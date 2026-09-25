@@ -30,7 +30,7 @@ struct Params {
   jet2: vec4f,     // length [M], synchrotron cutoff ν_c (in units of the green band), knot contrast, unused
   frame: vec4u,    // frame stamp, epoch (first frame of the current scene), flags, min spp (adaptive sampling)
   ext: vec4f,      // integrator tolerance, noise threshold, shutter [M], temporal blend weight
-  ext2: vec4f,     // interleave offset x, y, disk scale height H/R (0 = thin slab), unused
+  ext2: vec4f,     // interleave offset x, y, disk scale height H/R (0 = thin slab), 1.0 (opaque one)
   volColor: vec4f, // hot-flow colour: CIE-integrated power law ν^-α (linear sRGB)
   modes: vec4u,    // render mode, shift mode, background mode, disk enabled
   skyX: vec4f,     // rows of the rotation black-hole frame → ICRS equatorial; w = catalogue flux scale
@@ -222,11 +222,40 @@ fn rk4(s: GState, L: f32, a: f32, h: f32) -> GState {
   return o;
 }
 
+// RK4 increment only (the state update is applied with compensated summation).
+fn rk4Delta(s: GState, L: f32, a: f32, h: f32) -> GState {
+  let k1 = geodesicRHS(s.x, s.p, L, a);
+  let k2 = geodesicRHS(s.x + 0.5 * h * k1.dx, s.p + 0.5 * h * k1.dp, L, a);
+  let k3 = geodesicRHS(s.x + 0.5 * h * k2.dx, s.p + 0.5 * h * k2.dp, L, a);
+  let k4 = geodesicRHS(s.x + h * k3.dx, s.p + h * k3.dp, L, a);
+  var o: GState;
+  o.x = (h / 6.0) * (k1.dx + 2.0 * k2.dx + 2.0 * k3.dx + k4.dx);
+  o.p = (h / 6.0) * (k1.dp + 2.0 * k2.dp + 2.0 * k3.dp + k4.dp);
+  return o;
+}
+
+// Compensated (Kahan) summation of the state, y ← y + Δ, with the rounding error of every update
+// carried in c: over thousands of steps the f32 round-off stops accumulating (≈ doubles the useful
+// precision of φ, t and of rays skimming the photon sphere). `one` is 1.0 read from the uniforms:
+// an opaque factor that keeps fast-math compilers from simplifying (t − y) − Δ to zero.
+fn kahanAdd(y: GState, d: GState, c: ptr<function, GState>, one: f32) -> GState {
+  var o: GState;
+  let dx = d.x - (*c).x;
+  let tx = (y.x + dx) * one;
+  (*c).x = (tx - y.x) * one - dx;
+  o.x = tx;
+  let dp = d.p - (*c).p;
+  let tp = (y.p + dp) * one;
+  (*c).p = (tp - y.p) * one - dp;
+  o.p = tp;
+  return o;
+}
+
 // Error-controlled Dormand–Prince 5(4) (the integrator of MATLAB ode45 / Hairer's DOPRI5): six new
 // derivative evaluations per step, the seventh stage is the derivative at the new point and is
 // reused as the first stage of the next step (FSAL). The embedded 4th-order solution gives the
 // local error estimate; the 5th-order solution is propagated (local extrapolation).
-struct StepOut { s: GState, k: Deriv, h: f32, hNext: f32, evals: u32 };
+struct StepOut { s: GState, d: GState, k: Deriv, h: f32, hNext: f32, evals: u32 };
 
 // Mixed relative norm: radius relative to r, angles absolute (φ weighted by sin θ), momenta relative.
 fn errorNorm(y: GState, ex: vec4f, ep: vec2f) -> f32 {
@@ -251,9 +280,12 @@ fn adaptiveDOPRI(s: GState, k1: Deriv, L: f32, a: f32, hTry: f32, hMax: f32, tol
                           s.p + hh * (2.9525986892242035 * k1.dp + -11.595793324188385 * k2.dp + 9.822892851699436 * k3.dp + -0.2908093278463649 * k4.dp), L, a);
     let k6 = geodesicRHS(s.x + hh * (2.8462752525252526 * k1.dx + -10.757575757575758 * k2.dx + 8.906422717743473 * k3.dx + 0.2784090909090909 * k4.dx + -0.2735313036020583 * k5.dx),
                           s.p + hh * (2.8462752525252526 * k1.dp + -10.757575757575758 * k2.dp + 8.906422717743473 * k3.dp + 0.2784090909090909 * k4.dp + -0.2735313036020583 * k5.dp), L, a);
+    var d: GState;
+    d.x = hh * (0.09114583333333333 * k1.dx + 0.44923629829290207 * k3.dx + 0.6510416666666666 * k4.dx + -0.322376179245283 * k5.dx + 0.13095238095238096 * k6.dx);
+    d.p = hh * (0.09114583333333333 * k1.dp + 0.44923629829290207 * k3.dp + 0.6510416666666666 * k4.dp + -0.322376179245283 * k5.dp + 0.13095238095238096 * k6.dp);
     var y: GState;
-    y.x = s.x + hh * (0.09114583333333333 * k1.dx + 0.44923629829290207 * k3.dx + 0.6510416666666666 * k4.dx + -0.322376179245283 * k5.dx + 0.13095238095238096 * k6.dx);
-    y.p = s.p + hh * (0.09114583333333333 * k1.dp + 0.44923629829290207 * k3.dp + 0.6510416666666666 * k4.dp + -0.322376179245283 * k5.dp + 0.13095238095238096 * k6.dp);
+    y.x = s.x + d.x;
+    y.p = s.p + d.p;
     let k7 = geodesicRHS(y.x, y.p, L, a);
     out.evals += 6u;
     let ex = hh * (0.0012326388888888888 * k1.dx + -0.0042527702905061394 * k3.dx + 0.03697916666666667 * k4.dx + -0.05086379716981132 * k5.dx + 0.0419047619047619 * k6.dx + -0.025 * k7.dx);
@@ -261,6 +293,7 @@ fn adaptiveDOPRI(s: GState, k1: Deriv, L: f32, a: f32, hTry: f32, hMax: f32, tol
     let err = errorNorm(y, ex, ep);
     if (err <= tol || it == 11 || h <= 1e-5) {
       out.s = y;
+      out.d = d;
       out.k = k7;
       out.h = h;
       var grow = 5.0;
@@ -1232,6 +1265,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var trans3 = vec3f(1.0); // per-frequency transmittance (radio band)
   var out: TraceOut;
   var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
+  var comp: GState; // Kahan compensation of the state
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
   let polOn = P.pol.x > 0.5;
@@ -1263,17 +1297,21 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       var hMax = stepSize(s, L, a, eps * 4.0, rH);
       if (i == 0u) { hMax *= mix(0.2, 1.0, rnd); }
       let st = adaptiveDOPRI(s, kCur, L, a, min(hNext, hMax), hMax, tol);
-      n = wrapPole(st.s);
+      let ns = kahanAdd(s, st.d, &comp, P.ext2.w);
+      n = wrapPole(ns);
+      if (n.x.y != ns.x.y) { comp = GState(); }
       h = st.h;
       hNext = st.hNext;
       evals += st.evals;
       kNext = st.k;
-      if (n.x.y != st.s.x.y) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
+      if (n.x.y != ns.x.y) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
     } else {
       h = stepSize(s, L, a, eps, rH);
       // random first step: decorrelates volumetric sampling between pixels / samples
       if (i == 0u) { h *= mix(0.2, 1.0, rnd); }
-      n = wrapPole(rk4(s, L, a, -h));
+      let ns = kahanAdd(s, rk4Delta(s, L, a, -h), &comp, P.ext2.w);
+      n = wrapPole(ns);
+      if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
     }
 
@@ -1680,4 +1718,60 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     if (polOn) { polAcc[idx] = qu; }
   }
   stamps[idx] = frameStamp;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Precision probe (validation only, separate pipeline): integrates the rays given in probeBuf with
+// the quality integrator — with or without compensated summation — and returns the final states,
+// to be compared with a float64 CPU reference (scripts/precision-probe.ts).
+// in:  [r, θ, L, p_r], [p_θ, tolerance, compensated (0/1), 0]
+// out: [r, θ, φ, t],   [p_r, p_θ, fate (1 horizon, 2 escape), steps]
+// ---------------------------------------------------------------------------------------------
+@group(0) @binding(12) var<storage, read_write> probeBuf: array<vec4f>;
+
+@compute @workgroup_size(64)
+fn probe(@builtin(global_invocation_id) gid: vec3u) {
+  let count = arrayLength(&probeBuf) / 2u;
+  if (gid.x >= count) { return; }
+  let in0 = probeBuf[2u * gid.x];
+  let in1 = probeBuf[2u * gid.x + 1u];
+  var s: GState;
+  s.x = vec4f(in0.x, in0.y, 0.0, 0.0);
+  s.p = vec2f(in0.w, in1.x);
+  let L = in0.z;
+  let tol = in1.y;
+  let compensated = in1.z > 0.5;
+  let a = P.bh.x;
+  let rH = P.bh.y;
+  var k = geodesicRHS(s.x, s.p, L, a);
+  var hNext = 1e9;
+  var comp: GState;
+  var fate = 0.0;
+  var steps = 0u;
+  for (var i = 0u; i < u32(P.integ.y); i++) {
+    steps = i + 1u;
+    let hMax = stepSize(s, L, a, P.integ.x * 4.0, rH);
+    let st = adaptiveDOPRI(s, k, L, a, min(hNext, hMax), hMax, tol);
+    var ns: GState;
+    if (compensated) {
+      ns = kahanAdd(s, st.d, &comp, P.ext2.w);
+    } else {
+      ns.x = s.x + st.d.x;
+      ns.p = s.p + st.d.p;
+    }
+    let nw = wrapPole(ns);
+    hNext = st.hNext;
+    k = st.k;
+    if (nw.x.y != ns.x.y) {
+      comp = GState();
+      k = geodesicRHS(nw.x, nw.p, L, a);
+    }
+    let r = nw.x.x;
+    let rPrev = s.x.x;
+    s = nw;
+    if (r < rH + P.integ.w) { fate = 1.0; break; }
+    if (r > P.integ.z && r > rPrev) { fate = 2.0; break; }
+  }
+  probeBuf[2u * gid.x] = s.x;
+  probeBuf[2u * gid.x + 1u] = vec4f(s.p, fate, f32(steps));
 }

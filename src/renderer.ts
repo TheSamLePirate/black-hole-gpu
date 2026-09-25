@@ -183,6 +183,7 @@ export class Renderer {
   private sampler: GPUSampler;
   private clampSampler: GPUSampler;
 
+  private traceSource: string;
   private live: Target | null = null;
   private offline: OfflineJob | null = null;
 
@@ -214,6 +215,7 @@ export class Renderer {
     this.device = device;
     this.context = context;
     this.sdrFormat = format;
+    this.traceSource = src.trace;
 
     const traceModule = device.createShaderModule({ code: src.trace, label: "trace" });
     const displayModule = device.createShaderModule({ code: src.display, label: "display" });
@@ -638,7 +640,7 @@ export class Renderer {
     set(16, s.jetLength, s.jetCutoff, s.jetKnots, 0);
     u.set([this.frameStamp, t === this.live ? this.epoch : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
-    set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 0);
+    set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
     set(20, dc.volColor[0]!, dc.volColor[1]!, dc.volColor[2]!, 0);
     u.set([RENDER_MODES[s.renderMode], SHIFT_MODES[s.shiftMode], BG_MODES[s.background], s.disk ? 1 : 0], 21 * 4);
     const sky = skyMatrix(s);
@@ -1053,6 +1055,61 @@ export class Renderer {
     });
     job.shown = true;
     return result();
+  }
+
+  // ------------------------------------------------------------------------------------ validation
+  /**
+   * Precision probe: integrates equatorial rays (impact parameter b, initial p_r at r0) on the GPU
+   * with the quality integrator, with or without compensated summation, and returns their final
+   * states (compare with scripts/precision-probe.ts, float64).
+   */
+  async precisionProbe(
+    job: { a: number; r0: number; rEscape: number; captureTol: number; rays: { b: number; pr: number }[] },
+    tol: number,
+    compensated: boolean,
+  ) {
+    const d = this.device;
+    const module = d.createShaderModule({ code: this.traceSource });
+    const pipeline = d.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "probe", constants: { QUALITY_PIPELINE: 1 } } });
+    const params = new Float32Array(PARAM_VEC4S * 4);
+    params.set([job.a, horizon(job.a), isco(job.a), 22], 8 * 4);
+    params.set([0.02, 400000, job.rEscape, job.captureTol], 10 * 4);
+    params.set([0, 0, 0, 1], 19 * 4);
+    const pbuf = d.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(pbuf, 0, params);
+    const io = new Float32Array(job.rays.length * 8);
+    job.rays.forEach((r, i) => io.set([job.r0, Math.PI / 2, r.b, r.pr, 0, tol, compensated ? 1 : 0, 0], i * 8));
+    const buf = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(buf, 0, io);
+    const read = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = d.createCommandEncoder();
+    const pass = enc.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, d.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: pbuf } },
+        { binding: 12, resource: { buffer: buf } },
+      ],
+    }));
+    pass.dispatchWorkgroups(Math.ceil(job.rays.length / 64));
+    pass.end();
+    enc.copyBufferToBuffer(buf, 0, read, 0, io.byteLength);
+    d.queue.submit([enc.finish()]);
+    await read.mapAsync(GPUMapMode.READ);
+    const out = new Float32Array(read.getMappedRange().slice(0));
+    read.unmap();
+    for (const b of [pbuf, buf, read]) b.destroy();
+    return job.rays.map((r, i) => {
+      const [rr, , phi] = [out[i * 8]!, out[i * 8 + 1]!, out[i * 8 + 2]!];
+      const q = r.b / rr;
+      return {
+        r: rr,
+        phiInf: phi - Math.asin(q) - (2 / r.b) * (1 - Math.sqrt(1 - q * q)),
+        fate: out[i * 8 + 6]!,
+        steps: out[i * 8 + 7]!,
+      };
+    });
   }
 
   // ------------------------------------------------------------------------------------ export
