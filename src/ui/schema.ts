@@ -57,6 +57,7 @@ export const GROUP_SWITCH: Record<string, keyof Settings> = {
   "Relativistic jet": "jet",
   "Hot accretion flow": "hotFlow",
   Polarization: "polarization",
+  "Hot spot": "hotSpot",
 };
 
 const diskOn = (s: Settings) => s.disk;
@@ -214,6 +215,35 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "hotFlowIntensity", type: "number", section: "matter", group: "Hot accretion flow", label: "Intensity", min: 0.001, max: 5, scale: "log", precision: 2, enabled: flowOn,
+  },
+  // ------------------------------------------------------------------ matter · hot spot
+  {
+    key: "hotSpot", type: "toggle", section: "matter", group: "Hot spot", label: "Hot spot",
+    help: "A hot blob on a circular Keplerian orbit, like the infrared flares of Sgr A* seen by GRAVITY. It is drawn at the retarded time along each ray, so its primary, secondary and photon-ring images appear with their light-travel delays; Doppler boosting makes it flare on the approaching side. Turn on animation to see it orbit.",
+    keywords: "flare blob orbit gravity sgr echo time delay",
+  },
+  {
+    key: "spotRadius", type: "number", section: "matter", group: "Hot spot", label: "Orbit radius", min: 1.5, max: 30, step: 0.1, unit: "M", enabled: (s) => s.hotSpot,
+    help: "Boyer–Lindquist radius of the circular orbit (Keplerian angular velocity Ω = 1/(r^1.5 + a)).",
+  },
+  {
+    key: "spotSize", type: "number", section: "matter", group: "Hot spot", label: "Size σ", min: 0.1, max: 4, step: 0.01, unit: "M", enabled: (s) => s.hotSpot,
+  },
+  {
+    key: "spotHeight", type: "number", section: "matter", group: "Hot spot", label: "Height", min: -5, max: 5, step: 0.05, unit: "M", enabled: (s) => s.hotSpot,
+    help: "Offset above the equatorial plane (a spot inside the disk plane would be hidden by an opaque disk).",
+  },
+  {
+    key: "spotTemp", type: "number", section: "matter", group: "Hot spot", label: "Temperature", min: 1000, max: 1e6, scale: "log", unit: "K", precision: 3, enabled: (s) => s.hotSpot,
+  },
+  {
+    key: "spotBrightness", type: "number", section: "matter", group: "Hot spot", label: "Brightness", min: 0.01, max: 100, scale: "log", precision: 2, enabled: (s) => s.hotSpot,
+  },
+  {
+    key: "spotTau", type: "number", section: "matter", group: "Hot spot", label: "Optical depth", min: 0.01, max: 50, scale: "log", precision: 2, enabled: (s) => s.hotSpot,
+  },
+  {
+    key: "spotPhase", type: "number", section: "matter", group: "Hot spot", label: "Initial azimuth", min: -180, max: 180, step: 1, unit: "°", enabled: (s) => s.hotSpot,
   },
   // ------------------------------------------------------------------ sky
   {

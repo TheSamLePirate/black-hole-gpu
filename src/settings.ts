@@ -62,6 +62,15 @@ export interface Settings {
   // time
   animate: boolean;
   timeSpeed: number; // M per second
+  // orbiting hot spot (flare)
+  hotSpot: boolean;
+  spotRadius: number; // orbital radius [M]
+  spotSize: number; // Gaussian σ [M]
+  spotTau: number; // optical depth through the centre
+  spotTemp: number; // K
+  spotBrightness: number;
+  spotPhase: number; // azimuth at t = 0 [deg]
+  spotHeight: number; // above the equatorial plane [M]
   // observation band
   band: "visible" | "230GHz" | "multi";
   radioTau: number; // vertical optical depth of the flow at 230 GHz, at r = 4 M
@@ -147,6 +156,14 @@ export function defaultSettings(): Settings {
     skyRoll: 35,
     animate: true,
     timeSpeed: 6,
+    hotSpot: false,
+    spotRadius: 7,
+    spotSize: 0.7,
+    spotTau: 2,
+    spotTemp: 15000,
+    spotBrightness: 0.25,
+    spotPhase: 0,
+    spotHeight: 0.6,
     band: "visible",
     radioTau: 0.6,
     radioTe: 5,
@@ -209,6 +226,10 @@ export const presets: Record<string, Partial<Settings>> = {
   "EHT: M87* at 230 GHz (20 µas beam)": {
     spin: 0.94, distance: 200, inclination: 163, fov: 9, disk: false, hotFlow: true, hotFlowHR: 0.4, jet: true,
     band: "230GHz", beamUas: 20, bloom: 0, radioPeak: 4, polarization: true, polField: "spiral", polTickSize: 40,
+  },
+  "Orbiting hot spot (flare, light echoes)": {
+    spin: 0.9, distance: 30, inclination: 78, fov: 45, jet: false, hotSpot: true, spotRadius: 7, diskBrightness: 0.35,
+    turbulence: 0.3, animate: true, timeSpeed: 15,
   },
   "Face-on (M87*-like hot flow)": {
     spin: 0.94, distance: 60, inclination: 17, fov: 30, disk: false, hotFlow: true,

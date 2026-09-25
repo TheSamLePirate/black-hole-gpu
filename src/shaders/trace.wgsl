@@ -40,6 +40,8 @@ struct Params {
   ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, unused
   radio: vec4f,    // band (0 visible, 1 230 GHz, 2 86/230/345 GHz), τ₂₃₀, ν_s(4M)/230 GHz, θ_e(4M)
   radio2: vec4f,   // jet radio brightness, flow H/R, unused, unused
+  spot: vec4f,     // hot spot on (0/1), orbit radius [M], size σ [M], optical depth through the centre
+  spot2: vec4f,    // temperature [K], brightness, initial azimuth [rad], height above the plane [M]
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -334,7 +336,52 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
       h = min(h, max(0.7 * dist, 0.3 * Rj));
     }
   }
+  if (P.spot.x > 0.5) {
+    // never step over the hot spot; sample it at ≤ 0.25 σ
+    let dist = sqrt(spotDist2(s, P.time.x)) - 3.0 * P.spot.z - 0.5 * abs(P.ext.z);
+    h = min(h, max(0.8 * dist, 0.25 * P.spot.z));
+  }
   return max(h, 1e-5);
+}
+
+// Hot spot: a Gaussian blob on a circular Keplerian orbit (a flare, cf. GRAVITY's Sgr A* flares),
+// positioned at the retarded time t_em = t_now + Δt along the ray, so every image of it (primary,
+// secondary, photon ring) shows it where it was when that light left it.
+fn spotCentre(tEm: f32) -> vec3f {
+  let a = P.bh.x;
+  let rs = P.spot.y;
+  let om = 1.0 / (pow(rs, 1.5) + a);
+  let ph = P.spot2.z + om * tEm;
+  let R = sqrt(rs * rs + a * a);
+  return vec3f(R * cos(ph), R * sin(ph), P.spot2.w);
+}
+
+// Squared distance to the spot centre (Kerr–Schild-like Cartesian coordinates).
+fn spotDist2(s: GState, tNow: f32) -> f32 {
+  let r = s.x.x;
+  let sn = sin(s.x.y);
+  let R = sqrt(r * r + P.bh.x * P.bh.x) * sn;
+  let p = vec3f(R * cos(s.x.z), R * sin(s.x.z), r * cos(s.x.y));
+  let d = p - spotCentre(tNow + s.x.w);
+  return dot(d, d);
+}
+
+struct SpotSample { S: vec3f, dtau: f32 };
+
+fn spotSample(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> SpotSample {
+  var o: SpotSample;
+  let sig = P.spot.z;
+  let d2 = spotDist2(s, tNow);
+  if (d2 > 16.0 * sig * sig) { return o; }
+  let a = P.bh.x;
+  // rigid rotation with the orbital angular velocity of the centre
+  let om = 1.0 / (pow(P.spot.y, 1.5) + a);
+  let kEm = circularEmitterEnergy(s.x.x, s.x.y, a, L, om);
+  var g = (1.0 / E0) / kEm;
+  if (P.modes.y == SHIFT_NONE) { g = 1.0; }
+  o.dtau = P.spot.w * 0.3989423 / sig * exp(-0.5 * d2 / (sig * sig)) * kEm * dl;
+  o.S = blackbody(P.spot2.x * g, P.disk.w) * P.spot2.y;
+  return o;
 }
 
 // Parabolic jet boundary R_j ∝ z^0.6 anchored on the horizon (Blandford–Znajek field lines,
@@ -1181,6 +1228,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var trans = 1.0; // transmittance accumulated front to back
   var hNext = 1e9;
   let radio = P.radio.x > 0.5;
+  let spotOn = P.spot.x > 0.5;
   var trans3 = vec3f(1.0); // per-frequency transmittance (radio band)
   var out: TraceOut;
   var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
@@ -1297,6 +1345,16 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
           TDisk = d.T;
           hitDisk = true;
         }
+        trans *= att;
+        if (trans < 2e-3) { fate = 3u; break; }
+      }
+    }
+
+    if (spotOn && !radio) {
+      let sp = spotSample(n, L, E0, h, tNow);
+      if (sp.dtau > 0.0) {
+        let att = exp(-sp.dtau);
+        col += trans * sp.S * (1.0 - att);
         trans *= att;
         if (trans < 2e-3) { fate = 3u; break; }
       }
