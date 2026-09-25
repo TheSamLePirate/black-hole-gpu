@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "blackhole", "runtimeExecutable": "bun", "runtimeArgs": ["--hot", "server.ts"], "port": 3000 }
+  ]
+}
