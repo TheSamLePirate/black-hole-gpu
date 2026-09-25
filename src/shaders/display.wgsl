@@ -5,12 +5,15 @@ struct Display {
   flags: vec4f, // debug mode (1 = bypass exposure/tonemap/bloom), bloom strength, bloom levels, dither (0/1)
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
   hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
+  pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
+  img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, unused
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
 @group(0) @binding(1) var<uniform> D: Display;
 @group(0) @binding(2) var bloom: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
+@group(0) @binding(4) var<storage, read> polGrid: array<vec4f>; // Σ I, Q, U, n per tick cell
 
 struct VSOut { @builtin(position) pos: vec4f };
 
@@ -87,6 +90,47 @@ fn srgbEncode(c: vec3f) -> vec3f {
   return select(hi, lo, c <= vec3f(0.0031308));
 }
 
+fn viridis(t0: f32) -> vec3f {
+  let t = clamp(t0, 0.0, 1.0);
+  let c0 = vec3f(0.2777, 0.0054, 0.3341);
+  let c1 = vec3f(0.1051, 1.4046, 1.3846);
+  let c2 = vec3f(-0.3309, 0.2148, 0.0951);
+  let c3 = vec3f(-4.6342, -5.7991, -19.3324);
+  let c4 = vec3f(6.2283, 14.1799, 56.6906);
+  let c5 = vec3f(4.7764, -13.7451, -65.3530);
+  let c6 = vec3f(-5.4355, 4.6459, 26.3124);
+  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), vec3f(0.0), vec3f(1.0));
+}
+
+// Electric-vector position angle ticks (as in EHT polarimetric images): orientation χ = ½ atan2(U, Q)
+// from screen-up towards screen-right, length ∝ fractional polarization, colour = fraction.
+fn polTick(uv: vec2f, c: vec3f) -> vec3f {
+  let pt = uv * D.img.xy;
+  let cs = D.pol.y;
+  let cell = vec2i(floor(pt / cs));
+  let gw = i32(D.pol.z);
+  let gh = i32(D.pol.w);
+  if (cell.x < 0 || cell.y < 0 || cell.x >= gw || cell.y >= gh) { return c; }
+  let g = polGrid[cell.y * gw + cell.x];
+  let n = max(g.w, 1.0);
+  let I = g.x / n;
+  let qu = g.yz / n;
+  let P = length(qu);
+  let frac = P / max(I, 1e-12);
+  // only where the source is visible (exposed cell intensity) and measurably polarized
+  if (I * D.size.z < 0.03 || frac < 2e-3) { return c; }
+  let chi = 0.5 * atan2(qu.y, qu.x);
+  let dir = vec2f(sin(chi), -cos(chi));
+  let d = pt - (vec2f(cell) + 0.5) * cs;
+  let along = abs(dot(d, dir));
+  let perp = abs(d.x * dir.y - d.y * dir.x);
+  let halfLen = 0.46 * cs * clamp(frac / D.img.z, 0.25, 1.0);
+  let w = max(0.7, D.img.y / 900.0);
+  let px = max(D.img.y / D.size.y, 1.0); // image pixels per output pixel (antialiasing width)
+  let a = (1.0 - smoothstep(w, w + px, perp)) * (1.0 - smoothstep(halfLen, halfLen + px, along));
+  return mix(c, viridis(frac / D.img.z), a);
+}
+
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4f {
   let uvOut = in.pos.xy / D.size.xy;
@@ -104,6 +148,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   }
   // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
   c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));
+  if (D.pol.x > 0.5) { c = polTick(uv, c); }
   // Tiny dither against banding in the dark sky.
   let n = fract(sin(dot(in.pos.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5;
   return vec4f(srgbEncode(c) + n * D.flags.w / 255.0, 1.0);

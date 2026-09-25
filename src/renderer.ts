@@ -25,7 +25,8 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 25;
+const PARAM_VEC4S = 26;
+const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
 const STAR_FLUX_SCALE = 1 / 4250;
 
@@ -123,6 +124,10 @@ interface Target {
   bloomTex: GPUTexture;
   bloomLevels: number;
   resolveBuf: GPUBuffer;
+  polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
+  polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
+  polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
+  polGridPass: GPUBindGroup;
   traceBind: GPUBindGroup;
   postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number }[];
   displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
@@ -157,6 +162,7 @@ export class Renderer {
   private postResolve: GPUComputePipeline;
   private postDown: GPUComputePipeline;
   private postUp: GPUComputePipeline;
+  private postPolGrid: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   private paramsF = new Float32Array(this.params);
   private paramsU = new Uint32Array(this.params);
@@ -223,6 +229,7 @@ export class Renderer {
         { binding: 8, visibility: C, texture: { sampleType: "float" } },
         { binding: 9, visibility: C, texture: { sampleType: "float" } },
         { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 11, visibility: C, buffer: { type: "storage" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -248,9 +255,10 @@ export class Renderer {
     this.postResolve = mkPost("resolve");
     this.postDown = mkPost("down");
     this.postUp = mkPost("up");
+    this.postPolGrid = mkPost("polgrid");
 
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.lutBuf, 0, lut);
@@ -381,9 +389,12 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------------------------ targets
-  private createTarget(width: number, height: number): Target {
+  private createTarget(width: number, height: number, polarization = true): Target {
     const d = this.device;
     const px = width * height;
+    const polAcc = d.createBuffer({ size: polarization ? px * 8 : 16, usage: GPUBufferUsage.STORAGE });
+    const polGrid = d.createBuffer({ size: Math.max(16, Math.ceil(width / 6) * Math.ceil(height / 6) * 16), usage: GPUBufferUsage.STORAGE });
+    const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
     const moments = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
@@ -407,6 +418,10 @@ export class Renderer {
       bloomTex,
       bloomLevels,
       resolveBuf,
+      polAcc,
+      polGrid,
+      polGridBuf,
+      polGridPass: null as unknown as GPUBindGroup,
       traceBind: null as unknown as GPUBindGroup,
       postPasses: [],
       displayBinds: new Map(),
@@ -417,7 +432,7 @@ export class Renderer {
 
   private destroyTarget(t: Target | null) {
     if (!t) return;
-    for (const b of [t.accum, t.moments, t.stamps, t.resolveBuf]) b.destroy();
+    for (const b of [t.accum, t.moments, t.stamps, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     t.hdr.destroy();
     t.bloomTex.destroy();
   }
@@ -438,6 +453,16 @@ export class Renderer {
         { binding: 8, resource: this.mwTexture.createView() },
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
+        { binding: 11, resource: { buffer: t.polAcc } },
+      ],
+    });
+    t.polGridPass = d.createBindGroup({
+      layout: this.postPolGrid.getBindGroupLayout(0),
+      entries: [
+        { binding: 4, resource: { buffer: t.accum } },
+        { binding: 7, resource: { buffer: t.polAcc } },
+        { binding: 8, resource: { buffer: t.polGrid } },
+        { binding: 9, resource: { buffer: t.polGridBuf } },
       ],
     });
     t.displayBinds.clear();
@@ -451,6 +476,7 @@ export class Renderer {
             { binding: 1, resource: { buffer: this.displayBuf } },
             { binding: 2, resource: t.bloomTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
             { binding: 3, resource: this.clampSampler },
+            { binding: 4, resource: { buffer: t.polGrid } },
           ],
         }),
       );
@@ -473,6 +499,7 @@ export class Renderer {
             { binding: 4, resource: { buffer: t.accum } },
             { binding: 5, resource: { buffer: t.resolveBuf } },
             { binding: 6, resource: { buffer: t.stamps } },
+            { binding: 7, resource: { buffer: t.polAcc } },
           ],
         }),
       },
@@ -609,6 +636,7 @@ export class Renderer {
     set(22, ...sky[0], s.starBrightness * STAR_FLUX_SCALE);
     set(23, ...sky[1], this.skyReady ? 1 : 0);
     set(24, ...sky[2], 0);
+    set(25, s.polarization ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -621,6 +649,12 @@ export class Renderer {
     if (s.jet) r = Math.max(r, s.jetLength * 1.05);
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     return r;
+  }
+
+  /** Tick cell size in image pixels and grid dimensions. */
+  private polCells(s: Settings, t: Target) {
+    const cs = Math.max(6, Math.round((s.polTickSize * t.height) / 1080));
+    return { cs, gw: Math.ceil(t.width / cs), gh: Math.ceil(t.height / cs) };
   }
 
   private writeDisplay(s: Settings, target: Target, outW: number, outH: number, letterbox: boolean, dither: boolean, hdr = false) {
@@ -640,13 +674,24 @@ export class Renderer {
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
       sx, sy, ox, oy,
       hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
+      ...(() => {
+        const { cs, gw, gh } = this.polCells(s, target);
+        return [s.polarization ? 1 : 0, cs, gw, gh];
+      })(),
+      // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
+      target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, 0,
     ]);
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
   }
 
-  private writeResolve(t: Target) {
-    const r = t === this.live ? [this.lastBlock, ...this.lastOffset, this.epoch] : [1, 0, 0, 0];
+  private writeResolve(t: Target, s: Settings) {
+    const view = s.polarization && s.polView === "intensity" ? 1 << 8 : 0;
+    const r = t === this.live ? [this.lastBlock | view, ...this.lastOffset, this.epoch] : [1 | view, 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
+    if (s.polarization) {
+      const { cs, gw, gh } = this.polCells(s, t);
+      this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
+    }
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
@@ -657,7 +702,15 @@ export class Renderer {
     pass.end();
   }
 
-  private encodePost(enc: GPUCommandEncoder, t: Target) {
+  private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
+    if (s?.polarization) {
+      const { gw, gh } = this.polCells(s, t);
+      const pass = enc.beginComputePass();
+      pass.setPipeline(this.postPolGrid);
+      pass.setBindGroup(0, t.polGridPass);
+      pass.dispatchWorkgroups(Math.ceil(gw / 8), Math.ceil(gh / 8));
+      pass.end();
+    }
     for (const p of t.postPasses) {
       const pass = enc.beginComputePass();
       pass.setPipeline(p.pipeline);
@@ -756,9 +809,9 @@ export class Renderer {
       if (this.lastPhase === "converged" && !displayChanged) return this.stats(phase, t);
     }
 
-    this.writeResolve(t);
+    this.writeResolve(t, s);
     this.writeDisplay(s, t, t.width, t.height, false, true, this.hdrActive);
-    this.encodePost(enc, t);
+    this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     const auto = s.realtimeSubsampling === "auto";
     this.submit(enc, (ms) => {
@@ -823,7 +876,7 @@ export class Renderer {
   startOffline(s: Settings, time: number, opts: OfflineOptions) {
     this.cancelOffline();
     this.offline = {
-      target: this.createTarget(opts.width, opts.height),
+      target: this.createTarget(opts.width, opts.height, s.polarization),
       settings: structuredClone(s),
       time,
       opts,
@@ -924,9 +977,9 @@ export class Renderer {
         if (job.sampleIndex >= o.spp) job.done = true;
       }
     }
-    this.writeResolve(t);
+    this.writeResolve(t, s);
     this.writeDisplay(s, t, cv.width, cv.height, true, true, this.hdrActive);
-    this.encodePost(enc, t);
+    this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     this.submit(enc, (ms) => {
       if (rows > 0) {
@@ -968,9 +1021,9 @@ export class Renderer {
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
     const enc = this.device.createCommandEncoder();
-    this.writeResolve(t);
+    this.writeResolve(t, s);
     this.writeDisplay(s, t, t.width, t.height, false, bits === 8);
-    this.encodePost(enc, t);
+    this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, pipeline, tex.createView());
     this.device.queue.submit([enc.finish()]);
     const data = await this.readTexture(tex, t.width, t.height, bits === 8 ? 4 : 8);
@@ -1001,8 +1054,8 @@ export class Renderer {
   async exportEXR(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
     const enc = this.device.createCommandEncoder();
-    this.writeResolve(t);
-    this.encodePost(enc, t);
+    this.writeResolve(t, s);
+    this.encodePost(enc, t, s);
     this.device.queue.submit([enc.finish()]);
     const half = new Uint16Array((await this.readTexture(t.hdr, t.width, t.height, 8)).buffer);
     const k = Math.pow(2, s.exposure);

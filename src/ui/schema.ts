@@ -56,11 +56,13 @@ export const GROUP_SWITCH: Record<string, keyof Settings> = {
   "Accretion disk": "disk",
   "Relativistic jet": "jet",
   "Hot accretion flow": "hotFlow",
+  Polarization: "polarization",
 };
 
 const diskOn = (s: Settings) => s.disk;
 const jetOn = (s: Settings) => s.jet;
 const flowOn = (s: Settings) => s.hotFlow;
+const polOn = (s: Settings) => s.polarization;
 
 export const SCHEMA: ControlDef[] = [
   // ------------------------------------------------------------------ scene · black hole
@@ -251,6 +253,40 @@ export const SCHEMA: ControlDef[] = [
     ],
     help: "Switch individual effects off to see what each does. Physically everything is on: g = ν_obs/ν_em is exact and I_ν/ν³ is invariant.",
     keywords: "doppler redshift beaming interstellar",
+  },
+  // ------------------------------------------------------------------ physics · polarization
+  {
+    key: "polarization", type: "toggle", section: "physics", group: "Polarization", label: "Polarization",
+    help: "Linear polarization of every emitter, carried to the camera by the Walker–Penrose constant κ = (A − iB)(r − ia cos θ), which is conserved along Kerr null geodesics: gravitational rotation of the polarization plane, relativistic aberration and the observer's motion are all included exactly. Disk: electron-scattering atmosphere (Chandrasekhar, up to 11.7 % at grazing angles, E-vector parallel to the surface). Hot flow and jet: synchrotron, E ⟂ B in the gas frame.",
+    keywords: "evpa stokes q u eht walker penrose electric vector",
+  },
+  {
+    key: "polView", type: "choice", section: "physics", group: "Polarization", label: "Show", style: "segmented", effect: "display", enabled: polOn,
+    options: [
+      { value: "ticks", label: "Ticks", hint: "EVPA ticks over the image (length and colour: polarization fraction)" },
+      { value: "intensity", label: "P", hint: "Polarized intensity √(Q² + U²) with ticks" },
+    ],
+  },
+  {
+    key: "polField", type: "choice", section: "physics", group: "Polarization", label: "Flow field", style: "segmented", enabled: polOn,
+    options: [
+      { value: "spiral", label: "Spiral", hint: "Radial + toroidal (45° pitch), as in magnetically arrested disks" },
+      { value: "toroidal", label: "Toroidal" },
+      { value: "radial", label: "Radial" },
+      { value: "vertical", label: "Vertical" },
+    ],
+    help: "Magnetic field geometry of the hot accretion flow in the gas frame. The EHT's M87* images favour a spiral field (Event Horizon Telescope Collaboration 2021, Paper VIII).",
+  },
+  {
+    key: "polFraction", type: "number", section: "physics", group: "Polarization", label: "Synchrotron fraction", min: 0, max: 0.75, step: 0.01, enabled: polOn,
+    help: "Intrinsic polarization of the synchrotron emitters (0.75 for an ordered field and electron index p = 3; lower = tangled field).",
+  },
+  {
+    key: "polJetPitch", type: "number", section: "physics", group: "Polarization", label: "Jet field pitch", min: 0, max: 90, step: 1, unit: "°", enabled: polOn,
+    help: "Angle of the jet's helical field from the flow direction (0° poloidal, 90° toroidal).",
+  },
+  {
+    key: "polTickSize", type: "number", section: "physics", group: "Polarization", label: "Tick spacing", min: 8, max: 80, step: 1, unit: "px", effect: "display", enabled: polOn,
   },
   {
     key: "renderMode", type: "choice", section: "physics", group: "Diagnostics", label: "View", style: "select",

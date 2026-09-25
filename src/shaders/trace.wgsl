@@ -36,6 +36,7 @@ struct Params {
   skyX: vec4f,     // rows of the rotation black-hole frame → ICRS equatorial; w = catalogue flux scale
   skyY: vec4f,     // w = real sky loaded (0/1)
   skyZ: vec4f,
+  pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -59,6 +60,7 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(9) var starLodTex: texture_2d<f32>; // catalogue radiance map (large footprints)
 // Star catalogue: [magic, grid, count, 0, cellStart[6·grid² + 1], stars (x, y, z, mag|T packed)]
 @group(0) @binding(10) var<storage, read> catalogue: array<u32>;
+@group(0) @binding(11) var<storage, read_write> polAcc: array<vec2f>; // Σ Stokes Q, U (luminance)
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -615,6 +617,102 @@ fn jetEmission(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> vec3f {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Polarization: Walker–Penrose constant
+// ---------------------------------------------------------------------------------------------
+// For a photon k and a polarization vector f ⟂ k parallel-transported along a Kerr null geodesic,
+// κ = (A − iB)(r − i a cos θ) is conserved (Walker & Penrose 1970, Chandrasekhar 1983):
+//   A = (k^t f^r − k^r f^t) + a sin²θ (k^r f^φ − k^φ f^r)
+//   B = [(r² + a²)(k^φ f^θ − k^θ f^φ) − a (k^t f^θ − k^θ f^t)] sin θ
+// So the polarization emitted anywhere along the ray is transported to the camera for free: at the
+// camera we solve κ_em = c_x κ(e_x) + c_y κ(e_y) for the screen components of f — exact for any
+// observer position and motion (no distant-observer approximation). Vectors are (t, r, θ, φ).
+fn wpKappa(r: f32, th: f32, a: f32, k: vec4f, f: vec4f) -> vec2f {
+  let sn = sin(th);
+  let cs = cos(th);
+  let A = (k.x * f.y - k.y * f.x) + a * sn * sn * (k.y * f.w - k.w * f.y);
+  let B = ((r * r + a * a) * (k.w * f.z - k.z * f.w) - a * (k.x * f.z - k.z * f.x)) * sn;
+  return vec2f(A * r - B * a * cs, -(A * a * cs + B * r));
+}
+
+// ZAMO-frame components (t̂, r̂, θ̂, φ̂) → Boyer–Lindquist contravariant components (t, r, θ, φ).
+fn zamoToBL(r: f32, th: f32, a: f32, v: vec4f) -> vec4f {
+  let m = kerrMetric(r, th, a);
+  let alpha = sqrt(max(m.sig * m.del / m.A, 1e-12));
+  let omega = 2.0 * a * r / m.A;
+  let varpi = max(sqrt(m.A / m.sig) * sin(th), 1e-6);
+  return vec4f(v.x / alpha, sqrt(max(m.del / m.sig, 0.0)) * v.y, v.z / sqrt(m.sig), omega * v.x / alpha + v.w / varpi);
+}
+
+// Contravariant photon momentum (t, r, θ, φ) from the equations of motion.
+fn photonK(s: GState, L: f32, a: f32) -> vec4f {
+  let d = geodesicRHS(s.x, s.p, L, a);
+  return vec4f(d.dx.w, d.dx.x, d.dx.y, d.dx.z);
+}
+
+// Polarization of radiation leaving gas with ZAMO-frame velocity `vel` (r̂, θ̂, φ̂): photon direction
+// n' in the gas frame, E-vector f' ∝ n' × b (b: magnetic field for synchrotron, surface normal for
+// electron scattering), boosted back and expressed in BL. w = |n' × b|, mu = |n'·b|.
+struct PolEmit { kappa: vec2f, w: f32, mu: f32 };
+
+fn emitterPolarization(s: GState, L: f32, a: f32, vel: vec3f, b: vec3f) -> PolEmit {
+  var o: PolEmit;
+  let r = s.x.x;
+  let th = s.x.y;
+  let m = kerrMetric(r, th, a);
+  let alpha = sqrt(max(m.sig * m.del / m.A, 1e-12));
+  let omega = 2.0 * a * r / m.A;
+  let varpi = max(sqrt(m.A / m.sig) * sin(th), 1e-6);
+  let E = (1.0 - omega * L) / alpha;
+  let kz = vec3f(sqrt(max(m.del / m.sig, 0.0)) * s.p.x, s.p.y / sqrt(m.sig), L / varpi);
+  let v2 = dot(vel, vel);
+  var n = kz / E;
+  var gam = 1.0;
+  var vh = vec3f(0.0);
+  if (v2 > 1e-12) {
+    gam = inverseSqrt(max(1.0 - v2, 1e-6));
+    vh = vel * inverseSqrt(v2);
+    let Ep = gam * (E - dot(vel, kz));
+    n = (kz + ((gam - 1.0) * dot(vh, kz) - gam * sqrt(v2) * E) * vh) / Ep;
+  }
+  n = normalize(n);
+  let c = cross(n, b);
+  o.w = length(c);
+  o.mu = abs(dot(n, b));
+  if (o.w < 1e-4) { return o; }
+  let fp = c / o.w;
+  // back to the ZAMO frame: (0, f') → (γ v·f', f' + (γ − 1)(v̂·f') v̂)
+  let fz = vec4f(gam * dot(vel, fp), fp + (gam - 1.0) * dot(vh, fp) * vh);
+  o.kappa = wpKappa(r, th, a, photonK(s, L, a), zamoToBL(r, th, a, fz));
+  return o;
+}
+
+// Screen-frame Stokes direction (cos 2χ, sin 2χ) of κ_em, χ from screen-up towards screen-right.
+fn stokesDir(kem: vec2f, kx: vec2f, ky: vec2f) -> vec2f {
+  let det = kx.x * ky.y - ky.x * kx.y;
+  if (abs(det) < 1e-30) { return vec2f(0.0); }
+  let cx = (kem.x * ky.y - ky.x * kem.y) / det;
+  let cy = (kx.x * kem.y - kx.y * kem.x) / det;
+  let n2 = cx * cx + cy * cy;
+  if (n2 < 1e-30) { return vec2f(0.0); }
+  return vec2f(cy * cy - cx * cx, 2.0 * cx * cy) / n2;
+}
+
+// Degree of polarization of an electron-scattering atmosphere (Chandrasekhar 1960, Table XXIV):
+// 11.7 % at grazing emission, 0 face-on (fit within 0.3 %).
+fn chandrasekharPol(mu: f32) -> f32 {
+  return 0.1171 * (1.0 - mu) / (1.0 + 3.4 * mu);
+}
+
+// Magnetic field direction (r̂, θ̂, φ̂) of the hot flow.
+fn flowField(th: f32) -> vec3f {
+  let mode = u32(P.pol.z);
+  if (mode == 0u) { return vec3f(0.0, 0.0, 1.0); }
+  if (mode == 1u) { return vec3f(1.0, 0.0, 0.0); }
+  if (mode == 2u) { return vec3f(cos(th), -sin(th), 0.0); } // along the spin axis
+  return normalize(vec3f(1.0, 0.0, 1.0));                   // trailing spiral, 45° pitch
+}
+
+// ---------------------------------------------------------------------------------------------
 // Celestial sphere
 // ---------------------------------------------------------------------------------------------
 fn faceUV(d: vec3f) -> vec3f {
@@ -854,7 +952,7 @@ fn colormap(t0: f32) -> vec3f {
 
 // Result of a traced ray. The celestial sphere is shaded after the ray (in main) because its filter
 // footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
-struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32 };
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f };
 
 fn traceOut(col: vec3f) -> TraceOut {
   var o: TraceOut;
@@ -930,6 +1028,26 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var out: TraceOut;
   var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
 
+  // Polarization: κ of the two screen axes for this pixel's photon at the camera.
+  let polOn = P.pol.x > 0.5;
+  var kapX = vec2f(0.0);
+  var kapY = vec2f(0.0);
+  var stokes = vec2f(0.0);
+  if (polOn) {
+    let ex = normalize(P.camRight.xyz - look * dot(look, P.camRight.xyz));
+    let ey = normalize(P.camUp.xyz - look * dot(look, P.camUp.xyz) - ex * dot(ex, P.camUp.xyz));
+    let kc = vec4f(kCur.dx.w, kCur.dx.x, kCur.dx.y, kCur.dx.z);
+    var bx = vec4f(0.0, ex);
+    var by = vec4f(0.0, ey);
+    if (b2 > 1e-10) {
+      let bn = beta * inverseSqrt(b2);
+      bx = vec4f(gam * dot(beta, ex), ex + (gam - 1.0) * dot(bn, ex) * bn);
+      by = vec4f(gam * dot(beta, ey), ey + (gam - 1.0) * dot(bn, ey) * bn);
+    }
+    kapX = wpKappa(s.x.x, s.x.y, a, kc, zamoToBL(s.x.x, s.x.y, a, bx));
+    kapY = wpKappa(s.x.x, s.x.y, a, kc, zamoToBL(s.x.x, s.x.y, a, by));
+  }
+
   for (var i = 0u; i < maxSteps; i++) {
     steps = i;
     var n: GState;
@@ -955,16 +1073,40 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     }
 
     if (volOn) {
-      col += trans * volumeEmission(n, L, E0, h);
+      let e = trans * volumeEmission(n, L, E0, h);
+      col += e;
+      if (polOn && dot(e, e) > 0.0) {
+        // synchrotron: E ⟂ B in the gas frame (sub-Keplerian rotation Ω = 0.9 Ω_K)
+        let R = n.x.x * sin(n.x.y);
+        let m = kerrMetric(n.x.x, n.x.y, a);
+        let om = 0.9 / (pow(max(R, 1.0), 1.5) + a);
+        let v = sqrt(m.A / m.sig) * sin(n.x.y) * (om - 2.0 * a * n.x.x / m.A) / sqrt(max(m.sig * m.del / m.A, 1e-12));
+        let pe = emitterPolarization(n, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), flowField(n.x.y));
+        stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+      }
     }
     if (jetOn) {
-      col += trans * jetEmission(n, L, E0, h, tNow);
+      let e = trans * jetEmission(n, L, E0, h, tNow);
+      col += e;
+      if (polOn && dot(e, e) > 0.0) {
+        // helical field in the outflow frame: poloidal (along r̂) + toroidal, pitch P.pol.w
+        let pe = emitterPolarization(n, L, a, vec3f(P.jet.y, 0.0, 0.0), vec3f(cos(P.pol.w), 0.0, sin(P.pol.w)));
+        stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+      }
     }
     if (diskOn && thick) {
       let d = diskVolume(n, L, E0, h, tNow);
       if (d.dtau > 0.0) {
         let att = exp(-d.dtau);
         col += trans * d.S * (1.0 - att);
+        if (polOn) {
+          let m = kerrMetric(n.x.x, n.x.y, a);
+          let R = n.x.x * sin(n.x.y);
+          let om = 1.0 / (pow(max(R, 1.0), 1.5) + a);
+          let v = sqrt(m.A / m.sig) * sin(n.x.y) * (om - 2.0 * a * n.x.x / m.A) / sqrt(max(m.sig * m.del / m.A, 1e-12));
+          let pe = emitterPolarization(n, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), vec3f(0.0, 1.0, 0.0));
+          stokes += chandrasekharPol(pe.mu) * trans * luminance(d.S) * (1.0 - att) * stokesDir(pe.kappa, kapX, kapY);
+        }
         if (!hitDisk && d.dtau > 0.02) {
           gDisk = d.g;
           TDisk = d.T;
@@ -995,6 +1137,14 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         if (rc >= rIn && rc <= rOut) {
           let hit = shadeDisk(m, L, E0, tNow);
           col += trans * hit.color;
+          if (polOn) {
+            // electron-scattering atmosphere: E-vector parallel to the disk surface (⟂ normal and k)
+            let mt = kerrMetric(rc, PI * 0.5, a);
+            let om = 1.0 / (pow(rc, 1.5) + a);
+            let v = sqrt(mt.A / mt.sig) * (om - 2.0 * a * rc / mt.A) / sqrt(max(mt.sig * mt.del / mt.A, 1e-12));
+            let pe = emitterPolarization(m, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), vec3f(0.0, 1.0, 0.0));
+            stokes += chandrasekharPol(pe.mu) * trans * luminance(hit.color) * stokesDir(pe.kappa, kapX, kapY);
+          }
           if (!hitDisk) {
             gDisk = hit.g;
             TDisk = hit.T;
@@ -1047,6 +1197,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     }
   }
   out.col = col;
+  out.qu = stokes;
 
   if (mode == MODE_REDSHIFT && hitDisk) {
     return traceOut(colormap(0.5 + 0.6 * log2(gDisk)));
@@ -1252,12 +1403,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
 
+  var qu = tr.qu;
+  if (isNan(qu.x + qu.y)) { qu = vec2f(0.0); }
+  let polOn = P.pol.x > 0.5;
+
   if (interleaved) {
     let old = accum[idx];
     if (temporal && stamps[idx] >= epoch && old.a > 0.0) {
       col = mix(old.rgb / old.a, col, P.ext.w);
+      if (polOn) { qu = mix(polAcc[idx] / old.a, qu, P.ext.w); }
     }
     accum[idx] = vec4f(col, 1.0);
+    if (polOn) { polAcc[idx] = qu; }
     stamps[idx] = frameStamp;
     return;
   }
@@ -1265,9 +1422,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   if (accumulate) {
     accum[idx] += vec4f(col, 1.0);
     moments[idx] += l * l;
+    if (polOn) { polAcc[idx] += qu; }
   } else {
     accum[idx] = vec4f(col, 1.0);
     moments[idx] = l * l;
+    if (polOn) { polAcc[idx] = qu; }
   }
   stamps[idx] = frameStamp;
 }

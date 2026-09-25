@@ -62,6 +62,13 @@ export interface Settings {
   // time
   animate: boolean;
   timeSpeed: number; // M per second
+  // polarization (Walker–Penrose transport of the electric vector)
+  polarization: boolean;
+  polView: "ticks" | "intensity";
+  polField: "toroidal" | "radial" | "vertical" | "spiral";
+  polFraction: number; // synchrotron polarization fraction (ordered field)
+  polJetPitch: number; // jet field pitch angle from the flow direction [deg]
+  polTickSize: number; // tick spacing, in pixels of a 1080p image
   // rendering
   renderMode: RenderMode;
   shiftMode: ShiftMode;
@@ -129,6 +136,12 @@ export function defaultSettings(): Settings {
     skyRoll: 35,
     animate: true,
     timeSpeed: 6,
+    polarization: false,
+    polView: "ticks",
+    polField: "spiral",
+    polFraction: 0.7,
+    polJetPitch: 60,
+    polTickSize: 24,
     renderMode: "physical",
     shiftMode: "full",
     realtimeSubsampling: "auto",

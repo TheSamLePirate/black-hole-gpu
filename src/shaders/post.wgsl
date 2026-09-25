@@ -9,6 +9,29 @@
 @group(0) @binding(4) var<storage, read> accum: array<vec4f>;
 @group(0) @binding(5) var<uniform> R: vec4u; // realtime block size, interleave offset x, y, epoch
 @group(0) @binding(6) var<storage, read> stamps: array<u32>;
+@group(0) @binding(7) var<storage, read> polAcc: array<vec2f>;         // Σ Stokes Q, U
+@group(0) @binding(8) var<storage, read_write> polGrid: array<vec4f>;  // per tick cell: Σ I, Q, U, n
+@group(0) @binding(9) var<uniform> G: vec4u;                           // cell px, grid W, grid H, image W
+
+fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+
+// Polarization ticks: mean Stokes I, Q, U (luminance) over each cell of the tick grid.
+@compute @workgroup_size(8, 8)
+fn polgrid(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= G.y || gid.y >= G.z) { return; }
+  let W = G.w;
+  let H = arrayLength(&accum) / W;
+  var s = vec4f(0.0);
+  for (var y = gid.y * G.x; y < min((gid.y + 1u) * G.x, H); y++) {
+    for (var x = gid.x * G.x; x < min((gid.x + 1u) * G.x, W); x++) {
+      let i = y * W + x;
+      let a = accum[i];
+      let n = max(a.a, 1e-6);
+      s += vec4f(luminance(a.rgb) / n, polAcc[i] / n, 1.0);
+    }
+  }
+  polGrid[gid.y * G.y + gid.x] = s;
+}
 
 fn loadAvg(x: u32, y: u32, W: u32) -> vec3f {
   let s = accum[y * W + x];
@@ -20,7 +43,14 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let W = size.x;
-  let block = max(R.x, 1u);
+  let block = max(R.x & 0xffu, 1u);
+  if ((R.x >> 8u) == 1u) {
+    // polarized intensity P = √(Q² + U²), shown as grey radiance
+    let a = accum[gid.y * W + gid.x];
+    let q = polAcc[gid.y * W + gid.x] / max(a.a, 1e-6);
+    textureStore(dst, gid.xy, vec4f(vec3f(length(q)), 1.0));
+    return;
+  }
   let idx = gid.y * W + gid.x;
   var c: vec3f;
   if (block <= 1u || stamps[idx] >= R.w) {
