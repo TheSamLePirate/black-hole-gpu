@@ -142,7 +142,7 @@ journey: line up with the mouth, cross the throat, emerge facing the black hole 
 the black hole's universe: the way back home).
 
 Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–4 quality ·
+rain frame) · T wormhole journey · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

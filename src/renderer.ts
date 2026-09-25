@@ -205,6 +205,7 @@ export class Renderer {
   private bandY = 0;
   private bandRows = 64;
   private realtimeBlock = 2;
+  private blockMs = new Map<number, { ms: number; at: number }>();
   private lastBlock = 2;
   private interleaveIndex = 0;
   private lastOffset: [number, number] = [0, 0];
@@ -998,7 +999,7 @@ export class Renderer {
     this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     const auto = s.realtimeSubsampling === "auto";
     this.submit(enc, (ms) => {
-      if (phase === "realtime" && auto) this.adaptBlock(ms);
+      if (phase === "realtime" && auto) this.adaptBlock(ms, Math.max(8, s.realtimeBudget));
       if (phase === "converging" && rows > 0) {
         const perRow = ms / rows;
         this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (28 / Math.max(perRow, 1e-3)))));
@@ -1012,14 +1013,26 @@ export class Renderer {
    * Auto subsampling: coarser blocks when realtime frames exceed ~36 ms; finer ones when the
    * predicted cost at the next finer level (∝ number of rays) stays under ~26 ms.
    */
-  private adaptBlock(ms: number) {
-    const i = BLOCKS.indexOf(this.realtimeBlock);
+  /**
+   * Picks the realtime block size for a GPU time budget per frame. Part of a frame's cost is fixed
+   * (resolve, gather, bloom, display at full resolution), so the cost of another block size is not
+   * simply ∝ its number of rays: each size keeps its own measured time (EMA, forgotten after 3 s);
+   * an unmeasured finer size is predicted with half the frame assumed fixed.
+   */
+  private adaptBlock(ms: number, budget: number) {
+    const now = performance.now();
+    const b = this.realtimeBlock;
+    const m = this.blockMs.get(b);
+    const est = m && now - m.at < 3000 ? 0.7 * m.ms + 0.3 * ms : ms;
+    this.blockMs.set(b, { ms: est, at: now });
+    const i = BLOCKS.indexOf(b);
     const finer = i > 0 ? BLOCKS[i - 1]! : 0;
-    const predicted = finer ? ms * (this.realtimeBlock / finer) ** 2 : Infinity;
-    if (ms > 36) {
+    const known = finer ? this.blockMs.get(finer) : undefined;
+    const predicted = !finer ? Infinity : known && now - known.at < 3000 ? known.ms : est * (0.5 + 0.5 * (b / finer) ** 2);
+    if (est > budget * 1.1) {
       this.slowFrames++;
       this.fastFrames = 0;
-    } else if (predicted < 26) {
+    } else if (predicted < budget * 0.9) {
       this.fastFrames++;
       this.slowFrames = 0;
     } else {
@@ -1033,6 +1046,7 @@ export class Renderer {
       this.fastFrames = 0;
     }
   }
+
 
   private stats(phase: FrameStats["phase"], t: Target): FrameStats {
     const frac = this.bandY / Math.max(t.height, 1);
@@ -1266,6 +1280,13 @@ export class Renderer {
   }
 
   /** Current image (the offline render if one exists, else the live view) as an 8-bit sRGB PNG. */
+  /** Tone-mapped 8-bit sRGB pixels (RGBA) of the offline render (or the live view). */
+  async exportRGBA(s: Settings): Promise<{ data: Uint8Array; width: number; height: number }> {
+    const t = this.exportTarget();
+    const px = await this.renderDisplayed(s, t, 8);
+    return { data: new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), width: t.width, height: t.height };
+  }
+
   async exportPNG(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
     const px = await this.renderDisplayed(s, t, 8);

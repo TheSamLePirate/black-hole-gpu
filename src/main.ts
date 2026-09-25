@@ -30,7 +30,7 @@ function sanitize(s: Settings): Settings {
 }
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
-  "pixelRatio", "realtimeSubsampling", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
+  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed",
 ];
@@ -127,7 +127,12 @@ async function main() {
 
   function applyPreset(name: string) {
     const keep = Object.fromEntries(KEEP_ON_PRESET.map((k) => [k, settings[k]]));
-    Object.assign(settings, defaultSettings(), keep, presets[name]);
+    const { time, ...preset } = presets[name] ?? {};
+    Object.assign(settings, defaultSettings(), keep, preset);
+    if (time !== undefined) {
+      simTime = time;
+      timeDirty = true;
+    }
     camera.setCinematic(null);
     camera.sync();
     refreshGui();
@@ -189,10 +194,11 @@ async function main() {
     else if (k === "j") toggle("jet");
     else if (k === "i") actions["btn-info"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
-    else if (/^[1-4]$/.test(e.key)) {
-      settings.quality = (["low", "medium", "high", "ultra"] as const)[Number(k) - 1]!;
+    else if (/^[1-5]$/.test(e.key)) {
+      settings.quality = (["low", "medium", "high", "ultra", "realtime"] as const)[Number(k) - 1]!;
       Object.assign(settings, QUALITY[settings.quality]);
       refreshGui();
+      resize();
       touch();
     }
   });
@@ -215,6 +221,7 @@ async function main() {
 
   const renderDialog = setupRenderDialog({
     renderer,
+    camera,
     settings,
     time: () => simTime,
     download,

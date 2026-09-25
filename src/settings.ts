@@ -3,17 +3,25 @@ export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "st
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
 export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp";
-export type Quality = "low" | "medium" | "high" | "ultra";
+export type Quality = "low" | "medium" | "high" | "ultra" | "realtime";
 
 /** Integration / sampling budgets per quality level. */
 type QualityKeys =
   | "realtimeEps" | "realtimeSteps" | "qualityEps" | "qualitySteps" | "targetSpp"
   | "adaptiveIntegrator" | "integratorTolerance" | "noiseThreshold";
-export const QUALITY: Record<Quality, Pick<Settings, QualityKeys>> = {
-  low: { realtimeEps: 0.12, realtimeSteps: 300, qualityEps: 0.05, qualitySteps: 1500, targetSpp: 16, adaptiveIntegrator: false, integratorTolerance: 1e-4, noiseThreshold: 0.03 },
-  medium: { realtimeEps: 0.09, realtimeSteps: 450, qualityEps: 0.03, qualitySteps: 3000, targetSpp: 32, adaptiveIntegrator: true, integratorTolerance: 3e-5, noiseThreshold: 0.02 },
-  high: { realtimeEps: 0.07, realtimeSteps: 600, qualityEps: 0.02, qualitySteps: 4000, targetSpp: 64, adaptiveIntegrator: true, integratorTolerance: 1e-5, noiseThreshold: 0.01 },
-  ultra: { realtimeEps: 0.05, realtimeSteps: 1000, qualityEps: 0.02, qualitySteps: 8000, targetSpp: 256, adaptiveIntegrator: true, integratorTolerance: 2e-6, noiseThreshold: 0.005 },
+export const QUALITY: Record<Quality, Pick<Settings, QualityKeys> & Partial<Settings>> = {
+  low: { realtimeEps: 0.12, realtimeSteps: 300, qualityEps: 0.05, qualitySteps: 1500, targetSpp: 16, adaptiveIntegrator: false, integratorTolerance: 1e-4, noiseThreshold: 0.03, realtimeBudget: 30 },
+  medium: { realtimeEps: 0.09, realtimeSteps: 450, qualityEps: 0.03, qualitySteps: 3000, targetSpp: 32, adaptiveIntegrator: true, integratorTolerance: 3e-5, noiseThreshold: 0.02, realtimeBudget: 30 },
+  high: { realtimeEps: 0.07, realtimeSteps: 600, qualityEps: 0.02, qualitySteps: 4000, targetSpp: 64, adaptiveIntegrator: true, integratorTolerance: 1e-5, noiseThreshold: 0.01, realtimeBudget: 30 },
+  ultra: { realtimeEps: 0.05, realtimeSteps: 1000, qualityEps: 0.02, qualitySteps: 8000, targetSpp: 256, adaptiveIntegrator: true, integratorTolerance: 2e-6, noiseThreshold: 0.005, realtimeBudget: 30 },
+  // Best image that stays interactive (≈ 15 fps): a 60 ms GPU budget per frame spent on finer
+  // blocks and finer realtime steps, a render scale a little under the display's, and reference
+  // refinement (ultra) as soon as the view is still.
+  realtime: {
+    realtimeEps: 0.06, realtimeSteps: 700, qualityEps: 0.02, qualitySteps: 8000, targetSpp: 256, adaptiveIntegrator: true,
+    integratorTolerance: 2e-6, noiseThreshold: 0.005, realtimeSubsampling: "auto", realtimeBudget: 60, temporalBlend: 0.5,
+    pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.25), denoise: true,
+  },
 };
 
 export interface Settings {
@@ -94,6 +102,7 @@ export interface Settings {
   renderMode: RenderMode;
   shiftMode: ShiftMode;
   realtimeSubsampling: "auto" | 1 | 2 | 3 | 4 | 6 | 8;
+  realtimeBudget: number; // GPU time per realtime frame the automatic subsampling aims for [ms]
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -205,6 +214,7 @@ export function defaultSettings(): Settings {
     renderMode: "physical",
     shiftMode: "full",
     realtimeSubsampling: "auto",
+    realtimeBudget: 30,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -245,7 +255,15 @@ export function defaultSettings(): Settings {
   };
 }
 
-export const presets: Record<string, Partial<Settings>> = {
+/** A scene preset: settings, plus optionally the simulation time to start from [M]. */
+export type Preset = Partial<Settings> & { time?: number };
+
+const GARGANTUA: Preset = {
+  wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+  jet: false, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
+};
+
+export const presets: Record<string, Preset> = {
   "Kerr a=0.94, near edge-on": {
     spin: 0.94, distance: 36, inclination: 82, fov: 45,
   },
@@ -261,6 +279,33 @@ export const presets: Record<string, Partial<Settings>> = {
     wormhole: true, anchor: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
     spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
+  },
+  "Wormhole: our Milky Way from Gargantua's side": {
+    ...GARGANTUA, anchor: "wormhole", whL: 6, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
+    skyL: 180, skyB: 0, skyRoll: 35,
+  },
+  "Wormhole: long throat (images wrapped around it)": {
+    ...GARGANTUA, anchor: "wormhole", whLength: 10, whLensing: 0.05, whL: -17, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
+    roll: 0, fov: 50, skyL: 0, skyB: 0, skyRoll: 35,
+  },
+  "Wormhole: strong lensing (W = 0.43 ρ)": {
+    ...GARGANTUA, anchor: "wormhole", whLength: 1, whLensing: 0.43, whL: -11, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
+    roll: 0, fov: 55, skyL: 0, skyB: 0, skyRoll: 35,
+  },
+  "The mouth before Gargantua (banking flight)": {
+    ...GARGANTUA, anchor: "hole", distance: 34, inclination: 70, azimuth: -150, yaw: -25, pitch: 8, roll: -25, fov: 60,
+    time: 0, animate: false,
+  },
+  "Companion star close-up": {
+    ...GARGANTUA, anchor: "hole", distance: 74, inclination: 89, azimuth: 3.5, yaw: -20, pitch: -1, roll: 0, fov: 40,
+    time: 0, animate: false,
+  },
+  "The star passing Gargantua": {
+    ...GARGANTUA, anchor: "hole", distance: 90, inclination: 86, azimuth: -3, yaw: 6, pitch: 0, roll: 0, fov: 35,
+    time: 0, animate: false,
+  },
+  "Gargantua under the distant galaxy": {
+    ...GARGANTUA, wormhole: false, background: "alien", distance: 26, inclination: 80, azimuth: 0, fov: 50, sun: false,
   },
   "Schwarzschild (no spin → no BZ jet)": { spin: 0, distance: 36, inclination: 80, jet: false },
   "Luminet 1979 (bolometric)": {

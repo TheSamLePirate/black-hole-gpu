@@ -370,6 +370,23 @@ h1 {
   color: var(--dim);
 }
 
+#r-video {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#r-video summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#r-video .form {
+  margin: 10px 0 4px;
+}
+
 #render .actions {
   display: flex;
   align-items: center;

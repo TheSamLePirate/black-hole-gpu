@@ -534,6 +534,12 @@ export const SCHEMA: ControlDef[] = [
     help: "One ray per N×N pixels while moving. When the camera stops, the image fills in to full resolution over N² frames.",
   },
   {
+    key: "realtimeBudget", type: "number", section: "render", group: "Realtime", label: "Frame budget", min: 8, max: 120, step: 1, unit: "ms",
+    visible: (s) => s.realtimeSubsampling === "auto", effect: "none",
+    help: "GPU time per realtime frame that the automatic subsampling aims for: 30 ms ≈ 30 fps, 60 ms ≈ 15 fps with finer blocks (sharper while moving or while time runs).",
+    keywords: "fps frame rate performance speed",
+  },
+  {
     key: "temporalBlend", type: "number", section: "render", group: "Realtime", label: "Temporal blend", min: 0.05, max: 1, step: 0.01, advanced: true,
     help: "Weight of each new realtime sample (1 = no temporal accumulation). Lower = smoother, more ghosting while animating.",
   },
@@ -592,4 +598,14 @@ export const PRESET_INFO: Record<string, { description: string; icon: string }> 
   "Orbiting at r=8 (aberration)": { description: "Camera on a circular orbit: the sky is aberrated and Doppler-shifted.", icon: "↻" },
   "Falling in (rain frame)": { description: "Freely falling observer close to the horizon.", icon: "↓" },
   "Lensing grid + shadow guide": { description: "Coordinate grid on the sky and the analytic shadow outline.", icon: "▦" },
+  "EHT: M87* at 230 GHz (20 µas beam)": { description: "Millimetre view of an M87*-like hot flow with the EHT beam and polarization ticks.", icon: "◌" },
+  "Orbiting hot spot (flare, light echoes)": { description: "A flare orbiting close to the hole: Doppler flashes and lensed echoes.", icon: "✺" },
+  "Interstellar: wormhole to Gargantua": { description: "Interstellar's wormhole from our side: Gargantua, its star and a distant galaxy inside. T: the journey.", icon: "⊚" },
+  "Wormhole: our Milky Way from Gargantua's side": { description: "In Gargantua's universe, facing the mouth: our whole sky inside it.", icon: "⊙" },
+  "Wormhole: long throat (images wrapped around it)": { description: "2a = 10ρ: the far side repeats in rings, light wrapping round the throat.", icon: "◎" },
+  "Wormhole: strong lensing (W = 0.43 ρ)": { description: "A gently flaring mouth: strong lensing of our sky around it.", icon: "◉" },
+  "The mouth before Gargantua (banking flight)": { description: "Free flight with roll: the black mouth in front of Gargantua's shadow.", icon: "⊘" },
+  "Companion star close-up": { description: "The orange star: granulation, spots, prominences and corona, Gargantua beyond.", icon: "☼" },
+  "The star passing Gargantua": { description: "The star in front of Gargantua, both lensed.", icon: "✹" },
+  "Gargantua under the distant galaxy": { description: "Gargantua without the wormhole, under the far side's nebulae.", icon: "✧" },
 };

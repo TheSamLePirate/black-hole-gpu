@@ -498,6 +498,7 @@ export class SettingsPanel {
       ["medium", "Medium", "Balanced"],
       ["high", "High", "Error-controlled RK4 (1e-5), 64 spp"],
       ["ultra", "Ultra", "Error-controlled RK4 (2e-6), 256 spp, fine realtime steps"],
+      ["realtime", "RT max", "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still"],
     ];
     for (const [q, label, help] of levels) {
       seg.append(
@@ -506,7 +507,7 @@ export class SettingsPanel {
           onclick: () => {
             this.begin();
             Object.assign(this.s, QUALITY[q], { quality: q });
-            this.o.onChange([...QUALITY_KEYS, "quality"]);
+            this.o.onChange([...new Set([...QUALITY_KEYS, ...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality" as const])]);
             this.commit();
             this.refresh();
           },
@@ -870,7 +871,7 @@ export class SettingsPanel {
       ["W · X (Z · X)", "Roll left · right"],
       ["Right / Shift drag", "Turn the camera (no limit: loop over the top)"],
       ["J · G", "Jet · shadow guide"],
-      ["1 – 4", "Quality level"],
+      ["1 – 5", "Quality level (5: realtime max)"],
       ["M", "Show / hide settings (menu)"],
       ["/", "Search settings"],
       ["⌘Z · ⇧⌘Z", "Undo · redo"],

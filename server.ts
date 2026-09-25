@@ -12,7 +12,7 @@ const server = Bun.serve({
       POST: async (req) => {
         if (!dev) return new Response("disabled", { status: 404 });
         const name = new URL(req.url).searchParams.get("name")?.replace(/[^\w.-]/g, "") || "snapshot";
-        const file = /\.(png|exr|json)$/.test(name) ? name : `${name}.png`;
+        const file = /\.(png|exr|json|mp4)$/.test(name) ? name : `${name}.png`;
         await Bun.write(`snapshots/${file}`, await req.arrayBuffer());
         return new Response("ok");
       },

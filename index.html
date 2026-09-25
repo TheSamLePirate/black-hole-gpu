@@ -60,6 +60,7 @@
         <button id="render-close" class="icon" title="Hide (the render keeps running)">✕</button>
       </header>
       <div class="form">
+        <label title="Sets resolution, sampling and integrator for the purpose">Preset<select id="r-preset"></select></label>
         <label>Resolution<select id="r-res"></select></label>
         <div class="pair">
           <label>Width<input id="r-w" type="number" min="16" step="1" /></label>
@@ -78,6 +79,24 @@
         <button id="r-pause">Pause</button>
         <button id="r-stop">Close</button>
       </div>
+      <details id="r-video">
+        <summary>Video</summary>
+        <div class="form">
+          <label>Camera<select id="v-source"></select></label>
+          <div class="pair">
+            <label>Duration [s]<input id="v-duration" type="number" min="1" max="600" step="1" value="24" /></label>
+            <label>Frame rate<select id="v-fps"></select></label>
+          </div>
+          <div class="pair">
+            <label title="Simulated time per second of video, in M = GM/c³ (the disk turns, the star orbits)">Time speed [M/s]<input id="v-rate" type="number" min="0" max="500" step="1" value="20" /></label>
+            <label title="Motion blur of the flow: exposure as a fraction of the frame interval">Shutter<select id="v-shutter"></select></label>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="v-start" class="primary">Render video (MP4)</button>
+          <button id="v-stop">Stop</button>
+        </div>
+      </details>
       <div class="actions exports">
         <span>Export</span>
         <button id="r-png" title="8-bit sRGB, tone-mapped">PNG</button>
@@ -88,7 +107,7 @@
 
     <div id="help">
       drag orbit · right/shift-drag look · wheel zoom · alt+wheel FOV · pinch zoom · double-click recentre ·
-      ZQSD/AE fly · WX roll · arrows/± orbit · O orbit · C dive · T journey · J jet · G guide · M settings · / search · 1–4 quality · space time · H hide
+      ZQSD/AE fly · WX roll · arrows/± orbit · O orbit · C dive · T journey · J jet · G guide · M settings · / search · 1–5 quality · space time · H hide
     </div>
 
     <div id="error" hidden></div>
