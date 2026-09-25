@@ -102,6 +102,8 @@ export interface Settings {
   integratorTolerance: number;
   noiseThreshold: number; // adaptive sampling: relative std. error at which a pixel stops (0 = off)
   temporalBlend: number; // weight of a new realtime sample in the temporal accumulation (1 = off)
+  denoise: boolean; // variance-guided à-trous filter on accumulated images
+  denoiseStrength: number;
   exposure: number; // EV
   bloom: number; // fraction of the energy spread by the optical PSF
   tonemap: Tonemap;
@@ -192,6 +194,8 @@ export function defaultSettings(): Settings {
     integratorTolerance: 1e-5,
     noiseThreshold: 0.01,
     temporalBlend: 0.5,
+    denoise: true,
+    denoiseStrength: 1,
     exposure: 0,
     bloom: 0.1,
     tonemap: "AgX punchy",

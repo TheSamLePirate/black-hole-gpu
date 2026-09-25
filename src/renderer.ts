@@ -130,6 +130,7 @@ interface Target {
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
   polGridPass: GPUBindGroup;
   beam: { level: number; tex: GPUTexture; buf: GPUBuffer; h: GPUBindGroup; v: GPUBindGroup } | null;
+  denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
   traceBind: GPUBindGroup;
   postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number }[];
   displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
@@ -166,6 +167,7 @@ export class Renderer {
   private postUp: GPUComputePipeline;
   private postPolGrid: GPUComputePipeline;
   private postBeamH: GPUComputePipeline;
+  private postAtrous: GPUComputePipeline;
   private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   private paramsF = new Float32Array(this.params);
@@ -263,6 +265,7 @@ export class Renderer {
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
     this.postBeamH = mkPost("beamH");
+    this.postAtrous = mkPost("atrous");
     this.postBeamV = mkPost("beamV");
 
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -431,6 +434,7 @@ export class Renderer {
       polGridBuf,
       polGridPass: null as unknown as GPUBindGroup,
       beam: null,
+      denoise: null,
       traceBind: null as unknown as GPUBindGroup,
       postPasses: [],
       displayBinds: new Map(),
@@ -446,6 +450,8 @@ export class Renderer {
     t.bloomTex.destroy();
     t.beam?.tex.destroy();
     t.beam?.buf.destroy();
+    t.denoise?.tex.destroy();
+    t.denoise?.bufs.forEach((b) => b.destroy());
   }
 
   private bindTarget(t: Target) {
@@ -511,6 +517,7 @@ export class Renderer {
             { binding: 5, resource: { buffer: t.resolveBuf } },
             { binding: 6, resource: { buffer: t.stamps } },
             { binding: 7, resource: { buffer: t.polAcc } },
+            { binding: 11, resource: { buffer: t.moments } },
           ],
         }),
       },
@@ -667,6 +674,12 @@ export class Renderer {
     return r;
   }
 
+  /** The target holds a multi-sample estimate (progressive / offline), not a realtime frame. */
+  private accumulated(t: Target) {
+    if (t === this.live) return this.lastPhase !== "realtime" && this.sampleIndex >= 2;
+    return (this.offline?.sampleIndex ?? 0) >= 2;
+  }
+
   /** Tick cell size in image pixels and grid dimensions. */
   private polCells(s: Settings, t: Target) {
     const cs = Math.max(6, Math.round((s.polTickSize * t.height) / 1080));
@@ -766,6 +779,44 @@ export class Renderer {
     }
   }
 
+  /**
+   * Variance-guided à-trous denoiser on the resolved image: 4 iterations (steps 1, 2, 4, 8 px,
+   * footprint ±30 px) ping-ponging hdr[0] → tmp → hdr[0] → tmp → hdr[0]. Only for accumulated
+   * images (progressive / offline), where every pixel knows the variance of its estimate.
+   */
+  private encodeDenoise(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    const d = this.device;
+    if (!t.denoise) {
+      const tex = d.createTexture({
+        size: [t.width, t.height],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      });
+      const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
+      const tmp = tex.createView();
+      const bufs = [0, 1, 2, 3].map(() => d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }));
+      const binds = bufs.map((buf, i) =>
+        d.createBindGroup({
+          layout: this.postAtrous.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: i % 2 === 0 ? hdr0 : tmp },
+            { binding: 2, resource: i % 2 === 0 ? tmp : hdr0 },
+            { binding: 12, resource: { buffer: buf } },
+          ],
+        }),
+      );
+      t.denoise = { tex, bufs, binds };
+    }
+    t.denoise.bufs.forEach((b, i) => d.queue.writeBuffer(b, 0, new Float32Array([2 ** i, 1.5 * s.denoiseStrength, i, 0])));
+    for (const g of t.denoise.binds) {
+      const pass = enc.beginComputePass();
+      pass.setPipeline(this.postAtrous);
+      pass.setBindGroup(0, g);
+      pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      pass.end();
+    }
+  }
+
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
     if (s?.polarization) {
       const { gw, gh } = this.polCells(s, t);
@@ -781,7 +832,8 @@ export class Renderer {
       pass.setBindGroup(0, p.bind);
       pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
       pass.end();
-      // beam after the downsampling chain (resolve + n − 1 downs), before the bloom upsampling
+      // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
+      if (s && i === 0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
   }

@@ -431,6 +431,16 @@ export const SCHEMA: ControlDef[] = [
     key: "pixelRatio", type: "number", section: "render", group: "Image", label: "Pixel ratio", min: 0.25, max: 3, step: 0.05, unit: "×", effect: "resize",
     help: "Internal resolution relative to CSS pixels. Higher = sharper and slower.",
   },
+  {
+    key: "denoise", type: "toggle", section: "render", group: "Converged image", label: "Denoiser", effect: "display",
+    help: "Variance-guided edge-avoiding à-trous filter on accumulated images: a pixel whose Monte Carlo estimate is still noisy (relative standard error above 2 %) is averaged with neighbours whose estimates are statistically compatible with it. Converged pixels, stars and the photon ring are never touched; it fades out by itself as the image converges. Also applied to offline renders and exports.",
+    keywords: "noise svgf atrous filter",
+  },
+  {
+    key: "denoiseStrength", type: "number", section: "render", group: "Converged image", label: "Denoiser strength", min: 0.25, max: 4, scale: "log", precision: 2, effect: "display", advanced: true,
+    enabled: (s) => s.denoise,
+    help: "Compatibility threshold of the edge-stopping test, in combined standard errors (1 = 1.5 σ).",
+  },
   // ------------------------------------------------------------------ render · realtime
   {
     key: "realtimeSubsampling", type: "choice", section: "render", group: "Realtime", label: "Subsampling", style: "segmented",

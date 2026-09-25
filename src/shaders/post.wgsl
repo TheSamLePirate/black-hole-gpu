@@ -14,6 +14,49 @@
 @group(0) @binding(9) var<uniform> G: vec4u;                           // cell px, grid W, grid H, image W
 
 @group(0) @binding(10) var<uniform> B: vec4f; // beam: σ [px of this level], kernel radius [px]
+@group(0) @binding(11) var<storage, read> moments: array<f32>; // Σ luminance² per pixel
+@group(0) @binding(12) var<uniform> AT: vec4f; // à-trous: step [px], σ (standard errors), iteration, unused
+
+// Variance-guided edge-avoiding à-trous wavelet filter (Dammertz et al. 2010), with a statistical
+// edge-stopping test: the resolve pass stores in alpha the variance of each pixel's Monte Carlo
+// estimate, Var = (Σl²/n − l̄²)/n. A neighbour q is averaged into p with the B3-spline weight
+// h × exp(−(l_p − l_q)² / (2σ²(Var_p + Var_q))): only when the two estimates are statistically
+// compatible. Pixels whose relative standard error is already below 2 % are left untouched, so
+// converged detail, stars and the photon ring are never blurred; genuinely noisy Monte Carlo
+// estimates (returning radiation, thin volumes at low spp) are averaged with compatible
+// neighbours. Variances are propagated (Σw² Var / (Σw)²) so wider iterations filter less.
+@compute @workgroup_size(8, 8)
+fn atrous(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let p = vec2i(gid.xy);
+  let hi = vec2i(size) - 1;
+  let c = textureLoad(src, p, 0);
+  let lp = luminance(c.rgb);
+  let varP = c.a;
+  if (varP < 0.0 || varP < (0.02 * lp) * (0.02 * lp) + 1e-12) {
+    textureStore(dst, gid.xy, c);
+    return;
+  }
+  let h = array<f32, 5>(0.0625, 0.25, 0.375, 0.25, 0.0625);
+  let step = i32(AT.x);
+  let s2 = 2.0 * AT.y * AT.y;
+  var wsum = 0.0;
+  var col = vec3f(0.0);
+  var vsum = 0.0;
+  for (var j = -2; j <= 2; j++) {
+    for (var i = -2; i <= 2; i++) {
+      let q = textureLoad(src, clamp(p + vec2i(i, j) * step, vec2i(0), hi), 0);
+      let dl = lp - luminance(q.rgb);
+      let vq = select(q.a, varP, q.a < 0.0);
+      let w = h[i + 2] * h[j + 2] * exp(-dl * dl / (s2 * (varP + vq) + 1e-20));
+      wsum += w;
+      col += w * q.rgb;
+      vsum += w * w * vq;
+    }
+  }
+  textureStore(dst, gid.xy, vec4f(col / wsum, vsum / (wsum * wsum)));
+}
 
 // Instrument beam (e.g. the EHT's ≈ 20 µas restoring beam): separable Gaussian on one mip level.
 fn beamBlur(gid: vec2u, dir: vec2i) {
@@ -75,9 +118,15 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   }
   let idx = gid.y * W + gid.x;
   var c: vec3f;
+  var variance = -1.0; // variance of the pixel's estimate (−1: unknown)
   if (block <= 1u || stamps[idx] >= R.w) {
     // sample taken with the current camera (possibly a few frames old while animating)
     c = loadAvg(gid.x, gid.y, W);
+    let n = accum[idx].a;
+    if (n >= 2.0) {
+      let l = luminance(c);
+      variance = max(moments[idx] / n - l * l, 0.0) / n;
+    }
   } else {
     // Stale pixel: bilinear reconstruction from the latest realtime frame, whose samples sit at
     // (block·i + ox, block·j + oy).
@@ -99,7 +148,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     c = mix(mix(c00, c10, t.x), mix(c01, c11, t.x), t.y);
   }
   c = min(c, vec3f(60000.0));
-  textureStore(dst, gid.xy, vec4f(c, 1.0));
+  textureStore(dst, gid.xy, vec4f(c, variance));
 }
 
 // 13-tap downsample (box-filtered 4×4 with overlapping bilinear fetches)
