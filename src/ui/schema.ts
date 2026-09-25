@@ -207,7 +207,8 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "background", type: "choice", section: "sky", group: "Celestial sphere", label: "Sky", style: "segmented",
     options: [
-      { value: "stars", label: "Stars", hint: "Blackbody stars + procedural Milky Way" },
+      { value: "real", label: "Real sky", hint: "119 614 Hipparcos/HYG stars + the Gaia DR2 Milky Way (NASA Deep Star Maps 2020)" },
+      { value: "stars", label: "Procedural", hint: "Blackbody stars + procedural Milky Way" },
       { value: "checker", label: "Grid", hint: "Latitude/longitude grid: makes the lensing map explicit" },
       { value: "image", label: "Image", hint: "Your own equirectangular panorama" },
     ],
@@ -219,7 +220,24 @@ export const SCHEMA: ControlDef[] = [
     help: "Brightness of the sky relative to the disk (artistic: the real sky is far fainter than an accretion disk).",
   },
   {
-    key: "starSize", type: "number", section: "sky", group: "Celestial sphere", label: "Star PSF size", min: 0.3, max: 4, step: 0.01, visible: (s) => s.background === "stars",
+    key: "starBrightness", type: "number", section: "sky", group: "Celestial sphere", label: "Star brightness", min: 0.1, max: 30, scale: "log", precision: 2, visible: (s) => s.background === "real",
+    help: "Catalogue stars relative to the Milky Way map. 1 = photometric calibration (a V = 0 star against 20 mag/arcsec² star clouds).",
+  },
+  {
+    key: "skyL", type: "number", section: "sky", group: "Orientation", label: "Galactic longitude", min: -180, max: 180, step: 0.1, unit: "°", visible: (s) => s.background === "real",
+    help: "Galactic longitude seen behind the hole from the default viewpoint (0° = the Galactic Centre in Sagittarius, 180° = anticentre in Auriga/Taurus, −80° = Carina / Southern Cross region).",
+    keywords: "galaxy sagittarius orientation rotate sky",
+  },
+  {
+    key: "skyB", type: "number", section: "sky", group: "Orientation", label: "Galactic latitude", min: -90, max: 90, step: 0.1, unit: "°", visible: (s) => s.background === "real",
+    help: "Galactic latitude behind the hole (−33° ≈ Large Magellanic Cloud at l = 280°).",
+  },
+  {
+    key: "skyRoll", type: "number", section: "sky", group: "Orientation", label: "Plane tilt", min: -180, max: 180, step: 0.1, unit: "°", visible: (s) => s.background === "real",
+    help: "Angle between the galactic plane and the black hole's equatorial plane.",
+  },
+  {
+    key: "starSize", type: "number", section: "sky", group: "Celestial sphere", label: "Star PSF size", min: 0.3, max: 4, step: 0.01, visible: (s) => s.background === "stars" || s.background === "real",
     help: "Width of the stellar point-spread function in pixels (flux-conserving: lensing still magnifies correctly).",
   },
   // ------------------------------------------------------------------ physics

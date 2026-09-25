@@ -31,7 +31,7 @@ function sanitize(s: Settings): Settings {
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
-  "targetSpp", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize",
+  "targetSpp", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed",
 ];
 
@@ -56,6 +56,10 @@ async function main() {
 
   const touch = () => (changed = true);
   const touchDisplay = () => (displayChanged = true);
+  const skyLoading = renderer
+    .loadSky()
+    .then(() => touch())
+    .catch((e) => console.warn("Real sky unavailable, using the procedural sky:", e));
   let guiDirty = false; // GUI widgets need refreshing (camera moved)
 
   const camera = new CameraController(canvas, settings, (mode) => {
@@ -265,7 +269,7 @@ async function main() {
     return `${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s`;
   };
   Object.assign(globalThis, {
-    __bh: { settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui },
+    __bh: { settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading },
   });
 
   // -------------------------------------------------------------------- loop

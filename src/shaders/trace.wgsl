@@ -33,6 +33,9 @@ struct Params {
   ext2: vec4f,     // interleave offset x, y, disk scale height H/R (0 = thin slab), unused
   volColor: vec4f, // hot-flow colour: CIE-integrated power law ν^-α (linear sRGB)
   modes: vec4u,    // render mode, shift mode, background mode, disk enabled
+  skyX: vec4f,     // rows of the rotation black-hole frame → ICRS equatorial; w = catalogue flux scale
+  skyY: vec4f,     // w = real sky loaded (0/1)
+  skyZ: vec4f,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -52,6 +55,10 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(5) var<storage, read_write> moments: array<f32>; // Σ luminance² per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
 @group(0) @binding(7) var<storage, read> syncLut: array<vec4f>;     // synchrotron spectrum colours
+@group(0) @binding(8) var mwTex: texture_2d<f32>;      // Gaia DR2 Milky Way (linear, mip-mapped)
+@group(0) @binding(9) var starLodTex: texture_2d<f32>; // catalogue radiance map (large footprints)
+// Star catalogue: [magic, grid, count, 0, cellStart[6·grid² + 1], stars (x, y, z, mag|T packed)]
+@group(0) @binding(10) var<storage, read> catalogue: array<u32>;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -728,6 +735,74 @@ fn equirectGrad(d: vec3f, j: vec3f) -> vec2f {
   return vec2f(du, dv);
 }
 
+// Spectral shift of a sky source approximated by that of a blackbody at T: per-channel ratio of the
+// shifted to the unshifted colour (1 for g = 1). Stars use their own temperatures exactly.
+fn shiftRatio(T: f32, g: f32) -> vec3f {
+  return blackbodyShifted(T, g) / max(bbLookup(T).rgb, vec3f(1e-3));
+}
+
+fn catalogueCell(d: vec3f, grid: u32) -> u32 {
+  let fuv = faceUV(d);
+  let gf = f32(grid);
+  let cx = min(u32(floor((fuv.y * 0.5 + 0.5) * gf)), grid - 1u);
+  let cy = min(u32(floor((fuv.z * 0.5 + 0.5) * gf)), grid - 1u);
+  return (u32(fuv.x) * grid + cy) * grid + cx;
+}
+
+// The real sky: NASA/Goddard SVS Deep Star Maps 2020 (Gaia DR2 stars fainter than Tycho, as a
+// diffuse map) + the 119 614 HYG/Hipparcos stars as exact point sources, each a blackbody at its
+// B−V temperature seen at g·T. Directions are rotated into ICRS equatorial coordinates.
+fn realSky(dB: vec3f, g: f32, fpB: Footprint) -> vec3f {
+  let d = vec3f(dot(P.skyX.xyz, dB), dot(P.skyY.xyz, dB), dot(P.skyZ.xyz, dB));
+  var fp: Footprint;
+  fp.jx = vec3f(dot(P.skyX.xyz, fpB.jx), dot(P.skyY.xyz, fpB.jx), dot(P.skyZ.xyz, fpB.jx));
+  fp.jy = vec3f(dot(P.skyX.xyz, fpB.jy), dot(P.skyY.xyz, fpB.jy), dot(P.skyZ.xyz, fpB.jy));
+  // Milky Way map: u = 0.5 − RA/360°, v = (90° − Dec)/180°
+  let uv = vec2f(fract(0.5 - atan2(d.y, d.x) / TAU), acos(clamp(d.z, -1.0, 1.0)) / PI);
+  let gx = equirectGrad(d, fp.jx) * vec2f(-1.0, 1.0);
+  let gy = equirectGrad(d, fp.jy) * vec2f(-1.0, 1.0);
+  var col = textureSampleGrad(mwTex, bgSamp, uv, gx, gy).rgb * shiftRatio(5000.0, g);
+
+  // Catalogue stars through the sky filter; beyond ~cell-sized footprints, the catalogue's
+  // radiance map (same flux, mip-filtered) takes over.
+  let filt = skyFilter(d, fp, P.time.w);
+  let grid = max(catalogue[1], 1u);
+  let cellAngle = 1.5708 / f32(grid);
+  let reach = 3.0 * filt.radius;
+  let w = smoothstep(0.25, 0.5, reach / cellAngle);
+  let fluxScale = P.skyX.w;
+  if (w < 1.0) {
+    let starsBase = 4u + 6u * grid * grid + 1u;
+    var cells = array<u32, 4>(0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu);
+    var sum = vec3f(0.0);
+    for (var c = 0u; c < 4u; c++) {
+      let o = vec2f(select(-1.0, 1.0, (c & 1u) != 0u), select(-1.0, 1.0, (c & 2u) != 0u)) * reach;
+      let cell = catalogueCell(normalize(d + o.x * filt.e1 + o.y * filt.e2), grid);
+      var seen = false;
+      for (var k = 0u; k < c; k++) { if (cells[k] == cell) { seen = true; } }
+      cells[c] = cell;
+      if (seen) { continue; }
+      let s0 = catalogue[4u + cell];
+      let s1 = catalogue[5u + cell];
+      for (var i = s0; i < s1; i++) {
+        let b = starsBase + 4u * i;
+        let sd = vec3f(bitcast<f32>(catalogue[b]), bitcast<f32>(catalogue[b + 1u]), bitcast<f32>(catalogue[b + 2u]));
+        let k = skyKernel(filt, d - sd);
+        if (k < 1e-4 * filt.norm) { continue; }
+        let mt = unpack2x16float(catalogue[b + 3u]);
+        sum += blackbodyShifted(mt.y * 1000.0, g) * (exp2(-1.3287712 * mt.x) * fluxScale * k);
+      }
+    }
+    col += (1.0 - w) * sum;
+  }
+  if (w > 0.0) {
+    let lod = textureSampleGrad(starLodTex, bgSamp, uv, gx, gy).rgb;
+    col += w * lod * (fluxScale / (1.0 / 4250.0)) * shiftRatio(5800.0, g);
+  }
+  // map value 0.1 (bright star clouds) → radiance 0.05: the sky stays far fainter than the inner disk
+  return col * 0.5;
+}
+
 fn background(d: vec3f, g: f32, fp: Footprint) -> vec3f {
   let mode = P.modes.z;
   let intensity = P.time.z;
@@ -748,8 +823,10 @@ fn background(d: vec3f, g: f32, fp: Footprint) -> vec3f {
     // anisotropic, mip-mapped lookup over the lensed footprint (no seam: explicit gradients)
     let tex = textureSampleGrad(bgTex, bgSamp, vec2f(u, v), equirectGrad(d, fp.jx), equirectGrad(d, fp.jy)).rgb;
     // approximate the spectral shift by that of a 6500 K spectrum
-    let shiftc = blackbodyShifted(6500.0, g);
-    return tex * shiftc * intensity;
+    return tex * shiftRatio(6500.0, g) * intensity;
+  }
+  if (mode == 3u && P.skyY.w > 0.5) {
+    return realSky(d, g, fp) * intensity;
   }
   let filt = skyFilter(d, fp, P.time.w);
   var col = milkyWay(d, g, filt.radius);

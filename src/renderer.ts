@@ -1,6 +1,11 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
+import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
+import milkyWayUrl from "../assets/sky/milkyway.webp";
+import starCatalogueUrl from "../assets/sky/stars.bin";
+import starLodUrl from "../assets/sky/starlod.bin";
+import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame } from "./camera";
 import {
   blackbodyLogY,
@@ -17,10 +22,12 @@ import { encodeEXR, encodePNG16 } from "./exporters";
 
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
-const BG_MODES = { stars: 0, checker: 1, image: 2 } as const;
+const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 22;
+const PARAM_VEC4S = 25;
+/** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
+const STAR_FLUX_SCALE = 1 / 4250;
 
 const FLAG_ADAPTIVE_RK = 1;
 const FLAG_ADAPTIVE_SPP = 2;
@@ -158,6 +165,11 @@ export class Renderer {
   private lutBuf: GPUBuffer;
   private syncLutBuf: GPUBuffer;
   private bgTexture: GPUTexture;
+  private mwTexture: GPUTexture;
+  private starLodTexture: GPUTexture;
+  private catalogue: GPUBuffer;
+  private skyBuilder: SkyTextureBuilder;
+  private skyReady = false;
   private sampler: GPUSampler;
   private clampSampler: GPUSampler;
 
@@ -187,7 +199,7 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string },
+    src: { trace: string; display: string; post: string; sky: string },
   ) {
     this.device = device;
     this.context = context;
@@ -208,6 +220,9 @@ export class Renderer {
         { binding: 5, visibility: C, buffer: { type: "storage" } },
         { binding: 6, visibility: C, buffer: { type: "storage" } },
         { binding: 7, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 8, visibility: C, texture: { sampleType: "float" } },
+        { binding: 9, visibility: C, texture: { sampleType: "float" } },
+        { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -242,14 +257,48 @@ export class Renderer {
     const sync = buildSynchrotronLUT();
     this.syncLutBuf = device.createBuffer({ size: sync.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.syncLutBuf, 0, sync);
-    this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat" });
-    this.clampSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-    this.bgTexture = device.createTexture({
-      size: [1, 1],
-      format: "rgba8unorm-srgb",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    // trilinear + anisotropic: sky lookups use explicit gradients from the lensed pixel footprint
+    this.sampler = device.createSampler({
+      magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 16, addressModeU: "repeat",
     });
-    device.queue.writeTexture({ texture: this.bgTexture }, new Uint8Array([0, 0, 0, 255]), {}, [1, 1]);
+    this.clampSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+    const placeholder = () => {
+      const t = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      device.queue.writeTexture({ texture: t }, new Uint8Array([0, 0, 0, 255]), {}, [1, 1]);
+      return t;
+    };
+    this.bgTexture = placeholder();
+    this.mwTexture = placeholder();
+    this.starLodTexture = placeholder();
+    // empty catalogue: grid 1, no stars
+    this.catalogue = device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(this.catalogue, 0, new Uint32Array([0x31525453, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    this.skyBuilder = new SkyTextureBuilder(device, src.sky);
+  }
+
+  /**
+   * Loads the real sky (Gaia DR2 Milky Way map + Hipparcos/HYG catalogue) in the background; the
+   * procedural sky is shown until it is ready.
+   */
+  async loadSky(): Promise<void> {
+    const [bitmap, lod, cat] = await Promise.all([
+      fetch(milkyWayUrl)
+        .then((r) => r.blob())
+        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" })),
+      loadPackedTexture(this.device, starLodUrl),
+      loadStarCatalogue(this.device, starCatalogueUrl),
+    ]);
+    this.mwTexture = this.skyBuilder.build(bitmap, "log16", this.device.limits.maxTextureDimension2D);
+    this.starLodTexture = lod;
+    this.catalogue = cat;
+    this.skyReady = true;
+    if (this.live) this.bindTarget(this.live);
+    if (this.offline) this.bindTarget(this.offline.target);
+    this.invalidate();
+  }
+
+  get realSkyLoaded() {
+    return this.skyReady;
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
@@ -269,7 +318,9 @@ export class Renderer {
     if (!context) throw new Error("Could not create a WebGPU canvas context.");
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
-    const src = { trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL) };
+    const src = {
+      trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
+    };
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
     for (const [name, code] of Object.entries(src)) {
@@ -384,6 +435,9 @@ export class Renderer {
         { binding: 5, resource: { buffer: t.moments } },
         { binding: 6, resource: { buffer: t.stamps } },
         { binding: 7, resource: { buffer: this.syncLutBuf } },
+        { binding: 8, resource: this.mwTexture.createView() },
+        { binding: 9, resource: this.starLodTexture.createView() },
+        { binding: 10, resource: { buffer: this.catalogue } },
       ],
     });
     t.displayBinds.clear();
@@ -471,15 +525,8 @@ export class Renderer {
 
   async setBackgroundImage(file: Blob) {
     const bmp = await createImageBitmap(file, { colorSpaceConversion: "none" });
-    const max = this.device.limits.maxTextureDimension2D;
-    const w = Math.min(bmp.width, max);
-    const h = Math.min(bmp.height, max);
-    const tex = this.device.createTexture({
-      size: [w, h],
-      format: "rgba8unorm-srgb",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    this.device.queue.copyExternalImageToTexture({ source: bmp }, { texture: tex }, [w, h]);
+    // linear half floats + mips (footprint-filtered lookups)
+    const tex = this.skyBuilder.build(bmp, "srgb", this.device.limits.maxTextureDimension2D);
     const old = this.bgTexture;
     this.bgTexture = tex;
     if (this.live) this.bindTarget(this.live);
@@ -558,6 +605,10 @@ export class Renderer {
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 0);
     set(20, dc.volColor[0]!, dc.volColor[1]!, dc.volColor[2]!, 0);
     u.set([RENDER_MODES[s.renderMode], SHIFT_MODES[s.shiftMode], BG_MODES[s.background], s.disk ? 1 : 0], 21 * 4);
+    const sky = skyMatrix(s);
+    set(22, ...sky[0], s.starBrightness * STAR_FLUX_SCALE);
+    set(23, ...sky[1], this.skyReady ? 1 : 0);
+    set(24, ...sky[2], 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

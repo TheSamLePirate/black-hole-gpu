@@ -1,7 +1,7 @@
 export type Motion = "static" | "orbit" | "infall" | "forward";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
-export type Background = "stars" | "checker" | "image";
+export type Background = "real" | "stars" | "checker" | "image";
 export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp";
 export type Quality = "low" | "medium" | "high" | "ultra";
 
@@ -55,6 +55,10 @@ export interface Settings {
   background: Background;
   bgIntensity: number;
   starSize: number;
+  starBrightness: number; // catalogue stars relative to the Milky Way map (1 = photometric calibration)
+  skyL: number; // galactic longitude behind the hole (default view) [deg]
+  skyB: number; // galactic latitude behind the hole [deg]
+  skyRoll: number; // tilt of the galactic plane w.r.t. the black hole's equator [deg]
   // time
   animate: boolean;
   timeSpeed: number; // M per second
@@ -116,9 +120,13 @@ export function defaultSettings(): Settings {
     hotFlowHR: 0.4,
     hotFlowAlpha: 0.8,
     hotFlowIntensity: 0.6,
-    background: "stars",
+    background: "real",
     bgIntensity: 1,
     starSize: 1,
+    starBrightness: 1,
+    skyL: 0,
+    skyB: 0,
+    skyRoll: 35,
     animate: true,
     timeSpeed: 6,
     renderMode: "physical",
