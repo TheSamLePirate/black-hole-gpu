@@ -1,4 +1,4 @@
-export type Motion = "static" | "orbit" | "infall" | "forward";
+export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
@@ -36,6 +36,13 @@ export interface Settings {
   roll: number;
   motion: Motion;
   beta: number; // only for "forward"
+  // "geodesic": the camera is a massive body in free fall (gravity button); its 3-velocity relative
+  // to the local static/ZAMO observer, components along the anchor's (r̂, θ̂, φ̂) at the camera
+  velR: number;
+  velT: number;
+  velP: number;
+  thrust: number; // proper acceleration of the flight keys when gravity is on [c²/M]
+  showGeodesic: boolean; // draw the camera's predicted free-fall path
   // thin disk
   disk: boolean;
   diskTemp: number; // peak effective temperature, K
@@ -157,6 +164,11 @@ export function defaultSettings(): Settings {
     roll: 0,
     motion: "static",
     beta: 0.3,
+    velR: 0,
+    velT: 0,
+    velP: 0,
+    thrust: 0.02,
+    showGeodesic: true,
     disk: true,
     diskTemp: 9000,
     diskOuter: 22,

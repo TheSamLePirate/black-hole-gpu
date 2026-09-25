@@ -66,6 +66,9 @@ async function main() {
     $("btn-orbit").classList.toggle("active", mode === "orbit");
     $("btn-dive").classList.toggle("active", mode === "dive");
     $("btn-journey").classList.toggle("active", mode === "journey");
+    $("btn-fly").classList.toggle("active", camera.flyMode);
+    $("btn-gravity").classList.toggle("active", camera.gravity);
+    syncButtons();
     touch();
     guiDirty = true;
   });
@@ -154,6 +157,12 @@ async function main() {
   const actions: Record<string, () => void> = {
     "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
     "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
+    "btn-fly": () => camera.setFlyMode(!camera.flyMode),
+    "btn-gravity": () => {
+      camera.setGravity(!camera.gravity);
+      refreshGui();
+      touch();
+    },
     "btn-journey": () => {
       camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
       refreshGui();
@@ -190,6 +199,8 @@ async function main() {
     else if (k === "o") actions["btn-orbit"]!();
     else if (k === "c") actions["btn-dive"]!();
     else if (k === "t") actions["btn-journey"]!();
+    else if (k === "v") actions["btn-fly"]!();
+    else if (k === "b") actions["btn-gravity"]!();
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
     else if (k === "i") actions["btn-info"]!();
@@ -346,14 +357,19 @@ async function main() {
   // -------------------------------------------------------------------- overlays
   function drawGuide() {
     const cam = cameraFrame(settings);
-    const key = settings.shadowGuide && cam.region === "hole"
-      ? [settings.spin, cam.r, cam.theta, settings.yaw, settings.pitch, settings.fov, cam.speed, overlay.width, overlay.height].join()
+    const path = settings.showGeodesic ? camera.predictPath() : null;
+    const guide = settings.shadowGuide && cam.region === "hole";
+    const key = guide || path || camera.flyMode
+      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, path?.at, camera.flyMode].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
     const ctx = overlay.getContext("2d")!;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (key === "off") return;
+    if (camera.flyMode) drawCrosshair(ctx);
+    if (path && cam.region === "hole") drawPath(ctx, cam, path);
+    if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const aspect = overlay.width / overlay.height;
     const W = overlay.width;
@@ -391,6 +407,72 @@ async function main() {
     return `ℓ = ${settings.whL.toFixed(2)} M (${side})`;
   }
 
+  function drawCrosshair(ctx: CanvasRenderingContext2D) {
+    const x = overlay.width / 2;
+    const y = overlay.height / 2;
+    const k = devicePixelRatio;
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1.2 * k;
+    ctx.beginPath();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      ctx.moveTo(x + dx! * 5 * k, y + dy! * 5 * k);
+      ctx.lineTo(x + dx! * 12 * k, y + dy! * 12 * k);
+    }
+    ctx.stroke();
+  }
+
+  /**
+   * The camera's predicted free fall, projected along straight lines of sight (a HUD, not lensed):
+   * points of the black hole's frame → camera axes (ZAMO frame, flat far-field map).
+   */
+  function drawPath(ctx: CanvasRenderingContext2D, cam: ReturnType<typeof cameraFrame>, path: NonNullable<typeof camera.path>) {
+    const st = Math.sin(cam.theta), ct = Math.cos(cam.theta), sp = Math.sin(cam.phi), cp = Math.cos(cam.phi);
+    const er = [st * cp, st * sp, ct], et = [ct * cp, ct * sp, -st], ep = [-sp, cp, 0];
+    const world = (v: number[]) => [0, 1, 2].map((i) => er[i]! * v[0]! + et[i]! * v[1]! + ep[i]! * v[2]!);
+    const fwd = world(cam.fwd), right = world(cam.right), up = world(cam.up);
+    const X = [cam.r * er[0]!, cam.r * er[1]!, cam.r * er[2]!];
+    const tanH = Math.tan((settings.fov * Math.PI) / 360);
+    const W = overlay.width;
+    const H = overlay.height;
+    const aspect = W / H;
+    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+    ctx.save();
+    ctx.lineWidth = Math.max(1.5, devicePixelRatio * 1.6);
+    ctx.setLineDash([8 * devicePixelRatio, 5 * devicePixelRatio]);
+    ctx.strokeStyle = "rgba(90, 220, 255, 0.9)";
+    ctx.beginPath();
+    let pen = false;
+    let last: [number, number] | null = null;
+    for (const p of path.pts) {
+      const d = [p[0] - X[0]!, p[1] - X[1]!, p[2] - X[2]!];
+      const z = dot(d, fwd);
+      if (z < 0.05) {
+        pen = false;
+        continue;
+      }
+      const sx = ((dot(d, right) / (z * tanH * aspect)) + 1) / 2 * W;
+      const sy = (1 - dot(d, up) / (z * tanH)) / 2 * H;
+      if (pen) ctx.lineTo(sx, sy);
+      else ctx.moveTo(sx, sy);
+      pen = true;
+      last = [sx, sy];
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `${11 * devicePixelRatio}px ui-monospace, Menlo, monospace`;
+    if (last) {
+      ctx.fillStyle = path.fate === "horizon" ? "rgba(255, 90, 70, 0.95)" : "rgba(90, 220, 255, 0.95)";
+      ctx.beginPath();
+      ctx.arc(last[0], last[1], 4 * devicePixelRatio, 0, Math.PI * 2);
+      ctx.fill();
+      const label = path.fate === "horizon" ? "horizon" : path.fate === "escape" ? "escape" : "";
+      if (label) ctx.fillText(label, last[0] + 8 * devicePixelRatio, last[1] - 6 * devicePixelRatio);
+    }
+    ctx.fillStyle = "rgba(90, 220, 255, 0.9)";
+    ctx.fillText("free-fall path (geodesic, not lensed)", 16 * devicePixelRatio, H - 34 * devicePixelRatio);
+    ctx.restore();
+  }
+
   const statsEl = $("stats");
   const readoutEl = $("readouts");
   function updateHUD(st: FrameStats, fpsNow: number) {
@@ -402,7 +484,12 @@ async function main() {
         : st.phase === "converging"
           ? `<b class="cv">CONVERGING</b> ${st.spp.toFixed(1)} / ${settings.targetSpp} spp`
           : `<b class="ok">CONVERGED</b> ${settings.targetSpp} spp`;
-    const cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
+    let cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
+    if (camera.flyMode) cin += ` · <b class="cin">FLY ×${camera.flySpeed.toFixed(2)}</b>`;
+    if (camera.gravity) {
+      const v = Math.hypot(settings.velR, settings.velT, settings.velP);
+      cin += ` · <b class="cin">GRAVITY</b> v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M${settings.animate ? "" : " (time paused)"}`;
+    }
     statsEl.innerHTML =
       `${phase}${cin}<br><span class="dim">${st.width}×${st.height}${renderer.hdr ? " · HDR" : ""} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +
       `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M</span>`;

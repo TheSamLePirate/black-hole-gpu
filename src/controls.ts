@@ -3,6 +3,7 @@ import {
 } from "./camera";
 import { horizon, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
+import { advance, fromZamo, predict, toZamo } from "./geodesic";
 import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
@@ -55,6 +56,18 @@ export class CameraController {
   private diveSaved: Partial<Settings> | null = null;
   private diveHold = 0;
   private targetL: number;
+  /** Game-style flight: pointer locked, the mouse turns the camera, the wheel sets the speed. */
+  flyMode = false;
+  /** Speed multiplier of free flight (wheel in fly mode). */
+  flySpeed = 1;
+  /** Gravity: the camera is a massive body following Kerr geodesics; the flight keys thrust. */
+  gravity = false;
+  /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
+  private flyVel: Vec3 = [0, 0, 0];
+  /** Last free-fall prediction for the overlay. */
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues"; at: number } | null = null;
+  /** Proper time elapsed on the camera's clock while gravity is on [M]. */
+  properTime = 0;
   private journey: { t: number; dir: "out" | "back"; start: Pick<Settings, PoseKeys> } | null = null;
 
   constructor(
@@ -71,6 +84,16 @@ export class CameraController {
     canvas.addEventListener("pointercancel", this.onUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
     canvas.addEventListener("dblclick", () => this.resetView());
+    document.addEventListener("pointerlockchange", () => {
+      this.flyMode = document.pointerLockElement === canvas;
+      this.onCinematicChange(this.cinematic);
+    });
+    // fly mode: the mouse turns the camera like in a game (right = turn right, up = look up)
+    document.addEventListener("mousemove", (e) => {
+      if (!this.flyMode || !this.enabled) return;
+      const k = 0.12 * Math.min(1, this.s.fov / 60);
+      this.rotateView(e.movementX * k, -e.movementY * k, 0);
+    });
     addEventListener("keydown", (e: KeyboardEvent) => {
       if (isTyping(e)) return;
       if (e.metaKey || e.ctrlKey) return;
@@ -149,8 +172,32 @@ export class CameraController {
     this.sync();
   }
 
+  /** Enters/leaves game-style flight (pointer lock; Esc also leaves). */
+  setFlyMode(on: boolean) {
+    if (on && document.pointerLockElement !== this.canvas) this.canvas.requestPointerLock?.();
+    if (!on && document.pointerLockElement === this.canvas) document.exitPointerLock();
+  }
+
+  /** Gravity on: from now on the camera falls freely (starting at rest w.r.t. the local static observer). */
+  setGravity(on: boolean) {
+    const s = this.s;
+    this.gravity = on;
+    this.path = null;
+    if (on) {
+      if (this.cinematic) this.setCinematic(null);
+      s.animate = true;
+      s.motion = "geodesic";
+      s.velR = s.velT = s.velP = 0;
+      this.properTime = 0;
+    } else if (s.motion === "geodesic") {
+      s.motion = "static";
+      s.velR = s.velT = s.velP = 0;
+    }
+    this.onCinematicChange(this.cinematic);
+  }
+
   private onDown = (e: PointerEvent) => {
-    if (!this.enabled) return;
+    if (!this.enabled || this.flyMode) return;
     this.canvas.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.dragLook = e.button === 2 || e.shiftKey;
@@ -208,6 +255,11 @@ export class CameraController {
     e.preventDefault();
     if (!this.enabled) return;
     const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    if (this.flyMode) {
+      // flight speed, like a game's throttle
+      this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
+      return;
+    }
     if (e.altKey) {
       this.s.fov = clamp(this.s.fov * Math.exp(dy * 0.001), 1, 150);
     } else {
@@ -237,10 +289,17 @@ export class CameraController {
 
     // keyboard (held keys)
     const kRate = 60 * dt;
-    if (this.keys.has("ArrowLeft")) s.azimuth = wrapDeg(s.azimuth + kRate);
-    if (this.keys.has("ArrowRight")) s.azimuth = wrapDeg(s.azimuth - kRate);
-    if (this.keys.has("ArrowUp")) s.inclination = clamp(s.inclination - kRate, 0.2, 179.8);
-    if (this.keys.has("ArrowDown")) s.inclination = clamp(s.inclination + kRate, 0.2, 179.8);
+    if (this.flyMode) {
+      // arrows turn the camera in flight
+      const kx = (this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("ArrowLeft") ? 1 : 0);
+      const ky = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
+      if (kx || ky) this.rotateView(kx * kRate, ky * kRate, 0);
+    } else {
+      if (this.keys.has("ArrowLeft")) s.azimuth = wrapDeg(s.azimuth + kRate);
+      if (this.keys.has("ArrowRight")) s.azimuth = wrapDeg(s.azimuth - kRate);
+      if (this.keys.has("ArrowUp")) s.inclination = clamp(s.inclination - kRate, 0.2, 179.8);
+      if (this.keys.has("ArrowDown")) s.inclination = clamp(s.inclination + kRate, 0.2, 179.8);
+    }
     if (this.keys.has("+") || this.keys.has("=")) this.zoomBy(Math.exp(-1.2 * dt));
     if (this.keys.has("-") || this.keys.has("_")) this.zoomBy(Math.exp(1.2 * dt));
     const move: [number, number, number, number] = [0, 0, 0, 0];
@@ -248,11 +307,22 @@ export class CameraController {
       const m = FLIGHT_KEYS[c];
       if (m) for (let i = 0; i < 4; i++) move[i]! += m[i]!;
     }
-    if (move.some((x) => x !== 0) && this.cinematic !== "dive" && this.cinematic !== "journey") {
-      if (this.cinematic === "orbit") this.setCinematic(null);
-      const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight");
-      if (move[3]) this.rotateView(0, 0, move[3] * 70 * dt);
-      if (move[0] || move[1] || move[2]) this.fly([move[0], move[1], move[2]], dt, fast);
+    const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight");
+    const free = this.cinematic !== "dive" && this.cinematic !== "journey";
+    if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
+    if (move[3] && free) this.rotateView(0, 0, move[3] * 70 * dt);
+    if (this.gravity && free) {
+      // free fall along the Kerr geodesic in step with the scene's time; the keys thrust
+      const simDt = s.animate ? s.timeSpeed * dt : 0;
+      if (simDt > 0) this.fall(simDt, [move[0], move[1], move[2]], fast);
+      this.flyVel = [0, 0, 0];
+    } else if (free) {
+      // kinematic flight with inertia: the velocity eases towards the keys' target (~0.12 s)
+      const target = (fast ? 3 : 0.8) * this.flySpeed;
+      const ease = 1 - Math.exp(-dt / 0.12);
+      for (let i = 0; i < 3; i++) this.flyVel[i]! += (move[i]! * target - this.flyVel[i]!) * ease;
+      if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);
+      else this.flyVel = [0, 0, 0];
     }
 
     // momentum (exponential damping)
@@ -322,11 +392,11 @@ export class CameraController {
    * Near the wormhole: a spatial geodesic of the Dneg metric (it can cross the throat); near the hole:
    * a straight line. The camera re-anchors to the nearest object.
    */
-  private fly(local: Vec3, dt: number, fast: boolean) {
+  private fly(local: Vec3, dt: number) {
     const s = this.s;
     const rH = horizon(s.spin);
-    const k = (fast ? 3 : 0.8) * dt;
     const n = Math.hypot(...local);
+    const k = n * dt;
     const c: Vec3 = [local[0] / n, local[1] / n, local[2] / n];
     /** Camera axes in the flat frame of the hole (hole region). */
     const holeAxes = () => {
@@ -374,6 +444,76 @@ export class CameraController {
       else setHolePose(s, Y, h.fw, h.up);
     }
     this.sync();
+  }
+
+  // ------------------------------------------------------------------------------ gravity
+  /**
+   * Advances the camera as a massive body by simDt of coordinate time (the scene's time): a Kerr
+   * geodesic near the hole (thrust = proper acceleration along the camera's axes), inertial motion
+   * along the spatial geodesics of the wormhole metric near the mouth (it has no gravity, g_tt = −1).
+   * The orientation is kept fixed with respect to the distant stars (a gyroscope, flat far field).
+   */
+  private fall(simDt: number, keys: Vec3, fast: boolean) {
+    const s = this.s;
+    const a = s.spin;
+    const kn = Math.hypot(...keys);
+    const accel = kn > 0 ? s.thrust * (fast ? 5 : 1) : 0;
+    const cam = cameraFrame(s);
+    if (cam.region === "hole") {
+      const X0 = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f0 = sphericalFrame(X0);
+      const w0 = (v: Vec3) => add3(f0.er, f0.et, f0.ep, v);
+      const dirZ: Vec3 = kn > 0 ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2])) : [0, 0, 0];
+      const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a), a, simDt, 0.05, accel, dirZ);
+      this.properTime += res.tau;
+      const st = res.st;
+      const X1 = blToCartesian(st.r, st.th, st.ph);
+      const f1 = sphericalFrame(X1);
+      const vel = add3(f1.er, f1.et, f1.ep, toZamo(st, a));
+      setHolePose(s, X1, w0(cam.fwd), w0(cam.up), vel);
+      s.motion = "geodesic";
+      this.targetDistance = s.distance;
+      return;
+    }
+    // near the wormhole: straight (geodesic) motion at constant speed, thrust changes γβ
+    const m = mouth(s);
+    const p = repPose(s);
+    const right = cross(p.fwd, p.up);
+    let v = p.vel;
+    if (accel > 0) {
+      const d = normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
+      const g = 1 / Math.sqrt(Math.max(1 - (v[0] ** 2 + v[1] ** 2 + v[2] ** 2), 1e-9));
+      const U = lin(v, g, d, accel * simDt);
+      v = lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
+    }
+    const speed = Math.hypot(...v);
+    this.properTime += simDt * Math.sqrt(Math.max(1 - speed * speed, 0));
+    if (speed < 1e-9) {
+      setRepPose(s, { ...p, vel: [0, 0, 0] });
+      return;
+    }
+    const q = flyDneg(m.w, p.l, p.n, lin(v, 1 / speed, v, 0), [p.fwd, p.up], speed * simDt);
+    setRepPose(s, { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]!, vel: lin(q.dir, speed, q.dir, 0) });
+    s.motion = "geodesic";
+    this.sync();
+  }
+
+  /**
+   * The camera's future free-fall path (no thrust) in the black hole's frame, for the overlay:
+   * recomputed at most 4 times a second. Near the mouth the path is not predicted.
+   */
+  predictPath() {
+    const now = performance.now();
+    if (!this.gravity) return (this.path = null);
+    if (this.path && now - this.path.at < 250) return this.path;
+    const s = this.s;
+    const cam = cameraFrame(s);
+    if (cam.region !== "hole") return (this.path = null);
+    const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin);
+    // about one orbital period ahead (2π r^1.5), so that bound orbits show a full turn
+    const p = predict(st, s.spin, clamp(1.1 * 2 * Math.PI * cam.r ** 1.5, 300, 30000), 360);
+    this.path = { ...p, at: now };
+    return this.path;
   }
 
   // ------------------------------------------------------------------------------ journey

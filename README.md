@@ -147,12 +147,24 @@ distance to the throat. **Free flight, six degrees of freedom** (keys by physica
 A E / W X on AZERTY = W A S D / Q E / Z X on QWERTY): forward/left/back/right, down/up, roll; ⇧ faster;
 right-drag turns the camera about its own axes with no gimbal limit. Near the wormhole the camera
 follows its geodesics, so it can cross the throat; it re-anchors to the nearest object and can go
-anywhere outside the black hole's horizon. These keys are reserved for flight. **T** runs the
+anywhere outside the black hole's horizon. These keys are reserved for flight. **V** switches to
+game-style flight: pointer locked, the mouse turns the camera, the wheel sets the speed, movements ease
+in and out (inertia), Esc leaves.
+
+**Gravity (B)**: while time runs, the camera becomes a massive body in free fall: a timelike Kerr
+geodesic (`src/geodesic.ts`: Hamiltonian in Boyer–Lindquist coordinates, RK4 in proper time, advanced
+by the scene's coordinate time so the camera, the flow and the star share one clock) released at rest
+w.r.t. the local ZAMO; the flight keys fire thrusters (proper acceleration, setting "Thrust"). The view is
+that of the moving observer (aberration, Doppler), its orientation is kept fixed on the stars (gyroscope),
+and near the wormhole — whose metric has no gravity — it coasts along the Dneg geodesics. The predicted
+free-fall path is drawn as a dashed line (straight lines of sight, not lensed; red end = horizon). Tests:
+circular orbits keep their radius and Keplerian period, u·u = −1, and the proper time of a radial fall
+matches the cycloid solution. **T** runs the
 journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from
 the black hole's universe: the way back home).
 
 Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
+rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

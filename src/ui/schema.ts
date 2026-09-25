@@ -121,6 +121,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "orbit", label: "Circular orbit", hint: "Keplerian orbit: strong aberration and Doppler of the whole sky" },
       { value: "infall", label: "Free fall (rain frame)", hint: "Falling from rest at infinity, γ = 1/α" },
       { value: "forward", label: "Boost along view", hint: "Arbitrary speed β in the viewing direction" },
+      { value: "geodesic", label: "Free fall (gravity)", hint: "The camera follows its own geodesic (Gravity button, B)" },
     ],
     help: "Velocity of the camera relative to the local zero-angular-momentum observer. Moving observers see relativistic aberration (the sky crowds forward) and Doppler shifts.",
     keywords: "velocity aberration boost orbit fall",
@@ -133,6 +134,17 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "cinematicSpeed", type: "number", section: "scene", group: "Observer motion", label: "Cinematic speed", min: 0.5, max: 60, step: 0.1, effect: "none",
     help: "Orbit mode (O): degrees per second. Dive mode (D): proper time of the falling observer, in M per second.",
+  },
+  // ------------------------------------------------------------------ scene · flight & gravity
+  {
+    key: "thrust", type: "number", section: "scene", group: "Flight & gravity", label: "Thrust", min: 0.001, max: 1, scale: "log", unit: "c²/M", precision: 2, effect: "none",
+    help: "With gravity on (B), the flight keys fire thrusters: proper acceleration of the camera, ×5 with Shift. Hovering at r against gravity needs about M/r² (0.0025 at 20 M) — and much more near the horizon.",
+    keywords: "rocket acceleration gravity thruster",
+  },
+  {
+    key: "showGeodesic", type: "toggle", section: "scene", group: "Flight & gravity", label: "Show free-fall path", effect: "none",
+    help: "With gravity on, draws the camera's predicted geodesic (no thrust) as a dashed line: red end = it falls into the horizon. Projected along straight lines of sight (not lensed).",
+    keywords: "trajectory orbit geodesic path prediction",
   },
   // ------------------------------------------------------------------ scene · wormhole
   {

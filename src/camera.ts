@@ -107,12 +107,14 @@ function holeFrame(s: Settings): CameraFrame {
   } else if (s.motion === "infall") {
     // free fall from rest at infinity with zero angular momentum (the "rain" frame): γ = 1/α
     orbital = [-Math.sqrt(Math.max(0, 1 - z.alpha * z.alpha)), 0, 0];
+  } else if (s.motion === "geodesic") {
+    orbital = [s.velR, s.velT, s.velP];
   }
   return withMotion(s, { region: "hole", r, theta, phi, ell: 0, n: [1, 0, 0], right, up, fwd, zamo: z }, orbital);
 }
 
 /** A rep pose on the Gargantua side, outside the gluing sphere → black-hole frame (static observer). */
-function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3; up: Vec3; fwd: Vec3 }): CameraFrame {
+function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3; up: Vec3; fwd: Vec3; vel: Vec3 }): CameraFrame {
   const X = repToHole(m, l, n);
   const f = sphericalFrame(X);
   const r = Math.max(f.r, horizon(s.spin) + 0.05);
@@ -124,7 +126,7 @@ function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3
   return withMotion(s, {
     region: "hole", r, theta, phi: f.ph, ell: 0, n: [1, 0, 0],
     right: comps(v.right), up: comps(v.up), fwd: comps(v.fwd), zamo: zamo(r, theta, s.spin),
-  }, null);
+  }, s.motion === "geodesic" ? comps(v.vel) : null);
 }
 
 /** Camera orbiting the wormhole: whL is ℓ; inclination/azimuth are angles in the frame of its side. */
@@ -139,11 +141,12 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   const n = sidePosition(side, er); // the mirror map is its own inverse
   const b = basis(s.yaw, s.pitch, s.roll);
   const rep = (c: Vec3) => sideToRep(side, n, add(add(scale(er, c[0]), scale(et, c[1])), scale(ep, c[2])));
-  const v = { right: rep(b.right), up: rep(b.up), fwd: rep(b.fwd) };
+  const vel = rep([s.velR, s.velT, s.velP]);
+  const v = { right: rep(b.right), up: rep(b.up), fwd: rep(b.fwd), vel };
   if (side > 0 && s.whL > m.lGlue) return holeFromRep(s, m, s.whL, n, v);
   return withMotion(s, {
-    region: "throat", r: radius(m.w, s.whL)[0], theta, phi, ell: s.whL, n, ...v, zamo: STATIC_ZAMO,
-  }, null);
+    region: "throat", r: radius(m.w, s.whL)[0], theta, phi, ell: s.whL, n, right: v.right, up: v.up, fwd: v.fwd, zamo: STATIC_ZAMO,
+  }, s.motion === "geodesic" ? vel : null);
 }
 
 export function cameraFrame(s: Settings): CameraFrame {
@@ -172,22 +175,23 @@ export function blToCartesian(r: number, th: number, ph: number): Vec3 {
 // written back into the settings of either anchor (switching anchors keeps the view unchanged).
 // ---------------------------------------------------------------------------------------------
 
-export interface RepPose { l: number; n: Vec3; fwd: Vec3; up: Vec3 }
+export interface RepPose { l: number; n: Vec3; fwd: Vec3; up: Vec3; vel: Vec3 }
 
 /** Current camera as a rep pose (any position in the wormhole world). */
 export function repPose(s: Settings): RepPose {
   const m = mouth(s);
   const cam = cameraFrame(s);
-  if (cam.region === "throat") return { l: cam.ell, n: cam.n, fwd: cam.fwd, up: cam.up };
+  if (cam.region === "throat") return { l: cam.ell, n: cam.n, fwd: cam.fwd, up: cam.up, vel: cam.beta };
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   const f = sphericalFrame(X);
   const toRep = (c: Vec3) => toMouth(m, add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2])));
   const rep = holeToRep(m, X);
-  return { l: rep.l, n: rep.n, fwd: toRep(cam.fwd), up: toRep(cam.up) };
+  return { l: rep.l, n: rep.n, fwd: toRep(cam.fwd), up: toRep(cam.up), vel: toRep(cam.beta) };
 }
 
-/** Writes a rep pose as a camera orbiting the wormhole (up: keeps the roll; omitted: roll = 0). */
-export function setRepPose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3 }) {
+/** Writes a rep pose as a camera orbiting the wormhole (up: keeps the roll; omitted: roll = 0;
+ *  vel: the camera's 3-velocity, rep vector). */
+export function setRepPose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3; vel?: Vec3 }) {
   const side = p.l >= 0 ? 1 : -1;
   const f = sphericalFrame(sidePosition(side, p.n));
   const comps = (v: Vec3): Vec3 => {
@@ -202,12 +206,14 @@ export function setRepPose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { 
   s.yaw = yp.yaw;
   s.pitch = yp.pitch;
   s.roll = yp.roll;
+  if (p.vel) [s.velR, s.velT, s.velP] = comps(p.vel);
 }
 
-/** Writes a black-hole frame position and forward (and up) direction as a camera orbiting the hole. */
-export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3) {
+/** Writes a black-hole frame position and forward (and up, velocity) vectors as a camera orbiting the hole. */
+export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3, vel?: Vec3) {
   const f = sphericalFrame(X);
   const c = (v: Vec3): Vec3 => [dot(v, f.er), dot(v, f.et), dot(v, f.ep)];
+  if (vel) [s.velR, s.velT, s.velP] = c(vel);
   const yp = yawPitchRoll(c(fwd), up && c(up));
   s.anchor = "hole";
   s.distance = f.r;
@@ -219,9 +225,9 @@ export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3) {
 }
 
 /** Rep pose on the Gargantua side → black-hole frame position, forward and up vectors. */
-export function repToHolePose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3 }) {
+export function repToHolePose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3; vel?: Vec3 }) {
   const m = mouth(s);
-  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd), up: p.up && fromMouth(m, p.up) };
+  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd), up: p.up && fromMouth(m, p.up), vel: p.vel && fromMouth(m, p.vel) };
 }
 
 /** Changes what the camera orbits without moving it. Returns false when impossible (hole from our side). */
@@ -234,6 +240,6 @@ export function switchAnchor(s: Settings, to: Settings["anchor"]): boolean {
   }
   if (p.l < 0) return false;
   const h = repToHolePose(s, p);
-  setHolePose(s, h.X, h.fwd, h.up);
+  setHolePose(s, h.X, h.fwd, h.up, h.vel);
   return true;
 }
