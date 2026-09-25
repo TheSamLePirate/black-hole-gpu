@@ -1,7 +1,7 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, switchAnchor } from "./camera";
-import { CameraController, isTyping } from "./controls";
+import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -171,7 +171,7 @@ async function main() {
   syncButtons();
 
   addEventListener("keydown", (e: KeyboardEvent) => {
-    if (isTyping(e) || e.metaKey || e.ctrlKey) return;
+    if (isTyping(e) || e.metaKey || e.ctrlKey || e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
     const k = e.key.toLowerCase();
     if (e.code === "Space") {
       e.preventDefault();
@@ -183,7 +183,7 @@ async function main() {
     } else if (k === "p") savePNG();
     else if (k === "f") fullscreen();
     else if (k === "o") actions["btn-orbit"]!();
-    else if (k === "d") actions["btn-dive"]!();
+    else if (k === "c") actions["btn-dive"]!();
     else if (k === "t") actions["btn-journey"]!();
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");

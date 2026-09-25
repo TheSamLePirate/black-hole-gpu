@@ -172,23 +172,24 @@ export function traceDneg(
 }
 
 /**
- * Moves a camera along its forward direction by `ds` (a spatial geodesic) and parallel-transports
- * its up vector (the component normal to the plane of motion is kept; the in-plane part follows
- * the direction). Returns the new rep pose.
+ * Moves a camera by `ds` along the unit rep direction `dir` (a spatial geodesic) and parallel-
+ * transports the given vectors: their component normal to the plane of motion is kept, the in-plane
+ * part turns with the direction of motion (radial flight: rep vectors are carried unchanged).
  */
-export function flyDneg(w: Dneg, l0: number, n0: Vec3, fwd: Vec3, up: Vec3, ds: number) {
-  const end = traceDneg(w, l0, n0, fwd, Infinity, Infinity, { maxLength: Math.abs(ds), stepScale: 0.5 });
-  const N = cross(n0, fwd); // normal to the plane of motion (zero for a radial flight)
+export function flyDneg(w: Dneg, l0: number, n0: Vec3, dir: Vec3, vectors: Vec3[], ds: number) {
+  const end = traceDneg(w, l0, n0, dir, Infinity, Infinity, { maxLength: Math.abs(ds), stepScale: 0.5 });
+  const N = cross(n0, dir); // normal to the plane of motion
   const nn = Math.hypot(...N);
-  let newUp = up;
+  let moved = vectors;
   if (nn > 1e-9) {
     const Nu = scale(N, 1 / nn);
-    const perp0 = cross(Nu, fwd);
+    const perp0 = cross(Nu, dir);
     const perp1 = cross(Nu, end.d);
-    newUp = normalize(add(scale(Nu, dot(up, Nu)), scale(perp1, dot(up, perp0))));
+    moved = vectors.map((v) =>
+      normalize(add(add(scale(Nu, dot(v, Nu)), scale(end.d, dot(v, dir))), scale(perp1, dot(v, perp0)))),
+    );
   }
-  // (radial flight: rep vectors are carried along unchanged)
-  return { l: end.l, n: end.n, fwd: end.d, up: newUp };
+  return { l: end.l, n: end.n, dir: end.d, vectors: moved };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -230,7 +231,7 @@ export interface Mouth {
   lFar: number; // our side: rays are followed to ℓ = −lFar (r = 100 ρ), then straight
 }
 
-type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "spin";
+type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "spin" | "disk" | "diskOuter";
 export function mouth(s: Pick<Settings, MouthKeys>): Mouth {
   const w = dneg(s);
   const th = s.whIncl * DEG;
@@ -241,8 +242,11 @@ export function mouth(s: Pick<Settings, MouthKeys>): Mouth {
   let ez = sub([0, 0, 1], scale(ex, ex[2]));
   ez = Math.hypot(...ez) < 1e-6 ? normalize(cross(ex, [0, 1, 0])) : normalize(ez);
   const ey = cross(ez, ex);
-  // Large enough for the wormhole's own lensing to be done, small against the distance to the hole.
-  const rGlue = Math.min(Math.max(8 * w.rho, w.rho + 12 * w.M), 0.3 * D);
+  // Large enough for the wormhole's own lensing to be done, small against the distance to the hole,
+  // and clear of the accretion disk.
+  const R = D * Math.sin(th);
+  const toDisk = s.disk ? Math.hypot(Math.max(R - s.diskOuter, 0), D * Math.cos(th)) : Infinity;
+  const rGlue = Math.max(Math.min(Math.max(8 * w.rho, w.rho + 12 * w.M), 0.3 * D, 0.8 * toDisk), 2 * w.rho);
   return { w, C, ex, ey, ez, rGlue, lGlue: ellOfR(w, rGlue), lFar: ellOfR(w, 100 * w.rho) };
 }
 

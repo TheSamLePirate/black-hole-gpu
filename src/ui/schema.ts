@@ -59,6 +59,7 @@ export const GROUP_SWITCH: Record<string, keyof Settings> = {
   Polarization: "polarization",
   "Hot spot": "hotSpot",
   "Interstellar wormhole": "wormhole",
+  "Companion star": "sun",
 };
 
 const diskOn = (s: Settings) => s.disk;
@@ -105,8 +106,13 @@ export const SCHEMA: ControlDef[] = [
     help: "Turns the camera left/right away from the hole (right-drag on the view).",
   },
   {
-    key: "pitch", type: "number", section: "scene", group: "Look direction", label: "Pitch", min: -89, max: 89, step: 0.1, unit: "°",
+    key: "pitch", type: "number", section: "scene", group: "Look direction", label: "Pitch", min: -90, max: 90, step: 0.1, unit: "°",
     help: "Tilts the camera up/down (right-drag on the view).",
+  },
+  {
+    key: "roll", type: "number", section: "scene", group: "Look direction", label: "Roll", min: -180, max: 180, step: 0.1, unit: "°",
+    help: "Rotates the camera about its view direction (W / X on AZERTY, Z / X on QWERTY).",
+    keywords: "bank tilt horizon",
   },
   {
     key: "motion", type: "choice", section: "scene", group: "Observer motion", label: "Motion", style: "select",
@@ -300,6 +306,29 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "spotPhase", type: "number", section: "matter", group: "Hot spot", label: "Initial azimuth", min: -180, max: 180, step: 1, unit: "°", enabled: (s) => s.hotSpot,
+  },
+  // ------------------------------------------------------------------ matter · companion star
+  {
+    key: "sun", type: "toggle", section: "matter", group: "Companion star", label: "Star",
+    help: "A star on a circular orbit in the black hole's equatorial plane (in the black hole's frame; with a supermassive hole the star does the orbiting). Opaque limb-darkened blackbody photosphere, seen at the emission time with its orbital Doppler shift and gravitational redshift, and lensed like everything else.",
+    keywords: "sun star companion orbit binary",
+  },
+  {
+    key: "sunOrbit", type: "number", section: "matter", group: "Companion star", label: "Orbit radius", min: 8, max: 400, scale: "log", unit: "M", precision: 3, enabled: (s) => s.sun,
+  },
+  {
+    key: "sunRadius", type: "number", section: "matter", group: "Companion star", label: "Radius", min: 0.1, max: 20, scale: "log", unit: "M", precision: 3, enabled: (s) => s.sun,
+    help: "Artistic: a Sun-like star next to a 10⁸ M☉ hole would be ~0.005 M across.",
+  },
+  {
+    key: "sunTemp", type: "number", section: "matter", group: "Companion star", label: "Temperature", min: 2500, max: 40000, scale: "log", unit: "K", precision: 3, enabled: (s) => s.sun,
+  },
+  {
+    key: "sunBrightness", type: "number", section: "matter", group: "Companion star", label: "Brightness", min: 0.001, max: 100, scale: "log", precision: 2, enabled: (s) => s.sun,
+  },
+  {
+    key: "sunPhase", type: "number", section: "matter", group: "Companion star", label: "Orbital phase", min: -180, max: 180, step: 1, unit: "°", enabled: (s) => s.sun,
+    help: "Azimuth of the star at t = 0 (it then moves at the Keplerian angular velocity).",
   },
   // ------------------------------------------------------------------ sky
   {

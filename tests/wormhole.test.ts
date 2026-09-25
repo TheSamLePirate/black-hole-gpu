@@ -110,7 +110,8 @@ describe("Dneg rays", () => {
     const n0: Vec3 = [0, 0, 1];
     const f: Vec3 = [0, 1, 0];
     const u: Vec3 = [1, 0, 0];
-    const p = flyDneg(w, -500, n0, f, u, 10);
+    const q = flyDneg(w, -500, n0, f, [u], 10);
+    const p = { l: q.l, up: q.vectors[0]! };
     const r0 = radius(w, -500)[0];
     const r1 = radius(w, p.l)[0];
     expect(r1).toBeCloseTo(Math.hypot(r0, 10), 2);
@@ -145,5 +146,18 @@ describe("gluing frames", () => {
     expect(back.n[0]).toBeCloseTo(0.6, 8);
     expect(m.rGlue).toBeGreaterThan(8 * 2 - 1e-9);
     expect(radius(m.w, m.lGlue)[0]).toBeCloseTo(m.rGlue, 6);
+  });
+});
+
+describe("camera orientation (6 degrees of freedom)", () => {
+  test("yaw/pitch/roll ↔ basis round trip, including straight up/down", async () => {
+    const { basis, yawPitchRoll } = await import("../src/camera");
+    const cases = [[0, 0, 0], [30, 20, 10], [-170, -60, 120], [90, 90, 0], [45, -90, 30], [10, 89.9, -170], [179, 0, -45]];
+    for (const [y, p, r] of cases) {
+      const b = basis(y!, p!, r!);
+      const e = yawPitchRoll(b.fwd, b.up);
+      const c = basis(e.yaw, e.pitch, e.roll);
+      for (const k of ["fwd", "up", "right"] as const) for (let i = 0; i < 3; i++) expect(c[k][i]).toBeCloseTo(b[k][i]!, 9);
+    }
   });
 });

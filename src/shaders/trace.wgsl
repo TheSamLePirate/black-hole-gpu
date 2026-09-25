@@ -49,6 +49,8 @@ struct Params {
   whX: vec4f,      // mouth frame axes in the black hole's frame (x at the hole, z towards the spin axis)
   whY: vec4f,
   whZ: vec4f,
+  star: vec4f,     // companion star on (0/1), orbital radius [M], radius [M], temperature [K]
+  star2: vec4f,    // brightness, azimuth at t = 0 [rad], unused, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -376,6 +378,13 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
       h = min(h, max(0.7 * dist, 0.3 * Rj));
     }
   }
+  if (P.star.x > 0.5) {
+    // never step over the star's atmosphere (3 R); sample it finely near the limb
+    let pc = blCart(s.x);
+    let d = length(pc - starCentre(P.time.x + s.x.w)) / P.star.z;
+    let near = (0.03 + 0.12 * max(d - 1.0, 0.0)) * P.star.z;
+    h = min(h, max(0.7 * (d - 4.0) * P.star.z, near));
+  }
   if (P.spot.x > 0.5) {
     // never step over the hot spot; sample it at ≤ 0.25 σ
     let dist = sqrt(spotDist2(s, P.time.x)) - 3.0 * P.spot.z - 0.5 * abs(P.ext.z);
@@ -387,6 +396,95 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
 // Hot spot: a Gaussian blob on a circular Keplerian orbit (a flare, cf. GRAVITY's Sgr A* flares),
 // positioned at the retarded time t_em = t_now + Δt along the ray, so every image of it (primary,
 // secondary, photon ring) shows it where it was when that light left it.
+// Companion star: an opaque sphere on a circular equatorial orbit (Keplerian Ω), evaluated at the
+// emission time. Its photosphere is a limb-darkened blackbody with granulation; the frequency shift
+// uses the orbital motion of its centre (rigid rotation Ω around the hole) at the point hit.
+fn starCentre(tEm: f32) -> vec3f {
+  let rs = P.star.y;
+  let ph = P.star2.y + tEm / (pow(rs, 1.5) + P.bh.x);
+  return rs * vec3f(cos(ph), sin(ph), 0.0);
+}
+
+// First intersection of the chord p0 → p1 with a sphere (centre c, radius R), as a fraction (−1: none).
+fn sphereHit(p0: vec3f, p1: vec3f, c: vec3f, R: f32) -> f32 {
+  let dv = p1 - p0;
+  let f = p0 - c;
+  let cc = dot(f, f) - R * R;
+  let A = dot(dv, dv);
+  let B = dot(f, dv);
+  if (cc <= 0.0) { return 0.0; } // starts inside
+  let disc = B * B - A * cc;
+  if (disc < 0.0 || B >= 0.0) { return -1.0; }
+  let t = (-B - sqrt(disc)) / A;
+  return select(-1.0, t, t <= 1.0);
+}
+
+// Surface pattern of the star, rotating with it: granulation cells, spots with penumbrae.
+fn starSurface(nrm0: vec3f, tEm: f32) -> vec2f {
+  let ang = tEm * 0.004;
+  let cs = cos(ang);
+  let sn = sin(ang);
+  let nrm = vec3f(cs * nrm0.x - sn * nrm0.y, sn * nrm0.x + cs * nrm0.y, nrm0.z);
+  let t = tEm * 0.01;
+  // granulation: bright cells separated by dark lanes (ridged noise), two scales, slowly boiling
+  let g1 = 1.0 - abs(gnoise(nrm * 22.0 + vec3f(0.0, 0.0, t)));
+  let g2 = 1.0 - abs(gnoise(nrm * 60.0 + vec3f(t, 0.0, 0.0)));
+  let sg = gnoise(nrm * 6.0 - vec3f(t, t, 0.0)); // supergranulation
+  let gran = 0.78 + 0.2 * g1 * g1 * g1 + 0.07 * g2 + 0.06 * sg;
+  // active regions at low latitudes: umbra / penumbra (cooler), faculae around them (hotter)
+  let lat = 1.0 - smoothstep(0.25, 0.55, abs(nrm.z));
+  let sp = (gnoise(nrm * 11.0 + vec3f(3.0, 1.0, 2.0)) + 0.35 * gnoise(nrm * 29.0)) * lat;
+  let umbra = smoothstep(0.8, 0.88, sp);
+  let penumbra = smoothstep(0.68, 0.8, sp);
+  let fac = smoothstep(0.3, 0.48, sp) * (1.0 - penumbra);
+  let tf = mix(1.0, 0.88, penumbra) * mix(1.0, 0.8, umbra) * (1.0 + 0.05 * fac);
+  return vec2f(gran, tf);
+}
+
+fn starShift(n: GState, L: f32, E0: f32) -> f32 {
+  let a = P.bh.x;
+  let om = 1.0 / (pow(P.star.y, 1.5) + a);
+  if (P.modes.y == SHIFT_NONE) { return 1.0; }
+  return (1.0 / E0) / circularEmitterEnergy(max(n.x.x, 1.01 * P.bh.y), n.x.y, a, L, om);
+}
+
+// Photosphere: the emergent temperature falls towards the limb, T(μ) = T (0.2 + 0.8 μ)^¼ (steeper
+// than a grey atmosphere, as the visible continuum of the Sun), which gives both the limb darkening
+// and the redder limb: a white-hot centre fading to orange and red.
+fn shadeStar(X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
+  let nrm = normalize(X - c);
+  let mu = clamp(-dot(nrm, dW), 0.0, 1.0);
+  let surf = starSurface(nrm, tEm);
+  let T = P.star.w * pow(0.2 + 0.8 * mu, 0.25) * surf.y;
+  return blackbody(T * starShift(n, L, E0), P.disk.w) * P.star2.x * surf.x;
+}
+
+// Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
+// rim, prominences (Hα loops standing on the limb) and the white K-corona with radial streamers.
+fn starGlow(p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
+  let R = P.star.z;
+  let dv = p - c;
+  let d = length(dv);
+  let h = d / R - 1.0; // height above the photosphere, in stellar radii
+  if (h < 0.0 || h > 3.0) { return vec3f(0.0); }
+  let dir = dv / d;
+  let t = tEm * 0.003;
+  let Is = luminance(blackbody(P.star.w * g, P.disk.w)) * P.star2.x;
+  // corona: steep falloff, streamers along the field lines (angular noise, stretched radially)
+  let st = gnoise(dir * 3.2 + vec3f(t, 0.0, 0.0)) + 0.5 * gnoise(dir * 9.0 - vec3f(0.0, t, 0.0));
+  let streamers = 0.35 + 1.4 * smoothstep(-0.2, 0.9, st);
+  let corona = pow(1.0 / (1.0 + h), 7.0) * streamers;
+  // chromosphere: thin bright shell
+  let chrom = exp(-h / 0.03);
+  // prominences: ridged filaments on a few active longitudes, arching up to ~0.4 R
+  let loopN = 1.0 - abs(gnoise(dir * 6.0 + vec3f(0.0, 0.0, h * 4.0 + t)));
+  let region = smoothstep(0.15, 0.45, gnoise(dir * 1.7 + vec3f(7.0, 3.0, 1.0)));
+  let prom = smoothstep(0.86, 0.97, loopN) * region * exp(-h / 0.14);
+  let halpha = shiftRatio(3000.0, g) * vec3f(1.0, 0.25, 0.32);
+  let white = blackbodyShifted(6500.0, g) / max(luminance(blackbodyShifted(6500.0, 1.0)), 1e-6);
+  return Is / R * (white * corona * 0.12 + halpha * (chrom * 0.6 + prom * 2.0));
+}
+
 fn spotCentre(tEm: f32) -> vec3f {
   let a = P.bh.x;
   let rs = P.spot.y;
@@ -1556,6 +1654,28 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       n = wrapPole(ns);
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
+    }
+
+    if (P.star.x > 0.5) {
+      let p0 = blCart(s.x);
+      let p1 = blCart(n.x);
+      let tEm = tNow + n.x.w;
+      let c = starCentre(tEm);
+      let t = sphereHit(p0, p1, c, P.star.z);
+      if (!radio && length(p1 - c) < 4.0 * P.star.z) {
+        // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
+        let frac = select(1.0, t, t >= 0.0);
+        let pm = mix(p0, p1, 0.5 * frac);
+        // local path length = (−p·u_ZAMO) dλ for p_t = −1
+        col += trans * starGlow(pm, c, starShift(n, L, E0), tEm) * h * frac * zamoEnergy(n.x.x, n.x.y, a, L);
+      }
+      if (t >= 0.0) {
+        let X = mix(p0, p1, t);
+        if (!radio) { col += trans * shadeStar(X, c, n, L, E0, backwardDir(n, L, a), tEm); }
+        trans = 0.0;
+        fate = 3u;
+        break;
+      }
     }
 
     if (whOn) {

@@ -25,6 +25,7 @@ export interface Settings {
   fov: number; // vertical, degrees
   yaw: number;
   pitch: number;
+  roll: number;
   motion: Motion;
   beta: number; // only for "forward"
   // thin disk
@@ -126,6 +127,13 @@ export interface Settings {
   whIncl: number; // polar angle of the far mouth from the spin axis [deg]
   whAzimuth: number; // azimuth of the far mouth [deg]
   journeyDuration: number; // cinematic trip through the wormhole [s]
+  // companion star on a circular equatorial orbit around the hole
+  sun: boolean;
+  sunOrbit: number; // orbital radius [M]
+  sunRadius: number; // [M]
+  sunTemp: number; // photosphere temperature [K]
+  sunBrightness: number;
+  sunPhase: number; // orbital azimuth at t = 0 [deg]
 }
 
 export function defaultSettings(): Settings {
@@ -137,6 +145,7 @@ export function defaultSettings(): Settings {
     fov: 45,
     yaw: 0,
     pitch: 0,
+    roll: 0,
     motion: "static",
     beta: 0.3,
     disk: true,
@@ -220,13 +229,19 @@ export function defaultSettings(): Settings {
     wormhole: false,
     anchor: "hole",
     whL: -14,
-    whRho: 2,
+    whRho: 1.5,
     whLength: 0.01,
     whLensing: 0.05,
-    whDist: 60,
-    whIncl: 84,
+    whDist: 22,
+    whIncl: 70,
     whAzimuth: -160,
     journeyDuration: 24,
+    sun: false,
+    sunOrbit: 70,
+    sunRadius: 2.5,
+    sunTemp: 4300,
+    sunBrightness: 6,
+    sunPhase: 0,
   };
 }
 
@@ -243,9 +258,9 @@ export const presets: Record<string, Partial<Settings>> = {
     diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
   },
   "Interstellar: wormhole to Gargantua": {
-    wormhole: true, anchor: "wormhole", whL: -10, inclination: 88, azimuth: 8, yaw: 0, pitch: 0, fov: 55,
-    spin: 0.9, diskTemp: 5200, diskOuter: 20, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
-    skyL: 0, skyB: 0, skyRoll: 35,
+    wormhole: true, anchor: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
+    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
+    skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
   },
   "Schwarzschild (no spin → no BZ jet)": { spin: 0, distance: 36, inclination: 80, jet: false },
   "Luminet 1979 (bolometric)": {

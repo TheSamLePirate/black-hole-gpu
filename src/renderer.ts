@@ -26,7 +26,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 38;
+const PARAM_VEC4S = 40;
 const BANDS = { visible: 0, "230GHz": 1, multi: 2 } as const;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
@@ -672,6 +672,8 @@ export class Renderer {
     set(35, ...m.ex, 0);
     set(36, ...m.ey, 0);
     set(37, ...m.ez, 0);
+    set(38, s.sun ? 1 : 0, Math.max(s.sunOrbit, horizon(a) + s.sunRadius + 1), s.sunRadius, s.sunTemp);
+    set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -683,6 +685,7 @@ export class Renderer {
     let r = Math.max(60, 1.5 * s.diskOuter);
     if (s.jet) r = Math.max(r, s.jetLength * 1.05);
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
+    if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside
     return r;
   }
 

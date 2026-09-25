@@ -35,8 +35,11 @@ export interface CameraFrame {
   speed: number;
 }
 
-/** Camera basis from yaw/pitch, components along (r̂, θ̂, φ̂): yaw = pitch = 0 looks at the centre (−r̂). */
-function basis(yawDeg: number, pitchDeg: number) {
+/**
+ * Camera basis from yaw/pitch/roll, components along (r̂, θ̂, φ̂): yaw = pitch = 0 looks at the
+ * centre (−r̂) with the spin axis up; roll turns right/up about the view direction.
+ */
+export function basis(yawDeg: number, pitchDeg: number, rollDeg = 0) {
   const f0: Vec3 = [-1, 0, 0];
   const u0: Vec3 = [0, -1, 0];
   const r0: Vec3 = [0, 0, 1];
@@ -46,14 +49,24 @@ function basis(yawDeg: number, pitchDeg: number) {
   const right = norm(add(scale(r0, Math.cos(y)), scale(f0, -Math.sin(y))));
   const fwd = norm(add(scale(fy, Math.cos(p)), scale(u0, Math.sin(p))));
   const up = norm(cross(right, fwd));
-  return { right, up, fwd };
+  if (!rollDeg) return { right, up, fwd };
+  const c = Math.cos(rollDeg * DEG);
+  const sn = Math.sin(rollDeg * DEG);
+  return { right: add(scale(right, c), scale(up, sn)), up: add(scale(up, c), scale(right, -sn)), fwd };
 }
 
-/** Inverse of basis() for the forward vector: fwd = (−cos p cos y, −sin p, cos p sin y). */
-function yawPitch(f: Vec3) {
+/** Inverse of basis(): fwd = (−cos p cos y, −sin p, cos p sin y); roll from the up vector (if given). */
+export function yawPitchRoll(f: Vec3, u?: Vec3) {
   const pitch = Math.asin(Math.max(-1, Math.min(1, -f[1]))) / DEG;
-  const yaw = Math.atan2(f[2], -f[0]) / DEG;
-  return { yaw, pitch: Math.max(-89, Math.min(89, pitch)) };
+  // looking straight along ±θ̂: keep the yaw implied by the up vector (roll = 0)
+  const flat = Math.hypot(f[0], f[2]) < 1e-9 && u;
+  const yaw = flat ? Math.atan2(-u[2] * Math.sign(-f[1]), u[0] * Math.sign(-f[1])) / DEG : Math.atan2(f[2], -f[0]) / DEG;
+  let roll = 0;
+  if (u) {
+    const b = basis(yaw, pitch);
+    roll = Math.atan2(-dot(u, b.right), dot(u, b.up)) / DEG;
+  }
+  return { yaw, pitch, roll: Math.abs(roll) < 1e-9 ? 0 : roll };
 }
 
 const STATIC_ZAMO = { alpha: 1, omega: 0, varpi: 1, sqrtSig: 1, sqrtSigOverDel: 1 };
@@ -84,7 +97,7 @@ function holeFrame(s: Settings): CameraFrame {
   const r = Math.max(s.distance, rH + 0.02);
   const theta = safeTheta(s.inclination);
   const phi = s.azimuth * DEG;
-  const { right, up, fwd } = basis(s.yaw, s.pitch);
+  const { right, up, fwd } = basis(s.yaw, s.pitch, s.roll);
   const z = zamo(r, theta, a);
   let orbital: Vec3 | null = null;
   if (s.motion === "orbit") {
@@ -124,7 +137,7 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   const et: Vec3 = [ct * cp, ct * sp, -st];
   const ep: Vec3 = [-sp, cp, 0];
   const n = sidePosition(side, er); // the mirror map is its own inverse
-  const b = basis(s.yaw, s.pitch);
+  const b = basis(s.yaw, s.pitch, s.roll);
   const rep = (c: Vec3) => sideToRep(side, n, add(add(scale(er, c[0]), scale(et, c[1])), scale(ep, c[2])));
   const v = { right: rep(b.right), up: rep(b.up), fwd: rep(b.fwd) };
   if (side > 0 && s.whL > m.lGlue) return holeFromRep(s, m, s.whL, n, v);
@@ -173,36 +186,42 @@ export function repPose(s: Settings): RepPose {
   return { l: rep.l, n: rep.n, fwd: toRep(cam.fwd), up: toRep(cam.up) };
 }
 
-/** Writes a rep pose as a camera orbiting the wormhole. */
-export function setRepPose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd">) {
+/** Writes a rep pose as a camera orbiting the wormhole (up: keeps the roll; omitted: roll = 0). */
+export function setRepPose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3 }) {
   const side = p.l >= 0 ? 1 : -1;
   const f = sphericalFrame(sidePosition(side, p.n));
-  const fs = repToSide(side, p.n, p.fwd);
-  const yp = yawPitch([dot(fs, f.er), dot(fs, f.et), dot(fs, f.ep)]);
+  const comps = (v: Vec3): Vec3 => {
+    const vs = repToSide(side, p.n, v);
+    return [dot(vs, f.er), dot(vs, f.et), dot(vs, f.ep)];
+  };
+  const yp = yawPitchRoll(comps(p.fwd), p.up && comps(p.up));
   s.anchor = "wormhole";
   s.whL = p.l;
   s.inclination = Math.min(Math.max(f.th / DEG, 0.2), 179.8);
   s.azimuth = f.ph / DEG;
   s.yaw = yp.yaw;
   s.pitch = yp.pitch;
+  s.roll = yp.roll;
 }
 
-/** Writes a black-hole frame position and forward direction as a camera orbiting the hole. */
-export function setHolePose(s: Settings, X: Vec3, fwd: Vec3) {
+/** Writes a black-hole frame position and forward (and up) direction as a camera orbiting the hole. */
+export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3) {
   const f = sphericalFrame(X);
-  const yp = yawPitch([dot(fwd, f.er), dot(fwd, f.et), dot(fwd, f.ep)]);
+  const c = (v: Vec3): Vec3 => [dot(v, f.er), dot(v, f.et), dot(v, f.ep)];
+  const yp = yawPitchRoll(c(fwd), up && c(up));
   s.anchor = "hole";
   s.distance = f.r;
   s.inclination = Math.min(Math.max(f.th / DEG, 0.2), 179.8);
   s.azimuth = f.ph / DEG;
   s.yaw = yp.yaw;
   s.pitch = yp.pitch;
+  s.roll = yp.roll;
 }
 
-/** Rep pose on the Gargantua side → black-hole frame position and forward vector. */
-export function repToHolePose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd">) {
+/** Rep pose on the Gargantua side → black-hole frame position, forward and up vectors. */
+export function repToHolePose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3 }) {
   const m = mouth(s);
-  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd) };
+  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd), up: p.up && fromMouth(m, p.up) };
 }
 
 /** Changes what the camera orbits without moving it. Returns false when impossible (hole from our side). */
@@ -215,6 +234,6 @@ export function switchAnchor(s: Settings, to: Settings["anchor"]): boolean {
   }
   if (p.l < 0) return false;
   const h = repToHolePose(s, p);
-  setHolePose(s, h.X, h.fwd);
+  setHolePose(s, h.X, h.fwd, h.up);
   return true;
 }

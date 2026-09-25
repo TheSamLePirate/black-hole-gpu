@@ -129,17 +129,20 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
 
 ## Controls
 
-Drag: orbit (with momentum) · right-drag / shift-drag: look around · wheel / pinch: distance ·
+Drag: orbit (with momentum) · right-drag / shift-drag: turn the camera (yaw, pitch, no limit) · wheel / pinch: distance ·
 alt+wheel: FOV · double-click: recentre view · arrows, +/−: move.
 **Wormhole** (Scene → Interstellar wormhole, or the preset "Interstellar: wormhole to Gargantua"): the
 orbit controls turn around the wormhole or the black hole (switching keeps the view); the wheel sets the
-distance to the throat. **W / Z** fly forward, **X** backward (⇧ faster): near the wormhole along its
-geodesics, so you can cross the throat; the camera re-anchors to the nearest object. **T** runs the
+distance to the throat. **Free flight, six degrees of freedom** (keys by physical position: Z Q S D /
+A E / W X on AZERTY = W A S D / Q E / Z X on QWERTY): forward/left/back/right, down/up, roll; ⇧ faster;
+right-drag turns the camera about its own axes with no gimbal limit. Near the wormhole the camera
+follows its geodesics, so it can cross the throat; it re-anchors to the nearest object and can go
+anywhere outside the black hole's horizon. These keys are reserved for flight. **T** runs the
 journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from
 the black hole's universe: the way back home).
 
-Keys: O cinematic orbit · D free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · W/Z, X fly · J jet · G shadow guide · I readouts · S settings · / search · ⌘Z undo · 1–4 quality ·
+Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
+rain frame) · T wormhole journey · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–4 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

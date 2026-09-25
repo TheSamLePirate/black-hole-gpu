@@ -1,3 +1,4 @@
+import { FLIGHT_KEYS } from "../controls";
 import { QUALITY, type Quality, type Settings } from "../settings";
 import {
   GROUP_SWITCH,
@@ -261,8 +262,8 @@ export class SettingsPanel {
     this.undoBtn = h("button", { class: "sp-icon", title: "Undo (⌘Z / Ctrl+Z)", onclick: () => this.undo() }, svgIcon(ICONS.undo));
     this.redoBtn = h("button", { class: "sp-icon", title: "Redo (⇧⌘Z / Ctrl+Y)", onclick: () => this.redo() }, svgIcon(ICONS.redo));
     const menuBtn = h("button", { class: "sp-icon", title: "More", onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) }, svgIcon(ICONS.menu));
-    const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (S)", onclick: () => this.toggle(false) }, svgIcon(ICONS.close));
-    const opener = h("button", { class: "sp-opener", title: "Settings (S)", onclick: () => this.toggle(true) }, svgIcon(ICONS.gear), h("span", {}, "Settings"));
+    const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (M)", onclick: () => this.toggle(false) }, svgIcon(ICONS.close));
+    const opener = h("button", { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) }, svgIcon(ICONS.gear), h("span", {}, "Settings"));
 
     this.searchInput = h("input", {
       type: "search",
@@ -863,11 +864,14 @@ export class SettingsPanel {
       ["Double-click", "Recentre the view"],
       ["← → ↑ ↓ · + −", "Move / zoom"],
       ["Space", "Animate time"],
-      ["O · D · T", "Cinematic orbit · free-fall dive · wormhole journey"],
-      ["W / Z · X (⇧ faster)", "Fly forward · backward (through the wormhole)"],
+      ["O · C · T", "Cinematic orbit · free-fall dive (chute) · wormhole journey"],
+      ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster)"],
+      ["A · E (Q · E)", "Fly down · up"],
+      ["W · X (Z · X)", "Roll left · right"],
+      ["Right / Shift drag", "Turn the camera (no limit: loop over the top)"],
       ["J · G", "Jet · shadow guide"],
       ["1 – 4", "Quality level"],
-      ["S", "Show / hide settings"],
+      ["M", "Show / hide settings (menu)"],
       ["/", "Search settings"],
       ["⌘Z · ⇧⌘Z", "Undo · redo"],
       ["I · H · F · P", "Readouts · hide UI · fullscreen · PNG"],
@@ -897,7 +901,7 @@ export class SettingsPanel {
       e.preventDefault();
       this.toggle(true);
       this.searchInput.focus();
-    } else if (!mod && !typing && (e.key === "s" || e.key === "S")) {
+    } else if (!mod && !typing && (e.key === "m" || e.key === "M") && !(e.code in FLIGHT_KEYS)) {
       this.toggle();
     }
   };
