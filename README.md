@@ -71,10 +71,20 @@ Frequency-shift toggles let you switch off Doppler, beaming, or all shifts ("Int
   the critical curve).
 * Gaussian pixel filter (importance-sampled), R2 low-discrepancy sequences, per-pixel adaptive
   sampling (stops when the relative standard error of the mean falls under a threshold).
+* **Realtime max** (quality "RT max", key 5): aims at ~15 fps (60 ms of GPU per frame) instead of 30: finer
+  realtime blocks (2×2 instead of 8×8 in the wormhole scene) and finer realtime steps. The automatic block
+  size follows a GPU budget per frame using each block size's measured time (part of a frame is a fixed
+  full-resolution cost). While time runs, samples older than 1.5 M are dropped and stale pixels rebuilt by
+  normalized convolution, so the turning disk is not smeared.
 * Offline renders freeze the scene and render any resolution up to the GPU's limits (4K, 8K, …) in
   bands of rows over as many frames as needed, with a per-frame GPU budget, pause/resume, progress
   and ETA, optional motion blur (shutter in M), and export to **PNG**, **16-bit PNG** and linear
-  **OpenEXR** (half float, scene-referred).
+  **OpenEXR** (half float, scene-referred). Render presets: **Video** (Full HD frames, 64 spp, 180° shutter)
+  and **Mega photo** (8K, or the largest size the GPU holds; 1024 spp, Dormand–Prince 1e-6, 0.2 % noise).
+* **Video export (MP4)**: the journey through the wormhole, the cinematic orbit or the current view with
+  time running, rendered frame by frame offline (the flow turns, the star orbits, optional motion blur) and
+  encoded in the browser with WebCodecs (H.264) into a fragmented MP4 written by `src/video.ts` (no
+  dependency).
 * HDR post: energy-conserving multi-scale bloom (optical PSF), AgX / ACES tone mapping, and a
   **variance-guided à-trous denoiser** (SVGF-style edge stopping on each pixel's Monte Carlo variance).
 * **HDR / EDR output**: on high-dynamic-range screens the canvas is rgba16float with "extended" tone
