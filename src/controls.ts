@@ -385,6 +385,7 @@ export class CameraController {
       s.whL = -8 * mouth(s).w.rho;
     }
     s.motion = "static";
+    s.animate = true; // the disk turns and the star moves during the trip
     const dir = repPose(s).l < 0 ? "out" : "back";
     if (dir === "back") switchAnchor(s, "hole");
     const start = Object.fromEntries(POSE_KEYS.map((k) => [k, s[k]])) as Pick<Settings, PoseKeys>;
