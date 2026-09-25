@@ -68,12 +68,31 @@ layer (distance-to-layer step limiter). **Spectral colours** of the jet (x^{1/3}
 
 Units: G = c = M = 1, distances in M (= GM/c²), time in M (= GM/c³).
 
+## Settings panel
+
+A schema-driven panel (`src/ui/schema.ts` → `src/ui/panel.ts`): every parameter carries its unit,
+range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and what it affects
+(re-trace, resolve only, resize or nothing).
+
+* **Search** (`/`) across labels, descriptions and keywords — e.g. "transparency", "blazar", "doppler".
+* **Tabs** Scene · Matter · Sky · Physics · Render; groups collapse, matter groups carry their on/off switch.
+* **Log sliders** for wide ranges (distance, mass, optical depth, Γ, tolerance…) plus an editable value
+  field: type `1e-5`, `6.5×10^9`, `36 M`; ↑/↓ nudge (⇧ ×10, ⌥ ×0.1); Enter / Esc.
+* **Modified markers**: an orange dot per changed setting (click it or double-click the label to reset),
+  per-group reset, "Reset everything".
+* **Undo / redo** (⌘Z / ⇧⌘Z) of every panel edit; a whole slider drag is one step.
+* **Scene presets**, **your own presets** (saved in the browser), **quality** Low → Ultra (shows
+  "Custom" when edited by hand), **Advanced** toggle for expert integrator/sampling parameters.
+* **Share link**, **export / import JSON**, keyboard-shortcut sheet. `S` shows/hides the panel; on small
+  screens it becomes a bottom sheet.
+
 ## Controls
 
 Drag: orbit (with momentum) · right-drag / shift-drag: look around · wheel / pinch: distance ·
 alt+wheel: FOV · double-click: recentre view · arrows, +/−: move.
 Keys: O cinematic orbit · D free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · J jet · G shadow guide · I readouts · 1–4 quality · space time · P PNG · F fullscreen · H hide UI.
+rain frame) · J jet · G shadow guide · I readouts · S settings · / search · ⌘Z undo · 1–4 quality ·
+space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.
 

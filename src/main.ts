@@ -1,11 +1,12 @@
-import GUI, { type Controller } from "lil-gui";
 import { Renderer, type FrameStats } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame } from "./camera";
 import { CameraController, isTyping } from "./controls";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
-import { defaultSettings, presets, QUALITY, type Quality, type Settings } from "./settings";
+import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
+import { SettingsPanel } from "./ui/panel";
+import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl, saveToUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
 
@@ -14,17 +15,25 @@ const canvas = $<HTMLCanvasElement>("view");
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
 
-const settings: Settings = { ...defaultSettings(), ...loadFromUrl(defaultSettings()) };
+const settings: Settings = sanitize({ ...defaultSettings(), ...loadFromUrl(defaultSettings()) });
+
+/** Replaces invalid enum values (e.g. from a hand-edited URL) by their defaults. */
+function sanitize(s: Settings): Settings {
+  const d = defaultSettings();
+  const rec = s as unknown as Record<string, unknown>;
+  for (const def of SCHEMA) {
+    if (def.type === "choice" && !def.options.some((o) => o.value === rec[def.key])) rec[def.key] = d[def.key];
+    if (def.type === "number" && typeof rec[def.key] === "number" && !Number.isFinite(rec[def.key] as number)) rec[def.key] = d[def.key];
+  }
+  if (!(s.quality in QUALITY)) s.quality = d.quality;
+  return s;
+}
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "quality", "tonemap", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize",
   "massSolar", "cinematicSpeed",
 ];
-/** Settings that only affect the final resolve (no re-trace). */
-const DISPLAY_ONLY = new Set<keyof Settings>(["exposure", "tonemap", "bloom"]);
-/** Settings that don't affect the image at all. */
-const NO_RENDER = new Set<keyof Settings>(["massSolar", "cinematicSpeed", "shadowGuide", "quality", "animate", "timeSpeed"]);
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
 let timeDirty = false; // simulation time advanced since the last rendered frame
@@ -56,96 +65,7 @@ async function main() {
     guiDirty = true;
   });
 
-  // -------------------------------------------------------------------- GUI
-  const gui = new GUI({ title: "Controls", container: $("panel") });
-  const controllers: Controller[] = [];
-  const refreshGui = () => {
-    controllers.forEach((c) => c.updateDisplay());
-    syncButtons();
-  };
-  const add = <K extends keyof Settings>(folder: GUI, key: K, ...args: unknown[]) => {
-    const c = (folder.add as (...a: unknown[]) => Controller)(settings, key, ...args).onChange(() => {
-      syncButtons();
-      if (DISPLAY_ONLY.has(key)) touchDisplay();
-      else if (!NO_RENDER.has(key)) touch();
-      if (key === "distance") camera.sync();
-      scheduleUrlSave();
-    });
-    controllers.push(c);
-    return c;
-  };
-
-  const presetState = { preset: "" };
-  gui.add(presetState, "preset", ["", ...Object.keys(presets)]).name("scene preset").onChange((name: string) => {
-    if (name) applyPreset(name);
-  });
-  function applyPreset(name: string) {
-    const keep = Object.fromEntries(KEEP_ON_PRESET.map((k) => [k, settings[k]]));
-    Object.assign(settings, defaultSettings(), keep, presets[name]);
-    camera.setCinematic(null);
-    camera.sync();
-    refreshGui();
-    touch();
-    touchDisplay();
-    scheduleUrlSave();
-  }
-
-  add(gui, "quality", { "Low": "low", "Medium": "medium", "High": "high", "Ultra": "ultra" })
-    .name("quality")
-    .onFinishChange((q: Quality) => {
-      Object.assign(settings, QUALITY[q]);
-      refreshGui();
-      touch();
-    });
-
-  const fBH = gui.addFolder("Black hole");
-  add(fBH, "spin", -0.999, 0.999, 0.001).name("spin a/M");
-  add(fBH, "massSolar").name("mass [M☉] (units only)");
-
-  const fCam = gui.addFolder("Observer");
-  add(fCam, "distance", 1.1, 1000, 0.01).name("distance r [M]");
-  add(fCam, "inclination", 0.2, 179.8, 0.1).name("inclination θ [°]");
-  add(fCam, "azimuth", -360, 360, 0.1).name("azimuth φ [°]");
-  add(fCam, "fov", 1, 150, 0.1).name("field of view [°]");
-  add(fCam, "yaw", -180, 180, 0.1).name("look yaw [°]");
-  add(fCam, "pitch", -89, 89, 0.1).name("look pitch [°]");
-  add(fCam, "motion", { "static (ZAMO)": "static", "circular orbit": "orbit", "free fall (rain)": "infall", "boost along view": "forward" }).name("observer motion");
-  add(fCam, "beta", 0, 0.99, 0.001).name("boost β (view)");
-  add(fCam, "cinematicSpeed", 0.5, 60, 0.1).name("cinematic speed");
-  fCam.close();
-
-  const fDisk = gui.addFolder("Accretion disk (Novikov–Thorne)");
-  add(fDisk, "disk").name("thin disk");
-  add(fDisk, "diskTemp", 1500, 60000, 10).name("peak T_eff [K]");
-  add(fDisk, "diskOuter", 3, 200, 0.1).name("outer radius [M]");
-  add(fDisk, "diskTau", 0.01, 100, 0.01).name("optical depth τ");
-  add(fDisk, "diskThickness", 0, 0.25, 0.001).name("thickness H/R (0 = thin)");
-  add(fDisk, "turbulence", 0, 1, 0.01).name("turbulence");
-  add(fDisk, "flowPeriod", 10, 400, 1).name("turbulence lifetime [M]");
-  add(fDisk, "limbDarkening").name("limb darkening");
-  add(fDisk, "diskEmission", { "visible band (CIE)": "visible", "bolometric g⁴σT⁴": "bolometric" }).name("brightness model");
-  add(fDisk, "diskBrightness", 0, 4, 0.01).name("emissivity scale");
-
-  const fJet = gui.addFolder("Relativistic jet (synchrotron)");
-  add(fJet, "jet").name("enabled (J)");
-  add(fJet, "jetLorentz", 1.01, 20, 0.01).name("bulk Lorentz factor Γ");
-  add(fJet, "jetWidth", 0.3, 3, 0.01).name("width (parabolic)");
-  add(fJet, "jetLength", 20, 600, 1).name("length [M]");
-  add(fJet, "jetIntensity", 0, 5, 0.01).name("intensity");
-  add(fJet, "jetCutoff", 0.2, 10, 0.01).name("synchrotron cutoff ν_c");
-  add(fJet, "jetKnots", 0, 1, 0.01).name("knots / shocks");
-
-  const fFlow = gui.addFolder("Hot flow (volumetric)");
-  add(fFlow, "hotFlow").name("enabled");
-  add(fFlow, "hotFlowHR", 0.05, 1.5, 0.01).name("thickness H/R");
-  add(fFlow, "hotFlowAlpha", -1, 3, 0.01).name("spectral index α");
-  add(fFlow, "hotFlowIntensity", 0, 5, 0.01).name("intensity");
-  fFlow.close();
-
-  const fSky = gui.addFolder("Background");
-  add(fSky, "background", { "stars + Milky Way": "stars", "lensing grid": "checker", "image (equirect.)": "image" }).name("sky");
-  add(fSky, "bgIntensity", 0, 20, 0.01).name("intensity");
-  add(fSky, "starSize", 0.3, 4, 0.01).name("star PSF size");
+  // -------------------------------------------------------------------- settings panel
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "image/*";
@@ -157,46 +77,51 @@ async function main() {
     refreshGui();
     touch();
   };
-  fSky.add({ load: () => fileInput.click() }, "load").name("load equirectangular image…");
-  fSky.close();
 
-  const fPhys = gui.addFolder("Physics & diagnostics");
-  add(fPhys, "renderMode", {
-    physical: "physical",
-    "redshift g = ν_obs/ν_em": "redshift",
-    "disk temperature": "temperature",
-    "image order (plane crossings)": "order",
-    "integration cost": "steps",
-  }).name("view");
-  add(fPhys, "shiftMode", {
-    "full (Doppler+gravity+beaming)": "full",
-    "gravitational only": "gravitational",
-    "colour shift, no beaming": "noBeaming",
-    "none (Interstellar)": "none",
-  }).name("frequency shift");
-  add(fPhys, "shadowGuide").name("Kerr shadow guide (G)");
-  add(fPhys, "animate").name("animate (space)");
-  add(fPhys, "timeSpeed", 0, 100, 0.1).name("time speed [M/s]");
-  fPhys.close();
+  /** Routes a settings change to what it affects (re-trace, resolve only, resize, nothing). */
+  function onSettingsChange(keys: (keyof Settings)[]) {
+    let scene = false;
+    let resized = false;
+    for (const k of keys) {
+      const effect = SCHEMA_BY_KEY.get(k)?.effect ?? (k === "quality" ? "none" : "scene");
+      if (effect === "scene") scene = true;
+      else if (effect === "display") touchDisplay();
+      else if (effect === "resize") resized = true;
+      if (k === "distance") camera.sync();
+    }
+    if (scene) touch();
+    if (resized) resize();
+    syncButtons();
+    scheduleUrlSave();
+  }
 
-  const fRender = gui.addFolder("Rendering");
-  add(fRender, "exposure", -8, 8, 0.01).name("exposure [EV]");
-  add(fRender, "tonemap", ["AgX", "AgX punchy", "ACES", "clamp"]).name("tone map");
-  add(fRender, "bloom", 0, 0.5, 0.001).name("bloom (optical PSF)");
-  add(fRender, "pixelRatio", 0.25, 3, 0.05).name("pixel ratio").onFinishChange(resize);
-  add(fRender, "realtimeSubsampling", ["auto", 1, 2, 3, 4, 6, 8]).name("realtime subsampling");
-  add(fRender, "realtimeEps", 0.01, 0.3, 0.001).name("realtime RK4 ε");
-  add(fRender, "realtimeSteps", 50, 5000, 1).name("realtime max steps");
-  add(fRender, "qualityEps", 0.002, 0.1, 0.001).name("converged RK4 ε");
-  add(fRender, "qualitySteps", 200, 50000, 1).name("converged max steps");
-  add(fRender, "targetSpp", 1, 4096, 1).name("samples / pixel");
-  add(fRender, "adaptiveIntegrator").name("error-controlled RK4");
-  add(fRender, "integratorTolerance", 1e-7, 1e-3, 1e-7).name("RK4 local tolerance");
-  add(fRender, "noiseThreshold", 0, 0.1, 0.001).name("adaptive sampling (rel. error)");
-  add(fRender, "temporalBlend", 0.05, 1, 0.01).name("temporal blend (1 = off)");
-  fRender.close();
+  const panel = new SettingsPanel($("panel"), {
+    settings,
+    defaults: defaultSettings,
+    onChange: onSettingsChange,
+    applyPreset: (name) => applyPreset(name),
+    presetNames: Object.keys(presets),
+    loadImage: () => fileInput.click(),
+    shareUrl: () => {
+      saveToUrl(settings, defaultSettings(), ["pixelRatio"]);
+      return location.href;
+    },
+  });
+  const refreshGui = () => {
+    panel.refresh();
+    syncButtons();
+  };
 
-  if (innerWidth < 800) gui.close();
+  function applyPreset(name: string) {
+    const keep = Object.fromEntries(KEEP_ON_PRESET.map((k) => [k, settings[k]]));
+    Object.assign(settings, defaultSettings(), keep, presets[name]);
+    camera.setCinematic(null);
+    camera.sync();
+    refreshGui();
+    touch();
+    touchDisplay();
+    scheduleUrlSave();
+  }
 
   // -------------------------------------------------------------------- toolbar & keys
   const toggleUi = () => document.body.classList.toggle("hide-ui");
@@ -246,7 +171,7 @@ async function main() {
     else if (k === "j") toggle("jet");
     else if (k === "i") actions["btn-info"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
-    else if ("1234".includes(k)) {
+    else if (/^[1-4]$/.test(e.key)) {
       settings.quality = (["low", "medium", "high", "ultra"] as const)[Number(k) - 1]!;
       Object.assign(settings, QUALITY[settings.quality]);
       refreshGui();

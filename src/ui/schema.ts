@@ -1,0 +1,346 @@
+import type { Settings } from "../settings";
+
+/** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
+export type Effect = "scene" | "display" | "none" | "resize";
+
+export type SectionId = "scene" | "matter" | "sky" | "physics" | "render";
+
+export const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
+  { id: "scene", label: "Scene", icon: "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 12h3M18 12h3M12 3v3M12 18v3" },
+  { id: "matter", label: "Matter", icon: "M3 12c3-4 15-4 18 0c-3 4-15 4-18 0zM12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0" },
+  { id: "sky", label: "Sky", icon: "M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" },
+  { id: "physics", label: "Physics", icon: "M4 19h16M6 19V9M11 19V5M16 19v-7M21 19V13" },
+  { id: "render", label: "Render", icon: "M4 5h16v11H4zM8 20h8M12 16v4" },
+];
+
+interface Base<K extends keyof Settings = keyof Settings> {
+  key: K;
+  label: string;
+  section: SectionId;
+  group: string;
+  help?: string;
+  effect?: Effect; // default "scene"
+  advanced?: boolean;
+  keywords?: string;
+  visible?: (s: Settings) => boolean;
+  enabled?: (s: Settings) => boolean;
+}
+
+export interface NumberDef extends Base {
+  type: "number";
+  min: number;
+  max: number;
+  step?: number;
+  scale?: "linear" | "log";
+  unit?: string;
+  /** Value shown as "off" at the bottom of the slider (log sliders starting at 0). */
+  offAtZero?: boolean;
+  /** Significant digits for display (log scales), or fixed decimals from the step. */
+  precision?: number;
+}
+
+export interface ToggleDef extends Base {
+  type: "toggle";
+}
+
+export interface ChoiceDef extends Base {
+  type: "choice";
+  options: { value: string | number; label: string; hint?: string }[];
+  style?: "segmented" | "select";
+}
+
+export type ControlDef = NumberDef | ToggleDef | ChoiceDef;
+
+/** Group headers may carry the on/off switch of the physics they contain. */
+export const GROUP_SWITCH: Record<string, keyof Settings> = {
+  "Accretion disk": "disk",
+  "Relativistic jet": "jet",
+  "Hot accretion flow": "hotFlow",
+};
+
+const diskOn = (s: Settings) => s.disk;
+const jetOn = (s: Settings) => s.jet;
+const flowOn = (s: Settings) => s.hotFlow;
+
+export const SCHEMA: ControlDef[] = [
+  // ------------------------------------------------------------------ scene · black hole
+  {
+    key: "spin", type: "number", section: "scene", group: "Black hole", label: "Spin a/M", min: -0.999, max: 0.999, step: 0.001,
+    help: "Dimensionless angular momentum a = J/M. Positive: the disk co-rotates with the hole; negative: retrograde disk. 0 is Schwarzschild. Spin shrinks the horizon and the ISCO, flattens one side of the shadow (frame dragging) and powers the Blandford–Znajek jet.",
+    keywords: "kerr angular momentum rotation schwarzschild",
+  },
+  {
+    key: "massSolar", type: "number", section: "scene", group: "Black hole", label: "Mass", min: 1, max: 1e11, scale: "log", unit: "M☉", precision: 3, effect: "none",
+    help: "Only sets the physical units of the readouts (km, seconds, Kelvin…). General relativity is scale-free: the image in units of M = GM/c² is identical for any mass. 6.5×10⁹ M☉ is M87*, 4.3×10⁶ M☉ is Sgr A*.",
+    keywords: "units m87 sgr solar",
+  },
+  // ------------------------------------------------------------------ scene · observer
+  {
+    key: "distance", type: "number", section: "scene", group: "Observer", label: "Distance r", min: 1.1, max: 1000, scale: "log", unit: "M", precision: 3,
+    help: "Boyer–Lindquist radius of the camera, in units of M = GM/c². Wheel / pinch on the view to zoom.",
+    keywords: "zoom radius camera",
+  },
+  {
+    key: "inclination", type: "number", section: "scene", group: "Observer", label: "Inclination θ", min: 0.2, max: 179.8, step: 0.1, unit: "°",
+    help: "Polar angle from the spin axis: 0° looks down the jet (face-on), 90° is edge-on in the disk plane.",
+    keywords: "polar angle theta tilt",
+  },
+  {
+    key: "azimuth", type: "number", section: "scene", group: "Observer", label: "Azimuth φ", min: -360, max: 360, step: 0.1, unit: "°",
+    help: "Azimuthal position around the spin axis (rotates the sky and the disk pattern; the metric itself is axisymmetric).",
+  },
+  {
+    key: "fov", type: "number", section: "scene", group: "Observer", label: "Field of view", min: 1, max: 150, step: 0.1, unit: "°",
+    help: "Vertical field of view of the pinhole camera, in the observer's rest frame (alt + wheel).",
+    keywords: "fov zoom lens",
+  },
+  {
+    key: "yaw", type: "number", section: "scene", group: "Look direction", label: "Yaw", min: -180, max: 180, step: 0.1, unit: "°",
+    help: "Turns the camera left/right away from the hole (right-drag on the view).",
+  },
+  {
+    key: "pitch", type: "number", section: "scene", group: "Look direction", label: "Pitch", min: -89, max: 89, step: 0.1, unit: "°",
+    help: "Tilts the camera up/down (right-drag on the view).",
+  },
+  {
+    key: "motion", type: "choice", section: "scene", group: "Observer motion", label: "Motion", style: "select",
+    options: [
+      { value: "static", label: "Static (ZAMO)", hint: "Zero-angular-momentum observer: at rest relative to the dragged space" },
+      { value: "orbit", label: "Circular orbit", hint: "Keplerian orbit: strong aberration and Doppler of the whole sky" },
+      { value: "infall", label: "Free fall (rain frame)", hint: "Falling from rest at infinity, γ = 1/α" },
+      { value: "forward", label: "Boost along view", hint: "Arbitrary speed β in the viewing direction" },
+    ],
+    help: "Velocity of the camera relative to the local zero-angular-momentum observer. Moving observers see relativistic aberration (the sky crowds forward) and Doppler shifts.",
+    keywords: "velocity aberration boost orbit fall",
+  },
+  {
+    key: "beta", type: "number", section: "scene", group: "Observer motion", label: "Boost β", min: 0, max: 0.99, step: 0.001, unit: "c",
+    visible: (s) => s.motion === "forward",
+    help: "Speed of the camera along the viewing direction as a fraction of c.",
+  },
+  {
+    key: "cinematicSpeed", type: "number", section: "scene", group: "Observer motion", label: "Cinematic speed", min: 0.5, max: 60, step: 0.1, effect: "none",
+    help: "Orbit mode (O): degrees per second. Dive mode (D): proper time of the falling observer, in M per second.",
+  },
+  // ------------------------------------------------------------------ matter · disk
+  {
+    key: "diskTemp", type: "number", section: "matter", group: "Accretion disk", label: "Peak temperature", min: 1500, max: 100000, scale: "log", unit: "K", precision: 3, enabled: diskOn,
+    help: "Maximum effective temperature of the Novikov–Thorne disk (T ∝ F^¼). Real AGN disks reach ~10⁵ K (blue-white); ~9000 K maximises visible Doppler colour contrast.",
+    keywords: "novikov thorne colour blackbody",
+  },
+  {
+    key: "diskOuter", type: "number", section: "matter", group: "Accretion disk", label: "Outer radius", min: 3, max: 300, scale: "log", unit: "M", precision: 3, enabled: diskOn,
+    help: "Outer edge of the disk. The inner edge is the ISCO, fixed by the spin.",
+  },
+  {
+    key: "diskTau", type: "number", section: "matter", group: "Accretion disk", label: "Optical depth τ", min: 0.01, max: 100, scale: "log", precision: 2, enabled: diskOn,
+    help: "Vertical optical depth of the gas. Small τ: translucent, the lensed far side and the sky shine through; τ ≳ 10: opaque. A slab crossed at angle μ transmits e^(−τ/μ).",
+    keywords: "transparency opacity transparent",
+  },
+  {
+    key: "diskThickness", type: "number", section: "matter", group: "Accretion disk", label: "Thickness H/R", min: 0, max: 0.25, step: 0.001, enabled: diskOn,
+    help: "0: infinitely thin slab (fast). > 0: volumetric Gaussian layer with front-to-back absorption and emission along the geodesic (≈40 % slower).",
+    keywords: "volumetric thick scale height",
+  },
+  {
+    key: "turbulence", type: "number", section: "matter", group: "Accretion disk", label: "Turbulence", min: 0, max: 1, step: 0.01, enabled: diskOn,
+    help: "Clumps and filaments advected with the Keplerian flow, modulating temperature and density.",
+  },
+  {
+    key: "flowPeriod", type: "number", section: "matter", group: "Accretion disk", label: "Turbulence lifetime", min: 10, max: 400, step: 1, unit: "M", enabled: diskOn, advanced: true,
+    help: "Lifetime of turbulent structures before they are replaced (keeps differential rotation from winding them up forever).",
+  },
+  {
+    key: "limbDarkening", type: "toggle", section: "matter", group: "Accretion disk", label: "Limb darkening", enabled: diskOn,
+    help: "Chandrasekhar electron-scattering atmosphere I ∝ 1 + 2.06 μ, with the emission angle measured in the fluid frame (thin disk).",
+  },
+  {
+    key: "diskEmission", type: "choice", section: "matter", group: "Accretion disk", label: "Brightness", style: "segmented", enabled: diskOn,
+    options: [
+      { value: "visible", label: "Visible (CIE)", hint: "Planck spectrum integrated against the eye's colour matching functions" },
+      { value: "bolometric", label: "Bolometric", hint: "I ∝ g⁴σT⁴, colour of g·T (Luminet 1979)" },
+    ],
+    help: "How brightness is computed. Visible: what a human eye would see (exact Planck × CIE 1931). Bolometric: total flux, as in classic GR images.",
+  },
+  {
+    key: "diskBrightness", type: "number", section: "matter", group: "Accretion disk", label: "Emissivity scale", min: 0, max: 4, step: 0.01, enabled: diskOn, advanced: true,
+    help: "Artistic multiplier on the disk emission.",
+  },
+  // ------------------------------------------------------------------ matter · jet
+  {
+    key: "jetLorentz", type: "number", section: "matter", group: "Relativistic jet", label: "Lorentz factor Γ", min: 1.01, max: 30, scale: "log", precision: 3, enabled: jetOn,
+    help: "Bulk Lorentz factor of the outflow. Larger Γ beams the approaching jet (∝ g^{8/3}) and hides the counter-jet; seen close to the axis this makes a blazar.",
+    keywords: "blazar beaming speed",
+  },
+  {
+    key: "jetWidth", type: "number", section: "matter", group: "Relativistic jet", label: "Width", min: 0.3, max: 3, step: 0.01, enabled: jetOn,
+    help: "Scale of the parabolic jet boundary R ∝ z^0.6 (as measured for M87).",
+  },
+  {
+    key: "jetLength", type: "number", section: "matter", group: "Relativistic jet", label: "Length", min: 20, max: 800, scale: "log", unit: "M", precision: 3, enabled: jetOn,
+  },
+  {
+    key: "jetIntensity", type: "number", section: "matter", group: "Relativistic jet", label: "Intensity", min: 0.001, max: 5, scale: "log", precision: 2, enabled: jetOn,
+  },
+  {
+    key: "jetCutoff", type: "number", section: "matter", group: "Relativistic jet", label: "Synchrotron cutoff ν_c", min: 0.2, max: 30, scale: "log", precision: 2, enabled: jetOn,
+    help: "Exponential cutoff of the synchrotron spectrum j_ν ∝ ν^{1/3} e^{−ν/ν_c}, relative to green light. Low values redden the jet; Doppler shifts move the cutoff.",
+    keywords: "colour spectrum",
+  },
+  {
+    key: "jetKnots", type: "number", section: "matter", group: "Relativistic jet", label: "Knots / shocks", min: 0, max: 1, step: 0.01, enabled: jetOn,
+    help: "Contrast of internal shocks and helical filaments. They move at the bulk speed, so light-travel time makes them appear superluminal.",
+  },
+  // ------------------------------------------------------------------ matter · hot flow
+  {
+    key: "hotFlowHR", type: "number", section: "matter", group: "Hot accretion flow", label: "Thickness H/R", min: 0.05, max: 1.5, step: 0.01, enabled: flowOn,
+    help: "Geometrically thick, optically thin flow (RIAF/ADAF, like M87* and Sgr A*).",
+  },
+  {
+    key: "hotFlowAlpha", type: "number", section: "matter", group: "Hot accretion flow", label: "Spectral index α", min: -1, max: 3, step: 0.01, enabled: flowOn,
+    help: "Power law j_ν ∝ ν^−α; colours come from integrating it against the CIE observer.",
+  },
+  {
+    key: "hotFlowIntensity", type: "number", section: "matter", group: "Hot accretion flow", label: "Intensity", min: 0.001, max: 5, scale: "log", precision: 2, enabled: flowOn,
+  },
+  // ------------------------------------------------------------------ sky
+  {
+    key: "background", type: "choice", section: "sky", group: "Celestial sphere", label: "Sky", style: "segmented",
+    options: [
+      { value: "stars", label: "Stars", hint: "Blackbody stars + procedural Milky Way" },
+      { value: "checker", label: "Grid", hint: "Latitude/longitude grid: makes the lensing map explicit" },
+      { value: "image", label: "Image", hint: "Your own equirectangular panorama" },
+    ],
+    help: "What lies at infinity. Everything is gravitationally lensed and blue/redshifted for the observer.",
+    keywords: "background panorama stars milky way",
+  },
+  {
+    key: "bgIntensity", type: "number", section: "sky", group: "Celestial sphere", label: "Intensity", min: 0.01, max: 50, scale: "log", precision: 2,
+    help: "Brightness of the sky relative to the disk (artistic: the real sky is far fainter than an accretion disk).",
+  },
+  {
+    key: "starSize", type: "number", section: "sky", group: "Celestial sphere", label: "Star PSF size", min: 0.3, max: 4, step: 0.01, visible: (s) => s.background === "stars",
+    help: "Width of the stellar point-spread function in pixels (flux-conserving: lensing still magnifies correctly).",
+  },
+  // ------------------------------------------------------------------ physics
+  {
+    key: "shiftMode", type: "choice", section: "physics", group: "Frequency shifts", label: "Shifts", style: "select",
+    options: [
+      { value: "full", label: "Full (Doppler + gravity + beaming)" },
+      { value: "gravitational", label: "Gravitational only", hint: "Emitters replaced by static observers" },
+      { value: "noBeaming", label: "Colour shift, no beaming" },
+      { value: "none", label: "None (Interstellar look)" },
+    ],
+    help: "Switch individual effects off to see what each does. Physically everything is on: g = ν_obs/ν_em is exact and I_ν/ν³ is invariant.",
+    keywords: "doppler redshift beaming interstellar",
+  },
+  {
+    key: "renderMode", type: "choice", section: "physics", group: "Diagnostics", label: "View", style: "select",
+    options: [
+      { value: "physical", label: "Physical image" },
+      { value: "redshift", label: "Redshift map g = ν_obs/ν_em" },
+      { value: "temperature", label: "Disk temperature" },
+      { value: "order", label: "Image order (plane crossings)" },
+      { value: "steps", label: "Integration cost" },
+    ],
+    help: "False-colour views of the underlying quantities.",
+  },
+  {
+    key: "shadowGuide", type: "toggle", section: "physics", group: "Diagnostics", label: "Kerr shadow guide", effect: "none",
+    help: "Overlay of the analytic critical curve (spherical photon orbits, Bardeen 1973) seen through the actual observer frame — it must match the ray-traced shadow edge. Shortcut G.",
+  },
+  {
+    key: "animate", type: "toggle", section: "physics", group: "Time", label: "Animate", effect: "none",
+    help: "Advances coordinate time: the gas orbits, jet knots flow. Shortcut Space.",
+  },
+  {
+    key: "timeSpeed", type: "number", section: "physics", group: "Time", label: "Time speed", min: 0.1, max: 200, scale: "log", unit: "M/s", precision: 2, effect: "none",
+    help: "Simulated time per real second, in units of GM/c³ (≈ 9 h for M87*, 21 s for Sgr A*).",
+  },
+  // ------------------------------------------------------------------ render · image
+  {
+    key: "exposure", type: "number", section: "render", group: "Image", label: "Exposure", min: -8, max: 8, step: 0.01, unit: "EV", effect: "display",
+  },
+  {
+    key: "tonemap", type: "choice", section: "render", group: "Image", label: "Tone map", style: "segmented", effect: "display",
+    options: [
+      { value: "AgX", label: "AgX" },
+      { value: "AgX punchy", label: "Punchy" },
+      { value: "ACES", label: "ACES" },
+      { value: "clamp", label: "Linear" },
+    ],
+  },
+  {
+    key: "bloom", type: "number", section: "render", group: "Image", label: "Bloom", min: 0, max: 0.5, step: 0.001, effect: "display",
+    help: "Fraction of the light spread by the lens point-spread function (energy-conserving multi-scale glow).",
+  },
+  {
+    key: "pixelRatio", type: "number", section: "render", group: "Image", label: "Pixel ratio", min: 0.25, max: 3, step: 0.05, unit: "×", effect: "resize",
+    help: "Internal resolution relative to CSS pixels. Higher = sharper and slower.",
+  },
+  // ------------------------------------------------------------------ render · realtime
+  {
+    key: "realtimeSubsampling", type: "choice", section: "render", group: "Realtime", label: "Subsampling", style: "segmented",
+    options: ["auto", 1, 2, 3, 4, 6, 8].map((v) => ({ value: v, label: v === "auto" ? "Auto" : `${v}×` })),
+    help: "One ray per N×N pixels while moving. When the camera stops, the image fills in to full resolution over N² frames.",
+  },
+  {
+    key: "temporalBlend", type: "number", section: "render", group: "Realtime", label: "Temporal blend", min: 0.05, max: 1, step: 0.01, advanced: true,
+    help: "Weight of each new realtime sample (1 = no temporal accumulation). Lower = smoother, more ghosting while animating.",
+  },
+  {
+    key: "realtimeEps", type: "number", section: "render", group: "Realtime", label: "RK4 step ε", min: 0.01, max: 0.3, scale: "log", precision: 2, advanced: true,
+    help: "Relative step size of the realtime integrator (step ≈ ε·(r − r₊)).",
+  },
+  {
+    key: "realtimeSteps", type: "number", section: "render", group: "Realtime", label: "Max steps", min: 50, max: 5000, scale: "log", precision: 3, advanced: true,
+  },
+  // ------------------------------------------------------------------ render · converged
+  {
+    key: "targetSpp", type: "number", section: "render", group: "Converged image", label: "Samples / pixel", min: 1, max: 4096, scale: "log", precision: 4,
+    help: "Samples accumulated when everything is still (Gaussian-filtered, low-discrepancy jitter).",
+  },
+  {
+    key: "adaptiveIntegrator", type: "toggle", section: "render", group: "Converged image", label: "Error-controlled RK4",
+    help: "Step doubling + Richardson extrapolation: every step meets the local error tolerance (5th-order accurate).",
+  },
+  {
+    key: "integratorTolerance", type: "number", section: "render", group: "Converged image", label: "RK4 tolerance", min: 1e-7, max: 1e-3, scale: "log", precision: 2,
+    enabled: (s) => s.adaptiveIntegrator, advanced: true,
+    help: "Maximum local relative error per step.",
+  },
+  {
+    key: "noiseThreshold", type: "number", section: "render", group: "Converged image", label: "Adaptive sampling", min: 0.001, max: 0.1, scale: "log", precision: 2, offAtZero: true,
+    help: "Stop sampling a pixel once the relative standard error of its mean drops below this value (slide fully left for off).",
+  },
+  {
+    key: "qualityEps", type: "number", section: "render", group: "Converged image", label: "RK4 step ε", min: 0.002, max: 0.1, scale: "log", precision: 2, advanced: true,
+    help: "Fixed-step scale (upper bound on the step when error control is on).",
+  },
+  {
+    key: "qualitySteps", type: "number", section: "render", group: "Converged image", label: "Max steps", min: 200, max: 50000, scale: "log", precision: 3, advanced: true,
+  },
+];
+
+export const SCHEMA_BY_KEY = new Map(SCHEMA.map((d) => [d.key, d]));
+
+/** Keys whose change goes through the quality preset (the quality selector shows "Custom" if edited). */
+export const QUALITY_KEYS: (keyof Settings)[] = [
+  "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps", "targetSpp", "adaptiveIntegrator", "integratorTolerance", "noiseThreshold",
+];
+
+export const PRESET_INFO: Record<string, { description: string; icon: string }> = {
+  "Kerr a=0.94, near edge-on": { description: "The default: fast-spinning hole, translucent disk, jet.", icon: "◐" },
+  "Cinematic: volumetric disk + jet": { description: "Thick volumetric disk and jet — the most detailed look.", icon: "✦" },
+  "Interstellar (no shifts)": { description: "Gargantua-like: Doppler and redshift switched off, as in the film.", icon: "◎" },
+  "Schwarzschild (no spin → no BZ jet)": { description: "Non-rotating hole: symmetric shadow, ISCO at 6M.", icon: "○" },
+  "Luminet 1979 (bolometric)": { description: "The first computed black-hole image: bolometric, opaque, smooth disk.", icon: "◍" },
+  "Hot disk (T = 50 000 K, UV-bright AGN)": { description: "Realistic AGN temperatures: blue-white disk.", icon: "☀" },
+  "Face-on (M87*-like hot flow)": { description: "Looking down the axis at a thick hot flow: photon ring like the EHT image.", icon: "◉" },
+  "Jet launch (blazar-like, i=20°)": { description: "Close to the jet axis: Doppler-boosted jet, faint counter-jet.", icon: "↥" },
+  "Jet side view": { description: "Jet and counter-jet seen from the side.", icon: "↕" },
+  "Extreme spin a=0.998, edge-on": { description: "Thorne limit, in the disk plane: strongly flattened shadow.", icon: "◑" },
+  "Orbiting at r=8 (aberration)": { description: "Camera on a circular orbit: the sky is aberrated and Doppler-shifted.", icon: "↻" },
+  "Falling in (rain frame)": { description: "Freely falling observer close to the horizon.", icon: "↓" },
+  "Lensing grid + shadow guide": { description: "Coordinate grid on the sky and the analytic shadow outline.", icon: "▦" },
+};

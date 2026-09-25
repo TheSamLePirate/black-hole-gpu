@@ -266,54 +266,6 @@ h1 {
   pointer-events: none;
 }
 
-/* ---------------------------------------------------------------- lil-gui */
-#panel {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  max-height: calc(100vh - 28px);
-  overflow-y: auto;
-  border-radius: var(--radius);
-}
-
-#panel .lil-gui.root {
-  --width: 300px;
-  --background-color: var(--glass);
-  --widget-color: rgba(255, 255, 255, 0.07);
-  --hover-color: rgba(255, 255, 255, 0.12);
-  --focus-color: rgba(255, 255, 255, 0.16);
-  --number-color: var(--accent-2);
-  --string-color: var(--accent);
-  --title-background-color: rgba(255, 255, 255, 0.03);
-  --title-text-color: var(--text);
-  --text-color: #cfd5e2;
-  --font-family: var(--font);
-  --font-size: 11.5px;
-  --input-font-size: 11px;
-  --font-family-mono: var(--mono);
-  --widget-height: 22px;
-  --padding: 5px;
-  --widget-border-radius: 6px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-}
-
-#panel .lil-gui .title {
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-#panel .lil-gui .lil-gui > .title {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-#panel .lil-gui .slider .fill {
-  background: linear-gradient(90deg, rgba(255, 179, 92, 0.35), rgba(255, 179, 92, 0.75));
-}
-
 /* ---------------------------------------------------------------- offline render dialog */
 #render {
   position: fixed;
