@@ -409,12 +409,15 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
 const PATH_MAX = 256u;
 const PATH_CHUNK = 16u;
 
-fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec3f {
+// Returns the glow (rgb) and, in w, the mean position of the crossings along the chord (0..1).
+fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
   let n = u32(P.path.x);
   var col = vec3f(0.0);
+  var uSum = 0.0;
+  var wSum = 0.0;
   let dv = p1 - p0;
   let len = length(dv);
-  if (len < 1e-6) { return col; }
+  if (len < 1e-6) { return vec4f(0.0); }
   let R = max(P.path.y * (rayLen + 0.5 * len), 0.004);
   for (var c = 0u; c * PATH_CHUNK < n - 1u; c++) {
     // chord vs the chunk's bounding sphere (+ tube radius)
@@ -452,10 +455,13 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec3f {
       let dash = select(0.25, 1.0, fract(t * 48.0) < 0.62);
       var tint = vec3f(0.25, 0.85, 1.4);
       if (P.path.z > 0.5 && P.path.z < 1.5) { tint = mix(tint, vec3f(1.6, 0.25, 0.15), smoothstep(0.8, 1.0, t)); }
-      col += tint * dash * min((u2 - u1) * len / (2.0 * R), 1.0) * 0.9;
+      let wgt = min((u2 - u1) * len / (2.0 * R), 1.0);
+      col += tint * dash * wgt * 0.9;
+      uSum += 0.5 * (u1 + u2) * wgt;
+      wSum += wgt;
     }
   }
-  return col;
+  return vec4f(col, uSum / max(wSum, 1e-6));
 }
 
 // Companion star: an opaque sphere on a circular equatorial orbit (Keplerian Ω), evaluated at the
@@ -1646,6 +1652,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var skyG = 1.0;
   var skyId = SKY_NATIVE;
   var rayLen = 0.0; // distance travelled by the ray (flat map), for the camera path's tube radius
+  var tubeVis = 1.0; // the path's tube is hidden by the disk (opaque for it except in real gaps)
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
   let polOn = P.pol.x > 0.5;
@@ -1722,7 +1729,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     if (P.path.x > 1.5) {
       let q0 = blCart(s.x);
       let q1 = blCart(n.x);
-      col += trans * pathGlow(q0, q1, rayLen);
+      let pg = pathGlow(q0, q1, rayLen);
+      // the disk hides the tube: skip it when it lies beyond a disk crossing in this same step
+      var behindDisk = false;
+      let cz0 = cos(s.x.y);
+      let cz1 = cos(n.x.y);
+      if (diskOn && !thick && cz0 * cz1 < 0.0) {
+        let ud = cz0 / (cz0 - cz1);
+        let rc = mix(s.x.x, n.x.x, ud);
+        behindDisk = rc >= rIn && rc <= rOut && pg.w > ud;
+      }
+      if (!behindDisk) { col += trans * tubeVis * pg.rgb; }
       rayLen += length(q1 - q0);
     }
 
@@ -1833,6 +1850,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
           TDisk = d.T;
           hitDisk = true;
         }
+        tubeVis *= exp(-6.0 * d.dtau);
         trans *= att;
         if (trans < 2e-3) { fate = 3u; break; }
       }
@@ -1888,6 +1906,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
             hitDisk = true;
           }
           trans *= hit.trans;
+          tubeVis *= pow(hit.trans, 6.0);
           if (trans < 2e-3) { fate = 3u; break; }
         }
       }
@@ -1940,7 +1959,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       var q = x;
       var dl = max(r, 10.0);
       for (var k = 0u; k < 8u; k++) {
-        col += trans * pathGlow(q, q + dir * dl, rayLen);
+        col += trans * tubeVis * pathGlow(q, q + dir * dl, rayLen).rgb;
         q += dir * dl;
         rayLen += dl;
         dl *= 2.0;
