@@ -170,6 +170,13 @@ orbiting Gargantua or the star follows them instead. Tests: Ω, −B̈ = m x★/
 in the centre-of-mass frame stays at rest there (3 %; without the indirect field it drifts away).
 The wormhole's mouth stays bound to Gargantua.
 
+**Seamless gluing.** Rays cross the gluing sphere without a visible edge: their clock goes on through
+the Dneg region (Gargantua's coordinate time, dt² = dr²/α⁴ + r²dΩ²/α², integrated along the path — a
+reset clock had drawn the disk behind the mouth ~100 M off, a sharp circle), Dneg steps end exactly on
+the sphere (no overshoot for grazing rays), Gargantua's weak field still bends them inside the sphere,
+the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
+outside, and their energy at infinity is kept across it.
+
 **Two rotation modes** (R, toolbar, Scene → Camera rotation):
 
 - **Around the target**: drag orbits the selected body — Gargantua, the companion star or the wormhole's

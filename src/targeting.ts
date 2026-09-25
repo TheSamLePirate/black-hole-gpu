@@ -312,7 +312,8 @@ export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): B
   const f = sphericalFrame(X);
   const d = fromMouth(m, end.d);
   const ray = cameraRay(staticFrameAt(X, s.spin), [dot(d, f.er), dot(d, f.et), dot(d, f.ep)]);
-  return ray ? pickKerr(s, ray.state, ray.L, time, true) : null;
+  // (the ray's clock went on through the wormhole: emission times are earlier by its path length)
+  return ray ? pickKerr(s, ray.state, ray.L, time - end.length, true) : null;
 }
 
 // ------------------------------------------------------------------------------------ aiming

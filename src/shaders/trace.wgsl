@@ -391,6 +391,11 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
     // a massive star bends the ray: steps small against the distance to it (kick accuracy)
     if (P.star2.z > 0.0) { h = min(h, max(0.3 * d * P.star.z, near)); }
   }
+  if (P.wh.x > 0.5) {
+    // the wormhole's weak field outside its gluing sphere: steps small against the distance to it
+    let dm = length(blCart(s.x) - P.whC.xyz);
+    h = min(h, max(0.3 * dm, 0.2 * P.wh2.z));
+  }
   if (P.spot.x > 0.5) {
     // never step over the hot spot; sample it at ≤ 0.25 σ
     let dist = sqrt(spotDist2(s, P.time.x)) - 3.0 * P.spot.z - 0.5 * abs(P.ext.z);
@@ -547,6 +552,22 @@ fn starForce(x: vec4f, back: vec3f) -> vec3f {
   // a = m x★/D³: the uniform "indirect" field, g_tt = −(1 + 2a·x), δH = a·x for light.
   let D = length(c);
   g += (P.star2.z / (D * D * D)) * c;
+  return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
+}
+
+// The wormhole's own mass seen from outside its gluing sphere: the Dneg metric (g_tt = −1) is, far
+// from the throat, the spatial part of a Schwarzschild field of mass M_w (r ≈ ℓ − M_w ln ℓ, so
+// dr/dℓ ≈ 1 − M_w/r): light is bent by 2M_w/b, from δH = Φ|p|² = Φ with Φ = −M_w/d (spatial
+// perturbation only). Keeps the bending continuous across the gluing sphere. ∂δH/∂(r, θ, φ).
+fn mouthForce(x: vec4f) -> vec3f {
+  let st = sin(x.y);
+  let ct = cos(x.y);
+  let sp = sin(x.z);
+  let cp = cos(x.z);
+  let er = vec3f(st * cp, st * sp, ct);
+  let dv = x.x * er - P.whC.xyz;
+  let d2 = max(dot(dv, dv), P.wh2.z * P.wh2.z);
+  let g = (P.wh.w / (d2 * sqrt(d2))) * dv;
   return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
 }
 
@@ -1408,7 +1429,8 @@ fn dnegRHS(l: f32, pl: f32, b: f32) -> Planar {
   return Planar(pl, b * b * rr.y * ir * ir * ir, b * ir * ir);
 }
 
-struct WhOut { side: f32, n: vec3f, d: vec3f };
+// len: coordinate time spent (Gargantua's clock on its side of the throat, path length beyond)
+struct WhOut { side: f32, n: vec3f, d: vec3f, len: f32 };
 
 // Follows a ray from (l0, n0) with unit rep direction d0 until ℓ ≥ lPlus or ℓ ≤ −lMinus.
 fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
@@ -1424,8 +1446,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
     e2 = normalize(cross(n0, select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(n0.x) > 0.9)));
     tl = 0.0;
   }
-  let b = dnegR(l0).x * tl;
+  var b = dnegR(l0).x * tl;
   var st = Planar(l0, dot(d0, n0), 0.0);
+  var nA = n0; // plane of motion: (nA, e2); re-derived after each kick of the hole's field
   var out: WhOut;
   for (var i = 0u; i < 3000u; i++) {
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
@@ -1438,6 +1461,12 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
       let t2 = (-a - st.l) / st.pl;
       if (t1 > 1e-7 * rho && t1 < h) { h = t1; }
       if (t2 > 1e-7 * rho && t2 < h) { h = t2; }
+      // and end exactly on the way out (gluing sphere / our far radius): no overshoot, so a ray
+      // grazing the sphere spends no extra time or path in here (no seam at its rim)
+      let t3 = select(-1.0, (lPlus - st.l) / st.pl, st.pl > 0.0);
+      let t4 = select(-1.0, (-lMinus - st.l) / st.pl, st.pl < 0.0);
+      if (t3 > 1e-7 * rho && t3 < h) { h = t3; }
+      if (t4 > 1e-7 * rho && t4 < h) { h = t4; }
     }
     let k1 = dnegRHS(st.l, st.pl, b);
     let k2 = dnegRHS(st.l + 0.5 * h * k1.l, st.pl + 0.5 * h * k1.pl, b);
@@ -1446,11 +1475,33 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
     st.l += h / 6.0 * (k1.l + 2.0 * k2.l + 2.0 * k3.l + k4.l);
     st.pl += h / 6.0 * (k1.pl + 2.0 * k2.pl + 2.0 * k3.pl + k4.pl);
     st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
+    if (st.l <= a) { out.len += h; }
+    if (st.l > a) {
+      // Gargantua's side: its weak field (Φ = −1/|X|, light bends by −2∇⊥Φ per unit length) is
+      // felt here too, so that nothing jumps at the gluing sphere (the Dneg metric alone ignores it)
+      let rr = dnegR(st.l).x;
+      let n = cos(st.psi) * nA + sin(st.psi) * e2;
+      let t = -sin(st.psi) * nA + cos(st.psi) * e2;
+      var d = normalize(st.pl * n + (b / rr) * t);
+      let X = P.whC.xyz + whToWorld(n * rr);
+      // Gargantua's coordinate time for light (weak Schwarzschild field): dt² = dr²/α⁴ + r²dΩ²/α²
+      let a2 = max(1.0 - 2.0 / length(X), 1e-3);
+      let ur = dot(whToWorld(d), normalize(X));
+      out.len += h * sqrt(ur * ur / (a2 * a2) + (1.0 - ur * ur) / a2);
+      let gR = worldToWh(X / pow(dot(X, X), 1.5));
+      d = normalize(d - 2.0 * h * (gR - dot(gR, d) * d));
+      let tv2 = d - dot(d, n) * n;
+      let tl2 = length(tv2);
+      nA = n;
+      if (tl2 > 1e-7) { e2 = tv2 / tl2; }
+      b = rr * tl2;
+      st = Planar(st.l, dot(d, n), 0.0);
+    }
   }
   if (out.side == 0.0) { out.side = sign(st.l); }
   let r = dnegR(st.l).x;
-  out.n = cos(st.psi) * n0 + sin(st.psi) * e2;
-  let t = -sin(st.psi) * n0 + cos(st.psi) * e2;
+  out.n = cos(st.psi) * nA + sin(st.psi) * e2;
+  let t = -sin(st.psi) * nA + cos(st.psi) * e2;
   out.d = normalize(st.pl * out.n + (b / r) * t);
   return out;
 }
@@ -1625,6 +1676,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var wn = vec3f(0.0);
   var wd = vec3f(0.0);
   var eloc = Ez;         // and the photon energy measured there by static observers
+  var whInR = 0.0;       // distance to the hole where the ray entered the Dneg region (0: from our side)
+  var whInT = 0.0;       // coordinate time (along the ray, ≤ 0) when it entered
   var E0 = 1.0;          // energy at infinity of a photon the camera measures at energy 1
   var L = 0.0;
   var s: GState;
@@ -1634,6 +1687,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     wl = P.wh2.y;
     wn = P.whN.xyz;
     wd = -pz / Ez;
+    if (P.wh2.y > 0.0) { whInR = length(P.whC.xyz + whToWorld(P.whN.xyz * dnegR(P.wh2.y).x)); }
   } else {
     // ZAMO tetrad → covariant Boyer–Lindquist momentum.
     let alpha = P.zamo.x;
@@ -1720,9 +1774,18 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       break;
     }
     // out of the far mouth: on through the Kerr metric, from the gluing sphere
-    let ks = kerrLaunch(P.whC.xyz + whToWorld(w.n * (P.wh2.z * 1.0005)), whToWorld(w.d), eloc, a);
+    let Xo = P.whC.xyz + whToWorld(w.n * (P.wh2.z * 1.0005));
+    if (whInR > 0.0) {
+      // came in from the black hole's universe: the local energy follows its potential (weak field),
+      // E_loc ∝ 1/α, so the energy at infinity is unchanged across the Dneg region
+      eloc *= sqrt(max(1.0 - 2.0 / whInR, 1e-3) / max(1.0 - 2.0 / length(Xo), 1e-3));
+    }
+    let ks = kerrLaunch(Xo, whToWorld(w.d), eloc, a);
     if (ks.E0 <= 1e-6) { fate = 1u; break; }
     s = ks.s;
+    // the ray's clock goes on (backwards) through the wormhole: the disk, the flow and the star are
+    // seen at the right emission times behind it (it was reset to 0 here: a visible circle)
+    s.x.w = whInT - w.len;
     L = ks.L;
     E0 = ks.E0;
     kCur = geodesicRHS(s.x, s.p, L, a);
@@ -1759,10 +1822,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
     }
-    if (P.star.x > 0.5 && P.star2.z > 0.0) {
-      // the star's gravity: trapezoidal kick over the step (backwards in λ: Δp = +h ∂δH/∂x)
-      let back = normalize(blCart(n.x) - blCart(s.x));
-      let f = 0.5 * h * (starForce(s.x, back) + starForce(n.x, back));
+    let massive = P.star.x > 0.5 && P.star2.z > 0.0;
+    if (massive || whOn) {
+      // weak fields added to Kerr — the star's, the wormhole's: trapezoidal kick over the step
+      // (backwards in λ: Δp = +h ∂δH/∂x)
+      var f = vec3f(0.0);
+      if (massive) {
+        let back = normalize(blCart(n.x) - blCart(s.x));
+        f += starForce(s.x, back) + starForce(n.x, back);
+      }
+      if (whOn) { f += mouthForce(s.x) + mouthForce(n.x); }
+      f *= 0.5 * h;
       n.p += f.xy;
       L += f.z;
       if (adaptive) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
@@ -1828,6 +1898,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         wd = worldToWh(dW);
         wl = P.wh2.w;
         eloc = E0 * zamoEnergy(n.x.x, n.x.y, a, L);
+        whInR = length(mix(p0, p1, t));
+        whInT = mix(s.x.w, n.x.w, t);
         seg = 1u;
         entered = true;
         break;
@@ -1998,10 +2070,12 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       let c = dot(f, f) - P.wh2.z * P.wh2.z;
       if (c > 0.0 && B < 0.0 && B * B > c) {
         let X = x + (-B - sqrt(B * B - c)) * dir;
+        whInT = s.x.w - (-B - sqrt(B * B - c));
         wn = normalize(worldToWh(X - P.whC.xyz));
         wd = worldToWh(dir);
         wl = P.wh2.w;
         eloc = E0 / sqrt(max(1.0 - 2.0 / length(X), 1e-3)); // weak field: static observer there
+        whInR = length(X);
         seg = 1u;
         continue;
       }
