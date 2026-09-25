@@ -1,7 +1,11 @@
-import { horizon } from "./physics";
+import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor } from "./camera";
+import { horizon, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
+import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
-type Cinematic = "orbit" | "dive" | null;
+type Cinematic = "orbit" | "dive" | "journey" | null;
+type PoseKeys = "anchor" | "whL" | "distance" | "inclination" | "azimuth" | "yaw" | "pitch";
+const POSE_KEYS: PoseKeys[] = ["anchor", "whL", "distance", "inclination", "azimuth", "yaw", "pitch"];
 
 /**
  * Camera interaction: orbit / look with momentum, smooth logarithmic zoom, pinch zoom,
@@ -9,6 +13,9 @@ type Cinematic = "orbit" | "dive" | null;
  *  - orbit: the observer circles the hole (azimuth drift)
  *  - dive: exact free fall from rest at infinity (E = 1, L = Q = 0) integrated in proper time,
  *          seen from the infalling ("rain") frame; ends just outside the horizon.
+ *  - journey: through Interstellar's wormhole, from our side to the black hole (or back).
+ * Free flight (W/Z forward, X backward, Shift faster) follows straight lines: spatial geodesics of
+ * the wormhole metric near it (so it can cross the throat), flat lines near the hole.
  */
 export class CameraController {
   cinematic: Cinematic = null;
@@ -26,6 +33,8 @@ export class CameraController {
   private keys = new Set<string>();
   private diveSaved: Partial<Settings> | null = null;
   private diveHold = 0;
+  private targetL: number;
+  private journey: { t: number; dir: "out" | "back"; start: Pick<Settings, PoseKeys> } | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -33,6 +42,7 @@ export class CameraController {
     private onCinematicChange: (mode: Cinematic) => void,
   ) {
     this.targetDistance = s.distance;
+    this.targetL = s.whL;
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("pointermove", this.onMove);
@@ -42,16 +52,23 @@ export class CameraController {
     canvas.addEventListener("dblclick", () => this.resetView());
     addEventListener("keydown", (e: KeyboardEvent) => {
       if (isTyping(e)) return;
-      this.keys.add(e.key);
+      this.keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+      if (e.key === "Shift") this.keys.add("Shift");
     });
-    addEventListener("keyup", (e: KeyboardEvent) => this.keys.delete(e.key));
+    addEventListener("keyup", (e: KeyboardEvent) => this.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
     addEventListener("blur", () => this.keys.clear());
   }
 
   /** Call after the distance was changed from elsewhere (GUI, preset). */
   sync() {
     this.targetDistance = this.s.distance;
+    this.targetL = this.s.whL;
     this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
+  }
+
+  /** The camera orbits the wormhole (its distance is ℓ) rather than the hole. */
+  private get aroundWormhole() {
+    return this.s.wormhole && this.s.anchor === "wormhole";
   }
 
   resetView() {
@@ -62,6 +79,9 @@ export class CameraController {
 
   setCinematic(mode: Cinematic) {
     if (this.cinematic === "dive" && mode !== "dive") this.endDive();
+    if (mode !== "journey") this.journey = null;
+    if (mode === "dive" && this.aroundWormhole && !switchAnchor(this.s, "hole")) mode = null;
+    if (mode === "journey") this.startJourney();
     this.cinematic = mode;
     if (mode === "dive") {
       const s = this.s;
@@ -147,7 +167,14 @@ export class CameraController {
   };
 
   private zoomBy(f: number) {
-    if (this.cinematic === "dive") return;
+    if (this.cinematic === "dive" || this.cinematic === "journey") return;
+    if (this.aroundWormhole) {
+      // distance to the throat |ℓ| (never through it: fly with W/Z to cross)
+      const lMin = this.lMin();
+      const sign = this.targetL < 0 ? -1 : 1;
+      this.targetL = sign * clamp(lMin + (Math.abs(this.targetL) - lMin) * f, lMin, 2000);
+      return;
+    }
     const rMin = horizon(this.s.spin) + 0.05;
     this.targetDistance = clamp(rMin + (this.targetDistance - rMin) * f, rMin, 1000);
   }
@@ -156,7 +183,7 @@ export class CameraController {
   update(dt: number): boolean {
     if (!this.enabled) return false;
     const s = this.s;
-    const before = [s.azimuth, s.inclination, s.yaw, s.pitch, s.distance, s.fov].join();
+    const before = [s.azimuth, s.inclination, s.yaw, s.pitch, s.distance, s.fov, s.whL, s.anchor].join();
     const dragging = this.pointers.size > 0;
 
     // keyboard (held keys)
@@ -167,6 +194,11 @@ export class CameraController {
     if (this.keys.has("ArrowDown")) s.inclination = clamp(s.inclination + kRate, 0.2, 179.8);
     if (this.keys.has("+") || this.keys.has("=")) this.zoomBy(Math.exp(-1.2 * dt));
     if (this.keys.has("-") || this.keys.has("_")) this.zoomBy(Math.exp(1.2 * dt));
+    const thrust = (this.keys.has("w") || this.keys.has("z") ? 1 : 0) - (this.keys.has("x") ? 1 : 0);
+    if (thrust !== 0 && this.cinematic !== "dive" && this.cinematic !== "journey") {
+      if (this.cinematic === "orbit") this.setCinematic(null);
+      this.fly(thrust, dt, this.keys.has("Shift"));
+    }
 
     // momentum (exponential damping)
     if (!dragging) {
@@ -186,6 +218,19 @@ export class CameraController {
       s.azimuth = wrapDeg(s.azimuth + s.cinematicSpeed * dt);
     } else if (this.cinematic === "dive") {
       this.stepDive(dt);
+    } else if (this.cinematic === "journey") {
+      this.stepJourney(dt);
+    } else if (this.aroundWormhole) {
+      // smooth zoom towards the target |ℓ| (in log space), on the camera's side of the throat
+      if (Math.sign(this.targetL) !== Math.sign(s.whL)) this.targetL = s.whL;
+      const lMin = this.lMin();
+      const sign = s.whL < 0 ? -1 : 1;
+      const cur = Math.log(Math.max(Math.abs(s.whL) - lMin, 0) + 1e-3);
+      const tgt = Math.log(Math.abs(this.targetL) - lMin + 1e-3);
+      const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
+      const l = Math.abs(tgt - cur) < 1e-4 ? this.targetL : sign * (lMin + Math.exp(next) - 1e-3);
+      if (this.poseAllowed({ ...s, whL: l })) s.whL = l;
+      else this.targetL = s.whL;
     } else {
       // smooth zoom towards the target distance (in log space)
       const rMin = horizon(s.spin) + 0.05;
@@ -195,7 +240,165 @@ export class CameraController {
       const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
       s.distance = Math.abs(tgt - cur) < 1e-4 ? this.targetDistance : rMin + Math.exp(next) - 1e-3;
     }
-    return before !== [s.azimuth, s.inclination, s.yaw, s.pitch, s.distance, s.fov].join();
+    return before !== [s.azimuth, s.inclination, s.yaw, s.pitch, s.distance, s.fov, s.whL, s.anchor].join();
+  }
+
+  /** Closest approach of the wheel zoom to the throat. */
+  private lMin() {
+    const w = mouth(this.s).w;
+    return w.a + 0.3 * w.rho;
+  }
+
+  /** A pose is allowed unless it puts the camera inside the hole's horizon region. */
+  private poseAllowed(s: Settings) {
+    const cam = cameraFrame(s);
+    return cam.region === "throat" || cam.r > horizon(s.spin) + 0.3;
+  }
+
+  // ------------------------------------------------------------------------------ free flight
+  /**
+   * Moves the camera along its view direction (backwards for dir < 0) at a speed proportional to the
+   * distance to the nearest object. Near the wormhole: a spatial geodesic of the Dneg metric (it can
+   * cross the throat); near the hole: a straight line. The camera re-anchors to the nearest object.
+   */
+  private fly(dir: number, dt: number, fast: boolean) {
+    const s = this.s;
+    const rH = horizon(s.spin);
+    const k = (fast ? 3 : 0.8) * dt;
+    if (!s.wormhole) {
+      const cam = cameraFrame(s);
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const fw = add3(f.er, f.et, f.ep, cam.fwd);
+      const Y = axpy(X, fw, dir * k * (cam.r - rH));
+      if (Math.hypot(...Y) < rH + 0.3) return;
+      setHolePose(s, Y, fw);
+      s.anchor = "hole";
+      this.sync();
+      return;
+    }
+    const m = mouth(s);
+    const p = repPose(s);
+    const rw = radius(m.w, p.l)[0];
+    const toHole = p.l > 0 ? Math.hypot(...repToHole(m, p.l, p.n)) : Infinity;
+    const scale = Math.max(Math.min(rw - 0.5 * m.w.rho, toHole - rH), 0.2 * m.w.rho);
+    const ds = k * scale;
+    const nearMouth = p.l <= 0 || radius(m.w, p.l)[0] < toHole;
+    if (nearMouth) {
+      const back = dir < 0;
+      const q = flyDneg(m.w, p.l, p.n, back ? neg(p.fwd) : p.fwd, p.up, ds);
+      const pose = { l: q.l, n: q.n, fwd: back ? neg(q.fwd) : q.fwd };
+      if (pose.l > 0) {
+        const h = repToHolePose(s, pose);
+        const dHole = Math.hypot(...h.X);
+        if (dHole < rH + 0.3) return;
+        if (dHole < radius(m.w, pose.l)[0]) setHolePose(s, h.X, h.fwd);
+        else setRepPose(s, pose);
+      } else setRepPose(s, pose);
+    } else {
+      const cam = cameraFrame(s);
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const fw = add3(f.er, f.et, f.ep, cam.fwd);
+      const Y = axpy(X, fw, dir * ds);
+      if (Math.hypot(...Y) < rH + 0.3) return;
+      const rep = holeToRep(m, Y);
+      if (rep.r < Math.hypot(...Y)) setRepPose(s, { l: rep.l, n: rep.n, fwd: toMouth(m, fw) });
+      else setHolePose(s, Y, fw);
+    }
+    this.sync();
+  }
+
+  // ------------------------------------------------------------------------------ journey
+  private startJourney() {
+    const s = this.s;
+    if (!s.wormhole) {
+      s.wormhole = true;
+      s.anchor = "wormhole";
+      s.whL = -8 * mouth(s).w.rho;
+    }
+    s.motion = "static";
+    const dir = repPose(s).l < 0 ? "out" : "back";
+    if (dir === "back") switchAnchor(s, "hole");
+    const start = Object.fromEntries(POSE_KEYS.map((k) => [k, s[k]])) as Pick<Settings, PoseKeys>;
+    this.journey = { t: 0, dir, start };
+  }
+
+  /**
+   * Out: line up with the mouth on our side, fly radially through the throat (the line that leads
+   * to the hole), emerge in the black hole's universe facing it, approach and settle into an orbit.
+   * Back: fly to the far mouth, through it, and turn round on our side to look back at the mouth.
+   */
+  private stepJourney(dt: number) {
+    const J = this.journey;
+    if (!J) return this.setCinematic(null);
+    const s = this.s;
+    const m = mouth(s);
+    const { rho, a } = m.w;
+    J.t += dt;
+    const x = Math.min(J.t / Math.max(s.journeyDuration, 1), 1);
+    const f1 = 0.22;
+    const f2 = 0.58;
+    const phase = (lo: number, hi: number) => smoothstep((x - lo) / (hi - lo));
+    const asinhL = (l: number) => Math.asinh(l / rho);
+    const lOut = m.lGlue * 1.15;
+    const st = J.start;
+    if (J.dir === "out") {
+      const lA = -(a + 6 * rho);
+      if (x < f1) {
+        const k = phase(0, f1);
+        s.anchor = "wormhole";
+        s.whL = rho * Math.sinh(lerp(asinhL(st.whL), asinhL(lA), k));
+        s.inclination = lerp(st.inclination, 90, k);
+        s.azimuth = lerpAngle(st.azimuth, 0, k);
+        s.yaw = lerpAngle(st.yaw, 0, k);
+        s.pitch = lerp(st.pitch, 0, k);
+      } else if (x < f2) {
+        const l = rho * Math.sinh(lerp(asinhL(lA), asinhL(lOut), phase(f1, f2)));
+        setRepPose(s, { l, n: [1, 0, 0], fwd: [1, 0, 0] });
+      } else {
+        const k = phase(f2, 1);
+        const X0 = repToHole(m, lOut, [1, 0, 0]);
+        const f = sphericalFrame(X0);
+        s.anchor = "hole";
+        s.distance = Math.exp(lerp(Math.log(f.r), Math.log(Math.max(22, horizon(s.spin) + 10)), k));
+        s.inclination = lerp(f.th / DEG, 81, k);
+        s.azimuth = f.ph / DEG + 40 * k;
+        s.yaw = 0;
+        s.pitch = 0;
+      }
+      if (x >= 1) {
+        this.journey = null;
+        this.sync();
+        this.setCinematic("orbit");
+      }
+    } else {
+      const lIn = m.lGlue * 1.3;
+      const lB = -(a + 10 * rho);
+      if (x < f1) {
+        const k = phase(0, f1);
+        const target = repToHole(m, lIn, [1, 0, 0]);
+        const f = sphericalFrame(target);
+        s.anchor = "hole";
+        s.distance = Math.exp(lerp(Math.log(st.distance), Math.log(f.r), k));
+        s.inclination = lerp(st.inclination, f.th / DEG, k);
+        s.azimuth = lerpAngle(st.azimuth, f.ph / DEG, k);
+        s.yaw = lerpAngle(st.yaw, 180, k);
+        s.pitch = lerp(st.pitch, 0, k);
+      } else if (x < f2) {
+        const l = rho * Math.sinh(lerp(asinhL(lIn), asinhL(lB), phase(f1, f2)));
+        setRepPose(s, { l, n: [1, 0, 0], fwd: [-1, 0, 0] });
+      } else {
+        const k = phase(f2, 1);
+        setRepPose(s, { l: rho * Math.sinh(lerp(asinhL(lB), asinhL(lB * 1.4), k)), n: [1, 0, 0], fwd: [-1, 0, 0] });
+        s.yaw = lerpAngle(180, 0, k);
+      }
+      if (x >= 1) {
+        this.journey = null;
+        this.sync();
+        this.setCinematic(null);
+      }
+    }
   }
 
   private stepDive(dt: number) {
@@ -235,6 +438,22 @@ export class CameraController {
     this.targetDistance = s.distance;
   }
 }
+
+const DEG = Math.PI / 180;
+const neg = (v: Vec3): Vec3 => [-v[0], -v[1], -v[2]];
+const axpy = (x: Vec3, v: Vec3, k: number): Vec3 => [x[0] + k * v[0], x[1] + k * v[1], x[2] + k * v[2]];
+/** Components c along the frame (e0, e1, e2) → Cartesian vector. */
+const add3 = (e0: Vec3, e1: Vec3, e2: Vec3, c: Vec3): Vec3 => [
+  e0[0] * c[0] + e1[0] * c[1] + e2[0] * c[2],
+  e0[1] * c[0] + e1[1] * c[1] + e2[1] * c[2],
+  e0[2] * c[0] + e1[2] * c[1] + e2[2] * c[2],
+];
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+const lerpAngle = (a: number, b: number, k: number) => a + ((((b - a + 540) % 360) + 360) % 360 - 180) * k;
+const smoothstep = (x: number) => {
+  const t = Math.min(Math.max(x, 0), 1);
+  return t * t * (3 - 2 * t);
+};
 
 function clamp(x: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, x));

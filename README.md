@@ -35,7 +35,12 @@ Requires a WebGPU browser (Chrome/Edge ≥ 113, Safari 26, Firefox 141+).
 | Hot spot | Gaussian blob on a Keplerian orbit (flare): Doppler flaring, lensed arcs, light echoes |
 | Relativistic jet | Parabolic (R ∝ z^0.6), limb-brightened synchrotron plasma along the spin axis with bulk Lorentz factor Γ measured by the local ZAMO; j_ν ∝ ν^{1/3}e^{−ν/ν_c} in the fluid frame, transferred with g³. Doppler boosting, de-boosted/reddened counter-jet and apparent superluminal knot motion (retarded time) emerge from the geodesics |
 | Hot flow (optional) | Geometrically thick, optically thin emission, j_ν ∝ ρ ν^−α, invariant radiative transfer `dI = g^{3+α} j (−p·u) dλ` |
+| Interstellar's wormhole | The **Double Negative wormhole** of *Interstellar* (James, von Tunzelmann, Franklin & Thorne, Am. J. Phys. 83, 486, 2015): ds² = −dt² + dℓ² + r(ℓ)²dΩ², throat radius ρ, cylinder length 2a, lensing width W = 1.42953 M (film: 2a = 0.01ρ, W = 0.05ρ). Our universe (ℓ < 0, the real sky) on one side, the black hole's universe on the other, where the far mouth orbits the hole. Rays are followed in segments **Kerr → Dneg → Kerr** through a gluing sphere around the far mouth (each metric neglects the other's gravity there); both universes stay right-handed (no mirror image). The camera flies through the throat along spatial geodesics |
 | Sky | **Real sky**: 119 614 Hipparcos/HYG stars as point sources (blackbody at their B−V temperature, seen at g·T) + the Gaia DR2 Milky Way of NASA's Deep Star Maps 2020, orientable in galactic coordinates. Or procedural stars + Milky Way, a lat/long grid, or your own panorama. Every lookup is filtered over the pixel's **lensed footprint** |
+
+The black hole's universe seen through the wormhole shows a procedural **distant galaxy** (as in the
+film, nearer its centre than the Sun is to ours: a broad bright band and bulge, H II / O III / reflection
+nebulae, dust lanes, denser stars), pre-filtered over the lensed pixel footprint like the real sky.
 
 Diagnostic views: redshift map, disk temperature, image order (equatorial crossings), integration cost.
 **Kerr shadow guide**: the analytic critical curve (spherical photon orbits, Bardeen 1973) projected
@@ -87,6 +92,9 @@ Units: G = c = M = 1, distances in M (= GM/c²), time in M (= GM/c³).
 * `tests/`: critical impact parameters (±0.001 M), null constraint, ISCO, Novikov–Thorne flux,
   colorimetry, the Bardeen shadow guide vs the integrator (static and moving observers), Dormand–Prince
   vs step doubling, EXR/PNG encoders.
+* `tests/wormhole.test.ts`: the Dneg r(ℓ) against its integral form (Eq. 5a), W/M = 1.42953, null
+  constraint, rays with b < ρ cross the throat and b > ρ turn back, time reversibility, step convergence
+  (1e-5 rad), orientation of the gluing frames.
 * `src/analytic.ts`: closed-form Kerr geodesics (Carlson elliptic integrals; Mino time of the n-th
   equatorial crossing, Gralla & Lupsasca 2020), tested against the float64 integrator to 1e-6.
 * GPU probe (`probe` entry point of `trace.wgsl`, `Renderer.precisionProbe`, reference data from
@@ -123,8 +131,15 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
 
 Drag: orbit (with momentum) · right-drag / shift-drag: look around · wheel / pinch: distance ·
 alt+wheel: FOV · double-click: recentre view · arrows, +/−: move.
+**Wormhole** (Scene → Interstellar wormhole, or the preset "Interstellar: wormhole to Gargantua"): the
+orbit controls turn around the wormhole or the black hole (switching keeps the view); the wheel sets the
+distance to the throat. **W / Z** fly forward, **X** backward (⇧ faster): near the wormhole along its
+geodesics, so you can cross the throat; the camera re-anchors to the nearest object. **T** runs the
+journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from
+the black hole's universe: the way back home).
+
 Keys: O cinematic orbit · D free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · J jet · G shadow guide · I readouts · S settings · / search · ⌘Z undo · 1–4 quality ·
+rain frame) · T wormhole journey · W/Z, X fly · J jet · G shadow guide · I readouts · S settings · / search · ⌘Z undo · 1–4 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

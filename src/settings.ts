@@ -223,7 +223,7 @@ export function defaultSettings(): Settings {
     whRho: 2,
     whLength: 0.01,
     whLensing: 0.05,
-    whDist: 40,
+    whDist: 60,
     whIncl: 84,
     whAzimuth: 200,
     journeyDuration: 24,
@@ -241,6 +241,11 @@ export const presets: Record<string, Partial<Settings>> = {
   "Interstellar (no shifts)": {
     spin: 0.6, distance: 34, inclination: 84, fov: 40, yaw: 0, pitch: 0, shiftMode: "none",
     diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
+  },
+  "Interstellar: wormhole to Gargantua": {
+    wormhole: true, anchor: "wormhole", whL: -10, inclination: 88, azimuth: 8, yaw: 0, pitch: 0, fov: 55,
+    spin: 0.9, diskTemp: 5200, diskOuter: 20, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
+    skyL: 0, skyB: 0, skyRoll: 35,
   },
   "Schwarzschild (no spin → no BZ jet)": { spin: 0, distance: 36, inclination: 80, jet: false },
   "Luminet 1979 (bolometric)": {

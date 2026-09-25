@@ -58,12 +58,15 @@ export const GROUP_SWITCH: Record<string, keyof Settings> = {
   "Hot accretion flow": "hotFlow",
   Polarization: "polarization",
   "Hot spot": "hotSpot",
+  "Interstellar wormhole": "wormhole",
 };
 
 const diskOn = (s: Settings) => s.disk;
 const jetOn = (s: Settings) => s.jet;
 const flowOn = (s: Settings) => s.hotFlow;
 const polOn = (s: Settings) => s.polarization;
+const whOn = (s: Settings) => s.wormhole;
+const aroundHole = (s: Settings) => !s.wormhole || s.anchor === "hole";
 
 export const SCHEMA: ControlDef[] = [
   // ------------------------------------------------------------------ scene · black hole
@@ -79,7 +82,7 @@ export const SCHEMA: ControlDef[] = [
   },
   // ------------------------------------------------------------------ scene · observer
   {
-    key: "distance", type: "number", section: "scene", group: "Observer", label: "Distance r", min: 1.1, max: 1000, scale: "log", unit: "M", precision: 3,
+    key: "distance", type: "number", section: "scene", group: "Observer", label: "Distance r", min: 1.1, max: 1000, scale: "log", unit: "M", precision: 3, visible: aroundHole,
     help: "Boyer–Lindquist radius of the camera, in units of M = GM/c². Wheel / pinch on the view to zoom.",
     keywords: "zoom radius camera",
   },
@@ -124,6 +127,54 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "cinematicSpeed", type: "number", section: "scene", group: "Observer motion", label: "Cinematic speed", min: 0.5, max: 60, step: 0.1, effect: "none",
     help: "Orbit mode (O): degrees per second. Dive mode (D): proper time of the falling observer, in M per second.",
+  },
+  // ------------------------------------------------------------------ scene · wormhole
+  {
+    key: "wormhole", type: "toggle", section: "scene", group: "Interstellar wormhole", label: "Wormhole",
+    help: "Interstellar's Double Negative wormhole (James, von Tunzelmann, Franklin & Thorne 2015): our universe, with the real sky, on one side; the black hole's universe, with a distant galaxy, on the other. Light and the camera go through it. Fly with W/Z and X, or press T for the journey.",
+    keywords: "interstellar wormhole gargantua tunnel other universe travel dneg thorne",
+  },
+  {
+    key: "anchor", type: "choice", section: "scene", group: "Interstellar wormhole", label: "Camera orbits", style: "segmented", enabled: whOn,
+    options: [
+      { value: "wormhole", label: "Wormhole", hint: "Drag orbits the mouth; the wheel changes the distance to the throat" },
+      { value: "hole", label: "Black hole", hint: "Drag orbits the black hole (only from its universe)" },
+    ],
+    help: "What the orbit controls turn around. Switching keeps the view unchanged; from our side of the wormhole only the wormhole can be orbited.",
+  },
+  {
+    key: "whL", type: "number", section: "scene", group: "Interstellar wormhole", label: "Position ℓ", min: -200, max: 200, step: 0.01, unit: "M",
+    visible: (s) => s.wormhole && s.anchor === "wormhole",
+    help: "Proper radial distance through the wormhole: ℓ < 0 on our side, ℓ > 0 in the black hole's universe, |ℓ| < a inside the throat's cylinder.",
+    keywords: "ell proper distance through",
+  },
+  {
+    key: "whRho", type: "number", section: "scene", group: "Interstellar wormhole", label: "Throat radius ρ", min: 0.2, max: 20, scale: "log", unit: "M", precision: 3, enabled: whOn,
+    help: "Radius of the wormhole's spherical cross sections inside its cylindrical interior (1 km in the film; here in units of the black hole's M).",
+  },
+  {
+    key: "whLength", type: "number", section: "scene", group: "Interstellar wormhole", label: "Length 2a/ρ", min: 0.001, max: 20, scale: "log", precision: 3, enabled: whOn,
+    help: "Length of the cylindrical interior relative to the throat radius. The film used a very short wormhole (0.01); longer ones show multiple images of the far side wrapping around the throat.",
+  },
+  {
+    key: "whLensing", type: "number", section: "scene", group: "Interstellar wormhole", label: "Lensing width W/ρ", min: 0.001, max: 2, scale: "log", precision: 3, enabled: whOn,
+    help: "Width of the flaring of the mouths, W = 1.42953 M: how gently space turns from the cylinder to the flat exterior, i.e. how strongly the mouth lenses the stars around it (film: 0.05).",
+    keywords: "einstein ring lensing mass",
+  },
+  {
+    key: "whDist", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth distance", min: 10, max: 500, scale: "log", unit: "M", precision: 3, enabled: whOn,
+    help: "Distance of the far mouth from the black hole. Inside a sphere around the mouth light follows the wormhole metric, outside it the Kerr metric.",
+  },
+  {
+    key: "whIncl", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth inclination", min: 5, max: 175, step: 0.1, unit: "°", enabled: whOn,
+    help: "Polar angle of the far mouth from the spin axis: the angle at which the black hole is seen through the wormhole.",
+  },
+  {
+    key: "whAzimuth", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth azimuth", min: -180, max: 180, step: 0.1, unit: "°", enabled: whOn,
+  },
+  {
+    key: "journeyDuration", type: "number", section: "scene", group: "Interstellar wormhole", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
+    help: "Length of the cinematic trip (T): line up with the mouth, cross the throat, then approach the black hole (or, from its universe, the way back).",
   },
   // ------------------------------------------------------------------ matter · disk
   {
@@ -252,10 +303,11 @@ export const SCHEMA: ControlDef[] = [
   },
   // ------------------------------------------------------------------ sky
   {
-    key: "background", type: "choice", section: "sky", group: "Celestial sphere", label: "Sky", style: "segmented",
+    key: "background", type: "choice", section: "sky", group: "Celestial sphere", label: "Sky", style: "select",
     options: [
       { value: "real", label: "Real sky", hint: "119 614 Hipparcos/HYG stars + the Gaia DR2 Milky Way (NASA Deep Star Maps 2020)" },
       { value: "stars", label: "Procedural", hint: "Blackbody stars + procedural Milky Way" },
+      { value: "alien", label: "Distant galaxy", hint: "The galaxy on the far side of Interstellar's wormhole: nearer its centre, nebulae and dust" },
       { value: "checker", label: "Grid", hint: "Latitude/longitude grid: makes the lensing map explicit" },
       { value: "image", label: "Image", hint: "Your own equirectangular panorama" },
     ],

@@ -1347,8 +1347,8 @@ fn alienSky(d: vec3f, g: f32, fp: Footprint) -> vec3f {
   let dust = clamp(smoothstep(0.62, 0.92, ridge) * exp(-pow(bb / 0.16, 2.0))
     + 0.5 * smoothstep(0.55, 0.8, dn) * exp(-pow(bb / 0.3, 2.0)), 0.0, 1.0);
   let light = (band * (0.35 + 1.1 * clouds * clouds) * (0.55 + 0.9 * fine) * 1.8 + bulge * 2.2) * (1.0 - 0.9 * dust);
-  let Tg = mix(7200.0, 4200.0, clamp(bulge * 1.5, 0.0, 1.0));
-  var col = blackbodyShifted(Tg, g) * light * 0.14;
+  let Tg = mix(5600.0, 3900.0, clamp(bulge * 1.5 + 0.4 * dust, 0.0, 1.0));
+  var col = blackbodyShifted(Tg, g) * light * 0.1;
   // large coloured clouds along and off the band: H II (Hα), O III, blue reflection nebulae
   let m1 = fbmLod(q * 2.3 + vec3f(5.0, 9.0, 1.0), 5, fw * 2.3);
   let m2 = fbmLod(q * 3.1 + vec3f(1.0, 4.0, 8.0), 5, fw * 3.1);

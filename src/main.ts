@@ -1,6 +1,6 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
-import { cameraFrame } from "./camera";
+import { cameraFrame, switchAnchor } from "./camera";
 import { CameraController, isTyping } from "./controls";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
@@ -65,6 +65,7 @@ async function main() {
   const camera = new CameraController(canvas, settings, (mode) => {
     $("btn-orbit").classList.toggle("active", mode === "orbit");
     $("btn-dive").classList.toggle("active", mode === "dive");
+    $("btn-journey").classList.toggle("active", mode === "journey");
     touch();
     guiDirty = true;
   });
@@ -86,12 +87,20 @@ async function main() {
   function onSettingsChange(keys: (keyof Settings)[]) {
     let scene = false;
     let resized = false;
+    if (keys.includes("anchor")) {
+      // keep the view: re-express the camera around the chosen object (impossible: stay)
+      const want = settings.anchor;
+      settings.anchor = want === "hole" ? "wormhole" : "hole";
+      switchAnchor(settings, want);
+      camera.sync();
+      refreshGui();
+    }
     for (const k of keys) {
       const effect = SCHEMA_BY_KEY.get(k)?.effect ?? (k === "quality" ? "none" : "scene");
       if (effect === "scene") scene = true;
       else if (effect === "display") touchDisplay();
       else if (effect === "resize") resized = true;
-      if (k === "distance") camera.sync();
+      if (k === "distance" || k === "whL") camera.sync();
     }
     if (scene) touch();
     if (resized) resize();
@@ -140,6 +149,10 @@ async function main() {
   const actions: Record<string, () => void> = {
     "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
     "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
+    "btn-journey": () => {
+      camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
+      refreshGui();
+    },
     "btn-play": () => toggle("animate"),
     "btn-guide": () => toggle("shadowGuide"),
     "btn-jet": () => toggle("jet"),
@@ -171,6 +184,7 @@ async function main() {
     else if (k === "f") fullscreen();
     else if (k === "o") actions["btn-orbit"]!();
     else if (k === "d") actions["btn-dive"]!();
+    else if (k === "t") actions["btn-journey"]!();
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
     else if (k === "i") actions["btn-info"]!();
