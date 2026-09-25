@@ -408,28 +408,60 @@ fn ntFlux(r: f32, a: f32, rIn: f32) -> f32 {
   return max(br, 0.0) / (x * x * x * x * (x * x * x - 3.0 * x + 2.0 * a));
 }
 
-// Turbulent structure advected with the Keplerian flow; two phases cross-faded so that
-// differential rotation never winds the pattern up indefinitely (flow-map technique).
+// Gradient (Perlin) noise in [−1, 1], quintic fade: smoother and less grid-aligned than value noise.
+fn gnoise(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  var n: array<f32, 8>;
+  for (var c = 0u; c < 8u; c++) {
+    let o = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
+    let h = hash3u(bitcast<vec3u>(vec3i(i + o)));
+    let g = vec3f(f32(h & 0x3ffu), f32((h >> 10u) & 0x3ffu), f32((h >> 20u) & 0x3ffu)) * (2.0 / 1023.0) - 1.0;
+    n[c] = dot(g, f - o);
+  }
+  return 1.6 * mix(mix(mix(n[0], n[1], u.x), mix(n[2], n[3], u.x), u.y),
+                   mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
+}
+
+// MRI-like turbulence of the disk, advected with the Keplerian flow. Structures are anisotropic
+// and follow trailing logarithmic spirals (pitch ≈ 25°, as the shear of differential rotation
+// produces), with clumps plus thin ridged filaments. Two phases, cross-faded over the flow period,
+// so the pattern shears with the differential rotation but never winds up forever (flow-map
+// advection; a radius-dependent period would create radial phase bands). Evaluated at the retarded time t_em: moving structure is seen where it
+// was when the light left it.
 fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32) -> f32 {
   let omega = 1.0 / (pow(r, 1.5) + a);
   let period = P.time.y;
+  let lr = log(r);
   var acc = 0.0;
   for (var k = 0; k < 2; k++) {
     let ph = tEm / period + f32(k) * 0.5;
     let cyc = floor(ph);
     let fr = ph - cyc;
     let w = 1.0 - abs(2.0 * fr - 1.0);
-    let ang = phi - omega * fr * period;
     let seed = cyc * 13.37 + f32(k) * 71.3;
-    // clumps elongated ~3:1 along the orbit; the Keplerian shear stretches them further in time
-    let lr = log(r);
-    let q = vec3f(cos(ang) * 2.5, sin(ang) * 2.5, lr * 7.5 + seed);
-    let clumps = fbm(q + vec3f(seed * 0.31, zn * 0.45, zn * 0.3), 5);
-    let fil = fbm(vec3f(cos(ang) * 1.5, sin(ang) * 1.5, lr * 22.0 + seed * 1.7), 3);
-    acc += w * (0.8 * clumps + 0.2 * fil);
+    let ang = phi - omega * fr * period;
+    // trailing log-spiral coordinate: constant along arms that lag outward
+    let sp = ang + lr * 2.1;
+    let across = vec2f(cos(sp), sin(sp));
+    // large patches and voids (low frequency), mid-scale clumps, thin ridged filaments along arms
+    let qb = vec3f(across * 1.3, lr * 2.2 + seed * 0.7) + vec3f(zn * 0.2);
+    let big = 0.5 + 0.5 * (0.62 * gnoise(qb) + 0.28 * gnoise(qb * 2.03 + vec3f(5.1)) + 0.1 * gnoise(qb * 4.1 + vec3f(1.3)));
+    var clumps = 0.0;
+    var amp = 0.5;
+    var q = vec3f(across * 2.4, lr * 4.0 + seed) + vec3f(0.0, zn * 0.35, zn * 0.25);
+    for (var o = 0; o < 4; o++) {
+      clumps += amp * gnoise(q);
+      q = q * vec3f(2.07, 2.07, 1.9) + vec3f(1.7, 9.2, 3.1);
+      amp *= 0.5;
+    }
+    let rq = vec3f(across * 6.5, lr * 3.0 + seed * 1.7 + zn * 0.4);
+    let ridge = 1.0 - abs(gnoise(rq) + 0.5 * gnoise(rq * 2.1 + vec3f(3.3)));
+    let patches = smoothstep(0.22, 0.78, big);
+    acc += w * (0.12 + 0.88 * patches) * max(0.5 + 0.5 * clumps + 0.4 * (ridge * ridge * ridge - 0.3), 0.0);
   }
-  // contrast stretch around the mean of the fBm
-  return clamp(0.5 + 1.6 * (acc - 0.5), 0.0, 1.0);
+  return clamp(1.7 * acc, 0.0, 1.0);
 }
 
 struct DiskHit { color: vec3f, trans: f32, g: f32, T: f32 };
