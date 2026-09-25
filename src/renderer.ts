@@ -1064,7 +1064,7 @@ export class Renderer {
    * states (compare with scripts/precision-probe.ts, float64).
    */
   async precisionProbe(
-    job: { a: number; r0: number; rEscape: number; captureTol: number; rays: { b: number; pr: number }[] },
+    job: { a: number; rEscape: number; captureTol: number; rays: { r: number; theta: number; L: number; pr: number; pth: number }[] },
     tol: number,
     compensated: boolean,
   ) {
@@ -1077,8 +1077,8 @@ export class Renderer {
     params.set([0, 0, 0, 1], 19 * 4);
     const pbuf = d.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(pbuf, 0, params);
-    const io = new Float32Array(job.rays.length * 8);
-    job.rays.forEach((r, i) => io.set([job.r0, Math.PI / 2, r.b, r.pr, 0, tol, compensated ? 1 : 0, 0], i * 8));
+    const io = new Float32Array(job.rays.length * 12);
+    job.rays.forEach((r, i) => io.set([r.r, r.theta, r.L, r.pr, r.pth, tol, compensated ? 1 : 0, 0], i * 12));
     const buf = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(buf, 0, io);
     const read = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -1100,16 +1100,12 @@ export class Renderer {
     const out = new Float32Array(read.getMappedRange().slice(0));
     read.unmap();
     for (const b of [pbuf, buf, read]) b.destroy();
-    return job.rays.map((r, i) => {
-      const [rr, , phi] = [out[i * 8]!, out[i * 8 + 1]!, out[i * 8 + 2]!];
-      const q = r.b / rr;
-      return {
-        r: rr,
-        phiInf: phi - Math.asin(q) - (2 / r.b) * (1 - Math.sqrt(1 - q * q)),
-        fate: out[i * 8 + 6]!,
-        steps: out[i * 8 + 7]!,
-      };
-    });
+    return job.rays.map((_, i) => ({
+      state: Array.from(out.subarray(i * 12, i * 12 + 4)),
+      fate: out[i * 12 + 6]!,
+      steps: out[i * 12 + 7]!,
+      crossings: Array.from(out.subarray(i * 12 + 8, i * 12 + 8 + out[i * 12 + 11]!)),
+    }));
   }
 
   // ------------------------------------------------------------------------------------ export

@@ -1722,19 +1722,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
 // ---------------------------------------------------------------------------------------------
 // Precision probe (validation only, separate pipeline): integrates the rays given in probeBuf with
-// the quality integrator — with or without compensated summation — and returns the final states,
-// to be compared with a float64 CPU reference (scripts/precision-probe.ts).
-// in:  [r, θ, L, p_r], [p_θ, tolerance, compensated (0/1), 0]
-// out: [r, θ, φ, t],   [p_r, p_θ, fate (1 horizon, 2 escape), steps]
+// the quality integrator — with or without compensated summation — and returns the final states and
+// the radii of the first three equatorial crossings found exactly as the renderer finds disk hits
+// (Hermite root + RK4 sub-step), for comparison with float64 / closed-form references
+// (scripts/precision-probe.ts, src/analytic.ts).
+// in:  [r, θ, L, p_r], [p_θ, tolerance, compensated (0/1), 0], [0, 0, 0, 0]
+// out: [r, θ, φ, t],   [p_r, p_θ, fate (1 horizon, 2 escape), steps], [r₀, r₁, r₂, crossings]
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(12) var<storage, read_write> probeBuf: array<vec4f>;
 
 @compute @workgroup_size(64)
 fn probe(@builtin(global_invocation_id) gid: vec3u) {
-  let count = arrayLength(&probeBuf) / 2u;
+  let count = arrayLength(&probeBuf) / 3u;
   if (gid.x >= count) { return; }
-  let in0 = probeBuf[2u * gid.x];
-  let in1 = probeBuf[2u * gid.x + 1u];
+  let in0 = probeBuf[3u * gid.x];
+  let in1 = probeBuf[3u * gid.x + 1u];
   var s: GState;
   s.x = vec4f(in0.x, in0.y, 0.0, 0.0);
   s.p = vec2f(in0.w, in1.x);
@@ -1748,6 +1750,8 @@ fn probe(@builtin(global_invocation_id) gid: vec3u) {
   var comp: GState;
   var fate = 0.0;
   var steps = 0u;
+  var cross = vec4f(0.0);
+  var nc = 0u;
   for (var i = 0u; i < u32(P.integ.y); i++) {
     steps = i + 1u;
     let hMax = stepSize(s, L, a, P.integ.x * 4.0, rH);
@@ -1761,17 +1765,24 @@ fn probe(@builtin(global_invocation_id) gid: vec3u) {
     }
     let nw = wrapPole(ns);
     hNext = st.hNext;
-    k = st.k;
+    var kn = st.k;
     if (nw.x.y != ns.x.y) {
       comp = GState();
-      k = geodesicRHS(nw.x, nw.p, L, a);
+      kn = geodesicRHS(nw.x, nw.p, L, a);
     }
+    if (cos(s.x.y) * cos(nw.x.y) < 0.0 && nc < 3u) {
+      cross[nc] = equatorCrossing(s, nw, k, kn, L, a, st.h).x.x;
+      nc++;
+    }
+    k = kn;
     let r = nw.x.x;
     let rPrev = s.x.x;
     s = nw;
     if (r < rH + P.integ.w) { fate = 1.0; break; }
     if (r > P.integ.z && r > rPrev) { fate = 2.0; break; }
   }
-  probeBuf[2u * gid.x] = s.x;
-  probeBuf[2u * gid.x + 1u] = vec4f(s.p, fate, f32(steps));
+  cross.w = f32(nc);
+  probeBuf[3u * gid.x] = s.x;
+  probeBuf[3u * gid.x + 1u] = vec4f(s.p, fate, f32(steps));
+  probeBuf[3u * gid.x + 2u] = cross;
 }
