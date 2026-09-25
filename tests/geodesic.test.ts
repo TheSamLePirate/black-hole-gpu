@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { advance, fromZamo, hamiltonian, predict, thrust, toZamo } from "../src/geodesic";
+import { advance, fromZamo, hamiltonian, predict, thrust, toZamo, type Lens } from "../src/geodesic";
 import { horizon, keplerOmega, zamo } from "../src/physics";
 
 /** Prograde circular equatorial orbit: β relative to the ZAMO. */
@@ -62,5 +62,44 @@ describe("camera geodesics (timelike Kerr)", () => {
     expect(predict(fromZamo(10, Math.PI / 2, 0, [0, 0, 0], a), a, 2000).fate).toBe("horizon");
     expect(predict(fromZamo(40, Math.PI / 2, 0, [0.9, 0, 0], a), a, 5000).fate).toBe("escape");
     expect(thrust(st, [1, 0, 0], 0, 1, a)).toBe(st);
+  });
+
+  // a star of mass 0.1 M, radius 2.5 M, on a circular orbit of radius 70 M
+  const om = 1 / (70 ** 1.5 + 0.5);
+  const lens: Lens = {
+    m: 0.1, R: 2.5,
+    centre: (t) => [70 * Math.cos(om * t), 70 * Math.sin(om * t), 0],
+    velocity: (t) => [-70 * om * Math.sin(om * t), 70 * om * Math.cos(om * t), 0],
+  };
+  const cart = (st: { r: number; th: number; ph: number }): [number, number, number] =>
+    [st.r * Math.sin(st.th) * Math.cos(st.ph), st.r * Math.sin(st.th) * Math.sin(st.ph), st.r * Math.cos(st.th)];
+
+  test("a massive star pulls the camera with Newton's m/d² (weak field)", () => {
+    const a = 0.5;
+    // 10 M from the star, beside it (+y), released at rest w.r.t. the ZAMO
+    const r = Math.hypot(70, 10);
+    const st = fromZamo(r, Math.PI / 2, Math.atan2(10, 70), [0, 0, 0], a, 0);
+    const T = 3;
+    const free = advance(st, a, T, 0.05).st;
+    const pulled = advance(st, a, T, 0.05, 0, [0, 0, 0], lens).st;
+    const d = cart(pulled).map((v, i) => v - cart(free)[i]!);
+    // ½ (m/d²) T² towards the star (−y), to ~5 % (the star moves 0.36 M meanwhile)
+    expect(-d[1] / (0.5 * (0.1 / 100) * T * T)).toBeGreaterThan(0.93);
+    expect(-d[1] / (0.5 * (0.1 / 100) * T * T)).toBeLessThan(1.07);
+  });
+
+  test("falling onto the star, the camera lands and then rides on its surface", () => {
+    const a = 0.5;
+    const r = Math.hypot(70, 5);
+    const st = fromZamo(r, Math.PI / 2, Math.atan2(5, 70), [0, 0, 0], a, 0);
+    const p = predict(st, a, 400, 200, lens);
+    expect(p.fate).toBe("star");
+    const res = advance(st, a, 400, 0.05, 0, [0, 0, 0], lens);
+    expect(res.landed).toBe(true);
+    // after 400 M the star has moved ~48 M along its orbit: the camera is still on its surface
+    const c = lens.centre(res.st.t);
+    const dist = Math.hypot(...cart(res.st).map((v, i) => v - c[i]!));
+    expect(dist).toBeGreaterThan(2.49);
+    expect(dist).toBeLessThan(2.6);
   });
 });

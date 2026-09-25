@@ -45,6 +45,42 @@ export function starCentre(s: Settings, t: number): Vec3 {
   return [rs * Math.cos(ph), rs * Math.sin(ph), 0];
 }
 
+/** Velocity of the star's centre (coordinate time, Cartesian map). */
+export function starVelocity(s: Settings, t: number): Vec3 {
+  const c = starCentre(s, t);
+  const om = starOmega(s);
+  return [-om * c[1], om * c[0], 0];
+}
+
+/**
+ * Weak field of the moving star, h_μν = −2Φ (η_μν + 2 u_μ u_ν), Φ = −m/d_rest (as the shader).
+ * Returns ∇δH (Cartesian) for δH = Φ (2γ²(E − v·p)² − μ²)·… : `fac` is 2γ²(E − v·p)² − μ² (photon:
+ * 2γ²(1 − v·p̂)²; slow massive body: ≈ 1), times ∇Φ in the rest-frame metric.
+ */
+export function starGradPhi(s: Settings, X: Vec3, t: number) {
+  const c = starCentre(s, t);
+  const v = starVelocity(s, t);
+  const g2 = 1 / (1 - dot(v, v));
+  const dv = sub(X, c);
+  const dvv = dot(dv, v);
+  const d2 = Math.max(dot(dv, dv) + g2 * dvv * dvv, s.sunRadius * s.sunRadius);
+  // ∇Φ = m (dv + γ²(dv·v) v) / d³ (Φ = −m/d_rest)
+  return { grad: lin(lin(dv, 1, v, g2 * dvv), s.sunMass / (d2 * Math.sqrt(d2)), dv, 0), v, g2, d: Math.sqrt(d2) };
+}
+
+/**
+ * ∂δH/∂(r, θ, φ) of a photon (p_t = −1) in the star's field: δH = 2Φ γ² (1 − v·p̂)², so the
+ * deflection is 4m/b × (1 − v∥) (Pyne & Birkinshaw 1993). `back`: unit backward ray direction.
+ */
+export function starForce(s: Settings, r: number, th: number, ph: number, t: number, back: Vec3): Vec3 {
+  const st = Math.sin(th), ct = Math.cos(th), sp = Math.sin(ph), cp = Math.cos(ph);
+  const er: Vec3 = [st * cp, st * sp, ct];
+  const f = starGradPhi(s, lin(er, r, er, 0), t);
+  const k = 1 + dot(f.v, back);
+  const g = lin(f.grad, 2 * f.g2 * k * k, f.grad, 0);
+  return [dot(g, er), r * dot(g, [ct * cp, ct * sp, -st]), r * st * dot(g, [-sp, cp, 0])];
+}
+
 /** Centre of a body at time t (the hole: the origin). */
 export function bodyCentre(s: Settings, body: Body, t: number): Vec3 {
   if (body === "star") return starCentre(s, t);
@@ -106,7 +142,7 @@ function staticFrameAt(X: Vec3, a: number): CameraFrame {
  * Follows a backward ray through Kerr, calling `visit` for each chord (Cartesian end points and
  * coordinate times along the ray, t ≤ 0) until it returns true, or the ray falls in / escapes.
  */
-function walkKerr(s: Settings, st0: State, L: number, visit: (c: Chord) => boolean, maxSteps = 6000) {
+function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => boolean, maxSteps = 6000, time = 0) {
   const a = s.spin;
   const rH = horizon(a);
   const tol = 0.02 + 0.3 * (1 - Math.sqrt(Math.max(0, 1 - a * a)));
@@ -115,6 +151,8 @@ function walkKerr(s: Settings, st0: State, L: number, visit: (c: Chord) => boole
   let rEsc = 600;
   if (star) rEsc = Math.max(rEsc, star.rs + star.R + 60);
   if (m) rEsc = Math.max(rEsc, Math.hypot(...m.C) + m.rGlue + 60);
+  const massive = !!star && s.sunMass > 0;
+  let L = L0;
   let st = st0;
   let q0 = blToCartesian(st.x[0], st.x[1], st.x[2]);
   for (let i = 0; i < maxSteps; i++) {
@@ -123,6 +161,7 @@ function walkKerr(s: Settings, st0: State, L: number, visit: (c: Chord) => boole
     if (star) {
       const dRing = Math.hypot(Math.hypot(q0[0], q0[1]) - star.rs, q0[2]);
       h = Math.min(h, Math.max(0.5 * (dRing - star.R), 0.25 * star.R));
+      if (massive) h = Math.min(h, Math.max(0.3 * Math.hypot(...sub(q0, starCentre(s, time + st.x[3]))), 0.25 * star.R));
     }
     if (m) {
       const dm = Math.hypot(...sub(q0, m.C));
@@ -131,6 +170,15 @@ function walkKerr(s: Settings, st0: State, L: number, visit: (c: Chord) => boole
     let n = rk4(st, L, a, -h);
     if (n.x[1] < 0) n = { x: [n.x[0], -n.x[1], n.x[2] + Math.PI, n.x[3]], p: [n.p[0], -n.p[1]] };
     if (n.x[1] > Math.PI) n = { x: [n.x[0], 2 * Math.PI - n.x[1], n.x[2] + Math.PI, n.x[3]], p: [n.p[0], -n.p[1]] };
+    if (massive) {
+      // the star's weak field: trapezoidal kick of p_r, p_θ and L (as the shader)
+      const qn = blToCartesian(n.x[0], n.x[1], n.x[2]);
+      const back = norm(sub(qn, q0));
+      const f0 = starForce(s, st.x[0], st.x[1], st.x[2], time + st.x[3], back);
+      const f1 = starForce(s, n.x[0], n.x[1], n.x[2], time + n.x[3], back);
+      n = { x: n.x, p: [n.p[0] + 0.5 * h * (f0[0] + f1[0]), n.p[1] + 0.5 * h * (f0[1] + f1[1])] };
+      L += 0.5 * h * (f0[2] + f1[2]);
+    }
     if (!Number.isFinite(n.x[0]) || n.x[0] < rH + tol) return "horizon";
     const q1 = blToCartesian(n.x[0], n.x[1], n.x[2]);
     if (visit({ q0, q1, t0: st.x[3], t1: n.x[3], th0: st.x[1], th1: n.x[1], r0: st.x[0], r1: n.x[0] })) return "stopped";
@@ -139,6 +187,28 @@ function walkKerr(s: Settings, st0: State, L: number, visit: (c: Chord) => boole
     q0 = q1;
   }
   return "maxsteps";
+}
+
+/**
+ * Backward ray along `look` (camera components) until it escapes: its final direction (Cartesian,
+ * from the last chord) and its closest approach to the star's centre (for tests and diagnostics).
+ */
+export function traceRay(s: Settings, cam: CameraFrame, look: Vec3, time = 0) {
+  const ray = cameraRay(cam, look);
+  if (!ray) return null;
+  let dir: Vec3 = [0, 0, 0];
+  let starMin = Infinity;
+  const fate = walkKerr(s, ray.state, ray.L, (c) => {
+    dir = sub(c.q1, c.q0);
+    if (s.sun) {
+      const C = starCentre(s, time + 0.5 * (c.t0 + c.t1));
+      const dv = sub(c.q1, c.q0);
+      const u = Math.min(1, Math.max(0, dot(sub(C, c.q0), dv) / Math.max(dot(dv, dv), 1e-18)));
+      starMin = Math.min(starMin, Math.hypot(...sub(lin(c.q0, 1, dv, u), C)));
+    }
+    return false;
+  }, 20000, time);
+  return { fate, dir: norm(dir), starMin };
 }
 
 /** First intersection of the chord p0 → p1 with a sphere, as a fraction (−1: none; 0: starts inside). */
@@ -181,7 +251,7 @@ function pickKerr(s: Settings, st: State, L: number, time: number, skipGlue = fa
       if (r > 0.97 * rIn && r < s.diskOuter && f < best) (best = f), (hit = "hole");
     }
     return best < Infinity;
-  });
+  }, 6000, time);
   if (fate === "horizon") return "hole";
   return fate === "stopped" ? hit : null;
 }
@@ -251,7 +321,7 @@ function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: 
     // well past the closest approach: stop
     far = d > 2 * bestD + 5 ? far + 1 : 0;
     return far > 8;
-  }, 4000);
+  }, 4000, time);
   return best ? { miss: best as Vec3, d: bestD } : null;
 }
 
@@ -313,6 +383,8 @@ export function bodyLook(s: Settings, cam: CameraFrame, body: Body, time: number
     return { look: geometricLook(s, cam, bodyCentre(s, body, time)), lensed: false };
   }
   if (body === "hole") return { look: aberrate(cam, [-1, 0, 0]), lensed: false };
+  // the star's own field is symmetric about its centre: it does not move the central ray
+  if (body === "star" && s.sunMass > 0) s = { ...s, sunMass: 0 };
   const centre = (t: number) => bodyCentre(s, body, t);
   const geo = geometricLook(s, cam, centre(time));
   const R = bodyRadius(s, body);

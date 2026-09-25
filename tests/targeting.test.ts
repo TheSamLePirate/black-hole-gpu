@@ -3,7 +3,7 @@ import { basis, cameraFrame } from "../src/camera";
 import { defaultSettings, type Settings } from "../src/settings";
 import {
   aimFrame, apparentDirection, bodyLook, composeOffset, geometricLook, offsetFrom, pick, QUAT_ID, quatAngle, slerp,
-  starCentre, type Quat,
+  starCentre, traceRay, type Quat,
 } from "../src/targeting";
 import type { Vec3 } from "../src/physics";
 
@@ -13,7 +13,7 @@ const angle = (a: Vec3, b: Vec3) => Math.acos(Math.min(1, dot(a, b) / Math.hypot
 function scene(patch: Partial<Settings> = {}): Settings {
   return {
     ...defaultSettings(), wormhole: false, sun: true, sunOrbit: 70, sunRadius: 2.5, sunPhase: 0, spin: 0.9,
-    disk: true, diskOuter: 18, anchor: "hole", motion: "static", yaw: 0, pitch: 0, roll: 0, ...patch,
+    disk: true, diskOuter: 18, anchor: "hole", motion: "static", yaw: 0, pitch: 0, roll: 0, sunMass: 0, ...patch,
   };
 }
 
@@ -113,5 +113,37 @@ describe("aiming at bodies through curved spacetime", () => {
     // a static target at the star's present position would be aimed at differently
     const frozen = apparentDirection(s, cam, () => starCentre(s, 0), 0, now.look, 1e-4)!;
     expect(angle(now.look, frozen.look)).toBeGreaterThan(1e-3);
+  });
+
+  test("the star's mass bends light by 4m/b × γ(1 − v∥) (moving lens, weak field)", () => {
+    // camera 40 M from the star along y, looking along ±y: the ray passes the star at x-offset b, then
+    // recedes from the hole (whose own bending is the same with or without the star's mass)
+    for (const [b, dirY] of [[6, 1], [12, 1], [10, -1]] as const) {
+      const X: Vec3 = [70 + b, -40 * dirY, 0.001];
+      const r = Math.hypot(...X);
+      const s0 = scene({
+        sunMass: 0, disk: false, spin: 0.5,
+        distance: r, inclination: 90 - (0.001 * (180 / Math.PI)) / r, azimuth: (Math.atan2(X[1], X[0]) * 180) / Math.PI,
+      });
+      const s1 = { ...s0, sunMass: 0.1 };
+      const cam = cameraFrame(s0);
+      const ph = Math.atan2(X[1], X[0]);
+      const look: Vec3 = [dirY * Math.sin(ph), 0, dirY * Math.cos(ph)]; // ±y in ZAMO components
+      const r0 = traceRay(s0, cam, look)!;
+      const r1 = traceRay(s1, cam, look)!;
+      expect(r0.fate).toBe("escape");
+      expect(r1.fate).toBe("escape");
+      const defl = angle(r0.dir, r1.dir);
+      // star velocity ≈ +y (0.12 c); the photon travels along −dirY·y: v∥ = −dirY v
+      const v = 70 / (70 ** 1.5 + 0.5);
+      const expected = ((4 * 0.1) / r1.starMin) * (1 + dirY * v) / Math.sqrt(1 - v * v);
+      // (the camera is 40 M away: the part of the deflection behind it, ≈ 2 %, is missing)
+      expect(Math.abs(defl / expected - 0.98)).toBeLessThan(0.025);
+      expect(r1.dir[0]).toBeLessThan(r0.dir[0]); // bent towards the star (−x)
+    }
+    // m = 0: no effect at all
+    const s2 = scene({ sunMass: 0, distance: 80, inclination: 90.5, azimuth: 8 });
+    const cam2 = cameraFrame(s2);
+    expect(traceRay(s2, cam2, [-1, 0.01, 0.2])!.dir).toEqual(traceRay({ ...s2 }, cam2, [-1, 0.01, 0.2])!.dir);
   });
 });

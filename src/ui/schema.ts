@@ -362,6 +362,11 @@ export const SCHEMA: ControlDef[] = [
     key: "sunPhase", type: "number", section: "matter", group: "Companion star", label: "Orbital phase", min: -180, max: 180, step: 1, unit: "°", enabled: (s) => s.sun,
     help: "Azimuth of the star at t = 0 (it then moves at the Keplerian angular velocity).",
   },
+  {
+    key: "sunMass", type: "number", section: "matter", group: "Companion star", label: "Mass", min: 0, max: 1, scale: "log", offAtZero: true, unit: "M", precision: 2, enabled: (s) => s.sun,
+    help: "Mass of the star in units of the black hole's M. Its weak field Φ = −m/d is added to the Kerr metric: light passing it is bent by 4m/b (the background and Gargantua are lensed around the star, an Einstein ring forms behind it), its own light is redshifted by 1 − m/R, and with gravity on (B) the camera is pulled towards it and can orbit it. A real star next to a supermassive hole would weigh ~10⁻⁸ M (invisible); its orbit is computed in the test-mass limit (m ≪ M).",
+    keywords: "star mass gravity lensing einstein ring weight",
+  },
   // ------------------------------------------------------------------ sky
   {
     key: "background", type: "choice", section: "sky", group: "Celestial sphere", label: "Sky", style: "select",

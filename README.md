@@ -109,6 +109,8 @@ Units: G = c = M = 1, distances in M (= GM/c²), time in M (= GM/c³).
   straight line falls into the shadow; the light-travel delay moves the aim; picking the hole, the disk,
   the sky, the star and the mouth; a secondary image followed by the warm start gives way to the primary;
   orientation offsets (quaternions) round-trip.
+* Star's mass: the traced deflection matches 4m/b × γ(1 − v∥) for a lens moving along the line of sight
+  (both directions, to 2 %); the camera is pulled by m/d² (5 %), lands on the surface and rides it.
 * `src/analytic.ts`: closed-form Kerr geodesics (Carlson elliptic integrals; Mino time of the n-th
   equatorial crossing, Gralla & Lupsasca 2020), tested against the float64 integrator to 1e-6.
 * GPU probe (`probe` entry point of `trace.wgsl`, `Renderer.precisionProbe`, reference data from
@@ -142,6 +144,17 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
   screens it becomes a bottom sheet.
 
 ## Controls
+
+**The star's mass** (Matter → Companion star → Mass, in units of Gargantua's M; 0.1 by default — a real
+star beside a supermassive hole would weigh ~10⁻⁸ M and show nothing): its weak field is added to the Kerr
+metric in the flat far-field map as the linearized field of a *moving* mass, h_μν = −2Φ(η_μν + 2u_μu_ν),
+Φ = −m/d (rest-frame distance). For light, δH = 2Φγ²(1 − v·p̂)² kicks p_r, p_θ and L after every step
+(trapezoidal, on the GPU and in the CPU aiming/picking): deflection 4m/b × (1 − v∥) (Pyne & Birkinshaw
+1993), so Gargantua's image is pushed away from the star, the star magnifies itself, and at large masses
+secondary images appear on its limb; its own light is redshifted by 1 − m/R. The camera (gravity on)
+feels δH = Φ(2γ²(E − v·p)² − 1) — Newton for a slow body, and a moving star exchanges energy with it (a
+slingshot) — it can orbit the star while the star carries it round Gargantua, and it lands on (and
+rides) the surface instead of crossing it. The star's own orbit stays a test-mass orbit (m ≪ M).
 
 **Two rotation modes** (R, toolbar, Scene → Camera rotation):
 

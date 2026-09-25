@@ -579,6 +579,7 @@ async function main() {
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
       cin += ` · <b class="cin">GRAVITY</b> v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M${settings.animate ? "" : " (time paused)"}`;
+      if (camera.landed) cin += ` · <b class="cin">ON THE STAR</b>`;
     }
     statsEl.innerHTML =
       `${phase}${cin}<br><span class="dim">${st.width}×${st.height}${renderer.hdr ? " · HDR" : ""} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +

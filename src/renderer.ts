@@ -434,7 +434,7 @@ export class Renderer {
     }
     this.device.queue.writeBuffer(this.pathBuf, 0, data);
     this.pathCount = n;
-    this.pathFate = path.fate === "horizon" ? 1 : path.fate === "escape" ? 2 : 0;
+    this.pathFate = path.fate === "horizon" || path.fate === "star" ? 1 : path.fate === "escape" ? 2 : 0; // (red end: falls in)
     return true;
   }
 
@@ -764,7 +764,7 @@ export class Renderer {
     set(36, ...m.ey, 0);
     set(37, ...m.ez, 0);
     set(38, s.sun ? 1 : 0, Math.max(s.sunOrbit, horizon(a) + s.sunRadius + 1), s.sunRadius, s.sunTemp);
-    set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, 0, 0);
+    set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, s.sun ? s.sunMass : 0, 0);
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);

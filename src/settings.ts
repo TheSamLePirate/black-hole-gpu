@@ -155,6 +155,7 @@ export interface Settings {
   sunTemp: number; // photosphere temperature [K]
   sunBrightness: number;
   sunPhase: number; // orbital azimuth at t = 0 [deg]
+  sunMass: number; // mass of the star [M]: its weak field bends light and pulls the camera
 }
 
 export function defaultSettings(): Settings {
@@ -271,6 +272,7 @@ export function defaultSettings(): Settings {
     sunTemp: 4300,
     sunBrightness: 6,
     sunPhase: 0,
+    sunMass: 0.1,
   };
 }
 

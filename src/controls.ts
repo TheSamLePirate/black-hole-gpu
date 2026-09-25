@@ -5,9 +5,9 @@ import { horizon, zamo, type Vec3 } from "./physics";
 import type { Settings, Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
-  pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, type Body, type Quat,
+  pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
 } from "./targeting";
-import { advance, fromZamo, predict, toZamo } from "./geodesic";
+import { advance, fromZamo, predict, toZamo, type Lens } from "./geodesic";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
@@ -75,8 +75,10 @@ export class CameraController {
   /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
   private flyVel: Vec3 = [0, 0, 0];
   /** Last free-fall prediction for the overlay. */
-  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole"; at: number } | null = null;
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number } | null = null;
   private pathKey = "";
+  /** With gravity on: the camera stands on the star's surface. */
+  landed = false;
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
   properTime = 0;
   private journey: { t: number; dir: "out" | "back"; start: Pick<Settings, PoseKeys> } | null = null;
@@ -502,6 +504,13 @@ export class CameraController {
     s.velR = 0;
     s.velT = 0;
     s.velP = clamp(this.ride * v, -0.95, 0.95);
+  }
+
+  /** The star as a gravitating body for the camera's geodesic (none when massless or off). */
+  private lens(): Lens | undefined {
+    const s = this.s;
+    if (!s.sun || !(s.sunMass > 0)) return undefined;
+    return { m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t) };
   }
 
   /** Current co-moving fraction (0 … 1) for the HUD. */
@@ -947,7 +956,8 @@ export class CameraController {
       const f0 = sphericalFrame(X0);
       const w0 = (v: Vec3) => add3(f0.er, f0.et, f0.ep, v);
       const dirZ: Vec3 = kn > 0 ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2])) : [0, 0, 0];
-      const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a), a, simDt, 0.05, accel, dirZ);
+      const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime()), a, simDt, 0.05, accel, dirZ, this.lens());
+      this.landed = res.landed;
       this.properTime += res.tau;
       const st = res.st;
       const X1 = blToCartesian(st.r, st.th, st.ph);
@@ -990,15 +1000,15 @@ export class CameraController {
     if (!this.gravity) return (this.path = null);
     const s = this.s;
     // same state (e.g. time paused): same path object, so the renderer keeps converging
-    const key = [s.spin, s.anchor, s.distance, s.inclination, s.azimuth, s.whL, s.velR, s.velT, s.velP, s.wormhole, s.whDist, s.whIncl, s.whAzimuth].join();
+    const key = [s.spin, s.anchor, s.distance, s.inclination, s.azimuth, s.whL, s.velR, s.velT, s.velP, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.sun, s.sunMass, s.sunOrbit, this.nowTime()].join();
     if (this.path && (key === this.pathKey || now - this.path.at < 250)) return this.path;
     this.pathKey = key;
     const cam = cameraFrame(s);
     if (cam.region !== "hole") return (this.path = null);
-    const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin);
+    const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin, this.nowTime());
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
     // coming back past the camera (a segment that close would sweep across the whole view)
-    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" } = predict(st, s.spin, clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000), 480);
+    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000), 480, this.lens());
     // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
     let turned = 0;
     for (let i = 1; i < p.pts.length; i++) {

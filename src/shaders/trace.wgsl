@@ -387,6 +387,8 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
     let d = length(pc - starCentre(P.time.x + s.x.w)) / P.star.z;
     let near = (0.03 + 0.12 * max(d - 1.0, 0.0)) * P.star.z;
     h = min(h, max(0.7 * (d - 4.0) * P.star.z, near));
+    // a massive star bends the ray: steps small against the distance to it (kick accuracy)
+    if (P.star2.z > 0.0) { h = min(h, max(0.3 * d * P.star.z, near)); }
   }
   if (P.spot.x > 0.5) {
     // never step over the hot spot; sample it at ≤ 0.25 σ
@@ -513,7 +515,35 @@ fn starShift(n: GState, L: f32, E0: f32) -> f32 {
   let a = P.bh.x;
   let om = 1.0 / (pow(P.star.y, 1.5) + a);
   if (P.modes.y == SHIFT_NONE) { return 1.0; }
-  return (1.0 / E0) / circularEmitterEnergy(max(n.x.x, 1.01 * P.bh.y), n.x.y, a, L, om);
+  // the light also climbs out of the star's own potential: × (1 + Φ★) = 1 − m/d
+  let dS = length(blCart(n.x) - starCentre(P.time.x + n.x.w));
+  let gS = 1.0 - P.star2.z / max(dS, P.star.z);
+  return gS * (1.0 / E0) / circularEmitterEnergy(max(n.x.x, 1.01 * P.bh.y), n.x.y, a, L, om);
+}
+
+// Mass of the star (m = P.star2.z, test-mass orbit, m ≪ M): the linearized field of a moving mass,
+// h_μν = −2Φ (η_μν + 2 u_μ u_ν) with Φ = −m/d (d measured in the star's rest frame), added to the
+// Kerr metric in its flat far-field map. For a photon (p_t = −1) δH = −½ h^μν p_μ p_ν
+// = 2Φ γ² (1 − v·p)²: the deflection is 4m/b (twice Newton's) × (1 − v∥) for a star moving along
+// the line of sight (Pyne & Birkinshaw 1993). Returns ∂δH/∂(r, θ, φ), which kicks p_r, p_θ and L (no
+// longer conserved near the star); `back`: unit direction of the backward ray (p̂ = −back).
+fn starForce(x: vec4f, back: vec3f) -> vec3f {
+  let st = sin(x.y);
+  let ct = cos(x.y);
+  let sp = sin(x.z);
+  let cp = cos(x.z);
+  let er = vec3f(st * cp, st * sp, ct);
+  let tEm = P.time.x + x.w;
+  let c = starCentre(tEm);
+  let om = 1.0 / (pow(P.star.y, 1.5) + P.bh.x);
+  let v = om * vec3f(-c.y, c.x, 0.0);
+  let g2 = 1.0 / (1.0 - dot(v, v));
+  let dv = x.x * er - c;
+  let dvv = dot(dv, v);
+  let d2 = max(dot(dv, dv) + g2 * dvv * dvv, P.star.z * P.star.z); // rest-frame distance²
+  let k = 1.0 + dot(v, back);                                      // 1 − v·p̂
+  let g = (2.0 * P.star2.z * g2 * k * k) * (dv + g2 * dvv * v) / (d2 * sqrt(d2)); // ∇δH
+  return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
 }
 
 // Photosphere: the emergent temperature falls towards the limb, T(μ) = T (0.2 + 0.8 μ)^¼ (steeper
@@ -1724,6 +1754,14 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       n = wrapPole(ns);
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
+    }
+    if (P.star.x > 0.5 && P.star2.z > 0.0) {
+      // the star's gravity: trapezoidal kick over the step (backwards in λ: Δp = +h ∂δH/∂x)
+      let back = normalize(blCart(n.x) - blCart(s.x));
+      let f = 0.5 * h * (starForce(s.x, back) + starForce(n.x, back));
+      n.p += f.xy;
+      L += f.z;
+      if (adaptive) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
     }
 
     if (P.path.x > 1.5) {
