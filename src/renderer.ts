@@ -7,6 +7,7 @@ import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame } from "./camera";
+import { mouth } from "./wormhole";
 import {
   blackbodyLogY,
   buildBlackbodyLUT,
@@ -22,10 +23,10 @@ import { encodeEXR, encodePNG16 } from "./exporters";
 
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
-const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3 } as const;
+const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 31;
+const PARAM_VEC4S = 38;
 const BANDS = { visible: 0, "230GHz": 1, multi: 2 } as const;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
@@ -654,7 +655,8 @@ export class Renderer {
     set(22, ...sky[0], s.starBrightness * STAR_FLUX_SCALE);
     set(23, ...sky[1], this.skyReady ? 1 : 0);
     set(24, ...sky[2], 0);
-    set(25, s.polarization ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
+    // (polarization is not carried through the wormhole's gluing)
+    set(25, s.polarization && !s.wormhole ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
     // returning radiation: offline renders only by default (≈ 6× the cost of the converged view)
     const ret = s.returningRadiation === "always" || (s.returningRadiation === "offline" && t !== this.live);
     set(26, ret ? 1 : 0, s.diskAlbedo, 3000, 0);
@@ -662,6 +664,14 @@ export class Renderer {
     set(28, s.radioJet, s.hotFlowHR, 0, 0);
     set(29, s.hotSpot ? 1 : 0, Math.max(s.spotRadius, horizon(a) + 1.5 * s.spotSize), s.spotSize, s.spotTau);
     set(30, s.spotTemp, s.spotBrightness, (s.spotPhase * Math.PI) / 180, s.spotHeight);
+    const m = mouth(s);
+    set(31, s.wormhole ? 1 : 0, m.w.rho, m.w.a, m.w.M);
+    set(32, s.wormhole && cam.region === "throat" ? 1 : 0, cam.ell, m.rGlue, m.lGlue);
+    set(33, ...cam.n, m.lFar);
+    set(34, ...m.C, 0);
+    set(35, ...m.ex, 0);
+    set(36, ...m.ey, 0);
+    set(37, ...m.ez, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

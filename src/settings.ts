@@ -1,7 +1,7 @@
 export type Motion = "static" | "orbit" | "infall" | "forward";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
-export type Background = "real" | "stars" | "checker" | "image";
+export type Background = "real" | "stars" | "alien" | "checker" | "image";
 export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp";
 export type Quality = "low" | "medium" | "high" | "ultra";
 
@@ -115,6 +115,17 @@ export interface Settings {
   shadowGuide: boolean;
   massSolar: number; // only used for physical-unit readouts
   cinematicSpeed: number; // orbit: °/s, dive: proper time M/s
+  // Interstellar's wormhole (Dneg metric): our universe (ℓ < 0) ↔ the black hole's universe (ℓ > 0)
+  wormhole: boolean;
+  anchor: "hole" | "wormhole"; // what the camera orbits (distance/inclination/azimuth refer to it)
+  whL: number; // camera position ℓ when orbiting the wormhole [M] (< 0: our side)
+  whRho: number; // throat radius ρ [M]
+  whLength: number; // length of the cylindrical interior over the throat radius, 2a/ρ
+  whLensing: number; // lensing width over the throat radius, W/ρ
+  whDist: number; // distance of the far mouth from the black hole [M]
+  whIncl: number; // polar angle of the far mouth from the spin axis [deg]
+  whAzimuth: number; // azimuth of the far mouth [deg]
+  journeyDuration: number; // cinematic trip through the wormhole [s]
 }
 
 export function defaultSettings(): Settings {
@@ -206,6 +217,16 @@ export function defaultSettings(): Settings {
     shadowGuide: false,
     massSolar: 6.5e9,
     cinematicSpeed: 8,
+    wormhole: false,
+    anchor: "hole",
+    whL: -14,
+    whRho: 2,
+    whLength: 0.01,
+    whLensing: 0.05,
+    whDist: 40,
+    whIncl: 84,
+    whAzimuth: 200,
+    journeyDuration: 24,
   };
 }
 

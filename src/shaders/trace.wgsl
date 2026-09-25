@@ -42,6 +42,13 @@ struct Params {
   radio2: vec4f,   // jet radio brightness, flow H/R, unused, unused
   spot: vec4f,     // hot spot on (0/1), orbit radius [M], size σ [M], optical depth through the centre
   spot2: vec4f,    // temperature [K], brightness, initial azimuth [rad], height above the plane [M]
+  wh: vec4f,       // wormhole world on (0/1), throat radius ρ, half length a, lensing mass M (Dneg metric)
+  wh2: vec4f,      // camera in the throat region (0/1), camera ℓ, gluing radius, ℓ at the gluing sphere
+  whN: vec4f,      // camera n̂ (rep, see wormhole.ts), ℓ where rays leave for our sky
+  whC: vec4f,      // centre of the far mouth in the black hole's frame
+  whX: vec4f,      // mouth frame axes in the black hole's frame (x at the hole, z towards the spin axis)
+  whY: vec4f,
+  whZ: vec4f,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1136,8 +1143,11 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint) -> vec3f {
   return col * 0.5;
 }
 
-fn background(d: vec3f, g: f32, fp: Footprint) -> vec3f {
-  let mode = P.modes.z;
+fn background(d: vec3f, g: f32, fp: Footprint, sky: f32) -> vec3f {
+  var mode = P.modes.z;
+  // wormhole world: the black hole's universe is the distant galaxy, ours is the chosen sky
+  if (P.wh.x > 0.5 && sky < 1.5) { mode = 4u; }
+  if (mode == 4u) { return alienSky(d, g, fp) * P.time.z; }
   let intensity = P.time.z;
   if (mode == 1u) {
     // lat/long checkerboard: makes the lensing map explicit
@@ -1170,6 +1180,194 @@ fn background(d: vec3f, g: f32, fp: Footprint) -> vec3f {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Interstellar's wormhole: the Dneg metric (James, von Tunzelmann, Franklin & Thorne 2015),
+// ds² = −dt² + dℓ² + r(ℓ)² dΩ², ℓ > 0 the black hole's universe, ℓ < 0 ours. A ray keeps to the plane
+// of its initial position and direction: dℓ/dt = p_ℓ, dp_ℓ/dt = b² r'/r³, dψ/dt = b/r² (b conserved).
+// The far mouth sits in the black hole's universe; inside a gluing sphere around it rays follow the
+// Dneg metric, outside it the Kerr metric (each neglects the other's gravity there). Positions and
+// vectors of the Dneg region are "rep" vectors: radial component = ê_ℓ component (wormhole.ts).
+// ---------------------------------------------------------------------------------------------
+const SKY_NATIVE = 1.0; // the black hole's universe
+const SKY_HOME = 2.0;   // ours, through the wormhole
+
+fn dnegR(l: f32) -> vec2f {
+  let rho = P.wh.y;
+  let a = P.wh.z;
+  let M = P.wh.w;
+  let al = abs(l);
+  if (al <= a) { return vec2f(rho, 0.0); }
+  let x = 2.0 * (al - a) / (PI * M);
+  return vec2f(rho + M * (x * atan(x) - 0.5 * log(1.0 + x * x)), sign(l) * (2.0 / PI) * atan(x));
+}
+
+struct Planar { l: f32, pl: f32, psi: f32 };
+
+fn dnegRHS(l: f32, pl: f32, b: f32) -> Planar {
+  let rr = dnegR(l);
+  let ir = 1.0 / rr.x;
+  return Planar(pl, b * b * rr.y * ir * ir * ir, b * ir * ir);
+}
+
+struct WhOut { side: f32, n: vec3f, d: vec3f };
+
+// Follows a ray from (l0, n0) with unit rep direction d0 until ℓ ≥ lPlus or ℓ ≤ −lMinus.
+fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
+  let rho = P.wh.y;
+  let a = P.wh.z;
+  let M = P.wh.w;
+  var tv = d0 - dot(d0, n0) * n0;
+  var tl = length(tv);
+  var e2: vec3f;
+  if (tl > 1e-6) {
+    e2 = tv / tl;
+  } else {
+    e2 = normalize(cross(n0, select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(n0.x) > 0.9)));
+    tl = 0.0;
+  }
+  let b = dnegR(l0).x * tl;
+  var st = Planar(l0, dot(d0, n0), 0.0);
+  var out: WhOut;
+  for (var i = 0u; i < 3000u; i++) {
+    if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
+    if (st.l <= -lMinus && st.pl < 0.0) { out.side = -1.0; break; }
+    let r = dnegR(st.l).x;
+    var h = min(min(0.05 * r * r / max(b, 1e-3 * rho), 0.25 * r), 0.08 * (max(abs(st.l) - a, 0.0) + M) + 0.006 * rho);
+    // land on the mouths |ℓ| = a, where r'' jumps (keeps RK4 at full order)
+    if (abs(st.pl) > 1e-9) {
+      let t1 = (a - st.l) / st.pl;
+      let t2 = (-a - st.l) / st.pl;
+      if (t1 > 1e-7 * rho && t1 < h) { h = t1; }
+      if (t2 > 1e-7 * rho && t2 < h) { h = t2; }
+    }
+    let k1 = dnegRHS(st.l, st.pl, b);
+    let k2 = dnegRHS(st.l + 0.5 * h * k1.l, st.pl + 0.5 * h * k1.pl, b);
+    let k3 = dnegRHS(st.l + 0.5 * h * k2.l, st.pl + 0.5 * h * k2.pl, b);
+    let k4 = dnegRHS(st.l + h * k3.l, st.pl + h * k3.pl, b);
+    st.l += h / 6.0 * (k1.l + 2.0 * k2.l + 2.0 * k3.l + k4.l);
+    st.pl += h / 6.0 * (k1.pl + 2.0 * k2.pl + 2.0 * k3.pl + k4.pl);
+    st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
+  }
+  if (out.side == 0.0) { out.side = sign(st.l); }
+  let r = dnegR(st.l).x;
+  out.n = cos(st.psi) * n0 + sin(st.psi) * e2;
+  let t = -sin(st.psi) * n0 + cos(st.psi) * e2;
+  out.d = normalize(st.pl * out.n + (b / r) * t);
+  return out;
+}
+
+// Rep vector on our side → Cartesian vector of our universe (radial flip + mirror: right-handed).
+fn repToHome(n: vec3f, v: vec3f) -> vec3f {
+  let vl = dot(v, n);
+  let u = v - 2.0 * vl * n;
+  return vec3f(u.x, -u.y, u.z);
+}
+fn whToWorld(v: vec3f) -> vec3f { return v.x * P.whX.xyz + v.y * P.whY.xyz + v.z * P.whZ.xyz; }
+fn worldToWh(v: vec3f) -> vec3f { return vec3f(dot(v, P.whX.xyz), dot(v, P.whY.xyz), dot(v, P.whZ.xyz)); }
+fn blCart(x: vec4f) -> vec3f {
+  let st = sin(x.y);
+  return x.x * vec3f(st * cos(x.z), st * sin(x.z), cos(x.y));
+}
+
+// First intersection of the chord p0 → p1 with the gluing sphere, as a fraction of the chord (−1: none).
+fn glueHit(p0: vec3f, p1: vec3f) -> f32 {
+  let R = P.wh2.z;
+  let dv = p1 - p0;
+  let f = p0 - P.whC.xyz;
+  let c = dot(f, f) - R * R;
+  if (c <= 0.0) { return -1.0; } // starting on/inside it: just launched from the sphere
+  let A = dot(dv, dv);
+  let B = dot(f, dv);
+  let disc = B * B - A * c;
+  if (disc < 0.0 || B >= 0.0) { return -1.0; }
+  let t = (-B - sqrt(disc)) / A;
+  return select(-1.0, t, t <= 1.0);
+}
+
+// Unit direction of the backward ray in the (flat-mapped) Cartesian frame of the hole: the photon's
+// momentum in the ZAMO frame, reversed. E = 1 normalisation (p_t = −1, p_φ = L).
+fn backwardDir(st: GState, L: f32, a: f32) -> vec3f {
+  let m = kerrMetric(st.x.x, st.x.y, a);
+  let sth = sin(st.x.y);
+  let cth = cos(st.x.y);
+  let sp = sin(st.x.z);
+  let cp = cos(st.x.z);
+  let pr = sqrt(max(m.del / m.sig, 0.0)) * st.p.x;
+  let pth = st.p.y / sqrt(m.sig);
+  let pph = L / max(sqrt(m.A / m.sig) * sth, 1e-6);
+  let v = pr * vec3f(sth * cp, sth * sp, cth) + pth * vec3f(cth * cp, cth * sp, -sth) + pph * vec3f(-sp, cp, 0.0);
+  return -normalize(v);
+}
+
+struct Launch { s: GState, L: f32, E0: f32 };
+
+// Kerr initial state of a backward ray at Cartesian X with unit direction dW, for a photon of energy
+// Ez measured by the local ZAMO (the static observers of the gluing sphere, to O(a/r²)).
+fn kerrLaunch(X: vec3f, dW: vec3f, Ez: f32, a: f32) -> Launch {
+  let r = length(X);
+  let th = acos(clamp(X.z / r, -1.0, 1.0));
+  let ph = atan2(X.y, X.x);
+  let sth = sin(th);
+  let cth = cos(th);
+  let sp = sin(ph);
+  let cp = cos(ph);
+  let look = vec3f(dot(dW, vec3f(sth * cp, sth * sp, cth)), dot(dW, vec3f(cth * cp, cth * sp, -sth)), dot(dW, vec3f(-sp, cp, 0.0)));
+  let m = kerrMetric(r, th, a);
+  let alpha = sqrt(max(m.sig * m.del / m.A, 1e-12));
+  let omega = 2.0 * a * r / m.A;
+  let varpi = sqrt(m.A / m.sig) * sth;
+  let pz = -look * Ez;
+  var o: Launch;
+  o.E0 = alpha * Ez + omega * varpi * pz.z;
+  o.L = varpi * pz.z / o.E0;
+  o.s.x = vec4f(r, th, ph, 0.0);
+  o.s.p = vec2f(sqrt(m.sig / m.del) * pz.x / o.E0, sqrt(m.sig) * pz.y / o.E0);
+  return o;
+}
+
+// The distant galaxy on the far side (Interstellar: nearer its centre than the Sun is to ours: a broader,
+// brighter band, a large bulge, emission and reflection nebulae in several colours, dense dust lanes
+// and more stars). Procedural and pre-filtered over the pixel's lensed footprint.
+fn alienSky(d: vec3f, g: f32, fp: Footprint) -> vec3f {
+  let filt = skyFilter(d, fp, P.time.w);
+  let fw = filt.radius;
+  let gx = normalize(vec3f(0.55, -0.62, -0.25));
+  let gz0 = vec3f(-0.3, 0.2, 0.93);
+  let gz = normalize(gz0 - dot(gz0, gx) * gx);
+  let gy = cross(gz, gx);
+  let q = vec3f(dot(d, gx), dot(d, gy), dot(d, gz));
+  let lc = acos(clamp(q.x, -1.0, 1.0));
+  // warped band: the disk seen from inside is not a perfect great circle
+  let bb = asin(clamp(q.z, -1.0, 1.0)) - 0.08 * sin(2.0 * atan2(q.y, q.x) + 0.7);
+  let band = exp(-pow(bb / 0.24, 2.0)) * (0.4 + 0.6 * exp(-lc * lc / 1.2));
+  let bulge = exp(-(lc * lc + 2.5 * bb * bb) / 0.22);
+  let clouds = fbmLod(q * 4.0, 6, fw * 4.0);
+  let fine = fbmLod(q * 16.0 + vec3f(3.0, 1.0, 7.0), 5, fw * 16.0);
+  let dn = fbmLod(q * 6.5 + vec3f(11.0, 2.0, 5.0), 6, fw * 6.5);
+  let ridge = 1.0 - abs(2.0 * dn - 1.0);
+  let dust = clamp(smoothstep(0.62, 0.92, ridge) * exp(-pow(bb / 0.16, 2.0))
+    + 0.5 * smoothstep(0.55, 0.8, dn) * exp(-pow(bb / 0.3, 2.0)), 0.0, 1.0);
+  let light = (band * (0.35 + 1.1 * clouds * clouds) * (0.55 + 0.9 * fine) * 1.8 + bulge * 2.2) * (1.0 - 0.9 * dust);
+  let Tg = mix(7200.0, 4200.0, clamp(bulge * 1.5, 0.0, 1.0));
+  var col = blackbodyShifted(Tg, g) * light * 0.14;
+  // large coloured clouds along and off the band: H II (Hα), O III, blue reflection nebulae
+  let m1 = fbmLod(q * 2.3 + vec3f(5.0, 9.0, 1.0), 5, fw * 2.3);
+  let m2 = fbmLod(q * 3.1 + vec3f(1.0, 4.0, 8.0), 5, fw * 3.1);
+  let lay = exp(-pow(bb / 0.55, 2.0));
+  let hii = smoothstep(0.58, 0.82, m1) * lay * (0.5 + fine);
+  let oiii = smoothstep(0.6, 0.85, m2) * lay * (0.5 + clouds);
+  let refl = smoothstep(0.62, 0.8, 1.0 - m1) * smoothstep(0.5, 0.7, m2) * lay;
+  col += shiftRatio(3000.0, g) * vec3f(1.0, 0.28, 0.42) * hii * 0.15 * (1.0 - 0.7 * dust);
+  col += shiftRatio(12000.0, g) * vec3f(0.25, 0.85, 0.8) * oiii * 0.09 * (1.0 - 0.7 * dust);
+  col += shiftRatio(9000.0, g) * vec3f(0.45, 0.6, 1.0) * refl * 0.07;
+  // stars: denser than ours, concentrated towards the band and the bulge
+  let dens = min(0.5 + 0.5 * band + 0.6 * bulge, 1.6);
+  col += starLayer(d, 44.0, 5u, g, filt, 0.35 * dens) * 1.3;
+  col += starLayer(d, 150.0, 6u, g, filt, 0.3 * dens) * 0.12;
+  col += starLayer(d, 460.0, 7u, g, filt, 0.3 * dens) * 0.02;
+  return col;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Ray generation and tracing
 // ---------------------------------------------------------------------------------------------
 fn colormap(t0: f32) -> vec3f {
@@ -1187,7 +1385,7 @@ fn colormap(t0: f32) -> vec3f {
 
 // Result of a traced ray. The celestial sphere is shaded after the ray (in main) because its filter
 // footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
-struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f };
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32 };
 
 fn traceOut(col: vec3f) -> TraceOut {
   var o: TraceOut;
@@ -1220,22 +1418,39 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     pz = pc + ((gam - 1.0) * dot(bn, pc) + gam * sqrt(b2)) * bn;
   }
 
-  // ZAMO tetrad → covariant Boyer–Lindquist momentum.
-  let alpha = P.zamo.x;
-  let omega = P.zamo.y;
-  let varpi = P.zamo.z;
-  let sqrtSig = P.zamo.w;
-  let sqrtSigDel = P.zamo2.x;
-  let pt = -(alpha * Ez + omega * varpi * pz.z);
-  let E0 = -pt; // energy at infinity of a photon the camera measures at energy 1
-  if (E0 <= 1e-6) {
-    // Negative-energy photon (only possible inside the ergosphere): can't come from infinity.
-    return traceOut(vec3f(0.0));
-  }
-  let L = varpi * pz.z / E0;
+  // The ray is followed in segments: Kerr (seg 0) and, in the wormhole world, Dneg (seg 1).
+  let whOn = P.wh.x > 0.5;
+  var seg = 0u;
+  var wl = 0.0;          // Dneg segment start: ℓ, rep position and direction,
+  var wn = vec3f(0.0);
+  var wd = vec3f(0.0);
+  var eloc = Ez;         // and the photon energy measured there by static observers
+  var E0 = 1.0;          // energy at infinity of a photon the camera measures at energy 1
+  var L = 0.0;
   var s: GState;
-  s.x = vec4f(P.cam.x, P.cam.y, P.cam.z, 0.0);
-  s.p = vec2f(sqrtSigDel * pz.x / E0, sqrtSig * pz.y / E0);
+  if (whOn && P.wh2.x > 0.5) {
+    // camera in the wormhole's throat region: vectors are rep vectors, the observer is static
+    seg = 1u;
+    wl = P.wh2.y;
+    wn = P.whN.xyz;
+    wd = -pz / Ez;
+  } else {
+    // ZAMO tetrad → covariant Boyer–Lindquist momentum.
+    let alpha = P.zamo.x;
+    let omega = P.zamo.y;
+    let varpi = P.zamo.z;
+    let sqrtSig = P.zamo.w;
+    let sqrtSigDel = P.zamo2.x;
+    let pt = -(alpha * Ez + omega * varpi * pz.z);
+    E0 = -pt;
+    if (E0 <= 1e-6) {
+      // Negative-energy photon (only possible inside the ergosphere): can't come from infinity.
+      return traceOut(vec3f(0.0));
+    }
+    L = varpi * pz.z / E0;
+    s.x = vec4f(P.cam.x, P.cam.y, P.cam.z, 0.0);
+    s.p = vec2f(sqrtSigDel * pz.x / E0, sqrtSig * pz.y / E0);
+  }
 
   let eps = P.integ.x;
   let maxSteps = u32(P.integ.y);
@@ -1264,15 +1479,19 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   let spotOn = P.spot.x > 0.5;
   var trans3 = vec3f(1.0); // per-frequency transmittance (radio band)
   var out: TraceOut;
-  var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
+  var kCur: Deriv; // derivative at the current point (FSAL)
+  if (seg == 0u) { kCur = geodesicRHS(s.x, s.p, L, a); }
   var comp: GState; // Kahan compensation of the state
+  var skyDir = vec3f(0.0);
+  var skyG = 1.0;
+  var skyId = SKY_NATIVE;
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
   let polOn = P.pol.x > 0.5;
   var kapX = vec2f(0.0);
   var kapY = vec2f(0.0);
   var stokes = vec2f(0.0);
-  if (polOn) {
+  if (polOn && seg == 0u) {
     let ex = normalize(P.camRight.xyz - look * dot(look, P.camRight.xyz));
     let ey = normalize(P.camUp.xyz - look * dot(look, P.camUp.xyz) - ex * dot(ex, P.camUp.xyz));
     let kc = vec4f(kCur.dx.w, kCur.dx.x, kCur.dx.y, kCur.dx.z);
@@ -1287,6 +1506,30 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     kapY = wpKappa(s.x.x, s.x.y, a, kc, zamoToBL(s.x.x, s.x.y, a, by));
   }
 
+  for (var segN = 0u; segN < 6u; segN++) {
+  if (seg == 1u) {
+    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w);
+    if (w.side < 0.0) {
+      // out of our end of the wormhole: straight on to our sky (g_tt = −1: no frequency shift)
+      fate = 2u;
+      skyDir = repToHome(w.n, w.d);
+      skyG = 1.0 / eloc;
+      skyId = SKY_HOME;
+      break;
+    }
+    // out of the far mouth: on through the Kerr metric, from the gluing sphere
+    let ks = kerrLaunch(P.whC.xyz + whToWorld(w.n * (P.wh2.z * 1.0005)), whToWorld(w.d), eloc, a);
+    if (ks.E0 <= 1e-6) { fate = 1u; break; }
+    s = ks.s;
+    L = ks.L;
+    E0 = ks.E0;
+    kCur = geodesicRHS(s.x, s.p, L, a);
+    comp = GState();
+    hNext = 1e9;
+    seg = 0u;
+  }
+  var entered = false;
+  fate = 0u;
   for (var i = 0u; i < maxSteps; i++) {
     steps = i;
     var n: GState;
@@ -1313,6 +1556,23 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       n = wrapPole(ns);
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
+    }
+
+    if (whOn) {
+      // entering the gluing sphere of the far mouth → Dneg segment
+      let p0 = blCart(s.x);
+      let p1 = blCart(n.x);
+      let t = glueHit(p0, p1);
+      if (t >= 0.0) {
+        let dW = backwardDir(n, L, a);
+        wn = normalize(worldToWh(mix(p0, p1, t) - P.whC.xyz));
+        wd = worldToWh(dW);
+        wl = P.wh2.w;
+        eloc = E0 * zamoEnergy(n.x.x, n.x.y, a, L);
+        seg = 1u;
+        entered = true;
+        break;
+      }
     }
 
     if (radio) {
@@ -1449,8 +1709,9 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     s = n;
     kCur = kNext;
   }
-
-  if (fate == 2u) {
+  if (entered) { continue; }
+  if (fate != 2u) { break; }
+  {
     // Asymptotic direction of the (backward) ray = the direction on the sky it came from.
     let d = geodesicRHS(s.x, s.p, L, a);
     let r = s.x.x;
@@ -1469,9 +1730,33 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     let b = max(length(xperp), 1e-3);
     let delta = (2.0 / b) * (1.0 - sqrt(max(r * r - b * b, 0.0)) / r);
     let dir = normalize(v - delta * xperp / b);
-    var gBg = 1.0 / E0;
+    if (whOn) {
+      // does the outgoing ray run into the far mouth's gluing sphere?
+      let f = x - P.whC.xyz;
+      let B = dot(f, dir);
+      let c = dot(f, f) - P.wh2.z * P.wh2.z;
+      if (c > 0.0 && B < 0.0 && B * B > c) {
+        let X = x + (-B - sqrt(B * B - c)) * dir;
+        wn = normalize(worldToWh(X - P.whC.xyz));
+        wd = worldToWh(dir);
+        wl = P.wh2.w;
+        eloc = E0 / sqrt(max(1.0 - 2.0 / length(X), 1e-3)); // weak field: static observer there
+        seg = 1u;
+        continue;
+      }
+    }
+    skyDir = dir;
+    skyG = 1.0 / E0;
+    skyId = SKY_NATIVE;
+  }
+  break;
+  } // segments
+
+  if (fate == 2u) {
+    var gBg = skyG;
     if (P.modes.y == SHIFT_NONE) { gBg = 1.0; }
-    out.dir = dir;
+    out.dir = skyDir;
+    out.sky = skyId;
     if (radio) {
       // no millimetre sky (the 2.7 K CMB is negligible)
     } else if (mode == MODE_PHYSICAL) {
@@ -1524,13 +1809,13 @@ fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
 // lensing (like hardware dFdx/dFdy, but across ray jitter and with the best-conditioned pair of
 // neighbours). The sky is then pre-filtered over that footprint: stars get their exact lensing
 // magnification without sparkling, the Milky Way and images are band-limited.
-var<workgroup> wgDir: array<vec4f, 64>; // escape direction, w = 1 if the ray reached the sky
+var<workgroup> wgDir: array<vec4f, 64>; // escape direction, w = sky reached (0: none, 1: native, 2: ours)
 var<workgroup> wgPos: array<vec2f, 64>; // sample position in pixels
 var<workgroup> wgActive: atomic<u32>;   // pixels of the tile that still need samples
 
 struct Footprint { jx: vec3f, jy: vec3f };
 
-fn skyFootprint(lid: vec2u, d: vec3f, pos: vec2f) -> Footprint {
+fn skyFootprint(lid: vec2u, d: vec3f, pos: vec2f, sky: f32) -> Footprint {
   var fp: Footprint;
   let nominal = P.camUp.w; // unlensed pixel angle
   var best = 0.0;
@@ -1541,7 +1826,7 @@ fn skyFootprint(lid: vec2u, d: vec3f, pos: vec2f) -> Footprint {
     let nx = i32(lid.x) + sx;
     if (nx < 0 || nx > 7) { continue; }
     let ih = u32(nx) + lid.y * 8u;
-    if (wgDir[ih].w < 0.5) { continue; }
+    if (wgDir[ih].w != sky) { continue; } // neighbours on the same sky only
     let d1 = wgPos[ih] - pos;
     let D1 = wgDir[ih].xyz - d;
     if (!have) { dx1 = d1; dD1 = D1; }
@@ -1549,7 +1834,7 @@ fn skyFootprint(lid: vec2u, d: vec3f, pos: vec2f) -> Footprint {
       let ny = i32(lid.y) + sy;
       if (ny < 0 || ny > 7) { continue; }
       let iv = lid.x + u32(ny) * 8u;
-      if (wgDir[iv].w < 0.5) { continue; }
+      if (wgDir[iv].w != sky) { continue; }
       let d2 = wgPos[iv] - pos;
       let det = d1.x * d2.y - d2.x * d1.y;
       if (abs(det) > best) {
@@ -1676,7 +1961,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
     tr = trace(ndc, rnd, tSample);
   }
-  wgDir[li] = vec4f(tr.dir, select(0.0, 1.0, sampling && tr.bgW > 0.0));
+  wgDir[li] = vec4f(tr.dir, select(0.0, tr.sky, sampling && tr.bgW > 0.0));
   wgPos[li] = pos;
   workgroupBarrier();
   if (!sampling) { return; }
@@ -1684,11 +1969,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   var col = tr.col;
   if (tr.bgW > 0.0) {
     // pre-filter width relative to the lensed pixel (the jittered samples already apply σ = 0.42 px)
-    var fp = skyFootprint(lid.xy, tr.dir, pos);
+    var fp = skyFootprint(lid.xy, tr.dir, pos, tr.sky);
     let k = select(0.35, 0.5, interleaved);
     fp.jx *= k;
     fp.jy *= k;
-    col += tr.bgW * background(tr.dir, tr.gBg, fp);
+    col += tr.bgW * background(tr.dir, tr.gBg, fp, tr.sky);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
 

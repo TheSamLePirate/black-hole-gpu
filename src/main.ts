@@ -325,14 +325,14 @@ async function main() {
   // -------------------------------------------------------------------- overlays
   function drawGuide() {
     const cam = cameraFrame(settings);
-    const key = settings.shadowGuide
+    const key = settings.shadowGuide && cam.region === "hole"
       ? [settings.spin, cam.r, cam.theta, settings.yaw, settings.pitch, settings.fov, cam.speed, overlay.width, overlay.height].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
     const ctx = overlay.getContext("2d")!;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (!settings.shadowGuide) return;
+    if (key === "off") return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const aspect = overlay.width / overlay.height;
     const W = overlay.width;
@@ -363,6 +363,13 @@ async function main() {
     ctx.fillText("critical curve (analytic)", 16 * devicePixelRatio, H - 16 * devicePixelRatio);
   }
 
+  /** Camera position for the HUD: distance to the hole, or ℓ through the wormhole. */
+  function where() {
+    if (!settings.wormhole || settings.anchor === "hole") return `r = ${settings.distance.toFixed(2)} M`;
+    const side = settings.whL < 0 ? "our side" : "Gargantua side";
+    return `ℓ = ${settings.whL.toFixed(2)} M (${side})`;
+  }
+
   const statsEl = $("stats");
   const readoutEl = $("readouts");
   function updateHUD(st: FrameStats, fpsNow: number) {
@@ -377,7 +384,7 @@ async function main() {
     const cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
     statsEl.innerHTML =
       `${phase}${cin}<br><span class="dim">${st.width}×${st.height}${renderer.hdr ? " · HDR" : ""} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +
-      `r = ${settings.distance.toFixed(2)} M · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M</span>`;
+      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M</span>`;
     if (!$("info").classList.contains("collapsed")) {
       const cam = cameraFrame(settings);
       readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)
