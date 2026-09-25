@@ -856,35 +856,58 @@ export class SettingsPanel {
     input.click();
   }
 
-  private showShortcuts() {
-    const rows: [string, string][] = [
-      ["R", "Rotation: around the target ⟷ free"],
-      ["Click a body · Tab", "Select the target (its lensed image, even a secondary one) · next target"],
-      ["Double-click", "On a body: orbit it and fly the view to it · on the sky: recentre (free: level)"],
-      ["Drag", "Around: orbit the target (with momentum) · Free: look around"],
-      ["Right / Shift drag", "Around: offset the view from the target · Free: roll"],
-      ["Wheel · pinch", "Around: distance to the target · Free: move forward / back"],
-      ["Alt + wheel", "Field of view"],
-      ["⇧R", "Recentre on the target / level the horizon"],
-      ["← → ↑ ↓ · + −", "Orbit (free: turn) / zoom"],
-      ["Space", "Animate time"],
-      ["O · C · T", "Auto-orbit around the target · free-fall dive (chute) · wormhole journey"],
-      ["V", "Game-style flight: the mouse turns, wheel = speed, Esc leaves"],
-      ["B", "Gravity: free fall along the camera's Kerr geodesic (keys thrust)"],
-      ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster) · with gravity: thrust"],
-      ["A · E (Q · E)", "Fly down · up"],
-      ["W · X (Z · X)", "Roll left · right"],
-      ["J · G", "Jet · shadow guide"],
-      ["1 – 5", "Quality level (5: realtime max)"],
-      ["M", "Show / hide settings (menu)"],
-      ["/", "Search settings"],
-      ["⌘Z · ⇧⌘Z", "Undo · redo"],
-      ["I · H · F · P", "Readouts · hide UI · fullscreen · PNG"],
+  showShortcuts() {
+    document.querySelector(".sp-modal")?.remove();
+    const sections: [string, [string, string][]][] = [
+      ["Camera", [
+        ["Drag", "Around: orbit the target · Free: look around"],
+        ["Right / ⇧ drag", "Around: offset the view · Free: roll"],
+        ["Wheel · pinch", "Around: distance · Free: move forward / back"],
+        ["Alt + wheel", "Field of view"],
+        ["Click a body", "Target it (even a lensed image)"],
+        ["Double-click", "Fly to a body · on the sky: recentre"],
+        ["R · ⇧R", "Around the target ⟷ free · recentre / level"],
+        ["Tab", "Next target"],
+        ["← → ↑ ↓ · + −", "Orbit (free: turn) · zoom"],
+      ]],
+      ["Flight & cinematics", [
+        ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster)"],
+        ["A · E (Q · E)", "Down · up"],
+        ["W · X (Z · X)", "Roll"],
+        ["V", "Game-style flight (mouse look, Esc leaves)"],
+        ["B", "Gravity: free fall along the geodesic (keys thrust)"],
+        ["O · C · T", "Auto-orbit · dive to the horizon · wormhole journey"],
+      ]],
+      ["Scene", [
+        ["Space", "Run / pause time"],
+        ["J · G", "Jet · shadow guide"],
+        ["1 – 5", "Quality (5: realtime max)"],
+      ]],
+      ["Interface", [
+        ["M · /", "Settings · search them"],
+        ["I", "Details & physical readouts"],
+        ["H · F · P", "Hide the interface · fullscreen · save PNG"],
+        ["⌘Z · ⇧⌘Z", "Undo · redo"],
+        ["?", "This sheet"],
+      ]],
     ];
-    const dlg = h("div", { class: "sp-modal", onclick: (e: Event) => e.target === dlg && dlg.remove() },
-      h("div", { class: "sp-modal-card glass" },
-        h("header", {}, h("h3", {}, "Keyboard & mouse"), h("button", { class: "sp-icon", onclick: () => dlg.remove() }, svgIcon(ICONS.close))),
-        h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
+    const close = () => {
+      dlg.remove();
+      removeEventListener("keydown", onEsc, true);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+      }
+    };
+    addEventListener("keydown", onEsc, true);
+    const dlg = h("div", { class: "sp-modal", onclick: (e: Event) => e.target === dlg && close() },
+      h("div", { class: "sp-modal-card glass sp-keys" },
+        h("header", {}, h("h3", {}, "Keyboard & mouse"), h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close))),
+        ...sections.map(([title, rows]) =>
+          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])))),
+        h("footer", {}, h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗")),
       ),
     );
     document.body.append(dlg);
@@ -917,7 +940,8 @@ export class SettingsPanel {
       if (SECTIONS.some((s) => s.id === st.tab)) this.tab = st.tab;
       this.advanced = !!st.advanced;
       this.collapsedGroups = new Set(st.collapsed ?? []);
-      if (st.closed || innerWidth < 800) this.root.classList.add("collapsed");
+      // closed until the user opens it once (the view first)
+      if (st.closed !== false || innerWidth < 800) this.root.classList.add("collapsed");
     } catch {
       /* private mode */
     }

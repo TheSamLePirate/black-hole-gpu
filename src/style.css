@@ -54,124 +54,146 @@ body {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 
-/* ---------------------------------------------------------------- title / stats */
-#title {
+/* ---------------------------------------------------------------- HUD: status pill + details */
+#hud {
   position: fixed;
   top: 14px;
   left: 14px;
-  padding: 12px 16px;
-  max-width: min(460px, calc(100vw - 28px));
-  pointer-events: none;
+  width: max-content;
+  max-width: min(380px, calc(100vw - 28px));
+  overflow: hidden;
+  border-radius: 12px;
+  z-index: 3;
 }
 
-.brand {
+#hud-toggle {
+  all: unset;
+  box-sizing: border-box;
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px 7px 12px;
+  cursor: pointer;
+  font: 500 12px/1.3 var(--font);
+  color: var(--text);
 }
 
-.brand .dot {
-  width: 26px;
-  height: 26px;
+#hud-toggle:focus-visible {
+  outline: 2px solid rgba(255, 179, 92, 0.6);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+#status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+#status .phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+#status .phase::before {
+  content: "";
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #000 42%, #ffcf8a 47%, #ff8a3d 58%, rgba(255, 120, 40, 0) 72%);
-  box-shadow: 0 0 18px rgba(255, 150, 60, 0.45);
-  flex: none;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
-h1 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
+#status .rt { color: var(--accent); }
+#status .cv { color: var(--accent-2); }
+#status .ok { color: var(--ok); }
 
-.brand p {
-  margin: 1px 0 0;
+#status .chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
   color: var(--dim);
-  font-size: 11.5px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.badge {
-  margin-top: 10px;
-  font: 11px var(--mono);
-  color: var(--accent);
+#status .chip.hot {
+  color: #ff9be4;
+  background: rgba(255, 122, 217, 0.12);
+}
+
+#hud .chev {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s;
+}
+
+#hud.open .chev {
+  transform: rotate(180deg);
+}
+
+#hud-progress {
+  height: 2px;
+  background: transparent;
+}
+
+#hud-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent-2), #b8e2ff);
+  transition: width 0.3s, opacity 0.6s;
+}
+
+#hud-progress.done i {
+  background: var(--ok);
+  opacity: 0;
+}
+
+#hud-more {
+  display: none;
+  padding: 8px 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  width: min(356px, calc(100vw - 52px));
+}
+
+#hud.open #hud-more {
+  display: block;
 }
 
 #stats {
-  margin-top: 6px;
-  font: 11px/1.55 var(--mono);
-}
-
-#stats .dim {
+  font: 11px/1.6 var(--mono);
   color: var(--dim);
 }
 
 #stats b {
+  color: var(--text);
   font-weight: 500;
-  letter-spacing: 0.06em;
 }
 
-#stats .rt {
+.badge {
+  margin: 6px 0 4px;
+  font: 11px var(--mono);
   color: var(--accent);
 }
 
-#stats .cv {
-  color: var(--accent-2);
-}
-
-#stats .ok {
-  color: var(--ok);
-}
-
-#stats .cin {
-  color: #ff7ad9;
-}
-
-/* ---------------------------------------------------------------- readouts */
-#info {
-  position: fixed;
-  left: 14px;
-  bottom: 84px;
-  width: min(360px, calc(100vw - 28px));
-  overflow: hidden;
-}
-
-.info-head {
-  all: unset;
-  box-sizing: border-box;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-
-.info-head:hover {
-  color: var(--text);
-}
-
-.chev {
-  transition: transform 0.2s;
-}
-
-#info.collapsed .chev {
-  transform: rotate(-90deg);
-}
-
-#info.collapsed #readouts {
-  display: none;
-}
-
 #readouts {
-  padding: 0 14px 12px;
-  max-height: 46vh;
+  max-height: 44vh;
   overflow-y: auto;
+  padding-right: 6px;
 }
 
 #readouts .row {
@@ -193,6 +215,136 @@ h1 {
   text-align: right;
 }
 
+.hud-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.hud-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------- tooltip */
+#tip {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(16, 18, 28, 0.94);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+#tip.show {
+  opacity: 1;
+  transform: none;
+}
+
+#tip[hidden] {
+  display: none;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  font: 500 10.5px/1.3 var(--mono);
+  text-align: center;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- first-run hint */
+#hint {
+  position: fixed;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  max-width: calc(100vw - 28px);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(12, 14, 22, 0.7);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--dim);
+  font-size: 12px;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+
+#hint b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+#hint.gone {
+  opacity: 0;
+}
+
+#hint[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- loading */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  background: radial-gradient(circle at 50% 45%, #0d0f18 0%, #000 70%);
+  color: var(--dim);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  transition: opacity 0.7s;
+}
+
+#loading p {
+  margin: 0;
+}
+
+#loading .ring {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #000 52%, #ffcf8a 57%, #ff8a3d 64%, rgba(255, 120, 40, 0) 74%);
+  box-shadow: 0 0 30px rgba(255, 150, 60, 0.35);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { transform: scale(1.08); box-shadow: 0 0 44px rgba(255, 150, 60, 0.55); }
+}
+
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ---------------------------------------------------------------- toolbar */
 #toolbar {
   position: fixed;
@@ -202,24 +354,54 @@ h1 {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 6px;
-  border-radius: 16px;
+  padding: 5px;
+  border-radius: 14px;
+  max-width: calc(100vw - 20px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 3;
 }
 
+#toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* icon buttons (the label is in the tooltip); the target chip keeps its name */
 #toolbar button {
   all: unset;
+  flex: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  min-width: 48px;
-  padding: 6px 6px 5px;
+  justify-content: center;
+  gap: 7px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
   cursor: pointer;
   color: var(--dim);
-  font-size: 10px;
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  font-weight: 500;
   transition: background 0.15s, color 0.15s;
+}
+
+#toolbar button > span {
+  display: none;
+}
+
+#toolbar button:focus-visible {
+  outline: 2px solid rgba(255, 179, 92, 0.6);
+  outline-offset: -2px;
+}
+
+#toolbar #btn-target {
+  width: auto;
+  padding: 0 12px 0 9px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#toolbar #btn-target > span {
+  display: inline;
+  color: var(--text);
 }
 
 #toolbar button:hover {
@@ -259,35 +441,17 @@ h1 {
 #btn-target {
   color: var(--text);
 }
-#btn-target {
-  min-width: 64px;
-}
 #btn-target[data-body="hole"] svg { color: #ffb35c; }
 #btn-target[data-body="star"] svg { color: #ffd98a; }
 #btn-target[data-body="wormhole"] svg { color: #9fb8ff; }
 #btn-target[data-body="barycentre"] svg { color: #ebf0ff; }
 
 #toolbar .sep {
+  flex: none;
   width: 1px;
-  height: 28px;
-  margin: 0 4px;
+  height: 24px;
+  margin: 0 5px;
   background: var(--glass-border);
-}
-
-#help {
-  position: fixed;
-  right: 14px;
-  bottom: 84px;
-  max-width: 300px;
-  color: var(--dim);
-  font-size: 10.5px;
-  text-align: right;
-  opacity: 0.7;
-  pointer-events: none;
-}
-#help a {
-  pointer-events: auto;
-  color: var(--accent);
 }
 
 /* ---------------------------------------------------------------- offline render dialog */
@@ -455,15 +619,14 @@ h1 {
 }
 
 body.offline #overlay,
-body.offline #info {
+body.offline #hint {
   display: none;
 }
 
 /* ---------------------------------------------------------------- hidden UI */
-body.hide-ui #title,
-body.hide-ui #info,
+body.hide-ui #hud,
+body.hide-ui #hint,
 body.hide-ui #panel,
-body.hide-ui #help,
 body.hide-ui #render,
 body.hide-ui #toolbar > :not(#btn-hide) {
   display: none;
@@ -481,28 +644,42 @@ body.hide-ui #toolbar:hover {
   opacity: 1;
 }
 
-@media (max-width: 1100px) {
-  #help {
+@media (max-width: 600px) {
+  /* phones: touch-only or heavy tools stay in the settings */
+  #btn-fly,
+  #btn-help,
+  #btn-full,
+  #btn-render,
+  #btn-jet,
+  #btn-guide,
+  #toolbar .sep:nth-of-type(3) {
+    display: none !important;
+  }
+
+  #toolbar #btn-target {
+    width: 34px;
+    padding: 0;
+    background: transparent;
+  }
+
+  #toolbar #btn-target > span {
     display: none;
   }
 }
 
 @media (max-width: 800px) {
-
-  #info {
-    bottom: 82px;
-  }
-
-  #toolbar button span {
-    display: none;
-  }
-
   #toolbar button {
-    min-width: 36px;
+    width: 34px;
+    height: 34px;
   }
 
-  #title .brand p {
-    display: none;
+  #toolbar .sep {
+    margin: 0 2px;
+  }
+
+  #hint {
+    bottom: 76px;
+    border-radius: 14px;
   }
 }
 

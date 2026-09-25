@@ -15,44 +15,46 @@
     <canvas id="view"></canvas>
     <canvas id="overlay"></canvas>
 
-    <header id="title" class="glass">
-      <div class="brand">
-        <span class="dot"></span>
-        <div>
-          <h1>Kerr Black Hole</h1>
-          <p>General-relativistic ray tracer · WebGPU · RK4 geodesics</p>
-        </div>
-      </div>
-      <div id="spin-badge" class="badge"></div>
-      <div id="stats"></div>
-    </header>
+    <div id="loading" aria-live="polite">
+      <div class="ring"></div>
+      <p>Starting the ray tracer…</p>
+    </div>
 
-    <aside id="info" class="glass collapsed">
-      <button id="btn-info" class="info-head" title="Physical readouts (I)">
-        <span>Physical readouts</span><span class="chev">▾</span>
+    <div id="hud" class="glass">
+      <button id="hud-toggle" aria-expanded="false" aria-controls="hud-more" data-tip="Details and physical readouts" data-key="I">
+        <span id="status"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" /></svg>
       </button>
-      <div id="readouts"></div>
-    </aside>
+      <div id="hud-progress"><i></i></div>
+      <div id="hud-more">
+        <div id="stats"></div>
+        <div id="spin-badge" class="badge"></div>
+        <div id="readouts"></div>
+        <a class="hud-link" href="docs/" target="_blank" rel="noopener">Atlas de Kerr — the gallery ↗</a>
+      </div>
+    </div>
 
     <div id="panel"></div>
 
     <nav id="toolbar" class="glass">
-      <button id="btn-rotation" title="Rotation mode (R)"><svg viewBox="0 0 24 24" class="ic-around"><circle cx="12" cy="12" r="2.4" class="fill" /><path d="M4.5 9.5a8.5 8.5 0 0 1 15-1.5" /><path d="M19.5 14.5a8.5 8.5 0 0 1-15 1.5" /><path d="M19.8 4.6l-.3 3.4-3.4-.4M4.2 19.4l.3-3.4 3.4.4" /></svg><svg viewBox="0 0 24 24" class="ic-free"><circle cx="12" cy="12" r="3" /><path d="M12 2v5M12 17v5M2 12h5M17 12h5" /><path d="M10 4l2-2 2 2M10 20l2 2 2-2M4 10l-2 2 2 2M20 10l2 2-2 2" /></svg><span>Around</span></button>
-      <button id="btn-target" title="Target: the body orbited and tracked — click its image to select, Tab cycles, double-click to fly to it"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle cx="12" cy="12" r="3.2" class="fill" /></svg><span>Gargantua</span></button>
-      <button id="btn-orbit" title="Auto-orbit around the target (O)"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4.2" /><circle cx="12" cy="12" r="2.6" class="fill" /></svg><span>Auto</span></button>
-      <button id="btn-dive" title="Free-fall dive to the horizon (C)"><svg viewBox="0 0 24 24"><path d="M12 3v14" /><path d="M6.5 12.5 12 18l5.5-5.5" /><path d="M5 21h14" /></svg><span>Dive</span></button>
-      <button id="btn-fly" title="Game-style flight: mouse turns, Z Q S D / A E move, W X roll, wheel = speed, Esc to leave (V)"><svg viewBox="0 0 24 24"><path d="M12 3l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z" /></svg><span>Fly</span></button>
-      <button id="btn-gravity" title="Gravity: the camera falls freely along its Kerr geodesic while time runs; the flight keys thrust (B)"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3" class="fill" /><path d="M12 13v8M8 17l4 4 4-4" /></svg><span>Gravity</span></button>
-      <button id="btn-journey" title="Journey through the wormhole (T)"><svg viewBox="0 0 24 24"><ellipse cx="6" cy="12" rx="2.2" ry="6" /><ellipse cx="18" cy="12" rx="2.2" ry="6" /><path d="M6 6c4 3 8 3 12 0M6 18c4-3 8-3 12 0" /></svg><span>Journey</span></button>
+      <button id="btn-rotation" data-tip="Rotation mode" data-key="R"><svg viewBox="0 0 24 24" class="ic-around"><circle cx="12" cy="12" r="2.4" class="fill" /><path d="M4.5 9.5a8.5 8.5 0 0 1 15-1.5" /><path d="M19.5 14.5a8.5 8.5 0 0 1-15 1.5" /><path d="M19.8 4.6l-.3 3.4-3.4-.4M4.2 19.4l.3-3.4 3.4.4" /></svg><svg viewBox="0 0 24 24" class="ic-free"><circle cx="12" cy="12" r="3" /><path d="M12 2v5M12 17v5M2 12h5M17 12h5" /><path d="M10 4l2-2 2 2M10 20l2 2 2-2M4 10l-2 2 2 2M20 10l2 2-2 2" /></svg><span>Around</span></button>
+      <button id="btn-target" data-tip="Target — click a body to select it, double-click to fly to it" data-key="Tab"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle cx="12" cy="12" r="3.2" class="fill" /></svg><span>Gargantua</span></button>
+      <button id="btn-orbit" data-tip="Auto-orbit around the target" data-key="O"><svg viewBox="0 0 24 24"><path d="M19.2 8.4A8 8 0 1 1 15.6 4.9" /><circle cx="12" cy="12" r="2.2" class="fill" /><circle cx="18" cy="6" r="2" class="fill" /></svg><span>Auto</span></button>
       <span class="sep"></span>
-      <button id="btn-play" title="Animate time (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z" class="fill" /></svg><span>Time</span></button>
-      <button id="btn-jet" title="Relativistic jet (J)"><svg viewBox="0 0 24 24"><path d="M12 2v20" /><path d="M9 5l3-3 3 3M9 19l3 3 3-3" /><ellipse cx="12" cy="12" rx="6" ry="2" /></svg><span>Jet</span></button>
-      <button id="btn-guide" title="Analytic shadow guide (G)"><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 14 0 7 7 0 1 0-14 0" stroke-dasharray="3 2" /></svg><span>Guide</span></button>
+      <button id="btn-dive" data-tip="Free-fall dive to the horizon" data-key="C"><svg viewBox="0 0 24 24"><path d="M12 3v14" /><path d="M6.5 12.5 12 18l5.5-5.5" /><path d="M5 21h14" /></svg><span>Dive</span></button>
+      <button id="btn-fly" data-tip="Game-style flight (mouse look, Esc to leave)" data-key="V"><svg viewBox="0 0 24 24"><path d="M12 3l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z" /></svg><span>Fly</span></button>
+      <button id="btn-gravity" data-tip="Gravity: free fall along the camera's geodesic" data-key="B"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3" class="fill" /><path d="M12 13v8M8 17l4 4 4-4" /></svg><span>Gravity</span></button>
+      <button id="btn-journey" data-tip="Journey through the wormhole" data-key="T"><svg viewBox="0 0 24 24"><ellipse cx="6" cy="12" rx="2.2" ry="6" /><ellipse cx="18" cy="12" rx="2.2" ry="6" /><path d="M6 6c4 3 8 3 12 0M6 18c4-3 8-3 12 0" /></svg><span>Journey</span></button>
       <span class="sep"></span>
-      <button id="btn-render" title="Offline render: any resolution, reference quality, rendered over many frames"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5v5l4-2.5z" class="fill" /></svg><span>Render</span></button>
-      <button id="btn-shot" title="Save PNG (P)"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2" /><circle cx="12" cy="13" r="3.5" /><path d="M8 6l1.5-2h5L16 6" /></svg><span>PNG</span></button>
-      <button id="btn-full" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg><span>Full</span></button>
-      <button id="btn-hide" title="Hide interface (H)"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.8" /></svg><span>Hide</span></button>
+      <button id="btn-play" data-tip="Animate time" data-key="Space"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z" class="fill" /></svg><span>Time</span></button>
+      <button id="btn-jet" data-tip="Relativistic jet" data-key="J"><svg viewBox="0 0 24 24"><path d="M12 2v20" /><path d="M9 5l3-3 3 3M9 19l3 3 3-3" /><ellipse cx="12" cy="12" rx="6" ry="2" /></svg><span>Jet</span></button>
+      <button id="btn-guide" data-tip="Shadow guide (analytic)" data-key="G"><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 14 0 7 7 0 1 0-14 0" stroke-dasharray="3 2" /></svg><span>Guide</span></button>
+      <span class="sep"></span>
+      <button id="btn-render" data-tip="Offline render & video"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /><path d="M10 8.5v5l4-2.5z" class="fill" /></svg><span>Render</span></button>
+      <button id="btn-shot" data-tip="Save PNG" data-key="P"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2" /><circle cx="12" cy="13" r="3.5" /><path d="M8 6l1.5-2h5L16 6" /></svg><span>PNG</span></button>
+      <button id="btn-full" data-tip="Fullscreen" data-key="F"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg><span>Full</span></button>
+      <button id="btn-hide" data-tip="Hide interface" data-key="H"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.8" /><path d="M4 20L20 4" /></svg><span>Hide</span></button>
+      <button id="btn-help" data-tip="Keyboard & mouse" data-key="?"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.4" /><circle cx="12" cy="17.2" r="0.9" class="fill" /></svg><span>Help</span></button>
     </nav>
 
     <section id="render" class="glass" hidden>
@@ -109,10 +111,9 @@
       </div>
     </section>
 
-    <div id="help">
-      R rotation around / free · click a body: target · double-click: fly to it · Tab next target · drag orbit (free: look) · right-drag offset (free: roll) · wheel distance (free: dolly) · alt+wheel FOV ·
-      <a href="docs/" target="_blank" rel="noopener">Atlas de Kerr (gallery)</a> ·
-      V fly (mouse look) · B gravity · ZQSD/AE move or thrust · WX roll · arrows/± orbit · O auto-orbit · C dive · T journey · J jet · G guide · M settings · / search · 1–5 quality · space time · H hide
+    <div id="tip" role="tooltip" hidden></div>
+    <div id="hint" hidden>
+      <span><b>Drag</b> to orbit</span><span><b>Wheel</b> to zoom</span><span><b>Click</b> a body to target it</span><span><kbd>?</kbd> all shortcuts</span>
     </div>
 
     <div id="error" hidden></div>

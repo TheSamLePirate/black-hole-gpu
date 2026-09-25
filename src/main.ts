@@ -41,7 +41,10 @@ let timeDirty = false; // simulation time advanced since the last rendered frame
 let displayChanged = true;
 let simTime = 0;
 
+let firstFrame = false;
+
 function fail(msg: string) {
+  document.getElementById("loading")?.remove();
   errorEl.hidden = false;
   errorEl.textContent = msg;
 }
@@ -185,7 +188,8 @@ async function main() {
     "btn-shot": () => savePNG(),
     "btn-full": () => fullscreen(),
     "btn-hide": () => toggleUi(),
-    "btn-info": () => $("info").classList.toggle("collapsed"),
+    "hud-toggle": () => setHudOpen(!$("hud").classList.contains("open")),
+    "btn-help": () => panel.showShortcuts(),
     "btn-render": () => renderDialog.toggle(),
   };
   for (const [id, fn] of Object.entries(actions)) $(id).addEventListener("click", fn);
@@ -194,9 +198,9 @@ async function main() {
     const btn = $("btn-rotation");
     btn.classList.toggle("free", !orbit);
     btn.querySelector("span")!.textContent = orbit ? "Around" : "Free";
-    btn.title = orbit
-      ? "Rotation around the target: drag orbits it, the camera keeps it in view (R: switch to free)"
-      : "Free rotation: drag turns the camera about itself, right-drag rolls, wheel dollies (R: switch to around the target)";
+    btn.dataset.tip = orbit
+      ? "Rotation around the target — drag orbits it (switch to free)"
+      : "Free rotation — drag looks around, right-drag rolls (switch to around the target)";
     const tb = $("btn-target");
     tb.querySelector("span")!.textContent = BODY_NAMES[settings.target];
     tb.dataset.body = settings.target;
@@ -233,7 +237,8 @@ async function main() {
     else if (k === "b") actions["btn-gravity"]!();
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
-    else if (k === "i") actions["btn-info"]!();
+    else if (k === "i") actions["hud-toggle"]!();
+    else if (e.key === "?") actions["btn-help"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
     else if (/^[1-5]$/.test(e.key)) {
       settings.quality = (["low", "medium", "high", "ultra", "realtime"] as const)[Number(k) - 1]!;
@@ -369,6 +374,12 @@ async function main() {
     if (renderer.setCameraPath(settings.showGeodesic && camera.gravity ? camera.predictPath() : null)) changed = true;
     const st = renderer.frame(settings, simTime, changed, timeDirty, displayChanged);
     if (st) {
+      if (!firstFrame) {
+        // the first image is on screen: lift the loading veil
+        firstFrame = true;
+        $("loading").classList.add("done");
+        setTimeout(() => $("loading").remove(), 800);
+      }
       fpsN++;
       changed = false;
       timeDirty = false;
@@ -577,37 +588,135 @@ async function main() {
     ctx.stroke();
   }
 
+  // -------------------------------------------------------------------- HUD
+  const statusEl = $("status");
   const statsEl = $("stats");
   const readoutEl = $("readouts");
+  const progressEl = $("hud-progress");
+  const HUD_KEY = "kerr.hud";
+  function setHudOpen(open: boolean) {
+    $("hud").classList.toggle("open", open);
+    $("hud-toggle").setAttribute("aria-expanded", String(open));
+    try {
+      localStorage.setItem(HUD_KEY, open ? "1" : "0");
+    } catch {
+      // private mode: not remembered
+    }
+    if (open && lastStats) updateHUD(lastStats, fps);
+  }
+  try {
+    if (localStorage.getItem(HUD_KEY) === "1") setHudOpen(true);
+  } catch {
+    // storage unavailable
+  }
+
+  /** Compact status (phase, what the camera does) and, unfolded, the details and readouts. */
   function updateHUD(st: FrameStats, fpsNow: number) {
-    const phase =
-      st.phase === "offline" && st.offline
-        ? `<b class="cv">OFFLINE RENDER</b> ${st.offline.width}×${st.offline.height} · ${(st.offline.progress * 100).toFixed(1)} % · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`
-        : st.phase === "realtime"
-        ? `<b class="rt">REALTIME</b> 1 ray / ${st.block}×${st.block} px`
-        : st.phase === "converging"
-          ? `<b class="cv">CONVERGING</b> ${st.spp.toFixed(1)} / ${settings.targetSpp} spp`
-          : `<b class="ok">CONVERGED</b> ${settings.targetSpp} spp`;
-    let cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
-    if (camera.flyMode) cin += ` · <b class="cin">FLY ×${camera.flySpeed.toFixed(2)}</b>`;
-    else cin += settings.rotation === "orbit" ? ` · ↻ ${BODY_NAMES[settings.target]}` : " · free look";
-    if (camera.riding > 0.01) cin += ` · co-moving β = ${Math.abs(settings.velP).toFixed(3)} c`;
-    if (settings.motion === "barycentric") cin += ` · at rest in the centre-of-mass frame`;
+    let phase: string;
+    let progress = 0;
+    if (st.phase === "offline" && st.offline) {
+      phase = `<span class="phase cv">Rendering ${(st.offline.progress * 100).toFixed(0)} %</span>`;
+      progress = st.offline.progress;
+    } else if (st.phase === "realtime") {
+      phase = `<span class="phase rt">Live · ${fpsNow.toFixed(0)} fps</span>`;
+    } else if (st.phase === "converging") {
+      phase = `<span class="phase cv">Refining · ${Math.floor(st.spp)} / ${settings.targetSpp}</span>`;
+      progress = st.spp / settings.targetSpp;
+    } else {
+      phase = `<span class="phase ok">Converged</span>`;
+      progress = 1;
+    }
+    const chips: string[] = [];
+    if (camera.cinematic) chips.push(`<span class="chip hot">${camera.cinematic === "orbit" ? "Auto-orbit" : camera.cinematic === "dive" ? "Dive" : "Journey"}</span>`);
+    if (camera.flyMode) chips.push(`<span class="chip hot">Fly ×${camera.flySpeed.toFixed(1)}</span>`);
+    else chips.push(`<span class="chip">${settings.rotation === "orbit" ? `↻ ${BODY_NAMES[settings.target]}` : "Free look"}</span>`);
+    if (camera.gravity) chips.push(`<span class="chip hot">${camera.landed ? "On the star" : "Gravity"}</span>`);
+    statusEl.innerHTML = phase + chips.join("");
+    progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);
+    progressEl.classList.toggle("done", progress >= 1 && st.phase !== "offline");
+
+    if (!$("hud").classList.contains("open")) return;
+    const lines = [
+      `<b>${st.width}×${st.height}</b>${renderer.hdr ? " · HDR" : ""} · gpu ${st.gpuMs.toFixed(1)} ms · ` +
+        (st.phase === "realtime" ? `1 ray / ${st.block}×${st.block} px` : `${st.spp.toFixed(1)} spp`),
+      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M${settings.animate ? "" : " (paused)"}`,
+    ];
+    if (st.phase === "offline" && st.offline) lines.unshift(`offline ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`);
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
-      cin += ` · <b class="cin">GRAVITY</b> v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M${settings.animate ? "" : " (time paused)"}`;
-      if (camera.landed) cin += ` · <b class="cin">ON THE STAR</b>`;
-    }
-    statsEl.innerHTML =
-      `${phase}${cin}<br><span class="dim">${st.width}×${st.height}${renderer.hdr ? " · HDR" : ""} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +
-      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M</span>`;
-    if (!$("info").classList.contains("collapsed")) {
-      const cam = cameraFrame(settings);
-      readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)
-        .map((r) => `<div class="row"${r.hint ? ` title="${r.hint}"` : ""}><span>${r.label}</span><span>${r.value}</span></div>`)
-        .join("");
-    }
+      lines.push(`free fall · v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M`);
+    } else if (camera.riding > 0.01) lines.push(`co-moving with the star · β = ${Math.abs(settings.velP).toFixed(3)} c`);
+    else if (settings.motion === "barycentric") lines.push("at rest in the centre-of-mass frame");
+    statsEl.innerHTML = lines.join("<br>");
+    const cam = cameraFrame(settings);
+    readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)
+      .map((r) => `<div class="row"${r.hint ? ` title="${r.hint}"` : ""}><span>${r.label}</span><span>${r.value}</span></div>`)
+      .join("");
     $("spin-badge").textContent = `a = ${settings.spin.toFixed(3)} · r₊ = ${horizon(settings.spin).toFixed(3)} M · ISCO = ${isco(settings.spin).toFixed(3)} M`;
+  }
+
+  // -------------------------------------------------------------------- tooltips (toolbar, HUD)
+  const tip = $("tip");
+  let tipTimer = 0;
+  const showTip = (el: HTMLElement) => {
+    const text = el.dataset.tip;
+    if (!text || matchMedia("(hover: none)").matches) return;
+    const key = el.dataset.key;
+    tip.innerHTML = "";
+    tip.append(text);
+    if (key) {
+      const k = document.createElement("kbd");
+      k.textContent = key;
+      tip.append(k);
+    }
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const t = tip.getBoundingClientRect();
+    const above = r.top > innerHeight / 2;
+    tip.style.left = `${Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2))}px`;
+    tip.style.top = `${above ? r.top - t.height - 8 : r.bottom + 8}px`;
+    tip.classList.add("show");
+  };
+  const hideTip = () => {
+    clearTimeout(tipTimer);
+    tip.classList.remove("show");
+    tip.hidden = true;
+  };
+  for (const el of document.querySelectorAll<HTMLElement>("[data-tip]")) {
+    if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+    el.addEventListener("pointerenter", () => {
+      clearTimeout(tipTimer);
+      tipTimer = window.setTimeout(() => showTip(el), 280);
+    });
+    el.addEventListener("pointerleave", hideTip);
+    el.addEventListener("pointerdown", hideTip);
+  }
+
+  // -------------------------------------------------------------------- first-run hint
+  const HINT_KEY = "kerr.hint-seen";
+  let hintSeen = false;
+  try {
+    hintSeen = localStorage.getItem(HINT_KEY) === "1";
+  } catch {
+    // storage unavailable: show it
+  }
+  if (!hintSeen && !matchMedia("(hover: none)").matches) {
+    const hint = $("hint");
+    const dismiss = () => {
+      hint.classList.add("gone");
+      setTimeout(() => (hint.hidden = true), 700);
+      try {
+        localStorage.setItem(HINT_KEY, "1");
+      } catch {
+        // not remembered
+      }
+      canvas.removeEventListener("pointerdown", dismiss);
+      canvas.removeEventListener("wheel", dismiss);
+    };
+    setTimeout(() => (hint.hidden = false), 1200);
+    setTimeout(dismiss, 12000);
+    canvas.addEventListener("pointerdown", dismiss);
+    canvas.addEventListener("wheel", dismiss);
   }
 }
 

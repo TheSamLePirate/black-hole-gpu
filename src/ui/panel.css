@@ -809,6 +809,59 @@ input:focus-visible + .sp-switch {
   color: #cfd5e2;
 }
 
+/* keyboard sheet: two columns of sections on wide screens */
+.sp-modal-card.sp-keys {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  column-gap: 28px;
+}
+
+.sp-keys > section {
+  break-inside: avoid;
+  margin-top: 14px;
+}
+
+@media (min-width: 720px) {
+  .sp-keys {
+    columns: 2;
+  }
+
+  .sp-keys > header,
+  .sp-keys > footer {
+    column-span: all;
+  }
+}
+
+.sp-keys h4 {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.sp-keys dl {
+  margin-top: 8px;
+}
+
+.sp-keys footer {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+
+.sp-keys footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.sp-keys footer a:hover {
+  text-decoration: underline;
+}
+
 /* keep clear of the centred toolbar when the window is not wide enough */
 @media (max-width: 1400px) {
   #panel.sp {
