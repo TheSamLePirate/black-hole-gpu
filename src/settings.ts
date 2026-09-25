@@ -74,6 +74,8 @@ export interface Settings {
   exposure: number; // EV
   bloom: number; // fraction of the energy spread by the optical PSF
   tonemap: Tonemap;
+  hdr: "auto" | "on" | "off"; // extended-range (EDR/HDR) canvas output
+  hdrPeak: number; // brightest displayable value, in units of SDR white
   pixelRatio: number;
   quality: Quality;
   // overlays & physical units
@@ -134,6 +136,8 @@ export function defaultSettings(): Settings {
     exposure: 0,
     bloom: 0.1,
     tonemap: "AgX punchy",
+    hdr: "auto",
+    hdrPeak: 4,
     pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.5),
     quality: "high",
     shadowGuide: false,

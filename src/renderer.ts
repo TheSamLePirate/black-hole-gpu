@@ -142,7 +142,9 @@ export class Renderer {
   private tracePipeline: GPUComputePipeline; // realtime kernel
   private qualityPipeline: GPUComputePipeline; // + error-controlled integrator
   private traceLayout: GPUBindGroupLayout;
-  private displayPipeline: GPURenderPipeline;
+  private displayPipeline: GPURenderPipeline; // SDR canvas (preferred format)
+  private sdrFormat: GPUTextureFormat;
+  private hdrActive = false;
   private export8Pipeline: GPURenderPipeline;
   private export16Pipeline: GPURenderPipeline;
   private postResolve: GPUComputePipeline;
@@ -189,6 +191,7 @@ export class Renderer {
   ) {
     this.device = device;
     this.context = context;
+    this.sdrFormat = format;
 
     const traceModule = device.createShaderModule({ code: src.trace, label: "trace" });
     const displayModule = device.createShaderModule({ code: src.display, label: "display" });
@@ -232,7 +235,7 @@ export class Renderer {
     this.postUp = mkPost("up");
 
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.lutBuf, 0, lut);
@@ -279,6 +282,31 @@ export class Renderer {
     const err = await device.popErrorScope();
     if (err) throw new Error(`WebGPU pipeline creation failed: ${err.message}`);
     return r;
+  }
+
+  /** Extended-range output currently active on the canvas. */
+  get hdr() {
+    return this.hdrActive;
+  }
+
+  /**
+   * Switches the canvas between SDR (preferred 8-bit format) and extended range (rgba16float with
+   * tone mapping "extended": values above 1 are shown brighter than SDR white on EDR/HDR screens).
+   */
+  private configureOutput(s: Settings) {
+    const screenHdr = globalThis.matchMedia?.("(dynamic-range: high)").matches ?? false;
+    const want = s.hdr === "on" || (s.hdr === "auto" && screenHdr);
+    if (want === this.hdrActive) return;
+    this.hdrActive = want;
+    this.context.configure(
+      want
+        ? { device: this.device, format: "rgba16float", alphaMode: "opaque", toneMapping: { mode: "extended" } }
+        : { device: this.device, format: this.sdrFormat, alphaMode: "opaque" },
+    );
+  }
+
+  private get canvasPipeline() {
+    return this.hdrActive ? this.export16Pipeline : this.displayPipeline;
   }
 
   get size() {
@@ -544,7 +572,7 @@ export class Renderer {
     return r;
   }
 
-  private writeDisplay(s: Settings, target: Target, outW: number, outH: number, letterbox: boolean, dither: boolean) {
+  private writeDisplay(s: Settings, target: Target, outW: number, outH: number, letterbox: boolean, dither: boolean, hdr = false) {
     let sx = 1;
     let sy = 1;
     let ox = 0;
@@ -560,6 +588,7 @@ export class Renderer {
       outW, outH, Math.pow(2, s.exposure), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
       sx, sy, ox, oy,
+      hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
     ]);
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
   }
@@ -628,6 +657,7 @@ export class Renderer {
     if (cv.width !== t.width || cv.height !== t.height) return null;
 
     if (sceneChanged) this.invalidate();
+    this.configureOutput(s);
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
     let rows = 0;
@@ -676,9 +706,9 @@ export class Renderer {
     }
 
     this.writeResolve(t);
-    this.writeDisplay(s, t, t.width, t.height, false, true);
+    this.writeDisplay(s, t, t.width, t.height, false, true, this.hdrActive);
     this.encodePost(enc, t);
-    this.encodeDisplay(enc, t, this.displayPipeline, this.context.getCurrentTexture().createView());
+    this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     const auto = s.realtimeSubsampling === "auto";
     this.submit(enc, (ms) => {
       if (phase === "realtime" && auto) this.adaptBlock(ms);
@@ -732,6 +762,10 @@ export class Renderer {
   // ------------------------------------------------------------------------------------ offline
   get offlineActive() {
     return !!this.offline;
+  }
+
+  get offlineState(): OfflineStatus | null {
+    return this.offline ? this.offlineStatus(this.offline) : null;
   }
 
   /** Starts a render of the current scene, frozen in time, at an arbitrary resolution. */
@@ -794,7 +828,11 @@ export class Renderer {
     const job = this.offline!;
     const t = job.target;
     // the frozen scene, with the live exposure / tone mapping / bloom so they stay adjustable
-    const s = { ...job.settings, exposure: display.exposure, tonemap: display.tonemap, bloom: display.bloom };
+    const s = {
+      ...job.settings, exposure: display.exposure, tonemap: display.tonemap, bloom: display.bloom,
+      hdr: display.hdr, hdrPeak: display.hdrPeak,
+    };
+    this.configureOutput(s);
     const cv = this.context.canvas as HTMLCanvasElement;
     const now = performance.now();
     const working = !job.paused && !job.done;
@@ -836,9 +874,9 @@ export class Renderer {
       }
     }
     this.writeResolve(t);
-    this.writeDisplay(s, t, cv.width, cv.height, true, true);
+    this.writeDisplay(s, t, cv.width, cv.height, true, true, this.hdrActive);
     this.encodePost(enc, t);
-    this.encodeDisplay(enc, t, this.displayPipeline, this.context.getCurrentTexture().createView());
+    this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     this.submit(enc, (ms) => {
       if (rows > 0) {
         const perRow = ms / rows;

@@ -1,4 +1,4 @@
-import { Renderer, type FrameStats } from "./renderer";
+import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame } from "./camera";
 import { CameraController, isTyping } from "./controls";
@@ -31,7 +31,7 @@ function sanitize(s: Settings): Settings {
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
-  "targetSpp", "quality", "tonemap", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize",
+  "targetSpp", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize",
   "massSolar", "cinematicSpeed",
 ];
 
@@ -238,8 +238,34 @@ async function main() {
   // debug / automation handle (devtools): __bh.settings.spin = 0.5; __bh.touch()
   const snapshot = async (name = "snapshot") =>
     fetch(`/__snapshot?name=${encodeURIComponent(name)}`, { method: "POST", body: await renderer.exportPNG(settings) });
+  /**
+   * Automation: renders a scene offline and saves it through the dev server (snapshots/<name>.png).
+   * __bh.render("hero", "Kerr a=0.94, near edge-on", { exposure: 0.3 }, { width: 1920, spp: 128 })
+   */
+  const render = async (
+    name: string,
+    preset: string | null,
+    patch: Partial<Settings> = {},
+    o: Partial<OfflineOptions> & { time?: number } = {},
+  ) => {
+    renderer.cancelOffline();
+    if (preset) applyPreset(preset);
+    Object.assign(settings, { animate: false, exposure: 0, renderMode: "physical" }, patch);
+    refreshGui();
+    const t0 = performance.now();
+    renderer.startOffline(settings, o.time ?? simTime, {
+      width: 1920, height: 1080, spp: 128, tolerance: 1e-6, eps: 0.02, maxSteps: 12000, noiseThreshold: 0.004,
+      minSpp: 16, shutter: 0, budgetMs: 250, ...o,
+    });
+    while (!renderer.offlineState?.done) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (!renderer.offlineActive) return "cancelled";
+    }
+    await snapshot(`${name}.png`);
+    return `${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+  };
   Object.assign(globalThis, {
-    __bh: { settings, renderer, camera, touch, snapshot, resize, preset: applyPreset, refresh: refreshGui },
+    __bh: { settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui },
   });
 
   // -------------------------------------------------------------------- loop
@@ -346,7 +372,7 @@ async function main() {
           : `<b class="ok">CONVERGED</b> ${settings.targetSpp} spp`;
     const cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
     statsEl.innerHTML =
-      `${phase}${cin}<br><span class="dim">${st.width}×${st.height} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +
+      `${phase}${cin}<br><span class="dim">${st.width}×${st.height}${renderer.hdr ? " · HDR" : ""} · ${fpsNow.toFixed(0)} fps · gpu ${st.gpuMs.toFixed(1)} ms · ` +
       `r = ${settings.distance.toFixed(2)} M · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M</span>`;
     if (!$("info").classList.contains("collapsed")) {
       const cam = cameraFrame(settings);

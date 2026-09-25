@@ -271,6 +271,21 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "hdr", type: "choice", section: "render", group: "Image", label: "HDR output", style: "segmented", effect: "display",
+    options: [
+      { value: "auto", label: "Auto", hint: "HDR when the display reports a high dynamic range" },
+      { value: "on", label: "On" },
+      { value: "off", label: "SDR" },
+    ],
+    help: "Extended-range canvas (rgba16float, tone mapping 'extended'): on EDR/HDR displays (e.g. Apple XDR) the inner disk, the jet and bright stars exceed SDR white instead of being compressed. PNG exports stay SDR; EXR is always scene-linear.",
+    keywords: "edr xdr high dynamic range nits",
+  },
+  {
+    key: "hdrPeak", type: "number", section: "render", group: "Image", label: "HDR peak", min: 1, max: 16, scale: "log", unit: "× SDR", precision: 2, effect: "display",
+    visible: (s) => s.hdr !== "off",
+    help: "Brightest value sent to the display, in units of SDR white (XDR: ≈ 4 at full brightness indoors, up to 16 with 1600-nit peaks). Highlights roll off smoothly to this level.",
+  },
+  {
     key: "bloom", type: "number", section: "render", group: "Image", label: "Bloom", min: 0, max: 0.5, step: 0.001, effect: "display",
     help: "Fraction of the light spread by the lens point-spread function (energy-conserving multi-scale glow).",
   },

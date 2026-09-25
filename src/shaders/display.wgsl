@@ -4,6 +4,7 @@ struct Display {
   size: vec4f,  // output W, H, exposure (linear multiplier), tonemap (0 AgX, 1 AgX punchy, 2 ACES, 3 clamp)
   flags: vec4f, // debug mode (1 = bypass exposure/tonemap/bloom), bloom strength, bloom levels, dither (0/1)
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
+  hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -60,6 +61,26 @@ fn aces(c: vec3f) -> vec3f {
   return clamp(mOut * (a / b), vec3f(0.0), vec3f(1.0));
 }
 
+// Extended-range display mapping (EDR/HDR canvas, 1 = SDR white). Linear up to a knee, then an
+// exponential shoulder that reaches the display peak asymptotically, applied to the max channel so
+// hues are preserved; the brightest highlights drift towards white, as film and AgX do.
+fn hdrMap(c: vec3f, peak: f32, punchy: bool) -> vec3f {
+  var v = max(c, vec3f(0.0));
+  if (punchy) {
+    // same saturation lift as "AgX punchy", relative to luminance
+    let l = dot(v, vec3f(0.2126, 0.7152, 0.0722));
+    v = max(vec3f(l) + 1.15 * (v - vec3f(l)), vec3f(0.0));
+  }
+  let m = max(max(v.r, v.g), v.b);
+  let knee = min(0.6, 0.5 * peak);
+  if (m <= knee) { return v; }
+  let span = peak - knee;
+  let m2 = knee + span * (1.0 - exp(-(m - knee) / span));
+  let scaled = v * (m2 / m);
+  let w = smoothstep(0.3, 1.0, (m2 - knee) / span);
+  return mix(scaled, vec3f(m2), 0.75 * w);
+}
+
 fn srgbEncode(c: vec3f) -> vec3f {
   let lo = c * 12.92;
   let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055;
@@ -77,9 +98,12 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     c = mix(c, b, D.flags.y);
     c *= D.size.z;
     let tm = u32(D.size.w);
-    if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); }
+    if (D.hdr.x > 0.5) {
+      if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
+    } else if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); }
   }
-  c = clamp(c, vec3f(0.0), vec3f(1.0));
+  // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
+  c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));
   // Tiny dither against banding in the dark sky.
   let n = fract(sin(dot(in.pos.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5;
   return vec4f(srgbEncode(c) + n * D.flags.w / 255.0, 1.0);
