@@ -264,7 +264,7 @@ export function setupRenderDialog(d: DialogDeps) {
         cam.enabled = true;
         while (camTime < tf - 1e-9) {
           const dt = Math.min(1 / 120, tf - camTime);
-          cam.update(dt);
+          cam.update(dt, t0 + (camTime + dt) * rate);
           camTime += dt;
         }
         cam.enabled = false;

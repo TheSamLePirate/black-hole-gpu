@@ -107,7 +107,7 @@ function holeFrame(s: Settings): CameraFrame {
   } else if (s.motion === "infall") {
     // free fall from rest at infinity with zero angular momentum (the "rain" frame): γ = 1/α
     orbital = [-Math.sqrt(Math.max(0, 1 - z.alpha * z.alpha)), 0, 0];
-  } else if (s.motion === "geodesic") {
+  } else if (s.motion === "geodesic" || s.motion === "comoving") {
     orbital = [s.velR, s.velT, s.velP];
   }
   return withMotion(s, { region: "hole", r, theta, phi, ell: 0, n: [1, 0, 0], right, up, fwd, zamo: z }, orbital);
@@ -126,7 +126,7 @@ function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3
   return withMotion(s, {
     region: "hole", r, theta, phi: f.ph, ell: 0, n: [1, 0, 0],
     right: comps(v.right), up: comps(v.up), fwd: comps(v.fwd), zamo: zamo(r, theta, s.spin),
-  }, s.motion === "geodesic" ? comps(v.vel) : null);
+  }, s.motion === "geodesic" || s.motion === "comoving" ? comps(v.vel) : null);
 }
 
 /** Camera orbiting the wormhole: whL is ℓ; inclination/azimuth are angles in the frame of its side. */
@@ -146,7 +146,7 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   if (side > 0 && s.whL > m.lGlue) return holeFromRep(s, m, s.whL, n, v);
   return withMotion(s, {
     region: "throat", r: radius(m.w, s.whL)[0], theta, phi, ell: s.whL, n, right: v.right, up: v.up, fwd: v.fwd, zamo: STATIC_ZAMO,
-  }, s.motion === "geodesic" ? vel : null);
+  }, s.motion === "geodesic" || s.motion === "comoving" ? vel : null);
 }
 
 export function cameraFrame(s: Settings): CameraFrame {

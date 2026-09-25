@@ -1,10 +1,14 @@
 import {
   basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
-import { horizon, type Vec3 } from "./physics";
-import type { Settings } from "./settings";
+import { horizon, zamo, type Vec3 } from "./physics";
+import type { Settings, Target } from "./settings";
+import {
+  aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
+  pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, type Body, type Quat,
+} from "./targeting";
 import { advance, fromZamo, predict, toZamo } from "./geodesic";
-import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
+import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 type PoseKeys = "anchor" | "whL" | "distance" | "inclination" | "azimuth" | "yaw" | "pitch" | "roll";
@@ -28,8 +32,14 @@ export const FLIGHT_KEYS: Record<string, [number, number, number, number]> = {
 };
 
 /**
- * Camera interaction: orbit / look with momentum, smooth logarithmic zoom, pinch zoom,
- * keyboard, and two cinematic modes:
+ * Camera interaction. Two rotation modes (settings.rotation):
+ *  - orbit: drag turns around the target body (the hole, the star, the wormhole), the wheel sets
+ *    the distance to it, and the camera keeps aiming at its apparent image (lensed, light-delayed,
+ *    aberrated; see targeting.ts) with a user offset (right-drag). Orbiting the star follows it
+ *    along its orbit, co-moving. Selecting a body turns the view to it smoothly (quaternion slerp).
+ *  - free: drag turns the camera about itself, right-drag rolls, the wheel dollies.
+ * Clicking a body's image selects it; double-clicking flies the view to it and frames it.
+ * Also: momentum, smooth logarithmic zoom, pinch zoom, keyboard, and cinematic modes:
  *  - orbit: the observer circles the hole (azimuth drift)
  *  - dive: exact free fall from rest at infinity (E = 1, L = Q = 0) integrated in proper time,
  *          seen from the infalling ("rain") frame; ends just outside the horizon.
@@ -70,6 +80,32 @@ export class CameraController {
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
   properTime = 0;
   private journey: { t: number; dir: "out" | "back"; start: Pick<Settings, PoseKeys> } | null = null;
+  /** Body under the mouse pointer (canvas CSS pixels), for the hover label. */
+  hover: { body: Body; x: number; y: number } | null = null;
+  /** Last user interaction with the camera (performance.now()), to show / fade the target marker. */
+  activity = -1e9;
+  private hoverAt = 0;
+  private down: { x: number; y: number; t: number } | null = null;
+  /** Scene time of this update and of the previous one [M] (the star moves). */
+  private time = NaN;
+  private prevTime = NaN;
+  /** Orbit mode: the camera's orientation relative to the aim at the target. */
+  private offset: Quat | null = null;
+  /** yaw/pitch/roll as last written by the tracking (any other change updates the offset). */
+  private written = "";
+  /** Smooth turn of the view to the target (offset → identity). */
+  private focus: { from: Quat; t: number; dur: number } | null = null;
+  private aimCache: { body: Body; key: string; look: Vec3; lensed: boolean } | null = null;
+  /** Orbiting the star: wheel target distance, pending drag increments (°), co-moving fraction. */
+  private starD: number | null = null;
+  private starOrbit: [number, number] = [0, 0];
+  private ride = 0;
+  private leveling = false;
+  /**
+   * Flight to a framing position around the star or the mouth: along an arc around the body (its
+   * frame: co-rotating for the star), direction n0 → n1 and distance d0 → d1 (log), eased.
+   */
+  private flight: { body: Body; t: number; dur: number; C: Vec3; n0: Vec3; n1: Vec3; d0: number; d1: number } | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -78,13 +114,15 @@ export class CameraController {
   ) {
     this.targetDistance = s.distance;
     this.targetL = s.whL;
+    this.ride = s.motion === "comoving" ? 1 : 0; // (restored from a URL: already riding)
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("pointermove", this.onMove);
     canvas.addEventListener("pointerup", this.onUp);
     canvas.addEventListener("pointercancel", this.onUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    canvas.addEventListener("dblclick", () => this.resetView());
+    canvas.addEventListener("dblclick", this.onDblClick);
+    canvas.addEventListener("pointerleave", () => this.setHover(null));
     document.addEventListener("pointerlockchange", () => {
       this.flyMode = document.pointerLockElement === canvas;
       this.onCinematicChange(this.cinematic);
@@ -115,6 +153,7 @@ export class CameraController {
   sync() {
     this.targetDistance = this.s.distance;
     this.targetL = this.s.whL;
+    this.starD = null;
     this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
   }
 
@@ -123,12 +162,353 @@ export class CameraController {
     return this.s.wormhole && this.s.anchor === "wormhole";
   }
 
+  /** Orbit: turns the view back onto the target. Free: levels the horizon (roll → 0). */
   resetView() {
-    this.s.yaw = 0;
-    this.s.pitch = 0;
-    this.s.roll = 0;
     this.vYaw = this.vPitch = 0;
+    if (this.tracking) this.startFocus();
+    else this.leveling = true;
   }
+
+  // ------------------------------------------------------------------------------ rotation modes
+  /** Orbit mode drives the view (not during the dive, the journey or game-style flight). */
+  private get tracking() {
+    return this.s.rotation === "orbit" && !this.flyMode && this.cinematic !== "dive" && this.cinematic !== "journey";
+  }
+  /** Drags move the camera around the target (not while it falls freely). */
+  private get orbiting() {
+    return this.tracking && !this.gravity;
+  }
+
+  setRotation(mode: Settings["rotation"]) {
+    this.s.rotation = mode;
+    this.activity = performance.now();
+    if (mode === "free" && this.cinematic === "orbit") this.setCinematic(null);
+    if (mode === "orbit") this.startFocus();
+    this.onCinematicChange(this.cinematic);
+  }
+
+  /** Bodies that can be selected from where the camera is. */
+  availableTargets(): Body[] {
+    return availableBodies(this.s, cameraFrame(this.s));
+  }
+
+  /**
+   * Selects the body to orbit / aim at. focus: turn the view to it; frame: also move to a distance
+   * that frames it. Returns false if it is not in the camera's universe.
+   */
+  selectTarget(body: Target, o: { focus?: boolean; frame?: boolean } = {}) {
+    const s = this.s;
+    if (!this.availableTargets().includes(body)) return false;
+    const changed = s.target !== body;
+    s.target = body;
+    this.activity = performance.now();
+    this.aimCache = null;
+    this.starD = null;
+    if (changed && this.cinematic === "orbit") this.sync();
+    if (this.tracking) {
+      this.ensureAnchor();
+      if (o.frame) this.frameTarget();
+      if (o.focus !== false) this.startFocus();
+    }
+    this.onCinematicChange(this.cinematic);
+    return true;
+  }
+
+  /** Next / previous available body (Tab / Shift+Tab). */
+  cycleTarget(dir: 1 | -1 = 1) {
+    const list = this.availableTargets();
+    const i = list.indexOf(this.s.target);
+    this.selectTarget(list[(i + dir + list.length) % list.length]!);
+  }
+
+  /** The body seen at a point of the canvas (CSS pixels), if any and selectable. */
+  pickAt(x: number, y: number): Body | null {
+    const s = this.s;
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const cam = cameraFrame(s);
+    const look = pixelLook(cam, (2 * x) / w - 1, 1 - (2 * y) / h, s.fov, w / h);
+    const body = pick(s, cam, look, this.nowTime());
+    return body && availableBodies(s, cam).includes(body) ? body : null;
+  }
+
+  /**
+   * The target as seen now, for the overlay: its apparent direction (camera components), straight
+   * distance and angular radius.
+   */
+  targetInfo() {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const aim = this.aim(cam);
+    if (!aim) return null;
+    const dist = bodyDistance(s, cam, s.target, this.nowTime());
+    return { body: s.target, name: BODY_NAMES[s.target], look: aim.look, lensed: aim.lensed, dist, ang: angularRadius(s, s.target, dist), cam };
+  }
+
+  private nowTime() {
+    return Number.isFinite(this.time) ? this.time : 0;
+  }
+
+  /** Apparent direction of the target (cached; warm-started from the last answer). */
+  private aim(cam: ReturnType<typeof cameraFrame>) {
+    const s = this.s;
+    const body = s.target;
+    const t = body === "star" ? this.nowTime() : 0;
+    const key = [
+      body, cam.region, cam.r, cam.theta, cam.phi, cam.ell, ...cam.n, ...cam.beta, t, s.spin, s.sun, s.sunOrbit, s.sunRadius,
+      s.sunPhase, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.whRho, s.disk, s.diskOuter,
+    ].join();
+    if (this.aimCache?.key === key) return this.aimCache;
+    const guess = this.aimCache?.body === body ? this.aimCache.look : null;
+    const r = bodyLook(s, cam, body, t, guess);
+    this.aimCache = { body, key, ...r };
+    return this.aimCache;
+  }
+
+  /** Smooth turn of the view onto the target (duration grows with the angle). */
+  private startFocus() {
+    const s = this.s;
+    if (!this.tracking) return;
+    const cam = cameraFrame(s);
+    const aim = this.aim(cam);
+    if (!aim) return;
+    const b = basis(s.yaw, s.pitch, s.roll);
+    const from = offsetFrom(aimFrame(this.toLocal(cam, aim.look)), b.fwd, b.up);
+    this.focus = { from, t: 0, dur: 0.45 + 0.55 * (quatAngle(from) / Math.PI) };
+    this.offset = from;
+    this.written = [s.yaw, s.pitch, s.roll].join();
+  }
+
+  /** Distance that frames the target (its angular radius about a sixth of the field of view). */
+  private frameTarget() {
+    const s = this.s;
+    const half = (s.fov * DEG) / 2;
+    const body = s.target;
+    const R = body === "hole" ? 3 * Math.sqrt(3) : body === "star" ? s.sunRadius : 1.6 * mouth(s).w.rho;
+    const d = R / Math.sin((body === "hole" ? 0.34 : 0.28) * half);
+    if (body === "hole") return void (this.targetDistance = clamp(d, horizon(s.spin) + 1, 1000));
+    const cam = cameraFrame(s);
+    const X = cameraPosition(s, cam);
+    if (!X || (body === "wormhole" && cam.region === "throat")) {
+      // our side of the wormhole (or inside its mouth): straight along ℓ
+      this.targetL = (s.whL < 0 ? -1 : 1) * clamp(d, this.lMin(), 2000);
+      return;
+    }
+    // in the body's frame (co-rotating for the star): fly on an arc to a clear viewpoint
+    const t = this.nowTime();
+    const ph = body === "star" ? starPhase(s, t) : 0;
+    const C = rotZ(bodyCentre(s, body, t), -ph);
+    const rel = sub3(rotZ(X, -ph), C);
+    const d0 = Math.hypot(...rel);
+    const n0 = lin(rel, 1 / d0, rel, 0);
+    const d1 = body === "star" ? Math.max(d, 1.3 * s.sunRadius) : clamp(d, mouth(s).rGlue * 1.05, 2000);
+    const n1 = this.clearDirection(C, n0, d1);
+    const turn = Math.acos(clamp(dot3(n0, n1), -1, 1));
+    const dur = clamp(0.8 + 0.25 * Math.abs(Math.log(d0 / d1)) + (0.8 * turn) / Math.PI, 0.8, 2.4);
+    this.flight = { body, t: 0, dur, C, n0, n1, d0, d1 };
+  }
+
+  /**
+   * A viewing direction from the body (unit, from its centre towards the camera) close to `n0`
+   * whose line of sight to the body, from distance d, clears the hole and its disk; bends towards
+   * "outward and a little above the disk" as needed.
+   */
+  private clearDirection(C: Vec3, n0: Vec3, d: number): Vec3 {
+    const s = this.s;
+    const rC = Math.hypot(...C);
+    const up = n0[2] >= 0 || C[2] >= 0 ? 1 : -1;
+    const out = normalize(lin(lin(C, 1 / rC, [0, 0, 1], 0), 1, [0, 0, up], 0.4));
+    const clear = (n: Vec3) => {
+      const X = lin(C, 1, n, d);
+      // not deep in the hole's field (light bends a lot there)
+      if (Math.hypot(...X) < Math.max(horizon(s.spin) + 4, 0.6 * rC)) return false;
+      // the line of sight passes well clear of the hole
+      const v = sub3(C, X);
+      const u = clamp(-dot3(X, v) / dot3(v, v), 0, 1);
+      if (Math.hypot(...lin(X, 1, v, u)) < Math.max(10, 0.5 * rC)) return false;
+      // the disk (and a margin) must not lie across it
+      if (s.disk && X[2] * C[2] < 0) {
+        const f = X[2] / (X[2] - C[2]);
+        const P = lin(X, 1, v, f);
+        if (Math.hypot(P[0], P[1]) < 1.3 * s.diskOuter) return false;
+      }
+      return true;
+    };
+    for (let k = 0; k <= 8; k++) {
+      const n = normalize(lin(n0, 1 - k / 8, out, k / 8));
+      if (clear(n)) return n;
+    }
+    return out;
+  }
+
+  /** Advances the flight to a framing position (orbit mode). */
+  private stepFlight(dt: number) {
+    const s = this.s;
+    const F = this.flight!;
+    F.t += dt;
+    const x = Math.min(F.t / F.dur, 1);
+    const e = x * x * x * (x * (6 * x - 15) + 10);
+    // direction: spherical interpolation; distance: logarithmic
+    const om = Math.acos(clamp(dot3(F.n0, F.n1), -1, 1));
+    const n = om < 1e-6 ? F.n1 : lin(F.n0, Math.sin((1 - e) * om) / Math.sin(om), F.n1, Math.sin(e * om) / Math.sin(om));
+    const d = Math.exp(Math.log(F.d0) + (Math.log(F.d1) - Math.log(F.d0)) * e);
+    const ph = F.body === "star" ? starPhase(s, this.nowTime()) : 0;
+    const Y = rotZ(lin(F.C, 1, n, d), ph);
+    if (F.body === "star") {
+      const f = sphericalFrame(Y);
+      s.distance = f.r;
+      s.inclination = clamp(f.th / DEG, 0.2, 179.8);
+      s.azimuth = f.ph / DEG;
+      this.targetDistance = s.distance;
+    } else {
+      // around the mouth, Gargantua side: ℓ and the angles of the rep position
+      const m = mouth(s);
+      const q = toMouth(m, sub3(Y, m.C));
+      const r = Math.hypot(...q);
+      const f = sphericalFrame(lin(q, 1 / r, q, 0));
+      s.whL = ellOfR(m.w, r);
+      s.inclination = clamp(f.th / DEG, 0.2, 179.8);
+      s.azimuth = f.ph / DEG;
+      this.targetL = s.whL;
+    }
+    if (x >= 1) {
+      this.flight = null;
+      this.starD = F.body === "star" ? F.d1 : this.starD;
+    }
+  }
+
+  /** Orbit mode: the settings' anchor matches the target (the hole's frame for the star). */
+  private ensureAnchor() {
+    const s = this.s;
+    if (!s.wormhole) return;
+    const want = s.target === "wormhole" ? "wormhole" : "hole";
+    if (s.anchor === want) return;
+    if (!switchAnchor(s, want)) s.target = "wormhole";
+    this.targetDistance = s.distance;
+    this.targetL = s.whL;
+    this.written = "";
+  }
+
+  /** Camera components → components in the frame where basis(yaw, pitch, roll) is defined. */
+  private toLocal(cam: ReturnType<typeof cameraFrame>, v: Vec3): Vec3 {
+    const s = this.s;
+    const b = basis(s.yaw, s.pitch, s.roll);
+    return add3(b.right, b.up, b.fwd, [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)]);
+  }
+
+  /** Orbit increments (degrees of azimuth and inclination) around the target. */
+  private orbitBy(dAz: number, dInc: number) {
+    const s = this.s;
+    if (!this.orbiting) return;
+    this.flight = null;
+    if (s.target === "star") {
+      this.starOrbit[0] += dAz;
+      this.starOrbit[1] += dInc;
+      return;
+    }
+    s.azimuth = wrapDeg(s.azimuth + dAz);
+    s.inclination = clamp(s.inclination + dInc, 0.2, 179.8);
+  }
+
+  /** Keeps the target in view: orientation = aim frame ∘ offset (the offset eases to 0 in a focus). */
+  private track(dt: number) {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const aim = this.aim(cam);
+    if (!aim) return;
+    const A = aimFrame(this.toLocal(cam, aim.look));
+    const now = [s.yaw, s.pitch, s.roll].join();
+    if (!this.offset || now !== this.written) {
+      // turned by the user (or a preset, the panel…): keep that as the new offset
+      const b = basis(s.yaw, s.pitch, s.roll);
+      this.offset = offsetFrom(A, b.fwd, b.up);
+      if (this.written) this.focus = null;
+    }
+    if (this.focus) {
+      this.focus.t += dt;
+      const x = Math.min(this.focus.t / this.focus.dur, 1);
+      this.offset = slerp(this.focus.from, QUAT_ID, x * x * x * (x * (6 * x - 15) + 10));
+      if (x >= 1) this.focus = null;
+    }
+    const o = composeOffset(A, this.offset);
+    const e = yawPitchRoll(o.fwd, o.up);
+    // (round-off of the round trip must not count as a change: the image would never converge)
+    const moved = Math.abs(angleDiff(e.yaw, s.yaw)) + Math.abs(e.pitch - s.pitch) + Math.abs(angleDiff(e.roll, s.roll)) > 1e-7;
+    if (moved) {
+      s.yaw = e.yaw;
+      s.pitch = e.pitch;
+      s.roll = e.roll;
+    }
+    this.written = [s.yaw, s.pitch, s.roll].join();
+  }
+
+  /**
+   * Orbiting the star: the camera keeps its position relative to the star in the star's rotating
+   * frame (it follows it along its orbit), plus the drag increments and the eased wheel distance.
+   */
+  private followStar(dt: number) {
+    const s = this.s;
+    if (s.anchor !== "hole") return;
+    const t0 = Number.isFinite(this.prevTime) ? this.prevTime : this.nowTime();
+    const t1 = this.nowTime();
+    const X = blToCartesian(s.distance, clamp(s.inclination, 0.2, 179.8) * DEG, s.azimuth * DEG);
+    const rel = rotZ(sub3(X, starCentre(s, t0)), -starPhase(s, t0));
+    let d = Math.hypot(...rel);
+    let inc = Math.acos(clamp(rel[2] / d, -1, 1)) / DEG;
+    let az = Math.atan2(rel[1], rel[0]) / DEG;
+    az += this.starOrbit[0];
+    inc = clamp(inc - this.starOrbit[1], 1, 179);
+    this.starOrbit = [0, 0];
+    const dMin = 1.3 * s.sunRadius;
+    if (this.starD === null) this.starD = d;
+    this.starD = clamp(this.starD, dMin, 2000);
+    const k = 1 - Math.exp(-10 * dt);
+    d = Math.abs(Math.log(this.starD / d)) < 1e-4 ? this.starD : Math.exp(Math.log(d) + (Math.log(this.starD) - Math.log(d)) * k);
+    const st = Math.sin(inc * DEG);
+    const relN: Vec3 = [d * st * Math.cos(az * DEG), d * st * Math.sin(az * DEG), d * Math.cos(inc * DEG)];
+    const Y = lin(starCentre(s, t1), 1, rotZ(relN, starPhase(s, t1)), 1);
+    if (Math.hypot(...Y) < horizon(s.spin) + 0.5) return;
+    if (Math.hypot(...sub3(Y, X)) < 1e-9 * (1 + d)) return; // (round-off only: keep still)
+    const f = sphericalFrame(Y);
+    s.distance = f.r;
+    s.inclination = clamp(f.th / DEG, 0.2, 179.8);
+    s.azimuth = f.ph / DEG;
+    this.targetDistance = s.distance;
+  }
+
+  /**
+   * Co-moving with the star while orbiting it: the camera's velocity eases to that of the star's
+   * rotating frame at its position (v = ϖ(Ω★ − ω)/α relative to the ZAMO), and back to rest after.
+   */
+  private updateRide(dt: number) {
+    const s = this.s;
+    const want = this.orbiting && s.target === "star" && s.anchor === "hole" && (s.motion === "static" || s.motion === "comoving");
+    if (want && s.motion === "static") s.motion = "comoving";
+    if (s.motion !== "comoving") {
+      this.ride = 0;
+      return;
+    }
+    this.ride += ((want ? 1 : 0) - this.ride) * (1 - Math.exp(-dt / 0.35));
+    if (want && this.ride > 0.9995) this.ride = 1; // arrived: constant from now on (the image converges)
+    if ((!want && this.ride < 2e-3) || s.anchor !== "hole") {
+      s.motion = "static";
+      s.velR = s.velT = s.velP = 0;
+      this.ride = 0;
+      return;
+    }
+    const th = clamp(s.inclination, 0.2, 179.8) * DEG;
+    const z = zamo(Math.max(s.distance, horizon(s.spin) + 0.05), th, s.spin);
+    const v = (z.varpi * (starOmega(s) - z.omega)) / z.alpha;
+    s.velR = 0;
+    s.velT = 0;
+    s.velP = clamp(this.ride * v, -0.95, 0.95);
+  }
+
+  /** Current co-moving fraction (0 … 1) for the HUD. */
+  get riding() {
+    return this.s.motion === "comoving" ? this.ride : 0;
+  }
+
 
   /**
    * Turns the camera about its own axes (degrees): towards its right, towards its up, and a roll
@@ -156,6 +536,8 @@ export class CameraController {
     if (mode !== "journey") this.journey = null;
     if (mode === "dive" && this.aroundWormhole && !switchAnchor(this.s, "hole")) mode = null;
     if (mode === "journey") this.startJourney();
+    if (mode === "orbit") this.s.rotation = "orbit"; // auto-orbit turns around the target
+    if (mode === "dive") this.s.target = "hole";
     this.cinematic = mode;
     if (mode === "dive") {
       const s = this.s;
@@ -203,6 +585,12 @@ export class CameraController {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.dragLook = e.button === 2 || e.shiftKey;
     this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
+    this.down = this.pointers.size === 1 && e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    this.focus = null;
+    this.flight = null;
+    this.leveling = false;
+    this.activity = performance.now();
+    this.setHover(null);
     if (this.pointers.size === 2) this.pinchDist = this.pinchSpan();
     if (this.cinematic === "orbit") this.setCinematic(null);
   };
@@ -211,7 +599,32 @@ export class CameraController {
     this.pointers.delete(e.pointerId);
     // released after a pause: no fling
     if (performance.now() - this.lastMove > 80) this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
+    // a click (no drag): select the body under the pointer
+    const d = this.down;
+    this.down = null;
+    if (d && this.pointers.size === 0 && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5 && performance.now() - d.t < 400) {
+      const r = this.canvas.getBoundingClientRect();
+      const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
+      if (body && body !== this.s.target) this.selectTarget(body);
+    }
   };
+
+  /** Double-click: on a body, orbit it and fly the view to it (framed); on the sky, recentre / level. */
+  private onDblClick = (e: MouseEvent) => {
+    if (!this.enabled || this.flyMode) return;
+    const r = this.canvas.getBoundingClientRect();
+    const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
+    if (!body) return this.resetView();
+    if (this.cinematic === "orbit") this.setCinematic(null);
+    this.s.rotation = "orbit";
+    this.selectTarget(body, { frame: !this.gravity });
+  };
+
+  private setHover(h: CameraController["hover"]) {
+    if (h?.body === this.hover?.body && (!h || (h.x === this.hover!.x && h.y === this.hover!.y))) return;
+    this.hover = h;
+    this.canvas.style.cursor = h ? "pointer" : "";
+  }
 
   private pinchSpan() {
     const [a, b] = [...this.pointers.values()];
@@ -220,7 +633,19 @@ export class CameraController {
 
   private onMove = (e: PointerEvent) => {
     const p = this.pointers.get(e.pointerId);
-    if (!p) return;
+    if (!p) {
+      // hover: what is under the pointer (throttled; one traced ray)
+      if (!this.enabled || this.flyMode || e.pointerType === "touch") return;
+      const now = performance.now();
+      if (now - this.hoverAt < 70) return;
+      this.hoverAt = now;
+      const r = this.canvas.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const body = this.pickAt(x, y);
+      this.setHover(body ? { body, x, y } : null);
+      return;
+    }
     const now = performance.now();
     const dtEv = Math.max(16, now - this.lastMove) / 1000;
     const dx = e.clientX - p.x;
@@ -228,6 +653,7 @@ export class CameraController {
     p.x = e.clientX;
     p.y = e.clientY;
     this.lastMove = now;
+    this.activity = now;
 
     if (this.pointers.size === 2) {
       const span = this.pinchSpan();
@@ -238,15 +664,21 @@ export class CameraController {
     const s = this.s;
     // fling velocity: smoothed and capped (°/s)
     const smooth = (v: number, inst: number) => clamp(0.5 * inst + 0.5 * v, -120, 120);
-    if (this.dragLook) {
-      const k = s.fov / this.canvas.clientHeight; // degrees per CSS pixel
-      this.rotateView(-dx * k, dy * k, 0);
-      this.vYaw = smooth(this.vYaw, (-dx * k) / dtEv);
-      this.vPitch = smooth(this.vPitch, (dy * k) / dtEv);
+    const kLook = s.fov / this.canvas.clientHeight; // degrees per CSS pixel
+    const look = () => {
+      this.rotateView(-dx * kLook, dy * kLook, 0);
+      this.vYaw = smooth(this.vYaw, (-dx * kLook) / dtEv);
+      this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
+    };
+    if (s.rotation === "free") {
+      // free: drag looks around, right / shift drag rolls
+      if (this.dragLook) this.rotateView(0, 0, -dx * 0.4);
+      else look();
+    } else if (this.dragLook || !this.orbiting) {
+      look(); // offset of the view from the target (or, falling freely, just look)
     } else {
       const k = 0.25 * Math.min(1, s.fov / 45);
-      s.azimuth = wrapDeg(s.azimuth - dx * k);
-      s.inclination = clamp(s.inclination - dy * k, 0.2, 179.8);
+      this.orbitBy(-dx * k, -dy * k);
       this.vAz = smooth(this.vAz, (-dx * k) / dtEv);
       this.vInc = smooth(this.vInc, (-dy * k) / dtEv);
     }
@@ -256,13 +688,18 @@ export class CameraController {
     e.preventDefault();
     if (!this.enabled) return;
     const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    this.activity = performance.now();
+    this.flight = null;
     if (this.flyMode) {
       // flight speed, like a game's throttle
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
       return;
     }
-    if (e.altKey) {
+    if (e.altKey || this.gravity) {
       this.s.fov = clamp(this.s.fov * Math.exp(dy * 0.001), 1, 150);
+    } else if (this.s.rotation === "free" && !this.cinematic) {
+      // dolly along the view, gliding (the flight's inertia)
+      this.flyVel[0] = clamp(this.flyVel[0] - dy * 0.006 * this.flySpeed, -8 * this.flySpeed, 8 * this.flySpeed);
     } else {
       this.zoomBy(Math.exp(dy * 0.0015));
     }
@@ -270,6 +707,13 @@ export class CameraController {
 
   private zoomBy(f: number) {
     if (this.cinematic === "dive" || this.cinematic === "journey") return;
+    if (this.orbiting && this.s.target === "star") {
+      const s = this.s;
+      const dMin = 1.3 * s.sunRadius;
+      const d = this.starD ?? bodyDistance(s, cameraFrame(s), "star", this.nowTime());
+      this.starD = clamp(dMin + (d - dMin) * f, dMin, 2000);
+      return;
+    }
     if (this.aroundWormhole) {
       // distance to the throat |ℓ| (never through it: fly to cross)
       const lMin = this.lMin();
@@ -281,25 +725,35 @@ export class CameraController {
     this.targetDistance = clamp(rMin + (this.targetDistance - rMin) * f, rMin, 1000);
   }
 
-  /** Advances momentum, keyboard and cinematics. Returns true when the camera changed. */
-  update(dt: number): boolean {
+  /**
+   * Advances momentum, keyboard, cinematics and the rotation mode; `time` is the scene's time (the
+   * star moves). Returns true when the camera changed.
+   */
+  update(dt: number, time?: number): boolean {
     if (!this.enabled) return false;
     const s = this.s;
-    const before = [s.azimuth, s.inclination, s.yaw, s.pitch, s.roll, s.distance, s.fov, s.whL, s.anchor].join();
+    this.prevTime = Number.isFinite(this.time) ? this.time : (time ?? 0);
+    if (time !== undefined) this.time = time;
+    const before = this.poseKey();
     const dragging = this.pointers.size > 0;
 
-    // keyboard (held keys)
+    // the target must be in the camera's universe; orbiting uses the target's anchor
+    const avail = this.availableTargets();
+    if (!avail.includes(s.target)) {
+      s.target = avail.includes("hole") ? "hole" : "wormhole";
+      this.aimCache = null;
+      this.starD = null;
+    }
+    if (this.orbiting && !dragging) this.ensureAnchor();
+
+    // keyboard (held keys): arrows orbit, or turn the camera (free rotation, flight)
     const kRate = 60 * dt;
-    if (this.flyMode) {
-      // arrows turn the camera in flight
-      const kx = (this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("ArrowLeft") ? 1 : 0);
-      const ky = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
-      if (kx || ky) this.rotateView(kx * kRate, ky * kRate, 0);
-    } else {
-      if (this.keys.has("ArrowLeft")) s.azimuth = wrapDeg(s.azimuth + kRate);
-      if (this.keys.has("ArrowRight")) s.azimuth = wrapDeg(s.azimuth - kRate);
-      if (this.keys.has("ArrowUp")) s.inclination = clamp(s.inclination - kRate, 0.2, 179.8);
-      if (this.keys.has("ArrowDown")) s.inclination = clamp(s.inclination + kRate, 0.2, 179.8);
+    const kx = (this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("ArrowLeft") ? 1 : 0);
+    const ky = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
+    if (kx || ky || this.codes.size) this.activity = performance.now();
+    if (kx || ky) {
+      if (this.orbiting) this.orbitBy(-kx * kRate, -ky * kRate);
+      else this.rotateView(kx * kRate, ky * kRate, 0);
     }
     if (this.keys.has("+") || this.keys.has("=")) this.zoomBy(Math.exp(-1.2 * dt));
     if (this.keys.has("-") || this.keys.has("_")) this.zoomBy(Math.exp(1.2 * dt));
@@ -312,6 +766,9 @@ export class CameraController {
     const free = this.cinematic !== "dive" && this.cinematic !== "journey";
     if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
     if (move[3] && free) this.rotateView(0, 0, move[3] * 70 * dt);
+    // moving the camera (flight, free fall) re-expresses its orientation: not a turn by the user,
+    // so the tracking keeps its offset from the target
+    const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
     if (this.gravity && free) {
       // free fall along the Kerr geodesic in step with the scene's time; the keys thrust
       const simDt = s.animate ? s.timeSpeed * dt : 0;
@@ -325,12 +782,12 @@ export class CameraController {
       if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);
       else this.flyVel = [0, 0, 0];
     }
+    if (tracked) this.written = [s.yaw, s.pitch, s.roll].join();
 
     // momentum (exponential damping)
     if (!dragging) {
       const damp = Math.exp(-4 * dt);
-      s.azimuth = wrapDeg(s.azimuth + this.vAz * dt);
-      s.inclination = clamp(s.inclination + this.vInc * dt, 0.2, 179.8);
+      if (this.vAz || this.vInc) this.orbitBy(this.vAz * dt, this.vInc * dt);
       if (this.vYaw || this.vPitch) this.rotateView(this.vYaw * dt, this.vPitch * dt, 0);
       this.vAz *= damp;
       this.vInc *= damp;
@@ -339,16 +796,39 @@ export class CameraController {
       for (const k of ["vAz", "vInc", "vYaw", "vPitch"] as const) if (Math.abs(this[k]) < 0.05) this[k] = 0;
     }
 
+    if (this.leveling) {
+      s.roll *= Math.exp(-12 * dt);
+      if (Math.abs(s.roll) < 0.02) (s.roll = 0), (this.leveling = false);
+    }
+
     if (this.cinematic === "orbit") {
-      s.azimuth = wrapDeg(s.azimuth + s.cinematicSpeed * dt);
+      this.orbitBy(s.cinematicSpeed * dt, 0);
     } else if (this.cinematic === "dive") {
       this.stepDive(dt);
     } else if (this.cinematic === "journey") {
       this.stepJourney(dt);
-    } else if (this.aroundWormhole) {
-      // smooth zoom towards the target |ℓ| (in log space), on the camera's side of the throat
+    }
+    if (this.flight && !(this.orbiting && s.target === this.flight.body && s.anchor === (this.flight.body === "star" ? "hole" : "wormhole"))) {
+      this.flight = null;
+    }
+    if (this.cinematic !== "dive" && this.cinematic !== "journey") {
+      if (this.flight) this.stepFlight(dt);
+      else if (this.orbiting && s.target === "star") this.followStar(dt);
+      else this.easeZoom(dt);
+    }
+    this.updateRide(dt);
+    if (this.tracking) this.track(dt);
+    return this.changedSince(before);
+  }
+
+  /** Smooth wheel zoom towards the target distance (in log space): to the hole, or |ℓ| to the throat. */
+  private easeZoom(dt: number) {
+    const s = this.s;
+    if (this.gravity) return;
+    if (this.aroundWormhole) {
+      // on the camera's side of the throat
       if (Math.sign(this.targetL) !== Math.sign(s.whL)) this.targetL = s.whL;
-      if (Math.abs(this.targetL - s.whL) < 1e-9) return this.changedSince(before); // (also inside the throat)
+      if (Math.abs(this.targetL - s.whL) < 1e-9) return; // (also inside the throat)
       const lMin = this.lMin();
       const sign = s.whL < 0 ? -1 : 1;
       const cur = Math.log(Math.max(Math.abs(s.whL) - lMin, 0) + 1e-3);
@@ -357,21 +837,23 @@ export class CameraController {
       const l = Math.abs(tgt - cur) < 1e-4 ? this.targetL : sign * (lMin + Math.exp(next) - 1e-3);
       if (this.poseAllowed({ ...s, whL: l })) s.whL = l;
       else this.targetL = s.whL;
-    } else {
-      // smooth zoom towards the target distance (in log space)
-      const rMin = horizon(s.spin) + 0.05;
-      if (s.distance < rMin) s.distance = rMin;
-      const cur = Math.log(s.distance - rMin + 1e-3);
-      const tgt = Math.log(Math.max(this.targetDistance, rMin) - rMin + 1e-3);
-      const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
-      s.distance = Math.abs(tgt - cur) < 1e-4 ? this.targetDistance : rMin + Math.exp(next) - 1e-3;
+      return;
     }
-    return this.changedSince(before);
+    const rMin = horizon(s.spin) + 0.05;
+    if (s.distance < rMin) s.distance = rMin;
+    const cur = Math.log(s.distance - rMin + 1e-3);
+    const tgt = Math.log(Math.max(this.targetDistance, rMin) - rMin + 1e-3);
+    const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
+    s.distance = Math.abs(tgt - cur) < 1e-4 ? this.targetDistance : rMin + Math.exp(next) - 1e-3;
+  }
+
+  private poseKey() {
+    const s = this.s;
+    return [s.azimuth, s.inclination, s.yaw, s.pitch, s.roll, s.distance, s.fov, s.whL, s.anchor, s.motion, s.velP].join();
   }
 
   private changedSince(before: string) {
-    const s = this.s;
-    return before !== [s.azimuth, s.inclination, s.yaw, s.pitch, s.roll, s.distance, s.fov, s.whL, s.anchor].join();
+    return before !== this.poseKey();
   }
 
   /** Closest approach of the wheel zoom to the throat. */
@@ -603,6 +1085,7 @@ export class CameraController {
       if (x >= 1) {
         this.journey = null;
         this.sync();
+        s.target = "hole";
         this.setCinematic("orbit");
       }
     } else {
@@ -630,6 +1113,7 @@ export class CameraController {
       if (x >= 1) {
         this.journey = null;
         this.sync();
+        s.target = "wormhole";
         this.setCinematic(null);
       }
     }
@@ -682,6 +1166,12 @@ const normalize = (a: Vec3): Vec3 => {
   return [a[0] / n, a[1] / n, a[2] / n];
 };
 const axpy = (x: Vec3, v: Vec3, k: number): Vec3 => [x[0] + k * v[0], x[1] + k * v[1], x[2] + k * v[2]];
+const dot3 = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const sub3 = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+/** Rotation by `ang` [rad] about the z axis. */
+const rotZ = (v: Vec3, ang: number): Vec3 => [
+  v[0] * Math.cos(ang) - v[1] * Math.sin(ang), v[0] * Math.sin(ang) + v[1] * Math.cos(ang), v[2],
+];
 /** Components c along the frame (e0, e1, e2) → Cartesian vector. */
 const add3 = (e0: Vec3, e1: Vec3, e2: Vec3, c: Vec3): Vec3 => [
   e0[0] * c[0] + e1[0] * c[1] + e2[0] * c[2],
@@ -697,6 +1187,11 @@ const smoothstep = (x: number) => {
 
 function clamp(x: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, x));
+}
+
+/** b − a wrapped to (−180°, 180°]. */
+function angleDiff(a: number, b: number) {
+  return ((((b - a + 180) % 360) + 360) % 360) - 180;
 }
 
 function wrapDeg(d: number) {

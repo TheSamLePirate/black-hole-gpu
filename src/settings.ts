@@ -1,4 +1,7 @@
-export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic";
+export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving";
+/** Camera rotation: around the selected body, or about the camera itself. */
+export type Rotation = "orbit" | "free";
+export type Target = "hole" | "star" | "wormhole";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
@@ -43,6 +46,8 @@ export interface Settings {
   velP: number;
   thrust: number; // proper acceleration of the flight keys when gravity is on [c²/M]
   showGeodesic: boolean; // draw the camera's predicted free-fall path
+  rotation: Rotation; // drag orbits the target, or turns the camera about itself
+  target: Target; // the body orbited / aimed at
   // thin disk
   disk: boolean;
   diskTemp: number; // peak effective temperature, K
@@ -169,6 +174,8 @@ export function defaultSettings(): Settings {
     velP: 0,
     thrust: 0.02,
     showGeodesic: true,
+    rotation: "orbit",
+    target: "hole",
     disk: true,
     diskTemp: 9000,
     diskOuter: 22,
@@ -288,28 +295,28 @@ export const presets: Record<string, Preset> = {
     diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
   },
   "Interstellar: wormhole to Gargantua": {
-    wormhole: true, anchor: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
+    wormhole: true, anchor: "wormhole", target: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
     spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
   },
   "Wormhole: our Milky Way from Gargantua's side": {
-    ...GARGANTUA, anchor: "wormhole", whL: 6, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
+    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 6, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
     skyL: 180, skyB: 0, skyRoll: 35,
   },
   "Wormhole: long throat (images wrapped around it)": {
-    ...GARGANTUA, anchor: "wormhole", whLength: 10, whLensing: 0.05, whL: -17, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
+    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whLength: 10, whLensing: 0.05, whL: -17, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
     roll: 0, fov: 50, skyL: 0, skyB: 0, skyRoll: 35,
   },
   "Wormhole: strong lensing (W = 0.43 ρ)": {
-    ...GARGANTUA, anchor: "wormhole", whLength: 1, whLensing: 0.43, whL: -11, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
+    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whLength: 1, whLensing: 0.43, whL: -11, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
     roll: 0, fov: 55, skyL: 0, skyB: 0, skyRoll: 35,
   },
   "The mouth before Gargantua (banking flight)": {
-    ...GARGANTUA, anchor: "hole", distance: 34, inclination: 70, azimuth: -150, yaw: -25, pitch: 8, roll: -25, fov: 60,
+    ...GARGANTUA, anchor: "hole", target: "wormhole", distance: 34, inclination: 70, azimuth: -150, yaw: -25, pitch: 8, roll: -25, fov: 60,
     time: 0, animate: false,
   },
   "Companion star close-up": {
-    ...GARGANTUA, anchor: "hole", distance: 74, inclination: 89, azimuth: 3.5, yaw: -20, pitch: -1, roll: 0, fov: 40,
+    ...GARGANTUA, anchor: "hole", target: "star", distance: 74, inclination: 89, azimuth: 3.5, yaw: -20, pitch: -1, roll: 0, fov: 40,
     time: 0, animate: false,
   },
   "The star passing Gargantua": {

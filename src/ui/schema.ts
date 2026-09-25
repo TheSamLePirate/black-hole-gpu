@@ -102,6 +102,25 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fov zoom lens",
   },
   {
+    key: "rotation", type: "choice", section: "scene", group: "Camera rotation", label: "Rotation", style: "segmented", effect: "none",
+    options: [
+      { value: "orbit", label: "Around the target", hint: "Drag orbits the selected body and the camera keeps it in view (its lensed, light-delayed image)" },
+      { value: "free", label: "Free", hint: "Drag turns the camera about itself; the wheel moves it forward / back" },
+    ],
+    help: "Orbit: drag turns around the target, right-drag offsets the view, the wheel sets the distance; the camera tracks the target's apparent image (bent by the hole, delayed by the light travel time, aberrated). Free: drag looks around, right-drag rolls, the wheel dollies. R switches, click a body to select it, double-click to fly the view to it.",
+    keywords: "orbit around free look rotate turntable trackball pivot focus",
+  },
+  {
+    key: "target", type: "choice", section: "scene", group: "Camera rotation", label: "Target", style: "segmented", effect: "none",
+    options: [
+      { value: "hole", label: "Gargantua", hint: "The black hole" },
+      { value: "star", label: "Star", hint: "The companion star: the camera rides with it (co-moving) while time runs" },
+      { value: "wormhole", label: "Wormhole", hint: "The wormhole's mouth (the only body from our side of it)" },
+    ],
+    help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
+    keywords: "select body pivot focus star hole wormhole follow",
+  },
+  {
     key: "yaw", type: "number", section: "scene", group: "Look direction", label: "Yaw", min: -180, max: 180, step: 0.1, unit: "°",
     help: "Turns the camera left/right away from the hole (right-drag on the view).",
   },
@@ -122,6 +141,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "infall", label: "Free fall (rain frame)", hint: "Falling from rest at infinity, γ = 1/α" },
       { value: "forward", label: "Boost along view", hint: "Arbitrary speed β in the viewing direction" },
       { value: "geodesic", label: "Free fall (gravity)", hint: "The camera follows its own geodesic (Gravity button, B)" },
+      { value: "comoving", label: "Co-moving with the star", hint: "Rigid rotation with the star's orbital Ω (set when orbiting the star)" },
     ],
     help: "Velocity of the camera relative to the local zero-angular-momentum observer. Moving observers see relativistic aberration (the sky crowds forward) and Doppler shifts.",
     keywords: "velocity aberration boost orbit fall",
@@ -153,7 +173,7 @@ export const SCHEMA: ControlDef[] = [
     keywords: "interstellar wormhole gargantua tunnel other universe travel dneg thorne",
   },
   {
-    key: "anchor", type: "choice", section: "scene", group: "Interstellar wormhole", label: "Camera orbits", style: "segmented", enabled: whOn,
+    key: "anchor", type: "choice", section: "scene", group: "Interstellar wormhole", label: "Camera orbits", style: "segmented", enabled: whOn, visible: () => false,
     options: [
       { value: "wormhole", label: "Wormhole", hint: "Drag orbits the mouth; the wheel changes the distance to the throat" },
       { value: "hole", label: "Black hole", hint: "Drag orbits the black hole (only from its universe)" },

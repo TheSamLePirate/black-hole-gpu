@@ -105,6 +105,10 @@ Units: G = c = M = 1, distances in M (= GM/c²), time in M (= GM/c³).
 * `tests/wormhole.test.ts`: the Dneg r(ℓ) against its integral form (Eq. 5a), W/M = 1.42953, null
   constraint, rays with b < ρ cross the throat and b > ρ turn back, time reversibility, step convergence
   (1e-5 rad), orientation of the gluing frames.
+* `tests/targeting.test.ts`: the aimed ray passes through the star's centre (≤ 1e-3 M) even when the
+  straight line falls into the shadow; the light-travel delay moves the aim; picking the hole, the disk,
+  the sky, the star and the mouth; a secondary image followed by the warm start gives way to the primary;
+  orientation offsets (quaternions) round-trip.
 * `src/analytic.ts`: closed-form Kerr geodesics (Carlson elliptic integrals; Mino time of the n-th
   equatorial crossing, Gralla & Lupsasca 2020), tested against the float64 integrator to 1e-6.
 * GPU probe (`probe` entry point of `trace.wgsl`, `Renderer.precisionProbe`, reference data from
@@ -139,11 +143,32 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
 
 ## Controls
 
-Drag: orbit (with momentum) · right-drag / shift-drag: turn the camera (yaw, pitch, no limit) · wheel / pinch: distance ·
-alt+wheel: FOV · double-click: recentre view · arrows, +/−: move.
-**Wormhole** (Scene → Interstellar wormhole, or the preset "Interstellar: wormhole to Gargantua"): the
-orbit controls turn around the wormhole or the black hole (switching keeps the view); the wheel sets the
-distance to the throat. **Free flight, six degrees of freedom** (keys by physical position: Z Q S D /
+**Two rotation modes** (R, toolbar, Scene → Camera rotation):
+
+- **Around the target**: drag orbits the selected body — Gargantua, the companion star or the wormhole's
+  mouth — with momentum; the wheel sets the distance to it; right-drag offsets the view. The camera keeps
+  aiming at the body's **apparent image**, found on the CPU by shooting rays through the Kerr metric and
+  correcting them (Gauss–Newton) until one passes through the body's centre: light bending, the star's
+  light-travel delay (it is seen where it was) and the camera's aberration are included, and the primary
+  image is preferred (the one closest to the straight line; a warm start that drifted onto an image bent
+  around the hole is dropped). Orbiting the star follows it along its orbit in its rotating frame, and the
+  camera becomes **co-moving** (it takes the velocity of the star's rotating frame, v = ϖ(Ω★ − ω)/α,
+  eased in and out), so the star shows no Doppler shift.
+- **Free**: drag turns the camera about itself, right-drag rolls, the wheel moves it forward and back
+  (with the flight's inertia).
+
+**Selecting a body**: click its image — picking traces the pixel's ray (horizon or disk → the hole, star,
+gluing sphere → the wormhole), so even a lensed secondary image works; the hover label names it. Tab cycles
+the targets available in the camera's universe (from our side of the wormhole, only the wormhole).
+Double-click a body to orbit it and **fly the view to it**: the orientation turns by a quaternion slerp
+while the camera flies on an arc around the body to a framing distance, bending its approach so that the
+line of sight clears the hole and its disk. Double-click the sky (or ⇧R) to recentre (free: level the
+horizon). While the camera is handled, brackets mark the target's apparent image with its name and
+distance (an arrow at the edge when it is off-screen), then fade. With gravity on, the position follows
+the geodesic and the view keeps tracking the target. O auto-orbits the target.
+Alt+wheel: FOV · arrows, +/−: orbit / zoom.
+**Wormhole** (Scene → Interstellar wormhole, or the preset "Interstellar: wormhole to Gargantua"): target
+the wormhole to orbit it; the wheel then sets the distance to the throat. **Free flight, six degrees of freedom** (keys by physical position: Z Q S D /
 A E / W X on AZERTY = W A S D / Q E / Z X on QWERTY): forward/left/back/right, down/up, roll; ⇧ faster;
 right-drag turns the camera about its own axes with no gimbal limit. Near the wormhole the camera
 follows its geodesics, so it can cross the throat; it re-anchors to the nearest object and can go

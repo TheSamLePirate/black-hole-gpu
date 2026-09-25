@@ -2,6 +2,7 @@ import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, switchAnchor } from "./camera";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
+import { BODY_NAMES } from "./targeting";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -32,7 +33,7 @@ function sanitize(s: Settings): Settings {
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
-  "massSolar", "cinematicSpeed",
+  "massSolar", "cinematicSpeed", "rotation",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -61,6 +62,7 @@ async function main() {
     .then(() => touch())
     .catch((e) => console.warn("Real sky unavailable, using the procedural sky:", e));
   let guiDirty = false; // GUI widgets need refreshing (camera moved)
+  let previousTarget = settings.target; // (the panel's target choice is applied through the camera)
 
   const camera = new CameraController(canvas, settings, (mode) => {
     $("btn-orbit").classList.toggle("active", mode === "orbit");
@@ -68,6 +70,7 @@ async function main() {
     $("btn-journey").classList.toggle("active", mode === "journey");
     $("btn-fly").classList.toggle("active", camera.flyMode);
     $("btn-gravity").classList.toggle("active", camera.gravity);
+    syncRotationButtons();
     syncButtons();
     touch();
     guiDirty = true;
@@ -96,6 +99,13 @@ async function main() {
       settings.anchor = want === "hole" ? "wormhole" : "hole";
       switchAnchor(settings, want);
       camera.sync();
+      refreshGui();
+    }
+    if (keys.includes("rotation")) camera.setRotation(settings.rotation);
+    if (keys.includes("target")) {
+      const want = settings.target;
+      settings.target = previousTarget;
+      if (!camera.selectTarget(want)) panel.toast(`${BODY_NAMES[want]} is not in this universe`);
       refreshGui();
     }
     for (const k of keys) {
@@ -163,6 +173,8 @@ async function main() {
       refreshGui();
       touch();
     },
+    "btn-rotation": () => camera.setRotation(settings.rotation === "orbit" ? "free" : "orbit"),
+    "btn-target": () => camera.cycleTarget(1),
     "btn-journey": () => {
       camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
       refreshGui();
@@ -177,12 +189,26 @@ async function main() {
     "btn-render": () => renderDialog.toggle(),
   };
   for (const [id, fn] of Object.entries(actions)) $(id).addEventListener("click", fn);
+  function syncRotationButtons() {
+    const orbit = settings.rotation === "orbit";
+    const btn = $("btn-rotation");
+    btn.classList.toggle("free", !orbit);
+    btn.querySelector("span")!.textContent = orbit ? "Around" : "Free";
+    btn.title = orbit
+      ? "Rotation around the target: drag orbits it, the camera keeps it in view (R: switch to free)"
+      : "Free rotation: drag turns the camera about itself, right-drag rolls, wheel dollies (R: switch to around the target)";
+    const tb = $("btn-target");
+    tb.querySelector("span")!.textContent = BODY_NAMES[settings.target];
+    tb.dataset.body = settings.target;
+    previousTarget = settings.target;
+  }
   function syncButtons() {
     $("btn-play").classList.toggle("active", settings.animate);
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
     $("btn-jet").classList.toggle("active", settings.jet);
   }
   syncButtons();
+  syncRotationButtons();
 
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey || e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
@@ -192,8 +218,12 @@ async function main() {
       toggle("animate");
     } else if (k === "h") toggleUi();
     else if (k === "r") {
-      camera.resetView();
+      if (e.shiftKey) camera.resetView();
+      else actions["btn-rotation"]!();
       touch();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      camera.cycleTarget(e.shiftKey ? -1 : 1);
     } else if (k === "p") savePNG();
     else if (k === "f") fullscreen();
     else if (k === "o") actions["btn-orbit"]!();
@@ -323,7 +353,7 @@ async function main() {
       fpsAcc = 0;
       fpsN = 0;
     }
-    if (camera.update(dt)) {
+    if (camera.update(dt, simTime)) {
       changed = true;
       guiDirty = true;
     }
@@ -360,8 +390,10 @@ async function main() {
   function drawGuide() {
     const cam = cameraFrame(settings);
     const guide = settings.shadowGuide && cam.region === "hole";
-    const key = guide || camera.flyMode
-      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode].join()
+    const marker = targetMarker();
+    const hover = camera.hover;
+    const key = guide || camera.flyMode || marker || hover
+      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
@@ -369,6 +401,8 @@ async function main() {
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (key === "off") return;
     if (camera.flyMode) drawCrosshair(ctx);
+    if (marker) drawMarker(ctx, marker);
+    if (hover && hover.body !== marker?.body) drawHover(ctx, hover);
     if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const aspect = overlay.width / overlay.height;
@@ -398,6 +432,112 @@ async function main() {
     ctx.fillStyle = "rgba(90, 255, 160, 0.9)";
     ctx.font = `${11 * devicePixelRatio}px ui-monospace, Menlo, monospace`;
     ctx.fillText("critical curve (analytic)", 16 * devicePixelRatio, H - 16 * devicePixelRatio);
+  }
+
+  // ------------------------------------------------------------------ target marker
+  const BODY_COLOURS = { hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255" } as const;
+  /**
+   * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an
+   * arrow at the edge of the view when it is off-screen. Shown while the camera is handled, then fades.
+   */
+  function targetMarker() {
+    if (renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    const idle = (performance.now() - camera.activity) / 1000;
+    const alpha = idle < 1.6 ? 1 : Math.max(0, 1 - (idle - 1.6) / 0.8);
+    if (alpha <= 0) return null;
+    const info = camera.targetInfo();
+    if (!info) return null;
+    const W = overlay.width;
+    const H = overlay.height;
+    const tanH = Math.tan((settings.fov * Math.PI) / 360);
+    const { cam, look } = info;
+    const f = look[0] * cam.fwd[0] + look[1] * cam.fwd[1] + look[2] * cam.fwd[2];
+    const x = look[0] * cam.right[0] + look[1] * cam.right[1] + look[2] * cam.right[2];
+    const y = look[0] * cam.up[0] + look[1] * cam.up[1] + look[2] * cam.up[2];
+    let px = NaN;
+    let py = NaN;
+    let onScreen = false;
+    if (f > 1e-3) {
+      px = ((x / f / (tanH * (W / H)) + 1) / 2) * W;
+      py = ((1 - y / f / tanH) / 2) * H;
+      onScreen = px > 0 && px < W && py > 0 && py < H;
+    }
+    const radius = Math.max(14 * devicePixelRatio, (Math.tan(info.ang) / tanH) * (H / 2) * 1.25);
+    const riding = info.body === "star" ? camera.riding : 0;
+    const label = `${settings.rotation === "orbit" ? "↻ " : ""}${info.name.toUpperCase()} · ${info.dist < 1e4 ? info.dist.toFixed(info.dist < 10 ? 2 : 1) : "∞"} M${riding > 0.5 ? " · co-moving" : ""}`;
+    const dir = Math.atan2(-y, x); // screen direction of the target (off-screen arrow)
+    return {
+      body: info.body, px, py, radius, onScreen, dir, alpha, label,
+      key: [info.body, px.toFixed(1), py.toFixed(1), radius.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join(),
+    };
+  }
+
+  function drawMarker(ctx: CanvasRenderingContext2D, m: NonNullable<ReturnType<typeof targetMarker>>) {
+    const k = devicePixelRatio;
+    const c = BODY_COLOURS[m.body];
+    ctx.save();
+    ctx.globalAlpha = m.alpha;
+    ctx.strokeStyle = `rgba(${c}, 0.9)`;
+    ctx.fillStyle = `rgba(${c}, 0.95)`;
+    ctx.lineWidth = 1.4 * k;
+    ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 4 * k;
+    if (m.onScreen) {
+      const r = m.radius;
+      const l = Math.min(r * 0.45, 12 * k);
+      ctx.beginPath();
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+        ctx.moveTo(m.px + sx * r, m.py + sy * (r - l));
+        ctx.lineTo(m.px + sx * r, m.py + sy * r);
+        ctx.lineTo(m.px + sx * (r - l), m.py + sy * r);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(m.px, m.py, 1.6 * k, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.textAlign = "center";
+      ctx.fillText(m.label, m.px, Math.min(m.py + r + 15 * k, overlay.height - 8 * k));
+    } else {
+      // arrow on an ellipse inset from the edges, pointing at the target
+      const W = overlay.width;
+      const H = overlay.height;
+      const ax = W / 2 + Math.cos(m.dir) * (W / 2 - 36 * k);
+      const ay = H / 2 + Math.sin(m.dir) * (H / 2 - 36 * k);
+      ctx.translate(ax, ay);
+      ctx.rotate(m.dir);
+      ctx.beginPath();
+      ctx.moveTo(12 * k, 0);
+      ctx.lineTo(-6 * k, -8 * k);
+      ctx.lineTo(-2 * k, 0);
+      ctx.lineTo(-6 * k, 8 * k);
+      ctx.closePath();
+      ctx.fill();
+      ctx.rotate(-m.dir);
+      ctx.textAlign = Math.cos(m.dir) > 0.3 ? "right" : Math.cos(m.dir) < -0.3 ? "left" : "center";
+      const tx = Math.cos(m.dir) > 0.3 ? -16 * k : Math.cos(m.dir) < -0.3 ? 16 * k : 0;
+      const ty = Math.sin(m.dir) > 0.3 ? -16 * k : 20 * k;
+      ctx.fillText(m.label, tx, ty);
+    }
+    ctx.restore();
+  }
+
+  /** Name of the body under the pointer (click: select, double-click: fly to it). */
+  function drawHover(ctx: CanvasRenderingContext2D, h: NonNullable<typeof camera.hover>) {
+    const k = devicePixelRatio;
+    const c = BODY_COLOURS[h.body];
+    ctx.save();
+    ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillStyle = `rgba(${c}, 0.95)`;
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 4 * k;
+    ctx.textAlign = "left";
+    const hint = h.body === settings.target ? "double-click: fly to" : "click: target";
+    ctx.fillText(`${BODY_NAMES[h.body]}`, (h.x + 14) * k, (h.y + 22) * k);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = `${9.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillText(hint, (h.x + 14) * k, (h.y + 35) * k);
+    ctx.restore();
   }
 
   /** Camera position for the HUD: distance to the hole, or ℓ through the wormhole. */
@@ -434,6 +574,8 @@ async function main() {
           : `<b class="ok">CONVERGED</b> ${settings.targetSpp} spp`;
     let cin = camera.cinematic ? ` · <b class="cin">${camera.cinematic.toUpperCase()}</b>` : "";
     if (camera.flyMode) cin += ` · <b class="cin">FLY ×${camera.flySpeed.toFixed(2)}</b>`;
+    else cin += settings.rotation === "orbit" ? ` · ↻ ${BODY_NAMES[settings.target]}` : " · free look";
+    if (camera.riding > 0.01) cin += ` · co-moving β = ${Math.abs(settings.velP).toFixed(3)} c`;
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
       cin += ` · <b class="cin">GRAVITY</b> v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M${settings.animate ? "" : " (time paused)"}`;

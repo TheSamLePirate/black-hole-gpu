@@ -247,6 +247,25 @@ h1 {
   stroke: none;
 }
 
+/* rotation mode: one icon per mode; the target chip is tinted by its body */
+#btn-rotation .ic-free,
+#btn-rotation.free .ic-around {
+  display: none;
+}
+#btn-rotation.free .ic-free {
+  display: block;
+}
+#btn-rotation,
+#btn-target {
+  color: var(--text);
+}
+#btn-target {
+  min-width: 64px;
+}
+#btn-target[data-body="hole"] svg { color: #ffb35c; }
+#btn-target[data-body="star"] svg { color: #ffd98a; }
+#btn-target[data-body="wormhole"] svg { color: #9fb8ff; }
+
 #toolbar .sep {
   width: 1px;
   height: 28px;

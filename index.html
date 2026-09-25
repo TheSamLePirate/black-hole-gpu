@@ -37,7 +37,9 @@
     <div id="panel"></div>
 
     <nav id="toolbar" class="glass">
-      <button id="btn-orbit" title="Cinematic orbit (O)"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4.2" /><circle cx="12" cy="12" r="2.6" class="fill" /></svg><span>Orbit</span></button>
+      <button id="btn-rotation" title="Rotation mode (R)"><svg viewBox="0 0 24 24" class="ic-around"><circle cx="12" cy="12" r="2.4" class="fill" /><path d="M4.5 9.5a8.5 8.5 0 0 1 15-1.5" /><path d="M19.5 14.5a8.5 8.5 0 0 1-15 1.5" /><path d="M19.8 4.6l-.3 3.4-3.4-.4M4.2 19.4l.3-3.4 3.4.4" /></svg><svg viewBox="0 0 24 24" class="ic-free"><circle cx="12" cy="12" r="3" /><path d="M12 2v5M12 17v5M2 12h5M17 12h5" /><path d="M10 4l2-2 2 2M10 20l2 2 2-2M4 10l-2 2 2 2M20 10l2 2-2 2" /></svg><span>Around</span></button>
+      <button id="btn-target" title="Target: the body orbited and tracked — click its image to select, Tab cycles, double-click to fly to it"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle cx="12" cy="12" r="3.2" class="fill" /></svg><span>Gargantua</span></button>
+      <button id="btn-orbit" title="Auto-orbit around the target (O)"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4.2" /><circle cx="12" cy="12" r="2.6" class="fill" /></svg><span>Auto</span></button>
       <button id="btn-dive" title="Free-fall dive to the horizon (C)"><svg viewBox="0 0 24 24"><path d="M12 3v14" /><path d="M6.5 12.5 12 18l5.5-5.5" /><path d="M5 21h14" /></svg><span>Dive</span></button>
       <button id="btn-fly" title="Game-style flight: mouse turns, Z Q S D / A E move, W X roll, wheel = speed, Esc to leave (V)"><svg viewBox="0 0 24 24"><path d="M12 3l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z" /></svg><span>Fly</span></button>
       <button id="btn-gravity" title="Gravity: the camera falls freely along its Kerr geodesic while time runs; the flight keys thrust (B)"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3" class="fill" /><path d="M12 13v8M8 17l4 4 4-4" /></svg><span>Gravity</span></button>
@@ -108,8 +110,8 @@
     </section>
 
     <div id="help">
-      drag orbit · right/shift-drag look · wheel zoom · alt+wheel FOV · pinch zoom · double-click recentre ·
-      V fly (mouse look) · B gravity · ZQSD/AE move or thrust · WX roll · arrows/± orbit · O orbit · C dive · T journey · J jet · G guide · M settings · / search · 1–5 quality · space time · H hide
+      R rotation around / free · click a body: target · double-click: fly to it · Tab next target · drag orbit (free: look) · right-drag offset (free: roll) · wheel distance (free: dolly) · alt+wheel FOV ·
+      V fly (mouse look) · B gravity · ZQSD/AE move or thrust · WX roll · arrows/± orbit · O auto-orbit · C dive · T journey · J jet · G guide · M settings · / search · 1–5 quality · space time · H hide
     </div>
 
     <div id="error" hidden></div>
