@@ -62,6 +62,8 @@ export interface Settings {
   // time
   animate: boolean;
   timeSpeed: number; // M per second
+  returningRadiation: boolean; // disk self-irradiation (quality passes)
+  diskAlbedo: number;
   // polarization (Walker–Penrose transport of the electric vector)
   polarization: boolean;
   polView: "ticks" | "intensity";
@@ -136,6 +138,8 @@ export function defaultSettings(): Settings {
     skyRoll: 35,
     animate: true,
     timeSpeed: 6,
+    returningRadiation: true,
+    diskAlbedo: 0.5,
     polarization: false,
     polView: "ticks",
     polField: "spiral",

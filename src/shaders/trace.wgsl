@@ -37,6 +37,7 @@ struct Params {
   skyY: vec4f,     // w = real sky loaded (0/1)
   skyZ: vec4f,
   pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
+  ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -484,6 +485,61 @@ fn shadeDisk(s: GState, L: f32, E0: f32, tNow: f32) -> DiskHit {
   hit.g = g;
   hit.T = T;
   return hit;
+}
+
+// Returning radiation (Cunningham 1976): light emitted by the disk that the hole bends back onto
+// the disk. At a disk hit, one incoming direction is drawn from a cosine distribution about the
+// surface normal in the gas frame (Monte Carlo estimate of the Lambertian integral); the photon
+// that arrives from it is traced back (no recursion: a second, simpler march) to the disk element
+// that emitted it. That light is a blackbody at g₁₂T₂ in the local gas frame (g₁₂ from the two
+// emitters' energies) and is re-emitted with albedo A, then seen by the camera at g·g₁₂T₂.
+// Only compiled into the quality pipeline.
+fn returningRadiation(m: GState, side: f32, g1: f32, tNow: f32, u: vec2f) -> vec3f {
+  let a = P.bh.x;
+  let rH = P.bh.y;
+  let r = m.x.x;
+  let mt = kerrMetric(r, PI * 0.5, a);
+  let alpha = sqrt(max(mt.sig * mt.del / mt.A, 1e-12));
+  let omega = 2.0 * a * r / mt.A;
+  let varpi = sqrt(mt.A / mt.sig);
+  let v = clamp(varpi * (1.0 / (pow(r, 1.5) + a) - omega) / alpha, -0.99, 0.99);
+  let gam = inverseSqrt(1.0 - v * v);
+  // incoming direction nIn (r̂, θ̂, φ̂) on the observer's side; θ̂ points to −z at the equator
+  let N = vec3f(0.0, -side, 0.0);
+  let ph = TAU * u.y;
+  let nIn = sqrt(1.0 - u.x) * N + sqrt(u.x) * vec3f(cos(ph), 0.0, sin(ph));
+  // the photon travels along −nIn with unit energy in the gas frame → ZAMO frame → BL, E = 1 units
+  let kp = -nIn;
+  let Ez = gam * (1.0 + v * kp.z);
+  let kz = vec3f(kp.x, kp.y, gam * (kp.z + v));
+  let E = alpha * Ez + omega * varpi * kz.z;
+  if (E <= 1e-6) { return vec3f(0.0); }
+  var s: GState;
+  s.x = m.x;
+  s.p = vec2f(sqrt(mt.sig / max(mt.del, 1e-9)) * kz.x / E, sqrt(mt.sig) * kz.y / E);
+  let L = varpi * kz.z / E;
+  let rIn = P.bh.z;
+  let rOut = P.bh.w;
+  let rEsc = P.integ.z;
+  let maxSteps = u32(P.ret.z);
+  let eps = P.integ.x * 3.0;
+  for (var i = 0u; i < maxSteps; i++) {
+    let h = stepSize(s, L, a, eps, rH);
+    let n = wrapPole(rk4(s, L, a, -h));
+    if (i > 0u && cos(s.x.y) * cos(n.x.y) < 0.0 && n.x.y == n.x.y) {
+      let m2 = equatorCrossing(s, n, geodesicRHS(s.x, s.p, L, a), geodesicRHS(n.x, n.p, L, a), L, a, h);
+      let rc = m2.x.x;
+      if (rc >= rIn && rc <= rOut) {
+        let hit = shadeDisk(m2, L, E, tNow); // blackbody at g₁₂T₂ in the frame of gas 1
+        return hit.color * shiftRatio(max(hit.T * hit.g, 100.0), g1);
+      }
+    }
+    let rn = n.x.x;
+    if (rn < rH + P.integ.w || isNan(rn)) { return vec3f(0.0); }
+    if (rn > rEsc && rn > s.x.x) { return vec3f(0.0); } // the sky's light is negligible
+    s = n;
+  }
+  return vec3f(0.0);
 }
 
 // Volumetric Novikov–Thorne disk: Gaussian vertical profile of scale height H = (H/R)·R with
@@ -1137,6 +1193,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         if (rc >= rIn && rc <= rOut) {
           let hit = shadeDisk(m, L, E0, tNow);
           col += trans * hit.color;
+          if (QUALITY_PIPELINE && P.ret.x > 0.5 && P.misc.y < 0.5 && P.modes.y == SHIFT_FULL) {
+            let u = hash4(vec3u(bitcast<u32>(ndc.x), bitcast<u32>(ndc.y), bitcast<u32>(rnd) + crossings)).xy;
+            let back = returningRadiation(m, sign(cos(s.x.y)), hit.g, tNow, u);
+            col += trans * (1.0 - hit.trans) * P.ret.y * back;
+          }
           if (polOn) {
             // electron-scattering atmosphere: E-vector parallel to the disk surface (⟂ normal and k)
             let mt = kerrMetric(rc, PI * 0.5, a);

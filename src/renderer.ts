@@ -25,7 +25,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 26;
+const PARAM_VEC4S = 27;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
 const STAR_FLUX_SCALE = 1 / 4250;
@@ -637,6 +637,7 @@ export class Renderer {
     set(23, ...sky[1], this.skyReady ? 1 : 0);
     set(24, ...sky[2], 0);
     set(25, s.polarization ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
+    set(26, s.returningRadiation ? 1 : 0, s.diskAlbedo, 3000, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

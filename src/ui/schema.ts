@@ -157,6 +157,16 @@ export const SCHEMA: ControlDef[] = [
     help: "Chandrasekhar electron-scattering atmosphere I ∝ 1 + 2.06 μ, with the emission angle measured in the fluid frame (thin disk).",
   },
   {
+    key: "returningRadiation", type: "toggle", section: "matter", group: "Accretion disk", label: "Returning radiation", enabled: (s) => s.disk && s.diskThickness === 0,
+    help: "Disk light bent back onto the disk by the hole (Cunningham 1976), traced with one extra geodesic per disk hit and re-emitted with the albedo below: brightens the inner disk and the far side, strongest at high spin. Computed in the converged and offline passes (thin disk).",
+    keywords: "self irradiation reflection bounce path tracing cunningham",
+  },
+  {
+    key: "diskAlbedo", type: "number", section: "matter", group: "Accretion disk", label: "Albedo", min: 0, max: 1, step: 0.01,
+    enabled: (s) => s.disk && s.returningRadiation && s.diskThickness === 0,
+    help: "Fraction of the returning radiation scattered back (grey, Lambertian in the gas frame); the rest is absorbed.",
+  },
+  {
     key: "diskEmission", type: "choice", section: "matter", group: "Accretion disk", label: "Brightness", style: "segmented", enabled: diskOn,
     options: [
       { value: "visible", label: "Visible (CIE)", hint: "Planck spectrum integrated against the eye's colour matching functions" },
