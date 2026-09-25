@@ -65,7 +65,7 @@ export class CameraController {
   /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
   private flyVel: Vec3 = [0, 0, 0];
   /** Last free-fall prediction for the overlay. */
-  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues"; at: number } | null = null;
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole"; at: number } | null = null;
   private pathKey = "";
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
   properTime = 0;
@@ -514,8 +514,27 @@ export class CameraController {
     const cam = cameraFrame(s);
     if (cam.region !== "hole") return (this.path = null);
     const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin);
-    // about one orbital period ahead (2π r^1.5), so that bound orbits show a full turn
-    const p = predict(st, s.spin, clamp(1.1 * 2 * Math.PI * cam.r ** 1.5, 300, 30000), 360);
+    // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
+    // coming back past the camera (a segment that close would sweep across the whole view)
+    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" } = predict(st, s.spin, clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000), 480);
+    // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
+    let turned = 0;
+    for (let i = 1; i < p.pts.length; i++) {
+      const u = p.pts[i - 1]!, v = p.pts[i]!;
+      const c = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (Math.hypot(...u) * Math.hypot(...v));
+      turned += Math.acos(Math.min(1, Math.max(-1, c)));
+      if (turned > 0.95 * 2 * Math.PI) {
+        p.pts = p.pts.slice(0, i);
+        p.fate = "continues";
+        break;
+      }
+    }
+    if (s.wormhole) {
+      // the Kerr prediction stops where the path enters the far mouth (beyond: the other universe)
+      const m = mouth(s);
+      const i = p.pts.findIndex((q) => Math.hypot(q[0] - m.C[0], q[1] - m.C[1], q[2] - m.C[2]) < m.rGlue);
+      if (i >= 0) p.pts = p.pts.slice(0, Math.max(i + 1, 2)), p.fate = "wormhole";
+    }
     this.path = { ...p, at: now };
     return this.path;
   }

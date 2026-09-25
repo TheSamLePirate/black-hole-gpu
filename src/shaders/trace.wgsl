@@ -1744,6 +1744,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         let ts = sphereHit(q0, q1, starCentre(tNow + n.x.w), P.star.z);
         if (ts >= 0.0 && pg.w > ts) { behindDisk = true; }
       }
+      // the wormhole's mouth: beyond its gluing sphere the ray goes through the throat
+      if (whOn) {
+        let tg = glueHit(q0, q1);
+        if (tg >= 0.0 && pg.w > tg) { behindDisk = true; }
+      }
       if (!behindDisk) { col += trans * tubeVis * pg.rgb; }
       rayLen += length(q1 - q0);
     }
