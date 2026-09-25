@@ -51,6 +51,7 @@ struct Params {
   whZ: vec4f,
   star: vec4f,     // companion star on (0/1), orbital radius [M], radius [M], temperature [K]
   star2: vec4f,    // brightness, azimuth at t = 0 [rad], unused, unused
+  path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -75,6 +76,8 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 // Star catalogue: [magic, grid, count, 0, cellStart[6·grid² + 1], stars (x, y, z, mag|T packed)]
 @group(0) @binding(10) var<storage, read> catalogue: array<u32>;
 @group(0) @binding(11) var<storage, read_write> polAcc: array<vec2f>; // Σ Stokes Q, U (luminance)
+// camera path: 256 points (xyz, fraction along the path), then bounding spheres of chunks of 16 segments
+@group(0) @binding(13) var<storage, read> pathPts: array<vec4f>;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -396,6 +399,65 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
 // Hot spot: a Gaussian blob on a circular Keplerian orbit (a flare, cf. GRAVITY's Sgr A* flares),
 // positioned at the retarded time t_em = t_now + Δt along the ray, so every image of it (primary,
 // secondary, photon ring) shows it where it was when that light left it.
+// ---------------------------------------------------------------------------------------------
+// The camera's predicted free fall, drawn as a thin glowing dashed tube around the polyline of the
+// path. Tested against each step of the (curved, backward) ray, so it is lensed like everything else:
+// behind the hole it shows its Einstein arcs and secondary images. Its radius grows with the distance
+// travelled by the ray (constant apparent width, ~2 px); the emission of a crossing is the length of
+// the chord inside the tube over its diameter (a soft profile). Not a physical emitter: no shifts.
+// ---------------------------------------------------------------------------------------------
+const PATH_MAX = 256u;
+const PATH_CHUNK = 16u;
+
+fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec3f {
+  let n = u32(P.path.x);
+  var col = vec3f(0.0);
+  let dv = p1 - p0;
+  let len = length(dv);
+  if (len < 1e-6) { return col; }
+  let R = max(P.path.y * (rayLen + 0.5 * len), 0.004);
+  for (var c = 0u; c * PATH_CHUNK < n - 1u; c++) {
+    // chord vs the chunk's bounding sphere (+ tube radius)
+    let sph = pathPts[PATH_MAX + c];
+    let w = sph.xyz - p0;
+    let u = clamp(dot(w, dv) / (len * len), 0.0, 1.0);
+    let dc = length(w - u * dv);
+    if (dc > sph.w + R) { continue; }
+    let i0 = c * PATH_CHUNK;
+    let i1 = min(n - 1u, i0 + PATH_CHUNK);
+    for (var i = i0; i < i1; i++) {
+      let a = pathPts[i];
+      let b = pathPts[i + 1u];
+      let e = b.xyz - a.xyz;
+      let L = length(e);
+      if (L < 1e-6) { continue; }
+      let eh = e / L;
+      // distance to the segment's line, projected across it: |q0 + u qd|² = R²
+      let w0 = p0 - a.xyz;
+      let q0 = w0 - dot(w0, eh) * eh;
+      let qd = dv - dot(dv, eh) * eh;
+      let A = dot(qd, qd);
+      if (A < 1e-12) { continue; }
+      let B = dot(q0, qd);
+      let C = dot(q0, q0) - R * R;
+      let disc = B * B - A * C;
+      if (disc <= 0.0) { continue; }
+      let sq = sqrt(disc);
+      let u1 = max((-B - sq) / A, 0.0);
+      let u2 = min((-B + sq) / A, 1.0);
+      if (u2 <= u1) { continue; }
+      let along = dot(w0 + 0.5 * (u1 + u2) * dv, eh);
+      if (along < 0.0 || along > L) { continue; }
+      let t = mix(a.w, b.w, along / L); // fraction along the path
+      let dash = select(0.25, 1.0, fract(t * 48.0) < 0.62);
+      var tint = vec3f(0.25, 0.85, 1.4);
+      if (P.path.z > 0.5 && P.path.z < 1.5) { tint = mix(tint, vec3f(1.6, 0.25, 0.15), smoothstep(0.8, 1.0, t)); }
+      col += tint * dash * min((u2 - u1) * len / (2.0 * R), 1.0) * 0.9;
+    }
+  }
+  return col;
+}
+
 // Companion star: an opaque sphere on a circular equatorial orbit (Keplerian Ω), evaluated at the
 // emission time. Its photosphere is a limb-darkened blackbody with granulation; the frequency shift
 // uses the orbital motion of its centre (rigid rotation Ω around the hole) at the point hit.
@@ -1583,6 +1645,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var skyDir = vec3f(0.0);
   var skyG = 1.0;
   var skyId = SKY_NATIVE;
+  var rayLen = 0.0; // distance travelled by the ray (flat map), for the camera path's tube radius
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
   let polOn = P.pol.x > 0.5;
@@ -1654,6 +1717,13 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       n = wrapPole(ns);
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
+    }
+
+    if (P.path.x > 1.5) {
+      let q0 = blCart(s.x);
+      let q1 = blCart(n.x);
+      col += trans * pathGlow(q0, q1, rayLen);
+      rayLen += length(q1 - q0);
     }
 
     if (P.star.x > 0.5) {
@@ -1863,6 +1933,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         eloc = E0 / sqrt(max(1.0 - 2.0 / length(X), 1e-3)); // weak field: static observer there
         seg = 1u;
         continue;
+      }
+    }
+    if (P.path.x > 1.5) {
+      // the rest of the (straight) way out, in chords of growing length
+      var q = x;
+      var dl = max(r, 10.0);
+      for (var k = 0u; k < 8u; k++) {
+        col += trans * pathGlow(q, q + dir * dl, rayLen);
+        q += dir * dl;
+        rayLen += dl;
+        dl *= 2.0;
       }
     }
     skyDir = dir;

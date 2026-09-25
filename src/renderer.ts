@@ -26,7 +26,10 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 40;
+const PARAM_VEC4S = 41;
+/** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
+const PATH_MAX = 256;
+const PATH_CHUNK = 16;
 const BANDS = { visible: 0, "230GHz": 1, multi: 2 } as const;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
@@ -185,6 +188,10 @@ export class Renderer {
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
   private catalogue: GPUBuffer;
+  private pathBuf!: GPUBuffer;
+  private pathCount = 0;
+  private pathFate = 0;
+  private pathKey: unknown = null;
   private skyBuilder: SkyTextureBuilder;
   private skyReady = false;
   private sampler: GPUSampler;
@@ -248,6 +255,7 @@ export class Renderer {
         { binding: 9, visibility: C, texture: { sampleType: "float" } },
         { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 11, visibility: C, buffer: { type: "storage" } },
+        { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -279,6 +287,7 @@ export class Renderer {
     this.postAtrous = mkPost("atrous");
     this.postBeamV = mkPost("beamV");
 
+    this.pathBuf = device.createBuffer({ size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 112, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
@@ -394,6 +403,41 @@ export class Renderer {
     return { width: this.live?.width ?? 0, height: this.live?.height ?? 0 };
   }
 
+  /**
+   * The camera's predicted free fall (black-hole frame, flat map of BL coordinates), drawn by the
+   * tracer as a thin glowing dashed tube so that it is lensed like the rest of the scene. Points are
+   * resampled to ≤ 256; w = fraction along the path (dashes, colour towards the end).
+   */
+  setCameraPath(path: { pts: [number, number, number][]; fate: string; at: number } | null) {
+    if (path === this.pathKey) return false;
+    this.pathKey = path;
+    if (!path || path.pts.length < 2) {
+      const changed = this.pathCount !== 0;
+      this.pathCount = 0;
+      return changed;
+    }
+    const n = Math.min(PATH_MAX, path.pts.length);
+    const data = new Float32Array((PATH_MAX + PATH_MAX / PATH_CHUNK) * 4);
+    for (let i = 0; i < n; i++) {
+      const src = path.pts[Math.round((i * (path.pts.length - 1)) / (n - 1))]!;
+      data.set([src[0], src[1], src[2], i / (n - 1)], i * 4);
+    }
+    // bounding sphere of each chunk of segments [16k, 16k + 16]
+    for (let c = 0; c * PATH_CHUNK < n - 1; c++) {
+      const i0 = c * PATH_CHUNK;
+      const i1 = Math.min(n - 1, i0 + PATH_CHUNK);
+      const ctr = [0, 0, 0];
+      for (let i = i0; i <= i1; i++) for (let k = 0; k < 3; k++) ctr[k]! += data[i * 4 + k]! / (i1 - i0 + 1);
+      let rad = 0;
+      for (let i = i0; i <= i1; i++) rad = Math.max(rad, Math.hypot(data[i * 4]! - ctr[0]!, data[i * 4 + 1]! - ctr[1]!, data[i * 4 + 2]! - ctr[2]!));
+      data.set([ctr[0]!, ctr[1]!, ctr[2]!, rad], (PATH_MAX + c) * 4);
+    }
+    this.device.queue.writeBuffer(this.pathBuf, 0, data);
+    this.pathCount = n;
+    this.pathFate = path.fate === "horizon" ? 1 : path.fate === "escape" ? 2 : 0;
+    return true;
+  }
+
   /** Largest offline render the device can hold (accumulation buffer + texture limits). */
   get maxRender() {
     const l = this.device.limits;
@@ -499,6 +543,7 @@ export class Renderer {
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
         { binding: 11, resource: { buffer: t.polAcc } },
+        { binding: 13, resource: { buffer: this.pathBuf } },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -720,6 +765,8 @@ export class Renderer {
     set(37, ...m.ez, 0);
     set(38, s.sun ? 1 : 0, Math.max(s.sunOrbit, horizon(a) + s.sunRadius + 1), s.sunRadius, s.sunTemp);
     set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, 0, 0);
+    // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
+    set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

@@ -157,7 +157,9 @@ by the scene's coordinate time so the camera, the flow and the star share one cl
 w.r.t. the local ZAMO; the flight keys fire thrusters (proper acceleration, setting "Thrust"). The view is
 that of the moving observer (aberration, Doppler), its orientation is kept fixed on the stars (gyroscope),
 and near the wormhole — whose metric has no gravity — it coasts along the Dneg geodesics. The predicted
-free-fall path is drawn as a dashed line (straight lines of sight, not lensed; red end = horizon). Tests:
+free-fall path (about one orbital period, no thrust) is drawn **by the ray tracer** as a glowing dashed
+tube tested against every step of every ray, so it is lensed like the rest of the scene: an orbit's far
+half becomes an Einstein ring around the shadow, a plunge wraps around it (red end = horizon). Tests:
 circular orbits keep their radius and Keplerian period, u·u = −1, and the proper time of a radial fall
 matches the cycloid solution. **T** runs the
 journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from

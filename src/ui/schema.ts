@@ -143,7 +143,7 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "showGeodesic", type: "toggle", section: "scene", group: "Flight & gravity", label: "Show free-fall path", effect: "none",
-    help: "With gravity on, draws the camera's predicted geodesic (no thrust) as a dashed line: red end = it falls into the horizon. Projected along straight lines of sight (not lensed).",
+    help: "With gravity on, the camera's predicted geodesic (no thrust, about one orbital period ahead) is drawn in the render as a glowing dashed tube, lensed like everything else (Einstein arcs behind the hole). Red end: it falls into the horizon.",
     keywords: "trajectory orbit geodesic path prediction",
   },
   // ------------------------------------------------------------------ scene · wormhole

@@ -66,6 +66,7 @@ export class CameraController {
   private flyVel: Vec3 = [0, 0, 0];
   /** Last free-fall prediction for the overlay. */
   path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues"; at: number } | null = null;
+  private pathKey = "";
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
   properTime = 0;
   private journey: { t: number; dir: "out" | "back"; start: Pick<Settings, PoseKeys> } | null = null;
@@ -505,8 +506,11 @@ export class CameraController {
   predictPath() {
     const now = performance.now();
     if (!this.gravity) return (this.path = null);
-    if (this.path && now - this.path.at < 250) return this.path;
     const s = this.s;
+    // same state (e.g. time paused): same path object, so the renderer keeps converging
+    const key = [s.spin, s.anchor, s.distance, s.inclination, s.azimuth, s.whL, s.velR, s.velT, s.velP, s.wormhole, s.whDist, s.whIncl, s.whAzimuth].join();
+    if (this.path && (key === this.pathKey || now - this.path.at < 250)) return this.path;
+    this.pathKey = key;
     const cam = cameraFrame(s);
     if (cam.region !== "hole") return (this.path = null);
     const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin);

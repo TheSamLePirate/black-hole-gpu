@@ -331,6 +331,8 @@ async function main() {
       simTime += dt * settings.timeSpeed;
       timeDirty = true;
     }
+    // the camera's predicted free fall, drawn (lensed) by the tracer
+    if (renderer.setCameraPath(settings.showGeodesic && camera.gravity ? camera.predictPath() : null)) changed = true;
     const st = renderer.frame(settings, simTime, changed, timeDirty, displayChanged);
     if (st) {
       fpsN++;
@@ -357,10 +359,9 @@ async function main() {
   // -------------------------------------------------------------------- overlays
   function drawGuide() {
     const cam = cameraFrame(settings);
-    const path = settings.showGeodesic ? camera.predictPath() : null;
     const guide = settings.shadowGuide && cam.region === "hole";
-    const key = guide || path || camera.flyMode
-      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, path?.at, camera.flyMode].join()
+    const key = guide || camera.flyMode
+      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
@@ -368,7 +369,6 @@ async function main() {
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (key === "off") return;
     if (camera.flyMode) drawCrosshair(ctx);
-    if (path && cam.region === "hole") drawPath(ctx, cam, path);
     if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const aspect = overlay.width / overlay.height;
@@ -419,58 +419,6 @@ async function main() {
       ctx.lineTo(x + dx! * 12 * k, y + dy! * 12 * k);
     }
     ctx.stroke();
-  }
-
-  /**
-   * The camera's predicted free fall, projected along straight lines of sight (a HUD, not lensed):
-   * points of the black hole's frame → camera axes (ZAMO frame, flat far-field map).
-   */
-  function drawPath(ctx: CanvasRenderingContext2D, cam: ReturnType<typeof cameraFrame>, path: NonNullable<typeof camera.path>) {
-    const st = Math.sin(cam.theta), ct = Math.cos(cam.theta), sp = Math.sin(cam.phi), cp = Math.cos(cam.phi);
-    const er = [st * cp, st * sp, ct], et = [ct * cp, ct * sp, -st], ep = [-sp, cp, 0];
-    const world = (v: number[]) => [0, 1, 2].map((i) => er[i]! * v[0]! + et[i]! * v[1]! + ep[i]! * v[2]!);
-    const fwd = world(cam.fwd), right = world(cam.right), up = world(cam.up);
-    const X = [cam.r * er[0]!, cam.r * er[1]!, cam.r * er[2]!];
-    const tanH = Math.tan((settings.fov * Math.PI) / 360);
-    const W = overlay.width;
-    const H = overlay.height;
-    const aspect = W / H;
-    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
-    ctx.save();
-    ctx.lineWidth = Math.max(1.5, devicePixelRatio * 1.6);
-    ctx.setLineDash([8 * devicePixelRatio, 5 * devicePixelRatio]);
-    ctx.strokeStyle = "rgba(90, 220, 255, 0.9)";
-    ctx.beginPath();
-    let pen = false;
-    let last: [number, number] | null = null;
-    for (const p of path.pts) {
-      const d = [p[0] - X[0]!, p[1] - X[1]!, p[2] - X[2]!];
-      const z = dot(d, fwd);
-      if (z < 0.05) {
-        pen = false;
-        continue;
-      }
-      const sx = ((dot(d, right) / (z * tanH * aspect)) + 1) / 2 * W;
-      const sy = (1 - dot(d, up) / (z * tanH)) / 2 * H;
-      if (pen) ctx.lineTo(sx, sy);
-      else ctx.moveTo(sx, sy);
-      pen = true;
-      last = [sx, sy];
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.font = `${11 * devicePixelRatio}px ui-monospace, Menlo, monospace`;
-    if (last) {
-      ctx.fillStyle = path.fate === "horizon" ? "rgba(255, 90, 70, 0.95)" : "rgba(90, 220, 255, 0.95)";
-      ctx.beginPath();
-      ctx.arc(last[0], last[1], 4 * devicePixelRatio, 0, Math.PI * 2);
-      ctx.fill();
-      const label = path.fate === "horizon" ? "horizon" : path.fate === "escape" ? "escape" : "";
-      if (label) ctx.fillText(label, last[0] + 8 * devicePixelRatio, last[1] - 6 * devicePixelRatio);
-    }
-    ctx.fillStyle = "rgba(90, 220, 255, 0.9)";
-    ctx.fillText("free-fall path (geodesic, not lensed)", 16 * devicePixelRatio, H - 34 * devicePixelRatio);
-    ctx.restore();
   }
 
   const statsEl = $("stats");
