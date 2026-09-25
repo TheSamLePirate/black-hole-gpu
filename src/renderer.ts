@@ -35,6 +35,8 @@ const STAR_FLUX_SCALE = 1 / 4250;
 const FLAG_ADAPTIVE_RK = 1;
 const FLAG_ADAPTIVE_SPP = 2;
 const FLAG_TEMPORAL = 4;
+/** Realtime: samples older than this much simulated time [M] are not shown while time runs. */
+const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
 
 /**
@@ -122,6 +124,7 @@ interface Target {
   accum: GPUBuffer;
   moments: GPUBuffer;
   stamps: GPUBuffer;
+  gather: GPUBuffer;
   hdr: GPUTexture;
   bloomTex: GPUTexture;
   bloomLevels: number;
@@ -164,6 +167,7 @@ export class Renderer {
   private export8Pipeline: GPURenderPipeline;
   private export16Pipeline: GPURenderPipeline;
   private postResolve: GPUComputePipeline;
+  private postGatherH: GPUComputePipeline;
   private postDown: GPUComputePipeline;
   private postUp: GPUComputePipeline;
   private postPolGrid: GPUComputePipeline;
@@ -193,6 +197,10 @@ export class Renderer {
   // live view state
   private frameStamp = 0;
   private epoch = 1;
+  /** Oldest frame whose samples may still be shown (≥ epoch): while time runs, older samples are
+   *  of a different moment of the flow and would smear it. */
+  private validFrom = 1;
+  private frameTimes: { stamp: number; time: number }[] = [];
   private sampleIndex = 0;
   private bandY = 0;
   private bandRows = 64;
@@ -262,6 +270,7 @@ export class Renderer {
     const mkPost = (entryPoint: string) =>
       device.createComputePipeline({ layout: "auto", compute: { module: postModule, entryPoint } });
     this.postResolve = mkPost("resolve");
+    this.postGatherH = mkPost("gatherH");
     this.postDown = mkPost("down");
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
@@ -393,15 +402,29 @@ export class Renderer {
     };
   }
 
+  /**
+   * Realtime frames keep the samples of the last MAX_SAMPLE_AGE M of simulated time only: each pixel
+   * is refreshed once every block² frames, so with time running older samples would show the disk
+   * where it was up to seconds ago (smeared rotation). Still time: everything since the epoch.
+   */
+  private updateValidFrom(time: number) {
+    const ft = this.frameTimes;
+    ft.push({ stamp: this.frameStamp, time });
+    while (ft.length > 1 && (ft[0]!.stamp < this.epoch || Math.abs(time - ft[0]!.time) > MAX_SAMPLE_AGE)) ft.shift();
+    this.validFrom = Math.max(this.epoch, ft[0]!.stamp);
+  }
+
   /** Scene changed: previous samples of the live view become stale. */
   invalidate() {
+    this.frameTimes.length = 0;
+    this.validFrom = this.frameStamp + 1;
     this.epoch = this.frameStamp + 1;
     this.sampleIndex = 0;
     this.bandY = 0;
   }
 
   // ------------------------------------------------------------------------------------ targets
-  private createTarget(width: number, height: number, polarization = true): Target {
+  private createTarget(width: number, height: number, polarization = true, live = false): Target {
     const d = this.device;
     const px = width * height;
     const polAcc = d.createBuffer({ size: polarization ? px * 8 : 16, usage: GPUBufferUsage.STORAGE });
@@ -410,6 +433,8 @@ export class Renderer {
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
     const moments = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
+    // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
+    const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
     const bloomLevels = Math.max(2, Math.min(8, Math.floor(Math.log2(Math.min(width, height))) - 3));
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage });
@@ -426,6 +451,7 @@ export class Renderer {
       accum,
       moments,
       stamps,
+      gather,
       hdr,
       bloomTex,
       bloomLevels,
@@ -446,7 +472,7 @@ export class Renderer {
 
   private destroyTarget(t: Target | null) {
     if (!t) return;
-    for (const b of [t.accum, t.moments, t.stamps, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
+    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     t.hdr.destroy();
     t.bloomTex.destroy();
     t.beam?.tex.destroy();
@@ -505,7 +531,25 @@ export class Renderer {
     const bloomMip = (l: number) => t.bloomTex.createView({ baseMipLevel: l - 1, mipLevelCount: 1 });
     const mipSize = (l: number) => [Math.max(1, t.width >> l), Math.max(1, t.height >> l)] as const;
     const n = t.bloomLevels;
-    t.postPasses = [
+    const live = t.gather.size > 16;
+    t.postPasses = [];
+    if (live) {
+      t.postPasses.push({
+        pipeline: this.postGatherH,
+        w: t.width,
+        h: t.height,
+        bind: d.createBindGroup({
+          layout: this.postGatherH.getBindGroupLayout(0),
+          entries: [
+            { binding: 4, resource: { buffer: t.accum } },
+            { binding: 5, resource: { buffer: t.resolveBuf } },
+            { binding: 6, resource: { buffer: t.stamps } },
+            { binding: 13, resource: { buffer: t.gather } },
+          ],
+        }),
+      });
+    }
+    t.postPasses.push(
       {
         pipeline: this.postResolve,
         w: t.width,
@@ -519,10 +563,11 @@ export class Renderer {
             { binding: 6, resource: { buffer: t.stamps } },
             { binding: 7, resource: { buffer: t.polAcc } },
             { binding: 11, resource: { buffer: t.moments } },
+            { binding: 13, resource: { buffer: t.gather } },
           ],
         }),
       },
-    ];
+    );
     for (let l = 1; l < n; l++) {
       const [w, h] = mipSize(l);
       t.postPasses.push({
@@ -564,7 +609,7 @@ export class Renderer {
     height = Math.max(8, Math.floor(height));
     if (this.live && width === this.live.width && height === this.live.height) return;
     const old = this.live;
-    this.live = this.createTarget(width, height);
+    this.live = this.createTarget(width, height, true, true);
     if (old) this.device.queue.onSubmittedWorkDone().then(() => this.destroyTarget(old));
     this.invalidate();
   }
@@ -646,7 +691,7 @@ export class Renderer {
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
     set(15, s.jet ? 1 : 0, Math.sqrt(1 - 1 / (s.jetLorentz * s.jetLorentz)), s.jetWidth, s.jetIntensity);
     set(16, s.jetLength, s.jetCutoff, s.jetKnots, 0);
-    u.set([this.frameStamp, t === this.live ? this.epoch : 0, o.flags, o.minSpp ?? 0], 17 * 4);
+    u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
     set(20, dc.volColor[0]!, dc.volColor[1]!, dc.volColor[2]!, 0);
@@ -731,7 +776,8 @@ export class Renderer {
 
   private writeResolve(t: Target, s: Settings) {
     const view = s.polarization && s.polView === "intensity" ? 1 << 8 : 0;
-    const r = t === this.live ? [this.lastBlock | view, ...this.lastOffset, this.epoch] : [1 | view, 0, 0, 0];
+    // x: block | view << 8 | image width << 16
+    const r = t === this.live ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom] : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
@@ -841,6 +887,7 @@ export class Renderer {
       pass.dispatchWorkgroups(Math.ceil(gw / 8), Math.ceil(gh / 8));
       pass.end();
     }
+    const r0 = t.gather.size > 16 ? 1 : 0; // index of the resolve pass (live view: after the gather pass)
     t.postPasses.forEach((p, i) => {
       const pass = enc.beginComputePass();
       pass.setPipeline(p.pipeline);
@@ -848,8 +895,8 @@ export class Renderer {
       pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
       pass.end();
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
-      if (s && i === 0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
-      if (s && i === t.bloomLevels - 1) this.encodeBeam(enc, t, s);
+      if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
+      if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
   }
 
@@ -902,6 +949,7 @@ export class Renderer {
     if (sceneChanged || timeChanged) {
       phase = "realtime";
       this.frameStamp++;
+      this.updateValidFrom(time);
       this.sampleIndex = 0;
       this.bandY = 0;
       const block = s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling;
@@ -921,6 +969,8 @@ export class Renderer {
     } else if (this.sampleIndex < s.targetSpp) {
       phase = "converging";
       this.frameStamp++;
+      this.validFrom = this.epoch;
+      this.frameTimes.length = 0;
       const y0 = this.bandY;
       const y1 = Math.min(t.height, y0 + this.bandRows);
       rows = y1 - y0;
