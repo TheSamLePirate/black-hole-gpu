@@ -655,7 +655,9 @@ export class Renderer {
     set(23, ...sky[1], this.skyReady ? 1 : 0);
     set(24, ...sky[2], 0);
     set(25, s.polarization ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
-    set(26, s.returningRadiation ? 1 : 0, s.diskAlbedo, 3000, 0);
+    // returning radiation: offline renders only by default (≈ 6× the cost of the converged view)
+    const ret = s.returningRadiation === "always" || (s.returningRadiation === "offline" && t !== this.live);
+    set(26, ret ? 1 : 0, s.diskAlbedo, 3000, 0);
     set(27, BANDS[s.band], s.radioTau, s.radioNuS, s.radioTe / 0.593);
     set(28, s.radioJet, s.hotFlowHR, 0, 0);
     set(29, s.hotSpot ? 1 : 0, Math.max(s.spotRadius, horizon(a) + 1.5 * s.spotSize), s.spotSize, s.spotTau);

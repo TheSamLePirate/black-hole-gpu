@@ -80,7 +80,7 @@ export interface Settings {
   beamUas: number; // instrument beam FWHM [µas] (0 = perfect resolution)
   radioPeak: number; // brightness temperature shown as white [10¹⁰ K] (230 GHz colour map)
   uasPerM: number; // angular size of GM/c² [µas] (3.8 for M87*, 5.0 for Sgr A*)
-  returningRadiation: boolean; // disk self-irradiation (quality passes)
+  returningRadiation: "off" | "offline" | "always"; // disk self-irradiation (quality passes)
   diskAlbedo: number;
   // polarization (Walker–Penrose transport of the electric vector)
   polarization: boolean;
@@ -174,7 +174,7 @@ export function defaultSettings(): Settings {
     beamUas: 0,
     radioPeak: 5,
     uasPerM: 3.8,
-    returningRadiation: true,
+    returningRadiation: "offline",
     diskAlbedo: 0.5,
     polarization: false,
     polView: "ticks",

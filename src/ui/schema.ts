@@ -158,13 +158,18 @@ export const SCHEMA: ControlDef[] = [
     help: "Chandrasekhar electron-scattering atmosphere I ∝ 1 + 2.06 μ, with the emission angle measured in the fluid frame (thin disk).",
   },
   {
-    key: "returningRadiation", type: "toggle", section: "matter", group: "Accretion disk", label: "Returning radiation", enabled: (s) => s.disk && s.diskThickness === 0,
-    help: "Disk light bent back onto the disk by the hole (Cunningham 1976), traced with one extra geodesic per disk hit and re-emitted with the albedo below: brightens the inner disk and the far side, strongest at high spin. Computed in the converged and offline passes (thin disk).",
+    key: "returningRadiation", type: "choice", section: "matter", group: "Accretion disk", label: "Returning radiation", style: "segmented", enabled: (s) => s.disk && s.diskThickness === 0,
+    options: [
+      { value: "off", label: "Off" },
+      { value: "offline", label: "Offline", hint: "Only in offline renders (it multiplies the converged view's cost by ~6)" },
+      { value: "always", label: "Always", hint: "Also in the live converged view" },
+    ],
+    help: "Disk light bent back onto the disk by the hole (Cunningham 1976), traced with one extra geodesic per disk hit and re-emitted with the albedo below: brightens the inner disk and the far side, strongest at high spin. Thin disk, quality passes; by default only in offline renders.",
     keywords: "self irradiation reflection bounce path tracing cunningham",
   },
   {
     key: "diskAlbedo", type: "number", section: "matter", group: "Accretion disk", label: "Albedo", min: 0, max: 1, step: 0.01,
-    enabled: (s) => s.disk && s.returningRadiation && s.diskThickness === 0,
+    enabled: (s) => s.disk && s.returningRadiation !== "off" && s.diskThickness === 0,
     help: "Fraction of the returning radiation scattered back (grey, Lambertian in the gas frame); the rest is absorbed.",
   },
   {
