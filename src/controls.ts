@@ -223,10 +223,11 @@ export class CameraController {
     } else if (this.aroundWormhole) {
       // smooth zoom towards the target |ℓ| (in log space), on the camera's side of the throat
       if (Math.sign(this.targetL) !== Math.sign(s.whL)) this.targetL = s.whL;
+      if (Math.abs(this.targetL - s.whL) < 1e-9) return this.changedSince(before); // (also inside the throat)
       const lMin = this.lMin();
       const sign = s.whL < 0 ? -1 : 1;
       const cur = Math.log(Math.max(Math.abs(s.whL) - lMin, 0) + 1e-3);
-      const tgt = Math.log(Math.abs(this.targetL) - lMin + 1e-3);
+      const tgt = Math.log(Math.max(Math.abs(this.targetL) - lMin, 0) + 1e-3);
       const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
       const l = Math.abs(tgt - cur) < 1e-4 ? this.targetL : sign * (lMin + Math.exp(next) - 1e-3);
       if (this.poseAllowed({ ...s, whL: l })) s.whL = l;
@@ -240,6 +241,11 @@ export class CameraController {
       const next = cur + (tgt - cur) * (1 - Math.exp(-10 * dt));
       s.distance = Math.abs(tgt - cur) < 1e-4 ? this.targetDistance : rMin + Math.exp(next) - 1e-3;
     }
+    return this.changedSince(before);
+  }
+
+  private changedSince(before: string) {
+    const s = this.s;
     return before !== [s.azimuth, s.inclination, s.yaw, s.pitch, s.distance, s.fov, s.whL, s.anchor].join();
   }
 
@@ -270,8 +276,8 @@ export class CameraController {
       const X = blToCartesian(cam.r, cam.theta, cam.phi);
       const f = sphericalFrame(X);
       const fw = add3(f.er, f.et, f.ep, cam.fwd);
-      const Y = axpy(X, fw, dir * k * (cam.r - rH));
-      if (Math.hypot(...Y) < rH + 0.3) return;
+      const Y = axpy(X, fw, dir * k * Math.min(cam.r - rH, 100));
+      if (Math.hypot(...Y) < rH + 0.3 || Math.hypot(...Y) > MAX_RANGE) return;
       setHolePose(s, Y, fw);
       s.anchor = "hole";
       this.sync();
@@ -281,13 +287,14 @@ export class CameraController {
     const p = repPose(s);
     const rw = radius(m.w, p.l)[0];
     const toHole = p.l > 0 ? Math.hypot(...repToHole(m, p.l, p.n)) : Infinity;
-    const scale = Math.max(Math.min(rw - 0.5 * m.w.rho, toHole - rH), 0.2 * m.w.rho);
+    const scale = Math.min(Math.max(Math.min(rw - 0.5 * m.w.rho, toHole - rH), 0.2 * m.w.rho), 100);
     const ds = k * scale;
     const nearMouth = p.l <= 0 || radius(m.w, p.l)[0] < toHole;
     if (nearMouth) {
       const back = dir < 0;
       const q = flyDneg(m.w, p.l, p.n, back ? neg(p.fwd) : p.fwd, p.up, ds);
       const pose = { l: q.l, n: q.n, fwd: back ? neg(q.fwd) : q.fwd };
+      if (radius(m.w, pose.l)[0] > MAX_RANGE) return;
       if (pose.l > 0) {
         const h = repToHolePose(s, pose);
         const dHole = Math.hypot(...h.X);
@@ -301,7 +308,7 @@ export class CameraController {
       const f = sphericalFrame(X);
       const fw = add3(f.er, f.et, f.ep, cam.fwd);
       const Y = axpy(X, fw, dir * ds);
-      if (Math.hypot(...Y) < rH + 0.3) return;
+      if (Math.hypot(...Y) < rH + 0.3 || Math.hypot(...Y) > MAX_RANGE) return;
       const rep = holeToRep(m, Y);
       if (rep.r < Math.hypot(...Y)) setRepPose(s, { l: rep.l, n: rep.n, fwd: toMouth(m, fw) });
       else setHolePose(s, Y, fw);
@@ -440,6 +447,7 @@ export class CameraController {
 }
 
 const DEG = Math.PI / 180;
+const MAX_RANGE = 1000; // M: how far free flight may take the camera
 const neg = (v: Vec3): Vec3 => [-v[0], -v[1], -v[2]];
 const axpy = (x: Vec3, v: Vec3, k: number): Vec3 => [x[0] + k * v[0], x[1] + k * v[1], x[2] + k * v[2]];
 /** Components c along the frame (e0, e1, e2) → Cartesian vector. */

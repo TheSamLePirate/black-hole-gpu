@@ -225,7 +225,7 @@ export function defaultSettings(): Settings {
     whLensing: 0.05,
     whDist: 60,
     whIncl: 84,
-    whAzimuth: 200,
+    whAzimuth: -160,
     journeyDuration: 24,
   };
 }

@@ -133,7 +133,7 @@ describe("gluing frames", () => {
   });
 
   test("the mouth frame points at the hole; rep ↔ black-hole frame round trip", () => {
-    const s = { ...defaultSettings(), whDist: 80, whIncl: 84, whAzimuth: 200, whRho: 2 };
+    const s = { ...defaultSettings(), whDist: 80, whIncl: 84, whAzimuth: -160, whRho: 2 };
     const m = mouth(s);
     expect(Math.hypot(...m.C)).toBeCloseTo(80, 10);
     const toHole = m.C.map((x) => -x / 80) as Vec3;
