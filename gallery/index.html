@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="fr">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Atlas de Kerr : rendus en relativité générale d'un trou noir en rotation (WebGPU), du trou de ver d'Interstellar et d'une étoile compagnon." />
+<title>Atlas de Kerr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet" />
+<style>
+  /* Single, deliberate dark world: these are renders of space, shown the way an observatory shows plates. */
+  :root {
+    color-scheme: dark;
+    --ground: #07080c;
+    --panel: #0e1018;
+    --panel-2: #141722;
+    --rule: #232738;
+    --text: #ebe7df;
+    --dim: #8d93a4;
+    --amber: #f2a65a;
+    --blue: #93b9ff;
+    --display: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --math: "STIX Two Text", "Cambria Math", "Times New Roman", serif;
+    --gutter: clamp(16px, 4vw, 48px);
+  }
+
+  html {
+    background: var(--ground);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font: 15px/1.6 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+  }
+
+  .wrap {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding-inline: var(--gutter);
+  }
+
+  /* ------------------------------------------------------------ hero */
+  .hero {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .hero img {
+    display: block;
+    width: 100%;
+    max-height: 78vh;
+    object-fit: cover;
+    object-position: 45% 50%;
+  }
+
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(7, 8, 12, 0) 45%, rgba(7, 8, 12, 0.85) 88%, var(--ground) 100%);
+    pointer-events: none;
+  }
+
+  .hero-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    padding-block: 0 clamp(20px, 4vw, 44px);
+  }
+
+  .eyebrow {
+    font: 500 11.5px/1.4 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  h1 {
+    margin: 6px 0 10px;
+    font: 400 clamp(52px, 9vw, 120px) / 0.92 var(--display);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--amber);
+  }
+
+  .lead {
+    max-width: 62ch;
+    margin: 0;
+    color: #d3d0c9;
+    font-size: clamp(15px, 1.6vw, 17px);
+  }
+
+  .specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-top: 18px;
+    font: 12px/1.5 var(--mono);
+    color: var(--dim);
+  }
+
+  .specs span b {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  @media (max-width: 720px) {
+    .hero img {
+      max-height: none;
+      aspect-ratio: 16 / 11;
+    }
+
+    .hero-text {
+      position: static;
+      padding-block: 18px 0;
+    }
+
+    .hero::after {
+      display: none;
+    }
+  }
+
+  /* ------------------------------------------------------------ section heads */
+  section {
+    padding-block: clamp(48px, 7vw, 88px) 0;
+  }
+
+  .section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-bottom: 28px;
+    max-width: 70ch;
+  }
+
+  h2 {
+    margin: 0;
+    font: 400 clamp(34px, 4.4vw, 52px) / 1 var(--display);
+    text-wrap: balance;
+  }
+
+  .section-head p {
+    margin: 0;
+    color: var(--dim);
+  }
+
+  /* ------------------------------------------------------------ effects index */
+  .effects {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .effect {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    padding: 18px 18px 16px;
+    background: var(--panel);
+  }
+
+  .effect h3 {
+    margin: 0;
+    font: 600 14px/1.3 var(--body);
+  }
+
+  .effect p {
+    margin: 0;
+    color: var(--dim);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .refs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .refs a {
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    font: 11.5px var(--mono);
+    color: var(--amber);
+    text-decoration: none;
+  }
+
+  .refs a:hover {
+    border-color: var(--amber);
+  }
+
+  /* ------------------------------------------------------------ plates */
+  .plates {
+    display: grid;
+    gap: clamp(40px, 6vw, 72px);
+  }
+
+  .plate {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+    gap: clamp(18px, 3vw, 40px);
+    align-items: start;
+    margin: 0;
+    scroll-margin-top: 24px;
+  }
+
+  .shot {
+    all: unset;
+    display: block;
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: zoom-in;
+    background: #000;
+    box-shadow: 0 0 0 1px var(--rule);
+  }
+
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    transition: transform 0.6s ease;
+  }
+
+  .shot:hover img {
+    transform: scale(1.015);
+  }
+
+  .shot:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+  }
+
+  figcaption {
+    display: grid;
+    gap: 12px;
+  }
+
+  .pno {
+    font: 500 11px var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  figcaption h3 {
+    margin: -4px 0 0;
+    font: 400 clamp(26px, 2.6vw, 34px) / 1.05 var(--display);
+    text-wrap: balance;
+  }
+
+  figcaption p {
+    margin: 0;
+    color: #cbc8c1;
+    font-size: 14.5px;
+  }
+
+  .look {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 12px 14px;
+    list-style: none;
+    border-radius: 10px;
+    background: var(--panel);
+    font-size: 13.5px;
+    color: #d6d3cc;
+  }
+
+  .look li {
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    gap: 8px;
+  }
+
+  .look li::before {
+    content: "→";
+    color: var(--amber);
+  }
+
+  .params {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin: 0;
+    font: 11.5px/1.6 var(--mono);
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .params span b {
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  @media (max-width: 900px) {
+    .plate {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* ------------------------------------------------------------ comparison */
+  .compare-block {
+    display: grid;
+    gap: 22px;
+  }
+
+  .compare {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--rule);
+    user-select: none;
+    touch-action: pan-y;
+    background: #000;
+    --x: 50%;
+  }
+
+  .compare img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    pointer-events: none;
+  }
+
+  .compare .top {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 calc(100% - var(--x)) 0 0);
+  }
+
+  .compare .handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--x);
+    width: 2px;
+    margin-left: -1px;
+    background: var(--text);
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  }
+
+  .compare .knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--text);
+    color: var(--ground);
+    font: 600 14px var(--mono);
+  }
+
+  .compare .tag {
+    position: absolute;
+    top: 14px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(7, 8, 12, 0.72);
+    font: 11.5px var(--mono);
+    backdrop-filter: blur(6px);
+  }
+
+  .compare .tag.l {
+    left: 14px;
+  }
+
+  .compare .tag.r {
+    right: 14px;
+  }
+
+  .compare input[type="range"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: ew-resize;
+  }
+
+  .compare:has(input:focus-visible) {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+  }
+
+  .compare-caption {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px 40px;
+  }
+
+  /* ------------------------------------------------------------ colour bar */
+  .colorbar {
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px 10px;
+    border-radius: 10px;
+    background: var(--panel);
+  }
+
+  .colorbar-title {
+    font: 12px var(--mono);
+    color: var(--dim);
+  }
+
+  .colorbar-bar {
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  .colorbar-ticks {
+    position: relative;
+    height: 16px;
+    font: 11px var(--mono);
+    color: var(--text);
+  }
+
+  .colorbar-ticks span {
+    position: absolute;
+    transform: translateX(-50%);
+  }
+
+  .colorbar-ends {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+
+  /* ------------------------------------------------------------ in-page nav */
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 28px 0;
+  }
+
+  .toc a {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    font-size: 13px;
+    color: var(--dim);
+    text-decoration: none;
+  }
+
+  .toc a:hover {
+    color: var(--text);
+    border-color: var(--amber);
+  }
+
+  /* ------------------------------------------------------------ calculation model */
+  .diagram {
+    margin: 0 0 36px;
+    padding: clamp(14px, 2.5vw, 28px);
+    border-radius: 14px;
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .diagram-scroll {
+    overflow-x: auto;
+  }
+
+  .diagram svg {
+    display: block;
+    width: 100%;
+    min-width: 760px;
+    height: auto;
+  }
+
+  .diagram figcaption {
+    display: block;
+    max-width: 80ch;
+    margin-top: 14px;
+    color: var(--dim);
+    font-size: 13.5px;
+  }
+
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+    gap: 20px;
+  }
+
+  .model {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    padding: 22px 22px 20px;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+  }
+
+  .model-no {
+    font: 500 11px var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  .model h3 {
+    margin: -4px 0 0;
+    font: 400 26px/1.1 var(--display);
+    text-wrap: balance;
+  }
+
+  .model p {
+    margin: 0;
+    color: #cbc8c1;
+    font-size: 14px;
+  }
+
+  .eq {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border-left: 2px solid var(--amber);
+    border-radius: 0 8px 8px 0;
+    background: var(--panel-2);
+    font: italic 17px/1.5 var(--math);
+    color: var(--text);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .eq sub,
+  .eq sup {
+    font-size: 0.7em;
+  }
+
+  .eq-note {
+    font: 12px/1.5 var(--mono);
+    font-style: normal;
+    color: var(--dim);
+    white-space: normal;
+  }
+
+  .sub-title {
+    margin: 44px 0 14px;
+    font: 400 28px/1.1 var(--display);
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+  }
+
+  .sched {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  .sched th,
+  .sched td {
+    padding: 11px 16px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sched tbody tr:last-child th,
+  .sched tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .sched thead th {
+    background: var(--panel);
+    font-weight: 600;
+    color: var(--amber);
+  }
+
+  .sched tbody th {
+    font: 500 12px var(--mono);
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  .sched td {
+    color: #d6d3cc;
+  }
+
+  .section-note {
+    max-width: 80ch;
+    margin: 14px 0 0;
+    color: var(--dim);
+    font-size: 13.5px;
+  }
+
+  .checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+    gap: 0 40px;
+  }
+
+  .checks ul {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    color: #cbc8c1;
+  }
+
+  .checks li {
+    padding-left: 18px;
+    position: relative;
+  }
+
+  .checks li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--amber);
+  }
+
+  .checks > div:last-child li::before {
+    background: transparent;
+    border: 1px solid var(--dim);
+  }
+
+  /* ------------------------------------------------------------ footer */
+  footer {
+    margin-top: clamp(56px, 8vw, 96px);
+    border-top: 1px solid var(--rule);
+    padding-block: 36px 56px;
+  }
+
+  .method {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 22px 36px;
+  }
+
+  .method h4 {
+    margin: 0 0 6px;
+    font: 600 13px var(--body);
+  }
+
+  .method p {
+    margin: 0;
+    color: var(--dim);
+    font-size: 13px;
+  }
+
+  .colophon {
+    margin-top: 32px;
+    font: 12px var(--mono);
+    color: var(--dim);
+  }
+
+  /* ------------------------------------------------------------ lightbox */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    background: rgba(3, 4, 6, 0.96);
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+
+  .lightbox img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    min-height: 0;
+  }
+
+  .lightbox[hidden] {
+    display: none;
+  }
+
+  .lb-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 4px 0;
+  }
+
+  .lb-title {
+    flex: 1;
+    min-width: 0;
+    font: 400 22px/1.2 var(--display);
+  }
+
+  .lb-title small {
+    display: block;
+    font: 11px var(--mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  .lb-btn {
+    all: unset;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--rule);
+    color: var(--text);
+    cursor: pointer;
+    font: 16px var(--mono);
+  }
+
+  .lb-btn:hover {
+    border-color: var(--amber);
+  }
+
+  .journal {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    gap: 22px;
+  }
+
+  .journal figure {
+    margin: 0;
+  }
+
+  .journal img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+
+  .journal figcaption {
+    margin-top: 8px;
+    color: var(--dim);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .journal figcaption b {
+    display: block;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shot img {
+      transition: none;
+    }
+  }
+  .journey {
+    margin: 0 0 clamp(40px, 6vw, 72px);
+  }
+  .journey video {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    background: #000;
+    box-shadow: 0 0 0 1px var(--rule);
+  }
+  .journey figcaption {
+    margin-top: 12px;
+    color: var(--dim);
+    max-width: 70ch;
+  }
+.launch { margin-top: 18px; font-size: 15px; }
+.launch a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+</style>
+
+<header class="hero">
+  <img src="img/q1_hero.jpg" alt="Un trou noir en rotation rapide vu presque par la tranche, devant le vrai centre galactique : la Voie lactée forme un anneau d'Einstein rouge-brun autour de l'ombre, le disque passe devant, un jet bleu pâle monte le long de l'axe." />
+  <div class="hero-text">
+    <div class="wrap">
+      <div class="eyebrow">Trente-deux rendus en relativité générale · WebGPU</div>
+      <h1>Atlas de <em>Kerr</em></h1>
+      <p class="lead">
+        Chaque pixel suit un photon à rebours dans l'espace-temps courbé d'un trou noir en rotation.
+        Rien n'est peint : l'ombre, les anneaux, les couleurs et les asymétries de luminosité sortent tous
+        des équations des géodésiques et du transfert radiatif le long de celles-ci.
+      </p>
+      <div class="specs">
+        <span><b>1920×1080</b> par planche</span>
+        <span><b>48–192</b> échantillons / pixel</span>
+        <span>Dormand–Prince 5(4) <b>10⁻⁶</b></span>
+        <span>ciel réel Hipparcos + Gaia</span>
+        <span>polarisation · 230 GHz</span>
+        <span>unités de <b>M = GM/c²</b></span>
+      </div>
+      <p class="launch"><a href="../">Ouvrir le simulateur (WebGPU) →</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu">code source</a></p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#effects">Ce qu'il faut regarder</a>
+    <a href="#plates">Les planches</a>
+    <a href="#moteur">Le moteur v2</a>
+    <a href="#trou-de-ver">Le trou de ver</a>
+    <a href="#compare">Interstellar</a>
+    <a href="#modele">Le modèle de calcul</a>
+    <a href="#journal">Journal</a>
+  </nav>
+  <section id="effects" aria-labelledby="effects-title">
+    <div class="section-head">
+      <h2 id="effects-title">Ce qu'il faut regarder</h2>
+      <p>Chaque effet ci-dessous est visible dans les planches indiquées. Cliquez sur un numéro pour y aller.</p>
+    </div>
+    <div class="effects" id="effect-list"></div>
+  </section>
+
+  <section id="plates" aria-labelledby="plates-title">
+    <div class="section-head">
+      <h2 id="plates-title">Les planches</h2>
+      <p>Cliquez sur une image pour l'afficher en plein écran. Les paramètres sont en unités géométrisées : distances en M, spin a = J/M, inclinaison θ mesurée depuis l'axe de rotation.</p>
+    </div>
+    <div class="plates" id="plate-list"></div>
+  </section>
+
+  <section id="moteur" aria-labelledby="moteur-title">
+    <div class="section-head">
+      <h2 id="moteur-title">Le moteur v2 : planches XVI à XXIV</h2>
+      <p>Rendues avec la version améliorée du moteur : ciel réel, empreinte des pixels sur le ciel, polarisation, bande millimétrique, rayonnement de retour, point chaud orbital, turbulence spirale et débruiteur. Même mode d'emploi : cliquez pour agrandir.</p>
+    </div>
+    <div class="plates" id="plate-list-v2"></div>
+  </section>
+
+  <section id="trou-de-ver" aria-labelledby="wh-title">
+    <div class="section-head">
+      <h2 id="wh-title">Le trou de ver d'Interstellar : planches XXV à XXXII</h2>
+      <p>Comme dans le film, l'intérieur mène à une autre partie de l'univers. Le trou de ver est celui que Double Negative et Kip Thorne ont conçu pour Interstellar (James, von Tunzelmann, Franklin et Thorne, American Journal of Physics, 2015), avec les paramètres du film : un intérieur très court (2a = 0,01ρ) et une largeur de lentille modeste (W = 0,05ρ). De notre côté, le vrai ciel ; de l'autre, une galaxie lointaine, le trou noir Gargantua (la bouche est à 22 M de lui, 20° au-dessus du disque) et une étoile en orbite. Les rayons passent d'une métrique à l'autre par une sphère de raccord autour de la bouche lointaine : Kerr, puis trou de ver, puis Kerr.</p>
+    </div>
+    <figure class="journey">
+      <video controls playsinline preload="metadata" poster="img/journey_poster_v2.jpg" width="1280" height="720">
+        <source src="video/wormhole_journey.mp4" type="video/mp4" />
+      </video>
+      <figcaption><b>Le voyage (touche T), 24 s.</b> On s'aligne sur la bouche, on traverse la gorge, on ressort face à Gargantua et on se met en orbite. Chaque image est un rendu hors ligne à 12 échantillons par pixel ; le temps s'écoule (20 M par seconde de film) : le disque tourne et l'étoile avance sur son orbite.</figcaption>
+    </figure>
+    <figure class="journey">
+      <video controls playsinline preload="metadata" poster="img/barycentre_poster.jpg" width="1280" height="720">
+        <source src="video/barycentre_orbit.mp4" type="video/mp4" />
+      </video>
+      <figcaption><b>Autour du centre de masse, 20 s.</b> L'étoile pèse 0,1 M : Gargantua et elle tournent autour de leur centre de masse ⊕, Gargantua sur un cercle de 6,4 M à 0,011 c, toujours à l'opposé de l'étoile. Une période orbitale complète (≈ 3 500 M) ; la caméra, au repos dans le repère du centre de masse, en fait lentement le tour (60°). En haut à droite, la vue de dessus à l'échelle. 480 images hors ligne à 12 échantillons par pixel.</figcaption>
+    </figure>
+    <figure class="journey">
+      <video controls playsinline preload="metadata" poster="img/barycentre_close_poster.jpg" width="1280" height="720">
+        <source src="video/barycentre_orbit_close.mp4" type="video/mp4" />
+      </video>
+      <figcaption><b>Plus près, deux orbites, 40 s.</b> La caméra est à 55 M du centre de masse (au lieu de 95) : Gargantua s'y déplace de ±7° et l'étoile passe à ~24 M d'elle. Deux périodes orbitales complètes ; la caméra, au repos dans le repère du centre de masse, en fait le tour sur 120°. 960 images hors ligne à 12 échantillons par pixel.</figcaption>
+    </figure>
+    <div class="plates" id="plate-list-v3"></div>
+  </section>
+
+  <section id="compare" aria-labelledby="compare-title">
+    <div class="section-head">
+      <h2 id="compare-title">Planches 8 et 9 : le choix d'<em>Interstellar</em></h2>
+      <p>Même trou noir, même disque, même caméra. Faites glisser le séparateur.</p>
+    </div>
+    <div class="compare-block">
+      <div class="compare" id="compare-widget">
+        <img src="img/g09_interstellar_physical.jpg" alt="Planche 9 : le disque avec les décalages de fréquence physiques ; le côté gauche, qui s'approche, est bien plus lumineux que le côté droit qui s'éloigne." />
+        <div class="top"><img src="img/g08_interstellar.jpg" alt="Planche 8 : le même disque sans aucun décalage de fréquence ; les deux côtés ont la même luminosité." /></div>
+        <div class="handle"><div class="knob" aria-hidden="true">↔</div></div>
+        <span class="tag l">Planche 8 · décalages coupés</span>
+        <span class="tag r">Planche 9 · physique</span>
+        <input type="range" id="compare-range" min="0" max="100" value="50" aria-label="Séparateur entre la planche 8 et la planche 9" />
+      </div>
+      <div class="compare-caption">
+        <p>
+          Pour <em>Interstellar</em> (2014), l'équipe de Double Negative a supprimé les décalages Doppler et
+          gravitationnels pour que le public ne soit pas dérouté par un disque dissymétrique. La planche 8 reproduit
+          ce choix avec notre moteur : un trou noir de Kerr avec a = 0,6, un disque bolométrique à 4500 K, vu à 6°
+          au-dessus de son plan.
+        </p>
+        <p>
+          La planche 9 est la même image avec la physique activée. Le gaz à gauche vient vers nous au tiers de la
+          vitesse de la lumière : sa lumière est décalée vers le bleu et amplifiée (intensité bolométrique ∝ g⁴).
+          Dans les images affichées, le tiers qui s'approche est <b>2,6× plus lumineux</b> et le tiers qui s'éloigne
+          <b>7× plus sombre</b>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="modele" aria-labelledby="model-title">
+    <div class="section-head">
+      <h2 id="model-title">Le modèle de calcul</h2>
+      <p>
+        Chaque planche est calculée pixel par pixel sur le GPU. Un rayon part de la caméra, remonte le temps le long
+        d'une géodésique de l'espace-temps de Kerr, et ramasse en chemin la lumière émise par la matière qu'il traverse.
+        Voici la chaîne complète, les équations réellement résolues et la façon dont elles sont vérifiées.
+      </p>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-scroll">
+        <svg viewBox="0 0 1100 392" role="img" aria-label="Chemin d'un pixel : pixel et caméra, boucle d'intégration à rebours, puis quatre événements (traversée du disque, volume émissif, horizon, ciel) ; la matière ajoute de la lumière et le rayon continue ; l'horizon et le ciel terminent le rayon, qui est accumulé puis post-traité.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="currentColor" />
+            </marker>
+            <marker id="ah-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#f2a65a" />
+            </marker>
+          </defs>
+          <g fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="20" y="30" width="170" height="60" rx="8" />
+            <rect x="20" y="140" width="170" height="60" rx="8" />
+            <rect x="260" y="200" width="185" height="62" rx="8" />
+            <rect x="465" y="200" width="185" height="62" rx="8" />
+            <rect x="670" y="200" width="185" height="62" rx="8" />
+            <rect x="875" y="200" width="205" height="62" rx="8" />
+            <rect x="670" y="322" width="185" height="56" rx="8" />
+            <rect x="895" y="322" width="185" height="56" rx="8" />
+          </g>
+          <rect x="260" y="30" width="820" height="80" rx="10" fill="none" stroke="#f2a65a" stroke-width="1.8" />
+          <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#ah)">
+            <line x1="105" y1="90" x2="105" y2="136" />
+            <path d="M190 170 H222 V70 H256" />
+            <line x1="330" y1="110" x2="330" y2="196" />
+            <line x1="535" y1="110" x2="535" y2="196" />
+            <line x1="762" y1="110" x2="762" y2="196" />
+            <line x1="977" y1="110" x2="977" y2="196" />
+            <line x1="762" y1="262" x2="762" y2="318" />
+            <path d="M977 262 V292 H800 V318" />
+            <line x1="855" y1="350" x2="891" y2="350" />
+          </g>
+          <g stroke="#f2a65a" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ah-amber)">
+            <line x1="374" y1="200" x2="374" y2="114" />
+            <line x1="579" y1="200" x2="579" y2="114" />
+          </g>
+          <g fill="currentColor" font-family="IBM Plex Sans, system-ui, sans-serif" font-size="13" text-anchor="middle">
+            <text x="105" y="56" font-weight="600">Pixel (x, y)</text>
+            <text x="105" y="75" font-size="11.5" opacity="0.7">jitter gaussien</text>
+            <text x="105" y="166" font-weight="600">Caméra</text>
+            <text x="105" y="185" font-size="11.5" opacity="0.7">tétrade ZAMO + boost</text>
+            <text x="670" y="60" font-weight="600">Géodésique intégrée à rebours</text>
+            <text x="670" y="79" font-size="11.5" opacity="0.7">équations de Hamilton · RK4 en temps réel · Dormand–Prince 5(4) en qualité</text>
+            <text x="670" y="96" font-size="11.5" opacity="0.7">état (r, θ, φ, t, p_r, p_θ), un pas après l'autre</text>
+            <text x="352" y="226" font-weight="600">Disque mince</text>
+            <text x="352" y="245" font-size="11.5" opacity="0.7">racine d'Hermite, θ = π/2</text>
+            <text x="557" y="226" font-weight="600">Volume émissif</text>
+            <text x="557" y="245" font-size="11.5" opacity="0.7">jet · flot · disque épais</text>
+            <text x="762" y="226" font-weight="600">Horizon</text>
+            <text x="762" y="245" font-size="11.5" opacity="0.7">r &lt; r₊ + δ</text>
+            <text x="977" y="226" font-weight="600">Ciel à l'infini</text>
+            <text x="977" y="245" font-size="11.5" opacity="0.7">empreinte lentillée · B(gT)</text>
+            <text x="762" y="346" font-weight="600">Accumulation</text>
+            <text x="762" y="364" font-size="11.5" opacity="0.7">moyenne, variance, Q/U</text>
+            <text x="987" y="346" font-weight="600">Post-traitement</text>
+            <text x="987" y="364" font-size="11.5" opacity="0.7">débruiteur · bloom · HDR</text>
+          </g>
+          <g font-family="IBM Plex Mono, ui-monospace, monospace" font-size="11">
+            <g fill="currentColor" opacity="0.85">
+              <text x="113" y="118">direction</text>
+              <text x="230" y="128" text-anchor="start">p_μ, L, E₀</text>
+              <text x="322" y="146" text-anchor="end">traverse</text>
+              <text x="527" y="146" text-anchor="end">traverse</text>
+              <text x="754" y="146" text-anchor="end">capturé</text>
+              <text x="969" y="146" text-anchor="end">r &gt; r_esc</text>
+              <text x="770" y="296" text-anchor="start">noir</text>
+              <text x="885" y="286" text-anchor="middle">I final</text>
+            </g>
+            <g fill="#f2a65a">
+              <text x="382" y="170" text-anchor="start">+ lumière,</text>
+              <text x="382" y="184" text-anchor="start">continue</text>
+              <text x="587" y="170" text-anchor="start">+ lumière,</text>
+              <text x="587" y="184" text-anchor="start">continue</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        Le chemin d'un pixel. Le cadre orange est le cœur du calcul : à chaque pas, si le rayon traverse le plan
+        du disque ou un volume émissif, il ajoute la lumière émise, atténuée par la transmittance T accumulée
+        (T ← T·e<sup>−Δτ</sup>), puis <em>continue</em>. Seuls l'horizon, la fuite vers l'infini ou une matière devenue
+        opaque (T &lt; 0,2 %) terminent le rayon.
+      </figcaption>
+    </figure>
+
+    <div class="model-grid">
+      <article class="model">
+        <div class="model-no">1 · Espace-temps</div>
+        <h3>La métrique de Kerr, sous forme hamiltonienne</h3>
+        <p>
+          On travaille en coordonnées de Boyer–Lindquist avec G = c = M = 1. Au lieu des huit équations des
+          géodésiques avec symboles de Christoffel, on intègre les équations de Hamilton d'un photon. L'énergie
+          E = −p_t et le moment angulaire L = p_φ sont conservés exactement : il ne reste que six variables.
+        </p>
+        <div class="eq">
+          <div>H = N / 2Σ = 0</div>
+          <div>N = Δ p<sub>r</sub>² + p<sub>θ</sub>² − W²/Δ + (L − a sin²θ)² / sin²θ</div>
+          <div class="eq-note">W = r² + a² − aL · Σ = r² + a² cos²θ · Δ = r² − 2r + a²</div>
+        </div>
+        <div class="eq">
+          <div>ṙ = Δ p<sub>r</sub> / Σ &nbsp;&nbsp; θ̇ = p<sub>θ</sub> / Σ</div>
+          <div>φ̇ = (aW/Δ + L/sin²θ − a) / Σ</div>
+          <div>ṗ<sub>r</sub> = −∂H/∂r &nbsp;&nbsp; ṗ<sub>θ</sub> = −∂H/∂θ</div>
+        </div>
+        <p>
+          La contrainte H = 0 (le photon reste sur le cône de lumière) n'est pas imposée : elle sert de témoin de
+          précision. Le temps t est aussi intégré ; il donne l'instant d'émission de la lumière.
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">2 · Caméra</div>
+        <h3>Un observateur local, éventuellement en mouvement</h3>
+        <p>
+          La caméra est posée dans le repère du ZAMO, l'observateur à moment angulaire nul, qui existe partout
+          hors de l'horizon, même dans l'ergosphère. Pour un observateur en orbite ou en chute, un boost de Lorentz
+          de vitesse β transforme chaque direction : c'est l'aberration relativiste.
+        </p>
+        <div class="eq">
+          <div>p<sub>t</sub> = −(α E<sub>z</sub> + ω ϖ p<sup>φ̂</sup>) &nbsp;&nbsp; p<sub>φ</sub> = ϖ p<sup>φ̂</sup></div>
+          <div>p<sub>r</sub> = √(Σ/Δ) p<sup>r̂</sup> &nbsp;&nbsp; p<sub>θ</sub> = √Σ p<sup>θ̂</sup></div>
+          <div class="eq-note">α = √(ΣΔ/A) (laps) · ω = 2ar/A (entraînement) · ϖ = √(A/Σ) sin θ</div>
+        </div>
+        <p>
+          Le moment est ensuite normalisé à E = 1. Si E<sub>0</sub> ≤ 0, le photon a une énergie négative, ce qui n'est
+          possible que dans l'ergosphère : il ne peut pas venir de l'infini, et le pixel est noir.
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">3 · Intégration</div>
+        <h3>RK4 en temps réel, Dormand–Prince pour les images finales</h3>
+        <p>
+          En temps réel, un RK4 à pas heuristique raffine près de l'horizon, près de la sphère de photons
+          (Δφ ≤ ε par pas) et près de l'axe polaire, sans jamais sauter par-dessus une couche de matière ou un jet :
+        </p>
+        <div class="eq">
+          <div>h = ε (r − r₊)(1 + 0,01 r)</div>
+          <div class="eq-note">bornée par Δφ ≤ ε, Δθ ≤ ε sin θ et la distance à la matière</div>
+        </div>
+        <p>
+          Pour les images finales, un Dormand–Prince 5(4) (l'intégrateur de ode45) estime l'erreur locale par
+          différence avec sa solution emboîtée d'ordre 4, et réutilise sa dernière évaluation comme première du pas
+          suivant : 6 évaluations par pas au lieu de 12 pour le doublement de pas, à précision égale.
+        </p>
+        <div class="eq">
+          <div>ε<sub>loc</sub> = ‖h Σ (b<sub>i</sub> − b*<sub>i</sub>) k<sub>i</sub>‖ &nbsp;&nbsp; h ← h · clamp(0,9 (tol/ε<sub>loc</sub>)<sup>1/5</sup>, 0,2, 5)</div>
+          <div>y ← y + Δ avec sommation compensée (Kahan)</div>
+        </div>
+        <p>
+          La traversée du disque est la racine de l'interpolant cubique d'Hermite de θ(λ), affinée par un sous-pas et
+          une correction de Newton (11 évaluations au lieu de 56). Un rayon qui a quitté la matière reçoit analytiquement
+          la déflexion qui lui reste jusqu'à l'infini :
+        </p>
+        <div class="eq"><div>δ = (2M/b) (1 − √(r² − b²) / r)</div></div>
+      </article>
+
+      <article class="model">
+        <div class="model-no">4 · Disque</div>
+        <h3>Novikov–Thorne, Kepler, et un gaz translucide</h3>
+        <p>
+          Le flux émis suit la solution de Page et Thorne (1974) pour un disque mince à couple nul à l'ISCO ; la
+          température effective vient de σT⁴ = F. Le gaz tourne sur des orbites képlériennes de Kerr, ce qui fixe
+          sa quadrivitesse u et donc le décalage g vu par la caméra :
+        </p>
+        <div class="eq">
+          <div>T = T<sub>max</sub> (F / F<sub>max</sub>)<sup>1/4</sup> &nbsp;&nbsp; Ω = 1 / (r<sup>3/2</sup> + a)</div>
+          <div>u<sup>t</sup> = [−(g<sub>tt</sub> + 2Ω g<sub>tφ</sub> + Ω² g<sub>φφ</sub>)]<sup>−1/2</sup></div>
+          <div>g = ν<sub>obs</sub> / ν<sub>ém</sub> = (1/E<sub>0</sub>) / [u<sup>t</sup> (1 − Ω L)]</div>
+        </div>
+        <p>
+          <b>Disque mince</b> : au passage du plan θ = π/2, le disque agit comme
+          une couche d'épaisseur optique τ traversée sous l'angle μ (mesuré dans le repère du gaz).
+          <b>Disque épais</b> : le rayon traverse un volume gaussien de hauteur H et intègre l'absorption pas à pas.
+        </p>
+        <div class="eq">
+          <div>I ← I + T · B(gT) · (1 − e<sup>−τ/μ</sup>) &nbsp;&nbsp; T ← T · e<sup>−τ/μ</sup></div>
+          <div>dτ = κ ρ (−p·u) dλ &nbsp;&nbsp; ρ ∝ e<sup>−z²/2H²</sup></div>
+        </div>
+        <p>
+          La turbulence est un bruit de gradient aligné sur des bras spiraux traînants, cisaillé par la rotation
+          képlérienne et évalué au temps d'émission. En rendu final, chaque impact lance un second rayon, tiré selon le
+          cosinus autour de la normale dans le repère du gaz, qui remonte jusqu'à l'élément du disque qui l'éclaire :
+          c'est le rayonnement de retour, réémis à g·g₁₂·T₂ avec un albédo A.
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">5 · Lumière et couleur</div>
+        <h3>Un invariant qui rend les couleurs exactes</h3>
+        <p>
+          Le long d'un rayon, I<sub>ν</sub>/ν³ est conservé. Un corps noir à la température T, vu avec un décalage g,
+          est donc exactement un corps noir à g·T : pas besoin de corriger séparément la couleur et l'intensité.
+        </p>
+        <div class="eq">
+          <div>I<sub>ν</sub>/ν³ = invariant &nbsp;⇒&nbsp; B<sub>ν</sub>(T) observé = B<sub>ν</sub>(g T)</div>
+          <div>X, Y, Z = ∫ B<sub>λ</sub>(T) · x̄, ȳ, z̄ (λ) dλ &nbsp;&nbsp; (360–830 nm)</div>
+        </div>
+        <p>
+          Une table de 1024 températures (10² à 10⁹ K) contient la chromaticité et la luminance de chaque corps
+          noir, calculées avec l'observateur CIE 1931, puis converties en sRGB linéaire. Les spectres non thermiques
+          (jet, flot chaud) sont intégrés de la même façon, en passant de I<sub>ν</sub> à I<sub>λ</sub> ∝ I<sub>ν</sub> ν².
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">6 · Jet</div>
+        <h3>Synchrotron d'un plasma relativiste</h3>
+        <p>
+          Le plasma sort le long de l'axe à la vitesse β mesurée par le ZAMO local. L'énergie du photon dans le
+          repère du plasma donne le facteur Doppler, et l'émission est transportée avec l'invariant ci-dessus :
+        </p>
+        <div class="eq">
+          <div>k = −p·u = γ (E<sub>z</sub> − β p<sup>r̂</sup>) &nbsp;&nbsp; E<sub>z</sub> = (1 − ωL) / α</div>
+          <div>dI = g³ · j(ν/g) · k dλ &nbsp;&nbsp; j<sub>ν</sub> ∝ n ν<sup>1/3</sup> e<sup>−ν/ν_c</sup></div>
+        </div>
+        <p>
+          Les nodosités sont un motif en (z − β t<sub>ém</sub>) : comme t<sub>ém</sub> est le vrai temps d'émission
+          le long de chaque rayon, le mouvement apparent plus rapide que la lumière émerge tout seul.
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">7 · Ciel et empreintes</div>
+        <h3>Le vrai ciel, filtré sur la taille réelle de chaque pixel</h3>
+        <p>
+          Les 119 614 étoiles du catalogue HYG (Hipparcos) sont des sources ponctuelles : un corps noir à la température
+          tirée de leur indice B−V, vu à g·T. La lumière diffuse de la Voie lactée vient de la carte Gaia DR2 de la NASA.
+        </p>
+        <p>
+          Les rayons d'un groupe de 8×8 pixels partagent leurs directions d'arrivée. Chacun résout, avec ses voisins les
+          mieux conditionnés, la jacobienne de la direction sur le ciel par rapport à la position du pixel :
+        </p>
+        <div class="eq">
+          <div>J = [ΔD₁ ΔD₂] [Δx₁ Δx₂]<sup>−1</sup> &nbsp;&nbsp; C = σ²<sub>PSF</sub> I + J Jᵀ</div>
+          <div class="eq-note">chaque étoile est pondérée par une gaussienne de covariance C, normalisée : flux exact</div>
+        </div>
+        <p>
+          Près de l'anneau d'Einstein, où un pixel couvre une large zone du ciel, l'amplification de chaque étoile est
+          donc exacte et le ciel ne scintille plus (erreur à 16 échantillons divisée par 4,7).
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">8 · Polarisation</div>
+        <h3>Une constante conservée transporte le champ électrique</h3>
+        <p>
+          Pour un photon k et un vecteur de polarisation f transporté parallèlement, la constante de Walker–Penrose est
+          conservée le long de toute géodésique de Kerr :
+        </p>
+        <div class="eq">
+          <div>κ = (A − iB)(r − ia cos θ)</div>
+          <div>A = (k<sup>t</sup>f<sup>r</sup> − k<sup>r</sup>f<sup>t</sup>) + a sin²θ (k<sup>r</sup>f<sup>φ</sup> − k<sup>φ</sup>f<sup>r</sup>)</div>
+          <div>B = [(r²+a²)(k<sup>φ</sup>f<sup>θ</sup> − k<sup>θ</sup>f<sup>φ</sup>) − a(k<sup>t</sup>f<sup>θ</sup> − k<sup>θ</sup>f<sup>t</sup>)] sin θ</div>
+        </div>
+        <p>
+          À chaque émission, f vient de la physique locale (diffusion électronique pour le disque, f ⟂ B pour le
+          synchrotron) ; à la caméra, on résout κ<sub>ém</sub> = c<sub>x</sub> κ(e<sub>x</sub>) + c<sub>y</sub> κ(e<sub>y</sub>) sur les axes de l'écran,
+          exactement, quels que soient la position et le mouvement de l'observateur. Q et U sont accumulés par pixel.
+        </p>
+      </article>
+
+      <article class="model">
+        <div class="model-no">9 · Millimétrique</div>
+        <h3>Un plasma qui réabsorbe sa propre lumière</h3>
+        <p>
+          À 230 GHz, on résout le transfert en température de brillance à trois fréquences à la fois. Avec la loi de
+          Kirchhoff dans le repère du gaz et l'invariance de I<sub>ν</sub>/ν³ :
+        </p>
+        <div class="eq">
+          <div>dT<sub>b</sub>/ds = α<sub>ν</sub>(ν/g) · (g T<sub>e</sub> − T<sub>b</sub>)</div>
+          <div>α<sub>ν</sub> ∝ n θ<sub>e</sub><sup>−3</sup> K(X)/ν &nbsp;&nbsp; K = (√X + 2<sup>11/12</sup>X<sup>1/6</sup>)² e<sup>−X<sup>1/3</sup></sup></div>
+          <div class="eq-note">X = ν/ν<sub>s</sub> · ν<sub>s</sub> ∝ θ<sub>e</sub>² B · n ∝ r<sup>−1,1</sup> · θ<sub>e</sub> ∝ r<sup>−0,84</sup> · B ∝ r<sup>−1</sup></div>
+        </div>
+        <p>
+          La température de brillance observée tend vers la température des électrons décalée, g·T<sub>e</sub>. L'image
+          est ensuite floutée par le faisceau de l'instrument (20 µas pour l'EHT), converti en pixels à partir de la
+          taille angulaire de M.
+        </p>
+      </article>
+    </div>
+
+    <h3 class="sub-title">Trois façons d'ordonnancer le calcul</h3>
+    <div class="table-scroll">
+      <table class="sched">
+        <thead>
+          <tr><th scope="col"></th><th scope="col">Temps réel</th><th scope="col">Affinage progressif</th><th scope="col">Rendu hors ligne</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Quand</th><td>la caméra ou le temps bougent</td><td>tout est immobile</td><td>sur demande, scène figée</td></tr>
+          <tr><th scope="row">Rayons</th><td>1 par bloc N×N (N auto), décalage tournant</td><td>1 par pixel et par passe</td><td>1 par pixel et par passe, toute résolution</td></tr>
+          <tr><th scope="row">Intégrateur</th><td>RK4, pas heuristique</td><td>Dormand–Prince 5(4)</td><td>Dormand–Prince 5(4), tol. 10⁻⁶</td></tr>
+          <tr><th scope="row">Reconstruction</th><td>bilinéaire, accumulation temporelle</td><td>filtre gaussien σ = 0,42 px, débruiteur</td><td>filtre gaussien, flou de bouge, débruiteur</td></tr>
+          <tr><th scope="row">Rayons secondaires</th><td>—</td><td>—</td><td>rayonnement de retour</td></tr>
+          <tr><th scope="row">Arrêt</th><td>—</td><td>N échantillons ou bruit &lt; seuil</td><td>N échantillons ou bruit &lt; seuil</td></tr>
+          <tr><th scope="row">Découpage</th><td>une image par trame</td><td>bandes de lignes ≈ 28 ms</td><td>bandes selon un budget GPU (30–250 ms)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-note">
+      L'échantillonnage adaptatif arrête un pixel quand l'erreur standard relative de sa moyenne,
+      √(Var/n) / (moyenne + 0,01), passe sous le seuil (0,4 % ici) : les zones lisses s'arrêtent vers 16 échantillons,
+      l'anneau de photons et les étoiles en reçoivent jusqu'à 128 ou 192 selon la planche.
+    </p>
+
+    <div class="checks">
+      <div>
+        <h3 class="sub-title">Ce qui est vérifié (33 tests automatiques + une sonde GPU)</h3>
+        <ul>
+          <li>Les paramètres d'impact critiques b = ∓a + 6 cos(⅓ arccos(∓a)) sont retrouvés à ±0,01 M avec le pas fixe et à <b>±0,001 M</b> avec l'erreur contrôlée, pour a de 0 à 0,998.</li>
+          <li>La contrainte H = 0 reste sous <b>10⁻⁸</b> le long d'un rayon presque critique.</li>
+          <li>La courbe critique analytique de Bardeen (1973), projetée dans la vraie caméra, sépare bien les rayons capturés des rayons échappés, pour un observateur immobile comme pour un observateur en orbite.</li>
+          <li>ISCO exacte (6 M pour a = 0, 1,237 M pour a = 0,998), flux de Novikov–Thorne en r⁻³ à grande distance, pic à 9,55 M pour Schwarzschild.</li>
+          <li>Un corps noir à 6504 K donne le blanc sRGB ; la luminance de la table est monotone en T.</li>
+          <li>Une solution exacte en intégrales elliptiques de Carlson (Gralla & Lupsasca, 2020) donne les rayons où un disque mince est touché, images n = 0, 1, 2 : l'intégrateur en double précision la retrouve à 10⁻⁶ près.</li>
+          <li>Sonde GPU sur 425 rayons : les impacts sur le disque calculés par le moteur tombent à <b>~10⁻⁶ M</b> de la solution exacte (médiane), ~10⁻⁵ M pour l'anneau n = 2.</li>
+          <li>Face à une référence en double précision, l'erreur du GPU sur la direction d'arrivée reste environ 1000 fois plus petite que ce que couvre un centième de pixel ; la sommation compensée la divise par 1,4 à 4.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="sub-title">Ce qui n'est pas modélisé</h3>
+        <ul>
+          <li>Précision : le GPU calcule en flottants 32 bits ; l'erreur est mesurée (voir ci-contre) et reste invisible à l'échelle du pixel.</li>
+          <li>Le disque est une solution stationnaire idéalisée : pas de simulation magnétohydrodynamique, turbulence procédurale.</li>
+          <li>Pas de diffusion Compton ni de rotation Faraday ; le rayonnement de retour ne traite qu'un rebond, sur le disque mince.</li>
+          <li>Le flot millimétrique suit des profils paramétriques (type RIAF), pas une simulation GRMHD.</li>
+          <li>Le jet est cinématique : sa forme et sa vitesse sont imposées, pas calculées.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="journal" aria-labelledby="journal-title">
+    <div class="section-head">
+      <h2 id="journal-title">Journal des améliorations</h2>
+      <p>Les étapes qui ont mené au moteur v2 puis au trou de ver, chacune mesurée et enregistrée dans l'historique git du projet. Cliquez pour ouvrir une planche en grand.</p>
+    </div>
+    <div class="journal">
+      <figure>
+        <a href="img/journal/01_hdr.jpg" target="_blank" rel="noopener"><img src="img/journal/01_hdr.jpg" alt="A1 · Sortie HDR : Sur un écran XDR, le disque interne et le jet dépassent le blanc SDR au lieu d'être compressés." loading="lazy" /></a>
+        <figcaption><b>A1 · Sortie HDR</b> Sur un écran XDR, le disque interne et le jet dépassent le blanc SDR au lieu d'être compressés.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/02_dopri.jpg" target="_blank" rel="noopener"><img src="img/journal/02_dopri.jpg" alt="A2 · Dormand–Prince 5(4) : Rendu final 2× plus rapide à précision identique ; temps réel −28 % grâce à la racine d'Hermite." loading="lazy" /></a>
+        <figcaption><b>A2 · Dormand–Prince 5(4)</b> Rendu final 2× plus rapide à précision identique ; temps réel −28 % grâce à la racine d'Hermite.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/03_footprint.jpg" target="_blank" rel="noopener"><img src="img/journal/03_footprint.jpg" alt="A3 · Empreinte des pixels : À 16 échantillons, le ciel lentillé est presque aussi propre qu'à 512 (erreur ÷4,7)." loading="lazy" /></a>
+        <figcaption><b>A3 · Empreinte des pixels</b> À 16 échantillons, le ciel lentillé est presque aussi propre qu'à 512 (erreur ÷4,7).</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/04_real_sky.jpg" target="_blank" rel="noopener"><img src="img/journal/04_real_sky.jpg" alt="B1 · Ciel réel : Hipparcos + Gaia : les vraies étoiles et la vraie Voie lactée, lentillées." loading="lazy" /></a>
+        <figcaption><b>B1 · Ciel réel</b> Hipparcos + Gaia : les vraies étoiles et la vraie Voie lactée, lentillées.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/05_polarization.jpg" target="_blank" rel="noopener"><img src="img/journal/05_polarization.jpg" alt="B2 · Polarisation : Constante de Walker–Penrose : disque (Chandrasekhar) et flot synchrotron type M87*." loading="lazy" /></a>
+        <figcaption><b>B2 · Polarisation</b> Constante de Walker–Penrose : disque (Chandrasekhar) et flot synchrotron type M87*.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/06_returning.jpg" target="_blank" rel="noopener"><img src="img/journal/06_returning.jpg" alt="C1 · Rayonnement de retour : La lumière du disque revient éclairer le disque : +15 % à a = 0,998." loading="lazy" /></a>
+        <figcaption><b>C1 · Rayonnement de retour</b> La lumière du disque revient éclairer le disque : +15 % à a = 0,998.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/07_radio_eht.jpg" target="_blank" rel="noopener"><img src="img/journal/07_radio_eht.jpg" alt="C2 · Bande millimétrique : Synchrotron auto-absorbé à 86/230/345 GHz et faisceau de l'EHT." loading="lazy" /></a>
+        <figcaption><b>C2 · Bande millimétrique</b> Synchrotron auto-absorbé à 86/230/345 GHz et faisceau de l'EHT.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/08_turbulence.jpg" target="_blank" rel="noopener"><img src="img/journal/08_turbulence.jpg" alt="C3 · Turbulence spirale : Bras traînants, amas, vides et filaments cisaillés par la rotation." loading="lazy" /></a>
+        <figcaption><b>C3 · Turbulence spirale</b> Bras traînants, amas, vides et filaments cisaillés par la rotation.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/09_hotspot.jpg" target="_blank" rel="noopener"><img src="img/journal/09_hotspot.jpg" alt="C4 · Point chaud : Une éruption en orbite, vue au temps retardé : Doppler et arcs lentillés." loading="lazy" /></a>
+        <figcaption><b>C4 · Point chaud</b> Une éruption en orbite, vue au temps retardé : Doppler et arcs lentillés.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/10_precision.jpg" target="_blank" rel="noopener"><img src="img/journal/10_precision.jpg" alt="D1 · Précision : Sommation compensée et mesure de l'erreur face au calcul en double précision." loading="lazy" /></a>
+        <figcaption><b>D1 · Précision</b> Sommation compensée et mesure de l'erreur face au calcul en double précision.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/11_analytic.jpg" target="_blank" rel="noopener"><img src="img/journal/11_analytic.jpg" alt="D2 · Solution exacte : Les impacts sur le disque du GPU face aux intégrales elliptiques." loading="lazy" /></a>
+        <figcaption><b>D2 · Solution exacte</b> Les impacts sur le disque du GPU face aux intégrales elliptiques.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/12_denoiser.jpg" target="_blank" rel="noopener"><img src="img/journal/12_denoiser.jpg" alt="D3 · Débruiteur : Filtre à-trous à test statistique : erreur ÷2,5 à 8 échantillons." loading="lazy" /></a>
+        <figcaption><b>D3 · Débruiteur</b> Filtre à-trous à test statistique : erreur ÷2,5 à 8 échantillons.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/14_wormhole_geometry.jpg" target="_blank" rel="noopener"><img src="img/journal/14_wormhole_geometry.jpg" alt="W1 · Trou de ver : métrique DNeg raccordée à Kerr, vue des deux côtés et depuis Gargantua." loading="lazy" /></a>
+        <figcaption><b>W1 · Trou de ver</b> Métrique DNeg raccordée à Kerr : Gargantua vu de chez nous, notre ciel vu de chez lui.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/15_wormhole_journey.jpg" target="_blank" rel="noopener"><img src="img/journal/15_wormhole_journey.jpg" alt="W2 · Le voyage : traversée de la gorge puis orbite autour de Gargantua." loading="lazy" /></a>
+        <figcaption><b>W2 · Le voyage</b> Vol libre à travers la gorge et séquence cinématique de 24 s.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/16_wormhole_parameters.jpg" target="_blank" rel="noopener"><img src="img/journal/16_wormhole_parameters.jpg" alt="W3 · Forme du trou de ver : longueur et largeur de lentille comme dans les figures 7 et 9 de l'article." loading="lazy" /></a>
+        <figcaption><b>W3 · Forme</b> Longueur et largeur de lentille : les figures 7 et 9 de l'article, retrouvées.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/17_star_flight.jpg" target="_blank" rel="noopener"><img src="img/journal/17_star_flight.jpg" alt="W4 · Étoile et vol libre : Gargantua 2,5 fois plus gros dans la bouche, étoile compagnon, vol à six degrés de liberté." loading="lazy" /></a>
+        <figcaption><b>W4 · Étoile et vol libre</b> Gargantua 2,5 fois plus gros dans la bouche, étoile compagnon, vol à six degrés de liberté.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/18_realtime_time.jpg" target="_blank" rel="noopener"><img src="img/journal/18_realtime_time.jpg" alt="R1 · Temps réel sans traînée : quand le temps s'écoule, le disque tournant n'est plus étalé." loading="lazy" /></a>
+        <figcaption><b>R1 · Temps réel sans traînée</b> Quand le temps s'écoule, seuls les échantillons des 1,5 derniers M sont gardés ; les autres pixels sont reconstruits par convolution normalisée.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/19_scene_presets.jpg" target="_blank" rel="noopener"><img src="img/journal/19_scene_presets.jpg" alt="P1 · Préréglages de scènes : huit vues du trou de ver, de l'étoile et de Gargantua." loading="lazy" /></a>
+        <figcaption><b>P1 · Préréglages de scènes</b> Huit vues prêtes à l'emploi : trou de ver, étoile, vol incliné, galaxie lointaine.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/20_realtime_max.jpg" target="_blank" rel="noopener"><img src="img/journal/20_realtime_max.jpg" alt="P2 · Temps réel maximal : un rayon pour 2×2 pixels au lieu de 8×8, vers 15 à 20 images par seconde." loading="lazy" /></a>
+        <figcaption><b>P2 · Temps réel maximal</b> Un budget de 60 ms par image : un rayon pour 2×2 pixels au lieu de 8×8, vers 15 à 20 images par seconde.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/21_gravity.jpg" target="_blank" rel="noopener"><img src="img/journal/21_gravity.jpg" alt="G1 · Gravité : la caméra suit sa géodésique de Kerr ; en pointillés, sa trajectoire de chute libre prédite." loading="lazy" /></a>
+        <figcaption><b>G1 · Gravité</b> La caméra devient un corps en chute libre sur sa géodésique de Kerr, au rythme du temps de la scène ; en pointillés, sa trajectoire prédite (en rouge : l'horizon).</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/22_lensed_path.jpg" target="_blank" rel="noopener"><img src="img/journal/22_lensed_path.jpg" alt="G2 · Géodésique déviée : la trajectoire de la caméra tracée dans le rendu, anneau d'Einstein derrière le trou." loading="lazy" /></a>
+        <figcaption><b>G2 · Géodésique déviée</b> La trajectoire prédite est tracée par le lancer de rayons : la moitié d'orbite cachée derrière le trou devient un anneau d'Einstein, une chute s'enroule autour de l'ombre.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/23_path_occlusion.jpg" target="_blank" rel="noopener"><img src="img/journal/23_path_occlusion.jpg" alt="G3 · Le disque masque la géodésique : le tube passe derrière le disque." loading="lazy" /></a>
+        <figcaption><b>G3 · Masquage par le disque</b> Le tube de la trajectoire disparaît derrière le disque, sauf à travers les vrais trous de la turbulence.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/24_path_star.jpg" target="_blank" rel="noopener"><img src="img/journal/24_path_star.jpg" alt="G4 · L'étoile masque la géodésique : la trajectoire ressort du bord de l'étoile." loading="lazy" /></a>
+        <figcaption><b>G4 · Masquage par l'étoile</b> Lancée vers l'étoile, la trajectoire disparaît derrière elle et ressort de son bord, courbée vers Gargantua.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/25_path_wormhole.jpg" target="_blank" rel="noopener"><img src="img/journal/25_path_wormhole.jpg" alt="G5 · La bouche du trou de ver masque la géodésique." loading="lazy" /></a>
+        <figcaption><b>G5 · Masquage par le trou de ver</b> Le tube s'arrête au bord du disque et de la bouche ; la trajectoire prédite est limitée à un vrai tour autour du trou.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/26_camera_rotation.jpg" target="_blank" rel="noopener"><img src="img/journal/26_camera_rotation.jpg" alt="C1 · Rotation de la caméra : autour d'un corps choisi ou libre." loading="lazy" /></a>
+        <figcaption><b>C1 · Rotation de la caméra</b> Autour d'un corps choisi (Gargantua, l'étoile, la bouche), la caméra reste sur son image apparente, courbée et retardée ; ou rotation libre. Clic pour choisir, double-clic pour y voler.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/27_star_mass.jpg" target="_blank" rel="noopener"><img src="img/journal/27_star_mass.jpg" alt="C2 · L'étoile a une masse : elle dévie la lumière et attire la caméra." loading="lazy" /></a>
+        <figcaption><b>C2 · La masse de l'étoile</b> Son champ faible, celui d'une masse en mouvement, dévie la lumière (4m/b × (1 − v∥)) : l'image de Gargantua s'écarte, une image secondaire du disque apparaît au bord de l'étoile. En gravité, la caméra peut orbiter l'étoile, qui l'emporte autour de Gargantua.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/28_barycentre.jpg" target="_blank" rel="noopener"><img src="img/journal/28_barycentre.jpg" alt="C3 · Gargantua tourne autour du centre de masse." loading="lazy" /></a>
+        <figcaption><b>C3 · Le centre de masse</b> Gargantua et l'étoile tournent autour de leur centre de masse ⊕ : Gargantua décrit un cercle de 6,4 M à 0,011 c, à l'opposé de l'étoile, vu ici par une caméra au repos dans ce repère.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/29_glue_seam.jpg" target="_blank" rel="noopener"><img src="img/journal/29_glue_seam.jpg" alt="C4 · Plus de cercle autour du trou de ver." loading="lazy" /></a>
+        <figcaption><b>C4 · Raccord sans couture</b> L'horloge des rayons était remise à zéro en traversant la sphère de raccord de la bouche : le disque vu au travers était dessiné ~100 M trop tard, d'où un cercle net. Le temps, la déviation et l'énergie sont maintenant continus.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <footer>
+    <p class="colophon">Trou de ver : James, von Tunzelmann, Franklin &amp; Thorne, Am. J. Phys. 83, 486 (2015) · Rendu avec le mode hors ligne du projet · Bun + TypeScript + WebGPU · 1920×1080 par planche, de quelques secondes à 5 minutes chacune sur un GPU Apple dans le navigateur · Ciel : NASA/GSFC SVS Deep Star Maps 2020 (Gaia DR2 : ESA/Gaia/DPAC), catalogue HYG v4.4 (CC BY-SA 4.0)</p>
+  </footer>
+</main>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="lb-title">
+  <img id="lb-img" alt="" />
+  <div class="lb-bar">
+    <div class="lb-title" id="lb-title"></div>
+    <button class="lb-btn" id="lb-prev" aria-label="Planche précédente">←</button>
+    <button class="lb-btn" id="lb-next" aria-label="Planche suivante">→</button>
+    <button class="lb-btn" id="lb-close" aria-label="Fermer">✕</button>
+  </div>
+</div>
+
+<script>
+  const PLATES = [
+    {
+      id: 1, img: "g01_hero", title: "Disque volumétrique et jet",
+      text: "Un disque épais (hauteur caractéristique de 4 % du rayon) intégré comme un volume, avec absorption et émission le long de chaque trajet lumineux. La face lointaine du disque est courbée par-dessus l'ombre ; sa face inférieure réapparaît sous le trou, comme une seconde image.",
+      look: ["Le fin anneau de photons brillant, collé au bord gauche de l'ombre.", "La seconde image du disque, qui passe sous le trou.", "Le côté gauche, qui s'approche, est blanc bleuté ; le côté qui s'éloigne est ambré."],
+      params: [["a", "0,94"], ["θ", "83°"], ["r", "34 M"], ["T", "9500 K"], ["τ", "1,5"], ["H/R", "0,04"], ["Γ", "3"], ["éch.", "192"]],
+    },
+    {
+      id: 2, img: "g02_translucent", title: "Un disque translucide",
+      text: "Un disque infiniment mince de profondeur optique verticale τ = 0,3 : la plupart de la lumière qui vient de derrière le traverse. Près de nous, le contour complet de l'ombre transparaît à travers le gaz, et la face inférieure lentillée du disque lointain forme un anneau en dessous.",
+      look: ["Le bord de l'ombre qui continue derrière la partie proche du disque.", "L'arc inférieur : la lumière passée sous le trou avant de nous atteindre.", "La Voie lactée lentillée, visible entre les zones de turbulence."],
+      params: [["a", "0,94"], ["θ", "82°"], ["r", "36 M"], ["T", "9000 K"], ["τ", "0,3"], ["ISCO", "2,02 M"], ["éch.", "128"]],
+    },
+    {
+      id: 3, img: "g03_extreme", title: "Spin extrême, vu par la tranche",
+      text: "La limite de Thorne a = 0,998, vue à moins de 1° du plan du disque. L'horizon se réduit à 1,06 M et l'ISCO à 1,24 M. L'entraînement du référentiel permet aux photons qui tournent dans le sens du spin de passer bien plus près (paramètre d'impact critique 2,11 M) que ceux qui tournent en sens inverse (7,00 M) : l'ombre est aplatie et décalée.",
+      look: ["La silhouette asymétrique, en forme de D, de l'ombre.", "La partie proche du disque, vue comme un fin trait sombre en travers de l'image.", "L'image de la face inférieure : un grand arc sous le trou."],
+      params: [["a", "0,998"], ["θ", "89°"], ["r", "32 M"], ["r₊", "1,063 M"], ["τ", "3"], ["éch.", "128"]],
+    },
+    {
+      id: 4, img: "g04_m87", title: "Flot chaud vu de face",
+      text: "Presque dans l'axe de rotation, un flot géométriquement épais et optiquement mince, comme ceux qui entourent M87* et Sgr A*. Son émission décroît en r⁻³ : l'image est dominée par la lumière qui frôle les orbites de photons.",
+      look: ["L'anneau de photons, net : la lumière qui a tourné autour du trou avant de s'échapper.", "Le centre plus sombre : l'image lentillée de l'horizon sur le fond du flot.", "Les variations de luminosité le long de l'anneau, dues à l'effet Doppler du gaz en rotation."],
+      params: [["a", "0,94"], ["θ", "17°"], ["r", "60 M"], ["H/R", "0,45"], ["α", "0,8"], ["éch.", "128"]],
+    },
+    {
+      id: 5, img: "g05_blazar", title: "Un blazar",
+      text: "Le jet pointe à 20° de notre ligne de visée, avec un facteur de Lorentz de 5. Le jet qui s'approche a un facteur Doppler de 2,5, le contre-jet de 0,10 : un rapport de flux d'environ 5000, si bien que le contre-jet disparaît. Les nodosités de ce jet semblent se déplacer à 4,2 fois la vitesse de la lumière.",
+      look: ["Un seul jet brillant ; le contre-jet est sous le seuil de visibilité.", "Les filaments hélicoïdaux le long de l'écoulement.", "Le disque vu de face, à la base du jet."],
+      params: [["a", "0,95"], ["θ", "20°"], ["r", "90 M"], ["Γ", "5"], ["δ", "2,5 / 0,10"], ["éch.", "128"]],
+    },
+    {
+      id: 6, img: "g06_jetside", title: "Jet et contre-jet",
+      text: "Vus de côté (75°), les deux jets sont visibles. Avec Γ = 3 sous cet angle, le jet tourné vers nous est 3,8 fois plus lumineux que le contre-jet. La forme parabolique (largeur ∝ z^0,6) suit les mesures du jet de M87.",
+      look: ["Les bords du jet plus brillants (une gaine lumineuse autour d'un cœur plus pâle).", "Des nodosités de plus en plus espacées à mesure que le jet s'élargit.", "Le petit disque à la base, et le bulbe galactique en haut à droite."],
+      params: [["a", "0,95"], ["θ", "75°"], ["r", "110 M"], ["Γ", "3"], ["longueur", "220 M"], ["éch.", "128"]],
+    },
+    {
+      id: 7, img: "g07_luminet", title: "Luminet, 1979",
+      text: "Une reconstitution de la première image calculée d'un trou noir, obtenue sur un IBM 7040 et dessinée à la main par Jean-Pierre Luminet en 1979 : un trou noir sans rotation entouré d'un disque lisse et opaque, montré en lumière bolométrique.",
+      look: ["Le bord de l'ombre au paramètre d'impact critique 3√3 M = 5,196 M.", "Le bord interne du disque à l'ISCO, 6 M.", "Le côté gauche plus lumineux que le droit : amplification bolométrique ∝ g⁴."],
+      params: [["a", "0"], ["θ", "80°"], ["r", "60 M"], ["T", "6000 K"], ["modèle", "bolométrique"], ["éch.", "128"]],
+    },
+    {
+      id: 8, img: "g08_interstellar", title: "Interstellar : décalages coupés",
+      text: "Tous les décalages de fréquence coupés, comme pour le film. Le disque paraît symétrique, ce qui le rend lisible à l'écran, mais aucun disque réel ne ressemble à cela. Comparez avec la planche 9 grâce au curseur plus bas.",
+      look: ["La même luminosité des deux côtés du trou.", "La même géométrie qu'en planche 9 : l'effet de lentille ne dépend pas des décalages."],
+      params: [["a", "0,6"], ["θ", "84°"], ["r", "34 M"], ["T", "4500 K"], ["décalages", "coupés"], ["éch.", "128"]],
+    },
+    {
+      id: 9, img: "g09_interstellar_physical", title: "Interstellar : décalages activés",
+      text: "L'image de la planche 8 avec la physique rétablie : décalages Doppler, gravitationnel et transverse, et amplification relativiste.",
+      look: ["Le côté gauche, qui s'approche, est 2,6× plus lumineux qu'en planche 8.", "Le côté droit, qui s'éloigne, est 7× plus sombre et plus rouge."],
+      params: [["a", "0,6"], ["θ", "84°"], ["r", "34 M"], ["T", "4500 K"], ["décalages", "complets"], ["éch.", "128"]],
+    },
+    {
+      id: 10, img: "g10_redshift", title: "Carte des décalages", colorbar: true,
+      text: "Le rapport g = ν_obs/ν_ém entre la fréquence observée et la fréquence émise pour le disque de la planche 2 (rendu opaque), en fausses couleurs. Il combine l'effet Doppler du gaz en orbite et le décalage gravitationnel de la lumière qui s'extrait du puits de potentiel.",
+      look: ["Décalage vers le bleu (g > 1) là où le gaz vient vers nous, à gauche.", "Le décalage vers le rouge le plus fort au bord interne, du côté qui s'éloigne.", "Le fond vert : la lumière des étoiles, légèrement décalée vers le bleu en descendant vers la caméra (g ≈ 1,03)."],
+      params: [["a", "0,94"], ["θ", "82°"], ["r", "36 M"], ["vue", "carte de g"]],
+    },
+    {
+      id: 11, img: "g11_grid", title: "Carte de lentille",
+      text: "Une grille de latitude et de longitude peinte sur le ciel à l'infini, sans aucune matière. Elle montre d'où vient la lumière de chaque pixel : tout le ciel s'enroule en anneaux autour de l'ombre, chaque anneau plus proche étant une image d'ordre supérieur.",
+      look: ["Le ciel reproduit encore et encore en anneaux de plus en plus fins près du bord de l'ombre.", "La grille tordue par l'entraînement du référentiel : le motif n'est pas symétrique.", "L'hémisphère nord, en bleu, visible sous le trou autant qu'au-dessus."],
+      params: [["a", "0,9"], ["θ", "75°"], ["r", "25 M"], ["champ", "60°"], ["éch.", "64"]],
+    },
+    {
+      id: 12, img: "g12_orbit", title: "En orbite à r = 8 M",
+      text: "La caméra suit une orbite circulaire, à 0,38 c par rapport au repère local (γ = 1,08) ; son horloge bat à 0,87 fois le rythme d'une horloge à l'infini. L'aberration relativiste ramène toute la scène vers la direction du mouvement.",
+      look: ["L'ombre, déformée et repoussée sur le côté par l'aberration.", "Le disque qui défile juste sous la caméra.", "Les couleurs décalées par le mouvement propre de la caméra."],
+      params: [["a", "0,7"], ["θ", "80°"], ["r", "8 M"], ["β", "0,376"], ["champ", "75°"], ["éch.", "128"]],
+    },
+    {
+      id: 13, img: "g13_hotdisk", title: "Une température d'AGN réaliste",
+      text: "À 50 000 K, le spectre du disque culmine dans l'ultraviolet. La lumière visible tombe alors du côté de Rayleigh–Jeans, où la luminosité ne croît que proportionnellement à la température : l'amplification Doppler est plus faible dans le visible et tout le disque paraît blanc bleuté.",
+      look: ["Une couleur blanc bleuté uniforme, contre les tons ambrés de la planche 2 à 9000 K.", "Un contraste gauche–droite plus faible qu'en planche 2."],
+      params: [["a", "0,94"], ["θ", "82°"], ["r", "36 M"], ["T", "50 000 K"], ["τ", "1"], ["éch.", "128"]],
+    },
+    {
+      id: 14, img: "g14_infall", title: "La chute",
+      text: "La caméra tombe librement depuis le repos à l'infini (le référentiel « pluie ») et se trouve maintenant à r = 4,5 M, à 0,66 c par rapport au repère local (γ = 1,34). L'ombre occupe une grande partie du champ ; l'aberration la fait paraître plus petite qu'elle ne le serait pour un observateur immobile au même rayon.",
+      look: ["L'ombre qui remplit une grande partie de l'image.", "Le disque qui passe au-dessus.", "Le ciel comprimé vers la direction de la chute."],
+      params: [["a", "0,7"], ["θ", "70°"], ["r", "4,5 M"], ["β", "0,663"], ["champ", "90°"], ["éch.", "128"]],
+    },
+    {
+      id: 15, img: "g15_galaxy", title: "Le centre galactique derrière le trou",
+      text: "La caméra est 10° sous le plan du disque, à 70 M, avec le bulbe galactique juste derrière le trou. Le bulbe est lentillé en un anneau d'Einstein dont le rayon est proche de √(4M/D) ≈ 14° pour cette distance.",
+      look: ["L'anneau d'Einstein formé par le bulbe et ses bandes de poussière.", "Le disque vu de dessous, sa face lointaine lentillée autour de l'ombre.", "La bande de la Voie lactée qui se courbe en passant près du trou."],
+      params: [["a", "0,94"], ["θ", "100°"], ["r", "70 M"], ["φ", "−18°"], ["τ", "0,6"], ["éch.", "128"]],
+    },
+    {
+      id: 16, img: "q1_hero", title: "Le vrai centre galactique", v2: true,
+      text: "La scène par défaut devant le ciel réel : les 119 614 étoiles du catalogue Hipparcos/HYG, chacune un corps noir à sa température, et la Voie lactée de la carte Gaia DR2 de la NASA. Le centre galactique (Sagittaire) est placé derrière le trou : ses nuages d'étoiles et ses bandes de poussière forment un anneau d'Einstein complet.",
+      look: ["L'anneau d'Einstein rouge-brun de la Voie lactée, avec ses bandes de poussière.", "Le côté du disque qui s'éloigne, si rougi et si faible qu'il ne fait plus qu'absorber : une bande sombre sur l'anneau.", "Les étoiles réelles, amplifiées et étirées en arcs près de l'ombre."],
+      params: [["a", "0,94"], ["θ", "82°"], ["r", "36 M"], ["ciel", "l = 0°, b = 0°"], ["Γ", "3"], ["éch.", "128"]],
+    },
+    {
+      id: 17, img: "q6_crux", title: "La Croix du Sud lentillée", v2: true,
+      text: "Sans matière, le trou noir devant la région de la Carène et de la Croix du Sud (longitude galactique 298°). Chaque étoile du catalogue est filtrée sur l'empreinte réelle du pixel sur le ciel, calculée à partir des rayons voisins : près de l'anneau d'Einstein, un pixel voit une grande surface du ciel, et les étoiles y sont correctement amplifiées sans scintiller.",
+      look: ["Les étoiles brillantes étirées en arcs le long de l'anneau d'Einstein.", "Les images secondaires, retournées, à l'intérieur de l'anneau.", "Le bord net de l'ombre, sans bruit malgré la compression extrême du ciel."],
+      params: [["a", "0,94"], ["θ", "82°"], ["r", "40 M"], ["champ", "55°"], ["ciel", "l = 298°"], ["exposition", "+1,5 EV"], ["éch.", "64"]],
+    },
+    {
+      id: 18, img: "q4_poldisk", title: "La polarisation du disque", v2: true,
+      text: "L'atmosphère du disque diffuse la lumière sur les électrons : le champ électrique émerge parallèle à la surface, avec un taux jusqu'à 11,7 % sous incidence rasante (Chandrasekhar). La direction de polarisation est transportée jusqu'à la caméra par la constante de Walker–Penrose, conservée le long de chaque géodésique.",
+      look: ["Les traits horizontaux sur le disque extérieur, parallèles à son plan.", "Leur rotation près du trou noir : le plan de polarisation tourne en suivant la courbure.", "Des taux plus faibles (traits violets) là où l'on voit le disque plus de face."],
+      params: [["a", "0,94"], ["θ", "75°"], ["r", "36 M"], ["modèle", "Chandrasekhar"], ["transport", "Walker–Penrose"], ["éch.", "64"]],
+    },
+    {
+      id: 19, img: "q3_eht_sharp", title: "M87* à 230 GHz, résolution parfaite", v2: true,
+      text: "Dans la bande de l'Event Horizon Telescope, le disque mince disparaît : c'est un flot chaud et ténu, à 5·10¹⁰ K, qui rayonne par synchrotron thermique et réabsorbe sa propre lumière. Le transfert est résolu en température de brillance, à 86, 230 et 345 GHz en même temps. L'échelle de couleurs est celle des images de l'EHT.",
+      look: ["L'anneau de photons, très fin, qui entoure l'ombre.", "L'intérieur de l'ombre, pas tout à fait noir : le flot émet aussi devant le trou.", "La base du jet, faible à cette fréquence."],
+      params: [["a", "0,94"], ["θ", "163°"], ["r", "200 M"], ["ν", "230 GHz"], ["T_e", "5·10¹⁰ K"], ["τ₂₃₀", "0,6"], ["éch.", "64"]],
+    },
+    {
+      id: 20, img: "q3_eht_pol", title: "Ce que voit l'EHT", v2: true,
+      text: "La même image vue à travers le faisceau de 20 µas de l'EHT (pour M87*, une unité M vaut 3,8 µas). L'anneau de photons est flouté en un anneau épais d'environ 40 µas de diamètre, comme sur l'image publiée en 2019. Les traits montrent l'orientation du champ électrique pour un champ magnétique en spirale, le motif mesuré par l'EHT en 2021.",
+      look: ["Le diamètre de l'anneau, environ 2 × 5,2 M × 3,8 µas ≈ 40 µas.", "La dépression centrale, plus large que l'ombre réelle à cause du faisceau.", "Le motif en spirale des traits de polarisation."],
+      params: [["faisceau", "20 µas"], ["échelle", "3,8 µas/M"], ["champ B", "spirale"], ["taux", "≤ 70 %"], ["éch.", "64"]],
+    },
+    {
+      id: 21, img: "q7_multi", title: "Trois fréquences à la fois", v2: true,
+      text: "Rouge = 86 GHz, vert = 230 GHz, bleu = 345 GHz. L'auto-absorption dépend de la fréquence : à 86 GHz le flot est plus opaque et plus étendu ; à haute fréquence on voit plus profondément, jusqu'à l'anneau de photons. Le jet, dont le spectre décroît avec la fréquence, domine à 86 GHz, comme dans les observations du réseau GMVA.",
+      look: ["Le jet rouge : il n'apparaît vraiment qu'à basse fréquence.", "Le liseré bleuté de l'anneau : la haute fréquence traverse le flot.", "Le halo rouge-orangé, plus large, du flot optiquement épais à 86 GHz."],
+      params: [["R/V/B", "86/230/345 GHz"], ["a", "0,94"], ["θ", "163°"], ["exposition", "−2,2 EV"], ["éch.", "64"]],
+    },
+    {
+      id: 22, img: "q5_spot", title: "Un point chaud en orbite", v2: true,
+      text: "Une bulle de gaz à 15 000 K en orbite képlérienne à 7 M, comme les éruptions de Sgr A* suivies par l'instrument GRAVITY. Sa période est de 122 M, soit environ 43 minutes pour Sgr A*, l'ordre de grandeur observé. Chaque rayon la voit à l'instant où sa lumière est partie : ses images successives portent le retard de propagation.",
+      look: ["Le point chaud, amplifié par l'effet Doppler du côté qui s'approche.", "Sa moitié inférieure, cachée par le disque qu'il survole de 0,6 M.", "Son image secondaire, faible, de l'autre côté de l'ombre."],
+      params: [["a", "0,9"], ["θ", "78°"], ["r", "30 M"], ["orbite", "7 M"], ["σ", "0,7 M"], ["T", "15 000 K"], ["éch.", "64"]],
+    },
+    {
+      id: 23, img: "q9_extreme", title: "La lumière qui revient", v2: true,
+      text: "À a = 0,998, une partie de la lumière du disque interne est tellement courbée qu'elle retombe sur le disque (Cunningham, 1976). Chaque impact lance ici un second rayon qui remonte jusqu'à l'élément du disque qui a émis cette lumière ; elle est réémise avec un albédo de 1. Cet éclairage ajoute environ 15 % de lumière, surtout près du bord interne.",
+      look: ["Le disque interne, plus lumineux qu'avec la seule émission thermique.", "Une lueur sur le côté qui s'éloigne, éclairé par le côté qui s'approche.", "La forme en D de l'ombre, due à l'entraînement du référentiel."],
+      params: [["a", "0,998"], ["θ", "70°"], ["r", "25 M"], ["τ", "3"], ["albédo", "1"], ["éch.", "128"]],
+    },
+    {
+      id: 24, img: "q2_cine", title: "Turbulence spirale", v2: true,
+      text: "La planche I refaite avec le moteur v2 : la turbulence suit maintenant des bras spiraux traînants, cisaillés par la rotation différentielle et évalués au temps d'émission, avec des amas, des vides et des filaments fins. Le ciel réel et le débruiteur complètent l'image.",
+      look: ["Les bras spiraux et les vides du disque volumétrique.", "Les filaments fins le long des bras.", "Le jet et le contre-jet, et le ciel réel derrière."],
+      params: [["a", "0,94"], ["θ", "83°"], ["r", "34 M"], ["H/R", "0,04"], ["τ", "1,5"], ["éch.", "48"]],
+    },
+    {
+      id: 25, img: "w1_ourside", title: "Gargantua au fond du trou de ver", v3: true,
+      text: "De notre côté, à 6,5 M de la bouche, devant le vrai ciel. La bouche est une boule de cristal : tout l'autre univers y est comprimé, avec au centre Gargantua et son disque, vus par la tranche. Autour, notre Voie lactée est déviée en anneau par la courbure de l'embouchure.",
+      look: ["Gargantua au centre, son disque orange presque par la tranche.", "La bande de la galaxie lointaine, avec ses nébuleuses roses et bleu-vert.", "Notre Voie lactée étirée en anneau autour de la bouche."],
+      params: [["2a", "0,01 ρ"], ["W", "0,05 ρ"], ["ρ", "2 M"], ["ℓ", "−6,5 M"], ["D", "60 M"], ["éch.", "64"]],
+    },
+    {
+      id: 26, img: "w2_throat", title: "Dans la gorge", v3: true,
+      text: "À 1,2 M de la gorge, la bouche remplit presque tout le champ. L'autre univers occupe la quasi-totalité de l'image : seul un mince liseré de notre ciel subsiste au bord, là où les rayons frôlent l'embouchure.",
+      look: ["Le liseré de notre ciel, réduit à un anneau fin au bord de l'image.", "Gargantua qui grossit au centre.", "Les nébuleuses de la galaxie lointaine, étirées vers l'extérieur."],
+      params: [["ℓ", "−1,2 M"], ["champ", "70°"], ["2a", "0,01 ρ"], ["W", "0,05 ρ"], ["éch.", "64"]],
+    },
+    {
+      id: 27, img: "w3_behind", title: "La bouche devant Gargantua", v3: true,
+      text: "Dans l'univers de Gargantua, derrière la bouche. La caméra est dans la métrique de Kerr : les rayons qui entrent dans la sphère de raccord passent dans le trou de ver et ressortent chez nous. On voit la bouche en premier plan, notre ciel à l'intérieur, et Gargantua juste derrière, déformé par la lentille de la bouche.",
+      look: ["La bouche, sphère noire devant l'ombre de Gargantua.", "Le disque de Gargantua qui passe derrière la bouche.", "Le ciel extraterrestre enroulé par la lentille des deux objets."],
+      params: [["caméra", "Kerr, 90 M du trou"], ["ℓ", "+30 M"], ["champ", "40°"], ["éch.", "64"]],
+    },
+    {
+      id: 28, img: "w4_gargside", title: "Notre galaxie vue d'ailleurs", v3: true,
+      text: "Du côté de Gargantua, à 7 M de la bouche : à travers elle, notre univers entier, avec le centre de la Voie lactée orienté vers la bouche. Le chemin retour de la touche T part d'ici.",
+      look: ["La bande de notre Voie lactée, minuscule au fond de la bouche.", "La galaxie lointaine tout autour, plus dense et plus colorée que la nôtre.", "Le léger anneau de lentille au bord de la bouche."],
+      params: [["ℓ", "+7 M"], ["ciel", "l = 180° devant"], ["champ", "60°"], ["éch.", "64"]],
+    },
+    {
+      id: 29, img: "n1_mouth", title: "Gargantua en gros plan dans la bouche", v3: true,
+      text: "La bouche lointaine rapprochée à 22 M de Gargantua, 20° au-dessus de son disque. Dans la bouche, la taille d'un objet de l'autre univers dépend de l'angle sous lequel on le voit depuis la bouche lointaine : Gargantua y occupe maintenant environ 2,5 fois plus de place qu'avant.",
+      look: ["Gargantua au centre de la bouche, vu légèrement d'en haut.", "L'image secondaire du disque, repliée sous l'ombre.", "Notre Voie lactée, déviée en anneau autour de la bouche."],
+      params: [["ℓ", "−4 M"], ["D", "22 M"], ["élévation", "20°"], ["ρ", "1,5 M"], ["éch.", "48"]],
+    },
+    {
+      id: 30, img: "n2_star", title: "L'étoile compagnon", v3: true,
+      text: "Une étoile orange sur une orbite képlérienne à 70 M. Sa photosphère a une température qui baisse vers le bord, T(μ) = T (0,2 + 0,8 μ)^¼ : le centre est chauffé à blanc, le bord rougit. Elle porte une granulation, des taches avec pénombre et tourne sur elle-même. Au-dessus, une chromosphère rose, des protubérances Hα et une couronne à jets rayonnants, traitées en émission volumique fine.",
+      look: ["Les protubérances roses dressées sur le bord.", "Le bord plus sombre et plus rouge que le centre.", "Gargantua à droite, le ciel lointain enroulé autour."],
+      params: [["T", "4300 K"], ["R", "2,5 M"], ["orbite", "70 M"], ["champ", "40°"], ["éch.", "48"]],
+    },
+    {
+      id: 31, img: "n3_starfront", title: "L'étoile devant Gargantua", v3: true,
+      text: "L'étoile passe devant Gargantua. Elle est tracée comme le reste de la scène, avec son décalage Doppler orbital et gravitationnel, au temps d'émission. Placée derrière le trou, elle se déformerait en arcs d'Einstein.",
+      look: ["Le halo de la couronne et la lueur de l'objectif autour de l'étoile.", "Le disque de Gargantua qui passe derrière elle.", "L'ombre et l'anneau de photons au-dessus."],
+      params: [["r caméra", "90 M"], ["champ", "35°"], ["éch.", "48"]],
+    },
+    {
+      id: 32, img: "n4_roll", title: "Vol libre, six degrés de liberté", v3: true,
+      text: "La caméra se pilote comme un vaisseau : Z Q S D pour avancer, reculer et se décaler, A et E pour monter et descendre, W et X pour le roulis, clic droit pour tourner sans limite. Ici, inclinée de 25°, elle passe à côté de la bouche : la bouche noire, qui montre notre univers, se découpe devant l'ombre de Gargantua.",
+      look: ["Deux cercles noirs : la bouche au premier plan, l'ombre de Gargantua derrière.", "Le disque de Gargantua, déformé par la lentille de la bouche.", "L'horizon incliné par le roulis."],
+      params: [["r", "34 M"], ["roulis", "−25°"], ["champ", "60°"], ["éch.", "48"]],
+    },
+  ];
+
+  const EFFECTS = [
+    ["Ombre et anneau de photons", "La zone sombre est fixée par les orbites instables des photons, pas par l'horizon lui-même ; un fin anneau de lumière en borde le contour.", [1, 2, 4, 7]],
+    ["Entraînement du référentiel", "La rotation entraîne l'espace-temps autour du trou : un côté de l'ombre s'aplatit et le ciel lentillé se tord.", [3, 11]],
+    ["Lentille gravitationnelle", "La face lointaine du disque apparaît au-dessus et au-dessous du trou ; les étoiles d'arrière-plan s'étirent en arcs et en anneaux.", [1, 2, 11, 15]],
+    ["Images d'ordre supérieur", "La lumière qui fait un ou plusieurs tours autour du trou avant de s'échapper forme des images emboîtées, de plus en plus fines.", [2, 4, 11]],
+    ["Amplification Doppler", "Le gaz qui vient vers nous est plus lumineux et plus bleu ; celui qui s'éloigne est plus sombre et plus rouge.", [7, 9, 10]],
+    ["Décalage gravitationnel", "La lumière perd de l'énergie en remontant le puits de potentiel, ce qui rougit le disque interne.", [10, 13]],
+    ["Jets relativistes", "À petit angle, l'amplification cache le contre-jet ; les nodosités peuvent sembler plus rapides que la lumière.", [5, 6]],
+    ["Mouvement de l'observateur", "Une caméra en orbite ou en chute voit la scène aberrée et décalée en couleur par sa propre vitesse.", [12, 14]],
+    ["Transfert radiatif", "La matière translucide ou volumique absorbe et émet le long de chaque trajet lumineux, de l'avant vers l'arrière.", [1, 2, 4]],
+    ["Couleur physique", "Les couleurs viennent de spectres réels intégrés avec les fonctions colorimétriques de l'œil humain.", [2, 13, 8, 9]],
+    ["Ciel réel", "Les étoiles du catalogue Hipparcos et la Voie lactée de Gaia, lentillées et décalées en fréquence.", [16, 17, 24]],
+    ["Polarisation", "L'orientation du champ électrique est transportée le long de chaque rayon et tourne près du trou noir.", [18, 20]],
+    ["Bande millimétrique", "À 230 GHz on voit un flot chaud qui absorbe sa propre lumière, comme l'EHT.", [19, 20, 21]],
+    ["Rayonnement de retour", "La lumière du disque, courbée par le trou, revient éclairer le disque.", [23]],
+    ["Retard de propagation", "Ce qui bouge est vu à l'instant où sa lumière est partie : point chaud, nodosités du jet, turbulence.", [22, 24, 6]],
+  ];
+
+  const roman = (n) => ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI", "XXII", "XXIII", "XXIV"][n];
+
+  // ---------------------------------------------------------------- index des effets
+  const effectList = document.getElementById("effect-list");
+  for (const [name, text, refs] of EFFECTS) {
+    const el = document.createElement("article");
+    el.className = "effect";
+    el.innerHTML = `<h3>${name}</h3><p>${text}</p><div class="refs">${refs
+      .sort((a, b) => a - b)
+      .map((r) => `<a href="#plate-${r}" aria-label="Planche ${r}">Planche ${r}</a>`)
+      .join("")}</div>`;
+    effectList.append(el);
+  }
+
+  // ---------------------------------------------------------------- barre de couleurs (même polynôme que le shader)
+  function turbo(t) {
+    t = Math.min(1, Math.max(0, t));
+    const c = [
+      [0.114, 0.0628, 0.2248], [6.7162, 3.1822, 7.5715], [-66.093, -4.9366, -10.087], [228.66, 25.05, -91.883],
+      [-334.83, -69.314, 288.84], [218.73, 67.531, -305.17], [-52.887, -21.542, 110.53],
+    ];
+    return [0, 1, 2].map((k) => {
+      let v = c[6][k];
+      for (let i = 5; i >= 0; i--) v = c[i][k] + t * v;
+      v = Math.min(1, Math.max(0, v));
+      // le shader écrit des valeurs linéaires ; l'affichage les encode en sRGB
+      return Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
+    });
+  }
+  function colorbar() {
+    const stops = [];
+    for (let i = 0; i <= 24; i++) {
+      const [r, g, b] = turbo(i / 24);
+      stops.push(`rgb(${r} ${g} ${b}) ${((i / 24) * 100).toFixed(1)}%`);
+    }
+    // correspondance du shader : t = 0,5 + 0,6·log2(g)
+    const ticks = [0.6, 0.8, 1, 1.25, 1.6].map((g) => {
+      const t = 0.5 + 0.6 * Math.log2(g);
+      return `<span style="left:${(t * 100).toFixed(1)}%">${String(g).replace(".", ",")}</span>`;
+    });
+    return `<div class="colorbar"><div class="colorbar-title">g = ν_obs / ν_ém</div>
+      <div class="colorbar-bar" style="background:linear-gradient(90deg, ${stops.join(", ")})"></div>
+      <div class="colorbar-ticks">${ticks.join("")}</div>
+      <div class="colorbar-ends"><span>vers le rouge</span><span>vers le bleu</span></div></div>`;
+  }
+
+  // ---------------------------------------------------------------- planches
+  const list = document.getElementById("plate-list");
+  const listV2 = document.getElementById("plate-list-v2");
+  const listV3 = document.getElementById("plate-list-v3");
+  PLATES.forEach((p, i) => {
+    const fig = document.createElement("figure");
+    fig.className = "plate";
+    fig.id = `plate-${p.id}`;
+    fig.innerHTML = `
+      <button class="shot" data-index="${i}" aria-label="Afficher la planche ${p.id} en plein écran">
+        <img src="img/${p.img}.jpg" alt="Planche ${p.id} : ${p.title}" loading="${i < 2 ? "eager" : "lazy"}" width="1920" height="1080" />
+      </button>
+      <figcaption>
+        <div class="pno">Planche ${roman(p.id)} · ${p.id} sur ${PLATES.length}</div>
+        <h3>${p.title}</h3>
+        <p>${p.text}</p>
+        ${p.colorbar ? colorbar() : ""}
+        <ul class="look">${p.look.map((l) => `<li>${l}</li>`).join("")}</ul>
+        <p class="params">${p.params.map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("")}</p>
+      </figcaption>`;
+    (p.v3 ? listV3 : p.v2 ? listV2 : list).append(fig);
+  });
+
+  // ---------------------------------------------------------------- comparaison
+  const cmp = document.getElementById("compare-widget");
+  const range = document.getElementById("compare-range");
+  const setX = (v) => cmp.style.setProperty("--x", `${v}%`);
+  range.addEventListener("input", () => setX(range.value));
+  setX(range.value);
+
+  // ---------------------------------------------------------------- visionneuse
+  const lb = document.getElementById("lightbox");
+  const lbImg = document.getElementById("lb-img");
+  const lbTitle = document.getElementById("lb-title");
+  let current = 0;
+  let opener = null;
+  function show(i) {
+    current = (i + PLATES.length) % PLATES.length;
+    const p = PLATES[current];
+    lbImg.src = `img/${p.img}.jpg`;
+    lbImg.alt = `Planche ${p.id} : ${p.title}`;
+    lbTitle.innerHTML = `<small>Planche ${roman(p.id)}</small>${p.title}`;
+  }
+  function open(i, from) {
+    opener = from;
+    show(i);
+    lb.hidden = false;
+    document.getElementById("lb-close").focus();
+  }
+  function close() {
+    lb.hidden = true;
+    opener?.focus();
+  }
+  for (const l of [list, listV2]) {
+    l.addEventListener("click", (e) => {
+      const b = e.target.closest(".shot");
+      if (b) open(Number(b.dataset.index), b);
+    });
+  }
+  document.getElementById("lb-prev").onclick = () => show(current - 1);
+  document.getElementById("lb-next").onclick = () => show(current + 1);
+  document.getElementById("lb-close").onclick = close;
+  lb.addEventListener("click", (e) => {
+    if (e.target === lb || e.target === lbImg) close();
+  });
+  addEventListener("keydown", (e) => {
+    if (lb.hidden) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") show(current - 1);
+    else if (e.key === "ArrowRight") show(current + 1);
+  });
+</script>
+</html>

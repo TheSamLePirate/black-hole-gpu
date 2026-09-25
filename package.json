@@ -11,7 +11,8 @@
     "start": "bun server.ts",
     "build": "bun build ./index.html --outdir dist --minify",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:pages": "bun scripts/build-pages.ts"
   },
   "type": "module"
 }

@@ -1,5 +1,7 @@
 # Kerr black hole — WebGPU general-relativistic ray tracer
 
+**Live:** [the simulator](https://thesamlepirate.github.io/black-hole-gpu/) (needs WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+) · [Atlas de Kerr](https://thesamlepirate.github.io/black-hole-gpu/docs/), the gallery of renders and videos. Deployed by `.github/workflows/pages.yml` on every push to `main` (`bun run build:pages` → `_site/`: the app at the root, `gallery/` under `docs/` with the videos of `docs/video/`).
+
 Real-time and progressively converged rendering of a rotating (Kerr) black hole, its accretion disk
 and the lensed sky, written in TypeScript + WGSL, served with Bun.
 
