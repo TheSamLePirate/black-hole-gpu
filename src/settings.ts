@@ -62,6 +62,15 @@ export interface Settings {
   // time
   animate: boolean;
   timeSpeed: number; // M per second
+  // observation band
+  band: "visible" | "230GHz" | "multi";
+  radioTau: number; // vertical optical depth of the flow at 230 GHz, at r = 4 M
+  radioTe: number; // electron temperature at r = 4 M [10¹⁰ K]
+  radioNuS: number; // synchrotron frequency ν_s at r = 4 M, in units of 230 GHz
+  radioJet: number; // jet brightness in the radio band
+  beamUas: number; // instrument beam FWHM [µas] (0 = perfect resolution)
+  radioPeak: number; // brightness temperature shown as white [10¹⁰ K] (230 GHz colour map)
+  uasPerM: number; // angular size of GM/c² [µas] (3.8 for M87*, 5.0 for Sgr A*)
   returningRadiation: boolean; // disk self-irradiation (quality passes)
   diskAlbedo: number;
   // polarization (Walker–Penrose transport of the electric vector)
@@ -138,6 +147,14 @@ export function defaultSettings(): Settings {
     skyRoll: 35,
     animate: true,
     timeSpeed: 6,
+    band: "visible",
+    radioTau: 0.6,
+    radioTe: 5,
+    radioNuS: 0.15,
+    radioJet: 0.001,
+    beamUas: 0,
+    radioPeak: 5,
+    uasPerM: 3.8,
     returningRadiation: true,
     diskAlbedo: 0.5,
     polarization: false,
@@ -189,6 +206,10 @@ export const presets: Record<string, Partial<Settings>> = {
     diskOuter: 30, turbulence: 0, limbDarkening: false, exposure: 0.5, diskTau: 100, jet: false,
   },
   "Hot disk (T = 50 000 K, UV-bright AGN)": { diskTemp: 50000, exposure: -2.5 },
+  "EHT: M87* at 230 GHz (20 µas beam)": {
+    spin: 0.94, distance: 200, inclination: 163, fov: 9, disk: false, hotFlow: true, hotFlowHR: 0.4, jet: true,
+    band: "230GHz", beamUas: 20, bloom: 0, radioPeak: 4, polarization: true, polField: "spiral", polTickSize: 40,
+  },
   "Face-on (M87*-like hot flow)": {
     spin: 0.94, distance: 60, inclination: 17, fov: 30, disk: false, hotFlow: true,
     hotFlowHR: 0.45, hotFlowIntensity: 0.25, jet: false,

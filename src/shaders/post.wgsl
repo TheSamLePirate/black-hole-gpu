@@ -13,6 +13,28 @@
 @group(0) @binding(8) var<storage, read_write> polGrid: array<vec4f>;  // per tick cell: Σ I, Q, U, n
 @group(0) @binding(9) var<uniform> G: vec4u;                           // cell px, grid W, grid H, image W
 
+@group(0) @binding(10) var<uniform> B: vec4f; // beam: σ [px of this level], kernel radius [px]
+
+// Instrument beam (e.g. the EHT's ≈ 20 µas restoring beam): separable Gaussian on one mip level.
+fn beamBlur(gid: vec2u, dir: vec2i) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let n = i32(B.y);
+  let hi = vec2i(textureDimensions(src)) - 1;
+  var acc = vec3f(0.0);
+  var wsum = 0.0;
+  for (var i = -n; i <= n; i++) {
+    let w = exp(-0.5 * f32(i * i) / (B.x * B.x));
+    acc += w * textureLoad(src, clamp(vec2i(gid) + i * dir, vec2i(0), hi), 0).rgb;
+    wsum += w;
+  }
+  textureStore(dst, gid, vec4f(acc / wsum, 1.0));
+}
+@compute @workgroup_size(8, 8)
+fn beamH(@builtin(global_invocation_id) gid: vec3u) { beamBlur(gid.xy, vec2i(1, 0)); }
+@compute @workgroup_size(8, 8)
+fn beamV(@builtin(global_invocation_id) gid: vec3u) { beamBlur(gid.xy, vec2i(0, 1)); }
+
 fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
 
 // Polarization ticks: mean Stokes I, Q, U (luminance) over each cell of the tick grid.

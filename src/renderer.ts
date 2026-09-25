@@ -25,7 +25,8 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 27;
+const PARAM_VEC4S = 29;
+const BANDS = { visible: 0, "230GHz": 1, multi: 2 } as const;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
 const STAR_FLUX_SCALE = 1 / 4250;
@@ -128,6 +129,7 @@ interface Target {
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
   polGridPass: GPUBindGroup;
+  beam: { level: number; tex: GPUTexture; buf: GPUBuffer; h: GPUBindGroup; v: GPUBindGroup } | null;
   traceBind: GPUBindGroup;
   postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number }[];
   displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
@@ -163,6 +165,8 @@ export class Renderer {
   private postDown: GPUComputePipeline;
   private postUp: GPUComputePipeline;
   private postPolGrid: GPUComputePipeline;
+  private postBeamH: GPUComputePipeline;
+  private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   private paramsF = new Float32Array(this.params);
   private paramsU = new Uint32Array(this.params);
@@ -256,9 +260,11 @@ export class Renderer {
     this.postDown = mkPost("down");
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
+    this.postBeamH = mkPost("beamH");
+    this.postBeamV = mkPost("beamV");
 
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 112, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.lutBuf, 0, lut);
@@ -422,6 +428,7 @@ export class Renderer {
       polGrid,
       polGridBuf,
       polGridPass: null as unknown as GPUBindGroup,
+      beam: null,
       traceBind: null as unknown as GPUBindGroup,
       postPasses: [],
       displayBinds: new Map(),
@@ -435,6 +442,8 @@ export class Renderer {
     for (const b of [t.accum, t.moments, t.stamps, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     t.hdr.destroy();
     t.bloomTex.destroy();
+    t.beam?.tex.destroy();
+    t.beam?.buf.destroy();
   }
 
   private bindTarget(t: Target) {
@@ -472,7 +481,7 @@ export class Renderer {
         d.createBindGroup({
           layout: p.getBindGroupLayout(0),
           entries: [
-            { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+            { binding: 0, resource: t.hdr.createView() },
             { binding: 1, resource: { buffer: this.displayBuf } },
             { binding: 2, resource: t.bloomTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
             { binding: 3, resource: this.clampSampler },
@@ -638,6 +647,8 @@ export class Renderer {
     set(24, ...sky[2], 0);
     set(25, s.polarization ? 1 : 0, s.polFraction, POL_FIELDS[s.polField], (s.polJetPitch * Math.PI) / 180);
     set(26, s.returningRadiation ? 1 : 0, s.diskAlbedo, 3000, 0);
+    set(27, BANDS[s.band], s.radioTau, s.radioNuS, s.radioTe / 0.593);
+    set(28, s.radioJet, s.hotFlowHR, 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -671,7 +682,7 @@ export class Renderer {
       oy = (1 - sy) / 2;
     }
     const d = new Float32Array([
-      outW, outH, Math.pow(2, s.exposure), TONEMAPS[s.tonemap],
+      outW, outH, Math.pow(2, s.exposure) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
       sx, sy, ox, oy,
       hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
@@ -680,7 +691,8 @@ export class Renderer {
         return [s.polarization ? 1 : 0, cs, gw, gh];
       })(),
       // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
-      target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, 0,
+      target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, s.band === "230GHz" ? 1 : 0,
+      this.beamSetup(s, target)?.level ?? 0, 0, 0, 0,
     ]);
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
   }
@@ -703,6 +715,53 @@ export class Renderer {
     pass.end();
   }
 
+  /**
+   * Instrument beam: Gaussian of FWHM beamUas, with GM/c² subtending uasPerM, at the hole's distance
+   * (1 M ≈ 1/r rad from the camera). Blurred on the coarsest mip level where σ ≥ 2 px; the display
+   * samples that level (bilinear magnification of a band-limited image).
+   */
+  private beamSetup(s: Settings, t: Target) {
+    if (s.band === "visible" || s.beamUas <= 0) return null;
+    const pixelAngle = (2 * Math.tan((s.fov * Math.PI) / 360)) / t.height;
+    const sigmaPx = ((s.beamUas / 2.3548) / s.uasPerM / Math.max(s.distance, 2)) / pixelAngle;
+    if (sigmaPx < 1) return null;
+    const level = Math.max(0, Math.min(t.bloomLevels - 1, Math.floor(Math.log2(sigmaPx / 2))));
+    return { level, sigma: sigmaPx / 2 ** level };
+  }
+
+  private encodeBeam(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    const b = this.beamSetup(s, t);
+    if (!b) return;
+    const d = this.device;
+    const w = Math.max(1, t.width >> b.level);
+    const h = Math.max(1, t.height >> b.level);
+    if (!t.beam || t.beam.level !== b.level) {
+      t.beam?.tex.destroy();
+      t.beam?.buf.destroy();
+      const tex = d.createTexture({ size: [w, h], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+      const buf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const lv = t.hdr.createView({ baseMipLevel: b.level, mipLevelCount: 1 });
+      const mk = (p: GPUComputePipeline, src: GPUTextureView, dst: GPUTextureView) =>
+        d.createBindGroup({
+          layout: p.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: src },
+            { binding: 2, resource: dst },
+            { binding: 10, resource: { buffer: buf } },
+          ],
+        });
+      t.beam = { level: b.level, tex, buf, h: mk(this.postBeamH, lv, tex.createView()), v: mk(this.postBeamV, tex.createView(), lv) };
+    }
+    d.queue.writeBuffer(t.beam.buf, 0, new Float32Array([b.sigma, Math.ceil(3 * b.sigma), 0, 0]));
+    for (const [p, g] of [[this.postBeamH, t.beam.h], [this.postBeamV, t.beam.v]] as const) {
+      const pass = enc.beginComputePass();
+      pass.setPipeline(p);
+      pass.setBindGroup(0, g);
+      pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
+      pass.end();
+    }
+  }
+
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
     if (s?.polarization) {
       const { gw, gh } = this.polCells(s, t);
@@ -712,13 +771,15 @@ export class Renderer {
       pass.dispatchWorkgroups(Math.ceil(gw / 8), Math.ceil(gh / 8));
       pass.end();
     }
-    for (const p of t.postPasses) {
+    t.postPasses.forEach((p, i) => {
       const pass = enc.beginComputePass();
       pass.setPipeline(p.pipeline);
       pass.setBindGroup(0, p.bind);
       pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
       pass.end();
-    }
+      // beam after the downsampling chain (resolve + n − 1 downs), before the bloom upsampling
+      if (s && i === t.bloomLevels - 1) this.encodeBeam(enc, t, s);
+    });
   }
 
   private encodeDisplay(enc: GPUCommandEncoder, t: Target, pipeline: GPURenderPipeline, view: GPUTextureView) {

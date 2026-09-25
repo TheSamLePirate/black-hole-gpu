@@ -264,6 +264,50 @@ export const SCHEMA: ControlDef[] = [
     help: "Switch individual effects off to see what each does. Physically everything is on: g = ν_obs/ν_em is exact and I_ν/ν³ is invariant.",
     keywords: "doppler redshift beaming interstellar",
   },
+  // ------------------------------------------------------------------ physics · observation band
+  {
+    key: "band", type: "choice", section: "physics", group: "Observation", label: "Band", style: "segmented",
+    options: [
+      { value: "visible", label: "Visible", hint: "CIE 1931 colour of the full spectrum" },
+      { value: "230GHz", label: "230 GHz", hint: "Event Horizon Telescope band: brightness temperature, afmhot scale" },
+      { value: "multi", label: "86/230/345", hint: "Millimetre false colour: red 86, green 230, blue 345 GHz" },
+    ],
+    help: "Millimetre bands trace the hot flow's thermal synchrotron emission with self-absorption, solved at three frequencies at once: dT_b/ds = α_ν(ν/g)(g·T_e − T_b), Kirchhoff's law in the gas frame. The thin disk (~10⁴ K) is a black occulter there, the sky is dark.",
+    keywords: "radio millimetre mm eht submillimetre synchrotron brightness temperature",
+  },
+  {
+    key: "radioTau", type: "number", section: "physics", group: "Observation", label: "τ at 230 GHz", min: 0.01, max: 30, scale: "log", precision: 2,
+    visible: (s) => s.band !== "visible",
+    help: "Vertical optical depth of the flow at 230 GHz at r = 4 M. Above ~1 the flow hides the photon ring (Sgr A*-like at low frequency).",
+  },
+  {
+    key: "radioTe", type: "number", section: "physics", group: "Observation", label: "Electron temp.", min: 0.5, max: 50, scale: "log", unit: "10¹⁰ K", precision: 2,
+    visible: (s) => s.band !== "visible",
+    help: "Electron temperature at r = 4 M (θ_e ∝ r^−0.84 elsewhere).",
+  },
+  {
+    key: "radioNuS", type: "number", section: "physics", group: "Observation", label: "ν_s / 230 GHz", min: 0.02, max: 5, scale: "log", precision: 2, advanced: true,
+    visible: (s) => s.band !== "visible",
+    help: "Characteristic synchrotron frequency ν_s = (2/9)(eB/2πm_ec)θ_e² at r = 4 M, relative to 230 GHz: sets where the spectrum peaks.",
+  },
+  {
+    key: "radioJet", type: "number", section: "physics", group: "Observation", label: "Jet brightness", min: 0, max: 1, scale: "log", offAtZero: true, precision: 2,
+    visible: (s) => s.band !== "visible",
+  },
+  {
+    key: "radioPeak", type: "number", section: "physics", group: "Observation", label: "White level", min: 0.1, max: 100, scale: "log", unit: "10¹⁰ K", precision: 2, effect: "display",
+    visible: (s) => s.band === "230GHz",
+  },
+  {
+    key: "beamUas", type: "number", section: "physics", group: "Observation", label: "Beam", min: 0, max: 60, step: 0.5, unit: "µas", effect: "display", offAtZero: true,
+    visible: (s) => s.band !== "visible",
+    help: "Resolution of the interferometer (Gaussian restoring beam, FWHM). The EHT's is ≈ 20 µas at 230 GHz.",
+  },
+  {
+    key: "uasPerM", type: "number", section: "physics", group: "Observation", label: "GM/c² angle", min: 0.1, max: 20, scale: "log", unit: "µas", precision: 2, effect: "display",
+    visible: (s) => s.band !== "visible" && s.beamUas > 0,
+    help: "Angular size of GM/c² for the source: 3.8 µas for M87*, 5.0 µas for Sgr A*.",
+  },
   // ------------------------------------------------------------------ physics · polarization
   {
     key: "polarization", type: "toggle", section: "physics", group: "Polarization", label: "Polarization",

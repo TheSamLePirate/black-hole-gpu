@@ -6,7 +6,8 @@ struct Display {
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
   hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
   pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
-  img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, unused
+  img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
+  lod: vec4f,   // mip level of the HDR image to display (instrument beam), unused…
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -84,6 +85,10 @@ fn hdrMap(c: vec3f, peak: f32, punchy: bool) -> vec3f {
   return mix(scaled, vec3f(m2), 0.75 * w);
 }
 
+fn srgbToLinear(c: vec3f) -> vec3f {
+  return select(pow((c + 0.055) / 1.055, vec3f(2.4)), c / 12.92, c <= vec3f(0.04045));
+}
+
 fn srgbEncode(c: vec3f) -> vec3f {
   let lo = c * 12.92;
   let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055;
@@ -136,13 +141,17 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let uvOut = in.pos.xy / D.size.xy;
   let uv = (uvOut - D.view.zw) / D.view.xy;
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
-  var c = textureSampleLevel(hdr, samp, uv, 0.0).rgb;
+  var c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
     c = mix(c, b, D.flags.y);
     c *= D.size.z;
     let tm = u32(D.size.w);
-    if (D.hdr.x > 0.5) {
+    if (D.img.w > 0.5) {
+      // radio brightness temperature on the "afmhot" scale of EHT images (linear, exposure = peak)
+      let t = clamp(c.g, 0.0, 1.0);
+      c = srgbToLinear(clamp(vec3f(2.0 * t, 2.0 * t - 0.5, 2.0 * t - 1.0), vec3f(0.0), vec3f(1.0)));
+    } else if (D.hdr.x > 0.5) {
       if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
     } else if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); }
   }

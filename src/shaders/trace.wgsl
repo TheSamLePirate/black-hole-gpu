@@ -38,6 +38,8 @@ struct Params {
   skyZ: vec4f,
   pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
   ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, unused
+  radio: vec4f,    // band (0 visible, 1 230 GHz, 2 86/230/345 GHz), τ₂₃₀, ν_s(4M)/230 GHz, θ_e(4M)
+  radio2: vec4f,   // jet radio brightness, flow H/R, unused, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -621,7 +623,17 @@ fn volumeEmission(s: GState, L: f32, E0: f32, dl: f32) -> vec3f {
 // fluid frame; observed with dI = g³ j(ν_obs/g) (−p·u) dλ, so Doppler boosting of the approaching
 // jet, de-boosting and reddening of the counter-jet and apparent superluminal knot motion (via the
 // retarded time t_em) all follow from the geodesics.
+struct JetSample { n: f32, g: f32, k: f32 }; // emitter density, g = ν_obs/ν_em, −p·u
+
 fn jetEmission(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> vec3f {
+  let j = jetSample(s, L, E0, tNow);
+  if (j.n <= 0.0) { return vec3f(0.0); }
+  // I_obs = g³ j(ν/g) = g^{8/3} x^{1/3} e^{−x/(g ν_c)}: colour from the CIE-integrated LUT
+  return syncColor(j.g * P.jet2.y) * pow(j.g, 8.0 / 3.0) * j.n * j.k * dl * P.jet.w;
+}
+
+fn jetSample(s: GState, L: f32, E0: f32, tNow: f32) -> JetSample {
+  var o: JetSample;
   let a = P.bh.x;
   let rH = P.bh.y;
   let r = s.x.x;
@@ -631,10 +643,10 @@ fn jetEmission(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> vec3f {
   let az = abs(z);
   let R = r * sn;
   let zMax = P.jet2.x;
-  if (az < rH * 1.05 || az > zMax) { return vec3f(0.0); }
+  if (az < rH * 1.05 || az > zMax) { return o; }
   let Rj = jetRadius(az, rH);
   let x = R / Rj;
-  if (x > 2.2) { return vec3f(0.0); }
+  if (x > 2.2) { return o; }
 
   // limb-brightened sheath + fainter spine (as in VLBI images of M87), diluted ∝ R_j^-1.5
   let sheath = exp(-pow((x - 0.75) / 0.22, 2.0));
@@ -655,7 +667,7 @@ fn jetEmission(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> vec3f {
   // shocks are patchy (oblique, partially filled fronts), not clean rings
   let shock = pow(0.5 + 0.5 * sin(TAU * shockPhase), 10.0) * smoothstep(0.25, 0.75, fil);
   n *= mix(1.0, 0.15 + 1.5 * fil * fil + 2.2 * shock, P.jet2.z);
-  if (n < 1e-6) { return vec3f(0.0); }
+  if (n < 1e-6) { return o; }
 
   // Photon energy in the fluid frame: boost of the ZAMO measurement along r̂.
   let m = kerrMetric(r, th, a);
@@ -667,9 +679,64 @@ fn jetEmission(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> vec3f {
   let k = gam * (Ez - beta * pr);
   var g = (1.0 / E0) / max(k, 1e-6);
   if (P.modes.y == SHIFT_NONE) { g = 1.0; }
+  o.n = n;
+  o.g = g;
+  o.k = k;
+  return o;
+}
 
-  // I_obs = g³ j(ν/g) = g^{8/3} x^{1/3} e^{−x/(g ν_c)}: colour from the CIE-integrated LUT
-  return syncColor(g * P.jet2.y) * pow(g, 8.0 / 3.0) * n * k * dl * P.jet.w;
+// ---------------------------------------------------------------------------------------------
+// Radio (millimetre) band: thermal synchrotron with self-absorption, three frequencies at once
+// ---------------------------------------------------------------------------------------------
+// Transfer in brightness temperature at each observed frequency ν (Rayleigh–Jeans), with Kirchhoff's
+// law j_ν = α_ν B_ν(T_e) in the gas frame and the invariance of I_ν/ν³:
+//     dT_b/ds = α_ν(ν/g) · (g T_e − T_b),   ds = (−p·u) dλ
+// so the observed brightness temperature relaxes towards the Doppler-shifted electron temperature.
+// Absorption coefficient of a relativistic thermal plasma (Mahadevan+ 1996, Leung+ 2011 fit):
+//     α_ν ∝ n θ_e⁻³ K(X)/ν,  K(X) = (√X + 2^{11/12} X^{1/6})² e^{−X^{1/3}},  X = ν/ν_s,  ν_s ∝ θ_e² B
+// with a radiatively inefficient flow: n ∝ r^−1.1, θ_e ∝ r^−0.84, B ∝ r^−1, scale height H/R.
+const RADIO_NU = vec3f(86.0 / 230.0, 1.0, 345.0 / 230.0); // observed frequencies / 230 GHz
+const RADIO_R0 = 4.0; // reference radius of the normalisation [M]
+
+fn synchK(X: f32) -> f32 {
+  let x6 = pow(max(X, 1e-8), 1.0 / 6.0);
+  let t = x6 * x6 * x6 + 1.8877 * x6;
+  return t * t * exp(-x6 * x6);
+}
+
+struct RadioSample { alpha: vec3f, S: f32, dens: f32 };
+
+// P.radio: mode (1 = 230 GHz, 2 = 86/230/345 GHz), τ₂₃₀ scale, ν_s(R0)/230 GHz, θ_e(R0);
+// P.radio2: jet radio scale, H/R of the flow, 0, 0
+fn radioFlow(s: GState, L: f32, E0: f32) -> RadioSample {
+  var o: RadioSample;
+  let a = P.bh.x;
+  let r = s.x.x;
+  let th = s.x.y;
+  let R = r * sin(th);
+  let z = r * cos(th);
+  let H = max(P.radio2.y * R, 0.05);
+  let rH = P.bh.y;
+  let rc = 10.0; // outer taper of the compact flow [M]
+  let q = r / RADIO_R0;
+  let dens = exp(-0.5 * z * z / (H * H)) * pow(q, -1.1) * smoothstep(rH, rH * 1.25, r) * exp(-(r * r) / (rc * rc));
+  if (dens < 1e-5) { return o; }
+  let om = 0.9 / (pow(max(R, 1.0), 1.5) + a);
+  let kEm = circularEmitterEnergy(r, th, a, L, om);
+  var g = (1.0 / E0) / kEm;
+  if (P.modes.y == SHIFT_NONE) { g = 1.0; }
+  let thetaRel = pow(q, -0.84);                 // θ_e / θ_e(R0)
+  let xs = P.radio.z * thetaRel * thetaRel / q; // ν_s / 230 GHz
+  let xEm = RADIO_NU / g;
+  let kRef = synchK(1.0 / P.radio.z);
+  let X = xEm / xs;
+  let K = vec3f(synchK(X.x), synchK(X.y), synchK(X.z));
+  // normalised so that the vertical optical depth at 230 GHz through the flow at R0 is ≈ P.radio.y
+  let tauScale = P.radio.y / (2.5066 * max(P.radio2.y * RADIO_R0, 0.05));
+  o.alpha = tauScale * dens / (thetaRel * thetaRel * thetaRel) * (K / kRef) / xEm * kEm;
+  o.S = g * P.radio.w * 0.593 * thetaRel;       // g·T_e in units of 10¹⁰ K
+  o.dens = dens;
+  return o;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1081,6 +1148,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var hitDisk = false;
   var trans = 1.0; // transmittance accumulated front to back
   var hNext = 1e9;
+  let radio = P.radio.x > 0.5;
+  var trans3 = vec3f(1.0); // per-frequency transmittance (radio band)
   var out: TraceOut;
   var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
 
@@ -1128,34 +1197,62 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       evals += 4u;
     }
 
-    if (volOn) {
-      let e = trans * volumeEmission(n, L, E0, h);
-      col += e;
-      if (polOn && dot(e, e) > 0.0) {
-        // synchrotron: E ⟂ B in the gas frame (sub-Keplerian rotation Ω = 0.9 Ω_K)
-        let R = n.x.x * sin(n.x.y);
-        let m = kerrMetric(n.x.x, n.x.y, a);
-        let om = 0.9 / (pow(max(R, 1.0), 1.5) + a);
-        let v = sqrt(m.A / m.sig) * sin(n.x.y) * (om - 2.0 * a * n.x.x / m.A) / sqrt(max(m.sig * m.del / m.A, 1e-12));
-        let pe = emitterPolarization(n, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), flowField(n.x.y));
-        stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+    if (radio) {
+      if (volOn) {
+        let rs = radioFlow(n, L, E0);
+        if (rs.dens > 0.0) {
+          let att = exp(-rs.alpha * h);
+          let add = trans * trans3 * rs.S * (vec3f(1.0) - att);
+          col += add;
+          trans3 *= att;
+          if (polOn) {
+            let R = n.x.x * sin(n.x.y);
+            let m = kerrMetric(n.x.x, n.x.y, a);
+            let om = 0.9 / (pow(max(R, 1.0), 1.5) + a);
+            let v = sqrt(m.A / m.sig) * sin(n.x.y) * (om - 2.0 * a * n.x.x / m.A) / sqrt(max(m.sig * m.del / m.A, 1e-12));
+            let pe = emitterPolarization(n, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), flowField(n.x.y));
+            stokes += P.pol.y * pe.w * add.y * stokesDir(pe.kappa, kapX, kapY);
+          }
+        }
       }
-    }
-    if (jetOn) {
-      let e = trans * jetEmission(n, L, E0, h, tNow);
-      col += e;
-      if (polOn && dot(e, e) > 0.0) {
-        // helical field in the outflow frame: poloidal (along r̂) + toroidal, pitch P.pol.w
-        let pe = emitterPolarization(n, L, a, vec3f(P.jet.y, 0.0, 0.0), vec3f(cos(P.pol.w), 0.0, sin(P.pol.w)));
-        stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+      if (jetOn) {
+        // optically thin power law ν^−0.7: T_b ∝ g^{3.7} n ν^{−2.7}
+        let j = jetSample(n, L, E0, tNow);
+        if (j.n > 0.0) {
+          col += trans * trans3 * P.radio2.x * j.n * j.k * h * pow(j.g, 3.7) * pow(RADIO_NU, vec3f(-2.7));
+        }
+      }
+      if (trans * max(trans3.x, max(trans3.y, trans3.z)) < 2e-3) { fate = 3u; break; }
+    } else {
+      if (volOn) {
+        let e = trans * volumeEmission(n, L, E0, h);
+        col += e;
+        if (polOn && dot(e, e) > 0.0) {
+          // synchrotron: E ⟂ B in the gas frame (sub-Keplerian rotation Ω = 0.9 Ω_K)
+          let R = n.x.x * sin(n.x.y);
+          let m = kerrMetric(n.x.x, n.x.y, a);
+          let om = 0.9 / (pow(max(R, 1.0), 1.5) + a);
+          let v = sqrt(m.A / m.sig) * sin(n.x.y) * (om - 2.0 * a * n.x.x / m.A) / sqrt(max(m.sig * m.del / m.A, 1e-12));
+          let pe = emitterPolarization(n, L, a, vec3f(0.0, 0.0, clamp(v, -0.99, 0.99)), flowField(n.x.y));
+          stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+        }
+      }
+      if (jetOn) {
+        let e = trans * jetEmission(n, L, E0, h, tNow);
+        col += e;
+        if (polOn && dot(e, e) > 0.0) {
+          // helical field in the outflow frame: poloidal (along r̂) + toroidal, pitch P.pol.w
+          let pe = emitterPolarization(n, L, a, vec3f(P.jet.y, 0.0, 0.0), vec3f(cos(P.pol.w), 0.0, sin(P.pol.w)));
+          stokes += P.pol.y * pe.w * luminance(e) * stokesDir(pe.kappa, kapX, kapY);
+        }
       }
     }
     if (diskOn && thick) {
       let d = diskVolume(n, L, E0, h, tNow);
       if (d.dtau > 0.0) {
         let att = exp(-d.dtau);
-        col += trans * d.S * (1.0 - att);
-        if (polOn) {
+        if (!radio) { col += trans * d.S * (1.0 - att); }
+        if (polOn && !radio) {
           let m = kerrMetric(n.x.x, n.x.y, a);
           let R = n.x.x * sin(n.x.y);
           let om = 1.0 / (pow(max(R, 1.0), 1.5) + a);
@@ -1192,13 +1289,14 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         let rc = m.x.x;
         if (rc >= rIn && rc <= rOut) {
           let hit = shadeDisk(m, L, E0, tNow);
-          col += trans * hit.color;
-          if (QUALITY_PIPELINE && P.ret.x > 0.5 && P.misc.y < 0.5 && P.modes.y == SHIFT_FULL) {
+          // radio: the ~10⁴ K disk is a black occulter next to the ~10¹⁰ K synchrotron flow
+          if (!radio) { col += trans * hit.color; }
+          if (!radio && QUALITY_PIPELINE && P.ret.x > 0.5 && P.misc.y < 0.5 && P.modes.y == SHIFT_FULL) {
             let u = hash4(vec3u(bitcast<u32>(ndc.x), bitcast<u32>(ndc.y), bitcast<u32>(rnd) + crossings)).xy;
             let back = returningRadiation(m, sign(cos(s.x.y)), hit.g, tNow, u);
             col += trans * (1.0 - hit.trans) * P.ret.y * back;
           }
-          if (polOn) {
+          if (polOn && !radio) {
             // electron-scattering atmosphere: E-vector parallel to the disk surface (⟂ normal and k)
             let mt = kerrMetric(rc, PI * 0.5, a);
             let om = 1.0 / (pow(rc, 1.5) + a);
@@ -1246,7 +1344,9 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     var gBg = 1.0 / E0;
     if (P.modes.y == SHIFT_NONE) { gBg = 1.0; }
     out.dir = dir;
-    if (mode == MODE_PHYSICAL) {
+    if (radio) {
+      // no millimetre sky (the 2.7 K CMB is negligible)
+    } else if (mode == MODE_PHYSICAL) {
       out.bgW = trans;
       out.gBg = gBg;
     } else if (mode == MODE_REDSHIFT) {
