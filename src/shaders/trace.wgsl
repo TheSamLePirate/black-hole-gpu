@@ -629,34 +629,71 @@ fn faceDir(face: f32, u: f32, v: f32) -> vec3f {
   return normalize(vec3f(u, v, -1.0));
 }
 
+// Band-limited fBm: octaves finer than the filter footprint fw (in units of p) are replaced by their
+// mean, so the pattern is pre-filtered over the pixel's footprint on the sky instead of aliasing.
+fn fbmLod(p0: vec3f, octaves: i32, fw: f32) -> f32 {
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  var f = 1.0;
+  for (var i = 0; i < octaves; i++) {
+    let keep = 1.0 - smoothstep(0.2, 0.5, f * fw);
+    if (keep > 0.0) { s += a * mix(0.5, vnoise(p), keep); } else { s += a * 0.5; }
+    n += a;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    f *= 2.03;
+    a *= 0.5;
+  }
+  return s / n;
+}
+
 // Stars on a jittered cube-map grid. Each star is a blackbody point source (temperature drawn
-// from a cool-heavy distribution), rendered with a normalised Gaussian PSF so that total flux is
-// conserved; lensing magnification therefore stretches and brightens them correctly.
-fn starLayer(d: vec3f, cells: f32, layer: u32, g: f32, sigma: f32, density: f32) -> vec3f {
-  let fuv = faceUV(d);
-  let p = (fuv.yz * 0.5 + 0.5) * cells;
-  let cell = floor(p);
+// from a cool-heavy distribution) with flux ∝ U^−1.5. Rendered through the pixel's sky filter (PSF ⊗
+// lensed pixel footprint, normalised): the flux collected by a pixel is exact, including the lensing
+// magnification. When the footprint grows beyond the cell size (near the critical curve, where one
+// pixel sees a large patch of sky), the layer smoothly becomes its mean radiance instead of sparkling.
+const STAR_MEAN_FLUX = 19.2; // E[max(U, 0.02)^−1.5], U uniform
+fn starLayer(d: vec3f, cells: f32, layer: u32, g: f32, filt: SkyFilter, density: f32) -> vec3f {
+  let cellAngle = 1.5708 / cells;
+  let w = smoothstep(0.15, 0.35, filt.radius / cellAngle);
   var col = vec3f(0.0);
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let c = cell + vec2f(f32(i), f32(j));
-      if (c.x < 0.0 || c.y < 0.0 || c.x >= cells || c.y >= cells) { continue; }
-      let h = hash4(vec3u(u32(c.x), u32(c.y), u32(fuv.x) + layer * 8u));
-      if (h.x > density) { continue; }
-      let sp = (c + 0.1 + 0.8 * h.yz) / cells * 2.0 - 1.0;
-      let sd = faceDir(fuv.x, sp.x, sp.y);
-      let dv = d - sd;
-      let d2 = dot(dv, dv); // chord² ≈ angle², no cancellation in f32
-      let psf = exp(-0.5 * d2 / (sigma * sigma)) / (TAU * sigma * sigma);
-      let T = 3200.0 + 26000.0 * pow(fract(h.w * 7.13), 3.0);
-      let flux = 4.0e-8 * pow(max(fract(h.w * 3.71), 0.02), -1.5);
-      col += blackbodyShifted(T, g) * flux * psf;
+  if (w < 1.0) {
+    let fuv = faceUV(d);
+    let p = (fuv.yz * 0.5 + 0.5) * cells;
+    let cell = floor(p);
+    for (var j = -1; j <= 1; j++) {
+      for (var i = -1; i <= 1; i++) {
+        let c = cell + vec2f(f32(i), f32(j));
+        if (c.x < 0.0 || c.y < 0.0 || c.x >= cells || c.y >= cells) { continue; }
+        let h = hash4(vec3u(u32(c.x), u32(c.y), u32(fuv.x) + layer * 8u));
+        if (h.x > density) { continue; }
+        let sp = (c + 0.1 + 0.8 * h.yz) / cells * 2.0 - 1.0;
+        let sd = faceDir(fuv.x, sp.x, sp.y);
+        let k = skyKernel(filt, d - sd); // chord ≈ angle, no cancellation in f32
+        if (k < 1e-3 * filt.norm) { continue; }
+        let T = 3200.0 + 26000.0 * pow(fract(h.w * 7.13), 3.0);
+        let flux = 4.0e-8 * pow(max(fract(h.w * 3.71), 0.02), -1.5);
+        col += blackbodyShifted(T, g) * flux * k;
+      }
     }
+  }
+  if (w > 0.0) {
+    // mean radiance: density · E[flux] · E[colour] / solid angle of a cell (4-point Gauss–Legendre in v)
+    var mc = vec3f(0.0);
+    let gv = array<f32, 4>(0.0694318, 0.3300095, 0.6699905, 0.9305682);
+    let gw = array<f32, 4>(0.1739274, 0.3260726, 0.3260726, 0.1739274);
+    for (var q = 0; q < 4; q++) {
+      let v = gv[q];
+      mc += gw[q] * blackbodyShifted(3200.0 + 26000.0 * v * v * v, g);
+    }
+    let omegaCell = (4.0 * PI / 6.0) / (cells * cells);
+    col = mix(col, mc * (density * 4.0e-8 * STAR_MEAN_FLUX / omegaCell), w);
   }
   return col;
 }
 
-fn milkyWay(d: vec3f, g: f32) -> vec3f {
+fn milkyWay(d: vec3f, g: f32, fw: f32) -> vec3f {
   // Galactic frame tilted with respect to the black-hole spin axis.
   // Galactic centre roughly behind the hole as seen from the default viewpoint (φ = 0),
   // band inclined ~35° to the disk plane.
@@ -669,21 +706,29 @@ fn milkyWay(d: vec3f, g: f32) -> vec3f {
   let lc = acos(clamp(q.x, -1.0, 1.0)); // angular distance of longitude to the galactic centre
   let band = exp(-pow(b / 0.16, 2.0)) * (0.35 + 0.65 * exp(-lc * lc / 1.6));
   let bulge = exp(-(lc * lc + 4.0 * b * b) / 0.09);
-  let clouds = fbm(q * 5.0, 5);
-  let fine = fbm(q * 22.0 + vec3f(3.0), 4);
-  let dustN = fbm(q * 9.0 + vec3f(11.0), 5);
+  let clouds = fbmLod(q * 5.0, 5, fw * 5.0);
+  let fine = fbmLod(q * 22.0 + vec3f(3.0), 4, fw * 22.0);
+  let dustN = fbmLod(q * 9.0 + vec3f(11.0), 5, fw * 9.0);
   let dust = smoothstep(0.42, 0.72, dustN) * exp(-pow(b / 0.06, 2.0));
   let light = (band * (0.45 + 0.9 * clouds * clouds) * (0.6 + 0.8 * fine) * 1.6 + bulge * 1.0)
     * (1.0 - 0.85 * dust);
   let Tgal = mix(6800.0, 4300.0, clamp(bulge * 2.0 + dust, 0.0, 1.0));
   var col = blackbodyShifted(Tgal, g) * light * 0.09;
   // faint emission nebulae (H-α), Doppler-shifted like a 3000 K source
-  let neb = smoothstep(0.68, 0.9, fbm(q * 7.0 + vec3f(5.0, 1.0, 2.0), 4)) * exp(-pow(b / 0.15, 2.0));
+  let neb = smoothstep(0.68, 0.9, fbmLod(q * 7.0 + vec3f(5.0, 1.0, 2.0), 4, fw * 7.0)) * exp(-pow(b / 0.15, 2.0));
   col += blackbodyShifted(2500.0, g) * vec3f(1.0, 0.35, 0.45) * neb * 0.012;
   return col;
 }
 
-fn background(d: vec3f, g: f32) -> vec3f {
+// Equirectangular (u, v) of a direction and its derivatives along the footprint axes.
+fn equirectGrad(d: vec3f, j: vec3f) -> vec2f {
+  let rxy2 = max(d.x * d.x + d.y * d.y, 1e-8);
+  let du = dot(vec3f(-d.y, d.x, 0.0), j) / (TAU * rxy2);
+  let dv = -j.z / (PI * sqrt(rxy2));
+  return vec2f(du, dv);
+}
+
+fn background(d: vec3f, g: f32, fp: Footprint) -> vec3f {
   let mode = P.modes.z;
   let intensity = P.time.z;
   if (mode == 1u) {
@@ -700,16 +745,17 @@ fn background(d: vec3f, g: f32) -> vec3f {
   if (mode == 2u) {
     let u = atan2(d.y, d.x) / TAU + 0.5;
     let v = acos(clamp(d.z, -1.0, 1.0)) / PI;
-    let tex = textureSampleLevel(bgTex, bgSamp, vec2f(u, v), 0.0).rgb;
+    // anisotropic, mip-mapped lookup over the lensed footprint (no seam: explicit gradients)
+    let tex = textureSampleGrad(bgTex, bgSamp, vec2f(u, v), equirectGrad(d, fp.jx), equirectGrad(d, fp.jy)).rgb;
     // approximate the spectral shift by that of a 6500 K spectrum
     let shiftc = blackbodyShifted(6500.0, g);
     return tex * shiftc * intensity;
   }
-  let sigma = P.time.w;
-  var col = milkyWay(d, g);
-  col += starLayer(d, 40.0, 0u, g, sigma, 0.30) * 1.0;
-  col += starLayer(d, 140.0, 1u, g, sigma, 0.25) * 0.08;
-  col += starLayer(d, 420.0, 2u, g, sigma, 0.20) * 0.012;
+  let filt = skyFilter(d, fp, P.time.w);
+  var col = milkyWay(d, g, filt.radius);
+  col += starLayer(d, 40.0, 0u, g, filt, 0.30) * 1.0;
+  col += starLayer(d, 140.0, 1u, g, filt, 0.25) * 0.08;
+  col += starLayer(d, 420.0, 2u, g, filt, 0.20) * 0.012;
   return col * intensity;
 }
 
@@ -729,7 +775,17 @@ fn colormap(t0: f32) -> vec3f {
   return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), vec3f(0.0), vec3f(1.0));
 }
 
-fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
+// Result of a traced ray. The celestial sphere is shaded after the ray (in main) because its filter
+// footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32 };
+
+fn traceOut(col: vec3f) -> TraceOut {
+  var o: TraceOut;
+  o.col = col;
+  return o;
+}
+
+fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   let a = P.bh.x;
   let rH = P.bh.y;
   let mode = P.modes.x;
@@ -764,7 +820,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
   let E0 = -pt; // energy at infinity of a photon the camera measures at energy 1
   if (E0 <= 1e-6) {
     // Negative-energy photon (only possible inside the ergosphere): can't come from infinity.
-    return vec3f(0.0);
+    return traceOut(vec3f(0.0));
   }
   let L = varpi * pz.z / E0;
   var s: GState;
@@ -794,6 +850,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
   var hitDisk = false;
   var trans = 1.0; // transmittance accumulated front to back
   var hNext = 1e9;
+  var out: TraceOut;
   var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
 
   for (var i = 0u; i < maxSteps; i++) {
@@ -900,32 +957,37 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
     let dir = normalize(v - delta * xperp / b);
     var gBg = 1.0 / E0;
     if (P.modes.y == SHIFT_NONE) { gBg = 1.0; }
+    out.dir = dir;
     if (mode == MODE_PHYSICAL) {
-      col += trans * background(dir, gBg);
+      out.bgW = trans;
+      out.gBg = gBg;
     } else if (mode == MODE_REDSHIFT) {
       col = colormap(0.5 + 0.5 * log2(gBg)) * 0.25;
     } else {
-      col = background(dir, 1.0) * 0.5;
+      col = vec3f(0.0);
+      out.bgW = 0.5;
+      out.gBg = 1.0;
     }
   }
+  out.col = col;
 
   if (mode == MODE_REDSHIFT && hitDisk) {
-    return colormap(0.5 + 0.6 * log2(gDisk));
+    return traceOut(colormap(0.5 + 0.6 * log2(gDisk)));
   }
   if (mode == MODE_TEMPERATURE && hitDisk) {
-    return colormap(TDisk / P.disk.x);
+    return traceOut(colormap(TDisk / P.disk.x));
   }
   if (mode == MODE_ORDER) {
-    if (fate == 1u) { return vec3f(0.0); }
-    if (fate == 0u) { return vec3f(1.0, 0.0, 1.0); }
+    if (fate == 1u) { return traceOut(vec3f(0.0)); }
+    if (fate == 0u) { return traceOut(vec3f(1.0, 0.0, 1.0)); }
     let base = colormap(f32(crossings) / 5.0);
-    return base * select(0.35, 1.0, hitDisk);
+    return traceOut(base * select(0.35, 1.0, hitDisk));
   }
   if (mode == MODE_STEPS) {
     // derivative evaluations, log scale from 16 to the budget (4 per step of the step limit)
-    return colormap(log2(max(f32(evals), 16.0) / 16.0) / log2(max(f32(maxSteps) * 0.25, 2.0)));
+    return traceOut(colormap(log2(max(f32(evals), 16.0) / 16.0) / log2(max(f32(maxSteps) * 0.25, 2.0))));
   }
-  return col;
+  return out;
 }
 
 // Gaussian pixel filter (σ = 0.42 px, ≈ Blackman–Harris width) by Box–Muller importance sampling.
@@ -936,31 +998,184 @@ fn gaussJitter(u: vec2f) -> vec2f {
 
 fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
 
+// ---------------------------------------------------------------------------------------------
+// Ray footprints on the sky (ray differentials from the neighbouring rays of the workgroup)
+// ---------------------------------------------------------------------------------------------
+// Every thread of an 8×8 workgroup traces a neighbouring pixel (or realtime block). After a barrier
+// each escaped ray reads the sky directions of its escaped neighbours and solves for the Jacobian
+// J = ∂(sky direction)/∂(pixel position), i.e. the pixel's footprint on the celestial sphere after
+// lensing (like hardware dFdx/dFdy, but across ray jitter and with the best-conditioned pair of
+// neighbours). The sky is then pre-filtered over that footprint: stars get their exact lensing
+// magnification without sparkling, the Milky Way and images are band-limited.
+var<workgroup> wgDir: array<vec4f, 64>; // escape direction, w = 1 if the ray reached the sky
+var<workgroup> wgPos: array<vec2f, 64>; // sample position in pixels
+var<workgroup> wgActive: atomic<u32>;   // pixels of the tile that still need samples
+
+struct Footprint { jx: vec3f, jy: vec3f };
+
+fn skyFootprint(lid: vec2u, d: vec3f, pos: vec2f) -> Footprint {
+  var fp: Footprint;
+  let nominal = P.camUp.w; // unlensed pixel angle
+  var best = 0.0;
+  var have = false;
+  var dx1 = vec2f(0.0);
+  var dD1 = vec3f(0.0);
+  for (var sx = -1; sx <= 1; sx += 2) {
+    let nx = i32(lid.x) + sx;
+    if (nx < 0 || nx > 7) { continue; }
+    let ih = u32(nx) + lid.y * 8u;
+    if (wgDir[ih].w < 0.5) { continue; }
+    let d1 = wgPos[ih] - pos;
+    let D1 = wgDir[ih].xyz - d;
+    if (!have) { dx1 = d1; dD1 = D1; }
+    for (var sy = -1; sy <= 1; sy += 2) {
+      let ny = i32(lid.y) + sy;
+      if (ny < 0 || ny > 7) { continue; }
+      let iv = lid.x + u32(ny) * 8u;
+      if (wgDir[iv].w < 0.5) { continue; }
+      let d2 = wgPos[iv] - pos;
+      let det = d1.x * d2.y - d2.x * d1.y;
+      if (abs(det) > best) {
+        best = abs(det);
+        let D2 = wgDir[iv].xyz - d;
+        fp.jx = (D1 * d2.y - D2 * d1.y) / det;
+        fp.jy = (D2 * d1.x - D1 * d2.x) / det;
+      }
+    }
+    have = true;
+  }
+  if (best > 0.2 * max(dot(dx1, dx1), 1.0)) { return fp; }
+  // Fallback: isotropic footprint from one neighbour, or the unlensed pixel size.
+  var k = nominal;
+  if (have && dot(dx1, dx1) > 0.04) { k = max(length(dD1) / length(dx1), 0.25 * nominal); }
+  var t1 = cross(d, vec3f(0.0, 0.0, 1.0));
+  if (dot(t1, t1) < 1e-6) { t1 = cross(d, vec3f(1.0, 0.0, 0.0)); }
+  t1 = normalize(t1);
+  fp.jx = k * t1;
+  fp.jy = k * cross(d, t1);
+  return fp;
+}
+
+// Gaussian sky filter in the tangent plane at d: covariance C = σ² I + J Jᵀ (radians²).
+struct SkyFilter { e1: vec3f, e2: vec3f, ci: vec3f, norm: f32, radius: f32 };
+
+fn skyFilter(d: vec3f, fp: Footprint, sigma: f32) -> SkyFilter {
+  var f: SkyFilter;
+  var t = fp.jx - d * dot(d, fp.jx);
+  if (dot(t, t) < 1e-20) {
+    t = cross(d, vec3f(0.0, 0.0, 1.0));
+    if (dot(t, t) < 1e-6) { t = cross(d, vec3f(1.0, 0.0, 0.0)); }
+  }
+  f.e1 = normalize(t);
+  f.e2 = cross(d, f.e1);
+  let a = vec2f(dot(f.e1, fp.jx), dot(f.e2, fp.jx));
+  let b = vec2f(dot(f.e1, fp.jy), dot(f.e2, fp.jy));
+  let s2 = sigma * sigma;
+  let cxx = s2 + a.x * a.x + b.x * b.x;
+  let cyy = s2 + a.y * a.y + b.y * b.y;
+  let cxy = a.x * a.y + b.x * b.y;
+  let det = max(cxx * cyy - cxy * cxy, 1e-30);
+  f.ci = vec3f(cyy, cxx, -cxy) / det; // inverse covariance (xx, yy, xy)
+  f.norm = 1.0 / (TAU * sqrt(det));
+  // largest standard deviation
+  let tr = 0.5 * (cxx + cyy);
+  f.radius = sqrt(tr + sqrt(max(tr * tr - det, 0.0)));
+  return f;
+}
+
+fn skyKernel(f: SkyFilter, dv: vec3f) -> f32 {
+  let u = dot(dv, f.e1);
+  let v = dot(dv, f.e2);
+  return exp(-0.5 * (f.ci.x * u * u + f.ci.y * v * v + 2.0 * f.ci.z * u * v)) * f.norm;
+}
+
 @compute @workgroup_size(8, 8)
-fn main(@builtin(global_invocation_id) gid: vec3u) {
+fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
+        @builtin(local_invocation_index) li: u32) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
   let epoch = P.frame.y;
+  let interleaved = (flags & FLAG_INTERLEAVED) != 0u;
+  let temporal = (flags & FLAG_TEMPORAL) != 0u;
+  let accumulate = P.region.z > 0.5;
+  let si = P.res.w;
 
-  if ((flags & FLAG_INTERLEAVED) != 0u) {
-    // Realtime: one ray per block×block tile, at a rotating offset inside the tile. While the camera
-    // is still, successive frames fill every pixel (temporal super-resolution); the resolve pass
-    // reconstructs pixels that are stale for the current camera from this frame's samples.
+  // Pixel of this thread. Realtime: one ray per block×block tile, at a rotating offset inside the
+  // tile; while the camera is still, successive frames fill every pixel (temporal super-resolution)
+  // and the resolve pass reconstructs stale pixels from this frame's samples. Progressive / offline:
+  // full resolution, one filtered sample per pixel per pass, in bands of rows.
+  var px: u32;
+  var py: u32;
+  var inRange: bool;
+  if (interleaved) {
     let block = u32(P.res.z);
-    if (gid.x * block >= W || gid.y * block >= H) { return; }
-    let px = min(gid.x * block + u32(P.ext2.x), W - 1u);
-    let py = min(gid.y * block + u32(P.ext2.y), H - 1u);
-    let idx = py * W + px;
-    let hr = hash4(vec3u(px, py, frameStamp));
-    let temporal = (flags & FLAG_TEMPORAL) != 0u;
+    inRange = gid.x * block < W && gid.y * block < H;
+    px = min(gid.x * block + u32(P.ext2.x), W - 1u);
+    py = min(gid.y * block + u32(P.ext2.y), H - 1u);
+  } else {
+    px = gid.x;
+    py = gid.y + u32(P.region.x);
+    inRange = px < W && py < u32(P.region.y) && py < H;
+  }
+  let idx = py * W + px;
+
+  // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
+  // standard error of the mean (luminance) above the threshold (keeps ray differentials available).
+  if (li == 0u) { atomicStore(&wgActive, 0u); }
+  workgroupBarrier();
+  var need = inRange;
+  if (inRange && !interleaved && accumulate && (flags & FLAG_ADAPTIVE_SPP) != 0u && si >= f32(P.frame.w)) {
+    let acc = accum[idx];
+    let n = max(acc.a, 1.0);
+    let mean = luminance(acc.rgb) / n;
+    let variance = max(moments[idx] / n - mean * mean, 0.0);
+    need = sqrt(variance / n) >= P.ext.y * (mean + 0.01);
+  }
+  if (need) { atomicAdd(&wgActive, 1u); }
+  workgroupBarrier();
+  let sampling = inRange && atomicLoad(&wgActive) > 0u;
+
+  var tr: TraceOut;
+  var pos = vec2f(0.0);
+  if (sampling) {
     var jit = vec2f(0.0);
-    if (temporal) { jit = gaussJitter(hr.xy); }
-    let c = vec2f(f32(px) + 0.5, f32(py) + 0.5) + jit;
-    let ndc = vec2f(2.0 * c.x / P.res.x - 1.0, 1.0 - 2.0 * c.y / P.res.y);
-    var col = trace(ndc, hr.z, P.time.x);
-    if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+    var rnd = 0.0;
+    var tSample = P.time.x;
+    if (interleaved) {
+      let hr = hash4(vec3u(px, py, frameStamp));
+      if (temporal) { jit = gaussJitter(hr.xy); }
+      rnd = hr.z;
+    } else {
+      let rot = hash4(vec3u(px, py, 7u));
+      let seq = fract(rot + si * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
+      if (si > 0.0 || accumulate) { jit = gaussJitter(seq.xy); }
+      rnd = seq.z;
+      // motion blur: sample time uniformly within the shutter interval
+      tSample = P.time.x + (seq.w - 0.5) * P.ext.z;
+    }
+    pos = vec2f(f32(px) + 0.5, f32(py) + 0.5) + jit;
+    let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+    tr = trace(ndc, rnd, tSample);
+  }
+  wgDir[li] = vec4f(tr.dir, select(0.0, 1.0, sampling && tr.bgW > 0.0));
+  wgPos[li] = pos;
+  workgroupBarrier();
+  if (!sampling) { return; }
+
+  var col = tr.col;
+  if (tr.bgW > 0.0) {
+    // pre-filter width relative to the lensed pixel (the jittered samples already apply σ = 0.42 px)
+    var fp = skyFootprint(lid.xy, tr.dir, pos);
+    let k = select(0.35, 0.5, interleaved);
+    fp.jx *= k;
+    fp.jy *= k;
+    col += tr.bgW * background(tr.dir, tr.gBg, fp);
+  }
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+
+  if (interleaved) {
     let old = accum[idx];
     if (temporal && stamps[idx] >= epoch && old.a > 0.0) {
       col = mix(old.rgb / old.a, col, P.ext.w);
@@ -969,34 +1184,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     stamps[idx] = frameStamp;
     return;
   }
-
-  // Progressive / offline: full resolution, one filtered sample per pixel per pass.
-  let px = gid.x;
-  let py = gid.y + u32(P.region.x);
-  if (px >= W || py >= u32(P.region.y) || py >= H) { return; }
-  let idx = py * W + px;
-  let accumulate = P.region.z > 0.5;
-  let si = P.res.w;
-
-  if (accumulate && (flags & FLAG_ADAPTIVE_SPP) != 0u && si >= f32(P.frame.w)) {
-    // relative standard error of the pixel mean (luminance); converged pixels are skipped
-    let acc = accum[idx];
-    let n = max(acc.a, 1.0);
-    let mean = luminance(acc.rgb) / n;
-    let variance = max(moments[idx] / n - mean * mean, 0.0);
-    if (sqrt(variance / n) < P.ext.y * (mean + 0.01)) { return; }
-  }
-
-  let rot = hash4(vec3u(px, py, 7u));
-  let seq = fract(rot + si * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
-  var jit = vec2f(0.0);
-  if (si > 0.0 || accumulate) { jit = gaussJitter(seq.xy); }
-  let c = vec2f(f32(px) + 0.5, f32(py) + 0.5) + jit;
-  let ndc = vec2f(2.0 * c.x / P.res.x - 1.0, 1.0 - 2.0 * c.y / P.res.y);
-  // motion blur: sample time uniformly within the shutter interval
-  let tSample = P.time.x + (seq.w - 0.5) * P.ext.z;
-  var col = trace(ndc, seq.z, tSample);
-  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   let l = luminance(col);
   if (accumulate) {
     accum[idx] += vec4f(col, 1.0);

@@ -547,7 +547,7 @@ export class Renderer {
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);
     set(10, o.eps, o.steps, this.escapeRadius(s), captureTolerance(a));
-    set(11, time, s.flowPeriod, s.bgIntensity, Math.max(pixelAngle * 0.6, 2e-4) * s.starSize);
+    set(11, time, s.flowPeriod, s.bgIntensity, pixelAngle * 0.35 * s.starSize);
     set(12, s.hotFlow ? 1 : 0, s.hotFlowHR, s.hotFlowAlpha, s.hotFlowIntensity);
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
