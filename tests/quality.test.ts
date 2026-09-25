@@ -17,7 +17,7 @@ function equatorialRay(b: number, a: number, r0 = 2000): State {
   return { x: [r0, Math.PI / 2, 0, 0], p: [Math.sqrt(Math.max(0, (W * W) / del - (b - a) ** 2) / del), 0] };
 }
 
-describe("error-controlled RK4 (quality integrator)", () => {
+describe("error-controlled Dormand–Prince 5(4) (quality integrator)", () => {
   for (const a of [0, 0.9, 0.998]) {
     const { pro, retro } = criticalImpact(a);
     test(`a=${a}: resolves the critical curve to ±0.001 M`, () => {
@@ -42,6 +42,25 @@ describe("error-controlled RK4 (quality integrator)", () => {
     expect(adaptive.fate).toBe("escape");
     expect(adaptive.maxDH).toBeLessThan(1e-8);
     expect(adaptive.maxDH).toBeLessThan(fixed.maxDH);
+  });
+
+  test("Dormand–Prince needs fewer derivative evaluations than RK4 step doubling at equal accuracy", () => {
+    const a = 0.94;
+    const b = criticalImpact(a).pro + 0.02;
+    const st = equatorialRay(b, a, 60);
+    const base = { epsMax: 0.5, maxSteps: 200000, rEscape: 200, captureTol: captureTolerance(a) };
+    const dp = traceBackwardAdaptive(st, b, a, { ...base, tol: 1e-7 });
+    const rk = traceBackwardAdaptive(st, b, a, { ...base, tol: 1e-7, method: "rk4" });
+    const ref = traceBackwardAdaptive(st, b, a, { ...base, tol: 1e-11 });
+    // asymptotic azimuth (straight-line continuation beyond the stopping radius)
+    const phiInf = (r: typeof dp) => r.state.x[2] - Math.asin(b / r.state.x[0]);
+    const dirErr = (r: typeof dp) => Math.abs(phiInf(r) - phiInf(ref));
+    expect(dp.fate).toBe("escape");
+    expect(rk.fate).toBe("escape");
+    expect(dirErr(dp)).toBeLessThan(2e-5);
+    expect(dirErr(dp)).toBeLessThan(2 * dirErr(rk) + 1e-5);
+    expect(dp.evals).toBeLessThan(0.7 * rk.evals);
+    expect(dp.maxDH).toBeLessThan(1e-7);
   });
 });
 

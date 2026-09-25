@@ -208,46 +208,81 @@ fn rk4(s: GState, L: f32, a: f32, h: f32) -> GState {
   return o;
 }
 
-// Error-controlled RK4: step doubling gives a local error estimate (y_h/2 − y_h)/15 and the
-// Richardson-extrapolated y_h/2 + (y_h/2 − y_h)/15, which is 5th-order accurate.
-struct StepOut { s: GState, h: f32, hNext: f32, evals: u32 };
+// Error-controlled Dormand–Prince 5(4) (the integrator of MATLAB ode45 / Hairer's DOPRI5): six new
+// derivative evaluations per step, the seventh stage is the derivative at the new point and is
+// reused as the first stage of the next step (FSAL). The embedded 4th-order solution gives the
+// local error estimate; the 5th-order solution is propagated (local extrapolation).
+struct StepOut { s: GState, k: Deriv, h: f32, hNext: f32, evals: u32 };
 
-fn stepError(a: GState, b: GState) -> f32 {
-  let dx = a.x - b.x;
-  let dp = a.p - b.p;
-  let ePos = max(abs(dx.x) / max(a.x.x, 1e-3), max(abs(dx.y), abs(dx.z) * sin(a.x.y)));
-  let eMom = max(abs(dp.x) / (abs(a.p.x) + 1.0), abs(dp.y) / (abs(a.p.y) + 1.0));
+// Mixed relative norm: radius relative to r, angles absolute (φ weighted by sin θ), momenta relative.
+fn errorNorm(y: GState, ex: vec4f, ep: vec2f) -> f32 {
+  let ePos = max(abs(ex.x) / max(y.x.x, 1e-3), max(abs(ex.y), abs(ex.z) * sin(y.x.y)));
+  let eMom = max(abs(ep.x) / (abs(y.p.x) + 1.0), abs(ep.y) / (abs(y.p.y) + 1.0));
   return max(ePos, eMom);
 }
 
-fn adaptiveRK4(s: GState, L: f32, a: f32, hTry: f32, hMax: f32, tol: f32) -> StepOut {
+fn adaptiveDOPRI(s: GState, k1: Deriv, L: f32, a: f32, hTry: f32, hMax: f32, tol: f32) -> StepOut {
   var h = min(hTry, hMax);
   var out: StepOut;
   out.evals = 0u;
-  for (var k = 0; k < 8; k++) {
-    // full step, then two half steps — a single rk4 call site keeps the kernel compact
-    var full: GState;
-    var half: GState;
-    var src = s;
-    var hh = -h;
-    for (var j = 0; j < 3; j++) {
-      let o = rk4(src, L, a, hh);
-      if (j == 0) { full = o; hh = -0.5 * h; src = s; } else if (j == 1) { src = o; } else { half = o; }
-    }
-    out.evals += 3u;
-    let err = stepError(half, full) / 15.0;
-    if (err <= tol || k == 7 || h <= 1e-5) {
-      out.s.x = half.x + (half.x - full.x) * (1.0 / 15.0);
-      out.s.p = half.p + (half.p - full.p) * (1.0 / 15.0);
+  for (var it = 0; it < 12; it++) {
+    let hh = -h; // backwards in affine parameter
+    let k2 = geodesicRHS(s.x + hh * (0.2 * k1.dx),
+                          s.p + hh * (0.2 * k1.dp), L, a);
+    let k3 = geodesicRHS(s.x + hh * (0.075 * k1.dx + 0.225 * k2.dx),
+                          s.p + hh * (0.075 * k1.dp + 0.225 * k2.dp), L, a);
+    let k4 = geodesicRHS(s.x + hh * (0.9777777777777777 * k1.dx + -3.7333333333333334 * k2.dx + 3.5555555555555554 * k3.dx),
+                          s.p + hh * (0.9777777777777777 * k1.dp + -3.7333333333333334 * k2.dp + 3.5555555555555554 * k3.dp), L, a);
+    let k5 = geodesicRHS(s.x + hh * (2.9525986892242035 * k1.dx + -11.595793324188385 * k2.dx + 9.822892851699436 * k3.dx + -0.2908093278463649 * k4.dx),
+                          s.p + hh * (2.9525986892242035 * k1.dp + -11.595793324188385 * k2.dp + 9.822892851699436 * k3.dp + -0.2908093278463649 * k4.dp), L, a);
+    let k6 = geodesicRHS(s.x + hh * (2.8462752525252526 * k1.dx + -10.757575757575758 * k2.dx + 8.906422717743473 * k3.dx + 0.2784090909090909 * k4.dx + -0.2735313036020583 * k5.dx),
+                          s.p + hh * (2.8462752525252526 * k1.dp + -10.757575757575758 * k2.dp + 8.906422717743473 * k3.dp + 0.2784090909090909 * k4.dp + -0.2735313036020583 * k5.dp), L, a);
+    var y: GState;
+    y.x = s.x + hh * (0.09114583333333333 * k1.dx + 0.44923629829290207 * k3.dx + 0.6510416666666666 * k4.dx + -0.322376179245283 * k5.dx + 0.13095238095238096 * k6.dx);
+    y.p = s.p + hh * (0.09114583333333333 * k1.dp + 0.44923629829290207 * k3.dp + 0.6510416666666666 * k4.dp + -0.322376179245283 * k5.dp + 0.13095238095238096 * k6.dp);
+    let k7 = geodesicRHS(y.x, y.p, L, a);
+    out.evals += 6u;
+    let ex = hh * (0.0012326388888888888 * k1.dx + -0.0042527702905061394 * k3.dx + 0.03697916666666667 * k4.dx + -0.05086379716981132 * k5.dx + 0.0419047619047619 * k6.dx + -0.025 * k7.dx);
+    let ep = hh * (0.0012326388888888888 * k1.dp + -0.0042527702905061394 * k3.dp + 0.03697916666666667 * k4.dp + -0.05086379716981132 * k5.dp + 0.0419047619047619 * k6.dp + -0.025 * k7.dp);
+    let err = errorNorm(y, ex, ep);
+    if (err <= tol || it == 11 || h <= 1e-5) {
+      out.s = y;
+      out.k = k7;
       out.h = h;
-      var grow = 2.0;
-      if (err > 0.0) { grow = clamp(0.9 * pow(tol / err, 0.2), 0.3, 2.0); }
+      var grow = 5.0;
+      if (err > 0.0) { grow = clamp(0.9 * pow(tol / err, 0.2), 0.2, 5.0); }
       out.hNext = h * grow;
       return out;
     }
-    h *= clamp(0.9 * pow(tol / err, 0.25), 0.1, 0.9);
+    h *= clamp(0.9 * pow(tol / err, 0.2), 0.1, 0.9);
   }
   return out;
+}
+
+// Equatorial crossing inside a step s → n (affine step −h): the root of the cubic Hermite
+// interpolant of θ(u) (end derivatives from the equations of motion) seeds one RK4 sub-step, then a
+// Newton correction lands on θ = π/2. ~11 derivative evaluations instead of 56 for RK4 bisection.
+fn equatorCrossing(s: GState, n: GState, d0: Deriv, d1: Deriv, L: f32, a: f32, h: f32) -> GState {
+  let t0 = s.x.y - 0.5 * PI;
+  let t1 = n.x.y - 0.5 * PI;
+  let m0 = -h * d0.dx.y;
+  let m1 = -h * d1.dx.y;
+  var u = clamp(t0 / (t0 - t1), 0.0, 1.0);
+  for (var k = 0; k < 6; k++) {
+    let u2 = u * u;
+    let u3 = u2 * u;
+    let v = (2.0 * u3 - 3.0 * u2 + 1.0) * t0 + (u3 - 2.0 * u2 + u) * m0 + (-2.0 * u3 + 3.0 * u2) * t1 + (u3 - u2) * m1;
+    let dv = (6.0 * u2 - 6.0 * u) * t0 + (3.0 * u2 - 4.0 * u + 1.0) * m0 + (-6.0 * u2 + 6.0 * u) * t1 + (3.0 * u2 - 2.0 * u) * m1;
+    if (abs(dv) < 1e-12) { break; }
+    u = clamp(u - v / dv, 0.0, 1.0);
+  }
+  var m = rk4(s, L, a, -h * u);
+  let dm = geodesicRHS(m.x, m.p, L, a);
+  if (abs(dm.dx.y) > 1e-9) {
+    let dl = clamp((0.5 * PI - m.x.y) / dm.dx.y, -0.25 * h, 0.25 * h);
+    m = rk4(m, L, a, dl);
+  }
+  return m;
 }
 
 // Adaptive affine step: resolves the horizon, the photon sphere (Δφ ≤ ε) and polar crossings.
@@ -759,26 +794,30 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
   var hitDisk = false;
   var trans = 1.0; // transmittance accumulated front to back
   var hNext = 1e9;
+  var kCur = geodesicRHS(s.x, s.p, L, a); // derivative at the current point (FSAL)
 
   for (var i = 0u; i < maxSteps; i++) {
     steps = i;
     var n: GState;
     var h: f32;
+    var kNext: Deriv;
     if (adaptive) {
       // heuristic step only as an upper bound: accuracy is enforced by the error estimate
       var hMax = stepSize(s, L, a, eps * 4.0, rH);
       if (i == 0u) { hMax *= mix(0.2, 1.0, rnd); }
-      let st = adaptiveRK4(s, L, a, min(hNext, hMax), hMax, tol);
+      let st = adaptiveDOPRI(s, kCur, L, a, min(hNext, hMax), hMax, tol);
       n = wrapPole(st.s);
       h = st.h;
       hNext = st.hNext;
       evals += st.evals;
+      kNext = st.k;
+      if (n.x.y != st.s.x.y) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
     } else {
       h = stepSize(s, L, a, eps, rH);
       // random first step: decorrelates volumetric sampling between pixels / samples
       if (i == 0u) { h *= mix(0.2, 1.0, rnd); }
       n = wrapPole(rk4(s, L, a, -h));
-      evals += 1u;
+      evals += 4u;
     }
 
     if (volOn) {
@@ -810,14 +849,14 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
       let rMin = min(s.x.x, n.x.x);
       let rMax = max(s.x.x, n.x.x);
       if (diskOn && !thick && rMax >= rIn * 0.95 && rMin <= rOut * 1.05) {
-        var lo = 0.0;
-        var hi = 1.0;
-        var m = n;
-        for (var k = 0; k < 14; k++) {
-          let mid = 0.5 * (lo + hi);
-          m = rk4(s, L, a, -h * mid);
-          if (cos(m.x.y) * c0 > 0.0) { lo = mid; } else { hi = mid; }
+        if (!adaptive) {
+          // realtime: derivatives at both ends for the Hermite interpolant
+          kCur = geodesicRHS(s.x, s.p, L, a);
+          kNext = geodesicRHS(n.x, n.p, L, a);
+          evals += 2u;
         }
+        let m = equatorCrossing(s, n, kCur, kNext, L, a, h);
+        evals += 9u;
         let rc = m.x.x;
         if (rc >= rIn && rc <= rOut) {
           let hit = shadeDisk(m, L, E0, tNow);
@@ -837,6 +876,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
     if (r < rH + capTol || isNan(r)) { fate = 1u; break; }
     if (r > rEsc && r > s.x.x) { fate = 2u; s = n; break; }
     s = n;
+    kCur = kNext;
   }
 
   if (fate == 2u) {
@@ -882,8 +922,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> vec3f {
     return base * select(0.35, 1.0, hitDisk);
   }
   if (mode == MODE_STEPS) {
-    // RK4 stages (right-hand-side evaluations / 4) relative to the step budget
-    return colormap(f32(evals) / f32(maxSteps));
+    // derivative evaluations, log scale from 16 to the budget (4 per step of the step limit)
+    return colormap(log2(max(f32(evals), 16.0) / 16.0) / log2(max(f32(maxSteps) * 0.25, 2.0)));
   }
   return col;
 }

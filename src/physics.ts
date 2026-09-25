@@ -358,26 +358,109 @@ export function adaptiveRK4(st: State, L: number, a: number, hTry: number, hMax:
   throw new Error("unreachable");
 }
 
+// Dormand–Prince 5(4) tableau (FSAL: the 7th stage is the derivative at the new point).
+const DP_C = [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1];
+const DP_A = [
+  [],
+  [1 / 5],
+  [3 / 40, 9 / 40],
+  [44 / 45, -56 / 15, 32 / 9],
+  [19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729],
+  [9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656],
+  [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84],
+];
+// b (5th order) − b* (4th order embedded)
+const DP_E = [71 / 57600, 0, -71 / 16695, 71 / 1920, -17253 / 339200, 22 / 525, -1 / 40];
+
+/** One Dormand–Prince step of size h from st, given k1 = f(st). Returns y5, f(y5) and the error vector. */
+export function dopriStep(st: State, k1: State, L: number, a: number, h: number) {
+  const k: State[] = [k1];
+  const comb = (row: number[]): State => {
+    const x = [...st.x] as State["x"];
+    const p = [...st.p] as State["p"];
+    row.forEach((c, j) => {
+      if (!c) return;
+      for (let i = 0; i < 4; i++) x[i] += h * c * k[j]!.x[i]!;
+      for (let i = 0; i < 2; i++) p[i] += h * c * k[j]!.p[i]!;
+    });
+    return { x, p };
+  };
+  for (let i = 1; i < 6; i++) {
+    const y = comb(DP_A[i]!);
+    k.push(rhs(y.x, y.p, L, a));
+  }
+  const y5 = comb(DP_A[6]!);
+  k.push(rhs(y5.x, y5.p, L, a));
+  const err: State = { x: [0, 0, 0, 0], p: [0, 0] };
+  DP_E.forEach((e, j) => {
+    for (let i = 0; i < 4; i++) err.x[i] += h * e * k[j]!.x[i]!;
+    for (let i = 0; i < 2; i++) err.p[i] += h * e * k[j]!.p[i]!;
+  });
+  return { y: y5, k7: k[6]!, err };
+}
+
+/** Mixed relative norm of a local error vector (same scaling as stepError). */
+export function errorNorm(st: State, e: State): number {
+  return Math.max(
+    Math.abs(e.x[0]) / Math.max(st.x[0], 1e-3),
+    Math.abs(e.x[1]),
+    Math.abs(e.x[2]) * Math.sin(st.x[1]),
+    Math.abs(e.p[0]) / (Math.abs(st.p[0]) + 1),
+    Math.abs(e.p[1]) / (Math.abs(st.p[1]) + 1),
+  );
+}
+
+/** Error-controlled Dormand–Prince 5(4) step (backwards in affine parameter). */
+export function adaptiveDOPRI(st: State, k1: State, L: number, a: number, hTry: number, hMax: number, tol: number) {
+  let h = Math.min(hTry, hMax);
+  let evals = 0;
+  for (let k = 0; ; k++) {
+    const o = dopriStep(st, k1, L, a, -h);
+    evals += 6;
+    const err = errorNorm(o.y, o.err);
+    if (err <= tol || k === 11 || h <= 1e-9) {
+      const grow = err > 0 ? Math.min(5, Math.max(0.2, 0.9 * (tol / err) ** 0.2)) : 5;
+      return { state: o.y, k7: o.k7, h, hNext: h * grow, evals };
+    }
+    h *= Math.min(0.9, Math.max(0.1, 0.9 * (tol / err) ** 0.2));
+  }
+}
+
 export function traceBackwardAdaptive(
   st0: State,
   L: number,
   a: number,
-  opts: { tol: number; epsMax: number; maxSteps: number; rEscape: number; captureTol: number },
+  opts: { tol: number; epsMax: number; maxSteps: number; rEscape: number; captureTol: number; method?: "dopri" | "rk4" },
 ): TraceResult & { evals: number } {
   const rH = horizon(a);
   let st = st0;
   let maxDH = 0;
   let hNext = Infinity;
   let evals = 0;
+  let k1: State | null = null;
   for (let i = 0; i < opts.maxSteps; i++) {
     const hMax = stepSize(st, L, a, opts.epsMax, rH);
     const prevR = st.x[0];
-    const out = adaptiveRK4(st, L, a, Math.min(hNext, hMax), hMax, opts.tol);
-    evals += 3;
-    hNext = out.hNext;
-    st = out.state;
+    if (opts.method === "rk4") {
+      const out = adaptiveRK4(st, L, a, Math.min(hNext, hMax), hMax, opts.tol);
+      evals += 11;
+      hNext = out.hNext;
+      st = out.state;
+    } else {
+      if (!k1) {
+        k1 = rhs(st.x, st.p, L, a);
+        evals++;
+      }
+      const out = adaptiveDOPRI(st, k1, L, a, Math.min(hNext, hMax), hMax, opts.tol);
+      evals += out.evals;
+      hNext = out.hNext;
+      st = out.state;
+      k1 = out.k7;
+    }
+    const wrap = st.x[1] < 0 || st.x[1] > Math.PI;
     if (st.x[1] < 0) st = { x: [st.x[0], -st.x[1], st.x[2] + Math.PI, st.x[3]], p: [st.p[0], -st.p[1]] };
     if (st.x[1] > Math.PI) st = { x: [st.x[0], 2 * Math.PI - st.x[1], st.x[2] + Math.PI, st.x[3]], p: [st.p[0], -st.p[1]] };
+    if (wrap) k1 = null;
     maxDH = Math.max(maxDH, Math.abs(hamiltonian(st, L, a)));
     const r = st.x[0];
     if (r < rH + opts.captureTol || !Number.isFinite(r)) return { fate: "horizon", steps: i + 1, state: st, maxDH, evals };
