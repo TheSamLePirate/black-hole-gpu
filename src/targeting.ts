@@ -415,6 +415,8 @@ export function bodyLook(s: Settings, cam: CameraFrame, body: Body, time: number
     return { look: geometricLook(s, cam, bodyCentre(s, body, time)), lensed: false };
   }
   if (body === "hole") return { look: aberrate(cam, [-1, 0, 0]), lensed: false };
+  // the centre of mass is a point, not a light source: aim along the straight line (aberrated)
+  if (body === "barycentre") return { look: geometricLook(s, cam, bodyCentre(s, body, time)), lensed: false };
   // the star's own field is symmetric about its centre: it does not move the central ray
   const noLens = body === "star";
   const centre = (t: number) => bodyCentre(s, body, t);
