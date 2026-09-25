@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { advance, fromZamo, hamiltonian, predict, thrust, toZamo, type Lens } from "../src/geodesic";
 import { horizon, keplerOmega, zamo } from "../src/physics";
+import { defaultSettings } from "../src/settings";
+import { barycentre, barycentreVelocity, holeAcceleration, starCentre, starOmega, starVelocity } from "../src/targeting";
 
 /** Prograde circular equatorial orbit: β relative to the ZAMO. */
 function circular(r: number, a: number) {
@@ -101,5 +103,47 @@ describe("camera geodesics (timelike Kerr)", () => {
     const dist = Math.hypot(...cart(res.st).map((v, i) => v - c[i]!));
     expect(dist).toBeGreaterThan(2.49);
     expect(dist).toBeLessThan(2.6);
+  });
+
+  test("Gargantua and a massive star orbit their centre of mass (Newton: Ω² = (M + m)/D³)", () => {
+    const s = { ...defaultSettings(), spin: 0, sun: true, sunOrbit: 70, sunRadius: 2.5, sunMass: 0.1, sunPhase: 30 };
+    expect(starOmega(s)).toBeCloseTo(Math.sqrt(1.1 / 70 ** 3), 12);
+    expect(starOmega({ ...s, sunMass: 0 })).toBeCloseTo(70 ** -1.5, 12);
+    // hole at −B in the centre-of-mass frame: M(−B) + m(x★ − B) = 0
+    const t = 1234;
+    const B = barycentre(s, t);
+    const x = starCentre(s, t);
+    for (let i = 0; i < 3; i++) expect(-(1 + 0.1) * B[i]! + 0.1 * x[i]!).toBeCloseTo(0, 12);
+    // the hole's acceleration −B̈ (finite differences) is the star's pull m x★/D³ (the frame's fall)
+    const h = 1;
+    const Bdd = [0, 1, 2].map((i) => (barycentre(s, t + h)[i]! - 2 * B[i]! + barycentre(s, t - h)[i]!) / (h * h));
+    const aH = holeAcceleration(s, t);
+    for (let i = 0; i < 3; i++) expect(-Bdd[i]!).toBeCloseTo(aH[i]!, 9);
+    expect(barycentreVelocity(s, t)[1]).toBeCloseTo((0.1 / 1.1) * starVelocity(s, t)[1]!, 12);
+  });
+
+  test("with the indirect field, a far body at rest in the centre-of-mass frame stays at rest in it", () => {
+    const s = { ...defaultSettings(), spin: 0, sun: true, sunOrbit: 70, sunRadius: 2.5, sunMass: 0.1, sunPhase: 0 };
+    const D3 = 70 ** 3;
+    const lensB: Lens = {
+      m: 0.1, R: 2.5, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
+      accel: (t) => holeAcceleration(s, t),
+      accelRate: (t) => starVelocity(s, t).map((v) => (0.1 / D3) * v) as [number, number, number],
+    };
+    // 3000 M away along −x (both bodies' own pulls are ~1e-7 there; the frame's fall is 3e-5)
+    const X0: [number, number, number] = [-3000, 0, 0];
+    const vB = barycentreVelocity(s, 0);
+    // ZAMO components (r̂, θ̂, φ̂) at φ = π, θ = π/2: r̂ = −x̂, θ̂ = −ẑ, φ̂ = −ŷ
+    const st = fromZamo(3000, Math.PI / 2, Math.PI, [-vB[0], -vB[2], -vB[1]], 0, 0);
+    const T = 800;
+    const end = advance(st, 0, T, 0.05, 0, [0, 0, 0], lensB).st;
+    const expected = [0, 1, 2].map((i) => X0[i]! + barycentre(s, T)[i]! - barycentre(s, 0)[i]!);
+    const got = cart(end);
+    const drift = Math.hypot(...expected.map((v, i) => v - X0[i]!));
+    expect(drift).toBeGreaterThan(5); // the hole moved by several M meanwhile
+    expect(Math.hypot(...got.map((v, i) => v - expected[i]!))).toBeLessThan(0.03 * drift);
+    // without the indirect field it would lag behind by ½ a T²
+    const noInd = cart(advance(st, 0, T, 0.05, 0, [0, 0, 0], { ...lensB, accel: undefined, accelRate: undefined }).st);
+    expect(Math.hypot(...noInd.map((v, i) => v - expected[i]!))).toBeGreaterThan(0.2 * drift);
   });
 });

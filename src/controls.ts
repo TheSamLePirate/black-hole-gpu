@@ -6,6 +6,7 @@ import type { Settings, Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
+  baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius,
 } from "./targeting";
 import { advance, fromZamo, predict, toZamo, type Lens } from "./geodesic";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
@@ -99,9 +100,8 @@ export class CameraController {
   private focus: { from: Quat; t: number; dur: number } | null = null;
   private aimCache: { body: Body; key: string; look: Vec3; lensed: boolean } | null = null;
   /** Orbiting the star: wheel target distance, pending drag increments (°), co-moving fraction. */
-  private starD: number | null = null;
-  private starOrbit: [number, number] = [0, 0];
-  private ride = 0;
+  private followD: number | null = null;
+  private followOrbit: [number, number] = [0, 0];
   private leveling = false;
   /**
    * Flight to a framing position around the star or the mouth: along an arc around the body (its
@@ -116,7 +116,6 @@ export class CameraController {
   ) {
     this.targetDistance = s.distance;
     this.targetL = s.whL;
-    this.ride = s.motion === "comoving" ? 1 : 0; // (restored from a URL: already riding)
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("pointermove", this.onMove);
@@ -155,7 +154,7 @@ export class CameraController {
   sync() {
     this.targetDistance = this.s.distance;
     this.targetL = this.s.whL;
-    this.starD = null;
+    this.followD = null;
     this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
   }
 
@@ -205,7 +204,7 @@ export class CameraController {
     s.target = body;
     this.activity = performance.now();
     this.aimCache = null;
-    this.starD = null;
+    this.followD = null;
     if (changed && this.cinematic === "orbit") this.sync();
     if (this.tracking) {
       this.ensureAnchor();
@@ -255,7 +254,7 @@ export class CameraController {
   private aim(cam: ReturnType<typeof cameraFrame>) {
     const s = this.s;
     const body = s.target;
-    const t = body === "star" ? this.nowTime() : 0;
+    const t = body === "star" || body === "barycentre" ? this.nowTime() : 0;
     const key = [
       body, cam.region, cam.r, cam.theta, cam.phi, cam.ell, ...cam.n, ...cam.beta, t, s.spin, s.sun, s.sunOrbit, s.sunRadius,
       s.sunPhase, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.whRho, s.disk, s.diskOuter,
@@ -286,8 +285,9 @@ export class CameraController {
     const s = this.s;
     const half = (s.fov * DEG) / 2;
     const body = s.target;
-    const R = body === "hole" ? 3 * Math.sqrt(3) : body === "star" ? s.sunRadius : 1.6 * mouth(s).w.rho;
-    const d = R / Math.sin((body === "hole" ? 0.34 : 0.28) * half);
+    // (the centre of mass: frame the whole system, the star's orbit)
+    const R = body === "hole" ? 3 * Math.sqrt(3) : body === "star" ? s.sunRadius : body === "barycentre" ? 1.15 * starOrbitRadius(s) : 1.6 * mouth(s).w.rho;
+    const d = R / Math.sin((body === "hole" ? 0.34 : body === "barycentre" ? 0.9 : 0.28) * half);
     if (body === "hole") return void (this.targetDistance = clamp(d, horizon(s.spin) + 1, 1000));
     const cam = cameraFrame(s);
     const X = cameraPosition(s, cam);
@@ -303,7 +303,7 @@ export class CameraController {
     const rel = sub3(rotZ(X, -ph), C);
     const d0 = Math.hypot(...rel);
     const n0 = lin(rel, 1 / d0, rel, 0);
-    const d1 = body === "star" ? Math.max(d, 1.3 * s.sunRadius) : clamp(d, mouth(s).rGlue * 1.05, 2000);
+    const d1 = body === "star" ? Math.max(d, 1.3 * s.sunRadius) : body === "barycentre" ? clamp(d, 10, 2000) : clamp(d, mouth(s).rGlue * 1.05, 2000);
     const n1 = this.clearDirection(C, n0, d1);
     const turn = Math.acos(clamp(dot3(n0, n1), -1, 1));
     const dur = clamp(0.8 + 0.25 * Math.abs(Math.log(d0 / d1)) + (0.8 * turn) / Math.PI, 0.8, 2.4);
@@ -354,9 +354,11 @@ export class CameraController {
     const om = Math.acos(clamp(dot3(F.n0, F.n1), -1, 1));
     const n = om < 1e-6 ? F.n1 : lin(F.n0, Math.sin((1 - e) * om) / Math.sin(om), F.n1, Math.sin(e * om) / Math.sin(om));
     const d = Math.exp(Math.log(F.d0) + (Math.log(F.d1) - Math.log(F.d0)) * e);
-    const ph = F.body === "star" ? starPhase(s, this.nowTime()) : 0;
-    const Y = rotZ(lin(F.C, 1, n, d), ph);
-    if (F.body === "star") {
+    const t = this.nowTime();
+    const ph = F.body === "star" ? starPhase(s, t) : 0;
+    // around the body's present centre (the centre of mass moves in the hole's frame)
+    const Y = rotZ(lin(rotZ(bodyCentre(s, F.body, t), -ph), 1, n, d), ph);
+    if (F.body !== "wormhole") {
       const f = sphericalFrame(Y);
       s.distance = f.r;
       s.inclination = clamp(f.th / DEG, 0.2, 179.8);
@@ -375,7 +377,7 @@ export class CameraController {
     }
     if (x >= 1) {
       this.flight = null;
-      this.starD = F.body === "star" ? F.d1 : this.starD;
+      this.followD = F.body === "wormhole" ? this.followD : F.d1;
     }
   }
 
@@ -403,9 +405,9 @@ export class CameraController {
     const s = this.s;
     if (!this.orbiting) return;
     this.flight = null;
-    if (s.target === "star") {
-      this.starOrbit[0] += dAz;
-      this.starOrbit[1] += dInc;
+    if (s.target === "star" || s.target === "barycentre") {
+      this.followOrbit[0] += dAz;
+      this.followOrbit[1] += dInc;
       return;
     }
     s.azimuth = wrapDeg(s.azimuth + dAz);
@@ -444,31 +446,41 @@ export class CameraController {
     this.written = [s.yaw, s.pitch, s.roll].join();
   }
 
+  /** Closest the camera may orbit the followed body. */
+  private followMin() {
+    const s = this.s;
+    return s.target === "star" ? 1.3 * s.sunRadius : 2;
+  }
+
   /**
-   * Orbiting the star: the camera keeps its position relative to the star in the star's rotating
-   * frame (it follows it along its orbit), plus the drag increments and the eased wheel distance.
+   * Orbiting the star or the centre of mass: the camera keeps its position relative to the body —
+   * in the star's rotating frame (it follows it along its orbit), or in the non-rotating frame of
+   * the centre of mass (at rest in it: Gargantua and the star turn around it) — plus the drag
+   * increments and the eased wheel distance.
    */
-  private followStar(dt: number) {
+  private followBody(dt: number) {
     const s = this.s;
     if (s.anchor !== "hole") return;
+    const body = s.target;
+    const phase = (t: number) => (body === "star" ? starPhase(s, t) : 0);
     const t0 = Number.isFinite(this.prevTime) ? this.prevTime : this.nowTime();
     const t1 = this.nowTime();
     const X = blToCartesian(s.distance, clamp(s.inclination, 0.2, 179.8) * DEG, s.azimuth * DEG);
-    const rel = rotZ(sub3(X, starCentre(s, t0)), -starPhase(s, t0));
+    const rel = rotZ(sub3(X, bodyCentre(s, body, t0)), -phase(t0));
     let d = Math.hypot(...rel);
     let inc = Math.acos(clamp(rel[2] / d, -1, 1)) / DEG;
     let az = Math.atan2(rel[1], rel[0]) / DEG;
-    az += this.starOrbit[0];
-    inc = clamp(inc - this.starOrbit[1], 1, 179);
-    this.starOrbit = [0, 0];
-    const dMin = 1.3 * s.sunRadius;
-    if (this.starD === null) this.starD = d;
-    this.starD = clamp(this.starD, dMin, 2000);
+    az += this.followOrbit[0];
+    inc = clamp(inc - this.followOrbit[1], 1, 179);
+    this.followOrbit = [0, 0];
+    const dMin = this.followMin();
+    if (this.followD === null) this.followD = d;
+    this.followD = clamp(this.followD, dMin, 2000);
     const k = 1 - Math.exp(-10 * dt);
-    d = Math.abs(Math.log(this.starD / d)) < 1e-4 ? this.starD : Math.exp(Math.log(d) + (Math.log(this.starD) - Math.log(d)) * k);
+    d = Math.abs(Math.log(this.followD / d)) < 1e-4 ? this.followD : Math.exp(Math.log(d) + (Math.log(this.followD) - Math.log(d)) * k);
     const st = Math.sin(inc * DEG);
     const relN: Vec3 = [d * st * Math.cos(az * DEG), d * st * Math.sin(az * DEG), d * Math.cos(inc * DEG)];
-    const Y = lin(starCentre(s, t1), 1, rotZ(relN, starPhase(s, t1)), 1);
+    const Y = lin(bodyCentre(s, body, t1), 1, rotZ(relN, phase(t1)), 1);
     if (Math.hypot(...Y) < horizon(s.spin) + 0.5) return;
     if (Math.hypot(...sub3(Y, X)) < 1e-9 * (1 + d)) return; // (round-off only: keep still)
     const f = sphericalFrame(Y);
@@ -479,43 +491,85 @@ export class CameraController {
   }
 
   /**
-   * Co-moving with the star while orbiting it: the camera's velocity eases to that of the star's
-   * rotating frame at its position (v = ϖ(Ω★ − ω)/α relative to the ZAMO), and back to rest after.
+   * The camera is at rest in the centre-of-mass frame (the star has a mass, so Gargantua moves):
+   * free rotation, or orbiting the centre of mass — not when falling freely, nor near the mouth.
    */
-  private updateRide(dt: number) {
+  private baryRest() {
     const s = this.s;
-    const want = this.orbiting && s.target === "star" && s.anchor === "hole" && (s.motion === "static" || s.motion === "comoving");
-    if (want && s.motion === "static") s.motion = "comoving";
-    if (s.motion !== "comoving") {
-      this.ride = 0;
+    if (!baryFraction(s) || this.gravity || this.cinematic === "dive" || this.cinematic === "journey" || s.anchor !== "hole") return false;
+    if (cameraFrame(s).region !== "hole") return false;
+    return s.rotation === "free" || this.flyMode || (this.orbiting && s.target === "barycentre");
+  }
+
+  /** Free camera at rest in the centre-of-mass frame: in the hole's frame it drifts by ΔB. */
+  private driftWithBarycentre() {
+    const s = this.s;
+    const t0 = Number.isFinite(this.prevTime) ? this.prevTime : this.nowTime();
+    const t1 = this.nowTime();
+    if (t1 === t0) return;
+    const dB = sub3(bodyCentre(s, "barycentre", t1), bodyCentre(s, "barycentre", t0));
+    const cam = cameraFrame(s);
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const w = (v: Vec3) => add3(f.er, f.et, f.ep, v);
+    const Y = lin(X, 1, dB, 1);
+    if (Math.hypot(...Y) < horizon(s.spin) + 0.5) return;
+    setHolePose(s, Y, w(cam.fwd), w(cam.up)); // same orientation w.r.t. the distant stars
+    this.targetDistance = s.distance;
+  }
+
+  /**
+   * The camera's velocity when the controller carries it: co-moving with the star while orbiting it
+   * (rigid rotation at Ω★: v = ϖ(Ω★ − ω)/α relative to the ZAMO), at rest in the centre-of-mass
+   * frame (v = the centre of mass's velocity in the hole's frame), else at rest; eased (~0.35 s).
+   */
+  private updateMotion(dt: number) {
+    const s = this.s;
+    const own = s.motion === "static" || s.motion === "comoving" || s.motion === "barycentric";
+    const carried = s.motion === "comoving" || s.motion === "barycentric";
+    if (!own || s.anchor !== "hole") {
+      if (carried) (s.motion = "static"), (s.velR = s.velT = s.velP = 0);
       return;
     }
-    this.ride += ((want ? 1 : 0) - this.ride) * (1 - Math.exp(-dt / 0.35));
-    if (want && this.ride > 0.9995) this.ride = 1; // arrived: constant from now on (the image converges)
-    if ((!want && this.ride < 2e-3) || s.anchor !== "hole") {
-      s.motion = "static";
-      s.velR = s.velT = s.velP = 0;
-      this.ride = 0;
-      return;
-    }
+    const kind = this.orbiting && s.target === "star" ? "star" : this.baryRest() ? "bary" : null;
     const th = clamp(s.inclination, 0.2, 179.8) * DEG;
-    const z = zamo(Math.max(s.distance, horizon(s.spin) + 0.05), th, s.spin);
-    const v = (z.varpi * (starOmega(s) - z.omega)) / z.alpha;
-    s.velR = 0;
-    s.velT = 0;
-    s.velP = clamp(this.ride * v, -0.95, 0.95);
+    const r = Math.max(s.distance, horizon(s.spin) + 0.05);
+    const z = zamo(r, th, s.spin);
+    let target: Vec3 = [0, 0, 0];
+    if (kind === "star") target = [0, 0, (z.varpi * (starOmega(s) - z.omega)) / z.alpha];
+    else if (kind === "bary") {
+      const f = sphericalFrame(blToCartesian(r, th, s.azimuth * DEG));
+      const v = barycentreVelocity(s, this.nowTime());
+      target = [dot3(v, f.er) / z.alpha, dot3(v, f.et) / z.alpha, dot3(v, f.ep) / z.alpha];
+    }
+    const cur: Vec3 = carried ? [s.velR, s.velT, s.velP] : [0, 0, 0];
+    const k = 1 - Math.exp(-dt / 0.35);
+    let next = lin(cur, 1, sub3(target, cur), k);
+    if (Math.hypot(...sub3(target, next)) < 2e-5) next = target; // arrived: constant (the image converges)
+    if (!kind && Math.hypot(...next) < 2e-4) {
+      if (carried) (s.motion = "static"), (s.velR = s.velT = s.velP = 0);
+      return;
+    }
+    if (kind) s.motion = kind === "star" ? "comoving" : "barycentric";
+    [s.velR, s.velT, s.velP] = next.map((v) => clamp(v, -0.95, 0.95)) as Vec3;
   }
 
   /** The star as a gravitating body for the camera's geodesic (none when massless or off). */
   private lens(): Lens | undefined {
     const s = this.s;
     if (!s.sun || !(s.sunMass > 0)) return undefined;
-    return { m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t) };
+    const D3 = starOrbitRadius(s) ** 3;
+    return {
+      m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
+      // Gargantua orbits the centre of mass: its frame falls towards the star
+      accel: (t) => holeAcceleration(s, t),
+      accelRate: (t) => lin(starVelocity(s, t), s.sunMass / D3, [0, 0, 0], 0),
+    };
   }
 
-  /** Current co-moving fraction (0 … 1) for the HUD. */
+  /** Co-moving with the star (for the HUD). */
   get riding() {
-    return this.s.motion === "comoving" ? this.ride : 0;
+    return this.s.motion === "comoving" ? 1 : 0;
   }
 
 
@@ -716,11 +770,11 @@ export class CameraController {
 
   private zoomBy(f: number) {
     if (this.cinematic === "dive" || this.cinematic === "journey") return;
-    if (this.orbiting && this.s.target === "star") {
+    if (this.orbiting && (this.s.target === "star" || this.s.target === "barycentre")) {
       const s = this.s;
-      const dMin = 1.3 * s.sunRadius;
-      const d = this.starD ?? bodyDistance(s, cameraFrame(s), "star", this.nowTime());
-      this.starD = clamp(dMin + (d - dMin) * f, dMin, 2000);
+      const dMin = this.followMin();
+      const d = this.followD ?? bodyDistance(s, cameraFrame(s), s.target, this.nowTime());
+      this.followD = clamp(dMin + (d - dMin) * f, dMin, 2000);
       return;
     }
     if (this.aroundWormhole) {
@@ -751,7 +805,7 @@ export class CameraController {
     if (!avail.includes(s.target)) {
       s.target = avail.includes("hole") ? "hole" : "wormhole";
       this.aimCache = null;
-      this.starD = null;
+      this.followD = null;
     }
     if (this.orbiting && !dragging) this.ensureAnchor();
 
@@ -817,15 +871,16 @@ export class CameraController {
     } else if (this.cinematic === "journey") {
       this.stepJourney(dt);
     }
-    if (this.flight && !(this.orbiting && s.target === this.flight.body && s.anchor === (this.flight.body === "star" ? "hole" : "wormhole"))) {
+    if (this.flight && !(this.orbiting && s.target === this.flight.body && s.anchor === (this.flight.body === "wormhole" ? "wormhole" : "hole"))) {
       this.flight = null;
     }
     if (this.cinematic !== "dive" && this.cinematic !== "journey") {
       if (this.flight) this.stepFlight(dt);
-      else if (this.orbiting && s.target === "star") this.followStar(dt);
+      else if (this.orbiting && (s.target === "star" || s.target === "barycentre")) this.followBody(dt);
       else this.easeZoom(dt);
     }
-    this.updateRide(dt);
+    if (this.baryRest() && s.rotation === "free") this.driftWithBarycentre();
+    this.updateMotion(dt);
     if (this.tracking) this.track(dt);
     return this.changedSince(before);
   }

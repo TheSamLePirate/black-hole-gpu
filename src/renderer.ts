@@ -8,6 +8,7 @@ import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame } from "./camera";
 import { mouth } from "./wormhole";
+import { starOmega } from "./targeting";
 import {
   blackbodyLogY,
   buildBlackbodyLUT,
@@ -26,7 +27,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 41;
+const PARAM_VEC4S = 42;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
 const PATH_MAX = 256;
 const PATH_CHUNK = 16;
@@ -767,6 +768,8 @@ export class Renderer {
     set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, s.sun ? s.sunMass : 0, 0);
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
+    // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
+    set(41, s.sun && s.sunMass > 0 ? s.sunMass / (1 + s.sunMass) : 0, starOmega(s), 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

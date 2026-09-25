@@ -20,6 +20,13 @@ export interface Lens {
   R: number;
   centre: (t: number) => Vec3;
   velocity: (t: number) => Vec3;
+  /**
+   * Acceleration of the hole's frame (it orbits the centre of mass, falling towards the lens):
+   * adds the uniform "indirect" field, g_tt = −(1 + 2a·x), so the motion is right in the inertial
+   * frame of the centre of mass. `accelRate`: its time derivative.
+   */
+  accel?: (t: number) => Vec3;
+  accelRate?: (t: number) => Vec3;
 }
 
 export interface Massive {
@@ -107,6 +114,15 @@ function rhs(st: Massive, a: number, lens?: Lens): D {
     d.uth -= fac * r * dot3(F.grad, f.et);
     d.L = -fac * r * f.st * dot3(F.grad, f.ep);
     d.E = -fac * dot3(F.grad, F.v); // ∂δH/∂t = fac ∂Φ/∂t, ∂Φ/∂t = −∇Φ·v
+    if (lens.accel) {
+      // δH = E² a·x: a uniform pull −a (the frame's fall), and dE/dτ = E² ȧ·x
+      const A = lens.accel(st.t);
+      const E2 = E * E;
+      d.ur -= E2 * dot3(A, f.er);
+      d.uth -= E2 * r * dot3(A, f.et);
+      d.L -= E2 * r * f.st * dot3(A, f.ep);
+      if (lens.accelRate) d.E += E2 * dot3(lens.accelRate(st.t), f.X);
+    }
   }
   return d;
 }

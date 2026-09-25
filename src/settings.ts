@@ -1,7 +1,7 @@
-export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving";
+export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** Camera rotation: around the selected body, or about the camera itself. */
 export type Rotation = "orbit" | "free";
-export type Target = "hole" | "star" | "wormhole";
+export type Target = "hole" | "star" | "wormhole" | "barycentre";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";

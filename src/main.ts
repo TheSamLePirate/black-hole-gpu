@@ -331,7 +331,11 @@ async function main() {
     return `${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s`;
   };
   Object.assign(globalThis, {
-    __bh: { settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading },
+    __bh: {
+      settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
+      time: () => simTime,
+      setTime: (t: number) => ((simTime = t), (timeDirty = true)),
+    },
   });
 
   // -------------------------------------------------------------------- loop
@@ -435,7 +439,7 @@ async function main() {
   }
 
   // ------------------------------------------------------------------ target marker
-  const BODY_COLOURS = { hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255" } as const;
+  const BODY_COLOURS = { hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255" } as const;
   /**
    * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an
    * arrow at the edge of the view when it is off-screen. Shown while the camera is handled, then fades.
@@ -483,7 +487,19 @@ async function main() {
     ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
     ctx.shadowColor = "rgba(0,0,0,0.8)";
     ctx.shadowBlur = 4 * k;
-    if (m.onScreen) {
+    if (m.onScreen && m.body === "barycentre") {
+      // a point: ⊕
+      const r = 9 * k;
+      ctx.beginPath();
+      ctx.arc(m.px, m.py, r, 0, 2 * Math.PI);
+      ctx.moveTo(m.px - 1.6 * r, m.py);
+      ctx.lineTo(m.px + 1.6 * r, m.py);
+      ctx.moveTo(m.px, m.py - 1.6 * r);
+      ctx.lineTo(m.px, m.py + 1.6 * r);
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.fillText(m.label, m.px, Math.min(m.py + 2.4 * r + 8 * k, overlay.height - 8 * k));
+    } else if (m.onScreen) {
       const r = m.radius;
       const l = Math.min(r * 0.45, 12 * k);
       ctx.beginPath();
@@ -576,6 +592,7 @@ async function main() {
     if (camera.flyMode) cin += ` · <b class="cin">FLY ×${camera.flySpeed.toFixed(2)}</b>`;
     else cin += settings.rotation === "orbit" ? ` · ↻ ${BODY_NAMES[settings.target]}` : " · free look";
     if (camera.riding > 0.01) cin += ` · co-moving β = ${Math.abs(settings.velP).toFixed(3)} c`;
+    if (settings.motion === "barycentric") cin += ` · at rest in the centre-of-mass frame`;
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
       cin += ` · <b class="cin">GRAVITY</b> v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M${settings.animate ? "" : " (time paused)"}`;

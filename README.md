@@ -154,7 +154,21 @@ metric in the flat far-field map as the linearized field of a *moving* mass, h_�
 secondary images appear on its limb; its own light is redshifted by 1 − m/R. The camera (gravity on)
 feels δH = Φ(2γ²(E − v·p)² − 1) — Newton for a slow body, and a moving star exchanges energy with it (a
 slingshot) — it can orbit the star while the star carries it round Gargantua, and it lands on (and
-rides) the surface instead of crossing it. The star's own orbit stays a test-mass orbit (m ≪ M).
+rides) the surface instead of crossing it.
+
+**Gargantua orbits the centre of mass** (whenever the star has a mass): the relative orbit has
+Ω² = (M + m)/D³ (Kerr correction kept), and Gargantua circles the centre of mass at q·D, q = m/(M + m)
+(6.4 M at 0.011 c for m = 0.1 M), opposite the star. Everything is still traced in Gargantua's frame,
+which falls freely towards the star, so the uniform "indirect" field of that fall is added —
+g_tt = −(1 + 2a·x), a = m x★/D³ — for light (a kick like the star's) and for the camera's geodesic;
+the distant sky, at rest in the centre-of-mass frame, is aberrated (and Doppler-shifted) by Gargantua's
+velocity at the time each ray escapes, which together with the indirect field gives the right sky
+direction at the camera. In free rotation (and when orbiting the new target **Centre of mass** ⊕) the
+camera stays at rest in the centre-of-mass frame — it drifts in Gargantua's frame and takes its velocity
+(motion "At rest (centre of mass)") — so Gargantua and the star are seen circling ⊕ against fixed stars;
+orbiting Gargantua or the star follows them instead. Tests: Ω, −B̈ = m x★/D³, and a distant body at rest
+in the centre-of-mass frame stays at rest there (3 %; without the indirect field it drifts away).
+The wormhole's mouth stays bound to Gargantua.
 
 **Two rotation modes** (R, toolbar, Scene → Camera rotation):
 

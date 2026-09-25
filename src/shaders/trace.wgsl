@@ -50,8 +50,9 @@ struct Params {
   whY: vec4f,
   whZ: vec4f,
   star: vec4f,     // companion star on (0/1), orbital radius [M], radius [M], temperature [K]
-  star2: vec4f,    // brightness, azimuth at t = 0 [rad], unused, unused
+  star2: vec4f,    // brightness, azimuth at t = 0 [rad], mass m [M], unused
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
+  bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -471,7 +472,7 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
 // uses the orbital motion of its centre (rigid rotation Ω around the hole) at the point hit.
 fn starCentre(tEm: f32) -> vec3f {
   let rs = P.star.y;
-  let ph = P.star2.y + tEm / (pow(rs, 1.5) + P.bh.x);
+  let ph = P.star2.y + tEm * P.bary.y;
   return rs * vec3f(cos(ph), sin(ph), 0.0);
 }
 
@@ -513,7 +514,7 @@ fn starSurface(nrm0: vec3f, tEm: f32) -> vec2f {
 
 fn starShift(n: GState, L: f32, E0: f32) -> f32 {
   let a = P.bh.x;
-  let om = 1.0 / (pow(P.star.y, 1.5) + a);
+  let om = P.bary.y;
   if (P.modes.y == SHIFT_NONE) { return 1.0; }
   // the light also climbs out of the star's own potential: × (1 + Φ★) = 1 − m/d
   let dS = length(blCart(n.x) - starCentre(P.time.x + n.x.w));
@@ -521,7 +522,7 @@ fn starShift(n: GState, L: f32, E0: f32) -> f32 {
   return gS * (1.0 / E0) / circularEmitterEnergy(max(n.x.x, 1.01 * P.bh.y), n.x.y, a, L, om);
 }
 
-// Mass of the star (m = P.star2.z, test-mass orbit, m ≪ M): the linearized field of a moving mass,
+// Mass of the star (m = P.star2.z): the linearized field of a moving mass,
 // h_μν = −2Φ (η_μν + 2 u_μ u_ν) with Φ = −m/d (d measured in the star's rest frame), added to the
 // Kerr metric in its flat far-field map. For a photon (p_t = −1) δH = −½ h^μν p_μ p_ν
 // = 2Φ γ² (1 − v·p)²: the deflection is 4m/b (twice Newton's) × (1 − v∥) for a star moving along
@@ -535,14 +536,17 @@ fn starForce(x: vec4f, back: vec3f) -> vec3f {
   let er = vec3f(st * cp, st * sp, ct);
   let tEm = P.time.x + x.w;
   let c = starCentre(tEm);
-  let om = 1.0 / (pow(P.star.y, 1.5) + P.bh.x);
-  let v = om * vec3f(-c.y, c.x, 0.0);
+  let v = P.bary.y * vec3f(-c.y, c.x, 0.0);
   let g2 = 1.0 / (1.0 - dot(v, v));
   let dv = x.x * er - c;
   let dvv = dot(dv, v);
   let d2 = max(dot(dv, dv) + g2 * dvv * dvv, P.star.z * P.star.z); // rest-frame distance²
   let k = 1.0 + dot(v, back);                                      // 1 − v·p̂
-  let g = (2.0 * P.star2.z * g2 * k * k) * (dv + g2 * dvv * v) / (d2 * sqrt(d2)); // ∇δH
+  var g = (2.0 * P.star2.z * g2 * k * k) * (dv + g2 * dvv * v) / (d2 * sqrt(d2)); // ∇δH
+  // The hole's frame falls towards the star (Gargantua orbits the centre of mass) with
+  // a = m x★/D³: the uniform "indirect" field, g_tt = −(1 + 2a·x), δH = a·x for light.
+  let D = length(c);
+  g += (P.star2.z / (D * D * D)) * c;
   return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
 }
 
@@ -2015,6 +2019,20 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     }
     skyDir = dir;
     skyG = 1.0 / E0;
+    if (P.bary.x > 0.0) {
+      // The distant sky is at rest in the centre-of-mass frame, which moves at u = q v★ relative to
+      // the hole's frame (at the escape time): aberration and Doppler of the photon (p = −dir).
+      let c = starCentre(tNow + s.x.w);
+      let u = P.bary.x * P.bary.y * vec3f(-c.y, c.x, 0.0);
+      let u2 = dot(u, u);
+      let gu = inverseSqrt(1.0 - u2);
+      let un = u * inverseSqrt(max(u2, 1e-30));
+      let p = -dir;
+      let E1 = gu * (1.0 - dot(u, p));
+      let p1 = p + ((gu - 1.0) * dot(un, p) - gu * sqrt(u2)) * un;
+      skyDir = -normalize(p1);
+      skyG = 1.0 / (E0 * E1);
+    }
     skyId = SKY_NATIVE;
   }
   break;

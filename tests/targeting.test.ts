@@ -3,7 +3,7 @@ import { basis, cameraFrame } from "../src/camera";
 import { defaultSettings, type Settings } from "../src/settings";
 import {
   aimFrame, apparentDirection, bodyLook, composeOffset, geometricLook, offsetFrom, pick, QUAT_ID, quatAngle, slerp,
-  starCentre, traceRay, type Quat,
+  starCentre, starOmega, traceRay, type Quat,
 } from "../src/targeting";
 import type { Vec3 } from "../src/physics";
 
@@ -130,12 +130,13 @@ describe("aiming at bodies through curved spacetime", () => {
       const ph = Math.atan2(X[1], X[0]);
       const look: Vec3 = [dirY * Math.sin(ph), 0, dirY * Math.cos(ph)]; // ±y in ZAMO components
       const r0 = traceRay(s0, cam, look)!;
-      const r1 = traceRay(s1, cam, look)!;
+      // (the lens alone: without the uniform field of Gargantua's falling frame)
+      const r1 = traceRay(s1, cam, look, 0, { indirect: false })!;
       expect(r0.fate).toBe("escape");
       expect(r1.fate).toBe("escape");
       const defl = angle(r0.dir, r1.dir);
       // star velocity ≈ +y (0.12 c); the photon travels along −dirY·y: v∥ = −dirY v
-      const v = 70 / (70 ** 1.5 + 0.5);
+      const v = 70 * starOmega(s1);
       const expected = ((4 * 0.1) / r1.starMin) * (1 + dirY * v) / Math.sqrt(1 - v * v);
       // (the camera is 40 M away: the part of the deflection behind it, ≈ 2 %, is missing)
       expect(Math.abs(defl / expected - 0.98)).toBeLessThan(0.025);
@@ -145,5 +146,18 @@ describe("aiming at bodies through curved spacetime", () => {
     const s2 = scene({ sunMass: 0, distance: 80, inclination: 90.5, azimuth: 8 });
     const cam2 = cameraFrame(s2);
     expect(traceRay(s2, cam2, [-1, 0.01, 0.2])!.dir).toEqual(traceRay({ ...s2 }, cam2, [-1, 0.01, 0.2])!.dir);
+  });
+
+  test("Gargantua's falling frame: light far out is deflected by the frame's velocity change a·Δt", () => {
+    // a ray escaping far from the star: with the indirect field its direction turns by ≈ a × (path length)
+    const s0 = scene({ sunMass: 0.1, disk: false, spin: 0.5, distance: 30, inclination: 60, azimuth: 180 });
+    const cam = cameraFrame(s0);
+    const look: Vec3 = [0.9, 0.3, -0.3]; // outwards, away from the star
+    const a = traceRay(s0, cam, look, 0)!;
+    const b = traceRay(s0, cam, look, 0, { indirect: false })!;
+    const aH = (0.1 / 70 ** 3) * 70;
+    const turn = angle(a.dir, b.dir);
+    expect(turn).toBeGreaterThan(0.2 * aH * 500);
+    expect(turn).toBeLessThan(2 * aH * 700);
   });
 });

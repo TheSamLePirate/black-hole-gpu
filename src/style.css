@@ -265,6 +265,7 @@ h1 {
 #btn-target[data-body="hole"] svg { color: #ffb35c; }
 #btn-target[data-body="star"] svg { color: #ffd98a; }
 #btn-target[data-body="wormhole"] svg { color: #9fb8ff; }
+#btn-target[data-body="barycentre"] svg { color: #ebf0ff; }
 
 #toolbar .sep {
   width: 1px;

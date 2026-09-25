@@ -14,9 +14,9 @@ import type { Settings } from "./settings";
 import { cameraRay, zamoToCamera } from "./shadow";
 import { fromMouth, mouth, repToHole, sphericalFrame, toMouth, traceDneg } from "./wormhole";
 
-export type Body = "hole" | "star" | "wormhole";
+export type Body = "hole" | "star" | "wormhole" | "barycentre";
 
-export const BODY_NAMES: Record<Body, string> = { hole: "Gargantua", star: "Star", wormhole: "Wormhole" };
+export const BODY_NAMES: Record<Body, string> = { hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass" };
 
 const DEG = Math.PI / 180;
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -30,9 +30,37 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0
 export function starOrbitRadius(s: Pick<Settings, "sunOrbit" | "sunRadius" | "spin">) {
   return Math.max(s.sunOrbit, horizon(s.spin) + s.sunRadius + 1);
 }
-/** Angular velocity of the star's orbit (prograde Keplerian, dφ/dt = 1/(r^1.5 + a)). */
-export function starOmega(s: Pick<Settings, "sunOrbit" | "sunRadius" | "spin">) {
-  return 1 / (starOrbitRadius(s) ** 1.5 + s.spin);
+/**
+ * Angular velocity of the star's orbit relative to Gargantua: prograde Keplerian, dφ/dt = 1/(r^1.5 + a)
+ * for a test mass; a massive star and the hole orbit each other, Ω² = (M + m)/r³ (Newton, with the
+ * Kerr correction kept): Ω = 1/(r^1.5/√(1 + m) + a).
+ */
+export function starOmega(s: Pick<Settings, "sunOrbit" | "sunRadius" | "spin"> & Partial<Pick<Settings, "sun" | "sunMass">>) {
+  const m = s.sun === false ? 0 : Math.max(s.sunMass ?? 0, 0);
+  return 1 / (starOrbitRadius(s) ** 1.5 / Math.sqrt(1 + m) + s.spin);
+}
+
+/** Mass fraction q = m/(M + m): Gargantua's share of the separation (0: it does not move). */
+export function baryFraction(s: Settings) {
+  return s.sun && s.sunMass > 0 ? s.sunMass / (1 + s.sunMass) : 0;
+}
+
+/** The centre of mass in Gargantua's frame (Gargantua is at −this in the centre-of-mass frame). */
+export function barycentre(s: Settings, t: number): Vec3 {
+  return lin(starCentre(s, t), baryFraction(s), [0, 0, 0], 0);
+}
+
+/** Velocity of the centre of mass relative to Gargantua (= −Gargantua's velocity in its frame). */
+export function barycentreVelocity(s: Settings, t: number): Vec3 {
+  return lin(starVelocity(s, t), baryFraction(s), [0, 0, 0], 0);
+}
+
+/** Acceleration of Gargantua's frame (it falls towards the star): a = m x★/D³. */
+export function holeAcceleration(s: Settings, t: number): Vec3 {
+  if (!baryFraction(s)) return [0, 0, 0];
+  const c = starCentre(s, t);
+  const D = Math.hypot(...c);
+  return lin(c, s.sunMass / D ** 3, c, 0);
 }
 /** Orbital phase of the star at coordinate time t [rad]. */
 export function starPhase(s: Settings, t: number) {
@@ -72,18 +100,20 @@ export function starGradPhi(s: Settings, X: Vec3, t: number) {
  * ∂δH/∂(r, θ, φ) of a photon (p_t = −1) in the star's field: δH = 2Φ γ² (1 − v·p̂)², so the
  * deflection is 4m/b × (1 − v∥) (Pyne & Birkinshaw 1993). `back`: unit backward ray direction.
  */
-export function starForce(s: Settings, r: number, th: number, ph: number, t: number, back: Vec3): Vec3 {
+export function starForce(s: Settings, r: number, th: number, ph: number, t: number, back: Vec3, indirect = true): Vec3 {
   const st = Math.sin(th), ct = Math.cos(th), sp = Math.sin(ph), cp = Math.cos(ph);
   const er: Vec3 = [st * cp, st * sp, ct];
   const f = starGradPhi(s, lin(er, r, er, 0), t);
   const k = 1 + dot(f.v, back);
-  const g = lin(f.grad, 2 * f.g2 * k * k, f.grad, 0);
+  // plus the uniform "indirect" field of the hole's falling frame (δH = a·x for light)
+  const g = lin(f.grad, 2 * f.g2 * k * k, holeAcceleration(s, t), indirect ? 1 : 0);
   return [dot(g, er), r * dot(g, [ct * cp, ct * sp, -st]), r * st * dot(g, [-sp, cp, 0])];
 }
 
 /** Centre of a body at time t (the hole: the origin). */
 export function bodyCentre(s: Settings, body: Body, t: number): Vec3 {
   if (body === "star") return starCentre(s, t);
+  if (body === "barycentre") return barycentre(s, t);
   if (body === "wormhole") return mouth(s).C;
   return [0, 0, 0];
 }
@@ -91,13 +121,14 @@ export function bodyCentre(s: Settings, body: Body, t: number): Vec3 {
 /** Size used to frame a body: horizon, photosphere, throat. */
 export function bodyRadius(s: Settings, body: Body) {
   if (body === "star") return s.sunRadius;
+  if (body === "barycentre") return 1;
   if (body === "wormhole") return mouth(s).w.rho;
   return horizon(s.spin);
 }
 
 /** Angular radius of a body seen from distance d (the hole: its shadow, ≈ 3√3 M far away). */
 export function angularRadius(s: Settings, body: Body, d: number) {
-  const R = body === "hole" ? 3 * Math.sqrt(3) : body === "wormhole" ? 1.6 * mouth(s).w.rho : s.sunRadius;
+  const R = body === "hole" ? 3 * Math.sqrt(3) : body === "wormhole" ? 1.6 * mouth(s).w.rho : body === "barycentre" ? 0.5 : s.sunRadius;
   return Math.asin(Math.min(1, R / Math.max(d, 1e-6)));
 }
 
@@ -106,6 +137,7 @@ export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
   if (s.wormhole && cam.region === "throat" && cam.ell < 0) return ["wormhole"];
   const list: Body[] = ["hole"];
   if (s.sun) list.push("star");
+  if (baryFraction(s) > 0) list.push("barycentre");
   if (s.wormhole) list.push("wormhole");
   return list;
 }
@@ -142,7 +174,7 @@ function staticFrameAt(X: Vec3, a: number): CameraFrame {
  * Follows a backward ray through Kerr, calling `visit` for each chord (Cartesian end points and
  * coordinate times along the ray, t ≤ 0) until it returns true, or the ray falls in / escapes.
  */
-function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => boolean, maxSteps = 6000, time = 0) {
+function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => boolean, maxSteps = 6000, time = 0, noLens = false, indirect = true) {
   const a = s.spin;
   const rH = horizon(a);
   const tol = 0.02 + 0.3 * (1 - Math.sqrt(Math.max(0, 1 - a * a)));
@@ -151,7 +183,7 @@ function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => bool
   let rEsc = 600;
   if (star) rEsc = Math.max(rEsc, star.rs + star.R + 60);
   if (m) rEsc = Math.max(rEsc, Math.hypot(...m.C) + m.rGlue + 60);
-  const massive = !!star && s.sunMass > 0;
+  const massive = !!star && s.sunMass > 0 && !noLens;
   let L = L0;
   let st = st0;
   let q0 = blToCartesian(st.x[0], st.x[1], st.x[2]);
@@ -174,8 +206,8 @@ function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => bool
       // the star's weak field: trapezoidal kick of p_r, p_θ and L (as the shader)
       const qn = blToCartesian(n.x[0], n.x[1], n.x[2]);
       const back = norm(sub(qn, q0));
-      const f0 = starForce(s, st.x[0], st.x[1], st.x[2], time + st.x[3], back);
-      const f1 = starForce(s, n.x[0], n.x[1], n.x[2], time + n.x[3], back);
+      const f0 = starForce(s, st.x[0], st.x[1], st.x[2], time + st.x[3], back, indirect);
+      const f1 = starForce(s, n.x[0], n.x[1], n.x[2], time + n.x[3], back, indirect);
       n = { x: n.x, p: [n.p[0] + 0.5 * h * (f0[0] + f1[0]), n.p[1] + 0.5 * h * (f0[1] + f1[1])] };
       L += 0.5 * h * (f0[2] + f1[2]);
     }
@@ -193,7 +225,7 @@ function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => bool
  * Backward ray along `look` (camera components) until it escapes: its final direction (Cartesian,
  * from the last chord) and its closest approach to the star's centre (for tests and diagnostics).
  */
-export function traceRay(s: Settings, cam: CameraFrame, look: Vec3, time = 0) {
+export function traceRay(s: Settings, cam: CameraFrame, look: Vec3, time = 0, o: { indirect?: boolean } = {}) {
   const ray = cameraRay(cam, look);
   if (!ray) return null;
   let dir: Vec3 = [0, 0, 0];
@@ -207,7 +239,7 @@ export function traceRay(s: Settings, cam: CameraFrame, look: Vec3, time = 0) {
       starMin = Math.min(starMin, Math.hypot(...sub(lin(c.q0, 1, dv, u), C)));
     }
     return false;
-  }, 20000, time);
+  }, 20000, time, false, o.indirect ?? true);
   return { fate, dir: norm(dir), starMin };
 }
 
@@ -305,7 +337,7 @@ export function geometricLook(s: Settings, cam: CameraFrame, P: Vec3): Vec3 {
 }
 
 /** Closest approach of the backward ray along `look` to a (moving) point: miss vector and distance. */
-function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: number) => Vec3, time: number) {
+function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: number) => Vec3, time: number, noLens = false) {
   const ray = cameraRay(cam, look);
   if (!ray) return null;
   let best: Vec3 | null = null;
@@ -321,7 +353,7 @@ function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: 
     // well past the closest approach: stop
     far = d > 2 * bestD + 5 ? far + 1 : 0;
     return far > 8;
-  }, 4000, time);
+  }, 4000, time, noLens);
   return best ? { miss: best as Vec3, d: bestD } : null;
 }
 
@@ -331,18 +363,18 @@ function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: 
  * the point is hidden behind the hole's shadow).
  */
 export function apparentDirection(
-  s: Settings, cam: CameraFrame, centre: (t: number) => Vec3, time: number, guess: Vec3, tol = 1e-3,
+  s: Settings, cam: CameraFrame, centre: (t: number) => Vec3, time: number, guess: Vec3, tol = 1e-3, noLens = false,
 ): { look: Vec3; miss: number } | null {
   if (cam.region !== "hole") return null;
   let d = norm(guess);
-  let res = closestApproach(s, cam, d, centre, time);
+  let res = closestApproach(s, cam, d, centre, time, noLens);
   if (!res) return null;
   for (let it = 0; it < 8 && res.d > tol; it++) {
     const e1 = norm(cross(d, Math.abs(d[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
     const e2 = cross(d, e1);
     const h = 2e-4;
-    const r1 = closestApproach(s, cam, norm(lin(d, 1, e1, h)), centre, time);
-    const r2 = closestApproach(s, cam, norm(lin(d, 1, e2, h)), centre, time);
+    const r1 = closestApproach(s, cam, norm(lin(d, 1, e1, h)), centre, time, noLens);
+    const r2 = closestApproach(s, cam, norm(lin(d, 1, e2, h)), centre, time, noLens);
     if (!r1 || !r2) return null;
     const J1 = lin(r1.miss, 1 / h, res.miss, -1 / h);
     const J2 = lin(r2.miss, 1 / h, res.miss, -1 / h);
@@ -360,7 +392,7 @@ export function apparentDirection(
     let next = null;
     for (let tries = 0; tries < 5; tries++, k *= 0.5) {
       const dn = norm(lin(lin(d, 1, e1, k * du), 1, e2, k * dv));
-      const rn = closestApproach(s, cam, dn, centre, time);
+      const rn = closestApproach(s, cam, dn, centre, time, noLens);
       if (rn && rn.d < res.d) {
         next = { d: dn, r: rn };
         break;
@@ -384,12 +416,12 @@ export function bodyLook(s: Settings, cam: CameraFrame, body: Body, time: number
   }
   if (body === "hole") return { look: aberrate(cam, [-1, 0, 0]), lensed: false };
   // the star's own field is symmetric about its centre: it does not move the central ray
-  if (body === "star" && s.sunMass > 0) s = { ...s, sunMass: 0 };
+  const noLens = body === "star";
   const centre = (t: number) => bodyCentre(s, body, t);
   const geo = geometricLook(s, cam, centre(time));
   const R = bodyRadius(s, body);
   const solve = (g: Vec3) => {
-    const r = apparentDirection(s, cam, centre, time, g, 1e-3 * R);
+    const r = apparentDirection(s, cam, centre, time, g, 1e-3 * R, noLens);
     return r && r.miss < 0.25 * R ? r.look : null;
   };
   // the primary image is the one closest to the straight line: the warm start may have followed
@@ -415,7 +447,7 @@ export function bodyLook(s: Settings, cam: CameraFrame, body: Body, time: number
       seeds.push(norm(lin(hole, Math.cos(ang), lin(e1, Math.cos(ph), e2, Math.sin(ph)), Math.sin(ang))));
     }
   const ranked = seeds
-    .map((g) => ({ g, d: closestApproach(s, cam, g, centre, time)?.d ?? Infinity }))
+    .map((g) => ({ g, d: closestApproach(s, cam, g, centre, time, noLens)?.d ?? Infinity }))
     .sort((a, b) => a.d - b.d);
   const found = ranked.slice(0, 4).map(({ g }) => solve(g)).filter((v): v is Vec3 => !!v);
   if (found.length) return { look: found.sort((a, b) => off(a) - off(b))[0]!, lensed: true };

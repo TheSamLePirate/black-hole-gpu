@@ -116,6 +116,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "hole", label: "Gargantua", hint: "The black hole" },
       { value: "star", label: "Star", hint: "The companion star: the camera rides with it (co-moving) while time runs" },
       { value: "wormhole", label: "Wormhole", hint: "The wormhole's mouth (the only body from our side of it)" },
+      { value: "barycentre", label: "Centre of mass", hint: "Gargantua and the star orbit it (when the star has a mass): the camera stays at rest in its frame" },
     ],
     help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
     keywords: "select body pivot focus star hole wormhole follow",
@@ -142,6 +143,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "forward", label: "Boost along view", hint: "Arbitrary speed β in the viewing direction" },
       { value: "geodesic", label: "Free fall (gravity)", hint: "The camera follows its own geodesic (Gravity button, B)" },
       { value: "comoving", label: "Co-moving with the star", hint: "Rigid rotation with the star's orbital Ω (set when orbiting the star)" },
+      { value: "barycentric", label: "At rest (centre of mass)", hint: "At rest in the frame of the centre of mass, in which Gargantua moves (set in free rotation or when orbiting the centre of mass)" },
     ],
     help: "Velocity of the camera relative to the local zero-angular-momentum observer. Moving observers see relativistic aberration (the sky crowds forward) and Doppler shifts.",
     keywords: "velocity aberration boost orbit fall",
@@ -364,7 +366,7 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "sunMass", type: "number", section: "matter", group: "Companion star", label: "Mass", min: 0, max: 1, scale: "log", offAtZero: true, unit: "M", precision: 2, enabled: (s) => s.sun,
-    help: "Mass of the star in units of the black hole's M. Its weak field Φ = −m/d is added to the Kerr metric: light passing it is bent by 4m/b (the background and Gargantua are lensed around the star, an Einstein ring forms behind it), its own light is redshifted by 1 − m/R, and with gravity on (B) the camera is pulled towards it and can orbit it. A real star next to a supermassive hole would weigh ~10⁻⁸ M (invisible); its orbit is computed in the test-mass limit (m ≪ M).",
+    help: "Mass of the star in units of the black hole's M. Its weak field Φ = −m/d is added to the Kerr metric: light passing it is bent by 4m/b (the background and Gargantua are lensed around the star, an Einstein ring forms behind it), its own light is redshifted by 1 − m/R, and with gravity on (B) the camera is pulled towards it and can orbit it. A real star next to a supermassive hole would weigh ~10⁻⁸ M (invisible). Gargantua and the star then orbit their centre of mass: the relative orbit has Ω² = (M + m)/D³, Gargantua circles at q D (q = m/(M + m)), its frame falls towards the star (the uniform 'indirect' field is added for light and for the camera) and the distant sky, at rest in the centre-of-mass frame, is aberrated by Gargantua's velocity.",
     keywords: "star mass gravity lensing einstein ring weight",
   },
   // ------------------------------------------------------------------ sky
