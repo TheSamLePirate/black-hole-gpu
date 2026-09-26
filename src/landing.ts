@@ -23,6 +23,7 @@ import { body as sysBody, GARGANTUA_SYSTEM, type BodyDef } from "./system/bodies
 import { bodyTrack, meanMotion } from "./system/ephemeris";
 import { circularOrbit } from "./system/kerr-orbits";
 import { sphericalFrame } from "./wormhole";
+import { relief, SURF } from "./terrain";
 
 type M6 = number[][];
 
@@ -52,6 +53,8 @@ export interface PlanetFrame {
   /** the relative motion's system matrix in proper coordinates and time */
   A: M6;
   atm: { rho0: number; H: number } | null;
+  /** its surface kind (terrain.ts) */
+  surf: number;
   /** metres per M */
   mPerM: number;
   /** c²/M in m/s² */
@@ -104,7 +107,8 @@ export function planetFrame(id: string, t: number, a: number, massSolar: number)
   const Ap = A.map((row, i) => row.map((v, j) => (ut * Td[i]! * v) / Td[j]!));
   return {
     id, R: b.radius, m: b.mass, H, VH, C, V, rOrb, n, ut, S, A: Ap,
-    atm: b.surface?.atmosphere ?? null, mPerM: 1476.625 * massSolar, aUnit: accelUnit({ massSolar }),
+    atm: b.surface?.atmosphere ?? null, surf: SURF[b.surface?.kind ?? "rock"],
+    mPerM: 1476.625 * massSolar, aUnit: accelUnit({ massSolar }),
   };
 }
 
@@ -166,6 +170,12 @@ export function betaToCoord(X: Vec3, b: Vec3, a: number): Vec3 {
 export const zamoToLocal = (v: Vec3): Vec3 => [v[0], v[2], -v[1]];
 export const localToZamo = (v: Vec3): Vec3 => [v[0], -v[2], v[1]];
 
+/** Radius of the ground under a local position (the relief of terrain.ts) [M]. */
+export function groundR(F: PlanetFrame, xi: Vec3): number {
+  const d = len(xi);
+  return F.R + relief(F.surf, [xi[0] / d, xi[1] / d, xi[2] / d], F.R * F.mPerM) / F.mPerM;
+}
+
 /** Air density at a height [kg/m³]. */
 export function airDensity(F: PlanetFrame, hM: number): number {
   if (!F.atm) return 0;
@@ -215,7 +225,7 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
   for (let guard = 0; left > 0 && guard < 20000; guard++) {
     const d = len(L.xi);
     const sp = len(L.w) + 1e-30;
-    const hNow = Math.max(d - F.R - gear, 1e-12);
+    const hNow = Math.max(d - groundR(F, L.xi) - gear, 1e-12);
     const rho = airDensity(F, d - F.R);
     // (v/a of the drag, in M: B a_unit / (½ ρ v c²))
     const dragT = rho > 0 ? (BALLISTIC * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
@@ -239,10 +249,11 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
     left -= h;
     // the ground
     const dn = len(L.xi);
-    if (dn <= F.R + gear) {
+    const gr = groundR(F, L.xi);
+    if (dn <= gr + gear) {
       const up: Vec3 = [L.xi[0] / dn, L.xi[1] / dn, L.xi[2] / dn];
       impact = len(L.w) * 299792458;
-      L.xi = [up[0] * (F.R + gear), up[1] * (F.R + gear), up[2] * (F.R + gear)];
+      L.xi = [up[0] * (gr + gear), up[1] * (gr + gear), up[2] * (gr + gear)];
       L.w = [0, 0, 0];
       L.landed = true;
       break;

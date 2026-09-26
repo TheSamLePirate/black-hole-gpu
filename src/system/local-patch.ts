@@ -24,7 +24,8 @@ export interface LocalPatch {
   index: number;
   /** centre, camera rest frame (components along the ZAMO axes r̂, θ̂, φ̂), in units of its radius */
   centre: Vec3;
-  /** the black-hole frame's x, y, z axes seen in the camera rest frame (for the body's surface pattern) */
+  /** the body's own axes (x away from its primary, y along its orbit, z north — its tidally locked
+   *  ground is fixed in them) seen in the camera rest frame */
   axes: [Vec3, Vec3, Vec3];
   /** where its light comes from (the hole — its disk — or its host star), in the camera's rest frame
    *  (the light's direction aberrated by the camera's motion) */
@@ -128,10 +129,14 @@ export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: numb
     const vz = coordToZamo([dot(V, f.er), dot(V, f.et), dot(V, f.ep)], cam.r, cam.theta, cam.zamo);
     const rel = seenFrom(mapToZamo([C[0] - X[0], C[1] - X[1], C[2] - X[2]], cam), vz, cam.beta);
     const host = b.light >= 0 ? bodyPlace(list, b.light) : ([0, 0, 0] as Vec3);
+    // (its primary: the hole, or its parent star)
+    const prim = b.parent >= 0 ? bodyPlace(list, b.parent) : ([0, 0, 0] as Vec3);
+    const er = unit([C[0] - prim[0], C[1] - prim[1], 0]);
+    const ep: Vec3 = [-er[1], er[0], 0];
     best = {
       index: k,
       centre: [rel[0] / b.radius, rel[1] / b.radius, rel[2] / b.radius],
-      axes: [unit(mapToRest([1, 0, 0], cam)), unit(mapToRest([0, 1, 0], cam)), unit(mapToRest([0, 0, 1], cam))],
+      axes: [unit(mapToRest(er, cam)), unit(mapToRest(ep, cam)), unit(mapToRest([0, 0, 1], cam))],
       light: aberrate(unit(mapToZamo([host[0] - C[0], host[1] - C[1], host[2] - C[2]], cam)), cam.beta),
       radius: b.radius,
       distance: d,

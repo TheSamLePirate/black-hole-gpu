@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { advance, fromZamo, toZamo, type Lens } from "../src/geodesic";
-import { planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, betaToCoord, GEAR } from "../src/landing";
+import { planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, betaToCoord, GEAR, groundR } from "../src/landing";
 import type { Vec3 } from "../src/physics";
 import { GARGANTUA_SYSTEM as SYS, body } from "../src/system/bodies";
 import { bodyTrack } from "../src/system/ephemeris";
@@ -78,7 +78,9 @@ test("on the ground: a fall lands, the weight holds it, enough thrust lifts it",
   const F = planetFrame("mann", 5000, a, 1e8);
   const up: Vec3 = [0, 0, 1];
   const h0 = 2000 / F.mPerM; // 2 km
-  const L = { xi: [0, 0, F.R + h0] as Vec3, w: [0, 0, 0] as Vec3, landed: false };
+  // (2 km above the ground there: Mann's ice reaches 3 km)
+  const g0r = groundR(F, [0, 0, 1]);
+  const L = { xi: [0, 0, g0r + h0] as Vec3, w: [0, 0, 0] as Vec3, landed: false };
   let impact: number | null = null;
   // (1e-4 M of proper time per call: 0.05 s)
   for (let k = 0; k < 4000 && !L.landed; k++) impact = stepLocal(F, L, 1e-4, [0, 0, 0]).impact ?? impact;
@@ -86,7 +88,7 @@ test("on the ground: a fall lands, the weight holds it, enough thrust lifts it",
   // (free fall from 2 km through the air: below √(2 g h) ≈ 198 m/s)
   expect(impact!).toBeGreaterThan(20);
   expect(impact!).toBeLessThan(200);
-  expect(Math.hypot(...L.xi) * F.mPerM - F.R * F.mPerM).toBeCloseTo(GEAR, 3);
+  expect((Math.hypot(...L.xi) - groundR(F, L.xi)) * F.mPerM).toBeCloseTo(GEAR, 3);
   // stays put under its weight, lifts off with 2 g up
   const g = weightUp(F, L.xi);
   expect(g * F.aUnit / 9.80665).toBeGreaterThan(0.9);
@@ -94,6 +96,27 @@ test("on the ground: a fall lands, the weight holds it, enough thrust lifts it",
   expect(L.landed).toBe(true);
   stepLocal(F, L, 1e-3, [0, 0, 2 * g]);
   expect(L.landed).toBe(false);
-  expect(Math.hypot(...L.xi)).toBeGreaterThan(F.R + GEAR / F.mPerM);
+  expect(Math.hypot(...L.xi)).toBeGreaterThan(groundR(F, L.xi) + GEAR / F.mPerM);
   void up;
+});
+
+import { relief, SURF } from "../src/terrain";
+
+test("relief: Mann's ice and Edmunds' rock within their bounds, Miller at sea level", () => {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 400; i++) {
+    const th = Math.acos(1 - 2 * ((i * 0.618) % 1)), ph = i * 2.39996;
+    const q: Vec3 = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+    const h = relief(SURF.ice, q, 6.371e6);
+    lo = Math.min(lo, h);
+    hi = Math.max(hi, h);
+    const r = relief(SURF.rock, q, 6.371e6);
+    expect(r).toBeGreaterThanOrEqual(0);
+    expect(r).toBeLessThan(1800);
+    expect(relief(SURF.ocean, q, 6.371e6)).toBe(0);
+  }
+  // (the shader bounds its march at 4 200 m, Edmunds' at 1 800 m)
+  expect(lo).toBeGreaterThanOrEqual(0);
+  expect(hi).toBeLessThan(4200);
+  expect(hi - lo).toBeGreaterThan(1000);
 });

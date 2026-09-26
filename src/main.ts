@@ -643,7 +643,13 @@ async function main() {
     renderer.shipPose = settings.ship ? camera.shipPose() : null;
     const pil = flying();
     if (flightHud.visible !== pil) flightHud.show(pil);
-    if (pil) flightHud.update({ ...camera.flightInfo(), probe: renderer.planetProbes.get(settings.target) ?? null }, simTime);
+    if (pil) {
+      const info = camera.flightInfo();
+      // (re-entry glow on the Ranger)
+      const pl = info.surface?.plasma;
+      renderer.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];
+      flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null }, simTime);
+    }
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

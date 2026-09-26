@@ -13,7 +13,7 @@ import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
-import { airDensity, betaToCoord, CRASH_SPEED, GEAR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
+import { airDensity, betaToCoord, CRASH_SPEED, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -1513,7 +1513,7 @@ export class CameraController {
         // (near the ground: a frame covers no more than a fifth of the height left)
         const { F, L } = this.local;
         const d = Math.hypot(...L.xi);
-        const h = Math.max(d - F.R - GEAR / F.mPerM, 0);
+        const h = Math.max(d - groundR(F, L.xi) - GEAR / F.mPerM, 0);
         const vv = Math.abs((L.w[0] * L.xi[0] + L.w[1] * L.xi[1] + L.w[2] * L.xi[2]) / d) + 1e-12;
         // (the last metres at the pace of the last 20: no Zeno descent)
         const hc = Math.max(h, 20 / F.mPerM);
@@ -1934,8 +1934,16 @@ export class CameraController {
     const vv = dot3(L.w, up);
     const vh = Math.hypot(L.w[0] - vv * up[0], L.w[1] - vv * up[1], L.w[2] - vv * up[2]);
     const g = weightUp(F, L.xi);
+    // re-entry glow (visual): the heat flux scale ρ v³ [W/m²], the air's flow in the camera frame
+    const rho = airDensity(F, d - F.R);
+    const sp = Math.hypot(...L.w);
+    const q = rho * (sp * c) ** 3;
+    const cam = cameraFrame(this.s);
+    const flowZ = sp > 0 ? localToZamo([-L.w[0] / sp, -L.w[1] / sp, -L.w[2] / sp]) : ([0, 0, 0] as Vec3);
+    const flow: Vec3 = [dot3(flowZ, cam.right), dot3(flowZ, cam.up), dot3(flowZ, cam.fwd)];
     return {
-      body: F.id as Body, alt: (d - F.R) * F.mPerM - GEAR, vVert: vv * c, vHor: vh * c,
+      plasma: { q, flow, level: Math.min(Math.max((Math.log10(Math.max(q, 1)) - 5.5) / 2.5, 0), 1) },
+      body: F.id as Body, alt: (d - groundR(F, L.xi)) * F.mPerM - GEAR, vVert: vv * c, vHor: vh * c,
       gLocal: (g * F.aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: L.landed,
       air: airDensity(F, d - F.R),
     };
@@ -1958,7 +1966,7 @@ export class CameraController {
     const c = 299792458;
     const d = Math.hypot(...L.xi);
     const up: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
-    const h = d - F.R - GEAR / F.mPerM;
+    const h = d - groundR(F, L.xi) - GEAR / F.mPerM;
     const g = weightUp(F, L.xi);
     const thr = this.thrustMax();
     if (thr < 1.05 * g) {

@@ -13,6 +13,7 @@ import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
 import { localPatch } from "./system/local-patch";
+import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
 import { bodyVelocity, starOmega, type Body } from "./targeting";
 import {
@@ -33,7 +34,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 53;
+const PARAM_VEC4S = 54;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -216,6 +217,8 @@ export class Renderer {
   private bodyBuf!: GPUBuffer;
   /** the local patch for a body near the camera (off: traced like the others — for comparisons) */
   localPatchOn = true;
+  /** re-entry glow on the Ranger: the air's flow in the camera frame, level 0…1 (from the controller) */
+  shipPlasma: [number, number, number, number] = [0, 0, 1, 0];
   /** the last frame's local patch (inspection) */
   lastNear: ReturnType<typeof localPatch> = null;
   /** the planets' light probes (system/planet-probe.ts), by body id */
@@ -886,10 +889,17 @@ export class Renderer {
     if (lit === 2) {
       const sh = new Float32Array(SH_BYTES / 4);
       ownProbe!.sh.forEach((c, k) => sh.set([...c, 0], 4 * k));
+      // (then its dominant light, along the ZAMO axes like the harmonics)
+      sh.set([...ownProbe!.dir, 1], 36);
       this.device.queue.writeBuffer(this.bodyBuf, this.bodyData.byteLength, sh);
     }
     set(51, ...(near?.axes[2] ?? [0, 0, 1]), lit);
-    set(52, ...(near?.light ?? [0, 0, 1]), 0);
+    // metres per radius; the air (scale height, density, top), the clock of Miller's waves
+    const nb = near ? GARGANTUA_SYSTEM.bodies.find((q) => q.id === bodies[near.index]!.id) : undefined;
+    const mR = near ? near.radius * 1476.625 * s.massSolar : 1;
+    set(52, ...(near?.light ?? [0, 0, 1]), mR);
+    const atm = nb?.surface?.atmosphere;
+    set(53, atm?.H ?? 8000, atm ? atm.rho0 / 1.225 : 0, atm ? 1 + (12 * atm.H) / mR : 1, 4.925490947e-6 * s.massSolar);
     packBodies(bodies, this.bodyData);
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
@@ -1178,6 +1188,7 @@ export class Renderer {
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
+          plasma: this.shipPlasma,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);

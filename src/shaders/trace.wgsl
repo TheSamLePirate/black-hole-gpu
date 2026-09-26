@@ -62,10 +62,13 @@ struct Params {
   // local patch (src/system/local-patch.ts): a body near the camera, along straight rays in the
   // camera's rest frame (components along the ZAMO axes, like the look directions), unit = its radius
   near0: vec4f,    // centre; w = on (0/1)
-  near1: vec4f,    // the black-hole frame's x axis seen in the camera frame; w = body index
+  near1: vec4f,    // the body's own axes seen in the camera frame (x away from its primary, y along
+                   // its orbit, z north: fixed on its tidally locked ground); w = body index
   near2: vec4f,    // its y axis; w = radius [M]
   near3: vec4f,    // its z axis; w = lit by its source alone (0), the camera's light probe (1), its own (2)
-  near4: vec4f,    // direction of its light source (camera rest frame, aberrated); unused
+  near4: vec4f,    // direction of its light source (camera rest frame, aberrated); w = metres per radius
+  near5: vec4f,    // its atmosphere: scale height [m], sea-level density / 1.225 kg/m³ (0: none),
+                   // top of the air [radii], seconds per M (the waves' clock)
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -761,15 +764,26 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f
   // (as its light probe measured it: Miller's light comes from ahead of its motion, aberrated)
   let lm = bodies[BV * k + 4u];
   if (lm.w > 0.5) { ldir = rotZ(lm.xyz, bodyOmega(k) * (tEm - P.time.x)); }
-  return planetShade(k, nrm, nrm, ldir, -dW, tEm, g);
+  return planetShade(k, nrm, bodyFixed(k, nrm, tEm), ldir, -dW, tEm, g);
 }
 
-// A planet's surface colour at a unit normal of the black-hole frame (albedo rgb; w: surface kind)
-fn planetAlbedo(k: u32, nrm: vec3f, tEm: f32) -> vec4f {
+// A black-hole-frame direction on the body's own axes (x away from its primary, y along its orbit,
+// z north): tidally locked, its ground is fixed in them
+fn bodyFixed(k: u32, n: vec3f, tEm: f32) -> vec3f {
+  var host = vec3f(0.0);
+  let par = i32(bodies[BV * k + 1u].y);
+  if (par >= 0) { host = bodyCentre(u32(par), tEm); }
+  let c = bodyCentre(k, tEm) - host;
+  let er = normalize(vec3f(c.xy, 0.0));
+  let ep = vec3f(-er.y, er.x, 0.0);
+  return vec3f(dot(n, er), dot(n, ep), n.z);
+}
+
+// A planet's surface colour at a unit direction on its own axes (albedo rgb; w: surface kind)
+fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
   let b2 = bodies[BV * k + 2u];
-  // the planet turns with its orbit (synchronous): its surface pattern is fixed in the orbiting frame
-  let ang = -bodyOmega(k) * (tEm - P.time.x);
-  let q = rotZ(nrm, ang) * 3.0 + vec3f(b2.w);
+  let nrm = qb;
+  let q = qb * 3.0 + vec3f(b2.w);
   let n1 = 0.5 + 0.5 * gnoise(q);
   let n2 = 0.5 + 0.5 * gnoise(q * 3.7 + vec3f(1.7));
   var alb: vec3f;
@@ -788,21 +802,26 @@ fn planetAlbedo(k: u32, nrm: vec3f, tEm: f32) -> vec4f {
   return vec4f(alb * b2.y / 0.25, f32(surf));
 }
 
+// What lights a planet: x = temperature, y = surface brightness of its source — its host star, or
+// the disk (its bright inner part dominates what it sheds on the planet; the colour its probe
+// measured, Doppler shifted by its motion, when there is one)
+fn lightSource(k: u32) -> vec2f {
+  let li = i32(bodies[BV * k + 3u].x);
+  if (li >= 0) {
+    let q = u32(li);
+    return bodies[BV * q + 2u].xy;
+  }
+  let lm = bodies[BV * k + 4u];
+  return vec2f(select(0.75 * P.disk.x, lm.w, lm.w > 0.5), P.misc.z);
+}
+
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
 // ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
 fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32) -> vec3f {
   let b3 = bodies[BV * k + 3u];
-  var Tl = 0.75 * P.disk.x; // (the disk's bright inner part dominates what it sheds on the planet)
-  var Bl = P.misc.z;
-  let li = i32(b3.x);
-  if (li >= 0) {
-    let q = u32(li);
-    Tl = bodies[BV * q + 2u].x;
-    Bl = bodies[BV * q + 2u].y;
-  }
-  // (the colour of the light its probe measured: the disk's, Doppler shifted by its motion)
-  let lm = bodies[BV * k + 4u];
-  if (lm.w > 0.5) { Tl = lm.w; }
+  let src = lightSource(k);
+  let Tl = src.x;
+  let Bl = src.y;
   let cosi = max(dot(nrm, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
   let A = planetAlbedo(k, pat, tEm);
@@ -2016,8 +2035,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   // a body near the camera, in front of everything traced (the light probe, traced by traceLook
   // alone, leaves it out: it does not light itself)
   if (P.near0.w > 0.5) {
-    let t = nearHit(look);
-    if (t > 0.0) { return traceOut(shadeNear(look, t)); }
+    let k = u32(P.near1.w);
+    let hit = nearMarch(look);
+    if (hit.t > 0.0) {
+      let air = nearAir(look, hit.t, k);
+      return traceOut(shadeNear(look, hit) * air.T + air.L);
+    }
+    var tr = traceLook(look, rnd, tNow);
+    let air = nearAir(look, 1e30, k);
+    tr.col = tr.col * air.T + air.L;
+    tr.tint *= air.T;
+    return tr;
   }
   return traceLook(look, rnd, tNow);
 }
@@ -2072,35 +2100,301 @@ fn probeRadiance(d: vec3f) -> vec3f {
   return acc / 9.0;
 }
 
-fn shadeNear(look: vec3f, t: f32) -> vec3f {
+// ---- relief (the same function in src/terrain.ts: the ship stands on it) ------------------------
+// Heights in metres above the sphere, at a unit direction on the body's axes, resolved to `oct`
+// octaves. Mann: ice sheets and sharp ridges; Edmunds: plateaus and dunes; Miller: its water is
+// flat — but for the giant waves, long crests moving with the tides (drawn, not felt).
+fn tfbm(p0: vec3f, oct: i32) -> f32 {
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  for (var i = 0; i < oct; i++) {
+    s += a * gnoise(p);
+    n += a;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    a *= 0.5;
+  }
+  return s / n;
+}
+
+fn reliefMax(surf: u32) -> f32 {
+  if (surf == 0u) { return 1300.0; }
+  if (surf == 1u) { return 4200.0; }
+  if (surf == 2u) { return 1800.0; }
+  return 0.0;
+}
+
+// octaves of a layer of base frequency f (cycles per radian) resolved at a footprint (metres)
+fn layerOct(f: f32, foot: f32, mR: f32, most: i32) -> i32 {
+  return clamp(i32(log2(mR / (f * 4.0 * max(foot, 0.05)))), 0, most);
+}
+
+// ridged noise (sharp crests), 0…1
+fn ridged(p: vec3f, oct: i32) -> f32 {
+  if (oct <= 0) { return 0.5; }
+  let r = 1.0 - abs(tfbm(p, oct));
+  return r * r;
+}
+
+// foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
+fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  if (surf == 1u) {
+    // Mann: ice sheets, ridges, hills, rubble
+    // (noise cells: continents 1 000 km, ridges 270 km, mountains 21 km, crags 2 km, rocks 210 m, rubble 21 m)
+    var h = (0.5 + 0.5 * tfbm(q * 6.0, max(layerOct(6.0, foot, mR, 5), 1))) * 1400.0;
+    h += ridged(q * 24.0 + vec3f(5.0), layerOct(24.0, foot, mR, 4)) * 900.0;
+    let oh = layerOct(300.0, foot, mR, 3);
+    if (oh > 0) { h += ridged(q * 300.0 + vec3f(2.0), oh) * 1500.0; }
+    let oc = layerOct(3000.0, foot, mR, 3);
+    if (oc > 0) { h += ridged(q * 3000.0 + vec3f(7.0), oc) * 300.0; }
+    let orc = layerOct(30000.0, foot, mR, 3);
+    if (orc > 0) { h += (0.5 + 0.5 * tfbm(q * 30000.0, orc)) * 40.0; }
+    let ou = layerOct(300000.0, foot, mR, 2);
+    if (ou > 0) { h += (0.5 + 0.5 * tfbm(q * 300000.0, ou)) * 4.0; }
+    return h;
+  }
+  if (surf == 2u) {
+    // Edmunds: plateaus, mesas, dunes
+    let base = 0.5 + 0.5 * tfbm(q * 5.0, max(layerOct(5.0, foot, mR, 5), 1));
+    var h = base * 1000.0;
+    let om = layerOct(300.0, foot, mR, 3);
+    if (om > 0) { h += smoothstep(0.55, 0.62, 0.5 + 0.5 * tfbm(q * 300.0, om)) * 380.0; }
+    let oh = layerOct(3000.0, foot, mR, 3);
+    if (oh > 0) { h += (0.5 + 0.5 * tfbm(q * 3000.0 + vec3f(3.0), oh)) * 200.0; }
+    let ou = layerOct(300000.0, foot, mR, 2);
+    if (ou > 0) { h += (0.5 + 0.5 * tfbm(q * 300000.0, ou)) * 3.0; }
+    let od = layerOct(30000.0, foot, mR, 1);
+    if (od > 0) {
+      let dune = 0.5 + 0.5 * sin(dot(q, vec3f(0.6, 0.8, 0.0)) * 30000.0 + 4.0 * tfbm(q * 80.0, 2));
+      h += dune * 25.0 * smoothstep(0.45, 0.25, base);
+    }
+    return h;
+  }
+  if (surf == 0u) {
+    // Miller's giant waves: three trains of crests ~2 900 km apart, 1.2 km high, moving at ~20 m/s
+    // (drawn, not felt)
+    var h = 0.0;
+    for (var i = 0u; i < 3u; i++) {
+      let fi = f32(i);
+      let dir = normalize(vec3f(cos(fi * 2.1 + 0.3), sin(fi * 2.1 + 0.3), 0.35 * fi - 0.3));
+      let ph = dot(q, dir) * 14.0 + fi * 1.7 - tSec * (4.0e-5 + 1.0e-5 * fi);
+      let crest = pow(0.5 + 0.5 * sin(ph), 12.0);
+      h += crest * (0.65 + 0.35 * tfbm(q * 40.0 + vec3f(fi), max(layerOct(40.0, foot, mR, 5), 1)));
+    }
+    return h * 1200.0;
+  }
+  return 0.0;
+}
+
+struct NearHit { t: f32, qb: vec3f, h: f32 };
+
+// the body's own axes of a camera-frame direction
+fn toBody(v: vec3f) -> vec3f { return vec3f(dot(v, P.near1.xyz), dot(v, P.near2.xyz), dot(v, P.near3.xyz)); }
+fn fromBody(v: vec3f) -> vec3f { return v.x * P.near1.xyz + v.y * P.near2.xyz + v.z * P.near3.xyz; }
+
+// the pixel's footprint on the ground at a distance t (radii), in metres
+fn reliefFoot(t: f32) -> f32 { return max(t * P.camUp.w * P.near4.w, 0.05); }
+
+// The ray against the relief: marched from the relief's bounding shell, steps a fraction of the
+// height above the ground (and of the distance: the far horizon), then bisected. t < 0: missed.
+fn nearMarch(look: vec3f) -> NearHit {
+  var o: NearHit;
+  o.t = -1.0;
   let k = u32(P.near1.w);
-  let n = normalize(look * t - P.near0.xyz);
-  // the black-hole frame's components (the surface pattern, the far view's light)
-  let nw = normalize(vec3f(dot(n, P.near1.xyz), dot(n, P.near2.xyz), dot(n, P.near3.xyz)));
+  let surf = u32(bodies[BV * k + 2u].z);
+  let c = P.near0.xyz;
+  let mR = P.near4.w;
+  let tSec = P.time.x * P.near5.w;
+  let hmax = reliefMax(surf) / mR;
+  let Rs = 1.0 + hmax;
+  let b = dot(look, c);
+  let off = c - look * b;
+  let d2 = dot(off, off);
+  if (d2 > Rs * Rs) { return o; }
+  let sq = sqrt(Rs * Rs - d2);
+  let t1 = b + sq;
+  if (t1 <= 0.0) { return o; }
+  var t = max(b - sq, 0.0);
+  var tPrev = t;
+  if (hmax <= 0.0) {
+    // no relief (a gas giant): the sphere
+    let h = 1.0 - d2;
+    if (h < 0.0 || b <= 0.0) { return o; }
+    o.t = b - sqrt(h);
+    let p = look * o.t - c;
+    o.qb = normalize(toBody(p));
+    return o;
+  }
+  for (var i = 0u; i < 220u; i++) {
+    let p = look * t - c;
+    let r = length(p);
+    let qb = normalize(toBody(p / r));
+    let h = relief(surf, qb, reliefFoot(t), mR, tSec) / mR;
+    let f = r - (1.0 + h);
+    if (f < 0.0) {
+      // bisect between the last point above and this one
+      var lo = tPrev;
+      var hi = t;
+      for (var j = 0u; j < 10u; j++) {
+        let m = 0.5 * (lo + hi);
+        let pm = look * m - c;
+        let rm = length(pm);
+        let qm = normalize(toBody(pm / rm));
+        if (rm - (1.0 + relief(surf, qm, reliefFoot(m), mR, tSec) / mR) < 0.0) { hi = m; } else { lo = m; }
+      }
+      o.t = hi;
+      let ph = look * hi - c;
+      o.qb = normalize(toBody(ph));
+      o.h = relief(surf, o.qb, reliefFoot(hi), mR, tSec);
+      return o;
+    }
+    tPrev = t;
+    t += max(0.6 * f, 0.02 * t + 1e-9);
+    if (t > t1) { break; }
+  }
+  return o;
+}
+
+// the relief's normal at qb (body axes) by finite differences, in the camera frame, its detail no
+// finer than the pixel's footprint nor than minFoot [m]
+fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f {
+  let mR = P.near4.w;
+  let foot = max(reliefFoot(t), minFoot);
+  let e = max(t * P.camUp.w, 2.0 * max(minFoot, 1.0) / mR);
+  let t1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
+  let t2 = cross(qb, t1);
+  let h0 = relief(surf, qb, foot, mR, tSec);
+  let h1 = relief(surf, normalize(qb + t1 * e), foot, mR, tSec);
+  let h2 = relief(surf, normalize(qb + t2 * e), foot, mR, tSec);
+  let g = ((h1 - h0) * t1 + (h2 - h0) * t2) / (e * mR);
+  return normalize(fromBody(normalize(qb - g)));
+}
+
+// The light for the air and the ground: its dominant direction (camera frame) and irradiance
+struct NearLight { dir: vec3f, e: vec3f };
+fn nearLight(k: u32) -> NearLight {
+  var o: NearLight;
+  let mode = P.near3.w;
+  if (mode > 0.5 && mode < 1.5) {
+    let d = shEnv(9u).xyz;
+    o.dir = normalize(d.x * P.camRight.xyz + d.y * P.camUp.xyz + d.z * P.camFwd.xyz);
+    o.e = shIrradiance(d);
+  } else if (mode > 1.5) {
+    o.dir = normalize(shEnv(9u).xyz);
+    o.e = shIrradiance(o.dir);
+  } else {
+    o.dir = P.near4.xyz;
+    let src = lightSource(k);
+    o.e = blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y * PI;
+  }
+  return o;
+}
+
+fn nearE(n: vec3f) -> vec3f {
+  let mode = P.near3.w;
+  if (mode > 0.5 && mode < 1.5) { return shIrradiance(camAxes(n)); }
+  return shIrradiance(n);
+}
+
+// The air along the look direction up to t (radii): transmittance and the light it scatters to the
+// camera (single scattering of the dominant light, Rayleigh and Mie, sea-level coefficients of the
+// Earth's air scaled by the density; the light's own path through the air, Chapman-like; the
+// planet's shadow).
+struct Air { T: vec3f, L: vec3f };
+fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
+  var o: Air;
+  o.T = vec3f(1.0);
+  o.L = vec3f(0.0);
+  if (P.near5.y <= 0.0) { return o; }
+  let c = P.near0.xyz;
+  let top = P.near5.z;
+  let b = dot(look, c);
+  let off = c - look * b;
+  let d2 = dot(off, off);
+  if (d2 > top * top) { return o; }
+  let sq = sqrt(top * top - d2);
+  let ta = max(b - sq, 0.0);
+  let tb = min(b + sq, tEnd);
+  if (tb <= ta) { return o; }
+  let mR = P.near4.w;
+  let H = P.near5.x;
+  let HM = 0.15 * H;
+  let lt = nearLight(k);
+  let mu = dot(look, lt.dir);
+  let pR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
+  let g = 0.76;
+  let pM = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+  let bR = vec3f(5.8e-6, 13.5e-6, 33.1e-6) * P.near5.y;
+  let bM = 21e-6 * P.near5.y;
+  let N = 16u;
+  // (samples crowded near the start: the air is densest low down, where the camera usually is)
+  var tauCam = vec3f(0.0);
+  var tPrev = ta;
+  for (var i = 1u; i <= N; i++) {
+    let u = f32(i) / f32(N);
+    let t = ta + (tb - ta) * u * u;
+    let ds = (t - tPrev) * mR;
+    let tm = 0.5 * (t + tPrev);
+    tPrev = t;
+    let p = look * tm - c;
+    let r = length(p);
+    let hm = (r - 1.0) * mR;
+    let rR = exp(-hm / H);
+    let rM = exp(-hm / HM);
+    let ext = bR * rR + vec3f(1.1 * bM * rM);
+    // the light's way down to this point (grazing: Chapman-like), dark in the planet's shadow
+    let cz = dot(p / r, lt.dir);
+    let sun = select(0.0, 1.0, cz > -0.12);
+    let tauSun = (bR * rR * H + vec3f(1.1 * bM * rM * HM)) / max(cz + 0.12, 0.02);
+    let att = exp(-(tauCam + 0.5 * ext * ds)) * exp(-tauSun) * sun;
+    o.L += (bR * rR * pR + vec3f(bM * rM * pM)) * att * lt.e * ds;
+    tauCam += ext * ds;
+  }
+  o.T = exp(-tauCam);
+  return o;
+}
+
+fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
+  let k = u32(P.near1.w);
+  let t = hit.t;
+  let qb = hit.qb;
+  let surf = u32(bodies[BV * k + 2u].z);
+  let tSec = P.time.x * P.near5.w;
+  let n = select(normalize(fromBody(qb)), reliefNormal(surf, qb, t, tSec, 0.0), reliefMax(surf) > 0.0 && bodyKind(k) != 0u);
   if (bodyKind(k) == 0u) {
     // a star: limb darkening in the camera frame, its granulation fixed on it
     let mu = clamp(-dot(n, look), 0.0, 1.0);
-    let sf = starSurface(nw, P.time.x);
+    let sf = starSurface(qb, P.time.x);
     let b2 = bodies[BV * k + 2u];
     return blackbody(b2.x * pow(0.2 + 0.8 * mu, 0.25) * sf.y, P.disk.w) * b2.y * sf.x;
   }
-  if (P.near3.w < 0.5) { return planetShade(k, n, nw, P.near4.xyz, -look, P.time.x, 1.0); }
-  // lit by the camera's light probe (the environment of the planet: the lensed disk, Gargantua, the
-  // sky): diffuse albedo/π · E(n), water mirroring the environment (Fresnel), the air's blue at the limb
-  // (1: the Ranger's probe, camera axes; 2: the planet's own probe, along the ZAMO axes)
+  if (P.near3.w < 0.5) { return planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0); }
+  // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
+  // diffuse albedo/π · E(n); water mirroring the environment (Fresnel)
   let ranger = P.near3.w < 1.5;
-  let A = planetAlbedo(k, nw, P.time.x);
-  let E = select(shIrradiance(n), shIrradiance(camAxes(n)), ranger);
+  var A = planetAlbedo(k, qb, P.time.x);
+  let up = normalize(fromBody(qb));
+  // (the ground's colour follows the mountains' faces, not the rocks: a normal without the detail
+  // finer than 150 m)
+  let nm = select(n, reliefNormal(surf, qb, t, tSec, 150.0), surf != 0u);
+  let slope = 1.0 - clamp(dot(nm, up), 0.0, 1.0);
+  if (surf == 1u) {
+    // ice: blue ice on the steep faces, snow on the heights
+    A = vec4f(mix(A.rgb, vec3f(0.45, 0.62, 0.78), smoothstep(0.06, 0.25, slope)) * (0.9 + 0.1 * smoothstep(2400.0, 3600.0, hit.h)), A.w);
+  } else if (surf == 2u) {
+    A = vec4f(A.rgb * mix(1.0, 0.6, smoothstep(0.08, 0.3, slope)), A.w);
+  }
+  let E = nearE(n);
   var col = A.rgb / PI * E;
   let mu = clamp(-dot(n, look), 0.0, 1.0);
-  let surf = u32(A.w);
-  if (surf == 0u && ranger) {
+  if (surf == 0u) {
+    // the sea: the bed seen through knee-deep water, the sky's reflection, foam on the crests
     let F = 0.02 + 0.98 * pow(1.0 - mu, 5.0);
-    col += F * probeRadiance(camAxes(reflect(look, n)));
-  }
-  if (surf != 3u) {
-    let rim = pow(1.0 - mu, 3.0);
-    col += vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * E / PI;
+    let refl = select(shIrradiance(reflect(look, n)) / PI, probeRadiance(camAxes(reflect(look, n))), ranger);
+    col = col * (1.0 - F) + F * refl;
+    let foam = smoothstep(700.0, 1100.0, hit.h) * (0.5 + 0.5 * gnoise(qb * 4000.0));
+    col = mix(col, vec3f(0.85) / PI * E, foam * 0.8);
   }
   return col;
 }
