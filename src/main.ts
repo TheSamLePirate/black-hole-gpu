@@ -290,6 +290,13 @@ async function main() {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
       camera.pilot.throttle = t;
     },
+    plan: (goal, r2) => panel.toast(camera.planTransfer(goal, r2)),
+    align: (goal) => panel.toast(camera.planAlign(goal)),
+    addNode: () => camera.addNode(),
+    nudge: (i, dv, dt) => camera.nudgeNode(i, dv, dt),
+    deleteNode: (i) => camera.deleteNode(i),
+    clearPlan: () => camera.clearPlan(),
+    execute: () => pilotAuto("node"),
   });
   camera.onPilotMessage = (t) => panel.toast(t);
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
@@ -303,6 +310,7 @@ async function main() {
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "KeyN") panel.toast(flightHud.cycleDensity());
+    else if (e.code === "KeyO") flightHud.togglePlanner();
     else if (e.code === "KeyV") {
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);

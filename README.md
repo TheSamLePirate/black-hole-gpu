@@ -248,6 +248,25 @@ X cut; T SAS; 1–7 holds; 8 9 0 autopilots; V camera; , . time warp; drag looks
 left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde. Default lighting of the hull: 1
 (physical: strong contrasts).
 
+**Automatic flight: the flight planner** (O, or PLAN in the mission bar; `src/maneuver.ts`). Manoeuvre nodes —
+an impulse Δ(γβ) at a coordinate time, split along the orbital frame (prograde, normal, radial) — and the
+path through them, computed on the real Kerr geodesics (star included) and drawn on the map in cyan with the
+nodes as diamonds, the Pe / Ap after the last burn and its fate (horizon, star, escape, through the wormhole).
+Pick a goal — **Gargantua** (a circular orbit of radius r), the **companion star** (rendezvous) or the
+**wormhole** (through its mouth) — and the planner finds the burns by shooting:
+*align plane* turns the orbit into the goal's plane (Gargantua's equator — the disk's and the star's orbit's —,
+or the plane through the hole and the mouth) at the cheaper of the next two crossings, the velocity rotated
+with its speed kept (Δv ≈ 2v sin(i/2)); a transfer planned after it starts from the aligned orbit;
+*circular orbit* is Hohmann-like — a prograde (retrograde) burn whose opposite apsis, found by bisection on the
+geodesic, is r, then a circularizing burn there; *rendezvous* scans that burn's departure time so the star
+is there too and matches its velocity at the closest approach, then keeps station; *wormhole* solves for the
+3-D Δv whose path passes through the mouth's centre (Gauss–Newton on the miss vector, departure time scanned for
+the cheapest). Or **simulate a burn**: + NODE and shape it with PRO± NRM± RAD± (0.002 c, ⇧ ×10, ⌥ ×0.1) and
+its time — the predicted path updates live. **EXECUTE** flies the plan: time warps to the node, the nose turns
+onto the burn, the main engine fires centred on the node's time (its direction fixed when it starts), stops when
+the Δv is delivered, then the next node, then circularize or station-keeping. The first burn is always a few
+seconds of warp ahead, so there is time to turn.
+
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
 preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny
 ripples (wavelengths of 2π/150 of the throat radius and less) is stretched across the throat (ℓ = 0). It only

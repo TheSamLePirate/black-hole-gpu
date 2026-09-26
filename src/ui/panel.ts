@@ -911,6 +911,7 @@ export class SettingsPanel {
         [", · .", "Time warp slower · faster"],
         ["V · ⇧V", "Camera: next · previous attach point (the view travels there)"],
         ["N", "HUD density: full · minimal · clean view"],
+        ["O", "Flight planner: align the orbital plane · transfer to an orbit · rendezvous with the star · through the wormhole · manual nodes, then EXECUTE"],
         ["Drag · double-click", "Look around from the attach point · look ahead"],
         ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
       ]],

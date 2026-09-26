@@ -10,6 +10,7 @@ import {
 } from "./targeting";
 import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { circularSpeed, FlightComputer, toU, type PilotInput } from "./pilot";
+import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
@@ -91,6 +92,16 @@ export class CameraController {
   private lastMount = "";
   /** The pose used for the previous frame (a new attach point starts from it). */
   private lastPose: MountPose | null = null;
+  /**
+   * The flight plan: manoeuvre nodes (absolute coordinate times), the predicted path through them
+   * (refreshed from the current state), the executing node's delivered Δv and the warp to restore.
+   */
+  plan: { nodes: ManeuverNode[]; path: PlanPath | null; at: number; note: string; kind?: "align" } = { nodes: [], path: null, at: 0, note: "" };
+  /** the executing burn's direction (local), fixed when it starts */
+  private burnDir: Vec3 | null = null;
+  private nodeDone = 0;
+  private nodeBurning = false;
+  private userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
   private lastWant: { beta: Vec3; ff: Vec3 } | null = null;
   private pathKey = "";
@@ -1125,6 +1136,8 @@ export class CameraController {
     this.pilot.throttle = 0;
     this.pilot.hold = "none";
     this.pilot.auto = "none";
+    this.plan = { nodes: [], path: null, at: 0, note: "" };
+    this.restoreWarp();
     if (!on) {
       s.shipLookYaw = s.shipLookPitch = 0;
       if (this.gravity) this.setGravity(false);
@@ -1272,14 +1285,246 @@ export class CameraController {
     const inp = this.pilotInput(pad);
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
+    if (this.pilot.auto !== "node" && this.userWarp !== null) this.restoreWarp(); // execution stopped
+    const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
     const out = this.pilot.step({
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: s.thrust, tauRate,
-      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" ? this.autopilotWant(cam) : null),
+      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
+      burn,
     }, inp);
     this.rotateC(out.rot);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
+    const tau0 = this.properTime;
     if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
+    // Δv delivered to the executing node (proper acceleration × proper time)
+    if (burn && this.nodeBurning) this.nodeDone += Math.hypot(...out.acc) * (this.properTime - tau0);
+  }
+
+  // ------------------------------------------------------------------------------ flight plan
+  /** The ship's state now (Kerr geodesic), or null away from the hole. */
+  private stateNow() {
+    const cam = cameraFrame(this.s);
+    if (cam.region !== "hole") return null;
+    return fromZamo(cam.r, cam.theta, cam.phi, cam.beta, this.s.spin, this.nowTime());
+  }
+
+  private world() {
+    // the first burn at least ~8 s away at the current warp: time to turn the ship
+    return { a: this.s.spin, lens: this.lens(), lead: 8 * (this.s.animate ? this.s.timeSpeed : 0) };
+  }
+
+  /**
+   * Plans a transfer: "orbit" a circular orbit of radius r2 around the hole, "star" a rendezvous with
+   * the companion (then station-keeping), "wormhole" a path through the mouth. Returns a message.
+   */
+  planTransfer(goal: "orbit" | "star" | "wormhole", r2 = 30): string {
+    const s = this.s;
+    const now = this.stateNow();
+    if (!now) return "Planning works around the black hole";
+    let w = this.world();
+    // after a planned plane change: the transfer starts from the aligned orbit
+    let st = now;
+    let pre: ManeuverNode[] = [];
+    if (this.plan.kind === "align" && this.plan.nodes.length === 1 && this.plan.nodes[0]!.t > now.t) {
+      const after = planPath(now, this.plan.nodes, w, 1)?.states[0];
+      if (after) (st = after), (pre = this.plan.nodes), (w = { ...w, lead: 0 });
+    }
+    let res: { nodes: ManeuverNode[]; note: string } | null = null;
+    if (goal === "orbit") {
+      const rMin = Math.max(isco(s.spin) * 1.02, horizon(s.spin) + 2);
+      res = planCircular(st, Math.max(r2, rMin), w);
+      if (!res) return "No transfer found (inside the photon orbit, or out of reach)";
+    } else if (goal === "star") {
+      if (!s.sun) return "No companion star in this scene";
+      res = planRendezvous(st, w, {
+        centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t), radius: s.sunRadius, standoff: 4 * s.sunRadius,
+      });
+      if (!res) return "No rendezvous found";
+      s.target = "star";
+    } else {
+      if (!s.wormhole) return "No wormhole in this scene";
+      const m = mouth(s);
+      res = planIntercept(st, m.C as Vec3, w, 0.25 * m.w.rho);
+      if (!res) return "No path into the mouth found from this orbit";
+      s.target = "wormhole";
+    }
+    const nodes = [...pre, ...res.nodes];
+    this.plan = { nodes, path: null, at: 0, note: pre.length ? `plane aligned, then ${res.note}` : res.note };
+    this.refreshPlan(true);
+    const dv = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
+    return `Plan: ${this.plan.note} · ${nodes.length} burn${nodes.length > 1 ? "s" : ""} · Δv ${dv.toFixed(3)} c`;
+  }
+
+  /**
+   * The plane a goal lives in (normal, flat map): Gargantua's equator — the disk's, and the star's
+   * orbit's — or, for the wormhole, the plane through the hole and the mouth nearest the ship's.
+   */
+  private goalPlane(goal: "orbit" | "star" | "wormhole", st: NonNullable<ReturnType<CameraController["stateNow"]>>): { n: Vec3; name: string } | null {
+    if (goal !== "wormhole") return { n: [0, 0, 1], name: goal === "star" ? "the star's orbital plane" : "Gargantua's equatorial plane" };
+    if (!this.s.wormhole) return null;
+    const C = mouth(this.s).C as Vec3;
+    const c = lin(C, 1 / (Math.hypot(...C) || 1), C, 0);
+    const h = orbitNormal(st, this.s.spin);
+    let n = sub3(h, lin(c, h[0] * c[0] + h[1] * c[1] + h[2] * c[2], c, 0));
+    if (Math.hypot(...n) < 1e-6) n = [-c[1], c[0], 0];
+    return { n, name: "the plane of the mouth" };
+  }
+
+  /** Plans a plane change into the goal's plane (a later PLAN TRANSFER starts from there). */
+  planAlign(goal: "orbit" | "star" | "wormhole"): string {
+    const st = this.stateNow();
+    if (!st) return "Planning works around the black hole";
+    const g = this.goalPlane(goal, st);
+    if (!g) return "No wormhole in this scene";
+    const res = planAlign(st, this.world(), g.n, g.name);
+    if (!res) return `Already in ${g.name}`;
+    this.plan = { nodes: res.nodes, path: null, at: 0, note: res.note, kind: "align" };
+    this.refreshPlan(true);
+    return `Plan: ${res.note} · Δv ${Math.hypot(...res.nodes[0]!.dv).toFixed(3)} c — PLAN TRANSFER now starts from the new plane`;
+  }
+
+  /** Angle between the ship's orbit and each goal's plane [°], null away from the hole. */
+  private planeOffsets() {
+    const st = this.stateNow();
+    if (!st) return null;
+    const deg = (g: "orbit" | "wormhole") => {
+      const p = this.goalPlane(g, st);
+      return p ? (planeOffset(st, this.s.spin, p.n) * 180) / Math.PI : null;
+    };
+    return { orbit: deg("orbit")!, wormhole: deg("wormhole") };
+  }
+
+  /** A manual node, `after` M from now (default: a tenth of an orbit), or its Δv / time nudged. */
+  addNode(after?: number) {
+    const st = this.stateNow();
+    if (!st) return;
+    const t = st.t + (after ?? Math.max(30, 0.1 * 2 * Math.PI * st.r ** 1.5, 8 * this.s.timeSpeed));
+    this.plan.nodes.push({ t, dv: [0, 0, 0] });
+    this.plan.nodes.sort((a, b) => a.t - b.t);
+    this.plan.note = "manual node";
+    this.plan.kind = undefined;
+    this.refreshPlan(true);
+  }
+  nudgeNode(i: number, dv: Vec3, dt = 0) {
+    const n = this.plan.nodes[i];
+    if (!n) return;
+    this.plan.kind = undefined;
+    n.dv = [n.dv[0] + dv[0], n.dv[1] + dv[1], n.dv[2] + dv[2]];
+    n.t = Math.max(this.nowTime() + 1, n.t + dt);
+    this.refreshPlan(true);
+  }
+  deleteNode(i: number) {
+    this.plan.nodes.splice(i, 1);
+    if (!this.plan.nodes.length) this.clearPlan();
+    else this.refreshPlan(true);
+  }
+  clearPlan() {
+    this.plan = { nodes: [], path: null, at: 0, note: "" };
+    if (this.pilot.auto === "node") this.pilot.setAuto("node");
+    this.restoreWarp();
+  }
+
+  /** The path through the nodes, from the current state (at most 3 times a second). */
+  refreshPlan(force = false) {
+    const P = this.plan;
+    const now = performance.now();
+    if (!P.nodes.length) return (P.path = null);
+    if (!force && now - P.at < 330) return P.path;
+    P.at = now;
+    const st = this.stateNow();
+    if (!st) return (P.path = null);
+    // drop nodes left behind (missed or done)
+    const last = P.nodes[P.nodes.length - 1]!;
+    // (a rendezvous ends at the body: the station-keeping autopilot takes over there)
+    const tail = last.then === "approach" ? last.t - st.t + 40 : Math.max(2 * 2 * Math.PI * st.r ** 1.5, 1.5 * (last.t - st.t), 600);
+    // mid-burn: what is left of the first node's Δv, now
+    let nodes = P.nodes;
+    if (this.nodeBurning && this.pilot.auto === "node" && this.burnDir) {
+      const n0 = nodes[0]!;
+      const left = Math.max(0, Math.hypot(...n0.dv) - this.nodeDone);
+      nodes = [{ ...n0, t: st.t, dv: nodeComponents(st, this.s.spin, lin(this.burnDir, left, this.burnDir, 0)) }, ...nodes.slice(1)];
+    }
+    const res = planPath(st, nodes.filter((n) => n.t > st.t - 1), this.world(), Math.min(tail, 60000));
+    P.path = res?.path ?? null;
+    // through the wormhole's mouth: the path ends in the throat (the flat map knows nothing beyond)
+    if (P.path && this.s.wormhole) {
+      const m = mouth(this.s);
+      const d = P.path.pts.map((q) => Math.hypot(...sub3(q, m.C as Vec3)));
+      const j0 = d.findIndex((x) => x < m.rGlue);
+      if (j0 >= 0) {
+        let j = j0;
+        while (j + 1 < d.length && d[j + 1]! < d[j]!) j++;
+        if (d[j]! < m.w.rho) P.path = { pts: P.path.pts.slice(0, j + 1), times: P.path.times.slice(0, j + 1), fate: "wormhole" };
+      }
+    }
+    return P.path;
+  }
+
+  private restoreWarp() {
+    if (this.userWarp !== null) this.s.timeSpeed = this.userWarp;
+    this.userWarp = null;
+    this.nodeBurning = false;
+    this.nodeDone = 0;
+    this.burnDir = null;
+  }
+
+  /**
+   * Executing the next node: warp towards it, point along its burn, fire so that the burn is centred
+   * on its time, stop when its Δv is delivered; then the next one, or the plan's last manoeuvre
+   * (circularize, station-keeping).
+   */
+  private nodeBurn(cam: ReturnType<typeof cameraFrame>, dt: number, dtau: number): { dir: Vec3; throttle: number } | null {
+    const s = this.s;
+    const P = this.plan;
+    const node = P.nodes[0];
+    if (!node || cam.region !== "hole") {
+      this.pilot.setAuto("node");
+      this.restoreWarp();
+      return null;
+    }
+    if (this.userWarp === null) this.userWarp = s.timeSpeed;
+    const total = Math.hypot(...node.dv);
+    const left = Math.max(0, total - this.nodeDone);
+    // (the burn keeps the direction it had when it started: fixed in the local frame, not turning
+    // with the velocity it changes)
+    const dir = this.nodeBurning && this.burnDir ? this.burnDir : dvLocal(cam.beta, node.dv);
+    const dl = Math.hypot(...dir) || 1;
+    const aMax = Math.max(s.thrust, 1e-9);
+    const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
+    const toNode = node.t - this.nowTime();
+    const start = toNode - burnT / 2;
+    if (!this.nodeBurning && start <= 0) {
+      this.nodeBurning = true;
+      this.burnDir = lin(dir, 1 / dl, dir, 0);
+    }
+    if (this.nodeBurning) {
+      // burn: about 2 s of the pilot's time for the whole burn (warp adapted)
+      s.timeSpeed = Math.min(Math.max(burnT / 2, 0.05), 200);
+      const perFrame = aMax * s.timeSpeed * dt * dtau;
+      if (left <= Math.max(1e-5, 0.02 * perFrame) || left < 1e-6) {
+        P.nodes.shift();
+        this.nodeDone = 0;
+        this.nodeBurning = false;
+        this.burnDir = null;
+        s.timeSpeed = this.userWarp;
+        if (!P.nodes.length) {
+          const then = node.then ?? null;
+          this.userWarp = null;
+          P.path = null;
+          this.pilot.auto = "none";
+          if (then) this.pilot.setAuto(then);
+          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : "station-keeping"}` : "Manoeuvre done");
+        } else this.refreshPlan(true);
+        return null;
+      }
+      return { dir: lin(dir, 1 / dl, dir, 0), throttle: Math.min(1, left / Math.max(perFrame, 1e-12)) };
+    }
+    // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
+    // on the burn: it turns while coasting)
+    const coast = start - 20;
+    s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 500) : Math.min(Math.max(start / 1.5, 3), 12);
+    return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0 };
   }
 
   private radialOut(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
@@ -1470,6 +1715,10 @@ export class CameraController {
       dv: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...sub3(toU(this.lastWant.beta), toU(cam.beta))) : NaN,
       mount: s.shipMount,
       moving: this.mountAnim !== null,
+      /** the flight plan: nodes, the path through them, the executing burn */
+      /** the orbit's angle to each goal's plane [°] */
+      planes: this.planeOffsets(),
+      plan: this.plan.nodes.length ? { nodes: this.plan.nodes, path: this.refreshPlan(), note: this.plan.note, burning: this.nodeBurning, done: this.nodeDone, now: this.nowTime() } : null,
       /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
       target: s.target,
       targetDist: NaN,

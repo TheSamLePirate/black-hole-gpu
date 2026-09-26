@@ -13,13 +13,13 @@
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target";
-export type Auto = "none" | "hover" | "circularize" | "approach";
+export type Auto = "none" | "hover" | "circularize" | "approach" | "node";
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
   normal: "Normal", antinormal: "Anti-normal", target: "Target",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target" };
+export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", node: "Execute node" };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -53,6 +53,8 @@ export interface FlightContext {
   target: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
   want?: { beta: V3; ff: V3; pos?: V3 } | null;
+  /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned */
+  burn?: { dir: V3; throttle: number } | null;
 }
 
 export interface FlightOutput {
@@ -116,7 +118,13 @@ export class FlightComputer {
     let point: V3 | null = null; // desired nose direction (C)
     this.burn = null;
     let throttle = this.throttle;
-    if (this.auto !== "none" && c.want) {
+    if (this.auto === "node" && c.burn) {
+      // manoeuvre node: point along the burn, fire only when on it (within ~3°)
+      this.burn = c.burn.dir;
+      point = toC(c.burn.dir);
+      const align = dot(Z, point);
+      throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
+    } else if (this.auto !== "none" && c.want) {
       const U = toU(c.beta);
       const T = Math.max(1.2 * c.tauRate, 1e-3);
       let A = add(scale(add(toU(c.want.beta), scale(U, -1)), 1 / T), c.want.ff);

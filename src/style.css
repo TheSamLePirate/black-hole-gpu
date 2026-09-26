@@ -822,6 +822,51 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-ahead { margin-left: auto; }
 .fl-map { width: 100%; height: 250px; display: block; border-radius: 2px; background: radial-gradient(circle at 50% 50%, rgba(20, 40, 60, 0.35), rgba(0, 0, 0, 0.35)); cursor: zoom-in; }
 
+/* flight planner (top right, in place of the telemetry) */
+.fl-plan { top: 58px; right: 14px; width: 290px; padding: 8px 10px; display: none; max-height: calc(100vh - 58px - 380px); min-height: 120px; overflow-y: auto; }
+.fl-root.planning .fl-plan { display: block; }
+.fl-root.planning .fl-tel { display: none; }
+.fl-plan [hidden] { display: none !important; }
+.fl-tools.fl-planbtn { width: auto; padding: 0 7px; font: 700 9.5px var(--font); letter-spacing: 0.12em; }
+.fl-tools.fl-planbtn.on { background: rgba(90, 216, 255, 0.28); color: #dff6ff; box-shadow: 0 0 10px rgba(90, 216, 255, 0.35); }
+.fl-plan .fl-title { justify-content: flex-start; color: #5ad8ff; }
+.fl-plan .fl-title::before { background: #5ad8ff; box-shadow: 0 0 6px #5ad8ff; }
+.fl-x { all: unset; cursor: pointer; margin-left: auto; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 3px; color: var(--dim); font: 600 13px var(--font); }
+.fl-x:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.fl-plan button:not(.fl-x) {
+  font: 700 9px var(--font); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 6px;
+  border: 1px solid rgba(124, 214, 255, 0.14); border-radius: 3px; background: rgba(255, 255, 255, 0.04); color: rgba(230, 234, 243, 0.85);
+}
+.fl-plan button:not(.fl-x):hover:not(:disabled) { border-color: rgba(90, 216, 255, 0.55); color: #fff; }
+.fl-plan button:disabled { opacity: 0.35; cursor: default; }
+.fl-plan button.on { border-color: #5ad8ff; color: #dff6ff; background: rgba(90, 216, 255, 0.2); }
+.fl-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.fl-goal { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 6px 0 5px; font: 500 11px var(--font); color: rgba(230, 234, 243, 0.8); min-height: 22px; }
+.fl-rbox { display: inline-flex; align-items: center; gap: 3px; }
+.fl-rbox b { font: 600 11.5px var(--mono); color: #5ad8ff; min-width: 52px; text-align: center; }
+.fl-rbox button { padding: 2px 7px !important; }
+.fl-gorow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.fl-plan .fl-align.aligned { color: #6fe3a1; border-color: rgba(111, 227, 161, 0.5); }
+.fl-plan .fl-go { width: 100%; padding: 6px !important; border-color: rgba(90, 216, 255, 0.5) !important; background: linear-gradient(180deg, rgba(90, 216, 255, 0.24), rgba(90, 216, 255, 0.08)) !important; color: #e8f9ff !important; }
+.fl-plan .fl-go.on { border-color: var(--accent) !important; background: linear-gradient(180deg, rgba(255, 179, 92, 0.34), rgba(255, 179, 92, 0.12)) !important; color: #ffe2bd !important; }
+.fl-nodes { display: flex; flex-direction: column; gap: 3px; margin: 7px 0 5px; }
+.fl-node {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 2px 8px; padding: 4px 6px; cursor: pointer;
+  border: 1px solid rgba(124, 214, 255, 0.1); border-left: 2px solid rgba(90, 216, 255, 0.4); border-radius: 3px; background: rgba(255, 255, 255, 0.03);
+}
+.fl-node.sel { border-left-color: #5ad8ff; background: rgba(90, 216, 255, 0.1); }
+.fl-node b { font: 700 10px var(--font); color: #5ad8ff; }
+.fl-node .t { font: 600 11px var(--mono); color: #fff; }
+.fl-node .dv { font: 500 10.5px var(--mono); color: var(--accent); }
+.fl-node .parts { grid-column: 1 / -1; font: 500 9.5px var(--mono); color: var(--dim); }
+.fl-node .fl-x { grid-row: 1; grid-column: 4; }
+.fl-edit { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-bottom: 5px; }
+.fl-edit .fl-label { width: 100%; margin-top: 2px; }
+.fl-edit button { flex: 1; min-width: 38px; }
+.fl-result { font: 500 10.5px var(--font); line-height: 1.4; color: rgba(230, 234, 243, 0.82); padding: 5px 0; border-top: 1px solid rgba(124, 214, 255, 0.1); }
+.fl-actions { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 3px; }
+.fl-actions .fl-go { width: auto; }
+
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
 .fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }
