@@ -901,6 +901,17 @@ export class SettingsPanel {
         ["K · ⇧K", "Ranger: camera on the spaceship · next attach point"],
         ["1 – 5", "Quality (5: realtime max)"],
       ]],
+      ["Flying the Ranger (K)", [
+        ["W S · A D · Q E", "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)"],
+        ["⇧ + those keys", "RCS translation: forward/back · left/right · up/down"],
+        ["↑ ↓ · Z · X", "Throttle up/down · full · cut (W · X on AZERTY)"],
+        ["T", "SAS: stability assist"],
+        ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target"],
+        ["8 · 9 · 0", "Autopilot: hold position · circularize · approach target"],
+        [", · .", "Time warp slower · faster"],
+        ["Drag · double-click", "Look around from the attach point · look ahead"],
+        ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut"],
+      ]],
       ["Controller (Xbox · PlayStation)", [
         ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
         ["Right stick", "Around: orbit the target · Free: look"],

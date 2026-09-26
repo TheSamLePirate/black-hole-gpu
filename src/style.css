@@ -700,3 +700,131 @@ body.hide-ui #toolbar:hover {
   white-space: pre-wrap;
   background: #000;
 }
+
+/* ---------------------------------------------------------- Ranger flight displays */
+.fl-marks {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.fl-root { position: fixed; inset: 0; pointer-events: none; z-index: 3; } /* under the settings panel */
+.fl-root > * { pointer-events: auto; }
+
+.fl-warn {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  font: 600 12px/1.3 Inter, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+.fl-warn div {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(40, 30, 10, 0.72);
+  color: #ffd27a;
+  border: 1px solid rgba(255, 190, 80, 0.35);
+}
+.fl-warn div.hot {
+  background: rgba(70, 12, 8, 0.8);
+  color: #ffb0a4;
+  border-color: rgba(255, 90, 70, 0.6);
+  animation: fl-blink 1s ease-in-out infinite;
+}
+@keyframes fl-blink { 50% { opacity: 0.55; } }
+
+.fl-data {
+  position: absolute;
+  left: 14px;
+  bottom: 84px;
+  width: 290px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font: 12px/1.35 Inter, system-ui, sans-serif;
+}
+.fl-title { font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.fl-row { display: flex; justify-content: space-between; gap: 10px; padding: 1.5px 0; }
+.fl-row span { color: rgba(230, 234, 243, 0.62); white-space: nowrap; }
+.fl-row b { font: 500 11.5px/1.35 "JetBrains Mono", ui-monospace, monospace; text-align: right; }
+
+.fl-ctrl {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 14px;
+}
+.fl-ball { width: 150px; height: 150px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), inset 0 0 20px rgba(0, 0, 0, 0.6); }
+.fl-thr {
+  position: relative;
+  width: 14px;
+  height: 140px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  overflow: visible;
+}
+.fl-thr i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 7px;
+  background: linear-gradient(0deg, #ff7a3c, #ffc85a);
+}
+.fl-thr span {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 500 10.5px "JetBrains Mono", ui-monospace, monospace;
+  white-space: nowrap;
+}
+.fl-btns { display: flex; flex-direction: column; gap: 6px; }
+.fl-group { display: flex; gap: 4px; flex-wrap: wrap; max-width: 300px; }
+.fl-group button {
+  font: 600 10.5px Inter, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  padding: 5px 7px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  cursor: pointer;
+}
+.fl-group button:hover { background: rgba(255, 255, 255, 0.12); }
+.fl-group button.on { background: rgba(255, 179, 92, 0.25); border-color: var(--accent); color: #ffd9a8; }
+
+.fl-map {
+  position: absolute;
+  right: 14px;
+  bottom: 84px;
+  width: 240px;
+  height: 240px;
+  border-radius: 14px;
+}
+
+body.hide-ui .fl-data,
+body.hide-ui .fl-ctrl,
+body.hide-ui .fl-map { display: none; }
+
+@media (max-width: 900px) {
+  .fl-data { display: none; }
+  .fl-map { width: 150px; height: 150px; bottom: auto; top: 58px; }
+  .fl-ctrl { gap: 8px; bottom: 64px; }
+  .fl-ball { width: 110px; height: 110px; }
+  .fl-group { max-width: 200px; }
+}

@@ -205,6 +205,29 @@ reflections and specular anti-aliasing from the normal's variation within the pi
 physical: against the disk the hull is a black silhouette, since it receives a few hundred times less light
 than the disk's surface brightness; default 30), hull brightness, metalness, roughness and clear coat are settings.
 
+**Flying the Ranger** (on whenever the ship is: K; `src/pilot.ts`, `src/ui/flighthud.ts`). A flight model rather
+than a camera mount: the ship follows the Kerr geodesic (star's weak field included) in the scene's time;
+its main engine (the Thrust setting, c²/M, shown in g for the chosen mass) and its RCS (8 %) give it a proper
+acceleration along its own axes; its attitude has inertia (reaction wheels, 0.75 rad/s, 1.6 rad/s², in the
+pilot's seconds). The flight computer adds **SAS** (fly-by-wire rate command, damping), **attitude holds**
+(prograde, retrograde, radial ±, normal ±, target — the target's direction aberrated by the ship's motion,
+as the tracer draws it) and **autopilots** that fly like real ones — they point the main engine along the
+required burn, throttle it once aligned and leave fine corrections to the RCS: *hold position* (a static
+observer, gravity fed forward from the geodesic; the ZAMO inside the ergosphere, where no static observer
+exists), *circularize* (the tangential speed whose free fall has no radial acceleration, found by probing the
+geodesic — exact off the equator too), *approach target* (station-keeping 4 radii from the star, cancelling its
+pull, or 1.3 gluing radii from the wormhole's mouth). Displays: flight data (r, speed and γ relative to the ZAMO,
+dτ/dt, thrust, E and L, periapsis and apoapsis of the predicted path, course — bound, escape, horizon or star in
+so many M and hours —, target distance and range rate, proper time, time warp), an **attitude ball** (sky and
+ground relative to the hole, the orbital markers around the nose), prograde / retrograde / burn / nose markers
+in the view, warnings (collision course, ergosphere, below the ISCO, inside the photon orbit), and a **top-view
+map**: horizon, ergosphere, photon orbit, ISCO, disk, the star and its orbit, the mouth, the ship, its velocity
+and its **future geodesic** with periapsis, apoapsis and impact — the same path drawn, lensed, in the view.
+Keys: W S / A D / Q E pitch, yaw, roll (by physical position); with Shift, RCS translation; ↑ ↓ throttle, Z full,
+X cut; T SAS; 1–7 holds; 8 9 0 autopilots; , . time warp; drag looks around from the attach point. The pad:
+left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde. Default lighting of the hull: 1
+(physical: strong contrasts).
+
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
 preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny
 ripples (wavelengths of 2π/150 of the throat radius and less) is stretched across the throat (ℓ = 0). It only
@@ -281,7 +304,7 @@ journey: line up with the mouth, cross the throat, emerge facing the black hole 
 the black hole's universe: the way back home).
 
 Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · K Ranger (⇧K attach point) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
+rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · K fly the Ranger (⇧K attach point; flight keys in the help sheet) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

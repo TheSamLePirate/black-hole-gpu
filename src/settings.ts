@@ -165,6 +165,8 @@ export interface Settings {
   shipRough: number; // roughness scale (lower: glossier)
   shipLight: number; // gain on the light the hull receives (1: physical)
   shipCoat: number; // clear coat over the paint (0…1)
+  shipLookYaw: number; // free look: the camera turned on its mount [deg]
+  shipLookPitch: number;
   // companion star on a circular equatorial orbit around the hole
   sun: boolean;
   sunOrbit: number; // orbital radius [M]
@@ -296,8 +298,10 @@ export function defaultSettings(): Settings {
     shipAlbedo: 0.6,
     shipMetal: 0.15,
     shipRough: 1,
-    shipLight: 30,
+    shipLight: 1,
     shipCoat: 1,
+    shipLookYaw: 0,
+    shipLookPitch: 0,
     sun: false,
     sunOrbit: 70,
     sunRadius: 2.5,

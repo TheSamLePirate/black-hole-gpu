@@ -5,6 +5,8 @@ import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNTS, type Mount } from "./mounts";
+import { FlightHud } from "./ui/flighthud";
+import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -155,6 +157,7 @@ async function main() {
     }
     camera.setCinematic(null);
     camera.sync();
+    if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
     refreshGui();
     touch();
     touchDisplay();
@@ -252,8 +255,66 @@ async function main() {
   syncRotationButtons();
 
   // -------------------------------------------------------------------- game controller
+  // -------------------------------------------------------------------- piloting the Ranger
+  const WARPS = [0.25, 0.5, 1, 2, 3, 6, 12, 25, 50, 100, 200, 500];
+  function warp(dir: 1 | -1) {
+    const i = WARPS.findIndex((w) => w >= settings.timeSpeed - 1e-9);
+    const j = Math.max(0, Math.min(WARPS.length - 1, (i < 0 ? WARPS.length - 1 : i) + dir));
+    settings.timeSpeed = WARPS[j]!;
+    if (!settings.animate) toggle("animate");
+    refreshGui();
+    panel.toast(`Time warp: ${settings.timeSpeed} M/s`);
+  }
+  function pilotHold(h: Hold) {
+    camera.pilot.setHold(h);
+    panel.toast(camera.pilot.hold === "none" ? "Attitude hold off" : `Hold: ${HOLD_NAMES[h]}`);
+  }
+  function pilotAuto(a: Auto) {
+    camera.pilot.setAuto(a);
+    panel.toast(camera.pilot.auto === "none" ? "Autopilot off" : `Autopilot: ${AUTO_NAMES[a]}`);
+  }
+  function pilotSas() {
+    camera.pilot.sas = !camera.pilot.sas;
+    panel.toast(`SAS ${camera.pilot.sas ? "on" : "off"}`);
+  }
+  const flightHud = new FlightHud(settings, { hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp });
+  camera.onPilotMessage = (t) => panel.toast(t);
+  const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
+  /** Pilot keys (by physical position where it matters); true when handled. */
+  function pilotKey(e: KeyboardEvent) {
+    const holds: Record<string, Hold> = { Digit1: "prograde", Digit2: "retrograde", Digit3: "radialOut", Digit4: "radialIn", Digit5: "normal", Digit6: "antinormal", Digit7: "target" };
+    const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach" };
+    if (holds[e.code]) pilotHold(holds[e.code]!);
+    else if (autos[e.code]) pilotAuto(autos[e.code]!);
+    else if (e.code === "KeyT") pilotSas();
+    else if (e.code === "KeyZ") camera.pilot.throttle = 1;
+    else if (e.code === "KeyX") camera.pilot.throttle = 0;
+    else if (e.code === "Comma") warp(-1);
+    else if (e.code === "Period") warp(1);
+    else if (e.code === "Escape") {
+      camera.pilot.hold = "none";
+      if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
+    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger (K leaves it)");
+    else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
+    else return false;
+    e.preventDefault();
+    return true;
+  }
+
   camera.onPadAction = (a) => {
     if (renderer.offlineActive) return;
+    if (flying()) {
+      // in the Ranger: A SAS, B cut the engine, X prograde, Y retrograde, R3 look ahead
+      const pa: Partial<Record<typeof a, () => void>> = {
+        focus: pilotSas, gravity: () => (camera.pilot.throttle = 0), auto: () => pilotHold("prograde"), rotation: () => pilotHold("retrograde"),
+        recentre: () => camera.setLook(0, 0),
+      };
+      if (pa[a]) {
+        pa[a]!();
+        touch();
+        return;
+      }
+    }
     switch (a) {
       case "focus":
         // fly the view to the target (framed), like a double-click on it
@@ -317,7 +378,9 @@ async function main() {
   }
 
   addEventListener("keydown", (e: KeyboardEvent) => {
-    if (isTyping(e) || e.metaKey || e.ctrlKey || e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
+    if (isTyping(e) || e.metaKey || e.ctrlKey) return;
+    if (flying() && pilotKey(e)) return;
+    if (e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
     const k = e.key.toLowerCase();
     if (e.code === "Space") {
       e.preventDefault();
@@ -483,7 +546,8 @@ async function main() {
       timeDirty = true;
     }
     // the camera's predicted free fall, drawn (lensed) by the tracer
-    if (renderer.setCameraPath(settings.showGeodesic && camera.gravity ? camera.predictPath() : null)) changed = true;
+    const path = camera.gravity ? camera.predictPath() : null;
+    if (renderer.setCameraPath(settings.showGeodesic ? path : null)) changed = true;
     const st = renderer.frame(settings, simTime, changed, timeDirty, displayChanged);
     if (st) {
       if (!firstFrame) {
@@ -500,6 +564,9 @@ async function main() {
       if (st.offline) renderDialog.update(st.offline);
     }
     drawGuide();
+    const pil = flying();
+    if (flightHud.visible !== pil) flightHud.show(pil);
+    if (pil) flightHud.update(camera.flightInfo(), simTime);
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

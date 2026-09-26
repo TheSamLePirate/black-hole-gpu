@@ -5,12 +5,13 @@
 // lit by a light probe traced around the camera (lensed disk, Gargantua, sky) — see ship.wgsl.
 import meshUrl from "../assets/ranger/ranger.bin";
 
-import { MOUNTS, type Mount } from "./mounts";
+import { shipToCamera, type Mount } from "./mounts";
 
 type V3 = [number, number, number];
 
 export interface ShipView {
   mount: Mount;
+  look: [number, number]; // free look on the mount: yaw, pitch [deg]
   fov: number; // vertical, degrees
   aspect: number;
   albedo: number;
@@ -27,16 +28,6 @@ const norm = (a: V3): V3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
-/** Ship → camera frame (x right, y up, z forward) for a mount: rotation rows and translation. */
-export function mountMatrix(m: Mount): { R: [V3, V3, V3]; t: V3 } {
-  const { eye, aim } = MOUNTS[m] as { eye: V3; aim: V3 };
-  const fwd = norm(sub(aim, eye));
-  const right = norm(cross([0, 1, 0], fwd));
-  const up = cross(fwd, right);
-  const R: [V3, V3, V3] = [right, up, fwd];
-  return { R, t: R.map((r) => -dot(r, eye)) as V3 };
-}
 
 export const ENV_W = 256;
 export const ENV_H = 128;
@@ -124,8 +115,7 @@ export class ShipRenderer {
         layout: "auto",
         vertex,
         fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }] },
-        // (camera frame: z forward, y up — outward faces appear clockwise on screen)
-        primitive: { topology: "triangle-list", cullMode: "none", frontFace: "cw" },
+        primitive: { topology: "triangle-list", cullMode: "none", frontFace: "ccw" },
         depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
         multisample: { count: 4 },
       }),
@@ -264,7 +254,7 @@ export class ShipRenderer {
   }
 
   private writeUniform(v: ShipView) {
-    const { R, t } = mountMatrix(v.mount);
+    const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
     // column-major mat4: columns = images of the ship's x, y, z axes, then the translation
     const m = new Float32Array(32);
     for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = R[r]![c]!;

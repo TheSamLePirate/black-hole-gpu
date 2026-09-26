@@ -225,7 +225,7 @@ export const SCHEMA: ControlDef[] = [
   // ------------------------------------------------------------------ scene · spaceship
   {
     key: "ship", type: "toggle", section: "scene", group: "Spaceship", label: "Ranger",
-    help: "Mount the camera on Interstellar's Ranger. The ship is rigid in the camera's rest frame (it turns and flies with the view) and is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point). Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.",
+    help: "Fly Interstellar's Ranger, the camera on one of its attach points. A real flight model: the ship follows the Kerr geodesic in the scene's time, its main engine and RCS give it a proper acceleration (Thrust, in Flight & gravity), its attitude has inertia (reaction wheels), with SAS, attitude holds and autopilots (hold position, circularize, approach the target). Flight data, attitude ball, map with the predicted free-fall path. The hull is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point); ? lists the flight keys. Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.",
     keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
   },
   {
@@ -234,8 +234,8 @@ export const SCHEMA: ControlDef[] = [
     help: "Where the camera is fixed on the hull.",
   },
   {
-    key: "shipLight", type: "number", section: "scene", group: "Spaceship", label: "Lighting", min: 1, max: 300, scale: "log", precision: 2, enabled: (s) => s.ship, effect: "display",
-    help: "Gain on the light the hull receives. 1 is physical: the hull receives a few hundred times less light than the disk's surface brightness (the disk covers a small part of its sky), so against it the ship is a black silhouette. Films light it far more (default 30).",
+    key: "shipLight", type: "number", section: "scene", group: "Spaceship", label: "Lighting", min: 0.3, max: 300, scale: "log", precision: 2, enabled: (s) => s.ship, effect: "display",
+    help: "Gain on the light the hull receives. 1 is physical: the hull receives a few hundred times less light than the disk's surface brightness (the disk covers a small part of its sky), so against it the ship is mostly a silhouette with lit edges — the strongest contrasts (default). Films often light it far more.",
     keywords: "ship light exposure fill brightness",
   },
   {

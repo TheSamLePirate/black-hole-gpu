@@ -1017,7 +1017,7 @@ export class Renderer {
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          mount: s.shipMount as Mount, fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
+          mount: s.shipMount as Mount, look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);

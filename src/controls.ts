@@ -1,14 +1,16 @@
 import {
   basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
-import { horizon, zamo, type Vec3 } from "./physics";
+import { horizon, isco, photonOrbits, zamo, type Vec3 } from "./physics";
 import type { Settings, Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius,
 } from "./targeting";
-import { advance, fromZamo, predict, toZamo, type Lens } from "./geodesic";
+import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
+import { circularSpeed, FlightComputer, toU, type PilotInput } from "./pilot";
+import { shipToCamera, type M3, type Mount } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
@@ -76,8 +78,13 @@ export class CameraController {
   gravity = false;
   /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
   private flyVel: Vec3 = [0, 0, 0];
-  /** Last free-fall prediction for the overlay. */
-  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number } | null = null;
+  /** Last free-fall prediction for the overlay (dt: coordinate time between points [M]). */
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number; dt: number } | null = null;
+  /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
+  readonly pilot = new FlightComputer();
+  piloting = false;
+  /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
+  onPilotMessage?: (text: string) => void;
   private pathKey = "";
   /** With gravity on: the camera stands on the star's surface. */
   landed = false;
@@ -680,6 +687,7 @@ export class CameraController {
   /** Double-click: on a body, orbit it and fly the view to it (framed); on the sky, recentre / level. */
   private onDblClick = (e: MouseEvent) => {
     if (!this.enabled || this.flyMode) return;
+    if (this.piloting && !this.cinematic) return this.setLook(0, 0);
     const r = this.canvas.getBoundingClientRect();
     const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
     if (!body) return this.resetView();
@@ -738,7 +746,10 @@ export class CameraController {
       this.vYaw = smooth(this.vYaw, (-dx * kLook) / dtEv);
       this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
     };
-    if (s.rotation === "free") {
+    if (this.piloting && !this.cinematic) {
+      // piloting: the drag turns the camera on its mount (free look); the ship keeps its attitude
+      this.setLook(s.shipLookYaw - dx * kLook, s.shipLookPitch + dy * kLook);
+    } else if (s.rotation === "free") {
       // free: drag looks around, right / shift drag rolls
       if (this.dragLook) this.rotateView(0, 0, -dx * 0.4);
       else look();
@@ -763,7 +774,7 @@ export class CameraController {
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
       return;
     }
-    if (e.altKey || this.gravity) {
+    if (e.altKey || this.gravity || this.piloting) {
       this.s.fov = clamp(this.s.fov * Math.exp(dy * 0.001), 1, 150);
     } else if (this.s.rotation === "free" && !this.cinematic) {
       // dolly along the view, gliding (the flight's inertia)
@@ -808,6 +819,9 @@ export class CameraController {
     if (pad?.active) this.activity = performance.now();
     if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
+    if (s.ship !== this.piloting) this.setPilot(s.ship);
+    const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
+
     // the target must be in the camera's universe; orbiting uses the target's anchor
     const avail = this.availableTargets();
     if (!avail.includes(s.target)) {
@@ -827,13 +841,14 @@ export class CameraController {
     const kx = (this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("ArrowLeft") ? 1 : 0);
     const ky = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
     if (kx || ky || this.codes.size) this.activity = performance.now();
-    if (kx || ky) {
+    if ((kx || ky) && !pilotNow) {
       if (this.orbiting) this.orbitBy(-kx * kRate, -ky * kRate);
       else this.rotateView(kx * kRate, ky * kRate, 0);
     }
     if (pad && (pad.look[0] || pad.look[1])) {
-      // right stick: orbit the target, or turn the camera (free rotation, flight)
-      if (this.orbiting) this.orbitBy(-pad.look[0] * 75 * dt, -pad.look[1] * 75 * dt);
+      // right stick: orbit the target, or turn the camera (free rotation, flight); piloting: look
+      if (pilotNow) this.setLook(s.shipLookYaw + pad.look[0] * 90 * dt, s.shipLookPitch + pad.look[1] * 70 * dt);
+      else if (this.orbiting) this.orbitBy(-pad.look[0] * 75 * dt, -pad.look[1] * 75 * dt);
       else {
         const k = 110 * dt * Math.min(1, this.s.fov / 60);
         this.rotateView(pad.look[0] * k, pad.look[1] * k, 0);
@@ -851,11 +866,14 @@ export class CameraController {
     const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight") || !!pad?.fast;
     const free = this.cinematic !== "dive" && this.cinematic !== "journey";
     if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
-    if (move[3] && free) this.rotateView(0, 0, move[3] * 70 * dt);
+    if (move[3] && free && !pilotNow) this.rotateView(0, 0, move[3] * 70 * dt);
     // moving the camera (flight, free fall) re-expresses its orientation: not a turn by the user,
     // so the tracking keeps its offset from the target
     const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
-    if (this.gravity && free) {
+    if (pilotNow) {
+      this.flyShip(dt, pad);
+      this.flyVel = [0, 0, 0];
+    } else if (this.gravity && free) {
       // free fall along the Kerr geodesic in step with the scene's time; the keys thrust
       const simDt = s.animate ? s.timeSpeed * dt : 0;
       if (simDt > 0) this.fall(simDt, [move[0], move[1], move[2]], fast);
@@ -1038,17 +1056,18 @@ export class CameraController {
    * along the spatial geodesics of the wormhole metric near the mouth (it has no gravity, g_tt = −1).
    * The orientation is kept fixed with respect to the distant stars (a gyroscope, flat far field).
    */
-  private fall(simDt: number, keys: Vec3, fast: boolean) {
+  private fall(simDt: number, keys: Vec3, fast: boolean, acc?: Vec3) {
     const s = this.s;
     const a = s.spin;
     const kn = Math.hypot(...keys);
-    const accel = kn > 0 ? s.thrust * (fast ? 5 : 1) : 0;
+    // (acc: a proper acceleration given directly, local components — the Ranger's engines)
+    const accel = acc ? Math.hypot(...acc) : kn > 0 ? s.thrust * (fast ? 5 : 1) : 0;
     const cam = cameraFrame(s);
     if (cam.region === "hole") {
       const X0 = blToCartesian(cam.r, cam.theta, cam.phi);
       const f0 = sphericalFrame(X0);
       const w0 = (v: Vec3) => add3(f0.er, f0.et, f0.ep, v);
-      const dirZ: Vec3 = kn > 0 ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2])) : [0, 0, 0];
+      const dirZ: Vec3 = acc ? (accel > 0 ? lin(acc, 1 / accel, acc, 0) : [0, 0, 0]) : kn > 0 ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2])) : [0, 0, 0];
       const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime()), a, simDt, 0.05, accel, dirZ, this.lens());
       this.landed = res.landed;
       this.properTime += res.tau;
@@ -1067,7 +1086,8 @@ export class CameraController {
     const right = cross(p.fwd, p.up);
     let v = p.vel;
     if (accel > 0) {
-      const d = normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
+      // (acc is in the camera frame's rep components here, like p.fwd)
+      const d = acc ? lin(acc, 1 / accel, acc, 0) : normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
       const g = 1 / Math.sqrt(Math.max(1 - (v[0] ** 2 + v[1] ** 2 + v[2] ** 2), 1e-9));
       const U = lin(v, g, d, accel * simDt);
       v = lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
@@ -1082,6 +1102,325 @@ export class CameraController {
     setRepPose(s, { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]!, vel: lin(q.dir, speed, q.dir, 0) });
     s.motion = "geodesic";
     this.sync();
+  }
+
+  // ------------------------------------------------------------------------------ piloting
+  /**
+   * The Ranger carries the camera and flies: gravity on (Kerr geodesic in the scene's time), free
+   * rotation, time running. Starting near the hole, it is put on a circular orbit (prograde).
+   */
+  setPilot(on: boolean) {
+    const s = this.s;
+    this.piloting = on;
+    this.pilot.omega = [0, 0, 0];
+    this.pilot.throttle = 0;
+    this.pilot.hold = "none";
+    this.pilot.auto = "none";
+    if (!on) {
+      s.shipLookYaw = s.shipLookPitch = 0;
+      if (this.gravity) this.setGravity(false);
+      return;
+    }
+    if (this.cinematic === "orbit") this.setCinematic(null);
+    this.flyMode = false;
+    s.rotation = "free";
+    if (!this.gravity) this.setGravity(true);
+    s.motion = "geodesic";
+    s.animate = true;
+    s.showGeodesic = true; // the future path, drawn in the view and on the map
+    const cam = cameraFrame(s);
+    if (cam.region === "hole" && Math.hypot(...cam.beta) < 1e-6) {
+      const v = circularSpeed(cam.r, s.spin, true, cam.zamo);
+      if (v !== null && cam.r > isco(s.spin)) [s.velR, s.velT, s.velP] = [0, 0, v];
+    }
+  }
+
+  /** Turns the camera on its mount (degrees); the ship stays where it points. */
+  setLook(yaw: number, pitch: number) {
+    const s = this.s;
+    yaw = clamp(yaw, -170, 170);
+    pitch = clamp(pitch, -85, 85);
+    if (yaw === s.shipLookYaw && pitch === s.shipLookPitch) return;
+    const b = basis(s.yaw, s.pitch, s.roll);
+    const ax = this.shipAxesLocal(b);
+    const S2 = shipToCamera(s.shipMount as Mount, yaw, pitch).S;
+    // the camera's axes from the ship's: row k of S2 = camera axis k in the ship's frame
+    const cam = (k: number) => lin(lin(ax[0], S2[k]![0], ax[1], S2[k]![1]), 1, ax[2], S2[k]![2]);
+    const e = yawPitchRoll(cam(2), cam(1));
+    s.yaw = e.yaw;
+    s.pitch = e.pitch;
+    s.roll = e.roll;
+    s.shipLookYaw = yaw;
+    s.shipLookPitch = pitch;
+  }
+
+  private shipMatrix(): M3 {
+    return shipToCamera(this.s.shipMount as Mount, this.s.shipLookYaw, this.s.shipLookPitch).S;
+  }
+
+  /** The ship's axes (x left, y up, z nose) in the camera basis's local components. */
+  private shipAxesLocal(b: { right: Vec3; up: Vec3; fwd: Vec3 }): [Vec3, Vec3, Vec3] {
+    const S = this.shipMatrix();
+    const ax = (i: number) => lin(lin(b.right, S[0]![i]!, b.up, S[1]![i]!), 1, b.fwd, S[2]![i]!);
+    return [ax(0), ax(1), ax(2)];
+  }
+
+  /** Rotates the camera (and the ship on it) by a rotation vector given in camera coordinates [rad]. */
+  private rotateC(rot: Vec3) {
+    const ang = Math.hypot(...rot);
+    if (ang < 1e-9) return;
+    const k = lin(rot, 1 / ang, rot, 0);
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    const rod = (v: Vec3) => lin(lin(v, c, cross(k, v), sn), 1, k, dot3(k, v) * (1 - c));
+    const f = rod([0, 0, 1]);
+    const u = rod([0, 1, 0]);
+    const s = this.s;
+    const b = basis(s.yaw, s.pitch, s.roll);
+    const L = (v: Vec3) => lin(lin(b.right, v[0], b.up, v[1]), 1, b.fwd, v[2]);
+    const e = yawPitchRoll(L(f), L(u));
+    s.yaw = e.yaw;
+    s.pitch = e.pitch;
+    s.roll = e.roll;
+  }
+
+  /** Pilot's keys (held): W/S pitch, A/D yaw, Q/E roll (by physical position); with Shift: RCS translation. */
+  private pilotInput(pad: ReturnType<GamepadInput["poll"]>): PilotInput {
+    const k = (c: string) => (this.codes.has(c) ? 1 : 0);
+    const shift = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight");
+    const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
+    const ws = k("KeyS") - k("KeyW"); // W: nose down (like an aircraft), S: nose up
+    const ad = k("KeyD") - k("KeyA");
+    const qe = k("KeyE") - k("KeyQ");
+    if (shift) {
+      i.tz = -ws;
+      i.tx = ad;
+      i.ty = qe;
+    } else {
+      i.pitch = ws;
+      i.yaw = ad;
+      i.roll = qe;
+    }
+    i.throttle = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
+    if (pad) {
+      // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle
+      i.pitch = clamp(i.pitch - pad.move[0], -1, 1);
+      i.yaw = clamp(i.yaw + pad.move[1], -1, 1);
+      i.roll = clamp(i.roll - pad.move[3], -1, 1);
+      i.throttle = clamp(i.throttle + pad.move[2], -1, 1);
+    }
+    return i;
+  }
+
+  /** One frame of piloting: the flight computer turns the ship and fires the engines. */
+  private flyShip(dt: number, pad: ReturnType<GamepadInput["poll"]>) {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const inp = this.pilotInput(pad);
+    if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
+    const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
+    const tauRate = s.animate ? s.timeSpeed * dtau : 0;
+    const out = this.pilot.step({
+      dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: s.thrust, tauRate,
+      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: this.pilot.auto !== "none" ? this.autopilotWant(cam) : null,
+    }, inp);
+    this.rotateC(out.rot);
+    const simDt = s.animate ? s.timeSpeed * dt : 0;
+    if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
+  }
+
+  private radialOut(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+    if (cam.region === "hole") return [1, 0, 0];
+    // in the throat region: away from the throat (increasing |ℓ|)
+    return lin(cam.n, Math.sign(cam.ell) || 1, cam.n, 0);
+  }
+
+  /** Direction of the selected target, local components (the flat map's straight line). */
+  private targetDir(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+    if (cam.region !== "hole") return null;
+    const s = this.s;
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const C = s.target === "hole" ? [0, 0, 0] as Vec3 : bodyCentre(s, s.target, this.nowTime());
+    const d = sub3(C, X);
+    const l = Math.hypot(...d);
+    if (l < 1e-9) return null;
+    // seen from the moving ship: relativistic aberration (towards the motion), as the tracer draws it
+    const n: Vec3 = [dot3(d, f.er) / l, dot3(d, f.et) / l, dot3(d, f.ep) / l];
+    const b = cam.beta;
+    const b2 = dot3(b, b);
+    if (b2 < 1e-12) return n;
+    const g = 1 / Math.sqrt(1 - b2);
+    const bn = dot3(n, b) / Math.sqrt(b2);
+    const w = axpy(axpy(n, b, g), b, ((g - 1) * bn) / Math.sqrt(b2));
+    return lin(w, 1 / Math.hypot(...w), w, 0);
+  }
+
+  /** Coordinate acceleration of the 4-velocity in free fall (local components): what gravity does to us. */
+  private freeFallAccel(cam: ReturnType<typeof cameraFrame>, beta: Vec3 = cam.beta): Vec3 {
+    if (cam.region !== "hole") return [0, 0, 0];
+    const a = this.s.spin;
+    const st = fromZamo(cam.r, cam.theta, cam.phi, beta, a, this.nowTime());
+    const h = Math.max(1e-4, 2e-4 * (cam.r - horizon(a)));
+    const U0 = toU(beta);
+    const U1 = toU(toZamo(geoStep(st, a, h, this.lens()), a));
+    return lin(sub3(U1, U0), 1 / h, U0, 0);
+  }
+
+  /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
+  private autopilotWant(cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | null {
+    const s = this.s;
+    const P = this.pilot;
+    const say = (t: string) => {
+      P.setAuto("none");
+      this.onPilotMessage?.(t);
+      return null;
+    };
+    const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
+    const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
+    if (P.auto === "hover") {
+      if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
+      const z = cam.zamo;
+      // a static observer moves at −ωϖ/α relative to the ZAMO; none inside the ergosphere (hold the ZAMO)
+      const vs = (-z.omega * z.varpi) / z.alpha;
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      if (!P.anchor) P.anchor = X;
+      const f = sphericalFrame(X);
+      const d = sub3(P.anchor, X);
+      let back: Vec3 = [dot3(d, f.er), dot3(d, f.et), dot3(d, f.ep)];
+      const bl = Math.hypot(...back);
+      const k = Math.min(1 / (4 * T), 0.08 / Math.max(bl, 1e-9));
+      back = lin(back, k, back, 0);
+      return { beta: [back[0], back[1], (Math.abs(vs) < 0.99 ? vs : 0) + back[2]], ff: lin(this.freeFallAccel(cam), -1, cam.beta, 0) };
+    }
+    if (P.auto === "circularize") {
+      if (cam.region !== "hole") return say("Circularize: only around the black hole");
+      const b = cam.beta;
+      let t: Vec3 = [0, b[1], b[2]];
+      let tl = Math.hypot(...t);
+      if (tl < 1e-4) (t = [0, 0, s.spin >= 0 ? 1 : -1]), (tl = 1);
+      t = lin(t, 1 / tl, t, 0);
+      const pro = t[2] * (s.spin >= 0 ? 1 : -1) >= 0;
+      const v = circularSpeed(cam.r, Math.abs(s.spin), pro, cam.zamo);
+      if (v === null) return say("No circular orbit here: inside the photon orbit");
+      // the equatorial formula is only a first guess off the equator: the circular speed is the one
+      // whose free fall has no radial acceleration (a_r linear in v² — two probes)
+      const v1 = Math.abs(v), v2 = Math.min(1.05 * v1, 0.999);
+      const a1 = this.freeFallAccel(cam, lin(t, v1, t, 0))[0];
+      const a2 = this.freeFallAccel(cam, lin(t, v2, t, 0))[0];
+      const vc = a2 !== a1 ? Math.sqrt(clamp(v1 * v1 - (a1 * (v2 * v2 - v1 * v1)) / (a2 - a1), 0, 0.998)) : v1;
+      return { beta: lin(t, vc, t, 0), ff: [0, 0, 0] };
+    }
+    if (P.auto === "approach") {
+      if (cam.region !== "hole") return say("Approach: only in the black hole's universe");
+      if (s.target === "hole" || s.target === "barycentre") return say("Approach: select the star or the wormhole (Tab)");
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const t = this.nowTime();
+      const C = bodyCentre(s, s.target, t);
+      const star = s.target === "star";
+      const stand = star ? 4 * s.sunRadius : 1.3 * mouth(s).rGlue;
+      const away = sub3(X, C);
+      const dist = Math.hypot(...away);
+      const goal = axpy(C, away, stand / Math.max(dist, 1e-9));
+      const d = sub3(goal, X);
+      const dl = Math.hypot(...d);
+      const close = Math.min(0.25, dl / (5 * T));
+      const V: Vec3 = star ? starVelocity(s, t) : [0, 0, 0];
+      const W = axpy(V, d, close / Math.max(dl, 1e-9));
+      const loc: Vec3 = [dot3(W, f.er), dot3(W, f.et), dot3(W, f.ep)];
+      if (star) {
+        // the hole's pull is shared with the star (both fall); its own pull is not: cancel it
+        if (this.landed) return say("Landed on the star");
+        const g = lin(away, s.sunMass / Math.max(dist, s.sunRadius) ** 3, away, 0);
+        return { beta: loc, ff: [dot3(g, f.er), dot3(g, f.et), dot3(g, f.ep)] };
+      }
+      // the mouth is held static against gravity
+      return { beta: loc, ff: lin(this.freeFallAccel(cam), -1, cam.beta, 0) };
+    }
+    return null;
+  }
+
+  /** Everything the flight displays show, for this frame. */
+  flightInfo() {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const a = s.spin;
+    const S = this.shipMatrix();
+    const C = (v: Vec3 | null): Vec3 | null => v && [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    const speed = Math.hypot(...cam.beta);
+    const pro = speed > 1e-6 ? lin(cam.beta, 1 / speed, cam.beta, 0) : null;
+    const R = this.radialOut(cam);
+    let normal: Vec3 | null = null;
+    if (R && pro) {
+      const n = cross(R, pro);
+      const l = Math.hypot(...n);
+      if (l > 1e-6) normal = lin(n, 1 / l, n, 0);
+    }
+    const info = {
+      region: cam.region,
+      r: cam.r,
+      theta: cam.theta,
+      phi: cam.phi,
+      ell: cam.ell,
+      n: cam.n,
+      speed,
+      gamma: cam.gamma,
+      dtau: cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma,
+      E: NaN,
+      L: NaN,
+      rH: horizon(a),
+      isco: isco(a),
+      photon: photonOrbits(a).pro,
+      ergo: cam.region === "hole" && cam.r < 1 + Math.sqrt(Math.max(0, 1 - a * a * Math.cos(cam.theta) ** 2)),
+      accel: this.pilot.accel,
+      throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(s.thrust, 1e-12) : this.pilot.throttle,
+      sas: this.pilot.sas,
+      hold: this.pilot.hold,
+      auto: this.pilot.auto,
+      omega: this.pilot.omega,
+      properTime: this.properTime,
+      landed: this.landed,
+      // directions in camera coordinates, and the ship's axes
+      S,
+      dirs: {
+        prograde: C(pro),
+        retrograde: C(pro && lin(pro, -1, pro, 0)),
+        radialOut: C(R),
+        radialIn: C(R && lin(R, -1, R, 0)),
+        normal: C(normal),
+        antinormal: C(normal && lin(normal, -1, normal, 0)),
+        target: C(this.targetDir(cam)),
+        burn: C(this.pilot.burn),
+      },
+      // flat-map position, velocity and nose (black hole's frame), for the map
+      X: null as Vec3 | null,
+      V: null as Vec3 | null,
+      nose: null as Vec3 | null,
+      path: this.path,
+      /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
+      target: s.target,
+      targetDist: NaN,
+      targetRate: NaN,
+    };
+    if (cam.region === "hole") {
+      const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
+      info.E = st.E;
+      info.L = st.L;
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const W = (v: Vec3) => add3(f.er, f.et, f.ep, v);
+      info.X = X;
+      info.V = W(cam.beta);
+      const b = { right: cam.right, up: cam.up, fwd: cam.fwd };
+      info.nose = W(this.shipAxesLocal(b)[2]);
+      const t = this.nowTime();
+      const Ct: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyCentre(s, s.target, t);
+      const Vt: Vec3 = s.target === "star" ? starVelocity(s, t) : [0, 0, 0];
+      const d = sub3(X, Ct);
+      info.targetDist = Math.hypot(...d);
+      info.targetRate = dot3(sub3(info.V, Vt), d) / Math.max(info.targetDist, 1e-9);
+    }
+    return info;
   }
 
   /**
@@ -1101,7 +1440,8 @@ export class CameraController {
     const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin, this.nowTime());
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
     // coming back past the camera (a segment that close would sweep across the whole view)
-    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000), 480, this.lens());
+    const tMax = clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000);
+    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, tMax, 480, this.lens());
     // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
     let turned = 0;
     for (let i = 1; i < p.pts.length; i++) {
@@ -1120,7 +1460,7 @@ export class CameraController {
       const i = p.pts.findIndex((q) => Math.hypot(q[0] - m.C[0], q[1] - m.C[1], q[2] - m.C[2]) < m.rGlue);
       if (i >= 0) p.pts = p.pts.slice(0, Math.max(i + 1, 2)), p.fate = "wormhole";
     }
-    this.path = { ...p, at: now };
+    this.path = { ...p, at: now, dt: tMax / 480 };
     return this.path;
   }
 
