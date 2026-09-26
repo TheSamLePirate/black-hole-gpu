@@ -21,6 +21,7 @@ import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose }
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
+import { nodeDvHome, predictOurs, type OurPath } from "./system/our-predict";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1760,6 +1761,18 @@ export class CameraController {
 
   /** A manual node, `after` M from now (default: a tenth of an orbit), or its Δv / time nudged. */
   addNode(after?: number) {
+    // our universe: a tenth of a turn around the reference body ahead (or `after`)
+    const nav = this.ourNav(cameraFrame(this.s));
+    if (nav) {
+      const period = this.ourPeriod(nav);
+      const t = nav.t + (after ?? Math.max(0.1 * period, 8 * this.s.timeSpeed, 0.2));
+      this.plan.nodes.push({ t, dv: [0, 0, 0] });
+      this.plan.nodes.sort((a, b) => a.t - b.t);
+      this.plan.note = "manual node";
+      this.plan.kind = undefined;
+      this.refreshPlan(true);
+      return;
+    }
     const st = this.stateNow();
     if (!st) return;
     const t = st.t + (after ?? Math.max(30, 0.1 * 2 * Math.PI * st.r ** 1.5, 8 * this.s.timeSpeed));
@@ -1795,9 +1808,26 @@ export class CameraController {
   refreshPlan(force = false) {
     const P = this.plan;
     const now = performance.now();
-    if (!P.nodes.length) return (P.path = null);
+    if (!P.nodes.length) {
+      this.ourPlan = null;
+      return (P.path = null);
+    }
     if (!force && now - P.at < 330) return P.path;
     P.at = now;
+    // our universe: the path through the nodes by the Newtonian predictor (the hole's map: none)
+    const nav = this.ourNav(cameraFrame(this.s));
+    if (nav) {
+      let nodes = P.nodes.filter((n) => n.t > nav.t - 1e-6);
+      if (this.nodeBurning && this.pilot.auto === "node" && nodes[0]) {
+        const n0 = nodes[0];
+        const total = Math.hypot(...n0.dv);
+        const left = Math.max(0, total - this.nodeDone);
+        nodes = [{ ...n0, t: nav.t, dv: lin(n0.dv, left / Math.max(total, 1e-15), n0.dv, 0) }, ...nodes.slice(1)];
+      }
+      this.ourPlan = predictOurs(nav.X, nav.V, nav.t, nodes.map((n) => ({ t: n.t, dv: n.dv })), { mouthR: mouth(this.s).w.rho, maxSteps: 3000 });
+      return (P.path = null);
+    }
+    this.ourPlan = null;
     const st = this.stateNow();
     if (!st) return (P.path = null);
     // drop nodes left behind (missed or done)
@@ -1848,7 +1878,8 @@ export class CameraController {
     const s = this.s;
     const P = this.plan;
     const node = P.nodes[0];
-    if (!node || cam.region !== "hole") {
+    const nav = this.ourNav(cam);
+    if (!node || (cam.region !== "hole" && !nav)) {
       this.pilot.setAuto("node");
       this.restoreWarp();
       return null;
@@ -1860,8 +1891,10 @@ export class CameraController {
     // with the velocity it changes)
     // (a Crew burn lasts a good part of an orbit: it follows the orbital frame — prograde, normal,
     // radial turn with the ship — and is centred on the node, a finite burn)
-    const follow = s.engine === "crew";
-    const dir = this.nodeBurning && this.burnDir && !follow ? this.burnDir : dvLocal(cam.beta, node.dv);
+    // (our universe: the burn follows the orbital frame of the reference body, as a Crew burn)
+    const follow = s.engine === "crew" || !!nav;
+    const dir = this.nodeBurning && this.burnDir && !follow ? this.burnDir
+      : nav ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, node.dv)) : dvLocal(cam.beta, node.dv);
     const dl = Math.hypot(...dir) || 1;
     const aMax = Math.max(this.thrustMax(), 1e-9);
     const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
@@ -1875,7 +1908,8 @@ export class CameraController {
       // burn: about 2 s of the pilot's time for the whole burn (warp adapted); a Crew burn, ~10 s
       s.timeSpeed = follow ? Math.min(Math.max(burnT / 10, 0.05), 5000) : Math.min(Math.max(burnT / 2, 0.05), 200);
       const perFrame = aMax * s.timeSpeed * dt * dtau;
-      if (left <= Math.max(1e-5, 0.02 * perFrame) || left < 1e-6) {
+      // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c)
+      if (left <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame) || left < 1e-9) {
         P.nodes.shift();
         this.nodeDone = 0;
         this.nodeBurning = false;
@@ -2490,6 +2524,19 @@ export class CameraController {
   }
 
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
+  /** our universe: the free-fall path and the path through the nodes (Newtonian prediction) */
+  ourFree: OurPath | null = null;
+  ourPlan: OurPath | null = null;
+
+  /** A turn of the ship's orbit around its reference body (the Kepler period; unbound: a day). */
+  private ourPeriod(nav: NonNullable<ReturnType<CameraController["ourNav"]>>) {
+    const mb = OUR_BODIES.find((b) => b.id === nav.ref)?.mass ?? 1e-8;
+    const r = Math.hypot(...sub3(nav.X, nav.refPos));
+    const v = sub3(nav.V, nav.refVel);
+    const eps = dot3(v, v) / 2 - mb / r;
+    return eps < 0 ? 2 * Math.PI * Math.sqrt((-mb / (2 * eps)) ** 3 / mb) : 86400 / 492.55;
+  }
+
   /** the navball's speed: in orbit (around the reference body) or relative to the target */
   speedMode: "orbit" | "target" = "orbit";
 
@@ -2515,6 +2562,12 @@ export class CameraController {
   }
   /** (set by the planner of the side the ship is on: a node's burn as a local direction now) */
   private nodeDirLocal: ((cam: ReturnType<typeof cameraFrame>, n: ManeuverNode) => Vec3 | null) | null = (cam, n) => {
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const d = nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, n.dv));
+      const l = Math.hypot(...d);
+      return l > 0 ? lin(d, 1 / l, d, 0) : null;
+    }
     if (cam.region !== "hole") return null;
     const d = dvLocal(cam.beta, n.dv);
     const l = Math.hypot(...d);
@@ -2881,6 +2934,9 @@ export class CameraController {
       ourCa: null as { d: number; t: number } | null,
       speedMode: this.speedMode,
       precision: this.pilot.precision,
+      /** our universe: the free-fall path and the path through the nodes */
+      ourFree: this.ourFree,
+      ourPlan: this.plan.nodes.length ? this.ourPlan : null,
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
@@ -2980,6 +3036,14 @@ export class CameraController {
     if (this.path && (key === this.pathKey || now - this.path.at < Math.max(250, 5 * this.pathCost))) return this.path;
     this.pathKey = key;
     const cam = cameraFrame(s);
+    // our universe: the Newtonian prediction (the map draws it), no path in the hole's frame
+    const nav = this.ourNav(cam);
+    if (nav) {
+      this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR: mouth(s).w.rho });
+      this.pathCost = performance.now() - now;
+      return (this.path = null);
+    }
+    this.ourFree = null;
     if (cam.region !== "hole") return (this.path = null);
     const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin, this.nowTime());
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without

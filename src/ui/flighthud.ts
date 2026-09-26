@@ -28,6 +28,7 @@ import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
 import { EPOCH_DATE, SOLAR_BODIES, solarState } from "../system/solar";
+import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../system/our-predict";
 
 /** our universe's bodies on the map */
 const OUR_COLOURS: Record<string, string> = {
@@ -91,6 +92,8 @@ export interface FlightHudActions {
   throttle(t: number): void;
   /** a body clicked on the map: make it the target */
   select(body: string): void;
+  /** a manoeuvre node at a time of the path (scene time) */
+  addNodeAt(t: number): void;
   /** the navball's speed: orbit ↔ target */
   speedMode(): void;
 }
@@ -145,6 +148,103 @@ export class FlightHud {
   private ballFrame = 0;
   private throttleDrag = false;
   private start: { t: number; tau: number } | null = null;
+  // manoeuvre nodes on the map: the path's points (to add a node), the nodes, the selected node's
+  // handles, and what is being dragged
+  private pathHits: { x: number; y: number; t: number }[] = [];
+  private nodeHits: { k: number; x: number; y: number }[] = [];
+  private handleHits: { k: number; c: number; sign: number; x: number; y: number; dir: [number, number] }[] = [];
+  private gizmo: { k: number; c: number; sign: number; dir: [number, number]; x0: number; y0: number; x: number; y: number; at: number } | null = null;
+  private nodeDrag: { k: number } | null = null;
+  private lastInfo: Info | null = null;
+
+  /**
+   * The nodes on the map (either side): diamonds; the selected one's six handles — prograde /
+   * retrograde (green), normal / anti-normal (magenta), radial out / in (cyan) — to drag (the longer
+   * the pull, the faster its Δv grows), its Δv, burn time and countdown. places: each node's screen
+   * place and its P, N, R directions on screen.
+   */
+  private drawNodes(ctx: CanvasRenderingContext2D, i: Info, places: ({ x: number; y: number; t: number; dirs: [number, number][] } | null)[], t0: number, dpr: number) {
+    this.nodeHits = [];
+    this.handleHits = [];
+    const nodes = i.plan?.nodes ?? [];
+    if (this.sel >= nodes.length) this.sel = Math.max(0, nodes.length - 1);
+    // a handle being pulled: its Δv grows (quadratic in the pull, from the orbital speed's scale)
+    if (this.gizmo && nodes[this.gizmo.k]) {
+      const g = this.gizmo;
+      const now = performance.now();
+      const dt = Math.min((now - g.at) / 1000, 0.1);
+      g.at = now;
+      const pull = Math.max(((g.x - g.x0) * g.dir[0] + (g.y - g.y0) * g.dir[1]) / dpr, 0);
+      const scale = Math.max(i.speed, 1e-6) * 0.05;
+      const rate = scale * (pull / 50) ** 2;
+      if (rate > 0) {
+        const dv: V3 = [0, 0, 0];
+        dv[g.c] = g.sign * rate * dt;
+        this.act.nudge(g.k, dv, 0);
+      }
+    }
+    const COLS = ["#d6f55b", "#e07bff", "#5fd3ff"];
+    const GL = [["prograde", "retrograde"], ["prograde", "retrograde"], ["prograde", "retrograde"]];
+    places.forEach((pl, k) => {
+      if (!pl) return;
+      const sel = k === this.sel;
+      this.nodeHits.push({ k, x: pl.x, y: pl.y });
+      const r = (sel ? 7.5 : 6) * dpr;
+      ctx.fillStyle = sel ? "#5ad8ff" : "#2fa4d0";
+      ctx.strokeStyle = "#04121a";
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(pl.x, pl.y - r);
+      ctx.lineTo(pl.x + r, pl.y);
+      ctx.lineTo(pl.x, pl.y + r);
+      ctx.lineTo(pl.x - r, pl.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#dff6ff";
+      ctx.textAlign = "left";
+      ctx.font = `700 ${9.5 * dpr}px ${FONT}`;
+      ctx.fillText(`${k + 1}`, pl.x + 8 * dpr, pl.y - 6 * dpr);
+      if (!sel) return;
+      // the handles
+      for (let c = 0; c < 3; c++) {
+        let d = pl.dirs[c]!;
+        if (!(Math.hypot(d[0], d[1]) > 0.2)) d = c === 1 ? [0, -1] : [1, 0];
+        for (const sign of [1, -1]) {
+          const hx = pl.x + sign * d[0] * 36 * dpr, hy = pl.y + sign * d[1] * 36 * dpr;
+          ctx.strokeStyle = "rgba(220, 235, 255, 0.25)";
+          ctx.lineWidth = 1 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(pl.x + sign * d[0] * 10 * dpr, pl.y + sign * d[1] * 10 * dpr);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          const on = this.gizmo && this.gizmo.k === k && this.gizmo.c === c && this.gizmo.sign === sign;
+          marker(ctx, GL[c]![sign > 0 ? 0 : 1]!, hx, hy, (on ? 9 : 7) * dpr, COLS[c]!);
+          this.handleHits.push({ k, c, sign, x: hx, y: hy, dir: [sign * d[0], sign * d[1]] });
+        }
+      }
+      // its figures
+      const n = nodes[k]!;
+      const dvl = Math.hypot(...n.dv);
+      const kms = dvl * 299792.458;
+      const burn = dvl / Math.max(i.engine.max, 1e-30);
+      const lines = [
+        `NODE ${k + 1} · T−${fmtDur(n.t - t0, this.s)}`,
+        `Δv ${kms >= 1000 ? `${(dvl).toFixed(4)} c` : `${kms >= 10 ? kms.toFixed(1) : (kms * 1000).toFixed(0) + " m/s"}${kms >= 10 ? " km/s" : ""}`}  ·  burn ${fmtDur(burn, this.s)}`,
+        `P ${fmtDv(n.dv[0])}  N ${fmtDv(n.dv[1])}  R ${fmtDv(n.dv[2])}`,
+      ];
+      ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
+      const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12 * dpr;
+      const bx = pl.x + 44 * dpr, by = pl.y + 16 * dpr;
+      ctx.fillStyle = "rgba(4, 10, 18, 0.82)";
+      ctx.fillRect(bx, by, w, 44 * dpr);
+      ctx.strokeStyle = "rgba(90, 216, 255, 0.5)";
+      ctx.strokeRect(bx, by, w, 44 * dpr);
+      ctx.fillStyle = "#dff6ff";
+      lines.forEach((l, j) => ctx.fillText(l, bx + 6 * dpr, by + (13 + 13 * j) * dpr));
+    });
+  }
+
   /** the map over the whole screen (M) */
   mapView = false;
   toggleMapView() {
@@ -310,18 +410,68 @@ export class FlightHud {
       this.zoom = z;
     }, { passive: false });
     let drag: { x: number; y: number; moved: boolean; pan: [number, number] } | null = null;
+    const at = (e: PointerEvent | MouseEvent) => {
+      const r = this.map.getBoundingClientRect();
+      return [(e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio] as const;
+    };
     this.map.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       this.map.setPointerCapture(e.pointerId);
+      const [x, y] = at(e);
+      const near = (q: { x: number; y: number }, r: number) => Math.hypot(q.x - x, q.y - y) < r * devicePixelRatio;
+      // a node's handle (pull it), a node (select it; drag it along the path), else the map
+      const hnd = this.handleHits.find((q) => near(q, 11));
+      if (hnd) {
+        this.gizmo = { k: hnd.k, c: hnd.c, sign: hnd.sign, dir: hnd.dir, x0: x, y0: y, x, y, at: performance.now() };
+        return;
+      }
+      const nd = this.nodeHits.find((q) => near(q, 10));
+      if (nd) {
+        this.sel = nd.k;
+        this.nodeDrag = { k: nd.k };
+        return;
+      }
       drag = { x: e.clientX, y: e.clientY, moved: false, pan: [...this.pan] };
     });
+    this.map.addEventListener("contextmenu", (e) => {
+      // right-click a node: delete it
+      const [x, y] = at(e);
+      const nd = this.nodeHits.find((q) => Math.hypot(q.x - x, q.y - y) < 10 * devicePixelRatio);
+      if (nd) {
+        e.preventDefault();
+        this.act.deleteNode(nd.k);
+      }
+    });
     this.map.addEventListener("pointermove", (e) => {
+      if (this.gizmo) {
+        const [x, y] = at(e);
+        this.gizmo.x = x;
+        this.gizmo.y = y;
+        return;
+      }
+      if (this.nodeDrag) {
+        // along the path: the nearest of its points
+        const [x, y] = at(e);
+        let best: { t: number; d: number } | null = null;
+        for (const q of this.pathHits) {
+          const d = Math.hypot(q.x - x, q.y - y);
+          if (!best || d < best.d) best = { t: q.t, d };
+        }
+        const n = this.lastInfo?.plan?.nodes[this.nodeDrag.k];
+        if (best && n && best.d < 40 * devicePixelRatio) this.act.nudge(this.nodeDrag.k, [0, 0, 0], best.t - n.t);
+        return;
+      }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (Math.hypot(dx, dy) > 3) drag.moved = true;
       if (drag.moved) this.pan = [drag.pan[0] - (dx * devicePixelRatio) / this.mapK, drag.pan[1] + (dy * devicePixelRatio) / this.mapK];
     });
     this.map.addEventListener("pointerup", (e) => {
+      if (this.gizmo || this.nodeDrag) {
+        this.gizmo = null;
+        this.nodeDrag = null;
+        return;
+      }
       if (drag && !drag.moved) {
         // a click: the nearest body within 18 px
         const r = this.map.getBoundingClientRect();
@@ -335,9 +485,29 @@ export class FlightHud {
           this.act.select(best);
           this.mapFocus = best;
           this.pan = [0, 0];
+        } else {
+          // on the path: a new node there
+          let p: { t: number; d: number } | null = null;
+          for (const q of this.pathHits) {
+            const d = Math.hypot(q.x - x, q.y - y);
+            if (!p || d < p.d) p = { t: q.t, d };
+          }
+          if (p && p.d < 9 * devicePixelRatio) {
+            this.act.addNodeAt(p.t);
+            this.sel = this.lastInfo?.plan ? this.lastInfo.plan.nodes.filter((n) => n.t < p.t).length : 0;
+          }
         }
       }
       drag = null;
+    });
+    addEventListener("keydown", (e: KeyboardEvent) => {
+      // Delete / Backspace: the selected node (map view or planner open)
+      if ((e.key === "Delete" || e.key === "Backspace") && (this.mapView || this.plannerOpen) && this.lastInfo?.plan?.nodes.length) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+        e.preventDefault();
+        this.act.deleteNode(Math.min(this.sel, this.lastInfo.plan.nodes.length - 1));
+      }
     });
     this.map.addEventListener("dblclick", () => {
       this.zoom = 1;
@@ -1429,6 +1599,124 @@ export class FlightHud {
       ctx.font = `${moon ? 500 : 600} ${(moon ? 8.5 : 9.5) * dpr}px ${FONT}`;
       ctx.fillText(b.name, x + 5 * dpr, y - 4 * dpr);
     }
+    // the ship's path (the focus body's frame: where it is when the ship is there, drawn relative to
+    // where it is now): free fall (cyan), through the nodes (orange, dashed); the apsides around the
+    // reference body; the closest approach to the target; an impact
+    {
+      const Ff = (t: number) => solarState(focus, t).pos;
+      const FA = (X: V3, t: number): V3 => { const q = Ff(t); return [X[0] - q[0] + F[0], X[1] - q[1] + F[1], X[2] - q[2] + F[2]]; };
+      const line = (pts: V3[], times: number[], from: number, to: number, stroke: string, w: number, dash: number[] = []) => {
+        if (to - from < 1) return;
+        ctx.beginPath();
+        for (let j = from; j <= to; j++) {
+          const [x, y] = P(FA(pts[j]!, times[j]!));
+          if (j === from) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = w * dpr;
+        ctx.setLineDash(dash.map((d) => d * dpr));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      const tag = (X: V3, t: number, text: string, col: string, below = false) => {
+        const [x, y] = P(FA(X, t));
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.6 * dpr, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.font = `600 ${9 * dpr}px ${FONT}`;
+        ctx.textAlign = "left";
+        ctx.fillText(text, x + 5 * dpr, y + (below ? 11 : -5) * dpr);
+      };
+      const km = (d: number) => {
+        const k = d * 1.476625e8;
+        return k >= 1e7 ? `${(k / 1.495978707e8).toFixed(2)} AU` : `${Math.round(k).toLocaleString("en-US")} km`;
+      };
+      const apsides = (p: OurPath, from: number, label: string) => {
+        const sub: OurPath = { ...p, pts: p.pts.slice(from), vels: p.vels.slice(from), times: p.times.slice(from), refs: p.refs.slice(from), nodeAt: [] };
+        const body = sub.refs[0];
+        if (!body || body === "sun" && focus !== "sun") return;
+        const a = ourApsides(sub, body);
+        if (a.pe) tag(sub.pts[a.pe.i]!, sub.times[a.pe.i]!, `${label}Pe ${km(a.pe.alt)}`, "#9fe3ff", true);
+        if (a.ap) tag(sub.pts[a.ap.i]!, sub.times[a.ap.i]!, `${label}Ap ${km(a.ap.alt)}`, "#9fe3ff");
+      };
+      const free = i.ourFree, plan = i.ourPlan;
+      this.pathHits = [];
+      const hits = (p: OurPath) => {
+        for (let j = 0; j < p.pts.length; j += Math.max(1, Math.floor(p.pts.length / 400))) {
+          const [x, y] = P(FA(p.pts[j]!, p.times[j]!));
+          this.pathHits.push({ x, y, t: p.times[j]! });
+        }
+      };
+      if (free && free.pts.length > 1) {
+        const cut = plan && plan.nodeAt.length ? Math.min(plan.nodeAt[0]!, free.pts.length - 1) : free.pts.length - 1;
+        line(free.pts, free.times, 0, free.pts.length - 1, plan ? "rgba(90, 220, 255, 0.35)" : "rgba(90, 220, 255, 0.9)", 1.6);
+        if (plan) line(free.pts, free.times, 0, cut, "rgba(90, 220, 255, 0.9)", 1.6);
+        apsides(free, 0, "");
+        hits(free);
+        if (free.fate === "impact") {
+          const j = free.pts.length - 1;
+          const [x, y] = P(FA(free.pts[j]!, free.times[j]!));
+          ctx.strokeStyle = RED;
+          ctx.lineWidth = 2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(x - 5 * dpr, y - 5 * dpr); ctx.lineTo(x + 5 * dpr, y + 5 * dpr);
+          ctx.moveTo(x + 5 * dpr, y - 5 * dpr); ctx.lineTo(x - 5 * dpr, y + 5 * dpr);
+          ctx.stroke();
+          ctx.fillStyle = RED;
+          ctx.fillText(`IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, x + 7 * dpr, y + 4 * dpr);
+        }
+      }
+      if (plan && plan.nodeAt.length) {
+        const k0 = plan.nodeAt[0]!;
+        line(plan.pts, plan.times, k0, plan.pts.length - 1, "rgba(255, 170, 80, 0.95)", 1.8, [5, 3]);
+        apsides(plan, plan.nodeAt[plan.nodeAt.length - 1]!, "▸ ");
+        hits(plan);
+      }
+      // closest approach to the target (a body of ours), on the plan or the free path
+      const tp = plan ?? free;
+      if (tp && OUR_COLOURS[i.target] && i.target !== i.ref) {
+        const ca = ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0);
+        if (ca) {
+          const X = tp.pts[ca.i]!, t = tp.times[ca.i]!;
+          const T = solarState(i.target, t).pos;
+          const [x1, y1] = P(FA(X, t)), [x2, y2] = P(FA(T, t));
+          ctx.strokeStyle = "rgba(255, 138, 92, 0.8)";
+          ctx.lineWidth = 1 * dpr;
+          ctx.setLineDash([2 * dpr, 2 * dpr]);
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.arc(x2, y2, 5 * dpr, 0, 2 * Math.PI);
+          ctx.stroke();
+          const R = SOLAR_BODIES.find((b) => b.id === i.target)!.radius;
+          ctx.fillStyle = "#ff8a5c";
+          ctx.font = `600 ${9 * dpr}px ${FONT}`;
+          ctx.fillText(`CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, this.s)}`, (x1 + x2) / 2 + 6 * dpr, (y1 + y2) / 2);
+        }
+      }
+      // the nodes and the selected one's handles
+      if (plan && i.plan) {
+        this.drawNodes(ctx, i, i.plan.nodes.map((n, k) => {
+          const j = plan.nodeAt[k];
+          if (j === undefined) return null;
+          const X = plan.pts[j]!, V = plan.vels[j - 1] ?? plan.vels[j]!, t = plan.times[j]!;
+          const at0 = P(FA(X, t));
+          const dirOf = (c: V3) => {
+            const d = nodeDvHome(X, V, t, c);
+            const e = Math.hypot(...sub(X, solarState(focus, t).pos)) * 0.02 + 1e-9;
+            const q = P(FA([X[0] + d[0] * e / Math.max(Math.hypot(...d), 1e-30), X[1] + d[1] * e / Math.max(Math.hypot(...d), 1e-30), X[2] + d[2] * e / Math.max(Math.hypot(...d), 1e-30)], t));
+            const l = Math.hypot(q[0] - at0[0], q[1] - at0[1]) || 1;
+            return [(q[0] - at0[0]) / l, (q[1] - at0[1]) / l] as [number, number];
+          };
+          return { x: at0[0], y: at0[1], t: n.t, dirs: [dirOf([1, 0, 0]), dirOf([0, 1, 0]), dirOf([0, 0, 1])] };
+        }), t0, dpr);
+      }
+    }
     // our mouth of the wormhole
     {
       const [x, y] = P([0, 0, 0]);
@@ -1488,6 +1776,8 @@ export class FlightHud {
     const s = this.s;
     ctx.font = `${10 * dpr}px ${FONT}`;
     this.mapHits = [];
+    this.lastInfo = i;
+    this.pathHits = [];
     if (i.ref && i.X) return this.drawOurMap(i, t0, ctx, cw, ch);
     if (i.region !== "hole" || !i.X) {
       ctx.fillStyle = "rgba(220, 225, 235, 0.8)";
@@ -1769,30 +2059,41 @@ export class FlightHud {
         ctx.fillText(`CA ${fmtLen(ca.d, this.s)}`, (x1 + x2) / 2 + 5 * dpr, (y1 + y2) / 2);
       }
     }
-    // the flight plan: its path through the nodes (cyan), the nodes (diamonds)
+    // the free path's points: a click there adds a node
+    if (path) {
+      for (let j = 0; j < path.pts.length; j += Math.max(1, Math.floor(path.pts.length / 300))) {
+        const t = t0 + (j + 1) * path.dt;
+        const [x, y] = P(at(path.pts[j]!, t));
+        this.pathHits.push({ x, y, t });
+      }
+    }
+    // the flight plan: its path through the nodes (orange), the nodes (diamonds, handles)
     if (i.plan?.path && i.plan.path.pts.length > 1) {
       const pp = i.plan.path;
-      poly([at(X0, t0), ...pp.pts.map((q, j) => at(q, pp.times[j]!))], "rgba(90, 220, 255, 0.95)", 1.8, [2, 3]);
-      i.plan.nodes.forEach((n, k) => {
+      poly([at(X0, t0), ...pp.pts.map((q, j) => at(q, pp.times[j]!))], "rgba(255, 170, 80, 0.95)", 1.8, [5, 3]);
+      for (let j = 0; j < pp.pts.length; j += Math.max(1, Math.floor(pp.pts.length / 300))) {
+        const [x, y] = P(at(pp.pts[j]!, pp.times[j]!));
+        this.pathHits.push({ x, y, t: pp.times[j]! });
+      }
+      // the nodes: their place on the path, their P, N, R on screen (from the path's local motion)
+      this.drawNodes(ctx, i, i.plan.nodes.map((n) => {
         let j = pp.times.findIndex((tt) => tt >= n.t);
         if (j < 0) j = pp.pts.length - 1;
-        const [x, y] = P(at(pp.pts[j]!, n.t));
-        ctx.fillStyle = k === 0 ? "#5ad8ff" : "#2fa4d0";
-        ctx.strokeStyle = "#04121a";
-        ctx.lineWidth = 1.5 * dpr;
-        ctx.beginPath();
-        ctx.moveTo(x, y - 6 * dpr);
-        ctx.lineTo(x + 6 * dpr, y);
-        ctx.lineTo(x, y + 6 * dpr);
-        ctx.lineTo(x - 6 * dpr, y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = "#dff6ff";
-        ctx.textAlign = "left";
-        ctx.font = `700 ${9.5 * dpr}px ${FONT}`;
-        ctx.fillText(`${k + 1}`, x + 8 * dpr, y - 6 * dpr);
-      });
+        const X = pp.pts[j]!;
+        const A = pp.pts[Math.max(j - 1, 0)]!, B = pp.pts[Math.min(j + 1, pp.pts.length - 1)]!;
+        const v = norm3(sub(B, A));
+        const rh = norm3(X);
+        const Nn = norm3(cross3(rh, v));
+        const Rr = cross3(Nn, v);
+        const base = P(at(X, n.t));
+        const e = 0.02 * Math.hypot(...X);
+        const dirOf = (d: V3) => {
+          const q = P(at([X[0] + d[0] * e, X[1] + d[1] * e, X[2] + d[2] * e], n.t));
+          const l = Math.hypot(q[0] - base[0], q[1] - base[1]) || 1;
+          return [(q[0] - base[0]) / l, (q[1] - base[1]) / l] as [number, number];
+        };
+        return { x: base[0], y: base[1], t: n.t, dirs: [dirOf(v), dirOf(Nn), dirOf(Rr)] };
+      }), t0, dpr);
       const lastNode = i.plan.nodes[i.plan.nodes.length - 1];
       if ((lastNode?.then === "approach" || lastNode?.then === "orbit") && s.sun) {
         // the rendezvous: where the star will be then
@@ -2052,6 +2353,24 @@ function fmtLen(d: number, s: Settings) {
   return m >= 1e4 ? `${Math.round(m / 1000).toLocaleString("en-US")} km` : `${Math.round(m).toLocaleString("en-US")} m`;
 }
 
+/** A velocity change (c): m/s, km/s or c. */
+function fmtDv(v: number) {
+  const k = v * 299792.458;
+  if (Math.abs(k) >= 3000) return `${v.toFixed(3)}c`;
+  if (Math.abs(k) >= 1) return `${k.toFixed(2)} km/s`;
+  return `${(k * 1000).toFixed(0)} m/s`;
+}
+
+/** A duration (coordinate time in M) for the chosen mass: s, min, h, d, y. */
+function fmtDur(t: number, s: Settings) {
+  const sec = Math.max(t, 0) * 4.925490947e-6 * s.massSolar;
+  if (sec < 120) return `${sec.toFixed(0)} s`;
+  if (sec < 7200) return `${Math.floor(sec / 60)}m${String(Math.floor(sec % 60)).padStart(2, "0")}s`;
+  if (sec < 172800) return `${Math.floor(sec / 3600)}h${String(Math.floor((sec % 3600) / 60)).padStart(2, "0")}`;
+  if (sec < 365.25 * 86400 * 2) return `${(sec / 86400).toFixed(1)} d`;
+  return `${(sec / (365.25 * 86400)).toFixed(1)} y`;
+}
+
 /** A coordinate time in M, with its duration for the chosen mass. */
 function fmtM(t: number, s: Settings) {
   const sec = t * 4.925490947e-6 * s.massSolar;
@@ -2074,3 +2393,9 @@ function fmtClock(tM: number, s: Settings) {
   const p = (n: number) => String(n).padStart(2, "0");
   return d > 0 ? `${d}d ${p(hh)}:${p(mm)}` : `${p(hh)}:${p(mm)}:${p(ss)}`;
 }
+
+const norm3 = (a: V3): V3 => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+const cross3 = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

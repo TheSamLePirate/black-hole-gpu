@@ -824,6 +824,8 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 /* map view (M while flying): the map over the whole screen, the navball and the cockpit above it */
 .fl-root.mapview .fl-right { left: 14px; top: 56px; right: 14px; bottom: 14px; width: auto; z-index: 0; background: rgba(4, 8, 14, 0.9); }
 .fl-root.mapview .fl-map { flex: 1; height: auto; min-height: 0; cursor: crosshair; }
+/* (the target card sits top left: the map's controls go to the right) */
+.fl-root.mapview .fl-cams, .fl-root.mapview .fl-mapbar { justify-content: flex-end; align-self: flex-end; }
 .fl-root.mapview .fl-cockpit, .fl-root.mapview .fl-target, .fl-root.mapview .fl-planner { z-index: 1; }
 .fl-root.mapview .fl-tel, .fl-root.mapview .fl-orbit { display: none; }
 

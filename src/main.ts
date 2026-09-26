@@ -311,6 +311,10 @@ async function main() {
   }
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll,
+    addNodeAt: (t) => {
+      camera.addNode(Math.max(t - simTime, 1e-3));
+      touch();
+    },
     speedMode: () => {
       camera.speedMode = camera.speedMode === "orbit" ? "target" : "orbit";
       panel.toast(camera.speedMode === "target" ? `Speed relative to ${BODY_NAMES[settings.target]}` : "Speed in orbit");

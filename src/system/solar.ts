@@ -114,7 +114,8 @@ export const SOLAR_BODIES: SolarBody[] = [
   moon("charon", "Charon", "pluto", 106.1, 606, 19591, 6.387221, 131, 0.35, "ice"),
 ];
 
-export const solarBody = (id: string) => SOLAR_BODIES.find((b) => b.id === id);
+const BY_ID = new Map(SOLAR_BODIES.map((b) => [b.id, b]));
+export const solarBody = (id: string) => BY_ID.get(id);
 
 const OBLIQUITY = 23.43928 * DEG;
 /** J2000 equatorial (right ascension, declination) → ecliptic unit vector */
@@ -161,8 +162,23 @@ function moonGeo(d: number): State {
   return kepler(a, 0.0549, 5.1454 * DEG, M, w, O, n);
 }
 
-/** A planet's heliocentric state (the Earth: from the Earth–Moon barycentre) */
+// (the states of one instant, reused: the pull on the ship asks for every body at the same time)
+let memoD = NaN;
+const memo = new Map<string, State>();
 function helio(b: SolarBody, d: number): State {
+  if (d !== memoD) {
+    memoD = d;
+    memo.clear();
+  }
+  const hit = memo.get(b.id);
+  if (hit) return hit;
+  const st = helioNow(b, d);
+  memo.set(b.id, st);
+  return st;
+}
+
+/** A planet's heliocentric state (the Earth: from the Earth–Moon barycentre) */
+function helioNow(b: SolarBody, d: number): State {
   if (b.id === "sun") return { pos: [0, 0, 0], vel: [0, 0, 0] };
   if (b.id === "moon") {
     const e = helio(solarBody("earth")!, d);
@@ -215,10 +231,14 @@ export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
 /** Our mouth: on Saturn's orbit, 0.7 AU behind it (the same heliocentric turn, backwards) */
 const MOUTH_LAG = 2 * Math.asin(0.7 / (2 * 9.537));
 function mouthHelio(d: number): State {
+  const hit = d === memoD ? memo.get("#mouth") : undefined;
+  if (hit) return hit;
   const s = helio(solarBody("saturn")!, d);
   const c = Math.cos(-MOUTH_LAG), sn = Math.sin(-MOUTH_LAG);
   const rz = (v: Vec3): Vec3 => [c * v[0] - sn * v[1], sn * v[0] + c * v[1], v[2]];
-  return { pos: rz(s.pos), vel: rz(s.vel) };
+  const st = { pos: rz(s.pos), vel: rz(s.vel) };
+  memo.set("#mouth", st);
+  return st;
 }
 
 const toM = AU / M_METRES; // AU → M
