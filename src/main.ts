@@ -325,7 +325,7 @@ async function main() {
   /** Pilot keys (by physical position where it matters); true when handled. */
   function pilotKey(e: KeyboardEvent) {
     const holds: Record<string, Hold> = { Digit1: "prograde", Digit2: "retrograde", Digit3: "radialOut", Digit4: "radialIn", Digit5: "normal", Digit6: "antinormal", Digit7: "target" };
-    const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach" };
+    const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach", KeyL: "land", KeyU: "takeoff" };
     if (holds[e.code]) pilotHold(holds[e.code]!);
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();

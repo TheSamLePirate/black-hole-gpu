@@ -43,7 +43,9 @@ const HOLD_KEYS: [Hold, string, string][] = [
   ["prograde", "PRO", "1"], ["retrograde", "RETRO", "2"], ["radialOut", "RAD+", "3"], ["radialIn", "RAD−", "4"],
   ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"],
 ];
-const AUTO_KEYS: [Auto, string, string][] = [["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"]];
+const AUTO_KEYS: [Auto, string, string][] = [
+  ["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"], ["land", "LAND", "L"], ["takeoff", "TAKE OFF", "U"],
+];
 
 const AMBER = "#ffb35c";
 const CYAN = "#7cd6ff";
@@ -180,7 +182,10 @@ export class FlightHud {
 
     // ---- target
     this.target.append(h("div", "fl-title", "Target"));
-    for (const [k, label] of [["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"], ["light", "Light received"]] as const) {
+    for (const [k, label] of [
+      ["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"], ["light", "Light received"],
+      ["alt", "Radar altitude"], ["vv", "Vertical speed"], ["vh", "Ground speed"], ["twr", "Thrust / weight"],
+    ] as const) {
       const row = h("div", k === "name" ? "fl-tname" : "fl-kv");
       if (label) row.append(h("span", "", label));
       const v = h("b");
@@ -588,6 +593,18 @@ export class FlightHud {
     // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
     // temperature, from the planet's light probe
     const pr = i.probe;
+    // in a planet's frame: the landing figures (ground-relative)
+    const sf = i.surface;
+    for (const k of ["alt", "vv", "vh", "twr"]) T[k]!.parentElement!.hidden = !sf;
+    if (sf) {
+      const m = (x: number) => (Math.abs(x) >= 1e4 ? `${(x / 1000).toFixed(Math.abs(x) >= 1e5 ? 0 : 1)} km` : `${x.toFixed(Math.abs(x) >= 100 ? 0 : 1)} m`);
+      T.alt!.textContent = sf.landed ? `landed on ${BODY_NAMES[sf.body]}` : `${m(sf.alt)}${sf.air > 1e-6 ? ` · air ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
+      T.vv!.textContent = `${sf.vVert >= 0 ? "▲" : "▼"} ${m(Math.abs(sf.vVert))}/s`;
+      T.vv!.className = sf.vVert < -12 && sf.alt < 2000 ? "closing" : "";
+      T.vh!.textContent = `${m(sf.vHor)}/s`;
+      T.twr!.textContent = `${sf.twr.toFixed(2)} · local ${sf.gLocal.toFixed(2)} g`;
+      T.twr!.className = sf.twr < 1 ? "closing" : "";
+    }
     T.light!.parentElement!.hidden = !pr;
     if (pr) {
       const e = pr.eBol;
@@ -628,8 +645,11 @@ export class FlightHud {
     // (not while an autopilot flies around that body: it keeps the ship off it)
     const hit = p?.hit ?? "star";
     const nm = (b: keyof typeof BODY_NAMES) => (b === "star" ? "THE STAR" : BODY_NAMES[b].toUpperCase());
-    if (p?.fate === "star" && !((i.auto === "approach" || i.auto === "orbit") && i.target === hit)) w.push(`⚠ COLLISION COURSE — ${nm(hit)}`);
-    if (i.landed) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
+    // (not on the ground either: that is where the path ends)
+    const onGround = i.landed || i.surface?.landed;
+    if (p?.fate === "star" && !onGround && !((i.auto === "approach" || i.auto === "orbit" || i.auto === "land" || i.auto === "takeoff") && i.target === hit)) w.push(`⚠ COLLISION COURSE — ${nm(hit)}`);
+    if (i.surface?.landed) w.push(`LANDED ON ${nm(i.surface.body)}`);
+    else if (i.landed) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
     if (i.ergo) w.push("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");
     else if (i.region === "hole" && i.r < i.photon) w.push("INSIDE THE PHOTON ORBIT");
     else if (i.region === "hole" && i.r < i.isco) w.push("BELOW THE ISCO · NO STABLE ORBIT");

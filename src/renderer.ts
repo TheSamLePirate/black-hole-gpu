@@ -9,7 +9,7 @@ import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
-import { cameraFrame, type CameraFrame } from "./camera";
+import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
 import { localPatch } from "./system/local-patch";
@@ -803,7 +803,7 @@ export class Renderer {
     const set = (i: number, x: number, y: number, z: number, w: number) => f.set([x, y, z, w], i * 4);
 
     set(0, t.width, t.height, o.block, o.sampleIndex);
-    set(1, cam.r, cam.theta, cam.phi, tanH);
+    set(1, cam.r, gpuTheta(cam.theta), cam.phi, tanH);
     set(2, ...cam.right, t.width / t.height);
     set(3, ...cam.up, pixelAngle);
     set(4, ...cam.fwd, 0);

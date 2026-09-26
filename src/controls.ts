@@ -2,7 +2,7 @@ import {
   basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
 import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 } from "./physics";
-import type { Settings, Target } from "./settings";
+import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
@@ -13,6 +13,7 @@ import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
+import { airDensity, betaToCoord, CRASH_SPEED, GEAR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -1150,6 +1151,37 @@ export class CameraController {
       const f0 = sphericalFrame(X0);
       const w0 = (v: Vec3) => add3(f0.er, f0.et, f0.ep, v);
       const dirZ: Vec3 = acc ? (accel > 0 ? lin(acc, 1 / accel, acc, 0) : [0, 0, 0]) : kn > 0 ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2])) : [0, 0, 0];
+      // near a planet: its own frame (landing.ts)
+      const lf = this.localFlight(cam, X0);
+      if (lf) {
+        const t0 = this.nowTime();
+        const { F, L } = lf;
+        const dtau = simDt / F.ut;
+        const was = L.landed;
+        const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)));
+        this.properTime += dtau;
+        this.landed = L.landed;
+        const F1 = planetFrame(F.id, t0 + simDt, a, s.massSolar);
+        this.local!.F = F1;
+        const g = toGlobal(F1, L);
+        const b = zamoBeta(g.X, g.V, a);
+        const f1 = sphericalFrame(g.X);
+        const w1 = (v: Vec3) => add3(f1.er, f1.et, f1.ep, v);
+        // (the ship's attitude keeps its components on the ZAMO axes: it turns with the planet)
+        setHolePose(s, g.X, w1(cam.fwd), w1(cam.up), w1(b));
+        s.motion = "geodesic";
+        this.targetDistance = s.distance;
+        this.local!.key = this.poseKeyNow();
+        if (r.impact !== null && !was) {
+          // (the Ranger rests on its belly: levelled on the ground, nose on the horizon)
+          this.levelShip(localToZamo([L.xi[0], L.xi[1], L.xi[2]]));
+          const name = BODY_NAMES[F.id as Body];
+          const v = r.impact;
+          this.onPilotMessage?.(v > CRASH_SPEED ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+          if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
+        }
+        return t0 + simDt;
+      }
       const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime()), a, simDt, 0.05, accel, dirZ, this.lens());
       this.landed = res.landed;
       this.properTime += res.tau;
@@ -1201,6 +1233,7 @@ export class CameraController {
     this.plan = { nodes: [], path: null, at: 0, note: "" };
     this.transfer = null;
     this.spent = 0;
+    this.local = null;
     this.warpAfter = null;
     this.restoreWarp();
     if (!on) {
@@ -1304,6 +1337,33 @@ export class CameraController {
 
   private shipMatrix(): M3 {
     return shipToCamera(this.shipPose(), this.s.shipLookYaw, this.s.shipLookPitch).S;
+  }
+
+  /**
+   * Levels the ship on the ground: its top towards the local up (ZAMO components), its nose on the
+   * horizon along its heading (tilted forwards if it stood on its tail). The cameras follow it.
+   */
+  private levelShip(upZ: Vec3) {
+    const col = (S: M3, i: number): Vec3 => [S[0][i]!, S[1][i]!, S[2][i]!];
+    const toC = (v: Vec3) => {
+      const cam = cameraFrame(this.s);
+      return [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)] as Vec3;
+    };
+    const S = this.shipMatrix();
+    const Y = col(S, 1), Z = col(S, 2);
+    let u = toC(upZ);
+    u = lin(u, 1 / Math.hypot(...u), u, 0);
+    let h = sub3(Z, lin(u, dot3(Z, u), u, 0));
+    if (Math.hypot(...h) < 0.2) h = lin(sub3(Y, lin(u, dot3(Y, u), u, 0)), -1, u, 0);
+    h = lin(h, 1 / Math.hypot(...h), h, 0);
+    const k = cross(Z, h);
+    const kl = Math.hypot(...k);
+    if (kl > 1e-9) this.rotateC(lin(k, Math.atan2(kl, dot3(Z, h)) / kl, k, 0));
+    // then the roll: the top up
+    let u2 = toC(upZ);
+    u2 = lin(u2, 1 / Math.hypot(...u2), u2, 0);
+    const ra = Math.atan2(dot3(cross(Y, u2), Z), dot3(Y, u2));
+    this.rotateC(lin(Z, ra, Z, 0));
   }
 
   /** The ship's axes (x left, y up, z nose) in the camera basis's local components. */
@@ -1417,7 +1477,8 @@ export class CameraController {
       return;
     }
     const { lim, why } = this.railsLimit(cam);
-    const w = Math.max(Math.min(want, lim), Math.min(want, 0.25));
+    // (never below 0.25 M/s — except near the ground, where seconds count)
+    const w = Math.max(Math.min(want, lim), Math.min(want, why === "ground" ? 1e-5 : 0.25));
     if (w < want) this.warpWant = want;
     else this.warpWant = null;
     this.railsNote = w < want ? why : "";
@@ -1447,6 +1508,19 @@ export class CameraController {
         // (and a frame's push no more than 0.3 % of the orbital speed: where the engine rivals the
         // hole's pull, the orbit's apsis would otherwise jump past the goal in one frame)
         cap(Math.max(0.5, (30 * 0.003 * Math.max(Math.hypot(...cam.beta), 1e-3)) / Math.max(this.thrustMax(), 1e-12)), "spiral");
+      }
+      if (this.local) {
+        // (near the ground: a frame covers no more than a fifth of the height left)
+        const { F, L } = this.local;
+        const d = Math.hypot(...L.xi);
+        const h = Math.max(d - F.R - GEAR / F.mPerM, 0);
+        const vv = Math.abs((L.w[0] * L.xi[0] + L.w[1] * L.xi[1] + L.w[2] * L.xi[2]) / d) + 1e-12;
+        // (the last metres at the pace of the last 20: no Zeno descent)
+        const hc = Math.max(h, 20 / F.mPerM);
+        if (!L.landed) cap(Math.max((30 * hc) / (5 * vv), 1e-4), "ground");
+        // (landing, taking off: the pilot's response, ~1.2 s of warp, a tenth of the time to the ground)
+        const pa = this.pilot.auto;
+        if ((pa === "land" && !L.landed) || pa === "takeoff") cap(Math.max(hc / (12 * Math.max(vv, pa === "takeoff" ? 5 / 299792458 : 0)), 1e-5), "ground");
       }
       if (st === "circ" || st === "wait") cap(Math.max(6, (2 * Math.PI * cam.r ** 1.5) / 24), "circular orbit");
       const V = this.fromZamo(cam, sphericalFrame(X), cam.beta);
@@ -1807,6 +1881,131 @@ export class CameraController {
   /** Angular rate of a circular orbit around the hole through C (the frame a body there turns with). */
   private holeOmega(C: Vec3) {
     return 1 / (Math.hypot(...C) ** 1.5 + Math.abs(this.s.spin));
+  }
+
+  // ------------------------------------------------------------------------------ planet frame
+  /** the planet the ship flies in the frame of (landing.ts), and its state there */
+  local: { F: PlanetFrame; L: LocalState; key?: string } | null = null;
+  private poseKeyNow() {
+    const s = this.s;
+    return [s.distance, s.inclination, s.azimuth, s.velR, s.velT, s.velP].join();
+  }
+
+  /**
+   * The planet frame to fly in now, entering it within half a planet's Hill radius (its sphere of
+   * influence) and leaving it beyond 0.6 of it (a margin: no flicker at the edge). Planets of the
+   * system only (the classic scenes' star keeps the global integration).
+   */
+  private localFlight(cam: ReturnType<typeof cameraFrame>, X: Vec3): { F: PlanetFrame; L: LocalState } | null {
+    const s = this.s;
+    const t = this.nowTime();
+    // (the pose changed from elsewhere — a preset, a jump: start again from it)
+    if (this.local && this.local.key !== undefined && this.local.key !== this.poseKeyNow()) this.local = null;
+    if (this.local) {
+      const { F, L } = this.local;
+      const hill = bodyHill(s, F.id as Body, t);
+      if (Math.hypot(...L.xi) < 0.6 * hill || L.landed) return this.local;
+      this.local = null;
+      return null;
+    }
+    if (s.system === "none") return null;
+    for (const b of availableBodies(s, cam)) {
+      const sb = SYSTEM_BODIES.includes(b as SystemBody) ? GARGANTUA_SYSTEM.bodies.find((q) => q.id === b) : null;
+      if (!sb || sb.kind !== "planet" || sb.universe !== "gargantua") continue;
+      const C = bodyCentre(s, b, t);
+      const d = Math.hypot(X[0] - C[0], X[1] - C[1], X[2] - C[2]);
+      if (d > 0.5 * bodyHill(s, b, t)) continue;
+      const F = planetFrame(b, t, s.spin, s.massSolar);
+      const L = toLocal(F, X, betaToCoord(X, cam.beta, s.spin));
+      this.local = { F, L };
+      return this.local;
+    }
+    return null;
+  }
+
+  /** Radar altitude, speeds relative to the ground, thrust-to-weight: the landing HUD. */
+  private surfaceInfo() {
+    const lf = this.local;
+    if (!lf) return null;
+    const { F, L } = lf;
+    const c = 299792458;
+    const d = Math.hypot(...L.xi);
+    const up: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
+    const vv = dot3(L.w, up);
+    const vh = Math.hypot(L.w[0] - vv * up[0], L.w[1] - vv * up[1], L.w[2] - vv * up[2]);
+    const g = weightUp(F, L.xi);
+    return {
+      body: F.id as Body, alt: (d - F.R) * F.mPerM - GEAR, vVert: vv * c, vHor: vh * c,
+      gLocal: (g * F.aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: L.landed,
+      air: airDensity(F, d - F.R),
+    };
+  }
+
+  /**
+   * Landing and take-off, in the planet's frame (landing.ts). Landing: the horizontal speed killed,
+   * the descent no faster than half the engine's margin over the local weight can stop, down to
+   * 1.5 m/s at touchdown. Take-off: up, turning prograde as it climbs, to the orbit's radius with the
+   * circular speed of the turning frame; then the orbit autopilot. The goal velocity (local) is carried
+   * to the ZAMO's terms; the feed-forward holds the ship against what gravity and the frame do.
+   */
+  private surfaceWant(cam: ReturnType<typeof cameraFrame>, say: (t: string) => null): { beta: Vec3; ff: Vec3 } | null {
+    const P = this.pilot;
+    const lf = this.local;
+    const what = P.auto === "land" ? "Landing" : "Take-off";
+    if (!lf || cam.region !== "hole") return say(`${what}: get into the planet's sphere of influence first (orbit it)`);
+    const { F, L } = lf;
+    const name = BODY_NAMES[F.id as Body];
+    const c = 299792458;
+    const d = Math.hypot(...L.xi);
+    const up: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
+    const h = d - F.R - GEAR / F.mPerM;
+    const g = weightUp(F, L.xi);
+    const thr = this.thrustMax();
+    if (thr < 1.05 * g) {
+      const gU = F.aUnit / 9.80665;
+      return say(`${what}: the engine (${(thr * gU).toFixed(1)} g) cannot hold the weight on ${name} (${(g * gU).toFixed(2)} g)`);
+    }
+    let want: Vec3;
+    if (P.auto === "land") {
+      if (L.landed) {
+        P.setAuto("land");
+        this.onPilotMessage?.(`Landed on ${name}`);
+        return null;
+      }
+      // vertical speed: what half the margin can stop (v² = 2 a h), no less than a minute from the
+      // ground (a Cinema engine could stop far more), 1.5 m/s at the end
+      const minute = 60 / (4.925490947e-6 * this.s.massSolar); // [M]
+      const vd = -Math.max(Math.min(Math.sqrt(2 * 0.5 * (thr - g) * Math.max(h, 0)), Math.max(h, 0) / minute, 0.02), 1.5 / c);
+      want = [up[0] * vd, up[1] * vd, up[2] * vd];
+    } else {
+      // up to the orbit the orbit autopilot would keep (0.3 of the Hill radius), turning prograde
+      const hill = bodyHill(this.s, F.id as Body, this.nowTime());
+      const d0 = Math.max(0.3 * hill, 1.2 * F.R);
+      const f = Math.min(Math.max((d - F.R) / (d0 - F.R), 0), 1);
+      let east: Vec3 = [-up[1], up[0], 0];
+      const el = Math.hypot(...east);
+      east = el > 1e-6 ? [east[0] / el, east[1] / el, 0] : [0, 1, 0];
+      const vc = Math.sqrt(F.m / d) - F.n * F.ut * d; // circular, in the turning frame
+      // (a climb of about three minutes to the orbit's height at most — a Cinema engine could go far
+      // faster)
+      const minute = 60 / (4.925490947e-6 * this.s.massSolar); // [M]
+      const vUp = Math.min(Math.sqrt((thr - g) * (d0 - F.R)) * 0.5, (d0 - F.R) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
+      const vE = vc * Math.sqrt(f);
+      if (f > 0.95 && Math.abs((L.w[0] * east[0] + L.w[1] * east[1] + L.w[2] * east[2]) / vc - 1) < 0.1) {
+        P.auto = "none";
+        P.setAuto("orbit");
+        this.onPilotMessage?.(`In orbit around ${name}`);
+        return null;
+      }
+      want = [up[0] * vUp + east[0] * vE, up[1] * vUp + east[1] * vE, up[2] * vUp + east[2] * vE];
+    }
+    // to the ZAMO's terms at the ship
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const gW = toGlobal(F, { xi: L.xi, w: want, landed: false });
+    const beta = zamoBeta(X, gW.V, this.s.spin);
+    // feed-forward: what holds the ship on that velocity against gravity and the frame
+    const free = localAccel(F, L.xi, want, [0, 0, 0]);
+    return { beta, ff: localToZamo([-free[0], -free[1], -free[2]]) };
   }
 
   /** The massive body nearest a point at time t (what a predicted path ran into). */
@@ -2204,6 +2403,7 @@ export class CameraController {
       return typeof c === "string" ? say(c) : c;
     }
     if (P.auto === "transfer") return this.transferWant(cam, say);
+    if (P.auto === "land" || P.auto === "takeoff") return this.surfaceWant(cam, say);
     if (P.auto === "orbit") {
       // a circular orbit around the star (in its orbital plane), at the distance it was engaged at
       if (cam.region !== "hole") return say("Orbit: only in the black hole's universe");
@@ -2401,6 +2601,8 @@ export class CameraController {
       plan: this.plan.nodes.length ? { nodes: this.plan.nodes, path: this.refreshPlan(), note: this.plan.note, burning: this.nodeBurning, done: this.nodeDone, now: this.nowTime(), lowThrust: null as string | null }
         : this.transfer ? { nodes: [] as ManeuverNode[], path: null, note: this.transfer.note ?? "", burning: this.pilot.auto === "transfer" && this.pilot.accel > 0, done: 0, now: this.nowTime(), lowThrust: this.transfer.stage as string | null }
         : null,
+      /** near a planet: its frame's figures (landing.ts) */
+      surface: this.surfaceInfo(),
       /** the engine and the tank */
       engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
       /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */

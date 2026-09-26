@@ -80,13 +80,16 @@ function withMotion(s: Settings, f: Omit<CameraFrame, "beta" | "gamma" | "speed"
   return { ...f, beta, gamma: 1 / Math.sqrt(1 - speed * speed), speed };
 }
 
-/** Never exactly in the equatorial plane (disk crossing test) nor on the axis. */
+/** Never on the axis. (The tracer's camera is also kept off the exact equatorial plane — see
+ *  gpuTheta — but not the physical pose: 2e-7 rad is ~300 km at r = 10 M for a hole of 10⁸ M☉.) */
 function safeTheta(deg: number) {
-  let theta = Math.min(Math.max(deg, 0.2), 179.8) * DEG;
-  // off the exact equatorial plane (the thin disk's crossings), by a hair: 2e-7 rad is ~300 km at
-  // r = 10 M for a 10⁸ M☉ hole — small against a planet, still resolved in float32
-  if (Math.abs(theta - Math.PI / 2) < 1e-7) theta += 2e-7;
-  return theta;
+  return Math.min(Math.max(deg, 0.2), 179.8) * DEG;
+}
+
+/** The tracer's camera θ: off the exact equatorial plane (the thin disk's crossings), by a hair still
+ *  resolved in float32. The bodies near the camera are drawn from the true pose (local patch). */
+export function gpuTheta(theta: number) {
+  return Math.abs(theta - Math.PI / 2) < 1e-7 ? Math.PI / 2 + 2e-7 : theta;
 }
 
 /**
