@@ -302,6 +302,7 @@ async function main() {
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
+    else if (e.code === "KeyN") panel.toast(flightHud.cycleDensity());
     else if (e.code === "KeyV") {
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);

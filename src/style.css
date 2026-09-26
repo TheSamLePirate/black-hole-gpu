@@ -701,103 +701,140 @@ body.hide-ui #toolbar:hover {
   background: #000;
 }
 
-/* ---------------------------------------------------------- Ranger flight displays */
-.fl-marks { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 2; }
-.fl-root { position: fixed; inset: 0; pointer-events: none; z-index: 3; } /* under the settings panel */
+/* ---------------------------------------------------------- Ranger flight HUD */
+/* thin panels with corner brackets, tracking uppercase labels, mono figures, amber / cyan accents */
+.fl-hud { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 2; }
+.fl-root { position: fixed; inset: 0; pointer-events: none; z-index: 3; font-family: var(--font); color: var(--text); } /* under the settings panel */
 .fl-root > * { pointer-events: auto; }
 .fl-root button { font-family: var(--font); cursor: pointer; }
 
-/* while flying, the camera tools that would fight the pilot leave the toolbar */
-body.piloting #btn-rotation,
-body.piloting #btn-orbit,
-body.piloting #btn-dive,
-body.piloting #btn-fly,
-body.piloting #btn-gravity,
-body.piloting #btn-journey { display: none; }
+.fl-panel {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(8, 12, 20, 0.66), rgba(8, 12, 20, 0.42));
+  border: 1px solid rgba(124, 214, 255, 0.12);
+  border-radius: 4px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+/* corner brackets */
+.fl-panel::before, .fl-panel::after {
+  content: ""; position: absolute; width: 10px; height: 10px; pointer-events: none;
+  border-color: rgba(124, 214, 255, 0.65); border-style: solid;
+}
+.fl-panel::before { top: -1px; left: -1px; border-width: 1.5px 0 0 1.5px; }
+.fl-panel::after { bottom: -1px; right: -1px; border-width: 0 1.5px 1.5px 0; }
+.fl-title {
+  font: 700 9.5px var(--font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.fl-title::before { content: ""; width: 3px; height: 9px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.fl-label { font: 700 9px var(--font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
 
+/* the app's toolbar hides while flying (⋯ brings it back, below the mission bar) */
+body.piloting #toolbar { display: none; }
+body.piloting.show-tools #toolbar { display: flex; top: 62px; bottom: auto; }
+body.piloting #btn-rotation, body.piloting #btn-orbit, body.piloting #btn-dive,
+body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey { display: none; }
+
+/* mission bar */
+.fl-mission {
+  top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px; white-space: nowrap;
+}
+.fl-chip { display: inline-flex; align-items: center; gap: 6px; font: 700 10px var(--font); letter-spacing: 0.1em; color: rgba(230, 234, 243, 0.4); }
+.fl-chip i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); }
+.fl-chip.on { color: #fff; }
+.fl-chip.on i { background: #6fe3a1; box-shadow: 0 0 8px #6fe3a1; }
+.fl-vsep { width: 1px; height: 22px; background: rgba(124, 214, 255, 0.18); }
+.fl-warpbox { display: flex; align-items: center; gap: 4px; }
+.fl-warpbox span, .fl-clock span { font: 700 8.5px var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+.fl-warpbox b { font: 600 12px var(--mono); color: var(--accent); min-width: 44px; text-align: center; }
+.fl-warpbox button, .fl-tools {
+  all: unset; cursor: pointer; font: 600 13px var(--font); color: var(--text); width: 20px; height: 20px; text-align: center; line-height: 20px;
+  border-radius: 3px; background: rgba(255, 255, 255, 0.06);
+}
+.fl-warpbox button:hover, .fl-tools:hover { background: rgba(255, 255, 255, 0.16); }
+.fl-clock { display: flex; flex-direction: column; line-height: 1.1; }
+.fl-clock b { font: 500 12px var(--mono); color: #fff; }
+
+/* warnings: caution banners above the centre */
 .fl-warn {
-  position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 17vh; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
-  font: 600 12px/1.3 var(--font); letter-spacing: 0.02em;
+  font: 700 11px var(--font); letter-spacing: 0.12em;
 }
-.fl-warn div { padding: 5px 12px; border-radius: 9px; background: rgba(40, 30, 10, 0.72); color: #ffd27a; border: 1px solid rgba(255, 190, 80, 0.35); backdrop-filter: blur(8px); }
-.fl-warn div.hot { background: rgba(80, 14, 8, 0.82); color: #ffb9ae; border-color: rgba(255, 90, 70, 0.65); animation: fl-blink 1s ease-in-out infinite; }
-@keyframes fl-blink { 50% { opacity: 0.55; } }
+.fl-warn div { padding: 4px 14px; background: rgba(40, 28, 8, 0.66); color: #ffd27a; border-left: 3px solid #ffb35c; }
+.fl-warn div.hot { background: rgba(90, 12, 6, 0.8); color: #ffc2b8; border-left-color: #ff5a46; animation: fl-blink 0.9s steps(2, end) infinite; }
+@keyframes fl-blink { 50% { opacity: 0.45; } }
 
-/* cockpit */
+/* target (top left, under the status pill) */
+.fl-target { top: 58px; left: 14px; width: 232px; padding: 8px 10px; }
+.fl-target.empty { display: none; }
+.fl-tname b { font: 700 15px var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: #ff8a5c; }
+.fl-kv { display: flex; justify-content: space-between; align-items: baseline; padding: 1px 0; }
+.fl-kv span { font: 600 8.5px var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.fl-kv b { font: 500 11.5px var(--mono); }
+.fl-kv b.closing { color: #ffb0a0; }
+
+/* telemetry (top right, under the settings button) */
+.fl-tel { top: 58px; right: 14px; width: 250px; padding: 8px 10px; }
+.fl-telc { width: 100%; height: 150px; display: block; }
+
+/* orbit: effective potential */
+.fl-orbit { left: 14px; bottom: 14px; width: 300px; padding: 8px 10px; }
+.fl-veff { width: 100%; height: 118px; display: block; }
+.fl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 6px; }
+.fl-cell { display: flex; flex-direction: column; }
+.fl-cell span { font: 600 8.5px var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.fl-cell b { font: 500 11.5px var(--mono); white-space: nowrap; }
+.fl-cell b.hot { color: #ff9a88; }
+
+/* cockpit: holds | ball | autopilots */
 .fl-cockpit {
-  position: absolute; left: 50%; bottom: 68px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 8px 14px 8px; border-radius: 18px; width: min(640px, calc(100vw - 24px)); box-sizing: border-box;
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
 }
-.fl-status { font: 12px/1.3 var(--font); color: rgba(230, 234, 243, 0.8); min-height: 16px; text-align: center; }
-.fl-status b { color: var(--accent); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10.5px; margin-right: 4px; }
-.fl-mid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; width: 100%; }
-.fl-big { display: flex; flex-direction: column; gap: 1px; }
-.fl-big.l { align-items: flex-end; text-align: right; }
-.fl-big.r { align-items: flex-start; }
-.fl-big span { font: 600 10px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-.fl-big b { font: 500 22px/1.1 var(--mono); color: #fff; letter-spacing: -0.02em; white-space: nowrap; }
-.fl-big small { font: 11px var(--mono); color: rgba(230, 234, 243, 0.62); white-space: nowrap; }
-.fl-ball { width: 172px; height: 172px; border-radius: 50%; cursor: default; touch-action: none; }
-.fl-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.fl-group { display: flex; gap: 3px; }
-.fl-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.12); }
-.fl-group button, .fl-cams button, .fl-mapbar button, .fl-warprow button {
-  display: inline-flex; align-items: center; gap: 4px;
-  font: 600 10.5px var(--font); letter-spacing: 0.04em;
-  padding: 5px 7px; border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05); color: var(--text);
+.fl-ballbox { position: relative; }
+.fl-ball { width: 176px; height: 176px; display: block; touch-action: none; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5)); }
+.fl-holds { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.fl-autos { display: flex; flex-direction: column; gap: 4px; }
+.fl-btn {
+  display: inline-flex; align-items: center; gap: 5px; position: relative;
+  font: 700 9.5px var(--font); letter-spacing: 0.08em; padding: 6px 22px 6px 7px; min-width: 64px;
+  border: 1px solid rgba(124, 214, 255, 0.16); border-radius: 3px;
+  background: linear-gradient(180deg, rgba(10, 16, 26, 0.72), rgba(10, 16, 26, 0.5)); color: rgba(230, 234, 243, 0.85);
 }
-.fl-group button:hover, .fl-cams button:hover, .fl-mapbar button:hover, .fl-warprow button:hover { background: rgba(255, 255, 255, 0.12); }
-.fl-group button.on, .fl-cams button.on, .fl-mapbar button.on { background: rgba(255, 179, 92, 0.22); border-color: var(--accent); color: #ffdcae; }
-.fl-glyph { width: 14px; height: 14px; }
-.fl-keys { font: 10.5px var(--font); color: rgba(230, 234, 243, 0.5); text-align: center; }
-.fl-keys kbd { font: 600 9.5px var(--mono); padding: 1px 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); color: rgba(230, 234, 243, 0.8); }
+.fl-btn kbd { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font: 600 8px var(--mono); color: rgba(230, 234, 243, 0.35); }
+.fl-btn:hover { border-color: rgba(124, 214, 255, 0.45); color: #fff; }
+.fl-btn.on { border-color: var(--accent); color: #ffe2bd; background: linear-gradient(180deg, rgba(255, 179, 92, 0.3), rgba(255, 179, 92, 0.12)); box-shadow: 0 0 12px rgba(255, 179, 92, 0.25); }
+.fl-glyph { width: 13px; height: 13px; flex: none; }
 
-/* orbit panel */
-.fl-orbit { position: absolute; left: 14px; bottom: 68px; width: 286px; border-radius: 14px; padding: 6px 12px 8px; font: 12px/1.35 var(--font); box-sizing: border-box; }
-.fl-head { all: unset; cursor: pointer; display: block; width: 100%; font: 600 10.5px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); padding: 3px 0 5px; }
-.fl-head::after { content: "▾"; float: right; color: var(--dim); }
-.fl-orbit.folded .fl-head::after { content: "▸"; }
-.fl-orbit.folded .fl-rows { display: none; }
-.fl-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 1.5px 0; }
-.fl-row span { color: rgba(230, 234, 243, 0.6); white-space: nowrap; }
-.fl-row b { font: 500 11.5px/1.35 var(--mono); text-align: right; }
-.fl-row b.hot { color: #ff9a88; }
-.fl-warprow { margin-top: 3px; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
-.fl-warprow span { flex: 1; }
-.fl-warprow b { min-width: 64px; text-align: center; }
-
-/* camera strip + map */
-.fl-right { position: absolute; right: 14px; bottom: 68px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; width: 300px; }
-.fl-cams { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; padding: 5px 7px; border-radius: 12px; }
-.fl-label { font: 600 10px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin-right: 3px; }
+/* map + camera (bottom right) */
+.fl-right { right: 14px; bottom: 14px; width: 290px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.fl-cams, .fl-mapbar { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.fl-cams button, .fl-mapbar button {
+  font: 700 9px var(--font); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 6px;
+  border: 1px solid rgba(124, 214, 255, 0.14); border-radius: 3px; background: rgba(255, 255, 255, 0.04); color: rgba(230, 234, 243, 0.8);
+}
+.fl-cams button:hover, .fl-mapbar button:hover { border-color: rgba(124, 214, 255, 0.45); }
+.fl-cams button.on, .fl-mapbar button.on { border-color: var(--accent); color: #ffe2bd; background: rgba(255, 179, 92, 0.18); }
+.fl-cams .fl-label, .fl-mapbar .fl-label { width: 48px; }
 .fl-ahead { margin-left: auto; }
-.fl-mapbox { border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
-.fl-mapbar { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
-.fl-mapbar button { padding: 3px 7px; }
-.fl-map { width: 100%; height: 270px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); cursor: zoom-in; }
+.fl-map { width: 100%; height: 250px; display: block; border-radius: 2px; background: radial-gradient(circle at 50% 50%, rgba(20, 40, 60, 0.35), rgba(0, 0, 0, 0.35)); cursor: zoom-in; }
 
-body.hide-ui .fl-orbit, body.hide-ui .fl-cockpit, body.hide-ui .fl-right { display: none; }
+/* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
+.fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
+.fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }
 
-@media (max-width: 1180px) {
-  .fl-orbit { display: none; }
+body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
+
+@media (max-width: 1280px) { .fl-tel { display: none; } }
+@media (max-width: 1100px) { .fl-orbit { display: none; } .fl-target { display: none; } }
+@media (max-width: 820px) {
+  .fl-right { width: 180px; bottom: auto; top: 58px; }
+  .fl-map { height: 150px; }
+  .fl-cams .fl-label, .fl-mapbar .fl-label { display: none; }
+  .fl-ball { width: 130px; height: 130px; }
+  .fl-holds, .fl-autos { display: none; }
+  .fl-mission .fl-clock:nth-of-type(2), .fl-mission .fl-clock:nth-of-type(3) { display: none; }
 }
-@media (max-width: 900px) {
-  .fl-right { width: 190px; top: 58px; bottom: auto; }
-  .fl-map { height: 170px; }
-  .fl-cams .fl-label { display: none; }
-  .fl-cockpit { bottom: 62px; padding: 6px 8px; }
-  .fl-ball { width: 124px; height: 124px; }
-  .fl-big b { font-size: 16px; }
-  .fl-keys { display: none; }
-}
-
-/* flying: the cockpit takes the bottom edge, the toolbar goes to the top, the view stays clear */
-body.piloting #toolbar { bottom: auto; top: 12px; }
-body.piloting .fl-warn { top: 76px; }
-body.piloting .fl-cockpit { bottom: 10px; background: rgba(10, 12, 18, 0.42); }
-body.piloting .fl-orbit,
-body.piloting .fl-right { bottom: 10px; }
-.fl-orbit, .fl-mapbox, .fl-cams { background: rgba(10, 12, 18, 0.5); }

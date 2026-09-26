@@ -1427,6 +1427,12 @@ export class CameraController {
       dtau: cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma,
       E: NaN,
       L: NaN,
+      /** Carter constant, the spin (for the effective potential), radial 3-velocity (> 0 outwards) */
+      Q: NaN,
+      spin: a,
+      vr: cam.region === "hole" ? cam.beta[0] : NaN,
+      /** the autopilot's target speed (relative to the ZAMO), if any */
+      wantSpeed: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...this.lastWant.beta) : NaN,
       rH: horizon(a),
       isco: isco(a),
       photon: photonOrbits(a).pro,
@@ -1473,6 +1479,8 @@ export class CameraController {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
       info.E = st.E;
       info.L = st.L;
+      const ct = Math.cos(st.th), s2 = Math.max(Math.sin(st.th) ** 2, 1e-12);
+      info.Q = st.uth * st.uth + ct * ct * (a * a * (1 - st.E * st.E) + (st.L * st.L) / s2);
       const X = blToCartesian(cam.r, cam.theta, cam.phi);
       const f = sphericalFrame(X);
       const W = (v: Vec3) => add3(f.er, f.et, f.ep, v);

@@ -223,6 +223,16 @@ ground relative to the hole, the orbital markers around the nose), prograde / re
 in the view, warnings (collision course, ergosphere, below the ISCO, inside the photon orbit), and a **top-view
 map**: horizon, ergosphere, photon orbit, ISCO, disk, the star and its orbit, the mouth, the ship, its velocity
 and its **future geodesic** with periapsis, apoapsis and impact — the same path drawn, lensed, in the view.
+The **flight HUD** is laid out like a game's, on the edges of the screen so the view stays clear (N cycles
+full · minimal · clean; the app's toolbar folds behind ⋯): a mission bar (SAS / hold / autopilot lamps, time
+warp, the ship's clock τ against the distant clock t and their ratio), a **speed tape** (moving scale, value
+box, the autopilot's target bug, trend) and an **altitude tape** (log r with horizon, photon orbit, ISCO, the
+star's orbit, periapsis and apoapsis bugs, vertical-speed bar), placed in the free band between the panels;
+the target panel (range, range rate, closest approach), **telemetry** charts of the last minute (speed,
+altitude, clock rate, thrust), the **effective potential** of the orbit — V(r) for the ship's E, L and Carter
+constant Q, R(r) = [E(r² + a²) − aL]² − Δ[r² + (L − aE)² + Q] = 0, with the energy line, the escape line and the
+region the ship can reach —, and the cockpit: the attitude ball inside throttle and g-load arc gauges, holds
+on the left, SAS and autopilots on the right.
 The **map shows the real motions**: when the star has a mass, in the inertial frame of the centre of mass —
 Gargantua circles it too, the mouth with it — with the ship's trail and predicted geodesic, the star's and the
 hole's paths over the same span, common time ticks (where each will be at +100 M, +200 M…), the closest
