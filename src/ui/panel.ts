@@ -909,8 +909,9 @@ export class SettingsPanel {
         ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target"],
         ["8 · 9 · 0", "Autopilot: hold position · circularize · approach target"],
         [", · .", "Time warp slower · faster"],
+        ["V · ⇧V", "Camera: next · previous attach point (the view travels there)"],
         ["Drag · double-click", "Look around from the attach point · look ahead"],
-        ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut"],
+        ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
       ]],
       ["Controller (Xbox · PlayStation)", [
         ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],

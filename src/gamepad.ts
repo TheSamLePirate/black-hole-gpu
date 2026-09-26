@@ -8,7 +8,7 @@
 //   View  run / pause time            Menu  settings
 
 /** Discrete actions (edge-triggered buttons), handled by the app. */
-export type PadAction = "focus" | "gravity" | "auto" | "rotation" | "prevTarget" | "nextTarget" | "recentre" | "time" | "settings";
+export type PadAction = "focus" | "gravity" | "auto" | "rotation" | "prevTarget" | "nextTarget" | "recentre" | "time" | "settings" | "dpadUp" | "dpadDown";
 
 export interface PadState {
   /** [forward, right, up, roll] in −1 … 1, like the flight keys. */
@@ -33,6 +33,8 @@ const BUTTONS: Partial<Record<number, PadAction>> = {
   8: "time", // View / Back
   9: "settings", // Menu / Start
   11: "recentre", // R3
+  12: "dpadUp", // D-pad ▲ (also held: closer)
+  13: "dpadDown", // D-pad ▼ (also held: farther)
   14: "prevTarget", // D-pad ◀
   15: "nextTarget", // D-pad ▶
 };

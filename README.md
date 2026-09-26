@@ -223,8 +223,18 @@ ground relative to the hole, the orbital markers around the nose), prograde / re
 in the view, warnings (collision course, ergosphere, below the ISCO, inside the photon orbit), and a **top-view
 map**: horizon, ergosphere, photon orbit, ISCO, disk, the star and its orbit, the mouth, the ship, its velocity
 and its **future geodesic** with periapsis, apoapsis and impact — the same path drawn, lensed, in the view.
+The **map shows the real motions**: when the star has a mass, in the inertial frame of the centre of mass —
+Gargantua circles it too, the mouth with it — with the ship's trail and predicted geodesic, the star's and the
+hole's paths over the same span, common time ticks (where each will be at +100 M, +200 M…), the closest
+approach to the target (both moving), the camera's view cone; top or edge-on view, or Gargantua's frame. The
+**camera travels** between attach points (V / ⇧V, the Camera strip, the pad's D-pad ▲▼) in 0.6 s while the ship
+keeps its attitude. The **cockpit** takes the bottom edge while flying (the toolbar moves up, the camera tools
+that would fight the pilot leave it): speed and altitude, the attitude ball inside a throttle arc (drag it),
+the autopilot's phase and remaining Δv, SAS / holds (with their marker glyphs) / autopilots; the orbit panel
+adds periapsis and apoapsis with the time to reach them and the closest approach. The target hold points at
+the target where it is seen: light delay and aberration included.
 Keys: W S / A D / Q E pitch, yaw, roll (by physical position); with Shift, RCS translation; ↑ ↓ throttle, Z full,
-X cut; T SAS; 1–7 holds; 8 9 0 autopilots; , . time warp; drag looks around from the attach point. The pad:
+X cut; T SAS; 1–7 holds; 8 9 0 autopilots; V camera; , . time warp; drag looks around from the attach point. The pad:
 left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde. Default lighting of the hull: 1
 (physical: strong contrasts).
 

@@ -222,14 +222,13 @@ async function main() {
   }
   /** Next attach point of the camera on the Ranger (turns the ship on). */
   function nextMount() {
+    if (!settings.ship) {
+      settings.ship = true;
+      syncButtons();
+    }
     const keys = Object.keys(MOUNTS) as Mount[];
-    settings.shipMount = keys[(keys.indexOf(settings.shipMount as Mount) + 1) % keys.length]!;
-    if (!settings.ship) settings.ship = true;
-    refreshGui();
+    setMount(keys[(keys.indexOf(settings.shipMount as Mount) + 1) % keys.length]!);
     touch();
-    syncButtons();
-    scheduleUrlSave();
-    panel.toast(`Attach point: ${MOUNTS[settings.shipMount as Mount].label}`);
   }
   function syncRotationButtons() {
     const orbit = settings.rotation === "orbit";
@@ -277,7 +276,21 @@ async function main() {
     camera.pilot.sas = !camera.pilot.sas;
     panel.toast(`SAS ${camera.pilot.sas ? "on" : "off"}`);
   }
-  const flightHud = new FlightHud(settings, { hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp });
+  function setMount(m: Mount) {
+    if (settings.shipMount === m) return;
+    settings.shipMount = m;
+    refreshGui();
+    scheduleUrlSave();
+    panel.toast(`Camera: ${MOUNTS[m].label}`);
+  }
+  const flightHud = new FlightHud(settings, {
+    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount,
+    lookAhead: () => camera.setLook(0, 0),
+    throttle: (t) => {
+      if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
+      camera.pilot.throttle = t;
+    },
+  });
   camera.onPilotMessage = (t) => panel.toast(t);
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
   /** Pilot keys (by physical position where it matters); true when handled. */
@@ -289,7 +302,11 @@ async function main() {
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
-    else if (e.code === "Comma") warp(-1);
+    else if (e.code === "KeyV") {
+      const keys = Object.keys(MOUNTS) as Mount[];
+      const i = keys.indexOf(settings.shipMount as Mount);
+      setMount(keys[(i + (e.shiftKey ? -1 : 1) + keys.length) % keys.length]!);
+    } else if (e.code === "Comma") warp(-1);
     else if (e.code === "Period") warp(1);
     else if (e.code === "Escape") {
       camera.pilot.hold = "none";
@@ -308,6 +325,8 @@ async function main() {
       const pa: Partial<Record<typeof a, () => void>> = {
         focus: pilotSas, gravity: () => (camera.pilot.throttle = 0), auto: () => pilotHold("prograde"), rotation: () => pilotHold("retrograde"),
         recentre: () => camera.setLook(0, 0),
+        dpadUp: () => setMount((Object.keys(MOUNTS) as Mount[])[((Object.keys(MOUNTS) as Mount[]).indexOf(settings.shipMount as Mount) + 1) % 6]!),
+        dpadDown: () => setMount((Object.keys(MOUNTS) as Mount[])[((Object.keys(MOUNTS) as Mount[]).indexOf(settings.shipMount as Mount) + 5) % 6]!),
       };
       if (pa[a]) {
         pa[a]!();
@@ -564,6 +583,7 @@ async function main() {
       if (st.offline) renderDialog.update(st.offline);
     }
     drawGuide();
+    renderer.shipPose = settings.ship ? camera.shipPose() : null;
     const pil = flying();
     if (flightHud.visible !== pil) flightHud.show(pil);
     if (pil) flightHud.update(camera.flightInfo(), simTime);

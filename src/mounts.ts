@@ -1,16 +1,23 @@
 // Attach points of the camera on the spaceship (Interstellar's Ranger, see ship.ts).
 export type V3 = [number, number, number];
 
-/** Attach points: eye and aim in the ship's frame (x to its left, y up, z towards the nose; ≈ metres). */
+/**
+ * Attach points: eye and aim in the ship's frame (x to its left, y up, z towards the nose; ≈ metres),
+ * a short name for the flight displays.
+ */
 export const MOUNTS = {
-  quarter: { label: "Hull quarter (film)", eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
-  chase: { label: "Chase, above the tail", eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
-  dorsal: { label: "Dorsal, behind the cockpit", eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },
-  wing: { label: "Wingtip", eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
-  belly: { label: "Belly", eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
-  rear: { label: "Nose, looking back", eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
-} satisfies Record<string, { label: string; eye: V3; aim: V3 }>;
+  quarter: { label: "Hull quarter (film)", short: "Film", eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
+  chase: { label: "Chase, above the tail", short: "Chase", eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
+  dorsal: { label: "Dorsal, behind the cockpit", short: "Dorsal", eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },
+  wing: { label: "Wingtip", short: "Wing", eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
+  belly: { label: "Belly", short: "Belly", eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
+  rear: { label: "Nose, looking back", short: "Rear", eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
+} satisfies Record<string, { label: string; short: string; eye: V3; aim: V3 }>;
 export type Mount = keyof typeof MOUNTS;
+export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
+
+/** A camera placement on the ship (an attach point, or between two while the view moves). */
+export interface MountPose { eye: V3; aim: V3 }
 
 
 export type M3 = [V3, V3, V3]; // rows
@@ -28,8 +35,8 @@ const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
  * and the translation. `lookYaw` / `lookPitch` [deg]: the camera turned on its mount (free look;
  * positive: to the right / up).
  */
-export function shipToCamera(m: Mount, lookYaw = 0, lookPitch = 0): { S: M3; t: V3 } {
-  const { eye, aim } = MOUNTS[m] as { eye: V3; aim: V3 };
+export function shipToCamera(m: Mount | MountPose, lookYaw = 0, lookPitch = 0): { S: M3; t: V3 } {
+  const { eye, aim } = (typeof m === "string" ? MOUNTS[m] : m) as MountPose;
   const fwd = norm(sub(aim, eye));
   // the ship's right (−x) on the screen's right: like the tracer's camera basis, (right, up, forward)
   // is left-handed in a right-handed frame (the screen's x right, y up, z into it)

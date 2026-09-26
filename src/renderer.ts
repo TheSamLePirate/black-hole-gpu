@@ -4,7 +4,7 @@ import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import { ShipRenderer } from "./ship";
-import type { Mount } from "./mounts";
+import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
@@ -188,6 +188,8 @@ export class Renderer {
   private envReset = true;
   private envPhase = 0;
   private shipLoading: Promise<void> | null = null;
+  /** Where the camera sits on the ship now (the app sets it every frame: it moves between attach points). */
+  shipPose: MountPose | null = null;
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
    * splash left where the camera last went through (centre on the throat, clock then).
@@ -1017,7 +1019,7 @@ export class Renderer {
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          mount: s.shipMount as Mount, look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
+          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);

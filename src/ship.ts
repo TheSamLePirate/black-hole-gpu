@@ -5,12 +5,12 @@
 // lit by a light probe traced around the camera (lensed disk, Gargantua, sky) — see ship.wgsl.
 import meshUrl from "../assets/ranger/ranger.bin";
 
-import { shipToCamera, type Mount } from "./mounts";
+import { shipToCamera, type Mount, type MountPose } from "./mounts";
 
 type V3 = [number, number, number];
 
 export interface ShipView {
-  mount: Mount;
+  mount: Mount | MountPose;
   look: [number, number]; // free look on the mount: yaw, pitch [deg]
   fov: number; // vertical, degrees
   aspect: number;

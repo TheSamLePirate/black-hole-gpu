@@ -10,7 +10,7 @@ import {
 } from "./targeting";
 import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { circularSpeed, FlightComputer, toU, type PilotInput } from "./pilot";
-import { shipToCamera, type M3, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
@@ -85,6 +85,14 @@ export class CameraController {
   piloting = false;
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
+  /** The camera's place on the ship: moves smoothly (0.6 s) from one attach point to the next. */
+  private mountEff: MountPose | null = null;
+  private mountAnim: { from: MountPose; t: number } | null = null;
+  private lastMount = "";
+  /** The pose used for the previous frame (a new attach point starts from it). */
+  private lastPose: MountPose | null = null;
+  /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
+  private lastWant: { beta: Vec3; ff: Vec3 } | null = null;
   private pathKey = "";
   /** With gravity on: the camera stands on the star's surface. */
   landed = false;
@@ -820,6 +828,7 @@ export class CameraController {
     if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
     if (s.ship !== this.piloting) this.setPilot(s.ship);
+    this.stepMount(dt);
     const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
 
     // the target must be in the camera's universe; orbiting uses the target's anchor
@@ -1141,21 +1150,66 @@ export class CameraController {
     yaw = clamp(yaw, -170, 170);
     pitch = clamp(pitch, -85, 85);
     if (yaw === s.shipLookYaw && pitch === s.shipLookPitch) return;
+    const S0 = this.shipMatrix();
+    s.shipLookYaw = yaw;
+    s.shipLookPitch = pitch;
+    this.reorient(S0, this.shipMatrix());
+  }
+
+  /** Next / previous attach point (the view travels there; the ship keeps its attitude). */
+  cycleMount(dir: 1 | -1) {
+    const s = this.s;
+    const i = MOUNT_KEYS.indexOf(s.shipMount as Mount);
+    s.shipMount = MOUNT_KEYS[(i + dir + MOUNT_KEYS.length) % MOUNT_KEYS.length]!;
+    return s.shipMount as Mount;
+  }
+
+  /** Where the camera is on the ship now (between two attach points while the view moves). */
+  shipPose(): MountPose {
+    if (this.mountEff) return this.mountEff;
+    // (the setting just changed, before this frame's step: still where the camera was)
+    if (this.s.shipMount !== this.lastMount && this.lastPose) return this.lastPose;
+    return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
+  }
+
+  /** Eases the camera towards the chosen attach point; keeps the ship's attitude while it moves. */
+  private stepMount(dt: number) {
+    const s = this.s;
+    const to = (MOUNTS[s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
+    const S0 = this.shipMatrix();
+    if (s.shipMount !== this.lastMount) {
+      if (this.lastMount && s.ship) this.mountAnim = { from: this.shipPose(), t: 0 };
+      this.lastMount = s.shipMount;
+    }
+    if (this.mountAnim) {
+      const A = this.mountAnim;
+      A.t = Math.min(1, A.t + dt / 0.6);
+      const k = smoothstep(A.t);
+      const mix = (p: Vec3, q: Vec3) => lin(p, 1 - k, q, k);
+      this.mountEff = { eye: mix(A.from.eye, to.eye), aim: mix(A.from.aim, to.aim) };
+      if (A.t >= 1) (this.mountAnim = null), (this.mountEff = null);
+    } else this.mountEff = null;
+    if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
+    this.lastPose = this.shipPose();
+  }
+
+  /** The ship's placement relative to the camera changed from S0 to S1: turn the camera so that the ship does not. */
+  private reorient(S0: M3, S1: M3) {
+    if (S0.every((row, k) => row.every((x, i) => x === S1[k]![i]))) return;
+    const s = this.s;
     const b = basis(s.yaw, s.pitch, s.roll);
-    const ax = this.shipAxesLocal(b);
-    const S2 = shipToCamera(s.shipMount as Mount, yaw, pitch).S;
-    // the camera's axes from the ship's: row k of S2 = camera axis k in the ship's frame
-    const cam = (k: number) => lin(lin(ax[0], S2[k]![0], ax[1], S2[k]![1]), 1, ax[2], S2[k]![2]);
+    const ax = (i: number) => lin(lin(b.right, S0[0]![i]!, b.up, S0[1]![i]!), 1, b.fwd, S0[2]![i]!);
+    const A = [ax(0), ax(1), ax(2)];
+    // row k of S1: camera axis k in the ship's frame
+    const cam = (k: number) => lin(lin(A[0]!, S1[k]![0], A[1]!, S1[k]![1]), 1, A[2]!, S1[k]![2]);
     const e = yawPitchRoll(cam(2), cam(1));
     s.yaw = e.yaw;
     s.pitch = e.pitch;
     s.roll = e.roll;
-    s.shipLookYaw = yaw;
-    s.shipLookPitch = pitch;
   }
 
   private shipMatrix(): M3 {
-    return shipToCamera(this.s.shipMount as Mount, this.s.shipLookYaw, this.s.shipLookPitch).S;
+    return shipToCamera(this.shipPose(), this.s.shipLookYaw, this.s.shipLookPitch).S;
   }
 
   /** The ship's axes (x left, y up, z nose) in the camera basis's local components. */
@@ -1221,7 +1275,7 @@ export class CameraController {
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
     const out = this.pilot.step({
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: s.thrust, tauRate,
-      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: this.pilot.auto !== "none" ? this.autopilotWant(cam) : null,
+      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" ? this.autopilotWant(cam) : null),
     }, inp);
     this.rotateC(out.rot);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
@@ -1240,7 +1294,12 @@ export class CameraController {
     const s = this.s;
     const X = blToCartesian(cam.r, cam.theta, cam.phi);
     const f = sphericalFrame(X);
-    const C = s.target === "hole" ? [0, 0, 0] as Vec3 : bodyCentre(s, s.target, this.nowTime());
+    // where the body is seen: its position when the light left it (retarded time, flat estimate)
+    const t0 = this.nowTime();
+    let C = s.target === "hole" ? [0, 0, 0] as Vec3 : bodyCentre(s, s.target, t0);
+    if (s.target === "star" || s.target === "barycentre") {
+      for (let k = 0; k < 3; k++) C = bodyCentre(s, s.target, t0 - Math.hypot(...sub3(C, X)));
+    }
     const d = sub3(C, X);
     const l = Math.hypot(...d);
     if (l < 1e-9) return null;
@@ -1391,12 +1450,20 @@ export class CameraController {
         antinormal: C(normal && lin(normal, -1, normal, 0)),
         target: C(this.targetDir(cam)),
         burn: C(this.pilot.burn),
+        // velocity relative to the target (approach, docking)
+        tgtPrograde: null as Vec3 | null,
+        tgtRetrograde: null as Vec3 | null,
       },
       // flat-map position, velocity and nose (black hole's frame), for the map
       X: null as Vec3 | null,
       V: null as Vec3 | null,
       nose: null as Vec3 | null,
       path: this.path,
+      /** the camera's view direction (flat map), the autopilot's remaining velocity change |ΔU| */
+      look: null as Vec3 | null,
+      dv: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...sub3(toU(this.lastWant.beta), toU(cam.beta))) : NaN,
+      mount: s.shipMount,
+      moving: this.mountAnim !== null,
       /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
       target: s.target,
       targetDist: NaN,
@@ -1413,12 +1480,20 @@ export class CameraController {
       info.V = W(cam.beta);
       const b = { right: cam.right, up: cam.up, fwd: cam.fwd };
       info.nose = W(this.shipAxesLocal(b)[2]);
+      info.look = W(cam.fwd);
       const t = this.nowTime();
       const Ct: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyCentre(s, s.target, t);
       const Vt: Vec3 = s.target === "star" ? starVelocity(s, t) : [0, 0, 0];
       const d = sub3(X, Ct);
       info.targetDist = Math.hypot(...d);
       info.targetRate = dot3(sub3(info.V, Vt), d) / Math.max(info.targetDist, 1e-9);
+      const rel = sub3(info.V, Vt);
+      const rl = Math.hypot(...rel);
+      if (s.target !== "hole" && rl > 1e-5) {
+        const loc: Vec3 = [dot3(rel, f.er) / rl, dot3(rel, f.et) / rl, dot3(rel, f.ep) / rl];
+        info.dirs.tgtPrograde = C(loc);
+        info.dirs.tgtRetrograde = C(lin(loc, -1, loc, 0));
+      }
     }
     return info;
   }
