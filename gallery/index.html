@@ -916,6 +916,12 @@
       </video>
       <figcaption><b>Plus près, deux orbites, 40 s.</b> La caméra est à 55 M du centre de masse (au lieu de 95) : Gargantua s'y déplace de ±7° et l'étoile passe à ~24 M d'elle. Deux périodes orbitales complètes ; la caméra, au repos dans le repère du centre de masse, en fait le tour sur 120°. 960 images hors ligne à 12 échantillons par pixel.</figcaption>
     </figure>
+    <figure class="journey">
+      <video controls playsinline preload="metadata" poster="img/ranger_poster.jpg" width="1280" height="720">
+        <source src="video/ranger_wormhole.mp4" type="video/mp4" />
+      </video>
+      <figcaption><b>Le Ranger traverse le trou de ver, 30 s.</b> La caméra est fixée sur le vaisseau : vue de trois quarts pendant l'approche, caméra de poursuite au-dessus de la queue pour franchir la gorge, puis de nouveau de trois quarts face à Gargantua. La coque est éclairée par la lumière que le ray tracer voit autour de la caméra, recalculée à chaque image : la galaxie qui tourbillonne dans la gorge, puis le disque. 900 images hors ligne à 12 échantillons par pixel. Modèle : « Interstellar Ranger One », Max Vizell, CC BY 4.0.</figcaption>
+    </figure>
     <div class="plates" id="plate-list-v3"></div>
   </section>
 
@@ -965,7 +971,7 @@
       <li><kbd>R</kbd> : autour de la cible ⟷ rotation libre · <kbd>Tab</kbd> : cible suivante</li>
       <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> : voler (6 degrés de liberté) · <kbd>V</kbd> : vol à la souris</li>
       <li><kbd>B</kbd> : gravité, la caméra suit sa géodésique · <kbd>T</kbd> : le voyage par le trou de ver</li>
-      <li><kbd>L</kbd> : mode cinématique, le trou de ver liquide</li>
+      <li><kbd>L</kbd> : mode cinématique, le trou de ver liquide · <kbd>K</kbd> : la caméra sur le Ranger</li>
       <li><kbd>Espace</kbd> : le temps · <kbd>M</kbd> : réglages · <kbd>H</kbd> : masquer l'interface</li>
     </ul>
   </section>
@@ -1447,11 +1453,19 @@
         <a href="img/journal/33_liquid_close_only.jpg" target="_blank" rel="noopener"><img src="img/journal/33_liquid_close_only.jpg" alt="C8 · Des vaguelettes minuscules, visibles seulement de près." loading="lazy" /></a>
         <figcaption><b>C8 · Seulement de près</b> Les vagues sont devenues des vaguelettes minuscules (quelques centièmes du rayon de la gorge). Chacune s'efface dès qu'elle ne couvre plus assez de pixels : de loin, le trou de ver redevient exactement celui de la physique ; en s'approchant, la surface liquide apparaît.</figcaption>
       </figure>
+      <figure>
+        <a href="img/journal/34_ranger.jpg" target="_blank" rel="noopener"><img src="img/journal/34_ranger.jpg" alt="C9 · La caméra montée sur le Ranger, six points d'attache." loading="lazy" /></a>
+        <figcaption><b>C9 · Le Ranger porte la caméra</b> Le vaisseau d'Interstellar est fixé à la caméra, dessiné avec la même projection que le ray tracer et incrusté avant le halo lumineux. Six points d'attache (touche K, ⇧K pour changer), dont la vue de trois quarts du film. Il est éclairé par une sonde de lumière que le ray tracer calcule autour de la caméra. Modèle : « Interstellar Ranger One », Max Vizell, CC BY 4.0.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/35_ranger_shading.jpg" target="_blank" rel="noopener"><img src="img/journal/35_ranger_shading.jpg" alt="C10 · Le rendu du Ranger avant et après : reflets, vernis, relief, occlusion." loading="lazy" /></a>
+        <figcaption><b>C10 · Reflets, vernis, relief</b> Reflets préfiltrés selon la rugosité (GGX) d'une sonde 256×128 qui converge quand la caméra est immobile, vernis sur la peinture, relief procédural (joints, rivets, panneaux légèrement bombés), occlusion ambiante précalculée par lancer de rayons sur un maillage raffiné.</figcaption>
+      </figure>
     </div>
   </section>
 
   <footer>
-    <p class="colophon">Trou de ver : James, von Tunzelmann, Franklin &amp; Thorne, Am. J. Phys. 83, 486 (2015) · Rendu avec le mode hors ligne du projet · Bun + TypeScript + WebGPU · 1920×1080 par planche, de quelques secondes à 5 minutes chacune sur un GPU Apple dans le navigateur · Ciel : NASA/GSFC SVS Deep Star Maps 2020 (Gaia DR2 : ESA/Gaia/DPAC), catalogue HYG v4.4 (CC BY-SA 4.0)</p>
+    <p class="colophon">Trou de ver : James, von Tunzelmann, Franklin &amp; Thorne, Am. J. Phys. 83, 486 (2015) · Rendu avec le mode hors ligne du projet · Bun + TypeScript + WebGPU · 1920×1080 par planche, de quelques secondes à 5 minutes chacune sur un GPU Apple dans le navigateur · Ciel : NASA/GSFC SVS Deep Star Maps 2020 (Gaia DR2 : ESA/Gaia/DPAC), catalogue HYG v4.4 (CC BY-SA 4.0) · Ranger : « Interstellar Ranger One » par Max Vizell (Sketchfab), CC BY 4.0, modifié</p>
   </footer>
 </main>
 
