@@ -867,6 +867,18 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-actions { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 3px; }
 .fl-actions .fl-go { width: auto; }
 
+/* the automatic mission's captions: a film's lower third */
+.mission-caption {
+  position: fixed; left: 50%; bottom: 23vh; transform: translate(-50%, 8px); z-index: 4; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center;
+  opacity: 0; transition: opacity 0.8s ease, transform 0.8s ease; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+}
+.mission-caption.on { opacity: 1; transform: translate(-50%, 0); }
+.mission-caption small { font: 700 9.5px var(--font); letter-spacing: 0.3em; text-transform: uppercase; color: rgba(124, 214, 255, 0.85); }
+.mission-caption b { font: 300 26px var(--font); letter-spacing: 0.22em; text-transform: uppercase; color: #fff; }
+.mission-caption span { font: 400 13px var(--font); letter-spacing: 0.04em; color: rgba(230, 234, 243, 0.85); max-width: 70vw; }
+body.hide-ui .mission-caption { display: none; }
+
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
 .fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }

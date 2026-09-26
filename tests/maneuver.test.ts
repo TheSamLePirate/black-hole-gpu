@@ -72,3 +72,24 @@ test("plane change: an inclined orbit is turned into the equatorial plane at a n
   const p = pathFrom(after, w, 1500, 200);
   expect(Math.max(...p.pts.map((q) => Math.abs(q[2])))).toBeLessThan(0.05);
 });
+
+test("orbit insertion around a massive star: the free orbit after the last burn circles the star", () => {
+  const D = 70, m = 0.1, R = 2.5;
+  const om = 1 / (D ** 1.5 / Math.sqrt(1 + m) + a);
+  const centre = (t: number): Vec3 => [D * Math.cos(om * t), D * Math.sin(om * t), 0];
+  const velocity = (t: number): Vec3 => [-D * om * Math.sin(om * t), D * om * Math.cos(om * t), 0];
+  const wS: World = { a, lens: { m, R, centre, velocity } };
+  const st0 = fromZamo(23, Math.PI / 2, 2, [0, 0, 0.1], a, 500);
+  const st = fromZamo(23, Math.PI / 2, 2, circularBeta(st0, wS)!, a, 500);
+  const plan = planRendezvous(st, wS, { centre, velocity, radius: R, standoff: 3.2 * R, orbit: { mass: m, n: [0, 0, 1] } })!;
+  expect(plan.nodes[plan.nodes.length - 1]!.then).toBe("orbit");
+  const after = planPath(st, plan.nodes, wS, 1)!.states.at(-1)!;
+  const p = pathFrom(after, wS, 300, 120);
+  const ds = p.pts.map((q, j) => {
+    const c = centre(p.times[j]!);
+    return Math.hypot(q[0] - c[0], q[1] - c[1], q[2] - c[2]);
+  });
+  expect(p.fate).toBe("continues");
+  expect(Math.min(...ds)).toBeGreaterThan(1.5 * R);
+  expect(Math.max(...ds)).toBeLessThan(20);
+}, 30000);

@@ -313,7 +313,7 @@ export function defaultSettings(): Settings {
 }
 
 /** A scene preset: settings, plus optionally the simulation time to start from [M]. */
-export type Preset = Partial<Settings> & { time?: number };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
@@ -341,6 +341,12 @@ export const presets: Record<string, Preset> = {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
     spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
+  },
+  "Mission: through the wormhole to the companion star (automatic flight)": {
+    wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
+    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
+    skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
+    ship: true, shipMount: "quarter", mission: true,
   },
   "Wormhole: our Milky Way from Gargantua's side": {
     ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 6, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,

@@ -906,6 +906,7 @@ export class SettingsPanel {
         ["⇧ + those keys", "RCS translation: forward/back · left/right · up/down"],
         ["↑ ↓ · Z · X", "Throttle up/down · full · cut (W · X on AZERTY)"],
         ["T", "SAS: stability assist"],
+        ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
         ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target"],
         ["8 · 9 · 0", "Autopilot: hold position · circularize · approach target"],
         [", · .", "Time warp slower · faster"],

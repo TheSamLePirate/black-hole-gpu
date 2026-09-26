@@ -7,6 +7,7 @@ import { HidPads } from "./gamepad";
 import { MOUNTS, type Mount } from "./mounts";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
+import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -149,7 +150,8 @@ async function main() {
 
   function applyPreset(name: string) {
     const keep = Object.fromEntries(KEEP_ON_PRESET.map((k) => [k, settings[k]]));
-    const { time, ...preset } = presets[name] ?? {};
+    mission.stop();
+    const { time, mission: withMission, ...preset } = presets[name] ?? {};
     Object.assign(settings, defaultSettings(), keep, preset);
     if (time !== undefined) {
       simTime = time;
@@ -158,6 +160,7 @@ async function main() {
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
+    if (withMission) mission.start();
     refreshGui();
     touch();
     touchDisplay();
@@ -276,6 +279,10 @@ async function main() {
     camera.pilot.sas = !camera.pilot.sas;
     panel.toast(`SAS ${camera.pilot.sas ? "on" : "off"}`);
   }
+  function pilotRoll() {
+    camera.pilot.rollAlign = !camera.pilot.rollAlign;
+    panel.toast(`Roll alignment ${camera.pilot.rollAlign ? "on — wings in the orbital plane" : "off"}`);
+  }
   function setMount(m: Mount) {
     if (settings.shipMount === m) return;
     settings.shipMount = m;
@@ -284,13 +291,13 @@ async function main() {
     panel.toast(`Camera: ${MOUNTS[m].label}`);
   }
   const flightHud = new FlightHud(settings, {
-    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount,
+    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll,
     lookAhead: () => camera.setLook(0, 0),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
       camera.pilot.throttle = t;
     },
-    plan: (goal, r2) => panel.toast(camera.planTransfer(goal, r2)),
+    plan: (goal, r2, orbitStar) => panel.toast(camera.planTransfer(goal, r2, { orbitStar })),
     align: (goal) => panel.toast(camera.planAlign(goal)),
     addNode: () => camera.addNode(),
     nudge: (i, dv, dt) => camera.nudgeNode(i, dv, dt),
@@ -299,6 +306,17 @@ async function main() {
     execute: () => pilotAuto("node"),
   });
   camera.onPilotMessage = (t) => panel.toast(t);
+  // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
+  let hudDensity: number | null = null;
+  const mission = new Mission(settings, camera, (t) => panel.toast(t));
+  mission.onEnd = () => {
+    if (hudDensity !== null) flightHud.setDensity(hudDensity);
+    hudDensity = null;
+  };
+  mission.onStart = () => {
+    hudDensity = flightHud.density;
+    flightHud.setDensity(2); // clean: the view, the captions, the warnings
+  };
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
   /** Pilot keys (by physical position where it matters); true when handled. */
   function pilotKey(e: KeyboardEvent) {
@@ -307,6 +325,7 @@ async function main() {
     if (holds[e.code]) pilotHold(holds[e.code]!);
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
+    else if (e.code === "KeyR") pilotRoll();
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "KeyN") panel.toast(flightHud.cycleDensity());
@@ -318,6 +337,7 @@ async function main() {
     } else if (e.code === "Comma") warp(-1);
     else if (e.code === "Period") warp(1);
     else if (e.code === "Escape") {
+      mission.stop("Mission stopped — you have the controls");
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger (K leaves it)");
@@ -537,6 +557,17 @@ async function main() {
     __bh: {
       settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
       time: () => simTime,
+      mission,
+      /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
+      freeze: (on: boolean) => (frozen = on),
+      step: (dt: number) => {
+        camera.update(dt, simTime);
+        mission.update(dt);
+        if (settings.animate && settings.timeSpeed > 0) simTime += dt * settings.timeSpeed;
+        timeDirty = true;
+        changed = true;
+        return simTime;
+      },
       setTime: (t: number) => ((simTime = t), (timeDirty = true)),
     },
   });
@@ -547,6 +578,7 @@ async function main() {
   let fpsN = 0;
   let fps = 0;
   let hudTimer = 0;
+  let frozen = false;
   let lastStats: FrameStats | null = null;
   let guideKey = "";
 
@@ -560,13 +592,17 @@ async function main() {
       fpsAcc = 0;
       fpsN = 0;
     }
-    if (camera.update(dt, simTime)) {
-      changed = true;
-      guiDirty = true;
-    }
-    if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
-      simTime += dt * settings.timeSpeed;
-      timeDirty = true;
+    // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
+    if (!frozen) {
+      if (camera.update(dt, simTime)) {
+        changed = true;
+        guiDirty = true;
+      }
+      mission.update(dt);
+      if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
+        simTime += dt * settings.timeSpeed;
+        timeDirty = true;
+      }
     }
     // the liquid throat's waves run on their own clock (they move even with the scene's time paused)
     if (settings.cinematic && settings.wormhole && settings.waterSpeed > 0 && !renderer.offlineActive) {

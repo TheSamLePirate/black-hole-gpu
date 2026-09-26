@@ -264,8 +264,27 @@ is there too and matches its velocity at the closest approach, then keeps statio
 the cheapest). Or **simulate a burn**: + NODE and shape it with PRO± NRM± RAD± (0.002 c, ⇧ ×10, ⌥ ×0.1) and
 its time — the predicted path updates live. **EXECUTE** flies the plan: time warps to the node, the nose turns
 onto the burn, the main engine fires centred on the node's time (its direction fixed when it starts), stops when
-the Δv is delivered, then the next node, then circularize or station-keeping. The first burn is always a few
-seconds of warp ahead, so there is time to turn.
+the Δv is delivered, then the next node, then circularize, station-keeping or an orbit. The first burn is always a
+few seconds of warp ahead, so there is time to turn.
+At the star, **Station** stops next to it, **Orbit** inserts into a circular orbit around it: the rendezvous aims
+the closest approach at 3.2 stellar radii (never through the star) and the last burn gives the star's velocity
+plus the circular speed √(m/d) around it, in its orbital plane; the *orbit* autopilot then holds that orbit
+(radius and plane errors closed over a fraction of a turn) — needed, since at 8 M Gargantua's tides (the Hill
+radius is ≈ 0.32 × 70 M) would stretch a free prograde orbit to 3–14 M in a few turns. **Roll alignment** (R,
+on by default): whenever the nose is held — holds, autopilots, burns — the ship also rolls so that its top
+points along the orbit's normal, wings in the orbital plane (with the nose on the normal, the top faces the hole).
+
+**The Interstellar mission** (preset "Mission: through the wormhole to the companion star"; `src/mission.ts`)
+flies the whole trip with these systems alone, as a film: on our side of the wormhole the Ranger lights its
+engine towards the throat, reaching exactly the circular speed of the point where it will leave the far mouth —
+aimed along the orbit's tangent, at right angles to the radius — crosses the throat, turns its view to Gargantua
+and circularizes at r ≈ 21 M; that orbit would come back through the mouth one turn later, so a transfer raises
+it to 33 M, clear of the gluing sphere; after a while in orbit (prograde, wings level), a plane change of ≈ 21°
+brings it into the star's orbital plane, a transfer with orbit insertion takes it to the star, and the orbit
+autopilot keeps it there. Captions tell each phase; the camera cuts between attach points (quarter, wing,
+chase, dorsal, belly) and a camera director turns the view on its mount towards Gargantua or the star during
+burns and some coasts. Esc hands the controls back. `__bh.freeze()` / `__bh.step(dt)` step the simulation frame
+by frame for offline videos (docs/video/mission.mp4).
 
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
 preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny

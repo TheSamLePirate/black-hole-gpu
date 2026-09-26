@@ -1157,6 +1157,22 @@ export class CameraController {
     }
   }
 
+  /**
+   * Puts the Ranger in the wormhole's world (rep coordinates: ℓ, direction n) with a 3-velocity, its
+   * nose along `nose` and its top towards `top` (rep vectors); the camera goes where its mount is.
+   */
+  placeShipRep(l: number, n: Vec3, vel: Vec3, nose: Vec3, top: Vec3) {
+    const S = this.shipMatrix(); // rows: the camera's axes in the ship's frame (x left, y up, z nose)
+    const z = normalize(nose);
+    const x = normalize(cross(top, z));
+    const y = cross(z, x);
+    const cam = (k: number) => lin(lin(x, S[k]![0], y, S[k]![1]), 1, z, S[k]![2]);
+    setRepPose(this.s, { l, n, fwd: cam(2), up: cam(1), vel });
+    this.s.motion = "geodesic";
+    this.pilot.omega = [0, 0, 0];
+    this.sync();
+  }
+
   /** Turns the camera on its mount (degrees); the ship stays where it points. */
   setLook(yaw: number, pitch: number) {
     const s = this.s;
@@ -1318,7 +1334,7 @@ export class CameraController {
    * Plans a transfer: "orbit" a circular orbit of radius r2 around the hole, "star" a rendezvous with
    * the companion (then station-keeping), "wormhole" a path through the mouth. Returns a message.
    */
-  planTransfer(goal: "orbit" | "star" | "wormhole", r2 = 30): string {
+  planTransfer(goal: "orbit" | "star" | "wormhole", r2 = 30, o: { orbitStar?: boolean } = {}): string {
     const s = this.s;
     const now = this.stateNow();
     if (!now) return "Planning works around the black hole";
@@ -1338,7 +1354,11 @@ export class CameraController {
     } else if (goal === "star") {
       if (!s.sun) return "No companion star in this scene";
       res = planRendezvous(st, w, {
-        centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t), radius: s.sunRadius, standoff: 4 * s.sunRadius,
+        centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t), radius: s.sunRadius,
+        // an orbit: close in (3.2 radii — well inside the Hill radius, ≈ 0.32 D; the orbit autopilot
+        // then holds it against Gargantua's tides), in the sense the ship arrives with
+        standoff: (o.orbitStar ? 3.2 : 4) * s.sunRadius,
+        orbit: o.orbitStar && s.sunMass > 0 ? { mass: s.sunMass, n: [0, 0, 1] } : undefined,
       });
       if (!res) return "No rendezvous found";
       s.target = "star";
@@ -1437,7 +1457,9 @@ export class CameraController {
     // drop nodes left behind (missed or done)
     const last = P.nodes[P.nodes.length - 1]!;
     // (a rendezvous ends at the body: the station-keeping autopilot takes over there)
-    const tail = last.then === "approach" ? last.t - st.t + 40 : Math.max(2 * 2 * Math.PI * st.r ** 1.5, 1.5 * (last.t - st.t), 600);
+    const tail = last.then === "approach" ? last.t - st.t + 40
+      : last.then === "orbit" ? last.t - st.t + 2 * Math.PI * Math.sqrt((4 * this.s.sunRadius) ** 3 / Math.max(this.s.sunMass, 1e-3))
+      : Math.max(2 * 2 * Math.PI * st.r ** 1.5, 1.5 * (last.t - st.t), 600);
     // mid-burn: what is left of the first node's Δv, now
     let nodes = P.nodes;
     if (this.nodeBurning && this.pilot.auto === "node" && this.burnDir) {
@@ -1474,7 +1496,7 @@ export class CameraController {
    * on its time, stop when its Δv is delivered; then the next one, or the plan's last manoeuvre
    * (circularize, station-keeping).
    */
-  private nodeBurn(cam: ReturnType<typeof cameraFrame>, dt: number, dtau: number): { dir: Vec3; throttle: number } | null {
+  private nodeBurn(cam: ReturnType<typeof cameraFrame>, dt: number, dtau: number): { dir: Vec3; throttle: number; far?: boolean } | null {
     const s = this.s;
     const P = this.plan;
     const node = P.nodes[0];
@@ -1514,7 +1536,7 @@ export class CameraController {
           P.path = null;
           this.pilot.auto = "none";
           if (then) this.pilot.setAuto(then);
-          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : "station-keeping"}` : "Manoeuvre done");
+          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? "in orbit around the star" : "station-keeping"}` : "Manoeuvre done");
         } else this.refreshPlan(true);
         return null;
       }
@@ -1524,7 +1546,7 @@ export class CameraController {
     // on the burn: it turns while coasting)
     const coast = start - 20;
     s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 500) : Math.min(Math.max(start / 1.5, 3), 12);
-    return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0 };
+    return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0, far: start > 60 };
   }
 
   private radialOut(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
@@ -1614,6 +1636,39 @@ export class CameraController {
       const vc = a2 !== a1 ? Math.sqrt(clamp(v1 * v1 - (a1 * (v2 * v2 - v1 * v1)) / (a2 - a1), 0, 0.998)) : v1;
       return { beta: lin(t, vc, t, 0), ff: [0, 0, 0] };
     }
+    if (P.auto === "orbit") {
+      // a circular orbit around the star (in its orbital plane), at the distance it was engaged at
+      if (cam.region !== "hole") return say("Orbit: only in the black hole's universe");
+      if (s.target !== "star" || !s.sun || s.sunMass <= 0) return say("Orbit: select the companion star (with a mass)");
+      if (this.landed) return say("Landed on the star");
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const t = this.nowTime();
+      const C = starCentre(s, t);
+      const V = starVelocity(s, t);
+      const rel = sub3(X, C);
+      const d = Math.hypot(...rel);
+      const n: Vec3 = [0, 0, 1];
+      const Vs = add3(f.er, f.et, f.ep, cam.beta);
+      if (!P.anchor) {
+        // (the sense it goes round now, the distance now — kept within the stable, retrograde-friendly range)
+        const h = cross(rel, sub3(Vs, V));
+        P.anchor = [clamp(d, 2.4 * s.sunRadius, 0.17 * starOrbitRadius(s)), Math.sign(h[2]) || 1, 0];
+      }
+      const [d0, sense] = P.anchor as [number, number, number];
+      const vc = Math.sqrt(s.sunMass / d0);
+      const w0 = vc / d0;
+      const relP: Vec3 = [rel[0], rel[1], 0];
+      const tl = Math.hypot(...relP) || 1;
+      const tdir = lin(cross(lin(n, sense, n, 0), relP), 1 / tl, n, 0);
+      const rhat = lin(rel, 1 / Math.max(d, 1e-9), rel, 0);
+      // distance and plane errors closed over a fraction of an orbit
+      const vr = clamp(-(d - d0) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+      const vz = clamp(-rel[2] * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+      const W = axpy(axpy(axpy(V, tdir, vc), rhat, vr), n, vz);
+      const al = cam.zamo.alpha;
+      return { beta: [dot3(W, f.er) / al, dot3(W, f.et) / al, dot3(W, f.ep) / al], ff: [0, 0, 0] };
+    }
     if (P.auto === "approach") {
       if (cam.region !== "hole") return say("Approach: only in the black hole's universe");
       if (s.target === "hole" || s.target === "barycentre") return say("Approach: select the star or the wormhole (Tab)");
@@ -1685,6 +1740,7 @@ export class CameraController {
       accel: this.pilot.accel,
       throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(s.thrust, 1e-12) : this.pilot.throttle,
       sas: this.pilot.sas,
+      rollAlign: this.pilot.rollAlign,
       hold: this.pilot.hold,
       auto: this.pilot.auto,
       omega: this.pilot.omega,

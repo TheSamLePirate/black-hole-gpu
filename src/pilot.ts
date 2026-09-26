@@ -13,13 +13,13 @@
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target";
-export type Auto = "none" | "hover" | "circularize" | "approach" | "node";
+export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node";
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
   normal: "Normal", antinormal: "Anti-normal", target: "Target",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", node: "Execute node" };
+export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node" };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -53,8 +53,9 @@ export interface FlightContext {
   target: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
   want?: { beta: V3; ff: V3; pos?: V3 } | null;
-  /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned */
-  burn?: { dir: V3; throttle: number } | null;
+  /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
+   *  far: the burn is still far off (an attitude hold may point the nose meanwhile) */
+  burn?: { dir: V3; throttle: number; far?: boolean } | null;
 }
 
 export interface FlightOutput {
@@ -86,6 +87,8 @@ export class FlightComputer {
   omega: V3 = [0, 0, 0];
   throttle = 0;
   sas = true;
+  /** while the nose is pointed (holds, autopilots, burns): roll the wings into the orbital plane */
+  rollAlign = true;
   hold: Hold = "none";
   auto: Auto = "none";
   /** last proper acceleration [c²/M] and where the attitude controller points */
@@ -119,11 +122,17 @@ export class FlightComputer {
     this.burn = null;
     let throttle = this.throttle;
     if (this.auto === "node" && c.burn) {
-      // manoeuvre node: point along the burn, fire only when on it (within ~3°)
+      // manoeuvre node: point along the burn, fire only when on it (within ~3°); long before it, an
+      // attitude hold may keep the nose elsewhere
       this.burn = c.burn.dir;
-      point = toC(c.burn.dir);
-      const align = dot(Z, point);
-      throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
+      if (c.burn.far && this.hold !== "none") {
+        point = this.holdDirection(c, toC);
+        throttle = 0;
+      } else {
+        point = toC(c.burn.dir);
+        const align = dot(Z, point);
+        throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
+      }
     } else if (this.auto !== "none" && c.want) {
       const U = toU(c.beta);
       const T = Math.max(1.2 * c.tauRate, 1e-3);
@@ -131,8 +140,9 @@ export class FlightComputer {
       const a = len(A);
       const rcsMax = RCS * c.thrust;
       if (a < 0.8 * rcsMax) {
-        rcsC = toC(A); // fine corrections: RCS only, no need to turn
+        rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
         throttle = 0;
+        if (this.hold !== "none") point = this.holdDirection(c, toC);
       } else {
         this.burn = scale(A, 1 / a);
         point = toC(this.burn);
@@ -167,7 +177,14 @@ export class FlightComputer {
       const wb = body(wC);
       want[0] = wb[0];
       want[1] = wb[1];
-      want[2] = 0; // no roll
+      // roll: the ship's top towards the orbit's normal — its wings in the orbital plane (along the
+      // normal itself, towards the hole instead)
+      want[2] = 0;
+      const up = this.rollAlign ? this.levelUp(c, toC, Z) : null;
+      if (up) {
+        const ra = Math.atan2(dot(cross(Y, up), Z), dot(Y, up));
+        want[2] = Math.sign(ra) * Math.min(MAX_RATE, Math.sqrt(2 * 0.7 * ALPHA * Math.abs(ra)), 3 * Math.abs(ra));
+      }
     } else {
       for (let i = 0; i < 3; i++) {
         if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * MAX_RATE : this.omega[i]! + manual[i]! * ALPHA * dt;
@@ -193,6 +210,22 @@ export class FlightComputer {
     const acc = fromC(accC);
     this.accel = len(acc);
     return { rot, acc, burn: this.burn };
+  }
+
+  /** The orbit's normal (C), or radial in when the nose is on the normal (the hole overhead): where the ship's top goes. */
+  private levelUp(c: FlightContext, toC: (v: V3) => V3, Z: V3): V3 | null {
+    const R = c.radialOut;
+    const vl = len(c.beta);
+    if (!R || vl < 1e-6) return null;
+    const n = cross(R, scale(c.beta, 1 / vl));
+    const nl = len(n);
+    if (nl < 1e-3) return null; // moving radially: no orbital plane
+    for (const cand of [toC(scale(n, 1 / nl)), toC(scale(R, -1))]) {
+      const perp = add(cand, scale(Z, -dot(cand, Z))); // ⟂ the nose
+      const pl = len(perp);
+      if (pl > 0.2) return scale(perp, 1 / pl);
+    }
+    return null;
   }
 
   /** Where an attitude hold points the nose (C), from the orbital directions. */

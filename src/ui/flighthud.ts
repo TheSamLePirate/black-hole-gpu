@@ -55,7 +55,7 @@ const FONT = "Inter, system-ui, sans-serif";
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
 
 export interface FlightHudActions {
-  plan(goal: "orbit" | "star" | "wormhole", r2: number): void;
+  plan(goal: "orbit" | "star" | "wormhole", r2: number, orbitStar: boolean): void;
   align(goal: "orbit" | "star" | "wormhole"): void;
   addNode(): void;
   nudge(i: number, dv: V3, dt: number): void;
@@ -65,6 +65,7 @@ export interface FlightHudActions {
   hold(h: Hold): void;
   auto(a: Auto): void;
   sas(): void;
+  roll(): void;
   warp(dir: 1 | -1): void;
   mount(m: Mount): void;
   lookAhead(): void;
@@ -88,6 +89,7 @@ export class FlightHud {
   private planEls: Record<string, HTMLElement> = {};
   private goal: "orbit" | "star" | "wormhole" = "orbit";
   private r2 = 30;
+  private starOrbit = true;
   private sel = 0;
   private planSig = "";
   plannerOpen = false;
@@ -208,6 +210,7 @@ export class FlightHud {
     for (const [hold, label, key] of HOLD_KEYS) holds.append(mk(hold, label, key, `Hold ${HOLD_NAMES[hold]}`, () => act.hold(hold), GLYPH[hold], COL[hold]));
     const autos = h("div", "fl-autos");
     autos.append(mk("sas", "SAS", "T", "Stability assist: holds the attitude, damps rotation", () => act.sas()));
+    autos.append(mk("roll", "ROLL", "R", "Roll alignment: while the nose is held, the wings stay in the orbital plane (the top towards the orbit's normal)", () => act.roll()));
     for (const [a, label, key] of AUTO_KEYS) autos.append(mk(a, label, key, `Autopilot: ${AUTO_NAMES[a]}`, () => act.auto(a)));
     const ballBox = h("div", "fl-ballbox");
     ballBox.append(this.ball);
@@ -313,16 +316,26 @@ export class FlightHud {
     };
     rBox.append(nud(-1, "‹"), rv, nud(1, "›"));
     this.planEls.rBox = rBox;
+    // at the star: keep station, or go round it
+    const sBox = h("span", "fl-rbox");
+    for (const [orbit, label, title] of [[false, "Station", "Stop next to the star and keep station"], [true, "Orbit", "Insert into a circular orbit around the star"]] as const) {
+      const b = h("button", "", label) as HTMLButtonElement;
+      b.title = title;
+      b.onclick = () => (this.starOrbit = orbit);
+      this.planEls[`star:${orbit}`] = b;
+      sBox.append(b);
+    }
+    this.planEls.sBox = sBox;
     const go = h("button", "fl-go", "PLAN TRANSFER") as HTMLButtonElement;
     go.title = "Transfer to the goal (from the new plane when a plane change is planned)";
-    go.onclick = () => this.act.plan(this.goal, this.r2);
+    go.onclick = () => this.act.plan(this.goal, this.r2, this.starOrbit);
     const align = h("button", "fl-align", "ALIGN PLANE") as HTMLButtonElement;
     align.title = "Plane change: turn the orbit into the goal's plane at the next crossing (ascending / descending node) — do it first, transfers are then cheaper";
     align.onclick = () => this.act.align(this.goal);
     this.planEls.align = align;
     const goRow = h("div", "fl-gorow");
     goRow.append(align, go);
-    goalRow.append(desc, rBox);
+    goalRow.append(desc, rBox, sBox);
     // nodes
     const nodes = h("div", "fl-nodes");
     this.planEls.nodes = nodes;
@@ -371,8 +384,11 @@ export class FlightHud {
       E[`goal:${g}`]!.classList.toggle("on", this.goal === g);
       (E[`goal:${g}`] as HTMLButtonElement).disabled = (g === "star" && !s.sun) || (g === "wormhole" && !s.wormhole);
     }
-    E.desc!.textContent = this.goal === "orbit" ? "Circular orbit at r =" : this.goal === "star" ? "Rendezvous, then keep station" : "Dive through the mouth";
+    E.desc!.textContent = this.goal === "orbit" ? "Circular orbit at r =" : this.goal === "star" ? "Rendezvous, then" : "Dive through the mouth";
     E.rBox!.hidden = this.goal !== "orbit";
+    E.sBox!.hidden = this.goal !== "star";
+    E["star:true"]!.classList.toggle("on", this.starOrbit);
+    E["star:false"]!.classList.toggle("on", !this.starOrbit);
     // the orbit's angle to the goal's plane
     const off = i.planes ? (this.goal === "wormhole" ? i.planes.wormhole : i.planes.orbit) : null;
     E.align!.textContent = off === null ? "ALIGN PLANE" : `ALIGN PLANE · ${off.toFixed(1)}°`;
@@ -397,7 +413,7 @@ export class FlightHud {
           .map((l, j) => (Math.abs(n.dv[j]!) > 5e-5 ? `${l} ${n.dv[j]! >= 0 ? "+" : "−"}${Math.abs(n.dv[j]!).toFixed(3)}` : ""))
           .filter(Boolean)
           .join(" · ");
-        const then = n.then === "circularize" ? " → circularize" : n.then === "approach" ? " → keep station" : "";
+        const then = n.then === "circularize" ? " → circularize" : n.then === "approach" ? " → keep station" : n.then === "orbit" ? " → orbit the star" : "";
         row.innerHTML = `<b>◆ ${k + 1}</b><span class="t"></span><span class="dv">Δv ${dv.toFixed(3)} c</span><span class="parts">${parts || "no Δv yet"}${then}</span>`;
         const del = h("button", "fl-x", "×") as HTMLButtonElement;
         del.title = "Delete this node";
@@ -426,10 +442,16 @@ export class FlightHud {
       const after = last ? pp.pts.filter((_, j) => pp.times[j]! > last.t) : pp.pts;
       const ra = (after.length ? after : pp.pts).map((q) => Math.hypot(...q));
       const total = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
-      const fate = last?.then === "approach" ? "station-keeping at the target" : pp.fate === "wormhole" ? "through the wormhole" : pp.fate === "horizon" ? "into the horizon" : pp.fate === "star" ? "hits the star" : pp.fate === "escape" ? "escapes" : `Pe ${Math.min(...ra).toFixed(1)} · Ap ${Math.max(...ra).toFixed(1)} M`;
+      const fate = last?.then === "approach" ? "station-keeping at the target" : last?.then === "orbit" ? "in orbit around the star" : pp.fate === "wormhole" ? "through the wormhole" : pp.fate === "horizon" ? "into the horizon" : pp.fate === "star" ? "hits the star" : pp.fate === "escape" ? "escapes" : `Pe ${Math.min(...ra).toFixed(1)} · Ap ${Math.max(...ra).toFixed(1)} M`;
       res += `${res ? " · " : ""}Δv ${total.toFixed(3)} c · then ${fate}`;
     }
     E.result!.textContent = res;
+  }
+
+  /** 0 full · 1 minimal · 2 clean (not remembered: for an automation) */
+  setDensity(d: number) {
+    this.density = Math.min(2, Math.max(0, Math.round(d)));
+    this.applyDensity();
   }
 
   cycleDensity() {
@@ -573,6 +595,7 @@ export class FlightHud {
     this.warn.innerHTML = w.map((x) => `<div class="${x.startsWith("⚠") ? "hot" : ""}">${x}</div>`).join("");
     // buttons
     this.buttons.get("sas")!.classList.toggle("on", i.sas);
+    this.buttons.get("roll")!.classList.toggle("on", i.rollAlign);
     for (const [hold] of HOLD_KEYS) this.buttons.get(hold)!.classList.toggle("on", i.hold === hold);
     for (const [a] of AUTO_KEYS) this.buttons.get(a)!.classList.toggle("on", i.auto === a);
     for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", i.mount === m);
@@ -1384,7 +1407,7 @@ export class FlightHud {
         ctx.fillText(`${k + 1}`, x + 8 * dpr, y - 6 * dpr);
       });
       const lastNode = i.plan.nodes[i.plan.nodes.length - 1];
-      if (lastNode?.then === "approach" && s.sun) {
+      if ((lastNode?.then === "approach" || lastNode?.then === "orbit") && s.sun) {
         // the rendezvous: where the star will be then
         const [x, y] = P(at(starCentre(s, lastNode.t), lastNode.t));
         ctx.strokeStyle = "rgba(255, 211, 107, 0.9)";

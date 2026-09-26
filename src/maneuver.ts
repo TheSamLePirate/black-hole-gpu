@@ -27,7 +27,7 @@ export interface ManeuverNode {
   /** Δ(γβ) along prograde, normal, radial [c] */
   dv: Vec3;
   /** what the autopilot does after the last node */
-  then?: "circularize" | "approach" | null;
+  then?: "circularize" | "approach" | "orbit" | null;
 }
 
 export interface World {
@@ -238,26 +238,38 @@ export function planCircular(st0: Massive, r2: number, w: World): { nodes: Maneu
  * at the closest approach.
  */
 export function planRendezvous(
-  st0: Massive, w: World, body: { centre: (t: number) => Vec3; velocity: (t: number) => Vec3; radius: number; standoff: number },
+  st0: Massive, w: World,
+  body: {
+    centre: (t: number) => Vec3; velocity: (t: number) => Vec3; radius: number; standoff: number;
+    /**
+     * end on a circular orbit around the body instead of at rest: its mass, the orbit plane's normal,
+     * the sense of motion around n (±1; default: the sense the ship arrives with)
+     */
+    orbit?: { mass: number; n: Vec3; sense?: number };
+  },
 ): { nodes: ManeuverNode[]; note: string; miss: number } | null {
   const D = len(body.centre(st0.t));
   const lead = Math.max(20, 0.03 * period(st0.r), w.lead ?? 0);
   const sA = advanceTo(st0, st0.t + lead, w);
   if (!sA) return null;
-  // apsis at the body's orbit, a little inside: the ship arrives just short of it
+  // apsis at the body's orbit, a little short of it
   const rGoal = D - Math.sign(D - sA.r) * body.standoff * 0.5;
   const dv = apsisBurn(sA, rGoal, w);
   if (dv === null) return null;
   const synodic = Math.abs(1 / Math.abs(1 / period(sA.r) - 1 / period(D)));
   const window = Math.min(Math.max(period(sA.r), Math.min(synodic, 3 * period(D))), 6000);
   const tTransfer = Math.PI * ((sA.r + D) / 2) ** 1.5 * 1.35 + 50;
+  // the closest approach, and how far it is from the one wanted (at the standoff for an orbit, as close
+  // as possible otherwise; hitting the body is out)
+  const dWant = body.orbit ? body.standoff : 0;
   const miss = (s1: Massive, dvp: number) => {
     const p = pathFrom(applyDv(s1, [dvp, 0, 0], w.a), w, tTransfer, 240);
-    let best = { d: Infinity, t: NaN };
+    let best = { d: Infinity, t: NaN, cost: Infinity };
     p.pts.forEach((q, j) => {
       const d = len(sub(q, body.centre(p.times[j]!)));
-      if (d < best.d) best = { d, t: p.times[j]! };
+      if (d < best.d) best = { d, t: p.times[j]!, cost: 0 };
     });
+    best.cost = Math.abs(best.d - dWant) + (p.fate === "star" || best.d < 1.2 * body.radius ? 1e4 : 0);
     return best;
   };
   // scan the departure time (advancing incrementally), then refine around the best
@@ -269,7 +281,7 @@ export function planRendezvous(
     s = advanceTo(s, t1, w);
     if (!s) break;
     const m = miss(s, dv);
-    if (m.d < best.d) best = { t1, d: m.d };
+    if (m.cost < best.d) best = { t1, d: m.cost };
   }
   let step = window / n;
   for (let it = 0; it < 12; it++) {
@@ -279,22 +291,40 @@ export function planRendezvous(
       const s1 = advanceTo(sA, t1, w);
       if (!s1) continue;
       const m = miss(s1, dv);
-      if (m.d < best.d) best = { t1, d: m.d };
+      if (m.cost < best.d) best = { t1, d: m.cost };
     }
   }
   const s1 = advanceTo(sA, best.t1, w);
   if (!s1) return null;
-  const dv1 = apsisBurn(s1, rGoal, w) ?? dv;
+  // (the burn the scan was made with: recomputing it at the new time would move the encounter)
+  const dv1 = dv;
   const m = miss(s1, dv1);
+  if (m.cost >= 1e3) return null;
   const s2 = advanceTo(applyDv(s1, [dv1, 0, 0], w.a), m.t, w);
   if (!s2) return null;
   // match the body's velocity (flat map → local ZAMO components, the small α factors neglected)
   const f = localFrame(s2);
-  const V = body.velocity(m.t);
-  const betaT: Vec3 = [dot(V, f.er), dot(V, f.et), dot(V, f.ep)];
+  let V = body.velocity(m.t);
+  let then: ManeuverNode["then"] = "approach";
+  if (body.orbit) {
+    // orbit insertion: the body's velocity plus the circular speed around it, in the given plane, in
+    // the sense the ship already goes round it
+    const n = norm(body.orbit.n);
+    const rel = sub(position(s2), body.centre(m.t));
+    const relP = sub(rel, scale(n, dot(rel, n)));
+    const b2 = toZamo(s2, w.a);
+    const Vs = add(add(scale(f.er, b2[0]), scale(f.et, b2[1])), scale(f.ep, b2[2]));
+    const sense = body.orbit.sense ?? (Math.sign(dot(cross(rel, sub(Vs, V)), n)) || 1);
+    const t = norm(cross(scale(n, sense), relP));
+    V = add(V, scale(t, Math.sqrt(body.orbit.mass / Math.max(len(rel), body.radius))));
+    then = "orbit";
+  }
+  // (coordinate velocity → the ZAMO's: over the lapse)
+  const al = zamo(s2.r, s2.th, w.a).alpha;
+  const betaT: Vec3 = [dot(V, f.er) / al, dot(V, f.et) / al, dot(V, f.ep) / al];
   return {
-    nodes: [{ t: best.t1, dv: [dv1, 0, 0] }, { t: m.t, dv: matchDv(s2, betaT, w.a), then: "approach" }],
-    note: `rendezvous: closest approach ${m.d.toFixed(1)} M`,
+    nodes: [{ t: best.t1, dv: [dv1, 0, 0] }, { t: m.t, dv: matchDv(s2, betaT, w.a), then }],
+    note: `${body.orbit ? "orbit insertion" : "rendezvous"}: closest approach ${m.d.toFixed(1)} M`,
     miss: m.d,
   };
 }
