@@ -1328,7 +1328,7 @@
   <section id="journal" aria-labelledby="journal-title">
     <div class="section-head">
       <h2 id="journal-title">Journal des améliorations</h2>
-      <p>Les étapes qui ont mené au moteur v2 puis au trou de ver, chacune mesurée et enregistrée dans l'historique git du projet. Cliquez pour ouvrir une planche en grand.</p>
+      <p>Les étapes qui ont mené au moteur v2, au trou de ver puis au système de Gargantua, chacune mesurée et enregistrée dans l'historique git du projet. Cliquez pour ouvrir une planche en grand.</p>
     </div>
     <div class="journal">
       <figure>
@@ -1483,11 +1483,43 @@
         <a href="img/journal/39_flight_planner.jpg" target="_blank" rel="noopener"><img src="img/journal/39_flight_planner.jpg" alt="C14 · Le planificateur de vol : alignement du plan orbital, rendez-vous avec l'étoile, passage par le trou de ver." loading="lazy" /></a>
         <figcaption><b>C14 · Le vol automatique</b> Un planificateur de manœuvres (touche O) calcule les poussées sur les vraies géodésiques de Kerr : aligner le plan de l'orbite sur celui de la cible, transfert vers une orbite circulaire, rendez-vous avec l'étoile compagnon puis maintien à distance, ou trajectoire qui plonge dans la bouche du trou de ver. On peut aussi simuler une poussée à la main (prograde, normale, radiale) et voir le trajet se redessiner sur la carte. EXÉCUTER : le pilote accélère le temps jusqu'au nœud, oriente le moteur et brûle juste ce qu'il faut.</figcaption>
       </figure>
+      <figure>
+        <a href="img/journal/40_gargantua_bodies.jpg" target="_blank" rel="noopener"><img src="img/journal/40_gargantua_bodies.jpg" alt="D1 · Le système de Gargantua : Le système de Gargantua : Miller, Mann, K2 et Edmunds, la bouche en orbite à 300 M." loading="lazy" /></a>
+        <figcaption><b>D1 · Le système de Gargantua</b> Scène à 10⁸ M☉ et a* = 0,998 : Miller (x = 10, 1,3 g), Mann (x = 40), l'étoile K2 et Edmunds à 2 000 UA, et la bouche du trou de ver en orbite à 300 M. Les corps sont génériques (registre, éphémérides, horloge commune) et la bouche orbite vraiment, avec un boost de Lorentz au recollement.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/41_gargantua_points.jpg" target="_blank" rel="noopener"><img src="img/journal/41_gargantua_points.jpg" alt="D2 · Les points lentillés : Points lentillés : corps sous le pixel, images secondaires, corps lointains au temps retardé." loading="lazy" /></a>
+        <figcaption><b>D2 · Les points lentillés</b> Les corps plus petits qu'un pixel restent visibles : leur flux est étalé sur l'empreinte lentillée du pixel, avec images secondaires et anneaux d'Einstein. Les corps lointains (K2, Edmunds, le Soleil de notre côté) sont vus depuis le point de départ du rayon, au temps retardé.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/42_long_flight.jpg" target="_blank" rel="noopener"><img src="img/journal/42_long_flight.jpg" alt="D3 · Les longs voyages : Vol au long cours : géodésiques de Kerr, lentilles faibles des planètes, avance rapide maîtrisée." loading="lazy" /></a>
+        <figcaption><b>D3 · Les longs voyages</b> Le vaisseau suit ses géodésiques de Kerr en tenant compte de la gravité faible des planètes, avec un avance rapide automatique qui ralentit à l'approche. Le temps de la scène suit l'horloge du vaisseau : une heure sur Miller, c'est 1 h 11 min au loin.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/43_crew_engine.jpg" target="_blank" rel="noopener"><img src="img/journal/43_crew_engine.jpg" alt="D4 · Deux moteurs : Deux moteurs, propergol relativiste et guidage à faible poussée jusqu'aux planètes." loading="lazy" /></a>
+        <figcaption><b>D4 · Deux moteurs</b> Moteur « Cinéma » ou moteur « Équipage » à 3 g avec réservoir de fusée relativiste (m/m₀ = e^(−Δw/vₑ)). Le guidage à faible poussée fait des spirales, s'aligne sur l'apside, circularise, puis rejoint la planète par un contrôle à énergie minimale sur les épicycles de Kerr.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/44_local_patch.jpg" target="_blank" rel="noopener"><img src="img/journal/44_local_patch.jpg" alt="D5 · Le patch local : Patch local à origine flottante et sondes de lumière des planètes." loading="lazy" /></a>
+        <figcaption><b>D5 · Le patch local</b> Près d'une planète, celle-ci est dessinée autour d'une origine flottante, en float64 côté CPU, dans le référentiel de la caméra (Lorentz, retard, aberration) : l'accord avec les géodésiques de Kerr est à 0,02° près. Des sondes de lumière mesurent ce que chaque planète reçoit : le disque lentillé, l'irradiance et la température d'équilibre.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/45_landing.jpg" target="_blank" rel="noopener"><img src="img/journal/45_landing.jpg" alt="D6 · L'atterrissage : Atterrissage et décollage automatiques dans le repère de la planète." loading="lazy" /></a>
+        <figcaption><b>D6 · L'atterrissage</b> Dans le repère tournant de la planète : gravité, traînée, contact au sol et décollage. Les pilotes automatiques ATTERRIR (L) et DÉCOLLER (U), avec altitude radar, vitesses verticale et horizontale, et rapport poussée/poids dans le HUD.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/46_surfaces.jpg" target="_blank" rel="noopener"><img src="img/journal/46_surfaces.jpg" alt="D7 · Surfaces et atmosphères : Relief de Mann et d'Edmunds, vagues de Miller, diffusion atmosphérique, plasma de rentrée." loading="lazy" /></a>
+        <figcaption><b>D7 · Surfaces et atmosphères</b> Relief à niveaux de détail (la même fonction sur le CPU et le GPU : le vaisseau se pose sur le sol dessiné). La glace de Mann, la roche d'Edmunds, l'océan de Miller et ses vagues géantes, la diffusion de la lumière dans l'air (Rayleigh et Mie), et la lueur du plasma de rentrée, proportionnelle à ρv³.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/47_saturn.jpg" target="_blank" rel="noopener"><img src="img/journal/47_saturn.jpg" alt="D8 · Saturne et notre côté : Saturne et ses anneaux de notre côté, le col à côté, le départ de la mission." loading="lazy" /></a>
+        <figcaption><b>D8 · Saturne et notre côté</b> De notre côté du trou de ver, Saturne et ses anneaux sont croisés par les rayons dans la région Dneg. Les anneaux sont un profil radial en diffusion simple, avec l'ombre de la planète sur les anneaux et celle des anneaux sur le globe. Le Soleil et Saturne attirent le vaisseau (Newton). Le départ de la mission se fait à 10⁶ km de Saturne, avec le col à côté (+21 EV : la lumière du Soleil à 9,5 UA vaut 10⁻⁷ de celle du disque).</figcaption>
+      </figure>
     </div>
   </section>
 
   <footer>
-    <p class="colophon">Trou de ver : James, von Tunzelmann, Franklin &amp; Thorne, Am. J. Phys. 83, 486 (2015) · Rendu avec le mode hors ligne du projet · Bun + TypeScript + WebGPU · 1920×1080 par planche, de quelques secondes à 5 minutes chacune sur un GPU Apple dans le navigateur · Ciel : NASA/GSFC SVS Deep Star Maps 2020 (Gaia DR2 : ESA/Gaia/DPAC), catalogue HYG v4.4 (CC BY-SA 4.0) · Ranger : « Interstellar Ranger One » par Max Vizell (Sketchfab), CC BY 4.0, modifié</p>
+    <p class="colophon">Trou de ver : James, von Tunzelmann, Franklin &amp; Thorne, Am. J. Phys. 83, 486 (2015) · Rendu avec le mode hors ligne du projet · Bun + TypeScript + WebGPU · 1920×1080 par planche, de quelques secondes à 5 minutes chacune sur un GPU Apple dans le navigateur · Ciel : NASA/GSFC SVS Deep Star Maps 2020 (Gaia DR2 : ESA/Gaia/DPAC), catalogue HYG v4.4 (CC BY-SA 4.0) · Ranger : « Interstellar Ranger One » par Max Vizell (Sketchfab), CC BY 4.0, modifié · Cartes de Saturne et de ses anneaux : assets/textures du projet</p>
   </footer>
 </main>
 
