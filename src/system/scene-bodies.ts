@@ -35,6 +35,9 @@ export interface GpuBody {
   /** planets: what lights them (a body index, −1: Gargantua's disk) and the irradiance factor E/(πB) */
   light: number;
   illum: number;
+  /** 0 traced (sphere, or spread over the pixel when smaller), 1 beyond the traced region (met on the
+   *  rays' straight way out), 2 our universe (home coordinates, through our end of the wormhole) */
+  where: number;
 }
 
 /** The system a scene uses. */
@@ -42,43 +45,67 @@ export function sceneSystem(s: Settings): System | null {
   return s.system === "gargantua" ? GARGANTUA_SYSTEM : null;
 }
 
-/** Orbits within this radius are traced as spheres; farther bodies are for the lensed points (phase 2). */
-const TRACED_RADIUS = 600;
+/** Orbits within this radius are traced (the rays are integrated that far); farther bodies are met on
+ *  the escaped rays' straight way out. */
+export const TRACED_RADIUS = 600;
 
 export function sceneBodies(s: Settings, t: number): GpuBody[] {
   const out: GpuBody[] = [];
   if (s.sun) {
     out.push({
       id: "star", pos: starCentre(s, t), radius: s.sunRadius, omega: starOmega(s), parent: -1, kind: BODY_STAR,
-      mass: s.sunMass, temperature: s.sunTemp, brightness: s.sunBrightness, surface: 0, seed: 0, light: -1, illum: 0,
+      mass: s.sunMass, temperature: s.sunTemp, brightness: s.sunBrightness, surface: 0, seed: 0, light: -1, illum: 0, where: 0,
     });
   }
   const sys = sceneSystem(s);
   if (!sys) return out;
-  const traced = (b: BodyDef) => b.universe === "gargantua" && (b.kind === "planet" || b.kind === "star");
+  const traced = (b: BodyDef) => b.kind === "planet" || b.kind === "star";
   const index = new Map<string, number>();
   // parents first (a star before its planets)
-  const order = sys.bodies.filter(traced).sort((a, b) => (a.parent === "gargantua" ? 0 : 1) - (b.parent === "gargantua" ? 0 : 1));
+  const order = sys.bodies.filter(traced).sort((a, b) => depth(a) - depth(b));
   for (const b of order) {
     if (out.length >= MAX_BODIES) break;
     const st = bodyState(sys, b.id, t);
-    const R = Math.hypot(...st.pos);
-    if (R > TRACED_RADIUS) continue;
-    const parent = b.parent && b.parent !== "gargantua" ? index.get(b.parent) ?? -1 : -1;
+    const ours = b.universe === "ours";
+    // our side: fixed places (home coordinates of our mouth), met on the rays leaving our end
+    const where = ours ? 2 : Math.hypot(...st.pos) > TRACED_RADIUS ? 1 : 0;
+    const parent = !ours && b.parent && b.parent !== "gargantua" ? index.get(b.parent) ?? -1 : -1;
+    // (our side: a planet lit by its star, both fixed)
+    const host = ours && b.parent ? index.get(b.parent) : undefined;
     let pos = st.pos;
     if (parent >= 0) {
       const p = bodyState(sys, b.parent!, t).pos;
       pos = [pos[0] - p[0], pos[1] - p[1], pos[2] - p[2]];
     }
-    const lit = b.kind === "planet" ? planetLight(s, sys, b, parent, R) : { light: -1, illum: 0 };
+    let lit = b.kind === "planet" && !ours ? planetLight(s, sys, b, parent, Math.hypot(...st.pos)) : { light: -1, illum: 0 };
+    if (b.kind === "planet" && host !== undefined) {
+      const h = out[host]!;
+      const d = Math.hypot(st.pos[0] - h.pos[0], st.pos[1] - h.pos[1], st.pos[2] - h.pos[2]);
+      lit = { light: host, illum: (h.radius / d) ** 2 };
+    }
     index.set(b.id, out.length);
     out.push({
       id: b.id, pos, radius: b.radius, omega: meanMotion(sys, b), parent, kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
       mass: b.kind === "star" ? b.mass : 0, temperature: b.temperature ?? 0, brightness: b.kind === "star" ? 1 : albedo(b),
-      surface: b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1, ...lit,
+      surface: b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1, ...lit, where,
     });
   }
   return out;
+}
+
+const depth = (b: BodyDef) => (b.parent === null || b.parent === "gargantua" ? 0 : 1);
+
+/**
+ * Our end of the wormhole seen from far on Gargantua's side: the mean radiance of the throat's disk
+ * over our Sun's surface radiance — the throat maps our whole sky onto its disk, and the Sun covers
+ * (R☉/d☉)²/4 of it — and the Sun's temperature. Null without a system that has a Sun on our side.
+ */
+export function throatLight(s: Settings): { factor: number; temperature: number } | null {
+  const sys = sceneSystem(s);
+  const sun = sys?.bodies.find((b) => b.universe === "ours" && b.kind === "star");
+  if (!sun || sun.orbit.type !== "fixed") return null;
+  const d = Math.hypot(...sun.orbit.pos);
+  return { factor: (sun.radius / d) ** 2 / 4, temperature: sun.temperature ?? 5772 };
 }
 
 function albedo(b: BodyDef) {
@@ -116,6 +143,6 @@ export function packBodies(list: GpuBody[], out: Float32Array) {
     out.set([b.pos[0], b.pos[1], b.pos[2], b.radius], o);
     out.set([b.omega, b.parent, b.kind, b.mass], o + 4);
     out.set([b.temperature, b.brightness, b.surface, b.seed], o + 8);
-    out.set([b.light, b.illum, 0, 0], o + 12);
+    out.set([b.light, b.illum, b.where, 0], o + 12);
   });
 }

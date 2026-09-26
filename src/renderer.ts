@@ -11,7 +11,7 @@ import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame } from "./camera";
 import { mouth, setSceneTime } from "./wormhole";
-import { BODY_VEC4, MAX_BODIES, packBodies, sceneBodies } from "./system/scene-bodies";
+import { BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
 import { starOmega } from "./targeting";
 import {
   blackbodyLogY,
@@ -805,8 +805,16 @@ export class Renderer {
     packBodies(bodies, this.bodyData);
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
-    set(38, Math.min(bodies.length, MAX_BODIES), massive, 0, 0);
-    set(39, 0, 0, 0, 0);
+    const tl = s.wormhole ? throatLight(s) : null;
+    set(38, Math.min(bodies.length, MAX_BODIES), massive, tl?.factor ?? 0, tl?.temperature ?? 0);
+    // point sources at the catalogue stars' scale: a flux F (radiance units × sr) has the magnitude
+    // m = −26.74 − 2.5 log(F / F☉,1AU); the catalogue draws 10^(−0.4 m) × fluxScale, × ½ × bgIntensity
+    const lumSun = 10 ** (blackbodyLogY(5772) - dc.logY);
+    const fSun1AU = lumSun * Math.PI * (6.957e8 / 1.495978707e11) ** 2;
+    const pointScale = (0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
+    // highlight compression above magnitude −2: that flux spread over a glow of radius 0.75 pixel
+    const f2 = 0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
+    set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, 0);
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
@@ -849,7 +857,7 @@ export class Renderer {
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside
     // a system's traced bodies, and an orbiting mouth, likewise
-    for (const b of sceneBodies(s, 0)) if (b.parent < 0) r = Math.max(r, Math.hypot(...b.pos) + b.radius + 5);
+    for (const b of sceneBodies(s, 0)) if (b.parent < 0 && b.where === 0) r = Math.max(r, Math.min(Math.hypot(...b.pos), TRACED_RADIUS) + b.radius + 5);
     if (s.wormhole && s.whOrbit) r = Math.max(r, s.whDist + mouth(s).rGlue + 5);
     return r;
   }

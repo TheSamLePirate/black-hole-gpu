@@ -49,8 +49,8 @@ struct Params {
   whX: vec4f,      // mouth frame axes in the black hole's frame (x at the hole, z towards the spin axis)
   whY: vec4f,
   whZ: vec4f,
-  bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), unused, unused
-  bodyCfg2: vec4f, // unused
+  bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), mean radiance of the far throat over the Sun's (our side lit by it), temperature of that Sun [K]
+  bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); unused
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
@@ -91,7 +91,9 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 //   0: centre now (parent < 0) or offset from the parent's centre now; radius
 //   1: Ω (turning rate of its circle about the spin axis), parent index (−1), kind (0 star, 1 planet), mass m [M]
 //   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas); seed
-//   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB); unused ×2
+//   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB);
+//      where: 0 traced (within the escape radius), 1 far (met on the rays' straight way out),
+//      2 our universe (home coordinates, met by the rays that leave through our end of the wormhole); unused
 // Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
 // the retarded time Δt along the ray (no absolute time in float32).
 @group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
@@ -504,6 +506,32 @@ fn bodyCount() -> u32 { return u32(P.bodyCfg.x); }
 fn bodyRadius(k: u32) -> f32 { return bodies[4u * k].w; }
 fn bodyMass(k: u32) -> f32 { return bodies[4u * k + 1u].w; }
 fn bodyKind(k: u32) -> u32 { return u32(bodies[4u * k + 1u].z); }
+fn bodyWhere(k: u32) -> u32 { return u32(bodies[4u * k + 3u].z); }
+// A pixel's footprint radius at a distance d along its ray (unlensed estimate: the beam of one pixel)
+fn footprint(d: f32) -> f32 { return 0.75 * P.camUp.w * d; }
+// The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
+// the centre (|qc| < rEff) sees the point of a sphere of radius rEff above qc — so a sub-pixel planet
+// still shows its phase (a crescent a pixel wide), and a star its limb darkening.
+fn glowPoint(c: vec3f, qc: vec3f, rEff: f32, R: f32, dW: vec3f) -> vec3f {
+  let q = qc / rEff;
+  let nrm = normalize(q + sqrt(max(1.0 - dot(q, q), 0.0)) * -dW);
+  return c + R * nrm;
+}
+// Soft uniform disc of radius 1 (area-normalised over the unit disc)
+fn glowProfile(q: f32) -> f32 { return (1.0 - smoothstep(0.75, 1.0, q)) * 1.28; }
+// Bodies smaller than a pixel are drawn like the sky's catalogue stars: their flux turned into an
+// apparent magnitude, then at the catalogue's (photographic) scale — the disk's exposure would hide
+// them. The boost fades out as the body grows to a few pixels (R/rEff from ½ to 4), where it is seen
+// at the physical scale of the disk.
+fn pointBoost(ratio: f32) -> f32 { return exp2(log2(max(P.bodyCfg2.x, 1.0)) * (1.0 - smoothstep(0.5, 4.0, ratio))); }
+// Points brighter than magnitude −2 (Jupiter) are compressed logarithmically: the order of the
+// brightnesses is kept, a magnitude −10 star no longer floods the frame with its bloom.
+fn compressPoint(c: vec3f) -> vec3f {
+  let Lm = P.bodyCfg2.y;
+  let L = luminance(c);
+  if (Lm <= 0.0 || L <= Lm) { return c; }
+  return c * (Lm * (1.0 + log(L / Lm)) / L);
+}
 fn rotZ(p: vec3f, ang: f32) -> vec3f {
   let c = cos(ang);
   let s = sin(ang);
@@ -549,6 +577,48 @@ fn whVelocity(tEm: f32) -> vec3f {
   let c = whCentre(tEm);
   return P.whC.w * vec3f(-c.y, c.x, 0.0);
 }
+// The far throat when it is smaller than the pixel's footprint: the mean radiance of its disk — our
+// universe seen through it, dominated by our Sun: B☉ (R☉/d☉)²/4 (P.bodyCfg.z, 0 without a Sun) —
+// spread over the footprint around the ray's line (X a point on it, dW its backward direction).
+fn throatGlow(X: vec3f, dW: vec3f, C: vec3f, dist: f32, g: f32) -> vec3f {
+  if (P.bodyCfg.z <= 0.0) { return vec3f(0.0); }
+  let rho = P.wh.y;
+  let rEff = footprint(dist);
+  if (rho >= rEff) { return vec3f(0.0); }
+  let w = C - X;
+  let b = length(w - dot(w, dW) * dW);
+  if (b >= rEff) { return vec3f(0.0); }
+  return compressPoint(blackbody(P.bodyCfg.w * g, P.disk.w) * P.bodyCfg.z * (rho * rho / (rEff * rEff)) * glowProfile(b / rEff) * pointBoost(rho / rEff));
+}
+
+// Bodies at a finite distance beyond where the rays leave for their sky (the K2 star and Edmunds on
+// Gargantua's side, the Sun on ours): drawn like the catalogue stars — with the sky filter of the
+// pixel's lensed footprint (from the neighbouring rays: magnification, anti-aliasing) — around their
+// direction seen from the ray's point of departure (parallax), at the retarded time. Flux: B π R²/D²,
+// turned to the catalogue's scale (P.bodyCfg2.x), compressed above magnitude −2.
+fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f {
+  var col = vec3f(0.0);
+  for (var k = 0u; k < bodyCount(); k++) {
+    if (bodyWhere(k) != side) { continue; }
+    var c = bodyCentre(k, org.w);
+    c = bodyCentre(k, org.w - length(c - org.xyz));
+    let v = c - org.xyz;
+    let D = length(v);
+    let bd = v / D;
+    let kern = skyKernel(filt, d - bd);
+    if (kern < 1e-4 * filt.norm) { continue; }
+    let R = bodyRadius(k);
+    // the side it shows (a planet's phase, at its sub-observer point), its flux there
+    let F = shadeBody(k, c - R * bd, c, g, bd, org.w - D) * (PI * R * R / (D * D));
+    let Fs = F * P.bodyCfg2.x;
+    let Lm = P.bodyCfg2.z;
+    let Lf = luminance(Fs);
+    let comp = select(1.0, Lm * (1.0 + log(Lf / max(Lm, 1e-30))) / max(Lf, 1e-30), Lm > 0.0 && Lf > Lm);
+    col += Fs * comp * kern;
+  }
+  return col;
+}
+
 // A photon (travel direction d, energy 1) seen from a frame moving at v: its direction there and its
 // energy (Doppler factor γ(1 − v·d)). The frames' axes are parallel.
 struct Boosted { d: vec3f, e: f32 }
@@ -659,20 +729,20 @@ fn mouthForce(x: vec4f) -> vec3f {
 // Photosphere: the emergent temperature falls towards the limb, T(μ) = T (0.2 + 0.8 μ)^¼ (steeper
 // than a grey atmosphere, as the visible continuum of the Sun), which gives both the limb darkening
 // and the redder limb: a white-hot centre fading to orange and red.
-fn shadeStar(k: u32, X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
+fn shadeStar(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
   let nrm = normalize(X - c);
   let mu = clamp(-dot(nrm, dW), 0.0, 1.0);
   let surf = starSurface(nrm, tEm);
   let b2 = bodies[4u * k + 2u];
   let T = b2.x * pow(0.2 + 0.8 * mu, 0.25) * surf.y;
-  return blackbody(T * bodyShift(k, n, L, E0), P.disk.w) * b2.y * surf.x;
+  return blackbody(T * g, P.disk.w) * b2.y * surf.x;
 }
 
 // A planet: reflects the light of the accretion disk (from the hole's direction) or of its star, with
 // a surface of its kind (ocean with its glint, ice, rock, banded gas) and a thin atmosphere at the
 // limb. The reflected light keeps the source's spectrum: a blackbody at the source temperature, then
 // shifted by the planet's motion and the gravity climbed (g), like any emitter.
-fn shadePlanet(k: u32, X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
+fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
   let nrm = normalize(X - c);
   let b2 = bodies[4u * k + 2u];
   let b3 = bodies[4u * k + 3u];
@@ -715,12 +785,16 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f
   // atmosphere: the sunlit air (Rayleigh blue) over the whole day side, brighter along the limb
   let rim = pow(1.0 - mu, 3.0) * smoothstep(-0.1, 0.4, dot(nrm, ldir));
   let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf == 3u);
-  let g = bodyShift(k, n, L, E0);
   return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((alb + sky) * cosi + spec * cosi);
 }
 
 // Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
 // rim, prominences (Hα loops standing on the limb) and the white K-corona with radial streamers.
+fn shadeBody(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
+  if (bodyKind(k) == 0u) { return shadeStar(k, X, c, g, dW, tEm); }
+  return shadePlanet(k, X, c, g, dW, tEm);
+}
+
 fn starGlow(k: u32, p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
   let R = bodyRadius(k);
   let dv = p - c;
@@ -1502,7 +1576,16 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint) -> vec3f {
   return col * 0.5;
 }
 
-fn background(d: vec3f, g: f32, fp: Footprint, sky: f32) -> vec3f {
+fn background(d: vec3f, g: f32, fp: Footprint, sky: f32, org: vec4f) -> vec3f {
+  var pts = vec3f(0.0);
+  if (bodyCount() > 0u && P.bodyCfg2.x > 0.0) {
+    // (native sky: Gargantua's side; home: ours, through the wormhole)
+    pts = farPoints(select(1u, 2u, sky > 1.5), d, org, skyFilter(d, fp, P.time.w), g);
+  }
+  return pts + backgroundSky(d, g, fp, sky);
+}
+
+fn backgroundSky(d: vec3f, g: f32, fp: Footprint, sky: f32) -> vec3f {
   var mode = P.modes.z;
   // wormhole world: the black hole's universe is the distant galaxy, ours is the chosen sky
   if (P.wh.x > 0.5 && sky < 1.5) { mode = 4u; }
@@ -1884,7 +1967,9 @@ fn colormap(t0: f32) -> vec3f {
 
 // Result of a traced ray. The celestial sphere is shaded after the ray (in main) because its filter
 // footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
-struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32, tint: vec3f };
+// org: where the ray left for its sky (hole's frame, or our universe's home frame through our end of
+// the wormhole) and the coordinate time then: bodies at a finite distance beyond are drawn from there.
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32, tint: vec3f, org: vec4f };
 
 fn traceOut(col: vec3f) -> TraceOut {
   var o: TraceOut;
@@ -1987,11 +2072,13 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   if (seg == 0u) { kCur = geodesicRHS(s.x, s.p, L, a); }
   var comp: GState; // Kahan compensation of the state
   var skyDir = vec3f(0.0);
+  var skyOrg = vec4f(0.0); // where it left for the sky, and when (bodies beyond)
   var skyG = 1.0;
   var skyId = SKY_NATIVE;
   var thr = vec3f(1.0);  // transmission through the cinematic liquid surface
   var colW = vec3f(0.0); // light gathered before the last pass through the wormhole
   var rayLen = 0.0; // distance travelled by the ray (flat map), for the camera path's tube radius
+  var travel = 0.0; // the same, always kept when there are bodies (their footprint on the pixel)
   var tubeVis = 1.0; // the path's tube is hidden by the disk (opaque for it except in real gaps)
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
@@ -2027,8 +2114,11 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       skyDir = repToHome(w.n, w.d);
       skyG = 1.0 / eloc;
       skyId = SKY_HOME;
+      // (our universe's bodies — the Sun — are drawn with the sky, from where the ray left)
+      skyOrg = vec4f(dnegR(-P.whN.w).x * repToHome(w.n, -w.n), tNow);
       break;
     }
+    travel += w.len;
     // out of the far mouth: on through the Kerr metric, from the gluing sphere
     let tOut = tNow + whInT - w.len;
     let Xo = whCentre(tOut) + whToWorld(w.n * (P.wh2.z * 1.0005));
@@ -2131,12 +2221,29 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       let p0 = blCart(s.x);
       let p1 = blCart(n.x);
       let tEm = tNow + n.x.w;
-      // the nearest body hit in this step (and the stars' atmospheres in front of it)
+      let dv = p1 - p0;
+      let len = length(dv);
+      // the nearest body hit in this step (and the stars' atmospheres in front of it); bodies smaller
+      // than the pixel's footprint are spread over it (same flux: lensed images, Einstein rings and
+      // magnification then come from the traced rays themselves)
       var tHit = 2.0;
       var kHit = 0u;
       for (var k = 0u; k < bodyCount(); k++) {
+        if (bodyWhere(k) != 0u) { continue; }
         let c = bodyCentre(k, tEm);
         let R = bodyRadius(k);
+        let u = clamp(dot(c - p0, dv) / max(len * len, 1e-30), 0.0, 1.0);
+        let rEff = footprint(travel + u * len);
+        if (R < rEff) {
+          let qc = p0 + u * dv - c;
+          let dq = length(qc);
+          if (!radio && dq < rEff && u > 0.0 && u < 1.0) {
+            let dW = backwardDir(n, L, a);
+            let X = glowPoint(c, qc, rEff, R, dW);
+            col += trans * compressPoint(shadeBody(k, X, c, bodyShift(k, n, L, E0), dW, tEm) * (R * R / (rEff * rEff)) * glowProfile(dq / rEff) * pointBoost(R / rEff));
+          }
+          continue;
+        }
         let t = sphereHit(p0, p1, c, R);
         if (!radio && bodyKind(k) == 0u && length(p1 - c) < 4.0 * R) {
           // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
@@ -2153,13 +2260,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       if (tHit <= 1.0) {
         let X = mix(p0, p1, tHit);
         let c = bodyCentre(kHit, tEm);
-        if (!radio) {
-          if (bodyKind(kHit) == 0u) {
-            col += trans * shadeStar(kHit, X, c, n, L, E0, backwardDir(n, L, a), tEm);
-          } else {
-            col += trans * shadePlanet(kHit, X, c, n, L, E0, backwardDir(n, L, a), tEm);
-          }
-        }
+        if (!radio) { col += trans * shadeBody(kHit, X, c, bodyShift(kHit, n, L, E0), backwardDir(n, L, a), tEm); }
         trans = 0.0;
         fate = 3u;
         break;
@@ -2175,6 +2276,9 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       let t = glueHit(p0, p1, Cm);
       if (t >= 0.0) {
         let dW = backwardDir(n, L, a);
+        // far away the throat is smaller than a pixel: its light (our universe's, lit by our Sun) is
+        // spread over the pixel's footprint around the line through its centre
+        if (!radio) { col += trans * throatGlow(mix(p0, p1, t), dW, Cm, travel + t * length(p1 - p0), 1.0 / E0); }
         // an orbiting mouth: the photon in the mouth's rest frame (aberration, Doppler)
         let bo = boostPhoton(-dW, whVelocity(tEm));
         wn = normalize(worldToWh(mix(p0, p1, t) - Cm));
@@ -2188,6 +2292,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         break;
       }
     }
+    // the distance the ray has come (flat map): the pixel's footprint on small bodies, the throat
+    if (bodyCount() > 0u || whOn) { travel += length(blCart(n.x) - blCart(s.x)); }
 
     if (radio) {
       if (volOn) {
@@ -2365,6 +2471,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         Cm = whCentre(tNow + s.x.w - dist);
       }
       if (hitIt) {
+        if (!radio) { col += trans * throatGlow(X, dir, Cm, travel + dist, 1.0 / E0); }
         whInT = s.x.w - dist;
         let bo = boostPhoton(-dir, whVelocity(tNow + whInT));
         wn = normalize(worldToWh(X - Cm));
@@ -2376,6 +2483,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         continue;
       }
     }
+    // (bodies beyond the traced region — the K2 star, Edmunds — are drawn with the sky from here)
+    skyOrg = vec4f(x, tNow + s.x.w);
     if (P.path.x > 1.5) {
       // the rest of the (straight) way out, in chords of growing length
       var q = x;
@@ -2414,6 +2523,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     if (P.modes.y == SHIFT_NONE) { gBg = 1.0; }
     out.dir = skyDir;
     out.sky = skyId;
+    out.org = skyOrg;
     if (radio) {
       // no millimetre sky (the 2.7 K CMB is negligible)
     } else if (mode == MODE_PHYSICAL) {
@@ -2630,7 +2740,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let k = select(0.35, 0.5, interleaved);
     fp.jx *= k;
     fp.jy *= k;
-    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky);
+    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky, tr.org);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
 
@@ -2696,7 +2806,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     let t1 = normalize(cross(tr.dir, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(tr.dir.z) > 0.9)));
     let t2 = cross(tr.dir, t1);
     let w = PI / f32(ENV_H);
-    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky);
+    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky, tr.org);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   col = min(col, vec3f(60000.0));

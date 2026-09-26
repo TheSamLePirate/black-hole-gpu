@@ -179,7 +179,15 @@ test("bodies for the GPU: the companion star as before, the system's traced plan
   expect(b[0]!.mass).toBe(legacy.sunMass);
   const s = scene();
   const list = sceneBodies(s, 5000);
-  expect(list.map((q) => q.id)).toEqual(["miller", "mann"]); // the K2 star and Edmunds (2 026 M) come as points (phase 2)
+  expect(list.map((q) => q.id)).toEqual(["miller", "mann", "k2", "sun", "edmunds", "saturn"]);
+  // traced near the hole; beyond the traced region (met on the escaped rays); our side of the wormhole
+  expect(list.map((q) => q.where)).toEqual([0, 0, 1, 2, 1, 2]);
+  const ed = list[4]!, k2 = list[2]!;
+  expect(ed.parent).toBe(2); // around the K2 star, lit by it
+  expect(ed.light).toBe(2);
+  expect(Math.hypot(...ed.pos) * units(1e8).rgAu).toBeCloseTo(Math.sqrt(0.35), 6);
+  expect(k2.kind).toBe(0);
+  expect(list[5]!.light).toBe(3); // Saturn lit by the Sun
   const miller = list[0]!;
   const e = bodyState(SYS, "miller", 5000);
   for (let i = 0; i < 3; i++) expect(miller.pos[i]!).toBeCloseTo(e.pos[i]!, 12);
