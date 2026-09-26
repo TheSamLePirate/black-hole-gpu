@@ -58,7 +58,7 @@ struct Params {
   water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
   water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density), unused
   water5: vec4f,   // colour of the glow (linear rgb), unused
-  envCfg: vec4f,   // light probe: blend weight of a new frame (1: replace), unused…
+  envCfg: vec4f,   // light probe: reset (1), 2×2 phase, full refresh (0/1), averaging window [samples]
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -2497,17 +2497,25 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 // Light probe: the radiance reaching the camera from every direction, traced like the image, on an
 // ENV_W × ENV_H equirectangular map of the camera's rest frame (x right, y up, z forward;
 // u = atan2(x, z), v = polar angle from +y). It lights the spaceship the camera is mounted on. The
-// sky is pre-filtered over a texel; successive frames are blended (weight P.ext.w-like: env blend).
+// sky is pre-filtered over a texel. Each frame refreshes one texel of every 2×2 block (P.envCfg.y
+// picks which; all of them after a reset, P.envCfg.z = 1). Texels keep a running mean over their last
+// P.envCfg.w samples (alpha: count): it converges while the camera holds still, and follows it when
+// it moves (a short window).
 // ---------------------------------------------------------------------------------------------
-const ENV_W = 128u;
-const ENV_H = 64u;
+const ENV_W = 256u;
+const ENV_H = 128u;
 
 @compute @workgroup_size(8, 8)
 fn env(@builtin(global_invocation_id) gid: vec3u) {
-  if (gid.x >= ENV_W || gid.y >= ENV_H) { return; }
-  let h = hash4(vec3u(gid.xy, P.frame.x));
-  let u = (f32(gid.x) + h.x) / f32(ENV_W);
-  let v = (f32(gid.y) + h.y) / f32(ENV_H);
+  var px = gid.xy;
+  if (P.envCfg.z < 0.5) {
+    let q = u32(P.envCfg.y);
+    px = gid.xy * 2u + vec2u(q & 1u, q >> 1u);
+  }
+  if (px.x >= ENV_W || px.y >= ENV_H) { return; }
+  let h = hash4(vec3u(px, P.frame.x));
+  let u = (f32(px.x) + h.x) / f32(ENV_W);
+  let v = (f32(px.y) + h.y) / f32(ENV_H);
   let ph = (u - 0.5) * TAU;
   let th = v * PI;
   let dl = vec3f(sin(th) * sin(ph), cos(th), sin(th) * cos(ph));
@@ -2523,11 +2531,10 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   col = min(col, vec3f(60000.0));
-  let i = gid.y * ENV_W + gid.x;
+  let i = px.y * ENV_W + px.x;
   let old = envBuf[i];
-  // blend with the previous frames (x: blend weight of the new sample; 1 = replace)
-  let k = select(P.envCfg.x, 1.0, old.a <= 0.0);
-  envBuf[i] = vec4f(mix(old.rgb, col, k), 1.0);
+  let n = select(min(old.a, P.envCfg.w - 1.0), 0.0, P.envCfg.x >= 1.0 || old.a <= 0.0);
+  envBuf[i] = vec4f(mix(old.rgb, col, 1.0 / (n + 1.0)), n + 1.0);
 }
 
 // ---------------------------------------------------------------------------------------------

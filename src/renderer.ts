@@ -186,6 +186,7 @@ export class Renderer {
   readonly ship: ShipRenderer;
   private envPipeline: GPUComputePipeline;
   private envReset = true;
+  private envPhase = 0;
   private shipLoading: Promise<void> | null = null;
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
@@ -813,7 +814,8 @@ export class Renderer {
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light)
-    set(47, this.envReset ? 1 : 0.35, 0, 0, 0);
+    // (window: 2 samples while the camera moves, a long running mean once it holds still)
+    set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, o.flags & FLAG_INTERLEAVED ? 2 : 512);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -882,18 +884,24 @@ export class Renderer {
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
   private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
-    if (!s.ship) return;
+    if (!s.ship) {
+      this.envReset = true; // stale by the time the ship comes back
+      return;
+    }
     if (!this.ship.ready) {
       this.shipLoading ??= this.ship.load().then(() => this.invalidate(), (e) => console.error("Ranger:", e));
       return;
     }
+    // (256 × 128 probe: everything after a reset, else one texel of each 2×2 block per frame)
+    const full = this.envReset;
     const pass = enc.beginComputePass();
     pass.setPipeline(this.envPipeline);
     pass.setBindGroup(0, t.traceBind);
-    pass.dispatchWorkgroups(128 / 8, 64 / 8);
+    pass.dispatchWorkgroups(full ? 32 : 16, full ? 16 : 8);
     pass.end();
     this.ship.encodeEnv(enc);
     this.envReset = false;
+    this.envPhase++;
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
@@ -1009,7 +1017,7 @@ export class Renderer {
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          mount: s.shipMount as Mount, fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight,
+          mount: s.shipMount as Mount, fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
@@ -1099,7 +1107,7 @@ export class Renderer {
         sampleIndex: this.sampleIndex, flags, tol: s.integratorTolerance, noise: s.noiseThreshold, minSpp: 8,
       });
       this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
-      if (this.sampleIndex < 4) this.dispatchEnv(enc, t, s);
+      if (this.sampleIndex < 32) this.dispatchEnv(enc, t, s);
       this.bandY = y1;
       if (this.bandY >= t.height) {
         this.bandY = 0;
@@ -1285,7 +1293,7 @@ export class Renderer {
         shutter: o.shutter,
       });
       this.dispatchTrace(enc, t, t.width, rows, o.tolerance > 0);
-      if (job.sampleIndex < 4) this.dispatchEnv(enc, t, s);
+      this.dispatchEnv(enc, t, s);
       job.bandY = y1;
       if (job.bandY >= t.height) {
         job.bandY = 0;

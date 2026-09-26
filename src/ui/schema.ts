@@ -247,6 +247,11 @@ export const SCHEMA: ControlDef[] = [
     help: "Metalness of the plating: 0 a painted hull, 1 bare metal (mirror-like, coloured reflections of the disk).",
   },
   {
+    key: "shipCoat", type: "number", section: "scene", group: "Spaceship", label: "Clear coat", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "A thin glossy varnish over the paint: sharp reflections of the disk on top of the satin plating, strongest at grazing angles (Fresnel).",
+    keywords: "varnish gloss lacquer",
+  },
+  {
     key: "shipRough", type: "number", section: "scene", group: "Spaceship", label: "Roughness", min: 0.1, max: 2.5, step: 0.01, enabled: (s) => s.ship, effect: "display",
     help: "Roughness scale of the plating: lower is glossier (sharper reflections of the disk).",
   },

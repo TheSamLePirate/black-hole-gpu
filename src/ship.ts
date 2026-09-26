@@ -17,6 +17,7 @@ export interface ShipView {
   metal: number;
   rough: number;
   light: number;
+  coat: number;
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -37,11 +38,13 @@ export function mountMatrix(m: Mount): { R: [V3, V3, V3]; t: V3 } {
   return { R, t: R.map((r) => -dot(r, eye)) as V3 };
 }
 
-export const ENV_W = 128;
-export const ENV_H = 64;
-const ENV_MIPS = 8; // 128×64 … 1×1
+export const ENV_W = 256;
+export const ENV_H = 128;
+const RAW_MIPS = 9; // box-filtered probe 256×128 … 1×1: the source of the GGX filtering
+const SPEC_MIPS = 6; // GGX pre-filtered, roughness = level / 5
+const GGX_SAMPLES = [0, 48, 64, 96, 128, 128];
 const SHADOW = 2048;
-const STRIDE = 14 * 4;
+const STRIDE = 8 * 4; // position, normal, material, ambient occlusion
 
 interface ShipTargetRes {
   w: number;
@@ -57,7 +60,9 @@ export class ShipRenderer {
   ready = false;
   /** Light probe written by the tracer's `env` kernel (camera rest frame, equirectangular). */
   readonly envBuf: GPUBuffer;
-  private envTex: GPUTexture;
+  private envRaw: GPUTexture;
+  private envSpec: GPUTexture;
+  private ggxBufs: GPUBuffer[] = [];
   private shBuf: GPUBuffer;
   private uniform: GPUBuffer;
   private vbuf: GPUBuffer | null = null;
@@ -68,12 +73,13 @@ export class ShipRenderer {
   private pipes!: {
     copy: GPUComputePipeline;
     down: GPUComputePipeline;
+    ggx: GPUComputePipeline;
     sh: GPUComputePipeline;
     ship: GPURenderPipeline;
     shadow: GPURenderPipeline;
     comp: GPURenderPipeline;
   };
-  private envBinds: { copy: GPUBindGroup; down: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
+  private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
   private shipBind: GPUBindGroup | null = null;
   private shadowBind: GPUBindGroup | null = null;
   private targets = new WeakMap<GPUTexture, ShipTargetRes>();
@@ -81,10 +87,14 @@ export class ShipRenderer {
   constructor(private device: GPUDevice, shipWGSL: string) {
     const d = device;
     this.envBuf = d.createBuffer({ size: ENV_W * ENV_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
-    this.envTex = d.createTexture({
-      size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: ENV_MIPS,
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
-    });
+    const envUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING;
+    this.envRaw = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: RAW_MIPS, usage: envUsage });
+    this.envSpec = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: SPEC_MIPS, usage: envUsage });
+    for (let l = 0; l < SPEC_MIPS; l++) {
+      const b = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      d.queue.writeBuffer(b, 0, new Float32Array([Math.max(l / (SPEC_MIPS - 1), 0.02), RAW_MIPS, GGX_SAMPLES[l]!, 0]));
+      this.ggxBufs.push(b);
+    }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.uniform = d.createBuffer({ size: 64 + 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.shadowTex = d.createTexture({
@@ -100,15 +110,15 @@ export class ShipRenderer {
         attributes: [
           { shaderLocation: 0, offset: 0, format: "float32x3" },
           { shaderLocation: 1, offset: 12, format: "float32x3" },
-          { shaderLocation: 2, offset: 24, format: "float32x4" },
-          { shaderLocation: 3, offset: 40, format: "float32x2" },
-          { shaderLocation: 4, offset: 48, format: "float32" },
+          { shaderLocation: 2, offset: 24, format: "float32" },
+          { shaderLocation: 3, offset: 28, format: "float32" },
         ],
       }],
     };
     this.pipes = {
       copy: cp("envCopy"),
       down: cp("envDown"),
+      ggx: cp("envGGX"),
       sh: cp("envSH"),
       ship: d.createRenderPipeline({
         layout: "auto",
@@ -145,12 +155,12 @@ export class ShipRenderer {
     };
   }
 
-  /** Downloads the mesh (320 kB). */
+  /** Downloads the mesh (1 MB). */
   async load() {
     const d = this.device;
     const mesh = await fetch(meshUrl).then((r) => r.arrayBuffer());
     const u32 = new Uint32Array(mesh, 0, 4);
-    if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "RNGR") throw new Error("bad ranger.bin");
+    if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "RNGR" || u32[1] !== 2) throw new Error("bad ranger.bin");
     const nv = u32[2]!;
     const ni = u32[3]!;
     const bb = new Float32Array(mesh, 16, 6);
@@ -158,7 +168,7 @@ export class ShipRenderer {
     const hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
     this.bound.c = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
     this.bound.r = Math.hypot(...sub(hi, lo)) / 2;
-    const verts = new Float32Array(mesh, 40, nv * 14);
+    const verts = new Float32Array(mesh, 40, nv * 8);
     const idx = new Uint32Array(mesh, 40 + nv * STRIDE, ni);
     this.vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(this.vbuf, 0, verts);
@@ -171,16 +181,31 @@ export class ShipRenderer {
 
   private bind() {
     const d = this.device;
-    const envView = (l: number) => this.envTex.createView({ baseMipLevel: l, mipLevelCount: 1 });
+    const raw = (l: number) => this.envRaw.createView({ baseMipLevel: l, mipLevelCount: 1 });
+    const spec = (l: number) => this.envSpec.createView({ baseMipLevel: l, mipLevelCount: 1 });
+    const envSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat" });
     this.envBinds = {
-      copy: d.createBindGroup({
-        layout: this.pipes.copy.getBindGroupLayout(0),
-        entries: [{ binding: 0, resource: { buffer: this.envBuf } }, { binding: 1, resource: envView(0) }],
-      }),
-      down: Array.from({ length: ENV_MIPS - 1 }, (_, i) =>
+      copy: [raw(0), spec(0)].map((view) =>
+        d.createBindGroup({
+          layout: this.pipes.copy.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: this.envBuf } }, { binding: 1, resource: view }],
+        }),
+      ),
+      down: Array.from({ length: RAW_MIPS - 1 }, (_, i) =>
         d.createBindGroup({
           layout: this.pipes.down.getBindGroupLayout(0),
-          entries: [{ binding: 1, resource: envView(i + 1) }, { binding: 2, resource: envView(i) }],
+          entries: [{ binding: 1, resource: raw(i + 1) }, { binding: 2, resource: raw(i) }],
+        }),
+      ),
+      ggx: Array.from({ length: SPEC_MIPS - 1 }, (_, i) =>
+        d.createBindGroup({
+          layout: this.pipes.ggx.getBindGroupLayout(0),
+          entries: [
+            { binding: 1, resource: spec(i + 1) },
+            { binding: 2, resource: this.envRaw.createView() },
+            { binding: 4, resource: envSamp },
+            { binding: 5, resource: { buffer: this.ggxBufs[i + 1]! } },
+          ],
         }),
       ),
       sh: d.createBindGroup({
@@ -197,7 +222,7 @@ export class ShipRenderer {
       entries: [
         { binding: 0, resource: { buffer: this.uniform } },
         { binding: 1, resource: { buffer: this.shBuf } },
-        { binding: 2, resource: this.envTex.createView() },
+        { binding: 2, resource: this.envSpec.createView() },
         { binding: 3, resource: samp },
         { binding: 7, resource: this.shadowTex.createView() },
         { binding: 8, resource: cmp },
@@ -212,17 +237,25 @@ export class ShipRenderer {
     });
   }
 
-  /** Probe → texture, mips, spherical harmonics (after the tracer's env pass). */
+  /** Probe → box mips, GGX pre-filtered mips, spherical harmonics (after the tracer's env pass). */
   encodeEnv(enc: GPUCommandEncoder) {
     if (!this.envBinds) return;
+    const groups = (l: number) => [Math.ceil(Math.max(1, ENV_W >> l) / 8), Math.ceil(Math.max(1, ENV_H >> l) / 8)] as const;
     const pass = enc.beginComputePass();
     pass.setPipeline(this.pipes.copy);
-    pass.setBindGroup(0, this.envBinds.copy);
-    pass.dispatchWorkgroups(ENV_W / 8, ENV_H / 8);
+    for (const g of this.envBinds.copy) {
+      pass.setBindGroup(0, g);
+      pass.dispatchWorkgroups(ENV_W / 8, ENV_H / 8);
+    }
     pass.setPipeline(this.pipes.down);
     this.envBinds.down.forEach((g, i) => {
       pass.setBindGroup(0, g);
-      pass.dispatchWorkgroups(Math.ceil(Math.max(1, ENV_W >> (i + 1)) / 8), Math.ceil(Math.max(1, ENV_H >> (i + 1)) / 8));
+      pass.dispatchWorkgroups(...groups(i + 1));
+    });
+    pass.setPipeline(this.pipes.ggx);
+    this.envBinds.ggx.forEach((g, i) => {
+      pass.setBindGroup(0, g);
+      pass.dispatchWorkgroups(...groups(i + 1));
     });
     pass.setPipeline(this.pipes.sh);
     pass.setBindGroup(0, this.envBinds.sh);
@@ -238,10 +271,10 @@ export class ShipRenderer {
     m.set([...t, 1], 12);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
     m.set([tanH * v.aspect, tanH, 0.05, 80], 16);
-    m.set([v.albedo, v.metal, v.rough, ENV_MIPS], 20);
+    m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
-    m.set([v.light, 0, 0, 0], 28);
+    m.set([v.light, v.coat, 0, 0], 28);
     this.device.queue.writeBuffer(this.uniform, 0, m);
   }
 

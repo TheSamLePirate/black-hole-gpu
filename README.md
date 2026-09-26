@@ -189,13 +189,20 @@ ear-clipped in their plane, 40° auto-smooth normals, one material per part; the
 baked on another UV layout and are not used) carries the camera. A few metres across, it lives in the camera's
 local flat patch of spacetime and is rigid in its rest frame, so it is rasterized with the tracer's own pinhole
 (4× MSAA) and composited over the resolved HDR image, before bloom — the disk's glare spills over its
-silhouette. It is lit by a **light probe traced by the ray tracer itself**: 128×64 directions around the camera,
-in its rest frame (lensed disk, Gargantua, sky, aberration and Doppler of the camera's motion included),
-turned into box-filtered mips (glossy reflections, split-sum BRDF) and order-2 spherical harmonics (diffuse
-irradiance, Ramamoorthi & Hanrahan), plus a shadow map from the dominant light direction (the L1 band).
-Procedural plating: light grey panels with seams and wear, dark glass, metal nozzles. A lighting gain (1 =
+silhouette. It is lit by a **light probe traced by the ray tracer itself**: 256×128 directions around the camera,
+in its rest frame (lensed disk, Gargantua, sky, aberration and Doppler of the camera's motion included), one
+texel of each 2×2 block refreshed per frame, each texel a running mean that converges while the camera holds
+still. The probe is pre-filtered with the GGX lobe per roughness (filtered importance sampling, split-sum BRDF
+with multiple-scattering compensation) and projected on order-2 spherical harmonics (diffuse irradiance,
+Ramamoorthi & Hanrahan); a shadow map follows the dominant light direction (the L1 band). The mesh is refined
+to ≤ 0.45 m edges (crack-free red-green refinement) and carries **ambient occlusion baked** by ray casting
+(96 rays per vertex against a BVH). Surfaces: light grey paint under a **clear coat** (sharp reflections of the
+disk at grazing angles), a **procedural normal map** evaluated in the ship's frame (1.2 cm seam grooves,
+rivet rows, pillowed and slightly tilted panels, so reflections break panel by panel; features narrower
+than a few pixels fade out), wear, dark glass, metal nozzles; specular occlusion, horizon fade of bumped
+reflections and specular anti-aliasing from the normal's variation within the pixel. A lighting gain (1 =
 physical: against the disk the hull is a black silhouette, since it receives a few hundred times less light
-than the disk's surface brightness; default 30), hull brightness, metalness and roughness are settings.
+than the disk's surface brightness; default 30), hull brightness, metalness, roughness and clear coat are settings.
 
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
 preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny

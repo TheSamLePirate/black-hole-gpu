@@ -164,6 +164,7 @@ export interface Settings {
   shipMetal: number; // metalness of the plating (0 painted … 1 bare metal)
   shipRough: number; // roughness scale (lower: glossier)
   shipLight: number; // gain on the light the hull receives (1: physical)
+  shipCoat: number; // clear coat over the paint (0…1)
   // companion star on a circular equatorial orbit around the hole
   sun: boolean;
   sunOrbit: number; // orbital radius [M]
@@ -296,6 +297,7 @@ export function defaultSettings(): Settings {
     shipMetal: 0.15,
     shipRough: 1,
     shipLight: 30,
+    shipCoat: 1,
     sun: false,
     sunOrbit: 70,
     sunRadius: 2.5,
