@@ -147,13 +147,20 @@ export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number): Local
   };
   let best: LocalPatch | null = null;
   list.forEach((b, k) => {
-    if (b.where !== 2) return;
+    if (b.where !== 2 && b.where !== 4) return;
     const C = b.pos;
     const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
     if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;
     const rel = seenFrom(toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]), [0, 0, 0], cam.beta);
     const host = b.light >= 0 ? list[b.light]!.pos : ([C[0] + 1, C[1], C[2]] as Vec3);
-    const ax = b.rings ? poleAxes(b.rings.pole) : ([[1, 0, 0], [0, 1, 0], [0, 0, 1]] as [Vec3, Vec3, Vec3]);
+    // (its own axes: its pole, turned by its rotation — the tracer's spunAxes)
+    const pa = poleAxes(b.pole ?? [0, 0, 1]);
+    const cw = Math.cos(b.spin ?? 0), sw = Math.sin(b.spin ?? 0);
+    const ax: [Vec3, Vec3, Vec3] = [
+      [cw * pa[0][0] + sw * pa[1][0], cw * pa[0][1] + sw * pa[1][1], cw * pa[0][2] + sw * pa[1][2]],
+      [-sw * pa[0][0] + cw * pa[1][0], -sw * pa[0][1] + cw * pa[1][1], -sw * pa[0][2] + cw * pa[1][2]],
+      pa[2],
+    ];
     best = {
       index: k,
       centre: [rel[0] / b.radius, rel[1] / b.radius, rel[2] / b.radius],
@@ -176,7 +183,7 @@ export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: numb
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   let best: LocalPatch | null = null;
   list.forEach((b, k) => {
-    if (b.where === 2) return; // (our universe: through the wormhole only)
+    if (b.where === 2 || b.where === 4) return; // (our universe: through the wormhole only)
     const C = bodyPlace(list, k);
     const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
     if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;

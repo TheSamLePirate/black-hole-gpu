@@ -11,8 +11,10 @@ import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
-import { BODY_PLANET, BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
-import { loadPlanetMaps, type PlanetMaps } from "./system/planet-maps";
+import { BODY_PLANET, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
+import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
+import { homeOf } from "./system/our-side";
+import type { Vec3 } from "./physics";
 import { localPatch } from "./system/local-patch";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
@@ -35,7 +37,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 54;
+const PARAM_VEC4S = 55;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -213,8 +215,11 @@ export class Renderer {
   private bgTexture: GPUTexture;
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
-  /** Saturn's globe and rings (placeholders until loaded) */
+  /** the solar system's maps and Saturn's rings (placeholders until loaded, on first use) */
   private planetMaps: PlanetMaps;
+  private mapsRequested = false;
+  /** called when assets loaded in the background change the image (the loop redraws) */
+  onAssets: (() => void) | null = null;
   private catalogue: GPUBuffer;
   private pathBuf!: GPUBuffer;
   private bodyBuf!: GPUBuffer;
@@ -301,8 +306,9 @@ export class Renderer {
         { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 14, visibility: C, buffer: { type: "storage" } },
         { binding: 15, visibility: C, buffer: { type: "read-only-storage" } },
-        { binding: 16, visibility: C, texture: { sampleType: "float" } },
+        { binding: 16, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } },
         { binding: 17, visibility: C, texture: { sampleType: "float" } },
+        { binding: 18, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -363,7 +369,7 @@ export class Renderer {
     this.bgTexture = placeholder();
     this.mwTexture = placeholder();
     this.starLodTexture = placeholder();
-    this.planetMaps = { globe: placeholder(), rings: placeholder() };
+    this.planetMaps = placeholderMaps(device);
     // empty catalogue: grid 1, no stars
     this.catalogue = device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.catalogue, 0, new Uint32Array([0x31525453, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
@@ -391,12 +397,18 @@ export class Renderer {
     this.invalidate();
   }
 
-  /** Loads Saturn's maps in the background (its procedural bands until then). */
-  async loadPlanetMaps(): Promise<void> {
-    this.planetMaps = await loadPlanetMaps(this.device);
-    if (this.live) this.bindTarget(this.live);
-    if (this.offline) this.bindTarget(this.offline.target);
-    this.invalidate();
+  /** Loads the solar system's maps in the background, the first time a scene needs them. */
+  private requestPlanetMaps() {
+    this.mapsRequested = true;
+    loadPlanetMaps(this.device)
+      .then((maps) => {
+        this.planetMaps = maps;
+        if (this.live) this.bindTarget(this.live);
+        if (this.offline) this.bindTarget(this.offline.target);
+        this.invalidate();
+        this.onAssets?.();
+      })
+      .catch((e) => console.warn("Planet maps unavailable:", e));
   }
 
   get realSkyLoaded() {
@@ -613,8 +625,9 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.globe.createView() },
-        { binding: 17, resource: this.planetMaps.rings.createView() },
+        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
+        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
+        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -635,8 +648,9 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.globe.createView() },
-        { binding: 17, resource: this.planetMaps.rings.createView() },
+        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
+        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
+        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -921,7 +935,18 @@ export class Renderer {
     set(52, ...(near?.light ?? [0, 0, 1]), mR);
     const atm = nb?.surface?.atmosphere;
     set(53, atm?.H ?? 8000, atm ? atm.rho0 / 1.225 : 0, atm ? 1 + (12 * atm.H) / mR : 1, 4.925490947e-6 * s.massSolar);
-    packBodies(bodies, this.bodyData);
+    // our universe: places relative to the camera there (else to the mouth); mapped bodies' albedo
+    // over their map's mean
+    const origin = s.wormhole && cam.region === "throat" && cam.ell < 0 ? homeOf(m.w, cam.ell, cam.n) : ([0, 0, 0] as Vec3);
+    set(54, ...origin, 100 * m.w.rho);
+    for (const b of bodies) {
+      const map = b.surface >= SURFACE_MAPPED ? GARGANTUA_SYSTEM.bodies.find((q) => q.id === b.id)?.map : undefined;
+      if (map) {
+        if (!this.mapsRequested) this.requestPlanetMaps();
+        b.brightness /= this.planetMaps.mean.get(map) ?? 0.25;
+      }
+    }
+    packBodies(bodies, this.bodyData, origin);
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
     const tl = s.wormhole ? throatLight(s) : null;
@@ -933,9 +958,8 @@ export class Renderer {
     const pointScale = (0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
     // highlight compression above magnitude −2: that flux spread over a glow of radius 0.75 pixel
     const f2 = 0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
-    // (w: our universe has planets the rays test in the Dneg region — Saturn)
-    const oursTraced = bodies.slice(0, MAX_BODIES).some((b) => b.where === 2 && b.kind === BODY_PLANET);
-    set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, oursTraced ? 1 : 0);
+    // (w: where our universe's bodies start in the list)
+    set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, ourStart(bodies));
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)

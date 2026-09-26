@@ -6,6 +6,7 @@
 
 import { body, type BodyDef, type System } from "./bodies";
 import { circularOrbit, omega } from "./kerr-orbits";
+import { solarState } from "./solar";
 
 export type Vec3 = [number, number, number];
 
@@ -37,6 +38,7 @@ export function bodyState(sys: System, id: string, t: number): BodyState {
   const b = body(sys, id);
   const o = b.orbit;
   if (o.type === "fixed") return { pos: [...o.pos] as Vec3, vel: [0, 0, 0], dtau: 1 };
+  if (o.type === "solar") return { ...solarState(id, t), dtau: 1 };
   const w = meanMotion(sys, b);
   if (o.type === "kerr") {
     const c = circle(o.r, o.phase + w * t, w);
@@ -82,6 +84,8 @@ export function bodyTrack(sys: System, id: string): Track {
   if (o.type === "fixed") {
     const P = [...o.pos] as Vec3;
     tr = { pos: () => P, vel: () => [0, 0, 0] };
+  } else if (o.type === "solar") {
+    tr = { pos: (t) => solarState(id, t).pos, vel: (t) => solarState(id, t).vel };
   } else {
     const w = meanMotion(sys, b);
     const R = o.type === "kerr" ? o.r : o.a;

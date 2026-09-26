@@ -1,5 +1,5 @@
 import {
-  basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor, yawPitchRoll,
+  basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
 import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 } from "./physics";
 import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
@@ -18,8 +18,8 @@ import { circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
-import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
-import { homeOf, OUR_BODIES, ourGravity } from "./system/our-side";
+import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
+import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, repToHomeVec } from "./system/our-side";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1207,22 +1207,25 @@ export class CameraController {
       const U = lin(v, g, d, accel * simDt);
       v = lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
     }
-    // our universe: the Newtonian pull of the Sun and Saturn, in sub-steps short against the time
-    // it takes to fall towards them
-    const ours = p.l < -m.w.a && s.system === "gargantua" ? OUR_BODIES : [];
+    // our universe: the Newtonian pull of the solar system, in sub-steps short against the time it
+    // takes to fall towards its nearest body (a warp beyond them: the ship's clock lags the request)
+    const t0 = this.nowTime();
+    const ours = p.l < -m.w.a && s.system === "gargantua";
+    if (ours && homeOfPose(m.w, p).r > 1.05 * 100 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w);
     let steps = 1;
-    if (ours.length) {
-      const X = homeOf(m.w, p.l, p.n);
-      const tDyn = Math.min(...ours.map((b) => Math.sqrt(Math.hypot(X[0] - b.pos[0], X[1] - b.pos[1], X[2] - b.pos[2]) ** 3 / b.mass)));
-      steps = Math.min(Math.max(Math.ceil(simDt / (0.01 * tDyn)), 1), 400);
+    let span = simDt;
+    if (ours) {
+      const tDyn = ourGravity(m.w, p.l, p.n, t0).tDyn;
+      span = Math.min(simDt, 400 * 0.01 * tDyn);
+      steps = Math.min(Math.max(Math.ceil(span / (0.01 * tDyn)), 1), 400);
     }
     let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
-    const dt = simDt / steps;
+    const dt = span / steps;
     for (let i = 0; i < steps; i++) {
-      if (ours.length) {
-        const g = ourGravity(m.w, pose.l, pose.n);
+      if (ours) {
+        const g = ourGravity(m.w, pose.l, pose.n, t0 + i * dt);
         if (g.inside) {
-          v = [0, 0, 0];
+          v = homeToRep(m.w, pose.l, pose.n, ourState(g.inside, t0 + i * dt).vel);
           break;
         }
         v = lin(v, 1, g.acc, dt);
@@ -1239,6 +1242,49 @@ export class CameraController {
     setRepPose(s, { ...pose, vel: v });
     s.motion = "geodesic";
     this.sync();
+    return t0 + span;
+  }
+
+  /**
+   * Our universe far from the mouth (flat): velocity Verlet in the home frame's Cartesian
+   * coordinates, the attitude fixed against the stars; a body met: the ship rests on it.
+   */
+  private flyHome(p: ReturnType<typeof repPose>, vRep: Vec3, simDt: number, t0: number, w: Dneg) {
+    const s = this.s;
+    let X = homeOf(w, p.l, p.n);
+    let V = repToHomeVec(w, p.l, p.n, vRep);
+    const fwd = repToHomeVec(w, p.l, p.n, p.fwd);
+    const up = repToHomeVec(w, p.l, p.n, p.up);
+    let g = gravityHome(X, t0);
+    const span = Math.min(simDt, 400 * 0.01 * g.tDyn);
+    const steps = Math.min(Math.max(Math.ceil(span / (0.01 * g.tDyn)), 1), 400);
+    const dt = span / steps;
+    let t = t0;
+    for (let i = 0; i < steps; i++) {
+      V = lin(V, 1, g.acc, dt / 2);
+      X = lin(X, 1, V, dt);
+      t += dt;
+      g = gravityHome(X, t);
+      if (g.inside) {
+        // (on its ground: pushed back to the surface, moving with it)
+        const b = ourState(g.inside, t);
+        const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius;
+        const d = lin(X, 1, b.pos, -1);
+        const dl = Math.hypot(...d);
+        X = lin(b.pos, 1, d, (r * 1.0000001) / dl);
+        V = b.vel;
+        break;
+      }
+      V = lin(V, 1, g.acc, dt / 2);
+      const sp = Math.hypot(...V);
+      if (sp > 0.999) V = lin(V, 0.999 / sp, V, 0);
+    }
+    const speed = Math.hypot(...V);
+    this.properTime += span * Math.sqrt(Math.max(1 - speed * speed, 0));
+    setHomePose(s, X, normalize(fwd), normalize(up), V);
+    s.motion = "geodesic";
+    this.sync();
+    return t0 + span;
   }
 
   // ------------------------------------------------------------------------------ piloting
@@ -2897,3 +2943,8 @@ export function isTyping(e: KeyboardEvent) {
   return !!t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 }
 
+
+/** A rep pose's distance from the mouth in the home frame */
+function homeOfPose(w: Dneg, p: { l: number; n: Vec3 }) {
+  return { r: radius(w, p.l)[0] };
+}

@@ -50,7 +50,7 @@ struct Params {
   whY: vec4f,
   whZ: vec4f,
   bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), mean radiance of the far throat over the Sun's (our side lit by it), temperature of that Sun [K]
-  bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); unused
+  bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); index of our universe's first body (= count: none)
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
@@ -69,6 +69,8 @@ struct Params {
   near4: vec4f,    // direction of its light source (camera rest frame, aberrated); w = metres per radius
   near5: vec4f,    // its atmosphere: scale height [m], sea-level density / 1.225 kg/m³ (0: none),
                    // top of the air [radii], seconds per M (the waves' clock)
+  ourCam: vec4f,   // our universe: the origin of its bodies' places (the camera's place in the home
+                   // frame when it is there, else the mouth: 0); w = radius of the Dneg region (r(ℓ_far))
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -100,23 +102,25 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 // Bodies drawn as spheres (src/system/scene-bodies.ts), 6 vec4 each:
 //   0: centre now (parent < 0) or offset from the parent's centre now; radius
 //   1: Ω (turning rate of its circle about the spin axis), parent index (−1), kind (0 star, 1 planet), mass m [M]
-//   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas,
-//      4 gas drawn from its map: Saturn); seed
+//   2: stars: temperature [K], brightness; planets: albedo (mapped: over its map's mean); surface (0
+//      ocean, 1 ice, 2 rock, 3 gas, 4 + n: drawn from map n); seed, or the inner radius of its rings
 //   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB);
 //      where: 0 traced (within the escape radius), 1 far (met on the rays' straight way out),
-//      2 our universe (home coordinates, met by the rays that leave through our end of the wormhole),
+//      2 our universe (home coordinates, relative to P.ourCam), 4 the same within the Dneg region,
 //      3 drawn in the local patch; outer radius of its rings (its radii; 0: none)
 //   4: planets: where its light comes from, as its light probe measured it (black-hole frame, unit);
 //      w = its colour temperature [K] when measured, else 0 (the hole's direction, or its star's)
-//   5: rings: pole (its universe's frame), inner radius (its radii)
+//   5: pole (its universe's frame), turn about it now (radians)
 // Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
 // the retarded time Δt along the ray (no absolute time in float32).
 @group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
 const BV = 6u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
-// Saturn's map (equirectangular, sRGB) and its rings' radial profile (sRGB + opacity, from the inner
-// to the outer radius), mip-mapped (src/system/planet-maps.ts)
-@group(0) @binding(16) var planetTex: texture_2d<f32>;
+// The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
+// from the inner to the outer radius), mip-mapped (src/system/planet-maps.ts)
+@group(0) @binding(16) var mapHi: texture_2d_array<f32>; // 2048 × 1024 (solar.ts: MAPS_HI)
 @group(0) @binding(17) var ringTex: texture_2d<f32>;
+@group(0) @binding(18) var mapLo: texture_2d_array<f32>; // 1024 × 512 (MAPS_LO)
+const MAPS_HI = 6u;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -420,7 +424,7 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
       h = min(h, max(0.7 * dist, 0.3 * Rj));
     }
   }
-  let nb = bodyCount();
+  let nb = ourStart();
   if (nb > 0u) {
     // never step over a body (nor a star's atmosphere, 3 R); sample a star finely near the limb
     let pc = blCart(s.x);
@@ -523,6 +527,9 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
 // the light of the disk or of its star. Frequency shifts use the orbital motion of the centre (rigid
 // rotation Ω around the hole) at the point hit.
 fn bodyCount() -> u32 { return u32(P.bodyCfg.x); }
+// Gargantua's side: bodies [0, ourStart()); ours: [ourStart(), bodyCount())
+fn ourStart() -> u32 { return min(u32(P.bodyCfg2.w), bodyCount()); }
+fn isOurs(k: u32) -> bool { let w = bodyWhere(k); return w == 2u || w == 4u; }
 fn bodyRadius(k: u32) -> f32 { return bodies[BV * k].w; }
 fn bodyMass(k: u32) -> f32 { return bodies[BV * k + 1u].w; }
 fn bodyKind(k: u32) -> u32 { return u32(bodies[BV * k + 1u].z); }
@@ -620,21 +627,25 @@ fn throatGlow(X: vec3f, dW: vec3f, C: vec3f, dist: f32, g: f32) -> vec3f {
 var<private> physicalPoints: bool = false;
 fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f {
   var col = vec3f(0.0);
-  for (var k = 0u; k < bodyCount(); k++) {
-    if (bodyWhere(k) != side) { continue; }
-    // (our universe's planets are met by the rays in the Dneg region: Saturn)
-    if (side == 2u && bodyKind(k) == 1u && P.bodyCfg2.w > 0.5) { continue; }
+  let k0 = select(0u, ourStart(), side == 2u);
+  let k1 = select(ourStart(), bodyCount(), side == 2u);
+  for (var k = k0; k < k1; k++) {
+    let ours = side == 2u;
+    if (select(bodyWhere(k) != side, !isOurs(k), ours)) { continue; }
     var c = bodyCentre(k, org.w);
-    c = bodyCentre(k, org.w - length(c - org.xyz));
+    if (!ours) { c = bodyCentre(k, org.w - length(c - org.xyz)); }
     let v = c - org.xyz;
     let D = length(v);
     let bd = v / D;
+    let R = bodyRadius(k);
+    // (ours: only when smaller than the pixel — larger, the rays meet it: ourSegment)
+    if (ours && R * max(ringOuter(k), 1.0) >= 0.5 * P.camUp.w * (D + org.w)) { continue; }
     let kern = skyKernel(filt, d - bd);
     if (kern < 1e-4 * filt.norm) { continue; }
-    let R = bodyRadius(k);
     // the side it shows (a planet's phase, at its sub-observer point), its flux there
     let F = shadeBody(k, c - R * bd, c, g, bd, org.w - D) * (PI * R * R / (D * D));
-    if (physicalPoints) {
+    // (our universe: at its true flux, like the resolved bodies around it)
+    if (physicalPoints || ours) {
       col += F * kern;
       continue;
     }
@@ -784,6 +795,7 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f
 // A black-hole-frame direction on the body's own axes (x away from its primary, y along its orbit,
 // z north): tidally locked, its ground is fixed in them
 fn bodyFixed(k: u32, n: vec3f, tEm: f32) -> vec3f {
+  if (k >= ourStart()) { return spunAxes(k) * n; }
   var host = vec3f(0.0);
   let par = i32(bodies[BV * k + 1u].y);
   if (par >= 0) { host = bodyCentre(u32(par), tEm); }
@@ -809,12 +821,19 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     alb = mix(vec3f(0.62, 0.7, 0.8), vec3f(0.9, 0.93, 0.97), n1) * (0.85 + 0.15 * n2);
   } else if (surf == 2u) {
     alb = mix(vec3f(0.36, 0.24, 0.16), vec3f(0.62, 0.45, 0.3), n1) * (0.8 + 0.2 * n2);
-  } else if (surf == 4u) {
-    // its map: longitude about the pole, latitude (the map's albedo, sRGB → linear)
+  } else if (surf >= 4u) {
+    // its map: longitude about the pole, latitude (sRGB → linear, scaled to its albedo)
     let lon = atan2(nrm.y, nrm.x);
     let lat = asin(clamp(nrm.z, -1.0, 1.0));
     let uv = vec2f(0.5 + lon / TAU, 0.5 - lat / PI);
-    alb = pow(textureSampleLevel(planetTex, bgSamp, uv, mapLod()).rgb, vec3f(2.2)) * 0.25 / max(b2.y, 1e-3);
+    let m = surf - 4u;
+    var t: vec3f;
+    if (m < MAPS_HI) {
+      t = textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb;
+    } else {
+      t = textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
+    }
+    return vec4f(min(pow(t, vec3f(2.2)) * b2.y, vec3f(0.95)), f32(surf));
   } else {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
@@ -842,7 +861,7 @@ fn mapLod() -> f32 { return mapLodV; }
 // fpAngle: the pixel's footprint on the sphere (radians of it); fpRing: across the rings (its radii)
 fn setMapLod(fpAngle: f32, fpRing: f32, k: u32) {
   mapLodV = clamp(log2(max(fpAngle * 2048.0 / TAU, 1e-6)), 0.0, 11.0);
-  let w = max(bodies[BV * k + 3u].w - bodies[BV * k + 5u].w, 1e-3);
+  let w = max(bodies[BV * k + 3u].w - bodies[BV * k + 2u].w, 1e-3);
   ringLodV = clamp(log2(max(fpRing * 2048.0 / w, 1e-6)), 0.0, 11.0);
 }
 fn ringOuter(k: u32) -> f32 { return bodies[BV * k + 3u].w; }
@@ -850,7 +869,7 @@ fn ringOuter(k: u32) -> f32 { return bodies[BV * k + 3u].w; }
 // The rings at rr (its radii): albedo of the particles (linear rgb) and normal optical depth τ, from
 // the map's profile (opacity 1 − e^(−τ))
 fn ringSample(k: u32, rr: f32) -> vec4f {
-  let inner = bodies[BV * k + 5u].w;
+  let inner = bodies[BV * k + 2u].w;
   let f = (rr - inner) / (ringOuter(k) - inner);
   if (f <= 0.0 || f >= 1.0) { return vec4f(0.0); }
   let t = textureSampleLevel(ringTex, bgSamp, vec2f(clamp(f, 0.5 / 2048.0, 1.0 - 0.5 / 2048.0), 0.5), ringLodV);
@@ -906,51 +925,87 @@ fn poleAxes(N: vec3f) -> mat3x3f {
   return mat3x3f(ex, cross(N, ex), N);
 }
 
-// Our universe's planets (Saturn and its rings) on the chord p0 → p1 of a ray (home coordinates,
-// from the camera outwards): the rings add their light and dim what lies behind (tint), the planet
-// stops the ray. gObs: the photon's frequency ratio camera / static observer here. travel: distance
-// from the camera (the pixel's footprint).
-fn ourBodies(p0: vec3f, p1: vec3f, o: ptr<function, WhOut>, gObs: f32, travel: f32) -> bool {
-  let V = normalize(p0 - p1);
-  for (var k = 0u; k < bodyCount(); k++) {
-    if (bodyWhere(k) != 2u || bodyKind(k) != 1u) { continue; }
-    let c = bodies[BV * k].xyz;
+// A body of our universe: its own axes (pole, turned by its rotation), as rows: n ↦ its components
+fn spunAxes(k: u32) -> mat3x3f {
+  let r5 = bodies[BV * k + 5u];
+  let a = poleAxes(r5.xyz);
+  let c = cos(r5.w);
+  let s = sin(r5.w);
+  let ex = c * a[0] + s * a[1];
+  let ey = -s * a[0] + c * a[1];
+  return transpose(mat3x3f(ex, ey, a[2]));
+}
+
+// Our universe's bodies on a straight piece of a ray (P.ourCam-relative home coordinates): from o
+// along the unit direction d, over [0, tMax); travel: the ray's length before o (the pixel's
+// footprint). The nearest body stops the ray (a star shines, a planet reflects its star's light);
+// rings in front of it add their light and dim what lies behind (tint). Bodies smaller than the
+// pixel are left to farPoints. dneg: only those within the Dneg region. gObs: the photon's frequency
+// ratio camera / static observer here.
+fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f32, travel: f32, dneg: bool) -> bool {
+  var tBest = tMax;
+  var kBest = 0u;
+  var hit = false;
+  for (var k = ourStart(); k < bodyCount(); k++) {
+    let wk = bodyWhere(k);
+    if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
+    let c = bodies[BV * k].xyz - o;
     let R = bodyRadius(k);
-    let tS = sphereHit(p0, p1, c, R);
-    let li = i32(bodies[BV * k + 3u].x);
-    let Lpos = select(c + vec3f(1e3, 0.0, 0.0), bodies[BV * u32(max(li, 0))].xyz, li >= 0);
-    let src = lightSource(k);
-    let rad = blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
-    let N = bodies[BV * k + 5u].xyz;
-    let fp = P.camUp.w * travel / R;
-    if (ringOuter(k) > 0.0) {
-      let s0 = dot(p0 - c, N);
-      let s1 = dot(p1 - c, N);
-      if (s0 * s1 < 0.0) {
-        let tR = s0 / (s0 - s1);
-        if (tS < 0.0 || tR < tS) {
-          let X = mix(p0, p1, tR);
-          setMapLod(fp, fp / max(abs(dot(N, V)), 0.05), k);
-          let rl = ringLight(k, (X - c) / R, N, normalize(Lpos - X), V);
-          (*o).glow += (*o).tint * rl.rgb * rad;
-          (*o).tint *= 1.0 - rl.w;
-        }
-      }
-    }
-    if (tS >= 0.0) {
-      let X = mix(p0, p1, tS);
-      let nrm = normalize(X - c);
-      let L = normalize(Lpos - X);
-      setMapLod(fp, fp, k);
-      let ax = poleAxes(N);
-      let pat = vec3f(dot(nrm, ax[0]), dot(nrm, ax[1]), dot(nrm, N));
-      let col = planetShade(k, nrm, pat, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
-      (*o).glow += (*o).tint * col;
-      (*o).tint = vec3f(0.0);
-      return true;
+    let reach = R * max(ringOuter(k), 1.0);
+    let b = dot(c, d);
+    if (b + reach < 0.0 || b - reach > tMax) { continue; }
+    if (reach < 0.5 * P.camUp.w * (travel + length(c))) { continue; }
+    let perp = c - b * d;
+    let h = R * R - dot(perp, perp);
+    if (h < 0.0) { continue; }
+    let t = b - sqrt(h);
+    if (t >= 0.0 && t < tBest) {
+      tBest = t;
+      kBest = k;
+      hit = true;
     }
   }
-  return false;
+  let V = -d;
+  // rings in front of the nearest body
+  for (var k = ourStart(); k < bodyCount(); k++) {
+    if (ringOuter(k) <= 0.0 || !isOurs(k) || (dneg && bodyWhere(k) != 4u)) { continue; }
+    let c = bodies[BV * k].xyz - o;
+    let R = bodyRadius(k);
+    let N = bodies[BV * k + 5u].xyz;
+    let dn = dot(d, N);
+    if (abs(dn) < 1e-9) { continue; }
+    let sR = dot(c, N) / dn;
+    if (sR < 0.0 || sR >= tBest) { continue; }
+    let q = (d * sR - c) / R;
+    if (dot(q, q) > ringOuter(k) * ringOuter(k)) { continue; }
+    let li = i32(bodies[BV * k + 3u].x);
+    let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - d * sR);
+    let src = lightSource(k);
+    let fp = P.camUp.w * (travel + sR) / R;
+    setMapLod(fp, fp / max(abs(dn), 0.05), k);
+    let rl = ringLight(k, q, N, L, V);
+    (*out).glow += (*out).tint * rl.rgb * blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
+    (*out).tint *= 1.0 - rl.w;
+  }
+  if (!hit) { return false; }
+  let k = kBest;
+  let c = bodies[BV * k].xyz - o;
+  let X = d * tBest;
+  let nrm = normalize(X - c);
+  var col: vec3f;
+  if (bodyKind(k) == 0u) {
+    col = shadeStar(k, X, c, gObs, d, P.time.x);
+  } else {
+    let li = i32(bodies[BV * k + 3u].x);
+    let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - X);
+    let fp = P.camUp.w * (travel + tBest) / bodyRadius(k);
+    setMapLod(fp, fp, k);
+    let N = bodies[BV * k + 5u].xyz;
+    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
+  }
+  (*out).glow += (*out).tint * col;
+  (*out).tint = vec3f(0.0);
+  return true;
 }
 
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
@@ -1909,7 +1964,7 @@ struct WhOut { side: f32, n: vec3f, d: vec3f, len: f32, tint: vec3f, glow: vec3f
 
 // Follows a ray from (l0, n0) with unit rep direction d0 until ℓ ≥ lPlus or ℓ ≤ −lMinus.
 // u: a random number in [0, 1) (the liquid surface's reflect / transmit choice).
-fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gObs: f32) -> WhOut {
+fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gObs: f32, travel0: f32) -> WhOut {
   let rho = P.wh.y;
   let a = P.wh.z;
   let M = P.wh.w;
@@ -1930,7 +1985,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
   let waterOn = P.water.x > 0.5;
   var u = u0;
   // our universe's planets (Saturn): home coordinates of the ray's points, their distance
-  let ours = P.bodyCfg2.w > 0.5;
+  let ours = ourStart() < bodyCount();
   var travel = 0.0;
   for (var i = 0u; i < 3000u; i++) {
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
@@ -1940,8 +1995,8 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
     if (ours && st.l < -a) {
       // (short steps by them: the chord stays on the ray)
       let X = homePoint(st.l, st.psi, nA, e2);
-      for (var k = 0u; k < bodyCount(); k++) {
-        if (bodyWhere(k) != 2u || bodyKind(k) != 1u) { continue; }
+      for (var k = ourStart(); k < bodyCount(); k++) {
+        if (bodyWhere(k) != 4u) { continue; }
         let Rb = bodyRadius(k) * max(ringOuter(k), 1.0);
         h = min(h, max(0.5 * (length(X - bodies[BV * k].xyz) - Rb), 0.3 * Rb));
       }
@@ -1973,10 +2028,12 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
     st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
     if (st.l <= a) { out.len += h; }
     travel += h;
-    if (ours && lPrev < -a && st.l < -a) {
+    if (ours && lPrev < -a && st.l < -a && max(lPrev, st.l) > -lMinus) {
       let p0 = homePoint(lPrev, psiPrev, nA, e2);
       let p1 = homePoint(st.l, st.psi, nA, e2);
-      if (ourBodies(p0, p1, &out, gObs, travel)) { out.side = -1.0; break; }
+      let dp = p1 - p0;
+      let lp = length(dp);
+      if (lp > 0.0 && ourSegment(p0, dp / lp, lp, &out, gObs, travel0 + travel - h, true)) { out.side = -1.0; break; }
     }
     if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {
       // through the liquid surface: reflected (probability F, Schlick) or refracted by the ripples
@@ -2047,7 +2104,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
 // A point of our side (ℓ < 0, at angle ψ in the plane (nA, e2)) in our universe's home coordinates
 fn homePoint(l: f32, psi: f32, nA: vec3f, e2: vec3f) -> vec3f {
   let n = cos(psi) * nA + sin(psi) * e2;
-  return dnegR(l).x * vec3f(n.x, -n.y, n.z);
+  return dnegR(l).x * vec3f(n.x, -n.y, n.z) - P.ourCam.xyz;
 }
 
 // Rep vector on our side → Cartesian vector of our universe (radial flip + mirror: right-handed).
@@ -2232,7 +2289,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
 // Local patch: the body near the camera (unit sphere at P.near0.xyz, camera at the origin)
 // ---------------------------------------------------------------------------------------------
 // the probe's harmonics (camera axes), copied after the bodies (MAX_BODIES × BV vec4) on the GPU
-const SH_BASE = 48u;
+const SH_BASE = 240u; // (MAX_BODIES × BV)
 fn shEnv(k: u32) -> vec4f { return bodies[SH_BASE + k]; }
 
 // distance along the look direction to the sphere (in radii), −1 when missed (the perpendicular
@@ -2696,9 +2753,31 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     kapY = wpKappa(s.x.x, s.x.y, a, kc, zamoToBL(s.x.x, s.x.y, a, by));
   }
 
+  // Our universe, the camera beyond the Dneg region: the straight piece up to it (or to infinity, when
+  // the ray does not come back towards the mouth) meets the solar system's bodies first
+  var outward = false; // (the ray never enters the Dneg region: nothing further to meet)
+  if (seg == 1u && P.wh2.y < 0.0 && ourStart() < bodyCount()) {
+    let m = -P.ourCam.xyz;
+    let R2 = P.ourCam.w * P.ourCam.w;
+    if (dot(m, m) > R2) {
+      let dH = normalize(repToHome(wn, wd));
+      let b = dot(m, dH);
+      let perp = m - b * dH;
+      let hh = R2 - dot(perp, perp);
+      var tEnter = 3e38;
+      if (hh > 0.0 && b > 0.0) { tEnter = b - sqrt(hh); } else { outward = true; }
+      var wo: WhOut;
+      wo.tint = vec3f(1.0);
+      let stop = ourSegment(vec3f(0.0), dH, tEnter, &wo, 1.0 / eloc, 0.0, false);
+      colW += thr * wo.glow;
+      thr *= wo.tint;
+      if (stop) { return traceOut(colW); }
+    }
+  }
+
   for (var segN = 0u; segN < 6u; segN++) {
   if (seg == 1u) {
-    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc);
+    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc, travel);
     // light from beyond the liquid surface is tinted by it; what was gathered before is not
     colW += thr * (col + w.glow);
     col = vec3f(0.0);
@@ -2709,8 +2788,22 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       skyDir = repToHome(w.n, w.d);
       skyG = 1.0 / eloc;
       skyId = SKY_HOME;
-      // (our universe's bodies — the Sun — are drawn with the sky, from where the ray left)
-      skyOrg = vec4f(dnegR(-P.whN.w).x * repToHome(w.n, -w.n), tNow);
+      // our universe's bodies beyond the Dneg region (straight on), or, smaller than the pixel, with
+      // the sky from where the ray left (w: the ray's length there, their footprint)
+      if (outward) {
+        skyOrg = vec4f(0.0);
+      } else {
+        let exitH = dnegR(-P.whN.w).x * repToHome(w.n, -w.n) - P.ourCam.xyz;
+        skyOrg = vec4f(exitH, travel + length(exitH));
+        if (ourStart() < bodyCount()) {
+          var wo: WhOut;
+          wo.tint = vec3f(1.0);
+          let stop = ourSegment(exitH, normalize(skyDir), 3e38, &wo, 1.0 / eloc, skyOrg.w, false);
+          colW += thr * wo.glow;
+          thr *= wo.tint;
+          if (stop) { thr = vec3f(0.0); }
+        }
+      }
       break;
     }
     travel += w.len;
@@ -2799,7 +2892,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         behindDisk = rc >= rIn && rc <= rOut && pg.w > ud;
       }
       // bodies are opaque: they hide the tube beyond their surface in this step (then the ray ends)
-      for (var k = 0u; k < bodyCount(); k++) {
+      for (var k = 0u; k < ourStart(); k++) {
         let ts = sphereHit(q0, q1, bodyCentre(k, tNow + n.x.w), bodyRadius(k));
         if (ts >= 0.0 && pg.w > ts) { behindDisk = true; }
       }
@@ -2828,7 +2921,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       // magnification then come from the traced rays themselves)
       var tHit = 2.0;
       var kHit = 0u;
-      for (var k = 0u; k < bodyCount(); k++) {
+      for (var k = 0u; k < ourStart(); k++) {
         if (bodyWhere(k) != 0u) { continue; }
         let c0 = bodyCentre(k, tNow + s.x.w);
         let c1 = bodyCentre(k, tEm);

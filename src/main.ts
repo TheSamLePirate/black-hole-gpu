@@ -69,15 +69,12 @@ async function main() {
   }
 
   const touch = () => (changed = true);
+  renderer.onAssets = () => touch();
   const touchDisplay = () => (displayChanged = true);
   const skyLoading = renderer
     .loadSky()
     .then(() => touch())
     .catch((e) => console.warn("Real sky unavailable, using the procedural sky:", e));
-  renderer
-    .loadPlanetMaps()
-    .then(() => touch())
-    .catch((e) => console.warn("Saturn's maps unavailable:", e));
   let guiDirty = false; // GUI widgets need refreshing (camera moved)
   let previousTarget = settings.target; // (the panel's target choice is applied through the camera)
 
@@ -167,7 +164,7 @@ async function main() {
     Object.assign(settings, defaultSettings(), keep, preset);
     if (pose === "saturn") {
       const d = saturnDeparture();
-      setHomePose(settings, d.X, d.fwd, d.up, [0, 0, 0]);
+      setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
     }
     if (time !== undefined) {
