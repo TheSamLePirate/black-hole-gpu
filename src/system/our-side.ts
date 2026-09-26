@@ -120,3 +120,12 @@ export function referenceBody(X: Vec3, t: number): string {
   }
   return best;
 }
+
+/** A body's sphere of influence around its primary: a (m / M)^0.4 (the Sun: everything). */
+export function soiOf(id: string, t: number): number {
+  const b = SOLAR_BODIES.find((q) => q.id === id);
+  if (!b || !b.parent) return Infinity;
+  const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
+  const P = solarState(b.id, t).pos, Q = solarState(p.id, t).pos;
+  return Math.hypot(P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]) * (b.mass / p.mass) ** 0.4;
+}

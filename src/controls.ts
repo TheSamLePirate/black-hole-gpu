@@ -15,12 +15,12 @@ import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { airDensity, betaToCoord, CRASH_SPEED, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
-import { circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
+import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
-import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec } from "./system/our-side";
+import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1504,6 +1504,12 @@ export class CameraController {
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
     if (this.pilot.auto !== "node" && this.userWarp !== null) this.restoreWarp(); // execution stopped
+    if (this.pilot.auto !== "approach" && this.ourWarp !== null) {
+      // (our approach stopped: the pilot's warp back)
+      s.timeSpeed = this.warpSet = this.ourWarp;
+      this.ourWarp = null;
+      this.warpWant = null;
+    }
     if (this.pilot.auto !== "node") this.rails(cam);
     const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
@@ -1513,7 +1519,7 @@ export class CameraController {
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
       // ship turns within it — the wall-clock turn rates are for the eye, not for days-long burns)
-      snap: s.engine === "crew" && this.pilot.auto !== "none" && cam.region === "hole"
+      snap: this.pilot.auto !== "none" && ((s.engine === "crew" && cam.region === "hole") || onOurSide(s, cam))
         && s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20,
     }, inp);
     this.rotateC(out.rot);
@@ -1571,6 +1577,12 @@ export class CameraController {
     const cap = (v: number, w: string) => {
       if (v < lim) (lim = v), (why = w);
     };
+    // our universe: a turn of the tightest orbit here in no less than ~2 s
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const g = gravityHome(nav.X, nav.t);
+      cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
+    }
     // (long Crew burns: a higher ceiling — the integrator follows the slow thrust at any warp)
     if (this.pilot.accel > 0 || this.pilot.throttle > 0) cap(s.engine === "crew" ? 5000 : 500, "engine");
     if (cam.region === "hole") {
@@ -2479,6 +2491,96 @@ export class CameraController {
   }
 
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
+  /** where our universe's hover holds (home frame, relative to the reference body) */
+  private ourAnchor: { ref: string; d: Vec3 } | null = null;
+
+  /**
+   * Our universe's autopilots (Newton, home frame; wanted velocities returned as local rep vectors):
+   *  - approach: towards the target at the speed that still stops at the stand-off with 60 % of the
+   *    engine (accelerate, then brake: a brachistochrone), the side drift cancelled; the warp set for
+   *    an arrival in ~8 s, the pilot's given back there; a body with a mass: then its orbit;
+   *  - orbit: a circle around the target, at the height it is engaged at (from far: low orbit, above
+   *    its air), in the plane of the ship's motion;
+   *  - hover: at rest against the reference body where engaged, the pull cancelled.
+   */
+  private ourWant(cam: ReturnType<typeof cameraFrame>, say: (t: string) => null, T: number): { beta: Vec3; ff: Vec3 } | null {
+    const s = this.s;
+    const P = this.pilot;
+    const nav = this.ourNav(cam)!;
+    const t = nav.t;
+    const g = gravityHome(nav.X, t);
+    const thr = this.thrustMax();
+    const out = (v: Vec3, ff: Vec3 = [0, 0, 0]) => ({ beta: nav.toRep(v), ff: nav.toRep(ff) });
+    if (P.auto === "hover") {
+      const ref = ourState(nav.ref, t);
+      if (!this.ourAnchor || this.ourAnchor.ref !== nav.ref) this.ourAnchor = { ref: nav.ref, d: sub3(nav.X, ref.pos) };
+      const back = sub3(lin(ref.pos, 1, this.ourAnchor.d, 1), nav.X);
+      const k = Math.min(1 / (4 * T), 0.3 * Math.sqrt(thr / Math.max(Math.hypot(...back), 1e-15)));
+      return out(lin(ref.vel, 1, back, k), lin(g.acc, -1, g.acc, 0));
+    }
+    this.ourAnchor = null;
+    if (P.auto !== "approach" && P.auto !== "orbit") return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
+    const tgt = s.target;
+    const Tg = ourTarget(s, tgt, t);
+    const d = sub3(Tg.pos, nav.X);
+    const D = Math.hypot(...d);
+    const dh = lin(d, 1 / Math.max(D, 1e-30), d, 0);
+    const rel = sub3(nav.V, Tg.vel);
+    const sb = OUR_BODIES.find((b) => b.id === tgt);
+    const soi = sb && sb.id !== "sun" ? soiOf(tgt, t) : Infinity;
+    const air = GARGANTUA_SYSTEM.bodies.find((b) => b.id === tgt)?.surface?.atmosphere;
+    // (a low orbit: 10 % of the radius, above 12 scale heights of air)
+    const low = Tg.radius * 1.1 + (air ? (12 * air.H) / 1.476625e11 : 0);
+    if (P.auto === "orbit" && !(Tg.mass > 0)) return say("Orbit: select a body with a mass");
+    const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;
+    if (orbiting) {
+      if (!this.ourOrbitR || this.ourOrbitR.body !== tgt) this.ourOrbitR = { body: tgt, r: Math.max(D, low) };
+      const r = this.ourOrbitR.r;
+      const Rh = lin(dh, -1, dh, 0);
+      let n = cross(Rh, rel);
+      if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
+      if (Math.hypot(...n) < 1e-12) n = cross(Rh, [1, 0, 0]);
+      n = lin(n, 1 / Math.hypot(...n), n, 0);
+      const th = cross(n, Rh);
+      const vc = Math.sqrt(Tg.mass / D);
+      // (the height held: a gentle radial pull back, a small part of the circular speed)
+      const vr = Math.max(-0.2, Math.min(0.2, (r - D) / (0.1 * r))) * vc * 0.5;
+      return out(lin(lin(Tg.vel, 1, th, vc), 1, Rh, vr));
+    }
+    this.ourOrbitR = null;
+    // approach: the stand-off, and the speed that still stops there
+    const stand = Tg.mass > 0 ? (P.auto === "orbit" ? low : Math.max(3 * Tg.radius, low)) : Math.max(3 * Tg.radius, 1e-5);
+    const left = D - stand;
+    const a = 0.6 * thr;
+    const vmax = s.engine === "crew" ? 0.2 : 0.5;
+    const vClose = Math.min(vmax, Math.sqrt(2 * a * Math.max(left, 0)));
+    const closing = -dot3(rel, dh);
+    if (Math.abs(left) < 0.1 * stand && D > Tg.radius && Math.hypot(...rel) < Math.max(Math.sqrt(Tg.mass / Math.max(D, 1e-30)) * 0.2, 1e-9)) {
+      if (this.ourWarp !== null) s.timeSpeed = this.ourWarp;
+      this.ourWarp = null;
+      // (the rails forget the approach's warps: not a wish of the pilot's)
+      this.warpWant = null;
+      this.warpSet = s.timeSpeed;
+      if (Tg.mass > 0) {
+        P.setAuto("orbit");
+        this.onPilotMessage?.(`In orbit around ${BODY_NAMES[tgt]}`);
+      } else {
+        P.setAuto("hover");
+        this.onPilotMessage?.(`Arrived: ${BODY_NAMES[tgt]}`);
+      }
+      return out(Tg.vel);
+    }
+    // the warp: an arrival in ~8 s (the rails still hold it near bodies); the pilot's wish kept
+    const ttg = Math.abs(left) / Math.max(Math.abs(closing), vClose * 0.5, 1e-12);
+    if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
+    s.timeSpeed = Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5);
+    return out(lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left))));
+  }
+
+  private ourOrbitR: { body: string; r: number } | null = null;
+  /** the pilot's warp while our approach sets it (given back on arrival) */
+  private ourWarp: number | null = null;
+
   private autopilotWant(cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | null {
     const s = this.s;
     const P = this.pilot;
@@ -2489,6 +2591,8 @@ export class CameraController {
     };
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
     const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
+    // our universe: Newtonian autopilots in the home frame
+    if (this.ourNav(cam)) return this.ourWant(cam, say, T);
     if (P.auto === "hover") {
       if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
       const z = cam.zamo;
