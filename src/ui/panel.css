@@ -846,6 +846,21 @@ input:focus-visible + .sp-switch {
   margin-top: 8px;
 }
 
+.sp-keys-note {
+  column-span: all;
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.sp-link {
+  all: unset;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .sp-keys footer {
   margin-top: 16px;
   padding-top: 10px;

@@ -3,6 +3,7 @@ import { horizon, isco } from "./physics";
 import { cameraFrame, switchAnchor } from "./camera";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES } from "./targeting";
+import { HidPads } from "./gamepad";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -131,6 +132,7 @@ async function main() {
     applyPreset: (name) => applyPreset(name),
     presetNames: Object.keys(presets),
     loadImage: () => fileInput.click(),
+    connectController: HidPads.supported ? () => connectController() : undefined,
     shareUrl: () => {
       saveToUrl(settings, defaultSettings(), ["pixelRatio"]);
       return location.href;
@@ -252,11 +254,34 @@ async function main() {
     }
     touch();
   };
-  addEventListener("gamepadconnected", (e) => {
-    panel.toast(`Controller connected — ${(e as GamepadEvent).gamepad.id.replace(/\s*\(.*\)\s*$/, "") || "gamepad"} · ? for the buttons`);
-    camera.pad.rumble(0.2, 0.4, 120);
-  });
-  addEventListener("gamepaddisconnected", () => panel.toast("Controller disconnected"));
+  // connection toasts only for real changes: Safari hands a pad over from one internal provider to
+  // another (a disconnect immediately followed by a connect), which must not read as "disconnected"
+  let padWas = camera.pad.connected;
+  let padTimer = 0;
+  const padChanged = () => {
+    clearTimeout(padTimer);
+    padTimer = window.setTimeout(() => {
+      const now = camera.pad.connected;
+      if (now === padWas) return;
+      padWas = now;
+      if (now) {
+        const id = camera.pad.list()[0]?.id.replace(/\s*\(.*\)\s*$/, "") || "gamepad";
+        panel.toast(`Controller connected — ${id} · ? for the buttons`);
+        camera.pad.rumble(0.2, 0.4, 120);
+      } else panel.toast("Controller disconnected");
+      touch();
+    }, 900);
+  };
+  addEventListener("gamepadconnected", padChanged);
+  addEventListener("gamepaddisconnected", padChanged);
+  camera.pad.hid.onChange = padChanged;
+  async function connectController() {
+    try {
+      if (!(await camera.pad.hid.request())) panel.toast("No controller chosen");
+    } catch (e) {
+      panel.toast(`Could not open the controller: ${(e as Error).message}`);
+    }
+  }
 
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey || e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
@@ -692,6 +717,7 @@ async function main() {
       lines.push(`free fall · v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M`);
     } else if (camera.riding > 0.01) lines.push(`co-moving with the star · β = ${Math.abs(settings.velP).toFixed(3)} c`);
     else if (settings.motion === "barycentric") lines.push("at rest in the centre-of-mass frame");
+    for (const g of camera.pad.list()) lines.push(`controller: ${g.id} · ${g.mapping || "no mapping"} · ${g.buttons.length} buttons`);
     statsEl.innerHTML = lines.join("<br>");
     const cam = cameraFrame(settings);
     readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)

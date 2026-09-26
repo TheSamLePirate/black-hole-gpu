@@ -187,7 +187,11 @@ left stick flies (forward/back, sideways; L3 held: boost), right stick orbits th
 RT/LT up/down, LB/RB roll; A flies to the target, B gravity, X auto-orbit, Y around ⟷ free, D-pad
 ◀ ▶ previous/next target and ▲ ▼ closer/farther, R3 recentre, View runs/pauses time, Menu opens the
 settings. Radial dead zone and a gentle response curve; a rumble when the camera crosses the wormhole's
-throat. The browser exposes a pad once a button is pressed with the page focused.
+throat. The browser exposes a pad once a button is pressed with the page focused. On macOS 26 a wired
+Xbox 360 pad (045E:028E) has a system driver but Chromium browsers (Chrome, Edge, Arc) never hand it to
+the Gamepad API: "Connect a USB controller" (help sheet, settings menu) opens it through **WebHID** instead
+and decodes its 20-byte report (standard mapping; remembered, reopened on the next visit). Connection
+toasts are debounced (Safari hands a pad over between two internal providers).
 
 **Two rotation modes** (R, toolbar, Scene → Camera rotation):
 

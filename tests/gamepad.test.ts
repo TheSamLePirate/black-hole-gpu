@@ -69,3 +69,27 @@ describe("game controller", () => {
     expect(g.poll()!.actions).toEqual(["focus"]);
   });
 });
+
+describe("wired Xbox 360 pad over WebHID", () => {
+  test("the 20-byte report maps to the standard layout", async () => {
+    const { HidPad } = await import("../src/gamepad");
+    const pad = new HidPad({ vendorId: 0x045e, productId: 0x028e, productName: "Controller", opened: true, open: async () => {}, addEventListener: () => {} });
+    const d = new DataView(new ArrayBuffer(20));
+    d.setUint8(0, 0x00);
+    d.setUint8(1, 0x14);
+    d.setUint8(2, 0x01 | 0x10); // D-pad ▲, Start
+    d.setUint8(3, 0x10 | 0x02); // A, RB
+    d.setUint8(5, 255); // RT
+    d.setInt16(6, 32767, true); // LX right
+    d.setInt16(8, 32767, true); // LY up
+    d.setInt16(12, -32768, true); // RY down
+    pad.update(d);
+    const on = pad.buttons.map((b, i) => (b.pressed ? i : -1)).filter((i) => i >= 0);
+    expect(on).toEqual([0, 5, 7, 9, 12]); // A, RB, RT, Menu, ▲
+    expect(pad.buttons[7]!.value).toBeCloseTo(1, 6);
+    expect(pad.axes[0]).toBeCloseTo(1, 4);
+    expect(pad.axes[1]).toBeCloseTo(-1, 4); // standard: up = −1
+    expect(pad.axes[3]).toBeCloseTo(1, 4); // down = +1
+    expect(pad.mapping).toBe("standard");
+  });
+});

@@ -27,6 +27,8 @@ export interface PanelOptions {
   loadImage: () => void;
   /** Returns a shareable URL of the current state. */
   shareUrl: () => string;
+  /** WebHID access to a USB controller the browser does not expose (Chromium + wired Xbox 360 pads). */
+  connectController?: () => void;
 }
 
 const STORE_PRESETS = "kerr.userPresets.v1";
@@ -796,6 +798,7 @@ export class SettingsPanel {
       item("Import settings…", "Load a JSON file", () => this.importJSON()),
       h("hr", {}),
       item("Keyboard shortcuts", "", () => this.showShortcuts()),
+      ...(this.o.connectController ? [item("Connect a USB controller…", "If the browser does not see it", () => this.o.connectController!())] : []),
       h("hr", {}),
       item("Reset everything", "Restore all defaults (undoable)", () => {
         this.applyObject({}, true);
@@ -917,6 +920,12 @@ export class SettingsPanel {
         h("header", {}, h("h3", {}, "Keyboard & mouse"), h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close))),
         ...sections.map(([title, rows]) =>
           h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])))),
+        this.o.connectController
+          ? h("p", { class: "sp-keys-note" },
+              "Controller not detected? Press a button with the page focused. A wired Xbox 360 pad in Chrome, Edge or Arc: ",
+              h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, "connect it (USB)"),
+              ".")
+          : h("span", {}),
         h("footer", {}, h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗")),
       ),
     );
