@@ -54,7 +54,8 @@ export class ShipRenderer {
   private envRaw: GPUTexture;
   private envSpec: GPUTexture;
   private ggxBufs: GPUBuffer[] = [];
-  private shBuf: GPUBuffer;
+  /** spherical harmonics of the probe (9 × rgb, then the dominant direction), camera axes */
+  readonly shBuf: GPUBuffer;
   private uniform: GPUBuffer;
   private vbuf: GPUBuffer | null = null;
   private ibuf: GPUBuffer | null = null;

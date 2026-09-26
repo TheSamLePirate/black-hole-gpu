@@ -9,10 +9,12 @@ import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
-import { cameraFrame } from "./camera";
+import { cameraFrame, type CameraFrame } from "./camera";
 import { mouth, setSceneTime } from "./wormhole";
-import { BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
-import { starOmega } from "./targeting";
+import { BODY_PLANET, BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
+import { localPatch } from "./system/local-patch";
+import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
+import { bodyVelocity, starOmega, type Body } from "./targeting";
 import {
   blackbodyLogY,
   buildBlackbodyLUT,
@@ -31,7 +33,9 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 48;
+const PARAM_VEC4S = 53;
+/** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
+const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
 const PATH_MAX = 256;
 const PATH_CHUNK = 16;
@@ -144,6 +148,8 @@ interface Target {
   beam: { level: number; tex: GPUTexture; buf: GPUBuffer; h: GPUBindGroup; v: GPUBindGroup } | null;
   denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
   traceBind: GPUBindGroup;
+  /** the same, the light-probe buffer swapped for the planets' probe */
+  probeBind: GPUBindGroup;
   postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number }[];
   displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
 }
@@ -208,6 +214,17 @@ export class Renderer {
   private catalogue: GPUBuffer;
   private pathBuf!: GPUBuffer;
   private bodyBuf!: GPUBuffer;
+  /** the local patch for a body near the camera (off: traced like the others — for comparisons) */
+  localPatchOn = true;
+  /** the last frame's local patch (inspection) */
+  lastNear: ReturnType<typeof localPatch> = null;
+  /** the planets' light probes (system/planet-probe.ts), by body id */
+  readonly planetProbes = new Map<string, PlanetProbe>();
+  private probeBuf!: GPUBuffer;
+  private probeStage!: GPUBuffer;
+  private probeBusy = false;
+  private probeNext = 0;
+  private probeAt = -Infinity;
   private bodyData = new Float32Array(MAX_BODIES * BODY_VEC4 * 4);
   private pathCount = 0;
   private pathFate = 0;
@@ -312,8 +329,12 @@ export class Renderer {
     this.postBeamV = mkPost("beamV");
 
     this.pathBuf = device.createBuffer({ size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    this.bodyBuf = device.createBuffer({ size: this.bodyData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    // (after the bodies: the light probe's harmonics, copied there on the GPU — see dispatchEnv; the
+    // compute stage has no storage-buffer slot left for them)
+    this.bodyBuf = device.createBuffer({ size: this.bodyData.byteLength + SH_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+    this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 112, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -535,6 +556,7 @@ export class Renderer {
       beam: null,
       denoise: null,
       traceBind: null as unknown as GPUBindGroup,
+      probeBind: null as unknown as GPUBindGroup,
       postPasses: [],
       displayBinds: new Map(),
     };
@@ -573,6 +595,26 @@ export class Renderer {
         { binding: 11, resource: { buffer: t.polAcc } },
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
+        { binding: 15, resource: { buffer: this.bodyBuf } },
+      ],
+    });
+    t.probeBind = d.createBindGroup({
+      layout: this.traceLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.paramBuf } },
+        { binding: 1, resource: { buffer: t.accum } },
+        { binding: 2, resource: { buffer: this.lutBuf } },
+        { binding: 3, resource: this.bgTexture.createView() },
+        { binding: 4, resource: this.sampler },
+        { binding: 5, resource: { buffer: t.moments } },
+        { binding: 6, resource: { buffer: t.stamps } },
+        { binding: 7, resource: { buffer: this.syncLutBuf } },
+        { binding: 8, resource: this.mwTexture.createView() },
+        { binding: 9, resource: this.starLodTexture.createView() },
+        { binding: 10, resource: { buffer: this.catalogue } },
+        { binding: 11, resource: { buffer: t.polAcc } },
+        { binding: 13, resource: { buffer: this.pathBuf } },
+        { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
       ],
     });
@@ -703,6 +745,14 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------------------------ uniforms
+  private logYs = new Map<number, number>();
+  /** log10 Y of a blackbody at T (cached: it integrates the spectrum) */
+  private logYOf(T: number) {
+    let v = this.logYs.get(T);
+    if (v === undefined) this.logYs.set(T, (v = blackbodyLogY(T)));
+    return v;
+  }
+
   private diskConstants(s: Settings) {
     const c = this.cache;
     if (c.spin !== s.spin) {
@@ -739,11 +789,13 @@ export class Renderer {
       noise?: number;
       minSpp?: number;
       shutter?: number;
+      /** a planet's light probe: a camera at its centre, the planet itself left out */
+      probe?: { cam: CameraFrame; hide: string };
     },
   ) {
     const f = this.paramsF;
     const u = this.paramsU;
-    const cam = cameraFrame(s);
+    const cam = o.probe?.cam ?? cameraFrame(s);
     const dc = this.diskConstants(s);
     const a = s.spin;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -802,6 +854,42 @@ export class Renderer {
     set(37, ...m.ez, 0);
     // bodies (the companion star, a system's planets): places now, in float64 on the CPU
     const bodies = sceneBodies(s, time);
+    if (o.probe) {
+      const k = bodies.findIndex((b) => b.id === o.probe!.hide);
+      if (k >= 0) bodies[k]!.where = 3;
+    }
+    // planets lit as their light probes measured (the light they receive, in the far view's terms:
+    // E/(π B) of the disk's reference radiance)
+    for (const b of bodies) {
+      const p = this.planetProbes.get(b.id);
+      if (!p || b.kind !== BODY_PLANET || b.light >= 0 || !(p.tColour > 0)) continue;
+      // (the light's colour temperature, rounded: log Y integrates a spectrum — cached per value)
+      const T = Math.round(p.tColour / 50) * 50;
+      const yRef = 10 ** (this.logYOf(T) - dc.logY) * s.diskBrightness;
+      if (yRef > 0) {
+        b.illum = p.eMax / (Math.PI * yRef);
+        b.lightDir = p.worldDir;
+        b.lightT = T;
+      }
+    }
+    // a body near the camera: the local patch (floating origin), not a traced sphere
+    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => bodyVelocity(s, bodies[k]!.id as unknown as Body, time)) : null;
+    if (near) bodies[near.index]!.where = 3;
+    if (!o.probe) this.lastNear = near;
+    set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
+    set(49, ...(near?.axes[0] ?? [1, 0, 0]), near?.index ?? 0);
+    set(50, ...(near?.axes[1] ?? [0, 1, 0]), near?.radius ?? 0);
+    // lit by the Ranger's probe when it runs (piloting: 1), else by the planet's own (2), else by its
+    // source alone (0)
+    const ownProbe = near ? this.planetProbes.get(bodies[near.index]!.id) : undefined;
+    const lit = !near ? 0 : s.ship && this.ship.ready ? 1 : ownProbe ? 2 : 0;
+    if (lit === 2) {
+      const sh = new Float32Array(SH_BYTES / 4);
+      ownProbe!.sh.forEach((c, k) => sh.set([...c, 0], 4 * k));
+      this.device.queue.writeBuffer(this.bodyBuf, this.bodyData.byteLength, sh);
+    }
+    set(51, ...(near?.axes[2] ?? [0, 0, 1]), lit);
+    set(52, ...(near?.light ?? [0, 0, 1]), 0);
     packBodies(bodies, this.bodyData);
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
@@ -843,7 +931,8 @@ export class Renderer {
     set(46, ...hexToLinear(s.waterGlowColor), 0);
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light)
     // (window: 2 samples while the camera moves, a long running mean once it holds still)
-    set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, o.flags & FLAG_INTERLEAVED ? 2 : 512);
+    if (o.probe) set(47, 1, 0, 1, 1);
+    else set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, o.flags & FLAG_INTERLEAVED ? 2 : 512);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -931,8 +1020,48 @@ export class Renderer {
     pass.dispatchWorkgroups(full ? 32 : 16, full ? 16 : 8);
     pass.end();
     this.ship.encodeEnv(enc);
+    enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
     this.envPhase++;
+  }
+
+  /**
+   * The planets' light probes, one planet every 2 s in turn (those lit by the disk: a star's planet is
+   * lit by its star): the probe kernel from its centre, moving with it, itself left out; read back
+   * and reduced on the CPU (planet-probe.ts). Its own params and submission, before the frame's.
+   */
+  private probePlanets(t: Target, s: Settings, time: number) {
+    if (s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
+    const list = sceneBodies(s, time).filter((b) => b.kind === BODY_PLANET && b.light < 0 && b.where !== 2);
+    if (!list.length) return;
+    const b = list[this.probeNext++ % list.length]!;
+    const vel = bodyVelocity(s, b.id as unknown as Body, time);
+    const cam = probeCamera(b.pos, vel, s.spin);
+    this.probeBusy = true;
+    this.probeAt = performance.now();
+    this.writeParams(t, s, time, {
+      block: 1, eps: s.realtimeEps, steps: s.realtimeSteps, y0: 0, y1: 1, accumulate: false, sampleIndex: 0, flags: 0,
+      probe: { cam, hide: b.id },
+    });
+    const enc = this.device.createCommandEncoder();
+    const pass = enc.beginComputePass();
+    pass.setPipeline(this.envPipeline);
+    pass.setBindGroup(0, t.probeBind);
+    pass.dispatchWorkgroups(PROBE_W / 8, PROBE_H / 8);
+    pass.end();
+    enc.copyBufferToBuffer(this.probeBuf, 0, this.probeStage, 0, PROBE_W * PROBE_H * 16);
+    this.device.queue.submit([enc.finish()]);
+    const logY = this.diskConstants(s).logY;
+    this.probeStage.mapAsync(GPUMapMode.READ).then(
+      () => {
+        const data = new Float32Array(this.probeStage.getMappedRange().slice(0));
+        this.probeStage.unmap();
+        // (colour temperatures up to what the disk can show: its peak, blueshifted by g ≤ 3)
+        this.planetProbes.set(b.id, blendProbe(this.planetProbes.get(b.id), reduceProbe(data, cam, logY, b.brightness, 3 * s.diskTemp)));
+        this.probeBusy = false;
+      },
+      () => (this.probeBusy = false),
+    );
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
@@ -1097,6 +1226,7 @@ export class Renderer {
 
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
+    this.probePlanets(t, s, time);
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
     let rows = 0;

@@ -10,7 +10,7 @@ import { bodyState, meanMotion, type Vec3 } from "./ephemeris";
 
 export const MAX_BODIES = 8;
 /** vec4s per body in the GPU buffer */
-export const BODY_VEC4 = 4;
+export const BODY_VEC4 = 5;
 
 export const BODY_STAR = 0;
 export const BODY_PLANET = 1;
@@ -38,6 +38,10 @@ export interface GpuBody {
   /** 0 traced (sphere, or spread over the pixel when smaller), 1 beyond the traced region (met on the
    *  rays' straight way out), 2 our universe (home coordinates, through our end of the wormhole) */
   where: number;
+  /** planets: the direction its light comes from and its colour temperature [K], measured by its
+   *  light probe (black-hole frame) */
+  lightDir?: Vec3;
+  lightT?: number;
 }
 
 /** The system a scene uses. */
@@ -144,5 +148,6 @@ export function packBodies(list: GpuBody[], out: Float32Array) {
     out.set([b.omega, b.parent, b.kind, b.mass], o + 4);
     out.set([b.temperature, b.brightness, b.surface, b.seed], o + 8);
     out.set([b.light, b.illum, b.where, 0], o + 12);
+    out.set(b.lightDir ? [...b.lightDir, b.lightT ?? 1] : [0, 0, 0, 0], o + 16);
   });
 }

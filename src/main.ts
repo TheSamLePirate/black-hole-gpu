@@ -5,7 +5,7 @@ import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
-import { BODY_NAMES } from "./targeting";
+import { BODY_NAMES, bodyLook, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNTS, type Mount } from "./mounts";
 import { FlightHud } from "./ui/flighthud";
@@ -563,7 +563,11 @@ async function main() {
       time: () => simTime,
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
-      sys: { bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t), setHolePose, mouth: (t?: number) => mouth(settings, t) },
+      sys: {
+        bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t), setHolePose, mouth: (t?: number) => mouth(settings, t),
+        /** where the camera sees a body (CPU geodesics, retarded, aberrated): a look direction */
+        look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, simTime).look,
+      },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => (frozen = on),
       step: (dt: number) => {
@@ -639,7 +643,7 @@ async function main() {
     renderer.shipPose = settings.ship ? camera.shipPose() : null;
     const pil = flying();
     if (flightHud.visible !== pil) flightHud.show(pil);
-    if (pil) flightHud.update(camera.flightInfo(), simTime);
+    if (pil) flightHud.update({ ...camera.flightInfo(), probe: renderer.planetProbes.get(settings.target) ?? null }, simTime);
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

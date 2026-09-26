@@ -24,10 +24,12 @@ import { mouth } from "../wormhole";
 import { barycentre, bodyCentre, BODY_NAMES, starCentre, starOmega, starOrbitRadius } from "../targeting";
 import { isco } from "../physics";
 import { rapidityCost } from "../engine";
+import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
 
-type Info = ReturnType<CameraController["flightInfo"]>;
+/** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
+type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null };
 type V3 = [number, number, number];
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
@@ -178,7 +180,7 @@ export class FlightHud {
 
     // ---- target
     this.target.append(h("div", "fl-title", "Target"));
-    for (const [k, label] of [["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"]] as const) {
+    for (const [k, label] of [["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"], ["light", "Light received"]] as const) {
       const row = h("div", k === "name" ? "fl-tname" : "fl-kv");
       if (label) row.append(h("span", "", label));
       const v = h("b");
@@ -583,6 +585,16 @@ export class FlightHud {
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
     const ca = this.closestApproach(i, time);
     T.ca!.textContent = ca ? `${fmtLen(ca.d, this.s)} · ${ca.t > 0 ? `T−${fmtShort(Math.round(ca.t))}` : "now"}` : "—";
+    // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
+    // temperature, from the planet's light probe
+    const pr = i.probe;
+    T.light!.parentElement!.hidden = !pr;
+    if (pr) {
+      const e = pr.eBol;
+      const txt = e >= 1e6 ? `${(e / 1e6).toFixed(1)} MW/m²` : e >= 1e3 ? `${(e / 1e3).toFixed(1)} kW/m²` : `${e.toFixed(0)} W/m²`;
+      T.light!.textContent = `${txt} (${(e / EARTH_IRRADIANCE).toPrecision(2)} ⊕) · T_eq ${Math.round(pr.teq)} K`;
+      T.light!.className = pr.teq > 330 || pr.teq < 200 ? "closing" : "";
+    }
     // orbit figures
     const O = this.orbitEls;
     const p = i.path;

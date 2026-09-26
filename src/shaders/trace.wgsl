@@ -59,6 +59,13 @@ struct Params {
   water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density), unused
   water5: vec4f,   // colour of the glow (linear rgb), unused
   envCfg: vec4f,   // light probe: reset (1), 2×2 phase, full refresh (0/1), averaging window [samples]
+  // local patch (src/system/local-patch.ts): a body near the camera, along straight rays in the
+  // camera's rest frame (components along the ZAMO axes, like the look directions), unit = its radius
+  near0: vec4f,    // centre; w = on (0/1)
+  near1: vec4f,    // the black-hole frame's x axis seen in the camera frame; w = body index
+  near2: vec4f,    // its y axis; w = radius [M]
+  near3: vec4f,    // its z axis; w = lit by its source alone (0), the camera's light probe (1), its own (2)
+  near4: vec4f,    // direction of its light source (camera rest frame, aberrated); unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -93,10 +100,14 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 //   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas); seed
 //   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB);
 //      where: 0 traced (within the escape radius), 1 far (met on the rays' straight way out),
-//      2 our universe (home coordinates, met by the rays that leave through our end of the wormhole); unused
+//      2 our universe (home coordinates, met by the rays that leave through our end of the wormhole),
+//      3 drawn in the local patch; unused
+//   4: planets: where its light comes from, as its light probe measured it (black-hole frame, unit);
+//      w = its colour temperature [K] when measured, else 0 (the hole's direction, or its star's)
 // Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
 // the retarded time Δt along the ray (no absolute time in float32).
 @group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
+const BV = 5u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -503,10 +514,10 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
 // the light of the disk or of its star. Frequency shifts use the orbital motion of the centre (rigid
 // rotation Ω around the hole) at the point hit.
 fn bodyCount() -> u32 { return u32(P.bodyCfg.x); }
-fn bodyRadius(k: u32) -> f32 { return bodies[4u * k].w; }
-fn bodyMass(k: u32) -> f32 { return bodies[4u * k + 1u].w; }
-fn bodyKind(k: u32) -> u32 { return u32(bodies[4u * k + 1u].z); }
-fn bodyWhere(k: u32) -> u32 { return u32(bodies[4u * k + 3u].z); }
+fn bodyRadius(k: u32) -> f32 { return bodies[BV * k].w; }
+fn bodyMass(k: u32) -> f32 { return bodies[BV * k + 1u].w; }
+fn bodyKind(k: u32) -> u32 { return u32(bodies[BV * k + 1u].z); }
+fn bodyWhere(k: u32) -> u32 { return u32(bodies[BV * k + 3u].z); }
 // A pixel's footprint radius at a distance d along its ray (unlensed estimate: the beam of one pixel)
 fn footprint(d: f32) -> f32 { return 0.75 * P.camUp.w * d; }
 // The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
@@ -540,36 +551,36 @@ fn rotZ(p: vec3f, ang: f32) -> vec3f {
 // centre at the emission time tEm (P.time.x: now)
 fn bodyCentre(k: u32, tEm: f32) -> vec3f {
   let dt = tEm - P.time.x;
-  let b0 = bodies[4u * k];
-  let b1 = bodies[4u * k + 1u];
+  let b0 = bodies[BV * k];
+  let b1 = bodies[BV * k + 1u];
   var c = rotZ(b0.xyz, b1.x * dt);
   let par = i32(b1.y);
   if (par >= 0) {
     let q = u32(par);
-    c += rotZ(bodies[4u * q].xyz, bodies[4u * q + 1u].x * dt);
+    c += rotZ(bodies[BV * q].xyz, bodies[BV * q + 1u].x * dt);
   }
   return c;
 }
 // coordinate velocity of the centre
 fn bodyVelocity(k: u32, tEm: f32) -> vec3f {
   let dt = tEm - P.time.x;
-  let b0 = bodies[4u * k];
-  let b1 = bodies[4u * k + 1u];
+  let b0 = bodies[BV * k];
+  let b1 = bodies[BV * k + 1u];
   let c = rotZ(b0.xyz, b1.x * dt);
   var v = b1.x * vec3f(-c.y, c.x, 0.0);
   let par = i32(b1.y);
   if (par >= 0) {
     let q = u32(par);
-    let cp = rotZ(bodies[4u * q].xyz, bodies[4u * q + 1u].x * dt);
-    v += bodies[4u * q + 1u].x * vec3f(-cp.y, cp.x, 0.0);
+    let cp = rotZ(bodies[BV * q].xyz, bodies[BV * q + 1u].x * dt);
+    v += bodies[BV * q + 1u].x * vec3f(-cp.y, cp.x, 0.0);
   }
   return v;
 }
 // the turning rate of the frame the body is carried in around the hole (its parent's for a moon)
 fn bodyOmega(k: u32) -> f32 {
-  let par = i32(bodies[4u * k + 1u].y);
-  if (par >= 0) { return bodies[4u * u32(par) + 1u].x; }
-  return bodies[4u * k + 1u].x;
+  let par = i32(bodies[BV * k + 1u].y);
+  if (par >= 0) { return bodies[BV * u32(par) + 1u].x; }
+  return bodies[BV * k + 1u].x;
 }
 // the far mouth at the emission time (it may orbit the hole), and its velocity
 fn whCentre(tEm: f32) -> vec3f { return rotZ(P.whC.xyz, P.whC.w * (tEm - P.time.x)); }
@@ -733,7 +744,7 @@ fn shadeStar(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
   let nrm = normalize(X - c);
   let mu = clamp(-dot(nrm, dW), 0.0, 1.0);
   let surf = starSurface(nrm, tEm);
-  let b2 = bodies[4u * k + 2u];
+  let b2 = bodies[BV * k + 2u];
   let T = b2.x * pow(0.2 + 0.8 * mu, 0.25) * surf.y;
   return blackbody(T * g, P.disk.w) * b2.y * surf.x;
 }
@@ -744,21 +755,18 @@ fn shadeStar(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
 // shifted by the planet's motion and the gravity climbed (g), like any emitter.
 fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f {
   let nrm = normalize(X - c);
-  let b2 = bodies[4u * k + 2u];
-  let b3 = bodies[4u * k + 3u];
   var ldir = normalize(-X);
-  var Tl = 0.75 * P.disk.x; // (the disk's bright inner part dominates what it sheds on the planet)
-  var Bl = P.misc.z;
-  let li = i32(b3.x);
-  if (li >= 0) {
-    let q = u32(li);
-    ldir = normalize(bodyCentre(q, tEm) - X);
-    Tl = bodies[4u * q + 2u].x;
-    Bl = bodies[4u * q + 2u].y;
-  }
-  let cosi = max(dot(nrm, ldir), 0.0);
-  let view = -dW;
-  let mu = clamp(dot(nrm, view), 0.0, 1.0);
+  let li = i32(bodies[BV * k + 3u].x);
+  if (li >= 0) { ldir = normalize(bodyCentre(u32(li), tEm) - X); }
+  // (as its light probe measured it: Miller's light comes from ahead of its motion, aberrated)
+  let lm = bodies[BV * k + 4u];
+  if (lm.w > 0.5) { ldir = rotZ(lm.xyz, bodyOmega(k) * (tEm - P.time.x)); }
+  return planetShade(k, nrm, nrm, ldir, -dW, tEm, g);
+}
+
+// A planet's surface colour at a unit normal of the black-hole frame (albedo rgb; w: surface kind)
+fn planetAlbedo(k: u32, nrm: vec3f, tEm: f32) -> vec4f {
+  let b2 = bodies[BV * k + 2u];
   // the planet turns with its orbit (synchronous): its surface pattern is fixed in the orbiting frame
   let ang = -bodyOmega(k) * (tEm - P.time.x);
   let q = rotZ(nrm, ang) * 3.0 + vec3f(b2.w);
@@ -766,13 +774,9 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f
   let n2 = 0.5 + 0.5 * gnoise(q * 3.7 + vec3f(1.7));
   var alb: vec3f;
   let surf = u32(b2.z);
-  var spec = 0.0;
   if (surf == 0u) {
-    // shallow ocean over a pale bed (the film's knee-deep water): blue-green, lighter shoals, the
-    // glint of the light source
+    // shallow ocean over a pale bed (the film's knee-deep water): blue-green, lighter shoals
     alb = mix(vec3f(0.1, 0.22, 0.28), vec3f(0.3, 0.5, 0.52), smoothstep(0.35, 0.75, n1 * 0.7 + n2 * 0.3));
-    let hv = normalize(ldir + view);
-    spec = 0.6 * pow(max(dot(nrm, hv), 0.0), 180.0);
   } else if (surf == 1u) {
     alb = mix(vec3f(0.62, 0.7, 0.8), vec3f(0.9, 0.93, 0.97), n1) * (0.85 + 0.15 * n2);
   } else if (surf == 2u) {
@@ -781,11 +785,38 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
   }
-  alb *= b2.y / 0.25;
+  return vec4f(alb * b2.y / 0.25, f32(surf));
+}
+
+// Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
+// ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
+fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32) -> vec3f {
+  let b3 = bodies[BV * k + 3u];
+  var Tl = 0.75 * P.disk.x; // (the disk's bright inner part dominates what it sheds on the planet)
+  var Bl = P.misc.z;
+  let li = i32(b3.x);
+  if (li >= 0) {
+    let q = u32(li);
+    Tl = bodies[BV * q + 2u].x;
+    Bl = bodies[BV * q + 2u].y;
+  }
+  // (the colour of the light its probe measured: the disk's, Doppler shifted by its motion)
+  let lm = bodies[BV * k + 4u];
+  if (lm.w > 0.5) { Tl = lm.w; }
+  let cosi = max(dot(nrm, ldir), 0.0);
+  let mu = clamp(dot(nrm, view), 0.0, 1.0);
+  let A = planetAlbedo(k, pat, tEm);
+  let surf = u32(A.w);
+  var spec = 0.0;
+  if (surf == 0u) {
+    // the glint of the light source on the water
+    let hv = normalize(ldir + view);
+    spec = 0.6 * pow(max(dot(nrm, hv), 0.0), 180.0);
+  }
   // atmosphere: the sunlit air (Rayleigh blue) over the whole day side, brighter along the limb
   let rim = pow(1.0 - mu, 3.0) * smoothstep(-0.1, 0.4, dot(nrm, ldir));
   let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf == 3u);
-  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((alb + sky) * cosi + spec * cosi);
+  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((A.rgb + sky) * cosi + spec * cosi);
 }
 
 // Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
@@ -803,7 +834,7 @@ fn starGlow(k: u32, p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
   if (h < 0.0 || h > 3.0) { return vec3f(0.0); }
   let dir = dv / d;
   let t = tEm * 0.003;
-  let b2 = bodies[4u * k + 2u];
+  let b2 = bodies[BV * k + 2u];
   let Is = luminance(blackbody(b2.x * g, P.disk.w)) * b2.y;
   // corona: steep falloff, streamers along the field lines (angular noise, stretched radially)
   let st = gnoise(dir * 3.2 + vec3f(t, 0.0, 0.0)) + 0.5 * gnoise(dir * 9.0 - vec3f(0.0, t, 0.0));
@@ -1981,7 +2012,97 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
   let tanH = P.cam.w;
   let aspect = P.camRight.w;
-  return traceLook(normalize(P.camFwd.xyz + ndc.x * tanH * aspect * P.camRight.xyz + ndc.y * tanH * P.camUp.xyz), rnd, tNow);
+  let look = normalize(P.camFwd.xyz + ndc.x * tanH * aspect * P.camRight.xyz + ndc.y * tanH * P.camUp.xyz);
+  // a body near the camera, in front of everything traced (the light probe, traced by traceLook
+  // alone, leaves it out: it does not light itself)
+  if (P.near0.w > 0.5) {
+    let t = nearHit(look);
+    if (t > 0.0) { return traceOut(shadeNear(look, t)); }
+  }
+  return traceLook(look, rnd, tNow);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Local patch: the body near the camera (unit sphere at P.near0.xyz, camera at the origin)
+// ---------------------------------------------------------------------------------------------
+// the probe's harmonics (camera axes), copied after the bodies (MAX_BODIES × BV vec4) on the GPU
+const SH_BASE = 40u;
+fn shEnv(k: u32) -> vec4f { return bodies[SH_BASE + k]; }
+
+// distance along the look direction to the sphere (in radii), −1 when missed (the perpendicular
+// offset is formed directly: no cancellation hundreds of radii away)
+fn nearHit(look: vec3f) -> f32 {
+  let c = P.near0.xyz;
+  let b = dot(look, c);
+  let off = c - look * b;
+  let h = 1.0 - dot(off, off);
+  if (h < 0.0 || b <= 0.0) { return -1.0; }
+  return b - sqrt(h);
+}
+
+// camera-frame vector → the probe's axes (x right, y up, z forward)
+fn camAxes(v: vec3f) -> vec3f { return vec3f(dot(v, P.camRight.xyz), dot(v, P.camUp.xyz), dot(v, P.camFwd.xyz)); }
+
+// irradiance E(n) from the probe's harmonics (Ramamoorthi & Hanrahan)
+fn shIrradiance(d: vec3f) -> vec3f {
+  let b = array<f32, 9>(
+    0.282095, 0.488603 * d.y, 0.488603 * d.z, 0.488603 * d.x,
+    1.092548 * d.x * d.y, 1.092548 * d.y * d.z, 0.315392 * (3.0 * d.z * d.z - 1.0),
+    1.092548 * d.x * d.z, 0.546274 * (d.x * d.x - d.y * d.y));
+  let A = array<f32, 9>(PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398);
+  var e = vec3f(0.0);
+  for (var k = 0u; k < 9u; k++) { e += A[k] * b[k] * shEnv(k).rgb; }
+  return max(e, vec3f(0.0));
+}
+
+// the probe's radiance around a direction (3 × 3 texels: a slightly rough mirror)
+fn probeRadiance(d: vec3f) -> vec3f {
+  let u = atan2(d.x, d.z) / TAU + 0.5;
+  let v = acos(clamp(d.y, -1.0, 1.0)) / PI;
+  let x0 = i32(u * f32(ENV_W));
+  let y0 = i32(v * f32(ENV_H));
+  var acc = vec3f(0.0);
+  for (var j = -1; j <= 1; j++) {
+    let y = clamp(y0 + j, 0, i32(ENV_H) - 1);
+    for (var i = -1; i <= 1; i++) {
+      let x = (x0 + i + i32(ENV_W)) % i32(ENV_W);
+      acc += envBuf[u32(y) * ENV_W + u32(x)].rgb;
+    }
+  }
+  return acc / 9.0;
+}
+
+fn shadeNear(look: vec3f, t: f32) -> vec3f {
+  let k = u32(P.near1.w);
+  let n = normalize(look * t - P.near0.xyz);
+  // the black-hole frame's components (the surface pattern, the far view's light)
+  let nw = normalize(vec3f(dot(n, P.near1.xyz), dot(n, P.near2.xyz), dot(n, P.near3.xyz)));
+  if (bodyKind(k) == 0u) {
+    // a star: limb darkening in the camera frame, its granulation fixed on it
+    let mu = clamp(-dot(n, look), 0.0, 1.0);
+    let sf = starSurface(nw, P.time.x);
+    let b2 = bodies[BV * k + 2u];
+    return blackbody(b2.x * pow(0.2 + 0.8 * mu, 0.25) * sf.y, P.disk.w) * b2.y * sf.x;
+  }
+  if (P.near3.w < 0.5) { return planetShade(k, n, nw, P.near4.xyz, -look, P.time.x, 1.0); }
+  // lit by the camera's light probe (the environment of the planet: the lensed disk, Gargantua, the
+  // sky): diffuse albedo/π · E(n), water mirroring the environment (Fresnel), the air's blue at the limb
+  // (1: the Ranger's probe, camera axes; 2: the planet's own probe, along the ZAMO axes)
+  let ranger = P.near3.w < 1.5;
+  let A = planetAlbedo(k, nw, P.time.x);
+  let E = select(shIrradiance(n), shIrradiance(camAxes(n)), ranger);
+  var col = A.rgb / PI * E;
+  let mu = clamp(-dot(n, look), 0.0, 1.0);
+  let surf = u32(A.w);
+  if (surf == 0u && ranger) {
+    let F = 0.02 + 0.98 * pow(1.0 - mu, 5.0);
+    col += F * probeRadiance(camAxes(reflect(look, n)));
+  }
+  if (surf != 3u) {
+    let rim = pow(1.0 - mu, 3.0);
+    col += vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * E / PI;
+  }
+  return col;
 }
 
 fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
@@ -2223,6 +2344,11 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       let tEm = tNow + n.x.w;
       let dv = p1 - p0;
       let len = length(dv);
+      // (a body moves during the step — Miller at 0.3 c, the step longer than the distance to it up
+      // close: its centre goes linearly from the step's start to its end, and the ray is met in the
+      // body's frame, where it is still a straight segment: q0 → q1)
+      var kC0 = vec3f(0.0);
+      var kC1 = vec3f(0.0);
       // the nearest body hit in this step (and the stars' atmospheres in front of it); bodies smaller
       // than the pixel's footprint are spread over it (same flux: lensed images, Einstein rings and
       // magnification then come from the traced rays themselves)
@@ -2230,12 +2356,17 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       var kHit = 0u;
       for (var k = 0u; k < bodyCount(); k++) {
         if (bodyWhere(k) != 0u) { continue; }
-        let c = bodyCentre(k, tEm);
+        let c0 = bodyCentre(k, tNow + s.x.w);
+        let c1 = bodyCentre(k, tEm);
+        let q0 = p0 - c0;
+        let q1 = p1 - c1;
+        let dq1 = q1 - q0;
         let R = bodyRadius(k);
-        let u = clamp(dot(c - p0, dv) / max(len * len, 1e-30), 0.0, 1.0);
+        let u = clamp(-dot(q0, dq1) / max(dot(dq1, dq1), 1e-30), 0.0, 1.0);
+        let c = mix(c0, c1, u);
         let rEff = footprint(travel + u * len);
         if (R < rEff) {
-          let qc = p0 + u * dv - c;
+          let qc = q0 + u * dq1;
           let dq = length(qc);
           if (!radio && dq < rEff && u > 0.0 && u < 1.0) {
             let dW = backwardDir(n, L, a);
@@ -2244,23 +2375,27 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
           }
           continue;
         }
-        let t = sphereHit(p0, p1, c, R);
-        if (!radio && bodyKind(k) == 0u && length(p1 - c) < 4.0 * R) {
+        let t = sphereHit(q0, q1, vec3f(0.0), R);
+        if (!radio && bodyKind(k) == 0u && length(q1) < 4.0 * R) {
           // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
           let frac = select(1.0, t, t >= 0.0);
-          let pm = mix(p0, p1, 0.5 * frac);
+          let pm = mix(p0, p1, 0.5 * frac) - mix(c0, c1, 0.5 * frac) + c;
           // local path length = (−p·u_ZAMO) dλ for p_t = −1
           col += trans * starGlow(k, pm, c, bodyShift(k, n, L, E0), tEm) * h * frac * zamoEnergy(n.x.x, n.x.y, a, L);
         }
         if (t >= 0.0 && t < tHit) {
           tHit = t;
           kHit = k;
+          kC0 = c0;
+          kC1 = c1;
         }
       }
       if (tHit <= 1.0) {
         let X = mix(p0, p1, tHit);
-        let c = bodyCentre(kHit, tEm);
-        if (!radio) { col += trans * shadeBody(kHit, X, c, bodyShift(kHit, n, L, E0), backwardDir(n, L, a), tEm); }
+        let c = mix(kC0, kC1, tHit);
+        // (lit and patterned at the moment the ray passes it)
+        let tHitEm = tNow + mix(s.x.w, n.x.w, tHit);
+        if (!radio) { col += trans * shadeBody(kHit, X, c, bodyShift(kHit, n, L, E0), backwardDir(n, L, a), tHitEm); }
         trans = 0.0;
         fate = 3u;
         break;
