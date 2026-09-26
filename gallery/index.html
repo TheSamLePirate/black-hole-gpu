@@ -797,6 +797,34 @@
     background: #000;
     box-shadow: 0 0 0 1px var(--rule);
   }
+  .journey > a img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid var(--line, rgba(255,255,255,0.08));
+  }
+  .howto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px 28px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .howto li b { font-weight: 600; }
+  .howto kbd {
+    display: inline-block;
+    min-width: 1.3em;
+    padding: 0 5px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    font: 500 12px/1.4 "IBM Plex Mono", monospace;
+    text-align: center;
+  }
   .journey figcaption {
     margin-top: 12px;
     color: var(--dim);
@@ -837,6 +865,7 @@
     <a href="#moteur">Le moteur v2</a>
     <a href="#trou-de-ver">Le trou de ver</a>
     <a href="#compare">Interstellar</a>
+    <a href="#simulateur">Le simulateur</a>
     <a href="#modele">Le modèle de calcul</a>
     <a href="#journal">Journal</a>
   </nav>
@@ -919,6 +948,25 @@
         </p>
       </div>
     </div>
+  </section>
+
+  <section id="simulateur" aria-labelledby="sim-title">
+    <div class="section-head">
+      <h2 id="sim-title">Le simulateur</h2>
+      <p>Tout ce qui est dans cet atlas se calcule en direct dans le navigateur (WebGPU). L'interface laisse la place à la vue : un indicateur d'état en haut à gauche, une barre d'icônes en bas, les réglages et l'aide à la demande. <a href="../">Ouvrir le simulateur →</a></p>
+    </div>
+    <figure class="journey">
+      <a href="img/journal/30_interface.jpg" target="_blank" rel="noopener"><img src="img/journal/30_interface.jpg" alt="L'ancienne interface (titre, statistiques, encadré des mesures, barre légendée, réglages ouverts) et la nouvelle : un indicateur d'état, une barre d'icônes avec infobulles, l'aide clavier par sections, les réglages à la demande, et la version téléphone." loading="lazy" /></a>
+      <figcaption><b>Avant / après.</b> L'indicateur « Live · Refining · Converged » dit où en est l'image et ce que fait la caméra ; un clic (ou <kbd>I</kbd>) le déplie sur les détails et les mesures physiques. Chaque icône donne son nom et sa touche au survol ; <kbd>?</kbd> ouvre l'aide complète.</figcaption>
+    </figure>
+    <ul class="howto">
+      <li><b>Glisser</b> : tourner autour de la cible · <b>molette</b> : s'en approcher</li>
+      <li><b>Cliquer un corps</b> (même une image déviée) : le choisir comme cible · <b>double-clic</b> : y voler</li>
+      <li><kbd>R</kbd> : autour de la cible ⟷ rotation libre · <kbd>Tab</kbd> : cible suivante</li>
+      <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> : voler (6 degrés de liberté) · <kbd>V</kbd> : vol à la souris</li>
+      <li><kbd>B</kbd> : gravité, la caméra suit sa géodésique · <kbd>T</kbd> : le voyage par le trou de ver</li>
+      <li><kbd>Espace</kbd> : le temps · <kbd>M</kbd> : réglages · <kbd>H</kbd> : masquer l'interface</li>
+    </ul>
   </section>
 
   <section id="modele" aria-labelledby="model-title">
@@ -1381,6 +1429,10 @@
       <figure>
         <a href="img/journal/29_glue_seam.jpg" target="_blank" rel="noopener"><img src="img/journal/29_glue_seam.jpg" alt="C4 · Plus de cercle autour du trou de ver." loading="lazy" /></a>
         <figcaption><b>C4 · Raccord sans couture</b> L'horloge des rayons était remise à zéro en traversant la sphère de raccord de la bouche : le disque vu au travers était dessiné ~100 M trop tard, d'où un cercle net. Le temps, la déviation et l'énergie sont maintenant continus.</figcaption>
+      </figure>
+      <figure>
+        <a href="img/journal/30_interface.jpg" target="_blank" rel="noopener"><img src="img/journal/30_interface.jpg" alt="C5 · Une interface plus calme." loading="lazy" /></a>
+        <figcaption><b>C5 · Une interface plus calme</b> Plus de bloc titre : un indicateur d'état dépliable, une barre d'icônes avec infobulles et touches, l'aide clavier par sections, les réglages fermés au départ, une version téléphone épurée.</figcaption>
       </figure>
     </div>
   </section>
