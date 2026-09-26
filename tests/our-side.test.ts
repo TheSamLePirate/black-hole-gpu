@@ -109,3 +109,36 @@ test("the local patch puts Saturn where it is, seen from our side", () => {
   expect(Math.hypot(...lp.centre)).toBeLessThan(17 * 1.02);
   expect(Math.hypot(...lp.axes[2])).toBeCloseTo(1, 9);
 });
+
+test("the solar system holds and turns: a century of orbits around the Sun, true periods", () => {
+  const AU = 1.495978707e11 / 1.476625e11;
+  const year = (365.25 * 86400) / M_SECONDS;
+  const helio = (id: string, t: number) => {
+    const p = solarState(id, t).pos, sun = solarState("sun", t).pos;
+    return [p[0] - sun[0], p[1] - sun[1], p[2] - sun[2]] as Vec3;
+  };
+  // (every body stays on its orbit: perihelion–aphelion bounds over 100 years)
+  const bounds: Record<string, [number, number]> = { mercury: [0.3, 0.47], earth: [0.98, 1.02], mars: [1.38, 1.67], jupiter: [4.94, 5.46], saturn: [9.0, 10.1], neptune: [29.7, 30.4] };
+  for (let y = 0; y <= 100; y += 0.37) {
+    for (const [id, [lo, hi]] of Object.entries(bounds)) {
+      const r = Math.hypot(...helio(id, y * year)) / AU;
+      expect(r).toBeGreaterThan(lo);
+      expect(r).toBeLessThan(hi);
+    }
+    const em = dist(solarState("moon", y * year).pos, solarState("earth", y * year).pos) * 1.476625e8;
+    expect(em).toBeGreaterThan(356e3);
+    expect(em).toBeLessThan(407e3);
+  }
+  // periods: the heliocentric longitude comes back after one sidereal period
+  const lon = (id: string, t: number) => { const p = helio(id, t); return Math.atan2(p[1], p[0]); };
+  const turn = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
+  expect(turn(lon("earth", 0), lon("earth", year * 1.0000174))).toBeLessThan(0.02);
+  expect(turn(lon("jupiter", 0), lon("jupiter", year * 11.862))).toBeLessThan(0.02);
+  expect(turn(lon("saturn", 0), lon("saturn", year * 29.457))).toBeLessThan(0.03);
+  // all prograde, counter-clockwise seen from the ecliptic north
+  const t1 = year / 100;
+  for (const id of ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"]) {
+    const a = helio(id, 0), b = helio(id, t1);
+    expect(a[0] * b[1] - a[1] * b[0]).toBeGreaterThan(0);
+  }
+});

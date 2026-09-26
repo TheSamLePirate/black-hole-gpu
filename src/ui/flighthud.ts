@@ -27,7 +27,7 @@ import { rapidityCost } from "../engine";
 import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
-import { SOLAR_BODIES, solarState } from "../system/solar";
+import { EPOCH_DATE, SOLAR_BODIES, solarState } from "../system/solar";
 
 /** our universe's bodies on the map */
 const OUR_COLOURS: Record<string, string> = {
@@ -1313,26 +1313,28 @@ export class FlightHud {
   }
 
   /**
-   * Our universe's map: the solar system around a body (the ship's reference body, or one clicked),
-   * multi-scale — distance from it as ln(1 + r / r₀), r₀ five of its radii, directions kept — so the
-   * Moon around the Earth and Neptune show on the same map. Orbits (a turn), bodies, the ship, our
-   * mouth of the wormhole; the target ringed.
+   * Our universe's map: the solar system around the Sun (or around a body clicked: a planet and its
+   * moons), in the ecliptic (top) or edge-on (side); on log scale — distance from the centre as
+   * ln(1 + r / r₀), r₀ five radii of the centre body, directions kept: orbits around it stay ellipses
+   * — or true scale. Orbits (a turn), bodies, the ship, our mouth of the wormhole; the target ringed.
    */
   private drawOurMap(i: Info, t0: number, ctx: CanvasRenderingContext2D, cw: number, ch: number) {
     const dpr = devicePixelRatio;
-    const focus = this.mapFocus && SOLAR_BODIES.some((b) => b.id === this.mapFocus) ? this.mapFocus : i.ref!;
+    const focus = this.mapFocus && SOLAR_BODIES.some((b) => b.id === this.mapFocus) ? this.mapFocus : "sun";
     const F = solarState(focus, t0).pos;
     const r0 = 5 * (SOLAR_BODIES.find((b) => b.id === focus)?.radius ?? 1e-4);
     const side = this.view === "side";
+    const log = this.logMap !== false;
     const pr = (X: V3): [number, number] => {
       const d: V3 = sub(X, F);
       const q: [number, number] = side ? [d[0], d[2]] : [d[0], d[1]];
+      if (!log) return q;
       const R = Math.hypot(...d);
-      const Q = Math.hypot(q[0], q[1]);
-      return Q < 1e-30 ? [0, 0] : [(q[0] * Math.log1p(R / r0)) / Q * (Q / R), (q[1] * Math.log1p(R / r0)) / Q * (Q / R)];
+      return R < 1e-30 ? [0, 0] : [(q[0] * Math.log1p(R / r0)) / R, (q[1] * Math.log1p(R / r0)) / R];
     };
-    const ship = pr(i.X!);
-    const want = Math.max(Math.hypot(...ship) * 1.25, 3) * this.zoom;
+    // (framed on the planets out to Neptune around the Sun; on the ship and the moons around a planet)
+    const reach = focus === "sun" ? 31 * 1.0131 : Math.max(Math.hypot(...sub(i.X!, F)) * 1.2, 40 * r0);
+    const want = (log ? Math.log1p(reach / r0) : reach) * 1.08 * this.zoom;
     this.extent += (want - this.extent) * 0.15;
     const k = (Math.min(cw, ch) / 2 - 8 * dpr) / this.extent;
     this.mapK = k;
@@ -1346,7 +1348,7 @@ export class FlightHud {
     const [ox, oy] = P(F);
     for (let j = 1; j <= 6; j++) {
       ctx.beginPath();
-      ctx.arc(ox, oy, Math.log1p(10 ** j) * k, 0, 2 * Math.PI);
+      ctx.arc(ox, oy, (log ? Math.log1p(10 ** j) : 10 ** j * r0) * k, 0, 2 * Math.PI);
       ctx.stroke();
     }
     // orbits: a turn of each body around its primary (recomputed every 2 s)
@@ -1452,7 +1454,8 @@ export class FlightHud {
     ctx.fillStyle = "rgba(220, 225, 235, 0.6)";
     ctx.textAlign = "left";
     ctx.font = `${9 * dpr}px ${FONT}`;
-    ctx.fillText(`Our universe · around ${SOLAR_BODIES.find((b) => b.id === focus)?.name} · log scale`, 8 * dpr, ch - 8 * dpr);
+    const date = new Date(EPOCH_DATE + t0 * 492.5490947 * 1000).toISOString().slice(0, 10);
+    ctx.fillText(`${date} · around ${SOLAR_BODIES.find((b) => b.id === focus)?.name} · ${log ? "log scale" : "true scale"}`, 8 * dpr, ch - 8 * dpr);
   }
 
   private drawMap(i: Info, t0: number) {
