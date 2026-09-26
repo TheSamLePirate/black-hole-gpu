@@ -889,12 +889,12 @@ export class SettingsPanel {
       ["Controller (Xbox · PlayStation)", [
         ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
         ["Right stick", "Around: orbit the target · Free: look"],
-        ["RT · LT", "Up · down"],
-        ["LB · RB", "Roll"],
-        ["A", "Fly to the target"],
-        ["B · X · Y", "Gravity · auto-orbit · around ⟷ free"],
+        ["RT · LT  (R2 · L2)", "Up · down"],
+        ["LB · RB  (L1 · R1)", "Roll"],
+        ["A  (✕)", "Fly to the target"],
+        ["B · X · Y  (○ □ △)", "Gravity · auto-orbit · around ⟷ free"],
         ["D-pad ◀ ▶ · ▲ ▼", "Previous / next target · closer / farther"],
-        ["R3 · View · Menu", "Recentre · run / pause time · settings"],
+        ["R3 · View · Menu", "Recentre · run / pause time · settings (Share · Options)"],
       ]],
       ["Interface", [
         ["M · /", "Settings · search them"],
