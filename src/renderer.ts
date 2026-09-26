@@ -10,7 +10,8 @@ import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame } from "./camera";
-import { mouth } from "./wormhole";
+import { mouth, setSceneTime } from "./wormhole";
+import { BODY_VEC4, MAX_BODIES, packBodies, sceneBodies } from "./system/scene-bodies";
 import { starOmega } from "./targeting";
 import {
   blackbodyLogY,
@@ -206,6 +207,8 @@ export class Renderer {
   private starLodTexture: GPUTexture;
   private catalogue: GPUBuffer;
   private pathBuf!: GPUBuffer;
+  private bodyBuf!: GPUBuffer;
+  private bodyData = new Float32Array(MAX_BODIES * BODY_VEC4 * 4);
   private pathCount = 0;
   private pathFate = 0;
   private pathKey: unknown = null;
@@ -274,6 +277,7 @@ export class Renderer {
         { binding: 11, visibility: C, buffer: { type: "storage" } },
         { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 14, visibility: C, buffer: { type: "storage" } },
+        { binding: 15, visibility: C, buffer: { type: "read-only-storage" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -308,6 +312,7 @@ export class Renderer {
     this.postBeamV = mkPost("beamV");
 
     this.pathBuf = device.createBuffer({ size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.bodyBuf = device.createBuffer({ size: this.bodyData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 112, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const lut = buildBlackbodyLUT();
@@ -568,6 +573,7 @@ export class Renderer {
         { binding: 11, resource: { buffer: t.polAcc } },
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
+        { binding: 15, resource: { buffer: this.bodyBuf } },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -755,7 +761,13 @@ export class Renderer {
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);
     set(10, o.eps, o.steps, this.escapeRadius(s), captureTolerance(a));
-    set(11, time, s.flowPeriod, s.bgIntensity, pixelAngle * 0.35 * s.starSize);
+    // The GPU's "now" in float32: the absolute time only drives the disk's flow, the hot spot and the
+    // jet (periodic patterns); bodies and the mouth get their places at `time` from the CPU (float64)
+    // and are turned by Ω·Δt along the rays. After many flow periods it wraps (a rare jump of the
+    // disk's pattern), so that it keeps its precision over years of simulated time.
+    const wrap = Math.max(s.flowPeriod, 1) * 1024;
+    const tGpu = time > wrap ? time % wrap : time;
+    set(11, tGpu, s.flowPeriod, s.bgIntensity, pixelAngle * 0.35 * s.starSize);
     set(12, s.hotFlow ? 1 : 0, s.hotFlowHR, s.hotFlowAlpha, s.hotFlowIntensity);
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
@@ -779,16 +791,22 @@ export class Renderer {
     set(28, s.radioJet, s.hotFlowHR, 0, 0);
     set(29, s.hotSpot ? 1 : 0, Math.max(s.spotRadius, horizon(a) + 1.5 * s.spotSize), s.spotSize, s.spotTau);
     set(30, s.spotTemp, s.spotBrightness, (s.spotPhase * Math.PI) / 180, s.spotHeight);
-    const m = mouth(s);
+    setSceneTime(time);
+    const m = mouth(s, time);
     set(31, s.wormhole ? 1 : 0, m.w.rho, m.w.a, m.w.M);
     set(32, s.wormhole && cam.region === "throat" ? 1 : 0, cam.ell, m.rGlue, m.lGlue);
     set(33, ...cam.n, m.lFar);
-    set(34, ...m.C, 0);
+    set(34, ...m.C, m.omega);
     set(35, ...m.ex, 0);
     set(36, ...m.ey, 0);
     set(37, ...m.ez, 0);
-    set(38, s.sun ? 1 : 0, Math.max(s.sunOrbit, horizon(a) + s.sunRadius + 1), s.sunRadius, s.sunTemp);
-    set(39, s.sunBrightness, (s.sunPhase * Math.PI) / 180, s.sun ? s.sunMass : 0, 0);
+    // bodies (the companion star, a system's planets): places now, in float64 on the CPU
+    const bodies = sceneBodies(s, time);
+    packBodies(bodies, this.bodyData);
+    this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
+    const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
+    set(38, Math.min(bodies.length, MAX_BODIES), massive, 0, 0);
+    set(39, 0, 0, 0, 0);
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
@@ -830,6 +848,9 @@ export class Renderer {
     if (s.jet) r = Math.max(r, s.jetLength * 1.05);
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside
+    // a system's traced bodies, and an orbiting mouth, likewise
+    for (const b of sceneBodies(s, 0)) if (b.parent < 0) r = Math.max(r, Math.hypot(...b.pos) + b.radius + 5);
+    if (s.wormhole && s.whOrbit) r = Math.max(r, s.whDist + mouth(s).rGlue + 5);
     return r;
   }
 

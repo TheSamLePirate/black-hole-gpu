@@ -195,7 +195,7 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ell proper distance through",
   },
   {
-    key: "whRho", type: "number", section: "scene", group: "Interstellar wormhole", label: "Throat radius ρ", min: 0.2, max: 20, scale: "log", unit: "M", precision: 3, enabled: whOn,
+    key: "whRho", type: "number", section: "scene", group: "Interstellar wormhole", label: "Throat radius ρ", min: 0.01, max: 20, scale: "log", unit: "M", precision: 3, enabled: whOn,
     help: "Radius of the wormhole's spherical cross sections inside its cylindrical interior (1 km in the film; here in units of the black hole's M).",
   },
   {
@@ -212,11 +212,20 @@ export const SCHEMA: ControlDef[] = [
     help: "Distance of the far mouth from the black hole. Inside a sphere around the mouth light follows the wormhole metric, outside it the Kerr metric.",
   },
   {
-    key: "whIncl", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth inclination", min: 5, max: 175, step: 0.1, unit: "°", enabled: whOn,
+    key: "whIncl", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth inclination", min: 5, max: 175, step: 0.1, unit: "°", enabled: (s) => whOn(s) && !s.whOrbit,
     help: "Polar angle of the far mouth from the spin axis: the angle at which the black hole is seen through the wormhole.",
   },
   {
-    key: "whAzimuth", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth azimuth", min: -180, max: 180, step: 0.1, unit: "°", enabled: whOn,
+    key: "whAzimuth", type: "number", section: "scene", group: "Interstellar wormhole", label: "Far mouth azimuth", min: -180, max: 180, step: 0.1, unit: "°", enabled: (s) => whOn(s) && !s.whOrbit,
+  },
+  {
+    key: "whOrbit", type: "toggle", section: "scene", group: "Interstellar wormhole", label: "Mouth in orbit", enabled: whOn,
+    help: "The far mouth as a test particle on a circular equatorial orbit of Kerr at its distance (Ω = 1/(r^3/2 + a)), its axes fixed: light and the camera crossing its gluing sphere are boosted between the mouth's rest frame and the hole's (aberration, Doppler).",
+    keywords: "moving orbiting mouth boost lorentz",
+  },
+  {
+    key: "whPhase", type: "number", section: "scene", group: "Interstellar wormhole", label: "Mouth orbital phase", min: 0, max: 360, step: 0.1, unit: "°", enabled: (s) => whOn(s) && s.whOrbit,
+    help: "Azimuth of the orbiting mouth at t = 0.",
   },
   {
     key: "journeyDuration", type: "number", section: "scene", group: "Interstellar wormhole", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
@@ -425,6 +434,15 @@ export const SCHEMA: ControlDef[] = [
     key: "spotPhase", type: "number", section: "matter", group: "Hot spot", label: "Initial azimuth", min: -180, max: 180, step: 1, unit: "°", enabled: (s) => s.hotSpot,
   },
   // ------------------------------------------------------------------ matter · companion star
+  {
+    key: "system", type: "choice", section: "matter", group: "Planetary system", label: "System", style: "segmented",
+    options: [
+      { value: "none", label: "None", hint: "No planets" },
+      { value: "gargantua", label: "Gargantua", hint: "Miller (r = 10 M, 1.3 g), Mann (40 M), the mouth orbiting at 300 M, Edmunds and its K2 star at 2 000 AU — the study's system (10⁸ M☉, a* = 0.998)" },
+    ],
+    help: "Bodies from a registered system (src/system/bodies.ts), on their real orbits: circular Kerr geodesics around the hole, Keplerian around a star. Planets are spheres lit by the accretion disk (or their star); far away they are smaller than a pixel.",
+    keywords: "planets miller mann edmunds interstellar system",
+  },
   {
     key: "sun", type: "toggle", section: "matter", group: "Companion star", label: "Star",
     help: "A star on a circular orbit in the black hole's equatorial plane (in the black hole's frame; with a supermassive hole the star does the orbiting). Opaque limb-darkened blackbody photosphere, seen at the emission time with its orbital Doppler shift and gravitational redshift, and lensed like everything else.",

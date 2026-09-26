@@ -229,16 +229,39 @@ export interface Mouth {
   rGlue: number; // radius of the gluing sphere: inside it the Dneg metric, outside it Kerr
   lGlue: number;
   lFar: number; // our side: rays are followed to ℓ = −lFar (r = 100 ρ), then straight
+  /** coordinate velocity of the centre (black hole's frame): an orbiting mouth moves, 0 otherwise */
+  V: Vec3;
+  /** its angular velocity on its circle around the spin axis (dφ/dt), 0: static */
+  omega: number;
 }
 
-type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "spin" | "disk" | "diskOuter";
-export function mouth(s: Pick<Settings, MouthKeys>): Mouth {
+/**
+ * The scene's current coordinate time, for an orbiting mouth (set once a frame by the app, and by
+ * an offline render for its own time): everything within a frame sees the mouth at the same place.
+ */
+let sceneTime = 0;
+export function setSceneTime(t: number) {
+  sceneTime = t;
+}
+
+type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "whOrbit" | "whPhase" | "spin" | "disk" | "diskOuter";
+/**
+ * The far mouth at time t. Static: at (whDist, whIncl, whAzimuth). Orbiting: a test particle on the
+ * prograde circular equatorial Kerr orbit at whDist (Ω = 1/(r^{3/2} + a)), its frame axes fixed —
+ * the mouth translates without turning (the axes are those it has at t = 0).
+ */
+export function mouth(s: Pick<Settings, MouthKeys>, t = sceneTime): Mouth {
   const w = dneg(s);
-  const th = s.whIncl * DEG;
-  const ph = s.whAzimuth * DEG;
+  const orbit = !!s.whOrbit;
+  const th = orbit ? Math.PI / 2 : s.whIncl * DEG;
+  const ph0 = orbit ? (s.whPhase ?? 0) * DEG : s.whAzimuth * DEG;
   const D = Math.max(s.whDist, horizon(s.spin) + 4 * w.rho);
+  const omega = orbit ? 1 / (D ** 1.5 + s.spin) : 0;
+  const ph = ph0 + omega * t;
   const C: Vec3 = [D * Math.sin(th) * Math.cos(ph), D * Math.sin(th) * Math.sin(ph), D * Math.cos(th)];
-  const ex = scale(C, -1 / D);
+  const V: Vec3 = [-omega * C[1], omega * C[0], 0];
+  const C0: Vec3 = [D * Math.sin(th) * Math.cos(ph0), D * Math.sin(th) * Math.sin(ph0), D * Math.cos(th)];
+  const ex = scale(C0, -1 / D);
   let ez = sub([0, 0, 1], scale(ex, ex[2]));
   ez = Math.hypot(...ez) < 1e-6 ? normalize(cross(ex, [0, 1, 0])) : normalize(ez);
   const ey = cross(ez, ex);
@@ -247,8 +270,29 @@ export function mouth(s: Pick<Settings, MouthKeys>): Mouth {
   const R = D * Math.sin(th);
   const toDisk = s.disk ? Math.hypot(Math.max(R - s.diskOuter, 0), D * Math.cos(th)) : Infinity;
   const rGlue = Math.max(Math.min(Math.max(8 * w.rho, w.rho + 12 * w.M), 0.3 * D, 0.8 * toDisk), 2 * w.rho);
-  return { w, C, ex, ey, ez, rGlue, lGlue: ellOfR(w, rGlue), lFar: ellOfR(w, 100 * w.rho) };
+  return { w, C, ex, ey, ez, rGlue, lGlue: ellOfR(w, rGlue), lFar: ellOfR(w, 100 * w.rho), V, omega };
 }
+
+/**
+ * Relativistic composition of velocities: the velocity (3-velocity) of a body moving at u in a frame
+ * that moves at v, seen from the frame in which v was measured (v = 0: u).
+ */
+export function addVelocity(v: Vec3, u: Vec3): Vec3 {
+  const v2 = dot(v, v);
+  if (v2 < 1e-24) return u;
+  const g = 1 / Math.sqrt(1 - v2);
+  const vu = dot(v, u);
+  const k = 1 / (1 + vu);
+  // u∥ + v and u⊥/γ, over 1 + v·u
+  const par = scale(v, vu / v2);
+  const perp = sub(u, par);
+  return scale(add(add(par, v), scale(perp, 1 / g)), k);
+}
+
+/** A 3-velocity in the black hole's frame → the mouth's rest frame (rep components). */
+export const velToMouth = (m: Mouth, u: Vec3): Vec3 => toMouth(m, addVelocity(scale(m.V, -1), u));
+/** A 3-velocity in the mouth's rest frame (rep components) → the black hole's frame. */
+export const velFromMouth = (m: Mouth, u: Vec3): Vec3 => addVelocity(m.V, fromMouth(m, u));
 
 export const toMouth = (m: Mouth, v: Vec3): Vec3 => [dot(v, m.ex), dot(v, m.ey), dot(v, m.ez)];
 export const fromMouth = (m: Mouth, v: Vec3): Vec3 => add(add(scale(m.ex, v[0]), scale(m.ey, v[1])), scale(m.ez, v[2]));

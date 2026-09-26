@@ -138,3 +138,50 @@ test("the 0.05 M throat: 0.19 m/s² of tide over 10 m; r''(ℓ) of the Dneg metr
   expect(o.vZamo).toBeCloseTo(0.058, 3);
   expect(o.period * U.tg / SI.year).toBeCloseTo(0.51, 2);
 });
+
+// ---- phase 1: the orbiting mouth, velocities across its gluing sphere, the bodies sent to the GPU
+import { addVelocity, mouth, velFromMouth, velToMouth } from "../src/wormhole";
+import { defaultSettings, presets } from "../src/settings";
+import { sceneBodies } from "../src/system/scene-bodies";
+
+const scene = () => Object.assign(defaultSettings(), presets["Gargantua system (10⁸ M☉, a* = 0.998)"]);
+
+test("the orbiting mouth: a circular Kerr orbit at 300 M, 0.058 c, axes fixed", () => {
+  const s = scene();
+  const m0 = mouth(s, 0), m1 = mouth(s, 1000);
+  expect(Math.hypot(...m0.C)).toBeCloseTo(300, 9);
+  expect(m0.omega).toBeCloseTo(1 / (300 ** 1.5 + 0.998), 15);
+  expect(Math.hypot(...m0.V)).toBeCloseTo(300 * m0.omega, 12); // ≈ 0.0577 (coordinate speed)
+  expect(Math.atan2(m1.C[1], m1.C[0]) - Math.atan2(m0.C[1], m0.C[0])).toBeCloseTo(1000 * m0.omega, 9);
+  expect(m1.ex).toEqual(m0.ex); // translates without turning
+  // a static mouth has no velocity
+  expect(Math.hypot(...mouth({ ...s, whOrbit: false }, 1000).V)).toBe(0);
+});
+
+test("velocities compose relativistically across the gluing sphere (round trip, below c)", () => {
+  const m = mouth(scene(), 123);
+  for (const u of [[0.3, -0.2, 0.5], [0, 0, 0], [-0.9, 0.1, 0.2]] as [number, number, number][]) {
+    const back = velToMouth(m, velFromMouth(m, u));
+    for (let i = 0; i < 3; i++) expect(back[i]!).toBeCloseTo(u[i]!, 12);
+    expect(Math.hypot(...velFromMouth(m, u))).toBeLessThan(1);
+  }
+  // at rest in the mouth's frame: the mouth's own velocity
+  const v = velFromMouth(m, [0, 0, 0]);
+  for (let i = 0; i < 3; i++) expect(v[i]!).toBeCloseTo(m.V[i]!, 15);
+  // collinear speeds add as (a + b)/(1 + ab)
+  expect(addVelocity([0.5, 0, 0], [0.5, 0, 0])[0]).toBeCloseTo(0.8, 14);
+});
+
+test("bodies for the GPU: the companion star as before, the system's traced planets at their places now", () => {
+  const legacy = Object.assign(defaultSettings(), { sun: true, sunOrbit: 70, sunPhase: 30 });
+  const b = sceneBodies(legacy, 250);
+  expect(b.length).toBe(1);
+  expect(b[0]!.mass).toBe(legacy.sunMass);
+  const s = scene();
+  const list = sceneBodies(s, 5000);
+  expect(list.map((q) => q.id)).toEqual(["miller", "mann"]); // the K2 star and Edmunds (2 026 M) come as points (phase 2)
+  const miller = list[0]!;
+  const e = bodyState(SYS, "miller", 5000);
+  for (let i = 0; i < 3; i++) expect(miller.pos[i]!).toBeCloseTo(e.pos[i]!, 12);
+  expect(miller.omega).toBeCloseTo(1 / (10 ** 1.5 + 0.998), 15);
+});

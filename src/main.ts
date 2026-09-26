@@ -1,6 +1,9 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
-import { cameraFrame, switchAnchor } from "./camera";
+import { cameraFrame, setHolePose, switchAnchor } from "./camera";
+import { mouth, setSceneTime } from "./wormhole";
+import { GARGANTUA_SYSTEM } from "./system/bodies";
+import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES } from "./targeting";
 import { HidPads } from "./gamepad";
@@ -558,9 +561,12 @@ async function main() {
       settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
       time: () => simTime,
       mission,
+      /** a system's bodies (ephemeris) and camera placement, for automation */
+      sys: { bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t), setHolePose, mouth: (t?: number) => mouth(settings, t) },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => (frozen = on),
       step: (dt: number) => {
+        setSceneTime(simTime);
         camera.update(dt, simTime);
         mission.update(dt);
         if (settings.animate && settings.timeSpeed > 0) simTime += dt * settings.timeSpeed;
@@ -594,6 +600,7 @@ async function main() {
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     if (!frozen) {
+      setSceneTime(simTime); // (an orbiting wormhole mouth: where it is now)
       if (camera.update(dt, simTime)) {
         changed = true;
         guiDirty = true;

@@ -45,12 +45,12 @@ struct Params {
   wh: vec4f,       // wormhole world on (0/1), throat radius ρ, half length a, lensing mass M (Dneg metric)
   wh2: vec4f,      // camera in the throat region (0/1), camera ℓ, gluing radius, ℓ at the gluing sphere
   whN: vec4f,      // camera n̂ (rep, see wormhole.ts), ℓ where rays leave for our sky
-  whC: vec4f,      // centre of the far mouth in the black hole's frame
+  whC: vec4f,      // centre of the far mouth in the black hole's frame, now; w: its orbital Ω (0: static)
   whX: vec4f,      // mouth frame axes in the black hole's frame (x at the hole, z towards the spin axis)
   whY: vec4f,
   whZ: vec4f,
-  star: vec4f,     // companion star on (0/1), orbital radius [M], radius [M], temperature [K]
-  star2: vec4f,    // brightness, azimuth at t = 0 [rad], mass m [M], unused
+  bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), unused, unused
+  bodyCfg2: vec4f, // unused
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
@@ -87,6 +87,14 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(13) var<storage, read> pathPts: array<vec4f>;
 // light probe around the camera (equirectangular, camera rest frame), for the Ranger's lighting
 @group(0) @binding(14) var<storage, read_write> envBuf: array<vec4f>;
+// Bodies drawn as spheres (src/system/scene-bodies.ts), 4 vec4 each:
+//   0: centre now (parent < 0) or offset from the parent's centre now; radius
+//   1: Ω (turning rate of its circle about the spin axis), parent index (−1), kind (0 star, 1 planet), mass m [M]
+//   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas); seed
+//   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB); unused ×2
+// Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
+// the retarded time Δt along the ray (no absolute time in float32).
+@group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -390,18 +398,22 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
       h = min(h, max(0.7 * dist, 0.3 * Rj));
     }
   }
-  if (P.star.x > 0.5) {
-    // never step over the star's atmosphere (3 R); sample it finely near the limb
+  let nb = bodyCount();
+  if (nb > 0u) {
+    // never step over a body (nor a star's atmosphere, 3 R); sample a star finely near the limb
     let pc = blCart(s.x);
-    let d = length(pc - starCentre(P.time.x + s.x.w)) / P.star.z;
-    let near = (0.03 + 0.12 * max(d - 1.0, 0.0)) * P.star.z;
-    h = min(h, max(0.7 * (d - 4.0) * P.star.z, near));
-    // a massive star bends the ray: steps small against the distance to it (kick accuracy)
-    if (P.star2.z > 0.0) { h = min(h, max(0.3 * d * P.star.z, near)); }
+    for (var k = 0u; k < nb; k++) {
+      let R = bodyRadius(k);
+      let d = length(pc - bodyCentre(k, P.time.x + s.x.w)) / R;
+      let near = (0.03 + 0.12 * max(d - 1.0, 0.0)) * R;
+      h = min(h, max(0.7 * (d - 4.0) * R, near));
+      // a massive star bends the ray: steps small against the distance to it (kick accuracy)
+      if (bodyMass(k) > 0.0) { h = min(h, max(0.3 * d * R, near)); }
+    }
   }
   if (P.wh.x > 0.5) {
     // the wormhole's weak field outside its gluing sphere: steps small against the distance to it
-    let dm = length(blCart(s.x) - P.whC.xyz);
+    let dm = length(blCart(s.x) - whCentre(P.time.x + s.x.w));
     h = min(h, max(0.3 * dm, 0.2 * P.wh2.z));
   }
   if (P.spot.x > 0.5) {
@@ -484,13 +496,70 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
   return vec4f(col, uSum / max(wSum, 1e-6));
 }
 
-// Companion star: an opaque sphere on a circular equatorial orbit (Keplerian Ω), evaluated at the
-// emission time. Its photosphere is a limb-darkened blackbody with granulation; the frequency shift
-// uses the orbital motion of its centre (rigid rotation Ω around the hole) at the point hit.
-fn starCentre(tEm: f32) -> vec3f {
-  let rs = P.star.y;
-  let ph = P.star2.y + tEm * P.bary.y;
-  return rs * vec3f(cos(ph), sin(ph), 0.0);
+// Bodies: opaque spheres on circular orbits (around the hole, or around a parent), evaluated at the
+// emission time. A star's photosphere is a limb-darkened blackbody with granulation; a planet reflects
+// the light of the disk or of its star. Frequency shifts use the orbital motion of the centre (rigid
+// rotation Ω around the hole) at the point hit.
+fn bodyCount() -> u32 { return u32(P.bodyCfg.x); }
+fn bodyRadius(k: u32) -> f32 { return bodies[4u * k].w; }
+fn bodyMass(k: u32) -> f32 { return bodies[4u * k + 1u].w; }
+fn bodyKind(k: u32) -> u32 { return u32(bodies[4u * k + 1u].z); }
+fn rotZ(p: vec3f, ang: f32) -> vec3f {
+  let c = cos(ang);
+  let s = sin(ang);
+  return vec3f(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+}
+// centre at the emission time tEm (P.time.x: now)
+fn bodyCentre(k: u32, tEm: f32) -> vec3f {
+  let dt = tEm - P.time.x;
+  let b0 = bodies[4u * k];
+  let b1 = bodies[4u * k + 1u];
+  var c = rotZ(b0.xyz, b1.x * dt);
+  let par = i32(b1.y);
+  if (par >= 0) {
+    let q = u32(par);
+    c += rotZ(bodies[4u * q].xyz, bodies[4u * q + 1u].x * dt);
+  }
+  return c;
+}
+// coordinate velocity of the centre
+fn bodyVelocity(k: u32, tEm: f32) -> vec3f {
+  let dt = tEm - P.time.x;
+  let b0 = bodies[4u * k];
+  let b1 = bodies[4u * k + 1u];
+  let c = rotZ(b0.xyz, b1.x * dt);
+  var v = b1.x * vec3f(-c.y, c.x, 0.0);
+  let par = i32(b1.y);
+  if (par >= 0) {
+    let q = u32(par);
+    let cp = rotZ(bodies[4u * q].xyz, bodies[4u * q + 1u].x * dt);
+    v += bodies[4u * q + 1u].x * vec3f(-cp.y, cp.x, 0.0);
+  }
+  return v;
+}
+// the turning rate of the frame the body is carried in around the hole (its parent's for a moon)
+fn bodyOmega(k: u32) -> f32 {
+  let par = i32(bodies[4u * k + 1u].y);
+  if (par >= 0) { return bodies[4u * u32(par) + 1u].x; }
+  return bodies[4u * k + 1u].x;
+}
+// the far mouth at the emission time (it may orbit the hole), and its velocity
+fn whCentre(tEm: f32) -> vec3f { return rotZ(P.whC.xyz, P.whC.w * (tEm - P.time.x)); }
+fn whVelocity(tEm: f32) -> vec3f {
+  let c = whCentre(tEm);
+  return P.whC.w * vec3f(-c.y, c.x, 0.0);
+}
+// A photon (travel direction d, energy 1) seen from a frame moving at v: its direction there and its
+// energy (Doppler factor γ(1 − v·d)). The frames' axes are parallel.
+struct Boosted { d: vec3f, e: f32 }
+fn boostPhoton(d: vec3f, v: vec3f) -> Boosted {
+  let v2 = dot(v, v);
+  if (v2 < 1e-14) { return Boosted(d, 1.0); }
+  let g = inverseSqrt(1.0 - v2);
+  let vn = v * inverseSqrt(v2);
+  let e = g * (1.0 - dot(v, d));
+  let dp = (d + ((g - 1.0) * dot(d, vn) - g * sqrt(v2)) * vn) / e;
+  return Boosted(normalize(dp), e);
 }
 
 // First intersection of the chord p0 → p1 with a sphere (centre c, radius R), as a fraction (−1: none).
@@ -529,41 +598,45 @@ fn starSurface(nrm0: vec3f, tEm: f32) -> vec2f {
   return vec2f(gran, tf);
 }
 
-fn starShift(n: GState, L: f32, E0: f32) -> f32 {
+fn bodyShift(k: u32, n: GState, L: f32, E0: f32) -> f32 {
   let a = P.bh.x;
-  let om = P.bary.y;
+  let om = bodyOmega(k);
   if (P.modes.y == SHIFT_NONE) { return 1.0; }
-  // the light also climbs out of the star's own potential: × (1 + Φ★) = 1 − m/d
-  let dS = length(blCart(n.x) - starCentre(P.time.x + n.x.w));
-  let gS = 1.0 - P.star2.z / max(dS, P.star.z);
+  // the light also climbs out of the body's own potential: × (1 + Φ★) = 1 − m/d
+  let dS = length(blCart(n.x) - bodyCentre(k, P.time.x + n.x.w));
+  let gS = 1.0 - bodyMass(k) / max(dS, bodyRadius(k));
   return gS * (1.0 / E0) / circularEmitterEnergy(max(n.x.x, 1.01 * P.bh.y), n.x.y, a, L, om);
 }
 
-// Mass of the star (m = P.star2.z): the linearized field of a moving mass,
+// Mass of a body (m): the linearized field of a moving mass,
 // h_μν = −2Φ (η_μν + 2 u_μ u_ν) with Φ = −m/d (d measured in the star's rest frame), added to the
 // Kerr metric in its flat far-field map. For a photon (p_t = −1) δH = −½ h^μν p_μ p_ν
 // = 2Φ γ² (1 − v·p)²: the deflection is 4m/b (twice Newton's) × (1 − v∥) for a star moving along
 // the line of sight (Pyne & Birkinshaw 1993). Returns ∂δH/∂(r, θ, φ), which kicks p_r, p_θ and L (no
 // longer conserved near the star); `back`: unit direction of the backward ray (p̂ = −back).
-fn starForce(x: vec4f, back: vec3f) -> vec3f {
+fn bodyForce(b: u32, x: vec4f, back: vec3f) -> vec3f {
   let st = sin(x.y);
   let ct = cos(x.y);
   let sp = sin(x.z);
   let cp = cos(x.z);
   let er = vec3f(st * cp, st * sp, ct);
   let tEm = P.time.x + x.w;
-  let c = starCentre(tEm);
-  let v = P.bary.y * vec3f(-c.y, c.x, 0.0);
+  let c = bodyCentre(b, tEm);
+  let v = bodyVelocity(b, tEm);
+  let m = bodyMass(b);
+  let R = bodyRadius(b);
   let g2 = 1.0 / (1.0 - dot(v, v));
   let dv = x.x * er - c;
   let dvv = dot(dv, v);
-  let d2 = max(dot(dv, dv) + g2 * dvv * dvv, P.star.z * P.star.z); // rest-frame distance²
-  let k = 1.0 + dot(v, back);                                      // 1 − v·p̂
-  var g = (2.0 * P.star2.z * g2 * k * k) * (dv + g2 * dvv * v) / (d2 * sqrt(d2)); // ∇δH
+  let d2 = max(dot(dv, dv) + g2 * dvv * dvv, R * R); // rest-frame distance²
+  let k = 1.0 + dot(v, back);                        // 1 − v·p̂
+  var g = (2.0 * m * g2 * k * k) * (dv + g2 * dvv * v) / (d2 * sqrt(d2)); // ∇δH
   // The hole's frame falls towards the star (Gargantua orbits the centre of mass) with
   // a = m x★/D³: the uniform "indirect" field, g_tt = −(1 + 2a·x), δH = a·x for light.
-  let D = length(c);
-  g += (P.star2.z / (D * D * D)) * c;
+  if (i32(b) == i32(P.bodyCfg.y)) {
+    let D = length(c);
+    g += (m / (D * D * D)) * c;
+  }
   return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
 }
 
@@ -577,7 +650,7 @@ fn mouthForce(x: vec4f) -> vec3f {
   let sp = sin(x.z);
   let cp = cos(x.z);
   let er = vec3f(st * cp, st * sp, ct);
-  let dv = x.x * er - P.whC.xyz;
+  let dv = x.x * er - whCentre(P.time.x + x.w);
   let d2 = max(dot(dv, dv), P.wh2.z * P.wh2.z);
   let g = (P.wh.w / (d2 * sqrt(d2))) * dv;
   return vec3f(dot(g, er), x.x * dot(g, vec3f(ct * cp, ct * sp, -st)), x.x * st * dot(g, vec3f(-sp, cp, 0.0)));
@@ -586,25 +659,78 @@ fn mouthForce(x: vec4f) -> vec3f {
 // Photosphere: the emergent temperature falls towards the limb, T(μ) = T (0.2 + 0.8 μ)^¼ (steeper
 // than a grey atmosphere, as the visible continuum of the Sun), which gives both the limb darkening
 // and the redder limb: a white-hot centre fading to orange and red.
-fn shadeStar(X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
+fn shadeStar(k: u32, X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
   let nrm = normalize(X - c);
   let mu = clamp(-dot(nrm, dW), 0.0, 1.0);
   let surf = starSurface(nrm, tEm);
-  let T = P.star.w * pow(0.2 + 0.8 * mu, 0.25) * surf.y;
-  return blackbody(T * starShift(n, L, E0), P.disk.w) * P.star2.x * surf.x;
+  let b2 = bodies[4u * k + 2u];
+  let T = b2.x * pow(0.2 + 0.8 * mu, 0.25) * surf.y;
+  return blackbody(T * bodyShift(k, n, L, E0), P.disk.w) * b2.y * surf.x;
+}
+
+// A planet: reflects the light of the accretion disk (from the hole's direction) or of its star, with
+// a surface of its kind (ocean with its glint, ice, rock, banded gas) and a thin atmosphere at the
+// limb. The reflected light keeps the source's spectrum: a blackbody at the source temperature, then
+// shifted by the planet's motion and the gravity climbed (g), like any emitter.
+fn shadePlanet(k: u32, X: vec3f, c: vec3f, n: GState, L: f32, E0: f32, dW: vec3f, tEm: f32) -> vec3f {
+  let nrm = normalize(X - c);
+  let b2 = bodies[4u * k + 2u];
+  let b3 = bodies[4u * k + 3u];
+  var ldir = normalize(-X);
+  var Tl = 0.75 * P.disk.x; // (the disk's bright inner part dominates what it sheds on the planet)
+  var Bl = P.misc.z;
+  let li = i32(b3.x);
+  if (li >= 0) {
+    let q = u32(li);
+    ldir = normalize(bodyCentre(q, tEm) - X);
+    Tl = bodies[4u * q + 2u].x;
+    Bl = bodies[4u * q + 2u].y;
+  }
+  let cosi = max(dot(nrm, ldir), 0.0);
+  let view = -dW;
+  let mu = clamp(dot(nrm, view), 0.0, 1.0);
+  // the planet turns with its orbit (synchronous): its surface pattern is fixed in the orbiting frame
+  let ang = -bodyOmega(k) * (tEm - P.time.x);
+  let q = rotZ(nrm, ang) * 3.0 + vec3f(b2.w);
+  let n1 = 0.5 + 0.5 * gnoise(q);
+  let n2 = 0.5 + 0.5 * gnoise(q * 3.7 + vec3f(1.7));
+  var alb: vec3f;
+  let surf = u32(b2.z);
+  var spec = 0.0;
+  if (surf == 0u) {
+    // shallow ocean over a pale bed (the film's knee-deep water): blue-green, lighter shoals, the
+    // glint of the light source
+    alb = mix(vec3f(0.1, 0.22, 0.28), vec3f(0.3, 0.5, 0.52), smoothstep(0.35, 0.75, n1 * 0.7 + n2 * 0.3));
+    let hv = normalize(ldir + view);
+    spec = 0.6 * pow(max(dot(nrm, hv), 0.0), 180.0);
+  } else if (surf == 1u) {
+    alb = mix(vec3f(0.62, 0.7, 0.8), vec3f(0.9, 0.93, 0.97), n1) * (0.85 + 0.15 * n2);
+  } else if (surf == 2u) {
+    alb = mix(vec3f(0.36, 0.24, 0.16), vec3f(0.62, 0.45, 0.3), n1) * (0.8 + 0.2 * n2);
+  } else {
+    let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
+    alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
+  }
+  alb *= b2.y / 0.25;
+  // atmosphere: the sunlit air (Rayleigh blue) over the whole day side, brighter along the limb
+  let rim = pow(1.0 - mu, 3.0) * smoothstep(-0.1, 0.4, dot(nrm, ldir));
+  let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf == 3u);
+  let g = bodyShift(k, n, L, E0);
+  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((alb + sky) * cosi + spec * cosi);
 }
 
 // Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
 // rim, prominences (Hα loops standing on the limb) and the white K-corona with radial streamers.
-fn starGlow(p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
-  let R = P.star.z;
+fn starGlow(k: u32, p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
+  let R = bodyRadius(k);
   let dv = p - c;
   let d = length(dv);
   let h = d / R - 1.0; // height above the photosphere, in stellar radii
   if (h < 0.0 || h > 3.0) { return vec3f(0.0); }
   let dir = dv / d;
   let t = tEm * 0.003;
-  let Is = luminance(blackbody(P.star.w * g, P.disk.w)) * P.star2.x;
+  let b2 = bodies[4u * k + 2u];
+  let Is = luminance(blackbody(b2.x * g, P.disk.w)) * b2.y;
   // corona: steep falloff, streamers along the field lines (angular noise, stretched radially)
   let st = gnoise(dir * 3.2 + vec3f(t, 0.0, 0.0)) + 0.5 * gnoise(dir * 9.0 - vec3f(0.0, t, 0.0));
   let streamers = 0.35 + 1.4 * smoothstep(-0.2, 0.9, st);
@@ -1642,10 +1768,10 @@ fn blCart(x: vec4f) -> vec3f {
 }
 
 // First intersection of the chord p0 → p1 with the gluing sphere, as a fraction of the chord (−1: none).
-fn glueHit(p0: vec3f, p1: vec3f) -> f32 {
+fn glueHit(p0: vec3f, p1: vec3f, C: vec3f) -> f32 {
   let R = P.wh2.z;
   let dv = p1 - p0;
-  let f = p0 - P.whC.xyz;
+  let f = p0 - C;
   let c = dot(f, f) - R * R;
   if (c <= 0.0) { return -1.0; } // starting on/inside it: just launched from the sphere
   let A = dot(dv, dv);
@@ -1811,7 +1937,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     wl = P.wh2.y;
     wn = P.whN.xyz;
     wd = -pz / Ez;
-    if (P.wh2.y > 0.0) { whInR = length(P.whC.xyz + whToWorld(P.whN.xyz * dnegR(P.wh2.y).x)); }
+    if (P.wh2.y > 0.0) { whInR = length(whCentre(tNow) + whToWorld(P.whN.xyz * dnegR(P.wh2.y).x)); }
   } else {
     // ZAMO tetrad → covariant Boyer–Lindquist momentum.
     let alpha = P.zamo.x;
@@ -1904,13 +2030,18 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       break;
     }
     // out of the far mouth: on through the Kerr metric, from the gluing sphere
-    let Xo = P.whC.xyz + whToWorld(w.n * (P.wh2.z * 1.0005));
+    let tOut = tNow + whInT - w.len;
+    let Xo = whCentre(tOut) + whToWorld(w.n * (P.wh2.z * 1.0005));
     if (whInR > 0.0) {
       // came in from the black hole's universe: the local energy follows its potential (weak field),
       // E_loc ∝ 1/α, so the energy at infinity is unchanged across the Dneg region
       eloc *= sqrt(max(1.0 - 2.0 / whInR, 1e-3) / max(1.0 - 2.0 / length(Xo), 1e-3));
     }
-    let ks = kerrLaunch(Xo, whToWorld(w.d), eloc, a);
+    // an orbiting mouth: the photon, known in the mouth's rest frame, seen from the hole's frame
+    // (aberration and Doppler; the backward ray is the photon's direction reversed)
+    let bo = boostPhoton(-whToWorld(w.d), -whVelocity(tOut));
+    eloc *= bo.e;
+    let ks = kerrLaunch(Xo, -bo.d, eloc, a);
     if (ks.E0 <= 1e-6) { fate = 1u; break; }
     s = ks.s;
     // the ray's clock goes on (backwards) through the wormhole: the disk, the flow and the star are
@@ -1952,14 +2083,15 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
     }
-    let massive = P.star.x > 0.5 && P.star2.z > 0.0;
+    let massive = P.bodyCfg.y >= 0.0;
     if (massive || whOn) {
-      // weak fields added to Kerr — the star's, the wormhole's: trapezoidal kick over the step
-      // (backwards in λ: Δp = +h ∂δH/∂x)
+      // weak fields added to Kerr — the massive star's, the wormhole's: trapezoidal kick over the
+      // step (backwards in λ: Δp = +h ∂δH/∂x)
       var f = vec3f(0.0);
       if (massive) {
         let back = normalize(blCart(n.x) - blCart(s.x));
-        f += starForce(s.x, back) + starForce(n.x, back);
+        let b = u32(P.bodyCfg.y);
+        f += bodyForce(b, s.x, back) + bodyForce(b, n.x, back);
       }
       if (whOn) { f += mouthForce(s.x) + mouthForce(n.x); }
       f *= 0.5 * h;
@@ -1981,36 +2113,53 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         let rc = mix(s.x.x, n.x.x, ud);
         behindDisk = rc >= rIn && rc <= rOut && pg.w > ud;
       }
-      // the star is opaque: it hides the tube beyond its surface in this step (then the ray ends)
-      if (P.star.x > 0.5) {
-        let ts = sphereHit(q0, q1, starCentre(tNow + n.x.w), P.star.z);
+      // bodies are opaque: they hide the tube beyond their surface in this step (then the ray ends)
+      for (var k = 0u; k < bodyCount(); k++) {
+        let ts = sphereHit(q0, q1, bodyCentre(k, tNow + n.x.w), bodyRadius(k));
         if (ts >= 0.0 && pg.w > ts) { behindDisk = true; }
       }
       // the wormhole's mouth: beyond its gluing sphere the ray goes through the throat
       if (whOn) {
-        let tg = glueHit(q0, q1);
+        let tg = glueHit(q0, q1, whCentre(tNow + n.x.w));
         if (tg >= 0.0 && pg.w > tg) { behindDisk = true; }
       }
       if (!behindDisk) { col += trans * tubeVis * pg.rgb; }
       rayLen += length(q1 - q0);
     }
 
-    if (P.star.x > 0.5) {
+    if (bodyCount() > 0u) {
       let p0 = blCart(s.x);
       let p1 = blCart(n.x);
       let tEm = tNow + n.x.w;
-      let c = starCentre(tEm);
-      let t = sphereHit(p0, p1, c, P.star.z);
-      if (!radio && length(p1 - c) < 4.0 * P.star.z) {
-        // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
-        let frac = select(1.0, t, t >= 0.0);
-        let pm = mix(p0, p1, 0.5 * frac);
-        // local path length = (−p·u_ZAMO) dλ for p_t = −1
-        col += trans * starGlow(pm, c, starShift(n, L, E0), tEm) * h * frac * zamoEnergy(n.x.x, n.x.y, a, L);
+      // the nearest body hit in this step (and the stars' atmospheres in front of it)
+      var tHit = 2.0;
+      var kHit = 0u;
+      for (var k = 0u; k < bodyCount(); k++) {
+        let c = bodyCentre(k, tEm);
+        let R = bodyRadius(k);
+        let t = sphereHit(p0, p1, c, R);
+        if (!radio && bodyKind(k) == 0u && length(p1 - c) < 4.0 * R) {
+          // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
+          let frac = select(1.0, t, t >= 0.0);
+          let pm = mix(p0, p1, 0.5 * frac);
+          // local path length = (−p·u_ZAMO) dλ for p_t = −1
+          col += trans * starGlow(k, pm, c, bodyShift(k, n, L, E0), tEm) * h * frac * zamoEnergy(n.x.x, n.x.y, a, L);
+        }
+        if (t >= 0.0 && t < tHit) {
+          tHit = t;
+          kHit = k;
+        }
       }
-      if (t >= 0.0) {
-        let X = mix(p0, p1, t);
-        if (!radio) { col += trans * shadeStar(X, c, n, L, E0, backwardDir(n, L, a), tEm); }
+      if (tHit <= 1.0) {
+        let X = mix(p0, p1, tHit);
+        let c = bodyCentre(kHit, tEm);
+        if (!radio) {
+          if (bodyKind(kHit) == 0u) {
+            col += trans * shadeStar(kHit, X, c, n, L, E0, backwardDir(n, L, a), tEm);
+          } else {
+            col += trans * shadePlanet(kHit, X, c, n, L, E0, backwardDir(n, L, a), tEm);
+          }
+        }
         trans = 0.0;
         fate = 3u;
         break;
@@ -2021,13 +2170,17 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       // entering the gluing sphere of the far mouth → Dneg segment
       let p0 = blCart(s.x);
       let p1 = blCart(n.x);
-      let t = glueHit(p0, p1);
+      let tEm = tNow + n.x.w;
+      let Cm = whCentre(tEm);
+      let t = glueHit(p0, p1, Cm);
       if (t >= 0.0) {
         let dW = backwardDir(n, L, a);
-        wn = normalize(worldToWh(mix(p0, p1, t) - P.whC.xyz));
-        wd = worldToWh(dW);
+        // an orbiting mouth: the photon in the mouth's rest frame (aberration, Doppler)
+        let bo = boostPhoton(-dW, whVelocity(tEm));
+        wn = normalize(worldToWh(mix(p0, p1, t) - Cm));
+        wd = worldToWh(-bo.d);
         wl = P.wh2.w;
-        eloc = E0 * zamoEnergy(n.x.x, n.x.y, a, L);
+        eloc = E0 * zamoEnergy(n.x.x, n.x.y, a, L) * bo.e;
         whInR = length(mix(p0, p1, t));
         whInT = mix(s.x.w, n.x.w, t);
         seg = 1u;
@@ -2194,17 +2347,30 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     let delta = (2.0 / b) * (1.0 - sqrt(max(r * r - b * b, 0.0)) / r);
     let dir = normalize(v - delta * xperp / b);
     if (whOn) {
-      // does the outgoing ray run into the far mouth's gluing sphere?
-      let f = x - P.whC.xyz;
-      let B = dot(f, dir);
-      let c = dot(f, f) - P.wh2.z * P.wh2.z;
-      if (c > 0.0 && B < 0.0 && B * B > c) {
-        let X = x + (-B - sqrt(B * B - c)) * dir;
-        whInT = s.x.w - (-B - sqrt(B * B - c));
-        wn = normalize(worldToWh(X - P.whC.xyz));
-        wd = worldToWh(dir);
+      // does the outgoing ray run into the far mouth's gluing sphere? (where the mouth is when the
+      // ray gets there: two fixed-point passes on the retarded time for an orbiting one)
+      var Cm = whCentre(tNow + s.x.w);
+      var hitIt = false;
+      var X = x;
+      var dist = 0.0;
+      for (var it = 0u; it < 3u; it++) {
+        let f = x - Cm;
+        let B = dot(f, dir);
+        let c = dot(f, f) - P.wh2.z * P.wh2.z;
+        hitIt = c > 0.0 && B < 0.0 && B * B > c;
+        if (!hitIt) { break; }
+        dist = -B - sqrt(B * B - c);
+        X = x + dist * dir;
+        if (P.whC.w == 0.0) { break; }
+        Cm = whCentre(tNow + s.x.w - dist);
+      }
+      if (hitIt) {
+        whInT = s.x.w - dist;
+        let bo = boostPhoton(-dir, whVelocity(tNow + whInT));
+        wn = normalize(worldToWh(X - Cm));
+        wd = worldToWh(-bo.d);
         wl = P.wh2.w;
-        eloc = E0 / sqrt(max(1.0 - 2.0 / length(X), 1e-3)); // weak field: static observer there
+        eloc = E0 / sqrt(max(1.0 - 2.0 / length(X), 1e-3)) * bo.e; // weak field: static observer there
         whInR = length(X);
         seg = 1u;
         continue;
@@ -2226,8 +2392,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     if (P.bary.x > 0.0) {
       // The distant sky is at rest in the centre-of-mass frame, which moves at u = q v★ relative to
       // the hole's frame (at the escape time): aberration and Doppler of the photon (p = −dir).
-      let c = starCentre(tNow + s.x.w);
-      let u = P.bary.x * P.bary.y * vec3f(-c.y, c.x, 0.0);
+      let u = P.bary.x * bodyVelocity(u32(max(P.bodyCfg.y, 0.0)), tNow + s.x.w);
       let u2 = dot(u, u);
       let gu = inverseSqrt(1.0 - u2);
       let un = u * inverseSqrt(max(u2, 1e-30));

@@ -1,7 +1,7 @@
 import { horizon, keplerOmega, zamo, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
 import {
-  fromMouth, holeToRep, mouth, radius, repToHole, repToSide, sidePosition, sideToRep, sphericalFrame, toMouth,
+  fromMouth, holeToRep, mouth, radius, repToHole, repToSide, sidePosition, sideToRep, sphericalFrame, toMouth, velFromMouth, velToMouth,
   type Mouth,
 } from "./wormhole";
 
@@ -83,7 +83,9 @@ function withMotion(s: Settings, f: Omit<CameraFrame, "beta" | "gamma" | "speed"
 /** Never exactly in the equatorial plane (disk crossing test) nor on the axis. */
 function safeTheta(deg: number) {
   let theta = Math.min(Math.max(deg, 0.2), 179.8) * DEG;
-  if (Math.abs(theta - Math.PI / 2) < 1e-4) theta += 2e-4;
+  // off the exact equatorial plane (the thin disk's crossings), by a hair: 2e-7 rad is ~300 km at
+  // r = 10 M for a 10⁸ M☉ hole — small against a planet, still resolved in float32
+  if (Math.abs(theta - Math.PI / 2) < 1e-7) theta += 2e-7;
   return theta;
 }
 
@@ -123,10 +125,12 @@ function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3
     const W = fromMouth(m, u);
     return [dot(W, f.er), dot(W, f.et), dot(W, f.ep)];
   };
+  // (the rep frame is the mouth's rest frame: velocities are composed with the mouth's own)
+  const W = velFromMouth(m, v.vel);
   return withMotion(s, {
     region: "hole", r, theta, phi: f.ph, ell: 0, n: [1, 0, 0],
     right: comps(v.right), up: comps(v.up), fwd: comps(v.fwd), zamo: zamo(r, theta, s.spin),
-  }, s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? comps(v.vel) : null);
+  }, s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? [dot(W, f.er), dot(W, f.et), dot(W, f.ep)] : null);
 }
 
 /** Camera orbiting the wormhole: whL is ℓ; inclination/azimuth are angles in the frame of its side. */
@@ -159,10 +163,11 @@ export function cameraFrame(s: Settings): CameraFrame {
   const rep = holeToRep(m, X);
   if (rep.r >= m.rGlue) return cam;
   const f = sphericalFrame(X);
-  const toRep = (c: Vec3) => toMouth(m, add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2])));
+  const world = (c: Vec3) => add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2]));
+  const toRep = (c: Vec3) => toMouth(m, world(c));
   return {
     ...cam, region: "throat", ell: rep.l, n: rep.n, zamo: STATIC_ZAMO,
-    right: toRep(cam.right), up: toRep(cam.up), fwd: toRep(cam.fwd), beta: toRep(cam.beta),
+    right: toRep(cam.right), up: toRep(cam.up), fwd: toRep(cam.fwd), beta: velToMouth(m, world(cam.beta)),
   };
 }
 
@@ -184,9 +189,10 @@ export function repPose(s: Settings): RepPose {
   if (cam.region === "throat") return { l: cam.ell, n: cam.n, fwd: cam.fwd, up: cam.up, vel: cam.beta };
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   const f = sphericalFrame(X);
-  const toRep = (c: Vec3) => toMouth(m, add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2])));
+  const world = (c: Vec3) => add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2]));
+  const toRep = (c: Vec3) => toMouth(m, world(c));
   const rep = holeToRep(m, X);
-  return { l: rep.l, n: rep.n, fwd: toRep(cam.fwd), up: toRep(cam.up), vel: toRep(cam.beta) };
+  return { l: rep.l, n: rep.n, fwd: toRep(cam.fwd), up: toRep(cam.up), vel: velToMouth(m, world(cam.beta)) };
 }
 
 /** Writes a rep pose as a camera orbiting the wormhole (up: keeps the roll; omitted: roll = 0;
@@ -227,7 +233,7 @@ export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3, vel?: Ve
 /** Rep pose on the Gargantua side → black-hole frame position, forward and up vectors. */
 export function repToHolePose(s: Settings, p: Pick<RepPose, "l" | "n" | "fwd"> & { up?: Vec3; vel?: Vec3 }) {
   const m = mouth(s);
-  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd), up: p.up && fromMouth(m, p.up), vel: p.vel && fromMouth(m, p.vel) };
+  return { X: repToHole(m, p.l, p.n), fwd: fromMouth(m, p.fwd), up: p.up && fromMouth(m, p.up), vel: p.vel && velFromMouth(m, p.vel) };
 }
 
 /** Changes what the camera orbits without moving it. Returns false when impossible (hole from our side). */

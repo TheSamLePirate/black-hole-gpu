@@ -147,6 +147,8 @@ export interface Settings {
   whDist: number; // distance of the far mouth from the black hole [M]
   whIncl: number; // polar angle of the far mouth from the spin axis [deg]
   whAzimuth: number; // azimuth of the far mouth [deg]
+  whOrbit: boolean; // the far mouth on a circular equatorial Kerr orbit at whDist (else static)
+  whPhase: number; // its orbital azimuth at t = 0 [deg]
   journeyDuration: number; // cinematic trip through the wormhole [s]
   // cinematic mode (artistic, not physical): a liquid surface across the wormhole's throat
   cinematic: boolean;
@@ -175,6 +177,8 @@ export interface Settings {
   sunBrightness: number;
   sunPhase: number; // orbital azimuth at t = 0 [deg]
   sunMass: number; // mass of the star [M]: its weak field bends light and pulls the camera
+  // a planetary system from the body registry (src/system/bodies.ts)
+  system: "none" | "gargantua";
 }
 
 export function defaultSettings(): Settings {
@@ -284,6 +288,8 @@ export function defaultSettings(): Settings {
     whDist: 22,
     whIncl: 70,
     whAzimuth: -160,
+    whOrbit: false,
+    whPhase: 0,
     journeyDuration: 24,
     cinematic: false,
     waterRipples: 1,
@@ -309,6 +315,7 @@ export function defaultSettings(): Settings {
     sunBrightness: 6,
     sunPhase: 0,
     sunMass: 0.1,
+    system: "none",
   };
 }
 
@@ -341,6 +348,11 @@ export const presets: Record<string, Preset> = {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
     spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
+  },
+  "Gargantua system (10⁸ M☉, a* = 0.998)": {
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
+    anchor: "hole", distance: 60, inclination: 78, azimuth: 146, yaw: 0, pitch: 0, roll: 0, fov: 50,
   },
   "Mission: through the wormhole to the companion star (automatic flight)": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
