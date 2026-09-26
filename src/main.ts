@@ -179,7 +179,7 @@ async function main() {
       touch();
     },
     "btn-rotation": () => camera.setRotation(settings.rotation === "orbit" ? "free" : "orbit"),
-    "btn-target": () => camera.cycleTarget(1),
+    "btn-target": () => nextTarget(1),
     "btn-journey": () => {
       camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
       refreshGui();
@@ -195,6 +195,17 @@ async function main() {
     "btn-render": () => renderDialog.toggle(),
   };
   for (const [id, fn] of Object.entries(actions)) $(id).addEventListener("click", fn);
+  /** Next / previous target, named in a toast (or why there is nothing else to pick). */
+  function nextTarget(dir: 1 | -1) {
+    const list = camera.availableTargets();
+    if (list.length < 2) {
+      panel.toast(`Only ${BODY_NAMES[settings.target]} here — turn on the companion star or the wormhole, or pick a scene`);
+      return;
+    }
+    camera.cycleTarget(dir);
+    camera.pad.rumble(0.1, 0.3, 50);
+    panel.toast(`Target: ${BODY_NAMES[settings.target]}  (${list.indexOf(settings.target) + 1} / ${list.length})`);
+  }
   function syncRotationButtons() {
     const orbit = settings.rotation === "orbit";
     const btn = $("btn-rotation");
@@ -235,12 +246,10 @@ async function main() {
         actions["btn-rotation"]!();
         break;
       case "prevTarget":
-        camera.cycleTarget(-1);
-        camera.pad.rumble(0.1, 0.3, 50);
+        nextTarget(-1);
         break;
       case "nextTarget":
-        camera.cycleTarget(1);
-        camera.pad.rumble(0.1, 0.3, 50);
+        nextTarget(1);
         break;
       case "recentre":
         camera.resetView();
@@ -296,7 +305,7 @@ async function main() {
       touch();
     } else if (e.key === "Tab") {
       e.preventDefault();
-      camera.cycleTarget(e.shiftKey ? -1 : 1);
+      nextTarget(e.shiftKey ? -1 : 1);
     } else if (k === "p") savePNG();
     else if (k === "f") fullscreen();
     else if (k === "o") actions["btn-orbit"]!();
