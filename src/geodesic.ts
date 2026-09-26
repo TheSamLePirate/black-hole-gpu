@@ -29,6 +29,10 @@ export interface Lens {
   accelRate?: (t: number) => Vec3;
 }
 
+/** One lens, or several (a system's planets and stars: their weak fields add up, m ≪ M). */
+export type Lenses = Lens | readonly Lens[];
+const lensList = (l?: Lenses): readonly Lens[] => (!l ? [] : Array.isArray(l) ? (l as readonly Lens[]) : [l as Lens]);
+
 export interface Massive {
   t: number;
   r: number;
@@ -84,7 +88,28 @@ function lensField(lens: Lens, X: Vec3, t: number) {
   return { grad: [k * (dv[0] + g2 * dvv * v[0]), k * (dv[1] + g2 * dvv * v[1]), k * (dv[2] + g2 * dvv * v[2])] as Vec3, v, g2, c, dist: Math.hypot(...dv) };
 }
 
-function rhs(st: Massive, a: number, lens?: Lens): D {
+/** (distance from the body)² / (its Hill radius around the hole)²: how far out of its sphere of influence. */
+function hillDepth(lens: Lens, X: Vec3, t: number) {
+  const c = lens.centre(t);
+  const d2 = (X[0] - c[0]) ** 2 + (X[1] - c[1]) ** 2 + (X[2] - c[2]) ** 2;
+  return d2 / ((c[0] * c[0] + c[1] * c[1] + c[2] * c[2]) * Math.cbrt(lens.m / 3) ** 2 + 1e-300);
+}
+
+/** (dt/dτ)² of a body moving at the coordinate velocity v (flat map, Cartesian) at (r, θ) of Kerr. */
+function kerrUt2(r: number, th: number, a: number, v: Vec3, f: ReturnType<typeof frame>) {
+  const s2 = f.st * f.st, c = Math.cos(th);
+  const sig = r * r + a * a * c * c, del = r * r - 2 * r + a * a;
+  const rd = dot3(v, f.er), thd = dot3(v, f.et) / r, phd = dot3(v, f.ep) / (r * Math.max(f.st, 1e-9));
+  const gtt = -(1 - (2 * r) / sig), gtp = (-2 * a * r * s2) / sig, gpp = (r * r + a * a + (2 * a * a * r * s2) / sig) * s2;
+  const n = -(gtt + 2 * gtp * phd + gpp * phd * phd + (sig / del) * rd * rd + sig * thd * thd);
+  return n > 1e-9 ? 1 / n : 1e9;
+}
+
+/** Beyond this many Hill radii a body's pull is dropped (< 1e-6 of the hole's for the star, 1e-8 for a
+ *  planet): the far planets cost nothing. */
+const FAR_HILL = 100;
+
+function rhs(st: Massive, a: number, lenses?: Lenses): D {
   const { r, th, E, L, ur, uth } = st;
   const g = inverseMetric(r, th, a);
   const Hof = (rr: number, tt: number) => {
@@ -103,25 +128,32 @@ function rhs(st: Massive, a: number, lens?: Lens): D {
     L: 0,
     E: 0,
   };
-  if (lens) {
-    const f = frame(r, th, st.ph);
-    const F = lensField(lens, f.X, st.t);
+  const list = lensList(lenses);
+  const f = list.length ? frame(r, th, st.ph) : null;
+  for (const lens of list) {
+    if (lens.m > 0 && !lens.accel && hillDepth(lens, f!.X, st.t) > FAR_HILL * FAR_HILL) continue;
+    const F = lensField(lens, f!.X, st.t);
     // spatial covariant momentum in Cartesian components (flat map)
-    const p: Vec3 = [0, 1, 2].map((i) => ur * f.er[i]! + (uth / r) * f.et[i]! + (L / (r * Math.max(f.st, 1e-9))) * f.ep[i]!) as Vec3;
+    const g = f!;
+    const p: Vec3 = [0, 1, 2].map((i) => ur * g.er[i]! + (uth / r) * g.et[i]! + (L / (r * Math.max(g.st, 1e-9))) * g.ep[i]!) as Vec3;
     const w = E - dot3(F.v, p);
-    const fac = 2 * F.g2 * w * w - 1; // δH = Φ · fac
-    d.ur -= fac * dot3(F.grad, f.er);
-    d.uth -= fac * r * dot3(F.grad, f.et);
-    d.L = -fac * r * f.st * dot3(F.grad, f.ep);
-    d.E = -fac * dot3(F.grad, F.v); // ∂δH/∂t = fac ∂Φ/∂t, ∂Φ/∂t = −∇Φ·v
+    // −u·U = Uᵗ (E − p_i vⁱ), the ship's Lorentz factor in the body's frame: Uᵗ = dt/dτ of the body,
+    // from the Kerr metric here (near the hole the flat γ misses the lapse and the dragging: at
+    // Miller's orbit the pull on a co-moving ship would drop by half); a mouth-frame lens keeps γ
+    const Ut2 = lens.accel ? F.g2 : kerrUt2(r, th, a, F.v, g);
+    const fac = 2 * Ut2 * w * w - 1; // δH = Φ · fac
+    d.ur -= fac * dot3(F.grad, g.er);
+    d.uth -= fac * r * dot3(F.grad, g.et);
+    d.L -= fac * r * g.st * dot3(F.grad, g.ep);
+    d.E -= fac * dot3(F.grad, F.v); // ∂δH/∂t = fac ∂Φ/∂t, ∂Φ/∂t = −∇Φ·v
     if (lens.accel) {
       // δH = E² a·x: a uniform pull −a (the frame's fall), and dE/dτ = E² ȧ·x
       const A = lens.accel(st.t);
       const E2 = E * E;
-      d.ur -= E2 * dot3(A, f.er);
-      d.uth -= E2 * r * dot3(A, f.et);
-      d.L -= E2 * r * f.st * dot3(A, f.ep);
-      if (lens.accelRate) d.E += E2 * dot3(lens.accelRate(st.t), f.X);
+      d.ur -= E2 * dot3(A, g.er);
+      d.uth -= E2 * r * dot3(A, g.et);
+      d.L -= E2 * r * g.st * dot3(A, g.ep);
+      if (lens.accelRate) d.E += E2 * dot3(lens.accelRate(st.t), g.X);
     }
   }
   return d;
@@ -135,7 +167,7 @@ function add(st: Massive, d: D, h: number): Massive {
 }
 
 /** One RK4 step of proper time h. */
-export function step(st: Massive, a: number, h: number, lens?: Lens): Massive {
+export function step(st: Massive, a: number, h: number, lens?: Lenses): Massive {
   const k1 = rhs(st, a, lens);
   const k2 = rhs(add(st, k1, h / 2), a, lens);
   const k3 = rhs(add(st, k2, h / 2), a, lens);
@@ -191,64 +223,185 @@ export function thrust(st: Massive, dir: Vec3, accel: number, dtau: number, a: n
   return fromZamo(st.r, st.th, st.ph, [U[0] / g2, U[1] / g2, U[2] / g2], a, st.t);
 }
 
-/** Proper-time step: small near the horizon and where the body moves fast in angle. */
-function stepSize(st: Massive, a: number, lens?: Lens) {
+/**
+ * Largest proper-time step allowed (the error control picks the step below it): small near the
+ * horizon, a small fraction of the local orbital period (≈ 1/150 of r^{3/2}) elsewhere, and near a
+ * massive body small against the distance to it and its own orbital period there.
+ */
+function stepMax(st: Massive, a: number, lenses?: Lenses) {
   const rH = horizon(a);
-  let h = Math.min(0.02 * (st.r - rH) * Math.sqrt(st.r), 0.5 + 0.01 * st.r, 2);
-  if (lens) {
-    // near the star: small against the distance and the local orbital period
-    const d = Math.max(lensField(lens, frame(st.r, st.th, st.ph).X, st.t).dist, lens.R);
-    h = Math.min(h, Math.max(0.1 * (d - lens.R), 0.02 * lens.R), (0.03 * d ** 1.5) / Math.sqrt(lens.m));
+  let h = Math.min(0.02 * (st.r - rH) * Math.sqrt(st.r), 0.04 * st.r ** 1.5 + 0.5);
+  const list = lensList(lenses);
+  if (list.length) {
+    const f = frame(st.r, st.th, st.ph);
+    let V: Vec3 | null = null;
+    let tdot = 1;
+    for (const lens of list) {
+      if (!(lens.m > 0)) continue;
+      // (only where its pull competes with the hole's: within a few Hill radii — a planet's is a few
+      // of its own radii; the companion star's, tens of M)
+      if (hillDepth(lens, f.X, st.t) > 9) continue;
+      const d = Math.max(lensField(lens, f.X, st.t).dist, lens.R);
+      if (!V) {
+        // the ship's coordinate velocity (flat map) and dt/dτ
+        const g = inverseMetric(st.r, st.th, a);
+        tdot = -g.tt * st.E + g.tph * st.L;
+        const rd = (g.rr * st.ur) / tdot, thd = (g.thth * st.uth) / tdot, phd = (-g.tph * st.E + g.phph * st.L) / tdot;
+        V = [0, 1, 2].map((i) => rd * f.er[i]! + st.r * thd * f.et[i]! + st.r * f.st * phd * f.ep[i]!) as Vec3;
+      }
+      const u = lens.velocity(st.t);
+      const vRel = Math.hypot(V[0] - u[0], V[1] - u[1], V[2] - u[2]);
+      // no jumping over it (a tenth of the gap per step, at the relative speed), and a few hundred
+      // steps per orbit around it
+      h = Math.min(h, (0.1 * Math.max(d - lens.R, 0.2 * lens.R)) / (vRel * tdot + 1e-30), (0.03 * d ** 1.5) / Math.sqrt(lens.m));
+    }
   }
   return h;
 }
 
 /**
- * On (or in) the star: the camera sits on its surface and moves with it (an inelastic landing; it
+ * On (or in) a body: the camera sits on its surface and moves with it (an inelastic landing; it
  * takes off again with enough thrust). Returns the corrected state, or null if not in contact.
  */
-function land(st: Massive, a: number, lens: Lens): Massive | null {
+function land(st: Massive, a: number, lenses: Lenses): Massive | null {
   const f = frame(st.r, st.th, st.ph);
-  const c = lens.centre(st.t);
-  const n: Vec3 = [f.X[0] - c[0], f.X[1] - c[1], f.X[2] - c[2]];
-  const d = Math.hypot(...n);
-  if (d >= lens.R) return null;
-  const k = (lens.R * 1.0002) / Math.max(d, 1e-9);
-  const X: Vec3 = [c[0] + n[0] * k, c[1] + n[1] * k, c[2] + n[2] * k];
-  const r = Math.hypot(...X);
-  const th = Math.acos(Math.max(-1, Math.min(1, X[2] / r)));
-  const ph = Math.atan2(X[1], X[0]);
-  const g = frame(r, th, ph);
-  // the star's velocity seen by the local ZAMO
-  const z = zamo(r, th, a);
-  const v = lens.velocity(st.t);
-  const beta: Vec3 = [
-    (z.sqrtSigOverDel * dot3(v, g.er)) / z.alpha,
-    (z.sqrtSig * (dot3(v, g.et) / r)) / z.alpha,
-    (z.varpi * (dot3(v, g.ep) / (r * Math.max(g.st, 1e-9)) - z.omega)) / z.alpha,
-  ];
-  // keep an outward motion (take-off), drop the inward one
-  const cur = toZamo(st, a);
-  const nz: Vec3 = [dot3(n, g.er) / d, dot3(n, g.et) / d, dot3(n, g.ep) / d];
-  const out = Math.max(0, dot3(cur, nz) - dot3(beta, nz));
-  return fromZamo(r, th, ph, [beta[0] + out * nz[0], beta[1] + out * nz[1], beta[2] + out * nz[2]], a, st.t);
+  for (const lens of lensList(lenses)) {
+    const c = lens.centre(st.t);
+    const n: Vec3 = [f.X[0] - c[0], f.X[1] - c[1], f.X[2] - c[2]];
+    const d = Math.hypot(...n);
+    if (d >= lens.R) continue;
+    const k = (lens.R * 1.0002) / Math.max(d, 1e-30);
+    const X: Vec3 = [c[0] + n[0] * k, c[1] + n[1] * k, c[2] + n[2] * k];
+    const r = Math.hypot(...X);
+    const th = Math.acos(Math.max(-1, Math.min(1, X[2] / r)));
+    const ph = Math.atan2(X[1], X[0]);
+    const g = frame(r, th, ph);
+    // the body's velocity seen by the local ZAMO
+    const z = zamo(r, th, a);
+    const v = lens.velocity(st.t);
+    const beta: Vec3 = [
+      (z.sqrtSigOverDel * dot3(v, g.er)) / z.alpha,
+      (z.sqrtSig * (dot3(v, g.et) / r)) / z.alpha,
+      (z.varpi * (dot3(v, g.ep) / (r * Math.max(g.st, 1e-9)) - z.omega)) / z.alpha,
+    ];
+    // keep an outward motion (take-off), drop the inward one
+    const cur = toZamo(st, a);
+    const nz: Vec3 = [dot3(n, g.er) / d, dot3(n, g.et) / d, dot3(n, g.ep) / d];
+    const out = Math.max(0, dot3(cur, nz) - dot3(beta, nz));
+    return fromZamo(r, th, ph, [beta[0] + out * nz[0], beta[1] + out * nz[1], beta[2] + out * nz[2]], a, st.t);
+  }
+  return null;
+}
+
+// Dormand–Prince 5(4) coefficients
+const DP_C = [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1];
+const DP_A = [
+  [],
+  [1 / 5],
+  [3 / 40, 9 / 40],
+  [44 / 45, -56 / 15, 32 / 9],
+  [19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729],
+  [9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656],
+  [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84],
+];
+const DP_B5 = [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0];
+const DP_B4 = [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40];
+const KEYS = ["t", "r", "th", "ph", "ur", "uth", "L", "E"] as const;
+
+function combine(st: Massive, ks: D[], w: readonly number[], h: number): Massive {
+  const n = { ...st };
+  for (const key of KEYS) {
+    let acc = 0;
+    for (let i = 0; i < ks.length; i++) if (w[i]) acc += w[i]! * ks[i]![key];
+    n[key] = st[key] + h * acc;
+  }
+  return n;
 }
 
 /**
- * Advances the body by `dt` of coordinate time (the scene's time), or until it comes within
- * `stopAt` of the horizon. Returns the new state (its proper time is the sum of the steps).
+ * One Dormand–Prince 5(4) step of proper time h: the 5th-order state and an error estimate (the
+ * difference with the embedded 4th order, scaled: position relative to r, angles in radians,
+ * momenta relative to their size), in units of the tolerance.
  */
-export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel = 0, dir: Vec3 = [0, 0, 0], lens?: Lens) {
+function stepDP(st: Massive, a: number, h: number, lenses: Lenses | undefined, tol: number) {
+  const ks: D[] = [];
+  for (let i = 0; i < 7; i++) {
+    const s = i === 0 ? st : combine(st, ks, DP_A[i]!, h);
+    ks.push(rhs(s, a, lenses));
+  }
+  const y5 = combine(st, ks, DP_B5, h);
+  const y4 = combine(st, ks, DP_B4, h);
+  const u = Math.hypot(st.ur, st.uth / st.r, st.L / st.r) + 1e-3;
+  const err = Math.max(
+    Math.abs(y5.r - y4.r) / st.r,
+    Math.abs(y5.th - y4.th),
+    Math.abs(y5.ph - y4.ph) * Math.sin(st.th) + 1e-300,
+    Math.abs(y5.ur - y4.ur) / u,
+    Math.abs(y5.uth - y4.uth) / (u * st.r),
+    Math.abs(y5.t - y4.t) / (Math.abs(h * ks[0]!.t) + 1e-9),
+  ) / tol;
+  // across the polar axis: reflect (θ → −θ or 2π − θ, φ → φ + π)
+  let n = y5;
+  if (n.th < 0) n = { ...n, th: -n.th, ph: n.ph + Math.PI, uth: -n.uth };
+  else if (n.th > Math.PI) n = { ...n, th: 2 * Math.PI - n.th, ph: n.ph + Math.PI, uth: -n.uth };
+  return { st: n, err };
+}
+
+/** min(1, distance to the nearest massive body / r) within its sphere of influence: the tolerance's
+ *  scale near a planet or a star. */
+function localScale(st: Massive, lenses?: Lenses) {
+  const list = lensList(lenses);
+  if (!list.length) return 1;
+  const X = frame(st.r, st.th, st.ph).X;
+  let k = 1;
+  for (const l of list) {
+    // (only within a few Hill radii, where its pull competes with the hole's)
+    if (!(l.m > 0) || hillDepth(l, X, st.t) > 9) continue;
+    const c = l.centre(st.t);
+    k = Math.min(k, Math.hypot(X[0] - c[0], X[1] - c[1], X[2] - c[2]) / st.r);
+  }
+  return k;
+}
+
+/** Local error tolerance of the adaptive integrator (per step, relative). */
+const TOL = 1e-8;
+
+/**
+ * Advances the body by `dt` of coordinate time (the scene's time), or until it comes within
+ * `stopAt` of the horizon. Adaptive Dormand–Prince 5(4) in proper time — its steps grow as r^{3/2}
+ * far from the hole (≈ a few hundred per orbit at any distance), so years of flight cost little —
+ * with the thrust applied as an impulse after each accepted step (a step no longer than 1/200 of
+ * the time to change the velocity by 10 % while the engine burns). Returns the new state (its proper
+ * time is the sum of the steps).
+ */
+export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel = 0, dir: Vec3 = [0, 0, 0], lens?: Lenses, tol = TOL) {
   const rH = horizon(a);
   const tEnd = st.t + dt;
   let s = st;
   let tau = 0;
   let landed = false;
-  for (let i = 0; i < 4000 && s.t < tEnd; i++) {
-    let h = stepSize(s, a, lens);
-    const tdot = rhs(s, a).t;
-    if (s.t + h * tdot > tEnd) h = Math.max((tEnd - s.t) / tdot, 1e-9);
-    let n = thrust(step(s, a, h, lens), dir, accel, h, a);
+  let h = hGuess.get(a) ?? 0.05;
+  // (done when within a hair of tEnd: the last step aims at it, rounding may leave it just short)
+  const eps = 1e-10 * Math.max(1, Math.abs(tEnd));
+  for (let i = 0; i < 20000 && tEnd - s.t > eps; i++) {
+    let hMax = stepMax(s, a, lens);
+    if (accel > 0) hMax = Math.min(hMax, Math.max(0.1 / accel / 200, 1e-4));
+    h = Math.min(h, hMax);
+    const gi = inverseMetric(s.r, s.th, a);
+    const tdot = -gi.tt * s.E + gi.tph * s.L;
+    let last = false;
+    if (s.t + h * tdot >= tEnd) {
+      h = Math.max((tEnd - s.t) / tdot, 1e-12);
+      last = true;
+    }
+    // (near a body the scale that matters is the distance to it, not to the hole: tighten)
+    const r = stepDP(s, a, h, lens, Math.max(tol * localScale(s, lens), 1e-15));
+    if (!(r.err <= 1) && h > 1e-9) {
+      // rejected: shrink (0.9 (1/err)^{1/5}, at least ÷5)
+      h *= Math.max(0.2, 0.9 * (1 / Math.max(r.err, 1e-12)) ** 0.2);
+      continue;
+    }
+    let n = thrust(r.st, dir, accel, h, a);
     if (!Number.isFinite(n.r) || n.r < rH + stopAt) return { st: s, tau, stopped: true, landed };
     if (lens) {
       const l = land(n, a, lens);
@@ -256,19 +409,25 @@ export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel
     }
     s = n;
     tau += h;
+    // next step: grow at most ×5
+    const grow = Math.min(5, 0.9 * (1 / Math.max(r.err, 1e-12)) ** 0.2);
+    if (!last) h *= grow;
+    else hGuess.set(a, h * grow);
   }
   return { st: s, tau, stopped: false, landed };
 }
+/** The last step size used (warm start of the next call). */
+const hGuess = new Map<number, number>();
 
 /** Future path (no thrust): Cartesian points (flat map of BL) until `tMax` of coordinate time. */
-export function predict(st: Massive, a: number, tMax: number, maxPoints = 400, lens?: Lens) {
+export function predict(st: Massive, a: number, tMax: number, maxPoints = 400, lens?: Lenses, tol = TOL, stop?: (p: Vec3, t: number) => boolean) {
   const rH = horizon(a);
   const pts: Vec3[] = [];
   let s = st;
   let fate: "horizon" | "escape" | "continues" | "star" = "continues";
   const dtPoint = tMax / maxPoints;
   for (let i = 0; i < maxPoints; i++) {
-    const r = advance(s, a, dtPoint, 0.05, 0, [0, 0, 0], lens);
+    const r = advance(s, a, dtPoint, 0.05, 0, [0, 0, 0], lens, tol);
     s = r.st;
     pts.push([s.r * Math.sin(s.th) * Math.cos(s.ph), s.r * Math.sin(s.th) * Math.sin(s.ph), s.r * Math.cos(s.th)]);
     if (r.stopped) {
@@ -283,6 +442,7 @@ export function predict(st: Massive, a: number, tMax: number, maxPoints = 400, l
       fate = "escape";
       break;
     }
+    if (stop?.(pts[pts.length - 1]!, s.t)) break;
   }
   return { pts, fate };
 }

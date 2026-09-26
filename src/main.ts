@@ -13,7 +13,7 @@ import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
-import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
+import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl, saveToUrl } from "./urlstate";
@@ -261,7 +261,8 @@ async function main() {
 
   // -------------------------------------------------------------------- game controller
   // -------------------------------------------------------------------- piloting the Ranger
-  const WARPS = [0.25, 0.5, 1, 2, 3, 6, 12, 25, 50, 100, 200, 500];
+  // beyond 500 M/s: "rails" (engine off; the controller brings it down near bodies)
+  const WARPS = [0.25, 0.5, 1, 2, 3, 6, 12, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
   function warp(dir: 1 | -1) {
     const i = WARPS.findIndex((w) => w >= settings.timeSpeed - 1e-9);
     const j = Math.max(0, Math.min(WARPS.length - 1, (i < 0 ? WARPS.length - 1 : i) + dir));
@@ -569,7 +570,7 @@ async function main() {
         setSceneTime(simTime);
         camera.update(dt, simTime);
         mission.update(dt);
-        if (settings.animate && settings.timeSpeed > 0) simTime += dt * settings.timeSpeed;
+        if (settings.animate && settings.timeSpeed > 0) simTime = camera.shipClock() ?? simTime + dt * settings.timeSpeed;
         timeDirty = true;
         changed = true;
         return simTime;
@@ -607,7 +608,7 @@ async function main() {
       }
       mission.update(dt);
       if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
-        simTime += dt * settings.timeSpeed;
+        simTime = camera.shipClock() ?? simTime + dt * settings.timeSpeed;
         timeDirty = true;
       }
     }
@@ -701,7 +702,10 @@ async function main() {
   }
 
   // ------------------------------------------------------------------ target marker
-  const BODY_COLOURS = { hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255" } as const;
+  const BODY_COLOURS: Record<Target, string> = {
+    hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255",
+    miller: "140, 210, 220", mann: "220, 232, 245", k2: "255, 190, 120", edmunds: "220, 170, 120",
+  };
   /**
    * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an
    * arrow at the edge of the view when it is off-screen. Shown while the camera is handled, then fades.

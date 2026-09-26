@@ -21,8 +21,10 @@ import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
 import { mouth } from "../wormhole";
-import { barycentre, BODY_NAMES, starCentre, starOmega, starOrbitRadius } from "../targeting";
+import { barycentre, bodyCentre, BODY_NAMES, starCentre, starOmega, starOrbitRadius } from "../targeting";
 import { isco } from "../physics";
+import { GARGANTUA_SYSTEM } from "../system/bodies";
+import { bodyState, meanMotion } from "../system/ephemeris";
 
 type Info = ReturnType<CameraController["flightInfo"]>;
 type V3 = [number, number, number];
@@ -106,6 +108,8 @@ export class FlightHud {
   private centre: [number, number] = [0, 0];
   private zoom = 1;
   private view: "top" | "side" = "top";
+  /** multi-scale map: radius ∝ ln(1 + r/M) (angles kept) — null: automatic (on in a system) */
+  private logMap: boolean | null = null;
   private frame: "cm" | "hole" = "cm";
   private trail: { X: V3; t: number }[] = [];
   private samples: Sample[] = [];
@@ -166,6 +170,7 @@ export class FlightHud {
       clock("tau", "Ship τ", "Proper time on the ship since you took the controls"),
       clock("t", "Far t", "Coordinate time: the clocks of distant observers"),
       clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
+      clock("lost", "Earth +", "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)"),
       h("span", "fl-vsep"), planBtn, dens, tools,
     );
     this.buildPlanner();
@@ -249,6 +254,7 @@ export class FlightHud {
       tog("side", "Side", "Seen edge-on (along the equator)", () => (this.view = "side")),
       tog("cm", "CoM", "Inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
       tog("hole", "Hole", "Gargantua's frame (fixed at the centre)", () => (this.frame = "hole")),
+      tog("log", "Log", "Multi-scale map: distance from the centre as ln(1 + r/M), directions kept — Miller at 10 M and Edmunds at 2 000 M on the same map", () => (this.logMap = !this.isLog())),
     );
     this.map.title = "Wheel: zoom · double-click: fit";
     this.map.addEventListener("wheel", (e) => {
@@ -380,10 +386,18 @@ export class FlightHud {
   private drawPlanner(i: Info, time: number) {
     const s = this.s;
     const E = this.planEls;
+    // (in a system the "star" goal is the targeted body: a planet, the companion star)
+    const body = s.system !== "none" && s.target !== "hole" && s.target !== "wormhole" && s.target !== "barycentre" ? s.target : null;
+    const there = body ? BODY_NAMES[body] : "the star";
     for (const g of ["orbit", "star", "wormhole"] as const) {
       E[`goal:${g}`]!.classList.toggle("on", this.goal === g);
-      (E[`goal:${g}`] as HTMLButtonElement).disabled = (g === "star" && !s.sun) || (g === "wormhole" && !s.wormhole);
+      (E[`goal:${g}`] as HTMLButtonElement).disabled = (g === "star" && !s.sun && !body) || (g === "wormhole" && !s.wormhole);
     }
+    const starTab = E["goal:star"]!;
+    const tabLabel = body ? BODY_NAMES[body] : "Star";
+    if (starTab.textContent !== tabLabel) starTab.textContent = tabLabel;
+    E["star:false"]!.title = `Stop next to ${there} and keep station`;
+    E["star:true"]!.title = `Insert into a circular orbit around ${there}`;
     E.desc!.textContent = this.goal === "orbit" ? "Circular orbit at r =" : this.goal === "star" ? "Rendezvous, then" : "Dive through the mouth";
     E.rBox!.hidden = this.goal !== "orbit";
     E.sBox!.hidden = this.goal !== "star";
@@ -413,7 +427,7 @@ export class FlightHud {
           .map((l, j) => (Math.abs(n.dv[j]!) > 5e-5 ? `${l} ${n.dv[j]! >= 0 ? "+" : "−"}${Math.abs(n.dv[j]!).toFixed(3)}` : ""))
           .filter(Boolean)
           .join(" · ");
-        const then = n.then === "circularize" ? " → circularize" : n.then === "approach" ? " → keep station" : n.then === "orbit" ? " → orbit the star" : "";
+        const then = n.then === "circularize" ? " → circularize" : n.then === "approach" ? " → keep station" : n.then === "orbit" ? ` → orbit ${there}` : "";
         row.innerHTML = `<b>◆ ${k + 1}</b><span class="t"></span><span class="dv">Δv ${dv.toFixed(3)} c</span><span class="parts">${parts || "no Δv yet"}${then}</span>`;
         const del = h("button", "fl-x", "×") as HTMLButtonElement;
         del.title = "Delete this node";
@@ -442,7 +456,7 @@ export class FlightHud {
       const after = last ? pp.pts.filter((_, j) => pp.times[j]! > last.t) : pp.pts;
       const ra = (after.length ? after : pp.pts).map((q) => Math.hypot(...q));
       const total = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
-      const fate = last?.then === "approach" ? "station-keeping at the target" : last?.then === "orbit" ? "in orbit around the star" : pp.fate === "wormhole" ? "through the wormhole" : pp.fate === "horizon" ? "into the horizon" : pp.fate === "star" ? "hits the star" : pp.fate === "escape" ? "escapes" : `Pe ${Math.min(...ra).toFixed(1)} · Ap ${Math.max(...ra).toFixed(1)} M`;
+      const fate = last?.then === "approach" ? "station-keeping at the target" : last?.then === "orbit" ? `in orbit around ${there}` : pp.fate === "wormhole" ? "through the wormhole" : pp.fate === "horizon" ? "into the horizon" : pp.fate === "star" ? `hits ${there}` : pp.fate === "escape" ? "escapes" : `Pe ${Math.min(...ra).toFixed(1)} · Ap ${Math.max(...ra).toFixed(1)} M`;
       res += `${res ? " · " : ""}Δv ${total.toFixed(3)} c · then ${fate}`;
     }
     E.result!.textContent = res;
@@ -540,22 +554,26 @@ export class FlightHud {
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${i.dv < 1e-3 ? "<.001" : i.dv.toFixed(3)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
-    M.warp!.textContent = s.animate ? `×${s.timeSpeed >= 10 ? Math.round(s.timeSpeed) : +s.timeSpeed.toPrecision(2)}` : "PAUSE";
+    const wv = s.timeSpeed >= 10 ? Math.round(s.timeSpeed) : +s.timeSpeed.toPrecision(2);
+    // beyond 500 M/s the flight rides the rails; they hold the warp back near what needs following
+    M.warp!.textContent = !s.animate ? "PAUSE" : i.railsNote ? `×${wv} ↓${i.railsNote}` : s.timeSpeed > 500 ? `×${wv} RAILS` : `×${wv}`;
+    M.warp!.title = i.railsNote ? `Rails: the warp is held back by ${i.railsNote}` : "";
     const st = this.start ?? { t: time, tau: i.properTime };
     const dt = time - st.t, dtau = i.properTime - st.tau;
     M.tau!.textContent = fmtClock(dtau, s);
     M.t!.textContent = fmtClock(dt, s);
     M.ratio!.textContent = f(i.dtau, 4);
+    M.lost!.textContent = fmtClock(dt - dtau, s);
     // target
     const T = this.targetEls;
     const hasTarget = Number.isFinite(i.targetDist) && i.target !== "hole";
     this.target.classList.toggle("empty", !hasTarget);
     T.name!.textContent = `${BODY_NAMES[i.target]}`;
-    T.dist!.textContent = Number.isFinite(i.targetDist) ? `${f(i.targetDist, 1)} M` : "—";
+    T.dist!.textContent = Number.isFinite(i.targetDist) ? fmtLen(i.targetDist, this.s) : "—";
     T.rate!.textContent = Number.isFinite(i.targetRate) ? `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${Math.abs(i.targetRate).toFixed(3)} c` : "—";
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
     const ca = this.closestApproach(i, time);
-    T.ca!.textContent = ca ? `${f(ca.d, 1)} M · ${ca.t > 0 ? `T−${fmtShort(Math.round(ca.t))}` : "now"}` : "—";
+    T.ca!.textContent = ca ? `${fmtLen(ca.d, this.s)} · ${ca.t > 0 ? `T−${fmtShort(Math.round(ca.t))}` : "now"}` : "—";
     // orbit figures
     const O = this.orbitEls;
     const p = i.path;
@@ -573,7 +591,7 @@ export class FlightHud {
     if (p) {
       const t = p.pts.length * p.dt;
       if (p.fate === "horizon") (course = `HORIZON T−${fmtShort(Math.round(t))}`), (hot = true);
-      else if (p.fate === "star") (course = `STAR T−${fmtShort(Math.round(t))}`), (hot = true);
+      else if (p.fate === "star") (course = `${p.hit && p.hit !== "star" ? BODY_NAMES[p.hit].toUpperCase() : "STAR"} T−${fmtShort(Math.round(t))}`), (hot = true);
       else if (p.fate === "wormhole") course = `WORMHOLE T−${fmtShort(Math.round(t))}`;
       else if (p.fate === "escape") course = i.E >= 1 ? "ESCAPE" : "LEAVING";
       else course = i.E < 1 ? "BOUND ORBIT" : "COASTING";
@@ -586,8 +604,11 @@ export class FlightHud {
     // warnings
     const w: string[] = [];
     if (p?.fate === "horizon") w.push(`⚠ COLLISION COURSE — HORIZON IN ${fmtM(p.pts.length * p.dt, s).toUpperCase()}`);
-    if (p?.fate === "star" && !(i.auto === "approach" && i.target === "star")) w.push("⚠ COLLISION COURSE — STAR");
-    if (i.landed) w.push("LANDED ON THE STAR");
+    // (not while an autopilot flies around that body: it keeps the ship off it)
+    const hit = p?.hit ?? "star";
+    const nm = (b: keyof typeof BODY_NAMES) => (b === "star" ? "THE STAR" : BODY_NAMES[b].toUpperCase());
+    if (p?.fate === "star" && !((i.auto === "approach" || i.auto === "orbit") && i.target === hit)) w.push(`⚠ COLLISION COURSE — ${nm(hit)}`);
+    if (i.landed) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
     if (i.ergo) w.push("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");
     else if (i.region === "hole" && i.r < i.photon) w.push("INSIDE THE PHOTON ORBIT");
     else if (i.region === "hole" && i.r < i.isco) w.push("BELOW THE ISCO · NO STABLE ORBIT");
@@ -605,6 +626,7 @@ export class FlightHud {
     this.mapBtns.side!.classList.toggle("on", this.view === "side");
     this.mapBtns.cm!.hidden = this.mapBtns.hole!.hidden = !massive;
     this.mapBtns.cm!.classList.toggle("on", this.frame === "cm");
+    this.mapBtns.log!.classList.toggle("on", this.isLog());
     this.mapBtns.hole!.classList.toggle("on", this.frame === "hole");
   }
 
@@ -615,7 +637,8 @@ export class FlightHud {
     const s = this.s;
     if (i.target === "star" && !s.sun) return null;
     if (i.target === "wormhole" && !s.wormhole) return null;
-    const at = (t: number): V3 => (i.target === "star" ? starCentre(s, t) : mouth(s).C as V3);
+    const target = i.target;
+    const at = (t: number): V3 => bodyCentre(s, target, t) as V3;
     let best = { d: Math.hypot(...sub(i.X, at(t0))), t: 0 };
     p.pts.forEach((q, j) => {
       const d = Math.hypot(...sub(q, at(t0 + (j + 1) * p.dt)));
@@ -1143,6 +1166,10 @@ export class FlightHud {
   }
 
   // ------------------------------------------------------------------------------------ map
+  private isLog() {
+    return this.logMap ?? this.s.system !== "none";
+  }
+
   private drawMap(i: Info, t0: number) {
     const c = this.map;
     const dpr = devicePixelRatio;
@@ -1165,7 +1192,16 @@ export class FlightHud {
     const B = (t: number): V3 => (cm ? barycentre(s, t) : [0, 0, 0]);
     const at = (X: V3, t: number): V3 => sub(X, B(t));
     const side = this.view === "side";
-    const pr = (X: V3): [number, number] => (side ? [X[0], X[2]] : [X[0], X[1]]);
+    const log = this.isLog();
+    // (multi-scale: the distance from the map's origin — the hole or the centre of mass — as
+    // ln(1 + r/M), the direction kept)
+    const lg = (r: number) => (log ? Math.log1p(r) : r);
+    const pr = (X: V3): [number, number] => {
+      const q: [number, number] = side ? [X[0], X[2]] : [X[0], X[1]];
+      if (!log) return q;
+      const R = Math.hypot(q[0], q[1]);
+      return R < 1e-12 ? q : [(q[0] * Math.log1p(R)) / R, (q[1] * Math.log1p(R)) / R];
+    };
     const path = i.path;
     const T = path ? Math.max(path.pts.length * path.dt, 50) : 200;
     const pts: [number, number][] = [pr(at(X0, t0)), pr(at([0, 0, 0], t0))];
@@ -1184,8 +1220,10 @@ export class FlightHud {
     const rDisk = s.disk ? s.diskOuter : 6;
     (lo[0] = Math.min(lo[0]!, hc[0] - rDisk)), (hi[0] = Math.max(hi[0]!, hc[0] + rDisk));
     (lo[1] = Math.min(lo[1]!, hc[1] - (side ? 2 : rDisk))), (hi[1] = Math.max(hi[1]!, hc[1] + (side ? 2 : rDisk)));
-    const want = Math.max((hi[0]! - lo[0]!) / 2, ((hi[1]! - lo[1]!) / 2) * (cw / ch), 6) * 1.12 * this.zoom;
-    const cen: [number, number] = [(hi[0]! + lo[0]!) / 2, (hi[1]! + lo[1]!) / 2];
+    const want = (log
+      ? Math.max(...pts.map((p) => Math.hypot(p[0], p[1])), lg(12))
+      : Math.max((hi[0]! - lo[0]!) / 2, ((hi[1]! - lo[1]!) / 2) * (cw / ch), 6)) * 1.12 * this.zoom;
+    const cen: [number, number] = log ? [0, 0] : [(hi[0]! + lo[0]!) / 2, (hi[1]! + lo[1]!) / 2];
     this.extent += (want - this.extent) * 0.1;
     this.centre[0] += (cen[0] - this.centre[0]) * 0.1;
     this.centre[1] += (cen[1] - this.centre[1]) * 0.1;
@@ -1224,9 +1262,9 @@ export class FlightHud {
       ctx.beginPath();
       const [x, y] = P(hole);
       if (side) {
-        ctx.moveTo(x - r * k, y);
-        ctx.lineTo(x + r * k, y);
-      } else ctx.arc(x, y, Math.max(r * k, 0.6), 0, 2 * Math.PI);
+        ctx.moveTo(x - lg(r) * k, y);
+        ctx.lineTo(x + lg(r) * k, y);
+      } else ctx.arc(x, y, Math.max(lg(r) * k, 0.6), 0, 2 * Math.PI);
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 1.2 * dpr;
       ctx.setLineDash(dash.map((d) => d * dpr));
@@ -1236,11 +1274,11 @@ export class FlightHud {
     if (s.disk) {
       const [x, y] = P(hole);
       ctx.fillStyle = "rgba(255, 150, 60, 0.14)";
-      if (side) ctx.fillRect(x - s.diskOuter * k, y - 1.5 * dpr, 2 * s.diskOuter * k, 3 * dpr);
+      if (side) ctx.fillRect(x - lg(s.diskOuter) * k, y - 1.5 * dpr, 2 * lg(s.diskOuter) * k, 3 * dpr);
       else {
         ctx.beginPath();
-        ctx.arc(x, y, s.diskOuter * k, 0, 2 * Math.PI);
-        ctx.arc(x, y, isco(s.spin) * k, 0, 2 * Math.PI, true);
+        ctx.arc(x, y, lg(s.diskOuter) * k, 0, 2 * Math.PI);
+        ctx.arc(x, y, lg(isco(s.spin)) * k, 0, 2 * Math.PI, true);
         ctx.fill();
       }
     }
@@ -1250,7 +1288,7 @@ export class FlightHud {
     {
       const [x, y] = P(hole);
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(i.rH * k, 2.5 * dpr), 0, 2 * Math.PI);
+      ctx.arc(x, y, Math.max(lg(i.rH) * k, 2.5 * dpr), 0, 2 * Math.PI);
       ctx.fillStyle = "#000";
       ctx.fill();
       ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
@@ -1306,12 +1344,43 @@ export class FlightHud {
       ctx.fillStyle = "#ffd36b";
       ctx.fill();
     }
+    if (s.system === "gargantua") {
+      // the system: orbits (a turn from now), places, names; the target ringed
+      for (const b of GARGANTUA_SYSTEM.bodies) {
+        if (b.universe !== "gargantua" || b.kind === "hole" || b.kind === "mouth") continue;
+        const w = meanMotion(GARGANTUA_SYSTEM, b);
+        const turn = w > 0 ? (2 * Math.PI) / w : 0;
+        const pos = (t: number) => bodyState(GARGANTUA_SYSTEM, b.id, t).pos;
+        const col = b.kind === "star" ? "255, 190, 120" : b.id === "miller" ? "120, 210, 225" : b.id === "mann" ? "215, 228, 245" : "220, 170, 120";
+        if (turn > 0 && b.parent === "gargantua") poly(span(pos, t0, t0 + turn, 160), `rgba(${col}, 0.28)`, 1);
+        const [x, y] = P(at(pos(t0), t0));
+        ctx.beginPath();
+        ctx.arc(x, y, (b.kind === "star" ? 4 : 3) * dpr, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgba(${col}, 0.95)`;
+        ctx.fill();
+        if (i.target === b.id) {
+          ctx.beginPath();
+          ctx.arc(x, y, 7 * dpr, 0, 2 * Math.PI);
+          ctx.strokeStyle = "rgba(255, 138, 92, 0.95)";
+          ctx.lineWidth = 1.4 * dpr;
+          ctx.stroke();
+        }
+        ctx.fillStyle = `rgba(${col}, 0.85)`;
+        ctx.textAlign = "left";
+        ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
+        ctx.fillText(b.name, x + 6 * dpr, y - 5 * dpr);
+      }
+      if (s.wormhole && s.whOrbit) {
+        const m0 = mouth(s, t0);
+        poly(span((t) => mouth(s, t).C as V3, t0, t0 + (2 * Math.PI) / Math.max(m0.omega, 1e-12), 160), "rgba(200, 140, 255, 0.28)", 1, [2, 3]);
+      }
+    }
     if (s.wormhole) {
       const m = mouth(s);
       if (cm) poly(span(() => m.C as V3, t0, t0 + T, 60), "rgba(200, 140, 255, 0.35)", 1, [2, 3]);
       const [x, y] = P(at(m.C as V3, t0));
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(m.rGlue * k, 3 * dpr), 0, 2 * Math.PI);
+      ctx.arc(x, y, Math.max(lg(m.rGlue) * k, 3 * dpr), 0, 2 * Math.PI);
       ctx.strokeStyle = "rgba(200, 140, 255, 0.9)";
       ctx.lineWidth = 1.4 * dpr;
       ctx.stroke();
@@ -1379,7 +1448,7 @@ export class FlightHud {
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = "#ff8a5c";
-        ctx.fillText(`CA ${ca.d.toFixed(1)} M`, (x1 + x2) / 2 + 5 * dpr, (y1 + y2) / 2);
+        ctx.fillText(`CA ${fmtLen(ca.d, this.s)}`, (x1 + x2) / 2 + 5 * dpr, (y1 + y2) / 2);
       }
     }
     // the flight plan: its path through the nodes (cyan), the nodes (diamonds)
@@ -1654,6 +1723,13 @@ function fmtG(g: number) {
   return g >= 1e4 ? `${g.toExponential(1)} g` : g >= 100 ? `${g.toFixed(0)} g` : `${g.toPrecision(3)} g`;
 }
 
+/** A distance in M, in km (m) for the chosen mass below 0.1 M: near a planet, M is far too coarse. */
+function fmtLen(d: number, s: Settings) {
+  if (d >= 0.1) return `${d.toFixed(1)} M`;
+  const m = d * 1476.625 * s.massSolar;
+  return m >= 1e4 ? `${Math.round(m / 1000).toLocaleString("en-US")} km` : `${Math.round(m).toLocaleString("en-US")} m`;
+}
+
 /** A coordinate time in M, with its duration for the chosen mass. */
 function fmtM(t: number, s: Settings) {
   const sec = t * 4.925490947e-6 * s.massSolar;
@@ -1664,6 +1740,11 @@ function fmtM(t: number, s: Settings) {
 /** A clock: elapsed time for the chosen mass, as d hh:mm:ss. */
 function fmtClock(tM: number, s: Settings) {
   const sec = Math.max(0, tM * 4.925490947e-6 * s.massSolar);
+  // (years for long flights: Julian years)
+  if (sec >= 365.25 * 86400) {
+    const y = Math.floor(sec / (365.25 * 86400));
+    return `${y}y ${Math.floor((sec - y * 365.25 * 86400) / 86400)}d`;
+  }
   const d = Math.floor(sec / 86400);
   const hh = Math.floor((sec % 86400) / 3600);
   const mm = Math.floor((sec % 3600) / 60);

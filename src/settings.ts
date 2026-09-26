@@ -1,7 +1,10 @@
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** Camera rotation: around the selected body, or about the camera itself. */
 export type Rotation = "orbit" | "free";
-export type Target = "hole" | "star" | "wormhole" | "barycentre";
+/** Bodies of the registered Gargantua system that can be targeted (src/system/bodies.ts). */
+export type SystemBody = "miller" | "mann" | "k2" | "edmunds";
+export const SYSTEM_BODIES: SystemBody[] = ["miller", "mann", "k2", "edmunds"];
+export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody;
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";

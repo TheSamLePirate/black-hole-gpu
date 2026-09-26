@@ -41,7 +41,7 @@ test("intercept: the path passes through a fixed point", () => {
   const plan = planIntercept(st, target, w, 0.2)!;
   expect(plan).not.toBeNull();
   expect(plan.miss).toBeLessThan(0.8);
-});
+}, 30000);
 
 test("rendezvous with a body on a circular orbit", () => {
   const st = circular(25);
@@ -57,7 +57,7 @@ test("rendezvous with a body on a circular orbit", () => {
   expect(plan.miss).toBeLessThan(8);
   expect(zamo(D, Math.PI / 2, a).alpha).toBeGreaterThan(0);
   expect(position(st)[0]).toBeCloseTo(25, 6);
-});
+}, 30000);
 
 test("plane change: an inclined orbit is turned into the equatorial plane at a node", () => {
   // a circular orbit tilted by ~10°

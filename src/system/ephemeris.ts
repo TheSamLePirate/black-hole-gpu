@@ -59,3 +59,51 @@ export function bodyState(sys: System, id: string, t: number): BodyState {
 export function properTime(sys: System, id: string, t: number): number {
   return bodyState(sys, id, 0).dtau * t;
 }
+
+export interface Track {
+  pos: (t: number) => Vec3;
+  vel: (t: number) => Vec3;
+}
+
+const tracks = new WeakMap<System, Map<string, Track>>();
+
+/**
+ * A body's path as fast closures (its circle's constants computed once, the parent's track reused):
+ * for the integrators, which ask for the planets' places thousands of times a frame.
+ */
+export function bodyTrack(sys: System, id: string): Track {
+  let m = tracks.get(sys);
+  if (!m) tracks.set(sys, (m = new Map()));
+  const hit = m.get(id);
+  if (hit) return hit;
+  const b = body(sys, id);
+  const o = b.orbit;
+  let tr: Track;
+  if (o.type === "fixed") {
+    const P = [...o.pos] as Vec3;
+    tr = { pos: () => P, vel: () => [0, 0, 0] };
+  } else {
+    const w = meanMotion(sys, b);
+    const R = o.type === "kerr" ? o.r : o.a;
+    const ph0 = o.phase;
+    const parent = o.type === "kepler" ? bodyTrack(sys, b.parent!) : null;
+    tr = {
+      pos: (t) => {
+        const ph = ph0 + w * t;
+        const x = R * Math.cos(ph), y = R * Math.sin(ph);
+        if (!parent) return [x, y, 0];
+        const p = parent.pos(t);
+        return [p[0] + x, p[1] + y, p[2]];
+      },
+      vel: (t) => {
+        const ph = ph0 + w * t;
+        const x = -R * w * Math.sin(ph), y = R * w * Math.cos(ph);
+        if (!parent) return [x, y, 0];
+        const v = parent.vel(t);
+        return [v[0] + x, v[1] + y, v[2]];
+      },
+    };
+  }
+  m.set(id, tr);
+  return tr;
+}

@@ -88,6 +88,21 @@ export function zamo(r: number, th: number, a: number) {
   };
 }
 
+/**
+ * A coordinate velocity dx/dt of the flat map (Cartesian components on the spherical basis at (r, θ):
+ * [ṙ, r θ̇, r sinθ φ̇]) as the ZAMO there measures it (its orthonormal frame r, θ, φ), and back:
+ * the lapse, the metric's lengths and the frame dragging (a body at rest on the map moves at −ωϖ/α).
+ */
+export function coordToZamo(v: Vec3, r: number, th: number, z: ReturnType<typeof zamo>): Vec3 {
+  const rs = r * Math.max(Math.sin(th), 1e-12);
+  return [(z.sqrtSigOverDel * v[0]) / z.alpha, (z.sqrtSig * v[1]) / (r * z.alpha), (z.varpi * (v[2] / rs - z.omega)) / z.alpha];
+}
+
+export function zamoToCoord(b: Vec3, r: number, th: number, z: ReturnType<typeof zamo>): Vec3 {
+  const rs = r * Math.max(Math.sin(th), 1e-12);
+  return [(z.alpha * b[0]) / z.sqrtSigOverDel, (r * z.alpha * b[1]) / z.sqrtSig, rs * ((z.alpha * b[2]) / Math.max(z.varpi, 1e-12) + z.omega)];
+}
+
 // ---------------------------------------------------------------------------
 // Null geodesics: Hamiltonian H = N / (2Σ) with E = 1,
 // N = Δ p_r² + p_θ² − W²/Δ + (L − a sin²θ)²/sin²θ,  W = r² + a² − aL.

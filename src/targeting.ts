@@ -10,13 +10,39 @@
 import type { CameraFrame } from "./camera";
 import { blToCartesian } from "./camera";
 import { horizon, isco, rk4, stepSize, zamo, type State, type Vec3 } from "./physics";
-import type { Settings } from "./settings";
+import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
+import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
+import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
 import { fromMouth, mouth, repToHole, sphericalFrame, toMouth, traceDneg } from "./wormhole";
 
-export type Body = "hole" | "star" | "wormhole" | "barycentre";
+export type Body = Target;
 
-export const BODY_NAMES: Record<Body, string> = { hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass" };
+export const BODY_NAMES: Record<Body, string> = {
+  hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass",
+  miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds",
+};
+
+const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
+/** A body of the scene's registered system (null: not one, or no system in the scene). */
+function systemBody(s: Settings, b: Body) {
+  return s.system === "gargantua" && isSystem(b) ? sysBody(GARGANTUA_SYSTEM, b) : null;
+}
+
+/** Velocity of a body's centre (coordinate velocity in the hole's frame). */
+export function bodyVelocity(s: Settings, b: Body, t: number): Vec3 {
+  if (b === "star") return starVelocity(s, t);
+  if (b === "barycentre") return barycentreVelocity(s, t);
+  if (b === "wormhole") return s.wormhole ? mouth(s, t).V : [0, 0, 0];
+  if (systemBody(s, b)) return bodyTrack(GARGANTUA_SYSTEM, b).vel(t);
+  return [0, 0, 0];
+}
+
+/** Mass (GM, in M) of a body's own field felt by a ship (0: none; the mouth's does not attract). */
+export function bodyMass(s: Settings, b: Body) {
+  if (b === "star") return s.sun ? s.sunMass : 0;
+  return systemBody(s, b)?.mass ?? 0;
+}
 
 const DEG = Math.PI / 180;
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -114,7 +140,8 @@ export function starForce(s: Settings, r: number, th: number, ph: number, t: num
 export function bodyCentre(s: Settings, body: Body, t: number): Vec3 {
   if (body === "star") return starCentre(s, t);
   if (body === "barycentre") return barycentre(s, t);
-  if (body === "wormhole") return mouth(s).C;
+  if (body === "wormhole") return mouth(s, t).C;
+  if (systemBody(s, body)) return bodyTrack(GARGANTUA_SYSTEM, body as SystemBody).pos(t);
   return [0, 0, 0];
 }
 
@@ -123,12 +150,14 @@ export function bodyRadius(s: Settings, body: Body) {
   if (body === "star") return s.sunRadius;
   if (body === "barycentre") return 1;
   if (body === "wormhole") return mouth(s).w.rho;
+  const sb = systemBody(s, body);
+  if (sb) return sb.radius;
   return horizon(s.spin);
 }
 
 /** Angular radius of a body seen from distance d (the hole: its shadow, ≈ 3√3 M far away). */
 export function angularRadius(s: Settings, body: Body, d: number) {
-  const R = body === "hole" ? 3 * Math.sqrt(3) : body === "wormhole" ? 1.6 * mouth(s).w.rho : body === "barycentre" ? 0.5 : s.sunRadius;
+  const R = body === "hole" ? 3 * Math.sqrt(3) : body === "wormhole" ? 1.6 * mouth(s).w.rho : body === "barycentre" ? 0.5 : body === "star" ? s.sunRadius : bodyRadius(s, body);
   return Math.asin(Math.min(1, R / Math.max(d, 1e-6)));
 }
 
@@ -139,6 +168,7 @@ export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
   if (s.sun) list.push("star");
   if (baryFraction(s) > 0) list.push("barycentre");
   if (s.wormhole) list.push("wormhole");
+  if (s.system === "gargantua") list.push(...SYSTEM_BODIES);
   return list;
 }
 

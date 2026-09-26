@@ -1,14 +1,16 @@
 import {
   basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
-import { horizon, isco, photonOrbits, zamo, type Vec3 } from "./physics";
+import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 } from "./physics";
 import type { Settings, Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
-  baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius,
+  baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius,
 } from "./targeting";
 import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
+import { GARGANTUA_SYSTEM } from "./system/bodies";
+import { bodyState, bodyTrack } from "./system/ephemeris";
 import { circularSpeed, FlightComputer, toU, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -80,7 +82,8 @@ export class CameraController {
   /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
   private flyVel: Vec3 = [0, 0, 0];
   /** Last free-fall prediction for the overlay (dt: coordinate time between points [M]). */
-  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number; dt: number } | null = null;
+  /** (hit: the body the path runs into, when its fate is "star") */
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number; dt: number; hit?: Body } | null = null;
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
   piloting = false;
@@ -104,7 +107,10 @@ export class CameraController {
   private userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
   private lastWant: { beta: Vec3; ff: Vec3 } | null = null;
+  /** the orbit autopilot's last wanted 4-velocity (ZAMO components) and the proper time it was for */
+  private prevWant: { U: Vec3; tau: number; body: string } | null = null;
   private pathKey = "";
+  private pathCost = 0;
   /** With gravity on: the camera stands on the star's surface. */
   landed = false;
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
@@ -123,6 +129,7 @@ export class CameraController {
   /** Scene time of this update and of the previous one [M] (the star moves). */
   private time = NaN;
   private prevTime = NaN;
+  private shipTime = NaN;
   /** Orbit mode: the camera's orientation relative to the aim at the target. */
   private offset: Quat | null = null;
   /** yaw/pitch/roll as last written by the tracking (any other change updates the offset). */
@@ -277,8 +284,19 @@ export class CameraController {
     return { body: s.target, name: BODY_NAMES[s.target], look: aim.look, lensed: aim.lensed, dist, ang: angularRadius(s, s.target, dist), cam };
   }
 
+  /** The scene's time now: the frame's, or, once the ship has moved this frame, the ship's clock. */
   private nowTime() {
+    if (Number.isFinite(this.shipTime)) return this.shipTime;
     return Number.isFinite(this.time) ? this.time : 0;
+  }
+
+  /**
+   * The coordinate time the ship reached in the last update (null: it did not move): the scene's
+   * clock takes it, so the bodies are drawn where the ship's integrator had them — also when an
+   * autopilot changed the warp during the frame.
+   */
+  shipClock(): number | null {
+    return Number.isFinite(this.shipTime) ? this.shipTime : null;
   }
 
   /** Apparent direction of the target (cached; warm-started from the last answer). */
@@ -585,17 +603,32 @@ export class CameraController {
     [s.velR, s.velT, s.velP] = next.map((v) => clamp(v, -0.95, 0.95)) as Vec3;
   }
 
-  /** The star as a gravitating body for the camera's geodesic (none when massless or off). */
-  private lens(): Lens | undefined {
+  /**
+   * The gravitating bodies for the ship's geodesic: the companion star (Gargantua then orbits the
+   * centre of mass with it), or a system's planets and stars (weak fields; m ≪ M, the hole stays
+   * put). Undefined when there are none.
+   */
+  private lens(): Lens | Lens[] | undefined {
     const s = this.s;
-    if (!s.sun || !(s.sunMass > 0)) return undefined;
-    const D3 = starOrbitRadius(s) ** 3;
-    return {
-      m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
-      // Gargantua orbits the centre of mass: its frame falls towards the star
-      accel: (t) => holeAcceleration(s, t),
-      accelRate: (t) => lin(starVelocity(s, t), s.sunMass / D3, [0, 0, 0], 0),
-    };
+    const list: Lens[] = [];
+    if (s.sun && s.sunMass > 0) {
+      const D3 = starOrbitRadius(s) ** 3;
+      list.push({
+        m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
+        // Gargantua orbits the centre of mass: its frame falls towards the star
+        accel: (t) => holeAcceleration(s, t),
+        accelRate: (t) => lin(starVelocity(s, t), s.sunMass / D3, [0, 0, 0], 0),
+      });
+    }
+    if (s.system === "gargantua") {
+      for (const b of GARGANTUA_SYSTEM.bodies) {
+        if (b.universe !== "gargantua" || !(b.mass > 0) || b.kind === "hole") continue;
+        const tr = bodyTrack(GARGANTUA_SYSTEM, b.id);
+        list.push({ m: b.mass, R: b.radius, centre: tr.pos, velocity: tr.vel });
+      }
+    }
+    if (!list.length) return undefined;
+    return list.length === 1 ? list[0] : list;
   }
 
   /** Co-moving with the star (for the HUD). */
@@ -832,6 +865,7 @@ export class CameraController {
     const s = this.s;
     this.prevTime = Number.isFinite(this.time) ? this.time : (time ?? 0);
     if (time !== undefined) this.time = time;
+    this.shipTime = NaN;
     const before = this.poseKey();
     const dragging = this.pointers.size > 0;
     const pad = this.pad.poll();
@@ -1077,6 +1111,12 @@ export class CameraController {
    * The orientation is kept fixed with respect to the distant stars (a gyroscope, flat far field).
    */
   private fall(simDt: number, keys: Vec3, fast: boolean, acc?: Vec3) {
+    // (the ship's clock after the step: the scene's time follows it — see shipClock)
+    const t1 = this.nowTime() + simDt;
+    this.shipTime = this.fallStep(simDt, keys, fast, acc) ?? t1;
+  }
+
+  private fallStep(simDt: number, keys: Vec3, fast: boolean, acc?: Vec3): number | undefined {
     const s = this.s;
     const a = s.spin;
     const kn = Math.hypot(...keys);
@@ -1098,7 +1138,7 @@ export class CameraController {
       setHolePose(s, X1, w0(cam.fwd), w0(cam.up), vel);
       s.motion = "geodesic";
       this.targetDistance = s.distance;
-      return;
+      return st.t;
     }
     // near the wormhole: straight (geodesic) motion at constant speed, thrust changes γβ
     const m = mouth(s);
@@ -1302,6 +1342,7 @@ export class CameraController {
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
     if (this.pilot.auto !== "node" && this.userWarp !== null) this.restoreWarp(); // execution stopped
+    if (this.pilot.auto !== "node") this.rails(cam);
     const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
     const out = this.pilot.step({
@@ -1315,6 +1356,78 @@ export class CameraController {
     if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
     // Δv delivered to the executing node (proper acceleration × proper time)
     if (burn && this.nodeBurning) this.nodeDone += Math.hypot(...out.acc) * (this.properTime - tau0);
+  }
+
+  // ------------------------------------------------------------------------------ rails
+  /** Warp the pilot asked for, while the rails hold it lower (null: none held back). */
+  private warpWant: number | null = null;
+  private warpSet = NaN;
+  /** Why the rails hold the warp back (for the HUD), or "". */
+  railsNote = "";
+
+  /**
+   * Time warp "on rails": beyond 500 M/s (up to 10⁵ — years of flight in seconds) with the engine
+   * off. The warp comes down by itself where the flight needs to be followed — about 1/100 of an
+   * orbit per frame around the hole, a few seconds before entering a body's Hill sphere (then 1/100
+   * of the local orbit inside it), near the wormhole's mouth, and to 500 while the engine burns —
+   * and goes back up to what was asked when it can.
+   */
+  private rails(cam: ReturnType<typeof cameraFrame>) {
+    const s = this.s;
+    // the pilot changed the warp: that is the new wish
+    if (s.timeSpeed !== this.warpSet) this.warpWant = null;
+    const want = this.warpWant ?? s.timeSpeed;
+    // (the classic scenes keep their warps: the rails only engage beyond 500 M/s, or in a system)
+    if (want <= 500 && s.system === "none") {
+      this.warpWant = null;
+      this.railsNote = "";
+      this.warpSet = s.timeSpeed;
+      return;
+    }
+    const { lim, why } = this.railsLimit(cam);
+    const w = Math.max(Math.min(want, lim), Math.min(want, 0.25));
+    if (w < want) this.warpWant = want;
+    else this.warpWant = null;
+    this.railsNote = w < want ? why : "";
+    s.timeSpeed = w;
+    this.warpSet = w;
+  }
+
+  /** How fast time may run here (M/s), and what holds it. */
+  private railsLimit(cam: ReturnType<typeof cameraFrame>) {
+    const s = this.s;
+    let lim = 1e5;
+    let why = "";
+    const cap = (v: number, w: string) => {
+      if (v < lim) (lim = v), (why = w);
+    };
+    if (this.pilot.accel > 0 || this.pilot.throttle > 0) cap(500, "engine");
+    if (cam.region === "hole") {
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      cap(Math.max(6, (60 * 2 * Math.PI * cam.r ** 1.5) / 100), "Gargantua");
+      const V = add3(sphericalFrame(X).er, sphericalFrame(X).et, sphericalFrame(X).ep, cam.beta);
+      const t = this.nowTime();
+      for (const b of availableBodies(s, cam)) {
+        if (b === "hole" || b === "barycentre") continue;
+        const C = bodyCentre(s, b, t);
+        const d = Math.hypot(...sub3(X, C));
+        const v = Math.hypot(...sub3(V, bodyVelocity(s, b, t))) + 1e-9;
+        if (b === "wormhole") {
+          const g = mouth(s).rGlue;
+          cap(Math.max(2, (d - 3 * g) / v / 4), "the wormhole");
+          continue;
+        }
+        const m = bodyMass(s, b);
+        if (!(m > 0)) continue;
+        const D = Math.hypot(...C);
+        const hill = b === "edmunds" ? 0.6 * Math.cbrt(m / (3 * bodyMass(s, "k2"))) : D * Math.cbrt(m / 3);
+        if (d > hill) cap(Math.max((d - hill) / v / 4, (60 * 2 * Math.PI * Math.sqrt(hill ** 3 / m)) / 100), BODY_NAMES[b]);
+        // (inside: an orbit around a system body in no less than ~12 s, which the orbit autopilot can
+        // follow; the classic scenes' star, 1.7 s)
+        else cap((2 * Math.PI * Math.sqrt(Math.max(d, bodyRadius(s, b)) ** 3 / m)) / (b === "star" ? 1.67 : 12), BODY_NAMES[b]);
+      }
+    }
+    return { lim, why };
   }
 
   // ------------------------------------------------------------------------------ flight plan
@@ -1352,20 +1465,24 @@ export class CameraController {
       res = planCircular(st, Math.max(r2, rMin), w);
       if (!res) return "No transfer found (inside the photon orbit, or out of reach)";
     } else if (goal === "star") {
-      if (!s.sun) return "No companion star in this scene";
+      // the companion star, or in a system the targeted body (a planet, Edmunds' star)
+      const body: Body = s.system !== "none" && s.target !== "hole" && s.target !== "wormhole" && s.target !== "barycentre" ? s.target : "star";
+      if (body === "star" && !s.sun) return "No companion star in this scene: select a body (Tab)";
+      const R = bodyRadius(s, body);
+      const mB = bodyMass(s, body);
       res = planRendezvous(st, w, {
-        centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t), radius: s.sunRadius,
+        centre: (t) => bodyCentre(s, body, t), velocity: (t) => bodyVelocity(s, body, t), radius: R,
         // an orbit: close in (3.2 radii — well inside the Hill radius, ≈ 0.32 D; the orbit autopilot
         // then holds it against Gargantua's tides), in the sense the ship arrives with
-        standoff: (o.orbitStar ? 3.2 : 4) * s.sunRadius,
-        orbit: o.orbitStar && s.sunMass > 0 ? { mass: s.sunMass, n: [0, 0, 1] } : undefined,
+        standoff: (o.orbitStar ? 3.2 : 4) * R,
+        orbit: o.orbitStar && mB > 0 ? { mass: mB, n: [0, 0, 1] } : undefined,
       });
-      if (!res) return "No rendezvous found";
-      s.target = "star";
+      if (!res) return `No rendezvous with ${BODY_NAMES[body]} found`;
+      s.target = body;
     } else {
       if (!s.wormhole) return "No wormhole in this scene";
       const m = mouth(s);
-      res = planIntercept(st, m.C as Vec3, w, 0.25 * m.w.rho);
+      res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
       if (!res) return "No path into the mouth found from this orbit";
       s.target = "wormhole";
     }
@@ -1536,7 +1653,7 @@ export class CameraController {
           P.path = null;
           this.pilot.auto = "none";
           if (then) this.pilot.setAuto(then);
-          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? "in orbit around the star" : "station-keeping"}` : "Manoeuvre done");
+          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? `in orbit around ${this.s.target === "star" ? "the star" : BODY_NAMES[this.s.target]}` : "station-keeping"}` : "Manoeuvre done");
         } else this.refreshPlan(true);
         return null;
       }
@@ -1545,7 +1662,9 @@ export class CameraController {
     // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
     // on the burn: it turns while coasting)
     const coast = start - 20;
-    s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 500) : Math.min(Math.max(start / 1.5, 3), 12);
+    s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
+    // (a long coast rides the rails, held back near bodies like any flight)
+    if (s.system !== "none" || s.timeSpeed > 500) s.timeSpeed = Math.min(s.timeSpeed, Math.max(this.railsLimit(cam).lim, 3));
     return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0, far: start > 60 };
   }
 
@@ -1564,7 +1683,7 @@ export class CameraController {
     // where the body is seen: its position when the light left it (retarded time, flat estimate)
     const t0 = this.nowTime();
     let C = s.target === "hole" ? [0, 0, 0] as Vec3 : bodyCentre(s, s.target, t0);
-    if (s.target === "star" || s.target === "barycentre") {
+    if (s.target !== "hole") {
       for (let k = 0; k < 3; k++) C = bodyCentre(s, s.target, t0 - Math.hypot(...sub3(C, X)));
     }
     const d = sub3(C, X);
@@ -1590,6 +1709,45 @@ export class CameraController {
     const U0 = toU(beta);
     const U1 = toU(toZamo(geoStep(st, a, h, this.lens()), a));
     return lin(sub3(U1, U0), 1 / h, U0, 0);
+  }
+
+  /** A coordinate velocity (flat map, Cartesian) as the ZAMO at the camera measures it, and back. */
+  private toZamo(cam: ReturnType<typeof cameraFrame>, f: ReturnType<typeof sphericalFrame>, W: Vec3): Vec3 {
+    return coordToZamo([dot3(W, f.er), dot3(W, f.et), dot3(W, f.ep)], cam.r, cam.theta, cam.zamo);
+  }
+
+  private fromZamo(cam: ReturnType<typeof cameraFrame>, f: ReturnType<typeof sphericalFrame>, b: Vec3): Vec3 {
+    return add3(f.er, f.et, f.ep, zamoToCoord(b, cam.r, cam.theta, cam.zamo));
+  }
+
+  /** The massive body nearest a point at time t (what a predicted path ran into). */
+  private nearestBody(X: Vec3, t: number): Body | undefined {
+    const cam = cameraFrame(this.s);
+    let best: Body | undefined;
+    let bd = Infinity;
+    for (const b of availableBodies(this.s, cam)) {
+      if (b === "hole" || b === "barycentre" || !(bodyMass(this.s, b) > 0)) continue;
+      const d = Math.hypot(...sub3(X, bodyCentre(this.s, b, t))) / bodyRadius(this.s, b);
+      if (d < bd) (bd = d), (best = b);
+    }
+    return best;
+  }
+
+  /**
+   * Feed-forward for following a moving goal velocity (the orbit around a planet): its rate of change
+   * minus what gravity alone does to the ship, so the pilot keeps on it without lagging behind (its
+   * proportional correction, over ~1 s, would leave the ship sinking by a few % of the orbital speed —
+   * the goal is a free orbit only to ~10 %: the metric's lengths, the relativistic velocity sum).
+   */
+  private followFF(cam: ReturnType<typeof cameraFrame>, beta: Vec3): Vec3 {
+    const U = toU(beta);
+    const tau = this.properTime;
+    const p = this.prevWant;
+    this.prevWant = { U, tau, body: this.s.target };
+    if (!p || p.body !== this.s.target || !(tau > p.tau) || tau - p.tau > 2) return [0, 0, 0];
+    const ff = sub3(lin(sub3(U, p.U), 1 / (tau - p.tau), U, 0), this.freeFallAccel(cam));
+    // (a jump of the goal — a phase change — is left to the proportional part)
+    return Math.hypot(...ff) > 0.5 * this.s.thrust ? [0, 0, 0] : ff;
   }
 
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
@@ -1639,61 +1797,89 @@ export class CameraController {
     if (P.auto === "orbit") {
       // a circular orbit around the star (in its orbital plane), at the distance it was engaged at
       if (cam.region !== "hole") return say("Orbit: only in the black hole's universe");
-      if (s.target !== "star" || !s.sun || s.sunMass <= 0) return say("Orbit: select the companion star (with a mass)");
-      if (this.landed) return say("Landed on the star");
-      const X = blToCartesian(cam.r, cam.theta, cam.phi);
-      const f = sphericalFrame(X);
-      const t = this.nowTime();
-      const C = starCentre(s, t);
-      const V = starVelocity(s, t);
-      const rel = sub3(X, C);
-      const d = Math.hypot(...rel);
-      const n: Vec3 = [0, 0, 1];
-      const Vs = add3(f.er, f.et, f.ep, cam.beta);
-      if (!P.anchor) {
-        // (the sense it goes round now, the distance now — kept within the stable, retrograde-friendly range)
-        const h = cross(rel, sub3(Vs, V));
-        P.anchor = [clamp(d, 2.4 * s.sunRadius, 0.17 * starOrbitRadius(s)), Math.sign(h[2]) || 1, 0];
-      }
-      const [d0, sense] = P.anchor as [number, number, number];
-      const vc = Math.sqrt(s.sunMass / d0);
-      const w0 = vc / d0;
-      const relP: Vec3 = [rel[0], rel[1], 0];
-      const tl = Math.hypot(...relP) || 1;
-      const tdir = lin(cross(lin(n, sense, n, 0), relP), 1 / tl, n, 0);
-      const rhat = lin(rel, 1 / Math.max(d, 1e-9), rel, 0);
-      // distance and plane errors closed over a fraction of an orbit
-      const vr = clamp(-(d - d0) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
-      const vz = clamp(-rel[2] * w0 * 0.6, -0.3 * vc, 0.3 * vc);
-      const W = axpy(axpy(axpy(V, tdir, vc), rhat, vr), n, vz);
-      const al = cam.zamo.alpha;
-      return { beta: [dot3(W, f.er) / al, dot3(W, f.et) / al, dot3(W, f.ep) / al], ff: [0, 0, 0] };
-    }
-    if (P.auto === "approach") {
-      if (cam.region !== "hole") return say("Approach: only in the black hole's universe");
-      if (s.target === "hole" || s.target === "barycentre") return say("Approach: select the star or the wormhole (Tab)");
+      const mB = bodyMass(s, s.target);
+      if (s.target === "hole" || s.target === "barycentre" || !(mB > 0)) return say("Orbit: select a body with a mass (Tab)");
+      if (this.landed) return say(`Landed on ${BODY_NAMES[s.target]}`);
       const X = blToCartesian(cam.r, cam.theta, cam.phi);
       const f = sphericalFrame(X);
       const t = this.nowTime();
       const C = bodyCentre(s, s.target, t);
-      const star = s.target === "star";
-      const stand = star ? 4 * s.sunRadius : 1.3 * mouth(s).rGlue;
+      const V = bodyVelocity(s, s.target, t);
+      const R = bodyRadius(s, s.target);
+      const rel = sub3(X, C);
+      const d = Math.hypot(...rel);
+      const Vs = this.fromZamo(cam, f, cam.beta);
+      // the orbit's plane: the star's (its orbital plane around the hole), or the one the ship is in
+      const h0 = cross(rel, sub3(Vs, V));
+      const hl = Math.hypot(...h0);
+      const n: Vec3 = s.target === "star" || hl < 1e-18 ? [0, 0, 1] : lin(h0, 1 / hl, h0, 0);
+      if (!P.anchor) {
+        // (the sense it goes round now; the distance now, kept above the surface and well inside the
+        // body's Hill sphere, where the hole's tides no longer tear the orbit apart)
+        const D = Math.hypot(...C);
+        const hill = D * Math.cbrt(mB / 3);
+        const lo = s.target === "star" ? 2.4 * R : 1.03 * R;
+        const hi = s.target === "star" ? 0.17 * starOrbitRadius(s) : Math.max(0.3 * hill, 1.1 * lo);
+        // (around a planet the plane is the ship's own, n = ĥ: always the positive sense)
+        P.anchor = [clamp(d, lo, hi), s.target === "star" ? Math.sign(h0[2]) || 1 : 1, 0];
+      }
+      const [d0, sense] = P.anchor as [number, number, number];
+      const planet = s.target !== "star";
+      if (planet && d > 2 * d0) {
+        // far from it still (a planet's Hill sphere is a few radii): fly in first — towards the
+        // body, at the speed that a braking at half thrust can still kill, its velocity matched
+        const to = lin(rel, -1 / d, rel, 0);
+        const span = d - d0;
+        const vIn = Math.min(0.05, Math.sqrt(2 * 0.5 * s.thrust * span), span / (4 * T));
+        const Wa = axpy(V, to, vIn);
+        const ba = this.toZamo(cam, f, Wa);
+        return { beta: ba, ff: this.followFF(cam, ba) };
+      }
+      // (the circular speed around it, in its proper time: in the scene's time, × its clock rate dτ/dt)
+      const clock = s.target === "star" ? 1 : bodyState(GARGANTUA_SYSTEM, s.target, t).dtau;
+      // (around a planet: circular at the distance it is at, spiralling down to d0 over a few turns —
+      // the circle of d0 from farther out would fling it back out)
+      const dc = planet ? clamp(d, d0, 2 * d0) : d0;
+      const vc = Math.sqrt(mB / dc) * clock;
+      const w0 = vc / dc;
+      const relP = sub3(rel, lin(n, dot3(rel, n), n, 0));
+      const tl = Math.hypot(...relP) || 1;
+      const tdir = lin(cross(lin(n, sense, n, 0), relP), 1 / tl, n, 0);
+      const rhat = lin(rel, 1 / Math.max(d, 1e-30), rel, 0);
+      // distance and plane errors closed over a fraction of an orbit
+      const vr = planet ? clamp(-(d - d0) * w0 * 0.3, -0.15 * vc, 0.15 * vc) : clamp(-(d - d0) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+      const vz = clamp(-dot3(rel, n) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+      const W = axpy(axpy(axpy(V, tdir, vc), rhat, vr), n, vz);
+      const bw = this.toZamo(cam, f, W);
+      return { beta: bw, ff: planet ? this.followFF(cam, bw) : [0, 0, 0] };
+    }
+    if (P.auto === "approach") {
+      if (cam.region !== "hole") return say("Approach: only in the black hole's universe");
+      if (s.target === "hole" || s.target === "barycentre") return say("Approach: select a body (Tab)");
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const f = sphericalFrame(X);
+      const t = this.nowTime();
+      const C = bodyCentre(s, s.target, t);
+      const mB = bodyMass(s, s.target);
+      const star = mB > 0; // a body with its own pull: the star, a planet
+      const stand = s.target === "star" ? 4 * s.sunRadius : s.target === "wormhole" ? 1.3 * mouth(s).rGlue : 3 * bodyRadius(s, s.target);
       const away = sub3(X, C);
       const dist = Math.hypot(...away);
       const goal = axpy(C, away, stand / Math.max(dist, 1e-9));
       const d = sub3(goal, X);
       const dl = Math.hypot(...d);
       const close = Math.min(0.25, dl / (5 * T));
-      const V: Vec3 = star ? starVelocity(s, t) : [0, 0, 0];
-      const W = axpy(V, d, close / Math.max(dl, 1e-9));
-      const loc: Vec3 = [dot3(W, f.er), dot3(W, f.et), dot3(W, f.ep)];
+      const V: Vec3 = bodyVelocity(s, s.target, t);
+      const W = axpy(V, d, close / Math.max(dl, 1e-30));
+      const loc = this.toZamo(cam, f, W);
       if (star) {
         // the hole's pull is shared with the star (both fall); its own pull is not: cancel it
-        if (this.landed) return say("Landed on the star");
-        const g = lin(away, s.sunMass / Math.max(dist, s.sunRadius) ** 3, away, 0);
+        if (this.landed) return say(`Landed on ${BODY_NAMES[s.target]}`);
+        const g = lin(away, mB / Math.max(dist, bodyRadius(s, s.target)) ** 3, away, 0);
         return { beta: loc, ff: [dot3(g, f.er), dot3(g, f.et), dot3(g, f.ep)] };
       }
-      // the mouth is held static against gravity
+      // a static mouth is held against gravity; an orbiting one falls freely, and so does the ship
+      if (s.whOrbit) return { beta: loc, ff: [0, 0, 0] };
       return { beta: loc, ff: lin(this.freeFallAccel(cam), -1, cam.beta, 0) };
     }
     return null;
@@ -1740,12 +1926,16 @@ export class CameraController {
       accel: this.pilot.accel,
       throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(s.thrust, 1e-12) : this.pilot.throttle,
       sas: this.pilot.sas,
+      /** what holds the rails' warp back ("" : nothing) */
+      railsNote: this.railsNote,
       rollAlign: this.pilot.rollAlign,
       hold: this.pilot.hold,
       auto: this.pilot.auto,
       omega: this.pilot.omega,
       properTime: this.properTime,
       landed: this.landed,
+      /** the body landed on */
+      landedOn: this.landed ? this.nearestBody(blToCartesian(cam.r, cam.theta, cam.phi), this.nowTime()) ?? null : null,
       // directions in camera coordinates, and the ship's axes
       S,
       dirs: {
@@ -1796,7 +1986,7 @@ export class CameraController {
       info.look = W(cam.fwd);
       const t = this.nowTime();
       const Ct: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyCentre(s, s.target, t);
-      const Vt: Vec3 = s.target === "star" ? starVelocity(s, t) : [0, 0, 0];
+      const Vt: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyVelocity(s, s.target, t);
       const d = sub3(X, Ct);
       info.targetDist = Math.hypot(...d);
       info.targetRate = dot3(sub3(info.V, Vt), d) / Math.max(info.targetDist, 1e-9);
@@ -1821,7 +2011,8 @@ export class CameraController {
     const s = this.s;
     // same state (e.g. time paused): same path object, so the renderer keeps converging
     const key = [s.spin, s.anchor, s.distance, s.inclination, s.azimuth, s.whL, s.velR, s.velT, s.velP, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.sun, s.sunMass, s.sunOrbit, this.nowTime()].join();
-    if (this.path && (key === this.pathKey || now - this.path.at < 250)) return this.path;
+    // (at most 4 times a second, and never more than a fifth of the frame time)
+    if (this.path && (key === this.pathKey || now - this.path.at < Math.max(250, 5 * this.pathCost))) return this.path;
     this.pathKey = key;
     const cam = cameraFrame(s);
     if (cam.region !== "hole") return (this.path = null);
@@ -1829,7 +2020,7 @@ export class CameraController {
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
     // coming back past the camera (a segment that close would sweep across the whole view)
     const tMax = clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000);
-    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, tMax, 480, this.lens());
+    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, tMax, 480, this.lens(), 1e-7);
     // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
     let turned = 0;
     for (let i = 1; i < p.pts.length; i++) {
@@ -1848,7 +2039,8 @@ export class CameraController {
       const i = p.pts.findIndex((q) => Math.hypot(q[0] - m.C[0], q[1] - m.C[1], q[2] - m.C[2]) < m.rGlue);
       if (i >= 0) p.pts = p.pts.slice(0, Math.max(i + 1, 2)), p.fate = "wormhole";
     }
-    this.path = { ...p, at: now, dt: tMax / 480 };
+    this.pathCost = performance.now() - now;
+    this.path = { ...p, at: now, dt: tMax / 480, hit: p.fate === "star" ? this.nearestBody(p.pts.at(-1)!, st.t + p.pts.length * (tMax / 480)) : undefined };
     return this.path;
   }
 

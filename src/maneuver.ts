@@ -18,7 +18,7 @@
 //   plane alignment                    at the cheaper of the next two crossings of the target plane
 //                                      (ascending / descending node), the velocity turned into it
 
-import { advance, fromZamo, predict, step, thrust, toZamo, type Lens, type Massive } from "./geodesic";
+import { advance, fromZamo, predict, step, thrust, toZamo, type Lens, type Lenses, type Massive } from "./geodesic";
 import { horizon, zamo, type Vec3 } from "./physics";
 
 export interface ManeuverNode {
@@ -30,9 +30,12 @@ export interface ManeuverNode {
   then?: "circularize" | "approach" | "orbit" | null;
 }
 
+/** Integration tolerance of the planners (thousands of trial paths; the burns are refined anyway). */
+const PLAN_TOL = 1e-7;
+
 export interface World {
   a: number;
-  lens?: Lens;
+  lens?: Lenses;
   /** the least time before the first burn [M] (time to turn at the current warp) */
   lead?: number;
 }
@@ -89,7 +92,7 @@ export function dvComponents(beta: Vec3, v: Vec3): Vec3 {
 /** Free fall until coordinate time t (no thrust); null if the ship is lost (horizon, star) first. */
 export function advanceTo(st: Massive, t: number, w: World): Massive | null {
   if (t <= st.t) return st;
-  const r = advance(st, w.a, t - st.t, 0.05, 0, [0, 0, 0], w.lens);
+  const r = advance(st, w.a, t - st.t, 0.05, 0, [0, 0, 0], w.lens, PLAN_TOL);
   return r.stopped || r.landed ? null : r.st;
 }
 
@@ -101,8 +104,8 @@ export function applyDv(st: Massive, dv: Vec3, a: number): Massive {
 }
 
 /** Predicted path from a state, with times. */
-export function pathFrom(st: Massive, w: World, tMax: number, n = 300): PlanPath {
-  const p = predict(st, w.a, tMax, n, w.lens);
+export function pathFrom(st: Massive, w: World, tMax: number, n = 300, stop?: (p: Vec3, t: number) => boolean): PlanPath {
+  const p = predict(st, w.a, tMax, n, w.lens, PLAN_TOL, stop);
   const dt = tMax / n;
   return { pts: p.pts, times: p.pts.map((_, j) => st.t + (j + 1) * dt), fate: p.fate === "continues" || p.fate === "escape" || p.fate === "horizon" || p.fate === "star" ? p.fate : "continues" };
 }
@@ -248,6 +251,10 @@ export function planRendezvous(
     orbit?: { mass: number; n: Vec3; sense?: number };
   },
 ): { nodes: ManeuverNode[]; note: string; miss: number } | null {
+  // (the scan ignores the planets' tiny masses — they only matter within their Hill spheres, which
+  // the refinement below goes into with the full field)
+  const wFull = w;
+  w = { ...w, lens: coarseLenses(w.lens) };
   const D = len(body.centre(st0.t));
   const lead = Math.max(20, 0.03 * period(st0.r), w.lead ?? 0);
   const sA = advanceTo(st0, st0.t + lead, w);
@@ -297,16 +304,22 @@ export function planRendezvous(
   const s1 = advanceTo(sA, best.t1, w);
   if (!s1) return null;
   // (the burn the scan was made with: recomputing it at the new time would move the encounter)
-  const dv1 = dv;
-  const m = miss(s1, dv1);
+  const dv1: Vec3 = [dv, 0, 0];
+  const m = miss(s1, dv);
   if (m.cost >= 1e3) return null;
-  const s2 = advanceTo(applyDv(s1, [dv1, 0, 0], w.a), m.t, w);
+  const s2 = advanceTo(applyDv(s1, dv1, w.a), m.t, wFull);
   if (!s2) return null;
   // match the body's velocity (flat map → local ZAMO components, the small α factors neglected)
   const f = localFrame(s2);
   let V = body.velocity(m.t);
   let then: ManeuverNode["then"] = "approach";
-  if (body.orbit) {
+  // A small body (a planet: its Hill sphere is a few radii) is not met within it at the scan's
+  // resolution, nor would a flight's finite burns keep to it: the ship stops next to it (its velocity
+  // matched) and the orbit autopilot brings it in, with continuous guidance — the last correction
+  const hill = body.orbit ? len(body.centre(m.t)) * Math.cbrt(body.orbit.mass / 3) : Infinity;
+  if (body.orbit && m.d > 0.5 * hill) {
+    then = "orbit";
+  } else if (body.orbit) {
     // orbit insertion: the body's velocity plus the circular speed around it, in the given plane, in
     // the sense the ship already goes round it
     const n = norm(body.orbit.n);
@@ -323,10 +336,17 @@ export function planRendezvous(
   const al = zamo(s2.r, s2.th, w.a).alpha;
   const betaT: Vec3 = [dot(V, f.er) / al, dot(V, f.et) / al, dot(V, f.ep) / al];
   return {
-    nodes: [{ t: best.t1, dv: [dv1, 0, 0] }, { t: m.t, dv: matchDv(s2, betaT, w.a), then }],
-    note: `${body.orbit ? "orbit insertion" : "rendezvous"}: closest approach ${m.d.toFixed(1)} M`,
+    nodes: [{ t: best.t1, dv: dv1 }, { t: m.t, dv: matchDv(s2, betaT, w.a), then }],
+    note: `${body.orbit ? "orbit insertion" : "rendezvous"}: closest approach ${m.d < 0.01 ? `${(m.d * 1e4).toFixed(2)}·10⁻⁴` : m.d.toFixed(1)} M`,
     miss: m.d,
   };
+}
+
+/** The lenses massive enough to matter for a scan (the stars; not the planets). */
+function coarseLenses(l: World["lens"]): World["lens"] {
+  if (!l || !Array.isArray(l)) return l;
+  const kept = (l as readonly Lens[]).filter((q) => q.m > 1e-10);
+  return kept.length ? kept : undefined;
 }
 
 /** Normal of the orbit's plane (flat map): r̂ × v̂. */
@@ -397,23 +417,40 @@ export function planAlign(st0: Massive, w: World, n: Vec3, name: string): { node
  * A path through a fixed point (the wormhole's mouth): for departure times over one orbit, Newton's
  * method on the 3-D Δv drives the path's closest point to the target onto it; the cheapest wins.
  */
-export function planIntercept(st0: Massive, target: Vec3, w: World, tol: number): { nodes: ManeuverNode[]; note: string; miss: number } | null {
+export function planIntercept(
+  st0: Massive, target: Vec3 | ((t: number) => Vec3), w0: World, tol: number,
+): { nodes: ManeuverNode[]; note: string; miss: number } | null {
+  // (the search's many trial paths feel the hole and the stars only: the planets' pull, far from
+  // them, is below the aim's tolerance — the plan's path is then drawn with all of them)
+  const w: World = { ...w0, lens: coarseLenses(w0.lens) };
+  // (a moving target — an orbiting mouth — is met where it is when the ship gets there)
+  const at = typeof target === "function" ? target : () => target;
   const lead = Math.max(20, 0.03 * period(st0.r), w.lead ?? 0);
   const T = period(st0.r);
   // time to get there at the ship's speed, with room for a curved path
-  const reach = (s1: Massive) => (3 * len(sub(position(s1), target))) / Math.max(len(toZamo(s1, w.a)), 0.1) + 100;
+  const reach = (s1: Massive) => (3 * len(sub(position(s1), at(s1.t)))) / Math.max(len(toZamo(s1, w.a)), 0.1) + 100;
   const missVec = (s1: Massive, dv: Vec3): Vec3 | null => {
-    const p = pathFrom(applyDv(s1, dv, w.a), w, reach(s1), 260);
+    // (the path ends once it is well past the target: going away, twice as far as its closest yet)
+    let dMin = Infinity;
+    let away = 0;
+    const past = (q: Vec3, t: number) => {
+      const d = len(sub(q, at(t)));
+      if (d < dMin) (dMin = d), (away = 0);
+      else away++;
+      return away > 8 && d > 2 * dMin + 1;
+    };
+    const p = pathFrom(applyDv(s1, dv, w.a), w, reach(s1), 260, past);
     let best: Vec3 | null = null;
     let bd = Infinity;
     // closest point, refined on the segment
     for (let j = 0; j < p.pts.length; j++) {
       const a = j ? p.pts[j - 1]! : position(s1), b = p.pts[j]!;
+      const tgt = at(p.times[j]!);
       const e = sub(b, a);
-      const u = Math.min(1, Math.max(0, dot(sub(target, a), e) / Math.max(dot(e, e), 1e-12)));
+      const u = Math.min(1, Math.max(0, dot(sub(tgt, a), e) / Math.max(dot(e, e), 1e-12)));
       const q = add(a, scale(e, u));
-      const d = len(sub(q, target));
-      if (d < bd) (bd = d), (best = sub(q, target));
+      const d = len(sub(q, tgt));
+      if (d < bd) (bd = d), (best = sub(q, tgt));
     }
     return best;
   };
@@ -427,7 +464,7 @@ export function planIntercept(st0: Massive, target: Vec3, w: World, tol: number)
     // first guess: head straight for the target at about the current speed
     const X = position(s);
     const f = localFrame(s);
-    const d = norm(sub(target, X));
+    const d = norm(sub(at(s.t + len(sub(at(s.t), X)) / Math.max(len(toZamo(s, w.a)), 0.1)), X));
     const b = toZamo(s, w.a);
     const sp = Math.max(len(b), 0.15);
     const bT: Vec3 = scale([dot(d, f.er), dot(d, f.et), dot(d, f.ep)], sp);
