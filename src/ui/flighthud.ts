@@ -141,6 +141,8 @@ export class FlightHud {
   private view: "top" | "side" = "top";
   /** multi-scale map: radius ∝ ln(1 + r/M) (angles kept) — null: automatic (on in a system) */
   private logMap: boolean | null = null;
+  /** our universe's map: true scale by default (the solar system as it is), log on demand */
+  private ourLog = false;
   private frame: "cm" | "hole" = "cm";
   private trail: { X: V3; t: number }[] = [];
   private samples: Sample[] = [];
@@ -393,7 +395,7 @@ export class FlightHud {
       tog("side", "Side", "Seen edge-on (along the equator)", () => (this.view = "side")),
       tog("cm", "CoM", "Inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
       tog("hole", "Hole", "Gargantua's frame (fixed at the centre)", () => (this.frame = "hole")),
-      tog("log", "Log", "Multi-scale map: distance from the centre as ln(1 + r/M), directions kept — Miller at 10 M and Edmunds at 2 000 M on the same map", () => (this.logMap = !this.isLog())),
+      tog("log", "Log", "Multi-scale map: distance from the centre as ln(1 + r/M), directions kept — Miller at 10 M and Edmunds at 2 000 M on the same map", () => (this.lastInfo?.ref ? (this.ourLog = !this.ourLog) : (this.logMap = !this.isLog()))),
     );
     this.map.title = "Click a body: target it · drag: pan · wheel: zoom · double-click: fit";
     this.map.addEventListener("wheel", (e) => {
@@ -936,7 +938,7 @@ export class FlightHud {
     this.mapBtns.side!.classList.toggle("on", this.view === "side");
     this.mapBtns.cm!.hidden = this.mapBtns.hole!.hidden = !massive;
     this.mapBtns.cm!.classList.toggle("on", this.frame === "cm");
-    this.mapBtns.log!.classList.toggle("on", this.isLog());
+    this.mapBtns.log!.classList.toggle("on", i.ref ? this.ourLog : this.isLog());
     this.mapBtns.hole!.classList.toggle("on", this.frame === "hole");
   }
 
@@ -1513,7 +1515,7 @@ export class FlightHud {
     const F = solarState(focus, t0).pos;
     const r0 = 5 * (SOLAR_BODIES.find((b) => b.id === focus)?.radius ?? 1e-4);
     const side = this.view === "side";
-    const log = this.logMap !== false;
+    const log = this.ourLog;
     const pr = (X: V3): [number, number] => {
       const d: V3 = sub(X, F);
       const q: [number, number] = side ? [d[0], d[2]] : [d[0], d[1]];
