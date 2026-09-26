@@ -214,6 +214,50 @@ async function main() {
   syncButtons();
   syncRotationButtons();
 
+  // -------------------------------------------------------------------- game controller
+  camera.onPadAction = (a) => {
+    if (renderer.offlineActive) return;
+    switch (a) {
+      case "focus":
+        // fly the view to the target (framed), like a double-click on it
+        if (settings.rotation !== "orbit") camera.setRotation("orbit");
+        camera.selectTarget(settings.target, { frame: !camera.gravity });
+        break;
+      case "gravity":
+        actions["btn-gravity"]!();
+        break;
+      case "auto":
+        actions["btn-orbit"]!();
+        break;
+      case "rotation":
+        actions["btn-rotation"]!();
+        break;
+      case "prevTarget":
+        camera.cycleTarget(-1);
+        camera.pad.rumble(0.1, 0.3, 50);
+        break;
+      case "nextTarget":
+        camera.cycleTarget(1);
+        camera.pad.rumble(0.1, 0.3, 50);
+        break;
+      case "recentre":
+        camera.resetView();
+        break;
+      case "time":
+        actions["btn-play"]!();
+        break;
+      case "settings":
+        panel.toggle();
+        break;
+    }
+    touch();
+  };
+  addEventListener("gamepadconnected", (e) => {
+    panel.toast(`Controller connected — ${(e as GamepadEvent).gamepad.id.replace(/\s*\(.*\)\s*$/, "") || "gamepad"} · ? for the buttons`);
+    camera.pad.rumble(0.2, 0.4, 120);
+  });
+  addEventListener("gamepaddisconnected", () => panel.toast("Controller disconnected"));
+
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey || e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
     const k = e.key.toLowerCase();
@@ -631,6 +675,7 @@ async function main() {
     if (camera.flyMode) chips.push(`<span class="chip hot">Fly ×${camera.flySpeed.toFixed(1)}</span>`);
     else chips.push(`<span class="chip">${settings.rotation === "orbit" ? `↻ ${BODY_NAMES[settings.target]}` : "Free look"}</span>`);
     if (camera.gravity) chips.push(`<span class="chip hot">${camera.landed ? "On the star" : "Gravity"}</span>`);
+    if (camera.pad.connected) chips.push(`<span class="chip" title="Game controller">🎮</span>`);
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);
     progressEl.classList.toggle("done", progress >= 1 && st.phase !== "offline");

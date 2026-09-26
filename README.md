@@ -182,6 +182,13 @@ the sphere (no overshoot for grazing rays), Gargantua's weak field still bends t
 the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
 outside, and their energy at infinity is kept across it.
 
+**Game controller** (Xbox, PlayStation — any pad with the browser's standard mapping; `src/gamepad.ts`):
+left stick flies (forward/back, sideways; L3 held: boost), right stick orbits the target (free: looks),
+RT/LT up/down, LB/RB roll; A flies to the target, B gravity, X auto-orbit, Y around ⟷ free, D-pad
+◀ ▶ previous/next target and ▲ ▼ closer/farther, R3 recentre, View runs/pauses time, Menu opens the
+settings. Radial dead zone and a gentle response curve; a rumble when the camera crosses the wormhole's
+throat. The browser exposes a pad once a button is pressed with the page focused.
+
 **Two rotation modes** (R, toolbar, Scene → Camera rotation):
 
 - **Around the target**: drag orbits the selected body — Gargantua, the companion star or the wormhole's

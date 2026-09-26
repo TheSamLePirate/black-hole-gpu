@@ -9,6 +9,7 @@ import {
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius,
 } from "./targeting";
 import { advance, fromZamo, predict, toZamo, type Lens } from "./geodesic";
+import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
@@ -87,6 +88,10 @@ export class CameraController {
   hover: { body: Body; x: number; y: number } | null = null;
   /** Last user interaction with the camera (performance.now()), to show / fade the target marker. */
   activity = -1e9;
+  /** Game controller: the sticks and triggers fly and turn like the keys; buttons go to the app. */
+  readonly pad = new GamepadInput();
+  onPadAction?: (a: PadAction) => void;
+  private lastSide = 0;
   private hoverAt = 0;
   private down: { x: number; y: number; t: number } | null = null;
   /** Scene time of this update and of the previous one [M] (the star moves). */
@@ -799,6 +804,9 @@ export class CameraController {
     if (time !== undefined) this.time = time;
     const before = this.poseKey();
     const dragging = this.pointers.size > 0;
+    const pad = this.pad.poll();
+    if (pad?.active) this.activity = performance.now();
+    if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
     // the target must be in the camera's universe; orbiting uses the target's anchor
     const avail = this.availableTargets();
@@ -810,7 +818,8 @@ export class CameraController {
     // flying with the keys (or still gliding): the flight carries the view — no re-anchoring, no
     // aiming — so the camera can go anywhere, e.g. straight through the wormhole
     const flightKeys = [...this.codes].some((c) => (FLIGHT_KEYS[c]?.slice(0, 3) ?? []).some((v) => v !== 0));
-    const flying = !this.gravity && (flightKeys || Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed);
+    const padFlight = !!pad && (pad.move[0] !== 0 || pad.move[1] !== 0 || pad.move[2] !== 0);
+    const flying = !this.gravity && (flightKeys || padFlight || Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed);
     if (this.orbiting && !dragging && !flying) this.ensureAnchor();
 
     // keyboard (held keys): arrows orbit, or turn the camera (free rotation, flight)
@@ -822,6 +831,15 @@ export class CameraController {
       if (this.orbiting) this.orbitBy(-kx * kRate, -ky * kRate);
       else this.rotateView(kx * kRate, ky * kRate, 0);
     }
+    if (pad && (pad.look[0] || pad.look[1])) {
+      // right stick: orbit the target, or turn the camera (free rotation, flight)
+      if (this.orbiting) this.orbitBy(-pad.look[0] * 75 * dt, -pad.look[1] * 75 * dt);
+      else {
+        const k = 110 * dt * Math.min(1, this.s.fov / 60);
+        this.rotateView(pad.look[0] * k, pad.look[1] * k, 0);
+      }
+    }
+    if (pad?.zoom) this.zoomBy(Math.exp(-1.4 * pad.zoom * dt));
     if (this.keys.has("+") || this.keys.has("=")) this.zoomBy(Math.exp(-1.2 * dt));
     if (this.keys.has("-") || this.keys.has("_")) this.zoomBy(Math.exp(1.2 * dt));
     const move: [number, number, number, number] = [0, 0, 0, 0];
@@ -829,7 +847,8 @@ export class CameraController {
       const m = FLIGHT_KEYS[c];
       if (m) for (let i = 0; i < 4; i++) move[i]! += m[i]!;
     }
-    const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight");
+    if (pad) for (let i = 0; i < 4; i++) move[i] = clamp(move[i]! + pad.move[i]!, -1, 1);
+    const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight") || !!pad?.fast;
     const free = this.cinematic !== "dive" && this.cinematic !== "journey";
     if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
     if (move[3] && free) this.rotateView(0, 0, move[3] * 70 * dt);
@@ -850,6 +869,10 @@ export class CameraController {
       else this.flyVel = [0, 0, 0];
     }
     if (tracked) this.written = [s.yaw, s.pitch, s.roll].join();
+    // a rumble when the camera goes through the wormhole's throat
+    const side = s.wormhole && s.anchor === "wormhole" ? Math.sign(s.whL) : 0;
+    if (side && this.lastSide && side !== this.lastSide) this.pad.rumble(0.6, 0.9, 220);
+    this.lastSide = side;
 
     // momentum (exponential damping)
     if (!dragging) {

@@ -883,6 +883,16 @@ export class SettingsPanel {
         ["J · G", "Jet · shadow guide"],
         ["1 – 5", "Quality (5: realtime max)"],
       ]],
+      ["Controller (Xbox · PlayStation)", [
+        ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
+        ["Right stick", "Around: orbit the target · Free: look"],
+        ["RT · LT", "Up · down"],
+        ["LB · RB", "Roll"],
+        ["A", "Fly to the target"],
+        ["B · X · Y", "Gravity · auto-orbit · around ⟷ free"],
+        ["D-pad ◀ ▶ · ▲ ▼", "Previous / next target · closer / farther"],
+        ["R3 · View · Menu", "Recentre · run / pause time · settings"],
+      ]],
       ["Interface", [
         ["M · /", "Settings · search them"],
         ["I", "Details & physical readouts"],
