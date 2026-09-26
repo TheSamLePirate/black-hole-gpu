@@ -307,6 +307,9 @@ async function main() {
   }
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll,
+    select: (b) => {
+      if (camera.selectTarget(b as Target, { focus: false })) panel.toast(`Target: ${BODY_NAMES[settings.target]}`);
+    },
     lookAhead: () => camera.setLook(0, 0),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
@@ -729,6 +732,12 @@ async function main() {
   const BODY_COLOURS: Record<Target, string> = {
     hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255",
     miller: "140, 210, 220", mann: "220, 232, 245", k2: "255, 190, 120", edmunds: "220, 170, 120",
+    sun: "255, 236, 170", mercury: "190, 180, 170", venus: "240, 220, 170", earth: "120, 180, 255", moon: "210, 210, 210",
+    mars: "240, 130, 90", phobos: "170, 150, 130", deimos: "170, 150, 130", ceres: "180, 180, 180", jupiter: "230, 200, 160",
+    io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
+    mimas: "210, 210, 210", enceladus: "240, 245, 255", tethys: "220, 220, 220", dione: "210, 210, 210", rhea: "210, 210, 210",
+    titan: "235, 170, 90", iapetus: "200, 190, 170", uranus: "160, 220, 230", neptune: "110, 150, 255", triton: "220, 210, 220",
+    pluto: "220, 190, 160", charon: "190, 190, 190",
   };
   /**
    * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an

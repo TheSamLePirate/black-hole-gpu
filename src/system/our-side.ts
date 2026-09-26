@@ -10,7 +10,7 @@ import type { Vec3 } from "../physics";
 import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from "../wormhole";
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
-import { mouthAccel, solarState } from "./solar";
+import { mouthAccel, SOLAR_BODIES, solarState } from "./solar";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
 export const OUR_BODIES = GARGANTUA_SYSTEM.bodies
@@ -100,4 +100,23 @@ export function saturnDeparture(t = 0): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec
   const f: Vec3 = [toSat[0] - X[0] / xl, toSat[1] - X[1] / xl, toSat[2] - X[2] / xl];
   const fl = Math.hypot(...f);
   return { X, fwd: [f[0] / fl, f[1] / fl, f[2] / fl], up: [0, 0, 1], vel: st.vel };
+}
+
+/**
+ * The body whose sphere of influence holds a home-frame point (the smallest one: a moon's within its
+ * planet's, a planet's within the Sun's): r_SOI = a (m / M)^0.4 around its primary. The Sun otherwise.
+ */
+export function referenceBody(X: Vec3, t: number): string {
+  let best = "sun", bestR = Infinity;
+  for (const b of SOLAR_BODIES) {
+    if (!b.parent) continue;
+    const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
+    const P = solarState(b.id, t).pos;
+    const Q = solarState(p.id, t).pos;
+    const a = Math.hypot(P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]);
+    const soi = a * (b.mass / p.mass) ** 0.4;
+    const d = Math.hypot(X[0] - P[0], X[1] - P[1], X[2] - P[2]);
+    if (d < soi && soi < bestR) (best = b.id), (bestR = soi);
+  }
+  return best;
 }

@@ -49,6 +49,8 @@ export interface FlightContext {
   tauRate: number;
   /** unit vector away from the hole (local), or null */
   radialOut: V3 | null;
+  /** our universe: the velocity of the body the orbital directions refer to (local), if not at rest */
+  refVel?: V3;
   /** direction of the target (local), or null */
   target: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
@@ -225,9 +227,10 @@ export class FlightComputer {
   /** The orbit's normal (C), or radial in when the nose is on the normal (the hole overhead): where the ship's top goes. */
   private levelUp(c: FlightContext, toC: (v: V3) => V3, Z: V3): V3 | null {
     const R = c.radialOut;
-    const vl = len(c.beta);
+    const vr = c.refVel ? add(c.beta, scale(c.refVel, -1)) : c.beta;
+    const vl = len(vr);
     if (!R || vl < 1e-6) return null;
-    const n = cross(R, scale(c.beta, 1 / vl));
+    const n = cross(R, scale(vr, 1 / vl));
     const nl = len(n);
     if (nl < 1e-3) return null; // moving radially: no orbital plane
     for (const cand of [toC(scale(n, 1 / nl)), toC(scale(R, -1))]) {
@@ -240,7 +243,7 @@ export class FlightComputer {
 
   /** Where an attitude hold points the nose (C), from the orbital directions. */
   private holdDirection(c: FlightContext, toC: (v: V3) => V3): V3 | null {
-    const v = c.beta;
+    const v = c.refVel ? add(c.beta, scale(c.refVel, -1)) : c.beta;
     const vl = len(v);
     const pro = vl > 1e-6 ? scale(v, 1 / vl) : null;
     const R = c.radialOut;

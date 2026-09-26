@@ -4,7 +4,17 @@ export type Rotation = "orbit" | "free";
 /** Bodies of the registered Gargantua system that can be targeted (src/system/bodies.ts). */
 export type SystemBody = "miller" | "mann" | "k2" | "edmunds";
 export const SYSTEM_BODIES: SystemBody[] = ["miller", "mann", "k2", "edmunds"];
-export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody;
+/** our universe's bodies: the solar system (system/solar.ts) */
+export type OurBody =
+  | "sun" | "mercury" | "venus" | "earth" | "moon" | "mars" | "phobos" | "deimos" | "ceres" | "jupiter" | "io" | "europa"
+  | "ganymede" | "callisto" | "saturn" | "mimas" | "enceladus" | "tethys" | "dione" | "rhea" | "titan" | "iapetus"
+  | "uranus" | "neptune" | "triton" | "pluto" | "charon";
+export const OUR_TARGETS: OurBody[] = [
+  "sun", "mercury", "venus", "earth", "moon", "mars", "phobos", "deimos", "ceres", "jupiter", "io", "europa", "ganymede",
+  "callisto", "saturn", "mimas", "enceladus", "tethys", "dione", "rhea", "titan", "iapetus", "uranus", "neptune", "triton",
+  "pluto", "charon",
+];
+export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody;
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";

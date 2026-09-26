@@ -10,7 +10,9 @@
 import type { CameraFrame } from "./camera";
 import { blToCartesian } from "./camera";
 import { horizon, isco, rk4, stepSize, zamo, type State, type Vec3 } from "./physics";
-import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
+import { OUR_TARGETS, SYSTEM_BODIES, type OurBody, type Settings, type SystemBody, type Target } from "./settings";
+import { homeOf, homeToRep, ourState } from "./system/our-side";
+import { solarBody, SOLAR_BODIES } from "./system/solar";
 import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
@@ -21,16 +23,22 @@ export type Body = Target;
 export const BODY_NAMES: Record<Body, string> = {
   hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass",
   miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds",
+  ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
 };
 
 const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
+/** A body of our universe (the solar system, beyond our end of the wormhole) */
+export const isOurBody = (b: Body): b is OurBody => (OUR_TARGETS as string[]).includes(b);
+/** In the black hole's frame, a body of our universe is reached through the mouth: the mouth stands for it */
+const holeProxy = (b: Body): Body => (isOurBody(b) ? "wormhole" : b);
 /** A body of the scene's registered system (null: not one, or no system in the scene). */
 function systemBody(s: Settings, b: Body) {
   return s.system === "gargantua" && isSystem(b) ? sysBody(GARGANTUA_SYSTEM, b) : null;
 }
 
 /** Velocity of a body's centre (coordinate velocity in the hole's frame). */
-export function bodyVelocity(s: Settings, b: Body, t: number): Vec3 {
+export function bodyVelocity(s: Settings, b0: Body, t: number): Vec3 {
+  const b = holeProxy(b0);
   if (b === "star") return starVelocity(s, t);
   if (b === "barycentre") return barycentreVelocity(s, t);
   if (b === "wormhole") return s.wormhole ? mouth(s, t).V : [0, 0, 0];
@@ -41,6 +49,7 @@ export function bodyVelocity(s: Settings, b: Body, t: number): Vec3 {
 /** Mass (GM, in M) of a body's own field felt by a ship (0: none; the mouth's does not attract). */
 export function bodyMass(s: Settings, b: Body) {
   if (b === "star") return s.sun ? s.sunMass : 0;
+  if (isOurBody(b)) return 0;
   return systemBody(s, b)?.mass ?? 0;
 }
 
@@ -152,7 +161,8 @@ export function starForce(s: Settings, r: number, th: number, ph: number, t: num
 }
 
 /** Centre of a body at time t (the hole: the origin). */
-export function bodyCentre(s: Settings, body: Body, t: number): Vec3 {
+export function bodyCentre(s: Settings, body0: Body, t: number): Vec3 {
+  const body = holeProxy(body0);
   if (body === "star") return starCentre(s, t);
   if (body === "barycentre") return barycentre(s, t);
   if (body === "wormhole") return mouth(s, t).C;
@@ -165,6 +175,7 @@ export function bodyRadius(s: Settings, body: Body) {
   if (body === "star") return s.sunRadius;
   if (body === "barycentre") return 1;
   if (body === "wormhole") return mouth(s).w.rho;
+  if (isOurBody(body)) return solarBody(body)!.radius;
   const sb = systemBody(s, body);
   if (sb) return sb.radius;
   return horizon(s.spin);
@@ -176,15 +187,46 @@ export function angularRadius(s: Settings, body: Body, d: number) {
   return Math.asin(Math.min(1, R / Math.max(d, 1e-6)));
 }
 
-/** Bodies in the camera's universe: through the wormhole (our side) only the wormhole itself. */
+/**
+ * Bodies that can be targeted: those of the camera's universe first, then, with a system scene,
+ * those beyond the wormhole (reached through it: the mouth stands for them until the ship is there).
+ */
 export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
-  if (s.wormhole && cam.region === "throat" && cam.ell < 0) return ["wormhole"];
+  const ours = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS] : [];
+  if (onOurSide(s, cam)) return ["wormhole", ...ours, ...(s.system === "gargantua" ? (["hole", ...SYSTEM_BODIES] as Body[]) : [])];
   const list: Body[] = ["hole"];
   if (s.sun) list.push("star");
   if (baryFraction(s) > 0) list.push("barycentre");
   if (s.wormhole) list.push("wormhole");
   if (s.system === "gargantua") list.push(...SYSTEM_BODIES);
-  return list;
+  return [...list, ...ours];
+}
+
+/** The camera is in our universe, beyond our end of the wormhole. */
+export const onOurSide = (s: Settings, cam: CameraFrame) => s.wormhole && cam.region === "throat" && cam.ell < 0;
+
+/**
+ * A target seen from our universe, home frame (our mouth at the origin): the solar system's bodies
+ * where they are; the mouth — and everything beyond it — at the origin.
+ */
+export function ourTarget(s: Settings, b: Body, t: number): { pos: Vec3; vel: Vec3; radius: number; mass: number } {
+  if (isOurBody(b)) {
+    const st = ourState(b, t);
+    const sb = solarBody(b)!;
+    return { pos: st.pos, vel: st.vel, radius: sb.radius, mass: sb.mass };
+  }
+  return { pos: [0, 0, 0], vel: [0, 0, 0], radius: mouth(s).w.rho, mass: 0 };
+}
+
+/** The camera's place in the home frame (our side only). */
+export function cameraHome(s: Settings, cam: CameraFrame): Vec3 {
+  return homeOf(mouth(s).w, cam.ell, cam.n);
+}
+
+/** A home-frame direction as the camera sees it (rep vector at the camera, aberrated by its motion). */
+export function ourLook(s: Settings, cam: CameraFrame, d: Vec3): Vec3 {
+  const w = mouth(s).w;
+  return aberrateRep(norm(homeToRep(w, cam.ell, cam.n, d)), cam.beta);
 }
 
 /** Camera position in the black hole's Cartesian frame (null on our side of the wormhole). */
@@ -197,7 +239,7 @@ export function cameraPosition(s: Settings, cam: CameraFrame): Vec3 | null {
 
 /** Straight-line distance from the camera to a body's centre (∞ from our side, except the wormhole). */
 export function bodyDistance(s: Settings, cam: CameraFrame, body: Body, t: number) {
-  if (cam.region === "throat" && cam.ell < 0) return body === "wormhole" ? Math.abs(cam.ell) : Infinity;
+  if (onOurSide(s, cam)) return Math.hypot(...sub(ourTarget(s, body, t).pos, cameraHome(s, cam)));
   const X = cameraPosition(s, cam)!;
   return Math.hypot(...sub(bodyCentre(s, body, t), X));
 }
@@ -344,6 +386,19 @@ export function pixelLook(cam: CameraFrame, ndcX: number, ndcY: number, fovDeg: 
  * wormhole's gluing sphere the ray is first followed through the Dneg metric.
  */
 export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): Body | null {
+  // our universe: the body whose disc (or, small, a few pixels around it) holds the look
+  if (onOurSide(s, cam)) {
+    const X = cameraHome(s, cam);
+    let best: Body | null = null, bestOff = Infinity;
+    for (const b of ["wormhole", ...OUR_TARGETS] as Body[]) {
+      const T = ourTarget(s, b, time);
+      const d = sub(T.pos, X);
+      const D = Math.hypot(...d);
+      const off = Math.acos(Math.min(1, dot(ourLook(s, cam, d), norm(look)))) - Math.asin(Math.min(1, T.radius / D));
+      if (off < bestOff) (bestOff = off), (best = b);
+    }
+    return bestOff < 0.02 ? best : null;
+  }
   if (cam.region === "hole") {
     const ray = cameraRay(cam, look);
     return ray ? pickKerr(s, ray.state, ray.L, time) : null;
@@ -455,7 +510,13 @@ export function apparentDirection(
  * Where a body appears (camera components): its centre's image for the star and the mouth, the
  * direction of the hole's centre (aberrated) for the hole. `guess`: the previous answer (warm start).
  */
-export function bodyLook(s: Settings, cam: CameraFrame, body: Body, time: number, guess?: Vec3 | null): { look: Vec3; lensed: boolean } {
+export function bodyLook(s: Settings, cam: CameraFrame, body0: Body, time: number, guess?: Vec3 | null): { look: Vec3; lensed: boolean } {
+  // our universe: straight lines (its bodies, or the mouth for everything beyond it)
+  if (onOurSide(s, cam)) {
+    const d = sub(ourTarget(s, body0, time).pos, cameraHome(s, cam));
+    return { look: ourLook(s, cam, d), lensed: false };
+  }
+  const body = holeProxy(body0);
   if (cam.region === "throat") {
     if (body === "wormhole") return { look: cam.ell < 0 ? norm(cam.n) : norm(cam.n).map((v) => -v) as Vec3, lensed: false };
     return { look: geometricLook(s, cam, bodyCentre(s, body, time)), lensed: false };
@@ -582,4 +643,15 @@ export function offsetFrom(aim: ReturnType<typeof aimFrame>, fwd: Vec3, up: Vec3
 export function composeOffset(aim: ReturnType<typeof aimFrame>, q: Quat) {
   const back = (c: Vec3): Vec3 => lin(lin(aim.F, -c[0], aim.U, -c[1]), 1, aim.R, c[2]);
   return { fwd: back(quatRotate(q, [-1, 0, 0])), up: back(quatRotate(q, [0, -1, 0])) };
+}
+
+/** A direction seen from a camera moving at β (rep components): aberration towards the motion. */
+function aberrateRep(n: Vec3, b: Vec3): Vec3 {
+  const b2 = dot(b, b);
+  if (b2 < 1e-16) return n;
+  const g = 1 / Math.sqrt(1 - b2);
+  const bl = Math.sqrt(b2);
+  const bn = dot(n, b) / bl;
+  const w: Vec3 = [0, 1, 2].map((i) => n[i]! + b[i]! * (g + ((g - 1) * bn) / bl)) as Vec3;
+  return norm(w);
 }

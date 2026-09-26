@@ -1,4 +1,5 @@
-import type { Settings } from "../settings";
+import { OUR_TARGETS, type Settings } from "../settings";
+import { SOLAR_BODIES } from "../system/solar";
 import { MOUNTS } from "../mounts";
 
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
@@ -117,16 +118,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "orbit around free look rotate turntable trackball pivot focus",
   },
   {
-    key: "target", type: "choice", section: "scene", group: "Camera rotation", label: "Target", style: "segmented", effect: "none",
+    key: "target", type: "choice", section: "scene", group: "Camera rotation", label: "Target", style: "select", effect: "none",
     options: [
       { value: "hole", label: "Gargantua", hint: "The black hole" },
       { value: "star", label: "Star", hint: "The companion star: the camera rides with it (co-moving) while time runs" },
-      { value: "wormhole", label: "Wormhole", hint: "The wormhole's mouth (the only body from our side of it)" },
+      { value: "wormhole", label: "Wormhole", hint: "The wormhole's mouth (from the other side, it stands for every body beyond it)" },
       { value: "barycentre", label: "Centre of mass", hint: "Gargantua and the star orbit it (when the star has a mass): the camera stays at rest in its frame" },
       { value: "miller", label: "Miller", hint: "Gargantua system: the ocean planet at r = 10 M" },
       { value: "mann", label: "Mann", hint: "Gargantua system: the ice planet at r = 40 M" },
       { value: "k2", label: "Edmunds' star", hint: "Gargantua system: the K2 dwarf at 2 000 AU" },
       { value: "edmunds", label: "Edmunds", hint: "Gargantua system: the rocky planet around the K2 star" },
+      ...OUR_TARGETS.map((id) => ({ value: id, label: SOLAR_BODIES.find((b) => b.id === id)!.name, hint: "Our universe (the solar system, beyond our end of the wormhole)" })),
     ],
     help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
     keywords: "select body pivot focus star hole wormhole follow",

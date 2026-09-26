@@ -16,7 +16,7 @@
 //
 // N cycles the density: full · minimal (tapes, cockpit, mission bar) · clean (markers only).
 
-import type { Settings } from "../settings";
+import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
@@ -27,6 +27,17 @@ import { rapidityCost } from "../engine";
 import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
+import { SOLAR_BODIES, solarState } from "../system/solar";
+
+/** our universe's bodies on the map */
+const OUR_COLOURS: Record<string, string> = {
+  sun: "255, 236, 170", mercury: "190, 180, 170", venus: "240, 220, 170", earth: "120, 180, 255", moon: "210, 210, 210",
+  mars: "240, 130, 90", phobos: "170, 150, 130", deimos: "170, 150, 130", ceres: "180, 180, 180", jupiter: "230, 200, 160",
+  io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
+  mimas: "210, 210, 210", enceladus: "240, 245, 255", tethys: "220, 220, 220", dione: "210, 210, 210", rhea: "210, 210, 210",
+  titan: "235, 170, 90", iapetus: "200, 190, 170", uranus: "160, 220, 230", neptune: "110, 150, 255", triton: "220, 210, 220",
+  pluto: "220, 190, 160", charon: "190, 190, 190",
+};
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null };
@@ -77,6 +88,8 @@ export interface FlightHudActions {
   mount(m: Mount): void;
   lookAhead(): void;
   throttle(t: number): void;
+  /** a body clicked on the map: make it the target */
+  select(body: string): void;
 }
 
 interface Sample { w: number; speed: number; r: number; dtau: number; g: number }
@@ -112,6 +125,13 @@ export class FlightHud {
   private extent = 40;
   private centre: [number, number] = [0, 0];
   private zoom = 1;
+  /** the map's pan (map units, added to its centre), its bodies' places (pixels) for clicks, the
+   *  body our side's map is centred on (null: the ship's reference body) */
+  private pan: [number, number] = [0, 0];
+  private mapHits: { id: string; x: number; y: number }[] = [];
+  private mapK = 1;
+  private mapFocus: string | null = null;
+  private ourOrbits: { at: number; key: string; lines: Map<string, V3[]> } | null = null;
   private view: "top" | "side" = "top";
   /** multi-scale map: radius ∝ ln(1 + r/M) (angles kept) — null: automatic (on in a system) */
   private logMap: boolean | null = null;
@@ -264,13 +284,55 @@ export class FlightHud {
       tog("hole", "Hole", "Gargantua's frame (fixed at the centre)", () => (this.frame = "hole")),
       tog("log", "Log", "Multi-scale map: distance from the centre as ln(1 + r/M), directions kept — Miller at 10 M and Edmunds at 2 000 M on the same map", () => (this.logMap = !this.isLog())),
     );
-    this.map.title = "Wheel: zoom · double-click: fit";
+    this.map.title = "Click a body: target it · drag: pan · wheel: zoom · double-click: fit";
     this.map.addEventListener("wheel", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.zoom = Math.min(20, Math.max(0.03, this.zoom * Math.exp(e.deltaY * 0.0015)));
+      // (zoom about the cursor: the point under it stays)
+      const f = Math.exp(e.deltaY * 0.0015);
+      const z = Math.min(40, Math.max(0.002, this.zoom * f));
+      const r = this.map.getBoundingClientRect();
+      const dx = ((e.clientX - r.left) * devicePixelRatio - this.map.width / 2) / this.mapK;
+      const dy = -((e.clientY - r.top) * devicePixelRatio - this.map.height / 2) / this.mapK;
+      const g = z / this.zoom;
+      this.pan = [this.pan[0] + dx * (1 - g), this.pan[1] + dy * (1 - g)];
+      this.zoom = z;
     }, { passive: false });
-    this.map.addEventListener("dblclick", () => (this.zoom = 1));
+    let drag: { x: number; y: number; moved: boolean; pan: [number, number] } | null = null;
+    this.map.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      this.map.setPointerCapture(e.pointerId);
+      drag = { x: e.clientX, y: e.clientY, moved: false, pan: [...this.pan] };
+    });
+    this.map.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.hypot(dx, dy) > 3) drag.moved = true;
+      if (drag.moved) this.pan = [drag.pan[0] - (dx * devicePixelRatio) / this.mapK, drag.pan[1] + (dy * devicePixelRatio) / this.mapK];
+    });
+    this.map.addEventListener("pointerup", (e) => {
+      if (drag && !drag.moved) {
+        // a click: the nearest body within 18 px
+        const r = this.map.getBoundingClientRect();
+        const x = (e.clientX - r.left) * devicePixelRatio, y = (e.clientY - r.top) * devicePixelRatio;
+        let best: string | null = null, bd = 18 * devicePixelRatio;
+        for (const q of this.mapHits) {
+          const d = Math.hypot(q.x - x, q.y - y);
+          if (d < bd) (bd = d), (best = q.id);
+        }
+        if (best) {
+          this.act.select(best);
+          this.mapFocus = best;
+          this.pan = [0, 0];
+        }
+      }
+      drag = null;
+    });
+    this.map.addEventListener("dblclick", () => {
+      this.zoom = 1;
+      this.pan = [0, 0];
+      this.mapFocus = null;
+    });
     this.right.append(cams, bar, this.map);
 
     this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right);
@@ -586,16 +648,27 @@ export class FlightHud {
     this.target.classList.toggle("empty", !hasTarget);
     T.name!.textContent = `${BODY_NAMES[i.target]}`;
     T.dist!.textContent = Number.isFinite(i.targetDist) ? fmtLen(i.targetDist, this.s) : "—";
-    T.rate!.textContent = Number.isFinite(i.targetRate) ? `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${Math.abs(i.targetRate).toFixed(3)} c` : "—";
+    // (our universe: solar-system speeds, in km/s)
+    const kms = (v: number) => (Math.abs(v) * 299792.458 >= 100 ? (Math.abs(v) * 299792.458).toFixed(0) : (Math.abs(v) * 299792.458).toFixed(2));
+    T.rate!.textContent = !Number.isFinite(i.targetRate) ? "—" : i.ref ? `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${kms(i.targetRate)} km/s` : `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${Math.abs(i.targetRate).toFixed(3)} c`;
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
-    const ca = this.closestApproach(i, time);
+    const ca = i.ref ? i.ourCa : this.closestApproach(i, time);
     T.ca!.textContent = ca ? `${fmtLen(ca.d, this.s)} · ${ca.t > 0 ? `T−${fmtShort(Math.round(ca.t))}` : "now"}` : "—";
     // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
     // temperature, from the planet's light probe
-    const pr = i.probe;
+    const pr = i.ref ? null : i.probe;
     // in a planet's frame: the landing figures (ground-relative)
     const sf = i.surface;
     for (const k of ["alt", "vv", "vh", "twr"]) T[k]!.parentElement!.hidden = !sf;
+    // our universe: the altitude above the body of the sphere of influence, and the radial speed
+    if (i.ref && Number.isFinite(i.ourAlt)) {
+      T.alt!.parentElement!.hidden = false;
+      T.vv!.parentElement!.hidden = false;
+      const km = i.ourAlt * 1.476625e8;
+      T.alt!.textContent = `${km >= 1e6 ? `${(km / 1.495978707e8).toFixed(3)} AU` : `${km.toFixed(km >= 1e4 ? 0 : 1)} km`} · ${BODY_NAMES[i.ref as Target] ?? i.ref}`;
+      T.vv!.textContent = `${i.ourVr >= 0 ? "▲" : "▼"} ${kms(i.ourVr)} km/s`;
+      T.vv!.className = "";
+    }
     if (sf) {
       const m = (x: number) => (Math.abs(x) >= 1e4 ? `${(x / 1000).toFixed(Math.abs(x) >= 1e5 ? 0 : 1)} km` : `${x.toFixed(Math.abs(x) >= 100 ? 0 : 1)} m`);
       T.alt!.textContent = sf.landed ? `landed on ${BODY_NAMES[sf.body]}` : `${m(sf.alt)}${sf.air > 1e-6 ? ` · air ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
@@ -605,7 +678,17 @@ export class FlightHud {
       T.twr!.textContent = `${sf.twr.toFixed(2)} · local ${sf.gLocal.toFixed(2)} g`;
       T.twr!.className = sf.twr < 1 ? "closing" : "";
     }
-    T.light!.parentElement!.hidden = !pr;
+    T.light!.parentElement!.hidden = !pr && !i.ref;
+    // our universe: the Sun's light where the ship is (T_eq of an Earth-like planet, albedo 0.3)
+    if (i.ref && i.X) {
+      const S = solarState("sun", time).pos;
+      const au = (Math.hypot(i.X[0] - S[0], i.X[1] - S[1], i.X[2] - S[2]) * 1.476625e11) / 1.495978707e11;
+      const e = EARTH_IRRADIANCE / (au * au);
+      const txt = e >= 1e3 ? `${(e / 1e3).toFixed(1)} kW/m²` : `${e.toFixed(e >= 10 ? 0 : 1)} W/m²`;
+      const teq = 254.6 / Math.sqrt(au);
+      T.light!.textContent = `${txt} (${(1 / (au * au)).toPrecision(2)} ⊕) · T_eq ${Math.round(teq)} K`;
+      T.light!.className = teq > 330 || teq < 200 ? "closing" : "";
+    }
     if (pr) {
       const e = pr.eBol;
       const txt = e >= 1e6 ? `${(e / 1e6).toFixed(1)} MW/m²` : e >= 1e3 ? `${(e / 1e3).toFixed(1)} kW/m²` : `${e.toFixed(0)} W/m²`;
@@ -797,6 +880,13 @@ export class FlightHud {
         ctx.lineTo(x0 + wdt + 3 * dpr, cy - Math.max(-hgt / 2, Math.min(hgt / 2, trend * k)));
         ctx.stroke();
       }
+    }
+    // (our universe: km/s relative to the body of the sphere of influence)
+    if (i.ref) {
+      const v = i.speed * 299792.458;
+      valueBox(ctx, x0 + wdt + 8 * dpr, cy, v >= 1000 ? v.toFixed(0) : v.toFixed(2), "km/s", `${i.speed.toExponential(2)} c`, "left", dpr);
+      label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}`, dpr);
+      return;
     }
     valueBox(ctx, x0 + wdt + 8 * dpr, cy, `${i.speed.toFixed(4)}`, "c", `γ ${i.gamma.toFixed(3)}`, "left", dpr);
     label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", "rel. ZAMO", dpr);
@@ -1222,6 +1312,149 @@ export class FlightHud {
     return this.logMap ?? this.s.system !== "none";
   }
 
+  /**
+   * Our universe's map: the solar system around a body (the ship's reference body, or one clicked),
+   * multi-scale — distance from it as ln(1 + r / r₀), r₀ five of its radii, directions kept — so the
+   * Moon around the Earth and Neptune show on the same map. Orbits (a turn), bodies, the ship, our
+   * mouth of the wormhole; the target ringed.
+   */
+  private drawOurMap(i: Info, t0: number, ctx: CanvasRenderingContext2D, cw: number, ch: number) {
+    const dpr = devicePixelRatio;
+    const focus = this.mapFocus && SOLAR_BODIES.some((b) => b.id === this.mapFocus) ? this.mapFocus : i.ref!;
+    const F = solarState(focus, t0).pos;
+    const r0 = 5 * (SOLAR_BODIES.find((b) => b.id === focus)?.radius ?? 1e-4);
+    const side = this.view === "side";
+    const pr = (X: V3): [number, number] => {
+      const d: V3 = sub(X, F);
+      const q: [number, number] = side ? [d[0], d[2]] : [d[0], d[1]];
+      const R = Math.hypot(...d);
+      const Q = Math.hypot(q[0], q[1]);
+      return Q < 1e-30 ? [0, 0] : [(q[0] * Math.log1p(R / r0)) / Q * (Q / R), (q[1] * Math.log1p(R / r0)) / Q * (Q / R)];
+    };
+    const ship = pr(i.X!);
+    const want = Math.max(Math.hypot(...ship) * 1.25, 3) * this.zoom;
+    this.extent += (want - this.extent) * 0.15;
+    const k = (Math.min(cw, ch) / 2 - 8 * dpr) / this.extent;
+    this.mapK = k;
+    const P = (X: V3): [number, number] => {
+      const q = pr(X);
+      return [cw / 2 + (q[0] - this.pan[0]) * k, ch / 2 - (q[1] - this.pan[1]) * k];
+    };
+    // rings: the log scale's decades (10 r₀, 100 r₀, …)
+    ctx.strokeStyle = "rgba(124, 214, 255, 0.07)";
+    ctx.lineWidth = 1 * dpr;
+    const [ox, oy] = P(F);
+    for (let j = 1; j <= 6; j++) {
+      ctx.beginPath();
+      ctx.arc(ox, oy, Math.log1p(10 ** j) * k, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    // orbits: a turn of each body around its primary (recomputed every 2 s)
+    const key = `${focus}`;
+    if (!this.ourOrbits || this.ourOrbits.key !== key || Math.abs(t0 - this.ourOrbits.at) > 4000 || performance.now() % 2000 < 20) {
+      const lines = new Map<string, V3[]>();
+      for (const b of SOLAR_BODIES) {
+        if (!b.parent) continue;
+        const days = b.circle ? Math.abs(b.circle.period) : b.id === "moon" ? 27.32 : 365.25 * b.elements![0]![0]! ** 1.5;
+        const T = (days * 86400) / 492.5490947;
+        const pts: V3[] = [];
+        for (let j = 0; j <= 96; j++) {
+          const t = t0 + (T * j) / 96;
+          // (around its primary, drawn where the primary is now)
+          const p = solarState(b.id, t).pos, q = solarState(b.parent, t).pos, q0 = solarState(b.parent, t0).pos;
+          pts.push([p[0] - q[0] + q0[0], p[1] - q[1] + q0[1], p[2] - q[2] + q0[2]]);
+        }
+        lines.set(b.id, pts);
+      }
+      this.ourOrbits = { at: t0, key, lines };
+    }
+    for (const [id, pts] of this.ourOrbits.lines) {
+      const b = SOLAR_BODIES.find((q) => q.id === id)!;
+      const moon = b.parent !== "sun";
+      // (a moon's orbit only when its planet is near the focus: spread on the map)
+      const pp = P(solarState(b.parent!, t0).pos), pb = P(pts[0]!);
+      if (moon && Math.hypot(pp[0] - pb[0], pp[1] - pb[1]) < 10 * dpr) continue;
+      ctx.beginPath();
+      pts.forEach((X, j) => (j ? ctx.lineTo(...P(X)) : ctx.moveTo(...P(X))));
+      ctx.strokeStyle = `rgba(${OUR_COLOURS[id] ?? "200,200,200"}, ${moon ? 0.22 : 0.3})`;
+      ctx.lineWidth = 1 * dpr;
+      ctx.stroke();
+    }
+    // bodies (a moon labelled only when spread from its planet)
+    ctx.textAlign = "left";
+    for (const b of SOLAR_BODIES) {
+      const X = solarState(b.id, t0).pos;
+      const [x, y] = P(X);
+      if (x < -20 || y < -20 || x > cw + 20 || y > ch + 20) continue;
+      const moon = b.parent && b.parent !== "sun";
+      if (moon) {
+        const [px, py] = P(solarState(b.parent!, t0).pos);
+        if (Math.hypot(px - x, py - y) < 6 * dpr && b.id !== i.target && b.id !== focus) continue;
+      }
+      this.mapHits.push({ id: b.id, x, y });
+      const col = OUR_COLOURS[b.id] ?? "200, 200, 200";
+      ctx.beginPath();
+      ctx.arc(x, y, (b.kind === "star" ? 5 : moon ? 2 : 3.2) * dpr, 0, 2 * Math.PI);
+      ctx.fillStyle = `rgba(${col}, 0.95)`;
+      ctx.fill();
+      if (i.target === b.id) {
+        ctx.beginPath();
+        ctx.arc(x, y, 7 * dpr, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(255, 138, 92, 0.95)";
+        ctx.lineWidth = 1.4 * dpr;
+        ctx.stroke();
+      }
+      ctx.fillStyle = `rgba(${col}, ${moon ? 0.7 : 0.85})`;
+      ctx.font = `${moon ? 500 : 600} ${(moon ? 8.5 : 9.5) * dpr}px ${FONT}`;
+      ctx.fillText(b.name, x + 5 * dpr, y - 4 * dpr);
+    }
+    // our mouth of the wormhole
+    {
+      const [x, y] = P([0, 0, 0]);
+      this.mapHits.push({ id: "wormhole", x, y });
+      ctx.beginPath();
+      ctx.arc(x, y, 4 * dpr, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(200, 140, 255, 0.95)";
+      ctx.lineWidth = 1.4 * dpr;
+      ctx.stroke();
+      if (i.target === "wormhole" || !OUR_COLOURS[i.target]) {
+        ctx.beginPath();
+        ctx.arc(x, y, 8 * dpr, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(255, 138, 92, 0.95)";
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(200, 140, 255, 0.85)";
+      ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
+      ctx.fillText("Wormhole", x + 6 * dpr, y - 5 * dpr);
+    }
+    // the ship, its velocity relative to its reference body
+    {
+      const [x, y] = P(i.X!);
+      ctx.fillStyle = "rgba(124, 214, 255, 1)";
+      ctx.beginPath();
+      ctx.arc(x, y, 3 * dpr, 0, 2 * Math.PI);
+      ctx.fill();
+      const ref = solarState(i.ref!, t0);
+      const v = sub(i.V!, ref.vel);
+      const vl = Math.hypot(...v);
+      if (vl > 0) {
+        const D = Math.hypot(...sub(i.X!, F)) || r0;
+        const [x2, y2] = P([i.X![0] + (v[0] / vl) * D * 0.05, i.X![1] + (v[1] / vl) * D * 0.05, i.X![2] + (v[2] / vl) * D * 0.05]);
+        const l = Math.hypot(x2 - x, y2 - y) || 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + ((x2 - x) / l) * 16 * dpr, y + ((y2 - y) / l) * 16 * dpr);
+        ctx.strokeStyle = "rgba(124, 214, 255, 0.9)";
+        ctx.lineWidth = 1.4 * dpr;
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = "rgba(220, 225, 235, 0.6)";
+    ctx.textAlign = "left";
+    ctx.font = `${9 * dpr}px ${FONT}`;
+    ctx.fillText(`Our universe · around ${SOLAR_BODIES.find((b) => b.id === focus)?.name} · log scale`, 8 * dpr, ch - 8 * dpr);
+  }
+
   private drawMap(i: Info, t0: number) {
     const c = this.map;
     const dpr = devicePixelRatio;
@@ -1232,6 +1465,8 @@ export class FlightHud {
     ctx.clearRect(0, 0, cw, ch);
     const s = this.s;
     ctx.font = `${10 * dpr}px ${FONT}`;
+    this.mapHits = [];
+    if (i.ref && i.X) return this.drawOurMap(i, t0, ctx, cw, ch);
     if (i.region !== "hole" || !i.X) {
       ctx.fillStyle = "rgba(220, 225, 235, 0.8)";
       ctx.textAlign = "center";
@@ -1280,10 +1515,18 @@ export class FlightHud {
     this.centre[0] += (cen[0] - this.centre[0]) * 0.1;
     this.centre[1] += (cen[1] - this.centre[1]) * 0.1;
     const k = (cw / 2 - 8 * dpr) / this.extent;
+    this.mapK = k;
     const P = (X: V3): [number, number] => {
       const q = pr(X);
-      return [cw / 2 + (q[0] - this.centre[0]) * k, ch / 2 - (q[1] - this.centre[1]) * k];
+      return [cw / 2 + (q[0] - this.centre[0] - this.pan[0]) * k, ch / 2 - (q[1] - this.centre[1] - this.pan[1]) * k];
     };
+    const hit = (id: string, X: V3) => {
+      const [x, y] = P(X);
+      this.mapHits.push({ id, x, y });
+    };
+    hit("hole", at([0, 0, 0], t0));
+    if (s.sun) hit("star", at(starCentre(s, t0), t0));
+    if (s.wormhole) hit("wormhole", at(mouth(s).C as V3, t0));
     // radar grid: rings around the centre of the view
     ctx.strokeStyle = "rgba(124, 214, 255, 0.07)";
     ctx.lineWidth = 1 * dpr;
@@ -1406,6 +1649,7 @@ export class FlightHud {
         const col = b.kind === "star" ? "255, 190, 120" : b.id === "miller" ? "120, 210, 225" : b.id === "mann" ? "215, 228, 245" : "220, 170, 120";
         if (turn > 0 && b.parent === "gargantua") poly(span(pos, t0, t0 + turn, 160), `rgba(${col}, 0.28)`, 1);
         const [x, y] = P(at(pos(t0), t0));
+        this.mapHits.push({ id: b.id, x, y });
         ctx.beginPath();
         ctx.arc(x, y, (b.kind === "star" ? 4 : 3) * dpr, 0, 2 * Math.PI);
         ctx.fillStyle = `rgba(${col}, 0.95)`;

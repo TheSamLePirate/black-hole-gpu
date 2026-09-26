@@ -7,6 +7,7 @@ import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
+  cameraHome, onOurSide, ourLook, ourTarget,
 } from "./targeting";
 import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
@@ -19,7 +20,7 @@ import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOff
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
-import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, repToHomeVec } from "./system/our-side";
+import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec } from "./system/our-side";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -723,6 +724,13 @@ export class CameraController {
       s.motion = "geodesic";
       s.velR = s.velT = s.velP = 0;
       this.properTime = 0;
+      // our universe: at rest means moving with the body of the sphere of influence
+      const cam = cameraFrame(s);
+      const nav = this.ourNav(cam);
+      if (nav) {
+        const p = repPose(s);
+        setRepPose(s, { ...p, vel: nav.refVelRep });
+      }
     } else if (s.motion === "geodesic") {
       s.motion = "static";
       s.velR = s.velT = s.velP = 0;
@@ -1501,7 +1509,7 @@ export class CameraController {
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
     const out = this.pilot.step({
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
-      radialOut: this.radialOut(cam), target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
+      radialOut: this.radialOut(cam), refVel: this.ourNav(cam)?.refVelRep, target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
       // ship turns within it — the wall-clock turn rates are for the eye, not for days-long burns)
@@ -1883,16 +1891,38 @@ export class CameraController {
     return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0, far: start > 60 };
   }
 
+  /**
+   * Our universe: the ship in the home frame, and the body its orbital directions refer to (the
+   * smallest sphere of influence it is in): place, velocity, and those as local (rep) vectors.
+   */
+  private ourNav(cam: ReturnType<typeof cameraFrame>) {
+    const s = this.s;
+    if (!onOurSide(s, cam) || s.system !== "gargantua") return null;
+    const t = this.nowTime();
+    const w = mouth(s).w;
+    const X = homeOf(w, cam.ell, cam.n);
+    const V = repToHomeVec(w, cam.ell, cam.n, cam.beta);
+    const ref = referenceBody(X, t);
+    const st = ourState(ref, t);
+    const R = sub3(X, st.pos);
+    const toRep = (v: Vec3) => homeToRep(w, cam.ell, cam.n, v);
+    const Rr = toRep(R);
+    return { X, V, ref, refPos: st.pos, refVel: st.vel, refVelRep: toRep(st.vel), radial: lin(Rr, 1 / Math.hypot(...Rr), Rr, 0), toRep, t };
+  }
+
   private radialOut(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
     if (cam.region === "hole") return [1, 0, 0];
+    const nav = this.ourNav(cam);
+    if (nav) return nav.radial;
     // in the throat region: away from the throat (increasing |ℓ|)
     return lin(cam.n, Math.sign(cam.ell) || 1, cam.n, 0);
   }
 
   /** Direction of the selected target, local components (the flat map's straight line). */
   private targetDir(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
-    if (cam.region !== "hole") return null;
     const s = this.s;
+    if (onOurSide(s, cam)) return ourLook(s, cam, sub3(ourTarget(s, s.target, this.nowTime()).pos, cameraHome(s, cam)));
+    if (cam.region !== "hole") return null;
     const X = blToCartesian(cam.r, cam.theta, cam.phi);
     const f = sphericalFrame(X);
     // where the body is seen: its position when the light left it (retarded time, flat estimate)
@@ -2686,6 +2716,11 @@ export class CameraController {
       target: s.target,
       targetDist: NaN,
       targetRate: NaN,
+      /** our universe: the body of the sphere of influence, the altitude above it [M] and the radial speed */
+      ref: null as string | null,
+      ourAlt: NaN,
+      ourVr: NaN,
+      ourCa: null as { d: number; t: number } | null,
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
@@ -2714,6 +2749,49 @@ export class CameraController {
         info.dirs.tgtPrograde = C(loc);
         info.dirs.tgtRetrograde = C(lin(loc, -1, loc, 0));
       }
+    }
+    // our universe: orbital directions and speed relative to the body of the sphere of influence we
+    // are in; the target in the home frame
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const rel = sub3(nav.V, nav.refVel);
+      const rl = Math.hypot(...rel);
+      info.speed = rl;
+      info.ref = nav.ref;
+      const pr = rl > 1e-12 ? nav.toRep(rel) : null;
+      const p = pr && lin(pr, 1 / Math.hypot(...pr), pr, 0);
+      const R = nav.radial;
+      let nrm: Vec3 | null = null;
+      if (p) {
+        const n = cross(R, p);
+        const l = Math.hypot(...n);
+        if (l > 1e-6) nrm = lin(n, 1 / l, n, 0);
+      }
+      Object.assign(info.dirs, {
+        prograde: C(p), retrograde: C(p && lin(p, -1, p, 0)), radialOut: C(R), radialIn: C(lin(R, -1, R, 0)),
+        normal: C(nrm), antinormal: C(nrm && lin(nrm, -1, nrm, 0)),
+      });
+      info.X = nav.X;
+      info.V = nav.V;
+      const T = ourTarget(s, s.target, nav.t);
+      const d = sub3(nav.X, T.pos);
+      info.targetDist = Math.hypot(...d);
+      const vr = sub3(nav.V, T.vel);
+      info.targetRate = dot3(vr, d) / Math.max(info.targetDist, 1e-12);
+      const vl = Math.hypot(...vr);
+      // closest approach on straight lines (relative motion)
+      const tc = vl > 1e-15 ? -dot3(d, vr) / (vl * vl) : 0;
+      info.ourCa = tc > 0 ? { d: Math.hypot(...lin(d, 1, vr, tc)) - T.radius, t: tc } : { d: info.targetDist - T.radius, t: 0 };
+      if (vl > 1e-12) {
+        const loc = nav.toRep(vr);
+        const u = lin(loc, 1 / Math.hypot(...loc), loc, 0);
+        info.dirs.tgtPrograde = C(u);
+        info.dirs.tgtRetrograde = C(lin(u, -1, u, 0));
+      }
+      // above the reference body's surface
+      const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
+      info.ourAlt = Math.hypot(...sub3(nav.X, nav.refPos)) - rb;
+      info.ourVr = dot3(rel, sub3(nav.X, nav.refPos)) / Math.max(Math.hypot(...sub3(nav.X, nav.refPos)), 1e-12);
     }
     return info;
   }
