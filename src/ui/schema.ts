@@ -169,9 +169,41 @@ export const SCHEMA: ControlDef[] = [
   },
   // ------------------------------------------------------------------ scene · flight & gravity
   {
-    key: "thrust", type: "number", section: "scene", group: "Flight & gravity", label: "Thrust", min: 0.001, max: 1, scale: "log", unit: "c²/M", precision: 2, effect: "none",
+    key: "thrust", type: "number", section: "scene", group: "Flight & gravity", label: "Thrust (Cinema)", min: 0.001, max: 1, scale: "log", unit: "c²/M", precision: 2, effect: "none",
     help: "With gravity on (B), the flight keys fire thrusters: proper acceleration of the camera, ×5 with Shift. Hovering at r against gravity needs about M/r² (0.0025 at 20 M) — and much more near the horizon.",
     keywords: "rocket acceleration gravity thruster",
+  },
+  {
+    key: "engine", type: "choice", section: "scene", group: "Flight & gravity", label: "Ranger engine", style: "segmented", effect: "none",
+    options: [
+      { value: "cinema", label: "Cinema", hint: "The thrust above: thousands of g for a hole of 10⁸ M☉ — a hypothetical engine, g-load not survivable; burns are quasi-impulsive" },
+      { value: "crew", label: "Crew", hint: "0.1–3 g: burns last days, transfers are spirals (the low-thrust autopilot flies them)" },
+    ],
+    help: "The Ranger's engine. The path stays exact either way (proper acceleration along the Kerr geodesic); only the engine's performance changes. Crew: a few g converted with the hole's mass (1 g = 1.6 × 10⁻⁵ c²/M at 10⁸ M☉) — Gargantua's pull at 60 M is 17 g, so leaving it takes a spiral.",
+    keywords: "engine crew cinema thrust g low thrust spiral",
+  },
+  {
+    key: "crewG", type: "number", section: "scene", group: "Flight & gravity", label: "Crew engine", min: 0.1, max: 3, step: 0.1, unit: "g", precision: 1, effect: "none",
+    visible: (s) => s.engine === "crew",
+    help: "Proper acceleration of the Crew engine, in Earth gravities (what the crew feels at full throttle).",
+    keywords: "g acceleration crew",
+  },
+  {
+    key: "fuel", type: "toggle", section: "scene", group: "Flight & gravity", label: "Propellant gauge", effect: "none",
+    help: "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.",
+    keywords: "fuel propellant delta-v budget rocket mass ratio",
+  },
+  {
+    key: "exhaust", type: "number", section: "scene", group: "Flight & gravity", label: "Exhaust speed", min: 0.01, max: 1, scale: "log", unit: "c", precision: 2, effect: "none",
+    visible: (s) => s.fuel,
+    help: "Effective exhaust speed vₑ (1 c: a photon rocket).",
+    keywords: "isp exhaust velocity",
+  },
+  {
+    key: "massRatio", type: "number", section: "scene", group: "Flight & gravity", label: "Mass ratio", min: 1.1, max: 100, scale: "log", precision: 1, effect: "none",
+    visible: (s) => s.fuel,
+    help: "Initial mass over dry mass m₀/m_dry: the budget is vₑ ln(m₀/m_dry) of rapidity (≈ Δv for small values).",
+    keywords: "mass ratio tank",
   },
   {
     key: "showGeodesic", type: "toggle", section: "scene", group: "Flight & gravity", label: "Show free-fall path", effect: "none",

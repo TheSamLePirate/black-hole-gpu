@@ -23,6 +23,7 @@ import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
 import { mouth } from "../wormhole";
 import { barycentre, bodyCentre, BODY_NAMES, starCentre, starOmega, starOrbitRadius } from "../targeting";
 import { isco } from "../physics";
+import { rapidityCost } from "../engine";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
 
@@ -445,11 +446,13 @@ export class FlightHud {
       if (n) el.textContent = n.t - time >= 0 ? `T−${fmtShort(Math.round(n.t - time))}` : i.auto === "node" ? "now" : "missed";
     });
     E.edit!.hidden = !nodes.length;
-    (E.exec as HTMLButtonElement).disabled = !nodes.length && i.auto !== "node";
-    E.exec!.classList.toggle("on", i.auto === "node");
-    E.exec!.textContent = i.auto === "node" ? (plan?.burning ? "BURNING · STOP ■" : "EXECUTING · STOP ■") : "EXECUTE ▶";
+    const flying = i.auto === "node" || i.auto === "transfer";
+    (E.exec as HTMLButtonElement).disabled = !nodes.length && !plan?.lowThrust && !flying;
+    E.exec!.classList.toggle("on", flying);
+    E.exec!.textContent = flying ? (plan?.burning ? "BURNING · STOP ■" : "EXECUTING · STOP ■") : "EXECUTE ▶";
     // what the plan leads to
     let res = plan ? plan.note : "No plan yet: pick a goal and PLAN, or add a node and shape it";
+    if (plan?.lowThrust && i.auto === "transfer") res += ` · now: ${LOW_STAGES[plan.lowThrust] ?? plan.lowThrust}`;
     if (plan?.path && plan.path.pts.length) {
       const last = nodes[nodes.length - 1];
       const pp = plan.path;
@@ -458,6 +461,12 @@ export class FlightHud {
       const total = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
       const fate = last?.then === "approach" ? "station-keeping at the target" : last?.then === "orbit" ? `in orbit around ${there}` : pp.fate === "wormhole" ? "through the wormhole" : pp.fate === "horizon" ? "into the horizon" : pp.fate === "star" ? `hits ${there}` : pp.fate === "escape" ? "escapes" : `Pe ${Math.min(...ra).toFixed(1)} · Ap ${Math.max(...ra).toFixed(1)} M`;
       res += `${res ? " · " : ""}Δv ${total.toFixed(3)} c · then ${fate}`;
+    }
+    // (with the propellant gauge: the nodes' rapidity against what is left)
+    const fu = i.engine.fuel;
+    if (fu && nodes.length) {
+      const w = rapidityCost(nodes.map((n) => Math.hypot(...n.dv)));
+      res += w > fu.left ? ` · ⚠ needs ${w.toFixed(3)} of rapidity, ${fu.left.toFixed(3)} left` : ` · uses ${Math.round((100 * w) / Math.max(fu.budget, 1e-12))}% of the tank`;
     }
     E.result!.textContent = res;
   }
@@ -1113,7 +1122,7 @@ export class FlightHud {
     // left: throttle (bottom → top), right: g-load relative to the engine's full thrust
     const t = Math.max(0, Math.min(1, i.throttle));
     arcGauge(Math.PI * 0.64, Math.PI * 1.36, t, "#ff6a2c", "#ffd27a", false);
-    const gl = Math.max(0, Math.min(1, i.accel / Math.max(this.s.thrust, 1e-12)));
+    const gl = Math.max(0, Math.min(1, i.accel / Math.max(i.engine.max, 1e-12)));
     arcGauge(Math.PI * 0.36, -Math.PI * 0.36, gl, "#3b8cff", "#9fe3ff", true);
     ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
     ctx.textBaseline = "top";
@@ -1124,6 +1133,17 @@ export class FlightHud {
     ctx.textAlign = "right";
     const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
     ctx.fillText(i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g", size, 0);
+    // the engine (Cinema: hypothetical, not survivable) and the tank
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "left";
+    ctx.fillStyle = i.engine.kind === "crew" ? "#9fe3ff" : "#ff8a6a";
+    ctx.fillText(i.engine.kind === "crew" ? `CREW ${fmtG(i.engine.max * gUnit)}` : `CINEMA ${fmtG(i.engine.max * gUnit)}`, 0, size);
+    const fu = i.engine.fuel;
+    if (fu) {
+      ctx.textAlign = "right";
+      ctx.fillStyle = fu.empty ? "#ff5a4a" : fu.fraction < 0.15 ? "#ffb35c" : "#ffd27a";
+      ctx.fillText(fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}% · Δv ${fu.dvLeft.toFixed(3)} c`, size, size);
+    }
     // rotation rates: short bars (pitch right side, yaw bottom)
     ctx.lineWidth = 3 * dpr;
     ctx.strokeStyle = "rgba(255, 200, 90, 0.9)";
@@ -1722,6 +1742,10 @@ function fmtShort(t: number) {
 function fmtG(g: number) {
   return g >= 1e4 ? `${g.toExponential(1)} g` : g >= 100 ? `${g.toFixed(0)} g` : `${g.toPrecision(3)} g`;
 }
+
+const LOW_STAGES: Record<string, string> = {
+  spiral: "spiralling", coast: "coasting to the apsis", circ: "circularizing", rdv: "closing in (relative guidance)", drift: "drifting to the right phase", wait: "waiting for the body's side", final: "final approach",
+};
 
 /** A distance in M, in km (m) for the chosen mass below 0.1 M: near a planet, M is far too coarse. */
 function fmtLen(d: number, s: Settings) {

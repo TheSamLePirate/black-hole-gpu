@@ -307,7 +307,7 @@ async function main() {
     nudge: (i, dv, dt) => camera.nudgeNode(i, dv, dt),
     deleteNode: (i) => camera.deleteNode(i),
     clearPlan: () => camera.clearPlan(),
-    execute: () => pilotAuto("node"),
+    execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
   camera.onPilotMessage = (t) => panel.toast(t);
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)

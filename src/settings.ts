@@ -47,7 +47,13 @@ export interface Settings {
   velR: number;
   velT: number;
   velP: number;
-  thrust: number; // proper acceleration of the flight keys when gravity is on [c²/M]
+  thrust: number; // proper acceleration of the flight keys when gravity is on [c²/M]; the Cinema engine
+  /** the Ranger's engine: Cinema (thrust, quasi-impulsive) or Crew (crewG, long burns) */
+  engine: "cinema" | "crew";
+  crewG: number; // Crew engine's proper acceleration [g]
+  fuel: boolean; // propellant gauge (relativistic rocket)
+  exhaust: number; // effective exhaust speed [c]
+  massRatio: number; // initial mass over dry mass
   showGeodesic: boolean; // draw the camera's predicted free-fall path
   rotation: Rotation; // drag orbits the target, or turns the camera about itself
   target: Target; // the body orbited / aimed at
@@ -200,6 +206,11 @@ export function defaultSettings(): Settings {
     velT: 0,
     velP: 0,
     thrust: 0.02,
+    engine: "cinema",
+    crewG: 1,
+    fuel: false,
+    exhaust: 0.1,
+    massRatio: 20,
     showGeodesic: true,
     rotation: "orbit",
     target: "hole",

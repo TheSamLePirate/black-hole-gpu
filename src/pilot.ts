@@ -13,13 +13,13 @@
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target";
-export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node";
+export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer";
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
   normal: "Normal", antinormal: "Anti-normal", target: "Target",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node" };
+export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer" };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -56,6 +56,9 @@ export interface FlightContext {
   /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
    *  far: the burn is still far off (an attitude hold may point the nose meanwhile) */
   burn?: { dir: V3; throttle: number; far?: boolean } | null;
+  /** at a warp where the burn turns (with the orbit) faster than the ship can: the nose is held on it
+   *  kinematically (attitude on rails), not flown */
+  snap?: boolean;
 }
 
 export interface FlightOutput {
@@ -130,7 +133,7 @@ export class FlightComputer {
         throttle = 0;
       } else {
         point = toC(c.burn.dir);
-        const align = dot(Z, point);
+        const align = c.snap ? 1 : dot(Z, point);
         throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
       }
     } else if (this.auto !== "none" && c.want) {
@@ -147,7 +150,7 @@ export class FlightComputer {
         this.burn = scale(A, 1 / a);
         point = toC(this.burn);
         // throttle only once the nose is on the burn vector (cos 12° … cos 3°)
-        const align = dot(Z, point);
+        const align = c.snap ? 1 : dot(Z, point);
         const k = clamp((align - 0.978) / (0.9986 - 0.978), 0, 1);
         throttle = clamp(a / c.thrust, 0, 1) * k;
         // the RCS takes the rest (sideways part), within its authority
@@ -196,7 +199,14 @@ export class FlightComputer {
       this.omega[i] = clamp(this.omega[i]! + d, -1.5 * MAX_RATE, 1.5 * MAX_RATE);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
-    const rot = add(add(scale(X, this.omega[0] * dt), scale(Y, this.omega[1] * dt)), scale(Z, this.omega[2] * dt));
+    let rot = add(add(scale(X, this.omega[0] * dt), scale(Y, this.omega[1] * dt)), scale(Z, this.omega[2] * dt));
+    if (c.snap && point && !active) {
+      // attitude on rails: the nose straight onto the burn
+      const e = cross(Z, point);
+      const s = len(e);
+      rot = s > 1e-12 ? scale(e, Math.atan2(s, dot(Z, point)) / s) : [0, 0, 0];
+      this.omega = [0, 0, 0];
+    }
 
     // ---- thrust: main engine along the nose, RCS translation along the ship's axes
     if (this.auto === "none") {

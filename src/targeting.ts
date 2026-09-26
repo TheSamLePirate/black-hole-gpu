@@ -44,6 +44,21 @@ export function bodyMass(s: Settings, b: Body) {
   return systemBody(s, b)?.mass ?? 0;
 }
 
+/**
+ * Hill radius of a body with a mass [M]: around its host star for a planet on a Keplerian orbit
+ * (Edmunds around K2), around Gargantua otherwise (at its distance now).
+ */
+export function bodyHill(s: Settings, b: Body, t = 0) {
+  const m = bodyMass(s, b);
+  if (!(m > 0)) return 0;
+  const sb = systemBody(s, b);
+  if (sb && sb.orbit.type === "kepler" && sb.parent && sb.parent !== "gargantua") {
+    const host = sysBody(GARGANTUA_SYSTEM, sb.parent);
+    return sb.orbit.a * Math.cbrt(m / (3 * host.mass));
+  }
+  return Math.hypot(...bodyCentre(s, b, t)) * Math.cbrt(m / 3);
+}
+
 const DEG = Math.PI / 180;
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
