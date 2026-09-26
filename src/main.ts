@@ -1,7 +1,7 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { saturnDeparture } from "./system/our-side";
+import { earthStart, saturnDeparture } from "./system/our-side";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -159,11 +159,12 @@ async function main() {
     const { time, mission: withMission, pose, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
-    exposedForOurSide = pose === "saturn";
+    exposedForOurSide = pose !== undefined;
     mission.stop();
     Object.assign(settings, defaultSettings(), keep, preset);
-    if (pose === "saturn") {
-      const d = saturnDeparture();
+    if (pose) {
+      const t = time ?? simTime;
+      const d = pose === "earth" ? earthStart(t) : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
     }
@@ -175,6 +176,9 @@ async function main() {
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
     if (withMission) mission.start();
+    if (name === "game:interstellar") {
+      panel.toast("2067 · low Earth orbit. Objective: Saturn — the wormhole waits 0.7 AU behind it. Tab or a click on the map: target · 0: approach (then orbit) · 9: circularize");
+    }
     refreshGui();
     touch();
     touchDisplay();
@@ -678,6 +682,11 @@ async function main() {
       }
     }
   };
+  // a scene named in the URL (#scene=game:interstellar): applied at start
+  {
+    const scene = new URLSearchParams(location.hash.slice(1)).get("scene");
+    if (scene && presets[scene]) applyPreset(scene);
+  }
   requestAnimationFrame(loop);
 
   // -------------------------------------------------------------------- overlays

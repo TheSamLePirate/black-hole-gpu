@@ -7,7 +7,7 @@ import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
-  cameraHome, onOurSide, ourLook, ourTarget,
+  cameraHome, isOurBody, onOurSide, ourLook, ourTarget,
 } from "./targeting";
 import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
@@ -722,15 +722,15 @@ export class CameraController {
       if (this.cinematic) this.setCinematic(null);
       s.animate = true;
       s.motion = "geodesic";
-      s.velR = s.velT = s.velP = 0;
       this.properTime = 0;
-      // our universe: at rest means moving with the body of the sphere of influence
+      // our universe: the pose's velocity kept (an orbit, a planet's motion); none given: moving with
+      // the body of the sphere of influence
       const cam = cameraFrame(s);
       const nav = this.ourNav(cam);
-      if (nav) {
+      if (nav && Math.hypot(s.velR, s.velT, s.velP) === 0) {
         const p = repPose(s);
         setRepPose(s, { ...p, vel: nav.refVelRep });
-      }
+      } else if (!nav) s.velR = s.velT = s.velP = 0;
     } else if (s.motion === "geodesic") {
       s.motion = "static";
       s.velR = s.velT = s.velP = 0;
@@ -2512,15 +2512,20 @@ export class CameraController {
     const thr = this.thrustMax();
     const out = (v: Vec3, ff: Vec3 = [0, 0, 0]) => ({ beta: nav.toRep(v), ff: nav.toRep(ff) });
     if (P.auto === "hover") {
-      const ref = ourState(nav.ref, t);
-      if (!this.ourAnchor || this.ourAnchor.ref !== nav.ref) this.ourAnchor = { ref: nav.ref, d: sub3(nav.X, ref.pos) };
+      // (by the mouth — targeted, within a few of its stand-offs: at rest against it)
+      const byMouth = !isOurBody(s.target) && Math.hypot(...nav.X) < 0.5;
+      const refId = byMouth ? "mouth" : nav.ref;
+      const ref = byMouth ? { pos: [0, 0, 0] as Vec3, vel: [0, 0, 0] as Vec3 } : ourState(nav.ref, t);
+      if (!this.ourAnchor || this.ourAnchor.ref !== refId) this.ourAnchor = { ref: refId, d: sub3(nav.X, ref.pos) };
       const back = sub3(lin(ref.pos, 1, this.ourAnchor.d, 1), nav.X);
       const k = Math.min(1 / (4 * T), 0.3 * Math.sqrt(thr / Math.max(Math.hypot(...back), 1e-15)));
       return out(lin(ref.vel, 1, back, k), lin(g.acc, -1, g.acc, 0));
     }
     this.ourAnchor = null;
-    if (P.auto !== "approach" && P.auto !== "orbit") return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
-    const tgt = s.target;
+    if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize") return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
+    // (circularize: around the body of the sphere of influence, at the height it is engaged at)
+    const circ = P.auto === "circularize";
+    const tgt = (circ ? nav.ref : s.target) as Body;
     const Tg = ourTarget(s, tgt, t);
     const d = sub3(Tg.pos, nav.X);
     const D = Math.hypot(...d);
@@ -2532,9 +2537,9 @@ export class CameraController {
     // (a low orbit: 10 % of the radius, above 12 scale heights of air)
     const low = Tg.radius * 1.1 + (air ? (12 * air.H) / 1.476625e11 : 0);
     if (P.auto === "orbit" && !(Tg.mass > 0)) return say("Orbit: select a body with a mass");
-    const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;
+    const orbiting = circ || (P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius);
     if (orbiting) {
-      if (!this.ourOrbitR || this.ourOrbitR.body !== tgt) this.ourOrbitR = { body: tgt, r: Math.max(D, low) };
+      if (!this.ourOrbitR || this.ourOrbitR.body !== tgt) this.ourOrbitR = { body: tgt, r: circ ? Math.max(D, Tg.radius * 1.01) : Math.max(D, low) };
       const r = this.ourOrbitR.r;
       const Rh = lin(dh, -1, dh, 0);
       let n = cross(Rh, rel);
@@ -2555,7 +2560,10 @@ export class CameraController {
     const vmax = s.engine === "crew" ? 0.2 : 0.5;
     const vClose = Math.min(vmax, Math.sqrt(2 * a * Math.max(left, 0)));
     const closing = -dot3(rel, dh);
-    if (Math.abs(left) < 0.1 * stand && D > Tg.radius && Math.hypot(...rel) < Math.max(Math.sqrt(Tg.mass / Math.max(D, 1e-30)) * 0.2, 1e-9)) {
+    // (arrived: within a tenth of the stand-off, slower than a fifth of the orbital speed there — or,
+    // no mass, than what the engine stops over a tenth of it)
+    const vArrive = Math.max(Math.sqrt(Tg.mass / Math.max(D, 1e-30)), Math.sqrt(2 * 0.6 * thr * 0.1 * stand)) * 0.2;
+    if (Math.abs(left) < 0.1 * stand && D > Tg.radius && Math.hypot(...rel) < vArrive) {
       if (this.ourWarp !== null) s.timeSpeed = this.ourWarp;
       this.ourWarp = null;
       // (the rails forget the approach's warps: not a wish of the pilot's)
@@ -2571,10 +2579,25 @@ export class CameraController {
       return out(Tg.vel);
     }
     // the warp: an arrival in ~8 s (the rails still hold it near bodies); the pilot's wish kept
-    const ttg = Math.abs(left) / Math.max(Math.abs(closing), vClose * 0.5, 1e-12);
+    // (no Zeno ending: the last twentieth of the stand-off at the pace of a braking over it)
+    const ttg = (Math.abs(left) + 0.05 * stand) / Math.max(Math.abs(closing), vClose * 0.5, Math.sqrt(2 * 0.6 * thr * 0.05 * stand), 1e-12);
     if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
     s.timeSpeed = Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5);
-    return out(lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left))));
+    let want = lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left)));
+    // (never through a planet: near the body of the sphere of influence — not the target — the part
+    // of the wanted motion that dives towards it is taken off: the ship climbs, spiralling out)
+    if (nav.ref !== tgt && nav.ref !== "sun") {
+      const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
+      const Rv = sub3(nav.X, nav.refPos);
+      const Rd = Math.hypot(...Rv);
+      if (Rd < 10 * rb) {
+        const Rh = lin(Rv, 1 / Rd, Rv, 0);
+        const u = sub3(want, nav.refVel);
+        const ur = dot3(u, Rh);
+        if (ur < 0) want = lin(want, 1, Rh, -ur);
+      }
+    }
+    return out(want);
   }
 
   private ourOrbitR: { body: string; r: number } | null = null;

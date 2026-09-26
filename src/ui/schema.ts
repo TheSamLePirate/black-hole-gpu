@@ -664,6 +664,11 @@ export const SCHEMA: ControlDef[] = [
     key: "exposure", type: "number", section: "render", group: "Image", label: "Exposure", min: -8, max: 8, step: 0.01, unit: "EV", effect: "display",
   },
   {
+    key: "autoExposure", type: "toggle", section: "render", group: "Image", label: "Auto exposure", effect: "display",
+    help: "A light meter sets the exposure, as the eye adapts: for the light falling where the camera is (the Sun, a star, the disk), held back when something in view would burn out. Exposure then adds a bias. The sky keeps its look on screen.",
+    keywords: "auto exposure eye adaptation meter light sun brightness",
+  },
+  {
     key: "tonemap", type: "choice", section: "render", group: "Image", label: "Tone map", style: "segmented", effect: "display",
     options: [
       { value: "AgX", label: "AgX" },

@@ -11,11 +11,11 @@ import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
-import { BODY_PLANET, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
+import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
 import { homeOf } from "./system/our-side";
 import type { Vec3 } from "./physics";
-import { localPatch } from "./system/local-patch";
+import { bodyPlace, localPatch } from "./system/local-patch";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
 import { bodyVelocity, starOmega, type Body } from "./targeting";
@@ -218,6 +218,20 @@ export class Renderer {
   /** the solar system's maps and Saturn's rings (placeholders until loaded, on first use) */
   private planetMaps: PlanetMaps;
   private mapsRequested = false;
+  // auto exposure: the light meter (a histogram of the image, read back), its state
+  private meterPipeline!: GPUComputePipeline;
+  private histBuf!: GPUBuffer;
+  private histStage!: GPUBuffer;
+  private meterPending = false;
+  private meterPre = 1;
+  private meterSkyUsed = 0;
+  private meterSky = 0;
+  private meterIncident = 0;
+  private meterAt = 0;
+  /** exposure the meter adds [EV] (auto exposure) */
+  autoEV = 0;
+  private autoEVSet = false;
+  private autoEVDrawn = 0;
   /** called when assets loaded in the background change the image (the loop redraws) */
   onAssets: (() => void) | null = null;
   private catalogue: GPUBuffer;
@@ -341,6 +355,9 @@ export class Renderer {
     this.postBeamH = mkPost("beamH");
     this.postAtrous = mkPost("atrous");
     this.postBeamV = mkPost("beamV");
+    this.meterPipeline = mkPost("meter");
+    this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 
     this.pathBuf = device.createBuffer({ size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     // (after the bodies: the light probe's harmonics, copied there on the GPU — see dispatchEnv; the
@@ -854,7 +871,9 @@ export class Renderer {
     // disk's pattern), so that it keeps its precision over years of simulated time.
     const wrap = Math.max(s.flowPeriod, 1) * 1024;
     const tGpu = time > wrap ? time % wrap : time;
-    set(11, tGpu, s.flowPeriod, s.bgIntensity, pixelAngle * 0.35 * s.starSize);
+    // (auto exposure: the sky — an artistic backdrop — keeps its brightness on screen)
+    const bg = s.bgIntensity * this.skyScale(s);
+    set(11, tGpu, s.flowPeriod, bg, pixelAngle * 0.35 * s.starSize);
     set(12, s.hotFlow ? 1 : 0, s.hotFlowHR, s.hotFlowAlpha, s.hotFlowIntensity);
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
@@ -955,11 +974,17 @@ export class Renderer {
     // m = −26.74 − 2.5 log(F / F☉,1AU); the catalogue draws 10^(−0.4 m) × fluxScale, × ½ × bgIntensity
     const lumSun = 10 ** (blackbodyLogY(5772) - dc.logY);
     const fSun1AU = lumSun * Math.PI * (6.957e8 / 1.495978707e11) ** 2;
-    const pointScale = (0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
+    const pointScale = (0.5 * bg * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
     // highlight compression above magnitude −2: that flux spread over a glow of radius 0.75 pixel
-    const f2 = 0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
+    const f2 = 0.5 * bg * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
     // (w: where our universe's bodies start in the list)
     set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, ourStart(bodies));
+    // the light meter: the brightest the sky can be here (the scene is what shines beyond it), and the
+    // light falling where the camera is
+    if (!o.probe) {
+      this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
+      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY);
+    }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
@@ -1033,7 +1058,7 @@ export class Renderer {
       oy = (1 - sy) / 2;
     }
     const d = new Float32Array([
-      outW, outH, Math.pow(2, s.exposure) / preExposure(s) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
+      outW, outH, Math.pow(2, this.ev(s)) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
       sx, sy, ox, oy,
       hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
@@ -1053,7 +1078,7 @@ export class Renderer {
     // x: block | view << 8 | image width << 16
     const r = t === this.live ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom] : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
-    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(s), 0, 0, 0]));
+    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(this.ev(s)), 0, 0, 0]));
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
@@ -1235,12 +1260,117 @@ export class Renderer {
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(s),
+          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
+    // the light meter, on the live view (after the ship is drawn)
+    if (s?.autoExposure && t === this.live && !this.meterPending) {
+      this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
+      const pass = enc.beginComputePass();
+      pass.setPipeline(this.meterPipeline);
+      pass.setBindGroup(0, this.device.createBindGroup({
+        layout: this.meterPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+          { binding: 20, resource: { buffer: this.histBuf } },
+        ],
+      }));
+      pass.dispatchWorkgroups(8, 8);
+      pass.end();
+      enc.copyBufferToBuffer(this.histBuf, 0, this.histStage, 0, 512);
+      this.meterPending = true;
+      this.meterPre = preExposure(this.ev(s));
+      this.meterSkyUsed = this.meterSky;
+      this.device.queue.onSubmittedWorkDone().then(() =>
+        this.histStage.mapAsync(GPUMapMode.READ).then(() => {
+          const h = new Uint32Array(this.histStage.getMappedRange().slice(0));
+          this.histStage.unmap();
+          this.meterPending = false;
+          this.readMeter(h);
+        }).catch(() => (this.meterPending = false)),
+      );
+    }
+  }
+
+  /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
+  ev(s: Settings) {
+    return s.exposure + (s.autoExposure ? this.autoEVDrawn : 0);
+  }
+
+  /** The sky's brightness factor: auto exposure keeps the (artistic) sky as it looks on screen. */
+  private skyScale(s: Settings) {
+    return s.autoExposure ? 2 ** -this.autoEVDrawn : 1;
+  }
+
+  /**
+   * The light falling where the camera is (the disk's units: luminance of a white surface over π,
+   * albedo 0.3): the accretion disk seen from here (its face and lensed images, a first estimate —
+   * scene-bodies.ts: planetLight) and the stars at their distance.
+   */
+  private incidentLight(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, logYRef: number) {
+    const ours = s.wormhole && cam.region === "throat" && cam.ell < 0;
+    let E = 0;
+    let X: Vec3 | null = null;
+    if (!ours) {
+      X = cam.region === "hole" ? [cam.r * Math.sin(cam.theta) * Math.cos(cam.phi), cam.r * Math.sin(cam.theta) * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (mouth(s).C as Vec3);
+      const r = Math.max(Math.hypot(...X), 2);
+      if (s.disk) E += Math.min((0.75 * (Math.max(s.diskOuter, 2) ** 2 - 4)) / (r * r), 1);
+    }
+    const start = ourStart(bodies);
+    bodies.slice(0, MAX_BODIES).forEach((b, k) => {
+      if (b.kind !== BODY_STAR) return;
+      let d: number;
+      if (k >= start) {
+        if (!ours) return;
+        d = Math.hypot(b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2]);
+      } else {
+        if (ours || !X) return;
+        const P = bodyPlace(bodies, k);
+        d = Math.hypot(P[0] - X[0], P[1] - X[1], P[2] - X[2]);
+      }
+      const T = Math.round(b.temperature / 50) * 50;
+      E += 10 ** (this.logYOf(T) - logYRef) * b.brightness * (b.radius / Math.max(d, b.radius)) ** 2;
+    });
+    return 0.3 * E;
+  }
+
+  /**
+   * The meter's reading: exposure for the light falling here (a white surface in it well exposed),
+   * held back when the scene's brightest 0.5 % (brighter than any sky) would burn out; eased.
+   */
+  private readMeter(h: Uint32Array) {
+    let total = 0;
+    for (const c of h) total += c;
+    if (!total) return;
+    const Lof = (b: number) => 2 ** ((b + 0.5) / 1.5 - 48) / this.meterPre;
+    let acc = 0, Lhi = 0;
+    for (let b = 127; b >= 1; b--) {
+      if (Lof(b) < this.meterSkyUsed) break;
+      acc += h[b]!;
+      if (acc >= 0.005 * total) {
+        Lhi = Lof(b);
+        break;
+      }
+    }
+    let m = this.meterIncident > 0 ? 0.4 / this.meterIncident : 2 ** this.autoEV;
+    if (Lhi > 0) m = Math.min(m, 6 / Lhi);
+    const target = Math.min(Math.max(Math.log2(m), -6), 32);
+    const now = performance.now();
+    const dt = Math.min((now - this.meterAt) / 1000, 1);
+    this.meterAt = now;
+    // (eased over ~0.4 s; a jump of more than 6 EV — a new scene — at once)
+    if (!this.autoEVSet || Math.abs(target - this.autoEV) > 6) {
+      this.autoEV = target;
+      this.autoEVSet = true;
+    } else this.autoEV += (target - this.autoEV) * Math.min(1, dt / 0.4);
+    // (a new image only when it shows: the sky's scale is part of the scene)
+    if (Math.abs(this.autoEV - this.autoEVDrawn) > 0.05) {
+      this.autoEVDrawn = this.autoEV;
+      this.onAssets?.();
+    }
   }
 
   private encodeDisplay(enc: GPUCommandEncoder, t: Target, pipeline: GPURenderPipeline, view: GPUTextureView) {
@@ -1660,7 +1790,7 @@ export class Renderer {
     this.encodePost(enc, t, s);
     this.device.queue.submit([enc.finish()]);
     const half = new Uint16Array((await this.readTexture(t.hdr, t.width, t.height, 8)).buffer);
-    const k = Math.pow(2, s.exposure) / preExposure(s);
+    const k = Math.pow(2, this.ev(s)) / preExposure(this.ev(s));
     const f = new Float32Array(half.length);
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!) * k;
     return encodeEXR(f, t.width, t.height);
@@ -1672,8 +1802,8 @@ export class Renderer {
  * display: 1 at the usual exposures, 2^(EV − 4) beyond (a sunlit Saturn at 9.5 AU is ~10⁻⁷ of the
  * disk's radiance, below the half floats' normal range).
  */
-export function preExposure(s: Pick<Settings, "exposure">) {
-  return 2 ** Math.min(Math.max(s.exposure - 4, 0), 40);
+export function preExposure(ev: number) {
+  return 2 ** Math.min(Math.max(ev - 4, 0), 40);
 }
 
 /** "#rrggbb" (sRGB) → linear RGB. */

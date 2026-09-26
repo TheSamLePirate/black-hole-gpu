@@ -241,3 +241,21 @@ fn up(@builtin(global_invocation_id) gid: vec3u) {
   let here = textureLoad(addTex, gid.xy, 0).rgb;
   textureStore(dst, gid.xy, vec4f(here + o / 16.0, 1.0));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Light meter (auto exposure): the luminance of a 64 × 64 grid of the image (pre-exposed radiance)
+// as a histogram of log₂ — bin b holds log₂ L ∈ [b/1.5 − 48, (b+1)/1.5 − 48); bin 0: black
+// ---------------------------------------------------------------------------------------------
+@group(0) @binding(20) var<storage, read_write> hist: array<atomic<u32>, 128>;
+
+@compute @workgroup_size(8, 8)
+fn meter(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= 64u || gid.y >= 64u) { return; }
+  let size = textureDimensions(src, 0);
+  let p = vec2u((vec2f(gid.xy) + 0.5) / 64.0 * vec2f(size));
+  let c = textureLoad(src, min(p, size - 1u), 0).rgb;
+  let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
+  var b = 0u;
+  if (l > 0.0) { b = u32(clamp((log2(l) + 48.0) * 1.5, 1.0, 127.0)); }
+  atomicAdd(&hist[b], 1u);
+}
