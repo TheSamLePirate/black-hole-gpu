@@ -135,12 +135,14 @@ export class Mission {
           if (!cam.plan.nodes.length) return;
           P.setAuto("node");
           hold("prograde");
-          mount("quarter");
+          mount("chase");
         },
         step: () => {
-          this.burnCameras("chase", "quarter");
+          // (wings level, prograde: Gargantua is always on the ship's left — the attach points behind
+          // and above it, turned that way, keep both in the frame)
+          this.burnCameras("chase", this.t < 9 ? "chase" : "dorsal");
           this.aim = "hole";
-          this.aimK = info().plan?.burning ? 0.55 : 0.5;
+          this.aimK = s.shipMount === "chase" ? 0.33 : 0.5;
           if (P.auto === "node") return false;
           // (then the circularize autopilot, a few seconds)
           if (!this.mark) this.mark = this.t;
@@ -163,7 +165,7 @@ export class Mission {
         },
         step: () => {
           this.aim = this.t < 6 ? "hole" : null;
-          if (this.t > 6 && s.shipMount === "quarter") mount("dorsal");
+          if (this.t > 6 && s.shipMount !== "dorsal") mount("dorsal");
           return this.t > 13;
         },
       },
@@ -178,12 +180,13 @@ export class Mission {
           this.say(msg);
           P.setAuto("node");
           hold("prograde");
-          mount("quarter");
+          mount("dorsal");
         },
         step: () => {
-          this.burnCameras("chase", "quarter");
-          this.aim = info().plan?.burning ? "hole" : null;
-          this.aimK = 0.35;
+          const b = !!info().plan?.burning;
+          this.burnCameras("chase", "dorsal");
+          this.aim = "hole";
+          this.aimK = b ? 0.35 : 0.5;
           return P.auto !== "node";
         },
       },
