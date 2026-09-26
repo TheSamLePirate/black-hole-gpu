@@ -12,12 +12,12 @@
 
 import type { M3, V3 } from "./mounts";
 
-export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target";
+export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
 export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff";
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
-  normal: "Normal", antinormal: "Anti-normal", target: "Target",
+  normal: "Normal", antinormal: "Anti-normal", target: "Target", antiTarget: "Anti-target", maneuver: "Manoeuvre",
 };
 export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit" };
 
@@ -53,6 +53,8 @@ export interface FlightContext {
   refVel?: V3;
   /** direction of the target (local), or null */
   target: V3 | null;
+  /** the next manoeuvre node's burn direction (local), or null */
+  maneuver?: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
   want?: { beta: V3; ff: V3; pos?: V3 } | null;
   /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
@@ -101,6 +103,8 @@ export class FlightComputer {
   burn: V3 | null = null;
   /** the position an autopilot holds (local frame of the moment it engaged), if any */
   anchor: V3 | null = null;
+  /** precision controls (fine rotation and throttle, as KSP's Caps Lock) */
+  precision = false;
 
   setHold(h: Hold) {
     this.hold = this.hold === h ? "none" : h;
@@ -169,7 +173,8 @@ export class FlightComputer {
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)
-    const manual: V3 = [inp.pitch, inp.yaw, -inp.roll];
+    const fine = this.precision ? 0.25 : 1;
+    const manual: V3 = [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
     const want: V3 = [...this.omega];
     const active = manual.some((m) => m !== 0);
     if (point && !active) {
@@ -212,11 +217,12 @@ export class FlightComputer {
 
     // ---- thrust: main engine along the nose, RCS translation along the ship's axes
     if (this.auto === "none") {
-      this.throttle = clamp(this.throttle + inp.throttle * 0.6 * dt, 0, 1);
+      this.throttle = clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
       const rcsMax = RCS * c.thrust;
       // (the ship's right is −x)
-      rcsC = add(add(scale(X, -inp.tx * rcsMax), scale(Y, inp.ty * rcsMax)), scale(Z, inp.tz * rcsMax));
+      const k = rcsMax * (this.precision ? 0.25 : 1);
+      rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));
     }
     const accC = add(scale(Z, throttle * c.thrust), rcsC);
     const acc = fromC(accC);
@@ -263,6 +269,8 @@ export class FlightComputer {
         break;
       }
       case "target": d = c.target; break;
+      case "antiTarget": d = c.target && scale(c.target, -1); break;
+      case "maneuver": d = c.maneuver ?? null; break;
     }
     return d && toC(d);
   }

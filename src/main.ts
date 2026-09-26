@@ -311,6 +311,10 @@ async function main() {
   }
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll,
+    speedMode: () => {
+      camera.speedMode = camera.speedMode === "orbit" ? "target" : "orbit";
+      panel.toast(camera.speedMode === "target" ? `Speed relative to ${BODY_NAMES[settings.target]}` : "Speed in orbit");
+    },
     select: (b) => {
       if (camera.selectTarget(b as Target, { focus: false })) panel.toast(`Target: ${BODY_NAMES[settings.target]}`);
     },
@@ -340,18 +344,34 @@ async function main() {
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
+  panel.flightKeys = (e) => flying() && (e.code === "Slash" || e.key === "/" || ((e.key === "m" || e.key === "M") && !e.shiftKey));
   /** Pilot keys (by physical position where it matters); true when handled. */
   function pilotKey(e: KeyboardEvent) {
     const holds: Record<string, Hold> = { Digit1: "prograde", Digit2: "retrograde", Digit3: "radialOut", Digit4: "radialIn", Digit5: "normal", Digit6: "antinormal", Digit7: "target" };
-    const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach", KeyL: "land", KeyU: "takeoff" };
+    const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach", KeyG: "land", KeyU: "takeoff" };
+    // (held flight keys: translation, throttle — read each frame by the controller)
+    if (["KeyI", "KeyJ", "KeyK", "KeyL", "KeyH", "KeyN", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"].includes(e.code) && !(e.code === "KeyK" && e.shiftKey)) {
+      e.preventDefault();
+      return true;
+    }
     if (holds[e.code]) pilotHold(holds[e.code]!);
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyR") pilotRoll();
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
-    else if (e.code === "KeyN") panel.toast(flightHud.cycleDensity());
-    else if (e.code === "KeyO") flightHud.togglePlanner();
+    else if (e.code === "CapsLock") {
+      camera.pilot.precision = !camera.pilot.precision;
+      panel.toast(camera.pilot.precision ? "Precision controls" : "Normal controls");
+    } else if (e.code === "Backquote") panel.toast(flightHud.cycleDensity());
+    else if (e.code === "KeyK" && e.shiftKey) actions["btn-ship"]!(); // leave the Ranger
+    else if (e.key.toLowerCase() === "m" && !e.shiftKey) flightHud.toggleMapView();
+    else if (e.code === "Slash") {
+      // back to real time (1 s = 1 s)
+      settings.timeSpeed = 1 / (4.925490947e-6 * settings.massSolar);
+      settings.animate = true;
+      panel.toast("Real time");
+    } else if (e.code === "KeyO") flightHud.togglePlanner();
     else if (e.code === "KeyV") {
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);
@@ -362,7 +382,7 @@ async function main() {
       mission.stop("Mission stopped — you have the controls");
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
-    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger (K leaves it)");
+    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger (Shift+K leaves it)");
     else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
     else return false;
     e.preventDefault();

@@ -821,6 +821,11 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-cams .fl-label, .fl-mapbar .fl-label { width: 48px; }
 .fl-ahead { margin-left: auto; }
 .fl-map { width: 100%; height: 250px; display: block; border-radius: 2px; background: radial-gradient(circle at 50% 50%, rgba(20, 40, 60, 0.35), rgba(0, 0, 0, 0.35)); cursor: zoom-in; }
+/* map view (M while flying): the map over the whole screen, the navball and the cockpit above it */
+.fl-root.mapview .fl-right { left: 14px; top: 56px; right: 14px; bottom: 14px; width: auto; z-index: 0; background: rgba(4, 8, 14, 0.9); }
+.fl-root.mapview .fl-map { flex: 1; height: auto; min-height: 0; cursor: crosshair; }
+.fl-root.mapview .fl-cockpit, .fl-root.mapview .fl-target, .fl-root.mapview .fl-planner { z-index: 1; }
+.fl-root.mapview .fl-tel, .fl-root.mapview .fl-orbit { display: none; }
 
 /* flight planner (top right, in place of the telemetry) */
 .fl-plan { top: 58px; right: 14px; width: 290px; padding: 8px 10px; display: none; max-height: calc(100vh - 58px - 380px); min-height: 120px; overflow-y: auto; }

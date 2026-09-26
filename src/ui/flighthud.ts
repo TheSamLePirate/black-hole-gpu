@@ -52,10 +52,10 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 
 const HOLD_KEYS: [Hold, string, string][] = [
   ["prograde", "PRO", "1"], ["retrograde", "RETRO", "2"], ["radialOut", "RAD+", "3"], ["radialIn", "RAD−", "4"],
-  ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"],
+  ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"], ["antiTarget", "ANTI", ""], ["maneuver", "NODE", ""],
 ];
 const AUTO_KEYS: [Auto, string, string][] = [
-  ["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"], ["land", "LAND", "L"], ["takeoff", "TAKE OFF", "U"],
+  ["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"], ["land", "LAND", "G"], ["takeoff", "TAKE OFF", "U"],
 ];
 
 const AMBER = "#ffb35c";
@@ -64,10 +64,11 @@ const RED = "#ff5a46";
 const COL: Record<string, string> = {
   prograde: "#d6f55b", retrograde: "#d6f55b", radialOut: "#5fd3ff", radialIn: "#5fd3ff",
   normal: "#e07bff", antinormal: "#e07bff", target: "#ff8a5c", burn: "#4d8dff", tgtPrograde: "#ff8a5c", tgtRetrograde: "#ff8a5c",
+  antiTarget: "#ff8a5c", maneuver: "#4d8dff",
 };
 const GLYPH: Record<string, string> = {
   prograde: "prograde", retrograde: "retrograde", radialOut: "prograde", radialIn: "retrograde", normal: "prograde", antinormal: "retrograde",
-  target: "target", burn: "burn", tgtPrograde: "prograde", tgtRetrograde: "retrograde",
+  target: "target", burn: "burn", tgtPrograde: "prograde", tgtRetrograde: "retrograde", antiTarget: "retrograde", maneuver: "burn",
 };
 const FONT = "Inter, system-ui, sans-serif";
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
@@ -90,6 +91,8 @@ export interface FlightHudActions {
   throttle(t: number): void;
   /** a body clicked on the map: make it the target */
   select(body: string): void;
+  /** the navball's speed: orbit ↔ target */
+  speedMode(): void;
 }
 
 interface Sample { w: number; speed: number; r: number; dtau: number; g: number }
@@ -142,6 +145,13 @@ export class FlightHud {
   private ballFrame = 0;
   private throttleDrag = false;
   private start: { t: number; tau: number } | null = null;
+  /** the map over the whole screen (M) */
+  mapView = false;
+  toggleMapView() {
+    this.mapView = !this.mapView;
+    this.root.classList.toggle("mapview", this.mapView);
+    if (this.mapView) this.zoom = 1;
+  }
   /** 0 full · 1 minimal · 2 clean */
   density = 0;
   visible = false;
@@ -245,6 +255,7 @@ export class FlightHud {
     autos.append(mk("sas", "SAS", "T", "Stability assist: holds the attitude, damps rotation", () => act.sas()));
     autos.append(mk("roll", "ROLL", "R", "Roll alignment: while the nose is held, the wings stay in the orbital plane (the top towards the orbit's normal)", () => act.roll()));
     for (const [a, label, key] of AUTO_KEYS) autos.append(mk(a, label, key, `Autopilot: ${AUTO_NAMES[a]}`, () => act.auto(a)));
+    autos.append(mk("speedMode", "SPD ORBIT", "", "The navball's speed and prograde: in orbit, or relative to the target (docking, rendezvous)", () => act.speedMode()));
     const ballBox = h("div", "fl-ballbox");
     ballBox.append(this.ball);
     this.cockpit.append(holds, ballBox, autos);
@@ -743,6 +754,11 @@ export class FlightHud {
     this.buttons.get("roll")!.classList.toggle("on", i.rollAlign);
     for (const [hold] of HOLD_KEYS) this.buttons.get(hold)!.classList.toggle("on", i.hold === hold);
     for (const [a] of AUTO_KEYS) this.buttons.get(a)!.classList.toggle("on", i.auto === a);
+    {
+      const b = this.buttons.get("speedMode")!;
+      b.classList.toggle("on", i.speedMode === "target");
+      (b.querySelector("span") as HTMLElement).textContent = i.speedMode === "target" ? "SPD TARGET" : "SPD ORBIT";
+    }
     for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", i.mount === m);
     this.buttons.get("ahead")!.classList.toggle("on", s.shipLookYaw !== 0 || s.shipLookPitch !== 0);
     const massive = s.sun && s.sunMass > 0;
@@ -804,7 +820,8 @@ export class FlightHud {
       ctx.lineTo(nose[0] + 2.2 * r, nose[1]);
       ctx.stroke();
     }
-    for (const k of ["prograde", "retrograde", "burn", "tgtPrograde", "tgtRetrograde"] as const) {
+    for (const k of ["prograde", "retrograde", "burn", "maneuver", "tgtPrograde", "tgtRetrograde"] as const) {
+      if (k === "maneuver" && i.dirs.burn) continue;
       const p = proj(i.dirs[k]);
       if (p) marker(ctx, GLYPH[k]!, p[0], p[1], r, COL[k]!);
     }
@@ -882,14 +899,15 @@ export class FlightHud {
       }
     }
     // (our universe: km/s relative to the body of the sphere of influence)
-    if (i.ref) {
+    const rel = i.speedMode === "target" ? `rel. ${BODY_NAMES[i.target as Target]} (target)` : i.ref ? `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}` : "rel. ZAMO";
+    if (i.ref || i.speed < 1e-3) {
       const v = i.speed * 299792.458;
-      valueBox(ctx, x0 + wdt + 8 * dpr, cy, v >= 1000 ? v.toFixed(0) : v.toFixed(2), "km/s", `${i.speed.toExponential(2)} c`, "left", dpr);
-      label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}`, dpr);
+      valueBox(ctx, x0 + wdt + 8 * dpr, cy, v >= 1000 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : (v * 1000).toFixed(1), v >= 1 ? "km/s" : "m/s", `${i.speed.toExponential(2)} c`, "left", dpr);
+      label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", rel, dpr);
       return;
     }
     valueBox(ctx, x0 + wdt + 8 * dpr, cy, `${i.speed.toFixed(4)}`, "c", `γ ${i.gamma.toFixed(3)}`, "left", dpr);
-    label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", "rel. ZAMO", dpr);
+    label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", rel, dpr);
   }
 
   /** Altitude tape (right): r on a log scale with the orbit's landmarks and a vertical-speed bar. */
@@ -1250,7 +1268,7 @@ export class FlightHud {
     ctx.textBaseline = "top";
     ctx.fillStyle = "#ffd27a";
     ctx.textAlign = "left";
-    ctx.fillText(`THR ${Math.round(t * 100)}%`, 0, 0);
+    ctx.fillText(`THR ${Math.round(t * 100)}%${i.precision ? " · FINE" : ""}`, 0, 0);
     ctx.fillStyle = "#9fe3ff";
     ctx.textAlign = "right";
     const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
@@ -1282,7 +1300,8 @@ export class FlightHud {
     // orbital markers
     const r = 8 * dpr;
     ctx.lineWidth = 1.8 * dpr;
-    for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal", "target", "burn", "tgtPrograde"] as const) {
+    for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal", "target", "burn", "maneuver", "tgtPrograde"] as const) {
+      if (k === "maneuver" && i.dirs.burn) continue;
       const dd = i.dirs[k];
       if (!dd) continue;
       const b = body(dd);

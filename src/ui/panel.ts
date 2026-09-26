@@ -143,6 +143,9 @@ export class SettingsPanel {
   private redoStack: Diff[] = [];
   private pending: Settings | null = null;
 
+  /** keys the flight takes over while piloting (the panel then leaves them) */
+  flightKeys: ((e: KeyboardEvent) => boolean) | null = null;
+
   constructor(root: HTMLElement, options: PanelOptions) {
     this.root = root;
     this.o = options;
@@ -901,18 +904,22 @@ export class SettingsPanel {
         ["K · ⇧K", "Ranger: camera on the spaceship · next attach point"],
         ["1 – 5", "Quality (5: realtime max)"],
       ]],
-      ["Flying the Ranger (K)", [
+      ["Flying the Ranger (K) — KSP's layout", [
         ["W S · A D · Q E", "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)"],
-        ["⇧ + those keys", "RCS translation: forward/back · left/right · up/down"],
-        ["↑ ↓ · Z · X", "Throttle up/down · full · cut (W · X on AZERTY)"],
+        ["⇧ · Alt · ↑ ↓", "Throttle up · down (held)"],
+        ["Z · X", "Full throttle · cut (W · X on AZERTY)"],
+        ["I K · J L · H N", "RCS translation: down/up · left/right · forward/back"],
+        ["Caps Lock", "Precision controls (fine rotation, throttle, RCS)"],
         ["T", "SAS: stability assist"],
         ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
-        ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target"],
-        ["8 · 9 · 0", "Autopilot: hold position · circularize · approach target"],
-        [", · .", "Time warp slower · faster"],
+        ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
+        ["8 · 9 · 0 · G · U", "Autopilot: hold position · circularize · approach · land · take off"],
+        [", · . · /", "Time warp slower · faster · real time"],
+        ["M · ⇧M", "Map view (click a body: target · drag · wheel) · settings panel"],
         ["V · ⇧V", "Camera: next · previous attach point (the view travels there)"],
-        ["N", "HUD density: full · minimal · clean view"],
-        ["O", "Flight planner: align the orbital plane · transfer to an orbit · rendezvous with the star · through the wormhole · manual nodes, then EXECUTE"],
+        ["²  (`)", "HUD density: full · minimal · clean view"],
+        ["O", "Flight planner: align the orbital plane · transfer · rendezvous · through the wormhole · nodes, then EXECUTE"],
+        ["⇧K", "Leave the Ranger"],
         ["Drag · double-click", "Look around from the attach point · look ahead"],
         ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
       ]],
@@ -978,6 +985,8 @@ export class SettingsPanel {
     } else if (mod && e.key.toLowerCase() === "y" && !typing) {
       e.preventDefault();
       this.redo();
+    } else if (!mod && !typing && this.flightKeys?.(e)) {
+      // (flying: M is the map, / real time — the panel keeps Shift+M)
     } else if (!mod && !typing && e.key === "/") {
       e.preventDefault();
       this.toggle(true);

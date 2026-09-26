@@ -1470,22 +1470,20 @@ export class CameraController {
 
   /** Pilot's keys (held): W/S pitch, A/D yaw, Q/E roll (by physical position); with Shift: RCS translation. */
   private pilotInput(pad: ReturnType<GamepadInput["poll"]>): PilotInput {
+    // KSP's layout, by physical key (Z Q S D / A E on AZERTY): W S pitch (W: nose down), A D yaw, Q E
+    // roll; I K translate down / up, J L left / right, H N forward / back; Shift throttles up, Alt
+    // down (not Ctrl: Ctrl+W closes the tab), arrows too
     const k = (c: string) => (this.codes.has(c) ? 1 : 0);
-    const shift = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight");
     const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
-    const ws = k("KeyS") - k("KeyW"); // W: nose down (like an aircraft), S: nose up
-    const ad = k("KeyD") - k("KeyA");
-    const qe = k("KeyE") - k("KeyQ");
-    if (shift) {
-      i.tz = -ws;
-      i.tx = ad;
-      i.ty = qe;
-    } else {
-      i.pitch = ws;
-      i.yaw = ad;
-      i.roll = qe;
-    }
-    i.throttle = (this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("ArrowDown") ? 1 : 0);
+    i.pitch = k("KeyS") - k("KeyW");
+    i.yaw = k("KeyD") - k("KeyA");
+    i.roll = k("KeyE") - k("KeyQ");
+    i.tx = k("KeyL") - k("KeyJ");
+    i.ty = k("KeyK") - k("KeyI");
+    i.tz = k("KeyH") - k("KeyN");
+    const up = k("ShiftLeft") || k("ShiftRight") || (this.keys.has("ArrowUp") ? 1 : 0);
+    const down = k("AltLeft") || k("AltRight") || (this.keys.has("ArrowDown") ? 1 : 0);
+    i.throttle = up - down;
     if (pad) {
       // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle
       i.pitch = clamp(i.pitch - pad.move[0], -1, 1);
@@ -1515,7 +1513,8 @@ export class CameraController {
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
     const out = this.pilot.step({
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
-      radialOut: this.radialOut(cam), refVel: this.ourNav(cam)?.refVelRep, target: this.targetDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
+      radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
+      target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
       // ship turns within it — the wall-clock turn rates are for the eye, not for days-long burns)
@@ -2491,6 +2490,37 @@ export class CameraController {
   }
 
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
+  /** the navball's speed: in orbit (around the reference body) or relative to the target */
+  speedMode: "orbit" | "target" = "orbit";
+
+  /** The target's velocity as a local 3-velocity (ZAMO near the hole, rep on our side). */
+  private targetVelLocal(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+    const s = this.s;
+    if (s.target === "hole") return [0, 0, 0];
+    const nav = this.ourNav(cam);
+    if (nav) return nav.toRep(ourTarget(s, s.target, nav.t).vel);
+    if (cam.region !== "hole") return null;
+    const V = bodyVelocity(s, s.target, this.nowTime());
+    const f = sphericalFrame(blToCartesian(cam.r, cam.theta, cam.phi));
+    return coordToZamo([dot3(V, f.er), dot3(V, f.et), dot3(V, f.ep)], cam.r, cam.theta, cam.zamo);
+  }
+
+  /** The next manoeuvre node's burn direction (local), for the NODE hold and the navball. */
+  private maneuverDir(cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+    if (this.nodeBurning && this.burnDir) return this.burnDir;
+    const n = this.plan.nodes[0];
+    if (!n) return null;
+    const v = this.nodeDirLocal ? this.nodeDirLocal(cam, n) : null;
+    return v;
+  }
+  /** (set by the planner of the side the ship is on: a node's burn as a local direction now) */
+  private nodeDirLocal: ((cam: ReturnType<typeof cameraFrame>, n: ManeuverNode) => Vec3 | null) | null = (cam, n) => {
+    if (cam.region !== "hole") return null;
+    const d = dvLocal(cam.beta, n.dv);
+    const l = Math.hypot(...d);
+    return l > 0 ? lin(d, 1 / l, d, 0) : null;
+  };
+
   /** where our universe's hover holds (home frame, relative to the reference body) */
   private ourAnchor: { ref: string; d: Vec3 } | null = null;
 
@@ -2815,6 +2845,7 @@ export class CameraController {
         antinormal: C(normal && lin(normal, -1, normal, 0)),
         target: C(this.targetDir(cam)),
         burn: C(this.pilot.burn),
+        maneuver: C(this.maneuverDir(cam)),
         // velocity relative to the target (approach, docking)
         tgtPrograde: null as Vec3 | null,
         tgtRetrograde: null as Vec3 | null,
@@ -2848,6 +2879,8 @@ export class CameraController {
       ourAlt: NaN,
       ourVr: NaN,
       ourCa: null as { d: number; t: number } | null,
+      speedMode: this.speedMode,
+      precision: this.pilot.precision,
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
@@ -2919,6 +2952,16 @@ export class CameraController {
       const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
       info.ourAlt = Math.hypot(...sub3(nav.X, nav.refPos)) - rb;
       info.ourVr = dot3(rel, sub3(nav.X, nav.refPos)) / Math.max(Math.hypot(...sub3(nav.X, nav.refPos)), 1e-12);
+    }
+    // the navball relative to the target: its speed, its prograde
+    if (this.speedMode === "target") {
+      const vt = this.targetVelLocal(cam);
+      if (vt) {
+        const rel = sub3(cam.beta, vt);
+        info.speed = Math.hypot(...rel);
+        info.dirs.prograde = info.dirs.tgtPrograde;
+        info.dirs.retrograde = info.dirs.tgtRetrograde;
+      }
     }
     return info;
   }
