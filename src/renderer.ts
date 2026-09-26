@@ -785,7 +785,14 @@ export class Renderer {
     if (side) w.side = side;
     set(42, s.wormhole && s.cinematic ? 1 : 0, s.waterRipples, s.waterMirror, w.clock);
     set(43, ...w.splash, w.splashAt);
-    set(44, s.waterGlow, 0, 0, 0);
+    // a pixel's footprint on the throat's sphere (radians): the ripples fade once unresolved
+    let dThroat = Math.abs(cam.ell);
+    if (cam.region !== "throat") {
+      const st = Math.sin(cam.theta);
+      const X = [cam.r * st * Math.cos(cam.phi), cam.r * st * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)];
+      dThroat = Math.hypot(X[0]! - m.C[0]!, X[1]! - m.C[1]!, X[2]! - m.C[2]!) - m.w.rho;
+    }
+    set(44, s.waterGlow, (pixelAngle * Math.max(dThroat, 0.02 * m.w.rho)) / m.w.rho, 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

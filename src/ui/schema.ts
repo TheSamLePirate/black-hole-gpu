@@ -219,13 +219,13 @@ export const SCHEMA: ControlDef[] = [
   // ------------------------------------------------------------------ scene · cinematic mode
   {
     key: "cinematic", type: "toggle", section: "scene", group: "Cinematic mode", label: "Liquid wormhole",
-    help: "An artistic effect, not physics: a rippling liquid surface stretched across the wormhole's throat. Rays going through are bent by its waves (the far universe shimmers), some are reflected back (Fresnel: the rim of the sphere turns into a mirror of Gargantua's universe), and the light that crosses is slightly tinted, with caustics. Going through the throat yourself leaves a splash. Shortcut: L.",
+    help: "An artistic effect, not physics: a liquid surface stretched across the wormhole's throat, covered in tiny ripples. It only shows up close: each ripple fades out once it spans too few pixels, and from afar the wormhole is the physical one. Rays going through are bent by the ripples (the far universe shimmers), some are reflected back (Fresnel: the rim turns into a mirror of the camera's universe), and the light that crosses is slightly tinted, with caustics. Going through the throat yourself leaves a splash. Shortcut: L.",
     keywords: "water liquid surface ripple wave aqueous interface mirror splash cinematic artistic effect",
   },
   {
     key: "waterRipples", type: "number", section: "scene", group: "Cinematic mode", label: "Ripples", min: 0, max: 3, step: 0.05,
     enabled: (s) => s.cinematic,
-    help: "Strength of the waves: swell, drops falling now and then, and the splash when you go through. 0: a perfectly still surface.",
+    help: "Strength of the ripples (wavelengths of a few hundredths of the throat radius): patchy trains of fine waves, droplets falling now and then, and the splash when you go through. 0: a perfectly still surface.",
   },
   {
     key: "waterMirror", type: "number", section: "scene", group: "Cinematic mode", label: "Reflectance", min: 0, max: 1, step: 0.01,

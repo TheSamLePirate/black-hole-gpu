@@ -183,13 +183,16 @@ the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field
 outside, and their energy at infinity is kept across it.
 
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
-preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a rippling liquid surface is
-stretched across the throat (ℓ = 0). Dneg steps land exactly on it; each ray crossing it is either
+preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny
+ripples (wavelengths of 2π/150 of the throat radius and less) is stretched across the throat (ℓ = 0). It only
+shows up close: each ripple fades out once it spans fewer than ~8–24 pixels (the pixel's footprint on the
+throat, like a mip-mapped normal map), and once even the longest is unresolved the whole effect — reflection,
+tint, glow — is off, so from afar the wormhole is exactly the physical one. Dneg steps land exactly on it; each ray crossing it is either
 reflected (probability given by Schlick's Fresnel term, so the rim of the sphere turns into a mirror of the
 camera's own universe, Gargantua's disk included) or refracted by the slope of the waves, and the light
 that goes through picks up a thin aqueous tint, caustics where the surface curvature focuses it, and a
-glow scattered in the liquid (bright on the crests, a sheen towards the rim). The surface carries a swell
-of six travelling waves (deep-water dispersion ω ∝ √k), drops that fall now and then, and a **splash**
+glow scattered in the liquid (bright on the crests, a sheen towards the rim). The surface carries patchy
+trains of fine travelling ripples in eight directions (ω ∝ √k), droplets that fall now and then, and a **splash**
 spreading from the point where the camera goes through. The waves run on their own clock (they move with
 time paused; wave speed 0 freezes them so the view can refine); in a video they follow the video's time.
 Settings: ripples, reflectance at normal incidence, glow, wave speed.

@@ -55,7 +55,7 @@ struct Params {
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
   water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
-  water3: vec4f,   // glow of the liquid, unused, unused, unused
+  water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1438,52 +1438,63 @@ fn dnegRHS(l: f32, pl: f32, b: f32) -> Planar {
 // light that goes through picks up a faint aqueous tint and caustics.
 // ---------------------------------------------------------------------------------------------
 
+// The waves are tiny (wavelengths of a few hundredths of the throat radius): each one fades out once
+// it spans too few pixels (P.water3.y = a pixel's footprint on the throat, in radians), like a
+// mip-mapped normal map; when even the longest is unresolved the whole effect is gone, so from afar
+// the wormhole is the physical one.
+fn waterLod(K: f32) -> f32 { return smoothstep(8.0, 24.0, TAU / (K * P.water3.y)); }
+
 // A ring of ripples running out from c on the throat's sphere, `age` seconds after the drop.
-fn waterRing(n: vec3f, c: vec3f, age: f32, amp: f32) -> vec4f {
-  if (age < 0.0 || age > 7.0) { return vec4f(0.0); }
+fn waterRing(n: vec3f, c: vec3f, age: f32, amp: f32, K: f32, speed: f32) -> vec4f {
+  if (age < 0.0 || age > 6.0) { return vec4f(0.0); }
   let cc = clamp(dot(c, n), -1.0, 1.0);
-  let x = acos(cc) - 0.42 * age;           // behind (< 0) or ahead of the front
-  let w2 = 0.004 + 0.02 * age;             // the packet spreads
-  let env = amp * exp(-x * x / w2 - 0.45 * age) * min(age * 6.0, 1.0);
+  let x = acos(cc) - speed * age;          // behind (< 0) or ahead of the front
+  let w2 = 0.0015 + 0.004 * age;           // the packet spreads
+  let env = amp * waterLod(K) * exp(-x * x / w2 - 0.5 * age) * min(age * 8.0, 1.0);
   if (env < 1e-4) { return vec4f(0.0); }
-  let K = 46.0;
   let ph = K * x;
   let gth = (cc * n - c) * inverseSqrt(max(1.0 - cc * cc, 1e-6)); // ∇θ
-  return vec4f(env * cos(ph) * gth, -env * K * sin(ph));
+  return vec4f(env * cos(ph) * gth, -40.0 * env * sin(ph));
 }
 
-// Slope of the surface (tangential gradient of its height, per radian) and its curvature (caustics).
+// Slope of the surface (tangential gradient of its height, per radian) and a curvature measure
+// (caustics, glow on the crests).
 fn waterSlope(n: vec3f) -> vec4f {
   let tc = P.water.w;
   var acc = vec4f(0.0);
-  // swell: travelling waves in six directions, deep-water dispersion ω ∝ √K
-  for (var i = 0u; i < 6u; i++) {
+  // fine swell: travelling ripples in eight directions, ω ∝ √K
+  for (var i = 0u; i < 8u; i++) {
     let fi = f32(i);
-    let z = 1.0 - (2.0 * fi + 1.0) / 6.0;
+    let K = WATER_K0 * pow(1.4, fi);
+    let lod = waterLod(K);
+    if (lod <= 0.0) { break; }
+    let z = 1.0 - (2.0 * fi + 1.0) / 8.0;
     let q = sqrt(1.0 - z * z);
     let k = vec3f(q * cos(2.39996 * fi + 0.4), q * sin(2.39996 * fi + 0.4), z);
-    let K = 9.0 * pow(1.38, fi);
     let kn = dot(k, n);
     let ph = K * kn - 0.95 * sqrt(K) * tc + 1.7 * fi;
-    let sl = 0.5 / sqrt(K);
-    acc += vec4f(sl * cos(ph) * k, -sl * K * sin(ph) * (1.0 - kn * kn));
+    // patchy: each train comes and goes across the surface (no regular cross-hatching)
+    let trainAmp = vnoise(n * 7.0 + vec3f(13.1 * fi, 7.3 * fi, 0.05 * tc));
+    let sl = lod * 1.4 * trainAmp * trainAmp / sqrt(K);
+    acc += vec4f(sl * cos(ph) * k, -40.0 * sl * sin(ph) * (1.0 - kn * kn));
   }
-  // drops falling now and then, somewhere on the surface
-  for (var j = 0u; j < 3u; j++) {
+  // droplets falling now and then, somewhere on the surface
+  for (var j = 0u; j < 4u; j++) {
     let fj = f32(j);
-    let T = 2.6 + 1.3 * fj;
-    let tt = tc + 0.83 * fj;
+    let T = 1.6 + 0.7 * fj;
+    let tt = tc + 0.61 * fj;
     let cyc = floor(tt / T);
     let h = hash4(vec3u(u32(max(cyc, 0.0)), j, 911u));
     let z = 2.0 * h.x - 1.0;
     let c = vec3f(sqrt(1.0 - z * z) * vec2f(cos(TAU * h.y), sin(TAU * h.y)), z);
-    acc += waterRing(n, c, tt - cyc * T, 0.10 + 0.08 * h.z);
+    acc += waterRing(n, c, tt - cyc * T, 0.06 + 0.05 * h.z, 380.0, 0.2);
   }
   // the splash left by the camera going through
-  acc += waterRing(n, P.water2.xyz, tc - P.water2.w, 0.55);
+  acc += waterRing(n, P.water2.xyz, tc - P.water2.w, 0.3, 260.0, 0.3);
   let g = acc.xyz - dot(acc.xyz, n) * n;
   return vec4f(g, acc.w) * P.water.y;
 }
+const WATER_K0 = 150.0; // longest ripples: wavelength 2π/150 of the throat radius
 
 // len: coordinate time spent (Gargantua's clock on its side of the throat, path length beyond);
 // tint: transmission picked up at the cinematic liquid surface
@@ -1548,10 +1559,11 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
       let n = cos(st.psi) * nA + sin(st.psi) * e2;
       let t = -sin(st.psi) * nA + cos(st.psi) * e2;
       let d = normalize(st.pl * n + (b / r0) * t);
+      let vis = waterLod(WATER_K0); // 0 from afar: no effect at all
       let ws = waterSlope(n);
       let nw = normalize(n - ws.xyz);
       let c = dot(d, nw);
-      let F = P.water.z + (1.0 - P.water.z) * pow(1.0 - min(abs(c), 1.0), 5.0);
+      let F = vis * (P.water.z + (1.0 - P.water.z) * pow(1.0 - min(abs(c), 1.0), 5.0));
       u = fract(u * 7.1373 + 0.3719);
       let dr = d - 2.0 * c * nw;
       var dn = normalize(d - 0.45 * ws.xyz);
@@ -1566,8 +1578,8 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
         // and a sheen towards the rim (grazing incidence), so the surface shows on a dark sky too
         let crest = pow(clamp(-0.05 * ws.w, 0.0, 3.0), 2.0);
         let glow = vec3f(0.16, 0.55, 0.75) * (0.2 * crest + 0.25 * F + 0.008);
-        out.glow += out.tint * glow * (P.water3.x * P.time.z);
-        out.tint *= exp(-vec3f(0.55, 0.17, 0.07) * path) * caustic;
+        out.glow += out.tint * glow * (vis * P.water3.x * P.time.z);
+        out.tint *= mix(vec3f(1.0), exp(-vec3f(0.55, 0.17, 0.07) * path), vis) * caustic;
       }
       let tv2 = dn - dot(dn, n) * n;
       let tl2 = length(tv2);

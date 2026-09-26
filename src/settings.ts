@@ -317,7 +317,7 @@ export const presets: Record<string, Preset> = {
     skyL: 180, skyB: 0, skyRoll: 35,
   },
   "Cinematic: the liquid wormhole": {
-    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 5, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
+    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 0.9, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 60,
     skyL: 180, skyB: 0, skyRoll: 35, cinematic: true,
   },
   "Wormhole: long throat (images wrapped around it)": {
