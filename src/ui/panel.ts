@@ -898,6 +898,7 @@ export class SettingsPanel {
         ["Space", "Run / pause time"],
         ["J · G", "Jet · shadow guide"],
         ["L", "Cinematic mode: liquid wormhole surface"],
+        ["K · ⇧K", "Ranger: camera on the spaceship · next attach point"],
         ["1 – 5", "Quality (5: realtime max)"],
       ]],
       ["Controller (Xbox · PlayStation)", [

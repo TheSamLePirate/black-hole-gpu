@@ -1,4 +1,5 @@
 import type { Settings } from "../settings";
+import { MOUNTS } from "../mounts";
 
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
 export type Effect = "scene" | "display" | "none" | "resize";
@@ -220,6 +221,34 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "journeyDuration", type: "number", section: "scene", group: "Interstellar wormhole", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
     help: "Length of the cinematic trip (T): line up with the mouth, cross the throat, then approach the black hole (or, from its universe, the way back).",
+  },
+  // ------------------------------------------------------------------ scene · spaceship
+  {
+    key: "ship", type: "toggle", section: "scene", group: "Spaceship", label: "Ranger",
+    help: "Mount the camera on Interstellar's Ranger. The ship is rigid in the camera's rest frame (it turns and flies with the view) and is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point).",
+    keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
+  },
+  {
+    key: "shipMount", type: "choice", section: "scene", group: "Spaceship", label: "Attach point", enabled: (s) => s.ship,
+    options: Object.entries(MOUNTS).map(([value, m]) => ({ value, label: m.label })),
+    help: "Where the camera is fixed on the hull.",
+  },
+  {
+    key: "shipLight", type: "number", section: "scene", group: "Spaceship", label: "Lighting", min: 1, max: 300, scale: "log", precision: 2, enabled: (s) => s.ship, effect: "display",
+    help: "Gain on the light the hull receives. 1 is physical: the hull receives a few hundred times less light than the disk's surface brightness (the disk covers a small part of its sky), so against it the ship is a black silhouette. Films light it far more (default 30).",
+    keywords: "ship light exposure fill brightness",
+  },
+  {
+    key: "shipAlbedo", type: "number", section: "scene", group: "Spaceship", label: "Hull brightness", min: 0.02, max: 0.95, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Albedo of the hull plating (panels vary slightly, seams and wear are darker). The Ranger of the film is a light grey.",
+  },
+  {
+    key: "shipMetal", type: "number", section: "scene", group: "Spaceship", label: "Metalness", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Metalness of the plating: 0 a painted hull, 1 bare metal (mirror-like, coloured reflections of the disk).",
+  },
+  {
+    key: "shipRough", type: "number", section: "scene", group: "Spaceship", label: "Roughness", min: 0.1, max: 2.5, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Roughness scale of the plating: lower is glossier (sharper reflections of the disk).",
   },
   // ------------------------------------------------------------------ scene · cinematic mode
   {

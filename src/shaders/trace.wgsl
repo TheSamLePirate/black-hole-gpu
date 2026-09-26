@@ -58,6 +58,7 @@ struct Params {
   water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
   water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density), unused
   water5: vec4f,   // colour of the glow (linear rgb), unused
+  envCfg: vec4f,   // light probe: blend weight of a new frame (1: replace), unused…
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -84,6 +85,8 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(11) var<storage, read_write> polAcc: array<vec2f>; // Σ Stokes Q, U (luminance)
 // camera path: 256 points (xyz, fraction along the path), then bounding spheres of chunks of 16 segments
 @group(0) @binding(13) var<storage, read> pathPts: array<vec4f>;
+// light probe around the camera (equirectangular, camera rest frame), for the Ranger's lighting
+@group(0) @binding(14) var<storage, read_write> envBuf: array<vec4f>;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -1760,14 +1763,16 @@ fn traceOut(col: vec3f) -> TraceOut {
 }
 
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
-  let a = P.bh.x;
-  let rH = P.bh.y;
-  let mode = P.modes.x;
-
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
   let tanH = P.cam.w;
   let aspect = P.camRight.w;
-  let look = normalize(P.camFwd.xyz + ndc.x * tanH * aspect * P.camRight.xyz + ndc.y * tanH * P.camUp.xyz);
+  return traceLook(normalize(P.camFwd.xyz + ndc.x * tanH * aspect * P.camRight.xyz + ndc.y * tanH * P.camUp.xyz), rnd, tNow);
+}
+
+fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
+  let a = P.bh.x;
+  let rH = P.bh.y;
+  let mode = P.modes.x;
 
   // Received photon: energy 1, momentum opposite to the viewing direction. Lorentz boost from the
   // camera frame to the ZAMO frame (relativistic aberration + Doppler of the observer's motion).
@@ -2133,7 +2138,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
           // radio: the ~10⁴ K disk is a black occulter next to the ~10¹⁰ K synchrotron flow
           if (!radio) { col += trans * hit.color; }
           if (!radio && QUALITY_PIPELINE && P.ret.x > 0.5 && P.misc.y < 0.5 && P.modes.y == SHIFT_FULL) {
-            let u = hash4(vec3u(bitcast<u32>(ndc.x), bitcast<u32>(ndc.y), bitcast<u32>(rnd) + crossings)).xy;
+            let u = hash4(vec3u(bitcast<u32>(look.x), bitcast<u32>(look.y), bitcast<u32>(rnd) + crossings)).xy;
             let back = returningRadiation(m, sign(cos(s.x.y)), hit.g, tNow, u);
             col += trans * (1.0 - hit.trans) * P.ret.y * back;
           }
@@ -2486,6 +2491,43 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     if (polOn) { polAcc[idx] = qu; }
   }
   stamps[idx] = frameStamp;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Light probe: the radiance reaching the camera from every direction, traced like the image, on an
+// ENV_W × ENV_H equirectangular map of the camera's rest frame (x right, y up, z forward;
+// u = atan2(x, z), v = polar angle from +y). It lights the spaceship the camera is mounted on. The
+// sky is pre-filtered over a texel; successive frames are blended (weight P.ext.w-like: env blend).
+// ---------------------------------------------------------------------------------------------
+const ENV_W = 128u;
+const ENV_H = 64u;
+
+@compute @workgroup_size(8, 8)
+fn env(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= ENV_W || gid.y >= ENV_H) { return; }
+  let h = hash4(vec3u(gid.xy, P.frame.x));
+  let u = (f32(gid.x) + h.x) / f32(ENV_W);
+  let v = (f32(gid.y) + h.y) / f32(ENV_H);
+  let ph = (u - 0.5) * TAU;
+  let th = v * PI;
+  let dl = vec3f(sin(th) * sin(ph), cos(th), sin(th) * cos(ph));
+  let look = normalize(dl.x * P.camRight.xyz + dl.y * P.camUp.xyz + dl.z * P.camFwd.xyz);
+  let tr = traceLook(look, h.z, P.time.x);
+  var col = tr.col;
+  if (tr.bgW > 0.0) {
+    // footprint of a texel on the sky (along the lensed direction's tangents)
+    let t1 = normalize(cross(tr.dir, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(tr.dir.z) > 0.9)));
+    let t2 = cross(tr.dir, t1);
+    let w = PI / f32(ENV_H);
+    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky);
+  }
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  col = min(col, vec3f(60000.0));
+  let i = gid.y * ENV_W + gid.x;
+  let old = envBuf[i];
+  // blend with the previous frames (x: blend weight of the new sample; 1 = replace)
+  let k = select(P.envCfg.x, 1.0, old.a <= 0.0);
+  envBuf[i] = vec4f(mix(old.rgb, col, k), 1.0);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -157,6 +157,13 @@ export interface Settings {
   waterColor: string; // colour of the liquid (sRGB "#rrggbb"): what the light going through is filtered towards
   waterDensity: number; // how strongly it colours that light (0: clear)
   waterGlowColor: string; // colour of the scattered light
+  // the spaceship carrying the camera (Interstellar's Ranger)
+  ship: boolean;
+  shipMount: string; // attach point of the camera (ship.ts MOUNTS)
+  shipAlbedo: number; // hull albedo (light grey paint in the film)
+  shipMetal: number; // metalness of the plating (0 painted … 1 bare metal)
+  shipRough: number; // roughness scale (lower: glossier)
+  shipLight: number; // gain on the light the hull receives (1: physical)
   // companion star on a circular equatorial orbit around the hole
   sun: boolean;
   sunOrbit: number; // orbital radius [M]
@@ -283,6 +290,12 @@ export function defaultSettings(): Settings {
     waterColor: "#3aa6c8",
     waterDensity: 1,
     waterGlowColor: "#6fc4e1",
+    ship: false,
+    shipMount: "quarter",
+    shipAlbedo: 0.6,
+    shipMetal: 0.15,
+    shipRough: 1,
+    shipLight: 30,
     sun: false,
     sunOrbit: 70,
     sunRadius: 2.5,
@@ -312,6 +325,11 @@ export const presets: Record<string, Preset> = {
   "Interstellar (no shifts)": {
     spin: 0.6, distance: 34, inclination: 84, fov: 40, yaw: 0, pitch: 0, shiftMode: "none",
     diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
+  },
+  "Ranger: approaching Gargantua": {
+    spin: 0.6, distance: 34, inclination: 84, fov: 55, yaw: 0, pitch: 0, roll: 0, shiftMode: "none",
+    diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
+    ship: true, shipMount: "quarter",
   },
   "Interstellar: wormhole to Gargantua": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,

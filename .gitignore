@@ -36,3 +36,6 @@ snapshots
 
 # GitHub Pages build
 _site
+
+# raw model as supplied (54 MB); the app uses assets/ranger (scripts/build-ranger.ts)
+assets/Interstellar Ranger One/

@@ -182,6 +182,21 @@ the sphere (no overshoot for grazing rays), Gargantua's weak field still bends t
 the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
 outside, and their energy at infinity is kept across it.
 
+**The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
+"Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,
+wingtip, belly, nose looking back). Interstellar's Ranger (OBJ prepared by `scripts/build-ranger.ts`: n-gons
+ear-clipped in their plane, 40° auto-smooth normals, one material per part; the model's own textures were
+baked on another UV layout and are not used) carries the camera. A few metres across, it lives in the camera's
+local flat patch of spacetime and is rigid in its rest frame, so it is rasterized with the tracer's own pinhole
+(4× MSAA) and composited over the resolved HDR image, before bloom — the disk's glare spills over its
+silhouette. It is lit by a **light probe traced by the ray tracer itself**: 128×64 directions around the camera,
+in its rest frame (lensed disk, Gargantua, sky, aberration and Doppler of the camera's motion included),
+turned into box-filtered mips (glossy reflections, split-sum BRDF) and order-2 spherical harmonics (diffuse
+irradiance, Ramamoorthi & Hanrahan), plus a shadow map from the dominant light direction (the L1 band).
+Procedural plating: light grey panels with seams and wear, dark glass, metal nozzles. A lighting gain (1 =
+physical: against the disk the hull is a black silhouette, since it receives a few hundred times less light
+than the disk's surface brightness; default 30), hull brightness, metalness and roughness are settings.
+
 **Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
 preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a liquid surface covered in tiny
 ripples (wavelengths of 2π/150 of the throat radius and less) is stretched across the throat (ℓ = 0). It only
@@ -258,7 +273,7 @@ journey: line up with the mouth, cross the throat, emerge facing the black hole 
 the black hole's universe: the way back home).
 
 Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
+rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · K Ranger (⇧K attach point) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

@@ -2,6 +2,9 @@ import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
+import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
+import { ShipRenderer } from "./ship";
+import type { Mount } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
@@ -27,7 +30,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 47;
+const PARAM_VEC4S = 48;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
 const PATH_MAX = 256;
 const PATH_CHUNK = 16;
@@ -179,6 +182,11 @@ export class Renderer {
   private postAtrous: GPUComputePipeline;
   private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
+  /** The spaceship carrying the camera, and the light probe that lights it. */
+  readonly ship: ShipRenderer;
+  private envPipeline: GPUComputePipeline;
+  private envReset = true;
+  private shipLoading: Promise<void> | null = null;
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
    * splash left where the camera last went through (centre on the throat, clock then).
@@ -235,7 +243,7 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string; sky: string },
+    src: { trace: string; display: string; post: string; sky: string; ship: string },
   ) {
     this.device = device;
     this.context = context;
@@ -262,6 +270,7 @@ export class Renderer {
         { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 11, visibility: C, buffer: { type: "storage" } },
         { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 14, visibility: C, buffer: { type: "storage" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -272,6 +281,8 @@ export class Renderer {
       });
     this.qualityPipeline = mkTrace(true);
     this.tracePipeline = mkTrace(false);
+    this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
+    this.ship = new ShipRenderer(device, src.ship);
     const mkDisplay = (fmt: GPUTextureFormat) =>
       device.createRenderPipeline({
         layout: "auto",
@@ -365,6 +376,7 @@ export class Renderer {
     context.configure({ device, format, alphaMode: "opaque" });
     const src = {
       trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
+      ship: await wgsl(shipWGSL),
     };
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
@@ -488,7 +500,8 @@ export class Renderer {
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
     const bloomLevels = Math.max(2, Math.min(8, Math.floor(Math.log2(Math.min(width, height))) - 3));
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
-    const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage });
+    // (render attachment: the spaceship is composited over mip 0)
+    const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage: usage | GPUTextureUsage.RENDER_ATTACHMENT });
     const bloomTex = d.createTexture({
       size: [Math.max(1, width >> 1), Math.max(1, height >> 1)],
       format: "rgba16float",
@@ -524,6 +537,7 @@ export class Renderer {
   private destroyTarget(t: Target | null) {
     if (!t) return;
     for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
+    this.ship.forget(t.hdr);
     t.hdr.destroy();
     t.bloomTex.destroy();
     t.beam?.tex.destroy();
@@ -550,6 +564,7 @@ export class Renderer {
         { binding: 10, resource: { buffer: this.catalogue } },
         { binding: 11, resource: { buffer: t.polAcc } },
         { binding: 13, resource: { buffer: this.pathBuf } },
+        { binding: 14, resource: { buffer: this.ship.envBuf } },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -797,6 +812,8 @@ export class Renderer {
     const liquid = hexToLinear(s.waterColor);
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
+    // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light)
+    set(47, this.envReset ? 1 : 0.35, 0, 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -861,6 +878,22 @@ export class Renderer {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
     }
+  }
+
+  /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
+  private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    if (!s.ship) return;
+    if (!this.ship.ready) {
+      this.shipLoading ??= this.ship.load().then(() => this.invalidate(), (e) => console.error("Ranger:", e));
+      return;
+    }
+    const pass = enc.beginComputePass();
+    pass.setPipeline(this.envPipeline);
+    pass.setBindGroup(0, t.traceBind);
+    pass.dispatchWorkgroups(128 / 8, 64 / 8);
+    pass.end();
+    this.ship.encodeEnv(enc);
+    this.envReset = false;
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
@@ -974,6 +1007,11 @@ export class Renderer {
       pass.end();
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
+      if (s && i === r0 && s.ship && this.ship.ready) {
+        this.ship.encodeShip(enc, t.hdr, {
+          mount: s.shipMount as Mount, fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight,
+        });
+      }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
   }
@@ -1042,6 +1080,7 @@ export class Renderer {
         sampleIndex: 0, flags, offset,
       });
       this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
+      this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
       this.lastOffset = offset;
     } else if (this.sampleIndex < s.targetSpp) {
@@ -1060,6 +1099,7 @@ export class Renderer {
         sampleIndex: this.sampleIndex, flags, tol: s.integratorTolerance, noise: s.noiseThreshold, minSpp: 8,
       });
       this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
+      if (this.sampleIndex < 4) this.dispatchEnv(enc, t, s);
       this.bandY = y1;
       if (this.bandY >= t.height) {
         this.bandY = 0;
@@ -1148,6 +1188,7 @@ export class Renderer {
 
   /** Starts a render of the current scene, frozen in time, at an arbitrary resolution. */
   startOffline(s: Settings, time: number, opts: OfflineOptions) {
+    this.envReset = true; // the spaceship's light probe: from this camera only (video frames)
     this.cancelOffline();
     this.offline = {
       target: this.createTarget(opts.width, opts.height, s.polarization),
@@ -1244,6 +1285,7 @@ export class Renderer {
         shutter: o.shutter,
       });
       this.dispatchTrace(enc, t, t.width, rows, o.tolerance > 0);
+      if (job.sampleIndex < 4) this.dispatchEnv(enc, t, s);
       job.bandY = y1;
       if (job.bandY >= t.height) {
         job.bandY = 0;

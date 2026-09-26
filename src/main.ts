@@ -4,6 +4,7 @@ import { cameraFrame, switchAnchor } from "./camera";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES } from "./targeting";
 import { HidPads } from "./gamepad";
+import { MOUNTS, type Mount } from "./mounts";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings } from "./settings";
@@ -35,7 +36,7 @@ function sanitize(s: Settings): Settings {
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
-  "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor",
+  "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -163,7 +164,7 @@ async function main() {
   // -------------------------------------------------------------------- toolbar & keys
   const toggleUi = () => document.body.classList.toggle("hide-ui");
   const fullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
-  const toggle = (key: "animate" | "shadowGuide" | "jet" | "cinematic") => {
+  const toggle = (key: "animate" | "shadowGuide" | "jet" | "cinematic" | "ship") => {
     settings[key] = !settings[key];
     refreshGui();
     if (key !== "shadowGuide") touch();
@@ -188,6 +189,10 @@ async function main() {
     "btn-play": () => toggle("animate"),
     "btn-guide": () => toggle("shadowGuide"),
     "btn-jet": () => toggle("jet"),
+    "btn-ship": () => {
+      toggle("ship");
+      panel.toast(settings.ship ? `Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""} — ⇧K: next attach point` : "Ranger off");
+    },
     "btn-cinema": () => {
       toggle("cinematic");
       if (settings.cinematic && !settings.wormhole) panel.toast("Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”");
@@ -212,6 +217,17 @@ async function main() {
     camera.pad.rumble(0.1, 0.3, 50);
     panel.toast(`Target: ${BODY_NAMES[settings.target]}  (${list.indexOf(settings.target) + 1} / ${list.length})`);
   }
+  /** Next attach point of the camera on the Ranger (turns the ship on). */
+  function nextMount() {
+    const keys = Object.keys(MOUNTS) as Mount[];
+    settings.shipMount = keys[(keys.indexOf(settings.shipMount as Mount) + 1) % keys.length]!;
+    if (!settings.ship) settings.ship = true;
+    refreshGui();
+    touch();
+    syncButtons();
+    scheduleUrlSave();
+    panel.toast(`Attach point: ${MOUNTS[settings.shipMount as Mount].label}`);
+  }
   function syncRotationButtons() {
     const orbit = settings.rotation === "orbit";
     const btn = $("btn-rotation");
@@ -230,6 +246,7 @@ async function main() {
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
     $("btn-jet").classList.toggle("active", settings.jet);
     $("btn-cinema").classList.toggle("active", settings.cinematic);
+    $("btn-ship").classList.toggle("active", settings.ship);
   }
   syncButtons();
   syncRotationButtons();
@@ -323,6 +340,10 @@ async function main() {
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
     else if (k === "l") actions["btn-cinema"]!();
+    else if (k === "k") {
+      if (e.shiftKey) nextMount();
+      else actions["btn-ship"]!();
+    }
     else if (k === "i") actions["hud-toggle"]!();
     else if (e.key === "?") actions["btn-help"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
