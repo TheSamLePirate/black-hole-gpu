@@ -941,7 +941,11 @@ export class SettingsPanel {
               h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, "connect it (USB)"),
               ".")
           : h("span", {}),
-        h("footer", {}, h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗")),
+        h("footer", {},
+          h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗"),
+          h("span", { class: "credit" }, " · Ranger: ",
+            h("a", { href: "https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f", target: "_blank", rel: "noopener" }, "“Interstellar Ranger One” by Max Vizell"),
+            ", ", h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"))),
       ),
     );
     document.body.append(dlg);

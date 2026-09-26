@@ -225,7 +225,7 @@ export const SCHEMA: ControlDef[] = [
   // ------------------------------------------------------------------ scene · spaceship
   {
     key: "ship", type: "toggle", section: "scene", group: "Spaceship", label: "Ranger",
-    help: "Mount the camera on Interstellar's Ranger. The ship is rigid in the camera's rest frame (it turns and flies with the view) and is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point).",
+    help: "Mount the camera on Interstellar's Ranger. The ship is rigid in the camera's rest frame (it turns and flies with the view) and is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point). Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.",
     keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
   },
   {

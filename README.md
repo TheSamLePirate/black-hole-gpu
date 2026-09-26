@@ -184,7 +184,8 @@ outside, and their energy at infinity is kept across it.
 
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,
-wingtip, belly, nose looking back). Interstellar's Ranger (OBJ prepared by `scripts/build-ranger.ts`: n-gons
+wingtip, belly, nose looking back). Interstellar's Ranger — [“Interstellar Ranger One” by Max Vizell](https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified (see `assets/ranger/README.md`) — (OBJ prepared by `scripts/build-ranger.ts`: n-gons
 ear-clipped in their plane, 40° auto-smooth normals, one material per part; the model's own textures were
 baked on another UV layout and are not used) carries the camera. A few metres across, it lives in the camera's
 local flat patch of spacetime and is rigid in its rest frame, so it is rasterized with the tracer's own pinhole
