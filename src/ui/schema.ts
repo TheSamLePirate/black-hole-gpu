@@ -230,12 +230,12 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "waterMirror", type: "number", section: "scene", group: "Cinematic mode", label: "Reflectance", min: 0, max: 1, step: 0.01,
     enabled: (s) => s.cinematic,
-    help: "Reflectance at normal incidence (water 0.02, glass 0.04, mercury ≈ 0.7). It rises towards 1 at grazing incidence, near the rim of the sphere (Schlick's Fresnel).",
+    help: "Reflectance at normal incidence (water 0.02, glass 0.04, mercury ≈ 0.7). It rises towards 1 at grazing incidence, near the rim of the sphere (Schlick's Fresnel). 0: no reflection at all, rim included (the default).",
   },
   {
     key: "waterGlow", type: "number", section: "scene", group: "Cinematic mode", label: "Glow", min: 0, max: 3, step: 0.05,
     enabled: (s) => s.cinematic,
-    help: "Light scattered inside the liquid: a luminous network on the wave crests, where the caustics focus, and a sheen towards the rim. It makes the surface visible against a dark sky.",
+    help: "Light scattered inside the liquid: a luminous network on the wave crests, where the caustics focus, and a sheen towards the rim. It makes the surface visible against a dark sky. 0 by default.",
   },
   {
     key: "waterSpeed", type: "number", section: "scene", group: "Cinematic mode", label: "Wave speed", min: 0, max: 4, step: 0.05, effect: "none",

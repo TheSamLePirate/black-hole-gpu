@@ -1563,7 +1563,8 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
       let ws = waterSlope(n);
       let nw = normalize(n - ws.xyz);
       let c = dot(d, nw);
-      let F = vis * (P.water.z + (1.0 - P.water.z) * pow(1.0 - min(abs(c), 1.0), 5.0));
+      // (Schlick; faded to nothing as the reflectance goes to 0, grazing rim included)
+      let F = vis * min(P.water.z / 0.02, 1.0) * (P.water.z + (1.0 - P.water.z) * pow(1.0 - min(abs(c), 1.0), 5.0));
       u = fract(u * 7.1373 + 0.3719);
       let dr = d - 2.0 * c * nw;
       var dn = normalize(d - 0.45 * ws.xyz);
