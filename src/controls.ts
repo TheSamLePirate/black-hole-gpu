@@ -807,7 +807,11 @@ export class CameraController {
       this.aimCache = null;
       this.followD = null;
     }
-    if (this.orbiting && !dragging) this.ensureAnchor();
+    // flying with the keys (or still gliding): the flight carries the view — no re-anchoring, no
+    // aiming — so the camera can go anywhere, e.g. straight through the wormhole
+    const flightKeys = [...this.codes].some((c) => (FLIGHT_KEYS[c]?.slice(0, 3) ?? []).some((v) => v !== 0));
+    const flying = !this.gravity && (flightKeys || Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed);
+    if (this.orbiting && !dragging && !flying) this.ensureAnchor();
 
     // keyboard (held keys): arrows orbit, or turn the camera (free rotation, flight)
     const kRate = 60 * dt;
@@ -881,8 +885,19 @@ export class CameraController {
     }
     if (this.baryRest() && s.rotation === "free") this.driftWithBarycentre();
     this.updateMotion(dt);
-    if (this.tracking) this.track(dt);
+    if (this.tracking && !flying && !this.inThroat()) this.track(dt);
+    // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
+    else this.offset = null;
     return this.changedSince(before);
+  }
+
+  /** Inside the wormhole's throat (|ℓ| < a + 1.5 ρ): "aiming at the wormhole" means nothing there. */
+  private inThroat() {
+    const s = this.s;
+    if (!s.wormhole) return false;
+    const cam = cameraFrame(s);
+    const w = mouth(s).w;
+    return cam.region === "throat" && Math.abs(cam.ell) < w.a + 1.5 * w.rho;
   }
 
   /** Smooth wheel zoom towards the target distance (in log space): to the hole, or |ℓ| to the throat. */

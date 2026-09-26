@@ -168,7 +168,10 @@ velocity at the time each ray escapes, which together with the indirect field gi
 direction at the camera. In free rotation (and when orbiting the new target **Centre of mass** ⊕) the
 camera stays at rest in the centre-of-mass frame — it drifts in Gargantua's frame and takes its velocity
 (motion "At rest (centre of mass)") — so Gargantua and the star are seen circling ⊕ against fixed stars;
-orbiting Gargantua or the star follows them instead. Tests: Ω, −B̈ = m x★/D³, and a distant body at rest
+orbiting Gargantua or the star follows them instead. While the flight keys move the camera (and inside the throat, where
+"aiming at the wormhole" means nothing) the aim pauses and the flight carries the view, so Z/W takes
+the camera straight through the wormhole in either direction; the aim resumes from the orientation the
+flight left, without a jump. Tests: Ω, −B̈ = m x★/D³, and a distant body at rest
 in the centre-of-mass frame stays at rest there (3 %; without the indirect field it drifts away).
 The wormhole's mouth stays bound to Gargantua.
 
