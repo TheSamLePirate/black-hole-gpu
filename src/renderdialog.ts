@@ -253,6 +253,7 @@ export function setupRenderDialog(d: DialogDeps) {
     cam.setCinematic(source);
     cam.enabled = false;
     const t0 = d.time();
+    const w0 = d.renderer.water.clock; // the liquid throat's waves follow the video's own clock
     const n = Math.round(duration * fps);
     const opts = { ...options(), width: w, height: h, shutter: (SHUTTERS[vShutter.value] ?? 0) * (rate / fps) };
     const started = performance.now();
@@ -262,6 +263,7 @@ export function setupRenderDialog(d: DialogDeps) {
       for (let i = 0; i < n && !run.stop; i++) {
         const tf = i / fps;
         cam.enabled = true;
+        d.renderer.water.clock = w0 + tf * d.settings.waterSpeed;
         while (camTime < tf - 1e-9) {
           const dt = Math.min(1 / 120, tf - camTime);
           cam.update(dt, t0 + (camTime + dt) * rate);

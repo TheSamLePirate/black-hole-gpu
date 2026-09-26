@@ -216,6 +216,32 @@ export const SCHEMA: ControlDef[] = [
     key: "journeyDuration", type: "number", section: "scene", group: "Interstellar wormhole", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
     help: "Length of the cinematic trip (T): line up with the mouth, cross the throat, then approach the black hole (or, from its universe, the way back).",
   },
+  // ------------------------------------------------------------------ scene · cinematic mode
+  {
+    key: "cinematic", type: "toggle", section: "scene", group: "Cinematic mode", label: "Liquid wormhole",
+    help: "An artistic effect, not physics: a rippling liquid surface stretched across the wormhole's throat. Rays going through are bent by its waves (the far universe shimmers), some are reflected back (Fresnel: the rim of the sphere turns into a mirror of Gargantua's universe), and the light that crosses is slightly tinted, with caustics. Going through the throat yourself leaves a splash. Shortcut: L.",
+    keywords: "water liquid surface ripple wave aqueous interface mirror splash cinematic artistic effect",
+  },
+  {
+    key: "waterRipples", type: "number", section: "scene", group: "Cinematic mode", label: "Ripples", min: 0, max: 3, step: 0.05,
+    enabled: (s) => s.cinematic,
+    help: "Strength of the waves: swell, drops falling now and then, and the splash when you go through. 0: a perfectly still surface.",
+  },
+  {
+    key: "waterMirror", type: "number", section: "scene", group: "Cinematic mode", label: "Reflectance", min: 0, max: 1, step: 0.01,
+    enabled: (s) => s.cinematic,
+    help: "Reflectance at normal incidence (water 0.02, glass 0.04, mercury ≈ 0.7). It rises towards 1 at grazing incidence, near the rim of the sphere (Schlick's Fresnel).",
+  },
+  {
+    key: "waterGlow", type: "number", section: "scene", group: "Cinematic mode", label: "Glow", min: 0, max: 3, step: 0.05,
+    enabled: (s) => s.cinematic,
+    help: "Light scattered inside the liquid: a luminous network on the wave crests, where the caustics focus, and a sheen towards the rim. It makes the surface visible against a dark sky.",
+  },
+  {
+    key: "waterSpeed", type: "number", section: "scene", group: "Cinematic mode", label: "Wave speed", min: 0, max: 4, step: 0.05, effect: "none",
+    enabled: (s) => s.cinematic,
+    help: "Pace of the waves, on their own clock: they move even with time paused. 0 freezes them, so that the view can refine.",
+  },
   // ------------------------------------------------------------------ matter · disk
   {
     key: "diskTemp", type: "number", section: "matter", group: "Accretion disk", label: "Peak temperature", min: 1500, max: 100000, scale: "log", unit: "K", precision: 3, enabled: diskOn,

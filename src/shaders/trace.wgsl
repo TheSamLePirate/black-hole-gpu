@@ -53,6 +53,9 @@ struct Params {
   star2: vec4f,    // brightness, azimuth at t = 0 [rad], mass m [M], unused
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
+  water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
+  water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
+  water3: vec4f,   // glow of the liquid, unused, unused, unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1429,11 +1432,67 @@ fn dnegRHS(l: f32, pl: f32, b: f32) -> Planar {
   return Planar(pl, b * b * rr.y * ir * ir * ir, b * ir * ir);
 }
 
-// len: coordinate time spent (Gargantua's clock on its side of the throat, path length beyond)
-struct WhOut { side: f32, n: vec3f, d: vec3f, len: f32 };
+// ---------------------------------------------------------------------------------------------
+// Cinematic mode: a liquid surface stretched across the throat (ℓ = 0). Artistic, not part of the
+// Dneg metric: rays crossing it are refracted by its ripples, or reflected back (Fresnel), and the
+// light that goes through picks up a faint aqueous tint and caustics.
+// ---------------------------------------------------------------------------------------------
+
+// A ring of ripples running out from c on the throat's sphere, `age` seconds after the drop.
+fn waterRing(n: vec3f, c: vec3f, age: f32, amp: f32) -> vec4f {
+  if (age < 0.0 || age > 7.0) { return vec4f(0.0); }
+  let cc = clamp(dot(c, n), -1.0, 1.0);
+  let x = acos(cc) - 0.42 * age;           // behind (< 0) or ahead of the front
+  let w2 = 0.004 + 0.02 * age;             // the packet spreads
+  let env = amp * exp(-x * x / w2 - 0.45 * age) * min(age * 6.0, 1.0);
+  if (env < 1e-4) { return vec4f(0.0); }
+  let K = 46.0;
+  let ph = K * x;
+  let gth = (cc * n - c) * inverseSqrt(max(1.0 - cc * cc, 1e-6)); // ∇θ
+  return vec4f(env * cos(ph) * gth, -env * K * sin(ph));
+}
+
+// Slope of the surface (tangential gradient of its height, per radian) and its curvature (caustics).
+fn waterSlope(n: vec3f) -> vec4f {
+  let tc = P.water.w;
+  var acc = vec4f(0.0);
+  // swell: travelling waves in six directions, deep-water dispersion ω ∝ √K
+  for (var i = 0u; i < 6u; i++) {
+    let fi = f32(i);
+    let z = 1.0 - (2.0 * fi + 1.0) / 6.0;
+    let q = sqrt(1.0 - z * z);
+    let k = vec3f(q * cos(2.39996 * fi + 0.4), q * sin(2.39996 * fi + 0.4), z);
+    let K = 9.0 * pow(1.38, fi);
+    let kn = dot(k, n);
+    let ph = K * kn - 0.95 * sqrt(K) * tc + 1.7 * fi;
+    let sl = 0.5 / sqrt(K);
+    acc += vec4f(sl * cos(ph) * k, -sl * K * sin(ph) * (1.0 - kn * kn));
+  }
+  // drops falling now and then, somewhere on the surface
+  for (var j = 0u; j < 3u; j++) {
+    let fj = f32(j);
+    let T = 2.6 + 1.3 * fj;
+    let tt = tc + 0.83 * fj;
+    let cyc = floor(tt / T);
+    let h = hash4(vec3u(u32(max(cyc, 0.0)), j, 911u));
+    let z = 2.0 * h.x - 1.0;
+    let c = vec3f(sqrt(1.0 - z * z) * vec2f(cos(TAU * h.y), sin(TAU * h.y)), z);
+    acc += waterRing(n, c, tt - cyc * T, 0.10 + 0.08 * h.z);
+  }
+  // the splash left by the camera going through
+  acc += waterRing(n, P.water2.xyz, tc - P.water2.w, 0.55);
+  let g = acc.xyz - dot(acc.xyz, n) * n;
+  return vec4f(g, acc.w) * P.water.y;
+}
+
+// len: coordinate time spent (Gargantua's clock on its side of the throat, path length beyond);
+// tint: transmission picked up at the cinematic liquid surface
+// glow: light scattered by the liquid towards the camera (added in front of the tint)
+struct WhOut { side: f32, n: vec3f, d: vec3f, len: f32, tint: vec3f, glow: vec3f };
 
 // Follows a ray from (l0, n0) with unit rep direction d0 until ℓ ≥ lPlus or ℓ ≤ −lMinus.
-fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
+// u: a random number in [0, 1) (the liquid surface's reflect / transmit choice).
+fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) -> WhOut {
   let rho = P.wh.y;
   let a = P.wh.z;
   let M = P.wh.w;
@@ -1450,6 +1509,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
   var st = Planar(l0, dot(d0, n0), 0.0);
   var nA = n0; // plane of motion: (nA, e2); re-derived after each kick of the hole's field
   var out: WhOut;
+  out.tint = vec3f(1.0);
+  let waterOn = P.water.x > 0.5;
+  var u = u0;
   for (var i = 0u; i < 3000u; i++) {
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
     if (st.l <= -lMinus && st.pl < 0.0) { out.side = -1.0; break; }
@@ -1461,6 +1523,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
       let t2 = (-a - st.l) / st.pl;
       if (t1 > 1e-7 * rho && t1 < h) { h = t1; }
       if (t2 > 1e-7 * rho && t2 < h) { h = t2; }
+      // and on the liquid surface (ℓ = 0)
+      let t0 = -st.l / st.pl;
+      if (waterOn && t0 > 1e-7 * rho && t0 < h) { h = t0; }
       // and end exactly on the way out (gluing sphere / our far radius): no overshoot, so a ray
       // grazing the sphere spends no extra time or path in here (no seam at its rim)
       let t3 = select(-1.0, (lPlus - st.l) / st.pl, st.pl > 0.0);
@@ -1468,6 +1533,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
       if (t3 > 1e-7 * rho && t3 < h) { h = t3; }
       if (t4 > 1e-7 * rho && t4 < h) { h = t4; }
     }
+    let lPrev = st.l;
     let k1 = dnegRHS(st.l, st.pl, b);
     let k2 = dnegRHS(st.l + 0.5 * h * k1.l, st.pl + 0.5 * h * k1.pl, b);
     let k3 = dnegRHS(st.l + 0.5 * h * k2.l, st.pl + 0.5 * h * k2.pl, b);
@@ -1476,6 +1542,40 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32) -> WhOut {
     st.pl += h / 6.0 * (k1.pl + 2.0 * k2.pl + 2.0 * k3.pl + k4.pl);
     st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
     if (st.l <= a) { out.len += h; }
+    if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {
+      // through the liquid surface: reflected (probability F, Schlick) or refracted by the ripples
+      let r0 = dnegR(0.0).x;
+      let n = cos(st.psi) * nA + sin(st.psi) * e2;
+      let t = -sin(st.psi) * nA + cos(st.psi) * e2;
+      let d = normalize(st.pl * n + (b / r0) * t);
+      let ws = waterSlope(n);
+      let nw = normalize(n - ws.xyz);
+      let c = dot(d, nw);
+      let F = P.water.z + (1.0 - P.water.z) * pow(1.0 - min(abs(c), 1.0), 5.0);
+      u = fract(u * 7.1373 + 0.3719);
+      let dr = d - 2.0 * c * nw;
+      var dn = normalize(d - 0.45 * ws.xyz);
+      if (u < F && dot(dr, n) * st.pl < 0.0) {
+        dn = dr;
+      } else {
+        if (dot(dn, n) * st.pl <= 0.0) { dn = d; }
+        // a thin aqueous layer (longer path at grazing incidence), caustics from the curvature
+        let path = 0.35 / max(abs(dot(dn, n)), 0.2);
+        let caustic = 1.0 + clamp(-0.1 * ws.w, -0.55, 1.2);
+        // light scattered in the liquid: a luminous network on the crests (where the caustics focus)
+        // and a sheen towards the rim (grazing incidence), so the surface shows on a dark sky too
+        let crest = pow(clamp(-0.05 * ws.w, 0.0, 3.0), 2.0);
+        let glow = vec3f(0.16, 0.55, 0.75) * (0.2 * crest + 0.25 * F + 0.008);
+        out.glow += out.tint * glow * (P.water3.x * P.time.z);
+        out.tint *= exp(-vec3f(0.55, 0.17, 0.07) * path) * caustic;
+      }
+      let tv2 = dn - dot(dn, n) * n;
+      let tl2 = length(tv2);
+      nA = n;
+      if (tl2 > 1e-7) { e2 = tv2 / tl2; }
+      b = r0 * tl2;
+      st = Planar(0.0, dot(dn, n), 0.0);
+    }
     if (st.l > a) {
       // Gargantua's side: its weak field (Φ = −1/|X|, light bends by −2∇⊥Φ per unit length) is
       // felt here too, so that nothing jumps at the gluing sphere (the Dneg metric alone ignores it)
@@ -1636,7 +1736,7 @@ fn colormap(t0: f32) -> vec3f {
 
 // Result of a traced ray. The celestial sphere is shaded after the ray (in main) because its filter
 // footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
-struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32 };
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32, tint: vec3f };
 
 fn traceOut(col: vec3f) -> TraceOut {
   var o: TraceOut;
@@ -1739,6 +1839,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var skyDir = vec3f(0.0);
   var skyG = 1.0;
   var skyId = SKY_NATIVE;
+  var thr = vec3f(1.0);  // transmission through the cinematic liquid surface
+  var colW = vec3f(0.0); // light gathered before the last pass through the wormhole
   var rayLen = 0.0; // distance travelled by the ray (flat map), for the camera path's tube radius
   var tubeVis = 1.0; // the path's tube is hidden by the disk (opaque for it except in real gaps)
 
@@ -1764,7 +1866,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
 
   for (var segN = 0u; segN < 6u; segN++) {
   if (seg == 1u) {
-    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w);
+    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)));
+    // light from beyond the liquid surface is tinted by it; what was gathered before is not
+    colW += thr * (col + w.glow);
+    col = vec3f(0.0);
+    thr *= w.tint;
     if (w.side < 0.0) {
       // out of our end of the wormhole: straight on to our sky (g_tt = −1: no frequency shift)
       fate = 2u;
@@ -2112,6 +2218,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   break;
   } // segments
 
+  col = colW + thr * col;
+  out.tint = thr;
   if (fate == 2u) {
     var gBg = skyG;
     if (P.modes.y == SHIFT_NONE) { gBg = 1.0; }
@@ -2333,7 +2441,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let k = select(0.35, 0.5, interleaved);
     fp.jx *= k;
     fp.jy *= k;
-    col += tr.bgW * background(tr.dir, tr.gBg, fp, tr.sky);
+    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
 

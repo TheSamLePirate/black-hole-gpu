@@ -182,6 +182,18 @@ the sphere (no overshoot for grazing rays), Gargantua's weak field still bends t
 the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
 outside, and their energy at infinity is kept across it.
 
+**Cinematic mode — the liquid wormhole** (L, the toolbar's wave button, Scene → Cinematic mode, or the
+preset "Cinematic: the liquid wormhole"). An artistic effect, not physics: a rippling liquid surface is
+stretched across the throat (ℓ = 0). Dneg steps land exactly on it; each ray crossing it is either
+reflected (probability given by Schlick's Fresnel term, so the rim of the sphere turns into a mirror of the
+camera's own universe, Gargantua's disk included) or refracted by the slope of the waves, and the light
+that goes through picks up a thin aqueous tint, caustics where the surface curvature focuses it, and a
+glow scattered in the liquid (bright on the crests, a sheen towards the rim). The surface carries a swell
+of six travelling waves (deep-water dispersion ω ∝ √k), drops that fall now and then, and a **splash**
+spreading from the point where the camera goes through. The waves run on their own clock (they move with
+time paused; wave speed 0 freezes them so the view can refine); in a video they follow the video's time.
+Settings: ripples, reflectance at normal incidence, glow, wave speed.
+
 **Game controller** (Xbox, PlayStation — any pad with the browser's standard mapping; `src/gamepad.ts`):
 left stick flies (forward/back, sideways; L3 held: boost), right stick orbits the target (free: looks),
 RT/LT up/down, LB/RB roll; A flies to the target, B gravity, X auto-orbit, Y around ⟷ free, D-pad
@@ -241,7 +253,7 @@ journey: line up with the mouth, cross the throat, emerge facing the black hole 
 the black hole's universe: the way back home).
 
 Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
+rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
 space time · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.

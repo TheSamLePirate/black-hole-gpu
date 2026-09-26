@@ -34,7 +34,7 @@ function sanitize(s: Settings): Settings {
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
-  "massSolar", "cinematicSpeed", "rotation",
+  "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -162,7 +162,7 @@ async function main() {
   // -------------------------------------------------------------------- toolbar & keys
   const toggleUi = () => document.body.classList.toggle("hide-ui");
   const fullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
-  const toggle = (key: "animate" | "shadowGuide" | "jet") => {
+  const toggle = (key: "animate" | "shadowGuide" | "jet" | "cinematic") => {
     settings[key] = !settings[key];
     refreshGui();
     if (key !== "shadowGuide") touch();
@@ -187,6 +187,11 @@ async function main() {
     "btn-play": () => toggle("animate"),
     "btn-guide": () => toggle("shadowGuide"),
     "btn-jet": () => toggle("jet"),
+    "btn-cinema": () => {
+      toggle("cinematic");
+      if (settings.cinematic && !settings.wormhole) panel.toast("Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”");
+      else panel.toast(settings.cinematic ? "Cinematic mode: liquid wormhole" : "Cinematic mode off");
+    },
     "btn-shot": () => savePNG(),
     "btn-full": () => fullscreen(),
     "btn-hide": () => toggleUi(),
@@ -223,6 +228,7 @@ async function main() {
     $("btn-play").classList.toggle("active", settings.animate);
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
     $("btn-jet").classList.toggle("active", settings.jet);
+    $("btn-cinema").classList.toggle("active", settings.cinematic);
   }
   syncButtons();
   syncRotationButtons();
@@ -315,6 +321,7 @@ async function main() {
     else if (k === "b") actions["btn-gravity"]!();
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
+    else if (k === "l") actions["btn-cinema"]!();
     else if (k === "i") actions["hud-toggle"]!();
     else if (e.key === "?") actions["btn-help"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
@@ -446,6 +453,11 @@ async function main() {
     }
     if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
       simTime += dt * settings.timeSpeed;
+      timeDirty = true;
+    }
+    // the liquid throat's waves run on their own clock (they move even with the scene's time paused)
+    if (settings.cinematic && settings.wormhole && settings.waterSpeed > 0 && !renderer.offlineActive) {
+      renderer.water.clock += dt * settings.waterSpeed;
       timeDirty = true;
     }
     // the camera's predicted free fall, drawn (lensed) by the tracer

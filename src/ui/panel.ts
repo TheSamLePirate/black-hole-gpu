@@ -884,6 +884,7 @@ export class SettingsPanel {
       ["Scene", [
         ["Space", "Run / pause time"],
         ["J · G", "Jet · shadow guide"],
+        ["L", "Cinematic mode: liquid wormhole surface"],
         ["1 – 5", "Quality (5: realtime max)"],
       ]],
       ["Controller (Xbox · PlayStation)", [

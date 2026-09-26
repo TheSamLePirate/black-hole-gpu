@@ -27,7 +27,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 42;
+const PARAM_VEC4S = 45;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
 const PATH_MAX = 256;
 const PATH_CHUNK = 16;
@@ -179,6 +179,11 @@ export class Renderer {
   private postAtrous: GPUComputePipeline;
   private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
+  /**
+   * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
+   * splash left where the camera last went through (centre on the throat, clock then).
+   */
+  water = { clock: 0, splash: [0, 0, 1] as [number, number, number], splashAt: -1e9, side: 0 };
   private paramsF = new Float32Array(this.params);
   private paramsU = new Uint32Array(this.params);
   private paramBuf: GPUBuffer;
@@ -770,6 +775,17 @@ export class Renderer {
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
     set(41, s.sun && s.sunMass > 0 ? s.sunMass / (1 + s.sunMass) : 0, starOmega(s), 0, 0);
+    // cinematic liquid surface across the throat; a splash where the camera goes through it
+    const w = this.water;
+    const side = s.wormhole && cam.region === "throat" ? Math.sign(cam.ell) : 0;
+    if (side && w.side && side !== w.side) {
+      w.splash = [...cam.n];
+      w.splashAt = w.clock;
+    }
+    if (side) w.side = side;
+    set(42, s.wormhole && s.cinematic ? 1 : 0, s.waterRipples, s.waterMirror, w.clock);
+    set(43, ...w.splash, w.splashAt);
+    set(44, s.waterGlow, 0, 0, 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

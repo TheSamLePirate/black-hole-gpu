@@ -148,6 +148,12 @@ export interface Settings {
   whIncl: number; // polar angle of the far mouth from the spin axis [deg]
   whAzimuth: number; // azimuth of the far mouth [deg]
   journeyDuration: number; // cinematic trip through the wormhole [s]
+  // cinematic mode (artistic, not physical): a liquid surface across the wormhole's throat
+  cinematic: boolean;
+  waterRipples: number; // ripple strength (slopes), 0: a still mirror-flat surface
+  waterMirror: number; // reflectance at normal incidence (water: 0.02)
+  waterSpeed: number; // pace of the waves (their own clock, independent of the scene's time)
+  waterGlow: number; // light scattered by the liquid (crests, sheen towards the rim)
   // companion star on a circular equatorial orbit around the hole
   sun: boolean;
   sunOrbit: number; // orbital radius [M]
@@ -266,6 +272,11 @@ export function defaultSettings(): Settings {
     whIncl: 70,
     whAzimuth: -160,
     journeyDuration: 24,
+    cinematic: false,
+    waterRipples: 1,
+    waterMirror: 0.05,
+    waterSpeed: 1,
+    waterGlow: 1,
     sun: false,
     sunOrbit: 70,
     sunRadius: 2.5,
@@ -304,6 +315,10 @@ export const presets: Record<string, Preset> = {
   "Wormhole: our Milky Way from Gargantua's side": {
     ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 6, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
     skyL: 180, skyB: 0, skyRoll: 35,
+  },
+  "Cinematic: the liquid wormhole": {
+    ...GARGANTUA, anchor: "wormhole", target: "wormhole", whL: 5, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
+    skyL: 180, skyB: 0, skyRoll: 35, cinematic: true,
   },
   "Wormhole: long throat (images wrapped around it)": {
     ...GARGANTUA, anchor: "wormhole", target: "wormhole", whLength: 10, whLensing: 0.05, whL: -17, inclination: 90, azimuth: 0, yaw: 0, pitch: 0,
