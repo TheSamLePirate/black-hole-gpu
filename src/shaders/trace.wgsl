@@ -471,7 +471,10 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
       let dash = select(0.25, 1.0, fract(t * 48.0) < 0.62);
       var tint = vec3f(0.25, 0.85, 1.4);
       if (P.path.z > 0.5 && P.path.z < 1.5) { tint = mix(tint, vec3f(1.6, 0.25, 0.15), smoothstep(0.8, 1.0, t)); }
-      let wgt = min((u2 - u1) * len / (2.0 * R), 1.0);
+      // a tube seen from the inside (the camera sits on its own path, e.g. just after a prediction
+      // or with time slowed) would light every pixel: only crossings many tube radii away count
+      let dMid = rayLen + 0.5 * (u1 + u2) * len;
+      let wgt = min((u2 - u1) * len / (2.0 * R), 1.0) * smoothstep(6.0, 20.0, dMid / R);
       col += tint * dash * wgt * 0.9;
       uSum += 0.5 * (u1 + u2) * wgt;
       wSum += wgt;
