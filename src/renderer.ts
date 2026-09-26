@@ -27,7 +27,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 45;
+const PARAM_VEC4S = 47;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
 const PATH_MAX = 256;
 const PATH_CHUNK = 16;
@@ -793,6 +793,10 @@ export class Renderer {
       dThroat = Math.hypot(X[0]! - m.C[0]!, X[1]! - m.C[1]!, X[2]! - m.C[2]!) - m.w.rho;
     }
     set(44, s.waterGlow, (pixelAngle * Math.max(dThroat, 0.02 * m.w.rho)) / m.w.rho, 0, 0);
+    // the liquid's colour → absorption per unit path (the default "#3aa6c8" gives σ ≈ (0.55, 0.17, 0.09))
+    const liquid = hexToLinear(s.waterColor);
+    set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
+    set(46, ...hexToLinear(s.waterGlowColor), 0);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -1391,4 +1395,11 @@ export class Renderer {
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!) * k;
     return encodeEXR(f, t.width, t.height);
   }
+}
+
+/** "#rrggbb" (sRGB) → linear RGB. */
+function hexToLinear(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  return [lin(((n >> 16) & 255) / 255), lin(((n >> 8) & 255) / 255), lin((n & 255) / 255)];
 }

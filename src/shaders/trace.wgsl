@@ -56,6 +56,8 @@ struct Params {
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
   water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
   water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
+  water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density), unused
+  water5: vec4f,   // colour of the glow (linear rgb), unused
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1578,9 +1580,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
         // light scattered in the liquid: a luminous network on the crests (where the caustics focus)
         // and a sheen towards the rim (grazing incidence), so the surface shows on a dark sky too
         let crest = pow(clamp(-0.05 * ws.w, 0.0, 3.0), 2.0);
-        let glow = vec3f(0.16, 0.55, 0.75) * (0.2 * crest + 0.25 * F + 0.008);
+        let glow = P.water5.rgb * (0.2 * crest + 0.25 * F + 0.008);
         out.glow += out.tint * glow * (vis * P.water3.x * P.time.z);
-        out.tint *= mix(vec3f(1.0), exp(-vec3f(0.55, 0.17, 0.07) * path), vis) * caustic;
+        out.tint *= mix(vec3f(1.0), exp(-P.water4.rgb * path), vis) * caustic;
       }
       let tv2 = dn - dot(dn, n) * n;
       let tl2 = length(tv2);

@@ -49,7 +49,12 @@ export interface ChoiceDef extends Base {
   style?: "segmented" | "select";
 }
 
-export type ControlDef = NumberDef | ToggleDef | ChoiceDef;
+/** A colour, stored as "#rrggbb" (sRGB). */
+export interface ColorDef extends Base {
+  type: "color";
+}
+
+export type ControlDef = NumberDef | ToggleDef | ChoiceDef | ColorDef;
 
 /** Group headers may carry the on/off switch of the physics they contain. */
 export const GROUP_SWITCH: Record<string, keyof Settings> = {
@@ -233,9 +238,27 @@ export const SCHEMA: ControlDef[] = [
     help: "Reflectance at normal incidence (water 0.02, glass 0.04, mercury ≈ 0.7). It rises towards 1 at grazing incidence, near the rim of the sphere (Schlick's Fresnel). 0: no reflection at all, rim included (the default).",
   },
   {
+    key: "waterColor", type: "color", section: "scene", group: "Cinematic mode", label: "Liquid colour",
+    enabled: (s) => s.cinematic,
+    help: "Colour of the liquid: the light that goes through the surface is filtered towards it (more at grazing incidence, where the path through the liquid is longer).",
+    keywords: "water tint colour color hue",
+  },
+  {
+    key: "waterDensity", type: "number", section: "scene", group: "Cinematic mode", label: "Colour density", min: 0, max: 4, step: 0.05,
+    enabled: (s) => s.cinematic,
+    help: "How strongly the liquid colours the light that goes through it. 0: perfectly clear.",
+    keywords: "water tint absorption",
+  },
+  {
     key: "waterGlow", type: "number", section: "scene", group: "Cinematic mode", label: "Glow", min: 0, max: 3, step: 0.05,
     enabled: (s) => s.cinematic,
     help: "Light scattered inside the liquid: a luminous network on the wave crests, where the caustics focus, and a sheen towards the rim. It makes the surface visible against a dark sky. 0 by default.",
+  },
+  {
+    key: "waterGlowColor", type: "color", section: "scene", group: "Cinematic mode", label: "Glow colour",
+    enabled: (s) => s.cinematic,
+    help: "Colour of the light scattered in the liquid (shown when the glow is above 0).",
+    keywords: "water glow colour color",
   },
   {
     key: "waterSpeed", type: "number", section: "scene", group: "Cinematic mode", label: "Wave speed", min: 0, max: 4, step: 0.05, effect: "none",

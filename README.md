@@ -195,7 +195,8 @@ glow scattered in the liquid (bright on the crests, a sheen towards the rim). Th
 trains of fine travelling ripples in eight directions (ω ∝ √k), droplets that fall now and then, and a **splash**
 spreading from the point where the camera goes through. The waves run on their own clock (they move with
 time paused; wave speed 0 freezes them so the view can refine); in a video they follow the video's time.
-Settings: ripples, reflectance at normal incidence, glow, wave speed. By default the reflectance and
+Settings: ripples, reflectance at normal incidence, liquid colour and colour density (the transmitted light
+is filtered towards the colour, more at grazing incidence), glow and glow colour, wave speed. By default the reflectance and
 the glow are 0 (a clear liquid: ripples, caustics and tint only); 0 reflectance means no reflection at all.
 
 **Game controller** (Xbox, PlayStation — any pad with the browser's standard mapping; `src/gamepad.ts`):

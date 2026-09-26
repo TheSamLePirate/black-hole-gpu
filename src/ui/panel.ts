@@ -650,6 +650,7 @@ export class SettingsPanel {
     let update: () => void;
     if (d.type === "number") update = this.numberControl(d, row, reset, label);
     else if (d.type === "toggle") update = this.toggleControl(d, row, reset, label);
+    else if (d.type === "color") update = this.colorControl(d, row, reset, label);
     else update = this.choiceControl(d, row, reset, label);
 
     this.updaters.push(() => {
@@ -668,6 +669,7 @@ export class SettingsPanel {
     let shown = String(dv);
     if (d.type === "number") shown = `${formatValue(d, dv as number)}${d.unit ? ` ${d.unit}` : ""}`;
     else if (d.type === "choice") shown = d.options.find((o) => o.value === dv)?.label ?? shown;
+    else if (d.type === "color") shown = String(dv);
     else shown = dv ? "on" : "off";
     return `Default: ${shown} · double-click the label to reset`;
   }
@@ -742,6 +744,17 @@ export class SettingsPanel {
     row.append(h("div", { class: "sp-rhead" }, reset, label, h("label", { class: "sp-toggle" }, cb, h("span", { class: "sp-switch" }))));
     return () => {
       cb.checked = !!this.s[d.key];
+    };
+  }
+
+  private colorControl(d: ControlDef, row: HTMLElement, reset: HTMLElement, label: HTMLElement) {
+    const input = h("input", { type: "color", class: "sp-color", "aria-label": d.label });
+    input.addEventListener("pointerdown", () => this.begin());
+    input.addEventListener("input", () => this.set(d.key, input.value, false));
+    input.addEventListener("change", () => this.commit());
+    row.append(h("div", { class: "sp-rhead" }, reset, label, input));
+    return () => {
+      if (input.value !== this.s[d.key]) input.value = String(this.s[d.key]);
     };
   }
 

@@ -154,6 +154,9 @@ export interface Settings {
   waterMirror: number; // reflectance at normal incidence (water: 0.02)
   waterSpeed: number; // pace of the waves (their own clock, independent of the scene's time)
   waterGlow: number; // light scattered by the liquid (crests, sheen towards the rim)
+  waterColor: string; // colour of the liquid (sRGB "#rrggbb"): what the light going through is filtered towards
+  waterDensity: number; // how strongly it colours that light (0: clear)
+  waterGlowColor: string; // colour of the scattered light
   // companion star on a circular equatorial orbit around the hole
   sun: boolean;
   sunOrbit: number; // orbital radius [M]
@@ -277,6 +280,9 @@ export function defaultSettings(): Settings {
     waterMirror: 0,
     waterSpeed: 1,
     waterGlow: 0,
+    waterColor: "#3aa6c8",
+    waterDensity: 1,
+    waterGlowColor: "#6fc4e1",
     sun: false,
     sunOrbit: 70,
     sunRadius: 2.5,
