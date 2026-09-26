@@ -334,7 +334,8 @@ export function defaultSettings(): Settings {
 }
 
 /** A scene preset: settings, plus optionally the simulation time to start from [M]. */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean };
+/** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure) */
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
@@ -367,6 +368,12 @@ export const presets: Record<string, Preset> = {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "hole", distance: 60, inclination: 78, azimuth: 146, yaw: 0, pitch: 0, roll: 0, fov: 50,
+  },
+  // our side: sunlit at 9.5 AU, ~10⁻⁷ of the disk's radiance — exposed for it, the sky dimmed as much
+  "Gargantua system: departure near Saturn": {
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
+    anchor: "wormhole", target: "wormhole", fov: 50, exposure: 21, bgIntensity: 2 ** -21, pose: "saturn",
   },
   "Mission: through the wormhole to the companion star (automatic flight)": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,

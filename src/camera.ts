@@ -1,7 +1,8 @@
 import { horizon, keplerOmega, zamo, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
 import {
-  fromMouth, holeToRep, mouth, radius, repToHole, repToSide, sidePosition, sideToRep, sphericalFrame, toMouth, velFromMouth, velToMouth,
+  ellOfR, fromMouth, holeToRep, mouth, radius, repToHole, repToSide, sidePosition, sideToRep, sphericalFrame, toMouth, velFromMouth,
+  velToMouth,
   type Mouth,
 } from "./wormhole";
 
@@ -231,6 +232,32 @@ export function setHolePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3, vel?: Ve
   s.yaw = yp.yaw;
   s.pitch = yp.pitch;
   s.roll = yp.roll;
+}
+
+/**
+ * Writes a pose in our universe (home frame: our mouth at the origin, beyond its throat) as a camera
+ * orbiting the wormhole on our side: position X, forward (and up, velocity) home vectors. Rep vectors
+ * there carry the radial part in proper length (dℓ = dr / |dr/dℓ|).
+ */
+export function setHomePose(s: Settings, X: Vec3, fwd: Vec3, up?: Vec3, vel?: Vec3) {
+  const w = mouth(s).w;
+  const r = Math.hypot(...X);
+  const l = -ellOfR(w, r);
+  const xh = scale(X, 1 / r);
+  const n = sidePosition(-1, xh);
+  const slope = Math.max(Math.abs(radius(w, l)[1]), 1e-3);
+  const toRep = (v: Vec3, proper: boolean) => {
+    const vr = dot(v, xh);
+    return sideToRep(-1, n, add(v, scale(xh, vr * ((proper ? 1 / slope : 1) - 1))));
+  };
+  setRepPose(s, { l, n, fwd: norm(toRep(fwd, true)), up: up && norm(toRep(up, true)), vel: vel && toRep(vel, true) });
+}
+
+/** The camera's place in our universe's home frame (null on Gargantua's side). */
+export function homePosition(s: Settings): Vec3 | null {
+  const cam = cameraFrame(s);
+  if (cam.region !== "throat" || cam.ell >= 0) return null;
+  return [cam.r * cam.n[0], -cam.r * cam.n[1], cam.r * cam.n[2]];
 }
 
 /** Rep pose on the Gargantua side → black-hole frame position, forward and up vectors. */

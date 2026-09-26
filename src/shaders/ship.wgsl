@@ -23,7 +23,7 @@ struct Ship {
   proj: vec4f,      // tan(fov/2)·aspect, tan(fov/2), near, far
   mat: vec4f,       // hull albedo, metalness, roughness scale, specular mip count
   bound: vec4f,     // bounding sphere of the ship in C (centre, radius): the shadow map's box
-  light: vec4f,     // gain on the light the hull receives (1: physical), clear coat (0…1), unused…
+  light: vec4f,     // gain on the light the hull receives (1: physical; × pre-exposure), clear coat (0…1), pre-exposure
   plasma: vec4f,    // re-entry: the air's flow direction (camera frame), glow level 0…1
 };
 
@@ -391,7 +391,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let pl = S.plasma.w;
   if (pl > 0.0) {
     let face = max(dot(n, -S.plasma.xyz), 0.0);
-    col += vec3f(1.0, 0.42, 0.2) * (8.0 * pl * pl * face * face) / max(S.light.x, 1e-3);
+    col += vec3f(1.0, 0.42, 0.2) * (8.0 * pl * pl * face * face) * S.light.z / max(S.light.x, 1e-30);
   }
   return vec4f(col * S.light.x, 1.0);
 }

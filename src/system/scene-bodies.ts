@@ -10,11 +10,13 @@ import { bodyState, meanMotion, type Vec3 } from "./ephemeris";
 
 export const MAX_BODIES = 8;
 /** vec4s per body in the GPU buffer */
-export const BODY_VEC4 = 5;
+export const BODY_VEC4 = 6;
 
 export const BODY_STAR = 0;
 export const BODY_PLANET = 1;
 const SURFACES = { ocean: 0, ice: 1, rock: 2, gas: 3 } as const;
+/** a gas giant drawn from its map (Saturn) */
+export const SURFACE_MAPPED = 4;
 
 export interface GpuBody {
   id: string;
@@ -42,6 +44,8 @@ export interface GpuBody {
    *  light probe (black-hole frame) */
   lightDir?: Vec3;
   lightT?: number;
+  /** rings: inner, outer radii (its radii), pole */
+  rings?: { inner: number; outer: number; pole: Vec3 };
 }
 
 /** The system a scene uses. */
@@ -91,7 +95,8 @@ export function sceneBodies(s: Settings, t: number): GpuBody[] {
     out.push({
       id: b.id, pos, radius: b.radius, omega: meanMotion(sys, b), parent, kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
       mass: b.kind === "star" ? b.mass : 0, temperature: b.temperature ?? 0, brightness: b.kind === "star" ? 1 : albedo(b),
-      surface: b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1, ...lit, where,
+      surface: b.map ? SURFACE_MAPPED : b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1, ...lit, where,
+      rings: b.rings,
     });
   }
   return out;
@@ -147,7 +152,8 @@ export function packBodies(list: GpuBody[], out: Float32Array) {
     out.set([b.pos[0], b.pos[1], b.pos[2], b.radius], o);
     out.set([b.omega, b.parent, b.kind, b.mass], o + 4);
     out.set([b.temperature, b.brightness, b.surface, b.seed], o + 8);
-    out.set([b.light, b.illum, b.where, 0], o + 12);
+    out.set([b.light, b.illum, b.where, b.rings?.outer ?? 0], o + 12);
     out.set(b.lightDir ? [...b.lightDir, b.lightT ?? 1] : [0, 0, 0, 0], o + 16);
+    if (b.rings) out.set([...b.rings.pole, b.rings.inner], o + 20);
   });
 }

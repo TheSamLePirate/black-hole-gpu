@@ -10,8 +10,9 @@ import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
-import { mouth, setSceneTime } from "./wormhole";
+import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_VEC4, MAX_BODIES, packBodies, sceneBodies, throatLight, TRACED_RADIUS } from "./system/scene-bodies";
+import { loadPlanetMaps, type PlanetMaps } from "./system/planet-maps";
 import { localPatch } from "./system/local-patch";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
@@ -212,6 +213,8 @@ export class Renderer {
   private bgTexture: GPUTexture;
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
+  /** Saturn's globe and rings (placeholders until loaded) */
+  private planetMaps: PlanetMaps;
   private catalogue: GPUBuffer;
   private pathBuf!: GPUBuffer;
   private bodyBuf!: GPUBuffer;
@@ -298,6 +301,8 @@ export class Renderer {
         { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 14, visibility: C, buffer: { type: "storage" } },
         { binding: 15, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 16, visibility: C, texture: { sampleType: "float" } },
+        { binding: 17, visibility: C, texture: { sampleType: "float" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -358,6 +363,7 @@ export class Renderer {
     this.bgTexture = placeholder();
     this.mwTexture = placeholder();
     this.starLodTexture = placeholder();
+    this.planetMaps = { globe: placeholder(), rings: placeholder() };
     // empty catalogue: grid 1, no stars
     this.catalogue = device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.catalogue, 0, new Uint32Array([0x31525453, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
@@ -380,6 +386,14 @@ export class Renderer {
     this.starLodTexture = lod;
     this.catalogue = cat;
     this.skyReady = true;
+    if (this.live) this.bindTarget(this.live);
+    if (this.offline) this.bindTarget(this.offline.target);
+    this.invalidate();
+  }
+
+  /** Loads Saturn's maps in the background (its procedural bands until then). */
+  async loadPlanetMaps(): Promise<void> {
+    this.planetMaps = await loadPlanetMaps(this.device);
     if (this.live) this.bindTarget(this.live);
     if (this.offline) this.bindTarget(this.offline.target);
     this.invalidate();
@@ -540,7 +554,7 @@ export class Renderer {
       mipLevelCount: bloomLevels - 1,
       usage,
     });
-    const resolveBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const resolveBuf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const t: Target = {
       width,
       height,
@@ -599,6 +613,8 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
+        { binding: 16, resource: this.planetMaps.globe.createView() },
+        { binding: 17, resource: this.planetMaps.rings.createView() },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -619,6 +635,8 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
+        { binding: 16, resource: this.planetMaps.globe.createView() },
+        { binding: 17, resource: this.planetMaps.rings.createView() },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -876,7 +894,8 @@ export class Renderer {
       }
     }
     // a body near the camera: the local patch (floating origin), not a traced sphere
-    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => bodyVelocity(s, bodies[k]!.id as unknown as Body, time)) : null;
+    const dRdL = s.wormhole && cam.region === "throat" ? radius(m.w, cam.ell)[1] : 1;
+    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => bodyVelocity(s, bodies[k]!.id as unknown as Body, time), dRdL) : null;
     if (near) bodies[near.index]!.where = 3;
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
@@ -885,7 +904,9 @@ export class Renderer {
     // lit by the Ranger's probe when it runs (piloting: 1), else by the planet's own (2), else by its
     // source alone (0)
     const ownProbe = near ? this.planetProbes.get(bodies[near.index]!.id) : undefined;
-    const lit = !near ? 0 : s.ship && this.ship.ready ? 1 : ownProbe ? 2 : 0;
+    // (a star's planet: by its star alone — the Ranger's probe would bring the far scene's scale)
+    const starLit = near ? bodies[near.index]!.light >= 0 : false;
+    const lit = !near || starLit ? 0 : s.ship && this.ship.ready ? 1 : ownProbe ? 2 : 0;
     if (lit === 2) {
       const sh = new Float32Array(SH_BYTES / 4);
       ownProbe!.sh.forEach((c, k) => sh.set([...c, 0], 4 * k));
@@ -912,7 +933,9 @@ export class Renderer {
     const pointScale = (0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
     // highlight compression above magnitude −2: that flux spread over a glow of radius 0.75 pixel
     const f2 = 0.5 * s.bgIntensity * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
-    set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, 0);
+    // (w: our universe has planets the rays test in the Dneg region — Saturn)
+    const oursTraced = bodies.slice(0, MAX_BODIES).some((b) => b.where === 2 && b.kind === BODY_PLANET);
+    set(39, pointScale, f2 / (Math.PI * (0.75 * pixelAngle) ** 2), f2, oursTraced ? 1 : 0);
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
     // Gargantua and the star orbit their centre of mass (relative orbit with the total mass)
@@ -986,7 +1009,7 @@ export class Renderer {
       oy = (1 - sy) / 2;
     }
     const d = new Float32Array([
-      outW, outH, Math.pow(2, s.exposure) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
+      outW, outH, Math.pow(2, s.exposure) / preExposure(s) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
       sx, sy, ox, oy,
       hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
@@ -1006,6 +1029,7 @@ export class Renderer {
     // x: block | view << 8 | image width << 16
     const r = t === this.live ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom] : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
+    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(s), 0, 0, 0]));
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
@@ -1187,7 +1211,7 @@ export class Renderer {
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat,
+          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(s),
           plasma: this.shipPlasma,
         });
       }
@@ -1612,11 +1636,20 @@ export class Renderer {
     this.encodePost(enc, t, s);
     this.device.queue.submit([enc.finish()]);
     const half = new Uint16Array((await this.readTexture(t.hdr, t.width, t.height, 8)).buffer);
-    const k = Math.pow(2, s.exposure);
+    const k = Math.pow(2, s.exposure) / preExposure(s);
     const f = new Float32Array(half.length);
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!) * k;
     return encodeEXR(f, t.width, t.height);
   }
+}
+
+/**
+ * The factor the radiance is scaled by before it is stored in half floats (resolve), undone by the
+ * display: 1 at the usual exposures, 2^(EV − 4) beyond (a sunlit Saturn at 9.5 AU is ~10⁻⁷ of the
+ * disk's radiance, below the half floats' normal range).
+ */
+export function preExposure(s: Pick<Settings, "exposure">) {
+  return 2 ** Math.min(Math.max(s.exposure - 4, 0), 40);
 }
 
 /** "#rrggbb" (sRGB) → linear RGB. */

@@ -41,6 +41,10 @@ export interface BodyDef {
   temperature?: number;
   luminosity?: number;
   surface?: Surface;
+  /** rings in its equatorial plane: inner and outer radii (its radii), pole (its universe's frame) */
+  rings?: { inner: number; outer: number; pole: [number, number, number] };
+  /** a map of its surface (equirectangular, longitude about the pole): Saturn */
+  map?: "saturn";
   /** a short line for tooltips */
   note?: string;
 }
@@ -114,6 +118,11 @@ export const GARGANTUA_SYSTEM: System = {
       id: "saturn", name: "Saturn", parent: "sun", universe: "ours", kind: "planet", mass: solar(2.8589e-4), radius: m(5.8232e7),
       orbit: { type: "fixed", pos: [au(0.7) * 0.6, au(0.7) * 0.8, 0] },
       surface: { kind: "gas", gravity: 1.065, atmosphere: null },
+      // (the ring map's span, C ring to beyond A: 69 800 – 140 900 km; the pole leans 20° towards the
+      // mission's departure point, beyond Saturn from the mouth: the rings open 20° there, lit side)
+      rings: { inner: 69.8e6 / 5.8232e7, outer: 140.9e6 / 5.8232e7, pole: [0.2052, 0.2736, 0.9397] },
+      map: "saturn",
+      note: "0.7 AU from our mouth; rings seen from 1 million km for the departure",
     },
   ],
 };

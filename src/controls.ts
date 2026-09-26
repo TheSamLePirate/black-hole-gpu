@@ -19,6 +19,7 @@ import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOff
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth } from "./wormhole";
+import { homeOf, OUR_BODIES, ourGravity } from "./system/our-side";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1206,14 +1207,36 @@ export class CameraController {
       const U = lin(v, g, d, accel * simDt);
       v = lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
     }
-    const speed = Math.hypot(...v);
-    this.properTime += simDt * Math.sqrt(Math.max(1 - speed * speed, 0));
-    if (speed < 1e-9) {
-      setRepPose(s, { ...p, vel: [0, 0, 0] });
-      return;
+    // our universe: the Newtonian pull of the Sun and Saturn, in sub-steps short against the time
+    // it takes to fall towards them
+    const ours = p.l < -m.w.a && s.system === "gargantua" ? OUR_BODIES : [];
+    let steps = 1;
+    if (ours.length) {
+      const X = homeOf(m.w, p.l, p.n);
+      const tDyn = Math.min(...ours.map((b) => Math.sqrt(Math.hypot(X[0] - b.pos[0], X[1] - b.pos[1], X[2] - b.pos[2]) ** 3 / b.mass)));
+      steps = Math.min(Math.max(Math.ceil(simDt / (0.01 * tDyn)), 1), 400);
     }
-    const q = flyDneg(m.w, p.l, p.n, lin(v, 1 / speed, v, 0), [p.fwd, p.up], speed * simDt);
-    setRepPose(s, { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]!, vel: lin(q.dir, speed, q.dir, 0) });
+    let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
+    const dt = simDt / steps;
+    for (let i = 0; i < steps; i++) {
+      if (ours.length) {
+        const g = ourGravity(m.w, pose.l, pose.n);
+        if (g.inside) {
+          v = [0, 0, 0];
+          break;
+        }
+        v = lin(v, 1, g.acc, dt);
+        const sp = Math.hypot(...v);
+        if (sp > 0.999) v = lin(v, 0.999 / sp, v, 0);
+      }
+      const speed = Math.hypot(...v);
+      this.properTime += dt * Math.sqrt(Math.max(1 - speed * speed, 0));
+      if (speed < 1e-12) continue;
+      const q = flyDneg(m.w, pose.l, pose.n, lin(v, 1 / speed, v, 0), [pose.fwd, pose.up], speed * dt);
+      pose = { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]! };
+      v = lin(q.dir, speed, q.dir, 0);
+    }
+    setRepPose(s, { ...pose, vel: v });
     s.motion = "geodesic";
     this.sync();
   }
@@ -2873,3 +2896,4 @@ export function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null;
   return !!t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 }
+

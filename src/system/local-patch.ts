@@ -13,7 +13,7 @@
 import { blToCartesian } from "../camera";
 import type { CameraFrame } from "../camera";
 import { coordToZamo, type Vec3 } from "../physics";
-import { sphericalFrame } from "../wormhole";
+import { sideToRep, sphericalFrame } from "../wormhole";
 import type { GpuBody } from "./scene-bodies";
 
 /** Within this many of its radii a body is drawn in the local patch. */
@@ -113,8 +113,65 @@ export function aberrate(l: Vec3, beta: Vec3): Vec3 {
   return unit([-kp[0], -kp[1], -kp[2]]);
 }
 
-/** The body to draw in the local patch, if the camera is near one (the nearest in its radii). */
-export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: number) => Vec3): LocalPatch | null {
+/** Axes of a ringed planet: z its pole, x in the frame's xy plane (the tracer's poleAxes). */
+export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
+  let ex: Vec3 = [N[1], -N[0], 0];
+  if (Math.hypot(...ex) < 1e-4) ex = [1, 0, 0];
+  ex = unit(ex);
+  const ey: Vec3 = [N[1] * ex[2] - N[2] * ex[1], N[2] * ex[0] - N[0] * ex[2], N[0] * ex[1] - N[1] * ex[0]];
+  return [ex, ey, N];
+}
+
+/**
+ * Our universe (the camera beyond our end of the wormhole, ℓ < 0): its bodies are fixed in the home
+ * frame, the camera at r(ℓ) along its mirrored direction; rep vectors at the camera are home vectors
+ * with the radial flip, their radial part in proper length (dℓ = dr / |dr/dℓ|). Static bodies: seen
+ * at their place, Lorentz transformed and retarded for a moving camera.
+ */
+export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number): LocalPatch | null {
+  const n = cam.n;
+  const X: Vec3 = [cam.r * n[0], -cam.r * n[1], cam.r * n[2]];
+  const nh: Vec3 = [n[0], -n[1], n[2]]; // the radial direction, home frame
+  const toRep = (v: Vec3): Vec3 => {
+    const k = dot(v, nh) * (1 / Math.max(Math.abs(dRdL), 1e-3) - 1);
+    return sideToRep(-1, n, [v[0] + k * nh[0], v[1] + k * nh[1], v[2] + k * nh[2]]);
+  };
+  const lorentz = (x: Vec3): Vec3 => {
+    const b = cam.beta;
+    const b2 = dot(b, b);
+    if (b2 < 1e-16) return x;
+    const g = 1 / Math.sqrt(1 - b2);
+    const nb = unit(b);
+    const k = (g - 1) * dot(x, nb);
+    return [x[0] + k * nb[0], x[1] + k * nb[1], x[2] + k * nb[2]];
+  };
+  let best: LocalPatch | null = null;
+  list.forEach((b, k) => {
+    if (b.where !== 2) return;
+    const C = b.pos;
+    const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
+    if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;
+    const rel = seenFrom(toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]), [0, 0, 0], cam.beta);
+    const host = b.light >= 0 ? list[b.light]!.pos : ([C[0] + 1, C[1], C[2]] as Vec3);
+    const ax = b.rings ? poleAxes(b.rings.pole) : ([[1, 0, 0], [0, 1, 0], [0, 0, 1]] as [Vec3, Vec3, Vec3]);
+    best = {
+      index: k,
+      centre: [rel[0] / b.radius, rel[1] / b.radius, rel[2] / b.radius],
+      axes: [unit(lorentz(toRep(ax[0]))), unit(lorentz(toRep(ax[1]))), unit(lorentz(toRep(ax[2])))],
+      light: aberrate(unit(toRep([host[0] - C[0], host[1] - C[1], host[2] - C[2]])), cam.beta),
+      radius: b.radius,
+      distance: d,
+    };
+  });
+  return best;
+}
+
+/**
+ * The body to draw in the local patch, if the camera is near one (the nearest in its radii).
+ * dRdL: our side, dr/dℓ of the wormhole's radius at the camera.
+ */
+export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: number) => Vec3, dRdL = 1): LocalPatch | null {
+  if (cam.region === "throat" && cam.ell < 0) return ourPatch(cam, list, dRdL);
   if (cam.region !== "hole") return null;
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   let best: LocalPatch | null = null;

@@ -1,6 +1,7 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
-import { cameraFrame, setHolePose, switchAnchor } from "./camera";
+import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
+import { saturnDeparture } from "./system/our-side";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -73,6 +74,10 @@ async function main() {
     .loadSky()
     .then(() => touch())
     .catch((e) => console.warn("Real sky unavailable, using the procedural sky:", e));
+  renderer
+    .loadPlanetMaps()
+    .then(() => touch())
+    .catch((e) => console.warn("Saturn's maps unavailable:", e));
   let guiDirty = false; // GUI widgets need refreshing (camera moved)
   let previousTarget = settings.target; // (the panel's target choice is applied through the camera)
 
@@ -151,11 +156,20 @@ async function main() {
     syncButtons();
   };
 
+  // (a preset exposed for our side — sunlit Saturn, ~21 EV above the disk — does not pass its exposure on)
+  let exposedForOurSide = false;
   function applyPreset(name: string) {
-    const keep = Object.fromEntries(KEEP_ON_PRESET.map((k) => [k, settings[k]]));
+    const { time, mission: withMission, pose, ...preset } = presets[name] ?? {};
+    const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
+    const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
+    exposedForOurSide = pose === "saturn";
     mission.stop();
-    const { time, mission: withMission, ...preset } = presets[name] ?? {};
     Object.assign(settings, defaultSettings(), keep, preset);
+    if (pose === "saturn") {
+      const d = saturnDeparture();
+      setHomePose(settings, d.X, d.fwd, d.up, [0, 0, 0]);
+      settings.motion = "geodesic";
+    }
     if (time !== undefined) {
       simTime = time;
       timeDirty = true;
@@ -565,6 +579,9 @@ async function main() {
       /** a system's bodies (ephemeris) and camera placement, for automation */
       sys: {
         bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t), setHolePose, mouth: (t?: number) => mouth(settings, t),
+        /** our universe (home frame, our mouth at the origin) */
+        setHomePose: (X: [number, number, number], fwd: [number, number, number], up?: [number, number, number], vel?: [number, number, number]) => setHomePose(settings, X, fwd, up, vel),
+        homePosition: () => homePosition(settings),
         /** where the camera sees a body (CPU geodesics, retarded, aberrated): a look direction */
         look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, simTime).look,
       },

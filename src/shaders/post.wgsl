@@ -7,7 +7,10 @@
 @group(0) @binding(2) var dst: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(3) var addTex: texture_2d<f32>;
 @group(0) @binding(4) var<storage, read> accum: array<vec4f>;
-@group(0) @binding(5) var<uniform> R: vec4u; // realtime block size, interleave offset x, y, epoch
+// u: realtime block size, interleave offset x, y, epoch; f.x: pre-exposure (the radiance is scaled
+// before it is stored in half floats: our side's sunlit Saturn is ~10⁻⁷ of the disk's radiance)
+struct Resolve { u: vec4u, f: vec4f };
+@group(0) @binding(5) var<uniform> R: Resolve;
 @group(0) @binding(6) var<storage, read> stamps: array<u32>;
 @group(0) @binding(7) var<storage, read> polAcc: array<vec2f>;         // Σ Stokes Q, U
 @group(0) @binding(8) var<storage, read_write> polGrid: array<vec4f>;  // per tick cell: Σ I, Q, U, n
@@ -21,7 +24,7 @@
 // Realtime reconstruction of stale pixels by normalized convolution (Knutsson & Westin 1993): a
 // Gaussian (σ = block/2) of the valid samples divided by the same Gaussian of the validity mask,
 // separable in two passes. Valid = taken with the current camera and within the sample-age window
-// (R.w), so stale pixels are interpolated smoothly from the recent sparse samples around them.
+// (R.u.w), so stale pixels are interpolated smoothly from the recent sparse samples around them.
 fn gatherWeight(d: i32, block: u32) -> f32 {
   let sg = max(0.5 * f32(block), 0.8);
   return exp(-f32(d * d) / (2.0 * sg * sg));
@@ -29,10 +32,10 @@ fn gatherWeight(d: i32, block: u32) -> f32 {
 
 @compute @workgroup_size(8, 8)
 fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
-  let W = R.x >> 16u;
+  let W = R.u.x >> 16u;
   let H = arrayLength(&stamps) / max(W, 1u);
   if (gid.x >= W || gid.y >= H) { return; }
-  let block = max(R.x & 0xffu, 1u);
+  let block = max(R.u.x & 0xffu, 1u);
   if (block <= 1u) { return; }
   let h = i32(block);
   var acc = vec4f(0.0);
@@ -40,7 +43,7 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
     let x = i32(gid.x) + dx;
     if (x < 0 || x >= i32(W)) { continue; }
     let qi = gid.y * W + u32(x);
-    if (stamps[qi] < R.w) { continue; }
+    if (stamps[qi] < R.u.w) { continue; }
     let a = accum[qi];
     acc += gatherWeight(dx, block) * vec4f(a.rgb / max(a.a, 1e-6), 1.0);
   }
@@ -138,8 +141,8 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let W = size.x;
-  let block = max(R.x & 0xffu, 1u);
-  if (((R.x >> 8u) & 0xffu) == 1u) {
+  let block = max(R.u.x & 0xffu, 1u);
+  if (((R.u.x >> 8u) & 0xffu) == 1u) {
     // polarized intensity P = √(Q² + U²), shown as grey radiance
     let a = accum[gid.y * W + gid.x];
     let q = polAcc[gid.y * W + gid.x] / max(a.a, 1e-6);
@@ -149,7 +152,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   let idx = gid.y * W + gid.x;
   var c: vec3f;
   var variance = -1.0; // variance of the pixel's estimate (−1: unknown)
-  if (block <= 1u || stamps[idx] >= R.w) {
+  if (block <= 1u || stamps[idx] >= R.u.w) {
     // sample taken with the current camera (possibly a few frames old while animating)
     c = loadAvg(gid.x, gid.y, W);
     let n = accum[idx].a;
@@ -161,7 +164,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     // Stale pixel (older than the camera change, or than the sample-age window while time runs):
     // Gaussian-weighted gather of the valid (recent) samples around it; they include the latest
     // frame's, one per block. Fallback: bilinear reconstruction from the latest frame.
-    let o = vec2f(f32(R.y), f32(R.z)) + 0.5;
+    let o = vec2f(f32(R.u.y), f32(R.u.z)) + 0.5;
     let nb = vec2i((size + block - 1u) / block);
     let f = (vec2f(gid.xy) + 0.5 - o) / f32(block);
     let b0 = vec2i(floor(f));
@@ -169,7 +172,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let lo = vec2i(0);
     let hi = nb - 1;
     let maxP = vec2i(size) - 1;
-    let off = vec2i(i32(R.y), i32(R.z));
+    let off = vec2i(i32(R.u.y), i32(R.u.z));
     let p00 = vec2u(min(clamp(b0, lo, hi) * i32(block) + off, maxP));
     let p11 = vec2u(min(clamp(b0 + 1, lo, hi) * i32(block) + off, maxP));
     let c00 = loadAvg(p00.x, p00.y, W);
@@ -187,8 +190,9 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     }
     c = acc.rgb / acc.w;
   }
-  c = min(c, vec3f(60000.0));
-  textureStore(dst, gid.xy, vec4f(c, variance));
+  let pre = R.f.x;
+  c = min(c * pre, vec3f(60000.0));
+  textureStore(dst, gid.xy, vec4f(c, select(variance, variance * pre * pre, variance >= 0.0)));
 }
 
 // 13-tap downsample (box-filtered 4×4 with overlapping bilinear fetches)

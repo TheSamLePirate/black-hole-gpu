@@ -97,20 +97,26 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(13) var<storage, read> pathPts: array<vec4f>;
 // light probe around the camera (equirectangular, camera rest frame), for the Ranger's lighting
 @group(0) @binding(14) var<storage, read_write> envBuf: array<vec4f>;
-// Bodies drawn as spheres (src/system/scene-bodies.ts), 4 vec4 each:
+// Bodies drawn as spheres (src/system/scene-bodies.ts), 6 vec4 each:
 //   0: centre now (parent < 0) or offset from the parent's centre now; radius
 //   1: Ω (turning rate of its circle about the spin axis), parent index (−1), kind (0 star, 1 planet), mass m [M]
-//   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas); seed
+//   2: stars: temperature [K], brightness; planets: albedo; surface (0 ocean, 1 ice, 2 rock, 3 gas,
+//      4 gas drawn from its map: Saturn); seed
 //   3: planets: light source (body index, −1: the accretion disk), irradiance factor E/(πB);
 //      where: 0 traced (within the escape radius), 1 far (met on the rays' straight way out),
 //      2 our universe (home coordinates, met by the rays that leave through our end of the wormhole),
-//      3 drawn in the local patch; unused
+//      3 drawn in the local patch; outer radius of its rings (its radii; 0: none)
 //   4: planets: where its light comes from, as its light probe measured it (black-hole frame, unit);
 //      w = its colour temperature [K] when measured, else 0 (the hole's direction, or its star's)
+//   5: rings: pole (its universe's frame), inner radius (its radii)
 // Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
 // the retarded time Δt along the ray (no absolute time in float32).
 @group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
-const BV = 5u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
+const BV = 6u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
+// Saturn's map (equirectangular, sRGB) and its rings' radial profile (sRGB + opacity, from the inner
+// to the outer radius), mip-mapped (src/system/planet-maps.ts)
+@group(0) @binding(16) var planetTex: texture_2d<f32>;
+@group(0) @binding(17) var ringTex: texture_2d<f32>;
 
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
@@ -610,10 +616,14 @@ fn throatGlow(X: vec3f, dW: vec3f, C: vec3f, dist: f32, g: f32) -> vec3f {
 // pixel's lensed footprint (from the neighbouring rays: magnification, anti-aliasing) — around their
 // direction seen from the ray's point of departure (parallax), at the retarded time. Flux: B π R²/D²,
 // turned to the catalogue's scale (P.bodyCfg2.x), compressed above magnitude −2.
+// (the light probes take them at their true flux, uncompressed: the Sun lights the Ranger near Saturn)
+var<private> physicalPoints: bool = false;
 fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f {
   var col = vec3f(0.0);
   for (var k = 0u; k < bodyCount(); k++) {
     if (bodyWhere(k) != side) { continue; }
+    // (our universe's planets are met by the rays in the Dneg region: Saturn)
+    if (side == 2u && bodyKind(k) == 1u && P.bodyCfg2.w > 0.5) { continue; }
     var c = bodyCentre(k, org.w);
     c = bodyCentre(k, org.w - length(c - org.xyz));
     let v = c - org.xyz;
@@ -624,6 +634,10 @@ fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f 
     let R = bodyRadius(k);
     // the side it shows (a planet's phase, at its sub-observer point), its flux there
     let F = shadeBody(k, c - R * bd, c, g, bd, org.w - D) * (PI * R * R / (D * D));
+    if (physicalPoints) {
+      col += F * kern;
+      continue;
+    }
     let Fs = F * P.bodyCfg2.x;
     let Lm = P.bodyCfg2.z;
     let Lf = luminance(Fs);
@@ -795,6 +809,12 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     alb = mix(vec3f(0.62, 0.7, 0.8), vec3f(0.9, 0.93, 0.97), n1) * (0.85 + 0.15 * n2);
   } else if (surf == 2u) {
     alb = mix(vec3f(0.36, 0.24, 0.16), vec3f(0.62, 0.45, 0.3), n1) * (0.8 + 0.2 * n2);
+  } else if (surf == 4u) {
+    // its map: longitude about the pole, latitude (the map's albedo, sRGB → linear)
+    let lon = atan2(nrm.y, nrm.x);
+    let lat = asin(clamp(nrm.z, -1.0, 1.0));
+    let uv = vec2f(0.5 + lon / TAU, 0.5 - lat / PI);
+    alb = pow(textureSampleLevel(planetTex, bgSamp, uv, mapLod()).rgb, vec3f(2.2)) * 0.25 / max(b2.y, 1e-3);
   } else {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
@@ -813,6 +833,124 @@ fn lightSource(k: u32) -> vec2f {
   }
   let lm = bodies[BV * k + 4u];
   return vec2f(select(0.75 * P.disk.x, lm.w, lm.w > 0.5), P.misc.z);
+}
+
+// Saturn's map and rings: mip level from the pixel's footprint (set by the caller before shading)
+var<private> mapLodV: f32 = 0.0;
+var<private> ringLodV: f32 = 0.0;
+fn mapLod() -> f32 { return mapLodV; }
+// fpAngle: the pixel's footprint on the sphere (radians of it); fpRing: across the rings (its radii)
+fn setMapLod(fpAngle: f32, fpRing: f32, k: u32) {
+  mapLodV = clamp(log2(max(fpAngle * 2048.0 / TAU, 1e-6)), 0.0, 11.0);
+  let w = max(bodies[BV * k + 3u].w - bodies[BV * k + 5u].w, 1e-3);
+  ringLodV = clamp(log2(max(fpRing * 2048.0 / w, 1e-6)), 0.0, 11.0);
+}
+fn ringOuter(k: u32) -> f32 { return bodies[BV * k + 3u].w; }
+
+// The rings at rr (its radii): albedo of the particles (linear rgb) and normal optical depth τ, from
+// the map's profile (opacity 1 − e^(−τ))
+fn ringSample(k: u32, rr: f32) -> vec4f {
+  let inner = bodies[BV * k + 5u].w;
+  let f = (rr - inner) / (ringOuter(k) - inner);
+  if (f <= 0.0 || f >= 1.0) { return vec4f(0.0); }
+  let t = textureSampleLevel(ringTex, bgSamp, vec2f(clamp(f, 0.5 / 2048.0, 1.0 - 0.5 / 2048.0), 0.5), ringLodV);
+  // (the map's colours are an appearance: the B ring's ≈ 0.2 in linear rgb; its icy particles' single
+  // scattering albedo is ≈ 0.8)
+  return vec4f(min(pow(t.rgb, vec3f(2.2)) * 3.6, vec3f(0.95)), -log(1.0 - min(t.a, 0.995)));
+}
+
+// Light scattered by a slab of icy particles (single scattering, Henyey–Greenstein g = −0.3: they
+// throw light back to the source) towards V, lit along L, N its normal: the reflected radiance per
+// unit of the source's F (πF = its irradiance), on the lit face or through the slab to the other;
+// w: the slab's opacity along V. q: the point (its radii from the planet's centre), in the planet's
+// shadow or not.
+fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f) -> vec4f {
+  let rr = length(q);
+  let smp = ringSample(k, rr);
+  let tau = smp.w;
+  if (tau <= 0.0) { return vec4f(0.0); }
+  let mu = max(abs(dot(N, V)), 0.01);
+  let mu0 = max(abs(dot(N, L)), 0.01);
+  let g = -0.3;
+  let ct = -dot(L, V); // scattering angle: incident −L, out V
+  let ph = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5);
+  var R: f32;
+  if (dot(N, V) * dot(N, L) > 0.0) {
+    R = ph * mu0 / (4.0 * (mu + mu0)) * (1.0 - exp(-tau * (1.0 / mu + 1.0 / mu0)));
+  } else if (abs(mu - mu0) < 1e-3) {
+    R = ph * tau / (4.0 * mu) * exp(-tau / mu);
+  } else {
+    R = ph * mu0 / (4.0 * (mu0 - mu)) * (exp(-tau / mu0) - exp(-tau / mu));
+  }
+  // (the planet's shadow)
+  let b = dot(q, L);
+  let lit = select(1.0, 0.0, b < 0.0 && dot(q, q) - b * b < 1.0);
+  return vec4f(smp.rgb * R * lit, 1.0 - exp(-tau / mu));
+}
+
+// The rings' shadow on the planet: the sunlight's transmission to the point q (its radii)
+fn ringShadow(k: u32, q: vec3f, N: vec3f, L: vec3f) -> f32 {
+  if (ringOuter(k) <= 0.0) { return 1.0; }
+  let dn = dot(L, N);
+  if (abs(dn) < 1e-5) { return 1.0; }
+  let sR = -dot(q, N) / dn;
+  if (sR <= 0.0) { return 1.0; }
+  return exp(-ringSample(k, length(q + sR * L)).w / abs(dn));
+}
+
+// Axes of a ringed planet: z its pole, x in the frame's xy plane
+fn poleAxes(N: vec3f) -> mat3x3f {
+  var ex = cross(N, vec3f(0.0, 0.0, 1.0));
+  if (dot(ex, ex) < 1e-8) { ex = vec3f(1.0, 0.0, 0.0); }
+  ex = normalize(ex);
+  return mat3x3f(ex, cross(N, ex), N);
+}
+
+// Our universe's planets (Saturn and its rings) on the chord p0 → p1 of a ray (home coordinates,
+// from the camera outwards): the rings add their light and dim what lies behind (tint), the planet
+// stops the ray. gObs: the photon's frequency ratio camera / static observer here. travel: distance
+// from the camera (the pixel's footprint).
+fn ourBodies(p0: vec3f, p1: vec3f, o: ptr<function, WhOut>, gObs: f32, travel: f32) -> bool {
+  let V = normalize(p0 - p1);
+  for (var k = 0u; k < bodyCount(); k++) {
+    if (bodyWhere(k) != 2u || bodyKind(k) != 1u) { continue; }
+    let c = bodies[BV * k].xyz;
+    let R = bodyRadius(k);
+    let tS = sphereHit(p0, p1, c, R);
+    let li = i32(bodies[BV * k + 3u].x);
+    let Lpos = select(c + vec3f(1e3, 0.0, 0.0), bodies[BV * u32(max(li, 0))].xyz, li >= 0);
+    let src = lightSource(k);
+    let rad = blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
+    let N = bodies[BV * k + 5u].xyz;
+    let fp = P.camUp.w * travel / R;
+    if (ringOuter(k) > 0.0) {
+      let s0 = dot(p0 - c, N);
+      let s1 = dot(p1 - c, N);
+      if (s0 * s1 < 0.0) {
+        let tR = s0 / (s0 - s1);
+        if (tS < 0.0 || tR < tS) {
+          let X = mix(p0, p1, tR);
+          setMapLod(fp, fp / max(abs(dot(N, V)), 0.05), k);
+          let rl = ringLight(k, (X - c) / R, N, normalize(Lpos - X), V);
+          (*o).glow += (*o).tint * rl.rgb * rad;
+          (*o).tint *= 1.0 - rl.w;
+        }
+      }
+    }
+    if (tS >= 0.0) {
+      let X = mix(p0, p1, tS);
+      let nrm = normalize(X - c);
+      let L = normalize(Lpos - X);
+      setMapLod(fp, fp, k);
+      let ax = poleAxes(N);
+      let pat = vec3f(dot(nrm, ax[0]), dot(nrm, ax[1]), dot(nrm, N));
+      let col = planetShade(k, nrm, pat, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
+      (*o).glow += (*o).tint * col;
+      (*o).tint = vec3f(0.0);
+      return true;
+    }
+  }
+  return false;
 }
 
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
@@ -834,7 +972,7 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   }
   // atmosphere: the sunlit air (Rayleigh blue) over the whole day side, brighter along the limb
   let rim = pow(1.0 - mu, 3.0) * smoothstep(-0.1, 0.4, dot(nrm, ldir));
-  let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf == 3u);
+  let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf >= 3u);
   return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((A.rgb + sky) * cosi + spec * cosi);
 }
 
@@ -1771,7 +1909,7 @@ struct WhOut { side: f32, n: vec3f, d: vec3f, len: f32, tint: vec3f, glow: vec3f
 
 // Follows a ray from (l0, n0) with unit rep direction d0 until ℓ ≥ lPlus or ℓ ≤ −lMinus.
 // u: a random number in [0, 1) (the liquid surface's reflect / transmit choice).
-fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) -> WhOut {
+fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gObs: f32) -> WhOut {
   let rho = P.wh.y;
   let a = P.wh.z;
   let M = P.wh.w;
@@ -1791,11 +1929,23 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
   out.tint = vec3f(1.0);
   let waterOn = P.water.x > 0.5;
   var u = u0;
+  // our universe's planets (Saturn): home coordinates of the ray's points, their distance
+  let ours = P.bodyCfg2.w > 0.5;
+  var travel = 0.0;
   for (var i = 0u; i < 3000u; i++) {
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
     if (st.l <= -lMinus && st.pl < 0.0) { out.side = -1.0; break; }
     let r = dnegR(st.l).x;
     var h = min(min(0.05 * r * r / max(b, 1e-3 * rho), 0.25 * r), 0.08 * (max(abs(st.l) - a, 0.0) + M) + 0.006 * rho);
+    if (ours && st.l < -a) {
+      // (short steps by them: the chord stays on the ray)
+      let X = homePoint(st.l, st.psi, nA, e2);
+      for (var k = 0u; k < bodyCount(); k++) {
+        if (bodyWhere(k) != 2u || bodyKind(k) != 1u) { continue; }
+        let Rb = bodyRadius(k) * max(ringOuter(k), 1.0);
+        h = min(h, max(0.5 * (length(X - bodies[BV * k].xyz) - Rb), 0.3 * Rb));
+      }
+    }
     // land on the mouths |ℓ| = a, where r'' jumps (keeps RK4 at full order)
     if (abs(st.pl) > 1e-9) {
       let t1 = (a - st.l) / st.pl;
@@ -1813,6 +1963,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
       if (t4 > 1e-7 * rho && t4 < h) { h = t4; }
     }
     let lPrev = st.l;
+    let psiPrev = st.psi;
     let k1 = dnegRHS(st.l, st.pl, b);
     let k2 = dnegRHS(st.l + 0.5 * h * k1.l, st.pl + 0.5 * h * k1.pl, b);
     let k3 = dnegRHS(st.l + 0.5 * h * k2.l, st.pl + 0.5 * h * k2.pl, b);
@@ -1821,6 +1972,12 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
     st.pl += h / 6.0 * (k1.pl + 2.0 * k2.pl + 2.0 * k3.pl + k4.pl);
     st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
     if (st.l <= a) { out.len += h; }
+    travel += h;
+    if (ours && lPrev < -a && st.l < -a) {
+      let p0 = homePoint(lPrev, psiPrev, nA, e2);
+      let p1 = homePoint(st.l, st.psi, nA, e2);
+      if (ourBodies(p0, p1, &out, gObs, travel)) { out.side = -1.0; break; }
+    }
     if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {
       // through the liquid surface: reflected (probability F, Schlick) or refracted by the ripples
       let r0 = dnegR(0.0).x;
@@ -1885,6 +2042,12 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32) ->
   let t = -sin(st.psi) * nA + cos(st.psi) * e2;
   out.d = normalize(st.pl * out.n + (b / r) * t);
   return out;
+}
+
+// A point of our side (ℓ < 0, at angle ψ in the plane (nA, e2)) in our universe's home coordinates
+fn homePoint(l: f32, psi: f32, nA: vec3f, e2: vec3f) -> vec3f {
+  let n = cos(psi) * nA + sin(psi) * e2;
+  return dnegR(l).x * vec3f(n.x, -n.y, n.z);
 }
 
 // Rep vector on our side → Cartesian vector of our universe (radial flip + mirror: right-handed).
@@ -2037,14 +2200,29 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   if (P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let hit = nearMarch(look);
+    // rings in front of the planet (or of the sky): their light, and what they let through
+    var ring = vec4f(0.0);
+    if (ringOuter(k) > 0.0) {
+      let N = P.near3.xyz;
+      let dn = dot(look, N);
+      let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
+      if (sR > 0.0 && (hit.t <= 0.0 || sR < hit.t)) {
+        let fp = P.camUp.w * sR;
+        setMapLod(fp, fp / max(abs(dn), 0.05), k);
+        let src = lightSource(k);
+        let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
+        ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
+      }
+    }
     if (hit.t > 0.0) {
       let air = nearAir(look, hit.t, k);
-      return traceOut(shadeNear(look, hit) * air.T + air.L);
+      setMapLod(P.camUp.w * hit.t, 0.0, k);
+      return traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
     }
     var tr = traceLook(look, rnd, tNow);
     let air = nearAir(look, 1e30, k);
-    tr.col = tr.col * air.T + air.L;
-    tr.tint *= air.T;
+    tr.col = ring.rgb + (1.0 - ring.w) * (tr.col * air.T + air.L);
+    tr.tint *= air.T * (1.0 - ring.w);
     return tr;
   }
   return traceLook(look, rnd, tNow);
@@ -2054,7 +2232,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
 // Local patch: the body near the camera (unit sphere at P.near0.xyz, camera at the origin)
 // ---------------------------------------------------------------------------------------------
 // the probe's harmonics (camera axes), copied after the bodies (MAX_BODIES × BV vec4) on the GPU
-const SH_BASE = 40u;
+const SH_BASE = 48u;
 fn shEnv(k: u32) -> vec4f { return bodies[SH_BASE + k]; }
 
 // distance along the look direction to the sphere (in radii), −1 when missed (the perpendicular
@@ -2369,7 +2547,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
     let b2 = bodies[BV * k + 2u];
     return blackbody(b2.x * pow(0.2 + 0.8 * mu, 0.25) * sf.y, P.disk.w) * b2.y * sf.x;
   }
-  if (P.near3.w < 0.5) { return planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0); }
+  if (P.near3.w < 0.5) {
+    return planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+  }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
   // diffuse albedo/π · E(n); water mirroring the environment (Fresnel)
   let ranger = P.near3.w < 1.5;
@@ -2518,7 +2698,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
 
   for (var segN = 0u; segN < 6u; segN++) {
   if (seg == 1u) {
-    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)));
+    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc);
     // light from beyond the liquid surface is tinted by it; what was gathered before is not
     colW += thr * (col + w.glow);
     col = vec3f(0.0);
@@ -3221,6 +3401,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     px = gid.xy * 2u + vec2u(q & 1u, q >> 1u);
   }
   if (px.x >= ENV_W || px.y >= ENV_H) { return; }
+  physicalPoints = true;
   let h = hash4(vec3u(px, P.frame.x));
   let u = (f32(px.x) + h.x) / f32(ENV_W);
   let v = (f32(px.y) + h.y) / f32(ENV_H);

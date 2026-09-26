@@ -19,6 +19,8 @@ export interface ShipView {
   rough: number;
   light: number;
   coat: number;
+  /** pre-exposure of the HDR target (renderer.ts: preExposure) */
+  pre?: number;
   /** re-entry glow: the air's flow direction (camera frame), level 0…1 */
   plasma?: [number, number, number, number];
 }
@@ -267,7 +269,7 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
-    m.set([v.light, v.coat, 0, 0], 28);
+    m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     this.device.queue.writeBuffer(this.uniform, 0, m);
   }
