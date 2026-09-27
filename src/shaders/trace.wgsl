@@ -39,7 +39,7 @@ struct Params {
   pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
   ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, disk haze
   radio: vec4f,    // band (0 visible, 1 230 GHz, 2 86/230/345 GHz), τ₂₃₀, ν_s(4M)/230 GHz, θ_e(4M)
-  radio2: vec4f,   // jet radio brightness, flow H/R, unused, unused
+  radio2: vec4f,   // jet radio brightness, flow H/R, disk smoke, unused
   spot: vec4f,     // hot spot on (0/1), orbit radius [M], size σ [M], optical depth through the centre
   spot2: vec4f,    // temperature [K], brightness, initial azimuth [rad], height above the plane [M]
   wh: vec4f,       // wormhole world on (0/1), throat radius ρ, half length a, lensing mass M (Dneg metric)
@@ -1451,6 +1451,35 @@ fn diskSource(T: f32, g: f32) -> vec3f {
   return blackbody(T * g, P.disk.w);
 }
 
+// The smoke (P.radio2.z, 0: none): puffy clouds of cool dense gas above the disk's surface (1.5–7 H),
+// in its outer, cooler part (beyond ~10 M),
+// ~0.5 M across, orbiting with the wide rings (each rigidly, blended across): opaque, at ~0.45 of the
+// local temperature — dark silhouettes against the haze, sparse patches from above. Its density
+// factor at a point (0 outside the layer).
+fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
+  // (above the surface; only in the outer, cooler disk — the inner heat leaves none)
+  let layer = smoothstep(1.2, 2.5, abs(zn)) * (1.0 - smoothstep(4.5, 7.0, abs(zn))) * smoothstep(8.0, 14.0, R);
+  if (layer <= 0.0) { return 0.0; }
+  let pc = ringPair(log(R), phi, tEm, a, DISK_BANDS_C);
+  var v = 0.0;
+  for (var k = 0; k < 2; k++) {
+    let ang = select(pc.ang0, pc.ang1, k == 1);
+    // (isotropic puffs: the ring's frame in M, 2 cells per M)
+    var q = vec3f(R * cos(ang), R * sin(ang), z) * 2.0 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
+    var f = 0.0;
+    var amp = 0.5;
+    for (var o = 0; o < 4; o++) {
+      f += amp * gnoise(q);
+      q = q * 2.1 + vec3f(3.7, 1.3, 5.1);
+      amp *= 0.5;
+    }
+    v += select(pc.w0, pc.w1, k == 1) * f;
+  }
+  // (the blend's weights are contrast-keeping, their sum ≥ 1: back to a mean)
+  v /= max(pc.w0 + pc.w1, 1e-6);
+  return layer * smoothstep(0.18, 0.4, v);
+}
+
 // The haze (P.ret.w, 0: none): a thin scattering envelope hugging the disk (e^{−|z|/1.5H}, vertical
 // depth 0.2 × haze on each side) that sends back the light of the disk below it — seen from above it is a
 // faint veil, but along the disk, grazing, the path through it is ~R/H longer: a luminous mist over
@@ -1469,7 +1498,8 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let rOut = P.bh.w;
   let H = P.ext2.z * R;
   let haze = P.ret.w;
-  if (R < rIn * 0.85 || R > rOut || abs(z) > select(4.0, 8.0, haze > 0.0) * H) { return o; }
+  let smoke = P.radio2.z;
+  if (R < rIn * 0.85 || R > rOut || abs(z) > select(4.0, 8.0, haze > 0.0 || smoke > 0.0) * H) { return o; }
   let zn = z / H;
   let edge = smoothstep(rIn * 0.85, rIn * 1.03, R) * (1.0 - smoothstep(rOut * 0.8, rOut, R));
   var rho = exp(-0.5 * zn * zn) * 0.3989423 / H * edge;
@@ -1484,7 +1514,9 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
     // (the mist follows the gas below it, loosely)
     hz *= mix(1.0, 0.4 + 1.2 * n.y, turb);
   }
-  if (rho < 1e-6 && hz <= 0.0) { return o; }
+  var sm = 0.0;
+  if (smoke > 0.0 && R > 8.0) { sm = smoke * 4.0 / H * edge * diskSmoke(R, s.x.z, zn, z, tNow + s.x.w, a); }
+  if (rho < 1e-6 && hz <= 0.0 && sm <= 0.0) { return o; }
   let omega = 1.0 / (pow(max(R, 1.0), 1.5) + a);
   let kEm = circularEmitterEnergy(r, th, a, L, omega);
   var g = (1.0 / E0) / kEm;
@@ -1493,11 +1525,12 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   if (shift == SHIFT_NONE) { g = 1.0; }
   let dGas = P.misc.w * rho * kEm * dl;
   let dHaze = hz * kEm * dl;
+  let dSmoke = sm * kEm * dl;
   // (one source for the two, weighted by their depths — the mist's: the light of the disk's hot heart,
   // falling off as its solid angle, (10/R)²)
   let lit = min(100.0 / (R * R), 1.0);
-  o.S = P.misc.z * (diskSource(T, g) * dGas + lit * diskSource(P.disk.x, g) * dHaze) / max(dGas + dHaze, 1e-30);
-  o.dtau = dGas + dHaze;
+  o.S = P.misc.z * (diskSource(T, g) * dGas + lit * diskSource(P.disk.x, g) * dHaze + diskSource(0.45 * T0, g) * dSmoke) / max(dGas + dHaze + dSmoke, 1e-30);
+  o.dtau = dGas + dHaze + dSmoke;
   o.g = g;
   o.T = T;
   return o;

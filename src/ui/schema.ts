@@ -378,6 +378,12 @@ export const SCHEMA: ControlDef[] = [
     keywords: "haze mist fog glow atmosphere scattering film interstellar",
   },
   {
+    key: "diskSmoke", type: "number", section: "matter", group: "Accretion disk", label: "Smoke", min: 0, max: 1, step: 0.01, enabled: diskOn,
+    visible: (s) => s.diskThickness > 0,
+    help: "Dark clouds of cool, dense gas above the volumetric disk, orbiting with it: sparse patches seen from above, silhouettes against the luminous haze seen along the disk — the near side's dark clouds in the film.",
+    keywords: "smoke clouds dark dust foreground film interstellar",
+  },
+  {
     key: "limbDarkening", type: "toggle", section: "matter", group: "Accretion disk", label: "Limb darkening", enabled: diskOn,
     help: "Chandrasekhar electron-scattering atmosphere I ∝ 1 + 2.06 μ, with the emission angle measured in the fluid frame (thin disk).",
   },

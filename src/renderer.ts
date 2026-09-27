@@ -1032,7 +1032,7 @@ export class Renderer {
     const ret = s.returningRadiation === "always" || (s.returningRadiation === "offline" && t !== this.live);
     set(26, ret ? 1 : 0, s.diskAlbedo, 3000, s.diskThickness > 0 ? s.diskHaze : 0);
     set(27, BANDS[s.band], s.radioTau, s.radioNuS, s.radioTe / 0.593);
-    set(28, s.radioJet, s.hotFlowHR, 0, 0);
+    set(28, s.radioJet, s.hotFlowHR, s.diskThickness > 0 ? s.diskSmoke : 0, 0);
     set(29, s.hotSpot ? 1 : 0, Math.max(s.spotRadius, horizon(a) + 1.5 * s.spotSize), s.spotSize, s.spotTau);
     set(30, s.spotTemp, s.spotBrightness, (s.spotPhase * Math.PI) / 180, s.spotHeight);
     setSceneTime(time);
