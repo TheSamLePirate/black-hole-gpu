@@ -150,6 +150,8 @@ interface Target {
   resolveBuf: GPUBuffer;
   /** where the Ranger was drawn in this target's image (x, y, w, h; w = 0: not drawn) — the bloom's source */
   shipRect: GPUBuffer;
+  /** the lens flare's meter: its uniform (exposure, level) and result (mean excess, centroid) */
+  flare: { u: GPUBuffer; out: GPUBuffer; bind: GPUBindGroup | null };
   /** the image through the depth of field (made when it is first on) */
   dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup } | null;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
@@ -196,6 +198,7 @@ export class Renderer {
   private postDown: GPUComputePipeline;
   private postDownShip: GPUComputePipeline;
   private postDof: GPUComputePipeline;
+  private postFlare: GPUComputePipeline;
   /** (bound where a target has no depth-of-field image yet) */
   private dofDummy: GPUTexture;
   private postUp: GPUComputePipeline;
@@ -393,6 +396,7 @@ export class Renderer {
     this.postDown = mkPost("down");
     this.postDownShip = mkPost("downShip");
     this.postDof = mkPost("dof");
+    this.postFlare = mkPost("flareMeter");
     this.dofDummy = device.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
@@ -660,6 +664,11 @@ export class Renderer {
       resolveBuf,
       shipRect,
       dof: null,
+      flare: {
+        u: d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+        out: d.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }),
+        bind: null,
+      },
       polAcc,
       polGrid,
       polGridBuf,
@@ -680,6 +689,8 @@ export class Renderer {
     for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     this.ship.forget(t.hdr);
     t.dof?.tex.destroy();
+    t.flare.u.destroy();
+    t.flare.out.destroy();
     t.dof?.buf.destroy();
     t.hdr.destroy();
     t.bloomTex.destroy();
@@ -771,6 +782,7 @@ export class Renderer {
             { binding: 6, resource: this.ship.target(t.hdr).plume.createView() },
             { binding: 7, resource: (t.dof?.tex ?? this.dofDummy).createView() },
             { binding: 8, resource: t.bloomTex.createView() },
+            { binding: 9, resource: { buffer: t.flare.out } },
           ],
         }),
       );
@@ -801,6 +813,14 @@ export class Renderer {
 
   private bindPost(t: Target) {
     const d = this.device;
+    t.flare.bind = d.createBindGroup({
+      layout: this.postFlare.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: t.hdr.createView() },
+        { binding: 18, resource: { buffer: t.flare.u } },
+        { binding: 19, resource: { buffer: t.flare.out } },
+      ],
+    });
     const hdrMip = (l: number) => t.hdr.createView({ baseMipLevel: l, mipLevelCount: 1 });
     const bloomMip = (l: number) => t.bloomTex.createView({ baseMipLevel: l - 1, mipLevelCount: 1 });
     const mipSize = (l: number) => [Math.max(1, t.width >> l), Math.max(1, t.height >> l)] as const;
@@ -1450,6 +1470,16 @@ export class Renderer {
       pass.setPipeline(this.postDof);
       pass.setBindGroup(0, dof.bind);
       pass.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+      pass.end();
+    }
+    // the lens flare's meter: where the light that burns out is (a level ≤ 128 px wide)
+    if (s && s.lensFlare > 0 && t.flare.bind) {
+      const level = Math.min(t.bloomLevels - 1, Math.max(1, Math.ceil(Math.log2(t.width / 128))));
+      this.device.queue.writeBuffer(t.flare.u, 0, new Float32Array([Math.pow(2, this.ev(s)) / preExposure(this.ev(s)), level, 0, 0]));
+      const pass = enc.beginComputePass(this.prof.pass("lens flare meter"));
+      pass.setPipeline(this.postFlare);
+      pass.setBindGroup(0, t.flare.bind);
+      pass.dispatchWorkgroups(1);
       pass.end();
     }
     // the light meter, on the live view (the scene: the Ranger is composited at display)

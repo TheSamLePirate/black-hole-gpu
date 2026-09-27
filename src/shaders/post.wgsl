@@ -330,6 +330,37 @@ fn dof(@builtin(global_invocation_id) gid: vec3u) {
   textureStore(dst, gid.xy, vec4f(sum / wsum, blur));
 }
 
+// The lens flare's meter: where the light that burns out (beyond SDR white, after exposure) is on
+// the image, and how much of it — its centroid and its mean excess over white, from a coarse level of
+// the image, one workgroup summing it. The display draws the aperture's ghosts from these.
+struct FlareU { k: f32, level: f32, pad: vec2f }; // exposure (linear), level read
+@group(0) @binding(18) var<uniform> FU: FlareU;
+@group(0) @binding(19) var<storage, read_write> flareOut: array<vec4f>; // [0]: mean excess, centroid (uv), unused
+var<workgroup> flareSum: array<vec4f, 256>;
+@compute @workgroup_size(16, 16)
+fn flareMeter(@builtin(local_invocation_index) li: u32, @builtin(local_invocation_id) lid: vec3u) {
+  let lvl = u32(FU.level);
+  let size = textureDimensions(src, lvl);
+  var acc = vec4f(0.0);
+  for (var y = lid.y; y < size.y; y += 16u) {
+    for (var x = lid.x; x < size.x; x += 16u) {
+      let w = max(luminance(textureLoad(src, vec2u(x, y), lvl).rgb * FU.k) - 0.5, 0.0);
+      let uv = (vec2f(f32(x), f32(y)) + 0.5) / vec2f(size);
+      acc += vec4f(w, w * uv.x, w * uv.y, 0.0);
+    }
+  }
+  flareSum[li] = acc;
+  workgroupBarrier();
+  for (var s = 128u; s > 0u; s >>= 1u) {
+    if (li < s) { flareSum[li] += flareSum[li + s]; }
+    workgroupBarrier();
+  }
+  if (li == 0u) {
+    let t = flareSum[0];
+    flareOut[0] = vec4f(t.x / f32(size.x * size.y), t.yz / max(t.x, 1e-9), 0.0);
+  }
+}
+
 // 3×3 tent upsample of the coarser level, added to this level's downsampled image.
 @compute @workgroup_size(8, 8)
 fn up(@builtin(global_invocation_id) gid: vec3u) {

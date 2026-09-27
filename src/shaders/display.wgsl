@@ -20,6 +20,7 @@ struct Display {
 @group(0) @binding(6) var plumes: texture_2d<f32>; // its thrusters' flames (half resolution, added)
 @group(0) @binding(7) var dofImg: texture_2d<f32>; // the image through the depth of field (when on)
 @group(0) @binding(8) var bloomMips: texture_2d<f32>; // the bloom's levels (the flare's soft sources)
+@group(0) @binding(9) var<storage, read> flareM: array<vec4f>; // [0]: mean excess over white, its centroid (uv)
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
 // Lens flare (a camera's, as in the film): what is brighter than SDR white in the bloom's image —
@@ -56,7 +57,28 @@ fn lensFlare(uv: vec2f) -> vec3f {
   let hr = flareSrc(uv + dir * (h * 0.96), 2.0).r;
   let hg = flareSrc(uv + dir * h, 2.0).g;
   let hb = flareSrc(uv + dir * (h * 1.04), 2.0).b;
-  f += vec3f(hr * 0.7, hg * 0.3, hb * 1.0) * ring * 0.5;
+  f += vec3f(hr * 0.7, hg * 0.3, hb * 1.0) * ring * 0.2;
+  // the aperture's ghosts: images of the diaphragm (a disc, its rim bright, coloured by dispersion —
+  // red outside, violet inside) on the line from the light through the centre, mirrored — sharp
+  // whatever the light's shape
+  let m = flareM[0];
+  let e = clamp(m.x * 30.0, 0.0, 2.5);
+  if (e > 0.0) {
+    let p = uv * vec2f(aspect, 1.0);
+    let lc = m.yz;
+    let rs = array<f32, 3>(0.2, 0.075, 0.045);
+    let ks2 = array<f32, 3>(0.85, 1.45, 0.35);
+    let gs = array<f32, 3>(1.0, 0.3, 0.2);
+    for (var i = 0; i < 3; i++) {
+      let gc = (vec2f(0.5) + (vec2f(0.5) - lc) * ks2[i]) * vec2f(aspect, 1.0);
+      let r = rs[i];
+      let d = length(p - gc);
+      let w = 0.004 + 0.02 * r;
+      let rim = vec3f(exp(-pow((d - r * 1.02) / w, 2.0)), exp(-pow((d - r) / w, 2.0)), exp(-pow((d - r * 0.98) / w, 2.0)));
+      let fill = (1.0 - smoothstep(r * 0.92, r, d)) * 0.07;
+      f += e * gs[i] * (vec3f(1.0, 0.22, 0.85) * rim + vec3f(0.55, 0.3, 0.9) * fill);
+    }
+  }
   return f;
 }
 
