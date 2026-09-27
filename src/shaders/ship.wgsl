@@ -32,6 +32,21 @@ struct Ship {
   probeZ: vec4f,
   // the rectangle of the image drawn (the ship's box: its MSAA targets are that small): ndc centre, scale
   view: vec4f,
+  // thrusters: jets firing (count), display-referred emission scale (pre-exposure / 2^EV: a flame
+  // looks as bright whatever the exposure), time [s], air density (relative to sea level)
+  jet: vec4f,
+  // (unused)
+  box: vec4f,
+};
+
+// A thruster firing (ship frame, metres): exit centre and level, exhaust direction and kind (0: a
+// main engine, 1: an attitude thruster), the exit's half-width and half-height, the plume's length
+// and a seed, and the exit's width axis.
+struct Jet {
+  p: vec4f,
+  d: vec4f,
+  a: vec4f,
+  u: vec4f,
 };
 
 const ENV_W = 256u;
@@ -174,6 +189,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(3) var linSamp: sampler;
 @group(0) @binding(7) var shadowTex: texture_depth_2d;
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
+@group(0) @binding(9) var<storage, read> jets: array<Jet>;
 
 struct VIn {
   @location(0) pos: vec3f,
@@ -404,7 +420,159 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     let face = max(dot(n, -S.plasma.xyz), 0.0);
     col += vec3f(1.0, 0.42, 0.2) * (8.0 * pl * pl * face * face) * S.light.z / max(S.light.x, 1e-30);
   }
-  return vec4f(col * S.light.x, 1.0);
+  // the thrusters' own light on the hull (and in the engine bays): display-referred, like the flames
+  var jl = vec3f(0.0);
+  let dif = albedo * (1.0 - metal) + f0 * 0.25;
+  for (var k = 0u; k < u32(S.jet.x); k++) {
+    let J = jets[k];
+    let main = J.d.w < 0.5;
+    let src = J.p.xyz + J.d.xyz * select(0.25, 0.9, main);
+    let lp = (S.model * vec4f(src, 1.0)).xyz;
+    let L = lp - in.p;
+    let d2 = dot(L, L);
+    let ndl = max(dot(n, L * inverseSqrt(d2)), 0.0);
+    let tint = select(vec3f(1.0, 0.95, 0.88), vec3f(0.55, 0.72, 1.0), main);
+    jl += tint * (J.p.w * select(0.5, 2.2, main) * ndl / (d2 + select(0.08, 0.35, main)));
+  }
+  return vec4f(col * S.light.x + dif * jl * ao * S.jet.y, 1.0);
+}
+
+// ------------------------------------------------------------------------------------ thrusters
+// Each firing thruster is a glowing volume in a box around its plume, marched along the view ray
+// (emission only, added over the hull and the sky; the depth test against the hull hides what is
+// behind it). Main engines: a blue-white core, hottest at the exit, a wide faint halo; in vacuum
+// long and flaring, in air narrow with shock diamonds. Attitude thrusters: short white puffs.
+
+/** The tracer's pinhole over the whole image (the plumes' half-resolution pass), with a depth. */
+fn projectFull(p: vec3f) -> vec4f {
+  let near = S.proj.z;
+  let far = S.proj.w;
+  return vec4f(p.x / S.proj.x, p.y / S.proj.y, (p.z - near) * far / (far - near), p.z);
+}
+
+// the hull's depth alone, at the plumes' resolution: what hides them
+@vertex
+fn hullDepthVs(v: VIn) -> @builtin(position) vec4f {
+  return projectFull((S.model * vec4f(v.pos, 1.0)).xyz);
+}
+
+@fragment
+fn hullDepthFs() -> @location(0) vec4f {
+  return vec4f(0.0);
+}
+
+struct POut {
+  @builtin(position) clip: vec4f,
+  @location(0) q: vec3f, // ship frame
+  @location(1) @interpolate(flat) id: u32,
+};
+
+const CUBE = array<u32, 36>(0u, 2u, 1u, 1u, 2u, 3u, 4u, 5u, 6u, 5u, 7u, 6u, 0u, 1u, 4u, 1u, 5u, 4u,
+  2u, 6u, 3u, 3u, 6u, 7u, 0u, 4u, 2u, 2u, 4u, 6u, 1u, 3u, 5u, 3u, 7u, 5u);
+
+/** The plume's half-extents (along the exit's width and height axes) at a distance s from the exit. */
+fn plumeRadius(J: Jet, s: f32) -> vec2f {
+  if (J.d.w < 0.5) {
+    // (vacuum: the exhaust flares out; in air it stays a column)
+    let spread = mix(0.16, 0.03, clamp(S.jet.w, 0.0, 1.0));
+    return J.a.xy + vec2f(max(s, 0.0) * spread);
+  }
+  return J.a.xy + vec2f(max(s, 0.0) * 0.45);
+}
+
+// the proxy: a frustum around the plume (its halo included), from just inside the exit to 0.85 × its
+// length (the flame has faded by then) — tight, so few pixels run the march
+const HALO = 1.45;
+fn plumeEnd(J: Jet) -> f32 { return J.a.z * 0.85; }
+fn plumeBox(J: Jet) -> vec3f {
+  return vec3f(plumeRadius(J, plumeEnd(J)) * HALO, plumeEnd(J));
+}
+
+@vertex
+fn plumeVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> POut {
+  let J = jets[ii];
+  let c = CUBE[vi];
+  let far = (c & 4u) != 0u;
+  let s = select(-0.15, plumeEnd(J), far);
+  let b = plumeRadius(J, max(s, 0.0)) * HALO + vec2f(0.05);
+  let d = J.d.xyz;
+  let u = J.u.xyz;
+  let v = cross(d, u);
+  let q = J.p.xyz + u * (select(-1.0, 1.0, (c & 1u) != 0u) * b.x) + v * (select(-1.0, 1.0, (c & 2u) != 0u) * b.y) + d * s;
+  var o: POut;
+  o.q = q;
+  // (the whole image's ndc, not the ship's box: the flames reach beyond the hull)
+  o.clip = projectFull((S.model * vec4f(q, 1.0)).xyz);
+  o.id = ii;
+  return o;
+}
+
+@fragment
+fn plumeFs(in: POut) -> @location(0) vec4f {
+  let J = jets[in.id];
+  let d = J.d.xyz;
+  let u = J.u.xyz;
+  let v = cross(d, u);
+  let main = J.d.w < 0.5;
+  // the camera in the ship's frame (the model is rigid: its inverse is the transpose)
+  let R = mat3x3f(S.model[0].xyz, S.model[1].xyz, S.model[2].xyz);
+  let cam = -(transpose(R) * S.model[3].xyz);
+  let ro = cam - J.p.xyz;
+  let rw = normalize(in.q - cam);
+  let o = vec3f(dot(ro, u), dot(ro, v), dot(ro, d));
+  let r = vec3f(dot(rw, u), dot(rw, v), dot(rw, d));
+  let b = plumeBox(J);
+  let lo = vec3f(-b.x, -b.y, -0.15);
+  let hi = vec3f(b.x, b.y, b.z);
+  // (drawn by its front faces, depth-tested against the hull — or, the camera inside it, by its back
+  // faces; the march starts at the camera or where the ray enters)
+  let inv = 1.0 / select(r, vec3f(1e-6), abs(r) < vec3f(1e-6));
+  let t0 = (lo - o) * inv;
+  let t1 = (hi - o) * inv;
+  let tn = max(max(min(t0.x, t1.x), min(t0.y, t1.y)), max(min(t0.z, t1.z), 0.0));
+  let tf = min(min(max(t0.x, t1.x), max(t0.y, t1.y)), max(t0.z, t1.z));
+  if (tf <= tn) { discard; }
+  let tEnd = tf;
+  let N = 12;
+  let dt = (tEnd - tn) / f32(N);
+  // (interleaved gradient noise: an even, fine dither of the steps — Jimenez 2014)
+  let jit = fract(52.9829189 * fract(dot(in.clip.xy, vec2f(0.06711056, 0.00583715))));
+  let L = J.a.z;
+  let air = clamp(S.jet.w, 0.0, 1.0);
+  let tm = S.jet.z;
+  var sum = vec3f(0.0);
+  for (var i = 0; i < N; i++) {
+    let t = tn + (f32(i) + jit) * dt;
+    let x = o + r * t;
+    let s = x.z;
+    if (s < 0.0) { continue; }
+    let rad = plumeRadius(J, s);
+    let e = x.xy / rad;
+    let q2 = dot(e, e);
+    if (q2 > HALO * HALO * 1.2) { continue; }
+    // flicker: turbulence carried downstream
+    let ph = s * 1.3 - tm * 31.0 + J.a.w * 40.0;
+    let fl = 0.8 + 0.2 * sin(ph + 2.1 * x.x) * sin(0.61 * ph + 1.7 * x.y + 1.3);
+    var dens: f32;
+    var col: vec3f;
+    if (main) {
+      let fall = exp(-s / (0.28 * L)) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.65 * L, 0.85 * L, s));
+      let core = exp(-4.0 * q2);
+      let hot = 0.22 + 5.5 * exp(-s / 1.1);
+      // shock diamonds in air (spacing ~ the exit's size)
+      let dia = 1.0 + 0.9 * air * (0.5 + 0.5 * cos(6.2832 * s / (1.6 * J.a.y + 0.5))) * exp(-s / (0.3 * L));
+      let halo = 0.02 * exp(-1.2 * q2);
+      dens = (core * hot * dia * fl + halo) * fall;
+      col = mix(vec3f(0.22, 0.38, 1.0), vec3f(0.85, 0.93, 1.0), clamp(core * hot * 0.3, 0.0, 1.0));
+    } else {
+      let fall = exp(-s / (0.3 * L)) * smoothstep(0.0, 0.05, s) * (1.0 - smoothstep(0.65 * L, 0.85 * L, s));
+      dens = (exp(-2.5 * q2) * fl + 0.1 * exp(-1.2 * q2)) * fall;
+      col = vec3f(1.0, 0.97, 0.93);
+    }
+    sum += col * (dens * dt);
+  }
+  let gain = select(2.0, 0.8, main) * J.p.w;
+  return vec4f(sum * gain * S.jet.y, 0.0);
 }
 
 // ------------------------------------------------------------------------------------ composite

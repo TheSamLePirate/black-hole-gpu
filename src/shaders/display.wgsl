@@ -17,6 +17,7 @@ struct Display {
 @group(0) @binding(3) var samp: sampler;
 @group(0) @binding(4) var<storage, read> polGrid: array<vec4f>; // Σ I, Q, U, n per tick cell
 @group(0) @binding(5) var ship: texture_2d<f32>; // the Ranger, premultiplied (same scale as hdr)
+@group(0) @binding(6) var plumes: texture_2d<f32>; // its thrusters' flames (half resolution, added)
 
 struct VSOut { @builtin(position) pos: vec4f };
 
@@ -151,6 +152,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       let sp = textureLoad(ship, vec2i(uv * D.img.xy), 0);
       c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
     }
+    c += min(textureSampleLevel(plumes, samp, uv, 0.0).rgb, vec3f(60000.0));
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);

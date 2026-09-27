@@ -92,6 +92,14 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
   hidden inner faces. A re-oriented mesh (each triangle turned towards the side its rays escape from,
   single sheets doubled) was tried and dropped: 1938 pixels missing from the same viewpoints. The
   shadow map keeps both faces.
+- **The thrusters' flames** (the plumes, marched volumes): a pass of their own at half resolution,
+  added by the display, only while something fires. Its path, measured in the chase view at full
+  throttle (image 1731 × 1206; in parentheses, relative to the shadow map timed in the same run, the
+  machine's load varying): a box proxy at full resolution in the MSAA pass, 24 steps and value noise
+  34.7 ms (≈ 70×) → a tight frustum, 14 steps, a sine flicker 6.6 ms → one sample (5.7×) → half
+  resolution reading the hull's MSAA depth for occlusion (≈ 3×) → the hull's depth redrawn at half
+  resolution in the same pass, hardware depth test (≈ 1.5–2×, under 1 ms unloaded). The MSAA depth
+  reads and stores alone cost ~2 ms; the ship's MSAA box no longer grows to hold the flames.
 - **Ranger probe rays** are ~20× dearer than the image's (long, divergent) — fewer, rarer runs rather
   than cheaper rays.
 - **The planner's worker** also runs the free-fall prediction: during a long re-aim the map's path

@@ -872,6 +872,14 @@ async function main() {
       // (re-entry glow on the Ranger)
       const pl = info.surface?.plasma;
       renderer.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];
+      // the thrusters' flames (what the flight computer fired on its last step)
+      const fired = camera.pilot.fired;
+      const firing = performance.now() - fired.at < 300 && (fired.throttle > 0.01 || fired.rcs > 0.03 || fired.turn > 0.05);
+      const was = renderer.shipThrust !== null;
+      renderer.shipThrust = firing
+        ? { throttle: fired.throttle, force: fired.force, torque: fired.torque, air: Math.min((info.surface?.air ?? 0) / 1.225, 1), time: performance.now() / 1000 }
+        : null;
+      if (firing || was) changed = true;
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;
       try {
@@ -882,7 +890,10 @@ async function main() {
       }
       cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
       cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
-    } else audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
+    } else {
+      renderer.shipThrust = null;
+      audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
+    }
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

@@ -110,7 +110,7 @@ export class FlightComputer {
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
-  fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0 };
+  fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0] as V3, torque: [0, 0, 0] as V3 };
 
   setHold(h: Hold) {
     this.hold = this.hold === h ? "none" : h;
@@ -221,9 +221,13 @@ export class FlightComputer {
       }
     }
     let effort = 0;
+    const torque: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) {
       const d = clamp(want[i]! - this.omega[i]!, -TUNING.turnAccel * dt, TUNING.turnAccel * dt);
-      if (dt > 0) effort = Math.max(effort, Math.abs(d) / (TUNING.turnAccel * dt));
+      if (dt > 0) {
+        torque[i] = d / (TUNING.turnAccel * dt);
+        effort = Math.max(effort, Math.abs(torque[i]!));
+      }
       this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
@@ -254,6 +258,10 @@ export class FlightComputer {
       turn: c.snap ? 0 : effort,
       yaw: clamp(this.omega[1] / Math.max(TUNING.turnRate, 1e-9), -1, 1),
       at: performance.now(),
+      // (ship frame: x left, y up, z nose — the RCS push, as a fraction of its authority; the angular
+      // acceleration asked, as a fraction of the most the wheels give)
+      force: rcsAuth > 0 ? (body(rcsC).map((x) => x / rcsAuth) as V3) : [0, 0, 0],
+      torque: c.snap ? [0, 0, 0] : torque,
     };
     const accC = add(scale(c.gimbal && point && throttle > 0 ? point : Z, throttle * c.thrust), rcsC);
     const acc = fromC(accC);

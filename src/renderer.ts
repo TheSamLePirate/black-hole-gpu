@@ -4,7 +4,7 @@ import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer } from "./ship";
+import { ENV_H, ShipRenderer, type Thrust } from "./ship";
 import { GpuProfiler } from "./gpuprof";
 import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -256,6 +256,8 @@ export class Renderer {
   localPatchOn = true;
   /** re-entry glow on the Ranger: the air's flow in the camera frame, level 0…1 (from the controller) */
   shipPlasma: [number, number, number, number] = [0, 0, 1, 0];
+  /** the Ranger's thrusters firing (ship.ts: Thrust), or null */
+  shipThrust: Thrust | null = null;
   /** the last frame's local patch (inspection) */
   lastNear: ReturnType<typeof localPatch> = null;
   /** the planets' light probes (system/planet-probe.ts), by body id */
@@ -742,6 +744,7 @@ export class Renderer {
             { binding: 4, resource: { buffer: t.polGrid } },
             // (the Ranger, composited here over the traced image: shipOn in the display's params)
             { binding: 5, resource: this.ship.target(t.hdr).resolved.createView() },
+            { binding: 6, resource: this.ship.target(t.hdr).plume.createView() },
           ],
         }),
       );
@@ -1360,6 +1363,7 @@ export class Renderer {
         this.ship.encodeShip(enc, t.hdr, {
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
+          thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
         });
         // (where it was drawn: the display reads its image there)
         this.device.queue.writeBuffer(this.displayBuf, 112, new Float32Array(this.ship.rectFor(t.hdr)));
