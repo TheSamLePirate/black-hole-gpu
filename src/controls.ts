@@ -2161,7 +2161,8 @@ export class CameraController {
     const coast = start - 20;
     s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
     // (our universe: seconds matter — a burn of minutes in a low orbit; the warp down to real time)
-    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 6, 0.002), 1e5) : Math.max(Math.min(start / 3, s.timeSpeed), 0.002);
+    // (a short burn — a correction of a few m/s — is approached at ×5 at least, not in real time)
+    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 6, 0.002), 1e5) : Math.max(Math.min(start / 2, s.timeSpeed), burnT * 492.5490947 > 30 ? 0.002 : 0.01);
     if (hold) s.timeSpeed = Math.min(s.timeSpeed, Math.max(start / 4, 0.002));
     // (a long coast rides the rails, held back near bodies like any flight)
     if (s.system !== "none" || s.timeSpeed > 500) s.timeSpeed = Math.min(s.timeSpeed, Math.max(this.railsLimit(cam).lim, 3));
