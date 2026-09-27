@@ -165,6 +165,15 @@ const GM_SUN_AU = 2.9591220828559e-4; // AU³/day²
 const EARTH_MOON = 0.0121505856; // m_moon / (m_earth + m_moon)
 
 interface State { pos: Vec3; vel: Vec3 }
+/** A state whose velocity is worked out on first use (then kept) */
+class LazyState implements State {
+  private v: Vec3 | null = null;
+  constructor(public pos: Vec3, private f: () => Vec3) {}
+  get vel(): Vec3 {
+    return (this.v ??= this.f());
+  }
+}
+const lazy = (pos: Vec3, vel: () => Vec3): State => new LazyState(pos, vel);
 const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
@@ -199,12 +208,12 @@ function helioNow(b: SolarBody, d: number): State {
   if (b.id === "moon") {
     const e = helio(solarBody("earth")!, d);
     const m = moonGeo(d);
-    return { pos: add(e.pos, m.pos), vel: add(e.vel, m.vel) };
+    return lazy(add(e.pos, m.pos), () => add(e.vel, m.vel));
   }
   if (b.circle) {
     const p = helio(solarBody(b.parent!)!, d);
     const c = circleState(b, d);
-    return { pos: add(p.pos, c.pos), vel: add(p.vel, c.vel) };
+    return lazy(add(p.pos, c.pos), () => add(p.vel, c.vel));
   }
   const [el, rt] = b.elements!;
   const T = d / 36525;
@@ -215,13 +224,16 @@ function helioNow(b: SolarBody, d: number): State {
   const k0 = kepler(a, e, I, L - wb, wb - O, O, (rt[3]! - rt[4]!) * k, (rt[4]! - rt[5]!) * k, rt[5]! * k);
   // (and the ellipse's slow change of size, shape and tilt — ~0.3 m/s at Saturn: its place across a
   // day of the drift, the angles held)
+  // (the velocity only when asked: the pull on a ship needs the places alone)
   const dd = 1 / 36525;
-  const kp = kepler(a + rt[0]! * dd, e + rt[1]! * dd, I + rt[2]! * k, L - wb, wb - O, O, 0).pos;
-  const km = kepler(a - rt[0]! * dd, e - rt[1]! * dd, I - rt[2]! * k, L - wb, wb - O, O, 0).pos;
-  const s: State = { pos: k0.pos, vel: add(k0.vel, sub(kp, km), 0.5) };
+  const s = lazy(k0.pos, () => {
+    const kp = kepler(a + rt[0]! * dd, e + rt[1]! * dd, I + rt[2]! * k, L - wb, wb - O, O, 0).pos;
+    const km = kepler(a - rt[0]! * dd, e - rt[1]! * dd, I - rt[2]! * k, L - wb, wb - O, O, 0).pos;
+    return add(k0.vel, sub(kp, km), 0.5);
+  });
   if (b.id === "earth") {
     const m = moonGeo(d);
-    return { pos: add(s.pos, m.pos, -EARTH_MOON), vel: add(s.vel, m.vel, -EARTH_MOON) };
+    return lazy(add(s.pos, m.pos, -EARTH_MOON), () => add(s.vel, m.vel, -EARTH_MOON));
   }
   return s;
 }
@@ -259,7 +271,7 @@ function mouthHelio(d: number): State {
   const s = helio(solarBody("saturn")!, d);
   const c = Math.cos(-MOUTH_LAG), sn = Math.sin(-MOUTH_LAG);
   const rz = (v: Vec3): Vec3 => [c * v[0] - sn * v[1], sn * v[0] + c * v[1], v[2]];
-  const st = { pos: rz(s.pos), vel: rz(s.vel) };
+  const st = lazy(rz(s.pos), () => rz(s.vel));
   memo.set("#mouth", st);
   return st;
 }
@@ -273,10 +285,9 @@ export function solarState(id: string, t: number): State {
   const b = solarBody(id)!;
   const s = helio(b, d);
   const m = mouthHelio(d);
-  return {
-    pos: [(s.pos[0] - m.pos[0]) * toM, (s.pos[1] - m.pos[1]) * toM, (s.pos[2] - m.pos[2]) * toM],
-    vel: [(s.vel[0] - m.vel[0]) * toM * perDayToPerM, (s.vel[1] - m.vel[1]) * toM * perDayToPerM, (s.vel[2] - m.vel[2]) * toM * perDayToPerM],
-  };
+  return lazy([(s.pos[0] - m.pos[0]) * toM, (s.pos[1] - m.pos[1]) * toM, (s.pos[2] - m.pos[2]) * toM], () => [
+    (s.vel[0] - m.vel[0]) * toM * perDayToPerM, (s.vel[1] - m.vel[1]) * toM * perDayToPerM, (s.vel[2] - m.vel[2]) * toM * perDayToPerM,
+  ]);
 }
 
 /** The home frame's own acceleration (our mouth falls around the Sun like Saturn) [M/M²]. */

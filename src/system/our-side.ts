@@ -135,22 +135,35 @@ export function soiOf(id: string, t: number): number {
  * The game's start (game:interstellar): a circular orbit 400 km above the Earth, over its day side
  * (60° from the point under the Sun), the nose prograde and the Earth below. Home frame, at time t.
  */
-export function earthStart(t = 0, altKm = 400): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec3 } {
+export function earthStart(t = 0, altKm = 400, moonPlane = false): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec3 } {
   const E = ourState("earth", t);
   const sun = ourState("sun", t).pos;
   const earth = SOLAR_BODIES.find((b) => b.id === "earth")!;
-  const s0: Vec3 = [sun[0] - E.pos[0], sun[1] - E.pos[1], 0];
-  const sl = Math.hypot(...s0);
-  const s: Vec3 = [s0[0] / sl, s0[1] / sl, 0];
-  const e: Vec3 = [-s[1], s[0], 0];
+  // the orbit's plane: the ecliptic's, or the Moon's (a launch timed for the Moon: Artemis)
+  let n: Vec3 = [0, 0, 1];
+  if (moonPlane) {
+    const M = ourState("moon", t);
+    const r = [M.pos[0] - E.pos[0], M.pos[1] - E.pos[1], M.pos[2] - E.pos[2]] as Vec3;
+    const v = [M.vel[0] - E.vel[0], M.vel[1] - E.vel[1], M.vel[2] - E.vel[2]] as Vec3;
+    const h: Vec3 = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
+    const hl = Math.hypot(...h);
+    n = [h[0] / hl, h[1] / hl, h[2] / hl];
+  }
+  // (60° from the point under the Sun, in the plane)
+  const s0: Vec3 = [sun[0] - E.pos[0], sun[1] - E.pos[1], sun[2] - E.pos[2]];
+  const sd = s0[0] * n[0] + s0[1] * n[1] + s0[2] * n[2];
+  const sp: Vec3 = [s0[0] - sd * n[0], s0[1] - sd * n[1], s0[2] - sd * n[2]];
+  const sl = Math.hypot(...sp);
+  const s: Vec3 = [sp[0] / sl, sp[1] / sl, sp[2] / sl];
+  const e: Vec3 = [n[1] * s[2] - n[2] * s[1], n[2] * s[0] - n[0] * s[2], n[0] * s[1] - n[1] * s[0]];
   const c = Math.cos(Math.PI / 3), sn = Math.sin(Math.PI / 3);
-  const u: Vec3 = [c * s[0] + sn * e[0], c * s[1] + sn * e[1], 0];
+  const u: Vec3 = [c * s[0] + sn * e[0], c * s[1] + sn * e[1], c * s[2] + sn * e[2]];
   const r = earth.radius + (altKm * 1e3) / 1.476625e11;
-  const X: Vec3 = [E.pos[0] + r * u[0], E.pos[1] + r * u[1], E.pos[2]];
-  // prograde: counter-clockwise seen from the ecliptic north
-  const f: Vec3 = [-u[1], u[0], 0];
+  const X: Vec3 = [E.pos[0] + r * u[0], E.pos[1] + r * u[1], E.pos[2] + r * u[2]];
+  // prograde: counter-clockwise about the plane's normal
+  const f: Vec3 = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
   const vc = Math.sqrt(earth.mass / r);
-  return { X, fwd: f, up: u, vel: [E.vel[0] + vc * f[0], E.vel[1] + vc * f[1], E.vel[2]] };
+  return { X, fwd: f, up: u, vel: [E.vel[0] + vc * f[0], E.vel[1] + vc * f[1], E.vel[2] + vc * f[2]] };
 }
 
 /**

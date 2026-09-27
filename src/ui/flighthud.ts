@@ -29,6 +29,7 @@ import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState, meanMotion } from "../system/ephemeris";
 import { EPOCH_DATE, SOLAR_BODIES, solarState } from "../system/solar";
 import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../system/our-predict";
+import type { Arrival } from "../system/our-plan";
 
 /** our universe's bodies on the map */
 const OUR_COLOURS: Record<string, string> = {
@@ -76,6 +77,8 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 
 export interface FlightHudActions {
   plan(goal: "orbit" | "star" | "wormhole", r2: number, orbitStar: boolean): void;
+  /** our universe: an orbit around the reference body, a transfer to the target or the mouth */
+  planOur(kind: "orbit" | "target" | "wormhole", arrival: Arrival, altKm: number, retKm: number): void;
   align(goal: "orbit" | "star" | "wormhole"): void;
   addNode(): void;
   nudge(i: number, dv: V3, dt: number): void;
@@ -116,6 +119,10 @@ export class FlightHud {
   private goal: "orbit" | "star" | "wormhole" = "orbit";
   private r2 = 30;
   private starOrbit = true;
+  /** our universe: what to do at the target, the heights [km] there and back home */
+  private ourArrival: Arrival = "orbit";
+  private ourAlt = 200;
+  private ourRet = 200;
   private sel = 0;
   private planSig = "";
   plannerOpen = false;
@@ -585,9 +592,55 @@ export class FlightHud {
       sBox.append(b);
     }
     this.planEls.sBox = sBox;
+    // our universe: at the target, orbit / fly by / free return; the heights there and back
+    const aBox = h("span", "fl-rbox fl-arr");
+    for (const [a, label, title] of [
+      ["orbit", "Orbit", "Transfer, then a capture burn at the periapsis: a circular orbit at that height"],
+      ["flyby", "Flyby", "Transfer and pass the body at that height (a gravity assist)"],
+      ["freeReturn", "Free return", "Round the moon and back home without a burn (Apollo 13, Artemis II): the pass at that height, the perigee home at the second one, then a capture there"],
+    ] as const) {
+      const b = h("button", "", label) as HTMLButtonElement;
+      b.title = title;
+      b.onclick = () => {
+        this.ourArrival = a;
+        // (typical heights: a low orbit; a pass of a few thousand km)
+        if (a === "orbit" && this.ourAlt > 2000) this.ourAlt = 200;
+        if (a !== "orbit" && this.ourAlt < 1000) this.ourAlt = 7000;
+      };
+      this.planEls[`arr:${a}`] = b;
+      aBox.append(b);
+    }
+    this.planEls.aBox = aBox;
+    const kmBox = (get: () => number, set: (v: number) => void, key: string, title: string) => {
+      const box = h("span", "fl-rbox");
+      box.title = title;
+      const v = h("b");
+      this.planEls[key] = v;
+      const nb = (up: boolean, t: string) => {
+        const b = h("button", "", t) as HTMLButtonElement;
+        b.onclick = (e) => {
+          const k = (e as MouseEvent).shiftKey ? 2 : 1.25;
+          const x = get() * (up ? k : 1 / k);
+          set(Math.max(10, x < 1000 ? Math.round(x / 10) * 10 : Math.round(x / 100) * 100));
+        };
+        return b;
+      };
+      box.append(nb(false, "‹"), v, nb(true, "›"));
+      return box;
+    };
+    const altBox = kmBox(() => this.ourAlt, (v) => (this.ourAlt = v), "altV", "Height of the orbit, or of the pass (⇧: faster)");
+    const retBox = kmBox(() => this.ourRet, (v) => (this.ourRet = v), "retV", "Perigee back home (⇧: faster)");
+    this.planEls.altBox = altBox;
+    this.planEls.retBox = retBox;
+    const retLabel = h("span", "fl-label", "home at");
+    this.planEls.retLabel = retLabel;
     const go = h("button", "fl-go", "PLAN TRANSFER") as HTMLButtonElement;
+    this.planEls.go = go;
     go.title = "Transfer to the goal (from the new plane when a plane change is planned)";
-    go.onclick = () => this.act.plan(this.goal, this.r2, this.starOrbit);
+    go.onclick = () => {
+      if (this.lastInfo?.ref) this.act.planOur(this.goal === "orbit" ? "orbit" : this.goal === "star" ? "target" : "wormhole", this.ourArrival, this.ourAlt, this.ourRet);
+      else this.act.plan(this.goal, this.r2, this.starOrbit);
+    };
     const align = h("button", "fl-align", "ALIGN PLANE") as HTMLButtonElement;
     align.title = "Plane change: turn the orbit into the goal's plane at the next crossing (ascending / descending node) — do it first, transfers are then cheaper";
     align.onclick = () => this.act.align(this.goal);
@@ -595,6 +648,9 @@ export class FlightHud {
     const goRow = h("div", "fl-gorow");
     goRow.append(align, go);
     goalRow.append(desc, rBox, sBox);
+    const ourRow = h("div", "fl-goal fl-our");
+    ourRow.append(aBox, altBox, retLabel, retBox);
+    this.planEls.ourRow = ourRow;
     // nodes
     const nodes = h("div", "fl-nodes");
     this.planEls.nodes = nodes;
@@ -604,7 +660,10 @@ export class FlightHud {
       b.title = title;
       b.onclick = (e) => {
         const k = (e as MouseEvent).shiftKey ? 10 : (e as MouseEvent).altKey ? 0.1 : 1;
-        this.act.nudge(this.sel, [dv[0] * k, dv[1] * k, dv[2] * k], dt * k);
+        // (our universe: 1 m/s and 1 minute a click)
+        const our = !!this.lastInfo?.ref;
+        const kv = our ? k / 299792458 / step : k, kt = our ? (k * 60) / 492.5490947 / 10 : k;
+        this.act.nudge(this.sel, [dv[0] * kv, dv[1] * kv, dv[2] * kv], dt * kt);
       };
       return b;
     };
@@ -633,12 +692,106 @@ export class FlightHud {
       btn("CLEAR", "", "Delete the plan", () => this.act.clearPlan()),
       exec,
     );
-    P.append(head, seg, goalRow, goRow, nodes, edit, result, actions);
+    P.append(head, seg, goalRow, ourRow, goRow, nodes, edit, result, actions);
+  }
+
+  /** The planner in our universe: an orbit here, a transfer to the target or the mouth. */
+  private drawOurPlanner(i: Info, time: number) {
+    const s = this.s;
+    const E = this.planEls;
+    const refName = BODY_NAMES[i.ref as Target] ?? i.ref!;
+    const tgtOk = OUR_COLOURS[i.target] !== undefined && i.target !== i.ref;
+    const tgtName = tgtOk ? BODY_NAMES[i.target] : "Target";
+    const labels = { orbit: `Orbit ${refName}`, star: tgtName, wormhole: "Wormhole" } as const;
+    for (const g of ["orbit", "star", "wormhole"] as const) {
+      const b = E[`goal:${g}`] as HTMLButtonElement;
+      if (b.textContent !== labels[g]) b.textContent = labels[g];
+      b.classList.toggle("on", this.goal === g);
+      b.disabled = g === "star" && !tgtOk;
+    }
+    if (this.goal === "star" && !tgtOk) this.goal = "orbit";
+    E.rBox!.hidden = true;
+    E.sBox!.hidden = true;
+    E.align!.hidden = true;
+    E.aBox!.hidden = this.goal !== "star";
+    // (a free return: from an orbit around the moon's planet)
+    const moonOfRef = tgtOk && SOLAR_BODIES.find((b) => b.id === i.target)?.parent === i.ref;
+    (E["arr:freeReturn"] as HTMLButtonElement).disabled = !moonOfRef;
+    if (this.ourArrival === "freeReturn" && !moonOfRef) this.ourArrival = "orbit";
+    for (const a of ["orbit", "flyby", "freeReturn"] as const) E[`arr:${a}`]!.classList.toggle("on", this.ourArrival === a);
+    const free = this.goal === "star" && this.ourArrival === "freeReturn";
+    E.retBox!.hidden = !free;
+    E.retLabel!.hidden = !free;
+    E.altV!.textContent = `${this.ourAlt.toLocaleString("en-US")} km`;
+    E.retV!.textContent = `${this.ourRet.toLocaleString("en-US")} km`;
+    E.desc!.textContent = this.goal === "orbit" ? `Circular orbit around ${refName} at` : this.goal === "star" ? `To ${tgtName}:` : "Through the wormhole's mouth (0.7 AU behind Saturn)";
+    const busy = !!i.planBusy;
+    E.go!.textContent = busy ? "PLANNING…" : "PLAN";
+    (E.go as HTMLButtonElement).disabled = busy;
+    this.drawNodeRows(i, time, true);
+    const plan = i.plan;
+    const nodes = plan?.nodes ?? [];
+    const flying = i.auto === "node";
+    (E.exec as HTMLButtonElement).disabled = !nodes.length && !flying;
+    E.exec!.classList.toggle("on", flying);
+    E.exec!.textContent = flying ? (plan?.burning ? "BURNING · STOP ■" : "EXECUTING · STOP ■") : "EXECUTE ▶";
+    const total = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
+    E.result!.textContent = plan ? `${plan.note}${nodes.length ? ` · total Δv ${fmtDv(total)}` : ""}` : busy ? "Planning: the n-body paths are being aimed…" : "Pick a goal and PLAN — or add a node (+ NODE, or a click on the path) and shape it";
+    void s;
+  }
+
+  /** The plan's nodes, a row each: countdown, Δv, its parts, its role. */
+  private drawNodeRows(i: Info, time: number, our: boolean) {
+    const E = this.planEls;
+    const plan = i.plan;
+    const nodes = plan?.nodes ?? [];
+    if (this.sel >= nodes.length) this.sel = Math.max(0, nodes.length - 1);
+    const sig = plan ? nodes.map((n) => `${n.t.toFixed(3)}:${n.dv.map((x) => x.toExponential(4)).join()}:${n.then}:${n.role}`).join("|") + `:${this.sel}` : "none";
+    if (sig !== this.planSig) {
+      this.planSig = sig;
+      E.nodes!.innerHTML = "";
+      const ROLE: Record<string, string> = { depart: "departure", circ: "circularize", mcc: "correction", capture: "capture", mccReturn: "return correction", captureHome: "capture home" };
+      nodes.forEach((n, k) => {
+        const row = h("div", `fl-node${k === this.sel ? " sel" : ""}`);
+        row.onclick = () => {
+          this.sel = k;
+          this.planSig = "";
+        };
+        const dv = Math.hypot(...n.dv);
+        const parts = ["PRO", "NRM", "RAD"]
+          .map((l, j) => (Math.abs(n.dv[j]!) * 299792458 > 0.5 ? `${l} ${n.dv[j]! >= 0 ? "+" : "−"}${fmtDv(Math.abs(n.dv[j]!))}` : ""))
+          .filter(Boolean)
+          .join(" · ");
+        const role = n.role ? `${ROLE[n.role] ?? n.role}${n.body ? ` · ${BODY_NAMES[n.body as Target] ?? n.body}` : ""}` : "";
+        const tail = [role, n.then === "circularize" ? "→ circularize" : ""].filter(Boolean).join(" ");
+        const txt = n.role && dv === 0 ? "aimed in flight" : parts || "no Δv yet";
+        row.innerHTML = `<b>◆ ${k + 1}</b><span class="t"></span><span class="dv">Δv ${fmtDv(dv)}</span><span class="parts">${txt}${tail ? ` · ${tail}` : ""}</span>`;
+        const del = h("button", "fl-x", "×") as HTMLButtonElement;
+        del.title = "Delete this node";
+        del.onclick = (e) => {
+          e.stopPropagation();
+          this.act.deleteNode(k);
+        };
+        row.append(del);
+        E.nodes!.append(row);
+      });
+    }
+    E.nodes!.querySelectorAll<HTMLElement>(".fl-node .t").forEach((el, k) => {
+      const n = nodes[k];
+      if (n) el.textContent = n.t - time >= 0 ? `T−${our ? fmtDur(n.t - time, this.s) : fmtShort(Math.round(n.t - time))}` : i.auto === "node" ? "now" : "missed";
+    });
+    E.edit!.hidden = !nodes.length;
   }
 
   private drawPlanner(i: Info, time: number) {
     const s = this.s;
     const E = this.planEls;
+    const our = !!i.ref;
+    E.ourRow!.hidden = !our || this.goal === "wormhole";
+    if (our) return this.drawOurPlanner(i, time);
+    E.align!.hidden = false;
+    E.go!.textContent = "PLAN TRANSFER";
+    E["goal:orbit"]!.textContent = "Gargantua";
     // (in a system the "star" goal is the targeted body: a planet, the companion star)
     const body = s.system !== "none" && s.target !== "hole" && s.target !== "wormhole" && s.target !== "barycentre" ? s.target : null;
     const there = body ? BODY_NAMES[body] : "the star";
@@ -1511,7 +1664,11 @@ export class FlightHud {
    */
   private drawOurMap(i: Info, t0: number, ctx: CanvasRenderingContext2D, cw: number, ch: number) {
     const dpr = devicePixelRatio;
-    const focus = this.mapFocus && SOLAR_BODIES.some((b) => b.id === this.mapFocus) ? this.mapFocus : "sun";
+    // (centred by default on the ship's planet — the Earth for a flight to the Moon, where its path
+    // shows; a click on a body centres it, on the Sun the whole system; a double click: back)
+    const refB = SOLAR_BODIES.find((b) => b.id === i.ref);
+    const home = !refB || refB.id === "sun" ? "sun" : refB.parent === "sun" ? refB.id : refB.parent!;
+    const focus = this.mapFocus && SOLAR_BODIES.some((b) => b.id === this.mapFocus) ? this.mapFocus : home;
     const F = solarState(focus, t0).pos;
     const r0 = 5 * (SOLAR_BODIES.find((b) => b.id === focus)?.radius ?? 1e-4);
     const side = this.view === "side";
@@ -1524,7 +1681,21 @@ export class FlightHud {
       return R < 1e-30 ? [0, 0] : [(q[0] * Math.log1p(R / r0)) / R, (q[1] * Math.log1p(R / r0)) / R];
     };
     // (framed on the planets out to Neptune around the Sun; on the ship and the moons around a planet)
-    const reach = focus === "sun" ? 31 * 1.0131 : Math.max(Math.hypot(...sub(i.X!, F)) * 1.2, 40 * r0);
+    // (around a planet: the ship, and its paths out to three spheres of influence)
+    let reach = focus === "sun" ? 31 * 1.0131 : Math.max(Math.hypot(...sub(i.X!, F)) * 1.2, 40 * r0);
+    if (focus !== "sun") {
+      const fb = SOLAR_BODIES.find((b) => b.id === focus)!;
+      const par = solarState(fb.parent ?? "sun", t0).pos;
+      const cap = 3 * Math.hypot(...sub(F, par)) * (fb.mass / SOLAR_BODIES.find((b) => b.id === (fb.parent ?? "sun"))!.mass) ** 0.4;
+      for (const p of [i.ourFree, i.ourPlan]) {
+        if (!p) continue;
+        for (let j = 0; j < p.pts.length; j += 4) {
+          const q = solarState(focus, p.times[j]!).pos;
+          const d = Math.hypot(p.pts[j]![0] - q[0], p.pts[j]![1] - q[1], p.pts[j]![2] - q[2]);
+          if (d < cap) reach = Math.max(reach, d * 1.1);
+        }
+      }
+    }
     const want = (log ? Math.log1p(reach / r0) : reach) * 1.08 * this.zoom;
     this.extent += (want - this.extent) * 0.15;
     const k = (Math.min(cw, ch) / 2 - 8 * dpr) / this.extent;
@@ -1700,6 +1871,21 @@ export class FlightHud {
           ctx.font = `600 ${9 * dpr}px ${FONT}`;
           ctx.fillText(`CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, this.s)}`, (x1 + x2) / 2 + 6 * dpr, (y1 + y2) / 2);
         }
+      }
+      // the target where it will be when the plan meets it
+      if (i.ourArrive && i.ourArrive.body !== "wormhole" && plan) {
+        const T = solarState(i.ourArrive.body, i.ourArrive.t).pos;
+        const [x, y] = P(FA(T, i.ourArrive.t));
+        ctx.strokeStyle = "rgba(255, 170, 80, 0.9)";
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.setLineDash([2 * dpr, 2 * dpr]);
+        ctx.beginPath();
+        ctx.arc(x, y, 6 * dpr, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(255, 170, 80, 0.9)";
+        ctx.font = `600 ${8.5 * dpr}px ${FONT}`;
+        ctx.fillText(`${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, this.s)}`, x + 8 * dpr, y + 3 * dpr);
       }
       // the nodes and the selected one's handles
       if (plan && i.plan) {

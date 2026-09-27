@@ -22,6 +22,8 @@ import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
 import { nodeDvHome, predictOurs, type OurPath } from "./system/our-predict";
+import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
+import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 
@@ -128,6 +130,8 @@ export class CameraController {
   private burnDir: Vec3 | null = null;
   private nodeDone = 0;
   private nodeBurning = false;
+  /** the prograde hold a mission's cruise set (given back before a burn) */
+  private missionHold = false;
   private userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
   private lastWant: { beta: Vec3; ff: Vec3 } | null = null;
@@ -1627,8 +1631,9 @@ export class CameraController {
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
       // ship turns within it — the wall-clock turn rates are for the eye, not for days-long burns)
-      snap: this.pilot.auto !== "none" && ((s.engine === "crew" && cam.region === "hole") || onOurSide(s, cam))
-        && s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20,
+      snap: (this.pilot.auto !== "none" && ((s.engine === "crew" && cam.region === "hole") || onOurSide(s, cam))
+        && s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20) || (this.nodeBurning && onOurSide(s, cam)),
+      gimbal: this.nodeBurning && onOurSide(s, cam),
     }, inp);
     this.rotateC(out.rot);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
@@ -1840,6 +1845,89 @@ export class CameraController {
   }
 
   /**
+   * Our universe: plans a circular orbit around the reference body ("orbit", at altKm), a transfer
+   * to the target ("target": then orbit, fly by, or a free return home) or to the wormhole's mouth.
+   * The planner works in its worker (seconds of n-body paths); the plan is shown when it answers.
+   */
+  async planOurs(kind: "orbit" | "target" | "wormhole", arrival: Arrival, altKm: number, retKm: number): Promise<string> {
+    const s = this.s;
+    const nav = this.ourNav(cameraFrame(s));
+    if (!nav) return "Planning: in our universe (or around the black hole with PLAN TRANSFER)";
+    if (this.planBusy) return "Planning… (still working on the last one)";
+    const target = kind === "wormhole" ? "wormhole" : kind === "orbit" ? nav.ref : String(s.target);
+    if (kind === "target" && !isOurBody(s.target as Body)) return "Transfer: select a body of ours as the target (Tab, or a click on the map)";
+    // (the first burn at least a minute away, and ~10 s of the pilot's time at this warp)
+    const o = { lead: Math.max(60 / 492.5490947, 10 * (s.animate ? s.timeSpeed : 0)), mouthR: mouth(s).w.rho, accel: this.thrustMax() };
+    this.planBusy = true;
+    const gen = ++this.planGen;
+    try {
+      const res = await runPlanner<OurPlanResult>(kind === "orbit"
+        ? { kind: "orbit", X: nav.X, V: nav.V, t: nav.t, altM: altKm * 1e3, o }
+        : { kind: "transfer", X: nav.X, V: nav.V, t: nav.t, goal: { kind: "transfer", target, arrival, altM: altKm * 1e3, returnAltM: retKm * 1e3 }, o });
+      if (gen !== this.planGen) return "";
+      if ("error" in res) return res.error;
+      this.plan = { nodes: res.nodes.map((n: PlanNode) => ({ t: n.t, dv: n.dv, then: n.then ?? null, role: n.role, body: n.body })), path: null, at: 0, note: res.note };
+      this.ourMission = res.mission;
+      this.ourPlanned = res.path;
+      if (kind === "wormhole") s.target = "wormhole";
+      this.refreshPlan(true);
+      const dv = res.nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0) * 299792458;
+      return `Plan: ${res.note} · Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(0)} m/s`}`;
+    } finally {
+      if (gen === this.planGen) this.planBusy = false;
+    }
+  }
+  private planGen = 0;
+  /** the last re-aim's answer (for the HUD and debugging) */
+  lastRefine: { role: string; at: number; result: unknown } | null = null;
+
+  /**
+   * Executing a mission in our universe: the next node re-aimed from the ship's real state — when it
+   * becomes the next one, and closer to it (a correction twice, a capture's periapsis a few times as
+   * it nears) — in the planner's worker; a correction no longer needed is dropped.
+   * True while a re-aim is under way and the burn is close (the burn waits for it).
+   */
+  private ourRefineTick(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, node: ManeuverNode, burnT: number): boolean {
+    const m = this.ourMission;
+    if (!m || !node.role) return false;
+    let st = this.refineState.get(node);
+    if (!st) {
+      st = { at: -Infinity, n: 0, pending: false };
+      this.refineState.set(node, st);
+    }
+    const toNode = node.t - nav.t;
+    const start = toNode - burnT / 2;
+    if (st.pending) return start < 3 * Math.max(this.s.timeSpeed, 1e-6);
+    if (this.nodeBurning || start < 2 * burnT + 0.02) return false;
+    const cheap = node.role === "capture" || node.role === "captureHome" || node.role === "circ";
+    const maxN = cheap ? 8 : 3;
+    const due = st.n === 0 || (st.n < maxN && toNode < (cheap ? 0.4 : 0.15) * (node.t - st.at));
+    // (a departure: once within a turn of the orbit, the plan's two-body wait now flown)
+    if (!due || (node.role === "depart" && st.n === 0 && toNode > 1.2 * this.ourPeriod(nav) && toNode > 0.3 * 86400 / 492.55)) return false;
+    st.pending = true;
+    st.at = nav.t;
+    st.n++;
+    const o = { lead: Math.min(Math.max(60 / 492.5490947, burnT), 0.8 * start), mouthR: mouth(this.s).w.rho, accel: this.thrustMax() };
+    const pn: PlanNode = { t: node.t, dv: node.dv, role: node.role, body: node.body, then: node.then === "circularize" ? "circularize" : undefined };
+    void runPlanner<{ node: PlanNode | null } | { error: string }>({ kind: "refine", X: nav.X, V: nav.V, t: nav.t, mission: m, node: pn, o }).then((r) => {
+      st!.pending = false;
+      this.lastRefine = { role: node.role!, at: nav.t, result: r };
+      const i = this.plan.nodes.indexOf(node);
+      if (i < 0 || "error" in r) return;
+      if (!r.node) {
+        // (no correction needed: dropped)
+        this.plan.nodes.splice(i, 1);
+        this.onPilotMessage?.(`${node.role === "mccReturn" ? "Return" : "Mid-course"} correction not needed`);
+      } else {
+        node.t = r.node.t;
+        node.dv = r.node.dv;
+      }
+      this.refreshPlan(true);
+    });
+    return start < 3 * Math.max(this.s.timeSpeed, 1e-6);
+  }
+
+  /**
    * The plane a goal lives in (normal, flat map): Gargantua's equator — the disk's, and the star's
    * orbit's — or, for the wormhole, the plane through the hole and the mouth nearest the ship's.
    */
@@ -1916,6 +2004,8 @@ export class CameraController {
   }
   clearPlan() {
     this.plan = { nodes: [], path: null, at: 0, note: "" };
+    this.ourMission = null;
+    this.ourPlanned = null;
     this.transfer = null;
     this.warpAfter = null;
     if (this.pilot.auto === "transfer") this.pilot.setAuto("transfer");
@@ -1943,7 +2033,16 @@ export class CameraController {
         const left = Math.max(0, total - this.nodeDone);
         nodes = [{ ...n0, t: nav.t, dv: lin(n0.dv, left / Math.max(total, 1e-15), n0.dv, 0) }, ...nodes.slice(1)];
       }
-      this.ourPlan = predictOurs(nav.X, nav.V, nav.t, nodes.map((n) => ({ t: n.t, dv: n.dv })), { mouthR: mouth(this.s).w.rho, maxSteps: 3000 });
+      const m = this.ourMission;
+      // (a mission: its whole span; the first burn days away in a low orbit — beyond what the map's
+      // prediction reaches — the planner's own path)
+      if (m && this.ourPlanned && nodes[0]?.role === "depart" && nodes[0].t - nav.t > 0.4 * 86400 / 492.55) {
+        this.ourPlan = this.ourPlanned;
+        return (P.path = null);
+      }
+      // (a mission: the flight's own step — the display's path is the one flown)
+      const span = m ? { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 20000, step: 0.01 } : { maxSteps: 3000 };
+      this.ourPlan = predictOurs(nav.X, nav.V, nav.t, nodes.map((n) => ({ t: n.t, dv: n.dv })), { mouthR: mouth(this.s).w.rho, accel: this.thrustMax(), ...span });
       return (P.path = null);
     }
     this.ourPlan = null;
@@ -2017,18 +2116,26 @@ export class CameraController {
     const dl = Math.hypot(...dir) || 1;
     const aMax = Math.max(this.thrustMax(), 1e-9);
     const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
+    // (our universe, a mission's node: re-aimed as it nears — the burn waits for an answer due)
+    const hold = nav ? this.ourRefineTick(nav, node, burnT) : false;
     const toNode = node.t - this.nowTime();
     const start = toNode - burnT / 2;
-    if (!this.nodeBurning && start <= 0) {
+    if (!this.nodeBurning && start <= 0 && !hold) {
+      if (this.missionHold && this.pilot.hold === "prograde") this.pilot.hold = "none";
+      this.missionHold = false;
       this.nodeBurning = true;
       this.burnDir = lin(dir, 1 / dl, dir, 0);
     }
     if (this.nodeBurning) {
       // burn: about 2 s of the pilot's time for the whole burn (warp adapted); a Crew burn, ~10 s
       s.timeSpeed = follow ? Math.min(Math.max(burnT / 10, 0.05), 5000) : Math.min(Math.max(burnT / 2, 0.05), 200);
+      // (our universe: the end of a burn slowed down — a frame gives at most half of what is left —
+      // to cut it within a cm/s: 1 m/s at the Earth's departure is ~1 000 km at the Moon)
+      if (nav) s.timeSpeed = Math.min(s.timeSpeed, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
       const perFrame = aMax * s.timeSpeed * dt * dtau;
-      // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c)
-      if (left <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame) || left < 1e-9) {
+      // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
+      // within a cm/s)
+      if ((nav ? left <= Math.max(3e-11, 1e-6 * total) : left <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || left < 1e-12) {
         P.nodes.shift();
         this.nodeDone = 0;
         this.nodeBurning = false;
@@ -2036,6 +2143,9 @@ export class CameraController {
         s.timeSpeed = this.userWarp;
         if (!P.nodes.length) {
           const then = node.then ?? null;
+          this.ourMission = null;
+          this.ourPlanned = null;
+          this.missionHold = false;
           this.userWarp = null;
           P.path = null;
           this.pilot.auto = "none";
@@ -2050,9 +2160,24 @@ export class CameraController {
     // on the burn: it turns while coasting)
     const coast = start - 20;
     s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
+    // (our universe: seconds matter — a burn of minutes in a low orbit; the warp down to real time)
+    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 6, 0.002), 1e5) : Math.max(Math.min(start / 3, s.timeSpeed), 0.002);
+    if (hold) s.timeSpeed = Math.min(s.timeSpeed, Math.max(start / 4, 0.002));
     // (a long coast rides the rails, held back near bodies like any flight)
     if (s.system !== "none" || s.timeSpeed > 500) s.timeSpeed = Math.min(s.timeSpeed, Math.max(this.railsLimit(cam).lim, 3));
-    return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0, far: start > 60 };
+    // (our universe, a mission's cruise: the SAS on prograde until the next manoeuvre nears — ten
+    // minutes, or a few burn lengths — then onto the burn; a hold the pilot chose is kept)
+    const far = nav ? start > Math.max(600 / 492.5490947, 3 * burnT) : start > 60;
+    if (nav) {
+      if (far && this.pilot.hold === "none") {
+        this.pilot.hold = "prograde";
+        this.missionHold = true;
+      } else if (!far && this.missionHold && this.pilot.hold === "prograde") {
+        this.pilot.hold = "none";
+        this.missionHold = false;
+      }
+    }
+    return { dir: lin(dir, 1 / dl, dir, 0), throttle: 0, far };
   }
 
   /**
@@ -2645,6 +2770,13 @@ export class CameraController {
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
   /** our universe: the free-fall path and the path through the nodes (Newtonian prediction) */
   ourFree: OurPath | null = null;
+  /** our universe: the mission the plan flies (its nodes re-aimed in flight), the planner at work */
+  ourMission: OurMission | null = null;
+  planBusy = false;
+  /** the planner's own path, shown while the first burn is further than the map's prediction reaches */
+  private ourPlanned: OurPath | null = null;
+  /** per node: the last re-aim (scene time), how many, one under way */
+  private refineState = new WeakMap<ManeuverNode, { at: number; n: number; pending: boolean }>();
   ourPlan: OurPath | null = null;
 
   /** A turn of the ship's orbit around its reference body (the Kepler period; unbound: a day). */
@@ -3137,6 +3269,10 @@ export class CameraController {
       /** our universe: the free-fall path and the path through the nodes */
       ourFree: this.ourFree,
       ourPlan: this.plan.nodes.length ? this.ourPlan : null,
+      /** the planner at work (our universe) */
+      planBusy: this.planBusy,
+      /** a mission's target at its periapsis time (the map marks where it will be) */
+      ourArrive: this.ourMission && this.plan.nodes.length ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive } : null,
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());

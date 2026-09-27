@@ -165,7 +165,7 @@ async function main() {
     camera.setOurLanded(null);
     if (pose) {
       const t = time ?? simTime;
-      const d = pose === "earthGround" ? earthGround(t) : pose === "earth" ? earthStart(t) : saturnDeparture(t);
+      const d = pose === "earthGround" ? earthGround(t) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
@@ -178,6 +178,9 @@ async function main() {
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
     if (withMission) mission.start();
+    if (name === "game:artemis") {
+      panel.toast("Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)");
+    }
     if (name === "game:interstellar") {
       panel.toast("2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)");
     }
@@ -334,6 +337,10 @@ async function main() {
       camera.pilot.throttle = t;
     },
     plan: (goal, r2, orbitStar) => panel.toast(camera.planTransfer(goal, r2, { orbitStar })),
+    planOur: (kind, arrival, altKm, retKm) => {
+      panel.toast("Planning… (aiming the n-body paths)");
+      void camera.planOurs(kind, arrival, altKm, retKm).then((m) => m && panel.toast(m));
+    },
     align: (goal) => panel.toast(camera.planAlign(goal)),
     addNode: () => camera.addNode(),
     nudge: (i, dv, dt) => camera.nudgeNode(i, dv, dt),

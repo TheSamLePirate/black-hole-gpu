@@ -63,6 +63,9 @@ export interface FlightContext {
   /** at a warp where the burn turns (with the orbit) faster than the ship can: the nose is held on it
    *  kinematically (attitude on rails), not flown */
   snap?: boolean;
+  /** the engine gimballed onto the burn: its thrust along the commanded direction (a node's burn
+   *  in our universe — a nose lagging a mrad behind a turning prograde is 3 m/s off a TLI) */
+  gimbal?: boolean;
 }
 
 export interface FlightOutput {
@@ -237,7 +240,7 @@ export class FlightComputer {
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));
     }
-    const accC = add(scale(Z, throttle * c.thrust), rcsC);
+    const accC = add(scale(c.gimbal && point && throttle > 0 ? point : Z, throttle * c.thrust), rcsC);
     const acc = fromC(accC);
     this.accel = len(acc);
     return { rot, acc, burn: this.burn };

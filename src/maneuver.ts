@@ -28,6 +28,9 @@ export interface ManeuverNode {
   dv: Vec3;
   /** what the autopilot does after the last node */
   then?: "circularize" | "approach" | "orbit" | null;
+  /** our universe: the node's part in a mission (re-aimed in flight), the body of a capture */
+  role?: "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome";
+  body?: string;
 }
 
 /** Integration tolerance of the planners (thousands of trial paths; the burns are refined anyway). */

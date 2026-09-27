@@ -1,0 +1,45 @@
+// The page's side of the flight planner's worker (plan-worker.ts): requests answered as promises;
+// without a worker (tests, an old browser), the same work done here, at once.
+
+import { runPlan, type PlanRequest } from "./plan-worker";
+
+type Req = PlanRequest extends infer R ? (R extends { id: number } ? Omit<R, "id"> : never) : never;
+
+let worker: Worker | null = null;
+let failed = false;
+let next = 1;
+const waiting = new Map<number, (r: unknown) => void>();
+
+function getWorker(): Worker | null {
+  if (worker || failed || typeof Worker === "undefined" || typeof location === "undefined") return worker;
+  try {
+    worker = new Worker(new URL("plan-worker.js", location.href), { type: "module" });
+    worker.onmessage = (e: MessageEvent<{ id: number; result: unknown }>) => {
+      const f = waiting.get(e.data.id);
+      waiting.delete(e.data.id);
+      f?.(e.data.result);
+    };
+    worker.onerror = () => {
+      // (no worker there: answer what waits here, and from now on)
+      failed = true;
+      worker = null;
+      for (const [id, f] of waiting) f({ error: `Planner worker unavailable (${id})` });
+      waiting.clear();
+    };
+  } catch {
+    failed = true;
+    worker = null;
+  }
+  return worker;
+}
+
+/** Runs a planning request off the frame loop (or here, without a worker). */
+export function plan<T>(q: Req): Promise<T> {
+  const w = getWorker();
+  const id = next++;
+  if (!w) return Promise.resolve(runPlan({ ...q, id } as PlanRequest) as T);
+  return new Promise<T>((resolve) => {
+    waiting.set(id, resolve as (r: unknown) => void);
+    w.postMessage({ ...q, id });
+  });
+}

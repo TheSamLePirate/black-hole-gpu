@@ -96,7 +96,7 @@ export function nodeDvComponents(X: Vec3, V: Vec3, t: number, d: Vec3): Vec3 {
  * The path from (X, V) at t0 for about a turn of the orbit around its reference body (or, leaving it,
  * on until tMax), the nodes' impulses applied on the way. maxSteps bounds the work.
  */
-export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [], o: { tMax?: number; maxSteps?: number; mouthR?: number } = {}): OurPath {
+export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [], o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number } = {}): OurPath {
   const maxSteps = o.maxSteps ?? 2500;
   const out: OurPath = { pts: [X0], vels: [V0], times: [t0], refs: [], fate: "continues", nodeAt: [] };
   let X = X0, V = V0, t = t0;
@@ -118,28 +118,52 @@ export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [
     }
     return 1.3e5;
   };
-  let tEnd = Math.min(t0 + (o.tMax ?? horizon()), t0 + 1.3e5);
-  if (pending.length) tEnd = Math.max(tEnd, pending[pending.length - 1]!.t + 1);
+  // (a span asked for is kept — up to ~40 years; else the horizon, extended after each node)
+  const fixed = o.tMax !== undefined;
+  let tEnd = fixed ? t0 + Math.min(o.tMax!, 2.6e6) : Math.min(t0 + horizon(), t0 + 1.3e5);
+  if (pending.length && !fixed) tEnd = Math.max(tEnd, pending[pending.length - 1]!.t + 1);
   let g = pull(X, t, set);
   let lastRefCheck = t;
+  // (finite burns, as the ship flies them: the engine's acceleration along the node's P/N/R
+  // direction — turning with the orbit — centred on the node's time, until its Δv is given)
+  const acc = o.accel ?? 0;
+  const startOf = (n: OurNode) => (acc > 0 ? Math.max(n.t - Math.hypot(...n.dv) / acc / 2, t0) : n.t);
+  let burn: { dv: Vec3; left: number; T: number } | null = null;
+  const thrust = (Xq: Vec3, Vq: Vec3, tq: number): Vec3 => {
+    if (!burn) return [0, 0, 0];
+    const d = nodeDvHome(Xq, Vq, tq, burn.dv);
+    const l = Math.hypot(...d) || 1;
+    return [(d[0] / l) * acc, (d[1] / l) * acc, (d[2] / l) * acc];
+  };
   for (let i = 0; i < maxSteps && t < tEnd; i++) {
-    let dt = 0.02 * g.tDyn;
-    // (land on the next node exactly)
-    const next = pending[0];
-    if (next && t + dt >= next.t) dt = Math.max(next.t - t, 0);
+    let dt = (o.step ?? 0.02) * g.tDyn;
+    // (land on the next node — or its burn's start — exactly)
+    const next: OurNode | undefined = burn ? undefined : pending[0];
+    if (next && t + dt >= startOf(next)) dt = Math.max(startOf(next) - t, 0);
+    if (burn) dt = Math.min(dt, burn.T / 40, burn.left / acc);
     dt = Math.min(dt, tEnd - t);
-    V = add(V, g.a, dt / 2);
+    const a0 = burn ? add(g.a, thrust(X, V, t)) : g.a;
+    V = add(V, a0, dt / 2);
     X = add(X, V, dt);
     t += dt;
     g = pull(X, t, set);
-    V = add(V, g.a, dt / 2);
-    if (next && t >= next.t - 1e-9) {
-      V = add(V, nodeDvHome(X, V, t, next.dv));
+    const a1 = burn ? add(g.a, thrust(X, V, t)) : g.a;
+    V = add(V, a1, dt / 2);
+    if (burn) {
+      burn.left -= acc * dt;
+      if (burn.left <= 1e-15) burn = null;
+    }
+    if (next && t >= startOf(next) - 1e-9) {
+      const size = Math.hypot(...next.dv);
+      if (acc > 0 && size > 0) burn = { dv: next.dv, left: size, T: size / acc };
+      else V = add(V, nodeDvHome(X, V, t, next.dv));
       pending.shift();
       out.nodeAt.push(out.pts.length);
       // (after a burn: a turn of the new orbit)
-      tEnd = Math.max(tEnd, Math.min(t + horizon(), t0 + 1.3e5));
-      if (pending.length) tEnd = Math.max(tEnd, pending[pending.length - 1]!.t + 1);
+      if (!fixed) {
+        tEnd = Math.max(tEnd, Math.min(t + horizon(), t0 + 1.3e5));
+        if (pending.length) tEnd = Math.max(tEnd, pending[pending.length - 1]!.t + 1);
+      }
     }
     // the reference body (a few times per local fall time)
     if (t - lastRefCheck > 0.2 * g.tDyn) {

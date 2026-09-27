@@ -852,7 +852,14 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-rbox { display: inline-flex; align-items: center; gap: 3px; }
 .fl-rbox b { font: 600 11.5px var(--mono); color: #5ad8ff; min-width: 52px; text-align: center; }
 .fl-rbox button { padding: 2px 7px !important; }
+/* our universe: what to do at the target, the heights there and back (wraps on narrow panels) */
+.fl-our { flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
+.fl-our > .fl-label { margin-left: 4px; }
+.fl-arr button { white-space: nowrap; }
+.fl-our[hidden], .fl-our [hidden] { display: none !important; }
 .fl-gorow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.fl-gorow:has(.fl-align[hidden]) { grid-template-columns: 1fr; }
+.fl-gorow .fl-align[hidden] { display: none; }
 .fl-plan .fl-align.aligned { color: #6fe3a1; border-color: rgba(111, 227, 161, 0.5); }
 .fl-plan .fl-go { width: 100%; padding: 6px !important; border-color: rgba(90, 216, 255, 0.5) !important; background: linear-gradient(180deg, rgba(90, 216, 255, 0.24), rgba(90, 216, 255, 0.08)) !important; color: #e8f9ff !important; }
 .fl-plan .fl-go.on { border-color: var(--accent) !important; background: linear-gradient(180deg, rgba(255, 179, 92, 0.34), rgba(255, 179, 92, 0.12)) !important; color: #ffe2bd !important; }

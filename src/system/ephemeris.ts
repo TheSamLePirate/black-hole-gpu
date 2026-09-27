@@ -38,7 +38,10 @@ export function bodyState(sys: System, id: string, t: number): BodyState {
   const b = body(sys, id);
   const o = b.orbit;
   if (o.type === "fixed") return { pos: [...o.pos] as Vec3, vel: [0, 0, 0], dtau: 1 };
-  if (o.type === "solar") return { ...solarState(id, t), dtau: 1 };
+  if (o.type === "solar") {
+    const st = solarState(id, t);
+    return { pos: st.pos, vel: st.vel, dtau: 1 };
+  }
   const w = meanMotion(sys, b);
   if (o.type === "kerr") {
     const c = circle(o.r, o.phase + w * t, w);

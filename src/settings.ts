@@ -348,7 +348,7 @@ export function defaultSettings(): Settings {
 /** A scene preset: settings, plus optionally the simulation time to start from [M]. */
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
  *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
@@ -390,6 +390,14 @@ export const presets: Record<string, Preset> = {
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "saturn", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
     engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, quality: "realtime", time: 109.6, pose: "earthGround",
+  },
+  // the game's rehearsal: Artemis II — from a 400 km Earth orbit, round the Moon on a free return
+  // and back (O: the planner, the Moon targeted: Free return, PLAN, EXECUTE)
+  "game:artemis": {
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
+    anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
+    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, quality: "realtime", time: 109.6, pose: "earthMoon",
   },
   // our side: sunlit at 9.5 AU, ~10⁻⁷ of the disk's radiance — auto exposure
   "Gargantua system: departure near Saturn": {

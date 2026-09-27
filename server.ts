@@ -17,6 +17,12 @@ const server = Bun.serve({
         return new Response("ok");
       },
     },
+    // The flight planner's worker, bundled on its own (the pages build writes it next to the page)
+    "/plan-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/plan-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
     "/__snapshots/:name": {
       GET: (req) => {
