@@ -14,7 +14,7 @@ import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
-import { airDensity, betaToCoord, CRASH_SPEED, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
+import { airDensity, BALLISTIC, betaToCoord, CRASH_SPEED, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -22,6 +22,8 @@ import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
 import { nodeDvHome, predictOurs, type OurPath } from "./system/our-predict";
+import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
+import { M_METRES, solarBody, spinVector } from "./system/solar";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1262,38 +1264,144 @@ export class CameraController {
     const s = this.s;
     let X = homeOf(w, p.l, p.n);
     let V = repToHomeVec(w, p.l, p.n, vRep);
-    const fwd = repToHomeVec(w, p.l, p.n, p.fwd);
-    const up = repToHomeVec(w, p.l, p.n, p.up);
+    let fwd = repToHomeVec(w, p.l, p.n, p.fwd);
+    let up = repToHomeVec(w, p.l, p.n, p.up);
+    // (this frame's thrust: the velocity change the engines made before the fall)
+    const dvT = sub3(V, repToHomeVec(w, p.l, p.n, p.vel));
+    // on the ground: carried by the turning body, until the engine lifts the ship
+    if (this.ourLanded) {
+      const L = this.ourLanded;
+      const b = OUR_BODIES.find((q) => q.id === L.body)!;
+      const Xg = fromBodyFixed(L.body, L.q, t0);
+      const upL = unitV(sub3(Xg, ourState(L.body, t0).pos));
+      const gSurf = b.mass / Math.hypot(...sub3(Xg, ourState(L.body, t0).pos)) ** 2;
+      if (dot3(dvT, upL) > gSurf * simDt * 1.001) {
+        this.ourLanded = null;
+        this.landed = false;
+        X = Xg;
+        V = lin(groundVelocity(L.body, Xg, t0), 1, dvT, 1);
+        this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
+      } else {
+        const t1 = t0 + simDt;
+        const X1 = fromBodyFixed(L.body, L.q, t1);
+        // (the attitude turns with the ground)
+        const ang = spinRate(L.body) * simDt;
+        const ax = unitV(spinAxis(L.body));
+        this.properTime += simDt;
+        setHomePose(s, X1, unitV(rotateAbout(fwd, ax, ang)), unitV(rotateAbout(up, ax, ang)), groundVelocity(L.body, X1, t1));
+        s.motion = "geodesic";
+        this.landed = true;
+        this.sync();
+        return t1;
+      }
+    }
+    // the ground under the ship: the body of the sphere of influence, if solid (its air: drag)
+    const ref = referenceBody(X, t0);
+    const ground = solidBody(ref) ? ref : null;
+    const airy = ref !== "sun" && ourAir(ref, 0) > 0;
     let g = gravityHome(X, t0);
-    const span = Math.min(simDt, 400 * 0.01 * g.tDyn);
-    const steps = Math.min(Math.max(Math.ceil(span / (0.01 * g.tDyn)), 1), 400);
-    const dt = span / steps;
+    const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => (airy ? lin(gq.acc, 1, dragAccel(ref, Xq, Vq, tq), 1) : gq.acc);
+    // steps: a small part of the fall time; near the ground, of the time to reach it
+    const stepOf = () => {
+      let dt = 0.01 * g.tDyn;
+      if (ground || airy) {
+        const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
+        const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
+        dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+      }
+      return dt;
+    };
     let t = t0;
-    for (let i = 0; i < steps; i++) {
-      V = lin(V, 1, g.acc, dt / 2);
+    const tEnd = t0 + simDt;
+    let a = accAt(X, V, t, g);
+    let touched: { speed: number } | null = null;
+    for (let i = 0; i < 400 && t < tEnd - 1e-12; i++) {
+      const dt = Math.min(stepOf(), tEnd - t);
+      V = lin(V, 1, a, dt / 2);
       X = lin(X, 1, V, dt);
       t += dt;
       g = gravityHome(X, t);
+      // touchdown on a solid ground — coming down onto it (just lifted off, the gear a few mm up and
+      // the home ↔ rep round trip as fine as that: climbing, it is no landing)
+      if (ground && gearHeight(ground, X, t) < 0 && dot3(sub3(V, groundVelocity(ground, X, t)), sub3(X, ourState(ground, t).pos)) < 0) {
+        const gv = groundVelocity(ground, X, t);
+        touched = { speed: Math.hypot(...sub3(V, gv)) * 299792458 };
+        const P = ourState(ground, t).pos;
+        const rb = OUR_BODIES.find((q) => q.id === ground)!.radius + GEAR / M_METRES;
+        X = lin(P, 1, unitV(sub3(X, P)), rb);
+        V = gv;
+        this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+        break;
+      }
       if (g.inside) {
-        // (on its ground: pushed back to the surface, moving with it)
+        // (into a body with no ground to stand on: resting on its surface, moving with it)
         const b = ourState(g.inside, t);
         const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius;
         const d = lin(X, 1, b.pos, -1);
-        const dl = Math.hypot(...d);
-        X = lin(b.pos, 1, d, (r * 1.0000001) / dl);
+        X = lin(b.pos, 1, d, (r * 1.0000001) / Math.hypot(...d));
         V = b.vel;
         break;
       }
-      V = lin(V, 1, g.acc, dt / 2);
+      a = accAt(X, V, t, g);
+      V = lin(V, 1, a, dt / 2);
       const sp = Math.hypot(...V);
       if (sp > 0.999) V = lin(V, 0.999 / sp, V, 0);
     }
     const speed = Math.hypot(...V);
-    this.properTime += span * Math.sqrt(Math.max(1 - speed * speed, 0));
-    setHomePose(s, X, normalize(fwd), normalize(up), V);
+    this.properTime += (t - t0) * Math.sqrt(Math.max(1 - speed * speed, 0));
+    setHomePose(s, X, unitV(fwd), unitV(up), V);
     s.motion = "geodesic";
     this.sync();
-    return t0 + span;
+    if (touched) {
+      this.landed = true;
+      const nav = this.ourNav(cameraFrame(s));
+      if (nav) this.levelShip(nav.radial);
+      const name = BODY_NAMES[ground as Body];
+      const v = touched.speed;
+      this.onPilotMessage?.(v > CRASH_SPEED ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+      if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
+    }
+    return t;
+  }
+
+  /**
+   * Our universe, near a solid body or in its air: the landing figures (ground-relative), as near the
+   * hole — height of the gear, vertical and horizontal speeds, local gravity, thrust / weight, the
+   * air's density, the re-entry glow's heat flux ρ v³.
+   */
+  private ourSurfaceInfo() {
+    const nav = this.ourNav(cameraFrame(this.s));
+    if (!nav || nav.ref === "sun") return null;
+    const id = nav.ref;
+    const sb = solarBody(id)!;
+    const alt = gearHeight(id, nav.X, nav.t);
+    if (!(solidBody(id) || ourAir(id, 0) > 0) || alt > Math.max(30 * (sb.atmosphere?.H ?? 0), 0.5 * sb.radius * M_METRES)) return null;
+    const sp = groundSpeeds(id, nav.X, nav.V, nav.t);
+    const r = Math.hypot(...sub3(nav.X, nav.refPos));
+    const g = sb.mass / (r * r);
+    const aUnit = 299792458 ** 2 / M_METRES;
+    const air = ourAir(id, alt);
+    const vAir = Math.hypot(sp.vv, sp.vh);
+    // (the stagnation heat flux, Sutton–Graves for air with a 1 m nose: 1.74·10⁻⁴ √ρ v³ [W/m²] —
+    // nothing climbing at a few hundred m/s, ~1 MW/m² for a return from orbit at 70 km)
+    const q = 1.7415e-4 * Math.sqrt(air) * vAir ** 3;
+    const cam = cameraFrame(this.s);
+    const fl = nav.toRep(sp.va);
+    const fll = Math.hypot(...fl) || 1;
+    const flow: Vec3 = [-dot3(fl, cam.right) / fll, -dot3(fl, cam.up) / fll, -dot3(fl, cam.fwd) / fll];
+    return {
+      plasma: { q, flow, level: Math.min(Math.max((Math.log10(Math.max(q, 1)) - 5) / 1.5, 0), 1) },
+      body: id as Body, alt: Math.max(alt, 0), vVert: sp.vv, vHor: sp.vh,
+      gLocal: (g * aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: !!this.ourLanded, air,
+    };
+  }
+
+  /** our universe: resting on a body's ground (its own coordinates) */
+  private ourLanded: { body: string; q: Vec3 } | null = null;
+  /** Puts the ship down on a body's ground (a scene's start). */
+  setOurLanded(l: { body: string; q: Vec3 } | null) {
+    this.ourLanded = l;
+    this.landed = !!l;
   }
 
   // ------------------------------------------------------------------------------ piloting
@@ -1582,6 +1690,17 @@ export class CameraController {
     if (nav) {
       const g = gravityHome(nav.X, nav.t);
       cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
+      // near the ground (not on it): a frame covers no more than a fifth of the height left, the last
+      // metres at the pace of the last 20
+      if (!this.ourLanded && (solidBody(nav.ref) || ourAir(nav.ref, 0) > 0) && nav.ref !== "sun") {
+        const hM = Math.max(gearHeight(nav.ref, nav.X, nav.t), 20);
+        const sp = groundSpeeds(nav.ref, nav.X, nav.V, nav.t);
+        const vv = Math.abs(sp.vv) / 299792458 + 1e-12;
+        cap(Math.max((6 * hM) / M_METRES / vv, 1e-6), "ground");
+        // (the landing autopilot coming down: its ~1.2 s response a small part of the time to the
+        // ground — not below real time)
+        if (this.pilot.auto === "land" && sp.vv < 0) cap(Math.max((0.04 * hM) / M_METRES / vv, 1 / (4.925490947e-6 * s.massSolar)), "ground");
+      }
     }
     // (long Crew burns: a higher ceiling — the integrator follows the slow thrust at any warp)
     if (this.pilot.accel > 0 || this.pilot.throttle > 0) cap(s.engine === "crew" ? 5000 : 500, "engine");
@@ -2070,7 +2189,7 @@ export class CameraController {
   /** Radar altitude, speeds relative to the ground, thrust-to-weight: the landing HUD. */
   private surfaceInfo() {
     const lf = this.local;
-    if (!lf) return null;
+    if (!lf) return this.ourSurfaceInfo();
     const { F, L } = lf;
     const c = 299792458;
     const d = Math.hypot(...L.xi);
@@ -2605,6 +2724,7 @@ export class CameraController {
       return out(lin(ref.vel, 1, back, k), lin(g.acc, -1, g.acc, 0));
     }
     this.ourAnchor = null;
+    if (P.auto === "land" || P.auto === "takeoff") return this.ourSurfaceWant(nav, g, say, out, T);
     if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize") return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
     // (circularize: around the body of the sphere of influence, at the height it is engaged at)
     const circ = P.auto === "circularize";
@@ -2681,6 +2801,86 @@ export class CameraController {
       }
     }
     return out(want);
+  }
+
+  /**
+   * Our universe's landing and take-off (the body of the sphere of influence, if it has a ground):
+   *  - land: the horizontal motion over the ground killed, the descent spread over the time that takes
+   *    and no faster than half the engine's margin over the weight can stop (v² = 2 a h), a flare of
+   *    5 s at the end, 1.5 m/s at touchdown;
+   *  - take-off: up, turning towards the east (the way the ground turns) as it climbs, to the circular
+   *    speed at a low orbit (~200 km on the Earth: above 12 scale heights of air), the speed through
+   *    the air held to a drag of 30 % of the thrust (a gravity turn); then circularize.
+   * The feed-forward holds the ship against its weight and the drag.
+   */
+  private ourSurfaceWant(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, g: ReturnType<typeof gravityHome>, say: (t: string) => null,
+    out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 }, T: number) {
+    const P = this.pilot;
+    const id = nav.ref;
+    const what = P.auto === "land" ? "Landing" : "Take-off";
+    const name = BODY_NAMES[id as Body] ?? id;
+    if (id === "sun" || !solidBody(id)) return say(`${what}: get near a body with a ground first (${name} has none)`);
+    const sb = solarBody(id)!;
+    const c = 299792458;
+    const Pb = nav.refPos;
+    const r = Math.hypot(...sub3(nav.X, Pb));
+    const up = lin(sub3(nav.X, Pb), 1 / r, nav.X, 0);
+    const h = Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES;
+    const gw = sb.mass / (r * r);
+    const thr = this.thrustMax();
+    if (thr < 1.05 * gw) {
+      const gU = 299792458 ** 2 / M_METRES / 9.80665;
+      return say(`${what}: the engine (${(thr * gU).toFixed(1)} g) cannot hold the weight on ${name} (${(gw * gU).toFixed(2)} g)`);
+    }
+    // (held against gravity and, in the air, its drag)
+    const ff = lin(lin(g.acc, 1, dragAccel(id, nav.X, nav.V, nav.t), 1), -1, g.acc, 0);
+    const minute = 60 / 492.5490947; // [M]
+    const gv = groundVelocity(id, nav.X, nav.t);
+    if (P.auto === "land") {
+      if (this.ourLanded) {
+        P.setAuto("land");
+        this.onPilotMessage?.(`Landed on ${name}`);
+        return null;
+      }
+      const va = sub3(nav.V, gv);
+      const vv = dot3(va, up);
+      const vh = Math.hypot(va[0] - vv * up[0], va[1] - vv * up[1], va[2] - vv * up[2]);
+      const tH = vh / (0.5 * thr);
+      const vd = -Math.max(Math.min(Math.sqrt(2 * 0.5 * (thr - gw) * h), h / (minute / 12 + tH), 0.02), 1.5 / c);
+      // (the descent rate first: its correction rides with the hold against gravity, the horizontal
+      // speed is killed with the thrust left — a fall is never traded for a sideways error)
+      return out(lin(gv, 1, up, vv), lin(ff, 1, up, (vd - vv) / T));
+    }
+    // take-off
+    const air = sb.atmosphere;
+    const d0 = sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius);
+    const f = Math.min(Math.max((r - sb.radius) / (d0 - sb.radius), 0), 1);
+    let east = cross(spinAxis(id), up);
+    if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
+    east = unitV(east);
+    const vc = Math.sqrt(sb.mass / r);
+    let vUp = Math.min(Math.sqrt((thr - gw) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
+    const vE = vc * Math.sqrt(f);
+    const vi = sub3(nav.V, nav.refVel);
+    if (f > 0.95 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
+      P.auto = "none";
+      P.setAuto("circularize");
+      this.onPilotMessage?.(`In orbit around ${name}`);
+      return null;
+    }
+    // (inertial east speed: the ground already gives its turning at lift-off)
+    const vGroundE = dot3(sub3(gv, nav.refVel), east);
+    let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
+    // in the air: the speed through it no more than keeps the drag (½ ρ v² / B) under 30 % of the
+    // thrust — straight up through the thick air first, turning east as it thins (a gravity turn)
+    const rho = ourAir(id, h * M_METRES);
+    if (rho > 0) {
+      const vMax = Math.sqrt((2 * BALLISTIC * 0.3 * thr * (c * c / M_METRES)) / rho) / c;
+      vUp = Math.min(vUp, vMax);
+      const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
+      vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
+    }
+    return out(lin(lin(gv, 1, up, vUp), 1, east, vEastAir), ff);
   }
 
   private ourOrbitR: { body: string; r: number } | null = null;
@@ -3260,3 +3460,17 @@ export function isTyping(e: KeyboardEvent) {
 function homeOfPose(w: Dneg, p: { l: number; n: Vec3 }) {
   return { r: radius(w, p.l)[0] };
 }
+
+const unitV = (a: Vec3): Vec3 => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+/** v turned by ang about the unit axis k (Rodrigues) */
+function rotateAbout(v: Vec3, k: Vec3, ang: number): Vec3 {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+  const x: Vec3 = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+  return [v[0] * c + x[0] * s + k[0] * kv * (1 - c), v[1] * c + x[1] * s + k[1] * kv * (1 - c), v[2] * c + x[2] * s + k[2] * kv * (1 - c)];
+}
+const spinAxis = (id: string) => spinVector(solarBody(id)!);
+const spinRate = (id: string) => Math.hypot(...spinVector(solarBody(id)!));

@@ -844,7 +844,7 @@ export class FlightHud {
     const sf = i.surface;
     for (const k of ["alt", "vv", "vh", "twr"]) T[k]!.parentElement!.hidden = !sf;
     // our universe: the altitude above the body of the sphere of influence, and the radial speed
-    if (i.ref && Number.isFinite(i.ourAlt)) {
+    if (i.ref && Number.isFinite(i.ourAlt) && !sf) {
       T.alt!.parentElement!.hidden = false;
       T.vv!.parentElement!.hidden = false;
       const km = i.ourAlt * 1.476625e8;

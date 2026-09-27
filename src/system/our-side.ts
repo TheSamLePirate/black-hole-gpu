@@ -10,7 +10,8 @@ import type { Vec3 } from "../physics";
 import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from "../wormhole";
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
-import { mouthAccel, SOLAR_BODIES, solarState } from "./solar";
+import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
+import { bodyFixedOf, fromBodyFixed, GEAR, groundVelocity } from "./our-surface";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
 export const OUR_BODIES = GARGANTUA_SYSTEM.bodies
@@ -150,4 +151,21 @@ export function earthStart(t = 0, altKm = 400): { X: Vec3; fwd: Vec3; up: Vec3; 
   const f: Vec3 = [-u[1], u[0], 0];
   const vc = Math.sqrt(earth.mass / r);
   return { X, fwd: f, up: u, vel: [E.vel[0] + vc * f[0], E.vel[1] + vc * f[1], E.vel[2]] };
+}
+
+/**
+ * The game's start on the ground (game:interstellar): the Kennedy Space Center pad by default
+ * (28.57° N, 80.65° W), the ship resting on it, nose east, the Earth turning under it. Home frame, at t.
+ */
+export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
+  const q = bodyFixedOf("earth", lat, lon, GEAR);
+  const X = fromBodyFixed("earth", q, t);
+  const E = ourState("earth", t).pos;
+  const r = [X[0] - E[0], X[1] - E[1], X[2] - E[2]] as Vec3;
+  const rl = Math.hypot(...r);
+  const up: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
+  const w = spinVector(SOLAR_BODIES.find((b) => b.id === "earth")!);
+  const e: Vec3 = [w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]];
+  const el = Math.hypot(...e);
+  return { X, fwd: [e[0] / el, e[1] / el, e[2] / el] as Vec3, up, vel: groundVelocity("earth", X, t), landed: { body: "earth", q } };
 }

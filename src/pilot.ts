@@ -145,7 +145,20 @@ export class FlightComputer {
     } else if (this.auto !== "none" && c.want) {
       const U = toU(c.beta);
       const T = Math.max(1.2 * c.tauRate, 1e-3);
-      let A = add(scale(add(toU(c.want.beta), scale(U, -1)), 1 / T), c.want.ff);
+      const err = scale(add(toU(c.want.beta), scale(U, -1)), 1 / T);
+      let A = add(err, c.want.ff);
+      // (beyond the engine: the feed-forward first — holding against gravity, drag — the velocity's
+      // error with what is left, so a large sideways error never starves the hold against the fall)
+      if (len(A) > c.thrust) {
+        const ff = c.want.ff;
+        const fl = len(ff);
+        if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
+        else {
+          const ee = dot(err, err), fe = dot(ff, err);
+          const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
+          A = add(ff, scale(err, clamp(k, 0, 1)));
+        }
+      }
       const a = len(A);
       const rcsMax = RCS * c.thrust;
       if (a < 0.8 * rcsMax) {

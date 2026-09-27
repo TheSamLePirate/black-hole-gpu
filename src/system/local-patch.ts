@@ -128,12 +128,15 @@ export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
  * with the radial flip, their radial part in proper length (dℓ = dr / |dr/dℓ|). Static bodies: seen
  * at their place, Lorentz transformed and retarded for a moving camera.
  */
-export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number): LocalPatch | null {
+export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number, velocity: (k: number) => Vec3 = () => [0, 0, 0]): LocalPatch | null {
   const n = cam.n;
   const X: Vec3 = [cam.r * n[0], -cam.r * n[1], cam.r * n[2]];
   const nh: Vec3 = [n[0], -n[1], n[2]]; // the radial direction, home frame
+  // (the radial part in proper length — as the traced rays have it — far from the body; near it, the
+  // home frame's flat lengths the ship flies and lands in: the two blended from 110 down to 10 radii)
+  let blend = 1;
   const toRep = (v: Vec3): Vec3 => {
-    const k = dot(v, nh) * (1 / Math.max(Math.abs(dRdL), 1e-3) - 1);
+    const k = dot(v, nh) * (1 / Math.max(Math.abs(dRdL), 1e-3) - 1) * blend;
     return sideToRep(-1, n, [v[0] + k * nh[0], v[1] + k * nh[1], v[2] + k * nh[2]]);
   };
   const lorentz = (x: Vec3): Vec3 => {
@@ -151,7 +154,10 @@ export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number): Local
     const C = b.pos;
     const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
     if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;
-    const rel = seenFrom(toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]), [0, 0, 0], cam.beta);
+    blend = Math.min(Math.max((d / b.radius - 10) / 100, 0), 1);
+    // (seen from the moving camera with the body's own motion: standing on a turning Earth, both
+    // move together and the ground stays under the gear — not 20 ms of light time behind)
+    const rel = seenFrom(toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]), toRep(velocity(k)), cam.beta);
     const host = b.light >= 0 ? list[b.light]!.pos : ([C[0] + 1, C[1], C[2]] as Vec3);
     // (its own axes: its pole, turned by its rotation — the tracer's spunAxes)
     const pa = poleAxes(b.pole ?? [0, 0, 1]);
@@ -178,7 +184,7 @@ export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number): Local
  * dRdL: our side, dr/dℓ of the wormhole's radius at the camera.
  */
 export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: number) => Vec3, dRdL = 1): LocalPatch | null {
-  if (cam.region === "throat" && cam.ell < 0) return ourPatch(cam, list, dRdL);
+  if (cam.region === "throat" && cam.ell < 0) return ourPatch(cam, list, dRdL, velocity);
   if (cam.region !== "hole") return null;
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   let best: LocalPatch | null = null;

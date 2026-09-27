@@ -1,7 +1,7 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { earthStart, saturnDeparture } from "./system/our-side";
+import { earthGround, earthStart, saturnDeparture } from "./system/our-side";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -162,11 +162,13 @@ async function main() {
     exposedForOurSide = pose !== undefined;
     mission.stop();
     Object.assign(settings, defaultSettings(), keep, preset);
+    camera.setOurLanded(null);
     if (pose) {
       const t = time ?? simTime;
-      const d = pose === "earth" ? earthStart(t) : saturnDeparture(t);
+      const d = pose === "earthGround" ? earthGround(t) : pose === "earth" ? earthStart(t) : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
+      camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
     }
     if (time !== undefined) {
       simTime = time;
@@ -177,7 +179,7 @@ async function main() {
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
     if (withMission) mission.start();
     if (name === "game:interstellar") {
-      panel.toast("2067 · low Earth orbit. Objective: Saturn — the wormhole waits 0.7 AU behind it. Tab or a click on the map: target · 0: approach (then orbit) · 9: circularize");
+      panel.toast("2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)");
     }
     refreshGui();
     touch();
@@ -279,12 +281,16 @@ async function main() {
   // beyond 500 M/s: "rails" (engine off; the controller brings it down near bodies)
   const WARPS = [0.25, 0.5, 1, 2, 3, 6, 12, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
   function warp(dir: 1 | -1) {
-    const i = WARPS.findIndex((w) => w >= settings.timeSpeed - 1e-9);
-    const j = Math.max(0, Math.min(WARPS.length - 1, (i < 0 ? WARPS.length - 1 : i) + dir));
-    settings.timeSpeed = WARPS[j]!;
+    // (below the classic warps: real time and its first multiples — a climb, a landing)
+    const rt = 1 / (4.925490947e-6 * settings.massSolar);
+    const list = [...[1, 2, 5, 10, 25, 50].map((k) => k * rt).filter((w) => w < 0.9 * WARPS[0]!), ...WARPS];
+    const i = list.findIndex((w) => w >= settings.timeSpeed * (1 - 1e-6));
+    const j = Math.max(0, Math.min(list.length - 1, (i < 0 ? list.length - 1 : i) + dir));
+    settings.timeSpeed = list[j]!;
     if (!settings.animate) toggle("animate");
     refreshGui();
-    panel.toast(`Time warp: ${settings.timeSpeed} M/s`);
+    const x = settings.timeSpeed / rt;
+    panel.toast(`Time warp: ×${x < 100 ? Math.round(x) : x.toPrecision(3)} (${+settings.timeSpeed.toPrecision(3)} M/s)`);
   }
   function pilotHold(h: Hold) {
     camera.pilot.setHold(h);

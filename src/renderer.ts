@@ -1,4 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
+import { solarState } from "./system/solar";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -928,7 +929,7 @@ export class Renderer {
     }
     // a body near the camera: the local patch (floating origin), not a traced sphere
     const dRdL = s.wormhole && cam.region === "throat" ? radius(m.w, cam.ell)[1] : 1;
-    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => bodyVelocity(s, bodies[k]!.id as unknown as Body, time), dRdL) : null;
+    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => (bodies[k]!.where === 2 || bodies[k]!.where === 4 ? solarState(bodies[k]!.id, time).vel : bodyVelocity(s, bodies[k]!.id as unknown as Body, time)), dRdL) : null;
     if (near) bodies[near.index]!.where = 3;
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);

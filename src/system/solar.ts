@@ -125,7 +125,11 @@ export function eclipticOf(ra: number, dec: number): Vec3 {
 }
 
 /** Keplerian ellipse → heliocentric ecliptic position [AU] and velocity [AU/day] */
-function kepler(a: number, e: number, I: number, M: number, w: number, O: number, n: number) {
+/**
+ * A Keplerian state [AU, AU/day]: n the mean anomaly's rate, dw and dO the turning of the periapsis
+ * and of the node [rad/day] — the velocity the exact rate of the place (the mean elements drift).
+ */
+function kepler(a: number, e: number, I: number, M: number, w: number, O: number, n: number, dw = 0, dO = 0) {
   let E = M + e * Math.sin(M);
   for (let i = 0; i < 20; i++) {
     const d = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
@@ -143,7 +147,18 @@ function kepler(a: number, e: number, I: number, M: number, w: number, O: number
     (cw * sO + sw * cO * cI) * x + (-sw * sO + cw * cO * cI) * y,
     sw * sI * x + cw * sI * y,
   ];
-  return { pos: rot(xp, yp), vel: rot(vx, vy) };
+  const pos = rot(xp, yp);
+  const vel = rot(vx, vy);
+  // (the ellipse turning: about the orbit's normal by dw, about the ecliptic pole by dO)
+  const h: Vec3 = [sO * sI, -cO * sI, cI];
+  return {
+    pos,
+    vel: <Vec3>[
+      vel[0] + dw * (h[1] * pos[2] - h[2] * pos[1]) - dO * pos[1],
+      vel[1] + dw * (h[2] * pos[0] - h[0] * pos[2]) + dO * pos[0],
+      vel[2] + dw * (h[0] * pos[1] - h[1] * pos[0]),
+    ],
+  };
 }
 
 const GM_SUN_AU = 2.9591220828559e-4; // AU³/day²
@@ -151,6 +166,7 @@ const EARTH_MOON = 0.0121505856; // m_moon / (m_earth + m_moon)
 
 interface State { pos: Vec3; vel: Vec3 }
 const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 /** The Moon relative to the Earth [AU, AU/day] (mean elements, J2000 ecliptic) */
 function moonGeo(d: number): State {
@@ -159,7 +175,7 @@ function moonGeo(d: number): State {
   const O = (125.1228 - 0.0529538083 * d) * DEG;
   const w = (318.0634 + 0.1643573223 * d) * DEG;
   const M = (115.3654 + 13.0649929509 * d) * DEG;
-  return kepler(a, 0.0549, 5.1454 * DEG, M, w, O, n);
+  return kepler(a, 0.0549, 5.1454 * DEG, M, w, O, n, 0.1643573223 * DEG, -0.0529538083 * DEG);
 }
 
 // (the states of one instant, reused: the pull on the ship asks for every body at the same time)
@@ -194,8 +210,15 @@ function helioNow(b: SolarBody, d: number): State {
   const T = d / 36525;
   const at = (i: number) => el[i]! + rt[i]! * T;
   const a = at(0), e = at(1), I = at(2) * DEG, L = at(3) * DEG, wb = at(4) * DEG, O = at(5) * DEG;
-  const n = Math.sqrt(GM_SUN_AU / a ** 3);
-  const s = kepler(a, e, I, L - wb, wb - O, O, n);
+  // (the rates of the mean elements, per day: the mean anomaly L − ϖ, ω = ϖ − Ω, Ω)
+  const k = DEG / 36525;
+  const k0 = kepler(a, e, I, L - wb, wb - O, O, (rt[3]! - rt[4]!) * k, (rt[4]! - rt[5]!) * k, rt[5]! * k);
+  // (and the ellipse's slow change of size, shape and tilt — ~0.3 m/s at Saturn: its place across a
+  // day of the drift, the angles held)
+  const dd = 1 / 36525;
+  const kp = kepler(a + rt[0]! * dd, e + rt[1]! * dd, I + rt[2]! * k, L - wb, wb - O, O, 0).pos;
+  const km = kepler(a - rt[0]! * dd, e - rt[1]! * dd, I - rt[2]! * k, L - wb, wb - O, O, 0).pos;
+  const s: State = { pos: k0.pos, vel: add(k0.vel, sub(kp, km), 0.5) };
   if (b.id === "earth") {
     const m = moonGeo(d);
     return { pos: add(s.pos, m.pos, -EARTH_MOON), vel: add(s.vel, m.vel, -EARTH_MOON) };
@@ -265,10 +288,37 @@ export function mouthAccel(t: number): Vec3 {
   return [k * p[0], k * p[1], k * p[2]];
 }
 
-/** Rotation angle of a body about its pole at t (radians; its map's prime meridian) */
+/**
+ * Rotation angle of a body about its pole at t (radians; its map's prime meridian, from the node of
+ * its equator on the ecliptic). The Earth: the Greenwich mean sidereal time (its axes' x is the
+ * vernal equinox: the map's Greenwich — its centre — where it is).
+ */
 export function spinAngle(b: SolarBody, t: number): number {
+  if (b.id === "earth") {
+    const deg = 280.46061837 + 360.98564736629 * daysOf(t);
+    return ((deg % 360) + 360) % 360 * DEG;
+  }
   const hours = (daysOf(t) * 24) / b.rotation;
   return 2 * Math.PI * (hours - Math.floor(hours));
+}
+
+/** A body's rotation (home frame): its pole × its turning rate [rad per M of time]. */
+export function spinVector(b: SolarBody): Vec3 {
+  const w = (2 * Math.PI) / ((b.id === "earth" ? 23.9344696 : b.rotation) * 3600 / M_SECONDS);
+  const N = eclipticOf(b.pole[0], b.pole[1]);
+  return [N[0] * w, N[1] * w, N[2] * w];
+}
+
+/** A body's own axes at t (columns: its prime meridian, 90° east, its pole), home frame. */
+export function bodyAxes(b: SolarBody, t: number): [Vec3, Vec3, Vec3] {
+  const [ex, ey, ez] = poleAxes(eclipticOf(b.pole[0], b.pole[1]));
+  const W = spinAngle(b, t);
+  const c = Math.cos(W), s = Math.sin(W);
+  return [
+    [c * ex[0] + s * ey[0], c * ex[1] + s * ey[1], c * ex[2] + s * ey[2]],
+    [-s * ex[0] + c * ey[0], -s * ex[1] + c * ey[1], -s * ex[2] + c * ey[2]],
+    ez,
+  ];
 }
 
 /** The maps on the GPU: large ones (2048 × 1024) then small ones (1024 × 512), in two texture arrays */
