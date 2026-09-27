@@ -37,7 +37,7 @@ struct Params {
   skyY: vec4f,     // w = real sky loaded (0/1)
   skyZ: vec4f,
   pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
-  ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, unused
+  ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, disk haze
   radio: vec4f,    // band (0 visible, 1 230 GHz, 2 86/230/345 GHz), τ₂₃₀, ν_s(4M)/230 GHz, θ_e(4M)
   radio2: vec4f,   // jet radio brightness, flow H/R, unused, unused
   spot: vec4f,     // hot spot on (0/1), orbit radius [M], size σ [M], optical depth through the centre
@@ -1437,6 +1437,26 @@ fn returningRadiation(m: GState, side: f32, g1: f32, tNow: f32, u: vec2f) -> vec
 // Front-to-back transfer: I += T·S·(1 − e^{−dτ}), T *= e^{−dτ}, dτ = κρ ds, ds = (−p·u) dλ.
 struct DiskSample { S: vec3f, dtau: f32, g: f32, T: f32 };
 
+// The LTE source of the disk's gas at temperature T seen shifted by g (bolometric or colour).
+fn diskSource(T: f32, g: f32) -> vec3f {
+  let shift = P.modes.y;
+  if (P.misc.y > 0.5) {
+    let t = T / P.disk.x;
+    var boost = g * g * g * g;
+    if (shift == SHIFT_NO_BEAMING) { boost = 1.0; }
+    return bbLookup(T * g).rgb * (t * t * t * t) * boost;
+  } else if (shift == SHIFT_NO_BEAMING) {
+    return bbLookup(T * g).rgb * exp2((bbLookup(T).a - P.disk.w) * 3.32192809489);
+  }
+  return blackbody(T * g, P.disk.w);
+}
+
+// The haze (P.ret.w, 0: none): a thin scattering envelope hugging the disk (e^{−|z|/1.5H}, vertical
+// depth 0.2 × haze on each side) that sends back the light of the disk below it — seen from above it is a
+// faint veil, but along the disk, grazing, the path through it is ~R/H longer: a luminous mist over
+// the near side that thickens to the burnt band at the disk's horizon, as in the film. Its light is
+// the disk's hot heart's (scattered), brighter than the cooler gas it veils: the near side's
+// darker clouds show against it.
 fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   var o: DiskSample;
   o.dtau = 0.0;
@@ -1448,36 +1468,36 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let rIn = P.bh.z;
   let rOut = P.bh.w;
   let H = P.ext2.z * R;
-  if (R < rIn * 0.85 || R > rOut || abs(z) > 4.0 * H) { return o; }
+  let haze = P.ret.w;
+  if (R < rIn * 0.85 || R > rOut || abs(z) > select(4.0, 8.0, haze > 0.0) * H) { return o; }
   let zn = z / H;
-  var rho = exp(-0.5 * zn * zn) * 0.3989423 / H;
-  rho *= smoothstep(rIn * 0.85, rIn * 1.03, R) * (1.0 - smoothstep(rOut * 0.8, rOut, R));
-  var T = P.disk.x * pow(max(ntFlux(max(R, rIn), a, rIn) / P.disk.y, 0.0), 0.25);
+  let edge = smoothstep(rIn * 0.85, rIn * 1.03, R) * (1.0 - smoothstep(rOut * 0.8, rOut, R));
+  var rho = exp(-0.5 * zn * zn) * 0.3989423 / H * edge;
+  let T0 = P.disk.x * pow(max(ntFlux(max(R, rIn), a, rIn) / P.disk.y, 0.0), 0.25);
+  var T = T0;
+  var hz = haze * 0.2 / (1.5 * H) * exp(-abs(zn) / 1.5) * edge;
   let turb = P.disk.z;
   if (turb > 0.0) {
     let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn, diskFootprint(s));
     T *= mix(1.0, 0.3 + 0.95 * n.x, turb);
     rho *= mix(1.0, 0.002 + 2.8 * n.y * n.y, turb);
+    // (the mist follows the gas below it, loosely)
+    hz *= mix(1.0, 0.4 + 1.2 * n.y, turb);
   }
-  if (rho < 1e-6) { return o; }
+  if (rho < 1e-6 && hz <= 0.0) { return o; }
   let omega = 1.0 / (pow(max(R, 1.0), 1.5) + a);
   let kEm = circularEmitterEnergy(r, th, a, L, omega);
   var g = (1.0 / E0) / kEm;
   let shift = P.modes.y;
   if (shift == SHIFT_GRAV_ONLY) { g = (1.0 / E0) / zamoEnergy(r, th, a, L); }
   if (shift == SHIFT_NONE) { g = 1.0; }
-  if (P.misc.y > 0.5) {
-    let t = T / P.disk.x;
-    var boost = g * g * g * g;
-    if (shift == SHIFT_NO_BEAMING) { boost = 1.0; }
-    o.S = bbLookup(T * g).rgb * (t * t * t * t) * boost;
-  } else if (shift == SHIFT_NO_BEAMING) {
-    o.S = bbLookup(T * g).rgb * exp2((bbLookup(T).a - P.disk.w) * 3.32192809489);
-  } else {
-    o.S = blackbody(T * g, P.disk.w);
-  }
-  o.S *= P.misc.z;
-  o.dtau = P.misc.w * rho * kEm * dl;
+  let dGas = P.misc.w * rho * kEm * dl;
+  let dHaze = hz * kEm * dl;
+  // (one source for the two, weighted by their depths — the mist's: the light of the disk's hot heart,
+  // falling off as its solid angle, (10/R)²)
+  let lit = min(100.0 / (R * R), 1.0);
+  o.S = P.misc.z * (diskSource(T, g) * dGas + lit * diskSource(P.disk.x, g) * dHaze) / max(dGas + dHaze, 1e-30);
+  o.dtau = dGas + dHaze;
   o.g = g;
   o.T = T;
   return o;

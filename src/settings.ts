@@ -85,6 +85,7 @@ export interface Settings {
   diskEmission: "visible" | "bolometric";
   diskTau: number; // vertical optical depth
   diskThickness: number; // scale height H/R (0 = infinitely thin slab)
+  diskHaze: number; // the scattering mist over the volumetric disk (0: none)
   flowPeriod: number; // M (no longer a setting: the GPU clock wraps after 1024 of them)
   // relativistic jet
   jet: boolean;
@@ -264,6 +265,7 @@ export function defaultSettings(): Settings {
     diskEmission: "visible",
     diskTau: 0.5,
     diskThickness: 0,
+    diskHaze: 0,
     flowPeriod: 90,
     jet: true,
     jetLorentz: 3,
@@ -424,7 +426,7 @@ export const presets: Record<string, Preset> = {
     spin: 0.6, distance: 17.353, inclination: 84.456, azimuth: 40.467, fov: 45, yaw: 31.427, pitch: 6.397, roll: -4.302,
     motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
     diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84, tonemap: "Film", bloom: 0.5,
-    dof: true, dofAperture: 0.5, dofFocus: 0, lensFlare: 0.6,
+    dof: true, dofAperture: 0.5, dofFocus: 0, lensFlare: 0.6, diskHaze: 0.6,
   },
   // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
   "Ranger: approaching Gargantua": {

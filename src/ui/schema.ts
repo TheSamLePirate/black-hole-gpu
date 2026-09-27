@@ -372,6 +372,12 @@ export const SCHEMA: ControlDef[] = [
     help: "Fibrous strands, flame-like wisps and dark lanes (the look of Interstellar's Gargantua), carried round on circular Keplerian orbits — each ring at its own rate, no spiral — modulating temperature and density.",
   },
   {
+    key: "diskHaze", type: "number", section: "matter", group: "Accretion disk", label: "Haze", min: 0, max: 2, step: 0.01, enabled: diskOn,
+    visible: (s) => s.diskThickness > 0,
+    help: "A thin scattering mist over the volumetric disk, lit by the disk below it: a faint veil seen from above, a luminous haze over the near side seen along the disk — thickening to the burnt band at its horizon, as in the film.",
+    keywords: "haze mist fog glow atmosphere scattering film interstellar",
+  },
+  {
     key: "limbDarkening", type: "toggle", section: "matter", group: "Accretion disk", label: "Limb darkening", enabled: diskOn,
     help: "Chandrasekhar electron-scattering atmosphere I ∝ 1 + 2.06 μ, with the emission angle measured in the fluid frame (thin disk).",
   },

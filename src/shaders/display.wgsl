@@ -62,7 +62,7 @@ fn lensFlare(uv: vec2f) -> vec3f {
   // red outside, violet inside) on the line from the light through the centre, mirrored — sharp
   // whatever the light's shape
   let m = flareM[0];
-  let e = clamp(m.x * 30.0, 0.0, 2.5);
+  let e = 1.5 * (1.0 - exp(-m.x * 20.0));
   if (e > 0.0) {
     let p = uv * vec2f(aspect, 1.0);
     let lc = m.yz;
