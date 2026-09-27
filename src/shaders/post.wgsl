@@ -17,7 +17,7 @@ struct Resolve { u: vec4u, f: vec4f };
 @group(0) @binding(9) var<uniform> G: vec4u;                           // cell px, grid W, grid H, image W
 
 @group(0) @binding(10) var<uniform> B: vec4f; // beam: σ [px of this level], kernel radius [px]
-@group(0) @binding(11) var<storage, read> moments: array<f32>; // Σ luminance² per pixel
+@group(0) @binding(11) var<storage, read> moments: array<vec2f>; // Σ luminance², depth [M] per pixel
 @group(0) @binding(12) var<uniform> AT: vec4f; // à-trous: step [px], σ (standard errors), iteration, unused
 @group(0) @binding(13) var<storage, read_write> gatherBuf: array<vec4f>; // Σ w·c, Σ w (horizontal pass)
 
@@ -158,7 +158,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let n = accum[idx].a;
     if (n >= 2.0) {
       let l = luminance(c);
-      variance = max(moments[idx] / n - l * l, 0.0) / n;
+      variance = max(moments[idx].x / n - l * l, 0.0) / n;
     }
   } else {
     // Stale pixel (older than the camera change, or than the sample-age window while time runs):
@@ -257,6 +257,77 @@ fn downShip(@builtin(global_invocation_id) gid: vec3u) {
   o += (withShip(uv + texel * vec2f(-1.0, -1.0)) + withShip(uv + texel * vec2f(1.0, -1.0))
       + withShip(uv + texel * vec2f(-1.0, 1.0)) + withShip(uv + texel * vec2f(1.0, 1.0))) * 0.125;
   textureStore(dst, gid.xy, vec4f(o, 1.0));
+}
+
+// Depth of field (a thin lens): each pixel's circle of confusion from its depth (moments.y, the ray's
+// length where what it shows became opaque; the sky, the shadow: 1e9), c = A |1 − F/d| (at most 2A,
+// near), gathered as a scatter: a tap within its own circle's reach of this pixel adds its light over
+// the circle's area — so a blurred foreground spreads over a sharp background, not the reverse (a tap
+// farther than this pixel reaches no further than this pixel's own circle). F: the focus, or the
+// depth at the image's centre (autofocus). Taps on a golden spiral, read from the image's mips (each
+// covers the space between taps). At half resolution (the blur has no fine detail), its circle kept in
+// alpha: the display mixes it over the sharp image where the circle is over a pixel or two. The
+// Ranger, composited later, stays sharp.
+struct Dof { f: vec4f, u: vec4u }; // f: focus [M] (0: auto), largest circle A [px], taps, unused; u: W, H
+@group(0) @binding(17) var<uniform> DF: Dof;
+fn dofDepth(p: vec2i) -> f32 {
+  let q = clamp(p, vec2i(0), vec2i(DF.u.xy) - 1);
+  return min(moments[u32(q.y) * DF.u.x + u32(q.x)].y, 1e5);
+}
+fn cocOf(d: f32, F: f32, A: f32) -> f32 { return A * min(abs(1.0 - F / max(d, 1e-3)), 2.0); }
+@compute @workgroup_size(8, 8)
+fn dof(@builtin(global_invocation_id) gid: vec3u) {
+  let half = textureDimensions(dst);
+  if (gid.x >= half.x || gid.y >= half.y) { return; }
+  let size = DF.u.xy;
+  // (the full-resolution pixel this one stands for)
+  let p = min(vec2i(gid.xy) * 2, vec2i(size) - 1);
+  let A = DF.f.y;
+  var F = DF.f.x;
+  if (F <= 0.0) {
+    // autofocus: the harmonic mean of the depths around the centre (the sky counts as far)
+    let c = vec2i(size / 2u);
+    let s = i32(max(size.y / 40u, 2u));
+    var inv = 0.0;
+    for (var j = -1; j <= 1; j++) {
+      for (var i = -1; i <= 1; i++) { inv += 1.0 / dofDepth(c + vec2i(i, j) * s); }
+    }
+    F = 9.0 / inv;
+  }
+  // (this half-resolution pixel: the mean of its four)
+  let c0 = textureSampleLevel(src, samp, (vec2f(p) + 1.0) / vec2f(size), 1.0).rgb;
+  let dp = dofDepth(p);
+  let cp = cocOf(dp, F, A);
+  let R = 2.0 * A;
+  if (R < 0.75) {
+    textureStore(dst, gid.xy, vec4f(c0, 0.0));
+    return;
+  }
+  let n = i32(DF.f.z);
+  let texel = 1.0 / vec2f(size);
+  // (each tap stands for the area between taps: read at the mip that covers it)
+  let lod = clamp(log2(R * 1.77 / sqrt(f32(n))) - 0.5, 1.0, 4.0);
+  var sum = c0 / max(cp * cp, 1.0);
+  var wsum = 1.0 / max(cp * cp, 1.0);
+  // (how blurred this pixel shows: its own circle, or a nearer blurred one spreading over it)
+  var blur = cp;
+  for (var i = 0; i < n; i++) {
+    let rr = R * sqrt((f32(i) + 0.5) / f32(n));
+    let ang = f32(i) * 2.39996323;
+    let o = rr * vec2f(cos(ang), sin(ang));
+    let q = p + vec2i(round(o));
+    let dq = dofDepth(q);
+    var cq = cocOf(dq, F, A);
+    // (farther than this pixel: hidden behind it beyond its own circle)
+    if (dq > dp) { cq = min(cq, max(cp, 0.5)); }
+    let cover = clamp(cq - rr + 0.5, 0.0, 1.0);
+    if (cover <= 0.0) { continue; }
+    let w = cover / max(cq * cq, 1.0);
+    if (dq < dp) { blur = max(blur, cq * cover); }
+    sum += w * textureSampleLevel(src, samp, (vec2f(p) + 0.5 + o) * texel, lod).rgb;
+    wsum += w;
+  }
+  textureStore(dst, gid.xy, vec4f(sum / wsum, blur));
 }
 
 // 3×3 tent upsample of the coarser level, added to this level's downsampled image.

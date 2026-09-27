@@ -150,6 +150,8 @@ interface Target {
   resolveBuf: GPUBuffer;
   /** where the Ranger was drawn in this target's image (x, y, w, h; w = 0: not drawn) — the bloom's source */
   shipRect: GPUBuffer;
+  /** the image through the depth of field (made when it is first on) */
+  dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup } | null;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
@@ -193,6 +195,9 @@ export class Renderer {
   private postGatherH: GPUComputePipeline;
   private postDown: GPUComputePipeline;
   private postDownShip: GPUComputePipeline;
+  private postDof: GPUComputePipeline;
+  /** (bound where a target has no depth-of-field image yet) */
+  private dofDummy: GPUTexture;
   private postUp: GPUComputePipeline;
   private postPolGrid: GPUComputePipeline;
   private postBeamH: GPUComputePipeline;
@@ -387,6 +392,8 @@ export class Renderer {
     this.postGatherH = mkPost("gatherH");
     this.postDown = mkPost("down");
     this.postDownShip = mkPost("downShip");
+    this.postDof = mkPost("dof");
+    this.dofDummy = device.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
     this.postBeamH = mkPost("beamH");
@@ -624,7 +631,7 @@ export class Renderer {
     const polGrid = d.createBuffer({ size: Math.max(16, Math.ceil(width / 6) * Math.ceil(height / 6) * 16), usage: GPUBufferUsage.STORAGE });
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
-    const moments = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
+    const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
@@ -652,6 +659,7 @@ export class Renderer {
       bloomLevels,
       resolveBuf,
       shipRect,
+      dof: null,
       polAcc,
       polGrid,
       polGridBuf,
@@ -671,6 +679,8 @@ export class Renderer {
     if (!t) return;
     for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     this.ship.forget(t.hdr);
+    t.dof?.tex.destroy();
+    t.dof?.buf.destroy();
     t.hdr.destroy();
     t.bloomTex.destroy();
     t.beam?.tex.destroy();
@@ -736,6 +746,14 @@ export class Renderer {
         { binding: 9, resource: { buffer: t.polGridBuf } },
       ],
     });
+    this.bindDisplay(t);
+
+    // resolve → downsample hdr[0] → … → hdr[n-1] → upsample into bloom[k-1] = hdr[k] + tent(bloom[k])
+    this.bindPost(t);
+  }
+
+  private bindDisplay(t: Target) {
+    const d = this.device;
     t.displayBinds.clear();
     for (const p of [this.displayPipeline, this.export8Pipeline, this.export16Pipeline]) {
       t.displayBinds.set(
@@ -751,12 +769,38 @@ export class Renderer {
             // (the Ranger, composited here over the traced image: shipOn in the display's params)
             { binding: 5, resource: this.ship.target(t.hdr).resolved.createView() },
             { binding: 6, resource: this.ship.target(t.hdr).plume.createView() },
+            { binding: 7, resource: (t.dof?.tex ?? this.dofDummy).createView() },
+            { binding: 8, resource: t.bloomTex.createView() },
           ],
         }),
       );
     }
+  }
 
-    // resolve → downsample hdr[0] → … → hdr[n-1] → upsample into bloom[k-1] = hdr[k] + tent(bloom[k])
+  /** The depth of field's image and pass for a target (on first use), the display rebound to it. */
+  private ensureDof(t: Target) {
+    if (t.dof) return t.dof;
+    const d = this.device;
+    // (half resolution: the blur has no fine detail; the display mixes it over the sharp image)
+    const tex = d.createTexture({ size: [Math.ceil(t.width / 2), Math.ceil(t.height / 2)], format: "rgba16float", usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+    const buf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const bind = d.createBindGroup({
+      layout: this.postDof.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: t.hdr.createView() },
+        { binding: 1, resource: this.clampSampler },
+        { binding: 2, resource: tex.createView() },
+        { binding: 11, resource: { buffer: t.moments } },
+        { binding: 17, resource: { buffer: buf } },
+      ],
+    });
+    t.dof = { tex, buf, bind };
+    this.bindDisplay(t);
+    return t.dof;
+  }
+
+  private bindPost(t: Target) {
+    const d = this.device;
     const hdrMip = (l: number) => t.hdr.createView({ baseMipLevel: l, mipLevelCount: 1 });
     const bloomMip = (l: number) => t.bloomTex.createView({ baseMipLevel: l - 1, mipLevelCount: 1 });
     const mipSize = (l: number) => [Math.max(1, t.width >> l), Math.max(1, t.height >> l)] as const;
@@ -1166,9 +1210,17 @@ export class Renderer {
       })(),
       // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
       target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, s.band === "230GHz" ? 1 : 0,
-      this.beamSetup(s, target)?.level ?? 0, s.ship && this.ship.ready ? 1 : 0, 0, 0,
+      this.beamSetup(s, target)?.level ?? 0, s.ship && this.ship.ready ? 1 : 0, this.dofOn(s, target) ? 1 : 0, 0,
     ]);
+    // (the lens flare's strength: after the HDR peak)
+    d[14] = s.lensFlare;
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
+  }
+
+  private dofOn(s: Settings, t: Target) {
+    if (!s.dof || s.dofAperture <= 0) return false;
+    this.ensureDof(t);
+    return true;
   }
 
   private writeResolve(t: Target, s: Settings) {
@@ -1388,6 +1440,18 @@ export class Renderer {
       } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
+    // the depth of field, from the finished image and its depths (the Ranger, composited later, sharp)
+    if (s && this.dofOn(s, t)) {
+      const dof = t.dof!;
+      // (the largest circle: the aperture × 3 % of the image's height)
+      this.device.queue.writeBuffer(dof.buf, 0, new Float32Array([s.dofFocus, s.dofAperture * 0.03 * t.height, 32, 0]));
+      this.device.queue.writeBuffer(dof.buf, 16, new Uint32Array([t.width, t.height, 0, 0]));
+      const pass = enc.beginComputePass(this.prof.pass("depth of field"));
+      pass.setPipeline(this.postDof);
+      pass.setBindGroup(0, dof.bind);
+      pass.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+      pass.end();
+    }
     // the light meter, on the live view (the scene: the Ranger is composited at display)
     if (s?.autoExposure && t === this.live && !this.meterPending) {
       this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));

@@ -92,7 +92,7 @@ const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating 
 @group(0) @binding(2) var<storage, read> bbLut: array<vec4f>;
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
-@group(0) @binding(5) var<storage, read_write> moments: array<f32>; // Σ luminance² per pixel
+@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
 @group(0) @binding(7) var<storage, read> syncLut: array<vec4f>;     // synchrotron spectrum colours
 @group(0) @binding(8) var mwTex: texture_2d<f32>;      // Gaia DR2 Milky Way (linear, mip-mapped)
@@ -2332,13 +2332,17 @@ fn colormap(t0: f32) -> vec3f {
 // footprint comes from the neighbouring rays of the workgroup: final = col + bgW · sky(dir, gBg).
 // org: where the ray left for its sky (hole's frame, or our universe's home frame through our end of
 // the wormhole) and the coordinate time then: bodies at a finite distance beyond are drawn from there.
-struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32, tint: vec3f, org: vec4f };
+// depth: how far the ray went [M, its time |t| on the flat map] before what it shows became opaque
+// (the transmittance through 1/2) — the depth of field's; 1e9: the sky, the shadow
+struct TraceOut { col: vec3f, bgW: f32, dir: vec3f, gBg: f32, qu: vec2f, sky: f32, tint: vec3f, org: vec4f, depth: f32 };
 
 fn traceOut(col: vec3f) -> TraceOut {
   var o: TraceOut;
   o.col = col;
+  o.depth = 1e9;
   return o;
 }
+var<private> rayDepth: f32 = 1e9;
 
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
@@ -2367,7 +2371,9 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     if (hit.t > 0.0) {
       let air = nearAir(look, hit.t, k);
       setMapLod(P.camUp.w * hit.t, 0.0, k);
-      return traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
+      var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
+      o.depth = hit.t * bodyRadius(k);
+      return o;
     }
     var tr = traceLook(look, rnd, tNow);
     let air = nearAir(look, 1e30, k);
@@ -2730,6 +2736,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 }
 
 fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
+  rayDepth = 1e9;
   let a = P.bh.x;
   let rH = P.bh.y;
   let mode = P.modes.x;
@@ -3220,12 +3227,15 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       }
     }
 
+    if (rayDepth > 1e8 && trans < 0.5) { rayDepth = abs(n.x.w); }
     let r = n.x.x;
     if (r < rH + capTol || isNan(r)) { fate = 1u; break; }
     if (r > rEsc && r > s.x.x) { fate = 2u; s = n; break; }
     s = n;
     kCur = kNext;
   }
+  // (a step that ended the ray on something opaque)
+  if (rayDepth > 1e8 && trans < 0.5) { rayDepth = abs(s.x.w); }
   if (entered) { continue; }
   if (fate != 2u) { break; }
   {
@@ -3334,6 +3344,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
   out.col = col;
   out.qu = stokes;
+  out.depth = rayDepth;
 
   if (mode == MODE_REDSHIFT && hitDisk) {
     return traceOut(colormap(0.5 + 0.6 * log2(gDisk)));
@@ -3494,7 +3505,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let acc = accum[idx];
     let n = max(acc.a, 1.0);
     let mean = luminance(acc.rgb) / n;
-    let variance = max(moments[idx] / n - mean * mean, 0.0);
+    let variance = max(moments[idx].x / n - mean * mean, 0.0);
     need = sqrt(variance / n) >= P.ext.y * (mean + 0.01);
   }
   if (need) { atomicAdd(&wgActive, 1u); }
@@ -3551,17 +3562,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     }
     accum[idx] = vec4f(col, 1.0);
     if (polOn) { polAcc[idx] = qu; }
+    moments[idx] = vec2f(0.0, tr.depth);
     stamps[idx] = frameStamp;
     return;
   }
   let l = luminance(col);
   if (accumulate) {
+    let na = accum[idx].a + 1.0;
     accum[idx] += vec4f(col, 1.0);
-    moments[idx] += l * l;
+    let m = moments[idx];
+    moments[idx] = vec2f(m.x + l * l, mix(m.y, tr.depth, 1.0 / na));
     if (polOn) { polAcc[idx] += qu; }
   } else {
     accum[idx] = vec4f(col, 1.0);
-    moments[idx] = l * l;
+    moments[idx] = vec2f(l * l, tr.depth);
     if (polOn) { polAcc[idx] = qu; }
   }
   stamps[idx] = frameStamp;

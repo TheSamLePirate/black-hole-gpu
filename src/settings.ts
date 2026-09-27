@@ -156,6 +156,10 @@ export interface Settings {
   exposure: number; // EV
   autoExposure: boolean; // the light meter sets the exposure (the setting: a bias on top)
   bloom: number; // fraction of the energy spread by the optical PSF
+  dof: boolean; // depth of field (a thin lens)
+  dofAperture: number; // its largest circle of confusion, in units of 3 % of the image's height
+  dofFocus: number; // focus distance [M]; 0: autofocus (the depth at the image's centre)
+  lensFlare: number; // strength of the lens's ghosts and halo (0: none)
   tonemap: Tonemap;
   hdr: "auto" | "on" | "off"; // extended-range (EDR/HDR) canvas output
   hdrPeak: number; // brightest displayable value, in units of SDR white
@@ -323,6 +327,10 @@ export function defaultSettings(): Settings {
     exposure: 0,
     autoExposure: false,
     bloom: 0.1,
+    dof: false,
+    dofAperture: 0.5,
+    dofFocus: 0,
+    lensFlare: 0,
     tonemap: "AgX punchy",
     hdr: "auto",
     hdrPeak: 4,
@@ -416,6 +424,7 @@ export const presets: Record<string, Preset> = {
     spin: 0.6, distance: 17.353, inclination: 84.456, azimuth: 40.467, fov: 45, yaw: 31.427, pitch: 6.397, roll: -4.302,
     motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
     diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84, tonemap: "Film", bloom: 0.5,
+    dof: true, dofAperture: 0.5, dofFocus: 0, lensFlare: 0.6,
   },
   // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
   "Ranger: approaching Gargantua": {

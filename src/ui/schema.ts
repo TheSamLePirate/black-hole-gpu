@@ -697,6 +697,26 @@ export const SCHEMA: ControlDef[] = [
     help: "Fraction of the light spread by the lens point-spread function (energy-conserving multi-scale glow).",
   },
   {
+    key: "lensFlare", type: "number", section: "render", group: "Image", label: "Lens flare", min: 0, max: 1, step: 0.01, effect: "display",
+    help: "A camera's flare, as in the film: what burns out beyond white is reflected between the lens elements — tinted ghosts mirrored through the image's centre, and a halo ring, violet at its edge.",
+    keywords: "flare ghost halo lens camera film interstellar",
+  },
+  {
+    key: "dof", type: "toggle", section: "render", group: "Image", label: "Depth of field", effect: "display",
+    help: "A thin lens: what is nearer or farther than the focus is blurred by its circle of confusion, from the depth each ray reached before what it shows became opaque (the Ranger stays sharp). Autofocus on the image's centre, or a set distance.",
+    keywords: "depth of field dof bokeh focus blur aperture lens",
+  },
+  {
+    key: "dofAperture", type: "number", section: "render", group: "Image", label: "Aperture", min: 0, max: 2, step: 0.01, effect: "display",
+    visible: (s) => s.dof,
+    help: "The largest blur (the sky's, when focused near), in units of 3 % of the image's height; twice that for what is much nearer than the focus.",
+  },
+  {
+    key: "dofFocus", type: "number", section: "render", group: "Image", label: "Focus", min: 0, max: 200, step: 0.1, unit: "M", effect: "display",
+    visible: (s) => s.dof,
+    help: "Focus distance along the rays (0: autofocus on the depth at the image's centre).",
+  },
+  {
     key: "pixelRatio", type: "number", section: "render", group: "Image", label: "Pixel ratio", min: 0.25, max: 3, step: 0.05, unit: "×", effect: "resize",
     help: "Internal resolution relative to CSS pixels. Higher = sharper and slower.",
   },

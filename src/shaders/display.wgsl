@@ -4,10 +4,10 @@ struct Display {
   size: vec4f,  // output W, H, exposure (linear multiplier), tonemap (0 AgX, 1 AgX punchy, 2 ACES, 3 clamp, 4 film)
   flags: vec4f, // debug mode (1 = bypass exposure/tonemap/bloom), bloom strength, bloom levels, dither (0/1)
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
-  hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
+  hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white, lens flare strength, unused
   pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
-  lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), unused…
+  lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), unused
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
 };
 
@@ -18,6 +18,47 @@ struct Display {
 @group(0) @binding(4) var<storage, read> polGrid: array<vec4f>; // Σ I, Q, U, n per tick cell
 @group(0) @binding(5) var ship: texture_2d<f32>; // the Ranger, premultiplied (same scale as hdr)
 @group(0) @binding(6) var plumes: texture_2d<f32>; // its thrusters' flames (half resolution, added)
+@group(0) @binding(7) var dofImg: texture_2d<f32>; // the image through the depth of field (when on)
+@group(0) @binding(8) var bloomMips: texture_2d<f32>; // the bloom's levels (the flare's soft sources)
+
+const LUMA = vec3f(0.2126, 0.7152, 0.0722);
+// Lens flare (a camera's, as in the film): what is brighter than SDR white in the bloom's image —
+// the lens's own glare of the scene — reflected between the lens elements: ghosts along the line
+// through the image's centre (mirrored, tinted by the coatings), and a halo — a ring around the centre
+// through the light, violet at its edge (chromatic).
+// (read from a coarse level: a ghost is a defocused image — a soft patch, not a copy of the scene)
+fn flareSrc(q: vec2f, lod: f32) -> vec3f {
+  if (any(q < vec2f(0.0)) || any(q > vec2f(1.0))) { return vec3f(0.0); }
+  let l = min(lod, f32(textureNumLevels(bloomMips)) - 1.0);
+  // (level l sums the image's levels l + 1 … n − 1: their mean)
+  let b = textureSampleLevel(bloomMips, samp, q, l).rgb / max(D.flags.z - l, 1.0) * D.size.z;
+  // (the coatings colour a ghost, not the light: its brightness only)
+  return vec3f(max(dot(b, LUMA) - 0.35, 0.0));
+}
+fn lensFlare(uv: vec2f) -> vec3f {
+  let aspect = D.img.x / max(D.img.y, 1.0);
+  let toC = vec2f(0.5) - uv;
+  var f = vec3f(0.0);
+  // ghosts: images of the light mirrored through the centre, at several scales
+  let ks = array<f32, 4>(0.45, 0.8, 1.25, 1.7);
+  let tints = array<vec3f, 4>(vec3f(0.5, 0.3, 0.95), vec3f(0.85, 0.5, 0.3), vec3f(0.3, 0.55, 0.95), vec3f(0.75, 0.3, 0.8));
+  for (var i = 0; i < 4; i++) {
+    let q = uv + toC * (2.0 * ks[i]) ;
+    let fall = 1.0 - smoothstep(0.0, 0.75, length((q - 0.5) * vec2f(aspect, 1.0)));
+    f += flareSrc(q, 3.0 + f32(i & 1)) * tints[i] * fall * 0.3;
+  }
+  // the halo: a ring of radius h around the centre, the light it passes through reflected onto it
+  let d = toC * vec2f(aspect, 1.0);
+  let dl = max(length(d), 1e-4);
+  let dir = d / dl / vec2f(aspect, 1.0);
+  let h = 0.42;
+  let ring = smoothstep(0.0, 0.25, dl) * (1.0 - smoothstep(0.7, 1.0, dl / 0.75));
+  let hr = flareSrc(uv + dir * (h * 0.96), 2.0).r;
+  let hg = flareSrc(uv + dir * h, 2.0).g;
+  let hb = flareSrc(uv + dir * (h * 1.04), 2.0).b;
+  f += vec3f(hr * 0.7, hg * 0.3, hb * 1.0) * ring * 0.5;
+  return f;
+}
 
 struct VSOut { @builtin(position) pos: vec4f };
 
@@ -91,7 +132,6 @@ fn hdrMap(c: vec3f, peak: f32, punchy: bool) -> vec3f {
 // The film's look (Interstellar's Gargantua): 2 EV of overexposure, split toning (cool shadows,
 // warm highlights), saturated orange mid-tones kept from turning yellow — in linear light, before
 // the curve.
-const LUMA = vec3f(0.2126, 0.7152, 0.0722);
 fn filmGrade(c0: vec3f) -> vec3f {
   var c = max(c0 * 4.0, vec3f(0.0));
   let l = dot(c, LUMA);
@@ -187,6 +227,11 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = (uvOut - D.view.zw) / D.view.xy;
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   var c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
+  if (D.lod.z > 0.5 && D.lod.x == 0.0) {
+    // (the half-resolution blur where the circle of confusion is over a pixel or so)
+    let dv = textureSampleLevel(dofImg, samp, uv, 0.0);
+    c = mix(c, dv.rgb, smoothstep(0.6, 2.0, dv.a));
+  }
   if (D.lod.y > 0.5) {
     // the Ranger over the traced image, within its box (the glare below still spills over its silhouette)
     let q = uv * D.img.xy - D.ship.xy;
@@ -202,6 +247,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // (the film: the bloom a strong haze added over the sharp image — the camera's veiling glare —
     // rather than the eye's energy-conserving spread)
     if (tm == 4u) { c = c * (1.0 - 0.3 * D.flags.y) + b * (2.5 * D.flags.y); } else { c = mix(c, b, D.flags.y); }
+    if (D.hdr.z > 0.0) { c += D.hdr.z * lensFlare(uv) / max(D.size.z, 1e-30); }
     c *= D.size.z;
     if (D.img.w > 0.5) {
       // radio brightness temperature on the "afmhot" scale of EHT images (linear, exposure = peak)

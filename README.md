@@ -89,6 +89,11 @@ Frequency-shift toggles let you switch off Doppler, beaming, or all shifts ("Int
   dependency).
 * HDR post: energy-conserving multi-scale bloom (optical PSF), AgX / ACES tone mapping, and a
   **variance-guided à-trous denoiser** (SVGF-style edge stopping on each pixel's Monte Carlo variance).
+* **The film's camera**: a *Film* tone map (2 EV over, each channel rolling off to warm cream, orange
+  mid-tones, cool shadows, the bloom as an additive haze); **depth of field** from a per-pixel depth
+  (the ray's length where what it shows became opaque — lensing included), thin-lens circles of
+  confusion gathered at half resolution with autofocus on the image's centre; a **lens flare** (tinted
+  ghosts through the centre and a chromatic halo, from what burns out beyond white).
 * **HDR / EDR output**: on high-dynamic-range screens the canvas is rgba16float with "extended" tone
   mapping, highlights roll off to a chosen peak (× SDR white) instead of being compressed.
 
