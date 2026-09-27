@@ -222,6 +222,43 @@ fn down(@builtin(global_invocation_id) gid: vec3u) {
   textureStore(dst, gid.xy, vec4f(o, 1.0));
 }
 
+// The first level: the Ranger (premultiplied, same scale — its image holds only its box, x y w h in
+// px; w = 0: not drawn) and its jets taken over the traced image, as the display composites them — so
+// the glare is the whole picture's: the hull hides the disk behind it from the bloom too (else the
+// blurred disk, mixed back in, shows through it), and the exhaust glows.
+@group(0) @binding(14) var shipTex: texture_2d<f32>;
+@group(0) @binding(15) var plumeTex: texture_2d<f32>;
+@group(0) @binding(16) var<uniform> SR: vec4f;
+fn withShip(uv: vec2f) -> vec3f {
+  var c = textureSampleLevel(src, samp, uv, 0.0).rgb;
+  if (SR.z <= 0.0) { return c; }
+  let dim = vec2f(textureDimensions(src));
+  let px = uv * dim;
+  if (all(px >= SR.xy) && all(px < SR.xy + SR.zw)) {
+    // (the filter's texels kept within the box: beyond it the image is stale)
+    let pc = clamp(px, SR.xy + 0.5, SR.xy + SR.zw - 0.5);
+    let sp = textureSampleLevel(shipTex, samp, pc / dim, 0.0);
+    c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
+  }
+  return c + min(textureSampleLevel(plumeTex, samp, uv, 0.0).rgb, vec3f(60000.0));
+}
+
+@compute @workgroup_size(8, 8)
+fn downShip(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let texel = 1.0 / vec2f(textureDimensions(src));
+  let uv = (vec2f(gid.xy) + 0.5) / vec2f(size);
+  var o = withShip(uv) * 0.125;
+  o += (withShip(uv + texel * vec2f(-2.0, -2.0)) + withShip(uv + texel * vec2f(2.0, -2.0))
+      + withShip(uv + texel * vec2f(-2.0, 2.0)) + withShip(uv + texel * vec2f(2.0, 2.0))) * 0.03125;
+  o += (withShip(uv + texel * vec2f(0.0, -2.0)) + withShip(uv + texel * vec2f(-2.0, 0.0))
+      + withShip(uv + texel * vec2f(2.0, 0.0)) + withShip(uv + texel * vec2f(0.0, 2.0))) * 0.0625;
+  o += (withShip(uv + texel * vec2f(-1.0, -1.0)) + withShip(uv + texel * vec2f(1.0, -1.0))
+      + withShip(uv + texel * vec2f(-1.0, 1.0)) + withShip(uv + texel * vec2f(1.0, 1.0))) * 0.125;
+  textureStore(dst, gid.xy, vec4f(o, 1.0));
+}
+
 // 3×3 tent upsample of the coarser level, added to this level's downsampled image.
 @compute @workgroup_size(8, 8)
 fn up(@builtin(global_invocation_id) gid: vec3u) {

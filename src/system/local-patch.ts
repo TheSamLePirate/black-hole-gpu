@@ -18,6 +18,33 @@ import type { GpuBody } from "./scene-bodies";
 
 /** Within this many of its radii a body is drawn in the local patch. */
 export const LOCAL_RANGE = 300;
+/**
+ * …and while the hole bends the straight way to it by less than this [rad]: a large body (the
+ * companion star, 2.5 M) is within 300 radii from far off — seen past the hole, or behind it, where
+ * the traced rays fall in, a straight ray would still show it in the shadow.
+ */
+export const LOCAL_BEND = 1e-3;
+
+/**
+ * The hole's bending of a straight ray from A to B (flat map, the hole at the origin, weak field):
+ * ∫ 2M b / (b² + s²)^{3/2} ds over the segment — 2M/b (sin α_B − sin α_A), at most 4M/b.
+ */
+export function holeBending(A: Vec3, B: Vec3): number {
+  const d: Vec3 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+  const L = Math.hypot(...d);
+  if (L < 1e-12) return 0;
+  const u: Vec3 = [d[0] / L, d[1] / L, d[2] / L];
+  const sA = dot(A, u), sB = sA + L;
+  const b = Math.hypot(A[0] - sA * u[0], A[1] - sA * u[1], A[2] - sA * u[2]);
+  if (sA < 0 && sB > 0) return b < 1e-12 ? Infinity : (2 / b) * (sB / Math.hypot(b, sB) - sA / Math.hypot(b, sA));
+  // (on one side of the closest point — a radial way: b → 0 — as 1 − s/√(b² + s²) = b²/(h (h + s)),
+  // without the cancellation)
+  const c = (s: number) => {
+    const h = Math.hypot(b, s);
+    return 1 / (h * (h + Math.abs(s)));
+  };
+  return 2 * b * Math.abs(c(sA) - c(sB));
+}
 
 export interface LocalPatch {
   /** index in the GPU body list */
@@ -193,6 +220,7 @@ export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: numb
     const C = bodyPlace(list, k);
     const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
     if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;
+    if (holeBending(X, C) > LOCAL_BEND) return;
     // (its velocity, a coordinate velocity of the map, as the ZAMO here measures it)
     const V = velocity(k);
     const f = sphericalFrame(X);

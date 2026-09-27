@@ -148,6 +148,8 @@ interface Target {
   bloomTex: GPUTexture;
   bloomLevels: number;
   resolveBuf: GPUBuffer;
+  /** where the Ranger was drawn in this target's image (x, y, w, h; w = 0: not drawn) — the bloom's source */
+  shipRect: GPUBuffer;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
@@ -190,6 +192,7 @@ export class Renderer {
   private postResolve: GPUComputePipeline;
   private postGatherH: GPUComputePipeline;
   private postDown: GPUComputePipeline;
+  private postDownShip: GPUComputePipeline;
   private postUp: GPUComputePipeline;
   private postPolGrid: GPUComputePipeline;
   private postBeamH: GPUComputePipeline;
@@ -383,6 +386,7 @@ export class Renderer {
     this.postResolve = mkPost("resolve");
     this.postGatherH = mkPost("gatherH");
     this.postDown = mkPost("down");
+    this.postDownShip = mkPost("downShip");
     this.postUp = mkPost("up");
     this.postPolGrid = mkPost("polgrid");
     this.postBeamH = mkPost("beamH");
@@ -635,6 +639,7 @@ export class Renderer {
       usage,
     });
     const resolveBuf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const shipRect = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const t: Target = {
       width,
       height,
@@ -646,6 +651,7 @@ export class Renderer {
       bloomTex,
       bloomLevels,
       resolveBuf,
+      shipRect,
       polAcc,
       polGrid,
       polGridBuf,
@@ -663,7 +669,7 @@ export class Renderer {
 
   private destroyTarget(t: Target | null) {
     if (!t) return;
-    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
+    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
     this.ship.forget(t.hdr);
     t.hdr.destroy();
     t.bloomTex.destroy();
@@ -796,17 +802,27 @@ export class Renderer {
     );
     for (let l = 1; l < n; l++) {
       const [w, h] = mipSize(l);
+      // (the first level takes the Ranger and its jets over the traced image: the glare is the whole
+      // picture's — without them, the blurred scene behind would show through the hull)
+      const pipeline = l === 1 ? this.postDownShip : this.postDown;
       t.postPasses.push({
         label: `bloom down ${l}`,
-        pipeline: this.postDown,
+        pipeline,
         w,
         h,
         bind: d.createBindGroup({
-          layout: this.postDown.getBindGroupLayout(0),
+          layout: pipeline.getBindGroupLayout(0),
           entries: [
             { binding: 0, resource: hdrMip(l - 1) },
             { binding: 1, resource: this.clampSampler },
             { binding: 2, resource: hdrMip(l) },
+            ...(l === 1
+              ? [
+                  { binding: 14, resource: this.ship.target(t.hdr).resolved.createView() },
+                  { binding: 15, resource: this.ship.target(t.hdr).plume.createView() },
+                  { binding: 16, resource: { buffer: t.shipRect } },
+                ]
+              : []),
           ],
         }),
       });
@@ -1365,9 +1381,11 @@ export class Renderer {
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
         });
-        // (where it was drawn: the display reads its image there)
-        this.device.queue.writeBuffer(this.displayBuf, 112, new Float32Array(this.ship.rectFor(t.hdr)));
-      }
+        // (where it was drawn: the display reads its image there, the bloom too)
+        const rect = new Float32Array(this.ship.rectFor(t.hdr));
+        this.device.queue.writeBuffer(this.displayBuf, 112, rect);
+        this.device.queue.writeBuffer(t.shipRect, 0, rect);
+      } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
     // the light meter, on the live view (the scene: the Ranger is composited at display)
