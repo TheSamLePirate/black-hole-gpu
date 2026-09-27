@@ -369,11 +369,7 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "turbulence", type: "number", section: "matter", group: "Accretion disk", label: "Turbulence", min: 0, max: 1, step: 0.01, enabled: diskOn,
-    help: "Clumps and filaments advected with the Keplerian flow, modulating temperature and density.",
-  },
-  {
-    key: "flowPeriod", type: "number", section: "matter", group: "Accretion disk", label: "Turbulence lifetime", min: 10, max: 400, step: 1, unit: "M", enabled: diskOn, advanced: true,
-    help: "Lifetime of turbulent structures before they are replaced (keeps differential rotation from winding them up forever).",
+    help: "Fibrous strands, flame-like wisps and dark lanes (the look of Interstellar's Gargantua), carried round on circular Keplerian orbits — each ring at its own rate, no spiral — modulating temperature and density.",
   },
   {
     key: "limbDarkening", type: "toggle", section: "matter", group: "Accretion disk", label: "Limb darkening", enabled: diskOn,

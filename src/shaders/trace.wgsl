@@ -1201,44 +1201,66 @@ fn gnoise(p: vec3f) -> f32 {
                    mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
 }
 
-// MRI-like turbulence of the disk, advected with the Keplerian flow. Structures are anisotropic
-// and follow trailing logarithmic spirals (pitch ≈ 25°, as the shear of differential rotation
-// produces), with clumps plus thin ridged filaments. Two phases, cross-faded over the flow period,
-// so the pattern shears with the differential rotation but never winds up forever (flow-map
-// advection; a radius-dependent period would create radial phase bands). Evaluated at the retarded time t_em: moving structure is seen where it
-// was when the light left it.
-fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32) -> f32 {
-  let omega = 1.0 / (pow(r, 1.5) + a);
-  let period = P.time.y;
-  let lr = log(r);
-  var acc = 0.0;
-  for (var k = 0; k < 2; k++) {
-    let ph = tEm / period + f32(k) * 0.5;
-    let cyc = floor(ph);
-    let fr = ph - cyc;
-    let w = 1.0 - abs(2.0 * fr - 1.0);
-    let seed = cyc * 13.37 + f32(k) * 71.3;
-    let ang = phi - omega * fr * period;
-    // trailing log-spiral coordinate: constant along arms that lag outward
-    let sp = ang + lr * 2.1;
-    let across = vec2f(cos(sp), sin(sp));
-    // large patches and voids (low frequency), mid-scale clumps, thin ridged filaments along arms
-    let qb = vec3f(across * 1.3, lr * 2.2 + seed * 0.7) + vec3f(zn * 0.2);
-    let big = 0.5 + 0.5 * (0.62 * gnoise(qb) + 0.28 * gnoise(qb * 2.03 + vec3f(5.1)) + 0.1 * gnoise(qb * 4.1 + vec3f(1.3)));
-    var clumps = 0.0;
-    var amp = 0.5;
-    var q = vec3f(across * 2.4, lr * 4.0 + seed) + vec3f(0.0, zn * 0.35, zn * 0.25);
-    for (var o = 0; o < 4; o++) {
-      clumps += amp * gnoise(q);
-      q = q * vec3f(2.07, 2.07, 1.9) + vec3f(1.7, 9.2, 3.1);
-      amp *= 0.5;
-    }
-    let rq = vec3f(across * 6.5, lr * 3.0 + seed * 1.7 + zn * 0.4);
-    let ridge = 1.0 - abs(gnoise(rq) + 0.5 * gnoise(rq * 2.1 + vec3f(3.3)));
-    let patches = smoothstep(0.22, 0.78, big);
-    acc += w * (0.12 + 0.88 * patches) * max(0.5 + 0.5 * clumps + 0.4 * (ridge * ridge * ridge - 0.3), 0.0);
+// The disk's gas (the look of Interstellar's Gargantua: fibrous, flame-like strands drawn out along
+// the orbits, dark lanes between them, hotter clumps). The gas orbits: the disk is cut into thin
+// rings (NB per unit of ln r, each ~7 % of its radius), each turning rigidly at the Keplerian rate of
+// its middle, forever — no spiral winding, no fading between patterns — its neighbours blended across
+// it (their difference: the shear, a ring sliding past the next) — each ring with its own pattern,
+// no structure continued across rings (turned by other angles, it would slant). Along the orbits the structures
+// are long (a few cells around the circle), across them thin (the shear has drawn them out).
+// Evaluated at the retarded time t_em: moving structure is seen where it was when the light left it.
+const DISK_BANDS = 14.0;
+fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32) -> f32 {
+  // (each ring its own gas: a structure continued into the next ring, turned by another angle there,
+  // would be drawn slanted across the blend — a spiral arm)
+  let lr = lr0 + ring * 1.618;
+  // (the strands waver, like hair or flames: locally twisted, not perfect circles — both ways, no
+  // spiral at large scale)
+  let c0 = vec2f(cos(ang0), sin(ang0));
+  let ang = ang0 + 0.1 * gnoise(vec3f(c0 * 4.0, lr * 26.0 + 5.0));
+  let c = vec2f(cos(ang), sin(ang));
+  let lw = lr + 0.035 * gnoise(vec3f(c * 2.1, lr * 8.0 + 11.0));
+  // (height: the structures are columns through the thin disk, ragged at its surface — seen through
+  // its thickness they keep their contrast instead of averaging out)
+  // wide lanes and bright patches
+  let lanes = 0.5 + 0.5 * gnoise(vec3f(c * 1.3, lw * 6.0 + zn * 0.15));
+  // clouds: fBm, every octave keeping the stretch along the orbit
+  var cl = 0.0;
+  var amp = 0.5;
+  var q = vec3f(c * 4.5, lw * 30.0 + zn * 0.8);
+  for (var o = 0; o < 4; o++) {
+    cl += amp * gnoise(q);
+    q = q * vec3f(2.17, 2.17, 2.3) + vec3f(1.7, 9.2, 3.1);
+    amp *= 0.55;
   }
-  return clamp(1.7 * acc, 0.0, 1.0);
+  // thin ridged strands (the flames' fibres), finer across than the clouds
+  let rq = vec3f(c * 8.0, lw * 110.0 + zn * 1.3);
+  let ridge = 1.0 - abs(gnoise(rq) + 0.45 * gnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
+  let body = smoothstep(0.28, 0.72, lanes);
+  let n = clamp((0.08 + 0.92 * body) * (0.42 + 0.85 * cl) + 0.6 * body * (ridge * ridge * ridge * ridge - 0.2), 0.0, 1.0);
+  return n * n * (3.0 - 2.0 * n);
+}
+fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32) -> f32 {
+  let lr = log(r);
+  let u = lr * DISK_BANDS - 0.5;
+  let i0 = floor(u);
+  let f = u - i0;
+  let w1 = f * f * (3.0 - 2.0 * f);
+  var acc = 0.0;
+  var w2 = 0.0;
+  for (var k = 0; k < 2; k++) {
+    let ib = i0 + f32(k);
+    let rb = exp((ib + 0.5) / DISK_BANDS);
+    let om = 1.0 / (pow(rb, 1.5) + a);
+    // (the ring's angle now: its own turns taken out, in f32 over long times)
+    let turns = om * tEm / TAU;
+    let ang = phi - TAU * fract(turns) + ib * 2.399;
+    let w = select(1.0 - w1, w1, k == 1);
+    acc += w * (diskStrands(ang, lr, zn, ib) - 0.5);
+    w2 += w * w;
+  }
+  // (the blend of two rings keeps the contrast of one)
+  return clamp(0.5 + acc * inverseSqrt(max(w2, 1e-6)), 0.0, 1.0);
 }
 
 struct DiskHit { color: vec3f, trans: f32, g: f32, T: f32 };
@@ -1265,7 +1287,7 @@ fn shadeDisk(s: GState, L: f32, E0: f32, tNow: f32) -> DiskHit {
   let turb = P.disk.z;
   if (turb > 0.0) {
     let n = diskTurbulence(r, s.x.z, tNow + s.x.w, a, 0.0);
-    T *= mix(1.0, 0.6 + 0.8 * n, turb);
+    T *= mix(1.0, 0.5 + 1.0 * n, turb);
     tau *= mix(1.0, 0.08 + 2.4 * n * n, turb);
   }
 
@@ -1377,7 +1399,7 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let turb = P.disk.z;
   if (turb > 0.0) {
     let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn);
-    T *= mix(1.0, 0.6 + 0.8 * n, turb);
+    T *= mix(1.0, 0.5 + 1.0 * n, turb);
     rho *= mix(1.0, 0.05 + 2.6 * n * n, turb);
   }
   if (rho < 1e-6) { return o; }

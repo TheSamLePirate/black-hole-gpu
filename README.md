@@ -30,7 +30,7 @@ Requires a WebGPU browser (Chrome/Edge ≥ 113, Safari 26, Firefox 141+).
 | Colour | Planck spectrum × CIE 1931 observer → linear sRGB LUT; or bolometric g⁴σT⁴ mode (Luminet 1979) |
 | Limb darkening | Chandrasekhar electron-scattering law, emission angle measured in the fluid frame |
 | Light travel time | Disk turbulence, jet knots and the hot spot are evaluated at the retarded (emission) time along each ray |
-| Disk turbulence | Gradient noise sheared by the Keplerian flow (flow-map advection), trailing logarithmic spiral arms, patches, clumps and ridged filaments |
+| Disk turbulence | The look of Interstellar's Gargantua: fibrous strands drawn out along the orbits, flame-like wisps at the surface, dark lanes, hotter clumps (gradient noise, domain-warped). The gas orbits: thin rings (14 per unit of ln r) each turn rigidly at their Keplerian rate, forever — no spiral winding, no pattern resets — their neighbours blended across them |
 | Returning radiation | Disk light bent back onto the disk (Cunningham 1976): one cosine-weighted secondary geodesic per disk hit, blackbody at g₁₂T₂ re-emitted with an albedo (quality passes) |
 | Polarization | Walker–Penrose constant κ = (A − iB)(r − ia cos θ) carried along every geodesic and inverted at the camera: exact EVPA for any observer. Disk: Chandrasekhar scattering polarization; hot flow & jet: synchrotron E ⟂ B (toroidal/radial/vertical/spiral fields). EHT-style ticks, polarized-intensity view |
 | Millimetre band | 86/230/345 GHz thermal synchrotron with self-absorption: dT_b/ds = α_ν(ν/g)(g·T_e − T_b) (Kirchhoff + I_ν/ν³ invariance), RIAF profiles; afmhot 230 GHz view, false colour, instrument beam (EHT 20 µas) |

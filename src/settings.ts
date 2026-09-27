@@ -85,7 +85,7 @@ export interface Settings {
   diskEmission: "visible" | "bolometric";
   diskTau: number; // vertical optical depth
   diskThickness: number; // scale height H/R (0 = infinitely thin slab)
-  flowPeriod: number; // M
+  flowPeriod: number; // M (no longer a setting: the GPU clock wraps after 1024 of them)
   // relativistic jet
   jet: boolean;
   jetLorentz: number; // bulk Lorentz factor Γ
@@ -394,7 +394,7 @@ export function defaultSettings(): Settings {
 export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" };
 
 const GARGANTUA: Preset = {
-  wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+  wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
   jet: false, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
 };
 
@@ -408,20 +408,20 @@ export const presets: Record<string, Preset> = {
   },
   "Interstellar (no shifts)": {
     spin: 0.6, distance: 34, inclination: 84, fov: 40, yaw: 0, pitch: 0, shiftMode: "none",
-    diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
+    diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0.02, diskTau: 6, jet: false,
   },
   "Ranger: approaching Gargantua": {
     spin: 0.6, distance: 34, inclination: 84, fov: 55, yaw: 0, pitch: 0, roll: 0, shiftMode: "none",
-    diskTemp: 4500, diskOuter: 26, turbulence: 0.8, diskEmission: "bolometric", diskTau: 100, jet: false,
+    diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0.02, diskTau: 6, jet: false,
     ship: true, shipMount: "quarter",
   },
   "Interstellar: wormhole to Gargantua": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -4, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 45,
-    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
+    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
   },
   "Gargantua system (10⁸ M☉, a* = 0.998)": {
-    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "hole", distance: 60, inclination: 78, azimuth: 146, yaw: 0, pitch: 0, roll: 0, fov: 50,
   },
@@ -429,7 +429,7 @@ export const presets: Record<string, Preset> = {
   // 10:00 local), in real time, the Ranger on the Crew engine at 2 g (a lift-off needs more than 1 g);
   // first objective: orbit, then Saturn and the wormhole behind it
   "game:interstellar": {
-    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "saturn", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
     engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthGround",
@@ -437,20 +437,20 @@ export const presets: Record<string, Preset> = {
   // the game's rehearsal: Artemis II — from a 400 km Earth orbit, round the Moon on a free return
   // and back (O: the planner, the Moon targeted: Free return, PLAN, EXECUTE)
   "game:artemis": {
-    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
     engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthMoon",
   },
   // our side: sunlit at 9.5 AU, ~10⁻⁷ of the disk's radiance — auto exposure
   "Gargantua system: departure near Saturn": {
-    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
+    system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "wormhole", fov: 50, exposure: 0, bgIntensity: 1, autoExposure: true, pose: "saturn",
   },
   "Mission: through the wormhole to the companion star (automatic flight)": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
-    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5, jet: false,
+    spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6, jet: false,
     skyL: 0, skyB: 0, skyRoll: 35, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
     ship: true, shipMount: "quarter", mission: true,
   },
