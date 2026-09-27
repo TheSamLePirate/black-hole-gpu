@@ -42,8 +42,17 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
 - The marks: manoeuvre nodes (blue), the closest approach to the target (orange), entering another
   body's sphere of influence (violet), periapsis / apoapsis, the arrival, an impact or the horizon
   (red) — a click jumps there, the handle snaps to a mark within 6 px.
+- Beyond the prediction (our side): **patched Kepler conics** from the path's end (`src/system/our-extend.ts`,
+  `src/game/kepler.ts` — universal variables): a conic around the body of the sphere of influence;
+  entering a moon's or a planet's sphere, a conic around it; leaving, around its primary; stopped at a
+  surface. Drawn dotted (“conics ▸”), with the lowest point in each sphere crossed, an impact, and their
+  marks on the timeline (“(conics)”); the preview's ship follows them. Computed in the planner's worker
+  (~20 ms, a few times a second at most, the frame loop untouched). A picture, not the flight: near the
+  edge of a sphere of influence patched conics are sensitive (an apogee at the Earth's sphere may or
+  may not meet the Moon on the way back); the planner's n-body paths stay the reference.
 - ▶ plays it (the span in 8 s); **Now** comes back; the wheel on the track makes the span longer or
-  shorter (automatic: as far as the predicted paths reach). The label: the date and T+.
+  shorter (automatic: as far as the predicted paths reach, or to the encounter with the target along
+  the conics). The label: the date and T+.
 
 ## What it shows
 

@@ -20,6 +20,8 @@ import { FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } fr
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
 import { bodyPosAt, dateOf, lineage, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
+import { extensionHorizon, type Extension } from "../../system/our-extend";
+import { plan as planJob } from "../../system/plan-client";
 
 export interface MapHost {
   readonly s: Settings;
@@ -116,6 +118,11 @@ export class Map3D {
   private tlMarks: Mark[] = [];
   private tlSpan = 1;
   private tlT0 = 0;
+  // beyond the predicted path (our side): patched conics computed in the planner's worker — the
+  // latest one, the path it continues, a request in flight
+  private ext: Extension | null = null;
+  private extSrc: OurPath | null = null;
+  private extBusy = false;
   // the warp of the log scale: its centre (the camera's focus) and its scale length
   private log = false;
   private W: V3 = [0, 0, 0];
@@ -190,6 +197,52 @@ export class Map3D {
     for (const ev of ["pointerdown", "dblclick", "contextmenu"]) root.addEventListener(ev, (e) => e.stopPropagation());
   }
 
+  /** The path the preview continues: the plan once it has nodes, else the free fall. */
+  private extSource(i: Info): OurPath | null {
+    return i.ourPlan && i.ourPlan.nodeAt.length ? i.ourPlan : i.ourFree;
+  }
+
+  /**
+   * The conics beyond the predicted path (asked of the worker when the path changes; the last answer
+   * meanwhile, while it still starts where the path ends).
+   */
+  private extension(i: Info): Extension | null {
+    const src = this.extSource(i);
+    if (!src || src.fate !== "continues" || src.pts.length < 2) return null;
+    const n = src.pts.length - 1;
+    if (src !== this.extSrc && !this.extBusy) {
+      this.extBusy = true;
+      const ref = src.refs[n] ?? "sun";
+      planJob<Extension>({ kind: "extend", X: src.pts[n]!, V: src.vels[n]!, t: src.times[n]!, ref, horizon: extensionHorizon(ref) })
+        .then((e) => {
+          this.ext = e && (e as unknown as { error?: string }).error ? null : e;
+          this.extSrc = src;
+        })
+        .finally(() => (this.extBusy = false));
+    }
+    const e = this.ext;
+    if (!e || !e.times.length) return null;
+    const end = src.times[n]!;
+    return this.extSrc === src || Math.abs(e.times[0]! - end) < 0.02 * Math.max(end - src.times[0]!, 1e-9) + 1e-6 ? e : null;
+  }
+
+  /** The closest approach to a body along the conics (memoized per extension). */
+  private extClosest(e: Extension, id: string): { i: number; d: number } | null {
+    let m = this.pathMemo.get(e);
+    if (!m) this.pathMemo.set(e, (m = new Map()));
+    const key = `ca:${id}`;
+    if (!m.has(key)) {
+      let best: { i: number; d: number } | null = null;
+      for (let j = 0; j < e.pts.length; j++) {
+        const d = len(sub(e.pts[j]!, solarState(id, e.times[j]!).pos));
+        if (!best || d < best.d) best = { i: j, d };
+      }
+      // (not at its very start: an approach, not where the path left it)
+      m.set(key, best && best.i > 1 ? best : null);
+    }
+    return m.get(key) as { i: number; d: number } | null;
+  }
+
   /** The timeline's automatic span: how far the predicted paths reach (at least an hour). */
   private autoSpan(i: Info, t0: number, ours: boolean) {
     let end = t0;
@@ -201,6 +254,14 @@ export class Map3D {
       if (pp?.times.length) end = Math.max(end, pp.times[pp.times.length - 1]!);
     }
     for (const n of i.plan?.nodes ?? []) end = Math.max(end, n.t);
+    // (beyond: up to the encounter with the target along the conics, when there is one)
+    const e = ours ? this.extension(i) : null;
+    const sc = this.scene;
+    if (e && sc?.byId.has(i.target) && i.target !== i.ref) {
+      const ca = this.extClosest(e, i.target);
+      const tb = sc.byId.get(i.target)!;
+      if (ca && (ca.d < 3 * tb.soi || e.refs.includes(i.target))) end = Math.max(end, e.times[ca.i]! + 0.15 * (e.times[ca.i]! - t0));
+    }
     const hour = 3600 / (4.925490947e-6 * this.host.s.massSolar);
     return Math.max(end - t0, ours ? hour : 50);
   }
@@ -248,6 +309,18 @@ export class Map3D {
         const ca = m.get(key) as ReturnType<typeof ourClosest>;
         if (ca) out.push({ t: tp.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name}` });
       }
+      const e = this.extension(i);
+      if (e) {
+        for (let j = 1; j < e.refs.length; j++) {
+          if (e.refs[j] !== e.refs[j - 1]) out.push({ t: e.times[j]!, kind: "soi", label: `${sc.byId.get(e.refs[j]!)?.name ?? e.refs[j]}'s sphere of influence (conics)` });
+        }
+        for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis at ${sc.byId.get(a.body)?.name ?? a.body} (conics)` });
+        if (sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
+          const ca = this.extClosest(e, i.target);
+          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name} (conics)` });
+        }
+        if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: `Impact · ${sc.byId.get(e.hit ?? "")?.name ?? e.hit} (conics)` });
+      }
       if (i.ourArrive) out.push({ t: i.ourArrive.t, kind: "arrive", label: `Arrival · ${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body}` });
     } else {
       const ca = this.host.closestApproach(i, t0);
@@ -258,7 +331,7 @@ export class Map3D {
     return out.filter((m) => m.t > t0);
   }
 
-  private syncTimeline(t0: number, span: number, marks: Mark[], ours: boolean, beyond: boolean) {
+  private syncTimeline(t0: number, span: number, marks: Mark[], ours: boolean, note: string) {
     const tl = this.tl;
     this.tlSpan = span;
     this.tlT0 = t0;
@@ -290,12 +363,12 @@ export class Map3D {
     const tp = t0 + this.preview;
     const text = this.preview <= 0
       ? `Now · ${fmtDur(span, s)} ahead`
-      : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${beyond ? " · beyond the prediction" : ""}`;
+      : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${note ? ` · ${note}` : ""}`;
     if (tl.label.textContent !== text) tl.label.textContent = text;
   }
 
   /** The ship at a later time along its predicted path (the plan's once past its first node), map frame. */
-  private shipAt(i: Info, tp: number, t0: number, ours: boolean, sc: MapScene): { X: V3; V: V3; ref: string | null; beyond: boolean } | null {
+  private shipAt(i: Info, tp: number, t0: number, ours: boolean, sc: MapScene): { X: V3; V: V3; ref: string | null; beyond: boolean; conics?: boolean } | null {
     const lerp = (a: V3, b: V3, f: number): V3 => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
     const find = (times: number[]) => {
       let lo = 0, hi = times.length - 1;
@@ -311,14 +384,18 @@ export class Map3D {
     if (ours) {
       const plan = i.ourPlan, free = i.ourFree;
       const usePlan = !!plan && plan.nodeAt.length > 0 && tp >= plan.times[plan.nodeAt[0]!]!;
-      const p = usePlan ? plan! : free;
+      let p: OurPath | null = usePlan ? plan! : free;
       if (!p || p.times.length < 2) return null;
+      // (past the prediction: along the conics)
+      const e = this.extension(i);
+      const onConics = !!e && e.times.length > 1 && tp > p.times[p.times.length - 1]! && this.extSource(i) === p;
+      if (onConics) p = e!;
       const { j, f, beyond } = find(p.times);
       const k = Math.min(j + 1, p.pts.length - 1);
       const X = lerp(p.pts[j]!, p.pts[k]!, f);
       const V = lerp(p.vels[j]!, p.vels[k]!, f);
       const ref = p.refs[j] ?? null;
-      return { X, V: ref ? sub(V, solarState(ref, tp).vel) : V, ref, beyond };
+      return { X, V: ref ? sub(V, solarState(ref, tp).vel) : V, ref, beyond, conics: onConics };
     }
     const pp = i.plan?.path;
     let pts: V3[], times: number[];
@@ -945,7 +1022,8 @@ export class Map3D {
     this.drawShip(ctx, i, ship, shipVel, P, dpr, ours);
     if (previewing) {
       const q = P(ship);
-      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${later?.beyond ? " · end of the prediction" : later ? "" : " · no prediction"}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700 });
+      const how = later?.beyond ? (later.conics ? " · end of the conics" : " · end of the prediction") : later?.conics ? " · conics" : later ? "" : " · no prediction";
+      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${how}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700 });
     }
 
     // ---- labels, kept apart (the focus and the target first)
@@ -975,7 +1053,7 @@ export class Map3D {
     this.drawFooter(ctx, tp, cw, ch, dpr, ours);
     this.renderCrumbs(sc, fid);
     this.syncBar(sc, fid);
-    this.syncTimeline(t0, span, marks, ours, !!later?.beyond);
+    this.syncTimeline(t0, span, marks, ours, later?.beyond ? (later.conics ? "end of the conics" : "beyond the prediction") : later?.conics ? "conics (Kepler)" : "");
   }
 
   /** The reference plane's axes (e1 towards a fixed direction, n its normal). */
@@ -1467,16 +1545,43 @@ export class Map3D {
       apsides(plan, plan.nodeAt[plan.nodeAt.length - 1]!, "▸ ");
       hits(plan);
     }
-    // closest approach to the target, on the plan or the free path
+    // beyond the prediction: the patched conics (faint, dotted), their lowest points, an impact
+    const ext = this.extension(i);
+    if (ext && ext.pts.length > 1) {
+      line(inFrame(ext), "170, 205, 255", 0.6, 1.3, [2, 4]);
+      hits(ext);
+      for (const a of ext.apsides) {
+        const name = sc.byId.get(a.body)?.name ?? a.body;
+        tag(FA(ext.pts[a.i]!, ext.times[a.i]!), `${name} Pe ${km(a.alt)}`, "#b8d4ff", true);
+      }
+      if (ext.fate === "impact") {
+        const q = P(FA(ext.pts[ext.pts.length - 1]!, ext.times[ext.times.length - 1]!));
+        if (q.ok) {
+          ctx.strokeStyle = RED;
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(q.x - 4 * dpr, q.y - 4 * dpr); ctx.lineTo(q.x + 4 * dpr, q.y + 4 * dpr);
+          ctx.moveTo(q.x + 4 * dpr, q.y - 4 * dpr); ctx.lineTo(q.x - 4 * dpr, q.y + 4 * dpr);
+          ctx.stroke();
+        }
+      }
+      const q0 = P(FA(ext.pts[0]!, ext.times[0]!));
+      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600 });
+    }
+    // closest approach to the target, on the plan or the free path (or, closer, along the conics)
     const tp = plan ?? free;
     if (tp && sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
       let memo = this.pathMemo.get(tp);
       if (!memo) this.pathMemo.set(tp, (memo = new Map()));
       const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
-      const ca = (memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))) as ReturnType<typeof ourClosest>;
+      const caPred = (memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))) as ReturnType<typeof ourClosest>;
+      const caExt = ext ? this.extClosest(ext, i.target) : null;
+      const useExt = !!caExt && (!caPred || caExt.d < caPred.d);
+      const ca = useExt ? caExt : caPred;
+      const cp = useExt ? ext! : tp;
       if (ca) {
-        const t = tp.times[ca.i]!;
-        const a = P(FA(tp.pts[ca.i]!, t)), b = P(FA(solarState(i.target, t).pos, t));
+        const t = cp.times[ca.i]!;
+        const a = P(FA(cp.pts[ca.i]!, t)), b = P(FA(solarState(i.target, t).pos, t));
         if (a.ok && b.ok) {
           ctx.strokeStyle = "rgba(255, 138, 92, 0.8)";
           ctx.lineWidth = 1 * dpr;
