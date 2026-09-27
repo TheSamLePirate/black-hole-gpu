@@ -21,7 +21,8 @@ import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose }
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
-import { nodeDvHome, predictOurs, type OurPath } from "./system/our-predict";
+import { nodeDvHome, predictOurs, YOSHIDA, type OurPath } from "./system/our-predict";
+import { keplerProp } from "./system/our-plan";
 import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
 import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
@@ -1307,7 +1308,8 @@ export class CameraController {
     const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => (airy ? lin(gq.acc, 1, dragAccel(ref, Xq, Vq, tq), 1) : gq.acc);
     // steps: a small part of the fall time; near the ground, of the time to reach it
     const stepOf = () => {
-      let dt = 0.01 * g.tDyn;
+      // (fourth order in the vacuum: longer steps — the map's prediction's own)
+      let dt = (airy ? 0.01 : 0.025) * g.tDyn;
       if (ground || airy) {
         const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
         const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
@@ -1317,13 +1319,48 @@ export class CameraController {
     };
     let t = t0;
     const tEnd = t0 + simDt;
+    // on rails: a stable orbit, the engine off, a frame a good part of a turn — Kepler's orbit
+    // around the body, carried along with it (as KSP's time warp)
+    const rails = Math.hypot(...dvT) < 1e-15 ? this.stableOrbit(X, V, t0) : null;
+    if (rails && simDt > 0.02 * rails.period) {
+      const k = keplerProp(rails.mass, sub3(X, ourState(rails.ref, t0).pos), sub3(V, ourState(rails.ref, t0).vel), simDt);
+      const B = ourState(rails.ref, tEnd);
+      X = lin(B.pos, 1, k.r, 1);
+      V = lin(B.vel, 1, k.v, 1);
+      this.properTime += simDt * Math.sqrt(Math.max(1 - dot3(V, V), 0));
+      setHomePose(s, X, unitV(fwd), unitV(up), V);
+      s.motion = "geodesic";
+      this.sync();
+      return tEnd;
+    }
     let a = accAt(X, V, t, g);
     let touched: { speed: number } | null = null;
     for (let i = 0; i < 400 && t < tEnd - 1e-12; i++) {
       const dt = Math.min(stepOf(), tEnd - t);
-      V = lin(V, 1, a, dt / 2);
-      X = lin(X, 1, V, dt);
-      t += dt;
+      // (in the vacuum, clear of the ground: Yoshida's fourth-order composition — the planner's
+      // integrator; the flight follows its plans over months)
+      let last = dt;
+      const tn = t + dt;
+      if (!airy && !(ground && gearHeight(ground, X, t) < 1e5)) {
+        for (const w of YOSHIDA.slice(0, 2)) {
+          const h = w * dt;
+          V = lin(V, 1, a, h / 2);
+          X = lin(X, 1, V, h);
+          t += h;
+          g = gravityHome(X, t);
+          a = g.acc;
+          V = lin(V, 1, a, h / 2);
+        }
+        const h = YOSHIDA[2]! * dt;
+        V = lin(V, 1, a, h / 2);
+        X = lin(X, 1, V, h);
+        t = tn;
+        last = h;
+      } else {
+        V = lin(V, 1, a, dt / 2);
+        X = lin(X, 1, V, dt);
+        t = tn;
+      }
       g = gravityHome(X, t);
       // touchdown on a solid ground — coming down onto it (just lifted off, the gear a few mm up and
       // the home ↔ rep round trip as fine as that: climbing, it is no landing)
@@ -1347,7 +1384,7 @@ export class CameraController {
         break;
       }
       a = accAt(X, V, t, g);
-      V = lin(V, 1, a, dt / 2);
+      V = lin(V, 1, a, last / 2);
       const sp = Math.hypot(...V);
       if (sp > 0.999) V = lin(V, 0.999 / sp, V, 0);
     }
@@ -1366,6 +1403,28 @@ export class CameraController {
       if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
     }
     return t;
+  }
+
+  /**
+   * The ship's orbit round the body of its sphere of influence, when it is one to put on rails: bound,
+   * its periapsis clear of the ground and of 30 scale heights of air, its apoapsis well inside the
+   * sphere (the other bodies' pulls a small part of it). Null otherwise.
+   */
+  private stableOrbit(X: Vec3, V: Vec3, t: number) {
+    const ref = referenceBody(X, t);
+    if (ref === "sun") return null;
+    const b = solarBody(ref)!;
+    const st = ourState(ref, t);
+    const r = sub3(X, st.pos), v = sub3(V, st.vel);
+    const R = Math.hypot(...r);
+    const eps = dot3(v, v) / 2 - b.mass / R;
+    if (!(eps < 0)) return null;
+    const a = -b.mass / (2 * eps);
+    const h = cross(r, v);
+    const e = Math.sqrt(Math.max(1 - dot3(h, h) / (b.mass * a), 0));
+    const clear = b.radius * 1.01 + (b.atmosphere ? (30 * b.atmosphere.H) / M_METRES : 0);
+    if (a * (1 - e) < clear || a * (1 + e) > 0.25 * soiOf(ref, t)) return null;
+    return { ref, mass: b.mass, period: 2 * Math.PI * Math.sqrt(a ** 3 / b.mass) };
   }
 
   /**
@@ -1694,7 +1753,8 @@ export class CameraController {
     const nav = this.ourNav(cam);
     if (nav) {
       const g = gravityHome(nav.X, nav.t);
-      cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
+      // (a stable orbit rides Kepler's rails at any warp; else a turn of the tightest orbit in ~2 s)
+      if (!(this.pilot.throttle === 0 && this.pilot.accel === 0 && this.stableOrbit(nav.X, nav.V, nav.t))) cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
       // near the ground (not on it): a frame covers no more than a fifth of the height left, the last
       // metres at the pace of the last 20
       if (!this.ourLanded && (solidBody(nav.ref) || ourAir(nav.ref, 0) > 0) && nav.ref !== "sun") {
@@ -1915,9 +1975,15 @@ export class CameraController {
       const i = this.plan.nodes.indexOf(node);
       if (i < 0 || "error" in r) return;
       if (!r.node) {
-        // (no correction needed: dropped)
-        this.plan.nodes.splice(i, 1);
-        this.onPilotMessage?.(`${node.role === "mccReturn" ? "Return" : "Mid-course"} correction not needed`);
+        // (no correction needed — now: kept at zero while far, re-aimed nearer its time; dropped at
+        // its last look)
+        const nav2 = this.ourNav(cameraFrame(this.s));
+        const far = nav2 && node.t - nav2.t > 0.5 * 86400 / 492.5490947 && st!.n < 3;
+        if (far) node.dv = [0, 0, 0];
+        else {
+          this.plan.nodes.splice(i, 1);
+          this.onPilotMessage?.(`${node.role === "mccReturn" ? "Return" : "Mid-course"} correction not needed`);
+        }
       } else {
         node.t = r.node.t;
         node.dv = r.node.dv;
@@ -2021,7 +2087,8 @@ export class CameraController {
       this.ourPlan = null;
       return (P.path = null);
     }
-    if (!force && now - P.at < 330) return P.path;
+    // (at most 3 times a second — less when a prediction costs more than a few ms)
+    if (!force && now - P.at < Math.max(330, 8 * this.planCost)) return P.path;
     P.at = now;
     // our universe: the path through the nodes by the Newtonian predictor (the hole's map: none)
     const nav = this.ourNav(cameraFrame(this.s));
@@ -2036,13 +2103,17 @@ export class CameraController {
       const m = this.ourMission;
       // (a mission: its whole span; the first burn days away in a low orbit — beyond what the map's
       // prediction reaches — the planner's own path)
-      if (m && this.ourPlanned && nodes[0]?.role === "depart" && nodes[0].t - nav.t > 0.4 * 86400 / 492.55) {
+      // (before the departure: the planner's own path — from a low orbit, months of it are more than
+      // a frame can predict)
+      if (m && this.ourPlanned && nodes[0]?.role === "depart") {
         this.ourPlan = this.ourPlanned;
         return (P.path = null);
       }
       // (a mission: the flight's own step — the display's path is the one flown)
-      const span = m ? { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 20000, step: 0.01 } : { maxSteps: 3000 };
+      const span = m ? { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 6000, step: 0.025 } : { maxSteps: 3000 };
+      const t0 = performance.now();
       this.ourPlan = predictOurs(nav.X, nav.V, nav.t, nodes.map((n) => ({ t: n.t, dv: n.dv })), { mouthR: mouth(this.s).w.rho, accel: this.thrustMax(), ...span });
+      this.planCost = performance.now() - t0;
       return (P.path = null);
     }
     this.ourPlan = null;
@@ -2162,7 +2233,7 @@ export class CameraController {
     s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
     // (our universe: seconds matter — a burn of minutes in a low orbit; the warp down to real time)
     // (a short burn — a correction of a few m/s — is approached at ×5 at least, not in real time)
-    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 6, 0.002), 1e5) : Math.max(Math.min(start / 2, s.timeSpeed), burnT * 492.5490947 > 30 ? 0.002 : 0.01);
+    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 3, 0.002), 1e5) : Math.max(Math.min(start / 2, s.timeSpeed), burnT * 492.5490947 > 30 ? 0.002 : 0.01);
     if (hold) s.timeSpeed = Math.min(s.timeSpeed, Math.max(start / 4, 0.002));
     // (a long coast rides the rails, held back near bodies like any flight)
     if (s.system !== "none" || s.timeSpeed > 500) s.timeSpeed = Math.min(s.timeSpeed, Math.max(this.railsLimit(cam).lim, 3));
@@ -2774,6 +2845,8 @@ export class CameraController {
   /** our universe: the mission the plan flies (its nodes re-aimed in flight), the planner at work */
   ourMission: OurMission | null = null;
   planBusy = false;
+  /** what the last live prediction of the plan cost [ms] (it is refreshed less often when dear) */
+  private planCost = 0;
   /** the planner's own path, shown while the first burn is further than the map's prediction reaches */
   private ourPlanned: OurPath | null = null;
   /** per node: the last re-aim (scene time), how many, one under way */

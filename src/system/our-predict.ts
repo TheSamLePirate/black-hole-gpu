@@ -38,15 +38,21 @@ const unit = (a: Vec3): Vec3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
-const PLANETS = SOLAR_BODIES.filter((b) => b.parent === "sun" || b.kind === "star");
+// (the Sun and the planets — and the Moon: massive, near where flights start, its pull on a ship
+// leaving the Earth is still ~2 m/s of velocity past the sphere of influence)
+const PLANETS = SOLAR_BODIES.filter((b) => b.parent === "sun" || b.kind === "star" || b.id === "moon");
 const moonsOf = (id: string) => SOLAR_BODIES.filter((b) => b.parent === id);
 
 /** The body set felt near a place: the Sun, the planets, and the moons of the planet it is near. */
 function bodiesNear(ref: string) {
   const b = SOLAR_BODIES.find((q) => q.id === ref)!;
   const planet = b.parent && b.parent !== "sun" ? b.parent : b.kind === "planet" ? b.id : null;
-  return planet ? [...PLANETS, ...moonsOf(planet)] : PLANETS;
+  return planet ? [...PLANETS, ...moonsOf(planet).filter((b) => b.id !== "moon")] : PLANETS;
 }
+
+/** Yoshida's fourth-order weights for a composition of velocity-Verlet steps (sum 1). */
+const Y1 = 1 / (2 - Math.cbrt(2));
+export const YOSHIDA = [Y1, 1 - 2 * Y1, Y1];
 
 /** The pull at X, time t, from a body set (the frame's own acceleration taken off). */
 function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES) {
@@ -142,13 +148,27 @@ export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [
     if (next && t + dt >= startOf(next)) dt = Math.max(startOf(next) - t, 0);
     if (burn) dt = Math.min(dt, burn.T / 40, burn.left / acc);
     dt = Math.min(dt, tEnd - t);
-    const a0 = burn ? add(g.a, thrust(X, V, t)) : g.a;
-    V = add(V, a0, dt / 2);
-    X = add(X, V, dt);
-    t += dt;
-    g = pull(X, t, set);
-    const a1 = burn ? add(g.a, thrust(X, V, t)) : g.a;
-    V = add(V, a1, dt / 2);
+    if (burn) {
+      const a0 = add(g.a, thrust(X, V, t));
+      V = add(V, a0, dt / 2);
+      X = add(X, V, dt);
+      t += dt;
+      g = pull(X, t, set);
+      V = add(V, add(g.a, thrust(X, V, t)), dt / 2);
+    } else {
+      // (coasting: Yoshida's composition of three velocity-Verlet steps — fourth order, still
+      // symplectic: months between the planets stay within a few km)
+      const tn = t + dt;
+      for (let k = 0; k < 3; k++) {
+        const h = YOSHIDA[k]! * dt;
+        V = add(V, g.a, h / 2);
+        X = add(X, V, h);
+        // (the last substep lands on the step's end exactly: the weights' sum is 1 only to rounding)
+        t = k === 2 ? tn : t + h;
+        g = pull(X, t, set);
+        V = add(V, g.a, h / 2);
+      }
+    }
     if (burn) {
       burn.left -= acc * dt;
       if (burn.left <= 1e-15) burn = null;

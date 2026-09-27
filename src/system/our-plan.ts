@@ -9,7 +9,7 @@
 // Units: lengths and times in M, velocities in c, GM in M (G = c = 1).
 
 import type { Vec3 } from "../physics";
-import { nodeDvComponents, predictOurs, type OurNode, type OurPath } from "./our-predict";
+import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
 import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, M_SECONDS, solarBody, solarState, SOLAR_BODIES } from "./solar";
 
@@ -393,10 +393,11 @@ function gauss(A: number[][], b: number[]): number[] | null {
 // ---- the goals of a mission, measured on a predicted path
 
 /** Tolerances of the aim: a few km at a moon, more across the planets (mid-course corrections follow). */
-function aimTol(m: OurMission) {
+function aimTol(m: OurMission, inFlight = false) {
   if (m.goal.target === "wormhole") return 1e6 * KM;
   const far = m.type === "sibling" || (m.home === "sun" && m.goal.target !== "moon");
-  return far ? 300 * KM : 10 * KM;
+  // (in flight, the corrections close in: 30 km across the planets, 10 km near home)
+  return far ? (inFlight ? 30 : 300) * KM : 10 * KM;
 }
 
 /** The goals' residuals on a path: B-plane at the target, and/or the perigee back home. */
@@ -475,17 +476,17 @@ function residualsCore(m: OurMission, p: OurPath, from: number, stage: Stage, mo
  */
 type Stage = "out" | "back" | "escape";
 
-function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, stage: Stage, o: PlanOptions, moveTime = false, coarse = false, withTime = false) {
+function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, stage: Stage, o: PlanOptions, moveTime = false, coarse = false, withTime = false, inFlight = false) {
   const tMax = Math.max(m.tEnd - t, 0) * 1.15 + 2 * DAY;
   // (a finer integration than the map's: the aim differentiates the path)
-  const run = (dv: Vec3, tb: number) => predictOurs(X, V, t, [{ t: tb, dv }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: coarse ? 0.02 : 0.008 });
+  const run = (dv: Vec3, tb: number) => predictOurs(X, V, t, [{ t: tb, dv }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: coarse ? 0.05 : 0.02 });
   let cart = false;
   const timed = withTime && stage === "out" && m.type !== "parent";
   const goals = (x: number[]) => residuals(m, run([x[0]!, x[1]!, x[2]!], moveTime ? tn + x[3]! : tn), 0, stage, o.mouthR, cart, timed);
   const nGoals = stage === "escape" ? 3 : stage === "back" || m.type === "parent" ? 1 : 2;
   // (leaving a moon for its planet: the perigee is very sensitive to the burn — tens of km of it
   // are the integration's noise; the correction halfway down takes the rest)
-  const tol: number[] = new Array(nGoals).fill(stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" ? 60 * KM : aimTol(m));
+  const tol: number[] = new Array(nGoals).fill(stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" && !inFlight ? 60 * KM : aimTol(m, inFlight));
   if (timed) tol.push((m.type === "sibling" ? 3600 : 300) / M_SECONDS);
   // (the burn's time too, for a departure: moving it along the orbit turns the way out — cheaper
   // than a radial Δv; its step, a second, weighs as 0.05 m/s in the least change)
@@ -871,7 +872,7 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
   let runs = 0;
   const run = (dP: number, dt: number, fine: boolean) => {
     runs++;
-    return predictOurs(X, V, t, [{ t: t1 + dt, dv: [dP, 0, 0] }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: fine ? 0.008 : 0.02 });
+    return predictOurs(X, V, t, [{ t: t1 + dt, dv: [dP, 0, 0] }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: fine ? 0.02 : 0.05 });
   };
   const passSigned = (p: OurPath) => {
     const bp = bPlane(p, g.target, 0, o.mouthR);
@@ -904,16 +905,22 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
   let best: { dP: number; t: number; side: number; sign: number; path: OurPath } | null = null;
   for (const side of [1, -1]) {
     // the burn's size scanned (coarse paths), the time kept on the pass's height
+    // (from the first guess outwards, up then down, each size starting from its neighbour's time)
     const pts: { dP: number; dt: number; r: number }[] = [];
-    let dt = 0;
-    for (let k = -6; k <= 6; k++) {
-      const dP = dP0 + (k * 5) / C;
-      const q = inner(dP, side, dt, false, 40 * KM);
-      if (!q) continue;
-      dt = q.dt;
-      const r = retOf(q.path);
-      if (r !== null) pts.push({ dP, dt: q.dt, r });
+    let dt0 = 0;
+    for (const dir of [1, -1]) {
+      let dt = dt0;
+      for (let k = dir > 0 ? 0 : -1; Math.abs(k) <= 12; k += dir) {
+        const dP = dP0 + (k * 2.5) / C;
+        const q = inner(dP, side, dt, false, 40 * KM);
+        if (!q) continue;
+        dt = q.dt;
+        if (k === 0) dt0 = q.dt;
+        const r = retOf(q.path);
+        if (r !== null) pts.push({ dP, dt: q.dt, r });
+      }
     }
+    pts.sort((a, b) => a.dP - b.dP);
     // the brackets of the perigee back home (either sense), nearest the first guess first
     const brackets: { A: (typeof pts)[0]; B: (typeof pts)[0]; sign: number }[] = [];
     for (const sign of [1, -1]) {
@@ -955,10 +962,8 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
           side0 = 1;
         }
       }
-      if (found && fine) {
-        if (!best || Math.abs(found.dP) < Math.abs(best.dP)) best = { dP: found.dP, t: t1 + found.dt, side, sign, path: found.path };
-        break;
-      }
+      // (every bracket tried: the least burn wins — the classic figure-8, ~4 days out and back)
+      if (found && fine && (!best || Math.abs(found.dP) < Math.abs(best.dP))) best = { dP: found.dP, t: t1 + found.dt, side, sign, path: found.path };
     }
   }
   if ((globalThis as { __planDebug?: boolean }).__planDebug) console.log("free return: paths", runs);
@@ -980,22 +985,45 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
     // across the planets: the escape aimed on the Lambert way out, then — past home's sphere — a
     // first correction aimed on the target's B-plane (from there, not from the low orbit: 1 m/s
     // at the burn is ~10⁵ km at Mars)
-    const esc = aim(m, X, V, t, t1, dv0, "escape", o, true);
+    let esc = aim(m, X, V, t, t1, dv0, "escape", o, true);
     if (!esc) return { error: `Transfer: no escape towards ${tb.name} found` };
     const exitAt = (p: OurPath) => {
       for (let i = 0; i < p.pts.length; i++) if (norm(sub(p.pts[i]!, stateOf(m.home, p.times[i]!).pos)) > 1.5 * soiOf(m.home, p.times[i]!)) return p.times[i]!;
       return null;
     };
-    const tx = exitAt(esc.path);
-    const s0 = tx !== null ? stateAt(esc.path, tx) : null;
-    if (!s0 || tx === null) return { error: `Transfer: the escape towards ${tb.name} does not leave ${hb.name}` };
-    const side = predictOurs(s0.X, s0.V, tx, [], { tMax: (m.tEnd - tx) * 1.15, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
-    const bp0 = bPlane(side, goal.target, 0, o.mouthR);
-    if (bp0 && Math.hypot(bp0.bT, bp0.bR) > 0) m.bDir = [bp0.bT / Math.hypot(bp0.bT, bp0.bR), bp0.bR / Math.hypot(bp0.bT, bp0.bR)];
-    const c = aim(m, s0.X, s0.V, tx, tx + o.lead, [0, 0, 0], "out", o);
+    // (a differential correction: the first correction's Δv, found past home's sphere, is folded
+    // back into the way out asked of the escape — the Lambert v∞ is two-body, the flight is not —
+    // until what is left for the correction is small)
+    let c: ReturnType<typeof aim> = null;
+    for (let k = 0; k < 4; k++) {
+      const tx = exitAt(esc.path);
+      const s0 = tx !== null ? stateAt(esc.path, tx) : null;
+      if (!s0 || tx === null) return { error: `Transfer: the escape towards ${tb.name} does not leave ${hb.name}` };
+      if (k === 0) {
+        const side = predictOurs(s0.X, s0.V, tx, [], { tMax: (m.tEnd - tx) * 1.15, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
+        const bp0 = bPlane(side, goal.target, 0, o.mouthR);
+        if (bp0 && Math.hypot(bp0.bT, bp0.bR) > 0) m.bDir = [bp0.bT / Math.hypot(bp0.bT, bp0.bR), bp0.bR / Math.hypot(bp0.bT, bp0.bR)];
+      }
+      c = aim(m, s0.X, s0.V, tx, tx + o.lead, [0, 0, 0], "out", o);
+      if (!c || norm(c.dv) < 1 * MS || k === 3) break;
+      const d = nodeDvHome(s0.X, s0.V, c.t, c.dv);
+      m.vinf = add(m.vinf!, d);
+      const e2 = aim(m, X, V, t, esc.t, esc.dv, "escape", o, true);
+      if (!e2) break;
+      esc = e2;
+    }
+    // (the correction aimed once more from the path the whole plan flies: what the map shows)
+    if (c) {
+      const full = predictOurs(X, V, t, [{ t: esc.t, dv: esc.dv }], { tMax: c.t - t + 1e-6, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.02 });
+      // (from one of its own points — not interpolated: steps of days there, ~300 km at Mars)
+      let j = full.times.length - 1;
+      while (j > 0 && full.times[j]! > c.t - 0.5 * o.lead) j--;
+      const c2 = j > 0 ? aim(m, full.pts[j]!, full.vels[j]!, full.times[j]!, c.t, c.dv, "out", o) : null;
+      if (c2 && c2.ok) c = c2;
+    }
     if (c) mcc = { t: c.t, dv: c.dv, role: "mcc" };
     const nodes = [{ t: esc.t, dv: esc.dv }, ...(mcc ? [{ t: mcc.t, dv: mcc.dv }] : [])];
-    result = { ...esc, path: predictOurs(X, V, t, nodes, { tMax: (m.tEnd - t) * 1.15, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.008 }), ok: esc.ok && !!c?.ok };
+    result = { ...esc, path: predictOurs(X, V, t, nodes, { tMax: (m.tEnd - t) * 1.15, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.02 }), ok: esc.ok && !!c?.ok };
   } else if (goal.arrival === "freeReturn") {
     const fr = freeReturnSearch(m, X, V, t, t1, dv0[0], o);
     if (!fr) return { error: `Free return: no path round ${tb.name} and back found from this orbit` };
@@ -1123,7 +1151,7 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
       tAim = Math.max(t + o.lead, tx + 0.3 * (tp - tx));
     }
   }
-  const r = aim(m, X, V, t, tAim, node.role === "depart" ? node.dv : [0, 0, 0], stage, o, node.role === "depart", false, node.role === "mcc");
+  const r = aim(m, X, V, t, tAim, node.role === "depart" ? node.dv : [0, 0, 0], stage, o, node.role === "depart", false, node.role === "mcc", node.role !== "depart");
   if (!r) return { ...node, t: tAim };
   // (dropped only when the aim is met without it — a failed aim is no reason to skip a correction)
   if (node.role !== "depart" && norm(r.dv) < 0.03 * MS) return r.ok ? null : { ...node, t: tAim };

@@ -54,7 +54,7 @@ test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 
   expect(tli.dv[0] * C).toBeLessThan(3200);
   expect(Math.hypot(tli.dv[1], tli.dv[2]) * C).toBeLessThan(30);
   // flown with its finite 2 g burn: the pass and the way home as asked
-  const path = predictOurs(s.X, s.vel, t0, [{ t: tli.t, dv: tli.dv }], { tMax: 10 * DAY, maxSteps: 200000, step: 0.008, accel });
+  const path = predictOurs(s.X, s.vel, t0, [{ t: tli.t, dv: tli.dv }], { tMax: 10 * DAY, maxSteps: 200000, step: 0.02, accel });
   const bp = bPlane(path, "moon")!;
   const pass = (bp.ca.d - solarBody("moon")!.radius) / KM;
   expect(Math.abs(pass - 7000)).toBeLessThan(100);
@@ -83,8 +83,30 @@ test("from a low lunar orbit back to the Earth: a ~0.8 km/s burn, a perigee near
   const dv = Math.hypot(...p.nodes[0]!.dv) * C;
   expect(dv).toBeGreaterThan(600);
   expect(dv).toBeLessThan(1100);
-  const path = predictOurs(X, V, t0, [{ t: p.nodes[0]!.t, dv: p.nodes[0]!.dv }], { tMax: 7 * DAY, maxSteps: 200000, step: 0.008, accel });
+  const path = predictOurs(X, V, t0, [{ t: p.nodes[0]!.t, dv: p.nodes[0]!.dv }], { tMax: 7 * DAY, maxSteps: 200000, step: 0.02, accel });
   const rp = returnPerigee(path, "moon", "earth")!;
   // (the correction halfway down takes the rest: here within a few hundred km)
   expect(Math.abs(rp.rp / KM - 6371 - 200)).toBeLessThan(400);
+}, 60000);
+
+test("to Mars: a launch window, a ~3.7 km/s escape, a correction of a few m/s, a capture ~2.4 km/s", () => {
+  const t0 = 109.6;
+  const s = earthStart(t0, 400, true);
+  const p = planOurTransfer(s.X, s.vel, t0, { kind: "transfer", target: "mars", arrival: "orbit", altM: 300e3, returnAltM: 200e3 }, o);
+  if ("error" in p) throw new Error(p.error);
+  expect(p.nodes.map((n) => n.role)).toEqual(["depart", "mcc", "mcc", "capture"]);
+  const [tmi, mcc, , cap] = p.nodes as [(typeof p.nodes)[0], (typeof p.nodes)[0], (typeof p.nodes)[0], (typeof p.nodes)[0]];
+  // (the window: within a synodic period, ~2.1 years)
+  expect((tmi.t - t0) / DAY).toBeGreaterThan(0);
+  expect((tmi.t - t0) / DAY).toBeLessThan(800);
+  expect(Math.hypot(...tmi.dv) * C).toBeGreaterThan(3400);
+  expect(Math.hypot(...tmi.dv) * C).toBeLessThan(4200);
+  // (the escape aimed on the n-body way out: little left for the correction)
+  expect(Math.hypot(...mcc.dv) * C).toBeLessThan(10);
+  expect(Math.abs(cap.dv[0]) * C).toBeGreaterThan(1800);
+  expect(Math.abs(cap.dv[0]) * C).toBeLessThan(2800);
+  // (the flight: 5 to 9 months)
+  const tof = (cap.t - tmi.t) / DAY;
+  expect(tof).toBeGreaterThan(140);
+  expect(tof).toBeLessThan(280);
 }, 60000);

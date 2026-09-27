@@ -1681,8 +1681,19 @@ export class FlightHud {
       return R < 1e-30 ? [0, 0] : [(q[0] * Math.log1p(R / r0)) / R, (q[1] * Math.log1p(R / r0)) / R];
     };
     // (framed on the planets out to Neptune around the Sun; on the ship and the moons around a planet)
-    // (around a planet: the ship, and its paths out to three spheres of influence)
+    // (around a planet: the ship, and its paths out to three spheres of influence; around the Sun
+    // as the ship's own centre — cruising between the planets — the ship, its paths and its target;
+    // the Sun clicked: the whole system out to Neptune)
     let reach = focus === "sun" ? 31 * 1.0131 : Math.max(Math.hypot(...sub(i.X!, F)) * 1.2, 40 * r0);
+    if (focus === "sun" && this.mapFocus !== "sun") {
+      let rr = Math.hypot(...sub(i.X!, F));
+      for (const p of [i.ourFree, i.ourPlan]) {
+        if (!p) continue;
+        for (let j = 0; j < p.pts.length; j += 4) rr = Math.max(rr, Math.hypot(...sub(p.pts[j]!, solarState("sun", p.times[j]!).pos)));
+      }
+      if (OUR_COLOURS[i.target] && i.target !== "sun") rr = Math.max(rr, Math.hypot(...sub(solarState(i.target, t0).pos, F)));
+      reach = Math.min(reach, Math.max(rr * 1.15, 0.5));
+    }
     if (focus !== "sun") {
       const fb = SOLAR_BODIES.find((b) => b.id === focus)!;
       const par = solarState(fb.parent ?? "sun", t0).pos;
