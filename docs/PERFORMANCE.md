@@ -85,6 +85,13 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
   The cost hardly follows the ship's size or its samples: an empty clear-only pass or a 128 × 128 copy
   measures the same ~0.9 ms there — a per-pass floor. A small ship costs next to nothing above it, so
   one sample would save ~0.1 ms and make its edges shimmer. (WebGPU offers 1 or 4 samples only.)
+- **Back faces of the Ranger culled** (its shading pass): 1.85 → 1.53 ms per ship draw (−17 %). The
+  mesh looked unfit (542 open edges, 5070 inconsistently wound, ~24 % of the hull's triangles facing
+  in by ray parity), but rendering it with and without culling from 288 viewpoints around it (6 mounts ×
+  12 yaws × 4 pitches, 25.4 M ship pixels) leaves **0** pixels missing: the inward-wound triangles are
+  hidden inner faces. A re-oriented mesh (each triangle turned towards the side its rays escape from,
+  single sheets doubled) was tried and dropped: 1938 pixels missing from the same viewpoints. The
+  shadow map keeps both faces.
 - **Ranger probe rays** are ~20× dearer than the image's (long, divergent) — fewer, rarer runs rather
   than cheaper rays.
 - **The planner's worker** also runs the free-fall prediction: during a long re-aim the map's path
