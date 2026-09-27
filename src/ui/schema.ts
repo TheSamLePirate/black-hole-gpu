@@ -672,7 +672,10 @@ export const SCHEMA: ControlDef[] = [
       { value: "AgX punchy", label: "Punchy" },
       { value: "ACES", label: "ACES" },
       { value: "clamp", label: "Linear" },
+      { value: "Film", label: "Film" },
     ],
+    help: "How the scene's radiance becomes the screen's. Film: the look of Interstellar's Gargantua — overexposed by 2 EV over the exposure (the disk's heart burnt out to cream), each channel rolling off on its own (orange turns yellow, then white), saturated orange mid-tones, cool shadows, and the bloom as a strong additive haze over a sharp image.",
+    keywords: "tone mapping agx aces film interstellar grade look overexposed",
   },
   {
     key: "hdr", type: "choice", section: "render", group: "Image", label: "HDR output", style: "segmented", effect: "display",

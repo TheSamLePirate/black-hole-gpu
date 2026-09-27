@@ -38,7 +38,7 @@ import { encodeEXR, encodePNG16 } from "./exporters";
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
-const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
+const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 const PARAM_VEC4S = 58;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */

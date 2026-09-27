@@ -1,7 +1,7 @@
 // Final image: HDR radiance (+ bloom) → exposure → tone mapping → sRGB.
 
 struct Display {
-  size: vec4f,  // output W, H, exposure (linear multiplier), tonemap (0 AgX, 1 AgX punchy, 2 ACES, 3 clamp)
+  size: vec4f,  // output W, H, exposure (linear multiplier), tonemap (0 AgX, 1 AgX punchy, 2 ACES, 3 clamp, 4 film)
   flags: vec4f, // debug mode (1 = bypass exposure/tonemap/bloom), bloom strength, bloom levels, dither (0/1)
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
   hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
@@ -88,6 +88,48 @@ fn hdrMap(c: vec3f, peak: f32, punchy: bool) -> vec3f {
   return mix(scaled, vec3f(m2), 0.75 * w);
 }
 
+// The film's look (Interstellar's Gargantua): 2 EV of overexposure, split toning (cool shadows,
+// warm highlights), saturated orange mid-tones kept from turning yellow — in linear light, before
+// the curve.
+const LUMA = vec3f(0.2126, 0.7152, 0.0722);
+fn filmGrade(c0: vec3f) -> vec3f {
+  var c = max(c0 * 4.0, vec3f(0.0));
+  let l = dot(c, LUMA);
+  // shadows towards teal (the film's blue-black space)
+  let sh = 1.0 - smoothstep(0.0, 0.2, l);
+  c = max(c + vec3f(-0.003, 0.002, 0.01) * sh, vec3f(0.0));
+  // mid-tones more saturated (the orange strands); the highlights lose it in the curve
+  let mid = smoothstep(0.01, 0.25, l) * (1.0 - smoothstep(0.8, 4.0, l));
+  let l2 = dot(c, LUMA);
+  c = max(vec3f(l2) + (1.0 + 0.3 * mid) * (c - vec3f(l2)), vec3f(0.0));
+  // (the mid-tones towards orange-red: the green and blue held back, else the roll-off turns them gold)
+  return c * mix(vec3f(1.0), vec3f(1.0, 0.86, 0.72), mid);
+}
+// Its curve (SDR): each channel rolls off on its own, as a film's dye layers — the red saturates
+// first, orange turns yellow then white — to a warm cream at the top, with a gentle S for contrast.
+fn film(c: vec3f) -> vec3f {
+  let x = filmGrade(c);
+  let W = 5.0;
+  var v = x * (1.0 + x / (W * W)) / (1.0 + x);
+  v = clamp(v, vec3f(0.0), vec3f(1.0));
+  // (a hard toe: only the brightest burns out, the lanes and space stay deep)
+  v = pow(v, vec3f(1.45));
+  v = mix(v, v * v * (3.0 - 2.0 * v), 0.4);
+  let m = max(v.r, max(v.g, v.b));
+  v = mix(v, vec3f(1.0, 0.96, 0.87) * m, 0.5 * smoothstep(0.8, 1.0, m));
+  // (back to display-linear: the curve above is in display space)
+  return pow(v, vec3f(2.2));
+}
+
+// The same on an extended-range display: the SDR curve (its toe keeps the lanes and space deep), and
+// what burns out there — the disk's heart — lifted above SDR white towards the peak.
+fn filmHdr(c: vec3f, peak: f32) -> vec3f {
+  let v = film(c);
+  let m = max(v.r, max(v.g, v.b));
+  let k = smoothstep(0.8, 1.0, m);
+  return v * (1.0 + (max(0.6 * peak, 1.0) - 1.0) * k * k);
+}
+
 fn srgbToLinear(c: vec3f) -> vec3f {
   return select(pow((c + 0.055) / 1.055, vec3f(2.4)), c / 12.92, c <= vec3f(0.04045));
 }
@@ -156,16 +198,18 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
-    c = mix(c, b, D.flags.y);
-    c *= D.size.z;
     let tm = u32(D.size.w);
+    // (the film: the bloom a strong haze added over the sharp image — the camera's veiling glare —
+    // rather than the eye's energy-conserving spread)
+    if (tm == 4u) { c = c * (1.0 - 0.3 * D.flags.y) + b * (2.5 * D.flags.y); } else { c = mix(c, b, D.flags.y); }
+    c *= D.size.z;
     if (D.img.w > 0.5) {
       // radio brightness temperature on the "afmhot" scale of EHT images (linear, exposure = peak)
       let t = clamp(c.g, 0.0, 1.0);
       c = srgbToLinear(clamp(vec3f(2.0 * t, 2.0 * t - 0.5, 2.0 * t - 1.0), vec3f(0.0), vec3f(1.0)));
     } else if (D.hdr.x > 0.5) {
-      if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
-    } else if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); }
+      if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else if (tm == 4u) { c = filmHdr(c, D.hdr.y); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
+    } else if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
   }
   // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
   c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));

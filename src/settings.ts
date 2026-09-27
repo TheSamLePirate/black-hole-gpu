@@ -18,7 +18,7 @@ export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | 
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
-export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp";
+export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp" | "Film";
 export type Quality = "low" | "medium" | "high" | "ultra" | "realtime" | "game";
 
 /** Integration / sampling budgets per quality level. */
@@ -411,11 +411,11 @@ export const presets: Record<string, Preset> = {
     diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0.02, diskTau: 6, jet: false,
   },
   // the film's close pass along the disk (the reference view for its look): the lensed far side rising
-  // as a wall of strands beside the shadow, the near side below
+  // as a wall of strands beside the shadow, the near side below — in the film's grade
   "Interstellar: along the disk (the film's close pass)": {
     spin: 0.6, distance: 17.353, inclination: 84.456, azimuth: 40.467, fov: 45, yaw: 31.427, pitch: 6.397, roll: -4.302,
     motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
-    diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84,
+    diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84, tonemap: "Film", bloom: 0.5,
   },
   // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
   "Ranger: approaching Gargantua": {
