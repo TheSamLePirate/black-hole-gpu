@@ -11,7 +11,8 @@ export type PlanRequest =
   | { id: number; kind: "orbit"; X: Vec3; V: Vec3; t: number; altM: number; o: PlanOptions }
   | { id: number; kind: "refine"; X: Vec3; V: Vec3; t: number; mission: OurMission; node: PlanNode; o: PlanOptions }
   | { id: number; kind: "predict"; X: Vec3; V: Vec3; t: number; mouthR: number }
-  | { id: number; kind: "extend"; X: Vec3; V: Vec3; t: number; ref: string; horizon: number };
+  | { id: number; kind: "extend"; X: Vec3; V: Vec3; t: number; ref: string; horizon: number }
+  | { id: number; kind: "predictPlan"; X: Vec3; V: Vec3; t: number; nodes: { t: number; dv: Vec3 }[]; mouthR: number; accel: number };
 
 export function runPlan(q: PlanRequest) {
   if (q.kind === "transfer") return planOurTransfer(q.X, q.V, q.t, q.goal, q.o);
@@ -20,6 +21,8 @@ export function runPlan(q: PlanRequest) {
   if (q.kind === "predict") return predictOurs(q.X, q.V, q.t, [], { mouthR: q.mouthR });
   // (the map's preview beyond the predictions: patched conics)
   if (q.kind === "extend") return extendFrom(q.X, q.V, q.t, q.ref, q.horizon);
+  // (hand-made nodes: the path through them, far — a turn of the orbit after the last burn)
+  if (q.kind === "predictPlan") return predictOurs(q.X, q.V, q.t, q.nodes, { mouthR: q.mouthR, accel: q.accel, maxSteps: 12000 });
   return { node: refineOurNode(q.X, q.V, q.t, q.mission, q.node, q.o) };
 }
 

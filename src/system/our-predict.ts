@@ -171,7 +171,11 @@ export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [
     }
     if (burn) {
       burn.left -= acc * dt;
-      if (burn.left <= 1e-15) burn = null;
+      if (burn.left <= 1e-15) {
+        burn = null;
+        // (the burn done: a turn of the orbit it gave — at its start, the old orbit's was taken)
+        if (!fixed) tEnd = Math.max(tEnd, Math.min(t + horizon(), t0 + 1.3e5));
+      }
     }
     if (next && t >= startOf(next) - 1e-9) {
       const size = Math.hypot(...next.dv);

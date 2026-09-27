@@ -42,6 +42,10 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
 - The marks: manoeuvre nodes (blue), the closest approach to the target (orange), entering another
   body's sphere of influence (violet), periapsis / apoapsis, the arrival, an impact or the horizon
   (red) — a click jumps there, the handle snaps to a mark within 6 px.
+- Hand-made nodes: the path through them (n-body) reaches a turn of the orbit after the last burn —
+  days to the Moon and back — computed in the planner's worker and kept while the nodes stay as
+  they are (refreshed every 2 s); a node just made or pulled first shows a short path (to the last
+  node and half an hour on), continued by the conics until the far one comes (well under a second).
 - Beyond the prediction (our side): **patched Kepler conics** from the path's end (`src/system/our-extend.ts`,
   `src/game/kepler.ts` — universal variables): a conic around the body of the sphere of influence;
   entering a moon's or a planet's sphere, a conic around it; leaving, around its primary; stopped at a

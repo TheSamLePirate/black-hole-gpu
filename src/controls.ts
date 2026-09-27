@@ -2141,11 +2141,40 @@ export class CameraController {
         this.ourPlan = this.ourPlanned;
         return (P.path = null);
       }
-      // (a mission: the flight's own step — the display's path is the one flown)
-      const span = m ? { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 6000, step: 0.025 } : { maxSteps: 3000 };
-      const t0 = performance.now();
-      this.ourPlan = predictOurs(nav.X, nav.V, nav.t, nodes.map((n) => ({ t: n.t, dv: n.dv })), { mouthR: mouth(this.s).w.rho, accel: this.thrustMax(), ...span });
-      this.planCost = performance.now() - t0;
+      const mouthR = mouth(this.s).w.rho, accel = this.thrustMax();
+      const list = nodes.map((n) => ({ t: n.t, dv: n.dv }));
+      if (m) {
+        // (a mission: the flight's own step — the display's path is the one flown)
+        const span = { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 6000, step: 0.025 };
+        const t0 = performance.now();
+        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, ...span });
+        this.planCost = performance.now() - t0;
+        return (P.path = null);
+      }
+      // hand-made nodes: the far path (a turn of the orbit after the last burn — days to the Moon)
+      // in the planner's worker, kept while the nodes stay as they are; meanwhile — a node just made
+      // or pulled — a short one here, to the last node and half an hour on (the map continues it
+      // with conics until the far one comes)
+      const key = JSON.stringify(list);
+      const far = this.farPlan;
+      if (far && far.key === key) this.ourPlan = far.path;
+      else {
+        const t0 = performance.now();
+        const last = list[list.length - 1]!.t;
+        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, tMax: Math.max(last - nav.t, 0) + 1800 / 492.5490947, maxSteps: 3000 });
+        this.planCost = performance.now() - t0;
+      }
+      if (!this.farBusy && (!far || far.key !== key || now - far.at > 2000)) {
+        this.farBusy = true;
+        runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes: list, mouthR, accel })
+          .then((path) => {
+            if (!path || (path as unknown as { error?: string }).error) return;
+            this.farPlan = { key, path, at: performance.now() };
+            // (still these nodes: shown at once)
+            if (this.plan.nodes.length && JSON.stringify(this.plan.nodes.filter((n) => n.t > path.times[0]! - 1e-6).map((n) => ({ t: n.t, dv: n.dv }))) === key) this.ourPlan = path;
+          })
+          .finally(() => (this.farBusy = false));
+      }
       return (P.path = null);
     }
     this.ourPlan = null;
@@ -2900,6 +2929,9 @@ export class CameraController {
   planBusy = false;
   /** what the last live prediction of the plan cost [ms] (it is refreshed less often when dear) */
   private planCost = 0;
+  /** hand-made nodes' far path (from the planner's worker): for which nodes, when; a request in flight */
+  private farPlan: { key: string; path: OurPath; at: number } | null = null;
+  private farBusy = false;
   /** the planner's own path, shown while the first burn is further than the map's prediction reaches */
   private ourPlanned: OurPath | null = null;
   /** per node: the last re-aim (scene time), how many, one under way */

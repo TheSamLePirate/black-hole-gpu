@@ -52,3 +52,20 @@ test("patched conics: a ship aimed past the Moon enters its sphere, passes low, 
   expect(pe!.alt / km).toBeLessThan(5000);
   for (let j = 1; j < e.times.length; j++) expect(e.times[j]!).toBeGreaterThanOrEqual(e.times[j - 1]!);
 });
+
+import { predictOurs } from "../src/system/our-predict";
+
+test("a hand-made node flown as a finite burn: the path goes on for a turn of the orbit it gives (days), not the old one's", () => {
+  const t = 109.6;
+  const E = solarState("earth", t);
+  // a circular 400 km orbit (in the ecliptic, about the Earth)
+  const km = 1 / 1.476625e8;
+  const r = 6771 * km, v = 7.6686 / 299792.458;
+  const X = [E.pos[0] + r, E.pos[1], E.pos[2]] as [number, number, number];
+  const V = [E.vel[0], E.vel[1] + v, E.vel[2]] as [number, number, number];
+  const accel = (2 * 9.80665 * 1.476625e11) / 299792458 ** 2; // 2 g [c²/M]
+  const node = { t: t + 11, dv: [3.1 / 299792.458, 0, 0] as [number, number, number] };
+  const p = predictOurs(X, V, t, [node], { accel, maxSteps: 12000 });
+  const hours = ((p.times[p.times.length - 1]! - t) * 492.5490947) / 3600;
+  expect(hours).toBeGreaterThan(100);
+});
