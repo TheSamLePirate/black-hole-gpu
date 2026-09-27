@@ -974,7 +974,7 @@ export class SettingsPanel {
         ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
         ["8 · 9 · 0 · G · U", "Autopilot: hold position · circularize · approach · land · take off"],
         [", · . · /", "Time warp slower · faster · real time"],
-        ["M · ⇧M", "Map view (click a body: target · drag · wheel) · settings panel"],
+        ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
         ["V · ⇧V", "Camera: next · previous attach point (the view travels there)"],
         ["²  (`)", "HUD density: full · minimal · clean view"],
         ["O", "Flight planner: align the orbital plane · transfer · rendezvous · through the wormhole · nodes, then EXECUTE"],
