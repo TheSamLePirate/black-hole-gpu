@@ -30,6 +30,7 @@ import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
+import { VideoWriter } from "./video";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -691,6 +692,42 @@ async function main() {
     await snapshot(`${name}.png`);
     return `${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s`;
   };
+  /**
+   * Automation: a video of the current view — offline frames at the scene's time advancing by `rate` M
+   * per second of video (the camera still), H.264 in an MP4 saved through the dev server
+   * (snapshots/<name>.mp4). Progress in __bh.videoState.
+   * __bh.video("pass", { seconds: 10, fps: 30, rate: 8, width: 1920, height: 1080, spp: 24 })
+   */
+  const videoState = { frame: 0, frames: 0, started: 0, done: false, result: "" };
+  const video = async (name: string, o: Partial<OfflineOptions> & { seconds?: number; fps?: number; rate?: number } = {}) => {
+    const { seconds = 10, fps = 30, rate = settings.timeSpeed, ...off } = o;
+    const opts: OfflineOptions = {
+      width: 1920, height: 1080, spp: 24, tolerance: 1e-5, eps: 0.03, maxSteps: 6000, noiseThreshold: 0.01,
+      minSpp: 8, shutter: 0, budgetMs: 250, ...off,
+    };
+    opts.width &= ~1;
+    opts.height &= ~1;
+    const cfg = await VideoWriter.supported(opts.width, opts.height, fps);
+    if (!cfg) return (videoState.result = `H.264 at ${opts.width}×${opts.height} not supported`);
+    const writer = new VideoWriter(cfg, fps);
+    renderer.cancelOffline();
+    const t0 = simTime;
+    Object.assign(videoState, { frame: 0, frames: Math.round(seconds * fps), started: performance.now(), done: false, result: "" });
+    for (let i = 0; i < videoState.frames; i++) {
+      renderer.startOffline(settings, t0 + (i / fps) * rate, opts);
+      while (!renderer.offlineState?.done) {
+        await new Promise((r) => setTimeout(r, 20));
+        if (!renderer.offlineActive) return (videoState.result = "cancelled");
+      }
+      const px = await renderer.exportRGBA(settings);
+      await writer.addFrame(px.data, px.width, px.height);
+      videoState.frame = i + 1;
+    }
+    await fetch(`/__snapshot?name=${encodeURIComponent(name)}.mp4`, { method: "POST", body: await writer.finish() });
+    renderer.cancelOffline();
+    videoState.done = true;
+    return (videoState.result = `${name}.mp4: ${videoState.frames} frames in ${((performance.now() - videoState.started) / 1000).toFixed(0)} s`);
+  };
   // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
   const tools = new GameTools({
     settings, camera, renderer,
@@ -722,7 +759,7 @@ async function main() {
     __bh: {
       /** the game's tools: __bh.game.help() */
       game: tools,
-      settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
+      settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
       sound, audio,
       /** the built-in scenes' names (for __bh.preset) */
