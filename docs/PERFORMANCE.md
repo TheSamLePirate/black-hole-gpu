@@ -72,6 +72,19 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
   per-pixel branches (skipping sub-pixel noise octaves, the shadow on faces away from the light, the
   relief on smooth parts) — each measured *slower* than the arithmetic it skipped on this GPU; no
   anisotropic filtering on the reflections — no effect. What is left is mostly fixed (the MSAA raster).
+- **Fewer MSAA samples for a small ship** — measured, not adopted. With the frame loop stopped and the
+  ship's passes alone (image 1039 × 724, the ship shrunk with the field of view), per draw:
+
+  | ship on screen | 4× | 1× |
+  |---|---|---|
+  | 631 × 274 px | 1.31 ms | 1.15 ms |
+  | 309 × 136 px | 1.64 ms | 1.36 ms |
+  | 137 × 62 px | 1.62 ms | 1.21 ms |
+  | 54 × 26 px | 1.11 ms | 1.03 ms |
+
+  The cost hardly follows the ship's size or its samples: an empty clear-only pass or a 128 × 128 copy
+  measures the same ~0.9 ms there — a per-pass floor. A small ship costs next to nothing above it, so
+  one sample would save ~0.1 ms and make its edges shimmer. (WebGPU offers 1 or 4 samples only.)
 - **Ranger probe rays** are ~20× dearer than the image's (long, divergent) — fewer, rarer runs rather
   than cheaper rays.
 - **The planner's worker** also runs the free-fall prediction: during a long re-aim the map's path
