@@ -69,3 +69,25 @@ test("a hand-made node flown as a finite burn: the path goes on for a turn of th
   const hours = ((p.times[p.times.length - 1]! - t) * 492.5490947) / 3600;
   expect(hours).toBeGreaterThan(100);
 });
+
+import { extendTheirs } from "../src/system/their-extend";
+import { defaultSettings, presets } from "../src/settings";
+import { bodyHill, bodyVelocity, bodyCentre } from "../src/targeting";
+
+test("Gargantua's side: conics around the hole enter Miller's Hill sphere and pass low", () => {
+  const s = { ...defaultSettings(), ...presets["Gargantua system (10⁸ M☉, a* = 0.998)"] } as ReturnType<typeof defaultSettings>;
+  const t = 50;
+  const M = bodyCentre(s, "miller", t) as [number, number, number];
+  const Vm = bodyVelocity(s, "miller", t);
+  const hill = bodyHill(s, "miller", t);
+  // 3 Hill radii from Miller, falling towards it (plus its orbital motion), aimed a little off
+  const r = Math.hypot(...M);
+  const u = M.map((x) => x / r) as [number, number, number];
+  const side: [number, number, number] = [-u[1], u[0], 0];
+  const X = M.map((x, k) => x + u[k]! * 3 * hill + side[k]! * 0.05 * hill) as [number, number, number];
+  const V = Vm.map((x, k) => x - u[k]! * 0.002) as [number, number, number];
+  const e = extendTheirs(s, X, V, t, 100);
+  expect(e.refs).toContain("miller");
+  const pe = e.apsides.find((a) => a.body === "miller");
+  expect(pe === undefined ? e.fate === "impact" && e.hit === "miller" : pe.alt < hill).toBe(true);
+});

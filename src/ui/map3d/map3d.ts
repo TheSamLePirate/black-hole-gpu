@@ -21,6 +21,7 @@ import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 
 import { bodyPosAt, dateOf, lineage, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
+import { extendTheirs } from "../../system/their-extend";
 import { plan as planJob } from "../../system/plan-client";
 
 export interface MapHost {
@@ -123,6 +124,8 @@ export class Map3D {
   private ext: Extension | null = null;
   private extSrc: OurPath | null = null;
   private extBusy = false;
+  /** Gargantua's side: the conics (computed here — a few analytic orbits), where the path they continue ended, when */
+  private theirExt: { ext: Extension; end: number; X: V3; at: number } | null = null;
   // the warp of the log scale: its centre (the camera's focus) and its scale length
   private log = false;
   private W: V3 = [0, 0, 0];
@@ -232,15 +235,49 @@ export class Map3D {
     if (!m) this.pathMemo.set(e, (m = new Map()));
     const key = `ca:${id}`;
     if (!m.has(key)) {
+      // (our side: the home frame; Gargantua's: the hole's flat map)
+      const ours = this.universe === "ours";
+      const at = (t: number): V3 => (ours ? solarState(id, t).pos : (bodyCentre(this.host.s, id as Body, t) as V3));
       let best: { i: number; d: number } | null = null;
       for (let j = 0; j < e.pts.length; j++) {
-        const d = len(sub(e.pts[j]!, solarState(id, e.times[j]!).pos));
+        const d = len(sub(e.pts[j]!, at(e.times[j]!)));
         if (!best || d < best.d) best = { i: j, d };
       }
       // (not at its very start: an approach, not where the path left it)
       m.set(key, best && best.i > 1 ? best : null);
     }
     return m.get(key) as { i: number; d: number } | null;
+  }
+
+  /**
+   * Gargantua's side: the conics beyond the prediction (the plan's path once it has nodes, else the
+   * free fall) — computed again when that path's end has moved, at most twice a second, at once when it
+   * has jumped (a node pulled).
+   */
+  private theirExtension(i: Info, t0: number): Extension | null {
+    const pp = i.plan?.path;
+    let pts: V3[], times: number[], fate: string;
+    if (pp && pp.pts.length > 1 && i.plan!.nodes.length) (pts = pp.pts), (times = pp.times), (fate = pp.fate);
+    else if (i.path && i.path.pts.length > 1) {
+      const p = i.path;
+      (pts = p.pts), (times = p.pts.map((_, j) => t0 + (j + 1) * p.dt)), (fate = p.fate);
+    } else return null;
+    if (fate !== "continues" && fate !== "escape") return null;
+    const n = pts.length - 1;
+    const end = times[n]!, X = pts[n]!;
+    const V = scale(sub(X, pts[n - 1]!), 1 / Math.max(end - times[n - 1]!, 1e-9));
+    const cur = this.theirExt;
+    const now = performance.now();
+    const jumped = !cur || len(sub(cur.X, X)) > 0.02 * Math.max(len(X), 1) || Math.abs(cur.end - end) > 0.05 * Math.max(end - t0, 1);
+    if (jumped || (now - cur!.at > 500 && cur!.end !== end)) {
+      this.theirExt = { ext: extendTheirs(this.host.s, X, V, end, end - t0), end, X, at: now };
+    }
+    return this.theirExt!.ext;
+  }
+
+  /** The conics beyond the prediction, either side. */
+  private extFor(i: Info, t0: number, ours: boolean): Extension | null {
+    return ours ? this.extension(i) : this.theirExtension(i, t0);
   }
 
   /** The timeline's automatic span: how far the predicted paths reach (at least an hour). */
@@ -255,9 +292,9 @@ export class Map3D {
     }
     for (const n of i.plan?.nodes ?? []) end = Math.max(end, n.t);
     // (beyond: up to the encounter with the target along the conics, when there is one)
-    const e = ours ? this.extension(i) : null;
+    const e = this.extFor(i, t0, ours);
     const sc = this.scene;
-    if (e && sc?.byId.has(i.target) && i.target !== i.ref) {
+    if (e && sc?.byId.has(i.target) && i.target !== i.ref && i.target !== "hole") {
       const ca = this.extClosest(e, i.target);
       const tb = sc.byId.get(i.target)!;
       if (ca && (ca.d < 3 * tb.soi || e.refs.includes(i.target))) end = Math.max(end, e.times[ca.i]! + 0.15 * (e.times[ca.i]! - t0));
@@ -327,6 +364,19 @@ export class Map3D {
       if (ca && ca.t > 0) out.push({ t: t0 + ca.t, kind: "ca", label: `Closest approach · ${BODY_NAMES[i.target as Target] ?? i.target}` });
       const p = i.path;
       if (p && (p.fate === "horizon" || p.fate === "star")) out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? "The horizon" : "Into the star" });
+      const e = this.theirExtension(i, t0);
+      if (e) {
+        const name = (id: string) => sc.byId.get(id)?.name ?? BODY_NAMES[id as Target] ?? id;
+        for (let j = 1; j < e.refs.length; j++) {
+          if (e.refs[j] !== e.refs[j - 1]) out.push({ t: e.times[j]!, kind: "soi", label: e.refs[j] === "hole" ? `Out of ${name(e.refs[j - 1]!)}'s Hill sphere (conics)` : `${name(e.refs[j]!)}'s Hill sphere (conics)` });
+        }
+        for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis${a.body === "hole" ? "" : ` at ${name(a.body)}`} (conics)` });
+        if (sc.byId.has(i.target) && i.target !== "hole") {
+          const ca = this.extClosest(e, i.target);
+          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${name(i.target)} (conics)` });
+        }
+        if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: e.hit === "hole" ? "The horizon (conics)" : `Impact · ${name(e.hit ?? "")} (conics)` });
+      }
     }
     return out.filter((m) => m.t > t0);
   }
@@ -404,12 +454,16 @@ export class Map3D {
       pts = [i.X!, ...i.path.pts];
       times = pts.map((_, j) => t0 + j * i.path!.dt);
     } else return null;
+    // (past the prediction: along the conics)
+    const e = this.theirExtension(i, t0);
+    const onConics = !!e && e.times.length > 1 && tp > times[times.length - 1]!;
+    if (onConics) (pts = e!.pts), (times = e!.times);
     const { j, f, beyond } = find(times);
     const k = Math.min(j + 1, pts.length - 1);
     const X = lerp(pts[j]!, pts[k]!, f);
     const dT = Math.max(times[k]! - times[j]!, 1e-9);
-    const V = scale(sub(pts[k]!, pts[j]!), 1 / dT);
-    return { X: sub(X, sc.origin(tp)), V, ref: null, beyond };
+    const V = onConics ? lerp(e!.vels[j]!, e!.vels[k]!, f) : scale(sub(pts[k]!, pts[j]!), 1 / dT);
+    return { X: sub(X, sc.origin(tp)), V, ref: null, beyond, conics: onConics };
   }
 
   // ------------------------------------------------------------------------------------ the bar
@@ -1750,6 +1804,39 @@ export class Map3D {
         const p = P(at(path.pts[j]!, t));
         if (p.ok) this.pathHits.push({ x: p.x, y: p.y, t });
       }
+    }
+    // beyond the prediction: the conics (faint, dotted), their periapsides, the horizon or a body hit
+    const ext = this.theirExtension(i, t0);
+    if (ext && ext.pts.length > 1) {
+      const pts = ext.pts.map((q, j) => at(q, ext.times[j]!));
+      line(pts, "170, 205, 255", 0.6, 1.3, [2, 4]);
+      for (let j = 0; j < pts.length; j += Math.max(1, Math.floor(pts.length / 300))) {
+        const p = P(pts[j]!);
+        if (p.ok) this.pathHits.push({ x: p.x, y: p.y, t: ext.times[j]! });
+      }
+      for (const a of ext.apsides) {
+        const p = P(pts[a.i]!);
+        if (!p.ok) continue;
+        const who = a.body === "hole" ? "" : `${sc.byId.get(a.body)?.name ?? a.body} `;
+        labels.push({ text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? sc.hole?.rH ?? 0 : 0), s)}${a.body === "hole" ? " (r)" : ""}`, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "184, 212, 255", prio: 3, size: 9, weight: 600 });
+        ctx.fillStyle = "#b8d4ff";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.4 * dpr, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      if (ext.fate === "impact") {
+        const p = P(pts[pts.length - 1]!);
+        if (p.ok) {
+          ctx.strokeStyle = RED;
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(p.x - 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x + 4 * dpr, p.y + 4 * dpr);
+          ctx.moveTo(p.x + 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x - 4 * dpr, p.y + 4 * dpr);
+          ctx.stroke();
+        }
+      }
+      const q0 = P(pts[0]!);
+      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600 });
     }
     // the flight plan: its path through the nodes, the nodes
     if (i.plan?.path && i.plan.path.pts.length > 1) {

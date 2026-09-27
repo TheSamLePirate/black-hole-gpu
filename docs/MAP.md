@@ -54,6 +54,14 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
   (~20 ms, a few times a second at most, the frame loop untouched). A picture, not the flight: near the
   edge of a sphere of influence patched conics are sensitive (an apogee at the Earth's sphere may or
   may not meet the Moon on the way back); the planner's n-body paths stay the reference.
+- Gargantua's side: the same, beyond the geodesic prediction (the plan's path once it has nodes, else
+  the free fall): Newtonian conics around Gargantua (GM = 1 M, stopped at its horizon), patched into
+  the Hill spheres of Miller, Mann, Edmunds' star and Edmunds, and of a massive companion star
+  (`src/system/their-extend.ts`; the engine is shared: `src/system/patched.ts`). Their periapsides
+  (r around the hole), the spheres entered, the closest approach to the target, the horizon hit.
+  Computed here (~4 ms, twice a second at most). Far from the hole a fair sketch; within ~20 M,
+  Kerr's orbits precess and plunge where a conic would not — the geodesic prediction stays the
+  reference. The steps never stride over a sphere (Miller's Hill sphere is ~41 000 km).
 - ▶ plays it (the span in 8 s); **Now** comes back; the wheel on the track makes the span longer or
   shorter (automatic: as far as the predicted paths reach, or to the encounter with the target along
   the conics). The label: the date and T+.
