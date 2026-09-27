@@ -57,8 +57,12 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
 
 - **display (4–10 ms)**: a trivial shader; its time is mostly the wait for the canvas' drawable and
   scales with the pixels (EDR/HDR canvas). The lever is the render scale.
-- **Ranger MSAA (1.5–2.7 ms)**: 4× MSAA over the whole screen (clear + resolve) for a ship that covers
-  a part of it — a bbox-sized target would save about half.
+- **Ranger MSAA (1.5–2.7 ms)**: now drawn in targets the size of the ship's screen box (the mesh's box
+  corners projected, rounded up by 128 px: 27–33 % of the image in the chase view), copied into its
+  image. Measured A/B in the chase view: 3.9 vs 4.4 ms, within the noise — the pass is the shading of
+  the ship's own pixels (GGX reflections, 12-tap shadow PCF, procedural plating), not the full-screen
+  clear and resolve. The gain is memory: ~144 MB of 4× targets at 2078 × 1448 → ~39 MB. The lever left
+  is the ship's fragment shader.
 - **Ranger probe rays** are ~20× dearer than the image's (long, divergent) — fewer, rarer runs rather
   than cheaper rays.
 - **The planner's worker** also runs the free-fall prediction: during a long re-aim the map's path

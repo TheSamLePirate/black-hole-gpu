@@ -47,10 +47,12 @@ const STRIDE = 8 * 4; // position, normal, material, ambient occlusion
 interface ShipTargetRes {
   w: number;
   h: number;
-  color: GPUTexture; // MSAA
-  depth: GPUTexture;
-  /** the ship, resolved (premultiplied): the display composites it over the traced image */
+  /** the ship over the whole image (premultiplied), only its box written: the display reads that box */
   resolved: GPUTexture;
+  /** the MSAA targets and their resolve, the size of the ship's box (rounded up by 128 px) */
+  box: { w: number; h: number; color: GPUTexture; depth: GPUTexture; small: GPUTexture } | null;
+  /** where the box was drawn in the image [x, y, w, h] */
+  rect: [number, number, number, number];
 }
 
 export class ShipRenderer {
@@ -66,7 +68,7 @@ export class ShipRenderer {
   private vbuf: GPUBuffer | null = null;
   private ibuf: GPUBuffer | null = null;
   private count = 0;
-  private bound = { c: [0, 0, 0] as V3, r: 1 };
+  private bound = { c: [0, 0, 0] as V3, r: 1, lo: [-1, -1, -1] as V3, hi: [1, 1, 1] as V3 };
   private shadowTex: GPUTexture;
   private pipes!: {
     copy: GPUComputePipeline;
@@ -83,15 +85,22 @@ export class ShipRenderer {
   private targets = new WeakMap<GPUTexture, ShipTargetRes>();
 
   /** the ship's bounding sphere in the camera frame and the projection's half-extents (the scissor) */
-  private onScreen: { c: V3; r: number; tx: number; ty: number } | null = null;
+  private onScreen: { c: V3; r: number; tx: number; ty: number; corners: V3[] } | null = null;
 
   /** The pixels the ship can cover on a w × h target: [x, y, w, h] (the whole target when the camera is inside its sphere). */
   private scissor(w: number, h: number): [number, number, number, number] {
     const o = this.onScreen;
-    if (!o || o.c[2] - o.r < 0.06) return [0, 0, w, h];
-    const z = o.c[2] - o.r; // (the nearest depth: a conservative box)
-    const x0 = (o.c[0] - o.r) / (z * o.tx), x1 = (o.c[0] + o.r) / (z * o.tx);
-    const y0 = (o.c[1] - o.r) / (z * o.ty), y1 = (o.c[1] + o.r) / (z * o.ty);
+    // (the mesh's box projected: a corner at or behind the near plane — the camera in or at the
+    // ship — the whole image)
+    if (!o || o.corners.some((q) => q[2] < 0.06)) return [0, 0, w, h];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const q of o.corners) {
+      const nx = q[0] / (q[2] * o.tx), ny = q[1] / (q[2] * o.ty);
+      x0 = Math.min(x0, nx), x1 = Math.max(x1, nx), y0 = Math.min(y0, ny), y1 = Math.max(y1, ny);
+    }
+    // (a pixel of margin for the MSAA footprint)
+    const mx = 4 / w, my = 4 / h;
+    x0 -= mx, x1 += mx, y0 -= my, y1 += my;
     const px = (n: number) => Math.min(w, Math.max(0, Math.floor(((n + 1) / 2) * w)));
     const py = (n: number) => Math.min(h, Math.max(0, Math.floor(((1 - n) / 2) * h)));
     const X0 = px(Math.min(x0, x1)) , X1 = Math.min(w, px(Math.max(x0, x1)) + 2);
@@ -118,7 +127,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.shadowTex = d.createTexture({
       size: [SHADOW, SHADOW], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -189,6 +198,8 @@ export class ShipRenderer {
     const hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
     this.bound.c = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
     this.bound.r = Math.hypot(...sub(hi, lo)) / 2;
+    this.bound.lo = lo;
+    this.bound.hi = hi;
     const verts = new Float32Array(mesh, 40, nv * 8);
     const idx = new Uint32Array(mesh, 40 + nv * STRIDE, ni);
     this.vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -291,7 +302,7 @@ export class ShipRenderer {
   private writeUniform(v: ShipView) {
     const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
     // column-major mat4: columns = images of the ship's x, y, z axes, then the translation
-    const m = new Float32Array(48);
+    const m = new Float32Array(52);
     for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = R[r]![c]!;
     m.set([...t, 1], 12);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
@@ -299,38 +310,70 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
-    this.onScreen = { c: [c[0] + t[0], c[1] + t[1], c[2] + t[2]], r: this.bound.r * 1.02, tx: tanH * v.aspect, ty: tanH };
+    // (the mesh's box corners in the camera frame: the screen box)
+    const corners: V3[] = [];
+    for (let k = 0; k < 8; k++) {
+      const q: V3 = [k & 1 ? this.bound.hi[0] : this.bound.lo[0], k & 2 ? this.bound.hi[1] : this.bound.lo[1], k & 4 ? this.bound.hi[2] : this.bound.lo[2]];
+      corners.push([dot(R[0]!, q) + t[0], dot(R[1]!, q) + t[1], dot(R[2]!, q) + t[2]]);
+    }
+    this.onScreen = { c: [c[0] + t[0], c[1] + t[1], c[2] + t[2]], r: this.bound.r * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
     ax.forEach((a, i) => m.set([...a, 0], 36 + 4 * i));
+    m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
     this.device.queue.writeBuffer(this.uniform, 0, m);
   }
 
   /** The ship's own images for an HDR target (its size): created on first use. */
   target(hdr: GPUTexture): ShipTargetRes {
-    const d = this.device;
     let res = this.targets.get(hdr);
     if (!res || res.w !== hdr.width || res.h !== hdr.height) {
-      const size = [hdr.width, hdr.height];
-      const color = d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-      const depth = d.createTexture({ size, format: "depth24plus", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-      const resolved = d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-      res = { w: hdr.width, h: hdr.height, color, depth, resolved };
+      if (res) this.forget(hdr);
+      const resolved = this.device.createTexture({
+        size: [hdr.width, hdr.height], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      res = { w: hdr.width, h: hdr.height, resolved, box: null, rect: [0, 0, 0, 0] };
       this.targets.set(hdr, res);
     }
     return res;
   }
 
+  /** Where the ship was drawn last in this target's image: [x, y, w, h] (for the display). */
+  rectFor(hdr: GPUTexture): [number, number, number, number] {
+    return this.targets.get(hdr)?.rect ?? [0, 0, 0, 0];
+  }
+
   /**
-   * Draws the ship for an HDR target: shadow map, MSAA shading resolved into its own image, which the
-   * display composites over the traced one (a full-screen composite pass here cost ~5 ms a frame on a
-   * tiled GPU, whatever its scissor).
+   * Draws the ship for an HDR target: the shadow map; the shading with 4× MSAA in targets the size of
+   * its box on screen (its bounding sphere's, rounded up by 128 px: a chase view's ship covers a
+   * fraction of the image — the whole-screen MSAA clear and resolve cost as much as the drawing),
+   * resolved and copied into its image, which the display composites over the traced one.
    */
   encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView) {
     if (!this.ready) return;
     const res = this.target(hdr);
     this.writeUniform(v);
+    // the box: the sphere's screen box within the image, its size rounded up (few re-allocations)
+    const W = hdr.width, H = hdr.height;
+    const sc = this.scissor(W, H);
+    const up = (x: number, max: number) => Math.min(max, Math.max(128, Math.ceil(x / 128) * 128));
+    const bw = up(sc[2], W), bh = up(sc[3], H);
+    const x0 = Math.min(Math.max(sc[0], 0), W - bw), y0 = Math.min(Math.max(sc[1], 0), H - bh);
+    if (!res.box || res.box.w !== bw || res.box.h !== bh) {
+      const old = res.box;
+      if (old) this.device.queue.onSubmittedWorkDone().then(() => [old.color, old.depth, old.small].forEach((t) => t.destroy()));
+      const d = this.device, size = [bw, bh];
+      res.box = {
+        w: bw, h: bh,
+        color: d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
+        depth: d.createTexture({ size, format: "depth24plus", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
+        small: d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC }),
+      };
+    }
+    // (the box's ndc: centre and scale of the full image's ndc; y up, pixels down)
+    this.device.queue.writeBuffer(this.uniform, 192, new Float32Array([(2 * x0 + bw) / W - 1, 1 - (2 * y0 + bh) / H, W / bw, H / bh]));
+    res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
     if (this.shadowTick++ % 2 === 0) {
       const sp = enc.beginRenderPass(this.pass("ship: shadow map", {
@@ -344,27 +387,26 @@ export class ShipRenderer {
       sp.drawIndexed(this.count);
       sp.end();
     }
+    const b = res.box;
     const rp = enc.beginRenderPass(this.pass("ship: shading (MSAA)", {
-      colorAttachments: [{ view: res.color.createView(), resolveTarget: res.resolved.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
-      depthStencilAttachment: { view: res.depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
+      colorAttachments: [{ view: b.color.createView(), resolveTarget: b.small.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
+      depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
     }));
-    const sc = this.scissor(hdr.width, hdr.height);
-    rp.setScissorRect(...sc);
     rp.setPipeline(this.pipes.ship);
     rp.setBindGroup(0, this.shipBind!);
     rp.setVertexBuffer(0, this.vbuf!);
     rp.setIndexBuffer(this.ibuf!, "uint32");
     rp.drawIndexed(this.count);
     rp.end();
+    enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);
   }
 
   /** Frees the per-target buffers of a destroyed HDR texture. */
   forget(hdr: GPUTexture) {
     const r = this.targets.get(hdr);
     if (!r) return;
-    r.color.destroy();
-    r.depth.destroy();
     r.resolved.destroy();
+    if (r.box) [r.box.color, r.box.depth, r.box.small].forEach((t) => t.destroy());
     this.targets.delete(hdr);
   }
 }

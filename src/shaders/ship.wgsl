@@ -30,6 +30,8 @@ struct Ship {
   probeX: vec4f,
   probeY: vec4f,
   probeZ: vec4f,
+  // the rectangle of the image drawn (the ship's box: its MSAA targets are that small): ndc centre, scale
+  view: vec4f,
 };
 
 const ENV_W = 256u;
@@ -194,7 +196,9 @@ fn project(p: vec3f) -> vec4f {
   // same pinhole as the tracer: ndc = (x / (z tan·aspect), y / (z tan)); depth ∈ [0, 1]
   let near = S.proj.z;
   let far = S.proj.w;
-  return vec4f(p.x / S.proj.x, p.y / S.proj.y, (p.z - near) * far / (far - near), p.z);
+  // (then the box's own ndc: ndc' = (ndc − centre) × scale, in clip space)
+  let xy = (vec2f(p.x / S.proj.x, p.y / S.proj.y) - S.view.xy * p.z) * S.view.zw;
+  return vec4f(xy, (p.z - near) * far / (far - near), p.z);
 }
 
 @vertex
