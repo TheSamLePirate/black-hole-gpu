@@ -28,7 +28,7 @@ const unit = (a: Vec3): Vec3 => scale(a, 1 / (norm(a) || 1));
 
 /** What to do at the target: go round it, pass it, or pass it and fall back home (a free return). */
 export type Arrival = "orbit" | "flyby" | "freeReturn";
-export type Role = "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome";
+export type Role = "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
 
 export interface PlanNode extends OurNode {
   role: Role;
@@ -249,10 +249,14 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
   if (ca.i < 0) return null;
   const soi = sphereOf(id, p.times[ca.i]!, mouthR);
   let j = ca.i;
-  for (let i = from; i <= ca.i; i++) {
-    if (norm(sub(p.pts[i]!, stateOf(id, p.times[i]!).pos)) < soi) {
-      j = i;
-      break;
+  // (a massless target — the mouth — is aimed at from its closest approach: from afar the path
+  // still curves round Saturn and the Sun; the approach's vector goes through zero smoothly)
+  if (b.mass > 0) {
+    for (let i = from; i <= ca.i; i++) {
+      if (norm(sub(p.pts[i]!, stateOf(id, p.times[i]!).pos)) < soi) {
+        j = i;
+        break;
+      }
     }
   }
   const st = stateOf(id, p.times[j]!);
@@ -1114,7 +1118,13 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
         cap = ` · capture ${kms(Math.abs(dvc))}`;
       }
       note += ` · back to ${hb.name} perigee ${km(peM)} at +${days(tPe - t1)}${cap}`;
-    } else m.tEnd = tCa + 0.05 * (tCa - t1);
+    } else {
+      m.tEnd = tCa + 0.05 * (tCa - t1);
+      // (no capture — a pass, or the mouth: the arrival itself, a node with no burn the flight coasts
+      // to at warp; into the wormhole: where the path meets the throat)
+      const tIn = path.fate === "wormhole" ? path.times[path.times.length - 1]! : tCa;
+      nodes.push({ t: tIn, dv: [0, 0, 0], role: "arrive", body: goal.target });
+    }
   }
   if (!result.ok) note += " (aim rough — corrections will refine it)";
   return { nodes, mission: m, note, path };
@@ -1128,6 +1138,16 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
 export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: PlanNode, o: PlanOptions): PlanNode | null {
   const tn = Math.max(node.t, t + o.lead);
   const g = m.goal;
+  if (node.role === "arrive") {
+    // (the arrival's time as the path now goes: the closest approach, or the throat's edge)
+    const span = Math.max(m.tEnd - t, node.t - t) * 1.3 + 0.2 * DAY;
+    const path = predictOurs(X, V, t, [], { tMax: span, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
+    const tIn = path.fate === "wormhole" ? path.times[path.times.length - 1]! : (() => {
+      const ca = closest(path, g.target);
+      return ca.i >= 0 ? path.times[ca.i]! : node.t;
+    })();
+    return { ...node, t: Math.max(tIn, t + o.lead), dv: [0, 0, 0] };
+  }
   if (node.role === "capture" || node.role === "captureHome" || node.role === "circ") {
     const body = node.body ?? g.target;
     const b = info(body)!;

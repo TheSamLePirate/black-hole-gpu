@@ -133,6 +133,10 @@ export class CameraController {
   private nodeBurning = false;
   /** the prograde hold a mission's cruise set (given back before a burn) */
   private missionHold = false;
+  /** the wormhole's side the ship was on (a crossing is said once) */
+  private shipSide: "ours" | "gargantua" | null = null;
+  /** crossing the throat at the mission's warp (real time given back beyond it) */
+  private traversing = false;
   private userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
   private lastWant: { beta: Vec3; ff: Vec3 } | null = null;
@@ -1484,6 +1488,7 @@ export class CameraController {
   setPilot(on: boolean) {
     const s = this.s;
     this.piloting = on;
+    this.shipSide = null; // (a new flight: no crossing to announce)
     this.pilot.omega = [0, 0, 0];
     this.pilot.throttle = 0;
     this.pilot.hold = "none";
@@ -1679,6 +1684,19 @@ export class CameraController {
   private flyShip(dt: number, pad: ReturnType<GamepadInput["poll"]>) {
     const s = this.s;
     const cam = cameraFrame(s);
+    // (through the wormhole, one way or the other: said once)
+    if (s.wormhole) {
+      const side = cam.region === "throat" ? (cam.ell < 0 ? "ours" : "gargantua") : "gargantua";
+      if (this.shipSide && side !== this.shipSide) this.onPilotMessage?.(side === "gargantua" ? "Through the wormhole — Gargantua's system" : "Through the wormhole — back in the solar system");
+      this.shipSide = side;
+      // (out of the throat after a crossing at warp: real time again — the pilot's to choose)
+      if (this.traversing && cam.region === "hole") {
+        this.traversing = false;
+        s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+        this.warpWant = null;
+        this.onPilotMessage?.(`Out of the throat, ${Math.round(cam.r)} M from Gargantua — real time`);
+      }
+    }
     const inp = this.pilotInput(pad);
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
@@ -1968,7 +1986,7 @@ export class CameraController {
     const start = toNode - burnT / 2;
     if (st.pending) return start < 3 * Math.max(this.s.timeSpeed, 1e-6);
     if (this.nodeBurning || start < 2 * burnT + 0.02) return false;
-    const cheap = node.role === "capture" || node.role === "captureHome" || node.role === "circ";
+    const cheap = node.role === "capture" || node.role === "captureHome" || node.role === "circ" || node.role === "arrive";
     const maxN = cheap ? 8 : 3;
     const due = st.n === 0 || (st.n < maxN && toNode < (cheap ? 0.4 : 0.15) * (node.t - st.at));
     // (a departure: once within a turn of the orbit, the plan's two-body wait now flown)
@@ -2178,6 +2196,17 @@ export class CameraController {
     const node = P.nodes[0];
     const nav = this.ourNav(cam);
     if (!node || (cam.region !== "hole" && !nav)) {
+      // (a mission into the wormhole, its throat now under way: arrived — the warp that crosses it
+      // kept, the plan done)
+      if (node?.role === "arrive" && node.body === "wormhole") {
+        const v = Math.hypot(...cam.beta);
+        this.userWarp = Math.max(this.userWarp ?? 0, Math.min((24 * mouth(s).w.rho) / Math.max(v, 1e-9) / 20, 1e4));
+        P.nodes = [];
+        this.ourMission = null;
+        this.ourPlanned = null;
+        this.missionHold = false;
+        this.traversing = true;
+      }
       this.pilot.setAuto("node");
       this.restoreWarp();
       return null;
@@ -2223,6 +2252,12 @@ export class CameraController {
         s.timeSpeed = this.userWarp;
         if (!P.nodes.length) {
           const then = node.then ?? null;
+          // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
+          // ~20 s is kept, not the pilot's real time)
+          if (node.role === "arrive" && node.body === "wormhole" && nav) {
+            const v = Math.hypot(...nav.V);
+            this.userWarp = Math.max(this.userWarp ?? 0, Math.min((24 * mouth(this.s).w.rho) / Math.max(v, 1e-9) / 20, 1e4));
+          }
           this.ourMission = null;
           this.ourPlanned = null;
           this.missionHold = false;
@@ -2230,7 +2265,8 @@ export class CameraController {
           P.path = null;
           this.pilot.auto = "none";
           if (then) this.pilot.setAuto(then);
-          this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? `in orbit around ${this.s.target === "star" ? "the star" : BODY_NAMES[this.s.target]}` : "station-keeping"}` : "Manoeuvre done");
+          if (node.role === "arrive") this.onPilotMessage?.(node.body === "wormhole" ? "Into the wormhole's throat — Gargantua's side at its end" : `${BODY_NAMES[node.body as Body] ?? node.body} passed`);
+          else this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? `in orbit around ${this.s.target === "star" ? "the star" : BODY_NAMES[this.s.target]}` : "station-keeping"}` : "Manoeuvre done");
         } else this.refreshPlan(true);
         return null;
       }

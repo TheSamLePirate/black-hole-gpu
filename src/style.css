@@ -853,6 +853,8 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-rbox b { font: 600 11.5px var(--mono); color: #5ad8ff; min-width: 52px; text-align: center; }
 .fl-rbox button { padding: 2px 7px !important; }
 /* our universe: what to do at the target, the heights there and back (wraps on narrow panels) */
+/* the HUD's rows and boxes hidden by the code stay hidden, whatever display a rule gives them */
+.fl-root [hidden], .fl-hud [hidden] { display: none !important; }
 .fl-our { flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
 .fl-our > .fl-label { margin-left: 4px; }
 .fl-arr button { white-space: nowrap; }

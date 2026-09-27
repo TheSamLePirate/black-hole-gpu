@@ -29,7 +29,7 @@ export interface ManeuverNode {
   /** what the autopilot does after the last node */
   then?: "circularize" | "approach" | "orbit" | null;
   /** our universe: the node's part in a mission (re-aimed in flight), the body of a capture */
-  role?: "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome";
+  role?: "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
   body?: string;
 }
 
