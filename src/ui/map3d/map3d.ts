@@ -18,7 +18,7 @@ import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
 import { FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
-import { dateOf, lineage, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
+import { bodyPosAt, dateOf, lineage, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
 
 export interface MapHost {
@@ -40,6 +40,11 @@ export interface MapHost {
 }
 
 type PlaneMode = "system" | "equator" | "orbit" | "target";
+/** An event on the timeline: its time (scene time), what it is, its name. */
+interface Mark { t: number; kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact"; label: string }
+const MARK_COL: Record<Mark["kind"], string> = {
+  node: "#5ad8ff", ca: "#ff8a5c", soi: "#c88cff", pe: "#9fe3ff", ap: "#9fe3ff", arrive: "#ffaa50", impact: "#ff5a46",
+};
 type Proj = { x: number; y: number; z: number; k: number; ok: boolean };
 
 const PLANES: { id: PlaneMode; label: string; short: string; title: string }[] = [
@@ -101,6 +106,16 @@ export class Map3D {
   /** per predicted path (they are replaced a few times a second): its points relative to the frame's body, its apsides and closest approaches */
   private relCache = new WeakMap<OurPath, { frame: string; pts: V3[] }>();
   private pathMemo = new WeakMap<OurPath, Map<string, unknown>>();
+  // the timeline: the preview's offset from now and the span shown [M of scene time] (span 0:
+  // automatic — the predicted paths' reach), playing it, its elements
+  private preview = 0;
+  private span = 0;
+  private playing = false;
+  private tl!: { root: HTMLElement; play: HTMLButtonElement; track: HTMLElement; fill: HTMLElement; handle: HTMLElement; marks: HTMLElement; label: HTMLElement; now: HTMLButtonElement };
+  private tlKey = "";
+  private tlMarks: Mark[] = [];
+  private tlSpan = 1;
+  private tlT0 = 0;
   // the warp of the log scale: its centre (the camera's focus) and its scale length
   private log = false;
   private W: V3 = [0, 0, 0];
@@ -108,6 +123,7 @@ export class Map3D {
 
   constructor(private host: MapHost) {
     this.stage.append(this.canvas, this.crumbs, this.menu);
+    this.buildTimeline();
     this.buildBar();
     this.buildMenu();
     this.bindPointer();
@@ -116,7 +132,207 @@ export class Map3D {
 
   /** The camera still moves (the HUD then draws the map at the display's rate). */
   get animating() {
-    return this.moving || !!this.gizmo;
+    return this.moving || !!this.gizmo || this.playing;
+  }
+
+  // ------------------------------------------------------------------------------------ the timeline
+  private buildTimeline() {
+    const root = h("div", "m3-time");
+    const play = h("button", "m3-play", "▶") as HTMLButtonElement;
+    play.title = "Play the preview: the bodies and the ship move on along their paths";
+    play.onclick = () => {
+      if (this.preview >= this.tlSpan * 0.999) this.preview = 0;
+      this.playing = !this.playing;
+    };
+    const track = h("div", "m3-track");
+    const fill = h("i", "m3-fill");
+    const marks = h("div", "m3-marks");
+    const handle = h("b", "m3-handle");
+    track.append(fill, marks, handle);
+    track.title = "Drag: the positions at that time · wheel: a longer or shorter span · a mark: jump to it";
+    const label = h("span", "m3-tlabel", "Now");
+    const now = h("button", "m3-now", "Now") as HTMLButtonElement;
+    now.title = "Back to the present";
+    now.onclick = () => {
+      this.preview = 0;
+      this.playing = false;
+    };
+    root.append(play, track, label, now);
+    this.tl = { root, play, track, fill, handle, marks, label, now };
+    this.stage.append(root);
+    let dragging = false;
+    const setFrom = (clientX: number) => {
+      const r = track.getBoundingClientRect();
+      const f = clamp((clientX - r.left) / Math.max(r.width, 1), 0, 1);
+      let dt = f * this.tlSpan;
+      // (a mark within 6 px: onto it)
+      for (const m of this.tlMarks) {
+        const x = ((m.t - this.tlT0) / this.tlSpan) * r.width;
+        if (Math.abs(x - (clientX - r.left)) < 6) dt = m.t - this.tlT0;
+      }
+      this.preview = dt;
+      this.playing = false;
+    };
+    track.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      track.setPointerCapture(e.pointerId);
+      dragging = true;
+      setFrom(e.clientX);
+    });
+    track.addEventListener("pointermove", (e) => dragging && setFrom(e.clientX));
+    track.addEventListener("pointerup", () => (dragging = false));
+    track.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // (the span, ×/÷ with the wheel; the preview keeps its time)
+      this.span = clamp(this.tlSpan * Math.exp(e.deltaY * 0.002), 0.5, 1e8);
+    }, { passive: false });
+    for (const ev of ["pointerdown", "dblclick", "contextmenu"]) root.addEventListener(ev, (e) => e.stopPropagation());
+  }
+
+  /** The timeline's automatic span: how far the predicted paths reach (at least an hour). */
+  private autoSpan(i: Info, t0: number, ours: boolean) {
+    let end = t0;
+    if (ours) {
+      for (const p of [i.ourFree, i.ourPlan]) if (p?.times.length) end = Math.max(end, p.times[p.times.length - 1]!);
+    } else {
+      if (i.path) end = Math.max(end, t0 + i.path.pts.length * i.path.dt);
+      const pp = i.plan?.path;
+      if (pp?.times.length) end = Math.max(end, pp.times[pp.times.length - 1]!);
+    }
+    for (const n of i.plan?.nodes ?? []) end = Math.max(end, n.t);
+    const hour = 3600 / (4.925490947e-6 * this.host.s.massSolar);
+    return Math.max(end - t0, ours ? hour : 50);
+  }
+
+  /** The events ahead on the paths: nodes, closest approach, spheres of influence, apsides, arrival, impact. */
+  private marks(i: Info, t0: number, ours: boolean, sc: MapScene): Mark[] {
+    const out: Mark[] = [];
+    (i.plan?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "node", label: `Node ${k + 1}` }));
+    if (ours) {
+      const free = i.ourFree, plan = i.ourPlan;
+      const memo = (p: OurPath) => {
+        let m = this.pathMemo.get(p);
+        if (!m) this.pathMemo.set(p, (m = new Map()));
+        return m;
+      };
+      for (const p of [plan, free]) {
+        if (!p) continue;
+        const m = memo(p);
+        if (!m.has("soi")) {
+          const ch: Mark[] = [];
+          for (let j = 1; j < p.refs.length; j++) {
+            if (p.refs[j] !== p.refs[j - 1]) {
+              const name = sc.byId.get(p.refs[j]!)?.name ?? p.refs[j];
+              ch.push({ t: p.times[j]!, kind: "soi", label: `${name}'s sphere of influence` });
+            }
+          }
+          m.set("soi", ch);
+        }
+        out.push(...(m.get("soi") as Mark[]));
+        if (p === plan) break;
+      }
+      if (free && free.refs[0]) {
+        const m = memo(free);
+        if (!m.has("aps:0")) m.set("aps:0", ourApsides(free, free.refs[0]!));
+        const a = m.get("aps:0") as ReturnType<typeof ourApsides>;
+        if (a.pe) out.push({ t: free.times[a.pe.i]!, kind: "pe", label: "Periapsis" });
+        if (a.ap) out.push({ t: free.times[a.ap.i]!, kind: "ap", label: "Apoapsis" });
+        if (free.fate === "impact") out.push({ t: free.times[free.times.length - 1]!, kind: "impact", label: "Impact" });
+      }
+      const tp = plan ?? free;
+      if (tp && sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
+        const m = memo(tp);
+        const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
+        if (!m.has(key)) m.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0));
+        const ca = m.get(key) as ReturnType<typeof ourClosest>;
+        if (ca) out.push({ t: tp.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name}` });
+      }
+      if (i.ourArrive) out.push({ t: i.ourArrive.t, kind: "arrive", label: `Arrival · ${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body}` });
+    } else {
+      const ca = this.host.closestApproach(i, t0);
+      if (ca && ca.t > 0) out.push({ t: t0 + ca.t, kind: "ca", label: `Closest approach · ${BODY_NAMES[i.target as Target] ?? i.target}` });
+      const p = i.path;
+      if (p && (p.fate === "horizon" || p.fate === "star")) out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? "The horizon" : "Into the star" });
+    }
+    return out.filter((m) => m.t > t0);
+  }
+
+  private syncTimeline(t0: number, span: number, marks: Mark[], ours: boolean, beyond: boolean) {
+    const tl = this.tl;
+    this.tlSpan = span;
+    this.tlT0 = t0;
+    this.tlMarks = marks.filter((m) => m.t - t0 <= span);
+    const f = clamp(this.preview / span, 0, 1);
+    tl.fill.style.transform = `scaleX(${f.toFixed(4)})`;
+    tl.handle.style.left = `${(f * 100).toFixed(3)}%`;
+    tl.play.textContent = this.playing ? "❚❚" : "▶";
+    tl.root.classList.toggle("on", this.preview > 0);
+    const key = `${span.toPrecision(4)}|${this.tlMarks.map((m) => `${m.kind}${Math.round(((m.t - t0) / span) * 400)}`).join(",")}`;
+    if (key !== this.tlKey) {
+      this.tlKey = key;
+      tl.marks.replaceChildren();
+      for (const m of this.tlMarks) {
+        const e = h("button", `m3-mark m3-${m.kind}`) as HTMLButtonElement;
+        e.style.left = `${(((m.t - t0) / span) * 100).toFixed(3)}%`;
+        e.style.setProperty("--c", MARK_COL[m.kind]);
+        const when = fmtDur(m.t - t0, this.host.s);
+        e.title = `${m.label} · T+${when}`;
+        e.onpointerdown = (ev) => {
+          ev.stopPropagation();
+          this.preview = m.t - this.tlT0;
+          this.playing = false;
+        };
+        tl.marks.append(e);
+      }
+    }
+    const s = this.host.s;
+    const tp = t0 + this.preview;
+    const text = this.preview <= 0
+      ? `Now · ${fmtDur(span, s)} ahead`
+      : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${beyond ? " · beyond the prediction" : ""}`;
+    if (tl.label.textContent !== text) tl.label.textContent = text;
+  }
+
+  /** The ship at a later time along its predicted path (the plan's once past its first node), map frame. */
+  private shipAt(i: Info, tp: number, t0: number, ours: boolean, sc: MapScene): { X: V3; V: V3; ref: string | null; beyond: boolean } | null {
+    const lerp = (a: V3, b: V3, f: number): V3 => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    const find = (times: number[]) => {
+      let lo = 0, hi = times.length - 1;
+      if (tp >= times[hi]!) return { j: hi, f: 0, beyond: tp > times[hi]! };
+      if (tp <= times[0]!) return { j: 0, f: 0, beyond: false };
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid]! <= tp) lo = mid;
+        else hi = mid;
+      }
+      return { j: lo, f: (tp - times[lo]!) / Math.max(times[lo + 1]! - times[lo]!, 1e-30), beyond: false };
+    };
+    if (ours) {
+      const plan = i.ourPlan, free = i.ourFree;
+      const usePlan = !!plan && plan.nodeAt.length > 0 && tp >= plan.times[plan.nodeAt[0]!]!;
+      const p = usePlan ? plan! : free;
+      if (!p || p.times.length < 2) return null;
+      const { j, f, beyond } = find(p.times);
+      const k = Math.min(j + 1, p.pts.length - 1);
+      const X = lerp(p.pts[j]!, p.pts[k]!, f);
+      const V = lerp(p.vels[j]!, p.vels[k]!, f);
+      const ref = p.refs[j] ?? null;
+      return { X, V: ref ? sub(V, solarState(ref, tp).vel) : V, ref, beyond };
+    }
+    const pp = i.plan?.path;
+    let pts: V3[], times: number[];
+    if (pp && pp.times.length > 1 && tp >= pp.times[0]!) (pts = pp.pts), (times = pp.times);
+    else if (i.path && i.path.pts.length) {
+      pts = [i.X!, ...i.path.pts];
+      times = pts.map((_, j) => t0 + j * i.path!.dt);
+    } else return null;
+    const { j, f, beyond } = find(times);
+    const k = Math.min(j + 1, pts.length - 1);
+    const X = lerp(pts[j]!, pts[k]!, f);
+    const dT = Math.max(times[k]! - times[j]!, 1e-9);
+    const V = scale(sub(pts[k]!, pts[j]!), 1 / dT);
+    return { X: sub(X, sc.origin(tp)), V, ref: null, beyond };
   }
 
   // ------------------------------------------------------------------------------------ the bar
@@ -460,7 +676,18 @@ export class Map3D {
     }
     const universe: Universe = ours ? "ours" : "gargantua";
     const cm = !ours && s.sun && s.sunMass > 0 && this.frame === "cm";
-    const sc = (this.scene = ours ? ourScene(t0) : theirScene(s, t0, cm));
+    // ---- the timeline: the preview's time (the positions shown), played on at 1/8 of the span a second
+    const nowWall = performance.now();
+    const dtWall = Math.min((nowWall - this.lastWall) / 1000, 0.1);
+    const span = this.span > 0 ? this.span : this.autoSpan(i, t0, ours);
+    if (this.playing) {
+      this.preview += (span / 8) * dtWall;
+      if (this.preview >= span) (this.preview = span), (this.playing = false);
+    }
+    this.preview = clamp(this.preview, 0, span);
+    const tp = t0 + this.preview;
+    const previewing = this.preview > 0;
+    const sc = (this.scene = ours ? ourScene(tp) : theirScene(s, tp, cm));
     const fresh = this.universe !== universe;
     if (fresh) {
       this.universe = universe;
@@ -470,11 +697,15 @@ export class Map3D {
       this.cam.goal.pitch = 0.62;
       this.cam.goal.yaw = -0.5;
     }
-    // the ship now, its velocity relative to its primary (map frame)
-    const ship: V3 = ours ? [...i.X!] : sub(i.X!, sc.origin(t0));
+    // the ship (now, or where its path takes it at the preview's time), its velocity relative to its primary (map frame)
+    const shipNow: V3 = ours ? [...i.X!] : sub(i.X!, sc.origin(t0));
+    const later = previewing ? this.shipAt(i, tp, t0, ours, sc) : null;
     const refState = ours && i.ref ? solarState(i.ref, t0) : null;
-    const shipVel: V3 = ours ? sub(i.V!, refState!.vel) : (i.V ? [...i.V] : [0, 0, 0]);
-    const refPos: V3 = ours ? refState!.pos : sc.byId.get("hole")!.pos;
+    const ship: V3 = later ? later.X : shipNow;
+    const shipVel: V3 = later ? later.V : ours ? sub(i.V!, refState!.vel) : (i.V ? [...i.V] : [0, 0, 0]);
+    const refId = later?.ref ?? i.ref;
+    const refPos: V3 = ours ? solarState(refId ?? "sun", tp).pos : sc.byId.get("hole")!.pos;
+    const marks = this.marks(i, t0, ours, sc);
 
     // ---- the focus, the plane, the scale
     let fid = this.currentFocus();
@@ -492,10 +723,8 @@ export class Map3D {
     this.cam.maxDist = g(ours ? 400 : 4e5) * 3;
     if (this.autoDist) this.cam.goal.dist = clamp((g(reach) / Math.tan(this.cam.fov / 2)) * 1.08, this.cam.minDist, this.cam.maxDist);
     if (fresh) this.cam.snap();
-    const now = performance.now();
-    const dt = Math.min((now - this.lastWall) / 1000, 0.1);
-    this.lastWall = now;
-    this.moving = this.cam.update(dt);
+    this.lastWall = nowWall;
+    this.moving = this.cam.update(dtWall);
     this.W = [...this.cam.cur.focus];
 
     // ---- projection (the log scale's warp about the camera's focus)
@@ -706,11 +935,18 @@ export class Map3D {
     }
 
     // ---- paths
-    if (ours) this.drawOurPaths(ctx, i, sc, t0, fid, fb, dpr, P, line, labels, pn);
+    if (ours) this.drawOurPaths(ctx, i, sc, t0, tp, fid, fb, dpr, P, line, labels, pn);
     else this.drawTheirPaths(ctx, i, sc, t0, dpr, P, line, labels, pn, cm);
+
+    // ---- the preview: where things are now (faint rings), the trails the bodies follow until then
+    if (previewing) this.drawGhosts(ctx, sc, i, fid, t0, tp, shipNow, P, dpr);
 
     // ---- the ship
     this.drawShip(ctx, i, ship, shipVel, P, dpr, ours);
+    if (previewing) {
+      const q = P(ship);
+      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${later?.beyond ? " · end of the prediction" : later ? "" : " · no prediction"}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700 });
+    }
 
     // ---- labels, kept apart (the focus and the target first)
     labels.sort((a, b) => b.prio - a.prio);
@@ -736,9 +972,10 @@ export class Map3D {
     }
 
     // ---- the footer: date, focus, plane, scale bar at the focus's depth
-    this.drawFooter(ctx, t0, cw, ch, dpr, ours);
+    this.drawFooter(ctx, tp, cw, ch, dpr, ours);
     this.renderCrumbs(sc, fid);
     this.syncBar(sc, fid);
+    this.syncTimeline(t0, span, marks, ours, !!later?.beyond);
   }
 
   /** The reference plane's axes (e1 towards a fixed direction, n its normal). */
@@ -1048,6 +1285,67 @@ export class Map3D {
     }
   }
 
+  /**
+   * The preview's ghosts: the ship where it is now (a faint ring), and for the bodies that matter here
+   * (the target, the ship's primary, the focus and its moons) where they are now and the arc they follow
+   * until the preview's time.
+   */
+  private drawGhosts(ctx: CanvasRenderingContext2D, sc: MapScene, i: Info, fid: string, t0: number, tp: number, shipNow: V3, P: (X: V3) => Proj, dpr: number) {
+    const s = this.host.s;
+    const ring = (X: V3, col: string, r: number) => {
+      const p = P(X);
+      if (!p.ok) return null;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * dpr, 0, 2 * Math.PI);
+      ctx.strokeStyle = `rgba(${col}, 0.55)`;
+      ctx.lineWidth = 1 * dpr;
+      ctx.setLineDash([2 * dpr, 2 * dpr]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return p;
+    };
+    const sp = ring(shipNow, "124, 214, 255", 5);
+    if (sp) {
+      ctx.fillStyle = "rgba(124, 214, 255, 0.6)";
+      ctx.font = `600 ${8 * dpr}px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.fillText("now", sp.x + 7 * dpr, sp.y + 3 * dpr);
+    }
+    const ids = new Set<string>([i.target, i.ref ?? "", fid]);
+    for (const b of sc.bodies) if (b.parent === fid) ids.add(b.id);
+    let n = 0;
+    for (const id of ids) {
+      const b = sc.byId.get(id);
+      if (!b || b.kind === "hole" || n >= 8) continue;
+      const now = bodyPosAt(sc, s, id, t0);
+      if (!now) continue;
+      const a = P(now), z = P(b.pos);
+      if (!a.ok || !z.ok || Math.hypot(a.x - z.x, a.y - z.y) < 6 * dpr) continue;
+      n++;
+      // (its arc: up to a turn of its orbit)
+      const T = Math.min(tp - t0, b.period ?? tp - t0);
+      const steps = 32;
+      ctx.beginPath();
+      let open = false;
+      for (let j = 0; j <= steps; j++) {
+        const t = tp - T + (T * j) / steps;
+        const X = bodyPosAt(sc, s, id, t);
+        const q = X ? P(X) : null;
+        if (!q || !q.ok) {
+          open = false;
+          continue;
+        }
+        if (open) ctx.lineTo(q.x, q.y);
+        else ctx.moveTo(q.x, q.y);
+        open = true;
+      }
+      ctx.strokeStyle = `rgba(${b.col}, 0.55)`;
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.stroke();
+      if (T >= tp - t0) ring(now, b.col, 3.5);
+    }
+  }
+
   /** Where a path crosses the reference plane (through the focus): AN going up, DN going down. */
   private crossings(ctx: CanvasRenderingContext2D, pts: V3[], P: (X: V3) => Proj, n: V3, dpr: number, from = 0) {
     if (this.plane === "orbit") return;
@@ -1083,7 +1381,7 @@ export class Map3D {
   }
 
   private drawOurPaths(
-    ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, fid: string, fb: MapBody | null, dpr: number,
+    ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, tView: number, fid: string, fb: MapBody | null, dpr: number,
     P: (X: V3) => Proj, line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
     labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number }[], pn: V3,
   ) {
@@ -1091,7 +1389,7 @@ export class Map3D {
     // (the paths in the frame of the focus body — or of the ship's primary when the ship is the focus:
     // where it is when the ship is there, drawn relative to where it is now)
     const frameId = fid === "ship" ? i.ref ?? "sun" : fb?.id === "wormhole" ? "sun" : fid;
-    const F0 = solarState(frameId, t0).pos;
+    const F0 = solarState(frameId, tView).pos;
     const FA = (X: V3, t: number): V3 => {
       const q = solarState(frameId, t).pos;
       return [X[0] - q[0] + F0[0], X[1] - q[1] + F0[1], X[2] - q[2] + F0[2]];
@@ -1546,6 +1844,8 @@ export class Map3D {
 
   private drawFooter(ctx: CanvasRenderingContext2D, t0: number, cw: number, ch: number, dpr: number, ours: boolean) {
     const s = this.host.s;
+    // (above the timeline in the minimap; full screen, the timeline is centred: the corners are free)
+    const by = ch - (this.host.mapView() ? 0 : 30 * dpr);
     // a scale bar at the focus's depth (true scale only)
     if (!this.log) {
       const k = this.cam.focal / this.cam.cur.dist;
@@ -1554,23 +1854,23 @@ export class Map3D {
       ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath();
       const x0 = cw - 10 * dpr - bar * k;
-      ctx.moveTo(x0, ch - 10 * dpr);
-      ctx.lineTo(cw - 10 * dpr, ch - 10 * dpr);
-      ctx.moveTo(x0, ch - 13 * dpr);
-      ctx.lineTo(x0, ch - 7 * dpr);
-      ctx.moveTo(cw - 10 * dpr, ch - 13 * dpr);
-      ctx.lineTo(cw - 10 * dpr, ch - 7 * dpr);
+      ctx.moveTo(x0, by - 10 * dpr);
+      ctx.lineTo(cw - 10 * dpr, by - 10 * dpr);
+      ctx.moveTo(x0, by - 13 * dpr);
+      ctx.lineTo(x0, by - 7 * dpr);
+      ctx.moveTo(cw - 10 * dpr, by - 13 * dpr);
+      ctx.lineTo(cw - 10 * dpr, by - 7 * dpr);
       ctx.stroke();
       ctx.fillStyle = "rgba(230, 235, 245, 0.85)";
       ctx.font = `${9 * dpr}px ${MONO}`;
       ctx.textAlign = "right";
-      ctx.fillText(fmtDist(bar, ours, s), cw - 10 * dpr, ch - 16 * dpr);
+      ctx.fillText(fmtDist(bar, ours, s), cw - 10 * dpr, by - 16 * dpr);
     }
     const plane = PLANES.find((p) => p.id === this.plane)!.label.toLowerCase();
     ctx.fillStyle = "rgba(220, 225, 235, 0.55)";
     ctx.textAlign = "left";
     ctx.font = `${9 * dpr}px ${FONT}`;
     const date = ours ? `${dateOf(t0).toISOString().slice(0, 10)} · ` : "";
-    ctx.fillText(`${date}${plane} plane · ${this.log ? "log scale" : "true scale"}`, 8 * dpr, ch - 8 * dpr);
+    ctx.fillText(`${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`, 8 * dpr, by - 8 * dpr);
   }
 }

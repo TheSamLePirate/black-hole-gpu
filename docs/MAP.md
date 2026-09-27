@@ -31,6 +31,20 @@ projection, float64 throughout — from a low Earth orbit to the edge of the sol
   low orbit on one map); **Fit** — back to the automatic framing; **CoM / Hole** (Gargantua's side
   with a massive companion star) — the frame; **⛶** — full screen.
 
+## The timeline
+
+Under the breadcrumb (full screen) or at the bottom of the minimap: where everything will be.
+
+- Drag the handle (or click the track): the bodies at that time, the ship where its path takes it —
+  the free fall, or the plan once past its first node (to the end of the prediction, then held
+  there). Faint rings mark where the ship and the nearby bodies are now; the bodies' arcs until
+  then are drawn. The paths are shown in the focus body's frame at that time.
+- The marks: manoeuvre nodes (blue), the closest approach to the target (orange), entering another
+  body's sphere of influence (violet), periapsis / apoapsis, the arrival, an impact or the horizon
+  (red) — a click jumps there, the handle snaps to a mark within 6 px.
+- ▶ plays it (the span in 8 s); **Now** comes back; the wheel on the track makes the span longer or
+  shorter (automatic: as far as the predicted paths reach). The label: the date and T+.
+
 ## What it shows
 
 - The reference plane's grid (rings labelled in km / AU / M, spokes every 30°, the vernal equinox ♈).

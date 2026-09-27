@@ -208,3 +208,16 @@ export function lineage(sc: MapScene, id: string): MapBody[] {
 
 /** The date of a scene time (our side's calendar). */
 export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1000);
+
+/** Where a body of the map is at a time (the map's frame) — for the preview's trails. */
+export function bodyPosAt(sc: MapScene, s: Settings, id: string, t: number): V3 | null {
+  if (sc.universe === "ours") {
+    if (id === "wormhole") return [0, 0, 0];
+    return SOLAR_BODIES.some((b) => b.id === id) ? solarState(id, t).pos : null;
+  }
+  const o = sc.origin(t);
+  if (id === "hole") return sub([0, 0, 0], o);
+  if (id === "star") return s.sun ? sub(starCentre(s, t), o) : null;
+  if (id === "wormhole") return s.wormhole ? sub(mouth(s, t).C as V3, o) : null;
+  return GARGANTUA_SYSTEM.bodies.some((b) => b.id === id) ? sub(bodyState(GARGANTUA_SYSTEM, id, t).pos, o) : null;
+}
