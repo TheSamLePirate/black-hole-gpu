@@ -46,6 +46,15 @@ export class Splash {
   readonly gone = new Promise<void>((r) => (this.resolveLifted = r));
 
   constructor(private root: HTMLElement) {
+    if (!root.querySelector(".ld-bar")) {
+      // (no loading screen — a hot reload after it was lifted: nothing to show)
+      this.bar = this.stageEl = this.pctEl = this.steps = this.tipEl = document.createElement("div");
+      this.skip = document.createElement("button");
+      this.lifted = true;
+      this.resolveLifted();
+      this.pill.start();
+      return;
+    }
     this.bar = root.querySelector(".ld-bar i")!;
     this.stageEl = root.querySelector(".ld-stage")!;
     this.pctEl = root.querySelector(".ld-pct")!;

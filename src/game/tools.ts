@@ -294,14 +294,15 @@ export class GameTools {
     const save = typeof g === "string" ? (g === "autosave" ? autosave.get() : slots.get(g)) : g;
     if (!save) throw new Error(`no saved game "${g}"`);
     const s = this.ctx.settings, c = this.ctx.camera;
-    const pixelRatio = s.pixelRatio;
-    Object.assign(s, defaultSettings(), save.settings, { pixelRatio });
+    // (this screen's pixel ratio and the listener's sound stay theirs)
+    const own = { pixelRatio: s.pixelRatio, sound: s.sound, soundVolume: s.soundVolume, soundBeeps: s.soundBeeps, soundEngines: s.soundEngines, soundAmbience: s.soundAmbience, soundUi: s.soundUi };
+    Object.assign(s, defaultSettings(), save.settings, own);
     this.ctx.setTime(save.time);
     c.setCinematic(null);
     if (save.ship.piloting && s.ship) {
       c.setPilot(true);
       // (setPilot's own choices — time running, the path shown — give way to the saved ones)
-      Object.assign(s, save.settings, { pixelRatio });
+      Object.assign(s, save.settings, own);
       const p = c.pilot;
       p.sas = save.ship.sas;
       p.precision = save.ship.precision;

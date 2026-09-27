@@ -218,6 +218,12 @@ export interface Settings {
   rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
   soiRings: boolean; // the spheres of influence on the map
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
+  sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
+  soundVolume: number; // master, 0…1
+  soundBeeps: number; // the flight computer's beeps and alarms
+  soundEngines: number; // the main engine and the RCS
+  soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
+  soundUi: number; // the interface's clicks
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
 
@@ -372,6 +378,12 @@ export function defaultSettings(): Settings {
     rangerStatus: true,
     soiRings: true,
     pathInView: true,
+    sound: true,
+    soundVolume: 0.7,
+    soundBeeps: 0.8,
+    soundEngines: 0.9,
+    soundAmbience: 0.5,
+    soundUi: 0.35,
     dynamicResolution: false,
   };
 }

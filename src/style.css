@@ -721,6 +721,15 @@ kbd {
 }
 
 /* rotation mode: one icon per mode; the target chip is tinted by its body */
+#btn-sound .ic-off,
+#btn-sound.muted .ic-on {
+  display: none;
+}
+
+#btn-sound.muted .ic-off {
+  display: block;
+}
+
 #btn-rotation .ic-free,
 #btn-rotation.free .ic-around {
   display: none;

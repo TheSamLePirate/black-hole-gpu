@@ -107,6 +107,10 @@ export class FlightComputer {
   anchor: V3 | null = null;
   /** precision controls (fine rotation and throttle, as KSP's Caps Lock) */
   precision = false;
+  /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
+   *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
+   *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
+  fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0 };
 
   setHold(h: Hold) {
     this.hold = this.hold === h ? "none" : h;
@@ -216,8 +220,10 @@ export class FlightComputer {
         else if (this.sas) want[i] = 0;
       }
     }
+    let effort = 0;
     for (let i = 0; i < 3; i++) {
       const d = clamp(want[i]! - this.omega[i]!, -TUNING.turnAccel * dt, TUNING.turnAccel * dt);
+      if (dt > 0) effort = Math.max(effort, Math.abs(d) / (TUNING.turnAccel * dt));
       this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
@@ -239,6 +245,16 @@ export class FlightComputer {
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));
     }
+    const rcsAuth = TUNING.rcs * c.thrust;
+    const rl = len(rcsC);
+    this.fired = {
+      throttle: c.thrust > 0 ? throttle : 0,
+      rcs: rcsAuth > 0 ? clamp(rl / rcsAuth, 0, 1) : 0,
+      rcsSide: rl > 0 ? -dot(X, rcsC) / rl : 0,
+      turn: c.snap ? 0 : effort,
+      yaw: clamp(this.omega[1] / Math.max(TUNING.turnRate, 1e-9), -1, 1),
+      at: performance.now(),
+    };
     const accC = add(scale(c.gimbal && point && throttle > 0 ? point : Z, throttle * c.thrust), rcsC);
     const acc = fromC(accC);
     this.accel = len(acc);

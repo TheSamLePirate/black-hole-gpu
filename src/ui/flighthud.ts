@@ -83,6 +83,8 @@ export interface FlightHudActions {
   tools(): void;
   /** the future path in the view, on / off */
   pathInView(): void;
+  /** the sound, on / off */
+  sound(): void;
   plan(goal: "orbit" | "star" | "wormhole", r2: number, orbitStar: boolean): void;
   /** our universe: an orbit around the reference body, a transfer to the target or the mouth */
   planOur(kind: "orbit" | "target" | "wormhole", arrival: Arrival, altKm: number, retKm: number): void;
@@ -323,6 +325,10 @@ export class FlightHud {
     pathBtn.title = "Future path in the view (the cyan tube) [Y]";
     pathBtn.onclick = () => act.pathInView();
     this.missionEls.pathBtn = pathBtn;
+    const soundBtn = h("button", "fl-tools fl-soundbtn", "🔈") as HTMLButtonElement;
+    soundBtn.title = "Sound on / off (Settings › Game › Sound: the mix)";
+    soundBtn.onclick = () => act.sound();
+    this.missionEls.soundBtn = soundBtn;
     const toolsBtn = h("button", "fl-tools", "🛠") as HTMLButtonElement;
     toolsBtn.title = "Game tools: status, place, target, time, saves, audit, journal [F2]";
     toolsBtn.onclick = () => act.tools();
@@ -336,7 +342,7 @@ export class FlightHud {
       clock("t", "Far t", "Coordinate time: the clocks of distant observers"),
       clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
       clock("lost", "Earth +", "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)"),
-      h("span", "fl-vsep"), planBtn, pathBtn, toolsBtn, dens, tools,
+      h("span", "fl-vsep"), planBtn, pathBtn, soundBtn, toolsBtn, dens, tools,
     );
     this.buildPlanner();
 
@@ -1086,6 +1092,8 @@ export class FlightHud {
     };
     setChip("sas", i.sas, "SAS");
     M.pathBtn!.classList.toggle("off", !s.pathInView);
+    M.soundBtn!.classList.toggle("off", !s.sound);
+    M.soundBtn!.textContent = s.sound ? "🔈" : "🔇";
     this.drawStatus(i.status ?? null);
     setChip("hold", i.hold !== "none", i.hold === "none" ? "HOLD" : HOLD_NAMES[i.hold].toUpperCase());
     let auto = "AUTO";

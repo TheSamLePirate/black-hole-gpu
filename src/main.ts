@@ -28,6 +28,8 @@ import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
+import { SoundDirector } from "./audio/director";
+import { sound } from "./audio/engine";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -54,6 +56,7 @@ const KEEP_ON_PRESET: (keyof Settings)[] = [
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
+  "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -90,7 +93,7 @@ function fail(msg: string) {
 }
 
 async function main() {
-  const splash = new Splash($("loading"));
+  const splash = new Splash($("loading") ?? document.createElement("div"));
   let renderer: Renderer;
   try {
     renderer = await Renderer.create(canvas);
@@ -160,6 +163,7 @@ async function main() {
       else if (effect === "resize") resized = true;
       if (k === "distance" || k === "whL") camera.sync();
     }
+    if (keys.some((k) => k.startsWith("sound"))) audio.applyMix();
     if (scene) touch();
     if (resized) resize();
     syncButtons();
@@ -180,6 +184,7 @@ async function main() {
     connectController: HidPads.supported ? () => connectController() : undefined,
     shareUrl: () => tools.shareLink(),
   });
+  const audio = new SoundDirector(settings);
   const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
   panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));
   const refreshGui = () => {
@@ -241,6 +246,7 @@ async function main() {
   const actions: Record<string, () => void> = {
     "btn-tools": () => toolsWin.toggle(),
     "btn-scenes": () => scenes.toggle(),
+    "btn-sound": () => toggleSound(),
     "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
     "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
     "btn-fly": () => camera.setFlyMode(!camera.flyMode),
@@ -316,6 +322,7 @@ async function main() {
     $("btn-jet").classList.toggle("active", settings.jet);
     $("btn-cinema").classList.toggle("active", settings.cinematic);
     $("btn-ship").classList.toggle("active", settings.ship);
+    $("btn-sound").classList.toggle("muted", !settings.sound);
   }
   syncButtons();
   syncRotationButtons();
@@ -330,11 +337,19 @@ async function main() {
     const list = [...[1, 2, 5, 10, 25, 50].map((k) => k * rt).filter((w) => w < 0.9 * WARPS[0]!), ...WARPS];
     const i = list.findIndex((w) => w >= settings.timeSpeed * (1 - 1e-6));
     const j = Math.max(0, Math.min(list.length - 1, (i < 0 ? list.length - 1 : i) + dir));
+    if (list[j] !== settings.timeSpeed) audio.cue(dir > 0 ? "warp-up" : "warp-down", j);
+    else audio.cue("error");
     settings.timeSpeed = list[j]!;
     if (!settings.animate) toggle("animate");
     refreshGui();
     const x = settings.timeSpeed / rt;
     panel.toast(`Time warp: ×${x < 100 ? Math.round(x) : x.toPrecision(3)} (${+settings.timeSpeed.toPrecision(3)} M/s)`);
+  }
+  function toggleSound() {
+    settings.sound = !settings.sound;
+    audio.applyMix();
+    refreshGui();
+    panel.toast(settings.sound ? "Sound on" : "Sound off");
   }
   function togglePathInView() {
     settings.pathInView = !settings.pathInView;
@@ -366,7 +381,7 @@ async function main() {
     panel.toast(`Camera: ${MOUNTS[m].label}`);
   }
   const flightHud = new FlightHud(settings, {
-    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll,
+    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
     addNodeAt: (t) => {
       camera.addNode(Math.max(t - simTime, 1e-3));
       touch();
@@ -708,6 +723,8 @@ async function main() {
       /** the game's tools: __bh.game.help() */
       game: tools,
       settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
+      /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
+      sound, audio,
       /** the built-in scenes' names (for __bh.preset) */
       scenes: () => Object.keys(presets),
       /** the scene gallery's pictures: each scene applied, left to converge, cropped to 16:9, 640 × 360,
@@ -864,7 +881,8 @@ async function main() {
         /* (between two frames of a jump) */
       }
       cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
-    }
+      cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
+    } else audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

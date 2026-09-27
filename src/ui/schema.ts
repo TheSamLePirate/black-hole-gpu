@@ -813,6 +813,31 @@ export const SCHEMA: ControlDef[] = [
     keywords: "soi sphere of influence map",
   },
   {
+    key: "sound", type: "toggle", section: "game", group: "Sound", label: "Sound", effect: "none",
+    help: "Everything synthesized live, no music: the flight computer's beeps and alarms, the main engine (rumble, roar, ignition), the RCS thrusters (hiss, valve pops, panned to the side that fires), the reaction wheels, life support, the wind in an atmosphere, the interface. In vacuum only the hull carries sound: from the cabin-side mounts (dorsal, belly, nose) it is heavy and close, from the outside ones far and muffled. Starts with the first click or key (the browser's rule).",
+    keywords: "audio sound effects beeps volume mute engine thrusters rcs alarm",
+  },
+  {
+    key: "soundVolume", type: "number", section: "game", group: "Sound", label: "Volume", min: 0, max: 1, step: 0.01, effect: "none",
+    enabled: (s) => s.sound, keywords: "audio master volume",
+  },
+  {
+    key: "soundBeeps", type: "number", section: "game", group: "Sound", label: "Flight computer", min: 0, max: 1, step: 0.01, effect: "none",
+    enabled: (s) => s.sound, help: "SAS, holds, autopilots, warp, targets, manoeuvre countdowns, spheres of influence, alarms.", keywords: "audio beeps alarms computer",
+  },
+  {
+    key: "soundEngines", type: "number", section: "game", group: "Sound", label: "Engines & RCS", min: 0, max: 1, step: 0.01, effect: "none",
+    enabled: (s) => s.sound, keywords: "audio engine thrusters rcs",
+  },
+  {
+    key: "soundAmbience", type: "number", section: "game", group: "Sound", label: "Cabin & wind", min: 0, max: 1, step: 0.01, effect: "none",
+    enabled: (s) => s.sound, keywords: "audio ambience cabin life support wind reaction wheels",
+  },
+  {
+    key: "soundUi", type: "number", section: "game", group: "Sound", label: "Interface", min: 0, max: 1, step: 0.01, effect: "none",
+    enabled: (s) => s.sound, keywords: "audio clicks interface buttons",
+  },
+  {
     key: "autosave", type: "toggle", section: "game", group: "Saved games", label: "Autosave", effect: "none",
     help: "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).",
     keywords: "save resume persist",
