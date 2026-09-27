@@ -1,9 +1,11 @@
 import { FLIGHT_KEYS } from "../controls";
 import { QUALITY, type Quality, type Settings } from "../settings";
+import { sceneGroup, sceneTitle } from "./scenes";
 import {
   GROUP_SWITCH,
   PRESET_INFO,
   QUALITY_KEYS,
+  SCENE_GROUPS,
   SCHEMA,
   SCHEMA_BY_KEY,
   SECTIONS,
@@ -24,6 +26,10 @@ export interface PanelOptions {
   /** Applies a built-in scene preset to `settings` (keeping rendering choices). */
   applyPreset: (name: string) => void;
   presetNames: string[];
+  /** the scene applied last (null: none, or a saved flight) */
+  currentScene: () => string | null;
+  /** opens the scene gallery (searching for `query`) */
+  openScenes: (query?: string) => void;
   loadImage: () => void;
   /** Returns a shareable URL of the current state. */
   shareUrl: () => string;
@@ -127,6 +133,7 @@ export class SettingsPanel {
   private tabsEl!: HTMLElement;
   private qualityEl!: HTMLElement;
   private presetsEl!: HTMLElement;
+  private sceneCard!: HTMLElement;
   private undoBtn!: HTMLButtonElement;
   private redoBtn!: HTMLButtonElement;
   private tooltip: HTMLElement;
@@ -162,6 +169,7 @@ export class SettingsPanel {
   // ---------------------------------------------------------------------------------- public
   /** Re-reads every visible control from `settings` (after camera moves, shortcuts, …). */
   refresh() {
+    this.updateSceneCard();
     for (const u of this.updaters) u();
     this.updateQuality();
     this.updateHistoryButtons();
@@ -177,7 +185,14 @@ export class SettingsPanel {
     return !this.root.classList.contains("collapsed");
   }
 
+  /** while set, messages wait for it (the loading screen) */
+  holdToasts: Promise<void> | null = null;
+
   toast(msg: string) {
+    if (this.holdToasts) {
+      this.holdToasts.then(() => this.toast(msg));
+      return;
+    }
     this.toastEl.textContent = msg;
     this.toastEl.classList.add("show");
     clearTimeout((this.toastEl as unknown as { t: number }).t);
@@ -199,6 +214,15 @@ export class SettingsPanel {
     this.undoStack.push(d);
     this.applyValues(d.map((x) => [x.key, x.after]));
     this.toast(`Redo: ${this.describe(d)}`);
+  }
+
+  /** Applies a built-in scene (one undo step). */
+  applyScene(name: string) {
+    this.begin();
+    this.o.applyPreset(name);
+    this.commit();
+    this.refresh();
+    this.toast(`Scene: ${sceneTitle(name)}`);
   }
 
   // ---------------------------------------------------------------------------------- history
@@ -375,23 +399,13 @@ export class SettingsPanel {
   private renderPresets() {
     const el = this.presetsEl;
     el.replaceChildren();
-    const chips = h("div", { class: "sp-chips" });
-    for (const name of this.o.presetNames) {
-      const info = PRESET_INFO[name];
-      chips.append(
-        h("button", {
-          class: "sp-chip",
-          dataset: { help: info?.description ?? name, helpTitle: name },
-          onclick: () => {
-            this.begin();
-            this.o.applyPreset(name);
-            this.commit();
-            this.refresh();
-            this.toast(`Scene: ${name}`);
-          },
-        }, h("span", { class: "sp-chip-ico" }, info?.icon ?? "•"), name.replace(/\s*\(.*\)$/, "")),
-      );
-    }
+    // the scene: the current one, a click opens the gallery
+    this.sceneCard = h("button", {
+      class: "sp-scene",
+      title: "All the scenes",
+      onclick: () => this.o.openScenes(),
+    });
+    this.updateSceneCard();
     const user = this.userPresets();
     const userChips = h("div", { class: "sp-chips" });
     for (const name of Object.keys(user)) {
@@ -452,11 +466,30 @@ export class SettingsPanel {
       }, svgIcon(ICONS.plus), "Save current"),
     );
     el.append(
-      h("div", { class: "sp-label" }, "Scenes"),
-      chips,
+      h("div", { class: "sp-label" }, "Scene"),
+      this.sceneCard,
       h("div", { class: "sp-label" }, "My presets"),
       userChips,
       saveRow,
+    );
+  }
+
+  private updateSceneCard() {
+    const card = this.sceneCard;
+    if (!card) return;
+    const name = this.o.currentScene();
+    const info = name ? PRESET_INFO[name] : undefined;
+    const key = name ?? "";
+    if (card.dataset.scene === key) return;
+    card.dataset.scene = key;
+    card.dataset.group = name ? sceneGroup(name) : "";
+    card.replaceChildren(
+      h("span", { class: "sp-scene-ico" }, info?.icon ?? "✦"),
+      h("span", { class: "sp-scene-text" },
+        h("b", {}, name ? sceneTitle(name) : "Your own view"),
+        h("small", {}, name ? SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label : "Settings edited, or a saved flight"),
+      ),
+      h("span", { class: "sp-scene-go" }, "Browse", svgIcon(ICONS.chevron, "ico")),
     );
   }
 
@@ -564,6 +597,31 @@ export class SettingsPanel {
     const defs = SCHEMA.filter((d) =>
       searching ? this.matches(d, this.query) : d.section === this.tab && (this.advanced || !d.advanced),
     );
+    // (the scenes match a search too)
+    const scenes = searching
+      ? this.o.presetNames.filter((n) => {
+          const i = PRESET_INFO[n];
+          const hay = `${n} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(n))?.label}`.toLowerCase();
+          return this.query.split(/\s+/).every((w) => hay.includes(w));
+        })
+      : [];
+    if (scenes.length) {
+      this.body.append(
+        h("div", { class: "sp-group" },
+          h("header", { class: "sp-ghead" }, h("span", { class: "sp-gtitle" }, `Scenes (${scenes.length})`)),
+          h("div", { class: "sp-rows sp-scene-hits" },
+            ...scenes.slice(0, 6).map((n) =>
+              h("button", { class: "sp-scene small", dataset: { group: sceneGroup(n) }, onclick: () => this.applyScene(n) },
+                h("span", { class: "sp-scene-ico" }, PRESET_INFO[n]?.icon ?? "•"),
+                h("span", { class: "sp-scene-text" }, h("b", {}, sceneTitle(n)), h("small", {}, PRESET_INFO[n]?.description ?? "")),
+              ),
+            ),
+            ...(scenes.length > 6 ? [h("button", { class: "sp-btn block", onclick: () => this.o.openScenes(this.query) }, `All ${scenes.length} in the gallery…`)] : []),
+          ),
+        ),
+      );
+    }
+    if (!defs.length && scenes.length) return;
     if (!defs.length) {
       this.body.append(h("div", { class: "sp-empty" }, searching ? `No setting matches “${this.query}”` : "Nothing here."));
       return;

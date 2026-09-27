@@ -79,8 +79,8 @@ async function gunzip(res: Response): Promise<ArrayBuffer> {
 }
 
 /** rgb9e5 texture with its mip chain, from a gzip'd "SKY1" file (scripts/build-sky.ts). */
-export async function loadPackedTexture(device: GPUDevice, url: string): Promise<GPUTexture> {
-  const buf = await gunzip(await fetch(url));
+export async function loadPackedTexture(device: GPUDevice, url: string, get: (url: string) => Promise<Response> = fetch): Promise<GPUTexture> {
+  const buf = await gunzip(await get(url));
   const head = new Uint32Array(buf, 0, 4);
   if (head[0] !== 0x31594b53) throw new Error("sky asset: bad texture header");
   const [, w, h, levels] = head as unknown as [number, number, number, number];
@@ -101,8 +101,8 @@ export async function loadPackedTexture(device: GPUDevice, url: string): Promise
 }
 
 /** Star catalogue as one u32 storage buffer: [magic, grid, count, 0, cellStart[6·grid²+1], stars…]. */
-export async function loadStarCatalogue(device: GPUDevice, url: string): Promise<GPUBuffer> {
-  const buf = await gunzip(await fetch(url));
+export async function loadStarCatalogue(device: GPUDevice, url: string, get: (url: string) => Promise<Response> = fetch): Promise<GPUBuffer> {
+  const buf = await gunzip(await get(url));
   const head = new Uint32Array(buf, 0, 4);
   if (head[0] !== 0x31525453) throw new Error("sky asset: bad catalogue header");
   const gpu = device.createBuffer({ size: buf.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });

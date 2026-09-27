@@ -14,6 +14,8 @@ export interface GameSave {
   savedAt: number;
   /** a line: where, doing what */
   summary: string;
+  /** the scene it started from (older saves: none) */
+  scene?: string | null;
   settings: Settings;
   time: number;
   ship: {

@@ -42,6 +42,8 @@ export interface GameContext {
   fps(): number;
   /** the dynamic resolution's fraction of the pixel ratio */
   renderScale(): number;
+  /** the scene applied last (kept in saves, shown by the panel) */
+  scene?: { get(): string | null; set(name: string | null): void };
 }
 
 const KM = 1e3 / M_METRES;
@@ -278,7 +280,7 @@ export class GameTools {
     }
     const L = c.ourLandedOn;
     return {
-      v: 1, name, savedAt: Date.now(), summary, settings: { ...s }, time: this.ctx.time(),
+      v: 1, name, savedAt: Date.now(), summary, scene: this.ctx.scene?.get() ?? null, settings: { ...s }, time: this.ctx.time(),
       ship: {
         piloting: c.piloting, sas: c.pilot.sas, hold: c.pilot.hold, auto: c.pilot.auto, throttle: c.pilot.throttle, precision: c.pilot.precision,
         speedMode: c.speedMode, landed: L ? { body: L.body, q: [...L.q] as V3 } : null, spent: c.spent, properTime: c.properTime,
@@ -316,6 +318,7 @@ export class GameTools {
     }
     c.setOurLanded(save.ship.landed);
     c.sync();
+    this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();
     this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
     return save.summary;

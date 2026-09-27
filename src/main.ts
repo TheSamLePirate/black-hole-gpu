@@ -26,6 +26,8 @@ import { applyTuning } from "./game/tuning";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
+import { Splash } from "./ui/splash";
+import { SceneGallery } from "./ui/scenes";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -61,6 +63,26 @@ let simTime = 0;
 
 let firstFrame = false;
 
+/**
+ * A row that overflows sideways scrolls with a plain (vertical) mouse wheel too — Windows mice have
+ * no horizontal wheel, and a hidden scroll bar leaves no other way.
+ */
+function wheelScrollsSideways(el: HTMLElement) {
+  const edges = () => {
+    el.classList.toggle("more-l", el.scrollLeft > 1);
+    el.classList.toggle("more-r", el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  };
+  el.addEventListener("scroll", edges, { passive: true });
+  new ResizeObserver(edges).observe(el);
+  el.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || el.scrollWidth <= el.clientWidth + 1) return;
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1;
+    const before = el.scrollLeft;
+    el.scrollLeft += e.deltaY * k;
+    if (el.scrollLeft !== before) e.preventDefault();
+  }, { passive: false });
+}
+
 function fail(msg: string) {
   document.getElementById("loading")?.remove();
   errorEl.hidden = false;
@@ -68,6 +90,7 @@ function fail(msg: string) {
 }
 
 async function main() {
+  const splash = new Splash($("loading"));
   let renderer: Renderer;
   try {
     renderer = await Renderer.create(canvas);
@@ -143,16 +166,22 @@ async function main() {
     scheduleUrlSave();
   }
 
+  /** the scene applied last (the panel and the gallery show it) */
+  let currentScene: string | null = null;
   const panel = new SettingsPanel($("panel"), {
     settings,
     defaults: defaultSettings,
     onChange: onSettingsChange,
     applyPreset: (name) => applyPreset(name),
     presetNames: Object.keys(presets),
+    currentScene: () => currentScene,
+    openScenes: (q) => scenes.open(q),
     loadImage: () => fileInput.click(),
     connectController: HidPads.supported ? () => connectController() : undefined,
     shareUrl: () => tools.shareLink(),
   });
+  const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
+  panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));
   const refreshGui = () => {
     panel.refresh();
     syncButtons();
@@ -161,11 +190,14 @@ async function main() {
   // (a preset exposed for our side — sunlit Saturn, ~21 EV above the disk — does not pass its exposure on)
   let exposedForOurSide = false;
   function applyPreset(name: string) {
+    currentScene = presets[name] ? name : null;
     const { time, mission: withMission, pose, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
     exposedForOurSide = pose !== undefined;
     mission.stop();
+    // (a scene without the ship: the view is placed, not falling)
+    if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
     camera.setOurLanded(null);
     if (pose) {
@@ -182,6 +214,7 @@ async function main() {
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
+
     if (withMission) mission.start();
     if (name === "game:artemis") {
       panel.toast("Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)");
@@ -207,6 +240,7 @@ async function main() {
   };
   const actions: Record<string, () => void> = {
     "btn-tools": () => toolsWin.toggle(),
+    "btn-scenes": () => scenes.toggle(),
     "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
     "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
     "btn-fly": () => camera.setFlyMode(!camera.flyMode),
@@ -241,6 +275,7 @@ async function main() {
     "btn-render": () => renderDialog.toggle(),
   };
   for (const [id, fn] of Object.entries(actions)) $(id).addEventListener("click", fn);
+  wheelScrollsSideways($("toolbar"));
   /** Next / previous target, named in a toast (or why there is nothing else to pick). */
   function nextTarget(dir: 1 | -1) {
     const list = camera.availableTargets();
@@ -661,6 +696,7 @@ async function main() {
     toast: (t) => panel.toast(t),
     fps: () => fps,
     renderScale: () => renderScale,
+    scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools);
   addEventListener("pagehide", () => {
@@ -672,6 +708,37 @@ async function main() {
       /** the game's tools: __bh.game.help() */
       game: tools,
       settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
+      /** the built-in scenes' names (for __bh.preset) */
+      scenes: () => Object.keys(presets),
+      /** the scene gallery's pictures: each scene applied, left to converge, cropped to 16:9, 640 × 360,
+       *  posted to snapshots/scene-<slug>.webp (then: bun scripts/scene-thumbs.ts) */
+      captureScenes: async (names = Object.keys(presets), maxMs = 14000) => {
+        const slug = (n: string) => n.normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60);
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const pixelRatio = settings.pixelRatio;
+        for (const name of names) {
+          // (from the defaults, as a first visit would show it: no ship or exposure carried over)
+          Object.assign(settings, defaultSettings(), QUALITY.high, { quality: "high", pixelRatio });
+          applyPreset(name);
+          // (still scenes are frozen and left to converge; flights and missions get a while)
+          const moving = !!presets[name]!.ship || !!presets[name]!.mission;
+          if (!moving) settings.animate = false;
+          touch();
+          const t0 = performance.now();
+          await wait(2500);
+          while (performance.now() - t0 < (moving ? 9000 : maxMs) && !(lastStats?.phase === "converged" && !moving)) await wait(250);
+          const img = await createImageBitmap(await renderer.exportPNG(settings));
+          const W = 640, H = 360;
+          const sw = Math.min(img.width, (img.height * W) / H), sh = (sw * H) / W;
+          const cv = new OffscreenCanvas(W, H);
+          const ctx = cv.getContext("2d")!;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, W, H);
+          const out = await cv.convertToBlob({ type: "image/webp", quality: 0.82 });
+          await fetch(`/__snapshot?name=scene-${slug(name)}.webp`, { method: "POST", body: out });
+        }
+        return names.length;
+      },
       time: () => simTime,
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
@@ -744,10 +811,9 @@ async function main() {
     const st = cpuProf.time("render (encode, submit)", () => renderer.frame(settings, simTime, changed, timeDirty, displayChanged));
     if (st) {
       if (!firstFrame) {
-        // the first image is on screen: lift the loading veil
+        // the first image is on screen: the loading screen lifts once the scene's assets are in
         firstFrame = true;
-        $("loading").classList.add("done");
-        setTimeout(() => $("loading").remove(), 800);
+        splash.firstImage();
       }
       fpsN++;
       changed = false;

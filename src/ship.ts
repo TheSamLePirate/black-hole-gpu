@@ -188,9 +188,9 @@ export class ShipRenderer {
   }
 
   /** Downloads the mesh (1 MB). */
-  async load() {
+  async load(get: (url: string) => Promise<Response> = fetch) {
     const d = this.device;
-    const mesh = await fetch(meshUrl).then((r) => r.arrayBuffer());
+    const mesh = await get(meshUrl).then((r) => r.arrayBuffer());
     const u32 = new Uint32Array(mesh, 0, 4);
     if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "RNGR" || u32[1] !== 2) throw new Error("bad ranger.bin");
     const nv = u32[2]!;

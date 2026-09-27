@@ -47,8 +47,11 @@ export interface PlanetMaps {
 const levels = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
 const lin = (c: number) => (c / 255) ** 2.2;
 
+/** (the downloads, counted by the loading screen) */
+let get: (url: string) => Promise<Response> = (u) => fetch(u);
+
 async function bitmap(url: string) {
-  const blob = await (await fetch(url)).blob();
+  const blob = await (await get(url)).blob();
   return createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
 }
 
@@ -136,7 +139,8 @@ export function placeholderMaps(device: GPUDevice): PlanetMaps {
   return { hi: mk(2), lo: mk(2), rings: mk(1), mean: new Map() };
 }
 
-export async function loadPlanetMaps(device: GPUDevice): Promise<PlanetMaps> {
+export async function loadPlanetMaps(device: GPUDevice, fetcher?: (url: string) => Promise<Response>): Promise<PlanetMaps> {
+  if (fetcher) get = fetcher;
   const mean = new Map<MapName, number>();
   const [hi, lo, rings] = await Promise.all([
     mapArray(device, MAPS_HI, 2048, 1024, mean),

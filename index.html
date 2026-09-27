@@ -15,9 +15,26 @@
     <canvas id="view"></canvas>
     <canvas id="overlay"></canvas>
 
-    <div id="loading" aria-live="polite">
-      <div class="ring"></div>
-      <p>Starting the ray tracer…</p>
+    <div id="loading" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="ld-sky" aria-hidden="true"><i></i><i></i></div>
+      <div class="ld-main">
+        <div class="ld-hole" aria-hidden="true">
+          <div class="ld-glow"></div>
+          <div class="ld-halo"><i></i></div>
+          <div class="ld-disk"><i></i></div>
+          <div class="ld-shadow"></div>
+          <div class="ld-disk front"><i></i></div>
+        </div>
+        <h1 class="ld-title">KERR</h1>
+        <p class="ld-sub">General-relativistic ray tracing · the journey to Gargantua</p>
+        <div class="ld-progress">
+          <div class="ld-bar"><i></i></div>
+          <div class="ld-line"><span class="ld-stage">Starting the ray tracer…</span><span class="ld-pct">0 %</span></div>
+        </div>
+        <ol class="ld-steps"></ol>
+        <button class="ld-skip" hidden>Enter now — the rest keeps loading</button>
+      </div>
+      <p class="ld-tip"></p>
     </div>
 
     <div id="hud" class="glass">
@@ -37,6 +54,8 @@
     <div id="panel"></div>
 
     <nav id="toolbar" class="glass">
+      <button id="btn-scenes" data-tip="Scenes — every black hole, the wormhole, Gargantua and the game's missions"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><circle cx="17" cy="17" r="3.2" class="fill" /></svg><span>Scenes</span></button>
+      <span class="sep"></span>
       <button id="btn-rotation" data-tip="Rotation mode" data-key="R"><svg viewBox="0 0 24 24" class="ic-around"><circle cx="12" cy="12" r="2.4" class="fill" /><path d="M4.5 9.5a8.5 8.5 0 0 1 15-1.5" /><path d="M19.5 14.5a8.5 8.5 0 0 1-15 1.5" /><path d="M19.8 4.6l-.3 3.4-3.4-.4M4.2 19.4l.3-3.4 3.4.4" /></svg><svg viewBox="0 0 24 24" class="ic-free"><circle cx="12" cy="12" r="3" /><path d="M12 2v5M12 17v5M2 12h5M17 12h5" /><path d="M10 4l2-2 2 2M10 20l2 2 2-2M4 10l-2 2 2 2M20 10l2 2-2 2" /></svg><span>Around</span></button>
       <button id="btn-target" data-tip="Target — click a body to select it, double-click to fly to it" data-key="Tab"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle cx="12" cy="12" r="3.2" class="fill" /></svg><span>Gargantua</span></button>
       <button id="btn-orbit" data-tip="Auto-orbit around the target" data-key="O"><svg viewBox="0 0 24 24"><path d="M19.2 8.4A8 8 0 1 1 15.6 4.9" /><circle cx="12" cy="12" r="2.2" class="fill" /><circle cx="18" cy="6" r="2" class="fill" /></svg><span>Auto</span></button>

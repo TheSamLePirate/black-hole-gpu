@@ -8,6 +8,7 @@ import { ENV_H, ShipRenderer } from "./ship";
 import { GpuProfiler } from "./gpuprof";
 import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
+import { loading } from "./loading";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
@@ -428,12 +429,18 @@ export class Renderer {
    * procedural sky is shown until it is ready.
    */
   async loadSky(): Promise<void> {
-    const [bitmap, lod, cat] = await Promise.all([
-      fetch(milkyWayUrl)
+    loading.stage("sky", "Milky Way — the Gaia DR2 map", { weight: 2 });
+    loading.stage("stars", "Stars — the Hipparcos & HYG catalogue", { weight: 2 });
+    const stars = Promise.all([
+      loadPackedTexture(this.device, starLodUrl, (u) => loading.fetch(u, "stars")),
+      loadStarCatalogue(this.device, starCatalogueUrl, (u) => loading.fetch(u, "stars")),
+    ]);
+    const [bitmap, [lod, cat]] = await Promise.all([
+      loading.track("sky", "", loading
+        .fetch(milkyWayUrl, "sky")
         .then((r) => r.blob())
-        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" })),
-      loadPackedTexture(this.device, starLodUrl),
-      loadStarCatalogue(this.device, starCatalogueUrl),
+        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" }))),
+      loading.track("stars", "", stars),
     ]);
     this.mwTexture = this.skyBuilder.build(bitmap, "log16", this.device.limits.maxTextureDimension2D);
     this.starLodTexture = lod;
@@ -447,7 +454,8 @@ export class Renderer {
   /** Loads the solar system's maps in the background, the first time a scene needs them. */
   private requestPlanetMaps() {
     this.mapsRequested = true;
-    loadPlanetMaps(this.device)
+    loading.stage("maps", "Planets & moons — the solar system's maps", { weight: 3 });
+    loading.track("maps", "", loadPlanetMaps(this.device, (u) => loading.fetch(u, "maps")))
       .then((maps) => {
         this.planetMaps = maps;
         if (this.live) this.bindTarget(this.live);
@@ -464,6 +472,8 @@ export class Renderer {
 
   static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
     if (!navigator.gpu) throw new Error("WebGPU is not available in this browser.");
+    loading.stage("gpu", "WebGPU — the graphics device", { weight: 0.5, indeterminate: true, eta: 0.5 });
+    loading.stage("shaders", "Shaders — geodesics, disk, sky, Ranger", { weight: 1 });
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!adapter) throw new Error("No WebGPU adapter found.");
     const device = await adapter.requestDevice({
@@ -481,14 +491,20 @@ export class Renderer {
     if (!context) throw new Error("Could not create a WebGPU canvas context.");
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
+    loading.done("gpu");
     const src = {
       trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
       ship: await wgsl(shipWGSL),
     };
+    loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
+    // (the pipelines compile in the GPU process; the first frame waits for them)
+    loading.stage("pipelines", "Compiling the ray tracer — first image", { weight: 4, indeterminate: true, eta: 3 });
+    let checked = 0;
     for (const [name, code] of Object.entries(src)) {
       const info = await device.createShaderModule({ code }).getCompilationInfo();
+      loading.set("shaders", 0.3 + (0.7 * ++checked) / Object.keys(src).length);
       const errors = info.messages.filter((m) => m.type === "error");
       if (errors.length) {
         throw new Error(`${name}.wgsl failed to compile:\n` + errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n"));
@@ -496,6 +512,7 @@ export class Renderer {
     }
     const err = await device.popErrorScope();
     if (err) throw new Error(`WebGPU pipeline creation failed: ${err.message}`);
+    loading.done("shaders");
     return r;
   }
 
@@ -1154,7 +1171,7 @@ export class Renderer {
       return;
     }
     if (!this.ship.ready) {
-      this.shipLoading ??= this.ship.load().then(() => this.invalidate(), (e) => console.error("Ranger:", e));
+      this.shipLoading ??= loading.track("ranger", "The Ranger — hull & mounts", this.ship.load((u) => loading.fetch(u, "ranger"))).then(() => this.invalidate(), (e) => console.error("Ranger:", e));
       return;
     }
     // (256 × 128 probe: everything after a reset, else one texel of each 2×2 or 4×4 block per run)
