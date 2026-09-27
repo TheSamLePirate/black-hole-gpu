@@ -1227,7 +1227,9 @@ export class CameraController {
     // takes to fall towards its nearest body (a warp beyond them: the ship's clock lags the request)
     const t0 = this.nowTime();
     const ours = p.l < -m.w.a && s.system === "gargantua";
-    if (ours && homeOfPose(m.w, p).r > 1.05 * 100 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w);
+    // (our side: the home frame's Cartesian flight — the planner's — down to 12 throat radii, where
+    // the Dneg space is flat to 0.4 %; closer, along the metric's geodesics, through the throat)
+    if (ours && homeOfPose(m.w, p).r > 12 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w);
     let steps = 1;
     let span = simDt;
     if (ours) {
@@ -1238,22 +1240,29 @@ export class CameraController {
     let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
     const dt = span / steps;
     for (let i = 0; i < steps; i++) {
+      // (kick, drift along the geodesic, kick: second order — the half kicks carried by the geodesic's
+      // parallel transport of the velocity)
       if (ours) {
         const g = ourGravity(m.w, pose.l, pose.n, t0 + i * dt);
         if (g.inside) {
           v = homeToRep(m.w, pose.l, pose.n, ourState(g.inside, t0 + i * dt).vel);
           break;
         }
-        v = lin(v, 1, g.acc, dt);
-        const sp = Math.hypot(...v);
-        if (sp > 0.999) v = lin(v, 0.999 / sp, v, 0);
+        v = lin(v, 1, g.acc, dt / 2);
       }
       const speed = Math.hypot(...v);
       this.properTime += dt * Math.sqrt(Math.max(1 - speed * speed, 0));
-      if (speed < 1e-12) continue;
-      const q = flyDneg(m.w, pose.l, pose.n, lin(v, 1 / speed, v, 0), [pose.fwd, pose.up], speed * dt);
-      pose = { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]! };
-      v = lin(q.dir, speed, q.dir, 0);
+      if (speed >= 1e-12) {
+        const q = flyDneg(m.w, pose.l, pose.n, lin(v, 1 / speed, v, 0), [pose.fwd, pose.up], speed * dt);
+        pose = { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]! };
+        v = lin(q.dir, speed, q.dir, 0);
+      }
+      if (ours) {
+        const g = ourGravity(m.w, pose.l, pose.n, t0 + (i + 1) * dt);
+        if (!g.inside) v = lin(v, 1, g.acc, dt / 2);
+        const sp = Math.hypot(...v);
+        if (sp > 0.999) v = lin(v, 0.999 / sp, v, 0);
+      }
     }
     setRepPose(s, { ...pose, vel: v });
     s.motion = "geodesic";

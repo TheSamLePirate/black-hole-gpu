@@ -481,13 +481,15 @@ function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, 
   // (a finer integration than the map's: the aim differentiates the path)
   const run = (dv: Vec3, tb: number) => predictOurs(X, V, t, [{ t: tb, dv }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: coarse ? 0.05 : 0.02 });
   let cart = false;
-  const timed = withTime && stage === "out" && m.type !== "parent";
+  // (the meeting time kept for a moon's — days of flight, where the least change slides along the
+  // family; not across the planets: an hour's slip after years is nothing, correcting it hundreds of m/s)
+  const timed = withTime && stage === "out" && m.type === "direct" && m.home !== "sun";
   const goals = (x: number[]) => residuals(m, run([x[0]!, x[1]!, x[2]!], moveTime ? tn + x[3]! : tn), 0, stage, o.mouthR, cart, timed);
   const nGoals = stage === "escape" ? 3 : stage === "back" || m.type === "parent" ? 1 : 2;
   // (leaving a moon for its planet: the perigee is very sensitive to the burn — tens of km of it
   // are the integration's noise; the correction halfway down takes the rest)
   const tol: number[] = new Array(nGoals).fill(stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" && !inFlight ? 60 * KM : aimTol(m, inFlight));
-  if (timed) tol.push((m.type === "sibling" ? 3600 : 300) / M_SECONDS);
+  if (timed) tol.push(300 / M_SECONDS);
   // (the burn's time too, for a departure: moving it along the orbit turns the way out — cheaper
   // than a radial Δv; its step, a second, weighs as 0.05 m/s in the least change)
   const x0 = moveTime ? [...dv0, 0] : [...dv0];
@@ -522,8 +524,9 @@ const kms = (v: number) => (v * C >= 1000 ? `${((v * C) / 1000).toFixed(2)} km/s
 const days = (dt: number) => (dt >= 2 * DAY ? `${(dt / DAY).toFixed(1)} d` : `${(dt / (DAY / 24)).toFixed(1)} h`);
 
 /** A circular orbit at a height around the reference body: two burns (Hohmann), or one. */
-export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM: number, o: PlanOptions): OurPlanResult {
+export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM0: number, o: PlanOptions): OurPlanResult {
   const { ref, b } = parking(X, V, t);
+  const altM = clearOfRings(ref, altM0).altM;
   if (ref === "sun" && !(altM > 0)) return { error: "Orbit: near a body first" };
   const rt = b.radius + altM / M_METRES;
   const t1 = t + o.lead;
@@ -563,8 +566,25 @@ export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM: number, o: PlanO
 }
 
 /** A transfer from the reference body's neighbourhood to a target body (or the wormhole's mouth). */
-export function planOurTransfer(X: Vec3, V: Vec3, t: number, goal: OurGoal, o: PlanOptions): OurPlanResult {
+/** A height clear of a body's rings (Saturn's: out to 2.42 radii): raised above them, with a note. */
+function clearOfRings(id: string, altM: number) {
+  const b = solarBody(id);
+  const ring = b?.rings;
+  if (!b || !ring) return { altM, note: "" };
+  const min = (ring.outer * 1.08 - 1) * b.radius * M_METRES;
+  return altM >= min ? { altM, note: "" } : { altM: min, note: ` · raised above the rings to ${km(min / M_METRES)}` };
+}
+
+export function planOurTransfer(X: Vec3, V: Vec3, t: number, goal0: OurGoal, o: PlanOptions): OurPlanResult {
   const home = referenceBody(X, t);
+  const clear = clearOfRings(goal0.target === home ? home : goal0.target, goal0.altM);
+  const goal = { ...goal0, altM: clear.altM };
+  const res = planOurTransferRaw(X, V, t, goal, home, o);
+  if (!("error" in res) && clear.note) res.note += clear.note;
+  return res;
+}
+
+function planOurTransferRaw(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o: PlanOptions): OurPlanResult {
   const tb = info(goal.target, o.mouthR);
   const hb = info(home)!;
   if (!tb) return { error: "Transfer: select a target (Tab, or a click on the map)" };
