@@ -1272,27 +1272,52 @@ fn diskFootprint(s: GState) -> f32 {
 }
 /** x: the heat (temperature factor), y: the density (optical depth factor), both in [0, 1]; fw: the
  *  sample's footprint there [M] (diskFootprint). */
-fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32, fw: f32) -> vec2f {
-  let lr = log(r);
-  let u = lr * DISK_BANDS - 0.5;
+// The large scale of the gas, seen from afar when the strands are finer than a pixel: wide rings
+// (DISK_BANDS_C per unit of ln r, ~15 % of r), each orbiting rigidly with its own pattern too — broad
+// bright stretches and dark lanes along the orbits, concentric banding across them. Zero mean.
+const DISK_BANDS_C = 7.0;
+fn diskCoarse(ang: f32, lr0: f32, ring: f32, px: f32) -> f32 {
+  let lr = lr0 + ring * 2.71;
+  let c = vec2f(cos(ang), sin(ang));
+  let lod = 1.0 / max(px, 1e-9);
+  var v = 0.0;
+  let wl = smoothstep(0.35, 1.2, lod / 4.0);
+  if (wl > 0.0) { v += 0.85 * wl * gnoise(vec3f(c * 1.4, lr * 4.0 + 3.0)); }
+  let wb = smoothstep(0.35, 1.2, lod / 30.0);
+  if (wb > 0.0) { v += 0.75 * wb * gnoise(vec3f(c * 0.7, lr * 30.0 + 7.0)); }
+  return clamp(v, -1.0, 1.0);
+}
+// Two neighbouring rings of a level (n per unit of ln r) at the angle each has turned to by tEm, blended
+// across the ring keeping the contrast of one: the fine strands (level 1) or the large scale (0).
+struct RingPair { ang0: f32, ang1: f32, ib0: f32, w0: f32, w1: f32 };
+fn ringPair(lr: f32, phi: f32, tEm: f32, a: f32, n: f32) -> RingPair {
+  let u = lr * n - 0.5;
   let i0 = floor(u);
   let f = u - i0;
   let w1 = f * f * (3.0 - 2.0 * f);
-  var acc = vec2f(0.0);
-  var w2 = 0.0;
+  var o: RingPair;
+  o.ib0 = i0;
+  let norm = inverseSqrt(max((1.0 - w1) * (1.0 - w1) + w1 * w1, 1e-6));
+  o.w0 = (1.0 - w1) * norm;
+  o.w1 = w1 * norm;
   for (var k = 0; k < 2; k++) {
     let ib = i0 + f32(k);
-    let rb = exp((ib + 0.5) / DISK_BANDS);
-    let om = 1.0 / (pow(rb, 1.5) + a);
+    let om = 1.0 / (pow(exp((ib + 0.5) / n), 1.5) + a);
     // (the ring's angle now: its own turns taken out, in f32 over long times)
-    let turns = om * tEm / TAU;
-    let ang = phi - TAU * fract(turns) + ib * 2.399;
-    let w = select(1.0 - w1, w1, k == 1);
-    acc += w * (diskStrands(ang, lr, zn, ib, fw / r) - 0.5);
-    w2 += w * w;
+    let ang = phi - TAU * fract(om * tEm / TAU) + ib * 2.399;
+    if (k == 0) { o.ang0 = ang; } else { o.ang1 = ang; }
   }
-  // (the blend of two rings keeps the contrast of one)
-  return clamp(0.5 + acc * inverseSqrt(max(w2, 1e-6)), vec2f(0.0), vec2f(1.0));
+  return o;
+}
+fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32, fw: f32) -> vec2f {
+  let lr = log(r);
+  let px = fw / r;
+  let pf = ringPair(lr, phi, tEm, a, DISK_BANDS);
+  let fine = 0.5 + pf.w0 * (diskStrands(pf.ang0, lr, zn, pf.ib0, px) - 0.5) + pf.w1 * (diskStrands(pf.ang1, lr, zn, pf.ib0 + 1.0, px) - 0.5);
+  let pc = ringPair(lr, phi, tEm, a, DISK_BANDS_C);
+  let k = pc.w0 * diskCoarse(pc.ang0, lr, pc.ib0, px) + pc.w1 * diskCoarse(pc.ang1, lr, pc.ib0 + 1.0, px);
+  // (the large scale over the strands: hotter and denser stretches, darker lanes)
+  return clamp(vec2f(fine.x + 0.3 * k, fine.y * (1.0 + 0.7 * k)), vec2f(0.0), vec2f(1.0));
 }
 
 struct DiskHit { color: vec3f, trans: f32, g: f32, T: f32 };
