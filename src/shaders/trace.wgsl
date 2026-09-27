@@ -403,19 +403,21 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
   h = min(h, eps * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
   let hr = P.ext2.z;
   if (hr > 0.0 && P.modes.w == 1u) {
-    // volumetric disk: never jump over the layer |z| < 4H (8H with its haze or smoke), sample it at
-    // ≲ 0.4 H across; along it ≲ 0.08 R — ≲ 0.25 M through the smoke (clouds an M across: their
-    // outlines drawn, not averaged away)
+    // volumetric disk: never jump over the layer |z| < 4H (8H with its haze; the smoke's, ~0.5 M above
+    // the surface, beyond 8 M), sample it at
+    // ≲ 0.4 H across; along it ≲ 0.08 R — ≲ 0.1 M through the smoke (clouds an M across: their
+    // outlines drawn, not averaged away, nor stepped — each step only partly opaque; 0.25 M in the
+    // realtime passes, a block per ray: the refining passes and offline frames take the fine one)
     let R = r * sn;
     if (R > P.bh.z * 0.8 && R < P.bh.w * 1.05) {
       let H = hr * R;
       let d = geodesicRHS(s.x, s.p, L, a);
       let zdot = abs(d.dx.x * c - r * sn * d.dx.y) + 1e-4;
-      let dist = abs(r * c) - select(4.0, 8.0, P.ret.w > 0.0 || P.radio2.z > 0.0) * H;
+      let dist = abs(r * c) - max(select(4.0, 8.0, P.ret.w > 0.0) * H, select(0.0, 2.5 * H + 1.0, P.radio2.z > 0.0 && R > 8.0));
       h = min(h, (max(dist, 0.0) + 0.4 * H) / zdot);
       if (dist < 0.0) {
         h = min(h, 0.08 * R);
-        if (P.radio2.z > 0.0 && R > 8.0) { h = min(h, 0.25); }
+        if (P.radio2.z > 0.0 && R > 8.0) { h = min(h, select(0.1, 0.25, (P.frame.z & FLAG_INTERLEAVED) != 0u)); }
       }
     }
   }
@@ -1456,15 +1458,18 @@ fn diskSource(T: f32, g: f32) -> vec3f {
   return blackbody(T * g, P.disk.w);
 }
 
-// The smoke (P.radio2.z, 0: none): puffy clouds of cool dense gas above the disk's surface (1.5–7 H),
+// The smoke (P.radio2.z, 0: none): puffy clouds of cool dense gas above the disk's surface (from 1.5 H,
+// a soft top ~0.5 M higher),
 // in its outer, cooler part (beyond ~10 M), over an M across with a clear outline, orbiting with the
 // wide rings (each rigidly, blended across), rising and churning as they go: opaque, their cores at
 // ~0.4 of the local temperature,
 // their thin edges warmer — dark silhouettes rimmed with orange against the haze, sparse patches from
 // above. Its density factor at a point (0 outside the layer).
 fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
-  // (above the surface; only in the outer, cooler disk — the inner heat leaves none)
-  let layer = smoothstep(1.2, 2.5, abs(zn)) * (1.0 - smoothstep(4.5, 7.0, abs(zn))) * smoothstep(8.0, 14.0, R);
+  // (above the surface, up to a soft top ~0.5 M higher — not a thin slab slicing the clouds flat; only
+  // in the outer, cooler disk — the inner heat leaves none)
+  let za = max(abs(z) - 2.5 * abs(z) / max(abs(zn), 1e-6), 0.0); // (height above 2.5 H)
+  let layer = smoothstep(1.2, 2.5, abs(zn)) * exp(-(za * za) / 0.16) * smoothstep(8.0, 14.0, R);
   if (layer <= 0.0) { return 0.0; }
   let pc = ringPair(log(R), phi, tEm, a, DISK_BANDS_C);
   var v = 0.0;
@@ -1511,7 +1516,7 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let H = P.ext2.z * R;
   let haze = P.ret.w;
   let smoke = P.radio2.z;
-  if (R < rIn * 0.85 || R > rOut || abs(z) > select(4.0, 8.0, haze > 0.0 || smoke > 0.0) * H) { return o; }
+  if (R < rIn * 0.85 || R > rOut || abs(z) > max(select(4.0, 8.0, haze > 0.0) * H, select(0.0, 2.5 * H + 1.0, smoke > 0.0 && R > 8.0))) { return o; }
   let zn = z / H;
   let edge = smoothstep(rIn * 0.85, rIn * 1.03, R) * (1.0 - smoothstep(rOut * 0.8, rOut, R));
   var rho = exp(-0.5 * zn * zn) * 0.3989423 / H * edge;
@@ -1530,7 +1535,7 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   var smD = 0.0;
   if (smoke > 0.0 && R > 8.0) {
     smD = diskSmoke(R, s.x.z, zn, z, tNow + s.x.w, a);
-    sm = smoke * 6.0 / H * edge * smD;
+    sm = smoke * 1.5 / H * edge * smD;
   }
   if (rho < 1e-6 && hz <= 0.0 && sm <= 0.0) { return o; }
   let omega = 1.0 / (pow(max(R, 1.0), 1.5) + a);
@@ -3217,7 +3222,13 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       }
     }
     if (diskOn && thick) {
-      let d = diskVolume(n, L, E0, h, tNow);
+      // (sampled at a random point of the step — a different one at each step and sample — so that
+      // sharp structure along the ray, the smoke's outlines, is not sliced at the steps' spacing)
+      var sm = n;
+      let js = fract(rnd * 7.13 + f32(i) * 0.6180339887);
+      sm.x = mix(s.x, n.x, js);
+      sm.p = mix(s.p, n.p, js);
+      let d = diskVolume(sm, L, E0, h, tNow);
       if (d.dtau > 0.0) {
         let att = exp(-d.dtau);
         if (!radio) { col += trans * d.S * (1.0 - att); }
