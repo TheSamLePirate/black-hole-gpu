@@ -1458,7 +1458,8 @@ fn diskSource(T: f32, g: f32) -> vec3f {
 
 // The smoke (P.radio2.z, 0: none): puffy clouds of cool dense gas above the disk's surface (1.5–7 H),
 // in its outer, cooler part (beyond ~10 M), over an M across with a clear outline, orbiting with the
-// wide rings (each rigidly, blended across): opaque, their cores at ~0.4 of the local temperature,
+// wide rings (each rigidly, blended across), rising and churning as they go: opaque, their cores at
+// ~0.4 of the local temperature,
 // their thin edges warmer — dark silhouettes rimmed with orange against the haze, sparse patches from
 // above. Its density factor at a point (0 outside the layer).
 fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
@@ -1469,8 +1470,13 @@ fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
   var v = 0.0;
   for (var k = 0; k < 2; k++) {
     let ang = select(pc.ang0, pc.ang1, k == 1);
-    // (isotropic puffs: the ring's frame in M, 0.8 cell per M — clouds over a metre… an M across)
-    var q = vec3f(R * cos(ang), R * sin(ang), z) * 0.8 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
+    // (isotropic puffs: the ring's frame in M, 0.8 cell per M — clouds over an M across; they rise
+    // away from the midplane at 0.02 (convection: born low in the layer, thinning out at its top) and
+    // churn — a slow swirl warping them, so they boil as they orbit)
+    let zr = sign(z) * (abs(z) - 0.02 * tEm);
+    var q = vec3f(R * cos(ang), R * sin(ang), zr) * 0.8 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
+    let tw = 0.015 * tEm;
+    q += 0.9 * vec3f(gnoise(q * 0.4 + vec3f(0.0, 0.0, tw)), gnoise(q * 0.4 + vec3f(5.2, 1.3, tw + 7.1)), 0.0);
     var f = 0.0;
     var amp = 0.5;
     for (var o = 0; o < 5; o++) {

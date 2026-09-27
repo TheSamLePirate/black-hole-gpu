@@ -694,13 +694,18 @@ async function main() {
   };
   /**
    * Automation: a video of the current view — offline frames at the scene's time advancing by `rate` M
-   * per second of video (the camera still), H.264 in an MP4 saved through the dev server
-   * (snapshots/<name>.mp4). Progress in __bh.videoState.
-   * __bh.video("pass", { seconds: 10, fps: 30, rate: 8, width: 1920, height: 1080, spp: 24 })
+   * per second of video (the camera still, or moved by `path(u)`, u from 0 to 1: settings for the
+   * frame), H.264 in an MP4 saved through the dev server (snapshots/<name>.mp4). Progress in
+   * __bh.videoState.
+   * __bh.video("pass", { seconds: 10, fps: 30, rate: 8, width: 1920, height: 1080, spp: 24,
+   *   path: (u) => ({ azimuth: 40 + 12 * u }) })
    */
   const videoState = { frame: 0, frames: 0, started: 0, done: false, result: "" };
-  const video = async (name: string, o: Partial<OfflineOptions> & { seconds?: number; fps?: number; rate?: number } = {}) => {
-    const { seconds = 10, fps = 30, rate = settings.timeSpeed, ...off } = o;
+  const video = async (
+    name: string,
+    o: Partial<OfflineOptions> & { seconds?: number; fps?: number; rate?: number; path?: (u: number) => Partial<Settings> } = {},
+  ) => {
+    const { seconds = 10, fps = 30, rate = settings.timeSpeed, path, ...off } = o;
     const opts: OfflineOptions = {
       width: 1920, height: 1080, spp: 24, tolerance: 1e-5, eps: 0.03, maxSteps: 6000, noiseThreshold: 0.01,
       minSpp: 8, shutter: 0, budgetMs: 250, ...off,
@@ -713,7 +718,9 @@ async function main() {
     renderer.cancelOffline();
     const t0 = simTime;
     Object.assign(videoState, { frame: 0, frames: Math.round(seconds * fps), started: performance.now(), done: false, result: "" });
-    for (let i = 0; i < videoState.frames; i++) {
+    const n = videoState.frames;
+    for (let i = 0; i < n; i++) {
+      if (path) Object.assign(settings, path(n > 1 ? i / (n - 1) : 0));
       renderer.startOffline(settings, t0 + (i / fps) * rate, opts);
       while (!renderer.offlineState?.done) {
         await new Promise((r) => setTimeout(r, 20));
