@@ -4,7 +4,7 @@ import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
-import { ShipRenderer } from "./ship";
+import { ENV_H, ShipRenderer } from "./ship";
 import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
@@ -38,7 +38,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 55;
+const PARAM_VEC4S = 58;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -198,6 +198,11 @@ export class Renderer {
   readonly ship: ShipRenderer;
   private envPipeline: GPUComputePipeline;
   private envReset = true;
+  // the Ranger's light probe: what it saw last frame (unit vectors from the camera to what lights it,
+  // world axes; its velocity; its place around the hole), to size its running mean
+  private probeSeen: { side: string; things: Map<string, Vec3>; beta: Vec3; er: Vec3; time: number; sky: number } | null = null;
+  /** the camera's axes (right, up, forward) in the Ranger's probe's axes */
+  private shipProbeAxes: [Vec3, Vec3, Vec3] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   private envPhase = 0;
   private shipLoading: Promise<void> | null = null;
   /** Where the camera sits on the ship now (the app sets it every frame: it moves between attach points). */
@@ -1012,10 +1017,26 @@ export class Renderer {
     const liquid = hexToLinear(s.waterColor);
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
-    // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light)
-    // (window: 2 samples while the camera moves, a long running mean once it holds still)
-    if (o.probe) set(47, 1, 0, 1, 1);
-    else set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, o.flags & FLAG_INTERLEAVED ? 2 : 512);
+    // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
+    // its axes: the planet's probe camera's, else fixed (the ZAMO's, or the throat's), so that it
+    // keeps a long running mean while the camera turns — shortened as what it sees moves (a texel
+    // refreshed every 4 frames lags N of them: N·4·drift within a texel; 4 at least — a light
+    // lagging a few degrees does not show, a flickering one does)
+    if (o.probe) {
+      set(47, 1, 0, 1, 1);
+      set(55, ...cam.right, 0);
+      set(56, ...cam.up, 0);
+      set(57, ...cam.fwd, 0);
+    } else {
+      const drift = this.probeDrift(s, cam, bodies, origin, m, time, bg);
+      if (!(drift < 0.1)) this.envReset = true;
+      const window = Math.round(Math.min(512, Math.max(4, Math.PI / ENV_H / (4 * drift))));
+      set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, window);
+      set(55, 1, 0, 0, 0);
+      set(56, 0, 1, 0, 0);
+      set(57, 0, 0, 1, 0);
+      this.shipProbeAxes = [cam.right, cam.up, cam.fwd];
+    }
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -1262,7 +1283,7 @@ export class Renderer {
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
-          plasma: this.shipPlasma,
+          plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
         });
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
@@ -1294,6 +1315,52 @@ export class Renderer {
         }).catch(() => (this.meterPending = false)),
       );
     }
+  }
+
+  /**
+   * How far the Ranger's light probe's view moved since the last frame [rad]. Its axes do not turn
+   * with the camera: only the camera's travel moves what it sees — the parallax of the bodies large
+   * or bright enough to light the ship (and of the hole, of the mouth), the aberration of its changing
+   * velocity, the ZAMO's axes turning as it goes round the hole. Infinity: a jump (the other side,
+   * the sky's brightness changed).
+   */
+  private probeDrift(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, m: ReturnType<typeof mouth>, time: number, sky: number) {
+    const texel = Math.PI / ENV_H;
+    const things = new Map<string, Vec3>();
+    const add = (id: string, v: Vec3, radius: number, star: boolean) => {
+      const d = Math.hypot(v[0], v[1], v[2]);
+      if (d > 0 && (star || radius / d > 0.25 * texel)) things.set(id, [v[0] / d, v[1] / d, v[2] / d]);
+    };
+    const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const list = bodies.slice(0, MAX_BODIES);
+    const start = ourStart(list);
+    const side = cam.region === "hole" ? "hole" : cam.ell < 0 ? "ours" : "theirs";
+    let er: Vec3 = [0, 0, 0];
+    if (side === "ours") {
+      list.forEach((b, k) => k >= start && add(b.id, sub(b.pos, origin), b.radius, b.kind === BODY_STAR));
+    } else {
+      const st = Math.sin(cam.theta);
+      const X: Vec3 = side === "hole" ? [cam.r * st * Math.cos(cam.phi), cam.r * st * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (m.C as Vec3);
+      if (side === "hole") er = [st * Math.cos(cam.phi), st * Math.sin(cam.phi), Math.cos(cam.theta)];
+      add("hole", [-X[0], -X[1], -X[2]], Math.max(s.disk ? s.diskOuter : 0, 3), false);
+      list.forEach((b, k) => k < start && add(b.id, sub(bodyPlace(list, k), X), b.radius, b.kind === BODY_STAR));
+      if (s.wormhole && side === "hole") add("mouth", sub(m.C as Vec3, X), m.w.rho, false);
+    }
+    // (in the throat's region: the mouth around the camera)
+    if (s.wormhole && side !== "hole") add("mouth", [-cam.n[0], -cam.n[1], -cam.n[2]], m.w.rho / Math.max(radius(m.w, cam.ell)[0], m.w.rho), false);
+    const prev = this.probeSeen;
+    this.probeSeen = { side, things, beta: [...cam.beta], er, time, sky };
+    // (the sky's brightness follows the auto exposure: what the probe holds of it is then stale)
+    if (!prev || prev.side !== side || Math.abs(Math.log2(sky / prev.sky)) > 0.01) return Infinity;
+    const angle = (a: Vec3, b: Vec3) => 2 * Math.asin(Math.min(1, 0.5 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])));
+    // the probe's axes turning: the ZAMO's around the hole, the throat's with the orbiting mouth
+    const turn = side === "hole" ? angle(er, prev.er) : side === "theirs" ? Math.abs(m.omega * (time - prev.time)) : 0;
+    let moved = Math.hypot(cam.beta[0] - prev.beta[0], cam.beta[1] - prev.beta[1], cam.beta[2] - prev.beta[2]);
+    for (const [id, d] of things) {
+      const p = prev.things.get(id);
+      if (p) moved = Math.max(moved, angle(d, p));
+    }
+    return turn + moved;
   }
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */

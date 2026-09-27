@@ -23,6 +23,8 @@ export interface ShipView {
   pre?: number;
   /** re-entry glow: the air's flow direction (camera frame), level 0…1 */
   plasma?: [number, number, number, number];
+  /** the camera's axes (x right, y up, z forward) in the light probe's axes (default: the same) */
+  probeAxes?: [V3, V3, V3];
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -92,7 +94,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.shadowTex = d.createTexture({
       size: [SHADOW, SHADOW], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -261,7 +263,7 @@ export class ShipRenderer {
   private writeUniform(v: ShipView) {
     const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
     // column-major mat4: columns = images of the ship's x, y, z axes, then the translation
-    const m = new Float32Array(36);
+    const m = new Float32Array(48);
     for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = R[r]![c]!;
     m.set([...t, 1], 12);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
@@ -271,6 +273,8 @@ export class ShipRenderer {
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
+    const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    ax.forEach((a, i) => m.set([...a, 0], 36 + 4 * i));
     this.device.queue.writeBuffer(this.uniform, 0, m);
   }
 

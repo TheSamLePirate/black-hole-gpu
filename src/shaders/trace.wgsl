@@ -71,6 +71,11 @@ struct Params {
                    // top of the air [radii], seconds per M (the waves' clock)
   ourCam: vec4f,   // our universe: the origin of its bodies' places (the camera's place in the home
                    // frame when it is there, else the mouth: 0); w = radius of the Dneg region (r(ℓ_far))
+  // the light probe's axes (components along the ZAMO axes, like the look directions): the camera's
+  // for a planet's probe; fixed ones for the Ranger's (its texels keep still when the camera turns)
+  envX: vec4f,
+  envY: vec4f,
+  envZ: vec4f,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -535,7 +540,11 @@ fn bodyMass(k: u32) -> f32 { return bodies[BV * k + 1u].w; }
 fn bodyKind(k: u32) -> u32 { return u32(bodies[BV * k + 1u].z); }
 fn bodyWhere(k: u32) -> u32 { return u32(bodies[BV * k + 3u].z); }
 // A pixel's footprint radius at a distance d along its ray (unlensed estimate: the beam of one pixel)
-fn footprint(d: f32) -> f32 { return 0.75 * P.camUp.w * d; }
+fn footprint(d: f32) -> f32 { return 0.75 * beam() * d; }
+// The angle of a sample's beam: the pixel's, or the light probe's texel (its rays stand for a whole
+// texel: what is smaller than that is spread over it, not met by chance — see env)
+var<private> probeBeam: f32 = 0.0;
+fn beam() -> f32 { return max(P.camUp.w, probeBeam); }
 // The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
 // the centre (|qc| < rEff) sees the point of a sphere of radius rEff above qc — so a sub-pixel planet
 // still shows its phase (a crescent a pixel wide), and a star its limb darkening.
@@ -625,6 +634,9 @@ fn throatGlow(X: vec3f, dW: vec3f, C: vec3f, dist: f32, g: f32) -> vec3f {
 // turned to the catalogue's scale (P.bodyCfg2.x), compressed above magnitude −2.
 // (the light probes take them at their true flux, uncompressed: the Sun lights the Ranger near Saturn)
 var<private> physicalPoints: bool = false;
+// (the light probe: its ray's offset from the texel's centre — the points' filter is taken there, so
+// that a texel's share of a point does not depend on where its ray fell)
+var<private> probeShift: vec3f = vec3f(0.0);
 fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f {
   var col = vec3f(0.0);
   let k0 = select(0u, ourStart(), side == 2u);
@@ -639,8 +651,10 @@ fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f 
     let bd = v / D;
     let R = bodyRadius(k);
     // (ours: only when smaller than the pixel — larger, the rays meet it: ourSegment)
-    if (ours && R * max(ringOuter(k), 1.0) >= 0.5 * P.camUp.w * (D + org.w)) { continue; }
-    let kern = skyKernel(filt, d - bd);
+    if (ours && R * max(ringOuter(k), 1.0) >= 0.5 * beam() * (D + org.w)) { continue; }
+    // (the filter lives in the tangent plane at d: a point behind the ray would land on its centre)
+    if (dot(d, bd) <= 0.0) { continue; }
+    let kern = skyKernel(filt, d - probeShift - bd);
     if (kern < 1e-4 * filt.norm) { continue; }
     // the side it shows (a planet's phase, at its sub-observer point), its flux there
     let F = shadeBody(k, c - R * bd, c, g, bd, org.w - D) * (PI * R * R / (D * D));
@@ -954,7 +968,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let reach = R * max(ringOuter(k), 1.0);
     let b = dot(c, d);
     if (b + reach < 0.0 || b - reach > tMax) { continue; }
-    if (reach < 0.5 * P.camUp.w * (travel + length(c))) { continue; }
+    if (reach < 0.5 * beam() * (travel + length(c))) { continue; }
     let perp = c - b * d;
     let h = R * R - dot(perp, perp);
     if (h < 0.0) { continue; }
@@ -981,7 +995,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let li = i32(bodies[BV * k + 3u].x);
     let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - d * sR);
     let src = lightSource(k);
-    let fp = P.camUp.w * (travel + sR) / R;
+    let fp = beam() * (travel + sR) / R;
     setMapLod(fp, fp / max(abs(dn), 0.05), k);
     let rl = ringLight(k, q, N, L, V);
     (*out).glow += (*out).tint * rl.rgb * blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
@@ -998,7 +1012,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   } else {
     let li = i32(bodies[BV * k + 3u].x);
     let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - X);
-    let fp = P.camUp.w * (travel + tBest) / bodyRadius(k);
+    let fp = beam() * (travel + tBest) / bodyRadius(k);
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
     col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
@@ -2288,7 +2302,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
 // ---------------------------------------------------------------------------------------------
 // Local patch: the body near the camera (unit sphere at P.near0.xyz, camera at the origin)
 // ---------------------------------------------------------------------------------------------
-// the probe's harmonics (camera axes), copied after the bodies (MAX_BODIES × BV vec4) on the GPU
+// the probe's harmonics (its axes: P.envX…Z), copied after the bodies (MAX_BODIES × BV vec4) on the GPU
 const SH_BASE = 240u; // (MAX_BODIES × BV)
 fn shEnv(k: u32) -> vec4f { return bodies[SH_BASE + k]; }
 
@@ -2303,8 +2317,8 @@ fn nearHit(look: vec3f) -> f32 {
   return b - sqrt(h);
 }
 
-// camera-frame vector → the probe's axes (x right, y up, z forward)
-fn camAxes(v: vec3f) -> vec3f { return vec3f(dot(v, P.camRight.xyz), dot(v, P.camUp.xyz), dot(v, P.camFwd.xyz)); }
+// camera-frame vector → the Ranger's probe's axes
+fn camAxes(v: vec3f) -> vec3f { return vec3f(dot(v, P.envX.xyz), dot(v, P.envY.xyz), dot(v, P.envZ.xyz)); }
 
 // irradiance E(n) from the probe's harmonics (Ramamoorthi & Hanrahan)
 fn shIrradiance(d: vec3f) -> vec3f {
@@ -2513,7 +2527,7 @@ fn nearLight(k: u32) -> NearLight {
   let mode = P.near3.w;
   if (mode > 0.5 && mode < 1.5) {
     let d = shEnv(9u).xyz;
-    o.dir = normalize(d.x * P.camRight.xyz + d.y * P.camUp.xyz + d.z * P.camFwd.xyz);
+    o.dir = normalize(d.x * P.envX.xyz + d.y * P.envY.xyz + d.z * P.envZ.xyz);
     o.e = shIrradiance(d);
   } else if (mode > 1.5) {
     o.dir = normalize(shEnv(9u).xyz);
@@ -2878,7 +2892,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       if (adaptive) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
     }
 
-    if (P.path.x > 1.5) {
+    if (P.path.x > 1.5 && probeBeam == 0.0) { // (a drawing on the image: not a light for the probe)
       let q0 = blCart(s.x);
       let q1 = blCart(n.x);
       let pg = pathGlow(q0, q1, rayLen);
@@ -3187,7 +3201,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     }
     // (bodies beyond the traced region — the K2 star, Edmunds — are drawn with the sky from here)
     skyOrg = vec4f(x, tNow + s.x.w);
-    if (P.path.x > 1.5) {
+    if (P.path.x > 1.5 && probeBeam == 0.0) { // (a drawing on the image: not a light for the probe)
       // the rest of the (straight) way out, in chords of growing length
       var q = x;
       var dl = max(r, 10.0);
@@ -3476,12 +3490,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
 // ---------------------------------------------------------------------------------------------
 // Light probe: the radiance reaching the camera from every direction, traced like the image, on an
-// ENV_W × ENV_H equirectangular map of the camera's rest frame (x right, y up, z forward;
+// ENV_W × ENV_H equirectangular map of the camera's rest frame (axes P.envX, Y, Z;
 // u = atan2(x, z), v = polar angle from +y). It lights the spaceship the camera is mounted on. The
-// sky is pre-filtered over a texel. Each frame refreshes one texel of every 2×2 block (P.envCfg.y
-// picks which; all of them after a reset, P.envCfg.z = 1). Texels keep a running mean over their last
-// P.envCfg.w samples (alpha: count): it converges while the camera holds still, and follows it when
-// it moves (a short window).
+// sky, and whatever is smaller than a texel (the Sun, a far disk's bright core), is pre-filtered over
+// a texel: a jittered ray meeting or missing it would make the ship's light flicker. Each frame
+// refreshes one texel of every 2×2 block (P.envCfg.y picks which; all of them after a reset,
+// P.envCfg.z = 1). Texels keep a running mean over their last P.envCfg.w samples (alpha: count): long
+// while what the probe sees holds still (its axes do not turn with the camera), short when it moves.
 // ---------------------------------------------------------------------------------------------
 const ENV_W = 256u;
 const ENV_H = 128u;
@@ -3495,13 +3510,18 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   }
   if (px.x >= ENV_W || px.y >= ENV_H) { return; }
   physicalPoints = true;
+  probeBeam = PI / f32(ENV_H);
   let h = hash4(vec3u(px, P.frame.x));
   let u = (f32(px.x) + h.x) / f32(ENV_W);
   let v = (f32(px.y) + h.y) / f32(ENV_H);
   let ph = (u - 0.5) * TAU;
   let th = v * PI;
   let dl = vec3f(sin(th) * sin(ph), cos(th), sin(th) * cos(ph));
-  let look = normalize(dl.x * P.camRight.xyz + dl.y * P.camUp.xyz + dl.z * P.camFwd.xyz);
+  let look = normalize(dl.x * P.envX.xyz + dl.y * P.envY.xyz + dl.z * P.envZ.xyz);
+  let phc = ((f32(px.x) + 0.5) / f32(ENV_W) - 0.5) * TAU;
+  let thc = (f32(px.y) + 0.5) / f32(ENV_H) * PI;
+  let dc = vec3f(sin(thc) * sin(phc), cos(thc), sin(thc) * cos(phc));
+  probeShift = look - normalize(dc.x * P.envX.xyz + dc.y * P.envY.xyz + dc.z * P.envZ.xyz);
   let tr = traceLook(look, h.z, P.time.x);
   var col = tr.col;
   if (tr.bgW > 0.0) {

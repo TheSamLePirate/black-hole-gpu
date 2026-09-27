@@ -15,8 +15,9 @@
 //                       (Fdez-Agüera 2019), specular occlusion, specular anti-aliasing
 //   compVs / compFs     composite over the traced HDR image (premultiplied alpha)
 //
-// Camera frame C: x right, y up, z forward (right-handed); equirectangular u = atan2(x, z),
-// v = polar angle from +y.
+// Camera frame C: x right, y up, z forward (right-handed). The probe's own axes (P: equirectangular
+// u = atan2(x, z), v = polar angle from +y; its harmonics too) are fixed while the camera turns:
+// S.probeX…Z take C's vectors there.
 
 struct Ship {
   model: mat4x4f,   // ship → camera frame C
@@ -25,6 +26,10 @@ struct Ship {
   bound: vec4f,     // bounding sphere of the ship in C (centre, radius): the shadow map's box
   light: vec4f,     // gain on the light the hull receives (1: physical; × pre-exposure), clear coat (0…1), pre-exposure
   plasma: vec4f,    // re-entry: the air's flow direction (camera frame), glow level 0…1
+  // C's axes (x, y, z) in the light probe's axes: the probe keeps its own axes when the camera turns
+  probeX: vec4f,
+  probeY: vec4f,
+  probeZ: vec4f,
 };
 
 const ENV_W = 256u;
@@ -206,10 +211,14 @@ fn vs(v: VIn) -> VOut {
   return o;
 }
 
+// C → the probe's axes, and back
+fn toProbe(v: vec3f) -> vec3f { return v.x * S.probeX.xyz + v.y * S.probeY.xyz + v.z * S.probeZ.xyz; }
+fn fromProbe(d: vec3f) -> vec3f { return vec3f(dot(d, S.probeX.xyz), dot(d, S.probeY.xyz), dot(d, S.probeZ.xyz)); }
+
 // Orthographic view of the ship from the dominant light (direction sh[9].xyz, towards the light):
 // x, y ∈ [−1, 1] across the bounding sphere, depth 0 on the light's side.
 fn lightClip(p: vec3f) -> vec3f {
-  let l = sh[9].xyz;
+  let l = fromProbe(sh[9].xyz);
   let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
   let e2 = cross(l, e1);
   let q = p - S.bound.xyz;
@@ -224,7 +233,7 @@ fn shadowVs(v: VIn) -> @builtin(position) vec4f {
 
 fn irradiance(n: vec3f) -> vec3f {
   // Ramamoorthi & Hanrahan: E(n) = Σ Â_l L_lm Y_lm(n)
-  let b = shBasis(n);
+  let b = shBasis(toProbe(n));
   let A = array<f32, 9>(PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398);
   var e = vec3f(0.0);
   for (var k = 0u; k < 9u; k++) { e += A[k] * b[k] * sh[k].rgb; }
@@ -232,7 +241,7 @@ fn irradiance(n: vec3f) -> vec3f {
 }
 
 fn envSpec(d: vec3f, rough: f32) -> vec3f {
-  return textureSampleLevel(envTex, linSamp, envUV(d), rough * (S.mat.w - 1.0)).rgb;
+  return textureSampleLevel(envTex, linSamp, envUV(toProbe(d)), rough * (S.mat.w - 1.0)).rgb;
 }
 
 // split-sum environment BRDF scale and bias (Karis 2014, analytic fit): F0·x + y
@@ -363,7 +372,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let r = reflect(-v, n);
   // reflections below the geometric surface (bumped normals at grazing angles) fade out
   let horizon = clamp(1.0 + 1.3 * dot(r, ng), 0.0, 1.0);
-  let dom = sh[9];
+  let dom = vec4f(fromProbe(sh[9].xyz), sh[9].w);
   let sd = shadowAt(in.p, ng, dom.xyz);
   let dirW = dom.w * smoothstep(-0.1, 0.35, dot(ng, dom.xyz));
   let occD = mix(1.0, sd, dirW) * ao;
