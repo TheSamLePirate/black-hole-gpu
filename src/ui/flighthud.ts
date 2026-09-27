@@ -989,7 +989,9 @@ export class FlightHud {
     T.rate!.textContent = !Number.isFinite(i.targetRate) ? "—" : i.ref ? `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${kms(i.targetRate)} km/s` : `${i.targetRate >= 0 ? "▲ +" : "▼ −"}${Math.abs(i.targetRate).toFixed(3)} c`;
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
     const ca = i.ref ? i.ourCa : this.closestApproach(i, time);
-    T.ca!.textContent = ca ? `${fmtLen(ca.d, this.s)} · ${ca.t > 0 ? `T−${fmtShort(Math.round(ca.t))}` : "now"}` : "—";
+    // (a closest approach below the surface: an impact — or, the wormhole, a way into its throat)
+    const caTxt = ca && ca.d < 0 ? (i.target === "wormhole" ? "into the mouth" : "impact") : ca ? fmtLen(ca.d, this.s) : "";
+    T.ca!.textContent = ca ? `${caTxt} · ${ca.t > 0 ? `T−${i.ref ? fmtDur(ca.t, this.s) : fmtShort(Math.round(ca.t))}` : "now"}` : "—";
     // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
     // temperature, from the planet's light probe
     const pr = i.ref ? null : i.probe;
