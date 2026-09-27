@@ -257,21 +257,20 @@ fn envAB(rough: f32, nv: f32) -> vec2f {
   return vec2f(-1.04, 1.04) * a004 + r.zw;
 }
 
-// Poisson-disk PCF, normal-offset bias
+// Poisson-disk PCF (8 taps, each a bilinear 2×2 comparison), normal-offset bias
 fn shadowAt(p: vec3f, ng: vec3f, l: vec3f) -> f32 {
   let q = lightClip(p + ng * 0.05 + l * 0.02);
   let uv = vec2f(0.5 + 0.5 * q.x, 0.5 - 0.5 * q.y);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 1.0; }
   let texel = 1.0 / vec2f(textureDimensions(shadowTex));
-  let taps = array<vec2f, 12>(
-    vec2f(-0.326, -0.406), vec2f(-0.840, -0.074), vec2f(-0.696, 0.457), vec2f(-0.203, 0.621),
-    vec2f(0.962, -0.195), vec2f(0.473, -0.480), vec2f(0.519, 0.767), vec2f(0.185, -0.893),
-    vec2f(0.507, 0.064), vec2f(0.896, 0.412), vec2f(-0.322, -0.933), vec2f(-0.792, -0.598));
+  let taps = array<vec2f, 8>(
+    vec2f(-0.613, 0.617), vec2f(0.170, -0.040), vec2f(-0.299, -0.792), vec2f(0.645, 0.493),
+    vec2f(-0.651, -0.118), vec2f(0.422, -0.810), vec2f(0.035, 0.950), vec2f(0.934, -0.208));
   var s = 0.0;
-  for (var i = 0; i < 12; i++) {
+  for (var i = 0; i < 8; i++) {
     s += textureSampleCompareLevel(shadowTex, shadowSamp, uv + taps[i] * texel * 2.5, q.z - 0.0015);
   }
-  return s / 12.0;
+  return s / 8.0;
 }
 
 fn hash3(p: vec3i) -> f32 {
@@ -317,11 +316,6 @@ fn plate(c: vec2f, size: vec2f, axis: i32, fw: f32) -> vec2f {
   return vec2f(h, hash3(id));
 }
 
-// Plating on the projection planes weighted by w (one-hot: the dominant axis of the normal)
-fn plating(q: vec3f, w: vec3f, fw: f32) -> vec2f {
-  return w.x * plate(q.zy, vec2f(1.1, 0.7), 0, fw) + w.y * plate(q.xz, vec2f(0.7, 1.1), 1, fw) + w.z * plate(q.xy, vec2f(0.7, 0.7), 2, fw);
-}
-
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let side = select(-1.0, 1.0, front);
@@ -334,15 +328,18 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let kernel = min(2.0 * dot(dn, dn), 0.25);
 
   // ---- procedural relief: gradient of the height field by finite differences, in the ship frame
-  // plating projected along the dominant axis only: blending projections would cross two seam grids
+  // plating projected along the dominant axis only (blending projections would cross two seam
+  // grids), its plane picked by one-hot weights: one plate per sample, three in all. (No branches:
+  // per-pixel branches here measured slower than the arithmetic they skip.)
   let aq = abs(qn);
   let w = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), aq.y >= aq.z), vec3f(1.0, 0.0, 0.0), aq.x >= aq.y && aq.x >= aq.z);
+  let c = w.x * in.q.zy + w.y * in.q.xz + w.z * in.q.xy;
+  let size = w.x * vec2f(1.1, 0.7) + w.y * vec2f(0.7, 1.1) + w.z * vec2f(0.7, 0.7);
+  let axis = i32(w.y + 2.0 * w.z);
   let e = max(0.5 * fw, 0.0015);
-  let h0 = plating(in.q, w, fw);
-  let hx = plating(in.q + vec3f(e, 0.0, 0.0), w, fw).x;
-  let hy = plating(in.q + vec3f(0.0, e, 0.0), w, fw).x;
-  let hz = plating(in.q + vec3f(0.0, 0.0, e), w, fw).x;
-  var grad = (vec3f(hx, hy, hz) - h0.x) / e;
+  let h0 = plate(c, size, axis, fw);
+  let g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
+  var grad = w.x * vec3f(0.0, g.y, g.x) + w.y * vec3f(g.x, 0.0, g.y) + w.z * vec3f(g.x, g.y, 0.0);
   grad -= dot(grad, qn) * qn;
   let bumpOn = select(0.0, 1.0, part == 0u || part == 4u);
   let qb = normalize(qn - grad * bumpOn);
@@ -377,11 +374,12 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // reflections below the geometric surface (bumped normals at grazing angles) fade out
   let horizon = clamp(1.0 + 1.3 * dot(r, ng), 0.0, 1.0);
   let dom = vec4f(fromProbe(sh[9].xyz), sh[9].w);
-  let sd = shadowAt(in.p, ng, dom.xyz);
   let dirW = dom.w * smoothstep(-0.1, 0.35, dot(ng, dom.xyz));
+  let specW = dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz));
+  let sd = shadowAt(in.p, ng, dom.xyz);
   let occD = mix(1.0, sd, dirW) * ao;
   let so = clamp(pow(nv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0); // specular occlusion (Lagarde)
-  let occS = so * horizon * horizon * mix(1.0, sd, dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz)));
+  let occS = so * horizon * horizon * mix(1.0, sd, specW);
   let E = irradiance(n);
 
   // base layer: metal/paint, with multiple-scattering energy compensation (Fdez-Agüera 2019)

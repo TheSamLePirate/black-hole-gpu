@@ -61,8 +61,17 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
   corners projected, rounded up by 128 px: 27–33 % of the image in the chase view), copied into its
   image. Measured A/B in the chase view: 3.9 vs 4.4 ms, within the noise — the pass is the shading of
   the ship's own pixels (GGX reflections, 12-tap shadow PCF, procedural plating), not the full-screen
-  clear and resolve. The gain is memory: ~144 MB of 4× targets at 2078 × 1448 → ~39 MB. The lever left
-  is the ship's fragment shader.
+  clear and resolve. The gain is memory: ~144 MB of 4× targets at 2078 × 1448 → ~39 MB.
+- **The Ranger's fragment shader**, measured in isolation (its passes alone, 40 per submission, the
+  scene frozen; chase view, 1280 × 640 box): a whole ship draw ≈ 2.7 ms, of which a flat shader
+  already costs ≈ 1.9 (the 4× MSAA raster of 32 k two-sided triangles, the copy; the shadow map 0.17
+  per frame) — the lighting ≈ 0.8. Per part (removed one at a time): relief ≈ 0.6 → 0.4 after the
+  change, grime noise, shadow PCF and environment reflections ≈ 0.2 each.
+  Kept: the relief's plane picked by one-hot weights (3 plate evaluations instead of 12, no branch):
+  2.81 → 2.62 ms (−20 % of the lighting); an 8-tap shadow PCF (neutral, simpler). Tried and dropped:
+  per-pixel branches (skipping sub-pixel noise octaves, the shadow on faces away from the light, the
+  relief on smooth parts) — each measured *slower* than the arithmetic it skipped on this GPU; no
+  anisotropic filtering on the reflections — no effect. What is left is mostly fixed (the MSAA raster).
 - **Ranger probe rays** are ~20× dearer than the image's (long, divergent) — fewer, rarer runs rather
   than cheaper rays.
 - **The planner's worker** also runs the free-fall prediction: during a long re-aim the map's path
