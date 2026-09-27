@@ -403,15 +403,20 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
   h = min(h, eps * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
   let hr = P.ext2.z;
   if (hr > 0.0 && P.modes.w == 1u) {
-    // volumetric disk: never jump over the layer |z| < 4H, sample it at ≲ 0.4 H
+    // volumetric disk: never jump over the layer |z| < 4H (8H with its haze or smoke), sample it at
+    // ≲ 0.4 H across; along it ≲ 0.08 R — ≲ 0.25 M through the smoke (clouds an M across: their
+    // outlines drawn, not averaged away)
     let R = r * sn;
     if (R > P.bh.z * 0.8 && R < P.bh.w * 1.05) {
       let H = hr * R;
       let d = geodesicRHS(s.x, s.p, L, a);
       let zdot = abs(d.dx.x * c - r * sn * d.dx.y) + 1e-4;
-      let dist = abs(r * c) - 4.0 * H;
+      let dist = abs(r * c) - select(4.0, 8.0, P.ret.w > 0.0 || P.radio2.z > 0.0) * H;
       h = min(h, (max(dist, 0.0) + 0.4 * H) / zdot);
-      if (dist < 0.0) { h = min(h, 0.08 * R); }
+      if (dist < 0.0) {
+        h = min(h, 0.08 * R);
+        if (P.radio2.z > 0.0 && R > 8.0) { h = min(h, 0.25); }
+      }
     }
   }
   if (P.jet.x > 0.5) {
@@ -1452,10 +1457,10 @@ fn diskSource(T: f32, g: f32) -> vec3f {
 }
 
 // The smoke (P.radio2.z, 0: none): puffy clouds of cool dense gas above the disk's surface (1.5–7 H),
-// in its outer, cooler part (beyond ~10 M),
-// ~0.5 M across, orbiting with the wide rings (each rigidly, blended across): opaque, at ~0.45 of the
-// local temperature — dark silhouettes against the haze, sparse patches from above. Its density
-// factor at a point (0 outside the layer).
+// in its outer, cooler part (beyond ~10 M), over an M across with a clear outline, orbiting with the
+// wide rings (each rigidly, blended across): opaque, their cores at ~0.4 of the local temperature,
+// their thin edges warmer — dark silhouettes rimmed with orange against the haze, sparse patches from
+// above. Its density factor at a point (0 outside the layer).
 fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
   // (above the surface; only in the outer, cooler disk — the inner heat leaves none)
   let layer = smoothstep(1.2, 2.5, abs(zn)) * (1.0 - smoothstep(4.5, 7.0, abs(zn))) * smoothstep(8.0, 14.0, R);
@@ -1464,11 +1469,11 @@ fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
   var v = 0.0;
   for (var k = 0; k < 2; k++) {
     let ang = select(pc.ang0, pc.ang1, k == 1);
-    // (isotropic puffs: the ring's frame in M, 2 cells per M)
-    var q = vec3f(R * cos(ang), R * sin(ang), z) * 2.0 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
+    // (isotropic puffs: the ring's frame in M, 0.8 cell per M — clouds over a metre… an M across)
+    var q = vec3f(R * cos(ang), R * sin(ang), z) * 0.8 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
     var f = 0.0;
     var amp = 0.5;
-    for (var o = 0; o < 4; o++) {
+    for (var o = 0; o < 5; o++) {
       f += amp * gnoise(q);
       q = q * 2.1 + vec3f(3.7, 1.3, 5.1);
       amp *= 0.5;
@@ -1477,7 +1482,8 @@ fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
   }
   // (the blend's weights are contrast-keeping, their sum ≥ 1: back to a mean)
   v /= max(pc.w0 + pc.w1, 1e-6);
-  return layer * smoothstep(0.18, 0.4, v);
+  // (a steep edge: cumulus-like clouds with a clear outline, not a gradient)
+  return layer * smoothstep(0.14, 0.2, v);
 }
 
 // The haze (P.ret.w, 0: none): a thin scattering envelope hugging the disk (e^{−|z|/1.5H}, vertical
@@ -1515,7 +1521,11 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
     hz *= mix(1.0, 0.4 + 1.2 * n.y, turb);
   }
   var sm = 0.0;
-  if (smoke > 0.0 && R > 8.0) { sm = smoke * 4.0 / H * edge * diskSmoke(R, s.x.z, zn, z, tNow + s.x.w, a); }
+  var smD = 0.0;
+  if (smoke > 0.0 && R > 8.0) {
+    smD = diskSmoke(R, s.x.z, zn, z, tNow + s.x.w, a);
+    sm = smoke * 6.0 / H * edge * smD;
+  }
   if (rho < 1e-6 && hz <= 0.0 && sm <= 0.0) { return o; }
   let omega = 1.0 / (pow(max(R, 1.0), 1.5) + a);
   let kEm = circularEmitterEnergy(r, th, a, L, omega);
@@ -1529,7 +1539,7 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   // (one source for the two, weighted by their depths — the mist's: the light of the disk's hot heart,
   // falling off as its solid angle, (10/R)²)
   let lit = min(100.0 / (R * R), 1.0);
-  o.S = P.misc.z * (diskSource(T, g) * dGas + lit * diskSource(P.disk.x, g) * dHaze + diskSource(0.45 * T0, g) * dSmoke) / max(dGas + dHaze + dSmoke, 1e-30);
+  o.S = P.misc.z * (diskSource(T, g) * dGas + lit * diskSource(P.disk.x, g) * dHaze + diskSource((0.4 + 0.4 * (1.0 - smD)) * T0, g) * dSmoke) / max(dGas + dHaze + dSmoke, 1e-30);
   o.dtau = dGas + dHaze + dSmoke;
   o.g = g;
   o.T = T;
