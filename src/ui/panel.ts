@@ -504,6 +504,7 @@ export class SettingsPanel {
       ["high", "High", "Error-controlled RK4 (1e-5), 64 spp"],
       ["ultra", "Ultra", "Error-controlled RK4 (2e-6), 256 spp, fine realtime steps"],
       ["realtime", "RT max", "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still"],
+      ["game", "Game", "Fluid first (≈ 60 fps): a 16 ms frame budget, coarser realtime rays, the render scale lowered when needed (dynamic resolution)"],
     ];
     for (const [q, label, help] of levels) {
       seg.append(

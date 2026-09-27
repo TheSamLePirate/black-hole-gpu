@@ -32,6 +32,7 @@ import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../system/our-
 import type { Arrival } from "../system/our-plan";
 import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
+import { cpuProf } from "../perf";
 
 /** our universe's bodies on the map */
 const OUR_COLOURS: Record<string, string> = {
@@ -125,6 +126,8 @@ export class FlightHud {
   private stBadge = h("div", "fl-badge");
   private stEls: Record<string, HTMLElement> = {};
   private orbitHead: HTMLElement | null = null;
+  /** when each instrument was last drawn (performance.now) */
+  private drawnAt: Record<string, number> = {};
   private orbit = h("div", "fl-orbit fl-panel");
   private planner = h("div", "fl-plan fl-panel");
   private planEls: Record<string, HTMLElement> = {};
@@ -166,7 +169,6 @@ export class FlightHud {
   private trail: { X: V3; t: number }[] = [];
   private samples: Sample[] = [];
   private ballImg: ImageData | null = null;
-  private ballFrame = 0;
   private throttleDrag = false;
   private start: { t: number; tau: number } | null = null;
   // manoeuvre nodes on the map: the path's points (to add a node), the nodes, the selected node's
@@ -1018,17 +1020,24 @@ export class FlightHud {
   update(info: Info, time: number) {
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
-    this.drawHud(info);
-    if (this.density < 2) this.drawBall(info);
-    if (this.density === 0) {
-      this.drawMap(info, time);
-      this.drawTelemetry();
-      this.drawPotential(info);
-    }
     const now = performance.now();
+    // (the markers follow the view every frame; the instruments at their own pace — the map 15 times
+    // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame)
+    const due = (k: string, hz: number) => {
+      if (now - (this.drawnAt[k] ?? -1e9) < 1000 / hz) return false;
+      this.drawnAt[k] = now;
+      return true;
+    };
+    cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
+    if (this.density < 2 && due("ball", 20)) cpuProf.time("HUD: attitude ball", () => this.drawBall(info));
+    if (this.density === 0) {
+      if (due("map", this.mapView ? 30 : 15)) cpuProf.time("HUD: map", () => this.drawMap(info, time));
+      if (due("tel", 10)) cpuProf.time("HUD: telemetry", () => this.drawTelemetry());
+      if (due("orbit", 10)) cpuProf.time("HUD: orbit panel", () => this.drawPotential(info));
+    }
     if (now - this.textAt > 100) {
       this.textAt = now;
-      this.drawText(info, time);
+      cpuProf.time("HUD: text panels", () => this.drawText(info, time));
     }
   }
 
@@ -1651,11 +1660,10 @@ export class FlightHud {
   // ------------------------------------------------------------------------------------ attitude ball + arcs
   private drawBall(i: Info) {
     const c = this.ball;
-    // (per-pixel sky/ground in JS: capped at 1.5× CSS resolution, redrawn every other frame)
+    // (per-pixel sky/ground in JS: capped at 1.5× CSS resolution, redrawn 20 times a second)
     const dpr = Math.min(devicePixelRatio, 1.5);
     const size = Math.round(176 * dpr);
     if (c.width !== size) (c.width = size), (c.height = size);
-    if ((this.ballFrame = (this.ballFrame + 1) % 2) === 1) return;
     const ctx = c.getContext("2d")!;
     const C0 = size / 2;
     const R0 = size / 2 - 16 * dpr;

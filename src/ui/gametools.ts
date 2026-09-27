@@ -11,9 +11,9 @@ import { autosave, slots } from "../game/save";
 import type { AuditReport } from "../game/audit";
 import type { LogKind } from "../game/log";
 
-type Tab = "ranger" | "place" | "target" | "time" | "saves" | "audit" | "journal";
+type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
-  ["ranger", "Ranger"], ["place", "Place"], ["target", "Target · SOI"], ["time", "Time"], ["saves", "Saves"], ["audit", "Audit"], ["journal", "Journal"],
+  ["ranger", "Ranger"], ["place", "Place"], ["target", "Target · SOI"], ["time", "Time"], ["saves", "Saves"], ["perf", "Perf"], ["audit", "Audit"], ["journal", "Journal"],
 ];
 
 /** landing sites (latitude, east longitude) */
@@ -152,7 +152,7 @@ export class GameToolsWindow {
     this.live = null;
     const views: Record<Tab, () => void> = {
       ranger: () => this.ranger(), place: () => this.place(), target: () => this.target(), time: () => this.time(),
-      saves: () => this.saves(), audit: () => this.audit(), journal: () => this.journal(),
+      saves: () => this.saves(), perf: () => this.perf(), audit: () => this.audit(), journal: () => this.journal(),
     };
     views[tab]();
     (this.live as (() => void) | null)?.(); // (set by the view)
@@ -390,6 +390,47 @@ export class GameToolsWindow {
     if (!auto) acts.append(btn("✕", () => this.run(() => (this.g.deleteSave(nm), refresh()))));
     r.append(txt, acts);
     return r;
+  }
+
+  // ------------------------------------------------------------------------------ Perf
+  private perf() {
+    const head = h("div", "gt-kv");
+    const gpu = h("table", "gt-table");
+    const cpu = h("table", "gt-table");
+    const qual = h("div", "gt-row");
+    for (const [q, label] of [["game", "Game (≈ 60 fps)"], ["realtime", "RT max (sharp, ≈ 30)"], ["high", "High"]] as const) {
+      qual.append(btn(label, () => this.run(() => this.g.quality(q))));
+    }
+    qual.append(btn("Dynamic resolution on/off", () => this.run(() => this.g.set("dynamicResolution", !this.g.get("dynamicResolution")))));
+    this.body.append(
+      head, qual,
+      h("div", "fl-label", "GPU passes (ms per frame they run in)"), gpu,
+      h("div", "fl-label", "Main thread (ms per loop · worst over 3 s)"), cpu,
+      h("p", "gt-note", "The frame rate is the lower of the GPU's (its passes, two frames in flight) and the display's. A hidden page is throttled by the browser. Settings › Render: quality, pixel ratio, frame budget, dynamic resolution."),
+    );
+    const fill = (t: HTMLElement, cols: string[], rows: (string | number)[][]) => {
+      t.replaceChildren();
+      const hr = h("tr");
+      for (const c of cols) hr.append(h("th", "", c));
+      t.append(hr);
+      for (const r of rows) {
+        const tr = h("tr");
+        for (const c of r) tr.append(h("td", "", String(c)));
+        t.append(tr);
+      }
+    };
+    this.live = () => {
+      const p = this.g.perf();
+      head.replaceChildren();
+      const kv = (k: string, v: string) => head.append(h("span", "", k), h("b", "", v));
+      kv("Frames rendered", `${p.renderFps.toFixed(0)} / s (loop ${p.loopFps.toFixed(0)} / s)`);
+      kv("GPU per frame", `${p.gpuFrameMs.toFixed(1)} ms · passes ${p.gpuPassesMs.toFixed(1)} ms`);
+      kv("Image", `${p.image} · pixel ratio ${p.pixelRatio} × ${p.renderScale.toFixed(3)}`);
+      kv("Quality", `${p.quality} · budget ${p.budgetMs} ms · 1 ray / ${p.block}×${p.block} px`);
+      kv("Worst loop", `${p.worstLoopMs.toFixed(1)} ms`);
+      fill(gpu, ["Pass", "ms", "last"], p.gpu.slice(0, 14).map((g) => [g.pass, g.ms.toFixed(2), g.last.toFixed(2)]));
+      fill(cpu, ["Section", "ms", "worst"], p.cpu.slice(0, 12).map((c) => [c.section, c.ms.toFixed(2), c.worst.toFixed(1)]));
+    };
   }
 
   // ------------------------------------------------------------------------------ Audit

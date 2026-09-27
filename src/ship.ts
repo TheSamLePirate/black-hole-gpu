@@ -6,6 +6,7 @@
 import meshUrl from "../assets/ranger/ranger.bin";
 
 import { shipToCamera, type Mount, type MountPose } from "./mounts";
+import type { GpuProfiler } from "./gpuprof";
 
 type V3 = [number, number, number];
 
@@ -48,9 +49,8 @@ interface ShipTargetRes {
   h: number;
   color: GPUTexture; // MSAA
   depth: GPUTexture;
+  /** the ship, resolved (premultiplied): the display composites it over the traced image */
   resolved: GPUTexture;
-  compBind: GPUBindGroup;
-  hdrView: GPUTextureView;
 }
 
 export class ShipRenderer {
@@ -81,6 +81,30 @@ export class ShipRenderer {
   private shipBind: GPUBindGroup | null = null;
   private shadowBind: GPUBindGroup | null = null;
   private targets = new WeakMap<GPUTexture, ShipTargetRes>();
+
+  /** the ship's bounding sphere in the camera frame and the projection's half-extents (the scissor) */
+  private onScreen: { c: V3; r: number; tx: number; ty: number } | null = null;
+
+  /** The pixels the ship can cover on a w × h target: [x, y, w, h] (the whole target when the camera is inside its sphere). */
+  private scissor(w: number, h: number): [number, number, number, number] {
+    const o = this.onScreen;
+    if (!o || o.c[2] - o.r < 0.06) return [0, 0, w, h];
+    const z = o.c[2] - o.r; // (the nearest depth: a conservative box)
+    const x0 = (o.c[0] - o.r) / (z * o.tx), x1 = (o.c[0] + o.r) / (z * o.tx);
+    const y0 = (o.c[1] - o.r) / (z * o.ty), y1 = (o.c[1] + o.r) / (z * o.ty);
+    const px = (n: number) => Math.min(w, Math.max(0, Math.floor(((n + 1) / 2) * w)));
+    const py = (n: number) => Math.min(h, Math.max(0, Math.floor(((1 - n) / 2) * h)));
+    const X0 = px(Math.min(x0, x1)) , X1 = Math.min(w, px(Math.max(x0, x1)) + 2);
+    const Y0 = py(Math.max(y0, y1)), Y1 = Math.min(h, py(Math.min(y0, y1)) + 2);
+    return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : [0, 0, 1, 1];
+  }
+
+  private shadowTick = 0;
+  /** the renderer's GPU profiler (timestamps per pass) */
+  prof: GpuProfiler | null = null;
+  private pass<T extends GPUComputePassDescriptor | GPURenderPassDescriptor>(label: string, d?: T): T {
+    return this.prof ? this.prof.pass(label, d) : ((d ?? {}) as T);
+  }
 
   constructor(private device: GPUDevice, shipWGSL: string) {
     const d = device;
@@ -238,7 +262,7 @@ export class ShipRenderer {
   encodeEnv(enc: GPUCommandEncoder) {
     if (!this.envBinds) return;
     const groups = (l: number) => [Math.ceil(Math.max(1, ENV_W >> l) / 8), Math.ceil(Math.max(1, ENV_H >> l) / 8)] as const;
-    const pass = enc.beginComputePass();
+    let pass = enc.beginComputePass(this.pass("ship probe: mips"));
     pass.setPipeline(this.pipes.copy);
     for (const g of this.envBinds.copy) {
       pass.setBindGroup(0, g);
@@ -249,11 +273,15 @@ export class ShipRenderer {
       pass.setBindGroup(0, g);
       pass.dispatchWorkgroups(...groups(i + 1));
     });
+    pass.end();
+    pass = enc.beginComputePass(this.pass("ship probe: GGX"));
     pass.setPipeline(this.pipes.ggx);
     this.envBinds.ggx.forEach((g, i) => {
       pass.setBindGroup(0, g);
       pass.dispatchWorkgroups(...groups(i + 1));
     });
+    pass.end();
+    pass = enc.beginComputePass(this.pass("ship probe: SH"));
     pass.setPipeline(this.pipes.sh);
     pass.setBindGroup(0, this.envBinds.sh);
     pass.dispatchWorkgroups(1);
@@ -271,6 +299,7 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
+    this.onScreen = { c: [c[0] + t[0], c[1] + t[1], c[2] + t[2]], r: this.bound.r * 1.02, tx: tanH * v.aspect, ty: tanH };
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -278,12 +307,8 @@ export class ShipRenderer {
     this.device.queue.writeBuffer(this.uniform, 0, m);
   }
 
-  /**
-   * Draws the ship over the resolved HDR image (mip 0 of `hdr`, which must allow render attachment):
-   * shadow map, MSAA shading, resolve, premultiplied composite.
-   */
-  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView) {
-    if (!this.ready) return;
+  /** The ship's own images for an HDR target (its size): created on first use. */
+  target(hdr: GPUTexture): ShipTargetRes {
     const d = this.device;
     let res = this.targets.get(hdr);
     if (!res || res.w !== hdr.width || res.h !== hdr.height) {
@@ -291,38 +316,45 @@ export class ShipRenderer {
       const color = d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
       const depth = d.createTexture({ size, format: "depth24plus", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
       const resolved = d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-      res = {
-        w: hdr.width, h: hdr.height, color, depth, resolved,
-        compBind: d.createBindGroup({ layout: this.pipes.comp.getBindGroupLayout(0), entries: [{ binding: 0, resource: resolved.createView() }] }),
-        hdrView: hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
-      };
+      res = { w: hdr.width, h: hdr.height, color, depth, resolved };
       this.targets.set(hdr, res);
     }
+    return res;
+  }
+
+  /**
+   * Draws the ship for an HDR target: shadow map, MSAA shading resolved into its own image, which the
+   * display composites over the traced one (a full-screen composite pass here cost ~5 ms a frame on a
+   * tiled GPU, whatever its scissor).
+   */
+  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView) {
+    if (!this.ready) return;
+    const res = this.target(hdr);
     this.writeUniform(v);
-    let rp = enc.beginRenderPass({
-      colorAttachments: [],
-      depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
-    });
-    rp.setPipeline(this.pipes.shadow);
-    rp.setBindGroup(0, this.shadowBind!);
-    rp.setVertexBuffer(0, this.vbuf!);
-    rp.setIndexBuffer(this.ibuf!, "uint32");
-    rp.drawIndexed(this.count);
-    rp.end();
-    rp = enc.beginRenderPass({
+    // (the self-shadowing, every other frame: the light turns slowly against the ship)
+    if (this.shadowTick++ % 2 === 0) {
+      const sp = enc.beginRenderPass(this.pass("ship: shadow map", {
+        colorAttachments: [],
+        depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+      }));
+      sp.setPipeline(this.pipes.shadow);
+      sp.setBindGroup(0, this.shadowBind!);
+      sp.setVertexBuffer(0, this.vbuf!);
+      sp.setIndexBuffer(this.ibuf!, "uint32");
+      sp.drawIndexed(this.count);
+      sp.end();
+    }
+    const rp = enc.beginRenderPass(this.pass("ship: shading (MSAA)", {
       colorAttachments: [{ view: res.color.createView(), resolveTarget: res.resolved.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
       depthStencilAttachment: { view: res.depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
-    });
+    }));
+    const sc = this.scissor(hdr.width, hdr.height);
+    rp.setScissorRect(...sc);
     rp.setPipeline(this.pipes.ship);
     rp.setBindGroup(0, this.shipBind!);
     rp.setVertexBuffer(0, this.vbuf!);
     rp.setIndexBuffer(this.ibuf!, "uint32");
     rp.drawIndexed(this.count);
-    rp.end();
-    rp = enc.beginRenderPass({ colorAttachments: [{ view: res.hdrView, loadOp: "load", storeOp: "store" }] });
-    rp.setPipeline(this.pipes.comp);
-    rp.setBindGroup(0, res.compBind);
-    rp.draw(3);
     rp.end();
   }
 

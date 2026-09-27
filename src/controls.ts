@@ -2892,6 +2892,9 @@ export class CameraController {
   /** The autopilot's goal: the velocity to reach (local 3-velocity) and a feed-forward acceleration. */
   /** our universe: the free-fall path and the path through the nodes (Newtonian prediction) */
   ourFree: OurPath | null = null;
+  private ourFreeAt = 0;
+  private ourFreeKey = "";
+  private predicting = false;
   /** our universe: the mission the plan flies (its nodes re-aimed in flight), the planner at work */
   ourMission: OurMission | null = null;
   planBusy = false;
@@ -3499,8 +3502,24 @@ export class CameraController {
     // our universe: the Newtonian prediction (the map draws it), no path in the hole's frame
     const nav = this.ourNav(cam);
     if (nav) {
-      this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR: mouth(s).w.rho });
-      this.pathCost = performance.now() - now;
+      // (the same throttle: there is no path object on this side to carry its time; computed in the
+      // planner's worker — up to ~17 ms a time on the main thread — the first one here)
+      if (this.ourFree && (key === this.ourFreeKey || now - this.ourFreeAt < 250 || this.predicting)) return (this.path = null);
+      this.ourFreeKey = key;
+      this.ourFreeAt = now;
+      const mouthR = mouth(s).w.rho;
+      if (!this.ourFree) {
+        this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR });
+        return (this.path = null);
+      }
+      this.predicting = true;
+      runPlanner<OurPath>({ kind: "predict", X: nav.X, V: nav.V, t: nav.t, mouthR }).then(
+        (p) => {
+          this.predicting = false;
+          if (p && Array.isArray(p.pts) && this.ourFreeKey === key) this.ourFree = p;
+        },
+        () => (this.predicting = false),
+      );
       return (this.path = null);
     }
     this.ourFree = null;

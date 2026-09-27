@@ -11,7 +11,7 @@
 //   await __bh.game.audit({ planner: true })
 
 import type { Settings, Target } from "../settings";
-import { defaultSettings } from "../settings";
+import { defaultSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
 import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose } from "../camera";
@@ -25,6 +25,7 @@ import { autosave, downloadSave, parseSave, saveToHash, slots, type GameSave } f
 import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
 import type { V3 } from "./orbit";
+import { cpuProf } from "../perf";
 
 export interface GameContext {
   settings: Settings;
@@ -39,6 +40,8 @@ export interface GameContext {
   refresh(): void;
   toast(text: string): void;
   fps(): number;
+  /** the dynamic resolution's fraction of the pixel ratio */
+  renderScale(): number;
 }
 
 const KM = 1e3 / M_METRES;
@@ -77,6 +80,7 @@ export class GameTools {
       "warp(x) · pause(on) · realTime()   time: x times real time",
       "setDate('2067-03-01T12:00') · date()   the scene's clock (the bodies move; the ship keeps its place)",
       "set(key, value) · get(key) · settings()   any setting (see the panel, Game section)",
+      "quality('game'|'realtime'|…) · perf()   performance: the quality level; frame rates, GPU passes, CPU sections",
       "preset(name)                  a scene",
       "save(name) · load(name) · saves() · deleteSave(name) · exportSave(name) · importSave(json) · shareLink()",
       "audit({planner})              run the self-checks (await it)",
@@ -249,6 +253,13 @@ export class GameTools {
   settings() {
     return { ...this.ctx.settings };
   }
+  /** A quality level with its budgets (low · medium · high · ultra · realtime · game). */
+  quality(q: Settings["quality"]) {
+    if (!(q in QUALITY)) throw new Error(`no quality "${q}" — ${Object.keys(QUALITY).join(", ")}`);
+    Object.assign(this.ctx.settings, QUALITY[q], { quality: q });
+    this.ctx.changed([...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality", "pixelRatio"]);
+    return q;
+  }
   preset(name: string) {
     this.ctx.preset(name);
     this.log.add("info", `Scene: ${name}`, this.ctx.time());
@@ -340,6 +351,29 @@ export class GameTools {
   }
   autosaveNow() {
     return autosave.set(this.snapshot("autosave"));
+  }
+
+  // ------------------------------------------------------------------------------ performance
+  /**
+   * Where the frame's time goes: the loop's and the rendered frame rates, the main thread's sections
+   * (mean and worst), the GPU's passes (timestamps: switched on by the first call — read again a
+   * few seconds later), the image size and the realtime subsampling.
+   */
+  perf(o: { gpu?: boolean } = {}) {
+    const r = this.ctx.renderer, s = this.ctx.settings;
+    if (o.gpu !== false && !r.prof.enabled) {
+      r.prof.enabled = true;
+      r.prof.reset();
+    }
+    const cv = document.getElementById("view") as HTMLCanvasElement | null;
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+    return {
+      loopFps: r2(cpuProf.loopFps), renderFps: r2(cpuProf.renderFps), worstLoopMs: r2(cpuProf.worstLoop),
+      gpuFrameMs: r2(r.lastGpuMs), gpuPassesMs: r2(r.prof.frameMs), gpuProfiled: r.prof.frames, gpuSupported: r.prof.supported,
+      image: cv ? `${cv.width}×${cv.height}` : "", pixelRatio: s.pixelRatio, renderScale: this.ctx.renderScale(), quality: s.quality, budgetMs: s.realtimeBudget, block: r.realtimeBlockNow,
+      cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
+      gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
+    };
   }
 
   // ------------------------------------------------------------------------------ audit

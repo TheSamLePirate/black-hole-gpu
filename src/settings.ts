@@ -19,7 +19,7 @@ export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "st
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
 export type Tonemap = "AgX" | "AgX punchy" | "ACES" | "clamp";
-export type Quality = "low" | "medium" | "high" | "ultra" | "realtime";
+export type Quality = "low" | "medium" | "high" | "ultra" | "realtime" | "game";
 
 /** Integration / sampling budgets per quality level. */
 type QualityKeys =
@@ -36,7 +36,15 @@ export const QUALITY: Record<Quality, Pick<Settings, QualityKeys> & Partial<Sett
   realtime: {
     realtimeEps: 0.06, realtimeSteps: 700, qualityEps: 0.02, qualitySteps: 8000, targetSpp: 256, adaptiveIntegrator: true,
     integratorTolerance: 2e-6, noiseThreshold: 0.005, realtimeSubsampling: "auto", realtimeBudget: 60, temporalBlend: 0.5,
-    pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.25), denoise: true,
+    pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.25), denoise: true, dynamicResolution: false,
+  },
+  // The game's: a fluid frame rate first (≈ 60 fps: a 16 ms GPU budget, two frames in flight), the
+  // render scale lowered for it when the subsampling alone is not enough (dynamic resolution), the
+  // converged refinement lighter when the view holds still.
+  game: {
+    realtimeEps: 0.08, realtimeSteps: 500, qualityEps: 0.03, qualitySteps: 3000, targetSpp: 32, adaptiveIntegrator: true,
+    integratorTolerance: 3e-5, noiseThreshold: 0.02, realtimeSubsampling: "auto", realtimeBudget: 16, temporalBlend: 0.5,
+    pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.25), denoise: true, dynamicResolution: true,
   },
 };
 
@@ -210,6 +218,7 @@ export interface Settings {
   rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
   soiRings: boolean; // the spheres of influence on the map
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
+  dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
 
 export function defaultSettings(): Settings {
@@ -363,6 +372,7 @@ export function defaultSettings(): Settings {
     rangerStatus: true,
     soiRings: true,
     pathInView: true,
+    dynamicResolution: false,
   };
 }
 
@@ -410,7 +420,7 @@ export const presets: Record<string, Preset> = {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "saturn", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
-    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, quality: "realtime", time: 109.6, pose: "earthGround",
+    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthGround",
   },
   // the game's rehearsal: Artemis II — from a 400 km Earth orbit, round the Moon on a free return
   // and back (O: the planner, the Moon targeted: Free return, PLAN, EXECUTE)
@@ -418,7 +428,7 @@ export const presets: Record<string, Preset> = {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.75, diskThickness: 0.03, diskTau: 1.5,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
-    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, quality: "realtime", time: 109.6, pose: "earthMoon",
+    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthMoon",
   },
   // our side: sunlit at 9.5 AU, ~10⁻⁷ of the disk's radiance — auto exposure
   "Gargantua system: departure near Saturn": {

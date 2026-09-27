@@ -23,6 +23,7 @@ import { GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
+import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 
@@ -539,8 +540,8 @@ async function main() {
     else if (k === "i") actions["hud-toggle"]!();
     else if (e.key === "?") actions["btn-help"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
-    else if (/^[1-5]$/.test(e.key)) {
-      settings.quality = (["low", "medium", "high", "ultra", "realtime"] as const)[Number(k) - 1]!;
+    else if (/^[1-6]$/.test(e.key)) {
+      settings.quality = (["low", "medium", "high", "ultra", "realtime", "game"] as const)[Number(k) - 1]!;
       Object.assign(settings, QUALITY[settings.quality]);
       refreshGui();
       resize();
@@ -589,8 +590,13 @@ async function main() {
   }
 
   // -------------------------------------------------------------------- sizing
+  // dynamic resolution: a fraction of the pixel ratio (1: as set), lowered when the GPU cannot keep
+  // the frame budget with the subsampling already coarse, raised back when it has room
+  let renderScale = 1;
+  let gpuEma = 0;
+  let scaleTimer = 0;
   function resize() {
-    const dpr = settings.pixelRatio;
+    const dpr = settings.pixelRatio * renderScale;
     const w = Math.round(canvas.clientWidth * dpr);
     const h = Math.round(canvas.clientHeight * dpr);
     if (canvas.width !== w || canvas.height !== h) {
@@ -654,6 +660,7 @@ async function main() {
     },
     toast: (t) => panel.toast(t),
     fps: () => fps,
+    renderScale: () => renderScale,
   });
   const toolsWin = new GameToolsWindow(tools);
   addEventListener("pagehide", () => {
@@ -704,6 +711,7 @@ async function main() {
 
   const loop = (now: number) => {
     requestAnimationFrame(loop);
+    cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     fpsAcc += dt;
@@ -715,11 +723,11 @@ async function main() {
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     if (!frozen) {
       setSceneTime(simTime); // (an orbiting wormhole mouth: where it is now)
-      if (camera.update(dt, simTime)) {
+      if (cpuProf.time("flight (camera.update)", () => camera.update(dt, simTime))) {
         changed = true;
         guiDirty = true;
       }
-      mission.update(dt);
+      cpuProf.time("mission", () => mission.update(dt));
       if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
         simTime = camera.shipClock() ?? simTime + dt * settings.timeSpeed;
         timeDirty = true;
@@ -731,9 +739,9 @@ async function main() {
       timeDirty = true;
     }
     // the camera's predicted free fall, drawn (lensed) by the tracer
-    const path = camera.gravity ? camera.predictPath() : null;
+    const path = camera.gravity ? cpuProf.time("free-fall prediction", () => camera.predictPath()) : null;
     if (renderer.setCameraPath(settings.showGeodesic && settings.pathInView ? path : null)) changed = true;
-    const st = renderer.frame(settings, simTime, changed, timeDirty, displayChanged);
+    const st = cpuProf.time("render (encode, submit)", () => renderer.frame(settings, simTime, changed, timeDirty, displayChanged));
     if (st) {
       if (!firstFrame) {
         // the first image is on screen: lift the loading veil
@@ -747,44 +755,63 @@ async function main() {
       displayChanged = false;
       lastStats = st;
       if (st.offline) renderDialog.update(st.offline);
+      gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
     }
-    drawGuide();
+    // (every 1.5 s, by eighths, between half the pixel ratio and all of it)
+    scaleTimer += dt;
+    if (scaleTimer > 1.5) {
+      scaleTimer = 0;
+      const on = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive;
+      const block = renderer.realtimeBlockNow;
+      let want = renderScale;
+      if (!on) want = 1;
+      else if (gpuEma > 1.2 * settings.realtimeBudget && block >= 4) want = Math.max(0.5, renderScale - 0.125);
+      else if (gpuEma < 0.65 * settings.realtimeBudget && block <= 2) want = Math.min(1, renderScale + 0.125);
+      if (want !== renderScale) {
+        renderScale = want;
+        resize();
+      }
+    }
+    cpuProf.time("overlay (guide, marker)", drawGuide);
     applyTuning(settings);
-    toolsWin.tick();
+    cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;
     if (settings.autosave && firstFrame && !renderer.offlineActive && (saveTimer > settings.autosaveEvery || (saveSoon && saveTimer > 2))) {
       saveTimer = 0;
       saveSoon = false;
-      tools.autosaveNow();
+      cpuProf.time("autosave", () => tools.autosaveNow());
     }
     renderer.shipPose = settings.ship ? camera.shipPose() : null;
     const pil = flying();
     if (flightHud.visible !== pil) flightHud.show(pil);
     if (pil) {
-      const info = camera.flightInfo();
+      const info = cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo());
       // (re-entry glow on the Ranger)
       const pl = info.surface?.plasma;
       renderer.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;
       try {
-        status = rangerStatus(settings, camera, info, simTime);
+        status = cpuProf.time("Ranger status", () => rangerStatus(settings, camera, info, simTime));
         tools.watch(status);
       } catch {
         /* (between two frames of a jump) */
       }
-      flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime);
+      cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
     }
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;
-      updateHUD(lastStats, fps);
-      if (guiDirty) {
-        refreshGui();
-        guiDirty = false;
-        scheduleUrlSave();
-      }
+      cpuProf.time("panel & readouts", () => {
+        updateHUD(lastStats!, fps);
+        if (guiDirty) {
+          refreshGui();
+          guiDirty = false;
+          scheduleUrlSave();
+        }
+      });
     }
+    cpuProf.end(!!st);
   };
   // at start: a shared moment (#save=…), a scene named in the URL (#scene=game:interstellar), else the
   // flight saved last time; then the URL is left clean (settings from an old link were read above)

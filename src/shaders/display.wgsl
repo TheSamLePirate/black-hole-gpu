@@ -7,7 +7,7 @@ struct Display {
   hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white
   pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
-  lod: vec4f,   // mip level of the HDR image to display (instrument beam), unused…
+  lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), unused…
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -15,6 +15,7 @@ struct Display {
 @group(0) @binding(2) var bloom: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
 @group(0) @binding(4) var<storage, read> polGrid: array<vec4f>; // Σ I, Q, U, n per tick cell
+@group(0) @binding(5) var ship: texture_2d<f32>; // the Ranger, premultiplied (same scale as hdr)
 
 struct VSOut { @builtin(position) pos: vec4f };
 
@@ -142,6 +143,11 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = (uvOut - D.view.zw) / D.view.xy;
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   var c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
+  if (D.lod.y > 0.5) {
+    // the Ranger over the traced image (the glare below still spills over its silhouette)
+    let sp = textureSampleLevel(ship, samp, uv, 0.0);
+    c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
+  }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
     c = mix(c, b, D.flags.y);

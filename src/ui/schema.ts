@@ -718,6 +718,11 @@ export const SCHEMA: ControlDef[] = [
     help: "One ray per N×N pixels while moving. When the camera stops, the image fills in to full resolution over N² frames.",
   },
   {
+    key: "dynamicResolution", type: "toggle", section: "render", group: "Realtime", label: "Dynamic resolution", effect: "none",
+    help: "When the realtime subsampling alone cannot keep the frame budget, the render scale is lowered (down to half the pixel ratio), and raised again when the GPU has room. The Game quality turns it on.",
+    keywords: "fps performance resolution scale dynamic",
+  },
+  {
     key: "realtimeBudget", type: "number", section: "render", group: "Realtime", label: "Frame budget", min: 8, max: 120, step: 1, unit: "ms",
     visible: (s) => s.realtimeSubsampling === "auto", effect: "none",
     help: "GPU time per realtime frame that the automatic subsampling aims for: 30 ms ≈ 30 fps, 60 ms ≈ 15 fps with finer blocks (sharper while moving or while time runs).",

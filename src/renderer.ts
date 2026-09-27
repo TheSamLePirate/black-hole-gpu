@@ -5,6 +5,7 @@ import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer } from "./ship";
+import { GpuProfiler } from "./gpuprof";
 import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import starCatalogueUrl from "../assets/sky/stars.bin";
@@ -155,7 +156,7 @@ interface Target {
   traceBind: GPUBindGroup;
   /** the same, the light-probe buffer swapped for the planets' probe */
   probeBind: GPUBindGroup;
-  postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number }[];
+  postPasses: { pipeline: GPUComputePipeline; bind: GPUBindGroup; w: number; h: number; label?: string }[];
   displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
 }
 
@@ -196,6 +197,8 @@ export class Renderer {
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   /** The spaceship carrying the camera, and the light probe that lights it. */
   readonly ship: ShipRenderer;
+  /** GPU time per pass (timestamp queries; off unless switched on) */
+  readonly prof: GpuProfiler;
   private envPipeline: GPUComputePipeline;
   private envReset = true;
   // the Ranger's light probe: what it saw last frame (unit vectors from the camera to what lights it,
@@ -204,6 +207,11 @@ export class Renderer {
   /** the camera's axes (right, up, forward) in the Ranger's probe's axes */
   private shipProbeAxes: [Vec3, Vec3, Vec3] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   private envPhase = 0;
+  /** the ship probe's refresh this frame: every texel (1), one of each 2×2 (2) or 4×4 (4) block */
+  private envStride = 1;
+  /** run it every nth frame (slow changes: 4) */
+  private envEvery = 1;
+  private envTick = 0;
   private shipLoading: Promise<void> | null = null;
   /** Where the camera sits on the ship now (the app sets it every frame: it moves between attach points). */
   shipPose: MountPose | null = null;
@@ -280,11 +288,22 @@ export class Renderer {
   private bandY = 0;
   private bandRows = 64;
   private realtimeBlock = 2;
+  /** the realtime subsampling in use (one ray per block × block pixels) */
+  get realtimeBlockNow() {
+    return this.realtimeBlock;
+  }
   private blockMs = new Map<number, { ms: number; at: number }>();
   private lastBlock = 2;
   private interleaveIndex = 0;
   private lastOffset: [number, number] = [0, 0];
-  private busy = false;
+  /** frames submitted and not yet done; when the last one finished */
+  private inFlight = 0;
+  private lastDoneAt = 0;
+  /** The GPU has enough to do: the live view keeps two frames in flight (the CPU prepares the next one
+   *  while the GPU draws — +60 % frame rate), the offline render one (its bands are sized by their time). */
+  private get busy() {
+    return this.inFlight >= (this.offline ? 1 : 2);
+  }
   /** the last frame's GPU time [ms] */
   lastGpuMs = 0;
   private lastPhase: FrameStats["phase"] = "realtime";
@@ -342,6 +361,10 @@ export class Renderer {
     this.tracePipeline = mkTrace(false);
     this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
     this.ship = new ShipRenderer(device, src.ship);
+    this.prof = new GpuProfiler(device);
+    // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
+    this.prof.enabled = this.prof.supported;
+    this.ship.prof = this.prof;
     const mkDisplay = (fmt: GPUTextureFormat) =>
       device.createRenderPipeline({
         layout: "auto",
@@ -444,6 +467,8 @@ export class Renderer {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!adapter) throw new Error("No WebGPU adapter found.");
     const device = await adapter.requestDevice({
+      // (the GPU profiler's timestamps, when the adapter has them)
+      requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : [],
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
@@ -698,6 +723,8 @@ export class Renderer {
             { binding: 2, resource: t.bloomTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
             { binding: 3, resource: this.clampSampler },
             { binding: 4, resource: { buffer: t.polGrid } },
+            // (the Ranger, composited here over the traced image: shipOn in the display's params)
+            { binding: 5, resource: this.ship.target(t.hdr).resolved.createView() },
           ],
         }),
       );
@@ -712,6 +739,7 @@ export class Renderer {
     t.postPasses = [];
     if (live) {
       t.postPasses.push({
+        label: "gather",
         pipeline: this.postGatherH,
         w: t.width,
         h: t.height,
@@ -728,6 +756,7 @@ export class Renderer {
     }
     t.postPasses.push(
       {
+        label: "resolve",
         pipeline: this.postResolve,
         w: t.width,
         h: t.height,
@@ -748,6 +777,7 @@ export class Renderer {
     for (let l = 1; l < n; l++) {
       const [w, h] = mipSize(l);
       t.postPasses.push({
+        label: `bloom down ${l}`,
         pipeline: this.postDown,
         w,
         h,
@@ -764,6 +794,7 @@ export class Renderer {
     for (let l = n - 2; l >= 1; l--) {
       const [w, h] = mipSize(l);
       t.postPasses.push({
+        label: `bloom up ${l}`,
         pipeline: this.postUp,
         w,
         h,
@@ -849,7 +880,7 @@ export class Renderer {
       minSpp?: number;
       shutter?: number;
       /** a planet's light probe: a camera at its centre, the planet itself left out */
-      probe?: { cam: CameraFrame; hide: string };
+      probe?: { cam: CameraFrame; hide: string; slice?: number };
     },
   ) {
     const f = this.paramsF;
@@ -1024,15 +1055,23 @@ export class Renderer {
     // refreshed every 4 frames lags N of them: N·4·drift within a texel; 4 at least — a light
     // lagging a few degrees does not show, a flickering one does)
     if (o.probe) {
-      set(47, 1, 0, 1, 1);
+      // (a sixteenth of it: one texel of each 4×4 block, written over)
+      if (o.probe.slice !== undefined) set(47, 1, o.probe.slice, 2, 1);
+      else set(47, 1, 0, 1, 1);
       set(55, ...cam.right, 0);
       set(56, ...cam.up, 0);
       set(57, ...cam.fwd, 0);
     } else {
       const drift = this.probeDrift(s, cam, bodies, origin, m, time, bg);
       if (!(drift < 0.1)) this.envReset = true;
-      const window = Math.round(Math.min(512, Math.max(4, Math.PI / ENV_H / (4 * drift))));
-      set(47, this.envReset ? 1 : 0, this.envPhase % 4, this.envReset ? 1 : 0, window);
+      // (what it sees moving slowly: one texel of each 4×4 block, every 4th frame — the probe's rays
+      // are long and few, its pass lasts as long as the slowest: fewer rays save less than fewer runs)
+      const texel = Math.PI / ENV_H;
+      const slow = drift < texel / 256;
+      this.envStride = this.envReset ? 1 : slow ? 4 : 2;
+      this.envEvery = this.envReset || !slow ? 1 : 4;
+      const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
+      set(47, this.envReset ? 1 : 0, this.envPhase % (slow ? 16 : 4), this.envReset ? 1 : slow ? 2 : 0, window);
       set(55, 1, 0, 0, 0);
       set(56, 0, 1, 0, 0);
       set(57, 0, 0, 1, 0);
@@ -1091,7 +1130,7 @@ export class Renderer {
       })(),
       // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
       target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, s.band === "230GHz" ? 1 : 0,
-      this.beamSetup(s, target)?.level ?? 0, 0, 0, 0,
+      this.beamSetup(s, target)?.level ?? 0, s.ship && this.ship.ready ? 1 : 0, 0, 0,
     ]);
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
   }
@@ -1118,14 +1157,16 @@ export class Renderer {
       this.shipLoading ??= this.ship.load().then(() => this.invalidate(), (e) => console.error("Ranger:", e));
       return;
     }
-    // (256 × 128 probe: everything after a reset, else one texel of each 2×2 block per frame)
-    const full = this.envReset;
-    const pass = enc.beginComputePass();
+    // (256 × 128 probe: everything after a reset, else one texel of each 2×2 or 4×4 block per run)
+    if (this.envEvery > 1 && this.envTick++ % this.envEvery !== 0) return;
+    const k = this.envStride;
+    const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
     pass.setPipeline(this.envPipeline);
     pass.setBindGroup(0, t.traceBind);
-    pass.dispatchWorkgroups(full ? 32 : 16, full ? 16 : 8);
+    pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
-    this.ship.encodeEnv(enc);
+    // (its filtering: every other frame when it changes slowly)
+    if (k !== 4 || this.envPhase % 2 === 0) this.ship.encodeEnv(enc);
     enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
     this.envPhase++;
@@ -1136,27 +1177,42 @@ export class Renderer {
    * lit by its star): the probe kernel from its centre, moving with it, itself left out; read back
    * and reduced on the CPU (planet-probe.ts). Its own params and submission, before the frame's.
    */
-  private probePlanets(t: Target, s: Settings, time: number) {
-    if (s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
-    const list = sceneBodies(s, time).filter((b) => b.kind === BODY_PLANET && b.light < 0 && b.where !== 2);
-    if (!list.length) return;
-    const b = list[this.probeNext++ % list.length]!;
-    const vel = bodyVelocity(s, b.id as unknown as Body, time);
-    const cam = probeCamera(b.pos, vel, s.spin);
-    this.probeBusy = true;
-    this.probeAt = performance.now();
-    this.writeParams(t, s, time, {
+  private probePlanets(t: Target, s: Settings, time: number): void {
+    // (traced a sixteenth at a time — one texel of each 4×4 block per frame, the whole probe in 16
+    // frames: a 30 ms hitch every 2 s became ~2 ms a frame)
+    const job = this.probeJob;
+    if (!job) {
+      if (s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
+      // (the camera in our universe: they light nothing it can see — Gargantua's planets are specks
+      // through the mouth — and the target's figures are ours)
+      const cam0 = cameraFrame(s);
+      if (s.wormhole && cam0.region === "throat" && cam0.ell < 0) return;
+      const list = sceneBodies(s, time).filter((b) => b.kind === BODY_PLANET && b.light < 0 && b.where !== 2);
+      if (!list.length) return;
+      const b = list[this.probeNext++ % list.length]!;
+      const vel = bodyVelocity(s, b.id as unknown as Body, time);
+      this.probeJob = { b, cam: probeCamera(b.pos, vel, s.spin), time, slice: 0 };
+      this.probeBusy = true;
+      this.probePlanets(t, s, time);
+      return;
+    }
+    this.writeParams(t, s, job.time, {
       block: 1, eps: s.realtimeEps, steps: s.realtimeSteps, y0: 0, y1: 1, accumulate: false, sampleIndex: 0, flags: 0,
-      probe: { cam, hide: b.id },
+      probe: { cam: job.cam, hide: job.b.id, slice: job.slice },
     });
     const enc = this.device.createCommandEncoder();
-    const pass = enc.beginComputePass();
+    const pass = enc.beginComputePass(this.prof.pass("planet probe"));
     pass.setPipeline(this.envPipeline);
     pass.setBindGroup(0, t.probeBind);
-    pass.dispatchWorkgroups(PROBE_W / 8, PROBE_H / 8);
+    pass.dispatchWorkgroups(PROBE_W / 32, PROBE_H / 32);
     pass.end();
-    enc.copyBufferToBuffer(this.probeBuf, 0, this.probeStage, 0, PROBE_W * PROBE_H * 16);
+    const last = ++job.slice >= 16;
+    if (last) enc.copyBufferToBuffer(this.probeBuf, 0, this.probeStage, 0, PROBE_W * PROBE_H * 16);
     this.device.queue.submit([enc.finish()]);
+    if (!last) return;
+    this.probeJob = null;
+    this.probeAt = performance.now();
+    const { b, cam } = job;
     const logY = this.diskConstants(s).logY;
     this.probeStage.mapAsync(GPUMapMode.READ).then(
       () => {
@@ -1169,9 +1225,11 @@ export class Renderer {
       () => (this.probeBusy = false),
     );
   }
+  /** a planet's light probe under way: its camera, its time, the next sixteenth to trace */
+  private probeJob: { b: GpuBody; cam: CameraFrame; time: number; slice: number } | null = null;
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
-    const pass = enc.beginComputePass();
+    const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
     pass.setPipeline(quality ? this.qualityPipeline : this.tracePipeline);
     pass.setBindGroup(0, t.traceBind);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
@@ -1217,7 +1275,7 @@ export class Renderer {
     }
     d.queue.writeBuffer(t.beam.buf, 0, new Float32Array([b.sigma, Math.ceil(3 * b.sigma), 0, 0]));
     for (const [p, g] of [[this.postBeamH, t.beam.h], [this.postBeamV, t.beam.v]] as const) {
-      const pass = enc.beginComputePass();
+      const pass = enc.beginComputePass(this.prof.pass("beam"));
       pass.setPipeline(p);
       pass.setBindGroup(0, g);
       pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
@@ -1255,7 +1313,7 @@ export class Renderer {
     }
     t.denoise.bufs.forEach((b, i) => d.queue.writeBuffer(b, 0, new Float32Array([2 ** i, 1.5 * s.denoiseStrength, i, 0])));
     for (const g of t.denoise.binds) {
-      const pass = enc.beginComputePass();
+      const pass = enc.beginComputePass(this.prof.pass("denoise"));
       pass.setPipeline(this.postAtrous);
       pass.setBindGroup(0, g);
       pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
@@ -1266,7 +1324,7 @@ export class Renderer {
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
     if (s?.polarization) {
       const { gw, gh } = this.polCells(s, t);
-      const pass = enc.beginComputePass();
+      const pass = enc.beginComputePass(this.prof.pass("polarization"));
       pass.setPipeline(this.postPolGrid);
       pass.setBindGroup(0, t.polGridPass);
       pass.dispatchWorkgroups(Math.ceil(gw / 8), Math.ceil(gh / 8));
@@ -1274,7 +1332,7 @@ export class Renderer {
     }
     const r0 = t.gather.size > 16 ? 1 : 0; // index of the resolve pass (live view: after the gather pass)
     t.postPasses.forEach((p, i) => {
-      const pass = enc.beginComputePass();
+      const pass = enc.beginComputePass(this.prof.pass(p.label ?? "post"));
       pass.setPipeline(p.pipeline);
       pass.setBindGroup(0, p.bind);
       pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
@@ -1289,10 +1347,10 @@ export class Renderer {
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
-    // the light meter, on the live view (after the ship is drawn)
+    // the light meter, on the live view (the scene: the Ranger is composited at display)
     if (s?.autoExposure && t === this.live && !this.meterPending) {
       this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
-      const pass = enc.beginComputePass();
+      const pass = enc.beginComputePass(this.prof.pass("light meter"));
       pass.setPipeline(this.meterPipeline);
       pass.setBindGroup(0, this.device.createBindGroup({
         layout: this.meterPipeline.getBindGroupLayout(0),
@@ -1461,9 +1519,9 @@ export class Renderer {
   }
 
   private encodeDisplay(enc: GPUCommandEncoder, t: Target, pipeline: GPURenderPipeline, view: GPUTextureView) {
-    const rp = enc.beginRenderPass({
+    const rp = enc.beginRenderPass(this.prof.pass("display", {
       colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }],
-    });
+    }));
     rp.setPipeline(pipeline);
     rp.setBindGroup(0, t.displayBinds.get(pipeline)!);
     rp.draw(3);
@@ -1472,11 +1530,15 @@ export class Renderer {
 
   private submit(enc: GPUCommandEncoder, done: (ms: number) => void) {
     const t0 = performance.now();
+    this.prof.end(enc);
     this.device.queue.submit([enc.finish()]);
-    this.busy = true;
+    this.inFlight++;
     this.device.queue.onSubmittedWorkDone().then(() => {
-      this.busy = false;
-      const ms = performance.now() - t0;
+      this.inFlight--;
+      // (this frame's own time: from when the GPU could start on it — after the one before)
+      const now = performance.now();
+      const ms = now - Math.max(t0, this.lastDoneAt);
+      this.lastDoneAt = now;
       this.lastGpuMs = ms;
       done(ms);
     });
@@ -1502,6 +1564,7 @@ export class Renderer {
 
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
+    this.prof.begin();
     this.probePlanets(t, s, time);
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
@@ -1590,7 +1653,11 @@ export class Renderer {
     const i = BLOCKS.indexOf(b);
     const finer = i > 0 ? BLOCKS[i - 1]! : 0;
     const known = finer ? this.blockMs.get(finer) : undefined;
-    const predicted = !finer ? Infinity : known && now - known.at < 3000 ? known.ms : est * (0.5 + 0.5 * (b / finer) ** 2);
+    // (the trace pass's own time from the GPU profiler: only it grows as (b / finer)²; without it,
+    // half the frame assumed to)
+    const trace = this.prof.traceMs();
+    const guess = trace > 0 ? est + trace * ((b / finer) ** 2 - 1) : est * (0.5 + 0.5 * (b / finer) ** 2);
+    const predicted = !finer ? Infinity : known && now - known.at < 3000 ? known.ms : guess;
     if (est > budget * 1.1) {
       this.slowFrames++;
       this.fastFrames = 0;

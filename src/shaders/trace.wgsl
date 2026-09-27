@@ -3494,8 +3494,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 // u = atan2(x, z), v = polar angle from +y). It lights the spaceship the camera is mounted on. The
 // sky, and whatever is smaller than a texel (the Sun, a far disk's bright core), is pre-filtered over
 // a texel: a jittered ray meeting or missing it would make the ship's light flicker. Each frame
-// refreshes one texel of every 2×2 block (P.envCfg.y picks which; all of them after a reset,
-// P.envCfg.z = 1). Texels keep a running mean over their last P.envCfg.w samples (alpha: count): long
+// refreshes one texel of every 2×2 block — of every 4×4 when what it sees moves slowly (P.envCfg.y
+// picks which; all of them after a reset, P.envCfg.z = 1). Texels keep a running mean over their last P.envCfg.w samples (alpha: count): long
 // while what the probe sees holds still (its axes do not turn with the camera), short when it moves.
 // ---------------------------------------------------------------------------------------------
 const ENV_W = 256u;
@@ -3503,10 +3503,12 @@ const ENV_H = 128u;
 
 @compute @workgroup_size(8, 8)
 fn env(@builtin(global_invocation_id) gid: vec3u) {
+  // (envCfg.z: 1 every texel; 0 one of each 2×2 block, 2 one of each 4×4 — envCfg.y picks which)
   var px = gid.xy;
-  if (P.envCfg.z < 0.5) {
+  if (P.envCfg.z < 0.5 || P.envCfg.z > 1.5) {
+    let st = select(2u, 4u, P.envCfg.z > 1.5);
     let q = u32(P.envCfg.y);
-    px = gid.xy * 2u + vec2u(q & 1u, q >> 1u);
+    px = gid.xy * st + vec2u(q % st, q / st);
   }
   if (px.x >= ENV_W || px.y >= ENV_H) { return; }
   physicalPoints = true;
