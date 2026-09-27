@@ -3,10 +3,11 @@
 // landing gear, crash speed and ballistic coefficient as near the hole (landing.ts).
 
 import type { Vec3 } from "../physics";
-import { BALLISTIC, CRASH_SPEED, GEAR } from "../landing";
+import { GEAR } from "../landing";
+import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, solarBody, solarState, spinVector } from "./solar";
 
-export { CRASH_SPEED, GEAR };
+export { GEAR };
 
 const C = 299792458;
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -46,7 +47,7 @@ export function dragAccel(id: string, X: Vec3, V: Vec3, t: number): Vec3 {
   const va = sub(V, groundVelocity(id, X, t));
   const v = Math.hypot(...va);
   // (a = ½ ρ (v c)² / B in m/s², × M/c² in the code's units)
-  const k = (-0.5 * rho * v * M_METRES) / BALLISTIC;
+  const k = (-0.5 * rho * v * M_METRES) / TUNING.ballistic;
   return [va[0] * k, va[1] * k, va[2] * k];
 }
 

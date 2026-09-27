@@ -17,8 +17,14 @@ import { criticalCurveDirections, projectLook } from "./shadow";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
-import { loadFromUrl, saveToUrl } from "./urlstate";
+import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
+import { GameTools } from "./game/tools";
+import { rangerStatus, type RangerStatus } from "./game/status";
+import { GameToolsWindow } from "./ui/gametools";
+import { applyTuning } from "./game/tuning";
+import { gameLog } from "./game/log";
+import { autosave, saveFromHash, type GameSave } from "./game/save";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -44,6 +50,7 @@ const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
+  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -143,10 +150,7 @@ async function main() {
     presetNames: Object.keys(presets),
     loadImage: () => fileInput.click(),
     connectController: HidPads.supported ? () => connectController() : undefined,
-    shareUrl: () => {
-      saveToUrl(settings, defaultSettings(), ["pixelRatio"]);
-      return location.href;
-    },
+    shareUrl: () => tools.shareLink(),
   });
   const refreshGui = () => {
     panel.refresh();
@@ -201,6 +205,7 @@ async function main() {
     scheduleUrlSave();
   };
   const actions: Record<string, () => void> = {
+    "btn-tools": () => toolsWin.toggle(),
     "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
     "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
     "btn-fly": () => camera.setFlyMode(!camera.flyMode),
@@ -295,6 +300,12 @@ async function main() {
     const x = settings.timeSpeed / rt;
     panel.toast(`Time warp: ×${x < 100 ? Math.round(x) : x.toPrecision(3)} (${+settings.timeSpeed.toPrecision(3)} M/s)`);
   }
+  function togglePathInView() {
+    settings.pathInView = !settings.pathInView;
+    refreshGui();
+    touch();
+    panel.toast(settings.pathInView ? "Future path shown in the view [Y]" : "Future path hidden in the view (the map keeps it) [Y]");
+  }
   function pilotHold(h: Hold) {
     camera.pilot.setHold(h);
     panel.toast(camera.pilot.hold === "none" ? "Attitude hold off" : `Hold: ${HOLD_NAMES[h]}`);
@@ -346,9 +357,14 @@ async function main() {
     nudge: (i, dv, dt) => camera.nudgeNode(i, dv, dt),
     deleteNode: (i) => camera.deleteNode(i),
     clearPlan: () => camera.clearPlan(),
+    pathInView: togglePathInView,
+    tools: () => toolsWin.toggle(),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
-  camera.onPilotMessage = (t) => panel.toast(t);
+  camera.onPilotMessage = (t) => {
+    panel.toast(t);
+    gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, simTime);
+  };
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
   let hudDensity: number | null = null;
   const mission = new Mission(settings, camera, (t) => panel.toast(t));
@@ -375,6 +391,7 @@ async function main() {
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyR") pilotRoll();
+    else if (e.code === "KeyY") togglePathInView();
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "CapsLock") {
@@ -486,6 +503,11 @@ async function main() {
 
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey) return;
+    if (e.code === "F2") {
+      e.preventDefault();
+      toolsWin.toggle();
+      return;
+    }
     if (flying() && pilotKey(e)) return;
     if (e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
     const k = e.key.toLowerCase();
@@ -558,11 +580,12 @@ async function main() {
     },
   });
 
-  // -------------------------------------------------------------------- URL state
-  let urlTimer = 0;
+  // -------------------------------------------------------------------- saved state
+  // (the URL no longer carries the scene: the game saves itself in the browser — game/save.ts; a
+  // link is made on demand. Kept as a hook for what should save soon.)
+  let saveSoon = false;
   function scheduleUrlSave() {
-    clearTimeout(urlTimer);
-    urlTimer = window.setTimeout(() => saveToUrl(settings, defaultSettings(), ["pixelRatio"]), 400);
+    saveSoon = true;
   }
 
   // -------------------------------------------------------------------- sizing
@@ -612,8 +635,35 @@ async function main() {
     await snapshot(`${name}.png`);
     return `${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s`;
   };
+  // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
+  const tools = new GameTools({
+    settings, camera, renderer,
+    time: () => simTime,
+    setTime: (t) => {
+      simTime = t;
+      timeDirty = true;
+      setSceneTime(t);
+    },
+    preset: (name) => applyPreset(name),
+    changed: (keys) => onSettingsChange(keys),
+    refresh: () => {
+      refreshGui();
+      touch();
+      touchDisplay();
+      timeDirty = true;
+    },
+    toast: (t) => panel.toast(t),
+    fps: () => fps,
+  });
+  const toolsWin = new GameToolsWindow(tools);
+  addEventListener("pagehide", () => {
+    if (settings.autosave && firstFrame) tools.autosaveNow();
+  });
+
   Object.assign(globalThis, {
     __bh: {
+      /** the game's tools: __bh.game.help() */
+      game: tools,
       settings, renderer, camera, touch, snapshot, render, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
       time: () => simTime,
       mission,
@@ -650,6 +700,7 @@ async function main() {
   let frozen = false;
   let lastStats: FrameStats | null = null;
   let guideKey = "";
+  let saveTimer = 0;
 
   const loop = (now: number) => {
     requestAnimationFrame(loop);
@@ -681,7 +732,7 @@ async function main() {
     }
     // the camera's predicted free fall, drawn (lensed) by the tracer
     const path = camera.gravity ? camera.predictPath() : null;
-    if (renderer.setCameraPath(settings.showGeodesic ? path : null)) changed = true;
+    if (renderer.setCameraPath(settings.showGeodesic && settings.pathInView ? path : null)) changed = true;
     const st = renderer.frame(settings, simTime, changed, timeDirty, displayChanged);
     if (st) {
       if (!firstFrame) {
@@ -698,6 +749,14 @@ async function main() {
       if (st.offline) renderDialog.update(st.offline);
     }
     drawGuide();
+    applyTuning(settings);
+    toolsWin.tick();
+    saveTimer += dt;
+    if (settings.autosave && firstFrame && !renderer.offlineActive && (saveTimer > settings.autosaveEvery || (saveSoon && saveTimer > 2))) {
+      saveTimer = 0;
+      saveSoon = false;
+      tools.autosaveNow();
+    }
     renderer.shipPose = settings.ship ? camera.shipPose() : null;
     const pil = flying();
     if (flightHud.visible !== pil) flightHud.show(pil);
@@ -706,7 +765,15 @@ async function main() {
       // (re-entry glow on the Ranger)
       const pl = info.surface?.plasma;
       renderer.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];
-      flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null }, simTime);
+      // the Ranger's status (the telemetry; its changes go to the journal)
+      let status: RangerStatus | null = null;
+      try {
+        status = rangerStatus(settings, camera, info, simTime);
+        tools.watch(status);
+      } catch {
+        /* (between two frames of a jump) */
+      }
+      flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime);
     }
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
@@ -719,10 +786,26 @@ async function main() {
       }
     }
   };
-  // a scene named in the URL (#scene=game:interstellar): applied at start
+  // at start: a shared moment (#save=…), a scene named in the URL (#scene=game:interstellar), else the
+  // flight saved last time; then the URL is left clean (settings from an old link were read above)
   {
-    const scene = new URLSearchParams(location.hash.slice(1)).get("scene");
-    if (scene && presets[scene]) applyPreset(scene);
+    const hash = location.hash;
+    const scene = new URLSearchParams(hash.slice(1)).get("scene");
+    let shared: GameSave | null = null;
+    try {
+      shared = saveFromHash(hash);
+    } catch (e) {
+      panel.toast(`That link's saved game could not be read: ${(e as Error).message}`);
+    }
+    const last = autosave.get();
+    try {
+      if (shared) panel.toast(`Shared flight: ${tools.load(shared)}`);
+      else if (scene && presets[scene]) applyPreset(scene);
+      else if (hash.length <= 1 && last && last.settings.autosave !== false) panel.toast(`Resumed: ${tools.load(last)} (F2: saves)`);
+    } catch (e) {
+      console.warn("Could not restore the saved game:", e);
+    }
+    if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }
   requestAnimationFrame(loop);
 

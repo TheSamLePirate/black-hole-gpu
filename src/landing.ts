@@ -16,6 +16,7 @@
 // Contact: the ship stops on the ground (above its gear) and turns with it; it takes off when its
 // thrust beats its weight there.
 
+import { TUNING } from "./game/tuning";
 import { coordToZamo, zamo, zamoToCoord, type Vec3 } from "./physics";
 import { epicycle } from "./lowthrust";
 import { accelUnit } from "./engine";
@@ -29,10 +30,7 @@ type M6 = number[][];
 
 /** height of the ship's centre above its gear [m] */
 export const GEAR = 6;
-/** ballistic coefficient m/(C_D A) [kg/m²] (a dense lander) */
-export const BALLISTIC = 900;
-/** above this impact speed [m/s] the landing is a crash */
-export const CRASH_SPEED = 12;
+// (the ballistic coefficient m/(C_D A) and the crash speed: game/tuning.ts, from the settings)
 
 export interface PlanetFrame {
   id: string;
@@ -195,7 +193,7 @@ export function localAccel(F: PlanetFrame, xi: Vec3, w: Vec3, thrust: Vec3): Vec
   if (rho > 0 && sp > 0) {
     // ½ ρ v² / B, in c²/M: v [c] → m/s, the result → c²/M
     const vs = sp * 299792458;
-    const k = (0.5 * rho * vs * vs) / BALLISTIC / F.aUnit / sp;
+    const k = (0.5 * rho * vs * vs) / TUNING.ballistic / F.aUnit / sp;
     out = [out[0] - k * w[0], out[1] - k * w[1], out[2] - k * w[2]];
   }
   return out;
@@ -228,7 +226,7 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
     const hNow = Math.max(d - groundR(F, L.xi) - gear, 1e-12);
     const rho = airDensity(F, d - F.R);
     // (v/a of the drag, in M: B a_unit / (½ ρ v c²))
-    const dragT = rho > 0 ? (BALLISTIC * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
+    const dragT = rho > 0 ? (TUNING.ballistic * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
     const orbitT = Math.sqrt((d * d * d) / F.m);
     let h = Math.min(left, 0.02 * orbitT, 0.2 * dragT, Math.max(0.2 * hNow / sp, 1e-3 * orbitT));
     h = Math.max(h, 1e-14);

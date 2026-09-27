@@ -5,7 +5,7 @@ import { MOUNTS } from "../mounts";
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
 export type Effect = "scene" | "display" | "none" | "resize";
 
-export type SectionId = "scene" | "matter" | "sky" | "physics" | "render";
+export type SectionId = "scene" | "matter" | "sky" | "physics" | "render" | "game";
 
 export const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "scene", label: "Scene", icon: "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 12h3M18 12h3M12 3v3M12 18v3" },
@@ -13,6 +13,7 @@ export const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "sky", label: "Sky", icon: "M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" },
   { id: "physics", label: "Physics", icon: "M4 19h16M6 19V9M11 19V5M16 19v-7M21 19V13" },
   { id: "render", label: "Render", icon: "M4 5h16v11H4zM8 20h8M12 16v4" },
+  { id: "game", label: "Game", icon: "M12 2l3 7v8l-3 3-3-3V9zM9 13l-4 3v3l4-2M15 13l4 3v3l-4-2M12 9m-1.2 0a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0" },
 ];
 
 interface Base<K extends keyof Settings = keyof Settings> {
@@ -757,6 +758,74 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "qualitySteps", type: "number", section: "render", group: "Converged image", label: "Max steps", min: 200, max: 50000, scale: "log", precision: 3, advanced: true,
+  },
+  // ---- the game
+  {
+    key: "turnRate", type: "number", section: "game", group: "Ranger handling", label: "Turn rate", min: 5, max: 180, step: 1, unit: "°/s", effect: "none",
+    help: "Top turning rate of the attitude control (SAS, holds, the autopilots' turns).",
+    keywords: "attitude rotation speed sas",
+  },
+  {
+    key: "turnAccel", type: "number", section: "game", group: "Ranger handling", label: "Turn acceleration", min: 5, max: 360, step: 1, unit: "°/s²", effect: "none",
+    help: "Angular acceleration of the reaction wheels and the RCS: how fast a turn starts and stops.",
+    keywords: "attitude angular acceleration reaction wheels",
+  },
+  {
+    key: "rcsFraction", type: "number", section: "game", group: "Ranger handling", label: "RCS authority", min: 0, max: 0.5, step: 0.01, precision: 2, effect: "none",
+    help: "RCS translation (IJKL / HN, the autopilots' fine corrections), as a fraction of the main engine's thrust.",
+    keywords: "rcs translation thrusters docking",
+  },
+  {
+    key: "shipLookYaw", type: "number", section: "game", group: "Ranger handling", label: "Free look: yaw", min: -170, max: 170, step: 1, unit: "°", effect: "scene", advanced: true,
+    help: "The camera turned on its mount (the ship keeps its attitude).",
+  },
+  {
+    key: "shipLookPitch", type: "number", section: "game", group: "Ranger handling", label: "Free look: pitch", min: -85, max: 85, step: 1, unit: "°", effect: "scene", advanced: true,
+  },
+  {
+    key: "crashSpeed", type: "number", section: "game", group: "Ground & air", label: "Crash speed", min: 1, max: 100, step: 1, unit: "m/s", effect: "none",
+    help: "Touching the ground faster than this is a crash.",
+    keywords: "landing crash touchdown",
+  },
+  {
+    key: "ballistic", type: "number", section: "game", group: "Ground & air", label: "Ballistic coefficient", min: 50, max: 10000, scale: "log", precision: 3, unit: "kg/m²", effect: "none",
+    help: "m/(C_D A): how hard the air brakes the ship (lower: more drag). 900: a dense lander.",
+    keywords: "drag air atmosphere reentry",
+  },
+  {
+    key: "rangerStatus", type: "toggle", section: "game", group: "Displays", label: "Ranger status", effect: "none",
+    help: "The telemetry panel shows what the ship is doing: the body of its sphere of influence, landed / suborbital / in orbit / escaping, its orbit and the target.",
+    keywords: "telemetry status orbit soi target",
+  },
+  {
+    key: "pathInView", type: "toggle", section: "game", group: "Displays", label: "Future path in the view", effect: "scene",
+    help: "The cyan tube of the ship's predicted path, drawn in the view (Y while flying). The map shows it either way.",
+    keywords: "path trajectory tube cyan geodesic prediction",
+  },
+  {
+    key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
+    help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
+    keywords: "soi sphere of influence map",
+  },
+  {
+    key: "autosave", type: "toggle", section: "game", group: "Saved games", label: "Autosave", effect: "none",
+    help: "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).",
+    keywords: "save resume persist",
+  },
+  {
+    key: "autosaveEvery", type: "number", section: "game", group: "Saved games", label: "Every", min: 2, max: 120, step: 1, unit: "s", effect: "none",
+    enabled: (s) => s.autosave,
+  },
+  {
+    key: "velR", type: "number", section: "scene", group: "Observer motion", label: "Velocity: radial", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
+    help: "The camera's (the ship's) velocity relative to the local static observer, along r̂ (our side: the rep frame's axes).",
+    keywords: "velocity speed state vector",
+  },
+  {
+    key: "velT", type: "number", section: "scene", group: "Observer motion", label: "Velocity: polar", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
+  },
+  {
+    key: "velP", type: "number", section: "scene", group: "Observer motion", label: "Velocity: azimuthal", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
   },
 ];
 

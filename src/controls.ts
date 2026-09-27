@@ -1,6 +1,7 @@
 import {
   basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
+import { TUNING } from "./game/tuning";
 import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 } from "./physics";
 import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
 import {
@@ -14,7 +15,7 @@ import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
-import { airDensity, BALLISTIC, betaToCoord, CRASH_SPEED, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
+import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -1198,7 +1199,7 @@ export class CameraController {
           this.levelShip(localToZamo([L.xi[0], L.xi[1], L.xi[2]]));
           const name = BODY_NAMES[F.id as Body];
           const v = r.impact;
-          this.onPilotMessage?.(v > CRASH_SPEED ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+          this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
           if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
         }
         return t0 + simDt;
@@ -1412,7 +1413,7 @@ export class CameraController {
       if (nav) this.levelShip(nav.radial);
       const name = BODY_NAMES[ground as Body];
       const v = touched.speed;
-      this.onPilotMessage?.(v > CRASH_SPEED ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+      this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
       if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
     }
     return t;
@@ -1478,6 +1479,10 @@ export class CameraController {
   setOurLanded(l: { body: string; q: Vec3 } | null) {
     this.ourLanded = l;
     this.landed = !!l;
+  }
+  /** where the ship rests in our universe (a saved game keeps it) */
+  get ourLandedOn() {
+    return this.ourLanded;
   }
 
   // ------------------------------------------------------------------------------ piloting
@@ -3126,7 +3131,7 @@ export class CameraController {
     // thrust — straight up through the thick air first, turning east as it thins (a gravity turn)
     const rho = ourAir(id, h * M_METRES);
     if (rho > 0) {
-      const vMax = Math.sqrt((2 * BALLISTIC * 0.3 * thr * (c * c / M_METRES)) / rho) / c;
+      const vMax = Math.sqrt((2 * TUNING.ballistic * 0.3 * thr * (c * c / M_METRES)) / rho) / c;
       vUp = Math.min(vUp, vMax);
       const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
       vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);

@@ -10,6 +10,7 @@
 // Translation is physical: a proper acceleration (c²/M) on the Kerr geodesic (geodesic.ts), in the
 // scene's time. Attitude runs in the pilot's (wall-clock) seconds.
 
+import { TUNING } from "./game/tuning";
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
@@ -77,9 +78,7 @@ export interface FlightOutput {
   burn: V3 | null;
 }
 
-const MAX_RATE = 0.75; // rad/s
-const ALPHA = 1.6; // rad/s² (reaction wheels + RCS)
-export const RCS = 0.08; // RCS translation acceleration, fraction of the main engine
+// (turning rate, angular acceleration, RCS authority: game/tuning.ts, from the settings)
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
@@ -163,7 +162,7 @@ export class FlightComputer {
         }
       }
       const a = len(A);
-      const rcsMax = RCS * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust;
       if (a < 0.8 * rcsMax) {
         rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
         throttle = 0;
@@ -198,7 +197,7 @@ export class FlightComputer {
       const s = len(e);
       const ang = Math.atan2(s, dot(Z, point));
       // braking curve far away (reach the target at rest), linear near it (no chattering)
-      const rate = Math.min(MAX_RATE, Math.sqrt(2 * 0.7 * ALPHA * ang), 3 * ang);
+      const rate = Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * ang), 3 * ang);
       const wC = s > 1e-9 ? scale(e, rate / s) : [0, 0, 0] as V3;
       const wb = body(wC);
       want[0] = wb[0];
@@ -209,17 +208,17 @@ export class FlightComputer {
       const up = this.rollAlign ? this.levelUp(c, toC, Z) : null;
       if (up) {
         const ra = Math.atan2(dot(cross(Y, up), Z), dot(Y, up));
-        want[2] = Math.sign(ra) * Math.min(MAX_RATE, Math.sqrt(2 * 0.7 * ALPHA * Math.abs(ra)), 3 * Math.abs(ra));
+        want[2] = Math.sign(ra) * Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * Math.abs(ra)), 3 * Math.abs(ra));
       }
     } else {
       for (let i = 0; i < 3; i++) {
-        if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * MAX_RATE : this.omega[i]! + manual[i]! * ALPHA * dt;
+        if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
         else if (this.sas) want[i] = 0;
       }
     }
     for (let i = 0; i < 3; i++) {
-      const d = clamp(want[i]! - this.omega[i]!, -ALPHA * dt, ALPHA * dt);
-      this.omega[i] = clamp(this.omega[i]! + d, -1.5 * MAX_RATE, 1.5 * MAX_RATE);
+      const d = clamp(want[i]! - this.omega[i]!, -TUNING.turnAccel * dt, TUNING.turnAccel * dt);
+      this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
     let rot = add(add(scale(X, this.omega[0] * dt), scale(Y, this.omega[1] * dt)), scale(Z, this.omega[2] * dt));
@@ -235,7 +234,7 @@ export class FlightComputer {
     if (this.auto === "none") {
       this.throttle = clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
-      const rcsMax = RCS * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust;
       // (the ship's right is −x)
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));

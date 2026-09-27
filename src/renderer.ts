@@ -285,7 +285,8 @@ export class Renderer {
   private interleaveIndex = 0;
   private lastOffset: [number, number] = [0, 0];
   private busy = false;
-  private lastGpuMs = 0;
+  /** the last frame's GPU time [ms] */
+  lastGpuMs = 0;
   private lastPhase: FrameStats["phase"] = "realtime";
   private slowFrames = 0;
   private fastFrames = 0;
@@ -1361,6 +1362,24 @@ export class Renderer {
       if (p) moved = Math.max(moved, angle(d, p));
     }
     return turn + moved;
+  }
+
+  /** The Ranger is drawn (its mesh loaded). */
+  get shipReady() {
+    return this.ship.ready;
+  }
+
+  /** The light the Ranger's probe holds now: the luminance of its harmonics' L0 (read back). */
+  async readShipLight(): Promise<number> {
+    const st = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.ship.shBuf, 0, st, 0, 16);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    return 0.2126 * f[0]! + 0.7152 * f[1]! + 0.0722 * f[2]!;
   }
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */

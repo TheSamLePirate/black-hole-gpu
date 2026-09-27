@@ -199,6 +199,17 @@ export interface Settings {
   sunMass: number; // mass of the star [M]: its weak field bends light and pulls the camera
   // a planetary system from the body registry (src/system/bodies.ts)
   system: "none" | "gargantua";
+  // the game: the Ranger's handling, the ground, the tools
+  turnRate: number; // attitude control: top turning rate [°/s]
+  turnAccel: number; // attitude control: angular acceleration (reaction wheels + RCS) [°/s²]
+  rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
+  crashSpeed: number; // touching the ground faster than this is a crash [m/s]
+  ballistic: number; // ballistic coefficient m/(C_D A): how hard the air brakes the ship [kg/m²]
+  autosave: boolean; // keep the flight in the browser and resume it at the next visit
+  autosaveEvery: number; // [s]
+  rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
+  soiRings: boolean; // the spheres of influence on the map
+  pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
 }
 
 export function defaultSettings(): Settings {
@@ -342,6 +353,16 @@ export function defaultSettings(): Settings {
     sunPhase: 0,
     sunMass: 0.1,
     system: "none",
+    turnRate: 43,
+    turnAccel: 92,
+    rcsFraction: 0.08,
+    crashSpeed: 12,
+    ballistic: 900,
+    autosave: true,
+    autosaveEvery: 10,
+    rangerStatus: true,
+    soiRings: true,
+    pathInView: true,
   };
 }
 
