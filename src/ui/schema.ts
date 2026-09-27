@@ -879,6 +879,7 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Gargantua system (10⁸ M☉, a* = 0.998)": { title: "The Gargantua system", description: "10⁸ M☉ spinning at a* = 0.998: Miller's and Mann's planets, the orbiting wormhole mouth, the K2 star far out.", icon: "✺", group: "gargantua" },
   "Gargantua system: departure near Saturn": { title: "Departure near Saturn", description: "Our side: sunlit Saturn, the wormhole mouth waiting behind it.", icon: "♄", group: "gargantua" },
   "Interstellar (no shifts)": { title: "Gargantua, as in the film", description: "Doppler and redshift switched off, as the film did: the symmetric, golden Gargantua.", icon: "◎", group: "gargantua" },
+  "Interstellar: along the disk (the film's close pass)": { title: "Along the disk, as in the film", description: "Skimming the disk beside the shadow: the lensed far side rises as a wall of hot strands and smoke, the reference view for the disk's look.", icon: "≋", group: "gargantua" },
   "Companion star close-up": { description: "The orange star: granulation, spots, prominences and corona, Gargantua beyond.", icon: "☼", group: "gargantua" },
   "The star passing Gargantua": { description: "The star in front of Gargantua, both lensed.", icon: "✹", group: "gargantua" },
   "Gargantua under the distant galaxy": { description: "Gargantua without the wormhole, under the far side's nebulae.", icon: "✧", group: "gargantua" },

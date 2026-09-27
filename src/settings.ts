@@ -410,9 +410,17 @@ export const presets: Record<string, Preset> = {
     spin: 0.6, distance: 34, inclination: 84, fov: 40, yaw: 0, pitch: 0, shiftMode: "none",
     diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0.02, diskTau: 6, jet: false,
   },
+  // the film's close pass along the disk (the reference view for its look): the lensed far side rising
+  // as a wall of strands beside the shadow, the near side below
+  "Interstellar: along the disk (the film's close pass)": {
+    spin: 0.6, distance: 17.353, inclination: 84.456, azimuth: 40.467, fov: 45, yaw: 31.427, pitch: 6.397, roll: -4.302,
+    motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
+    diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84,
+  },
+  // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
   "Ranger: approaching Gargantua": {
     spin: 0.6, distance: 34, inclination: 84, fov: 55, yaw: 0, pitch: 0, roll: 0, shiftMode: "none",
-    diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0.02, diskTau: 6, jet: false,
+    diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0, diskTau: 100, jet: false,
     ship: true, shipMount: "quarter",
   },
   "Interstellar: wormhole to Gargantua": {

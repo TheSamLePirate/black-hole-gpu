@@ -1201,52 +1201,84 @@ fn gnoise(p: vec3f) -> f32 {
                    mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
 }
 
-// The disk's gas (the look of Interstellar's Gargantua: fibrous, flame-like strands drawn out along
-// the orbits, dark lanes between them, hotter clumps). The gas orbits: the disk is cut into thin
-// rings (NB per unit of ln r, each ~7 % of its radius), each turning rigidly at the Keplerian rate of
-// its middle, forever — no spiral winding, no fading between patterns — its neighbours blended across
-// it (their difference: the shear, a ring sliding past the next) — each ring with its own pattern,
-// no structure continued across rings (turned by other angles, it would slant). Along the orbits the structures
-// are long (a few cells around the circle), across them thin (the shear has drawn them out).
-// Evaluated at the retarded time t_em: moving structure is seen where it was when the light left it.
-const DISK_BANDS = 14.0;
-fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32) -> f32 {
+// The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
+// orbits, breaking up into turbulent clouds, with dense cool smoke that darkens what lies behind it,
+// and open lanes). Two fields: the heat (the strands: temperature) and the density (the clouds and
+// the smoke: optical depth) — hot and thin glows, cool and dense hides. The gas orbits: the disk is
+// cut into thin rings (NB per unit of ln r, each ~2 % of its radius), each turning rigidly at the
+// Keplerian rate of its middle, forever — no spiral winding, no fading between patterns — its
+// neighbours blended across it (their difference: the shear, a ring sliding past the next); each
+// ring with its own pattern, no structure continued across rings (turned by other angles, it would
+// slant). Along the orbits the structures are long, across them thin (the shear has drawn them out:
+// the strands ~60 : 1). Evaluated at the retarded time t_em: moving structure is seen where it was
+// when the light left it.
+const DISK_BANDS = 45.0;
+// px: the pixel's footprint in units of ln r — scales finer than it fade to their mean (no sparkle
+// from strands a fraction of a pixel wide, seen from afar while the image cannot accumulate)
+fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32, px: f32) -> vec2f {
   // (each ring its own gas: a structure continued into the next ring, turned by another angle there,
   // would be drawn slanted across the blend — a spiral arm)
   let lr = lr0 + ring * 1.618;
   // (the strands waver, like hair or flames: locally twisted, not perfect circles — both ways, no
   // spiral at large scale)
   let c0 = vec2f(cos(ang0), sin(ang0));
-  let ang = ang0 + 0.1 * gnoise(vec3f(c0 * 4.0, lr * 26.0 + 5.0));
+  let ang = ang0 + 0.08 * gnoise(vec3f(c0 * 3.0, lr * 3.0 + 5.0));
   let c = vec2f(cos(ang), sin(ang));
-  let lw = lr + 0.035 * gnoise(vec3f(c * 2.1, lr * 8.0 + 11.0));
-  // (height: the structures are columns through the thin disk, ragged at its surface — seen through
-  // its thickness they keep their contrast instead of averaging out)
-  // wide lanes and bright patches
-  let lanes = 0.5 + 0.5 * gnoise(vec3f(c * 1.3, lw * 6.0 + zn * 0.15));
-  // clouds: fBm, every octave keeping the stretch along the orbit
+  let lw = lr + 0.03 * gnoise(vec3f(c * 2.1, lr * 8.0 + 11.0));
+  // (height: the structures run through the thin disk, ragged at its surface)
+  // wide lanes (open, dark) and full stretches
+  let lanes = 0.5 + 0.5 * gnoise(vec3f(c * 1.2, lw * 7.0 + zn * 0.15));
+  let lod = 1.0 / max(px, 1e-9);
+  // clouds and smoke: fBm, every octave keeping the stretch along the orbit
   var cl = 0.0;
   var amp = 0.5;
-  var q = vec3f(c * 4.5, lw * 30.0 + zn * 0.8);
+  var q = vec3f(c * 3.2, lw * 45.0 + zn * 0.8);
+  var cell = 1.0 / 45.0;
   for (var o = 0; o < 4; o++) {
-    cl += amp * gnoise(q);
+    let w = smoothstep(0.35, 1.2, cell * lod);
+    if (w <= 0.0) { break; }
+    cl += w * amp * gnoise(q);
     q = q * vec3f(2.17, 2.17, 2.3) + vec3f(1.7, 9.2, 3.1);
     amp *= 0.55;
+    cell /= 2.3;
   }
-  // thin ridged strands (the flames' fibres), finer across than the clouds
-  let rq = vec3f(c * 8.0, lw * 110.0 + zn * 1.3);
-  let ridge = 1.0 - abs(gnoise(rq) + 0.45 * gnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
-  let body = smoothstep(0.28, 0.72, lanes);
-  let n = clamp((0.08 + 0.92 * body) * (0.42 + 0.85 * cl) + 0.6 * body * (ridge * ridge * ridge * ridge - 0.2), 0.0, 1.0);
-  return n * n * (3.0 - 2.0 * n);
+  // (the lanes' edges torn by the clouds: the strands break up into them, no clean ends lining up)
+  // (a ring narrower than the pixel: its own lanes, unlike its neighbours', would be noise)
+  let wl = smoothstep(0.35, 1.2, lod / DISK_BANDS);
+  let body = mix(0.55, smoothstep(0.3, 0.7, lanes + 0.35 * cl), wl);
+  // the strands: long, hair-thin ridges
+  var r3 = 0.4;
+  let wr = smoothstep(0.35, 1.2, lod / 220.0);
+  if (wr > 0.0) {
+    let rq = vec3f(c * 3.5, lw * 220.0 + zn * 1.3);
+    let ridge = 1.0 - abs(gnoise(rq) + 0.45 * gnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
+    r3 = mix(0.4, ridge * ridge * ridge, wr);
+  }
+  let heat = clamp(body * (0.3 + 0.45 * cl + 0.95 * (r3 - 0.15)), 0.0, 1.0);
+  let dens = clamp((0.06 + 0.94 * body) * (0.4 + 1.1 * cl + 0.3 * r3), 0.0, 1.0);
+  // (all of it finer than the pixel: what keeps the mean light — the emission goes as T⁴, the mean of
+  // the strands' T⁴ is that of 0.9 T (h ≈ 0.63), not that of their mean T — and a mean opacity)
+  let W = wl * wr;
+  return vec2f(mix(0.63, heat * heat * (3.0 - 2.0 * heat), W), mix(0.55, dens, W));
 }
-fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32) -> f32 {
+// The footprint of a disk sample across the orbits [M]: the pixel's at the ray's length (≈ its time
+// |t|) — half the realtime block's when one ray stands for block × block pixels (its rotating offset
+// and the temporal blend recover part of the rest; the refining passes, one per pixel, bring the
+// fine strands back)
+// — and stretched across the orbits by the grazing angle (μ ≈ |p_θ|/r, the gas frame's factor aside)
+fn diskFootprint(s: GState) -> f32 {
+  let mu = clamp(abs(s.p.y) / max(s.x.x, 1e-3), 0.15, 1.0);
+  return footprint(abs(s.x.w)) * max(0.5 * P.res.z, 1.0) / mu;
+}
+/** x: the heat (temperature factor), y: the density (optical depth factor), both in [0, 1]; fw: the
+ *  sample's footprint there [M] (diskFootprint). */
+fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32, fw: f32) -> vec2f {
   let lr = log(r);
   let u = lr * DISK_BANDS - 0.5;
   let i0 = floor(u);
   let f = u - i0;
   let w1 = f * f * (3.0 - 2.0 * f);
-  var acc = 0.0;
+  var acc = vec2f(0.0);
   var w2 = 0.0;
   for (var k = 0; k < 2; k++) {
     let ib = i0 + f32(k);
@@ -1256,11 +1288,11 @@ fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32) -> f32 {
     let turns = om * tEm / TAU;
     let ang = phi - TAU * fract(turns) + ib * 2.399;
     let w = select(1.0 - w1, w1, k == 1);
-    acc += w * (diskStrands(ang, lr, zn, ib) - 0.5);
+    acc += w * (diskStrands(ang, lr, zn, ib, fw / r) - 0.5);
     w2 += w * w;
   }
   // (the blend of two rings keeps the contrast of one)
-  return clamp(0.5 + acc * inverseSqrt(max(w2, 1e-6)), 0.0, 1.0);
+  return clamp(0.5 + acc * inverseSqrt(max(w2, 1e-6)), vec2f(0.0), vec2f(1.0));
 }
 
 struct DiskHit { color: vec3f, trans: f32, g: f32, T: f32 };
@@ -1286,9 +1318,9 @@ fn shadeDisk(s: GState, L: f32, E0: f32, tNow: f32) -> DiskHit {
   var tau = P.misc.w * edge;
   let turb = P.disk.z;
   if (turb > 0.0) {
-    let n = diskTurbulence(r, s.x.z, tNow + s.x.w, a, 0.0);
-    T *= mix(1.0, 0.5 + 1.0 * n, turb);
-    tau *= mix(1.0, 0.08 + 2.4 * n * n, turb);
+    let n = diskTurbulence(r, s.x.z, tNow + s.x.w, a, 0.0, diskFootprint(s));
+    T *= mix(1.0, 0.3 + 0.95 * n.x, turb);
+    tau *= mix(1.0, 0.002 + 2.8 * n.y * n.y, turb);
   }
 
   // Limb darkening of an electron-scattering atmosphere (Chandrasekhar): I ∝ 1 + 2.06 μ,
@@ -1398,9 +1430,9 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   var T = P.disk.x * pow(max(ntFlux(max(R, rIn), a, rIn) / P.disk.y, 0.0), 0.25);
   let turb = P.disk.z;
   if (turb > 0.0) {
-    let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn);
-    T *= mix(1.0, 0.5 + 1.0 * n, turb);
-    rho *= mix(1.0, 0.05 + 2.6 * n * n, turb);
+    let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn, diskFootprint(s));
+    T *= mix(1.0, 0.3 + 0.95 * n.x, turb);
+    rho *= mix(1.0, 0.002 + 2.8 * n.y * n.y, turb);
   }
   if (rho < 1e-6) { return o; }
   let omega = 1.0 / (pow(max(R, 1.0), 1.5) + a);
