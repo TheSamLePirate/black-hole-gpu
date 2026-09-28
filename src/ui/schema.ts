@@ -492,7 +492,7 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "endurance", type: "toggle", section: "matter", group: "Endurance", label: "Endurance",
-    help: "Interstellar's ring ship on a circular orbit around the hole, lit by the disk, as in the film's shots. At its true size (64 m) it would be far below a pixel next to a hole of 10⁸ M☉ (M ≈ 1 AU): it is drawn at a cinematic scale. Not lensed (seen along straight rays from the camera); hidden by the disk's gas in front of it.",
+    help: "Interstellar's ring ship on a circular prograde orbit around the hole, flying along its hub's axis with its ring spinning about it, lit by the disk, as in the film's shots. At its true size (64 m) it would be far below a pixel next to a hole of 10⁸ M☉ (M ≈ 1 AU): it is drawn at a cinematic scale. Not lensed (seen along straight rays from the camera); hidden by the disk's gas in front of it.",
     keywords: "endurance ship ring station interstellar orbit film",
   },
   {

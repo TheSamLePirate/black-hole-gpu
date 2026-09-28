@@ -22,7 +22,7 @@ const unit = (a: Vec3): Vec3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
-/** The Endurance's centre, velocity and axes (the hole's flat map) at time t: a circular orbit. */
+/** The Endurance's centre, velocity and axes (the hole's flat map) at time t: a circular prograde orbit. */
 export function endurancePose(s: Settings, t: number) {
   const a = Math.max(s.enduranceOrbit, 3);
   const om = 1 / (a ** 1.5 + s.spin);
@@ -35,9 +35,10 @@ export function endurancePose(s: Settings, t: number) {
   const qv: Vec3 = [-a * om * Math.sin(u), a * om * Math.cos(u) * Math.cos(i), a * om * Math.cos(u) * Math.sin(i)];
   const rz = (v: Vec3): Vec3 => [v[0] * Math.cos(nd) - v[1] * Math.sin(nd), v[0] * Math.sin(nd) + v[1] * Math.cos(nd), v[2]];
   const C = rz(q), V = rz(qv);
-  // the ring's axis along the radius (its face to the hole), turning about it
-  const z = unit(C);
-  const x0 = unit(cross(z, [0, 0, 1]));
+  // it flies along its hub's axis (as in the film): the axis along its velocity — prograde, the way the
+  // disk turns — the ring spinning about it (right-handed about the motion), x0 its radial direction
+  const z = unit(V);
+  const x0 = unit(cross(cross(z, C), z));
   const y0 = cross(z, x0);
   const psi = (2 * Math.PI * t) / Math.max(s.enduranceSpin, 1);
   const x: Vec3 = [0, 1, 2].map((k) => Math.cos(psi) * x0[k]! + Math.sin(psi) * y0[k]!) as Vec3;
