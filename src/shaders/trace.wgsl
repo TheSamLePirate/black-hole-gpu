@@ -4694,22 +4694,28 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   let thc = (f32(px.y) + 0.5) / f32(ENV_H) * PI;
   let dc = vec3f(sin(thc) * sin(phc), cos(thc), sin(thc) * cos(phc));
   probeShift = look - normalize(dc.x * P.envX.xyz + dc.y * P.envY.xyz + dc.z * P.envZ.xyz);
-  let tr = traceLook(look, h.z, P.time.x);
-  var col = tr.col;
-  if (tr.bgW > 0.0) {
-    // footprint of a texel on the sky (along the lensed direction's tangents)
-    let t1 = normalize(cross(tr.dir, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(tr.dir.z) > 0.9)));
-    let t2 = cross(tr.dir, t1);
-    let w = PI / f32(ENV_H);
-    col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky, tr.org);
+  // (the Earth near hides what lies beyond it: nothing traced there — the rays going under the ship,
+  // half the probe in a low orbit, were traced across the solar system and thrown away)
+  let kn = u32(P.near1.w);
+  let nearOn = P.near0.w > 0.5 && hasAir(kn);
+  let t = select(-1.0, nearHit(look), nearOn);
+  var col = vec3f(0.0);
+  if (t <= 0.0) {
+    let tr = traceLook(look, h.z, P.time.x);
+    col = tr.col;
+    if (tr.bgW > 0.0) {
+      // footprint of a texel on the sky (along the lensed direction's tangents)
+      let t1 = normalize(cross(tr.dir, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(tr.dir.z) > 0.9)));
+      let t2 = cross(tr.dir, t1);
+      let w = PI / f32(ENV_H);
+      col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky, tr.org);
+    }
   }
   // the Earth near (the local patch, which traceLook leaves out): its ground, clouds and air around
   // the ship — the sun through the air, reddened low, hidden at night; the sky's blue; its glow
-  let kn = u32(P.near1.w);
-  if (P.near0.w > 0.5 && hasAir(kn)) {
+  if (nearOn) {
     setAir(kn);
     let rd = toBody(look);
-    let t = nearHit(look);
     let lt = nearLight(kn);
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
     let e = earthLook(kn, toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w);

@@ -1026,17 +1026,22 @@ body.hide-ui #toolbar:hover {
 .fl-root b, .fl-root .fl-mono { font-variant-numeric: tabular-nums; }
 .fl-root [hidden], .fl-hud [hidden] { display: none !important; }
 
-/* the panels: light glass — barely there over the view, a hairline edge, a soft top highlight */
+/* the panels: tinted glass over the view, a hairline edge, a soft top highlight — no backdrop blur on
+   the panels always shown (the browser re-blurs what lies under them every frame, the image changing:
+   the compositor's work delays the tracer's frames); the passing menus keep it */
 .fl-panel, .gt-root, #cam-pop {
   position: absolute;
-  background: linear-gradient(180deg, rgba(10, 16, 28, 0.58), rgba(6, 10, 18, 0.46));
+  background: linear-gradient(180deg, rgba(9, 14, 25, 0.74), rgba(6, 10, 18, 0.64));
   border: 1px solid rgba(160, 210, 255, 0.09);
   border-radius: 8px;
   padding: 8px 10px;
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: fl-in 0.22s ease-out both;
+}
+#cam-pop {
+  background: linear-gradient(180deg, rgba(10, 16, 28, 0.58), rgba(6, 10, 18, 0.46));
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 @keyframes fl-in { from { opacity: 0; transform: translateY(4px); } }
 .fl-mission, .fl-cockpit { animation: none; }
