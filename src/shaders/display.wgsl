@@ -164,8 +164,11 @@ fn filmGrade(c0: vec3f) -> vec3f {
   let mid = smoothstep(0.01, 0.25, l) * (1.0 - smoothstep(0.8, 4.0, l));
   let l2 = dot(c, LUMA);
   c = max(vec3f(l2) + (1.0 + 0.3 * mid) * (c - vec3f(l2)), vec3f(0.0));
-  // (the mid-tones towards orange-red: the green and blue held back, else the roll-off turns them gold)
-  return c * mix(vec3f(1.0), vec3f(1.0, 0.86, 0.72), mid);
+  // (the mid-tones towards orange-red: the green and blue held back, else the roll-off turns them gold —
+  // the warm ones only: the disk's strands; a grey or bluish mid-tone — moonlit clouds, a twilight sky —
+  // keeps its hue)
+  let warm = smoothstep(0.1, 0.5, (c.r - c.b) / max(l2, 1e-6));
+  return c * mix(vec3f(1.0), vec3f(1.0, 0.86, 0.72), mid * warm);
 }
 // Its curve (SDR): each channel rolls off on its own, as a film's dye layers — the red saturates
 // first, orange turns yellow then white — to a warm cream at the top, with a gentle S for contrast.

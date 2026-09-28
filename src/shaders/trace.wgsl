@@ -2958,12 +2958,14 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
 }
 
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
-// towards ro (L; the sun along Ls, its irradiance E). jit: the samples' offset (0…1).
-struct EarthAir { T: vec3f, L: vec3f };
-fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32) -> EarthAir {
+// towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
+// through the air before it only). jit: the samples' offset (0…1).
+struct EarthAir { T: vec3f, L: vec3f, Lm: vec3f, Tc: vec3f, Lc: vec3f };
+fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSplit: f32) -> EarthAir {
   var o: EarthAir;
   o.T = vec3f(1.0);
   o.L = vec3f(0.0);
+  o.Tc = vec3f(1.0);
   let b = dot(ro, rd);
   let off = ro - rd * b;
   let h2 = airTop() * airTop() - dot(off, off);
@@ -2976,11 +2978,23 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32) -> E
   let pR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
   let g = 0.8;
   let pM = 3.0 / (8.0 * PI) * (1.0 - g * g) * (1.0 + mu * mu) / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+  // the Moon's light scattered too, where the sun is down (the moonlit sky's blue): its phase functions,
+  // its irradiance over the sun's — a third of what lights the ground (EARTH_MOON): the moonlit sky a deep
+  // blue, not a day's (Lm: its share — the stars' veil leaves it out: they stay, drawn, under the Moon)
+  let Lm = P.earth3.xyz;
+  let mm = dot(rd, Lm);
+  let pRm = 3.0 / (16.0 * PI) * (1.0 + mm * mm);
+  let pMm = 3.0 / (8.0 * PI) * (1.0 - g * g) * (1.0 + mm * mm) / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mm, 1.5));
+  let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
   let N = 32u;
   var tau = vec3f(0.0);
   var tPrev = ta;
+  var split = tSplit <= ta;
+  var tauC = vec3f(0.0);
+  var LcS = vec3f(0.0);
+  var LcM = vec3f(0.0);
   for (var i = 0u; i < N; i++) {
     let u1 = (f32(i) + 1.0) / f32(N);
     let t1 = ta + (tb - ta) * select(u1, u1 * u1, inside);
@@ -2997,11 +3011,32 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32) -> E
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
     // the molecules' single scattering, a third of the aerosols')
     let sc = AIR_BR * dR * (pR + 0.8 / (4.0 * PI)) + vec3f(AIR_BMS * dM * (pM + 0.3 / (4.0 * PI)));
-    o.L += sc * Ts * exp(-(tau + 0.5 * ext * ds)) * ds;
+    let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
+    o.L += sc * Ts * Tv;
+    let mz = dot(p, Lm) / r;
+    let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(p, Ls) / r);
+    if (nightS > 0.0 && mz > -0.1 && P.earth3.w > 0.0) {
+      let scm = AIR_BR * dR * (pRm + 0.8 / (4.0 * PI)) + vec3f(AIR_BMS * dM * (pMm + 0.3 / (4.0 * PI)));
+      o.Lm += scm * sunThrough(h, mz) * moonE * nightS * Tv;
+    }
     tau += ext * ds;
+    if (!split && t1 >= tSplit) {
+      split = true;
+      tauC = tau;
+      LcS = o.L;
+      LcM = o.Lm;
+    }
   }
-  o.L *= E;
+  if (!split) {
+    tauC = tau;
+    LcS = o.L;
+    LcM = o.Lm;
+  }
+  o.Lm *= E;
+  o.L = o.L * E + o.Lm;
   o.T = exp(-tau);
+  o.Tc = exp(-tauC);
+  o.Lc = (LcS + LcM) * E;
   return o;
 }
 
@@ -3282,12 +3317,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
 // What a ray sees of the Earth: from ro along rd (its axes; radii), meeting the ground at tHit (< 0:
 // it does not); the sun along Ls, its irradiance E; the pixel's axes gx, gy and its footprint fp0 +
 // fpK t. col: the light added; T: what shows through of what lies beyond (the ground: none).
-struct EarthLook { col: vec3f, T: vec3f };
+struct EarthLook { col: vec3f, T: vec3f, Lm: vec3f };
 fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> EarthLook {
   var o: EarthLook;
-  let air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit);
-  o.col = air.L;
-  o.T = air.T;
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
   let rc = 1.0 + P.earth2.x;
   let b = dot(ro, rd);
@@ -3295,30 +3327,30 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
   let hc2 = rc * rc - dot(off, off);
   var alpha = 0.0;
   var cl = vec3f(0.0);
+  var tc = -1.0;
   if (hc2 > 0.0 && P.earth2.y > 0.0) {
     let below = dot(ro, ro) < rc * rc;
-    let tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
-    if (tc > 0.0 && (tHit <= 0.0 || tc < tHit || below)) {
+    tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
+    if (tc > 0.0 && (tHit <= 0.0 || tc < tHit) && !(below && tHit > 0.0)) {
       let qc = normalize(ro + rd * tc);
       let fp = fp0 + fpK * tc;
       let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
       alpha = cv.x;
-      // (from below, the ground hit under the camera: no cloud between)
-      if (below && tHit > 0.0) { alpha = 0.0; }
       cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
     }
   }
+  // the air: to the ground (or out), and to the cloud — seen through the air before it only
+  let air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, tc, alpha > 0.0));
+  o.Lm = air.Lm;
+  var G = vec3f(0.0);
   if (tHit > 0.0) {
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    let g = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
-    o.col += air.T * mix(g, cl, alpha);
-    o.T = vec3f(0.0);
-  } else {
-    o.col = mix(o.col, air.T * cl, alpha);
-    o.T *= 1.0 - alpha;
+    G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
   }
+  o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
+  o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
   return o;
 }
 
@@ -3335,7 +3367,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
-  let s = luminance(e.col) / max(luminance(lt.e) / PI, 1e-30);
+  let s = luminance(max(e.col - e.Lm, vec3f(0.0))) / max(luminance(lt.e) / PI, 1e-30);
   let veil = clamp(log(1e-2 / max(s, 1e-12)) / log(100.0), 0.0, 1.0);
   return EarthNear(e.col, e.T, t, veil * veil);
 }
