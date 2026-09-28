@@ -12,7 +12,7 @@
 // edge-on), log scale, fit, the frame (theirs), the full-screen map.
 
 import type { Settings } from "../../settings";
-import { solarState } from "../../system/solar";
+import { solarBody, solarState } from "../../system/solar";
 import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../../system/our-predict";
 import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
@@ -229,14 +229,18 @@ export class Map3D {
     return this.extSrc === src || Math.abs(e.times[0]! - end) < 0.02 * Math.max(end - src.times[0]!, 1e-9) + 1e-6 ? e : null;
   }
 
-  /** The closest approach to a body along the conics (memoized per extension). */
-  private extClosest(e: Extension, id: string): { i: number; d: number } | null {
+  /**
+   * The closest approach to a body along the conics (memoized per extension) — null for a body of the
+   * other universe (the frame the ship goes through the wormhole: the target, the scene and the paths
+   * are not all on the same side yet).
+   */
+  private extClosest(e: Extension, id: string, ours = this.universe === "ours"): { i: number; d: number } | null {
+    if (ours !== !!solarBody(id)) return null;
     let m = this.pathMemo.get(e);
     if (!m) this.pathMemo.set(e, (m = new Map()));
-    const key = `ca:${id}`;
+    const key = `ca:${ours ? "o" : "g"}:${id}`;
     if (!m.has(key)) {
       // (our side: the home frame; Gargantua's: the hole's flat map)
-      const ours = this.universe === "ours";
       const at = (t: number): V3 => (ours ? solarState(id, t).pos : (bodyCentre(this.host.s, id as Body, t) as V3));
       let best: { i: number; d: number } | null = null;
       for (let j = 0; j < e.pts.length; j++) {
@@ -295,7 +299,7 @@ export class Map3D {
     const e = this.extFor(i, t0, ours);
     const sc = this.scene;
     if (e && sc?.byId.has(i.target) && i.target !== i.ref && i.target !== "hole") {
-      const ca = this.extClosest(e, i.target);
+      const ca = this.extClosest(e, i.target, ours);
       const tb = sc.byId.get(i.target)!;
       if (ca && (ca.d < 3 * tb.soi || e.refs.includes(i.target))) end = Math.max(end, e.times[ca.i]! + 0.15 * (e.times[ca.i]! - t0));
     }
@@ -339,7 +343,7 @@ export class Map3D {
         if (free.fate === "impact") out.push({ t: free.times[free.times.length - 1]!, kind: "impact", label: "Impact" });
       }
       const tp = plan ?? free;
-      if (tp && sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
+      if (tp && sc.byId.has(i.target) && solarBody(i.target) && i.target !== i.ref && i.target !== "wormhole") {
         const m = memo(tp);
         const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
         if (!m.has(key)) m.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0));
@@ -353,7 +357,7 @@ export class Map3D {
         }
         for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis at ${sc.byId.get(a.body)?.name ?? a.body} (conics)` });
         if (sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
-          const ca = this.extClosest(e, i.target);
+          const ca = this.extClosest(e, i.target, true);
           if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name} (conics)` });
         }
         if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: `Impact · ${sc.byId.get(e.hit ?? "")?.name ?? e.hit} (conics)` });
@@ -372,7 +376,7 @@ export class Map3D {
         }
         for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis${a.body === "hole" ? "" : ` at ${name(a.body)}`} (conics)` });
         if (sc.byId.has(i.target) && i.target !== "hole") {
-          const ca = this.extClosest(e, i.target);
+          const ca = this.extClosest(e, i.target, false);
           if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${name(i.target)} (conics)` });
         }
         if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: e.hit === "hole" ? "The horizon (conics)" : `Impact · ${name(e.hit ?? "")} (conics)` });
@@ -831,9 +835,10 @@ export class Map3D {
     // the ship (now, or where its path takes it at the preview's time), its velocity relative to its primary (map frame)
     const shipNow: V3 = ours ? [...i.X!] : sub(i.X!, sc.origin(t0));
     const later = previewing ? this.shipAt(i, tp, t0, ours, sc) : null;
-    const refState = ours && i.ref ? solarState(i.ref, t0) : null;
+    // (the frame the ship goes through the wormhole, its primary may still be of the other side)
+    const refState = ours && i.ref && solarBody(i.ref) ? solarState(i.ref, t0) : null;
     const ship: V3 = later ? later.X : shipNow;
-    const shipVel: V3 = later ? later.V : ours ? sub(i.V!, refState!.vel) : (i.V ? [...i.V] : [0, 0, 0]);
+    const shipVel: V3 = later ? later.V : ours ? (refState ? sub(i.V!, refState.vel) : [...i.V!]) : (i.V ? [...i.V] : [0, 0, 0]);
     const refId = later?.ref ?? i.ref;
     const refPos: V3 = ours ? solarState(refId ?? "sun", tp).pos : sc.byId.get("hole")!.pos;
     const marks = this.marks(i, t0, ours, sc);
@@ -1166,7 +1171,7 @@ export class Map3D {
     const moons = sc.bodies.filter((b) => b.parent === fb.id);
     const shipNear = dist(ship) < cap;
     let r = shipNear ? Math.max(fb.radius * 8, dist(ship) * 1.2) : Math.max(fb.radius * 12, moons.length ? Math.min(Math.max(...moons.map((m) => dist(m.pos))) * 1.15, fb.radius * 30) : 0);
-    for (const p of [i.ourFree, i.ourPlan]) {
+    for (const p of solarBody(fb.id) ? [i.ourFree, i.ourPlan] : []) {
       if (!p) continue;
       for (let j = 0; j < p.pts.length; j += 4) {
         const q = solarState(fb.id, p.times[j]!).pos;
@@ -1520,7 +1525,8 @@ export class Map3D {
     const s = this.host.s;
     // (the paths in the frame of the focus body — or of the ship's primary when the ship is the focus:
     // where it is when the ship is there, drawn relative to where it is now)
-    const frameId = fid === "ship" ? i.ref ?? "sun" : fb?.id === "wormhole" ? "sun" : fid;
+    const f0 = fid === "ship" ? i.ref ?? "sun" : fb?.id === "wormhole" ? "sun" : fid;
+    const frameId = solarBody(f0) ? f0 : "sun";
     const F0 = solarState(frameId, tView).pos;
     const FA = (X: V3, t: number): V3 => {
       const q = solarState(frameId, t).pos;
@@ -1624,12 +1630,12 @@ export class Map3D {
     }
     // closest approach to the target, on the plan or the free path (or, closer, along the conics)
     const tp = plan ?? free;
-    if (tp && sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
+    if (tp && sc.byId.has(i.target) && solarBody(i.target) && i.target !== i.ref && i.target !== "wormhole") {
       let memo = this.pathMemo.get(tp);
       if (!memo) this.pathMemo.set(tp, (memo = new Map()));
       const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
       const caPred = (memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))) as ReturnType<typeof ourClosest>;
-      const caExt = ext ? this.extClosest(ext, i.target) : null;
+      const caExt = ext ? this.extClosest(ext, i.target, true) : null;
       const useExt = !!caExt && (!caPred || caExt.d < caPred.d);
       const ca = useExt ? caExt : caPred;
       const cp = useExt ? ext! : tp;
@@ -1657,7 +1663,7 @@ export class Map3D {
       }
     }
     // the target where the plan meets it
-    if (i.ourArrive && i.ourArrive.body !== "wormhole" && plan) {
+    if (i.ourArrive && i.ourArrive.body !== "wormhole" && solarBody(i.ourArrive.body) && plan) {
       const q = P(FA(solarState(i.ourArrive.body, i.ourArrive.t).pos, i.ourArrive.t));
       if (q.ok) {
         ctx.strokeStyle = "rgba(255, 170, 80, 0.9)";
