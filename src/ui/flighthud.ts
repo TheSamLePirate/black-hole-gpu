@@ -1043,67 +1043,170 @@ export class FlightHud {
     E.result!.textContent = res;
   }
 
-  /** The orbit around the body of the sphere of influence, to scale (the body, the ship, the apsides). */
+  /**
+   * The orbit around the body of the sphere of influence, to scale: scale rings, the orbit glowing —
+   * bright ahead of the ship, fading behind —, a direction arrow and a tick every twelfth of the period,
+   * the body a shaded sphere in its colour, the apsides flagged with their heights, the ship a gold
+   * chevron along its motion; a suborbital path: the impact marked where it meets the ground.
+   */
   private drawKepler(ctx: CanvasRenderingContext2D, cw: number, ch: number, st: RangerStatus) {
     const o = st.orbit!;
     const dpr = devicePixelRatio;
+    const S = (v: number) => v * dpr;
     const R = o.aKm * (1 - o.ecc) - o.peKm; // the body's radius [km]
     const e = o.ecc;
     const bound = e < 1 && Number.isFinite(o.apKm);
-    // (drawn apsides horizontal: periapsis to the right; unbound: the branch near periapsis)
     const a = Math.abs(o.aKm);
     const rp = a * Math.abs(1 - e);
     const reach = bound ? a * (1 + e) : Math.max(4 * rp, 3 * R);
     const width = bound ? 2 * a : reach + rp;
-    const k = Math.min((cw - 20 * dpr) / width, (ch - 16 * dpr) / (2 * (bound ? a * Math.sqrt(1 - e * e) : reach)), (ch / 2 - 8 * dpr) / R);
+    const k = Math.min((cw - S(36)) / width, (ch - S(20)) / (2 * (bound ? a * Math.sqrt(1 - e * e) : reach)), (ch / 2 - S(10)) / R);
     const cx = bound ? cw / 2 + a * e * k : cw / 2 + ((reach - rp) / 2) * k, cy = ch / 2;
-    // the body, its air
-    ctx.fillStyle = "rgba(124, 214, 255, 0.18)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(R * k, 2 * dpr), 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(124, 214, 255, 0.5)";
-    ctx.lineWidth = 1 * dpr;
-    ctx.stroke();
-    // the orbit (r(ν) = p / (1 + e cos ν))
+    const col = OUR_COLOURS[st.soi] ?? "124, 214, 255";
     const p = a * Math.abs(1 - e * e);
-    ctx.beginPath();
-    const nuMax = bound ? Math.PI : Math.acos(Math.max(-1, Math.min(1, (p / reach - 1) / e)));
-    let first = true;
-    for (let j = 0; j <= 200; j++) {
-      const nu = -nuMax + (2 * nuMax * j) / 200;
+    const at = (nu: number) => {
       const r = p / (1 + e * Math.cos(nu));
-      if (!(r > 0) || r > 1.01 * reach) continue;
-      const x = cx + r * Math.cos(nu) * k, y = cy - r * Math.sin(nu) * k;
-      if (first) ctx.moveTo(x, y), (first = false);
-      else ctx.lineTo(x, y);
-    }
-    ctx.strokeStyle = st.status === "orbit" ? "#6fe3a1" : st.status === "suborbital" ? AMBER : CYAN;
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.stroke();
-    // periapsis, apoapsis, the ship (from the time to periapsis: the mean anomaly)
-    const mark = (x: number, y: number, col: string, r = 3) => {
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(x, y, r * dpr, 0, 2 * Math.PI);
-      ctx.fill();
+      return [cx + r * Math.cos(nu) * k, cy - r * Math.sin(nu) * k, r] as const;
     };
-    mark(cx + rp * k, cy, "#ffffff", 2);
-    if (bound) mark(cx - a * (1 + e) * k, cy, "#ffffff", 2);
-    let nu = NaN;
+    // scale rings round the body (its radius × 2, × 4 … while they fit)
+    ctx.strokeStyle = "rgba(124, 214, 255, 0.07)";
+    ctx.lineWidth = S(1);
+    for (let m = 2; R * m * k < Math.max(cw, ch); m *= 2) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * m * k, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    // the ship's true anomaly (from the time to periapsis: the mean anomaly)
+    const nuMax = bound ? Math.PI : Math.acos(Math.max(-1, Math.min(1, (p / reach - 1) / e)));
+    let nuShip = NaN;
     if (bound && Number.isFinite(o.period)) {
       const M = 2 * Math.PI * (1 - o.tPe / o.period);
       let E = M;
       for (let j = 0; j < 12; j++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-      nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
-    } else if (!bound && Number.isFinite(o.tPe)) {
-      nu = o.tPe > 0 ? -0.6 * nuMax : 0.6 * nuMax;
+      nuShip = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+    } else if (!bound && Number.isFinite(o.tPe)) nuShip = o.tPe > 0 ? -0.6 * nuMax : 0.6 * nuMax;
+    const hot = st.status === "suborbital";
+    const tone = st.status === "orbit" ? "111, 227, 161" : hot ? "255, 179, 92" : "124, 214, 255";
+    // the orbit: segments whose brightness falls off behind the ship (ahead: bright)
+    const N = 240;
+    ctx.lineCap = "round";
+    ctx.shadowColor = `rgba(${tone}, 0.7)`;
+    ctx.shadowBlur = S(6);
+    for (let j = 0; j < N; j++) {
+      const n0 = -nuMax + (2 * nuMax * j) / N, n1 = -nuMax + (2 * nuMax * (j + 1)) / N;
+      const [x0, y0, r0] = at(n0), [x1, y1] = at(n1);
+      if (!(r0 > 0) || r0 > 1.01 * reach) continue;
+      let ahead = 1;
+      if (Number.isFinite(nuShip)) {
+        const d = bound ? (((n0 - nuShip) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) : n0 - nuShip;
+        ahead = bound ? 1 - 0.75 * (d / (2 * Math.PI)) : d >= 0 ? 1 : 0.3;
+      }
+      ctx.strokeStyle = `rgba(${tone}, ${(0.25 + 0.75 * ahead).toFixed(3)})`;
+      ctx.lineWidth = S(1 + 1.2 * ahead);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
     }
-    if (Number.isFinite(nu)) {
-      const r = p / (1 + e * Math.cos(nu));
-      mark(cx + r * Math.cos(nu) * k, cy - r * Math.sin(nu) * k, "#ffc85a", 4);
+    ctx.shadowBlur = 0;
+    // a tick every twelfth of the period (equal times, crowding at apoapsis)
+    if (bound) {
+      ctx.fillStyle = `rgba(${tone}, 0.8)`;
+      for (let j = 0; j < 12; j++) {
+        const M = (2 * Math.PI * j) / 12;
+        let E = M;
+        for (let q = 0; q < 10; q++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+        const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+        const [x, y] = at(nu);
+        ctx.beginPath();
+        ctx.arc(x, y, S(1.3), 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+    // the body: a shaded sphere in its colour, its glow
+    const Rb = Math.max(R * k, S(3));
+    const glow = ctx.createRadialGradient(cx, cy, Rb * 0.9, cx, cy, Rb * 1.5);
+    glow.addColorStop(0, `rgba(${col}, 0.28)`);
+    glow.addColorStop(1, `rgba(${col}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Rb * 1.5, 0, 2 * Math.PI);
+    ctx.fill();
+    const shade = ctx.createRadialGradient(cx - Rb * 0.35, cy - Rb * 0.35, Rb * 0.1, cx, cy, Rb);
+    shade.addColorStop(0, `rgba(${col}, 0.95)`);
+    shade.addColorStop(0.7, `rgba(${col}, 0.45)`);
+    shade.addColorStop(1, "rgba(10, 16, 28, 0.9)");
+    ctx.fillStyle = shade;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Rb, 0, 2 * Math.PI);
+    ctx.fill();
+    // the impact: where the path meets the ground (the ground holds |ν| < νᵢ round the periapsis: moving
+    // on, the ship meets it at −νᵢ)
+    if (o.peKm < 0 && e > 0) {
+      const nuI = Math.acos(Math.max(-1, Math.min(1, (p / R - 1) / e)));
+      const [x, y] = at(-nuI);
+      ctx.strokeStyle = "#ff5a46";
+      ctx.lineWidth = S(2);
+      ctx.beginPath();
+      ctx.moveTo(x - S(4), y - S(4));
+      ctx.lineTo(x + S(4), y + S(4));
+      ctx.moveTo(x + S(4), y - S(4));
+      ctx.lineTo(x - S(4), y + S(4));
+      ctx.stroke();
+    }
+    // the apsides: flags with their heights
+    const km = (x: number) => (Math.abs(x) >= 1e5 ? `${Math.round(x / 1e3).toLocaleString("en")}k` : Math.round(x).toLocaleString("en"));
+    const flag = (x: number, y: number, txt: string, left: boolean) => {
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(x, y - S(3));
+      ctx.lineTo(x + S(3), y);
+      ctx.lineTo(x, y + S(3));
+      ctx.lineTo(x - S(3), y);
+      ctx.fill();
+      ctx.font = `700 ${S(10)}px ${FONT}`;
+      ctx.textAlign = left ? "right" : "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(230, 238, 249, 0.85)";
+      ctx.fillText(txt, x + (left ? -S(6) : S(6)), y - S(8));
+      ctx.textBaseline = "alphabetic";
+    };
+    if (o.peKm >= 0) flag(...(at(0).slice(0, 2) as [number, number]), `Pe ${km(o.peKm)}`, false);
+    if (bound) flag(...(at(Math.PI).slice(0, 2) as [number, number]), `Ap ${km(o.apKm)}`, true);
+    // the ship: a gold chevron along its motion, a direction arrow a little ahead
+    if (Number.isFinite(nuShip)) {
+      const [x, y] = at(nuShip), [x2, y2] = at(nuShip + 0.02);
+      const ang = Math.atan2(y2 - y, x2 - x);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.shadowColor = "rgba(255, 200, 90, 0.95)";
+      ctx.shadowBlur = S(8);
+      ctx.fillStyle = "#ffc85a";
+      ctx.beginPath();
+      ctx.moveTo(S(6), 0);
+      ctx.lineTo(S(-4), S(-4.5));
+      ctx.lineTo(S(-1.5), 0);
+      ctx.lineTo(S(-4), S(4.5));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      const [xa, ya] = at(nuShip + (bound ? 0.9 : 0.25)), [xb, yb] = at(nuShip + (bound ? 0.92 : 0.26));
+      const aa = Math.atan2(yb - ya, xb - xa);
+      ctx.save();
+      ctx.translate(xa, ya);
+      ctx.rotate(aa);
+      ctx.strokeStyle = `rgba(${tone}, 0.95)`;
+      ctx.lineWidth = S(1.6);
+      ctx.beginPath();
+      ctx.moveTo(S(-3), S(-3.5));
+      ctx.lineTo(S(2), 0);
+      ctx.lineTo(S(-3), S(3.5));
+      ctx.stroke();
+      ctx.restore();
     }
   }
+
 
   /** The Ranger's status block (telemetry panel). */
   private drawStatus(st: RangerStatus | null) {
@@ -2252,40 +2355,68 @@ export class FlightHud {
   /** The orbit's figures in the plot's corners: what it is, the course; periapsis, apoapsis; the rest. */
   private drawOrbitText(ctx: CanvasRenderingContext2D, cw: number, ch: number) {
     const dpr = devicePixelRatio;
+    const S = (v: number) => v * dpr;
     const O = this.orbitEls;
     const txt = (k: string) => O[k]?.textContent ?? "";
-    const m = 8 * dpr;
-    const label = (t: string, x: number, y: number, align: CanvasTextAlign, col = "rgba(176, 196, 222, 0.62)") => {
-      ctx.font = `700 ${11 * dpr}px ${FONT}`;
-      ctx.fillStyle = col;
-      ctx.textAlign = align;
-      ctx.fillText(t.toUpperCase(), x, y);
-    };
-    const value = (t: string, x: number, y: number, align: CanvasTextAlign, col = "#e8f0fa") => {
-      ctx.font = `500 ${11.5 * dpr}px ${MONO}`;
-      ctx.fillStyle = col;
-      ctx.textAlign = align;
-      ctx.fillText(t, x, y);
-    };
+    const m = S(8);
+    // (a soft vignette under the corners' text)
+    const vg = ctx.createLinearGradient(0, 0, 0, ch);
+    vg.addColorStop(0, "rgba(6, 10, 18, 0.55)");
+    vg.addColorStop(0.2, "rgba(6, 10, 18, 0)");
+    vg.addColorStop(0.8, "rgba(6, 10, 18, 0)");
+    vg.addColorStop(1, "rgba(6, 10, 18, 0.55)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, cw, ch);
     ctx.textBaseline = "top";
-    label(this.orbitHead?.textContent ?? "Orbit", m, m, "left", "#d9efff");
-    value(txt("el"), m, m + 13 * dpr, "left", "rgba(214, 226, 242, 0.7)");
+    // the title: what it shows; its inclination and eccentricity (or E and L) under it
+    const head = (this.orbitHead?.textContent ?? "Orbit").toUpperCase();
+    const k = head.indexOf(" · ");
+    ctx.textAlign = "left";
+    ctx.font = `700 ${S(9.5)}px ${FONT}`;
+    ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+    ctx.fillText(k > 0 ? head.slice(0, k) : head, m, m);
+    if (k > 0) {
+      ctx.font = `700 ${S(13)}px ${FONT}`;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(head.slice(k + 3), m, m + S(11));
+    }
+    ctx.font = `500 ${S(10)}px ${MONO}`;
+    ctx.fillStyle = "rgba(214, 226, 242, 0.7)";
+    ctx.fillText(txt("el"), m, m + S(k > 0 ? 27 : 12));
+    // the course: a badge in its colour
+    const course = txt("course").toUpperCase();
     const hot = O.course?.classList.contains("hot");
-    ctx.font = `700 ${12 * dpr}px ${FONT}`;
-    ctx.fillStyle = hot ? "#ff8a70" : "#6fe3a1";
+    const inOrbit = /ORBIT|BOUND/.test(course);
+    const c = hot ? "255, 90, 70" : inOrbit ? "111, 227, 161" : "255, 179, 92";
+    ctx.font = `700 ${S(10.5)}px ${FONT}`;
+    const tw = ctx.measureText(course).width;
+    const bx = cw - m - tw - S(12), by = m - S(1);
+    ctx.fillStyle = `rgba(${c}, 0.18)`;
+    ctx.fillRect(bx, by, tw + S(12), S(16));
+    ctx.fillStyle = `rgb(${c})`;
+    ctx.fillRect(bx, by, S(2), S(16));
     ctx.textAlign = "right";
-    ctx.fillText(txt("course"), cw - m, m);
-    ctx.textBaseline = "bottom";
+    ctx.fillText(course, cw - m - S(4), m + S(2));
+    // periapsis and apoapsis: the height in figures, when in small
     const split = (t: string) => {
-      const k = t.indexOf(" · ");
-      return k < 0 ? [t, ""] : [t.slice(0, k), t.slice(k + 3)];
+      const j = t.indexOf(" · ");
+      return j < 0 ? [t, ""] : [t.slice(0, j), t.slice(j + 3)];
     };
     const [pe, peT] = split(txt("pe")), [ap, apT] = split(txt("ap"));
-    label(peT ? `Pe · ${peT}` : "Pe", m, ch - m - 14 * dpr, "left");
-    value(pe, m, ch - m, "left");
-    label(apT ? `Ap · ${apT}` : "Ap", cw - m, ch - m - 14 * dpr, "right");
-    value(ap, cw - m, ch - m, "right");
+    ctx.textBaseline = "bottom";
+    const corner = (lbl: string, t: string, v: string, x: number, align: CanvasTextAlign) => {
+      ctx.textAlign = align;
+      ctx.font = `700 ${S(9.5)}px ${FONT}`;
+      ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+      ctx.fillText(t ? `${lbl} · ${t.toUpperCase()}` : lbl, x, ch - m - S(14));
+      ctx.font = `500 ${S(11.5)}px ${MONO}`;
+      ctx.fillStyle = "#eef4fb";
+      ctx.fillText(v, x, ch - m);
+    };
+    corner("PE", peT, pe, m, "left");
+    corner("AP", apT, ap, cw - m, "right");
   }
+
 
   /** The effective potential of the ship's Kerr orbit (L, Q): the well, the energy line, the ship. */
   private drawWell(ctx: CanvasRenderingContext2D, cw: number, ch: number, i: Info) {
@@ -2339,8 +2470,10 @@ export class FlightHud {
     }
     if (open) ctx.lineTo(X(rMax), Y(E)), ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(230, 236, 245, 0.85)";
-    ctx.lineWidth = 1.4 * dpr;
+    ctx.strokeStyle = "rgba(230, 236, 245, 0.9)";
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.shadowColor = "rgba(200, 225, 255, 0.6)";
+    ctx.shadowBlur = 6 * dpr;
     ctx.beginPath();
     let pen = false;
     for (const [r, v] of pts) {
@@ -2353,6 +2486,7 @@ export class FlightHud {
       else ctx.lineTo(X(r), yy);
     }
     ctx.stroke();
+    ctx.shadowBlur = 0;
     if (1 > lo && 1 < hi) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.setLineDash([3 * dpr, 3 * dpr]);
@@ -2367,29 +2501,31 @@ export class FlightHud {
       ctx.fillText("E = 1 · escape", cw - 4 * dpr, Y(1) - 8 * dpr);
     }
     ctx.strokeStyle = CYAN;
-    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineWidth = 1.8 * dpr;
+    ctx.shadowColor = "rgba(124, 214, 255, 0.8)";
+    ctx.shadowBlur = 8 * dpr;
     ctx.beginPath();
     ctx.moveTo(X(r0), Y(E));
     ctx.lineTo(X(rMax), Y(E));
     ctx.stroke();
+    ctx.shadowBlur = 0;
     // landmarks on the axis, the ship
     ctx.font = `600 ${9.8 * dpr}px ${FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (const [rr, txt, col] of [[i.photon, "γ", "#ffdc78"], [i.isco, "ISCO", "#78e696"]] as const) {
       ctx.fillStyle = col;
-      ctx.fillRect(X(rr) - 0.5 * dpr, ch - 16 * dpr, 1 * dpr, 4 * dpr);
-      ctx.fillText(txt, X(rr), ch - 11 * dpr);
+      ctx.fillRect(X(rr) - 0.5 * dpr, ch - 26 * dpr, 1 * dpr, 5 * dpr);
+      ctx.fillText(txt, X(rr), ch - 20 * dpr);
     }
-    ctx.fillStyle = "rgba(200, 208, 222, 0.6)";
-    ctx.textAlign = "left";
-    ctx.fillText("r (log)", 2 * dpr, ch - 11 * dpr);
-    ctx.fillText("V", 2 * dpr, 2 * dpr);
     const sx = X(i.r), sy = Y(E);
     ctx.fillStyle = "#ffc85a";
+    ctx.shadowColor = "rgba(255, 200, 90, 0.95)";
+    ctx.shadowBlur = 8 * dpr;
     ctx.beginPath();
     ctx.arc(sx, sy, 4 * dpr, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.shadowBlur = 0;
     // which way it moves along r
     if (Number.isFinite(i.vr) && Math.abs(i.vr) > 1e-4) {
       ctx.strokeStyle = "#ffc85a";
