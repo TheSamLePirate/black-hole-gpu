@@ -1058,6 +1058,10 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   return true;
 }
 
+// the maps (solar.ts: MAPS_HI, then MAPS_LO) of dusty airless worlds: the Moon, Mars, Mercury; Ceres,
+// Phobos, Deimos, the Galilean moons, Saturn's icy moons; Pluto — not the Earth, the giants, Venus, Titan
+fn regolith(m: u32) -> bool { return (m >= 1u && m <= 3u) || (m >= 7u && m <= 18u) || m == 22u; }
+
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
 // ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
 fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32) -> vec3f {
@@ -1078,7 +1082,12 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   // atmosphere: the sunlit air (Rayleigh blue) over the whole day side, brighter along the limb
   let rim = pow(1.0 - mu, 3.0) * smoothstep(-0.1, 0.4, dot(nrm, ldir));
   let sky = vec3f(0.25, 0.45, 1.0) * (0.06 + 0.6 * rim) * select(1.0, 0.0, surf >= 3u);
-  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((A.rgb + sky) * cosi + spec * cosi);
+  // (an airless world of dust — the Moon, Mercury, the rocky and icy moons, Mars — scatters as its regolith
+  // does: Lommel–Seeliger, 2 cos i / (cos i + cos e) — no darkening towards the limb: the full Moon evenly
+  // lit, a thin crescent bright; the gas giants, Venus and Titan's haze, as Lambert)
+  var f = cosi;
+  if (surf >= 4u && regolith(surf - 4u)) { f = 2.0 * cosi / max(cosi + mu, 1e-4); }
+  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((A.rgb + sky) * f + spec * cosi);
 }
 
 // Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
