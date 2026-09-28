@@ -104,11 +104,16 @@ const ROW_TIPS: Record<string, string> = {
   vh: "Speed along the ground",
   twr: "The engine's full thrust over the local weight — above 1, it can lift off",
   soi: "The body whose gravity dominates: the orbit is reckoned around it",
+  pe: "The orbit's lowest point: its height above the surface",
+  ap: "The orbit's highest point",
+  inc: "The orbit's tilt to the body's equator",
+  ecc: "0: circular · below 1: an ellipse · 1 and above: escaping",
+  tpe: "Time until the next periapsis",
   palt: "Height above its surface",
-  spd: "Orbital speed · vertical speed",
+  spd: "Orbital speed, and the vertical speed under it",
   pa: "Periapsis · apoapsis heights: the orbit's lowest and highest points",
   ie: "Inclination to the body's equator · eccentricity (0: circular)",
-  per: "Orbital period · time to the next periapsis",
+  per: "The time one orbit takes",
   next: "The next event on the path: a sphere change, an impact, a node",
   tgt: "The selected target and its distance",
 };
@@ -354,34 +359,59 @@ export class FlightHud {
     );
     this.buildPlanner();
 
-    // ---- target
+    // ---- target: its name (the ball's target mark) and range; the rest as tiles
     this.target.append(panelHead(this.target, "target", "Target").head);
-    for (const [k, label] of [
-      ["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"], ["light", "Light received"],
-      ["alt", "Radar altitude"], ["vv", "Vertical speed"], ["vh", "Ground speed"], ["twr", "Thrust / weight"],
-    ] as const) {
-      const row = h("div", k === "name" ? "fl-tname" : "fl-kv");
-      if (label) row.append(h("span", "", label));
-      if (ROW_TIPS[k]) (row.dataset.tip = ROW_TIPS[k]), (row.dataset.label = label);
+    const tile = (box: HTMLElement, els: Record<string, HTMLElement>, k: string, label: string, wide = false) => {
+      const t = h("div", `fl-tile${wide ? " wide" : ""}`);
+      t.append(h("span", "", label));
       const v = h("b");
-      row.append(v);
-      this.targetEls[k] = v;
-      this.target.append(row);
+      t.append(v);
+      if (ROW_TIPS[k]) (t.dataset.tip = ROW_TIPS[k]), (t.dataset.label = label);
+      els[k] = v;
+      box.append(t);
+    };
+    {
+      const nameRow = h("div", "fl-tname");
+      const mark = glyphSvg("target", COL.target!);
+      const nm = h("b");
+      const range = h("em", "fl-trange");
+      range.dataset.tip = ROW_TIPS.dist!;
+      range.dataset.label = "Range";
+      nameRow.append(mark, nm, range);
+      this.targetEls.name = nm;
+      this.targetEls.dist = range;
+      this.target.append(nameRow);
+      const tiles = h("div", "fl-tiles");
+      tile(tiles, this.targetEls, "rate", "Range rate");
+      tile(tiles, this.targetEls, "ca", "Closest");
+      tile(tiles, this.targetEls, "alt", "Radar alt.", true);
+      tile(tiles, this.targetEls, "vv", "Vertical");
+      tile(tiles, this.targetEls, "vh", "Ground");
+      tile(tiles, this.targetEls, "twr", "Thrust / weight", true);
+      tile(tiles, this.targetEls, "light", "Light received", true);
+      this.target.append(tiles);
     }
 
-    // ---- telemetry
-    const stGrid = h("div", "fl-stgrid");
-    for (const [k, label] of [
-      ["soi", "SOI"], ["alt", "Altitude"], ["spd", "Speed"], ["pa", "Pe · Ap"], ["ie", "Incl · e"], ["per", "Period · T−Pe"], ["next", "Next"], ["tgt", "Target"],
-    ] as const) {
-      const v = h("b");
-      const lab = h("span", "", label);
-      const tipKey = k === "alt" ? "palt" : k;
-      if (ROW_TIPS[tipKey]) for (const e of [lab, v]) (e.dataset.tip = ROW_TIPS[tipKey]), (e.dataset.label = label);
-      stGrid.append(lab, v);
-      this.stEls[k] = v;
+    // ---- the Ranger: its status and sphere, its orbit as tiles
+    {
+      const stHead = h("div", "fl-sthead");
+      const soi = h("span", "fl-stsoi");
+      soi.dataset.tip = ROW_TIPS.soi!;
+      soi.dataset.label = "Sphere of influence";
+      stHead.append(this.stBadge, soi);
+      this.stEls.soi = soi;
+      const tiles = h("div", "fl-tiles");
+      tile(tiles, this.stEls, "palt", "Altitude");
+      tile(tiles, this.stEls, "spd", "Speed");
+      tile(tiles, this.stEls, "pe", "Periapsis");
+      tile(tiles, this.stEls, "ap", "Apoapsis");
+      tile(tiles, this.stEls, "inc", "Inclination");
+      tile(tiles, this.stEls, "ecc", "Eccentricity");
+      tile(tiles, this.stEls, "per", "Period");
+      tile(tiles, this.stEls, "tpe", "To periapsis");
+      tile(tiles, this.stEls, "next", "Next", true);
+      this.stBox.append(stHead, tiles);
     }
-    this.stBox.append(this.stBadge, stGrid);
     const telBody = h("div", "fl-body");
     telBody.append(this.stBox, h("div", "fl-sub", "Telemetry · the last minute"), this.telCanvas);
     this.tel.append(panelHead(this.tel, "tel", "Ranger").head, telBody);
@@ -1058,16 +1088,20 @@ export class FlightHud {
     this.stBadge.textContent = st.label;
     this.stBadge.dataset.status = st.status;
     const E = this.stEls, o = st.orbit;
-    E.soi!.textContent = st.soiName;
-    E.alt!.textContent = st.kerr ? `r ${st.kerr.r.toFixed(3)} M` : km(st.altKm);
-    E.spd!.textContent = `${ms(st.speed)} · ${st.vVert >= 0 ? "▲" : "▼"}${ms(Math.abs(st.vVert))}`;
-    E.pa!.textContent = o ? `${km(o.peKm)} · ${km(o.apKm)}` : st.kerr ? `E ${st.kerr.E.toFixed(4)}` : "—";
-    E.ie!.textContent = o ? `${o.incDeg.toFixed(1)}° · ${o.ecc.toFixed(3)}` : "—";
-    E.per!.textContent = o ? `${fmtS(o.period)} · ${fmtS(o.tPe)}` : "—";
+    E.soi!.textContent = `around ${st.soiName}`;
+    E.palt!.textContent = st.kerr ? `r ${st.kerr.r.toFixed(3)} M` : km(st.altKm);
+    E.spd!.textContent = ms(st.speed);
+    E.spd!.parentElement!.dataset.sub = `${st.vVert >= 0 ? "▲" : "▼"} ${ms(Math.abs(st.vVert))}`;
+    E.spd!.parentElement!.dataset.own = "1";
+    E.pe!.textContent = o ? km(o.peKm) : st.kerr ? `E ${st.kerr.E.toFixed(4)}` : "—";
+    E.ap!.textContent = o ? km(o.apKm) : "—";
+    E.inc!.textContent = o ? `${o.incDeg.toFixed(1)}°` : "—";
+    E.ecc!.textContent = o ? o.ecc.toFixed(3) : "—";
+    E.per!.textContent = o && Number.isFinite(o.period) ? fmtS(o.period) : "—";
+    E.tpe!.textContent = o && Number.isFinite(o.tPe) ? fmtS(o.tPe) : "—";
     const n = st.next;
     E.next!.textContent = n ? `${n.kind === "exit" ? `exits ${n.name}` : n.kind === "enter" ? `enters ${n.name}` : n.kind === "impact" ? `IMPACT ${n.name}` : "mouth"} · ${fmtS(n.inS)}` : "—";
     E.next!.className = n?.kind === "impact" ? "closing" : "";
-    E.tgt!.textContent = st.target ? `${st.target.name} · ${km(st.target.distKm)}` : "—";
   }
 
   /** 0 full · 1 minimal · 2 clean (not remembered: for an automation) */
@@ -1156,12 +1190,31 @@ export class FlightHud {
   /** The panels' rows with nothing to say, hidden (no "—" taking room). */
   private tidyRows() {
     const empty = (t: string | null) => !t || t === "—" || t === "–";
-    for (const row of this.target.querySelectorAll<HTMLElement>(".fl-kv")) row.hidden = empty(row.querySelector("b")?.textContent ?? null);
-    const cells = [...this.stBox.querySelectorAll<HTMLElement>(".fl-stgrid > *")];
-    for (let k = 0; k + 1 < cells.length; k += 2) {
-      const hide = empty(cells[k + 1]!.textContent);
-      cells[k]!.hidden = hide;
-      cells[k + 1]!.hidden = hide;
+    for (const box of this.root.querySelectorAll<HTMLElement>(".fl-tiles")) {
+      const tiles = [...box.querySelectorAll<HTMLElement>(".fl-tile")];
+      for (const t of tiles) {
+        const b = t.querySelector("b")!;
+        t.hidden = empty(b.textContent);
+        // (a figure with a second part — a time, a rate —: the second part under it, in small)
+        const txt = b.textContent ?? "";
+        const k = txt.indexOf(" · ");
+        if (!t.classList.contains("wide") && k > 0 && t.dataset.split !== "no") {
+          b.textContent = txt.slice(0, k);
+          t.dataset.sub = txt.slice(k + 3);
+        } else if (t.dataset.split !== "keep" && k < 0 && t.dataset.sub && !t.dataset.own) delete t.dataset.sub;
+      }
+      // (a tile left alone on its row spans it)
+      const shown = tiles.filter((t) => !t.hidden);
+      let col = 0;
+      shown.forEach((t, j) => {
+        t.classList.remove("solo");
+        if (t.classList.contains("wide")) return void (col = 0);
+        if (col === 0) {
+          const next = shown[j + 1];
+          if (!next || next.classList.contains("wide")) t.classList.add("solo");
+          else col = 1;
+        } else col = 0;
+      });
     }
   }
 
@@ -1428,40 +1481,73 @@ export class FlightHud {
     }
   }
 
-  /** Speed tape (left): a moving scale in c, the value box, the autopilot's target bug, the trend. */
+  /** the speed tape's full scale [c], eased towards its goal (a round number over the speed) */
+  private tapeMax = 0;
+  private tapeGoal = 0;
+
+  /**
+   * Speed tape (left): a gauge from 0 at the bottom to a round full scale above the speed (and the
+   * autopilot's goal) — in m/s, km/s, or c when relativistic, up to the light barrier — rescaled
+   * smoothly when the speed outgrows it or falls well under it; the column filled to the speed, the
+   * value box beside it, the autopilot's target bug, the trend.
+   */
   private speedTape(ctx: CanvasRenderingContext2D, i: Info, x0: number, cy: number, hgt: number, dpr: number) {
     const wdt = 58 * dpr;
-    const span = 0.24; // c over the tape's height
-    const k = hgt / span;
-    const y = (v: number) => cy - (v - i.speed) * k;
-    panelBg(ctx, x0, cy - hgt / 2, wdt, hgt, dpr);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, cy - hgt / 2, wdt, hgt);
-    ctx.clip();
+    const C = 299792458;
+    const want = Number.isFinite(i.wantSpeed) ? i.wantSpeed : 0;
+    const need = Math.max(i.speed, want, 1e-9);
+    // a round number (1, 2, 2.5, 5 × 10ⁿ) at or above x
+    const nice = (x: number) => {
+      const e = Math.pow(10, Math.floor(Math.log10(x)));
+      const m = x / e;
+      return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e;
+    };
+    // the unit: c when relativistic (above 1 % of c), km/s above 2 km/s, else m/s (10 m/s at least)
+    const rel = need * 1.15 > 0.01;
+    const unitK = rel ? 1 : need * C * 1.15 >= 2000 ? C / 1000 : C; // (c → the unit)
+    const unit = rel ? "c" : unitK === C ? "m/s" : "km/s";
+    const goal = Math.min(rel ? 1 : Infinity, nice(Math.max(need * 1.15 * unitK, rel ? 0.02 : unitK === C ? 10 : 2)) / unitK);
+    // (a new scale when the speed nears its top, or falls under a third of it)
+    if (!(this.tapeGoal > 0) || need > this.tapeGoal * 0.9 || need < this.tapeGoal * 0.3 || Math.abs(Math.log(goal / this.tapeGoal)) > 3) this.tapeGoal = goal;
+    this.tapeMax = this.tapeMax > 0 ? Math.exp(Math.log(this.tapeMax) + (Math.log(this.tapeGoal) - Math.log(this.tapeMax)) * 0.18) : this.tapeGoal;
+    const vmax = this.tapeMax;
+    const top = cy - hgt / 2, bot = cy + hgt / 2;
+    const y = (v: number) => bot - Math.min(Math.max(v / vmax, 0), 1.02) * hgt;
+    panelBg(ctx, x0, top, wdt, hgt, dpr);
+    // the column filled to the speed
+    const g = ctx.createLinearGradient(0, bot, 0, top);
+    g.addColorStop(0, "rgba(214, 245, 91, 0.05)");
+    g.addColorStop(1, "rgba(214, 245, 91, 0.32)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x0 + wdt - 7 * dpr, y(i.speed), 5 * dpr, bot - y(i.speed));
+    // the scale: 5 labelled steps, a tick between each
+    const step = nice(vmax * unitK / 5) / unitK;
     ctx.strokeStyle = "rgba(230, 236, 245, 0.55)";
-    ctx.fillStyle = "rgba(230, 236, 245, 0.75)";
+    ctx.fillStyle = "rgba(230, 236, 245, 0.78)";
     ctx.lineWidth = 1 * dpr;
     ctx.font = `${10 * dpr}px ${MONO}`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    const v0 = Math.max(0, Math.floor((i.speed - span / 2) / 0.01) * 0.01);
-    for (let v = v0; v <= Math.min(1, i.speed + span / 2); v += 0.01) {
+    const fmt = (v: number) => {
+      const u = v * unitK;
+      return rel ? u.toFixed(u < 0.1 ? 3 : 2) : u >= 100 || Number.isInteger(u) ? u.toFixed(0) : u.toFixed(1);
+    };
+    for (let v = 0; v <= vmax * 1.0001; v += step / 2) {
+      const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
       const yy = y(v);
-      const major = Math.round(v * 100) % 5 === 0;
       ctx.beginPath();
       ctx.moveTo(x0 + wdt, yy);
       ctx.lineTo(x0 + wdt - (major ? 12 : 6) * dpr, yy);
       ctx.stroke();
-      if (major) ctx.fillText(v.toFixed(2), x0 + wdt - 15 * dpr, yy);
+      if (major) ctx.fillText(fmt(v), x0 + wdt - 15 * dpr, yy);
     }
-    // the light barrier and the autopilot's target speed
-    if (i.speed + span / 2 > 0.95) {
+    // the light barrier, the autopilot's target speed
+    if (rel && vmax > 0.9) {
       ctx.fillStyle = "rgba(255, 90, 70, 0.25)";
       ctx.fillRect(x0, y(1), wdt, y(0.95) - y(1));
     }
-    if (Number.isFinite(i.wantSpeed)) {
-      const yy = y(i.wantSpeed);
+    if (want > 0) {
+      const yy = y(want);
       ctx.fillStyle = CYAN;
       ctx.beginPath();
       ctx.moveTo(x0 + wdt, yy);
@@ -1469,30 +1555,26 @@ export class FlightHud {
       ctx.lineTo(x0 + wdt - 8 * dpr, yy + 5 * dpr);
       ctx.fill();
     }
-    ctx.restore();
+    const yv = y(i.speed);
     // trend over the last second (where the speed will be in 1 s)
     const s1 = this.samples.find((q) => q.w >= this.samples[this.samples.length - 1]!.w - 1);
     if (s1) {
-      const trend = i.speed - s1.speed;
-      if (Math.abs(trend * k) > 2 * dpr) {
+      const d = ((i.speed - s1.speed) / vmax) * hgt;
+      if (Math.abs(d) > 2 * dpr) {
         ctx.strokeStyle = "#d6f55b";
         ctx.lineWidth = 3 * dpr;
         ctx.beginPath();
-        ctx.moveTo(x0 + wdt + 3 * dpr, cy);
-        ctx.lineTo(x0 + wdt + 3 * dpr, cy - Math.max(-hgt / 2, Math.min(hgt / 2, trend * k)));
+        ctx.moveTo(x0 + wdt + 3 * dpr, yv);
+        ctx.lineTo(x0 + wdt + 3 * dpr, Math.max(top, Math.min(bot, yv - d)));
         ctx.stroke();
       }
     }
-    // (our universe: km/s relative to the body of the sphere of influence)
-    const rel = i.speedMode === "target" ? `rel. ${BODY_NAMES[i.target as Target]} (target)` : i.ref ? `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}` : "rel. ZAMO";
-    if (i.ref || i.speed < 1e-3) {
-      const v = i.speed * 299792.458;
-      valueBox(ctx, x0 + wdt + 8 * dpr, cy, v >= 1000 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : (v * 1000).toFixed(1), v >= 1 ? "km/s" : "m/s", `${i.speed.toExponential(2)} c`, "left", dpr);
-      label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", rel, dpr);
-      return;
-    }
-    valueBox(ctx, x0 + wdt + 8 * dpr, cy, `${i.speed.toFixed(4)}`, "c", `γ ${i.gamma.toFixed(3)}`, "left", dpr);
-    label(ctx, x0, cy - hgt / 2 - 8 * dpr, "SPEED", rel, dpr);
+    const relTo = i.speedMode === "target" ? `rel. ${BODY_NAMES[i.target as Target]} (target)` : i.ref ? `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}` : "rel. ZAMO";
+    label(ctx, x0, top - 16 * dpr, `SPEED · ${unit}`, relTo, dpr);
+    // the value, beside the pointer
+    const v = i.speed * unitK;
+    const main = rel ? i.speed.toFixed(4) : v >= 1000 ? v.toFixed(0) : v >= 100 ? v.toFixed(1) : v.toFixed(2);
+    valueBox(ctx, x0 + wdt + 8 * dpr, Math.max(top + 12 * dpr, Math.min(bot - 12 * dpr, yv)), main, unit, rel ? `γ ${i.gamma.toFixed(3)}` : `${i.speed.toExponential(2)} c`, "left", dpr);
   }
 
   /** Altitude tape (right): r on a log scale with the orbit's landmarks and a vertical-speed bar. */
