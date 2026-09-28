@@ -2995,14 +2995,41 @@ fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
   return textureSampleGrad(earthSurf, bgSamp, uv, dx, dy);
 }
 
-// the cloud cover at q (the clouds drift about the pole: P.earth.y)
-fn earthCloud(q: vec3f, fx: vec3f, fy: vec3f) -> f32 {
-  let a = textureSampleGrad(earthCube, bgSamp, eCube(rotZ(q, P.earth.y)), eCube(rotZ(fx, P.earth.y)), eCube(rotZ(fy, P.earth.y))).a;
-  return clamp((a - 0.06) * 1.25, 0.0, 1.0) * P.earth2.y;
+// Detail finer than the maps, the camera near: fractal noise, as many octaves as a texel of the cube
+// maps holds pixels (none from afar), faded in — the texel's angle on the sphere, and the octaves
+// resolved by a footprint fp (radians)
+fn earthTexel() -> f32 { return 1.5707963 / f32(textureDimensions(earthCube).x); }
+fn earthOct(fx: vec3f, fy: vec3f) -> f32 { return clamp(log2(earthTexel() / max(max(length(fx), length(fy)), 1e-9)) + 1.0, 0.0, 6.0); }
+
+// The cloud cover at q (x) and the light on its puffs (y: 1 flat); the clouds drift about the pole
+// (P.earth.y). Near, the map's soft texels break into puffs and wisps (most at their edges), their
+// relief lit from the sun (Ls): denser towards it, this side in the shade.
+fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
+  let q = rotZ(q0, P.earth.y);
+  let base = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(rotZ(fx, P.earth.y)), eCube(rotZ(fy, P.earth.y))).a;
+  var a = clamp((base - 0.06) * 1.25, 0.0, 1.0);
+  var lit = 1.0;
+  let o = earthOct(fx, fy);
+  if (o > 0.0 && a > 0.0) {
+    let f = 0.6 / earthTexel();
+    let oct = i32(ceil(o));
+    let k = min(o, 1.0);
+    let n = tfbm(q * f, oct);
+    a = clamp(a + k * n * (0.35 + 3.2 * a * (1.0 - a)), 0.0, 1.0);
+    // (their edges sharp: dense puffs, not a grey veil)
+    a = mix(a, smoothstep(0.04, 0.55, a), k);
+    let Lt = rotZ(Ls - q0 * dot(q0, Ls), P.earth.y);
+    let lt = length(Lt);
+    if (lt > 1e-4) {
+      let n2 = tfbm((q + Lt * (0.35 / (f * lt))) * f, oct);
+      lit = clamp(1.0 - k * 2.5 * (n2 - n), 0.45, 1.35);
+    }
+  }
+  return vec2f(a * P.earth2.y, lit);
 }
 
 // the clouds' light at q (their top, or their base seen from below), lit through the air
-fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool) -> vec3f {
+fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f32) -> vec3f {
   let hc = P.earth2.x * EARTH_RM;
   let mu0 = dot(q, Ls);
   let Ts = sunThrough(hc, mu0);
@@ -3012,7 +3039,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool) -> vec
   let ct = dot(rd, Ls);
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let amb = vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0);
-  let top = 0.85 / PI * (E * Ts * (wrap + fwd) + E * amb);
+  let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb);
   return select(top, top * 0.35, below);
 }
 
@@ -3034,11 +3061,25 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f) -
   // sun's slant from their height; softened)
   let hc = P.earth2.x;
   let qs = normalize(q + (Ls - q * mu0) * (hc / max(mu0, 0.06)));
-  let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0);
+  let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
   let Eg = E * sunThrough(0.0, mu0) * shade;
+  // (near: the land's colour and relief finer than the maps — the noise's slopes facing the sun lit)
+  var relLit = 1.0;
+  let og = earthOct(fx, fy);
+  if (og > 0.0 && ocean < 1.0) {
+    let f = 1.0 / earthTexel();
+    let oct = i32(ceil(og));
+    let k = min(og, 1.0) * (1.0 - ocean);
+    let p = q * f + vec3f(17.0, 3.0, 5.0);
+    let nd = tfbm(p, oct);
+    A *= 1.0 + k * vec3f(0.4, 0.34, 0.28) * nd;
+    let Lt = Ls - q * mu0;
+    let lt = length(Lt);
+    if (lt > 1e-4) { relLit = clamp(1.0 - k * 1.0 * (tfbm(p + Lt * (0.3 / lt), oct) - nd), 0.3, 1.6); }
+  }
   // the sky's light (blue by day, the twilight's glow)
   let sky = E * vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0);
-  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) + sky);
+  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
   // the sky mirrored (Fresnel)
   if (ocean > 0.0) {
@@ -3086,10 +3127,11 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
     if (tc > 0.0 && (tHit <= 0.0 || tc < tHit || below)) {
       let qc = normalize(ro + rd * tc);
       let fp = fp0 + fpK * tc;
-      alpha = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp));
+      let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
+      alpha = cv.x;
       // (from below, the ground hit under the camera: no cloud between)
       if (below && tHit > 0.0) { alpha = 0.0; }
-      cl = earthCloudLight(qc, rd, Ls, E, below);
+      cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
     }
   }
   if (tHit > 0.0) {
