@@ -1017,10 +1017,11 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   }
   // the Earth (its air in front of what the ray meets — its limb's glow; its ground, clouds and air when
   // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
-  if (earthOn()) {
+  {
     for (var k = ourStart(); k < bodyCount(); k++) {
       let wk = bodyWhere(k);
-      if (!isEarth(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
+      if (!hasAir(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
+      setAir(k);
       let R = bodyRadius(k);
       let c = bodies[BV * k].xyz - o;
       let b = dot(c, d);
@@ -1031,7 +1032,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       let t1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
       let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
       let met = hit && k == kBest;
-      let e = earthLook(A * (-c / R), rd, select(-1.0, tBest / R, met), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz),
+      let e = earthLook(k, A * (-c / R), rd, select(-1.0, tBest / R, met), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz),
         earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5);
       (*out).glow += (*out).tint * e.col;
       (*out).tint *= e.T;
@@ -2505,42 +2506,52 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
   if (P.near0.w > 0.5) {
     let k = u32(P.near1.w);
-    if (isEarth(k)) {
-      let e = earthNear(look, rnd, k);
-      if (e.t > 0.0) {
-        var o = traceOut(e.col);
-        o.depth = e.t * bodyRadius(k);
+    let air = hasAir(k);
+    // the body met (its air's own march for a world with air; its relief for the Gargantua planets)
+    var hitT = -1.0;
+    var hit: NearHit;
+    var e: EarthNear;
+    if (air) {
+      e = earthNear(look, rnd, k);
+      hitT = e.t;
+    } else {
+      hit = nearMarch(look);
+      hitT = hit.t;
+    }
+    // rings in front of the planet (or of the sky): their light, and what they let through
+    var ring = vec4f(0.0);
+    if (ringOuter(k) > 0.0) {
+      let N = P.near3.xyz;
+      let dn = dot(look, N);
+      let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
+      if (sR > 0.0 && (hitT <= 0.0 || sR < hitT)) {
+        let fp = P.camUp.w * sR;
+        setMapLod(fp, fp / max(abs(dn), 0.05), k);
+        let src = lightSource(k);
+        let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
+        ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
+      }
+    }
+    if (air) {
+      if (hitT > 0.0) {
+        var o = traceOut(ring.rgb + (1.0 - ring.w) * e.col);
+        o.depth = hitT * bodyRadius(k);
         return o;
       }
-      pre = e.col;
-      T = e.T;
+      pre = ring.rgb + (1.0 - ring.w) * e.col;
+      T = (1.0 - ring.w) * e.T;
       veil = e.veil;
     } else {
-      let hit = nearMarch(look);
-      // rings in front of the planet (or of the sky): their light, and what they let through
-      var ring = vec4f(0.0);
-      if (ringOuter(k) > 0.0) {
-        let N = P.near3.xyz;
-        let dn = dot(look, N);
-        let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
-        if (sR > 0.0 && (hit.t <= 0.0 || sR < hit.t)) {
-          let fp = P.camUp.w * sR;
-          setMapLod(fp, fp / max(abs(dn), 0.05), k);
-          let src = lightSource(k);
-          let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
-          ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
-        }
-      }
-      if (hit.t > 0.0) {
-        let air = nearAir(look, hit.t, k);
-        setMapLod(P.camUp.w * hit.t, 0.0, k);
-        var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
-        o.depth = hit.t * bodyRadius(k);
+      if (hitT > 0.0) {
+        let nair = nearAir(look, hitT, k);
+        setMapLod(P.camUp.w * hitT, 0.0, k);
+        var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * nair.T + nair.L));
+        o.depth = hitT * bodyRadius(k);
         return o;
       }
-      let air = nearAir(look, 1e30, k);
-      pre = ring.rgb + (1.0 - ring.w) * air.L;
-      T = (1.0 - ring.w) * air.T;
+      let nair = nearAir(look, 1e30, k);
+      pre = ring.rgb + (1.0 - ring.w) * nair.L;
+      T = (1.0 - ring.w) * nair.T;
     }
   }
   var tr = traceLook(look, rnd, tNow);
@@ -2928,18 +2939,89 @@ fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   return EARTH_MOON * pow(P.earth3.w, 1.5) * night * smoothstep(-0.05, 0.05, mz) * max(dot(n, Lm), 0.0) * sunThrough(h, mz);
 }
 const EARTH_RM = 6.371e6;     // metres per radius
-// (the air drawn thicker than it is, P.earth2.w: its scale heights × k, its densities / k — the same
-// columns, the same colours, a glow along the limb k times as tall)
-fn airK() -> f32 { return max(P.earth2.w, 1.0); }
-fn airTop() -> f32 { return 1.0 + 100e3 * airK() / EARTH_RM; } // the air's top: 100 km
-fn airHR() -> f32 { return 8000.0 * airK(); }                // scale heights [m]: the molecules, the aerosols
-fn airHM() -> f32 { return 1200.0 * airK(); }
-const AIR_BR = vec3f(5.802e-6, 13.558e-6, 33.1e-6); // Rayleigh scattering at sea level [1/m]
-const AIR_BMS = 2.1e-5;       // Mie: scattering, extinction [1/m] (an ordinary day's aerosols: τ ≈ 0.03)
-const AIR_BME = 2.33e-5;
-// ozone's absorption, carried with the molecules' density (its column: a 15 km layer at
-// (0.65, 1.88, 0.085) 10⁻⁶/m — the blue of the twilight, the Chappuis band)
-const AIR_BO = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
+// A world's air (the Earth's, Mars' dust, Venus' and Titan's hazes, the giants' hydrogen, Pluto's blue
+// layers): its size, its scale heights, its molecules' scattering (and the Earth's ozone), its
+// aerosols' — coloured: their single-scattering albedo, a Henyey–Greenstein asymmetry per colour (Mars'
+// dust throws more blue forwards: its blue sunset) — the sky's light on its ground, and how much
+// thicker it is drawn (k: its scale heights × k, its densities / k — the same columns, a limb's glow k
+// times as tall). Set for the body being drawn (setAir): the functions below read it.
+struct AirSpec {
+  rm: f32,     // metres per radius
+  top: f32,    // the air's top [m]
+  hr: f32,     // scale heights [m]: the molecules, the aerosols
+  hm: f32,
+  br: vec3f,   // molecular scattering at the ground [1/m]
+  bo: vec3f,   // absorption carried with the molecules [1/m] (the Earth's ozone)
+  bms: vec3f,  // the aerosols' scattering [1/m] (their albedo × their extinction)
+  bme: f32,    // their extinction [1/m]
+  g: vec3f,    // their asymmetry, per colour
+  k: f32,      // drawn thicker (1: as it is)
+  sky: vec3f,  // the sky's light on the ground by day, over the sunlight's irradiance
+  moon: f32,   // the Moon's light scattered too (the Earth: 1)
+};
+var<private> AIR: AirSpec;
+// the maps (solar.ts: MAPS_HI, then MAPS_LO) of the worlds with air
+fn airOf(m: u32) -> bool { return m == 0u || m == 2u || m == 4u || m == 5u || m == 6u || m == 19u || m == 20u || m == 21u || m == 22u; }
+fn hasAir(k: u32) -> bool {
+  let surf = u32(bodies[BV * k + 2u].z);
+  return bodyKind(k) != 0u && surf >= 4u && airOf(surf - 4u) && (surf != EARTH_SURF || earthOn());
+}
+fn setAir(k: u32) {
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  var a: AirSpec;
+  // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03)
+  a.rm = 6.371e6; a.top = 100e3; a.hr = 8000.0; a.hm = 1200.0;
+  a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6); a.bo = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
+  a.bms = vec3f(2.1e-5); a.bme = 2.33e-5; a.g = vec3f(0.8); a.k = max(P.earth2.w, 1.0);
+  a.sky = vec3f(0.035, 0.06, 0.12); a.moon = 1.0;
+  if (m != 0u) { a.moon = 0.0; }
+  if (m == 2u) {
+    // Mars: 0.6 % of the Earth's air (CO₂), its dust (τ ≈ 0.4, well mixed): the butterscotch sky, the
+    // blue sunset round the sun
+    a.rm = 3.3895e6; a.top = 80e3; a.hr = 11100.0; a.hm = 11100.0;
+    a.br = vec3f(2.2e-7, 5.2e-7, 1.27e-6); a.bo = vec3f(0.0);
+    a.bms = 3.6e-5 * vec3f(0.94, 0.78, 0.6); a.bme = 3.6e-5; a.g = vec3f(0.62, 0.7, 0.8); a.k = 2.0;
+    a.sky = vec3f(0.07, 0.045, 0.025);
+  } else if (m == 6u) {
+    // Venus: above its cloud deck (the drawn ground), CO₂ and a yellowish sulphuric haze
+    a.rm = 6.0518e6; a.top = 90e3; a.hr = 15900.0; a.hm = 6000.0;
+    a.br = vec3f(1.4e-6, 3.3e-6, 8.0e-6); a.bo = vec3f(0.0);
+    a.bms = 1.2e-5 * vec3f(1.0, 0.93, 0.78); a.bme = 1.2e-5; a.g = vec3f(0.72); a.k = 2.0;
+    a.sky = vec3f(0.12, 0.1, 0.06);
+  } else if (m == 19u) {
+    // Titan: an orange photochemical haze, optically thick (τ ≈ 4) — the ground barely shows
+    a.rm = 2.5747e6; a.top = 500e3; a.hr = 20000.0; a.hm = 60000.0;
+    a.br = vec3f(1.2e-5, 2.8e-5, 6.8e-5) * 0.15; a.bo = vec3f(0.0);
+    a.bms = 6.7e-5 * vec3f(0.92, 0.66, 0.3); a.bme = 6.7e-5; a.g = vec3f(0.62); a.k = 1.0;
+    a.sky = vec3f(0.12, 0.07, 0.025);
+  } else if (m == 4u || m == 5u || m == 20u || m == 21u) {
+    // the giants: hydrogen above their clouds (the drawn ground) — a thin haze, bluish on Uranus and
+    // Neptune, yellowish on Jupiter and Saturn
+    a.rm = select(select(select(2.4622e7, 2.5362e7, m == 20u), 5.8232e7, m == 5u), 6.9911e7, m == 4u);
+    a.hr = select(27000.0, 50000.0, m == 5u || m == 20u);
+    a.top = 12.0 * a.hr; a.hm = a.hr * 0.7;
+    a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6) * select(0.06, 0.3, m >= 20u); a.bo = vec3f(0.0);
+    a.bms = 1.5e-6 * select(vec3f(1.0, 0.95, 0.82), vec3f(0.8, 0.95, 1.0), m >= 20u);
+    a.bme = 1.5e-6; a.g = vec3f(0.6); a.k = 1.0;
+    a.sky = vec3f(0.0);
+  } else if (m == 22u) {
+    // Pluto: a tenuous nitrogen air and its blue haze layers
+    a.rm = 1.1883e6; a.top = 250e3; a.hr = 50000.0; a.hm = 40000.0;
+    a.br = vec3f(0.0); a.bo = vec3f(0.0);
+    a.bms = 3.0e-7 * vec3f(0.45, 0.75, 1.3); a.bme = 3.0e-7; a.g = vec3f(0.55); a.k = 1.0;
+    a.sky = vec3f(0.0);
+  }
+  AIR = a;
+}
+fn airK() -> f32 { return AIR.k; }
+fn airTop() -> f32 { return 1.0 + AIR.top * AIR.k / AIR.rm; }
+fn airHR() -> f32 { return AIR.hr * AIR.k; }
+fn airHM() -> f32 { return AIR.hm * AIR.k; }
+// Henyey–Greenstein (Cornette–Shanks) per colour
+fn phaseM(g: vec3f, mu: f32) -> vec3f {
+  let g2 = g * g;
+  return 3.0 / (8.0 * PI) * (1.0 - g2) * (1.0 + mu * mu) / ((2.0 + g2) * pow(1.0 + g2 - 2.0 * g * mu, vec3f(1.5)));
+}
 
 fn earthOn() -> bool { return P.earth.x > 0.5; }
 fn isEarth(k: u32) -> bool { return earthOn() && bodyKind(k) != 0u && u32(bodies[BV * k + 2u].z) == EARTH_SURF; }
@@ -2956,7 +3038,7 @@ fn chUp(x: f32, mu: f32) -> f32 {
 // the air's column [m of air at sea level] along a ray from a height h [m] towards mu, for a scale
 // height H: through the ground (mu below its horizon), the column to the shadow — huge
 fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
-  let X = EARTH_RM / H;
+  let X = AIR.rm / H;
   let x = X + h / H;
   if (mu >= 0.0) { return chUp(x, mu) * exp(-h / H) * H; }
   let x0 = x * sqrt(max(1.0 - mu * mu, 0.0));
@@ -2964,7 +3046,7 @@ fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
 }
 // the sunlight's transmission down to a height h [m], the sun at mu from the zenith
 fn sunThrough(h: f32, mu: f32) -> vec3f {
-  return exp(-((AIR_BR + AIR_BO) * airColumn(h, mu, airHR()) + vec3f(AIR_BME * airColumn(h, mu, airHM()))) / airK());
+  return exp(-((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK());
 }
 
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
@@ -2986,15 +3068,14 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   if (tb <= ta) { return o; }
   let mu = dot(rd, Ls);
   let pR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
-  let g = 0.8;
-  let pM = 3.0 / (8.0 * PI) * (1.0 - g * g) * (1.0 + mu * mu) / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+  let pM = phaseM(AIR.g, mu);
   // the Moon's light scattered too, where the sun is down (the moonlit sky's blue): its phase functions,
   // its irradiance over the sun's — a third of what lights the ground (EARTH_MOON): the moonlit sky a deep
   // blue, not a day's (Lm: its share — the stars' veil leaves it out: they stay, drawn, under the Moon)
   let Lm = P.earth3.xyz;
   let mm = dot(rd, Lm);
   let pRm = 3.0 / (16.0 * PI) * (1.0 + mm * mm);
-  let pMm = 3.0 / (8.0 * PI) * (1.0 - g * g) * (1.0 + mm * mm) / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mm, 1.5));
+  let pMm = phaseM(AIR.g, mm);
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
@@ -3008,25 +3089,25 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   for (var i = 0u; i < N; i++) {
     let u1 = (f32(i) + 1.0) / f32(N);
     let t1 = ta + (tb - ta) * select(u1, u1 * u1, inside);
-    let ds = (t1 - tPrev) * EARTH_RM;
+    let ds = (t1 - tPrev) * AIR.rm;
     let t = mix(tPrev, t1, jit);
     tPrev = t1;
     let p = ro + rd * t;
     let r = length(p);
-    let h = (r - 1.0) * EARTH_RM;
+    let h = (r - 1.0) * AIR.rm;
     let dR = exp(-h / airHR()) / airK();
     let dM = exp(-h / airHM()) / airK();
-    let ext = (AIR_BR + AIR_BO) * dR + vec3f(AIR_BME * dM);
+    let ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
     let Ts = sunThrough(h, dot(p, Ls) / r);
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
     // the molecules' single scattering, a third of the aerosols')
-    let sc = AIR_BR * dR * (pR + 0.8 / (4.0 * PI)) + vec3f(AIR_BMS * dM * (pM + 0.3 / (4.0 * PI)));
+    let sc = AIR.br * dR * (pR + 0.8 / (4.0 * PI)) + AIR.bms * dM * (pM + 0.3 / (4.0 * PI));
     let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     o.L += sc * Ts * Tv;
     let mz = dot(p, Lm) / r;
     let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(p, Ls) / r);
-    if (nightS > 0.0 && mz > -0.1 && P.earth3.w > 0.0) {
-      let scm = AIR_BR * dR * (pRm + 0.8 / (4.0 * PI)) + vec3f(AIR_BMS * dM * (pMm + 0.3 / (4.0 * PI)));
+    if (nightS > 0.0 && mz > -0.1 && P.earth3.w > 0.0 && AIR.moon > 0.5) {
+      let scm = AIR.br * dR * (pRm + 0.8 / (4.0 * PI)) + AIR.bms * dM * (pMm + 0.3 / (4.0 * PI));
       o.Lm += scm * sunThrough(h, mz) * moonE * nightS * Tv;
     }
     tau += ext * ds;
@@ -3386,12 +3467,35 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   return col;
 }
 
+// Another world's ground (or cloud deck) seen through its air: its map (at the footprint's level), lit
+// by the sunlight come down through the air (reddened, dimmed low, none in the shadow) and by its sky;
+// the giants darkened towards the limb (Minnaert), the dusty worlds as regolith (Lommel–Seeliger)
+fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec3f {
+  setMapLod(fp, fp, k);
+  let A = planetAlbedo(k, q, P.time.x).rgb;
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  let mu0 = dot(q, Ls);
+  let mu = max(dot(q, -rd), 0.02);
+  let cosi = max(mu0, 0.0);
+  var f = cosi;
+  if (m == 4u || m == 5u || m == 20u || m == 21u) {
+    let km = select(0.88, 0.8, m >= 20u);
+    f = pow(cosi, km) * pow(mu, km - 1.0);
+  } else if (regolith(m)) {
+    f = 2.0 * cosi / (cosi + mu);
+  }
+  // (the rings' shadow: their plane the equator's)
+  let rs = ringShadow(k, q, vec3f(0.0, 0.0, 1.0), Ls);
+  return A / PI * E * (sunThrough(0.0, mu0) * f * rs + AIR.sky * smoothstep(-0.15, 0.25, mu0));
+}
+
 // What a ray sees of the Earth: from ro along rd (its axes; radii), meeting the ground at tHit (< 0:
 // it does not); the sun along Ls, its irradiance E; the pixel's axes gx, gy and its footprint fp0 +
 // fpK t. col: the light added; T: what shows through of what lies beyond (the ground: none).
 struct EarthLook { col: vec3f, T: vec3f, Lm: vec3f };
-fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> EarthLook {
+fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> EarthLook {
   var o: EarthLook;
+  let earth = isEarth(k);
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
   let rc = 1.0 + P.earth2.x;
   let b = dot(ro, rd);
@@ -3400,7 +3504,7 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
   var alpha = 0.0;
   var cl = vec3f(0.0);
   var tc = -1.0;
-  if (hc2 > 0.0 && P.earth2.y > 0.0) {
+  if (earth && hc2 > 0.0 && P.earth2.y > 0.0) {
     let below = dot(ro, ro) < rc * rc;
     tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
     if (tc > 0.0 && (tHit <= 0.0 || tc < tHit) && !(below && tHit > 0.0)) {
@@ -3419,7 +3523,11 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
+    if (earth) {
+      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
+    } else {
+      G = otherGround(k, q, rd, Ls, E, fp);
+    }
   }
   o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
   o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
@@ -3429,12 +3537,14 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them
 struct EarthNear { col: vec3f, T: vec3f, t: f32, veil: f32 };
 fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
-  // (its relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the sphere)
+  setAir(k);
+  // (the Earth's relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the
+  // sphere; the other worlds' ground, a sphere)
   let ro = toBody(-P.near0.xyz);
   var t = nearHit(look);
-  if (length(ro) < 1.5) { t = earthMarch(ro, toBody(look), P.camUp.w); }
+  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), P.camUp.w); }
   let lt = nearLight(k);
-  let e = earthLook(ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
+  let e = earthLook(k, ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
     0.0, P.camUp.w, fract(rnd * 7.31 + 0.37));
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
@@ -4351,12 +4461,13 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // the Earth near (the local patch, which traceLook leaves out): its ground, clouds and air around
   // the ship — the sun through the air, reddened low, hidden at night; the sky's blue; its glow
   let kn = u32(P.near1.w);
-  if (P.near0.w > 0.5 && isEarth(kn)) {
+  if (P.near0.w > 0.5 && hasAir(kn)) {
+    setAir(kn);
     let rd = toBody(look);
     let t = nearHit(look);
     let lt = nearLight(kn);
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
-    let e = earthLook(toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w);
+    let e = earthLook(kn, toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w);
     col = select(col * e.T + e.col, e.col, t > 0.0);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
