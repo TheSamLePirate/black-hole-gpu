@@ -79,7 +79,9 @@ struct Params {
   // the Earth (its maps loaded): on (0/1), the clouds' drift about its pole [rad], the city lights'
   // radiance (over the sunlit ground's scale), the relief's strength (its normal map)
   earth: vec4f,
-  earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, unused
+  earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, the air's
+                   // thickness drawn (its scale heights × k)
+  earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -2904,6 +2906,17 @@ const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS
 // the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
 // it is: the ground shows, faintly, cool), over the sunlight's irradiance
 const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
+// the full Moon's light at night, over the sunlight's irradiance (drawn far brighter than it is — a
+// moonlit landscape shows, silvery), and the moonlight at q: its direction's cosine on the normal n,
+// through the air, faded in as the night falls
+const EARTH_MOON = vec3f(0.16, 0.19, 0.24);
+fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
+  let Lm = P.earth3.xyz;
+  let mz = dot(q, Lm);
+  let night = 1.0 - smoothstep(-0.12, 0.06, mu0);
+  if (mz < -0.05 || night <= 0.0 || P.earth3.w <= 0.0) { return vec3f(0.0); }
+  return EARTH_MOON * pow(P.earth3.w, 1.5) * night * smoothstep(-0.05, 0.05, mz) * max(dot(n, Lm), 0.0) * sunThrough(h, mz);
+}
 const EARTH_RM = 6.371e6;     // metres per radius
 // (the air drawn thicker than it is, P.earth2.w: its scale heights × k, its densities / k — the same
 // columns, the same colours, a glow along the limb k times as tall)
@@ -3187,7 +3200,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let ct = dot(rd, Ls);
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0), EARTH_NIGHT);
-  let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb);
+  let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   return select(top, top * 0.35, below);
 }
 
@@ -3239,7 +3252,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // the sky's light (blue by day, the twilight's glow)
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
   let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0), EARTH_NIGHT);
-  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0)));
+  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0))
+    + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
   // the sky mirrored (Fresnel)
   if (ocean > 0.0) {

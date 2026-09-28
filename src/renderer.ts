@@ -1,5 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { solarState } from "./system/solar";
+import { bodyAxes, solarBody, solarState } from "./system/solar";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -46,7 +46,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 60;
+const PARAM_VEC4S = 61;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -1242,6 +1242,20 @@ export class Renderer {
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
     set(58, this.earthMaps.tier ? 1 : 0, drift, 0.6, 4);
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
+    // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
+    // share of its disk seen from the Earth)
+    let moon: [number, number, number, number] = [0, 0, 1, 0];
+    if (earthK >= 0) {
+      const E = solarState("earth", time).pos, M = solarState("moon", time).pos, S = solarState("sun", time).pos;
+      const m = [M[0] - E[0], M[1] - E[1], M[2] - E[2]], sn = [S[0] - M[0], S[1] - M[1], S[2] - M[2]];
+      const ml = Math.hypot(...m), sl = Math.hypot(...sn);
+      const A = bodyAxes(solarBody("earth")!, time);
+      const q = A.map((a) => (a[0] * m[0]! + a[1] * m[1]! + a[2] * m[2]!) / ml);
+      // (Sun–Moon–Earth angle: 0 at full Moon)
+      const cosPhase = -(m[0]! * sn[0]! + m[1]! * sn[1]! + m[2]! * sn[2]!) / (ml * sl);
+      moon = [q[0]!, q[1]!, q[2]!, (1 + cosPhase) / 2];
+    }
+    set(60, ...moon);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
