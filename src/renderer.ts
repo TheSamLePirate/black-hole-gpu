@@ -267,6 +267,10 @@ export class Renderer {
   private meterSkyUsed = 0;
   private meterSky = 0;
   private meterIncident = 0;
+  /** the camera in the Earth's air: the meter reads the image too (a sunset's sky, not a backdrop) */
+  private meterInAir = false;
+  /** what the tone map adds before its curve (the film look: 2 stops over) */
+  private meterGain = 1;
   private meterAt = 0;
   /** exposure the meter adds [EV] (auto exposure) */
   autoEV = 0;
@@ -1178,6 +1182,8 @@ export class Renderer {
     if (!o.probe) {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
       this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
+      this.meterGain = s.tonemap === "Film" ? 4 : 1;
+      this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier && (Math.hypot(...near.centre) - 1) * 6371 < 100 * AIR_K;
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
@@ -1759,6 +1765,19 @@ export class Renderer {
     }
     let m = this.meterIncident > 0 ? 0.4 / this.meterIncident : 2 ** this.autoEV;
     if (Lhi > 0) m = Math.min(m, 6 / Lhi);
+    // (in the Earth's air, its sky is the scene, not a backdrop: a camera's meter besides — no more than a
+    // fiftieth of the image over white once the tone map's own gain is in (a sunset's glow round the sun;
+    // the disk itself is fewer pixels). Only ever less exposure: night and space as the light sets them)
+    if (this.meterInAir) {
+      let acc2 = 0;
+      for (let b = 127; b >= 1; b--) {
+        acc2 += h[b]!;
+        if (acc2 >= 0.02 * total) {
+          m = Math.min(m, 1 / (this.meterGain * Lof(b)));
+          break;
+        }
+      }
+    }
     const target = Math.min(Math.max(Math.log2(m), -6), 32);
     const now = performance.now();
     const dt = Math.min((now - this.meterAt) / 1000, 1);
