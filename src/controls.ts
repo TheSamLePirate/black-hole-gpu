@@ -2143,6 +2143,11 @@ export class CameraController {
       }
       const mouthR = mouth(this.s).w.rho, accel = this.thrustMax();
       const list = nodes.map((n) => ({ t: n.t, dv: n.dv }));
+      // (every node behind the ship — passed, not flown: the plan's path is the free one)
+      if (!list.length) {
+        this.ourPlan = null;
+        return (P.path = null);
+      }
       if (m) {
         // (a mission: the flight's own step — the display's path is the one flown)
         const span = { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 6000, step: 0.025 };
