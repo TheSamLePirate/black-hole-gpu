@@ -2918,7 +2918,7 @@ const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
 // the full Moon's light at night, over the sunlight's irradiance (drawn far brighter than it is — a
 // moonlit landscape shows, silvery), and the moonlight at q: its direction's cosine on the normal n,
 // through the air, faded in as the night falls
-const EARTH_MOON = vec3f(0.16, 0.19, 0.24);
+const EARTH_MOON = vec3f(0.07, 0.085, 0.11);
 fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   let Lm = P.earth3.xyz;
   let mz = dot(q, Lm);

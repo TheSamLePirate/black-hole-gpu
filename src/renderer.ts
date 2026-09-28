@@ -1240,7 +1240,11 @@ export class Renderer {
     if (near && near.index === earthK && Math.hypot(...near.centre) < 60 && this.earthWant === "med" && this.earthMaps.tier === "med") this.requestEarthMaps("high");
     const tSec = time * 4.925490947e-6 * s.massSolar;
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
-    set(58, this.earthMaps.tier ? 1 : 0, drift, 0.6, 4);
+    // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
+    // twentieth: seen from below, lit areas would glare like a sunlit field)
+    const altKm = near && near.index === earthK ? (Math.hypot(...near.centre) - 1) * 6371 : 1e4;
+    const lights = 0.6 * 20 ** (Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0));
+    set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
