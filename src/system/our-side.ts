@@ -11,7 +11,7 @@ import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from ".
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
-import { bodyFixedOf, fromBodyFixed, GEAR, groundVelocity } from "./our-surface";
+import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity } from "./our-surface";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
 export const OUR_BODIES = GARGANTUA_SYSTEM.bodies
@@ -171,7 +171,7 @@ export function earthStart(t = 0, altKm = 400, moonPlane = false): { X: Vec3; fw
  * (28.57° N, 80.65° W), the ship resting on it, nose east, the Earth turning under it. Home frame, at t.
  */
 export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
-  const q = bodyFixedOf("earth", lat, lon, GEAR);
+  const q = bodyFixedOf("earth", lat, lon, GEAR + groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
   const X = fromBodyFixed("earth", q, t);
   const E = ourState("earth", t).pos;
   const r = [X[0] - E[0], X[1] - E[1], X[2] - E[2]] as Vec3;

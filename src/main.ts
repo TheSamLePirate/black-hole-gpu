@@ -758,8 +758,11 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools);
-  addEventListener("pagehide", () => {
+  addEventListener("pagehide", (e) => {
     if (settings.autosave && firstFrame) tools.autosaveNow();
+    // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is
+    // collected: reloads in a row would stack them)
+    if (!(e as PageTransitionEvent).persisted) renderer.release();
   });
 
   Object.assign(globalThis, {

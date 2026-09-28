@@ -2896,8 +2896,8 @@ fn airTop() -> f32 { return 1.0 + 100e3 * airK() / EARTH_RM; } // the air's top:
 fn airHR() -> f32 { return 8000.0 * airK(); }                // scale heights [m]: the molecules, the aerosols
 fn airHM() -> f32 { return 1200.0 * airK(); }
 const AIR_BR = vec3f(5.802e-6, 13.558e-6, 33.1e-6); // Rayleigh scattering at sea level [1/m]
-const AIR_BMS = 3.996e-6;     // Mie: scattering, extinction [1/m]
-const AIR_BME = 4.44e-6;
+const AIR_BMS = 2.1e-5;       // Mie: scattering, extinction [1/m] (an ordinary day's aerosols: τ ≈ 0.03)
+const AIR_BME = 2.33e-5;
 // ozone's absorption, carried with the molecules' density (its column: a 15 km layer at
 // (0.65, 1.88, 0.085) 10⁻⁶/m — the blue of the twilight, the Chappuis band)
 const AIR_BO = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
@@ -2965,8 +2965,9 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32) -> E
     let dM = exp(-h / airHM()) / airK();
     let ext = (AIR_BR + AIR_BO) * dR + vec3f(AIR_BME * dM);
     let Ts = sunThrough(h, dot(p, Ls) / r);
-    // (multiple scattering, roughly: a quarter more of the molecules' light, isotropic)
-    let sc = AIR_BR * dR * (pR + 0.25 / (4.0 * PI)) + vec3f(AIR_BMS * dM * pM);
+    // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
+    // the molecules' single scattering, a third of the aerosols')
+    let sc = AIR_BR * dR * (pR + 0.8 / (4.0 * PI)) + vec3f(AIR_BMS * dM * (pM + 0.3 / (4.0 * PI)));
     o.L += sc * Ts * exp(-(tau + 0.5 * ext * ds)) * ds;
     tau += ext * ds;
   }
@@ -2993,6 +2994,137 @@ fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
   let dx = vec2f((q.x * fx.y - q.y * fx.x) / (rxy2 * TAU), -fx.z / (rxy * PI));
   let dy = vec2f((q.x * fy.y - q.y * fy.x) / (rxy2 * TAU), -fy.z / (rxy * PI));
   return textureSampleGrad(earthSurf, bgSamp, uv, dx, dy);
+}
+
+// ---- the Earth's relief (the same function in src/terrain.ts: earthDetail, earthHeightSampler — the
+// ship stands on it): its height map (the relief map's alpha: 0 … 8 848 m), ridges on its mountains
+// and hills on its land finer than the map; heights [m] at a unit direction on its axes, resolved to a
+// footprint foot [m]
+fn earthDetail(q: vec3f, h0: f32, foot: f32) -> f32 {
+  let mount = smoothstep(300.0, 2500.0, h0);
+  let land = smoothstep(0.0, 40.0, h0);
+  var h = 0.0;
+  // ridges 3 km apart on the mountains; crests 300 m apart on them, hills on the plains; rocks
+  let o1 = layerOct(2000.0, foot, EARTH_RM, 4);
+  if (o1 > 0 && mount > 0.0) { h += (ridged(q * 2000.0 + vec3f(11.0), o1) - 0.5) * 900.0 * mount; }
+  let o2 = layerOct(20000.0, foot, EARTH_RM, 3);
+  if (o2 > 0 && land > 0.0) {
+    if (mount > 0.0) { h += (ridged(q * 20000.0 + vec3f(7.0), o2) - 0.5) * 260.0 * mount; }
+    h += tfbm(q * 20000.0 + vec3f(5.0), o2) * 50.0 * land;
+  }
+  let o3 = layerOct(200000.0, foot, EARTH_RM, 3);
+  if (o3 > 0 && land > 0.0) { h += tfbm(q * 200000.0 + vec3f(3.0), o3) * (3.0 + 12.0 * mount) * land; }
+  return h;
+}
+fn earthUV(q: vec3f) -> vec2f {
+  return vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
+}
+// cubic B-spline weights (texels −1 … +2): the map smooth — no facets between its texels
+fn bspline4(t: f32) -> vec4f {
+  let t2 = t * t;
+  let t3 = t2 * t;
+  return vec4f(1.0 - 3.0 * t + 3.0 * t2 - t3, 4.0 - 6.0 * t2 + 3.0 * t3, 1.0 + 3.0 * t + 3.0 * t2 - 3.0 * t3, t3) / 6.0;
+}
+// the map's height: near, a cubic B-spline over its texels; from afar, its mip level from the footprint
+fn earthH0(q: vec3f, foot: f32) -> f32 {
+  let dim = vec2i(textureDimensions(earthSurf));
+  let texelM = EARTH_RM * TAU / f32(dim.x);
+  let lod = log2(max(foot, 1.0) / texelM);
+  let uv = earthUV(q);
+  if (lod > 0.5) { return textureSampleLevel(earthSurf, bgSamp, uv, lod).a * 8848.0; }
+  let x = uv.x * f32(dim.x) - 0.5;
+  let y = uv.y * f32(dim.y) - 0.5;
+  let x0 = floor(x);
+  let y0 = floor(y);
+  let wx = bspline4(x - x0);
+  let wy = bspline4(y - y0);
+  var s = 0.0;
+  for (var j = 0; j < 4; j++) {
+    let yy = clamp(i32(y0) + j - 1, 0, dim.y - 1);
+    var row = 0.0;
+    for (var i = 0; i < 4; i++) {
+      let xx = ((i32(x0) + i - 1) % dim.x + dim.x) % dim.x;
+      row += wx[i] * textureLoad(earthSurf, vec2i(xx, yy), 0).a;
+    }
+    s += wy[j] * row;
+  }
+  return s * 8848.0;
+}
+fn earthHeight(q: vec3f, foot: f32) -> f32 {
+  let h0 = earthH0(q, foot);
+  return max(h0 + earthDetail(q, h0, foot), 0.0);
+}
+// the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
+// dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
+fn earthHeightStep(q: vec3f, foot: f32) -> f32 {
+  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthSurf).x);
+  let h0 = textureSampleLevel(earthSurf, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).a * 8848.0;
+  return max(h0 + earthDetail(q, h0, max(foot * 4.0, 1.0)), 0.0);
+}
+// the relief's own normal at q, no finer than the footprint
+fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
+  let e = max(foot, 2.0) / EARTH_RM;
+  let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
+  let t2 = cross(q, t1);
+  let h0 = earthHeight(q, foot);
+  let h1 = earthHeight(normalize(q + t1 * e), foot);
+  let h2 = earthHeight(normalize(q + t2 * e), foot);
+  return normalize(q - ((h1 - h0) * t1 + (h2 - h0) * t2) / (e * EARTH_RM));
+}
+
+// The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~30 km,
+// steps growing, softened by how close the ray passes over the ground (a penumbra); foot [m]
+fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
+  let p0 = p * (1.0 + 2.0 / EARTH_RM);
+  var t = max(foot, 20.0);
+  var sh = 1.0;
+  for (var i = 0; i < 24; i++) {
+    let x = p0 + Ls * (t / EARTH_RM);
+    let r = length(x);
+    let hr = (r - 1.0) * EARTH_RM;
+    if (hr > 9600.0) { break; }
+    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot));
+    sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
+    if (sh <= 0.0) { break; }
+    t *= 1.35;
+  }
+  return sh;
+}
+
+// The ray (its axes, radii) against the relief: marched from the relief's bounding shell, steps a
+// fraction of the height above the ground (and of the distance: the far horizon), then bisected; fpK:
+// the pixel's footprint per unit distance. < 0: missed.
+fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
+  let Rs = 1.0 + 9600.0 / EARTH_RM;
+  let b = dot(ro, rd);
+  let off = ro - rd * b;
+  let d2 = dot(off, off);
+  if (d2 > Rs * Rs) { return -1.0; }
+  let sq = sqrt(Rs * Rs - d2);
+  let t1 = -b + sq;
+  if (t1 <= 0.0) { return -1.0; }
+  var t = max(-b - sq, 0.0);
+  var tPrev = t;
+  for (var i = 0u; i < 160u; i++) {
+    let p = ro + rd * t;
+    let r = length(p);
+    let f = r - (1.0 + earthHeightStep(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM);
+    if (f < 0.0) {
+      var lo = tPrev;
+      var hi = t;
+      for (var j = 0u; j < 10u; j++) {
+        let m = 0.5 * (lo + hi);
+        let pm = ro + rd * m;
+        let rm = length(pm);
+        if (rm - (1.0 + earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM) < 0.0) { hi = m; } else { lo = m; }
+      }
+      return hi;
+    }
+    tPrev = t;
+    t += max(0.6 * f, 0.006 * t + 1e-9);
+    if (t > t1) { break; }
+  }
+  return -1.0;
 }
 
 // Detail finer than the maps, the camera near: fractal noise, as many octaves as a texel of the cube
@@ -3044,7 +3176,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
 }
 
 // The ground at q (unit), seen along rd; its footprint's axes fx, fy
-fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f) -> vec3f {
+fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   let day = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(fx), eCube(fy));
   let rel = earthRelief(q, fx, fy);
   let ocean = smoothstep(0.35, 0.65, rel.b);
@@ -3054,7 +3186,13 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f) -
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
   let north = cross(q, east);
   let tn = vec2f(rel.r * 2.0 - 1.0, 1.0 - rel.g * 2.0) * P.earth.w * (1.0 - ocean);
-  let n = normalize(q + tn.x * east + tn.y * north);
+  var n = normalize(q + tn.x * east + tn.y * north);
+  // (near — a pixel under the map's texel — the relief's own normal: its ridges, crests and rocks)
+  let footM = max(length(fx), length(fy)) * EARTH_RM;
+  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthSurf).x);
+  if (footM < texelM && ocean < 1.0) {
+    n = normalize(mix(n, earthNormalAt(q, footM), smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean)));
+  }
   let V = -rd;
   let mu0 = dot(q, Ls);
   // the sunlight at the ground, through the air and under the clouds (their shadow, cast along the
@@ -3062,7 +3200,12 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f) -
   let hc = P.earth2.x;
   let qs = normalize(q + (Ls - q * mu0) * (hc / max(mu0, 0.06)));
   let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
-  let Eg = E * sunThrough(0.0, mu0) * shade;
+  var Eg = E * sunThrough(hG, mu0) * shade;
+  // (near, the mountains' shadows: a peak between the sun and the valley)
+  let footS = max(length(fx), length(fy)) * EARTH_RM;
+  if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthSurf).x) && mu0 > -0.05 && ocean < 1.0) {
+    Eg *= mix(1.0, earthTerrainShadow(q * (1.0 + hG / EARTH_RM), Ls, footS), 1.0 - ocean);
+  }
   // (near: the land's colour and relief finer than the maps — the noise's slopes facing the sun lit)
   var relLit = 1.0;
   let og = earthOct(fx, fy);
@@ -3135,9 +3278,10 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
     }
   }
   if (tHit > 0.0) {
-    let q = normalize(ro + rd * tHit);
+    let ph = ro + rd * tHit;
+    let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    let g = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp));
+    let g = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
     o.col += air.T * mix(g, cl, alpha);
     o.T = vec3f(0.0);
   } else {
@@ -3149,9 +3293,12 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
 
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them
 fn earthNear(look: vec3f, rnd: f32, tNow: f32, k: u32) -> TraceOut {
-  let t = nearHit(look);
+  // (its relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the sphere)
+  let ro = toBody(-P.near0.xyz);
+  var t = nearHit(look);
+  if (length(ro) < 1.5) { t = earthMarch(ro, toBody(look), P.camUp.w); }
   let lt = nearLight(k);
-  let e = earthLook(toBody(-P.near0.xyz), toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
+  let e = earthLook(ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
     0.0, P.camUp.w, fract(rnd * 7.31 + 0.37));
   if (t > 0.0) {
     var o = traceOut(e.col);
@@ -4067,6 +4214,17 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     let t2 = cross(tr.dir, t1);
     let w = PI / f32(ENV_H);
     col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, Footprint(t1 * w, t2 * w), tr.sky, tr.org);
+  }
+  // the Earth near (the local patch, which traceLook leaves out): its ground, clouds and air around
+  // the ship — the sun through the air, reddened low, hidden at night; the sky's blue; its glow
+  let kn = u32(P.near1.w);
+  if (P.near0.w > 0.5 && isEarth(kn)) {
+    let rd = toBody(look);
+    let t = nearHit(look);
+    let lt = nearLight(kn);
+    let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
+    let e = earthLook(toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w);
+    col = select(col * e.T + e.col, e.col, t > 0.0);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   col = min(col, vec3f(60000.0));

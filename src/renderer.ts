@@ -18,7 +18,10 @@ import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
-import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { loadEarthMaps, placeholderEarth, readEarthHeights, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { setGroundRelief } from "./system/our-surface";
+import { EARTH_RM, earthHeightSampler } from "./terrain";
+import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch } from "./system/local-patch";
@@ -509,6 +512,10 @@ export class Renderer {
       .then((maps) => {
         const old = this.earthMaps;
         this.earthMaps = maps;
+        // (the ground the ship stands on: the heights drawn, read back)
+        void readEarthHeights(this.device, maps.surf).then(({ map, W, H }) => {
+          if (this.earthMaps === maps) setGroundRelief("earth", earthHeightSampler(map, W, H));
+        });
         if (this.live) this.bindTarget(this.live);
         if (this.offline) this.bindTarget(this.offline.target);
         // (the old ones once the frames drawing with them are done)
@@ -517,6 +524,11 @@ export class Renderer {
         this.onAssets?.();
       })
       .catch((e) => console.warn("Earth maps unavailable:", e));
+  }
+
+  /** Frees the GPU at once (the page going away). */
+  release() {
+    this.device.destroy();
   }
 
   get realSkyLoaded() {
@@ -1165,7 +1177,7 @@ export class Renderer {
     // light falling where the camera is
     if (!o.probe) {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
-      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY);
+      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
@@ -1229,7 +1241,7 @@ export class Renderer {
     const tSec = time * 4.925490947e-6 * s.massSolar;
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
     set(58, this.earthMaps.tier ? 1 : 0, drift, 0.6, 4);
-    set(59, 6000 / 6.371e6, 1, 0.8, 3);
+    set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -1670,7 +1682,7 @@ export class Renderer {
    * albedo 0.3): the accretion disk seen from here (its face and lensed images, a first estimate —
    * scene-bodies.ts: planetLight) and the stars at their distance.
    */
-  private incidentLight(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, logYRef: number) {
+  private incidentLight(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, logYRef: number, near: ReturnType<typeof localPatch> = null) {
     const ours = s.wormhole && cam.region === "throat" && cam.ell < 0;
     let E = 0;
     let X: Vec3 | null = null;
@@ -1692,9 +1704,21 @@ export class Renderer {
         d = Math.hypot(P[0] - X[0], P[1] - X[1], P[2] - X[2]);
       }
       const T = Math.round(b.temperature / 50) * 50;
-      E += 10 ** (this.logYOf(T) - logYRef) * b.brightness * (b.radius / Math.max(d, b.radius)) ** 2;
+      E += 10 ** (this.logYOf(T) - logYRef) * b.brightness * (b.radius / Math.max(d, b.radius)) ** 2 * this.earthSunlight(bodies, near);
     });
     return 0.3 * E;
+  }
+
+  /**
+   * Near the Earth (its local patch), the share of the sunlight reaching the camera: through its air,
+   * reddened and dimmed low, none in its shadow — a ten-thousandth left at night (the sky's and the
+   * cities' glow: the eye adapts).
+   */
+  private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>) {
+    if (!near || bodies[near.index]?.id !== "earth" || !this.earthMaps.tier) return 1;
+    const r = Math.hypot(...near.centre);
+    const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
+    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 1e-4);
   }
 
   /**

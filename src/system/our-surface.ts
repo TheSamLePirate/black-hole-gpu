@@ -70,10 +70,28 @@ export function bodyFixedOf(id: string, lat: number, lon: number, hM = GEAR): Ve
   return [R * Math.cos(f) * Math.cos(l), R * Math.cos(f) * Math.sin(l), R * Math.sin(f)];
 }
 
-/** Height of the ship's gear above the ground [m] (a sphere: the mean radius). */
+/**
+ * A body's relief above its sphere, once known (the Earth's: its height map read back from the
+ * tracer's — the ground drawn): height [m] at a unit direction on its own axes.
+ */
+const reliefs = new Map<string, (q: Vec3) => number>();
+export function setGroundRelief(id: string, f: ((q: Vec3) => number) | null) {
+  if (f) reliefs.set(id, f);
+  else reliefs.delete(id);
+}
+/** The ground's height above the mean radius [m] under a body-fixed point (0: a sphere). */
+export function groundRelief(id: string, q: Vec3): number {
+  const f = reliefs.get(id);
+  if (!f) return 0;
+  const l = Math.hypot(...q) || 1;
+  return f([q[0] / l, q[1] / l, q[2] / l]);
+}
+
+/** Height of the ship's gear above the ground [m] (the mean radius, and the relief when known). */
 export function gearHeight(id: string, X: Vec3, t: number) {
   const b = solarBody(id)!;
-  return (Math.hypot(...sub(X, solarState(id, t).pos)) - b.radius) * M_METRES - GEAR;
+  const r = (Math.hypot(...sub(X, solarState(id, t).pos)) - b.radius) * M_METRES - GEAR;
+  return reliefs.has(id) ? r - groundRelief(id, toBodyFixed(id, X, t)) : r;
 }
 
 /** Speeds relative to the ground [m/s]: vertical (> 0 up), horizontal; the local up. */

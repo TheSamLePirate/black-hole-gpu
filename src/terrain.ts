@@ -96,3 +96,58 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05): number {
   }
   return 0;
 }
+
+/** The Earth's radius [m] (its relief's scale). */
+export const EARTH_RM = 6.371e6;
+
+/**
+ * The Earth's relief finer than its height map (h0: the map's height there [m]): ridges 3 km apart on
+ * its mountains, crests 300 m apart on them and hills on its plains, rocks — the tracer's earthDetail,
+ * at a pixel footprint `foot` [m].
+ */
+export function earthDetail(q: V3, h0: number, foot = 0.05): number {
+  const mount = smooth(300, 2500, h0);
+  const land = smooth(0, 40, h0);
+  let h = 0;
+  const o1 = layerOct(2000, foot, EARTH_RM, 4);
+  if (o1 > 0 && mount > 0) h += (ridged(sc(q, 2000, 11), o1) - 0.5) * 900 * mount;
+  const o2 = layerOct(20000, foot, EARTH_RM, 3);
+  if (o2 > 0 && land > 0) {
+    if (mount > 0) h += (ridged(sc(q, 20000, 7), o2) - 0.5) * 260 * mount;
+    h += tfbm(sc(q, 20000, 5), o2) * 50 * land;
+  }
+  const o3 = layerOct(200000, foot, EARTH_RM, 3);
+  if (o3 > 0 && land > 0) h += tfbm(sc(q, 200000, 3), o3) * (3 + 12 * mount) * land;
+  return h;
+}
+
+/** Cubic B-spline weights for the texels −1 … +2 around a fraction t. */
+const bspline4 = (t: number) => {
+  const t2 = t * t, t3 = t2 * t;
+  return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6];
+};
+
+/**
+ * The Earth's height [m] at a unit direction on its axes, from its height map (a byte per texel,
+ * 0…255 → 0…8 848 m; W × H, equirectangular) as the tracer samples it near — a cubic B-spline over
+ * its texels, wrapping in longitude — and the detail finer than it.
+ */
+export function earthHeightSampler(map: Uint8Array, W: number, H: number) {
+  return (q: V3, foot = 0.05): number => {
+    const lon = Math.atan2(q[1], q[0]);
+    const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
+    const x = (0.5 + lon / (2 * Math.PI)) * W - 0.5;
+    const y = (0.5 - lat / Math.PI) * H - 0.5;
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const wx = bspline4(x - x0), wy = bspline4(y - y0);
+    let v = 0;
+    for (let j = 0; j < 4; j++) {
+      const yy = Math.min(Math.max(y0 + j - 1, 0), H - 1);
+      let row = 0;
+      for (let i = 0; i < 4; i++) row += wx[i]! * map[yy * W + ((((x0 + i - 1) % W) + W) % W)]!;
+      v += wy[j]! * row;
+    }
+    const h0 = (v / 255) * 8848;
+    return Math.max(h0 + earthDetail(q, h0, foot), 0);
+  };
+}

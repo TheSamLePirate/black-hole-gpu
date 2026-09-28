@@ -240,3 +240,27 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   await device.queue.onSubmittedWorkDone();
   return { cube, night, surf, tier };
 }
+
+/**
+ * The heights the tracer draws (the packed map's alpha, its finest level) read back to the CPU: the
+ * ground the ship stands on (src/terrain.ts: earthHeightSampler), a byte per texel.
+ */
+export async function readEarthHeights(device: GPUDevice, surf: GPUTexture): Promise<{ map: Uint8Array; W: number; H: number }> {
+  const W = surf.width, H = surf.height;
+  const map = new Uint8Array(W * H);
+  // (in bands of rows: a few tens of MB mapped at a time)
+  const rows = Math.max(1, Math.floor((32 << 20) / (4 * W)));
+  const buf = device.createBuffer({ size: 4 * W * rows, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  for (let y = 0; y < H; y += rows) {
+    const n = Math.min(rows, H - y);
+    const enc = device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: surf, origin: [0, y, 0] }, { buffer: buf, bytesPerRow: 4 * W }, [W, n]);
+    device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ, 0, 4 * W * n);
+    const px = new Uint8Array(buf.getMappedRange(0, 4 * W * n));
+    for (let i = 0; i < W * n; i++) map[y * W + i] = px[4 * i + 3]!;
+    buf.unmap();
+  }
+  buf.destroy();
+  return { map, W, H };
+}
