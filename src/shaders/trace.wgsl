@@ -1012,21 +1012,27 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     (*out).glow += (*out).tint * rl.rgb * blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
     (*out).tint *= 1.0 - rl.w;
   }
-  // the Earth's air in front of what the ray meets: its limb's glow (the Earth met: drawn with it)
+  // the Earth (its air in front of what the ray meets — its limb's glow; its ground, clouds and air when
+  // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
   if (earthOn()) {
     for (var k = ourStart(); k < bodyCount(); k++) {
       let wk = bodyWhere(k);
-      if (!isEarth(k) || (hit && k == kBest) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
+      if (!isEarth(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
       let R = bodyRadius(k);
       let c = bodies[BV * k].xyz - o;
       let b = dot(c, d);
       let top = airTop() * R;
       if (b + top < 0.0 || b - top > tBest || top < 0.5 * beam() * (travel + length(c))) { continue; }
       let A = spunAxes(k);
+      let rd = A * d;
+      let t1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
       let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
-      let air = earthAir(A * (-c / R), A * d, select(1e30, tBest / R, tBest < 1e30), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz), earthSun(k, gObs), 0.5);
-      (*out).glow += (*out).tint * air.L;
-      (*out).tint *= air.T;
+      let met = hit && k == kBest;
+      let e = earthLook(A * (-c / R), rd, select(-1.0, tBest / R, met), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz),
+        earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5);
+      (*out).glow += (*out).tint * e.col;
+      (*out).tint *= e.T;
+      if (met) { return true; }
     }
   }
   if (!hit) { return false; }
@@ -1037,16 +1043,6 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   var col: vec3f;
   if (bodyKind(k) == 0u) {
     col = shadeStar(k, X, c, gObs, d, P.time.x);
-  } else if (isEarth(k)) {
-    // its ground, clouds and air, on its own axes (the pixel's footprint: round, across the ray)
-    let R = bodyRadius(k);
-    let A = spunAxes(k);
-    let rd = A * d;
-    let t1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
-    let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
-    let e = earthLook(A * (-c / R), rd, tBest / R, A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz), earthSun(k, gObs),
-      t1, cross(rd, t1), beam() * travel / R, beam(), 0.5);
-    col = e.col;
   } else {
     let li = i32(bodies[BV * k + 3u].x);
     let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - X);
@@ -2489,39 +2485,54 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   let aspect = P.camRight.w;
   let look = normalize(P.camFwd.xyz + ndc.x * tanH * aspect * P.camRight.xyz + ndc.y * tanH * P.camUp.xyz);
   // a body near the camera, in front of everything traced (the light probe, traced by traceLook
-  // alone, leaves it out: it does not light itself)
+  // alone, leaves it out: it does not light itself): met — drawn alone; else the light it adds in
+  // front of the traced scene (pre) and what it lets through (T). (traceLook, huge, called at one
+  // place only: every call is a copy the shader compiler builds)
+  var pre = vec3f(0.0);
+  var T = vec3f(1.0);
   if (P.near0.w > 0.5) {
     let k = u32(P.near1.w);
-    if (isEarth(k)) { return earthNear(look, rnd, tNow, k); }
-    let hit = nearMarch(look);
-    // rings in front of the planet (or of the sky): their light, and what they let through
-    var ring = vec4f(0.0);
-    if (ringOuter(k) > 0.0) {
-      let N = P.near3.xyz;
-      let dn = dot(look, N);
-      let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
-      if (sR > 0.0 && (hit.t <= 0.0 || sR < hit.t)) {
-        let fp = P.camUp.w * sR;
-        setMapLod(fp, fp / max(abs(dn), 0.05), k);
-        let src = lightSource(k);
-        let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
-        ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
+    if (isEarth(k)) {
+      let e = earthNear(look, rnd, k);
+      if (e.t > 0.0) {
+        var o = traceOut(e.col);
+        o.depth = e.t * bodyRadius(k);
+        return o;
       }
+      pre = e.col;
+      T = e.T;
+    } else {
+      let hit = nearMarch(look);
+      // rings in front of the planet (or of the sky): their light, and what they let through
+      var ring = vec4f(0.0);
+      if (ringOuter(k) > 0.0) {
+        let N = P.near3.xyz;
+        let dn = dot(look, N);
+        let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
+        if (sR > 0.0 && (hit.t <= 0.0 || sR < hit.t)) {
+          let fp = P.camUp.w * sR;
+          setMapLod(fp, fp / max(abs(dn), 0.05), k);
+          let src = lightSource(k);
+          let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
+          ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
+        }
+      }
+      if (hit.t > 0.0) {
+        let air = nearAir(look, hit.t, k);
+        setMapLod(P.camUp.w * hit.t, 0.0, k);
+        var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
+        o.depth = hit.t * bodyRadius(k);
+        return o;
+      }
+      let air = nearAir(look, 1e30, k);
+      pre = ring.rgb + (1.0 - ring.w) * air.L;
+      T = (1.0 - ring.w) * air.T;
     }
-    if (hit.t > 0.0) {
-      let air = nearAir(look, hit.t, k);
-      setMapLod(P.camUp.w * hit.t, 0.0, k);
-      var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * air.T + air.L));
-      o.depth = hit.t * bodyRadius(k);
-      return o;
-    }
-    var tr = traceLook(look, rnd, tNow);
-    let air = nearAir(look, 1e30, k);
-    tr.col = ring.rgb + (1.0 - ring.w) * (tr.col * air.T + air.L);
-    tr.tint *= air.T * (1.0 - ring.w);
-    return tr;
   }
-  return traceLook(look, rnd, tNow);
+  var tr = traceLook(look, rnd, tNow);
+  tr.col = pre + T * tr.col;
+  tr.tint *= T;
+  return tr;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -3292,7 +3303,8 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
 }
 
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them
-fn earthNear(look: vec3f, rnd: f32, tNow: f32, k: u32) -> TraceOut {
+struct EarthNear { col: vec3f, T: vec3f, t: f32 };
+fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // (its relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the sphere)
   let ro = toBody(-P.near0.xyz);
   var t = nearHit(look);
@@ -3300,15 +3312,7 @@ fn earthNear(look: vec3f, rnd: f32, tNow: f32, k: u32) -> TraceOut {
   let lt = nearLight(k);
   let e = earthLook(ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
     0.0, P.camUp.w, fract(rnd * 7.31 + 0.37));
-  if (t > 0.0) {
-    var o = traceOut(e.col);
-    o.depth = t * bodyRadius(k);
-    return o;
-  }
-  var tr = traceLook(look, rnd, tNow);
-  tr.col = tr.col * e.T + e.col;
-  tr.tint *= e.T;
-  return tr;
+  return EarthNear(e.col, e.T, t);
 }
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,
