@@ -1,5 +1,5 @@
 import {
-  basis, blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose, switchAnchor, yawPitchRoll,
+  basis, blToCartesian, cameraFrame, homePosition, repPose, repToHolePose, setHolePose, setHomePose, setRepPose, switchAnchor, yawPitchRoll,
 } from "./camera";
 import { TUNING } from "./game/tuning";
 import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 } from "./physics";
@@ -252,7 +252,9 @@ export class CameraController {
   // ------------------------------------------------------------------------------ rotation modes
   /** Orbit mode drives the view (not during the dive, the journey or game-style flight). */
   private get tracking() {
-    return this.s.rotation === "orbit" && !this.flyMode && this.cinematic !== "dive" && this.cinematic !== "journey";
+    // (not when the rig turns about a planet, a moon — the classic aim resumes where it cannot: a body
+    // beyond the wormhole, aimed at through its mouth)
+    return this.s.rotation === "orbit" && !this.flyMode && this.cinematic !== "dive" && this.cinematic !== "journey" && !(this.rig.on && this.rigOrbits());
   }
   /** Drags move the camera around the target (not while it falls freely). */
   private get orbiting() {
@@ -847,7 +849,16 @@ export class CameraController {
       this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
     };
     const ov = this.piloting && !this.cinematic ? this.outsideView() : null;
-    if (ov === "around") {
+    const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || s.rotation === "tripod") && !this.dragLook;
+    if (rigTurn && s.rotation === "orbit") {
+      // around a planet, a moon: the drag turns the camera about it
+      this.rig.az -= dx * 0.25;
+      this.rig.el = clamp(this.rig.el + dy * 0.25, -89, 89);
+    } else if (rigTurn) {
+      // on the tripod: the drag turns the view off the target
+      this.rig.yawOff = clamp(this.rig.yawOff - dx * kLook, -170, 170);
+      this.rig.pitchOff = clamp(this.rig.pitchOff + dy * kLook, -85, 85);
+    } else if (ov === "around") {
       // outside, around the ship: the drag turns the camera about it
       const o = this.outside;
       o.yaw = (((o.yaw + dx * 0.3 + 180) % 360) + 360) % 360 - 180;
@@ -883,6 +894,13 @@ export class CameraController {
     if (this.flyMode) {
       // flight speed, like a game's throttle
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
+      return;
+    }
+    if (!e.altKey && this.rig.on && !this.piloting) {
+      // the rig: around a body the wheel sets the distance (to its surface, logarithmically); else it
+      // pushes the camera forwards / back
+      if (this.s.rotation === "orbit") this.rig.alt = clamp(this.rig.alt * Math.exp(dy * 0.0015), 1e-12, 1e6);
+      else this.rig.dolly -= dy * 0.004;
       return;
     }
     if (!e.altKey && this.piloting && !this.cinematic && this.outsideView() === "around") {
@@ -986,9 +1004,13 @@ export class CameraController {
     // moving the camera (flight, free fall) re-expresses its orientation: not a turn by the user,
     // so the tracking keeps its offset from the target
     const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
+    this.rig.on = false; // (set again below while the rig moves the camera)
     if (pilotNow) {
       if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
       this.flyShip(dt, pad);
+      this.flyVel = [0, 0, 0];
+    } else if (!this.gravity && free && this.rigStep(dt, move, fast)) {
+      // the rig moves the camera (around a body, following it, carried by it, on a tripod)
       this.flyVel = [0, 0, 0];
     } else if (this.gravity && free) {
       // free fall along the Kerr geodesic in step with the scene's time; the keys thrust
@@ -1004,6 +1026,8 @@ export class CameraController {
       else this.flyVel = [0, 0, 0];
     }
     if (tracked) this.written = [s.yaw, s.pitch, s.roll].join();
+    // (the rig idle this frame: it starts afresh from where the camera is when it takes over again)
+    if (!this.rig.on) this.rig.key = "";
     // a rumble when the camera goes through the wormhole's throat
     const side = s.wormhole && s.anchor === "wormhole" ? Math.sign(s.whL) : 0;
     if (side && this.lastSide && side !== this.lastSide) this.pad.rumble(0.6, 0.9, 220);
@@ -1041,7 +1065,7 @@ export class CameraController {
       else if (this.orbiting && (s.target === "star" || s.target === "barycentre")) this.followBody(dt);
       else this.easeZoom(dt);
     }
-    if (this.baryRest() && s.rotation === "free") this.driftWithBarycentre();
+    if (this.baryRest() && s.rotation === "free" && !this.rig.on) this.driftWithBarycentre();
     this.updateMotion(dt);
     if (this.tracking && !flying && !this.inThroat()) this.track(dt);
     // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
@@ -2641,6 +2665,223 @@ export class CameraController {
     // feed-forward: what holds the ship on that velocity against gravity and the frame
     const free = localAccel(F, L.xi, want, [0, 0, 0]);
     return { beta, ff: localToZamo([-free[0], -free[1], -free[2]]) };
+  }
+
+  // ------------------------------------------------------------------------------ the camera rig
+  /**
+   * The camera without the ship, near the worlds (settings.rotation): around a planet or a moon (drag:
+   * about it, wheel: its distance), following one (its motion carried, the view free, the keys move
+   * the camera), free (carried by the nearest body — within 40 of its radii — the keys fly), on a
+   * tripod (fixed on the nearest body, turning with it, aiming at the target; drag: off it, keys: move
+   * the tripod). The camera takes the body's velocity: its view is a co-moving observer's (Miller
+   * runs at half the speed of light). Around the hole, the star, the mouth: the classic orbit.
+   */
+  rig = {
+    on: false,
+    key: "",
+    ref: null as Body | null,
+    /** camera − the body's centre [M] (follow, free) */
+    off: [0, 0, 0] as Vec3,
+    /** tripod: the place on the body's own axes (ours [M]; Gargantua's worlds: their frame's ξ) */
+    fixed: null as Vec3 | null,
+    /** around: azimuth, elevation [°], the height above its surface [M] */
+    az: 0,
+    el: 20,
+    alt: 1,
+    yawOff: 0,
+    pitchOff: 0,
+    vel: [0, 0, 0] as Vec3,
+    dolly: 0,
+  };
+
+  /** Around a planet, a moon (the rig), not the classic orbit's hole, star, mouth. */
+  private rigOrbits() {
+    const s = this.s;
+    return s.rotation === "orbit" && !this.piloting && !s.ship && !["hole", "wormhole", "star", "barycentre"].includes(s.target);
+  }
+
+  /** The camera's place and axes as world vectors (our side: the home frame; else the hole's map). */
+  private rigWorld(): { ours: boolean; X: Vec3; fwd: Vec3; up: Vec3; right: Vec3 } | null {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    if (onOurSide(s, cam)) {
+      const X = homePosition(s);
+      if (!X) return null;
+      const w = mouth(s).w;
+      const v = (c: Vec3) => repToHomeVec(w, cam.ell, cam.n, c);
+      return { ours: true, X, fwd: unitV(v(cam.fwd)), up: unitV(v(cam.up)), right: unitV(v(cam.right)) };
+    }
+    if (cam.region !== "hole") return null;
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const v = (c: Vec3) => add3(f.er, f.et, f.ep, c);
+    return { ours: false, X, fwd: v(cam.fwd), up: v(cam.up), right: v(cam.right) };
+  }
+
+  /** A body the camera can move with: its centre, velocity, radius [M] (none: the hole, the mouth…). */
+  private rigBody(b: Body | null, ours: boolean, t: number): { id: Body; C: Vec3; V: Vec3; R: number } | null {
+    const s = this.s;
+    if (!b || b === "hole" || b === "barycentre" || b === "wormhole") return null;
+    if (ours) {
+      if (!isOurBody(b)) return null;
+      const st = ourState(b, t);
+      return { id: b, C: st.pos, V: st.vel, R: solarBody(b)!.radius };
+    }
+    if (isOurBody(b) || (b === "star" && !s.sun)) return null;
+    return { id: b, C: bodyCentre(s, b, t), V: bodyVelocity(s, b, t), R: bodyRadius(s, b) };
+  }
+
+  /** The body nearest the camera (in its radii from its surface), within 40 of them. */
+  private rigNearest(ours: boolean, X: Vec3, t: number) {
+    let best: ReturnType<CameraController["rigBody"]> = null;
+    let bd = 40;
+    for (const b of availableBodies(this.s, cameraFrame(this.s))) {
+      const r = this.rigBody(b, ours, t);
+      if (!r) continue;
+      const d = (Math.hypot(...sub3(X, r.C)) - r.R) / r.R;
+      if (d < bd) (bd = d), (best = r);
+    }
+    return best;
+  }
+
+  /** Places the camera (world vectors) moving at V (coordinate velocity: the body's). */
+  private rigPlace(ours: boolean, X: Vec3, fwd: Vec3, up: Vec3, V: Vec3) {
+    const s = this.s;
+    if (ours) setHomePose(s, X, fwd, up, V);
+    else {
+      const f = sphericalFrame(X);
+      const b = zamoBeta(X, V, s.spin);
+      const bl = Math.hypot(...b);
+      setHolePose(s, X, fwd, up, add3(f.er, f.et, f.ep, bl > 0.99 ? lin(b, 0.99 / bl, b, 0) : b));
+    }
+    s.motion = "geodesic";
+    this.targetDistance = s.distance;
+    this.targetL = s.whL;
+    this.written = "";
+  }
+
+  /** One frame of the rig; false: not its to move (the classic camera then does). */
+  private rigStep(dt: number, move: number[], fast: boolean): boolean {
+    const s = this.s;
+    const R = this.rig;
+    const mode = s.rotation;
+    R.on = false;
+    if (this.piloting || s.ship || this.flyMode || (mode === "orbit" && !this.rigOrbits())) return false;
+    const w = this.rigWorld();
+    if (!w) return false;
+    const t = this.nowTime();
+    // the body it moves with: the target (around, following), else the nearest (free: the nearest now,
+    // taking over when much nearer; the tripod: the one it stands on)
+    let ref = mode === "orbit" || mode === "follow" ? this.rigBody(s.target, w.ours, t) : this.rigBody(R.ref, w.ours, t);
+    if (mode === "free" || mode === "tripod") {
+      const n = this.rigNearest(w.ours, w.X, t);
+      const dist = (b: NonNullable<typeof ref>) => (Math.hypot(...sub3(w.X, b.C)) - b.R) / b.R;
+      if (!ref || (mode === "free" && n && n.id !== ref.id && dist(n) < 0.7 * dist(ref)) || (mode === "free" && dist(ref) > 60)) ref = n;
+    }
+    if (!ref) {
+      R.key = "";
+      R.ref = null;
+      return false;
+    }
+    R.on = true;
+    const key = `${mode}|${s.target}|${ref.id}|${w.ours}`;
+    const rel = sub3(w.X, ref.C);
+    const mR = 1476.625 * s.massSolar; // metres per M
+    if (key !== R.key) {
+      // (a new behaviour, target or body: from where the camera is)
+      R.key = key;
+      R.ref = ref.id;
+      R.off = rel;
+      R.vel = [0, 0, 0];
+      R.dolly = 0;
+      R.yawOff = R.pitchOff = 0;
+      const d = Math.hypot(...rel);
+      R.alt = Math.max(d - ref.R, 50 / mR);
+      R.az = (Math.atan2(rel[1], rel[0]) * 180) / Math.PI;
+      R.el = (Math.asin(clamp(rel[2] / d, -1, 1)) * 180) / Math.PI;
+      R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, t) : null;
+    }
+    // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
+    const h = Math.max(Math.hypot(...(mode === "follow" || mode === "free" ? R.off : rel)) - ref.R, 1 / mR);
+    const v = 0.8 * h * this.flySpeed * (fast ? 3 : 1);
+    const want = lin(lin(w.fwd, move[0]! * v, w.right, move[1]! * v), 1, w.up, move[2]! * v);
+    R.vel = lin(R.vel, 1, sub3(want, R.vel), 1 - Math.exp(-dt / 0.12));
+    let step = lin(R.vel, dt, w.fwd, R.dolly * h);
+    R.dolly = 0;
+    const floor = (X: Vec3) => {
+      // (not below the surface: a metre above its mean sphere at least)
+      const r = sub3(X, ref!.C);
+      const l = Math.hypot(...r);
+      const m = ref!.R + 1 / mR;
+      return l < m ? lin(ref!.C, 1, r, m / l) : X;
+    };
+    if (mode === "orbit") {
+      // around: the keys too — forwards / back the distance, sideways and up / down about it
+      R.alt = clamp(R.alt * Math.exp(-move[0]! * dt * (fast ? 3 : 1)), 1 / mR, 1e6);
+      R.az -= move[1]! * 40 * dt;
+      R.el = clamp(R.el + move[2]! * 40 * dt, -89, 89);
+      const d = ref.R + R.alt;
+      const a = (R.az * Math.PI) / 180, e = (R.el * Math.PI) / 180;
+      const X = lin(ref.C, 1, [Math.cos(e) * Math.cos(a), Math.cos(e) * Math.sin(a), Math.sin(e)], d);
+      const fwd = unitV(sub3(ref.C, X));
+      const upRef: Vec3 = Math.abs(fwd[2]) > 0.98 ? [0, 1, 0] : [0, 0, 1];
+      this.rigPlace(w.ours, X, fwd, unitV(sub3(upRef, lin(fwd, dot3(upRef, fwd), fwd, 0))), ref.V);
+    } else if (mode === "tripod") {
+      if (Math.hypot(...step) > 0 && R.fixed) {
+        // (moved: from where the tripod stands now on the body)
+        const P0 = this.rigUnfix(ref.id, w.ours, R.fixed, t);
+        R.fixed = this.rigFix(ref.id, w.ours, floor(lin(P0?.X ?? w.X, 1, step, 1)), t);
+      }
+      const P = R.fixed ? this.rigUnfix(ref.id, w.ours, R.fixed, t) : null;
+      const X = P?.X ?? floor(lin(ref.C, 1, R.off, 1));
+      const V = P?.V ?? ref.V;
+      // aiming at the target (its centre; the hole: its place), the local vertical up, then the offsets
+      const T = w.ours ? ourTarget(s, s.target, t).pos : bodyCentre(s, s.target, t);
+      const up0 = unitV(sub3(X, ref.C));
+      let fwd = unitV(sub3(T, X));
+      if (Math.abs(dot3(fwd, up0)) > 0.999) fwd = unitV(cross(up0, [0, 0, 1]));
+      const east = unitV(cross(fwd, up0));
+      const yo = (R.yawOff * Math.PI) / 180, po = (R.pitchOff * Math.PI) / 180;
+      let f2 = lin(fwd, Math.cos(yo), east, -Math.sin(yo));
+      const u2 = unitV(sub3(up0, lin(f2, dot3(up0, f2), f2, 0)));
+      f2 = unitV(lin(f2, Math.cos(po), u2, Math.sin(po)));
+      this.rigPlace(w.ours, X, f2, unitV(sub3(up0, lin(f2, dot3(up0, f2), f2, 0))), V);
+    } else {
+      // following the target, or free (carried by the nearest body): the keys move the camera (its offset
+      // kept from frame to frame — not re-read from the camera, placed where the body was a frame ago)
+      R.off = sub3(floor(lin(ref.C, 1, lin(R.off, 1, step, 1), 1)), ref.C);
+      this.rigPlace(w.ours, lin(ref.C, 1, R.off, 1), w.fwd, w.up, ref.V);
+    }
+    if (move.some((x) => x !== 0)) this.activity = performance.now();
+    return true;
+  }
+
+  /** A place on a body's own (turning) axes: ours — its body-fixed axes [M]; Gargantua's planets — their frame's ξ. */
+  private rigFix(id: Body, ours: boolean, X: Vec3, t: number): Vec3 | null {
+    const s = this.s;
+    if (ours) return toBodyFixed(id, X, t);
+    if (!["miller", "mann", "edmunds"].includes(id)) return null;
+    const F = planetFrame(id, t, s.spin, s.massSolar);
+    return toLocal(F, X, F.V).xi;
+  }
+  private rigUnfix(id: Body, ours: boolean, q: Vec3, t: number): { X: Vec3; V: Vec3 } | null {
+    const s = this.s;
+    if (ours) {
+      const X = fromBodyFixed(id, q, t);
+      return { X, V: groundVelocity(id, X, t) };
+    }
+    if (!["miller", "mann", "edmunds"].includes(id)) return null;
+    const F = planetFrame(id, t, s.spin, s.massSolar);
+    return toGlobal(F, { xi: q, w: [0, 0, 0], landed: true });
+  }
+
+  /** What carries the camera (the rig's body) and its height above it [M], for the panel. */
+  rigStatus(): { body: Body; h: number } | null {
+    const R = this.rig;
+    if (!R.on || !R.ref) return null;
+    const w = this.rigWorld();
+    const b = w && this.rigBody(R.ref, w.ours, this.nowTime());
+    return w && b ? { body: b.id, h: Math.hypot(...sub3(w.X, b.C)) - b.R } : null;
   }
 
   /** The camera's distance [M] to the nearest surface of a body of its universe (planets, moons, stars). */

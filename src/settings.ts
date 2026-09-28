@@ -2,7 +2,9 @@ import type { BodyView } from "./system/our-side";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** Camera rotation: around the selected body, or about the camera itself. */
-export type Rotation = "orbit" | "free";
+/** The camera's behaviour (controls.ts): around the target, following it, free (carried by the nearest
+ *  body), on a tripod (fixed on the nearest body, aiming at the target) */
+export type Rotation = "orbit" | "follow" | "free" | "tripod";
 /** Bodies of the registered Gargantua system that can be targeted (src/system/bodies.ts). */
 export type SystemBody = "miller" | "mann" | "k2" | "edmunds";
 export const SYSTEM_BODIES: SystemBody[] = ["miller", "mann", "k2", "edmunds"];

@@ -113,7 +113,9 @@ export const SCHEMA: ControlDef[] = [
     key: "rotation", type: "choice", section: "scene", group: "Camera rotation", label: "Rotation", style: "segmented", effect: "none",
     options: [
       { value: "orbit", label: "Around the target", hint: "Drag orbits the selected body and the camera keeps it in view (its lensed, light-delayed image)" },
-      { value: "free", label: "Free", hint: "Drag turns the camera about itself; the wheel moves it forward / back" },
+      { value: "follow", label: "Follow", hint: "The camera moves with the target (a planet, a moon): drag looks around, the keys move it" },
+      { value: "free", label: "Free", hint: "Drag turns the camera about itself; the keys fly it, carried by the nearest body" },
+      { value: "tripod", label: "Tripod", hint: "Fixed on the nearest body, turning with it, aiming at the target" },
     ],
     help: "Orbit: drag turns around the target, right-drag offsets the view, the wheel sets the distance; the camera tracks the target's apparent image (bent by the hole, delayed by the light travel time, aberrated). Free: drag looks around, right-drag rolls, the wheel dollies. R switches, click a body to select it, double-click to fly the view to it.",
     keywords: "orbit around free look rotate turntable trackball pivot focus",

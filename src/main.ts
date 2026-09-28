@@ -9,7 +9,7 @@ import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES, bodyLook, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNT_KEYS, MOUNTS, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, shipToCamera, type Mount } from "./mounts";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -34,6 +34,17 @@ import { sound } from "./audio/engine";
 import { VideoWriter } from "./video";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+/** The camera's behaviours (controls.ts: the rig), their names and what the mouse and keys do. */
+const CAM_MODES: Settings["rotation"][] = ["orbit", "follow", "free", "tripod"];
+const CAM_LABEL: Record<Settings["rotation"], string> = { orbit: "Around", follow: "Follow", free: "Free", tripod: "Tripod" };
+const CAM_HELP: Record<Settings["rotation"], string> = {
+  orbit: "around the target: drag turns about it, the wheel sets the distance (Z / S too; Q D, A E: around, up / down)",
+  follow: "moves with the target: drag looks around, Z Q S D, A E move the camera, the wheel pushes it",
+  free: "carried by the nearest body: drag looks around, Z Q S D, A E fly, Shift faster",
+  tripod: "fixed on the nearest body, turning with it, aiming at the target: drag aims off it, Z Q S D, A E move the tripod",
+};
+/** A height [m] as the panel shows it. */
+const fmtHeight = (m: number) => (m < 1e3 ? `${m.toFixed(0)} m` : m < 1e6 ? `${(m / 1e3).toFixed(m < 1e4 ? 1 : 0)} km` : `${(m / 1e6).toFixed(1)} Mm`);
 const canvas = $<HTMLCanvasElement>("view");
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
@@ -309,8 +320,13 @@ async function main() {
       refreshGui();
       touch();
     },
-    "btn-rotation": () => camera.setRotation(settings.rotation === "orbit" ? "free" : "orbit"),
-    "btn-target": () => nextTarget(1),
+    "btn-rotation": () => {
+      const i = CAM_MODES.indexOf(settings.rotation);
+      camera.setRotation(CAM_MODES[(i + 1) % CAM_MODES.length]!);
+      panel.toast(`Camera: ${CAM_LABEL[settings.rotation]} — ${CAM_HELP[settings.rotation]}`);
+      camPop.refresh();
+    },
+    "btn-target": () => camPop.toggle(),
     "btn-journey": () => {
       camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
       refreshGui();
@@ -347,6 +363,99 @@ async function main() {
     camera.pad.rumble(0.1, 0.3, 50);
     panel.toast(`Target: ${BODY_NAMES[settings.target]}  (${list.indexOf(settings.target) + 1} / ${list.length})`);
   }
+  // ---- the camera panel (the target button): its behaviour, its target, its speed; the Ranger's views
+  const camPop = (() => {
+    const el = document.createElement("div");
+    el.id = "cam-pop";
+    el.className = "glass";
+    el.hidden = true;
+    document.body.append(el);
+    const row = (label: string) => {
+      const r = document.createElement("div");
+      r.className = "cp-row";
+      const l = document.createElement("span");
+      l.className = "cp-label";
+      l.textContent = label;
+      const box = document.createElement("div");
+      box.className = "cp-items";
+      r.append(l, box);
+      el.append(r);
+      return box;
+    };
+    const button = (text: string, title: string, active: boolean, on: () => void) => {
+      const b = document.createElement("button");
+      b.textContent = text;
+      b.title = title;
+      b.classList.toggle("active", active);
+      b.onclick = () => {
+        on();
+        touch();
+        refresh();
+      };
+      return b;
+    };
+    const statusEl = document.createElement("div");
+    statusEl.className = "cp-status";
+    const helpEl = document.createElement("div");
+    helpEl.className = "cp-help";
+    function refresh() {
+      if (el.hidden) return;
+      el.replaceChildren();
+      if (settings.ship) {
+        const views = row("Ranger");
+        for (const m of Object.keys(MOUNTS) as Mount[]) views.append(button(MOUNTS[m].short, MOUNTS[m].label, settings.shipMount === m, () => setMount(m)));
+      } else {
+        const modes = row("Behaviour");
+        for (const m of CAM_MODES) modes.append(button(CAM_LABEL[m], CAM_HELP[m], settings.rotation === m, () => camera.setRotation(m)));
+      }
+      const targets = row("Target");
+      for (const b of camera.availableTargets()) {
+        targets.append(button(BODY_NAMES[b], `Aim at ${BODY_NAMES[b]}`, settings.target === b, () => {
+          camera.selectTarget(b, { focus: true });
+          syncRotationButtons();
+        }));
+      }
+      if (!settings.ship) {
+        const speed = row("Speed");
+        const r = document.createElement("input");
+        r.type = "range";
+        r.min = "-4";
+        r.max = "4";
+        r.step = "0.1";
+        r.value = String(Math.log2(camera.flySpeed));
+        const v = document.createElement("span");
+        v.className = "cp-value";
+        v.textContent = `×${camera.flySpeed.toFixed(2)}`;
+        r.oninput = () => {
+          camera.flySpeed = 2 ** Number(r.value);
+          v.textContent = `×${camera.flySpeed.toFixed(2)}`;
+        };
+        speed.append(r, v);
+      }
+      el.append(statusEl, helpEl);
+      status();
+    }
+    function status() {
+      if (el.hidden) return;
+      if (settings.ship) {
+        statusEl.textContent = `On the Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""}`;
+        helpEl.textContent = settings.shipMount === "around" ? "Drag: turn around the ship · wheel: distance" : settings.shipMount === "free" ? "Z Q S D, A E: move the camera · drag: turn · Shift: faster" : "Drag: look around from the attach point · V: next view";
+        return;
+      }
+      const rs = camera.rigStatus();
+      statusEl.textContent = rs ? `Carried by ${BODY_NAMES[rs.body]} — ${fmtHeight(rs.h * 1476.625 * settings.massSolar)} above its surface` : settings.rotation === "orbit" ? `Around ${BODY_NAMES[settings.target]}` : "In space — no body near enough to carry the camera";
+      helpEl.textContent = CAM_HELP[settings.rotation];
+    }
+    return {
+      toggle() {
+        el.hidden = !el.hidden;
+        refresh();
+      },
+      refresh,
+      status,
+    };
+  })();
+
   /** Next attach point of the camera on the Ranger (turns the ship on). */
   function nextMount() {
     if (!settings.ship) {
@@ -361,10 +470,8 @@ async function main() {
     const orbit = settings.rotation === "orbit";
     const btn = $("btn-rotation");
     btn.classList.toggle("free", !orbit);
-    btn.querySelector("span")!.textContent = orbit ? "Around" : "Free";
-    btn.dataset.tip = orbit
-      ? "Rotation around the target — drag orbits it (switch to free)"
-      : "Free rotation — drag looks around, right-drag rolls (switch to around the target)";
+    btn.querySelector("span")!.textContent = CAM_LABEL[settings.rotation];
+    btn.dataset.tip = `Camera: ${CAM_LABEL[settings.rotation]} — ${CAM_HELP[settings.rotation]} (R: next behaviour)`;
     const tb = $("btn-target");
     tb.querySelector("span")!.textContent = BODY_NAMES[settings.target];
     tb.dataset.body = settings.target;
@@ -999,6 +1106,7 @@ async function main() {
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;
+      camPop.status();
       cpuProf.time("panel & readouts", () => {
         updateHUD(lastStats!, fps);
         if (guiDirty) {
@@ -1039,8 +1147,9 @@ async function main() {
     const guide = settings.shadowGuide && cam.region === "hole";
     const marker = targetMarker();
     const hover = camera.hover;
-    const key = guide || camera.flyMode || marker || hover
-      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y].join()
+    const ship = shipMarker();
+    const key = guide || camera.flyMode || marker || hover || ship
+      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
@@ -1050,6 +1159,7 @@ async function main() {
     if (camera.flyMode) drawCrosshair(ctx);
     if (marker) drawMarker(ctx, marker);
     if (hover && hover.body !== marker?.body) drawHover(ctx, hover);
+    if (ship) drawShipMarker(ctx, ship);
     if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const aspect = overlay.width / overlay.height;
@@ -1079,6 +1189,72 @@ async function main() {
     ctx.fillStyle = "rgba(90, 255, 160, 0.9)";
     ctx.font = `${11 * devicePixelRatio}px ui-monospace, Menlo, monospace`;
     ctx.fillText("critical curve (analytic)", 16 * devicePixelRatio, H - 16 * devicePixelRatio);
+  }
+
+  // ------------------------------------------------------------------ the Ranger, seen from outside
+  /**
+   * Outside the ship (the Around and Free views): where it is on the screen and how far, once it is a
+   * few pixels long — a diamond and its distance; off-screen, an arrow at the edge towards it.
+   */
+  function shipMarker() {
+    if (!settings.ship || !camera.outsideView() || renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    const t = shipToCamera(camera.shipPose(), settings.shipLookYaw, settings.shipLookPitch).t;
+    const d = Math.hypot(...t);
+    const W = overlay.width, H = overlay.height;
+    const tanH = Math.tan((settings.fov * Math.PI) / 360);
+    const size = (26 / Math.max(d, 1) / tanH) * (H / 2); // (its length on the screen, px)
+    if (size > 60) return null;
+    const alpha = Math.min(1, (60 - size) / 30);
+    let px = W / 2, py = H / 2, onScreen = false;
+    if (t[2] > 1e-6) {
+      px = ((t[0] / t[2] / (tanH * (W / H)) + 1) / 2) * W;
+      py = ((1 - t[1] / t[2] / tanH) / 2) * H;
+      onScreen = px > 0 && px < W && py > 0 && py < H;
+    }
+    const label = `RANGER · ${d < 1e3 ? `${d.toFixed(0)} m` : `${(d / 1e3).toFixed(d < 1e4 ? 2 : 1)} km`}`;
+    const dir = Math.atan2(-t[1], t[0]);
+    return { px, py, onScreen, dir, alpha, label, key: [px.toFixed(1), py.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join() };
+  }
+  function drawShipMarker(ctx: CanvasRenderingContext2D, m: NonNullable<ReturnType<typeof shipMarker>>) {
+    const k = devicePixelRatio;
+    ctx.save();
+    ctx.globalAlpha = m.alpha;
+    ctx.strokeStyle = "rgba(120, 255, 200, 0.95)";
+    ctx.fillStyle = "rgba(120, 255, 200, 0.95)";
+    ctx.lineWidth = 1.5 * k;
+    ctx.font = `${11 * k}px ui-monospace, Menlo, monospace`;
+    ctx.textAlign = "center";
+    if (m.onScreen) {
+      const r = 7 * k;
+      ctx.beginPath();
+      ctx.moveTo(m.px, m.py - r);
+      ctx.lineTo(m.px + r, m.py);
+      ctx.lineTo(m.px, m.py + r);
+      ctx.lineTo(m.px - r, m.py);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(m.px, m.py, 1.6 * k, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.fillText(m.label, m.px, m.py + r + 14 * k);
+    } else {
+      // (off the screen: an arrow at its edge, towards it)
+      const W = overlay.width, H = overlay.height, e = 34 * k;
+      const c = Math.cos(m.dir), s2 = Math.sin(m.dir);
+      const f = Math.min((W / 2 - e) / Math.max(Math.abs(c), 1e-6), (H / 2 - e) / Math.max(Math.abs(s2), 1e-6));
+      const x = W / 2 + c * f, y = H / 2 + s2 * f;
+      ctx.translate(x, y);
+      ctx.rotate(m.dir);
+      ctx.beginPath();
+      ctx.moveTo(10 * k, 0);
+      ctx.lineTo(-6 * k, -7 * k);
+      ctx.lineTo(-6 * k, 7 * k);
+      ctx.closePath();
+      ctx.fill();
+      ctx.rotate(-m.dir);
+      ctx.fillText(m.label, 0, 22 * k);
+    }
+    ctx.restore();
   }
 
   // ------------------------------------------------------------------ target marker
@@ -1270,7 +1446,11 @@ async function main() {
     const chips: string[] = [];
     if (camera.cinematic) chips.push(`<span class="chip hot">${camera.cinematic === "orbit" ? "Auto-orbit" : camera.cinematic === "dive" ? "Dive" : "Journey"}</span>`);
     if (camera.flyMode) chips.push(`<span class="chip hot">Fly ×${camera.flySpeed.toFixed(1)}</span>`);
-    else chips.push(`<span class="chip">${settings.rotation === "orbit" ? `↻ ${BODY_NAMES[settings.target]}` : "Free look"}</span>`);
+    else if (!settings.ship) {
+      const rs = camera.rigStatus();
+      const carried = rs ? ` · on ${BODY_NAMES[rs.body]}, ${fmtHeight(rs.h * 1476.625 * settings.massSolar)}` : "";
+      chips.push(`<span class="chip">${settings.rotation === "orbit" ? "↻" : settings.rotation === "free" ? "✦" : settings.rotation === "follow" ? "⇢" : "⊥"} ${CAM_LABEL[settings.rotation]}${settings.rotation === "free" ? "" : ` ${BODY_NAMES[settings.target]}`}${carried}</span>`);
+    }
     if (camera.gravity) chips.push(`<span class="chip hot">${camera.landed ? "On the star" : "Gravity"}</span>`);
     if (camera.pad.connected) chips.push(`<span class="chip" title="Game controller">🎮</span>`);
     statusEl.innerHTML = phase + chips.join("");

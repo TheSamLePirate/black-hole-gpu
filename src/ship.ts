@@ -472,9 +472,13 @@ export class ShipRenderer {
     for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = R[r]![c]!;
     m.set([...t, 1], 12);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
-    m.set([tanH * v.aspect, tanH, 0.05, 80], 16);
-    m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
+    // near and far planes about the ship where it is (the outside views: up to tens of km — not a fixed
+    // 80 m, beyond which it vanished), its plumes (a few hundred metres) within them
+    const dist = Math.hypot(c[0] + t[0], c[1] + t[1], c[2] + t[2]);
+    const reach = this.bound.r * 1.2 + 400;
+    m.set([tanH * v.aspect, tanH, Math.max(0.05, Math.min(dist - reach, 0.5 * dist)), Math.max(80, dist + reach)], 16);
+    m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
     // (the mesh's box corners in the camera frame: the screen box)
     const corners: V3[] = [];
