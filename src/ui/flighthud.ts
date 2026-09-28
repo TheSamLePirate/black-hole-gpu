@@ -1090,8 +1090,22 @@ export class FlightHud {
     // the orbit: segments whose brightness falls off behind the ship (ahead: bright)
     const N = 240;
     ctx.lineCap = "round";
-    ctx.shadowColor = `rgba(${tone}, 0.7)`;
-    ctx.shadowBlur = S(6);
+    ctx.lineJoin = "round";
+    // (its glow: the whole path once, wide and faint, under the segments)
+    ctx.strokeStyle = `rgba(${tone}, 0.12)`;
+    ctx.lineWidth = S(6);
+    ctx.beginPath();
+    let pen = false;
+    for (let j = 0; j <= N; j++) {
+      const [x, y, r] = at(-nuMax + (2 * nuMax * j) / N);
+      if (!(r > 0) || r > 1.01 * reach) {
+        pen = false;
+        continue;
+      }
+      if (pen) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y), (pen = true);
+    }
+    ctx.stroke();
     for (let j = 0; j < N; j++) {
       const n0 = -nuMax + (2 * nuMax * j) / N, n1 = -nuMax + (2 * nuMax * (j + 1)) / N;
       const [x0, y0, r0] = at(n0), [x1, y1] = at(n1);
@@ -1108,7 +1122,6 @@ export class FlightHud {
       ctx.lineTo(x1, y1);
       ctx.stroke();
     }
-    ctx.shadowBlur = 0;
     // a tick every twelfth of the period (equal times, crowding at apoapsis)
     if (bound) {
       ctx.fillStyle = `rgba(${tone}, 0.8)`;
@@ -1177,11 +1190,10 @@ export class FlightHud {
     if (Number.isFinite(nuShip)) {
       const [x, y] = at(nuShip), [x2, y2] = at(nuShip + 0.02);
       const ang = Math.atan2(y2 - y, x2 - x);
+      halo(ctx, x, y, S(11), "255, 200, 90", 0.5);
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(ang);
-      ctx.shadowColor = "rgba(255, 200, 90, 0.95)";
-      ctx.shadowBlur = S(8);
       ctx.fillStyle = "#ffc85a";
       ctx.beginPath();
       ctx.moveTo(S(6), 0);
@@ -1575,12 +1587,12 @@ export class FlightHud {
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
     const r = 11 * dpr;
-    ctx.lineWidth = 2 * dpr;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-    ctx.shadowBlur = 4 * dpr;
+    // (each mark twice: a dark outline under it for the bright sky, then its colour)
+    const UNDER = "rgba(0, 0, 0, 0.4)";
     const nose = proj([i.S[0][2], i.S[1][2], i.S[2][2]]);
-    if (nose) {
-      ctx.strokeStyle = "rgba(255, 200, 90, 0.95)";
+    if (nose) for (const [lw, col] of [[4.5, UNDER], [2, "rgba(255, 200, 90, 0.95)"]] as const) {
+      ctx.lineWidth = lw * dpr;
+      ctx.strokeStyle = col;
       ctx.beginPath();
       ctx.moveTo(nose[0] - 2.2 * r, nose[1]);
       ctx.lineTo(nose[0] - r, nose[1]);
@@ -1594,9 +1606,12 @@ export class FlightHud {
     for (const k of ["prograde", "retrograde", "burn", "maneuver", "tgtPrograde", "tgtRetrograde"] as const) {
       if (k === "maneuver" && i.dirs.burn) continue;
       const p = proj(i.dirs[k]);
-      if (p) marker(ctx, GLYPH[k]!, p[0], p[1], r, COL[k]!);
+      if (!p) continue;
+      ctx.lineWidth = 4.5 * dpr;
+      marker(ctx, GLYPH[k]!, p[0], p[1], r, UNDER);
+      ctx.lineWidth = 2 * dpr;
+      marker(ctx, GLYPH[k]!, p[0], p[1], r, COL[k]!);
     }
-    ctx.shadowBlur = 0;
     if (this.density < 2) {
       // each tape in the free band between the panels above and below it on its side
       const band = (above: HTMLElement[], below: HTMLElement[]) => {
@@ -1801,8 +1816,7 @@ export class FlightHud {
       ctx.lineTo(S(x), S(y));
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.shadowColor = "rgba(255, 138, 92, 0.9)";
-      ctx.shadowBlur = S(8);
+      halo(ctx, S(x), S(y), S(12), "255, 138, 92", 0.45);
       ctx.beginPath();
       ctx.arc(S(x), S(y), S(4), 0, 2 * Math.PI);
       if (b[2] >= 0) {
@@ -1813,7 +1827,6 @@ export class FlightHud {
         ctx.lineWidth = S(1.8);
         ctx.stroke();
       }
-      ctx.shadowBlur = 0;
       ctx.font = `700 ${S(9.5)}px ${FONT}`;
       ctx.fillStyle = "rgba(255, 148, 102, 0.9)";
       ctx.textAlign = "center";
@@ -1974,12 +1987,11 @@ export class FlightHud {
       ctx.fill();
     }
     // the ship on it
+    halo(ctx, S(X(alt)), S(yb), S(11), "255, 200, 90", 0.45);
     ctx.save();
     ctx.translate(S(X(alt)), S(yb));
     ctx.rotate(Math.PI / 4);
     ctx.fillStyle = "#ffc85a";
-    ctx.shadowColor = "rgba(255, 200, 90, 0.9)";
-    ctx.shadowBlur = S(6);
     ctx.fillRect(S(-3.5), S(-3.5), S(7), S(7));
     ctx.restore();
     small(pe < 0 ? "IMPACT" : `PE ${o.tPe > 0 && Number.isFinite(o.tPe) ? `· ${fmtS(o.tPe)}` : ""}`, xa - 8, yb + 17);
@@ -2470,10 +2482,6 @@ export class FlightHud {
     }
     if (open) ctx.lineTo(X(rMax), Y(E)), ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(230, 236, 245, 0.9)";
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.shadowColor = "rgba(200, 225, 255, 0.6)";
-    ctx.shadowBlur = 6 * dpr;
     ctx.beginPath();
     let pen = false;
     for (const [r, v] of pts) {
@@ -2485,8 +2493,14 @@ export class FlightHud {
       if (!pen) ctx.moveTo(X(r), yy), (pen = true);
       else ctx.lineTo(X(r), yy);
     }
+    // (its glow: the same path wide and faint first)
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(200, 225, 255, 0.12)";
+    ctx.lineWidth = 6 * dpr;
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(230, 236, 245, 0.9)";
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.stroke();
     if (1 > lo && 1 < hi) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.setLineDash([3 * dpr, 3 * dpr]);
@@ -2500,15 +2514,15 @@ export class FlightHud {
       ctx.textAlign = "right";
       ctx.fillText("E = 1 · escape", cw - 4 * dpr, Y(1) - 8 * dpr);
     }
-    ctx.strokeStyle = CYAN;
-    ctx.lineWidth = 1.8 * dpr;
-    ctx.shadowColor = "rgba(124, 214, 255, 0.8)";
-    ctx.shadowBlur = 8 * dpr;
     ctx.beginPath();
     ctx.moveTo(X(r0), Y(E));
     ctx.lineTo(X(rMax), Y(E));
+    ctx.strokeStyle = "rgba(124, 214, 255, 0.16)";
+    ctx.lineWidth = 7 * dpr;
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = CYAN;
+    ctx.lineWidth = 1.8 * dpr;
+    ctx.stroke();
     // landmarks on the axis, the ship
     ctx.font = `600 ${9.8 * dpr}px ${FONT}`;
     ctx.textAlign = "center";
@@ -2519,13 +2533,11 @@ export class FlightHud {
       ctx.fillText(txt, X(rr), ch - 20 * dpr);
     }
     const sx = X(i.r), sy = Y(E);
+    halo(ctx, sx, sy, 13 * dpr, "255, 200, 90", 0.5);
     ctx.fillStyle = "#ffc85a";
-    ctx.shadowColor = "rgba(255, 200, 90, 0.95)";
-    ctx.shadowBlur = 8 * dpr;
     ctx.beginPath();
     ctx.arc(sx, sy, 4 * dpr, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.shadowBlur = 0;
     // which way it moves along r
     if (Number.isFinite(i.vr) && Math.abs(i.vr) > 1e-4) {
       ctx.strokeStyle = "#ffc85a";
@@ -2684,6 +2696,20 @@ function hexA(hex: string, a: number) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+/**
+ * A glow round a point: a radial gradient (rgb "r, g, b"). Never the canvas's shadowBlur — a
+ * Gaussian blur the GPU runs per draw, every frame, beside the tracer (240 of them halved the frame rate).
+ */
+function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: string, a: number) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb}, ${a})`);
+  g.addColorStop(1, `rgba(${rgb}, 0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
 /** A tape's background: a vertical gradient that fades at both ends, corner brackets. */
 function panelBg(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, dpr: number) {
   const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -2742,10 +2768,7 @@ function valueBox(ctx: CanvasRenderingContext2D, x: number, cy: number, value: s
   ctx.fillStyle = "#fff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(255, 179, 92, 0.7)";
-  ctx.shadowBlur = 6 * dpr;
   ctx.fillText(value, x0 + 8 * dpr, cy + 1 * dpr);
-  ctx.shadowBlur = 0;
   ctx.fillStyle = AMBER;
   ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
   ctx.textAlign = "right";
