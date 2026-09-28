@@ -97,6 +97,71 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05): number {
   return 0;
 }
 
+const u2f = (h: number) => (h >>> 8) / 16777216;
+/** The tracer's hash4: four uniform numbers from a lattice cell (x ^ a, y ^ b, z ^ c). */
+function hash4(x: number, y: number, z: number): [number, number, number, number] {
+  const h = hash3u(x >>> 0, y >>> 0, z >>> 0);
+  const h2 = pcg(h), h3 = pcg(h2), h4 = pcg(h3);
+  return [u2f(h), u2f(h2), u2f(h3), u2f(h4)];
+}
+
+/** How cratered one of our airless worlds is, by its map's index (the tracer's craterDensity). */
+export function craterDensity(m: number) {
+  return m === 10 ? 0.03 : m === 11 ? 0.12 : m === 15 ? 0.5 : m === 12 ? 0.75 : 1;
+}
+
+/**
+ * The ground of one of our airless worlds finer than its map (the tracer's craterRelief): craters in six
+ * sizes (cells 4 km … 5 m, at most one in each: a bowl, its rim, its ejecta; fresh or worn) and a
+ * swell of a few km — height [m] at a unit direction q on its axes (m: its map's index; mR: metres per
+ * radius; foot: the pixel's footprint [m]).
+ */
+export function craterRelief(m: number, q: V3, mR: number, foot = 0.05): number {
+  const dens = craterDensity(m);
+  let h = 0;
+  let cell = 4000;
+  for (let l = 0; l < 7; l++) {
+    const w = Math.min(Math.max(Math.log2(cell / (8 * Math.max(foot, 0.05))), 0), 1);
+    if (w <= 0) break;
+    const k = mR / cell;
+    const p: V3 = [q[0] * k, q[1] * k, q[2] * k];
+    const c = [Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2])];
+    const r = hash4(c[0]! ^ Math.imul(m, 7919), c[1]! ^ Math.imul(l, 104729), c[2]! ^ 0x9e3779b9);
+    if (r[3] < dens * 0.55) {
+      const r2 = hash4(c[0]! ^ Math.imul(l, 2654435), c[1]! ^ Math.imul(m, 40503), c[2]! ^ 0x85ebca6b);
+      const rad = 0.08 + 0.2 * r2[0] * r2[0];
+      const ctr = [0, 1, 2].map((i) => c[i]! + 0.5 + (r[i]! - 0.5) * (1 - 3.2 * rad));
+      const x = Math.hypot(p[0] - ctr[0]!, p[1] - ctr[1]!, p[2] - ctr[2]!) / rad;
+      if (x < 1.6) {
+        const fresh = 0.3 + 0.7 * r2[1];
+        const D = 0.4 * rad * cell * fresh;
+        const Hr = 0.22 * D;
+        h += w * (x < 1 ? (x * x - 1) * D + Hr : Hr * Math.exp(-4 * (x - 1)) * smooth(1.6, 1.15, x));
+      }
+    }
+    cell *= 0.33333;
+  }
+  const os = layerOctF(mR / 3000, foot, mR, 5);
+  if (os > 0) h += tfbmF(sc(q, mR / 3000, m * 3.7), os) * Math.min(os, 1) * 90;
+  return h;
+}
+
+/**
+ * Miller's giant waves (the tracer's: drawn, not felt): their height [m] at a unit direction q on its
+ * axes, tSec seconds into the scene's clock.
+ */
+export function millerWaves(q: V3, tSec: number, mR: number, foot = 0.05): number {
+  let h = 0;
+  for (let i = 0; i < 3; i++) {
+    const d = [Math.cos(i * 2.1 + 0.3), Math.sin(i * 2.1 + 0.3), 0.35 * i - 0.3];
+    const l = Math.hypot(d[0]!, d[1]!, d[2]!);
+    const ph = ((q[0] * d[0]! + q[1] * d[1]! + q[2] * d[2]!) / l) * 14 + i * 1.7 - tSec * (4e-5 + 1e-5 * i);
+    const crest = (0.5 + 0.5 * Math.sin(ph)) ** 40;
+    h += crest * (0.65 + 0.35 * tfbm(sc(q, 40, i), Math.max(layerOct(40, foot, mR, 5), 1)));
+  }
+  return h * 1200;
+}
+
 /** The Earth's radius [m] (its relief's scale). */
 export const EARTH_RM = 6.371e6;
 

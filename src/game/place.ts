@@ -9,12 +9,14 @@ import { soiOf } from "../system/our-side";
 import { bodyFixedOf, fromBodyFixed, groundRelief, groundVelocity, solidBody, GEAR } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
-import { planetFrame, toGlobal, zamoBeta } from "../landing";
+import { GEAR as HOLE_GEAR, groundR, planetFrame, toGlobal, zamoBeta } from "../landing";
+import { millerWaves, SURF } from "../terrain";
 import { sphericalFrame } from "../wormhole";
 import { ECLIPTIC, elements, stateFrom, type Axes, type OrbitSpec } from "./orbit";
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -153,4 +155,58 @@ export function theirOrbitPose(p: OrbitPlacement & { rM?: number }, t: number, s
   const up = unit(sub(g.X, F.C));
   const rel = sub(g.V, F.V);
   return { frame: "hole", X: g.X, vel: cart(b), fwd: unit(rel), up, note: `${def.name}: orbit ${Math.round((rp - F.R) * mPerM / 1e3)} × ${Math.round((ra - F.R) * mPerM / 1e3)} km` };
+}
+
+/**
+ * On the ground of one of Gargantua's worlds, the ship at rest on it (turning with it: tidally locked),
+ * at the place where Gargantua stands `el` [°] above the horizon, `az` [°] round from its north (east
+ * positive); the nose level towards Gargantua.
+ */
+export function theirGroundPose(body: string, el: number, az: number, t: number, spin: number, massSolar: number): Pose {
+  const F = planetFrame(body, t, spin, massSolar);
+  const def = sysBody(GARGANTUA_SYSTEM, body);
+  // (the local axes: x away from its primary, y along its orbit, z north — on the map)
+  const cr: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], 0];
+  const ex = unit(cr), ey: Vec3 = [-ex[1], ex[0], 0], ez: Vec3 = [0, 0, 1];
+  // (its axes are proper lengths: S of the map's per unit)
+  const S = F.S;
+  const toMap = (v: Vec3): Vec3 => [0, 1, 2].map((i) => (v[0] / S[0]) * ex[i]! + (v[1] / S[1]) * ey[i]! + (v[2] / S[2]) * ez[i]!) as Vec3;
+  // Gargantua's direction from the world, on its axes; the place: from the point under it, 90° − el
+  // away, towards the azimuth
+  const g0 = unit([-F.C[0], -F.C[1], -F.C[2]]);
+  const g = unit([dot(g0, ex) * S[0], dot(g0, ey) * S[1], dot(g0, ez) * S[2]]);
+  let north = sub([0, 0, 1], g.map((c) => c * g[2]) as Vec3);
+  if (Math.hypot(...north) < 1e-6) north = [0, 1, 0];
+  north = unit(north);
+  const east = cross(g, north);
+  const z = ((90 - el) * Math.PI) / 180;
+  const placeAt = (azDeg: number) => {
+    const A = (azDeg * Math.PI) / 180;
+    // (seen from the place, Gargantua lies towards −(the tilt): the tilt away from it is the azimuth's opposite)
+    const tilt: Vec3 = [0, 1, 2].map((i) => -(Math.cos(A) * north[i]! + Math.sin(A) * east[i]!)) as Vec3;
+    return unit([0, 1, 2].map((i) => g[i]! * Math.cos(z) + tilt[i]! * Math.sin(z)) as Vec3);
+  };
+  let q = placeAt(az);
+  let sea = 0;
+  if (F.surf === SURF.ocean) {
+    // Miller: between its giant waves (drawn, not felt: the ship in a trough, not inside a wall of water)
+    const tSec = t * 4.925490947e-6 * massSolar, mR = F.R * F.mPerM;
+    for (let k = 0; k < 1440; k++) {
+      const qk = placeAt(az + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25);
+      const h = millerWaves(qk, tSec, mR);
+      if (h < 1) {
+        q = qk;
+        sea = h;
+        break;
+      }
+    }
+  }
+  const rG = groundR(F, [q[0] * F.R, q[1] * F.R, q[2] * F.R]) + (HOLE_GEAR + sea) / F.mPerM;
+  const xi: Vec3 = [q[0] * rG, q[1] * rG, q[2] * rG];
+  const glob = toGlobal(F, { xi, w: [0, 0, 0], landed: true });
+  const b = zamoBeta(glob.X, glob.V, spin);
+  const f = sphericalFrame(glob.X);
+  const cart = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * f.er[i]! + v[1] * f.et[i]! + v[2] * f.ep[i]!) as Vec3;
+  const h = unit(sub(g, q.map((c) => c * dot(g, q)) as Vec3));
+  return { frame: "hole", X: glob.X, vel: cart(b), fwd: toMap(h), up: toMap(q), note: `${def.name}: on the ground, Gargantua ${el}° up` };
 }

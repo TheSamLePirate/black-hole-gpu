@@ -75,6 +75,6 @@ test("other worlds: the phase, the Sun's height, the tilt", () => {
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(12 + 22);
+  expect(worlds.length).toBe(12 + 27);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });

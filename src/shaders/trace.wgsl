@@ -85,6 +85,9 @@ struct Params {
   earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground, unused
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
+  fine0: vec4f,    // an airless world's ground, finest: an anchor near the camera (whole metres, multiples of
+                   // 64, on the body's axes); w: on (0/1)
+  fine1: vec4f,    // the camera from the anchor [m] (float64 on the CPU: the ground's centimetres exact)
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1117,6 +1120,7 @@ fn hdNormal(k: u32, q: vec3f) -> vec3f {
   return normalize(q + tn.x * east + tn.y * north);
 }
 // the body's axes in the frame planetShade is called in (columns): set by its callers for our worlds
+var<private> ALB_GAIN: f32 = 1.0; // (near: the ground's own brightening — fresh ejecta, regolith)
 var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
 
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
@@ -1128,10 +1132,12 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   let Bl = src.y;
   // (the finer relief, near: the normal tilted by it)
   var nrmL = nrm;
-  if (isHd(k)) { nrmL = normalize(BODYW * hdNormal(k, pat)); }
+  // (added to the relief's own normal, near: the map's tilt on it)
+  if (isHd(k)) { nrmL = normalize(nrm + BODYW * (hdNormal(k, pat) - pat)); }
   let cosi = max(dot(nrmL, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
-  let A = planetAlbedo(k, pat, tEm);
+  var A = planetAlbedo(k, pat, tEm);
+  A = vec4f(A.rgb * ALB_GAIN, A.w);
   let surf = u32(A.w);
   var spec = 0.0;
   if (surf == 0u) {
@@ -2550,7 +2556,9 @@ fn traceOut(col: vec3f) -> TraceOut {
 }
 var<private> rayDepth: f32 = 1e9;
 
+var<private> RND: f32 = 0.5; // (the sample's random number: jitters the ground's shadow march)
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
+  RND = fract(rnd * 7.31 + 0.13);
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
   let tanH = P.cam.w;
   let aspect = P.camRight.w;
@@ -2703,7 +2711,84 @@ fn reliefMax(surf: u32) -> f32 {
   if (surf == 0u) { return 1300.0; }
   if (surf == 1u) { return 4600.0; }
   if (surf == 2u) { return 1800.0; }
+  if (airless(surf)) { return 500.0; }
   return 0.0;
+}
+
+// Our airless worlds (the Moon, Mercury, the rocky and icy moons, Ceres, Phobos, Deimos): their ground
+// finer than their maps — craters in seven sizes (cells 4 km … 5 m, one crater at most in each: a bowl,
+// its raised rim, its ejecta fading out; fresh or worn), a gentle swell. terrain.ts: craterRelief, the
+// same on the CPU (the gear on it).
+fn airless(surf: u32) -> bool {
+  if (surf < 4u) { return false; }
+  let m = surf - 4u;
+  return regolith(m) && m != 2u && m != 22u;
+}
+// how cratered: Io's lava resurfaces it, Europa's ice is young, Enceladus' partly
+fn craterDensity(m: u32) -> f32 {
+  if (m == 10u) { return 0.03; }
+  if (m == 11u) { return 0.12; }
+  if (m == 15u) { return 0.5; }
+  if (m == 12u) { return 0.75; }
+  return 1.0;
+}
+var<private> CRATER_BRIGHT: f32 = 0.0; // (the last relief's fresh ejecta: the albedo's)
+var<private> CRATER_GRAD: vec3f = vec3f(0.0); // (…and its craters' slope, exact: dh/dq over the radius)
+fn craterRelief(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
+  let dens = craterDensity(m);
+  var h = 0.0;
+  var br = 0.0;
+  var g = vec3f(0.0);
+  var cell = 4000.0;
+  for (var l = 0u; l < 7u; l++) {
+    // (a size fades in as the pixel resolves it: its cell 8 … 16 footprints wide)
+    let w = clamp(log2(cell / (8.0 * max(foot, 0.05))), 0.0, 1.0);
+    if (w <= 0.0) { break; }
+    let p = q * (mR / cell);
+    let c = floor(p);
+    let r = hash4(bitcast<vec3u>(vec3i(c)) ^ vec3u(m * 7919u, l * 104729u, 0x9e3779b9u));
+    if (r.w < dens * 0.55) {
+      let r2 = hash4(bitcast<vec3u>(vec3i(c)) ^ vec3u(l * 2654435u, m * 40503u, 0x85ebca6bu));
+      // radius [cells] (many small, few large), its reach 1.6 radii kept inside the cell
+      let rad = 0.08 + 0.2 * r2.x * r2.x;
+      let ctr = c + vec3f(0.5) + (r.xyz - 0.5) * (1.0 - 3.2 * rad);
+      let v = p - ctr;
+      let x = length(v) / rad;
+      if (x < 1.6) {
+        let fresh = 0.3 + 0.7 * r2.y;
+        let D = 0.4 * rad * cell * fresh;
+        let Hr = 0.22 * D;
+        var prof: f32;
+        var dp: f32; // d prof / dx
+        if (x < 1.0) {
+          prof = (x * x - 1.0) * D + Hr;
+          dp = 2.0 * x * D;
+        } else {
+          let e = Hr * exp(-4.0 * (x - 1.0));
+          let u = clamp((x - 1.6) / (1.15 - 1.6), 0.0, 1.0);
+          let sm = u * u * (3.0 - 2.0 * u);
+          let dsm = 6.0 * u * (1.0 - u) / (1.15 - 1.6);
+          prof = e * sm;
+          dp = -4.0 * e * sm + e * dsm;
+        }
+        h += w * prof;
+        // (dh/dq = dprof/dx · v/|v| / rad · mR/cell; over mR: the slope)
+        g += w * dp * v / max(length(v) * rad * cell, 1e-9);
+        br += w * pow(fresh, 6.0) * smoothstep(1.55, 0.9, x);
+      }
+    }
+    cell *= 0.33333;
+  }
+  h += airlessSwell(m, q, foot, mR);
+  CRATER_BRIGHT = min(br, 1.0);
+  CRATER_GRAD = g;
+  return h;
+}
+// the swell (a few km) under the craters
+fn airlessSwell(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
+  let os = layerOctF(mR / 3000.0, foot, mR, 5.0);
+  if (os <= 0.0) { return 0.0; }
+  return tfbmF(q * (mR / 3000.0) + vec3f(f32(m) * 3.7), os) * min(os, 1.0) * 90.0;
 }
 
 // octaves of a layer of base frequency f (cycles per radian) resolved at a footprint (metres)
@@ -2720,6 +2805,7 @@ fn ridged(p: vec3f, oct: i32) -> f32 {
 
 // foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
 fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  if (surf >= 4u) { return select(0.0, craterRelief(surf - 4u, q, foot, mR), airless(surf)); }
   if (surf == 1u) {
     // Mann: ice sheets, ridges, hills, rubble
     // (noise cells: continents 1 000 km, ridges 270 km, mountains 21 km, crags 2 km, rocks 210 m, rubble 21 m)
@@ -2753,14 +2839,14 @@ fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
     return h;
   }
   if (surf == 0u) {
-    // Miller's giant waves: three trains of crests ~2 900 km apart, 1.2 km high, moving at ~20 m/s
-    // (drawn, not felt)
+    // Miller's giant waves: three trains of crests ~2 900 km apart, 1.2 km high walls ~60 km wide,
+    // moving at ~20 m/s (drawn, not felt; terrain.ts: millerWaves, the same)
     var h = 0.0;
     for (var i = 0u; i < 3u; i++) {
       let fi = f32(i);
       let dir = normalize(vec3f(cos(fi * 2.1 + 0.3), sin(fi * 2.1 + 0.3), 0.35 * fi - 0.3));
       let ph = dot(q, dir) * 14.0 + fi * 1.7 - tSec * (4.0e-5 + 1.0e-5 * fi);
-      let crest = pow(0.5 + 0.5 * sin(ph), 12.0);
+      let crest = pow(0.5 + 0.5 * sin(ph), 40.0);
       h += crest * (0.65 + 0.35 * tfbm(q * 40.0 + vec3f(fi), max(layerOct(40.0, foot, mR, 5), 1)));
     }
     return h * 1200.0;
@@ -2842,6 +2928,19 @@ fn nearMarch(look: vec3f) -> NearHit {
 fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f {
   let mR = P.near4.w;
   let foot = max(reliefFoot(t), minFoot);
+  if (airless(surf)) {
+    // the craters' slope exact (no finite step: sharp down to their smallest), the swell's by differences
+    _ = craterRelief(surf - 4u, qb, foot, mR);
+    let gc = CRATER_GRAD;
+    let es = max(t * P.camUp.w, 100.0 / mR);
+    let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
+    let a2 = cross(qb, a1);
+    let s0 = airlessSwell(surf - 4u, qb, foot, mR);
+    let s1 = airlessSwell(surf - 4u, normalize(qb + a1 * es), foot, mR);
+    let s2 = airlessSwell(surf - 4u, normalize(qb + a2 * es), foot, mR);
+    let g = gc - qb * dot(gc, qb) + ((s1 - s0) * a1 + (s2 - s0) * a2) / (es * mR);
+    return normalize(fromBody(normalize(qb - g)));
+  }
   // (no finer than 10 m: float32 directions on the unit sphere are ~0.4 m apart — finer, the normal
   // is noise in blocks)
   let e = max(t * P.camUp.w, 2.0 * max(minFoot, 5.0) / mR);
@@ -2905,6 +3004,66 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
   return o;
 }
 
+// The relief's shadow at a point of the ground (q: its direction, h: its height [m]) towards the light
+// (L: body axes): marched in growing steps from 0.5 m to ~60 km (their start jittered per sample: no
+// bands), soft over the source's half degree
+fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f32 {
+  let mR = P.near4.w;
+  let hmax = reliefMax(surf) / mR;
+  let p0 = q * (1.0 + h / mR);
+  if (dot(L, q) < -0.2) { return 0.0; } // (the night side: in the planet's own shadow)
+  var s = 1.0;
+  var d = max(0.5, foot) / mR * exp2(0.3 * RND);
+  for (var i = 0u; i < 56u; i++) {
+    let pp = p0 + L * d;
+    let r = length(pp);
+    if (r - 1.0 > hmax) { break; }
+    let hh = relief(surf, pp / r, max(foot, d * mR * 0.02), mR, tSec) / mR;
+    // (its clearance [m], less a bias: the ground there drawn at a coarser footprint than the pixel's)
+    let cl = (r - 1.0 - hh) * mR + 0.5 + 0.01 * d * mR;
+    s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
+    if (s <= 0.0) { break; }
+    d *= 1.23;
+  }
+  return s;
+}
+
+// Gradient noise on an integer lattice (base) plus a small offset f: exact far from the body's centre
+fn gnoiseI(base: vec3i, f0: vec3f) -> f32 {
+  let i = floor(f0);
+  let f = f0 - i;
+  let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  var n: array<f32, 8>;
+  for (var c = 0u; c < 8u; c++) {
+    let o = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
+    let h = hash3u(bitcast<vec3u>(base + vec3i(i + o)));
+    let g = vec3f(f32(h & 0x3ffu), f32((h >> 10u) & 0x3ffu), f32((h >> 20u) & 0x3ffu)) * (2.0 / 1023.0) - 1.0;
+    n[c] = dot(g, f - o);
+  }
+  return 1.6 * mix(mix(mix(n[0], n[1], u.x), mix(n[2], n[3], u.x), u.y),
+                   mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
+}
+// An airless world's ground at its finest (x: from the anchor [m], body axes): the regolith's roughness,
+// 16 m down to 25 cm, and stones — shading only (the relief stops at its 5 m craters)
+fn fineGround(x: vec3f, foot: f32) -> f32 {
+  let a = vec3i(P.fine0.xyz);
+  var h = 0.0;
+  for (var k = 0; k < 7; k++) {
+    let e = 4 - k; // the octave's cell: 2^e m
+    let sc = exp2(f32(e));
+    let w = clamp(log2(sc / (2.0 * foot)), 0.0, 1.0);
+    if (w <= 0.0) { break; }
+    let base = select(a << vec3u(u32(-e)), a >> vec3u(u32(max(e, 0))), e >= 0);
+    h += w * 0.035 * sc * gnoiseI(base + vec3i(k * 1013), x / sc);
+    if (e <= 1 && e >= -1) {
+      // stones: the noise's highest bumps, sharpened
+      let st = gnoiseI(base + vec3i(7919 + k), x / sc + vec3f(0.37));
+      h += w * 0.35 * sc * smoothstep(0.4, 0.85, st) * smoothstep(0.4, 0.85, st);
+    }
+  }
+  return h;
+}
+
 fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   let k = u32(P.near1.w);
   let t = hit.t;
@@ -2921,7 +3080,33 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   }
   if (P.near3.w < 0.5) {
     BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
-    return planetShade(k, n0, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+    var sh = 1.0;
+    var n = n0;
+    if (reliefMax(surf) > 0.0) {
+      // the relief's shadows (a light source: its penumbra half a degree), and on our airless worlds the
+      // fresh craters' bright ejecta, the regolith's mottling
+      let foot = reliefFoot(t);
+      sh = nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec);
+      if (airless(surf)) {
+        _ = relief(surf, qb, foot, P.near4.w, tSec);
+        ALB_GAIN = 1.0 + 0.45 * CRATER_BRIGHT;
+        if (P.fine0.w > 0.5 && foot < 8.0) {
+          // the finest ground, near: its slope by differences (exact: from the anchor), its stones lighter
+          let x = toBody(look * t) * P.near4.w + P.fine1.xyz;
+          let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
+          let a2 = cross(qb, a1);
+          let e = max(foot, 0.03);
+          let h0 = fineGround(x, foot);
+          let g = ((fineGround(x + a1 * e, foot) - h0) * a1 + (fineGround(x + a2 * e, foot) - h0) * a2) / e;
+          n = normalize(n - fromBody(g) * smoothstep(8.0, 2.0, foot));
+          ALB_GAIN *= 1.0 + clamp(h0 * 0.25, -0.15, 0.2);
+        }
+      }
+    }
+    // (in the shadows the light the lit ground around sheds: a few per cent)
+    let c = planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+    ALB_GAIN = 1.0;
+    return c * (sh + (1.0 - sh) * 0.03);
   }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
   // diffuse albedo/π · E(n); water mirroring the environment (Fresnel)

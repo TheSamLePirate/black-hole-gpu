@@ -521,16 +521,18 @@ export const presets: Record<string, Preset> = {
   "Earth: a winter afternoon in Brittany": { ...EARTH_VIEW, target: "sun", fov: 70, time: T0, pose: { at: [48.4, -4.5], off: [0, 12] } },
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
   // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
-  "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 30, time: T0 + 16.5 * DAY, pose: { tilt: 60, body: "moon", at: [0, -21], altKm: 25, look: "earth", off: [0, -7] } },
+  "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 35, exposure: 1.5, time: T0 + 13.5 * DAY, pose: { body: "moon", at: [0, 170], look: "earth", off: [0, -4] } },
+  "Moon: an afternoon on the plains": { ...EARTH_VIEW, target: "sun", fov: 70, exposure: 2.3, time: T0, pose: { body: "moon", at: [20, 0], sunEl: 18, off: [90, -10] } },
   "Moon: the terminator from orbit": { ...WORLD_VIEW, target: "moon", fov: 60, exposure: 1, time: T0, pose: { body: "moon", altKm: 300, phase: 80, look: "moon", off: [0, 50] } },
   "Moon: the half Moon from orbit": { ...WORLD_VIEW, target: "moon", fov: 50, exposure: 1, time: T0, pose: { tilt: 60, body: "moon", altKm: 4000, phase: 80, look: "moon" } },
   "Mercury: from orbit": { ...WORLD_VIEW, target: "mercury", fov: 50, exposure: 0.7, time: T0, pose: { tilt: 60, body: "mercury", altKm: 5000, phase: 55, look: "mercury" } },
+  "Mercury: the cratered plains": { ...EARTH_VIEW, target: "sun", fov: 70, exposure: 1.5, time: T0, pose: { body: "mercury", at: [10, 0], sunEl: 15, off: [90, -8] } },
   "Venus: above the clouds": { ...WORLD_VIEW, target: "venus", fov: 50, time: T0, pose: { tilt: 60, body: "venus", altKm: 15000, phase: 60, look: "venus" } },
   "Mars: from orbit": { ...WORLD_VIEW, target: "mars", fov: 50, time: T0, pose: { tilt: 60, body: "mars", altKm: 6000, phase: 35, look: "mars" } },
   "Mars: the blue sunset": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0, pose: { body: "mars", at: [-4.6, 0], sunEl: 2, look: "sun", off: [0, 4] } },
   "Jupiter: from orbit": { ...WORLD_VIEW, target: "jupiter", fov: 50, time: T0, pose: { tilt: 60, body: "jupiter", altKm: 200000, phase: 30, look: "jupiter" } },
-  "Io: Jupiter in the sky": { ...EARTH_VIEW, target: "jupiter", fov: 80, time: T0 + 0.985 * DAY, pose: { tilt: 60, body: "io", at: [10, 18], altKm: 40, look: "jupiter", off: [0, -17] } },
-  "Europa: Jupiter over the ice": { ...EARTH_VIEW, target: "jupiter", fov: 80, time: T0 + 0.59 * DAY, pose: { tilt: 60, body: "europa", at: [10, -142], altKm: 40, look: "jupiter", off: [0, -14] } },
+  "Io: Jupiter in the sky": { ...EARTH_VIEW, target: "jupiter", fov: 70, exposure: 1, time: T0 + 0.93 * DAY, pose: { body: "io", at: [10, 18], look: "jupiter", off: [0, -12] } },
+  "Europa: Jupiter over the ice": { ...EARTH_VIEW, target: "jupiter", fov: 70, exposure: 1, time: T0 + 0.54 * DAY, pose: { body: "europa", at: [10, -136], look: "jupiter", off: [0, -10] } },
   "Saturn: the rings from above": { ...WORLD_VIEW, target: "saturn", fov: 32, time: T0, pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 40, at: [-30, 0], look: "saturn" } },
   "Saturn: backlit": { ...WORLD_VIEW, target: "saturn", fov: 32, time: T0, pose: { tilt: 60, body: "saturn", altKm: 500000, phase: 155, at: [-12, 0], look: "saturn" } },
   "Titan: the orange haze": { ...WORLD_VIEW, target: "titan", fov: 50, exposure: 0.7, time: T0, pose: { tilt: 60, body: "titan", altKm: 6000, phase: 45, look: "titan" } },
@@ -544,6 +546,11 @@ export const presets: Record<string, Preset> = {
   "Mann: the glaciers": { ...GARGANTUA_WORLD, target: "mann", fov: 60, pose: { body: "mann", altKm: 3, nu: 225, off: [0, 80] } },
   "Edmunds: the desert world": { ...GARGANTUA_WORLD, target: "edmunds", pose: { tilt: 60, body: "edmunds", altKm: 25000, nu: 225 } },
   "Edmunds: the plains": { ...GARGANTUA_WORLD, target: "edmunds", fov: 60, pose: { body: "edmunds", altKm: 2, nu: 240, off: [0, 80] } },
+  // …and on their grounds, Gargantua in their sky: over Miller's sea (10 M from it: its shadow 60° across,
+  // the disk's near side beamed by the planet's half light speed), over Mann's ice, low over Edmunds' desert
+  "Miller: Gargantua over the sea": { ...GARGANTUA_WORLD, target: "hole", fov: 90, pose: { body: "miller", holeEl: 25, holeAz: 0, off: [0, -18] } },
+  "Mann: Gargantua over the ice": { ...GARGANTUA_WORLD, target: "hole", fov: 60, pose: { body: "mann", holeEl: 15, holeAz: 0 } },
+  "Edmunds: Gargantua at dusk": { ...GARGANTUA_WORLD, target: "hole", fov: 10, pose: { body: "edmunds", holeEl: 3, holeAz: 0, off: [0, -3] } },
   // the game: the film's journey from the Earth (on the pad at the Kennedy Space Center, 2067-01-01
   // 10:00 local), in real time, the Ranger on the Crew engine at 2 g (a lift-off needs more than 1 g);
   // first objective: orbit, then Saturn and the wormhole behind it

@@ -195,6 +195,10 @@ export interface BodyView {
   /** in orbit: the ship's nose that far [°] below the body, its back towards it (the look turned onto
    *  the body passes over the cockpit: the hull out of the image) */
   tilt?: number;
+  /** Gargantua's worlds (main.ts), on the ground (no altKm): Gargantua that high above the horizon [°],
+   *  that far round from the north [°] */
+  holeEl?: number;
+  holeAz?: number;
   /** Gargantua's worlds (main.ts): on an orbit about the world, where on it [°] and its tilt [°] */
   nu?: number;
   inc?: number;

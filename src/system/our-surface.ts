@@ -5,7 +5,8 @@
 import type { Vec3 } from "../physics";
 import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
-import { bodyAxes, M_METRES, solarBody, solarState, spinVector } from "./solar";
+import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
+import { craterRelief } from "../terrain";
 
 export { GEAR };
 
@@ -79,6 +80,16 @@ export function setGroundRelief(id: string, f: ((q: Vec3) => number) | null) {
   if (f) reliefs.set(id, f);
   else reliefs.delete(id);
 }
+// our airless worlds' ground: the tracer's craters (by their maps' indices: the Moon, Mercury, Ceres,
+// Phobos … Rhea — trace.wgsl: airless)
+for (const b of SOLAR_BODIES) {
+  const m = b.map ? mapIndex(b.map) : -1;
+  if (m === 1 || m === 3 || (m >= 7 && m <= 18)) {
+    const mR = b.radius * M_METRES;
+    reliefs.set(b.id, (q) => craterRelief(m, q, mR));
+  }
+}
+
 /** The ground's height above the mean radius [m] under a body-fixed point (0: a sphere). */
 export function groundRelief(id: string, q: Vec3): number {
   const f = reliefs.get(id);

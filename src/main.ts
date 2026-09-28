@@ -2,7 +2,7 @@ import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
-import { theirOrbitPose, universeOf } from "./game/place";
+import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -229,7 +229,17 @@ async function main() {
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
     camera.setOurLanded(null);
-    if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
+    if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
+      // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards
+      // it, the look raised to it (as the map has it: its light bent, the ship's speed, move it on the sky)
+      const el = pose.holeEl ?? 20;
+      const p = theirGroundPose(pose.body!, el, pose.holeAz ?? 0, time ?? simTime, settings.spin, settings.massSolar);
+      settings.shipLookYaw = settings.shipLookPitch = 0;
+      setHolePose(settings, p.X, p.fwd, p.up, p.vel);
+      settings.motion = "geodesic";
+      const off = pose.off ?? [0, 0];
+      void aimAt(null, [off[0], off[1] + el]);
+    } else if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
       // a view of one of Gargantua's worlds: on an orbit about it, looking straight down, the way it
       // goes at the top of the image, then the look turned off it
       const p = theirOrbitPose({ body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc }, time ?? simTime, settings.spin, settings.massSolar);

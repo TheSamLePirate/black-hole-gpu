@@ -1,5 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { bodyAxes, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
+import { bodyAxes, M_METRES, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
@@ -47,7 +47,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 63;
+const PARAM_VEC4S = 65;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -1295,6 +1295,20 @@ export class Renderer {
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
     const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 1.2;
     set(62, hdOn ? mapIndex(hd.name!) : -1, (this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean, hdRelief, hd.color.width);
+    // an airless world's finest ground (trace.wgsl: fineGround): the camera on the body's axes in metres,
+    // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
+    const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;
+    const fm = fineMap ? mapIndex(fineMap) : -1;
+    if (near && (fm === 1 || fm === 3 || (fm >= 7 && fm <= 18)) && Math.hypot(...near.centre) < 1.02) {
+      const mR = near.radius * M_METRES;
+      const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
+      const an = cb.map((c) => Math.round(c / 64) * 64);
+      set(63, an[0]!, an[1]!, an[2]!, 1);
+      set(64, cb[0]! - an[0]!, cb[1]! - an[1]!, cb[2]! - an[2]!, 0);
+    } else {
+      set(63, 0, 0, 0, 0);
+      set(64, 0, 0, 0, 0);
+    }
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
