@@ -285,14 +285,26 @@ fn dof(@builtin(global_invocation_id) gid: vec3u) {
   let A = DF.f.y;
   var F = DF.f.x;
   if (F <= 0.0) {
-    // autofocus: the harmonic mean of the depths around the centre (the sky counts as far)
+    // autofocus: the harmonic mean of the finite depths around the centre — the sky and the shadow
+    // are left out (focused on them, everything else would blur); a wider grid when the centre is all
+    // shadow (the hole framed in the middle: focus on the disk around it)
     let c = vec2i(size / 2u);
-    let s = i32(max(size.y / 40u, 2u));
     var inv = 0.0;
-    for (var j = -1; j <= 1; j++) {
-      for (var i = -1; i <= 1; i++) { inv += 1.0 / dofDepth(c + vec2i(i, j) * s); }
+    var nf = 0.0;
+    for (var ring = 1; ring <= 3; ring++) {
+      let s = i32(max(size.y / 40u, 2u)) * ring * ring;
+      for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+          let d = dofDepth(c + vec2i(i, j) * s);
+          if (d < 1e4) {
+            inv += 1.0 / d;
+            nf += 1.0;
+          }
+        }
+      }
+      if (nf >= 3.0) { break; }
     }
-    F = 9.0 / inv;
+    F = select(1e5, nf / max(inv, 1e-9), nf > 0.0);
   }
   // (this half-resolution pixel: the mean of its four)
   let c0 = textureSampleLevel(src, samp, (vec2f(p) + 1.0) / vec2f(size), 1.0).rgb;

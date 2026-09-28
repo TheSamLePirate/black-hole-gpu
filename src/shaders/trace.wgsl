@@ -1264,19 +1264,24 @@ fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32, px: f32) -> vec2f {
   // (a ring narrower than the pixel: its own lanes, unlike its neighbours', would be noise)
   let wl = smoothstep(0.35, 1.2, lod / DISK_BANDS);
   let body = mix(0.55, smoothstep(0.3, 0.7, lanes + 0.35 * cl), wl);
-  // the strands: long, hair-thin ridges
+  // the strands: long, hair-thin ridges — at three widths, the finest one resolved drawn over the
+  // coarser (a cascade): seen from afar there are still strands a pixel or two wide, with their
+  // contrast, not a flat mean
   var r3 = 0.4;
-  let wr = smoothstep(0.35, 1.2, lod / 220.0);
-  if (wr > 0.0) {
-    let rq = vec3f(c * 3.5, lw * 220.0 + zn * 1.3);
+  let rf = array<f32, 3>(36.0, 90.0, 220.0);
+  let ra = array<f32, 3>(1.8, 2.6, 3.5);
+  for (var o = 0; o < 3; o++) {
+    let wr = smoothstep(0.35, 1.2, lod / rf[o]);
+    if (wr <= 0.0) { break; }
+    let rq = vec3f(c * ra[o], lw * rf[o] + zn * 1.3 + f32(o) * 7.7);
     let ridge = 1.0 - abs(gnoise(rq) + 0.45 * gnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
-    r3 = mix(0.4, ridge * ridge * ridge, wr);
+    r3 = mix(r3, ridge * ridge * ridge, wr);
   }
   let heat = clamp(body * (0.3 + 0.45 * cl + 0.95 * (r3 - 0.15)), 0.0, 1.0);
   let dens = clamp((0.06 + 0.94 * body) * (0.4 + 1.1 * cl + 0.3 * r3), 0.0, 1.0);
-  // (all of it finer than the pixel: what keeps the mean light — the emission goes as T⁴, the mean of
+  // (the rings finer than the pixel: what keeps the mean light — the emission goes as T⁴, the mean of
   // the strands' T⁴ is that of 0.9 T (h ≈ 0.63), not that of their mean T — and a mean opacity)
-  let W = wl * wr;
+  let W = wl;
   return vec2f(mix(0.63, heat * heat * (3.0 - 2.0 * heat), W), mix(0.55, dens, W));
 }
 // The footprint of a disk sample across the orbits [M]: the pixel's at the ray's length (≈ its time
@@ -1303,6 +1308,17 @@ fn diskCoarse(ang: f32, lr0: f32, ring: f32, px: f32) -> f32 {
   if (wl > 0.0) { v += 0.85 * wl * gnoise(vec3f(c * 1.4, lr * 4.0 + 3.0)); }
   let wb = smoothstep(0.35, 1.2, lod / 30.0);
   if (wb > 0.0) { v += 0.75 * wb * gnoise(vec3f(c * 0.7, lr * 30.0 + 7.0)); }
+  // (streaks: ridges along the orbits, 12 and 28 per unit of ln r — the strands seen from afar)
+  var st = 0.0;
+  let sf = array<f32, 2>(12.0, 28.0);
+  for (var o = 0; o < 2; o++) {
+    let ws = smoothstep(0.35, 1.2, lod / sf[o]);
+    if (ws <= 0.0) { break; }
+    let q = vec3f(c * (1.1 + 0.6 * f32(o)), lr * sf[o] + 13.0 + f32(o) * 5.3);
+    let rg = 1.0 - abs(gnoise(q) + 0.4 * gnoise(q * vec3f(2.0, 2.0, 1.8) + vec3f(4.1)));
+    st = mix(st, 2.0 * (rg * rg * rg) - 0.6, ws);
+  }
+  v += 0.8 * st;
   return clamp(v, -1.0, 1.0);
 }
 // Two neighbouring rings of a level (n per unit of ln r) at the angle each has turned to by tEm, blended
@@ -1334,8 +1350,11 @@ fn diskTurbulence(r: f32, phi: f32, tEm: f32, a: f32, zn: f32, fw: f32) -> vec2f
   let fine = 0.5 + pf.w0 * (diskStrands(pf.ang0, lr, zn, pf.ib0, px) - 0.5) + pf.w1 * (diskStrands(pf.ang1, lr, zn, pf.ib0 + 1.0, px) - 0.5);
   let pc = ringPair(lr, phi, tEm, a, DISK_BANDS_C);
   let k = pc.w0 * diskCoarse(pc.ang0, lr, pc.ib0, px) + pc.w1 * diskCoarse(pc.ang1, lr, pc.ib0 + 1.0, px);
-  // (the large scale over the strands: hotter and denser stretches, darker lanes)
-  return clamp(vec2f(fine.x + 0.3 * k, fine.y * (1.0 + 0.7 * k)), vec2f(0.0), vec2f(1.0));
+  // (the large scale over the strands: hotter and denser stretches, darker lanes, streaks — carrying
+  // the contrast where the fine rings are finer than the pixel)
+  let wf = smoothstep(0.35, 1.2, 1.0 / max(px, 1e-9) / DISK_BANDS);
+  let kk = (0.3 + 0.35 * (1.0 - wf)) * k;
+  return clamp(vec2f(fine.x + kk, fine.y * (1.0 + 0.7 * k)), vec2f(0.0), vec2f(1.0));
 }
 
 struct DiskHit { color: vec3f, trans: f32, g: f32, T: f32 };
