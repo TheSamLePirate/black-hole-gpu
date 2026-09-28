@@ -1857,3 +1857,7 @@ body .sp-tooltip, #tip {
 .fl-stsoi { font: 600 12px var(--hud-font); letter-spacing: 0.08em; color: rgba(214, 226, 242, 0.75); cursor: help; }
 .fl-target { width: 248px; }
 .fl-tel { width: 248px; }
+/* (the target's and the Ranger's figures: drawn as instruments now — the old rows kept for their values) */
+.fl-legacy { display: none !important; }
+.fl-instr { display: block; width: 100%; }
+.fl-target, .fl-tel { width: 256px; }

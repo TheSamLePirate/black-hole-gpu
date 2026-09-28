@@ -207,6 +207,10 @@ export class FlightHud {
   private map3d!: Map3D;
   private buttons = new Map<string, HTMLButtonElement>();
   private viewMenu: HTMLElement | null = null;
+  /** the target's and the Ranger's instruments (canvases), and their tooltips' regions (CSS px) */
+  private tgtCanvas = h("canvas", "fl-instr fl-tgtc");
+  private stCanvas = h("canvas", "fl-instr fl-stc");
+  private regions = new Map<HTMLCanvasElement, { x: number; y: number; w: number; h: number; label: string; tip: string }[]>();
   /** the readout above the ball: throttle, g-load, the engine and its tank */
   private ballRead: { thr: HTMLElement; g: HTMLElement; eng: HTMLElement } | null = null;
   private textAt = 0;
@@ -389,7 +393,9 @@ export class FlightHud {
       tile(tiles, this.targetEls, "vh", "Ground");
       tile(tiles, this.targetEls, "twr", "Thrust / weight", true);
       tile(tiles, this.targetEls, "light", "Light received", true);
-      this.target.append(tiles);
+      this.target.append(tiles, this.tgtCanvas);
+      nameRow.classList.add("fl-legacy");
+      tiles.classList.add("fl-legacy");
     }
 
     // ---- the Ranger: its status and sphere, its orbit as tiles
@@ -410,7 +416,8 @@ export class FlightHud {
       tile(tiles, this.stEls, "per", "Period");
       tile(tiles, this.stEls, "tpe", "To periapsis");
       tile(tiles, this.stEls, "next", "Next", true);
-      this.stBox.append(stHead, tiles);
+      this.stBox.append(stHead, tiles, this.stCanvas);
+      tiles.classList.add("fl-legacy");
     }
     const telBody = h("div", "fl-body");
     telBody.append(this.stBox, h("div", "fl-sub", "Telemetry · the last minute"), this.telCanvas);
@@ -598,7 +605,7 @@ export class FlightHud {
     document.body.append(tip);
     let at: HTMLElement | null = null;
     let timer = 0;
-    const show = (el: HTMLElement) => {
+    const show = (el: HTMLElement, rect?: DOMRect) => {
       if (el.title) {
         const t = el.title;
         el.removeAttribute("title");
@@ -613,7 +620,7 @@ export class FlightHud {
       if (text) tip.append(h("span", "", text));
       if (el.dataset.why) tip.append(h("em", "", el.dataset.why));
       tip.hidden = false;
-      const r = el.getBoundingClientRect();
+      const r = rect ?? el.getBoundingClientRect();
       const t = tip.getBoundingClientRect();
       const below = r.top < 140;
       tip.style.left = `${Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2))}px`;
@@ -628,8 +635,27 @@ export class FlightHud {
     };
     const within = (e: Event) => {
       const el = (e.target as HTMLElement | null)?.closest?.("[data-tip],[title]") as HTMLElement | null;
+      if (el?.classList.contains("fl-instr")) return null; // (its regions: below)
       return el && (this.root.contains(el) || this.viewMenu?.contains(el)) ? el : null;
     };
+    // the instruments (canvases): a tooltip per region under the pointer
+    for (const c of [this.tgtCanvas, this.stCanvas]) {
+      let cur = "";
+      c.addEventListener("pointermove", (e) => {
+        const r = c.getBoundingClientRect();
+        const x = e.clientX - r.left, y = e.clientY - r.top;
+        const reg = (this.regions.get(c) ?? []).find((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+        const key = reg ? reg.label : "";
+        if (key === cur) return;
+        cur = key;
+        hide();
+        if (!reg) return;
+        c.dataset.label = reg.label;
+        c.dataset.tip = reg.tip;
+        timer = window.setTimeout(() => cur === key && show(c, new DOMRect(r.left + reg.x, r.top + reg.y, reg.w, reg.h)), 250);
+      });
+      c.addEventListener("pointerleave", () => ((cur = ""), hide()));
+    }
     addEventListener("pointerover", (e) => {
       const el = within(e);
       if (el === at) return;
@@ -1140,6 +1166,10 @@ export class FlightHud {
     };
     cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
     if (this.density < 2 && due("ball", 20)) cpuProf.time("HUD: attitude ball", () => this.drawBall(info));
+    if (this.density === 0 && due("instr", 15)) cpuProf.time("HUD: target & Ranger", () => {
+      this.drawTargetInstr(info);
+      this.drawRangerInstr(info);
+    });
     if (this.density === 0) {
       if (due("map", this.mapView || this.map3d.animating ? 60 : 20)) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
       if (due("tel", 10)) cpuProf.time("HUD: telemetry", () => this.drawTelemetry());
@@ -1578,6 +1608,373 @@ export class FlightHud {
     const v = i.speed * unitK;
     const main = rel ? i.speed.toFixed(4) : v >= 1000 ? v.toFixed(0) : v >= 100 ? v.toFixed(1) : v.toFixed(2);
     valueBox(ctx, x0 + wdt + 8 * dpr, Math.max(top + 12 * dpr, Math.min(bot - 12 * dpr, yv)), main, unit, rel ? `γ ${i.gamma.toFixed(3)}` : `${i.speed.toExponential(2)} c`, "left", dpr);
+  }
+
+  // ------------------------------------------------------------------------------------ target & Ranger instruments
+  /** A canvas sized to its CSS box (device pixels), cleared; its tooltips' regions reset. */
+  private instr(c: HTMLCanvasElement, cssH: number) {
+    const dpr = devicePixelRatio;
+    const w = c.clientWidth || 228;
+    const cw = Math.round(w * dpr), ch = Math.round(cssH * dpr);
+    if (c.width !== cw || c.height !== ch) (c.width = cw), (c.height = ch), (c.style.height = `${cssH}px`);
+    const ctx = c.getContext("2d")!;
+    ctx.clearRect(0, 0, cw, ch);
+    const regs: { x: number; y: number; w: number; h: number; label: string; tip: string }[] = [];
+    this.regions.set(c, regs);
+    return { ctx, dpr, W: w, H: cssH, reg: (x: number, y: number, ww: number, hh: number, label: string, tip: string) => regs.push({ x, y, w: ww, h: hh, label, tip }) };
+  }
+
+  /**
+   * The target: a bearing scope (the target's angle off the nose — dead ahead at the centre, astern
+   * at the rim; hollow when behind), its name and range, the range rate as a two-way bar (closing:
+   * left, red; receding: right), the closest approach and when; the light it receives; near the
+   * ground, the landing figures.
+   */
+  private drawTargetInstr(i: Info) {
+    const T = this.targetEls;
+    const hasGround = !!T.alt?.textContent && T.alt.textContent !== "—";
+    const { ctx, dpr, W, reg } = this.instr(this.tgtCanvas, hasGround ? 156 : 126);
+    const txt = (k: string) => T[k]?.textContent ?? "";
+    const S = (v: number) => v * dpr;
+    ctx.textBaseline = "alphabetic";
+    // the scope
+    const R = 42, cx = R + 2, cy = R + 4;
+    ctx.save();
+    ctx.translate(S(cx), S(cy));
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, S(R));
+    g.addColorStop(0, "rgba(111, 210, 255, 0.10)");
+    g.addColorStop(1, "rgba(111, 210, 255, 0.02)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, S(R), 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(111, 210, 255, 0.35)";
+    ctx.lineWidth = S(1);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(111, 210, 255, 0.16)";
+    for (const f of [0.25, 0.5, 0.75]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, S(R * f), 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(S(-R), 0);
+    ctx.lineTo(S(R), 0);
+    ctx.moveTo(0, S(-R));
+    ctx.lineTo(0, S(R));
+    ctx.stroke();
+    // (ticks round the rim every 30°)
+    ctx.strokeStyle = "rgba(111, 210, 255, 0.5)";
+    for (let a = 0; a < 360; a += 30) {
+      const c = Math.cos((a * Math.PI) / 180), s2 = Math.sin((a * Math.PI) / 180);
+      ctx.beginPath();
+      ctx.moveTo(S(c * R), S(s2 * R));
+      ctx.lineTo(S(c * (R - 4)), S(s2 * (R - 4)));
+      ctx.stroke();
+    }
+    // the nose at the centre
+    ctx.strokeStyle = "#ffc85a";
+    ctx.lineWidth = S(1.5);
+    ctx.beginPath();
+    ctx.moveTo(S(-6), 0);
+    ctx.lineTo(S(-2.5), 0);
+    ctx.lineTo(0, S(2.5));
+    ctx.lineTo(S(2.5), 0);
+    ctx.lineTo(S(6), 0);
+    ctx.stroke();
+    const d = i.dirs.target;
+    if (d) {
+      const Sm = i.S;
+      const b: V3 = [Sm[0][0] * d[0] + Sm[1][0] * d[1] + Sm[2][0] * d[2], Sm[0][1] * d[0] + Sm[1][1] * d[1] + Sm[2][1] * d[2], Sm[0][2] * d[0] + Sm[1][2] * d[1] + Sm[2][2] * d[2]];
+      const ang = Math.acos(Math.max(-1, Math.min(1, b[2])));
+      const rr = (ang / Math.PI) * R;
+      const dir = Math.atan2(b[1], -b[0]);
+      const x = Math.cos(dir) * rr, y = -Math.sin(dir) * rr;
+      ctx.setLineDash([S(2), S(3)]);
+      ctx.strokeStyle = "rgba(255, 148, 102, 0.55)";
+      ctx.lineWidth = S(1);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(S(x), S(y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.shadowColor = "rgba(255, 138, 92, 0.9)";
+      ctx.shadowBlur = S(8);
+      ctx.beginPath();
+      ctx.arc(S(x), S(y), S(4), 0, 2 * Math.PI);
+      if (b[2] >= 0) {
+        ctx.fillStyle = "#ff9466";
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = "#ff9466";
+        ctx.lineWidth = S(1.8);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      ctx.font = `700 ${S(9.5)}px ${FONT}`;
+      ctx.fillStyle = "rgba(255, 148, 102, 0.9)";
+      ctx.textAlign = "center";
+      ctx.fillText(`${Math.round((ang * 180) / Math.PI)}°`, 0, S(R - 8));
+    }
+    ctx.restore();
+    reg(cx - R, cy - R, 2 * R, 2 * R, "Bearing", "Where the target lies from the nose: dead ahead at the centre, astern at the rim (hollow: behind)");
+    // the name, the range
+    const x0 = 2 * R + 14, cw = W - x0 - 2;
+    ctx.textAlign = "left";
+    ctx.font = `700 ${S(10)}px ${FONT}`;
+    ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+    ctx.fillText("TARGET", S(x0), S(13));
+    ctx.font = `700 ${S(18)}px ${FONT}`;
+    ctx.fillStyle = "#ff9466";
+    ctx.fillText(txt("name").toUpperCase(), S(x0), S(30), S(cw));
+    ctx.font = `600 ${S(16)}px ${MONO}`;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(txt("dist"), S(x0), S(50), S(cw));
+    reg(x0, 0, cw, 54, "Range", "Distance to the target, centre to centre");
+    // the range rate: a two-way bar round a centre line
+    const rate = i.targetRate;
+    const yb = 74;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(S(x0), S(yb), S(cw), S(4));
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillRect(S(x0 + cw / 2 - 0.5), S(yb - 3), S(1), S(10));
+    if (Number.isFinite(rate) && rate !== 0) {
+      const ms = Math.abs(rate) * (i.ref ? 1e3 : 299792458);
+      const f = Math.min(1, Math.log10(1 + ms) / 4.5) * (cw / 2);
+      ctx.fillStyle = rate < 0 ? "#ff7a5c" : "#6fd2ff";
+      ctx.fillRect(S(rate < 0 ? x0 + cw / 2 - f : x0 + cw / 2), S(yb), S(f), S(4));
+    }
+    ctx.font = `600 ${S(9.5)}px ${FONT}`;
+    ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+    ctx.fillText("CLOSING", S(x0), S(yb + 15));
+    ctx.textAlign = "right";
+    ctx.fillText("RECEDING", S(x0 + cw), S(yb + 15));
+    ctx.textAlign = "center";
+    ctx.font = `500 ${S(11)}px ${MONO}`;
+    ctx.fillStyle = rate < 0 ? "#ffb0a0" : "#d9efff";
+    ctx.fillText(txt("rate").replace(/^[▲▼]\s*/, ""), S(x0 + cw / 2), S(yb - 5));
+    reg(x0, yb - 16, cw, 34, "Range rate", "How fast the distance changes — the bar grows left when closing in, right when drawing away");
+    // the closest approach
+    const ca = txt("ca");
+    if (ca && ca !== "—") {
+      const k = ca.indexOf(" · ");
+      const [cv, ct] = k > 0 ? [ca.slice(0, k), ca.slice(k + 3)] : [ca, ""];
+      const yc = 116;
+      ctx.textAlign = "left";
+      ctx.font = `700 ${S(9.5)}px ${FONT}`;
+      ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+      ctx.fillText("CLOSEST", S(x0), S(yc - 12));
+      ctx.font = `500 ${S(12)}px ${MONO}`;
+      ctx.fillStyle = "#eef4fb";
+      ctx.fillText(cv, S(x0), S(yc + 2));
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffc85a";
+      ctx.fillText(ct, S(x0 + cw), S(yc + 2));
+      reg(x0, yc - 22, cw, 28, "Closest approach", "The closest the path comes to the target, and in how long");
+    }
+    // near the ground: the landing figures, one line
+    if (hasGround) {
+      const yg = 146;
+      const items: [string, string][] = [["ALT", txt("alt").split(" · ")[0]!], ["V/S", txt("vv")], ["GND", txt("vh")], ["T/W", txt("twr").split(" · ")[0]!]];
+      const colW = W / items.length;
+      items.forEach(([l, v], j) => {
+        ctx.textAlign = "left";
+        ctx.font = `700 ${S(9)}px ${FONT}`;
+        ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+        ctx.fillText(l, S(j * colW + 2), S(yg - 11));
+        ctx.font = `500 ${S(10.5)}px ${MONO}`;
+        ctx.fillStyle = l === "V/S" && T.vv?.classList.contains("closing") ? "#ffb0a0" : "#eef4fb";
+        ctx.fillText(v || "—", S(j * colW + 2), S(yg + 2), S(colW - 4));
+      });
+      reg(0, yg - 22, W, 28, "Landing", "Radar altitude · vertical speed · ground speed · thrust over the local weight");
+    }
+  }
+
+  /**
+   * The Ranger: its height and speed in large; the apsis bar — the orbit's lowest to highest point,
+   * the ship on it (a periapsis under the ground: the ground and IMPACT; open orbits: ∞) —; three
+   * dials: the inclination (the orbit's tilt drawn), the eccentricity (the ellipse's true shape), the
+   * period (the ring of one orbit, the part flown since periapsis); the next event.
+   */
+  private drawRangerInstr(i: Info) {
+    const st = i.status;
+    if (!st) return;
+    const o = st.orbit;
+    const { ctx, dpr, W, reg } = this.instr(this.stCanvas, o ? (st.next ? 192 : 174) : 70);
+    const S = (v: number) => v * dpr;
+    const km = (x: number) => (!Number.isFinite(x) ? "∞" : Math.abs(x) >= 1e7 ? `${(x / 1.495978707e8).toFixed(2)} AU` : Math.abs(x) >= 1e4 ? `${Math.round(x).toLocaleString("en")} km` : `${x.toFixed(1)} km`);
+    const ms = (v: number) => (!Number.isFinite(v) ? "—" : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`);
+    const small = (t: string, x: number, y: number, align: CanvasTextAlign = "left") => {
+      ctx.textAlign = align;
+      ctx.font = `700 ${S(9.5)}px ${FONT}`;
+      ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
+      ctx.fillText(t, S(x), S(y));
+    };
+    const big = (t: string, x: number, y: number, col = "#ffffff", size = 15) => {
+      ctx.textAlign = "left";
+      ctx.font = `600 ${S(size)}px ${MONO}`;
+      ctx.fillStyle = col;
+      ctx.fillText(t, S(x), S(y), S(W / 2 - 6));
+    };
+    // height and speed
+    small("ALTITUDE", 2, 11);
+    big(st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm), 2, 29);
+    small("SPEED", W / 2 + 4, 11);
+    big(ms(st.speed), W / 2 + 4, 29);
+    ctx.font = `500 ${S(10)}px ${MONO}`;
+    ctx.fillStyle = st.vVert < 0 ? "#ffb0a0" : "#9fe3ff";
+    ctx.textAlign = "left";
+    if (Number.isFinite(st.vVert)) ctx.fillText(`${st.vVert >= 0 ? "▲" : "▼"} ${ms(Math.abs(st.vVert))}`, S(W / 2 + 4), S(42));
+    reg(0, 0, W / 2, 44, "Altitude", "Height above the surface of the body whose gravity dominates");
+    reg(W / 2, 0, W / 2, 46, "Speed", "Speed relative to that body, and the vertical speed under it");
+    if (!o) {
+      if (st.kerr) {
+        small("E", 2, 58);
+        big(st.kerr.E.toFixed(4), 14, 60, "#d9efff", 12);
+        small("L", W / 2 + 4, 58);
+        big(st.kerr.L.toFixed(3), W / 2 + 16, 60, "#d9efff", 12);
+      }
+      return;
+    }
+    // the apsis bar
+    const pe = o.peKm, ap = o.apKm, alt = st.altKm;
+    const yb = 62, xa = 10, xb = W - 10;
+    // (the bar spans the orbit's heights, a margin round them — the ground too when it is within)
+    const span = Math.max((Number.isFinite(ap) ? ap - pe : pe) * 0.12, Math.abs(alt) * 0.02, 1);
+    const lo = Math.min(pe < 0 ? pe : pe - span, alt), hi = Number.isFinite(ap) ? Math.max(ap + span, alt) : Math.max(alt * 2, pe * 2, 1);
+    const X = (h: number) => xa + ((h - lo) / Math.max(hi - lo, 1e-9)) * (xb - xa);
+    // (the rail, faint, then the orbit's span on it)
+    ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
+    ctx.fillRect(S(xa), S(yb - 1), S(xb - xa), S(2));
+    const grd = ctx.createLinearGradient(S(xa), 0, S(xb), 0);
+    grd.addColorStop(0, "rgba(111, 210, 255, 0.55)");
+    grd.addColorStop(1, Number.isFinite(ap) ? "rgba(111, 210, 255, 0.55)" : "rgba(111, 210, 255, 0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(S(X(Math.max(pe, lo))), S(yb - 1), S(X(Number.isFinite(ap) ? ap : hi) - X(Math.max(pe, lo))), S(2));
+    const tick = (h: number, col: string) => {
+      ctx.fillStyle = col;
+      ctx.fillRect(S(X(h) - 0.75), S(yb - 6), S(1.5), S(12));
+    };
+    if (pe < 0) {
+      // the ground inside the orbit: it hits
+      ctx.fillStyle = "rgba(255, 90, 70, 0.25)";
+      ctx.fillRect(S(X(lo)), S(yb - 5), S(X(0) - X(lo)), S(10));
+      tick(0, "#ff5a46");
+    } else tick(pe, "#6fd2ff");
+    if (Number.isFinite(ap)) tick(ap, "#6fd2ff");
+    else {
+      ctx.fillStyle = "#6fd2ff";
+      ctx.beginPath();
+      ctx.moveTo(S(xb + 4), S(yb));
+      ctx.lineTo(S(xb - 3), S(yb - 4));
+      ctx.lineTo(S(xb - 3), S(yb + 4));
+      ctx.fill();
+    }
+    // the ship on it
+    ctx.save();
+    ctx.translate(S(X(alt)), S(yb));
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = "#ffc85a";
+    ctx.shadowColor = "rgba(255, 200, 90, 0.9)";
+    ctx.shadowBlur = S(6);
+    ctx.fillRect(S(-3.5), S(-3.5), S(7), S(7));
+    ctx.restore();
+    small(pe < 0 ? "IMPACT" : `PE ${o.tPe > 0 && Number.isFinite(o.tPe) ? `· ${fmtS(o.tPe)}` : ""}`, xa - 8, yb + 17);
+    ctx.font = `500 ${S(11)}px ${MONO}`;
+    ctx.fillStyle = pe < 0 ? "#ff8a70" : "#eef4fb";
+    ctx.textAlign = "left";
+    ctx.fillText(pe < 0 ? "below ground" : km(pe), S(xa - 8), S(yb + 30));
+    small(Number.isFinite(ap) ? `AP ${Number.isFinite(o.tAp) ? `· ${fmtS(o.tAp)}` : ""}` : "ESCAPE", xb + 8, yb + 17, "right");
+    ctx.font = `500 ${S(11)}px ${MONO}`;
+    ctx.fillStyle = "#eef4fb";
+    ctx.textAlign = "right";
+    ctx.fillText(Number.isFinite(ap) ? km(ap) : "∞", S(xb + 8), S(yb + 30));
+    reg(0, yb - 12, W, 46, "Apsides", "The orbit from its lowest point (periapsis) to its highest (apoapsis), and the ship on it");
+    // the dials
+    const yd = 124, rd = 15;
+    const dial = (cx: number, label: string, value: string, draw: () => void, tipL: string, tip: string) => {
+      ctx.save();
+      ctx.translate(S(cx), S(yd));
+      ctx.strokeStyle = "rgba(111, 210, 255, 0.22)";
+      ctx.lineWidth = S(1);
+      ctx.beginPath();
+      ctx.arc(0, 0, S(rd), 0, 2 * Math.PI);
+      ctx.stroke();
+      draw();
+      ctx.restore();
+      small(label, cx, yd + rd + 11, "center");
+      ctx.font = `500 ${S(10.5)}px ${MONO}`;
+      ctx.fillStyle = "#eef4fb";
+      ctx.textAlign = "center";
+      ctx.fillText(value, S(cx), S(yd + rd + 23));
+      reg(cx - W / 6, yd - rd - 4, W / 3, 2 * rd + 32, tipL, tip);
+    };
+    const inc = (o.incDeg * Math.PI) / 180;
+    dial(W / 6, "INCL.", `${o.incDeg.toFixed(1)}°`, () => {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.beginPath();
+      ctx.moveTo(S(-rd), 0);
+      ctx.lineTo(S(rd), 0);
+      ctx.stroke();
+      ctx.strokeStyle = "#e07bff";
+      ctx.lineWidth = S(2);
+      ctx.beginPath();
+      ctx.moveTo(S(-Math.cos(inc) * rd), S(Math.sin(inc) * rd));
+      ctx.lineTo(S(Math.cos(inc) * rd), S(-Math.sin(inc) * rd));
+      ctx.stroke();
+    }, "Inclination", "The orbit's tilt to the body's equator (the white line): 0° equatorial, 90° polar");
+    dial(W / 2, "ECC.", o.ecc.toFixed(3), () => {
+      ctx.strokeStyle = "#6fe3a1";
+      ctx.lineWidth = S(1.8);
+      ctx.beginPath();
+      if (o.ecc < 1) {
+        const a = rd - 3, b = a * Math.sqrt(1 - o.ecc * o.ecc);
+        ctx.ellipse(0, 0, S(a), S(b), 0, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.fillStyle = "#6fd2ff";
+        ctx.beginPath();
+        ctx.arc(S(a * o.ecc), 0, S(2), 0, 2 * Math.PI);
+        ctx.fill();
+      } else {
+        for (let t = -1.2; t <= 1.2; t += 0.05) {
+          const x = rd - 4 - (Math.cosh(t) - 1) * 6, y = Math.sinh(t) * 6;
+          if (t === -1.2) ctx.moveTo(S(x), S(y));
+          else ctx.lineTo(S(x), S(y));
+        }
+        ctx.stroke();
+      }
+    }, "Eccentricity", "The orbit's shape: 0 a circle, under 1 an ellipse (drawn true), 1 and above an open, escaping path");
+    const frac = Number.isFinite(o.period) && o.period > 0 && Number.isFinite(o.tPe) ? 1 - o.tPe / o.period : NaN;
+    dial((5 * W) / 6, "PERIOD", Number.isFinite(o.period) ? fmtS(o.period) : "—", () => {
+      if (!Number.isFinite(frac)) return;
+      ctx.strokeStyle = "#ffc85a";
+      ctx.lineWidth = S(2.5);
+      ctx.beginPath();
+      ctx.arc(0, 0, S(rd), -Math.PI / 2, -Math.PI / 2 + frac * 2 * Math.PI);
+      ctx.stroke();
+      const a = -Math.PI / 2 + frac * 2 * Math.PI;
+      ctx.fillStyle = "#ffc85a";
+      ctx.beginPath();
+      ctx.arc(S(Math.cos(a) * rd), S(Math.sin(a) * rd), S(3), 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.font = `700 ${S(8.5)}px ${FONT}`;
+      ctx.fillStyle = "rgba(255, 200, 90, 0.9)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${Math.round(frac * 100)}%`, 0, 0);
+      ctx.textBaseline = "alphabetic";
+    }, "Period", "The time one orbit takes; the ring: the part flown since the last periapsis");
+    // the next event
+    if (st.next) {
+      const n = st.next;
+      const hot = n.kind === "impact";
+      const txt = `${n.kind === "exit" ? `Leaves ${n.name}` : n.kind === "enter" ? `Enters ${n.name}` : n.kind === "impact" ? `IMPACT · ${n.name}` : "The mouth"} in ${fmtS(n.inS)}`;
+      ctx.font = `700 ${S(11)}px ${FONT}`;
+      ctx.fillStyle = hot ? "#ff7a5c" : "#ffc85a";
+      ctx.textAlign = "left";
+      ctx.fillText(`▸ ${txt.toUpperCase()}`, S(2), S(188));
+      reg(0, 176, W, 16, "Next", "The next event on the free-fall path");
+    }
   }
 
   /** the altitude tape's full scale [m], eased towards its goal */
