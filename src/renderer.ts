@@ -9,7 +9,7 @@ import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer, type Thrust } from "./ship";
 import { EnduranceRenderer } from "./endurance";
 import { GpuProfiler } from "./gpuprof";
-import type { Mount, MountPose } from "./mounts";
+import { shipToCamera, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import { loading } from "./loading";
 import starCatalogueUrl from "../assets/sky/stars.bin";
@@ -1161,6 +1161,13 @@ export class Renderer {
     const dRdL = s.wormhole && cam.region === "throat" ? radius(m.w, cam.ell)[1] : 1;
     const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => (bodies[k]!.where === 2 || bodies[k]!.where === 4 ? solarState(bodies[k]!.id, time).vel : bodyVelocity(s, bodies[k]!.id as unknown as Body, time)), dRdL) : null;
     if (near) bodies[near.index]!.where = 3;
+    if (near && s.ship && this.shipPose) {
+      // (the body seen from the camera's eye, not the ship's centre: its attach point, the outside
+      // views' metres to kilometres — the ground where it is under the ship)
+      const t = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+      const k = 1 / (near.radius * 1476.625 * s.massSolar);
+      near.centre = [0, 1, 2].map((i) => near.centre[i]! + (t[0] * cam.right[i]! + t[1] * cam.up[i]! + t[2] * cam.fwd[i]!) * k) as Vec3;
+    }
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
     set(49, ...(near?.axes[0] ?? [1, 0, 0]), near?.index ?? 0);

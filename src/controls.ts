@@ -118,6 +118,9 @@ export class CameraController {
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
   /** The camera's place on the ship: moves smoothly (0.6 s) from one attach point to the next. */
+  /** the outside views (mounts.ts: around, free): about the ship — yaw, pitch [deg] (0: behind it),
+   *  distance [m]; free — the eye [m] and the look's yaw, pitch [deg] in the ship's frame (0: its nose) */
+  outside = { yaw: 0, pitch: 12, dist: 42, eye: [18, 6, -36] as Vec3, fyaw: -25, fpitch: -5, fvel: [0, 0, 0] as Vec3 };
   private mountEff: MountPose | null = null;
   private mountAnim: { from: MountPose; t: number } | null = null;
   private lastMount = "";
@@ -843,7 +846,18 @@ export class CameraController {
       this.vYaw = smooth(this.vYaw, (-dx * kLook) / dtEv);
       this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
     };
-    if (this.piloting && !this.cinematic) {
+    const ov = this.piloting && !this.cinematic ? this.outsideView() : null;
+    if (ov === "around") {
+      // outside, around the ship: the drag turns the camera about it
+      const o = this.outside;
+      o.yaw = (((o.yaw + dx * 0.3 + 180) % 360) + 360) % 360 - 180;
+      o.pitch = clamp(o.pitch + dy * 0.3, -85, 85);
+    } else if (ov === "free") {
+      // outside, free: the drag turns the camera where it is
+      const o = this.outside;
+      o.fyaw += dx * kLook;
+      o.fpitch = clamp(o.fpitch + dy * kLook, -89, 89);
+    } else if (this.piloting && !this.cinematic) {
       // piloting: the drag turns the camera on its mount (free look); the ship keeps its attitude
       this.setLook(s.shipLookYaw - dx * kLook, s.shipLookPitch + dy * kLook);
     } else if (s.rotation === "free") {
@@ -871,7 +885,10 @@ export class CameraController {
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
       return;
     }
-    if (e.altKey || this.gravity || this.piloting) {
+    if (!e.altKey && this.piloting && !this.cinematic && this.outsideView() === "around") {
+      // outside, around the ship: the wheel sets the camera's distance (12 m … 20 km)
+      this.outside.dist = clamp(this.outside.dist * Math.exp(dy * 0.0015), 12, 20000);
+    } else if (e.altKey || this.gravity || this.piloting) {
       this.s.fov = clamp(this.s.fov * Math.exp(dy * 0.001), 1, 150);
     } else if (this.s.rotation === "free" && !this.cinematic) {
       // dolly along the view, gliding (the flight's inertia)
@@ -970,6 +987,7 @@ export class CameraController {
     // so the tracking keeps its offset from the target
     const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
     if (pilotNow) {
+      if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
       this.flyShip(dt, pad);
       this.flyVel = [0, 0, 0];
     } else if (this.gravity && free) {
@@ -1099,6 +1117,9 @@ export class CameraController {
     const rH = horizon(s.spin);
     const n = Math.hypot(...local);
     const k = n * dt;
+    // (near a planet, a moon, a star: its surface's distance too — a metre at least — not the hole's
+    // or the mouth's alone, tens of M away: the keys would throw the camera at millions of km/s)
+    const near = Math.max(this.surfaceDistance(), 1 / (1476.625 * s.massSolar));
     const c: Vec3 = [local[0] / n, local[1] / n, local[2] / n];
     /** Camera axes in the flat frame of the hole (hole region). */
     const holeAxes = () => {
@@ -1111,7 +1132,7 @@ export class CameraController {
     };
     if (!s.wormhole) {
       const h = holeAxes();
-      const Y = axpy(h.X, h.d, k * Math.min(h.r - rH, 100));
+      const Y = axpy(h.X, h.d, k * Math.min(h.r - rH, 100, near));
       if (Math.hypot(...Y) < rH + 0.3 || Math.hypot(...Y) > MAX_RANGE) return;
       setHolePose(s, Y, h.fw, h.up);
       s.anchor = "hole";
@@ -1122,7 +1143,7 @@ export class CameraController {
     const p = repPose(s);
     const rw = radius(m.w, p.l)[0];
     const toHole = p.l > 0 ? Math.hypot(...repToHole(m, p.l, p.n)) : Infinity;
-    const ds = k * Math.min(Math.max(Math.min(rw - 0.5 * m.w.rho, toHole - rH), 0.2 * m.w.rho), 100);
+    const ds = k * Math.min(Math.max(Math.min(rw - 0.5 * m.w.rho, toHole - rH), 0.2 * m.w.rho), 100, near);
     const nearMouth = p.l <= 0 || rw < toHole;
     if (nearMouth) {
       const right = cross(p.fwd, p.up);
@@ -1539,6 +1560,30 @@ export class CameraController {
     this.sync();
   }
 
+  /**
+   * Outside, free: the keys move the camera along its own axes (Z Q S D, A E on AZERTY; Shift faster),
+   * its speed eased (~0.15 s), a fifth of its distance from the ship per second (5 m/s at least).
+   */
+  private moveOutside(dt: number, move: number[], fast: boolean) {
+    const o = this.outside;
+    const S = shipToCamera(this.mountTarget(), 0, 0).S;
+    const v = Math.max(5, 0.2 * Math.hypot(...o.eye)) * (fast ? 5 : 1);
+    const want = lin(lin(S[2], move[0]! * v, S[0], move[1]! * v), 1, S[1], move[2]! * v);
+    o.fvel = lin(o.fvel, 1, sub3(want, o.fvel), 1 - Math.exp(-dt / 0.15));
+    if (Math.hypot(...o.fvel) < 1e-3) return (o.fvel = [0, 0, 0]);
+    const e = lin(o.eye, 1, o.fvel, dt);
+    // (no farther than 50 km from the ship)
+    const l = Math.hypot(...e);
+    o.eye = l > 5e4 ? lin(e, 5e4 / l, e, 0) : e;
+    this.activity = performance.now();
+  }
+
+  /** The look's angles set without turning the camera (the pose's change does, through stepMount). */
+  private setLookRaw(yaw: number, pitch: number) {
+    this.s.shipLookYaw = yaw;
+    this.s.shipLookPitch = pitch;
+  }
+
   /** Turns the camera on its mount (degrees); the ship stays where it points. */
   setLook(yaw: number, pitch: number) {
     const s = this.s;
@@ -1564,18 +1609,54 @@ export class CameraController {
     if (this.mountEff) return this.mountEff;
     // (the setting just changed, before this frame's step: still where the camera was)
     if (this.s.shipMount !== this.lastMount && this.lastPose) return this.lastPose;
+    return this.mountTarget();
+  }
+
+  /** The outside view in use (mounts.ts), or none. */
+  outsideView(): "around" | "free" | null {
+    const m = MOUNTS[this.s.shipMount as Mount] as { outside?: "around" | "free" } | undefined;
+    return this.s.ship ? (m?.outside ?? null) : null;
+  }
+
+  /** Where the chosen attach point puts the camera (the outside views: where they are now). */
+  private mountTarget(): MountPose {
+    const o = this.outside;
+    const v = this.outsideView();
+    const d = Math.PI / 180;
+    if (v === "around") {
+      const c: Vec3 = [0, 1.5, 0];
+      const dir: Vec3 = [Math.sin(o.yaw * d) * Math.cos(o.pitch * d), Math.sin(o.pitch * d), -Math.cos(o.yaw * d) * Math.cos(o.pitch * d)];
+      return { eye: lin(c, 1, dir, o.dist), aim: c };
+    }
+    if (v === "free") {
+      const f: Vec3 = [Math.sin(o.fyaw * d) * Math.cos(o.fpitch * d), Math.sin(o.fpitch * d), Math.cos(o.fyaw * d) * Math.cos(o.fpitch * d)];
+      return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
+    }
     return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
   }
 
   /** Eases the camera towards the chosen attach point; keeps the ship's attitude while it moves. */
   private stepMount(dt: number) {
     const s = this.s;
-    const to = (MOUNTS[s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
-    const S0 = this.shipMatrix();
+    // (the outside views' poses change between frames — dragged, moved —: from where the camera was)
+    const S0 = this.lastPose && !this.mountAnim ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
     if (s.shipMount !== this.lastMount) {
-      if (this.lastMount && s.ship) this.mountAnim = { from: this.shipPose(), t: 0 };
+      if (this.lastMount && s.ship) this.mountAnim = { from: this.lastPose ?? this.shipPose(), t: 0 };
       this.lastMount = s.shipMount;
+      const v = this.outsideView();
+      if (v === "free" && this.lastPose) {
+        // (the free camera starts where the view was, looking the same way)
+        const P = this.lastPose;
+        const f = sub3(P.aim, P.eye);
+        const l = Math.hypot(...f) || 1;
+        this.outside.eye = [...P.eye] as Vec3;
+        this.outside.fyaw = (Math.atan2(f[0], f[2]) * 180) / Math.PI;
+        this.outside.fpitch = (Math.asin(clamp(f[1] / l, -1, 1)) * 180) / Math.PI;
+        this.outside.fvel = [0, 0, 0];
+      }
+      if (v) this.setLookRaw(0, 0);
     }
+    const to = this.mountTarget();
     if (this.mountAnim) {
       const A = this.mountAnim;
       A.t = Math.min(1, A.t + dt / 0.6);
@@ -1666,6 +1747,8 @@ export class CameraController {
     // down (not Ctrl: Ctrl+W closes the tab), arrows too
     const k = (c: string) => (this.codes.has(c) ? 1 : 0);
     const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
+    // (outside, free: the keys move the camera — the ship flies on as it was)
+    if (this.outsideView() === "free") return i;
     i.pitch = k("KeyS") - k("KeyW");
     i.yaw = k("KeyD") - k("KeyA");
     i.roll = k("KeyE") - k("KeyQ");
@@ -2558,6 +2641,19 @@ export class CameraController {
     // feed-forward: what holds the ship on that velocity against gravity and the frame
     const free = localAccel(F, L.xi, want, [0, 0, 0]);
     return { beta, ff: localToZamo([-free[0], -free[1], -free[2]]) };
+  }
+
+  /** The camera's distance [M] to the nearest surface of a body of its universe (planets, moons, stars). */
+  private surfaceDistance(): number {
+    const s = this.s, cam = cameraFrame(s), t = this.nowTime();
+    const ours = onOurSide(s, cam);
+    let d = Infinity;
+    for (const b of availableBodies(s, cam)) {
+      if (b === "hole" || b === "barycentre" || b === "wormhole" || isOurBody(b) !== ours) continue;
+      const r = bodyDistance(s, cam, b, t) - bodyRadius(s, b);
+      if (r < d) d = r;
+    }
+    return d;
   }
 
   /** The massive body nearest a point at time t (what a predicted path ran into). */

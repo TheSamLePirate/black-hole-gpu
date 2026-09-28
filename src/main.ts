@@ -9,7 +9,7 @@ import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES, bodyLook, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNTS, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, type Mount } from "./mounts";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -432,7 +432,8 @@ async function main() {
     settings.shipMount = m;
     refreshGui();
     scheduleUrlSave();
-    panel.toast(`Camera: ${MOUNTS[m].label}`);
+    const help = m === "around" ? " — drag: turn around it · wheel: distance" : m === "free" ? " — Z Q S D, A E: move · drag: turn · Shift: faster (the ship flies on)" : "";
+    panel.toast(`Camera: ${MOUNTS[m].label}${help}`);
   }
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
@@ -497,6 +498,7 @@ async function main() {
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyR") pilotRoll();
     else if (e.code === "KeyY") togglePathInView();
+    else if ((e.code === "KeyZ" || e.code === "KeyX") && camera.outsideView() === "free") e.preventDefault(); // (the free camera's keys)
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "CapsLock") {
@@ -535,8 +537,8 @@ async function main() {
       const pa: Partial<Record<typeof a, () => void>> = {
         focus: pilotSas, gravity: () => (camera.pilot.throttle = 0), auto: () => pilotHold("prograde"), rotation: () => pilotHold("retrograde"),
         recentre: () => camera.setLook(0, 0),
-        dpadUp: () => setMount((Object.keys(MOUNTS) as Mount[])[((Object.keys(MOUNTS) as Mount[]).indexOf(settings.shipMount as Mount) + 1) % 6]!),
-        dpadDown: () => setMount((Object.keys(MOUNTS) as Mount[])[((Object.keys(MOUNTS) as Mount[]).indexOf(settings.shipMount as Mount) + 5) % 6]!),
+        dpadUp: () => setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + 1) % MOUNT_KEYS.length]!),
+        dpadDown: () => setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + MOUNT_KEYS.length - 1) % MOUNT_KEYS.length]!),
       };
       if (pa[a]) {
         pa[a]!();
