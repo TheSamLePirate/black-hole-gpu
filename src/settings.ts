@@ -447,14 +447,14 @@ export const presets: Record<string, Preset> = {
     dof: true, dofAperture: 0.3, dofFocus: 0, lensFlare: 0.6, diskHaze: 0.6, diskSmoke: 0.6,
   },
   // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
-  // the film's wide shot: the Endurance on its orbit before Gargantua's disk, coming towards the camera
-  // along it (its ring face-on; cinematic scale: 2.4 M)
+  // the film's wide shot: the Endurance on its orbit just above Gargantua's disk (tilted 9°: ~2.8 M over
+  // it at its highest, clear of the haze), coming towards the camera (its ring face-on; cinematic scale: 2.4 M)
   "Interstellar: the Endurance before Gargantua": {
     spin: 0.6, distance: 40.904, inclination: 86.995, azimuth: 10.299, fov: 45, yaw: -3.854, pitch: 4.015, roll: -15.416,
     motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
     diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84, tonemap: "Film", bloom: 0.5,
     dof: false, lensFlare: 0.6, diskHaze: 0.6, diskSmoke: 0.6, exposure: 0, autoExposure: false,
-    endurance: true, enduranceOrbit: 18, enduranceIncl: 40, enduranceNode: -144, endurancePhase: 125.82, enduranceSize: 2.4, enduranceLight: 1.5,
+    endurance: true, enduranceOrbit: 18, enduranceIncl: 9, enduranceNode: -144, endurancePhase: 125.82, enduranceSize: 2.4, enduranceLight: 1.5,
   },
   "Ranger: approaching Gargantua": {
     spin: 0.6, distance: 34, inclination: 84, fov: 55, yaw: 0, pitch: 0, roll: 0, shiftMode: "none",
