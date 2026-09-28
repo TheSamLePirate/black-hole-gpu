@@ -1185,7 +1185,7 @@ export class Renderer {
    * handled by the analytic weak-field deflection (error O(M²/r²)).
    */
   private escapeRadius(s: Settings) {
-    let r = Math.max(60, 1.5 * s.diskOuter);
+    let r = Math.max(60, 1.5 * s.diskOuter); // (the disk thins out to 1.3 of its outer radius)
     if (s.jet) r = Math.max(r, s.jetLength * 1.05);
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside

@@ -409,7 +409,7 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
     // outlines drawn, not averaged away, nor stepped — each step only partly opaque; 0.25 M in the
     // realtime passes, a block per ray: the refining passes and offline frames take the fine one)
     let R = r * sn;
-    if (R > P.bh.z * 0.8 && R < P.bh.w * 1.05) {
+    if (R > P.bh.z * 0.8 && R < P.bh.w * DISK_REACH * 1.05) {
       let H = hr * R;
       let d = geodesicRHS(s.x, s.p, L, a);
       let zdot = abs(d.dx.x * c - r * sn * d.dx.y) + 1e-4;
@@ -1192,6 +1192,17 @@ fn ntFlux(r: f32, a: f32, rIn: f32) -> f32 {
   return max(br, 0.0) / (x * x * x * x * (x * x * x - 3.0 * x + 2.0 * a));
 }
 
+// The disk's outer edge: no rim — beyond 0.6 of its outer radius the gas's optical depth falls off
+// exponentially, reaching τ = 1 near the outer radius (the e-folding length set by the disk's own
+// depth τ₀, so that any disk turns translucent there), traced out to 1.3 of it (DISK_REACH): it fades
+// into the dark as the film's disk does — torn into wisps by the turbulence's density over it. A
+// factor on the optical depth.
+const DISK_REACH = 1.3;
+fn diskFade(R: f32, rOut: f32) -> f32 {
+  let lam = 0.4 * rOut / max(log(max(P.misc.w, 1.0)), 1.0);
+  return exp(-max(R - 0.6 * rOut, 0.0) / lam) * (1.0 - smoothstep(0.85 * DISK_REACH * rOut, DISK_REACH * rOut, R));
+}
+
 // Gradient (Perlin) noise in [−1, 1], quintic fade: smoother and less grid-aligned than value noise.
 fn gnoise(p: vec3f) -> f32 {
   let i = floor(p);
@@ -1344,7 +1355,7 @@ fn shadeDisk(s: GState, L: f32, E0: f32, tNow: f32) -> DiskHit {
 
   var T = P.disk.x * pow(max(ntFlux(r, a, rIn) / P.disk.y, 0.0), 0.25);
   // soft outer edge
-  let edge = 1.0 - smoothstep(rOut * 0.8, rOut, r);
+  let edge = diskFade(r, rOut);
   // Vertical (grey) optical depth of the slab; turbulence modulates both the heating and the
   // column density, opening optically thin gaps between clumps.
   var tau = P.misc.w * edge;
@@ -1353,6 +1364,8 @@ fn shadeDisk(s: GState, L: f32, E0: f32, tNow: f32) -> DiskHit {
     let n = diskTurbulence(r, s.x.z, tNow + s.x.w, a, 0.0, diskFootprint(s));
     T *= mix(1.0, 0.3 + 0.95 * n.x, turb);
     tau *= mix(1.0, 0.002 + 2.8 * n.y * n.y, turb);
+    // (the edge torn into wisps: denser gas reaches farther out)
+    tau *= diskFade(r * (1.0 - 0.3 * turb * (n.y - 0.5)), rOut) / max(edge, 1e-6);
   }
 
   // Limb darkening of an electron-scattering atmosphere (Chandrasekhar): I ∝ 1 + 2.06 μ,
@@ -1426,7 +1439,7 @@ fn returningRadiation(m: GState, side: f32, g1: f32, tNow: f32, u: vec2f) -> vec
     if (i > 0u && cos(s.x.y) * cos(n.x.y) < 0.0 && n.x.y == n.x.y) {
       let m2 = equatorCrossing(s, n, geodesicRHS(s.x, s.p, L, a), geodesicRHS(n.x, n.p, L, a), L, a, h);
       let rc = m2.x.x;
-      if (rc >= rIn && rc <= rOut) {
+      if (rc >= rIn && rc <= rOut * DISK_REACH) {
         let hit = shadeDisk(m2, L, E, tNow); // blackbody at g₁₂T₂ in the frame of gas 1
         return hit.color * shiftRatio(max(hit.T * hit.g, 100.0), g1);
       }
@@ -1516,9 +1529,9 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let H = P.ext2.z * R;
   let haze = P.ret.w;
   let smoke = P.radio2.z;
-  if (R < rIn * 0.85 || R > rOut || abs(z) > max(select(4.0, 8.0, haze > 0.0) * H, select(0.0, 2.5 * H + 1.0, smoke > 0.0 && R > 8.0))) { return o; }
+  if (R < rIn * 0.85 || R > rOut * DISK_REACH || abs(z) > max(select(4.0, 8.0, haze > 0.0) * H, select(0.0, 2.5 * H + 1.0, smoke > 0.0 && R > 8.0))) { return o; }
   let zn = z / H;
-  let edge = smoothstep(rIn * 0.85, rIn * 1.03, R) * (1.0 - smoothstep(rOut * 0.8, rOut, R));
+  let edge = smoothstep(rIn * 0.85, rIn * 1.03, R) * diskFade(R, rOut);
   var rho = exp(-0.5 * zn * zn) * 0.3989423 / H * edge;
   let T0 = P.disk.x * pow(max(ntFlux(max(R, rIn), a, rIn) / P.disk.y, 0.0), 0.25);
   var T = T0;
@@ -1528,6 +1541,8 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
     let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn, diskFootprint(s));
     T *= mix(1.0, 0.3 + 0.95 * n.x, turb);
     rho *= mix(1.0, 0.002 + 2.8 * n.y * n.y, turb);
+    // (the edge torn into wisps: denser gas reaches farther out)
+    rho *= diskFade(R * (1.0 - 0.3 * turb * (n.y - 0.5)), rOut) / max(diskFade(R, rOut), 1e-6);
     // (the mist follows the gas below it, loosely)
     hz *= mix(1.0, 0.4 + 1.2 * n.y, turb);
   }
@@ -3063,7 +3078,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       if (diskOn && !thick && cz0 * cz1 < 0.0) {
         let ud = cz0 / (cz0 - cz1);
         let rc = mix(s.x.x, n.x.x, ud);
-        behindDisk = rc >= rIn && rc <= rOut && pg.w > ud;
+        behindDisk = rc >= rIn && rc <= rOut * DISK_REACH && pg.w > ud;
       }
       // bodies are opaque: they hide the tube beyond their surface in this step (then the ray ends)
       for (var k = 0u; k < ourStart(); k++) {
@@ -3268,7 +3283,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       crossings++;
       let rMin = min(s.x.x, n.x.x);
       let rMax = max(s.x.x, n.x.x);
-      if (diskOn && !thick && rMax >= rIn * 0.95 && rMin <= rOut * 1.05) {
+      if (diskOn && !thick && rMax >= rIn * 0.95 && rMin <= rOut * DISK_REACH * 1.05) {
         if (!adaptive) {
           // realtime: derivatives at both ends for the Hermite interpolant
           kCur = geodesicRHS(s.x, s.p, L, a);
@@ -3278,7 +3293,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         let m = equatorCrossing(s, n, kCur, kNext, L, a, h);
         evals += 9u;
         let rc = m.x.x;
-        if (rc >= rIn && rc <= rOut) {
+        if (rc >= rIn && rc <= rOut * DISK_REACH) {
           let hit = shadeDisk(m, L, E0, tNow);
           // radio: the ~10⁴ K disk is a black occulter next to the ~10¹⁰ K synchrotron flow
           if (!radio) { col += trans * hit.color; }
