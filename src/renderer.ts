@@ -1711,14 +1711,14 @@ export class Renderer {
 
   /**
    * Near the Earth (its local patch), the share of the sunlight reaching the camera: through its air,
-   * reddened and dimmed low, none in its shadow — a ten-thousandth left at night (the sky's and the
-   * cities' glow: the eye adapts).
+   * reddened and dimmed low, none in its shadow — a quarter at least (twilight, night: 2
+   * stops more; the cities show already, more and the stars fade, the ship's own lights blind).
    */
   private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>) {
     if (!near || bodies[near.index]?.id !== "earth" || !this.earthMaps.tier) return 1;
     const r = Math.hypot(...near.centre);
     const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
-    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 1e-4);
+    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 0.25);
   }
 
   /**

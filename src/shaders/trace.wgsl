@@ -2490,6 +2490,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   // place only: every call is a copy the shader compiler builds)
   var pre = vec3f(0.0);
   var T = vec3f(1.0);
+  var veil = 1.0; // (the sky's glow hiding the stars behind it)
   if (P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     if (isEarth(k)) {
@@ -2501,6 +2502,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       }
       pre = e.col;
       T = e.T;
+      veil = e.veil;
     } else {
       let hit = nearMarch(look);
       // rings in front of the planet (or of the sky): their light, and what they let through
@@ -2531,7 +2533,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   }
   var tr = traceLook(look, rnd, tNow);
   tr.col = pre + T * tr.col;
-  tr.tint *= T;
+  tr.tint *= T * veil;
   return tr;
 }
 
@@ -3303,7 +3305,7 @@ fn earthLook(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy
 }
 
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them
-struct EarthNear { col: vec3f, T: vec3f, t: f32 };
+struct EarthNear { col: vec3f, T: vec3f, t: f32, veil: f32 };
 fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // (its relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the sphere)
   let ro = toBody(-P.near0.xyz);
@@ -3312,7 +3314,12 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let lt = nearLight(k);
   let e = earthLook(ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
     0.0, P.camUp.w, fract(rnd * 7.31 + 0.37));
-  return EarthNear(e.col, e.T, t);
+  // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
+  // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
+  // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
+  let s = luminance(e.col) / max(luminance(lt.e) / PI, 1e-30);
+  let veil = clamp(log(1e-2 / max(s, 1e-12)) / log(100.0), 0.0, 1.0);
+  return EarthNear(e.col, e.T, t, veil * veil);
 }
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,
