@@ -187,6 +187,14 @@ the sphere (no overshoot for grazing rays), Gargantua's weak field still bends t
 the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
 outside, and their energy at infinity is kept across it.
 
+**The Endurance** (Matter → Endurance, or the preset "Interstellar: the Endurance before Gargantua") —
+[“Interstellar | Endurance” by devPilot](https://sketchfab.com/3d-models/interstellar-endurance-901fec2809704b74bec891e9a40a8726),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified (see `assets/endurance/README.md`) — on a
+circular Keplerian orbit around the hole, its ring turning, at a cinematic scale (its diameter in M: at 64 m it
+would be far below a pixel next to a hole of 10⁸ M☉). Seen along straight rays from the camera (retarded and
+aberrated like the local patch, not lensed), rasterized with the tracer's pinhole into a box of the image
+(4× MSAA), hidden where the traced depth is nearer, lit by the disk, composited before bloom.
+
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,
 wingtip, belly, nose looking back). Interstellar's Ranger — [“Interstellar Ranger One” by Max Vizell](https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f),
