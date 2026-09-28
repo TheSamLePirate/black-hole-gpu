@@ -18,6 +18,7 @@ import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
+import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { homeOf } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch } from "./system/local-patch";
@@ -42,7 +43,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 58;
+const PARAM_VEC4S = 60;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -251,6 +252,9 @@ export class Renderer {
   /** the solar system's maps and Saturn's rings (placeholders until loaded, on first use) */
   private planetMaps: PlanetMaps;
   private mapsRequested = false;
+  /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
+  private earthMaps: EarthMaps;
+  private earthWant: EarthTier | null = null;
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
   private histBuf!: GPUBuffer;
@@ -370,6 +374,9 @@ export class Renderer {
         { binding: 16, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } },
         { binding: 17, visibility: C, texture: { sampleType: "float" } },
         { binding: 18, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } },
+        { binding: 19, visibility: C, texture: { sampleType: "float", viewDimension: "cube" } },
+        { binding: 20, visibility: C, texture: { sampleType: "float", viewDimension: "cube" } },
+        { binding: 21, visibility: C, texture: { sampleType: "float" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -443,6 +450,7 @@ export class Renderer {
     this.mwTexture = placeholder();
     this.starLodTexture = placeholder();
     this.planetMaps = placeholderMaps(device);
+    this.earthMaps = placeholderEarth(device);
     // empty catalogue: grid 1, no stars
     this.catalogue = device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.catalogue, 0, new Uint32Array([0x31525453, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
@@ -489,6 +497,26 @@ export class Renderer {
         this.onAssets?.();
       })
       .catch((e) => console.warn("Planet maps unavailable:", e));
+  }
+
+  /** Loads the Earth's maps (a tier finer than those it has), in the background. */
+  private requestEarthMaps(tier: EarthTier) {
+    this.earthWant = tier;
+    const first = tier === "med";
+    if (first) loading.stage("earth", "The Earth — day, night, clouds and relief", { weight: 3 });
+    const job = loadEarthMaps(this.device, tier, first ? (u) => loading.fetch(u, "earth") : undefined);
+    (first ? loading.track("earth", "", job) : job)
+      .then((maps) => {
+        const old = this.earthMaps;
+        this.earthMaps = maps;
+        if (this.live) this.bindTarget(this.live);
+        if (this.offline) this.bindTarget(this.offline.target);
+        // (the old ones once the frames drawing with them are done)
+        void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf].forEach((t) => t.destroy()));
+        this.invalidate();
+        this.onAssets?.();
+      })
+      .catch((e) => console.warn("Earth maps unavailable:", e));
   }
 
   get realSkyLoaded() {
@@ -731,6 +759,9 @@ export class Renderer {
         { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
         { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
         { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
+        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
+        { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
+        { binding: 21, resource: this.earthMaps.surf.createView() },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -754,6 +785,9 @@ export class Renderer {
         { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
         { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
         { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
+        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
+        { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
+        { binding: 21, resource: this.earthMaps.surf.createView() },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -1187,6 +1221,15 @@ export class Renderer {
       set(57, 0, 0, 1, 0);
       this.shipProbeAxes = [cam.right, cam.up, cam.fwd];
     }
+    // the Earth: its maps asked for once it is in the scene, the finer ones when the camera nears it
+    // (within 60 of its radii); its clouds drift eastwards, a turn in 20 days
+    const earthK = bodies.findIndex((b) => b.id === "earth" && b.surface >= SURFACE_MAPPED);
+    if (earthK >= 0 && !this.earthWant) this.requestEarthMaps("med");
+    if (near && near.index === earthK && Math.hypot(...near.centre) < 60 && this.earthWant === "med" && this.earthMaps.tier === "med") this.requestEarthMaps("high");
+    const tSec = time * 4.925490947e-6 * s.massSolar;
+    const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
+    set(58, this.earthMaps.tier ? 1 : 0, drift, 0.6, 4);
+    set(59, 6000 / 6.371e6, 1, 0.8, 3);
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 

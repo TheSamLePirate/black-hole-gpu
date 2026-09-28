@@ -243,6 +243,7 @@ fn withShip(uv: vec2f) -> vec3f {
   return c + min(textureSampleLevel(plumeTex, samp, uv, 0.0).rgb, vec3f(60000.0));
 }
 
+const BLOOM_CAP = 6.0;
 @compute @workgroup_size(8, 8)
 fn downShip(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
@@ -256,6 +257,10 @@ fn downShip(@builtin(global_invocation_id) gid: vec3u) {
       + withShip(uv + texel * vec2f(2.0, 0.0)) + withShip(uv + texel * vec2f(0.0, 2.0))) * 0.0625;
   o += (withShip(uv + texel * vec2f(-1.0, -1.0)) + withShip(uv + texel * vec2f(1.0, -1.0))
       + withShip(uv + texel * vec2f(-1.0, 1.0)) + withShip(uv + texel * vec2f(1.0, 1.0))) * 0.125;
+  // (the glare of what is far brighter than white — the Sun's disk, 10⁵ times the lit ground —
+  // softly capped: its halo a camera's, not a blinding blob; white is ≈ 1/16 here, pre-exposed)
+  let lo = dot(o, vec3f(0.2126, 0.7152, 0.0722));
+  o *= 1.0 / (1.0 + lo / BLOOM_CAP);
   textureStore(dst, gid.xy, vec4f(o, 1.0));
 }
 
