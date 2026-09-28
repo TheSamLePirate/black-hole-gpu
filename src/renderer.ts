@@ -1293,7 +1293,7 @@ export class Renderer {
     if (nearMap && HD_SETS[nearMap] && Math.hypot(...near!.centre) < 40) this.requestHd(nearMap);
     const hd = this.hdMap;
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
-    const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 2.5;
+    const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 1.2;
     set(62, hdOn ? mapIndex(hd.name!) : -1, (this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean, hdRelief, hd.color.width);
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit

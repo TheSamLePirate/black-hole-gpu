@@ -930,11 +930,12 @@ export const QUALITY_KEYS: (keyof Settings)[] = [
   "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps", "targetSpp", "adaptiveIntegrator", "integratorTolerance", "noiseThreshold",
 ];
 
-export type SceneGroup = "game" | "earth" | "gargantua" | "wormhole" | "hole";
+export type SceneGroup = "game" | "earth" | "solar" | "gargantua" | "wormhole" | "hole";
 export const SCENE_GROUPS: { id: SceneGroup; label: string; hint: string }[] = [
   { id: "game", label: "Game", hint: "Fly the Ranger: the film's journey, missions" },
   { id: "earth", label: "Earth", hint: "Our planet from its ground and its orbits: its air, its night, the Sun, the Moon and the stars" },
-  { id: "gargantua", label: "Gargantua", hint: "Interstellar's black hole, its star and planets" },
+  { id: "solar", label: "Solar system", hint: "Our worlds from their orbits and their grounds: the Moon, the planets, their moons" },
+  { id: "gargantua", label: "Gargantua", hint: "Interstellar's black hole, its star and planets: Miller's sea, Mann's ice, Edmunds' desert" },
   { id: "wormhole", label: "Wormhole", hint: "The mouth near Saturn and its lensing" },
   { id: "hole", label: "Black holes", hint: "Kerr physics: disks, jets, observers, instruments" },
 ];
@@ -953,6 +954,28 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Earth: moonlit night at Uluru": { title: "Moonlit night at Uluru", description: "Midnight in the desert under the full Moon: silvered clouds, the red ground, the stars through the blue.", icon: "☾", group: "earth" },
   "Earth: the Milky Way over the Atacama": { title: "The Milky Way over the Atacama", description: "Paranal past midnight, near the new Moon: the Milky Way rising in the east over the desert.", icon: "✧", group: "earth" },
   "Earth: a winter afternoon in Brittany": { title: "A winter afternoon", description: "Brittany at 15:00 in January, the low Sun behind: the clouds lit pink, the green hills, the haze.", icon: "☁", group: "earth" },
+  "Moon: Earthrise": { title: "Earthrise", description: "25 km over the Moon's western limb: the full Earth just above the horizon, the craters lit by a low Sun behind.", icon: "◒", group: "solar" },
+  "Moon: the terminator from orbit": { title: "The Moon's terminator", description: "300 km up, looking along the line between day and night: the craters' rims catch the last light.", icon: "◑", group: "solar" },
+  "Moon: the half Moon from orbit": { title: "The half Moon", description: "4 000 km out: the first quarter from close by, the dark seas along the terminator.", icon: "☽", group: "solar" },
+  "Mercury: from orbit": { title: "Mercury", description: "The battered innermost world, its craters and rays in a Sun seven times fiercer than ours.", icon: "☿", group: "solar" },
+  "Venus: above the clouds": { title: "Venus", description: "The sulphuric cloud deck from 15 000 km, its yellowish haze, the thin blue of its limb.", icon: "♀", group: "solar" },
+  "Mars: from orbit": { title: "Mars", description: "The Tharsis volcanoes, Olympus Mons, Valles Marineris' scar, the polar cap and the dust's thin veil.", icon: "♂", group: "solar" },
+  "Mars: the blue sunset": { title: "The blue sunset", description: "On Mars' ground as the Sun sets: the butterscotch sky, and round the Sun the blue its dust throws forwards.", icon: "◓", group: "solar" },
+  "Jupiter: from orbit": { title: "Jupiter", description: "The belts and zones, the Great Red Spot and its wake, from 200 000 km.", icon: "♃", group: "solar" },
+  "Io: Jupiter in the sky": { title: "Jupiter from Io", description: "40 km over Io's sulphur plains, the gibbous Jupiter hanging 20° across in its sky.", icon: "◉", group: "solar" },
+  "Europa: Jupiter over the ice": { title: "Jupiter from Europa", description: "Low over Europa's cracked ice, Jupiter rising, three-quarters lit.", icon: "◍", group: "solar" },
+  "Saturn: the rings from above": { title: "Saturn's rings", description: "From above the lit face of the rings: their divisions, the planet's shadow across them, their shadow on its clouds.", icon: "♄", group: "solar" },
+  "Saturn: backlit": { title: "Saturn against the Sun", description: "From the night side, the planet a thin crescent, its rings a line of light.", icon: "◌", group: "solar" },
+  "Titan: the orange haze": { title: "Titan", description: "Saturn's largest moon wrapped in its orange haze, the ring of it glowing along the limb.", icon: "●", group: "solar" },
+  "Uranus: from orbit": { title: "Uranus", description: "The pale cyan giant tipped on its side, its pole towards the Sun.", icon: "⛢", group: "solar" },
+  "Neptune: from orbit": { title: "Neptune", description: "The deep blue of methane, its bright cirrus streaks.", icon: "♆", group: "solar" },
+  "Pluto: the heart": { title: "Pluto", description: "Sputnik Planitia's nitrogen ice — the heart — and the dark red Cthulhu beside it.", icon: "♇", group: "solar" },
+  "Miller: the water world": { title: "Miller's planet", description: "The water world a few radii from Gargantua, lit by its disk: shallow seas over pale shoals, the giant waves' trains of foam.", icon: "≋", group: "gargantua" },
+  "Miller: the shallow sea": { title: "Miller's shallow sea", description: "3 km over the knee-deep ocean: the swell and the wind waves glittering under Gargantua's light.", icon: "〰", group: "gargantua" },
+  "Mann: the ice world": { title: "Mann's planet", description: "The frozen world: snowfields, blue glacial ice, dark rock ridges.", icon: "❄", group: "gargantua" },
+  "Mann: the glaciers": { title: "Mann's glaciers", description: "Low over the ice: the ridges and snowfields under a deep blue sky.", icon: "▲", group: "gargantua" },
+  "Edmunds: the desert world": { title: "Edmunds' planet", description: "The third world, round the orange K2 star: a desert of ochre, rust and grey rock under an Earth-like air.", icon: "◔", group: "gargantua" },
+  "Edmunds: the plains": { title: "Edmunds' plains", description: "2 km over its plains, the warm light of its star, the haze towards the horizon.", icon: "▭", group: "gargantua" },
   "game:interstellar": { title: "Interstellar — the journey", description: "2067, on the pad at the Kennedy Space Center. Take off, reach Saturn and the wormhole behind it, then Gargantua. Real time, real distances.", icon: "✈", group: "game" },
   "game:artemis": { title: "Artemis II — around the Moon", description: "400 km above the Earth, the Moon targeted: plan a free return with the flight planner (O) and fly it.", icon: "☾", group: "game" },
   "Mission: through the wormhole to the companion star (automatic flight)": { title: "Mission: through the wormhole", description: "An automatic flight in the Ranger: through the throat to Gargantua's companion star.", icon: "⇥", group: "game" },

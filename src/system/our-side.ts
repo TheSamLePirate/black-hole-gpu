@@ -11,7 +11,7 @@ import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from ".
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
-import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity } from "./our-surface";
+import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity, toBodyFixed } from "./our-surface";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
 export const OUR_BODIES = GARGANTUA_SYSTEM.bodies
@@ -171,48 +171,85 @@ export function earthStart(t = 0, altKm = 400, moonPlane = false): { X: Vec3; fw
  * (28.57° N, 80.65° W), the ship resting on it, nose east, the Earth turning under it. Home frame, at t.
  */
 export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
-  const q = bodyFixedOf("earth", lat, lon, GEAR + groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
-  const X = fromBodyFixed("earth", q, t);
-  const E = ourState("earth", t).pos;
-  const r = [X[0] - E[0], X[1] - E[1], X[2] - E[2]] as Vec3;
-  const rl = Math.hypot(...r);
-  const up: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
-  const w = spinVector(SOLAR_BODIES.find((b) => b.id === "earth")!);
-  const e: Vec3 = [w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]];
-  const el = Math.hypot(...e);
-  return { X, fwd: [e[0] / el, e[1] / el, e[2] / el] as Vec3, up, vel: groundVelocity("earth", X, t), landed: { body: "earth", q } };
+  return bodyGround("earth", t, lat, lon);
 }
 
 /**
- * A view of the Earth (the scenes): on its ground at a latitude, east longitude [°] — the ship on its
- * gear, level — or `altKm` above that place, on a circular orbit eastwards; turned towards a body (the
- * Moon, the Sun, or the Earth's centre), then off it by [yaw, pitch]° (yaw > 0: to the left). On the
- * ground the nose points under the body, level; in orbit at it (the look is then turned onto it and off
- * it as the camera sees it: main.ts, aimAt).
+ * A view of one of our bodies (the scenes; the Earth by default): on its ground at a latitude, east
+ * longitude [°] — the ship on its gear, level — or `altKm` above that place, on a circular orbit
+ * eastwards; turned towards a body (the Moon, the Sun, the body itself, any of ours), then off it by
+ * [yaw, pitch]° (yaw > 0: to the left). On the ground the nose points under the body, level; in orbit
+ * at it (the look is then turned onto it and off it as the camera sees it: main.ts, aimAt).
+ * Whatever the date: `phase` places an orbit at that angle from the point under the Sun (0: its full
+ * face seen, 90: half lit — eastwards, the evening side), `sunEl` a place on the ground at the
+ * latitude at[0] where the Sun stands that high [°] (the afternoon's side; below 0: dusk).
  */
-export interface EarthView { at: [number, number]; altKm?: number; look?: "moon" | "sun" | "earth"; off?: [number, number] }
-export function earthView(t: number, v: EarthView) {
+export interface BodyView {
+  body?: string;
+  at?: [number, number];
+  altKm?: number;
+  phase?: number;
+  sunEl?: number;
+  look?: string;
+  off?: [number, number];
+  /** in orbit: the ship's nose that far [°] below the body, its back towards it (the look turned onto
+   *  the body passes over the cockpit: the hull out of the image) */
+  tilt?: number;
+  /** Gargantua's worlds (main.ts): on an orbit about the world, where on it [°] and its tilt [°] */
+  nu?: number;
+  inc?: number;
+}
+/** (the Earth's scenes: a BodyView there) */
+export type EarthView = BodyView;
+export function bodyView(t: number, v: BodyView) {
   const unit = (a: Vec3): Vec3 => {
     const l = Math.hypot(...a) || 1;
     return [a[0] / l, a[1] / l, a[2] / l];
   };
   const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  const [lat, lon] = v.at;
-  const E = ourState("earth", t);
+  const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const id = v.body ?? "earth";
+  const body = SOLAR_BODIES.find((b) => b.id === id)!;
+  const B = ourState(id, t);
+  const S = ourState("sun", t).pos;
+  const sun = unit([S[0] - B.pos[0], S[1] - B.pos[1], S[2] - B.pos[2]]);
+  const w = spinVector(body);
+  const pole = Math.hypot(...w) > 0 ? unit(w) : ([0, 0, 1] as Vec3);
+  // (the latitude, east longitude of a direction from the body's centre, at t)
+  const latLonOf = (d: Vec3): [number, number] => {
+    const q = unit(toBodyFixed(id, [B.pos[0] + d[0], B.pos[1] + d[1], B.pos[2] + d[2]], t));
+    return [(Math.asin(Math.max(-1, Math.min(1, q[2]))) * 180) / Math.PI, (Math.atan2(q[1], q[0]) * 180) / Math.PI];
+  };
+  let [lat, lon] = v.at ?? [0, 0];
+  if (v.altKm !== undefined && v.phase !== undefined) {
+    const ph = (v.phase * Math.PI) / 180;
+    const e = unit(cross(pole, sun));
+    [lat, lon] = latLonOf([sun[0] * Math.cos(ph) + e[0] * Math.sin(ph), sun[1] * Math.cos(ph) + e[1] * Math.sin(ph), sun[2] * Math.cos(ph) + e[2] * Math.sin(ph)]);
+    if (v.at) lat += v.at[0];
+  } else if (v.altKm === undefined && v.sunEl !== undefined) {
+    // (the longitude, along the latitude, where the Sun stands at sunEl — the afternoon's side)
+    let best = Infinity;
+    for (let l = -180; l < 180; l += 0.25) {
+      const X = fromBodyFixed(id, bodyFixedOf(id, lat, l, 0), t);
+      const up = unit([X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]]);
+      const east = unit(cross(pole, up));
+      if (dot(east, sun) > 0) continue;
+      const el = (Math.asin(Math.max(-1, Math.min(1, dot(up, sun)))) * 180) / Math.PI;
+      if (Math.abs(el - v.sunEl) < best) [best, lon] = [Math.abs(el - v.sunEl), l];
+    }
+  }
   let X: Vec3, up: Vec3, east: Vec3, vel: Vec3, landed: { body: string; q: Vec3 } | undefined;
   if (v.altKm === undefined) {
-    const g = earthGround(t, lat, lon);
+    const g = bodyGround(id, t, lat, lon);
     ({ X, up, vel, landed } = g);
     east = g.fwd;
   } else {
-    const earth = SOLAR_BODIES.find((b) => b.id === "earth")!;
-    X = fromBodyFixed("earth", bodyFixedOf("earth", lat, lon, v.altKm * 1e3), t);
-    const r: Vec3 = [X[0] - E.pos[0], X[1] - E.pos[1], X[2] - E.pos[2]];
+    X = fromBodyFixed(id, bodyFixedOf(id, lat, lon, v.altKm * 1e3), t);
+    const r: Vec3 = [X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]];
     up = unit(r);
-    const w = spinVector(earth);
-    east = unit([w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]]);
-    const vc = Math.sqrt(earth.mass / Math.hypot(...r));
-    vel = [E.vel[0] + vc * east[0], E.vel[1] + vc * east[1], E.vel[2] + vc * east[2]];
+    east = unit(cross(pole, up));
+    const vc = Math.sqrt(body.mass / Math.hypot(...r));
+    vel = [B.vel[0] + vc * east[0], B.vel[1] + vc * east[1], B.vel[2] + vc * east[2]];
   }
   // the body's direction (the Moon's from here: its parallax is a degree)
   const P = v.look ? ourState(v.look, t).pos : null;
@@ -225,9 +262,33 @@ export function earthView(t: number, v: EarthView) {
   }
   // (the local up, or — looking straight down — the north)
   const u = dot(up, dir);
-  const north: Vec3 = unit([up[1] * east[2] - up[2] * east[1], up[2] * east[0] - up[0] * east[2], up[0] * east[1] - up[1] * east[0]]);
+  const north = unit(cross(up, east));
   const ref = Math.abs(u) < 0.95 ? up : north;
   const k = dot(ref, dir);
   const shipUp = unit([ref[0] - dir[0] * k, ref[1] - dir[1] * k, ref[2] - dir[2] * k]);
-  return { X, fwd: dir, up: shipUp, vel, landed };
+  const [fwd, up2] = tiltAway(dir, shipUp, v.tilt ?? 0);
+  return { X, fwd, up: up2, vel, landed };
+}
+export const earthView = bodyView;
+
+/** A ship's nose and up turned from a direction d (up u ⟂ d) by a [°] about their normal: d then that far
+ *  above its nose. */
+export function tiltAway(d: Vec3, u: Vec3, a: number): [Vec3, Vec3] {
+  const c = Math.cos((a * Math.PI) / 180), s = Math.sin((a * Math.PI) / 180);
+  return [[d[0] * c - u[0] * s, d[1] * c - u[1] * s, d[2] * c - u[2] * s], [d[0] * s + u[0] * c, d[1] * s + u[1] * c, d[2] * s + u[2] * c]];
+}
+
+/** On the ground of one of our solid bodies at a latitude, east longitude [°]: the ship on its gear, nose east. */
+export function bodyGround(id: string, t: number, lat: number, lon: number) {
+  const q = bodyFixedOf(id, lat, lon, GEAR + groundRelief(id, bodyFixedOf(id, lat, lon, 0)));
+  const X = fromBodyFixed(id, q, t);
+  const C = ourState(id, t).pos;
+  const r = [X[0] - C[0], X[1] - C[1], X[2] - C[2]] as Vec3;
+  const rl = Math.hypot(...r);
+  const up: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
+  const w = spinVector(SOLAR_BODIES.find((b) => b.id === id)!);
+  let e: Vec3 = [w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]];
+  if (Math.hypot(...e) < 1e-30) e = [0, -up[2], up[1]];
+  const el = Math.hypot(...e);
+  return { X, fwd: [e[0] / el, e[1] / el, e[2] / el] as Vec3, up, vel: groundVelocity(id, X, t), landed: { body: id, q } };
 }

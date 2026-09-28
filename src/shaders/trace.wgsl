@@ -2601,12 +2601,12 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       veil = e.veil;
     } else {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
-      // most of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
+      // part of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
       var wb = vec3f(1.0);
       if (k < ourStart() && bodyKind(k) != 0u) {
         let le = nearLight(k).e;
         let ll = luminance(le);
-        if (ll > 0.0) { wb = ll / max(mix(vec3f(ll), le, 0.85), vec3f(1e-30)); }
+        if (ll > 0.0) { wb = ll / max(mix(vec3f(ll), le, 0.6), vec3f(1e-30)); }
       }
       let nair = nearAir(look, select(1e30, hitT, hitT > 0.0), k);
       if (hitT > 0.0) {

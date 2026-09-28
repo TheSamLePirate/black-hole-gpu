@@ -1,7 +1,8 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { earthGround, earthStart, earthView, saturnDeparture } from "./system/our-side";
+import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
+import { theirOrbitPose, universeOf } from "./game/place";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -228,11 +229,21 @@ async function main() {
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
     camera.setOurLanded(null);
-    if (typeof pose === "object") {
-      // a view of the Earth: placed, the look turned towards its body
+    if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
+      // a view of one of Gargantua's worlds: on an orbit about it, looking straight down, the way it
+      // goes at the top of the image, then the look turned off it
+      const p = theirOrbitPose({ body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc }, time ?? simTime, settings.spin, settings.massSolar);
+      settings.shipLookYaw = settings.shipLookPitch = 0;
+      const [fwd, up] = tiltAway([-p.up[0], -p.up[1], -p.up[2]], p.fwd, pose.tilt ?? 0);
+      setHolePose(settings, p.X, fwd, up, p.vel);
+      settings.motion = "geodesic";
+      const off = pose.off ?? [0, 0];
+      void aimAt(null, [off[0], off[1] + (pose.tilt ?? 0)]);
+    } else if (typeof pose === "object") {
+      // a view of one of our bodies: placed, the look turned towards a body
       // (the camera placed along the ship's axes — the ship's attitude is the camera's less the look —
       // then the look turned)
-      const v = earthView(time ?? simTime, pose);
+      const v = bodyView(time ?? simTime, pose);
       settings.shipLookYaw = settings.shipLookPitch = 0;
       setHomePose(settings, v.X, v.fwd, v.up, v.vel);
       settings.motion = "geodesic";
@@ -801,7 +812,7 @@ async function main() {
     __bh: {
       /** the game's tools: __bh.game.help() */
       game: tools,
-      settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, refresh: refreshGui, skyLoading,
+      settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
       sound, audio,
       /** the built-in scenes' names (for __bh.preset) */

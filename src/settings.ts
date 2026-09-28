@@ -1,4 +1,4 @@
-import type { EarthView } from "./system/our-side";
+import type { BodyView } from "./system/our-side";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** Camera rotation: around the selected body, or about the camera itself. */
@@ -422,7 +422,7 @@ export function defaultSettings(): Settings {
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
  *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center;
  *  an EarthView: a view of the Earth — its ground or above it, towards the Moon, the Sun or itself) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | EarthView };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | BodyView };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
@@ -438,6 +438,10 @@ const EARTH_VIEW: Preset = {
   anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "dorsal",
   engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, lensFlare: 0,
 };
+// (the solar system's worlds, Gargantua's: the same system, the Ranger on its orbit, the camera behind its
+// cockpit — it moves with them: Miller runs round Gargantua at half the speed of light)
+const WORLD_VIEW: Preset = { ...EARTH_VIEW };
+const GARGANTUA_WORLD: Preset = { ...EARTH_VIEW, anchor: "hole", fov: 40, time: 109.6 };
 /** the game's start [M], a day [M] */
 const T0 = 109.6, DAY = 86400 / 492.5490947;
 const SANTIAGO: [number, number] = [-33.45, -70.66];
@@ -515,6 +519,31 @@ export const presets: Record<string, Preset> = {
   // Brittany on a winter afternoon (15:00, the Sun low in the south-west behind): the clouds lit pink, the
   // green hills
   "Earth: a winter afternoon in Brittany": { ...EARTH_VIEW, target: "sun", fov: 70, time: T0, pose: { at: [48.4, -4.5], off: [0, 12] } },
+  // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
+  // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
+  "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 30, time: T0 + 16.5 * DAY, pose: { tilt: 60, body: "moon", at: [0, -21], altKm: 25, look: "earth", off: [0, -7] } },
+  "Moon: the terminator from orbit": { ...WORLD_VIEW, target: "moon", fov: 60, exposure: 1, time: T0, pose: { body: "moon", altKm: 300, phase: 80, look: "moon", off: [0, 50] } },
+  "Moon: the half Moon from orbit": { ...WORLD_VIEW, target: "moon", fov: 50, exposure: 1, time: T0, pose: { tilt: 60, body: "moon", altKm: 4000, phase: 80, look: "moon" } },
+  "Mercury: from orbit": { ...WORLD_VIEW, target: "mercury", fov: 50, exposure: 0.7, time: T0, pose: { tilt: 60, body: "mercury", altKm: 5000, phase: 55, look: "mercury" } },
+  "Venus: above the clouds": { ...WORLD_VIEW, target: "venus", fov: 50, time: T0, pose: { tilt: 60, body: "venus", altKm: 15000, phase: 60, look: "venus" } },
+  "Mars: from orbit": { ...WORLD_VIEW, target: "mars", fov: 50, time: T0, pose: { tilt: 60, body: "mars", altKm: 6000, phase: 35, look: "mars" } },
+  "Mars: the blue sunset": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0, pose: { body: "mars", at: [-4.6, 0], sunEl: 2, look: "sun", off: [0, 4] } },
+  "Jupiter: from orbit": { ...WORLD_VIEW, target: "jupiter", fov: 50, time: T0, pose: { tilt: 60, body: "jupiter", altKm: 200000, phase: 30, look: "jupiter" } },
+  "Io: Jupiter in the sky": { ...EARTH_VIEW, target: "jupiter", fov: 80, time: T0 + 0.985 * DAY, pose: { tilt: 60, body: "io", at: [10, 18], altKm: 40, look: "jupiter", off: [0, -17] } },
+  "Europa: Jupiter over the ice": { ...EARTH_VIEW, target: "jupiter", fov: 80, time: T0 + 0.59 * DAY, pose: { tilt: 60, body: "europa", at: [10, -142], altKm: 40, look: "jupiter", off: [0, -14] } },
+  "Saturn: the rings from above": { ...WORLD_VIEW, target: "saturn", fov: 32, time: T0, pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 40, at: [-30, 0], look: "saturn" } },
+  "Saturn: backlit": { ...WORLD_VIEW, target: "saturn", fov: 32, time: T0, pose: { tilt: 60, body: "saturn", altKm: 500000, phase: 155, at: [-12, 0], look: "saturn" } },
+  "Titan: the orange haze": { ...WORLD_VIEW, target: "titan", fov: 50, exposure: 0.7, time: T0, pose: { tilt: 60, body: "titan", altKm: 6000, phase: 45, look: "titan" } },
+  "Uranus: from orbit": { ...WORLD_VIEW, target: "uranus", fov: 50, time: T0, pose: { tilt: 60, body: "uranus", altKm: 70000, phase: 30, look: "uranus" } },
+  "Neptune: from orbit": { ...WORLD_VIEW, target: "neptune", fov: 50, time: T0, pose: { tilt: 60, body: "neptune", altKm: 70000, phase: 30, look: "neptune" } },
+  "Pluto: the heart": { ...WORLD_VIEW, target: "pluto", fov: 50, exposure: -0.8, time: T0, pose: { tilt: 60, body: "pluto", altKm: 3000, phase: 25, look: "pluto" } },
+  // ---- Gargantua's worlds (group "gargantua"): on an orbit about each, looking down, then towards its horizon
+  "Miller: the water world": { ...GARGANTUA_WORLD, target: "miller", pose: { tilt: 60, body: "miller", altKm: 25000, nu: 120 } },
+  "Miller: the shallow sea": { ...GARGANTUA_WORLD, target: "miller", fov: 60, pose: { body: "miller", altKm: 3, nu: 120, off: [0, 78] } },
+  "Mann: the ice world": { ...GARGANTUA_WORLD, target: "mann", pose: { tilt: 60, body: "mann", altKm: 25000, nu: 210 } },
+  "Mann: the glaciers": { ...GARGANTUA_WORLD, target: "mann", fov: 60, pose: { body: "mann", altKm: 3, nu: 225, off: [0, 80] } },
+  "Edmunds: the desert world": { ...GARGANTUA_WORLD, target: "edmunds", pose: { tilt: 60, body: "edmunds", altKm: 25000, nu: 225 } },
+  "Edmunds: the plains": { ...GARGANTUA_WORLD, target: "edmunds", fov: 60, pose: { body: "edmunds", altKm: 2, nu: 240, off: [0, 80] } },
   // the game: the film's journey from the Earth (on the pad at the Kennedy Space Center, 2067-01-01
   // 10:00 local), in real time, the Ranger on the Crew engine at 2 g (a lift-off needs more than 1 g);
   // first objective: orbit, then Saturn and the wormhole behind it

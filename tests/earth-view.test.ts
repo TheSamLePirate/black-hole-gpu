@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { earthView, ourState } from "../src/system/our-side";
+import { bodyView, earthView, ourState } from "../src/system/our-side";
 import { gearHeight } from "../src/system/our-surface";
 import { presets } from "../src/settings";
 
@@ -46,4 +46,35 @@ test("the Earth's scenes all place the camera", () => {
     const v = earthView(p.time!, p.pose as Parameters<typeof earthView>[1]);
     expect(v.X.every(Number.isFinite)).toBe(true);
   }
+});
+
+// Any of our worlds: an orbit placed by its phase (the angle at the body from the Sun to the camera),
+// a place on the ground by the Sun's height there, the ship tilted off the body (its back to it)
+test("other worlds: the phase, the Sun's height, the tilt", () => {
+  const deg = 180 / Math.PI;
+  for (const [body, phase] of [["mars", 35], ["moon", 80], ["saturn", 150]] as const) {
+    const v = bodyView(t0, { body, altKm: 5000, phase, look: body });
+    const B = ourState(body, t0).pos, S = ourState("sun", t0).pos;
+    const c = unit([v.X[0] - B[0], v.X[1] - B[1], v.X[2] - B[2]]), s = unit([S[0] - B[0], S[1] - B[1], S[2] - B[2]]);
+    expect(Math.abs(Math.acos(dot(c, s)) * deg - phase)).toBeLessThan(0.5);
+  }
+  const g = bodyView(t0, { body: "mars", at: [-4.6, 0], sunEl: 2, look: "sun" });
+  expect(g.landed?.body).toBe("mars");
+  const S = ourState("sun", t0).pos;
+  const el = Math.asin(dot(g.up, unit([S[0] - g.X[0], S[1] - g.X[1], S[2] - g.X[2]]))) * deg;
+  expect(Math.abs(el - 2)).toBeLessThan(0.5);
+  // tilted 60°: the body 60° above the nose, the ship's axes orthonormal
+  const t = bodyView(t0, { body: "jupiter", altKm: 200000, phase: 30, look: "jupiter", tilt: 60 });
+  const J = ourState("jupiter", t0).pos;
+  const d = unit([J[0] - t.X[0], J[1] - t.X[1], J[2] - t.X[2]]);
+  expect(Math.abs(dot(d, t.fwd) - 0.5)).toBeLessThan(1e-6);
+  expect(dot(d, t.up)).toBeGreaterThan(0.866 - 1e-6);
+  expect(Math.abs(dot(t.fwd, t.up))).toBeLessThan(1e-9);
+});
+
+test("every world's scene has its gallery entry", async () => {
+  const { PRESET_INFO } = await import("../src/ui/schema");
+  const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
+  expect(worlds.length).toBe(12 + 22);
+  for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });
