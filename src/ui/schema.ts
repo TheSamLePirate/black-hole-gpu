@@ -930,9 +930,10 @@ export const QUALITY_KEYS: (keyof Settings)[] = [
   "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps", "targetSpp", "adaptiveIntegrator", "integratorTolerance", "noiseThreshold",
 ];
 
-export type SceneGroup = "game" | "gargantua" | "wormhole" | "hole";
+export type SceneGroup = "game" | "earth" | "gargantua" | "wormhole" | "hole";
 export const SCENE_GROUPS: { id: SceneGroup; label: string; hint: string }[] = [
   { id: "game", label: "Game", hint: "Fly the Ranger: the film's journey, missions" },
+  { id: "earth", label: "Earth", hint: "Our planet from its ground and its orbits: its air, its night, the Sun, the Moon and the stars" },
   { id: "gargantua", label: "Gargantua", hint: "Interstellar's black hole, its star and planets" },
   { id: "wormhole", label: "Wormhole", hint: "The mouth near Saturn and its lensing" },
   { id: "hole", label: "Black holes", hint: "Kerr physics: disks, jets, observers, instruments" },
@@ -940,6 +941,18 @@ export const SCENE_GROUPS: { id: SceneGroup; label: string; hint: string }[] = [
 
 /** The scenes' names, blurbs, glyphs and groups (the scene gallery); keyed by preset name. */
 export const PRESET_INFO: Record<string, { title?: string; description: string; icon: string; group: SceneGroup }> = {
+  "Earth: the Blue Marble": { title: "The Blue Marble", description: "The whole day side from 15 000 km: the Americas and the Atlantic under their clouds, the blue of the air along the limb.", icon: "◉", group: "earth" },
+  "Earth: sunset from orbit": { title: "Sunset from orbit", description: "2 500 km over the Indian Ocean, the Sun just above the limb: the air's arc, the ocean's glint, the terminator's red.", icon: "◐", group: "earth" },
+  "Earth: low orbit over the Amazon": { title: "Low orbit over the Amazon", description: "400 km up: the river's sediment, the cumulus in puffs, the haze thickening towards the horizon.", icon: "≈", group: "earth" },
+  "Earth: the night side, Japan's lights": { title: "The night side", description: "800 km over Japan at midnight: the cities' lights, the dark ocean, the stars over the limb.", icon: "✦", group: "earth" },
+  "Earth: the Himalaya from orbit": { title: "The Himalaya from orbit", description: "400 km over the Ganges plain, looking north: the range in relief under the afternoon Sun, its snow and shadows.", icon: "▲", group: "earth" },
+  "Earth: sunset over the Andes": { title: "Sunset over the Andes", description: "Santiago, the Sun going down behind the coast range: the glow, the sky darkening upwards.", icon: "☀", group: "earth" },
+  "Earth: full Moon rising over the Andes": { title: "Full Moon over the Andes", description: "A quarter of an hour after sunset, the full Moon rising over the Andes, reddened, crossed by far clouds (a telephoto).", icon: "●", group: "earth" },
+  "Earth: crescent Moon at dusk over the Alps": { title: "Crescent over the Alps", description: "Mont Blanc at dusk: a two-day-old Moon, 4 % lit, low over the afterglow (a telephoto).", icon: "☽", group: "earth" },
+  "Earth: first quarter over the Andes": { title: "First quarter", description: "Aconcagua at dusk: the half Moon 34° up, its seas, the deep blue of the evening (a telephoto).", icon: "◑", group: "earth" },
+  "Earth: moonlit night at Uluru": { title: "Moonlit night at Uluru", description: "Midnight in the desert under the full Moon: silvered clouds, the red ground, the stars through the blue.", icon: "☾", group: "earth" },
+  "Earth: the Milky Way over the Atacama": { title: "The Milky Way over the Atacama", description: "Paranal past midnight, near the new Moon: the Milky Way rising in the east over the desert.", icon: "✧", group: "earth" },
+  "Earth: a winter afternoon in Brittany": { title: "A winter afternoon", description: "Brittany at 15:00 in January, the low Sun behind: the clouds lit pink, the green hills, the haze.", icon: "☁", group: "earth" },
   "game:interstellar": { title: "Interstellar — the journey", description: "2067, on the pad at the Kennedy Space Center. Take off, reach Saturn and the wormhole behind it, then Gargantua. Real time, real distances.", icon: "✈", group: "game" },
   "game:artemis": { title: "Artemis II — around the Moon", description: "400 km above the Earth, the Moon targeted: plan a free return with the flight planner (O) and fly it.", icon: "☾", group: "game" },
   "Mission: through the wormhole to the companion star (automatic flight)": { title: "Mission: through the wormhole", description: "An automatic flight in the Ranger: through the throat to Gargantua's companion star.", icon: "⇥", group: "game" },

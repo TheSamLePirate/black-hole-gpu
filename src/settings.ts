@@ -1,3 +1,5 @@
+import type { EarthView } from "./system/our-side";
+
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** Camera rotation: around the selected body, or about the camera itself. */
 export type Rotation = "orbit" | "free";
@@ -418,13 +420,27 @@ export function defaultSettings(): Settings {
 
 /** A scene preset: settings, plus optionally the simulation time to start from [M]. */
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
- *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" };
+ *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center;
+ *  an EarthView: a view of the Earth — its ground or above it, towards the Moon, the Sun or itself) */
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | EarthView };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
   jet: false, sun: true, sunOrbit: 70, sunRadius: 2.5, sunTemp: 4300, sunBrightness: 6, sunPhase: 0,
 };
+
+// The Earth's scenes: our side in the game's world (the wormhole near Saturn), the Ranger on the ground or
+// in orbit (an EarthView: placed, the look turned towards the Moon, the Sun or the Earth), in real time,
+// auto exposure; dates from the game's start (2067-01-01 15:00 UTC: a full Moon)
+const EARTH_VIEW: Preset = {
+  system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
+  jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
+  anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "dorsal",
+  engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, lensFlare: 0,
+};
+/** the game's start [M], a day [M] */
+const T0 = 109.6, DAY = 86400 / 492.5490947;
+const SANTIAGO: [number, number] = [-33.45, -70.66];
 
 export const presets: Record<string, Preset> = {
   "Kerr a=0.94, near edge-on": {
@@ -471,6 +487,34 @@ export const presets: Record<string, Preset> = {
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "hole", distance: 60, inclination: 78, azimuth: 146, yaw: 0, pitch: 0, roll: 0, fov: 50,
   },
+  // ---- the Earth (group "earth"): its air, clouds, relief and night; the Sun, the Moon and the stars from it
+  // the whole day side from 15 000 km: the Americas and the Atlantic, the clouds, the limb's blue
+  "Earth: the Blue Marble": { ...EARTH_VIEW, target: "earth", fov: 55, time: T0, pose: { at: [-10, -40], altKm: 15000, look: "earth" } },
+  // 2 500 km over the Indian Ocean, the Sun just over the limb: the air's arc, the glint, the terminator
+  "Earth: sunset from orbit": { ...EARTH_VIEW, target: "sun", shipMount: "chase", time: T0, pose: { at: [0, 65], altKm: 2500, look: "sun", off: [22, -6] } },
+  // 400 km over the Amazon's mouth: its sediment, the cumulus, the haze towards the horizon
+  "Earth: low orbit over the Amazon": { ...EARTH_VIEW, target: "earth", time: T0, pose: { at: [-1, -52], altKm: 400, look: "earth", off: [0, 62] } },
+  // 800 km over Japan at midnight near the new Moon (15 January): the cities' lights, the night's air on the limb
+  "Earth: the night side, Japan's lights": { ...EARTH_VIEW, target: "earth", time: T0 + 14 * DAY, pose: { at: [35, 137], altKm: 800, look: "earth", off: [0, 40] } },
+  // the Himalaya from 400 km over the Ganges plain, looking north at the range, the afternoon Sun 11° up
+  // there: the ridges in relief, their snow, their shadows
+  "Earth: the Himalaya from orbit": { ...EARTH_VIEW, target: "earth", fov: 50, time: T0 - 0.1931 * DAY, pose: { at: [24.5, 86.9], altKm: 400, look: "earth", off: [0, 45] } },
+  // Santiago, the Sun setting behind the coast range: the auto exposure on the glow
+  "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0 + 0.358 * DAY, pose: { at: SANTIAGO, look: "sun", off: [0, 6] } },
+  // Santiago, a quarter of an hour later: the full Moon rising over the Andes (a telephoto)
+  "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3695 * DAY, pose: { at: SANTIAGO, look: "moon" } },
+  // Mont Blanc at dusk, 18 January: a two-day-old Moon, 4 % lit, 12° up (a telephoto)
+  "Earth: crescent Moon at dusk over the Alps": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 17.083 * DAY, pose: { at: [45.83, 6.86], look: "moon" } },
+  // Aconcagua at dusk, 23 January: the first quarter, 34° up (a telephoto)
+  "Earth: first quarter over the Andes": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 22.382 * DAY, pose: { at: [-32.65, -70.01], look: "moon" } },
+  // Uluru at midnight under the full Moon: moonlit clouds, the stars through the deep blue
+  "Earth: moonlit night at Uluru": { ...EARTH_VIEW, target: "moon", time: T0, pose: { at: [-25.34, 131.03], look: "moon", off: [0, -20] } },
+  // the Atacama at Paranal, past midnight near the new Moon (16 January): the Milky Way rising in the east
+  // over the desert
+  "Earth: the Milky Way over the Atacama": { ...EARTH_VIEW, target: "moon", fov: 80, time: T0 + 14.4875 * DAY, pose: { at: [-24.6, -70.4], off: [0, 28] } },
+  // Brittany on a winter afternoon (15:00, the Sun low in the south-west behind): the clouds lit pink, the
+  // green hills
+  "Earth: a winter afternoon in Brittany": { ...EARTH_VIEW, target: "sun", fov: 70, time: T0, pose: { at: [48.4, -4.5], off: [0, 12] } },
   // the game: the film's journey from the Earth (on the pad at the Kennedy Space Center, 2067-01-01
   // 10:00 local), in real time, the Ranger on the Crew engine at 2 g (a lift-off needs more than 1 g);
   // first objective: orbit, then Saturn and the wormhole behind it

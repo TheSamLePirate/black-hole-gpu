@@ -1,7 +1,7 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { earthGround, earthStart, saturnDeparture } from "./system/our-side";
+import { earthGround, earthStart, earthView, saturnDeparture } from "./system/our-side";
 import { mouth, setSceneTime } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
@@ -193,6 +193,28 @@ async function main() {
     syncButtons();
   };
 
+  /**
+   * A scene's look turned onto a body as the camera sees it (its mount and the aberration whatever they
+   * are): a few frames of correction — the body's bearing and elevation in the image taken off the look
+   * — then the scene's offset [yaw, pitch]° added (the ship keeps its attitude).
+   */
+  async function aimAt(id: string | null, off: [number, number]) {
+    const deg = 180 / Math.PI;
+    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+    await frame();
+    // (the camera's frame and the body's place are computed, not rendered: no frame to wait for)
+    for (let i = 0; id && i < 12; i++) {
+      const cam = cameraFrame(settings);
+      const L = bodyLook(settings, cam, id as Body, simTime).look;
+      const b = Math.atan2(dot(L, cam.right), dot(L, cam.fwd)) * deg;
+      const e = Math.asin(Math.max(-1, Math.min(1, dot(L, cam.up)))) * deg;
+      camera.setLook(settings.shipLookYaw + b, settings.shipLookPitch + e);
+      if (Math.abs(b) < 0.005 && Math.abs(e) < 0.005) break;
+    }
+    camera.setLook(settings.shipLookYaw + off[0], settings.shipLookPitch + off[1]);
+  }
+
   // (a preset exposed for our side — sunlit Saturn, ~21 EV above the disk — does not pass its exposure on)
   let exposedForOurSide = false;
   function applyPreset(name: string) {
@@ -206,7 +228,17 @@ async function main() {
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
     camera.setOurLanded(null);
-    if (pose) {
+    if (typeof pose === "object") {
+      // a view of the Earth: placed, the look turned towards its body
+      // (the camera placed along the ship's axes — the ship's attitude is the camera's less the look —
+      // then the look turned)
+      const v = earthView(time ?? simTime, pose);
+      settings.shipLookYaw = settings.shipLookPitch = 0;
+      setHomePose(settings, v.X, v.fwd, v.up, v.vel);
+      settings.motion = "geodesic";
+      camera.setOurLanded(v.landed ?? null);
+      void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
+    } else if (pose) {
       const t = time ?? simTime;
       const d = pose === "earthGround" ? earthGround(t) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);

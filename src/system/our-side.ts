@@ -182,3 +182,52 @@ export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
   const el = Math.hypot(...e);
   return { X, fwd: [e[0] / el, e[1] / el, e[2] / el] as Vec3, up, vel: groundVelocity("earth", X, t), landed: { body: "earth", q } };
 }
+
+/**
+ * A view of the Earth (the scenes): on its ground at a latitude, east longitude [°] — the ship on its
+ * gear, level — or `altKm` above that place, on a circular orbit eastwards; turned towards a body (the
+ * Moon, the Sun, or the Earth's centre), then off it by [yaw, pitch]° (yaw > 0: to the left). On the
+ * ground the nose points under the body, level; in orbit at it (the look is then turned onto it and off
+ * it as the camera sees it: main.ts, aimAt).
+ */
+export interface EarthView { at: [number, number]; altKm?: number; look?: "moon" | "sun" | "earth"; off?: [number, number] }
+export function earthView(t: number, v: EarthView) {
+  const unit = (a: Vec3): Vec3 => {
+    const l = Math.hypot(...a) || 1;
+    return [a[0] / l, a[1] / l, a[2] / l];
+  };
+  const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const [lat, lon] = v.at;
+  const E = ourState("earth", t);
+  let X: Vec3, up: Vec3, east: Vec3, vel: Vec3, landed: { body: string; q: Vec3 } | undefined;
+  if (v.altKm === undefined) {
+    const g = earthGround(t, lat, lon);
+    ({ X, up, vel, landed } = g);
+    east = g.fwd;
+  } else {
+    const earth = SOLAR_BODIES.find((b) => b.id === "earth")!;
+    X = fromBodyFixed("earth", bodyFixedOf("earth", lat, lon, v.altKm * 1e3), t);
+    const r: Vec3 = [X[0] - E.pos[0], X[1] - E.pos[1], X[2] - E.pos[2]];
+    up = unit(r);
+    const w = spinVector(earth);
+    east = unit([w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]]);
+    const vc = Math.sqrt(earth.mass / Math.hypot(...r));
+    vel = [E.vel[0] + vc * east[0], E.vel[1] + vc * east[1], E.vel[2] + vc * east[2]];
+  }
+  // the body's direction (the Moon's from here: its parallax is a degree)
+  const P = v.look ? ourState(v.look, t).pos : null;
+  const dir = P ? unit([P[0] - X[0], P[1] - X[1], P[2] - X[2]]) : east;
+  if (landed) {
+    const el = Math.asin(Math.max(-1, Math.min(1, dot(dir, up))));
+    const h: Vec3 = [dir[0] - up[0] * Math.sin(el), dir[1] - up[1] * Math.sin(el), dir[2] - up[2] * Math.sin(el)];
+    const fwd = Math.hypot(...h) > 1e-6 ? unit(h) : east;
+    return { X, fwd, up, vel, landed };
+  }
+  // (the local up, or — looking straight down — the north)
+  const u = dot(up, dir);
+  const north: Vec3 = unit([up[1] * east[2] - up[2] * east[1], up[2] * east[0] - up[0] * east[2], up[0] * east[1] - up[1] * east[0]]);
+  const ref = Math.abs(u) < 0.95 ? up : north;
+  const k = dot(ref, dir);
+  const shipUp = unit([ref[0] - dir[0] * k, ref[1] - dir[1] * k, ref[2] - dir[2] * k]);
+  return { X, fwd: dir, up: shipUp, vel, landed };
+}

@@ -46,7 +46,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 61;
+const PARAM_VEC4S = 62;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -267,7 +267,7 @@ export class Renderer {
   private meterSkyUsed = 0;
   private meterSky = 0;
   private meterIncident = 0;
-  /** the camera in the Earth's air: the meter reads the image too (a sunset's sky, not a backdrop) */
+  /** the camera near the Earth: the meter reads the image too (a sunset's sky, its lit clouds: not a backdrop) */
   private meterInAir = false;
   /** what the tone map adds before its curve (the film look: 2 stops over) */
   private meterGain = 1;
@@ -1183,7 +1183,7 @@ export class Renderer {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
       this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
-      this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier && (Math.hypot(...near.centre) - 1) * 6371 < 100 * AIR_K;
+      this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier;
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
@@ -1251,6 +1251,9 @@ export class Renderer {
     const altKm = near && near.index === earthK ? (Math.hypot(...near.centre) - 1) * 6371 : 1e4;
     const lights = 0.6 * 20 ** (Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0));
     set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
+    // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
+    // side dark round its cities)
+    set(61, 4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1), 0, 0, 0);
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
