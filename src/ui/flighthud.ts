@@ -93,6 +93,26 @@ function panelHead(panel: HTMLElement, key: string, title: string) {
   return { head, text: t };
 }
 
+/** What each figure of the panels means (their tooltips). */
+const ROW_TIPS: Record<string, string> = {
+  dist: "Distance to the target, centre to centre",
+  rate: "How fast the distance changes — negative: closing in",
+  ca: "The closest the path comes to the target, and when",
+  light: "The light falling on the target's surface, and its equilibrium temperature",
+  alt: "Height above the ground under the ship",
+  vv: "Speed up or down, relative to the ground",
+  vh: "Speed along the ground",
+  twr: "The engine's full thrust over the local weight — above 1, it can lift off",
+  soi: "The body whose gravity dominates: the orbit is reckoned around it",
+  palt: "Height above its surface",
+  spd: "Orbital speed · vertical speed",
+  pa: "Periapsis · apoapsis heights: the orbit's lowest and highest points",
+  ie: "Inclination to the body's equator · eccentricity (0: circular)",
+  per: "Orbital period · time to the next periapsis",
+  next: "The next event on the path: a sphere change, an impact, a node",
+  tgt: "The selected target and its distance",
+};
+
 const HOLD_KEYS: [Hold, string, string][] = [
   ["prograde", "PRO", "1"], ["retrograde", "RETRO", "2"], ["radialOut", "RAD+", "3"], ["radialIn", "RAD−", "4"],
   ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"], ["antiTarget", "ANTI", ""], ["maneuver", "NODE", ""],
@@ -211,9 +231,13 @@ export class FlightHud {
     }
 
     // ---- mission bar
-    const chip = (key: string, label: string) => {
-      const c = h("span", "fl-chip");
+    // (the modes' lights: a click turns off what is engaged — SAS toggles)
+    const chip = (key: string, label: string, tip: string, click: () => void) => {
+      const c = h("button", "fl-chip") as HTMLButtonElement;
       c.append(h("i"), h("span", "", label));
+      c.dataset.label = label;
+      c.dataset.tip = tip;
+      c.onclick = click;
       this.missionEls[key] = c;
       return c;
     };
@@ -308,7 +332,17 @@ export class FlightHud {
       return g;
     };
     this.mission.append(
-      group("fl-mg-modes", chip("sas", "SAS"), chip("hold", "HOLD"), chip("auto", "AUTO")),
+      group("fl-mg-modes",
+        chip("sas", "Stability assist", "Holds the attitude, damps any rotation — click to toggle", () => act.sas()),
+        chip("hold", "Attitude hold", "The direction the nose is held along — click to release it", () => {
+          const hd = this.lastInfo?.hold;
+          if (hd && hd !== "none") act.hold(hd);
+        }),
+        chip("auto", "Autopilot", "What the autopilot flies — click to hand the controls back", () => {
+          const a = this.lastInfo?.auto;
+          if (a && a !== "none") act.auto(a);
+        }),
+      ),
       group("fl-mg-warp", warpBox),
       group("fl-mg-clocks",
         clock("tau", "Ship τ", "Proper time on the ship since you took the controls"),
@@ -328,6 +362,7 @@ export class FlightHud {
     ] as const) {
       const row = h("div", k === "name" ? "fl-tname" : "fl-kv");
       if (label) row.append(h("span", "", label));
+      if (ROW_TIPS[k]) (row.dataset.tip = ROW_TIPS[k]), (row.dataset.label = label);
       const v = h("b");
       row.append(v);
       this.targetEls[k] = v;
@@ -340,7 +375,10 @@ export class FlightHud {
       ["soi", "SOI"], ["alt", "Altitude"], ["spd", "Speed"], ["pa", "Pe · Ap"], ["ie", "Incl · e"], ["per", "Period · T−Pe"], ["next", "Next"], ["tgt", "Target"],
     ] as const) {
       const v = h("b");
-      stGrid.append(h("span", "", label), v);
+      const lab = h("span", "", label);
+      const tipKey = k === "alt" ? "palt" : k;
+      if (ROW_TIPS[tipKey]) for (const e of [lab, v]) (e.dataset.tip = ROW_TIPS[tipKey]), (e.dataset.label = label);
+      stGrid.append(lab, v);
       this.stEls[k] = v;
     }
     this.stBox.append(this.stBadge, stGrid);
@@ -377,9 +415,10 @@ export class FlightHud {
       b.style.left = `${CX + RING * Math.cos(a)}px`;
       b.style.top = `${CY - RING * Math.sin(a)}px`;
       b.dataset.label = label;
+      b.dataset.tip = title;
+      b.setAttribute("aria-label", label);
       b.dataset.side = Math.cos(a) < 0 ? "l" : "r";
       b.innerHTML = `<svg viewBox="-12 -12 24 24" style="${col ? `--c:${col}` : ""}">${svgBody}</svg>`;
-      b.title = title;
       b.onclick = fn;
       this.buttons.set(id, b);
       this.cockpit.append(b);
@@ -396,8 +435,19 @@ export class FlightHud {
       antiTarget: '<circle r="5"/><path d="M-3.5-3.5L3.5 3.5M3.5-3.5L-3.5 3.5M0-5V-9M0 5V9M-5 0H-9M5 0H9"/>',
       maneuver: '<path d="M0-7L7 0L0 7L-7 0Z"/><circle r="1.6" class="f"/>',
     };
-    HOLD_KEYS.forEach(([hold, label], j) => {
-      ringBtn(hold, label, `Hold ${HOLD_NAMES[hold]}`, () => act.hold(hold), 108 + j * 14.5, HOLD_SVG[hold] ?? "", COL[hold]);
+    const HOLD_TIPS: Record<string, string> = {
+      prograde: "Nose along the motion — burn to speed up, raise the far side of the orbit",
+      retrograde: "Nose against the motion — burn to slow down, lower the far side",
+      radialOut: "Nose away from the body, across the motion — turns the orbit about the ship",
+      radialIn: "Nose towards the body, across the motion",
+      normal: "Nose along the orbit's normal — burn to tilt the orbit",
+      antinormal: "Nose against the orbit's normal — tilts it the other way",
+      target: "Nose at the target",
+      antiTarget: "Nose away from the target",
+      maneuver: "Nose along the next planned burn",
+    };
+    HOLD_KEYS.forEach(([hold], j) => {
+      ringBtn(hold, HOLD_NAMES[hold], HOLD_TIPS[hold] ?? `Points the nose ${HOLD_NAMES[hold]} and holds it there`, () => act.hold(hold), 108 + j * 14.5, HOLD_SVG[hold] ?? "", COL[hold]);
     });
     const AUTO_SVG: Record<string, string> = {
       sas: '<circle r="6.5"/><path d="M-10 0H10M0-3V3"/>',
@@ -409,13 +459,49 @@ export class FlightHud {
       takeoff: '<path d="M0 5V-7M-3.5-3.5L0-7L3.5-3.5M-8 8H8"/>',
       speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
     };
+    const AUTO_TIPS: Record<string, string> = {
+      hover: "Kills the speed relative to the body and holds the place",
+      circularize: "Burns at the right moment to make the orbit circular",
+      approach: "Flies to the target and stops beside it",
+      land: "Descends, kills the horizontal speed, touches down",
+      takeoff: "Lifts off and climbs to orbit",
+    };
     const rightIds: [string, string, string, () => void][] = [
-      ["sas", "SAS", "Stability assist: holds the attitude, damps rotation", () => act.sas()],
-      ["roll", "Roll align", "Roll alignment: while the nose is held, the wings stay in the orbital plane", () => act.roll()],
-      ...AUTO_KEYS.map(([a2, label]) => [a2, label, `Autopilot: ${AUTO_NAMES[a2]}`, () => act.auto(a2)] as [string, string, string, () => void]),
-      ["speedMode", "Speed: orbit", "The navball's speed and prograde: in orbit, or relative to the target (docking, rendezvous)", () => act.speedMode()],
+      ["sas", "Stability assist", "Holds the attitude, damps any rotation", () => act.sas()],
+      ["roll", "Roll alignment", "While the nose is held, the wings stay in the orbital plane", () => act.roll()],
+      ...AUTO_KEYS.map(([a2]) => [a2, AUTO_NAMES[a2], AUTO_TIPS[a2] ?? `Autopilot: ${AUTO_NAMES[a2]}`, () => act.auto(a2)] as [string, string, string, () => void]),
+      ["speedMode", "Speed: orbit", "The ball's speed and prograde — in orbit, or relative to the target (docking, rendezvous)", () => act.speedMode()],
     ];
     rightIds.forEach(([id, label, title, fn], j) => ringBtn(id, label, title, fn, 72 - j * 15, AUTO_SVG[id] ?? ""));
+    {
+      const NS = "http://www.w3.org/2000/svg";
+      const bez = document.createElementNS(NS, "svg");
+      bez.setAttribute("class", "fl-bezel");
+      bez.setAttribute("width", String(CW));
+      bez.setAttribute("height", String(CH));
+      const pt = (deg: number, r: number) => [CX + r * Math.cos((deg * Math.PI) / 180), CY - r * Math.sin((deg * Math.PI) / 180)];
+      const arc = (d0: number, d1: number, r: number) => {
+        const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r);
+        const sweep = d1 < d0 ? 1 : 0;
+        return `M${x0} ${y0}A${r} ${r} 0 0 ${sweep} ${x1} ${y1}`;
+      };
+      // the two sections' bands, then their names: each path runs clockwise (up the left side, down the
+      // right one), so the letters stand on the ring, their tops outwards
+      bez.innerHTML = `
+        <defs>
+          <path id="fl-bz-l" d="${arc(222, 112, RING + 23)}"/>
+          <path id="fl-bz-r" d="${arc(68, -30, RING + 23)}"/>
+        </defs>
+        <path class="band" d="${arc(232, 100, RING)}"/>
+        <path class="band" d="${arc(80, -44, RING)}"/>
+        <path class="edge" d="${arc(232, 100, RING + 17)}"/>
+        <path class="edge" d="${arc(80, -44, RING + 17)}"/>
+        <path class="edge" d="${arc(232, 100, RING - 17)}"/>
+        <path class="edge" d="${arc(80, -44, RING - 17)}"/>
+        <text><textPath href="#fl-bz-l" startOffset="50%" text-anchor="middle">ATTITUDE</textPath></text>
+        <text><textPath href="#fl-bz-r" startOffset="50%" text-anchor="middle">AUTOPILOT</textPath></text>`;
+      this.cockpit.append(bez);
+    }
     const ballBox = h("div", "fl-ballbox");
     ballBox.style.left = `${CX - BALL}px`;
     ballBox.style.top = `${CY - BALL}px`;
@@ -467,7 +553,62 @@ export class FlightHud {
 
     this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
     document.body.append(this.hud, this.root);
+    this.initTips();
     this.show(false);
+  }
+
+  /**
+   * The HUD's tooltips: a name and what it does, shown by whatever the pointer rests on (data-tip, or a
+   * title — taken over, so the browser's own does not show too). No keys: the help lists them.
+   */
+  private initTips() {
+    const tip = h("div", "fl-tip");
+    tip.hidden = true;
+    document.body.append(tip);
+    let at: HTMLElement | null = null;
+    let timer = 0;
+    const show = (el: HTMLElement) => {
+      if (el.title) {
+        const t = el.title;
+        el.removeAttribute("title");
+        const k = t.indexOf(": ");
+        if (!el.dataset.label && k > 0 && k < 32) (el.dataset.label = t.slice(0, k)), (el.dataset.tip = t.slice(k + 2));
+        else el.dataset.tip = t;
+      }
+      const label = el.dataset.label ?? "";
+      const text = el.dataset.tip ?? "";
+      tip.replaceChildren();
+      if (label) tip.append(h("b", "", label));
+      if (text) tip.append(h("span", "", text));
+      if (el.dataset.why) tip.append(h("em", "", el.dataset.why));
+      tip.hidden = false;
+      const r = el.getBoundingClientRect();
+      const t = tip.getBoundingClientRect();
+      const below = r.top < 140;
+      tip.style.left = `${Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2))}px`;
+      tip.style.top = `${below ? r.bottom + 10 : r.top - t.height - 10}px`;
+      tip.classList.add("show");
+    };
+    const hide = () => {
+      clearTimeout(timer);
+      at = null;
+      tip.classList.remove("show");
+      tip.hidden = true;
+    };
+    const within = (e: Event) => {
+      const el = (e.target as HTMLElement | null)?.closest?.("[data-tip],[title]") as HTMLElement | null;
+      return el && (this.root.contains(el) || this.viewMenu?.contains(el)) ? el : null;
+    };
+    addEventListener("pointerover", (e) => {
+      const el = within(e);
+      if (el === at) return;
+      hide();
+      if (!el) return;
+      at = el;
+      timer = window.setTimeout(() => at === el && show(el), 280);
+    });
+    addEventListener("pointerdown", hide);
+    addEventListener("scroll", hide, true);
   }
 
   show(on: boolean) {
@@ -942,7 +1083,10 @@ export class FlightHud {
     }
     if (now - this.textAt > 100) {
       this.textAt = now;
-      cpuProf.time("HUD: text panels", () => this.drawText(info, time));
+      cpuProf.time("HUD: text panels", () => {
+        this.drawText(info, time);
+        this.tidyRows();
+      });
     }
   }
 
@@ -979,6 +1123,18 @@ export class FlightHud {
   }
 
   // ------------------------------------------------------------------------------------ text panels
+  /** The panels' rows with nothing to say, hidden (no "—" taking room). */
+  private tidyRows() {
+    const empty = (t: string | null) => !t || t === "—" || t === "–";
+    for (const row of this.target.querySelectorAll<HTMLElement>(".fl-kv")) row.hidden = empty(row.querySelector("b")?.textContent ?? null);
+    const cells = [...this.stBox.querySelectorAll<HTMLElement>(".fl-stgrid > *")];
+    for (let k = 0; k + 1 < cells.length; k += 2) {
+      const hide = empty(cells[k + 1]!.textContent);
+      cells[k]!.hidden = hide;
+      cells[k + 1]!.hidden = hide;
+    }
+  }
+
   private drawText(i: Info, time: number) {
     const s = this.s;
     const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : "—");
@@ -1137,10 +1293,33 @@ export class FlightHud {
     this.buttons.get("roll")!.classList.toggle("on", i.rollAlign);
     for (const [hold] of HOLD_KEYS) this.buttons.get(hold)!.classList.toggle("on", i.hold === hold);
     for (const [a] of AUTO_KEYS) this.buttons.get(a)!.classList.toggle("on", i.auto === a);
+    // what cannot apply now, dimmed (its tooltip says why)
+    {
+      const nearGround = !!i.surface || (!!i.status && !i.status.kerr && Number.isFinite(i.status.altKm) && i.status.altKm < 300);
+      const why: Record<string, string> = {};
+      if (!i.dirs.target) why.target = why.antiTarget = why.approach = why.speedMode = "No target";
+      if (!i.dirs.maneuver && !i.plan?.nodes.length) why.maneuver = "No planned burn";
+      if (!i.dirs.prograde) for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal"]) why[k] = i.landed ? "On the ground" : "No orbit here";
+      if (i.landed) why.hover = why.circularize = why.land = "On the ground";
+      else {
+        why.takeoff = "Not on the ground";
+        if (!nearGround) why.land = "No ground near";
+      }
+      for (const [id, b] of this.buttons) {
+        if (!b.classList.contains("fl-rb")) continue;
+        const r = why[id];
+        b.classList.toggle("off", !!r && !b.classList.contains("on"));
+        b.setAttribute("aria-pressed", String(b.classList.contains("on")));
+        if (r) b.dataset.why = r;
+        else delete b.dataset.why;
+      }
+    }
     {
       const b = this.buttons.get("speedMode")!;
       b.classList.toggle("on", i.speedMode === "target");
       b.dataset.label = i.speedMode === "target" ? "Speed: target" : "Speed: orbit";
+      b.setAttribute("aria-label", b.dataset.label);
+      b.setAttribute("aria-pressed", String(i.speedMode === "target"));
     }
     for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", i.mount === m);
     this.buttons.get("ahead")!.classList.toggle("on", s.shipLookYaw !== 0 || s.shipLookPitch !== 0);
