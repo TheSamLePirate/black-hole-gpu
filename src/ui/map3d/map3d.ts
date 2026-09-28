@@ -472,9 +472,24 @@ export class Map3D {
 
   // ------------------------------------------------------------------------------------ the bar
   private buildBar() {
-    const b = (id: string, label: string, title: string, fn: () => void, cls = "") => {
-      const e = h("button", cls, label) as HTMLButtonElement;
-      e.title = title;
+    const svg = (body: string) => `<svg viewBox="0 0 24 24">${body}</svg>`;
+    const ICON: Record<string, string> = {
+      top: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.8" class="f"/>',
+      "3d": '<ellipse cx="12" cy="12" rx="9" ry="4.4"/><circle cx="12" cy="12" r="1.8" class="f"/>',
+      edge: '<path d="M3 12h18"/><circle cx="12" cy="12" r="1.8" class="f"/>',
+      log: '<path d="M4 4v16h16"/><path d="M6 17c2.5-7 5.5-10 13-11"/>',
+      fit: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><circle cx="12" cy="12" r="2.4"/>',
+      full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+      plane: '<path d="M3 16l5-6h13l-5 6z"/>',
+    };
+    /** a button: an icon (or a short text), its name and what it does for the tooltip */
+    const b = (id: string, icon: string, label: string, tip: string, fn: () => void, cls = "") => {
+      const e = h("button", cls) as HTMLButtonElement;
+      if (ICON[icon]) e.innerHTML = svg(ICON[icon]!);
+      else if (icon) e.textContent = icon;
+      e.dataset.label = label;
+      e.dataset.tip = tip;
+      e.setAttribute("aria-label", label);
       e.onclick = (ev) => {
         ev.stopPropagation();
         fn();
@@ -482,39 +497,56 @@ export class Map3D {
       this.btns[id] = e;
       return e;
     };
-    this.focusBtn.title = "The body at the centre (double-click a body on the map; a click targets it)";
+    this.focusBtn.dataset.label = "Focus";
+    this.focusBtn.dataset.tip = "The body at the centre — double-click a body on the map; a click targets it";
     this.focusBtn.onclick = (e) => {
       e.stopPropagation();
       this.openMenu(!this.menu.classList.contains("open"));
     };
     const planes = h("div", "m3-seg");
     for (const p of PLANES) {
-      const e = b(`plane:${p.id}`, "", `Reference plane: ${p.title}`, () => this.setPlane(p.id));
+      const e = b(`plane:${p.id}`, "", `Plane: ${p.label}`, p.title, () => this.setPlane(p.id));
       e.append(h("span", "m3-long", p.label), h("span", "m3-short", p.short));
       planes.append(e);
     }
     const views = h("div", "m3-seg");
     views.append(
-      b("view:top", "⊤", "Seen from above the reference plane", () => this.setView(Math.PI / 2 - 1e-3)),
-      b("view:3d", "◿", "Seen at 30° above the plane", () => this.setView(0.52)),
-      b("view:edge", "⟂", "Seen edge-on: in the reference plane", () => this.setView(0.004)),
+      b("view:top", "top", "From above", "Seen from above the reference plane", () => this.setView(Math.PI / 2 - 1e-3)),
+      b("view:3d", "3d", "Oblique", "Seen at 30° above the plane", () => this.setView(0.52)),
+      b("view:edge", "edge", "Edge-on", "Seen in the reference plane", () => this.setView(0.004)),
     );
+    // (the minimap's rail: the plane and the view each one button, cycling)
+    const cyclePlane = b("cycle:plane", "", "Reference plane", "Click for the next one: the system's, the equator, the ship's orbit, the target's", () => {
+      const list = PLANES.filter((p) => !this.btns[`plane:${p.id}`]!.disabled);
+      const i = list.findIndex((p) => p.id === this.plane);
+      this.setPlane(list[(i + 1) % list.length]!.id);
+    }, "m3-cycle");
+    const cycleView = b("cycle:view", "3d", "View", "Click for the next one: from above, oblique, edge-on", () => {
+      const pitch = this.cam.goal.pitch;
+      this.setView(pitch > 1.5 ? 0.52 : Math.abs(pitch - 0.52) < 0.01 ? 0.004 : Math.PI / 2 - 1e-3);
+    }, "m3-cycle");
     this.bar.append(
       h("span", "fl-label", "Map"),
       this.focusBtn,
       planes,
       views,
-      b("log", "Log", "Multi-scale: the distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map", () => {
+      cyclePlane,
+      cycleView,
+      b("log", "log", "Multi-scale", "The distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map", () => {
         if (this.universe === "ours") this.logOurs = !this.logOurs;
         else this.logTheirs = !this.isLog();
         this.autoDist = true;
       }),
-      b("fit", "Fit", "Frame the focus and the ship's paths again (double-click on empty space)", () => this.fit()),
-      b("cm", "CoM", "Inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
-      b("holeF", "Hole", "Gargantua's frame (fixed at the centre)", () => (this.frame = "hole")),
-      b("full", "⛶", "The map over the whole screen", () => this.host.toggleMapView(), "m3-full"),
+      b("fit", "fit", "Frame", "Frame the focus and the ship's paths again (or double-click on empty space)", () => this.fit()),
+      b("cm", "CoM", "Centre of mass", "The inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
+      b("holeF", "Hole", "Gargantua's frame", "Gargantua fixed at the centre", () => (this.frame = "hole")),
+      b("full", "full", "Full screen", "The map over the whole screen", () => this.host.toggleMapView(), "m3-full"),
     );
+    this.planeIcon = svg(ICON.plane!);
+    this.viewIcons = { top: svg(ICON.top!), "3d": svg(ICON["3d"]!), edge: svg(ICON.edge!) };
   }
+  private planeIcon = "";
+  private viewIcons: Record<string, string> = {};
 
   private buildMenu() {
     this.menuSearch.placeholder = "Find a body…";
@@ -659,6 +691,14 @@ export class Map3D {
     this.btns.holeF!.classList.toggle("on", this.frame === "hole");
     this.btns.full!.classList.toggle("on", this.host.mapView());
     this.btns["plane:target"]!.disabled = !this.lastInfo || !sc.byId.get(this.lastInfo.target)?.orbit;
+    if (this.btns["plane:target"]!.disabled) this.btns["plane:target"]!.dataset.why = "The target has no orbit to take the plane of";
+    else delete this.btns["plane:target"]!.dataset.why;
+    // the rail's cycling buttons: the current plane (its short name), the current view (its icon)
+    const pc = this.btns["cycle:plane"]!, vc = this.btns["cycle:view"]!;
+    const pShort = PLANES.find((p) => p.id === this.plane)?.short ?? "";
+    if (pc.dataset.cur !== pShort) (pc.dataset.cur = pShort), (pc.innerHTML = `${this.planeIcon}<small>${pShort}</small>`);
+    const vk = pitch > 1.5 ? "top" : Math.abs(pitch) < 0.02 ? "edge" : "3d";
+    if (vc.dataset.cur !== vk) (vc.dataset.cur = vk), (vc.innerHTML = this.viewIcons[vk] ?? "");
   }
 
   // ------------------------------------------------------------------------------------ pointer

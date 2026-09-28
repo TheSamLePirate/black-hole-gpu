@@ -406,7 +406,8 @@ export class FlightHud {
     // ---- cockpit: the attitude ball, its controls on a ring around it — the attitude holds on the left
     // arc, the stability assist, the autopilots and the speed mode on the right (names on hover)
     const RING = 118, BALL = 88; // (the ring's radius, the ball's, CSS px)
-    const CW = 2 * RING + 44, CH = BALL + RING + 34, CX = CW / 2, CY = CH - BALL - 8;
+    // (under the ball: its readout — throttle, g-load, the engine)
+    const CW = 2 * RING + 44, CH = BALL + RING + 70, CX = CW / 2, CY = CH - BALL - 40;
     this.cockpit.style.width = `${CW}px`;
     this.cockpit.style.height = `${CH}px`;
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
@@ -509,10 +510,10 @@ export class FlightHud {
     this.cockpit.prepend(ballBox);
     const read = h("div", "fl-bread");
     read.style.left = `${CX}px`;
-    read.style.top = `${CY - RING - 6}px`;
+    read.style.top = `${CY + BALL + 4}px`;
     const thr = h("b", "fl-thr"), g = h("b", "fl-g"), eng = h("span", "fl-eng");
     const row = h("div");
-    row.append(h("i", "", "THR"), thr, h("i", "", "·"), g);
+    row.append(h("i", "", "THR"), thr, g);
     read.append(row, eng);
     this.ballRead = { thr, g, eng };
     this.cockpit.append(read);
@@ -709,8 +710,8 @@ export class FlightHud {
       box.append(nb(false, "‹"), v, nb(true, "›"));
       return box;
     };
-    const altBox = kmBox(() => this.ourAlt, (v) => (this.ourAlt = v), "altV", "Height of the orbit, or of the pass (⇧: faster)");
-    const retBox = kmBox(() => this.ourRet, (v) => (this.ourRet = v), "retV", "Perigee back home (⇧: faster)");
+    const altBox = kmBox(() => this.ourAlt, (v) => (this.ourAlt = v), "altV", "Height of the orbit, or of the pass");
+    const retBox = kmBox(() => this.ourRet, (v) => (this.ourRet = v), "retV", "Perigee back home");
     this.planEls.altBox = altBox;
     this.planEls.retBox = retBox;
     const retLabel = h("span", "fl-label", "home at");
@@ -749,28 +750,40 @@ export class FlightHud {
       return b;
     };
     const step = 0.002;
-    edit.append(
-      h("span", "fl-label", "Δv"),
-      eb("PRO−", [-step, 0, 0], 0, "Less prograde (⇧ ×10, ⌥ ×0.1)"), eb("PRO+", [step, 0, 0], 0, "More prograde (⇧ ×10, ⌥ ×0.1)"),
-      eb("NRM−", [0, -step, 0], 0, "Anti-normal"), eb("NRM+", [0, step, 0], 0, "Normal"),
-      eb("RAD−", [0, 0, -step], 0, "Radial in"), eb("RAD+", [0, 0, step], 0, "Radial out"),
-      h("span", "fl-label", "Time"), eb("−", [0, 0, 0], -10, "Earlier (⇧ ×10)"), eb("+", [0, 0, 0], 10, "Later (⇧ ×10)"),
-    );
+    // the burn editor: a row per direction — its mark (the ball's colours), less, more — and the time
+    const line = (label: string, glyph: string, col: string, minus: () => HTMLButtonElement, plus: () => HTMLButtonElement) => {
+      const l = h("div", "fl-eline");
+      const name = h("span", "fl-ename");
+      if (glyph) name.append(glyphSvg(glyph, col));
+      name.append(h("span", "", label));
+      l.append(name, minus(), plus());
+      edit.append(l);
+    };
+    const sign = (b: HTMLButtonElement, t: string) => ((b.textContent = t), b);
+    edit.append(h("div", "fl-sub", "Shape the burn"));
+    line("Prograde", "prograde", COL.prograde!, () => sign(eb("", [-step, 0, 0], 0, "Less prograde: slows the orbit"), "−"), () => sign(eb("", [step, 0, 0], 0, "More prograde: speeds the orbit"), "+"));
+    line("Normal", "prograde", COL.normal!, () => sign(eb("", [0, -step, 0], 0, "Towards the anti-normal: tilts the orbit"), "−"), () => sign(eb("", [0, step, 0], 0, "Towards the normal: tilts the orbit"), "+"));
+    line("Radial", "prograde", COL.radialOut!, () => sign(eb("", [0, 0, -step], 0, "Radial in: turns the orbit about the ship"), "−"), () => sign(eb("", [0, 0, step], 0, "Radial out: turns the orbit about the ship"), "+"));
+    line("Time", "", "", () => sign(eb("", [0, 0, 0], -10, "The burn earlier"), "−"), () => sign(eb("", [0, 0, 0], 10, "The burn later"), "+"));
     this.planEls.edit = edit;
     const result = h("div", "fl-result");
     this.planEls.result = result;
     const actions = h("div", "fl-actions");
-    const btn = (label: string, cls: string, title: string, fn: () => void) => {
-      const b = h("button", cls, label) as HTMLButtonElement;
-      b.title = title;
+    const btn = (label: string, icon: string, cls: string, name: string, tip: string, fn: () => void) => {
+      const b = h("button", cls) as HTMLButtonElement;
+      setIconLabel(b, icon, label);
+      b.dataset.label = name;
+      b.dataset.tip = tip;
       b.onclick = fn;
       return b;
     };
-    const exec = btn("EXECUTE ▶", "fl-go", "Fly the plan: warp to each node, burn, then circularize or keep station", () => this.act.execute());
+    const exec = btn("Execute", "play", "fl-go", "Execute", "Fly the plan: warp to each node, burn, then circularize or keep station", () => this.act.execute());
     this.planEls.exec = exec;
+    const clear = btn("Clear", "trash", "", "Clear", "Delete the plan", () => this.act.clearPlan());
+    this.planEls.clear = clear;
     actions.append(
-      btn("+ NODE", "", "A manual node a tenth of an orbit ahead: shape the burn with the Δv buttons", () => this.act.addNode()),
-      btn("CLEAR", "", "Delete the plan", () => this.act.clearPlan()),
+      btn("Node", "plus", "", "Add a node", "A manual burn a tenth of an orbit ahead — shape it with the burn editor", () => this.act.addNode()),
+      clear,
       exec,
     );
     P.append(head, seg, goalRow, ourRow, goRow, nodes, edit, result, actions);
@@ -815,7 +828,16 @@ export class FlightHud {
     const flying = i.auto === "node";
     (E.exec as HTMLButtonElement).disabled = !nodes.length && !flying;
     E.exec!.classList.toggle("on", flying);
-    E.exec!.textContent = flying ? (plan?.burning ? "BURNING · STOP ■" : "EXECUTING · STOP ■") : "EXECUTE ▶";
+    setIconLabel(E.exec as HTMLButtonElement, flying ? "stop" : "play", flying ? (plan?.burning ? "Burning · stop" : "Executing · stop") : "Execute");
+    // (what cannot apply: dimmed, the tooltip says why)
+    const why = (el: HTMLElement | undefined, r: string | false) => {
+      if (!el) return;
+      (el as HTMLButtonElement).disabled = !!r;
+      if (r) el.dataset.why = r;
+      else delete el.dataset.why;
+    };
+    why(E.exec, !nodes.length && !plan?.lowThrust && !flying && "No plan yet — pick a goal and plan, or add a node");
+    why(E.clear, !plan && "Nothing to clear");
     const total = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
     E.result!.textContent = plan ? `${plan.note}${nodes.length ? ` · total Δv ${fmtDv(total)}` : ""}` : busy ? "Planning: the n-body paths are being aimed…" : "Pick a goal and PLAN — or add a node (+ NODE, or a click on the path) and shape it";
     void s;
@@ -933,9 +955,17 @@ export class FlightHud {
     });
     E.edit!.hidden = !nodes.length;
     const flying = i.auto === "node" || i.auto === "transfer";
-    (E.exec as HTMLButtonElement).disabled = !nodes.length && !plan?.lowThrust && !flying;
     E.exec!.classList.toggle("on", flying);
-    E.exec!.textContent = flying ? (plan?.burning ? "BURNING · STOP ■" : "EXECUTING · STOP ■") : "EXECUTE ▶";
+    setIconLabel(E.exec as HTMLButtonElement, flying ? "stop" : "play", flying ? (plan?.burning ? "Burning · stop" : "Executing · stop") : "Execute");
+    // (what cannot apply: dimmed, the tooltip says why)
+    const why = (el: HTMLElement | undefined, r: string | false) => {
+      if (!el) return;
+      (el as HTMLButtonElement).disabled = !!r;
+      if (r) el.dataset.why = r;
+      else delete el.dataset.why;
+    };
+    why(E.exec, !nodes.length && !plan?.lowThrust && !flying && "No plan yet — pick a goal and plan, or add a node");
+    why(E.clear, !plan && "Nothing to clear");
     // what the plan leads to
     let res = plan ? plan.note : "No plan yet: pick a goal and PLAN, or add a node and shape it";
     if (plan?.lowThrust && i.auto === "transfer") res += ` · now: ${LOW_STAGES[plan.lowThrust] ?? plan.lowThrust}`;
@@ -2017,6 +2047,21 @@ function label(ctx: CanvasRenderingContext2D, x: number, y: number, title: strin
 }
 
 /** The marker's glyph as a small SVG, for the buttons. */
+/** A button's icon and label (the planner's actions). */
+const BTN_ICONS: Record<string, string> = {
+  play: '<path d="M8 5v14l11-7z" class="f"/>',
+  stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5" class="f"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  trash: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>',
+};
+function setIconLabel(b: HTMLButtonElement, icon: string, label: string) {
+  if (b.dataset.icon === icon && b.dataset.text === label) return;
+  b.dataset.icon = icon;
+  b.dataset.text = label;
+  b.innerHTML = `<svg viewBox="0 0 24 24" class="fl-bi">${BTN_ICONS[icon] ?? ""}</svg><span></span>`;
+  b.querySelector("span")!.textContent = label;
+}
+
 function glyphSvg(kind: string, col: string) {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");

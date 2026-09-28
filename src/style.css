@@ -1220,10 +1220,10 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-btn { display: none; }
 /* the readout above the ball (the ring's gap at the top): throttle · g-load, the engine and its tank */
 .fl-bread {
-  position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 0;
+  position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 0;
   pointer-events: none; white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
-.fl-bread div { display: flex; align-items: baseline; gap: 5px; }
+.fl-bread div { display: flex; align-items: baseline; gap: 7px; }
 .fl-bread i { font: 700 10px var(--hud-font); font-style: normal; letter-spacing: 0.16em; color: rgba(176, 196, 222, 0.6); }
 .fl-bread .fl-thr { font: 600 13px var(--mono); color: #ffd27a; }
 .fl-bread .fl-g { font: 600 13px var(--mono); color: #9fe3ff; }
@@ -1232,12 +1232,24 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-glyph { width: 13px; height: 13px; flex: none; }
 
 /* ---- the map (bottom right): the map alone, its bar showing on hover */
-.fl-right { right: 14px; bottom: 14px; width: 262px; padding: 5px; display: flex; flex-direction: column; }
+.fl-right { right: 14px; bottom: 14px; width: 282px; padding: 5px; display: flex; flex-direction: column; }
 .fl-right > .fl-title { display: none; }
 .fl-mapbody { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .fl-root.mapview .fl-mapbody { flex: 1; }
-.fl-root:not(.mapview) .fl-right .fl-mapbar { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 4; opacity: 0; transition: opacity 0.18s; }
-.fl-root:not(.mapview) .fl-right:hover .fl-mapbar { opacity: 1; }
+/* (the minimap: a rail of icon buttons down its right edge — the plane and the view cycling; the full
+   bar over the whole screen) */
+.fl-root:not(.mapview) .fl-right .fl-mapbar {
+  position: absolute; right: 5px; top: 5px; bottom: 5px; z-index: 4; flex-direction: column; flex-wrap: nowrap; gap: 3px; justify-content: flex-start;
+}
+.fl-root:not(.mapview) .fl-right .m3-stage { width: calc(100% - 34px); }
+.fl-root:not(.mapview) .fl-mapbar > .fl-label, .fl-root:not(.mapview) .fl-mapbar > .m3-seg, .fl-root:not(.mapview) .fl-mapbar > .m3-focus { display: none; }
+.fl-root.mapview .fl-mapbar > .m3-cycle { display: none; }
+.fl-root:not(.mapview) .fl-mapbar > button { width: 28px; height: 28px; min-height: 0; padding: 0; border-radius: 6px; flex-direction: column; gap: 0; }
+.fl-mapbar button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fl-mapbar button svg .f { fill: currentColor; stroke: none; }
+.fl-mapbar .m3-cycle svg { width: 14px; height: 14px; }
+.fl-mapbar .m3-cycle small { font: 700 8.5px var(--hud-font); letter-spacing: 0.08em; line-height: 1; margin-top: -1px; }
+.fl-mapbar button:disabled, .fl-mapbar button[data-why] { opacity: 0.38; }
 .fl-mapbar { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
 .fl-mapbar button, .fl-plan button:not(.fl-x), .gt-btn, #cam-pop button {
   all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -1810,3 +1822,16 @@ body .sp-tooltip, #tip {
   font: 600 12.5px/1.4 var(--hud-font); letter-spacing: 0.04em;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
 }
+
+/* ---- the planner's burn editor (a row per direction: its mark, less, more) and its actions */
+.fl-plan .fl-edit { display: grid; grid-template-columns: 1fr; gap: 3px; margin: 4px 0 6px; }
+.fl-plan .fl-edit .fl-sub { margin: 4px 0 2px; }
+.fl-eline { display: grid; grid-template-columns: 1fr 34px 34px; gap: 3px; align-items: center; }
+.fl-ename { display: flex; align-items: center; gap: 6px; font: 700 11px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: rgba(214, 226, 242, 0.8); }
+.fl-ename .fl-glyph { width: 14px; height: 14px; }
+.fl-eline button { font-size: 14px !important; padding: 1px 0 !important; }
+.fl-plan .fl-actions { grid-template-columns: 1fr 1fr 1.5fr; gap: 4px; }
+.fl-plan .fl-actions button, .fl-plan .fl-go { gap: 6px; }
+.fl-bi { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fl-bi .f { fill: currentColor; stroke: none; }
+.fl-plan button[data-why], .fl-plan button:disabled { opacity: 0.38; }
