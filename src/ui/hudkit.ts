@@ -19,7 +19,8 @@ export const COL: Record<string, string> = {
   normal: "#e07bff", antinormal: "#e07bff", target: "#ff8a5c", burn: "#4d8dff", tgtPrograde: "#ff8a5c", tgtRetrograde: "#ff8a5c",
   antiTarget: "#ff8a5c", maneuver: "#4d8dff",
 };
-export const FONT = "Inter, system-ui, sans-serif";
+/** the HUD's technical face for labels (sized ~1.2× Inter's: narrower), mono for figures */
+export const FONT = "Rajdhani, Inter, system-ui, sans-serif";
 export const MONO = '"JetBrains Mono", ui-monospace, monospace';
 
 export function marker(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, r: number, col: string) {

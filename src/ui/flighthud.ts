@@ -43,6 +43,56 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
   return e;
 };
 
+/** The HUD's line icons (24 × 24, stroked with the text's colour). */
+const ICONS: Record<string, string> = {
+  path: '<path d="M3 19c4-1 5-6 9-7s6-6 9-8" /><circle cx="3" cy="19" r="1.4" class="f" /><circle cx="21" cy="4" r="1.4" class="f" />',
+  sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />',
+  mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f" /><path d="M16 9.5l5 5M21 9.5l-5 5" />',
+  tools: '<path d="M14.5 5.5a4 4 0 0 0-5 5L4 16l4 4 5.5-5.5a4 4 0 0 0 5-5l-2.6 2.6-2.8-.6-.6-2.8z" />',
+  density: '<rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 9h17M8 9v10.5" />',
+  more: '<circle cx="5" cy="12" r="1.6" class="f" /><circle cx="12" cy="12" r="1.6" class="f" /><circle cx="19" cy="12" r="1.6" class="f" />',
+  camera: '<path d="M3.5 8.5h3l2-2.5h7l2 2.5h3v10h-17z" /><circle cx="12" cy="13" r="3.4" />',
+  plan: '<circle cx="6" cy="17" r="2" /><circle cx="18" cy="7" r="2" /><path d="M7.6 15.6C10 9 14 13 16.4 8.4" stroke-dasharray="2 2.2" />',
+  chevron: '<path d="M7 10l5 5 5-5" />',
+};
+const icon = (name: string, cls = "fl-ic") => {
+  const e = document.createElement("span");
+  e.className = cls;
+  e.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[name] ?? ""}</svg>`;
+  return e;
+};
+/** A panel's collapsed state, remembered (the header's chevron, or a click on it). */
+const COLLAPSED_KEY = "kerr.hud-collapsed";
+function collapsedSet(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+/** A panel's header: its title (a span, rewritable) and a chevron that folds the panel. */
+function panelHead(panel: HTMLElement, key: string, title: string) {
+  const head = h("div", "fl-title fl-head");
+  const t = h("span", "fl-htext", title);
+  const fold = icon("chevron", "fl-fold");
+  head.append(t, fold);
+  head.title = "Fold / unfold";
+  if (collapsedSet().has(key)) panel.classList.add("collapsed");
+  head.onclick = (e) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    panel.classList.toggle("collapsed");
+    const set = collapsedSet();
+    if (panel.classList.contains("collapsed")) set.add(key);
+    else set.delete(key);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
+    } catch {
+      /* private mode */
+    }
+  };
+  return { head, text: t };
+}
+
 const HOLD_KEYS: [Hold, string, string][] = [
   ["prograde", "PRO", "1"], ["retrograde", "RETRO", "2"], ["radialOut", "RAD+", "3"], ["radialIn", "RAD−", "4"],
   ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"], ["antiTarget", "ANTI", ""], ["maneuver", "NODE", ""],
@@ -131,6 +181,9 @@ export class FlightHud {
   /** the map (3D): the minimap in the right panel, over the whole screen with M */
   private map3d!: Map3D;
   private buttons = new Map<string, HTMLButtonElement>();
+  private viewMenu: HTMLElement | null = null;
+  /** the readout above the ball: throttle, g-load, the engine and its tank */
+  private ballRead: { thr: HTMLElement; g: HTMLElement; eng: HTMLElement } | null = null;
   private textAt = 0;
   private trail: { X: V3; t: number }[] = [];
   private samples: Sample[] = [];
@@ -177,45 +230,98 @@ export class FlightHud {
     this.missionEls.warp = wv;
     const wb = (d: 1 | -1, t: string) => {
       const b = h("button", "", t) as HTMLButtonElement;
-      b.title = d < 0 ? "Slower time [,]" : "Faster time [.]";
+      b.title = d < 0 ? "Slower time" : "Faster time";
       b.onclick = () => act.warp(d);
       return b;
     };
     warpBox.append(h("span", "", "Warp"), wb(-1, "‹"), wv, wb(1, "›"));
-    const tools = h("button", "fl-tools", "⋯") as HTMLButtonElement;
-    tools.title = "Tools (the app's toolbar)";
-    tools.onclick = () => document.body.classList.toggle("show-tools");
-    const planBtn = h("button", "fl-tools fl-planbtn", "PLAN") as HTMLButtonElement;
-    planBtn.title = "Flight planner: transfers, rendezvous, manoeuvre nodes [O]";
+    warpBox.title = "Time warp";
+    const iconBtn = (name: string, title: string, fn: () => void, cls = "") => {
+      const b = h("button", `fl-tools ${cls}`) as HTMLButtonElement;
+      b.append(icon(name));
+      b.title = title;
+      b.onclick = fn;
+      return b;
+    };
+    const tools = iconBtn("more", "The app's toolbar", () => document.body.classList.toggle("show-tools"));
+    const planBtn = h("button", "fl-tools fl-planbtn") as HTMLButtonElement;
+    planBtn.append(icon("plan"), h("span", "", "Plan"));
+    planBtn.title = "Flight planner: transfers, rendezvous, manoeuvre nodes";
     planBtn.onclick = () => this.togglePlanner();
     this.missionEls.planBtn = planBtn;
-    const pathBtn = h("button", "fl-tools fl-pathbtn", "⌇") as HTMLButtonElement;
-    pathBtn.title = "Future path in the view (the cyan tube) [Y]";
-    pathBtn.onclick = () => act.pathInView();
+    const pathBtn = iconBtn("path", "Future path in the view (the cyan tube)", () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
-    const soundBtn = h("button", "fl-tools fl-soundbtn", "🔈") as HTMLButtonElement;
-    soundBtn.title = "Sound on / off (Settings › Game › Sound: the mix)";
-    soundBtn.onclick = () => act.sound();
+    const soundBtn = iconBtn("sound", "Sound on / off (Settings › Game › Sound: the mix)", () => act.sound(), "fl-soundbtn");
     this.missionEls.soundBtn = soundBtn;
-    const toolsBtn = h("button", "fl-tools", "🛠") as HTMLButtonElement;
-    toolsBtn.title = "Game tools: status, place, target, time, saves, audit, journal [F2]";
-    toolsBtn.onclick = () => act.tools();
-    const dens = h("button", "fl-tools", "◐") as HTMLButtonElement;
-    dens.title = "HUD density: full · minimal · clean [N]";
-    dens.onclick = () => this.cycleDensity();
+    const toolsBtn = iconBtn("tools", "Game tools: status, place, target, time, saves, audit, journal", () => act.tools());
+    const dens = iconBtn("density", "HUD density: full · minimal · clean", () => this.cycleDensity());
+    // the camera's view on the Ranger: a menu (its attach points, outside: around it, free)
+    const viewBox = h("div", "fl-viewbox");
+    const viewBtn = h("button", "fl-tools fl-viewbtn") as HTMLButtonElement;
+    const viewName = h("span", "fl-viewname", "");
+    viewBtn.append(icon("camera"), viewName, icon("chevron", "fl-ic fl-caret"));
+    viewBtn.title = "The camera's view";
+    this.missionEls.viewName = viewName;
+    const viewMenu = h("div", "fl-menu");
+    viewMenu.hidden = true;
+    const groups: [string, Mount[]][] = [
+      ["On the ship", MOUNT_KEYS.filter((m) => !(MOUNTS[m] as { outside?: string }).outside)],
+      ["Outside", MOUNT_KEYS.filter((m) => !!(MOUNTS[m] as { outside?: string }).outside)],
+    ];
+    for (const [g, list] of groups) {
+      viewMenu.append(h("div", "fl-menu-h", g));
+      for (const m of list) {
+        const b = h("button", "fl-menu-i") as HTMLButtonElement;
+        b.append(h("b", "", MOUNTS[m].short), h("span", "", MOUNTS[m].label));
+        b.onclick = () => {
+          act.mount(m);
+          viewMenu.hidden = true;
+        };
+        this.buttons.set(`mount:${m}`, b);
+        viewMenu.append(b);
+      }
+    }
+    const ahead = h("button", "fl-menu-i fl-ahead") as HTMLButtonElement;
+    ahead.append(h("b", "", "↺"), h("span", "", "Look ahead again"));
+    ahead.onclick = () => {
+      act.lookAhead();
+      viewMenu.hidden = true;
+    };
+    this.buttons.set("ahead", ahead);
+    viewMenu.append(ahead);
+    // (the menu lives in the HUD's root: the mission bar's cut-away ends would clip it)
+    viewBtn.onclick = () => {
+      viewMenu.hidden = !viewMenu.hidden;
+      if (viewMenu.hidden) return;
+      const r = viewBtn.getBoundingClientRect();
+      viewMenu.style.top = `${r.bottom + 8}px`;
+      viewMenu.style.left = `${Math.max(8, Math.min(innerWidth - 268, r.left))}px`;
+    };
+    addEventListener("pointerdown", (e) => {
+      if (!viewMenu.hidden && !viewBox.contains(e.target as Node) && !viewMenu.contains(e.target as Node)) viewMenu.hidden = true;
+    });
+    viewBox.append(viewBtn);
+    this.viewMenu = viewMenu;
+    const group = (cls: string, ...els: HTMLElement[]) => {
+      const g = h("div", `fl-mgroup ${cls}`);
+      g.append(...els);
+      return g;
+    };
     this.mission.append(
-      chip("sas", "SAS"), chip("hold", "HOLD"), chip("auto", "AUTO"),
-      h("span", "fl-vsep"), warpBox, h("span", "fl-vsep"),
-      clock("tau", "Ship τ", "Proper time on the ship since you took the controls"),
-      clock("t", "Far t", "Coordinate time: the clocks of distant observers"),
-      clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
-      clock("lost", "Earth +", "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)"),
-      h("span", "fl-vsep"), planBtn, pathBtn, soundBtn, toolsBtn, dens, tools,
+      group("fl-mg-modes", chip("sas", "SAS"), chip("hold", "HOLD"), chip("auto", "AUTO")),
+      group("fl-mg-warp", warpBox),
+      group("fl-mg-clocks",
+        clock("tau", "Ship τ", "Proper time on the ship since you took the controls"),
+        clock("t", "Far t", "Coordinate time: the clocks of distant observers"),
+        clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
+        clock("lost", "Earth +", "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)"),
+      ),
+      group("fl-mg-acts", planBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
     this.buildPlanner();
 
     // ---- target
-    this.target.append(h("div", "fl-title", "Target"));
+    this.target.append(panelHead(this.target, "target", "Target").head);
     for (const [k, label] of [
       ["name", ""], ["dist", "Range"], ["rate", "Range rate"], ["ca", "Closest approach"], ["light", "Light received"],
       ["alt", "Radar altitude"], ["vv", "Vertical speed"], ["vh", "Ground speed"], ["twr", "Thrust / weight"],
@@ -237,12 +343,15 @@ export class FlightHud {
       stGrid.append(h("span", "", label), v);
       this.stEls[k] = v;
     }
-    this.stBox.append(h("div", "fl-title", "Ranger"), this.stBadge, stGrid);
-    this.tel.append(this.stBox, h("div", "fl-title", "Telemetry · 60 s"), this.telCanvas);
+    this.stBox.append(this.stBadge, stGrid);
+    const telBody = h("div", "fl-body");
+    telBody.append(this.stBox, h("div", "fl-sub", "Telemetry · the last minute"), this.telCanvas);
+    this.tel.append(panelHead(this.tel, "tel", "Ranger").head, telBody);
 
     // ---- orbit: effective potential + figures
-    const orbitHead = h("div", "fl-title", "Orbit · effective potential");
-    this.orbitHead = orbitHead;
+    const oh = panelHead(this.orbit, "orbit", "Orbit · effective potential");
+    const orbitHead = oh.head;
+    this.orbitHead = oh.text;
     const grid = h("div", "fl-grid");
     for (const [k, label] of [["course", "Course"], ["pe", "Periapsis"], ["ap", "Apoapsis"], ["el", "E · L"]] as const) {
       const c = h("div", "fl-cell");
@@ -251,48 +360,82 @@ export class FlightHud {
       this.orbitEls[k] = v;
       grid.append(c);
     }
-    this.orbit.append(orbitHead, this.veff, grid);
+    // (the figures are drawn in the canvas: its corners — the panel is the plot alone)
+    void orbitHead;
+    void grid;
+    this.orbit.append(this.veff);
 
-    // ---- cockpit: holds | ball | autopilots
-    const mk = (id: string, label: string, key: string, title: string, fn: () => void, glyph?: string, col?: string) => {
-      const b = h("button", "fl-btn") as HTMLButtonElement;
-      if (glyph) b.append(glyphSvg(glyph, col!));
-      b.append(h("span", "", label), h("kbd", "", key));
+    // ---- cockpit: the attitude ball, its controls on a ring around it — the attitude holds on the left
+    // arc, the stability assist, the autopilots and the speed mode on the right (names on hover)
+    const RING = 118, BALL = 88; // (the ring's radius, the ball's, CSS px)
+    const CW = 2 * RING + 44, CH = BALL + RING + 34, CX = CW / 2, CY = CH - BALL - 8;
+    this.cockpit.style.width = `${CW}px`;
+    this.cockpit.style.height = `${CH}px`;
+    const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
+      const b = h("button", "fl-rb") as HTMLButtonElement;
+      const a = (deg * Math.PI) / 180;
+      b.style.left = `${CX + RING * Math.cos(a)}px`;
+      b.style.top = `${CY - RING * Math.sin(a)}px`;
+      b.dataset.label = label;
+      b.dataset.side = Math.cos(a) < 0 ? "l" : "r";
+      b.innerHTML = `<svg viewBox="-12 -12 24 24" style="${col ? `--c:${col}` : ""}">${svgBody}</svg>`;
       b.title = title;
       b.onclick = fn;
       this.buttons.set(id, b);
+      this.cockpit.append(b);
       return b;
     };
-    const holds = h("div", "fl-holds");
-    for (const [hold, label, key] of HOLD_KEYS) holds.append(mk(hold, label, key, `Hold ${HOLD_NAMES[hold]}`, () => act.hold(hold), GLYPH[hold], COL[hold]));
-    const autos = h("div", "fl-autos");
-    autos.append(mk("sas", "SAS", "T", "Stability assist: holds the attitude, damps rotation", () => act.sas()));
-    autos.append(mk("roll", "ROLL", "R", "Roll alignment: while the nose is held, the wings stay in the orbital plane (the top towards the orbit's normal)", () => act.roll()));
-    for (const [a, label, key] of AUTO_KEYS) autos.append(mk(a, label, key, `Autopilot: ${AUTO_NAMES[a]}`, () => act.auto(a)));
-    autos.append(mk("speedMode", "SPD ORBIT", "", "The navball's speed and prograde: in orbit, or relative to the target (docking, rendezvous)", () => act.speedMode()));
+    const HOLD_SVG: Record<string, string> = {
+      prograde: '<circle r="5"/><path d="M0-5V-10M-5 0H-10M5 0H10"/>',
+      retrograde: '<circle r="5"/><path d="M-3.5-3.5L3.5 3.5M3.5-3.5L-3.5 3.5M0 5V10"/>',
+      radialOut: '<circle r="4.5"/><path d="M3.3-3.3L7-7M-3.3-3.3L-7-7M3.3 3.3L7 7M-3.3 3.3L-7 7"/>',
+      radialIn: '<circle r="7.5"/><path d="M-5.3-5.3L-2-2M5.3-5.3L2-2M-5.3 5.3L-2 2M5.3 5.3L2 2"/>',
+      normal: '<path d="M0-7L6.5 5H-6.5Z"/><circle r="1" class="f"/>',
+      antinormal: '<path d="M0 7L6.5-5H-6.5Z"/><path d="M0-5V-9M-6.5-5L-9-8M6.5-5L9-8"/>',
+      target: '<circle r="5"/><path d="M0-5V-9M0 5V9M-5 0H-9M5 0H9"/>',
+      antiTarget: '<circle r="5"/><path d="M-3.5-3.5L3.5 3.5M3.5-3.5L-3.5 3.5M0-5V-9M0 5V9M-5 0H-9M5 0H9"/>',
+      maneuver: '<path d="M0-7L7 0L0 7L-7 0Z"/><circle r="1.6" class="f"/>',
+    };
+    HOLD_KEYS.forEach(([hold, label], j) => {
+      ringBtn(hold, label, `Hold ${HOLD_NAMES[hold]}`, () => act.hold(hold), 108 + j * 14.5, HOLD_SVG[hold] ?? "", COL[hold]);
+    });
+    const AUTO_SVG: Record<string, string> = {
+      sas: '<circle r="6.5"/><path d="M-10 0H10M0-3V3"/>',
+      roll: '<path d="M-6.5 3A7 7 0 1 1 6.5 3"/><path d="M6.5 3L8.8-.5M6.5 3L2.8 1.8"/>',
+      hover: '<path d="M0-9V-3.5M0 3.5V9M-9 0H-3.5M3.5 0H9"/><circle r="1.7" class="f"/>',
+      circularize: '<circle r="7"/><circle cx="7" r="1.8" class="f"/>',
+      approach: '<path d="M-9 0H2.5M-.5-3.5L3 0L-.5 3.5"/><circle cx="7.5" r="2" class="f"/>',
+      land: '<path d="M0-8V3M-3.5-.5L0 3L3.5-.5M-8 7.5H8"/>',
+      takeoff: '<path d="M0 5V-7M-3.5-3.5L0-7L3.5-3.5M-8 8H8"/>',
+      speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
+    };
+    const rightIds: [string, string, string, () => void][] = [
+      ["sas", "SAS", "Stability assist: holds the attitude, damps rotation", () => act.sas()],
+      ["roll", "Roll align", "Roll alignment: while the nose is held, the wings stay in the orbital plane", () => act.roll()],
+      ...AUTO_KEYS.map(([a2, label]) => [a2, label, `Autopilot: ${AUTO_NAMES[a2]}`, () => act.auto(a2)] as [string, string, string, () => void]),
+      ["speedMode", "Speed: orbit", "The navball's speed and prograde: in orbit, or relative to the target (docking, rendezvous)", () => act.speedMode()],
+    ];
+    rightIds.forEach(([id, label, title, fn], j) => ringBtn(id, label, title, fn, 72 - j * 15, AUTO_SVG[id] ?? ""));
     const ballBox = h("div", "fl-ballbox");
+    ballBox.style.left = `${CX - BALL}px`;
+    ballBox.style.top = `${CY - BALL}px`;
     ballBox.append(this.ball);
-    this.cockpit.append(holds, ballBox, autos);
+    this.cockpit.prepend(ballBox);
+    const read = h("div", "fl-bread");
+    read.style.left = `${CX}px`;
+    read.style.top = `${CY - RING - 6}px`;
+    const thr = h("b", "fl-thr"), g = h("b", "fl-g"), eng = h("span", "fl-eng");
+    const row = h("div");
+    row.append(h("i", "", "THR"), thr, h("i", "", "·"), g);
+    read.append(row, eng);
+    this.ballRead = { thr, g, eng };
+    this.cockpit.append(read);
     this.ball.title = "Attitude: sky (away from the hole) and ground, markers around the nose. Left arc: throttle (drag it) · right arc: g-load";
     this.ball.addEventListener("pointerdown", (e) => this.onBall(e, true));
     this.ball.addEventListener("pointermove", (e) => this.onBall(e, false));
     this.ball.addEventListener("pointerup", () => (this.throttleDrag = false));
 
-    // ---- camera + map
-    const cams = h("div", "fl-cams");
-    cams.append(h("span", "fl-label", "Camera"));
-    for (const m of MOUNT_KEYS) {
-      const b = h("button", "", MOUNTS[m].short) as HTMLButtonElement;
-      b.title = `${MOUNTS[m].label}  [V / ⇧V]`;
-      b.onclick = () => act.mount(m);
-      this.buttons.set(`mount:${m}`, b);
-      cams.append(b);
-    }
-    const ahead = h("button", "fl-ahead", "↺") as HTMLButtonElement;
-    ahead.title = "Look ahead (drag the view to look around from the attach point) [double-click]";
-    ahead.onclick = () => act.lookAhead();
-    this.buttons.set("ahead", ahead);
-    cams.append(ahead);
+    // ---- the map (the camera's view: the mission bar's menu)
     const hud = this;
     this.map3d = new Map3D({
       s: this.s,
@@ -317,9 +460,12 @@ export class FlightHud {
         this.act.deleteNode(Math.min(this.sel, this.lastInfo.plan.nodes.length - 1));
       }
     });
-    this.right.append(cams, this.map3d.bar, this.map3d.stage);
+    const mapHead = panelHead(this.right, "map", "Map");
+    const mapBody = h("div", "fl-body fl-mapbody");
+    mapBody.append(this.map3d.bar, this.map3d.stage);
+    this.right.append(mapHead.head, mapBody);
 
-    this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right);
+    this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
     document.body.append(this.hud, this.root);
     this.show(false);
   }
@@ -730,11 +876,6 @@ export class FlightHud {
       const r = p / (1 + e * Math.cos(nu));
       mark(cx + r * Math.cos(nu) * k, cy - r * Math.sin(nu) * k, "#ffc85a", 4);
     }
-    ctx.fillStyle = "rgba(200, 208, 222, 0.6)";
-    ctx.font = `600 ${8.5 * dpr}px ${FONT}`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(`${st.soiName.toUpperCase()} · TO SCALE`, 2 * dpr, 2 * dpr);
   }
 
   /** The Ranger's status block (telemetry panel). */
@@ -851,7 +992,11 @@ export class FlightHud {
     setChip("sas", i.sas, "SAS");
     M.pathBtn!.classList.toggle("off", !s.pathInView);
     M.soundBtn!.classList.toggle("off", !s.sound);
-    M.soundBtn!.textContent = s.sound ? "🔈" : "🔇";
+    if (M.soundBtn!.dataset.on !== String(s.sound)) {
+      M.soundBtn!.dataset.on = String(s.sound);
+      M.soundBtn!.replaceChildren(icon(s.sound ? "sound" : "mute"));
+    }
+    M.viewName!.textContent = MOUNTS[s.shipMount as Mount]?.short ?? "";
     this.drawStatus(i.status ?? null);
     setChip("hold", i.hold !== "none", i.hold === "none" ? "HOLD" : HOLD_NAMES[i.hold].toUpperCase());
     let auto = "AUTO";
@@ -960,7 +1105,7 @@ export class FlightHud {
     // around a body (ours, or a planet's frame): the Kepler figures
     const ks = i.status;
     const kepler = !!ks && !ks.kerr && ks.side !== "throat";
-    if (this.orbitHead) this.orbitHead.textContent = kepler ? `Orbit · ${ks!.soiName}` : "Orbit · effective potential";
+    if (this.orbitHead) this.orbitHead.textContent = kepler ? `Orbit · ${ks!.soiName}` : "Effective potential";
     if (ks && kepler) {
       const km = (x: number) => (!Number.isFinite(x) ? "∞" : Math.abs(x) >= 1e7 ? `${(x / 1.495978707e8).toFixed(2)} AU` : `${Math.round(x).toLocaleString("en")} km`);
       O.course!.textContent = `${ks.label} · ${ks.soiName.toUpperCase()}`;
@@ -995,7 +1140,7 @@ export class FlightHud {
     {
       const b = this.buttons.get("speedMode")!;
       b.classList.toggle("on", i.speedMode === "target");
-      (b.querySelector("span") as HTMLElement).textContent = i.speedMode === "target" ? "SPD TARGET" : "SPD ORBIT";
+      b.dataset.label = i.speedMode === "target" ? "Speed: target" : "Speed: orbit";
     }
     for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", i.mount === m);
     this.buttons.get("ahead")!.classList.toggle("on", s.shipLookYaw !== 0 || s.shipLookPitch !== 0);
@@ -1191,7 +1336,7 @@ export class FlightHud {
       ctx.stroke();
       ctx.fillStyle = col;
       ctx.textAlign = "right";
-      ctx.font = `600 ${8.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
       ctx.fillText(txt, x0 + wdt - 18 * dpr, yy - 6 * dpr);
       ctx.textAlign = "left";
       ctx.font = `${10 * dpr}px ${MONO}`;
@@ -1276,7 +1421,7 @@ export class FlightHud {
       ctx.fillStyle = g;
       ctx.fill();
       ctx.fillStyle = "rgba(200, 208, 222, 0.6)";
-      ctx.font = `600 ${8.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       ctx.fillText(name, 2 * dpr, y0 + 4 * dpr);
@@ -1299,8 +1444,58 @@ export class FlightHud {
     if (c.width !== cw || c.height !== ch) (c.width = cw), (c.height = ch);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, cw, ch);
-    if (i.status?.orbit && !i.status.kerr) return this.drawKepler(ctx, cw, ch, i.status);
-    if (i.region !== "hole" || !Number.isFinite(i.E)) return;
+    // (the plot inset from the figures written in its corners)
+    const pad = { t: 30 * dpr, b: 30 * dpr };
+    ctx.save();
+    ctx.translate(0, pad.t);
+    const chP = ch - pad.t - pad.b;
+    if (i.status?.orbit && !i.status.kerr) this.drawKepler(ctx, cw, chP, i.status);
+    else if (i.region === "hole" && Number.isFinite(i.E)) this.drawWell(ctx, cw, chP, i);
+    ctx.restore();
+    this.drawOrbitText(ctx, cw, ch);
+  }
+
+  /** The orbit's figures in the plot's corners: what it is, the course; periapsis, apoapsis; the rest. */
+  private drawOrbitText(ctx: CanvasRenderingContext2D, cw: number, ch: number) {
+    const dpr = devicePixelRatio;
+    const O = this.orbitEls;
+    const txt = (k: string) => O[k]?.textContent ?? "";
+    const m = 8 * dpr;
+    const label = (t: string, x: number, y: number, align: CanvasTextAlign, col = "rgba(176, 196, 222, 0.62)") => {
+      ctx.font = `700 ${11 * dpr}px ${FONT}`;
+      ctx.fillStyle = col;
+      ctx.textAlign = align;
+      ctx.fillText(t.toUpperCase(), x, y);
+    };
+    const value = (t: string, x: number, y: number, align: CanvasTextAlign, col = "#e8f0fa") => {
+      ctx.font = `500 ${11.5 * dpr}px ${MONO}`;
+      ctx.fillStyle = col;
+      ctx.textAlign = align;
+      ctx.fillText(t, x, y);
+    };
+    ctx.textBaseline = "top";
+    label(this.orbitHead?.textContent ?? "Orbit", m, m, "left", "#d9efff");
+    value(txt("el"), m, m + 13 * dpr, "left", "rgba(214, 226, 242, 0.7)");
+    const hot = O.course?.classList.contains("hot");
+    ctx.font = `700 ${12 * dpr}px ${FONT}`;
+    ctx.fillStyle = hot ? "#ff8a70" : "#6fe3a1";
+    ctx.textAlign = "right";
+    ctx.fillText(txt("course"), cw - m, m);
+    ctx.textBaseline = "bottom";
+    const split = (t: string) => {
+      const k = t.indexOf(" · ");
+      return k < 0 ? [t, ""] : [t.slice(0, k), t.slice(k + 3)];
+    };
+    const [pe, peT] = split(txt("pe")), [ap, apT] = split(txt("ap"));
+    label(peT ? `Pe · ${peT}` : "Pe", m, ch - m - 14 * dpr, "left");
+    value(pe, m, ch - m, "left");
+    label(apT ? `Ap · ${apT}` : "Ap", cw - m, ch - m - 14 * dpr, "right");
+    value(ap, cw - m, ch - m, "right");
+  }
+
+  /** The effective potential of the ship's Kerr orbit (L, Q): the well, the energy line, the ship. */
+  private drawWell(ctx: CanvasRenderingContext2D, cw: number, ch: number, i: Info) {
+    const dpr = devicePixelRatio;
     const a = i.spin, L = i.L, Q = i.Q, E = i.E;
     const V = (r: number) => {
       const r2 = r * r, a2 = a * a;
@@ -1373,7 +1568,7 @@ export class FlightHud {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-      ctx.font = `${8.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
       ctx.textAlign = "right";
       ctx.fillText("E = 1 · escape", cw - 4 * dpr, Y(1) - 8 * dpr);
     }
@@ -1384,7 +1579,7 @@ export class FlightHud {
     ctx.lineTo(X(rMax), Y(E));
     ctx.stroke();
     // landmarks on the axis, the ship
-    ctx.font = `600 ${8 * dpr}px ${FONT}`;
+    ctx.font = `600 ${9.8 * dpr}px ${FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (const [rr, txt, col] of [[i.photon, "γ", "#ffdc78"], [i.isco, "ISCO", "#78e696"]] as const) {
@@ -1496,25 +1691,15 @@ export class FlightHud {
     arcGauge(Math.PI * 0.64, Math.PI * 1.36, t, "#ff6a2c", "#ffd27a", false);
     const gl = Math.max(0, Math.min(1, i.accel / Math.max(i.engine.max, 1e-12)));
     arcGauge(Math.PI * 0.36, -Math.PI * 0.36, gl, "#3b8cff", "#9fe3ff", true);
-    ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "#ffd27a";
-    ctx.textAlign = "left";
-    ctx.fillText(`THR ${Math.round(t * 100)}%${i.precision ? " · FINE" : ""}`, 0, 0);
-    ctx.fillStyle = "#9fe3ff";
-    ctx.textAlign = "right";
+    // (the throttle, the g-load, the engine and the tank: the readout above the ball)
     const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
-    ctx.fillText(i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g", size, 0);
-    // the engine (Cinema: hypothetical, not survivable) and the tank
-    ctx.textBaseline = "bottom";
-    ctx.textAlign = "left";
-    ctx.fillStyle = i.engine.kind === "crew" ? "#9fe3ff" : "#ff8a6a";
-    ctx.fillText(i.engine.kind === "crew" ? `CREW ${fmtG(i.engine.max * gUnit)}` : `CINEMA ${fmtG(i.engine.max * gUnit)}`, 0, size);
     const fu = i.engine.fuel;
-    if (fu) {
-      ctx.textAlign = "right";
-      ctx.fillStyle = fu.empty ? "#ff5a4a" : fu.fraction < 0.15 ? "#ffb35c" : "#ffd27a";
-      ctx.fillText(fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}% · Δv ${fu.dvLeft.toFixed(3)} c`, size, size);
+    const R = this.ballRead;
+    if (R) {
+      R.thr.textContent = `${Math.round(t * 100)}%${i.precision ? " FINE" : ""}`;
+      R.g.textContent = i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g";
+      R.eng.textContent = `${i.engine.kind === "crew" ? "CREW" : "CINEMA"} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}%`}` : ""}`;
+      R.eng.classList.toggle("hot", !!fu && (fu.empty || fu.fraction < 0.15));
     }
     // rotation rates: short bars (pitch right side, yaw bottom)
     ctx.lineWidth = 3 * dpr;
@@ -1632,7 +1817,7 @@ function valueBox(ctx: CanvasRenderingContext2D, x: number, cy: number, value: s
   ctx.fillText(value, x0 + 8 * dpr, cy + 1 * dpr);
   ctx.shadowBlur = 0;
   ctx.fillStyle = AMBER;
-  ctx.font = `600 ${10 * dpr}px ${FONT}`;
+  ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
   ctx.textAlign = "right";
   ctx.fillText(unit, x0 + w - 7 * dpr, cy + 1 * dpr);
   ctx.fillStyle = "rgba(220, 228, 240, 0.75)";
@@ -1645,10 +1830,10 @@ function label(ctx: CanvasRenderingContext2D, x: number, y: number, title: strin
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = AMBER;
-  ctx.font = `700 ${9.5 * dpr}px ${FONT}`;
+  ctx.font = `700 ${11.6 * dpr}px ${FONT}`;
   ctx.fillText(title, x, y - 10 * dpr);
   ctx.fillStyle = "rgba(200, 208, 222, 0.55)";
-  ctx.font = `${8.5 * dpr}px ${FONT}`;
+  ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
   ctx.fillText(sub2, x, y);
 }
 

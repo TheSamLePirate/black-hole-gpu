@@ -10,6 +10,7 @@ import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES, bodyLook, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type Mount } from "./mounts";
+import { SOLAR_BODIES } from "./system/solar";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -38,10 +39,17 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const CAM_MODES: Settings["rotation"][] = ["orbit", "follow", "free", "tripod"];
 const CAM_LABEL: Record<Settings["rotation"], string> = { orbit: "Around", follow: "Follow", free: "Free", tripod: "Tripod" };
 const CAM_HELP: Record<Settings["rotation"], string> = {
-  orbit: "around the target: drag turns about it, the wheel sets the distance (Z / S too; Q D, A E: around, up / down)",
-  follow: "moves with the target: drag looks around, Z Q S D, A E move the camera, the wheel pushes it",
-  free: "carried by the nearest body: drag looks around, Z Q S D, A E fly, Shift faster",
-  tripod: "fixed on the nearest body, turning with it, aiming at the target: drag aims off it, Z Q S D, A E move the tripod",
+  orbit: "Circles the target — drag to turn about it, scroll to come closer",
+  follow: "Moves with the target — drag to look around, fly to shift the camera",
+  free: "Flies freely, carried by the nearest world — drag to look around",
+  tripod: "Stands on the nearest world, turning with it, aimed at the target",
+};
+/** The behaviours' glyphs (24 × 24 line icons). */
+const CAM_ICON: Record<Settings["rotation"], string> = {
+  orbit: '<circle cx="12" cy="12" r="2.6" class="f"/><ellipse cx="12" cy="12" rx="9" ry="4.2"/><circle cx="20.2" cy="10.4" r="1.5" class="f"/>',
+  follow: '<circle cx="15" cy="12" r="3" class="f"/><path d="M3 12h6M6 9l3 3-3 3"/><path d="M18.5 7.5a6.5 6.5 0 0 1 0 9"/>',
+  free: '<path d="M12 3l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z"/>',
+  tripod: '<path d="M12 5v6M12 11l-6 9M12 11l6 9M12 11v9"/><rect x="8.5" y="3" width="7" height="4" rx="1"/>',
 };
 /** A height [m] as the panel shows it. */
 const fmtHeight = (m: number) => (m < 1e3 ? `${m.toFixed(0)} m` : m < 1e6 ? `${(m / 1e3).toFixed(m < 1e4 ? 1 : 0)} km` : `${(m / 1e6).toFixed(1)} Mm`);
@@ -336,7 +344,7 @@ async function main() {
     "btn-jet": () => toggle("jet"),
     "btn-ship": () => {
       toggle("ship");
-      panel.toast(settings.ship ? `Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""} — ⇧K: next attach point` : "Ranger off");
+      panel.toast(settings.ship ? `Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""}` : "Ranger off");
     },
     "btn-cinema": () => {
       toggle("cinematic");
@@ -367,93 +375,159 @@ async function main() {
   const camPop = (() => {
     const el = document.createElement("div");
     el.id = "cam-pop";
-    el.className = "glass";
     el.hidden = true;
     document.body.append(el);
-    const row = (label: string) => {
-      const r = document.createElement("div");
-      r.className = "cp-row";
-      const l = document.createElement("span");
-      l.className = "cp-label";
-      l.textContent = label;
-      const box = document.createElement("div");
-      box.className = "cp-items";
-      r.append(l, box);
-      el.append(r);
-      return box;
+    const mk = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      return e;
     };
-    const button = (text: string, title: string, active: boolean, on: () => void) => {
-      const b = document.createElement("button");
-      b.textContent = text;
-      b.title = title;
+    const svg = (body: string) => `<svg viewBox="0 0 24 24">${body}</svg>`;
+    let filter = "";
+    const statusMode = mk("span", "cp-mode");
+    const statusText = mk("span", "cp-carried");
+    function section(label: string) {
+      const sec = mk("div", "cp-sec");
+      sec.append(mk("div", "cp-label", label));
+      el.append(sec);
+      return sec;
+    }
+    function tile(icon: string, name: string, desc: string, active: boolean, on: () => void) {
+      const b = mk("button", "cp-tile");
       b.classList.toggle("active", active);
+      const i = mk("span", "cp-ti");
+      i.innerHTML = svg(icon);
+      const t = mk("span", "cp-tt");
+      t.append(mk("b", "", name), mk("small", "", desc));
+      b.append(i, t);
       b.onclick = () => {
         on();
         touch();
         refresh();
       };
       return b;
-    };
-    const statusEl = document.createElement("div");
-    statusEl.className = "cp-status";
-    const helpEl = document.createElement("div");
-    helpEl.className = "cp-help";
+    }
+    /** the targets by kind: the worlds here, their moons, what lies beyond the wormhole */
+    function groupsOf(list: Target[]): [string, Target[]][] {
+      const ours = list.filter((b) => SOLAR_BODIES.some((q) => q.id === b));
+      const theirs = list.filter((b) => !ours.includes(b));
+      const planets = ours.filter((b) => { const q = SOLAR_BODIES.find((x) => x.id === b)!; return !q.parent || q.parent === "sun"; });
+      const moons = ours.filter((b) => !planets.includes(b));
+      const here = cameraFrame(settings).region === "throat" && cameraFrame(settings).ell < 0;
+      const g: [string, Target[]][] = here
+        ? [["The Sun and the planets", planets], ["Moons", moons], ["Beyond the wormhole", theirs]]
+        : [["Gargantua's system", theirs], ["Through the wormhole — the Sun and the planets", planets], ["Moons", moons]];
+      return g.filter(([, l]) => l.length);
+    }
     function refresh() {
       if (el.hidden) return;
       el.replaceChildren();
+      // header: the title, the state, a close button
+      const head = mk("div", "fl-title cp-head");
+      head.append(mk("span", "fl-htext", settings.ship ? "Camera · Ranger" : "Camera"));
+      const x = mk("button", "cp-x", "×");
+      x.title = "Close";
+      x.onclick = () => toggle(false);
+      head.append(x);
+      const st = mk("div", "cp-state");
+      st.append(statusMode, statusText);
+      el.append(head, st);
       if (settings.ship) {
-        const views = row("Ranger");
-        for (const m of Object.keys(MOUNTS) as Mount[]) views.append(button(MOUNTS[m].short, MOUNTS[m].label, settings.shipMount === m, () => setMount(m)));
+        for (const [g, outside] of [["On the ship", false], ["Outside", true]] as const) {
+          const sec = section(g);
+          const tiles = mk("div", "cp-tiles cp-tiles-3");
+          for (const m of Object.keys(MOUNTS) as Mount[]) {
+            if (!!(MOUNTS[m] as { outside?: string }).outside !== outside) continue;
+            tiles.append(tile(CAM_ICON[outside ? (m === "around" ? "orbit" : "free") : "follow"], MOUNTS[m].short, MOUNTS[m].label, settings.shipMount === m, () => setMount(m)));
+          }
+          sec.append(tiles);
+        }
       } else {
-        const modes = row("Behaviour");
-        for (const m of CAM_MODES) modes.append(button(CAM_LABEL[m], CAM_HELP[m], settings.rotation === m, () => camera.setRotation(m)));
-      }
-      const targets = row("Target");
-      for (const b of camera.availableTargets()) {
-        targets.append(button(BODY_NAMES[b], `Aim at ${BODY_NAMES[b]}`, settings.target === b, () => {
-          camera.selectTarget(b, { focus: true });
+        const sec = section("Behaviour");
+        const tiles = mk("div", "cp-tiles");
+        for (const m of CAM_MODES) tiles.append(tile(CAM_ICON[m], CAM_LABEL[m], CAM_HELP[m], settings.rotation === m, () => {
+          camera.setRotation(m);
           syncRotationButtons();
         }));
+        sec.append(tiles);
       }
+      // the target: a search, the bodies by kind
+      const tsec = section("Target");
+      const search = mk("input", "cp-search") as HTMLInputElement;
+      search.type = "search";
+      search.placeholder = "Search a body…";
+      search.value = filter;
+      const lists = mk("div", "cp-groups");
+      const fill = () => {
+        lists.replaceChildren();
+        const q = filter.trim().toLowerCase();
+        for (const [g, list] of groupsOf(camera.availableTargets())) {
+          const items = list.filter((b) => !q || BODY_NAMES[b].toLowerCase().includes(q));
+          if (!items.length) continue;
+          lists.append(mk("div", "cp-gname", g));
+          const box = mk("div", "cp-bodies");
+          for (const b of items) {
+            const btn = mk("button", "cp-body");
+            btn.classList.toggle("active", settings.target === b);
+            const dot = mk("i");
+            dot.style.background = `rgb(${BODY_COLOURS[b] ?? "200, 200, 200"})`;
+            btn.append(dot, mk("span", "", BODY_NAMES[b]));
+            btn.onclick = () => {
+              camera.selectTarget(b, { focus: true });
+              syncRotationButtons();
+              touch();
+              refresh();
+            };
+            box.append(btn);
+          }
+          lists.append(box);
+        }
+      };
+      search.oninput = () => {
+        filter = search.value;
+        fill();
+      };
+      fill();
+      tsec.append(search, lists);
       if (!settings.ship) {
-        const speed = row("Speed");
-        const r = document.createElement("input");
+        const ssec = section("Speed");
+        const row = mk("div", "cp-speed");
+        const r = mk("input") as HTMLInputElement;
         r.type = "range";
         r.min = "-4";
         r.max = "4";
         r.step = "0.1";
         r.value = String(Math.log2(camera.flySpeed));
-        const v = document.createElement("span");
-        v.className = "cp-value";
-        v.textContent = `×${camera.flySpeed.toFixed(2)}`;
+        const v = mk("span", "cp-value", `×${camera.flySpeed.toFixed(2)}`);
         r.oninput = () => {
           camera.flySpeed = 2 ** Number(r.value);
           v.textContent = `×${camera.flySpeed.toFixed(2)}`;
         };
-        speed.append(r, v);
+        row.append(r, v);
+        ssec.append(row);
       }
-      el.append(statusEl, helpEl);
       status();
     }
     function status() {
       if (el.hidden) return;
       if (settings.ship) {
-        statusEl.textContent = `On the Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""}`;
-        helpEl.textContent = settings.shipMount === "around" ? "Drag: turn around the ship · wheel: distance" : settings.shipMount === "free" ? "Z Q S D, A E: move the camera · drag: turn · Shift: faster" : "Drag: look around from the attach point · V: next view";
+        statusMode.textContent = MOUNTS[settings.shipMount as Mount]?.short ?? "";
+        statusText.textContent = `Target: ${BODY_NAMES[settings.target]}`;
         return;
       }
       const rs = camera.rigStatus();
-      statusEl.textContent = rs ? `Carried by ${BODY_NAMES[rs.body]} — ${fmtHeight(rs.h * 1476.625 * settings.massSolar)} above its surface` : settings.rotation === "orbit" ? `Around ${BODY_NAMES[settings.target]}` : "In space — no body near enough to carry the camera";
-      helpEl.textContent = CAM_HELP[settings.rotation];
+      statusMode.textContent = CAM_LABEL[settings.rotation];
+      statusText.textContent = rs
+        ? `on ${BODY_NAMES[rs.body]} · ${fmtHeight(rs.h * 1476.625 * settings.massSolar)} above it`
+        : settings.rotation === "orbit" ? `around ${BODY_NAMES[settings.target]}` : "in open space";
     }
-    return {
-      toggle() {
-        el.hidden = !el.hidden;
-        refresh();
-      },
-      refresh,
-      status,
-    };
+    function toggle(open = el.hidden) {
+      el.hidden = !open;
+      filter = "";
+      refresh();
+    }
+    return { toggle: () => toggle(), refresh, status };
   })();
 
   /** Next attach point of the camera on the Ranger (turns the ship on). */
@@ -516,7 +590,7 @@ async function main() {
     settings.pathInView = !settings.pathInView;
     refreshGui();
     touch();
-    panel.toast(settings.pathInView ? "Future path shown in the view [Y]" : "Future path hidden in the view (the map keeps it) [Y]");
+    panel.toast(settings.pathInView ? "Future path shown in the view" : "Future path hidden in the view (the map keeps it)");
   }
   function pilotHold(h: Hold) {
     camera.pilot.setHold(h);
@@ -539,7 +613,7 @@ async function main() {
     settings.shipMount = m;
     refreshGui();
     scheduleUrlSave();
-    const help = m === "around" ? " — drag: turn around it · wheel: distance" : m === "free" ? " — Z Q S D, A E: move · drag: turn · Shift: faster (the ship flies on)" : "";
+    const help = m === "around" ? " — drag to turn around the ship" : m === "free" ? " — fly the camera, the ship flies on" : "";
     panel.toast(`Camera: ${MOUNTS[m].label}${help}`);
   }
   const flightHud = new FlightHud(settings, {
@@ -630,7 +704,7 @@ async function main() {
       mission.stop("Mission stopped — you have the controls");
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
-    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger (Shift+K leaves it)");
+    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger");
     else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
     else return false;
     e.preventDefault();
@@ -1133,7 +1207,7 @@ async function main() {
     try {
       if (shared) panel.toast(`Shared flight: ${tools.load(shared)}`);
       else if (scene && presets[scene]) applyPreset(scene);
-      else if (hash.length <= 1 && last && last.settings.autosave !== false) panel.toast(`Resumed: ${tools.load(last)} (F2: saves)`);
+      else if (hash.length <= 1 && last && last.settings.autosave !== false) panel.toast(`Resumed: ${tools.load(last)}`);
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
     }
@@ -1487,11 +1561,7 @@ async function main() {
     const key = el.dataset.key;
     tip.innerHTML = "";
     tip.append(text);
-    if (key) {
-      const k = document.createElement("kbd");
-      k.textContent = key;
-      tip.append(k);
-    }
+    void key; // (no keys shown on the HUD: the help lists them)
     tip.hidden = false;
     const r = el.getBoundingClientRect();
     const t = tip.getBoundingClientRect();

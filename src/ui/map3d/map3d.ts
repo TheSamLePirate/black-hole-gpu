@@ -512,7 +512,7 @@ export class Map3D {
       b("fit", "Fit", "Frame the focus and the ship's paths again (double-click on empty space)", () => this.fit()),
       b("cm", "CoM", "Inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
       b("holeF", "Hole", "Gargantua's frame (fixed at the centre)", () => (this.frame = "hole")),
-      b("full", "⛶", "The map over the whole screen [M]", () => this.host.toggleMapView(), "m3-full"),
+      b("full", "⛶", "The map over the whole screen", () => this.host.toggleMapView(), "m3-full"),
     );
   }
 
@@ -803,7 +803,7 @@ export class Map3D {
     const ours = !!(i.ref && i.X);
     if (!ours && (i.region !== "hole" || !i.X)) {
       ctx.fillStyle = "rgba(220, 225, 235, 0.8)";
-      ctx.font = `${10 * dpr}px ${FONT}`;
+      ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
       ctx.fillText(`In the wormhole · ℓ = ${i.ell.toFixed(2)} M`, cw / 2, ch / 2);
       this.moving = false;
@@ -1090,7 +1090,7 @@ export class Map3D {
     const boxes: [number, number, number, number][] = [];
     ctx.textAlign = "left";
     for (const l of labels) {
-      ctx.font = `${l.weight} ${l.size * dpr}px ${FONT}`;
+      ctx.font = `${Math.max(Number(l.weight) || 600, 600)} ${l.size * 1.2 * dpr}px ${FONT}`;
       const w = ctx.measureText(l.text).width;
       const box: [number, number, number, number] = [l.x - 2 * dpr, l.y - l.size * dpr, w + 4 * dpr, (l.size + 3) * dpr];
       if (l.prio < 4 && boxes.some((q) => box[0] < q[0] + q[2] && q[0] < box[0] + box[2] && box[1] < q[1] + q[3] && q[1] < box[1] + box[3])) continue;
@@ -1247,7 +1247,7 @@ export class Map3D {
       ctx.stroke();
       if (j === 0 && p1.x > 0 && p1.x < cw && p1.y > 0 && p1.y < ch) {
         ctx.fillStyle = "rgba(124, 214, 255, 0.4)";
-        ctx.font = `${9 * dpr}px ${FONT}`;
+        ctx.font = `600 ${11 * dpr}px ${FONT}`;
         ctx.fillText(ours ? "♈" : "+x", p1.x + 3 * dpr, p1.y);
       }
     }
@@ -1444,7 +1444,7 @@ export class Map3D {
     const sp = ring(shipNow, "124, 214, 255", 5);
     if (sp) {
       ctx.fillStyle = "rgba(124, 214, 255, 0.6)";
-      ctx.font = `600 ${8 * dpr}px ${FONT}`;
+      ctx.font = `600 ${9.8 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.fillText("now", sp.x + 7 * dpr, sp.y + 3 * dpr);
     }
@@ -1511,7 +1511,7 @@ export class Map3D {
       }
       ctx.closePath();
       ctx.fill();
-      ctx.font = `700 ${8.5 * dpr}px ${FONT}`;
+      ctx.font = `700 ${10.4 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.fillText(up ? "AN" : "DN", p.x + 6 * dpr, p.y + 3 * dpr);
     }
@@ -1548,7 +1548,7 @@ export class Map3D {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 2.6 * dpr, 0, 2 * Math.PI);
       ctx.fill();
-      ctx.font = `600 ${9 * dpr}px ${FONT}`;
+      ctx.font = `600 ${11 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.fillText(text, p.x + 5 * dpr, p.y + (below ? 11 : -5) * dpr);
     };
@@ -1594,7 +1594,7 @@ export class Map3D {
           ctx.moveTo(q.x + 5 * dpr, q.y - 5 * dpr); ctx.lineTo(q.x - 5 * dpr, q.y + 5 * dpr);
           ctx.stroke();
           ctx.fillStyle = RED;
-          ctx.font = `600 ${9 * dpr}px ${FONT}`;
+          ctx.font = `600 ${11 * dpr}px ${FONT}`;
           ctx.fillText(`IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, q.x + 7 * dpr, q.y + 4 * dpr);
         }
       }
@@ -1656,7 +1656,7 @@ export class Map3D {
           ctx.stroke();
           const R = sc.byId.get(i.target)!.radius;
           ctx.fillStyle = "#ff8a5c";
-          ctx.font = `600 ${9 * dpr}px ${FONT}`;
+          ctx.font = `600 ${11 * dpr}px ${FONT}`;
           ctx.textAlign = "left";
           ctx.fillText(`CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`, (a.x + b.x) / 2 + 6 * dpr, (a.y + b.y) / 2);
         }
@@ -1745,7 +1745,7 @@ export class Map3D {
       const bad = path.fate === "horizon" || path.fate === "star";
       line(fut, bad ? "255, 90, 70" : "255, 190, 80", 0.95, 1.7, [5, 3]);
       this.crossings(ctx, fut, P, pn, dpr);
-      ctx.font = `${9.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
       tickTimes.forEach((tt, j) => {
         const idx = (tt - t0) / path.dt - 1;
         if (idx < 0 || idx >= path.pts.length - 1) return;
@@ -1945,7 +1945,7 @@ export class Map3D {
       ctx.stroke();
       ctx.fillStyle = "#dff6ff";
       ctx.textAlign = "left";
-      ctx.font = `700 ${9.5 * dpr}px ${FONT}`;
+      ctx.font = `700 ${11.6 * dpr}px ${FONT}`;
       ctx.fillText(`${k + 1}`, pl.x + 8 * dpr, pl.y - 6 * dpr);
       if (!sel) return;
       for (let c = 0; c < 3; c++) {
@@ -1973,7 +1973,7 @@ export class Map3D {
         `Δv ${kms >= 1000 ? `${dvl.toFixed(4)} c` : `${kms >= 10 ? kms.toFixed(1) : (kms * 1000).toFixed(0) + " m/s"}${kms >= 10 ? " km/s" : ""}`}  ·  burn ${fmtDur(burn, this.host.s)}`,
         `P ${fmtDv(n.dv[0])}  N ${fmtDv(n.dv[1])}  R ${fmtDv(n.dv[2])}`,
       ];
-      ctx.font = `600 ${9.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
       const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12 * dpr;
       const bx = pl.x + 44 * dpr, by = pl.y + 16 * dpr;
       ctx.fillStyle = "rgba(4, 10, 18, 0.82)";
@@ -1998,9 +1998,9 @@ export class Map3D {
     if (b.soi > 0 && Number.isFinite(b.soi)) rows.push(["Sphere of influence", fmtDist(b.soi, ours, s)]);
     const hint = b.id === i.target ? "the target · double-click: centre it" : "click: target · double-click: centre";
     const title = b.name;
-    ctx.font = `700 ${11 * dpr}px ${FONT}`;
+    ctx.font = `700 ${13.4 * dpr}px ${FONT}`;
     let w = ctx.measureText(title).width;
-    ctx.font = `${9.5 * dpr}px ${FONT}`;
+    ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
     for (const [k, v] of rows) w = Math.max(w, ctx.measureText(`${k}  ${v}`).width + 16 * dpr);
     w = Math.max(w, ctx.measureText(hint).width) + 20 * dpr;
     const hgt = (30 + rows.length * 14 + 16) * dpr;
@@ -2020,9 +2020,9 @@ export class Map3D {
     ctx.fill();
     ctx.fillStyle = "#eef3fa";
     ctx.textAlign = "left";
-    ctx.font = `700 ${11 * dpr}px ${FONT}`;
+    ctx.font = `700 ${13.4 * dpr}px ${FONT}`;
     ctx.fillText(title, x + 22 * dpr, y + 19 * dpr);
-    ctx.font = `${9.5 * dpr}px ${FONT}`;
+    ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
     rows.forEach(([k, v], j) => {
       const yy = y + (36 + j * 14) * dpr;
       ctx.fillStyle = "rgba(200, 210, 225, 0.65)";
@@ -2032,11 +2032,11 @@ export class Map3D {
       ctx.textAlign = "right";
       ctx.font = `${9.5 * dpr}px ${MONO}`;
       ctx.fillText(v, x + w - 10 * dpr, yy);
-      ctx.font = `${9.5 * dpr}px ${FONT}`;
+      ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
     });
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(124, 214, 255, 0.75)";
-    ctx.font = `${8.5 * dpr}px ${FONT}`;
+    ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
     ctx.fillText(hint, x + 10 * dpr, y + hgt - 8 * dpr);
   }
 
@@ -2067,7 +2067,7 @@ export class Map3D {
     const plane = PLANES.find((p) => p.id === this.plane)!.label.toLowerCase();
     ctx.fillStyle = "rgba(220, 225, 235, 0.55)";
     ctx.textAlign = "left";
-    ctx.font = `${9 * dpr}px ${FONT}`;
+    ctx.font = `600 ${11 * dpr}px ${FONT}`;
     const date = ours ? `${dateOf(t0).toISOString().slice(0, 10)} · ` : "";
     ctx.fillText(`${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`, 8 * dpr, by - 8 * dpr);
   }
