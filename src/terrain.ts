@@ -100,24 +100,61 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05): number {
 /** The Earth's radius [m] (its relief's scale). */
 export const EARTH_RM = 6.371e6;
 
+/** Musgrave's ridged multifractal (the tracer's ridgedMF): sharp crests, smooth valleys; 0 … ~1; `oct`
+ *  fractional (the last octave faded in). */
+function ridgedMF(p0: V3, oct: number): number {
+  let p = p0;
+  let sig = 1 - Math.abs(gnoise(p));
+  sig *= sig;
+  let sum = sig, amp = 1, norm = 1;
+  for (let i = 1; i < oct; i++) {
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    const w = Math.min(Math.max(sig * 1.8, 0), 1);
+    amp *= 0.5;
+    const fade = Math.min(Math.max(oct - i, 0), 1);
+    sig = 1 - Math.abs(gnoise(p));
+    sig = sig * sig * w;
+    sum += sig * amp * fade;
+    norm += amp * fade;
+  }
+  return sum / norm;
+}
+/** Fractal noise with a fractional number of octaves (the tracer's tfbmF). */
+function tfbmF(p0: V3, oct: number): number {
+  let p = p0;
+  let a = 0.5, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    const fade = Math.min(Math.max(oct - i, 0), 1);
+    s += a * fade * gnoise(p);
+    n += a * fade;
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    a *= 0.5;
+  }
+  return s / Math.max(n, 1e-6);
+}
+/** A layer's octaves resolved at a footprint, fractional (the tracer's layerOctF). */
+const layerOctF = (f: number, foot: number, mR: number, most: number) =>
+  Math.min(Math.max(Math.log2(mR / (f * 4 * Math.max(foot, 0.05))), 0), most);
+
 /**
- * The Earth's relief finer than its height map (h0: the map's height there [m]): ridges 3 km apart on
- * its mountains, crests 300 m apart on them and hills on its plains, rocks — the tracer's earthDetail,
- * at a pixel footprint `foot` [m].
+ * The Earth's relief finer than its height map (h0: the map's height there [m]): on its mountains a
+ * ridged multifractal on a warped lattice (ridges ~4 km apart down to ~100 m), hills on its plains,
+ * rocks — the tracer's earthDetail, at a pixel footprint `foot` [m].
  */
 export function earthDetail(q: V3, h0: number, foot = 0.05): number {
   const mount = smooth(300, 2500, h0);
   const land = smooth(0, 40, h0);
   let h = 0;
-  const o1 = layerOct(2000, foot, EARTH_RM, 4);
-  if (o1 > 0 && mount > 0) h += (ridged(sc(q, 2000, 11), o1) - 0.5) * 900 * mount;
-  const o2 = layerOct(20000, foot, EARTH_RM, 3);
-  if (o2 > 0 && land > 0) {
-    if (mount > 0) h += (ridged(sc(q, 20000, 7), o2) - 0.5) * 260 * mount;
-    h += tfbm(sc(q, 20000, 5), o2) * 50 * land;
+  const o1 = layerOctF(1500, foot, EARTH_RM, 7);
+  if (o1 > 0 && mount > 0) {
+    const w: V3 = [tfbm(sc(q, 600, 3.1), 2), tfbm(sc(q, 600, 7.7), 2), tfbm(sc(q, 600, 1.3), 2)];
+    const pw: V3 = [q[0] * 1500 + 11 + 0.7 * w[0], q[1] * 1500 + 11 + 0.7 * w[1], q[2] * 1500 + 11 + 0.7 * w[2]];
+    h += (ridgedMF(pw, o1) - 0.3) * 1500 * mount;
   }
-  const o3 = layerOct(200000, foot, EARTH_RM, 3);
-  if (o3 > 0 && land > 0) h += tfbm(sc(q, 200000, 3), o3) * (3 + 12 * mount) * land;
+  const o2 = layerOctF(20000, foot, EARTH_RM, 3);
+  if (o2 > 0 && land > 0) h += tfbmF(sc(q, 20000, 5), o2) * Math.min(o2, 1) * 50 * land * (1 - mount);
+  const o3 = layerOctF(200000, foot, EARTH_RM, 3);
+  if (o3 > 0 && land > 0) h += tfbmF(sc(q, 200000, 3), o3) * Math.min(o3, 1) * (3 + 8 * mount) * land;
   return h;
 }
 

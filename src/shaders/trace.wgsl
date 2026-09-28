@@ -3074,20 +3074,64 @@ fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
 // ship stands on it): its height map (the relief map's alpha: 0 … 8 848 m), ridges on its mountains
 // and hills on its land finer than the map; heights [m] at a unit direction on its axes, resolved to a
 // footprint foot [m]
+// Musgrave's ridged multifractal: sharp crests and smooth valleys between them, each octave's ridges
+// weighted by the one above (crests grow on crests, the valleys stay smooth) — mountains, not cones;
+// 0 … ~1. oct: the octaves the footprint resolves, fractional — the last one faded in (no seam where
+// the distance adds one)
+fn ridgedMF(p0: vec3f, oct: f32) -> f32 {
+  var p = p0;
+  var sig = 1.0 - abs(gnoise(p));
+  sig *= sig;
+  var sum = sig;
+  var amp = 1.0;
+  var norm = 1.0;
+  for (var i = 1; f32(i) < oct; i++) {
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    let w = clamp(sig * 1.8, 0.0, 1.0);
+    amp *= 0.5;
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    sig = 1.0 - abs(gnoise(p));
+    sig = sig * sig * w;
+    sum += sig * amp * fade;
+    norm += amp * fade;
+  }
+  return sum / norm;
+}
+// fractal noise with a fractional number of octaves (the last faded in); 0 for none
+fn tfbmF(p0: vec3f, oct: f32) -> f32 {
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  for (var i = 0; f32(i) < oct; i++) {
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    s += a * fade * gnoise(p);
+    n += a * fade;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    a *= 0.5;
+  }
+  return s / max(n, 1e-6);
+}
+// the octaves of a layer of base frequency f resolved at a footprint, fractional
+fn layerOctF(f: f32, foot: f32, mR: f32, most: f32) -> f32 {
+  return clamp(log2(mR / (f * 4.0 * max(foot, 0.05))), 0.0, most);
+}
 fn earthDetail(q: vec3f, h0: f32, foot: f32) -> f32 {
   let mount = smoothstep(300.0, 2500.0, h0);
   let land = smoothstep(0.0, 40.0, h0);
   var h = 0.0;
-  // ridges 3 km apart on the mountains; crests 300 m apart on them, hills on the plains; rocks
-  let o1 = layerOct(2000.0, foot, EARTH_RM, 4);
-  if (o1 > 0 && mount > 0.0) { h += (ridged(q * 2000.0 + vec3f(11.0), o1) - 0.5) * 900.0 * mount; }
-  let o2 = layerOct(20000.0, foot, EARTH_RM, 3);
-  if (o2 > 0 && land > 0.0) {
-    if (mount > 0.0) { h += (ridged(q * 20000.0 + vec3f(7.0), o2) - 0.5) * 260.0 * mount; }
-    h += tfbm(q * 20000.0 + vec3f(5.0), o2) * 50.0 * land;
+  // the mountains: a ridged multifractal (ridges ~4 km apart down to ~100 m), its lattice warped by a
+  // smooth field (no regular rows of peaks)
+  let o1 = layerOctF(1500.0, foot, EARTH_RM, 7.0);
+  if (o1 > 0.0 && mount > 0.0) {
+    let pw = q * 1500.0 + vec3f(11.0) + 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2));
+    h += (ridgedMF(pw, o1) - 0.3) * 1500.0 * mount;
   }
-  let o3 = layerOct(200000.0, foot, EARTH_RM, 3);
-  if (o3 > 0 && land > 0.0) { h += tfbm(q * 200000.0 + vec3f(3.0), o3) * (3.0 + 12.0 * mount) * land; }
+  // the plains' hills, the rocks
+  let o2 = layerOctF(20000.0, foot, EARTH_RM, 3.0);
+  if (o2 > 0.0 && land > 0.0) { h += tfbmF(q * 20000.0 + vec3f(5.0), o2) * min(o2, 1.0) * 50.0 * land * (1.0 - mount); }
+  let o3 = layerOctF(200000.0, foot, EARTH_RM, 3.0);
+  if (o3 > 0.0 && land > 0.0) { h += tfbmF(q * 200000.0 + vec3f(3.0), o3) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
   return h;
 }
 fn earthUV(q: vec3f) -> vec2f {
@@ -3137,13 +3181,18 @@ fn earthHeightStep(q: vec3f, foot: f32) -> f32 {
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
-  let e = max(foot, 2.0) / EARTH_RM;
+  // (no finer than 10 m: a float32 point of the unit sphere is good to ~0.4 m — finer differences would
+  // show its steps, a grid)
+  let e = max(foot, 10.0) / EARTH_RM;
   let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
   let t2 = cross(q, t1);
-  let h0 = earthHeight(q, foot);
-  let h1 = earthHeight(normalize(q + t1 * e), foot);
-  let h2 = earthHeight(normalize(q + t2 * e), foot);
-  return normalize(q - ((h1 - h0) * t1 + (h2 - h0) * t2) / (e * EARTH_RM));
+  // (three heights, one call: every call site is a copy the compiler builds)
+  var hs = array<f32, 3>(0.0, 0.0, 0.0);
+  for (var i = 0; i < 3; i++) {
+    let qi = select(select(q, normalize(q + t1 * e), i == 1), normalize(q + t2 * e), i == 2);
+    hs[i] = earthHeight(qi, foot);
+  }
+  return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
 }
 
 // The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~30 km,
@@ -3179,10 +3228,10 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   if (t1 <= 0.0) { return -1.0; }
   var t = max(-b - sq, 0.0);
   var tPrev = t;
-  for (var i = 0u; i < 160u; i++) {
+  for (var i = 0u; i < 256u; i++) {
     let p = ro + rd * t;
     let r = length(p);
-    let f = r - (1.0 + earthHeightStep(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM);
+    let f = r - (1.0 + earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM);
     if (f < 0.0) {
       var lo = tPrev;
       var hi = t;
@@ -3195,7 +3244,7 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
       return hi;
     }
     tPrev = t;
-    t += max(0.6 * f, 0.006 * t + 1e-9);
+    t += max(0.5 * f, 0.002 * t + 1e-9);
     if (t > t1) { break; }
   }
   return -1.0;
@@ -3266,6 +3315,19 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthSurf).x);
   if (footM < texelM && ocean < 1.0) {
     n = normalize(mix(n, earthNormalAt(q, footM), smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean)));
+  }
+  // (near: the ground's own materials from its height and slope — snow above the snow line (lower towards
+  // the poles, ragged), bare rock on the steep faces of the mountains; blended in as the map's texel
+  // grows under the pixel)
+  if (footM < texelM && ocean < 1.0) {
+    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
+    let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
+    let lat = abs(asin(clamp(q.z, -1.0, 1.0))) * 57.29578;
+    let snowLine = mix(5700.0, 700.0, smoothstep(20.0, 70.0, lat)) + 300.0 * gnoise(q * 3000.0);
+    let snow = smoothstep(snowLine - 250.0, snowLine + 250.0, hG) * (1.0 - smoothstep(0.25, 0.5, slope));
+    let rock = smoothstep(0.22, 0.45, slope) * smoothstep(300.0, 1500.0, hG);
+    A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
+    A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
   let V = -rd;
   let mu0 = dot(q, Ls);
