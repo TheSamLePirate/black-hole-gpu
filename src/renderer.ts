@@ -4,7 +4,9 @@ import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
+import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer, type Thrust } from "./ship";
+import { EnduranceRenderer } from "./endurance";
 import { GpuProfiler } from "./gpuprof";
 import type { Mount, MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -153,7 +155,7 @@ interface Target {
   /** the lens flare's meter: its uniform (exposure, level) and result (mean excess, centroid) */
   flare: { u: GPUBuffer; out: GPUBuffer; bind: GPUBindGroup | null };
   /** the image through the depth of field (made when it is first on) */
-  dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup } | null;
+  dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup; endTex: GPUTexture } | null;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
@@ -209,6 +211,11 @@ export class Renderer {
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   /** The spaceship carrying the camera, and the light probe that lights it. */
   readonly ship: ShipRenderer;
+  readonly endurance: EnduranceRenderer;
+  private enduranceLoading: Promise<void> | null = null;
+  /** the camera frame and time of the last image traced (the Endurance is drawn with them) */
+  private lastCam: CameraFrame | null = null;
+  private lastTime = 0;
   /** GPU time per pass (timestamp queries; off unless switched on) */
   readonly prof: GpuProfiler;
   private envPipeline: GPUComputePipeline;
@@ -331,7 +338,7 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string; sky: string; ship: string },
+    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string },
   ) {
     this.device = device;
     this.context = context;
@@ -375,6 +382,7 @@ export class Renderer {
     this.tracePipeline = mkTrace(false);
     this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
     this.ship = new ShipRenderer(device, src.ship);
+    this.endurance = new EnduranceRenderer(device, src.endurance);
     this.prof = new GpuProfiler(device);
     // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
     this.prof.enabled = this.prof.supported;
@@ -511,7 +519,7 @@ export class Renderer {
     loading.done("gpu");
     const src = {
       trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
-      ship: await wgsl(shipWGSL),
+      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL),
     };
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
@@ -795,7 +803,7 @@ export class Renderer {
     const d = this.device;
     // (half resolution: the blur has no fine detail; the display mixes it over the sharp image)
     const tex = d.createTexture({ size: [Math.ceil(t.width / 2), Math.ceil(t.height / 2)], format: "rgba16float", usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
-    const buf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const buf = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const bind = d.createBindGroup({
       layout: this.postDof.getBindGroupLayout(0),
       entries: [
@@ -804,9 +812,10 @@ export class Renderer {
         { binding: 2, resource: tex.createView() },
         { binding: 11, resource: { buffer: t.moments } },
         { binding: 17, resource: { buffer: buf } },
+        { binding: 20, resource: this.endurance.depthTexture().createView() },
       ],
     });
-    t.dof = { tex, buf, bind };
+    t.dof = { tex, buf, bind, endTex: this.endurance.depthTexture() };
     this.bindDisplay(t);
     return t.dof;
   }
@@ -986,6 +995,7 @@ export class Renderer {
     const f = this.paramsF;
     const u = this.paramsU;
     const cam = o.probe?.cam ?? cameraFrame(s);
+    if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     const dc = this.diskConstants(s);
     const a = s.spin;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -1458,6 +1468,15 @@ export class Renderer {
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
         this.device.queue.writeBuffer(t.shipRect, 0, rect);
       } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+      // the Endurance, over the traced image (before the bloom's levels are made from it)
+      if (s && i === r0 && s.endurance && this.lastCam) {
+        if (!this.endurance.ready) {
+          this.enduranceLoading ??= loading.track("endurance", "The Endurance", this.endurance.load((u) => loading.fetch(u, "endurance"))).then(() => this.invalidate(), (e) => console.error("Endurance:", e));
+        } else {
+          const pre = preExposure(this.ev(s));
+          this.endurance.encode(enc, t.hdr, t.moments, s, this.lastCam, this.lastTime, pre, pre / Math.pow(2, this.ev(s)));
+        }
+      }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
     // the depth of field, from the finished image and its depths (the Ranger, composited later, sharp)
@@ -1466,6 +1485,24 @@ export class Renderer {
       // (the largest circle: the aperture × 3 % of the image's height)
       this.device.queue.writeBuffer(dof.buf, 0, new Float32Array([s.dofFocus, s.dofAperture * 0.03 * t.height, 32, 0]));
       this.device.queue.writeBuffer(dof.buf, 16, new Uint32Array([t.width, t.height, 0, 0]));
+      // (the Endurance's box and depth: nearer than the traced scene where it covers it)
+      const er = s.endurance ? this.endurance.rect : [0, 0, 0, 0];
+      this.device.queue.writeBuffer(dof.buf, 32, new Float32Array(er));
+      const et = this.endurance.depthTexture();
+      if (dof.endTex !== et) {
+        dof.endTex = et;
+        dof.bind = this.device.createBindGroup({
+          layout: this.postDof.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: t.hdr.createView() },
+            { binding: 1, resource: this.clampSampler },
+            { binding: 2, resource: dof.tex.createView() },
+            { binding: 11, resource: { buffer: t.moments } },
+            { binding: 17, resource: { buffer: dof.buf } },
+            { binding: 20, resource: et.createView() },
+          ],
+        });
+      }
       const pass = enc.beginComputePass(this.prof.pass("depth of field"));
       pass.setPipeline(this.postDof);
       pass.setBindGroup(0, dof.bind);

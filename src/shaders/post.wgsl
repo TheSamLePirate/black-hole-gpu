@@ -268,11 +268,20 @@ fn downShip(@builtin(global_invocation_id) gid: vec3u) {
 // covers the space between taps). At half resolution (the blur has no fine detail), its circle kept in
 // alpha: the display mixes it over the sharp image where the circle is over a pixel or two. The
 // Ranger, composited later, stays sharp.
-struct Dof { f: vec4f, u: vec4u }; // f: focus [M] (0: auto), largest circle A [px], taps, unused; u: W, H
+struct Dof { f: vec4f, u: vec4u, box: vec4f }; // f: focus [M] (0: auto), largest circle A [px], taps, unused; u: W, H; box: the Endurance's [px] (w = 0: none)
 @group(0) @binding(17) var<uniform> DF: Dof;
+@group(0) @binding(20) var endDepth: texture_2d<f32>; // the Endurance's box: distance, coverage
 fn dofDepth(p: vec2i) -> f32 {
   let q = clamp(p, vec2i(0), vec2i(DF.u.xy) - 1);
-  return min(moments[u32(q.y) * DF.u.x + u32(q.x)].y, 1e5);
+  var d = min(moments[u32(q.y) * DF.u.x + u32(q.x)].y, 1e5);
+  if (DF.box.z > 0.0) {
+    let b = q - vec2i(DF.box.xy);
+    if (all(b >= vec2i(0)) && all(b < vec2i(textureDimensions(endDepth)))) {
+      let e = textureLoad(endDepth, b, 0);
+      if (e.y > 0.5) { d = min(d, e.x / e.y); }
+    }
+  }
+  return d;
 }
 fn cocOf(d: f32, F: f32, A: f32) -> f32 { return A * min(abs(1.0 - F / max(d, 1e-3)), 2.0); }
 @compute @workgroup_size(8, 8)

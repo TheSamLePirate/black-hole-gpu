@@ -86,6 +86,14 @@ export interface Settings {
   diskTau: number; // vertical optical depth
   diskThickness: number; // scale height H/R (0 = infinitely thin slab)
   diskHaze: number; // the scattering mist over the volumetric disk (0: none)
+  endurance: boolean; // the Endurance on an orbit around the hole (cinematic scale)
+  enduranceOrbit: number; // its orbit's radius [M]
+  endurancePhase: number; // where on it at t = 0 [deg]
+  enduranceIncl: number; // the orbit's tilt to the disk [deg]
+  enduranceNode: number; // its ascending node's longitude [deg] (highest 90° after it)
+  enduranceSize: number; // its diameter [M] (cinematic: at 64 m it would be far below a pixel)
+  enduranceSpin: number; // its ring's turn [M of time]
+  enduranceLight: number; // the disk's light on it (× the estimate)
   diskSmoke: number; // dark clouds of cool dense gas above the volumetric disk (0: none)
   flowPeriod: number; // M (no longer a setting: the GPU clock wraps after 1024 of them)
   // relativistic jet
@@ -267,6 +275,14 @@ export function defaultSettings(): Settings {
     diskTau: 0.5,
     diskThickness: 0,
     diskHaze: 0,
+    endurance: false,
+    enduranceOrbit: 24,
+    endurancePhase: 0,
+    enduranceIncl: 4,
+    enduranceNode: 0,
+    enduranceSize: 1.2,
+    enduranceSpin: 60,
+    enduranceLight: 1.5,
     diskSmoke: 0,
     flowPeriod: 90,
     jet: true,
@@ -431,6 +447,14 @@ export const presets: Record<string, Preset> = {
     dof: true, dofAperture: 0.3, dofFocus: 0, lensFlare: 0.6, diskHaze: 0.6, diskSmoke: 0.6,
   },
   // (a flight: the image never accumulates — the thin disk, crisp in motion, where the volume would be grainy)
+  // the film's wide shot: the Endurance on its orbit before Gargantua's disk (cinematic scale: 1.6 M)
+  "Interstellar: the Endurance before Gargantua": {
+    spin: 0.6, distance: 40.904, inclination: 86.995, azimuth: 10.299, fov: 45, yaw: -3.854, pitch: 4.015, roll: -15.416,
+    motion: "static", shiftMode: "none", diskTemp: 4500, diskOuter: 26, turbulence: 0.95, diskEmission: "bolometric",
+    diskThickness: 0.009, diskTau: 59, jet: false, animate: false, time: 1692.84, tonemap: "Film", bloom: 0.5,
+    dof: false, lensFlare: 0.6, diskHaze: 0.6, diskSmoke: 0.6, exposure: 0, autoExposure: false,
+    endurance: true, enduranceOrbit: 30, enduranceIncl: 8, enduranceNode: -80, endurancePhase: 141.87, enduranceSize: 1.6, enduranceLight: 1.5,
+  },
   "Ranger: approaching Gargantua": {
     spin: 0.6, distance: 34, inclination: 84, fov: 55, yaw: 0, pitch: 0, roll: 0, shiftMode: "none",
     diskTemp: 4500, diskOuter: 26, turbulence: 0.9, diskEmission: "bolometric", diskThickness: 0, diskTau: 100, jet: false,

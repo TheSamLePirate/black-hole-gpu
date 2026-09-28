@@ -491,6 +491,39 @@ export const SCHEMA: ControlDef[] = [
     keywords: "planets miller mann edmunds interstellar system",
   },
   {
+    key: "endurance", type: "toggle", section: "matter", group: "Endurance", label: "Endurance",
+    help: "Interstellar's ring ship on a circular orbit around the hole, lit by the disk, as in the film's shots. At its true size (64 m) it would be far below a pixel next to a hole of 10⁸ M☉ (M ≈ 1 AU): it is drawn at a cinematic scale. Not lensed (seen along straight rays from the camera); hidden by the disk's gas in front of it.",
+    keywords: "endurance ship ring station interstellar orbit film",
+  },
+  {
+    key: "enduranceOrbit", type: "number", section: "matter", group: "Endurance", label: "Orbit radius", min: 4, max: 200, step: 0.1, unit: "M",
+    visible: (s) => s.endurance, help: "Radius of its circular orbit around the hole (it turns at the Keplerian rate).",
+  },
+  {
+    key: "endurancePhase", type: "number", section: "matter", group: "Endurance", label: "Orbit phase", min: -180, max: 180, step: 0.1, unit: "°",
+    visible: (s) => s.endurance, help: "Where on its orbit it is at t = 0.",
+  },
+  {
+    key: "enduranceIncl", type: "number", section: "matter", group: "Endurance", label: "Orbit tilt", min: -90, max: 90, step: 0.1, unit: "°",
+    visible: (s) => s.endurance, help: "The orbit's inclination to the disk's plane.",
+  },
+  {
+    key: "enduranceNode", type: "number", section: "matter", group: "Endurance", label: "Orbit node", min: -180, max: 180, step: 0.1, unit: "°",
+    visible: (s) => s.endurance, advanced: true, help: "Longitude of the orbit's ascending node: it rises above the disk there, highest 90° later.",
+  },
+  {
+    key: "enduranceSize", type: "number", section: "matter", group: "Endurance", label: "Size", min: 0.05, max: 10, step: 0.01, scale: "log", unit: "M",
+    visible: (s) => s.endurance, help: "Its ring's diameter — a cinematic scale.",
+  },
+  {
+    key: "enduranceSpin", type: "number", section: "matter", group: "Endurance", label: "Spin period", min: 5, max: 1000, step: 1, scale: "log", unit: "M",
+    visible: (s) => s.endurance, advanced: true, help: "One turn of its ring (its artificial gravity), in the scene's time.",
+  },
+  {
+    key: "enduranceLight", type: "number", section: "matter", group: "Endurance", label: "Disk light", min: 0, max: 4, step: 0.01,
+    visible: (s) => s.endurance, advanced: true, help: "Scale on the estimated light of the disk falling on it.",
+  },
+  {
     key: "sun", type: "toggle", section: "matter", group: "Companion star", label: "Star",
     help: "A star on a circular orbit in the black hole's equatorial plane (in the black hole's frame; with a supermassive hole the star does the orbiting). Opaque limb-darkened blackbody photosphere, seen at the emission time with its orbital Doppler shift and gravitational redshift, and lensed like everything else.",
     keywords: "sun star companion orbit binary",
@@ -915,6 +948,7 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Gargantua system: departure near Saturn": { title: "Departure near Saturn", description: "Our side: sunlit Saturn, the wormhole mouth waiting behind it.", icon: "♄", group: "gargantua" },
   "Interstellar (no shifts)": { title: "Gargantua, as in the film", description: "Doppler and redshift switched off, as the film did: the symmetric, golden Gargantua.", icon: "◎", group: "gargantua" },
   "Interstellar: along the disk (the film's close pass)": { title: "Along the disk, as in the film", description: "Skimming the disk beside the shadow: the lensed far side rises as a wall of hot strands and smoke, the reference view for the disk's look.", icon: "≋", group: "gargantua" },
+  "Interstellar: the Endurance before Gargantua": { title: "The Endurance before Gargantua", description: "The film's wide shot: the ring ship on its orbit above the disk, lit by it — at a cinematic scale.", icon: "◍", group: "gargantua" },
   "Companion star close-up": { description: "The orange star: granulation, spots, prominences and corona, Gargantua beyond.", icon: "☼", group: "gargantua" },
   "The star passing Gargantua": { description: "The star in front of Gargantua, both lensed.", icon: "✹", group: "gargantua" },
   "Gargantua under the distant galaxy": { description: "Gargantua without the wormhole, under the far side's nebulae.", icon: "✧", group: "gargantua" },
