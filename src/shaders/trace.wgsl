@@ -2901,6 +2901,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 @group(0) @binding(21) var earthSurf: texture_2d<f32>;    // normal (east, south), ocean, height
 
 const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS_HI)
+// the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
+// it is: the ground shows, faintly, cool), over the sunlight's irradiance
+const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
 const EARTH_RM = 6.371e6;     // metres per radius
 // (the air drawn thicker than it is, P.earth2.w: its scale heights × k, its densities / k — the same
 // columns, the same colours, a glow along the limb k times as tall)
@@ -3183,7 +3186,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let wrap = clamp((mu0 + 0.08) / 1.08, 0.0, 1.0);
   let ct = dot(rd, Ls);
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
-  let amb = vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0);
+  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0), EARTH_NIGHT);
   let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb);
   return select(top, top * 0.35, below);
 }
@@ -3234,8 +3237,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     if (lt > 1e-4) { relLit = clamp(1.0 - k * 1.0 * (tfbm(p + Lt * (0.3 / lt), oct) - nd), 0.3, 1.6); }
   }
   // the sky's light (blue by day, the twilight's glow)
-  let sky = E * vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0);
-  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky);
+  // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
+  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0), EARTH_NIGHT);
+  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0)));
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
   // the sky mirrored (Fresnel)
   if (ocean > 0.0) {
