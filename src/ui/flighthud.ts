@@ -1477,7 +1477,10 @@ export class FlightHud {
       const L = band([this.target], [this.orbit]);
       if (L) this.speedTape(ctx, i, 30 * dpr, L.cy, L.h, dpr);
       const R = band([this.tel, this.planner], [this.right]);
-      if (R && i.region === "hole") this.altTape(ctx, i, W - 30 * dpr, R.cy, R.h, dpr);
+      // (near a body — ours, or one of Gargantua's —: the height above its ground; else r near the hole)
+      const st = i.status;
+      if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - 30 * dpr, R.cy, R.h, dpr);
+      else if (R && i.region === "hole") this.altTape(ctx, i, W - 30 * dpr, R.cy, R.h, dpr);
     }
   }
 
@@ -1577,6 +1580,109 @@ export class FlightHud {
     valueBox(ctx, x0 + wdt + 8 * dpr, Math.max(top + 12 * dpr, Math.min(bot - 12 * dpr, yv)), main, unit, rel ? `γ ${i.gamma.toFixed(3)}` : `${i.speed.toExponential(2)} c`, "left", dpr);
   }
 
+  /** the altitude tape's full scale [m], eased towards its goal */
+  private altMax = 0;
+  private altGoal = 0;
+
+  /**
+   * Altitude tape near a body (right): a gauge from its ground at the bottom to a round full scale
+   * over the height (and the apoapsis, when near) — m, or km —, rescaled smoothly; the periapsis and
+   * apoapsis marked (a periapsis under the ground: IMPACT), the column filled to the height, the
+   * vertical speed as a bar beside it.
+   */
+  private bodyAltTape(ctx: CanvasRenderingContext2D, i: Info, x1: number, cy: number, hgt: number, dpr: number) {
+    const wdt = 58 * dpr;
+    const x0 = x1 - wdt;
+    const st = i.status;
+    const sf = i.surface;
+    // the height [m] and the vertical speed [m/s]: the ground's figures near it, else the orbit's
+    const near = !!sf && (!st || st.kerr || !Number.isFinite(st.altKm) || st.altKm < 50);
+    const alt = Math.max(0, near ? sf!.alt : st!.altKm * 1e3);
+    const vv = near ? sf!.vVert : st?.vVert ?? 0;
+    const o = st?.orbit;
+    const pe = o ? o.peKm * 1e3 : NaN, ap = o && Number.isFinite(o.apKm) ? o.apKm * 1e3 : NaN;
+    const nice = (x: number) => {
+      const e = Math.pow(10, Math.floor(Math.log10(x)));
+      const m = x / e;
+      return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e;
+    };
+    const need = Math.max(alt, Number.isFinite(ap) && ap < 3 * Math.max(alt, 1) ? ap : 0, 10);
+    const goal = nice(need * 1.15);
+    if (!(this.altGoal > 0) || need > this.altGoal * 0.9 || need < this.altGoal * 0.3) this.altGoal = goal;
+    this.altMax = this.altMax > 0 ? Math.exp(Math.log(this.altMax) + (Math.log(this.altGoal) - Math.log(this.altMax)) * 0.18) : this.altGoal;
+    const hmax = this.altMax;
+    const km = hmax >= 2000;
+    const unit = km ? "km" : "m";
+    const top = cy - hgt / 2, bot = cy + hgt / 2;
+    const y = (h: number) => bot - Math.min(Math.max(h / hmax, 0), 1.02) * hgt;
+    panelBg(ctx, x0, top, wdt, hgt, dpr);
+    // the ground
+    ctx.fillStyle = "rgba(150, 105, 60, 0.35)";
+    ctx.fillRect(x0, bot - 3 * dpr, wdt, 3 * dpr);
+    // the column filled to the height
+    const g = ctx.createLinearGradient(0, bot, 0, top);
+    g.addColorStop(0, "rgba(111, 210, 255, 0.05)");
+    g.addColorStop(1, "rgba(111, 210, 255, 0.32)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x0 + 2 * dpr, y(alt), 5 * dpr, bot - y(alt));
+    // the scale
+    const step = nice(hmax / 5);
+    ctx.strokeStyle = "rgba(230, 236, 245, 0.55)";
+    ctx.fillStyle = "rgba(230, 236, 245, 0.78)";
+    ctx.lineWidth = 1 * dpr;
+    ctx.font = `${10 * dpr}px ${MONO}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const fmt = (h: number) => {
+      const u = km ? h / 1e3 : h;
+      return u >= 100 || Number.isInteger(u) ? Math.round(u).toLocaleString("en") : u.toFixed(1);
+    };
+    for (let h = 0; h <= hmax * 1.0001; h += step / 2) {
+      const major = Math.abs(h / step - Math.round(h / step)) < 1e-6;
+      const yy = y(h);
+      ctx.beginPath();
+      ctx.moveTo(x0, yy);
+      ctx.lineTo(x0 + (major ? 12 : 6) * dpr, yy);
+      ctx.stroke();
+      if (major) ctx.fillText(fmt(h), x0 + 15 * dpr, yy);
+    }
+    // periapsis, apoapsis (a periapsis under the ground: the impact)
+    const mark = (h: number, col: string, txt: string) => {
+      if (!Number.isFinite(h) || h > hmax * 1.02) return;
+      const yy = y(h);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(x0 + wdt - 16 * dpr, yy);
+      ctx.lineTo(x0 + wdt, yy);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.textAlign = "right";
+      ctx.font = `700 ${10.4 * dpr}px ${FONT}`;
+      ctx.fillText(txt, x0 + wdt - 18 * dpr, yy - 6 * dpr);
+      ctx.font = `${10 * dpr}px ${MONO}`;
+    };
+    // (a near-circular orbit: one mark for both)
+    const same = Number.isFinite(pe) && Number.isFinite(ap) && pe >= 0 && Math.abs(ap - pe) < hmax * 0.03;
+    if (Number.isFinite(pe)) mark(Math.max(pe, 0), pe < 0 ? RED : CYAN, pe < 0 ? "IMPACT" : same ? "Pe·Ap" : "Pe");
+    if (Number.isFinite(ap) && !same) mark(ap, CYAN, "Ap");
+    // the vertical speed: a bar beside the tape, its length on a log scale (±10 km/s at the ends)
+    if (Number.isFinite(vv)) {
+      const k = Math.sign(vv) * Math.min(1, Math.log10(1 + Math.abs(vv)) / 4);
+      const vy = k * (hgt / 2);
+      ctx.fillStyle = vv < 0 ? "rgba(255, 150, 90, 0.9)" : "rgba(124, 214, 255, 0.9)";
+      ctx.fillRect(x0 - 7 * dpr, Math.min(cy, cy - vy), 3 * dpr, Math.abs(vy));
+      ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.fillRect(x0 - 9 * dpr, cy, 7 * dpr, 1 * dpr);
+    }
+    const body = near ? BODY_NAMES[sf!.body as Target] ?? sf!.body : st?.soiName ?? "";
+    label(ctx, x0, top - 16 * dpr, `ALTITUDE · ${unit}`, near && sf!.landed ? `landed · ${body}` : `above ${body}`, dpr);
+    const u = km ? alt / 1e3 : alt;
+    const main = u >= 1000 ? Math.round(u).toLocaleString("en") : u >= 100 ? u.toFixed(0) : u.toFixed(1);
+    const vtxt = `${vv >= 0 ? "▲" : "▼"} ${Math.abs(vv) >= 1e3 ? `${(Math.abs(vv) / 1e3).toFixed(2)} km/s` : `${Math.abs(vv).toFixed(1)} m/s`}`;
+    valueBox(ctx, x0 - 12 * dpr, Math.max(top + 12 * dpr, Math.min(bot - 12 * dpr, y(alt))), main, unit, vtxt, "right", dpr);
+  }
+
   /** Altitude tape (right): r on a log scale with the orbit's landmarks and a vertical-speed bar. */
   private altTape(ctx: CanvasRenderingContext2D, i: Info, x1: number, cy: number, hgt: number, dpr: number) {
     const wdt = 58 * dpr;
@@ -1653,7 +1759,7 @@ export class FlightHud {
       ctx.fillRect(x0 - 7 * dpr, cy + hgt / 2, 3 * dpr, 1 * dpr);
     }
     valueBox(ctx, x0 - 12 * dpr, cy, `${i.r.toFixed(2)}`, "M", `v_r ${i.vr >= 0 ? "+" : "−"}${Math.abs(i.vr).toFixed(3)} c`, "right", dpr);
-    label(ctx, x0, cy - hgt / 2 - 8 * dpr, "ALTITUDE", "r · log", dpr);
+    label(ctx, x0, cy - hgt / 2 - 16 * dpr, "ALTITUDE · M", "r · log", dpr);
   }
 
   // ------------------------------------------------------------------------------------ telemetry sparklines
