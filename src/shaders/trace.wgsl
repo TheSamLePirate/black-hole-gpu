@@ -83,6 +83,8 @@ struct Params {
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
   earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground, unused
+  hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
+                   // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -856,12 +858,17 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     let uv = vec2f(0.5 + lon / TAU, 0.5 - lat / PI);
     let m = surf - 4u;
     var t: vec3f;
-    if (m < MAPS_HI) {
+    var gain = 1.0;
+    if (i32(m) == i32(P.hd.x)) {
+      // (its finer map, the camera near: its level from the footprint, its brightness the coarse map's)
+      t = textureSampleLevel(hdColor, bgSamp, uv, max(mapLod() + log2(P.hd.w / 2048.0), 0.0)).rgb;
+      gain = P.hd.y;
+    } else if (m < MAPS_HI) {
       t = textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb;
     } else {
       t = textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
     }
-    return vec4f(min(pow(t, vec3f(2.2)) * b2.y, vec3f(0.95)), f32(surf));
+    return vec4f(min(pow(t, vec3f(2.2)) * b2.y * gain, vec3f(0.95)), f32(surf));
   } else {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
@@ -1053,6 +1060,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let fp = beam() * (travel + tBest) / bodyRadius(k);
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
+    BODYW = transpose(spunAxes(k));
     col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
   }
   (*out).glow += (*out).tint * col;
@@ -1064,6 +1072,25 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
 // Phobos, Deimos, the Galilean moons, Saturn's icy moons; Pluto — not the Earth, the giants, Venus, Titan
 fn regolith(m: u32) -> bool { return (m >= 1u && m <= 3u) || (m >= 7u && m <= 18u) || m == 22u; }
 
+// The finer relief of the body near the camera (P.hd): its normal at q (its axes), from its normal map
+// (red east, green south), at the footprint's level; q itself elsewhere
+fn isHd(k: u32) -> bool {
+  let surf = u32(bodies[BV * k + 2u].z);
+  return P.hd.z > 0.0 && surf >= 4u && i32(surf - 4u) == i32(P.hd.x);
+}
+fn hdNormal(k: u32, q: vec3f) -> vec3f {
+  if (!isHd(k)) { return q; }
+  let uv = vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
+  let rl = textureSampleLevel(hdRelief, bgSamp, uv, max(mapLod() + log2(f32(textureDimensions(hdRelief).x) / 2048.0), 0.0));
+  var east = vec3f(-q.y, q.x, 0.0);
+  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
+  let north = cross(q, east);
+  let tn = vec2f(rl.r * 2.0 - 1.0, 1.0 - rl.g * 2.0) * P.hd.z;
+  return normalize(q + tn.x * east + tn.y * north);
+}
+// the body's axes in the frame planetShade is called in (columns): set by its callers for our worlds
+var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
 // ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
 fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32) -> vec3f {
@@ -1071,7 +1098,10 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   let src = lightSource(k);
   let Tl = src.x;
   let Bl = src.y;
-  let cosi = max(dot(nrm, ldir), 0.0);
+  // (the finer relief, near: the normal tilted by it)
+  var nrmL = nrm;
+  if (isHd(k)) { nrmL = normalize(BODYW * hdNormal(k, pat)); }
+  let cosi = max(dot(nrmL, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
   let A = planetAlbedo(k, pat, tEm);
   let surf = u32(A.w);
@@ -2880,6 +2910,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
     return blackbody(b2.x * pow(0.2 + 0.8 * mu, 0.25) * sf.y, P.disk.w) * b2.y * sf.x;
   }
   if (P.near3.w < 0.5) {
+    BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
     return planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
   }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
@@ -2921,7 +2952,10 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(19) var earthCube: texture_cube<f32>;  // day colour (sRGB), cloud cover (alpha)
 @group(0) @binding(20) var earthNight: texture_cube<f32>; // city lights (r)
-@group(0) @binding(21) var earthSurf: texture_2d<f32>;    // normal (east, south), ocean, height
+@group(0) @binding(21) var earthSurf: texture_2d<f32>;
+// the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
+@group(0) @binding(22) var hdColor: texture_2d<f32>;
+@group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
 
 const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS_HI)
 // the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
@@ -3476,7 +3510,7 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   let mu0 = dot(q, Ls);
   let mu = max(dot(q, -rd), 0.02);
-  let cosi = max(mu0, 0.0);
+  let cosi = max(dot(hdNormal(k, q), Ls), 0.0);
   var f = cosi;
   if (m == 4u || m == 5u || m == 20u || m == 21u) {
     let km = select(0.88, 0.8, m >= 20u);

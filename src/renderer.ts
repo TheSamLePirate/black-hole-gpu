@@ -1,5 +1,6 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { bodyAxes, solarBody, solarState } from "./system/solar";
+import { bodyAxes, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
+import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -46,7 +47,7 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
-const PARAM_VEC4S = 62;
+const PARAM_VEC4S = 63;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -258,6 +259,9 @@ export class Renderer {
   /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
   private earthMaps: EarthMaps;
   private earthWant: EarthTier | null = null;
+  /** the finer maps of the body near the camera (one at a time), and the one being loaded */
+  private hdMap!: HdMap;
+  private hdLoading: MapName | null = null;
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
   private histBuf!: GPUBuffer;
@@ -384,6 +388,8 @@ export class Renderer {
         { binding: 19, visibility: C, texture: { sampleType: "float", viewDimension: "cube" } },
         { binding: 20, visibility: C, texture: { sampleType: "float", viewDimension: "cube" } },
         { binding: 21, visibility: C, texture: { sampleType: "float" } },
+        { binding: 22, visibility: C, texture: { sampleType: "float" } },
+        { binding: 23, visibility: C, texture: { sampleType: "float" } },
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
@@ -458,6 +464,7 @@ export class Renderer {
     this.starLodTexture = placeholder();
     this.planetMaps = placeholderMaps(device);
     this.earthMaps = placeholderEarth(device);
+    this.hdMap = placeholderHd(device);
     // empty catalogue: grid 1, no stars
     this.catalogue = device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.catalogue, 0, new Uint32Array([0x31525453, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
@@ -533,6 +540,28 @@ export class Renderer {
   /** Frees the GPU at once (the page going away). */
   release() {
     this.device.destroy();
+  }
+
+  /** Streams in a world's finer maps (the previous ones freed once loaded). */
+  private requestHd(name: MapName) {
+    if (this.hdMap.name === name || this.hdLoading === name) return;
+    this.hdLoading = name;
+    loadHdMap(this.device, name)
+      .then((m) => {
+        if (!m || this.hdLoading !== name) return m?.color.destroy();
+        const old = this.hdMap;
+        this.hdMap = m;
+        this.hdLoading = null;
+        if (this.live) this.bindTarget(this.live);
+        if (this.offline) this.bindTarget(this.offline.target);
+        void this.device.queue.onSubmittedWorkDone().then(() => (old.color.destroy(), old.relief.destroy()));
+        this.invalidate();
+        this.onAssets?.();
+      })
+      .catch((e) => {
+        this.hdLoading = null;
+        console.warn("Finer maps unavailable:", e);
+      });
   }
 
   get realSkyLoaded() {
@@ -778,6 +807,8 @@ export class Renderer {
         { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
+        { binding: 22, resource: this.hdMap.color.createView() },
+        { binding: 23, resource: this.hdMap.relief.createView() },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -804,6 +835,8 @@ export class Renderer {
         { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
+        { binding: 22, resource: this.hdMap.color.createView() },
+        { binding: 23, resource: this.hdMap.relief.createView() },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -1254,6 +1287,14 @@ export class Renderer {
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
     set(61, 4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1), 0, 0, 0);
+    // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
+    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
+    const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
+    if (nearMap && HD_SETS[nearMap] && Math.hypot(...near!.centre) < 40) this.requestHd(nearMap);
+    const hd = this.hdMap;
+    const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
+    const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 2.5;
+    set(62, hdOn ? mapIndex(hd.name!) : -1, (this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean, hdRelief, hd.color.width);
     set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
