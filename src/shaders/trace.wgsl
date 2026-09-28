@@ -844,13 +844,40 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
   let n2 = 0.5 + 0.5 * gnoise(q * 3.7 + vec3f(1.7));
   var alb: vec3f;
   let surf = u32(b2.z);
+  // (Gargantua's worlds: patterns at every scale the pixel resolves — its footprint from the map's
+  // level: fractal noise to as many octaves)
+  let fpA = exp2(mapLod()) * TAU / 2048.0;
+  let oc = clamp(log2(1.0 / (fpA * 6.0)), 1.0, 11.0);
   if (surf == 0u) {
-    // shallow ocean over a pale bed (the film's knee-deep water): blue-green, lighter shoals
-    alb = mix(vec3f(0.1, 0.22, 0.28), vec3f(0.3, 0.5, 0.52), smoothstep(0.35, 0.75, n1 * 0.7 + n2 * 0.3));
+    // Miller: knee-deep water over a pale bed — blue-green, lighter shoals, darker channels; the giant
+    // waves' trains (the relief's: ~2 900 km apart) white with foam along their crests
+    let f = tfbmF(q * 2.0 + vec3f(3.3), oc);
+    alb = mix(vec3f(0.06, 0.16, 0.22), vec3f(0.32, 0.5, 0.5), smoothstep(-0.35, 0.45, f));
+    let tSec = select(0.0, tEm * P.near5.w, u32(P.near1.w) == k);
+    var crest = 0.0;
+    for (var i = 0u; i < 3u; i++) {
+      let fi = f32(i);
+      let dir = normalize(vec3f(cos(fi * 2.1 + 0.3), sin(fi * 2.1 + 0.3), 0.35 * fi - 0.3));
+      let ph = dot(qb, dir) * 14.0 + fi * 1.7 - tSec * (4.0e-5 + 1.0e-5 * fi);
+      crest = max(crest, pow(0.5 + 0.5 * sin(ph), 40.0));
+    }
+    alb = mix(alb, vec3f(0.7, 0.75, 0.76), crest * 0.22);
   } else if (surf == 1u) {
-    alb = mix(vec3f(0.62, 0.7, 0.8), vec3f(0.9, 0.93, 0.97), n1) * (0.85 + 0.15 * n2);
+    // Mann: snowfields, blue glacial ice in the lows, dark rock on the ridges, drifts
+    let f = tfbmF(q * 1.5 + vec3f(1.9), oc);
+    let r = ridged(q * 3.0 + vec3f(5.0), 4);
+    alb = mix(vec3f(0.5, 0.62, 0.75), vec3f(0.82, 0.85, 0.88), smoothstep(-0.3, 0.3, f));
+    alb = mix(alb, vec3f(0.25, 0.26, 0.28), smoothstep(0.85, 0.97, r) * 0.6);
+    alb *= 0.9 + 0.1 * tfbmF(q * 40.0, max(oc - 2.0, 1.0));
   } else if (surf == 2u) {
-    alb = mix(vec3f(0.36, 0.24, 0.16), vec3f(0.62, 0.45, 0.3), n1) * (0.8 + 0.2 * n2);
+    // Edmunds: a desert — ochre, rust, grey rock, pale sand in the basins
+    let f1 = tfbmF(q * 1.2 + vec3f(7.1), oc);
+    let f2 = tfbmF(q * 4.0 + vec3f(2.3), max(oc - 1.0, 1.0));
+    alb = mix(vec3f(0.6, 0.45, 0.29), vec3f(0.52, 0.31, 0.19), smoothstep(-0.25, 0.25, f1));
+    alb = mix(alb, vec3f(0.36, 0.34, 0.32), smoothstep(0.2, 0.5, f2) * 0.8);
+    alb = mix(alb, vec3f(0.76, 0.7, 0.58), smoothstep(0.25, 0.5, -f1) * 0.7);
+    // (near: the rock's own mottling, kilometres down to metres)
+    alb *= 0.8 + 0.4 * (0.5 + 0.5 * tfbmF(q * 300.0 + vec3f(4.4), max(oc - 6.0, 0.0)));
   } else if (surf >= 4u) {
     // its map: longitude about the pole, latitude (sRGB → linear, scaled to its albedo)
     let lon = atan2(nrm.y, nrm.x);
@@ -873,7 +900,8 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
   }
-  return vec4f(alb * b2.y / 0.25, f32(surf));
+  // (Gargantua's worlds: their albedos as they are; the giants' bands scaled to theirs)
+  return vec4f(select(alb * b2.y / 0.25, alb, surf < 3u), f32(surf));
 }
 
 // What lights a planet: x = temperature, y = surface brightness of its source — its host star, or
@@ -2572,15 +2600,22 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       T = (1.0 - ring.w) * e.T;
       veil = e.veil;
     } else {
+      // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
+      // most of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
+      var wb = vec3f(1.0);
+      if (k < ourStart() && bodyKind(k) != 0u) {
+        let le = nearLight(k).e;
+        let ll = luminance(le);
+        if (ll > 0.0) { wb = ll / max(mix(vec3f(ll), le, 0.85), vec3f(1e-30)); }
+      }
+      let nair = nearAir(look, select(1e30, hitT, hitT > 0.0), k);
       if (hitT > 0.0) {
-        let nair = nearAir(look, hitT, k);
         setMapLod(P.camUp.w * hitT, 0.0, k);
-        var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * nair.T + nair.L));
+        var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * nair.T + nair.L) * wb);
         o.depth = hitT * bodyRadius(k);
         return o;
       }
-      let nair = nearAir(look, 1e30, k);
-      pre = ring.rgb + (1.0 - ring.w) * nair.L;
+      pre = ring.rgb + (1.0 - ring.w) * nair.L * wb;
       T = (1.0 - ring.w) * nair.T;
     }
   }
@@ -2624,20 +2659,26 @@ fn shIrradiance(d: vec3f) -> vec3f {
 }
 
 // the probe's radiance around a direction (3 × 3 texels: a slightly rough mirror)
+fn envTexel(x: i32, y: i32) -> vec3f {
+  let yy = clamp(y, 0, i32(ENV_H) - 1);
+  let xx = ((x % i32(ENV_W)) + i32(ENV_W)) % i32(ENV_W);
+  return envBuf[u32(yy) * ENV_W + u32(xx)].rgb;
+}
+// (bilinear, four taps a texel apart: smooth, no blocks where a reflection magnifies it)
 fn probeRadiance(d: vec3f) -> vec3f {
   let u = atan2(d.x, d.z) / TAU + 0.5;
   let v = acos(clamp(d.y, -1.0, 1.0)) / PI;
-  let x0 = i32(u * f32(ENV_W));
-  let y0 = i32(v * f32(ENV_H));
   var acc = vec3f(0.0);
-  for (var j = -1; j <= 1; j++) {
-    let y = clamp(y0 + j, 0, i32(ENV_H) - 1);
-    for (var i = -1; i <= 1; i++) {
-      let x = (x0 + i + i32(ENV_W)) % i32(ENV_W);
-      acc += envBuf[u32(y) * ENV_W + u32(x)].rgb;
-    }
+  for (var k = 0; k < 4; k++) {
+    let fx = u * f32(ENV_W) - 0.5 + select(-0.6, 0.6, (k & 1) == 1);
+    let fy = v * f32(ENV_H) - 0.5 + select(-0.6, 0.6, (k & 2) == 2);
+    let x0 = i32(floor(fx));
+    let y0 = i32(floor(fy));
+    let wx = fx - f32(x0);
+    let wy = fy - f32(y0);
+    acc += mix(mix(envTexel(x0, y0), envTexel(x0 + 1, y0), wx), mix(envTexel(x0, y0 + 1), envTexel(x0 + 1, y0 + 1), wx), wy);
   }
-  return acc / 9.0;
+  return acc * 0.25;
 }
 
 // ---- relief (the same function in src/terrain.ts: the ship stands on it) ------------------------
@@ -2660,7 +2701,7 @@ fn tfbm(p0: vec3f, oct: i32) -> f32 {
 
 fn reliefMax(surf: u32) -> f32 {
   if (surf == 0u) { return 1300.0; }
-  if (surf == 1u) { return 4200.0; }
+  if (surf == 1u) { return 4600.0; }
   if (surf == 2u) { return 1800.0; }
   return 0.0;
 }
@@ -2684,8 +2725,8 @@ fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
     // (noise cells: continents 1 000 km, ridges 270 km, mountains 21 km, crags 2 km, rocks 210 m, rubble 21 m)
     var h = (0.5 + 0.5 * tfbm(q * 6.0, max(layerOct(6.0, foot, mR, 5), 1))) * 1400.0;
     h += ridged(q * 24.0 + vec3f(5.0), layerOct(24.0, foot, mR, 4)) * 900.0;
-    let oh = layerOct(300.0, foot, mR, 3);
-    if (oh > 0) { h += ridged(q * 300.0 + vec3f(2.0), oh) * 1500.0; }
+    let oh = layerOctF(300.0, foot, mR, 5.0);
+    if (oh > 0.0) { h += ridgedMF(q * 300.0 + vec3f(2.0), oh) * 1800.0; }
     let oc = layerOct(3000.0, foot, mR, 3);
     if (oc > 0) { h += ridged(q * 3000.0 + vec3f(7.0), oc) * 300.0; }
     let orc = layerOct(30000.0, foot, mR, 3);
@@ -2801,7 +2842,9 @@ fn nearMarch(look: vec3f) -> NearHit {
 fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f {
   let mR = P.near4.w;
   let foot = max(reliefFoot(t), minFoot);
-  let e = max(t * P.camUp.w, 2.0 * max(minFoot, 1.0) / mR);
+  // (no finer than 10 m: float32 directions on the unit sphere are ~0.4 m apart — finer, the normal
+  // is noise in blocks)
+  let e = max(t * P.camUp.w, 2.0 * max(minFoot, 5.0) / mR);
   let t1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
   let t2 = cross(qb, t1);
   let h0 = relief(surf, qb, foot, mR, tSec);
@@ -2847,51 +2890,18 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
   o.T = vec3f(1.0);
   o.L = vec3f(0.0);
   if (P.near5.y <= 0.0) { return o; }
-  let c = P.near0.xyz;
-  let top = P.near5.z;
-  let b = dot(look, c);
-  let off = c - look * b;
-  let d2 = dot(off, off);
-  if (d2 > top * top) { return o; }
-  let sq = sqrt(top * top - d2);
-  let ta = max(b - sq, 0.0);
-  let tb = min(b + sq, tEnd);
-  if (tb <= ta) { return o; }
-  let mR = P.near4.w;
-  let H = P.near5.x;
-  let HM = 0.15 * H;
+  // (the world's air — its scale height, its density — in the solar system's model: the Earth's
+  // molecules and aerosols scaled by its density, no ozone)
+  var a: AirSpec;
+  a.rm = P.near4.w; a.hr = P.near5.x; a.hm = 0.15 * P.near5.x; a.top = (P.near5.z - 1.0) * P.near4.w;
+  a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6) * P.near5.y; a.bo = vec3f(0.0);
+  a.bms = vec3f(2.1e-5) * P.near5.y; a.bme = 2.33e-5 * P.near5.y; a.g = vec3f(0.8); a.k = 1.0;
+  a.sky = vec3f(0.0); a.moon = 0.0;
+  AIR = a;
   let lt = nearLight(k);
-  let mu = dot(look, lt.dir);
-  let pR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
-  let g = 0.76;
-  let pM = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
-  let bR = vec3f(5.8e-6, 13.5e-6, 33.1e-6) * P.near5.y;
-  let bM = 21e-6 * P.near5.y;
-  let N = 16u;
-  // (samples crowded near the start: the air is densest low down, where the camera usually is)
-  var tauCam = vec3f(0.0);
-  var tPrev = ta;
-  for (var i = 1u; i <= N; i++) {
-    let u = f32(i) / f32(N);
-    let t = ta + (tb - ta) * u * u;
-    let ds = (t - tPrev) * mR;
-    let tm = 0.5 * (t + tPrev);
-    tPrev = t;
-    let p = look * tm - c;
-    let r = length(p);
-    let hm = (r - 1.0) * mR;
-    let rR = exp(-hm / H);
-    let rM = exp(-hm / HM);
-    let ext = bR * rR + vec3f(1.1 * bM * rM);
-    // the light's way down to this point (grazing: Chapman-like), dark in the planet's shadow
-    let cz = dot(p / r, lt.dir);
-    let sun = select(0.0, 1.0, cz > -0.12);
-    let tauSun = (bR * rR * H + vec3f(1.1 * bM * rM * HM)) / max(cz + 0.12, 0.02);
-    let att = exp(-(tauCam + 0.5 * ext * ds)) * exp(-tauSun) * sun;
-    o.L += (bR * rR * pR + vec3f(bM * rM * pM)) * att * lt.e * ds;
-    tauCam += ext * ds;
-  }
-  o.T = exp(-tauCam);
+  let e = earthAir(-P.near0.xyz, look, tEnd, lt.dir, lt.e, 0.5, 3e38);
+  o.T = e.T;
+  o.L = e.L;
   return o;
 }
 
@@ -2901,17 +2911,17 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   let qb = hit.qb;
   let surf = u32(bodies[BV * k + 2u].z);
   let tSec = P.time.x * P.near5.w;
-  let n = select(normalize(fromBody(qb)), reliefNormal(surf, qb, t, tSec, 0.0), reliefMax(surf) > 0.0 && bodyKind(k) != 0u);
+  let n0 = select(normalize(fromBody(qb)), reliefNormal(surf, qb, t, tSec, 0.0), reliefMax(surf) > 0.0 && bodyKind(k) != 0u);
   if (bodyKind(k) == 0u) {
     // a star: limb darkening in the camera frame, its granulation fixed on it
-    let mu = clamp(-dot(n, look), 0.0, 1.0);
+    let mu = clamp(-dot(n0, look), 0.0, 1.0);
     let sf = starSurface(qb, P.time.x);
     let b2 = bodies[BV * k + 2u];
     return blackbody(b2.x * pow(0.2 + 0.8 * mu, 0.25) * sf.y, P.disk.w) * b2.y * sf.x;
   }
   if (P.near3.w < 0.5) {
     BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
-    return planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+    return planetShade(k, n0, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
   }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
   // diffuse albedo/π · E(n); water mirroring the environment (Fresnel)
@@ -2920,13 +2930,29 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   let up = normalize(fromBody(qb));
   // (the ground's colour follows the mountains' faces, not the rocks: a normal without the detail
   // finer than 150 m)
-  let nm = select(n, reliefNormal(surf, qb, t, tSec, 150.0), surf != 0u);
+  let nm = select(n0, reliefNormal(surf, qb, t, tSec, 150.0), surf != 0u);
   let slope = 1.0 - clamp(dot(nm, up), 0.0, 1.0);
   if (surf == 1u) {
     // ice: blue ice on the steep faces, snow on the heights
     A = vec4f(mix(A.rgb, vec3f(0.45, 0.62, 0.78), smoothstep(0.06, 0.25, slope)) * (0.9 + 0.1 * smoothstep(2400.0, 3600.0, hit.h)), A.w);
   } else if (surf == 2u) {
     A = vec4f(A.rgb * mix(1.0, 0.6, smoothstep(0.08, 0.3, slope)), A.w);
+  }
+  var n = n0;
+  if (surf == 0u) {
+    // (the sea's wind waves and swell on the giant ones: slopes of noise, as fine as the pixel resolves
+    // — the sky's reflection broken, glittering)
+    let foot = reliefFoot(t);
+    var g = vec3f(0.0);
+    for (var i = 0u; i < 2u; i++) {
+      let lam = select(40.0, 400.0, i == 0u);
+      let w = smoothstep(lam * 0.5, lam * 0.1, foot);
+      if (w > 0.0) {
+        let p = qb * (P.near4.w / lam) + vec3f(f32(i) * 7.3, 0.0, tSec * 0.12 / lam);
+        g += w * 0.07 * vec3f(gnoise(p), gnoise(p + vec3f(17.1)), gnoise(p + vec3f(31.7)));
+      }
+    }
+    n = normalize(n0 + g - up * dot(g, up));
   }
   let E = nearE(n);
   var col = A.rgb / PI * E;

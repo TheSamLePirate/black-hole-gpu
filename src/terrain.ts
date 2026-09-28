@@ -68,8 +68,8 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05): number {
   if (surf === SURF.ice) {
     let h = (0.5 + 0.5 * tfbm(sc(q, 6), Math.max(layerOct(6, foot, mR, 5), 1))) * 1400;
     h += ridged(sc(q, 24, 5), layerOct(24, foot, mR, 4)) * 900;
-    const oh = layerOct(300, foot, mR, 3);
-    if (oh > 0) h += ridged(sc(q, 300, 2), oh) * 1500;
+    const oh = layerOctF(300, foot, mR, 5);
+    if (oh > 0) h += ridgedMF(sc(q, 300, 2), oh) * 1800;
     const oc = layerOct(3000, foot, mR, 3);
     if (oc > 0) h += ridged(sc(q, 3000, 7), oc) * 300;
     const orc = layerOct(30000, foot, mR, 3);

@@ -1757,7 +1757,11 @@ export class Renderer {
     if (!ours) {
       X = cam.region === "hole" ? [cam.r * Math.sin(cam.theta) * Math.cos(cam.phi), cam.r * Math.sin(cam.theta) * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (mouth(s).C as Vec3);
       const r = Math.max(Math.hypot(...X), 2);
-      if (s.disk) E += Math.min((0.75 * (Math.max(s.diskOuter, 2) ** 2 - 4)) / (r * r), 1);
+      // (near a world the disk lights — Miller, Mann —: the light its probe measured there, the disk as
+      // its ground sees it, part of it hidden, not the disk's whole face)
+      const nb = near ? bodies[near.index] : undefined;
+      if (nb && nb.kind === BODY_PLANET && nb.light < 0 && nb.illum > 0) E += nb.illum;
+      else if (s.disk) E += Math.min((0.75 * (Math.max(s.diskOuter, 2) ** 2 - 4)) / (r * r), 1);
     }
     const start = ourStart(bodies);
     bodies.slice(0, MAX_BODIES).forEach((b, k) => {
