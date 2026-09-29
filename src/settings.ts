@@ -159,6 +159,7 @@ export interface Settings {
   fpsCap: 0 | 30 | 60 | 120; // images rendered per second at most (0: as the display refreshes)
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
+  farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -343,6 +344,7 @@ export function defaultSettings(): Settings {
     fpsCap: 0,
     glassBlur: false,
     temporalReprojection: true,
+    farFieldLut: true,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,

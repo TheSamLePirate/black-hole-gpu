@@ -794,6 +794,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "taa temporal reprojection history sharp motion upscaling",
   },
   {
+    key: "farFieldLut", type: "toggle", section: "render", group: "Realtime", label: "Far-field LUT", effect: "none",
+    help: "In scenes with only the hole and its disk, a ray every 8 pixels is traced first; between four that escaped untouched, far beyond the disk, where the lensed sky is smooth, the rays are not traced — their sky is interpolated (under a tenth of a pixel of error). The disk, its images and the photon ring are always traced.",
+    keywords: "lut far field sky speed performance",
+  },
+  {
     key: "glassBlur", type: "toggle", section: "render", group: "Realtime", label: "Frosted panels", effect: "none",
     help: "The interface's panels blur the view behind them. The browser redoes that blur every frame the image changes, beside the tracer's work: off, the panels are tinted glass and the frame rate is higher.",
     keywords: "blur glass backdrop ui panels performance",

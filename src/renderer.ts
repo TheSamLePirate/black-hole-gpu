@@ -78,6 +78,11 @@ const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
 /** realtime pass under the temporal reprojection: rays prefiltered over their pixel, not their block */
 const FLAG_REPROJECT = 16;
+/** the far field's LUT is there (trace.wgsl: farLut) */
+const FLAG_LUT = 32;
+/** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
+ *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
+const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
 
 /**
  * Bun's dev server sometimes serves a `type: "text"` import as an asset URL after a hot reload
@@ -183,6 +188,8 @@ interface Target {
   denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
   /** the temporal reprojection's history (ping-pong) and its uniform (made on first use, live only) */
   temporal: { hist: GPUTexture[]; buf: GPUBuffer; binds: GPUBindGroup[]; idx: number; valid: boolean } | null;
+  /** the far field's LUT (live target): a ray every 8 pixels — directions + shift, clean flags */
+  lut: { tex: GPUTexture[]; w: number; h: number; write: GPUBindGroup; read: GPUBindGroup } | null;
   traceBind: GPUBindGroup;
   /** the same, the light-probe buffer swapped for the planets' probe */
   probeBind: GPUBindGroup;
@@ -447,11 +454,37 @@ export class Renderer {
     this.noise3d = bakeNoise3d(device);
     this.noiseSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat" });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
+    // (the far field's LUT: written by its own pass, read by the main kernel — a second bind group)
+    this.lutWriteLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: C, storageTexture: { access: "write-only", format: "rgba32float" } },
+        { binding: 1, visibility: C, storageTexture: { access: "write-only", format: "r32float" } },
+      ],
+    });
+    this.lutReadLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 2, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        { binding: 3, visibility: C, texture: { sampleType: "unfilterable-float" } },
+      ],
+    });
+    this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
+    this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
     const mkTrace = (quality: boolean) =>
       device.createComputePipeline({
-        layout,
+        layout: this.mainLayout,
         compute: { module: traceModule, entryPoint: "main", constants: { QUALITY_PIPELINE: quality ? 1 : 0 } },
       });
+    const mkLut = (quality: boolean) =>
+      device.createComputePipeline({
+        layout: this.lutLayout,
+        compute: { module: traceModule, entryPoint: "lut", constants: { QUALITY_PIPELINE: quality ? 1 : 0 } },
+      });
+    {
+      const tx = [device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }), device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING })];
+      this.lutDummy = device.createBindGroup({ layout: this.lutReadLayout, entries: [{ binding: 2, resource: tx[0]!.createView() }, { binding: 3, resource: tx[1]!.createView() }] });
+    }
+    this.lutPipeline = mkLut(false);
+    this.lutQPipeline = mkLut(true);
     this.qualityPipeline = mkTrace(true);
     this.tracePipeline = mkTrace(false);
     this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
@@ -871,6 +904,7 @@ export class Renderer {
       beam: null,
       denoise: null,
       temporal: null,
+      lut: live ? this.makeLut(width, height) : null,
       traceBind: null as unknown as GPUBindGroup,
       probeBind: null as unknown as GPUBindGroup,
       postPasses: [],
@@ -895,6 +929,7 @@ export class Renderer {
     t.denoise?.tex.destroy();
     t.denoise?.bufs.forEach((b) => b.destroy());
     t.temporal?.hist.forEach((h) => h.destroy());
+    t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
   }
 
@@ -1331,6 +1366,9 @@ export class Renderer {
     }
     packBodies(bodies, this.bodyData, origin);
     if (bodies.length) this.featureKey |= 128;
+    // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet)
+    this.lutOn = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut;
+    if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
     const tl = s.wormhole ? throatLight(s) : null;
@@ -1656,10 +1694,20 @@ export class Renderer {
 
   // ------------------------------------------------------------------ kernel specialisation
   private traceModule!: GPUShaderModule;
+  private lutWriteLayout!: GPUBindGroupLayout;
+  private lutReadLayout!: GPUBindGroupLayout;
+  private mainLayout!: GPUPipelineLayout;
+  private lutLayout!: GPUPipelineLayout;
+  private lutPipeline!: GPUComputePipeline;
+  private lutQPipeline!: GPUComputePipeline;
+  /** this frame's params want the far field's LUT (set with them) */
+  private lutOn = false;
+  /** the LUT's epoch on the live target (refining a still view: computed once) */
+  private lutEpoch = -1;
   private tracePipeLayout!: GPUPipelineLayout;
   /** the scene's features (bits: radio, polarization, jet, hot spot, hot flow, wormhole, thick disk) — set with its params */
   private featureKey = FEATURES_ALL;
-  private variants = new Map<number, { rt: GPUComputePipeline | null; q: GPUComputePipeline | null; env: GPUComputePipeline | null }>();
+  private variants = new Map<number, { rt: GPUComputePipeline | null; q: GPUComputePipeline | null; env: GPUComputePipeline | null; lut: GPUComputePipeline | null; lutq: GPUComputePipeline | null }>();
 
   /** The features the kernel must keep for these settings (trace.wgsl: HAS_*). */
   private featuresOf(s: Settings) {
@@ -1671,34 +1719,46 @@ export class Renderer {
    * The tracer for the scene's features: a pipeline with the unused ones compiled out (built in the
    * background the first time — ~10 s —, the general one drawing meanwhile).
    */
-  private traceVariant(kind: "rt" | "q" | "env"): GPUComputePipeline {
-    const general = kind === "rt" ? this.tracePipeline : kind === "q" ? this.qualityPipeline : this.envPipeline;
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline {
+    const general = { rt: this.tracePipeline, q: this.qualityPipeline, env: this.envPipeline, lut: this.lutPipeline, lutq: this.lutQPipeline }[kind];
     const key = this.featureKey;
     if (key === FEATURES_ALL) return general;
     let v = this.variants.get(key);
     if (!v) {
-      v = { rt: null, q: null, env: null };
+      v = { rt: null, q: null, env: null, lut: null, lutq: null };
       this.variants.set(key, v);
       const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
       const constants = { HAS_RADIO: has(1), HAS_POL: has(2), HAS_JET: has(4), HAS_SPOT: has(8), HAS_VOL: has(16), HAS_WH: has(32), HAS_THICK: has(64), HAS_BODIES: has(128) };
       const mk = (entryPoint: string, quality: boolean) =>
         this.device.createComputePipelineAsync({
-          layout: this.tracePipeLayout,
+          layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
           compute: { module: this.traceModule, entryPoint, constants: { ...constants, QUALITY_PIPELINE: quality ? 1 : 0 } },
         });
       const slot = v;
-      void mk("main", false).then((p) => ((slot.rt = p), mk("env", false))).then((p) => ((slot.env = p), mk("main", true))).then(
-        (p) => (slot.q = p),
-        (e) => console.warn("Specialised tracer unavailable:", e),
-      );
+      void mk("main", false).then((p) => ((slot.rt = p), mk("env", false))).then((p) => ((slot.env = p), mk("main", true)))
+        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", false) : null)).then((p) => ((slot.lut = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", true) : null)).then(
+          (p) => (slot.lutq = p),
+          (e) => console.warn("Specialised tracer unavailable:", e),
+        );
     }
     return v[kind] ?? general;
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
+    // (the far field's LUT first: every realtime frame, once an epoch while a still view refines)
+    if (this.lutOn && t.lut && (!quality || this.lutEpoch !== this.epoch)) {
+      this.lutEpoch = quality ? this.epoch : -1;
+      const lp = enc.beginComputePass(this.prof.pass("far-field LUT"));
+      lp.setPipeline(this.traceVariant(quality ? "lutq" : "lut"));
+      lp.setBindGroup(0, t.traceBind);
+      lp.setBindGroup(1, t.lut.write);
+      lp.dispatchWorkgroups(Math.ceil(t.lut.w / 8), Math.ceil(t.lut.h / 8));
+      lp.end();
+    }
     const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
     pass.setPipeline(this.traceVariant(quality ? "q" : "rt"));
     pass.setBindGroup(0, t.traceBind);
+    pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
     pass.end();
   }
@@ -1755,6 +1815,21 @@ export class Renderer {
    * footprint ±30 px) ping-ponging hdr[0] → tmp → hdr[0] → tmp → hdr[0]. Only for accumulated
    * images (progressive / offline), where every pixel knows the variance of its estimate.
    */
+  /** the LUT's textures and bind groups for an image of W × H (a sample every 8 px, corners included) */
+  private makeLut(W: number, H: number) {
+    const d = this.device;
+    const w = Math.ceil(W / 8) + 2, h = Math.ceil(H / 8) + 2;
+    const usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
+    const tex = [d.createTexture({ size: [w, h], format: "rgba32float", usage }), d.createTexture({ size: [w, h], format: "r32float", usage })];
+    return {
+      tex, w, h,
+      write: d.createBindGroup({ layout: this.lutWriteLayout, entries: [{ binding: 0, resource: tex[0]!.createView() }, { binding: 1, resource: tex[1]!.createView() }] }),
+      read: d.createBindGroup({ layout: this.lutReadLayout, entries: [{ binding: 2, resource: tex[0]!.createView() }, { binding: 3, resource: tex[1]!.createView() }] }),
+    };
+  }
+  /** (targets without a LUT: a texel's worth, never read — the flag is off) */
+  private lutDummy: GPUBindGroup | null = null;
+
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
   /** the previous live frame's camera (axes, tan of the half field, aspect), pre-exposure, place */

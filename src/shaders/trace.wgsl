@@ -111,6 +111,7 @@ const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extr
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
 const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
 const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating offset
+const FLAG_LUT = 32u;           // the far field's LUT is there: rays between clean samples read it (main: farLut)
 const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the frames' rays accumulate —
                                 // each prefiltered over its pixel (the history supplies the coverage)
 
@@ -2621,6 +2622,10 @@ fn traceOut(col: vec3f) -> TraceOut {
   return o;
 }
 var<private> rayDepth: f32 = 1e9;
+// (the least Boyer–Lindquist r a ray came to, and where it crossed the equator closest: the far-field
+// LUT keeps only rays clear of the photon sphere and of the disk's plane within the disk)
+var<private> RMIN: f32 = 1e30;
+var<private> CROSSMIN: f32 = 1e30;
 
 var<private> RND: f32 = 0.5; // (the sample's random number: jitters the ground's shadow march)
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
@@ -4345,6 +4350,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     if (c0 * c1 < 0.0) {
       crossings++;
       let rMin = min(s.x.x, n.x.x);
+      CROSSMIN = min(CROSSMIN, rMin);
       let rMax = max(s.x.x, n.x.x);
       if (diskOn && !thick && rMax >= rIn * 0.95 && rMin <= rOut * DISK_REACH * 1.05) {
         if (!adaptive) {
@@ -4387,6 +4393,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
 
     if (rayDepth > 1e8 && trans < 0.5) { rayDepth = abs(n.x.w); }
     let r = n.x.x;
+    RMIN = min(RMIN, r);
     if (r < rH + capTol || isNan(r)) { fate = 1u; break; }
     if (r > rEsc && r > s.x.x) { fate = 2u; s = n; break; }
     s = n;
@@ -4623,6 +4630,70 @@ fn skyKernel(f: SkyFilter, dv: vec3f) -> f32 {
   return exp(-0.5 * (f.ci.x * u * u + f.ci.y * v * v + 2.0 * f.ci.z * u * v)) * f.norm;
 }
 
+// ---------------------------------------------------------------------------------------------
+// The far field's LUT (scenes with only the hole and its disk: no bodies, jet, wormhole, flows): a ray
+// every LUT_CELL pixels traced first; where four neighbours escaped to the sky untouched — no light
+// gathered, nothing absorbed — clear of the photon sphere and of the disk's plane (RMIN, CROSSMIN), and the map from the image to
+// the sky is smooth over their cell (its bilinear twist under a tenth of a pixel), the rays between them
+// are not traced: their sky direction and shift are interpolated. The disk, its images, the photon ring
+// and the shadow are always traced.
+// ---------------------------------------------------------------------------------------------
+const LUT_CELL = 8.0;
+@group(1) @binding(0) var lutDirOut: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(1) var lutSkyOut: texture_storage_2d<r32float, write>;
+@group(1) @binding(2) var lutDirIn: texture_2d<f32>;
+@group(1) @binding(3) var lutSkyIn: texture_2d<f32>;
+
+@compute @workgroup_size(8, 8)
+fn lut(@builtin(global_invocation_id) gid: vec3u) {
+  let dims = textureDimensions(lutDirOut);
+  if (gid.x >= dims.x || gid.y >= dims.y) { return; }
+  let pos = vec2f(gid.xy) * LUT_CELL;
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  RMIN = 1e30;
+  CROSSMIN = 1e30;
+  let tr = trace(ndc, 0.5, P.time.x);
+  // (clean: to the sky untouched — no light, nothing absorbed —, never near the photon sphere, through
+  // the equator only well beyond the disk; its neighbours then cannot meet what it did not)
+  let clean = tr.bgW > 0.999 && all(tr.col == vec3f(0.0)) && min(tr.tint.x, min(tr.tint.y, tr.tint.z)) > 0.999
+    && RMIN > 6.0 && CROSSMIN > 1.5 * P.bh.w * DISK_REACH;
+  textureStore(lutDirOut, gid.xy, vec4f(tr.dir, tr.gBg));
+  // (1 + the sky's id where clean — 0: not)
+  textureStore(lutSkyOut, gid.xy, vec4f(select(0.0, 1.0 + tr.sky, clean), 0.0, 0.0, 0.0));
+}
+
+/** A ray at pos (pixels) from the far field's LUT, when its cell's four corners are clean and smooth. */
+fn farLut(pos: vec2f, out: ptr<function, TraceOut>) -> bool {
+  let u = pos / LUT_CELL;
+  let c0 = vec2i(floor(u));
+  let dims = vec2i(textureDimensions(lutSkyIn));
+  if (any(c0 < vec2i(0)) || any(c0 + 1 >= dims)) { return false; }
+  let s00 = textureLoad(lutSkyIn, c0, 0).r;
+  if (s00 <= 0.0 || textureLoad(lutSkyIn, c0 + vec2i(1, 0), 0).r != s00 || textureLoad(lutSkyIn, c0 + vec2i(0, 1), 0).r != s00
+    || textureLoad(lutSkyIn, c0 + vec2i(1, 1), 0).r != s00) { return false; }
+  let a = textureLoad(lutDirIn, c0, 0);
+  let b = textureLoad(lutDirIn, c0 + vec2i(1, 0), 0);
+  let c = textureLoad(lutDirIn, c0 + vec2i(0, 1), 0);
+  let d = textureLoad(lutDirIn, c0 + vec2i(1, 1), 0);
+  // (the bilinear patch's twist: the interpolation's error is a quarter of it at the centre — kept under
+  // a tenth of a pixel)
+  if (length(a.xyz - b.xyz - c.xyz + d.xyz) > 0.4 * P.camUp.w) { return false; }
+  let f = u - floor(u);
+  let m = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  var o: TraceOut;
+  o.col = vec3f(0.0);
+  o.bgW = 1.0;
+  o.dir = normalize(m.xyz);
+  o.gBg = m.w;
+  o.qu = vec2f(0.0);
+  o.sky = s00 - 1.0;
+  o.tint = vec3f(1.0);
+  o.org = vec4f(0.0);
+  o.depth = 1e9;
+  *out = o;
+  return true;
+}
+
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
         @builtin(local_invocation_index) li: u32) {
@@ -4698,7 +4769,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     }
     pos = vec2f(f32(px) + 0.5, f32(py) + 0.5) + jit;
     let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
-    tr = trace(ndc, rnd, tSample);
+    if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
   }
   wgDir[li] = vec4f(tr.dir, select(0.0, tr.sky, sampling && tr.bgW > 0.0));
   wgPos[li] = pos;
