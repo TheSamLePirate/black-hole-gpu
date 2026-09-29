@@ -3635,6 +3635,10 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
 // steps growing, softened by how close the ray passes over the ground (a penumbra); foot [m]
 fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   let p0 = p * (1.0 + 2.0 / EARTH_RM);
+  // (the march's heights are coarser than the ground drawn: measured from their own ground here — else
+  // where they stand a metre above it the point is inside its own relief, black patches under a high sun)
+  let rp = length(p);
+  let bias = earthHeightStep(p / rp, foot) - (rp - 1.0) * EARTH_RM;
   var t = max(foot, 20.0);
   var sh = 1.0;
   for (var i = 0; i < 24; i++) {
@@ -3642,7 +3646,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     let r = length(x);
     let hr = (r - 1.0) * EARTH_RM;
     if (hr > 9600.0) { break; }
-    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot));
+    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias;
     sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
     if (sh <= 0.0) { break; }
     t *= 1.35;
