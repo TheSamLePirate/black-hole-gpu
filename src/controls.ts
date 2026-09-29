@@ -27,7 +27,7 @@ import { nodeDvHome, predictOurs, YOSHIDA, type OurPath } from "./system/our-pre
 import { keplerProp } from "./system/our-plan";
 import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
 import { plan as runPlanner } from "./system/plan-client";
-import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
+import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
@@ -1325,6 +1325,11 @@ export class CameraController {
     if (this.ourLanded) {
       const L = this.ourLanded;
       const b = OUR_BODIES.find((q) => q.id === L.body)!;
+      // (on the ground as it is known now: a scene placed before the Earth's relief was read back
+      // stood at its sphere, inside the mountain — raised onto it once the heights are in)
+      const qr = Math.hypot(...L.q);
+      const rWant = b.radius + (GEAR + groundRelief(L.body, L.q)) / M_METRES;
+      if (Math.abs(qr - rWant) * M_METRES > 1) L.q = [L.q[0] * (rWant / qr), L.q[1] * (rWant / qr), L.q[2] * (rWant / qr)];
       const Xg = fromBodyFixed(L.body, L.q, t0);
       const upL = unitV(sub3(Xg, ourState(L.body, t0).pos));
       const gSurf = b.mass / Math.hypot(...sub3(Xg, ourState(L.body, t0).pos)) ** 2;
