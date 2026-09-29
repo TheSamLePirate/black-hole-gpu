@@ -46,3 +46,30 @@ smoke alone +50 %), the target of wave B's B3.
 | B10 robustness | device loss: autosave + reload panel; uncaptured GPU errors shown; Earth maps under an OOM scope, falling back a tier |
 | B4 dynamic resolution without reallocation | not done: a resize costs 0.5–1 ms of CPU and no frame over 20 ms on this machine — measured, no gain to take |
 | B8 ship shadow on the traced ground, B9 the Endurance (LOD, GGX) | not done yet |
+
+## Wave C (so far)
+
+| Step | Result |
+|---|---|
+| Fixed simulation step | sub-step budget per second of frame instead of per frame; measured: the time warp was already the same at 30, 60 and 120 Hz here (another limit paces the ship's clock) — a full fixed-timestep loop not adopted (144 Hz displays would get frames with no step; at 240 Hz ~3 ms of CPU a frame) |
+| Far-field LUT | scenes with only the hole and its disk: rays between clean samples (escaped untouched, r > 6, equator crossed beyond 1.5 × the disk) interpolated; Luminet +7 %, Schwarzschild +5 % at full resolution; converged images within 50 dB (stars moved by a fraction of a pixel) |
+| f16 / subgroups | not done: after B3 the remaining cost is the geodesics' RK4, which needs f32 (removing the disk or the sky barely changes a frame) |
+| Volumetric clouds, virtual texturing, wavefront, adaptive sparse tracing | not done yet |
+
+## Now vs the plan's start (`b3a8f3d`) — `bench-now-vs-start.json`
+
+Alternated, 2 runs each, the specialised tracers compiled during a 35 s warm-up.
+
+| Scene | fps (auto) | rays/px (auto) | fixed b4 | GPU memory |
+|---|---|---|---|---|
+| Earth orbit | 59.6 → 59.2 | 0.043 → 0.043 | 17.0 → 17.0 ms | 1246 → 695 MiB |
+| Near Gargantua | 47.5 → 56.0 | 0.0054 → 0.0339 (×6.3) | 36.4 → 16.8 ms (−54 %) | 1151 → 376 MiB |
+| Along the disk | 46.3 → 43.4 | 0.0021 → 0.0034 (+62 %) | 82.5 → 38.5 ms (−53 %) | 1160 → 385 MiB |
+| Classic Kerr | 52.0 → 57.0 | 0.0035 → 0.0153 (×4.4) | 53.1 → 17.1 ms (−68 %) | 1160 → 385 MiB |
+| Saturn backlit | 45.3 → 45.1 | 0.0054 → 0.0061 | 41.5 → 38.2 ms | 1269 → 451 MiB |
+| Wormhole to Gargantua | 47.8 → 45.8 | 0.0047 → 0.0083 (+77 %) | 29.8 → 20.4 ms (−32 %) | 1182 → 385 MiB |
+| Moon's ground | 51.8 → 53.5 | 0.0072 → 0.0083 | 20.6 → 19.7 ms | 1439 → 771 MiB |
+| Miller's sea | 47.3 → 48.5 | 0.0019 → 0.0034 (+79 %) | 84.3 → 49.5 ms (−41 %) | 1333 → 451 MiB |
+
+The automatic controls turn the kernel's savings into image (rays per pixel) at ~the same frame rate;
+the realtime image is further sharpened by the temporal reprojection (B1: +2.4 to +4 dB).
