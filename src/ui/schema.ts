@@ -5,9 +5,10 @@ import { MOUNTS } from "../mounts";
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
 export type Effect = "scene" | "display" | "none" | "resize";
 
-export type SectionId = "scene" | "matter" | "sky" | "physics" | "render" | "game";
+export type SectionId = "camera" | "scene" | "matter" | "sky" | "physics" | "render" | "game";
 
 export const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
+  { id: "camera", label: "Camera", icon: "M3 8.5a2 2 0 0 1 2-2h2.2l1.6-2h6.4l1.6 2H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 12.5m-3.6 0a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0" },
   { id: "scene", label: "Scene", icon: "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 12h3M18 12h3M12 3v3M12 18v3" },
   { id: "matter", label: "Matter", icon: "M3 12c3-4 15-4 18 0c-3 4-15 4-18 0zM12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0" },
   { id: "sky", label: "Sky", icon: "M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" },
@@ -78,50 +79,30 @@ const whOn = (s: Settings) => s.wormhole;
 const aroundHole = (s: Settings) => !s.wormhole || s.anchor === "hole";
 
 export const SCHEMA: ControlDef[] = [
-  // ------------------------------------------------------------------ scene · black hole
+  // ------------------------------------------------------------------ camera · view
   {
-    key: "spin", type: "number", section: "scene", group: "Black hole", label: "Spin a/M", min: -0.999, max: 0.999, step: 0.001,
-    help: "Dimensionless angular momentum a = J/M. Positive: the disk co-rotates with the hole; negative: retrograde disk. 0 is Schwarzschild. Spin shrinks the horizon and the ISCO, flattens one side of the shadow (frame dragging) and powers the Blandford–Znajek jet.",
-    keywords: "kerr angular momentum rotation schwarzschild",
-  },
-  {
-    key: "massSolar", type: "number", section: "scene", group: "Black hole", label: "Mass", min: 1, max: 1e11, scale: "log", unit: "M☉", precision: 3, effect: "none",
-    help: "Only sets the physical units of the readouts (km, seconds, Kelvin…). General relativity is scale-free: the image in units of M = GM/c² is identical for any mass. 6.5×10⁹ M☉ is M87*, 4.3×10⁶ M☉ is Sgr A*.",
-    keywords: "units m87 sgr solar",
-  },
-  // ------------------------------------------------------------------ scene · observer
-  {
-    key: "distance", type: "number", section: "scene", group: "Observer", label: "Distance r", min: 1.1, max: 1000, scale: "log", unit: "M", precision: 3, visible: aroundHole,
-    help: "Boyer–Lindquist radius of the camera, in units of M = GM/c². Wheel / pinch on the view to zoom.",
-    keywords: "zoom radius camera",
-  },
-  {
-    key: "inclination", type: "number", section: "scene", group: "Observer", label: "Inclination θ", min: 0.2, max: 179.8, step: 0.1, unit: "°",
-    help: "Polar angle from the spin axis: 0° looks down the jet (face-on), 90° is edge-on in the disk plane.",
-    keywords: "polar angle theta tilt",
-  },
-  {
-    key: "azimuth", type: "number", section: "scene", group: "Observer", label: "Azimuth φ", min: -360, max: 360, step: 0.1, unit: "°",
-    help: "Azimuthal position around the spin axis (rotates the sky and the disk pattern; the metric itself is axisymmetric).",
-  },
-  {
-    key: "fov", type: "number", section: "scene", group: "Observer", label: "Field of view", min: 1, max: 150, step: 0.1, unit: "°",
-    help: "Vertical field of view of the pinhole camera, in the observer's rest frame (alt + wheel).",
-    keywords: "fov zoom lens",
-  },
-  {
-    key: "rotation", type: "choice", section: "scene", group: "Camera rotation", label: "Rotation", style: "segmented", effect: "none",
+    key: "rotation", type: "choice", section: "camera", group: "View", label: "Placement", style: "segmented", effect: "none",
     options: [
-      { value: "orbit", label: "Around the target", hint: "Drag orbits the selected body and the camera keeps it in view (its lensed, light-delayed image)" },
+      { value: "orbit", label: "Around", hint: "Circles the target: drag turns about it, the wheel sets the distance; the view keeps it (its lensed, light-delayed image)" },
       { value: "follow", label: "Follow", hint: "The camera moves with the target (a planet, a moon): drag looks around, the keys move it" },
       { value: "free", label: "Free", hint: "Drag turns the camera about itself; the keys fly it, carried by the nearest body" },
-      { value: "tripod", label: "Tripod", hint: "Fixed on the nearest body, turning with it, aiming at the target" },
+      { value: "tripod", label: "Tripod", hint: "Fixed on the nearest body, turning with it (aimed at the target, or its view fixed to the ground: a time-lapse)" },
     ],
-    help: "Orbit: drag turns around the target, right-drag offsets the view, the wheel sets the distance; the camera tracks the target's apparent image (bent by the hole, delayed by the light travel time, aberrated). Free: drag looks around, right-drag rolls, the wheel dollies. R switches, click a body to select it, double-click to fly the view to it.",
+    help: "Where the camera stands — none of them moves it when chosen. Around: drag turns around the target, right-drag offsets the view, the wheel sets the distance. Follow: moves with the target. Free: flies, carried by the nearest world (with gravity on: falling freely, B). Tripod: stands on the nearest world, turning with it. V cycles them (the ship: its views); the camera panel (the toolbar's camera button) has them all.",
     keywords: "orbit around free look rotate turntable trackball pivot focus",
   },
   {
-    key: "target", type: "choice", section: "scene", group: "Camera rotation", label: "Target", style: "select", effect: "none",
+    key: "lookAt", type: "toggle", section: "camera", group: "View", label: "Look at the target", effect: "none",
+    help: "The view locked on the target wherever the camera goes — free, following, falling, on the ship's mounts (the look turns on its mount) or outside it (around the ship: behind it on the target's line). A drag sets where the target sits in the view. Around the target the view is always on it. Shortcut: C.",
+    keywords: "look at lock track aim follow target focus",
+  },
+  {
+    key: "telescope", type: "toggle", section: "camera", group: "View", label: "Telescope", effect: "none",
+    help: "A long lens: fields down to 0.02° (a 70 m focal length on a 35 mm frame), the view held on the target, the wheel its eased zoom, a reticle with the angular scale, the target's apparent diameter and distance. It sees the wormhole from the Earth — and, zoomed in, the other universe through it. Shortcut: Y.",
+    keywords: "telescope telephoto zoom lens magnification tele scope reticle",
+  },
+  {
+    key: "target", type: "choice", section: "camera", group: "View", label: "Target", style: "select", effect: "none",
     options: [
       { value: "hole", label: "Gargantua", hint: "The black hole" },
       { value: "star", label: "Star", hint: "The companion star: the camera rides with it (co-moving) while time runs" },
@@ -136,21 +117,44 @@ export const SCHEMA: ControlDef[] = [
     help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
     keywords: "select body pivot focus star hole wormhole follow",
   },
+  // ------------------------------------------------------------------ camera · lens
   {
-    key: "yaw", type: "number", section: "scene", group: "Look direction", label: "Yaw", min: -180, max: 180, step: 0.1, unit: "°",
-    help: "Turns the camera left/right away from the hole (right-drag on the view).",
+    key: "fov", type: "number", section: "camera", group: "Lens", label: "Field of view", min: 0.02, max: 150, scale: "log", precision: 3, unit: "°",
+    help: "Vertical field of view, in the observer's rest frame: 45° is a 29 mm lens on a 35 mm frame, 1° a 1.4 m telephoto, 0.02° the telescope's narrowest (Alt + wheel; the telescope's wheel).",
+    keywords: "fov zoom lens",
   },
   {
-    key: "pitch", type: "number", section: "scene", group: "Look direction", label: "Pitch", min: -90, max: 90, step: 0.1, unit: "°",
-    help: "Tilts the camera up/down (right-drag on the view).",
+    key: "dof", type: "toggle", section: "camera", group: "Lens", label: "Depth of field", effect: "display",
+    help: "A thin lens: what is nearer or farther than the focus is blurred by its circle of confusion, from the depth each ray reached before what it shows became opaque (the Ranger stays sharp). Autofocus on the image's centre, or a set distance.",
+    keywords: "depth of field dof bokeh focus blur aperture lens",
   },
   {
-    key: "roll", type: "number", section: "scene", group: "Look direction", label: "Roll", min: -180, max: 180, step: 0.1, unit: "°",
-    help: "Rotates the camera about its view direction (W / X on AZERTY, Z / X on QWERTY).",
-    keywords: "bank tilt horizon",
+    key: "dofAperture", type: "number", section: "camera", group: "Lens", label: "Aperture", min: 0, max: 2, step: 0.01, effect: "display",
+    visible: (s) => s.dof,
+    help: "The largest blur (the sky's, when focused near), in units of 3 % of the image's height; twice that for what is much nearer than the focus.",
   },
   {
-    key: "motion", type: "choice", section: "scene", group: "Observer motion", label: "Motion", style: "select",
+    key: "dofFocus", type: "number", section: "camera", group: "Lens", label: "Focus", min: 0, max: 200, step: 0.1, unit: "M", effect: "display",
+    visible: (s) => s.dof,
+    help: "Focus distance along the rays (0: autofocus on the depth at the image's centre).",
+  },
+  {
+    key: "lensFlare", type: "number", section: "camera", group: "Lens", label: "Lens flare", min: 0, max: 1, step: 0.01, effect: "display",
+    help: "A camera's flare, as in the film: what burns out beyond white is reflected between the lens elements — tinted ghosts mirrored through the image's centre, and a halo ring, violet at its edge.",
+    keywords: "flare ghost halo lens camera film interstellar",
+  },
+  // ------------------------------------------------------------------ camera · time
+  {
+    key: "animate", type: "toggle", section: "camera", group: "Time", label: "Time runs", effect: "none",
+    help: "The scene's time runs: the bodies orbit, the gas flows, the ship flies, the cinematics move. Paused, nothing the time drives changes and the image refines. Every mode; Space, or the time bar.",
+  },
+  {
+    key: "timeSpeed", type: "number", section: "camera", group: "Time", label: "Time warp", min: 1e-7, max: 1e5, scale: "log", unit: "M/s", precision: 3, effect: "none",
+    help: "Scene time per real second, in units of GM/c³ (≈ 8 min at 10⁸ M☉, 9 h for M87*): the time bar shows it as a multiple of real time. , and . step along the ladder, / is real time; beyond 500 M/s the ship rides on rails.",
+  },
+  // ------------------------------------------------------------------ camera · observer motion
+  {
+    key: "motion", type: "choice", section: "camera", group: "Observer motion", label: "Motion", style: "select",
     options: [
       { value: "static", label: "Static (ZAMO)", hint: "Zero-angular-momentum observer: at rest relative to the dragged space" },
       { value: "orbit", label: "Circular orbit", hint: "Keplerian orbit: strong aberration and Doppler of the whole sky" },
@@ -164,76 +168,100 @@ export const SCHEMA: ControlDef[] = [
     keywords: "velocity aberration boost orbit fall",
   },
   {
-    key: "beta", type: "number", section: "scene", group: "Observer motion", label: "Boost β", min: 0, max: 0.99, step: 0.001, unit: "c",
+    key: "beta", type: "number", section: "camera", group: "Observer motion", label: "Boost β", min: 0, max: 0.99, step: 0.001, unit: "c",
     visible: (s) => s.motion === "forward",
     help: "Speed of the camera along the viewing direction as a fraction of c.",
   },
   {
-    key: "cinematicSpeed", type: "number", section: "scene", group: "Observer motion", label: "Cinematic speed", min: 0.5, max: 60, step: 0.1, effect: "none",
-    help: "Orbit mode (O): degrees per second. Dive mode (D): proper time of the falling observer, in M per second.",
+    key: "velR", type: "number", section: "camera", group: "Observer motion", label: "Velocity: radial", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
+    help: "The camera's (the ship's) velocity relative to the local static observer, along r̂ (our side: the rep frame's axes).",
+    keywords: "velocity speed state vector",
   },
-  // ------------------------------------------------------------------ scene · flight & gravity
   {
-    key: "thrust", type: "number", section: "scene", group: "Flight & gravity", label: "Thrust (Cinema)", min: 0.001, max: 1, scale: "log", unit: "c²/M", precision: 2, effect: "none",
+    key: "velT", type: "number", section: "camera", group: "Observer motion", label: "Velocity: polar", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
+  },
+  {
+    key: "velP", type: "number", section: "camera", group: "Observer motion", label: "Velocity: azimuthal", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
+  },
+  // ------------------------------------------------------------------ camera · cinematics
+  {
+    key: "cinematicSpeed", type: "number", section: "camera", group: "Cinematics", label: "Speed", min: 0.5, max: 60, step: 0.1, effect: "none",
+    help: "Auto-orbit (O): degrees per second. Dive (⇧C): proper time of the falling observer, in M per second. They run with the scene's time (paused, they hold).",
+  },
+  {
+    key: "journeyDuration", type: "number", section: "camera", group: "Cinematics", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
+    help: "Length of the cinematic trip (T): line up with the mouth, cross the throat, then approach the black hole (or, from its universe, the way back).",
+  },
+  // ------------------------------------------------------------------ camera · free fall
+  {
+    key: "thrust", type: "number", section: "camera", group: "Free fall", label: "Thrust (Cinema)", min: 0.001, max: 1, scale: "log", unit: "c²/M", precision: 2, effect: "none",
     help: "With gravity on (B), the flight keys fire thrusters: proper acceleration of the camera, ×5 with Shift. Hovering at r against gravity needs about M/r² (0.0025 at 20 M) — and much more near the horizon.",
     keywords: "rocket acceleration gravity thruster",
   },
   {
-    key: "engine", type: "choice", section: "scene", group: "Flight & gravity", label: "Ranger engine", style: "segmented", effect: "none",
-    options: [
-      { value: "cinema", label: "Cinema", hint: "The thrust above: thousands of g for a hole of 10⁸ M☉ — a hypothetical engine, g-load not survivable; burns are quasi-impulsive" },
-      { value: "crew", label: "Crew", hint: "0.1–3 g: burns last days, transfers are spirals (the low-thrust autopilot flies them)" },
-    ],
-    help: "The Ranger's engine. The path stays exact either way (proper acceleration along the Kerr geodesic); only the engine's performance changes. Crew: a few g converted with the hole's mass (1 g = 1.6 × 10⁻⁵ c²/M at 10⁸ M☉) — Gargantua's pull at 60 M is 17 g, so leaving it takes a spiral.",
-    keywords: "engine crew cinema thrust g low thrust spiral",
-  },
-  {
-    key: "crewG", type: "number", section: "scene", group: "Flight & gravity", label: "Crew engine", min: 0.1, max: 3, step: 0.1, unit: "g", precision: 1, effect: "none",
-    visible: (s) => s.engine === "crew",
-    help: "Proper acceleration of the Crew engine, in Earth gravities (what the crew feels at full throttle).",
-    keywords: "g acceleration crew",
-  },
-  {
-    key: "fuel", type: "toggle", section: "scene", group: "Flight & gravity", label: "Propellant gauge", effect: "none",
-    help: "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.",
-    keywords: "fuel propellant delta-v budget rocket mass ratio",
-  },
-  {
-    key: "exhaust", type: "number", section: "scene", group: "Flight & gravity", label: "Exhaust speed", min: 0.01, max: 1, scale: "log", unit: "c", precision: 2, effect: "none",
-    visible: (s) => s.fuel,
-    help: "Effective exhaust speed vₑ (1 c: a photon rocket).",
-    keywords: "isp exhaust velocity",
-  },
-  {
-    key: "massRatio", type: "number", section: "scene", group: "Flight & gravity", label: "Mass ratio", min: 1.1, max: 100, scale: "log", precision: 1, effect: "none",
-    visible: (s) => s.fuel,
-    help: "Initial mass over dry mass m₀/m_dry: the budget is vₑ ln(m₀/m_dry) of rapidity (≈ Δv for small values).",
-    keywords: "mass ratio tank",
-  },
-  {
-    key: "showGeodesic", type: "toggle", section: "scene", group: "Flight & gravity", label: "Show free-fall path", effect: "none",
+    key: "showGeodesic", type: "toggle", section: "camera", group: "Free fall", label: "Show free-fall path", effect: "none",
     help: "With gravity on, the camera's predicted geodesic (no thrust, about one orbital period ahead) is drawn in the render as a glowing dashed tube, lensed like everything else (Einstein arcs behind the hole). Red end: it falls into the horizon.",
     keywords: "trajectory orbit geodesic path prediction",
   },
-  // ------------------------------------------------------------------ scene · wormhole
+  // ------------------------------------------------------------------ camera · position (advanced)
   {
-    key: "wormhole", type: "toggle", section: "scene", group: "Interstellar wormhole", label: "Wormhole",
-    help: "Interstellar's Double Negative wormhole (James, von Tunzelmann, Franklin & Thorne 2015): our universe, with the real sky, on one side; the black hole's universe, with a distant galaxy, on the other. Light and the camera go through it. Fly with W/Z and X, or press T for the journey.",
-    keywords: "interstellar wormhole gargantua tunnel other universe travel dneg thorne",
+    key: "distance", type: "number", section: "camera", group: "Position", label: "Distance r", advanced: true, min: 1.1, max: 1000, scale: "log", unit: "M", precision: 3, visible: aroundHole,
+    help: "Boyer–Lindquist radius of the camera, in units of M = GM/c². Wheel / pinch on the view to zoom.",
+    keywords: "zoom radius camera",
   },
   {
-    key: "anchor", type: "choice", section: "scene", group: "Interstellar wormhole", label: "Camera orbits", style: "segmented", enabled: whOn, visible: () => false,
+    key: "inclination", type: "number", section: "camera", group: "Position", label: "Inclination θ", advanced: true, min: 0.2, max: 179.8, step: 0.1, unit: "°",
+    help: "Polar angle from the spin axis: 0° looks down the jet (face-on), 90° is edge-on in the disk plane.",
+    keywords: "polar angle theta tilt",
+  },
+  {
+    key: "azimuth", type: "number", section: "camera", group: "Position", label: "Azimuth φ", advanced: true, min: -360, max: 360, step: 0.1, unit: "°",
+    help: "Azimuthal position around the spin axis (rotates the sky and the disk pattern; the metric itself is axisymmetric).",
+  },
+  {
+    key: "whL", type: "number", section: "camera", group: "Position", label: "Position ℓ", advanced: true, min: -200, max: 200, step: 0.01, unit: "M",
+    visible: (s) => s.wormhole && s.anchor === "wormhole",
+    help: "Proper radial distance through the wormhole: ℓ < 0 on our side, ℓ > 0 in the black hole's universe, |ℓ| < a inside the throat's cylinder.",
+    keywords: "ell proper distance through",
+  },
+  {
+    key: "anchor", type: "choice", section: "camera", group: "Position", label: "Camera orbits", advanced: true, style: "segmented", enabled: whOn, visible: () => false,
     options: [
       { value: "wormhole", label: "Wormhole", hint: "Drag orbits the mouth; the wheel changes the distance to the throat" },
       { value: "hole", label: "Black hole", hint: "Drag orbits the black hole (only from its universe)" },
     ],
     help: "What the orbit controls turn around. Switching keeps the view unchanged; from our side of the wormhole only the wormhole can be orbited.",
   },
+  // ------------------------------------------------------------------ camera · orientation (advanced)
   {
-    key: "whL", type: "number", section: "scene", group: "Interstellar wormhole", label: "Position ℓ", min: -200, max: 200, step: 0.01, unit: "M",
-    visible: (s) => s.wormhole && s.anchor === "wormhole",
-    help: "Proper radial distance through the wormhole: ℓ < 0 on our side, ℓ > 0 in the black hole's universe, |ℓ| < a inside the throat's cylinder.",
-    keywords: "ell proper distance through",
+    key: "yaw", type: "number", section: "camera", group: "Orientation", label: "Yaw", advanced: true, min: -180, max: 180, step: 0.1, unit: "°",
+    help: "Turns the camera left/right away from the hole (right-drag on the view).",
+  },
+  {
+    key: "pitch", type: "number", section: "camera", group: "Orientation", label: "Pitch", advanced: true, min: -90, max: 90, step: 0.1, unit: "°",
+    help: "Tilts the camera up/down (right-drag on the view).",
+  },
+  {
+    key: "roll", type: "number", section: "camera", group: "Orientation", label: "Roll", advanced: true, min: -180, max: 180, step: 0.1, unit: "°",
+    help: "Rotates the camera about its view direction (W / X on AZERTY, Z / X on QWERTY).",
+    keywords: "bank tilt horizon",
+  },
+  // ------------------------------------------------------------------ scene · black hole
+  {
+    key: "spin", type: "number", section: "scene", group: "Black hole", label: "Spin a/M", min: -0.999, max: 0.999, step: 0.001,
+    help: "Dimensionless angular momentum a = J/M. Positive: the disk co-rotates with the hole; negative: retrograde disk. 0 is Schwarzschild. Spin shrinks the horizon and the ISCO, flattens one side of the shadow (frame dragging) and powers the Blandford–Znajek jet.",
+    keywords: "kerr angular momentum rotation schwarzschild",
+  },
+  {
+    key: "massSolar", type: "number", section: "scene", group: "Black hole", label: "Mass", min: 1, max: 1e11, scale: "log", unit: "M☉", precision: 3, effect: "none",
+    help: "Only sets the physical units of the readouts (km, seconds, Kelvin…). General relativity is scale-free: the image in units of M = GM/c² is identical for any mass. 6.5×10⁹ M☉ is M87*, 4.3×10⁶ M☉ is Sgr A*.",
+    keywords: "units m87 sgr solar",
+  },
+  // ------------------------------------------------------------------ scene · wormhole
+  {
+    key: "wormhole", type: "toggle", section: "scene", group: "Interstellar wormhole", label: "Wormhole",
+    help: "Interstellar's Double Negative wormhole (James, von Tunzelmann, Franklin & Thorne 2015): our universe, with the real sky, on one side; the black hole's universe, with a distant galaxy, on the other. Light and the camera go through it. Fly with W/Z and X, or press T for the journey.",
+    keywords: "interstellar wormhole gargantua tunnel other universe travel dneg thorne",
   },
   {
     key: "whRho", type: "number", section: "scene", group: "Interstellar wormhole", label: "Throat radius ρ", min: 0.01, max: 20, scale: "log", unit: "M", precision: 3, enabled: whOn,
@@ -268,86 +296,49 @@ export const SCHEMA: ControlDef[] = [
     key: "whPhase", type: "number", section: "scene", group: "Interstellar wormhole", label: "Mouth orbital phase", min: 0, max: 360, step: 0.1, unit: "°", enabled: (s) => whOn(s) && s.whOrbit,
     help: "Azimuth of the orbiting mouth at t = 0.",
   },
-  {
-    key: "journeyDuration", type: "number", section: "scene", group: "Interstellar wormhole", label: "Journey duration", min: 6, max: 120, step: 1, unit: "s", effect: "none",
-    help: "Length of the cinematic trip (T): line up with the mouth, cross the throat, then approach the black hole (or, from its universe, the way back).",
-  },
-  // ------------------------------------------------------------------ scene · spaceship
-  {
-    key: "ship", type: "toggle", section: "scene", group: "Spaceship", label: "Ranger",
-    help: "Fly Interstellar's Ranger, the camera on one of its attach points. A real flight model: the ship follows the Kerr geodesic in the scene's time, its main engine and RCS give it a proper acceleration (Thrust, in Flight & gravity), its attitude has inertia (reaction wheels), with SAS, attitude holds and autopilots (hold position, circularize, approach the target). Flight data, attitude ball, map with the predicted free-fall path. The hull is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point); ? lists the flight keys. Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.",
-    keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
-  },
-  {
-    key: "shipMount", type: "choice", section: "scene", group: "Spaceship", label: "Attach point", enabled: (s) => s.ship,
-    options: Object.entries(MOUNTS).map(([value, m]) => ({ value, label: m.label })),
-    help: "Where the camera is fixed on the hull.",
-  },
-  {
-    key: "shipLight", type: "number", section: "scene", group: "Spaceship", label: "Lighting", min: 0.3, max: 300, scale: "log", precision: 2, enabled: (s) => s.ship, effect: "display",
-    help: "Gain on the light the hull receives. 1 is physical: the hull receives a few hundred times less light than the disk's surface brightness (the disk covers a small part of its sky), so against it the ship is mostly a silhouette with lit edges — the strongest contrasts (default). Films often light it far more.",
-    keywords: "ship light exposure fill brightness",
-  },
-  {
-    key: "shipAlbedo", type: "number", section: "scene", group: "Spaceship", label: "Hull brightness", min: 0.02, max: 0.95, step: 0.01, enabled: (s) => s.ship, effect: "display",
-    help: "Albedo of the hull plating (panels vary slightly, seams and wear are darker). The Ranger of the film is a light grey.",
-  },
-  {
-    key: "shipMetal", type: "number", section: "scene", group: "Spaceship", label: "Metalness", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
-    help: "Metalness of the plating: 0 a painted hull, 1 bare metal (mirror-like, coloured reflections of the disk).",
-  },
-  {
-    key: "shipCoat", type: "number", section: "scene", group: "Spaceship", label: "Clear coat", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
-    help: "A thin glossy varnish over the paint: sharp reflections of the disk on top of the satin plating, strongest at grazing angles (Fresnel).",
-    keywords: "varnish gloss lacquer",
-  },
-  {
-    key: "shipRough", type: "number", section: "scene", group: "Spaceship", label: "Roughness", min: 0.1, max: 2.5, step: 0.01, enabled: (s) => s.ship, effect: "display",
-    help: "Roughness scale of the plating: lower is glossier (sharper reflections of the disk).",
-  },
   // ------------------------------------------------------------------ scene · cinematic mode
   {
-    key: "cinematic", type: "toggle", section: "scene", group: "Cinematic mode", label: "Liquid wormhole",
+    key: "cinematic", type: "toggle", section: "scene", group: "Liquid wormhole (artistic)", label: "Liquid wormhole",
     help: "An artistic effect, not physics: a liquid surface stretched across the wormhole's throat, covered in tiny ripples. It only shows up close: each ripple fades out once it spans too few pixels, and from afar the wormhole is the physical one. Rays going through are bent by the ripples (the far universe shimmers), some are reflected back (Fresnel: the rim turns into a mirror of the camera's universe), and the light that crosses is slightly tinted, with caustics. Going through the throat yourself leaves a splash. Shortcut: L.",
     keywords: "water liquid surface ripple wave aqueous interface mirror splash cinematic artistic effect",
   },
   {
-    key: "waterRipples", type: "number", section: "scene", group: "Cinematic mode", label: "Ripples", min: 0, max: 3, step: 0.05,
+    key: "waterRipples", type: "number", section: "scene", group: "Liquid wormhole (artistic)", label: "Ripples", min: 0, max: 3, step: 0.05,
     enabled: (s) => s.cinematic,
     help: "Strength of the ripples (wavelengths of a few hundredths of the throat radius): patchy trains of fine waves, droplets falling now and then, and the splash when you go through. 0: a perfectly still surface.",
   },
   {
-    key: "waterMirror", type: "number", section: "scene", group: "Cinematic mode", label: "Reflectance", min: 0, max: 1, step: 0.01,
+    key: "waterMirror", type: "number", section: "scene", group: "Liquid wormhole (artistic)", label: "Reflectance", min: 0, max: 1, step: 0.01,
     enabled: (s) => s.cinematic,
     help: "Reflectance at normal incidence (water 0.02, glass 0.04, mercury ≈ 0.7). It rises towards 1 at grazing incidence, near the rim of the sphere (Schlick's Fresnel). 0: no reflection at all, rim included (the default).",
   },
   {
-    key: "waterColor", type: "color", section: "scene", group: "Cinematic mode", label: "Liquid colour",
+    key: "waterColor", type: "color", section: "scene", group: "Liquid wormhole (artistic)", label: "Liquid colour",
     enabled: (s) => s.cinematic,
     help: "Colour of the liquid: the light that goes through the surface is filtered towards it (more at grazing incidence, where the path through the liquid is longer).",
     keywords: "water tint colour color hue",
   },
   {
-    key: "waterDensity", type: "number", section: "scene", group: "Cinematic mode", label: "Colour density", min: 0, max: 4, step: 0.05,
+    key: "waterDensity", type: "number", section: "scene", group: "Liquid wormhole (artistic)", label: "Colour density", min: 0, max: 4, step: 0.05,
     enabled: (s) => s.cinematic,
     help: "How strongly the liquid colours the light that goes through it. 0: perfectly clear.",
     keywords: "water tint absorption",
   },
   {
-    key: "waterGlow", type: "number", section: "scene", group: "Cinematic mode", label: "Glow", min: 0, max: 3, step: 0.05,
+    key: "waterGlow", type: "number", section: "scene", group: "Liquid wormhole (artistic)", label: "Glow", min: 0, max: 3, step: 0.05,
     enabled: (s) => s.cinematic,
     help: "Light scattered inside the liquid: a luminous network on the wave crests, where the caustics focus, and a sheen towards the rim. It makes the surface visible against a dark sky. 0 by default.",
   },
   {
-    key: "waterGlowColor", type: "color", section: "scene", group: "Cinematic mode", label: "Glow colour",
+    key: "waterGlowColor", type: "color", section: "scene", group: "Liquid wormhole (artistic)", label: "Glow colour",
     enabled: (s) => s.cinematic,
     help: "Colour of the light scattered in the liquid (shown when the glow is above 0).",
     keywords: "water glow colour color",
   },
   {
-    key: "waterSpeed", type: "number", section: "scene", group: "Cinematic mode", label: "Wave speed", min: 0, max: 4, step: 0.05, effect: "none",
+    key: "waterSpeed", type: "number", section: "scene", group: "Liquid wormhole (artistic)", label: "Wave speed", min: 0, max: 4, step: 0.05, effect: "none",
     enabled: (s) => s.cinematic,
-    help: "Pace of the waves, on their own clock: they move even with time paused. 0 freezes them, so that the view can refine.",
+    help: "Pace of the waves while time runs (slower in slow motion; paused, they hold and the view refines). 0 freezes them.",
   },
   // ------------------------------------------------------------------ matter · disk
   {
@@ -695,14 +686,6 @@ export const SCHEMA: ControlDef[] = [
     key: "shadowGuide", type: "toggle", section: "physics", group: "Diagnostics", label: "Kerr shadow guide", effect: "none",
     help: "Overlay of the analytic critical curve (spherical photon orbits, Bardeen 1973) seen through the actual observer frame — it must match the ray-traced shadow edge. Shortcut G.",
   },
-  {
-    key: "animate", type: "toggle", section: "physics", group: "Time", label: "Animate", effect: "none",
-    help: "Advances coordinate time: the gas orbits, jet knots flow. Shortcut Space.",
-  },
-  {
-    key: "timeSpeed", type: "number", section: "physics", group: "Time", label: "Time speed", min: 0.1, max: 200, scale: "log", unit: "M/s", precision: 2, effect: "none",
-    help: "Simulated time per real second, in units of GM/c³ (≈ 9 h for M87*, 21 s for Sgr A*).",
-  },
   // ------------------------------------------------------------------ render · image
   {
     key: "exposure", type: "number", section: "render", group: "Image", label: "Exposure", min: -8, max: 8, step: 0.01, unit: "EV", effect: "display",
@@ -742,26 +725,6 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "bloom", type: "number", section: "render", group: "Image", label: "Bloom", min: 0, max: 0.5, step: 0.001, effect: "display",
     help: "Fraction of the light spread by the lens point-spread function (energy-conserving multi-scale glow).",
-  },
-  {
-    key: "lensFlare", type: "number", section: "render", group: "Image", label: "Lens flare", min: 0, max: 1, step: 0.01, effect: "display",
-    help: "A camera's flare, as in the film: what burns out beyond white is reflected between the lens elements — tinted ghosts mirrored through the image's centre, and a halo ring, violet at its edge.",
-    keywords: "flare ghost halo lens camera film interstellar",
-  },
-  {
-    key: "dof", type: "toggle", section: "render", group: "Image", label: "Depth of field", effect: "display",
-    help: "A thin lens: what is nearer or farther than the focus is blurred by its circle of confusion, from the depth each ray reached before what it shows became opaque (the Ranger stays sharp). Autofocus on the image's centre, or a set distance.",
-    keywords: "depth of field dof bokeh focus blur aperture lens",
-  },
-  {
-    key: "dofAperture", type: "number", section: "render", group: "Image", label: "Aperture", min: 0, max: 2, step: 0.01, effect: "display",
-    visible: (s) => s.dof,
-    help: "The largest blur (the sky's, when focused near), in units of 3 % of the image's height; twice that for what is much nearer than the focus.",
-  },
-  {
-    key: "dofFocus", type: "number", section: "render", group: "Image", label: "Focus", min: 0, max: 200, step: 0.1, unit: "M", effect: "display",
-    visible: (s) => s.dof,
-    help: "Focus distance along the rays (0: autofocus on the depth at the image's centre).",
   },
   {
     key: "pixelRatio", type: "number", section: "render", group: "Image", label: "Pixel ratio", min: 0.25, max: 3, step: 0.05, unit: "×", effect: "resize",
@@ -857,6 +820,71 @@ export const SCHEMA: ControlDef[] = [
     key: "qualitySteps", type: "number", section: "render", group: "Converged image", label: "Max steps", min: 200, max: 50000, scale: "log", precision: 3, advanced: true,
   },
   // ---- the game
+  // ------------------------------------------------------------------ game · the Ranger
+  {
+    key: "ship", type: "toggle", section: "game", group: "Ranger", label: "Ranger",
+    help: "Fly Interstellar's Ranger, the camera on one of its attach points. A real flight model: the ship follows the Kerr geodesic in the scene's time, its main engine and RCS give it a proper acceleration (Thrust, in Flight & gravity), its attitude has inertia (reaction wheels), with SAS, attitude holds and autopilots (hold position, circularize, approach the target). Flight data, attitude ball, map with the predicted free-fall path. The hull is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point); ? lists the flight keys. Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.",
+    keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
+  },
+  {
+    key: "shipMount", type: "choice", section: "game", group: "Ranger", label: "View", enabled: (s) => s.ship,
+    options: Object.entries(MOUNTS).map(([value, m]) => ({ value, label: m.label })),
+    help: "Where the camera is fixed on the hull.",
+  },
+  {
+    key: "engine", type: "choice", section: "game", group: "Ranger", label: "Ranger engine", style: "segmented", effect: "none",
+    options: [
+      { value: "cinema", label: "Cinema", hint: "The thrust above: thousands of g for a hole of 10⁸ M☉ — a hypothetical engine, g-load not survivable; burns are quasi-impulsive" },
+      { value: "crew", label: "Crew", hint: "0.1–3 g: burns last days, transfers are spirals (the low-thrust autopilot flies them)" },
+    ],
+    help: "The Ranger's engine. The path stays exact either way (proper acceleration along the Kerr geodesic); only the engine's performance changes. Crew: a few g converted with the hole's mass (1 g = 1.6 × 10⁻⁵ c²/M at 10⁸ M☉) — Gargantua's pull at 60 M is 17 g, so leaving it takes a spiral.",
+    keywords: "engine crew cinema thrust g low thrust spiral",
+  },
+  {
+    key: "crewG", type: "number", section: "game", group: "Ranger", label: "Crew engine", min: 0.1, max: 3, step: 0.1, unit: "g", precision: 1, effect: "none",
+    visible: (s) => s.engine === "crew",
+    help: "Proper acceleration of the Crew engine, in Earth gravities (what the crew feels at full throttle).",
+    keywords: "g acceleration crew",
+  },
+  {
+    key: "fuel", type: "toggle", section: "game", group: "Ranger", label: "Propellant gauge", effect: "none",
+    help: "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.",
+    keywords: "fuel propellant delta-v budget rocket mass ratio",
+  },
+  {
+    key: "exhaust", type: "number", section: "game", group: "Ranger", label: "Exhaust speed", min: 0.01, max: 1, scale: "log", unit: "c", precision: 2, effect: "none",
+    visible: (s) => s.fuel,
+    help: "Effective exhaust speed vₑ (1 c: a photon rocket).",
+    keywords: "isp exhaust velocity",
+  },
+  {
+    key: "massRatio", type: "number", section: "game", group: "Ranger", label: "Mass ratio", min: 1.1, max: 100, scale: "log", precision: 1, effect: "none",
+    visible: (s) => s.fuel,
+    help: "Initial mass over dry mass m₀/m_dry: the budget is vₑ ln(m₀/m_dry) of rapidity (≈ Δv for small values).",
+    keywords: "mass ratio tank",
+  },
+  {
+    key: "shipLight", type: "number", section: "game", group: "Ranger: appearance", label: "Lighting", min: 0.3, max: 300, scale: "log", precision: 2, enabled: (s) => s.ship, effect: "display",
+    help: "Gain on the light the hull receives. 1 is physical: the hull receives a few hundred times less light than the disk's surface brightness (the disk covers a small part of its sky), so against it the ship is mostly a silhouette with lit edges — the strongest contrasts (default). Films often light it far more.",
+    keywords: "ship light exposure fill brightness",
+  },
+  {
+    key: "shipAlbedo", type: "number", section: "game", group: "Ranger: appearance", label: "Hull brightness", min: 0.02, max: 0.95, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Albedo of the hull plating (panels vary slightly, seams and wear are darker). The Ranger of the film is a light grey.",
+  },
+  {
+    key: "shipMetal", type: "number", section: "game", group: "Ranger: appearance", label: "Metalness", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Metalness of the plating: 0 a painted hull, 1 bare metal (mirror-like, coloured reflections of the disk).",
+  },
+  {
+    key: "shipCoat", type: "number", section: "game", group: "Ranger: appearance", label: "Clear coat", min: 0, max: 1, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "A thin glossy varnish over the paint: sharp reflections of the disk on top of the satin plating, strongest at grazing angles (Fresnel).",
+    keywords: "varnish gloss lacquer",
+  },
+  {
+    key: "shipRough", type: "number", section: "game", group: "Ranger: appearance", label: "Roughness", min: 0.1, max: 2.5, step: 0.01, enabled: (s) => s.ship, effect: "display",
+    help: "Roughness scale of the plating: lower is glossier (sharper reflections of the disk).",
+  },
   {
     key: "turnRate", type: "number", section: "game", group: "Ranger handling", label: "Turn rate", min: 5, max: 180, step: 1, unit: "°/s", effect: "none",
     help: "Top turning rate of the attitude control (SAS, holds, the autopilots' turns).",
@@ -937,17 +965,6 @@ export const SCHEMA: ControlDef[] = [
   {
     key: "autosaveEvery", type: "number", section: "game", group: "Saved games", label: "Every", min: 2, max: 120, step: 1, unit: "s", effect: "none",
     enabled: (s) => s.autosave,
-  },
-  {
-    key: "velR", type: "number", section: "scene", group: "Observer motion", label: "Velocity: radial", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
-    help: "The camera's (the ship's) velocity relative to the local static observer, along r̂ (our side: the rep frame's axes).",
-    keywords: "velocity speed state vector",
-  },
-  {
-    key: "velT", type: "number", section: "scene", group: "Observer motion", label: "Velocity: polar", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
-  },
-  {
-    key: "velP", type: "number", section: "scene", group: "Observer motion", label: "Velocity: azimuthal", min: -0.99, max: 0.99, step: 0.0001, precision: 4, unit: "c", advanced: true,
   },
 ];
 
