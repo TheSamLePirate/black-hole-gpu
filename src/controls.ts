@@ -10,8 +10,9 @@ import {
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
   cameraHome, isOurBody, onOurSide, ourLook, ourTarget,
 } from "./targeting";
-import { advance, fromZamo, predict, step as geoStep, toZamo, type Lens } from "./geodesic";
+import { advance, fromZamo, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
+import { lensesOf } from "./lenses";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
@@ -152,6 +153,8 @@ export class CameraController {
   spent = 0;
   private pathKey = "";
   private pathCost = 0;
+  /** the free-fall path asked of the planner's worker, not back yet */
+  private kerrPending = false;
   /** With gravity on: the camera stands on the star's surface. */
   landed = false;
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
@@ -652,26 +655,7 @@ export class CameraController {
    * put). Undefined when there are none.
    */
   private lens(): Lens | Lens[] | undefined {
-    const s = this.s;
-    const list: Lens[] = [];
-    if (s.sun && s.sunMass > 0) {
-      const D3 = starOrbitRadius(s) ** 3;
-      list.push({
-        m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
-        // Gargantua orbits the centre of mass: its frame falls towards the star
-        accel: (t) => holeAcceleration(s, t),
-        accelRate: (t) => lin(starVelocity(s, t), s.sunMass / D3, [0, 0, 0], 0),
-      });
-    }
-    if (s.system === "gargantua") {
-      for (const b of GARGANTUA_SYSTEM.bodies) {
-        if (b.universe !== "gargantua" || !(b.mass > 0) || b.kind === "hole") continue;
-        const tr = bodyTrack(GARGANTUA_SYSTEM, b.id);
-        list.push({ m: b.mass, R: b.radius, centre: tr.pos, velocity: tr.vel });
-      }
-    }
-    if (!list.length) return undefined;
-    return list.length === 1 ? list[0] : list;
+    return lensesOf(this.s);
   }
 
   /** Co-moving with the star (for the HUD). */
@@ -3878,10 +3862,12 @@ export class CameraController {
     if (nav) {
       // (the same throttle: there is no path object on this side to carry its time; computed in the
       // planner's worker — up to ~17 ms a time on the main thread — the first one here)
-      if (this.ourFree && (key === this.ourFreeKey || now - this.ourFreeAt < 250 || this.predicting)) return (this.path = null);
+      if (this.predicting || (this.ourFree && (key === this.ourFreeKey || now - this.ourFreeAt < 250))) return (this.path = null);
       this.ourFreeKey = key;
       this.ourFreeAt = now;
       const mouthR = mouth(s).w.rho;
+      // (the first one here, whole: without it the telemetry and the map fall back to costlier work —
+      // measured: a 150–220 ms task when it came from the worker a few frames later)
       if (!this.ourFree) {
         this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR });
         return (this.path = null);
@@ -3902,7 +3888,24 @@ export class CameraController {
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
     // coming back past the camera (a segment that close would sweep across the whole view)
     const tMax = clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000);
-    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = predict(st, s.spin, tMax, 480, this.lens(), 1e-7);
+    // (in the planner's worker — 6–12 ms a time here before —: the last path drawn meanwhile)
+    if (this.kerrPending) return this.path;
+    this.kerrPending = true;
+    runPlanner<{ pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "star" } | { error: string }>({ kind: "kerrPath", s: { ...s }, st, tMax }).then(
+      (r) => {
+        this.kerrPending = false;
+        if (!r || "error" in r || this.pathKey !== key) return;
+        this.path = this.kerrPathFrom(r, st, tMax, now);
+      },
+      () => (this.kerrPending = false),
+    );
+    return this.path;
+  }
+
+  /** The free-fall path's points (from the worker) cut to what the overlay draws. */
+  private kerrPathFrom(r: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "star" }, st: ReturnType<typeof fromZamo>, tMax: number, now: number) {
+    const s = this.s;
+    const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = { pts: r.pts, fate: r.fate };
     // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
     let turned = 0;
     for (let i = 1; i < p.pts.length; i++) {
@@ -3921,9 +3924,8 @@ export class CameraController {
       const i = p.pts.findIndex((q) => Math.hypot(q[0] - m.C[0], q[1] - m.C[1], q[2] - m.C[2]) < m.rGlue);
       if (i >= 0) p.pts = p.pts.slice(0, Math.max(i + 1, 2)), p.fate = "wormhole";
     }
-    this.pathCost = performance.now() - now;
-    this.path = { ...p, at: now, dt: tMax / 480, hit: p.fate === "star" ? this.nearestBody(p.pts.at(-1)!, st.t + p.pts.length * (tMax / 480)) : undefined };
-    return this.path;
+    this.pathCost = 0;
+    return { ...p, at: now, dt: tMax / 480, hit: p.fate === "star" ? this.nearestBody(p.pts.at(-1)!, st.t + p.pts.length * (tMax / 480)) : undefined };
   }
 
   // ------------------------------------------------------------------------------ journey

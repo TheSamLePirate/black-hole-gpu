@@ -245,22 +245,49 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
  * The heights the tracer draws (the packed map's alpha, its finest level) read back to the CPU: the
  * ground the ship stands on (src/terrain.ts: earthHeightSampler), a byte per texel.
  */
+const ALPHA_WGSL = `
+@group(0) @binding(0) var src: texture_2d<f32>;
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let uv = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4f(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+@fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
+  return vec4f(textureLoad(src, vec2i(p.xy), 0).a, 0.0, 0.0, 1.0);
+}`;
+
 export async function readEarthHeights(device: GPUDevice, surf: GPUTexture): Promise<{ map: Uint8Array; W: number; H: number }> {
   const W = surf.width, H = surf.height;
   const map = new Uint8Array(W * H);
-  // (in bands of rows: a few tens of MB mapped at a time)
-  const rows = Math.max(1, Math.floor((32 << 20) / (4 * W)));
-  const buf = device.createBuffer({ size: 4 * W * rows, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  // (the heights — the packed map's alpha — drawn by the GPU into a one-byte texture, read back in
+  // bands copied whole: no loop over the 33 M texels on the main thread, which took four long tasks)
+  const heights = device.createTexture({ size: [W, H], format: "r8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const mod = device.createShaderModule({ code: ALPHA_WGSL, label: "earth heights" });
+  const pipe = device.createRenderPipeline({
+    layout: "auto", vertex: { module: mod, entryPoint: "vs" },
+    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "r8unorm" }] }, primitive: { topology: "triangle-list" },
+  });
+  {
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: heights.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }] });
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: surf.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
+    pass.draw(3);
+    pass.end();
+    device.queue.submit([enc.finish()]);
+  }
+  // (rows are 256-byte aligned: W is a power of two ≥ 256)
+  const rows = Math.max(1, Math.floor((32 << 20) / W));
+  const buf = device.createBuffer({ size: W * rows, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
   for (let y = 0; y < H; y += rows) {
     const n = Math.min(rows, H - y);
     const enc = device.createCommandEncoder();
-    enc.copyTextureToBuffer({ texture: surf, origin: [0, y, 0] }, { buffer: buf, bytesPerRow: 4 * W }, [W, n]);
+    enc.copyTextureToBuffer({ texture: heights, origin: [0, y, 0] }, { buffer: buf, bytesPerRow: W }, [W, n]);
     device.queue.submit([enc.finish()]);
-    await buf.mapAsync(GPUMapMode.READ, 0, 4 * W * n);
-    const px = new Uint8Array(buf.getMappedRange(0, 4 * W * n));
-    for (let i = 0; i < W * n; i++) map[y * W + i] = px[4 * i + 3]!;
+    await buf.mapAsync(GPUMapMode.READ, 0, W * n);
+    map.set(new Uint8Array(buf.getMappedRange(0, W * n)), y * W);
     buf.unmap();
   }
   buf.destroy();
+  heights.destroy();
   return { map, W, H };
 }
