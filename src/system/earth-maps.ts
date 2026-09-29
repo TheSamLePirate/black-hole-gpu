@@ -124,7 +124,7 @@ const levels = (n: number) => Math.floor(Math.log2(n)) + 1;
 /** Placeholders (one texel each) until the maps are loaded. */
 export function placeholderEarth(device: GPUDevice): EarthMaps {
   const mk = (format: GPUTextureFormat, layers: number, px: Uint8Array<ArrayBuffer>) => {
-    const t = device.createTexture({ size: [1, 1, layers], format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const t = device.createTexture({ size: [1, 1, layers], format, viewFormats: format === "rgba8unorm" ? ["rgba8unorm-srgb"] : [], usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
     for (let l = 0; l < layers; l++) device.queue.writeTexture({ texture: t, origin: [0, 0, l] }, px, {}, [1, 1]);
     return t;
   };
@@ -212,7 +212,7 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   const set = SETS[tier];
   const pk = new Packer(device);
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC;
-  const cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", mipLevelCount: levels(set.size), usage });
+  const cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(set.size), usage });
   const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "r8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
   const surf = device.createTexture({ size: [set.w, set.w / 2], format: "rgba8unorm", mipLevelCount: levels(set.w), usage });
   // (face by face: a few large images decoded at a time)

@@ -45,7 +45,11 @@ export interface PlanetMaps {
 }
 
 const levels = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
-const lin = (c: number) => (c / 255) ** 2.2;
+/** an 8-bit sRGB code to linear (the IEC 61966-2-1 curve — what the GPU's -srgb views decode) */
+const lin = (c: number) => {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
 
 /** (the downloads, counted by the loading screen) */
 let get: (url: string) => Promise<Response> = (u) => fetch(u);
@@ -59,7 +63,7 @@ async function bitmap(url: string) {
 async function mapArray(device: GPUDevice, names: MapName[], w: number, h: number, mean: Map<MapName, number>) {
   const n = levels(w, h);
   const tex = device.createTexture({
-    size: [w, h, names.length], format: "rgba8unorm", mipLevelCount: n, dimension: "2d",
+    size: [w, h, names.length], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: n, dimension: "2d",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
   });
   await Promise.all(names.map(async (name, layer) => {
@@ -109,7 +113,7 @@ async function ringTexture(device: GPUDevice): Promise<GPUTexture> {
     prof.set(a > 0 ? [r / a, g / a, b / a, (255 * a) / img.height] : [0, 0, 0, 0], 4 * x);
   }
   const n = levels(img.width, 1);
-  const tex = device.createTexture({ size: [img.width, 1], format: "rgba8unorm", mipLevelCount: n, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  const tex = device.createTexture({ size: [img.width, 1], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: n, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
   let w = img.width;
   for (let l = 0; l < n; l++) {
     const data = new Uint8Array(w * 4);
@@ -132,7 +136,7 @@ async function ringTexture(device: GPUDevice): Promise<GPUTexture> {
 /** Placeholder arrays (one black layer) until the maps are loaded. */
 export function placeholderMaps(device: GPUDevice): PlanetMaps {
   const mk = (layers: number) => {
-    const t = device.createTexture({ size: [1, 1, layers], format: "rgba8unorm", dimension: "2d", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const t = device.createTexture({ size: [1, 1, layers], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], dimension: "2d", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
     for (let l = 0; l < layers; l++) device.queue.writeTexture({ texture: t, origin: [0, 0, l] }, new Uint8Array([128, 128, 128, 255]), {}, [1, 1]);
     return t;
   };

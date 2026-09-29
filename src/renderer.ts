@@ -46,6 +46,9 @@ const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
+// the colour maps are read through sRGB views: decoded to linear by the GPU (the true curve, before
+// filtering) — not pow(t, 2.2) after it
+const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
@@ -857,13 +860,13 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
-        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
-        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
-        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
+        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
+        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube", format: SRGB }) },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
-        { binding: 22, resource: this.hdMap.color.createView() },
+        { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
       ],
     });
@@ -885,13 +888,13 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array" }) },
-        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d" }) },
-        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array" }) },
-        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube" }) },
+        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
+        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube", format: SRGB }) },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
-        { binding: 22, resource: this.hdMap.color.createView() },
+        { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
       ],
     });

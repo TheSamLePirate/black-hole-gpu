@@ -899,7 +899,7 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     // (near: the rock's own mottling, kilometres down to metres)
     alb *= 0.8 + 0.4 * (0.5 + 0.5 * tfbmF(q * 300.0 + vec3f(4.4), max(oc - 6.0, 0.0)));
   } else if (surf >= 4u) {
-    // its map: longitude about the pole, latitude (sRGB → linear, scaled to its albedo)
+    // its map: longitude about the pole, latitude (linear: an sRGB view; scaled to its albedo)
     let lon = atan2(nrm.y, nrm.x);
     let lat = asin(clamp(nrm.z, -1.0, 1.0));
     let uv = vec2f(0.5 + lon / TAU, 0.5 - lat / PI);
@@ -915,7 +915,7 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     } else {
       t = textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
     }
-    return vec4f(min(pow(t, vec3f(2.2)) * b2.y * gain, vec3f(0.95)), f32(surf));
+    return vec4f(min(t * b2.y * gain, vec3f(0.95)), f32(surf));
   } else {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
     alb = mix(vec3f(0.72, 0.62, 0.45), vec3f(0.9, 0.84, 0.7), band);
@@ -958,7 +958,7 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
   let t = textureSampleLevel(ringTex, bgSamp, vec2f(clamp(f, 0.5 / 2048.0, 1.0 - 0.5 / 2048.0), 0.5), ringLodV);
   // (the map's colours are an appearance: the B ring's ≈ 0.2 in linear rgb; its icy particles' single
   // scattering albedo is ≈ 0.8)
-  return vec4f(min(pow(t.rgb, vec3f(2.2)) * 3.6, vec3f(0.95)), -log(1.0 - min(t.a, 0.995)));
+  return vec4f(min(t.rgb * 3.6, vec3f(0.95)), -log(1.0 - min(t.a, 0.995)));
 }
 
 // Light scattered by a slab of icy particles (single scattering, Henyey–Greenstein g = −0.3: they
@@ -3664,7 +3664,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let day = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(fx), eCube(fy));
   let rel = earthRelief(q, fx, fy);
   let ocean = smoothstep(0.35, 0.65, rel.b);
-  var A = pow(day.rgb, vec3f(2.2)) * P.earth2.z;
+  var A = day.rgb * P.earth2.z;
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);

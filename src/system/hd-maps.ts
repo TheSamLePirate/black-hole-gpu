@@ -111,11 +111,15 @@ fn quad(p: vec2u) -> array<vec4f, 4> {
 `;
 
 const levels = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
-const lin = (c: number) => (c / 255) ** 2.2;
+/** an 8-bit sRGB code to linear (the IEC 61966-2-1 curve — what the GPU's -srgb views decode) */
+const lin = (c: number) => {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
 
 export function placeholderHd(device: GPUDevice): HdMap {
   const mk = (px: number[]) => {
-    const t = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const t = device.createTexture({ size: [1, 1], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
     device.queue.writeTexture({ texture: t }, new Uint8Array(px), {}, [1, 1]);
     return t;
   };
@@ -174,7 +178,7 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
 
   // the colour, and its mean (a small copy of it, area-weighted)
   const cImg = await bitmap(set.color);
-  const color = device.createTexture({ size: [cImg.width, cImg.height], format: "rgba8unorm", mipLevelCount: levels(cImg.width, cImg.height), usage });
+  const color = device.createTexture({ size: [cImg.width, cImg.height], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(cImg.width, cImg.height), usage });
   const cSrc = upload(cImg);
   draw("copy", color, 0, cSrc.createView());
   mips(color, true);
