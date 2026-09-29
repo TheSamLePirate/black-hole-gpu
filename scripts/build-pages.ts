@@ -6,6 +6,9 @@ await $`rm -rf _site`;
 await $`bun build ./index.html --outdir _site --minify`;
 // (the flight planner's worker, loaded by URL next to the page)
 await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --minify --target browser`;
+// (the KTX2 transcoder's worker and its WebAssembly)
+await $`bun build ./src/system/ktx-worker.ts --outfile _site/ktx-worker.js --minify --target browser`;
+await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;

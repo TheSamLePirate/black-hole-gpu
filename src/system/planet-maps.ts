@@ -30,6 +30,36 @@ import titan from "../../assets/planets/titan.jpg";
 import uranus from "../../assets/planets/uranus.jpg";
 import neptune from "../../assets/planets/neptune.jpg";
 import pluto from "../../assets/planets/pluto.jpg";
+import k_earth from "../../assets/planets/ktx2/earth.ktx2";
+import k_moon from "../../assets/planets/ktx2/moon.ktx2";
+import k_mars from "../../assets/planets/ktx2/mars.ktx2";
+import k_mercury from "../../assets/planets/ktx2/mercury.ktx2";
+import k_jupiter from "../../assets/planets/ktx2/jupiter.ktx2";
+import k_saturn from "../../assets/planets/ktx2/saturn.ktx2";
+import k_venus from "../../assets/planets/ktx2/venus.ktx2";
+import k_ceres from "../../assets/planets/ktx2/ceres.ktx2";
+import k_phobos from "../../assets/planets/ktx2/phobos.ktx2";
+import k_deimos from "../../assets/planets/ktx2/deimos.ktx2";
+import k_io from "../../assets/planets/ktx2/io.ktx2";
+import k_europa from "../../assets/planets/ktx2/europa.ktx2";
+import k_ganymede from "../../assets/planets/ktx2/ganymede.ktx2";
+import k_callisto from "../../assets/planets/ktx2/callisto.ktx2";
+import k_mimas from "../../assets/planets/ktx2/mimas.ktx2";
+import k_enceladus from "../../assets/planets/ktx2/enceladus.ktx2";
+import k_tethys from "../../assets/planets/ktx2/tethys.ktx2";
+import k_dione from "../../assets/planets/ktx2/dione.ktx2";
+import k_rhea from "../../assets/planets/ktx2/rhea.ktx2";
+import k_titan from "../../assets/planets/ktx2/titan.ktx2";
+import k_uranus from "../../assets/planets/ktx2/uranus.ktx2";
+import k_neptune from "../../assets/planets/ktx2/neptune.ktx2";
+import k_pluto from "../../assets/planets/ktx2/pluto.ktx2";
+import ktxMeans from "../../assets/planets/ktx2/means.json";
+import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
+
+// the maps GPU-compressed at their arrays' sizes (scripts/build-ktx2.ts), their means measured there
+const KTX: Record<MapName, string> = {
+earth: k_earth, moon: k_moon, mars: k_mars, mercury: k_mercury, jupiter: k_jupiter, saturn: k_saturn, venus: k_venus, ceres: k_ceres, phobos: k_phobos, deimos: k_deimos, io: k_io, europa: k_europa, ganymede: k_ganymede, callisto: k_callisto, mimas: k_mimas, enceladus: k_enceladus, tethys: k_tethys, dione: k_dione, rhea: k_rhea, titan: k_titan, uranus: k_uranus, neptune: k_neptune, pluto: k_pluto,
+};
 
 const URLS: Record<MapName, string> = {
   earth, moon, mars, mercury, jupiter, saturn, venus, ceres, phobos, deimos, io, europa, ganymede, callisto, mimas, enceladus,
@@ -59,8 +89,32 @@ async function bitmap(url: string) {
   return createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
 }
 
+/** A texture array of maps in this GPU's compressed format (null: none, or no transcoder). */
+async function compressedArray(device: GPUDevice, names: MapName[], w: number, h: number, mean: Map<MapName, number>) {
+  const target = ktxTarget(device);
+  if (target === "rgba") return null;
+  const tex = device.createTexture({
+    size: [w, h, names.length], format: ktxFormat(target), mipLevelCount: levels(w, h), dimension: "2d",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  try {
+    await Promise.all(names.map(async (name, layer) => {
+      const k = await ktxLevels(KTX[name], target);
+      writeLevels(device, tex, k.levels, k.width, k.height, target, layer);
+      mean.set(name, (ktxMeans as Record<string, number>)[name] ?? 0.25);
+    }));
+    return tex;
+  } catch (e) {
+    console.warn("Compressed planet maps unavailable, JPEG instead:", e);
+    tex.destroy();
+    return null;
+  }
+}
+
 /** A texture array of maps, every mip level resampled from the full image by the browser. */
 async function mapArray(device: GPUDevice, names: MapName[], w: number, h: number, mean: Map<MapName, number>) {
+  const packed = await compressedArray(device, names, w, h, mean);
+  if (packed) return packed;
   const n = levels(w, h);
   const tex = device.createTexture({
     size: [w, h, names.length], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: n, dimension: "2d",

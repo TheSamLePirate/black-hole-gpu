@@ -51,6 +51,9 @@ const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as cons
 // the colour maps are read through sRGB views: decoded to linear by the GPU (the true curve, before
 // filtering) — not pow(t, 2.2) after it
 const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
+/** A colour map's view read as sRGB: an rgba8 one through its sRGB view format, a compressed one (already
+ *  an sRGB format) as it is. */
+const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) => t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 255;
@@ -669,7 +672,8 @@ export class Renderer {
     if (!adapter) throw new Error("No WebGPU adapter found.");
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
-      requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : [],
+      // (and the compressed textures it samples: the colour maps' KTX2, transcoded to BC7 or ASTC)
+      requiredFeatures: (["timestamp-query", "texture-compression-bc", "texture-compression-astc"] as GPUFeatureName[]).filter((f) => adapter.features.has(f)),
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
@@ -915,10 +919,10 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
         { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
-        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array", format: SRGB }) },
-        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube", format: SRGB }) },
+        { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
+        { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
@@ -945,10 +949,10 @@ export class Renderer {
         { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: this.planetMaps.hi.createView({ dimension: "2d-array", format: SRGB }) },
+        { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
         { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
-        { binding: 18, resource: this.planetMaps.lo.createView({ dimension: "2d-array", format: SRGB }) },
-        { binding: 19, resource: this.earthMaps.cube.createView({ dimension: "cube", format: SRGB }) },
+        { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
+        { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.surf.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },

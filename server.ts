@@ -23,6 +23,13 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // The KTX2 transcoder's worker and its WebAssembly (vendor/basis)
+    "/ktx-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/ktx-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
+    "/basis_transcoder.wasm": () => new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
     "/__snapshots/:name": {
       GET: (req) => {

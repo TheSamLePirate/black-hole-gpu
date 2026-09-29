@@ -1,0 +1,370 @@
+{
+ "label": "b6",
+ "sha": "7194173",
+ "date": "2026-09-29T04:24:52.189Z",
+ "viewport": [
+  1469,
+  965,
+  2
+ ],
+ "compare": "http://localhost:3012/",
+ "peakVramMiB": 1184,
+ "results": {
+  "game:artemis": [
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 60.2,
+     "p50": 16.8,
+     "p95": 18.8,
+     "p99": 19.8,
+     "over33": 0,
+     "raysPerPx": 0.0434,
+     "blocks": {
+      "3": 301
+     },
+     "scales": {
+      "1": 301
+     }
+    },
+    "fixed": {
+     "fps": 60.3,
+     "p50": 17,
+     "p95": 20.3
+    },
+    "vramMiB": 694,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 5.4
+     },
+     {
+      "pass": "display",
+      "ms": 5.27
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.24
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 1.96
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.59
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 0.5
+     },
+     {
+      "pass": "gather",
+      "ms": 0.48
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.44
+     }
+    ]
+   }
+  ],
+  "game:artemis (ref)": [
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 60,
+     "p50": 16.8,
+     "p95": 19.2,
+     "p99": 20,
+     "over33": 0,
+     "raysPerPx": 0.0434,
+     "blocks": {
+      "3": 300
+     },
+     "scales": {
+      "1": 300
+     }
+    },
+    "fixed": {
+     "fps": 60.3,
+     "p50": 16.9,
+     "p95": 19.6
+    },
+    "vramMiB": 1160,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 5.41
+     },
+     {
+      "pass": "display",
+      "ms": 3.64
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.6
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 0.56
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.46
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.44
+     },
+     {
+      "pass": "temporal",
+      "ms": 0.44
+     },
+     {
+      "pass": "gather",
+      "ms": 0.38
+     }
+    ]
+   }
+  ],
+  "Saturn: the rings from above": [
+   {
+    "scene": "Saturn: the rings from above",
+    "auto": {
+     "fps": 45.2,
+     "p50": 19,
+     "p95": 36.9,
+     "p99": 37.6,
+     "over33": 41,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 226
+     },
+     "scales": {
+      "0.875": 226
+     }
+    },
+    "fixed": {
+     "fps": 22.7,
+     "p50": 42.7,
+     "p95": 53.3
+    },
+    "vramMiB": 450,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 8.94
+     },
+     {
+      "pass": "trace",
+      "ms": 8.54
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.83
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 4.62
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 3.27
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.63
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.53
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.45
+     }
+    ]
+   }
+  ],
+  "Saturn: the rings from above (ref)": [
+   {
+    "scene": "Saturn: the rings from above",
+    "auto": {
+     "fps": 47.6,
+     "p50": 23.7,
+     "p95": 28.2,
+     "p99": 28.9,
+     "over33": 0,
+     "raysPerPx": 0.0061,
+     "blocks": {
+      "8": 238
+     },
+     "scales": {
+      "1": 238
+     }
+    },
+    "fixed": {
+     "fps": 25.3,
+     "p50": 38.3,
+     "p95": 47.6
+    },
+    "vramMiB": 532,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 9.72
+     },
+     {
+      "pass": "display",
+      "ms": 9.5
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 5.65
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.23
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.64
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.73
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.56
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.55
+     }
+    ]
+   }
+  ],
+  "Moon: Earthrise": [
+   {
+    "scene": "Moon: Earthrise",
+    "auto": {
+     "fps": 46,
+     "p50": 20.2,
+     "p95": 34.2,
+     "p99": 38.3,
+     "over33": 16,
+     "raysPerPx": 0.0058,
+     "blocks": {
+      "6": 25,
+      "8": 205
+     },
+     "scales": {
+      "1": 105,
+      "0.875": 125
+     }
+    },
+    "fixed": {
+     "fps": 31.7,
+     "p50": 30.9,
+     "p95": 37.7
+    },
+    "vramMiB": 770,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 8.5
+     },
+     {
+      "pass": "trace",
+      "ms": 8.33
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.77
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 4.7
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 4.03
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.97
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.74
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.6
+     }
+    ]
+   }
+  ],
+  "Moon: Earthrise (ref)": [
+   {
+    "scene": "Moon: Earthrise",
+    "auto": {
+     "fps": 46.6,
+     "p50": 16.9,
+     "p95": 34.7,
+     "p99": 36,
+     "over33": 41,
+     "raysPerPx": 0.0083,
+     "blocks": {
+      "6": 233
+     },
+     "scales": {
+      "0.875": 233
+     }
+    },
+    "fixed": {
+     "fps": 26.3,
+     "p50": 38.7,
+     "p95": 49.1
+    },
+    "vramMiB": 948,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 8.05
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 6.12
+     },
+     {
+      "pass": "display",
+      "ms": 4.86
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.55
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.77
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.55
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.49
+     },
+     {
+      "pass": "gather",
+      "ms": 0.44
+     }
+    ]
+   }
+  ]
+ }
+}

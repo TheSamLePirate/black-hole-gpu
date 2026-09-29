@@ -47,6 +47,19 @@ import oceanMed from "../../assets/earth/ocean-med.jpg";
 import oceanHigh from "../../assets/earth/ocean-high.jpg";
 import heightMed from "../../assets/earth/height-med.jpg";
 import heightHigh from "../../assets/earth/height-high.jpg";
+import ktxMedRt from "../../assets/earth/ktx2/med-rt.ktx2";
+import ktxMedLf from "../../assets/earth/ktx2/med-lf.ktx2";
+import ktxMedUp from "../../assets/earth/ktx2/med-up.ktx2";
+import ktxMedDn from "../../assets/earth/ktx2/med-dn.ktx2";
+import ktxMedFt from "../../assets/earth/ktx2/med-ft.ktx2";
+import ktxMedBk from "../../assets/earth/ktx2/med-bk.ktx2";
+import ktxHighRt from "../../assets/earth/ktx2/high-rt.ktx2";
+import ktxHighLf from "../../assets/earth/ktx2/high-lf.ktx2";
+import ktxHighUp from "../../assets/earth/ktx2/high-up.ktx2";
+import ktxHighDn from "../../assets/earth/ktx2/high-dn.ktx2";
+import ktxHighFt from "../../assets/earth/ktx2/high-ft.ktx2";
+import ktxHighBk from "../../assets/earth/ktx2/high-bk.ktx2";
+import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
 
 export type EarthTier = "med" | "high";
 
@@ -67,6 +80,36 @@ const SETS: Record<EarthTier, { size: number; day: Faces; cloud: Faces; normal: 
   },
 };
 const NIGHT: Faces = [nightRt, nightLf, nightUp, nightDn, nightFt, nightBk];
+// the day cube GPU-compressed (scripts/build-ktx2.ts: day colour, cloud cover as alpha; mip-mapped)
+const KTX: Record<EarthTier, Faces> = {
+  med: [ktxMedRt, ktxMedLf, ktxMedUp, ktxMedDn, ktxMedFt, ktxMedBk],
+  high: [ktxHighRt, ktxHighLf, ktxHighUp, ktxHighDn, ktxHighFt, ktxHighBk],
+};
+
+/**
+ * The day cube from its KTX2 faces, in this GPU's compressed format (BC7, ASTC): a quarter of rgba8's
+ * memory. Null when it has none, or the transcoder is not there (the JPEG faces then).
+ */
+async function compressedCube(device: GPUDevice, tier: EarthTier): Promise<GPUTexture | null> {
+  const target = ktxTarget(device);
+  if (target === "rgba") return null;
+  let cube: GPUTexture | null = null;
+  try {
+    for (let f = 0; f < 6; f++) {
+      const k = await ktxLevels(KTX[tier][f]!, target);
+      cube ??= device.createTexture({
+        size: [k.width, k.height, 6], format: ktxFormat(target), mipLevelCount: k.levels.length,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      writeLevels(device, cube, k.levels, k.width, k.height, target, f);
+    }
+    return cube;
+  } catch (e) {
+    console.warn("Compressed Earth maps unavailable, JPEG instead:", e);
+    cube?.destroy();
+    return null;
+  }
+}
 const NIGHT_SIZE = 2048;
 
 /** The Earth's height at a map value (0…1) [m]. */
@@ -212,16 +255,19 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   const set = SETS[tier];
   const pk = new Packer(device);
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC;
-  const cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(set.size), usage });
   const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "r8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
   const surf = device.createTexture({ size: [set.w, set.w / 2], format: "rgba8unorm", mipLevelCount: levels(set.w), usage });
-  // (face by face: a few large images decoded at a time)
-  for (let f = 0; f < 6; f++) {
-    const [day, cloud] = await Promise.all([upload(device, set.day[f]!), upload(device, set.cloud[f]!, "r8unorm")]);
-    pk.draw("face", cube, f, 0, [day.createView(), cloud.createView()]);
-    pk.mips(cube, f, true);
-    day.destroy();
-    cloud.destroy();
+  let cube = await compressedCube(device, tier);
+  if (!cube) {
+    cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(set.size), usage });
+    // (face by face: a few large images decoded at a time)
+    for (let f = 0; f < 6; f++) {
+      const [day, cloud] = await Promise.all([upload(device, set.day[f]!), upload(device, set.cloud[f]!, "r8unorm")]);
+      pk.draw("face", cube, f, 0, [day.createView(), cloud.createView()]);
+      pk.mips(cube, f, true);
+      day.destroy();
+      cloud.destroy();
+    }
   }
   for (let f = 0; f < 6; f++) {
     const lights = await upload(device, NIGHT[f]!, "r8unorm");
