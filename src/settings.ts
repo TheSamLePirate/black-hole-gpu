@@ -156,6 +156,7 @@ export interface Settings {
   shiftMode: ShiftMode;
   realtimeSubsampling: "auto" | 1 | 2 | 3 | 4 | 6 | 8;
   realtimeBudget: number; // GPU time per realtime frame the automatic subsampling aims for [ms]
+  fpsCap: 0 | 30 | 60 | 120; // images rendered per second at most (0: as the display refreshes)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -337,6 +338,7 @@ export function defaultSettings(): Settings {
     shiftMode: "full",
     realtimeSubsampling: "auto",
     realtimeBudget: 30,
+    fpsCap: 0,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,

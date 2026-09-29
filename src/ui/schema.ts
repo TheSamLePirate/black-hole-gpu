@@ -789,9 +789,15 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fps performance resolution scale dynamic",
   },
   {
+    key: "fpsCap", type: "choice", section: "render", group: "Realtime", label: "Frame rate cap", style: "segmented", effect: "none",
+    options: [0, 30, 60, 120].map((v) => ({ value: v, label: v === 0 ? "Display" : `${v}` })),
+    help: "Images rendered per second at most. Display: as fast as the screen refreshes. A cap under it leaves the GPU room — steadier frames, a cooler laptop — and the automatic subsampling spends that room on a sharper image.",
+    keywords: "fps frame rate cap limit vsync battery",
+  },
+  {
     key: "realtimeBudget", type: "number", section: "render", group: "Realtime", label: "Frame budget", min: 8, max: 120, step: 1, unit: "ms",
     visible: (s) => s.realtimeSubsampling === "auto", effect: "none",
-    help: "GPU time per realtime frame that the automatic subsampling aims for: 30 ms ≈ 30 fps, 60 ms ≈ 15 fps with finer blocks (sharper while moving or while time runs).",
+    help: "GPU time per realtime frame that the automatic subsampling aims for: 30 ms ≈ 30 fps, 60 ms ≈ 15 fps with finer blocks (sharper while moving or while time runs). It is fitted to a whole number of the display's refreshes, a tenth under (16 ms on a 60 Hz screen: 15 ms — one refresh, no 30/60 judder).",
     keywords: "fps frame rate performance speed",
   },
   {

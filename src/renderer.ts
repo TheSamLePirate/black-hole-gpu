@@ -344,6 +344,20 @@ export class Renderer {
   private get busy() {
     return this.inFlight >= (this.offline ? 1 : 2);
   }
+  /** the display's refresh interval, measured by the main loop [ms] (0: not yet) */
+  refreshMs = 0;
+  /**
+   * The frame time the automatic controls aim for [ms]: the quality's budget fitted to a whole number
+   * of display refreshes, a tenth under — 16 ms on a 60 Hz screen is 15 (one refresh: no 30/60 judder),
+   * on a 120 Hz one two refreshes, 15 —, and no less than the frame rate cap's interval.
+   */
+  frameBudget(s: Settings) {
+    let b = Math.max(8, s.realtimeBudget);
+    const r = this.refreshMs;
+    if (r > 4) b = Math.max(1, Math.round(b / r)) * r * 0.9;
+    if (s.fpsCap > 0) b = Math.max(b, (1000 / s.fpsCap) * 0.9);
+    return b;
+  }
   /** the last frame's GPU time [ms] */
   lastGpuMs = 0;
   private lastPhase: FrameStats["phase"] = "realtime";
@@ -1990,12 +2004,12 @@ export class Renderer {
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
     this.submit(enc, (ms) => {
-      if (phase === "realtime" && auto) this.adaptBlock(ms, Math.max(8, s.realtimeBudget), used);
+      if (phase === "realtime" && auto) this.adaptBlock(ms, this.frameBudget(s), used);
       if (phase === "converging" && rows > 0) {
         const perRow = ms / rows;
         // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
         // refines —, 28 ms at most for the finer qualities)
-        const band = Math.min(28, Math.max(8, s.realtimeBudget));
+        const band = Math.min(28, this.frameBudget(s));
         this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3)))));
       }
     });

@@ -73,7 +73,7 @@ function sanitize(s: Settings): Settings {
 }
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
-  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
+  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
@@ -1072,6 +1072,8 @@ async function main() {
 
   // -------------------------------------------------------------------- loop
   let last = performance.now();
+  const loopIv: number[] = [];
+  let renderedAt = 0;
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -1085,6 +1087,10 @@ async function main() {
     requestAnimationFrame(loop);
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
+    // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
+    loopIv.push(now - last);
+    if (loopIv.length > 31) loopIv.shift();
+    if (loopIv.length >= 15) renderer.refreshMs = [...loopIv].sort((a, b) => a - b)[loopIv.length >> 1]!;
     last = now;
     fpsAcc += dt;
     if (fpsAcc > 0.5) {
@@ -1113,8 +1119,11 @@ async function main() {
     // the camera's predicted free fall, drawn (lensed) by the tracer
     const path = camera.gravity ? cpuProf.time("free-fall prediction", () => camera.predictPath()) : null;
     if (renderer.setCameraPath(settings.showGeodesic && settings.pathInView ? path : null)) changed = true;
-    const st = cpuProf.time("render (encode, submit)", () => renderer.frame(settings, simTime, changed, timeDirty, displayChanged));
+    // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
+    const capped = settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
+    const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, simTime, changed, timeDirty, displayChanged));
     if (st) {
+      renderedAt = now;
       if (!firstFrame) {
         // the first image is on screen: the loading screen lifts once the scene's assets are in
         firstFrame = true;
@@ -1144,13 +1153,14 @@ async function main() {
       };
       const lower = Math.max(0.5, renderScale - 0.125), higher = Math.min(1, renderScale + 0.125);
       const kl = known(lower), kh = known(higher);
+      const budget = renderer.frameBudget(settings);
       let want = renderScale;
       if (!on) want = 1;
       else if (!settled) want = renderScale;
-      else if (gpuEma > 1.2 * settings.realtimeBudget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
+      else if (gpuEma > 1.2 * budget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
       // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
       // the frame grown as the pixels would stay within it)
-      else if (higher > renderScale && (kh !== undefined ? kh <= Math.max(0.85 * settings.realtimeBudget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * settings.realtimeBudget)) want = higher;
+      else if (higher > renderScale && (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)) want = higher;
       if (want !== renderScale) {
         renderScale = want;
         gpuEma = 0; // (measured afresh at the new scale)
@@ -1191,7 +1201,9 @@ async function main() {
       } catch {
         /* (between two frames of a jump) */
       }
-      cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
+      // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
+      // shown, not a pose one or two frames ahead of it)
+      if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
       cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
     } else {
       renderer.shipThrust = null;

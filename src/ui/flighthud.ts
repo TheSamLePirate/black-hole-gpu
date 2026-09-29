@@ -669,6 +669,7 @@ export class FlightHud {
 
   show(on: boolean) {
     this.visible = on;
+    if (on) this.drawn = false;
     this.root.hidden = !on;
     this.hud.hidden = !on;
     document.body.classList.toggle("piloting", on);
@@ -1266,7 +1267,10 @@ export class FlightHud {
   }
 
   /** Called every frame while piloting. */
+  /** drawn at least once since shown */
+  drawn = false;
   update(info: Info, time: number) {
+    this.drawn = true;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
     this.lastInfo = info;

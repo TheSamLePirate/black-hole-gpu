@@ -1,0 +1,725 @@
+{
+ "label": "a5",
+ "sha": "4825766",
+ "date": "2026-09-29T00:44:37.841Z",
+ "viewport": [
+  1469,
+  965,
+  2
+ ],
+ "compare": "http://localhost:3012/",
+ "peakVramMiB": 1338,
+ "results": {
+  "game:artemis": [
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 45.6,
+     "p50": 17.2,
+     "p95": 41.2,
+     "p99": 105.8,
+     "over33": 16,
+     "raysPerPx": 0.005,
+     "blocks": {
+      "8": 228
+     },
+     "scales": {
+      "1": 57,
+      "0.875": 171
+     }
+    },
+    "fixed": {
+     "fps": 32.7,
+     "p50": 30.7,
+     "p95": 36.1
+    },
+    "vramMiB": 1139,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 7.19
+     },
+     {
+      "pass": "trace",
+      "ms": 2.73
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 1.81
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.39
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 1.3
+     },
+     {
+      "pass": "depth of field",
+      "ms": 1.08
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.92
+     },
+     {
+      "pass": "gather",
+      "ms": 0.63
+     }
+    ]
+   },
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 59.6,
+     "p50": 16.8,
+     "p95": 20.2,
+     "p99": 22.8,
+     "over33": 0,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 298
+     },
+     "scales": {
+      "0.875": 298
+     }
+    },
+    "fixed": {
+     "fps": 43.3,
+     "p50": 23.8,
+     "p95": 27.6
+    },
+    "vramMiB": 1139,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 5.46
+     },
+     {
+      "pass": "trace",
+      "ms": 2.22
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 1.78
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.97
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 0.86
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.78
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.54
+     },
+     {
+      "pass": "gather",
+      "ms": 0.54
+     }
+    ]
+   }
+  ],
+  "game:artemis (ref)": [
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 38.6,
+     "p50": 17.3,
+     "p95": 70.6,
+     "p99": 146.8,
+     "over33": 26,
+     "raysPerPx": 0.0061,
+     "blocks": {
+      "8": 193
+     },
+     "scales": {
+      "1": 193
+     }
+    },
+    "fixed": {
+     "fps": 46,
+     "p50": 21.3,
+     "p95": 31.5
+    },
+    "vramMiB": 1135,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 6.67
+     },
+     {
+      "pass": "trace",
+      "ms": 3.35
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 2.2
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.74
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 1.54
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 1.11
+     },
+     {
+      "pass": "gather",
+      "ms": 1
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 0.77
+     }
+    ]
+   },
+   {
+    "scene": "game:artemis",
+    "auto": {
+     "fps": 57.6,
+     "p50": 16.9,
+     "p95": 20.7,
+     "p99": 54.4,
+     "over33": 5,
+     "raysPerPx": 0.0137,
+     "blocks": {
+      "3": 101,
+      "4": 46,
+      "6": 141
+     },
+     "scales": {
+      "0.75": 288
+     }
+    },
+    "fixed": {
+     "fps": 47.3,
+     "p50": 18.4,
+     "p95": 32.3
+    },
+    "vramMiB": 1135,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 4.59
+     },
+     {
+      "pass": "display",
+      "ms": 4.01
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 2.92
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.04
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.41
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 0.41
+     },
+     {
+      "pass": "gather",
+      "ms": 0.36
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.34
+     }
+    ]
+   }
+  ],
+  "Ranger: approaching Gargantua": [
+   {
+    "scene": "Ranger: approaching Gargantua",
+    "auto": {
+     "fps": 34.8,
+     "p50": 27.9,
+     "p95": 41,
+     "p99": 52.6,
+     "over33": 30,
+     "raysPerPx": 0.004,
+     "blocks": {
+      "8": 174
+     },
+     "scales": {
+      "0.875": 83,
+      "0.75": 91
+     }
+    },
+    "fixed": {
+     "fps": 11.7,
+     "p50": 85.5,
+     "p95": 95.9
+    },
+    "vramMiB": 639,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 17.34
+     },
+     {
+      "pass": "display",
+      "ms": 14.59
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 5.3
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.63
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 3.42
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.92
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.69
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.56
+     }
+    ]
+   },
+   {
+    "scene": "Ranger: approaching Gargantua",
+    "auto": {
+     "fps": 35.8,
+     "p50": 26.7,
+     "p95": 42.8,
+     "p99": 58.8,
+     "over33": 23,
+     "raysPerPx": 0.0035,
+     "blocks": {
+      "8": 179
+     },
+     "scales": {
+      "0.875": 35,
+      "0.75": 111,
+      "0.625": 33
+     }
+    },
+    "fixed": {
+     "fps": 10.7,
+     "p50": 98.8,
+     "p95": 108.3
+    },
+    "vramMiB": 327,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 17.16
+     },
+     {
+      "pass": "display",
+      "ms": 14.62
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.01
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.64
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 2.36
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.71
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.42
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.42
+     }
+    ]
+   }
+  ],
+  "Ranger: approaching Gargantua (ref)": [
+   {
+    "scene": "Ranger: approaching Gargantua",
+    "auto": {
+     "fps": 38.8,
+     "p50": 25.4,
+     "p95": 32.8,
+     "p99": 48.2,
+     "over33": 6,
+     "raysPerPx": 0.004,
+     "blocks": {
+      "8": 194
+     },
+     "scales": {
+      "0.875": 89,
+      "0.75": 105
+     }
+    },
+    "fixed": {
+     "fps": 12.3,
+     "p50": 82.1,
+     "p95": 96.1
+    },
+    "vramMiB": 635,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 19.03
+     },
+     {
+      "pass": "display",
+      "ms": 18.13
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 8.33
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 5.3
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 2.51
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.01
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.52
+     },
+     {
+      "pass": "gather",
+      "ms": 0.49
+     }
+    ]
+   },
+   {
+    "scene": "Ranger: approaching Gargantua",
+    "auto": {
+     "fps": 42.8,
+     "p50": 21,
+     "p95": 45.7,
+     "p99": 53.8,
+     "over33": 19,
+     "raysPerPx": 0.0034,
+     "blocks": {
+      "8": 214
+     },
+     "scales": {
+      "0.875": 40,
+      "0.75": 127,
+      "0.625": 47
+     }
+    },
+    "fixed": {
+     "fps": 11.3,
+     "p50": 90,
+     "p95": 101.6
+    },
+    "vramMiB": 323,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 14.35
+     },
+     {
+      "pass": "display",
+      "ms": 13.89
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.38
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.5
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 2.08
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.48
+     },
+     {
+      "pass": "ship probe: SH",
+      "ms": 0.42
+     },
+     {
+      "pass": "ship probe: GGX",
+      "ms": 0.34
+     }
+    ]
+   }
+  ],
+  "Moon: an afternoon on the plains": [
+   {
+    "scene": "Moon: an afternoon on the plains",
+    "auto": {
+     "fps": 45,
+     "p50": 21.3,
+     "p95": 32.3,
+     "p99": 36.9,
+     "over33": 6,
+     "raysPerPx": 0.0037,
+     "blocks": {
+      "8": 225
+     },
+     "scales": {
+      "0.875": 67,
+      "0.75": 142,
+      "0.625": 16
+     }
+    },
+    "fixed": {
+     "fps": 16,
+     "p50": 63.8,
+     "p95": 73.1
+    },
+    "vramMiB": 927,
+    "gpuPasses": [
+     {
+      "pass": "ship probe: trace",
+      "ms": 11.36
+     },
+     {
+      "pass": "display",
+      "ms": 11.35
+     },
+     {
+      "pass": "trace",
+      "ms": 9.99
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.56
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.31
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.12
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.79
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.66
+     }
+    ]
+   },
+   {
+    "scene": "Moon: an afternoon on the plains",
+    "auto": {
+     "fps": 48.8,
+     "p50": 18.6,
+     "p95": 30.4,
+     "p99": 41.1,
+     "over33": 9,
+     "raysPerPx": 0.0034,
+     "blocks": {
+      "8": 244
+     },
+     "scales": {
+      "0.875": 37,
+      "0.75": 148,
+      "0.625": 59
+     }
+    },
+    "fixed": {
+     "fps": 18,
+     "p50": 55.3,
+     "p95": 68.5
+    },
+    "vramMiB": 927,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 13.12
+     },
+     {
+      "pass": "trace",
+      "ms": 10.66
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 9.3
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.53
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.27
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.68
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.59
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.58
+     }
+    ]
+   }
+  ],
+  "Moon: an afternoon on the plains (ref)": [
+   {
+    "scene": "Moon: an afternoon on the plains",
+    "auto": {
+     "fps": 48,
+     "p50": 19,
+     "p95": 31.2,
+     "p99": 34.1,
+     "over33": 3,
+     "raysPerPx": 0.0041,
+     "blocks": {
+      "8": 240
+     },
+     "scales": {
+      "0.875": 122,
+      "0.75": 118
+     }
+    },
+    "fixed": {
+     "fps": 15.3,
+     "p50": 65.6,
+     "p95": 75.9
+    },
+    "vramMiB": 923,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 13.48
+     },
+     {
+      "pass": "trace",
+      "ms": 11.95
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 11.74
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.77
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.52
+     },
+     {
+      "pass": "gather",
+      "ms": 1.58
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.56
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.95
+     }
+    ]
+   },
+   {
+    "scene": "Moon: an afternoon on the plains",
+    "auto": {
+     "fps": 49.4,
+     "p50": 17.5,
+     "p95": 35.2,
+     "p99": 41.3,
+     "over33": 15,
+     "raysPerPx": 0.0036,
+     "blocks": {
+      "8": 247
+     },
+     "scales": {
+      "0.875": 27,
+      "0.75": 220
+     }
+    },
+    "fixed": {
+     "fps": 16,
+     "p50": 62.4,
+     "p95": 75.5
+    },
+    "vramMiB": 923,
+    "gpuPasses": [
+     {
+      "pass": "ship probe: trace",
+      "ms": 10.36
+     },
+     {
+      "pass": "trace",
+      "ms": 10.31
+     },
+     {
+      "pass": "display",
+      "ms": 9.55
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.63
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.2
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.07
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.66
+     },
+     {
+      "pass": "gather",
+      "ms": 0.64
+     }
+    ]
+   }
+  ]
+ }
+}

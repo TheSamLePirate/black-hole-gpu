@@ -2,6 +2,7 @@
 // protocol, against a running server (bun --hot server.ts):
 //
 //   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick]
+//                        [--compare http://localhost:3012/ [--reps 2]]
 //
 // For each scene: the Game quality, its automatic subsampling and dynamic resolution — the frame
 // intervals' p50/p95/p99, frames over 33 ms, the rays per displayed pixel —, then a fixed setting
@@ -19,6 +20,8 @@ const arg = (k: string, d: string) => {
 };
 const URL = arg("url", "http://localhost:3000/");
 const quick = process.argv.includes("--quick");
+// a reference build to alternate with (e.g. git archive HEAD~1 served on another port)
+const COMPARE = arg("compare", "");
 const SCENES = arg("scenes", "")
   ? arg("scenes", "").split("|")
   : [
@@ -105,12 +108,21 @@ try {
   await cdp("Page.enable");
   await cdp("Page.addScriptToEvaluateOnNewDocument", { source: VRAM_HOOK });
   await cdp("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: DPR, mobile: false });
-  await cdp("Page.navigate", { url: URL });
-  for (let i = 0; i < 240; i++) {
-    if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`).catch(() => false)) break;
-    await sleep(500);
-  }
-  await sleep(3000);
+  // (compare mode: the reference build and this one, alternated scene by scene — the machine's own
+  // drift, its clocks and heat, falls on both)
+  const urls = COMPARE ? [COMPARE, URL] : [URL];
+  let at = "";
+  const open = async (url: string) => {
+    if (at === url) return;
+    await cdp("Page.navigate", { url });
+    at = url;
+    await sleep(1000);
+    for (let i = 0; i < 240; i++) {
+      if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`).catch(() => false)) break;
+      await sleep(500);
+    }
+    await sleep(3000);
+  };
 
   // a window of frames: every rAF marks the scene changed (the realtime path, as when flying); the
   // intervals between the GPU's completions, the block and scale each frame was drawn with
@@ -134,16 +146,12 @@ try {
     return { fps: +(n * 1000 / ${ms}).toFixed(1), p50: q(0.5), p95: q(0.95), p99: q(0.99), over33: iv.filter((x) => x > 33.4).length,
       raysPerPx: +(rays / Math.max(n, 1)).toFixed(4), blocks, scales };`;
 
-  const results: SceneResult[] = [];
   const warm = quick ? 4000 : 7000, span = quick ? 5000 : 9000;
-  for (const scene of SCENES) {
+  const measure = async (scene: string): Promise<SceneResult | null> => {
     const ok = await js(`if (!(${JSON.stringify(scene)} in __bh.presets)) return false; __bh.preset(${JSON.stringify(scene)});
-      Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: "auto", dynamicResolution: true, pixelRatio: Math.min(devicePixelRatio, 1.25) });
+      Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: "auto", dynamicResolution: true, fpsCap: 0, pixelRatio: Math.min(devicePixelRatio, 1.25) });
       __bh.resize(); __bh.refresh?.(); return true;`);
-    if (!ok) {
-      console.log(`(no scene "${scene}")`);
-      continue;
-    }
+    if (!ok) return null;
     await js(`const t0 = performance.now(); while (performance.now() - t0 < ${warm}) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`);
     const auto = await js(window(span));
     const gpuPasses = await js(`return __bh.game.perf().gpu.slice(0, 8).map((g) => ({ pass: g.pass, ms: +g.ms.toFixed(2) }))`);
@@ -151,15 +159,37 @@ try {
     await js(`const t0 = performance.now(); while (performance.now() - t0 < 2500) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`);
     const f = await js(window(quick ? 3000 : 5000));
     const vramMiB = +(await js(`return globalThis.__vram ? __vram().mib : NaN`)).toFixed(0);
-    const res: SceneResult = { scene, auto, fixed: { fps: f.fps, p50: f.p50, p95: f.p95 }, vramMiB, gpuPasses };
-    results.push(res);
-    console.log(
-      `${scene.slice(0, 44).padEnd(44)} auto ${String(auto.fps).padStart(5)} fps  p50 ${String(auto.p50).padStart(6)}  p95 ${String(auto.p95).padStart(6)}  >33ms ${String(auto.over33).padStart(3)}  rays/px ${auto.raysPerPx.toFixed(3)}` +
-        `  | fixed b4 p50 ${String(f.p50).padStart(6)} ms  | VRAM ${vramMiB} MiB`,
-    );
+    return { scene, auto, fixed: { fps: f.fps, p50: f.p50, p95: f.p95 }, vramMiB, gpuPasses };
+  };
+  const mean = (a: number[]) => +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(a[0]! < 1 ? 4 : 1);
+  const line = (tag: string, rs: SceneResult[]) =>
+    `  ${tag.padEnd(4)} auto ${String(mean(rs.map((r) => r.auto.fps))).padStart(5)} fps  p50 ${String(mean(rs.map((r) => r.auto.p50))).padStart(6)}` +
+    `  p95 ${String(mean(rs.map((r) => r.auto.p95))).padStart(6)}  >33ms ${String(mean(rs.map((r) => r.auto.over33))).padStart(5)}` +
+    `  rays/px ${mean(rs.map((r) => r.auto.raysPerPx)).toFixed(4)}  | fixed b4 p50 ${String(mean(rs.map((r) => r.fixed.p50))).padStart(6)} ms  | VRAM ${mean(rs.map((r) => r.vramMiB))} MiB`;
+
+  const results: Record<string, SceneResult[]> = {};
+  const reps = COMPARE ? Number(arg("reps", "2")) : 1;
+  for (const scene of SCENES) {
+    const per: SceneResult[][] = urls.map(() => []);
+    for (let k = 0; k < reps; k++)
+      for (const [i, url] of urls.entries()) {
+        await open(url);
+        const r = await measure(scene);
+        if (r) per[i]!.push(r);
+      }
+    if (!per[0]!.length) {
+      console.log(`(no scene "${scene}")`);
+      continue;
+    }
+    console.log(scene);
+    urls.forEach((u, i) => {
+      if (per[i]!.length) console.log(line(COMPARE ? (i ? "new" : "ref") : "", per[i]!));
+    });
+    results[scene] = per[urls.length - 1]!;
+    if (COMPARE) results[`${scene} (ref)`] = per[0]!;
   }
   const peak = await js(`return globalThis.__vram ? +__vram().peakMiB.toFixed(0) : NaN`);
-  const out = { label, sha, date: new Date().toISOString(), viewport: [W, H, DPR], peakVramMiB: peak, results };
+  const out = { label, sha, date: new Date().toISOString(), viewport: [W, H, DPR], compare: COMPARE || null, peakVramMiB: peak, results };
   await Bun.write(`docs/perf/bench-${label}.json`, JSON.stringify(out, null, 1));
   console.log(`peak VRAM ${peak} MiB → docs/perf/bench-${label}.json`);
 } finally {
