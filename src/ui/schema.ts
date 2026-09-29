@@ -794,6 +794,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "taa temporal reprojection history sharp motion upscaling",
   },
   {
+    key: "volumetricClouds", type: "toggle", section: "render", group: "Realtime", label: "Volumetric clouds", effect: "scene",
+    help: "Near the Earth, its clouds are a volume — from 1.5 km to a top rising with the cover — marched along each ray: lit through themselves, their silhouettes on the horizon and their shadowed flanks. Off: a textured shell (faster).",
+    keywords: "clouds volumetric earth sky weather",
+  },
+  {
     key: "farFieldLut", type: "toggle", section: "render", group: "Realtime", label: "Far-field LUT", effect: "none",
     help: "In scenes with only the hole and its disk, a ray every 8 pixels is traced first; between four that escaped untouched, far beyond the disk, where the lensed sky is smooth, the rays are not traced — their sky is interpolated (under a tenth of a pixel of error). The disk, its images and the photon ring are always traced.",
     keywords: "lut far field sky speed performance",

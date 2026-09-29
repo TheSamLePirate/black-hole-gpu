@@ -1117,7 +1117,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
       let met = hit && k == kBest;
       let e = earthLook(k, A * (-c / R), rd, select(-1.0, tBest / R, met), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz),
-        earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5);
+        earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5, false);
       (*out).glow += (*out).tint * e.col;
       (*out).tint *= e.T;
       if (met) { return true; }
@@ -3849,7 +3849,93 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
 // it does not); the sun along Ls, its irradiance E; the pixel's axes gx, gy and its footprint fp0 +
 // fpK t. col: the light added; T: what shows through of what lies beyond (the ground: none).
 struct EarthLook { col: vec3f, T: vec3f, Lm: vec3f };
-fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> EarthLook {
+// The Earth's clouds as a volume (the camera near: the horizon seen from orbit, a sunrise, the sky from
+// the ground): a layer from 1.5 km up to a top that rises with the cover (0.25 … 1 of 9 km), marched
+// over 12 samples where the ray crosses it — Beer–Lambert, the sunlight through the cloud above
+// (its column from the cover) with the powder term, a forward lobe (Henyey–Greenstein) and multiple
+// scattering's brightening, the sky's light; x: opacity, rgb in cl: its mean radiance, t: where it starts
+struct CloudVol { alpha: f32, cl: vec3f, t: f32 };
+fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> CloudVol {
+  var o: CloudVol;
+  o.t = -1.0;
+  let hb = 1500.0 / EARTH_RM;
+  let ht = 9000.0 / EARTH_RM;
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  let hT = (1.0 + ht) * (1.0 + ht) - off2;
+  if (hT <= 0.0) { return o; }
+  var t0 = max(-b - sqrt(hT), 0.0);
+  var t1 = -b + sqrt(hT);
+  // (the base's sphere cuts the layer: the part before it, or — from under it — the part after)
+  let hB = (1.0 + hb) * (1.0 + hb) - off2;
+  if (hB > 0.0) {
+    let b0 = -b - sqrt(hB);
+    let b1 = -b + sqrt(hB);
+    if (b0 > t0) { t1 = min(t1, b0); } else if (b1 > t0) { t0 = b1; }
+  }
+  if (tHit > 0.0) { t1 = min(t1, tHit); }
+  // (no farther than 120 km: the clouds beyond thin into the haze)
+  t1 = min(t1, t0 + 250000.0 / EARTH_RM);
+  if (t1 <= t0) { return o; }
+  let N = 16u;
+  let ct = dot(rd, Ls);
+  let g = 0.55;
+  let hg = (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * ct, 1e-4), 1.5));
+  var Tv = 1.0;
+  var col = vec3f(0.0);
+  var tPrev = t0;
+  for (var i = 0u; i < N; i++) {
+    // (samples crowding near the camera: the near clouds' shapes resolved, the far ones' mean)
+    let u1 = (f32(i) + 1.0) / f32(N);
+    let tn = t0 + (t1 - t0) * u1 * u1;
+    let t = mix(tPrev, tn, jit);
+    let dm = (tn - tPrev) * EARTH_RM;
+    tPrev = tn;
+    let p = ro + rd * t;
+    let r = length(p);
+    let q = p / r;
+    let hn = (r - 1.0 - hb) / (ht - hb);
+    // the cover as the flat layer draws it (the map and its fine noise), shaped in height by a 3D noise
+    // drifting with the clouds: cumulus domes — a base that wavers, a top that rises with the cover and
+    // the noise — so their sides are not the map's walls drawn upwards
+    let fp = fp0 + fpK * t;
+    let a = earthCloud(q, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), Ls).x / max(P.earth2.y, 1e-3);
+    if (a <= 0.01) { continue; }
+    let qd = rotZ(q, P.earth.y);
+    let x = qd * (EARTH_RM / 2600.0) + vec3f(0.0, 0.0, hn * 2.0);
+    let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.3 + vec3f(5.1)) + 0.1 * dnoise(x * 5.3 + vec3f(1.7));
+    let top = (0.2 + 0.8 * a) * (0.7 + 0.6 * sh);
+    let hp = smoothstep(0.0, 0.05 + 0.12 * sh, hn) * (1.0 - smoothstep(0.45 * top, top, hn));
+    let c = a;
+    let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0); // (thin cover eroded to puffs and gaps)
+    if (rho <= 0.0) { continue; }
+    let sigma = rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2)); // (per metre: τ ~ 25 through a thick one)
+    let mu0 = dot(q, Ls);
+    // the sunlight: through the air to this height, then the cloud above it towards the sun
+    let Ts = sunThrough((r - 1.0) * EARTH_RM, mu0);
+    // (the cloud above this point, to its top; the sun's path through it — the clouds broken, it comes in by
+    // their sides too: shortened)
+    let tauUp = c * 25.0 * max(top - hn, 0.0) / max(top, 0.2);
+    let tauSun = 0.4 * tauUp / max(mu0, 0.12);
+    let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
+    let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
+    // (the sky's and the moon's light from above, dimmed by the cloud over it: a grey base, a bright top)
+    let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
+    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0), EARTH_NIGHT * P.earth4.x);
+    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * exp(-0.12 * tauSun) * smoothstep(-0.1, 0.1, mu0))
+      + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, (r - 1.0) * EARTH_RM, mu0));
+    let dT = exp(-sigma * dm);
+    col += Tv * Lin * (1.0 - dT);
+    if (o.t < 0.0) { o.t = t; }
+    Tv *= dT;
+    if (Tv < 0.01) { break; }
+  }
+  o.alpha = (1.0 - Tv) * P.earth2.y;
+  o.cl = col / max(1.0 - Tv, 1e-4);
+  return o;
+}
+
+fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
   var o: EarthLook;
   let earth = isEarth(k);
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
@@ -3860,7 +3946,12 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   var alpha = 0.0;
   var cl = vec3f(0.0);
   var tc = -1.0;
-  if (earth && hc2 > 0.0 && P.earth2.y > 0.0) {
+  if (volume && earth && P.earth2.y > 0.0) {
+    let cv = cloudVolume(ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit);
+    alpha = cv.alpha;
+    cl = cv.cl;
+    tc = cv.t;
+  } else if (earth && hc2 > 0.0 && P.earth2.y > 0.0) {
     let below = dot(ro, ro) < rc * rc;
     tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
     if (tc > 0.0 && (tHit <= 0.0 || tc < tHit) && !(below && tHit > 0.0)) {
@@ -3901,7 +3992,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), pixFoot()); }
   let lt = nearLight(k);
   let e = earthLook(k, ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
-    0.0, pixFoot(), fract(rnd * 7.31 + 0.37));
+    0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
@@ -4914,7 +5005,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     let rd = toBody(look);
     let lt = nearLight(kn);
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
-    let e = earthLook(kn, toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w);
+    let e = earthLook(kn, toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
     col = select(col * e.T + e.col, e.col, t > 0.0);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }

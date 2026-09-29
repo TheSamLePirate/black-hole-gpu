@@ -160,6 +160,7 @@ export interface Settings {
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
+  volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -345,6 +346,7 @@ export function defaultSettings(): Settings {
     glassBlur: false,
     temporalReprojection: true,
     farFieldLut: true,
+    volumetricClouds: true,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,

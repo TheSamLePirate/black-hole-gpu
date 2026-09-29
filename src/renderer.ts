@@ -1493,7 +1493,7 @@ export class Renderer {
     set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    set(61, 4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1), 0, 0, 0);
+    set(61, 4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1), 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;

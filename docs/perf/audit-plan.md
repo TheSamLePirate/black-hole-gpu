@@ -45,7 +45,8 @@ smoke alone +50 %), the target of wave B's B3.
 | B8 Ranger | smooth normals from the coarse mesh (no more faceting), MSAA resolved on c/(1+L) |
 | B10 robustness | device loss: autosave + reload panel; uncaptured GPU errors shown; Earth maps under an OOM scope, falling back a tier |
 | B4 dynamic resolution without reallocation | not done: a resize costs 0.5–1 ms of CPU and no frame over 20 ms on this machine — measured, no gain to take |
-| B8 ship shadow on the traced ground, B9 the Endurance (LOD, GGX) | not done yet |
+| B8 ship shadow on the traced ground | the Ranger's own shadow map, orthographic from the environment's dominant light, read by the traced ground (`0a1c2e3`) |
+| B9 the Endurance (LOD, GGX) | not done yet |
 
 ## Wave C (so far)
 
@@ -54,7 +55,8 @@ smoke alone +50 %), the target of wave B's B3.
 | Fixed simulation step | sub-step budget per second of frame instead of per frame; measured: the time warp was already the same at 30, 60 and 120 Hz here (another limit paces the ship's clock) — a full fixed-timestep loop not adopted (144 Hz displays would get frames with no step; at 240 Hz ~3 ms of CPU a frame) |
 | Far-field LUT | scenes with only the hole and its disk: rays between clean samples (escaped untouched, r > 6, equator crossed beyond 1.5 × the disk) interpolated; Luminet +7 %, Schwarzschild +5 % at full resolution; converged images within 50 dB (stars moved by a fraction of a pixel) |
 | f16 / subgroups | not done: after B3 the remaining cost is the geodesics' RK4, which needs f32 (removing the disk or the sky barely changes a frame) |
-| Volumetric clouds, virtual texturing, wavefront, adaptive sparse tracing | not done yet |
+| Volumetric clouds | below 30 km, the Earth's clouds marched as a volume (1.5 km to a top rising with the cover, 16 samples crowded near the camera, ≤ 250 km): the flat layer's cover shaped in height by the baked 3D noise (cumulus domes, not walls), Henyey–Greenstein + powder + a multiple-scattering term, the sky's light dimmed under the cloud; Brittany at b4: 58.4 → 53.7 fps (−8 %), orbit unchanged (the shell); setting `volumetricClouds`; `docs/progress/108_volumetric_clouds.jpg` (shell │ volume) |
+| Virtual texturing, wavefront, adaptive sparse tracing | not done yet |
 
 ## Now vs the plan's start (`b3a8f3d`) — `bench-now-vs-start.json`
 
