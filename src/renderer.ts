@@ -351,6 +351,9 @@ export class Renderer {
   private get busy() {
     return this.inFlight >= (this.offline ? 1 : 2);
   }
+  /** the live target holds a polarization buffer; the settings want one */
+  private livePol = false;
+  private wantPol = false;
   /** the display's refresh interval, measured by the main loop [ms] (0: not yet) */
   refreshMs = 0;
   /**
@@ -1066,9 +1069,11 @@ export class Renderer {
     if (width < 1 || height < 1) return;
     width = Math.max(8, Math.floor(width));
     height = Math.max(8, Math.floor(height));
-    if (this.live && width === this.live.width && height === this.live.height) return;
+    if (this.live && width === this.live.width && height === this.live.height && this.livePol === this.wantPol) return;
     const old = this.live;
-    this.live = this.createTarget(width, height, true, true);
+    // (its polarization buffer — 8 bytes a pixel — only while polarization is drawn)
+    this.livePol = this.wantPol;
+    this.live = this.createTarget(width, height, this.livePol, true);
     if (old) this.device.queue.onSubmittedWorkDone().then(() => this.destroyTarget(old));
     this.blockMs.clear(); // (their times were measured at the old size)
     this.invalidate();
@@ -1688,12 +1693,20 @@ export class Renderer {
       pass.end();
     }
     const r0 = t.gather.size > 16 ? 1 : 0; // index of the resolve pass (live view: after the gather pass)
+    // (the bloom's levels only when something reads them: the glow, the lens flare's ghosts, an
+    // instrument's beam; its upsampling only for the glow — the display weighs it by the glow's 0)
+    const glow = !s || s.bloom > 0;
+    const downs = glow || !s || s.lensFlare > 0 || !!this.beamSetup(s, t);
     t.postPasses.forEach((p, i) => {
-      const pass = enc.beginComputePass(this.prof.pass(p.label ?? "post"));
-      pass.setPipeline(p.pipeline);
-      pass.setBindGroup(0, p.bind);
-      pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
-      pass.end();
+      const label = p.label ?? "post";
+      const skip = (label.startsWith("bloom down") && !downs) || (label.startsWith("bloom up") && !glow);
+      if (!skip) {
+        const pass = enc.beginComputePass(this.prof.pass(label));
+        pass.setPipeline(p.pipeline);
+        pass.setBindGroup(0, p.bind);
+        pass.dispatchWorkgroups(Math.ceil(p.w / 8), Math.ceil(p.h / 8));
+        pass.end();
+      }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
@@ -2000,6 +2013,9 @@ export class Renderer {
    */
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
     if (this.busy) return null;
+    // (polarization turned on or off: the live target remade with or without its buffer)
+    this.wantPol = !!s.polarization;
+    if (this.live && this.livePol !== this.wantPol) this.resize(this.live.width, this.live.height);
     if (this.offline) return this.offlineFrame(s, displayChanged);
     const t = this.live;
     if (!t) return null;
