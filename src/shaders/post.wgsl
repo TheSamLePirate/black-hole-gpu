@@ -417,9 +417,15 @@ fn up(@builtin(global_invocation_id) gid: vec3u) {
 fn meter(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= 64u || gid.y >= 64u) { return; }
   let size = textureDimensions(src, 0);
-  let p = vec2u((vec2f(gid.xy) + 0.5) / 64.0 * vec2f(size));
-  let c = textureLoad(src, min(p, size - 1u), 0).rgb;
-  let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
+  // (each cell's mean over 4 × 4 points spread across it — not one point: a star or the Sun landing on
+  // a grid point made the exposure pump)
+  var l = 0.0;
+  for (var j = 0u; j < 16u; j++) {
+    let o = (vec2f(f32(j & 3u), f32(j >> 2u)) + 0.5) / 4.0;
+    let p = vec2u((vec2f(gid.xy) + o) / 64.0 * vec2f(size));
+    l += dot(textureLoad(src, min(p, size - 1u), 0).rgb, vec3f(0.2126, 0.7152, 0.0722));
+  }
+  l /= 16.0;
   var b = 0u;
   if (l > 0.0) { b = u32(clamp((log2(l) + 48.0) * 1.5, 1.0, 127.0)); }
   atomicAdd(&hist[b], 1u);

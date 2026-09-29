@@ -180,6 +180,9 @@ fn hash4(p: vec3u) -> vec4f {
   let h4 = pcg(h3);
   return vec4f(u2f(h), u2f(h2), u2f(h3), u2f(h4));
 }
+// Interleaved gradient noise (Jimenez 2014): blue-ish in space, cheap — a pixel's value differs from its
+// neighbours', so per-pixel randomness reads as fine grain, not clumps
+fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))); }
 fn hash31(p: vec3f) -> f32 {
   return u2f(hash3u(bitcast<vec3u>(vec3i(floor(p)))));
 }
@@ -4649,9 +4652,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     if (interleaved) {
       let hr = hash4(vec3u(px, py, frameStamp));
       if (temporal) { jit = gaussJitter(hr.xy); }
-      rnd = hr.z;
+      // (the rays' first-step offset — the volumes' sampling —: blue noise in space, a golden-ratio walk
+      // in time, not white noise)
+      rnd = fract(ign(vec2f(f32(px), f32(py))) + f32(frameStamp % 1024u) * 0.6180339887);
     } else {
-      let rot = hash4(vec3u(px, py, 7u));
+      // (R2 / Kronecker sequences per pixel, rotated by a hash — the first-step offset by blue noise)
+      var rot = hash4(vec3u(px, py, 7u));
+      rot.z = ign(vec2f(f32(px), f32(py)));
       let seq = fract(rot + si * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
       if (si > 0.0 || accumulate) { jit = gaussJitter(seq.xy); }
       rnd = seq.z;

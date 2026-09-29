@@ -287,7 +287,10 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
   c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));
   if (D.pol.x > 0.5) { c = polTick(uv, c); }
-  // Tiny dither against banding in the dark sky.
-  let n = fract(sin(dot(in.pos.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5;
+  // Tiny dither against banding in the dark sky: triangular (TPDF, ±1 code — no noise modulation with
+  // the signal) from two interleaved-gradient-noise draws (blue-ish: fine grain, no clumps)
+  let q = in.pos.xy;
+  let n = fract(52.9829189 * fract(dot(q, vec2f(0.06711056, 0.00583715))))
+    + fract(52.9829189 * fract(dot(q + vec2f(47.0, 17.0), vec2f(0.06711056, 0.00583715)))) - 1.0;
   return vec4f(srgbEncode(c) + n * D.flags.w / 255.0, 1.0);
 }
