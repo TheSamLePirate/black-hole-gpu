@@ -785,7 +785,7 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "dynamicResolution", type: "toggle", section: "render", group: "Realtime", label: "Dynamic resolution", effect: "none",
-    help: "When the realtime subsampling alone cannot keep the frame budget, the render scale is lowered (down to half the pixel ratio), and raised again when the GPU has room. The Game quality turns it on.",
+    help: "When the realtime subsampling alone cannot keep the frame budget, the render scale is lowered (down to half the pixel ratio) — only where a smaller image is measured to be faster —, and raised again when the GPU has room or when it gains nothing. The Game quality turns it on.",
     keywords: "fps performance resolution scale dynamic",
   },
   {

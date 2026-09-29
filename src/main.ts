@@ -882,6 +882,11 @@ async function main() {
   let renderScale = 1;
   let gpuEma = 0;
   let scaleTimer = 0;
+  // the frame time measured at each scale (remembered 30 s, then tried again): a lower scale only when
+  // it pays — the frame may be bound elsewhere (the browser's compositing), where a smaller image is
+  // no faster, only blurrier
+  const scaleMs = new Map<number, { ms: number; at: number }>();
+  let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
   function resize() {
     const dpr = settings.pixelRatio * renderScale;
     const w = Math.round(canvas.clientWidth * dpr);
@@ -1129,12 +1134,27 @@ async function main() {
       scaleTimer = 0;
       const on = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive;
       const block = renderer.realtimeBlockNow;
+      const now = performance.now();
+      scaleHeld += 1.5;
+      const settled = scaleHeld >= 3;
+      if (on && settled && gpuEma > 0) scaleMs.set(renderScale, { ms: gpuEma, at: now });
+      const known = (x: number) => {
+        const m = scaleMs.get(x);
+        return m && now - m.at < 30000 ? m.ms : undefined;
+      };
+      const lower = Math.max(0.5, renderScale - 0.125), higher = Math.min(1, renderScale + 0.125);
+      const kl = known(lower), kh = known(higher);
       let want = renderScale;
       if (!on) want = 1;
-      else if (gpuEma > 1.2 * settings.realtimeBudget && block >= 4) want = Math.max(0.5, renderScale - 0.125);
-      else if (gpuEma < 0.65 * settings.realtimeBudget && block <= 2) want = Math.min(1, renderScale + 0.125);
+      else if (!settled) want = renderScale;
+      else if (gpuEma > 1.2 * settings.realtimeBudget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
+      // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
+      // the frame grown as the pixels would stay within it)
+      else if (higher > renderScale && (kh !== undefined ? kh <= Math.max(0.85 * settings.realtimeBudget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * settings.realtimeBudget)) want = higher;
       if (want !== renderScale) {
         renderScale = want;
+        gpuEma = 0; // (measured afresh at the new scale)
+        scaleHeld = 0;
         resize();
       }
     }

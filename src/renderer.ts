@@ -47,6 +47,8 @@ const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as cons
 const BG_MODES = { stars: 0, checker: 1, image: 2, real: 3, alien: 4 } as const;
 const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as const;
 const BLOCKS = [1, 2, 3, 4, 6, 8];
+/** how long a block size's measured frame time is remembered [ms] (then tried again) */
+const BLOCK_MEMORY = 20000;
 const PARAM_VEC4S = 65;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
@@ -1011,6 +1013,7 @@ export class Renderer {
     const old = this.live;
     this.live = this.createTarget(width, height, true, true);
     if (old) this.device.queue.onSubmittedWorkDone().then(() => this.destroyTarget(old));
+    this.blockMs.clear(); // (their times were measured at the old size)
     this.invalidate();
   }
 
@@ -1968,8 +1971,9 @@ export class Renderer {
     this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     const auto = s.realtimeSubsampling === "auto";
+    const used = this.lastBlock;
     this.submit(enc, (ms) => {
-      if (phase === "realtime" && auto) this.adaptBlock(ms, Math.max(8, s.realtimeBudget));
+      if (phase === "realtime" && auto) this.adaptBlock(ms, Math.max(8, s.realtimeBudget), used);
       if (phase === "converging" && rows > 0) {
         const perRow = ms / rows;
         this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (28 / Math.max(perRow, 1e-3)))));
@@ -1985,42 +1989,56 @@ export class Renderer {
    */
   /**
    * Picks the realtime block size for a GPU time budget per frame. Part of a frame's cost is fixed
-   * (resolve, gather, bloom, display at full resolution), so the cost of another block size is not
-   * simply ∝ its number of rays: each size keeps its own measured time (EMA, forgotten after 3 s);
-   * an unmeasured finer size is predicted with half the frame assumed fixed.
+   * (resolve, gather, bloom, display at full resolution — and what the browser's compositing makes it
+   * wait, which no block size changes), so the cost of another block size is not simply ∝ its number
+   * of rays: each size keeps its own measured time (EMA, remembered BLOCK_MEMORY ms); an unmeasured
+   * finer size is predicted with half the frame assumed fixed. A coarser image only when it pays: the
+   * coarser size not measured lately (tried), or measured a tenth faster at least; a finer one when it
+   * fits the budget, or when it costs the frame no more than a tenth over the fastest size measured
+   * (the frame bound elsewhere, the budget out of reach: the image kept sharp for nothing lost).
    */
-  private adaptBlock(ms: number, budget: number) {
+  private adaptBlock(ms: number, budget: number, b: number) {
     const now = performance.now();
-    const b = this.realtimeBlock;
-    const m = this.blockMs.get(b);
-    const est = m && now - m.at < 3000 ? 0.7 * m.ms + 0.3 * ms : ms;
+    const fresh = (x: number) => {
+      const m = x ? this.blockMs.get(x) : undefined;
+      return m && now - m.at < BLOCK_MEMORY ? m : undefined;
+    };
+    // (smoothed well: with two frames in flight, one frame's time swings from a third to twice the mean)
+    const m = fresh(b);
+    const est = m ? 0.85 * m.ms + 0.15 * ms : ms;
     this.blockMs.set(b, { ms: est, at: now });
+    if (b !== this.realtimeBlock) return; // (a frame drawn before the last change)
     const i = BLOCKS.indexOf(b);
     const finer = i > 0 ? BLOCKS[i - 1]! : 0;
-    const known = finer ? this.blockMs.get(finer) : undefined;
+    const coarser = i < BLOCKS.length - 1 ? BLOCKS[i + 1]! : 0;
+    const kf = fresh(finer), kc = fresh(coarser);
+    let best = est;
+    for (const x of BLOCKS) best = Math.min(best, fresh(x)?.ms ?? Infinity);
+    // (what the frame may cost: the budget, or a tenth over the fastest size when none reaches it)
+    const limit = Math.max(budget, 1.1 * best);
     // (the trace pass's own time from the GPU profiler: only it grows as (b / finer)²; without it,
     // half the frame assumed to)
     const trace = this.prof.traceMs();
     const guess = trace > 0 ? est + trace * ((b / finer) ** 2 - 1) : est * (0.5 + 0.5 * (b / finer) ** 2);
-    const predicted = !finer ? Infinity : known && now - known.at < 3000 ? known.ms : guess;
-    if (est > budget * 1.1) {
+    const finerFits = !!finer && (kf ? kf.ms <= limit : guess < 0.9 * limit);
+    const coarserPays = !!coarser && (kc ? kc.ms < 0.9 * est && est > 1.1 * limit : est > 1.1 * budget);
+    if (coarserPays) {
       this.slowFrames++;
       this.fastFrames = 0;
-    } else if (predicted < budget * 0.9) {
+    } else if (finerFits) {
       this.fastFrames++;
       this.slowFrames = 0;
     } else {
       this.slowFrames = this.fastFrames = 0;
     }
-    if (this.slowFrames >= 3 && i < BLOCKS.length - 1) {
-      this.realtimeBlock = BLOCKS[i + 1]!;
+    if (this.slowFrames >= 3) {
+      this.realtimeBlock = coarser;
       this.slowFrames = 0;
-    } else if (this.fastFrames >= 8 && finer) {
+    } else if (this.fastFrames >= 8) {
       this.realtimeBlock = finer;
       this.fastFrames = 0;
     }
   }
-
 
   private stats(phase: FrameStats["phase"], t: Target): FrameStats {
     const frac = this.bandY / Math.max(t.height, 1);
