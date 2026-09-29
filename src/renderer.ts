@@ -263,6 +263,10 @@ export class Renderer {
   /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
   private earthMaps: EarthMaps;
   private earthWant: EarthTier | null = null;
+  /** the Earth maps' latest request (an older one landing late is dropped) */
+  private earthJob = 0;
+  /** when its disk was last over 12 pixels [ms] */
+  private earthSeenAt = 0;
   /** the finer maps of the body near the camera (one at a time), and the one being loaded */
   private hdMap!: HdMap;
   private hdLoading: MapName | null = null;
@@ -536,14 +540,17 @@ export class Renderer {
       .catch((e) => console.warn("Planet maps unavailable:", e));
   }
 
-  /** Loads the Earth's maps (a tier finer than those it has), in the background. */
+  /** Loads the Earth's maps of a tier in the background (the ones it has kept till they are in). */
   private requestEarthMaps(tier: EarthTier) {
     this.earthWant = tier;
-    const first = tier === "med";
+    const token = ++this.earthJob;
+    const first = !this.earthMaps.tier;
     if (first) loading.stage("earth", "The Earth — day, night, clouds and relief", { weight: 3 });
     const job = loadEarthMaps(this.device, tier, first ? (u) => loading.fetch(u, "earth") : undefined);
     (first ? loading.track("earth", "", job) : job)
       .then((maps) => {
+        // (a later request won — another tier, or none): these are not used
+        if (token !== this.earthJob) return [maps.cube, maps.night, maps.surf].forEach((t) => t.destroy());
         const old = this.earthMaps;
         this.earthMaps = maps;
         // (the ground the ship stands on: the heights drawn, read back)
@@ -560,9 +567,33 @@ export class Renderer {
       .catch((e) => console.warn("Earth maps unavailable:", e));
   }
 
+  /** Frees the Earth's maps (it is a few pixels across, or out of the scene): the placeholder back. */
+  private releaseEarthMaps() {
+    this.earthWant = null;
+    this.earthJob++;
+    const old = this.earthMaps;
+    if (!old.tier) return;
+    this.earthMaps = placeholderEarth(this.device);
+    if (this.live) this.bindTarget(this.live);
+    if (this.offline) this.bindTarget(this.offline.target);
+    void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf].forEach((t) => t.destroy()));
+    this.invalidate();
+  }
+
   /** Frees the GPU at once (the page going away). */
   release() {
     this.device.destroy();
+  }
+
+  /** Frees the finer maps (the camera left their world): the placeholder back. */
+  private releaseHd() {
+    const old = this.hdMap;
+    this.hdMap = placeholderHd(this.device);
+    this.hdLoading = null;
+    if (this.live) this.bindTarget(this.live);
+    if (this.offline) this.bindTarget(this.offline.target);
+    void this.device.queue.onSubmittedWorkDone().then(() => (old.color.destroy(), old.relief.destroy()));
+    this.invalidate();
   }
 
   /** Streams in a world's finer maps (the previous ones freed once loaded). */
@@ -571,7 +602,8 @@ export class Renderer {
     this.hdLoading = name;
     loadHdMap(this.device, name)
       .then((m) => {
-        if (!m || this.hdLoading !== name) return m?.color.destroy();
+        // (superseded while it loaded: both its textures freed — the relief leaked before)
+        if (!m || this.hdLoading !== name) return m && (m.color.destroy(), m.relief.destroy());
         const old = this.hdMap;
         this.hdMap = m;
         this.hdLoading = null;
@@ -1308,11 +1340,34 @@ export class Renderer {
       set(57, 0, 0, 1, 0);
       this.shipProbeAxes = [cam.right, cam.up, cam.fwd];
     }
-    // the Earth: its maps asked for once it is in the scene, the finer ones when the camera nears it
-    // (within 60 of its radii); its clouds drift eastwards, a turn in 20 days
+    // the Earth: its maps by what the camera sees of it — none while its disk is under ~24 pixels (the
+    // solar system's map draws it), "med" above, "high" once a med texel outgrows a pixel under the
+    // camera (d − 1 < (π/2 / 2048) / pixel: below ~2 radii at a 60° view), loaded directly; back to med
+    // beyond 3.5 radii, freed under 12 pixels for 5 s (hysteresis: no reload back and forth); its
+    // clouds drift eastwards, a turn in 20 days
     const earthK = bodies.findIndex((b) => b.id === "earth" && b.surface >= SURFACE_MAPPED);
-    if (earthK >= 0 && !this.earthWant) this.requestEarthMaps("med");
-    if (near && near.index === earthK && Math.hypot(...near.centre) < 60 && this.earthWant === "med" && this.earthMaps.tier === "med") this.requestEarthMaps("high");
+    if (!o.probe) {
+      let dE = Infinity; // [its radii]
+      if (earthK >= 0 && near && near.index === earthK) dE = Math.hypot(...near.centre);
+      else if (earthK >= 0 && bodies[earthK]!.where !== 0 && bodies[earthK]!.where !== 1) {
+        const b = bodies[earthK]!;
+        dE = Math.hypot(b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2]) / b.radius;
+      }
+      const diskPx = dE > 1 ? (2 * Math.asin(1 / dE)) / pixelAngle : Infinity;
+      const highAt = 1 + (Math.PI / 2 / 2048) / pixelAngle;
+      const have = this.earthWant;
+      let want: EarthTier | null = have;
+      if (diskPx < 12) want = have && performance.now() - this.earthSeenAt > 5000 ? null : have;
+      else {
+        this.earthSeenAt = performance.now();
+        if (dE < highAt) want = "high";
+        else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
+      }
+      if (want !== have) {
+        if (want) this.requestEarthMaps(want);
+        else this.releaseEarthMaps();
+      }
+    }
     const tSec = time * 4.925490947e-6 * s.massSolar;
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
     // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
@@ -1326,7 +1381,14 @@ export class Renderer {
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
-    if (nearMap && HD_SETS[nearMap] && Math.hypot(...near!.centre) < 40) this.requestHd(nearMap);
+    // (the finer maps once the coarse map's texel outgrows a pixel under the camera — within ~4 radii
+    // at a 60° view; freed beyond twice that)
+    if (!o.probe) {
+      const dN = near ? Math.hypot(...near.centre) : Infinity;
+      const hdAt = 1 + 1.3 * ((2 * Math.PI) / 4096) / pixelAngle;
+      if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
+      else if (this.hdMap.name && !(nearMap === this.hdMap.name && dN < 2 * hdAt)) this.releaseHd();
+    }
     const hd = this.hdMap;
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
     const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 1.2;
