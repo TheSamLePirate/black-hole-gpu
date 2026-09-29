@@ -103,6 +103,8 @@ override HAS_POL: bool = true;
 override HAS_JET: bool = true;
 override HAS_SPOT: bool = true;
 override HAS_VOL: bool = true;
+override HAS_WH: bool = true;     // the wormhole world
+override HAS_THICK: bool = true;  // the volumetric (thick) disk
 
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
@@ -444,7 +446,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
   h = min(h, eps * sig * sn * sn / (abs(L) + 1e-3));
   h = min(h, eps * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
   let hr = P.ext2.z;
-  if (hr > 0.0 && P.modes.w == 1u) {
+  if (HAS_THICK && hr > 0.0 && P.modes.w == 1u) {
     // volumetric disk: never jump over the layer |z| < 4H (8H with its haze; the smoke's, ~0.5 M above
     // the surface, beyond 8 M), sample it at
     // ≲ 0.4 H across; along it ≲ 0.08 R — ≲ 0.1 M through the smoke (clouds an M across: their
@@ -493,7 +495,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
       if (bodyMass(k) > 0.0) { h = min(h, max(0.3 * d * R, near)); }
     }
   }
-  if (P.wh.x > 0.5) {
+  if (HAS_WH && P.wh.x > 0.5) {
     // the wormhole's weak field outside its gluing sphere: steps small against the distance to it
     let dm = length(pc - whCentre(P.time.x + s.x.w));
     h = min(h, max(0.3 * dm, 0.2 * P.wh2.z));
@@ -2199,7 +2201,7 @@ fn background(d: vec3f, g: f32, fp: Footprint, sky: f32, org: vec4f) -> vec3f {
 fn backgroundSky(d: vec3f, g: f32, fp: Footprint, sky: f32) -> vec3f {
   var mode = P.modes.z;
   // wormhole world: the black hole's universe is the distant galaxy, ours is the chosen sky
-  if (P.wh.x > 0.5 && sky < 1.5) { mode = 4u; }
+  if (HAS_WH && P.wh.x > 0.5 && sky < 1.5) { mode = 4u; }
   if (mode == 4u) { return alienSky(d, g, fp) * P.time.z; }
   let intensity = P.time.z;
   if (mode == 1u) {
@@ -3897,7 +3899,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
 
   // The ray is followed in segments: Kerr (seg 0) and, in the wormhole world, Dneg (seg 1).
-  let whOn = P.wh.x > 0.5;
+  let whOn = HAS_WH && P.wh.x > 0.5;
   var seg = 0u;
   var wl = 0.0;          // Dneg segment start: ℓ, rep position and direction,
   var wn = vec3f(0.0);
@@ -3938,7 +3940,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   let rEsc = P.integ.z;
   let capTol = P.integ.w;
   let diskOn = P.modes.w == 1u;
-  let thick = P.ext2.z > 0.0;
+  let thick = HAS_THICK && P.ext2.z > 0.0;
   let volOn = (HAS_VOL && P.vol.x > 0.5);
   let jetOn = (HAS_JET && P.jet.x > 0.5);
   let adaptive = QUALITY_PIPELINE && (P.frame.z & FLAG_ADAPTIVE_RK) != 0u;

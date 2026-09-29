@@ -1,0 +1,720 @@
+{
+ "label": "b2b",
+ "sha": "a0899ba",
+ "date": "2026-09-29T03:41:33.518Z",
+ "viewport": [
+  1469,
+  965,
+  2
+ ],
+ "compare": "http://localhost:3012/",
+ "peakVramMiB": 680,
+ "results": {
+  "Kerr a=0.94, near edge-on": [
+   {
+    "scene": "Kerr a=0.94, near edge-on",
+    "auto": {
+     "fps": 50.6,
+     "p50": 17.4,
+     "p95": 33.6,
+     "p99": 35,
+     "over33": 13,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 253
+     },
+     "scales": {
+      "0.875": 253
+     }
+    },
+    "fixed": {
+     "fps": 24,
+     "p50": 42.3,
+     "p95": 48.6
+    },
+    "vramMiB": 353,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 9.89
+     },
+     {
+      "pass": "trace",
+      "ms": 8.1
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.7
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 3.08
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.36
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.71
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.55
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.46
+     }
+    ]
+   },
+   {
+    "scene": "Kerr a=0.94, near edge-on",
+    "auto": {
+     "fps": 54.2,
+     "p50": 17,
+     "p95": 31.2,
+     "p99": 33.8,
+     "over33": 3,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 271
+     },
+     "scales": {
+      "0.875": 271
+     }
+    },
+    "fixed": {
+     "fps": 27.7,
+     "p50": 36.2,
+     "p95": 42
+    },
+    "vramMiB": 353,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 14.93
+     },
+     {
+      "pass": "trace",
+      "ms": 10.64
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 5.34
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.18
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.85
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.91
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.65
+     },
+     {
+      "pass": "temporal",
+      "ms": 0.55
+     }
+    ]
+   }
+  ],
+  "Kerr a=0.94, near edge-on (ref)": [
+   {
+    "scene": "Kerr a=0.94, near edge-on",
+    "auto": {
+     "fps": 48.6,
+     "p50": 20.3,
+     "p95": 26.4,
+     "p99": 32.8,
+     "over33": 1,
+     "raysPerPx": 0.0037,
+     "blocks": {
+      "8": 243
+     },
+     "scales": {
+      "0.875": 68,
+      "0.75": 155,
+      "0.625": 20
+     }
+    },
+    "fixed": {
+     "fps": 15,
+     "p50": 65.8,
+     "p95": 75.4
+    },
+    "vramMiB": 466,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 14.07
+     },
+     {
+      "pass": "display",
+      "ms": 11.29
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.49
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.99
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 2.48
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.45
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.34
+     },
+     {
+      "pass": "ship probe: SH",
+      "ms": 0.33
+     }
+    ]
+   },
+   {
+    "scene": "Kerr a=0.94, near edge-on",
+    "auto": {
+     "fps": 50.6,
+     "p50": 18.8,
+     "p95": 27,
+     "p99": 31.4,
+     "over33": 0,
+     "raysPerPx": 0.0038,
+     "blocks": {
+      "8": 253
+     },
+     "scales": {
+      "0.875": 72,
+      "0.75": 181
+     }
+    },
+    "fixed": {
+     "fps": 11.7,
+     "p50": 86.3,
+     "p95": 103.4
+    },
+    "vramMiB": 357,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 14
+     },
+     {
+      "pass": "display",
+      "ms": 10.79
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 6.17
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 5.15
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 3.03
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.54
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.39
+     },
+     {
+      "pass": "ship probe: SH",
+      "ms": 0.34
+     }
+    ]
+   }
+  ],
+  "Luminet 1979 (bolometric)": [
+   {
+    "scene": "Luminet 1979 (bolometric)",
+    "auto": {
+     "fps": 51,
+     "p50": 17.2,
+     "p95": 33.4,
+     "p99": 34.8,
+     "over33": 13,
+     "raysPerPx": 0.0095,
+     "blocks": {
+      "4": 9,
+      "6": 213,
+      "8": 33
+     },
+     "scales": {
+      "1": 135,
+      "0.875": 120
+     }
+    },
+    "fixed": {
+     "fps": 40.7,
+     "p50": 25.3,
+     "p95": 28.8
+    },
+    "vramMiB": 361,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 11.16
+     },
+     {
+      "pass": "trace",
+      "ms": 7.26
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.2
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.31
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.96
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.94
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.75
+     },
+     {
+      "pass": "temporal",
+      "ms": 0.7
+     }
+    ]
+   },
+   {
+    "scene": "Luminet 1979 (bolometric)",
+    "auto": {
+     "fps": 50.4,
+     "p50": 17.1,
+     "p95": 33.6,
+     "p99": 34.1,
+     "over33": 15,
+     "raysPerPx": 0.0105,
+     "blocks": {
+      "6": 232,
+      "8": 20
+     },
+     "scales": {
+      "1": 252
+     }
+    },
+    "fixed": {
+     "fps": 47.3,
+     "p50": 21.2,
+     "p95": 23.3
+    },
+    "vramMiB": 361,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 13.29
+     },
+     {
+      "pass": "trace",
+      "ms": 8.67
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 5.97
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 4.6
+     },
+     {
+      "pass": "depth of field",
+      "ms": 1.35
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.33
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 1.01
+     },
+     {
+      "pass": "temporal",
+      "ms": 0.88
+     }
+    ]
+   }
+  ],
+  "Luminet 1979 (bolometric) (ref)": [
+   {
+    "scene": "Luminet 1979 (bolometric)",
+    "auto": {
+     "fps": 52,
+     "p50": 18,
+     "p95": 31.3,
+     "p99": 33.7,
+     "over33": 3,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 260
+     },
+     "scales": {
+      "0.875": 260
+     }
+    },
+    "fixed": {
+     "fps": 22.3,
+     "p50": 44.5,
+     "p95": 48.7
+    },
+    "vramMiB": 380,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 13.48
+     },
+     {
+      "pass": "trace",
+      "ms": 10.74
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.49
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.76
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.26
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.97
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.7
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.6
+     }
+    ]
+   },
+   {
+    "scene": "Luminet 1979 (bolometric)",
+    "auto": {
+     "fps": 53.4,
+     "p50": 17.1,
+     "p95": 31.2,
+     "p99": 33.2,
+     "over33": 2,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 267
+     },
+     "scales": {
+      "0.875": 267
+     }
+    },
+    "fixed": {
+     "fps": 24,
+     "p50": 42,
+     "p95": 46.5
+    },
+    "vramMiB": 380,
+    "gpuPasses": [
+     {
+      "pass": "trace",
+      "ms": 11.16
+     },
+     {
+      "pass": "display",
+      "ms": 11.05
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 5.33
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 4.18
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.35
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.34
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.75
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.74
+     }
+    ]
+   }
+  ],
+  "Jet side view": [
+   {
+    "scene": "Jet side view",
+    "auto": {
+     "fps": 52.4,
+     "p50": 17.4,
+     "p95": 32.9,
+     "p99": 34.4,
+     "over33": 11,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 262
+     },
+     "scales": {
+      "0.875": 262
+     }
+    },
+    "fixed": {
+     "fps": 29,
+     "p50": 34.8,
+     "p95": 45
+    },
+    "vramMiB": 348,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 10.59
+     },
+     {
+      "pass": "trace",
+      "ms": 6.38
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 2.72
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 1.9
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.85
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.7
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.58
+     }
+    ]
+   },
+   {
+    "scene": "Jet side view",
+    "auto": {
+     "fps": 51,
+     "p50": 17.5,
+     "p95": 33.4,
+     "p99": 35.5,
+     "over33": 12,
+     "raysPerPx": 0.0068,
+     "blocks": {
+      "6": 73,
+      "8": 182
+     },
+     "scales": {
+      "1": 129,
+      "0.875": 126
+     }
+    },
+    "fixed": {
+     "fps": 40,
+     "p50": 24.9,
+     "p95": 28.8
+    },
+    "vramMiB": 348,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 12.49
+     },
+     {
+      "pass": "trace",
+      "ms": 7.68
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 3.53
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.45
+     },
+     {
+      "pass": "resolve",
+      "ms": 1.15
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.73
+     },
+     {
+      "pass": "temporal",
+      "ms": 0.59
+     }
+    ]
+   }
+  ],
+  "Jet side view (ref)": [
+   {
+    "scene": "Jet side view",
+    "auto": {
+     "fps": 55.6,
+     "p50": 17.5,
+     "p95": 23.6,
+     "p99": 33.9,
+     "over33": 3,
+     "raysPerPx": 0.0047,
+     "blocks": {
+      "8": 278
+     },
+     "scales": {
+      "0.875": 278
+     }
+    },
+    "fixed": {
+     "fps": 19,
+     "p50": 53.6,
+     "p95": 62.1
+    },
+    "vramMiB": 340,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 15.89
+     },
+     {
+      "pass": "trace",
+      "ms": 12.89
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 5.77
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 4
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 2.07
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.95
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.64
+     },
+     {
+      "pass": "gather",
+      "ms": 0.5
+     }
+    ]
+   },
+   {
+    "scene": "Jet side view",
+    "auto": {
+     "fps": 48.4,
+     "p50": 19.1,
+     "p95": 32.9,
+     "p99": 35.4,
+     "over33": 8,
+     "raysPerPx": 0.0038,
+     "blocks": {
+      "8": 242
+     },
+     "scales": {
+      "0.875": 63,
+      "0.75": 179
+     }
+    },
+    "fixed": {
+     "fps": 17,
+     "p50": 58.6,
+     "p95": 69.6
+    },
+    "vramMiB": 340,
+    "gpuPasses": [
+     {
+      "pass": "display",
+      "ms": 14.88
+     },
+     {
+      "pass": "trace",
+      "ms": 11.86
+     },
+     {
+      "pass": "ship: shading (MSAA)",
+      "ms": 4.76
+     },
+     {
+      "pass": "ship: shadow map",
+      "ms": 2.07
+     },
+     {
+      "pass": "ship probe: trace",
+      "ms": 1.75
+     },
+     {
+      "pass": "resolve",
+      "ms": 0.59
+     },
+     {
+      "pass": "depth of field",
+      "ms": 0.44
+     },
+     {
+      "pass": "bloom down 1",
+      "ms": 0.37
+     }
+    ]
+   }
+  ]
+ }
+}
