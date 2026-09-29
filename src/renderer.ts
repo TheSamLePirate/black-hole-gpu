@@ -59,7 +59,7 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 255;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-const PARAM_VEC4S = 65;
+const PARAM_VEC4S = 66;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -448,6 +448,7 @@ export class Renderer {
         { binding: 23, visibility: C, texture: { sampleType: "float" } },
         { binding: 24, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
+        { binding: 26, visibility: C, texture: { sampleType: "depth" } },
       ],
     });
     // (the disk's turbulence: a tiling noise baked once)
@@ -964,6 +965,7 @@ export class Renderer {
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
+        { binding: 26, resource: this.ship.shadowView },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -994,6 +996,7 @@ export class Renderer {
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
+        { binding: 26, resource: this.ship.shadowView },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -1366,6 +1369,9 @@ export class Renderer {
     }
     packBodies(bodies, this.bodyData, origin);
     if (bodies.length) this.featureKey |= 128;
+    // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
+    const sb = !o.probe && s.ship && this.ship.ready && near ? this.ship.shadowBound : null;
+    set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet)
     this.lutOn = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut;
     if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;

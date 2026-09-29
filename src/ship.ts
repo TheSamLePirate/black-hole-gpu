@@ -160,6 +160,14 @@ export class ShipRenderer {
 
   /** the ship's bounding sphere in the camera frame and the projection's half-extents (the scissor) */
   private onScreen: { c: V3; r: number; tx: number; ty: number; corners: V3[] } | null = null;
+  /** the shadow map's view (the tracer shadows the ground with it) */
+  get shadowView() {
+    return this.shadowTex.createView();
+  }
+  /** the ship's bounding sphere in the camera's axes (x right, y up, z forward) [m], as last drawn */
+  get shadowBound(): { c: V3; r: number } | null {
+    return this.onScreen ? { c: this.onScreen.c, r: this.onScreen.r } : null;
+  }
 
   /** The pixels the ship can cover on a w × h target: [x, y, w, h] (the whole target when the camera is inside its sphere). */
   private scissor(w: number, h: number): [number, number, number, number] {

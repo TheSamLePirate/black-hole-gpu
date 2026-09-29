@@ -88,6 +88,7 @@ struct Params {
   fine0: vec4f,    // an airless world's ground, finest: an anchor near the camera (whole metres, multiples of
                    // 64, on the body's axes); w: on (0/1)
   fine1: vec4f,    // the camera from the anchor [m] (float64 on the CPU: the ground's centimetres exact)
+  shipShadow: vec4f, // the Ranger's bounding sphere in the camera's axes (right, up, forward) [m]; w: radius (0: no shadow)
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -3160,6 +3161,8 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // fresh craters' bright ejecta, the regolith's mottling
       let foot = reliefFoot(t);
       sh = nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec);
+      // (and the Ranger's, the ground within reach of it)
+      sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {
         _ = relief(surf, qb, foot, P.near4.w, tSec);
         ALB_GAIN = 1.0 + 0.45 * CRATER_BRIGHT;
@@ -3240,6 +3243,37 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
+// the Ranger's shadow map (ship.ts: orthographic from its dominant light over its bounding sphere)
+@group(0) @binding(26) var shipShadowMap: texture_depth_2d;
+
+// The Ranger's shadow on the ground under it: a point pw from the camera [m, world axes] seen in the
+// ship's own shadow map — the view from its light probe's dominant light (shEnv(9)), across its bounding
+// sphere (ship.wgsl: lightClip) —; lit where nothing of the hull is between it and the light (3 × 3 taps)
+fn shipShadow(pw: vec3f) -> f32 {
+  let R = P.shipShadow.w;
+  if (R <= 0.0) { return 1.0; }
+  let dl = shEnv(9u).xyz;
+  if (dot(dl, dl) < 1e-12) { return 1.0; }
+  let lw = normalize(dl.x * P.envX.xyz + dl.y * P.envY.xyz + dl.z * P.envZ.xyz);
+  let l = vec3f(dot(lw, P.camRight.xyz), dot(lw, P.camUp.xyz), dot(lw, P.camFwd.xyz));
+  let p = vec3f(dot(pw, P.camRight.xyz), dot(pw, P.camUp.xyz), dot(pw, P.camFwd.xyz));
+  let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
+  let e2 = cross(l, e1);
+  let q = p - P.shipShadow.xyz;
+  let c = vec3f(dot(q, e1) / R, dot(q, e2) / R, 0.5 - 0.5 * dot(q, l) / R);
+  if (abs(c.x) >= 1.0 || abs(c.y) >= 1.0) { return 1.0; }
+  let dims = vec2i(textureDimensions(shipShadowMap));
+  let px = vec2i(vec2f(0.5 + 0.5 * c.x, 0.5 - 0.5 * c.y) * vec2f(dims));
+  var lit = 0.0;
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let d = textureLoad(shipShadowMap, clamp(px + vec2i(i, j), vec2i(0), dims - 1), 0);
+      lit += select(0.0, 1.0, d >= 0.9999 || c.z <= d + 0.004);
+    }
+  }
+  return lit / 9.0;
+}
+
 // the disk's turbulence: gradient noise baked into a tiling texture (noise3d.ts: period 32, 4 texels a unit)
 @group(0) @binding(24) var noiseTex: texture_3d<f32>;
 @group(0) @binding(25) var noiseSamp: sampler;
