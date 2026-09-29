@@ -580,7 +580,11 @@ fn footprint(d: f32) -> f32 { return 0.75 * beam() * d; }
 // The angle of a sample's beam: the pixel's, or the light probe's texel (its rays stand for a whole
 // texel: what is smaller than that is spread over it, not met by chance — see env)
 var<private> probeBeam: f32 = 0.0;
-fn beam() -> f32 { return max(P.camUp.w, probeBeam); }
+// the angle one ray stands for: a pixel — a block of them in the realtime passes (FOOT, set by the main
+// kernel: textures, relief and small bodies filtered over what the ray is spread on, not a pixel of it)
+var<private> FOOT: f32 = 1.0;
+fn pixFoot() -> f32 { return P.camUp.w * FOOT; }
+fn beam() -> f32 { return max(pixFoot(), probeBeam); }
 // The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
 // the centre (|qc| < rEff) sees the point of a sphere of radius rEff above qc — so a sub-pixel planet
 // still shows its phase (a crescent a pixel wide), and a star its limb darkening.
@@ -2626,7 +2630,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       let dn = dot(look, N);
       let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
       if (sR > 0.0 && (hitT <= 0.0 || sR < hitT)) {
-        let fp = P.camUp.w * sR;
+        let fp = pixFoot() * sR;
         setMapLod(fp, fp / max(abs(dn), 0.05), k);
         let src = lightSource(k);
         let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
@@ -2653,7 +2657,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       }
       let nair = nearAir(look, select(1e30, hitT, hitT > 0.0), k);
       if (hitT > 0.0) {
-        setMapLod(P.camUp.w * hitT, 0.0, k);
+        setMapLod(pixFoot() * hitT, 0.0, k);
         var o = traceOut(ring.rgb + (1.0 - ring.w) * (shadeNear(look, hit) * nair.T + nair.L) * wb);
         o.depth = hitT * bodyRadius(k);
         return o;
@@ -2896,7 +2900,7 @@ fn toBody(v: vec3f) -> vec3f { return vec3f(dot(v, P.near1.xyz), dot(v, P.near2.
 fn fromBody(v: vec3f) -> vec3f { return v.x * P.near1.xyz + v.y * P.near2.xyz + v.z * P.near3.xyz; }
 
 // the pixel's footprint on the ground at a distance t (radii), in metres
-fn reliefFoot(t: f32) -> f32 { return max(t * P.camUp.w * P.near4.w, 0.05); }
+fn reliefFoot(t: f32) -> f32 { return max(t * pixFoot() * P.near4.w, 0.05); }
 
 // The ray against the relief: marched from the relief's bounding shell, steps a fraction of the
 // height above the ground (and of the distance: the far horizon), then bisected. t < 0: missed.
@@ -2967,7 +2971,7 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
     // the craters' slope exact (no finite step: sharp down to their smallest), the swell's by differences
     _ = craterRelief(surf - 4u, qb, foot, mR);
     let gc = CRATER_GRAD;
-    let es = max(t * P.camUp.w, 100.0 / mR);
+    let es = max(t * pixFoot(), 100.0 / mR);
     let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
     let a2 = cross(qb, a1);
     let s0 = airlessSwell(surf - 4u, qb, foot, mR);
@@ -2978,7 +2982,7 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
   }
   // (no finer than 10 m: float32 directions on the unit sphere are ~0.4 m apart — finer, the normal
   // is noise in blocks)
-  let e = max(t * P.camUp.w, 2.0 * max(minFoot, 5.0) / mR);
+  let e = max(t * pixFoot(), 2.0 * max(minFoot, 5.0) / mR);
   let t1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
   let t2 = cross(qb, t1);
   let h0 = relief(surf, qb, foot, mR, tSec);
@@ -3628,16 +3632,17 @@ fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
   let o = earthOct(fx, fy);
   if (o > 0.0 && a > 0.0) {
     let f = 0.6 / earthTexel();
-    let oct = i32(ceil(o));
+    // (fractional octaves: the finest fades in with the distance — no pop of detail as the camera nears)
+    let oct = max(o, 1.0);
     let k = min(o, 1.0);
-    let n = tfbm(q * f, oct);
+    let n = tfbmF(q * f, oct);
     a = clamp(a + k * n * (0.35 + 3.2 * a * (1.0 - a)), 0.0, 1.0);
     // (their edges sharp: dense puffs, not a grey veil)
     a = mix(a, smoothstep(0.04, 0.55, a), k);
     let Lt = rotZ(Ls - q0 * dot(q0, Ls), P.earth.y);
     let lt = length(Lt);
     if (lt > 1e-4) {
-      let n2 = tfbm((q + Lt * (0.35 / (f * lt))) * f, oct);
+      let n2 = tfbmF((q + Lt * (0.35 / (f * lt))) * f, oct);
       lit = clamp(1.0 - k * 2.5 * (n2 - n), 0.45, 1.35);
     }
   }
@@ -3708,14 +3713,14 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let og = earthOct(fx, fy);
   if (og > 0.0 && ocean < 1.0) {
     let f = 1.0 / earthTexel();
-    let oct = i32(ceil(og));
+    let oct = max(og, 1.0);
     let k = min(og, 1.0) * (1.0 - ocean);
     let p = q * f + vec3f(17.0, 3.0, 5.0);
-    let nd = tfbm(p, oct);
+    let nd = tfbmF(p, oct);
     A *= 1.0 + k * vec3f(0.4, 0.34, 0.28) * nd;
     let Lt = Ls - q * mu0;
     let lt = length(Lt);
-    if (lt > 1e-4) { relLit = clamp(1.0 - k * 1.0 * (tfbm(p + Lt * (0.3 / lt), oct) - nd), 0.3, 1.6); }
+    if (lt > 1e-4) { relLit = clamp(1.0 - k * 1.0 * (tfbmF(p + Lt * (0.3 / lt), oct) - nd), 0.3, 1.6); }
   }
   // the sky's light (blue by day, the twilight's glow)
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
@@ -3822,10 +3827,10 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // sphere; the other worlds' ground, a sphere)
   let ro = toBody(-P.near0.xyz);
   var t = nearHit(look);
-  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), P.camUp.w); }
+  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), pixFoot()); }
   let lt = nearLight(k);
   let e = earthLook(k, ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
-    0.0, P.camUp.w, fract(rnd * 7.31 + 0.37));
+    0.0, pixFoot(), fract(rnd * 7.31 + 0.37));
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
@@ -4608,6 +4613,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   var inRange: bool;
   if (interleaved) {
     let block = u32(P.res.z);
+    FOOT = f32(block);
     inRange = gid.x * block < W && gid.y * block < H;
     px = min(gid.x * block + u32(P.ext2.x), W - 1u);
     py = min(gid.y * block + u32(P.ext2.y), H - 1u);
@@ -4663,9 +4669,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
   var col = tr.col;
   if (tr.bgW > 0.0) {
-    // pre-filter width relative to the lensed pixel (the jittered samples already apply σ = 0.42 px)
+    // pre-filter width relative to the lensed pixel (the jittered samples already apply σ = 0.42 px);
+    // realtime, one ray a block: half the block — the gather's own σ — so a star smaller than the
+    // rays' spacing is spread over it, not caught by one ray in b² and missed by the rest (strobing)
     var fp = skyFootprint(lid.xy, tr.dir, pos, tr.sky);
-    let k = select(0.35, 0.5, interleaved);
+    let k = select(0.35, 0.5 * FOOT, interleaved);
     fp.jx *= k;
     fp.jy *= k;
     col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky, tr.org);
