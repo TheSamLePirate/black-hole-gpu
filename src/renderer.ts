@@ -337,7 +337,7 @@ export class Renderer {
   private bodyData = new Float32Array(MAX_BODIES * BODY_VEC4 * 4);
   private pathCount = 0;
   private pathFate = 0;
-  private pathKey: unknown = null;
+  private pathKey: { pts: [number, number, number][]; fate: string; at: number } | null = null;
   private skyBuilder: SkyTextureBuilder;
   private skyReady = false;
   private sampler: GPUSampler;
@@ -2148,6 +2148,20 @@ export class Renderer {
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
   ev(s: Settings) {
     return s.exposure + (s.autoExposure ? this.autoEVDrawn : 0);
+  }
+
+  /** The auto exposure's value in use [EV] — a take keeps it, a video sets it back frame by frame. */
+  get autoExposureEV() {
+    return this.autoEVDrawn;
+  }
+  set autoExposureEV(ev: number) {
+    this.autoEV = this.autoEVDrawn = ev;
+    this.autoEVSet = true;
+  }
+
+  /** The predicted path drawn now (setCameraPath's), for a take. */
+  get cameraPath() {
+    return this.pathKey;
   }
 
   /** The sky's brightness factor: auto exposure keeps the (artistic) sky as it looks on screen. */

@@ -36,6 +36,8 @@ import { sound } from "./audio/engine";
 import { VideoWriter } from "./video";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
+import { Take, type TakeState } from "./take";
+import { setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -175,6 +177,8 @@ async function main() {
   });
   /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
   const sim = new Simulation(settings, camera, renderer);
+  /** the take recorder (take.ts): the live view recorded, rendered afterwards as a video */
+  const take = new Take();
 
   // -------------------------------------------------------------------- settings panel
   const fileInput = document.createElement("input");
@@ -695,10 +699,23 @@ async function main() {
   document.body.append(tpDock);
   transport = new TransportBar({
     settings, time: () => sim.time, playPause: () => playPause(), warp, setWarp, realTime,
-    record: () => panel.toast("Takes: coming"), recording: () => ({ on: false, seconds: 0, frames: 0 }),
+    record: () => toggleTake(), recording: () => ({ on: take.recording, seconds: take.seconds, frames: take.length }),
     railsNote: () => camera.railsNote,
   });
   transport.mount(tpDock, false);
+  /** Starts or stops recording a take (● on the time bar). */
+  function toggleTake() {
+    if (renderer.offlineActive) return panel.toast("A render is running");
+    if (take.recording) {
+      take.stop();
+      renderDialog.takeChanged();
+      panel.toast(`Take recorded · ${take.seconds.toFixed(1)} s — Render › Video renders it at full quality`);
+    } else {
+      take.start();
+      panel.toast("Recording a take — fly, orbit, pause, warp as you like; ● again to stop");
+    }
+    transport?.update(true);
+  }
   camera.onPilotMessage = (t) => {
     panel.toast(t);
     gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, sim.time);
@@ -915,6 +932,32 @@ async function main() {
     renderer,
     camera,
     settings,
+    sim,
+    take,
+    applyState: (st: TakeState) => {
+      renderer.water.clock = st.water;
+      renderer.shipPose = st.ship;
+      renderer.shipThrust = st.thrust;
+      renderer.shipPlasma = st.plasma;
+      renderer.setCameraPath(st.path);
+      renderer.autoExposureEV = st.ev;
+      sim.time = st.time;
+      setSceneTime(st.time);
+    },
+    // (the scene as it was: the flight — a saved game's state —, every setting, the clocks)
+    snapshot: () => ({ save: tools.snapshot("before the video"), settings: { ...settings }, time: sim.time, water: renderer.water.clock, ev: renderer.autoExposureEV }),
+    restore: (x) => {
+      const b = x as { save: GameSave; settings: Settings; time: number; water: number; ev: number };
+      tools.load(b.save, { quiet: true });
+      Object.assign(settings, b.settings);
+      sim.setTime(b.time);
+      renderer.water.clock = b.water;
+      renderer.autoExposureEV = b.ev;
+      camera.sync();
+      refreshGui();
+      touch();
+      touchDisplay();
+    },
     time: () => sim.time,
     download,
     fileStem,
@@ -1022,9 +1065,24 @@ async function main() {
     const t0 = sim.time;
     Object.assign(videoState, { frame: 0, frames: Math.round(seconds * fps), started: performance.now(), done: false, result: "" });
     const n = videoState.frames;
+    // (a path: the camera set frame by frame, the time at the rate; else the scene goes on as live —
+    // the simulation's step, the user's inputs left out)
+    settings.timeSpeed = rate;
+    let clock = 0;
     for (let i = 0; i < n; i++) {
       if (path) Object.assign(settings, path(n > 1 ? i / (n - 1) : 0));
-      renderer.startOffline(settings, t0 + (i / fps) * rate, opts);
+      else {
+        camera.scripted = true;
+        const tf = i / fps;
+        while (clock < tf - 1e-9) {
+          const dt = Math.min(1 / 60, tf - clock);
+          sim.step(dt);
+          clock += dt;
+        }
+        sim.applyRender(camera.piloting && !camera.cinematic ? camera.flightInfo() : null);
+        camera.scripted = false;
+      }
+      renderer.startOffline(settings, path ? t0 + (i / fps) * rate : sim.time, opts);
       while (!renderer.offlineState?.done) {
         await new Promise((r) => setTimeout(r, 20));
         if (!renderer.offlineActive) return (videoState.result = "cancelled");
@@ -1172,6 +1230,18 @@ async function main() {
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
+    // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)
+    if (take.recording && !renderer.offlineActive) {
+      const ok = take.capture(settings, {
+        time: sim.time, water: renderer.water.clock, ev: renderer.autoExposureEV, ship: renderer.shipPose, thrust: renderer.shipThrust,
+        plasma: renderer.shipPlasma, path: renderer.cameraPath,
+      });
+      if (!ok) {
+        renderDialog.takeChanged();
+        panel.toast(`Take stopped at ${take.seconds.toFixed(0)} s (10 minutes at most) — Render › Video renders it`);
+        transport?.update(true);
+      }
+    }
     // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
     const capped = settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));

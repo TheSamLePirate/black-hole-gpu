@@ -289,8 +289,9 @@ export class GameTools {
     };
   }
 
-  /** Restores a saved game (a slot's name, or the save itself). */
-  load(g: string | GameSave) {
+  /** Restores a saved game (a slot's name, or the save itself); quiet: not in the journal (a video's
+   *  return to its start). */
+  load(g: string | GameSave, o: { quiet?: boolean } = {}) {
     const save = typeof g === "string" ? (g === "autosave" ? autosave.get() : slots.get(g)) : g;
     if (!save) throw new Error(`no saved game "${g}"`);
     const s = this.ctx.settings, c = this.ctx.camera;
@@ -321,7 +322,7 @@ export class GameTools {
     c.sync();
     this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();
-    this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
+    if (!o.quiet) this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
     return save.summary;
   }
 

@@ -110,15 +110,17 @@
       <details id="r-video">
         <summary>Video</summary>
         <div class="form">
-          <label>Camera<select id="v-source"></select></label>
+          <label title="What the video films: the scene as it goes on from now (the camera's mode, the ship and its autopilot, the mission — as live), a take recorded live (● on the time bar), or a cinematic">Shot<select id="v-source"></select></label>
           <div class="pair">
             <label>Duration [s]<input id="v-duration" type="number" min="1" max="600" step="1" value="24" /></label>
             <label>Frame rate<select id="v-fps"></select></label>
           </div>
           <div class="pair">
-            <label title="Simulated time per second of video, in M = GM/c³ (the disk turns, the star orbits)">Time speed [M/s]<input id="v-rate" type="number" min="0" max="500" step="1" value="20" /></label>
+            <label title="The scene's time during the video: the live warp, another one, or frozen (the camera moves in a still instant)">Time<select id="v-rate"></select></label>
             <label title="Motion blur of the flow: exposure as a fraction of the frame interval">Shutter<select id="v-shutter"></select></label>
           </div>
+          <label class="check" title="After the video, the scene returns to where it was (else it goes on from the video's end)"><input id="v-restore" type="checkbox" checked /> Return to the start afterwards</label>
+          <div id="v-note" class="note"></div>
         </div>
         <div class="actions">
           <button id="v-start" class="primary">Render video (MP4)</button>

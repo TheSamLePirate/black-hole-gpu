@@ -99,6 +99,10 @@ export class CameraController {
   private pinchDist = 0;
   private keys = new Set<string>();
   private codes = new Set<string>();
+  /** A video steps the scene (sim.ts): the user's keys and controller are left out. */
+  scripted = false;
+  /** A video in a frozen instant: the camera's cinematics go on, the scene's time does not. */
+  bulletTime = false;
   private diveSaved: Partial<Settings> | null = null;
   private diveHold = 0;
   private targetL: number;
@@ -927,6 +931,20 @@ export class CameraController {
    */
   update(dt: number, time?: number): boolean {
     if (!this.enabled) return false;
+    if (!this.scripted) return this.advance(dt, time);
+    // (a video steps the scene: the keys held, the controller's sticks do not reach it)
+    const keys = this.keys, codes = this.codes;
+    this.keys = new Set();
+    this.codes = new Set();
+    try {
+      return this.advance(dt, time);
+    } finally {
+      this.keys = keys;
+      this.codes = codes;
+    }
+  }
+
+  private advance(dt: number, time?: number): boolean {
     const s = this.s;
     // (the flight's sub-steps budgeted per second of the frame, not per frame: at 30 fps twice a 60 fps
     // frame's — the time warp the same whatever the frame rate; 0.1 s at most, a hitch not caught up)
@@ -936,7 +954,7 @@ export class CameraController {
     this.shipTime = NaN;
     const before = this.poseKey();
     const dragging = this.pointers.size > 0;
-    const pad = this.pad.poll();
+    const pad = this.scripted ? null : this.pad.poll();
     if (pad?.active) this.activity = performance.now();
     if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
@@ -1039,7 +1057,7 @@ export class CameraController {
     }
 
     // (the cinematics run with the scene's time: paused, they hold — the image converges)
-    const play = s.animate ? dt : 0;
+    const play = s.animate || this.bulletTime ? dt : 0;
     if (this.cinematic === "orbit") {
       if (play) this.orbitBy(s.cinematicSpeed * play, 0);
     } else if (this.cinematic === "dive") {

@@ -1,6 +1,9 @@
 import type { CameraController } from "./controls";
 import type { OfflineOptions, OfflineStatus, Renderer } from "./renderer";
 import type { Settings } from "./settings";
+import type { Simulation } from "./sim";
+import type { Take, TakeState } from "./take";
+import { fmtFactor, fmtWarp, realTimeSpeed, warpLadder } from "./clock";
 import { VideoWriter } from "./video";
 
 const RESOLUTIONS: Record<string, [number, number] | null> = {
@@ -37,11 +40,15 @@ const PRESETS: Record<string, { res: string; spp: string; integ: string; noise: 
   },
 };
 
-const VIDEO_SOURCES: Record<string, "journey" | "orbit" | null> = {
-  "Journey through the wormhole (T)": "journey",
-  "Cinematic orbit (O)": "orbit",
-  "Current view, time running": null,
-};
+/** The video's shots: the scene going on from now (as live), a recorded take, or a cinematic. */
+const SHOTS = {
+  live: "Live: the scene goes on from now",
+  take: "Recorded take",
+  orbit: "Cinematic orbit around the target",
+  journey: "Journey through the wormhole",
+  dive: "Dive to the horizon",
+} as const;
+type Shot = keyof typeof SHOTS;
 const SHUTTERS: Record<string, number> = { "Off": 0, "180° (half a frame)": 0.5, "360° (whole frame)": 1 };
 
 const BUDGETS: Record<string, number> = {
@@ -62,6 +69,15 @@ function fmtDuration(sec: number): string {
 interface DialogDeps {
   renderer: Renderer;
   settings: Settings;
+  /** the simulation: a video steps it (sim.ts) */
+  sim: Simulation;
+  /** the take recorded live (take.ts) */
+  take: Take;
+  /** a take's frame: the renderer's state and the scene's time as recorded */
+  applyState: (st: TakeState) => void;
+  /** the scene before a video, and back to it after */
+  snapshot: () => unknown;
+  restore: (snap: unknown) => void;
   time: () => number;
   download: (blob: Blob, name: string) => void;
   fileStem: () => string;
@@ -95,7 +111,9 @@ export function setupRenderDialog(d: DialogDeps) {
   const vSource = $<HTMLSelectElement>("v-source");
   const vDuration = $<HTMLInputElement>("v-duration");
   const vFps = $<HTMLSelectElement>("v-fps");
-  const vRate = $<HTMLInputElement>("v-rate");
+  const vRate = $<HTMLSelectElement>("v-rate");
+  const vRestore = $<HTMLInputElement>("v-restore");
+  const vNote = $<HTMLElement>("v-note");
   const vShutter = $<HTMLSelectElement>("v-shutter");
   const vStart = $<HTMLButtonElement>("v-start");
   const vStop = $<HTMLButtonElement>("v-stop");
@@ -109,7 +127,6 @@ export function setupRenderDialog(d: DialogDeps) {
   fill(noiseSel, ["off", "0.2 %", "0.5 %", "1 %", "2 %"], "0.5 %");
   fill(budgetSel, Object.keys(BUDGETS), "Balanced (80 ms/frame)");
   fill(presetSel, Object.keys(PRESETS), "Custom");
-  fill(vSource, Object.keys(VIDEO_SOURCES), "Journey through the wormhole (T)");
   fill(vFps, ["24", "30", "60"], "24");
   fill(vShutter, Object.keys(SHUTTERS), "180° (half a frame)");
 
@@ -219,22 +236,66 @@ export function setupRenderDialog(d: DialogDeps) {
   budgetSel.onchange = () => d.renderer.setOfflineBudget(BUDGETS[budgetSel.value]!);
 
   // ------------------------------------------------------------------ video
-  // Each frame is an offline render at the frame's time (the flow turns, the star orbits), with the
-  // camera advanced by the chosen cinematic; frames are encoded to H.264 in an MP4 as they come.
+  // Each frame is an offline render of the scene at that frame. The shot either goes on from now with
+  // the simulation's own step (sim.ts: the camera's mode, the ship and its autopilots, the mission, the
+  // cinematics — as live, the user's keys left out), or replays a take recorded live (take.ts). Frames
+  // are encoded to H.264 in an MP4 as they come; the scene returns to where it was afterwards.
   let video: { stop: boolean; label: string } | null = null;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   vStop.disabled = true;
   vStop.onclick = () => {
     if (video) video.stop = true;
   };
+  /** the shots: their names, what they need */
+  const fillShots = () => {
+    const take = d.take.ready ? `Recorded take (${d.take.seconds.toFixed(1)} s)` : "Recorded take (none yet: ● on the time bar)";
+    const keep = vSource.value;
+    vSource.innerHTML = (Object.keys(SHOTS) as Shot[])
+      .map((k) => `<option value="${k}"${k === "take" && !d.take.ready ? " disabled" : ""}>${k === "take" ? take : SHOTS[k]}</option>`)
+      .join("");
+    vSource.value = keep && !(keep === "take" && !d.take.ready) ? keep : d.take.ready ? "take" : "live";
+    const s = d.settings;
+    const rt = realTimeSpeed(s);
+    const rates = warpLadder(s).filter((w) => w !== s.timeSpeed);
+    const keepRate = vRate.value;
+    vRate.innerHTML = [`<option value="live">As live · ${fmtWarp(s, false)}</option>`, `<option value="0">Frozen · bullet time</option>`,
+      ...rates.reverse().map((w) => `<option value="${w}">${fmtFactor(w / rt)} · ${+w.toPrecision(3)} M/s</option>`)].join("");
+    vRate.value = [...vRate.options].some((o) => o.value === keepRate) ? keepRate : "live";
+    syncShot();
+  };
+  const syncShot = () => {
+    const take = vSource.value === "take";
+    vRate.disabled = take || !!video;
+    if (take) vDuration.value = d.take.seconds.toFixed(1);
+    vDuration.disabled = take || !!video;
+    vNote.textContent = take
+      ? "The take replays what you did live — camera, ship, time — at the video's frame rate."
+      : vSource.value === "live"
+        ? "The scene goes on from now as it would live: the camera's mode, the ship and its autopilot, the mission, the time."
+        : vRate.value === "0" ? "Time frozen: the camera moves through a still instant." : "";
+  };
+  vSource.onchange = syncShot;
+  vRate.onchange = syncShot;
+  videoBox.addEventListener("toggle", () => videoBox.open && fillShots());
+
+  /** Waits for the offline frame, then encodes it. */
+  const encodeFrame = async (run: { stop: boolean }, writer: VideoWriter, opts: OfflineOptions, time: number) => {
+    d.renderer.startOffline(d.settings, time, opts);
+    while (!d.renderer.offlineState?.done && !run.stop) await sleep(20);
+    if (run.stop) return;
+    const px = await d.renderer.exportRGBA(d.settings);
+    await writer.addFrame(px.data, px.width, px.height);
+  };
+
   vStart.onclick = async () => {
     if (video) return;
     syncSize();
     const w = size[0] & ~1;
     const h = size[1] & ~1;
     const fps = Number(vFps.value);
-    const duration = Math.min(600, Math.max(1, Number(vDuration.value) || 24));
-    const rate = Math.max(0, Number(vRate.value) || 0);
+    const shot = vSource.value as Shot;
+    if (shot === "take" && !d.take.ready) return;
+    const duration = shot === "take" ? d.take.seconds : Math.min(600, Math.max(1, Number(vDuration.value) || 24));
     const cfg = await VideoWriter.supported(w, h, fps);
     if (!cfg) {
       status.textContent = `⚠ this browser cannot encode H.264 at ${w}×${h}`;
@@ -245,55 +306,85 @@ export function setupRenderDialog(d: DialogDeps) {
     vStart.disabled = true;
     vStop.disabled = false;
     setActive(true);
+    syncShot();
+    const s = d.settings;
     const cam = d.camera;
-    const source = VIDEO_SOURCES[vSource.value] ?? null;
-    const savedJourney = d.settings.journeyDuration;
-    if (source === "journey") d.settings.journeyDuration = duration; // the journey fills the video
-    cam.enabled = true;
-    cam.setCinematic(source);
-    cam.enabled = false;
-    const t0 = d.time();
-    const w0 = d.renderer.water.clock; // the liquid throat's waves follow the video's own clock
-    const n = Math.round(duration * fps);
-    const opts = { ...options(), width: w, height: h, shutter: (SHUTTERS[vShutter.value] ?? 0) * (rate / fps) };
+    const sim = d.sim;
+    const before = vRestore.checked ? d.snapshot() : null;
+    const shutter = SHUTTERS[vShutter.value] ?? 0;
+    const base = { ...options(), width: w, height: h };
     const started = performance.now();
-    let camTime = 0;
+    let n = Math.round(duration * fps);
     let error = "";
+    const label = (i: number) => {
+      const per = i > 0 ? (performance.now() - started) / 1000 / i : NaN;
+      run.label = `🎞 frame ${i + 1} / ${n} · ETA ${fmtDuration(per * (n - i))} · `;
+    };
     try {
-      for (let i = 0; i < n && !run.stop; i++) {
-        const tf = i / fps;
-        cam.enabled = true;
-        d.renderer.water.clock = w0 + tf * d.settings.waterSpeed;
-        while (camTime < tf - 1e-9) {
-          const dt = Math.min(1 / 120, tf - camTime);
-          cam.update(dt, t0 + (camTime + dt) * rate);
-          camTime += dt;
+      if (shot === "take") {
+        // the take: each video frame, the recorded frame nearest its time
+        let prevTime = NaN;
+        for (const f of d.take.play(fps)) {
+          if (run.stop) break;
+          n = f.n;
+          label(f.i);
+          Object.assign(s, f.settings);
+          d.applyState(f.state);
+          const dtM = Number.isFinite(prevTime) ? Math.abs(f.state.time - prevTime) : 0;
+          prevTime = f.state.time;
+          await encodeFrame(run, writer, { ...base, shutter: shutter * dtM }, f.state.time);
         }
-        cam.enabled = false;
-        d.renderer.startOffline(d.settings, t0 + tf * rate, opts);
-        const per = i > 0 ? (performance.now() - started) / 1000 / i : NaN;
-        run.label = `🎞 frame ${i + 1} / ${n} · ETA ${fmtDuration(per * (n - i))} · `;
-        while (!d.renderer.offlineState?.done && !run.stop) await sleep(20);
-        if (run.stop) break;
-        const px = await d.renderer.exportRGBA(d.settings);
-        await writer.addFrame(px.data, px.width, px.height);
+      } else {
+        // the scene goes on: the simulation's step (1/60 s at most), the user's inputs left out
+        const rate = vRate.value === "live" ? s.timeSpeed : Number(vRate.value);
+        const frozen = rate === 0;
+        s.animate = !frozen;
+        if (!frozen) s.timeSpeed = rate;
+        cam.bulletTime = frozen;
+        cam.scripted = true;
+        if (shot !== "live") {
+          if (shot === "journey") s.journeyDuration = duration; // (the journey fills the video)
+          cam.enabled = true;
+          cam.setCinematic(shot);
+          cam.enabled = false;
+        }
+        let clock = 0;
+        for (let i = 0; i < n && !run.stop; i++) {
+          label(i);
+          const tf = i / fps;
+          cam.enabled = true;
+          while (clock < tf - 1e-9) {
+            const dt = Math.min(1 / 60, tf - clock);
+            sim.step(dt);
+            clock += dt;
+          }
+          sim.applyRender(cam.piloting && !cam.cinematic ? cam.flightInfo() : null);
+          cam.enabled = false;
+          await encodeFrame(run, writer, { ...base, shutter: shutter * (frozen ? 0 : rate / fps) }, sim.time);
+        }
       }
       if (!run.stop) {
         const blob = await writer.finish();
-        d.download(blob, `${d.fileStem()}-${duration}s-${fps}fps.mp4`);
+        d.download(blob, `${d.fileStem()}-${shot}-${duration.toFixed(0)}s-${fps}fps.mp4`);
       }
     } catch (e) {
       error = (e as Error).message;
     }
+    cam.scripted = false;
+    cam.bulletTime = false;
     video = null;
     vStart.disabled = false;
     vStop.disabled = true;
     d.renderer.cancelOffline();
     btnStart.textContent = "Start render";
     bar.style.width = "0%";
+    if (shot !== "live" && shot !== "take") {
+      cam.enabled = true;
+      cam.setCinematic(null);
+    }
+    if (before) d.restore(before);
     setActive(false);
-    cam.setCinematic(null);
-    d.settings.journeyDuration = savedJourney;
+    syncShot();
     status.textContent = error ? `⚠ video failed: ${error}` : run.stop ? "video stopped" : `✔ video saved · ${n} frames in ${fmtDuration((performance.now() - started) / 1000)}`;
   };
 
@@ -307,14 +398,27 @@ export function setupRenderDialog(d: DialogDeps) {
     const visible = show ?? panel.hidden;
     panel.hidden = !visible;
     document.getElementById("btn-render")?.classList.toggle("active", visible || active);
-    if (visible) syncSize();
+    if (visible) {
+      syncSize();
+      if (!video) fillShots();
+    }
   }
 
   setActive(false);
   syncSize();
+  fillShots();
 
   return {
     toggle,
+    /** a take was recorded: offered as the video's shot */
+    takeChanged: () => {
+      if (video) return;
+      fillShots();
+      if (d.take.ready) {
+        vSource.value = "take";
+        syncShot();
+      }
+    },
     size: () => ({ width: size[0], height: size[1] }),
     update(st: OfflineStatus) {
       bar.style.width = `${(st.progress * 100).toFixed(2)}%`;

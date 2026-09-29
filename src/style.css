@@ -839,6 +839,24 @@ kbd {
   background: #151823;
 }
 
+#render label.check {
+  display: flex;
+  gap: 8px;
+}
+#render label.check input {
+  all: revert;
+  accent-color: var(--accent);
+  margin: 0;
+}
+#render .note {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.4;
+}
+#render .note:empty {
+  display: none;
+}
+
 #render .progress {
   height: 6px;
   border-radius: 3px;
