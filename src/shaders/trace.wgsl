@@ -187,14 +187,23 @@ fn vnoise(p: vec3f) -> f32 {
   let i = floor(p);
   let f = fract(p);
   let u = f * f * (3.0 - 2.0 * f);
-  let n000 = hash31(i);
-  let n100 = hash31(i + vec3f(1, 0, 0));
-  let n010 = hash31(i + vec3f(0, 1, 0));
-  let n110 = hash31(i + vec3f(1, 1, 0));
-  let n001 = hash31(i + vec3f(0, 0, 1));
-  let n101 = hash31(i + vec3f(1, 0, 1));
-  let n011 = hash31(i + vec3f(0, 1, 1));
-  let n111 = hash31(i + vec3f(1, 1, 1));
+  // (hash31 at the 8 corners, their z and y stages shared: 14 pcg instead of 24, the same bits)
+  let b = bitcast<vec3u>(vec3i(i));
+  let z0 = pcg(b.z);
+  let z1 = pcg(b.z + 1u);
+  let y00 = pcg(b.y ^ z0);
+  let y10 = pcg((b.y + 1u) ^ z0);
+  let y01 = pcg(b.y ^ z1);
+  let y11 = pcg((b.y + 1u) ^ z1);
+  let x1 = b.x + 1u;
+  let n000 = u2f(pcg(b.x ^ y00));
+  let n100 = u2f(pcg(x1 ^ y00));
+  let n010 = u2f(pcg(b.x ^ y10));
+  let n110 = u2f(pcg(x1 ^ y10));
+  let n001 = u2f(pcg(b.x ^ y01));
+  let n101 = u2f(pcg(x1 ^ y01));
+  let n011 = u2f(pcg(b.x ^ y11));
+  let n111 = u2f(pcg(x1 ^ y11));
   return mix(mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y),
              mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y), u.z);
 }
@@ -1314,19 +1323,34 @@ fn diskFade(R: f32, rOut: f32) -> f32 {
 }
 
 // Gradient (Perlin) noise in [−1, 1], quintic fade: smoother and less grid-aligned than value noise.
+// (the corners' hashes share their z and y stages — hash3u(x, y, z) = pcg(x ^ pcg(y ^ pcg(z))): 14 pcg
+// instead of 24, the same bits)
+fn gGrad(h: u32, d: vec3f) -> f32 {
+  let g = vec3f(f32(h & 0x3ffu), f32((h >> 10u) & 0x3ffu), f32((h >> 20u) & 0x3ffu)) * (2.0 / 1023.0) - 1.0;
+  return dot(g, d);
+}
 fn gnoise(p: vec3f) -> f32 {
   let i = floor(p);
   let f = p - i;
   let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-  var n: array<f32, 8>;
-  for (var c = 0u; c < 8u; c++) {
-    let o = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
-    let h = hash3u(bitcast<vec3u>(vec3i(i + o)));
-    let g = vec3f(f32(h & 0x3ffu), f32((h >> 10u) & 0x3ffu), f32((h >> 20u) & 0x3ffu)) * (2.0 / 1023.0) - 1.0;
-    n[c] = dot(g, f - o);
-  }
-  return 1.6 * mix(mix(mix(n[0], n[1], u.x), mix(n[2], n[3], u.x), u.y),
-                   mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
+  let b = bitcast<vec3u>(vec3i(i));
+  let z0 = pcg(b.z);
+  let z1 = pcg(b.z + 1u);
+  let y00 = pcg(b.y ^ z0);
+  let y10 = pcg((b.y + 1u) ^ z0);
+  let y01 = pcg(b.y ^ z1);
+  let y11 = pcg((b.y + 1u) ^ z1);
+  let x1 = b.x + 1u;
+  let n0 = gGrad(pcg(b.x ^ y00), f);
+  let n1 = gGrad(pcg(x1 ^ y00), f - vec3f(1.0, 0.0, 0.0));
+  let n2 = gGrad(pcg(b.x ^ y10), f - vec3f(0.0, 1.0, 0.0));
+  let n3 = gGrad(pcg(x1 ^ y10), f - vec3f(1.0, 1.0, 0.0));
+  let n4 = gGrad(pcg(b.x ^ y01), f - vec3f(0.0, 0.0, 1.0));
+  let n5 = gGrad(pcg(x1 ^ y01), f - vec3f(1.0, 0.0, 1.0));
+  let n6 = gGrad(pcg(b.x ^ y11), f - vec3f(0.0, 1.0, 1.0));
+  let n7 = gGrad(pcg(x1 ^ y11), f - vec3f(1.0, 1.0, 1.0));
+  return 1.6 * mix(mix(mix(n0, n1, u.x), mix(n2, n3, u.x), u.y),
+                   mix(mix(n4, n5, u.x), mix(n6, n7, u.x), u.y), u.z);
 }
 
 // The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
@@ -1665,6 +1689,9 @@ fn diskVolume(s: GState, L: f32, E0: f32, dl: f32, tNow: f32) -> DiskSample {
   let T0 = P.disk.x * pow(max(ntFlux(max(R, rIn), a, rIn) / P.disk.y, 0.0), 0.25);
   var T = T0;
   var hz = haze * 0.2 / (1.5 * H) * exp(-abs(zn) / 1.5) * edge;
+  // (the Gaussian's tail, no mist nor smoke there: what the gas could add at most — the turbulence's
+  // densest ×2.8, the emitter's energy ≤ 3 — under 1e-4 of optical depth: no turbulence to evaluate)
+  if (hz <= 0.0 && !(smoke > 0.0 && R > 8.0) && P.misc.w * rho * 8.4 * dl < 1e-4) { return o; }
   let turb = P.disk.z;
   if (turb > 0.0) {
     let n = diskTurbulence(R, s.x.z, tNow + s.x.w, a, zn, diskFootprint(s));
