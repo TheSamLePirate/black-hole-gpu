@@ -434,7 +434,10 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     let tint = select(vec3f(1.0, 0.95, 0.88), vec3f(0.55, 0.72, 1.0), main);
     jl += tint * (J.p.w * select(0.5, 2.2, main) * ndl / (d2 + select(0.08, 0.35, main)));
   }
-  return vec4f(col * S.light.x + dif * jl * ao * S.jet.y, 1.0);
+  // (resolved by the MSAA as c / (1 + L): a highlight's sample no longer outweighs the pixel's others —
+  // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
+  let o = col * S.light.x + dif * jl * ao * S.jet.y;
+  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }
 
 // ------------------------------------------------------------------------------------ thrusters
@@ -587,5 +590,10 @@ fn compVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
 @fragment
 fn compFs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let c = textureLoad(shipTex, vec2i(pos.xy), 0);
-  return vec4f(min(c.rgb, vec3f(60000.0)), c.a); // premultiplied (MSAA-resolved coverage)
+  // (the resolve's mean of c / (1 + L) over the covered samples, undone: c' / (1 − L'), premultiplied
+  // by the coverage again)
+  if (c.a <= 0.0) { return vec4f(0.0); }
+  let m = c.rgb / c.a;
+  let h = m / max(1.0 - dot(m, vec3f(0.2126, 0.7152, 0.0722)), 1.0 / 60000.0);
+  return vec4f(min(h, vec3f(60000.0)) * c.a, c.a); // premultiplied (MSAA-resolved coverage)
 }
