@@ -23,6 +23,8 @@ struct Display {
 @group(0) @binding(9) var<storage, read> flareM: array<vec4f>; // [0]: mean excess over white, its centroid (uv)
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
+// (x² — WGSL's pow is exp2(y·log2 x): undefined for x < 0 on some backends, D3D and Vulkan among them)
+fn sq(x: f32) -> f32 { return x * x; }
 // Lens flare (a camera's, as in the film): what is brighter than SDR white in the bloom's image —
 // the lens's own glare of the scene — reflected between the lens elements: ghosts along the line
 // through the image's centre (mirrored, tinted by the coatings), and a halo — a ring around the centre
@@ -74,7 +76,7 @@ fn lensFlare(uv: vec2f) -> vec3f {
       let r = rs[i];
       let d = length(p - gc);
       let w = 0.004 + 0.02 * r;
-      let rim = vec3f(exp(-pow((d - r * 1.02) / w, 2.0)), exp(-pow((d - r) / w, 2.0)), exp(-pow((d - r * 0.98) / w, 2.0)));
+      let rim = vec3f(exp(-sq((d - r * 1.02) / w)), exp(-sq((d - r) / w)), exp(-sq((d - r * 0.98) / w)));
       let fill = (1.0 - smoothstep(r * 0.92, r, d)) * 0.07;
       f += e * gs[i] * (vec3f(1.0, 0.22, 0.85) * rim + vec3f(0.55, 0.3, 0.9) * fill);
     }

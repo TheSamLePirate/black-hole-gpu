@@ -170,6 +170,8 @@ fn pcg(v: u32) -> u32 {
 }
 fn hash3u(p: vec3u) -> u32 { return pcg(p.x ^ pcg(p.y ^ pcg(p.z))); }
 fn isNan(x: f32) -> bool { return (bitcast<u32>(x) & 0x7fffffffu) > 0x7f800000u; }
+// (x² — WGSL's pow is exp2(y·log2 x): undefined for x < 0 on some backends, D3D and Vulkan among them)
+fn sq(x: f32) -> f32 { return x * x; }
 fn u2f(u: u32) -> f32 { return f32(u >> 8u) * (1.0 / 16777216.0); }
 fn hash4(p: vec3u) -> vec4f {
   let h = hash3u(p);
@@ -1782,7 +1784,7 @@ fn jetSample(s: GState, L: f32, E0: f32, tNow: f32) -> JetSample {
   if (x > 2.2) { return o; }
 
   // limb-brightened sheath + fainter spine (as in VLBI images of M87), diluted ∝ R_j^-1.5
-  let sheath = exp(-pow((x - 0.75) / 0.22, 2.0));
+  let sheath = exp(-sq((x - 0.75) / 0.22));
   let spine = 0.25 * exp(-3.0 * x * x);
   let base = smoothstep(rH * 1.1, rH * 3.0, az) * (1.0 - smoothstep(0.5 * zMax, zMax, az));
   var n = (sheath + spine) * base * 4.0 * pow(Rj, -1.5);
@@ -2065,18 +2067,18 @@ fn milkyWay(d: vec3f, g: f32, fw: f32) -> vec3f {
   let q = vec3f(dot(d, gx), dot(d, gy), dot(d, gz));
   let b = asin(clamp(q.z, -1.0, 1.0));
   let lc = acos(clamp(q.x, -1.0, 1.0)); // angular distance of longitude to the galactic centre
-  let band = exp(-pow(b / 0.16, 2.0)) * (0.35 + 0.65 * exp(-lc * lc / 1.6));
+  let band = exp(-sq(b / 0.16)) * (0.35 + 0.65 * exp(-lc * lc / 1.6));
   let bulge = exp(-(lc * lc + 4.0 * b * b) / 0.09);
   let clouds = fbmLod(q * 5.0, 5, fw * 5.0);
   let fine = fbmLod(q * 22.0 + vec3f(3.0), 4, fw * 22.0);
   let dustN = fbmLod(q * 9.0 + vec3f(11.0), 5, fw * 9.0);
-  let dust = smoothstep(0.42, 0.72, dustN) * exp(-pow(b / 0.06, 2.0));
+  let dust = smoothstep(0.42, 0.72, dustN) * exp(-sq(b / 0.06));
   let light = (band * (0.45 + 0.9 * clouds * clouds) * (0.6 + 0.8 * fine) * 1.6 + bulge * 1.0)
     * (1.0 - 0.85 * dust);
   let Tgal = mix(6800.0, 4300.0, clamp(bulge * 2.0 + dust, 0.0, 1.0));
   var col = blackbodyShifted(Tgal, g) * light * 0.09;
   // faint emission nebulae (H-α), Doppler-shifted like a 3000 K source
-  let neb = smoothstep(0.68, 0.9, fbmLod(q * 7.0 + vec3f(5.0, 1.0, 2.0), 4, fw * 7.0)) * exp(-pow(b / 0.15, 2.0));
+  let neb = smoothstep(0.68, 0.9, fbmLod(q * 7.0 + vec3f(5.0, 1.0, 2.0), 4, fw * 7.0)) * exp(-sq(b / 0.15));
   col += blackbodyShifted(2500.0, g) * vec3f(1.0, 0.35, 0.45) * neb * 0.012;
   return col;
 }
@@ -2397,7 +2399,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
         let caustic = 1.0 + clamp(-0.1 * ws.w, -0.55, 1.2);
         // light scattered in the liquid: a luminous network on the crests (where the caustics focus)
         // and a sheen towards the rim (grazing incidence), so the surface shows on a dark sky too
-        let crest = pow(clamp(-0.05 * ws.w, 0.0, 3.0), 2.0);
+        let crest = sq(clamp(-0.05 * ws.w, 0.0, 3.0));
         let glow = P.water5.rgb * (0.2 * crest + 0.25 * F + 0.008);
         out.glow += out.tint * glow * (vis * P.water3.x * P.time.z);
         out.tint *= mix(vec3f(1.0), exp(-P.water4.rgb * path), vis) * caustic;
@@ -2528,21 +2530,21 @@ fn alienSky(d: vec3f, g: f32, fp: Footprint) -> vec3f {
   let lc = acos(clamp(q.x, -1.0, 1.0));
   // warped band: the disk seen from inside is not a perfect great circle
   let bb = asin(clamp(q.z, -1.0, 1.0)) - 0.08 * sin(2.0 * atan2(q.y, q.x) + 0.7);
-  let band = exp(-pow(bb / 0.24, 2.0)) * (0.4 + 0.6 * exp(-lc * lc / 1.2));
+  let band = exp(-sq(bb / 0.24)) * (0.4 + 0.6 * exp(-lc * lc / 1.2));
   let bulge = exp(-(lc * lc + 2.5 * bb * bb) / 0.22);
   let clouds = fbmLod(q * 4.0, 6, fw * 4.0);
   let fine = fbmLod(q * 16.0 + vec3f(3.0, 1.0, 7.0), 5, fw * 16.0);
   let dn = fbmLod(q * 6.5 + vec3f(11.0, 2.0, 5.0), 6, fw * 6.5);
   let ridge = 1.0 - abs(2.0 * dn - 1.0);
-  let dust = clamp(smoothstep(0.62, 0.92, ridge) * exp(-pow(bb / 0.16, 2.0))
-    + 0.5 * smoothstep(0.55, 0.8, dn) * exp(-pow(bb / 0.3, 2.0)), 0.0, 1.0);
+  let dust = clamp(smoothstep(0.62, 0.92, ridge) * exp(-sq(bb / 0.16))
+    + 0.5 * smoothstep(0.55, 0.8, dn) * exp(-sq(bb / 0.3)), 0.0, 1.0);
   let light = (band * (0.35 + 1.1 * clouds * clouds) * (0.55 + 0.9 * fine) * 1.8 + bulge * 2.2) * (1.0 - 0.9 * dust);
   let Tg = mix(5600.0, 3900.0, clamp(bulge * 1.5 + 0.4 * dust, 0.0, 1.0));
   var col = blackbodyShifted(Tg, g) * light * 0.1;
   // large coloured clouds along and off the band: H II (Hα), O III, blue reflection nebulae
   let m1 = fbmLod(q * 2.3 + vec3f(5.0, 9.0, 1.0), 5, fw * 2.3);
   let m2 = fbmLod(q * 3.1 + vec3f(1.0, 4.0, 8.0), 5, fw * 3.1);
-  let lay = exp(-pow(bb / 0.55, 2.0));
+  let lay = exp(-sq(bb / 0.55));
   let hii = smoothstep(0.58, 0.82, m1) * lay * (0.5 + fine);
   let oiii = smoothstep(0.6, 0.85, m2) * lay * (0.5 + clouds);
   let refl = smoothstep(0.62, 0.8, 1.0 - m1) * smoothstep(0.5, 0.7, m2) * lay;
