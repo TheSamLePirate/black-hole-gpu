@@ -31,3 +31,18 @@ Findings that differ from the audit's estimates: the probe's full reset costs ab
 quarter (its pass is bound by its slowest rays); the step bookkeeping (A8) and integer hashing (A9)
 are not what bounds the kernel on this Apple GPU — the volumetric disk is (2.4× the thin disk's cost;
 smoke alone +50 %), the target of wave B's B3.
+
+## Wave B
+
+| Step | Result (measured, alternated with the commit before) |
+|---|---|
+| B1 temporal reprojection (TAAU) | realtime vs converged PSNR in a frame-locked turn: classic Kerr 19.8 → 23.8 dB, near Gargantua 14.7 → 18.2, Earth orbit 28.2 → 30.6, Moon's ground =, Saturn −1 dB; 0.4 ms |
+| B3 disk noise baked (3D texture) | along the disk 93 → 67 ms (fixed b4), near Gargantua 41 → 34, Miller 82 → 71; same look, another draw of the noise |
+| B2 kernel specialisation (HAS_*) | features compiled out per scene, built in the background: near Gargantua −12 %, along the disk −11 %; without the wormhole: classic Kerr 76 → 39 ms, Luminet 43 → 23, jet 56 → 30; without bodies: classic Kerr 42.6 → 26.7 ms |
+| B5 hardware tier | pixel budget for the Game quality (0.5–6 Mpx by tier); this Mac tier 2 (2.2 Mpx) — unchanged here |
+| B6 KTX2 colour maps (BC7/ASTC) | GPU memory: Earth orbit 1160 → 694 MiB, Earthrise 948 → 770, Saturn 532 → 450; +100 MB in the repository, ~4× the Earth's high-tier download (UASTC quality chosen) |
+| B7 | GPU profiler on one frame in eight (it cost 2–3 %); gather + resolve fusion not worth it (a 2D gather) |
+| B8 Ranger | smooth normals from the coarse mesh (no more faceting), MSAA resolved on c/(1+L) |
+| B10 robustness | device loss: autosave + reload panel; uncaptured GPU errors shown; Earth maps under an OOM scope, falling back a tier |
+| B4 dynamic resolution without reallocation | not done: a resize costs 0.5–1 ms of CPU and no frame over 20 ms on this machine — measured, no gain to take |
+| B8 ship shadow on the traced ground, B9 the Endurance (LOD, GGX) | not done yet |
