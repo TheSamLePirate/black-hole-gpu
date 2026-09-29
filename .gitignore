@@ -39,3 +39,8 @@ _site
 
 # raw model as supplied (54 MB); the app uses assets/ranger (scripts/build-ranger.ts)
 assets/Interstellar Ranger One/
+# raw Endurance model as supplied; the app uses assets/endurance (scripts/build-endurance.ts)
+assets/Interstellar Endurance/
+# local texture packs, not used by the app (340 MB together)
+assets/tex/
+assets/textures/
