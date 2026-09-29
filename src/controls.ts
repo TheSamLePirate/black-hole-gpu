@@ -1179,7 +1179,9 @@ export class CameraController {
     // (the cinematics run with the scene's time: paused, they hold — the image converges)
     const play = s.animate || this.bulletTime ? dt : 0;
     if (this.cinematic === "orbit") {
-      if (play) this.orbitBy(s.cinematicSpeed * play, 0);
+      // (around a planet, a moon: the rig's azimuth — the classic orbit is the hole's, the star's, the mouth's)
+      if (play && this.rig.on && this.rigOrbits()) this.rig.az += s.cinematicSpeed * play;
+      else if (play) this.orbitBy(s.cinematicSpeed * play, 0);
     } else if (this.cinematic === "dive") {
       if (play) this.stepDive(play);
     } else if (this.cinematic === "journey") {
