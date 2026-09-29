@@ -19,7 +19,7 @@ import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
-import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "./mounts";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
@@ -126,6 +126,11 @@ export class CameraController {
   /** the outside views (mounts.ts: around, free): about the ship — yaw, pitch [deg] (0: behind it),
    *  distance [m]; free — the eye [m] and the look's yaw, pitch [deg] in the ship's frame (0: its nose) */
   outside = { yaw: 0, pitch: 12, dist: 42, eye: [18, 6, -36] as Vec3, fyaw: -25, fpitch: -5, fvel: [0, 0, 0] as Vec3 };
+  /** the fly-by: where the camera stands (the local frame's axes, metres from the ship; null: to place) and
+   *  its eye on the ship's axes this frame */
+  private flyby: { E: Vec3 | null; eye: Vec3 } = { E: null, eye: [22, 6, 40] };
+  /** the ship's views locked on the target: its direction on the ship's axes (x left, y up, z nose) */
+  private shipAim: Vec3 | null = null;
   private mountEff: MountPose | null = null;
   private mountAnim: { from: MountPose; t: number } | null = null;
   private lastMount = "";
@@ -259,24 +264,51 @@ export class CameraController {
   }
 
   // ------------------------------------------------------------------------------ rotation modes
-  /** Orbit mode drives the view (not during the dive, the journey or game-style flight). */
+  /**
+   * The view is kept on the target: around it always, else when locked on it (lookAt) — not during the
+   * dive, the journey or game-style flight, nor on the ship (its views aim by their own means) nor on
+   * the tripod (it aims itself, turning with its ground).
+   */
   private get tracking() {
+    const s = this.s;
+    const aimed = s.rotation === "orbit" || (s.lookAt && s.rotation !== "tripod");
     // (not when the rig turns about a planet, a moon — the classic aim resumes where it cannot: a body
     // beyond the wormhole, aimed at through its mouth)
-    return this.s.rotation === "orbit" && !this.flyMode && this.cinematic !== "dive" && this.cinematic !== "journey" && !(this.rig.on && this.rigOrbits());
+    return aimed && !this.piloting && !this.flyMode && this.cinematic !== "dive" && this.cinematic !== "journey" && !(this.rig.on && this.rigOrbits());
   }
-  /** Drags move the camera around the target (not while it falls freely). */
+  /** Drags move the camera around the target (around it, not while it falls freely). */
   private get orbiting() {
-    return this.tracking && !this.gravity;
+    return this.tracking && this.s.rotation === "orbit" && !this.gravity;
   }
 
+  /**
+   * The camera's placement: around the target, following it, free, on a tripod — from where the camera
+   * is (none of them moves it). Falling freely (gravity) is the free placement's: another one lands it.
+   */
   setRotation(mode: Settings["rotation"]) {
     this.s.rotation = mode;
     this.activity = performance.now();
-    if (mode === "free" && this.cinematic === "orbit") this.setCinematic(null);
+    if (mode !== "orbit" && this.cinematic === "orbit") this.setCinematic(null);
+    if (mode !== "free" && this.gravity && !this.piloting) this.setGravity(false);
     if (mode === "orbit") this.startFocus();
     this.onCinematicChange(this.cinematic);
   }
+
+  /** The view locked on the target (or free); turning it on turns the view to the target. */
+  setLookAt(on: boolean) {
+    this.s.lookAt = on;
+    this.activity = performance.now();
+    this.lookOff = [0, 0];
+    if (this.piloting) {
+      // (the ship's views: the camera eases to its new placement; around the ship, behind it on the
+      // target's line — a little above)
+      if (this.lastPose) this.mountAnim = { from: this.lastPose, t: 0 };
+      if (on && this.outsideView() === "around") (this.outside.yaw = 0), (this.outside.pitch = 10);
+    } else if (on) this.startFocus();
+    this.onCinematicChange(this.cinematic);
+  }
+  /** The ship's views locked on the target: where the target sits in the view [°, right / up of centre]. */
+  private lookOff: [number, number] = [0, 0];
 
   /** Bodies that can be selected from where the camera is. */
   availableTargets(): Body[] {
@@ -728,6 +760,11 @@ export class CameraController {
     this.path = null;
     if (on) {
       if (this.cinematic) this.setCinematic(null);
+      // (falling is the free placement's: from around the target, the view stays on it)
+      if (s.rotation !== "free" && !this.piloting) {
+        if (s.rotation === "orbit") s.lookAt = true;
+        s.rotation = "free";
+      }
       s.motion = "geodesic";
       this.properTime = 0;
       // our universe: the pose's velocity kept (an orbit, a planet's motion); none given: moving with
@@ -747,6 +784,12 @@ export class CameraController {
 
   private onDown = (e: PointerEvent) => {
     if (!this.enabled || this.flyMode) return;
+    // (a middle click: game-style mouse look, the free camera's)
+    if (e.button === 1 && !this.piloting) {
+      e.preventDefault();
+      this.setFlyMode(true);
+      return;
+    }
     this.canvas.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.dragLook = e.button === 2 || e.shiftKey;
@@ -783,7 +826,9 @@ export class CameraController {
     const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
     if (!body) return this.resetView();
     if (this.cinematic === "orbit") this.setCinematic(null);
-    this.s.rotation = "orbit";
+    // (falling freely: the view locks on it; else the camera goes around it)
+    if (this.gravity) this.s.lookAt = true;
+    else this.s.rotation = "orbit";
     this.selectTarget(body, { frame: !this.gravity });
   };
 
@@ -838,7 +883,7 @@ export class CameraController {
       this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
     };
     const ov = this.piloting && !this.cinematic ? this.outsideView() : null;
-    const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || s.rotation === "tripod") && !this.dragLook;
+    const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || (s.rotation === "tripod" && s.lookAt)) && !this.dragLook;
     if (rigTurn && s.rotation === "orbit") {
       // around a planet, a moon: the drag turns the camera about it
       this.rig.az -= dx * 0.25;
@@ -853,13 +898,21 @@ export class CameraController {
       o.yaw = (((o.yaw + dx * 0.3 + 180) % 360) + 360) % 360 - 180;
       o.pitch = clamp(o.pitch + dy * 0.3, -85, 85);
     } else if (ov === "free") {
-      // outside, free: the drag turns the camera where it is
+      // outside, free: the drag turns the camera where it is (locked on the target: its offset from it)
       const o = this.outside;
-      o.fyaw += dx * kLook;
-      o.fpitch = clamp(o.fpitch + dy * kLook, -89, 89);
+      if (s.lookAt) this.lookOff = [this.lookOff[0] + dx * kLook, clamp(this.lookOff[1] + dy * kLook, -80, 80)];
+      else {
+        o.fyaw += dx * kLook;
+        o.fpitch = clamp(o.fpitch + dy * kLook, -89, 89);
+      }
+    } else if (ov === "flyby") {
+      // (the fly-by aims at the ship by itself)
     } else if (this.piloting && !this.cinematic) {
-      // piloting: the drag turns the camera on its mount (free look); the ship keeps its attitude
-      this.setLook(s.shipLookYaw - dx * kLook, s.shipLookPitch + dy * kLook);
+      // piloting: the drag turns the camera on its mount (free look; locked on the target: where the target
+      // sits in the view); the ship keeps its attitude
+      const lim = s.fov * 0.6;
+      if (s.lookAt) this.lookOff = [clamp(this.lookOff[0] + dx * kLook, -lim, lim), clamp(this.lookOff[1] - dy * kLook, -lim, lim)];
+      else this.setLook(s.shipLookYaw - dx * kLook, s.shipLookPitch + dy * kLook);
     } else if (s.rotation === "free") {
       // free: drag looks around, right / shift drag rolls
       if (this.dragLook) this.rotateView(0, 0, -dx * 0.4);
@@ -880,6 +933,8 @@ export class CameraController {
     const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
     this.activity = performance.now();
     this.flight = null;
+    // (the telescope: the wheel is its zoom, in every mode)
+    if (this.s.telescope) return this.zoomLens(Math.exp(dy * 0.0015));
     if (this.flyMode) {
       // flight speed, like a game's throttle
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
@@ -896,7 +951,7 @@ export class CameraController {
       // outside, around the ship: the wheel sets the camera's distance (12 m … 20 km)
       this.outside.dist = clamp(this.outside.dist * Math.exp(dy * 0.0015), 12, 20000);
     } else if (e.altKey || this.gravity || this.piloting) {
-      this.s.fov = clamp(this.s.fov * Math.exp(dy * 0.001), 1, 150);
+      this.zoomLens(Math.exp(dy * 0.001));
     } else if (this.s.rotation === "free" && !this.cinematic) {
       // dolly along the view, gliding (the flight's inertia)
       this.flyVel[0] = clamp(this.flyVel[0] - dy * 0.006 * this.flySpeed, -8 * this.flySpeed, 8 * this.flySpeed);
@@ -904,6 +959,62 @@ export class CameraController {
       this.zoomBy(Math.exp(dy * 0.0015));
     }
   };
+
+  // ------------------------------------------------------------------------------ the lens
+  /** The field of view the lens eases to (log), or none. */
+  private fovTarget: number | null = null;
+  /** the view before the telescope: its field, whether it was locked on the target */
+  private teleSaved: { fov: number; lookAt: boolean } | null = null;
+
+  /** Zooms the lens by a factor of its field (eased): 1°…150°, the telescope down to 0.02°. */
+  zoomLens(f: number) {
+    const s = this.s;
+    const [lo, hi] = s.telescope ? [TELE_MIN, 20] : [Math.min(1, s.fov), 150];
+    this.fovTarget = clamp((this.fovTarget ?? s.fov) * f, lo, hi);
+    this.activity = performance.now();
+  }
+  /** Sets the field of view, eased (the panel's own changes land at once: stopZoom). */
+  setFov(fov: number) {
+    this.fovTarget = clamp(fov, TELE_MIN, 150);
+  }
+  stopZoom() {
+    this.fovTarget = null;
+  }
+  private easeLens(dt: number) {
+    const s = this.s;
+    if (this.fovTarget === null) return;
+    const cur = Math.log(s.fov), tgt = Math.log(this.fovTarget);
+    if (Math.abs(tgt - cur) < 2e-4) {
+      s.fov = this.fovTarget;
+      this.fovTarget = null;
+    } else s.fov = Math.exp(cur + (tgt - cur) * (1 - Math.exp(-12 * dt)));
+  }
+
+  /**
+   * The telescope: a long lens (fields down to 0.02° — a 70 m focal length on a 35 mm frame), the view
+   * held on the target (the tracking a telescope's mount does: it stays centred while everything
+   * moves), a reticle with the angular scale. On: the target framed at a third of the view; off: the
+   * field and the lock as they were.
+   */
+  setTelescope(on: boolean) {
+    const s = this.s;
+    if (s.telescope === on) return;
+    s.telescope = on;
+    if (on) {
+      this.teleSaved = { fov: this.fovTarget ?? s.fov, lookAt: s.lookAt };
+      if (!s.lookAt) this.setLookAt(true);
+      const info = this.targetInfo();
+      const want = info && info.ang > 0 ? ((info.ang * 360) / Math.PI) * 3 : s.fov / 8;
+      this.fovTarget = clamp(want, TELE_MIN, Math.min(20, s.fov));
+    } else {
+      const sv = this.teleSaved;
+      this.fovTarget = clamp(sv ? sv.fov : Math.max(s.fov, 40), 1, 150);
+      if (sv && !sv.lookAt) this.setLookAt(false);
+      this.teleSaved = null;
+    }
+    this.activity = performance.now();
+    this.onCinematicChange(this.cinematic);
+  }
 
   private zoomBy(f: number) {
     if (this.cinematic === "dive" || this.cinematic === "journey") return;
@@ -959,6 +1070,12 @@ export class CameraController {
     if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
     if (s.ship !== this.piloting) this.setPilot(s.ship);
+    if (s.shipMount !== this.lastMount) this.lookOff = [0, 0];
+    this.aimShipViews(dt);
+    if (this.piloting && !this.cinematic && this.outsideView() === "flyby") {
+      if (s.shipMount !== this.lastMount) this.flyby.E = null; // (a new fly-by: from where the view is)
+      this.flybyStep(dt);
+    }
     this.stepMount(dt);
     const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
 
@@ -994,9 +1111,12 @@ export class CameraController {
         this.rotateView(pad.look[0] * k, pad.look[1] * k, 0);
       }
     }
-    if (pad?.zoom) this.zoomBy(Math.exp(-1.4 * pad.zoom * dt));
-    if (this.keys.has("+") || this.keys.has("=")) this.zoomBy(Math.exp(-1.2 * dt));
-    if (this.keys.has("-") || this.keys.has("_")) this.zoomBy(Math.exp(1.2 * dt));
+    // (+ − and the pad's zoom: the distance — the lens with the telescope)
+    const zoom = (f: number) => (s.telescope ? this.zoomLens(f) : this.zoomBy(f));
+    if (pad?.zoom) zoom(Math.exp(-1.4 * pad.zoom * dt));
+    if (this.keys.has("+") || this.keys.has("=")) zoom(Math.exp(-1.2 * dt));
+    if (this.keys.has("-") || this.keys.has("_")) zoom(Math.exp(1.2 * dt));
+    this.easeLens(dt);
     const move: [number, number, number, number] = [0, 0, 0, 0];
     for (const c of this.codes) {
       const m = FLIGHT_KEYS[c];
@@ -1650,9 +1770,74 @@ export class CameraController {
   }
 
   /** The outside view in use (mounts.ts), or none. */
-  outsideView(): "around" | "free" | null {
-    const m = MOUNTS[this.s.shipMount as Mount] as { outside?: "around" | "free" } | undefined;
+  outsideView(): OutsideView | null {
+    const m = MOUNTS[this.s.shipMount as Mount] as { outside?: OutsideView } | undefined;
     return this.s.ship ? (m?.outside ?? null) : null;
+  }
+
+  /**
+   * The ship's views locked on the target (lookAt): on its mounts the look turns to it (eased; the drag
+   * sets where it sits in the view), outside the views read its direction (mountTarget).
+   */
+  private aimShipViews(dt: number) {
+    const s = this.s;
+    this.shipAim = null;
+    if (!s.lookAt || !this.piloting || this.cinematic) return;
+    const cam = cameraFrame(s);
+    const a = this.aim(cam);
+    if (!a) return;
+    const c: Vec3 = [dot3(a.look, cam.right), dot3(a.look, cam.up), dot3(a.look, cam.fwd)];
+    const S = this.shipMatrix();
+    this.shipAim = normalize(lin(lin(S[0], c[0], S[1], c[1]), 1, S[2], c[2]));
+    if (this.outsideView()) return;
+    const deg = 180 / Math.PI;
+    const b = Math.atan2(c[0], c[2]) * deg - this.lookOff[0];
+    const e = Math.asin(clamp(c[1], -1, 1)) * deg - this.lookOff[1];
+    if (Math.abs(b) + Math.abs(e) < 1e-4) return; // (on it: still — the image converges)
+    const k = 1 - Math.exp(-dt / 0.12);
+    this.setLook(s.shipLookYaw + b * k, s.shipLookPitch + e * k);
+  }
+
+  /**
+   * The fly-by: the camera stands still in the frame the ship flies in (the body of its sphere of
+   * influence, the planet it is near, the hole's static frame) and the ship passes it; once the ship is
+   * well past, the camera waits for it further on, a little aside and above its path. Too fast for one
+   * (a warp): it rides behind the ship.
+   */
+  private flybyStep(dt: number) {
+    const s = this.s, F = this.flyby;
+    const cam = cameraFrame(s);
+    const S = this.shipMatrix();
+    const ax = [0, 1, 2].map((i) => lin(lin(cam.right, S[0][i]!, cam.up, S[1][i]!), 1, cam.fwd, S[2][i]!)) as [Vec3, Vec3, Vec3];
+    const toShip = (E: Vec3): Vec3 => [dot3(E, ax[0]), dot3(E, ax[1]), dot3(E, ax[2])];
+    const toLocal = (e: Vec3) => lin(lin(ax[0], e[0], ax[1], e[1]), 1, ax[2], e[2]);
+    if (!F.E) F.E = toLocal(this.lastPose?.eye ?? F.eye);
+    const c = 299792458;
+    const vRel = sub3(cam.beta, this.refBeta(cam));
+    const v = Math.hypot(...vRel) * c;
+    const dtSec = s.animate ? s.timeSpeed * dt * 4.925490947e-6 * s.massSolar : 0;
+    F.E = lin(F.E, 1, vRel, -c * dtSec);
+    const D = clamp(v * 3.5, 60, 2500);
+    if (v * dtSec > 0.3 * D) F.E = toLocal([0, 7, -45]);
+    else if (v > 1) {
+      const vh = lin(vRel, c / v, vRel, 0);
+      if (Math.hypot(...F.E) > 1.6 * D || dot3(F.E, vh) < -0.9 * D) {
+        let side = cross(vh, ax[1]);
+        if (Math.hypot(...side) < 0.2) side = cross(vh, ax[0]);
+        side = normalize(side);
+        F.E = lin(lin(vh, D, side, 0.15 * D + 15), 1, ax[1], 0.05 * D + 5);
+      }
+    }
+    F.eye = toShip(F.E);
+  }
+
+  /** The velocity of the frame the ship flies in, on the local axes [c]: the body of its sphere of
+   *  influence (ours), the planet it is near (Gargantua's), else the hole's static frame. */
+  private refBeta(cam: ReturnType<typeof cameraFrame>): Vec3 {
+    const nav = this.ourNav(cam);
+    if (nav) return nav.refVelRep;
+    if (cam.region === "hole" && this.local) return zamoBeta(blToCartesian(cam.r, cam.theta, cam.phi), this.local.F.V, this.s.spin);
+    return [0, 0, 0];
   }
 
   /** Where the chosen attach point puts the camera (the outside views: where they are now). */
@@ -1660,15 +1845,23 @@ export class CameraController {
     const o = this.outside;
     const v = this.outsideView();
     const d = Math.PI / 180;
+    const A = this.shipAim;
     if (v === "around") {
       const c: Vec3 = [0, 1.5, 0];
-      const dir: Vec3 = [Math.sin(o.yaw * d) * Math.cos(o.pitch * d), Math.sin(o.pitch * d), -Math.cos(o.yaw * d) * Math.cos(o.pitch * d)];
+      // (locked on the target: behind the ship on the target's line, the drag an offset from it)
+      const y0 = A ? Math.atan2(-A[0], A[2]) / d : 0, p0 = A ? Math.asin(clamp(-A[1], -1, 1)) / d : 0;
+      const yaw = (y0 + o.yaw) * d, pitch = clamp(p0 + o.pitch, -88, 88) * d;
+      const dir: Vec3 = [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
       return { eye: lin(c, 1, dir, o.dist), aim: c };
     }
     if (v === "free") {
-      const f: Vec3 = [Math.sin(o.fyaw * d) * Math.cos(o.fpitch * d), Math.sin(o.fpitch * d), Math.cos(o.fyaw * d) * Math.cos(o.fpitch * d)];
+      // (locked on the target: aimed at it, the drag an offset)
+      const fy = A ? Math.atan2(A[0], A[2]) / d + this.lookOff[0] : o.fyaw;
+      const fp = A ? clamp(Math.asin(clamp(A[1], -1, 1)) / d + this.lookOff[1], -89, 89) : o.fpitch;
+      const f: Vec3 = [Math.sin(fy * d) * Math.cos(fp * d), Math.sin(fp * d), Math.cos(fy * d) * Math.cos(fp * d)];
       return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
     }
+    if (v === "flyby") return { eye: this.flyby.eye, aim: [0, 1.5, 0] };
     return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
   }
 
@@ -1679,6 +1872,7 @@ export class CameraController {
     const S0 = this.lastPose && !this.mountAnim ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
     if (s.shipMount !== this.lastMount) {
       if (this.lastMount && s.ship) this.mountAnim = { from: this.lastPose ?? this.shipPose(), t: 0 };
+      const prevMount = this.lastMount;
       this.lastMount = s.shipMount;
       const v = this.outsideView();
       if (v === "free" && this.lastPose) {
@@ -1690,6 +1884,20 @@ export class CameraController {
         this.outside.fyaw = (Math.atan2(f[0], f[2]) * 180) / Math.PI;
         this.outside.fpitch = (Math.asin(clamp(f[1] / l, -1, 1)) * 180) / Math.PI;
         this.outside.fvel = [0, 0, 0];
+      }
+      if (v === "around" && this.lastPose) {
+        // (around the ship from where the view was: no jump)
+        const c: Vec3 = [0, 1.5, 0];
+        const e = sub3(this.lastPose.eye, c);
+        const l = Math.hypot(...e) || 1;
+        const deg = 180 / Math.PI;
+        const A = this.shipAim;
+        const y0 = A ? Math.atan2(-A[0], A[2]) * deg : 0, p0 = A ? Math.asin(clamp(-A[1], -1, 1)) * deg : 0;
+        // (from a mount on the hull: out to a view of the whole ship, the same side of it)
+        const fromOutside = !!(MOUNTS[prevMount as Mount] as { outside?: string } | undefined)?.outside;
+        this.outside.dist = clamp(fromOutside ? l : Math.max(l, 42), 12, 20000);
+        this.outside.yaw = wrapDeg(Math.atan2(e[0], -e[2]) * deg - y0);
+        this.outside.pitch = clamp(Math.asin(clamp(e[1] / l, -1, 1)) * deg - p0, -85, 85);
       }
       if (v) this.setLookRaw(0, 0);
     }
@@ -2699,6 +2907,9 @@ export class CameraController {
     off: [0, 0, 0] as Vec3,
     /** tripod: the place on the body's own axes (ours [M]; Gargantua's worlds: their frame's ξ) */
     fixed: null as Vec3 | null,
+    /** the tripod's free view: its forward and up on the body's own axes (as offsets from its foot) */
+    look: null as { f: Vec3; u: Vec3 } | null,
+    lookKey: "",
     /** around: azimuth, elevation [°], the height above its surface [M] */
     az: 0,
     el: 20,
@@ -2815,6 +3026,7 @@ export class CameraController {
       R.az = (Math.atan2(rel[1], rel[0]) * 180) / Math.PI;
       R.el = (Math.asin(clamp(rel[2] / d, -1, 1)) * 180) / Math.PI;
       R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, t) : null;
+      R.look = null;
     }
     // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
     const h = Math.max(Math.hypot(...(mode === "follow" || mode === "free" ? R.off : rel)) - ref.R, 1 / mR);
@@ -2850,6 +3062,24 @@ export class CameraController {
       const P = R.fixed ? this.rigUnfix(ref.id, w.ours, R.fixed, t) : null;
       const X = P?.X ?? floor(lin(ref.C, 1, R.off, 1));
       const V = P?.V ?? ref.V;
+      if (!s.lookAt && R.fixed) {
+        // the view free: fixed on the ground, turning with it (the sky wheels overhead — a time-lapse's
+        // camera); turned by the user, fixed again as it is then
+        const now = [s.yaw, s.pitch, s.roll].join();
+        const dir = (v: Vec3) => this.rigFix(ref.id, w.ours, lin(X, 1, v, ref.R), t);
+        if (!R.look || R.lookKey !== now) {
+          const o = this.rigFix(ref.id, w.ours, X, t), f = dir(w.fwd), u = dir(w.up);
+          R.look = o && f && u ? { f: sub3(f, o), u: sub3(u, o) } : null;
+        }
+        const o = R.look && this.rigUnfix(ref.id, w.ours, R.fixed, t);
+        const back = (q: Vec3) => this.rigUnfix(ref.id, w.ours, lin(R.fixed!, 1, q, 1), t)?.X;
+        const fX = R.look && back(R.look.f), uX = R.look && back(R.look.u);
+        if (o && fX && uX) this.rigPlace(w.ours, X, unitV(sub3(fX, o.X)), unitV(sub3(uX, o.X)), V);
+        else this.rigPlace(w.ours, X, w.fwd, w.up, V);
+        R.lookKey = [s.yaw, s.pitch, s.roll].join();
+        if (move.some((x) => x !== 0)) this.activity = performance.now();
+        return true;
+      }
       // aiming at the target (its centre; the hole: its place), the local vertical up, then the offsets
       const T = w.ours ? ourTarget(s, s.target, t).pos : bodyCentre(s, s.target, t);
       const up0 = unitV(sub3(X, ref.C));
@@ -4095,6 +4325,8 @@ export class CameraController {
 }
 
 const DEG = Math.PI / 180;
+/** The telescope's narrowest field [°] (the tracer's rays in float32: ~10 ulps per pixel at 1080 p) */
+export const TELE_MIN = 0.02;
 const MAX_RANGE = 1000; // M: how far free flight may take the camera
 const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

@@ -16,7 +16,12 @@ export const MOUNTS = {
   // distance; free: the keys move the camera, the drag turns it; it follows the ship's motion)
   around: { label: "Outside, around the ship", short: "Around", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "around" },
   free: { label: "Outside, free", short: "Free", eye: [18, 6, -36], aim: [0, 1.5, 0], outside: "free" },
-} satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: "around" | "free" }>;
+  // (a fly-by: the camera stands still where the ship will pass — in the frame of the body it flies by —,
+  // turns to follow it, and waits for it further on once it is gone)
+  flyby: { label: "Fly-by, the ship passing", short: "Fly-by", eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
+} satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
+/** The views from outside the ship: around it, free, a fly-by. */
+export type OutsideView = "around" | "free" | "flyby";
 export type Mount = keyof typeof MOUNTS;
 export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 

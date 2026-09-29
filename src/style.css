@@ -1959,3 +1959,40 @@ body.hide-ui #tp-dock { display: none; }
 .tp-mi.on { background: rgba(255, 179, 92, 0.16); }
 .tp-mi.on b { color: var(--hud-amber); }
 @media (max-width: 560px) { #tp-dock { bottom: 64px; } #tp-dock .tp-clock { min-width: 0; } }
+
+/* ---- the camera panel's new pieces: five placements, chips (the look, the telescope…), keys, the lens,
+   the observer's motion */
+#cam-pop { width: min(680px, calc(100vw - 32px)); }
+#cam-pop .cp-tiles-5 { grid-template-columns: repeat(5, 1fr); }
+#cam-pop .cp-tiles-5 .cp-tile { min-height: 104px; }
+#cam-pop .cp-hint { margin-left: auto; order: 2; font: 600 10px var(--hud-font); letter-spacing: 0.12em; color: rgba(176, 196, 222, 0.42); text-transform: none; }
+#cam-pop .cp-label::after { order: 1; }
+#cam-pop kbd {
+  display: inline-block; margin-left: 7px; padding: 0 5px; border-radius: 3px; vertical-align: 1px;
+  font: 600 10px var(--mono); letter-spacing: 0; text-transform: none; color: rgba(214, 226, 242, 0.7);
+  border: 1px solid rgba(160, 210, 255, 0.22); background: rgba(160, 210, 255, 0.06);
+}
+#cam-pop .cp-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+#cam-pop .cp-chip { gap: 7px; padding: 5px 10px 5px 8px; font: 600 12.5px var(--hud-font); letter-spacing: 0.08em; text-transform: uppercase; }
+#cam-pop .cp-chip svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--hud-cyan); }
+#cam-pop .cp-chip svg .f { fill: currentColor; stroke: none; }
+#cam-pop .cp-chip.on { border-color: var(--hud-amber); color: #ffe6c6; background: rgba(255, 179, 92, 0.2); }
+#cam-pop .cp-chip.on svg { color: var(--hud-amber); }
+#cam-pop .cp-chip kbd { margin-left: 2px; }
+#cam-pop .cp-lenses .cp-chip { padding: 3px 9px; font: 600 11.5px var(--mono); letter-spacing: 0; text-transform: none; }
+#cam-pop .cp-sub { font: 600 11px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(176, 196, 222, 0.55); white-space: nowrap; }
+#cam-pop .cp-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+#cam-pop .cp-seg button { justify-content: center; padding: 5px 4px; font: 600 12px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; }
+#cam-pop .cp-seg button.on { border-color: var(--hud-amber); color: #ffe6c6; background: rgba(255, 179, 92, 0.2); }
+#cam-pop .cp-value { min-width: 116px; }
+@media (max-width: 640px) { #cam-pop .cp-tiles-5 { grid-template-columns: repeat(3, 1fr); } }
+
+/* the toolbar's camera button: the view and the target (the dot: the target's colour; lit when the view
+   is locked on it) */
+#toolbar #btn-camera { width: auto; padding: 0 12px 0 9px; gap: 8px; background: rgba(255, 255, 255, 0.05); color: var(--text); }
+#toolbar #btn-camera > span { display: inline; }
+#toolbar #btn-camera .cam-mode { font: 700 11.5px var(--hud-font, system-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+#toolbar #btn-camera .cam-target { display: inline-flex; align-items: center; gap: 6px; }
+#toolbar #btn-camera .cam-target::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--body, #ccc); opacity: 0.5; }
+#toolbar #btn-camera.locked .cam-target::before { opacity: 1; box-shadow: 0 0 6px var(--body, #ccc); }
+body:not(.piloting) #cam-pop { bottom: 122px; max-height: min(calc(100vh - 150px), 760px); }

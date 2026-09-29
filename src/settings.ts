@@ -1,9 +1,9 @@
 import type { BodyView } from "./system/our-side";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
-/** Camera rotation: around the selected body, or about the camera itself. */
-/** The camera's behaviour (controls.ts): around the target, following it, free (carried by the nearest
- *  body), on a tripod (fixed on the nearest body, aiming at the target) */
+/** The camera's placement (controls.ts): around the target, following it, free (carried by the nearest
+ *  body; with gravity on, falling freely), on a tripod (fixed on the nearest body, turning with it).
+ *  Where it looks is apart (Settings.lookAt): locked on the target, or free. */
 export type Rotation = "orbit" | "follow" | "free" | "tripod";
 /** Bodies of the registered Gargantua system that can be targeted (src/system/bodies.ts). */
 export type SystemBody = "miller" | "mann" | "k2" | "edmunds";
@@ -59,6 +59,7 @@ export interface Settings {
   inclination: number; // degrees from the spin axis
   azimuth: number; // degrees
   fov: number; // vertical, degrees
+  telescope: boolean; // the telephoto / telescope: fields down to 0.02°, the view held on the target, a reticle
   yaw: number;
   pitch: number;
   roll: number;
@@ -77,7 +78,8 @@ export interface Settings {
   exhaust: number; // effective exhaust speed [c]
   massRatio: number; // initial mass over dry mass
   showGeodesic: boolean; // draw the camera's predicted free-fall path
-  rotation: Rotation; // drag orbits the target, or turns the camera about itself
+  rotation: Rotation; // the camera's placement: around the target, following it, free, on a tripod
+  lookAt: boolean; // the view locked on the target (any placement, the ship's views too; around: always)
   target: Target; // the body orbited / aimed at
   // thin disk
   disk: boolean;
@@ -257,6 +259,7 @@ export function defaultSettings(): Settings {
     inclination: 82,
     azimuth: 0,
     fov: 45,
+    telescope: false,
     yaw: 0,
     pitch: 0,
     roll: 0,
@@ -273,6 +276,7 @@ export function defaultSettings(): Settings {
     massRatio: 20,
     showGeodesic: true,
     rotation: "orbit",
+    lookAt: false,
     target: "hole",
     disk: true,
     diskTemp: 9000,

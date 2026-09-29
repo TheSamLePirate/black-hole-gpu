@@ -286,6 +286,7 @@ export class GameTools {
         speedMode: c.speedMode, landed: L ? { body: L.body, q: [...L.q] as V3 } : null, spent: c.spent, properTime: c.properTime,
       },
       plan: c.plan.nodes.length ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission } : null,
+      camera: { gravity: c.gravity && !c.piloting },
     };
   }
 
@@ -319,6 +320,12 @@ export class GameTools {
       if (save.ship.auto !== "none" && (save.ship.auto !== "node" || save.plan)) p.auto = save.ship.auto;
     }
     c.setOurLanded(save.ship.landed);
+    // (the free camera falling freely: again, from its saved velocity)
+    if (!s.ship && !!save.camera?.gravity !== c.gravity) {
+      const vel = [s.velR, s.velT, s.velP];
+      c.setGravity(!!save.camera?.gravity);
+      if (c.gravity) [s.velR, s.velT, s.velP] = vel as [number, number, number];
+    }
     c.sync();
     this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();

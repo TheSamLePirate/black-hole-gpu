@@ -37,28 +37,14 @@ import { VideoWriter } from "./video";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
+import { drawTelescope, type TelescopeView } from "./ui/telescope";
+import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
+import { defaultAltKm, ourOrbitPose } from "./game/place";
+import { solarBody, M_METRES } from "./system/solar";
 import { setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-/** The camera's behaviours (controls.ts: the rig), their names and what the mouse and keys do. */
-const CAM_MODES: Settings["rotation"][] = ["orbit", "follow", "free", "tripod"];
-const CAM_LABEL: Record<Settings["rotation"], string> = { orbit: "Around", follow: "Follow", free: "Free", tripod: "Tripod" };
-const CAM_HELP: Record<Settings["rotation"], string> = {
-  orbit: "Circles the target — drag to turn about it, scroll to come closer",
-  follow: "Moves with the target — drag to look around, fly to shift the camera",
-  free: "Flies freely, carried by the nearest world — drag to look around",
-  tripod: "Stands on the nearest world, turning with it, aimed at the target",
-};
-/** The behaviours' glyphs (24 × 24 line icons). */
-const CAM_ICON: Record<Settings["rotation"], string> = {
-  orbit: '<circle cx="12" cy="12" r="2.6" class="f"/><ellipse cx="12" cy="12" rx="9" ry="4.2"/><circle cx="20.2" cy="10.4" r="1.5" class="f"/>',
-  follow: '<circle cx="15" cy="12" r="3" class="f"/><path d="M3 12h6M6 9l3 3-3 3"/><path d="M18.5 7.5a6.5 6.5 0 0 1 0 9"/>',
-  free: '<path d="M12 3l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z"/>',
-  tripod: '<path d="M12 5v6M12 11l-6 9M12 11l6 9M12 11v9"/><rect x="8.5" y="3" width="7" height="4" rx="1"/>',
-};
-/** A height [m] as the panel shows it. */
-const fmtHeight = (m: number) => (m < 1e3 ? `${m.toFixed(0)} m` : m < 1e6 ? `${(m / 1e3).toFixed(m < 1e4 ? 1 : 0)} km` : `${(m / 1e6).toFixed(1)} Mm`);
 const canvas = $<HTMLCanvasElement>("view");
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
@@ -81,7 +67,7 @@ function sanitize(s: Settings): Settings {
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "farFieldLut", "volumetricClouds", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
-  "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
+  "massSolar", "cinematicSpeed", "rotation", "lookAt", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
   "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
 ];
@@ -164,14 +150,12 @@ async function main() {
   let guiDirty = false; // GUI widgets need refreshing (camera moved)
   let previousTarget = settings.target; // (the panel's target choice is applied through the camera)
 
-  const camera = new CameraController(canvas, settings, (mode) => {
-    $("btn-orbit").classList.toggle("active", mode === "orbit");
-    $("btn-dive").classList.toggle("active", mode === "dive");
-    $("btn-journey").classList.toggle("active", mode === "journey");
-    $("btn-fly").classList.toggle("active", camera.flyMode);
-    $("btn-gravity").classList.toggle("active", camera.gravity);
-    syncRotationButtons();
+  /** the camera panel (ui/camerapanel.ts), once built */
+  let camPanel: CameraPanel | null = null;
+  const camera = new CameraController(canvas, settings, () => {
+    syncCameraButton();
     syncButtons();
+    camPanel?.refresh();
     touch();
     guiDirty = true;
   });
@@ -353,24 +337,9 @@ async function main() {
     "btn-tools": () => toolsWin.toggle(),
     "btn-scenes": () => scenes.toggle(),
     "btn-sound": () => toggleSound(),
-    "btn-orbit": () => camera.setCinematic(camera.cinematic === "orbit" ? null : "orbit"),
-    "btn-dive": () => camera.setCinematic(camera.cinematic === "dive" ? null : "dive"),
-    "btn-fly": () => camera.setFlyMode(!camera.flyMode),
-    "btn-gravity": () => {
-      camera.setGravity(!camera.gravity);
-      refreshGui();
-      touch();
-    },
-    "btn-rotation": () => {
-      const i = CAM_MODES.indexOf(settings.rotation);
-      camera.setRotation(CAM_MODES[(i + 1) % CAM_MODES.length]!);
-      panel.toast(`Camera: ${CAM_LABEL[settings.rotation]} — ${CAM_HELP[settings.rotation]}`);
-      camPop.refresh();
-    },
-    "btn-target": () => camPop.toggle(),
-    "btn-journey": () => {
-      camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
-      refreshGui();
+    "btn-camera": () => {
+      camPanel!.toggle();
+      syncCameraButton();
     },
     "btn-guide": () => toggle("shadowGuide"),
     "btn-jet": () => toggle("jet"),
@@ -403,164 +372,93 @@ async function main() {
     camera.pad.rumble(0.1, 0.3, 50);
     panel.toast(`Target: ${BODY_NAMES[settings.target]}  (${list.indexOf(settings.target) + 1} / ${list.length})`);
   }
-  // ---- the camera panel (the target button): its behaviour, its target, its speed; the Ranger's views
-  const camPop = (() => {
-    const el = document.createElement("div");
-    el.id = "cam-pop";
-    el.hidden = true;
-    document.body.append(el);
-    const mk = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-      const e = document.createElement(tag);
-      if (cls) e.className = cls;
-      if (text) e.textContent = text;
-      return e;
-    };
-    const svg = (body: string) => `<svg viewBox="0 0 24 24">${body}</svg>`;
-    let filter = "";
-    const statusMode = mk("span", "cp-mode");
-    const statusText = mk("span", "cp-carried");
-    function section(label: string) {
-      const sec = mk("div", "cp-sec");
-      sec.append(mk("div", "cp-label", label));
-      el.append(sec);
-      return sec;
+  // ---- the camera: its view (a placement, falling freely), the look, the cinematics — one set of commands
+  // for the camera panel, the keys and the controller
+  /** The camera's view without the ship: its placement, or falling freely. */
+  const view = (): View => (camera.gravity ? "fall" : settings.rotation);
+  /** Sets the view, from where the camera is (none of them moves it). */
+  function setView(v: View, say = true) {
+    if (settings.ship) return;
+    if (v === "fall") {
+      if (!camera.gravity) camera.setGravity(true);
+    } else {
+      if (camera.gravity) camera.setGravity(false);
+      camera.setRotation(v);
     }
-    function tile(icon: string, name: string, desc: string, active: boolean, on: () => void) {
-      const b = mk("button", "cp-tile");
-      b.classList.toggle("active", active);
-      const i = mk("span", "cp-ti");
-      i.innerHTML = svg(icon);
-      const t = mk("span", "cp-tt");
-      t.append(mk("b", "", name), mk("small", "", desc));
-      b.append(i, t);
-      b.onclick = () => {
-        on();
-        touch();
-        refresh();
-      };
-      return b;
+    if (say) panel.toast(`Camera: ${VIEW_LABEL[v]} — ${VIEW_HELP[v]}${v === "fall" && !settings.animate ? " (paused: Space runs time)" : ""}`);
+    refreshGui();
+    touch();
+  }
+  /** The next view (V): the ship's attach points, else the placements. */
+  function nextView(dir: 1 | -1) {
+    if (settings.ship) {
+      const keys = Object.keys(MOUNTS) as Mount[];
+      return setMount(keys[(keys.indexOf(settings.shipMount as Mount) + dir + keys.length) % keys.length]!);
     }
-    /** the targets by kind: the worlds here, their moons, what lies beyond the wormhole */
-    function groupsOf(list: Target[]): [string, Target[]][] {
-      const ours = list.filter((b) => SOLAR_BODIES.some((q) => q.id === b));
-      const theirs = list.filter((b) => !ours.includes(b));
-      const planets = ours.filter((b) => { const q = SOLAR_BODIES.find((x) => x.id === b)!; return !q.parent || q.parent === "sun"; });
-      const moons = ours.filter((b) => !planets.includes(b));
-      const here = cameraFrame(settings).region === "throat" && cameraFrame(settings).ell < 0;
-      const g: [string, Target[]][] = here
-        ? [["The Sun and the planets", planets], ["Moons", moons], ["Beyond the wormhole", theirs]]
-        : [["Gargantua's system", theirs], ["Through the wormhole — the Sun and the planets", planets], ["Moons", moons]];
-      return g.filter(([, l]) => l.length);
+    setView(VIEWS[(VIEWS.indexOf(view()) + dir + VIEWS.length) % VIEWS.length]!);
+  }
+  /** A cinematic on or off (the dive and the journey are the free camera's). */
+  function cinematic(c: "orbit" | "dive" | "journey") {
+    if (settings.ship && c !== "orbit") return panel.toast("The dive and the journey are the free camera's — leave the Ranger (⇧K)");
+    camera.setCinematic(camera.cinematic === c ? null : c);
+    if (camera.cinematic && !settings.animate) panel.toast("Cinematics run with the time — Space runs it");
+    refreshGui();
+    touch();
+  }
+  function toggleLookAt() {
+    camera.setLookAt(!settings.lookAt);
+    panel.toast(settings.lookAt ? `View locked on ${BODY_NAMES[settings.target]}` : "View free");
+    refreshGui();
+    touch();
+  }
+  function toggleTelescope() {
+    camera.setTelescope(!settings.telescope);
+    panel.toast(settings.telescope ? `Telescope on ${BODY_NAMES[settings.target]} — the wheel zooms (to a 0.02° field), Y leaves` : "Telescope off");
+    refreshGui();
+    touch();
+  }
+  /**
+   * Takes the free camera to a body — anywhere in the world, through the wormhole too: in orbit around
+   * it (a planet, a moon: a few radii up), around it. Why it cannot, or null.
+   */
+  function goTo(b: Target): string | null {
+    if (settings.ship) return "The Ranger flies there: the planner (O), the autopilot (0: approach)";
+    const id = b === "hole" ? "gargantua" : b;
+    const u = universeOf(id);
+    camera.setCinematic(null);
+    if (!u || (u === "gargantua" && id !== "gargantua" && settings.system !== "gargantua")) {
+      if (!camera.availableTargets().includes(b)) return `${BODY_NAMES[b]} is not in this world`;
+      setView("orbit", false);
+      camera.selectTarget(b, { frame: true });
+      return null;
     }
-    function refresh() {
-      if (el.hidden) return;
-      el.replaceChildren();
-      // header: the title, the state, a close button
-      const head = mk("div", "fl-title cp-head");
-      head.append(mk("span", "fl-htext", settings.ship ? "Camera · Ranger" : "Camera"));
-      const x = mk("button", "cp-x", "×");
-      x.title = "Close";
-      x.onclick = () => toggle(false);
-      head.append(x);
-      const st = mk("div", "cp-state");
-      st.append(statusMode, statusText);
-      el.append(head, st);
-      if (settings.ship) {
-        for (const [g, outside] of [["On the ship", false], ["Outside", true]] as const) {
-          const sec = section(g);
-          const tiles = mk("div", "cp-tiles cp-tiles-3");
-          for (const m of Object.keys(MOUNTS) as Mount[]) {
-            if (!!(MOUNTS[m] as { outside?: string }).outside !== outside) continue;
-            tiles.append(tile(CAM_ICON[outside ? (m === "around" ? "orbit" : "free") : "follow"], MOUNTS[m].short, MOUNTS[m].label, settings.shipMount === m, () => setMount(m)));
-          }
-          sec.append(tiles);
-        }
-      } else {
-        const sec = section("Behaviour");
-        const tiles = mk("div", "cp-tiles");
-        for (const m of CAM_MODES) tiles.append(tile(CAM_ICON[m], CAM_LABEL[m], CAM_HELP[m], settings.rotation === m, () => {
-          camera.setRotation(m);
-          syncRotationButtons();
-        }));
-        sec.append(tiles);
-      }
-      // the target: a search, the bodies by kind
-      const tsec = section("Target");
-      const search = mk("input", "cp-search") as HTMLInputElement;
-      search.type = "search";
-      search.placeholder = "Search a body…";
-      search.value = filter;
-      const lists = mk("div", "cp-groups");
-      const fill = () => {
-        lists.replaceChildren();
-        const q = filter.trim().toLowerCase();
-        for (const [g, list] of groupsOf(camera.availableTargets())) {
-          const items = list.filter((b) => !q || BODY_NAMES[b].toLowerCase().includes(q));
-          if (!items.length) continue;
-          lists.append(mk("div", "cp-gname", g));
-          const box = mk("div", "cp-bodies");
-          for (const b of items) {
-            const btn = mk("button", "cp-body");
-            btn.classList.toggle("active", settings.target === b);
-            const dot = mk("i");
-            dot.style.background = `rgb(${BODY_COLOURS[b] ?? "200, 200, 200"})`;
-            btn.append(dot, mk("span", "", BODY_NAMES[b]));
-            btn.onclick = () => {
-              camera.selectTarget(b, { focus: true });
-              syncRotationButtons();
-              touch();
-              refresh();
-            };
-            box.append(btn);
-          }
-          lists.append(box);
-        }
-      };
-      search.oninput = () => {
-        filter = search.value;
-        fill();
-      };
-      fill();
-      tsec.append(search, lists);
-      if (!settings.ship) {
-        const ssec = section("Speed");
-        const row = mk("div", "cp-speed");
-        const r = mk("input") as HTMLInputElement;
-        r.type = "range";
-        r.min = "-4";
-        r.max = "4";
-        r.step = "0.1";
-        r.value = String(Math.log2(camera.flySpeed));
-        const v = mk("span", "cp-value", `×${camera.flySpeed.toFixed(2)}`);
-        r.oninput = () => {
-          camera.flySpeed = 2 ** Number(r.value);
-          v.textContent = `×${camera.flySpeed.toFixed(2)}`;
-        };
-        row.append(r, v);
-        ssec.append(row);
-      }
-      status();
+    if (u === "ours" && !(settings.system === "gargantua" && settings.wormhole)) return "The solar system lies through the wormhole of the Gargantua-system scenes";
+    try {
+      const sb = u === "ours" ? solarBody(id) : null;
+      const alt = sb ? Math.max(defaultAltKm(id), (2.2 * sb.radius * M_METRES) / 1e3) : undefined;
+      const p = u === "ours"
+        ? ourOrbitPose({ body: id, altKm: alt }, sim.time)
+        : theirOrbitPose({ body: id, rM: id === "gargantua" ? 40 : undefined, altKm: id === "gargantua" ? undefined : 20000 }, sim.time, settings.spin, settings.massSolar);
+      if (camera.gravity) camera.setGravity(false);
+      if (p.frame === "ours") setHomePose(settings, p.X, p.fwd, p.up, p.vel);
+      else setHolePose(settings, p.X, p.fwd, p.up, p.vel);
+      settings.motion = "geodesic";
+      camera.setOurLanded(null);
+      camera.sync();
+      settings.rotation = "orbit";
+      camera.selectTarget(b, { focus: true });
+      panel.toast(`Camera: around ${BODY_NAMES[b]}`);
+      refreshGui();
+      touch();
+      return null;
+    } catch (e) {
+      return (e as Error).message;
     }
-    function status() {
-      if (el.hidden) return;
-      if (settings.ship) {
-        statusMode.textContent = MOUNTS[settings.shipMount as Mount]?.short ?? "";
-        statusText.textContent = `Target: ${BODY_NAMES[settings.target]}`;
-        return;
-      }
-      const rs = camera.rigStatus();
-      statusMode.textContent = CAM_LABEL[settings.rotation];
-      statusText.textContent = rs
-        ? `on ${BODY_NAMES[rs.body]} · ${fmtHeight(rs.h * 1476.625 * settings.massSolar)} above it`
-        : settings.rotation === "orbit" ? `around ${BODY_NAMES[settings.target]}` : "in open space";
-    }
-    function toggle(open = el.hidden) {
-      el.hidden = !open;
-      filter = "";
-      refresh();
-    }
-    return { toggle: () => toggle(), refresh, status };
-  })();
+  }
+  camPanel = new CameraPanel({
+    settings, camera, view, setView: (v) => setView(v), setMount: (m) => setMount(m), cinematic, goTo,
+    changed: (keys) => onSettingsChange(keys), toast: (t) => panel.toast(t),
+  });
 
   /** Next attach point of the camera on the Ranger (turns the ship on). */
   function nextMount() {
@@ -572,15 +470,15 @@ async function main() {
     setMount(keys[(keys.indexOf(settings.shipMount as Mount) + 1) % keys.length]!);
     touch();
   }
-  function syncRotationButtons() {
-    const orbit = settings.rotation === "orbit";
-    const btn = $("btn-rotation");
-    btn.classList.toggle("free", !orbit);
-    btn.querySelector("span")!.textContent = CAM_LABEL[settings.rotation];
-    btn.dataset.tip = `Camera: ${CAM_LABEL[settings.rotation]} — ${CAM_HELP[settings.rotation]} (R: next behaviour)`;
-    const tb = $("btn-target");
-    tb.querySelector("span")!.textContent = BODY_NAMES[settings.target];
-    tb.dataset.body = settings.target;
+  /** The toolbar's camera button: the view and the target. */
+  function syncCameraButton() {
+    const btn = $("btn-camera");
+    const v = settings.ship ? (MOUNTS[settings.shipMount as Mount]?.short ?? "Ranger") : camera.cinematic ? { orbit: "Auto-orbit", dive: "Dive", journey: "Journey" }[camera.cinematic] : VIEW_LABEL[view()];
+    btn.querySelector(".cam-mode")!.textContent = `${v}${settings.telescope ? " · 🔭" : ""}`;
+    btn.querySelector(".cam-target")!.textContent = BODY_NAMES[settings.target];
+    btn.classList.toggle("locked", settings.lookAt || (!settings.ship && view() === "orbit"));
+    btn.style.setProperty("--body", `rgb(${BODY_COLOURS[settings.target] ?? "200, 200, 200"})`);
+    btn.classList.toggle("active", camPanel?.open ?? false);
     previousTarget = settings.target;
   }
   function syncButtons() {
@@ -592,7 +490,7 @@ async function main() {
     $("btn-sound").classList.toggle("muted", !settings.sound);
   }
   syncButtons();
-  syncRotationButtons();
+  syncCameraButton();
 
   // -------------------------------------------------------------------- game controller
   // -------------------------------------------------------------------- piloting the Ranger
@@ -663,6 +561,10 @@ async function main() {
   }
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
+    camera: () => {
+      camPanel!.toggle();
+      syncCameraButton();
+    },
     addNodeAt: (t) => {
       camera.addNode(Math.max(t - sim.time, 1e-3));
       touch();
@@ -747,7 +649,7 @@ async function main() {
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyR") pilotRoll();
-    else if (e.code === "KeyY") togglePathInView();
+    else if (e.code === "KeyY" && e.shiftKey) togglePathInView(); // (Y alone: the telescope, every mode)
     else if ((e.code === "KeyZ" || e.code === "KeyX") && camera.outsideView() === "free") e.preventDefault(); // (the free camera's keys)
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
@@ -792,17 +694,17 @@ async function main() {
     switch (a) {
       case "focus":
         // fly the view to the target (framed), like a double-click on it
-        if (settings.rotation !== "orbit") camera.setRotation("orbit");
+        if (view() !== "orbit" && !camera.gravity) setView("orbit", false);
         camera.selectTarget(settings.target, { frame: !camera.gravity });
         break;
       case "gravity":
-        actions["btn-gravity"]!();
+        setView(view() === "fall" ? "free" : "fall");
         break;
       case "auto":
-        actions["btn-orbit"]!();
+        cinematic("orbit");
         break;
       case "rotation":
-        actions["btn-rotation"]!();
+        nextView(1);
         break;
       case "prevTarget":
         nextTarget(-1);
@@ -881,18 +783,22 @@ async function main() {
     if (k === "h") toggleUi();
     else if (k === "r") {
       if (e.shiftKey) camera.resetView();
-      else actions["btn-rotation"]!();
+      else nextView(1);
       touch();
     } else if (e.key === "Tab") {
       e.preventDefault();
       nextTarget(e.shiftKey ? -1 : 1);
     } else if (k === "p") savePNG();
     else if (k === "f") fullscreen();
-    else if (k === "o") actions["btn-orbit"]!();
-    else if (k === "c") actions["btn-dive"]!();
-    else if (k === "t") actions["btn-journey"]!();
-    else if (k === "v") actions["btn-fly"]!();
-    else if (k === "b") actions["btn-gravity"]!();
+    // the camera, in every mode: V the next view, C the look locked on the target, Y the telescope; the
+    // free camera's B falling freely, O T ⇧C its cinematics
+    else if (k === "v") nextView(e.shiftKey ? -1 : 1);
+    else if (k === "c" && !e.shiftKey) toggleLookAt();
+    else if (k === "y") toggleTelescope();
+    else if (k === "o") cinematic("orbit");
+    else if (k === "c") cinematic("dive");
+    else if (k === "t") cinematic("journey");
+    else if (k === "b") setView(view() === "fall" ? "free" : "fall");
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");
     else if (k === "l") actions["btn-cinema"]!();
@@ -1324,7 +1230,8 @@ async function main() {
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;
       document.body.classList.toggle("glass-blur", settings.glassBlur);
-      camPop.status();
+      camPanel!.refresh();
+      syncCameraButton();
       transport!.update();
       cpuProf.time("panel & readouts", () => {
         updateHUD(lastStats!, fps);
@@ -1367,8 +1274,10 @@ async function main() {
     const marker = targetMarker();
     const hover = camera.hover;
     const ship = shipMarker();
-    const key = guide || camera.flyMode || marker || hover || ship
-      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key].join()
+    const tele = telescopeView(cam);
+    const key = guide || camera.flyMode || marker || hover || ship || tele
+      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key,
+        tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking]].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
@@ -1376,7 +1285,8 @@ async function main() {
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (key === "off") return;
     if (camera.flyMode) drawCrosshair(ctx);
-    if (marker) drawMarker(ctx, marker);
+    if (tele) drawTelescope(ctx, overlay.width, overlay.height, devicePixelRatio, tele);
+    if (marker && !tele) drawMarker(ctx, marker);
     if (hover && hover.body !== marker?.body) drawHover(ctx, hover);
     if (ship) drawShipMarker(ctx, ship);
     if (!guide) return;
@@ -1477,16 +1387,7 @@ async function main() {
   }
 
   // ------------------------------------------------------------------ target marker
-  const BODY_COLOURS: Record<Target, string> = {
-    hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255",
-    miller: "140, 210, 220", mann: "220, 232, 245", k2: "255, 190, 120", edmunds: "220, 170, 120",
-    sun: "255, 236, 170", mercury: "190, 180, 170", venus: "240, 220, 170", earth: "120, 180, 255", moon: "210, 210, 210",
-    mars: "240, 130, 90", phobos: "170, 150, 130", deimos: "170, 150, 130", ceres: "180, 180, 180", jupiter: "230, 200, 160",
-    io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
-    mimas: "210, 210, 210", enceladus: "240, 245, 255", tethys: "220, 220, 220", dione: "210, 210, 210", rhea: "210, 210, 210",
-    titan: "235, 170, 90", iapetus: "200, 190, 170", uranus: "160, 220, 230", neptune: "110, 150, 255", triton: "220, 210, 220",
-    pluto: "220, 190, 160", charon: "190, 190, 190",
-  };
+
   /**
    * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an
    * arrow at the edge of the view when it is off-screen. Shown while the camera is handled, then fades.
@@ -1610,6 +1511,18 @@ async function main() {
     return `ℓ = ${settings.whL.toFixed(2)} M (${side})`;
   }
 
+  /** The telescope's overlay (ui/telescope.ts): the lens, the target where it is, the tracking. */
+  function telescopeView(cam: ReturnType<typeof cameraFrame>): TelescopeView | null {
+    if (!settings.telescope || renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    const info = camera.targetInfo();
+    const tanH = Math.tan((settings.fov * Math.PI) / 360);
+    const ndc = info ? projectLook(cam, info.look, tanH, overlay.width / overlay.height) : null;
+    return {
+      fov: settings.fov, mPerM: 1476.625 * settings.massSolar, tracking: settings.lookAt,
+      target: info ? { name: info.name, ang: info.ang, dist: info.dist, ndc: ndc ? [ndc[0], ndc[1]] : null } : null,
+    };
+  }
+
   function drawCrosshair(ctx: CanvasRenderingContext2D) {
     const x = overlay.width / 2;
     const y = overlay.height / 2;
@@ -1668,9 +1581,12 @@ async function main() {
     else if (!settings.ship) {
       const rs = camera.rigStatus();
       const carried = rs ? ` · on ${BODY_NAMES[rs.body]}, ${fmtHeight(rs.h * 1476.625 * settings.massSolar)}` : "";
-      chips.push(`<span class="chip">${settings.rotation === "orbit" ? "↻" : settings.rotation === "free" ? "✦" : settings.rotation === "follow" ? "⇢" : "⊥"} ${CAM_LABEL[settings.rotation]}${settings.rotation === "free" ? "" : ` ${BODY_NAMES[settings.target]}`}${carried}</span>`);
+      const v = view();
+      const glyph = { orbit: "↻", free: "✦", follow: "⇢", tripod: "⊥", fall: "↓" }[v];
+      const aimed = v === "orbit" || settings.lookAt ? ` ${BODY_NAMES[settings.target]}` : "";
+      chips.push(`<span class="chip${v === "fall" ? " hot" : ""}">${glyph} ${v === "fall" && camera.landed ? "Landed" : VIEW_LABEL[v]}${aimed}${carried}</span>`);
     }
-    if (camera.gravity) chips.push(`<span class="chip hot">${camera.landed ? "On the star" : "Gravity"}</span>`);
+    if (settings.telescope) chips.push(`<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`);
     if (camera.pad.connected) chips.push(`<span class="chip" title="Game controller">🎮</span>`);
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);

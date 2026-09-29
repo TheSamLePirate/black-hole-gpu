@@ -31,6 +31,8 @@ export interface GameSave {
     properTime: number;
   };
   plan: { nodes: ManeuverNode[]; note: string; mission: unknown } | null;
+  /** the free camera (no ship): falling freely (older saves: none) */
+  camera?: { gravity: boolean };
 }
 
 const AUTO_KEY = "kerr.autosave";

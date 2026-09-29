@@ -154,6 +154,8 @@ export interface FlightHudActions {
   sas(): void;
   roll(): void;
   warp(dir: 1 | -1): void;
+  /** the app's camera panel (its views, the look, the lens, the target) — else the HUD's own menu */
+  camera?(): void;
   mount(m: Mount): void;
   lookAhead(): void;
   throttle(t: number): void;
@@ -316,6 +318,7 @@ export class FlightHud {
     viewMenu.append(ahead);
     // (the menu lives in the HUD's root: the mission bar's cut-away ends would clip it)
     viewBtn.onclick = () => {
+      if (act.camera) return act.camera();
       viewMenu.hidden = !viewMenu.hidden;
       if (viewMenu.hidden) return;
       const r = viewBtn.getBoundingClientRect();
