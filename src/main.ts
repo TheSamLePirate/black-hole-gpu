@@ -25,6 +25,7 @@ import { GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
+import { cappedRatio } from "./tier";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -914,7 +915,10 @@ async function main() {
   const scaleMs = new Map<number, { ms: number; at: number }>();
   let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
   function resize() {
-    const dpr = settings.pixelRatio * renderScale;
+    // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
+    // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
+    const ratio = settings.dynamicResolution ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) : settings.pixelRatio;
+    const dpr = ratio * renderScale;
     const w = Math.round(canvas.clientWidth * dpr);
     const h = Math.round(canvas.clientHeight * dpr);
     if (canvas.width !== w || canvas.height !== h) {

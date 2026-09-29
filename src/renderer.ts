@@ -2,6 +2,7 @@ import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { bodyAxes, M_METRES, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
+import { guessTier, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -690,6 +691,7 @@ export class Renderer {
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
+    r.tier = guessTier(adapter);
     void lost.then((info) => {
       r.lost = info.reason === "destroyed" ? "released" : info.message || "the GPU was reset";
       if (info.reason !== "destroyed") r.onLost?.(r.lost);
@@ -2153,6 +2155,8 @@ export class Renderer {
    *  - Still: progressive full-resolution refinement (error-controlled RK4, Gaussian-filtered
    *    jittered samples, adaptive sampling) in bands sized to ~28 ms of GPU time.
    */
+  /** the hardware's tier (its pixel budget for the realtime image) */
+  tier: Tier = { level: 2, capMpx: 2.2, label: "" };
   /** the device was lost (its reason), or null */
   lost: string | null = null;
   onLost?: (why: string) => void;

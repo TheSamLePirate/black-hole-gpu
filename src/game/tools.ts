@@ -295,7 +295,7 @@ export class GameTools {
     if (!save) throw new Error(`no saved game "${g}"`);
     const s = this.ctx.settings, c = this.ctx.camera;
     // (this screen's pixel ratio and the listener's sound stay theirs)
-    const own = { pixelRatio: s.pixelRatio, sound: s.sound, soundVolume: s.soundVolume, soundBeeps: s.soundBeeps, soundEngines: s.soundEngines, soundAmbience: s.soundAmbience, soundUi: s.soundUi };
+    const own = { pixelRatio: s.pixelRatio, fpsCap: s.fpsCap, glassBlur: s.glassBlur, temporalReprojection: s.temporalReprojection, sound: s.sound, soundVolume: s.soundVolume, soundBeeps: s.soundBeeps, soundEngines: s.soundEngines, soundAmbience: s.soundAmbience, soundUi: s.soundUi };
     Object.assign(s, defaultSettings(), save.settings, own);
     this.ctx.setTime(save.time);
     c.setCinematic(null);
@@ -374,7 +374,7 @@ export class GameTools {
     return {
       loopFps: r2(cpuProf.loopFps), renderFps: r2(cpuProf.renderFps), worstLoopMs: r2(cpuProf.worstLoop),
       gpuFrameMs: r2(r.lastGpuMs), gpuPassesMs: r2(r.prof.frameMs), gpuProfiled: r.prof.frames, gpuSupported: r.prof.supported,
-      image: cv ? `${cv.width}×${cv.height}` : "", pixelRatio: s.pixelRatio, renderScale: this.ctx.renderScale(), quality: s.quality, budgetMs: s.realtimeBudget, block: r.realtimeBlockNow,
+      image: cv ? `${cv.width}×${cv.height}` : "", pixelRatio: s.pixelRatio, tier: r.tier, renderScale: this.ctx.renderScale(), quality: s.quality, budgetMs: s.realtimeBudget, block: r.realtimeBlockNow,
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
     };
