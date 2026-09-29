@@ -1,6 +1,7 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { bodyAxes, M_METRES, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
+import { bakeNoise3d } from "./noise3d";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -222,6 +223,8 @@ export class Renderer {
   private postBeamH: GPUComputePipeline;
   private postAtrous: GPUComputePipeline;
   private postTemporal: GPUComputePipeline;
+  private noise3d!: GPUTexture;
+  private noiseSampler!: GPUSampler;
   private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   /** The spaceship carrying the camera, and the light probe that lights it. */
@@ -428,8 +431,13 @@ export class Renderer {
         { binding: 21, visibility: C, texture: { sampleType: "float" } },
         { binding: 22, visibility: C, texture: { sampleType: "float" } },
         { binding: 23, visibility: C, texture: { sampleType: "float" } },
+        { binding: 24, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
+        { binding: 25, visibility: C, sampler: { type: "filtering" } },
       ],
     });
+    // (the disk's turbulence: a tiling noise baked once)
+    this.noise3d = bakeNoise3d(device);
+    this.noiseSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat" });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
     const mkTrace = (quality: boolean) =>
       device.createComputePipeline({
@@ -880,6 +888,8 @@ export class Renderer {
         { binding: 21, resource: this.earthMaps.surf.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
+        { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
+        { binding: 25, resource: this.noiseSampler },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -908,6 +918,8 @@ export class Renderer {
         { binding: 21, resource: this.earthMaps.surf.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
+        { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
+        { binding: 25, resource: this.noiseSampler },
       ],
     });
     t.polGridPass = d.createBindGroup({

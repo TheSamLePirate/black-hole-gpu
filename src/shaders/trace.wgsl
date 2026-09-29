@@ -1369,6 +1369,10 @@ fn gnoise(p: vec3f) -> f32 {
                    mix(mix(n4, n5, u.x), mix(n6, n7, u.x), u.y), u.z);
 }
 
+// gnoise read from the baked texture (trilinear, a quarter-unit lattice): the disk's 20–36 noises a
+// sample, one fetch each instead of 8 hashed gradients
+fn dnoise(p: vec3f) -> f32 { return textureSampleLevel(noiseTex, noiseSamp, p * (1.0 / 32.0), 0.0).r; }
+
 // The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
 // orbits, breaking up into turbulent clouds, with dense cool smoke that darkens what lies behind it,
 // and open lanes). Two fields: the heat (the strands: temperature) and the density (the clouds and
@@ -1390,12 +1394,12 @@ fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32, px: f32) -> vec2f {
   // (the strands waver, like hair or flames: locally twisted, not perfect circles — both ways, no
   // spiral at large scale)
   let c0 = vec2f(cos(ang0), sin(ang0));
-  let ang = ang0 + 0.08 * gnoise(vec3f(c0 * 3.0, lr * 3.0 + 5.0));
+  let ang = ang0 + 0.08 * dnoise(vec3f(c0 * 3.0, lr * 3.0 + 5.0));
   let c = vec2f(cos(ang), sin(ang));
-  let lw = lr + 0.03 * gnoise(vec3f(c * 2.1, lr * 8.0 + 11.0));
+  let lw = lr + 0.03 * dnoise(vec3f(c * 2.1, lr * 8.0 + 11.0));
   // (height: the structures run through the thin disk, ragged at its surface)
   // wide lanes (open, dark) and full stretches
-  let lanes = 0.5 + 0.5 * gnoise(vec3f(c * 1.2, lw * 7.0 + zn * 0.15));
+  let lanes = 0.5 + 0.5 * dnoise(vec3f(c * 1.2, lw * 7.0 + zn * 0.15));
   let lod = 1.0 / max(px, 1e-9);
   // clouds and smoke: fBm, every octave keeping the stretch along the orbit
   var cl = 0.0;
@@ -1405,7 +1409,7 @@ fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32, px: f32) -> vec2f {
   for (var o = 0; o < 4; o++) {
     let w = smoothstep(0.35, 1.2, cell * lod);
     if (w <= 0.0) { break; }
-    cl += w * amp * gnoise(q);
+    cl += w * amp * dnoise(q);
     q = q * vec3f(2.17, 2.17, 2.3) + vec3f(1.7, 9.2, 3.1);
     amp *= 0.55;
     cell /= 2.3;
@@ -1424,7 +1428,7 @@ fn diskStrands(ang0: f32, lr0: f32, zn: f32, ring: f32, px: f32) -> vec2f {
     let wr = smoothstep(0.35, 1.2, lod / rf[o]);
     if (wr <= 0.0) { break; }
     let rq = vec3f(c * ra[o], lw * rf[o] + zn * 1.3 + f32(o) * 7.7);
-    let ridge = 1.0 - abs(gnoise(rq) + 0.45 * gnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
+    let ridge = 1.0 - abs(dnoise(rq) + 0.45 * dnoise(rq * vec3f(2.1, 2.1, 1.7) + vec3f(3.3)));
     r3 = mix(r3, ridge * ridge * ridge, wr);
   }
   let heat = clamp(body * (0.3 + 0.45 * cl + 0.95 * (r3 - 0.15)), 0.0, 1.0);
@@ -1455,9 +1459,9 @@ fn diskCoarse(ang: f32, lr0: f32, ring: f32, px: f32) -> f32 {
   let lod = 1.0 / max(px, 1e-9);
   var v = 0.0;
   let wl = smoothstep(0.35, 1.2, lod / 4.0);
-  if (wl > 0.0) { v += 0.85 * wl * gnoise(vec3f(c * 1.4, lr * 4.0 + 3.0)); }
+  if (wl > 0.0) { v += 0.85 * wl * dnoise(vec3f(c * 1.4, lr * 4.0 + 3.0)); }
   let wb = smoothstep(0.35, 1.2, lod / 30.0);
-  if (wb > 0.0) { v += 0.75 * wb * gnoise(vec3f(c * 0.7, lr * 30.0 + 7.0)); }
+  if (wb > 0.0) { v += 0.75 * wb * dnoise(vec3f(c * 0.7, lr * 30.0 + 7.0)); }
   // (streaks: ridges along the orbits, 12 and 28 per unit of ln r — the strands seen from afar)
   var st = 0.0;
   let sf = array<f32, 2>(12.0, 28.0);
@@ -1465,7 +1469,7 @@ fn diskCoarse(ang: f32, lr0: f32, ring: f32, px: f32) -> f32 {
     let ws = smoothstep(0.35, 1.2, lod / sf[o]);
     if (ws <= 0.0) { break; }
     let q = vec3f(c * (1.1 + 0.6 * f32(o)), lr * sf[o] + 13.0 + f32(o) * 5.3);
-    let rg = 1.0 - abs(gnoise(q) + 0.4 * gnoise(q * vec3f(2.0, 2.0, 1.8) + vec3f(4.1)));
+    let rg = 1.0 - abs(dnoise(q) + 0.4 * dnoise(q * vec3f(2.0, 2.0, 1.8) + vec3f(4.1)));
     st = mix(st, 2.0 * (rg * rg * rg) - 0.6, ws);
   }
   v += 0.8 * st;
@@ -1663,11 +1667,11 @@ fn diskSmoke(R: f32, phi: f32, zn: f32, z: f32, tEm: f32, a: f32) -> f32 {
     let zr = sign(z) * (abs(z) - 0.02 * tEm);
     var q = vec3f(R * cos(ang), R * sin(ang), zr) * 0.8 + vec3f(0.0, 0.0, (pc.ib0 + f32(k)) * 17.3);
     let tw = 0.015 * tEm;
-    q += 0.9 * vec3f(gnoise(q * 0.4 + vec3f(0.0, 0.0, tw)), gnoise(q * 0.4 + vec3f(5.2, 1.3, tw + 7.1)), 0.0);
+    q += 0.9 * vec3f(dnoise(q * 0.4 + vec3f(0.0, 0.0, tw)), dnoise(q * 0.4 + vec3f(5.2, 1.3, tw + 7.1)), 0.0);
     var f = 0.0;
     var amp = 0.5;
     for (var o = 0; o < 5; o++) {
-      f += amp * gnoise(q);
+      f += amp * dnoise(q);
       q = q * 2.1 + vec3f(3.7, 1.3, 5.1);
       amp *= 0.5;
     }
@@ -3218,6 +3222,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
+// the disk's turbulence: gradient noise baked into a tiling texture (noise3d.ts: period 32, 4 texels a unit)
+@group(0) @binding(24) var noiseTex: texture_3d<f32>;
+@group(0) @binding(25) var noiseSamp: sampler;
 
 const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS_HI)
 // the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
