@@ -1062,6 +1062,8 @@ export class FlightHud {
     const width = bound ? 2 * a : reach + rp;
     const k = Math.min((cw - S(36)) / width, (ch - S(20)) / (2 * (bound ? a * Math.sqrt(1 - e * e) : reach)), (ch / 2 - S(10)) / R);
     const cx = bound ? cw / 2 + a * e * k : cw / 2 + ((reach - rp) / 2) * k, cy = ch / 2;
+    // (degenerate elements — resting on the ground, a radial fall —: nothing to draw)
+    if (!(Number.isFinite(k) && k > 0 && Number.isFinite(cx) && R > 0)) return;
     const col = OUR_COLOURS[st.soi] ?? "124, 214, 255";
     const p = a * Math.abs(1 - e * e);
     const at = (nu: number) => {
