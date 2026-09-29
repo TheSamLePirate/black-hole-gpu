@@ -36,16 +36,21 @@ export class GpuProfiler {
   private get on() {
     return this.enabled && this.supported && !this.reading;
   }
+  /** profile one frame in `every` (timestamps split the GPU's work: ~2–3 % when every frame) */
+  every = 8;
+  private tick = 0;
+  private active = false;
 
   /** A new frame's passes (call before encoding them). */
   begin() {
-    if (this.on) this.labels = [];
+    this.active = this.on && this.tick++ % this.every === 0;
+    if (this.active) this.labels = [];
   }
 
   /** A pass descriptor's timestamp writes, for a labelled pass (or nothing when off / full). */
   pass<T extends GPUComputePassDescriptor | GPURenderPassDescriptor>(label: string, desc?: T): T {
     const d = (desc ?? {}) as T;
-    if (!this.on || this.labels.length >= MAX_PASSES) return d;
+    if (!this.active || !this.on || this.labels.length >= MAX_PASSES) return d;
     const k = this.labels.length;
     this.labels.push(label);
     return { ...d, timestampWrites: { querySet: this.qs!, beginningOfPassWriteIndex: 2 * k, endOfPassWriteIndex: 2 * k + 1 } };
@@ -53,7 +58,7 @@ export class GpuProfiler {
 
   /** At the end of the frame's encoder: resolves the timestamps. */
   end(enc: GPUCommandEncoder) {
-    if (!this.on || !this.labels.length) return;
+    if (!this.active || !this.on || !this.labels.length) return;
     const n = 2 * this.labels.length;
     enc.resolveQuerySet(this.qs!, 0, n, this.resolveBuf!, 0);
     enc.copyBufferToBuffer(this.resolveBuf!, 0, this.readBuf!, 0, n * 8);
