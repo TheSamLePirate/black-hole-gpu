@@ -155,6 +155,8 @@ export class CameraController {
   private pathCost = 0;
   /** the free-fall path asked of the planner's worker, not back yet */
   private kerrPending = false;
+  /** the flight's sub-steps allowed this frame (400 per 1/60 s) */
+  private subCap = 400;
   /** With gravity on: the camera stands on the star's surface. */
   landed = false;
   /** Proper time elapsed on the camera's clock while gravity is on [M]. */
@@ -927,6 +929,9 @@ export class CameraController {
   update(dt: number, time?: number): boolean {
     if (!this.enabled) return false;
     const s = this.s;
+    // (the flight's sub-steps budgeted per second of the frame, not per frame: at 30 fps twice a 60 fps
+    // frame's — the time warp the same whatever the frame rate; 0.1 s at most, a hitch not caught up)
+    this.subCap = Math.round(400 * Math.min(Math.max(dt * 60, 1), 6));
     this.prevTime = Number.isFinite(this.time) ? this.time : (time ?? 0);
     if (time !== undefined) this.time = time;
     this.shipTime = NaN;
@@ -1268,8 +1273,8 @@ export class CameraController {
     let span = simDt;
     if (ours) {
       const tDyn = ourGravity(m.w, p.l, p.n, t0).tDyn;
-      span = Math.min(simDt, 400 * 0.01 * tDyn);
-      steps = Math.min(Math.max(Math.ceil(span / (0.01 * tDyn)), 1), 400);
+      span = Math.min(simDt, this.subCap * 0.01 * tDyn);
+      steps = Math.min(Math.max(Math.ceil(span / (0.01 * tDyn)), 1), this.subCap);
     }
     let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
     const dt = span / steps;
@@ -1378,7 +1383,7 @@ export class CameraController {
     }
     let a = accAt(X, V, t, g);
     let touched: { speed: number } | null = null;
-    for (let i = 0; i < 400 && t < tEnd - 1e-12; i++) {
+    for (let i = 0; i < this.subCap && t < tEnd - 1e-12; i++) {
       const dt = Math.min(stepOf(), tEnd - t);
       // (in the vacuum, clear of the ground: Yoshida's fourth-order composition — the planner's
       // integrator; the flight follows its plans over months)
