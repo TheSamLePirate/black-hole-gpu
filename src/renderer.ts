@@ -1993,7 +1993,10 @@ export class Renderer {
       if (phase === "realtime" && auto) this.adaptBlock(ms, Math.max(8, s.realtimeBudget), used);
       if (phase === "converging" && rows > 0) {
         const perRow = ms / rows;
-        this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (28 / Math.max(perRow, 1e-3)))));
+        // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
+        // refines —, 28 ms at most for the finer qualities)
+        const band = Math.min(28, Math.max(8, s.realtimeBudget));
+        this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3)))));
       }
     });
     this.lastPhase = phase;
