@@ -105,6 +105,7 @@ override HAS_SPOT: bool = true;
 override HAS_VOL: bool = true;
 override HAS_WH: bool = true;     // the wormhole world
 override HAS_THICK: bool = true;  // the volumetric (thick) disk
+override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
@@ -584,7 +585,7 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
 // emission time. A star's photosphere is a limb-darkened blackbody with granulation; a planet reflects
 // the light of the disk or of its star. Frequency shifts use the orbital motion of the centre (rigid
 // rotation Ω around the hole) at the point hit.
-fn bodyCount() -> u32 { return u32(P.bodyCfg.x); }
+fn bodyCount() -> u32 { return select(0u, u32(P.bodyCfg.x), HAS_BODIES); }
 // Gargantua's side: bodies [0, ourStart()); ours: [ourStart(), bodyCount())
 fn ourStart() -> u32 { return min(u32(P.bodyCfg2.w), bodyCount()); }
 fn isOurs(k: u32) -> bool { let w = bodyWhere(k); return w == 2u || w == 4u; }
@@ -2636,7 +2637,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var pre = vec3f(0.0);
   var T = vec3f(1.0);
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
-  if (P.near0.w > 0.5) {
+  if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
     // the body met (its air's own march for a world with air; its relief for the Gargantua planets)
@@ -4787,7 +4788,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // (the Earth near hides what lies beyond it: nothing traced there — the rays going under the ship,
   // half the probe in a low orbit, were traced across the solar system and thrown away)
   let kn = u32(P.near1.w);
-  let nearOn = P.near0.w > 0.5 && hasAir(kn);
+  let nearOn = HAS_BODIES && P.near0.w > 0.5 && hasAir(kn);
   let t = select(-1.0, nearHit(look), nearOn);
   var col = vec3f(0.0);
   if (t <= 0.0) {

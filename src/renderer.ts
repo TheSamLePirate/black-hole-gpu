@@ -53,7 +53,7 @@ const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as cons
 const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 127;
+const FEATURES_ALL = 255;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 const PARAM_VEC4S = 65;
@@ -1326,6 +1326,7 @@ export class Renderer {
       }
     }
     packBodies(bodies, this.bodyData, origin);
+    if (bodies.length) this.featureKey |= 128;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
     const tl = s.wormhole ? throatLight(s) : null;
@@ -1659,7 +1660,7 @@ export class Renderer {
   /** The features the kernel must keep for these settings (trace.wgsl: HAS_*). */
   private featuresOf(s: Settings) {
     return (BANDS[s.band] ? 1 : 0) | (s.polarization && !s.wormhole ? 2 : 0) | (s.jet ? 4 : 0) | (s.hotSpot ? 8 : 0) | (s.hotFlow ? 16 : 0)
-      | (s.wormhole ? 32 : 0) | (s.diskThickness > 0 ? 64 : 0);
+      | (s.wormhole ? 32 : 0) | (s.diskThickness > 0 ? 64 : 0); // (bodies: 128, added with them)
   }
 
   /**
@@ -1675,7 +1676,7 @@ export class Renderer {
       v = { rt: null, q: null, env: null };
       this.variants.set(key, v);
       const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
-      const constants = { HAS_RADIO: has(1), HAS_POL: has(2), HAS_JET: has(4), HAS_SPOT: has(8), HAS_VOL: has(16), HAS_WH: has(32), HAS_THICK: has(64) };
+      const constants = { HAS_RADIO: has(1), HAS_POL: has(2), HAS_JET: has(4), HAS_SPOT: has(8), HAS_VOL: has(16), HAS_WH: has(32), HAS_THICK: has(64), HAS_BODIES: has(128) };
       const mk = (entryPoint: string, quality: boolean) =>
         this.device.createComputePipelineAsync({
           layout: this.tracePipeLayout,
