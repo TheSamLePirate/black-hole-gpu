@@ -69,6 +69,8 @@ const FLAG_TEMPORAL = 4;
 /** Realtime: samples older than this much simulated time [M] are not shown while time runs. */
 const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
+/** realtime pass under the temporal reprojection: rays prefiltered over their pixel, not their block */
+const FLAG_REPROJECT = 16;
 
 /**
  * Bun's dev server sometimes serves a `type: "text"` import as an asset URL after a hot reload
@@ -172,6 +174,8 @@ interface Target {
   polGridPass: GPUBindGroup;
   beam: { level: number; tex: GPUTexture; buf: GPUBuffer; h: GPUBindGroup; v: GPUBindGroup } | null;
   denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
+  /** the temporal reprojection's history (ping-pong) and its uniform (made on first use, live only) */
+  temporal: { hist: GPUTexture[]; buf: GPUBuffer; binds: GPUBindGroup[]; idx: number; valid: boolean } | null;
   traceBind: GPUBindGroup;
   /** the same, the light-probe buffer swapped for the planets' probe */
   probeBind: GPUBindGroup;
@@ -217,6 +221,7 @@ export class Renderer {
   private postPolGrid: GPUComputePipeline;
   private postBeamH: GPUComputePipeline;
   private postAtrous: GPUComputePipeline;
+  private postTemporal: GPUComputePipeline;
   private postBeamV: GPUComputePipeline;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   /** The spaceship carrying the camera, and the light probe that lights it. */
@@ -463,6 +468,7 @@ export class Renderer {
     this.postPolGrid = mkPost("polgrid");
     this.postBeamH = mkPost("beamH");
     this.postAtrous = mkPost("atrous");
+    this.postTemporal = mkPost("temporal");
     this.postBeamV = mkPost("beamV");
     this.meterPipeline = mkPost("meter");
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -784,7 +790,7 @@ export class Renderer {
     const bloomLevels = Math.max(2, Math.min(8, Math.floor(Math.log2(Math.min(width, height))) - 3));
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     // (render attachment: the spaceship is composited over mip 0)
-    const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage: usage | GPUTextureUsage.RENDER_ATTACHMENT });
+    const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage: usage | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
     const bloomTex = d.createTexture({
       size: [Math.max(1, width >> 1), Math.max(1, height >> 1)],
       format: "rgba16float",
@@ -817,6 +823,7 @@ export class Renderer {
       polGridPass: null as unknown as GPUBindGroup,
       beam: null,
       denoise: null,
+      temporal: null,
       traceBind: null as unknown as GPUBindGroup,
       probeBind: null as unknown as GPUBindGroup,
       postPasses: [],
@@ -840,6 +847,8 @@ export class Renderer {
     t.beam?.buf.destroy();
     t.denoise?.tex.destroy();
     t.denoise?.bufs.forEach((b) => b.destroy());
+    t.temporal?.hist.forEach((h) => h.destroy());
+    t.temporal?.buf.destroy();
   }
 
   private bindTarget(t: Target) {
@@ -1650,6 +1659,95 @@ export class Renderer {
    * footprint ±30 px) ping-ponging hdr[0] → tmp → hdr[0] → tmp → hdr[0]. Only for accumulated
    * images (progressive / offline), where every pixel knows the variance of its estimate.
    */
+  /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
+  private taPhase: FrameStats["phase"] = "realtime";
+  /** the previous live frame's camera (axes, tan of the half field, aspect), pre-exposure, place */
+  private taPrev: { right: Vec3; up: Vec3; fwd: Vec3; tanH: number; asp: number; pre: number; r: number; region: string; near: { index: number; centre: Vec3; radius: number } | null } | null = null;
+  /** the reprojection's weights: a pixel a ray landed on, one between rays; the clamp's width [σ] */
+  taParams: [number, number, number] = [0.25, 0.05, 2.0];
+  /** the history is dropped on the next frame (a new scene, a jump) */
+  resetTemporal() {
+    this.taPrev = null;
+  }
+
+  /**
+   * Temporal reprojection (realtime, the camera moving): the previous frame's image, found by the
+   * camera's rotation (exact for the sky and everything far, whatever the lensing), clamped to the
+   * range of the current frame's samples at the block's scale, blended in (post.wgsl: temporal); on
+   * the refining frames, or after a jump, the history is only refreshed from the image.
+   */
+  private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    const d = this.device;
+    const cam = this.lastCam;
+    if (!cam) return;
+    if (!t.temporal) {
+      const hist = [0, 1].map(() =>
+        d.createTexture({
+          size: [t.width, t.height], format: "rgba16float",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
+        }),
+      );
+      const buf = d.createBuffer({ size: 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
+      // (bind k: reads history k, writes history 1 − k)
+      const binds = [0, 1].map((k) =>
+        d.createBindGroup({
+          layout: this.postTemporal.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: hdr0 },
+            { binding: 1, resource: this.clampSampler },
+            { binding: 2, resource: hist[1 - k]!.createView() },
+            { binding: 3, resource: hist[k]!.createView() },
+            { binding: 5, resource: { buffer: t.resolveBuf } },
+            { binding: 6, resource: { buffer: t.stamps } },
+            { binding: 11, resource: { buffer: t.moments } },
+            { binding: 21, resource: { buffer: buf } },
+          ],
+        }),
+      );
+      t.temporal = { hist, buf, binds, idx: 0, valid: false };
+    }
+    const ta = t.temporal;
+    const tanH = Math.tan((s.fov * Math.PI) / 360);
+    const asp = t.width / t.height;
+    const pre = preExposure(this.ev(s));
+    const prev = this.taPrev;
+    // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame)
+    const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9);
+    const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
+    const ln = this.lastNear;
+    const near = ln ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius } : null;
+    this.taPrev = { right: [...cam.right], up: [...cam.up], fwd: [...cam.fwd], tanH, asp, pre, r: cam.r, region: cam.region, near };
+    if (!on) {
+      // (refresh the history from the image: the next moving frame starts from it)
+      enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
+      ta.valid = true;
+      return;
+    }
+    const p = prev!;
+    // (the camera's move against the near body: its centre's shift, the other way)
+    let move: Vec3 = [0, 0, 0];
+    if (near && p.near && p.near.index === near.index) {
+      const k = near.radius;
+      move = [(p.near.centre[0] - near.centre[0]) * k, (p.near.centre[1] - near.centre[1]) * k, (p.near.centre[2] - near.centre[2]) * k];
+    }
+    d.queue.writeBuffer(ta.buf, 0, new Float32Array([
+      ...cam.right, tanH, ...cam.up, asp, ...cam.fwd, this.taParams[2],
+      ...p.right, p.tanH, ...p.up, p.asp, ...p.fwd, 0,
+      // (the history's exposure to this frame's; on; the weight of a pixel a ray landed on, of one between)
+      pre / p.pre, 1, this.taParams[0], this.taParams[1],
+      // (the near body's ground: within 30 of its radii — drawn afresh, not reprojected)
+      ...move, near ? 30 * near.radius : 0,
+    ]));
+    const pass = enc.beginComputePass(this.prof.pass("temporal"));
+    pass.setPipeline(this.postTemporal);
+    pass.setBindGroup(0, ta.binds[ta.idx]!);
+    pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    pass.end();
+    ta.idx = 1 - ta.idx;
+    enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
+  }
+
   private encodeDenoise(enc: GPUCommandEncoder, t: Target, s: Settings) {
     const d = this.device;
     if (!t.denoise) {
@@ -1709,6 +1807,7 @@ export class Renderer {
       }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
+      if (s && i === r0 && t === this.live) this.encodeTemporal(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
@@ -2043,6 +2142,7 @@ export class Renderer {
       const offset = order[this.interleaveIndex++ % order.length]!;
       let flags = FLAG_INTERLEAVED;
       if (s.temporalBlend < 1) flags |= FLAG_TEMPORAL;
+      if (s.temporalReprojection) flags |= FLAG_REPROJECT;
       this.writeParams(t, s, time, {
         block, eps: s.realtimeEps, steps: s.realtimeSteps, y0: 0, y1: t.height, accumulate: false,
         sampleIndex: 0, flags, offset,
@@ -2080,6 +2180,7 @@ export class Renderer {
 
     this.writeResolve(t, s);
     this.writeDisplay(s, t, t.width, t.height, false, true, this.hdrActive);
+    this.taPhase = phase;
     this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
     const auto = s.realtimeSubsampling === "auto";

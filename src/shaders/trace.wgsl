@@ -98,6 +98,8 @@ const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extr
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
 const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
 const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating offset
+const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the frames' rays accumulate —
+                                // each prefiltered over its pixel (the history supplies the coverage)
 
 @group(0) @binding(0) var<uniform> P: Params;
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
@@ -586,6 +588,11 @@ var<private> probeBeam: f32 = 0.0;
 // the angle one ray stands for: a pixel — a block of them in the realtime passes (FOOT, set by the main
 // kernel: textures, relief and small bodies filtered over what the ray is spread on, not a pixel of it)
 var<private> FOOT: f32 = 1.0;
+// (the main kernel's choice for the near body met first — its ground — and for the rest: under the
+// temporal reprojection the rest is prefiltered over the pixel, the history supplying the coverage,
+// the near ground over the block — its parallax and relief defeat the reprojection, it is drawn afresh)
+var<private> FOOT_NEAR: f32 = 1.0;
+var<private> FOOT_FAR: f32 = 1.0;
 fn pixFoot() -> f32 { return P.camUp.w * FOOT; }
 fn beam() -> f32 { return max(pixFoot(), probeBeam); }
 // The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
@@ -2601,6 +2608,7 @@ var<private> rayDepth: f32 = 1e9;
 var<private> RND: f32 = 0.5; // (the sample's random number: jitters the ground's shadow march)
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   RND = fract(rnd * 7.31 + 0.13);
+  FOOT = FOOT_NEAR;
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
   let tanH = P.cam.w;
   let aspect = P.camRight.w;
@@ -2669,6 +2677,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       T = (1.0 - ring.w) * nair.T;
     }
   }
+  FOOT = FOOT_FAR;
   var tr = traceLook(look, rnd, tNow);
   tr.col = pre + T * tr.col;
   tr.tint *= T * veil;
@@ -4616,7 +4625,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   var inRange: bool;
   if (interleaved) {
     let block = u32(P.res.z);
-    FOOT = f32(block);
+    FOOT_NEAR = f32(block);
+    FOOT_FAR = select(f32(block), 1.0, (flags & FLAG_REPROJECT) != 0u);
+    FOOT = FOOT_NEAR;
     inRange = gid.x * block < W && gid.y * block < H;
     px = min(gid.x * block + u32(P.ext2.x), W - 1u);
     py = min(gid.y * block + u32(P.ext2.y), H - 1u);
@@ -4680,7 +4691,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     // realtime, one ray a block: half the block — the gather's own σ — so a star smaller than the
     // rays' spacing is spread over it, not caught by one ray in b² and missed by the rest (strobing)
     var fp = skyFootprint(lid.xy, tr.dir, pos, tr.sky);
-    let k = select(0.35, 0.5 * FOOT, interleaved);
+    let k = select(0.35, 0.5 * FOOT_FAR, interleaved);
     fp.jx *= k;
     fp.jy *= k;
     col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky, tr.org);

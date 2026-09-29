@@ -430,3 +430,118 @@ fn meter(@builtin(global_invocation_id) gid: vec3u) {
   if (l > 0.0) { b = u32(clamp((log2(l) + 48.0) * 1.5, 1.0, 127.0)); }
   atomicAdd(&hist[b], 1u);
 }
+// ---------------------------------------------------------------------------------------------
+// Temporal reprojection (realtime): the image kept from frame to frame. Each pixel's view direction is
+// found in the previous frame's image by the camera's rotation alone — exact for everything far (the
+// sky, the lensed images: a photon's arrival direction does not depend on how the camera is turned),
+// and for what is near the neighbourhood clamp rejects what moved. The history is clamped to the
+// range the current frame's samples span around the pixel (at the scale of the block: the current
+// frame is a reconstruction from one ray a block, its own 3×3 would crush the history's detail), then
+// blended: a pixel a ray landed on this frame takes more of it than one reconstructed between rays.
+// ---------------------------------------------------------------------------------------------
+struct Temporal {
+  right: vec4f,   // current camera axes (w: tan of the half vertical field, aspect, unused)
+  up: vec4f,
+  fwd: vec4f,     // (w: the clamp's width, in standard deviations)
+  pRight: vec4f,  // the previous frame's (w: its tan, aspect)
+  pUp: vec4f,
+  pFwd: vec4f,
+  k: vec4f,       // history's exposure ratio (current / previous pre-exposure), on (0: copy), α fresh, α between
+  drift: vec4f,   // the camera's displacement since the previous frame [M], in these axes (the near body's frame);
+                  // w: under this depth [M] a pixel shows the near body's ground — drawn afresh (0: none)
+};
+@group(0) @binding(21) var<uniform> TA: Temporal;
+
+fn rgbToYcocg(c: vec3f) -> vec3f {
+  return vec3f(0.25 * c.r + 0.5 * c.g + 0.25 * c.b, 0.5 * c.r - 0.5 * c.b, -0.25 * c.r + 0.5 * c.g - 0.25 * c.b);
+}
+fn ycocgToRgb(y: vec3f) -> vec3f {
+  return vec3f(y.x + y.y - y.z, y.x + y.z, y.x - y.y - y.z);
+}
+
+// The history read with a Catmull–Rom filter (9 bilinear taps): a bilinear read blurs it a little at
+// every frame's sub-pixel shift — over the 16 frames a block's rays take to cover it, as much as the
+// reconstruction it should sharpen
+fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
+  let sp = uv * size;
+  let t1 = floor(sp - 0.5) + 0.5;
+  let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let t0 = (t1 - 1.0) / size;
+  let t3 = (t1 + 2.0) / size;
+  let t12 = (t1 + w2 / w12) / size;
+  var c = vec3f(0.0);
+  c += textureSampleLevel(addTex, samp, vec2f(t0.x, t0.y), 0.0).rgb * w0.x * w0.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t12.x, t0.y), 0.0).rgb * w12.x * w0.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t3.x, t0.y), 0.0).rgb * w3.x * w0.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t0.x, t12.y), 0.0).rgb * w0.x * w12.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t12.x, t12.y), 0.0).rgb * w12.x * w12.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t3.x, t12.y), 0.0).rgb * w3.x * w12.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t0.x, t3.y), 0.0).rgb * w0.x * w3.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t12.x, t3.y), 0.0).rgb * w12.x * w3.y;
+  c += textureSampleLevel(addTex, samp, vec2f(t3.x, t3.y), 0.0).rgb * w3.x * w3.y;
+  return max(c, vec3f(0.0));
+}
+
+@compute @workgroup_size(8, 8)
+fn temporal(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let cur = textureLoad(src, vec2i(gid.xy), 0);
+  if (TA.k.y < 0.5) {
+    textureStore(dst, gid.xy, cur);
+    return;
+  }
+  let W = size.x;
+  let block = max(R.u.x & 0xffu, 1u);
+  // where this pixel's direction was in the previous frame
+  let tanH = TA.right.w;
+  let asp = TA.up.w;
+  let ndc = vec2f(2.0 * (f32(gid.x) + 0.5) / f32(size.x) - 1.0, 1.0 - 2.0 * (f32(gid.y) + 0.5) / f32(size.y));
+  let d0 = normalize(TA.fwd.xyz + ndc.x * tanH * asp * TA.right.xyz + ndc.y * tanH * TA.up.xyz);
+  // (what the pixel shows at a finite depth — a planet's ground under the ship — seen from where the
+  // camera was: parallax; the far sky by the turn alone)
+  let depth = moments[gid.y * W + gid.x].y;
+  var d = d0;
+  if (depth < 1e8) { d = normalize(d0 * depth + TA.drift.xyz); }
+  let zf = dot(d, TA.pFwd.xyz);
+  var alpha = 1.0;
+  var hist = cur.rgb;
+  let ground = TA.drift.w > 0.0 && depth < TA.drift.w;
+  if (zf > 1e-3 && !ground) {
+    let pt = TA.pRight.w;
+    let pa = TA.pUp.w;
+    let xp = dot(d, TA.pRight.xyz) / (zf * pt * pa);
+    let yp = dot(d, TA.pUp.xyz) / (zf * pt);
+    let uv = vec2f(0.5 * (xp + 1.0), 0.5 * (1.0 - yp));
+    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+      hist = historyAt(uv, vec2f(size)) * TA.k.x;
+      // the range of the current frame around the pixel, at the block's scale (mean ± 1.25 σ, YCoCg)
+      let st = i32(max(block / 2u, 1u));
+      let hi = vec2i(size) - 1;
+      var m1 = vec3f(0.0);
+      var m2 = vec3f(0.0);
+      for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+          let q = rgbToYcocg(textureLoad(src, clamp(vec2i(gid.xy) + vec2i(i, j) * st, vec2i(0), hi), 0).rgb);
+          m1 += q;
+          m2 += q * q;
+        }
+      }
+      m1 /= 9.0;
+      let sd = sqrt(max(m2 / 9.0 - m1 * m1, vec3f(0.0)));
+      let h = rgbToYcocg(hist);
+      let g = TA.fwd.w;
+      hist = ycocgToRgb(clamp(h, m1 - g * sd, m1 + g * sd));
+      // a ray landed on this pixel this frame, or it was reconstructed between rays
+      let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
+      alpha = select(TA.k.w, TA.k.z, fresh);
+    }
+  }
+  let c = mix(max(hist, vec3f(0.0)), cur.rgb, alpha);
+  textureStore(dst, gid.xy, vec4f(c, cur.a));
+}

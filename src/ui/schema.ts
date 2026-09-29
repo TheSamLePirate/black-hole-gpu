@@ -789,6 +789,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fps performance resolution scale dynamic",
   },
   {
+    key: "temporalReprojection", type: "toggle", section: "render", group: "Realtime", label: "Temporal reprojection", effect: "none",
+    help: "While the camera moves, the previous frames' image is carried over — found by the camera's turn, exact for the sky and the lensed images — and refined by each new frame's rays: a sharp image in motion from few rays. What moved in the scene is taken from the new frame only.",
+    keywords: "taa temporal reprojection history sharp motion upscaling",
+  },
+  {
     key: "glassBlur", type: "toggle", section: "render", group: "Realtime", label: "Frosted panels", effect: "none",
     help: "The interface's panels blur the view behind them. The browser redoes that blur every frame the image changes, beside the tracer's work: off, the panels are tinted glass and the frame rate is higher.",
     keywords: "blur glass backdrop ui panels performance",

@@ -73,7 +73,7 @@ function sanitize(s: Settings): Settings {
 }
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
-  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
+  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
@@ -239,6 +239,7 @@ async function main() {
   let exposedForOurSide = false;
   function applyPreset(name: string) {
     currentScene = presets[name] ? name : null;
+    renderer.resetTemporal(); // (another scene: no history carried into it)
     const { time, mission: withMission, pose, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
