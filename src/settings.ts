@@ -520,7 +520,7 @@ export const presets: Record<string, Preset> = {
   // Santiago, a quarter of an hour later: the full Moon rising over the Andes (a telephoto)
   "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3695 * DAY, pose: { at: SANTIAGO, look: "moon" } },
   // Mont Blanc at dusk, 18 January: a two-day-old Moon, 4 % lit, 12° up (a telephoto)
-  "Earth: crescent Moon at dusk over the Alps": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 17.083 * DAY, pose: { at: [45.83, 6.86], look: "moon" } },
+  "Earth: crescent Moon at dusk over the Alps": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 17.071 * DAY, pose: { at: [45.83, 6.86], look: "moon" } },
   // Aconcagua at dusk, 23 January: the first quarter, 34° up (a telephoto)
   "Earth: first quarter over the Andes": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 22.382 * DAY, pose: { at: [-32.65, -70.01], look: "moon" } },
   // Uluru at midnight under the full Moon: moonlit clouds, the stars through the deep blue
