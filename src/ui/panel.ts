@@ -296,7 +296,7 @@ export class SettingsPanel {
 
     this.searchInput = h("input", {
       type: "search",
-      placeholder: "Search settings…  /",
+      placeholder: "Search settings…  ⌘K",
       spellcheck: "false",
       oninput: () => {
         this.query = this.searchInput.value.trim().toLowerCase();
@@ -1044,12 +1044,13 @@ export class SettingsPanel {
     } else if (mod && e.key.toLowerCase() === "y" && !typing) {
       e.preventDefault();
       this.redo();
-    } else if (!mod && !typing && this.flightKeys?.(e)) {
-      // (flying: M is the map, / real time — the panel keeps Shift+M)
-    } else if (!mod && !typing && e.key === "/") {
+    } else if (mod && e.key.toLowerCase() === "k") {
+      // (the settings' search: ⌘K / Ctrl+K — the / key is real time, in every mode)
       e.preventDefault();
       this.toggle(true);
       this.searchInput.focus();
+    } else if (!mod && !typing && this.flightKeys?.(e)) {
+      // (flying: M is the map — the panel keeps Shift+M)
     } else if (!mod && !typing && (e.key === "m" || e.key === "M") && !(e.code in FLIGHT_KEYS)) {
       this.toggle();
     }

@@ -174,6 +174,8 @@ export class FlightHud {
   private warn = h("div", "fl-warn");
   private mission = h("div", "fl-mission fl-panel");
   private missionEls: Record<string, HTMLElement> = {};
+  /** where the app's transport bar goes while flying (ui/transport.ts) */
+  readonly transportSlot = h("div", "fl-transport");
   private target = h("div", "fl-target fl-panel");
   private targetEls: Record<string, HTMLElement> = {};
   private tel = h("div", "fl-tel fl-panel");
@@ -257,17 +259,8 @@ export class FlightHud {
       this.missionEls[key] = v;
       return c;
     };
-    const warpBox = h("div", "fl-warpbox");
-    const wv = h("b");
-    this.missionEls.warp = wv;
-    const wb = (d: 1 | -1, t: string) => {
-      const b = h("button", "", t) as HTMLButtonElement;
-      b.title = d < 0 ? "Slower time" : "Faster time";
-      b.onclick = () => act.warp(d);
-      return b;
-    };
-    warpBox.append(h("span", "", "Warp"), wb(-1, "‹"), wv, wb(1, "›"));
-    warpBox.title = "Time warp";
+    // (the time: the app's transport bar — run / pause, warp, real time, takes — mounted here while flying)
+    const warpBox = this.transportSlot;
     const iconBtn = (name: string, title: string, fn: () => void, cls = "") => {
       const b = h("button", `fl-tools ${cls}`) as HTMLButtonElement;
       b.append(icon(name));
@@ -1398,10 +1391,6 @@ export class FlightHud {
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${i.dv < 1e-3 ? "<.001" : i.dv.toFixed(3)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
-    const wv = s.timeSpeed >= 10 ? Math.round(s.timeSpeed) : +s.timeSpeed.toPrecision(2);
-    // beyond 500 M/s the flight rides the rails; they hold the warp back near what needs following
-    M.warp!.textContent = !s.animate ? "PAUSE" : i.railsNote ? `×${wv} ↓${i.railsNote}` : s.timeSpeed > 500 ? `×${wv} RAILS` : `×${wv}`;
-    M.warp!.title = i.railsNote ? `Rails: the warp is held back by ${i.railsNote}` : "";
     const st = this.start ?? { t: time, tau: i.properTime };
     const dt = time - st.t, dtau = i.properTime - st.tau;
     M.tau!.textContent = fmtClock(dtau, s);

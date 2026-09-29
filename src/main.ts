@@ -3,7 +3,7 @@ import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
 import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
-import { mouth, setSceneTime } from "./wormhole";
+import { mouth } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
@@ -34,6 +34,9 @@ import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
 import { VideoWriter } from "./video";
+import { Simulation } from "./sim";
+import { TransportBar } from "./ui/transport";
+import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The camera's behaviours (controls.ts: the rig), their names and what the mouse and keys do. */
@@ -75,16 +78,16 @@ function sanitize(s: Settings): Settings {
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "farFieldLut", "volumetricClouds", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
-  "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "animate", "timeSpeed", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
+  "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
   "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
-let timeDirty = false; // simulation time advanced since the last rendered frame
 let displayChanged = true;
-let simTime = 0;
+/** the transport bar (ui/transport.ts), once built */
+let transport: TransportBar | null = null;
 
 let firstFrame = false;
 
@@ -170,6 +173,8 @@ async function main() {
     touch();
     guiDirty = true;
   });
+  /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
+  const sim = new Simulation(settings, camera, renderer);
 
   // -------------------------------------------------------------------- settings panel
   const fileInput = document.createElement("input");
@@ -252,7 +257,7 @@ async function main() {
     // (the camera's frame and the body's place are computed, not rendered: no frame to wait for)
     for (let i = 0; id && i < 12; i++) {
       const cam = cameraFrame(settings);
-      const L = bodyLook(settings, cam, id as Body, simTime).look;
+      const L = bodyLook(settings, cam, id as Body, sim.time).look;
       const b = Math.atan2(dot(L, cam.right), dot(L, cam.fwd)) * deg;
       const e = Math.asin(Math.max(-1, Math.min(1, dot(L, cam.up)))) * deg;
       camera.setLook(settings.shipLookYaw + b, settings.shipLookPitch + e);
@@ -279,7 +284,7 @@ async function main() {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards
       // it, the look raised to it (as the map has it: its light bent, the ship's speed, move it on the sky)
       const el = pose.holeEl ?? 20;
-      const p = theirGroundPose(pose.body!, el, pose.holeAz ?? 0, time ?? simTime, settings.spin, settings.massSolar);
+      const p = theirGroundPose(pose.body!, el, pose.holeAz ?? 0, time ?? sim.time, settings.spin, settings.massSolar);
       settings.shipLookYaw = settings.shipLookPitch = 0;
       setHolePose(settings, p.X, p.fwd, p.up, p.vel);
       settings.motion = "geodesic";
@@ -288,7 +293,7 @@ async function main() {
     } else if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
       // a view of one of Gargantua's worlds: on an orbit about it, looking straight down, the way it
       // goes at the top of the image, then the look turned off it
-      const p = theirOrbitPose({ body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc }, time ?? simTime, settings.spin, settings.massSolar);
+      const p = theirOrbitPose({ body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc }, time ?? sim.time, settings.spin, settings.massSolar);
       settings.shipLookYaw = settings.shipLookPitch = 0;
       const [fwd, up] = tiltAway([-p.up[0], -p.up[1], -p.up[2]], p.fwd, pose.tilt ?? 0);
       setHolePose(settings, p.X, fwd, up, p.vel);
@@ -299,23 +304,20 @@ async function main() {
       // a view of one of our bodies: placed, the look turned towards a body
       // (the camera placed along the ship's axes — the ship's attitude is the camera's less the look —
       // then the look turned)
-      const v = bodyView(time ?? simTime, pose);
+      const v = bodyView(time ?? sim.time, pose);
       settings.shipLookYaw = settings.shipLookPitch = 0;
       setHomePose(settings, v.X, v.fwd, v.up, v.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(v.landed ?? null);
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose) {
-      const t = time ?? simTime;
+      const t = time ?? sim.time;
       const d = pose === "earthGround" ? earthGround(t) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
     }
-    if (time !== undefined) {
-      simTime = time;
-      timeDirty = true;
-    }
+    if (time !== undefined) sim.setTime(time);
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
@@ -366,7 +368,6 @@ async function main() {
       camera.setCinematic(camera.cinematic === "journey" ? null : "journey");
       refreshGui();
     },
-    "btn-play": () => toggle("animate"),
     "btn-guide": () => toggle("shadowGuide"),
     "btn-jet": () => toggle("jet"),
     "btn-ship": () => {
@@ -579,7 +580,7 @@ async function main() {
     previousTarget = settings.target;
   }
   function syncButtons() {
-    $("btn-play").classList.toggle("active", settings.animate);
+    transport?.update(true);
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
     $("btn-jet").classList.toggle("active", settings.jet);
     $("btn-cinema").classList.toggle("active", settings.cinematic);
@@ -591,21 +592,34 @@ async function main() {
 
   // -------------------------------------------------------------------- game controller
   // -------------------------------------------------------------------- piloting the Ranger
-  // beyond 500 M/s: "rails" (engine off; the controller brings it down near bodies)
-  const WARPS = [0.25, 0.5, 1, 2, 3, 6, 12, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+  // -------------------------------------------------------------------- time: play / pause, warp (every mode)
+  /** Time warp one rung faster or slower (clock.ts: slow motion, real time's multiples, then the classic
+   *  ladder — beyond 500 M/s the ship rides on rails). Paused, the warp is set for when time runs again. */
   function warp(dir: 1 | -1) {
-    // (below the classic warps: real time and its first multiples — a climb, a landing)
-    const rt = 1 / (4.925490947e-6 * settings.massSolar);
-    const list = [...[1, 2, 5, 10, 25, 50].map((k) => k * rt).filter((w) => w < 0.9 * WARPS[0]!), ...WARPS];
-    const i = list.findIndex((w) => w >= settings.timeSpeed * (1 - 1e-6));
-    const j = Math.max(0, Math.min(list.length - 1, (i < 0 ? list.length - 1 : i) + dir));
-    if (list[j] !== settings.timeSpeed) audio.cue(dir > 0 ? "warp-up" : "warp-down", j);
+    const next = stepWarp(settings, dir);
+    if (next !== settings.timeSpeed) audio.cue(dir > 0 ? "warp-up" : "warp-down", warpLadder(settings).indexOf(next));
     else audio.cue("error");
-    settings.timeSpeed = list[j]!;
-    if (!settings.animate) toggle("animate");
+    setWarp(next);
+  }
+  function setWarp(speed: number) {
+    settings.timeSpeed = speed;
     refreshGui();
-    const x = settings.timeSpeed / rt;
-    panel.toast(`Time warp: ×${x < 100 ? Math.round(x) : x.toPrecision(3)} (${+settings.timeSpeed.toPrecision(3)} M/s)`);
+    scheduleUrlSave();
+    touch();
+    panel.toast(`Time warp ${fmtWarp(settings, false)}${settings.animate ? "" : " — paused (Space runs it)"} · ${+speed.toPrecision(3)} M/s`);
+  }
+  /** Real time: 1 s of the scene per second. */
+  function realTime() {
+    setWarp(realTimeSpeed(settings));
+  }
+  /** Runs or pauses time — in every mode (paused: nothing the time drives moves, the image converges). */
+  function playPause(on = !settings.animate) {
+    if (settings.animate === on) return;
+    settings.animate = on;
+    refreshGui();
+    syncButtons();
+    touch();
+    scheduleUrlSave();
   }
   function toggleSound() {
     settings.sound = !settings.sound;
@@ -646,7 +660,7 @@ async function main() {
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
     addNodeAt: (t) => {
-      camera.addNode(Math.max(t - simTime, 1e-3));
+      camera.addNode(Math.max(t - sim.time, 1e-3));
       touch();
     },
     speedMode: () => {
@@ -675,13 +689,24 @@ async function main() {
     tools: () => toolsWin.toggle(),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
+  // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
+  const tpDock = document.createElement("div");
+  tpDock.id = "tp-dock";
+  document.body.append(tpDock);
+  transport = new TransportBar({
+    settings, time: () => sim.time, playPause: () => playPause(), warp, setWarp, realTime,
+    record: () => panel.toast("Takes: coming"), recording: () => ({ on: false, seconds: 0, frames: 0 }),
+    railsNote: () => camera.railsNote,
+  });
+  transport.mount(tpDock, false);
   camera.onPilotMessage = (t) => {
     panel.toast(t);
-    gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, simTime);
+    gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, sim.time);
   };
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
   let hudDensity: number | null = null;
   const mission = new Mission(settings, camera, (t) => panel.toast(t));
+  sim.mission = mission;
   mission.onEnd = () => {
     if (hudDensity !== null) flightHud.setDensity(hudDensity);
     hudDensity = null;
@@ -691,7 +716,7 @@ async function main() {
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
-  panel.flightKeys = (e) => flying() && (e.code === "Slash" || e.key === "/" || ((e.key === "m" || e.key === "M") && !e.shiftKey));
+  panel.flightKeys = (e) => flying() && (e.key === "m" || e.key === "M") && !e.shiftKey;
   /** Pilot keys (by physical position where it matters); true when handled. */
   function pilotKey(e: KeyboardEvent) {
     const holds: Record<string, Hold> = { Digit1: "prograde", Digit2: "retrograde", Digit3: "radialOut", Digit4: "radialIn", Digit5: "normal", Digit6: "antinormal", Digit7: "target" };
@@ -715,19 +740,12 @@ async function main() {
     } else if (e.code === "Backquote") panel.toast(flightHud.cycleDensity());
     else if (e.code === "KeyK" && e.shiftKey) actions["btn-ship"]!(); // leave the Ranger
     else if (e.key.toLowerCase() === "m" && !e.shiftKey) flightHud.toggleMapView();
-    else if (e.code === "Slash") {
-      // back to real time (1 s = 1 s)
-      settings.timeSpeed = 1 / (4.925490947e-6 * settings.massSolar);
-      settings.animate = true;
-      panel.toast("Real time");
-    } else if (e.code === "KeyO") flightHud.togglePlanner();
+    else if (e.code === "KeyO") flightHud.togglePlanner();
     else if (e.code === "KeyV") {
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);
       setMount(keys[(i + (e.shiftKey ? -1 : 1) + keys.length) % keys.length]!);
-    } else if (e.code === "Comma") warp(-1);
-    else if (e.code === "Period") warp(1);
-    else if (e.code === "Escape") {
+    } else if (e.code === "Escape") {
       mission.stop("Mission stopped — you have the controls");
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
@@ -779,7 +797,7 @@ async function main() {
         camera.resetView();
         break;
       case "time":
-        actions["btn-play"]!();
+        playPause();
         break;
       case "settings":
         panel.toggle();
@@ -824,12 +842,26 @@ async function main() {
       return;
     }
     if (flying() && pilotKey(e)) return;
-    if (e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
-    const k = e.key.toLowerCase();
+    // time, in every mode: Space runs / pauses, , . slower / faster, / real time (by physical position:
+    // ; : ! on AZERTY)
     if (e.code === "Space") {
       e.preventDefault();
-      toggle("animate");
-    } else if (k === "h") toggleUi();
+      playPause();
+      return;
+    }
+    if (e.code === "Comma" || e.code === "Period") {
+      e.preventDefault();
+      warp(e.code === "Period" ? 1 : -1);
+      return;
+    }
+    if (e.code === "Slash") {
+      e.preventDefault();
+      realTime();
+      return;
+    }
+    if (e.code in FLIGHT_KEYS) return; // flight keys fly, nothing else
+    const k = e.key.toLowerCase();
+    if (k === "h") toggleUi();
     else if (k === "r") {
       if (e.shiftKey) camera.resetView();
       else actions["btn-rotation"]!();
@@ -883,7 +915,7 @@ async function main() {
     renderer,
     camera,
     settings,
-    time: () => simTime,
+    time: () => sim.time,
     download,
     fileStem,
     onActiveChange: (active) => {
@@ -952,7 +984,7 @@ async function main() {
     Object.assign(settings, { animate: false, exposure: 0, renderMode: "physical" }, patch);
     refreshGui();
     const t0 = performance.now();
-    renderer.startOffline(settings, o.time ?? simTime, {
+    renderer.startOffline(settings, o.time ?? sim.time, {
       width: 1920, height: 1080, spp: 128, tolerance: 1e-6, eps: 0.02, maxSteps: 12000, noiseThreshold: 0.004,
       minSpp: 16, shutter: 0, budgetMs: 250, ...o,
     });
@@ -987,7 +1019,7 @@ async function main() {
     if (!cfg) return (videoState.result = `H.264 at ${opts.width}×${opts.height} not supported`);
     const writer = new VideoWriter(cfg, fps);
     renderer.cancelOffline();
-    const t0 = simTime;
+    const t0 = sim.time;
     Object.assign(videoState, { frame: 0, frames: Math.round(seconds * fps), started: performance.now(), done: false, result: "" });
     const n = videoState.frames;
     for (let i = 0; i < n; i++) {
@@ -1009,19 +1041,15 @@ async function main() {
   // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
   const tools = new GameTools({
     settings, camera, renderer,
-    time: () => simTime,
-    setTime: (t) => {
-      simTime = t;
-      timeDirty = true;
-      setSceneTime(t);
-    },
+    time: () => sim.time,
+    setTime: (t) => sim.setTime(t),
     preset: (name) => applyPreset(name),
     changed: (keys) => onSettingsChange(keys),
     refresh: () => {
       refreshGui();
       touch();
       touchDisplay();
-      timeDirty = true;
+      sim.timeDirty = true;
     },
     toast: (t) => panel.toast(t),
     fps: () => fps,
@@ -1056,7 +1084,7 @@ async function main() {
           Object.assign(settings, defaultSettings(), QUALITY.high, { quality: "high", pixelRatio });
           applyPreset(name);
           // (a scene with no time of its own at 0 — not wherever the clock stood: the same picture each time)
-          if (presets[name]!.time === undefined) (simTime = 0), (timeDirty = true);
+          if (presets[name]!.time === undefined) sim.setTime(0);
           // (still scenes are frozen and left to converge; flights and missions get a while)
           const moving = !!presets[name]!.ship || !!presets[name]!.mission;
           if (!moving) settings.animate = false;
@@ -1076,7 +1104,7 @@ async function main() {
         }
         return names.length;
       },
-      time: () => simTime,
+      time: () => sim.time,
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
       sys: {
@@ -1085,20 +1113,20 @@ async function main() {
         setHomePose: (X: [number, number, number], fwd: [number, number, number], up?: [number, number, number], vel?: [number, number, number]) => setHomePose(settings, X, fwd, up, vel),
         homePosition: () => homePosition(settings),
         /** where the camera sees a body (CPU geodesics, retarded, aberrated): a look direction */
-        look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, simTime).look,
+        look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, sim.time).look,
       },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => (frozen = on),
       step: (dt: number) => {
-        setSceneTime(simTime);
-        camera.update(dt, simTime);
-        mission.update(dt);
-        if (settings.animate && settings.timeSpeed > 0) simTime = camera.shipClock() ?? simTime + dt * settings.timeSpeed;
-        timeDirty = true;
+        sim.step(dt);
+        sim.applyRender(camera.piloting && !camera.cinematic ? camera.flightInfo() : null);
+        sim.timeDirty = true;
         changed = true;
-        return simTime;
+        return sim.time;
       },
-      setTime: (t: number) => ((simTime = t), (timeDirty = true)),
+      setTime: (t: number) => sim.setTime(t),
+      /** the simulation (sim.ts): its clocks, its step */
+      sim,
     },
   });
 
@@ -1131,29 +1159,22 @@ async function main() {
       fpsN = 0;
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
-    if (!frozen) {
-      setSceneTime(simTime); // (an orbiting wormhole mouth: where it is now)
-      if (cpuProf.time("flight (camera.update)", () => camera.update(dt, simTime))) {
+    // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the
+    // scene held, or stepped by the video itself)
+    if (!frozen && !renderer.offlineActive) {
+      if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
         changed = true;
         guiDirty = true;
       }
-      cpuProf.time("mission", () => mission.update(dt));
-      if (settings.animate && settings.timeSpeed > 0 && !renderer.offlineActive) {
-        simTime = camera.shipClock() ?? simTime + dt * settings.timeSpeed;
-        timeDirty = true;
-      }
     }
-    // the liquid throat's waves run on their own clock (they move even with the scene's time paused)
-    if (settings.cinematic && settings.wormhole && settings.waterSpeed > 0 && !renderer.offlineActive) {
-      renderer.water.clock += dt * settings.waterSpeed;
-      timeDirty = true;
-    }
-    // the camera's predicted free fall, drawn (lensed) by the tracer
-    const path = camera.gravity ? cpuProf.time("free-fall prediction", () => camera.predictPath()) : null;
-    if (renderer.setCameraPath(settings.showGeodesic && settings.pathInView ? path : null)) changed = true;
+    // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
+    // or a video holds its own
+    const pil = flying();
+    const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
+    if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
     // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
     const capped = settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
-    const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, simTime, changed, timeDirty, displayChanged));
+    const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));
     if (st) {
       renderedAt = now;
       if (!firstFrame) {
@@ -1163,7 +1184,7 @@ async function main() {
       }
       fpsN++;
       changed = false;
-      timeDirty = false;
+      sim.timeDirty = false;
       displayChanged = false;
       lastStats = st;
       if (st.offline) renderDialog.update(st.offline);
@@ -1209,36 +1230,24 @@ async function main() {
       saveSoon = false;
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
-    renderer.shipPose = settings.ship ? camera.shipPose() : null;
-    const pil = flying();
-    if (flightHud.visible !== pil) flightHud.show(pil);
-    if (pil) {
-      const info = cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo());
-      // (re-entry glow on the Ranger)
-      const pl = info.surface?.plasma;
-      renderer.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];
-      // the thrusters' flames (what the flight computer fired on its last step)
-      const fired = camera.pilot.fired;
-      const firing = performance.now() - fired.at < 300 && (fired.throttle > 0.01 || fired.rcs > 0.03 || fired.turn > 0.05);
-      const was = renderer.shipThrust !== null;
-      renderer.shipThrust = firing
-        ? { throttle: fired.throttle, force: fired.force, torque: fired.torque, air: Math.min((info.surface?.air ?? 0) / 1.225, 1), time: performance.now() / 1000 }
-        : null;
-      if (firing || was) changed = true;
+    if (flightHud.visible !== pil) {
+      flightHud.show(pil);
+      transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
+    }
+    if (pil && info) {
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;
       try {
-        status = cpuProf.time("Ranger status", () => rangerStatus(settings, camera, info, simTime));
+        status = cpuProf.time("Ranger status", () => rangerStatus(settings, camera, info, sim.time));
         tools.watch(status);
       } catch {
         /* (between two frames of a jump) */
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)
-      if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, simTime));
+      if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time));
       cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
     } else {
-      renderer.shipThrust = null;
       audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
     }
     hudTimer += dt;
@@ -1246,6 +1255,7 @@ async function main() {
       hudTimer = 0;
       document.body.classList.toggle("glass-blur", settings.glassBlur);
       camPop.status();
+      transport!.update();
       cpuProf.time("panel & readouts", () => {
         updateHUD(lastStats!, fps);
         if (guiDirty) {
@@ -1600,7 +1610,7 @@ async function main() {
     const lines = [
       `<b>${st.width}×${st.height}</b>${renderer.hdr ? " · HDR" : ""} · gpu ${st.gpuMs.toFixed(1)} ms · ` +
         (st.phase === "realtime" ? `1 ray / ${st.block}×${st.block} px` : `${st.spp.toFixed(1)} spp`),
-      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${simTime.toFixed(0)} M${settings.animate ? "" : " (paused)"}`,
+      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${sim.time.toFixed(0)} M${settings.animate ? "" : " (paused)"}`,
     ];
     if (st.phase === "offline" && st.offline) lines.unshift(`offline ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`);
     if (camera.gravity) {
@@ -1640,15 +1650,24 @@ async function main() {
     tip.classList.remove("show");
     tip.hidden = true;
   };
-  for (const el of document.querySelectorAll<HTMLElement>("[data-tip]")) {
-    if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
-    el.addEventListener("pointerenter", () => {
-      clearTimeout(tipTimer);
-      tipTimer = window.setTimeout(() => showTip(el), 280);
-    });
-    el.addEventListener("pointerleave", hideTip);
-    el.addEventListener("pointerdown", hideTip);
-  }
+  // (delegated: the panels built later — the transport bar, the camera panel — have theirs too; the
+  // flight HUD shows its own)
+  for (const el of document.querySelectorAll<HTMLElement>("[data-tip]")) if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+  let tipEl: HTMLElement | null = null;
+  document.addEventListener("pointerover", (e) => {
+    const el = (e.target as Element | null)?.closest?.<HTMLElement>("[data-tip]") ?? null;
+    if (el === tipEl) return;
+    hideTip();
+    tipEl = el && !el.closest(".fl-root") ? el : null;
+    if (!tipEl) return;
+    if (!tipEl.getAttribute("aria-label")) tipEl.setAttribute("aria-label", tipEl.dataset.tip!);
+    const target = tipEl;
+    tipTimer = window.setTimeout(() => target.isConnected && showTip(target), 280);
+  });
+  document.addEventListener("pointerdown", () => {
+    hideTip();
+    tipEl = null;
+  });
 
   // -------------------------------------------------------------------- first-run hint
   const HINT_KEY = "kerr.hint-seen";

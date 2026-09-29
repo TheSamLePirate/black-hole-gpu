@@ -724,7 +724,6 @@ export class CameraController {
     this.path = null;
     if (on) {
       if (this.cinematic) this.setCinematic(null);
-      s.animate = true;
       s.motion = "geodesic";
       this.properTime = 0;
       // our universe: the pose's velocity kept (an orbit, a planet's motion); none given: moving with
@@ -1039,12 +1038,14 @@ export class CameraController {
       if (Math.abs(s.roll) < 0.02) (s.roll = 0), (this.leveling = false);
     }
 
+    // (the cinematics run with the scene's time: paused, they hold — the image converges)
+    const play = s.animate ? dt : 0;
     if (this.cinematic === "orbit") {
-      this.orbitBy(s.cinematicSpeed * dt, 0);
+      if (play) this.orbitBy(s.cinematicSpeed * play, 0);
     } else if (this.cinematic === "dive") {
-      this.stepDive(dt);
+      if (play) this.stepDive(play);
     } else if (this.cinematic === "journey") {
-      this.stepJourney(dt);
+      if (play) this.stepJourney(play);
     }
     if (this.flight && !(this.orbiting && s.target === this.flight.body && s.anchor === (this.flight.body === "wormhole" ? "wormhole" : "hole"))) {
       this.flight = null;
@@ -1527,7 +1528,8 @@ export class CameraController {
   // ------------------------------------------------------------------------------ piloting
   /**
    * The Ranger carries the camera and flies: gravity on (Kerr geodesic in the scene's time), free
-   * rotation, time running. Starting near the hole, it is put on a circular orbit (prograde).
+   * rotation; the clock as it was (paused, the ship waits). Starting near the hole, it is put on a
+   * circular orbit (prograde).
    */
   setPilot(on: boolean) {
     const s = this.s;
@@ -1553,7 +1555,6 @@ export class CameraController {
     s.rotation = "free";
     if (!this.gravity) this.setGravity(true);
     s.motion = "geodesic";
-    s.animate = true;
     s.showGeodesic = true; // the future path, drawn in the view and on the map
     const cam = cameraFrame(s);
     if (cam.region === "hole" && Math.hypot(...cam.beta) < 1e-6) {
@@ -1789,6 +1790,8 @@ export class CameraController {
   /** One frame of piloting: the flight computer turns the ship and fires the engines. */
   private flyShip(dt: number, pad: ReturnType<GamepadInput["poll"]>) {
     const s = this.s;
+    // (paused: the ship holds — its attitude too, its turn resumes with the time)
+    if (!s.animate) return;
     const cam = cameraFrame(s);
     // (through the wormhole, one way or the other: said once)
     if (s.wormhole) {
@@ -3947,7 +3950,6 @@ export class CameraController {
       s.whL = -8 * mouth(s).w.rho;
     }
     s.motion = "static";
-    s.animate = true; // the disk turns and the star moves during the trip
     const dir = repPose(s).l < 0 ? "out" : "back";
     if (dir === "back") switchAnchor(s, "hole");
     const start = Object.fromEntries(POSE_KEYS.map((k) => [k, s[k]])) as Pick<Settings, PoseKeys>;
