@@ -52,6 +52,8 @@ const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as cons
 // filtering) — not pow(t, 2.2) after it
 const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const BLOCKS = [1, 2, 3, 4, 6, 8];
+/** every feature of the tracer kept (the general pipelines) */
+const FEATURES_ALL = 31;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 const PARAM_VEC4S = 65;
@@ -450,6 +452,8 @@ export class Renderer {
     this.qualityPipeline = mkTrace(true);
     this.tracePipeline = mkTrace(false);
     this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
+    this.traceModule = traceModule;
+    this.tracePipeLayout = layout;
     this.ship = new ShipRenderer(device, src.ship);
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.prof = new GpuProfiler(device);
@@ -1194,6 +1198,7 @@ export class Renderer {
   ) {
     const f = this.paramsF;
     const u = this.paramsU;
+    this.featureKey = this.featuresOf(s);
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     const dc = this.diskConstants(s);
@@ -1576,7 +1581,7 @@ export class Renderer {
     if (this.envEvery > 1 && this.envTick++ % this.envEvery !== 0) return;
     const k = this.envStride;
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
-    pass.setPipeline(this.envPipeline);
+    pass.setPipeline(this.traceVariant("env"));
     pass.setBindGroup(0, t.traceBind);
     pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
@@ -1618,7 +1623,7 @@ export class Renderer {
     });
     const enc = this.device.createCommandEncoder();
     const pass = enc.beginComputePass(this.prof.pass("planet probe"));
-    pass.setPipeline(this.envPipeline);
+    pass.setPipeline(this.traceVariant("env"));
     pass.setBindGroup(0, t.probeBind);
     pass.dispatchWorkgroups(PROBE_W / 32, PROBE_H / 32);
     pass.end();
@@ -1644,9 +1649,49 @@ export class Renderer {
   /** a planet's light probe under way: its camera, its time, the next sixteenth to trace */
   private probeJob: { b: GpuBody; cam: CameraFrame; time: number; slice: number } | null = null;
 
+  // ------------------------------------------------------------------ kernel specialisation
+  private traceModule!: GPUShaderModule;
+  private tracePipeLayout!: GPUPipelineLayout;
+  /** the scene's features (bits: radio, polarization, jet, hot spot, hot flow) — set with its params */
+  private featureKey = FEATURES_ALL;
+  private variants = new Map<number, { rt: GPUComputePipeline | null; q: GPUComputePipeline | null; env: GPUComputePipeline | null }>();
+
+  /** The features the kernel must keep for these settings (trace.wgsl: HAS_*). */
+  private featuresOf(s: Settings) {
+    return (BANDS[s.band] ? 1 : 0) | (s.polarization && !s.wormhole ? 2 : 0) | (s.jet ? 4 : 0) | (s.hotSpot ? 8 : 0) | (s.hotFlow ? 16 : 0);
+  }
+
+  /**
+   * The tracer for the scene's features: a pipeline with the unused ones compiled out (built in the
+   * background the first time — ~10 s —, the general one drawing meanwhile).
+   */
+  private traceVariant(kind: "rt" | "q" | "env"): GPUComputePipeline {
+    const general = kind === "rt" ? this.tracePipeline : kind === "q" ? this.qualityPipeline : this.envPipeline;
+    const key = this.featureKey;
+    if (key === FEATURES_ALL) return general;
+    let v = this.variants.get(key);
+    if (!v) {
+      v = { rt: null, q: null, env: null };
+      this.variants.set(key, v);
+      const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
+      const constants = { HAS_RADIO: has(1), HAS_POL: has(2), HAS_JET: has(4), HAS_SPOT: has(8), HAS_VOL: has(16) };
+      const mk = (entryPoint: string, quality: boolean) =>
+        this.device.createComputePipelineAsync({
+          layout: this.tracePipeLayout,
+          compute: { module: this.traceModule, entryPoint, constants: { ...constants, QUALITY_PIPELINE: quality ? 1 : 0 } },
+        });
+      const slot = v;
+      void mk("main", false).then((p) => ((slot.rt = p), mk("env", false))).then((p) => ((slot.env = p), mk("main", true))).then(
+        (p) => (slot.q = p),
+        (e) => console.warn("Specialised tracer unavailable:", e),
+      );
+    }
+    return v[kind] ?? general;
+  }
+
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
     const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
-    pass.setPipeline(quality ? this.qualityPipeline : this.tracePipeline);
+    pass.setPipeline(this.traceVariant(quality ? "q" : "rt"));
     pass.setBindGroup(0, t.traceBind);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
     pass.end();

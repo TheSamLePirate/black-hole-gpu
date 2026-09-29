@@ -94,6 +94,16 @@ struct Params {
 // pipeline, keeping the realtime kernel small (register pressure / occupancy).
 override QUALITY_PIPELINE: bool = false;
 
+// Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
+// the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
+// system: no radio band, no polarization, no jet, no hot spot, no hot flow). The general pipeline keeps
+// them all (true).
+override HAS_RADIO: bool = true;
+override HAS_POL: bool = true;
+override HAS_JET: bool = true;
+override HAS_SPOT: bool = true;
+override HAS_VOL: bool = true;
+
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
 const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
@@ -453,7 +463,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
       }
     }
   }
-  if (P.jet.x > 0.5) {
+  if ((HAS_JET && P.jet.x > 0.5)) {
     // Jet volume (R < 2.2 R_j, |z| < z_max): sample it at ≤ 0.3 R_j; outside, never step further
     // than ~the distance to its surface (coordinate speed ≈ 1 per unit affine parameter for E = 1).
     let az = abs(r * c);
@@ -488,7 +498,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
     let dm = length(pc - whCentre(P.time.x + s.x.w));
     h = min(h, max(0.3 * dm, 0.2 * P.wh2.z));
   }
-  if (P.spot.x > 0.5) {
+  if ((HAS_SPOT && P.spot.x > 0.5)) {
     // never step over the hot spot; sample it at ≤ 0.25 σ
     let dist = sqrt(spotDist2(s, P.time.x)) - 3.0 * P.spot.z - 0.5 * abs(P.ext.z);
     h = min(h, max(0.8 * dist, 0.25 * P.spot.z));
@@ -3929,8 +3939,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   let capTol = P.integ.w;
   let diskOn = P.modes.w == 1u;
   let thick = P.ext2.z > 0.0;
-  let volOn = P.vol.x > 0.5;
-  let jetOn = P.jet.x > 0.5;
+  let volOn = (HAS_VOL && P.vol.x > 0.5);
+  let jetOn = (HAS_JET && P.jet.x > 0.5);
   let adaptive = QUALITY_PIPELINE && (P.frame.z & FLAG_ADAPTIVE_RK) != 0u;
   let tol = P.ext.x;
   let rIn = P.bh.z;
@@ -3946,8 +3956,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   var hitDisk = false;
   var trans = 1.0; // transmittance accumulated front to back
   var hNext = 1e9;
-  let radio = P.radio.x > 0.5;
-  let spotOn = P.spot.x > 0.5;
+  let radio = (HAS_RADIO && P.radio.x > 0.5);
+  let spotOn = (HAS_SPOT && P.spot.x > 0.5);
   var trans3 = vec3f(1.0); // per-frequency transmittance (radio band)
   var out: TraceOut;
   var kCur: Deriv; // derivative at the current point (FSAL)
@@ -3964,7 +3974,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   var tubeVis = 1.0; // the path's tube is hidden by the disk (opaque for it except in real gaps)
 
   // Polarization: κ of the two screen axes for this pixel's photon at the camera.
-  let polOn = P.pol.x > 0.5;
+  let polOn = (HAS_POL && P.pol.x > 0.5);
   var kapX = vec2f(0.0);
   var kapY = vec2f(0.0);
   var stokes = vec2f(0.0);
@@ -4707,7 +4717,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
   var qu = tr.qu;
   if (isNan(qu.x + qu.y)) { qu = vec2f(0.0); }
-  let polOn = P.pol.x > 0.5;
+  let polOn = (HAS_POL && P.pol.x > 0.5);
 
   if (interleaved) {
     let old = accum[idx];

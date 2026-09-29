@@ -2,7 +2,7 @@
 // protocol, against a running server (bun --hot server.ts):
 //
 //   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick]
-//                        [--compare http://localhost:3012/ [--reps 2]]
+//                        [--compare http://localhost:3012/ [--reps 2]] [--warm ms]
 //
 // For each scene: the Game quality, its automatic subsampling and dynamic resolution — the frame
 // intervals' p50/p95/p99, frames over 33 ms, the rays per displayed pixel —, then a fixed setting
@@ -22,6 +22,8 @@ const URL = arg("url", "http://localhost:3000/");
 const quick = process.argv.includes("--quick");
 // a reference build to alternate with (e.g. git archive HEAD~1 served on another port)
 const COMPARE = arg("compare", "");
+// time given to each page before its first measure [ms] (the specialised tracers compile in the background)
+const WARM = Number(arg("warm", "3000"));
 const SCENES = arg("scenes", "")
   ? arg("scenes", "").split("|")
   : [
@@ -121,7 +123,9 @@ try {
       if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`).catch(() => false)) break;
       await sleep(500);
     }
-    await sleep(3000);
+    // (the first scene applied at once: its specialised tracer compiles while the page warms)
+    await js(`__bh.preset(${JSON.stringify(SCENES[0])}); return 0`).catch(() => 0);
+    await sleep(WARM);
   };
 
   // a window of frames: every rAF marks the scene changed (the realtime path, as when flying); the
