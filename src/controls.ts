@@ -1781,13 +1781,15 @@ export class CameraController {
    */
   private aimShipViews(dt: number) {
     const s = this.s;
+    // (the ship's axes as the camera had them last frame: the pose drawn — the outside views' placement
+    // depends on the aim itself)
+    const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
     this.shipAim = null;
     if (!s.lookAt || !this.piloting || this.cinematic) return;
     const cam = cameraFrame(s);
     const a = this.aim(cam);
     if (!a) return;
     const c: Vec3 = [dot3(a.look, cam.right), dot3(a.look, cam.up), dot3(a.look, cam.fwd)];
-    const S = this.shipMatrix();
     this.shipAim = normalize(lin(lin(S[0], c[0], S[1], c[1]), 1, S[2], c[2]));
     if (this.outsideView()) return;
     const deg = 180 / Math.PI;
@@ -1807,7 +1809,7 @@ export class CameraController {
   private flybyStep(dt: number) {
     const s = this.s, F = this.flyby;
     const cam = cameraFrame(s);
-    const S = this.shipMatrix();
+    const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
     const ax = [0, 1, 2].map((i) => lin(lin(cam.right, S[0][i]!, cam.up, S[1][i]!), 1, cam.fwd, S[2][i]!)) as [Vec3, Vec3, Vec3];
     const toShip = (E: Vec3): Vec3 => [dot3(E, ax[0]), dot3(E, ax[1]), dot3(E, ax[2])];
     const toLocal = (e: Vec3) => lin(lin(ax[0], e[0], ax[1], e[1]), 1, ax[2], e[2]);

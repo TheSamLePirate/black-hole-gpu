@@ -588,7 +588,7 @@ export const presets: Record<string, Preset> = {
   "Gargantua system: departure near Saturn": {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
-    anchor: "wormhole", target: "wormhole", fov: 50, exposure: 0, bgIntensity: 1, autoExposure: true, pose: "saturn",
+    anchor: "wormhole", target: "wormhole", fov: 50, exposure: 0, bgIntensity: 1, autoExposure: true, pose: "saturn", timeSpeed: 1 / 492.5490947,
   },
   "Mission: through the wormhole to the companion star (automatic flight)": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
