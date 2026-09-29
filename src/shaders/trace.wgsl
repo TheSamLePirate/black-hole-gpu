@@ -406,6 +406,10 @@ fn equatorCrossing(s: GState, n: GState, d0: Deriv, d1: Deriv, L: f32, a: f32, h
 
 // Adaptive affine step: resolves the horizon, the photon sphere (Δφ ≤ ε) and polar crossings.
 fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
+  return stepSizeAt(s, L, a, eps, rH, blCart(s.x));
+}
+// (the same, the state's Cartesian place pc given: the tracer keeps it from the step before)
+fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
   let r = s.x.x;
   let sn = max(sin(s.x.y), 1e-6);
   let c = cos(s.x.y);
@@ -450,9 +454,11 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
   }
   let nb = ourStart();
   if (nb > 0u) {
-    // never step over a body (nor a star's atmosphere, 3 R); sample a star finely near the limb
-    let pc = blCart(s.x);
+    // never step over a body (nor a star's atmosphere, 3 R); sample a star finely near the limb (the
+    // traced ones only: those met on the rays' straight way out — K2, Edmunds, 2 000 AU off — do not
+    // bound the steps)
     for (var k = 0u; k < nb; k++) {
+      if (bodyWhere(k) != 0u) { continue; }
       let R = bodyRadius(k);
       let d = length(pc - bodyCentre(k, P.time.x + s.x.w)) / R;
       let near = (0.03 + 0.12 * max(d - 1.0, 0.0)) * R;
@@ -463,7 +469,7 @@ fn stepSize(s: GState, L: f32, a: f32, eps: f32, rH: f32) -> f32 {
   }
   if (P.wh.x > 0.5) {
     // the wormhole's weak field outside its gluing sphere: steps small against the distance to it
-    let dm = length(blCart(s.x) - whCentre(P.time.x + s.x.w));
+    let dm = length(pc - whCentre(P.time.x + s.x.w));
     h = min(h, max(0.3 * dm, 0.2 * P.wh2.z));
   }
   if (P.spot.x > 0.5) {
@@ -4005,6 +4011,10 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
   var entered = false;
   fate = 0u;
+  // (the step's start in Cartesian form and the mouth's pull there: its end's, kept from the step before)
+  var pS = blCart(s.x);
+  var mfS = vec3f(0.0);
+  if (whOn) { mfS = mouthForce(s.x); }
   for (var i = 0u; i < maxSteps; i++) {
     steps = i;
     var n: GState;
@@ -4012,7 +4022,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     var kNext: Deriv;
     if (adaptive) {
       // heuristic step only as an upper bound: accuracy is enforced by the error estimate
-      var hMax = stepSize(s, L, a, eps * 4.0, rH);
+      var hMax = stepSizeAt(s, L, a, eps * 4.0, rH, pS);
       if (i == 0u) { hMax *= mix(0.2, 1.0, rnd); }
       let st = adaptiveDOPRI(s, kCur, L, a, min(hNext, hMax), hMax, tol);
       let ns = kahanAdd(s, st.d, &comp, P.ext2.w);
@@ -4024,7 +4034,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       kNext = st.k;
       if (n.x.y != ns.x.y) { kNext = geodesicRHS(n.x, n.p, L, a); evals += 1u; }
     } else {
-      h = stepSize(s, L, a, eps, rH);
+      h = stepSizeAt(s, L, a, eps, rH, pS);
       // random first step: decorrelates volumetric sampling between pixels / samples
       if (i == 0u) { h *= mix(0.2, 1.0, rnd); }
       let ns = kahanAdd(s, rk4Delta(s, L, a, -h), &comp, P.ext2.w);
@@ -4032,17 +4042,22 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       if (n.x.y != ns.x.y) { comp = GState(); }
       evals += 4u;
     }
+    let pN = blCart(n.x);
     let massive = P.bodyCfg.y >= 0.0;
     if (massive || whOn) {
       // weak fields added to Kerr — the massive star's, the wormhole's: trapezoidal kick over the
       // step (backwards in λ: Δp = +h ∂δH/∂x)
       var f = vec3f(0.0);
       if (massive) {
-        let back = normalize(blCart(n.x) - blCart(s.x));
+        let back = normalize(pN - pS);
         let b = u32(P.bodyCfg.y);
         f += bodyForce(b, s.x, back) + bodyForce(b, n.x, back);
       }
-      if (whOn) { f += mouthForce(s.x) + mouthForce(n.x); }
+      if (whOn) {
+        let mfN = mouthForce(n.x);
+        f += mfS + mfN;
+        mfS = mfN;
+      }
       f *= 0.5 * h;
       n.p += f.xy;
       L += f.z;
@@ -4050,8 +4065,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     }
 
     if (P.path.x > 1.5 && probeBeam == 0.0) { // (a drawing on the image: not a light for the probe)
-      let q0 = blCart(s.x);
-      let q1 = blCart(n.x);
+      let q0 = pS;
+      let q1 = pN;
       let pg = pathGlow(q0, q1, rayLen);
       // the disk hides the tube: skip it when it lies beyond a disk crossing in this same step
       var behindDisk = false;
@@ -4077,8 +4092,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     }
 
     if (bodyCount() > 0u) {
-      let p0 = blCart(s.x);
-      let p1 = blCart(n.x);
+      let p0 = pS;
+      let p1 = pN;
       let tEm = tNow + n.x.w;
       let dv = p1 - p0;
       let len = length(dv);
@@ -4142,8 +4157,8 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
 
     if (whOn) {
       // entering the gluing sphere of the far mouth → Dneg segment
-      let p0 = blCart(s.x);
-      let p1 = blCart(n.x);
+      let p0 = pS;
+      let p1 = pN;
       let tEm = tNow + n.x.w;
       let Cm = whCentre(tEm);
       let t = glueHit(p0, p1, Cm);
@@ -4166,7 +4181,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       }
     }
     // the distance the ray has come (flat map): the pixel's footprint on small bodies, the throat
-    if (bodyCount() > 0u || whOn) { travel += length(blCart(n.x) - blCart(s.x)); }
+    if (bodyCount() > 0u || whOn) { travel += length(pN - pS); }
 
     if (radio) {
       if (volOn) {
@@ -4310,6 +4325,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     if (r > rEsc && r > s.x.x) { fate = 2u; s = n; break; }
     s = n;
     kCur = kNext;
+    pS = pN;
   }
   // (a step that ended the ray on something opaque)
   if (rayDepth > 1e8 && trans < 0.5) { rayDepth = abs(s.x.w); }
