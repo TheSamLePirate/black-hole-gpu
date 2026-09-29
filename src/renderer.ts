@@ -227,6 +227,8 @@ export class Renderer {
   readonly prof: GpuProfiler;
   private envPipeline: GPUComputePipeline;
   private envReset = true;
+  /** frames left of a spread reset (every texel written over, one of each 2×2 block a frame) */
+  private envSpread = 0;
   // the Ranger's light probe: what it saw last frame (unit vectors from the camera to what lights it,
   // world axes; its velocity; its place around the hole), to size its running mean
   private probeSeen: { side: string; things: Map<string, Vec3>; beta: Vec3; er: Vec3; time: number; sky: number } | null = null;
@@ -1269,14 +1271,17 @@ export class Renderer {
     } else {
       const drift = this.probeDrift(s, cam, bodies, origin, m, time, bg);
       if (!(drift < 0.1)) this.envReset = true;
+      // (the sky's brightness changed a lot — the auto exposure —: every texel written over, a quarter a
+      // frame, the old light kept meanwhile — not all 32 768 long rays in one frame)
+      const spread = !this.envReset && this.envSpread > 0;
       // (what it sees moving slowly: one texel of each 4×4 block, every 4th frame — the probe's rays
       // are long and few, its pass lasts as long as the slowest: fewer rays save less than fewer runs)
       const texel = Math.PI / ENV_H;
       const slow = drift < texel / 256;
-      this.envStride = this.envReset ? 1 : slow ? 4 : 2;
-      this.envEvery = this.envReset || !slow ? 1 : 4;
+      this.envStride = this.envReset ? 1 : spread || !slow ? 2 : 4;
+      this.envEvery = this.envReset || spread || !slow ? 1 : 4;
       const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
-      set(47, this.envReset ? 1 : 0, this.envPhase % (slow ? 16 : 4), this.envReset ? 1 : slow ? 2 : 0, window);
+      set(47, this.envReset || spread ? 1 : 0, this.envPhase % (slow && !spread ? 16 : 4), this.envReset ? 1 : slow && !spread ? 2 : 0, window);
       set(55, 1, 0, 0, 0);
       set(56, 0, 1, 0, 0);
       set(57, 0, 0, 1, 0);
@@ -1434,6 +1439,7 @@ export class Renderer {
     if (k !== 4 || this.envPhase % 2 === 0) this.ship.encodeEnv(enc);
     enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
+    if (this.envSpread > 0) this.envSpread--;
     this.envPhase++;
   }
 
@@ -1728,8 +1734,12 @@ export class Renderer {
     if (s.wormhole && side !== "hole") add("mouth", [-cam.n[0], -cam.n[1], -cam.n[2]], m.w.rho / Math.max(radius(m.w, cam.ell)[0], m.w.rho), false);
     const prev = this.probeSeen;
     this.probeSeen = { side, things, beta: [...cam.beta], er, time, sky };
-    // (the sky's brightness follows the auto exposure: what the probe holds of it is then stale)
-    if (!prev || prev.side !== side || Math.abs(Math.log2(sky / prev.sky)) > 0.01) return Infinity;
+    if (!prev || prev.side !== side) return Infinity;
+    // (the sky's brightness follows the auto exposure: what the probe holds of it is then stale — by
+    // half a stop or more, written over in 4 frames; less, its running mean shortened to a few frames)
+    const skyStops = Math.abs(Math.log2(sky / prev.sky));
+    if (skyStops > 0.5) this.envSpread = 4;
+    const skyMoved = skyStops > 0.01 ? texel : 0;
     const angle = (a: Vec3, b: Vec3) => 2 * Math.asin(Math.min(1, 0.5 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])));
     // the probe's axes turning: the ZAMO's around the hole, the throat's with the orbiting mouth
     const turn = side === "hole" ? angle(er, prev.er) : side === "theirs" ? Math.abs(m.omega * (time - prev.time)) : 0;
@@ -1738,7 +1748,7 @@ export class Renderer {
       const p = prev.things.get(id);
       if (p) moved = Math.max(moved, angle(d, p));
     }
-    return turn + moved;
+    return Math.max(turn + moved, skyMoved);
   }
 
   /** The Ranger is drawn (its mesh loaded). */
