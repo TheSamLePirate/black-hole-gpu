@@ -3742,6 +3742,88 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
 }
 
 // The ground at q (unit), seen along rd; its footprint's axes fx, fy
+// Fields: the ground's plan (east, north in metres from the latitude and longitude — good to a metre)
+// cut into regions of 15 km, each with its own bearing, strip width (150–380 m) and hedgerows (0 … 1);
+// each strip cut into plots 200–800 m long, staggered from strip to strip. x: the plot's hash (0 … 1),
+// y: the distance to its edge [m], z: the region's hedgerows, w: along the plot [m] (its furrows)
+fn fieldPlot(q: vec3f) -> vec4f {
+  let lat = asin(clamp(q.z, -1.0, 1.0));
+  let uv = vec2f(atan2(q.y, q.x) * cos(lat), lat) * EARTH_RM;
+  let R = 15000.0;
+  let rc = floor(uv / R);
+  let hr = hash3u(bitcast<vec3u>(vec3i(i32(rc.x), i32(rc.y), 77)));
+  let ang = u2f(hr) * PI;
+  let rowW = mix(150.0, 380.0, u2f(pcg(hr)));
+  let hedge = u2f(pcg(pcg(hr)));
+  let d = uv - (rc + 0.5) * R;
+  let c = cos(ang);
+  let sn = sin(ang);
+  let p = vec2f(c * d.x + sn * d.y, -sn * d.x + c * d.y);
+  let j = floor(p.y / rowW);
+  let hj = pcg(hr ^ (bitcast<u32>(i32(j)) * 2654435761u));
+  let len = mix(200.0, 800.0, u2f(hj));
+  let x = p.x + u2f(pcg(hj)) * len;
+  let i = floor(x / len);
+  let fy = p.y / rowW - j;
+  let fx = x / len - i;
+  // (the region's own border: a lane too)
+  let rb = min(min(d.x + 0.5 * R, 0.5 * R - d.x), min(d.y + 0.5 * R, 0.5 * R - d.y));
+  let edge = min(min(min(fy, 1.0 - fy) * rowW, min(fx, 1.0 - fx) * len), rb);
+  return vec4f(u2f(pcg(hj ^ (bitcast<u32>(i32(i)) * 40503u))), edge, hedge, x);
+}
+
+// The land's cover finer than the colour map (a texel: ~2.4 km), near: a factor on the map's colour,
+// ~1 on average (from afar the map's own colour). Where the map is green: a patchwork of fields
+// (~350 m, warped cells) — crops, stubble, ploughed earth, meadows, their hedgerows — on the plains,
+// woods on the slopes; where it is dry: mineral tints and strata following the height. (The map's
+// colour tells them by brightness — its linear sum, albedo applied: forests under 0.035 (the Amazon,
+// the Congo, the Black Forest, the taiga), farmland 0.05–0.22 (the pampas, the Beauce, Iowa, Ukraine,
+// Brittany; dry ones to 0.45), deserts from 0.37 (the Atacama, the Sahara); its hue does not — the dry
+// fields are as red as the deserts — sampled from the day cube.) q: the ground
+// (unit), A: the map's colour (linear), n: the relief's normal, hG: its height [m], footM: the pixel's
+// footprint [m] (the patterns fade as it nears their size)
+fn earthCover(q: vec3f, A: vec3f, n: vec3f, hG: f32, footM: f32) -> vec3f {
+  let sum = A.r + A.g + A.b;
+  let arid = smoothstep(0.33, 0.55, sum);
+  let forest = 1.0 - smoothstep(0.03, 0.05, sum);
+  let veg = 1.0 - arid;
+  let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
+  var m = vec3f(1.0);
+  // the fields: plains and low hills
+  let kF = smoothstep(120.0, 25.0, footM) * veg * (1.0 - forest) * (1.0 - smoothstep(0.06, 0.14, slope)) * (1.0 - smoothstep(1200.0, 2000.0, hG));
+  if (kF > 0.0) {
+    let f = fieldPlot(q);
+    let r = f.x;
+    var t = vec3f(0.78, 0.92, 0.72);                                  // pasture, dark
+    if (r > 0.3) { t = vec3f(0.98, 1.06, 0.82); }                     // green crops
+    if (r > 0.55) { t = vec3f(1.22, 1.1, 0.8); }                      // stubble, ripe grain
+    if (r > 0.72) { t = vec3f(1.06, 0.9, 0.8); }                      // ploughed earth
+    if (r > 0.86) { t = vec3f(0.92, 1.02, 0.88); }                    // meadow
+    // (within a plot: the soil's patches; near, its furrows along it — 6 m apart)
+    t *= 0.93 + 0.14 * gnoise(q * (EARTH_RM / 90.0));
+    t *= 1.0 + 0.06 * sin(f.w * 1.047) * smoothstep(4.0, 1.5, footM);
+    // (its edge: a track or, where the region has them, a hedgerow — darker, wider)
+    let w = mix(3.0, 9.0, f.z);
+    let e = 1.0 - smoothstep(0.4 * w, w, f.y + 0.25 * footM);
+    t = mix(t, mix(vec3f(1.05, 0.98, 0.9), vec3f(0.5, 0.6, 0.45), f.z), e);
+    m = mix(m, t, kF);
+  }
+  // the woods: vegetated slopes, darker and grained
+  let kW = smoothstep(60.0, 12.0, footM) * veg * max(forest, smoothstep(0.08, 0.18, slope));
+  if (kW > 0.0) {
+    m = mix(m, vec3f(0.72, 0.8, 0.7) * (0.8 + 0.4 * gnoise(q * (EARTH_RM / 45.0))), kW);
+  }
+  // dry land: its minerals' tints (~800 m) and strata along the height (~40 m bands, warped)
+  let kD = smoothstep(150.0, 30.0, footM) * arid;
+  if (kD > 0.0) {
+    let g = gnoise(q * (EARTH_RM / 800.0));
+    let tint = mix(vec3f(1.12, 0.98, 0.86), vec3f(0.9, 0.96, 1.06), 0.5 + 0.5 * g);
+    let strata = 1.0 + 0.1 * sin(hG / 40.0 + 6.0 * gnoise(q * (EARTH_RM / 3000.0))) * smoothstep(0.05, 0.25, slope);
+    m = mix(m, tint * strata, kD);
+  }
+  return m;
+}
+
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   let day = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(fx), eCube(fy));
   let rel = earthRelief(q, fx, fy);
@@ -3769,6 +3851,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     let snowLine = mix(5700.0, 700.0, smoothstep(20.0, 70.0, lat)) + 300.0 * gnoise(q * 3000.0);
     let snow = smoothstep(snowLine - 250.0, snowLine + 250.0, hG) * (1.0 - smoothstep(0.25, 0.5, slope));
     let rock = smoothstep(0.22, 0.45, slope) * smoothstep(300.0, 1500.0, hG);
+    A *= mix(vec3f(1.0), earthCover(q, A, n, hG, footM), k);
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
