@@ -3680,10 +3680,12 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
       return hi;
     }
     tPrev = t;
-    t += max(0.5 * f, 0.002 * t + 1e-9);
-    if (t > t1) { break; }
+    t += max(0.5 * f, 0.004 * t + 1e-9);
+    if (t > t1) { return -1.0; }
   }
-  return -1.0;
+  // (the steps spent still under the relief's shell: a grazing ray, near the ground over tens of km —
+  // it meets the far ridges; a miss here showed the sky through the land, in bands)
+  return t;
 }
 
 // Detail finer than the maps, the camera near: fractal noise, as many octaves as a texel of the cube
