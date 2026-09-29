@@ -1,0 +1,190 @@
+{
+ "label": "a2",
+ "sha": "b087623",
+ "date": "2026-09-29T00:31:55.376Z",
+ "viewport": [
+  1469,
+  965,
+  2
+ ],
+ "peakVramMiB": 1657,
+ "results": [
+  {
+   "scene": "game:artemis",
+   "auto": {
+    "fps": 50.4,
+    "p50": 17,
+    "p95": 33.7,
+    "p99": 60.8,
+    "over33": 23,
+    "raysPerPx": 0.0083,
+    "blocks": {
+     "4": 151,
+     "6": 223,
+     "8": 80
+    },
+    "scales": {
+     "0.875": 44,
+     "0.75": 410
+    }
+   },
+   "fixed": {
+    "fps": 38.2,
+    "p50": 25.7,
+    "p95": 38.6
+   },
+   "vramMiB": 1139,
+   "gpuPasses": [
+    {
+     "pass": "planet probe",
+     "ms": 14.13
+    },
+    {
+     "pass": "display",
+     "ms": 5.92
+    },
+    {
+     "pass": "trace",
+     "ms": 4.8
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 1.77
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.46
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.81
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.7
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.67
+    }
+   ]
+  },
+  {
+   "scene": "Ranger: approaching Gargantua",
+   "auto": {
+    "fps": 47.1,
+    "p50": 18.3,
+    "p95": 46.5,
+    "p99": 59.9,
+    "over33": 40,
+    "raysPerPx": 0.0018,
+    "blocks": {
+     "8": 424
+    },
+    "scales": {
+     "0.75": 15,
+     "0.625": 124,
+     "0.5": 285
+    }
+   },
+   "fixed": {
+    "fps": 13.2,
+    "p50": 77.3,
+    "p95": 86.4
+   },
+   "vramMiB": 1151,
+   "gpuPasses": [
+    {
+     "pass": "planet probe",
+     "ms": 14.13
+    },
+    {
+     "pass": "trace",
+     "ms": 12.38
+    },
+    {
+     "pass": "display",
+     "ms": 11.6
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 2.08
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 1.98
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.44
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.41
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.36
+    }
+   ]
+  },
+  {
+   "scene": "Moon: an afternoon on the plains",
+   "auto": {
+    "fps": 39.7,
+    "p50": 23.4,
+    "p95": 37.3,
+    "p99": 40.8,
+    "over33": 49,
+    "raysPerPx": 0.0044,
+    "blocks": {
+     "8": 357
+    },
+    "scales": {
+     "0.875": 278,
+     "0.75": 79
+    }
+   },
+   "fixed": {
+    "fps": 19.2,
+    "p50": 52.6,
+    "p95": 58.4
+   },
+   "vramMiB": 1439,
+   "gpuPasses": [
+    {
+     "pass": "display",
+     "ms": 17.57
+    },
+    {
+     "pass": "planet probe",
+     "ms": 14.13
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 12.57
+    },
+    {
+     "pass": "trace",
+     "ms": 12.38
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 7.41
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 6.29
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.62
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 1.33
+    }
+   ]
+  }
+ ]
+}

@@ -347,8 +347,13 @@ export class Renderer {
   /** the last frame's GPU time [ms] */
   lastGpuMs = 0;
   private lastPhase: FrameStats["phase"] = "realtime";
-  private slowFrames = 0;
-  private fastFrames = 0;
+  /** time spent over the budget, under it with room for a finer block [ms of frames] */
+  private slowMs = 0;
+  private fastMs = 0;
+  /** the last frames' times (their median bounds a spike) */
+  private recentMs: number[] = [];
+  /** frames still to leave out of the measure (after new resources, a full probe reset) */
+  private eventFrames = 0;
   private orders = new Map<number, [number, number][]>();
 
   private cache = { spin: NaN, rIn: 0, fmax: 1, temp: NaN, logY: 0, alpha: NaN, volColor: [1, 1, 1] as number[] };
@@ -786,6 +791,7 @@ export class Renderer {
   }
 
   private bindTarget(t: Target) {
+    this.eventFrames = 3; // (new resources: the next frames' times are not the scene's)
     const d = this.device;
     t.traceBind = d.createBindGroup({
       layout: this.traceLayout,
@@ -1271,6 +1277,7 @@ export class Renderer {
     } else {
       const drift = this.probeDrift(s, cam, bodies, origin, m, time, bg);
       if (!(drift < 0.1)) this.envReset = true;
+      if (this.envReset) this.eventFrames = Math.max(this.eventFrames, 2);
       // (the sky's brightness changed a lot — the auto exposure —: every texel written over, a quarter a
       // frame, the old light kept meanwhile — not all 32 768 long rays in one frame)
       const spread = !this.envReset && this.envSpread > 0;
@@ -2014,6 +2021,17 @@ export class Renderer {
       return m && now - m.at < BLOCK_MEMORY ? m : undefined;
     };
     // (smoothed well: with two frames in flight, one frame's time swings from a third to twice the mean)
+    // (a frame after new resources or a probe reset is left out; a spike is bounded by twice the recent
+    // median: a hitch — the main thread busy, a compile — does not make the image coarser for seconds)
+    if (this.eventFrames > 0) {
+      this.eventFrames--;
+      return;
+    }
+    const rec = this.recentMs;
+    rec.push(ms);
+    if (rec.length > 15) rec.shift();
+    const med = [...rec].sort((x, y) => x - y)[rec.length >> 1]!;
+    ms = Math.min(ms, 2 * med);
     const m = fresh(b);
     const est = m ? 0.85 * m.ms + 0.15 * ms : ms;
     this.blockMs.set(b, { ms: est, at: now });
@@ -2032,21 +2050,23 @@ export class Renderer {
     const guess = trace > 0 ? est + trace * ((b / finer) ** 2 - 1) : est * (0.5 + 0.5 * (b / finer) ** 2);
     const finerFits = !!finer && (kf ? kf.ms <= limit : guess < 0.9 * limit);
     const coarserPays = !!coarser && (kc ? kc.ms < 0.9 * est && est > 1.1 * limit : est > 1.1 * budget);
+    // (decided on time, not frames: 150 ms over the budget for a coarser block, 400 ms of room for a
+    // finer one — the same at 20 fps as at 120)
     if (coarserPays) {
-      this.slowFrames++;
-      this.fastFrames = 0;
+      this.slowMs += ms;
+      this.fastMs = 0;
     } else if (finerFits) {
-      this.fastFrames++;
-      this.slowFrames = 0;
+      this.fastMs += ms;
+      this.slowMs = 0;
     } else {
-      this.slowFrames = this.fastFrames = 0;
+      this.slowMs = this.fastMs = 0;
     }
-    if (this.slowFrames >= 3) {
+    if (this.slowMs >= 150) {
       this.realtimeBlock = coarser;
-      this.slowFrames = 0;
-    } else if (this.fastFrames >= 8) {
+      this.slowMs = 0;
+    } else if (this.fastMs >= 400) {
       this.realtimeBlock = finer;
-      this.fastFrames = 0;
+      this.fastMs = 0;
     }
   }
 

@@ -1,7 +1,7 @@
 // Frame-time benchmark of the reference scenes (audit §17), in a headless Chrome over the DevTools
 // protocol, against a running server (bun --hot server.ts):
 //
-//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes a,b] [--quick]
+//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick]
 //
 // For each scene: the Game quality, its automatic subsampling and dynamic resolution — the frame
 // intervals' p50/p95/p99, frames over 33 ms, the rays per displayed pixel —, then a fixed setting
@@ -20,7 +20,7 @@ const arg = (k: string, d: string) => {
 const URL = arg("url", "http://localhost:3000/");
 const quick = process.argv.includes("--quick");
 const SCENES = arg("scenes", "")
-  ? arg("scenes", "").split(",")
+  ? arg("scenes", "").split("|")
   : [
       "game:artemis",
       "Ranger: approaching Gargantua",
