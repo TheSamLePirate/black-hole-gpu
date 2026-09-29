@@ -123,6 +123,31 @@ async function main() {
     return;
   }
 
+  // the device lost: the flight saved, the image frozen, a way back
+  renderer.onLost = (why) => {
+    try {
+      if (settings.autosave) tools.autosaveNow();
+    } catch {
+      /* (nothing to save yet) */
+    }
+    fail("");
+    document.body.classList.add("gpu-lost");
+    const box = document.createElement("div");
+    box.textContent = `The graphics device was reset (${why}).\n\nYour flight was saved. Reload the page to go on.\n`;
+    const b = document.createElement("button");
+    b.textContent = "Reload";
+    b.className = "error-reload";
+    b.onclick = () => location.reload();
+    box.append(b);
+    errorEl.append(box);
+  };
+  renderer.onGpuError = (m) => {
+    try {
+      panel.toast(`GPU error: ${m.split("\n")[0]!.slice(0, 140)}`);
+    } catch {
+      /* (before the panel exists: the console has it) */
+    }
+  };
   const touch = () => (changed = true);
   renderer.onAssets = () => touch();
   const touchDisplay = () => (displayChanged = true);

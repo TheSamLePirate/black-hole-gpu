@@ -274,6 +274,8 @@ export class Renderer {
   /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
   private earthMaps: EarthMaps;
   private earthWant: EarthTier | null = null;
+  /** the finest Earth tier this GPU's memory held (lowered when one ran out) */
+  private earthCap: EarthTier | "none" = "high";
   /** the Earth maps' latest request (an older one landing late is dropped) */
   private earthJob = 0;
   /** when its disk was last over 12 pixels [ms] */
@@ -566,11 +568,22 @@ export class Renderer {
     const token = ++this.earthJob;
     const first = !this.earthMaps.tier;
     if (first) loading.stage("earth", "The Earth — day, night, clouds and relief", { weight: 3 });
+    // (out of GPU memory while the maps load: the tier below, or none — not a lost device)
+    this.device.pushErrorScope("out-of-memory");
     const job = loadEarthMaps(this.device, tier, first ? (u) => loading.fetch(u, "earth") : undefined);
+    const oom = this.device.popErrorScope();
     (first ? loading.track("earth", "", job) : job)
-      .then((maps) => {
+      .then(async (maps) => {
         // (a later request won — another tier, or none): these are not used
         if (token !== this.earthJob) return [maps.cube, maps.night, maps.surf].forEach((t) => t.destroy());
+        if (await oom) {
+          [maps.cube, maps.night, maps.surf].forEach((t) => t.destroy());
+          console.warn(`Out of GPU memory for the Earth's ${tier} maps`);
+          this.earthCap = tier === "high" ? "med" : "none";
+          if (tier === "high") this.requestEarthMaps("med");
+          else this.releaseEarthMaps();
+          return;
+        }
         const old = this.earthMaps;
         this.earthMaps = maps;
         // (the ground the ship stands on: the heights drawn, read back)
@@ -659,7 +672,12 @@ export class Renderer {
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
       },
     });
-    device.lost.then((info) => console.error("WebGPU device lost:", info.message));
+    // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
+    // flight and offers a reload; nothing more is sent to it)
+    const lost = device.lost.then((info) => {
+      console.error("WebGPU device lost:", info.message);
+      return info;
+    });
     const context = canvas.getContext("webgpu");
     if (!context) throw new Error("Could not create a WebGPU canvas context.");
     const format = navigator.gpu.getPreferredCanvasFormat();
@@ -672,6 +690,17 @@ export class Renderer {
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
+    void lost.then((info) => {
+      r.lost = info.reason === "destroyed" ? "released" : info.message || "the GPU was reset";
+      if (info.reason !== "destroyed") r.onLost?.(r.lost);
+    });
+    // (errors the code did not scope: counted, the first ones told — a silent black image otherwise)
+    device.addEventListener("uncapturederror", (e) => {
+      const m = (e as GPUUncapturedErrorEvent).error.message;
+      r.gpuErrors++;
+      console.error("WebGPU error:", m);
+      if (r.gpuErrors <= 3) r.onGpuError?.(m);
+    });
     // (the pipelines compile in the GPU process; the first frame waits for them)
     loading.stage("pipelines", "Compiling the ray tracer — first image", { weight: 4, indeterminate: true, eta: 3 });
     let checked = 0;
@@ -1392,6 +1421,8 @@ export class Renderer {
         if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
+      if (want === "high" && this.earthCap !== "high") want = this.earthCap === "med" ? "med" : null;
+      if (want === "med" && this.earthCap === "none") want = null;
       if (want !== have) {
         if (want) this.requestEarthMaps(want);
         else this.releaseEarthMaps();
@@ -2122,7 +2153,15 @@ export class Renderer {
    *  - Still: progressive full-resolution refinement (error-controlled RK4, Gaussian-filtered
    *    jittered samples, adaptive sampling) in bands sized to ~28 ms of GPU time.
    */
+  /** the device was lost (its reason), or null */
+  lost: string | null = null;
+  onLost?: (why: string) => void;
+  /** uncaptured GPU errors so far, and who hears of them */
+  gpuErrors = 0;
+  onGpuError?: (message: string) => void;
+
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
+    if (this.lost) return null;
     if (this.busy) return null;
     // (polarization turned on or off: the live target remade with or without its buffer)
     this.wantPol = !!s.polarization;

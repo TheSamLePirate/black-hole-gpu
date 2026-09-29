@@ -1006,6 +1006,13 @@ body.hide-ui #toolbar:hover {
   white-space: pre-wrap;
   background: #000;
 }
+body.gpu-lost #error { z-index: 50; background: rgba(0, 0, 0, 0.82); }
+body.gpu-lost .fl-root, body.gpu-lost canvas.fl-hud { display: none; }
+#error .error-reload {
+  margin-top: 14px; padding: 8px 22px; border-radius: 8px; border: 1px solid rgba(160, 210, 255, 0.3);
+  background: rgba(90, 216, 255, 0.16); color: #e6f8ff; font: 600 13px var(--hud-font, system-ui); letter-spacing: 0.12em;
+  text-transform: uppercase; cursor: pointer; pointer-events: auto;
+}
 
 /* ---------------------------------------------------------- Ranger flight HUD */
 /* a simulation's cockpit display: dark glass panels with chamfered corners and a lit edge, a technical
