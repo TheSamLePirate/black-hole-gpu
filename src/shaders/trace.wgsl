@@ -3859,7 +3859,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   var o: CloudVol;
   o.t = -1.0;
   let hb = 1500.0 / EARTH_RM;
-  let ht = 9000.0 / EARTH_RM;
+  let ht = 4500.0 / EARTH_RM;
   let b = dot(ro, rd);
   let off2 = dot(ro, ro) - b * b;
   let hT = (1.0 + ht) * (1.0 + ht) - off2;
@@ -3899,12 +3899,18 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     // drifting with the clouds: cumulus domes — a base that wavers, a top that rises with the cover and
     // the noise — so their sides are not the map's walls drawn upwards
     let fp = fp0 + fpK * t;
-    let a = earthCloud(q, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), Ls).x / max(P.earth2.y, 1e-3);
+    let fx = earthFoot(q, rd, gx, fp);
+    let fy = earthFoot(q, rd, gy, fp);
+    let a = earthCloud(q, fx, fy, Ls).x / max(P.earth2.y, 1e-3);
     if (a <= 0.01) { continue; }
     let qd = rotZ(q, P.earth.y);
     let x = qd * (EARTH_RM / 2600.0) + vec3f(0.0, 0.0, hn * 2.0);
     let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.3 + vec3f(5.1)) + 0.1 * dnoise(x * 5.3 + vec3f(1.7));
-    let top = (0.2 + 0.8 * a) * (0.7 + 0.6 * sh);
+    // (the tops follow the cover smoothed over ~16 texels — tens of km —: gentle domes where the map's
+    // cover ends sharply, not walls rising from its edge)
+    let qc = rotZ(q, P.earth.y);
+    let soft = clamp((textureSampleGrad(earthCube, bgSamp, eCube(qc), eCube(rotZ(fx, P.earth.y)) * 16.0, eCube(rotZ(fy, P.earth.y)) * 16.0).a - 0.06) * 1.25, 0.0, 1.0);
+    let top = (0.15 + 0.85 * soft) * (0.7 + 0.6 * sh);
     let hp = smoothstep(0.0, 0.05 + 0.12 * sh, hn) * (1.0 - smoothstep(0.45 * top, top, hn));
     let c = a;
     let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0); // (thin cover eroded to puffs and gaps)
