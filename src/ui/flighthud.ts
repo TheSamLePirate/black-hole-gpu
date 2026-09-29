@@ -213,7 +213,6 @@ export class FlightHud {
   private regions = new Map<HTMLCanvasElement, { x: number; y: number; w: number; h: number; label: string; tip: string }[]>();
   /** the readout above the ball: throttle, g-load, the engine and its tank */
   private ballRead: { thr: HTMLElement; g: HTMLElement; eng: HTMLElement } | null = null;
-  private textAt = 0;
   private trail: { X: V3; t: number }[] = [];
   private samples: Sample[] = [];
   private ballImg: ImageData | null = null;
@@ -1272,30 +1271,29 @@ export class FlightHud {
     this.record(info, time);
     this.lastInfo = info;
     const now = performance.now();
-    // (the markers follow the view every frame; the instruments at their own pace — the map 15 times
-    // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame)
-    const due = (k: string, hz: number) => {
-      if (now - (this.drawnAt[k] ?? -1e9) < 1000 / hz) return false;
-      this.drawnAt[k] = now;
-      return true;
-    };
+    // (the markers follow the view every frame; the instruments at their own pace — the map 20 times
+    // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame —,
+    // one of them a frame, the most overdue: never all on the same frame, every 100 ms)
     cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
-    if (this.density < 2 && due("ball", 20)) cpuProf.time("HUD: attitude ball", () => this.drawBall(info));
-    if (this.density === 0 && due("instr", 15)) cpuProf.time("HUD: target & Ranger", () => {
-      this.drawTargetInstr(info);
-      this.drawRangerInstr(info);
-    });
+    const tasks: [string, number, () => void][] = [];
+    if (this.density < 2) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
     if (this.density === 0) {
-      if (due("map", this.mapView || this.map3d.animating ? 60 : 20)) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
-      if (due("tel", 10)) cpuProf.time("HUD: telemetry", () => this.drawTelemetry());
-      if (due("orbit", 10)) cpuProf.time("HUD: orbit panel", () => this.drawPotential(info));
+      tasks.push(["instr", 15, () => cpuProf.time("HUD: target & Ranger", () => (this.drawTargetInstr(info), this.drawRangerInstr(info)))]);
+      tasks.push(["tel", 10, () => cpuProf.time("HUD: telemetry", () => this.drawTelemetry())]);
+      tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
+      // (the full-screen map, or its animation, every frame)
+      if (this.mapView || this.map3d.animating) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
+      else tasks.push(["map", 20, () => cpuProf.time("HUD: map", () => this.map3d.draw(info, time))]);
     }
-    if (now - this.textAt > 100) {
-      this.textAt = now;
-      cpuProf.time("HUD: text panels", () => {
-        this.drawText(info, time);
-        this.tidyRows();
-      });
+    tasks.push(["text", 10, () => cpuProf.time("HUD: text panels", () => (this.drawText(info, time), this.tidyRows()))]);
+    let pick: (typeof tasks)[number] | null = null, late = 1;
+    for (const t of tasks) {
+      const r = (now - (this.drawnAt[t[0]] ?? -1e9)) * t[1] / 1000; // (how many periods since it was drawn)
+      if (r >= late) (late = r), (pick = t);
+    }
+    if (pick) {
+      this.drawnAt[pick[0]] = now;
+      pick[2]();
     }
   }
 
