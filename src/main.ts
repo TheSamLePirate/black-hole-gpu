@@ -1055,6 +1055,8 @@ async function main() {
           // (from the defaults, as a first visit would show it: no ship or exposure carried over)
           Object.assign(settings, defaultSettings(), QUALITY.high, { quality: "high", pixelRatio });
           applyPreset(name);
+          // (a scene with no time of its own at 0 — not wherever the clock stood: the same picture each time)
+          if (presets[name]!.time === undefined) (simTime = 0), (timeDirty = true);
           // (still scenes are frozen and left to converge; flights and missions get a while)
           const moving = !!presets[name]!.ship || !!presets[name]!.mission;
           if (!moving) settings.animate = false;

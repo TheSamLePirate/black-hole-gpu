@@ -12,7 +12,8 @@
     "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build:pages": "bun scripts/build-pages.ts"
+    "build:pages": "bun scripts/build-pages.ts",
+    "gallery": "bun scripts/gallery.ts"
   },
   "type": "module"
 }

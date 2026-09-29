@@ -7,12 +7,12 @@
 //   await __bh.captureScenes()          // all of them, ~4 minutes
 //   await __bh.captureScenes(["Jet side view"])
 //
-// then: bun scripts/scene-thumbs.ts
+// then: bun scripts/scene-thumbs.ts — or all of it, compared with the pictures in the repository first:
+// bun scripts/gallery.ts (--update)
 import { presets } from "../src/settings";
 import { readdirSync, renameSync, mkdirSync, existsSync } from "node:fs";
+import { sceneSlug } from "./scene-slug";
 
-export const sceneSlug = (n: string) =>
-  n.normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60);
 
 mkdirSync("assets/scenes", { recursive: true });
 for (const f of existsSync("snapshots") ? readdirSync("snapshots") : []) {
