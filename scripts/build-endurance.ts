@@ -1,8 +1,9 @@
 // Prepares the Endurance model for the web: FBX → (Blender: joined, decimated, triangulated) OBJ →
-// assets/endurance/endurance.bin (40 % of the triangles: the ship seen from afar, loaded by the app)
-// and endurance-full.bin (all of them: for close views, not loaded yet).
+// its levels of detail, the app picking one by the ship's size on screen (src/endurance.ts):
+// endurance-lod2.bin (5 % of the triangles), endurance-lod1.bin (10 %), endurance.bin (40 %) and
+// endurance-full.bin (all of them).
 //
-//   bun scripts/build-endurance.ts ["assets/Interstellar Endurance"] [path/to/Blender]
+//   bun scripts/build-endurance.ts ["assets/Interstellar Endurance"] [path/to/Blender] [name,name…]
 //
 //  1. positions centred on the ring and scaled to a diameter of 1 (the app sets its size), the ring's
 //     axis (the model's thinnest extent) turned onto z;
@@ -189,6 +190,7 @@ async function build(ratio: number, name: string) {
   console.log(`${name}.bin: ${indices.length / 3} triangles, ${verts.length} vertices; AO ${AO_RAYS} rays in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
 }
 
-await build(0.4, "endurance");
-await build(1, "endurance-full");
+const LODS: [number, string][] = [[0.05, "endurance-lod2"], [0.1, "endurance-lod1"], [0.4, "endurance"], [1, "endurance-full"]];
+const only = process.argv[4]?.split(",");
+for (const [ratio, name] of LODS) if (!only || only.includes(name)) await build(ratio, name);
 console.log((await $`ls -la ${out}`.text()).trim());

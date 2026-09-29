@@ -493,6 +493,7 @@ export class Renderer {
     this.tracePipeLayout = layout;
     this.ship = new ShipRenderer(device, src.ship);
     this.endurance = new EnduranceRenderer(device, src.endurance);
+    this.endurance.onLoaded = () => this.invalidate();
     this.prof = new GpuProfiler(device);
     // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
     this.prof.enabled = this.prof.supported;

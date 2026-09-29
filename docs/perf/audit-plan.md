@@ -46,7 +46,7 @@ smoke alone +50 %), the target of wave B's B3.
 | B10 robustness | device loss: autosave + reload panel; uncaptured GPU errors shown; Earth maps under an OOM scope, falling back a tier |
 | B4 dynamic resolution without reallocation | not done: a resize costs 0.5–1 ms of CPU and no frame over 20 ms on this machine — measured, no gain to take |
 | B8 ship shadow on the traced ground | the Ranger's own shadow map, orthographic from the environment's dominant light, read by the traced ground (`0a1c2e3`) |
-| B9 the Endurance (LOD, GGX) | not done yet |
+| B9 the Endurance (LOD, GGX) | four levels (5 / 10 / 40 / 100 % of the triangles; Blender's decimation at 2 % left spikes) picked by the box's width with hysteresis, each downloaded when first needed (0.7 MB at first sight instead of 5.8 MB); GGX (Smith, Schlick, split-sum) lit by the disk projected on order-2 harmonics from the ship's place each frame (its light wraps round the ring; highlights from its dominant direction); box depth in `rg16float` and kept ≤ 1.5× its need: 96 → 76 B/px (a full-screen ship: ~207 → ~164 MiB); bind groups cached. Cost unmeasurable next to the tracer (full-screen ship ±1 fps). Composite pass not merged into the display (it feeds the bloom). `docs/progress/109_endurance_lod_ggx.jpg` (before │ after, far and near) |
 
 ## Wave C (so far)
 
