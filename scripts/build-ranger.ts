@@ -7,7 +7,8 @@
 //  1. n-gons triangulated by ear clipping in their own plane (some are concave);
 //  2. refined until no edge exceeds REFINE metres, crack-free: whether an edge is split depends on the
 //     edge alone, so both triangles sharing it agree (red-green refinement: 1, 2 or 3 split edges);
-//  3. normals smoothed across edges flatter than 40° (Blender's auto smooth), a material id per part
+//  3. normals smoothed across edges flatter than 40° (Blender's auto smooth) on the coarse mesh, then
+//     interpolated into the refined triangles (not computed after refining: faceted), a material id per part
 //     (0 hull, 1 glass, 2 nozzles, 3 window frames, 4 hatch/airlock);
 //  4. ambient occlusion baked per vertex: AO_RAYS cosine-distributed rays against a BVH of the mesh,
 //     occlusion weighted by (1 − t/AO_RANGE).
@@ -88,7 +89,7 @@ function earClip(pts: V3[]): [number, number, number][] {
   return tris;
 }
 
-interface Tri { v: [number, number, number]; n: V3; area: number; part: number }
+interface Tri { v: [number, number, number]; n: V3; area: number; part: number; cn?: [V3, V3, V3] }
 const faceNormal = (v: Tri["v"]) => {
   const cr = cross(sub(P[v[1]]!, P[v[0]]!), sub(P[v[2]]!, P[v[0]]!));
   return { n: norm(cr), area: Math.hypot(...cr) / 2 };
@@ -102,6 +103,32 @@ for (const f of faces) {
   }
 }
 const coarse = tris.length;
+
+// ------------------------------------------------------------------------------------ normals
+// corner normals on the coarse mesh (before refining: the refined triangles inherit their parent's
+// plane — smoothing them afterwards left every coarse face flat inside, the hull faceted like crumpled
+// paper): area-weighted normals of the faces around the corner's position — positions welded, the OBJ
+// splits them along its UV seams — within the smoothing angle; then interpolated as the faces are cut
+const weld = new Map<string, number>();
+const wid = (i: number) => {
+  const p = P[i]!;
+  const k = `${Math.round(p[0] * 1e4)},${Math.round(p[1] * 1e4)},${Math.round(p[2] * 1e4)}`;
+  let w = weld.get(k);
+  if (w === undefined) weld.set(k, (w = weld.size));
+  return w;
+};
+const aroundC = new Map<number, number[]>();
+tris.forEach((t, i) => t.v.forEach((v) => (aroundC.get(wid(v)) ?? aroundC.set(wid(v), []).get(wid(v))!).push(i)));
+for (const t of tris) {
+  t.cn = t.v.map((v) => {
+    let n: V3 = [0, 0, 0];
+    for (const j of aroundC.get(wid(v))!) {
+      const o = tris[j]!;
+      if (dot(o.n, t.n) >= SMOOTH) n = add(n, scale(o.n, o.area));
+    }
+    return norm(n);
+  }) as [V3, V3, V3];
+}
 
 // ------------------------------------------------------------------------------------ refine
 // (the face normal is inherited: children lie in the parent's plane)
@@ -124,26 +151,33 @@ for (let pass = 0; pass < 12; pass++) {
     const [a, b, c] = t.v;
     const e = [long(a, b), long(b, c), long(c, a)];
     const n = e.filter(Boolean).length;
+    // (this face's corner normals, and its edges' midpoints' — the average of their ends')
+    const nrm = new Map<number, V3>(t.v.map((v, k) => [v, t.cn![k]!]));
+    const mid = (x: number, y: number) => {
+      const m = midpoint(x, y);
+      nrm.set(m, norm(add(nrm.get(x)!, nrm.get(y)!)));
+      return m;
+    };
     const mk = (v: Tri["v"]) => {
       const area = faceNormal(v).area;
-      if (area > 1e-12) next.push({ v, n: t.n, area, part: t.part });
+      if (area > 1e-12) next.push({ v, n: t.n, area, part: t.part, cn: v.map((i) => nrm.get(i)!) as [V3, V3, V3] });
     };
     if (n === 0) next.push(t);
     else if (n === 3) {
-      const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+      const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
       mk([a, ab, ca]); mk([ab, b, bc]); mk([ca, bc, c]); mk([ab, bc, ca]);
     } else {
       // rotate so that the first split edge is (x, y)
       const r = e[0] ? 0 : e[1] ? 1 : 2;
       const [x, y, z] = [t.v[r]!, t.v[(r + 1) % 3]!, t.v[(r + 2) % 3]!];
-      const xy = midpoint(x, y);
+      const xy = mid(x, y);
       if (n === 1) {
         mk([x, xy, z]); mk([xy, y, z]);
       } else if (e[(r + 1) % 3]) {
-        const yz = midpoint(y, z);
+        const yz = mid(y, z);
         mk([x, xy, z]); mk([xy, y, yz]); mk([xy, yz, z]);
       } else {
-        const zx = midpoint(z, x);
+        const zx = mid(z, x);
         mk([x, xy, zx]); mk([xy, y, z]); mk([xy, z, zx]);
       }
     }
@@ -153,21 +187,14 @@ for (let pass = 0; pass < 12; pass++) {
   if (!split) break;
 }
 
-// ------------------------------------------------------------------------------------ normals
-// corner normal: area-weighted face normals around the position, within the smoothing angle
-const around = new Map<number, number[]>();
-tris.forEach((t, i) => t.v.forEach((v) => (around.get(v) ?? around.set(v, []).get(v)!).push(i)));
+// ------------------------------------------------------------------------------------ vertices
+// (a corner's normal carried from the coarse mesh; one vertex per position, normal and part)
 const verts: number[][] = []; // position 3, normal 3, material, AO
 const key = new Map<string, number>();
 const indices: number[] = [];
 for (const t of tris) {
   for (let k = 0; k < 3; k++) {
-    let n: V3 = [0, 0, 0];
-    for (const j of around.get(t.v[k]!)!) {
-      const o = tris[j]!;
-      if (dot(o.n, t.n) >= SMOOTH) n = add(n, scale(o.n, o.area));
-    }
-    n = norm(n);
+    const n = t.cn![k]!;
     const id = `${t.v[k]}/${n.map((x) => x.toFixed(3)).join()}/${t.part}`;
     let vi = key.get(id);
     if (vi === undefined) {
