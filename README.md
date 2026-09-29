@@ -138,8 +138,8 @@ A schema-driven panel (`src/ui/schema.ts` → `src/ui/panel.ts`): every paramete
 range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and what it affects
 (re-trace, resolve only, resize or nothing).
 
-* **Search** (`/`) across labels, descriptions and keywords — e.g. "transparency", "blazar", "doppler".
-* **Tabs** Scene · Matter · Sky · Physics · Render; groups collapse, matter groups carry their on/off switch.
+* **Search** (⌘K / Ctrl+K) across labels, descriptions and keywords — e.g. "transparency", "blazar", "doppler".
+* **Tabs** Camera · Scene · Matter · Sky · Physics · Render · Game; groups collapse, matter groups carry their on/off switch.
 * **Log sliders** for wide ranges (distance, mass, optical depth, Γ, tolerance…) plus an editable value
   field: type `1e-5`, `6.5×10^9`, `36 M`; ↑/↓ nudge (⇧ ×10, ⌥ ×0.1); Enter / Esc.
 * **Modified markers**: an orange dot per changed setting (click it or double-click the label to reset),
@@ -151,6 +151,31 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
   screens it becomes a bottom sheet.
 
 ## Controls
+
+**Time and camera, one model in every mode** (with or without the Ranger):
+
+- **Time** (the time bar — over the toolbar, in the mission bar while flying): Space runs / pauses,
+  `,` `.` step the warp along its ladder (slow motion, real time's multiples, then the classic M/s rungs;
+  beyond 500 M/s the ship rides on rails), `/` is real time (by physical position: `;` `:` `!` on AZERTY).
+  The warp reads as a multiple of real time; the clock as a UTC date in the game's world. Paused, nothing
+  the time drives moves — the ship, its attitude, the cinematics, the liquid throat's waves — and the
+  image refines at once; the camera itself stays free (a photo mode).
+- **Views** (V · ⇧V): without the ship, around the target · following it · free · on a tripod · falling
+  freely (B); with it, its six mounts, around it, free, or a fly-by. Choosing one never moves the camera.
+- **Look at the target** (C) in every view — the free and falling cameras, the follow camera, the ship's
+  mounts (the look turns on its mount), around the ship (behind it on the target's line). The tripod
+  without it keeps a view fixed to its ground: the sky wheels over it.
+- **Telescope** (Y): fields down to 0.02°, held on the target, eased zoom on the wheel, a reticle with the
+  angular scale, the focal length and the target's size and distance — the wormhole a lensed degree-wide
+  sphere from the Earth, and through it Gargantua's sky.
+- **The camera panel** (the toolbar's camera button, the flight HUD's view): the views, the look, the lens,
+  the target (search, frame it, **go to it** — anywhere in the world, through the wormhole too), the
+  relativistic observer's motion and the cinematics (O auto-orbit, ⇧C dive, T journey — they run with the
+  time).
+- **Video** (Render › Video) steps the same simulation as the live view (`src/sim.ts`): the scene goes on
+  from now as it would live — the camera's mode, the ship and its autopilots, the mission — at the live
+  warp, another one, or frozen (bullet time); or it replays a **take** recorded live (● on the time bar:
+  what you did, frame by frame, rendered afterwards at full quality). The scene returns to its start.
 
 **The star's mass** (Matter → Companion star → Mass, in units of Gargantua's M; 0.1 by default — a real
 star beside a supermassive hole would weigh ~10⁻⁸ M and show nothing): its weak field is added to the Kerr
@@ -327,7 +352,7 @@ the Gamepad API: "Connect a USB controller" (help sheet, settings menu) opens it
 and decodes its 20-byte report (standard mapping; remembered, reopened on the next visit). Connection
 toasts are debounced (Safari hands a pad over between two internal providers).
 
-**Two rotation modes** (R, toolbar, Scene → Camera rotation):
+**Placements** in detail (V, the camera panel, Camera → View):
 
 - **Around the target**: drag orbits the selected body — Gargantua, the companion star or the wormhole's
   mouth — with momentum; the wheel sets the distance to it; right-drag offsets the view. The camera keeps
@@ -356,7 +381,7 @@ the wormhole to orbit it; the wheel then sets the distance to the throat. **Free
 A E / W X on AZERTY = W A S D / Q E / Z X on QWERTY): forward/left/back/right, down/up, roll; ⇧ faster;
 right-drag turns the camera about its own axes with no gimbal limit. Near the wormhole the camera
 follows its geodesics, so it can cross the throat; it re-anchors to the nearest object and can go
-anywhere outside the black hole's horizon. These keys are reserved for flight. **V** switches to
+anywhere outside the black hole's horizon. These keys are reserved for flight. A **middle click** switches to
 game-style flight: pointer locked, the mouse turns the camera, the wheel sets the speed, movements ease
 in and out (inertia), Esc leaves.
 
@@ -374,9 +399,11 @@ matches the cycloid solution. **T** runs the
 journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from
 the black hole's universe: the way back home).
 
-Keys: O cinematic orbit · C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the
-rain frame) · T wormhole journey · V game-style flight · B gravity · J jet · G shadow guide · L cinematic mode (liquid wormhole) · K fly the Ranger (⇧K attach point; flight keys in the help sheet) · I readouts · M settings · / search · ⌘Z undo · 1–5 quality ·
-space time · P PNG · F fullscreen · H hide UI.
+Keys: space time · , . / warp and real time · V view · C look at the target · Y telescope · Tab target ·
+O cinematic orbit · ⇧C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the rain frame) ·
+T wormhole journey · B free fall · middle click mouse look · J jet · G shadow guide · L liquid wormhole ·
+K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · ⌘K search · ⌘Z undo ·
+1–6 quality · P PNG · F fullscreen · H hide UI.
 
 Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.
 
