@@ -789,6 +789,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fps performance resolution scale dynamic",
   },
   {
+    key: "glassBlur", type: "toggle", section: "render", group: "Realtime", label: "Frosted panels", effect: "none",
+    help: "The interface's panels blur the view behind them. The browser redoes that blur every frame the image changes, beside the tracer's work: off, the panels are tinted glass and the frame rate is higher.",
+    keywords: "blur glass backdrop ui panels performance",
+  },
+  {
     key: "fpsCap", type: "choice", section: "render", group: "Realtime", label: "Frame rate cap", style: "segmented", effect: "none",
     options: [0, 30, 60, 120].map((v) => ({ value: v, label: v === 0 ? "Display" : `${v}` })),
     help: "Images rendered per second at most. Display: as fast as the screen refreshes. A cap under it leaves the GPU room — steadier frames, a cooler laptop — and the automatic subsampling spends that room on a sharper image.",
