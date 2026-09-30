@@ -942,6 +942,11 @@ export class SettingsPanel {
         [", · . · /", "Time warp slower · faster · real time (; : ! on AZERTY)"],
         ["● on the time bar", "Record a take — Render › Video renders it at full quality"],
       ]],
+      ["The sky — our side", [
+        ["N · ⇧N", "Constellations: their figures and names · the bright stars' names"],
+        ["U", "Grids in turn: equatorial (of date) · horizontal (on a world) · both · none"],
+        ["Sky button", "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card"],
+      ]],
       ["Camera — every mode", [
         ["V · ⇧V", "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)"],
         ["C", "Look at the target: the view locked on it, wherever the camera goes"],

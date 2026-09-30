@@ -96,19 +96,32 @@ export function nutation(T: number) {
  * The Earth's axes at a UTC instant [ms] (et its TDB): Greenwich on x, the pole of date on z — the
  * ICRF turned by the precession, the nutation, the apparent sidereal time (UT1 = UTC).
  */
-export function earthAxes(utcMs: number, et: number): M3 {
+/** ICRS → the true equator and equinox of date (rows: the equinox, 90° east of it, the pole) at et: the
+ *  precession (Lieske 1977) and the nutation; with the nutation's angles */
+function precessionNutation(et: number) {
   const T = et / 86400 / 36525;
-  // the precession J2000 → the mean equator and equinox of date (Lieske 1977)
   const zeta = (2306.2181 * T + 0.30188 * T * T + 0.017998 * T ** 3) * AS;
   const z = (2306.2181 * T + 1.09468 * T * T + 0.018203 * T ** 3) * AS;
   const th = (2004.3109 * T - 0.42665 * T * T - 0.041833 * T ** 3) * AS;
   const P = mul(R3(-z), mul(R2(th), R3(-zeta)));
   const { dpsi, deps, eps } = nutation(T);
   const N = mul(R1(-(eps + deps)), mul(R3(-dpsi), R1(eps)));
+  return { Q: mul(N, P), dpsi, deps, eps };
+}
+
+/** The true equator of date's axes (the equinox, 90° east of it, the pole) on the J2000 ecliptic axes at
+ *  et [TDB s]: the sky's equatorial grid of the date (the pole of 2067 0.9° from J2000's). */
+export function equatorOfDate(et: number): M3 {
+  const Q = precessionNutation(et).Q;
+  return [eclOf(Q[0]), eclOf(Q[1]), eclOf(Q[2])];
+}
+
+export function earthAxes(utcMs: number, et: number): M3 {
+  const { Q, dpsi, deps, eps } = precessionNutation(et);
   // the apparent sidereal time: the mean (IAU 1982, on UT1) plus the equation of the equinoxes
   const du = (utcMs - J2000_MS) / 86400e3, Tu = du / 36525;
   const gmst = (280.46061837 + 360.98564736629 * du + 0.000387933 * Tu * Tu - (Tu ** 3) / 38710000) * D;
-  const M = mul(R3(gmst + dpsi * Math.cos(eps + deps)), mul(N, P));
+  const M = mul(R3(gmst + dpsi * Math.cos(eps + deps)), Q);
   // (rows of M: the Earth's axes on the ICRF)
   return [eclOf(M[0]), eclOf(M[1]), eclOf(M[2])];
 }

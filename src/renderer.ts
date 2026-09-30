@@ -17,6 +17,8 @@ import { loading } from "./loading";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
+import { ChartOverlay } from "./chartoverlay";
+import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
@@ -415,7 +417,7 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string },
+    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string; overlay: string },
   ) {
     this.device = device;
     this.context = context;
@@ -541,6 +543,7 @@ export class Renderer {
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.chart = new ChartOverlay(device, src.overlay);
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.lutBuf, 0, lut);
@@ -735,7 +738,7 @@ export class Renderer {
     loading.done("gpu");
     const src = {
       trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
-      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL),
+      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL), overlay: await wgsl(overlayWGSL),
     };
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
@@ -788,6 +791,34 @@ export class Renderer {
         ? { device: this.device, format: "rgba16float", alphaMode: "opaque", toneMapping: { mode: "extended" } }
         : { device: this.device, format: this.sdrFormat, alphaMode: "opaque" },
     );
+  }
+
+  /** the sky chart's lines over the image (skychart.ts) */
+  private chart: ChartOverlay;
+  private chartDirty = false;
+  /** the sky chart's lines from now on (skychart.ts's segments; none: null) — redrawn at once, even over a
+   *  still image */
+  setChart(segs: Float32Array | null, count: number) {
+    if (!segs && !this.chart.active) return;
+    this.chart.set(segs, count);
+    this.chartDirty = true;
+  }
+  /** where the image lies in an output of outW × outH (uv_out = uv · (sx, sy) + (ox, oy)): writeDisplay's */
+  private displayView(target: Target, outW: number, outH: number, letterbox: boolean): [number, number, number, number] {
+    if (!letterbox) return [1, 1, 0, 0];
+    const k = Math.min(outW / target.width, outH / target.height);
+    const sx = (target.width * k) / outW, sy = (target.height * k) / outH;
+    return [sx, sy, (1 - sx) / 2, (1 - sy) / 2];
+  }
+  /** (the lines' widths are CSS pixels of the view: output pixels per CSS pixel on the page, or — an export —
+   *  per CSS pixel of the image as the page shows it) */
+  private encodeChart(enc: GPUCommandEncoder, s: Settings, t: Target, view: GPUTextureView, format: GPUTextureFormat, outW: number, outH: number, letterbox: boolean, toCanvas = true) {
+    if (!this.chart.active) return;
+    const cv = this.context.canvas as HTMLCanvasElement;
+    const css = Math.max(cv.clientWidth || cv.width, 1);
+    const shown = toCanvas ? css : this.offline ? this.displayView(t, cv.width, cv.height, true)[0] * css : css;
+    const ship = s.ship && this.ship.ready ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) } : null;
+    this.chart.encode(enc, view, format, outW, outH, this.displayView(t, outW, outH, letterbox), t.moments, t.width, t.height, outW / shown, ship);
   }
 
   private get canvasPipeline() {
@@ -1606,17 +1637,7 @@ export class Renderer {
   }
 
   private writeDisplay(s: Settings, target: Target, outW: number, outH: number, letterbox: boolean, dither: boolean, hdr = false) {
-    let sx = 1;
-    let sy = 1;
-    let ox = 0;
-    let oy = 0;
-    if (letterbox) {
-      const k = Math.min(outW / target.width, outH / target.height);
-      sx = (target.width * k) / outW;
-      sy = (target.height * k) / outH;
-      ox = (1 - sx) / 2;
-      oy = (1 - sy) / 2;
-    }
+    const [sx, sy, ox, oy] = this.displayView(target, outW, outH, letterbox);
     const d = new Float32Array([
       outW, outH, Math.pow(2, this.ev(s)) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
@@ -2476,14 +2497,17 @@ export class Renderer {
       }
     } else {
       phase = "converged";
-      if (this.lastPhase === "converged" && !displayChanged) return this.stats(phase, t);
+      if (this.lastPhase === "converged" && !displayChanged && !this.chartDirty) return this.stats(phase, t);
     }
 
     this.writeResolve(t, s);
     this.writeDisplay(s, t, t.width, t.height, false, true, this.hdrActive);
     this.taPhase = phase;
     this.encodePost(enc, t, s);
-    this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
+    const outTex = this.context.getCurrentTexture();
+    this.encodeDisplay(enc, t, this.canvasPipeline, outTex.createView());
+    this.encodeChart(enc, s, t, outTex.createView(), outTex.format, outTex.width, outTex.height, false);
+    this.chartDirty = false;
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
     this.submit(enc, (ms) => {
@@ -2585,6 +2609,11 @@ export class Renderer {
   // ------------------------------------------------------------------------------------ offline
   get offlineActive() {
     return !!this.offline;
+  }
+  /** the offline render's scene (its settings, time, image size), or null */
+  get offlineScene(): { settings: Settings; time: number; width: number; height: number } | null {
+    const o = this.offline;
+    return o ? { settings: o.settings, time: o.time, width: o.target.width, height: o.target.height } : null;
   }
 
   get offlineState(): OfflineStatus | null {
@@ -2701,7 +2730,10 @@ export class Renderer {
     this.writeResolve(t, s);
     this.writeDisplay(s, t, cv.width, cv.height, true, true, this.hdrActive);
     this.encodePost(enc, t, s);
-    this.encodeDisplay(enc, t, this.canvasPipeline, this.context.getCurrentTexture().createView());
+    const outTex = this.context.getCurrentTexture();
+    this.encodeDisplay(enc, t, this.canvasPipeline, outTex.createView());
+    this.encodeChart(enc, s, t, outTex.createView(), outTex.format, outTex.width, outTex.height, true);
+    this.chartDirty = false;
     this.submit(enc, (ms) => {
       if (rows > 0) {
         const perRow = ms / rows;
@@ -2797,6 +2829,7 @@ export class Renderer {
     this.writeDisplay(s, t, t.width, t.height, false, bits === 8);
     this.encodePost(enc, t, s);
     this.encodeDisplay(enc, t, pipeline, tex.createView());
+    this.encodeChart(enc, s, t, tex.createView(), format, t.width, t.height, false, false);
     this.device.queue.submit([enc.finish()]);
     const data = await this.readTexture(tex, t.width, t.height, bits === 8 ? 4 : 8);
     tex.destroy();
@@ -2808,16 +2841,26 @@ export class Renderer {
   async exportRGBA(s: Settings): Promise<{ data: Uint8Array; width: number; height: number }> {
     const t = this.exportTarget();
     const px = await this.renderDisplayed(s, t, 8);
-    return { data: new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), width: t.width, height: t.height };
+    const data = new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4);
+    if (!this.exportWords) return { data, width: t.width, height: t.height };
+    const c = this.withWords(data, t.width, t.height);
+    return { data: new Uint8Array(c.getContext("2d")!.getImageData(0, 0, t.width, t.height).data.buffer), width: t.width, height: t.height };
   }
 
   async exportPNG(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
     const px = await this.renderDisplayed(s, t, 8);
-    const canvas = new OffscreenCanvas(t.width, t.height);
-    const img = new ImageData(new Uint8ClampedArray(px.buffer as ArrayBuffer), t.width, t.height);
-    canvas.getContext("2d")!.putImageData(img, 0, 0);
-    return canvas.convertToBlob({ type: "image/png" });
+    return this.withWords(new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), t.width, t.height).convertToBlob({ type: "image/png" });
+  }
+
+  /** words drawn over an exported image (the sky chart's labels: main.ts), its width and height [px] */
+  exportWords: ((ctx: OffscreenCanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+  private withWords(px: Uint8Array, w: number, h: number) {
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext("2d")!;
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(px.buffer as ArrayBuffer, px.byteOffset, w * h * 4), w, h), 0, 0);
+    this.exportWords?.(ctx, w, h);
+    return canvas;
   }
 
   /** 16 bits per channel, tone-mapped sRGB PNG (no dithering). */

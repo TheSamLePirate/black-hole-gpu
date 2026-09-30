@@ -649,7 +649,7 @@ export function composeOffset(aim: ReturnType<typeof aimFrame>, q: Quat) {
 }
 
 /** A direction seen from a camera moving at β (rep components): aberration towards the motion. */
-function aberrateRep(n: Vec3, b: Vec3): Vec3 {
+export function aberrateRep(n: Vec3, b: Vec3): Vec3 {
   const b2 = dot(b, b);
   if (b2 < 1e-16) return n;
   const g = 1 / Math.sqrt(1 - b2);

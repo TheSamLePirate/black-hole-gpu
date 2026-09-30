@@ -7,7 +7,7 @@ import { mouth } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
-import { BODY_NAMES, bodyLook, type Body } from "./targeting";
+import { BODY_NAMES, bodyLook, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, shipToCamera, type Mount } from "./mounts";
 import { SOLAR_BODIES } from "./system/solar";
@@ -16,6 +16,9 @@ import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
+import { aimAngles, buildChart, chartOn, chartOptions, CONSTELLATIONS, horizonAt, lookOf, NAMED_STARS, pickChart, type ChartFrame } from "./skychart";
+import { drawChartLabels } from "./ui/skylabels";
+import { SkyPanel } from "./ui/skypanel";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
@@ -73,6 +76,7 @@ const KEEP_ON_PRESET: (keyof Settings)[] = [
   "massSolar", "cinematicSpeed", "rotation", "lookAt", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
   "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
   "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
+  "skyLines", "skyNames", "starNames", "gridEquatorial", "gridHorizontal", "skyEcliptic", "skyChartOpacity",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -354,6 +358,10 @@ async function main() {
       syncCameraButton();
     },
     "btn-guide": () => toggle("shadowGuide"),
+    "btn-sky": () => {
+      skyPanel.toggle();
+      syncButtons();
+    },
     "btn-jet": () => toggle("jet"),
     "btn-ship": () => {
       toggle("ship");
@@ -483,6 +491,136 @@ async function main() {
     changed: (keys) => onSettingsChange(keys), toast: (t) => panel.toast(t),
   });
 
+  // ------------------------------------------------------------------ the sky chart (skychart.ts)
+  // our sky's constellations, named stars, grids — lines drawn by the renderer over the sky, words on the
+  // overlay; rebuilt when the view, the time or the switches change
+  const skyPanel = new SkyPanel({
+    settings,
+    changed: (keys) => {
+      onSettingsChange(keys);
+      panel.refresh();
+    },
+    where: () => {
+      const cam = cameraFrame(settings);
+      const ours = onOurSide(settings, cam);
+      const hz = ours ? horizonAt(settings, cam, sim.time) : null;
+      return { ours, horizon: hz ? (BODY_NAMES[hz.body as Body] ?? hz.body) : null };
+    },
+    goTo: (kind, index) => skyGoTo(kind, index),
+  });
+  /**
+   * Turns the camera to a constellation or a named star in 0.9 s — level on a world's horizon —, the
+   * view freed from the target (the "around" placement becomes the free one: it always faces its target).
+   */
+  function skyGoTo(kind: "constellation" | "star", index: number) {
+    const name = kind === "star" ? NAMED_STARS[index]!.name : CONSTELLATIONS[index]!.name;
+    let cam = cameraFrame(settings);
+    if (!onOurSide(settings, cam)) return void panel.toast("Our constellations are on the other side of the wormhole");
+    const d = kind === "star" ? NAMED_STARS[index]!.v : CONSTELLATIONS[index]!.label;
+    if (settings.ship) {
+      // (the Ranger's views: its look turned — as onto a body, aimAt)
+      if (settings.lookAt) toggleLookAt();
+      const deg = 180 / Math.PI;
+      for (let i = 0; i < 12; i++) {
+        const c = cameraFrame(settings);
+        const L = lookOf(settings, c, d);
+        const b = Math.atan2(L[0] * c.right[0] + L[1] * c.right[1] + L[2] * c.right[2], L[0] * c.fwd[0] + L[1] * c.fwd[1] + L[2] * c.fwd[2]) * deg;
+        const e = Math.asin(Math.max(-1, Math.min(1, L[0] * c.up[0] + L[1] * c.up[1] + L[2] * c.up[2]))) * deg;
+        camera.setLook(settings.shipLookYaw + b, settings.shipLookPitch + e);
+        if (Math.abs(b) < 0.01 && Math.abs(e) < 0.01) break;
+      }
+      touch();
+      return void panel.toast(kind === "star" ? name : `${name} · ${CONSTELLATIONS[index]!.abbr}`);
+    }
+    if (settings.lookAt) toggleLookAt();
+    if (settings.rotation === "orbit") setView("free");
+    cam = cameraFrame(settings);
+    const hz = horizonAt(settings, cam, sim.time);
+    const to = aimAngles(settings, cam, d, hz?.zenith);
+    const from = { yaw: settings.yaw, pitch: settings.pitch, roll: settings.roll };
+    const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
+    const t0 = performance.now();
+    const step = () => {
+      const u = Math.min(1, (performance.now() - t0) / 900);
+      const e = u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2;
+      settings.yaw = from.yaw + wrap(to.yaw - from.yaw) * e;
+      settings.pitch = from.pitch + (to.pitch - from.pitch) * e;
+      settings.roll = from.roll + wrap(to.roll - from.roll) * e;
+      touch();
+      if (u < 1) requestAnimationFrame(step);
+      else refreshGui();
+    };
+    requestAnimationFrame(step);
+    panel.toast(kind === "star" ? `${name}` : `${name} · ${CONSTELLATIONS[index]!.abbr}`);
+  }
+  let chart: ChartFrame | null = null;
+  let chartKey = "";
+  let chartHover = -1;
+  /** the offline image's height on the page [CSS px] (letterboxed in the canvas) */
+  const displayedHeight = (off: { width: number; height: number }) => Math.min(canvas.clientHeight, (canvas.clientWidth * off.height) / off.width);
+  /** Builds the chart for the image about to be drawn (the offline render's scene while one runs). */
+  function updateChart(force = false) {
+    const o = chartOptions(settings, chartHover);
+    const off = renderer.offlineScene;
+    const s = off?.settings ?? settings;
+    const t = off?.time ?? sim.time;
+    const cam = cameraFrame(s);
+    const aspect = off ? off.width / off.height : canvas.width / Math.max(canvas.height, 1);
+    const key = chartOn(o)
+      ? [cam.region, cam.ell, ...cam.n, ...cam.fwd, ...cam.up, ...cam.beta, s.fov, t, aspect, o.lines, o.names, o.stars, o.equatorial, o.horizontal, o.ecliptic, o.opacity, o.highlight, !!off].join()
+      : "off";
+    if (key === chartKey && !force) return;
+    chartKey = key;
+    chart = key === "off" ? null : buildChart(s, cam, t, o, aspect, off ? displayedHeight(off) : canvas.clientHeight);
+    renderer.setChart(chart?.segs ?? null, chart?.count ?? 0);
+  }
+  // (an exported image — a PNG, a video's frame — carries the chart's words too, at its own scale: the
+  // image's pixels per CSS pixel of it on the page)
+  renderer.exportWords = (ctx, w, h) => {
+    if (!chart) return;
+    const off = renderer.offlineScene;
+    const cssH = off ? displayedHeight(off) : canvas.clientHeight;
+    drawChartLabels(ctx, chart.labels, w, h, h / Math.max(cssH, 1));
+  };
+  /** The sky under the pointer: the constellation lit up, the card of a star or a constellation. */
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.buttons || !chart || renderer.offlineActive || document.body.classList.contains("hide-ui")) {
+      if (!e.buttons) skyPanel.showCard(null);
+      return;
+    }
+    const r = canvas.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 2 - 1, y = 1 - ((e.clientY - r.top) / r.height) * 2;
+    const what = pickChart(chart, x, y, (2 * 14) / r.height, r.width / r.height, sim.time);
+    const hover = settings.skyLines ? what.constellationIndex : -1;
+    if (hover !== chartHover) chartHover = hover;
+    skyPanel.showCard(what.star || (what.constellation && settings.skyLines) ? { x: e.clientX, y: e.clientY } : null, what);
+  });
+  canvas.addEventListener("pointerleave", () => {
+    chartHover = -1;
+    skyPanel.showCard(null);
+  });
+  canvas.addEventListener("pointerdown", () => skyPanel.showCard(null));
+  /** N: the constellations (figures and names) on / off; ⇧N the stars' names. U: the grids in turn. */
+  function toggleConstellations(stars = false) {
+    if (stars) settings.starNames = !settings.starNames;
+    else settings.skyLines = settings.skyNames = !(settings.skyLines || settings.skyNames);
+    onSettingsChange(stars ? ["starNames"] : ["skyLines", "skyNames"]);
+    panel.refresh();
+    panel.toast(stars ? `Star names ${settings.starNames ? "on" : "off"}` : `Constellations ${settings.skyLines ? "on" : "off"}`);
+  }
+  function cycleGrids() {
+    const states: [boolean, boolean][] = [[false, false], [true, false], [false, true], [true, true]];
+    const i = states.findIndex(([e, h]) => e === settings.gridEquatorial && h === settings.gridHorizontal);
+    const [e, h] = states[(i + 1) % states.length]!;
+    settings.gridEquatorial = e;
+    settings.gridHorizontal = h;
+    onSettingsChange(["gridEquatorial", "gridHorizontal"]);
+    panel.refresh();
+    const cam = cameraFrame(settings);
+    const noHorizon = h && !horizonAt(settings, cam, sim.time);
+    panel.toast(!e && !h ? "Grids off" : `${[e && "Equatorial", h && "Horizontal"].filter(Boolean).join(" + ")} grid${e && h ? "s" : ""}${noHorizon ? " — no world under the camera" : ""}`);
+  }
+
   /** Next attach point of the camera on the Ranger (turns the ship on). */
   function nextMount() {
     if (!settings.ship) {
@@ -507,6 +645,7 @@ async function main() {
   function syncButtons() {
     transport?.update(true);
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
+    $("btn-sky").classList.toggle("active", settings.skyLines || settings.skyNames || settings.starNames || settings.gridEquatorial || settings.gridHorizontal || settings.skyEcliptic);
     $("btn-jet").classList.toggle("active", settings.jet);
     $("btn-cinema").classList.toggle("active", settings.cinematic);
     $("btn-ship").classList.toggle("active", settings.ship);
@@ -826,6 +965,8 @@ async function main() {
     } else if (k === "t") cinematic("journey");
     else if (k === "b") setView(view() === "fall" ? "free" : "fall");
     else if (k === "g") toggle("shadowGuide");
+    else if (k === "n" && !flying()) toggleConstellations(e.shiftKey);
+    else if (k === "u" && !flying()) cycleGrids();
     else if (k === "j") toggle("jet");
     else if (k === "l") actions["btn-cinema"]!();
     else if (k === "k") {
@@ -1019,6 +1160,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 20));
         if (!renderer.offlineActive) return (videoState.result = "cancelled");
       }
+      updateChart(true);
       const px = await renderer.exportRGBA(settings);
       await writer.addFrame(px.data, px.width, px.height);
       videoState.frame = i + 1;
@@ -1059,6 +1201,19 @@ async function main() {
       /** the game's tools: __bh.game.help() */
       game: tools,
       settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
+      /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
+      sky: {
+        goTo: (name: string) => {
+          const n = name.toLowerCase();
+          const c = CONSTELLATIONS.findIndex((k) => k.name.toLowerCase() === n || k.abbr.toLowerCase() === n);
+          if (c >= 0) return skyGoTo("constellation", c);
+          const st = NAMED_STARS.findIndex((k) => k.name.toLowerCase() === n);
+          if (st >= 0) return skyGoTo("star", st);
+          throw new Error(`no constellation or star named ${name}`);
+        },
+        update: () => updateChart(true),
+        chart: () => chart,
+      },
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
       sound, audio,
       /** the built-in scenes' names (for __bh.preset) */
@@ -1176,6 +1331,8 @@ async function main() {
     }
     // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
     const capped = settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
+    if (!capped) cpuProf.time("sky chart", () => updateChart());
+    skyPanel.refresh();
     const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));
     if (st) {
       renderedAt = now;
@@ -1303,15 +1460,18 @@ async function main() {
     const hover = camera.hover;
     const ship = shipMarker();
     const tele = telescopeView(cam);
-    const key = guide || camera.flyMode || marker || hover || ship || tele
+    // (the sky chart's words: over the live view — the offline one is letterboxed, its lines alone)
+    const sky = chart && !renderer.offlineActive ? chart : null;
+    const key = guide || camera.flyMode || marker || hover || ship || tele || sky
       ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key,
-        tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking]].join()
+        tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking], sky ? chartKey : ""].join()
       : "off";
     if (key === guideKey) return;
     guideKey = key;
     const ctx = overlay.getContext("2d")!;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (key === "off") return;
+    if (sky) drawChartLabels(ctx, sky.labels, overlay.width, overlay.height, devicePixelRatio);
     if (camera.flyMode) drawCrosshair(ctx);
     if (tele) drawTelescope(ctx, overlay.width, overlay.height, devicePixelRatio, tele);
     if (marker && !tele) drawMarker(ctx, marker);

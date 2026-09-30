@@ -581,6 +581,42 @@ export const SCHEMA: ControlDef[] = [
     key: "starSize", type: "number", section: "sky", group: "Celestial sphere", label: "Star PSF size", min: 0.3, max: 4, step: 0.01, visible: (s) => s.background === "stars" || s.background === "real",
     help: "Width of the stellar point-spread function in pixels (flux-conserving: lensing still magnifies correctly).",
   },
+  // ------------------------------------------------------------------ sky · the sky chart (our sky)
+  {
+    key: "skyLines", type: "toggle", section: "sky", group: "Sky chart", label: "Constellation figures", effect: "none",
+    help: "The 88 constellations' traditional figures, drawn over our sky where it shows (the ground, the Sun and the Moon hide them). Hover one to light it up. Shortcut N (names too).",
+    keywords: "constellations lines figures asterism stellarium planetarium",
+  },
+  {
+    key: "skyNames", type: "toggle", section: "sky", group: "Sky chart", label: "Constellation names", effect: "none",
+    help: "The constellations' names, written in the middle of their figures.",
+    keywords: "constellations names labels",
+  },
+  {
+    key: "starNames", type: "toggle", section: "sky", group: "Sky chart", label: "Star names", effect: "none",
+    help: "The proper names of the bright stars (102 of them) — the twenty brightest in a wide view, all as you zoom in. Hover a star for its card.",
+    keywords: "stars names sirius vega betelgeuse labels",
+  },
+  {
+    key: "gridEquatorial", type: "toggle", section: "sky", group: "Sky chart", label: "Equatorial grid", effect: "none",
+    help: "Right ascension and declination of the date (the equator and equinox precessed from J2000), the celestial equator bolder. The step follows the zoom. Shortcut U cycles the grids.",
+    keywords: "grid equatorial right ascension declination coordinates celestial equator",
+  },
+  {
+    key: "gridHorizontal", type: "toggle", section: "sky", group: "Sky chart", label: "Horizontal grid", effect: "none",
+    help: "Altitude and azimuth of the place under the camera — on or near a planet or a moon (within two of its radii): the horizon, the cardinal points.",
+    keywords: "grid azimuthal horizontal altitude azimuth alt-az horizon cardinal",
+  },
+  {
+    key: "skyEcliptic", type: "toggle", section: "sky", group: "Sky chart", label: "Ecliptic", effect: "none",
+    help: "The Sun's yearly path among the stars (J2000), where the planets wander.",
+    keywords: "ecliptic zodiac",
+  },
+  {
+    key: "skyChartOpacity", type: "number", section: "sky", group: "Sky chart", label: "Chart opacity", min: 0.1, max: 1, step: 0.01, effect: "none",
+    visible: (s) => s.skyLines || s.skyNames || s.starNames || s.gridEquatorial || s.gridHorizontal || s.skyEcliptic,
+    help: "How strongly the chart is drawn over the sky.",
+  },
   // ------------------------------------------------------------------ physics
   {
     key: "shiftMode", type: "choice", section: "physics", group: "Frequency shifts", label: "Shifts", style: "select",

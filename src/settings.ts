@@ -123,6 +123,15 @@ export interface Settings {
   skyL: number; // galactic longitude behind the hole (default view) [deg]
   skyB: number; // galactic latitude behind the hole [deg]
   skyRoll: number; // tilt of the galactic plane w.r.t. the black hole's equator [deg]
+  // the sky chart over our sky (skychart.ts): the constellations' figures, their names, the named stars,
+  // the equatorial grid of the date, the horizontal (alt-azimuth) grid, the ecliptic; its opacity (0 … 1)
+  skyLines: boolean;
+  skyNames: boolean;
+  starNames: boolean;
+  gridEquatorial: boolean;
+  gridHorizontal: boolean;
+  skyEcliptic: boolean;
+  skyChartOpacity: number;
   // time
   animate: boolean;
   timeSpeed: number; // M per second
@@ -317,6 +326,13 @@ export function defaultSettings(): Settings {
     skyL: 0,
     skyB: 0,
     skyRoll: 35,
+    skyLines: false,
+    skyNames: false,
+    starNames: false,
+    gridEquatorial: false,
+    gridHorizontal: false,
+    skyEcliptic: false,
+    skyChartOpacity: 0.85,
     animate: true,
     timeSpeed: 6,
     hotSpot: false,
