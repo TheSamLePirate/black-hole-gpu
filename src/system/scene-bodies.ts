@@ -7,7 +7,7 @@ import type { Settings } from "../settings";
 import { starCentre, starOmega } from "../targeting";
 import { GARGANTUA_SYSTEM, type BodyDef, type System } from "./bodies";
 import { bodyState, meanMotion, type Vec3 } from "./ephemeris";
-import { mapIndex, solarBody, spinAngle } from "./solar";
+import { bodyPole, mapIndex, seenFrom, solarBody, spinAngle } from "./solar";
 
 export const MAX_BODIES = 40;
 /** vec4s per body in the GPU buffer */
@@ -61,7 +61,11 @@ export function sceneSystem(s: Settings): System | null {
  *  the escaped rays' straight way out. */
 export const TRACED_RADIUS = 600;
 
-export function sceneBodies(s: Settings, t: number): GpuBody[] {
+/**
+ * The bodies the tracer draws at t. `obs`: where the camera is in our universe's home frame (our mouth
+ * seen from Gargantua's side: its origin) — our bodies then where the light shows them (seenFrom).
+ */
+export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): GpuBody[] {
   const out: GpuBody[] = [];
   if (s.sun) {
     out.push({
@@ -101,7 +105,10 @@ export function sceneBodies(s: Settings, t: number): GpuBody[] {
     let sun = -1;
     for (const b of sys.bodies.filter((q) => traced(q) && q.universe === "ours")) {
       if (out.length >= MAX_BODIES) break;
-      const st = bodyState(sys, b.id, t);
+      // (seen with the light's delay from the camera: the Moon 1.3 s ago, Jupiter 40 min — its turning too)
+      const seen = obs && solarBody(b.id) ? seenFrom(b.id, t, obs) : null;
+      const st = seen ?? bodyState(sys, b.id, t);
+      const ts = seen?.t ?? t;
       const reach = b.radius * Math.max(b.rings?.outer ?? 1, 1);
       const where = Math.hypot(...st.pos) - reach < rFar ? 4 : 2;
       let lit = { light: -1, illum: 0 };
@@ -117,7 +124,8 @@ export function sceneBodies(s: Settings, t: number): GpuBody[] {
         id: b.id, pos: st.pos, radius: b.radius, omega: 0, parent: -1, kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
         mass: 0, temperature: b.temperature ?? 0, brightness: b.kind === "star" ? 1 : b.albedo ?? albedo(b),
         surface: b.map ? SURFACE_MAPPED + mapIndex(b.map) : b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1,
-        ...lit, where, rings: b.rings, pole: b.pole, spin: sb ? spinAngle(sb, t) : 0,
+        // (the pole of now: the Earth's precesses, the Moon's librates — the map turned from its node)
+        ...lit, where, rings: b.rings, pole: sb ? bodyPole(sb, ts) : b.pole, spin: sb ? spinAngle(sb, ts) : 0,
       });
     }
   }

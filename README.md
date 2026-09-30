@@ -132,6 +132,33 @@ Progress screenshots of each improvement step are in `docs/progress/`.
 Real sky: NASA/Goddard Space Flight Center Scientific Visualization Studio, *Deep Star Maps 2020*
 (Gaia DR2: ESA/Gaia/DPAC); HYG star database v4.4 (CC BY-SA 4.0). Details in `assets/sky/README.md`.
 
+**The solar system** (our side of the wormhole), to scale — radii, masses, distances — and where it is:
+
+- **Ephemerides**: NASA/JPL's **DE440** (the Sun, the planets' systems, the Moon: 1990 – 2150) and **JUP365**
+  (the Galilean moons: 2040 – 2100), refitted from NAIF's kernels by `scripts/build-ephemeris.ts`
+  (`assets/ephemeris/`, 7 MB; the kernels themselves are not in the repository): the Moon to 8 m, the inner
+  planets to 1 km, the outer ones to 4 km, continuous across their records. The planets' centres are their
+  barycentres less their moons' pull (the Earth: the Moon and DE440's mass ratio; Pluto's centre is 2 100 km
+  from its system's). Elsewhere, models: the planets on Standish's mean elements, the Moon on its mean
+  elements and main inequalities (~2′), the other moons on JPL's mean elements in their Laplace planes.
+  Checked (`tests/ephemeris.test.ts`): the 2020 great conjunction (0.10°), Mars' 2020 closest approach
+  (62.07 Mkm), the 2012 transit of Venus, the total eclipse of 12 August 2026 against NASA's path —
+  greatest eclipse within a second, 1 km and γ 0.8977.
+- **Time**: the clock is UTC; the ephemerides run on TDB (the leap seconds of `naif0012.tls`, + 32.184 s),
+  the Earth on UT1 ≈ UTC.
+- **Turning**: the IAU models (`pck00010.tpc`: poles, prime meridians — Mars' Airy-0 where its map has it, the
+  Moon's physical librations); the Earth's precession (IAU 1976), nutation and apparent sidereal time
+  (Greenwich to ~15 m); the moons with no model face their planet.
+- **Light-time**: what is drawn is where the light shows it from the camera — the Moon 1.3 s ago, Jupiter 40
+  minutes (and turned as it was then). Without it the Sun sat 20″ off the Moon: an eclipse's shadow passed
+  40 s late, 40 km off.
+- **Eclipses**: the Moon's shadow on the Earth — the Sun's disk uncovered seen from every point of the ground,
+  the air and the clouds (the umbra, the penumbra, the sky's own light from the sunlit air around: the
+  totality's deep blue, the horizon's glow all round), the Sun's corona (Baumbach's profile: a millionth of
+  the Sun, streamers, prominences) and the light meter following it. The scene *Earth: total eclipse over
+  Burgos, 12 Aug 2026* starts half a minute before the shadow arrives. Settings › Sky › The Earth › Cloud
+  cover clears the sky.
+
 ## Settings panel
 
 A schema-driven panel (`src/ui/schema.ts` → `src/ui/panel.ts`): every parameter carries its unit,

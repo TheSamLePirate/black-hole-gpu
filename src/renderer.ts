@@ -1,5 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { bodyAxes, M_METRES, mapIndex, solarBody, solarState, type MapName } from "./system/solar";
+import { bodyAxes, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { guessTier, type Tier } from "./tier";
@@ -17,7 +17,7 @@ import { loading } from "./loading";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
-import { cameraFrame, gpuTheta, type CameraFrame } from "./camera";
+import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
@@ -59,7 +59,7 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 255;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-const PARAM_VEC4S = 66;
+const PARAM_VEC4S = 67;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -1306,8 +1306,9 @@ export class Renderer {
     set(35, ...m.ex, 0);
     set(36, ...m.ey, 0);
     set(37, ...m.ez, 0);
-    // bodies (the companion star, a system's planets): places now, in float64 on the CPU
-    const bodies = sceneBodies(s, time);
+    // bodies (the companion star, a system's planets): places now, in float64 on the CPU — ours where
+    // the light shows them from the camera (our mouth, seen from Gargantua's side)
+    const bodies = sceneBodies(s, time, s.wormhole ? (homePosition(s) ?? [0, 0, 0]) : null);
     if (o.probe) {
       const k = bodies.findIndex((b) => b.id === o.probe!.hide);
       if (k >= 0) bodies[k]!.where = 3;
@@ -1397,6 +1398,8 @@ export class Renderer {
     // light falling where the camera is
     if (!o.probe) {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
+      this.meterHome = s.wormhole ? homePosition(s) : null;
+      this.meterTime = time;
       this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
       this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier;
@@ -1528,10 +1531,12 @@ export class Renderer {
       set(63, 0, 0, 0, 0);
       set(64, 0, 0, 0, 0);
     }
-    set(59, 6000 / 6.371e6, 1, 0.8, AIR_K);
+    set(59, 6000 / 6.371e6, s.earthClouds, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
     let moon: [number, number, number, number] = [0, 0, 1, 0];
+    let eclipse: [number, number, number, number] = [0, 0, 0, 0];
+    let sunAng = 0;
     if (earthK >= 0) {
       const E = solarState("earth", time).pos, M = solarState("moon", time).pos, S = solarState("sun", time).pos;
       const m = [M[0] - E[0], M[1] - E[1], M[2] - E[2]], sn = [S[0] - M[0], S[1] - M[1], S[2] - M[2]];
@@ -1541,8 +1546,22 @@ export class Renderer {
       // (Sun–Moon–Earth angle: 0 at full Moon)
       const cosPhase = -(m[0]! * sn[0]! + m[1]! * sn[1]! + m[2]! * sn[2]!) / (ml * sl);
       moon = [q[0]!, q[1]!, q[2]!, (1 + cosPhase) / 2];
+      // the eclipses: the Moon and the Sun where the light shows them from the camera (the Moon 1.3 s
+      // ago — the shadow's place, to a kilometre), on the Earth's axes [its radii]; the Sun's angular radius
+      const obs = homePosition(s) ?? E;
+      const Ms = seenFrom("moon", time, obs).pos, Ss = seenFrom("sun", time, obs).pos;
+      const RE = solarBody("earth")!.radius;
+      const mv = [Ms[0] - E[0], Ms[1] - E[1], Ms[2] - E[2]];
+      const mq = A.map((a) => (a[0] * mv[0]! + a[1] * mv[1]! + a[2] * mv[2]!) / RE);
+      const sd = Math.hypot(Ss[0] - E[0], Ss[1] - E[1], Ss[2] - E[2]);
+      // (only when the Moon is within 2° of the Sun, seen from the Earth's centre: the shader's test is cheap)
+      const cosMS = ((Ss[0] - E[0]) * mv[0]! + (Ss[1] - E[1]) * mv[1]! + (Ss[2] - E[2]) * mv[2]!) / (sd * Math.hypot(...mv));
+      eclipse = cosMS > Math.cos(2.5 * (Math.PI / 180)) ? [mq[0]!, mq[1]!, mq[2]!, solarBody("moon")!.radius / RE] : [0, 0, 0, 0];
+      sunAng = Math.asin(Math.min(solarBody("sun")!.radius / sd, 1));
     }
     set(60, ...moon);
+    set(66, ...eclipse);
+    f[61 * 4 + 1] = sunAng; // (earth4.y)
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -2218,8 +2237,14 @@ export class Renderer {
     if (!near || bodies[near.index]?.id !== "earth" || !this.earthMaps.tier) return 1;
     const r = Math.hypot(...near.centre);
     const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
-    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 0.25);
+    // (and an eclipse: the Sun's disk the Moon leaves — the totality's twilight, ten stops down)
+    const home = this.meterHome;
+    const ecl = home ? sunShare(home, this.meterTime) : 1;
+    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 0.25) * Math.max(ecl, 0.002);
   }
+  /** where the meter reads the light (home frame) and when */
+  private meterHome: Vec3 | null = null;
+  private meterTime = 0;
 
   /**
    * The meter's reading: exposure for the light falling here (a white surface in it well exposed),

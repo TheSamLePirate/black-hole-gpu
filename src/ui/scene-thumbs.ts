@@ -71,6 +71,7 @@ import t67 from "../../assets/scenes/extreme-spin-a-0-998-edge-on.webp";
 import t68 from "../../assets/scenes/orbiting-at-r-8-aberration.webp";
 import t69 from "../../assets/scenes/falling-in-rain-frame.webp";
 import t70 from "../../assets/scenes/lensing-grid-shadow-guide.webp";
+import t71 from "../../assets/scenes/earth-total-eclipse-over-burgos-12-aug-2026.webp";
 
 export const SCENE_THUMBS: Record<string, string> = {
   "Kerr a=0.94, near edge-on": t0,
@@ -86,6 +87,7 @@ export const SCENE_THUMBS: Record<string, string> = {
   "Earth: low orbit over the Amazon": t10,
   "Earth: the night side, Japan's lights": t11,
   "Earth: the Himalaya from orbit": t12,
+  "Earth: total eclipse over Burgos, 12 Aug 2026": t71,
   "Earth: sunset over the Andes": t13,
   "Earth: full Moon rising over the Andes": t14,
   "Earth: crescent Moon at dusk over the Alps": t15,

@@ -163,6 +163,7 @@ export interface Settings {
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
+  earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -351,6 +352,7 @@ export function defaultSettings(): Settings {
     temporalReprojection: true,
     farFieldLut: true,
     volumetricClouds: true,
+    earthClouds: 1,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -520,6 +522,13 @@ export const presets: Record<string, Preset> = {
   // there: the ridges in relief, their snow, their shadows
   "Earth: the Himalaya from orbit": { ...EARTH_VIEW, target: "earth", fov: 50, time: T0 - 0.1931 * DAY, pose: { at: [24.5, 86.9], altKm: 400, look: "earth", off: [0, 45] } },
   // Santiago, the Sun setting behind the coast range: the auto exposure on the glow
+  // the total eclipse of 12 August 2026 from Burgos, half a minute before the Moon's shadow arrives —
+  // totality 18:28:10 – 18:29:51 UTC here, the Sun 9° up in the west-northwest: the sky's darkening, the
+  // diamond ring, the corona, the horizon's glow all round (DE440; the NASA path within a kilometre)
+  "Earth: total eclipse over Burgos, 12 Aug 2026": {
+    ...EARTH_VIEW, ship: false, target: "sun", lookAt: true, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [42.34, -3.7], look: "sun" },
+  },
   "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0 + 0.358 * DAY, pose: { at: SANTIAGO, look: "sun", off: [0, 6] } },
   // Santiago, a quarter of an hour later: the full Moon rising over the Andes (a telephoto)
   "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3945 * DAY, pose: { at: SANTIAGO, look: "moon", off: [0, -2] } },

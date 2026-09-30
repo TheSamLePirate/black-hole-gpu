@@ -39,7 +39,7 @@ test("in orbit: the nose on the Earth's centre, the north up, a circular speed",
 
 test("the Earth's scenes all place the camera", () => {
   const names = Object.keys(presets).filter((n) => n.startsWith("Earth:"));
-  expect(names.length).toBe(12);
+  expect(names.length).toBe(13);
   for (const n of names) {
     const p = presets[n]!;
     expect(typeof p.pose).toBe("object");
@@ -75,6 +75,6 @@ test("other worlds: the phase, the Sun's height, the tilt", () => {
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(12 + 27);
+  expect(worlds.length).toBe(13 + 27);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });

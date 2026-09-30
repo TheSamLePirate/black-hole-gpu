@@ -757,6 +757,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "taa temporal reprojection history sharp motion upscaling",
   },
   {
+    key: "earthClouds", type: "number", section: "sky", group: "The Earth", label: "Cloud cover", min: 0, max: 1, step: 0.05, precision: 2, effect: "scene",
+    help: "How much of the Earth's cloud map is drawn: 1, its clouds (NASA's Blue Marble); 0, a clear sky everywhere — an eclipse, a landscape, a view from orbit without them.",
+    keywords: "clouds cover weather clear sky earth eclipse",
+  },
+  {
     key: "volumetricClouds", type: "toggle", section: "render", group: "Realtime", label: "Volumetric clouds", effect: "scene",
     help: "Near the Earth, its clouds are a volume — from 1.5 km to a top rising with the cover — marched along each ray: lit through themselves, their silhouettes on the horizon and their shadowed flanks. Off: a textured shell (faster).",
     keywords: "clouds volumetric earth sky weather",
@@ -992,6 +997,7 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Earth: low orbit over the Amazon": { title: "Low orbit over the Amazon", description: "400 km up: the river's sediment, the cumulus in puffs, the haze thickening towards the horizon.", icon: "≈", group: "earth" },
   "Earth: the night side, Japan's lights": { title: "The night side", description: "800 km over Japan at midnight: the cities' lights, the dark ocean, the stars over the limb.", icon: "✦", group: "earth" },
   "Earth: the Himalaya from orbit": { title: "The Himalaya from orbit", description: "400 km over the Ganges plain, looking north: the range in relief under the afternoon Sun, its snow and shadows.", icon: "▲", group: "earth" },
+  "Earth: total eclipse over Burgos, 12 Aug 2026": { title: "Total eclipse over Burgos", description: "12 August 2026, the Sun low over Castile: the Moon's shadow sweeps in, 1 min 42 s of totality — the corona, the prominences, the horizon's glow all round (JPL's DE440 ephemeris).", icon: "◯", group: "earth" },
   "Earth: sunset over the Andes": { title: "Sunset over the Andes", description: "Santiago, the Sun going down behind the coast range: the glow, the sky darkening upwards.", icon: "☀", group: "earth" },
   "Earth: full Moon rising over the Andes": { title: "Full Moon over the Andes", description: "A quarter of an hour after sunset, the full Moon rising over the Andes, reddened, crossed by far clouds (a telephoto).", icon: "●", group: "earth" },
   "Earth: crescent Moon at dusk over the Alps": { title: "Crescent over the Alps", description: "Mont Blanc at dusk: a two-day-old Moon, 4 % lit, low over the afterglow (a telephoto).", icon: "☽", group: "earth" },

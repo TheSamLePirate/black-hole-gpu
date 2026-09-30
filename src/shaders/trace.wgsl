@@ -82,13 +82,16 @@ struct Params {
   earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, the air's
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
-  earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground, unused
+  earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground; y: the Sun's angular radius
+                   // seen from the Earth [rad] (the eclipses), unused
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
   fine0: vec4f,    // an airless world's ground, finest: an anchor near the camera (whole metres, multiples of
                    // 64, on the body's axes); w: on (0/1)
   fine1: vec4f,    // the camera from the anchor [m] (float64 on the CPU: the ground's centimetres exact)
   shipShadow: vec4f, // the Ranger's bounding sphere in the camera's axes (right, up, forward) [m]; w: radius (0: no shadow)
+  eclipse: vec4f,  // the Moon as it shades the Earth: its centre on the Earth's axes [its radii] (where the light
+                   // shows it: 1.3 s ago), w: its radius [the Earth's] (0: no eclipse near)
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1123,6 +1126,20 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       if (met) { return true; }
     }
   }
+  // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
+  // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
+  for (var k = ourStart(); k < bodyCount(); k++) {
+    if (bodyKind(k) != 0u) { continue; }
+    let wk = bodyWhere(k);
+    if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
+    let c = bodies[BV * k].xyz - o;
+    let b = dot(c, d);
+    let R = bodyRadius(k);
+    if (b <= 0.0 || (hit && tBest < b)) { continue; }
+    let r = length(c - b * d) / R;
+    if (r <= 1.0 || r > 12.0) { continue; }
+    (*out).glow += (*out).tint * sunCorona(k, normalize(d * b - c), r, gObs, P.time.x);
+  }
   if (!hit) { return false; }
   let k = kBest;
   let c = bodies[BV * k].xyz - o;
@@ -1232,6 +1249,33 @@ fn starGlow(k: u32, p: vec3f, c: vec3f, g: f32, tEm: f32) -> vec3f {
   let halpha = shiftRatio(3000.0, g) * vec3f(1.0, 0.25, 0.32);
   let white = blackbodyShifted(6500.0, g) / max(luminance(blackbodyShifted(6500.0, 1.0)), 1e-6);
   return Is / R * (white * corona * 0.12 + halpha * (chrom * 0.6 + prom * 2.0));
+}
+
+// Our Sun's corona as it is seen (its light along the sight line): r [its radii] from its centre, dir
+// the direction from it. The K and F coronae's mean radiance over the disk's (Baumbach: 10⁻⁶ (0.0532 r^−2.5
+// + 1.425 r^−7 + 2.565 r^−17) — a millionth of the Sun, a full Moon's light, all told), streamers along
+// its equator (the helmets) and plumes over its poles, fine rays; the chromosphere's pink rim and a few
+// prominences at the limb (Hα), for the seconds they show.
+fn sunCorona(k: u32, dir: vec3f, r: f32, g: f32, tEm: f32) -> vec3f {
+  let b2 = bodies[BV * k + 2u];
+  let disk = blackbody(b2.x * 0.97 * g, P.disk.w) * b2.y * 0.84; // (the disk's mean: its limb darkened)
+  let base = 1e-6 * (0.0532 * pow(r, -2.5) + 1.425 * pow(r, -7.0) + 2.565 * pow(r, -17.0));
+  // (its shape: the Sun's axes — streamers near its equator, rays everywhere, finer close in)
+  let q = spunAxes(k) * dir;
+  let lat = abs(q.z);
+  let rays = 0.55 + 0.9 * smoothstep(-0.3, 0.8, gnoise(q * 7.0 + vec3f(0.0, 0.0, log(r) * 0.6)) + 0.5 * gnoise(q * 23.0));
+  let helmets = mix(1.35, 0.55, smoothstep(0.2, 0.75, lat)) + 0.5 * smoothstep(0.35, 0.9, gnoise(q * 2.2 + vec3f(3.1)));
+  let shape = rays * mix(1.0, helmets, smoothstep(1.05, 1.6, r));
+  let white = blackbodyShifted(5800.0, g) / max(luminance(blackbodyShifted(5800.0, 1.0)), 1e-6);
+  var col = white * luminance(disk) * base * shape;
+  // the chromosphere (a few thousand km: 0.01 of a radius) and the prominences (Hα red, up to ~0.08)
+  let h = r - 1.0;
+  let halpha = shiftRatio(3000.0, g) * vec3f(1.0, 0.25, 0.32);
+  let loopN = 1.0 - abs(gnoise(q * 9.0 + vec3f(0.0, 0.0, h * 40.0)));
+  let region = smoothstep(0.2, 0.5, gnoise(q * 1.7 + vec3f(7.0, 3.0, 1.0)));
+  let prom = smoothstep(0.88, 0.97, loopN) * region * exp(-h / 0.025);
+  col += halpha * luminance(disk) * (1.5e-4 * exp(-h / 0.004) + 4e-4 * prom);
+  return col;
 }
 
 fn spotCentre(tEm: f32) -> vec3f {
@@ -3404,6 +3448,46 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
   return exp(-((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK());
 }
 
+// The eclipses: the share of the Sun's disk the Moon leaves uncovered, seen from p (the Earth's axes, its
+// radii; the Sun along Ls) — two disks' overlap (angles by their sines: f32 keeps them to 0.1″); the Sun's
+// disk uniform (its limb's darkening left out). 1: none.
+fn sunSeen(p: vec3f, Ls: vec3f) -> f32 {
+  if (P.eclipse.w <= 0.0) { return 1.0; }
+  let m = P.eclipse.xyz - p;
+  let dm = length(m);
+  let u = m / dm;
+  if (dot(u, Ls) < 0.995) { return 1.0; }
+  let d = asin(min(length(cross(u, Ls)), 1.0));
+  let rs = P.earth4.y;
+  let rm = asin(min(P.eclipse.w / dm, 1.0));
+  if (d >= rs + rm) { return 1.0; }
+  var a: f32;
+  if (d <= abs(rm - rs)) {
+    a = PI * min(rs, rm) * min(rs, rm);
+  } else {
+    let k1 = clamp((d * d + rs * rs - rm * rm) / (2.0 * d * rs), -1.0, 1.0);
+    let k2 = clamp((d * d + rm * rm - rs * rs) / (2.0 * d * rm), -1.0, 1.0);
+    let k3 = max((-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm), 0.0);
+    a = rs * rs * acos(k1) + rm * rm * acos(k2) - 0.5 * sqrt(k3);
+  }
+  return clamp(1.0 - a / (PI * rs * rs), 0.0, 1.0);
+}
+// The sky's own light at p under an eclipse: the sunlit air around it — the Sun's share seen from p and
+// from four places 200 km about it (across the shadow), averaged: at the umbra's heart a thousandth or so
+// (the totality's deep blue, the horizon's glow beyond), the day's in the penumbra's outer parts.
+fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
+  if (P.eclipse.w <= 0.0) { return 1.0; }
+  let s0 = sunSeen(p, Ls);
+  if (s0 >= 1.0) { return 1.0; }
+  let e1 = normalize(cross(Ls, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(Ls.z) > 0.9)));
+  let e2 = cross(Ls, e1);
+  let L = 200000.0 / EARTH_RM;
+  let avg = 0.2 * (s0 + sunSeen(p + e1 * L, Ls) + sunSeen(p - e1 * L, Ls) + sunSeen(p + e2 * L, Ls) + sunSeen(p - e2 * L, Ls));
+  // (squared: that light scatters twice, from farther the deeper the shadow — the sky of totality a
+  // thousandth of the day's, the inner corona hundreds of times brighter than it)
+  return mix(0.0004, 1.0, avg * avg);
+}
+
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
 // towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
 // through the air before it only). jit: the samples' offset (0…1).
@@ -3455,8 +3539,11 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
     let Ts = sunThrough(h, dot(p, Ls) / r);
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
-    // the molecules' single scattering, a third of the aerosols')
-    let sc = AIR.br * dR * (pR + 0.8 / (4.0 * PI)) + AIR.bms * dM * (pM + 0.3 / (4.0 * PI));
+    // the molecules' single scattering, a third of the aerosols'; under an eclipse the single scattering
+    // needs the Sun seen from there, the multiple the sunlit air around: the totality's sky a deep blue)
+    let s1 = sunSeen(p, Ls);
+    let sM = select(max(s1, skySeen(p, Ls)), 1.0, s1 >= 1.0);
+    let sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
     let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     o.L += sc * Ts * Tv;
     let mz = dot(p, Lm) / r;
@@ -3730,13 +3817,13 @@ fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
 fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f32) -> vec3f {
   let hc = P.earth2.x * EARTH_RM;
   let mu0 = dot(q, Ls);
-  let Ts = sunThrough(hc, mu0);
+  let Ts = sunThrough(hc, mu0) * sunSeen(q * (1.0 + P.earth2.x), Ls);
   // thick clouds: a diffuse, bright top (a soft terminator: they stand above it), forward scattering
   // round the sun; their base, dimmer
   let wrap = clamp((mu0 + 0.08) / 1.08, 0.0, 1.0);
   let ct = dot(rd, Ls);
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
-  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0), EARTH_NIGHT * P.earth4.x);
+  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
   let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   return select(top, top * 0.35, below);
 }
@@ -3862,7 +3949,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let hc = P.earth2.x;
   let qs = normalize(q + (Ls - q * mu0) * (hc / max(mu0, 0.06)));
   let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
-  var Eg = E * sunThrough(hG, mu0) * shade;
+  var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / EARTH_RM), Ls);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthSurf).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -3884,7 +3971,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   // the sky's light (blue by day, the twilight's glow)
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
-  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0), EARTH_NIGHT * P.earth4.x);
+  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
   var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0))
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
@@ -4007,7 +4094,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let sigma = rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2)); // (per metre: τ ~ 25 through a thick one)
     let mu0 = dot(q, Ls);
     // the sunlight: through the air to this height, then the cloud above it towards the sun
-    let Ts = sunThrough((r - 1.0) * EARTH_RM, mu0);
+    let Ts = sunThrough((r - 1.0) * EARTH_RM, mu0) * sunSeen(p, Ls);
     // (the cloud above this point, to its top; the sun's path through it — the clouds broken, it comes in by
     // their sides too: shortened)
     let tauUp = c * 25.0 * max(top - hn, 0.0) / max(top, 0.2);
@@ -4016,7 +4103,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     // (the sky's and the moon's light from above, dimmed by the cloud over it: a grey base, a bright top)
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
-    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0), EARTH_NIGHT * P.earth4.x);
+    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
     let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * exp(-0.12 * tauSun) * smoothstep(-0.1, 0.1, mu0))
       + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, (r - 1.0) * EARTH_RM, mu0));
     let dT = exp(-sigma * dm);
