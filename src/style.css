@@ -1525,6 +1525,14 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 .gt-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; margin: 6px 0; }
 .gt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 8px 12px; margin: 6px 0; }
 .gt-grid[hidden] { display: none; }
+.gt-in.gt-auto { opacity: 0.4; font-style: italic; }
+.gt-pick { margin: 4px 0 8px; }
+.gt-pick[hidden] { display: none; }
+.gt-pickbar { margin: 0 0 4px; align-items: center; }
+.gt-pickbar .gt-btn.on { border-color: var(--hud-amber); color: #ffe6c6; background: rgba(255, 179, 92, 0.2); }
+.gt-picknote { font: 400 11.5px var(--font); color: var(--hud-dim); margin-left: 6px; }
+.gt-pick .gt-stage { height: 240px; }
+.gt-pick .gt-canvas { cursor: crosshair; }
 .gt-field { display: flex; flex-direction: column; gap: 3px; }
 .gt-field > span { font: 700 10.5px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-dim); }
 .gt-in {

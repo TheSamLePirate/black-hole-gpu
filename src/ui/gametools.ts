@@ -10,6 +10,8 @@ import { solidBody } from "../system/our-surface";
 import { autosave, slots } from "../game/save";
 import type { AuditReport } from "../game/audit";
 import type { LogKind } from "../game/log";
+import type { Settings } from "../settings";
+import { GroundTrack } from "./groundtrack";
 
 type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
@@ -81,7 +83,11 @@ export class GameToolsWindow {
   private at = 0;
   open = false;
 
-  constructor(private g: GameTools) {
+  /** the place picker (the Place tab): the chosen world as a globe or a planisphere */
+  private picker: GroundTrack;
+
+  constructor(private g: GameTools, settings: Settings) {
+    this.picker = new GroundTrack(settings);
     const head = h("div", "gt-head");
     head.append(h("div", "fl-title", "Game tools"), btn("×", () => this.toggle(false), "gt-x"));
     const tabs = h("div", "gt-tabs");
@@ -216,12 +222,70 @@ export class GameToolsWindow {
     const pe = num(400, "1"), ap = num(400, "1"), inc = num(0, "0.1"), raan = num(0, "1"), argPe = num(0, "1"), nu = num(0, "1"), rM = num(12, "0.1");
     const retro = h("input") as HTMLInputElement;
     retro.type = "checkbox";
+    // (Gargantua's own: an element has one place in the page — shared, the orbit's box lost them)
+    const az = num(0, "1");
+    const retroH = h("input") as HTMLInputElement;
+    retroH.type = "checkbox";
     const lat = num(0, "0.001"), lon = num(0, "0.001");
     const site = h("select", "gt-in") as HTMLSelectElement;
     const orbitBox = h("div", "gt-grid"), groundBox = h("div", "gt-grid"), holeBox = h("div", "gt-grid");
     orbitBox.append(field("Periapsis alt. [km]", pe), field("Apoapsis alt. [km]", ap), field("Inclination [°]", inc), field("Node Ω [°]", raan), field("Periapsis ω [°]", argPe), field("True anomaly ν [°]", nu), field("Retrograde", retro));
-    holeBox.append(field("Radius [M]", rM), field("Azimuth [°]", nu), field("Retrograde", retro));
+    holeBox.append(field("Radius [M]", rM), field("Azimuth [°]", az), field("Retrograde", retroH));
     groundBox.append(field("Site", site), field("Latitude [°]", lat), field("East longitude [°]", lon));
+    // the picker: a click on the world — on the ground, the place; in orbit, the orbit passing over it now
+    // (its node and anomaly found when the Ranger is placed, the inclination raised to the latitude)
+    const P = this.picker;
+    const pickBox = h("div", "gt-pick");
+    const pickBar = h("div", "gt-row gt-pickbar");
+    const pickNote = h("span", "gt-picknote");
+    const views: Record<string, HTMLButtonElement> = {};
+    for (const [m, label] of [["globe", "Globe"], ["map", "Planisphere"]] as const) {
+      views[m] = btn(label, () => {
+        P.mode = m;
+        for (const [k, b] of Object.entries(views)) b.classList.toggle("on", k === m);
+        drawPick();
+      });
+      views[m].classList.toggle("on", P.mode === m);
+    }
+    pickBar.append(views.globe!, views.map!, pickNote);
+    pickBox.append(pickBar, P.stage);
+    /** the orbit over the place picked (in orbit): its latitude, longitude */
+    let over: [number, number] | null = null;
+    const D = Math.PI / 180;
+    const dir = (la: number, lo: number): [number, number, number] => [Math.cos(la * D) * Math.cos(lo * D), Math.cos(la * D) * Math.sin(lo * D), Math.sin(la * D)];
+    const pickable = () => bodySel.value !== "gargantua" && bodySel.value !== "sun";
+    const drawPick = () => {
+      pickBox.hidden = !pickable();
+      if (pickBox.hidden) return;
+      P.drawWorld(bodySel.value, this.g.now());
+      pickNote.textContent = mode.value === "ground"
+        ? "Click the world: the place to land"
+        : over ? `Over ${over[0].toFixed(2)}°, ${over[1].toFixed(2)}° now — Ω and ν found when placed` : "Click the world: the orbit passes over it now";
+    };
+    const setPick = (la: number, lo: number, centre = false) => {
+      P.pick = dir(la, lo);
+      if (centre) P.centre(P.pick);
+    };
+    P.onPick = (q) => {
+      const la = Math.asin(Math.max(-1, Math.min(1, q[2]))) / D, lo = Math.atan2(q[1], q[0]) / D;
+      lat.value = la.toFixed(3);
+      lon.value = lo.toFixed(3);
+      site.value = site.options[0]?.value ?? "";
+      if (mode.value === "orbit") {
+        over = [la, lo];
+        raan.classList.add("gt-auto"), nu.classList.add("gt-auto");
+        raan.title = nu.title = "Found when the Ranger is placed: the orbit passes over the place picked (type a value: back to it)";
+        // (the inclination shown as it will be: raised to the latitude)
+        if (Math.abs(la) > +inc.value && Math.abs(la) <= 90) inc.value = (Math.ceil(Math.abs(la) * 10) / 10).toFixed(1);
+      }
+      drawPick();
+    };
+    const clearOver = () => {
+      over = null;
+      raan.classList.remove("gt-auto"), nu.classList.remove("gt-auto");
+      drawPick();
+    };
+    raan.oninput = nu.oninput = clearOver;
     const fillBodies = () => {
       const ours = uni.value === "ours";
       bodySel.replaceChildren();
@@ -240,7 +304,7 @@ export class GameToolsWindow {
       const ours = universeOf(id) === "ours";
       const alt = ours ? defaultAltKm(id) : 100;
       pe.value = ap.value = String(alt);
-      const canLand = ours && solidBody(id);
+      const canLand = ours ? solidBody(id) : id !== "gargantua";
       mode.disabled = !canLand;
       if (!canLand) mode.value = "orbit";
       site.replaceChildren();
@@ -249,6 +313,9 @@ export class GameToolsWindow {
         o.value = `${la},${lo}`;
         site.append(o);
       }
+      P.pick = null;
+      over = null;
+      raan.classList.remove("gt-auto"), nu.classList.remove("gt-auto");
       layout();
     };
     const layout = () => {
@@ -256,11 +323,19 @@ export class GameToolsWindow {
       orbitBox.hidden = hole || mode.value !== "orbit";
       holeBox.hidden = !hole;
       groundBox.hidden = hole || mode.value !== "ground";
+      if (mode.value === "ground" && over) clearOver();
+      drawPick();
     };
     site.onchange = () => {
       const [la, lo] = site.value.split(",").map(Number);
       lat.value = String(la);
       lon.value = String(lo);
+      if (site.selectedIndex > 0) setPick(la!, lo!, true);
+      drawPick();
+    };
+    lat.oninput = lon.oninput = () => {
+      setPick(+lat.value, +lon.value);
+      drawPick();
     };
     uni.onchange = fillBodies;
     bodySel.onchange = fillBody;
@@ -268,9 +343,11 @@ export class GameToolsWindow {
     const go = btn("PLACE THE RANGER", () =>
       this.run(() => {
         const id = bodySel.value;
-        if (id === "gargantua") return this.g.orbit(id, { rM: +rM.value, nu: +nu.value, retrograde: retro.checked });
+        if (id === "gargantua") return this.g.orbit(id, { rM: +rM.value, nu: +az.value, retrograde: retroH.checked });
         if (mode.value === "ground") return this.g.land(id, +lat.value, +lon.value);
-        return this.g.orbit(id, { peKm: +pe.value, apKm: +ap.value, inc: +inc.value, raan: +raan.value, argPe: +argPe.value, nu: +nu.value, retrograde: retro.checked });
+        const o = { peKm: +pe.value, apKm: +ap.value, inc: +inc.value, argPe: +argPe.value, retrograde: retro.checked };
+        if (over) return this.g.orbitOver(id, over[0], over[1], o);
+        return this.g.orbit(id, { ...o, raan: +raan.value, nu: +nu.value });
       }), "gt-primary");
     const quick = h("div", "gt-row");
     quick.append(
@@ -281,9 +358,17 @@ export class GameToolsWindow {
     );
     const g2 = h("div", "gt-grid");
     g2.append(field("Universe", uni), field("Body", bodySel), field("Where", mode));
-    this.body.append(h("p", "gt-note", "Puts the Ranger there now, its flight started afresh (engine off, no plan). Altitudes above the mean radius; inclination from the body's equator."));
-    this.body.append(g2, orbitBox, holeBox, groundBox, go, quick);
+    this.body.append(h("p", "gt-note", "Puts the Ranger there now, its flight started afresh (engine off, no plan). Altitudes above the mean radius; inclination from the body's equator. Click the world to choose the place."));
+    this.body.append(g2, pickBox, orbitBox, holeBox, groundBox, go, quick);
     fillBodies();
+    // (the world turns, the Sun with the time: redrawn every second)
+    let at = 0;
+    this.live = () => {
+      const n = performance.now();
+      if (n - at < 1000) return;
+      at = n;
+      drawPick();
+    };
   }
 
   // ------------------------------------------------------------------------------ Target · SOI

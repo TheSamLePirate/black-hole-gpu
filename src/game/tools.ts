@@ -20,7 +20,7 @@ import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState } 
 import { soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
-import { ourGroundPose, ourOrbitPose, theirOrbitPose, universeOf, defaultAltKm, OUR_IDS, THEIR_IDS, type OrbitPlacement, type Pose } from "./place";
+import { orbitOver, ourGroundPose, ourOrbitPose, theirGroundAt, theirOrbitPose, universeOf, defaultAltKm, OUR_IDS, THEIR_IDS, type OrbitPlacement, type Pose } from "./place";
 import { autosave, downloadSave, parseSave, saveToHash, slots, type GameSave } from "./save";
 import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
@@ -194,9 +194,36 @@ export class GameTools {
     return note;
   }
 
-  /** On the ground of one of our solid bodies, at latitude and east longitude [°]. */
+  /**
+   * On the ground at latitude and east longitude [°]: one of our solid bodies, or one of Gargantua's
+   * worlds (on its frame's axes: x away from Gargantua, z its pole).
+   */
   land(body: string, lat = 0, lon = 0) {
+    if (universeOf(body) === "gargantua") {
+      const s = this.ctx.settings;
+      if (body === "gargantua") throw new Error("Gargantua has no ground");
+      if (s.system !== "gargantua") throw new Error("Gargantua's planets live in the Gargantua-system scenes");
+      const D = Math.PI / 180;
+      const q: V3 = [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
+      return this.placeAt(theirGroundAt(body, q, this.ctx.time(), s.spin, s.massSolar));
+    }
     return this.placeAt(ourGroundPose(body, lat, lon, this.ctx.time()));
+  }
+
+  /**
+   * In orbit passing over a place now (latitude, east longitude [°]): the node and the anomaly found,
+   * the inclination raised to the latitude if lower; the rest as orbit() takes it.
+   */
+  orbitOver(body: string, lat: number, lon: number, o: Omit<OrbitPlacement, "body" | "raan" | "nu"> = {}) {
+    const D = Math.PI / 180;
+    const q: V3 = [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
+    const w = orbitOver(body, q, this.ctx.time(), { inc: o.inc ?? 0, argPe: o.argPe ?? 0, retrograde: !!o.retrograde });
+    return this.orbit(body, { ...o, inc: w.inc, raan: w.raan, nu: w.nu });
+  }
+
+  /** The scene's time now [M]. */
+  now() {
+    return this.ctx.time();
   }
 
   /** In orbit around the current target (its default altitude). */

@@ -114,6 +114,59 @@ export function ourGroundPose(id: string, lat: number, lon: number, t: number): 
 }
 
 /**
+ * An orbit passing over a place now: its node Ω and true anomaly ν [°] (the periapsis' argument ω
+ * kept), going up — northwards — over it; the inclination raised to the place's latitude when lower (no
+ * orbit reaches past it). The place: a unit direction on the body's own axes (ours: fixed on its
+ * ground, turning with it; Gargantua's worlds: their frame's ξ). `inc` as the placement takes it (a
+ * retrograde orbit: 180° − inc).
+ */
+export function orbitOver(id: string, q: Vec3, t: number, o: { inc: number; argPe: number; retrograde: boolean }) {
+  const D = Math.PI / 180;
+  let e = unit(q);
+  if (universeOf(id) === "ours") {
+    const d = unit(sub(fromBodyFixed(id, q, t), solarState(id, t).pos));
+    const A = equatorAxes(id);
+    e = [dot(d, A[0]), dot(d, A[1]), dot(d, A[2])];
+  }
+  const lat = Math.asin(Math.min(Math.max(e[2], -1), 1)), lam = Math.atan2(e[1], e[0]);
+  let inc = Math.min(Math.max(o.inc, 0), 90);
+  // (the orbit's highest latitude is its inclination — retrograde: 180° − it, the same reach)
+  if (Math.abs(lat) / D > inc) inc = Math.min(90, Math.ceil((Math.abs(lat) / D) * 10 + 1e-9) / 10);
+  const I = (o.retrograde ? 180 - inc : inc) * D;
+  let raan: number, u: number;
+  if (Math.abs(Math.sin(I)) < 1e-9) (raan = 0), (u = o.retrograde ? -lam : lam);
+  else {
+    const su = Math.min(Math.max(Math.sin(lat) / Math.sin(I), -1), 1);
+    u = Math.asin(su);
+    raan = lam - Math.atan2(su * Math.cos(I), Math.cos(u));
+  }
+  const wrap = (x: number) => ((((x / D) % 360) + 540) % 360) - 180;
+  return { inc, raan: wrap(raan), nu: wrap(u - o.argPe * D) };
+}
+
+/**
+ * On the ground of one of Gargantua's worlds at a place (a unit direction on its frame's ξ): Gargantua
+ * where it stands in that place's sky (theirGroundPose's elevation and azimuth).
+ */
+export function theirGroundAt(body: string, q: Vec3, t: number, spin: number, massSolar: number): Pose {
+  const F = planetFrame(body, t, spin, massSolar);
+  const S = F.S;
+  const cr: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], 0];
+  const ex = unit(cr), ey: Vec3 = [-ex[1], ex[0], 0], ez: Vec3 = [0, 0, 1];
+  const g0 = unit([-F.C[0], -F.C[1], -F.C[2]]);
+  const g = unit([dot(g0, ex) * S[0], dot(g0, ey) * S[1], dot(g0, ez) * S[2]]);
+  let north = sub([0, 0, 1], g.map((c) => c * g[2]) as Vec3);
+  if (Math.hypot(...north) < 1e-6) north = [0, 1, 0];
+  north = unit(north);
+  const east = cross(g, north);
+  const p = unit(q);
+  const z = Math.acos(Math.min(Math.max(dot(p, g), -1), 1));
+  const tilt = sub(p, g.map((c) => c * Math.cos(z)) as Vec3);
+  const A = Math.hypot(...tilt) < 1e-9 ? 0 : Math.atan2(-dot(tilt, east), -dot(tilt, north));
+  return theirGroundPose(body, 90 - (z * 180) / Math.PI, (A * 180) / Math.PI, t, spin, massSolar);
+}
+
+/**
  * How fast a planet's frame turns, in its proper time: half the mean of its Coriolis coefficients
  * (Hill's equations: n; about Gargantua, n dt/dτ and the metric's stretch).
  */

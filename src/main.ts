@@ -1034,7 +1034,7 @@ async function main() {
     renderScale: () => renderScale,
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
-  const toolsWin = new GameToolsWindow(tools);
+  const toolsWin = new GameToolsWindow(tools, settings);
   addEventListener("pagehide", (e) => {
     if (settings.autosave && firstFrame) tools.autosaveNow();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is

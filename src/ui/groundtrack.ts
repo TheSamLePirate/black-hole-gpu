@@ -59,8 +59,8 @@ interface Scene {
   /** mean radius [km] */
   Rkm: number;
   ours: boolean;
-  /** the ship: unit direction on the world's own axes, its height [km] */
-  ship: V3;
+  /** the ship: unit direction on the world's own axes (none: a world alone — the picker), its height [km] */
+  ship: V3 | null;
   altKm: number;
   /** towards the Sun (our worlds), on the world's axes */
   sun: V3 | null;
@@ -86,9 +86,15 @@ export class GroundTrack {
   private night = { c: document.createElement("canvas"), key: "" };
   private cache = new WeakMap<OurPath, { id: string; pts: V3[]; times: number[]; pe: Scene["pe"]; ap: Scene["ap"] }>();
   private drag: { x: number; y: number; lat: number; lon: number } | null = null;
-  private last: { i: Info; t: number } | null = null;
+  /** draws again as last drawn (a map just loaded, the wheel, a drag) */
+  private redraw: (() => void) | null = null;
   /** a drag or the zoom moved the globe: the HUD draws it at the display's rate */
   animating = false;
+  /** the picker: a click on the world gives a place (a unit direction on its axes); the place chosen */
+  onPick: ((q: V3) => void) | null = null;
+  pick: V3 | null = null;
+  /** where the world was drawn last (device px), to read a click back */
+  private hit: { globe: true; cx: number; cy: number; R: number; C: V3; E: V3; N: V3 } | { globe: false; x0: number; y0: number; mw: number; mh: number } | null = null;
 
   constructor(private s: Settings) {
     this.stage.append(this.canvas, this.tag, this.read);
@@ -124,22 +130,13 @@ export class GroundTrack {
   }
 
   draw(i: Info, t: number) {
-    this.last = { i, t };
+    this.redraw = () => this.draw(i, t);
     const sc = this.scene(i, t);
-    const cv = this.canvas;
-    const dpr = devicePixelRatio || 1;
-    const W = Math.max(1, Math.round(this.stage.clientWidth * dpr)), H = Math.max(1, Math.round(this.stage.clientHeight * dpr));
-    if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
-    const ctx = cv.getContext("2d")!;
-    ctx.clearRect(0, 0, W, H);
-    if (!sc) {
+    if (!this.paint(sc) || !sc?.ship) {
       this.tag.textContent = "";
       this.read.textContent = "Near a planet or a moon — in its sphere of influence";
       return;
     }
-    const tex = this.texture(sc.id);
-    if (this.mode === "globe") this.drawGlobe(ctx, W, H, dpr, sc, tex);
-    else this.drawMap(ctx, W, H, dpr, sc, tex);
     const [la, lo] = latLon(sc.ship);
     const orb = i.status?.orbit;
     this.tag.textContent = `${sc.name}${this.mode === "globe" && !this.view.follow ? " · double-click: follow" : ""}`;
@@ -148,6 +145,49 @@ export class GroundTrack {
       `alt ${fmtKm(sc.altKm)}`,
       orb && Number.isFinite(orb.apKm) ? `Pe ${fmtKm(orb.peKm)} · Ap ${fmtKm(orb.apKm)} · i ${orb.incDeg.toFixed(1)}°` : "",
     ].filter(Boolean).join("   ");
+  }
+
+  /**
+   * A world alone at time t — the picker: its map lit by the Sun, the place picked (a click picks
+   * another), the ship if it is over that world (`ship`).
+   */
+  drawWorld(id: string, t: number, ship: V3 | null = null) {
+    this.redraw = () => this.drawWorld(id, t, ship);
+    const ours = !THEIRS[id];
+    const b = ours ? solarBody(id) : null;
+    const F = ours ? null : planetFrame(id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
+    const sc: Scene = {
+      id, name: BODY_NAMES[id as Body] ?? id, Rkm: b ? (b.radius * M_METRES) / 1e3 : F ? (F.R * F.mPerM) / 1e3 : NaN, ours, ship, altKm: NaN,
+      sun: b ? unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)) : null, ahead: [], plan: [], pe: null, ap: null,
+    };
+    this.view.follow = false;
+    this.paint(sc);
+    this.tag.textContent = sc.name;
+    if (this.pick) {
+      const [la, lo] = latLon(this.pick);
+      this.read.textContent = `${fmtLat(la)}  ${fmtLon(lo)}`;
+    } else this.read.textContent = "Click: a place";
+  }
+
+  /** Centres the globe on a place (the picker: on the place picked). */
+  centre(q: V3) {
+    [this.view.lat, this.view.lon] = latLon(q);
+  }
+
+  /** Clears the canvas and draws the scene (none: false). */
+  private paint(sc: Scene | null) {
+    const cv = this.canvas;
+    const dpr = devicePixelRatio || 1;
+    const W = Math.max(1, Math.round(this.stage.clientWidth * dpr)), H = Math.max(1, Math.round(this.stage.clientHeight * dpr));
+    if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
+    const ctx = cv.getContext("2d")!;
+    ctx.clearRect(0, 0, W, H);
+    this.hit = null;
+    if (!sc) return false;
+    const tex = this.texture(sc.id);
+    if (this.mode === "globe") this.drawGlobe(ctx, W, H, dpr, sc, tex);
+    else this.drawMap(ctx, W, H, dpr, sc, tex);
+    return true;
   }
 
   // ---------------------------------------------------------------------------------- the scene
@@ -237,7 +277,7 @@ export class GroundTrack {
       x.drawImage(img, 0, 0, w, hh);
       this.tex.set(id, { w, h: hh, px: new Uint32Array(x.getImageData(0, 0, w, hh).data.buffer), img: c });
       this.raster.key = "";
-      if (this.last) this.draw(this.last.i, this.last.t);
+      this.redraw?.();
     };
     img.onerror = () => this.tex.set(id, "none");
     img.src = planetMapUrl(m);
@@ -263,7 +303,7 @@ export class GroundTrack {
 
   private drawGlobe(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
     const v = this.view;
-    if (v.follow) {
+    if (v.follow && sc.ship) {
       // (the ship at the centre, the globe turning under it — eased, a jump taken at once)
       const [la, lo] = latLon(sc.ship);
       const dl = Math.atan2(Math.sin(lo - v.lon), Math.cos(lo - v.lon));
@@ -276,6 +316,7 @@ export class GroundTrack {
     const R = (Math.min(W, H - top - bottom) / 2 - 6 * dpr) * v.zoom;
     const cx = W / 2, cy = top + (H - top - bottom) / 2;
     const proj = (q: V3) => ({ x: cx + dot(q, E) * R, y: cy - dot(q, N) * R, vis: dot(q, C) > 0 });
+    this.hit = { globe: true, cx, cy, R, C, E, N };
 
     // the atmosphere's rim, the lit disc (the raster: at most 420 px across, scaled up)
     const halo = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.08);
@@ -385,6 +426,7 @@ export class GroundTrack {
       const [la, lo] = latLon(q);
       return [x0 + (0.5 + lo / (2 * Math.PI)) * mw, y0 + (0.5 - la / Math.PI) * mh];
     };
+    this.hit = { globe: false, x0, y0, mw, mh };
     if (tex) ctx.drawImage(tex.img, x0, y0, mw, mh);
     else {
       const t = THEIRS[sc.id] ?? [120, 120, 120];
@@ -488,9 +530,10 @@ export class GroundTrack {
       ctx.setLineDash([]);
     };
     // the horizon the ship sees: a circle of angular radius acos(R / (R + h)) about the point under it
-    if (Number.isFinite(sc.Rkm) && sc.altKm > 0) {
+    const ship = sc.ship;
+    if (ship && Number.isFinite(sc.Rkm) && sc.altKm > 0) {
       const rho = Math.acos(sc.Rkm / (sc.Rkm + sc.altKm));
-      const s = sc.ship;
+      const s = ship;
       const u = unit(cross(Math.abs(s[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], s));
       const w = cross(s, u);
       const ring = Array.from({ length: 97 }, (_, k) => {
@@ -500,8 +543,8 @@ export class GroundTrack {
       path(ring, "rgba(124, 214, 255, 0.45)", 1, [3, 3]);
     }
     // the track left (fading into the past), the one ahead, the planned one
-    path(this.past.pts.map((p) => p.q).concat([sc.ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
-    path([sc.ship, ...sc.ahead], CYAN, 1.6, [5, 4]);
+    if (ship && this.past.id === sc.id) path(this.past.pts.map((p) => p.q).concat([ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
+    if (ship) path([ship, ...sc.ahead], CYAN, 1.6, [5, 4]);
     path(sc.plan, AMBER, 1.6, [2, 3]);
     // the point under the Sun
     if (sc.sun) {
@@ -537,12 +580,28 @@ export class GroundTrack {
       ctx.textAlign = "left";
       ctx.fillText(`${lab} ${fmtKm(m.km)}`, p[0] + 7 * dpr, p[1]);
     }
+    // the place picked: a sight
+    const pk = this.pick && at(this.pick);
+    if (pk) {
+      const r = 6 * dpr;
+      for (const [lw, col] of [[3.5, "rgba(0, 0, 0, 0.6)"], [1.6, "#6fe3a1"]] as const) {
+        ctx.lineWidth = lw * dpr;
+        ctx.strokeStyle = col;
+        ctx.beginPath();
+        ctx.arc(pk[0], pk[1], r, 0, 2 * Math.PI);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          ctx.moveTo(pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45);
+          ctx.lineTo(pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8);
+        }
+        ctx.stroke();
+      }
+    }
     // the ship: a chevron along its track
-    const p = at(sc.ship);
-    if (p) {
-      const nxt = sc.ahead.find((q) => Math.acos(clamp(dot(q, sc.ship), -1, 1)) > 0.05 * D);
+    const p = ship && at(ship);
+    if (ship && p) {
+      const nxt = sc.ahead.find((q) => Math.acos(clamp(dot(q, ship), -1, 1)) > 0.05 * D);
       const prv = this.past.pts.at(-2)?.q;
-      const qa = nxt ?? sc.ship, qb = nxt ? sc.ship : (prv ?? sc.ship);
+      const qa = nxt ?? ship, qb = nxt ? ship : (prv ?? ship);
       const a = at(qa), b = at(qb);
       let ang = -Math.PI / 2;
       if (a && b && Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.1 && !(wrap && Math.abs(a[0] - b[0]) > wrap / 2)) ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
@@ -568,20 +627,33 @@ export class GroundTrack {
   // ---------------------------------------------------------------------------------- gestures
   private bindPointer() {
     const cv = this.canvas;
+    let down: { x: number; y: number; moved: boolean } | null = null;
     cv.addEventListener("pointerdown", (e) => {
+      down = { x: e.clientX, y: e.clientY, moved: false };
       if (this.mode !== "globe") return;
       cv.setPointerCapture(e.pointerId);
       this.drag = { x: e.clientX, y: e.clientY, lat: this.view.lat, lon: this.view.lon };
       this.animating = true;
     });
+    // (a click that did not drag: the place under it, for the picker)
+    cv.addEventListener("click", (e) => {
+      if (!this.onPick || !down || down.moved) return;
+      const q = this.placeAt(e);
+      if (!q) return;
+      this.pick = q;
+      this.onPick(q);
+      this.redraw?.();
+    });
     cv.addEventListener("pointermove", (e) => {
       const d = this.drag;
       if (!d) return;
       const R = Math.max(40, Math.min(this.stage.clientWidth, this.stage.clientHeight) / 2) * this.view.zoom;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) this.view.follow = false;
-      if (this.view.follow) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= 3) return;
+      if (down) down.moved = true;
+      this.view.follow = false;
       this.view.lon = d.lon - (e.clientX - d.x) / R;
       this.view.lat = clamp(d.lat + (e.clientY - d.y) / R, -Math.PI / 2, Math.PI / 2);
+      if (this.onPick) this.redraw?.();
     });
     const end = () => {
       this.drag = null;
@@ -597,7 +669,26 @@ export class GroundTrack {
       if (this.mode !== "globe") return;
       e.preventDefault();
       this.view.zoom = clamp(this.view.zoom * Math.exp(-e.deltaY * 0.0015), 1, 8);
-      if (this.last) this.draw(this.last.i, this.last.t);
+      this.redraw?.();
     }, { passive: false });
+  }
+
+  /** The place under a pointer event (a unit direction on the world's axes), or null (off the world). */
+  private placeAt(e: MouseEvent): V3 | null {
+    const H = this.hit;
+    if (!H) return null;
+    const r = this.canvas.getBoundingClientRect();
+    const k = this.canvas.width / Math.max(r.width, 1);
+    const x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+    if (H.globe) {
+      const px = (x - H.cx) / H.R, py = -(y - H.cy) / H.R;
+      const rr = px * px + py * py;
+      if (rr >= 1) return null;
+      const pz = Math.sqrt(1 - rr);
+      return unit([0, 1, 2].map((i) => px * H.E[i]! + py * H.N[i]! + pz * H.C[i]!) as V3);
+    }
+    const u = (x - H.x0) / H.mw, v = (y - H.y0) / H.mh;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+    return fromLatLon((0.5 - v) * Math.PI, (u - 0.5) * 2 * Math.PI);
   }
 }
