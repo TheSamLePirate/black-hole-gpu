@@ -2895,6 +2895,8 @@ export class CameraController {
       body: F.id as Body, alt: (d - groundR(F, L.xi)) * F.mPerM - GEAR, vVert: vv * c, vHor: vh * c,
       gLocal: (g * F.aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: L.landed,
       air: airDensity(F, d - F.R),
+      /** where on the world (its frame's ξ: the HUD's globe) */
+      xi: L.xi,
     };
   }
 

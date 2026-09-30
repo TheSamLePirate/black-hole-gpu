@@ -274,6 +274,12 @@ altitude, clock rate, thrust), the **effective potential** of the orbit — V(r)
 constant Q, R(r) = [E(r² + a²) − aL]² − Δ[r² + (L − aE)² + Q] = 0, with the energy line, the escape line and the
 region the ship can reach —, and the cockpit: the attitude ball inside throttle and g-load arc gauges, holds
 on the left, SAS and autopilots on the right.
+The map's tabs add the **ground track** of the world the ship orbits (in its sphere of influence: our
+planets and moons, Mann, Edmunds): a **globe** — its map lit by the Sun, the day and the night, turning under
+the ship (drag it, the wheel zooms, a double click follows the ship again) — or a **planisphere**; on both the
+track left (fading), the free-fall path ahead and the planned one through the nodes, periapsis and apoapsis
+with their heights, the horizon the ship sees (acos R/(R + h) about the point under it), the point under the
+Sun, the latitude, longitude, altitude and orbit (M: full screen).
 The **map shows the real motions**: when the star has a mass, in the inertial frame of the centre of mass —
 Gargantua circles it too, the mouth with it — with the ship's trail and predicted geodesic, the star's and the
 hole's paths over the same span, common time ticks (where each will be at +100 M, +200 M…), the closest

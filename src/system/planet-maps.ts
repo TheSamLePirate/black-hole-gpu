@@ -66,6 +66,9 @@ const URLS: Record<MapName, string> = {
   tethys, dione, rhea, titan, uranus, neptune, pluto,
 };
 
+/** A world's map (equirectangular, longitude 0 at its centre): its URL — the HUD's globe reads it. */
+export const planetMapUrl = (m: MapName) => URLS[m];
+
 export interface PlanetMaps {
   hi: GPUTexture;
   lo: GPUTexture;

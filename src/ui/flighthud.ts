@@ -29,6 +29,7 @@ import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
 import { cpuProf } from "../perf";
 import { Map3D } from "./map3d/map3d";
+import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 
 
@@ -209,6 +210,11 @@ export class FlightHud {
   private right = h("div", "fl-right fl-panel");
   /** the map (3D): the minimap in the right panel, over the whole screen with M */
   private map3d!: Map3D;
+  /** the ground track (a globe, a planisphere) of the world the ship orbits; the tab shown and its buttons */
+  private ground!: GroundTrack;
+  private mapTab: "orbit" | "globe" | "map" = "orbit";
+  private tabBtns: Record<string, HTMLButtonElement> = {};
+  private mapBody: HTMLElement | null = null;
   private buttons = new Map<string, HTMLButtonElement>();
   private viewMenu: HTMLElement | null = null;
   /** the target's and the Ranger's instruments (canvases), and their tooltips' regions (CSS px) */
@@ -229,6 +235,32 @@ export class FlightHud {
   toggleMapView() {
     this.mapView = !this.mapView;
     this.root.classList.toggle("mapview", this.mapView);
+  }
+  /** The map's tab: the 3D system, or the ground track (a globe, a planisphere). */
+  setMapTab(t: "orbit" | "globe" | "map") {
+    this.mapTab = t;
+    if (t !== "orbit") this.ground.mode = t;
+    try {
+      localStorage.setItem("kerr.map-tab", t);
+    } catch {
+      /* private mode */
+    }
+    this.syncMapTab();
+    this.drawnAt.map = -1e9;
+  }
+  /** What the map shows: the ground track needs a world under the ship — else the 3D map, the tab kept. */
+  private syncMapTab() {
+    const i = this.lastInfo;
+    const world = i ? this.ground.worldOf(i) : null;
+    const ground = this.mapTab !== "orbit" && !!world;
+    this.mapBody?.classList.toggle("ground", ground);
+    for (const [id, b] of Object.entries(this.tabBtns)) {
+      b.classList.toggle("on", id === (ground ? this.mapTab : "orbit"));
+      const off = id !== "orbit" && !world;
+      b.classList.toggle("off", off);
+      b.dataset.why = off ? "Near a planet or a moon: in its sphere of influence" : "";
+    }
+    return ground;
   }
   /** 0 full · 1 minimal · 2 clean */
   density = 0;
@@ -581,8 +613,30 @@ export class FlightHud {
     });
     const mapHead = panelHead(this.right, "map", "Map");
     const mapBody = h("div", "fl-body fl-mapbody");
-    mapBody.append(this.map3d.bar, this.map3d.stage);
+    // (the map's tabs: the system in 3D, the globe and the planisphere of the world the ship orbits)
+    try {
+      const t = localStorage.getItem("kerr.map-tab");
+      if (t === "globe" || t === "map") this.mapTab = t;
+    } catch {
+      /* private mode */
+    }
+    this.ground = new GroundTrack(this.s);
+    const tabs = h("div", "fl-maptabs");
+    for (const [id, label, tip] of [
+      ["orbit", "3D", "The system in 3D: the orbits, the paths, the nodes"],
+      ["globe", "Globe", "The world the ship orbits, as a globe: where it is over the ground, the track left and ahead (drag: turn it, double click: follow the ship)"],
+      ["map", "Planisphere", "The world the ship orbits, flat: the ground track, the day and the night"],
+    ] as const) {
+      const b = h("button", "", label) as HTMLButtonElement;
+      b.dataset.tip = tip;
+      b.onclick = () => this.setMapTab(id);
+      this.tabBtns[id] = b;
+      tabs.append(b);
+    }
+    mapBody.append(tabs, this.map3d.bar, this.map3d.stage, this.ground.stage);
+    this.mapBody = mapBody;
     this.right.append(mapHead.head, mapBody);
+    this.setMapTab(this.mapTab);
 
     this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
     document.body.append(this.hud, this.root);
@@ -1271,6 +1325,7 @@ export class FlightHud {
     this.drawn = true;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
+    this.ground.observe(info, time);
     this.lastInfo = info;
     const now = performance.now();
     // (the markers follow the view every frame; the instruments at their own pace — the map 20 times
@@ -1283,8 +1338,11 @@ export class FlightHud {
       tasks.push(["instr", 15, () => cpuProf.time("HUD: target & Ranger", () => (this.drawTargetInstr(info), this.drawRangerInstr(info)))]);
       tasks.push(["tel", 10, () => cpuProf.time("HUD: telemetry", () => this.drawTelemetry())]);
       tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
-      // (the full-screen map, or its animation, every frame)
-      if (this.mapView || this.map3d.animating) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
+      // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
+      if (this.syncMapTab()) {
+        if (this.ground.animating) cpuProf.time("HUD: ground track", () => this.ground.draw(info, time));
+        else tasks.push(["map", this.mapView ? 30 : 15, () => cpuProf.time("HUD: ground track", () => this.ground.draw(info, time))]);
+      } else if (this.mapView || this.map3d.animating) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
       else tasks.push(["map", 20, () => cpuProf.time("HUD: map", () => this.map3d.draw(info, time))]);
     }
     tasks.push(["text", 10, () => cpuProf.time("HUD: text panels", () => (this.drawText(info, time), this.tidyRows()))]);
