@@ -1,13 +1,19 @@
-// The solar system, to scale, on our side of the wormhole (Newtonian): the Sun, the planets (JPL
-// mean Keplerian elements, J2000 ecliptic, E. M. Standish, "Keplerian Elements for Approximate
-// Positions of the Major Planets"), Ceres and Pluto, and the major moons (the Moon on its mean
-// ecliptic orbit, the others on circles in their planet's equatorial plane).
+// The solar system, to scale, on our side of the wormhole (Newtonian): the Sun, the planets, Ceres and
+// Pluto, the major moons — where NASA/JPL's DE440 puts them (1990 – 2150; JUP365: the Galilean moons,
+// 2040 – 2100: de440.ts), else on models: the planets on their mean Keplerian elements (J2000 ecliptic,
+// E. M. Standish, "Keplerian Elements for Approximate Positions of the Major Planets"), the Moon on its
+// mean elements and main inequalities (~0.1°), the other moons on JPL's mean elements in their Laplace
+// planes. The planets' centres: their systems' barycentres less their moons' pull. Their turning: the
+// IAU models (orientation.ts), the Earth's to its precession and nutation, the moons facing their planet.
 //
 // Frame: our universe's home frame — the J2000 ecliptic axes, the origin at our mouth of the
 // wormhole, which co-orbits Saturn 0.7 AU behind it (ANALYSE-INTEGRATION.md §3.9). Positions in M
 // (10⁸ M☉: 1 M = 0.98706 AU), time t in M of the scene's clock, t = 0 on EPOCH_DATE.
 
 import type { Vec3 } from "../physics";
+import { deState } from "./de440";
+import { earthAxes, eclDir, eclOf, iauAxes, iauRate } from "./orientation";
+import { tdbOf } from "./timescale";
 
 /** The scene's t = 0 (the Endurance's year, in the film's chronology) */
 export const EPOCH_DATE = Date.UTC(2067, 0, 1);
@@ -50,9 +56,14 @@ export interface SolarBody {
   rings?: { inner: number; outer: number };
   /** heliocentric elements [a AU, e, I°, L°, ϖ°, Ω°] and their rates per Julian century */
   elements?: [number[], number[]];
-  /** a moon: its orbit around the parent (radius km, period days, phase at J2000 °; < 0 period:
-   *  retrograde), in the parent's equatorial plane */
+  /** a moon: its orbit's size [km] and sidereal period [days] (< 0: retrograde) */
   circle?: { a: number; period: number; phase: number };
+  /**
+   * a moon's mean elements (JPL SSD, epoch J2000 TDB) in its Laplace plane (pole: J2000 RA, Dec [°]; the
+   * node counted from that plane's node on the ICRF equator): e, ω, M, i, Ω [°], the apsides' and the
+   * node's precession periods [years] (0: none)
+   */
+  orbit?: { laplace: [number, number]; e: number; w: number; M: number; i: number; node: number; Pw: number; Pnode: number };
 }
 
 const planet = (
@@ -61,12 +72,14 @@ const planet = (
 ): SolarBody => ({ id, name, kind: "planet", parent: "sun", mass: gm(gmKm), radius: km(rKm), rotation, pole, albedo, surface, map, elements, ...extra });
 
 const moon = (
-  id: string, name: string, parent: string, gmKm: number, rKm: number, a: number, period: number, phase: number,
+  id: string, name: string, parent: string, gmKm: number, rKm: number, a: number, period: number, orbit: NonNullable<SolarBody["orbit"]>,
   albedo: number, surface: SolarBody["surface"], map?: MapName, extra: Partial<SolarBody> = {},
 ): SolarBody => ({
-  id, name, kind: "planet", parent, mass: gm(gmKm), radius: km(rKm), rotation: Math.abs(period) * 24 * Math.sign(period), pole: [0, 90],
-  albedo, surface, map, circle: { a, period, phase }, ...extra,
+  id, name, kind: "planet", parent, mass: gm(gmKm), radius: km(rKm), rotation: Math.abs(period) * 24 * Math.sign(period), pole: orbit.laplace,
+  albedo, surface, map, circle: { a, period, phase: 0 }, orbit, ...extra,
 });
+/** JPL's mean elements: Laplace pole, e, ω, M, i, Ω, Pω, PΩ */
+const el = (laplace: [number, number], e: number, w: number, M: number, i: number, node: number, Pw = 0, Pnode = 0) => ({ laplace, e, w, M, i, node, Pw, Pnode });
 
 export const SOLAR_BODIES: SolarBody[] = [
   { id: "sun", name: "Sun", kind: "star", parent: null, mass: gm(1.32712440018e11), radius: km(695700), rotation: 609.12, pole: [286.13, 63.87], albedo: 0, temperature: 5772, surface: "gas" },
@@ -97,34 +110,33 @@ export const SOLAR_BODIES: SolarBody[] = [
     [[39.48211675, 0.2488273, 17.14001206, 238.92903833, 224.06891629, 110.30393684], [-0.00031596, 0.0000517, 0.00004818, 145.20780515, -0.04062942, -0.01183482]]),
   // the Moon: mean elements on the ecliptic (its node and perigee turn: 18.6 and 8.85 years)
   { id: "moon", name: "Moon", kind: "planet", parent: "earth", mass: gm(4902.8), radius: km(1737.4), rotation: 655.72, pole: [266.86, 65.64], albedo: 0.12, surface: "rock", map: "moon" },
-  moon("phobos", "Phobos", "mars", 7.1e-4, 11.1, 9376, 0.31891, 20, 0.07, "rock", "phobos"),
-  moon("deimos", "Deimos", "mars", 9.6e-5, 6.2, 23463, 1.26244, 200, 0.07, "rock", "deimos"),
-  moon("io", "Io", "jupiter", 5959.9, 1821.6, 421700, 1.769138, 106, 0.63, "rock", "io"),
-  moon("europa", "Europa", "jupiter", 3202.7, 1560.8, 671034, 3.551181, 176, 0.67, "ice", "europa"),
-  moon("ganymede", "Ganymede", "jupiter", 9887.8, 2634.1, 1070412, 7.154553, 121, 0.43, "ice", "ganymede"),
-  moon("callisto", "Callisto", "jupiter", 7179.3, 2410.3, 1882709, 16.689018, 85, 0.22, "rock", "callisto"),
-  moon("mimas", "Mimas", "saturn", 2.5, 198.2, 185539, 0.942422, 14, 0.96, "ice", "mimas"),
-  moon("enceladus", "Enceladus", "saturn", 7.2, 252.1, 237948, 1.370218, 300, 1.37, "ice", "enceladus"),
-  moon("tethys", "Tethys", "saturn", 41.2, 531.1, 294619, 1.887802, 244, 1.23, "ice", "tethys"),
-  moon("dione", "Dione", "saturn", 73.1, 561.4, 377396, 2.736915, 290, 1.0, "ice", "dione"),
-  moon("rhea", "Rhea", "saturn", 153.9, 763.8, 527108, 4.518212, 32, 0.95, "ice", "rhea"),
-  moon("titan", "Titan", "saturn", 8978.1, 2574.7, 1221870, 15.945, 163, 0.22, "gas", "titan", { atmosphere: { rho0: 5.3, H: 21000 } }),
-  moon("iapetus", "Iapetus", "saturn", 120.5, 734.5, 3560820, 79.3215, 271, 0.6, "rock"),
-  moon("triton", "Triton", "neptune", 1427.6, 1353.4, 354759, -5.876854, 63, 0.76, "ice"),
-  moon("charon", "Charon", "pluto", 106.1, 606, 19591, 6.387221, 131, 0.35, "ice"),
+  moon("phobos", "Phobos", "mars", 7.087e-4, 11.1, 9376, 0.31891023, el([317.7, 52.9], 0.015, 216.3, 189.7, 1.1, 169.2, 1.1, 2.3), 0.07, "rock", "phobos"),
+  moon("deimos", "Deimos", "mars", 9.62e-5, 6.2, 23457, 1.26244, el([316.6, 53.5], 0.0002, 0, 205.0, 1.8, 54.3, 0, 56.2), 0.07, "rock", "deimos"),
+  moon("io", "Io", "jupiter", 5959.916, 1821.6, 421800, 1.769137786, el([268.1, 64.5], 0.004, 49.1, 330.9, 0.0, 0.0, 1.333), 0.63, "rock", "io"),
+  moon("europa", "Europa", "jupiter", 3202.739, 1560.8, 671100, 3.551181041, el([268.1, 64.5], 0.009, 45.0, 345.4, 0.5, 184.0, 1.394, 30.202), 0.67, "ice", "europa"),
+  moon("ganymede", "Ganymede", "jupiter", 9887.834, 2634.1, 1070400, 7.15455296, el([268.2, 64.6], 0.001, 198.3, 324.8, 0.2, 58.5, 68.301, 137.812), 0.43, "ice", "ganymede"),
+  moon("callisto", "Callisto", "jupiter", 7179.289, 2410.3, 1882700, 16.6890184, el([268.7, 64.8], 0.007, 43.8, 87.4, 0.3, 309.1, 277.921, 577.264), 0.22, "rock", "callisto"),
+  moon("mimas", "Mimas", "saturn", 2.503, 198.2, 186000, 0.942421959, el([40.6, 83.5], 0.020, 160.4, 275.3, 1.6, 66.2, 0.493, 0.986), 0.96, "ice", "mimas"),
+  moon("enceladus", "Enceladus", "saturn", 7.211, 252.1, 238400, 1.370218, el([40.6, 83.5], 0.005, 119.5, 57.0, 0.0, 0.0, 2.916), 1.37, "ice", "enceladus"),
+  moon("tethys", "Tethys", "saturn", 41.21, 531.1, 295000, 1.887802, el([40.6, 83.5], 0.001, 335.3, 0.0, 1.1, 273.0, 0, 4.982), 1.23, "ice", "tethys"),
+  moon("dione", "Dione", "saturn", 73.11, 561.4, 377700, 2.736915, el([40.6, 83.5], 0.002, 116.0, 212.0, 0.0, 0.0, 11.698), 1.0, "ice", "dione"),
+  moon("rhea", "Rhea", "saturn", 153.94, 763.8, 527200, 4.518212, el([40.6, 83.5], 0.001, 44.3, 31.5, 0.3, 133.7, 33.939, 35.775), 0.95, "ice", "rhea"),
+  moon("titan", "Titan", "saturn", 8978.14, 2574.7, 1221900, 15.945421, el([36.4, 84.0], 0.029, 78.3, 11.7, 0.3, 78.6, 346.68, 687.37), 0.22, "gas", "titan", { atmosphere: { rho0: 5.3, H: 21000 } }),
+  moon("iapetus", "Iapetus", "saturn", 120.52, 734.5, 3561700, 79.3215, el([288.7, 78.9], 0.028, 254.5, 74.8, 7.6, 86.5, 1662.9, 3130.302), 0.6, "rock"),
+  // (Triton: retrograde — its inclination on its Laplace plane over 90°)
+  moon("triton", "Triton", "neptune", 1428.5, 1353.4, 354800, -5.876854, el([299.8, 43.1], 0.000016, 0, 63.0, 157.3, 178.1, 0, 340.379), 0.76, "ice"),
+  // (Charon: in Pluto's equator, facing it — the IAU pole)
+  moon("charon", "Charon", "pluto", 106.1, 606, 19596, 6.3872273, el([132.993, -6.163], 0.0002, 0, 304.1, 0, 0), 0.35, "ice"),
 ];
 
 const BY_ID = new Map(SOLAR_BODIES.map((b) => [b.id, b]));
 export const solarBody = (id: string) => BY_ID.get(id);
 
-const OBLIQUITY = 23.43928 * DEG;
 /** J2000 equatorial (right ascension, declination) → ecliptic unit vector */
 export function eclipticOf(ra: number, dec: number): Vec3 {
-  const x = Math.cos(dec * DEG) * Math.cos(ra * DEG), y = Math.cos(dec * DEG) * Math.sin(ra * DEG), z = Math.sin(dec * DEG);
-  return [x, y * Math.cos(OBLIQUITY) + z * Math.sin(OBLIQUITY), -y * Math.sin(OBLIQUITY) + z * Math.cos(OBLIQUITY)];
+  return eclDir(ra, dec);
 }
 
-/** Keplerian ellipse → heliocentric ecliptic position [AU] and velocity [AU/day] */
 /**
  * A Keplerian state [AU, AU/day]: n the mean anomaly's rate, dw and dO the turning of the periapsis
  * and of the node [rad/day] — the velocity the exact rate of the place (the mean elements drift).
@@ -161,10 +173,12 @@ function kepler(a: number, e: number, I: number, M: number, w: number, O: number
   };
 }
 
-const GM_SUN_AU = 2.9591220828559e-4; // AU³/day²
-const EARTH_MOON = 0.0121505856; // m_moon / (m_earth + m_moon)
+/** DE440's Earth / Moon mass ratio */
+const EMRAT = 81.30056822149722;
+const EARTH_MOON = 1 / (1 + EMRAT); // m_moon / (m_earth + m_moon)
+const KM_AU = 1e3 / AU, KMS_AUD = (86400 * 1e3) / AU;
 
-interface State { pos: Vec3; vel: Vec3 }
+export interface State { pos: Vec3; vel: Vec3 }
 /** A state whose velocity is worked out on first use (then kept) */
 class LazyState implements State {
   private v: Vec3 | null = null;
@@ -177,14 +191,40 @@ const lazy = (pos: Vec3, vel: () => Vec3): State => new LazyState(pos, vel);
 const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
-/** The Moon relative to the Earth [AU, AU/day] (mean elements, J2000 ecliptic) */
+/**
+ * The Moon relative to the Earth [AU, AU/day] where DE440 does not reach: its mean elements (P.
+ * Schlyter's — their day 0 is 1999-12-31 0h, J2000 − 1.5 d: the 20° this model once lost) and its
+ * main inequalities (evection, variation, annual equation…: ~2′), from the equinox of date to J2000's.
+ */
 function moonGeo(d: number): State {
-  const a = 384400e3 / AU;
-  const n = 13.0649929509 * DEG;
-  const O = (125.1228 - 0.0529538083 * d) * DEG;
-  const w = (318.0634 + 0.1643573223 * d) * DEG;
-  const M = (115.3654 + 13.0649929509 * d) * DEG;
-  return kepler(a, 0.0549, 5.1454 * DEG, M, w, O, n, 0.1643573223 * DEG, -0.0529538083 * DEG);
+  const at = (dd: number): Vec3 => {
+    const ds = dd + 1.5;
+    const N = (125.1228 - 0.0529538083 * ds) * DEG, i = 5.1454 * DEG, w = (318.0634 + 0.1643573223 * ds) * DEG;
+    const M = (115.3654 + 13.0649929509 * ds) * DEG, e = 0.0549;
+    let E = M + e * Math.sin(M) * (1 + e * Math.cos(M));
+    for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    const xv = Math.cos(E) - e, yv = Math.sqrt(1 - e * e) * Math.sin(E);
+    const v = Math.atan2(yv, xv);
+    let r = 60.2666 * Math.hypot(xv, yv); // [Earth radii]
+    let lon = Math.atan2(Math.sin(v + w) * Math.cos(i), Math.cos(v + w)) + N;
+    let lat = Math.asin(Math.sin(v + w) * Math.sin(i));
+    // the Sun's and the Moon's mean longitudes, the elongation, the argument of latitude
+    const Ms = (356.047 + 0.9856002585 * ds) * DEG, ws = (282.9404 + 4.70935e-5 * ds) * DEG;
+    const Ls = Ms + ws, Lm = M + w + N, Dl = Lm - Ls, F = Lm - N;
+    lon += DEG * (-1.274 * Math.sin(M - 2 * Dl) + 0.658 * Math.sin(2 * Dl) - 0.186 * Math.sin(Ms) - 0.059 * Math.sin(2 * M - 2 * Dl) - 0.057 * Math.sin(M - 2 * Dl + Ms)
+      + 0.053 * Math.sin(M + 2 * Dl) + 0.046 * Math.sin(2 * Dl - Ms) + 0.041 * Math.sin(M - Ms) - 0.035 * Math.sin(Dl) - 0.031 * Math.sin(M + Ms) - 0.015 * Math.sin(2 * F - 2 * Dl) + 0.011 * Math.sin(M - 4 * Dl));
+    lat += DEG * (-0.173 * Math.sin(F - 2 * Dl) - 0.055 * Math.sin(M - F - 2 * Dl) - 0.046 * Math.sin(M + F - 2 * Dl) + 0.033 * Math.sin(F + 2 * Dl) + 0.017 * Math.sin(2 * M + F));
+    r += -0.58 * Math.cos(M - 2 * Dl) - 0.46 * Math.cos(2 * Dl);
+    // (to J2000's equinox: the general precession since)
+    lon -= 3.82394e-5 * dd * DEG;
+    const R = (r * 6378.14e3) / AU;
+    return [R * Math.cos(lat) * Math.cos(lon), R * Math.cos(lat) * Math.sin(lon), R * Math.sin(lat)];
+  };
+  const p = at(d);
+  return lazy(p, () => {
+    const h = 0.01;
+    return add(at(d + h), at(d - h), -1).map((x) => x / (2 * h)) as Vec3;
+  });
 }
 
 // (the states of one instant, reused: the pull on the ship asks for every body at the same time)
@@ -202,19 +242,43 @@ function helio(b: SolarBody, d: number): State {
   return st;
 }
 
-/** A planet's heliocentric state (the Earth: from the Earth–Moon barycentre) */
+/** TDB [s past J2000] at d (UTC days past J2000) */
+const etOfDays = (d: number) => tdbOf(J2000 + d * 86400e3);
+/** DE440's state of a body (relative to its centre) in AU, AU/day, or null */
+function de(id: string, d: number): State | null {
+  const s = deState(id, etOfDays(d));
+  return s && { pos: [s.pos[0] * KM_AU, s.pos[1] * KM_AU, s.pos[2] * KM_AU], vel: [s.vel[0] * KMS_AUD, s.vel[1] * KMS_AUD, s.vel[2] * KMS_AUD] };
+}
+
+/** The moons each planet's centre is pulled about by (its barycentre less their share) */
+const MOONS_OF = new Map<string, SolarBody[]>();
+/** A moon relative to its planet [AU, AU/day]: DE440 / JUP365 where they reach, else its elements */
+function moonRel(b: SolarBody, d: number): State {
+  if (b.id === "moon") return de("moon", d) ?? moonGeo(d);
+  return de(b.id, d) ?? orbitState(b, d);
+}
+
+/** A body's heliocentric state [AU, AU/day] — the planets' centres, not their barycentres */
 function helioNow(b: SolarBody, d: number): State {
   if (b.id === "sun") return { pos: [0, 0, 0], vel: [0, 0, 0] };
-  if (b.id === "moon") {
-    const e = helio(solarBody("earth")!, d);
-    const m = moonGeo(d);
-    return lazy(add(e.pos, m.pos), () => add(e.vel, m.vel));
-  }
-  if (b.circle) {
-    const p = helio(solarBody(b.parent!)!, d);
-    const c = circleState(b, d);
+  if (b.parent && b.parent !== "sun") {
+    const p = helio(solarBody(b.parent)!, d);
+    const c = moonRel(b, d);
     return lazy(add(p.pos, c.pos), () => add(p.vel, c.vel));
   }
+  // the system's barycentre (the Earth's: the Earth–Moon barycentre)
+  const bary = de(b.id === "earth" ? "emb" : b.id, d) ?? standish(b, d);
+  const moons = MOONS_OF.get(b.id) ?? [];
+  if (!moons.length) return bary;
+  // (the centre: the barycentre less the moons' mass-weighted offsets)
+  const mTot = b.mass + moons.reduce((m, q) => m + q.mass, 0);
+  const rel = moons.map((q) => ({ k: q.mass / mTot, s: moonRel(q, d) }));
+  const pos = rel.reduce((p, r) => add(p, r.s.pos, -r.k), bary.pos);
+  return lazy(pos, () => rel.reduce((v, r) => add(v, r.s.vel, -r.k), bary.vel));
+}
+
+/** A planet's (a system's barycentre's) heliocentric state from its mean elements (Standish). */
+function standish(b: SolarBody, d: number): State {
   const [el, rt] = b.elements!;
   const T = d / 36525;
   const at = (i: number) => el[i]! + rt[i]! * T;
@@ -223,36 +287,50 @@ function helioNow(b: SolarBody, d: number): State {
   const k = DEG / 36525;
   const k0 = kepler(a, e, I, L - wb, wb - O, O, (rt[3]! - rt[4]!) * k, (rt[4]! - rt[5]!) * k, rt[5]! * k);
   // (and the ellipse's slow change of size, shape and tilt — ~0.3 m/s at Saturn: its place across a
-  // day of the drift, the angles held)
-  // (the velocity only when asked: the pull on a ship needs the places alone)
+  // day of the drift, the angles held; the velocity only when asked: the pull on a ship needs places)
   const dd = 1 / 36525;
-  const s = lazy(k0.pos, () => {
+  return lazy(k0.pos, () => {
     const kp = kepler(a + rt[0]! * dd, e + rt[1]! * dd, I + rt[2]! * k, L - wb, wb - O, O, 0).pos;
     const km = kepler(a - rt[0]! * dd, e - rt[1]! * dd, I - rt[2]! * k, L - wb, wb - O, O, 0).pos;
     return add(k0.vel, sub(kp, km), 0.5);
   });
-  if (b.id === "earth") {
-    const m = moonGeo(d);
-    return lazy(add(s.pos, m.pos, -EARTH_MOON), () => add(s.vel, m.vel, -EARTH_MOON));
-  }
-  return s;
 }
 
-/** A moon on its circle in the parent's equatorial plane, relative to the parent [AU, AU/day] */
-function circleState(b: SolarBody, d: number): State {
-  const c = b.circle!;
-  const p = solarBody(b.parent!)!;
-  const [ex, ey, ez] = poleAxes(eclipticOf(p.pole[0], p.pole[1]));
-  const w = (2 * Math.PI) / c.period;
-  const ph = c.phase * DEG + w * d;
-  const r = (c.a * 1e3) / AU;
-  const cs = Math.cos(ph), sn = Math.sin(ph);
-  void ez;
-  return {
-    pos: [r * (cs * ex[0] + sn * ey[0]), r * (cs * ex[1] + sn * ey[1]), r * (cs * ex[2] + sn * ey[2])],
-    vel: [r * w * (-sn * ex[0] + cs * ey[0]), r * w * (-sn * ex[1] + cs * ey[1]), r * w * (-sn * ex[2] + cs * ey[2])],
-  };
+/** A moon's Laplace plane: axes x (its node on the ICRF equator), y, z (its pole) — ecliptic */
+const laplaceAxes = new Map<string, [Vec3, Vec3, Vec3]>();
+function laplaceOf(b: SolarBody): [Vec3, Vec3, Vec3] {
+  let A = laplaceAxes.get(b.id);
+  if (!A) {
+    const [ra, dec] = b.orbit!.laplace;
+    const z = eclDir(ra, dec);
+    const x = eclOf([-Math.sin(ra * DEG), Math.cos(ra * DEG), 0]);
+    A = [x, [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]], z];
+    laplaceAxes.set(b.id, A);
+  }
+  return A;
 }
+
+/** A moon relative to its planet from its mean elements [AU, AU/day]: its ellipse, turning (apsides, node) */
+function orbitState(b: SolarBody, d: number): State {
+  const o = b.orbit!, c = b.circle!;
+  const P = Math.abs(c.period);
+  const yr = d / 365.25;
+  const dW = o.Pnode ? -360 / (o.Pnode * 365.25) : 0; // (the node regresses)
+  const dVarpi = o.Pw ? 360 / (o.Pw * 365.25) : 0; // (the apsides advance)
+  const node = o.node + dW * d;
+  const varpi = o.node + o.w + dVarpi * d;
+  const lambda = o.node + o.w + o.M + (360 / P) * d;
+  void yr;
+  const a = (c.a * 1e3) / AU;
+  const n = (2 * Math.PI) / P;
+  const k = kepler(a, o.e, o.i * DEG, (lambda - varpi) * DEG, (varpi - node) * DEG, node * DEG, n - (dVarpi * DEG), (dVarpi - dW) * DEG, dW * DEG);
+  const [ex, ey, ez] = laplaceOf(b);
+  const to = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * ex[i]! + v[1] * ey[i]! + v[2] * ez[i]!) as Vec3;
+  return { pos: to(k.pos), vel: to(k.vel) };
+}
+for (const b of SOLAR_BODIES) if (b.parent && b.parent !== "sun") MOONS_OF.set(b.parent, [...(MOONS_OF.get(b.parent) ?? []), b]);
+// (the Earth's centre from the Earth–Moon barycentre: the Moon's pull, DE440's mass ratio)
+MOONS_OF.set("earth", MOONS_OF.get("earth")!.map((m) => (m.id === "moon" ? { ...m, mass: (solarBody("earth")!.mass * 1) / EMRAT } : m)));
 
 /** Axes with z along a pole, x in the ecliptic plane (the tracer's poleAxes) */
 export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
@@ -290,6 +368,49 @@ export function solarState(id: string, t: number): State {
   ]);
 }
 
+/**
+ * A body as it is seen from a place of the home frame at t: where it was when the light now arriving
+ * there left it (light runs straight in the Sun's frame, not in the home frame, which moves with our
+ * mouth: the retarded place taken there, then brought into the home frame of now), and the time then —
+ * its turning seen as it was. Light-time [M] is the distance [M] (c = 1). Without it the Sun sits 20″
+ * off the Moon (the aberration of its light): an eclipse's shadow passed 40 s late, 40 km off.
+ */
+export function seenFrom(id: string, t: number, obs: Vec3): { pos: Vec3; vel: Vec3; t: number } {
+  // (one step: the delay from the place of now — off by v/c of itself, a quarter second at Jupiter)
+  const now = solarState(id, t).pos;
+  const tr = t - Math.hypot(now[0] - obs[0], now[1] - obs[1], now[2] - obs[2]);
+  const st = solarState(id, tr);
+  // (the home frame's origin then and now, in the Sun's frame: the shift between)
+  const m0 = mouthHelio(daysOf(tr)).pos, m1 = mouthHelio(daysOf(t)).pos;
+  const pos: Vec3 = [st.pos[0] + (m0[0] - m1[0]) * toM, st.pos[1] + (m0[1] - m1[1]) * toM, st.pos[2] + (m0[2] - m1[2]) * toM];
+  return { pos, vel: st.vel, t: tr };
+}
+
+/** The share of a disk of angular radius rs left uncovered by one of radius rm, their centres d apart [rad]. */
+export function diskShare(rs: number, rm: number, d: number): number {
+  if (d >= rs + rm) return 1;
+  let a: number;
+  if (d <= Math.abs(rm - rs)) a = Math.PI * Math.min(rs, rm) ** 2;
+  else {
+    const k1 = Math.min(Math.max((d * d + rs * rs - rm * rm) / (2 * d * rs), -1), 1);
+    const k2 = Math.min(Math.max((d * d + rm * rm - rs * rs) / (2 * d * rm), -1), 1);
+    const k3 = Math.max((-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm), 0);
+    a = rs * rs * Math.acos(k1) + rm * rm * Math.acos(k2) - 0.5 * Math.sqrt(k3);
+  }
+  return Math.min(Math.max(1 - a / (Math.PI * rs * rs), 0), 1);
+}
+
+/** The share of the Sun's disk the Moon leaves uncovered, seen from a place of the home frame at t (the light's delays in). */
+export function sunShare(obs: Vec3, t: number): number {
+  const S = seenFrom("sun", t, obs).pos, Mn = seenFrom("moon", t, obs).pos;
+  const s = sub(S, obs), m = sub(Mn, obs);
+  const ds = Math.hypot(...s), dm = Math.hypot(...m);
+  const c = dot(s, m) / (ds * dm);
+  if (c < 0.999) return 1;
+  const d = Math.asin(Math.min(Math.hypot(...[s[1] * m[2] - s[2] * m[1], s[2] * m[0] - s[0] * m[2], s[0] * m[1] - s[1] * m[0]]) / (ds * dm), 1));
+  return diskShare(Math.asin(Math.min(SOLAR_BODIES[0]!.radius / ds, 1)), Math.asin(Math.min(solarBody("moon")!.radius / dm, 1)), d);
+}
+
 /** The home frame's own acceleration (our mouth falls around the Sun like Saturn) [M/M²]. */
 export function mouthAccel(t: number): Vec3 {
   const d = daysOf(t);
@@ -299,38 +420,94 @@ export function mouthAccel(t: number): Vec3 {
   return [k * p[0], k * p[1], k * p[2]];
 }
 
+// ------------------------------------------------------------------------------------ turning
+/** the scene's UTC instant [ms] at t [M] */
+export const utcOf = (t: number) => EPOCH_DATE + t * M_SECONDS * 1e3;
+
+let axesT = NaN;
+const axesMemo = new Map<string, [Vec3, Vec3, Vec3]>();
 /**
- * Rotation angle of a body about its pole at t (radians; its map's prime meridian, from the node of
- * its equator on the ecliptic). The Earth: the Greenwich mean sidereal time (its axes' x is the
- * vernal equinox: the map's Greenwich — its centre — where it is).
+ * A body's own axes at t (columns: its prime meridian — its map's centre —, 90° east, its pole), home
+ * frame. The Earth: precession, nutation, sidereal time; the moons: facing their planet (a mean pole,
+ * their prime meridian towards it — the Moon: its IAU model, the librations with it); the rest: IAU.
+ */
+export function bodyAxes(b: SolarBody, t: number): [Vec3, Vec3, Vec3] {
+  if (t !== axesT) {
+    axesT = t;
+    axesMemo.clear();
+  }
+  const hit = axesMemo.get(b.id);
+  if (hit) return hit;
+  const utc = utcOf(t), et = tdbOf(utc);
+  let A: [Vec3, Vec3, Vec3] | null = null;
+  if (b.id === "earth") A = earthAxes(utc, et);
+  else if (b.parent && b.parent !== "sun" && b.id !== "moon") {
+    // (a moon whose place is modelled: its prime meridian where its planet is — no drift between the two)
+    const z = unit(iauAxes(b.id, et)?.[2] ?? eclipticOf(b.pole[0], b.pole[1]));
+    const toP = unit(sub(solarState(b.parent, t).pos, solarState(b.id, t).pos));
+    const x = unit(sub(toP, z.map((c) => c * dot(toP, z)) as Vec3));
+    A = [x, [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]], z];
+  } else A = iauAxes(b.id, et);
+  if (!A) {
+    // (no model: turning uniformly about its pole)
+    const [ex, ey, ez] = poleAxes(eclipticOf(b.pole[0], b.pole[1]));
+    const hours = (daysOf(t) * 24) / b.rotation, W = 2 * Math.PI * (hours - Math.floor(hours));
+    const c = Math.cos(W), s = Math.sin(W);
+    A = [[c * ex[0] + s * ey[0], c * ex[1] + s * ey[1], c * ex[2] + s * ey[2]], [-s * ex[0] + c * ey[0], -s * ex[1] + c * ey[1], -s * ex[2] + c * ey[2]], ez];
+  }
+  axesMemo.set(b.id, A);
+  return A;
+}
+
+/** A body's pole now (home frame) — the tracer's pole, its spin measured from its node on the ecliptic. */
+export function bodyPole(b: SolarBody, t: number): Vec3 {
+  return bodyAxes(b, t)[2];
+}
+
+/**
+ * The rotation angle of a body about its pole now (radians): its prime meridian from the node of its
+ * equator on the ecliptic (poleAxes' x) — with bodyPole, what the tracer turns its map by.
  */
 export function spinAngle(b: SolarBody, t: number): number {
-  if (b.id === "earth") {
-    const deg = 280.46061837 + 360.98564736629 * daysOf(t);
-    return ((deg % 360) + 360) % 360 * DEG;
+  const [x, , z] = bodyAxes(b, t);
+  const [ex, ey] = poleAxes(z);
+  return Math.atan2(dot(x, ey), dot(x, ex));
+}
+
+/**
+ * A body's rotation (home frame) [rad per M of time]: at t, its pole of now times its turning rate then
+ * (the Earth's pole of date, the Moon's librating rate: its IAU model's); without t, its mean spin
+ * about its J2000 pole.
+ */
+const spinMemo = new Map<string, Vec3>();
+const EARTH_RATE = (2 * Math.PI) / ((23.9344696 * 3600) / M_SECONDS);
+export function spinVector(b: SolarBody, t?: number): Vec3 {
+  if (t !== undefined) {
+    const N = bodyAxes(b, t)[2];
+    let w: number;
+    if (b.id === "earth") w = EARTH_RATE;
+    else if (b.parent && b.parent !== "sun" && b.id !== "moon") w = (2 * Math.PI) / ((Math.abs(b.circle!.period) * 86400) / M_SECONDS);
+    else {
+      const r = iauRate(b.id, tdbOf(utcOf(t)));
+      w = r !== null ? (r * DEG * M_SECONDS) / 86400 : (2 * Math.PI) / ((b.rotation * 3600) / M_SECONDS);
+    }
+    return [N[0] * w, N[1] * w, N[2] * w];
   }
-  const hours = (daysOf(t) * 24) / b.rotation;
-  return 2 * Math.PI * (hours - Math.floor(hours));
+  let v = spinMemo.get(b.id);
+  if (!v) {
+    const w = (2 * Math.PI) / ((b.id === "earth" ? 23.9344696 : b.rotation) * 3600 / M_SECONDS);
+    const N = b.id === "earth" ? earthAxes(J2000, 0)[2] : (iauAxes(b.id, 0)?.[2] ?? eclipticOf(b.pole[0], b.pole[1]));
+    v = [N[0] * w, N[1] * w, N[2] * w];
+    spinMemo.set(b.id, v);
+  }
+  return v;
 }
 
-/** A body's rotation (home frame): its pole × its turning rate [rad per M of time]. */
-export function spinVector(b: SolarBody): Vec3 {
-  const w = (2 * Math.PI) / ((b.id === "earth" ? 23.9344696 : b.rotation) * 3600 / M_SECONDS);
-  const N = eclipticOf(b.pole[0], b.pole[1]);
-  return [N[0] * w, N[1] * w, N[2] * w];
-}
-
-/** A body's own axes at t (columns: its prime meridian, 90° east, its pole), home frame. */
-export function bodyAxes(b: SolarBody, t: number): [Vec3, Vec3, Vec3] {
-  const [ex, ey, ez] = poleAxes(eclipticOf(b.pole[0], b.pole[1]));
-  const W = spinAngle(b, t);
-  const c = Math.cos(W), s = Math.sin(W);
-  return [
-    [c * ex[0] + s * ey[0], c * ex[1] + s * ey[1], c * ex[2] + s * ey[2]],
-    [-s * ex[0] + c * ey[0], -s * ex[1] + c * ey[1], -s * ex[2] + c * ey[2]],
-    ez,
-  ];
-}
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = (a: Vec3): Vec3 => {
+  const l = Math.hypot(...a) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
 
 /** The maps on the GPU: large ones (2048 × 1024) then small ones (1024 × 512), in two texture arrays */
 export const MAPS_HI: MapName[] = ["earth", "moon", "mars", "mercury", "jupiter", "saturn"];

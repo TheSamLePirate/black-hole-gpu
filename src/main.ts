@@ -43,6 +43,9 @@ import { defaultAltKm, ourOrbitPose } from "./game/place";
 import { solarBody, M_METRES } from "./system/solar";
 import { setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
+import { loading } from "./loading";
+import { loadEphemerides } from "./system/de440";
+import { ephemerisUrls } from "./system/ephemeris-files";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -143,6 +146,9 @@ async function main() {
   const touch = () => (changed = true);
   renderer.onAssets = () => touch();
   const touchDisplay = () => (displayChanged = true);
+  // the solar system's ephemerides (DE440, JUP365: 7 MB) — in while the rest is built
+  loading.stage("ephemeris", "The solar system — NASA/JPL ephemerides (DE440)", { weight: 2 });
+  const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(), (u) => loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`))))));
   const skyLoading = renderer
     .loadSky()
     .then(() => touch())
@@ -1259,7 +1265,9 @@ async function main() {
     cpuProf.end(!!st);
   };
   // at start: a shared moment (#save=…), a scene named in the URL (#scene=game:interstellar), else the
-  // flight saved last time; then the URL is left clean (settings from an old link were read above)
+  // flight saved last time; then the URL is left clean (settings from an old link were read above) —
+  // once the ephemerides are in (a ship placed near a planet before would find it moved under it)
+  await ephemerides;
   {
     const hash = location.hash;
     const scene = new URLSearchParams(hash.slice(1)).get("scene");

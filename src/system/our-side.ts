@@ -217,7 +217,7 @@ export function bodyView(t: number, v: BodyView) {
   const B = ourState(id, t);
   const S = ourState("sun", t).pos;
   const sun = unit([S[0] - B.pos[0], S[1] - B.pos[1], S[2] - B.pos[2]]);
-  const w = spinVector(body);
+  const w = spinVector(body, t);
   const pole = Math.hypot(...w) > 0 ? unit(w) : ([0, 0, 1] as Vec3);
   // (the latitude, east longitude of a direction from the body's centre, at t)
   const latLonOf = (d: Vec3): [number, number] => {
@@ -290,7 +290,7 @@ export function bodyGround(id: string, t: number, lat: number, lon: number) {
   const r = [X[0] - C[0], X[1] - C[1], X[2] - C[2]] as Vec3;
   const rl = Math.hypot(...r);
   const up: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
-  const w = spinVector(SOLAR_BODIES.find((b) => b.id === id)!);
+  const w = spinVector(SOLAR_BODIES.find((b) => b.id === id)!, t);
   let e: Vec3 = [w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]];
   if (Math.hypot(...e) < 1e-30) e = [0, -up[2], up[1]];
   const el = Math.hypot(...e);

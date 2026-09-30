@@ -25,7 +25,7 @@ export function solidBody(id: string) {
 export function groundVelocity(id: string, X: Vec3, t: number): Vec3 {
   const b = solarBody(id)!;
   const st = solarState(id, t);
-  const w = spinVector(b);
+  const w = spinVector(b, t);
   const r = sub(X, st.pos);
   const v = cross(w, r);
   return [st.vel[0] + v[0], st.vel[1] + v[1], st.vel[2] + v[2]];

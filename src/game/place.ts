@@ -108,7 +108,7 @@ export function ourGroundPose(id: string, lat: number, lon: number, t: number): 
   const q = bodyFixedOf(id, lat, lon, GEAR + groundRelief(id, bodyFixedOf(id, lat, lon, 0)));
   const X = fromBodyFixed(id, q, t);
   const up = unit(sub(X, solarState(id, t).pos));
-  let east = cross(spinVector(b), up);
+  let east = cross(spinVector(b, t), up);
   if (Math.hypot(...east) < 1e-12) east = cross([1, 0, 0], up);
   return { frame: "ours", X, vel: groundVelocity(id, X, t), fwd: unit(east), up, landed: { body: id, q }, note: `${b.name}: landed at ${lat.toFixed(2)}°, ${lon.toFixed(2)}°` };
 }

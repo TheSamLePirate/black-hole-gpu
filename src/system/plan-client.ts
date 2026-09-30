@@ -2,6 +2,7 @@
 // without a worker (tests, an old browser), the same work done here, at once.
 
 import { runPlan, type PlanRequest } from "./plan-worker";
+import { ephemerisUrls } from "./ephemeris-files";
 
 type Req = PlanRequest extends infer R ? (R extends { id: number } ? Omit<R, "id"> : never) : never;
 
@@ -19,6 +20,8 @@ function getWorker(): Worker | null {
       waiting.delete(e.data.id);
       f?.(e.data.result);
     };
+    // (the ephemerides first: the worker answers once they are in — the page's files)
+    worker.postMessage({ kind: "ephemeris", urls: ephemerisUrls() });
     worker.onerror = () => {
       // (no worker there: answer what waits here, and from now on)
       failed = true;

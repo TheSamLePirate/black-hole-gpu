@@ -44,3 +44,8 @@ assets/Interstellar Endurance/
 # local texture packs, not used by the app (340 MB together)
 assets/tex/
 assets/textures/
+
+# NASA/JPL NAIF kernels (DE440s, JUP365, PCK, LSK: ~2 GB) — scripts/build-ephemeris.ts reads them;
+# the app uses its refit, assets/ephemeris/
+assets/kernels/
+assets/nasaSolar/

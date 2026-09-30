@@ -4,6 +4,7 @@
 import { planOurOrbit, planOurTransfer, refineOurNode, type PlanNode, type OurGoal, type OurMission, type PlanOptions } from "./our-plan";
 import type { Vec3 } from "../physics";
 import { predictOurs } from "./our-predict";
+import { loadEphemerides } from "./de440";
 import { extendFrom } from "./our-extend";
 import { predict, type Massive } from "../geodesic";
 import { lensesOf } from "../lenses";
@@ -35,11 +36,19 @@ export function runPlan(q: PlanRequest) {
 // (in a worker: answer the page's requests)
 const g = globalThis as unknown as { document?: unknown; onmessage: unknown; postMessage: (m: unknown) => void };
 if (typeof g.document === "undefined" && typeof (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope !== "undefined") {
-  g.onmessage = (e: MessageEvent<PlanRequest>) => {
-    try {
-      g.postMessage({ id: e.data.id, result: runPlan(e.data) });
-    } catch (err) {
-      g.postMessage({ id: e.data.id, result: { error: `Planner: ${String(err)}` } });
-    }
+  // (the page's ephemerides here too — the requests wait for them: a path predicted around a planet
+  // where the models put it, thousands of km from where DE440 does, would not be the page's)
+  // (the page sends the files' URLs first: this bundle's own would not be served)
+  let ready: Promise<void> = new Promise(() => {});
+  g.onmessage = (e: MessageEvent<PlanRequest | { kind: "ephemeris"; urls: string[] }>) => {
+    if (e.data.kind === "ephemeris") return void (ready = loadEphemerides(e.data.urls));
+    const q = e.data;
+    void ready.then(() => {
+      try {
+        g.postMessage({ id: q.id, result: runPlan(q) });
+      } catch (err) {
+        g.postMessage({ id: q.id, result: { error: `Planner: ${String(err)}` } });
+      }
+    });
   };
 }
