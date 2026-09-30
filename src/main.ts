@@ -303,6 +303,12 @@ async function main() {
       setHomePose(settings, v.X, v.fwd, v.up, v.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(v.landed ?? null);
+      // (on the ground without the ship: the camera on its tripod there — the rotation a scene keeps,
+      // "around" by default, circled the target: the Sun, the Earth left behind at 30 km/s)
+      if (v.landed && !settings.ship && settings.rotation !== "tripod") {
+        settings.rotation = "tripod";
+        camera.setRotation("tripod");
+      }
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose) {
       const t = time ?? sim.time;

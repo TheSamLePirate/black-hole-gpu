@@ -3375,6 +3375,12 @@ const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS
 // the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
 // it is: the ground shows, faintly, cool), over the sunlight's irradiance
 const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
+// The night's light on the ground as the eye sees it (EARTH_NIGHT) — none in the Moon's shadow by day:
+// there the sky's own light, the sky seen (sk: skySeen), a ten-thousandth of the day's at the umbra's
+// heart (the floor, 6 % of the sunlight, lit the totality's ground above the partial phase's)
+fn nightFloor(sk: f32, mu0: f32) -> vec3f {
+  return EARTH_NIGHT * P.earth4.x * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
+}
 // the full Moon's light at night, over the sunlight's irradiance (drawn far brighter than it is — a
 // moonlit landscape shows, silvery), and the moonlight at q: its direction's cosine on the normal n,
 // through the air, faded in as the night falls
@@ -3880,7 +3886,8 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let wrap = clamp((mu0 + 0.08) / 1.08, 0.0, 1.0);
   let ct = dot(rd, Ls);
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
-  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
+  let sk = skySeen(q, Ls);
+  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
   let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   return select(top, top * 0.35, below);
 }
@@ -4028,7 +4035,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   // the sky's light (blue by day, the twilight's glow)
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
-  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
+  let sk = skySeen(q, Ls);
+  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
   var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0))
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
@@ -4160,7 +4168,8 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     // (the sky's and the moon's light from above, dimmed by the cloud over it: a grey base, a bright top)
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
-    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * skySeen(q, Ls), EARTH_NIGHT * P.earth4.x);
+    let sk = skySeen(q, Ls);
+    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
     let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * exp(-0.12 * tauSun) * smoothstep(-0.1, 0.1, mu0))
       + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, (r - 1.0) * EARTH_RM, mu0));
     let dT = exp(-sigma * dm);
