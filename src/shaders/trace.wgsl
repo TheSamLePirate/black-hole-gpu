@@ -92,6 +92,9 @@ struct Params {
   shipShadow: vec4f, // the Ranger's bounding sphere in the camera's axes (right, up, forward) [m]; w: radius (0: no shadow)
   eclipse: vec4f,  // the Moon as it shades the Earth: its centre on the Earth's axes [its radii] (where the light
                    // shows it: 1.3 s ago), w: its radius [the Earth's] (0: no eclipse near)
+  nearCam0: vec4f, // the camera on the near body's axes [its radii], in float32 (an anchor: the same each frame
+                   // while the ground carries the camera); w: its |·|² − 1 (float64 on the CPU)
+  nearCam1: vec4f, // the camera from that anchor [radii] (float64's remainder); w: on (0/1)
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1140,6 +1143,41 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     if (r <= 1.0 || r > 12.0) { continue; }
     (*out).glow += (*out).tint * sunCorona(k, normalize(d * b - c), r, gObs, P.time.x);
   }
+  // our stars' disks, their edges antialiased: a pixel's share of the disk (not a point: in or out as the
+  // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
+  // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
+  for (var k = ourStart(); k < bodyCount(); k++) {
+    if (bodyKind(k) != 0u) { continue; }
+    let wk = bodyWhere(k);
+    if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
+    let c = bodies[BV * k].xyz - o;
+    let b = dot(c, d);
+    if (b <= 0.0) { continue; }
+    let R = bodyRadius(k);
+    let perp = c - b * d;
+    let pd = length(perp);
+    let px = max(beam() * (travel + b), 1e-30);
+    let cov = clamp((R - pd) / px + 0.5, 0.0, 1.0);
+    if (cov <= 0.0) { continue; }
+    var vis = 1.0;
+    for (var j = ourStart(); j < bodyCount(); j++) {
+      if (j == k) { continue; }
+      let wj = bodyWhere(j);
+      if (!(wj == 4u || (wj == 2u && !dneg))) { continue; }
+      let cj = bodies[BV * j].xyz - o;
+      let bj = dot(cj, d);
+      if (bj <= 0.0 || bj >= b) { continue; }
+      let Rj = bodyRadius(j);
+      let pj = length(cj - bj * d);
+      vis *= 1.0 - clamp((Rj - pj) / max(beam() * (travel + bj), 1e-30) + 0.5, 0.0, 1.0);
+      if (vis <= 0.0) { break; }
+    }
+    if (vis <= 0.0) { continue; }
+    // (where the ray meets it, or — passing just outside — its limb's nearest point)
+    var X = c - perp * (R / max(pd, 1e-30));
+    if (pd < R) { X = d * (b - sqrt(R * R - pd * pd)); }
+    (*out).glow += (*out).tint * shadeStar(k, X, c, gObs, d, P.time.x) * (cov * vis);
+  }
   if (!hit) { return false; }
   let k = kBest;
   let c = bodies[BV * k].xyz - o;
@@ -1147,7 +1185,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   let nrm = normalize(X - c);
   var col: vec3f;
   if (bodyKind(k) == 0u) {
-    col = shadeStar(k, X, c, gObs, d, P.time.x);
+    col = vec3f(0.0); // (its light: above, with its edge's share)
   } else {
     let li = i32(bodies[BV * k + 3u].x);
     let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - X);
@@ -2977,6 +3015,10 @@ struct NearHit { t: f32, qb: vec3f, h: f32 };
 // the body's own axes of a camera-frame direction
 fn toBody(v: vec3f) -> vec3f { return vec3f(dot(v, P.near1.xyz), dot(v, P.near2.xyz), dot(v, P.near3.xyz)); }
 fn fromBody(v: vec3f) -> vec3f { return v.x * P.near1.xyz + v.y * P.near2.xyz + v.z * P.near3.xyz; }
+// The camera on the near body's axes [its radii]: from the CPU's float64 — turned in float32 here from
+// the far frame's axes (the world turning with the ground under the camera), its rounding came out
+// differently each frame: the camera 0.4 m up or down, the ground near it shaking
+fn nearCam() -> vec3f { return select(toBody(-P.near0.xyz), P.nearCam0.xyz + P.nearCam1.xyz, P.nearCam1.w > 0.5); }
 
 // the pixel's footprint on the ground at a distance t (radii), in metres
 fn reliefFoot(t: f32) -> f32 { return max(t * pixFoot() * P.near4.w, 0.05); }
@@ -3011,26 +3053,33 @@ fn nearMarch(look: vec3f) -> NearHit {
     o.qb = normalize(toBody(p));
     return o;
   }
+  // (on the body's axes, from the camera there in float64 — see nearCam — and the height above the sphere
+  // to the millimetre: see earthMarch)
+  let fine = P.nearCam1.w > 0.5;
+  let A = select(toBody(-c), P.nearCam0.xyz, fine);
+  let e = select(dot(A, A) - 1.0, P.nearCam0.w, fine);
+  let oc = select(vec3f(0.0), P.nearCam1.xyz, fine);
+  let rd = toBody(look);
   for (var i = 0u; i < 220u; i++) {
-    let p = look * t - c;
+    let v = oc + rd * t;
+    let p = A + v;
     let r = length(p);
-    let qb = normalize(toBody(p / r));
+    let qb = p / r;
     let h = relief(surf, qb, reliefFoot(t), mR, tSec) / mR;
-    let f = r - (1.0 + h);
+    let f = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - h;
     if (f < 0.0) {
       // bisect between the last point above and this one
       var lo = tPrev;
       var hi = t;
       for (var j = 0u; j < 10u; j++) {
         let m = 0.5 * (lo + hi);
-        let pm = look * m - c;
+        let vm = oc + rd * m;
+        let pm = A + vm;
         let rm = length(pm);
-        let qm = normalize(toBody(pm / rm));
-        if (rm - (1.0 + relief(surf, qm, reliefFoot(m), mR, tSec) / mR) < 0.0) { hi = m; } else { lo = m; }
+        if ((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - relief(surf, pm / rm, reliefFoot(m), mR, tSec) / mR < 0.0) { hi = m; } else { lo = m; }
       }
       o.t = hi;
-      let ph = look * hi - c;
-      o.qb = normalize(toBody(ph));
+      o.qb = normalize(A + oc + rd * hi);
       o.h = relief(surf, o.qb, reliefFoot(hi), mR, tSec);
       return o;
     }
@@ -3755,18 +3804,26 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   if (t1 <= 0.0) { return -1.0; }
   var t = max(-b - sq, 0.0);
   var tPrev = t;
+  // (the height above the sphere near the camera, r − 1, where float32 keeps 0.8 m of it: from the anchor
+  // A and the ray from it v — (|A|² − 1 + 2 A·v + v²) / (r + 1), to the millimetre)
+  let fine = P.nearCam1.w > 0.5;
+  let A = select(ro, P.nearCam0.xyz, fine);
+  let e = select(dot(ro, ro) - 1.0, P.nearCam0.w, fine);
+  let o = select(vec3f(0.0), P.nearCam1.xyz, fine);
   for (var i = 0u; i < 256u; i++) {
-    let p = ro + rd * t;
+    let v = o + rd * t;
+    let p = A + v;
     let r = length(p);
-    let f = r - (1.0 + earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM);
+    let f = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM;
     if (f < 0.0) {
       var lo = tPrev;
       var hi = t;
       for (var j = 0u; j < 10u; j++) {
         let m = 0.5 * (lo + hi);
-        let pm = ro + rd * m;
+        let vm = o + rd * m;
+        let pm = A + vm;
         let rm = length(pm);
-        if (rm - (1.0 + earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM) < 0.0) { hi = m; } else { lo = m; }
+        if ((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
       }
       return hi;
     }
@@ -4169,7 +4226,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   setAir(k);
   // (the Earth's relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the
   // sphere; the other worlds' ground, a sphere)
-  let ro = toBody(-P.near0.xyz);
+  let ro = nearCam();
   var t = nearHit(look);
   if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), pixFoot()); }
   let lt = nearLight(k);
@@ -5187,7 +5244,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     let rd = toBody(look);
     let lt = nearLight(kn);
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
-    let e = earthLook(kn, toBody(-P.near0.xyz), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
+    let e = earthLook(kn, nearCam(), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
     col = select(col * e.T + e.col, e.col, t > 0.0);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }

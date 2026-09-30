@@ -511,13 +511,28 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let zf = dot(d, TA.pFwd.xyz);
   var alpha = 1.0;
   var hist = cur.rgb;
-  let ground = TA.drift.w > 0.0 && depth < TA.drift.w;
-  if (zf > 1e-3 && !ground) {
+  // (the near body's ground: drawn afresh — or, the camera carried rigidly with it, where it was: the same
+  // pixel — its ridges' edge too: a pixel by the ground (3×3) is carried, or the sky and the ground took
+  // it in turn, one clamped, the other not: a checkerboard along the skyline)
+  let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w);
+  var byGround = ground;
+  if (TA.drift.w < 0.0 && !ground) {
+    let H = size.y;
+    for (var dy = -1; dy <= 1; dy++) {
+      for (var dx = -1; dx <= 1; dx++) {
+        let q = clamp(vec2i(gid.xy) + vec2i(dx, dy), vec2i(0), vec2i(i32(W) - 1, i32(H) - 1));
+        byGround = byGround || moments[u32(q.y) * W + u32(q.x)].y < -TA.drift.w;
+      }
+    }
+  }
+  let carried = byGround && TA.drift.w < 0.0;
+  if ((zf > 1e-3 && !ground) || carried) {
     let pt = TA.pRight.w;
     let pa = TA.pUp.w;
     let xp = dot(d, TA.pRight.xyz) / (zf * pt * pa);
     let yp = dot(d, TA.pUp.xyz) / (zf * pt);
-    let uv = vec2f(0.5 * (xp + 1.0), 0.5 * (1.0 - yp));
+    var uv = vec2f(0.5 * (xp + 1.0), 0.5 * (1.0 - yp));
+    if (carried) { uv = (vec2f(gid.xy) + 0.5) / vec2f(size); }
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // the range of the current frame around the pixel, at the block's scale (mean ± 1.25 σ, YCoCg)
@@ -536,10 +551,17 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       let sd = sqrt(max(m2 / 9.0 - m1 * m1, vec3f(0.0)));
       let h = rgbToYcocg(hist);
       let g = TA.fwd.w;
-      hist = ycocgToRgb(clamp(h, m1 - g * sd, m1 + g * sd));
       // a ray landed on this pixel this frame, or it was reconstructed between rays
       let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
       alpha = select(TA.k.w, TA.k.z, fresh);
+      if (carried) {
+        // (the ground carried with the camera: its history exact — not clamped to this frame's range, which
+        // follows the ridges one ray march finds this frame; refined over ~10 frames: steady. Every pixel
+        // alike: the ones between rays, taking half as much, lagged the light a quarter behind — a checkerboard)
+        alpha = 0.1;
+      } else {
+        hist = ycocgToRgb(clamp(h, m1 - g * sd, m1 + g * sd));
+      }
     }
   }
   let c = mix(max(hist, vec3f(0.0)), cur.rgb, alpha);

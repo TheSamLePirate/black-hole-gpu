@@ -59,7 +59,7 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 255;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-const PARAM_VEC4S = 67;
+const PARAM_VEC4S = 69;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -303,6 +303,8 @@ export class Renderer {
   private meterPending = false;
   private meterPre = 1;
   private meterSkyUsed = 0;
+  /** the auto exposure the meter's sky threshold was scaled with */
+  private meterEVUsed = 0;
   private meterSky = 0;
   private meterIncident = 0;
   /** the camera near the Earth: the meter reads the image too (a sunset's sky, its lit clouds: not a backdrop) */
@@ -1561,6 +1563,17 @@ export class Renderer {
     }
     set(60, ...moon);
     set(66, ...eclipse);
+    // the camera on the near body's axes [radii], in float64: an anchor in float32 and the rest (trace.wgsl:
+    // nearCam — turned there in float32, the ground shook by its rounding)
+    if (near) {
+      const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
+      const A = c.map((x) => Math.fround(x));
+      set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
+      set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
+    } else {
+      set(67, 0, 0, 0, 0);
+      set(68, 0, 0, 0, 0);
+    }
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
@@ -1863,9 +1876,13 @@ export class Renderer {
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
   /** the previous live frame's camera (axes, tan of the half field, aspect), pre-exposure, place */
-  private taPrev: { right: Vec3; up: Vec3; fwd: Vec3; tanH: number; asp: number; pre: number; r: number; region: string; near: { index: number; centre: Vec3; radius: number } | null } | null = null;
+  private taPrev: { right: Vec3; up: Vec3; fwd: Vec3; tanH: number; asp: number; pre: number; r: number; region: string; time: number; near: { index: number; centre: Vec3; radius: number; axes: [Vec3, Vec3, Vec3] } | null } | null = null;
   /** the reprojection's weights: a pixel a ray landed on, one between rays; the clamp's width [σ] */
   taParams: [number, number, number] = [0.25, 0.05, 2.0];
+  /** the near body's ground reprojected when the camera is carried with it (a switch for comparisons) */
+  carryGround = true;
+  /** (the last reprojection: the camera standing still on the near body's ground) */
+  taStill: { still: boolean; mMetres: number; turn: number } | null = null;
   /** the history is dropped on the next frame (a new scene, a jump) */
   resetTemporal() {
     this.taPrev = null;
@@ -1917,8 +1934,8 @@ export class Renderer {
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9);
     const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
     const ln = this.lastNear;
-    const near = ln ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius } : null;
-    this.taPrev = { right: [...cam.right], up: [...cam.up], fwd: [...cam.fwd], tanH, asp, pre, r: cam.r, region: cam.region, near };
+    const near = ln ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius, axes: ln.axes.map((a) => [...a]) as [Vec3, Vec3, Vec3] } : null;
+    this.taPrev = { right: [...cam.right], up: [...cam.up], fwd: [...cam.fwd], tanH, asp, pre, r: cam.r, region: cam.region, time: this.lastTime, near };
     if (!on) {
       // (refresh the history from the image: the next moving frame starts from it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
@@ -1932,13 +1949,31 @@ export class Renderer {
       const k = near.radius;
       move = [(p.near.centre[0] - near.centre[0]) * k, (p.near.centre[1] - near.centre[1]) * k, (p.near.centre[2] - near.centre[2]) * k];
     }
+    // (the near body's ground: within 30 of its radii — drawn afresh, not reprojected; unless the camera is
+    // carried with it — on the body's own axes, where it was to a centimetre and turned less than a quarter
+    // of a pixel: standing on a turning world, the view held or following the Sun. Its ground then stays
+    // where it was in the image: taken from the same pixel (the sky still turned). Drawn afresh in 2×2
+    // blocks each frame, its ridges — met by a ray march whose steps grow with the distance — came and
+    // went: the ground shook)
+    let still = false;
+    if (near && p.near && p.near.index === near.index) {
+      const onAxes = (v: Vec3, A: Vec3[]) => A.map((a) => v[0] * a[0]! + v[1] * a[1]! + v[2] * a[2]!);
+      const dist = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
+      const mMetres = dist(onAxes(near.centre, near.axes), onAxes(p.near.centre, p.near.axes)) * near.radius * 1476.625 * (s.massSolar || 1);
+      const turn = dist(onAxes(cam.fwd as Vec3, near.axes), onAxes(p.fwd, p.near.axes)) + dist(onAxes(cam.up as Vec3, near.axes), onAxes(p.up, p.near.axes));
+      // (and the light not changed at once: a new date, the history lit as it was — within 5 s of the
+      // scene's clock a frame, the Sun turns 0.02° over the ground)
+      const step = Math.abs(this.lastTime - p.time) * (1476.625 / 299792458) * (s.massSolar || 1);
+      still = this.carryGround && mMetres < 0.01 && turn < (0.25 * 2 * tanH) / t.height && step < 5; // (the centre's round-off: tenths of a millimetre)
+      this.taStill = { still, mMetres, turn };
+    }
     d.queue.writeBuffer(ta.buf, 0, new Float32Array([
       ...cam.right, tanH, ...cam.up, asp, ...cam.fwd, this.taParams[2],
       ...p.right, p.tanH, ...p.up, p.asp, ...p.fwd, 0,
       // (the history's exposure to this frame's; on; the weight of a pixel a ray landed on, of one between)
       pre / p.pre, 1, this.taParams[0], this.taParams[1],
-      // (the near body's ground: within 30 of its radii — drawn afresh, not reprojected)
-      ...move, near ? 30 * near.radius : 0,
+      // (w: the ground's reach — negative: carried with it, the same pixel)
+      ...move, near ? (still ? -30 : 30) * near.radius : 0,
     ]));
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
@@ -2089,6 +2124,7 @@ export class Renderer {
       this.meterPending = true;
       this.meterPre = preExposure(this.ev(s));
       this.meterSkyUsed = this.meterSky;
+      this.meterEVUsed = this.autoEVDrawn;
       this.device.queue.onSubmittedWorkDone().then(() =>
         this.histStage.mapAsync(GPUMapMode.READ).then(() => {
           const h = new Uint32Array(this.histStage.getMappedRange().slice(0));
@@ -2255,12 +2291,21 @@ export class Renderer {
     for (const c of h) total += c;
     if (!total) return;
     const Lof = (b: number) => 2 ** ((b + 0.5) / 1.5 - 48) / this.meterPre;
+    // (a quantile within its bin — its share of the bin's count, the bin's top down: the bins are 0.67 EV
+    // wide, a quantile falling now in one, now in the next, jumped the exposure by that much, to and fro)
+    const within = (b: number, before: number, need: number) => 2 ** ((b + 1 - (need - before) / Math.max(h[b]!, 1)) / 1.5 - 48) / this.meterPre;
     let acc = 0, Lhi = 0;
+    // (the sky's brightest, as the exposure the light falling here asks for would draw it — not the
+    // exposure in use: the sky's scale follows it, and a haze at that threshold made the meter swing
+    // 0.3 EV from one reading to the next, the image pumping)
+    const evRef = this.meterIncident > 0 ? Math.min(Math.max(Math.log2(0.4 / this.meterIncident), -6), 32) : this.meterEVUsed;
+    const skyRef = this.meterSkyUsed * 2 ** (this.meterEVUsed - evRef);
     for (let b = 127; b >= 1; b--) {
-      if (Lof(b) < this.meterSkyUsed) break;
+      if (Lof(b) < skyRef) break;
+      const before = acc;
       acc += h[b]!;
       if (acc >= 0.005 * total) {
-        Lhi = Lof(b);
+        Lhi = within(b, before, 0.005 * total);
         break;
       }
     }
@@ -2272,9 +2317,10 @@ export class Renderer {
     if (this.meterInAir) {
       let acc2 = 0;
       for (let b = 127; b >= 1; b--) {
+        const before = acc2;
         acc2 += h[b]!;
         if (acc2 >= 0.02 * total) {
-          m = Math.min(m, 1 / (this.meterGain * Lof(b)));
+          m = Math.min(m, 1 / (this.meterGain * within(b, before, 0.02 * total)));
           break;
         }
       }
@@ -2295,11 +2341,20 @@ export class Renderer {
       }
       return;
     }
-    // (eased over ~0.4 s; a jump of more than 6 EV — a new scene — at once)
+    // (eased over ~1 s, a third of the gap at most a reading — the eye's pace; the brightest pixels the
+    // exposure itself clips made a bolder easing swing from one reading to the next; a jump of more than
+    // 6 EV — a new scene — at once)
     if (!this.autoEVSet || Math.abs(target - this.autoEV) > 6) {
       this.autoEV = target;
       this.autoEVSet = true;
-    } else this.autoEV += (target - this.autoEV) * Math.min(1, dt / 0.4);
+    } else this.autoEV += (target - this.autoEV) * Math.min(0.3, dt / 1.0);
+    // (the scene moving — time running, the camera turning —: each frame is new anyway, the exposure
+    // follows it smoothly; in steps of a twentieth of a stop it flickered, the ground's brightness 6 % up
+    // and down from one frame to the next)
+    if (now - this.sceneAt < 250) {
+      this.autoEVDrawn = this.autoEV;
+      return;
+    }
     // (a new image only when it shows: the sky's scale is part of the scene)
     if (Math.abs(this.autoEV - this.autoEVDrawn) > 0.05) {
       this.autoEVDrawn = this.autoEV;
