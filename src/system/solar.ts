@@ -389,14 +389,12 @@ export function seenFrom(id: string, t: number, obs: Vec3): { pos: Vec3; vel: Ve
 /** The share of a disk of angular radius rs left uncovered by one of radius rm, their centres d apart [rad]. */
 export function diskShare(rs: number, rm: number, d: number): number {
   if (d >= rs + rm) return 1;
-  let a: number;
-  if (d <= Math.abs(rm - rs)) a = Math.PI * Math.min(rs, rm) ** 2;
-  else {
-    const k1 = Math.min(Math.max((d * d + rs * rs - rm * rm) / (2 * d * rs), -1), 1);
-    const k2 = Math.min(Math.max((d * d + rm * rm - rs * rs) / (2 * d * rm), -1), 1);
-    const k3 = Math.max((-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm), 0);
-    a = rs * rs * Math.acos(k1) + rm * rm * Math.acos(k2) - 0.5 * Math.sqrt(k3);
-  }
+  // A fully covered disk has exactly zero light; dividing its area back out can leave roundoff.
+  if (d <= Math.abs(rm - rs)) return rm >= rs ? 0 : 1 - (rm / rs) ** 2;
+  const k1 = Math.min(Math.max((d * d + rs * rs - rm * rm) / (2 * d * rs), -1), 1);
+  const k2 = Math.min(Math.max((d * d + rm * rm - rs * rs) / (2 * d * rm), -1), 1);
+  const k3 = Math.max((-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm), 0);
+  const a = rs * rs * Math.acos(k1) + rm * rm * Math.acos(k2) - 0.5 * Math.sqrt(k3);
   return Math.min(Math.max(1 - a / (Math.PI * rs * rs), 0), 1);
 }
 
