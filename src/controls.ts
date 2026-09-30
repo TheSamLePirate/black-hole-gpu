@@ -603,6 +603,8 @@ export class CameraController {
     if (w.ours) setHomePose(s, w.X, w.fwd, u);
     else setHolePose(s, w.X, w.fwd, u);
     [s.velR, s.velT, s.velP] = vel;
+    // (the rig's own place, re-expressed: not a move from outside)
+    this.rig.placed = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
     return true;
   }
 
@@ -3024,6 +3026,8 @@ export class CameraController {
     dolly: 0,
     /** what the last placement was made from and wrote (the same again: nothing to redo) */
     stamp: "",
+    /** where the last placement put the camera (moved since by something else: the rig starts afresh) */
+    placed: "",
   };
 
   /** Around a planet, a moon (the rig), not the classic orbit's hole, star, mouth. */
@@ -3090,6 +3094,7 @@ export class CameraController {
     this.targetDistance = s.distance;
     this.targetL = s.whL;
     this.written = "";
+    this.rig.placed = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
   }
 
   /** One frame of the rig; false: not its to move (the classic camera then does). */
@@ -3101,15 +3106,24 @@ export class CameraController {
     if (this.piloting || s.ship || this.flyMode || (mode === "orbit" && !this.rigOrbits())) return false;
     const w = this.rigWorld();
     if (!w) return false;
-    const t = this.nowTime();
+    // (moved by something else since the rig placed it — a scene, a jump: from where it is now)
+    const where = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
+    if (R.key && R.placed && where !== R.placed) R.key = "";
+    // two times: now — where the camera is was placed for it (read it then) — and the time the frame shows
+    // (the simulation moves its clock on after this step): the camera placed for that. Placed for now, it
+    // lagged the world it stands on by a frame's motion — 30 km/s × a frame: the ground shook
+    const tNow = this.nowTime();
+    const t = tNow + (s.animate && s.timeSpeed > 0 ? dt * s.timeSpeed : 0);
     // the body it moves with: the target (around, following), else the nearest (free: the nearest now,
     // taking over when much nearer; the tripod: the one it stands on)
     let ref = mode === "orbit" || mode === "follow" ? this.rigBody(s.target, w.ours, t) : this.rigBody(R.ref, w.ours, t);
     if (mode === "free" || mode === "tripod") {
-      const n = this.rigNearest(w.ours, w.X, t);
-      const dist = (b: NonNullable<typeof ref>) => (Math.hypot(...sub3(w.X, b.C)) - b.R) / b.R;
+      const n = this.rigNearest(w.ours, w.X, tNow);
+      const dist = (b: NonNullable<typeof ref>) => (Math.hypot(...sub3(w.X, this.rigBody(b.id, w.ours, tNow)?.C ?? b.C)) - b.R) / b.R;
       if (!ref || (mode === "free" && n && n.id !== ref.id && dist(n) < 0.7 * dist(ref)) || (mode === "free" && dist(ref) > 60)) ref = n;
     }
+    // (the body as the frame shows it)
+    if (ref) ref = this.rigBody(ref.id, w.ours, t);
     if (!ref) {
       R.key = "";
       R.ref = null;
@@ -3117,7 +3131,8 @@ export class CameraController {
     }
     R.on = true;
     const key = `${mode}|${s.target}|${ref.id}|${w.ours}`;
-    const rel = sub3(w.X, ref.C);
+    // (the camera from the body, both now)
+    const rel = sub3(w.X, this.rigBody(ref.id, w.ours, tNow)!.C);
     const mR = 1476.625 * s.massSolar; // metres per M
     if (key !== R.key) {
       // (a new behaviour, target or body: from where the camera is)
@@ -3131,12 +3146,12 @@ export class CameraController {
       R.alt = Math.max(d - ref.R, 50 / mR);
       R.az = (Math.atan2(rel[1], rel[0]) * 180) / Math.PI;
       R.el = (Math.asin(clamp(rel[2] / d, -1, 1)) * 180) / Math.PI;
-      R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, t) : null;
+      R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, tNow) : null;
       R.look = null;
     }
     // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
     // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
-    const h = Math.max(Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) - ref.R - this.reliefUnder(ref, w, t) / mR, 1 / mR);
+    const h = Math.max(Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) - ref.R - this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR, 1 / mR);
     const v = 0.8 * h * this.flySpeed * (fast ? 3 : 1);
     const want = lin(lin(w.fwd, move[0]! * v, w.right, move[1]! * v), 1, w.up, move[2]! * v);
     R.vel = lin(R.vel, 1, sub3(want, R.vel), 1 - Math.exp(-dt / 0.12));
@@ -3157,7 +3172,7 @@ export class CameraController {
       // (fixed: its height from where it is fixed — the camera's last place is a frame behind the world)
       const hr = (Math.hypot(...(R.fixed ?? rel)) - ref.R) / ref.R;
       const low = hr < (R.fixed ? 0.03 : 0.02);
-      if (low && !R.fixed) (R.fixed = this.rigFix(ref.id, w.ours, w.X, t)), (R.look = null);
+      if (low && !R.fixed) (R.fixed = this.rigFix(ref.id, w.ours, w.X, tNow)), (R.look = null);
       else if (!low && R.fixed) (R.fixed = null), (R.off = rel), (R.look = null);
     }
     if (R.fixed && (mode === "tripod" || mode === "free")) {

@@ -106,7 +106,12 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
     for (const b of sys.bodies.filter((q) => traced(q) && q.universe === "ours")) {
       if (out.length >= MAX_BODIES) break;
       // (seen with the light's delay from the camera: the Moon 1.3 s ago, Jupiter 40 min — its turning too)
-      const seen = obs && solarBody(b.id) ? seenFrom(b.id, t, obs) : null;
+      // (not the world the camera is at — within 50 of its radii: its near side's light takes no time, the
+      // whole of it moved by its centre's delay would shift the ground under the camera by hundreds of metres)
+      const sb0 = obs ? solarBody(b.id) : undefined;
+      const now0 = sb0 ? bodyState(sys, b.id, t).pos : null;
+      const far = !!now0 && Math.hypot(now0[0] - obs![0], now0[1] - obs![1], now0[2] - obs![2]) > 50 * sb0!.radius;
+      const seen = far ? seenFrom(b.id, t, obs!) : null;
       const st = seen ?? bodyState(sys, b.id, t);
       const ts = seen?.t ?? t;
       const reach = b.radius * Math.max(b.rings?.outer ?? 1, 1);
