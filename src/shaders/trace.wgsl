@@ -2222,12 +2222,24 @@ fn catalogueCell(d: vec3f, grid: u32) -> u32 {
 
 // The real sky: NASA/Goddard SVS Deep Star Maps 2020 (Gaia DR2 stars fainter than Tycho, as a
 // diffuse map) + the 119 614 HYG/Hipparcos stars as exact point sources, each a blackbody at its
-// B−V temperature seen at g·T. Directions are rotated into ICRS equatorial coordinates.
-fn realSky(dB: vec3f, g: f32, fpB: Footprint) -> vec3f {
-  let d = vec3f(dot(P.skyX.xyz, dB), dot(P.skyY.xyz, dB), dot(P.skyZ.xyz, dB));
+// B−V temperature seen at g·T. Directions are rotated into ICRS equatorial coordinates: the black hole's
+// universe by the chosen orientation (skyMatrix: the galactic centre behind the hole), ours — the home
+// frame on J2000 ecliptic axes — by the obliquity alone: the constellations where they are in our sky
+// (they once took the black hole's orientation too, Orion wherever it fell).
+fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
+  var RX = P.skyX.xyz;
+  var RY = P.skyY.xyz;
+  var RZ = P.skyZ.xyz;
+  if (home) {
+    // (J2000 ecliptic → ICRS: about x by −ε, ε = 84 381.448″)
+    RX = vec3f(1.0, 0.0, 0.0);
+    RY = vec3f(0.0, 0.91748206, -0.39777716);
+    RZ = vec3f(0.0, 0.39777716, 0.91748206);
+  }
+  let d = vec3f(dot(RX, dB), dot(RY, dB), dot(RZ, dB));
   var fp: Footprint;
-  fp.jx = vec3f(dot(P.skyX.xyz, fpB.jx), dot(P.skyY.xyz, fpB.jx), dot(P.skyZ.xyz, fpB.jx));
-  fp.jy = vec3f(dot(P.skyX.xyz, fpB.jy), dot(P.skyY.xyz, fpB.jy), dot(P.skyZ.xyz, fpB.jy));
+  fp.jx = vec3f(dot(RX, fpB.jx), dot(RY, fpB.jx), dot(RZ, fpB.jx));
+  fp.jy = vec3f(dot(RX, fpB.jy), dot(RY, fpB.jy), dot(RZ, fpB.jy));
   // Milky Way map: u = 0.5 − RA/360°, v = (90° − Dec)/180°
   let uv = vec2f(fract(0.5 - atan2(d.y, d.x) / TAU), acos(clamp(d.z, -1.0, 1.0)) / PI);
   let gx = equirectGrad(d, fp.jx) * vec2f(-1.0, 1.0);
@@ -2309,7 +2321,7 @@ fn backgroundSky(d: vec3f, g: f32, fp: Footprint, sky: f32) -> vec3f {
     return tex * shiftRatio(6500.0, g) * intensity;
   }
   if (mode == 3u && P.skyY.w > 0.5) {
-    return realSky(d, g, fp) * intensity;
+    return realSky(d, g, fp, sky > 1.5) * intensity;
   }
   let filt = skyFilter(d, fp, P.time.w);
   var col = milkyWay(d, g, filt.radius);
