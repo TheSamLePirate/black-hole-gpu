@@ -455,8 +455,19 @@ async function main() {
       return (e as Error).message;
     }
   }
+  /** The camera set down on a world, on its tripod, looking at the horizon (⇧T; the camera panel). */
+  function standOn(b?: Target): string | null {
+    if (settings.ship) return "The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down";
+    const why = camera.standOn(b as Parameters<typeof camera.standOn>[0]);
+    if (why) return why;
+    const on = camera.rigStatus()?.body;
+    panel.toast(`Tripod on ${on ? BODY_NAMES[on as Target] : "the ground"} — drag to look around, the keys walk it, V another view`);
+    refreshGui();
+    touch();
+    return null;
+  }
   camPanel = new CameraPanel({
-    settings, camera, view, setView: (v) => setView(v), setMount: (m) => setMount(m), cinematic, goTo,
+    settings, camera, view, setView: (v) => setView(v), setMount: (m) => setMount(m), cinematic, goTo, standOn,
     changed: (keys) => onSettingsChange(keys), toast: (t) => panel.toast(t),
   });
 
@@ -797,7 +808,10 @@ async function main() {
     else if (k === "y") toggleTelescope();
     else if (k === "o") cinematic("orbit");
     else if (k === "c") cinematic("dive");
-    else if (k === "t") cinematic("journey");
+    else if (k === "t" && e.shiftKey) {
+      const why = standOn();
+      if (why) panel.toast(why);
+    } else if (k === "t") cinematic("journey");
     else if (k === "b") setView(view() === "fall" ? "free" : "fall");
     else if (k === "g") toggle("shadowGuide");
     else if (k === "j") toggle("jet");

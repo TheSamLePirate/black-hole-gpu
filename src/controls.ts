@@ -1686,6 +1686,7 @@ export class CameraController {
     this.warpAfter = null;
     this.restoreWarp();
     if (!on) {
+      this.stepOffMount();
       s.shipLookYaw = s.shipLookPitch = 0;
       if (this.gravity) this.setGravity(false);
       return;
@@ -1701,6 +1702,76 @@ export class CameraController {
       const v = circularSpeed(cam.r, s.spin, true, cam.zamo);
       if (v !== null && cam.r > isco(s.spin)) [s.velR, s.velT, s.velP] = [0, 0, v];
     }
+  }
+
+  /**
+   * Leaving the ship: the camera where its eye was. The pose is the ship's centre, the eye its attach
+   * point's — metres on the hull, tens to kilometres outside: off the ship, the view would jump there
+   * (into the hull, under the ground it stood on).
+   */
+  private stepOffMount() {
+    const s = this.s;
+    const t = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+    const w = t.some((x) => x !== 0) ? this.rigWorld() : null;
+    if (!w) return;
+    // (t: the ship's centre from the eye, on the camera's axes [m] — the eye is the other way)
+    const k = -1 / (1476.625 * s.massSolar);
+    const X = lin(lin(w.X, 1, w.right, t[0] * k), 1, lin(w.up, t[1] * k, w.fwd, t[2] * k), 1);
+    const motion = s.motion;
+    if (w.ours) setHomePose(s, X, w.fwd, w.up);
+    else setHolePose(s, X, w.fwd, w.up);
+    s.motion = motion;
+    this.targetDistance = s.distance;
+    this.targetL = s.whL;
+    this.written = "";
+  }
+
+  /**
+   * The camera on the ground: a tripod standing on a world (the one given, else the target when it is
+   * one, else the nearest), 1.7 m above its relief under the camera — or where the camera faces it from
+   * afar —, level, looking at the horizon the way the camera faced. Why it cannot, or null.
+   */
+  standOn(b?: Body): string | null {
+    const s = this.s;
+    if (this.piloting) return "The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)";
+    const w = this.rigWorld();
+    if (!w) return "No world to stand on here";
+    const t = this.nowTime();
+    const solid = (id: Body) => (w.ours ? solidBody(id) : ["miller", "mann", "edmunds"].includes(id));
+    const pick = (id: Body | null | undefined) => (id && solid(id) ? this.rigBody(id, w.ours, t) : null);
+    const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t));
+    if (!ref || !solid(ref.id)) return "Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)";
+    const up = unitV(sub3(w.X, ref.C));
+    const mR = 1476.625 * s.massSolar;
+    let X = lin(ref.C, 1, up, ref.R);
+    let V = ref.V;
+    if (w.ours) {
+      X = lin(ref.C, 1, up, ref.R + (groundRelief(ref.id, toBodyFixed(ref.id, X, t)) + 1.7) / mR);
+      V = groundVelocity(ref.id, X, t);
+    } else {
+      const F = planetFrame(ref.id as "miller" | "mann" | "edmunds", t, s.spin, s.massSolar);
+      const xi = toLocal(F, X, F.V).xi;
+      const g = groundR(F, xi);
+      const P = toGlobal(F, { xi: lin(xi, (g + 1.7 / F.mPerM) / Math.hypot(...xi), xi, 0), w: [0, 0, 0], landed: true });
+      [X, V] = [P.X, P.V];
+    }
+    // (the heading: the camera's forward on the horizon — looking straight down, its up)
+    let f = sub3(w.fwd, lin(up, dot3(w.fwd, up), up, 0));
+    if (Math.hypot(...f) < 1e-3) f = sub3(w.up, lin(up, dot3(w.up, up), up, 0));
+    f = unitV(f);
+    this.setCinematic(null);
+    if (this.gravity) this.setGravity(false);
+    this.setOurLanded(null);
+    this.flyMode = false;
+    s.lookAt = false;
+    s.telescope = false;
+    s.rotation = "tripod";
+    this.rigPlace(w.ours, X, f, up, V);
+    this.rig.key = ""; // (the tripod fixed where it now stands)
+    this.leveling = false;
+    this.activity = performance.now();
+    this.onCinematicChange(this.cinematic);
+    return null;
   }
 
   /**
@@ -2922,6 +2993,8 @@ export class CameraController {
     pitchOff: 0,
     vel: [0, 0, 0] as Vec3,
     dolly: 0,
+    /** what the last placement was made from and wrote (the same again: nothing to redo) */
+    stamp: "",
   };
 
   /** Around a planet, a moon (the rig), not the classic orbit's hole, star, mouth. */
@@ -3033,19 +3106,43 @@ export class CameraController {
       R.look = null;
     }
     // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
-    const h = Math.max(Math.hypot(...(mode === "follow" || mode === "free" ? R.off : rel)) - ref.R, 1 / mR);
+    // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
+    const h = Math.max(Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) - ref.R - this.reliefUnder(ref, w, t) / mR, 1 / mR);
     const v = 0.8 * h * this.flySpeed * (fast ? 3 : 1);
     const want = lin(lin(w.fwd, move[0]! * v, w.right, move[1]! * v), 1, w.up, move[2]! * v);
     R.vel = lin(R.vel, 1, sub3(want, R.vel), 1 - Math.exp(-dt / 0.12));
+    if (!move.some((x) => x !== 0) && Math.hypot(...R.vel) < 1e-3 * h) R.vel = [0, 0, 0]; // (glided to a stop: a thousandth of the height per second)
     let step = lin(R.vel, dt, w.fwd, R.dolly * h);
     R.dolly = 0;
     const floor = (X: Vec3) => {
-      // (not below the surface: a metre above its mean sphere at least)
+      // (not below the surface: a metre above its relief — where known —, its mean sphere else)
       const r = sub3(X, ref!.C);
       const l = Math.hypot(...r);
-      const m = ref!.R + 1 / mR;
+      const g = w.ours && solidBody(ref!.id) && l < ref!.R * 1.01 ? groundRelief(ref!.id, toBodyFixed(ref!.id, X, t)) : 0;
+      const m = ref!.R + (g + 1) / mR;
       return l < m ? lin(ref!.C, 1, r, m / l) : X;
     };
+    if (mode === "free") {
+      // near the ground (under a fiftieth of the radius: the Earth's 130 km, the Moon's 35), carried by
+      // it — turning with the world, the view with it —, as one standing there; higher, by its centre
+      // (fixed: its height from where it is fixed — the camera's last place is a frame behind the world)
+      const hr = (Math.hypot(...(R.fixed ?? rel)) - ref.R) / ref.R;
+      const low = hr < (R.fixed ? 0.03 : 0.02);
+      if (low && !R.fixed) (R.fixed = this.rigFix(ref.id, w.ours, w.X, t)), (R.look = null);
+      else if (!low && R.fixed) (R.fixed = null), (R.off = rel), (R.look = null);
+    }
+    if (R.fixed && (mode === "tripod" || mode === "free")) {
+      // (above the ground once its relief is known — the Earth's comes with its maps: set down before,
+      // the tripod stood on the sea-level sphere, inside the mountains)
+      const P = this.rigUnfix(ref.id, w.ours, R.fixed, t);
+      const F = P && floor(P.X);
+      if (P && F !== P.X) R.fixed = this.rigFix(ref.id, w.ours, F!, t) ?? R.fixed;
+    }
+    // (the same time, no key, nothing changed since the last placement: the camera is where it would be
+    // put again — not rewritten, the round trip's last bits would move it each frame, and a paused image
+    // would never refine)
+    const stamp = () => [t, key, R.az, R.el, R.alt, R.yawOff, R.pitchOff, ...R.off, ...(R.fixed ?? []), s.lookAt, this.poseKey(), s.velR, s.velT].join();
+    if (step.every((x) => x === 0) && !move.some((x) => x !== 0) && R.stamp === stamp()) return true;
     if (mode === "orbit") {
       // around: the keys too — forwards / back the distance, sideways and up / down about it
       R.alt = clamp(R.alt * Math.exp(-move[0]! * dt * (fast ? 3 : 1)), 1 / mR, 1e6);
@@ -3057,7 +3154,7 @@ export class CameraController {
       const fwd = unitV(sub3(ref.C, X));
       const upRef: Vec3 = Math.abs(fwd[2]) > 0.98 ? [0, 1, 0] : [0, 0, 1];
       this.rigPlace(w.ours, X, fwd, unitV(sub3(upRef, lin(fwd, dot3(upRef, fwd), fwd, 0))), ref.V);
-    } else if (mode === "tripod") {
+    } else if (mode === "tripod" || (mode === "free" && R.fixed)) {
       if (Math.hypot(...step) > 0 && R.fixed) {
         // (moved: from where the tripod stands now on the body)
         const P0 = this.rigUnfix(ref.id, w.ours, R.fixed, t);
@@ -3081,6 +3178,14 @@ export class CameraController {
         if (o && fX && uX) this.rigPlace(w.ours, X, unitV(sub3(fX, o.X)), unitV(sub3(uX, o.X)), V);
         else this.rigPlace(w.ours, X, w.fwd, w.up, V);
         R.lookKey = [s.yaw, s.pitch, s.roll].join();
+        R.stamp = stamp();
+        if (move.some((x) => x !== 0)) this.activity = performance.now();
+        return true;
+      }
+      if (mode === "free") {
+        // (locked on the target: the tracking aims it)
+        this.rigPlace(w.ours, X, w.fwd, w.up, V);
+        R.stamp = stamp();
         if (move.some((x) => x !== 0)) this.activity = performance.now();
         return true;
       }
@@ -3101,8 +3206,15 @@ export class CameraController {
       R.off = sub3(floor(lin(ref.C, 1, lin(R.off, 1, step, 1), 1)), ref.C);
       this.rigPlace(w.ours, lin(ref.C, 1, R.off, 1), w.fwd, w.up, ref.V);
     }
+    R.stamp = stamp();
     if (move.some((x) => x !== 0)) this.activity = performance.now();
     return true;
+  }
+
+  /** The ground's height above a world's mean sphere under the camera [m] (known: our solid worlds'). */
+  private reliefUnder(ref: { id: Body; C: Vec3; R: number }, w: { ours: boolean; X: Vec3 }, t: number) {
+    if (!w.ours || !solidBody(ref.id) || Math.hypot(...sub3(w.X, ref.C)) > 1.01 * ref.R) return 0;
+    return groundRelief(ref.id, toBodyFixed(ref.id, w.X, t));
   }
 
   /** A place on a body's own (turning) axes: ours — its body-fixed axes [M]; Gargantua's planets — their frame's ξ. */

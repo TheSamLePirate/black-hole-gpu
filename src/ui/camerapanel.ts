@@ -22,7 +22,7 @@ export const VIEW_HELP: Record<View, string> = {
   orbit: "Circles the target — drag to turn about it, scroll to come closer",
   follow: "Moves with the target — drag to look around, fly to shift the camera",
   free: "Flies freely, carried by the nearest world — drag to look around",
-  tripod: "Stands on the nearest world and turns with it — a time-lapse's camera",
+  tripod: "Fixed on the nearest world, turning with it — a time-lapse's camera (⇧T: set down on the ground)",
   fall: "A massive body in free fall along its geodesic — the keys thrust",
 };
 /** Their glyphs (24 × 24 line icons). */
@@ -47,6 +47,7 @@ const ICON = {
   ahead: '<path d="M4 12h13M13 7l5 5-5 5"/>',
   frame: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3" class="f"/>',
   go: '<path d="M5 19L19 5M10 5h9v9"/>',
+  ground: '<path d="M2 20h20"/><path d="M12 6v6M12 12l-5 8M12 12l5 8"/><rect x="9" y="3" width="6" height="4" rx="1"/>',
   orbit: '<path d="M19.2 8.4A8 8 0 1 1 15.6 4.9"/><circle cx="12" cy="12" r="2.2" class="f"/><circle cx="18" cy="6" r="2" class="f"/>',
   dive: '<path d="M12 3v14"/><path d="M6.5 12.5 12 18l5.5-5.5"/><path d="M5 21h14"/>',
   journey: '<ellipse cx="6" cy="12" rx="2.2" ry="6"/><ellipse cx="18" cy="12" rx="2.2" ry="6"/><path d="M6 6c4 3 8 3 12 0M6 18c4-3 8-3 12 0"/>',
@@ -72,6 +73,9 @@ const OBSERVER: [Settings["motion"], string, string][] = [
   ["forward", "Boost", "Moving forwards at β: the searchlight effect"],
 ];
 
+/** The worlds one can stand on: our planets and moons with a ground, Gargantua's three. */
+const SOLID = new Set<Target>([...SOLAR_BODIES.filter((b) => b.kind === "planet" && b.surface !== "gas").map((b) => b.id as Target), "miller", "mann", "edmunds"]);
+
 /** A lens's focal lengths on a 35 mm frame [mm], and the telescope's. */
 const LENSES = [14, 24, 35, 50, 85, 200, 600];
 const SCOPES = [2000, 8000, 20000, 70000];
@@ -90,6 +94,8 @@ export interface CameraPanelDeps {
   cinematic(c: "orbit" | "dive" | "journey"): void;
   /** the camera taken to a body (anywhere in the world: through the wormhole too); why not, or null */
   goTo(b: Target): string | null;
+  /** the camera on a tripod on a world's ground (the target, the nearest), facing the horizon; why not, or null */
+  standOn(b?: Target): string | null;
   /** settings the panel changed (routed like the settings panel's) */
   changed(keys: (keyof Settings)[]): void;
   toast(t: string): void;
@@ -219,7 +225,12 @@ export class CameraPanel {
     const tiles = h("div", "cp-tiles cp-tiles-5");
     const now = this.d.view();
     for (const v of VIEWS) tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v)));
-    sec.append(tiles);
+    const row = h("div", "cp-chips");
+    row.append(this.chip(ICON.ground, "Set down on the ground", "The tripod on the target's ground when it is a world, else the nearest one's — level, looking at the horizon", false, () => {
+      const why = this.d.standOn();
+      if (why) this.d.toast(why);
+    }, "⇧T"));
+    sec.append(tiles, row);
   }
 
   private shipViews() {
@@ -311,6 +322,10 @@ export class CameraPanel {
       const why = this.d.goTo(s.target);
       if (why) this.d.toast(why);
     }));
+    if (!s.ship && SOLID.has(s.target)) acts.append(this.chip(ICON.ground, `Stand on ${name}`, "A tripod on its ground, under where the camera is (or on the side facing it), level, looking at the horizon", false, () => {
+      const why = this.d.standOn(s.target);
+      if (why) this.d.toast(why);
+    }, "⇧T"));
     const lists = h("div", "cp-groups");
     const fill = () => {
       lists.replaceChildren();

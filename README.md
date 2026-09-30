@@ -164,7 +164,10 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
   freely (B); with it, its six mounts, around it, free, or a fly-by. Choosing one never moves the camera.
 - **Look at the target** (C) in every view — the free and falling cameras, the follow camera, the ship's
   mounts (the look turns on its mount), around the ship (behind it on the target's line). The tripod
-  without it keeps a view fixed to its ground: the sky wheels over it.
+  without it keeps a view fixed to its ground: the sky wheels over it. **⇧T sets it down** on a world —
+  the target's, else the nearest —, 1.7 m above its relief, level, facing the horizon. The free camera
+  near a world's ground (under a fiftieth of its radius) is carried by it, turning with it; leaving the
+  ship, the camera stays where its eye was (a mount outside is metres to kilometres from its centre).
 - **Telescope** (Y): fields down to 0.02°, held on the target, eased zoom on the wheel, a reticle with the
   angular scale, the focal length and the target's size and distance — the wormhole a lensed degree-wide
   sphere from the Earth, and through it Gargantua's sky.
@@ -401,7 +404,7 @@ the black hole's universe: the way back home).
 
 Keys: space time · , . / warp and real time · V view · C look at the target · Y telescope · Tab target ·
 O cinematic orbit · ⇧C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the rain frame) ·
-T wormhole journey · B free fall · middle click mouse look · J jet · G shadow guide · L liquid wormhole ·
+T wormhole journey · ⇧T tripod on the ground · B free fall · middle click mouse look · J jet · G shadow guide · L liquid wormhole ·
 K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · ⌘K search · ⌘Z undo ·
 1–6 quality · P PNG · F fullscreen · H hide UI.
 

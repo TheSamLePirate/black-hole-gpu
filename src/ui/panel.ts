@@ -962,6 +962,7 @@ export class SettingsPanel {
         ["Middle click", "Mouse look, game-style (Esc leaves)"],
         ["B", "Free fall along the geodesic (the keys thrust) ⟷ free"],
         ["O · ⇧C · T", "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)"],
+        ["⇧T", "Tripod on the ground: the target's world (else the nearest), level, facing the horizon"],
       ]],
       ["Scene", [
         ["J · G", "Jet · shadow guide"],
