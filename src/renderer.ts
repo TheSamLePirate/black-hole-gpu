@@ -314,6 +314,10 @@ export class Renderer {
   autoEV = 0;
   private autoEVSet = false;
   private autoEVDrawn = 0;
+  /** when the scene last changed (not the meter's own redraws) [ms] */
+  private sceneAt = 0;
+  /** the meter asked for the last redraw */
+  private evRedraw = false;
   /** called when assets loaded in the background change the image (the loop redraws) */
   onAssets: (() => void) | null = null;
   private catalogue: GPUBuffer;
@@ -2254,6 +2258,18 @@ export class Renderer {
     const now = performance.now();
     const dt = Math.min((now - this.meterAt) / 1000, 1);
     this.meterAt = now;
+    // (the scene still a quarter of a second — paused, the camera at rest —: the image refines, and its own noise
+    // going moves the meter; the exposure held, a new image only for a real change, at once — before, each
+    // drift of a twentieth of a stop restarted the refining, over and over)
+    if (this.autoEVSet && now - this.sceneAt > 250) {
+      this.meterAt = now;
+      if (Math.abs(target - this.autoEVDrawn) > 1) {
+        this.autoEV = this.autoEVDrawn = target;
+        this.evRedraw = true;
+        this.onAssets?.();
+      }
+      return;
+    }
     // (eased over ~0.4 s; a jump of more than 6 EV — a new scene — at once)
     if (!this.autoEVSet || Math.abs(target - this.autoEV) > 6) {
       this.autoEV = target;
@@ -2262,6 +2278,7 @@ export class Renderer {
     // (a new image only when it shows: the sky's scale is part of the scene)
     if (Math.abs(this.autoEV - this.autoEVDrawn) > 0.05) {
       this.autoEVDrawn = this.autoEV;
+      this.evRedraw = true;
       this.onAssets?.();
     }
   }
@@ -2323,6 +2340,8 @@ export class Renderer {
     const cv = this.context.canvas as HTMLCanvasElement;
     if (cv.width !== t.width || cv.height !== t.height) return null;
 
+    if ((sceneChanged && !this.evRedraw) || timeChanged) this.sceneAt = performance.now();
+    this.evRedraw = false;
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
     this.prof.begin();
