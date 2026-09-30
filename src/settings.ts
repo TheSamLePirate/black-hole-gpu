@@ -529,6 +529,13 @@ export const presets: Record<string, Preset> = {
     ...EARTH_VIEW, ship: false, target: "sun", lookAt: true, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
     pose: { at: [42.34, -3.7], look: "sun" },
   },
+  // the same eclipse from 3 000 km over the Labrador Sea, the Sun behind the camera: the Moon's shadow on the
+  // clouds west of Iceland at greatest eclipse (17:45:56 UTC, γ 0.8977), the penumbra dimming the Arctic
+  // around it (DE440)
+  "Earth: the Moon's shadow from orbit, 12 Aug 2026": {
+    ...EARTH_VIEW, ship: false, target: "earth", rotation: "free", lookAt: false, fov: 34, time: (Date.UTC(2026, 7, 12, 17, 45, 50) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [52, -40], altKm: 3000, aim: [65.2, -25.2], off: [0, 3] },
+  },
   "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0 + 0.358 * DAY, pose: { at: SANTIAGO, look: "sun", off: [0, 6] } },
   // Santiago, a quarter of an hour later: the full Moon rising over the Andes (a telephoto)
   "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3945 * DAY, pose: { at: SANTIAGO, look: "moon", off: [0, -2] } },

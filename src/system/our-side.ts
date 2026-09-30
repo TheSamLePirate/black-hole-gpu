@@ -178,7 +178,7 @@ export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
  * A view of one of our bodies (the scenes; the Earth by default): on its ground at a latitude, east
  * longitude [°] — the ship on its gear, level — or `altKm` above that place, on a circular orbit
  * eastwards; turned towards a body (the Moon, the Sun, the body itself, any of ours), then off it by
- * [yaw, pitch]° (yaw > 0: to the left). On the ground the nose points under the body, level; in orbit
+ * [yaw, pitch]° (yaw > 0: to the left) — or at a place of the body (`aim`). On the ground the nose points under the body, level; in orbit
  * at it (the look is then turned onto it and off it as the camera sees it: main.ts, aimAt).
  * Whatever the date: `phase` places an orbit at that angle from the point under the Sun (0: its full
  * face seen, 90: half lit — eastwards, the evening side), `sunEl` a place on the ground at the
@@ -191,6 +191,8 @@ export interface BodyView {
   phase?: number;
   sunEl?: number;
   look?: string;
+  /** (no `look`) the nose at a place of the body instead: its latitude, east longitude [°] */
+  aim?: [number, number];
   off?: [number, number];
   /** in orbit: the ship's nose that far [°] below the body, its back towards it (the look turned onto
    *  the body passes over the cockpit: the hull out of the image) */
@@ -256,7 +258,7 @@ export function bodyView(t: number, v: BodyView) {
     vel = [B.vel[0] + vc * east[0], B.vel[1] + vc * east[1], B.vel[2] + vc * east[2]];
   }
   // the body's direction (the Moon's from here: its parallax is a degree)
-  const P = v.look ? ourState(v.look, t).pos : null;
+  const P = v.look ? ourState(v.look, t).pos : v.aim ? fromBodyFixed(id, bodyFixedOf(id, v.aim[0], v.aim[1], 0), t) : null;
   const dir = P ? unit([P[0] - X[0], P[1] - X[1], P[2] - X[2]]) : east;
   if (landed) {
     const el = Math.asin(Math.max(-1, Math.min(1, dot(dir, up))));

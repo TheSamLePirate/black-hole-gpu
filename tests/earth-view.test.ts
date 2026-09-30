@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { bodyView, earthView, ourState } from "../src/system/our-side";
-import { gearHeight } from "../src/system/our-surface";
+import { bodyFixedOf, fromBodyFixed, gearHeight } from "../src/system/our-surface";
 import { presets } from "../src/settings";
 
 // The Earth's scenes' placements: on the ground, the ship level on its gear, its nose under the body
@@ -39,13 +39,21 @@ test("in orbit: the nose on the Earth's centre, the north up, a circular speed",
 
 test("the Earth's scenes all place the camera", () => {
   const names = Object.keys(presets).filter((n) => n.startsWith("Earth:"));
-  expect(names.length).toBe(13);
+  expect(names.length).toBe(14);
   for (const n of names) {
     const p = presets[n]!;
     expect(typeof p.pose).toBe("object");
     const v = earthView(p.time!, p.pose as Parameters<typeof earthView>[1]);
     expect(v.X.every(Number.isFinite)).toBe(true);
   }
+});
+
+test("a view aimed at a place: the nose on it (the Moon's shadow from orbit)", () => {
+  const p = presets["Earth: the Moon's shadow from orbit, 12 Aug 2026"]!;
+  const pose = p.pose as Parameters<typeof bodyView>[1];
+  const v = bodyView(p.time!, pose);
+  const Q = fromBodyFixed("earth", bodyFixedOf("earth", pose.aim![0], pose.aim![1], 0), p.time!);
+  expect(dot(v.fwd, unit([Q[0] - v.X[0], Q[1] - v.X[1], Q[2] - v.X[2]]))).toBeGreaterThan(1 - 1e-9);
 });
 
 // Any of our worlds: an orbit placed by its phase (the angle at the body from the Sun to the camera),
@@ -75,6 +83,6 @@ test("other worlds: the phase, the Sun's height, the tilt", () => {
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(13 + 27);
+  expect(worlds.length).toBe(14 + 27);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });
