@@ -277,6 +277,7 @@ async function main() {
     // (a scene without the ship: the view is placed, not falling)
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
+    camera.settleMount();
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards

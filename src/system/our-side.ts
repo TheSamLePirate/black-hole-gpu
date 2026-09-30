@@ -182,7 +182,8 @@ export function earthGround(t = 0, lat = 28.573, lon = -80.649) {
  * at it (the look is then turned onto it and off it as the camera sees it: main.ts, aimAt).
  * Whatever the date: `phase` places an orbit at that angle from the point under the Sun (0: its full
  * face seen, 90: half lit — eastwards, the evening side), `sunEl` a place on the ground at the
- * latitude at[0] where the Sun stands that high [°] (the afternoon's side; below 0: dusk).
+ * latitude at[0] where the Sun stands that high [°] (the afternoon's side; below 0: dusk), `lookEl` one
+ * where the looked-at body stands that high, rising in the east.
  */
 export interface BodyView {
   body?: string;
@@ -191,6 +192,9 @@ export interface BodyView {
   phase?: number;
   sunEl?: number;
   look?: string;
+  /** on the ground (no altKm): the place along the latitude at[0] where `look` stands that high [°] —
+   *  east of the camera: rising (an Earthrise from the Moon's limb, whatever its orientation's model) */
+  lookEl?: number;
   /** (no `look`) the nose at a place of the body instead: its latitude, east longitude [°] */
   aim?: [number, number];
   off?: [number, number];
@@ -232,6 +236,18 @@ export function bodyView(t: number, v: BodyView) {
     const e = unit(cross(pole, sun));
     [lat, lon] = latLonOf([sun[0] * Math.cos(ph) + e[0] * Math.sin(ph), sun[1] * Math.cos(ph) + e[1] * Math.sin(ph), sun[2] * Math.cos(ph) + e[2] * Math.sin(ph)]);
     if (v.at) lat += v.at[0];
+  } else if (v.altKm === undefined && v.lookEl !== undefined && v.look) {
+    // (the longitude, along the latitude, where the looked-at body stands at lookEl — in the east)
+    const L = ourState(v.look, t).pos;
+    let best = Infinity;
+    for (let l = -180; l < 180; l += 0.25) {
+      const X = fromBodyFixed(id, bodyFixedOf(id, lat, l, 0), t);
+      const up = unit([X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]]);
+      const d = unit([L[0] - X[0], L[1] - X[1], L[2] - X[2]]);
+      if (dot(unit(cross(pole, up)), d) < 0) continue;
+      const el = (Math.asin(Math.max(-1, Math.min(1, dot(up, d)))) * 180) / Math.PI;
+      if (Math.abs(el - v.lookEl) < best) [best, lon] = [Math.abs(el - v.lookEl), l];
+    }
   } else if (v.altKm === undefined && v.sunEl !== undefined) {
     // (the longitude, along the latitude, where the Sun stands at sunEl — the afternoon's side)
     let best = Infinity;

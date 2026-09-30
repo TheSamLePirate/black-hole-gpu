@@ -1969,6 +1969,16 @@ export class CameraController {
     return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
   }
 
+  /** A scene applied: the camera straight at its attach point — not travelling there from the last scene's
+   *  (the ship kept still meanwhile, the view the scene turned onto its body turned away: 21° on the Moon's
+   *  Earthrise, the Earth out of the frame) */
+  settleMount() {
+    this.lastMount = this.s.shipMount;
+    this.mountAnim = null;
+    this.mountEff = null;
+    this.lastPose = this.mountTarget();
+  }
+
   /** Eases the camera towards the chosen attach point; keeps the ship's attitude while it moves. */
   private stepMount(dt: number) {
     const s = this.s;

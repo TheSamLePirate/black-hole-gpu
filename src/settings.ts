@@ -569,7 +569,7 @@ export const presets: Record<string, Preset> = {
   "Earth: a winter afternoon in Brittany": { ...EARTH_VIEW, target: "sun", fov: 70, time: T0, pose: { at: [48.4, -4.5], off: [0, 12] } },
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
   // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
-  "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 35, exposure: 1.5, time: T0 + 13.5 * DAY, pose: { body: "moon", at: [0, 170], look: "earth", off: [0, -4] } },
+  "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 35, exposure: 1.5, time: T0 + 13.5 * DAY, pose: { body: "moon", at: [0, 0], lookEl: 4, look: "earth", off: [0, -4] } },
   "Moon: an afternoon on the plains": { ...EARTH_VIEW, target: "sun", fov: 70, exposure: 2.3, time: T0, pose: { body: "moon", at: [20, 0], sunEl: 18, off: [90, -10] } },
   "Moon: the terminator from orbit": { ...WORLD_VIEW, target: "moon", fov: 60, exposure: 1, time: T0, pose: { body: "moon", altKm: 300, phase: 80, look: "moon", off: [0, 50] } },
   "Moon: the half Moon from orbit": { ...WORLD_VIEW, target: "moon", fov: 50, exposure: 1, time: T0, pose: { tilt: 60, body: "moon", altKm: 4000, phase: 80, look: "moon" } },

@@ -48,6 +48,15 @@ test("the Earth's scenes all place the camera", () => {
   }
 });
 
+test("Earthrise: from the Moon's limb, the Earth 4° over the horizon, in the east", () => {
+  const p = presets["Moon: Earthrise"]!;
+  const v = bodyView(p.time!, p.pose as Parameters<typeof bodyView>[1]);
+  expect(v.landed?.body).toBe("moon");
+  const E = ourState("earth", p.time!).pos;
+  const d = unit([E[0] - v.X[0], E[1] - v.X[1], E[2] - v.X[2]]);
+  expect(Math.abs((Math.asin(dot(d, v.up)) * 180) / Math.PI - 4)).toBeLessThan(0.3);
+});
+
 test("a view aimed at a place: the nose on it (the Moon's shadow from orbit)", () => {
   const p = presets["Earth: the Moon's shadow from orbit, 12 Aug 2026"]!;
   const pose = p.pose as Parameters<typeof bodyView>[1];
