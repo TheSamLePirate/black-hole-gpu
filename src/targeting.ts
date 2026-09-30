@@ -12,7 +12,7 @@ import { blToCartesian } from "./camera";
 import { horizon, isco, rk4, stepSize, zamo, type State, type Vec3 } from "./physics";
 import { OUR_TARGETS, SYSTEM_BODIES, type OurBody, type Settings, type SystemBody, type Target } from "./settings";
 import { homeOf, homeToRep, ourState } from "./system/our-side";
-import { solarBody, SOLAR_BODIES } from "./system/solar";
+import { seenFrom, solarBody, SOLAR_BODIES } from "./system/solar";
 import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
@@ -513,7 +513,10 @@ export function apparentDirection(
 export function bodyLook(s: Settings, cam: CameraFrame, body0: Body, time: number, guess?: Vec3 | null): { look: Vec3; lensed: boolean } {
   // our universe: straight lines (its bodies, or the mouth for everything beyond it)
   if (onOurSide(s, cam)) {
-    const d = sub(ourTarget(s, body0, time).pos, cameraHome(s, cam));
+    // (a body of the solar system where the light shows it — as it is drawn: the Sun 20″ off its
+    // place of now, a tenth of the telescope's narrowest field)
+    const home = cameraHome(s, cam);
+    const d = sub(solarBody(body0) ? seenFrom(body0, time, home).pos : ourTarget(s, body0, time).pos, home);
     return { look: ourLook(s, cam, d), lensed: false };
   }
   const body = holeProxy(body0);

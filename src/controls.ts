@@ -329,7 +329,8 @@ export class CameraController {
     this.followD = null;
     if (changed && this.cinematic === "orbit") this.sync();
     if (this.tracking) {
-      this.ensureAnchor();
+      // (around the target: its frame — looking at it from anywhere leaves the camera's)
+      if (this.orbiting) this.ensureAnchor();
       if (o.frame) this.frameTarget();
       if (o.focus !== false) this.startFocus();
     }
@@ -387,7 +388,8 @@ export class CameraController {
   private aim(cam: ReturnType<typeof cameraFrame>) {
     const s = this.s;
     const body = s.target;
-    const t = body === "star" || body === "barycentre" ? this.nowTime() : 0;
+    // (the bodies that move: the companion star, the centre of mass, our solar system's — seen now)
+    const t = body === "star" || body === "barycentre" || isOurBody(body) ? this.nowTime() : 0;
     const key = [
       body, cam.region, cam.r, cam.theta, cam.phi, cam.ell, ...cam.n, ...cam.beta, t, s.spin, s.sun, s.sunOrbit, s.sunRadius,
       s.sunPhase, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.whRho, s.disk, s.diskOuter,
@@ -518,7 +520,8 @@ export class CameraController {
   private ensureAnchor() {
     const s = this.s;
     if (!s.wormhole) return;
-    const want = s.target === "wormhole" ? "wormhole" : "hole";
+    // (our solar system's bodies: through our mouth — its frame; the rest, the hole's)
+    const want = s.target === "wormhole" || isOurBody(s.target) ? "wormhole" : "hole";
     if (s.anchor === want) return;
     if (!switchAnchor(s, want)) s.target = "wormhole";
     this.targetDistance = s.distance;
@@ -576,7 +579,31 @@ export class CameraController {
       s.pitch = e.pitch;
       s.roll = e.roll;
     }
+    // (standing on a world: the horizon level — the aim's own "up" is the mouth's frame's, tilted there;
+    // kept as the offset from then on, so that the aim and the level do not undo each other each frame)
+    if (this.rig.on && this.rig.fixed && this.levelOnGround()) {
+      const b = basis(s.yaw, s.pitch, s.roll);
+      this.offset = offsetFrom(A, b.fwd, b.up);
+    }
     this.written = [s.yaw, s.pitch, s.roll].join();
+  }
+
+  /** The camera's up turned to the local vertical (its forward kept): true when it turned. */
+  private levelOnGround(): boolean {
+    const s = this.s;
+    const w = this.rigWorld();
+    const ref = w && this.rig.ref ? this.rigBody(this.rig.ref, w.ours, this.nowTime()) : null;
+    if (!w || !ref) return false;
+    const V = unitV(sub3(w.X, ref.C));
+    const up = sub3(V, lin(w.fwd, dot3(V, w.fwd), w.fwd, 0));
+    if (Math.hypot(...up) < 1e-3) return false; // (looking straight up or down: no horizon)
+    const u = unitV(up);
+    if (dot3(u, w.up) > 1 - 1e-12) return false;
+    const vel: Vec3 = [s.velR, s.velT, s.velP];
+    if (w.ours) setHomePose(s, w.X, w.fwd, u);
+    else setHolePose(s, w.X, w.fwd, u);
+    [s.velR, s.velT, s.velP] = vel;
+    return true;
   }
 
   /** Closest the camera may orbit the followed body. */
