@@ -1956,6 +1956,8 @@ body.hide-ui #tp-dock { display: none; }
 .tp-play { color: var(--hud-amber); }
 .tp-play.paused { color: #fff; background: rgba(255, 179, 92, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 179, 92, 0.55); }
 .tp-rt.on { color: var(--hud-amber); }
+.tp-auto { font-size: 10px; letter-spacing: 0.12em; }
+.tp-auto.on { color: var(--hud-amber); box-shadow: inset 0 0 0 1px rgba(255, 179, 92, 0.45); }
 .tp-warp {
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 78px; height: 28px; padding: 0 6px;
   border-radius: 4px; line-height: 1.05; transition: background 0.15s;

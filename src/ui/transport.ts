@@ -18,6 +18,10 @@ export interface TransportDeps {
   recording(): { on: boolean; seconds: number; frames: number };
   /** why the rails hold the warp back ("" when they do not) */
   railsNote(): string;
+  /** a manoeuvre's warp: "" no plan; "plan" a plan not executing; else as it runs (auto, the pilot's,
+   *  the pilot's held down to the manoeuvre's) */
+  nodeWarp(): "" | "plan" | "auto" | "manual" | "held";
+  toggleAutoWarp(): void;
 }
 
 const ICON = {
@@ -43,6 +47,7 @@ export class TransportBar {
   private warpMain = h("b");
   private warpSub = h("small");
   private rtBtn = h("button", "tp-btn tp-rt", "1×");
+  private autoBtn = h("button", "tp-btn tp-auto", "AUTO");
   private clock = h("div", "tp-clock");
   private clockMain = h("b");
   private clockSub = h("small");
@@ -66,6 +71,7 @@ export class TransportBar {
     const slower = btn(h("button", "tp-btn"), ICON.slower, "Slower time", ",", () => d.warp(-1));
     const faster = btn(h("button", "tp-btn"), ICON.faster, "Faster time", ".", () => d.warp(1));
     btn(this.rtBtn, "", "Real time: a second per second", "/", () => d.realTime());
+    btn(this.autoBtn, "", "Auto warp for manoeuvres: on, the autopilot sets the warp; off, you choose it live (never faster than the manoeuvre allows)", "", () => d.toggleAutoWarp());
     this.warpBtn.append(this.warpMain, this.warpSub);
     this.warpBtn.dataset.tip = "Time warp — a click: every rung";
     this.warpBtn.onclick = () => this.toggleMenu();
@@ -73,7 +79,7 @@ export class TransportBar {
     btn(this.rec, ICON.rec, "Record a take: what you do, live — then Render › Video renders it at full quality", "", () => d.record());
     this.rec.append(this.recTime);
     this.menu.hidden = true;
-    this.el.append(this.play, slower, this.warpBtn, faster, this.rtBtn, h("i", "tp-sep"), this.clock, h("i", "tp-sep"), this.rec);
+    this.el.append(this.play, slower, this.warpBtn, faster, this.rtBtn, this.autoBtn, h("i", "tp-sep"), this.clock, h("i", "tp-sep"), this.rec);
     document.body.append(this.menu);
     addEventListener("pointerdown", (e) => {
       if (!this.menu.hidden && !this.menu.contains(e.target as Node) && !this.warpBtn.contains(e.target as Node)) this.menu.hidden = true;
@@ -120,8 +126,9 @@ export class TransportBar {
     const t = this.d.time();
     const rec = this.d.recording();
     const note = this.d.railsNote();
+    const nw = this.d.nodeWarp();
     const clock = fmtClock(s, t);
-    const key = [s.animate, s.timeSpeed, s.massSolar, clock.main, clock.sub, rec.on, Math.floor(rec.seconds), note].join();
+    const key = [s.animate, s.timeSpeed, s.massSolar, clock.main, clock.sub, rec.on, Math.floor(rec.seconds), note, nw, s.autoWarp].join();
     if (!force && key === this.last) return;
     this.last = key;
     this.play.innerHTML = svg(s.animate ? ICON.pause : ICON.play);
@@ -129,8 +136,11 @@ export class TransportBar {
     this.el.classList.toggle("paused", !s.animate);
     const x = warpFactor(s);
     this.warpMain.textContent = s.animate ? fmtWarp(s) : `❚❚ ${fmtWarp(s, false)}`;
-    this.warpSub.textContent = note ? `rails ↓ ${note}` : s.timeSpeed > 500 ? "on rails" : `${+s.timeSpeed.toPrecision(3)} M/s`;
-    this.warpBtn.classList.toggle("held", !!note);
+    const man = nw === "auto" ? "auto · manoeuvre" : nw === "held" ? "max · manoeuvre" : nw === "manual" ? "yours · manoeuvre" : "";
+    this.warpSub.textContent = man || (note ? `rails ↓ ${note}` : s.timeSpeed > 500 ? "on rails" : `${+s.timeSpeed.toPrecision(3)} M/s`);
+    this.warpBtn.classList.toggle("held", !!note || nw === "held");
+    this.autoBtn.hidden = !nw;
+    this.autoBtn.classList.toggle("on", s.autoWarp);
     this.rtBtn.classList.toggle("on", Math.abs(x - 1) < 1e-6);
     this.clockMain.textContent = clock.main;
     this.clockSub.textContent = clock.sub;

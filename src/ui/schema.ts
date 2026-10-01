@@ -893,6 +893,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "g acceleration crew",
   },
   {
+    key: "autoWarp", type: "toggle", section: "game", group: "Ranger", label: "Auto warp for manoeuvres", effect: "none",
+    help: "On, executing a plan sets the warp itself: fast through the coasts, slow for the burns. Off, the warp is yours, live (, and . or the time bar), never faster than the autopilot's — a coast faster would pass the burn, a burn faster would overshoot its Δv. Also AUTO on the time bar while a plan is set.",
+    keywords: "time warp auto manoeuvre maneuver node execute",
+  },
+  {
     key: "fuel", type: "toggle", section: "game", group: "Ranger", label: "Propellant gauge", effect: "none",
     help: "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.",
     keywords: "fuel propellant delta-v budget rocket mass ratio",

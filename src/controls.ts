@@ -2149,7 +2149,12 @@ export class CameraController {
     const inp = this.pilotInput(pad);
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
-    if (this.pilot.auto !== "node" && this.userWarp !== null) this.restoreWarp(); // execution stopped
+    if (this.pilot.auto !== "node") {
+      if (this.userWarp !== null) this.restoreWarp(); // execution stopped
+      this.nodeWarpWant = null;
+      this.nodeWarpSet = NaN;
+      this.nodeWarp = "";
+    }
     if (this.pilot.auto !== "approach" && this.ourWarp !== null) {
       // (our approach stopped: the pilot's warp back)
       s.timeSpeed = this.warpSet = this.ourWarp;
@@ -2663,9 +2668,38 @@ export class CameraController {
   private restoreWarp() {
     if (this.userWarp !== null) this.s.timeSpeed = this.userWarp;
     this.userWarp = null;
+    this.nodeWarpWant = null;
+    this.nodeWarpSet = NaN;
+    this.nodeWarp = "";
     this.nodeBurning = false;
     this.nodeDone = 0;
     this.burnDir = null;
+  }
+
+  /** The pilot's own warp during a manoeuvre, auto warp off (null: not chosen yet). */
+  private nodeWarpWant: number | null = null;
+  private nodeWarpSet = NaN;
+  /** A manoeuvre's warp, for the HUD: "" none executing; "auto"; "manual" (the pilot's); "held" (the
+   *  pilot's held down to what the manoeuvre allows). */
+  nodeWarp: "" | "auto" | "manual" | "held" = "";
+
+  /**
+   * The warp while a manoeuvre executes: the autopilot's (auto warp), or the pilot's — chosen live
+   * with the warp keys — never above the autopilot's: a coast faster than that would pass the burn's
+   * start, a burn faster would overshoot its Δv.
+   */
+  private setNodeWarp(auto: number) {
+    const s = this.s;
+    if (s.autoWarp) this.nodeWarpWant = null;
+    else {
+      // (the pilot changed the warp since the last frame: that is the new choice; auto warp just
+      // turned off: the warp as it stands)
+      if (this.nodeWarpWant === null || s.timeSpeed !== this.nodeWarpSet) this.nodeWarpWant = Number.isFinite(this.nodeWarpSet) ? s.timeSpeed : auto;
+    }
+    const want = this.nodeWarpWant;
+    const w = want === null ? auto : Math.min(want, auto);
+    s.timeSpeed = this.nodeWarpSet = w;
+    this.nodeWarp = want === null ? "auto" : want > auto * (1 + 1e-9) ? "held" : "manual";
   }
 
   /**
@@ -2720,10 +2754,11 @@ export class CameraController {
     }
     if (this.nodeBurning) {
       // burn: about 2 s of the pilot's time for the whole burn (warp adapted); a Crew burn, ~10 s
-      s.timeSpeed = follow ? Math.min(Math.max(burnT / 10, 0.05), 5000) : Math.min(Math.max(burnT / 2, 0.05), 200);
+      let w = follow ? Math.min(Math.max(burnT / 10, 0.05), 5000) : Math.min(Math.max(burnT / 2, 0.05), 200);
       // (our universe: the end of a burn slowed down — a frame gives at most half of what is left —
       // to cut it within a cm/s: 1 m/s at the Earth's departure is ~1 000 km at the Moon)
-      if (nav) s.timeSpeed = Math.min(s.timeSpeed, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
+      if (nav) w = Math.min(w, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
+      this.setNodeWarp(w);
       const perFrame = aMax * s.timeSpeed * dt * dtau;
       // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
       // within a cm/s)
@@ -2732,7 +2767,8 @@ export class CameraController {
         this.nodeDone = 0;
         this.nodeBurning = false;
         this.burnDir = null;
-        s.timeSpeed = this.userWarp;
+        // (the pilot's warp before the plan between its nodes — not a choice of the pilot's)
+        s.timeSpeed = this.nodeWarpSet = this.userWarp;
         if (!P.nodes.length) {
           const then = node.then ?? null;
           // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
@@ -2758,13 +2794,14 @@ export class CameraController {
     // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
     // on the burn: it turns while coasting)
     const coast = start - 20;
-    s.timeSpeed = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
+    let w = coast > 0 ? Math.min(Math.max(coast / 2.5, 4), 1e5) : Math.min(Math.max(start / 1.5, 3), 12);
     // (our universe: seconds matter — a burn of minutes in a low orbit; the warp down to real time)
     // (a short burn — a correction of a few m/s — is approached at ×5 at least, not in real time)
-    if (nav) s.timeSpeed = coast > 0 ? Math.min(Math.max(start / 3, 0.002), 1e5) : Math.max(Math.min(start / 2, s.timeSpeed), burnT * 492.5490947 > 30 ? 0.002 : 0.01);
-    if (hold) s.timeSpeed = Math.min(s.timeSpeed, Math.max(start / 4, 0.002));
+    if (nav) w = coast > 0 ? Math.min(Math.max(start / 3, 0.002), 1e5) : Math.max(Math.min(start / 2, w), burnT * 492.5490947 > 30 ? 0.002 : 0.01);
+    if (hold) w = Math.min(w, Math.max(start / 4, 0.002));
     // (a long coast rides the rails, held back near bodies like any flight)
-    if (s.system !== "none" || s.timeSpeed > 500) s.timeSpeed = Math.min(s.timeSpeed, Math.max(this.railsLimit(cam).lim, 3));
+    if (s.system !== "none" || w > 500) w = Math.min(w, Math.max(this.railsLimit(cam).lim, 3));
+    this.setNodeWarp(w);
     // (our universe, a mission's cruise: the SAS on prograde until the next manoeuvre nears — ten
     // minutes, or a few burn lengths — then onto the burn; a hold the pilot chose is kept)
     const far = nav ? start > Math.max(600 / 492.5490947, 3 * burnT) : start > 60;

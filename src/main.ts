@@ -661,12 +661,21 @@ async function main() {
   /** Time warp one rung faster or slower (clock.ts: slow motion, real time's multiples, then the classic
    *  ladder — beyond 500 M/s the ship rides on rails). Paused, the warp is set for when time runs again. */
   function warp(dir: 1 | -1) {
+    if (autoWarpHeld()) return;
     const next = stepWarp(settings, dir);
     if (next !== settings.timeSpeed) audio.cue(dir > 0 ? "warp-up" : "warp-down", warpLadder(settings).indexOf(next));
     else audio.cue("error");
     setWarp(next);
   }
+  /** A manoeuvre executing under auto warp: the warp is the autopilot's (the pilot's once AUTO is off). */
+  function autoWarpHeld() {
+    if (camera.nodeWarp !== "auto") return false;
+    audio.cue("error");
+    panel.toast("Auto warp: the manoeuvre sets the warp — AUTO on the time bar gives it to you");
+    return true;
+  }
   function setWarp(speed: number) {
+    if (autoWarpHeld()) return;
     settings.timeSpeed = speed;
     refreshGui();
     scheduleUrlSave();
@@ -766,6 +775,13 @@ async function main() {
     settings, time: () => sim.time, playPause: () => playPause(), warp, setWarp, realTime,
     record: () => toggleTake(), recording: () => ({ on: take.recording, seconds: take.seconds, frames: take.length }),
     railsNote: () => camera.railsNote,
+    nodeWarp: () => camera.nodeWarp || (camera.plan.nodes.length && settings.ship ? "plan" : ""),
+    toggleAutoWarp: () => {
+      settings.autoWarp = !settings.autoWarp;
+      refreshGui();
+      scheduleUrlSave();
+      panel.toast(settings.autoWarp ? "Auto warp — the manoeuvre sets the warp" : "Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows");
+    },
   });
   transport.mount(tpDock, false);
   /** Starts or stops recording a take (● on the time bar). */
