@@ -2,10 +2,9 @@
 //   cube (rgba8, a cube map): the day colour (sRGB) and the cloud cover (alpha)
 //   night (r8, a cube map): the city lights (the night map's red channel — its dark blue ground has
 //     almost none)
-//   surf (rgba8, equirectangular): the relief's normal (its east and south components, from the heights),
-//     the oceans (1)
-//   elev (r16float, equirectangular, the same size): the height above the sea [m] (NOAA's ETOPO 2022:
-//     scripts/build-earth-relief.py), the sea floor below 0
+//   elev (rg16float, equirectangular): the height above the sea [m] (NOAA's ETOPO 2022:
+//     scripts/build-earth-relief.py), the oceans (1) — the relief's normals taken from the heights by the
+//     tracer
 // The cube maps' faces: `ft` looks at Greenwich (lat 0, lon 0), `rt` at 90° E, `up` at the north pole
 // (Greenwich at its bottom edge), `dn` at the south pole (Greenwich at its top edge): on the Earth's
 // own axes q (x Greenwich, y 90° E, z north), the cube's direction is (q.y, q.z, q.x) — its faces +X…−Z
@@ -118,7 +117,6 @@ export interface EarthHeights { map: Int16Array<ArrayBuffer>; W: number; H: numb
 export interface EarthMaps {
   cube: GPUTexture;
   night: GPUTexture;
-  surf: GPUTexture;
   elev: GPUTexture;
   /** the heights on the CPU (the ground the ship stands on): null for the placeholder */
   heights: EarthHeights | null;
@@ -142,27 +140,10 @@ struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
 @fragment fn face(v: V) -> @location(0) vec4f {
   return vec4f(textureSampleLevel(a, s, v.uv, 0.0).rgb, textureSampleLevel(b, s, v.uv, 0.0).r);
 }
-// the heights [m] (r16float), from their whole metres (r16sint)
+// the heights [m], from their whole metres (r16sint), and the oceans (b)
 @group(0) @binding(4) var m: texture_2d<i32>;
 @fragment fn elev(v: V) -> @location(0) vec4f {
-  return vec4f(f32(textureLoad(m, vec2i(v.p.xy), 0).r), 0.0, 0.0, 1.0);
-}
-// the relief's normal from the heights (a: elev, the sea at 0) — the slopes −∂h/∂east, −∂h/∂south,
-// central differences over the texels' sizes on the sphere — and the oceans (b)
-@fragment fn surf(v: V) -> @location(0) vec4f {
-  let d = vec2i(textureDimensions(a));
-  let p = vec2i(v.p.xy);
-  let xm = (p.x + d.x - 1) % d.x;
-  let xp = (p.x + 1) % d.x;
-  let ym = max(p.y - 1, 0);
-  let yp = min(p.y + 1, d.y - 1);
-  let hE = max(textureLoad(a, vec2i(xp, p.y), 0).r, 0.0) - max(textureLoad(a, vec2i(xm, p.y), 0).r, 0.0);
-  let hS = max(textureLoad(a, vec2i(p.x, yp), 0).r, 0.0) - max(textureLoad(a, vec2i(p.x, ym), 0).r, 0.0);
-  let lat = (0.5 - (f32(p.y) + 0.5) / f32(d.y)) * 3.14159265;
-  let dx = 2.0 * 3.14159265 * 6.371e6 * max(cos(lat), 1e-3) / f32(d.x) * 2.0;
-  let dy = 3.14159265 * 6.371e6 / f32(d.y) * f32(yp - ym);
-  let sl = clamp(vec2f(-hE / dx, -hS / dy), vec2f(-1.0), vec2f(1.0));
-  return vec4f(0.5 + 0.5 * sl, textureSampleLevel(b, s, v.uv, 0.0).r, 1.0);
+  return vec4f(f32(textureLoad(m, vec2i(v.p.xy), 0).r), textureSampleLevel(b, s, v.uv, 0.0).r, 0.0, 1.0);
 }
 // a mip level from the one above (2 × 2 texels): colour averaged in linear light, or plainly
 fn quad(p: vec2u) -> array<vec4f, 4> {
@@ -194,8 +175,7 @@ export function placeholderEarth(device: GPUDevice): EarthMaps {
   return {
     cube: mk("rgba8unorm", 6, new Uint8Array([40, 60, 90, 0])),
     night: mk("r8unorm", 6, new Uint8Array([0])),
-    surf: mk("rgba8unorm", 1, new Uint8Array([128, 128, 255, 0])),
-    elev: mk("r16float", 1, new Uint8Array([0, 0]) as Uint8Array<ArrayBuffer>),
+    elev: mk("rg16float", 1, new Uint8Array([0, 0, 0, 0])),
     heights: null,
     tier: null,
   };
@@ -229,7 +209,7 @@ class Packer {
     const p = this.pipe(entry, dst.format);
     const layout = p.getBindGroupLayout(0);
     // (an entry point's layout holds only the bindings it uses)
-    const used = entry === "face" || entry === "surf" ? [0, 1, 3] : entry === "elev" ? [4] : [0];
+    const used = entry === "face" ? [0, 1, 3] : entry === "elev" ? [1, 3, 4] : [0];
     const bind = d.createBindGroup({
       layout,
       entries: used.map((b) => ({ binding: b, resource: b === 3 ? this.samp : b === 4 ? src[0]! : src[b]! })),
@@ -278,7 +258,6 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   const pk = new Packer(device);
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC;
   const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "r8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
-  const surf = device.createTexture({ size: [set.w, set.w / 2], format: "rgba8unorm", mipLevelCount: levels(set.w), usage });
   let cube = await compressedCube(device, tier);
   if (!cube) {
     cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(set.size), usage });
@@ -300,17 +279,15 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
     lights.destroy();
   }
   const [heights, o] = await Promise.all([loadHeights(set.relief), upload(device, set.ocean, "r8unorm")]);
-  const elev = device.createTexture({ size: [set.w, set.w / 2], format: "r16float", mipLevelCount: levels(set.w), usage });
+  const elev = device.createTexture({ size: [set.w, set.w / 2], format: "rg16float", mipLevelCount: levels(set.w), usage });
   const whole = device.createTexture({ size: [heights.W, heights.H], format: "r16sint", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
   device.queue.writeTexture({ texture: whole }, heights.map, { bytesPerRow: heights.W * 2 }, [heights.W, heights.H]);
-  pk.draw("elev", elev, 0, 0, [whole.createView()]);
+  pk.draw("elev", elev, 0, 0, [whole.createView(), o.createView()]);
   pk.mips(elev, 0, false);
-  pk.draw("surf", surf, 0, 0, [elev.createView({ baseMipLevel: 0, mipLevelCount: 1 }), o.createView()]);
-  pk.mips(surf, 0, false);
   whole.destroy();
   o.destroy();
   await device.queue.onSubmittedWorkDone();
-  return { cube, night, surf, elev, heights, tier };
+  return { cube, night, elev, heights, tier };
 }
 
 /**

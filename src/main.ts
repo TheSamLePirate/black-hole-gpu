@@ -1100,6 +1100,12 @@ async function main() {
     if (preset) applyPreset(preset);
     Object.assign(settings, { animate: false, exposure: 0, renderMode: "physical" }, patch);
     refreshGui();
+    // (the Earth's maps and terrain tiles in first — up to half a minute —, and a camera on the ground
+    // raised onto it: the live frames ask for them and carry the camera)
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 3; i++) await frame();
+    for (let w = performance.now(); !renderer.earthSettled && performance.now() - w < 30000; ) await frame();
+    for (let i = 0; i < 3; i++) await frame();
     const t0 = performance.now();
     renderer.startOffline(settings, o.time ?? sim.time, {
       width: 1920, height: 1080, spp: 128, tolerance: 1e-6, eps: 0.02, maxSteps: 12000, noiseThreshold: 0.004,

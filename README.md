@@ -132,6 +132,12 @@ Progress screenshots of each improvement step are in `docs/progress/`.
 Real sky: NASA/Goddard Space Flight Center Scientific Visualization Studio, *Deep Star Maps 2020*
 (Gaia DR2: ESA/Gaia/DPAC); HYG star database v4.4 (CC BY-SA 4.0). Details in `assets/sky/README.md`.
 
+**The Earth's relief**: NOAA/NCEI's **ETOPO 2022** (60″, public domain; doi:10.25921/fd45-gt74) for the whole
+globe (`assets/earth/relief-*.bin`, `scripts/build-earth-relief.py`), and near the camera the real ground streamed
+in: Mapzen/Tilezen's terrain tiles on AWS Open Data (Terrarium; SRTM — NASA/USGS —, GMTED2010, ETOPO1, EU-DEM
+and national surveys such as USGS 3DEP), eight levels from 2.4 km to 19 m a texel (`src/system/earth-tiles.ts`;
+the "Real terrain" switch).
+
 **The solar system** (our side of the wormhole), to scale — radii, masses, distances — and where it is:
 
 - **Ephemerides**: NASA/JPL's **DE440** (the Sun, the planets' systems, the Moon: 1990 – 2150) and **JUP365**

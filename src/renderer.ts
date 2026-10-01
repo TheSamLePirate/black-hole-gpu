@@ -24,6 +24,7 @@ import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
 import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler } from "./terrain";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -61,7 +62,7 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 255;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-const PARAM_VEC4S = 69;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -212,6 +213,8 @@ interface OfflineJob {
   paused: boolean;
   done: boolean;
   shown: boolean;
+  /** the terrain tiles drawn when it started (EarthTiles.stamp): restarted when more come in */
+  tiles: number;
 }
 
 export class Renderer {
@@ -288,6 +291,8 @@ export class Renderer {
   private mapsRequested = false;
   /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
   private earthMaps: EarthMaps;
+  /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
+  readonly earthTiles: EarthTiles;
   private earthWant: EarthTier | null = null;
   /** the finest Earth tier this GPU's memory held (lowered when one ran out) */
   private earthCap: EarthTier | "none" = "high";
@@ -457,7 +462,7 @@ export class Renderer {
         { binding: 24, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
         { binding: 26, visibility: C, texture: { sampleType: "depth" } },
-        { binding: 27, visibility: C, texture: { sampleType: "float" } },
+        { binding: 28, visibility: C, texture: { sampleType: "unfilterable-float", viewDimension: "2d-array" } },
       ],
     });
     // (the disk's turbulence: a tiling noise baked once)
@@ -503,6 +508,10 @@ export class Renderer {
     this.ship = new ShipRenderer(device, src.ship);
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.endurance.onLoaded = () => this.invalidate();
+    this.earthTiles = new EarthTiles(device);
+    this.earthTiles.onChange = () => {
+      if (!this.offline) this.invalidate();
+    };
     this.prof = new GpuProfiler(device);
     // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
     this.prof.enabled = this.prof.supported;
@@ -628,9 +637,9 @@ export class Renderer {
     (first ? loading.track("earth", "", job) : job)
       .then(async (maps) => {
         // (a later request won — another tier, or none): these are not used
-        if (token !== this.earthJob) return [maps.cube, maps.night, maps.surf, maps.elev].forEach((t) => t.destroy());
+        if (token !== this.earthJob) return [maps.cube, maps.night, maps.elev].forEach((t) => t.destroy());
         if (await oom) {
-          [maps.cube, maps.night, maps.surf, maps.elev].forEach((t) => t.destroy());
+          [maps.cube, maps.night, maps.elev].forEach((t) => t.destroy());
           console.warn(`Out of GPU memory for the Earth's ${tier} maps`);
           this.earthCap = tier === "high" ? "med" : "none";
           if (tier === "high") this.requestEarthMaps("med");
@@ -639,12 +648,25 @@ export class Renderer {
         }
         const old = this.earthMaps;
         this.earthMaps = maps;
-        // (the ground the ship stands on: the heights drawn)
-        if (maps.heights) setGroundRelief("earth", earthHeightSampler(maps.heights.map, maps.heights.W, maps.heights.H));
+        // (the ground the ship stands on: the heights drawn — the terrain tiles over the map)
+        if (maps.heights) {
+          const { map, W, H } = maps.heights;
+          setGroundRelief("earth", earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot)));
+          // (a tile that will not load: the map's heights there)
+          this.earthTiles.fallback = (q) => {
+            const x = (0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI)) * W - 0.5, y = (0.5 - Math.asin(q[2]) / Math.PI) * H - 0.5;
+            const i = ((Math.floor(x) % W) + W) % W, j = Math.min(Math.max(Math.floor(y), 0), H - 1);
+            return Math.max(map[j * W + i]!, 0);
+          };
+        }
         if (this.live) this.bindTarget(this.live);
-        if (this.offline) this.bindTarget(this.offline.target);
+        if (this.offline) {
+          this.bindTarget(this.offline.target);
+          // (an offline render begun before them: begun again)
+          Object.assign(this.offline, { sampleIndex: 0, bandY: 0, done: false });
+        }
         // (the old ones once the frames drawing with them are done)
-        void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf, old.elev].forEach((t) => t.destroy()));
+        void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.elev].forEach((t) => t.destroy()));
         this.invalidate();
         this.onAssets?.();
       })
@@ -660,7 +682,7 @@ export class Renderer {
     this.earthMaps = placeholderEarth(this.device);
     if (this.live) this.bindTarget(this.live);
     if (this.offline) this.bindTarget(this.offline.target);
-    void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf, old.elev].forEach((t) => t.destroy()));
+    void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.elev].forEach((t) => t.destroy()));
     this.invalidate();
   }
 
@@ -997,13 +1019,13 @@ export class Renderer {
         { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
         { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
-        { binding: 21, resource: this.earthMaps.surf.createView() },
+        { binding: 21, resource: this.earthMaps.elev.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
-        { binding: 27, resource: this.earthMaps.elev.createView() },
+        { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -1029,13 +1051,13 @@ export class Renderer {
         { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
         { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
-        { binding: 21, resource: this.earthMaps.surf.createView() },
+        { binding: 21, resource: this.earthMaps.elev.createView() },
         { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
-        { binding: 27, resource: this.earthMaps.elev.createView() },
+        { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -1606,6 +1628,12 @@ export class Renderer {
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
     }
+    // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
+    if (!o.probe) {
+      const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
+      this.earthTiles.update(onEarth ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3) : null, pixelAngle);
+    }
+    f.set(this.earthTiles.params(), 69 * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
@@ -2622,6 +2650,11 @@ export class Renderer {
   }
 
   /** Starts a render of the current scene, frozen in time, at an arbitrary resolution. */
+  /** The Earth's maps and terrain tiles the view wants are in (none loading). */
+  get earthSettled() {
+    return !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier);
+  }
+
   startOffline(s: Settings, time: number, opts: OfflineOptions) {
     this.envReset = true; // the spaceship's light probe: from this camera only (video frames)
     this.cancelOffline();
@@ -2638,6 +2671,7 @@ export class Renderer {
       paused: false,
       done: false,
       shown: false,
+      tiles: this.earthTiles.stamp,
     };
   }
 
@@ -2705,6 +2739,13 @@ export class Renderer {
 
     const enc = this.device.createCommandEncoder();
     let rows = 0;
+    // (the terrain tiles come in while it renders: started again on them)
+    if (job.tiles !== this.earthTiles.stamp) {
+      job.tiles = this.earthTiles.stamp;
+      job.sampleIndex = 0;
+      job.bandY = 0;
+      job.done = false;
+    }
     if (working) {
       this.frameStamp++;
       const o = job.opts;
@@ -2725,7 +2766,8 @@ export class Renderer {
       if (job.bandY >= t.height) {
         job.bandY = 0;
         job.sampleIndex++;
-        if (job.sampleIndex >= o.spp) job.done = true;
+        // (not before the Earth's maps and its terrain tiles are in: they would come into the next frame)
+        if (job.sampleIndex >= o.spp && this.earthSettled) job.done = true;
       }
     }
     this.writeResolve(t, s);

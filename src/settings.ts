@@ -173,6 +173,7 @@ export interface Settings {
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
+  earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -369,6 +370,7 @@ export function defaultSettings(): Settings {
     farFieldLut: true,
     volumetricClouds: true,
     earthClouds: 1,
+    earthTerrain: true,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,

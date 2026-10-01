@@ -95,6 +95,12 @@ struct Params {
   nearCam0: vec4f, // the camera on the near body's axes [its radii], in float32 (an anchor: the same each frame
                    // while the ground carries the camera); w: its |·|² − 1 (float64 on the CPU)
   nearCam1: vec4f, // the camera from that anchor [radii] (float64's remainder); w: on (0/1)
+  // the Earth's terrain tiles near the camera (src/system/earth-tiles.ts): the reference — cos, sin of its
+  // longitude, the sine of its latitude, on (0/1) —; per level (z 6 … 13) the reference in its valid
+  // rectangle [px], the rectangle's corner in its layer [px]; the rectangle's size [px], the level's
+  // pixels per radian, on
+  tiles: vec4f,
+  tileL: array<vec4f, 16>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -3344,8 +3350,8 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(19) var earthCube: texture_cube<f32>;  // day colour (sRGB), cloud cover (alpha)
 @group(0) @binding(20) var earthNight: texture_cube<f32>; // city lights (r)
-@group(0) @binding(21) var earthSurf: texture_2d<f32>;    // the relief's normal (east, south), the oceans
-@group(0) @binding(27) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022)
+@group(0) @binding(21) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022), the oceans
+@group(0) @binding(28) var earthTiles: texture_2d_array<f32>; // the terrain tiles' levels [m] (r32float, 1024²)
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -3649,7 +3655,9 @@ fn earthFoot(q: vec3f, rd: vec3f, g: vec3f, fp: f32) -> vec3f {
   return (g - rd * (dot(g, q) / s)) * fp;
 }
 
-// The equirectangular relief map at q (its footprint's axes fx, fy)
+// The equirectangular relief map at q (its footprint's axes fx, fy): the slopes over the footprint
+// (−∂h/∂east, −∂h/∂south, as 0.5 + 0.5·slope: central differences of the heights at its mip level), the
+// oceans, the height [m]
 fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
   let lon = atan2(q.y, q.x);
   let lat = asin(clamp(q.z, -1.0, 1.0));
@@ -3658,7 +3666,16 @@ fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
   let rxy = sqrt(rxy2);
   let dx = vec2f((q.x * fx.y - q.y * fx.x) / (rxy2 * TAU), -fx.z / (rxy * PI));
   let dy = vec2f((q.x * fy.y - q.y * fy.x) / (rxy2 * TAU), -fy.z / (rxy * PI));
-  return textureSampleGrad(earthSurf, bgSamp, uv, dx, dy);
+  let dim = vec2f(textureDimensions(earthElev));
+  let lod = max(log2(max(length(dx * dim), length(dy * dim))), 0.0);
+  let c = textureSampleLevel(earthElev, bgSamp, uv, lod);
+  let e = exp2(floor(lod)) / dim; // (a texel of that level)
+  let hE = textureSampleLevel(earthElev, bgSamp, uv + vec2f(e.x, 0.0), lod).r - textureSampleLevel(earthElev, bgSamp, uv - vec2f(e.x, 0.0), lod).r;
+  let hS = textureSampleLevel(earthElev, bgSamp, uv + vec2f(0.0, e.y), lod).r - textureSampleLevel(earthElev, bgSamp, uv - vec2f(0.0, e.y), lod).r;
+  let dxM = 2.0 * e.x * TAU * EARTH_RM * max(rxy, 1e-3);
+  let dyM = 2.0 * e.y * PI * EARTH_RM;
+  let sl = clamp(vec2f(-hE / dxM, -hS / dyM), vec2f(-1.0), vec2f(1.0));
+  return vec4f(0.5 + 0.5 * sl, c.g, c.r);
 }
 
 // ---- the Earth's relief (the same function in src/terrain.ts: earthDetail, earthHeightSampler — the
@@ -3707,20 +3724,77 @@ fn tfbmF(p0: vec3f, oct: f32) -> f32 {
 fn layerOctF(f: f32, foot: f32, mR: f32, most: f32) -> f32 {
   return clamp(log2(mR / (f * 4.0 * max(foot, 0.05))), 0.0, most);
 }
-fn earthDetail(q: vec3f, h0: f32, foot: f32) -> f32 {
+// (the same two, each octave weighed by what the heights already hold: an octave of wavelength λ [m] —
+// lam0 the first's, halved by 2.03 each — drawn where the heights' resolution res is coarser than it, faded
+// out where they resolve it (λ > 3 res); centred: ridgedMF − 0.3, tfbmF)
+fn octaveKept(lam: f32, res: f32) -> f32 { return 1.0 - smoothstep(res, 3.0 * res, lam); }
+// the first octave kept (λ < 3 res) of a ladder from lam0 halved by 2.03: the ones before it not computed
+fn firstKept(lam0: f32, res: f32) -> i32 { return max(i32(floor(log2(lam0 / (3.0 * res)) / 1.0215)) + 1, 0); }
+fn ridgedMFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
+  let i0 = firstKept(lam0, res);
+  var p = p0;
+  var lam = lam0;
+  var amp = 1.0;
+  var norm = 1.0;
+  // (the octaves the heights hold skipped: their lattice and weights carried, no noise; the first kept
+  // one unweighted by those above)
+  for (var i = 1; i <= i0; i++) {
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    lam /= 2.03;
+    amp *= 0.5;
+    norm += amp * clamp(oct - f32(i), 0.0, 1.0);
+  }
+  if (f32(i0) >= oct) { return 0.0; }
+  var sig = 1.0 - abs(gnoise(p));
+  sig *= sig;
+  // (the first octave whole, as ridgedMF has it; a later one faded in with the footprint)
+  var sum = (sig - 0.3) * amp * select(clamp(oct - f32(i0), 0.0, 1.0), 1.0, i0 == 0) * octaveKept(lam, res);
+  for (var i = i0 + 1; f32(i) < oct; i++) {
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    lam /= 2.03;
+    let w = clamp(sig * 1.8, 0.0, 1.0);
+    amp *= 0.5;
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    sig = 1.0 - abs(gnoise(p));
+    sig = sig * sig * w;
+    sum += (sig - 0.3) * amp * fade * octaveKept(lam, res);
+    norm += amp * fade;
+  }
+  return sum / norm;
+}
+fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
+  let i0 = firstKept(lam0, res);
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  var lam = lam0;
+  for (var i = 0; f32(i) < oct; i++) {
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    if (i >= i0) { s += a * fade * gnoise(p) * octaveKept(lam, res); }
+    n += a * fade;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    a *= 0.5;
+    lam /= 2.03;
+  }
+  return s / max(n, 1e-6);
+}
+fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   let mount = smoothstep(300.0, 2500.0, h0);
   let land = smoothstep(0.0, 40.0, h0);
   var h = 0.0;
+  // (where the heights are known finer — the terrain tiles: res, their resolution [m] — the octaves they
+  // hold fade out: the real ground, the noise only below it)
   // the mountains: a ridged multifractal (ridges ~4 km apart down to ~100 m), its lattice warped by a
   // smooth field (no regular rows of peaks)
   let o1 = layerOctF(1500.0, foot, EARTH_RM, 7.0);
-  if (o1 > 0.0 && mount > 0.0) {
+  if (o1 > f32(firstKept(EARTH_RM / 1500.0, res)) && mount > 0.0) {
     let pw = q * 1500.0 + vec3f(11.0) + 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2));
-    h += (ridgedMF(pw, o1) - 0.3) * 1500.0 * mount;
+    h += ridgedMFw(pw, o1, EARTH_RM / 1500.0, res) * 1500.0 * mount;
   }
   // the plains' hills, the rocks
   let o2 = layerOctF(20000.0, foot, EARTH_RM, 3.0);
-  if (o2 > 0.0 && land > 0.0) { h += tfbmF(q * 20000.0 + vec3f(5.0), o2) * min(o2, 1.0) * 50.0 * land * (1.0 - mount); }
+  if (o2 > 0.0 && land > 0.0) { h += tfbmFw(q * 20000.0 + vec3f(5.0), o2, EARTH_RM / 20000.0, res) * min(o2, 1.0) * 50.0 * land * (1.0 - mount); }
   let o3 = layerOctF(200000.0, foot, EARTH_RM, 3.0);
   if (o3 > 0.0 && land > 0.0) { h += tfbmF(q * 200000.0 + vec3f(3.0), o3) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
   return h;
@@ -3759,16 +3833,92 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
   }
   return s;
 }
+// ---- the terrain tiles (src/system/earth-tiles.ts: the same weights on the CPU, heightAt)
+const TILE_Z0 = 6u;
+const TILE_LEVELS = 8u;
+const TILE_RES_MIN = 25.0;
+// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo 1024)
+fn tileTexel(l: u32, i: vec2i) -> f32 {
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
+  return textureLoad(earthTiles, t, l, 0).r;
+}
+// a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
+// (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
+// over an octave
+fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  let k = clamp(mag - 1.0, 0.0, 1.0);
+  var lin = 0.0;
+  if (k < 1.0) {
+    lin = mix(mix(tileTexel(l, i0), tileTexel(l, i0 + vec2i(1, 0)), f.x), mix(tileTexel(l, i0 + vec2i(0, 1)), tileTexel(l, i0 + vec2i(1, 1)), f.x), f.y);
+  }
+  if (k <= 0.0) { return lin; }
+  let wx = bspline4(f.x);
+  let wy = bspline4(f.y);
+  var b = 0.0;
+  for (var j = 0; j < 4; j++) {
+    var row = 0.0;
+    for (var i = 0; i < 4; i++) { row += wx[i] * tileTexel(l, i0 + vec2i(i - 1, j - 1)); }
+    b += wy[j] * row;
+  }
+  return mix(lin, b, k);
+}
+// The ground's height under the map's finer detail at q for a footprint foot [m]: the tiles' levels — the
+// finest within the footprint and the next coarser, blended by the footprint and towards their windows'
+// edges — over the global map where they leave off; y: the heights' resolution [m] (earthDetail). cheap:
+// bilinear only (the shadows' march)
+fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
+  let texelA = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
+  if (P.tiles.w < 0.5) { return vec2f(earthH0(q, foot), texelA); }
+  let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
+  // (from the reference — the camera's place —: the longitude by a turned atan2, Mercator's y by
+  // atanh(a) − atanh(b) = atanh((a − b)/(1 − ab)): no float32 cancellation near the camera)
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let sz = clamp(q.z, -0.999999, 0.999999);
+  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.5)));
+  var h = 0.0;
+  var res = 0.0;
+  var rem = 1.0;
+  for (var li = 0; li < i32(TILE_LEVELS); li++) {
+    let l = TILE_LEVELS - 1u - u32(li);
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let z = f32(TILE_Z0 + l);
+    let wz = clamp(zf - z + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p = a.xy + vec2f(dlon, -dM) * b.z;
+    let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
+    let w = wz * smoothstep(2.0, 48.0, d);
+    if (w <= 0.0) { continue; }
+    h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap));
+    res += rem * w * max(EARTH_RM * cosLat / b.z, TILE_RES_MIN);
+    rem *= 1.0 - w;
+    if (rem < 1e-4) { break; }
+  }
+  if (rem >= 1e-4) {
+    h += rem * earthH0(q, foot);
+    res += rem * texelA;
+  }
+  return vec2f(h, res);
+}
 fn earthHeight(q: vec3f, foot: f32) -> f32 {
-  let h0 = earthH0(q, foot);
-  return max(h0 + earthDetail(q, h0, foot), 0.0);
+  let hr = earthH(q, foot, false);
+  return max(hr.x + earthDetail(q, hr.x, foot, hr.y), 0.0);
 }
 // the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
 fn earthHeightStep(q: vec3f, foot: f32) -> f32 {
+  if (P.tiles.w > 0.5) {
+    let hr = earthH(q, foot, true);
+    return max(hr.x + earthDetail(q, hr.x, max(foot * 4.0, 1.0), hr.y), 0.0);
+  }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   let h0 = textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r;
-  return max(h0 + earthDetail(q, h0, max(foot * 4.0, 1.0)), 0.0);
+  return max(h0 + earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
@@ -4001,7 +4151,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var n = normalize(q + tn.x * east + tn.y * north);
   // (near — a pixel under the map's texel — the relief's own normal: its ridges, crests and rocks)
   let footM = max(length(fx), length(fy)) * EARTH_RM;
-  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthSurf).x);
+  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   if (footM < texelM && ocean < 1.0) {
     n = normalize(mix(n, earthNormalAt(q, footM), smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean)));
   }
@@ -4029,7 +4179,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / EARTH_RM), Ls);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
-  if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthSurf).x) && mu0 > -0.05 && ocean < 1.0) {
+  if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
     Eg *= mix(1.0, earthTerrainShadow(q * (1.0 + hG / EARTH_RM), Ls, footS), 1.0 - ocean);
   }
   // (near: the land's colour and relief finer than the maps — the noise's slopes facing the sun lit)
@@ -4050,7 +4200,12 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
   let sk = skySeen(q, Ls);
   let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
-  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * (0.25 + 0.75 * pow(max(dot(n, q), 0.0), 3.0))
+  // (a face sees the sky over it and the ground round it — a plane's shares, ½(1 + n·up) and ½(1 − n·up)
+  // —: on the steep faces in the shade, the sky's light halved and the light the sunlit ground sends back,
+  // at an albedo of 0.18; a cliff's shadow not black)
+  let up = dot(n, q);
+  let bounce = E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) * 0.18 * 0.5 * (1.0 - up);
+  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
   // the sky mirrored (Fresnel)

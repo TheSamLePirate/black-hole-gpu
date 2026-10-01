@@ -197,31 +197,81 @@ function tfbmF(p0: V3, oct: number): number {
   }
   return s / Math.max(n, 1e-6);
 }
+/** The tracer's octaveKept, ridgedMFw, tfbmFw: each octave (wavelength λ [m]) weighed by what the
+ *  heights hold — drawn where their resolution res is coarser, faded out where they resolve it. */
+const octaveKept = (lam: number, res: number) => 1 - smooth(res, 3 * res, lam);
+/** the first octave kept (λ < 3 res) of a ladder from lam0 halved by 2.03 (the tracer's firstKept) */
+const firstKept = (lam0: number, res: number) => Math.max(Math.floor(Math.fround(Math.log2(lam0 / (3 * res)) / 1.0215)) + 1, 0);
+function ridgedMFw(p0: V3, oct: number, lam0: number, res: number): number {
+  const i0 = firstKept(lam0, res);
+  let p = p0;
+  let lam = lam0, amp = 1, norm = 1;
+  for (let i = 1; i <= i0; i++) {
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    lam /= 2.03;
+    amp *= 0.5;
+    norm += amp * Math.min(Math.max(oct - i, 0), 1);
+  }
+  if (i0 >= oct) return 0;
+  let sig = 1 - Math.abs(gnoise(p));
+  sig *= sig;
+  let sum = (sig - 0.3) * amp * (i0 === 0 ? 1 : Math.min(Math.max(oct - i0, 0), 1)) * octaveKept(lam, res);
+  for (let i = i0 + 1; i < oct; i++) {
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    lam /= 2.03;
+    const w = Math.min(Math.max(sig * 1.8, 0), 1);
+    amp *= 0.5;
+    const fade = Math.min(Math.max(oct - i, 0), 1);
+    sig = 1 - Math.abs(gnoise(p));
+    sig = sig * sig * w;
+    sum += (sig - 0.3) * amp * fade * octaveKept(lam, res);
+    norm += amp * fade;
+  }
+  return sum / norm;
+}
+function tfbmFw(p0: V3, oct: number, lam0: number, res: number): number {
+  const i0 = firstKept(lam0, res);
+  let p = p0;
+  let a = 0.5, s = 0, n = 0, lam = lam0;
+  for (let i = 0; i < oct; i++) {
+    const fade = Math.min(Math.max(oct - i, 0), 1);
+    if (i >= i0) s += a * fade * gnoise(p) * octaveKept(lam, res);
+    n += a * fade;
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    a *= 0.5;
+    lam /= 2.03;
+  }
+  return s / Math.max(n, 1e-6);
+}
 /** A layer's octaves resolved at a footprint, fractional (the tracer's layerOctF). */
 const layerOctF = (f: number, foot: number, mR: number, most: number) =>
   Math.min(Math.max(Math.log2(mR / (f * 4 * Math.max(foot, 0.05))), 0), most);
 
 /**
- * The Earth's relief finer than its height map (h0: the map's height there [m]): on its mountains a
- * ridged multifractal on a warped lattice (ridges ~4 km apart down to ~100 m), hills on its plains,
- * rocks — the tracer's earthDetail, at a pixel footprint `foot` [m].
+ * The Earth's relief finer than its height map (h0: the map's height there [m]; res: the heights'
+ * resolution there [m] — the layers it resolves faded out): on its mountains a ridged multifractal on a
+ * warped lattice (ridges ~4 km apart down to ~100 m), hills on its plains, rocks — the tracer's
+ * earthDetail, at a pixel footprint `foot` [m].
  */
-export function earthDetail(q: V3, h0: number, foot = 0.05): number {
+export function earthDetail(q: V3, h0: number, foot = 0.05, res = EARTH_MAP_RES): number {
   const mount = smooth(300, 2500, h0);
   const land = smooth(0, 40, h0);
   let h = 0;
   const o1 = layerOctF(1500, foot, EARTH_RM, 7);
-  if (o1 > 0 && mount > 0) {
+  if (o1 > firstKept(EARTH_RM / 1500, res) && mount > 0) {
     const w: V3 = [tfbm(sc(q, 600, 3.1), 2), tfbm(sc(q, 600, 7.7), 2), tfbm(sc(q, 600, 1.3), 2)];
     const pw: V3 = [q[0] * 1500 + 11 + 0.7 * w[0], q[1] * 1500 + 11 + 0.7 * w[1], q[2] * 1500 + 11 + 0.7 * w[2]];
-    h += (ridgedMF(pw, o1) - 0.3) * 1500 * mount;
+    h += ridgedMFw(pw, o1, EARTH_RM / 1500, res) * 1500 * mount;
   }
   const o2 = layerOctF(20000, foot, EARTH_RM, 3);
-  if (o2 > 0 && land > 0) h += tfbmF(sc(q, 20000, 5), o2) * Math.min(o2, 1) * 50 * land * (1 - mount);
+  if (o2 > 0 && land > 0) h += tfbmFw(sc(q, 20000, 5), o2, EARTH_RM / 20000, res) * Math.min(o2, 1) * 50 * land * (1 - mount);
   const o3 = layerOctF(200000, foot, EARTH_RM, 3);
   if (o3 > 0 && land > 0) h += tfbmF(sc(q, 200000, 3), o3) * Math.min(o3, 1) * (3 + 8 * mount) * land;
   return h;
 }
+
+/** The global height map's texel at the equator [m] (8192 wide: the resolution earthDetail assumes). */
+export const EARTH_MAP_RES = (EARTH_RM * 2 * Math.PI) / 8192;
 
 /** Cubic B-spline weights for the texels −1 … +2 around a fraction t. */
 const bspline4 = (t: number) => {
@@ -241,11 +291,13 @@ export function toHalf(v: number): number {
 /**
  * The Earth's height [m] at a unit direction on its axes, from its height map (whole metres per texel,
  * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
- * samples it near — a cubic B-spline over its texels, wrapping in longitude — and the detail finer than
- * it; the sea at 0.
+ * samples it near — a cubic B-spline over its texels, wrapping in longitude — under the terrain tiles
+ * near the camera (tiles: earth-tiles.ts, their heights and what they leave to the map), and the detail
+ * finer than them; the sea at 0.
  */
-export function earthHeightSampler(map: Int16Array, W: number, H: number) {
-  return (q: V3, foot = 0.05): number => {
+export function earthHeightSampler(map: Int16Array, W: number, H: number, tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number }) {
+  const texelA = (EARTH_RM * 2 * Math.PI) / W;
+  const fromMap = (q: V3): number => {
     const lon = Math.atan2(q[1], q[0]);
     const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
     const x = (0.5 + lon / (2 * Math.PI)) * W - 0.5;
@@ -259,7 +311,18 @@ export function earthHeightSampler(map: Int16Array, W: number, H: number) {
       for (let i = 0; i < 4; i++) row += wx[i]! * toHalf(map[yy * W + ((((x0 + i - 1) % W) + W) % W)]!);
       v += wy[j]! * row;
     }
-    const h0 = v;
-    return Math.max(h0 + earthDetail(q, h0, foot), 0);
+    return v;
+  };
+  return (q: V3, foot = 0.05): number => {
+    let h0: number, res: number;
+    const t = tiles?.(q, foot);
+    if (t && t.rem < 1) {
+      h0 = t.h + (t.rem >= 1e-4 ? t.rem * fromMap(q) : 0);
+      res = t.res + (t.rem >= 1e-4 ? t.rem * texelA : 0);
+    } else {
+      h0 = fromMap(q);
+      res = texelA;
+    }
+    return Math.max(h0 + earthDetail(q, h0, foot, res), 0);
   };
 }

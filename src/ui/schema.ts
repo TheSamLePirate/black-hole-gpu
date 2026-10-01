@@ -798,6 +798,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "clouds cover weather clear sky earth eclipse",
   },
   {
+    key: "earthTerrain", type: "toggle", section: "sky", group: "The Earth", label: "Real terrain", effect: "scene",
+    help: "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are. Off, or while they load: NOAA's global map (4.9 km) with drawn detail.",
+    keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
+  },
+  {
     key: "volumetricClouds", type: "toggle", section: "render", group: "Realtime", label: "Volumetric clouds", effect: "scene",
     help: "Near the Earth, its clouds are a volume — from 1.5 km to a top rising with the cover — marched along each ray: lit through themselves, their silhouettes on the horizon and their shadowed flanks. Off: a textured shell (faster).",
     keywords: "clouds volumetric earth sky weather",
