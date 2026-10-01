@@ -57,7 +57,7 @@ const ICON = {
 /** The targets' colours (the list's dots, the toolbar's chip, the markers). */
 export const BODY_COLOURS: Record<Target, string> = {
   hole: "255, 179, 92", star: "255, 217, 138", wormhole: "159, 184, 255", barycentre: "235, 240, 255",
-  miller: "140, 210, 220", mann: "220, 232, 245", k2: "255, 190, 120", edmunds: "220, 170, 120",
+  miller: "140, 210, 220", mann: "220, 232, 245", k2: "255, 190, 120", edmunds: "220, 170, 120", iss: "95, 255, 208",
   sun: "255, 236, 170", mercury: "190, 180, 170", venus: "240, 220, 170", earth: "120, 180, 255", moon: "210, 210, 210",
   mars: "240, 130, 90", phobos: "170, 150, 130", deimos: "170, 150, 130", ceres: "180, 180, 180", jupiter: "230, 200, 160",
   io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
@@ -373,7 +373,8 @@ export class CameraPanel {
   private groups(list: Target[]): [string, Target[]][] {
     const s = this.d.settings;
     const ours = list.filter((b) => SOLAR_BODIES.some((q) => q.id === b));
-    const theirs = list.filter((b) => !ours.includes(b));
+    const craft: Target[] = list.filter((b) => b === "iss");
+    const theirs = list.filter((b) => !ours.includes(b) && !craft.includes(b));
     const planets = ours.filter((b) => {
       const q = SOLAR_BODIES.find((x) => x.id === b)!;
       return !q.parent || q.parent === "sun";
@@ -382,8 +383,8 @@ export class CameraPanel {
     const cam = cameraFrame(s);
     const here = cam.region === "throat" && cam.ell < 0;
     const g: [string, Target[]][] = here
-      ? [["The Sun and the planets", planets], ["Moons", moons], ["Beyond the wormhole", theirs]]
-      : [["Gargantua's system", theirs], ["Through the wormhole — the Sun and the planets", planets], ["Moons", moons]];
+      ? [["The Sun and the planets", planets], ["Moons", moons], ["Spacecraft", craft], ["Beyond the wormhole", theirs]]
+      : [["Gargantua's system", theirs], ["Through the wormhole — the Sun and the planets", planets], ["Moons", moons], ["Spacecraft", craft]];
     return g.filter(([, l]) => l.length);
   }
 

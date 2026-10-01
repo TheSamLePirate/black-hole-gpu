@@ -12,7 +12,8 @@ import { blToCartesian } from "./camera";
 import { horizon, isco, rk4, stepSize, zamo, type State, type Vec3 } from "./physics";
 import { OUR_TARGETS, SYSTEM_BODIES, type OurBody, type Settings, type SystemBody, type Target } from "./settings";
 import { homeOf, homeToRep, ourState } from "./system/our-side";
-import { seenFrom, solarBody, SOLAR_BODIES } from "./system/solar";
+import { M_METRES, seenFrom, solarBody, SOLAR_BODIES } from "./system/solar";
+import { issTrack } from "./system/iss";
 import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
@@ -22,15 +23,19 @@ export type Body = Target;
 
 export const BODY_NAMES: Record<Body, string> = {
   hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass",
-  miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds",
+  miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds", iss: "ISS",
   ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
 };
 
 const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
 /** A body of our universe (the solar system, beyond our end of the wormhole) */
 export const isOurBody = (b: Body): b is OurBody => (OUR_TARGETS as string[]).includes(b);
+/** A target of our universe: a body of the solar system, or the space station */
+export const isOurs = (b: Body) => isOurBody(b) || b === "iss";
+/** The space station's half-span, for framing and picking [m] */
+export const ISS_RADIUS_M = 55;
 /** In the black hole's frame, a body of our universe is reached through the mouth: the mouth stands for it */
-const holeProxy = (b: Body): Body => (isOurBody(b) ? "wormhole" : b);
+const holeProxy = (b: Body): Body => (isOurs(b) ? "wormhole" : b);
 /** A body of the scene's registered system (null: not one, or no system in the scene). */
 function systemBody(s: Settings, b: Body) {
   return s.system === "gargantua" && isSystem(b) ? sysBody(GARGANTUA_SYSTEM, b) : null;
@@ -49,7 +54,7 @@ export function bodyVelocity(s: Settings, b0: Body, t: number): Vec3 {
 /** Mass (GM, in M) of a body's own field felt by a ship (0: none; the mouth's does not attract). */
 export function bodyMass(s: Settings, b: Body) {
   if (b === "star") return s.sun ? s.sunMass : 0;
-  if (isOurBody(b)) return 0;
+  if (isOurs(b)) return 0;
   return systemBody(s, b)?.mass ?? 0;
 }
 
@@ -176,6 +181,7 @@ export function bodyRadius(s: Settings, body: Body) {
   if (body === "barycentre") return 1;
   if (body === "wormhole") return mouth(s).w.rho;
   if (isOurBody(body)) return solarBody(body)!.radius;
+  if (body === "iss") return ISS_RADIUS_M / M_METRES;
   const sb = systemBody(s, body);
   if (sb) return sb.radius;
   return horizon(s.spin);
@@ -192,7 +198,7 @@ export function angularRadius(s: Settings, body: Body, d: number) {
  * those beyond the wormhole (reached through it: the mouth stands for them until the ship is there).
  */
 export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
-  const ours = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS] : [];
+  const ours: Body[] = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : [])] : [];
   if (onOurSide(s, cam)) return ["wormhole", ...ours, ...(s.system === "gargantua" ? (["hole", ...SYSTEM_BODIES] as Body[]) : [])];
   const list: Body[] = ["hole"];
   if (s.sun) list.push("star");
@@ -214,6 +220,11 @@ export function ourTarget(s: Settings, b: Body, t: number): { pos: Vec3; vel: Ve
     const st = ourState(b, t);
     const sb = solarBody(b)!;
     return { pos: st.pos, vel: st.vel, radius: sb.radius, mass: sb.mass };
+  }
+  if (b === "iss") {
+    // (where the game flies it: SGP4, or near the ship its own fall)
+    const st = issTrack.peek(t) ?? { X: ourState("earth", t).pos, V: ourState("earth", t).vel };
+    return { pos: st.X, vel: st.V, radius: ISS_RADIUS_M / M_METRES, mass: 0 };
   }
   return { pos: [0, 0, 0], vel: [0, 0, 0], radius: mouth(s).w.rho, mass: 0 };
 }
@@ -390,7 +401,7 @@ export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): B
   if (onOurSide(s, cam)) {
     const X = cameraHome(s, cam);
     let best: Body | null = null, bestOff = Infinity;
-    for (const b of ["wormhole", ...OUR_TARGETS] as Body[]) {
+    for (const b of ["wormhole", ...OUR_TARGETS, ...(s.iss ? ["iss"] : [])] as Body[]) {
       const T = ourTarget(s, b, time);
       const d = sub(T.pos, X);
       const D = Math.hypot(...d);

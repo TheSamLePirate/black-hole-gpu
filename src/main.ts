@@ -51,7 +51,7 @@ import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
 import { drawLock, lockKey } from "./ui/targethud";
-import { gameTimeOf, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
+import { gameTimeOf, issAxes, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
 import { rangerHull, stationHulls } from "./system/collide";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
@@ -460,6 +460,30 @@ async function main() {
    */
   function goTo(b: Target): string | null {
     if (settings.ship) return "The Ranger flies there: the planner (O), the autopilot (0: approach)";
+    if (b === "iss") {
+      // the space station: the camera 110 m off it — behind, to starboard, above —, moving with it,
+      // around it
+      if (!(settings.system === "gargantua" && settings.wormhole && settings.iss)) return "The space station flies in our universe (through the wormhole of the Gargantua-system scenes)";
+      const st = issTrack.peek(sim.time);
+      if (!st) return "The space station: no orbit known at this date";
+      const A = issAxes(st.X, st.V, sim.time);
+      const o = [-70, 60, -55];
+      const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [number, number, number];
+      const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
+      const l = Math.hypot(...d);
+      camera.setCinematic(null);
+      if (camera.gravity) camera.setGravity(false);
+      setHomePose(settings, X, [d[0] / l, d[1] / l, d[2] / l], [-A[2][0], -A[2][1], -A[2][2]], st.V);
+      settings.motion = "geodesic";
+      camera.setOurLanded(null);
+      camera.sync();
+      settings.rotation = "orbit";
+      camera.selectTarget("iss", { focus: true });
+      panel.toast("Camera: around the ISS");
+      refreshGui();
+      touch();
+      return null;
+    }
     const id = b === "hole" ? "gargantua" : b;
     const u = universeOf(id);
     camera.setCinematic(null);
@@ -1253,6 +1277,8 @@ async function main() {
       settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
       iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart, hulls: { ranger: rangerHull, station: stationHulls } },
+      /** the free camera to a target (the camera panel's Go to) */
+      goTo,
       /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
       sky: {
         goTo: (name: string) => {
@@ -1539,7 +1565,7 @@ async function main() {
       const k = devicePixelRatio;
       drawLock(ctx, lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360), k, lock.alpha, camera.piloting ? { top: 56 * k, bottom: 255 * k } : { top: 0, bottom: 70 * k });
     }
-    if (hover && hover.body !== marker?.body && !(lock && hover.body === settings.target && camera.lock === null)) drawHover(ctx, hover);
+    if (hover && hover.body !== marker?.body && !(lock && hover.body === settings.target)) drawHover(ctx, hover);
     if (ship) drawShipMarker(ctx, ship);
     if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);

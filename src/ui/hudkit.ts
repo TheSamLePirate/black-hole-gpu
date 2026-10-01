@@ -8,7 +8,7 @@ export const OUR_COLOURS: Record<string, string> = {
   io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
   mimas: "210, 210, 210", enceladus: "240, 245, 255", tethys: "220, 220, 220", dione: "210, 210, 210", rhea: "210, 210, 210",
   titan: "235, 170, 90", iapetus: "200, 190, 170", uranus: "160, 220, 230", neptune: "110, 150, 255", triton: "220, 210, 220",
-  pluto: "220, 190, 160", charon: "190, 190, 190",
+  pluto: "220, 190, 160", charon: "190, 190, 190", iss: "95, 255, 208",
 };
 
 export const AMBER = "#ffb35c";

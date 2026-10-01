@@ -12,6 +12,8 @@ import type { Info } from "./flighthud";
 import type { OurPath } from "../system/our-predict";
 import { M_METRES, solarBody, solarState, type MapName } from "../system/solar";
 import { toBodyFixed } from "../system/our-surface";
+import { issOrbit, issTrack } from "../system/iss";
+import { M_SECONDS } from "../system/solar";
 import { planetMapUrl } from "../system/planet-maps";
 import { BODY_NAMES, type Body } from "../targeting";
 import { AMBER, CYAN, FONT } from "./hudkit";
@@ -66,6 +68,8 @@ interface Scene {
   sun: V3 | null;
   ahead: V3[];
   plan: V3[];
+  /** the space station over the Earth: where it is, its ground track an orbit ahead (unit directions on its axes) */
+  iss?: { q: V3; track: V3[]; target: boolean } | null;
   /** the periapsis / apoapsis on the path ahead, with their heights [km] */
   pe: { q: V3; km: number } | null;
   ap: { q: V3; km: number } | null;
@@ -209,7 +213,27 @@ export class GroundTrack {
       id, name, Rkm, ours: true, ship: unit(q), altKm: (Math.hypot(...q) - b.radius) * M_METRES / 1e3,
       sun: unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)),
       ahead: ahead?.pts ?? [], plan: plan?.pts ?? [], pe: ahead?.pe ?? null, ap: ahead?.ap ?? null,
+      iss: id === "earth" && this.s.iss ? this.issTrack(t) : null,
     };
+  }
+
+  /** The space station's ground track (an orbit ahead, SGP4: the Earth turning under it), redone every
+   *  30 s of the scene's time; where it is now. */
+  private issCache: { t: number; track: V3[] } | null = null;
+  private issTrack(t: number) {
+    const now = issTrack.peek(t);
+    if (!now) return null;
+    const P = 92.9 * 60 / M_SECONDS;
+    if (!this.issCache || Math.abs(t - this.issCache.t) > 30 / M_SECONDS) {
+      const track: V3[] = [];
+      for (let k = 0; k <= 120; k++) {
+        const tk = t + (P * k) / 120;
+        const o = issOrbit(tk);
+        if (o) track.push(unit(toBodyFixed("earth", o.X as V3, tk)));
+      }
+      this.issCache = { t, track };
+    }
+    return { q: unit(toBodyFixed("earth", now.X as V3, t)), track: this.issCache.track, target: this.s.target === "iss" };
   }
 
   /**
@@ -546,6 +570,24 @@ export class GroundTrack {
     if (ship && this.past.id === sc.id) path(this.past.pts.map((p) => p.q).concat([ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
     if (ship) path([ship, ...sc.ahead], CYAN, 1.6, [5, 4]);
     path(sc.plan, AMBER, 1.6, [2, 3]);
+    // the space station: its ground track an orbit ahead, where it is (brighter when it is the target)
+    if (sc.iss) {
+      const tc = sc.iss.target ? "rgba(95, 255, 208, 0.85)" : "rgba(95, 255, 208, 0.4)";
+      path(sc.iss.track, tc, sc.iss.target ? 1.4 : 1, [4, 3]);
+      const p = at(sc.iss.q);
+      if (p) {
+        ctx.fillStyle = "rgb(95, 255, 208)";
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.lineWidth = 1 * dpr;
+        // (a station: a body and its wings)
+        ctx.fillRect(p[0] - 2.5 * dpr, p[1] - 2.5 * dpr, 5 * dpr, 5 * dpr);
+        ctx.fillRect(p[0] - 8 * dpr, p[1] - 1 * dpr, 16 * dpr, 2 * dpr);
+        ctx.font = `700 ${10 * dpr}px ${FONT}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("ISS", p[0] + 10 * dpr, p[1] - 6 * dpr);
+      }
+    }
     // the point under the Sun
     if (sc.sun) {
       const p = at(sc.sun);

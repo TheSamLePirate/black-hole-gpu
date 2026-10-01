@@ -928,7 +928,10 @@ export class FlightHud {
     E.rBox!.hidden = true;
     E.sBox!.hidden = true;
     E.align!.hidden = true;
-    E.aBox!.hidden = this.goal !== "star";
+    // (the space station: a rendezvous — no arrival to choose, no orbit's height)
+    const iss = i.target === "iss";
+    E.aBox!.hidden = this.goal !== "star" || iss;
+    E.altBox!.hidden = this.goal === "star" && iss;
     // (a free return: from an orbit around the moon's planet)
     const moonOfRef = tgtOk && SOLAR_BODIES.find((b) => b.id === i.target)?.parent === i.ref;
     (E["arr:freeReturn"] as HTMLButtonElement).disabled = !moonOfRef;
@@ -939,7 +942,7 @@ export class FlightHud {
     E.retLabel!.hidden = !free;
     E.altV!.textContent = `${this.ourAlt.toLocaleString("en-US")} km`;
     E.retV!.textContent = `${this.ourRet.toLocaleString("en-US")} km`;
-    E.desc!.textContent = this.goal === "orbit" ? `Circular orbit around ${refName} at` : this.goal === "star" ? `To ${tgtName}:` : "Through the wormhole's mouth (0.7 AU behind Saturn)";
+    E.desc!.textContent = this.goal === "orbit" ? `Circular orbit around ${refName} at` : this.goal === "star" ? (iss ? "Rendezvous with the ISS: 200 m off IDA-2, its velocity matched" : `To ${tgtName}:`) : "Through the wormhole's mouth (0.7 AU behind Saturn)";
     const busy = !!i.planBusy;
     E.go!.textContent = busy ? "PLANNING…" : "PLAN";
     (E.go as HTMLButtonElement).disabled = busy;

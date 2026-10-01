@@ -14,6 +14,14 @@ import { barycentre, bodyHill, starCentre, starOmega } from "../../targeting";
 import { mouth } from "../../wormhole";
 import { isco, horizon, photonOrbits } from "../../physics";
 import { OUR_COLOURS } from "../hudkit";
+import { issAxes, issOrbit, issTrack } from "../../system/iss";
+import { M_METRES } from "../../system/solar";
+
+/** A place in our universe's home frame at t: a body of the solar system's, or the space station's. */
+export function ourPos(id: string, t: number): V3 {
+  if (id === "iss") return (issTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
+  return solarState(id, t).pos as V3;
+}
 import type { V3 } from "./camera";
 
 export type Universe = "ours" | "gargantua";
@@ -122,6 +130,29 @@ export function ourScene(t0: number): MapScene {
     id: "wormhole", name: "Wormhole", kind: "mouth", parent: "sun", pos: [0, 0, 0], radius: 0.05, col: "200, 140, 255",
     pole: Z, soi: 0, orbit: null, orbitOff: [0, 0, 0], light: null,
   });
+  // the space station: its place (SGP4, or near the ship its own fall), a turn of its orbit around the
+  // Earth (SGP4: 92 minutes), its orbit's normal for a pole
+  const iss = issTrack.peek(t0);
+  if (iss) {
+    const E = pos.get("earth")!;
+    const T = (92.9 * 60) / M_SECONDS;
+    const orbit = cachedOrbit("ours:iss", t0, () => {
+      const pts: V3[] = [];
+      for (let j = 0; j <= 96; j++) {
+        const t = t0 + (T * j) / 96;
+        const o = issOrbit(t);
+        if (o) pts.push(add(sub(o.X as V3, solarState("earth", t).pos as V3), E));
+      }
+      return pts;
+    }, T / 40);
+    const c = orbitCache.get("ours:iss")!;
+    const off = sub(E, (c.q ??= solarState("earth", c.at).pos as V3));
+    const A = issAxes(iss.X, iss.V, t0);
+    bodies.push({
+      id: "iss", name: "ISS", kind: "moon", parent: "earth", pos: iss.X as V3, radius: 55 / M_METRES, col: "95, 255, 208",
+      pole: [-A[1][0], -A[1][1], -A[1][2]], soi: 0, orbit, orbitOff: off, light: "sun", period: T,
+    });
+  }
   return {
     universe: "ours", bodies, byId: new Map(bodies.map((b) => [b.id, b])), systemPole: Z, systemX: [1, 0, 0], hole: null,
     origin: () => [0, 0, 0],
@@ -213,7 +244,7 @@ export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1000)
 export function bodyPosAt(sc: MapScene, s: Settings, id: string, t: number): V3 | null {
   if (sc.universe === "ours") {
     if (id === "wormhole") return [0, 0, 0];
-    return SOLAR_BODIES.some((b) => b.id === id) ? solarState(id, t).pos : null;
+    return SOLAR_BODIES.some((b) => b.id === id) || id === "iss" ? ourPos(id, t) : null;
   }
   const o = sc.origin(t);
   if (id === "hole") return sub([0, 0, 0], o);

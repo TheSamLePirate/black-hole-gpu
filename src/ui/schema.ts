@@ -113,6 +113,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "k2", label: "Edmunds' star", hint: "Gargantua system: the K2 dwarf at 2 000 AU" },
       { value: "edmunds", label: "Edmunds", hint: "Gargantua system: the rocky planet around the K2 star" },
       ...OUR_TARGETS.map((id) => ({ value: id, label: SOLAR_BODIES.find((b) => b.id === id)!.name, hint: "Our universe (the solar system, beyond our end of the wormhole)" })),
+      { value: "iss", label: "ISS", hint: "The International Space Station, on its real orbit around the Earth" },
     ],
     help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
     keywords: "select body pivot focus star hole wormhole follow",

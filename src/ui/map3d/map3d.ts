@@ -18,7 +18,7 @@ import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
 import { FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
-import { bodyPosAt, dateOf, lineage, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
+import { bodyPosAt, dateOf, lineage, ourPos, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
 import { extendTheirs } from "../../system/their-extend";
@@ -235,13 +235,13 @@ export class Map3D {
    * are not all on the same side yet).
    */
   private extClosest(e: Extension, id: string, ours = this.universe === "ours"): { i: number; d: number } | null {
-    if (ours !== !!solarBody(id)) return null;
+    if (ours !== (!!solarBody(id) || id === "iss")) return null;
     let m = this.pathMemo.get(e);
     if (!m) this.pathMemo.set(e, (m = new Map()));
     const key = `ca:${ours ? "o" : "g"}:${id}`;
     if (!m.has(key)) {
       // (our side: the home frame; Gargantua's: the hole's flat map)
-      const at = (t: number): V3 => (ours ? solarState(id, t).pos : (bodyCentre(this.host.s, id as Body, t) as V3));
+      const at = (t: number): V3 => (ours ? ourPos(id, t) : (bodyCentre(this.host.s, id as Body, t) as V3));
       let best: { i: number; d: number } | null = null;
       for (let j = 0; j < e.pts.length; j++) {
         const d = len(sub(e.pts[j]!, at(e.times[j]!)));
@@ -1681,7 +1681,7 @@ export class Map3D {
       const cp = useExt ? ext! : tp;
       if (ca) {
         const t = cp.times[ca.i]!;
-        const a = P(FA(cp.pts[ca.i]!, t)), b = P(FA(solarState(i.target, t).pos, t));
+        const a = P(FA(cp.pts[ca.i]!, t)), b = P(FA(ourPos(i.target, t), t));
         if (a.ok && b.ok) {
           ctx.strokeStyle = "rgba(255, 138, 92, 0.8)";
           ctx.lineWidth = 1 * dpr;
@@ -1703,8 +1703,8 @@ export class Map3D {
       }
     }
     // the target where the plan meets it
-    if (i.ourArrive && i.ourArrive.body !== "wormhole" && solarBody(i.ourArrive.body) && plan) {
-      const q = P(FA(solarState(i.ourArrive.body, i.ourArrive.t).pos, i.ourArrive.t));
+    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || i.ourArrive.body === "iss") && plan) {
+      const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
         ctx.strokeStyle = "rgba(255, 170, 80, 0.9)";
         ctx.lineWidth = 1.2 * dpr;

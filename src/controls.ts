@@ -8,7 +8,7 @@ import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
   pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
   baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
-  cameraHome, isOurBody, onOurSide, ourLook, ourTarget,
+  cameraHome, isOurBody, isOurs, onOurSide, ourLook, ourTarget,
 } from "./targeting";
 import { advance, fromZamo, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
@@ -30,6 +30,7 @@ import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles } from "./system/iss";
+import { planIssRendezvous, refineIssNode } from "./system/iss-plan";
 import { rangerHull, stationHulls } from "./system/collide";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
@@ -366,7 +367,6 @@ export class CameraController {
   selectTarget(body: Target, o: { focus?: boolean; frame?: boolean } = {}) {
     const s = this.s;
     if (!this.availableTargets().includes(body)) return false;
-    this.lock = null;
     const changed = s.target !== body;
     s.target = body;
     this.activity = performance.now();
@@ -413,9 +413,6 @@ export class CameraController {
     const dist = bodyDistance(s, cam, s.target, this.nowTime());
     return { body: s.target, name: BODY_NAMES[s.target], look: aim.look, lensed: aim.lensed, dist, ang: angularRadius(s, s.target, dist), cam };
   }
-
-  /** The targeting locked on the space station (clicked), rather than on the target body. */
-  lock: "iss" | null = null;
 
   /** The space station from the camera's eye now: its direction (rep), distance [m], place and velocity. */
   private issSeen() {
@@ -501,7 +498,7 @@ export class CameraController {
       }
       return { tca: tc > 0 ? tc : NaN, ca: Math.max(miss - R, 0), impact };
     };
-    if (this.lock === "iss") {
+    if (s.target === "iss") {
       const v = this.issSeen();
       if (v) {
         // (its velocity relative to the ship: the station's, against the ship's)
@@ -514,7 +511,6 @@ export class CameraController {
         const c = course(p, u, R);
         return { id: "iss", name: "ISS", colour: "95, 255, 208", dir: dirC, ang: Math.atan(R / v.dist), dist: this.issSurfaceDistance(v), centre: v.dist, vrel: vC, closing: -dot3(vr, v.dir), ...c };
       }
-      this.lock = null;
     }
     const info = this.targetInfo();
     if (!info) return null;
@@ -549,7 +545,7 @@ export class CameraController {
     const s = this.s;
     const body = s.target;
     // (the bodies that move: the companion star, the centre of mass, our solar system's — seen now)
-    const t = body === "star" || body === "barycentre" || isOurBody(body) ? this.nowTime() : 0;
+    const t = body === "star" || body === "barycentre" || isOurs(body) ? this.nowTime() : 0;
     const key = [
       body, cam.region, cam.r, cam.theta, cam.phi, cam.ell, ...cam.n, ...cam.beta, t, s.spin, s.sun, s.sunOrbit, s.sunRadius,
       s.sunPhase, s.wormhole, s.whDist, s.whIncl, s.whAzimuth, s.whRho, s.disk, s.diskOuter,
@@ -681,7 +677,7 @@ export class CameraController {
     const s = this.s;
     if (!s.wormhole) return;
     // (our solar system's bodies: through our mouth — its frame; the rest, the hole's)
-    const want = s.target === "wormhole" || isOurBody(s.target) ? "wormhole" : "hole";
+    const want = s.target === "wormhole" || isOurs(s.target) ? "wormhole" : "hole";
     if (s.anchor === want) return;
     if (!switchAnchor(s, want)) s.target = "wormhole";
     this.targetDistance = s.distance;
@@ -1008,12 +1004,10 @@ export class CameraController {
       const r = this.canvas.getBoundingClientRect();
       // (the space station first: a click on it locks the targeting on it)
       if (this.pickIss(e.clientX - r.left, e.clientY - r.top)) {
-        this.lock = "iss";
-        this.activity = performance.now();
-        this.onPilotMessage?.("Target: the ISS");
+        if (this.s.target !== "iss" && this.selectTarget("iss")) this.onPilotMessage?.("Target: the ISS");
       } else {
         const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
-        if (body && (body !== this.s.target || this.lock)) this.selectTarget(body);
+        if (body && body !== this.s.target) this.selectTarget(body);
       }
       // (a finger: two taps in a row are a double click — the browsers' own dblclick is unreliable
       // there)
@@ -2898,6 +2892,8 @@ export class CameraController {
     if (!nav) return "Planning: in our universe (or around the black hole with PLAN TRANSFER)";
     if (this.planBusy) return "Planning… (still working on the last one)";
     const target = kind === "wormhole" ? "wormhole" : kind === "orbit" ? nav.ref : String(s.target);
+    // (the space station: a rendezvous beside its forward port — iss-plan.ts)
+    if (kind === "target" && s.target === "iss") return this.planIss(nav);
     if (kind === "target" && !isOurBody(s.target as Body)) return "Transfer: select a body of ours as the target (Tab, or a click on the map)";
     // (the first burn at least a minute away, and ~10 s of the pilot's time at this warp)
     const o = { lead: Math.max(60 / 492.5490947, 10 * (s.animate ? s.timeSpeed : 0)), mouthR: mouth(s).w.rho, accel: this.thrustMax() };
@@ -2921,7 +2917,51 @@ export class CameraController {
     }
   }
   private planGen = 0;
-  /** the last re-aim's answer (for the HUD and debugging) */
+
+  /** A rendezvous with the space station under way: its arrival's time; the re-aims each node had. */
+  private issGoal: { tArrive: number; refined: Map<ManeuverNode, number> } | null = null;
+
+  /** Plans the rendezvous with the station (iss-plan.ts): four nodes — departure, two corrections, arrival. */
+  private planIss(nav: NonNullable<ReturnType<CameraController["ourNav"]>>): string {
+    const s = this.s;
+    if (nav.ref !== "earth") return "Rendezvous: from an orbit around the Earth";
+    const lead = Math.max(60 / 492.5490947, 10 * (s.animate ? s.timeSpeed : 0));
+    const p = planIssRendezvous(nav.X, nav.V, nav.t, lead);
+    if (!p) return "No rendezvous with the ISS found in the next day";
+    this.ourMission = null;
+    this.ourPlanned = null;
+    this.plan = { nodes: p.nodes.map((n) => ({ t: n.t, dv: n.dv, then: null, role: n.role as ManeuverNode["role"], body: n.body })), path: null, at: 0, note: p.note };
+    this.issGoal = { tArrive: p.tArrive, refined: new Map() };
+    this.refreshPlan(true);
+    return `Plan: ${p.note}`;
+  }
+
+  /**
+   * Executing the rendezvous: the next node re-aimed from the ship's real state — a correction twice
+   * (when it becomes the next, and at a third of the way to it), the arrival as it nears. Never holds
+   * the burn back (the arcs are solved here, at once).
+   */
+  private issRefineTick(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, node: ManeuverNode, burnT: number): boolean {
+    const g = this.issGoal!;
+    if (this.nodeBurning || node.role === "depart") return false;
+    const n = g.refined.get(node) ?? 0;
+    const toNode = node.t - nav.t;
+    const due = n === 0 || (n === 1 && toNode < 0.35 * (node.t - (this.plan.at || nav.t))) || (n < 4 && toNode < 4 * burnT + 30 / 492.5490947);
+    if (!due || toNode < burnT) return false;
+    const dv = refineIssNode(nav.X, nav.V, nav.t, node, g.tArrive);
+    g.refined.set(node, n + 1);
+    if (!dv) return false;
+    // (a correction too small to fly — under 2 cm/s: dropped)
+    if (node.role === "mcc" && Math.hypot(...dv) * 299792458 < 0.02 && n > 0) {
+      const i = this.plan.nodes.indexOf(node);
+      if (i >= 0) {
+        this.plan.nodes.splice(i, 1);
+        this.onPilotMessage?.("Mid-course correction not needed");
+      }
+    } else node.dv = dv;
+    this.refreshPlan(true);
+    return false;
+  }
   lastRefine: { role: string; at: number; result: unknown } | null = null;
 
   /**
@@ -3052,6 +3092,7 @@ export class CameraController {
     else this.refreshPlan(true);
   }
   clearPlan() {
+    this.issGoal = null;
     this.plan = { nodes: [], path: null, at: 0, note: "" };
     this.ourMission = null;
     this.ourPlanned = null;
@@ -3245,7 +3286,7 @@ export class CameraController {
     const aMax = Math.max(this.thrustMax(), 1e-9);
     const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
     // (our universe, a mission's node: re-aimed as it nears — the burn waits for an answer due)
-    const hold = nav ? this.ourRefineTick(nav, node, burnT) : false;
+    const hold = nav ? (this.issGoal ? this.issRefineTick(nav, node, burnT) : this.ourRefineTick(nav, node, burnT)) : false;
     const toNode = node.t - this.nowTime();
     const start = toNode - burnT / 2;
     if (!this.nodeBurning && start <= 0 && !hold) {
@@ -3281,6 +3322,7 @@ export class CameraController {
           }
           this.ourMission = null;
           this.ourPlanned = null;
+          this.issGoal = null;
           this.missionHold = false;
           this.userWarp = null;
           P.path = null;
@@ -3608,11 +3650,16 @@ export class CameraController {
     const s = this.s;
     if (!b || b === "hole" || b === "barycentre" || b === "wormhole") return null;
     if (ours) {
+      if (b === "iss") {
+        // (the space station: around it, moving with it)
+        const T = ourTarget(s, b, t);
+        return { id: b, C: T.pos, V: T.vel, R: T.radius };
+      }
       if (!isOurBody(b)) return null;
       const st = ourState(b, t);
       return { id: b, C: st.pos, V: st.vel, R: solarBody(b)!.radius };
     }
-    if (isOurBody(b) || (b === "star" && !s.sun)) return null;
+    if (isOurs(b) || (b === "star" && !s.sun)) return null;
     return { id: b, C: bodyCentre(s, b, t), V: bodyVelocity(s, b, t), R: bodyRadius(s, b) };
   }
 
@@ -3813,7 +3860,7 @@ export class CameraController {
   /** A place on a body's own (turning) axes: ours — its body-fixed axes [M]; Gargantua's planets — their frame's ξ. */
   private rigFix(id: Body, ours: boolean, X: Vec3, t: number): Vec3 | null {
     const s = this.s;
-    if (ours) return toBodyFixed(id, X, t);
+    if (ours) return isOurBody(id) ? toBodyFixed(id, X, t) : null;
     if (!["miller", "mann", "edmunds"].includes(id)) return null;
     const F = planetFrame(id, t, s.spin, s.massSolar);
     return toLocal(F, X, F.V).xi;
@@ -3844,7 +3891,7 @@ export class CameraController {
     const ours = onOurSide(s, cam);
     let d = Infinity;
     for (const b of availableBodies(s, cam)) {
-      if (b === "hole" || b === "barycentre" || b === "wormhole" || isOurBody(b) !== ours) continue;
+      if (b === "hole" || b === "barycentre" || b === "wormhole" || isOurs(b) !== ours) continue;
       const r = bodyDistance(s, cam, b, t) - bodyRadius(s, b);
       if (r < d) d = r;
     }
@@ -4302,7 +4349,7 @@ export class CameraController {
     const out = (v: Vec3, ff: Vec3 = [0, 0, 0]) => ({ beta: nav.toRep(v), ff: nav.toRep(ff) });
     if (P.auto === "hover") {
       // (by the mouth — targeted, within a few of its stand-offs: at rest against it)
-      const byMouth = !isOurBody(s.target) && Math.hypot(...nav.X) < 0.5;
+      const byMouth = !isOurs(s.target) && Math.hypot(...nav.X) < 0.5;
       const refId = byMouth ? "mouth" : nav.ref;
       const ref = byMouth ? { pos: [0, 0, 0] as Vec3, vel: [0, 0, 0] as Vec3 } : ourState(nav.ref, t);
       if (!this.ourAnchor || this.ourAnchor.ref !== refId) this.ourAnchor = { ref: refId, d: sub3(nav.X, ref.pos) };
@@ -4731,7 +4778,8 @@ export class CameraController {
       /** the planner at work (our universe) */
       planBusy: this.planBusy,
       /** a mission's target at its periapsis time (the map marks where it will be) */
-      ourArrive: this.ourMission && this.plan.nodes.length ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive } : null,
+      ourArrive: this.ourMission && this.plan.nodes.length ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive }
+        : this.issGoal && this.plan.nodes.length ? { body: "iss", t: this.issGoal.tArrive } : null,
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());

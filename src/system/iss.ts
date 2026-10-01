@@ -266,6 +266,14 @@ export class IssTracker {
     return this.st;
   }
 
+  /** Its place at t without changing the tracker: its own fall near the ship (flown from its last
+   *  state, within 10 min), else SGP4's. */
+  peek(t: number): { X: Vec3; V: Vec3 } | null {
+    const st = this.st;
+    if (this.near && st && Math.abs(t - st.t) * M_S < 600) return this.flown(st, t);
+    return issOrbit(t);
+  }
+
   /** The state flown from `st` to t1 (either way: velocity Verlet is reversible). */
   private flown(st: { t: number; X: Vec3; V: Vec3 }, t1: number) {
     const span = t1 - st.t;
