@@ -75,7 +75,9 @@ export const FLIGHT_KEYS: Record<string, [number, number, number, number]> = {
  *    along its orbit, co-moving. Selecting a body turns the view to it smoothly (quaternion slerp).
  *  - free: drag turns the camera about itself, right-drag rolls, the wheel dollies.
  * Clicking a body's image selects it; double-clicking flies the view to it and frames it.
- * Also: momentum, smooth logarithmic zoom, pinch zoom, keyboard, and cinematic modes:
+ * Also: momentum, smooth logarithmic zoom, keyboard, and cinematic modes. Touch: a finger drags, two
+ * pinch (what the wheel does in the mode) and turn the view together (a right-drag), a double tap is a
+ * double click. Cinematic modes:
  *  - orbit: the observer circles the hole (azimuth drift)
  *  - dive: exact free fall from rest at infinity (E = 1, L = Q = 0) integrated in proper time,
  *          seen from the infalling ("rain") frame; ends just outside the horizon.
@@ -97,6 +99,11 @@ export class CameraController {
   private dragLook = false;
   private lastMove = 0;
   private pinchDist = 0;
+  /** two fingers: their midpoint at the last move (null: not two) */
+  private pinchMid: { x: number; y: number } | null = null;
+  /** a finger's last tap (a second within 320 ms nearby: a double tap), and when one was taken */
+  private lastTap: { x: number; y: number; t: number } | null = null;
+  private tapDblAt = -Infinity;
   private keys = new Set<string>();
   private codes = new Set<string>();
   /** A video steps the scene (sim.ts): the user's keys and controller are left out. */
@@ -120,6 +127,8 @@ export class CameraController {
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
   piloting = false;
+  /** the touch screen's flight controls (ui/touchflight.ts), −1…1: read with the keys */
+  readonly touchInput = { pitch: 0, yaw: 0, roll: 0 };
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
   /** The camera's place on the ship: moves smoothly (0.6 s) from one attach point to the next. */
@@ -829,12 +838,16 @@ export class CameraController {
     this.leveling = false;
     this.activity = performance.now();
     this.setHover(null);
-    if (this.pointers.size === 2) this.pinchDist = this.pinchSpan();
+    if (this.pointers.size === 2) {
+      this.pinchDist = this.pinchSpan();
+      this.pinchMid = this.pinchCentre();
+    }
     if (this.cinematic === "orbit") this.setCinematic(null);
   };
 
   private onUp = (e: PointerEvent) => {
     this.pointers.delete(e.pointerId);
+    this.pinchMid = null;
     // released after a pause: no fling
     if (performance.now() - this.lastMove > 80) this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
     // a click (no drag): select the body under the pointer
@@ -844,12 +857,25 @@ export class CameraController {
       const r = this.canvas.getBoundingClientRect();
       const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
       if (body && body !== this.s.target) this.selectTarget(body);
+      // (a finger: two taps in a row are a double click — the browsers' own dblclick is unreliable
+      // there)
+      if (e.pointerType === "touch") {
+        const now = performance.now();
+        const l = this.lastTap;
+        if (l && now - l.t < 320 && Math.hypot(e.clientX - l.x, e.clientY - l.y) < 30) {
+          this.lastTap = null;
+          this.tapDblAt = now;
+          this.onDblClick(e, true);
+        } else this.lastTap = { x: e.clientX, y: e.clientY, t: now };
+      }
     }
   };
 
   /** Double-click: on a body, orbit it and fly the view to it (framed); on the sky, recentre / level. */
-  private onDblClick = (e: MouseEvent) => {
+  private onDblClick = (e: MouseEvent, tap = false) => {
     if (!this.enabled || this.flyMode) return;
+    // (the double tap taken already: not again from the browser's dblclick)
+    if (!tap && performance.now() - this.tapDblAt < 600) return;
     if (this.piloting && !this.cinematic) return this.setLook(0, 0);
     const r = this.canvas.getBoundingClientRect();
     const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
@@ -870,6 +896,11 @@ export class CameraController {
   private pinchSpan() {
     const [a, b] = [...this.pointers.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  }
+
+  private pinchCentre() {
+    const [a, b] = [...this.pointers.values()];
+    return a && b ? { x: 0.5 * (a.x + b.x), y: 0.5 * (a.y + b.y) } : null;
   }
 
   private onMove = (e: PointerEvent) => {
@@ -897,11 +928,23 @@ export class CameraController {
     this.activity = now;
 
     if (this.pointers.size === 2) {
+      // two fingers: spread or pinched, what the wheel does in this mode (zoom, the distance around a
+      // body or the ship, the lens); moved together, the view turns as with a right-drag
       const span = this.pinchSpan();
-      if (this.pinchDist > 0 && span > 0) this.zoomBy(this.pinchDist / span);
+      const mid = this.pinchCentre();
+      if (this.pinchDist > 0 && span > 0) this.zoomStep(Math.log(this.pinchDist / span) / 0.0015, false);
+      if (mid && this.pinchMid) this.dragBy(mid.x - this.pinchMid.x, mid.y - this.pinchMid.y, dtEv, true);
+      // (no fling after two fingers: their midpoint jitters as they move one event at a time)
+      this.vAz = this.vInc = this.vYaw = this.vPitch = 0;
       this.pinchDist = span;
+      this.pinchMid = mid;
       return;
     }
+    this.dragBy(dx, dy, dtEv, this.dragLook);
+  };
+
+  /** A drag of the view by (dx, dy) CSS pixels; look: as a right-drag (the view turns about itself). */
+  private dragBy(dx: number, dy: number, dtEv: number, lookDrag: boolean) {
     const s = this.s;
     // fling velocity: smoothed and capped (°/s)
     const smooth = (v: number, inst: number) => clamp(0.5 * inst + 0.5 * v, -120, 120);
@@ -912,7 +955,7 @@ export class CameraController {
       this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
     };
     const ov = this.piloting && !this.cinematic ? this.outsideView() : null;
-    const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || (s.rotation === "tripod" && s.lookAt)) && !this.dragLook;
+    const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || (s.rotation === "tripod" && s.lookAt)) && !lookDrag;
     if (rigTurn && s.rotation === "orbit") {
       // around a planet, a moon: the drag turns the camera about it
       this.rig.az -= dx * 0.25;
@@ -944,9 +987,9 @@ export class CameraController {
       else this.setLook(s.shipLookYaw - dx * kLook, s.shipLookPitch + dy * kLook);
     } else if (s.rotation === "free") {
       // free: drag looks around, right / shift drag rolls
-      if (this.dragLook) this.rotateView(0, 0, -dx * 0.4);
+      if (lookDrag) this.rotateView(0, 0, -dx * 0.4);
       else look();
-    } else if (this.dragLook || !this.orbiting) {
+    } else if (lookDrag || !this.orbiting) {
       look(); // offset of the view from the target (or, falling freely, just look)
     } else {
       const k = 0.25 * Math.min(1, s.fov / 45);
@@ -954,12 +997,16 @@ export class CameraController {
       this.vAz = smooth(this.vAz, (-dx * k) / dtEv);
       this.vInc = smooth(this.vInc, (-dy * k) / dtEv);
     }
-  };
+  }
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (!this.enabled) return;
-    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    this.zoomStep(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, e.altKey);
+  };
+
+  /** The wheel's step dy (pixels: > 0 away, out), or a pinch's — what it does depends on the mode. */
+  private zoomStep(dy: number, alt: boolean) {
     this.activity = performance.now();
     this.flight = null;
     // (the telescope: the wheel is its zoom, in every mode)
@@ -969,17 +1016,17 @@ export class CameraController {
       this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
       return;
     }
-    if (!e.altKey && this.rig.on && !this.piloting) {
+    if (!alt && this.rig.on && !this.piloting) {
       // the rig: around a body the wheel sets the distance (to its surface, logarithmically); else it
       // pushes the camera forwards / back
       if (this.s.rotation === "orbit") this.rig.alt = clamp(this.rig.alt * Math.exp(dy * 0.0015), 1e-12, 1e6);
       else this.rig.dolly -= dy * 0.004;
       return;
     }
-    if (!e.altKey && this.piloting && !this.cinematic && this.outsideView() === "around") {
+    if (!alt && this.piloting && !this.cinematic && this.outsideView() === "around") {
       // outside, around the ship: the wheel sets the camera's distance (12 m … 20 km)
       this.outside.dist = clamp(this.outside.dist * Math.exp(dy * 0.0015), 12, 20000);
-    } else if (e.altKey || this.gravity || this.piloting) {
+    } else if (alt || this.gravity || this.piloting) {
       this.zoomLens(Math.exp(dy * 0.001));
     } else if (this.s.rotation === "free" && !this.cinematic) {
       // dolly along the view, gliding (the flight's inertia)
@@ -987,7 +1034,7 @@ export class CameraController {
     } else {
       this.zoomBy(Math.exp(dy * 0.0015));
     }
-  };
+  }
 
   // ------------------------------------------------------------------------------ the lens
   /** The field of view the lens eases to (log), or none. */
@@ -2117,6 +2164,10 @@ export class CameraController {
     const up = k("ShiftLeft") || k("ShiftRight") || (this.keys.has("ArrowUp") ? 1 : 0);
     const down = k("AltLeft") || k("AltRight") || (this.keys.has("ArrowDown") ? 1 : 0);
     i.throttle = up - down;
+    const t = this.touchInput;
+    i.pitch = clamp(i.pitch + t.pitch, -1, 1);
+    i.yaw = clamp(i.yaw + t.yaw, -1, 1);
+    i.roll = clamp(i.roll + t.roll, -1, 1);
     if (pad) {
       // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle
       i.pitch = clamp(i.pitch - pad.move[0], -1, 1);

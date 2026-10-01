@@ -47,11 +47,14 @@ import { solarBody, M_METRES } from "./system/solar";
 import { setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
 import { loading } from "./loading";
+import { preventPageZoom } from "./ui/nozoom";
+import { TouchFlight } from "./ui/touchflight";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
+preventPageZoom();
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
 
@@ -731,6 +734,16 @@ async function main() {
     const help = m === "around" ? " — drag to turn around the ship" : m === "free" ? " — fly the camera, the ship flies on" : "";
     panel.toast(`Camera: ${MOUNTS[m].label}${help}`);
   }
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const touchFlight = new TouchFlight({
+    input: camera.touchInput,
+    throttle: () => camera.pilot.throttle,
+    setThrottle: (t) => {
+      if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
+      camera.pilot.throttle = t;
+    },
+  });
+  document.body.append(touchFlight.el);
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
     camera: () => {
@@ -1419,6 +1432,8 @@ async function main() {
       flightHud.show(pil);
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
     }
+    // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera)
+    touchFlight.update(pil && coarse && camera.outsideView() !== "free" && !document.body.classList.contains("hide-ui"));
     if (pil && info) {
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;

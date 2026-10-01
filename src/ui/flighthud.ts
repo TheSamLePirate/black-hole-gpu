@@ -268,8 +268,13 @@ export class FlightHud {
 
   constructor(private s: Settings, private act: FlightHudActions) {
     this.hud = h("canvas", "fl-hud");
+    // (a phone: the minimal HUD — the full one's panels cover the small screen and the touch controls —
+    // until the pilot picks another)
+    const small = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse) and (max-height: 540px), (pointer: coarse) and (max-width: 540px)").matches;
+    this.density = small ? 1 : 0;
     try {
-      this.density = Math.min(2, Math.max(0, Number(localStorage.getItem("kerr.hud-density")) || 0));
+      const saved = localStorage.getItem("kerr.hud-density");
+      if (saved !== null) this.density = Math.min(2, Math.max(0, Number(saved) || 0));
     } catch {
       /* private mode */
     }
