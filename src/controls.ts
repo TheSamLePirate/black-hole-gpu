@@ -366,6 +366,7 @@ export class CameraController {
   selectTarget(body: Target, o: { focus?: boolean; frame?: boolean } = {}) {
     const s = this.s;
     if (!this.availableTargets().includes(body)) return false;
+    this.lock = null;
     const changed = s.target !== body;
     s.target = body;
     this.activity = performance.now();
@@ -411,6 +412,121 @@ export class CameraController {
     if (!aim) return null;
     const dist = bodyDistance(s, cam, s.target, this.nowTime());
     return { body: s.target, name: BODY_NAMES[s.target], look: aim.look, lensed: aim.lensed, dist, ang: angularRadius(s, s.target, dist), cam };
+  }
+
+  /** The targeting locked on the space station (clicked), rather than on the target body. */
+  lock: "iss" | null = null;
+
+  /** The space station from the camera's eye now: its direction (rep), distance [m], place and velocity. */
+  private issSeen() {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav || !s.iss) return null;
+    const st = issTrack.state(nav.t, nav.X);
+    if (!st) return null;
+    const d = lin(sub3(st.X, nav.X), M_METRES, st.X, 0);
+    // (from the eye, not the ship's centre)
+    const eye = s.ship ? shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    const r = nav.toRep(d);
+    const dir = lin(lin(r, 1, cam.right, eye[0]), 1, lin(cam.up, eye[1], cam.fwd, eye[2]), 1);
+    const dist = Math.hypot(...dir);
+    if (!(dist < 5e6)) return null;
+    return { cam, nav, st, dir: lin(dir, 1 / dist, dir, 0), dist };
+  }
+
+  /**
+   * The distance from the eye to the station's nearest point [m]: within 1.5 km, its nearest vertex
+   * (the coarse mesh, its parts turned as they are); farther, its centre less 38 m.
+   */
+  private issSurfaceDistance(v: NonNullable<ReturnType<CameraController["issSeen"]>>) {
+    if (v.dist > 1500 || !stationHulls.length || !station.joints.length) return Math.max(v.dist - 38, 0);
+    const s = this.s;
+    const w = mouth(s).w;
+    const cam = v.cam;
+    // the eye on the station's axes [m]
+    const A = issAxes(v.st.X, v.st.V, v.nav.t);
+    const dH = repToHomeVec(w, cam.ell, cam.n, lin(v.dir, v.dist, v.dir, 0));
+    const q: Vec3 = [-dot3(dH, A[0]), -dot3(dH, A[1]), -dot3(dH, A[2])];
+    const T = partTransforms(station.joints, stationAngles(v.nav.t, v.st.X, v.st.V));
+    let best = Infinity;
+    stationHulls.forEach((bvh, k) => {
+      if (!bvh) return;
+      const qp = m34unapply(T[k]!, q);
+      // (its own vertices: the parts share one array — through its triangles)
+      const P = bvh.pos, I = bvh.tri;
+      for (let j = 0; j < I.length; j++) {
+        const i = 3 * I[j]!;
+        const d2 = (P[i]! - qp[0]) ** 2 + (P[i + 1]! - qp[1]) ** 2 + (P[i + 2]! - qp[2]) ** 2;
+        if (d2 < best) best = d2;
+      }
+    });
+    return Math.sqrt(best);
+  }
+
+  /** Whether a click at (x, y) [CSS px] falls on the space station's image (its 60 m, or 14 px). */
+  private pickIss(x: number, y: number) {
+    const v = this.issSeen();
+    if (!v) return false;
+    const s = this.s;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    const look = pixelLook(v.cam, (2 * x) / w - 1, 1 - (2 * y) / h, s.fov, w / h);
+    const ang = Math.acos(Math.max(-1, Math.min(1, dot3(look, v.dir))));
+    const px = (2 * Math.tan((s.fov * Math.PI) / 360)) / h; // (radians a pixel, near the middle)
+    return ang < Math.max(Math.atan(60 / v.dist), 14 * px);
+  }
+
+  /**
+   * The targeting: what is locked (the space station when clicked, else the target body), as the HUD
+   * draws it — its name, its direction (camera frame: x right, y up, z forward), its angular radius,
+   * the distance to its surface [m], its velocity relative to the ship (camera frame) [m/s], the
+   * closing rate [m/s, > 0 closing], the closest approach on straight lines (its distance from the
+   * surface [m] and time [s]) and, on a collision course, the time to impact [s].
+   */
+  lockView() {
+    const s = this.s;
+    const C_MS = 299792458;
+    const cam = cameraFrame(s);
+    const toCam = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    // the straight-line geometry: ship relative to the target (position p [m], velocity u [m/s])
+    const course = (p: Vec3, u: Vec3, R: number) => {
+      const uu = dot3(u, u);
+      const pu = dot3(p, u);
+      const tc = uu > 1e-12 ? -pu / uu : 0;
+      const miss = tc > 0 ? Math.hypot(...lin(p, 1, u, tc)) : Math.hypot(...p);
+      let impact = NaN;
+      if (tc > 0 && miss < R) {
+        const disc = pu * pu - uu * (dot3(p, p) - R * R);
+        if (disc >= 0) impact = (-pu - Math.sqrt(disc)) / uu;
+      }
+      return { tca: tc > 0 ? tc : NaN, ca: Math.max(miss - R, 0), impact };
+    };
+    if (this.lock === "iss") {
+      const v = this.issSeen();
+      if (v) {
+        // (its velocity relative to the ship: the station's, against the ship's)
+        const vr = v.nav.toRep(lin(sub3(v.st.V, v.nav.V), C_MS, v.st.V, 0));
+        // (its ring: the half-span it shows from most sides — the truss 50 m, the modules 37)
+        const R = 38;
+        const dirC = toCam(v.dir);
+        const vC = toCam(vr);
+        const p = lin(v.dir, -v.dist, v.dir, 0), u = lin(vr, -1, vr, 0);
+        const c = course(p, u, R);
+        return { id: "iss", name: "ISS", colour: "95, 255, 208", dir: dirC, ang: Math.atan(R / v.dist), dist: this.issSurfaceDistance(v), centre: v.dist, vrel: vC, closing: -dot3(vr, v.dir), ...c };
+      }
+      this.lock = null;
+    }
+    const info = this.targetInfo();
+    if (!info) return null;
+    const mR = 1476.625 * (s.massSolar || 1);
+    const R = Math.tan(info.ang) * info.dist * mR;
+    const dirC = toCam(info.look);
+    const vt = this.targetVelLocal(cam);
+    const vr: Vec3 = vt ? lin(sub3(vt, cam.beta), C_MS, vt, 0) : [0, 0, 0];
+    const centre = info.dist * mR;
+    const p = lin(info.look, -centre, info.look, 0), u = lin(vr, -1, vr, 0);
+    const c = course(p, u, R);
+    return { id: String(s.target), name: info.name, colour: "", dir: dirC, ang: info.ang, dist: Math.max(centre - R, 0), centre, vrel: toCam(vr), closing: -dot3(vr, info.look), ...c };
   }
 
   /** The scene's time now: the frame's, or, once the ship has moved this frame, the ship's clock. */
@@ -890,8 +1006,15 @@ export class CameraController {
     this.down = null;
     if (d && this.pointers.size === 0 && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5 && performance.now() - d.t < 400) {
       const r = this.canvas.getBoundingClientRect();
-      const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
-      if (body && body !== this.s.target) this.selectTarget(body);
+      // (the space station first: a click on it locks the targeting on it)
+      if (this.pickIss(e.clientX - r.left, e.clientY - r.top)) {
+        this.lock = "iss";
+        this.activity = performance.now();
+        this.onPilotMessage?.("Target: the ISS");
+      } else {
+        const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
+        if (body && (body !== this.s.target || this.lock)) this.selectTarget(body);
+      }
       // (a finger: two taps in a row are a double click — the browsers' own dblclick is unreliable
       // there)
       if (e.pointerType === "touch") {

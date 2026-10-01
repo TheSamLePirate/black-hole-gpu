@@ -50,6 +50,7 @@ import { loading } from "./loading";
 import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
+import { drawLock, lockKey } from "./ui/targethud";
 import { gameTimeOf, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
 import { rangerHull, stationHulls } from "./system/collide";
 import { loadEphemerides } from "./system/de440";
@@ -1512,14 +1513,17 @@ async function main() {
   function drawGuide() {
     const cam = cameraFrame(settings);
     const guide = settings.shadowGuide && cam.region === "hole";
-    const marker = targetMarker();
+    // (the targeting: around what is locked — the target, or the station clicked; the old brackets only
+    // where it gives nothing)
+    const lock = lockDraw();
+    const marker = lock ? null : targetMarker();
     const hover = camera.hover;
     const ship = shipMarker();
     const tele = telescopeView(cam);
     // (the sky chart's words: over the live view — the offline one is letterboxed, its lines alone)
     const sky = chart && !renderer.offlineActive ? chart : null;
-    const key = guide || camera.flyMode || marker || hover || ship || tele || sky
-      ? [settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key,
+    const key = guide || camera.flyMode || marker || lock || hover || ship || tele || sky
+      ? [lock ? lockKey(lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360)) + lock.alpha.toFixed(2) : "",settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key,
         tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking], sky ? chartKey : ""].join()
       : "off";
     if (key === guideKey) return;
@@ -1531,7 +1535,11 @@ async function main() {
     if (camera.flyMode) drawCrosshair(ctx);
     if (tele) drawTelescope(ctx, overlay.width, overlay.height, devicePixelRatio, tele);
     if (marker && !tele) drawMarker(ctx, marker);
-    if (hover && hover.body !== marker?.body) drawHover(ctx, hover);
+    if (lock && !tele) {
+      const k = devicePixelRatio;
+      drawLock(ctx, lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360), k, lock.alpha, camera.piloting ? { top: 56 * k, bottom: 255 * k } : { top: 0, bottom: 70 * k });
+    }
+    if (hover && hover.body !== marker?.body && !(lock && hover.body === settings.target && camera.lock === null)) drawHover(ctx, hover);
     if (ship) drawShipMarker(ctx, ship);
     if (!guide) return;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
@@ -1631,6 +1639,20 @@ async function main() {
   }
 
   // ------------------------------------------------------------------ target marker
+
+  /**
+   * The targeting HUD's figures (ui/targethud.ts): flying, always there; else while the camera is
+   * handled, then fading, as the brackets did.
+   */
+  function lockDraw() {
+    if (renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    const idle = (performance.now() - camera.activity) / 1000;
+    const alpha = settings.ship ? 1 : idle < 1.6 ? 1 : Math.max(0, 1 - (idle - 1.6) / 0.8);
+    if (alpha <= 0) return null;
+    const v = camera.lockView();
+    if (!v || !v.dir.every(Number.isFinite)) return null;
+    return { v: { ...v, colour: v.colour || BODY_COLOURS[v.id as Target] || "" }, alpha };
+  }
 
   /**
    * The target's marker: corner brackets around its apparent image (lensed and light-delayed), or an
