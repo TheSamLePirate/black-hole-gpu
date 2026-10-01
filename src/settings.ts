@@ -538,14 +538,17 @@ export const presets: Record<string, Preset> = {
   "Earth: the night side, Japan's lights": { ...EARTH_VIEW, target: "earth", time: T0 + 14 * DAY, pose: { at: [35, 137], altKm: 800, look: "earth", off: [0, 40] } },
   // the Himalaya from 400 km over the Ganges plain, looking north at the range, the afternoon Sun 11° up
   // there: the ridges in relief, their snow, their shadows
-  "Earth: the Himalaya from orbit": { ...EARTH_VIEW, target: "earth", fov: 50, time: T0 - 0.1931 * DAY, pose: { at: [24.5, 86.9], altKm: 400, look: "earth", off: [0, 45] } },
+  // (no clouds: the map's, on its fixed deck 6 km up, covered the plateau now at its true ~4 800 m)
+  "Earth: the Himalaya from orbit": { ...EARTH_VIEW, target: "earth", fov: 50, earthClouds: 0, time: T0 - 0.1931 * DAY, pose: { at: [24.5, 86.9], altKm: 400, look: "earth", off: [0, 45] } },
   // Santiago, the Sun setting behind the coast range: the auto exposure on the glow
   // the total eclipse of 12 August 2026 from Burgos, half a minute before the Moon's shadow arrives —
   // totality 18:28:10 – 18:29:51 UTC here, the Sun 9° up in the west-northwest: the sky's darkening, the
   // diamond ring, the corona, the horizon's glow all round (DE440; the NASA path within a kilometre)
+  // (the view 4° under the Sun: the Meseta's real horizon, flat, in the frame — the drawn hills that filled
+  // its foot are gone)
   "Earth: total eclipse over Burgos, 12 Aug 2026": {
-    ...EARTH_VIEW, ship: false, target: "sun", lookAt: true, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
-    pose: { at: [42.34, -3.7], look: "sun" },
+    ...EARTH_VIEW, ship: false, target: "sun", lookAt: false, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [42.34, -3.7], look: "sun", off: [0, -4] },
   },
   // the same eclipse from 3 000 km over the Labrador Sea, the Sun behind the camera: the Moon's shadow on the
   // clouds west of Iceland at greatest eclipse (17:45:56 UTC, γ 0.8977), the penumbra dimming the Arctic
@@ -555,8 +558,9 @@ export const presets: Record<string, Preset> = {
     pose: { at: [52, -40], altKm: 3000, aim: [65.2, -25.2], off: [0, 3] },
   },
   "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0 + 0.358 * DAY, pose: { at: SANTIAGO, look: "sun", off: [0, 6] } },
-  // Santiago, a quarter of an hour later: the full Moon rising over the Andes (a telephoto)
-  "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3945 * DAY, pose: { at: SANTIAGO, look: "moon", off: [0, -2] } },
+  // Santiago, an hour after sunset: the full Moon just clear of the Andes (their crest 5° up from the city —
+  // a quarter of an hour after sunset it was still behind them) (a telephoto)
+  "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3945 * DAY + (45 / 1440) * DAY, pose: { at: SANTIAGO, look: "moon", off: [0, -2] } },
   // Mont Blanc at dusk, 18 January: a two-day-old Moon, 4 % lit, 12° up (a telephoto)
   "Earth: crescent Moon at dusk over the Alps": { ...EARTH_VIEW, target: "moon", fov: 7, time: T0 + 17.071 * DAY, pose: { at: [45.83, 6.86], look: "moon" } },
   // Aconcagua at dusk, 23 January: the first quarter, 34° up (a telephoto)
