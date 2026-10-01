@@ -2355,6 +2355,12 @@ export class CameraController {
       }
     }
     const inp = this.pilotInput(pad);
+    // (the docking autopilot ended — docked, stopped: the pilot's warp back)
+    if (this.pilot.auto !== "dock" && this.dockAuto) {
+      if (this.dockAuto.warp !== null && s.timeSpeed === this.dockAuto.set) s.timeSpeed = this.warpSet = this.dockAuto.warp;
+      this.warpWant = null;
+      this.dockAuto = null;
+    }
     // docked: carried by the station; a push of the engine or the thrusters undocks
     if (this.docked) {
       if (inp.throttle > 0 || inp.tx !== 0 || inp.ty !== 0 || inp.tz !== 0 || this.pilot.throttle > 0) this.undock();
@@ -2381,6 +2387,7 @@ export class CameraController {
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
       radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
       target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
+      dock: this.pilot.auto === "dock" ? this.dockAuto?.att ?? null : null,
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
       // ship turns within it — the wall-clock turn rates are for the eye, not for days-long burns)
@@ -2409,7 +2416,7 @@ export class CameraController {
    * the ship's nose against the port's axis (docked rear first: the nose along it, outwards). Null
    * beyond 5 km, or not on our side.
    */
-  private dockGeometry() {
+  private dockGeometry(only?: number) {
     const s = this.s;
     const cam = cameraFrame(s);
     const nav = this.ourNav(cam);
@@ -2430,6 +2437,7 @@ export class CameraController {
     const om = lin(cross(r, v), 1 / dot3(r, r), r, 0);
     let best: DockInfo | null = null;
     station.ports.forEach((p, k) => {
+      if (only !== undefined && k !== only) return;
       const c = lin(iss.X, 1, st(p.centre), m);
       const a = st(p.axis);
       const d = lin(sub3(ring, c), M_METRES, a, 0);
@@ -2468,6 +2476,11 @@ export class CameraController {
   /** The ship for contacts with the station near it: its centre, velocity and axes (home), its time. */
   private contactPose() {
     if (!issTrack.near || this.docked || this.undocking || !rangerHull.bvh || !stationHulls.length || !station.joints.length) return null;
+    // (the ring on the port's axis, its nose on it, within a metre and a half: the docking systems
+    // meet — the hull's own collar touches the adapter's 40 cm out, before the capture's 30; the
+    // capture or the port's bounce (dockCheck) answers)
+    const g = this.dockInfo;
+    if (g && g.along < 1.5 && g.along > -0.6 && g.lateral < 0.3 && g.angle < 10) return null;
     const s = this.s;
     const cam = cameraFrame(s);
     const nav = this.ourNav(cam);
@@ -2578,7 +2591,8 @@ export class CameraController {
   /** After each step: the docking aid's figures, and the capture — the ring within 30 cm of the port's,
    *  slower than 0.5 m/s, the nose within 10° of the port's axis. */
   private dockCheck() {
-    const g = this.dockGeometry();
+    // (the docking autopilot's port while it flies; else the nearest)
+    const g = this.dockGeometry(this.pilot.auto === "dock" ? this.dockAuto?.port : undefined);
     this.dockInfo = g && g.range < 5000 ? g : null;
     if (!g || this.docked) return;
     // (just undocked: no capture until the ring is a metre clear)
@@ -2665,6 +2679,7 @@ export class CameraController {
     if (!D) return;
     this.docked = null;
     this.undocking = true;
+    if (this.pilot.auto === "dock") this.pilot.auto = "none";
     const g = this.dockGeometry();
     if (g) {
       const s = this.s;
@@ -2677,6 +2692,131 @@ export class CameraController {
       this.sync();
     }
     this.onPilotMessage?.("Undocked from the ISS");
+  }
+
+  /**
+   * The docking autopilot (B, or the end of a rendezvous with the station): its port, what it is
+   * doing (for the HUD), the attitude it holds (local), the pilot's warp and the one it set, whether
+   * the way to the port's axis is clear (and when that was last looked at).
+   */
+  dockAuto: { port: number; phase: string; att: { nose: Vec3; up: Vec3 } | null; warp: number | null; set: number; corridor: boolean; final: boolean; blocked: boolean; checked: number } | null = null;
+
+  /**
+   * The last of a rendezvous, flown on the thrusters alone (the nose out along the port's axis, the
+   * ship's top to the zenith — its rear hatch towards the port; the main engine would push it off):
+   *  - off the axis: to a point on it (30 – 200 m out); if the station stands in the way (lines a hull's
+   *    width apart cast against it), round it first — on a sphere 130 m about its centre, stepping
+   *    towards the axis;
+   *  - in the approach corridor (a cone about the axis): closing at 0.08 m/s + 1.2 % of the distance
+   *    (3 m/s at most — 0.1 m/s at the contact), the offset across the axis taken out as it closes;
+   *  - 10 m out: a hold until the ring is within 10 cm of the axis, the nose within 2° and the drift
+   *    still; then the final approach, to the capture (dockCheck) — docked, it lets go.
+   * The relative motion is the station's turning frame's: its point where the ring is, its fall and the
+   * ship's (their difference — the tide — and the turn's pull) fed forward. The warp: ×10 beyond
+   * 150 m, ×5 beyond 40, ×2 beyond 4, real time for the last 4 m (with auto warp; otherwise the
+   * pilot's, no higher).
+   */
+  private dockWant(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, say: (t: string) => null, out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 }): { beta: Vec3; ff: Vec3 } | null {
+    const s = this.s;
+    if (!this.dockAuto) {
+      const g0 = this.dockGeometry();
+      if (!g0 || g0.range > 3000) return say("Docking: within 3 km of the ISS — a PLAN with it as the target brings the ship 200 m off its port");
+      this.dockAuto = { port: g0.port, phase: "", att: null, warp: s.timeSpeed, set: NaN, corridor: false, final: false, blocked: false, checked: -1e9 };
+      this.onPilotMessage?.(`Docking autopilot · ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`);
+    }
+    const D = this.dockAuto;
+    const g = this.dockGeometry(D.port);
+    if (!g) return say("Docking: the ISS is out of reach");
+    const C = 299792458;
+    const a = g.a, A = g.A;
+    // the attitude: the nose out along the port's axis, the top to the zenith (on a zenith port: forward)
+    let upRef = lin(A[2], -1, A[2], 0);
+    if (Math.abs(dot3(upRef, a)) > 0.7) upRef = A[0];
+    const up = unitV(lin(upRef, 1, a, -dot3(upRef, a)));
+    const loc = (v: Vec3) => unitV(nav.toRep(v));
+    D.att = { nose: loc(a), up: loc(up) };
+    // the ring against the port [m]; the station's point there, its motion and pull
+    const along = g.along, lat = g.lateral;
+    const d = lin(sub3(g.ring, g.c), M_METRES, a, 0);
+    const latv = lin(d, 1, a, -along);
+    const E = ourState("earth", nav.t);
+    const r = sub3(g.iss.X, E.pos), v = sub3(g.iss.V, E.vel);
+    const om = lin(cross(r, v), 1 / dot3(r, r), r, 0);
+    const rho = sub3(g.ring, g.iss.X);
+    const Vp = lin(g.iss.V, 1, cross(om, rho), 1);
+    const ff = lin(sub3(gravityHome(g.iss.X, nav.t).acc, gravityHome(nav.X, nav.t).acc), 1, cross(om, cross(om, rho)), 1);
+    // the warp: by the range (the pilot's own, if lower, without auto warp)
+    const real = 1 / 492.5490947;
+    const cap = (g.range > 150 ? 10 : g.range > 40 ? 5 : g.range > 4 ? 2 : 1) * real;
+    if (s.timeSpeed !== D.set && Number.isFinite(D.set)) D.warp = s.timeSpeed;
+    s.timeSpeed = D.set = s.autoWarp ? cap : Math.min(D.warp ?? cap, cap);
+    // (the lateral gain within what the velocity loop follows at this warp: damped)
+    const Ts = 1.2 * s.timeSpeed * 492.5490947;
+    const kLat = Math.min(0.08, 0.3 / Math.max(Ts, 1e-3));
+    const cone = 1 + 0.15 * Math.max(along, 0);
+    D.corridor = along > -0.5 && lat < (D.corridor ? 1.5 : 1) * cone;
+    let want: Vec3; // relative to the station's point [m/s]
+    if (D.corridor) {
+      let vc = Math.min(3, 0.08 + 0.012 * Math.max(along, 0));
+      // 10 m out: held until on the axis, the nose on it, the drift still (and kept so)
+      const aligned = D.final ? lat < 0.2 && g.angle < 5 : lat < 0.1 && g.angle < 2 && g.lateralRate < 0.04;
+      D.final = along < 12 && aligned;
+      if (along < 12 && !aligned) vc = Math.max(Math.min(vc, 0.05 * (along - 10)), -0.1);
+      D.phase = along >= 12 ? "APPROACH" : D.final ? "FINAL" : "HOLD 10 m";
+      let vl = lin(latv, -kLat, latv, 0);
+      const vll = Math.hypot(...vl);
+      if (vll > 0.4) vl = lin(vl, 0.4 / vll, vl, 0);
+      want = lin(a, -vc, vl, 1);
+    } else {
+      D.final = false;
+      // to the axis: a point on it, round the station if it stands in the way
+      const S = Math.min(Math.max(along, 30), 200);
+      const G = lin(g.c, 1, a, S / M_METRES);
+      const now = performance.now();
+      if (now - D.checked > 250) {
+        D.checked = now;
+        D.blocked = this.stationBlocks(g.ring, G, nav.t, g.iss);
+      }
+      let P = G;
+      if (D.blocked) {
+        const Rs = 130 / M_METRES;
+        const u = unitV(sub3(g.ring, g.iss.X)), gd = unitV(sub3(lin(g.c, 1, a, 130 / M_METRES), g.iss.X));
+        const th = Math.acos(Math.max(-1, Math.min(1, dot3(u, gd))));
+        const step = Math.min(th, (30 * Math.PI) / 180);
+        // (u turned towards gd by the step, in their plane)
+        const w0 = lin(gd, 1, u, -dot3(gd, u));
+        const wl = Math.hypot(...w0);
+        const w = wl > 1e-9 ? lin(u, Math.cos(step), w0, Math.sin(step) / wl) : u;
+        P = lin(g.iss.X, 1, w, Rs);
+      }
+      const to = lin(sub3(P, g.ring), M_METRES, P, 0);
+      const dist = Math.hypot(...to);
+      const sp = Math.min(3, Math.sqrt(2 * 0.03 * dist), 0.1 * dist);
+      want = dist > 1e-6 ? lin(to, sp / dist, to, 0) : [0, 0, 0];
+      D.phase = D.blocked ? "AROUND THE STATION" : "TO THE AXIS";
+    }
+    return out(lin(Vp, 1, want, 1 / C), ff);
+  }
+
+  /**
+   * Whether the ship going straight from p to q (its ring; home frame) would meet the station: five
+   * lines — its own and four a hull's radius about it — cast against each of its parts as they are now.
+   */
+  private stationBlocks(p: Vec3, q: Vec3, t: number, iss: { X: Vec3; V: Vec3 }): boolean {
+    if (!stationHulls.length || !station.joints.length) return false;
+    const A = issAxes(iss.X, iss.V, t);
+    const toSt = (P: Vec3): Vec3 => {
+      const d = lin(sub3(P, iss.X), M_METRES, P, 0);
+      return [dot3(d, A[0]), dot3(d, A[1]), dot3(d, A[2])];
+    };
+    const a = toSt(p), b = toSt(q);
+    const dir = unitV(sub3(b, a));
+    const e1 = unitV(cross(dir, Math.abs(dir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
+    const e2 = cross(dir, e1);
+    const R = Math.max(rangerHull.radius, 5) + 3;
+    const offs: Vec3[] = [[0, 0, 0], lin(e1, R, e1, 0), lin(e1, -R, e1, 0), lin(e2, R, e2, 0), lin(e2, -R, e2, 0)];
+    const T = partTransforms(station.joints, stationAngles(t, iss.X, iss.V));
+    return stationHulls.some((bvh, k) => bvh && offs.some((o) => bvh.segment(m34unapply(T[k]!, lin(a, 1, o, 1)), m34unapply(T[k]!, lin(b, 1, o, 1))) !== null));
   }
 
   // ------------------------------------------------------------------------------ rails
@@ -2930,7 +3070,8 @@ export class CameraController {
     if (!p) return "No rendezvous with the ISS found in the next day";
     this.ourMission = null;
     this.ourPlanned = null;
-    this.plan = { nodes: p.nodes.map((n) => ({ t: n.t, dv: n.dv, then: null, role: n.role as ManeuverNode["role"], body: n.body })), path: null, at: 0, note: p.note };
+    // (arrived 200 m out: the docking autopilot takes the last of it)
+    this.plan = { nodes: p.nodes.map((n) => ({ t: n.t, dv: n.dv, then: n.role === "arrive" ? "dock" as const : null, role: n.role as ManeuverNode["role"], body: n.body })), path: null, at: 0, note: p.note };
     this.issGoal = { tArrive: p.tArrive, refined: new Map() };
     this.refreshPlan(true);
     return `Plan: ${p.note}`;
@@ -3328,7 +3469,8 @@ export class CameraController {
           P.path = null;
           this.pilot.auto = "none";
           if (then) this.pilot.setAuto(then);
-          if (node.role === "arrive") this.onPilotMessage?.(node.body === "wormhole" ? "Into the wormhole's throat — Gargantua's side at its end" : `${BODY_NAMES[node.body as Body] ?? node.body} passed`);
+          if (then === "dock") this.onPilotMessage?.("At the ISS — the docking autopilot takes over");
+          else if (node.role === "arrive") this.onPilotMessage?.(node.body === "wormhole" ? "Into the wormhole's throat — Gargantua's side at its end" : `${BODY_NAMES[node.body as Body] ?? node.body} passed`);
           else this.onPilotMessage?.(then ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? `in orbit around ${this.s.target === "star" ? "the star" : BODY_NAMES[this.s.target]}` : "station-keeping"}` : "Manoeuvre done");
         } else this.refreshPlan(true);
         return null;
@@ -4359,6 +4501,7 @@ export class CameraController {
     }
     this.ourAnchor = null;
     if (P.auto === "land" || P.auto === "takeoff") return this.ourSurfaceWant(nav, g, say, out, T);
+    if (P.auto === "dock") return this.dockWant(nav, say, out);
     if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize") return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
     // (circularize: around the body of the sphere of influence, at the height it is engaged at)
     const circ = P.auto === "circularize";
@@ -4533,6 +4676,7 @@ export class CameraController {
     const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
     // our universe: Newtonian autopilots in the home frame
     if (this.ourNav(cam)) return this.ourWant(cam, say, T);
+    if (P.auto === "dock") return say("Docking: with the ISS, in our solar system");
     if (P.auto === "hover") {
       if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
       const z = cam.zamo;
@@ -4770,6 +4914,8 @@ export class CameraController {
       ourCa: null as { d: number; t: number } | null,
       /** the docking aid (the station near), or null */
       dock: null as DockInfo | null,
+      /** the docking autopilot's phase ("": off) */
+      dockPhase: this.pilot.auto === "dock" ? this.dockAuto?.phase ?? "" : "",
       speedMode: this.speedMode,
       precision: this.pilot.precision,
       /** our universe: the free-fall path and the path through the nodes */

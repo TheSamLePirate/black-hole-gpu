@@ -1467,7 +1467,7 @@ export class FlightHud {
         ? `NODE ${1} · BURN Δv ${Math.max(0, Math.hypot(...n.dv) - i.plan.done).toFixed(3)}`
         : `NODE 1 · T−${fmtShort(Math.max(0, Math.round(n.t - time)))}`;
     } else if (i.auto !== "none") {
-      const phase = i.dirs.burn ? (i.throttle > 0.02 ? "BURN" : "ALIGN") : "RCS";
+      const phase = i.auto === "dock" && i.dockPhase ? i.dockPhase : i.dirs.burn ? (i.throttle > 0.02 ? "BURN" : "ALIGN") : "RCS";
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${i.dv < 1e-3 ? "<.001" : i.dv.toFixed(3)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
@@ -1724,7 +1724,7 @@ export class FlightHud {
     if (!d) return;
     const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
     const ok = (b: boolean) => (b ? "ok" : "");
-    const key = d.docked ? `docked${d.port}` : [d.port, d.range.toFixed(1), d.closing.toFixed(2), d.lateral.toFixed(2), d.lateralRate.toFixed(2), d.angle.toFixed(0)].join();
+    const key = d.docked ? `docked${d.port}` : [d.port, d.range.toFixed(1), d.closing.toFixed(2), d.lateral.toFixed(2), d.lateralRate.toFixed(2), d.angle.toFixed(0), i.dockPhase].join();
     if (key === this.dockKey) return;
     this.dockKey = key;
     this.dock.replaceChildren();
@@ -1744,6 +1744,12 @@ export class FlightHud {
     row("Closing", `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
     row("Offset", `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
     row("Nose to port axis", `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
+    // the docking autopilot: what it does; the button that engages or stops it (B)
+    if (i.dockPhase) row("Autopilot", i.dockPhase, "ok");
+    const b = h("button", "fl-go", i.dockPhase ? "STOP AUTO-DOCK" : "AUTO-DOCK · B") as HTMLButtonElement;
+    b.title = "The docking autopilot: on the thrusters, to the port's axis, then in along it to the capture";
+    b.onclick = () => this.act.auto("dock");
+    this.dock.append(b);
   }
 
   /** the attitude ball's box (the cockpit's drawn ball, not its wide frame) */

@@ -254,7 +254,9 @@ orbit: CelesTrak's latest elements, propagated with SGP4 and turned into the Ear
 time the game turns the Earth by; flying +XVV, its solar arrays turned to the Sun (alpha joints and beta
 gimbals), its radiators edge-on. Within 30 km of the Ranger it falls by the game's own gravity and drag, as
 the ship does. The Ranger docks to Harmony's ports (IDA-2, IDA-3) rear first; its docking camera, the
-station's, a docking aid in the HUD.
+station's, a docking aid in the HUD. The docking autopilot (B, AUTO-DOCK in the docking panel, or the end of a
+PLAN to the ISS) flies the last of it on the thrusters: round the station if it stands in the way, to the
+port's axis, in along it with a hold 10 m out, to the capture at under 0.1 m/s.
 
 **The Endurance** (Matter → Endurance, or the preset "Interstellar: the Endurance before Gargantua") —
 [“Interstellar | Endurance” by devPilot](https://sketchfab.com/3d-models/interstellar-endurance-901fec2809704b74bec891e9a40a8726),

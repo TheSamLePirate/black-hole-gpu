@@ -752,6 +752,7 @@ async function main() {
     panel.toast(camera.pilot.hold === "none" ? "Attitude hold off" : `Hold: ${HOLD_NAMES[h]}`);
   }
   function pilotAuto(a: Auto) {
+    if (a === "dock" && camera.docked) return panel.toast("Docked to the ISS — UNDOCK first");
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? "Autopilot off" : `Autopilot: ${AUTO_NAMES[a]}`);
   }
@@ -898,7 +899,7 @@ async function main() {
       mission.stop("Mission stopped — you have the controls");
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
-    } else if (e.key.toLowerCase() === "b") panel.toast("Gravity is always on in the Ranger");
+    } else if (e.code === "KeyB") pilotAuto("dock");
     else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
     else return false;
     e.preventDefault();

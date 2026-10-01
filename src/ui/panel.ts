@@ -985,7 +985,7 @@ export class SettingsPanel {
         ["T", "SAS: stability assist"],
         ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
         ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
-        ["8 · 9 · 0 · G · U", "Autopilot: hold position · circularize · approach · land · take off"],
+        ["8 · 9 · 0 · G · U · B", "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)"],
         ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
         ["V · ⇧V", "Camera: next · previous view — on the hull, around the ship, free, fly-by"],
         ["⇧Y", "The future path in the view"],

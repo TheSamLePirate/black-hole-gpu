@@ -27,7 +27,7 @@ export interface ManeuverNode {
   /** Δ(γβ) along prograde, normal, radial [c] */
   dv: Vec3;
   /** what the autopilot does after the last node */
-  then?: "circularize" | "approach" | "orbit" | null;
+  then?: "circularize" | "approach" | "orbit" | "dock" | null;
   /** our universe: the node's part in a mission (re-aimed in flight), the body of a capture */
   role?: "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
   body?: string;

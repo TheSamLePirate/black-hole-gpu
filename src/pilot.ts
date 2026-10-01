@@ -14,13 +14,13 @@ import { TUNING } from "./game/tuning";
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
-export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff";
+export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock";
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
   normal: "Normal", antinormal: "Anti-normal", target: "Target", antiTarget: "Anti-target", maneuver: "Manoeuvre",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit" };
+export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit", dock: "Docking" };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -61,6 +61,9 @@ export interface FlightContext {
   /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
    *  far: the burn is still far off (an attitude hold may point the nose meanwhile) */
   burn?: { dir: V3; throttle: number; far?: boolean } | null;
+  /** docking: the attitude to hold (local) — the nose and the ship's top; the thrusters alone
+   *  translate (the main engine, along the nose, would push it off the port's axis) */
+  dock?: { nose: V3; up: V3 } | null;
   /** at a warp where the burn turns (with the orbit) faster than the ship can: the nose is held on it
    *  kinematically (attitude on rails), not flown */
   snap?: boolean;
@@ -134,6 +137,7 @@ export class FlightComputer {
     // ---- autopilot: required proper acceleration → a burn direction and a throttle
     let rcsC: V3 = [0, 0, 0];
     let point: V3 | null = null; // desired nose direction (C)
+    let upC: V3 | null = null; // and, if set, where the ship's top goes (C)
     this.burn = null;
     let throttle = this.throttle;
     if (this.auto === "node" && c.burn) {
@@ -147,6 +151,18 @@ export class FlightComputer {
         point = toC(c.burn.dir);
         const align = c.snap ? 1 : dot(Z, point);
         throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
+      }
+    } else if (this.auto === "dock" && c.want) {
+      // docking: the thrusters only, within their authority; the attitude held on the port's axis
+      const T = Math.max(1.2 * c.tauRate, 1e-3);
+      const A = add(scale(add(toU(c.want.beta), scale(toU(c.beta), -1)), 1 / T), c.want.ff);
+      const a = len(A);
+      const rcsMax = TUNING.rcs * c.thrust;
+      rcsC = toC(a > rcsMax ? scale(A, rcsMax / a) : A);
+      throttle = 0;
+      if (c.dock) {
+        point = toC(c.dock.nose);
+        upC = toC(c.dock.up);
       }
     } else if (this.auto !== "none" && c.want) {
       const U = toU(c.beta);
@@ -209,7 +225,12 @@ export class FlightComputer {
       // roll: the ship's top towards the orbit's normal — its wings in the orbital plane (along the
       // normal itself, towards the hole instead)
       want[2] = 0;
-      const up = this.rollAlign ? this.levelUp(c, toC, Z) : null;
+      let up = this.rollAlign ? this.levelUp(c, toC, Z) : null;
+      if (upC) {
+        const perp = add(upC, scale(Z, -dot(upC, Z)));
+        const pl = len(perp);
+        up = pl > 0.2 ? scale(perp, 1 / pl) : up;
+      }
       if (up) {
         const ra = Math.atan2(dot(cross(Y, up), Z), dot(Y, up));
         want[2] = Math.sign(ra) * Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * Math.abs(ra)), 3 * Math.abs(ra));
