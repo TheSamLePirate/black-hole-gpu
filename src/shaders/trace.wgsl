@@ -4199,12 +4199,14 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // the sky's light (blue by day, the twilight's glow)
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
   let sk = skySeen(q, Ls);
-  let sky = E * max(vec3f(0.035, 0.06, 0.12) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
+  // (a clear sky's light on the flat: ~a tenth of the sun's — bluish)
+  let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
   // (a face sees the sky over it and the ground round it — a plane's shares, ½(1 + n·up) and ½(1 − n·up)
-  // —: on the steep faces in the shade, the sky's light halved and the light the sunlit ground sends back,
-  // at an albedo of 0.18; a cliff's shadow not black)
+  // —: on the steep faces in the shade, the sky's light halved and the light the ground sends back — the
+  // sun's and the sky's on it, at an albedo of 0.18: a cliff's shadow 2–3 stops under the sunlit ground,
+  // as the eye sees it, not black)
   let up = dot(n, q);
-  let bounce = E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) * 0.18 * 0.5 * (1.0 - up);
+  let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),

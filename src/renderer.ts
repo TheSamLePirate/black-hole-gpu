@@ -318,6 +318,8 @@ export class Renderer {
   private meterInAir = false;
   /** what the tone map adds before its curve (the film look: 2 stops over) */
   private meterGain = 1;
+  /** the shadows kept from "AgX punchy"'s deepening (display.wgsl: agx): a landscape by day */
+  private shadowKeep = 0;
   private meterAt = 0;
   /** exposure the meter adds [EV] (auto exposure) */
   autoEV = 0;
@@ -1459,6 +1461,20 @@ export class Renderer {
       this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
       this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier;
+      // (a landscape by day — the camera low in the Earth's air, the Sun over 4–15° there, not eclipsed —:
+      // its shade kept from "AgX punchy"'s deepening, a dark grey as the eye sees it, not black; dusk, night,
+      // totality and the views from orbit keep their depth)
+      this.shadowKeep = 0;
+      if (this.meterInAir && near) {
+        const r = Math.hypot(...near.centre);
+        const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
+        const ecl = this.meterHome ? sunShare(this.meterHome, this.meterTime) : 1;
+        const smooth = (a: number, b: number, x: number) => {
+          const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+          return t * t * (3 - 2 * t);
+        };
+        this.shadowKeep = smooth(0.07, 0.26, mu) * smooth(0.3, 0.9, ecl) * (1 - smooth(20, 60, (r - 1) * 6371));
+      }
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
     set(40, s.showGeodesic ? this.pathCount : 0, 1.8 * pixelAngle, this.pathFate, 0);
@@ -1682,6 +1698,7 @@ export class Renderer {
     ]);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;
+    d[15] = this.shadowKeep;
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
   }
 

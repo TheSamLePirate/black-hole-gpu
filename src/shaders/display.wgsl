@@ -4,7 +4,8 @@ struct Display {
   size: vec4f,  // output W, H, exposure (linear multiplier), tonemap (0 AgX, 1 AgX punchy, 2 ACES, 3 clamp, 4 film)
   flags: vec4f, // debug mode (1 = bypass exposure/tonemap/bloom), bloom strength, bloom levels, dither (0/1)
   view: vec4f,  // image placement in the output (uv): scale x, y, offset x, y (letterboxed preview)
-  hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white, lens flare strength, unused
+  hdr: vec4f,   // extended-range output (0/1), peak in units of SDR white, lens flare strength, the shadows
+                // kept from "AgX punchy"'s deepening (0…1: a landscape in the Earth's air)
   pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
   lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), unused
@@ -100,7 +101,7 @@ fn agxContrast(x: vec3f) -> vec3f {
   let x4 = x2 * x2;
   return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
 }
-fn agx(c: vec3f, punchy: bool) -> vec3f {
+fn agx(c: vec3f, punchy: bool, keep: f32) -> vec3f {
   let m = mat3x3f(
     0.842479062253094, 0.0423282422610123, 0.0423756549057051,
     0.0784335999999992, 0.878468636469772, 0.0784336,
@@ -113,7 +114,9 @@ fn agx(c: vec3f, punchy: bool) -> vec3f {
   v = agxContrast(v);
   if (punchy) {
     let luma = dot(v, vec3f(0.2126, 0.7152, 0.0722));
-    v = pow(max(v, vec3f(0.0)), vec3f(1.35));
+    // (its contrast: the mid-tones and highlights deepened — and the shadows with them, three stops under
+    // the mid-grey nearly black: a sunlit landscape's shade (keep) left as AgX draws it, a dark grey)
+    v = mix(pow(max(v, vec3f(0.0)), vec3f(1.35)), v, keep * (1.0 - smoothstep(0.3, 0.65, luma)));
     v = luma + 1.4 * (v - luma);
   }
   let mi = mat3x3f(
@@ -282,7 +285,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       c = srgbToLinear(clamp(vec3f(2.0 * t, 2.0 * t - 0.5, 2.0 * t - 1.0), vec3f(0.0), vec3f(1.0)));
     } else if (D.hdr.x > 0.5) {
       if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else if (tm == 4u) { c = filmHdr(c, D.hdr.y); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
-    } else if (tm == 0u) { c = agx(c, false); } else if (tm == 1u) { c = agx(c, true); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
+    } else if (tm == 0u) { c = agx(c, false, 0.0); } else if (tm == 1u) { c = agx(c, true, D.hdr.w); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
   }
   // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
   c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));
