@@ -17,7 +17,7 @@ export const RED = "#ff5a46";
 export const COL: Record<string, string> = {
   prograde: "#d6f55b", retrograde: "#d6f55b", radialOut: "#5fd3ff", radialIn: "#5fd3ff",
   normal: "#e07bff", antinormal: "#e07bff", target: "#ff8a5c", burn: "#4d8dff", tgtPrograde: "#ff8a5c", tgtRetrograde: "#ff8a5c",
-  antiTarget: "#ff8a5c", maneuver: "#4d8dff",
+  antiTarget: "#ff8a5c", maneuver: "#4d8dff", dock: "#5fffd0",
 };
 /** the HUD's technical face for labels (sized ~1.2× Inter's: narrower), mono for figures */
 export const FONT = "Rajdhani, Inter, system-ui, sans-serif";
@@ -27,6 +27,16 @@ export function marker(ctx: CanvasRenderingContext2D, kind: string, x: number, y
   ctx.strokeStyle = col;
   ctx.fillStyle = col;
   ctx.beginPath();
+  if (kind === "dock") {
+    // (a docking port: its ring in a square, its centre)
+    ctx.rect(x - r * 1.1, y - r * 1.1, r * 2.2, r * 2.2);
+    ctx.moveTo(x + r * 0.55, y);
+    ctx.arc(x, y, r * 0.55, 0, 2 * Math.PI);
+    ctx.moveTo(x + r * 0.1, y);
+    ctx.arc(x, y, r * 0.1, 0, 2 * Math.PI);
+    ctx.stroke();
+    return;
+  }
   if (kind === "prograde") {
     ctx.arc(x, y, r * 0.6, 0, 2 * Math.PI);
     ctx.moveTo(x, y - r * 0.6);

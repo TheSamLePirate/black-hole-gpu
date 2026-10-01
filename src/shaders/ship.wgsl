@@ -38,7 +38,7 @@ struct Ship {
   // thrusters: jets firing (count), display-referred emission scale (pre-exposure / 2^EV: a flame
   // looks as bright whatever the exposure), time [s], air density (relative to sea level)
   jet: vec4f,
-  // (unused)
+  // the space station's box in the image [px] (x, y, width, height; 0: none) — its depth hides the hull
   box: vec4f,
 };
 
@@ -201,6 +201,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
 @group(0) @binding(9) var<storage, read> jets: array<Jet>;
 @group(0) @binding(10) var scene: texture_2d<f32>; // the traced image the ship is drawn over (× pre-exposure)
+@group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
   @location(0) pos: vec3f,
@@ -387,6 +388,17 @@ fn plate(c: vec2f, size: vec2f, axis: i32, fw: f32) -> vec2f {
 
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  // (the space station before it: hidden there — the station is composited first, into the traced image)
+  if (S.box.z > 0.0) {
+    let dims = vec2f(textureDimensions(scene));
+    let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * dims - S.box.xy;
+    let sd = vec2i(textureDimensions(stationDepth));
+    let q = vec2i(px);
+    if (all(q >= vec2i(0)) && all(q < sd)) {
+      let st = textureLoad(stationDepth, q, 0);
+      if (st.g > 0.5 && st.r / st.g < length(in.p) - 0.05) { discard; }
+    }
+  }
   let side = select(-1.0, 1.0, front);
   let ng = normalize(in.n) * side;       // geometric (smoothed) normal, camera frame
   let qn = normalize(in.qn) * side;      // same, ship frame

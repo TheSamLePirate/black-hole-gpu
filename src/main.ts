@@ -1,6 +1,6 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
-import { cameraFrame, homePosition, setHolePose, setHomePose, switchAnchor } from "./camera";
+import { cameraFrame, homePosition, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
 import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { mouth } from "./wormhole";
@@ -50,6 +50,7 @@ import { loading } from "./loading";
 import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
+import { gameTimeOf, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 
@@ -274,7 +275,7 @@ async function main() {
   function applyPreset(name: string) {
     currentScene = presets[name] ? name : null;
     renderer.resetTemporal(); // (another scene: no history carried into it)
-    const { time, mission: withMission, pose, ...preset } = presets[name] ?? {};
+    const { time, mission: withMission, pose, issDistance, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
     exposedForOurSide = pose !== undefined;
@@ -321,8 +322,10 @@ async function main() {
       }
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose) {
-      const t = time ?? sim.time;
-      const d = pose === "earthGround" ? earthGround(t) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
+      // (the station: at the real time now, unless the scene has its own)
+      const t = time ?? (pose === "iss" ? gameTimeOf(Date.now()) : sim.time);
+      if (pose === "iss" && time === undefined) sim.setTime(t);
+      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
@@ -331,6 +334,12 @@ async function main() {
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
+    if (pose === "iss" && settings.ship) {
+      // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
+      // the camera then where its mount is)
+      const p = repPose(settings);
+      camera.placeShipRep(p.l, p.n, p.vel, p.fwd, p.up);
+    }
 
     if (withMission) mission.start();
     if (name === "game:artemis") {
@@ -764,6 +773,7 @@ async function main() {
       if (camera.selectTarget(b as Target, { focus: false })) panel.toast(`Target: ${BODY_NAMES[settings.target]}`);
     },
     lookAhead: () => camera.setLook(0, 0),
+    undock: () => camera.undock(),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
       camera.pilot.throttle = t;
@@ -1239,6 +1249,8 @@ async function main() {
       /** the game's tools: __bh.game.help() */
       game: tools,
       settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
+      /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
+      iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart },
       /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
       sky: {
         goTo: (name: string) => {

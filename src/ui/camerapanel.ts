@@ -38,6 +38,7 @@ const MOUNT_ICON = {
   around: VIEW_ICON.orbit,
   free: VIEW_ICON.free,
   flyby: '<path d="M3 17c4-1 8-5 11-10"/><path d="M11 6l3 1 1-3"/><path d="M17 20v-5l-3-2"/><circle cx="17" cy="12" r="1.3" class="f"/>',
+  station: '<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M8 9V4M16 9V4M8 15v5M16 15v5"/><circle cx="12" cy="12" r="1.5" class="f"/>',
 };
 const ICON = {
   look: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4" class="f"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/>',
@@ -239,7 +240,7 @@ export class CameraPanel {
       const sec = this.section(g, outside ? "" : "V · ⇧V");
       const tiles = h("div", "cp-tiles cp-tiles-3");
       for (const m of Object.keys(MOUNTS) as Mount[]) {
-        const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" }).outside;
+        const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" }).outside;
         if (!!o !== outside) continue;
         tiles.append(this.tile(o ? MOUNT_ICON[o] : MOUNT_ICON.on, MOUNTS[m].short, MOUNTS[m].label, s.shipMount === m, () => this.d.setMount(m)));
       }

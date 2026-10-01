@@ -118,6 +118,8 @@ interface ShipTargetRes {
   plumeDirty: boolean;
   /** the shading's bind group, with this target's traced image */
   bind?: GPUBindGroup;
+  /** the station's depth bound (group 1), and which texture it holds */
+  occBind?: { tex: GPUTexture; g: GPUBindGroup };
 }
 
 export class ShipRenderer {
@@ -196,6 +198,7 @@ export class ShipRenderer {
   private shadowTick = 0;
   /** the renderer's GPU profiler (timestamps per pass) */
   prof: GpuProfiler | null = null;
+  private occDummy: GPUTexture | null = null;
   private pass<T extends GPUComputePassDescriptor | GPURenderPassDescriptor>(label: string, d?: T): T {
     return this.prof ? this.prof.pass(label, d) : ((d ?? {}) as T);
   }
@@ -534,7 +537,7 @@ export class ShipRenderer {
    * fraction of the image — the whole-screen MSAA clear and resolve cost as much as the drawing),
    * resolved and copied into its image, which the display composites over the traced one.
    */
-  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView) {
+  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView, occluder?: { depth: GPUTexture; rect: [number, number, number, number] }) {
     if (!this.ready) return;
     const res = this.target(hdr);
     this.writeUniform(v);
@@ -557,6 +560,13 @@ export class ShipRenderer {
     }
     // (the box's ndc: centre and scale of the full image's ndc; y up, pixels down)
     this.device.queue.writeBuffer(this.uniform, 192, new Float32Array([(2 * x0 + bw) / W - 1, 1 - (2 * y0 + bh) / H, W / bw, H / bh]));
+    // (the station's box and depth: it hides the hull where it stands before it)
+    const occ = occluder && occluder.rect[2] > 0 ? occluder : null;
+    this.device.queue.writeBuffer(this.uniform, 224, new Float32Array(occ ? occ.rect : [0, 0, 0, 0]));
+    const occTex = occ?.depth ?? (this.occDummy ??= this.device.createTexture({ size: [1, 1], format: "rg16float", usage: GPUTextureUsage.TEXTURE_BINDING }));
+    if (res.occBind?.tex !== occTex) {
+      res.occBind = { tex: occTex, g: this.device.createBindGroup({ layout: this.pipes!.ship.getBindGroupLayout(1), entries: [{ binding: 0, resource: occTex.createView() }] }) };
+    }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
     if (this.shadowTick++ % 2 === 0) {
@@ -584,6 +594,7 @@ export class ShipRenderer {
       entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }],
     });
     rp.setBindGroup(0, res.bind);
+    rp.setBindGroup(1, res.occBind!.g);
     rp.setVertexBuffer(0, this.vbuf!);
     rp.setIndexBuffer(this.ibuf!, "uint32");
     rp.drawIndexed(this.count);

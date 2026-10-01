@@ -248,6 +248,14 @@ the sphere (no overshoot for grazing rays), Gargantua's weak field still bends t
 the mouth's far field (2M_w/b: Dneg is the spatial part of a Schwarzschild field far out) bends them
 outside, and their energy at infinity is kept across it.
 
+**The International Space Station** (Sky → The Earth → Space station, or the scene "Earth: docking to the
+ISS") — NASA's model of the station as flown (NASA 3D Resources; see `assets/iss/README.md`), on its real
+orbit: CelesTrak's latest elements, propagated with SGP4 and turned into the Earth's axes by the sidereal
+time the game turns the Earth by; flying +XVV, its solar arrays turned to the Sun (alpha joints and beta
+gimbals), its radiators edge-on. Within 30 km of the Ranger it falls by the game's own gravity and drag, as
+the ship does. The Ranger docks to Harmony's ports (IDA-2, IDA-3) rear first; its docking camera, the
+station's, a docking aid in the HUD.
+
 **The Endurance** (Matter → Endurance, or the preset "Interstellar: the Endurance before Gargantua") —
 [“Interstellar | Endurance” by devPilot](https://sketchfab.com/3d-models/interstellar-endurance-901fec2809704b74bec891e9a40a8726),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified (see `assets/endurance/README.md`) — on a

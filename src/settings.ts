@@ -92,6 +92,7 @@ export interface Settings {
   diskTau: number; // vertical optical depth
   diskThickness: number; // scale height H/R (0 = infinitely thin slab)
   diskHaze: number; // the scattering mist over the volumetric disk (0: none)
+  iss: boolean; // the International Space Station on its real orbit, near the Earth
   endurance: boolean; // the Endurance on an orbit around the hole (cinematic scale)
   enduranceOrbit: number; // its orbit's radius [M]
   endurancePhase: number; // where on it at t = 0 [deg]
@@ -300,6 +301,7 @@ export function defaultSettings(): Settings {
     diskTau: 0.5,
     diskThickness: 0,
     diskHaze: 0,
+    iss: true,
     endurance: false,
     enduranceOrbit: 24,
     endurancePhase: 0,
@@ -460,7 +462,7 @@ export function defaultSettings(): Settings {
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
  *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center;
  *  an EarthView: a view of the Earth — its ground or above it, towards the Moon, the Sun or itself) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | BodyView };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | "iss" | BodyView; /** pose "iss": the ship's distance from the port [m] */ issDistance?: number };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
@@ -639,6 +641,11 @@ export const presets: Record<string, Preset> = {
   },
   // the game's rehearsal: Artemis II — from a 400 km Earth orbit, round the Moon on a free return
   // and back (O: the planner, the Moon targeted: Free return, PLAN, EXECUTE)
+  // the International Space Station where it really is now (its latest elements, SGP4): the Ranger
+  // 60 m off Harmony's forward port (IDA-2), its rear hatch to it, at rest against it — back in to dock,
+  // seen from the docking camera in the hatch; its arrays turned to the Sun (at night: in the Earth's
+  // shadow, as it is)
+  "Earth: docking to the ISS": { ...EARTH_VIEW, target: "earth", shipMount: "dock", pose: "iss", issDistance: 60 },
   "game:artemis": {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,

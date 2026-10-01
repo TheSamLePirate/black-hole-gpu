@@ -798,6 +798,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "clouds cover weather clear sky earth eclipse",
   },
   {
+    key: "iss", type: "toggle", section: "sky", group: "The Earth", label: "Space station", effect: "scene",
+    help: "The International Space Station (NASA's model) on its real orbit: its latest elements from CelesTrak, propagated with SGP4 — where it really is at the scene's date. Flying +XVV, its solar arrays turned to the Sun. The Ranger can dock at Harmony's ports (IDA-2 forward, IDA-3 zenith), rear first.",
+    keywords: "iss space station orbit tle sgp4 dock",
+  },
+  {
     key: "earthTerrain", type: "toggle", section: "sky", group: "The Earth", label: "Real terrain", effect: "scene",
     help: "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are. Off, or while they load: NOAA's global map (4.9 km) with drawn detail.",
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
@@ -1045,6 +1050,7 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Earth: the Himalaya from orbit": { title: "The Himalaya from orbit", description: "400 km over the Ganges plain, looking north: the range in relief under the afternoon Sun, its snow and shadows.", icon: "▲", group: "earth" },
   "Earth: total eclipse over Burgos, 12 Aug 2026": { title: "Total eclipse over Burgos", description: "12 August 2026, the Sun low over Castile: the Moon's shadow sweeps in, 1 min 42 s of totality — the corona, the prominences, the horizon's glow all round (JPL's DE440 ephemeris).", icon: "◯", group: "earth" },
   "Earth: the Moon's shadow from orbit, 12 Aug 2026": { title: "The Moon's shadow from orbit", description: "12 August 2026 at greatest eclipse, from 3 000 km over the Labrador Sea: the umbra, 290 km across, darkens the clouds west of Iceland, the penumbra dims the whole Arctic around it (JPL's DE440 ephemeris).", icon: "◐", group: "earth" },
+  "Earth: docking to the ISS": { title: "Docking to the ISS", description: "The space station where it really is right now, its arrays to the Sun: back the Ranger 60 m into Harmony's forward port (I K J L H N: the thrusters; V: the views — the hatch's camera, the station's).", icon: "⊕", group: "earth" },
   "Earth: sunset over the Andes": { title: "Sunset over the Andes", description: "Above Mendoza, the Sun going down behind the Cordón del Plata: the ridges in layers in the haze, the glow, the snowy peaks.", icon: "☀", group: "earth" },
   "Earth: full Moon rising over the Andes": { title: "Full Moon over the Andes", description: "An hour after sunset, the full Moon just clear of the Andes' snowy crest, reddened in the evening's haze (a telephoto).", icon: "●", group: "earth" },
   "Earth: crescent Moon at dusk over the Alps": { title: "Crescent over the Alps", description: "Mont Blanc at dusk: a two-day-old Moon, 4 % lit, low over the afterglow (a telephoto).", icon: "☽", group: "earth" },

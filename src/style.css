@@ -1426,6 +1426,17 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-root.mapview .fl-cockpit, .fl-root.mapview .fl-target, .fl-root.mapview .fl-planner { z-index: 1; }
 .fl-root.mapview .fl-tel, .fl-root.mapview .fl-orbit { display: none; }
 
+/* ---- the docking aid (the space station near): under the mission bar, in the middle */
+.fl-dock { top: 138px; left: 50%; transform: translateX(-50%); min-width: 210px; padding: 6px 10px 8px; }
+.fl-dock[hidden] { display: none; }
+.fl-dock .fl-title::before { background: #5fffd0; box-shadow: 0 0 6px #5fffd0; }
+.fl-dock-port { font: 600 11px var(--hud-font); letter-spacing: 0.08em; color: rgba(214, 226, 242, 0.7); margin: 2px 0 4px; }
+.fl-dock-row { display: flex; justify-content: space-between; gap: 14px; font: 600 11px var(--hud-font); letter-spacing: 0.06em; color: rgba(176, 196, 222, 0.75); }
+.fl-dock-row b { font: 500 12px var(--mono); color: #fff; }
+.fl-dock-row b.ok { color: #5fffd0; }
+.fl-dock .fl-go { margin-top: 6px; width: 100%; }
+body.mobile .fl-dock { top: 92px; transform: translateX(-50%) scale(0.85); transform-origin: 50% 0; }
+
 /* ---- flight planner (top right, in place of the telemetry) */
 .fl-plan { top: 56px; right: 14px; width: 290px; display: none; max-height: calc(100vh - 64px - 390px); min-height: 120px; overflow-y: auto; }
 .fl-root.planning .fl-plan { display: block; }

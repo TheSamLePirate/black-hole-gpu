@@ -29,6 +29,7 @@ import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-
 import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
+import { issAxes, issTrack, station } from "./system/iss";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -86,6 +87,32 @@ export const FLIGHT_KEYS: Record<string, [number, number, number, number]> = {
  * right-drag turns the camera about its own axes, without limit) follows straight lines: spatial
  * geodesics of the wormhole metric near it (so it can cross the throat), flat lines near the hole.
  */
+/** The Ranger's docking ring: its rear hatch's centre (ship frame: x left, y up, z nose) [m]. */
+const DOCK_RING: Vec3 = [0.04, 1.11, -5.34];
+
+/** The docking aid: the nearest port of the station and the ship's ring against it. */
+export interface DockInfo {
+  port: number;
+  name: string;
+  /** the rings' distance, its part along the port's axis (> 0: outside) and across it [m] */
+  range: number;
+  along: number;
+  lateral: number;
+  /** the closing rate along the axis and the drift across it [m/s] */
+  closing: number;
+  lateralRate: number;
+  /** the nose against the port's axis [deg] */
+  angle: number;
+  docked: boolean;
+  ring: Vec3;
+  c: Vec3;
+  a: Vec3;
+  sh: [Vec3, Vec3, Vec3];
+  iss: { X: Vec3; V: Vec3 };
+  A: [Vec3, Vec3, Vec3];
+  vrel: Vec3;
+}
+
 export class CameraController {
   cinematic: Cinematic = null;
   /** Input is ignored while disabled (e.g. during an offline render). */
@@ -127,6 +154,13 @@ export class CameraController {
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
   piloting = false;
+  /** Docked to the space station: its port, the ship's centre and axes (x left, y up, z nose) in the
+   *  station's frame [m]. */
+  docked: { port: number; c: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
+  /** Near the station (5 km): the nearest port and the ship's docking ring against it — for the HUD. */
+  dockInfo: DockInfo | null = null;
+  /** let go of the station, not yet clear of the port */
+  private undocking = false;
   /** the touch screen's flight controls (ui/touchflight.ts), −1…1: read with the keys */
   readonly touchInput = { pitch: 0, yaw: 0, roll: 0 };
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
@@ -2013,6 +2047,11 @@ export class CameraController {
       return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
     }
     if (v === "flyby") return { eye: this.flyby.eye, aim: [0, 1.5, 0] };
+    if (v === "station") {
+      const sc = this.stationCam();
+      if (sc) return sc;
+      return { eye: [0, 9, -42], aim: [0, 1.5, 0] };
+    }
     return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
   }
 
@@ -2198,6 +2237,11 @@ export class CameraController {
       }
     }
     const inp = this.pilotInput(pad);
+    // docked: carried by the station; a push of the engine or the thrusters undocks
+    if (this.docked) {
+      if (inp.throttle > 0 || inp.tx !== 0 || inp.ty !== 0 || inp.tz !== 0 || this.pilot.throttle > 0) this.undock();
+      else return this.flyDocked(dt);
+    }
     if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
     const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
     if (this.pilot.auto !== "node") {
@@ -2235,6 +2279,174 @@ export class CameraController {
     const w = Math.hypot(...out.acc) * (this.properTime - tau0);
     this.spent += w;
     if (burn && this.nodeBurning) this.nodeDone += w;
+    this.dockCheck();
+  }
+
+  // ------------------------------------------------------------------------------ docking
+  /**
+   * The ship against the station now: its docking ring (the hatch at its rear) and each of the
+   * station's ports — the nearest, the ring's offset along its axis and across it, the closing rate,
+   * the ship's nose against the port's axis (docked rear first: the nose along it, outwards). Null
+   * beyond 5 km, or not on our side.
+   */
+  private dockGeometry() {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav || !station.ports.length) return null;
+    const t = nav.t;
+    const iss = issTrack.state(t, nav.X);
+    if (!iss || !issTrack.near) return null;
+    const w = mouth(s).w;
+    const A = issAxes(iss.X, iss.V, t);
+    const home = (v: Vec3) => repToHomeVec(w, cam.ell, cam.n, v);
+    const sh = this.shipAxesLocal({ right: cam.right, up: cam.up, fwd: cam.fwd }).map((a) => unitV(home(a))) as [Vec3, Vec3, Vec3];
+    const m = 1 / M_METRES;
+    const st = (v: Vec3): Vec3 => lin(lin(A[0], v[0], A[1], v[1]), 1, A[2], v[2]);
+    const ring = lin(nav.X, 1, lin(lin(sh[0], DOCK_RING[0], sh[1], DOCK_RING[1]), 1, sh[2], DOCK_RING[2]), m);
+    // (the station turns once an orbit: a point of it moves with ω × r)
+    const E = ourState("earth", t);
+    const r = sub3(iss.X, E.pos), v = sub3(iss.V, E.vel);
+    const om = lin(cross(r, v), 1 / dot3(r, r), r, 0);
+    let best: DockInfo | null = null;
+    station.ports.forEach((p, k) => {
+      const c = lin(iss.X, 1, st(p.centre), m);
+      const a = st(p.axis);
+      const d = lin(sub3(ring, c), M_METRES, a, 0);
+      const along = dot3(d, a);
+      const lateral = Math.hypot(...lin(d, 1, a, -along));
+      const range = Math.hypot(...d);
+      // (relative to the station's turning frame where the ring is: co-orbiting is at rest)
+      const vp = lin(iss.V, 1, cross(om, sub3(ring, iss.X)), 1);
+      const vrel = lin(sub3(nav.V, vp), 299792458, a, 0);
+      const closing = -dot3(vrel, a);
+      const angle = (Math.acos(Math.max(-1, Math.min(1, dot3(sh[2], a)))) * 180) / Math.PI;
+      if (!best || range < best.range) best = { port: k, name: p.name, range, along, lateral, closing, lateralRate: Math.hypot(...lin(vrel, 1, a, dot3(vrel, a) * -1)), angle, docked: false, ring, c, a, sh, iss, A, vrel };
+    });
+    return best as DockInfo | null;
+  }
+
+  /**
+   * The station's docking camera, in the ship's frame: on the nearest port's axis, 40 cm out from its
+   * ring, looking out along it (the ship coming in, centred when on the axis); null away from it (or
+   * before the first step's geometry).
+   */
+  private stationCam(): MountPose | null {
+    // (the last step's geometry: the ship's axes come from the camera through this very mount)
+    const g = this.dockInfo;
+    if (!g) return null;
+    const m = 1 / M_METRES;
+    const X = lin(g.ring, 1, lin(lin(g.sh[0], DOCK_RING[0], g.sh[1], DOCK_RING[1]), 1, g.sh[2], DOCK_RING[2]), -m);
+    const toShip = (P: Vec3): Vec3 => {
+      const d = lin(sub3(P, X), M_METRES, P, 0);
+      return [dot3(d, g.sh[0]), dot3(d, g.sh[1]), dot3(d, g.sh[2])];
+    };
+    const eye = lin(g.c, 1, g.a, 0.4 * m);
+    return { eye: toShip(eye), aim: toShip(lin(eye, 1, g.a, 20 * m)) };
+  }
+
+  /** After each step: the docking aid's figures, and the capture — the ring within 30 cm of the port's,
+   *  slower than 0.5 m/s, the nose within 10° of the port's axis. */
+  private dockCheck() {
+    const g = this.dockGeometry();
+    this.dockInfo = g && g.range < 5000 ? g : null;
+    if (!g || this.docked) return;
+    // (just undocked: no capture until the ring is a metre clear)
+    if (this.undocking) {
+      if (g.range < 1) return;
+      this.undocking = false;
+    }
+    const speed = Math.hypot(...g.vrel);
+    // (closing in, or at rest against it: not on the rebound)
+    const capture = g.along < 0.3 && g.along > -0.6 && g.lateral < 0.3 && g.angle < 10 && speed < 0.5 && g.closing > -0.02;
+    if (!capture && g.along < 0.05 && g.along > -2 && g.lateral < 1.5) {
+      // against the port too fast, or off its axis: it bounces (a third of its closing speed back), the
+      // ring set back on the port's face — no passing through the station
+      const s = this.s;
+      const cam = cameraFrame(s);
+      const nav = this.ourNav(cam);
+      if (nav) {
+        const w = mouth(s).w;
+        const va = dot3(g.vrel, g.a); // [m/s], < 0: towards the station
+        if (va < 0) {
+          const V = lin(nav.V, 1, g.a, (-1.3 * va) / 299792458);
+          const X = lin(nav.X, 1, g.a, (0.05 - g.along) / M_METRES);
+          setHomePose(s, X, unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)), V);
+          this.sync();
+          const why = speed >= 0.5 ? `${speed.toFixed(2)} m/s — 0.5 at most` : g.lateral >= 0.3 ? `${g.lateral.toFixed(2)} m off its axis — 0.3 at most` : `the nose ${g.angle.toFixed(0)}° off its axis — 10 at most`;
+          this.onPilotMessage?.(`Bounced off the ISS's port · ${why}`);
+        }
+      }
+      return;
+    }
+    if (capture) {
+      // captured: the ring on the port's, the nose along its axis, the roll kept
+      const a = g.a;
+      const A = g.A;
+      const toSt = (v: Vec3): Vec3 => [dot3(v, A[0]), dot3(v, A[1]), dot3(v, A[2])];
+      const z = toSt(a);
+      let y = toSt(g.sh[1]);
+      y = unitV(lin(y, 1, z, -dot3(y, z)));
+      const x = cross(y, z);
+      const port = station.ports[g.port]!;
+      const c = lin(port.centre, 1, lin(lin(x, DOCK_RING[0], y, DOCK_RING[1]), 1, z, DOCK_RING[2]), -1);
+      this.docked = { port: g.port, c, ax: [x, y, z] };
+      this.pilot.auto = "none";
+      this.pilot.throttle = 0;
+      this.pilot.omega = [0, 0, 0];
+      this.onPilotMessage?.(`Docked to the ISS · ${port.name} · ${speed.toFixed(2)} m/s`);
+    }
+  }
+
+  /** Docked: the ship where the station carries it (its centre, axes, velocity), for this frame. */
+  private flyDocked(dt: number) {
+    const s = this.s;
+    const D = this.docked!;
+    const t0 = this.nowTime();
+    const simDt = s.animate ? s.timeSpeed * dt : 0;
+    const t1 = t0 + simDt;
+    const cam = cameraFrame(s);
+    const w = mouth(s).w;
+    const iss = issTrack.state(t1, homeOf(w, cam.ell, cam.n));
+    if (!iss) return this.undock();
+    const A = issAxes(iss.X, iss.V, t1);
+    const st = (v: Vec3): Vec3 => lin(lin(A[0], v[0], A[1], v[1]), 1, A[2], v[2]);
+    const X = lin(iss.X, 1, st(D.c), 1 / M_METRES);
+    const E = ourState("earth", t1);
+    const r = sub3(iss.X, E.pos), v = sub3(iss.V, E.vel);
+    const om = lin(cross(r, v), 1 / dot3(r, r), r, 0);
+    const V = lin(iss.V, 1, cross(om, sub3(X, iss.X)), 1);
+    const [x, y, z] = D.ax.map(st) as [Vec3, Vec3, Vec3];
+    const S = this.shipMatrix();
+    const camAx = (k: number) => lin(lin(x, S[k]![0], y, S[k]![1]), 1, z, S[k]![2]);
+    setHomePose(s, X, unitV(camAx(2)), unitV(camAx(1)), V);
+    s.motion = "geodesic";
+    this.pilot.omega = [0, 0, 0];
+    this.properTime += simDt;
+    this.shipTime = t1;
+    this.sync();
+    this.dockCheck();
+    if (this.dockInfo) this.dockInfo.docked = true;
+  }
+
+  /** Lets go of the station: a push of 5 cm/s away from the port (its springs). */
+  undock() {
+    const D = this.docked;
+    if (!D) return;
+    this.docked = null;
+    this.undocking = true;
+    const g = this.dockGeometry();
+    if (g) {
+      const s = this.s;
+      const cam = cameraFrame(s);
+      const w = mouth(s).w;
+      const nav = this.ourNav(cam)!;
+      const V = lin(nav.V, 1, g.a, 0.05 / 299792458);
+      const fwd = repToHomeVec(w, cam.ell, cam.n, cam.fwd), up = repToHomeVec(w, cam.ell, cam.n, cam.up);
+      setHomePose(s, nav.X, unitV(fwd), unitV(up), V);
+      this.sync();
+    }
+    this.onPilotMessage?.("Undocked from the ISS");
   }
 
   // ------------------------------------------------------------------------------ rails
@@ -2299,6 +2511,9 @@ export class CameraController {
         if (this.pilot.auto === "land" && sp.vv < 0) cap(Math.max((0.04 * hM) / M_METRES / vv, 1 / (4.925490947e-6 * s.massSolar)), "ground");
       }
     }
+    // (the space station near: it falls by the game's own steps beside the ship — no Kepler rails, a
+    // frame's step short against its orbit: ×100)
+    if (issTrack.near) cap(100 / 492.5490947, "the station");
     // (long Crew burns: a higher ceiling — the integrator follows the slow thrust at any warp)
     if (this.pilot.accel > 0 || this.pilot.throttle > 0) cap(s.engine === "crew" ? 5000 : 500, "engine");
     if (cam.region === "hole") {
@@ -4238,6 +4453,8 @@ export class CameraController {
         // velocity relative to the target (approach, docking)
         tgtPrograde: null as Vec3 | null,
         tgtRetrograde: null as Vec3 | null,
+        /** the station's nearest docking port, seen from the eye */
+        dock: null as Vec3 | null,
       },
       // flat-map position, velocity and nose (black hole's frame), for the map
       X: null as Vec3 | null,
@@ -4268,6 +4485,8 @@ export class CameraController {
       ourAlt: NaN,
       ourVr: NaN,
       ourCa: null as { d: number; t: number } | null,
+      /** the docking aid (the station near), or null */
+      dock: null as DockInfo | null,
       speedMode: this.speedMode,
       precision: this.pilot.precision,
       /** our universe: the free-fall path and the path through the nodes */
@@ -4348,6 +4567,24 @@ export class CameraController {
       const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
       info.ourAlt = Math.hypot(...sub3(nav.X, nav.refPos)) - rb;
       info.ourVr = dot3(rel, sub3(nav.X, nav.refPos)) / Math.max(Math.hypot(...sub3(nav.X, nav.refPos)), 1e-12);
+    }
+    // the station near: its port where it is seen from the eye, the velocity relative to it (the
+    // docking's prograde and retrograde)
+    const di = this.dockInfo;
+    if (di && nav) {
+      info.dock = di;
+      const vl = Math.hypot(...di.vrel);
+      if (vl > 1e-4) {
+        const u = nav.toRep(lin(di.vrel, 1 / vl, di.vrel, 0));
+        const ul = Math.hypot(...u);
+        info.dirs.tgtPrograde = C(lin(u, 1 / ul, u, 0));
+        info.dirs.tgtRetrograde = C(lin(u, -1 / ul, u, 0));
+      }
+      const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+      const pc = C(nav.toRep(lin(sub3(di.c, nav.X), M_METRES, di.c, 0)))!;
+      const q: Vec3 = [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]];
+      const ql = Math.hypot(...q);
+      if (ql > 1e-6) info.dirs.dock = [q[0] / ql, q[1] / ql, q[2] / ql];
     }
     // the navball relative to the target: its speed, its prograde
     if (this.speedMode === "target") {

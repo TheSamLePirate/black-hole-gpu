@@ -161,6 +161,8 @@ export interface FlightHudActions {
   mount(m: Mount): void;
   lookAhead(): void;
   throttle(t: number): void;
+  /** lets go of the space station */
+  undock(): void;
   /** a body clicked on the map: make it the target */
   select(body: string): void;
   /** a manoeuvre node at a time of the path (scene time) */
@@ -177,6 +179,9 @@ export class FlightHud {
   private hud: HTMLCanvasElement;
   private warn = h("div", "fl-warn");
   private mission = h("div", "fl-mission fl-panel");
+  /** the docking aid: the station's nearest port and the ship's ring against it */
+  private dock = h("div", "fl-dock fl-panel");
+  private dockKey = "";
   private missionEls: Record<string, HTMLElement> = {};
   /** where the app's transport bar goes while flying (ui/transport.ts) */
   readonly transportSlot = h("div", "fl-transport");
@@ -646,7 +651,8 @@ export class FlightHud {
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
 
-    this.root.append(this.warn, this.mission, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
+    this.root.append(this.warn, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
+    this.dock.hidden = true;
     document.body.append(this.hud, this.root);
     this.initTips();
     this.show(false);
@@ -1341,6 +1347,7 @@ export class FlightHud {
     // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame —,
     // one of them a frame, the most overdue: never all on the same frame, every 100 ms)
     cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
+    this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
     if (this.density < 2) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
     if (this.density === 0) {
@@ -1666,7 +1673,7 @@ export class FlightHud {
       ctx.lineTo(nose[0] + 2.2 * r, nose[1]);
       ctx.stroke();
     }
-    for (const k of ["prograde", "retrograde", "burn", "maneuver", "tgtPrograde", "tgtRetrograde"] as const) {
+    for (const k of ["prograde", "retrograde", "burn", "maneuver", "tgtPrograde", "tgtRetrograde", "dock"] as const) {
       if (k === "maneuver" && i.dirs.burn) continue;
       const p = proj(i.dirs[k]);
       if (!p) continue;
@@ -1701,6 +1708,39 @@ export class FlightHud {
       if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - x, R.cy, R.h, u);
       else if (R && i.region === "hole") this.altTape(ctx, i, W - x, R.cy, R.h, u);
     }
+  }
+
+  /**
+   * The docking aid (the space station within 5 km): the port, the rings' distance, the closing rate,
+   * the offset and drift across the port's axis, the nose against it — each green within the capture
+   * (30 cm, 10°, under 0.5 m/s); docked, the port and UNDOCK.
+   */
+  private drawDock(i: Info) {
+    const d = i.dock;
+    this.dock.hidden = !d;
+    if (!d) return;
+    const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
+    const ok = (b: boolean) => (b ? "ok" : "");
+    const key = d.docked ? `docked${d.port}` : [d.port, d.range.toFixed(1), d.closing.toFixed(2), d.lateral.toFixed(2), d.lateralRate.toFixed(2), d.angle.toFixed(0)].join();
+    if (key === this.dockKey) return;
+    this.dockKey = key;
+    this.dock.replaceChildren();
+    const row = (label: string, value: string, cls = "") => {
+      const r = h("div", "fl-dock-row");
+      r.append(h("span", "", label), h("b", cls, value));
+      this.dock.append(r);
+    };
+    this.dock.append(h("div", "fl-title", d.docked ? "Docked · ISS" : "Docking · ISS"), h("div", "fl-dock-port", d.name));
+    if (d.docked) {
+      const b = h("button", "fl-go", "UNDOCK") as HTMLButtonElement;
+      b.onclick = () => this.act.undock();
+      this.dock.append(b);
+      return;
+    }
+    row("Range", f(d.range, d.range < 100 ? 2 : 1));
+    row("Closing", `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
+    row("Offset", `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
+    row("Nose to port axis", `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
   }
 
   /** the attitude ball's box (the cockpit's drawn ball, not its wide frame) */

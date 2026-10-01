@@ -8,8 +8,11 @@ import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
+import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer, type Thrust } from "./ship";
 import { EnduranceRenderer } from "./endurance";
+import { StationRenderer, type StationView } from "./station";
+import { issAxes, issTrack, jointAngles, refreshIssElements, station } from "./system/iss";
 import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -28,7 +31,7 @@ import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler } from "./terrain";
 import { AIR_K, sunThroughY } from "./system/earth-air";
-import { homeOf } from "./system/our-side";
+import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch } from "./system/local-patch";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
@@ -36,6 +39,8 @@ import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProb
 import { bodyVelocity, starOmega, type Body } from "./targeting";
 import {
   blackbodyLogY,
+  blackbodyXYZ,
+  xyzToLinearSRGB,
   buildBlackbodyLUT,
   buildSynchrotronLUT,
   captureTolerance,
@@ -249,6 +254,13 @@ export class Renderer {
   readonly ship: ShipRenderer;
   readonly endurance: EnduranceRenderer;
   private enduranceLoading: Promise<void> | null = null;
+  /** The International Space Station on its real orbit (station.ts, system/iss.ts). */
+  readonly station: StationRenderer;
+  private stationLoading: Promise<void> | null = null;
+  /** the disk's reference luminance (log10 Y) of the last frame's parameters: the stars' scale */
+  private lastLogY = 0;
+  /** the last frame's bodies (the stars' radius, temperature, brightness) */
+  private lastBodies: GpuBody[] = [];
   /** the camera frame and time of the last image traced (the Endurance is drawn with them) */
   private lastCam: CameraFrame | null = null;
   private lastTime = 0;
@@ -424,7 +436,7 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string; overlay: string },
+    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string; station: string; overlay: string },
   ) {
     this.device = device;
     this.context = context;
@@ -509,6 +521,8 @@ export class Renderer {
     this.tracePipeLayout = layout;
     this.ship = new ShipRenderer(device, src.ship);
     this.endurance = new EnduranceRenderer(device, src.endurance);
+    this.station = new StationRenderer(device, src.station);
+    this.station.onLoaded = () => this.invalidate();
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
     this.earthTiles.onChange = () => {
@@ -761,7 +775,7 @@ export class Renderer {
     loading.done("gpu");
     const src = {
       trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
-      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL), overlay: await wgsl(overlayWGSL),
+      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL), station: await wgsl(stationWGSL), overlay: await wgsl(overlayWGSL),
     };
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
@@ -1322,6 +1336,7 @@ export class Renderer {
     set(7, ...cam.beta, cam.gamma);
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);
+    if (!o.probe) this.lastLogY = dc.logY;
     set(10, o.eps, o.steps, this.escapeRadius(s), captureTolerance(a));
     // The GPU's "now" in float32: the absolute time only drives the disk's flow, the hot spot and the
     // jet (periodic patterns); bodies and the mouth get their places at `time` from the CPU (float64)
@@ -1432,6 +1447,7 @@ export class Renderer {
       }
     }
     packBodies(bodies, this.bodyData, origin);
+    if (!o.probe) this.lastBodies = bodies;
     if (bodies.length) this.featureKey |= 128;
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
     const sb = !o.probe && s.ship && this.ship.ready && near ? this.ship.shadowBound : null;
@@ -2112,12 +2128,14 @@ export class Renderer {
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && t === this.live) this.encodeTemporal(enc, t, s);
+      // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
+      if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
-        });
+        }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined);
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
@@ -2202,6 +2220,114 @@ export class Renderer {
         }).catch(() => (this.meterPending = false)),
       );
     }
+  }
+
+  /**
+   * The International Space Station: on our side near the Earth (within 3 000 km), where SGP4 — or,
+   * near the ship, the game's own fall — puts it; seen from the camera (rep vectors at the camera, its
+   * axes), its arrays turned to the Sun. Lit by the Sun — its share above the Earth's limb, reddened
+   * through the air there — and by the Earth's sunlit disc below it (on harmonics).
+   */
+  private encodeStation(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    this.station.rect = [0, 0, 0, 0];
+    const cam = this.lastCam;
+    if (!s.iss || !cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return;
+    const time = this.lastTime;
+    const w = mouth(s).w;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const E = solarState("earth", time);
+    const mR = 1476.625 * (s.massSolar || 1);
+    const hE = (Math.hypot(Xc[0] - E.pos[0], Xc[1] - E.pos[1], Xc[2] - E.pos[2]) * mR) / 1e3 - 6371;
+    if (!(hE < 3000)) return;
+    void refreshIssElements();
+    if (!this.station.ready) {
+      this.stationLoading ??= loading.track("iss", "The space station", this.station.load((u) => loading.fetch(u, "iss"))).then(() => this.invalidate(), (e) => console.error("ISS:", e));
+      return;
+    }
+    const st = issTrack.state(time, Xc);
+    if (!st) return;
+    const toCam = (v: Vec3): Vec3 => {
+      const r = homeToRep(w, cam.ell, cam.n, v);
+      return [r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2], r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2], r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2]];
+    };
+    const unitV = (v: Vec3): Vec3 => {
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    const relH: Vec3 = [st.X[0] - Xc[0], st.X[1] - Xc[1], st.X[2] - Xc[2]];
+    const rel = toCam(relH).map((c) => c * mR) as Vec3;
+    // (seen from the camera's eye — its attach point, or the outside views' place —, not the ship's centre)
+    if (s.ship && this.shipPose) {
+      const e = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+      for (let k = 0; k < 3; k++) rel[k]! += e[k]!;
+    }
+    if (Math.hypot(...rel) > 3.5e6) return;
+    const A = issAxes(st.X, st.V, time);
+    const axes = A.map((a) => unitV(toCam(a))) as [Vec3, Vec3, Vec3];
+    // the Sun from the station: its direction, its disc's share above the Earth's limb (the air's 30 km
+    // counted in), reddened through it
+    const bodies = this.lastBodies;
+    const sunB = bodies.find((b) => b.id === "sun");
+    const S = solarState("sun", time).pos;
+    const toSun: Vec3 = [S[0] - st.X[0], S[1] - st.X[1], S[2] - st.X[2]];
+    const dS = Math.hypot(...toSun);
+    const sunH = unitV(toSun);
+    const toE: Vec3 = [E.pos[0] - st.X[0], E.pos[1] - st.X[1], E.pos[2] - st.X[2]];
+    const dE = Math.hypot(...toE);
+    const rE = (6371e3 + 30e3) / mR;
+    const rhoE = Math.asin(Math.min(rE / dE, 1));
+    const rhoS = Math.asin(Math.min((sunB?.radius ?? 0.00471 * dS) / dS, 1));
+    const sep = Math.acos(Math.max(-1, Math.min(1, (sunH[0] * toE[0] + sunH[1] * toE[1] + sunH[2] * toE[2]) / dE)));
+    const x = Math.max(-1, Math.min(1, (sep - rhoE) / Math.max(rhoS, 1e-6)));
+    const share = 0.5 + (x * Math.sqrt(1 - x * x) + Math.asin(x)) / Math.PI;
+    const red = Math.sqrt(Math.max(0, Math.min(1, (x + 1) / 2)));
+    const T = sunB?.temperature ?? 5772;
+    const bb = blackbodyXYZ(T);
+    const rgb0 = xyzToLinearSRGB([bb[0] / bb[1], 1, bb[2] / bb[1]]).map((c) => Math.max(c, 0)) as Vec3;
+    const lum = 0.2126 * rgb0[0] + 0.7152 * rgb0[1] + 0.0722 * rgb0[2];
+    const Esun = Math.PI * 10 ** (this.logYOf(Math.round(T / 50) * 50) - this.lastLogY) * (sunB?.brightness ?? 1) * ((sunB?.radius ?? 0) / dS) ** 2;
+    const tint: Vec3 = [1, 0.5 + 0.5 * red, 0.25 + 0.75 * red];
+    const sunE = rgb0.map((c, k) => (c / lum) * Esun * share * tint[k]!) as Vec3;
+    // the Earth's sunlit disc below: its radiance (albedo 0.3, Lambert, a little blue) over the cap it
+    // fills, on order-2 harmonics (camera frame)
+    const sh = new Array<number>(27).fill(0);
+    const eDir = unitV(toE);
+    const cosCap = Math.cos(Math.asin(Math.min(6371e3 / mR / dE, 1)));
+    const aux: Vec3 = Math.abs(eDir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    const ex = unitV([eDir[1] * aux[2] - eDir[2] * aux[1], eDir[2] * aux[0] - eDir[0] * aux[2], eDir[0] * aux[1] - eDir[1] * aux[0]]);
+    const ey: Vec3 = [eDir[1] * ex[2] - eDir[2] * ex[1], eDir[2] * ex[0] - eDir[0] * ex[2], eDir[0] * ex[1] - eDir[1] * ex[0]];
+    const N = 96;
+    const dOmega = (2 * Math.PI * (1 - cosCap)) / N;
+    const earthCol = [0.85, 0.93, 1.0];
+    const rEm = 6371e3 / mR;
+    for (let k = 0; k < N; k++) {
+      // (a Fibonacci spiral over the cap)
+      const cz = 1 - ((k + 0.5) / N) * (1 - cosCap);
+      const sz = Math.sqrt(1 - cz * cz);
+      const ph = k * 2.399963229728653;
+      const d: Vec3 = [0, 1, 2].map((i) => eDir[i]! * cz + (ex[i]! * Math.cos(ph) + ey[i]! * Math.sin(ph)) * sz) as Vec3;
+      // where it meets the ground, the Sun's height there
+      const b = d[0] * toE[0] + d[1] * toE[1] + d[2] * toE[2];
+      const c2 = dE * dE - rEm * rEm;
+      const tt = b - Math.sqrt(Math.max(b * b - c2, 0));
+      const P: Vec3 = [st.X[0] + d[0] * tt - E.pos[0], st.X[1] + d[1] * tt - E.pos[1], st.X[2] + d[2] * tt - E.pos[2]];
+      const pl = Math.hypot(...P);
+      const mu = Math.max(0, (P[0] * sunH[0] + P[1] * sunH[1] + P[2] * sunH[2]) / pl);
+      if (mu <= 0) continue;
+      const L = (0.3 / Math.PI) * Esun * mu;
+      const dc = toCam(d);
+      const dl = Math.hypot(...dc) || 1;
+      const [nx, ny, nz] = [dc[0] / dl, dc[1] / dl, dc[2] / dl];
+      const Y = [0.282095, 0.488603 * ny, 0.488603 * nz, 0.488603 * nx, 1.092548 * nx * ny, 1.092548 * ny * nz, 0.315392 * (3 * nz * nz - 1), 1.092548 * nx * nz, 0.546274 * (nx * nx - ny * ny)];
+      for (let q = 0; q < 9; q++) for (let ch = 0; ch < 3; ch++) sh[3 * q + ch]! += L * earthCol[ch]! * (rgb0[ch]! / lum) * Y[q]! * dOmega;
+    }
+    const sunStation: Vec3 = [0, 1, 2].map((k) => sunH[0] * A[k]![0] + sunH[1] * A[k]![1] + sunH[2] * A[k]![2]) as Vec3;
+    const view: StationView = {
+      rel, axes, angles: jointAngles(station.joints, sunStation),
+      sun: unitV(toCam(sunH)), sunRadius: rhoS, sunE, sh,
+      tanH: Math.tan((s.fov * Math.PI) / 360), aspect: t.width / t.height, pre: preExposure(this.ev(s)), mPerM: mR,
+    };
+    this.station.encode(enc, t.hdr, t.moments, view);
   }
 
   /**

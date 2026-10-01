@@ -12,6 +12,8 @@ export const MOUNTS = {
   wing: { label: "Wingtip", short: "Wing", eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
   belly: { label: "Belly", short: "Belly", eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
   rear: { label: "Nose, looking back", short: "Rear", eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
+  // (the docking camera: in the rear hatch, on its axis, looking out — the port to back onto)
+  dock: { label: "Docking camera, rear hatch", short: "Dock", eye: [0.04, 1.11, -5.5], aim: [0.04, 1.11, -40] },
   // outside the ship (controls.ts: their poses move — around it: drag turns about it, the wheel its
   // distance; free: the keys move the camera, the drag turns it; it follows the ship's motion)
   around: { label: "Outside, around the ship", short: "Around", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "around" },
@@ -19,9 +21,12 @@ export const MOUNTS = {
   // (a fly-by: the camera stands still where the ship will pass — in the frame of the body it flies by —,
   // turns to follow it, and waits for it further on once it is gone)
   flyby: { label: "Fly-by, the ship passing", short: "Fly-by", eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
+  // (the space station's own docking camera: on the nearest port's axis, looking out at the ship
+  // coming in — moving with the station; elsewhere, around the ship)
+  station: { label: "ISS docking camera, on the port", short: "ISS cam", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "station" },
 } satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
 /** The views from outside the ship: around it, free, a fly-by. */
-export type OutsideView = "around" | "free" | "flyby";
+export type OutsideView = "around" | "free" | "flyby" | "station";
 export type Mount = keyof typeof MOUNTS;
 export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 
