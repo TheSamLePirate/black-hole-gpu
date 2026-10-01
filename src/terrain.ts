@@ -229,12 +229,22 @@ const bspline4 = (t: number) => {
   return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6];
 };
 
+/** A value as a half float holds it (the tracer's r16float height map: 1 m steps up to 2 048 m, 4 m to 8 192). */
+export function toHalf(v: number): number {
+  const a = Math.abs(v);
+  if (a < 6.103515625e-5) return Math.round(v / 5.960464477539063e-8) * 5.960464477539063e-8;
+  const e = Math.floor(Math.log2(a));
+  const ulp = 2 ** (e - 10);
+  return Math.round(v / ulp) * ulp;
+}
+
 /**
- * The Earth's height [m] at a unit direction on its axes, from its height map (a byte per texel,
- * 0…255 → 0…8 848 m; W × H, equirectangular) as the tracer samples it near — a cubic B-spline over
- * its texels, wrapping in longitude — and the detail finer than it.
+ * The Earth's height [m] at a unit direction on its axes, from its height map (whole metres per texel,
+ * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
+ * samples it near — a cubic B-spline over its texels, wrapping in longitude — and the detail finer than
+ * it; the sea at 0.
  */
-export function earthHeightSampler(map: Uint8Array, W: number, H: number) {
+export function earthHeightSampler(map: Int16Array, W: number, H: number) {
   return (q: V3, foot = 0.05): number => {
     const lon = Math.atan2(q[1], q[0]);
     const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
@@ -246,10 +256,10 @@ export function earthHeightSampler(map: Uint8Array, W: number, H: number) {
     for (let j = 0; j < 4; j++) {
       const yy = Math.min(Math.max(y0 + j - 1, 0), H - 1);
       let row = 0;
-      for (let i = 0; i < 4; i++) row += wx[i]! * map[yy * W + ((((x0 + i - 1) % W) + W) % W)]!;
+      for (let i = 0; i < 4; i++) row += wx[i]! * toHalf(map[yy * W + ((((x0 + i - 1) % W) + W) % W)]!);
       v += wy[j]! * row;
     }
-    const h0 = (v / 255) * 8848;
+    const h0 = v;
     return Math.max(h0 + earthDetail(q, h0, foot), 0);
   };
 }

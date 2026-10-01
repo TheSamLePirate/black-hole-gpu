@@ -2,8 +2,10 @@
 //   cube (rgba8, a cube map): the day colour (sRGB) and the cloud cover (alpha)
 //   night (r8, a cube map): the city lights (the night map's red channel — its dark blue ground has
 //     almost none)
-//   surf (rgba8, equirectangular): the normal map's east and south components, the oceans (1), the
-//     height (8 848 m × value)
+//   surf (rgba8, equirectangular): the relief's normal (its east and south components, from the heights),
+//     the oceans (1)
+//   elev (r16float, equirectangular, the same size): the height above the sea [m] (NOAA's ETOPO 2022:
+//     scripts/build-earth-relief.py), the sea floor below 0
 // The cube maps' faces: `ft` looks at Greenwich (lat 0, lon 0), `rt` at 90° E, `up` at the north pole
 // (Greenwich at its bottom edge), `dn` at the south pole (Greenwich at its top edge): on the Earth's
 // own axes q (x Greenwich, y 90° E, z north), the cube's direction is (q.y, q.z, q.x) — its faces +X…−Z
@@ -41,12 +43,10 @@ import nightLf from "../../assets/earth/night/lf.jpg";
 import nightRt from "../../assets/earth/night/rt.jpg";
 import nightUp from "../../assets/earth/night/up.jpg";
 import nightDn from "../../assets/earth/night/dn.jpg";
-import normalMed from "../../assets/earth/normal-med.jpg";
-import normalHigh from "../../assets/earth/normal-high.jpg";
 import oceanMed from "../../assets/earth/ocean-med.jpg";
 import oceanHigh from "../../assets/earth/ocean-high.jpg";
-import heightMed from "../../assets/earth/height-med.jpg";
-import heightHigh from "../../assets/earth/height-high.jpg";
+import reliefMed from "../../assets/earth/relief-med.bin";
+import reliefHigh from "../../assets/earth/relief-high.bin";
 import ktxMedRt from "../../assets/earth/ktx2/med-rt.ktx2";
 import ktxMedLf from "../../assets/earth/ktx2/med-lf.ktx2";
 import ktxMedUp from "../../assets/earth/ktx2/med-up.ktx2";
@@ -65,18 +65,18 @@ export type EarthTier = "med" | "high";
 
 /** the faces in the cube's layer order: +X, −X, +Y, −Y, +Z, −Z */
 type Faces = [string, string, string, string, string, string];
-const SETS: Record<EarthTier, { size: number; day: Faces; cloud: Faces; normal: string; ocean: string; height: string; w: number }> = {
+const SETS: Record<EarthTier, { size: number; day: Faces; cloud: Faces; ocean: string; relief: string; w: number }> = {
   med: {
     size: 2048, w: 4096,
     day: [dayMedRt, dayMedLf, dayMedUp, dayMedDn, dayMedFt, dayMedBk],
     cloud: [cloudMedRt, cloudMedLf, cloudMedUp, cloudMedDn, cloudMedFt, cloudMedBk],
-    normal: normalMed, ocean: oceanMed, height: heightMed,
+    ocean: oceanMed, relief: reliefMed,
   },
   high: {
     size: 4096, w: 8192,
     day: [dayHighRt, dayHighLf, dayHighUp, dayHighDn, dayHighFt, dayHighBk],
     cloud: [cloudHighRt, cloudHighLf, cloudHighUp, cloudHighDn, cloudHighFt, cloudHighBk],
-    normal: normalHigh, ocean: oceanHigh, height: heightHigh,
+    ocean: oceanHigh, relief: reliefHigh,
   },
 };
 const NIGHT: Faces = [nightRt, nightLf, nightUp, nightDn, nightFt, nightBk];
@@ -112,13 +112,16 @@ async function compressedCube(device: GPUDevice, tier: EarthTier): Promise<GPUTe
 }
 const NIGHT_SIZE = 2048;
 
-/** The Earth's height at a map value (0…1) [m]. */
-export const EARTH_HEIGHT_SCALE = 8848;
+/** The Earth's heights [m] as the tracer has them (its elev map: their texels), W × H equirectangular. */
+export interface EarthHeights { map: Int16Array<ArrayBuffer>; W: number; H: number }
 
 export interface EarthMaps {
   cube: GPUTexture;
   night: GPUTexture;
   surf: GPUTexture;
+  elev: GPUTexture;
+  /** the heights on the CPU (the ground the ship stands on): null for the placeholder */
+  heights: EarthHeights | null;
   tier: EarthTier | null;
 }
 
@@ -139,10 +142,27 @@ struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
 @fragment fn face(v: V) -> @location(0) vec4f {
   return vec4f(textureSampleLevel(a, s, v.uv, 0.0).rgb, textureSampleLevel(b, s, v.uv, 0.0).r);
 }
-// the relief: normal (east, south), ocean, height
+// the heights [m] (r16float), from their whole metres (r16sint)
+@group(0) @binding(4) var m: texture_2d<i32>;
+@fragment fn elev(v: V) -> @location(0) vec4f {
+  return vec4f(f32(textureLoad(m, vec2i(v.p.xy), 0).r), 0.0, 0.0, 1.0);
+}
+// the relief's normal from the heights (a: elev, the sea at 0) — the slopes −∂h/∂east, −∂h/∂south,
+// central differences over the texels' sizes on the sphere — and the oceans (b)
 @fragment fn surf(v: V) -> @location(0) vec4f {
-  let n = textureSampleLevel(a, s, v.uv, 0.0);
-  return vec4f(n.r, n.g, textureSampleLevel(b, s, v.uv, 0.0).r, textureSampleLevel(c, s, v.uv, 0.0).r);
+  let d = vec2i(textureDimensions(a));
+  let p = vec2i(v.p.xy);
+  let xm = (p.x + d.x - 1) % d.x;
+  let xp = (p.x + 1) % d.x;
+  let ym = max(p.y - 1, 0);
+  let yp = min(p.y + 1, d.y - 1);
+  let hE = max(textureLoad(a, vec2i(xp, p.y), 0).r, 0.0) - max(textureLoad(a, vec2i(xm, p.y), 0).r, 0.0);
+  let hS = max(textureLoad(a, vec2i(p.x, yp), 0).r, 0.0) - max(textureLoad(a, vec2i(p.x, ym), 0).r, 0.0);
+  let lat = (0.5 - (f32(p.y) + 0.5) / f32(d.y)) * 3.14159265;
+  let dx = 2.0 * 3.14159265 * 6.371e6 * max(cos(lat), 1e-3) / f32(d.x) * 2.0;
+  let dy = 3.14159265 * 6.371e6 / f32(d.y) * f32(yp - ym);
+  let sl = clamp(vec2f(-hE / dx, -hS / dy), vec2f(-1.0), vec2f(1.0));
+  return vec4f(0.5 + 0.5 * sl, textureSampleLevel(b, s, v.uv, 0.0).r, 1.0);
 }
 // a mip level from the one above (2 × 2 texels): colour averaged in linear light, or plainly
 fn quad(p: vec2u) -> array<vec4f, 4> {
@@ -175,6 +195,8 @@ export function placeholderEarth(device: GPUDevice): EarthMaps {
     cube: mk("rgba8unorm", 6, new Uint8Array([40, 60, 90, 0])),
     night: mk("r8unorm", 6, new Uint8Array([0])),
     surf: mk("rgba8unorm", 1, new Uint8Array([128, 128, 255, 0])),
+    elev: mk("r16float", 1, new Uint8Array([0, 0]) as Uint8Array<ArrayBuffer>),
+    heights: null,
     tier: null,
   };
 }
@@ -207,10 +229,10 @@ class Packer {
     const p = this.pipe(entry, dst.format);
     const layout = p.getBindGroupLayout(0);
     // (an entry point's layout holds only the bindings it uses)
-    const used = entry === "face" ? [0, 1, 3] : entry === "surf" ? [0, 1, 2, 3] : [0];
+    const used = entry === "face" || entry === "surf" ? [0, 1, 3] : entry === "elev" ? [4] : [0];
     const bind = d.createBindGroup({
       layout,
-      entries: used.map((b) => ({ binding: b, resource: b === 3 ? this.samp : src[b]! })),
+      entries: used.map((b) => ({ binding: b, resource: b === 3 ? this.samp : b === 4 ? src[0]! : src[b]! })),
     });
     const enc = d.createCommandEncoder();
     const pass = enc.beginRenderPass({
@@ -277,63 +299,41 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
     pk.mips(night, f, false);
     lights.destroy();
   }
-  const [n, o, h] = await Promise.all([upload(device, set.normal), upload(device, set.ocean, "r8unorm"), upload(device, set.height, "r8unorm")]);
-  pk.draw("surf", surf, 0, 0, [n.createView(), o.createView(), h.createView()]);
+  const [heights, o] = await Promise.all([loadHeights(set.relief), upload(device, set.ocean, "r8unorm")]);
+  const elev = device.createTexture({ size: [set.w, set.w / 2], format: "r16float", mipLevelCount: levels(set.w), usage });
+  const whole = device.createTexture({ size: [heights.W, heights.H], format: "r16sint", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({ texture: whole }, heights.map, { bytesPerRow: heights.W * 2 }, [heights.W, heights.H]);
+  pk.draw("elev", elev, 0, 0, [whole.createView()]);
+  pk.mips(elev, 0, false);
+  pk.draw("surf", surf, 0, 0, [elev.createView({ baseMipLevel: 0, mipLevelCount: 1 }), o.createView()]);
   pk.mips(surf, 0, false);
-  n.destroy();
+  whole.destroy();
   o.destroy();
-  h.destroy();
   await device.queue.onSubmittedWorkDone();
-  return { cube, night, surf, tier };
+  return { cube, night, surf, elev, heights, tier };
 }
 
 /**
- * The heights the tracer draws (the packed map's alpha, its finest level) read back to the CPU: the
- * ground the ship stands on (src/terrain.ts: earthHeightSampler), a byte per texel.
+ * The heights [m] from their file (scripts/build-earth-relief.py: "ELV1", gzip; each row's values after
+ * its first as differences, the low bytes then the high), the rows summed a band at a time (no long
+ * task on the main thread).
  */
-const ALPHA_WGSL = `
-@group(0) @binding(0) var src: texture_2d<f32>;
-@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  let uv = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
-  return vec4f(uv * 2.0 - 1.0, 0.0, 1.0);
-}
-@fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
-  return vec4f(textureLoad(src, vec2i(p.xy), 0).a, 0.0, 0.0, 1.0);
-}`;
-
-export async function readEarthHeights(device: GPUDevice, surf: GPUTexture): Promise<{ map: Uint8Array; W: number; H: number }> {
-  const W = surf.width, H = surf.height;
-  const map = new Uint8Array(W * H);
-  // (the heights — the packed map's alpha — drawn by the GPU into a one-byte texture, read back in
-  // bands copied whole: no loop over the 33 M texels on the main thread, which took four long tasks)
-  const heights = device.createTexture({ size: [W, H], format: "r8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
-  const mod = device.createShaderModule({ code: ALPHA_WGSL, label: "earth heights" });
-  const pipe = device.createRenderPipeline({
-    layout: "auto", vertex: { module: mod, entryPoint: "vs" },
-    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "r8unorm" }] }, primitive: { topology: "triangle-list" },
-  });
-  {
-    const enc = device.createCommandEncoder();
-    const pass = enc.beginRenderPass({ colorAttachments: [{ view: heights.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }] });
-    pass.setPipeline(pipe);
-    pass.setBindGroup(0, device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: surf.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
-    pass.draw(3);
-    pass.end();
-    device.queue.submit([enc.finish()]);
+async function loadHeights(url: string): Promise<EarthHeights> {
+  const res = await get(url);
+  if (!res.ok || !res.body) throw new Error(`Earth relief: HTTP ${res.status}`);
+  const buf = await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  const head = new Uint32Array(buf, 0, 4);
+  if (head[0] !== 0x31564c45) throw new Error("Earth relief: bad header");
+  const W = head[1]!, H = head[2]!, n = W * H;
+  const lo = new Uint8Array(buf, 16, n), hi = new Uint8Array(buf, 16 + n, n);
+  const map = new Int16Array(n);
+  for (let y0 = 0; y0 < H; y0 += 256) {
+    for (let y = y0; y < Math.min(y0 + 256, H); y++) {
+      let o = y * W;
+      let v = 0;
+      for (let x = 0; x < W; x++, o++) map[o] = v = v + ((lo[o]! | (hi[o]! << 8)) << 16 >> 16);
+    }
+    await new Promise((r) => setTimeout(r, 0));
   }
-  // (rows are 256-byte aligned: W is a power of two ≥ 256)
-  const rows = Math.max(1, Math.floor((32 << 20) / W));
-  const buf = device.createBuffer({ size: W * rows, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-  for (let y = 0; y < H; y += rows) {
-    const n = Math.min(rows, H - y);
-    const enc = device.createCommandEncoder();
-    enc.copyTextureToBuffer({ texture: heights, origin: [0, y, 0] }, { buffer: buf, bytesPerRow: W }, [W, n]);
-    device.queue.submit([enc.finish()]);
-    await buf.mapAsync(GPUMapMode.READ, 0, W * n);
-    map.set(new Uint8Array(buf.getMappedRange(0, W * n)), y * W);
-    buf.unmap();
-  }
-  buf.destroy();
-  heights.destroy();
   return { map, W, H };
 }

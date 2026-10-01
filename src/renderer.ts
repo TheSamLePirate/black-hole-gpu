@@ -23,7 +23,7 @@ import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera"
 import { mouth, radius, setSceneTime } from "./wormhole";
 import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
-import { loadEarthMaps, placeholderEarth, readEarthHeights, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler } from "./terrain";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -457,6 +457,7 @@ export class Renderer {
         { binding: 24, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
         { binding: 26, visibility: C, texture: { sampleType: "depth" } },
+        { binding: 27, visibility: C, texture: { sampleType: "float" } },
       ],
     });
     // (the disk's turbulence: a tiling noise baked once)
@@ -627,9 +628,9 @@ export class Renderer {
     (first ? loading.track("earth", "", job) : job)
       .then(async (maps) => {
         // (a later request won — another tier, or none): these are not used
-        if (token !== this.earthJob) return [maps.cube, maps.night, maps.surf].forEach((t) => t.destroy());
+        if (token !== this.earthJob) return [maps.cube, maps.night, maps.surf, maps.elev].forEach((t) => t.destroy());
         if (await oom) {
-          [maps.cube, maps.night, maps.surf].forEach((t) => t.destroy());
+          [maps.cube, maps.night, maps.surf, maps.elev].forEach((t) => t.destroy());
           console.warn(`Out of GPU memory for the Earth's ${tier} maps`);
           this.earthCap = tier === "high" ? "med" : "none";
           if (tier === "high") this.requestEarthMaps("med");
@@ -638,14 +639,12 @@ export class Renderer {
         }
         const old = this.earthMaps;
         this.earthMaps = maps;
-        // (the ground the ship stands on: the heights drawn, read back)
-        void readEarthHeights(this.device, maps.surf).then(({ map, W, H }) => {
-          if (this.earthMaps === maps) setGroundRelief("earth", earthHeightSampler(map, W, H));
-        });
+        // (the ground the ship stands on: the heights drawn)
+        if (maps.heights) setGroundRelief("earth", earthHeightSampler(maps.heights.map, maps.heights.W, maps.heights.H));
         if (this.live) this.bindTarget(this.live);
         if (this.offline) this.bindTarget(this.offline.target);
         // (the old ones once the frames drawing with them are done)
-        void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf].forEach((t) => t.destroy()));
+        void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf, old.elev].forEach((t) => t.destroy()));
         this.invalidate();
         this.onAssets?.();
       })
@@ -661,7 +660,7 @@ export class Renderer {
     this.earthMaps = placeholderEarth(this.device);
     if (this.live) this.bindTarget(this.live);
     if (this.offline) this.bindTarget(this.offline.target);
-    void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf].forEach((t) => t.destroy()));
+    void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.surf, old.elev].forEach((t) => t.destroy()));
     this.invalidate();
   }
 
@@ -1004,6 +1003,7 @@ export class Renderer {
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
+        { binding: 27, resource: this.earthMaps.elev.createView() },
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -1035,6 +1035,7 @@ export class Renderer {
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
+        { binding: 27, resource: this.earthMaps.elev.createView() },
       ],
     });
     t.polGridPass = d.createBindGroup({

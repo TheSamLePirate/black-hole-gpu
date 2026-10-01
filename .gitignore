@@ -49,3 +49,6 @@ assets/textures/
 # the app uses its refit, assets/ephemeris/
 assets/kernels/
 assets/nasaSolar/
+# NOAA's ETOPO 2022 grid (478 MB) — scripts/build-earth-relief.py reads it; the app uses its maps,
+# assets/earth/relief-*.bin
+assets/etopo/

@@ -3344,7 +3344,8 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(19) var earthCube: texture_cube<f32>;  // day colour (sRGB), cloud cover (alpha)
 @group(0) @binding(20) var earthNight: texture_cube<f32>; // city lights (r)
-@group(0) @binding(21) var earthSurf: texture_2d<f32>;
+@group(0) @binding(21) var earthSurf: texture_2d<f32>;    // the relief's normal (east, south), the oceans
+@group(0) @binding(27) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022)
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -3661,7 +3662,7 @@ fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
 }
 
 // ---- the Earth's relief (the same function in src/terrain.ts: earthDetail, earthHeightSampler — the
-// ship stands on it): its height map (the relief map's alpha: 0 … 8 848 m), ridges on its mountains
+// ship stands on it): its height map (earthElev: NOAA's ETOPO 2022, metres), ridges on its mountains
 // and hills on its land finer than the map; heights [m] at a unit direction on its axes, resolved to a
 // footprint foot [m]
 // Musgrave's ridged multifractal: sharp crests and smooth valleys between them, each octave's ridges
@@ -3735,11 +3736,11 @@ fn bspline4(t: f32) -> vec4f {
 }
 // the map's height: near, a cubic B-spline over its texels; from afar, its mip level from the footprint
 fn earthH0(q: vec3f, foot: f32) -> f32 {
-  let dim = vec2i(textureDimensions(earthSurf));
+  let dim = vec2i(textureDimensions(earthElev));
   let texelM = EARTH_RM * TAU / f32(dim.x);
   let lod = log2(max(foot, 1.0) / texelM);
   let uv = earthUV(q);
-  if (lod > 0.5) { return textureSampleLevel(earthSurf, bgSamp, uv, lod).a * 8848.0; }
+  if (lod > 0.5) { return textureSampleLevel(earthElev, bgSamp, uv, lod).r; }
   let x = uv.x * f32(dim.x) - 0.5;
   let y = uv.y * f32(dim.y) - 0.5;
   let x0 = floor(x);
@@ -3752,11 +3753,11 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
     var row = 0.0;
     for (var i = 0; i < 4; i++) {
       let xx = ((i32(x0) + i - 1) % dim.x + dim.x) % dim.x;
-      row += wx[i] * textureLoad(earthSurf, vec2i(xx, yy), 0).a;
+      row += wx[i] * textureLoad(earthElev, vec2i(xx, yy), 0).r;
     }
     s += wy[j] * row;
   }
-  return s * 8848.0;
+  return s;
 }
 fn earthHeight(q: vec3f, foot: f32) -> f32 {
   let h0 = earthH0(q, foot);
@@ -3765,8 +3766,8 @@ fn earthHeight(q: vec3f, foot: f32) -> f32 {
 // the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
 fn earthHeightStep(q: vec3f, foot: f32) -> f32 {
-  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthSurf).x);
-  let h0 = textureSampleLevel(earthSurf, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).a * 8848.0;
+  let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
+  let h0 = textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r;
   return max(h0 + earthDetail(q, h0, max(foot * 4.0, 1.0)), 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
