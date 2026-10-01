@@ -540,7 +540,6 @@ export const presets: Record<string, Preset> = {
   // there: the ridges in relief, their snow, their shadows
   // (no clouds: the map's, on its fixed deck 6 km up, covered the plateau now at its true ~4 800 m)
   "Earth: the Himalaya from orbit": { ...EARTH_VIEW, target: "earth", fov: 50, earthClouds: 0, time: T0 - 0.1931 * DAY, pose: { at: [24.5, 86.9], altKm: 400, look: "earth", off: [0, 45] } },
-  // Santiago, the Sun setting behind the coast range: the auto exposure on the glow
   // the total eclipse of 12 August 2026 from Burgos, half a minute before the Moon's shadow arrives —
   // totality 18:28:10 – 18:29:51 UTC here, the Sun 9° up in the west-northwest: the sky's darkening, the
   // diamond ring, the corona, the horizon's glow all round (DE440; the NASA path within a kilometre)
@@ -557,7 +556,10 @@ export const presets: Record<string, Preset> = {
     ...EARTH_VIEW, ship: false, target: "earth", rotation: "free", lookAt: false, fov: 34, time: (Date.UTC(2026, 7, 12, 17, 45, 50) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
     pose: { at: [52, -40], altKm: 3000, aim: [65.2, -25.2], off: [0, 3] },
   },
-  "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, time: T0 + 0.358 * DAY, pose: { at: SANTIAGO, look: "sun", off: [0, 6] } },
+  // above the Potrerillos reservoir (Mendoza, 1 500 m), the Sun going down behind the Cordón del Plata,
+  // its crest 8° up 20 km away and its snowy 6 000 m peaks behind: the ridges in layers in the haze, the
+  // glow (from Santiago the coast range west of the city, real, is next to flat on the horizon)
+  "Earth: sunset over the Andes": { ...EARTH_VIEW, target: "sun", fov: 50, earthClouds: 0, time: T0 + 0.358 * DAY - (42 / 1440) * DAY, pose: { at: [-32.96, -69.2], look: "sun", off: [0, 5] } },
   // Santiago, an hour after sunset: the full Moon just clear of the Andes (their crest 5° up from the city —
   // a quarter of an hour after sunset it was still behind them) (a telephoto)
   "Earth: full Moon rising over the Andes": { ...EARTH_VIEW, target: "moon", fov: 10, time: T0 + 0.3945 * DAY + (45 / 1440) * DAY, pose: { at: SANTIAGO, look: "moon", off: [0, -2] } },
