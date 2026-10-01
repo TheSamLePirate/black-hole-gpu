@@ -1460,7 +1460,8 @@ export class Renderer {
       this.meterTime = time;
       this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
-      this.meterInAir = !!near && bodies[near.index]?.id === "earth" && !!this.earthMaps.tier;
+      this.earthIsNear = !!near && bodies[near.index]?.id === "earth";
+      this.meterInAir = this.earthIsNear && !!this.earthMaps.tier;
       // (a landscape by day — the camera low in the Earth's air, the Sun over 4–15° there, not eclipsed —:
       // its shade kept from "AgX punchy"'s deepening, a dark grey as the eye sees it, not black; dusk, night,
       // totality and the views from orbit keep their depth)
@@ -2669,8 +2670,10 @@ export class Renderer {
   /** Starts a render of the current scene, frozen in time, at an arbitrary resolution. */
   /** The Earth's maps and terrain tiles the view wants are in (none loading). */
   get earthSettled() {
-    return !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier);
+    return !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier) && !(this.earthIsNear && !this.earthMaps.tier);
   }
+  /** the camera in the Earth's local patch (its maps wanted, whether or not asked for yet) */
+  private earthIsNear = false;
 
   startOffline(s: Settings, time: number, opts: OfflineOptions) {
     this.envReset = true; // the spaceship's light probe: from this camera only (video frames)

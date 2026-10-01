@@ -3936,8 +3936,9 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
   return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
 }
 
-// The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~30 km,
-// steps growing, softened by how close the ray passes over the ground (a penumbra); foot [m]
+// The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~50 km,
+// steps growing by a sixth (by a third, a grazing Sun's ray stepped over the crests between them: lit lines
+// across the shade), softened by how close the ray passes over the ground (a penumbra); foot [m]
 fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   let p0 = p * (1.0 + 2.0 / EARTH_RM);
   // (the march's heights are coarser than the ground drawn: measured from their own ground here — else
@@ -3946,15 +3947,17 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   let bias = earthHeightStep(p / rp, foot) - (rp - 1.0) * EARTH_RM;
   var t = max(foot, 20.0);
   var sh = 1.0;
-  for (var i = 0; i < 24; i++) {
+  for (var i = 0; i < 48; i++) {
     let x = p0 + Ls * (t / EARTH_RM);
     let r = length(x);
     let hr = (r - 1.0) * EARTH_RM;
     if (hr > 9600.0) { break; }
-    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias;
+    // (+0.5 % of the distance: the march's heights, from coarser levels farther, a few metres off the
+    // ground drawn)
+    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias + 0.005 * t;
     sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
     if (sh <= 0.0) { break; }
-    t *= 1.35;
+    t *= 1.18;
   }
   return sh;
 }
@@ -4138,6 +4141,15 @@ fn earthCover(q: vec3f, A: vec3f, n: vec3f, hG: f32, footM: f32) -> vec3f {
   return m;
 }
 
+// The snow line [m] at a latitude [°]: highest in the dry subtropics (the Himalaya's ~5 800 m), ~3 000 m
+// in the Alps, 1 500 m at 60°, near the sea in the Arctic
+fn snowLineAt(lat: f32) -> f32 {
+  if (lat < 28.0) { return mix(4900.0, 5800.0, lat / 28.0); }
+  if (lat < 46.0) { return mix(5800.0, 3000.0, (lat - 28.0) / 18.0); }
+  if (lat < 60.0) { return mix(3000.0, 1500.0, (lat - 46.0) / 14.0); }
+  return mix(1500.0, 500.0, clamp((lat - 60.0) / 12.0, 0.0, 1.0));
+}
+
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   let day = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(fx), eCube(fy));
   let rel = earthRelief(q, fx, fy);
@@ -4162,7 +4174,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
     let lat = abs(asin(clamp(q.z, -1.0, 1.0))) * 57.29578;
-    let snowLine = mix(5700.0, 700.0, smoothstep(20.0, 70.0, lat)) + 300.0 * gnoise(q * 3000.0);
+    let snowLine = snowLineAt(lat) + 300.0 * gnoise(q * 3000.0);
     let snow = smoothstep(snowLine - 250.0, snowLine + 250.0, hG) * (1.0 - smoothstep(0.25, 0.5, slope));
     let rock = smoothstep(0.22, 0.45, slope) * smoothstep(300.0, 1500.0, hG);
     A *= mix(vec3f(1.0), earthCover(q, A, n, hG, footM), k);

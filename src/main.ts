@@ -1243,7 +1243,10 @@ async function main() {
           touch();
           const t0 = performance.now();
           await wait(2500);
-          while (performance.now() - t0 < (moving ? 9000 : maxMs) && !(lastStats?.phase === "converged" && !moving)) await wait(250);
+          // (the Earth's maps and terrain tiles in first: up to half a minute more)
+          while (!renderer.earthSettled && performance.now() - t0 < 30000) await wait(250);
+          const t1 = performance.now();
+          while (performance.now() - t1 < (moving ? 9000 : maxMs) && !(lastStats?.phase === "converged" && !moving)) await wait(250);
           const img = await createImageBitmap(await renderer.exportPNG(settings));
           const W = 640, H = 360;
           const sw = Math.min(img.width, (img.height * W) / H), sh = (sw * H) / W;

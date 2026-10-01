@@ -569,6 +569,25 @@ export const presets: Record<string, Preset> = {
   // Brittany on a winter afternoon (15:00, the Sun low in the south-west behind): the clouds lit pink, the
   // green hills
   "Earth: a winter afternoon in Brittany": { ...EARTH_VIEW, target: "sun", fov: 70, time: T0, pose: { at: [48.4, -4.5], off: [0, 12] } },
+  // ---- the real ground (the terrain tiles: SRTM, EU-DEM, USGS 3DEP) — the camera on its tripod there
+  // Yosemite Valley from Tunnel View, 17:30 on 12 August: El Capitan on the left, the valley's floor, Half
+  // Dome's ridge far off, the light low from behind
+  "Earth: Yosemite Valley from Tunnel View": {
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 50, earthClouds: 0, time: (Date.UTC(2026, 7, 13, 0, 30) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [37.7156, -119.6773], aim: [37.74, -119.57] },
+  },
+  // Everest from Kala Patthar (5 645 m) at sunset, 15 October: the last light on the summits — Everest,
+  // Nuptse, Changtse — the Khumbu glacier below in the shade
+  "Earth: Everest at sunset from Kala Patthar": {
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 40, earthClouds: 0, time: (Date.UTC(2026, 9, 15, 11, 45) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [27.9957, 86.8288], aim: [27.9881, 86.925] },
+  },
+  // Saint-Jean-de-Valériscle (Gard, 229 m) on a summer morning, 12 August: the Cévennes' foothills towards
+  // Mont Lozère, 39 km to the north-west
+  "Earth: Saint-Jean-de-Valériscle, the Cévennes": {
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 60, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391] },
+  },
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
   // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
   "Moon: Earthrise": { ...EARTH_VIEW, target: "earth", fov: 35, exposure: 1.5, time: T0 + 13.5 * DAY, pose: { body: "moon", at: [0, 0], lookEl: 4, look: "earth", off: [0, -4] } },

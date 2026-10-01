@@ -39,7 +39,7 @@ test("in orbit: the nose on the Earth's centre, the north up, a circular speed",
 
 test("the Earth's scenes all place the camera", () => {
   const names = Object.keys(presets).filter((n) => n.startsWith("Earth:"));
-  expect(names.length).toBe(14);
+  expect(names.length).toBe(17);
   for (const n of names) {
     const p = presets[n]!;
     expect(typeof p.pose).toBe("object");
@@ -89,9 +89,33 @@ test("other worlds: the phase, the Sun's height, the tilt", () => {
   expect(Math.abs(dot(t.fwd, t.up))).toBeLessThan(1e-9);
 });
 
+test("the real ground's scenes: on the ground there, level, the nose towards the place they look at", () => {
+  for (const [n, at] of [
+    ["Earth: Yosemite Valley from Tunnel View", [37.7156, -119.6773]],
+    ["Earth: Everest at sunset from Kala Patthar", [27.9957, 86.8288]],
+    ["Earth: Saint-Jean-de-Valériscle, the Cévennes", [44.233, 4.143]],
+  ] as const) {
+    const p = presets[n]!;
+    const pose = p.pose as Parameters<typeof bodyView>[1];
+    const v = bodyView(p.time!, pose);
+    expect(v.landed?.body).toBe("earth");
+    expect(p.ship).toBe(false);
+    // (where the scene says it stands: its place on the Earth's axes)
+    const here = fromBodyFixed("earth", bodyFixedOf("earth", at[0], at[1], 0), p.time!);
+    const E = ourState("earth", p.time!).pos;
+    const up = unit([v.X[0] - E[0], v.X[1] - E[1], v.X[2] - E[2]]);
+    expect(dot(up, unit([here[0] - E[0], here[1] - E[1], here[2] - E[2]]))).toBeGreaterThan(1 - 1e-9); // (within ~300 m)
+    expect(Math.abs(dot(v.fwd, v.up))).toBeLessThan(1e-9);
+    const P = fromBodyFixed("earth", bodyFixedOf("earth", pose.aim![0], pose.aim![1], 0), p.time!);
+    const d = unit([P[0] - v.X[0], P[1] - v.X[1], P[2] - v.X[2]]);
+    const h = unit([d[0] - v.up[0] * dot(d, v.up), d[1] - v.up[1] * dot(d, v.up), d[2] - v.up[2] * dot(d, v.up)]);
+    expect(dot(h, v.fwd)).toBeGreaterThan(0.9999);
+  }
+});
+
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(14 + 27);
+  expect(worlds.length).toBe(17 + 27);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });
