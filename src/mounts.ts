@@ -1,4 +1,6 @@
-// Attach points of the camera on the spaceship (Interstellar's Ranger, see ship.ts).
+// Attach points of the camera on the spaceship (the craft flown: vessels.ts — the Ranger's here).
+import { VESSELS, type VesselId } from "./vessels";
+
 export type V3 = [number, number, number];
 
 /**
@@ -33,6 +35,17 @@ export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 /** A camera placement on the ship (an attach point, or between two while the view moves). */
 export interface MountPose { eye: V3; aim: V3 }
 
+/** The craft flown (vessels.ts): its own places for the attach points on the hull. */
+let mountVessel: VesselId = "ranger";
+export function setMountVessel(id: VesselId) {
+  mountVessel = id;
+}
+/** An attach point on the craft flown: its eye and aim (the outside views: the table's defaults). */
+export function mountPose(m: Mount): MountPose {
+  const own = (VESSELS[mountVessel].mounts as Record<string, MountPose | undefined>)[m];
+  return own ?? (MOUNTS[m] as MountPose);
+}
+
 
 export type M3 = [V3, V3, V3]; // rows
 
@@ -50,11 +63,12 @@ const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
  * positive: to the right / up).
  */
 export function shipToCamera(m: Mount | MountPose, lookYaw = 0, lookPitch = 0): { S: M3; t: V3 } {
-  const { eye, aim } = (typeof m === "string" ? MOUNTS[m] : m) as MountPose;
+  const { eye, aim } = typeof m === "string" ? mountPose(m) : m;
   const fwd = norm(sub(aim, eye));
   // the ship's right (−x) on the screen's right: like the tracer's camera basis, (right, up, forward)
-  // is left-handed in a right-handed frame (the screen's x right, y up, z into it)
-  const right = norm(cross(fwd, [0, 1, 0]));
+  // is left-handed in a right-handed frame (the screen's x right, y up, z into it); looking straight up
+  // or down the ship (the Lander's hatch camera), its nose at the image's top
+  const right = norm(cross(fwd, Math.abs(fwd[1]) > 0.98 ? [0, 0, 1] : [0, 1, 0]));
   const up = cross(right, fwd);
   let S: M3 = [right, up, fwd];
   if (lookYaw || lookPitch) {

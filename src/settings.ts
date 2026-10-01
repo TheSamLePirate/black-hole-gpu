@@ -228,6 +228,8 @@ export interface Settings {
   waterGlowColor: string; // colour of the scattered light
   // the spaceship carrying the camera (Interstellar's Ranger)
   ship: boolean;
+  /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
+  vessel: "ranger" | "lander" | "endurance";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
   shipMetal: number; // metalness of the plating (0 painted … 1 bare metal)
@@ -423,6 +425,7 @@ export function defaultSettings(): Settings {
     waterDensity: 1,
     waterGlowColor: "#6fc4e1",
     ship: false,
+    vessel: "ranger",
     shipMount: "quarter",
     shipAlbedo: 0.6,
     shipMetal: 0.15,
@@ -463,7 +466,7 @@ export function defaultSettings(): Settings {
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
  *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center;
  *  an EarthView: a view of the Earth — its ground or above it, towards the Moon, the Sun or itself) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | "iss" | BodyView; /** pose "iss": the ship's distance from the port [m], off its axis [m, station frame] */ issDistance?: number; issOffset?: [number, number, number] };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | "iss" | "fleet" | BodyView; /** pose "iss": the ship's distance from the port [m], off its axis [m, station frame] */ issDistance?: number; issOffset?: [number, number, number] };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
@@ -647,6 +650,10 @@ export const presets: Record<string, Preset> = {
   // seen from the docking camera in the hatch; its arrays turned to the Sun (at night: in the Earth's
   // shadow, as it is)
   "Earth: docking to the ISS": { ...EARTH_VIEW, target: "earth", shipMount: "dock", pose: "iss", issDistance: 60 },
+  // the fleet (fleet.ts) at the real time now, in the station's plane: the Endurance 800 km up, the
+  // Ranger on its fore port; the Lander 500 km up — each flown from its own orbit ([ ]: the other craft)
+  "Earth: the Endurance, 800 km up": { ...EARTH_VIEW, target: "earth", vessel: "endurance", shipMount: "quarter", pose: "fleet" },
+  "Earth: the Lander, 500 km up": { ...EARTH_VIEW, target: "earth", vessel: "lander", shipMount: "quarter", pose: "fleet" },
   "game:artemis": {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,

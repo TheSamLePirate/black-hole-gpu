@@ -19,7 +19,9 @@ import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
-import { MOUNT_KEYS, MOUNTS, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "./mounts";
+import { fleet, type Pose } from "./fleet";
+import { VESSELS, type VesselId } from "./vessels";
 import { GamepadInput, type PadAction } from "./gamepad";
 import { ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "./wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "./system/our-side";
@@ -31,7 +33,7 @@ import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelie
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles } from "./system/iss";
 import { planIssRendezvous, refineIssNode } from "./system/iss-plan";
-import { rangerHull, stationHulls } from "./system/collide";
+import { stationHulls, vesselHulls } from "./system/collide";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -254,6 +256,7 @@ export class CameraController {
   ) {
     this.targetDistance = s.distance;
     this.targetL = s.whL;
+    fleet.activePose = () => this.activePoseNow();
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("pointermove", this.onMove);
@@ -2149,8 +2152,9 @@ export class CameraController {
     const v = this.outsideView();
     const d = Math.PI / 180;
     const A = this.shipAim;
+    const V = VESSELS[fleet.active];
     if (v === "around") {
-      const c: Vec3 = [0, 1.5, 0];
+      const c: Vec3 = V.centre;
       // (locked on the target: behind the ship on the target's line, the drag an offset from it)
       const y0 = A ? Math.atan2(-A[0], A[2]) / d : 0, p0 = A ? Math.asin(clamp(-A[1], -1, 1)) / d : 0;
       const yaw = (y0 + o.yaw) * d, pitch = clamp(p0 + o.pitch, -88, 88) * d;
@@ -2164,13 +2168,13 @@ export class CameraController {
       const f: Vec3 = [Math.sin(fy * d) * Math.cos(fp * d), Math.sin(fp * d), Math.cos(fy * d) * Math.cos(fp * d)];
       return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
     }
-    if (v === "flyby") return { eye: this.flyby.eye, aim: [0, 1.5, 0] };
+    if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
     if (v === "station") {
       const sc = this.stationCam();
       if (sc) return sc;
-      return { eye: [0, 9, -42], aim: [0, 1.5, 0] };
+      return { eye: lin(V.centre, 1, [0, 0.2, -1], V.viewDist), aim: V.centre };
     }
-    return (MOUNTS[this.s.shipMount as Mount] ?? MOUNTS.quarter) as MountPose;
+    return mountPose((MOUNTS[this.s.shipMount as Mount] ? this.s.shipMount : "quarter") as Mount);
   }
 
   /** A scene applied: the camera straight at its attach point — not travelling there from the last scene's
@@ -2205,7 +2209,7 @@ export class CameraController {
       }
       if (v === "around" && this.lastPose) {
         // (around the ship from where the view was: no jump)
-        const c: Vec3 = [0, 1.5, 0];
+        const c: Vec3 = VESSELS[fleet.active].centre;
         const e = sub3(this.lastPose.eye, c);
         const l = Math.hypot(...e) || 1;
         const deg = 180 / Math.PI;
@@ -2213,7 +2217,7 @@ export class CameraController {
         const y0 = A ? Math.atan2(-A[0], A[2]) * deg : 0, p0 = A ? Math.asin(clamp(-A[1], -1, 1)) * deg : 0;
         // (from a mount on the hull: out to a view of the whole ship, the same side of it)
         const fromOutside = !!(MOUNTS[prevMount as Mount] as { outside?: string } | undefined)?.outside;
-        this.outside.dist = clamp(fromOutside ? l : Math.max(l, 42), 12, 20000);
+        this.outside.dist = clamp(fromOutside ? l : Math.max(l, VESSELS[fleet.active].viewDist), 12, 20000);
         this.outside.yaw = wrapDeg(Math.atan2(e[0], -e[2]) * deg - y0);
         this.outside.pitch = clamp(Math.asin(clamp(e[1] / l, -1, 1)) * deg - p0, -85, 85);
       }
@@ -2354,6 +2358,14 @@ export class CameraController {
         this.onPilotMessage?.(`Out of the throat, ${Math.round(cam.r)} M from Gargantua — real time`);
       }
     }
+    // (another craft chosen: the camera onto it)
+    if (s.vessel !== fleet.active) {
+      const why = this.switchVessel(s.vessel);
+      if (why) {
+        s.vessel = fleet.active;
+        this.onPilotMessage?.(why);
+      }
+    }
     const inp = this.pilotInput(pad);
     // (the docking autopilot ended — docked, stopped: the pilot's warp back)
     if (this.pilot.auto !== "dock" && this.dockAuto) {
@@ -2383,6 +2395,16 @@ export class CameraController {
     if (this.pilot.auto !== "node") this.rails(cam);
     const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
     const tauRate = s.animate ? s.timeSpeed * dtau : 0;
+    // the craft's own turning, slower in an assembly (its wheels and thrusters against the assembly's
+    // moment of inertia)
+    const V0 = VESSELS[fleet.active];
+    const mp = fleet.massProps();
+    const ag = (V0.agility * mp.own) / mp.inertia;
+    const tune = { rate: TUNING.turnRate, acc: TUNING.turnAccel };
+    TUNING.turnAccel = tune.acc * ag;
+    TUNING.turnRate = tune.rate * Math.min(1, 1.4 * Math.sqrt(ag));
+    const assembled = fleet.flownAssembly().length > 1;
+    const before = assembled ? this.camAxesHome() : null;
     const out = this.pilot.step({
       dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
       radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
@@ -2395,7 +2417,11 @@ export class CameraController {
         && s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20) || (this.nodeBurning && onOurSide(s, cam)),
       gimbal: this.nodeBurning && onOurSide(s, cam),
     }, inp);
+    TUNING.turnAccel = tune.acc;
+    TUNING.turnRate = tune.rate;
     this.rotateC(out.rot);
+    // (an assembly turns about its centre of mass: the flown craft's centre swings round it)
+    if (before) this.turnAboutCom(before, mp.com);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
     const tau0 = this.properTime;
     const pre = simDt > 0 ? this.contactPose() : null;
@@ -2407,6 +2433,112 @@ export class CameraController {
     this.spent += w;
     if (burn && this.nodeBurning) this.nodeDone += w;
     this.dockCheck();
+  }
+
+  // ------------------------------------------------------------------------------ the fleet
+  /** The flown craft's place now (home): its centre, velocity and axes (fleet.ts reads it). */
+  private activePoseNow(): (Pose & { t: number }) | null {
+    const s = this.s;
+    if (!s.ship) return null;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav) return null;
+    const w = mouth(s).w;
+    const ax = this.shipAxesLocal({ right: cam.right, up: cam.up, fwd: cam.fwd }).map((a) => unitV(repToHomeVec(w, cam.ell, cam.n, a))) as [Vec3, Vec3, Vec3];
+    return { X: nav.X, V: nav.V, ax, t: nav.t };
+  }
+
+  /** The camera's axes (right, up, forward) in the home frame (our side), or null. */
+  private camAxesHome(): [Vec3, Vec3, Vec3] | null {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    if (!onOurSide(s, cam)) return null;
+    const w = mouth(s).w;
+    return [cam.right, cam.up, cam.fwd].map((a) => unitV(repToHomeVec(w, cam.ell, cam.n, a))) as [Vec3, Vec3, Vec3];
+  }
+
+  /**
+   * After a turn of the flown craft (the camera's axes `before` it, home): its centre moved as the
+   * assembly's turns about their common centre of mass (`com`, its own frame [m]) — the centre of mass
+   * stays put, its velocity too.
+   */
+  private turnAboutCom(before: [Vec3, Vec3, Vec3] | null, com: Vec3) {
+    const after = this.camAxesHome();
+    if (!before || !after) return;
+    const S = this.shipMatrix();
+    const rc: Vec3 = [dot3(S[0], com), dot3(S[1], com), dot3(S[2], com)];
+    let d: Vec3 = [0, 0, 0];
+    for (let k = 0; k < 3; k++) d = lin(d, 1, sub3(before[k]!, after[k]!), rc[k]!);
+    if (Math.hypot(...d) < 1e-7) return;
+    const nav = this.ourNav(cameraFrame(this.s));
+    if (!nav) return;
+    setHomePose(this.s, lin(nav.X, 1, d, 1 / M_METRES), after[2], after[1], nav.V);
+    this.sync();
+  }
+
+  /** A scene's start: the camera on the flown craft at a pose (home), at its attach point. */
+  flyFrom(p: Pose) {
+    setMountVessel(fleet.active);
+    this.settleMount();
+    this.placeOnPose(p);
+  }
+
+  /** Puts the camera on the flown craft at a pose (home): the camera's axes from the craft's, through the
+   *  attach point. */
+  private placeOnPose(p: Pose) {
+    const S = this.shipMatrix();
+    const cam = (k: number) => lin(lin(p.ax[0], S[k]![0], p.ax[1], S[k]![1]), 1, p.ax[2], S[k]![2]);
+    setHomePose(this.s, p.X, unitV(cam(2)), unitV(cam(1)), p.V);
+    this.s.motion = "geodesic";
+    this.pilot.omega = [0, 0, 0];
+    this.sync();
+  }
+
+  /**
+   * Flies another craft: the one left coasts on its orbit (or stays docked: the assembly then coasts as
+   * it, or is held by the station); the camera onto the new one, at the same kind of attach point. Why
+   * not, or null.
+   */
+  switchVessel(id: VesselId): string | null {
+    const s = this.s;
+    if (id === fleet.active) return null;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav) return "The other craft are near the Earth — in our solar system";
+    const t = nav.t;
+    const to = fleet.pose(id, t);
+    if (!to) return `${VESSELS[id].name}: not found`;
+    const old = fleet.active;
+    const me = this.activePoseNow();
+    const group = fleet.assembly(old);
+    // (the craft left: its assembly coasts as it — unless the new one or the station holds it)
+    if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t);
+    for (const v of fleet.assembly(id)) if (v !== "iss") delete fleet.free[v];
+    fleet.active = id;
+    s.vessel = id;
+    setMountVessel(id);
+    this.pilot.auto = "none";
+    this.pilot.hold = "none";
+    this.pilot.throttle = 0;
+    this.pilot.omega = [0, 0, 0];
+    this.plan = { nodes: [], path: null, at: 0, note: "" };
+    this.issGoal = null;
+    this.ourMission = null;
+    this.spent = 0;
+    this.outside.dist = VESSELS[id].viewDist;
+    this.settleMount();
+    this.placeOnPose(to);
+    this.dockInfo = null;
+    this.onPilotMessage?.(`Flying the ${VESSELS[id].name}${fleet.flownAssembly().length > 1 ? ` — docked: ${fleet.flownAssembly().filter((v) => v !== id).map((v) => VESSELS[v].name).join(", ")} with it` : ""}`);
+    return null;
+  }
+
+  /** The next (or previous) craft of the fleet. */
+  cycleVessel(dir: 1 | -1) {
+    const ids: VesselId[] = ["ranger", "lander", "endurance"];
+    const i = ids.indexOf(fleet.active);
+    this.s.vessel = ids[(i + dir + ids.length) % ids.length]!;
+    return this.s.vessel;
   }
 
   // ------------------------------------------------------------------------------ docking
@@ -2475,7 +2607,7 @@ export class CameraController {
 
   /** The ship for contacts with the station near it: its centre, velocity and axes (home), its time. */
   private contactPose() {
-    if (!issTrack.near || this.docked || this.undocking || !rangerHull.bvh || !stationHulls.length || !station.joints.length) return null;
+    if (!issTrack.near || this.docked || this.undocking || !vesselHulls[fleet.active].bvh || !stationHulls.length || !station.joints.length) return null;
     // (the ring on the port's axis, its nose on it, within a metre and a half: the docking systems
     // meet — the hull's own collar touches the adapter's 40 cm out, before the capture's 30; the
     // capture or the port's bounce (dockCheck) answers)
@@ -2504,7 +2636,8 @@ export class CameraController {
     if (!p1) return;
     const i0 = issTrack.state(p0.t, p0.X), i1 = issTrack.state(p1.t, p1.X);
     if (!i0 || !i1) return;
-    const R = rangerHull.radius;
+    const hull = vesselHulls[fleet.active];
+    const R = hull.radius;
     if (Math.hypot(...sub3(p1.X, i1.X)) * M_METRES > 75 + R) return;
     const A0 = issAxes(i0.X, i0.V, p0.t), A1 = issAxes(i1.X, i1.V, p1.t);
     const toSt = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [dot3(v, A[0]), dot3(v, A[1]), dot3(v, A[2])];
@@ -2528,7 +2661,7 @@ export class CameraController {
       const rr = R + sweep;
       for (let a = 0; a < 3; a++) if (cm[a]! + rr < lo[a]! || cm[a]! - rr > hi[a]!) return;
       // the hull's points along their paths, against the part
-      for (const q of rangerHull.points) {
+      for (const q of hull.points) {
         const a = m34unapply(M, place(c0, R0, q)), b = m34unapply(M, place(c1, R1, q));
         const h = bvh.segment(a, b);
         if (h && (!best || h.t < best.t)) {
@@ -2542,11 +2675,11 @@ export class CameraController {
         const v = m34apply(M, [bvh.pos[3 * vi]!, bvh.pos[3 * vi + 1]!, bvh.pos[3 * vi + 2]!]);
         const a = local(c0, R0, v), b = local(c1, R1, v);
         // (outside the hull's box all along: nothing to meet)
-        const L = rangerHull.lo, H = rangerHull.hi;
+        const L = hull.lo, H = hull.hi;
         let out = false;
         for (let q = 0; q < 3; q++) if (Math.max(a[q]!, b[q]!) < L[q]! - 0.05 || Math.min(a[q]!, b[q]!) > H[q]! + 0.05) out = true;
         if (out) continue;
-        const h = rangerHull.bvh!.segment(a, b);
+        const h = hull.bvh!.segment(a, b);
         if (h && (!best || h.t < best.t)) {
           // (the ship pushed along the vertex's motion relative to it)
           const mv = lin(lin(R1[0], b[0] - a[0], R1[1], b[1] - a[1]), 1, R1[2], b[2] - a[2]);
@@ -2813,7 +2946,7 @@ export class CameraController {
     const dir = unitV(sub3(b, a));
     const e1 = unitV(cross(dir, Math.abs(dir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
     const e2 = cross(dir, e1);
-    const R = Math.max(rangerHull.radius, 5) + 3;
+    const R = Math.max(vesselHulls[fleet.active].radius, 5) + 3;
     const offs: Vec3[] = [[0, 0, 0], lin(e1, R, e1, 0), lin(e1, -R, e1, 0), lin(e2, R, e2, 0), lin(e2, -R, e2, 0)];
     const T = partTransforms(station.joints, stationAngles(t, iss.X, iss.V));
     return stationHulls.some((bvh, k) => bvh && offs.some((o) => bvh.segment(m34unapply(T[k]!, lin(a, 1, o, 1)), m34unapply(T[k]!, lin(b, 1, o, 1))) !== null));
@@ -3581,7 +3714,10 @@ export class CameraController {
   thrustMax() {
     const s = this.s;
     if (s.fuel && tank(s, this.spent).empty) return 0;
-    return engineThrust(s);
+    // (the craft flown: its own engines — a share of the crew setting's —, over its assembly's mass: the
+    // craft docked to it are pushed along)
+    const V = VESSELS[fleet.active];
+    return (engineThrust(s) * V.accel * V.mass) / fleet.massProps().mass;
   }
 
   /** Fills the tank again. */
@@ -4914,6 +5050,10 @@ export class CameraController {
       ourCa: null as { d: number; t: number } | null,
       /** the docking aid (the station near), or null */
       dock: null as DockInfo | null,
+      /** the craft flown, and those docked to it; the assembly's mass [kg] */
+      vessel: fleet.active,
+      assembly: fleet.flownAssembly(),
+      mass: fleet.massProps().mass,
       /** the docking autopilot's phase ("": off) */
       dockPhase: this.pilot.auto === "dock" ? this.dockAuto?.phase ?? "" : "",
       speedMode: this.speedMode,

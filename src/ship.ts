@@ -1,17 +1,39 @@
-// The spaceship carrying the camera (Interstellar's Ranger, assets/ranger, built by
-// scripts/build-ranger.ts). The camera is mounted on it at one of several attach points: the ship
-// is rigid in the camera's rest frame, so it is drawn with the tracer's own pinhole projection and
-// composited over the traced image (before bloom: the disk's glare spills over its silhouette). It is
-// lit by a light probe traced around the camera (lensed disk, Gargantua, sky) — see ship.wgsl.
-import meshUrl from "../assets/ranger/ranger.bin";
+// The spacecraft (vessels.ts: Interstellar's Ranger, its Lander, the Endurance): the one the camera is
+// mounted on, at one of several attach points — rigid in the camera's rest frame —, and the others near it,
+// where they are seen from the camera; all drawn in one pass (their depths shared: docked, they hide each
+// other), with the tracer's own pinhole projection, and composited over the traced image (before bloom:
+// the disk's glare spills over their silhouettes). They are lit by a light probe traced around the camera
+// (lensed disk, Gargantua, sky) — see ship.wgsl.
+import rangerUrl from "../assets/ranger/ranger.bin";
+import landerUrl from "../assets/lander/lander.bin";
+import landerAlbedoUrl from "../assets/lander/lander-albedo.webp";
+import landerNormalUrl from "../assets/lander/lander-normal.webp";
+import landerLightsUrl from "../assets/lander/lander-lights.webp";
+import enduranceUrl from "../assets/endurance/endurance.bin";
 
-import { shipToCamera, type Mount, type MountPose } from "./mounts";
+import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import type { GpuProfiler } from "./gpuprof";
-import { rangerHull, samplePoints, TriBVH } from "./system/collide";
+import { samplePoints, TriBVH, vesselHulls } from "./system/collide";
+import { VESSELS, type JetDef, type VesselId } from "./vessels";
 
 type V3 = [number, number, number];
 
+/** Another craft in view: its axes' images in the camera frame (rows: the camera's axes on the craft's,
+ *  as shipToCamera's S) and its origin there [m]; whether it is in the shadow map (near the flown one). */
+export interface ShipInstance {
+  id: VesselId;
+  S: M3;
+  t: V3;
+  shadow: boolean;
+}
+
 export interface ShipView {
+  /** the craft flown (its mesh, its thrusters) */
+  vessel?: VesselId;
+  /** the other craft in view */
+  others?: ShipInstance[];
+  /** metres per M (the traced image's depths: the other craft hidden behind what it holds) */
+  mPerM?: number;
   mount: Mount | MountPose;
   look: [number, number]; // free look on the mount: yaw, pitch [deg]
   fov: number; // vertical, degrees
@@ -46,42 +68,10 @@ export interface Thrust {
   time: number;
 }
 
-/** A thruster (ship frame, metres): exit centre, exhaust direction, the exit's half-sizes and width axis. */
-interface JetDef {
-  p: V3;
-  d: V3;
-  half: [number, number];
-  u: V3;
-  main: boolean;
-}
-
-// the two main engines: the nozzles in the rear bays (the mesh's "nozzle" parts: 1.55 × 0.85 m,
-// exits at z = −4.65); the attitude thrusters: quads on the hull's edges — the nose's and the tail
-// wing's corners — and a pair at each wingtip for roll
-const MAIN_EXIT: V3[] = [[1.76, 1.19, -4.62], [-1.76, 1.19, -4.62]];
-const JET_DEFS: JetDef[] = (() => {
-  const jets: JetDef[] = MAIN_EXIT.map((p) => ({ p, d: [0, 0, -1] as V3, half: [0.6, 0.33] as [number, number], u: [1, 0, 0] as V3, main: true }));
-  const rcs = (p: V3, d: V3, u: V3) => jets.push({ p: [p[0] + 0.06 * d[0], p[1] + 0.06 * d[1], p[2] + 0.06 * d[2]], d, half: [0.08, 0.08], u, main: false });
-  for (const sx of [1, -1]) {
-    const nose: V3 = [2.52 * sx, 1.38, 7.55];
-    const tail: V3 = [3.12 * sx, 1.5, -3.0];
-    const tip: V3 = [4.1 * sx, 0.44, 0.1];
-    rcs(nose, [sx, 0, 0], [0, 0, 1]);
-    rcs([nose[0] - 0.25 * sx, nose[1] + 0.12, nose[2]], [0, 1, 0], [1, 0, 0]);
-    rcs([nose[0] - 0.25 * sx, nose[1] - 0.12, nose[2]], [0, -1, 0], [1, 0, 0]);
-    rcs(tail, [sx, 0, 0], [0, 0, 1]);
-    rcs([tail[0] - 0.25 * sx, tail[1] + 0.12, tail[2]], [0, 1, 0], [1, 0, 0]);
-    rcs([tail[0] - 0.25 * sx, tail[1] - 0.12, tail[2]], [0, -1, 0], [1, 0, 0]);
-    rcs([tail[0] - 0.3 * sx, tail[1], tail[2] - 0.25], [0, 0, -1], [1, 0, 0]);
-    rcs([tail[0] - 0.3 * sx, tail[1], tail[2] + 0.25], [0, 0, 1], [1, 0, 0]);
-    rcs([tip[0], tip[1] + 0.08, tip[2]], [0, 1, 0], [0, 0, 1]);
-    rcs([tip[0], tip[1] - 0.08, tip[2]], [0, -1, 0], [0, 0, 1]);
-  }
-  return jets;
-})();
-/** (the ship's centre of mass, roughly: the torque arms) */
-const COM: V3 = [0, 1.25, 1.5];
-const MAX_JETS = 32;
+const MAX_JETS = 40;
+/** the craft drawn at once, at most */
+const MAX_INST = 8;
+const INST_FLOATS = 20;
 const JET_FLOATS = 16;
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -102,7 +92,15 @@ const RAW_MIPS = 9; // box-filtered probe 256×128 … 1×1: the source of the G
 const SPEC_MIPS = 6; // GGX pre-filtered, roughness = level / 5
 const GGX_SAMPLES = [0, 48, 64, 96, 128, 128];
 const SHADOW = 2048;
-const STRIDE = 8 * 4; // position, normal, material, ambient occlusion
+const STRIDE = 10 * 4; // position, normal, material, ambient occlusion, UV
+
+interface Mesh {
+  vbuf: GPUBuffer;
+  ibuf: GPUBuffer;
+  count: number;
+  /** its box's centre and half-diagonal, its box (ship frame) [m] */
+  bound: { c: V3; r: number; lo: V3; hi: V3 };
+}
 
 interface ShipTargetRes {
   w: number;
@@ -117,8 +115,10 @@ interface ShipTargetRes {
   plume: GPUTexture;
   plumeDepth: GPUTexture;
   plumeDirty: boolean;
-  /** the shading's bind group, with this target's traced image */
+  /** the shading's bind group, with this target's traced image and depths (and the bindings' generation) */
   bind?: GPUBindGroup;
+  bindGen?: number;
+  bindMoments?: GPUBuffer;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
 }
@@ -141,10 +141,22 @@ export class ShipRenderer {
   private jetInside: boolean[] = [];
   /** the camera in the ship's frame */
   private camShip: V3 = [0, 0, 0];
-  private vbuf: GPUBuffer | null = null;
-  private ibuf: GPUBuffer | null = null;
-  private count = 0;
+  /** the craft's meshes (loaded when first seen) */
+  private meshes: Partial<Record<VesselId, Mesh>> = {};
+  private loadingMesh = new Set<VesselId>();
+  /** the instances' transforms and flags (the flown craft first) */
+  private instBuf: GPUBuffer;
+  private instData = new Float32Array(MAX_INST * INST_FLOATS);
+  /** this frame's draws: mesh, and whether in the shadow map */
+  private draws: { mesh: Mesh; shadow: boolean }[] = [];
+  /** the Lander's maps (1×1 until loaded) */
+  private maps: { albedo: GPUTexture; normal: GPUTexture; lights: GPUTexture } | null = null;
+  private mapSamp: GPUSampler;
+  /** the flown craft's mesh bound (the plumes' depth range), and its thrusters */
   private bound = { c: [0, 0, 0] as V3, r: 1, lo: [-1, -1, -1] as V3, hi: [1, 1, 1] as V3 };
+  private vessel: VesselId = "ranger";
+  /** the moments buffer bound into the per-target groups */
+  private momentsBuf: GPUBuffer | null = null;
   private shadowTex: GPUTexture;
   private pipes!: {
     copy: GPUComputePipeline;
@@ -217,8 +229,10 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.mapSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
     this.shadowTex = d.createTexture({
       size: [SHADOW, SHADOW], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -234,6 +248,7 @@ export class ShipRenderer {
           { shaderLocation: 1, offset: 12, format: "float32x3" },
           { shaderLocation: 2, offset: 24, format: "float32" },
           { shaderLocation: 3, offset: 28, format: "float32" },
+          { shaderLocation: 4, offset: 32, format: "float32x2" },
         ],
       }],
     };
@@ -249,7 +264,8 @@ export class ShipRenderer {
         // (back faces culled: the mesh's inward-wound triangles are its hidden inner faces — none of its
         // pixels goes missing from 288 viewpoints around it — and the pass is ~20 % faster)
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-        depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+        // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact)
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
         multisample: { count: 4 },
       }),
       shadow: d.createRenderPipeline({
@@ -306,40 +322,101 @@ export class ShipRenderer {
     };
   }
 
-  /** Downloads the mesh (1 MB). */
+  /** Downloads the Ranger's mesh (1 MB); the other craft's when first drawn (loadVessel). */
   async load(get: (url: string) => Promise<Response> = fetch) {
-    const d = this.device;
-    const mesh = await get(meshUrl).then((r) => r.arrayBuffer());
-    const u32 = new Uint32Array(mesh, 0, 4);
-    if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "RNGR" || u32[1] !== 2) throw new Error("bad ranger.bin");
-    const nv = u32[2]!;
-    const ni = u32[3]!;
-    const bb = new Float32Array(mesh, 16, 6);
-    const lo: V3 = [bb[0]!, bb[1]!, bb[2]!];
-    const hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
-    this.bound.c = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
-    this.bound.r = Math.hypot(...sub(hi, lo)) / 2;
-    this.bound.lo = lo;
-    this.bound.hi = hi;
-    const verts = new Float32Array(mesh, 40, nv * 8);
-    const idx = new Uint32Array(mesh, 40 + nv * STRIDE, ni);
-    // (its hull for contacts: points a half metre apart, its triangles in a hierarchy)
-    const pos = new Float32Array(nv * 3);
-    for (let i = 0; i < nv; i++) pos.set(verts.subarray(8 * i, 8 * i + 3), 3 * i);
-    rangerHull.points = samplePoints(verts, 8, nv, 0.5);
-    rangerHull.bvh = new TriBVH(pos, new Uint32Array(idx));
-    rangerHull.radius = this.bound.r + Math.hypot(...this.bound.c);
-    rangerHull.lo = lo;
-    rangerHull.hi = hi;
-    this.vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-    d.queue.writeBuffer(this.vbuf, 0, verts);
-    this.ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
-    d.queue.writeBuffer(this.ibuf, 0, idx);
-    this.count = ni;
+    this.getter = get;
+    await this.loadVessel("ranger");
     this.bind();
     this.ready = true;
   }
+  private getter: (url: string) => Promise<Response> = fetch;
 
+  /** Whether a craft's mesh is there (starting its download if not). */
+  has(id: VesselId) {
+    if (this.meshes[id]) return true;
+    if (!this.loadingMesh.has(id) && this.ready) {
+      this.loadingMesh.add(id);
+      this.loadVessel(id).then(() => this.onLoaded?.(), (e) => console.error(`${VESSELS[id].name}:`, e));
+    }
+    return false;
+  }
+  /** (a mesh arrived: the renderer redraws) */
+  onLoaded?: () => void;
+
+  /**
+   * A craft's mesh, into the common vertex layout (position, normal, material, AO, UV): the Ranger's and
+   * the Endurance's (8 floats: no UV; the Endurance's at its 64 m and its materials from 20 on), the
+   * Lander's as built (its maps with it). Its hull for contacts, too.
+   */
+  private async loadVessel(id: VesselId) {
+    const d = this.device;
+    const url = id === "ranger" ? rangerUrl : id === "lander" ? landerUrl : enduranceUrl;
+    const buf = await this.getter(url).then((r) => r.arrayBuffer());
+    const magic = new TextDecoder().decode(new Uint8Array(buf, 0, 4));
+    const u32 = new Uint32Array(buf, 0, 4);
+    const nv = u32[2]!, ni = u32[3]!;
+    const inStride = magic === "LNDR" ? 10 : 8;
+    if (!["RNGR", "ENDR", "LNDR"].includes(magic)) throw new Error(`bad mesh for ${id}`);
+    const src = new Float32Array(buf, 40, nv * inStride);
+    const idx = new Uint32Array(buf, 40 + nv * inStride * 4, ni);
+    // (the Endurance's model: a ring of diameter 1)
+    const k = id === "endurance" ? 64 : 1;
+    const matOff = id === "endurance" ? 20 : 0;
+    const verts = new Float32Array(nv * 10);
+    const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < nv; i++) {
+      const o = 10 * i, q = inStride * i;
+      for (let c = 0; c < 3; c++) {
+        const x = src[q + c]! * k;
+        verts[o + c] = x;
+        lo[c] = Math.min(lo[c]!, x);
+        hi[c] = Math.max(hi[c]!, x);
+        verts[o + 3 + c] = src[q + 3 + c]!;
+      }
+      verts[o + 6] = src[q + 6]! + matOff;
+      verts[o + 7] = src[q + 7]!;
+      if (inStride === 10) (verts[o + 8] = src[q + 8]!), (verts[o + 9] = src[q + 9]!);
+    }
+    // (its hull for contacts: points a half metre apart — two on the Endurance —, its triangles)
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    const r = Math.hypot(...sub(hi, lo)) / 2;
+    const H = vesselHulls[id];
+    H.points = samplePoints(verts, 10, nv, id === "endurance" ? 2 : 0.5);
+    H.bvh = new TriBVH(pos, new Uint32Array(idx));
+    H.radius = r + Math.hypot(...c);
+    H.lo = lo;
+    H.hi = hi;
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx);
+    if (id === "lander") await this.loadMaps();
+    this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r, lo, hi } };
+  }
+
+  /** The Lander's maps: colour (sRGB), normals, the lights' emission (sRGB); mip-mapped here. */
+  private async loadMaps() {
+    const d = this.device;
+    const tex = async (url: string, format: GPUTextureFormat) => {
+      const img = await createImageBitmap(await this.getter(url).then((r) => r.blob()));
+      const levels = Math.floor(Math.log2(Math.max(img.width, img.height))) + 1;
+      const t = d.createTexture({ size: [img.width, img.height], format, mipLevelCount: levels, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+      for (let l = 0; l < levels; l++) {
+        const w = Math.max(1, img.width >> l), h = Math.max(1, img.height >> l);
+        const b = l === 0 ? img : await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+        d.queue.copyExternalImageToTexture({ source: b }, { texture: t, mipLevel: l }, [w, h]);
+      }
+      return t;
+    };
+    const [albedo, normal, lights] = await Promise.all([tex(landerAlbedoUrl, "rgba8unorm-srgb"), tex(landerNormalUrl, "rgba8unorm"), tex(landerLightsUrl, "rgba8unorm-srgb")]);
+    this.maps = { albedo, normal, lights };
+    // (the shading's bind groups hold the maps: made again)
+    this.bind();
+  }
+
+  private bindGen = 0;
   private bind() {
     const d = this.device;
     const raw = (l: number) => this.envRaw.createView({ baseMipLevel: l, mipLevelCount: 1 });
@@ -378,6 +455,8 @@ export class ShipRenderer {
       magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge", maxAnisotropy: 8,
     });
     const cmp = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
+    const dummy = (format: GPUTextureFormat) => d.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.TEXTURE_BINDING });
+    const maps = this.maps ?? { albedo: dummy("rgba8unorm-srgb"), normal: dummy("rgba8unorm"), lights: dummy("rgba8unorm-srgb") };
     this.shipEntries = [
       { binding: 0, resource: { buffer: this.uniform } },
       { binding: 1, resource: { buffer: this.shBuf } },
@@ -386,7 +465,13 @@ export class ShipRenderer {
       { binding: 7, resource: this.shadowTex.createView() },
       { binding: 8, resource: cmp },
       { binding: 9, resource: { buffer: this.jetBuf } },
+      { binding: 12, resource: { buffer: this.instBuf } },
+      { binding: 13, resource: maps.albedo.createView() },
+      { binding: 14, resource: maps.normal.createView() },
+      { binding: 15, resource: maps.lights.createView() },
+      { binding: 16, resource: this.mapSamp },
     ];
+    this.bindGen++;
 
     const pb = (p: GPURenderPipeline, jets = true) => d.createBindGroup({
       layout: p.getBindGroupLayout(0),
@@ -398,6 +483,7 @@ export class ShipRenderer {
       entries: [
         { binding: 0, resource: { buffer: this.uniform } },
         { binding: 1, resource: { buffer: this.shBuf } },
+        { binding: 12, resource: { buffer: this.instBuf } },
       ],
     });
   }
@@ -444,14 +530,17 @@ export class ShipRenderer {
       const air = Math.min(Math.max(th.air, 0), 1);
       const tq = th.torque;
       const tl = Math.hypot(...tq);
-      for (let i = 0; i < JET_DEFS.length && n < MAX_JETS; i++) {
-        const J = JET_DEFS[i]!;
+      const V = VESSELS[this.vessel];
+      const defs: JetDef[] = V.jets;
+      const COM = V.com;
+      for (let i = 0; i < defs.length && n < MAX_JETS; i++) {
+        const J = defs[i]!;
         let level: number;
         let len: number;
         if (J.main) {
           level = Math.min(Math.max(th.throttle, 0), 1);
           if (level < 0.01) continue;
-          len = (4 + 20 * level) * (1 - 0.45 * air);
+          len = (4 + 20 * level) * (1 - 0.45 * air) * V.flame;
         } else {
           const F: V3 = [-J.d[0], -J.d[1], -J.d[2]];
           const arm = sub(J.p, COM);
@@ -483,15 +572,19 @@ export class ShipRenderer {
     if (n) this.device.queue.writeBuffer(this.jetBuf, 0, out, 0, n * JET_FLOATS);
   }
 
-  private writeUniform(v: ShipView) {
+  private writeUniform(v: ShipView, mesh: Mesh) {
+    this.bound = mesh.bound;
     const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
     // (the camera in the ship's frame: −Rᵀ t)
     this.camShip = [0, 1, 2].map((k) => -(R[0]![k]! * t[0] + R[1]![k]! * t[1] + R[2]![k]! * t[2])) as V3;
     this.writeJets(v.thrust);
     // column-major mat4: columns = images of the ship's x, y, z axes, then the translation
     const m = new Float32Array(56);
-    for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = R[r]![c]!;
-    m.set([...t, 1], 12);
+    const model = (R: M3, t: V3, out: Float32Array, o: number) => {
+      for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) out[o + c * 4 + r] = R[r]![c]!;
+      out.set([...t, 1], o + 12);
+    };
+    model(R, t, m, 0);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     // near and far planes about the ship where it is (the outside views: up to tens of km — not a fixed
@@ -500,14 +593,45 @@ export class ShipRenderer {
     const reach = this.bound.r * 1.2 + 400;
     m.set([tanH * v.aspect, tanH, Math.max(0.05, Math.min(dist - reach, 0.5 * dist)), Math.max(80, dist + reach)], 16);
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
-    m.set([c[0] + t[0], c[1] + t[1], c[2] + t[2], this.bound.r * 1.02], 24);
-    // (the mesh's box corners in the camera frame: the screen box)
+    // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
+    // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
+    const kind = { ranger: 0, lander: 1, endurance: 2 } as const;
+    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = [{ id: this.vessel, R, t, shadow: true, far: false }];
+    for (const o of v.others ?? []) if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
+    this.draws = [];
     const corners: V3[] = [];
-    for (let k = 0; k < 8; k++) {
-      const q: V3 = [k & 1 ? this.bound.hi[0] : this.bound.lo[0], k & 2 ? this.bound.hi[1] : this.bound.lo[1], k & 4 ? this.bound.hi[2] : this.bound.lo[2]];
-      corners.push([dot(R[0]!, q) + t[0], dot(R[1]!, q) + t[1], dot(R[2]!, q) + t[2]]);
-    }
-    this.onScreen = { c: [c[0] + t[0], c[1] + t[1], c[2] + t[2]], r: this.bound.r * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
+    // (the shadow map's sphere: about the flown craft and those near it)
+    let sc: V3 | null = null, sr = 0;
+    list.forEach((it, i) => {
+      const me = this.meshes[it.id]!;
+      model(it.R, it.t, this.instData, i * INST_FLOATS);
+      this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, 0], i * INST_FLOATS + 16);
+      this.draws.push({ mesh: me, shadow: it.shadow });
+      const b = me.bound;
+      for (let k = 0; k < 8; k++) {
+        const q: V3 = [k & 1 ? b.hi[0] : b.lo[0], k & 2 ? b.hi[1] : b.lo[1], k & 4 ? b.hi[2] : b.lo[2]];
+        corners.push([dot(it.R[0]!, q) + it.t[0], dot(it.R[1]!, q) + it.t[1], dot(it.R[2]!, q) + it.t[2]]);
+      }
+      if (!it.shadow) return;
+      const cc: V3 = [dot(it.R[0]!, b.c) + it.t[0], dot(it.R[1]!, b.c) + it.t[1], dot(it.R[2]!, b.c) + it.t[2]];
+      if (!sc) (sc = cc), (sr = b.r);
+      else {
+        // (the smallest sphere holding both)
+        const d = Math.hypot(...sub(cc, sc));
+        if (d + b.r > sr) {
+          if (d + sr <= b.r) (sc = cc), (sr = b.r);
+          else {
+            const R2 = (d + sr + b.r) / 2;
+            const k2 = (R2 - sr) / Math.max(d, 1e-9);
+            sc = [sc[0] + (cc[0] - sc[0]) * k2, sc[1] + (cc[1] - sc[1]) * k2, sc[2] + (cc[2] - sc[2]) * k2];
+            sr = R2;
+          }
+        }
+      }
+    });
+    this.device.queue.writeBuffer(this.instBuf, 0, this.instData, 0, list.length * INST_FLOATS);
+    m.set([sc![0], sc![1], sc![2], sr * 1.02], 24);
+    this.onScreen = { c: sc!, r: sr * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -546,10 +670,16 @@ export class ShipRenderer {
    * fraction of the image — the whole-screen MSAA clear and resolve cost as much as the drawing),
    * resolved and copied into its image, which the display composites over the traced one.
    */
-  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView, occluder?: { depth: GPUTexture; rect: [number, number, number, number] }) {
+  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView, occluder?: { depth: GPUTexture; rect: [number, number, number, number] }, moments?: GPUBuffer) {
     if (!this.ready) return;
+    this.vessel = v.vessel ?? "ranger";
+    const mesh = this.meshes[this.vessel];
+    if (!this.has(this.vessel) || !mesh) return;
+    for (const o of v.others ?? []) this.has(o.id);
     const res = this.target(hdr);
-    this.writeUniform(v);
+    this.writeUniform(v, mesh);
+    // (the image's size and the metres per M: the other craft's depths against the traced image's)
+    this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, moments ? 1 : 0]));
     // the box: the sphere's screen box within the image, its size rounded up (few re-allocations)
     const W = hdr.width, H = hdr.height;
     const sc = this.scissor(W, H);
@@ -563,7 +693,7 @@ export class ShipRenderer {
       res.box = {
         w: bw, h: bh,
         color: d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
-        depth: d.createTexture({ size, format: "depth24plus", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING }),
+        depth: d.createTexture({ size, format: "depth32float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING }),
         small: d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC }),
       };
     }
@@ -585,28 +715,39 @@ export class ShipRenderer {
       }));
       sp.setPipeline(this.pipes.shadow);
       sp.setBindGroup(0, this.shadowBind!);
-      sp.setVertexBuffer(0, this.vbuf!);
-      sp.setIndexBuffer(this.ibuf!, "uint32");
-      sp.drawIndexed(this.count);
+      this.draws.forEach((dr, i) => {
+        if (!dr.shadow) return;
+        sp.setVertexBuffer(0, dr.mesh.vbuf);
+        sp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        sp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
+      });
       sp.end();
     }
     const b = res.box;
     const jets = this.jetCount > 0;
     const rp = enc.beginRenderPass(this.pass("ship: shading (MSAA)", {
       colorAttachments: [{ view: b.color.createView(), resolveTarget: b.small.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
-      depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
+      depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     }));
     rp.setPipeline(this.pipes.ship);
-    // (the traced image the ship is drawn over: its sharp reflections — ship.wgsl screenRefl)
-    res.bind ??= this.device.createBindGroup({
-      layout: this.pipes!.ship.getBindGroupLayout(0),
-      entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }],
-    });
+    // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
+    // depths: what hides the other craft)
+    const mb = moments ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
+    if (!res.bind || res.bindGen !== this.bindGen || res.bindMoments !== mb) {
+      res.bind = this.device.createBindGroup({
+        layout: this.pipes!.ship.getBindGroupLayout(0),
+        entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+      });
+      res.bindGen = this.bindGen;
+      res.bindMoments = mb;
+    }
     rp.setBindGroup(0, res.bind);
     rp.setBindGroup(1, res.occBind!.g);
-    rp.setVertexBuffer(0, this.vbuf!);
-    rp.setIndexBuffer(this.ibuf!, "uint32");
-    rp.drawIndexed(this.count);
+    this.draws.forEach((dr, i) => {
+      rp.setVertexBuffer(0, dr.mesh.vbuf);
+      rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+      rp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
+    });
     rp.end();
     if (jets) {
       const pp = enc.beginRenderPass(this.pass("ship: thrusters", {
@@ -616,9 +757,9 @@ export class ShipRenderer {
       const B = this.plumeBinds!;
       pp.setPipeline(this.pipes.hullDepth);
       pp.setBindGroup(0, B.hullDepth);
-      pp.setVertexBuffer(0, this.vbuf!);
-      pp.setIndexBuffer(this.ibuf!, "uint32");
-      pp.drawIndexed(this.count);
+      pp.setVertexBuffer(0, mesh.vbuf);
+      pp.setIndexBuffer(mesh.ibuf, "uint32");
+      pp.drawIndexed(mesh.count);
       for (const inside of [false, true]) {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
         pp.setBindGroup(0, inside ? B.plumeIn : B.plume);

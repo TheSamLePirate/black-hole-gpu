@@ -879,6 +879,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ranger spaceship ship shuttle vessel endurance mount camera holder attach",
   },
   {
+    key: "vessel", type: "choice", section: "game", group: "Ranger", label: "Craft", style: "segmented", enabled: (s) => s.ship,
+    options: [
+      { value: "ranger", label: "Ranger", hint: "The Ranger: 40 t, the agile one — lands, docks by its rear hatch" },
+      { value: "lander", label: "Lander", hint: "The Lander: 160 t, heavy-lift, lands — docks by its dorsal hatch; 500 km up at the start" },
+      { value: "endurance", label: "Endurance", hint: "The Endurance: 900 t, the ring ship — docks by its hub's ends, never lands; 800 km up at the start" },
+    ],
+    help: "The craft flown ([ and ] in flight). The others coast on Kepler orbits where they were left, or stay docked: docked craft fly together — the one flown pushes the others, their masses added. Lander: “Endurance Lander from Interstellar” by Crusty Bread (Sketchfab), CC BY 4.0, modified. Endurance: “Interstellar | Endurance” by devPilot (Sketchfab), CC BY 4.0, modified.",
+    keywords: "vessel craft ranger lander endurance switch fleet ship",
+  },
+  {
     key: "shipMount", type: "choice", section: "game", group: "Ranger", label: "View", enabled: (s) => s.ship,
     options: Object.entries(MOUNTS).map(([value, m]) => ({ value, label: m.label })),
     help: "Where the camera is fixed on the hull.",
@@ -1051,6 +1061,8 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
   "Earth: the Himalaya from orbit": { title: "The Himalaya from orbit", description: "400 km over the Ganges plain, looking north: the range in relief under the afternoon Sun, its snow and shadows.", icon: "▲", group: "earth" },
   "Earth: total eclipse over Burgos, 12 Aug 2026": { title: "Total eclipse over Burgos", description: "12 August 2026, the Sun low over Castile: the Moon's shadow sweeps in, 1 min 42 s of totality — the corona, the prominences, the horizon's glow all round (JPL's DE440 ephemeris).", icon: "◯", group: "earth" },
   "Earth: the Moon's shadow from orbit, 12 Aug 2026": { title: "The Moon's shadow from orbit", description: "12 August 2026 at greatest eclipse, from 3 000 km over the Labrador Sea: the umbra, 290 km across, darkens the clouds west of Iceland, the penumbra dims the whole Arctic around it (JPL's DE440 ephemeris).", icon: "◐", group: "earth" },
+  "Earth: the Endurance, 800 km up": { title: "The Endurance in Earth orbit", description: "The Endurance 800 km up, the Ranger on its hub's fore port: fly the ring ship ([ ]: the Ranger, the Lander — 500 km up). Docked, the craft fly together, their masses added.", icon: "◎", group: "earth" },
+  "Earth: the Lander, 500 km up": { title: "The Lander in Earth orbit", description: "The Lander 500 km up, in the station's plane: fly it, rendezvous with the Endurance 800 km up or the ISS, dock by its dorsal hatch ([ ]: the other craft).", icon: "⊟", group: "earth" },
   "Earth: docking to the ISS": { title: "Docking to the ISS", description: "The space station where it really is right now, its arrays to the Sun: back the Ranger 60 m into Harmony's forward port (I K J L H N: the thrusters; V: the views — the hatch's camera, the station's).", icon: "⊕", group: "earth" },
   "Earth: sunset over the Andes": { title: "Sunset over the Andes", description: "Above Mendoza, the Sun going down behind the Cordón del Plata: the ridges in layers in the haze, the glow, the snowy peaks.", icon: "☀", group: "earth" },
   "Earth: full Moon rising over the Andes": { title: "Full Moon over the Andes", description: "An hour after sunset, the full Moon just clear of the Andes' snowy crest, reddened in the evening's haze (a telephoto).", icon: "●", group: "earth" },

@@ -21,6 +21,7 @@ import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
+import { VESSELS } from "../vessels";
 import { bodyCentre, BODY_NAMES, starOrbitRadius } from "../targeting";
 import { rapidityCost } from "../engine";
 import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
@@ -461,7 +462,9 @@ export class FlightHud {
     }
     const telBody = h("div", "fl-body");
     telBody.append(this.stBox, h("div", "fl-sub", "Telemetry · the last minute"), this.telCanvas);
-    this.tel.append(panelHead(this.tel, "tel", "Ranger").head, telBody);
+    const telHead = panelHead(this.tel, "tel", "Ranger").head;
+    this.telTitle = telHead.querySelector(".fl-htext");
+    this.tel.append(telHead, telBody);
 
     // ---- orbit: effective potential + figures
     const oh = panelHead(this.orbit, "orbit", "Orbit · effective potential");
@@ -2037,7 +2040,14 @@ export class FlightHud {
    * dials: the inclination (the orbit's tilt drawn), the eccentricity (the ellipse's true shape), the
    * period (the ring of one orbit, the part flown since periapsis); the next event.
    */
+  /** the craft panel's title: the craft flown (and those docked to it, the assembly's mass) */
+  private telTitle: HTMLElement | null = null;
   private drawRangerInstr(i: Info) {
+    if (this.telTitle) {
+      const others = i.assembly.filter((v) => v !== i.vessel);
+      const t = `${VESSELS[i.vessel].name}${others.length ? ` + ${others.map((v) => VESSELS[v].name).join(" + ")} · ${Math.round(i.mass / 1e3)} t` : ""}`;
+      if (this.telTitle.textContent !== t) this.telTitle.textContent = t;
+    }
     const st = i.status;
     if (!st) return;
     const o = st.orbit;

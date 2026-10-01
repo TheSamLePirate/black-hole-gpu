@@ -266,6 +266,18 @@ would be far below a pixel next to a hole of 10⁸ M☉). Seen along straight ra
 aberrated like the local patch, not lensed), rasterized with the tracer's pinhole into a box of the image
 (4× MSAA), hidden where the traced depth is nearer, lit by the disk, composited before bloom.
 
+**The fleet: the Ranger, the Lander, the Endurance** (Game → Craft, [ and ] in flight, or the scenes "Earth:
+the Endurance, 800 km up" and "Earth: the Lander, 500 km up") — three craft to fly, each with its mass, engines,
+turning, docking ports, thrusters and attach points (`src/vessels.ts`): the Ranger (40 t, its rear hatch), the
+Lander ([“Endurance Lander from Interstellar” by Crusty Bread](https://sketchfab.com/3d-models/endurance-lander-from-interstellar-0bcbd25523794779826e3e19770dc1f2),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified — see `assets/lander/README.md`; 160 t, 24 m,
+its painted maps, its dorsal hatch) and the Endurance at its true 64 m (900 t, its hub's two ends). They start
+near the Earth in the space station's plane, the Endurance 800 km up, the Lander 500 km up. The one flown
+carries the camera; the others coast on Kepler orbits, or stay docked (`src/fleet.ts`) — docked craft fly as
+one: the one flown pushes the others, the masses added, the assembly turning about its common centre of mass,
+slower by its moment of inertia. All are drawn in one pass (`ship.wgsl`: their depths shared, reversed in
+float; those not flown hidden by what the traced image holds nearer), lit like the Ranger.
+
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,
 wingtip, belly, nose looking back). Interstellar's Ranger — [“Interstellar Ranger One” by Max Vizell](https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f),

@@ -185,8 +185,14 @@ export function samplePoints(pos: Float32Array, stride: number, count: number, c
   return out;
 }
 
-/** The Ranger's hull for contacts (ship frame, metres): points a half metre apart, and its triangles. */
-export const rangerHull: { points: Vec3[]; bvh: TriBVH | null; radius: number; lo: Vec3; hi: Vec3 } = { points: [], bvh: null, radius: 0, lo: [0, 0, 0], hi: [0, 0, 0] };
+/** A craft's hull for contacts (ship frame, metres): points a half metre apart (on the larger craft,
+ *  coarser), its triangles, the sphere about its origin that holds it, its box. */
+export interface Hull { points: Vec3[]; bvh: TriBVH | null; radius: number; lo: Vec3; hi: Vec3 }
+const emptyHull = (): Hull => ({ points: [], bvh: null, radius: 0, lo: [0, 0, 0], hi: [0, 0, 0] });
+/** The craft's hulls (vessels.ts), filled as their meshes load (ship.ts). */
+export const vesselHulls: Record<"ranger" | "lander" | "endurance", Hull> = { ranger: emptyHull(), lander: emptyHull(), endurance: emptyHull() };
+/** The Ranger's. */
+export const rangerHull = vesselHulls.ranger;
 
 /** The space station's parts for contacts (their rest frame, metres): one hierarchy each (0: the
  *  station itself, k + 1: joint k's). */

@@ -9,7 +9,9 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type Thrust } from "./ship";
+import { ENV_H, ShipRenderer, type ShipInstance, type Thrust } from "./ship";
+import { fleet } from "./fleet";
+import { vesselHulls } from "./system/collide";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
@@ -523,6 +525,7 @@ export class Renderer {
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.station = new StationRenderer(device, src.station);
     this.station.onLoaded = () => this.invalidate();
+    this.ship.onLoaded = () => this.invalidate();
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
     this.earthTiles.onChange = () => {
@@ -2132,10 +2135,11 @@ export class Renderer {
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0 && s.ship && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
+          vessel: s.vessel, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
-        }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined);
+        }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined, t.moments);
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
@@ -2220,6 +2224,40 @@ export class Renderer {
         }).catch(() => (this.meterPending = false)),
       );
     }
+  }
+
+  /**
+   * The craft not flown (fleet.ts), where they are seen from the camera's eye: within 60 km, on our side;
+   * in the shadow map those within 150 m of the flown one (docked, alongside). Their transforms: the craft's
+   * axes on the camera's (rows: the camera's axes on the craft's), the origin [m].
+   */
+  private shipOthers(s: Settings): ShipInstance[] {
+    const cam = this.lastCam;
+    if (!cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];
+    const time = this.lastTime;
+    const w = mouth(s).w;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const mR = 1476.625 * (s.massSolar || 1);
+    const toCam = (v: Vec3): Vec3 => {
+      const r = homeToRep(w, cam.ell, cam.n, v);
+      return [r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2], r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2], r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2]];
+    };
+    const unitV = (v: Vec3): Vec3 => {
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    const eye = this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    const out: ShipInstance[] = [];
+    for (const o of fleet.others(time)) {
+      const rel = toCam([o.pose.X[0] - Xc[0], o.pose.X[1] - Xc[1], o.pose.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
+      // (the flown craft's origin is the camera's place: its distance from it, not from the eye)
+      const sep = Math.hypot(...rel.map((c, k) => c - eye[k]!));
+      if (Math.hypot(...rel) > 6e4) continue;
+      const a = o.pose.ax.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
+      const S: [Vec3, Vec3, Vec3] = [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3];
+      out.push({ id: o.id, S, t: rel, shadow: sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 150 });
+    }
+    return out;
   }
 
   /**

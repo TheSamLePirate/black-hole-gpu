@@ -1,6 +1,9 @@
-// The spaceship the camera is mounted on (Interstellar's Ranger), rasterized in the camera's rest
-// frame — a few metres across, it lives in the camera's local, flat patch of spacetime — and lit by
-// the light probe the tracer takes around the camera (the lensed disk, Gargantua, the sky).
+// The spacecraft (vessels.ts): the one the camera is mounted on and the others near it, rasterized in the
+// camera's rest frame — metres to kilometres away, they live in the camera's local, flat patch of
+// spacetime — and lit by the light probe the tracer takes around the camera (the lensed disk, Gargantua,
+// the sky). One pass draws them all, an instance each (its transform, its kind: the Ranger's procedural
+// plating, the Lander's painted maps, the Endurance's parts), their depths shared — reversed, in float:
+// exact from a hatch's centimetres to a craft kilometres off.
 //
 //   envCopy / envDown   light probe (storage buffer) → equirectangular texture + box mips (the
 //                       source of filtered importance sampling)
@@ -40,6 +43,15 @@ struct Ship {
   jet: vec4f,
   // the space station's box in the image [px] (x, y, width, height; 0: none) — its depth hides the hull
   box: vec4f,
+  // the image's size [px], metres per M, the traced depths bound (1) — what hides the other craft
+  img: vec4f,
+};
+
+// A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
+// (1), hidden by what the traced image holds nearer (1: the craft not flown)
+struct Inst {
+  model: mat4x4f,
+  flags: vec4f,
 };
 
 // A thruster firing (ship frame, metres): exit centre and level, exhaust direction and kind (0: a
@@ -201,6 +213,12 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
 @group(0) @binding(9) var<storage, read> jets: array<Jet>;
 @group(0) @binding(10) var scene: texture_2d<f32>; // the traced image the ship is drawn over (× pre-exposure)
+@group(0) @binding(11) var<storage, read> moments: array<vec2f>; // Σ l², the traced depth [M]
+@group(0) @binding(12) var<storage, read> inst: array<Inst>;
+@group(0) @binding(13) var albedoMap: texture_2d<f32>; // the Lander's paint (sRGB)
+@group(0) @binding(14) var normalMap: texture_2d<f32>; // its tangent-space normals (v down the image)
+@group(0) @binding(15) var lightsMap: texture_2d<f32>; // its lights' emission
+@group(0) @binding(16) var mapSamp: sampler;
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -208,6 +226,7 @@ struct VIn {
   @location(1) nrm: vec3f,
   @location(2) mat: f32,
   @location(3) ao: f32,
+  @location(4) uv: vec2f,
 };
 
 struct VOut {
@@ -218,28 +237,34 @@ struct VOut {
   @location(3) ao: f32,
   @location(4) q: vec3f,   // position and normal in the ship's frame (procedural plating)
   @location(5) qn: vec3f,
+  @location(6) uv: vec2f,
+  @location(7) @interpolate(flat) ii: u32,
 };
 
+// the near plane [m] (reversed depth: 1 there, 0 at infinity)
+const NEAR = 0.01;
+
 fn project(p: vec3f) -> vec4f {
-  // same pinhole as the tracer: ndc = (x / (z tan·aspect), y / (z tan)); depth ∈ [0, 1]
-  let near = S.proj.z;
-  let far = S.proj.w;
+  // same pinhole as the tracer: ndc = (x / (z tan·aspect), y / (z tan)); depth = near / z
   // (then the box's own ndc: ndc' = (ndc − centre) × scale, in clip space)
   let xy = (vec2f(p.x / S.proj.x, p.y / S.proj.y) - S.view.xy * p.z) * S.view.zw;
-  return vec4f(xy, (p.z - near) * far / (far - near), p.z);
+  return vec4f(xy, NEAR, p.z);
 }
 
 @vertex
-fn vs(v: VIn) -> VOut {
+fn vs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   var o: VOut;
-  let p = (S.model * vec4f(v.pos, 1.0)).xyz;
+  let M = inst[ii].model;
+  let p = (M * vec4f(v.pos, 1.0)).xyz;
   o.p = p;
   o.clip = project(p);
-  o.n = (S.model * vec4f(v.nrm, 0.0)).xyz;
+  o.n = (M * vec4f(v.nrm, 0.0)).xyz;
   o.mat = v.mat;
   o.ao = v.ao;
   o.q = v.pos;
   o.qn = v.nrm;
+  o.uv = v.uv;
+  o.ii = ii;
   return o;
 }
 
@@ -259,8 +284,8 @@ fn lightClip(p: vec3f) -> vec3f {
 }
 
 @vertex
-fn shadowVs(v: VIn) -> @builtin(position) vec4f {
-  return vec4f(lightClip((S.model * vec4f(v.pos, 1.0)).xyz), 1.0);
+fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+  return vec4f(lightClip((inst[ii].model * vec4f(v.pos, 1.0)).xyz), 1.0);
 }
 
 fn irradiance(n: vec3f) -> vec3f {
@@ -399,6 +424,15 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       if (st.g > 0.5 && st.r / st.g < length(in.p) - 0.05) { discard; }
     }
   }
+  let I = inst[in.ii];
+  let model = I.model;
+  let kind = u32(I.flags.x + 0.5);
+  // (a craft not flown: hidden where the traced image holds something nearer — a planet, the disk)
+  if (I.flags.z > 0.5 && S.img.w > 0.5) {
+    let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
+    let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
+    if (moments[q.y * u32(S.img.x) + q.x].y * S.img.z < length(in.p) * 0.999) { discard; }
+  }
   let side = select(-1.0, 1.0, front);
   let ng = normalize(in.n) * side;       // geometric (smoothed) normal, camera frame
   let qn = normalize(in.qn) * side;      // same, ship frame
@@ -422,9 +456,14 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
   var grad = w.x * vec3f(0.0, g.y, g.x) + w.y * vec3f(g.x, 0.0, g.y) + w.z * vec3f(g.x, g.y, 0.0);
   grad -= dot(grad, qn) * qn;
-  let bumpOn = select(0.0, 1.0, part == 0u || part == 4u);
+  let bumpOn = select(0.0, 1.0, kind == 0u && (part == 0u || part == 4u));
   let qb = normalize(qn - grad * bumpOn);
-  let n = normalize((S.model * vec4f(qb, 0.0)).xyz);
+  var n = normalize((model * vec4f(qb, 0.0)).xyz);
+  // (the maps' footprint: the UV's and the position's derivatives, taken here — in uniform control flow)
+  let duvx = dpdx(in.uv);
+  let duvy = dpdy(in.uv);
+  let dpx = dpdx(in.p);
+  let dpy = dpdy(in.p);
 
   // ---- material
   let tone = h0.y;
@@ -434,11 +473,39 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   var metal = S.mat.y;
   var rough = 0.5 + 0.2 * grime;
   var coat = S.light.y; // clear coat over the paint
+  var emit = vec3f(0.0);
   switch part {
     case 1u: { albedo = vec3f(0.01, 0.012, 0.015); metal = 0.0; rough = 0.03; coat = 0.0; }        // glass
     case 2u: { albedo = vec3f(0.35, 0.33, 0.31); metal = 1.0; rough = 0.32 + 0.1 * grime; coat = 0.0; } // nozzles
     case 3u: { albedo = vec3f(0.04); metal = 0.0; rough = 0.45; coat = 0.5 * coat; }                // window frames
     case 4u: { albedo *= 0.72; }                                                                     // hatch, airlock
+    case 10u: {
+      // the Lander: its painted maps — colour, normals (a cotangent frame from the derivatives: Schüler
+      // 2013), its lights; plates of painted metal under a thin varnish, the dark ones rougher
+      albedo = textureSampleGrad(albedoMap, mapSamp, in.uv, duvx, duvy).rgb;
+      var tn = textureSampleGrad(normalMap, mapSamp, in.uv, duvx, duvy).xyz * 2.0 - 1.0;
+      tn.y = -tn.y;
+      let d2 = cross(dpy, ng);
+      let d1 = cross(ng, dpx);
+      let T = d2 * duvx.x + d1 * duvy.x;
+      let B = d2 * duvx.y + d1 * duvy.y;
+      let im = inverseSqrt(max(max(dot(T, T), dot(B, B)), 1e-30));
+      n = normalize(T * im * tn.x + B * im * tn.y + ng * tn.z);
+      let lum = dot(albedo, vec3f(0.2126, 0.7152, 0.0722));
+      metal = 0.3;
+      rough = 0.35 + 0.35 * (1.0 - smoothstep(0.02, 0.3, lum)) + 0.1 * grime;
+      coat = 0.35 * coat;
+      emit = textureSampleGrad(lightsMap, mapSamp, in.uv, duvx, duvy).rgb;
+    }
+    // the Endurance's parts (as endurance.wgsl): metal, non-metal panels, glass, tiles, lights, interior,
+    // the rolling shuttle
+    case 20u: { albedo = vec3f(0.72) * (1.0 - 0.18 * grime); metal = 1.0; rough = 0.38 + 0.12 * grime; coat = 0.0; }
+    case 21u: { albedo = vec3f(0.42, 0.42, 0.44) * (1.0 - 0.15 * grime); metal = 0.0; rough = 0.6; coat = 0.3 * coat; }
+    case 22u: { albedo = vec3f(0.02); metal = 0.0; rough = 0.06; coat = 0.0; }
+    case 23u: { albedo = vec3f(0.82, 0.81, 0.78) * (1.0 - 0.12 * grime); metal = 0.0; rough = 0.75; coat = 0.0; }
+    case 24u: { albedo = vec3f(0.1); metal = 0.0; rough = 0.5; coat = 0.0; emit = vec3f(0.35, 0.6, 1.0) * 0.6; }
+    case 25u: { albedo = vec3f(0.25); metal = 0.0; rough = 0.8; coat = 0.0; }
+    case 26u: { albedo = vec3f(0.62, 0.62, 0.6); metal = 0.3; rough = 0.5; coat = 0.2 * coat; }
     default: {}
   }
   rough = clamp(rough * S.mat.z, 0.03, 1.0);
@@ -460,7 +527,9 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let keyOn = sh[11].w > 0.5;
   let dirW = select(dom.w * smoothstep(-0.1, 0.35, dot(ng, dom.xyz)), 0.0, keyOn);
   let specW = select(dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz)), 0.0, keyOn);
-  let sd = shadowAt(in.p, ng, dom.xyz);
+  // (a craft away from the flown one is not in its shadow map)
+  let shOn = I.flags.y > 0.5;
+  let sd = select(1.0, shadowAt(in.p, ng, dom.xyz), shOn);
   let occD = mix(1.0, sd, dirW) * ao;
   let so = clamp(pow(nv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0); // specular occlusion (Lagarde)
   let occS = so * horizon * horizon * mix(1.0, sd, specW);
@@ -497,7 +566,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     // (the bumped normal facing the light on a face turned away from it: no light)
     let face = smoothstep(-0.02, 0.08, dot(ng, l));
     if (nl > 0.0 && face > 0.0 && dot(Ek, Ek) > 0.0) {
-      let vis = shadowAt(in.p, ng, l) * face;
+      let vis = select(1.0, shadowAt(in.p, ng, l), shOn) * face;
       let hv = normalize(l + v);
       let nh = clamp(dot(n, hv), 0.0, 1.0);
       let vh = clamp(dot(v, hv), 0.0, 1.0);
@@ -540,7 +609,9 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   }
   // (resolved by the MSAA as c / (1 + L): a highlight's sample no longer outweighs the pixel's others —
   // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
-  let o = col * S.light.x + dif * jl * ao * S.jet.y;
+  // (the thrusters light the flown craft; the lights, display-referred too: seen whatever the exposure)
+  let own = select(0.0, 1.0, in.ii == 0u);
+  let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }
 

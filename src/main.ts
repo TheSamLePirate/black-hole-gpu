@@ -9,7 +9,8 @@ import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { BODY_NAMES, bodyLook, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNT_KEYS, MOUNTS, shipToCamera, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
+import { fleet, fleetStart } from "./fleet";
 import { SOLAR_BODIES } from "./system/solar";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
@@ -285,6 +286,9 @@ async function main() {
     // (a scene without the ship: the view is placed, not falling)
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
     Object.assign(settings, defaultSettings(), keep, preset);
+    // (the craft the scene flies: its attach points — fleetStart below places the others)
+    fleet.active = settings.vessel;
+    setMountVessel(settings.vessel);
     camera.settleMount();
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
@@ -325,9 +329,10 @@ async function main() {
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose) {
       // (the station: at the real time now, unless the scene has its own)
-      const t = time ?? (pose === "iss" ? gameTimeOf(Date.now()) : sim.time);
-      if (pose === "iss" && time === undefined) sim.setTime(t);
-      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance, issOffset) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
+      const now = pose === "iss" || pose === "fleet";
+      const t = time ?? (now ? gameTimeOf(Date.now()) : sim.time);
+      if (now && time === undefined) sim.setTime(t);
+      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance, issOffset) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" || pose === "fleet" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
@@ -336,6 +341,11 @@ async function main() {
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
+    // the fleet near the Earth (fleet.ts): the Endurance 800 km up, the Lander 500 km up; the craft flown
+    // where the scene puts it — or, "fleet", where the fleet's start has it
+    setMountVessel(settings.vessel);
+    const starts = fleetStart(sim.time, settings.vessel);
+    if (pose === "fleet" && settings.ship) camera.flyFrom(starts[settings.vessel]);
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
       // the camera then where its mount is)
@@ -900,6 +910,7 @@ async function main() {
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     } else if (e.code === "KeyB") pilotAuto("dock");
+    else if (e.code === "BracketLeft" || e.code === "BracketRight") camera.cycleVessel(e.code === "BracketRight" ? 1 : -1); // (the craft flown: KSP's [ ])
     else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
     else return false;
     e.preventDefault();
@@ -1280,6 +1291,8 @@ async function main() {
       iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart, hulls: { ranger: rangerHull, station: stationHulls } },
       /** the free camera to a target (the camera panel's Go to) */
       goTo,
+      /** the fleet: the craft, where they are, their dockings (fleet.ts) */
+      fleet,
       /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
       sky: {
         goTo: (name: string) => {
