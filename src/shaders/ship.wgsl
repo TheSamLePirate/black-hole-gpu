@@ -12,7 +12,10 @@
 //   vs / fs             shading: painted plating under a clear coat, procedural relief (seams,
 //                       rivets, pillowed and slightly tilted panels), baked ambient occlusion,
 //                       split-sum reflections with multiple-scattering compensation
-//                       (Fdez-Agüera 2019), specular occlusion, specular anti-aliasing
+//                       (Fdez-Agüera 2019), specular occlusion, specular anti-aliasing; the key
+//                       light (a star near: analytic — trace.wgsl keyLight) in GGX with its own
+//                       shadow; the mirror-like layers reflecting the traced image itself where it
+//                       holds the reflected direction (screenRefl)
 //   compVs / compFs     composite over the traced HDR image (premultiplied alpha)
 //
 // Camera frame C: x right, y up, z forward (right-handed). The probe's own axes (P: equirectangular
@@ -180,6 +183,13 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
   let l0 = max(dot(tot[0], lum), 1e-20);
   let m = length(l1);
   shOut[9] = vec4f(select(vec3f(0.0, 1.0, 0.0), l1 / m, m > 0.0), clamp(m / (1.7320508 * l0), 0.0, 1.0));
+  // the key light (the near world's star, analytic — trace.wgsl keyLight — the probe without it): its
+  // direction and the disc's angular radius, its irradiance and on (0/1); on, it is the dominant light —
+  // the hull's shadow map, its shadow on the ground
+  let key = envIn[n + 1u];
+  shOut[10] = envIn[n];
+  shOut[11] = key;
+  if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
 }
 
 // ------------------------------------------------------------------------------------ the ship
@@ -190,6 +200,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(7) var shadowTex: texture_depth_2d;
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
 @group(0) @binding(9) var<storage, read> jets: array<Jet>;
+@group(0) @binding(10) var scene: texture_2d<f32>; // the traced image the ship is drawn over (× pre-exposure)
 
 struct VIn {
   @location(0) pos: vec3f,
@@ -271,6 +282,48 @@ fn envAB(rough: f32, nv: f32) -> vec2f {
   let r = rough * c0 + c1;
   let a004 = min(r.x * r.x, exp2(-9.28 * nv)) * r.x + r.y;
   return vec2f(-1.04, 1.04) * a004 + r.zw;
+}
+
+// GGX specular from a disc light (angular radius rs) for the irradiance it gives at normal incidence:
+// D · V (height-correlated Smith), the lobe widened by the disc (Karis 2013: α' = α + rs/2 — the
+// highlight of a mirror-smooth varnish the Sun's own disc, not a point). Times F, E, n·l by the caller.
+fn ggxSpec(nh: f32, nv: f32, nl: f32, rough: f32, rs: f32) -> f32 {
+  let a = min(rough * rough + 0.5 * rs, 1.0);
+  let aa = a * a;
+  let dd = nh * nh * (aa - 1.0) + 1.0;
+  let D = aa / (PI * dd * dd);
+  let gv = nl * sqrt(nv * nv * (1.0 - aa) + aa);
+  let gl = nv * sqrt(nl * nl * (1.0 - aa) + aa);
+  let V = 0.5 / max(gv + gl, 1e-6);
+  return D * V;
+}
+
+// How much of a direction (camera frame) the traced image holds: 1 well inside the frame, fading to 0
+// over its last 6 % (and behind the camera)
+fn inFrame(d: vec3f) -> f32 {
+  if (d.z <= 0.0) { return 0.0; }
+  let ndc = vec2f(d.x / (d.z * S.proj.x), d.y / (d.z * S.proj.y));
+  let e = 1.0 - max(abs(ndc.x), abs(ndc.y));
+  return smoothstep(0.0, 0.12, e);
+}
+
+// The far scene reflected along r, from the traced image itself: the world around the ship is at
+// infinity next to its metres, so what a mirror shows along r is what the camera sees along r — at the
+// image's full resolution (the probe's texels are 1.4° wide: windows and varnish reflected a blur).
+// A cone of half-angle a: five taps (the centre, four around it). Radiance (the probe's units), weight.
+fn screenRefl(r: vec3f, a: f32) -> vec4f {
+  let w = inFrame(r);
+  if (w <= 0.0) { return vec4f(0.0); }
+  let dims = vec2f(textureDimensions(scene));
+  let uv = vec2f(0.5 + 0.5 * r.x / (r.z * S.proj.x), 0.5 - 0.5 * r.y / (r.z * S.proj.y)) * dims;
+  // (pixels per radian there)
+  let rad = min(a * 0.5 * dims.y / (S.proj.y * r.z * r.z), 24.0);
+  var acc = textureLoad(scene, clamp(vec2i(uv), vec2i(0), vec2i(dims) - 1), 0).rgb * 2.0;
+  for (var k = 0; k < 4; k++) {
+    let o = rad * vec2f(select(-0.7, 0.7, (k & 1) == 1), select(-0.7, 0.7, (k & 2) == 2));
+    acc += textureLoad(scene, clamp(vec2i(uv + o), vec2i(0), vec2i(dims) - 1), 0).rgb;
+  }
+  return vec4f(acc / 6.0 / max(S.light.z, 1e-30), w);
 }
 
 // Poisson-disk PCF (8 taps, each a bilinear 2×2 comparison), normal-offset bias
@@ -390,8 +443,11 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // reflections below the geometric surface (bumped normals at grazing angles) fade out
   let horizon = clamp(1.0 + 1.3 * dot(r, ng), 0.0, 1.0);
   let dom = vec4f(fromProbe(sh[9].xyz), sh[9].w);
-  let dirW = dom.w * smoothstep(-0.1, 0.35, dot(ng, dom.xyz));
-  let specW = dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz));
+  // (with a key light the probe holds the surroundings alone — no light in it compact enough to cast
+  // the hull's shadow: that is the key's)
+  let keyOn = sh[11].w > 0.5;
+  let dirW = select(dom.w * smoothstep(-0.1, 0.35, dot(ng, dom.xyz)), 0.0, keyOn);
+  let specW = select(dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz)), 0.0, keyOn);
   let sd = shadowAt(in.p, ng, dom.xyz);
   let occD = mix(1.0, sd, dirW) * ao;
   let so = clamp(pow(nv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0); // specular occlusion (Lagarde)
@@ -407,13 +463,49 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let fms = fss * fAvg / (1.0 - (1.0 - ess) * fAvg);
   let emsE = (1.0 - ess) * fms;
   let kd = albedo * (1.0 - metal) * (1.0 - (fss + emsE));
-  var col = envSpec(r, rough) * fss * occS + (emsE + kd) * E / PI * occD;
-
-  // clear coat: a thin varnish (F0 = 0.04, roughness 0.05) that darkens what is below by its Fresnel
+  // the mirror-like layers (glass, the varnish) reflect the traced image where it holds the direction,
+  // the probe elsewhere; rougher ones the probe (one cone of taps, as sharp as the smoother layer)
   let cr = clamp(0.05 * S.mat.z, 0.03, 1.0);
+  let ar = min(rough, cr);
+  let sr = screenRefl(r, ar * ar);
+  let wB = sr.w * (1.0 - smoothstep(0.1, 0.3, rough));
+  let wC = sr.w * (1.0 - smoothstep(0.1, 0.3, cr));
+  var col = mix(envSpec(r, rough), sr.rgb, wB) * fss * occS + (emsE + kd) * E / PI * occD;
+
+  // the key light (a star, a disc of angular radius rs): Lambert and GGX on the base, the varnish's own
+  // sharp highlight on top — shadowed by the hull (its shadow map, from this light)
+  var key = vec3f(0.0);
+  var keyCoat = vec3f(0.0);
+  var keyFc = 0.0;
+  if (keyOn) {
+    let Ek = sh[11].rgb;
+    let rs = sh[10].w;
+    let l = dom.xyz;
+    let nl = dot(n, l);
+    // (the bumped normal facing the light on a face turned away from it: no light)
+    let face = smoothstep(-0.02, 0.08, dot(ng, l));
+    if (nl > 0.0 && face > 0.0 && dot(Ek, Ek) > 0.0) {
+      let vis = shadowAt(in.p, ng, l) * face;
+      let hv = normalize(l + v);
+      let nh = clamp(dot(n, hv), 0.0, 1.0);
+      let vh = clamp(dot(v, hv), 0.0, 1.0);
+      let fk = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
+      // (the star itself in the traced image, reflected there already: its highlight not twice)
+      let lf = inFrame(l);
+      let sk = ggxSpec(nh, nv, nl, rough, rs) * fk * (1.0 - wB * lf);
+      // (the multiple scattering's energy, as for the environment: Fdez-Agüera)
+      let ms = 1.0 + f0 * (1.0 - ess) / max(ess, 1e-3);
+      let kdk = albedo * (1.0 - metal) * (1.0 - fk) / PI;
+      key = (kdk + sk * ms) * Ek * nl * vis;
+      let fcv = (0.04 + 0.96 * pow(1.0 - vh, 5.0)) * coat;
+      keyFc = fcv;
+      keyCoat = ggxSpec(nh, nv, nl, cr, rs) * fcv * Ek * nl * vis * (1.0 - wC * lf);
+    }
+  }
+  // clear coat: a thin varnish (F0 = 0.04, roughness 0.05) that darkens what is below by its Fresnel
   let cab = envAB(cr, nv);
   let fc = (0.04 * cab.x + cab.y) * coat;
-  col = col * (1.0 - fc) + envSpec(r, cr) * fc * occS;
+  col = col * (1.0 - fc) + mix(envSpec(r, cr), sr.rgb, wC) * fc * occS + key * (1.0 - keyFc) + keyCoat;
   // re-entry: the faces meeting the air glow (visual, driven by ρ v³ — the heat does nothing yet)
   let pl = S.plasma.w;
   if (pl > 0.0) {

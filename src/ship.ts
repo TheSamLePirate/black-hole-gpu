@@ -116,6 +116,8 @@ interface ShipTargetRes {
   plume: GPUTexture;
   plumeDepth: GPUTexture;
   plumeDirty: boolean;
+  /** the shading's bind group, with this target's traced image */
+  bind?: GPUBindGroup;
 }
 
 export class ShipRenderer {
@@ -154,7 +156,8 @@ export class ShipRenderer {
     hullDepth: GPURenderPipeline;
   };
   private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
-  private shipBind: GPUBindGroup | null = null;
+  /** the shading's bindings but the traced image (one bind group per target: shipBindFor) */
+  private shipEntries: GPUBindGroupEntry[] | null = null;
   private shadowBind: GPUBindGroup | null = null;
   private targets = new WeakMap<GPUTexture, ShipTargetRes>();
 
@@ -199,7 +202,8 @@ export class ShipRenderer {
 
   constructor(private device: GPUDevice, shipWGSL: string) {
     const d = device;
-    this.envBuf = d.createBuffer({ size: ENV_W * ENV_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+    // (the probe's texels, then its key light: trace.wgsl env)
+    this.envBuf = d.createBuffer({ size: (ENV_W * ENV_H + 2) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
     const envUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING;
     this.envRaw = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: RAW_MIPS, usage: envUsage });
     this.envSpec = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: SPEC_MIPS, usage: envUsage });
@@ -362,18 +366,15 @@ export class ShipRenderer {
       magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge", maxAnisotropy: 8,
     });
     const cmp = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
-    this.shipBind = d.createBindGroup({
-      layout: this.pipes.ship.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: this.uniform } },
-        { binding: 1, resource: { buffer: this.shBuf } },
-        { binding: 2, resource: this.envSpec.createView() },
-        { binding: 3, resource: samp },
-        { binding: 7, resource: this.shadowTex.createView() },
-        { binding: 8, resource: cmp },
-        { binding: 9, resource: { buffer: this.jetBuf } },
-      ],
-    });
+    this.shipEntries = [
+      { binding: 0, resource: { buffer: this.uniform } },
+      { binding: 1, resource: { buffer: this.shBuf } },
+      { binding: 2, resource: this.envSpec.createView() },
+      { binding: 3, resource: samp },
+      { binding: 7, resource: this.shadowTex.createView() },
+      { binding: 8, resource: cmp },
+      { binding: 9, resource: { buffer: this.jetBuf } },
+    ];
 
     const pb = (p: GPURenderPipeline, jets = true) => d.createBindGroup({
       layout: p.getBindGroupLayout(0),
@@ -577,7 +578,12 @@ export class ShipRenderer {
       depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
     }));
     rp.setPipeline(this.pipes.ship);
-    rp.setBindGroup(0, this.shipBind!);
+    // (the traced image the ship is drawn over: its sharp reflections — ship.wgsl screenRefl)
+    res.bind ??= this.device.createBindGroup({
+      layout: this.pipes!.ship.getBindGroupLayout(0),
+      entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }],
+    });
+    rp.setBindGroup(0, res.bind);
     rp.setVertexBuffer(0, this.vbuf!);
     rp.setIndexBuffer(this.ibuf!, "uint32");
     rp.drawIndexed(this.count);

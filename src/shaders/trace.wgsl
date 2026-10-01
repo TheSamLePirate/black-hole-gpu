@@ -711,6 +711,9 @@ fn throatGlow(X: vec3f, dW: vec3f, C: vec3f, dist: f32, g: f32) -> vec3f {
 // turned to the catalogue's scale (P.bodyCfg2.x), compressed above magnitude −2.
 // (the light probes take them at their true flux, uncompressed: the Sun lights the Ranger near Saturn)
 var<private> physicalPoints: bool = false;
+// (the Ranger's probe with its key light on — the near world's star, analytic: see env — leaves the
+// stars out: their light is in the key)
+var<private> probeNoStar: bool = false;
 // (the light probe: its ray's offset from the texel's centre — the points' filter is taken there, so
 // that a texel's share of a point does not depend on where its ray fell)
 var<private> probeShift: vec3f = vec3f(0.0);
@@ -721,6 +724,7 @@ fn farPoints(side: u32, d: vec3f, org: vec4f, filt: SkyFilter, g: f32) -> vec3f 
   for (var k = k0; k < k1; k++) {
     let ours = side == 2u;
     if (select(bodyWhere(k) != side, !isOurs(k), ours)) { continue; }
+    if (probeNoStar && bodyKind(k) == 0u) { continue; }
     var c = bodyCentre(k, org.w);
     if (!ours) { c = bodyCentre(k, org.w - length(c - org.xyz)); }
     let v = c - org.xyz;
@@ -1138,7 +1142,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
   // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
   for (var k = ourStart(); k < bodyCount(); k++) {
-    if (bodyKind(k) != 0u) { continue; }
+    if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
     let c = bodies[BV * k].xyz - o;
@@ -1153,7 +1157,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
   // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
   for (var k = ourStart(); k < bodyCount(); k++) {
-    if (bodyKind(k) != 0u) { continue; }
+    if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
     let c = bodies[BV * k].xyz - o;
@@ -4747,7 +4751,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         if (R < rEff) {
           let qc = q0 + u * dq1;
           let dq = length(qc);
-          if (!radio && dq < rEff && u > 0.0 && u < 1.0) {
+          if (!radio && dq < rEff && u > 0.0 && u < 1.0 && !(probeNoStar && bodyKind(k) == 0u)) {
             let dW = backwardDir(n, L, a);
             let X = glowPoint(c, qc, rEff, R, dW);
             col += trans * compressPoint(shadeBody(k, X, c, bodyShift(k, n, L, E0), dW, tEm) * (R * R / (rEff * rEff)) * glowProfile(dq / rEff) * pointBoost(R / rEff));
@@ -4755,7 +4759,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
           continue;
         }
         let t = sphereHit(q0, q1, vec3f(0.0), R);
-        if (!radio && bodyKind(k) == 0u && length(q1) < 4.0 * R) {
+        if (!radio && bodyKind(k) == 0u && !probeNoStar && length(q1) < 4.0 * R) {
           // atmosphere in front of the photosphere (midpoint of the step, clipped at the surface)
           let frac = select(1.0, t, t >= 0.0);
           let pm = mix(p0, p1, 0.5 * frac) - mix(c0, c1, 0.5 * frac) + c;
@@ -4774,7 +4778,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         let c = mix(kC0, kC1, tHit);
         // (lit and patterned at the moment the ray passes it)
         let tHitEm = tNow + mix(s.x.w, n.x.w, tHit);
-        if (!radio) { col += trans * shadeBody(kHit, X, c, bodyShift(kHit, n, L, E0), backwardDir(n, L, a), tHitEm); }
+        if (!radio && !(probeNoStar && bodyKind(kHit) == 0u)) { col += trans * shadeBody(kHit, X, c, bodyShift(kHit, n, L, E0), backwardDir(n, L, a), tHitEm); }
         trans = 0.0;
         fate = 3u;
         break;
@@ -5388,8 +5392,91 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 const ENV_W = 256u;
 const ENV_H = 128u;
 
+// The key light: the near world's star (our Sun, or a star's planet on Gargantua's side), analytic.
+// In the probe its disc is a blob three texels wide — no crisp highlight on the hull, no sharp shadow —
+// and, a running mean of many frames, it lingered for seconds after the star had set behind the world.
+// Here it is the star's irradiance at the camera, its disc's share above the world's limb (the penumbra:
+// both discs' sizes), through the world's air (reddened low, dimmed by the clouds), shadowed by the
+// relief round the camera (the ship landed in a valley at sunset). Written after the probe's texels
+// (ship.ts reads it through the harmonics): direction (probe axes) and the disc's angular radius;
+// irradiance, on (0/1).
+fn keyLit() -> bool {
+  if (!(HAS_BODIES && P.near0.w > 0.5 && P.near3.w < 0.5)) { return false; }
+  let kn = u32(P.near1.w);
+  return bodyKind(kn) != 0u && i32(bodies[BV * kn + 3u].x) >= 0;
+}
+
+// the relief between the camera and the key light (body axes, radii): the Earth's ground and the
+// airless worlds' — as the ground's shadows are marched, measured from the ground under the camera when
+// it stands on it (within 50 m: the march's coarser heights), from the camera itself when it flies
+fn keyRelief(kn: u32, L: vec3f) -> f32 {
+  let c = nearCam();
+  let rc = length(c);
+  let mR = P.near4.w;
+  let surf = u32(bodies[BV * kn + 2u].z);
+  if (isEarth(kn) && earthOn()) {
+    let alt = (rc - 1.0) * EARTH_RM;
+    if (alt > 9600.0) { return 1.0; }
+    let g = earthHeightStep(c / rc, 2.0) - alt;
+    let bias = select(0.0, g, abs(g) < 50.0);
+    var t = 20.0;
+    var sh = 1.0;
+    for (var i = 0; i < 48; i++) {
+      let x = c + L * (t / EARTH_RM);
+      let r = length(x);
+      let hr = (r - 1.0) * EARTH_RM;
+      if (hr > 9600.0) { break; }
+      let d = hr - earthHeightStep(x / r, max(0.05 * t, 2.0)) + bias + 0.005 * t;
+      sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
+      if (sh <= 0.0) { break; }
+      t *= 1.18;
+    }
+    return sh;
+  }
+  if (airless(surf) && (rc - 1.0) * mR < 2.0 * reliefMax(surf)) {
+    RND = 0.5;
+    return nearShadow(surf, c / rc, (rc - 1.0) * mR, L, 0.5, P.time.x * P.near5.w);
+  }
+  return 1.0;
+}
+
+fn keyLight() {
+  let kn = u32(P.near1.w);
+  let lt = nearLight(kn);
+  let L = lt.dir;
+  // (the star's angular radius: its irradiance factor is (R/D)²)
+  let rs = asin(clamp(sqrt(max(bodies[BV * kn + 3u].y, 0.0)), 1e-5, 1.0));
+  // the world's disc before it: the share of the star's above its limb
+  let c = P.near0.xyz;
+  let dc = length(c);
+  let rb = asin(clamp(1.0 / dc, 0.0, 1.0));
+  let sep = acos(clamp(dot(L, c / dc), -1.0, 1.0));
+  let x = clamp((sep - rb) / rs, -1.0, 1.0);
+  // (the area of a disc above a chord at x radii from its centre)
+  var E = lt.e * (0.5 + (x * sqrt(1.0 - x * x) + asin(x)) / PI);
+  if (hasAir(kn)) {
+    setAir(kn);
+    let rd = toBody(L);
+    let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
+    let e = earthLook(kn, nearCam(), rd, -1.0, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
+    E *= e.T;
+  }
+  if (luminance(E) > 0.0) { E *= keyRelief(kn, toBody(L)); }
+  // (to the probe's axes: the transpose of envX…Z)
+  let Lp = vec3f(dot(L, P.envX.xyz), dot(L, P.envY.xyz), dot(L, P.envZ.xyz));
+  let n = ENV_W * ENV_H;
+  envBuf[n] = vec4f(Lp, rs);
+  envBuf[n + 1u] = vec4f(max(E, vec3f(0.0)), 1.0);
+}
+
 @compute @workgroup_size(8, 8)
 fn env(@builtin(global_invocation_id) gid: vec3u) {
+  let key = keyLit();
+  // (the planets' probes run this kernel into their own buffer, the probe's texels alone: no key)
+  if (all(gid.xy == vec2u(0u)) && arrayLength(&envBuf) >= ENV_W * ENV_H + 2u) {
+    if (key) { keyLight(); } else { envBuf[ENV_W * ENV_H + 1u] = vec4f(0.0); }
+  }
+  probeNoStar = key;
   // (envCfg.z: 1 every texel; 0 one of each 2×2 block, 2 one of each 4×4 — envCfg.y picks which)
   var px = gid.xy;
   if (P.envCfg.z < 0.5 || P.envCfg.z > 1.5) {
@@ -5415,7 +5502,10 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // half the probe in a low orbit, were traced across the solar system and thrown away)
   let kn = u32(P.near1.w);
   let nearOn = HAS_BODIES && P.near0.w > 0.5 && hasAir(kn);
-  let t = select(-1.0, nearHit(look), nearOn);
+  // (an airless world near, lit by its star: its ground — the sunlit ground's light on the hull, the
+  // sky hidden behind it; a sphere at the probe's resolution)
+  let solid = HAS_BODIES && P.near0.w > 0.5 && !nearOn && bodyKind(kn) != 0u && P.near3.w < 0.5;
+  let t = select(-1.0, nearHit(look), nearOn || solid);
   var col = vec3f(0.0);
   if (t <= 0.0) {
     let tr = traceLook(look, h.z, P.time.x);
@@ -5437,6 +5527,10 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
     let e = earthLook(kn, nearCam(), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
     col = select(col * e.T + e.col, e.col, t > 0.0);
+  } else if (solid && t > 0.0) {
+    BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
+    let nc = normalize(look * t - P.near0.xyz);
+    col = planetShade(kn, nc, toBody(nc), P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(kn, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   col = min(col, vec3f(60000.0));
