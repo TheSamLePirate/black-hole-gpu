@@ -1499,7 +1499,7 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 @media (max-width: 900px) {
   .fl-orbit, .fl-tel { display: none; }
   .fl-right { bottom: auto; top: 56px; }
-  .fl-warpbox > span, .fl-viewname, .fl-planbtn span { display: none; }
+  .fl-warpbox > span, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
 }
 @media (max-width: 700px) {
   .fl-cockpit { transform: translateX(-50%) scale(0.72); }
@@ -1972,6 +1972,7 @@ body.hide-ui #tp-dock { display: none; }
 .tp-play.paused { color: #fff; background: rgba(255, 179, 92, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 179, 92, 0.55); }
 .tp-rt.on { color: var(--hud-amber); }
 .tp-auto { font-size: 10px; letter-spacing: 0.12em; }
+.tp-auto[hidden] { display: none; }
 .tp-auto.on { color: var(--hud-amber); box-shadow: inset 0 0 0 1px rgba(255, 179, 92, 0.45); }
 .tp-warp {
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 78px; height: 28px; padding: 0 6px;
@@ -2163,3 +2164,80 @@ body.piloting #sky-pop { top: 64px; bottom: auto; }
 .tf-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, rgba(255, 179, 92, 0.65), rgba(255, 179, 92, 0.25)); }
 .tf-thrk { position: absolute; top: 6px; left: 0; right: 0; text-align: center; font: 700 9px var(--hud-font); letter-spacing: 0.14em; color: rgba(214, 226, 242, 0.7); }
 .tf-thrv { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font: 600 11px var(--mono); color: #fff; text-shadow: 0 1px 3px #000; }
+
+
+/* ================================================================ phones (ui/mobile.ts: body.mobile)
+   A touch screen with a phone's short side, held either way. The settings in a round button top right;
+   flying, the mission bar across the top (two lines upright), the tapes smaller between it and the touch
+   controls, the attitude ball at the bottom between the stick and the throttle (upright: above them),
+   the panels smaller, the planner a sheet; the time bar and the toolbar without what does not fit. */
+body.mobile #panel.sp.collapsed {
+  top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); bottom: auto; left: auto;
+  width: auto; height: auto;
+}
+body.mobile .sp-opener { padding: 0; width: 40px; height: 40px; justify-content: center; border-radius: 50%; }
+body.mobile .sp-opener span { display: none; }
+body.mobile .sp-opener .ico { width: 19px; height: 19px; }
+body.mobile #hud { top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); max-width: calc(100vw - 72px); }
+body.mobile.piloting #hud { display: none; }
+/* (the settings open: over everything, the whole height on its side — upright, the bottom sheet — the
+   touch controls out of the way) */
+body.mobile:not(.portrait) #panel.sp:not(.collapsed) {
+  top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right));
+  left: auto; width: min(360px, 52vw); height: auto; z-index: 31;
+}
+body.mobile.portrait.piloting #panel.sp:not(.collapsed) { bottom: calc(8px + env(safe-area-inset-bottom)); height: min(72vh, 620px); z-index: 31; }
+body.mobile:has(#panel.sp:not(.collapsed)) .tf { display: none; }
+/* (on its side the screen is too short for the panel's head and a scrolling body: all of it scrolls) */
+body.mobile:not(.portrait) .sp-shell { overflow-y: auto; overscroll-behavior: contain; }
+body.mobile:not(.portrait) .sp-body { flex: none; overflow: visible; min-height: auto; }
+
+/* the time bar and the toolbar */
+body.mobile .tp-rec, body.mobile .tp-sep:last-of-type { display: none; }
+body.mobile #tp-dock { bottom: calc(66px + env(safe-area-inset-bottom)); max-width: calc(100vw - 16px); }
+body.mobile #tp-dock > .tp { padding: 3px 10px; }
+body.mobile #tp-dock .tp-clock { min-width: 0; }
+body.mobile #toolbar { bottom: calc(8px + env(safe-area-inset-bottom)); max-width: calc(100vw - 16px); }
+body.mobile #toolbar #btn-camera { max-width: 150px; }
+body.mobile #toolbar #btn-camera .cam-target { overflow: hidden; text-overflow: ellipsis; }
+
+/* flying: the mission bar */
+body.mobile .fl-mission {
+  top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: calc(54px + env(safe-area-inset-right));
+  transform: none; flex-wrap: wrap; justify-content: center; row-gap: 2px; white-space: normal; padding: 2px 4px;
+}
+body.mobile .fl-mgroup { padding: 0 5px; gap: 6px; }
+body.mobile .fl-mgroup + .fl-mgroup { border-left: none; }
+body.mobile .fl-chip { padding: 5px 6px; font-size: 11px; letter-spacing: 0.08em; }
+body.mobile .fl-mission .fl-tools { min-width: 30px; height: 30px; }
+body.mobile .fl-mission .tp-btn { min-width: 28px; height: 28px; }
+body.mobile .fl-warpbox > span, body.mobile .fl-viewname, body.mobile .fl-planbtn > span:not(.fl-ic) { display: none; }
+body.mobile.portrait .fl-mg-acts { order: 1; }
+body.mobile.portrait .fl-soundbtn { display: none; }
+body.mobile.portrait .fl-chip { padding: 5px 4px; gap: 4px; font-size: 10.5px; letter-spacing: 0.02em; }
+body.mobile.portrait .fl-viewbtn .fl-caret { display: none; }
+body.mobile.portrait .fl-mg-acts { gap: 0; }
+body.mobile.portrait .fl-mgroup { padding: 0 2px; }
+body.mobile.portrait .fl-mission .fl-tools { min-width: 28px; padding: 0 3px; }
+body.mobile.portrait .fl-mg-warp { order: 2; flex-basis: 100%; justify-content: center; }
+
+/* the attitude ball: between the stick and the throttle; upright, above them */
+body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(2px + env(safe-area-inset-bottom)); }
+body.mobile.portrait .fl-cockpit { transform: translateX(-50%) scale(0.82); bottom: calc(176px + env(safe-area-inset-bottom)); }
+
+/* (upright, planning: the planner's sheet where the ball stands) */
+body.mobile.portrait .fl-root.planning .fl-cockpit { display: none; }
+
+/* the panels (the full HUD): smaller, in their corners */
+body.mobile .fl-target { top: 52px; left: 8px; transform: scale(0.72); transform-origin: 0 0; }
+body.mobile .fl-right { display: flex; top: 52px; bottom: auto; right: 8px; transform: scale(0.72); transform-origin: 100% 0; }
+body.mobile.portrait .fl-right { top: auto; bottom: 380px; }
+body.mobile .fl-orbit, body.mobile .fl-tel { display: none; }
+
+/* the planner: a sheet — beside the view on its side, under it upright */
+body.mobile .fl-plan { top: 50px; right: 8px; width: min(330px, 48vw); max-height: calc(100vh - 60px); min-height: 0; }
+body.mobile.portrait .fl-plan { top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; max-height: 58vh; }
+
+/* the touch controls: a little tighter upright */
+body.mobile.portrait .tf-stick { width: 124px; height: 124px; left: calc(14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); }

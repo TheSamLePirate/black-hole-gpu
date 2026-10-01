@@ -48,6 +48,7 @@ import { setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
 import { loading } from "./loading";
 import { preventPageZoom } from "./ui/nozoom";
+import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
@@ -55,6 +56,7 @@ import { ephemerisUrls } from "./system/ephemeris-files";
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
 preventPageZoom();
+watchMobile();
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
 
@@ -1433,7 +1435,7 @@ async function main() {
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
     }
     // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera)
-    touchFlight.update(pil && coarse && camera.outsideView() !== "free" && !document.body.classList.contains("hide-ui"));
+    touchFlight.update(pil && coarse && camera.outsideView() !== "free" && !flightHud.planning && !document.body.classList.contains("hide-ui"));
     if (pil && info) {
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;

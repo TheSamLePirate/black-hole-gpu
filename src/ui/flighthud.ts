@@ -16,6 +16,7 @@
 //
 // N cycles the density: full · minimal (tapes, cockpit, mission bar) · clean (markers only).
 
+import { isMobile } from "./mobile";
 import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
@@ -265,12 +266,14 @@ export class FlightHud {
   /** 0 full · 1 minimal · 2 clean */
   density = 0;
   visible = false;
+  /** the planner open */
+  planning = false;
 
   constructor(private s: Settings, private act: FlightHudActions) {
     this.hud = h("canvas", "fl-hud");
     // (a phone: the minimal HUD — the full one's panels cover the small screen and the touch controls —
     // until the pilot picks another)
-    const small = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse) and (max-height: 540px), (pointer: coarse) and (max-width: 540px)").matches;
+    const small = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse) and (max-height: 560px), (pointer: coarse) and (max-width: 560px)").matches;
     this.density = small ? 1 : 0;
     try {
       const saved = localStorage.getItem("kerr.hud-density");
@@ -736,6 +739,7 @@ export class FlightHud {
   togglePlanner(open = !this.plannerOpen) {
     this.plannerOpen = open;
     this.root.classList.toggle("planning", open);
+    this.planning = open;
     this.missionEls.planBtn?.classList.toggle("on", open);
   }
 
@@ -1672,23 +1676,36 @@ export class FlightHud {
       marker(ctx, GLYPH[k]!, p[0], p[1], r, COL[k]!);
     }
     if (this.density < 2) {
-      // each tape in the free band between the panels above and below it on its side
-      const band = (above: HTMLElement[], below: HTMLElement[]) => {
-        const shown = (e: HTMLElement) => e.offsetParent !== null && getComputedStyle(e).display !== "none";
-        const top = Math.max(60, ...above.filter(shown).map((e) => e.getBoundingClientRect().bottom)) + 40;
-        const bottom = Math.min(innerHeight - 210, ...below.filter(shown).map((e) => e.getBoundingClientRect().top)) - 34;
-        if (bottom - top < 110) return null; // no room (a tall planner): no tape
-        const hgt = Math.min(bottom - top, 330);
+      // each tape in the free band between the panels above and below it on its side (a phone: between
+      // the mission bar and the touch controls, smaller)
+      const phone = isMobile();
+      const u = phone ? 0.8 * dpr : dpr;
+      // (shown: laid out — offsetParent is null for the fixed ones, the touch controls)
+      const shown = (e: HTMLElement | null): e is HTMLElement => !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== "none";
+      const band = (above: (HTMLElement | null)[], below: (HTMLElement | null)[]) => {
+        const top = Math.max(phone ? 0 : 60, ...above.filter(shown).map((e) => e.getBoundingClientRect().bottom)) + (phone ? 30 : 40);
+        const bottom = Math.min(phone ? innerHeight - 20 : innerHeight - 210, ...below.filter(shown).map((e) => e.getBoundingClientRect().top)) - (phone ? 30 : 34);
+        if (bottom - top < (phone ? 90 : 110)) return null; // no room (a tall planner): no tape
+        const hgt = Math.min(bottom - top, phone ? 250 : 330);
         return { cy: ((top + bottom) / 2) * dpr, h: hgt * dpr };
       };
-      const L = band([this.target], [this.orbit]);
-      if (L) this.speedTape(ctx, i, 30 * dpr, L.cy, L.h, dpr);
-      const R = band([this.tel, this.planner], [this.right]);
+      const q = (sel: string) => document.querySelector<HTMLElement>(sel);
+      // (upright, the attitude ball stands above the touch controls: the tapes end above it)
+      const ball = phone && innerHeight > innerWidth ? this.cockpitEl() : null;
+      const L = phone ? band([this.mission, this.target], [q(".tf-stick"), ball]) : band([this.target], [this.orbit]);
+      const x = (phone ? 16 : 30) * dpr;
+      if (L) this.speedTape(ctx, i, x, L.cy, L.h, u);
+      const R = phone ? band([this.mission, this.planner, this.right], [q(".tf-right"), ball]) : band([this.tel, this.planner], [this.right]);
       // (near a body — ours, or one of Gargantua's —: the height above its ground; else r near the hole)
       const st = i.status;
-      if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - 30 * dpr, R.cy, R.h, dpr);
-      else if (R && i.region === "hole") this.altTape(ctx, i, W - 30 * dpr, R.cy, R.h, dpr);
+      if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - x, R.cy, R.h, u);
+      else if (R && i.region === "hole") this.altTape(ctx, i, W - x, R.cy, R.h, u);
     }
+  }
+
+  /** the attitude ball's box (the cockpit's drawn ball, not its wide frame) */
+  private cockpitEl() {
+    return this.root.querySelector<HTMLElement>(".fl-ballbox");
   }
 
   /** the speed tape's full scale [c], eased towards its goal (a round number over the speed) */
