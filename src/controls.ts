@@ -29,7 +29,8 @@ import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-
 import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
-import { issAxes, issTrack, station } from "./system/iss";
+import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles } from "./system/iss";
+import { rangerHull, stationHulls } from "./system/collide";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -2273,7 +2274,9 @@ export class CameraController {
     this.rotateC(out.rot);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
     const tau0 = this.properTime;
+    const pre = simDt > 0 ? this.contactPose() : null;
     if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
+    if (pre) this.stationContact(pre);
     // rapidity spent (the propellant gauge), and the Δv delivered to the executing node (proper
     // acceleration × proper time)
     const w = Math.hypot(...out.acc) * (this.properTime - tau0);
@@ -2343,6 +2346,116 @@ export class CameraController {
     };
     const eye = lin(g.c, 1, g.a, 0.4 * m);
     return { eye: toShip(eye), aim: toShip(lin(eye, 1, g.a, 20 * m)) };
+  }
+
+  /** The ship for contacts with the station near it: its centre, velocity and axes (home), its time. */
+  private contactPose() {
+    if (!issTrack.near || this.docked || this.undocking || !rangerHull.bvh || !stationHulls.length || !station.joints.length) return null;
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav) return null;
+    const w = mouth(s).w;
+    const ax = this.shipAxesLocal({ right: cam.right, up: cam.up, fwd: cam.fwd }).map((a) => unitV(repToHomeVec(w, cam.ell, cam.n, a))) as [Vec3, Vec3, Vec3];
+    return { t: nav.t, X: nav.X, V: nav.V, ax };
+  }
+
+  private lastContactMsg = 0;
+
+  /**
+   * Contact with the station over the step just flown: every hull point's path (in each of the
+   * station's parts' own frame — its arrays turn) against the part, and every vertex of the station
+   * near the ship along its path relative to the hull, against the hull. At the first crossing the ship
+   * is set back to it (2 cm clear), its velocity against the station's surface turned back (a third of
+   * it) and its slide damped; its spin stopped.
+   */
+  private stationContact(p0: NonNullable<ReturnType<CameraController["contactPose"]>>) {
+    const p1 = this.contactPose();
+    if (!p1) return;
+    const i0 = issTrack.state(p0.t, p0.X), i1 = issTrack.state(p1.t, p1.X);
+    if (!i0 || !i1) return;
+    const R = rangerHull.radius;
+    if (Math.hypot(...sub3(p1.X, i1.X)) * M_METRES > 75 + R) return;
+    const A0 = issAxes(i0.X, i0.V, p0.t), A1 = issAxes(i1.X, i1.V, p1.t);
+    const toSt = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [dot3(v, A[0]), dot3(v, A[1]), dot3(v, A[2])];
+    // the ship in the station's frame [m]: its centre, its axes (columns)
+    const c0 = toSt(A0, lin(sub3(p0.X, i0.X), M_METRES, p0.X, 0)), c1 = toSt(A1, lin(sub3(p1.X, i1.X), M_METRES, p1.X, 0));
+    const R0 = p0.ax.map((a) => toSt(A0, a)) as [Vec3, Vec3, Vec3], R1 = p1.ax.map((a) => toSt(A1, a)) as [Vec3, Vec3, Vec3];
+    const place = (c: Vec3, Rm: [Vec3, Vec3, Vec3], q: Vec3): Vec3 => lin(lin(c, 1, Rm[0], q[0]), 1, lin(Rm[1], q[1], Rm[2], q[2]), 1);
+    const local = (c: Vec3, Rm: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => {
+      const d = sub3(v, c);
+      return [dot3(d, Rm[0]), dot3(d, Rm[1]), dot3(d, Rm[2])];
+    };
+    const T = partTransforms(station.joints, stationAngles(p1.t, i1.X, i1.V));
+    const sweep = Math.hypot(...sub3(c1, c0));
+    let best: { t: number; n: Vec3 } | null = null;
+    stationHulls.forEach((bvh, k) => {
+      if (!bvh) return;
+      const M = T[k]!;
+      // (the part's box against the ship's swept sphere, in its rest frame)
+      const [lo, hi] = bvh.bounds();
+      const cm = m34unapply(M, lin(c0, 0.5, c1, 0.5));
+      const rr = R + sweep;
+      for (let a = 0; a < 3; a++) if (cm[a]! + rr < lo[a]! || cm[a]! - rr > hi[a]!) return;
+      // the hull's points along their paths, against the part
+      for (const q of rangerHull.points) {
+        const a = m34unapply(M, place(c0, R0, q)), b = m34unapply(M, place(c1, R1, q));
+        const h = bvh.segment(a, b);
+        if (h && (!best || h.t < best.t)) {
+          const n = m34apply(M, h.n, 0);
+          const mv = sub3(b, a);
+          best = { t: h.t, n: dot3(m34apply(M, mv, 0), n) > 0 ? lin(n, -1, n, 0) : n };
+        }
+      }
+      // the part's vertices near the ship, along their paths relative to the hull, against it
+      for (const vi of bvh.verticesNear(cm, rr)) {
+        const v = m34apply(M, [bvh.pos[3 * vi]!, bvh.pos[3 * vi + 1]!, bvh.pos[3 * vi + 2]!]);
+        const a = local(c0, R0, v), b = local(c1, R1, v);
+        // (outside the hull's box all along: nothing to meet)
+        const L = rangerHull.lo, H = rangerHull.hi;
+        let out = false;
+        for (let q = 0; q < 3; q++) if (Math.max(a[q]!, b[q]!) < L[q]! - 0.05 || Math.min(a[q]!, b[q]!) > H[q]! + 0.05) out = true;
+        if (out) continue;
+        const h = rangerHull.bvh!.segment(a, b);
+        if (h && (!best || h.t < best.t)) {
+          // (the ship pushed along the vertex's motion relative to it)
+          const mv = lin(lin(R1[0], b[0] - a[0], R1[1], b[1] - a[1]), 1, R1[2], b[2] - a[2]);
+          let n = lin(lin(R1[0], h.n[0], R1[1], h.n[1]), 1, R1[2], h.n[2]);
+          if (dot3(n, mv) < 0) n = lin(n, -1, n, 0);
+          best = { t: h.t, n };
+        }
+      }
+    });
+    if (!best) return;
+    const hit = best as { t: number; n: Vec3 };
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const w = mouth(s).w;
+    const toHome = (v: Vec3): Vec3 => lin(lin(A1[0], v[0], A1[1], v[1]), 1, A1[2], v[2]);
+    // set back along the step to the contact, 2 cm clear of the surface
+    const back = lin(lin(sub3(c1, c0), -(1 - hit.t), c0, 0), 1, hit.n, 0.02);
+    const X = lin(p1.X, 1, toHome(back), 1 / M_METRES);
+    // the velocity against the station's surface where it is (the station turning: ω × r)
+    const E = ourState("earth", p1.t);
+    const r = sub3(i1.X, E.pos), v = sub3(i1.V, E.vel);
+    const om = lin(cross(r, v), 1 / dot3(r, r), r, 0);
+    const Vst = lin(i1.V, 1, cross(om, sub3(X, i1.X)), 1);
+    const N = toHome(hit.n);
+    const vrel = sub3(p1.V, Vst);
+    const vn = dot3(vrel, N);
+    let V = p1.V;
+    if (vn < 0) {
+      const vt = lin(vrel, 1, N, -vn);
+      V = lin(lin(Vst, 1, N, -0.3 * vn), 1, vt, 0.7);
+    }
+    setHomePose(s, X, unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)), V);
+    this.pilot.omega = [0, 0, 0];
+    this.sync();
+    const now = performance.now();
+    if (now - this.lastContactMsg > 1500) {
+      this.lastContactMsg = now;
+      this.onPilotMessage?.(`Contact with the ISS · ${(Math.abs(vn) * 299792458).toFixed(2)} m/s`);
+    }
   }
 
   /** After each step: the docking aid's figures, and the capture — the ring within 30 cm of the port's,

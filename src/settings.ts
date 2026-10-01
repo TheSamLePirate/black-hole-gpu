@@ -462,7 +462,7 @@ export function defaultSettings(): Settings {
 /** pose: a camera placement computed when the preset is applied ("saturn": the mission's departure;
  *  "earth": in low Earth orbit; "earthGround": the game's start, on the pad at the Kennedy Space Center;
  *  an EarthView: a view of the Earth — its ground or above it, towards the Moon, the Sun or itself) */
-export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | "iss" | BodyView; /** pose "iss": the ship's distance from the port [m] */ issDistance?: number };
+export type Preset = Partial<Settings> & { time?: number; mission?: boolean; pose?: "saturn" | "earth" | "earthGround" | "earthMoon" | "iss" | BodyView; /** pose "iss": the ship's distance from the port [m], off its axis [m, station frame] */ issDistance?: number; issOffset?: [number, number, number] };
 
 const GARGANTUA: Preset = {
   wormhole: true, spin: 0.9, diskTemp: 5200, diskOuter: 18, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,

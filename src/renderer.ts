@@ -12,7 +12,7 @@ import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer, type Thrust } from "./ship";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
-import { issAxes, issTrack, jointAngles, refreshIssElements, station } from "./system/iss";
+import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
 import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -2321,9 +2321,8 @@ export class Renderer {
       const Y = [0.282095, 0.488603 * ny, 0.488603 * nz, 0.488603 * nx, 1.092548 * nx * ny, 1.092548 * ny * nz, 0.315392 * (3 * nz * nz - 1), 1.092548 * nx * nz, 0.546274 * (nx * nx - ny * ny)];
       for (let q = 0; q < 9; q++) for (let ch = 0; ch < 3; ch++) sh[3 * q + ch]! += L * earthCol[ch]! * (rgb0[ch]! / lum) * Y[q]! * dOmega;
     }
-    const sunStation: Vec3 = [0, 1, 2].map((k) => sunH[0] * A[k]![0] + sunH[1] * A[k]![1] + sunH[2] * A[k]![2]) as Vec3;
     const view: StationView = {
-      rel, axes, angles: jointAngles(station.joints, sunStation),
+      rel, axes, angles: stationAngles(time, st.X, st.V),
       sun: unitV(toCam(sunH)), sunRadius: rhoS, sunE, sh,
       tanH: Math.tan((s.fov * Math.PI) / 360), aspect: t.width / t.height, pre: preExposure(this.ev(s)), mPerM: mR,
     };

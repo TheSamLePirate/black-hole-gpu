@@ -82,7 +82,7 @@ test("the station now: 400 km up, flying +XVV, the Ranger's start 150 m out on I
 });
 
 test("the arrays as drawn (the parts' transforms): every blanket's vertices in a plane facing the Sun", async () => {
-  const { partTransforms } = await import("../src/station");
+  const { partTransforms } = await import("../src/system/iss");
   const J = await joints();
   const buf = gunzipSync(new Uint8Array(await Bun.file("assets/iss/iss-lod0.bin").arrayBuffer()));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

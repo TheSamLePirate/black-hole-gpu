@@ -151,6 +151,43 @@ export function rotAbout(v: Vec3, k: Vec3, a: number): Vec3 {
   return [v[0] * c + kx[0] * s + k[0] * kd, v[1] * c + kx[1] * s + k[1] * kd, v[2] * c + kx[2] * s + k[2] * kd];
 }
 
+/** A rigid transform: the images of x, y, z, then the translation (columns). */
+export type M34 = [Vec3, Vec3, Vec3, Vec3];
+export const m34mul = (A: M34, B: M34): M34 => {
+  const ap = (v: Vec3, w: number): Vec3 => [0, 1, 2].map((k) => A[0][k]! * v[0] + A[1][k]! * v[1] + A[2][k]! * v[2] + w * A[3][k]!) as Vec3;
+  return [ap(B[0], 0), ap(B[1], 0), ap(B[2], 0), ap(B[3], 1)];
+};
+/** x ↦ M x (w = 1: a point; 0: a direction), and its inverse (M rigid). */
+export const m34apply = (M: M34, v: Vec3, w = 1): Vec3 => [0, 1, 2].map((k) => M[0][k]! * v[0] + M[1][k]! * v[1] + M[2][k]! * v[2] + w * M[3][k]!) as Vec3;
+export const m34unapply = (M: M34, v: Vec3, w = 1): Vec3 => {
+  const d: Vec3 = [v[0] - w * M[3][0], v[1] - w * M[3][1], v[2] - w * M[3][2]];
+  return [dot(M[0], d), dot(M[1], d), dot(M[2], d)];
+};
+/** A rotation by a about the line through p along k. */
+const rotM = (p: Vec3, k: Vec3, a: number): M34 => {
+  const c0 = rotAbout([1, 0, 0], k, a), c1 = rotAbout([0, 1, 0], k, a), c2 = rotAbout([0, 0, 1], k, a);
+  const rp = rotAbout(p, k, a);
+  return [c0, c1, c2, [p[0] - rp[0], p[1] - rp[1], p[2] - rp[2]]];
+};
+
+/** The parts' transforms (the station, then each joint's): at rest → turned, a gimbal after its alpha joint. */
+export function partTransforms(joints: StationJoint[], angles: number[]): M34[] {
+  const I: M34 = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]];
+  const out: M34[] = [I];
+  const own = joints.map((j, k) => rotM(j.pivot, j.axis, angles[k] ?? 0));
+  joints.forEach((j, k) => out.push(j.parent >= 0 ? m34mul(own[j.parent]!, own[k]!) : own[k]!));
+  while (out.length < 13) out.push(I);
+  return out;
+}
+
+/** The joints' angles at time t for the station at (X, V) [home]: the Sun's direction in its frame. */
+export function stationAngles(t: number, X: Vec3, V: Vec3): number[] {
+  const A = issAxes(X, V, t);
+  const S = solarState("sun", t).pos;
+  const s = unit(sub(S, X));
+  return jointAngles(station.joints, [dot(s, A[0]), dot(s, A[1]), dot(s, A[2])]);
+}
+
 /**
  * The joints' angles for the Sun at `sun` (a unit vector, station frame): each alpha joint turns its
  * masts square to the Sun, each beta gimbal turns its blanket onto it (either face: the cells on one, the
@@ -261,11 +298,12 @@ export const RANGER_RING: Vec3 = [0.04, 1.11, -5.34];
 
 /**
  * A start beside the station: the Ranger `dist` metres out along the axis of IDA-2 (Harmony's forward
+ * port; `offset` [m, station frame] off it
  * port: ahead of the station on its orbit), its nose along that axis and its top to the zenith — its
  * rear hatch facing the port, to back in. Home frame: its centre, nose, top, velocity (the station's,
  * with the turn of the orbit at that offset).
  */
-export function issStart(t: number, dist = 150) {
+export function issStart(t: number, dist = 150, offset: Vec3 = [0, 0, 0]) {
   const iss = issOrbit(t);
   if (!iss) return null;
   const A = issAxes(iss.X, iss.V, t);
@@ -276,7 +314,7 @@ export function issStart(t: number, dist = 150) {
   const x = cross(y, z);
   const m = 1 / M_METRES;
   const ringH = lin(lin(x, RANGER_RING[0], y, RANGER_RING[1]), 1, z, RANGER_RING[2]);
-  const X = lin(lin(iss.X, 1, st(p.centre), m), 1, lin(z, dist, ringH, -1), m);
+  const X = lin(lin(iss.X, 1, st(lin(p.centre, 1, offset, 1)), m), 1, lin(z, dist, ringH, -1), m);
   const E = solarState("earth", t);
   const r = sub(iss.X, E.pos), v = sub(iss.V, E.vel);
   const om = lin(cross(r, v), 1 / dot(r, r), r, 0);

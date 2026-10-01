@@ -7,6 +7,7 @@ import meshUrl from "../assets/ranger/ranger.bin";
 
 import { shipToCamera, type Mount, type MountPose } from "./mounts";
 import type { GpuProfiler } from "./gpuprof";
+import { rangerHull, samplePoints, TriBVH } from "./system/collide";
 
 type V3 = [number, number, number];
 
@@ -322,6 +323,14 @@ export class ShipRenderer {
     this.bound.hi = hi;
     const verts = new Float32Array(mesh, 40, nv * 8);
     const idx = new Uint32Array(mesh, 40 + nv * STRIDE, ni);
+    // (its hull for contacts: points a half metre apart, its triangles in a hierarchy)
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < nv; i++) pos.set(verts.subarray(8 * i, 8 * i + 3), 3 * i);
+    rangerHull.points = samplePoints(verts, 8, nv, 0.5);
+    rangerHull.bvh = new TriBVH(pos, new Uint32Array(idx));
+    rangerHull.radius = this.bound.r + Math.hypot(...this.bound.c);
+    rangerHull.lo = lo;
+    rangerHull.hi = hi;
     this.vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(this.vbuf, 0, verts);
     this.ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });

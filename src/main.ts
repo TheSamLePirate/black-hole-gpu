@@ -51,6 +51,7 @@ import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
 import { gameTimeOf, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
+import { rangerHull, stationHulls } from "./system/collide";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 
@@ -275,7 +276,7 @@ async function main() {
   function applyPreset(name: string) {
     currentScene = presets[name] ? name : null;
     renderer.resetTemporal(); // (another scene: no history carried into it)
-    const { time, mission: withMission, pose, issDistance, ...preset } = presets[name] ?? {};
+    const { time, mission: withMission, pose, issDistance, issOffset, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
     exposedForOurSide = pose !== undefined;
@@ -325,7 +326,7 @@ async function main() {
       // (the station: at the real time now, unless the scene has its own)
       const t = time ?? (pose === "iss" ? gameTimeOf(Date.now()) : sim.time);
       if (pose === "iss" && time === undefined) sim.setTime(t);
-      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
+      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance, issOffset) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
@@ -1250,7 +1251,7 @@ async function main() {
       game: tools,
       settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
-      iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart },
+      iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart, hulls: { ranger: rangerHull, station: stationHulls } },
       /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
       sky: {
         goTo: (name: string) => {

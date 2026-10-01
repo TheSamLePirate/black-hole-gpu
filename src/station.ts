@@ -7,10 +7,10 @@ import lod0Url from "../assets/iss/iss-lod0.bin";
 import lod1Url from "../assets/iss/iss-lod1.bin";
 
 import type { Vec3 } from "./physics";
-import { rotAbout, setStationGeometry, PORT_NAMES, type StationJoint, type StationPort } from "./system/iss";
+import { m34mul, partTransforms, setStationGeometry, PORT_NAMES, type M34, type StationJoint, type StationPort } from "./system/iss";
+import { stationHulls, TriBVH } from "./system/collide";
 
 const STRIDE = 24;
-const PARTS = 13;
 /** the shadow map's reach: the station's bounding sphere [m] */
 const REACH = 62;
 const SHADOW = 2048;
@@ -40,28 +40,6 @@ export interface StationView {
   mPerM: number;
 }
 
-type M34 = [Vec3, Vec3, Vec3, Vec3]; // columns: the images of x, y, z, then the translation
-
-const mul = (A: M34, B: M34): M34 => {
-  const ap = (v: Vec3, w: number): Vec3 => [0, 1, 2].map((k) => A[0][k]! * v[0] + A[1][k]! * v[1] + A[2][k]! * v[2] + w * A[3][k]!) as Vec3;
-  return [ap(B[0], 0), ap(B[1], 0), ap(B[2], 0), ap(B[3], 1)];
-};
-/** A rotation by a about the line through p along k. */
-const rotM = (p: Vec3, k: Vec3, a: number): M34 => {
-  const c0 = rotAbout([1, 0, 0], k, a), c1 = rotAbout([0, 1, 0], k, a), c2 = rotAbout([0, 0, 1], k, a);
-  const rp = rotAbout(p, k, a);
-  return [c0, c1, c2, [p[0] - rp[0], p[1] - rp[1], p[2] - rp[2]]];
-};
-
-/** The parts' transforms (the station, then each joint's): at rest → turned, a gimbal after its alpha joint. */
-export function partTransforms(joints: StationJoint[], angles: number[]): M34[] {
-  const I: M34 = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]];
-  const out: M34[] = [I];
-  const own = joints.map((j, k) => rotM(j.pivot, j.axis, angles[k] ?? 0));
-  joints.forEach((j, k) => out.push(j.parent >= 0 ? mul(own[j.parent]!, own[k]!) : own[k]!));
-  while (out.length < PARTS) out.push(I);
-  return out;
-}
 
 export class StationRenderer {
   ready = false;
@@ -161,6 +139,17 @@ export class StationRenderer {
       const ibuf = d.createBuffer({ size: ni * 4, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
       d.queue.writeBuffer(ibuf, 0, buf, off + nv * STRIDE, ni * 4);
       this.meshes[i] = { vbuf, ibuf, count: ni };
+      // (the coarse level: its parts for contacts, each in its own rest frame)
+      if (i === 0) {
+        const f = new Float32Array(buf, off, (nv * STRIDE) / 4);
+        const u8 = new Uint8Array(buf, off, nv * STRIDE);
+        const idx = new Uint32Array(buf, off + nv * STRIDE, ni);
+        const pos = new Float32Array(nv * 3);
+        for (let k = 0; k < nv; k++) pos.set(f.subarray(6 * k, 6 * k + 3), 3 * k);
+        const lists: number[][] = [];
+        for (let t = 0; t < ni; t += 3) (lists[u8[STRIDE * idx[t]! + 20]!] ??= []).push(idx[t]!, idx[t + 1]!, idx[t + 2]!);
+        lists.forEach((l, k) => (stationHulls[k] = l ? new TriBVH(pos, new Uint32Array(l)) : null));
+      }
       this.ready = true;
       if (i > 0) this.onLoaded();
     })());
@@ -215,7 +204,7 @@ export class StationRenderer {
     // each part: station (at rest) → camera frame: [axes | rel] ∘ the joints' turns
     const S: M34 = [v.axes[0], v.axes[1], v.axes[2], p];
     this.partMatrices(v.angles).forEach((T, k) => {
-      const M = mul(S, T);
+      const M = m34mul(S, T);
       for (let r = 0; r < 3; r++) u.set([M[0][r]!, M[1][r]!, M[2][r]!, M[3][r]!], 60 + 12 * k + 4 * r);
     });
     this.device.queue.writeBuffer(this.uniform, 0, u);
