@@ -21,6 +21,7 @@ export interface FlightSnapshot {
   landed: boolean;
   plan: { nodes: { t: number }[]; burning: boolean; now: number } | null;
   surface: { air: number; vVert: number; vHor: number } | null;
+  air?: { heat: number; mach: number; inAir: boolean } | null;
   engine: { fuel: { empty: boolean; fraction: number } | null };
   path: { fate: string } | null;
 }
@@ -35,6 +36,8 @@ export interface Fired {
 }
 
 export class SoundDirector {
+  /** the last Mach number (the boom when it crosses 1) */
+  private mach = 0;
   private prev: {
     sas: boolean; hold: string; auto: string; precision: boolean; landed: boolean; burning: boolean; soi: string; side: string;
     target: string; mount: string; empty: boolean; low: boolean; toNode: number;
@@ -91,6 +94,7 @@ export class SoundDirector {
       inside: ON_HULL.has(s.shipMount),
       air: sf ? Math.min(sf.air / 1.225, 2) : 0,
       airspeed: sf ? Math.hypot(sf.vVert, sf.vHor) : 0,
+      plasma: info?.air?.inAir ? Math.min(Math.max((Math.log10(Math.max(info.air.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
       aboard: flying,
       live: o.live,
     });
@@ -124,6 +128,10 @@ export class SoundDirector {
     if (now.precision !== p.precision) this.cue(now.precision ? "precision-on" : "precision-off");
     if (now.landed && !p.landed) this.cue("touchdown");
     if (now.target !== p.target) this.cue("target");
+    // through Mach 1 in the air: the boom
+    const M = info.air?.inAir ? info.air.mach : 0;
+    if ((this.mach < 1) !== (M < 1) && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2) this.cue("boom");
+    this.mach = M;
     if (now.mount !== p.mount) this.cue("mount");
     if (now.side !== p.side && p.side && now.side && now.side !== "throat" && p.side !== "throat") this.cue("wormhole");
     else if (now.soi !== p.soi && p.soi && now.soi) this.cue("soi");

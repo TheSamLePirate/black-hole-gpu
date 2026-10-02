@@ -65,7 +65,7 @@ export interface FlightContext {
   /** in the air: the flight law, the flow's angles (α, β [rad]), the control surfaces' authority added
    *  to the thrusters' [rad/s², the pilot's axes], the flight path's own turn (the pilot's axes and
    *  signs [rad/s]), on the wheels, the stall angle, the dynamic pressure [Pa] */
-  air?: { mode: FlightMode; alpha: number; beta: number; auth: V3; path: V3; ground: boolean; stall: number; q: number; gamma: number; bank: number } | null;
+  air?: { mode: FlightMode; alpha: number; beta: number; auth: V3; path: V3; ground: boolean; stall: number; q: number; gamma: number; bank: number; mach: number } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
    *  the hold given free (antigravity: no engine, no propellant) */
@@ -126,6 +126,8 @@ export class FlightComputer {
    *  the last one seen (its rate) */
   gammaHold: number | null = null;
   private gammaPrev: number | null = null;
+  /** hypersonic, the plane law holds the angle of attack instead (an entry's): the one held [rad] */
+  alphaHold: number | null = null;
   /** the plane law's held bank [rad] (wings level under 6°), null: to be taken */
   bankHold: number | null = null;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
@@ -258,7 +260,7 @@ export class FlightComputer {
     const A3 = c.air && c.air.mode !== "rocket" ? c.air.auth : [0, 0, 0];
     const acc3: V3 = [TUNING.turnAccel + A3[0], TUNING.turnAccel + A3[1], TUNING.turnAccel + A3[2]];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
-    if (!planeLaw || inp.pitch !== 0) this.gammaHold = null;
+    if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
     if (planeLaw) {
       // the plane: the stick asks for rates (pitch 20°/s, yaw 8°/s, roll 70°/s); let go, the flight
@@ -271,7 +273,12 @@ export class FlightComputer {
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
       if (P.ground) want[0] = manual[0] * rates[0];
-      else want[0] = manual[0] !== 0 ? P.path[0] + manual[0] * rates[0] : P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
+      else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
+      else if (P.mach > 4) {
+        // (hypersonic: the angle of attack held — the shield kept to the flow, as an entry is flown)
+        if (this.alphaHold === null) this.alphaHold = P.alpha;
+        want[0] = P.path[0] - 1.5 * (P.alpha - this.alphaHold);
+      } else want[0] = P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
       if (P.alpha > stallSafe) want[0] = Math.min(want[0], P.path[0] - 2 * (P.alpha - stallSafe));
       want[1] = P.ground ? manual[1] * 0.3 : P.path[1] - 2 * P.beta + manual[1] * rates[1];
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;

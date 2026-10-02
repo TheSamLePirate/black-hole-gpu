@@ -54,6 +54,17 @@ struct Ship {
   dash0: vec4f,
   dash1: vec4f,
   dash2: vec4f,
+  // the re-entry (written each frame): the motion through the air (ship frame, unit) and the plasma's
+  // level 0…1; the shield's and hull's temperatures [K], Mach, the air's density (/ sea level); the
+  // gas's glow (linear rgb) and the air's temperature [K]; the shield's direction and cone; the body
+  // along the flow (its front and back from the centre [m], its radius across it, the wake's length);
+  // the body's centre (ship frame) and a clock [s]
+  re0: vec4f,
+  re1: vec4f,
+  re2: vec4f,
+  re3: vec4f,
+  re4: vec4f,
+  re5: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
@@ -711,7 +722,7 @@ fn projectFull(p: vec3f) -> vec4f {
 
 // the hull's depth alone, at the plumes' resolution: what hides them
 @vertex
-fn hullDepthVs(v: VIn) -> @builtin(position) vec4f {
+fn hullDepthVs(v: VIn) -> @builtin(position) @invariant vec4f {
   return projectFull((S.model * vec4f(v.pos, 1.0)).xyz);
 }
 
@@ -832,6 +843,201 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
   }
   let gain = select(2.0, 0.8, main) * J.p.w;
   return vec4f(sum * gain * S.jet.y, 0.0);
+}
+
+// ------------------------------------------------------------------------------------ re-entry
+// Drawn in the plumes' pass (additive, display-referred, at half resolution): the hull glowing hot (a
+// black body at the skin's temperatures — the faces to the flow the hottest), and around the craft the
+// shock layer and its wake, marched through: a bow shock standing off before the body (a paraboloid
+// about the flow), the hot gas between it and the body, brightest at the stagnation point, the ionized
+// wake streaming behind, turbulent; near Mach 1 in dense air, a vapour cone. The march ends at the hull
+// (its distance drawn first): nothing is seen through it.
+
+/** A black body's colour (linear rgb, normalized), 800 … 12 000 K (Tanner Helland's fit of the locus). */
+fn blackbody(T: f32) -> vec3f {
+  let t = T / 100.0;
+  var r = 1.0;
+  var g: f32;
+  var b: f32;
+  if (t <= 66.0) { g = 0.39008157 * log(t) - 0.63184144; }
+  else {
+    r = 1.29293618 * pow(t - 60.0, -0.1332047592);
+    g = 1.12989086 * pow(t - 60.0, -0.0755148492);
+  }
+  if (t >= 66.0) { b = 1.0; } else if (t <= 19.0) { b = 0.0; } else { b = 0.54320678 * log(t - 10.0) - 1.19625408; }
+  return pow(clamp(vec3f(r, g, b), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+}
+
+/** The skin's glow at a temperature (display-referred): nothing below ~700 K, dull red, then orange,
+ *  yellow-white — the visible part of σT⁴ climbing steeply. */
+fn skinGlow(T: f32) -> vec3f {
+  let k = max(T - 700.0, 0.0) / 900.0;
+  return blackbody(max(T, 800.0)) * (0.35 * k * k * k);
+}
+
+struct GOut {
+  @builtin(position) @invariant clip: vec4f,
+  @location(0) n: vec3f,
+  @location(1) q: vec3f,
+};
+
+@vertex
+fn glowVs(v: VIn) -> GOut {
+  var o: GOut;
+  o.clip = projectFull((S.model * vec4f(v.pos, 1.0)).xyz);
+  o.n = v.nrm;
+  o.q = v.pos;
+  return o;
+}
+
+@fragment
+fn glowFs(in: GOut) -> @location(0) vec4f {
+  let n = normalize(in.n);
+  // the faces to the flow at the skin's hottest (the shield where it faces it, else the bare hull),
+  // the lee about half as hot (a twentieth of the flux: T ∝ q^¼); the tiles' and panels' small
+  // differences, the hot spots of the flow wandering
+  let wind = dot(n, S.re0.xyz);
+  let Tw = max(S.re1.x, S.re1.y);
+  let nz = vnoise(in.q * 1.7) * 0.6 + vnoise(in.q * 5.3 + vec3f(0.0, 0.0, S.re5.w * 0.7)) * 0.4;
+  let T = mix(0.5 * Tw, Tw, smoothstep(-0.2, 0.85, wind)) * (0.94 + 0.1 * nz);
+  return vec4f(skinGlow(T) * S.jet.y, 0.0);
+}
+
+// the hull's distance from the camera at the plumes' resolution: where a march through the plasma ends
+struct DistOut {
+  @builtin(position) clip: vec4f,
+  @location(0) p: vec3f,
+};
+
+@vertex
+fn distVs(v: VIn) -> DistOut {
+  var o: DistOut;
+  o.p = (S.model * vec4f(v.pos, 1.0)).xyz;
+  o.clip = projectFull(o.p);
+  return o;
+}
+
+@fragment
+fn distFs(in: DistOut) -> @location(0) vec4f {
+  return vec4f(length(in.p), 0.0, 0.0, 1.0);
+}
+
+@group(0) @binding(18) var hullDist: texture_2d<f32>;
+
+/** The flow's frame (ship frame): two axes across it, the motion. */
+fn flowBasis() -> mat3x3f {
+  let a = S.re0.xyz;
+  let h = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(a.y) > 0.9);
+  let b1 = normalize(cross(a, h));
+  return mat3x3f(b1, cross(a, b1), a);
+}
+
+/** The box about the shock and the wake (flow frame): half-width across, the back and the front. */
+fn sheathBox() -> vec3f {
+  let Rp = S.re4.z;
+  return vec3f(max(1.9 * Rp, 0.6 * Rp + 0.08 * S.re4.w) + 1.0, S.re4.y - 1.3 * S.re4.w, S.re4.x + 0.5 * Rp + 0.5);
+}
+
+struct SOut {
+  @builtin(position) clip: vec4f,
+  @location(0) q: vec3f, // ship frame
+};
+
+@vertex
+fn sheathVs(@builtin(vertex_index) vi: u32) -> SOut {
+  let B = flowBasis();
+  let bx = sheathBox();
+  let c = CUBE[vi];
+  let l = vec3f(select(-bx.x, bx.x, (c & 1u) != 0u), select(-bx.x, bx.x, (c & 2u) != 0u), select(bx.y, bx.z, (c & 4u) != 0u));
+  var o: SOut;
+  o.q = S.re5.xyz + B * l;
+  o.clip = projectFull((S.model * vec4f(o.q, 1.0)).xyz);
+  return o;
+}
+
+/** The plasma's and the vapour's emission at a point of the flow frame (relative to the body's centre). */
+fn sheathAt(l: vec3f, tm: f32) -> vec3f {
+  let Rp = S.re4.z;
+  let sf = S.re4.x;
+  let sb = S.re4.y;
+  let Lw = S.re4.w;
+  let s = l.z;
+  let rho = length(l.xy);
+  let lev = S.re0.w;
+  var e = vec3f(0.0);
+  if (lev > 0.0) {
+    // the bow shock: a paraboloid standing off the body's front; the hot gas just behind it, thin,
+    // brightest at the stagnation point, the outer gas redder (N₂⁺, O), the core whiter
+    let Rs = 1.35 * Rp;
+    let d = sf + 0.12 * Rp - rho * rho / (2.0 * Rs) - s;
+    let axis = exp(-rho * rho / (0.35 * Rp * Rp));
+    let side = smoothstep(Rs * 1.35, Rs * 0.55, rho);
+    if (d > -0.08 * Rp && side > 0.0) {
+      let nz = vnoise(vec3f(l.xy * (2.2 / Rp), l.z * (0.8 / Rp) + tm * 4.0)) * 0.55 + vnoise(vec3f(l.xy * (6.0 / Rp), l.z * (2.0 / Rp) + tm * 9.0)) * 0.45;
+      let rim = exp(-pow(d / (0.05 * Rp), 2.0));
+      let layer = select(0.0, exp(-d / (0.3 * Rp)), d > 0.0);
+      let a = (1.1 * rim + layer * (0.45 + 0.9 * nz)) * (0.6 + 3.0 * axis) * side;
+      e += mix(S.re2.rgb * vec3f(1.0, 0.85, 0.75), vec3f(1.0, 0.82, 0.6), clamp(axis * 1.2, 0.0, 0.9)) * a;
+    }
+    // the wake: ionized gas streaming behind in streaks, narrowing, flickering
+    let back = sb - s;
+    if (back > -0.5 * Rp) {
+      let rw = Rp * (0.5 + 0.05 * max(back, 0.0) / Rp);
+      let core = exp(-rho * rho / (rw * rw));
+      let fade = exp(-max(back, 0.0) / Lw) * smoothstep(0.2 * Rp, 2.5 * Rp, back);
+      // (streaks: a noise stretched along the flow, drifting back)
+      let st = vnoise(vec3f(l.xy * (3.0 / Rp), l.z * (0.18 / Rp) + tm * 1.6));
+      let st2 = vnoise(vec3f(l.xy * (7.0 / Rp), l.z * (0.35 / Rp) + tm * 3.1));
+      e += S.re2.rgb * vec3f(1.0, 0.75, 0.95) * (0.32 * core * fade * (0.1 + 2.2 * pow(st, 4.0) + 0.8 * pow(st2, 3.0)));
+    }
+    e *= lev * lev * 1.1;
+  }
+  // the vapour cone: near Mach 1 in dense air, a white shell flaring from the body's widest point
+  let M = S.re1.z;
+  let vk = (1.0 - smoothstep(0.03, 0.12, abs(M - 0.99))) * smoothstep(0.2, 0.5, S.re1.w);
+  if (vk > 0.0) {
+    let mid = 0.5 * (sf + sb);
+    let aft = mid - s;
+    let r = Rp * (0.9 + 0.5 * max(aft, 0.0) / Rp);
+    let shell = exp(-pow((rho - r) / (0.25 * Rp), 2.0)) * exp(-max(aft, 0.0) / (1.4 * Rp)) * smoothstep(-0.4 * Rp, 0.2 * Rp, aft);
+    e += vec3f(0.9, 0.93, 1.0) * (0.12 * vk * shell * (0.6 + 0.4 * vnoise(l * (3.0 / Rp))));
+  }
+  return e;
+}
+
+@fragment
+fn sheathFs(in: SOut) -> @location(0) vec4f {
+  let B = flowBasis();
+  let R = mat3x3f(S.model[0].xyz, S.model[1].xyz, S.model[2].xyz);
+  let cam = -(transpose(R) * S.model[3].xyz);
+  let rw = normalize(in.q - cam);
+  // (the ray in the flow frame, from the body's centre)
+  let o = transpose(B) * (cam - S.re5.xyz);
+  let r = transpose(B) * rw;
+  let bx = sheathBox();
+  let lo = vec3f(-bx.x, -bx.x, bx.y);
+  let hi = vec3f(bx.x, bx.x, bx.z);
+  let inv = 1.0 / select(r, vec3f(1e-6), abs(r) < vec3f(1e-6));
+  let t0 = (lo - o) * inv;
+  let t1 = (hi - o) * inv;
+  let tn = max(max(min(t0.x, t1.x), min(t0.y, t1.y)), max(min(t0.z, t1.z), 0.0));
+  // (drawn by its back faces, wherever the camera is: the march from where the ray enters, or the
+  // camera, to where it leaves — or meets the hull)
+  let hd = textureLoad(hullDist, vec2i(in.clip.xy), 0).r;
+  let tf = min(min(min(max(t0.x, t1.x), max(t0.y, t1.y)), max(t0.z, t1.z)), hd);
+  if (tf <= tn) { discard; }
+  let N = 20;
+  let dt = (tf - tn) / f32(N);
+  let jit = fract(52.9829189 * fract(dot(in.clip.xy, vec2f(0.06711056, 0.00583715))));
+  let tm = S.re5.w;
+  var sum = vec3f(0.0);
+  for (var i = 0; i < N; i++) {
+    let t = tn + (f32(i) + jit) * dt;
+    sum += sheathAt(o + r * t, tm) * dt;
+  }
+  // (inside the plasma — a camera under the belly — the glow saturates softly rather than blowing out)
+  let g = sum / max(S.re4.z, 0.5);
+  return vec4f(1.8 * (1.0 - exp(-g / 1.8)) * S.jet.y, 0.0);
 }
 
 // ------------------------------------------------------------------------------------ composite
@@ -1034,6 +1240,9 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
     cl += (kd / PI + f0 * spec) * lnl / (d2 + 0.25);
   }
   cl = (cl * 3.5 * vec3f(0.85, 0.93, 1.0) + kd * vec3f(0.12, 0.14, 0.16)) * ao;
+  // re-entry: the plasma's light through the windows, flickering
+  let pl = S.re0.w;
+  if (pl > 0.0) { cl += kd * S.re2.rgb * (pl * pl * 2.4 * sky * ao * (0.85 + 0.15 * sin(S.re5.w * 23.0 + in.p.x))); }
   let o = col * S.light.x + (emit * 2.0 + cl) * S.jet.y;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }

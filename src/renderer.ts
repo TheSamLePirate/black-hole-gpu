@@ -9,7 +9,7 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type ShipInstance, type Thrust } from "./ship";
+import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type Thrust } from "./ship";
 import { fleet } from "./fleet";
 import { vesselHulls } from "./system/collide";
 import { EnduranceRenderer } from "./endurance";
@@ -352,6 +352,10 @@ export class Renderer {
   localPatchOn = true;
   /** re-entry glow on the Ranger: the air's flow in the camera frame, level 0…1 (from the controller) */
   shipPlasma: [number, number, number, number] = [0, 0, 1, 0];
+  /** the camera's shake (the air buffeting the craft): the image's offset, a fraction of its size */
+  shake: [number, number] = [0, 0];
+  /** the flown craft's re-entry: its plasma and heat (ship.ts Reentry) */
+  shipReentry: Reentry | null = null;
   /** the Ranger's thrusters firing (ship.ts: Thrust), or null */
   shipThrust: Thrust | null = null;
   /** the last frame's local patch (inspection) */
@@ -1723,7 +1727,16 @@ export class Renderer {
   }
 
   private writeDisplay(s: Settings, target: Target, outW: number, outH: number, letterbox: boolean, dither: boolean, hdr = false) {
-    const [sx, sy, ox, oy] = this.displayView(target, outW, outH, letterbox);
+    let [sx, sy, ox, oy] = this.displayView(target, outW, outH, letterbox);
+    // (the live view shaken: offset, and zoomed in as much so no edge shows)
+    const [kx, ky] = this.shake;
+    if (target === this.live && (kx || ky)) {
+      const z = 1 + 2.2 * Math.max(Math.abs(kx), Math.abs(ky));
+      ox += kx - (sx * (z - 1)) / 2;
+      oy += ky - (sy * (z - 1)) / 2;
+      sx *= z;
+      sy *= z;
+    }
     const d = new Float32Array([
       outW, outH, Math.pow(2, this.ev(s)) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
       s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
@@ -2159,7 +2172,7 @@ export class Renderer {
           vessel: s.ship ? s.vessel : undefined, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
           inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"), dash: this.cockpitDash ?? undefined,
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
-          plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
+          plasma: this.shipPlasma, reentry: this.shipReentry, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
         }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined, t.moments);
         // (where it was drawn: the display reads its image there, the bloom too)

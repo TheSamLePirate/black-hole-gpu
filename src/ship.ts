@@ -53,6 +53,8 @@ export interface ShipView {
   pre?: number;
   /** re-entry glow: the air's flow direction (camera frame), level 0…1 */
   plasma?: [number, number, number, number];
+  /** the re-entry's plasma and heat (the flown craft): see Reentry */
+  reentry?: Reentry | null;
   /** the camera's axes (x right, y up, z forward) in the light probe's axes (default: the same) */
   probeAxes?: [V3, V3, V3];
   /** the thrusters: see Thrust */
@@ -71,6 +73,22 @@ export interface Thrust {
   force: V3;
   torque: V3;
   air: number;
+  time: number;
+}
+
+/**
+ * The flown craft in the air, for the re-entry's look (ship frame: x left, y up, z nose): its motion
+ * through the air (unit), the stagnation heat flux [W/m²], the shield's and hull's temperatures [K],
+ * Mach, the air's density [kg/m³], the gas's glow (linear rgb), a clock [s].
+ */
+export interface Reentry {
+  u: V3;
+  heat: number;
+  shield: number;
+  hull: number;
+  mach: number;
+  rho: number;
+  glow: V3;
   time: number;
 }
 
@@ -124,6 +142,9 @@ interface ShipTargetRes {
   plume: GPUTexture;
   plumeDepth: GPUTexture;
   plumeDirty: boolean;
+  /** the hull's distance at the plumes' resolution (where the plasma's march ends), its bind group */
+  hullDist: GPUTexture;
+  sheathBind?: GPUBindGroup;
   /** the shading's bind group, with this target's traced image and depths (and the bindings' generation) */
   bind?: GPUBindGroup;
   bindGen?: number;
@@ -145,7 +166,9 @@ export class ShipRenderer {
   private jetBuf: GPUBuffer;
   private jetData = new Float32Array(MAX_JETS * JET_FLOATS);
   private jetCount = 0;
-  private plumeBinds: { plume: GPUBindGroup; plumeIn: GPUBindGroup; hullDepth: GPUBindGroup } | null = null;
+  private plumeBinds: { plume: GPUBindGroup; plumeIn: GPUBindGroup; hullDepth: GPUBindGroup; glow: GPUBindGroup; dist: GPUBindGroup } | null = null;
+  /** this frame's re-entry: the hull glowing, the plasma (or the vapour) drawn */
+  private reOn = { glow: false, sheath: false };
   /** which jets have the camera inside their plume (drawn by their back faces) */
   private jetInside: boolean[] = [];
   /** the camera in the ship's frame */
@@ -186,6 +209,9 @@ export class ShipRenderer {
     plume: GPURenderPipeline;
     plumeIn: GPURenderPipeline;
     hullDepth: GPURenderPipeline;
+    glow: GPURenderPipeline;
+    sheath: GPURenderPipeline;
+    dist: GPURenderPipeline;
     glass: GPURenderPipeline;
     cabin: GPURenderPipeline;
     depthPre: GPURenderPipeline;
@@ -249,7 +275,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 192 + 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 192 + 96 + 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.mapSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
@@ -314,6 +340,29 @@ export class ShipRenderer {
         return {
           plume: plume(false),
           plumeIn: plume(true),
+          // the re-entry: the hull glowing (its visible faces: the depth equal to the pre-pass's), the
+          // plasma marched through (back faces, wherever the camera is), the hull's distance for it
+          glow: d.createRenderPipeline({
+            layout: "auto",
+            vertex: { ...vertex, entryPoint: "glowVs" },
+            fragment: { module, entryPoint: "glowFs", targets: [{ format: "rgba16float", blend }] },
+            primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less-equal" },
+          }),
+          sheath: d.createRenderPipeline({
+            layout: "auto",
+            vertex: { module, entryPoint: "sheathVs" },
+            fragment: { module, entryPoint: "sheathFs", targets: [{ format: "rgba16float", blend }] },
+            primitive: { topology: "triangle-list", cullMode: "front" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "always" },
+          }),
+          dist: d.createRenderPipeline({
+            layout: "auto",
+            vertex: { ...vertex, entryPoint: "distVs" },
+            fragment: { module, entryPoint: "distFs", targets: [{ format: "r16float" }] },
+            primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+          }),
           hullDepth: d.createRenderPipeline({
             layout: "auto",
             vertex: { ...vertex, entryPoint: "hullDepthVs" },
@@ -579,7 +628,7 @@ export class ShipRenderer {
       layout: p.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: this.uniform } }, ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [])],
     });
-    this.plumeBinds = { plume: pb(this.pipes.plume), plumeIn: pb(this.pipes.plumeIn), hullDepth: pb(this.pipes.hullDepth, false) };
+    this.plumeBinds = { plume: pb(this.pipes.plume), plumeIn: pb(this.pipes.plumeIn), hullDepth: pb(this.pipes.hullDepth, false), glow: pb(this.pipes.glow, false), dist: pb(this.pipes.dist, false) };
     this.shadowBind = d.createBindGroup({
       layout: this.pipes.shadow.getBindGroupLayout(0),
       entries: [
@@ -747,6 +796,7 @@ export class ShipRenderer {
     m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
+    this.writeReentry(v.reentry, mesh);
     // the cockpit: the sticks following the attitude commands (the effort the wheels give: the pilot's
     // and the autopilots'), eased over a tenth of a second; the dashboard's figures
     if (inCabin) {
@@ -766,6 +816,37 @@ export class ShipRenderer {
       ]));
     }
   }
+  /**
+   * The re-entry's uniforms: the flow (ship frame) and the plasma's level from the heat flux (from
+   * 40 kW/m², full by 2 MW/m²), the skin's temperatures, Mach and the air's density, the gas's glow; the
+   * body along the flow — its front and back from its centre, its radius across the flow (from its box's
+   * projected area), the wake's length.
+   */
+  private writeReentry(re: Reentry | null | undefined, mesh: Mesh) {
+    const blk = new Float32Array(24);
+    this.reOn = { glow: false, sheath: false };
+    if (re && this.flown) {
+      const lev = Math.min(Math.max((Math.log10(Math.max(re.heat, 1)) - 4.6) / 1.7, 0), 1);
+      const { lo, hi } = mesh.bound;
+      const c: V3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+      const L: V3 = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+      const u = norm(re.u);
+      let front = -Infinity, back = Infinity;
+      for (let k = 0; k < 8; k++) {
+        const q: V3 = [(k & 1 ? hi[0] : lo[0]) - c[0], (k & 2 ? hi[1] : lo[1]) - c[1], (k & 4 ? hi[2] : lo[2]) - c[2]];
+        const d = dot(q, u);
+        front = Math.max(front, d);
+        back = Math.min(back, d);
+      }
+      const area = 0.75 * (Math.abs(u[0]) * L[1] * L[2] + Math.abs(u[1]) * L[0] * L[2] + Math.abs(u[2]) * L[0] * L[1]);
+      const Rp = Math.sqrt(area / Math.PI);
+      const vapour = re.mach > 0.85 && re.mach < 1.15 && re.rho > 0.25;
+      this.reOn = { glow: Math.max(re.shield, re.hull) > 720, sheath: lev > 0 || vapour };
+      blk.set([...u, lev, re.shield, re.hull, re.mach, re.rho / 1.225, ...re.glow, 0, 0, 0, 0, 0, front, back, Rp, Rp * (4 + 14 * lev), ...c, re.time]);
+    }
+    this.device.queue.writeBuffer(this.uniform, 352, blk);
+  }
+
   /** the cabin drawn this frame (its glass then) */
   private inCabin = false;
   private cabinBinds: { gen: number; cabin: GPUBindGroup; glass: GPUBindGroup } | null = null;
@@ -813,7 +894,8 @@ export class ShipRenderer {
         size: [Math.ceil(hdr.width / 2), Math.ceil(hdr.height / 2)], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
       const plumeDepth = this.device.createTexture({ size: [plume.width, plume.height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
-      res = { w: hdr.width, h: hdr.height, resolved, box: null, rect: [0, 0, 0, 0], plume, plumeDepth, plumeDirty: true };
+      const hullDist = this.device.createTexture({ size: [plume.width, plume.height], format: "r16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
+      res = { w: hdr.width, h: hdr.height, resolved, box: null, rect: [0, 0, 0, 0], plume, plumeDepth, plumeDirty: true, hullDist };
       this.targets.set(hdr, res);
     }
     return res;
@@ -948,21 +1030,52 @@ export class ShipRenderer {
       rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
     }
     rp.end();
-    if (jets) {
-      const pp = enc.beginRenderPass(this.pass("ship: thrusters", {
+    const re = this.reOn;
+    if (jets || re.glow || re.sheath) {
+      const B = this.plumeBinds!;
+      // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
+      const occl = this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.count };
+      if (re.sheath) {
+        const dp = enc.beginRenderPass(this.pass("ship: hull distance", {
+          colorAttachments: [{ view: res.hullDist.createView(), loadOp: "clear", storeOp: "store", clearValue: [60000, 0, 0, 0] }],
+          depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
+        }));
+        dp.setPipeline(this.pipes.dist);
+        dp.setBindGroup(0, B.dist);
+        dp.setVertexBuffer(0, occl.m.vbuf);
+        dp.setIndexBuffer(occl.m.ibuf, "uint32");
+        dp.drawIndexed(occl.n);
+        dp.end();
+      }
+      const pp = enc.beginRenderPass(this.pass("ship: thrusters and plasma", {
         colorAttachments: [{ view: res.plume.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
         depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
       }));
-      const B = this.plumeBinds!;
       pp.setPipeline(this.pipes.hullDepth);
       pp.setBindGroup(0, B.hullDepth);
-      pp.setVertexBuffer(0, mesh.vbuf);
-      pp.setIndexBuffer(mesh.ibuf, "uint32");
-      pp.drawIndexed(mesh.count);
+      pp.setVertexBuffer(0, occl.m.vbuf);
+      pp.setIndexBuffer(occl.m.ibuf, "uint32");
+      pp.drawIndexed(occl.n);
       for (const inside of [false, true]) {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
         pp.setBindGroup(0, inside ? B.plumeIn : B.plume);
         for (let i = 0; i < this.jetCount; i++) if (this.jetInside[i] === inside) pp.draw(36, 1, 0, i);
+      }
+      if (re.glow && !this.inCabin) {
+        pp.setPipeline(this.pipes.glow);
+        pp.setBindGroup(0, B.glow);
+        pp.setVertexBuffer(0, mesh.vbuf);
+        pp.setIndexBuffer(mesh.ibuf, "uint32");
+        pp.drawIndexed(mesh.count);
+      }
+      if (re.sheath) {
+        res.sheathBind ??= this.device.createBindGroup({
+          layout: this.pipes.sheath.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 18, resource: res.hullDist.createView() }],
+        });
+        pp.setPipeline(this.pipes.sheath);
+        pp.setBindGroup(0, res.sheathBind);
+        pp.draw(36);
       }
       pp.end();
       res.plumeDirty = true;
@@ -981,6 +1094,7 @@ export class ShipRenderer {
     r.resolved.destroy();
     r.plume.destroy();
     r.plumeDepth.destroy();
+    r.hullDist.destroy();
     if (r.box) [r.box.color, r.box.depth, r.box.small].forEach((t) => t.destroy());
     this.targets.delete(hdr);
   }

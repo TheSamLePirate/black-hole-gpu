@@ -13,7 +13,10 @@ import { warpFactor } from "./clock";
 import { setSceneTime } from "./wormhole";
 
 /** The flight figures the renderer takes from (controls.ts flightInfo): the re-entry glow. */
-type FlightInfo = { surface?: { plasma?: { flow: [number, number, number]; level: number } | null; air?: number } | null } | null;
+type FlightInfo = {
+  surface?: { plasma?: { flow: [number, number, number]; level: number } | null; air?: number } | null;
+  air?: { u: [number, number, number] | null; heat: number; shield: number; hull: number; mach: number; rho: number; glow: [number, number, number] | null; inAir: boolean; q: number; speed: number; rolling?: boolean } | null;
+} | null;
 
 export class Simulation {
   /** the scene's time [M] */
@@ -79,8 +82,27 @@ export class Simulation {
     if (!flying) {
       if (r.shipThrust) changed = true;
       r.shipThrust = null;
+      r.shipReentry = null;
+      r.shake = [0, 0];
       return changed;
     }
+    // the air's buffeting: the camera shakes with the dynamic pressure, the plasma, through Mach 1 and
+    // on the wheels (not from the outside views' distance)
+    const A = info?.air;
+    const near = ["cockpit", "cabin", "dorsal", "belly", "rear", "wing", "chase", "quarter"].includes(this.s.shipMount);
+    let amp = 0;
+    if (A?.inAir && near) {
+      const lev = Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1);
+      amp = 0.0018 * Math.min(A.q / 30000, 1) + 0.0025 * lev + 0.002 * Math.max(0, 1 - Math.abs(A.mach - 1) / 0.15) * Math.min(A.rho, 1);
+      if (A.rolling) amp += 0.0008 * Math.min(A.speed / 120, 1);
+      if (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin") amp *= 1.6;
+    }
+    const tt = this.play;
+    r.shake = amp > 0 ? [amp * (Math.sin(tt * 71.3) * 0.6 + Math.sin(tt * 43.1 + 1.3) * 0.4), amp * (Math.sin(tt * 59.7 + 0.7) * 0.6 + Math.sin(tt * 37.9 + 2.1) * 0.4)] : [0, 0];
+    // the re-entry's look: the plasma, the hot skin (cooling after, out of the air)
+    r.shipReentry = A && (A.u || A.shield > 700 || A.hull > 700)
+      ? { u: A.u ?? [0, 0, 1], heat: A.u ? A.heat : 0, shield: A.shield, hull: A.hull, mach: A.mach, rho: A.rho, glow: A.glow ?? [1, 0.45, 0.32], time: this.play }
+      : null;
     if (!s.animate) return changed;
     const pl = info?.surface?.plasma;
     r.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];

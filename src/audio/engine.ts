@@ -14,7 +14,7 @@ export type Cue =
   | "sas-on" | "sas-off" | "hold" | "hold-off" | "auto-on" | "auto-off" | "warp-up" | "warp-down"
   | "target" | "soi" | "node-tick" | "node-go" | "burn-end" | "touchdown" | "liftoff" | "error"
   | "notify" | "precision-on" | "precision-off" | "mount" | "click" | "hover" | "open" | "close"
-  | "crash" | "arrive" | "wormhole";
+  | "crash" | "arrive" | "wormhole" | "boom";
 
 export interface Mix {
   master: number;
@@ -39,6 +39,8 @@ export interface EngineState {
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
+  /** the re-entry's plasma, 0…1 (its roar) */
+  plasma?: number;
   /** someone aboard (the ship flown) */
   aboard: boolean;
   /** the simulation runs (paused / warping far: thrusters quiet) */
@@ -61,7 +63,7 @@ export class SoundEngine {
     crackle: GainNode;
   } | null = null;
   private rcsV: { gain: GainNode; bp: BiquadFilterNode; pan: StereoPannerNode } | null = null;
-  private amb: { hum: GainNode; air: GainNode; wheel: GainNode; wheelOsc: OscillatorNode; wheelOsc2: OscillatorNode; wind: GainNode; windBP: BiquadFilterNode } | null = null;
+  private amb: { hum: GainNode; air: GainNode; wheel: GainNode; wheelOsc: OscillatorNode; wheelOsc2: OscillatorNode; wind: GainNode; windBP: BiquadFilterNode; roar: GainNode } | null = null;
   private last: EngineState | null = null;
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
@@ -345,7 +347,15 @@ export class SoundEngine {
     windBP.frequency.value = 400;
     windBP.Q.value = 0.9;
     this.loop(this.white, 0.7).connect(windBP).connect(wind).connect(this.busses.listener);
-    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP };
+    // the re-entry's roar: the shock layer's low, buffeting rumble through the hull
+    const roar = ctx.createGain();
+    roar.gain.value = 0;
+    const roarLP = ctx.createBiquadFilter();
+    roarLP.type = "lowpass";
+    roarLP.frequency.value = 140;
+    roarLP.Q.value = 1.4;
+    this.loop(this.brown, 1.3).connect(roarLP).connect(roar).connect(this.busses.listener);
+    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar };
   }
 
   // ------------------------------------------------------------------------------ continuous
@@ -403,6 +413,7 @@ export class SoundEngine {
     const q = clamp((air * s.airspeed * s.airspeed) / 2.5e5);
     set(a.wind.gain, aboard * 0.6 * Math.sqrt(q), 0.25);
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
+    set(a.roar.gain, aboard * 1.1 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
   }
 
   private ignition(th: number) {
@@ -547,6 +558,11 @@ export class SoundEngine {
       case "node-tick": T(1000, 0, 0.06, { level: 0.2, type: "square", partial: 0 }); break;
       case "node-go": T(1500, 0, 0.45, { level: 0.2, type: "square" }); break;
       case "burn-end": T(1200, 0, 0.07, { level: 0.2 }); T(1200, 0.12, 0.07, { level: 0.2 }); break;
+      case "boom":
+        // (a sonic boom: two thumps, the bow's and the tail's shocks)
+        this.burst(this.busses.listener, 1.0, 90, 0.35, 0.8);
+        this.burst(this.busses.listener, 0.8, 70, 0.4, 0.8, 0.12);
+        break;
       case "touchdown":
         this.burst(this.busses.engine, 0.6, 220, 0.4, 0.7);
         T(880, 0.25, 0.08, { level: 0.18 }); T(1320, 0.36, 0.14, { level: 0.18 });

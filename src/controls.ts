@@ -2614,7 +2614,7 @@ export class CameraController {
     const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
     const airCtx = LA0 && LA0.out.q > 20 ? {
       mode, alpha: LA0.out.alpha, beta: LA0.out.beta, auth: AV.ctrl.map((k) => Math.min((k * LA0.out.q) / 1000, 4)) as Vec3,
-      path: this.airFlight.pathRate.map((x) => -x) as Vec3, ground: onWheels0, stall: AV.wing?.stall ?? 0.35, q: LA0.out.q, gamma: this.pathAngle(cam), bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
+      path: this.airFlight.pathRate.map((x) => -x) as Vec3, ground: onWheels0, stall: AV.wing?.stall ?? 0.35, q: LA0.out.q, gamma: this.pathAngle(cam), bank: (this.attitudeNow() as { bank?: number }).bank ?? 0, mach: LA0.out.mach,
     } : null;
     const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
     if (mode !== "sf" || !sfCtx) this.sfCmd = null;
@@ -2872,9 +2872,9 @@ export class CameraController {
     const V = VESSELS[fleet.active].aero;
     return {
       inAir: A.inAir, q: L?.out.q ?? 0, mach: L?.out.mach ?? 0, alpha: L?.out.alpha ?? 0, beta: L?.out.beta ?? 0, heat: L?.out.heat ?? 0,
-      u: L?.u ?? null, lift: L?.out.L ?? 0, drag: L?.out.D ?? 0, stalled: L?.out.stalled ?? false, h: L?.h ?? NaN, speed: L?.speed ?? 0, airT: L?.air.T ?? NaN,
+      u: L?.u ?? null, rho: L?.air.rho ?? 0, glow: L?.air.gas.glow ?? null, lift: L?.out.L ?? 0, drag: L?.out.D ?? 0, stalled: L?.out.stalled ?? false, h: L?.h ?? NaN, speed: L?.speed ?? 0, airT: L?.air.T ?? NaN,
       shield: A.skin.shield, hull: A.skin.hull, shieldMax: V.shield?.tMax ?? 0, hullMax: V.hull.tMax, g: A.g, gMax: V.gMax, gPeak: A.gPeak,
-      margins: A.margins(), failure: A.failure, damage: this.s.damage, body: A.body,
+      margins: A.margins(), failure: A.failure, damage: this.s.damage, body: A.body, rolling: !!this.rolling || !!this.local?.L.rolling,
       mode: this.flightModeNow(), antigrav: this.s.antigrav, flaps: A.cfg.flaps ?? 0, brake: A.cfg.brake ?? 0, gear: !!A.cfg.gear,
       sf: this.sfCmd ? { ...this.sfCmd } : null, ...this.attitudeNow(),
     };

@@ -36,7 +36,7 @@ export interface Gas {
 }
 
 export const GASES = {
-  air: { gamma: 1.4, R: 287.05, ksg: 1.7415e-4, radiative: true, glow: [1.0, 0.45, 0.32] as V3 },
+  air: { gamma: 1.4, R: 287.05, ksg: 1.7415e-4, radiative: true, glow: [1.0, 0.36, 0.2] as V3 },
   co2: { gamma: 1.29, R: 188.92, ksg: 1.8960e-4, radiative: false, glow: [1.0, 0.62, 0.38] as V3 },
   n2ch4: { gamma: 1.4, R: 296.8, ksg: 1.7407e-4, radiative: false, glow: [0.75, 0.42, 1.0] as V3 },
 } satisfies Record<string, Gas>;
