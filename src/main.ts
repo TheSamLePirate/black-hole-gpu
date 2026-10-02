@@ -876,6 +876,7 @@ async function main() {
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
   // the flight computer, over the full-screen map (ui/fc/computer.ts)
+  let openMissions = () => {};
   const flightComputer = new FlightComputer({
     context: () => camera.fcContext(),
     kerr: () => {
@@ -906,14 +907,20 @@ async function main() {
       pilotAuto("entry");
       return null;
     },
-    mission: (target, arrival, altKm) => {
-      if (!target) return "Target a body first (a click on the map)";
-      void camera.planOurs("target", arrival, altKm, 200).then((m) => m && panel.toast(m));
-      return null;
-    },
+    missionTargets: () => camera.missionTargets(),
+    missionPlan: (spec) => camera.missionPlan(spec),
+    missionCommit: () => camera.missionCommit(),
+    target: () => String(settings.target),
     say: (t) => panel.toast(t),
   });
   flightHud.attach(flightComputer.root);
+  // (the planner — its key, its button —: the map, the flight computer's MISSION tab)
+  flightHud.onPlanner = () => openMissions();
+  openMissions = () => {
+    if (!flightHud.mapView) flightHud.toggleMapView();
+    flightComputer.show(true);
+    flightComputer.openTab("mission");
+  };
   // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
   const tpDock = document.createElement("div");
   tpDock.id = "tp-dock";
@@ -990,7 +997,7 @@ async function main() {
     } else if (e.code === "Backquote") panel.toast(flightHud.cycleDensity());
     else if (e.code === "KeyK" && e.shiftKey) actions["btn-ship"]!(); // leave the Ranger
     else if (e.key.toLowerCase() === "m" && !e.shiftKey) flightHud.toggleMapView();
-    else if (e.code === "KeyO") flightHud.togglePlanner();
+    else if (e.code === "KeyO") openMissions();
     else if (e.code === "KeyV") {
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);

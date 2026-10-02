@@ -88,7 +88,7 @@ Décisions de l'utilisateur :
 |---|---|---|
 | C1 disposition | fait : HUD masqué, panneaux latéraux repliables, bande compacte, cadrage dans la zone libre, densité 1 | · 150 |
 | C2 aperçu du trajet | fait : candidat non destructif, tracé 3D/globe/planisphère/frise, mondes de Gargantua (orbite libre, plan, aperçu), sites | · 151 |
-| C3 missions | à faire | |
+| C3 missions | fait : destinations groupées des deux univers, arrivée (orbite, survol, retour libre ; en orbite, à côté), aperçu puis adoption entière ; touche O | · 152 |
 | C4 hub = ordinateur de bord | à faire | |
 | C5 carte WebGPU | à faire | |
 | C6 finitions | à faire | |

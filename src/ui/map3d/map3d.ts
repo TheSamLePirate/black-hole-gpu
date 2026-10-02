@@ -657,6 +657,8 @@ export class Map3D {
     }
     const ref = i.ref ? sc.byId.get(i.ref) : null;
     if (!ref || ref.id === "sun") return "sun";
+    // (a preview or a plan out to the Sun's sphere — a mission to another planet —: the whole of it)
+    for (const p of [i.cand?.kind === "ours" ? i.cand.ours : null, i.ourPlan]) if (p && p.refs.includes("sun")) return "sun";
     return ref.kind === "moon" && ref.parent ? ref.parent : ref.id;
   }
 
@@ -2068,7 +2070,11 @@ export class Map3D {
       ctx.font = `700 ${8.5 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
       ctx.fillText(`${k + 1}`, q.x, q.y + 3 * dpr);
-      if (k === 0) labels.push({ text: `◇ PREVIEW · ${note}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700 });
+      if (k === 0) {
+        // (the operation's name, short — the card has the rest)
+        const head = note.split(" · ")[0]!;
+        labels.push({ text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700 });
+      }
     });
   }
 

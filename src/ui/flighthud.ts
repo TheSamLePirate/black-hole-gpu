@@ -217,6 +217,8 @@ export class FlightHud {
   private sel = 0;
   private planSig = "";
   plannerOpen = false;
+  /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
+  onPlanner: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
@@ -418,7 +420,7 @@ export class FlightHud {
     const planBtn = h("button", "fl-tools fl-planbtn") as HTMLButtonElement;
     planBtn.append(icon("plan"), h("span", "", "Plan"));
     planBtn.title = "Flight planner: transfers, rendezvous, manoeuvre nodes";
-    planBtn.onclick = () => this.togglePlanner();
+    planBtn.onclick = () => (this.onPlanner ? this.onPlanner() : this.togglePlanner());
     this.missionEls.planBtn = planBtn;
     const pathBtn = iconBtn("path", "Future path in the view (the cyan tube)", () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;

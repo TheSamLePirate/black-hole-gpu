@@ -42,12 +42,18 @@ export interface FcHost {
   site(): Site | null;
   setSite(s: Site | null): void;
   land(): string | null;
-  /** our universe's missions (to another body): its planner (our-plan.ts) */
-  mission(target: string | null, arrival: "orbit" | "flyby" | "freeReturn", altKm: number): string | null;
+  /** the MISSION tab: the destinations from here, a mission planned (previewed: its path on the maps),
+   *  adopted into the plan */
+  missionTargets(): { universe: "ours" | "gargantua" | null; here: string | null; list: { id: string; name: string; group: string; far: string }[] };
+  missionPlan(spec: { target: string; arrival?: "orbit" | "flyby" | "freeReturn"; altKm?: number; retKm?: number; orbit?: boolean }): Promise<
+    { ok: true; note: string; burns: Burn[]; dvTotal: number; arrive: { body: string; t: number } | null; afterText: string } | { ok: false; note: string }>;
+  missionCommit(): string | null;
+  /** the current target (the map's, the analysis's) */
+  target(): string;
   say(t: string): void;
 }
 
-type Tab = "orbit" | "target" | "land" | "mission";
+export type Tab = "orbit" | "target" | "land" | "mission";
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -165,6 +171,11 @@ export class FlightComputer {
     this.setTab("orbit");
   }
 
+  /** A tab brought up (the HUD's planner key: the MISSION tab). */
+  openTab(t: Tab) {
+    this.setTab(t);
+  }
+
   /** Shown with the full-screen map. */
   show(on: boolean) {
     if (on === this.shown) return;
@@ -182,7 +193,7 @@ export class FlightComputer {
     this.pending = null;
     this.host.preview(null, "");
     const k = this.host.kerr();
-    if (k && t !== "land") return this.buildKerr(t);
+    if (k && t !== "land" && t !== "mission") return this.buildKerr(t);
     if (t === "orbit") this.buildOrbit();
     else if (t === "target") this.buildTarget();
     else if (t === "land") this.buildLand();
@@ -323,25 +334,92 @@ export class FlightComputer {
     this.op("Deorbit, entry & landing", "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander)", [], () => this.host.land(), "ENGAGE");
   }
 
+  /** The mission's choices, kept from one opening to the next. */
+  private mis = { target: "", arrival: "orbit" as "orbit" | "flyby" | "freeReturn", altKm: 200, retKm: 200, orbit: true };
+
+  /**
+   * MISSION: to another body — the destinations from here (grouped, how far), the arrival (an orbit, a
+   * flyby, a free return; about Gargantua's worlds: in orbit or beside), PLAN: the mission computed,
+   * its path previewed on the maps, its burns and arrival in the card; EXECUTE / TO THE PLAN adopt it.
+   */
   private buildMission() {
-    const c = this.host.context();
-    if (!c || c.universe !== "ours") {
-      this.body.append(h("div", "fc-empty", "Missions between bodies: in our solar system (Gargantua's: ORBIT and TARGET about the hole)"));
+    const T = this.host.missionTargets();
+    if (!T.universe || !T.list.length) {
+      this.body.append(h("div", "fc-empty", "Missions: from an orbit in our solar system, or about Gargantua"));
       return;
     }
-    let arrival: "orbit" | "flyby" | "freeReturn" = "orbit";
-    const seg = h("div", "fc-seg");
-    for (const [w, l] of [["orbit", "ORBIT"], ["flyby", "FLYBY"], ["freeReturn", "FREE RETURN"]] as ["orbit" | "flyby" | "freeReturn", string][]) {
-      const b = h("button", w === arrival ? "on" : "", l);
-      b.onclick = () => {
-        arrival = w;
-        for (const x of seg.children) x.classList.toggle("on", x === b);
-      };
-      seg.append(b);
+    const M = this.mis;
+    const ids = T.list.map((x) => x.id);
+    if (!ids.includes(M.target) || M.target === T.here) {
+      const tg = this.host.target();
+      M.target = ids.includes(tg) && tg !== T.here ? tg : T.list.find((x) => x.id !== T.here && x.group !== "Planets")?.id ?? T.list.find((x) => x.id !== T.here)!.id;
     }
-    const alt = numField("Arrival altitude", 200, "km", 50, () => {}, { min: 10 });
-    this.body.append(h("div", "fc-tgt", `To: ${c.targetName ?? "— (target a body on the map)"}`));
-    this.op("Transfer to the target body", "Patched conics aimed with the n-body predictor: the departure, mid-course corrections, the capture — the B-plane aimed at the altitude asked", [seg, alt.el], () => this.host.mission(c.targetName, arrival, alt.get()), "PLAN");
+    this.body.append(h("div", "fc-tgt", `From: ${T.here ? (T.list.find((x) => x.id === T.here)?.name ?? T.here) : T.universe === "ours" ? "our solar system" : "Gargantua's orbit"}`));
+    // the destinations
+    const list = h("div", "fc-dests");
+    let group = "";
+    for (const d of T.list) {
+      if (d.group !== group) {
+        group = d.group;
+        list.append(h("div", "fc-dest-g", group));
+      }
+      const b = h("button", "fc-dest" + (d.id === M.target ? " on" : "") + (d.id === T.here ? " here" : ""));
+      b.innerHTML = `<b>${d.name}</b><small>${d.id === T.here ? "here" : d.far}</small>`;
+      b.disabled = d.id === T.here;
+      b.onclick = () => {
+        M.target = d.id;
+        this.setTab("mission");
+      };
+      list.append(b);
+    }
+    this.body.append(list);
+    requestAnimationFrame(() => list.querySelector(".fc-dest.on")?.scrollIntoView({ block: "nearest" }));
+    // the arrival
+    const dest = T.list.find((x) => x.id === M.target)!;
+    const craft = ["iss", "ranger", "lander", "endurance"].includes(dest.id);
+    const fields: HTMLElement[] = [];
+    let help = "";
+    if (T.universe === "ours" && !craft && dest.id !== "wormhole") {
+      const seg = h("div", "fc-seg");
+      for (const [w, l] of [["orbit", "ORBIT"], ["flyby", "FLYBY"], ["freeReturn", "FREE RETURN"]] as [typeof M.arrival, string][]) {
+        const b = h("button", w === M.arrival ? "on" : "", l);
+        b.onclick = () => {
+          M.arrival = w;
+          this.setTab("mission");
+        };
+        seg.append(b);
+      }
+      fields.push(seg, numField(M.arrival === "orbit" ? "Orbit altitude" : "Closest approach", M.altKm, "km", 50, (v) => (M.altKm = v), { min: 10 }).el);
+      if (M.arrival === "freeReturn") fields.push(numField("Back home at", M.retKm, "km", 50, (v) => (M.retKm = v), { min: 10 }).el);
+      help = "Patched conics aimed with the n-body predictor — the departure in its window, mid-course corrections, the capture; the B-plane aimed at the height asked";
+    } else if (craft) help = "A rendezvous 200 m off its free docking port — departure, two corrections, arrival — then the docking autopilot";
+    else if (dest.id === "wormhole") help = T.universe === "ours" ? "Into our mouth: the throat crossed to Gargantua's side" : "A 3-D burn aimed by Newton's method at the mouth's centre";
+    else {
+      const seg = h("div", "fc-seg");
+      for (const [w, l] of [[true, "IN ORBIT"], [false, "BESIDE IT"]] as [boolean, string][]) {
+        const b = h("button", w === M.orbit ? "on" : "", l);
+        b.onclick = () => {
+          M.orbit = w;
+          this.setTab("mission");
+        };
+        seg.append(b);
+      }
+      fields.push(seg);
+      help = "On Kerr's geodesics: the apsis burn timed for the world to be there, a velocity match at the closest approach — then in orbit about it, or station-keeping beside it";
+    }
+    this.op(`To ${dest.name}`, help, fields, () => {
+      this.result.replaceChildren(h("div", "fc-busy", `Planning the mission to ${dest.name}… (the n-body paths aimed)`));
+      void this.host.missionPlan({ target: M.target, arrival: M.arrival, altKm: M.altKm, retKm: M.retKm, orbit: M.orbit }).then((r) => {
+        if (this.tab !== "mission") return;
+        if (!r.ok) {
+          if (r.note) this.preview({ ok: false, note: r.note, burns: [], dvTotal: 0 });
+          else this.result.replaceChildren();
+          return;
+        }
+        this.preview({ ok: true, note: r.note, burns: r.burns, dvTotal: r.dvTotal, afterText: r.afterText, mission: true });
+      });
+      return null;
+    });
   }
 
   /** About Gargantua itself: the orbital operations on the Kerr geodesics (fc/kerr-ops.ts), the
@@ -380,9 +458,22 @@ export class FlightComputer {
     } else if (t === "target") {
       this.body.append(h("div", "fc-tgt", `Target: ${k.target ?? "—"}`));
       this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () => this.host.kerrOp("plane"));
-      this.op("Rendezvous", "The apsis burn timed for the target to be there, a velocity match at the closest approach", [], () => this.host.kerrPlan("target"));
-      this.op("The wormhole", "A 3-D burn aimed by Newton's method at the mouth's centre", [], () => this.host.kerrPlan("wormhole"));
-      this.op("Circular orbit, now", "Gargantua's planner: a burn now-ish, the opposite apsis at the radius, circularized there", [], () => this.host.kerrPlan("circular", Math.round(k.r)));
+      // (a rendezvous, the wormhole: the MISSION tab's planner — previewed before it is flown)
+      const mission = (target: string, orbit: boolean) => () => {
+        this.result.replaceChildren(h("div", "fc-busy", "Planning on the geodesics…"));
+        void this.host.missionPlan({ target, orbit }).then((r) => {
+          if (this.tab !== "target") return;
+          if (!r.ok) return r.note ? this.preview({ ok: false, note: r.note, burns: [], dvTotal: 0 }) : this.result.replaceChildren();
+          this.preview({ ok: true, note: r.note, burns: r.burns, dvTotal: r.dvTotal, afterText: r.afterText, mission: true });
+        });
+        return null;
+      };
+      const tg = k.target && k.target !== "hole" && k.target !== "barycentre" && k.target !== "wormhole" ? k.target : null;
+      if (tg) {
+        this.op("Orbit the target", "The apsis burn timed for it to be there, a velocity match at the closest approach, then in orbit about it", [], mission(tg, true));
+        this.op("Rendezvous", "The same, then beside it, station-keeping", [], mission(tg, false));
+      }
+      this.op("The wormhole", "A 3-D burn aimed by Newton's method at the mouth's centre", [], mission("wormhole", false));
     } else this.body.append(h("div", "fc-empty", "About Gargantua: ORBIT and TARGET (Kerr's geodesics)"));
   }
 
@@ -394,8 +485,9 @@ export class FlightComputer {
       this.result.append(h("div", "fc-err", r.note));
       return;
     }
-    // (its path on the maps at once — the operation previewed, not yet the plan)
-    this.host.preview(r.burns, r.note);
+    // (its path on the maps at once — the operation previewed, not yet the plan; a mission: its own,
+    // already there)
+    if (!r.mission) this.host.preview(r.burns, r.note);
     const c = this.host.context();
     const B = this.host.budget();
     const card = h("div", "fc-card");
@@ -404,7 +496,8 @@ export class FlightComputer {
     // (about the hole the burns are fractions of c: their parts in km/s)
     const big = r.burns.some((b) => len(b.dv) >= 1e5);
     // (the normal and radial columns only when a burn has them)
-    const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]) < 0.05 * Math.max(len(b.dv), 1e-9));
+    const top = Math.max(...r.burns.map((b) => len(b.dv)), 1e-9);
+    const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]) < 0.02 * top);
     const showN = !tiny(1), showR = !tiny(2);
     const col = (on: boolean, x: string) => (on ? x : "");
     tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th>${col(showN, "<th>NRM</th>")}${col(showR, "<th>RAD</th>")}<th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
@@ -422,12 +515,13 @@ export class FlightComputer {
     if (r.grid) card.append(this.porkchop(r.grid));
     const row = h("div", "fc-row");
     const fly = h("button", "fc-go fc-exec", "EXECUTE");
+    const adopt = () => (r.mission ? this.host.missionCommit() : this.host.setPlan(r.burns, r.note));
     fly.onclick = () => {
-      const e = this.host.setPlan(r.burns, r.note) ?? this.host.execute();
+      const e = adopt() ?? this.host.execute();
       this.host.say(e ?? `Executing: ${r.note}`);
     };
     const set = h("button", "fc-go", "TO THE PLAN");
-    set.onclick = () => this.host.say(this.host.setPlan(r.burns, r.note) ?? `Planned: ${r.note} — the map shows it (EXECUTE, or edit the burns)`);
+    set.onclick = () => this.host.say(adopt() ?? `Planned: ${r.note} — the map shows it (EXECUTE, or edit the burns)`);
     const no = h("button", "fc-go fc-no", "DISCARD");
     no.onclick = () => {
       this.result.replaceChildren();

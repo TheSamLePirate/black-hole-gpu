@@ -94,3 +94,18 @@
 .fl-root.mapview.fc-r-off { --fc-r: 58px; }
 
 .fc-card { overflow-x: auto; }
+
+/* the MISSION tab's destinations: grouped, how far each is */
+.fc-dests { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; margin: 6px 0 4px; padding-right: 2px; }
+.fc-dest-g { font: 700 9.5px var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(150, 200, 255, 0.6); margin: 6px 0 2px; }
+.fc-dest {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(160, 210, 255, 0.1); color: rgba(214, 226, 242, 0.9); text-align: left;
+}
+.fc-dest b { font: 600 12px var(--hud-font); letter-spacing: 0.04em; }
+.fc-dest small { font: 500 10.5px "JetBrains Mono", ui-monospace, monospace; color: rgba(176, 196, 222, 0.6); }
+.fc-dest:hover { background: rgba(255, 255, 255, 0.08); }
+.fc-dest.on { border-color: rgba(196, 140, 255, 0.8); background: rgba(196, 140, 255, 0.16); color: #fff; }
+.fc-dest.here { opacity: 0.45; cursor: default; }
+.fc-busy { padding: 10px; font: 600 11.5px var(--hud-font); letter-spacing: 0.06em; color: rgba(196, 140, 255, 0.9); animation: fc-pulse 1.2s ease-in-out infinite; }
+@keyframes fc-pulse { 50% { opacity: 0.45; } }

@@ -40,7 +40,7 @@ import { keplerProp } from "./system/our-plan";
 import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
 import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, bodyFixedOf, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
-import { M_METRES, solarBody, spinVector } from "./system/solar";
+import { M_METRES, SOLAR_BODIES, solarBody, solarState, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "./system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint, type RendezvousPoint } from "./system/iss-plan";
 import { cockpitHull, stationHulls, vesselHulls, type TriBVH } from "./system/collide";
@@ -4791,6 +4791,185 @@ export class CameraController {
     }
   }
   private planGen = 0;
+
+  /**
+   * The flight computer's MISSION tab: a mission to another body planned — not yet in the plan —,
+   * previewed (its path on the maps, its burns, its arrival), then adopted by `missionCommit`.
+   * Our side: a transfer to a body (orbit, flyby, free return), the wormhole, a rendezvous with the
+   * station or a craft. Gargantua's: a rendezvous with one of its worlds or the companion star (in orbit
+   * about it, or beside it), the wormhole. The burns (s from now, m/s) or why not.
+   */
+  async missionPlan(spec: { target: string; arrival?: Arrival; altKm?: number; retKm?: number; orbit?: boolean }): Promise<
+    { ok: true; note: string; burns: Burn[]; dvTotal: number; arrive: { body: string; t: number } | null; afterText: string } | { ok: false; note: string }
+  > {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const fail = (note: string) => ({ ok: false as const, note });
+    const gen = ++this.planGen;
+    this.pendingMission = null;
+    const roleName: Record<string, string> = { depart: "departure", circ: "circularize", mcc: "correction", capture: "capture", mccReturn: "return correction", captureHome: "capture home", arrive: "arrival" };
+    const burnsOf = (nodes: { t: number; dv: Vec3; role?: string }[], t0: number): Burn[] =>
+      nodes.map((n, k) => ({ t: (n.t - t0) * Msec, dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3, label: roleName[n.role ?? ""] ?? `burn ${k + 1}` }));
+    const sum = (b: Burn[]) => b.reduce((q, x) => q + Math.hypot(...x.dv), 0);
+    const name = (id: string) => (id === "wormhole" ? "the wormhole" : BODY_NAMES[id as Body] ?? (isCraft(id as Target) ? `the ${VESSELS[id as VesselId].name}` : id === "iss" ? "the ISS" : id));
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const target = spec.target;
+      const lead = Math.max(60 / 492.5490947, 10 * (s.animate ? s.timeSpeed : 0));
+      // the station, a craft of the fleet: the rendezvous beside a free docking port
+      if (target === "iss" || isCraft(target as Target)) {
+        if (nav.ref !== "earth") return fail("A rendezvous: from an orbit around the Earth");
+        const craft = isCraft(target as Target) ? (target as VesselId) : null;
+        if (craft && freePort(craft) === null) return fail(`The ${VESSELS[craft].name}: no free docking port`);
+        const point = craft ? craftPoint(craft) : rendezvousPoint;
+        const p = planIssRendezvous(nav.X, nav.V, nav.t, lead, point, name(target), craft ? `its ${VESSELS[craft].ports[freePort(craft)!]!.name}` : "IDA-2");
+        if (!p) return fail(`No rendezvous with ${name(target)} found in the next day`);
+        if (gen !== this.planGen) return fail("");
+        const burns = burnsOf(p.nodes.map((n) => ({ t: n.t, dv: n.dv as Vec3, role: n.role })), nav.t);
+        this.pendingMission = {
+          gen, note: p.note,
+          commit: () => {
+            s.target = target as Target;
+            this.ourMission = null;
+            this.ourPlanned = null;
+            this.plan = { nodes: p.nodes.map((n) => ({ t: n.t, dv: n.dv, then: n.role === "arrive" ? "dock" as const : null, role: n.role as ManeuverNode["role"], body: craft && n.role === "arrive" ? craft : n.body })), path: null, at: 0, note: p.note };
+            this.issGoal = { tArrive: p.tArrive, refined: new Map(), body: craft ?? "iss", point };
+            this.refreshPlan(true);
+          },
+        };
+        const arrive = { body: craft ?? "iss", t: p.tArrive };
+        this.fcPreview(burns, p.note, { arrive });
+        return { ok: true, note: p.note, burns, dvTotal: sum(burns), arrive, afterText: `Arrival 200 m off ${name(target)}'s port in ${fmtDur((p.tArrive - nav.t) * Msec)}, then the docking autopilot` };
+      }
+      if (target !== "wormhole" && !isOurBody(target as Body)) return fail("Pick a destination (a body, the station, a craft, the wormhole)");
+      if (target === nav.ref) return fail(`Already about ${name(target)}: the ORBIT tab's operations`);
+      const arrival = target === "wormhole" ? "flyby" : spec.arrival ?? "orbit";
+      const o = { lead, mouthR: mouth(s).w.rho, accel: this.thrustMax() };
+      this.planBusy = true;
+      try {
+        const res = await runPlanner<OurPlanResult>({ kind: "transfer", X: nav.X, V: nav.V, t: nav.t, goal: { kind: "transfer", target, arrival, altM: (spec.altKm ?? 200) * 1e3, returnAltM: (spec.retKm ?? 200) * 1e3 }, o });
+        if (gen !== this.planGen) return fail("");
+        if ("error" in res) return fail(res.error);
+        const burns = burnsOf(res.nodes.map((n) => ({ t: n.t, dv: n.dv as Vec3, role: n.role })), nav.t);
+        this.pendingMission = {
+          gen, note: res.note,
+          commit: () => {
+            this.issGoal = null;
+            this.plan = { nodes: res.nodes.map((n: PlanNode) => ({ t: n.t, dv: n.dv, then: n.then ?? null, role: n.role, body: n.body })), path: null, at: 0, note: res.note };
+            this.ourMission = res.mission;
+            this.ourPlanned = res.path;
+            s.target = target as Target;
+            this.refreshPlan(true);
+          },
+        };
+        const arrive = { body: target, t: res.mission.tArrive };
+        this.fcPreview(burns, res.note, { ours: res.path, arrive });
+        const what = arrival === "orbit" ? `into a ${spec.altKm ?? 200} km orbit` : arrival === "flyby" ? `a flyby at ${spec.altKm ?? 200} km` : `round it at ${spec.altKm ?? 200} km and back home to ${spec.retKm ?? 200} km`;
+        return { ok: true, note: res.note, burns, dvTotal: sum(burns), arrive, afterText: `${target === "wormhole" ? "Into the wormhole's mouth" : `Arrival at ${name(target)}`} in ${fmtDur((res.mission.tArrive - nav.t) * Msec)} — ${target === "wormhole" ? "the throat crossed" : what}` };
+      } finally {
+        if (gen === this.planGen) this.planBusy = false;
+      }
+    }
+    // Gargantua's side: about the hole (or from a world's frame): its own planners on the geodesics
+    const st = this.stateNow();
+    if (!st) return fail("Missions: about the hole or one of its worlds");
+    const w = this.world();
+    if (spec.target === "wormhole") {
+      if (!s.wormhole) return fail("No wormhole in this scene");
+      const m = mouth(s);
+      const res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
+      if (!res) return fail("No path into the mouth found from this orbit");
+      const burns = burnsOf(res.nodes, st.t);
+      this.pendingMission = { gen, note: res.note, commit: () => this.adoptKerr(res.nodes, res.note, "wormhole") };
+      this.fcPreview(burns, res.note);
+      return { ok: true, note: res.note, burns, dvTotal: sum(burns), arrive: null, afterText: "Into the mouth — the throat crossed to our side" };
+    }
+    const body = spec.target as Body;
+    if (body === "star" && !s.sun) return fail("No companion star in this scene");
+    if (body !== "star" && (s.system === "none" || !bodyRadius(s, body))) return fail("Pick a destination: one of Gargantua's worlds, the star, the wormhole");
+    const R = bodyRadius(s, body);
+    const mB = bodyMass(s, body);
+    const orbitIt = spec.orbit !== false && mB > 0;
+    const res = planRendezvous(st, w, {
+      centre: (t) => bodyCentre(s, body, t), velocity: (t) => bodyVelocity(s, body, t), radius: R,
+      standoff: (orbitIt ? 3.2 : 4) * R,
+      orbit: orbitIt ? { mass: mB, n: [0, 0, 1] } : undefined,
+    });
+    if (!res) return fail(`No rendezvous with ${name(body)} found`);
+    const burns = burnsOf(res.nodes, st.t);
+    const tArr = res.nodes[res.nodes.length - 1]!.t;
+    this.pendingMission = { gen, note: res.note, commit: () => this.adoptKerr(res.nodes, res.note, body) };
+    const arrive = { body, t: tArr };
+    this.fcPreview(burns, res.note, { arrive });
+    return { ok: true, note: res.note, burns, dvTotal: sum(burns), arrive, afterText: `Arrival at ${name(body)} in ${fmtDur((tArr - st.t) * Msec)} — ${orbitIt ? "then in orbit about it" : "then beside it, station-keeping"}` };
+  }
+
+  /**
+   * The MISSION tab's destinations from where the ship is: our side, the planets and moons (grouped by
+   * what they orbit), the station and the fleet's craft about the Earth, the wormhole; Gargantua's, its
+   * worlds, the companion star, the wormhole — each with how far it is now.
+   */
+  missionTargets(): { universe: "ours" | "gargantua" | null; here: string | null; list: { id: string; name: string; group: string; far: string }[] } {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    const fmt = (m: number) => (m >= 1.495978707e10 ? `${(m / 1.495978707e11).toFixed(2)} AU` : m >= 1e7 ? `${Math.round(m / 1e3).toLocaleString("en")} km` : `${(m / 1e3).toFixed(0)} km`);
+    if (nav) {
+      const list: { id: string; name: string; group: string; far: string }[] = [];
+      const dist = (X: Vec3) => Math.hypot(...sub3(X, nav.X)) * M_METRES;
+      for (const b of SOLAR_BODIES) {
+        if (b.kind === "star") continue;
+        const group = b.parent === "sun" ? "Planets" : `${solarBody(b.parent!)?.name ?? b.parent}'s moons`;
+        list.push({ id: b.id, name: b.name, group, far: fmt(dist(solarState(b.id, nav.t).pos)) });
+      }
+      if (nav.ref === "earth") {
+        if (s.iss) list.push({ id: "iss", name: "ISS", group: "Craft about the Earth", far: "" });
+        for (const id of ["ranger", "lander", "endurance"] as VesselId[]) {
+          if (fleet.flownAssembly().includes(id)) continue;
+          const p = fleet.pose(id, nav.t);
+          if (p) list.push({ id, name: VESSELS[id].name, group: "Craft about the Earth", far: fmt(dist(p.X as Vec3)) });
+        }
+      }
+      if (s.wormhole) list.push({ id: "wormhole", name: "The wormhole", group: "Beyond", far: fmt(Math.hypot(...nav.X) * M_METRES) });
+      return { universe: "ours", here: nav.ref, list };
+    }
+    if (cam.region !== "hole") return { universe: null, here: null, list: [] };
+    const list: { id: string; name: string; group: string; far: string }[] = [];
+    const X = this.stateNow();
+    const at = X ? (() => {
+      const q = X;
+      const sn = Math.sin(q.th);
+      return [q.r * sn * Math.cos(q.ph), q.r * sn * Math.sin(q.ph), q.r * Math.cos(q.th)] as Vec3;
+    })() : null;
+    const t = this.nowTime();
+    const far = (b: Body) => (at ? `${Math.hypot(...sub3(bodyCentre(s, b, t), at)).toFixed(1)} M` : "");
+    if (s.system !== "none") for (const b of SYSTEM_BODIES) if (bodyRadius(s, b as Body) > 0) list.push({ id: b, name: BODY_NAMES[b as Body] ?? b, group: "Gargantua's worlds", far: far(b as Body) });
+    if (s.sun) list.push({ id: "star", name: BODY_NAMES.star ?? "The star", group: "The companion", far: far("star") });
+    if (s.wormhole) list.push({ id: "wormhole", name: "The wormhole", group: "Beyond", far: "" });
+    return { universe: "gargantua", here: this.local?.F.id ?? null, list };
+  }
+
+  /** A mission's plan about the hole adopted: its nodes, the target. */
+  private adoptKerr(nodes: ManeuverNode[], note: string, target: Target) {
+    this.transfer = null;
+    this.plan = { nodes, path: null, at: 0, note };
+    this.s.target = target;
+    this.refreshPlan(true);
+  }
+
+  /** The mission previewed, adopted: into the plan (its in-flight re-aims with it). Why not, or null. */
+  private pendingMission: { gen: number; note: string; commit: () => void } | null = null;
+  missionCommit(): string | null {
+    const m = this.pendingMission;
+    if (!m) return "No mission previewed";
+    this.fcPreview(null);
+    this.clearPlan();
+    m.commit();
+    this.pendingMission = null;
+    return null;
+  }
 
   /** A rendezvous with the space station under way: its arrival's time; the re-aims each node had. */
   private issGoal: { tArrive: number; refined: Map<ManeuverNode, number>; body: Body; point: RendezvousPoint } | null = null;

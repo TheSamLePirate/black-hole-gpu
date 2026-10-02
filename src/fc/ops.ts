@@ -33,6 +33,8 @@ export interface OpResult {
   after?: Elements;
   /** about Gargantua itself: the orbit after, on the geodesics, as text */
   afterText?: string;
+  /** a mission to another body (the MISSION tab): adopted whole — its re-aims in flight with it */
+  mission?: boolean;
   grid?: Porkchop;
 }
 
