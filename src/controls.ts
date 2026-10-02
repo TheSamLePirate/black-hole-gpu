@@ -17,7 +17,8 @@ import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { AirFlight, AIR_WARP } from "./flightair";
-import { attitudeFor, EntryGuidance, planDeorbit, predictEntry, type EntryCraft, type EntryEnv, type EntryState } from "./entry";
+import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type EntryState } from "./entry";
+import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site } from "./game/sites";
 import { fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext } from "./fc/ops";
@@ -2845,8 +2846,10 @@ export class CameraController {
   /** The entry autopilot's run: its phase, the deorbit's burn (its time [s of the scene], Δv, done
    *  [m/s]), the guidance and its bank, the angle of attack, the next guidance's update [s]. */
   entryRun: {
-    phase: "wait" | "burn" | "entry" | "glide"; site: Site | null; tBurn: number; dv: number; done: number;
+    phase: "plan" | "wait" | "burn" | "entry" | "glide"; site: Site | null; tBurn: number; dv: number; done: number;
     guid: EntryGuidance | null; bank: number; next: number; alpha: number; gPrev: number | null; short: number; handover: number;
+    /** a guidance update in the planner's worker */
+    pending?: boolean;
     plan?: { heat: number; shield: number; g: number };
   } | null = null;
 
@@ -2863,23 +2866,12 @@ export class CameraController {
       const id = nav.ref;
       const b = solarBody(id);
       if (!b || id === "sun" || b.kind === "star") return null;
-      const mu = b.mass * M_METRES * c * c;
-      const w = lin(spinVector(b, nav.t), 1 / Msec, nav.X, 0);
-      const wl = Math.hypot(...w);
-      const wa = wl > 0 ? lin(w, 1 / wl, w, 0) : ([0, 0, 1] as Vec3);
-      const env: EntryEnv = {
-        R: b.radius * M_METRES, atm: b.atmosphere ?? null,
-        gravity: (x) => {
-          const r = Math.hypot(...x);
-          return lin(x, -mu / (r * r * r), x, 0);
-        },
-        ground: (x) => cross(w, x),
-        carry: (p, dt) => rotateAbout(p, wa, wl * dt),
-      };
+      const desc: EnvDesc = { universe: "ours", body: id, t: nav.t, massSolar: this.s.massSolar };
+      const env = envOf(desc)!;
       const st: EntryState = { x: lin(sub3(nav.X, nav.refPos), M_METRES, nav.X, 0), v: lin(sub3(nav.V, nav.refVel), c, nav.V, 0) };
       const w0 = mouth(this.s).w;
       return {
-        env, s: st, body: id, now: nav.t * Msec,
+        env, desc, s: st, body: id, now: nav.t * Msec,
         place: (site: Site) => lin(sub3(fromBodyFixed(id, bodyFixedOf(id, site.lat, site.lon, 0), nav.t), nav.refPos), M_METRES, nav.X, 0),
         toLocal: (v: Vec3) => unitV(nav.toRep(v)),
         fromLocal: (v: Vec3) => unitV(repToHomeVec(w0, cam.ell, cam.n, v)),
@@ -2888,14 +2880,10 @@ export class CameraController {
     const lf = this.local;
     if (!lf || cam.region !== "hole") return null;
     const { F, L } = lf;
-    const env: EntryEnv = {
-      R: F.R * F.mPerM, atm: F.atm,
-      gravity: (x, v) => lin(localAccel(F, lin(x, 1 / F.mPerM, x, 0), lin(v, 1 / c, v, 0), [0, 0, 0], () => [0, 0, 0]), F.aUnit, x, 0),
-      ground: () => [0, 0, 0],
-      carry: (p) => p,
-    };
+    const desc: EnvDesc = { universe: "gargantua", body: F.id, t: this.nowTime(), spin: this.s.spin, massSolar: this.s.massSolar };
+    const env = envOf(desc)!;
     return {
-      env, s: { x: lin(L.xi, F.mPerM, L.xi, 0), v: lin(L.w, c, L.w, 0) } as EntryState, body: F.id as string, now: this.nowTime() * Msec,
+      env, desc, s: { x: lin(L.xi, F.mPerM, L.xi, 0), v: lin(L.w, c, L.w, 0) } as EntryState, body: F.id as string, now: this.nowTime() * Msec,
       place: (site: Site) => lin(siteDir(site), F.R * F.mPerM, L.xi, 0),
       toLocal: (v: Vec3) => unitV(localToZamo(v)),
       fromLocal: (v: Vec3) => unitV(zamoToLocal(v)),
@@ -2954,19 +2942,35 @@ export class CameraController {
       if (h > top) {
         // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
         if (!site) return say(`Entry: no landing site on ${name} — fly the entry by hand (F: the plane law holds α hypersonic)`);
-        const plan = planDeorbit(fr.env, craft, fr.s, fr.place(site), { peH: ranger ? 45e3 : 30e3, handoverMach: handover, short: shortM, orbits: 16, reach: ranger ? 600e3 : 150e3 });
-        if (!plan) return say(`Entry: no deorbit to ${site.name} within a day of orbits — the orbit never passes near it`);
+        // (planned in the planner's worker: a second of predicted falls, off the frame loop)
         const R = this.entryRun;
-        R.phase = "wait";
-        R.tBurn = fr.now + plan.t;
-        R.dv = plan.dv;
-        R.plan = { heat: plan.result.heatPeak, shield: plan.result.shieldPeak, g: plan.result.gPeak };
-        const mm = Math.floor(plan.t / 60), ss = Math.round(plan.t % 60);
-        this.onPilotMessage?.(`Entry to ${site.name}: the deorbit burn in ${mm} min ${ss} s, ${plan.dv.toFixed(0)} m/s — then ${(plan.result.heatPeak / 1e4).toFixed(0)} W/cm², ${plan.result.gPeak.toFixed(1)} g, the shield ${Math.round(plan.result.shieldPeak)} K at most`);
+        R.phase = "plan";
+        const at = fr.now;
+        this.onPilotMessage?.(`Entry to ${site.name}: planning the deorbit…`);
+        void runPlanner<{ t: number; dv: number; heat: number; shield: number; g: number } | null>({
+          kind: "deorbit", env: fr.desc, craft, s: fr.s, place: fr.place(site),
+          o: { peH: ranger ? 45e3 : 30e3, handoverMach: handover, short: shortM, orbits: 16, reach: ranger ? 600e3 : 150e3 },
+        }).then((plan) => {
+          if (this.entryRun !== R || R.phase !== "plan") return;
+          if (!plan || (plan as { error?: string }).error) {
+            if (P.auto === "entry") P.setAuto("none");
+            this.entryRun = null;
+            this.onPilotMessage?.(`Entry: no deorbit to ${site.name} within a day of orbits — the orbit never passes near it`);
+            return;
+          }
+          R.phase = "wait";
+          R.tBurn = at + plan.t;
+          R.dv = plan.dv;
+          R.plan = { heat: plan.heat, shield: plan.shield, g: plan.g };
+          const wait = R.tBurn - this.nowTime() * Msec;
+          const mm = Math.floor(wait / 60), ss = Math.round(wait % 60);
+          this.onPilotMessage?.(`Entry to ${site.name}: the deorbit burn in ${mm} min ${ss} s, ${plan.dv.toFixed(0)} m/s — then ${(plan.heat / 1e4).toFixed(0)} W/cm², ${plan.g.toFixed(1)} g, the shield ${Math.round(plan.shield)} K at most`);
+        });
       } else this.onPilotMessage?.(site ? `Entry: guided to ${site.name}` : `Entry: no site on ${name} — lift up, the controls yours when slow`);
     }
     const R = this.entryRun!;
     const retro = () => ({ nose: fr.toLocal(lin(va, -1, va, 0)), up: fr.toLocal(up) });
+    if (R.phase === "plan") return retro();
     if (R.phase === "wait" || R.phase === "burn") {
       const thrSI = this.thrustMax() * (299792458 ** 2 / (1476.625 * s.massSolar));
       const burnT = thrSI > 0 ? R.dv / thrSI : 0;
@@ -2980,7 +2984,7 @@ export class CameraController {
           R.phase = "burn";
           R.done = 0;
           this.warpWant = null;
-        s.timeSpeed = this.warpSet = 1 / Msec;
+          s.timeSpeed = this.warpSet = 1 / Msec;
           this.onPilotMessage?.(`Deorbit burn: ${R.dv.toFixed(0)} m/s retrograde`);
         }
         return retro();
@@ -3003,14 +3007,28 @@ export class CameraController {
         const tEI = vr < 0 ? (h - ei) / -vr : Infinity;
         this.warpWant = null;
         s.timeSpeed = this.warpSet = (Number.isFinite(tEI) ? Math.min(500, Math.max(1, (tEI - 20) / 4)) : 100) / Msec;
-      } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) this.warpWant = null;
-        s.timeSpeed = this.warpSet = AIR_WARP / Msec; // (the entry flown at ×4)
+      } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) {
+        // (the entry flown at ×4)
+        this.warpWant = null;
+        s.timeSpeed = this.warpSet = AIR_WARP / Msec;
+      }
       // the guidance: the bank, every second of the fall (the site carried by the ground)
       // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)
       const wall = performance.now() / 1000;
-      if (R.guid && R.site && wall >= R.next) {
-        R.bank = R.guid.update(fr.env, craft, fr.s, fr.place(R.site));
+      if (R.guid && R.site && wall >= R.next && !R.pending) {
+        // (in the planner's worker: the next bank arrives a few frames on)
+        const G = R.guid;
+        R.pending = true;
         R.next = wall + 1;
+        void runPlanner<{ out: number; bank: number; sign: number; prev: { b: number; e: number } | null; miss: EntryGuidance["lastMiss"]; path: Vec3[] | null } | null>({
+          kind: "guide", env: fr.desc, craft, s: fr.s, place: fr.place(R.site), g: { bank: G.bank, sign: G.sign, prev: G.prev, o: G.o },
+        }).then((r) => {
+          R.pending = false;
+          if (this.entryRun !== R || !r || (r as { error?: string }).error) return;
+          Object.assign(G, { bank: r.bank, sign: r.sign, prev: r.prev, lastMiss: r.miss });
+          G.last = { path: r.path ?? [] } as unknown as EntryResult;
+          R.bank = r.out;
+        });
       }
       if (LA && LA.out.mach < R.handover && LA.h < top * 0.5) {
         if (!R.site) return say(`Entry done over ${name}: Mach ${LA.out.mach.toFixed(1)}, the controls are yours`);
@@ -3205,7 +3223,7 @@ export class CameraController {
     const att = { nose: fr.toLocal(dir), up: fr.toLocal(unitV(fc.ctx.r as Vec3)) };
     if (!B.firing) {
       this.warpWant = null;
-        s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
+      s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
       if (wait <= 0) {
         B.firing = true;
         B.done = 0;

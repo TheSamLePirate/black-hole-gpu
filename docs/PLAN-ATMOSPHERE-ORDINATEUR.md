@@ -95,3 +95,23 @@ Décisions de l'utilisateur :
 
 ### P9 — Finitions
 - Performances, tests, README, aide des raccourcis, écrans du cockpit (Mach, chaleur, g, mode).
+
+## Avancement (2026-10-02)
+
+| Phase | État | Commit · fiche |
+|---|---|---|
+| P1 cœur aéro-thermique | fait, testé (atmosphère standard, finesse, rentrée type navette) | `10be8d6` · 140 |
+| P2 la physique en vol | fait (deux univers, ×4 dans l'air, limites, destruction, reprise, prédiction avec traînée) | `c4b5991` · 141 |
+| P3 au sol, roulage | fait (toucher, roulage, freins, déporteurs, décollage) | `2de98e4` · 142 |
+| P4 trois modes de vol | fait (fusée, avion électrique, ordinateur SF + antigravité, HUD air) | `a6387ca` · 143 |
+| P5 graphisme de la rentrée | fait (gaine de plasma, peau incandescente, cockpit, cône de vapeur, tremblement, son) | `f4adff3` · 144 |
+| P6 rentrée pilotée | fait (désorbitation planifiée, guidage, plané, atterrissage ; sites) | `a23d345` · 145 |
+| P7–P8 ordinateur de bord | fait (opérations, porkchop, analyse, plan éditable ; Terre, Edmunds, Gargantua) | `a23d345`, `ef7f4ff` · 146 |
+| P9 finitions | en cours : calculs d'entrée dans le worker, écrans du cockpit, documentation | |
+
+Limites connues :
+- les traînées de condensation des moteurs ne sont pas dessinées (le cône de vapeur, oui) ;
+- le plané du Ranger vise le site, pas l'axe d'une piste ; l'atterrissage se fait dans le sens d'arrivée ;
+- les missions entre corps (onglet MISSION) restent celles du planificateur existant (notre système) ;
+- autour de Gargantua même, l'ordinateur de bord propose les planificateurs de Kerr existants (orbite
+  circulaire, alignement, rendez-vous, trou de ver), pas encore les opérations à deux corps.

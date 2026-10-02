@@ -201,7 +201,7 @@ export class EntryGuidance {
   sign = 1;
   last: EntryResult | null = null;
   lastMiss: { along: number; across: number; dist: number } | null = null;
-  private prev: { b: number; e: number } | null = null;
+  prev: { b: number; e: number } | null = null;
   constructor(public o: { handoverMach: number; short: number }) {}
 
   /** The signed bank [rad] to fly now, from the state and where the place is now (the ground carries
