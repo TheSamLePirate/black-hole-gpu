@@ -21,6 +21,8 @@ import { fleet } from "../fleet";
 import { keplerProp } from "../system/our-plan";
 import { VESSELS } from "../vessels";
 import { siteDir, sitesOf } from "../game/sites";
+import { BodyKind, MapGpu, type MapTextures } from "./map3d/gpu";
+import { MAPS_HI, MAPS_LO } from "../system/solar";
 const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
 const sub3 = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -369,6 +371,25 @@ export class GroundTrack {
   }
 
   /** The room kept free above and below the world [device px]: the labels; full screen, the cockpit. */
+  /** the tracer's GPU and maps (the globe drawn on it — the planet's own map, its day and night, its air) */
+  gpuSource: (() => { device: GPUDevice; textures(): MapTextures | null } | null) | null = null;
+  private gpu: MapGpu | null = null;
+  private gpuTried = false;
+  private gpuLayer(): MapGpu | null {
+    if (this.gpu || this.gpuTried) return this.gpu;
+    const src = this.gpuSource?.();
+    if (!src) return null;
+    this.gpuTried = true;
+    try {
+      this.gpu = new MapGpu(src.device, src.textures);
+      this.stage.insertBefore(this.gpu.canvas, this.canvas);
+    } catch (e) {
+      console.warn("The globe's GPU layer: none —", e);
+      this.gpu = null;
+    }
+    return this.gpu;
+  }
+
   /** full screen: the panels over the stage's edges [CSS px] (the host's measure) */
   insets: (() => { l: number; r: number; t: number; b: number }) | null = null;
   private margins(dpr: number) {
@@ -406,18 +427,43 @@ export class GroundTrack {
     const proj = (q: V3) => ({ x: cx + dot(q, E) * R, y: cy - dot(q, N) * R, vis: dot(q, C) > 0 });
     this.hit = { globe: true, cx, cy, R, C, E, N };
 
+    // on the GPU: the world's own map at the screen's resolution, lit, its air — the canvas over it
+    const G = this.gpuLayer();
+    if (G) {
+      G.canvas.style.display = "";
+      const view = (v: V3): V3 => [dot(v, E), dot(v, N), -dot(v, C)];
+      const D = 100;
+      const f = R * Math.sqrt(D * D - 1);
+      const lin = (x: number) => Math.pow(x / 255, 2.2);
+      const t = THEIRS[sc.id] ?? [150, 150, 150];
+      const col = t.map(lin) as V3;
+      const sb = solarBody(sc.id);
+      const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
+      const proc = { miller: 0, mann: 1, edmunds: 2 }[sc.id as "miller"];
+      const hi = sb?.map ? MAPS_HI.indexOf(sb.map) : -1, lo = sb?.map ? MAPS_LO.indexOf(sb.map) : -1;
+      const kind = sc.id === "earth" ? BodyKind.Earth : proc !== undefined ? BodyKind.Proc : hi >= 0 || lo >= 0 ? BodyKind.Map : BodyKind.Plain;
+      // (the light: the Sun's, ours; Gargantua's worlds, over the viewer's shoulder)
+      const L = sc.sun ? view(sc.sun) : ([0.35, 0.45, -0.82] as V3);
+      G.begin();
+      G.body({
+        c: [0, 0, D], R: 1, kind, layer: hi >= 0 ? hi : -(lo + 1), proc, L, col,
+        ax: [view([1, 0, 0]), view([0, 1, 0]), view([0, 0, 1])],
+        air: AIR[sc.id] ? { col: AIR[sc.id]!, k: 0.9 } : undefined, minPx: 1, night: 0.16,
+      });
+      G.render(W, H, f, cx, cy, [E, N, [-C[0], -C[1], -C[2]]], performance.now() / 1000);
+    }
     // the atmosphere's rim, the lit disc (the raster: at most 420 px across, scaled up)
     const halo = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.08);
     halo.addColorStop(0, sc.id === "earth" ? "rgba(120, 180, 255, 0.35)" : "rgba(200, 210, 230, 0.12)");
     halo.addColorStop(1, "rgba(120, 180, 255, 0)");
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 1.08, 0, 2 * Math.PI);
+    if (!G) ctx.arc(cx, cy, R * 1.08, 0, 2 * Math.PI);
     ctx.fill();
     const n = Math.max(8, Math.min(420, Math.round(2 * R)));
     const sun = sc.sun;
     const key = [sc.id, n, v.lat.toFixed(4), v.lon.toFixed(4), sun ? sun.map((x) => x.toFixed(3)).join() : "", tex ? tex.w : 0].join("|");
-    if (key !== this.raster.key) {
+    if (key !== this.raster.key && !G) {
       this.raster.key = key;
       this.renderGlobe(n, sc, tex, C, E, N);
     }
@@ -426,7 +472,7 @@ export class GroundTrack {
     ctx.arc(cx, cy, R, 0, 2 * Math.PI);
     ctx.clip();
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.raster.c, cx - R, cy - R, 2 * R, 2 * R);
+    if (!G) ctx.drawImage(this.raster.c, cx - R, cy - R, 2 * R, 2 * R);
 
     // the graticule: every 30° (the equator and the prime meridian brighter)
     ctx.lineWidth = 1 * dpr;
@@ -506,6 +552,7 @@ export class GroundTrack {
 
   // ---------------------------------------------------------------------------------- the planisphere
   private drawMap(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
+    if (this.gpu) this.gpu.canvas.style.display = "none";
     const { top, bottom, left, right } = this.margins(dpr);
     const aw = W - left - right - 8 * dpr, ah = H - top - bottom;
     const mw = Math.min(aw, 2 * ah), mh = mw / 2;

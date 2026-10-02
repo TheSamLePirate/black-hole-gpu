@@ -6586,6 +6586,13 @@ export class CameraController {
    *    the air held to a drag of 30 % of the thrust (a gravity turn); then circularize.
    * The feed-forward holds the ship against its weight and the drag.
    */
+  /**
+   * The take-off's goal — the flight computer's LAUNCH and the hub's TAKE OFF fly the same: the orbit's
+   * height [km] (null: the lowest safe, above the air), its inclination [°] (null: due east, the ground's
+   * turn given for free).
+   */
+  launchGoal: { altKm: number | null; incDeg: number | null } = { altKm: null, incDeg: null };
+
   private ourSurfaceWant(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, g: ReturnType<typeof gravityHome>, say: (t: string) => null,
     out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 }, T: number) {
     const P = this.pilot;
@@ -6627,16 +6634,30 @@ export class CameraController {
     }
     // take-off
     const air = sb.atmosphere;
-    const d0 = sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius);
-    const f = Math.min(Math.max((r - sb.radius) / (d0 - sb.radius), 0), 1);
-    let east = cross(spinAxis(id), up);
+    const LG = this.launchGoal;
+    const d0 = sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius, LG.altKm !== null ? (LG.altKm * 1e3) / M_METRES : 0);
+    // (the climb aimed a little above the height asked — it slows as it nears its aim — and the orbit
+    // made circular once the height is reached)
+    const dAim = d0 + 0.04 * (d0 - sb.radius);
+    const f = Math.min(Math.max((r - sb.radius) / (dAim - sb.radius), 0), 1);
+    const pole = unitV(spinAxis(id));
+    let east = cross(pole, up);
     if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
     east = unitV(east);
+    // (an inclination asked: the launch azimuth for it — sin az = cos i / cos latitude, prograde —, the
+    // nearest reachable when the site's latitude is above it)
+    if (LG.incDeg !== null) {
+      const north = cross(up, east);
+      const cl = Math.sqrt(Math.max(1 - dot3(up, pole) ** 2, 1e-9));
+      const sinAz = clamp(Math.cos((LG.incDeg * Math.PI) / 180) / cl, -1, 1);
+      const az = Math.asin(sinAz);
+      east = unitV(lin(north, Math.cos(az), east, sinAz));
+    }
     const vc = Math.sqrt(sb.mass / r);
     let vUp = Math.min(Math.sqrt((thr - gw) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
     const vE = vc * Math.sqrt(f);
     const vi = sub3(nav.V, nav.refVel);
-    if (f > 0.95 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
+    if (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
       P.auto = "none";
       P.setAuto("circularize");
       this.onPilotMessage?.(`In orbit around ${name}`);
@@ -6656,7 +6677,15 @@ export class CameraController {
       const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
       vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
     }
-    return out(lin(lin(gv, 1, up, vUp), 1, east, vEastAir), ff);
+    // (an inclination asked: the ground's own turn across the launch's heading taken off as the craft
+    // climbs — else it is left in the orbit, which then comes out flatter)
+    let want = lin(lin(gv, 1, up, vUp), 1, east, vEastAir);
+    if (LG.incDeg !== null) {
+      const gi = sub3(gv, nav.refVel);
+      const across = lin(lin(gi, 1, east, -dot3(gi, east)), 1, up, -dot3(gi, up));
+      want = lin(want, 1, across, -f);
+    }
+    return out(want, ff);
   }
 
   private ourOrbitR: { body: string; r: number } | null = null;

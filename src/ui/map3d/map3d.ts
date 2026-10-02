@@ -23,6 +23,8 @@ import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
 import { extendTheirs } from "../../system/their-extend";
 import { plan as planJob } from "../../system/plan-client";
+import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./gpu";
+import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
 
 export interface MapHost {
   readonly s: Settings;
@@ -42,6 +44,8 @@ export interface MapHost {
   toggleMapView(): void;
   /** the panels over the map's edges (full screen) [CSS px]: what it is centred and framed without */
   insets?(): { l: number; r: number; t: number; b: number };
+  /** the tracer's GPU and maps (the bodies drawn textured on it), when there is one */
+  gpu?(): { device: GPUDevice; textures(): MapTextures | null } | null;
 }
 
 type PlaneMode = "system" | "equator" | "orbit" | "target";
@@ -80,6 +84,9 @@ function fmtDist(d: number, ours: boolean, s: Settings) {
 
 export class Map3D {
   readonly canvas = h("canvas", "fl-map");
+  /** the bodies on the GPU, under the canvas (null: none — the canvas draws them) */
+  private gpu: MapGpu | null = null;
+  private gpuTried = false;
   readonly bar = h("div", "fl-mapbar m3-bar");
   readonly stage = h("div", "m3-stage");
   private crumbs = h("div", "m3-crumbs");
@@ -845,8 +852,83 @@ export class Map3D {
     return best;
   }
 
+  /** The GPU's layer, made the first time the host has one (the stage's under-layer). */
+  private gpuLayer(): MapGpu | null {
+    if (this.gpu || this.gpuTried) return this.gpu;
+    const src = this.host.gpu?.();
+    if (!src) return null;
+    this.gpuTried = true;
+    try {
+      this.gpu = new MapGpu(src.device, src.textures);
+      this.stage.insertBefore(this.gpu.canvas, this.canvas);
+      this.stage.classList.add("gpu");
+    } catch (e) {
+      console.warn("The map's GPU layer: none —", e);
+      this.gpu = null;
+    }
+    return this.gpu;
+  }
+
+  /** A body for the GPU: its place and size in view space, its light, its axes, what it is drawn as. */
+  private gpuBody(G: MapGpu, sc: MapScene, b: MapBody, t: number, dpr: number, pw: (X: V3) => V3, rw: (X: V3, R: number) => number): boolean {
+    const cam = this.cam;
+    const view = (v: V3): V3 => [dot(v, cam.right), dot(v, cam.up), dot(v, cam.fwd)];
+    const c = view(sub(pw(b.pos), cam.eye));
+    const lin = (x: number) => Math.pow(x / 255, 2.2);
+    const col = b.col.split(",").map((x) => lin(+x)) as V3;
+    const src = b.light ? sc.byId.get(b.light)?.pos : null;
+    const L = view(src ? norm(sub(src, b.pos)) : scale(cam.fwd, -1));
+    const sb = sc.universe === "ours" ? solarBody(b.id) : null;
+    // (the body's axes: ours, its own — its map turned as the world turns —; Gargantua's worlds, their
+    // frames' — x away from the hole, z their pole)
+    let ax: [V3, V3, V3];
+    if (sb) ax = bodyAxes(sb, t) as [V3, V3, V3];
+    else {
+      const z = b.kind === "hole" ? ([0, 0, 1] as V3) : norm(b.pole);
+      const H = sc.byId.get("hole")?.pos ?? [0, 0, 0];
+      let x = b.kind === "hole" ? ([1, 0, 0] as V3) : sub(b.pos, H);
+      x = norm(sub(x, scale(z, dot(x, z))));
+      ax = [x, cross(z, x), z];
+    }
+    const axV = ax.map(view) as [V3, V3, V3];
+    const R = rw(b.pos, b.radius);
+    const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
+    const air = b.air ? { col: AIR[b.id] ?? col, k: 0.9 } : undefined;
+    const base = { c, R, L, ax: axV, col, air, minPx: (b.kind === "moon" ? 2 : 3.2) * dpr } as GpuBody;
+    if (b.kind === "star") return G.body({ ...base, kind: BodyKind.Star, minPx: 5 * dpr }), true;
+    if (b.kind === "mouth") return G.body({ ...base, kind: BodyKind.Mouth, minPx: 4 * dpr }), true;
+    if (b.kind === "hole") {
+      const hl = sc.hole;
+      const Rh = rw(b.pos, hl?.rH ?? b.radius);
+      const rings: [number, number] | undefined = hl?.disk ? [rw(b.pos, hl.isco) / Rh, rw(b.pos, hl.diskOuter) / Rh] : undefined;
+      return G.body({ ...base, R: Rh, kind: BodyKind.Hole, rings, minPx: 3 * dpr }), true;
+    }
+    const rings: [number, number] | undefined = b.rings ? [rw(b.pos, b.rings.inner * b.radius) / R, rw(b.pos, b.rings.outer * b.radius) / R] : undefined;
+    if (sb?.map) {
+      if (b.id === "earth") return G.body({ ...base, kind: BodyKind.Earth, rings }), true;
+      const hi = MAPS_HI.indexOf(sb.map), lo = MAPS_LO.indexOf(sb.map);
+      if (hi >= 0 || lo >= 0) return G.body({ ...base, kind: BodyKind.Map, layer: hi >= 0 ? hi : -(lo + 1), rings }), true;
+    }
+    const proc = { miller: 0, mann: 1, edmunds: 2 }[b.id as "miller"];
+    if (proc !== undefined) return G.body({ ...base, kind: BodyKind.Proc, proc }), true;
+    return G.body({ ...base, kind: BodyKind.Plain, rings }), true;
+  }
+
   // ------------------------------------------------------------------------------------ drawing
   draw(i: Info, t0: number) {
+    const G = this.gpuLayer();
+    G?.begin();
+    try {
+      this.draw2d(i, t0, G);
+    } finally {
+      if (G) {
+        const [vx, vy, vw, vh] = this.cam.view;
+        G.render(this.canvas.width, this.canvas.height, this.cam.focal, vx + vw / 2, vy + vh / 2, [this.cam.right, this.cam.up, this.cam.fwd], performance.now() / 1000);
+      }
+    }
+  }
+
+  private draw2d(i: Info, t0: number, G: MapGpu | null) {
     const c = this.canvas;
     const dpr = devicePixelRatio;
     const cw = Math.round((c.clientWidth || 260) * dpr);
@@ -960,6 +1042,22 @@ export class Map3D {
       for (const o of occluders) if (z > o.z && (x - o.x) ** 2 + (y - o.y) ** 2 < o.r * o.r) return true;
       return false;
     };
+    // (the GPU's bodies are solid: what they hide is not drawn, the grid cut round them)
+    const hideK = G ? 0 : 0.22;
+
+    // ---- the reference plane's grid (around the focus)
+    if (G && occluders.length) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, cw, ch);
+      for (const o of occluders) {
+        ctx.moveTo(o.x + o.r, o.y);
+        ctx.arc(o.x, o.y, o.r, 0, 2 * Math.PI, true);
+      }
+      ctx.clip("evenodd");
+      this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
+      ctx.restore();
+    } else this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
 
     // a polyline (its points offset by off), depth-cued, broken behind the camera, faint where a body hides it
     const line = (pts: V3[], col: string, a: number, w: number, dash: number[] = [], occl = true, off?: V3) => {
@@ -984,8 +1082,8 @@ export class Map3D {
           continue;
         }
         if (prev) {
-          const hid = occl && occluders.length > 0 && hidden((p.x + prev.x) / 2, (p.y + prev.y) / 2, (p.z + prev.z) / 2);
-          const alpha = a * depthA(p.z) * (hid ? 0.22 : 1);
+          const hid = (occl || !!G) && occluders.length > 0 && hidden((p.x + prev.x) / 2, (p.y + prev.y) / 2, (p.z + prev.z) / 2);
+          const alpha = a * depthA(p.z) * (hid ? hideK : 1);
           const st = Math.round(alpha * 20);
           if (st !== state || !open) {
             flush();
@@ -1011,14 +1109,12 @@ export class Map3D {
     };
     const labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number; below?: boolean }[] = [];
 
-    // ---- the reference plane's grid (around the focus)
-    this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
 
     // ---- the hole (theirs): the disk, its rings, the horizon
     if (sc.hole) {
       const H = sc.byId.get("hole")!.pos;
       const hl = sc.hole;
-      if (hl.disk) {
+      if (hl.disk && !G) {
         const outer = circle3(H, hl.diskOuter, [0, 0, 1], 120).map((X) => P(X));
         const inner = circle3(H, hl.isco, [0, 0, 1], 72).map((X) => P(X));
         if (outer.every((p) => p.ok)) {
@@ -1034,9 +1130,12 @@ export class Map3D {
           ctx.fill("evenodd");
         }
       }
-      line(circle3(H, hl.isco, [0, 0, 1]), "120, 230, 150", 0.6, 1.1, [4, 3], false);
-      line(circle3(H, hl.photon, [0, 0, 1]), "255, 220, 120", 0.5, 1.1, [1.5, 2.5], false);
-      line(circle3(H, 2, [0, 0, 1]), "150, 170, 255", 0.35, 1, [3, 3], false);
+      // (the GPU draws the disk and the photon ring: the ISCO's circle alone, hidden behind the horizon)
+      line(circle3(H, hl.isco, [0, 0, 1]), "120, 230, 150", 0.6, 1.1, [4, 3], !!G);
+      if (!G) {
+        line(circle3(H, hl.photon, [0, 0, 1]), "255, 220, 120", 0.5, 1.1, [1.5, 2.5], false);
+        line(circle3(H, 2, [0, 0, 1]), "150, 170, 255", 0.35, 1, [3, 3], false);
+      }
     }
 
     // ---- orbits
@@ -1088,7 +1187,9 @@ export class Map3D {
       }
       if (p.x < -60 * dpr || p.y < -60 * dpr || p.x > cw + 60 * dpr || p.y > ch + 60 * dpr) continue;
       const r = rw(b.pos, b.radius) * p.k;
-      this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
+      // (on the GPU: textured, lit — the station and the craft stay the canvas's dots)
+      const craft = ["iss", "ranger", "lander", "endurance"].includes(b.id);
+      if (!G || craft || !this.gpuBody(G, sc, b, tp, dpr, pw, rw)) this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
       const shown = Math.max(r, b.kind === "star" ? 5 * dpr : moon ? 2 * dpr : 3.2 * dpr);
       this.bodyHits.push({ id: b.id, x: p.x, y: p.y, r: shown });
       if (b.id === tgt) {

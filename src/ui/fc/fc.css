@@ -109,3 +109,9 @@
 .fc-dest.here { opacity: 0.45; cursor: default; }
 .fc-busy { padding: 10px; font: 600 11.5px var(--hud-font); letter-spacing: 0.06em; color: rgba(196, 140, 255, 0.9); animation: fc-pulse 1.2s ease-in-out infinite; }
 @keyframes fc-pulse { 50% { opacity: 0.45; } }
+
+/* the autopilots' rows — the hub's own buttons: their tag, their state */
+.fc-hub { margin-left: 8px; padding: 1px 5px; border-radius: 4px; font: 700 8.5px var(--hud-font); letter-spacing: 0.14em; color: #0b1220; background: rgba(255, 179, 92, 0.85); vertical-align: 2px; }
+.fc-go.fc-on { color: #0b1220; background: linear-gradient(180deg, #ffd08a, #ffb35c); border-color: #ffd08a; font-weight: 700; }
+.fc-go.fc-off { opacity: 0.45; }
+.fc-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(176, 196, 222, 0.85); cursor: pointer; }

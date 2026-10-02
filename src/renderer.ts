@@ -358,6 +358,14 @@ export class Renderer {
   shipReentry: Reentry | null = null;
   /** the Ranger's thrusters firing (ship.ts: Thrust), or null */
   shipThrust: Thrust | null = null;
+  /** The map's GPU (ui/map3d/gpu.ts): this device, and the tracer's maps as they stand (no second copy). */
+  mapGpuSource() {
+    return {
+      device: this.device,
+      textures: () => ({ hi: this.planetMaps.hi, lo: this.planetMaps.lo, rings: this.planetMaps.rings, earthDay: this.earthMaps.cube, earthNight: this.earthMaps.night }),
+    };
+  }
+
   /** the condensation trails (contrails.ts: segments in the ship's frame), or null */
   shipContrails: { data: Float32Array<ArrayBuffer>; n: number } | null = null;
   /** the last frame's local patch (inspection) */

@@ -217,6 +217,13 @@ export class FlightHud {
   private sel = 0;
   private planSig = "";
   plannerOpen = false;
+  /** the tracer's GPU and its maps, for the map's textured bodies (main.ts) */
+  mapGpu: { device: GPUDevice; textures(): import("./map3d/gpu").MapTextures | null } | null = null;
+
+  /** Why an autopilot cannot be engaged now (the hub's own reason), "" when it can. */
+  autoWhy(a: Auto): string {
+    return this.buttons.get(a)?.dataset.why ?? "";
+  }
   /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
   onPlanner: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
@@ -687,11 +694,11 @@ export class FlightHud {
       speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
     };
     const AUTO_TIPS: Record<string, string> = {
-      hover: "Kills the speed relative to the body and holds the place",
-      circularize: "Burns at the right moment to make the orbit circular",
-      approach: "Flies to the target and stops beside it",
-      land: "Descends, kills the horizontal speed, touches down",
-      takeoff: "Lifts off and climbs to orbit",
+      hover: "Kills the speed relative to the body and holds the place — the flight computer's Hold position",
+      circularize: "Makes the orbit circular where the ship is — the flight computer's Circularize NOW",
+      approach: "Flies to the target and stops beside it — the flight computer's Approach the target",
+      land: "Descends, kills the horizontal speed, touches down — the flight computer's Land here",
+      takeoff: "Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)",
       entry: "From orbit: the deorbit burn, the guided entry (the angle of attack held, the bank flown to the site), the glide and the landing — at the chosen site, or the nearest",
     };
     this.buildStrip(AUTO_SVG, AUTO_TIPS);
@@ -766,6 +773,7 @@ export class FlightHud {
       mapView: () => this.mapView,
       toggleMapView: () => this.toggleMapView(),
       insets: () => this.mapInsets(),
+      gpu: () => this.mapGpu,
     });
     addEventListener("keydown", (e: KeyboardEvent) => {
       // Delete / Backspace: the selected node (map view or planner open)
@@ -805,6 +813,7 @@ export class FlightHud {
 
     this.root.append(this.warn, this.airData, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.strip, this.viewMenu!, this.craftMenu!);
     this.ground.insets = () => this.mapInsets();
+    this.ground.gpuSource = () => this.mapGpu;
     this.dock.hidden = true;
     document.body.append(this.hud, this.root);
     this.initTips();

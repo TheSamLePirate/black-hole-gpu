@@ -50,6 +50,13 @@ export interface FcHost {
   missionCommit(): string | null;
   /** the current target (the map's, the analysis's) */
   target(): string;
+  /** the autopilots — the hub's own buttons do the same: engaged (not toggled), their state (on, why
+   *  not); the launch to orbit (its height, its inclination: the hub's TAKE OFF flies them too) */
+  engage(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry"): string | null;
+  disengage(): void;
+  autoState(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry"): { on: boolean; why: string };
+  launch(altKm: number | null, incDeg: number | null): string | null;
+  launchGoal(): { altKm: number | null; incDeg: number | null };
   say(t: string): void;
 }
 
@@ -200,6 +207,49 @@ export class FlightComputer {
     else this.buildMission();
   }
 
+  /** The autopilots' rows' buttons, kept up to date (engaged, why not) a few times a second. */
+  private autoBtns: { a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry"; b: HTMLButtonElement; verb: string }[] = [];
+
+  /**
+   * An autopilot's row — the same as the hub's button: ENGAGE (the hub's lit button the same), its
+   * state shown (ENGAGED — a click disengages), dimmed with the hub's reason when it cannot.
+   */
+  private autoOp(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry", title: string, help: string, fields: HTMLElement[] = [], go?: () => string | null, verb = "ENGAGE") {
+    const r = h("div", "fc-op fc-auto");
+    const t = h("div", "fc-op-t", title);
+    t.append(h("span", "fc-hub", "HUB"));
+    const p = h("div", "fc-op-h", help);
+    const f = h("div", "fc-op-f");
+    f.append(...fields);
+    const b = h("button", "fc-go", verb);
+    b.onclick = () => {
+      const st = this.host.autoState(a);
+      if (st.on) {
+        this.host.disengage();
+        return;
+      }
+      const e = go ? go() : this.host.engage(a);
+      if (e) this.host.say(e);
+    };
+    r.append(t, p, f, b);
+    this.body.append(r);
+    this.autoBtns.push({ a, b, verb });
+  }
+
+  private syncAutos() {
+    for (const { a, b, verb } of this.autoBtns) {
+      if (!b.isConnected) continue;
+      const st = this.host.autoState(a);
+      const txt = st.on ? "ENGAGED — DISENGAGE" : verb;
+      if (b.textContent !== txt) b.textContent = txt;
+      b.classList.toggle("fc-on", st.on);
+      b.classList.toggle("fc-off", !st.on && !!st.why);
+      if (st.why && !st.on) b.dataset.why = st.why;
+      else delete b.dataset.why;
+    }
+    this.autoBtns = this.autoBtns.filter((x) => x.b.isConnected);
+  }
+
   /** An operation's row: its title, help, fields, and the button that plans it. */
   private op(title: string, help: string, fields: HTMLElement[], plan: () => OpResult | string | null, verb = "PLAN") {
     const r = h("div", "fc-op");
@@ -229,7 +279,21 @@ export class FlightComputer {
     return { ctx: c.ctx, R: c.ctx.R };
   }
 
+  /** The launch to orbit (the hub's TAKE OFF): its height and inclination fields. */
+  private launchOp() {
+    const g = this.host.launchGoal();
+    const alt = numField("Orbit altitude", g.altKm ?? 200, "km", 10, () => {}, { min: 0 });
+    const inc = numField("Inclination", g.incDeg ?? 0, "°", 1, () => {}, { min: 0, max: 180, digits: 1 });
+    const east = h("label", "fc-check");
+    const cb = h("input");
+    cb.type = "checkbox";
+    cb.checked = g.incDeg === null;
+    east.append(cb, h("span", "", "Due east (the ground's turn given)"));
+    this.autoOp("takeoff", "Launch to orbit", "Straight up through the thick air, the gravity turn, then circular at the height — the hub's TAKE OFF flies the same", [alt.el, inc.el, east], () => this.host.launch(alt.get(), cb.checked ? null : inc.get()), "LAUNCH");
+  }
+
   private buildOrbit() {
+    this.launchOp();
     const c = this.host.context();
     const R = c?.ctx.R ?? 6371e3;
     const el = c ? elements(c.ctx.mu, c.ctx.r, c.ctx.v, c.ctx.pole) : null;
@@ -244,7 +308,12 @@ export class FlightComputer {
       };
       seg.append(b);
     }
-    this.op("Circularize", "The speed made circular there, the flight path levelled", [seg], () => {
+    this.op("Circularize", "The speed made circular there, the flight path levelled — NOW: the autopilot, closed on the circular speed (the hub's CIRC)", [seg], () => {
+      if (where === "now") {
+        const e = this.host.engage("circularize");
+        this.host.say(e ?? "Circularize: the autopilot (the hub's CIRC) — closed on the circular speed where the ship is");
+        return null;
+      }
       const x = this.ctxOrSay();
       return x && circularize(x.ctx, where);
     });
@@ -276,6 +345,8 @@ export class FlightComputer {
   }
 
   private buildTarget() {
+    this.autoOp("approach", "Approach the target", "Flies to the target and stops beside it, station-keeping — the hub's APPROACH");
+    this.autoOp("hover", "Hold position", "Kills the speed relative to the body and holds the place — the hub's HOLD POS");
     const c = this.host.context();
     const name = c?.targetName ?? null;
     if (!name || !c?.ctx.target) {
@@ -310,7 +381,8 @@ export class FlightComputer {
     const sites = this.host.sites();
     const cur = this.host.site();
     if (!sites.length) {
-      this.body.append(h("div", "fc-empty", "No landing site on this body — a world with ground and its sites (Earth, Mars, the Moon, Titan, Miller, Mann, Edmunds)"));
+      this.autoOp("land", "Land here", "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND");
+      this.body.append(h("div", "fc-empty", "No landing site on this body for the guided entry — a world with ground and its sites (Earth, Mars, the Moon, Titan, Miller, Mann, Edmunds)"));
       return;
     }
     const list = h("div", "fc-sites");
@@ -331,7 +403,8 @@ export class FlightComputer {
       list.append(b);
     }
     this.body.append(list);
-    this.op("Deorbit, entry & landing", "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander)", [], () => this.host.land(), "ENGAGE");
+    this.autoOp("entry", "Deorbit, entry & landing", "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander) — the hub's ENTRY");
+    this.autoOp("land", "Land here", "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND");
   }
 
   /** The mission's choices, kept from one opening to the next. */
@@ -443,7 +516,14 @@ export class FlightComputer {
         };
         seg.append(b);
       }
-      this.op("Circularize", "The velocity made the circular orbit's there — tangential, the speed whose free fall has no radial pull (not Kepler's: the hole's own)", [seg], () => this.host.kerrOp("circ", where));
+      this.op("Circularize", "The velocity made the circular orbit's there — tangential, the speed whose free fall has no radial pull (not Kepler's: the hole's own) — NOW: the autopilot (the hub's CIRC)", [seg], () => {
+        if (where === "now") {
+          const e = this.host.engage("circularize");
+          this.host.say(e ?? "Circularize: the autopilot (the hub's CIRC)");
+          return null;
+        }
+        return this.host.kerrOp("circ", where);
+      });
       const fin = (x: number) => (Number.isFinite(x) ? x : 0);
       const ap = numField("Apoapsis", Math.round(fin(o?.ra ?? k.r) * 1.5), "M", 1, () => {}, { min: 2, digits: 1 });
       this.op("Apoapsis", "A burn at the periapsis: the far side put there — found on the real path (it precesses)", [ap.el], () => this.host.kerrOp("ap", ap.get()));
@@ -456,6 +536,8 @@ export class FlightComputer {
       const rs = numField("Period ×", 1.5, "", 0.25, () => {}, { min: 0.2, max: 20, digits: 3 });
       this.op("Resonant orbit", "The period a ratio of this one's — back where it is every few turns — on the geodesic's own clock", [rs.el], () => this.host.kerrOp("res", rs.get()));
     } else if (t === "target") {
+      this.autoOp("approach", "Approach the target", "Flies to the target and stops beside it, station-keeping — the hub's APPROACH");
+      this.autoOp("hover", "Hold position", "Kills the speed relative to the hole's frame and holds the place — the hub's HOLD POS");
       this.body.append(h("div", "fc-tgt", `Target: ${k.target ?? "—"}`));
       this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () => this.host.kerrOp("plane"));
       // (a rendezvous, the wormhole: the MISSION tab's planner — previewed before it is flown)
@@ -595,6 +677,7 @@ export class FlightComputer {
     const now = performance.now();
     if (now - this.lastInfo < 250) return;
     this.lastInfo = now;
+    this.syncAutos();
     const c = this.host.context();
     const k = this.host.kerr();
     const sig = `${c?.body}|${c?.targetName}|${!!k}`;

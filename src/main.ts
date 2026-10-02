@@ -904,9 +904,24 @@ async function main() {
     site: () => camera.entrySite,
     setSite: (st) => (camera.entrySite = st),
     land: () => {
-      pilotAuto("entry");
+      if (camera.pilot.auto !== "entry") pilotAuto("entry");
       return null;
     },
+    // (the hub's autopilots: engaged — never toggled off by a second engage —, the same code)
+    engage: (a) => {
+      if (camera.pilot.auto !== a) pilotAuto(a);
+      return null;
+    },
+    disengage: () => {
+      if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
+    },
+    autoState: (a) => ({ on: camera.pilot.auto === a, why: flightHud.autoWhy(a) }),
+    launch: (altKm, incDeg) => {
+      camera.launchGoal = { altKm, incDeg };
+      if (camera.pilot.auto !== "takeoff") pilotAuto("takeoff");
+      return null;
+    },
+    launchGoal: () => ({ ...camera.launchGoal }),
     missionTargets: () => camera.missionTargets(),
     missionPlan: (spec) => camera.missionPlan(spec),
     missionCommit: () => camera.missionCommit(),
@@ -914,6 +929,8 @@ async function main() {
     say: (t) => panel.toast(t),
   });
   flightHud.attach(flightComputer.root);
+  // (the map's bodies drawn on the tracer's GPU, with its maps)
+  flightHud.mapGpu = renderer.mapGpuSource();
   // (the planner — its key, its button —: the map, the flight computer's MISSION tab)
   flightHud.onPlanner = () => openMissions();
   openMissions = () => {
