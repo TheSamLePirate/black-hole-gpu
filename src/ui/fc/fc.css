@@ -1,5 +1,8 @@
 /* the flight computer over the full-screen map (ui/fc/computer.ts) */
 .fc-root { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+/* (inside the HUD, whose children all take the pointer: the full-screen layer lets it through to the
+   map — only its panels take it) */
+.fl-root > .fc-root { pointer-events: none; }
 .fc-root[hidden] { display: none; }
 .fc-panel {
   box-sizing: border-box; position: absolute; top: 62px; bottom: 12px; pointer-events: auto; overflow-y: auto; overflow-x: hidden;
