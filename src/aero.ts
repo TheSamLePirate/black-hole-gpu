@@ -280,6 +280,8 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     const lin = cla * Math.min(a, s);
     cl = Math.sign(alpha) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) + (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
     stalled = a > s;
+    // (the spoilers — the air brake — spoil the lift)
+    cl *= 1 - 0.65 * (cfg.brake ?? 0);
     // (sideslip: the wing sees the flow's part in its plane)
     const cb = Math.cos(beta);
     const Lw = q * W.S * cl * cb * cb;

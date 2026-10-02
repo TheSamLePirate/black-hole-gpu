@@ -65,6 +65,17 @@ export interface LocalState {
   xi: Vec3;
   w: Vec3;
   landed: boolean;
+  /** on its wheels, moving along the ground */
+  rolling?: boolean;
+}
+
+/** The craft's wheels, for a frame: its left (local axes, unit), level enough to roll, braking (the
+ *  engine idle), built to land. */
+export interface Wheels {
+  side: Vec3;
+  level: boolean;
+  brake: boolean;
+  lands: boolean;
 }
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -219,12 +230,18 @@ export function weightUp(F: PlanetFrame, xi: Vec3): number {
  * acceleration, local axes, c²/M): RK4 substeps small against the orbit around the planet, the drag
  * time and the time to the ground. Returns the impact speed [m/s] if it touched down.
  */
-export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3, aero?: AeroFn): { impact: number | null } {
+export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3, aero?: AeroFn, wheels?: Wheels): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean } {
   const gear = GEAR / F.mPerM;
+  const C = 299792458;
+  let touchdown: { vn: number; vh: number } | undefined;
+  let airborne = false;
   if (L.landed) {
-    // on the ground: stays, unless the thrust lifts it
+    // on the ground: stays, unless the thrust lifts it — or pushes it along past the wheels' resistance
     const up: Vec3 = [L.xi[0] / len(L.xi), L.xi[1] / len(L.xi), L.xi[2] / len(L.xi)];
-    if (dot(thrust, up) > weightUp(F, L.xi)) L.landed = false;
+    const tu = dot(thrust, up);
+    const along = len([thrust[0] - tu * up[0], thrust[1] - tu * up[1], thrust[2] - tu * up[2]]);
+    if (tu > weightUp(F, L.xi)) L.landed = false;
+    else if (wheels?.lands && along > 0.02 * weightUp(F, L.xi)) (L.landed = false), (L.rolling = true);
     else return { impact: null };
   }
   let left = dtau;
@@ -260,17 +277,61 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
     L.xi = [0, 1, 2].map((i) => x0[i]! + (h / 6) * (k1x[i]! + 2 * k2x[i]! + 2 * k3x[i]! + k4x[i]!)) as Vec3;
     L.w = [0, 1, 2].map((i) => v0[i]! + (h / 6) * (k1v[i]! + 2 * k2v[i]! + 2 * k3v[i]! + k4v[i]!)) as Vec3;
     left -= h;
-    // the ground
     const dn = len(L.xi);
     const gr = groundR(F, L.xi);
+    // rolling: held on the ground, the wheels' friction along it, the tyres' grip across
+    if (L.rolling) {
+      const n: Vec3 = [L.xi[0] / dn, L.xi[1] / dn, L.xi[2] / dn];
+      const vn = dot(L.w, n);
+      let vt: Vec3 = [L.w[0] - vn * n[0], L.w[1] - vn * n[1], L.w[2] - vn * n[2]];
+      const press = -dot(localAccel(F, L.xi, L.w, thrust, aero), n) - dot(vt, vt) / dn;
+      if (press <= 0 && vn >= 0) {
+        L.rolling = false;
+        airborne = true;
+        continue;
+      }
+      L.xi = [n[0] * (gr + gear), n[1] * (gr + gear), n[2] * (gr + gear)];
+      const fl = Math.max(press, 0) * h;
+      if (wheels) {
+        const sd = dot(wheels.side, n);
+        const side0: Vec3 = [wheels.side[0] - sd * n[0], wheels.side[1] - sd * n[1], wheels.side[2] - sd * n[2]];
+        const sl = len(side0) || 1;
+        const side: Vec3 = [side0[0] / sl, side0[1] / sl, side0[2] / sl];
+        const vs = dot(vt, side);
+        const vsN = Math.sign(vs) * Math.max(Math.abs(vs) - 0.6 * fl, 0);
+        vt = [vt[0] + (vsN - vs) * side[0], vt[1] + (vsN - vs) * side[1], vt[2] + (vsN - vs) * side[2]];
+      }
+      const mu = 0.015 + (wheels?.brake ? 0.3 : 0);
+      const sp = len(vt);
+      const k = sp > 0 ? Math.max(sp - mu * fl, 0) / sp : 0;
+      L.w = [vt[0] * k, vt[1] * k, vt[2] * k];
+      if (len(L.w) * C < 0.05 && wheels?.brake) {
+        L.w = [0, 0, 0];
+        L.rolling = false;
+        L.landed = true;
+        break;
+      }
+      continue;
+    }
+    // the ground
     if (dn <= gr + gear) {
       const up: Vec3 = [L.xi[0] / dn, L.xi[1] / dn, L.xi[2] / dn];
-      impact = len(L.w) * 299792458;
+      const vn = dot(L.w, up);
+      const vh = len([L.w[0] - vn * up[0], L.w[1] - vn * up[1], L.w[2] - vn * up[2]]) * C;
+      // (on its wheels: level, not too fast along — the vertical speed is the crash)
+      if (wheels?.lands && wheels.level && vh > 0.5 && vh < 220 && -vn * C <= TUNING.crashSpeed) {
+        L.xi = [up[0] * (gr + gear), up[1] * (gr + gear), up[2] * (gr + gear)];
+        L.w = [L.w[0] - vn * up[0], L.w[1] - vn * up[1], L.w[2] - vn * up[2]];
+        L.rolling = true;
+        touchdown = { vn: -vn * C, vh };
+        continue;
+      }
+      impact = wheels?.lands && wheels.level ? Math.max(-vn * C, len(L.w) * C * (vh >= 220 ? 1 : 0)) : len(L.w) * C;
       L.xi = [up[0] * (gr + gear), up[1] * (gr + gear), up[2] * (gr + gear)];
       L.w = [0, 0, 0];
       L.landed = true;
       break;
     }
   }
-  return { impact };
+  return { impact, touchdown, airborne };
 }

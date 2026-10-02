@@ -1636,10 +1636,16 @@ export class CameraController {
         const dtau = simDt / F.ut;
         const was = L.landed;
         // (the flown craft: its own aerodynamics, its axes on the planet's local ones)
-        const aero = acc && F.atm ? this.airFlight.forceFn(F.atm, F.id, fleet.massProps().mass, this.shipAxesLocal(cam).map((v) => zamoToLocal(unitV(v))) as [Vec3, Vec3, Vec3], this.spinPhysical()) : undefined;
-        const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)), aero);
+        const axL = this.shipAxesLocal(cam).map((v) => zamoToLocal(unitV(v))) as [Vec3, Vec3, Vec3];
+        const aero = acc && F.atm ? this.airFlight.forceFn(F.atm, F.id, fleet.massProps().mass, axL, this.spinPhysical()) : undefined;
+        const nUp = unitV(L.xi);
+        const wheels = acc ? { side: axL[0], level: dot3(axL[1], nUp) > Math.cos((25 * Math.PI) / 180), brake: this.pilot.throttle <= 0 && this.pilot.auto === "none", lands: VESSELS[fleet.active].lands } : undefined;
+        const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)), aero, wheels);
+        const bodyName = BODY_NAMES[F.id as Body];
+        if (r.touchdown) this.onPilotMessage?.(`Touchdown on ${bodyName} · ${r.touchdown.vn.toFixed(1)} m/s down, ${r.touchdown.vh.toFixed(0)} m/s along`);
+        if (r.airborne) this.onPilotMessage?.(`Airborne · ${(Math.hypot(...L.w) * 299792458).toFixed(0)} m/s`);
         this.properTime += dtau;
-        this.landed = L.landed;
+        this.landed = L.landed || !!L.rolling;
         const F1 = planetFrame(F.id, t0 + simDt, a, s.massSolar);
         this.local!.F = F1;
         const g = toGlobal(F1, L);
@@ -1657,6 +1663,7 @@ export class CameraController {
           const name = BODY_NAMES[F.id as Body];
           const v = r.impact;
           this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+          if (v > TUNING.crashSpeed) this.crashed(`${VESSELS[fleet.active].name}: crashed on ${name} at ${v.toFixed(0)} m/s`);
           if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
         }
         return t0 + simDt;
@@ -1756,12 +1763,16 @@ export class CameraController {
       const Xg = fromBodyFixed(L.body, L.q, t0);
       const upL = unitV(sub3(Xg, ourState(L.body, t0).pos));
       const gSurf = b.mass / Math.hypot(...sub3(Xg, ourState(L.body, t0).pos)) ** 2;
-      if (dot3(dvT, upL) > gSurf * simDt * 1.001) {
+      // (pushed along the ground past the wheels' resistance: rolling)
+      const along = Math.hypot(...lin(dvT, 1, upL, -dot3(dvT, upL)));
+      const rolls = flown && VESSELS[fleet.active].lands && along > 0.02 * gSurf * simDt;
+      if (dot3(dvT, upL) > gSurf * simDt * 1.001 || rolls) {
         this.ourLanded = null;
         this.landed = false;
         X = Xg;
         V = lin(groundVelocity(L.body, Xg, t0), 1, dvT, 1);
-        this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
+        if (rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001) this.rolling = { body: L.body };
+        else this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
       } else {
         const t1 = t0 + simDt;
         const X1 = fromBodyFixed(L.body, L.q, t1);
@@ -1830,7 +1841,7 @@ export class CameraController {
       return tEnd;
     }
     let a = accAt(X, V, t, g);
-    let touched: { speed: number } | null = null;
+    let touched: { speed: number; vh?: number; wheels?: boolean } | null = null;
     for (let i = 0; i < this.subCap && t < tEnd - 1e-12; i++) {
       const dt = Math.min(stepOf(), tEnd - t);
       // (in the vacuum, clear of the ground: Yoshida's fourth-order composition — the planner's
@@ -1858,14 +1869,68 @@ export class CameraController {
         t = tn;
       }
       g = gravityHome(X, t);
+      // rolling on the ground: held on it, the wheels' friction along it, the tyres' grip across
+      if (this.rolling && ground === this.rolling.body) {
+        const P = ourState(ground, t).pos;
+        const n = unitV(sub3(X, P));
+        const gv = groundVelocity(ground, X, t);
+        let vr = sub3(V, gv);
+        const vn = dot3(vr, n);
+        // (pressed on it: the weight less the lift and the turn of the ground's curve)
+        const aNow = accAt(X, V, t, g);
+        const vt = lin(vr, 1, n, -vn);
+        const press = -dot3(aNow, n) - dot3(vt, vt) / Math.hypot(...sub3(X, P)) + dot3(dvT, n) * (-1 / simDt);
+        if (press <= 0 && vn >= 0) {
+          this.rolling = null;
+          this.onPilotMessage?.(`Airborne · ${(Math.hypot(...vt) * 299792458).toFixed(0)} m/s`);
+        } else {
+          X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
+          vr = vt;
+          const sp = Math.hypot(...vr);
+          if (sp > 0) {
+            // (rolling 0.015, braking 0.3 with the engine at idle; across: the tyres, 0.6)
+            const side = unitV(lin(axes[0], 1, n, -dot3(axes[0], n)));
+            const vs = dot3(vr, side);
+            const fl = Math.max(press, 0) * dt;
+            const mu = 0.015 + (this.pilot.throttle <= 0 && this.pilot.auto === "none" ? 0.3 : 0);
+            const vsN = Math.sign(vs) * Math.max(Math.abs(vs) - 0.6 * fl, 0);
+            let va = lin(vr, 1, side, vsN - vs);
+            const sa = Math.hypot(...va);
+            if (sa > 0) va = lin(va, Math.max(sa - mu * fl, 0) / sa, va, 0);
+            vr = va;
+          }
+          V = lin(gv, 1, vr, 1);
+          // (at rest, the engine idle: standing)
+          if (Math.hypot(...vr) * 299792458 < 0.05 && this.pilot.throttle <= 0) {
+            this.rolling = null;
+            this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+            V = gv;
+            break;
+          }
+        }
+      }
       // touchdown on a solid ground — coming down onto it (just lifted off, the gear a few mm up and
       // the home ↔ rep round trip as fine as that: climbing, it is no landing)
-      if (ground && gearHeight(ground, X, t) < 0 && dot3(sub3(V, groundVelocity(ground, X, t)), sub3(X, ourState(ground, t).pos)) < 0) {
+      else if (ground && gearHeight(ground, X, t) < 0 && dot3(sub3(V, groundVelocity(ground, X, t)), sub3(X, ourState(ground, t).pos)) < 0) {
         const gv = groundVelocity(ground, X, t);
-        touched = { speed: Math.hypot(...sub3(V, gv)) * 299792458 };
         const P = ourState(ground, t).pos;
-        const rb = OUR_BODIES.find((q) => q.id === ground)!.radius + GEAR / M_METRES;
-        X = lin(P, 1, unitV(sub3(X, P)), rb);
+        const n = unitV(sub3(X, P));
+        const vr = sub3(V, gv);
+        const vn = dot3(vr, n) * 299792458;
+        const vh = Math.hypot(...lin(vr, 1, n, -dot3(vr, n))) * 299792458;
+        // (on its wheels: belly down, wings level enough, not too fast — the vertical speed is the crash)
+        const level = dot3(axes[1], n) > Math.cos((25 * Math.PI) / 180);
+        const wheels = flown && VESSELS[fleet.active].lands && level && vh > 0.5 && vh < 220;
+        touched = { speed: wheels ? -vn : Math.hypot(vn, vh), vh, wheels };
+        if (wheels && -vn <= TUNING.crashSpeed) {
+          X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
+          V = lin(gv, 1, vr, 1);
+          V = lin(V, 1, n, -dot3(vr, n));
+          this.rolling = { body: ground };
+          continue;
+        }
+        // (resting on the relief, the gear on it)
+        X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
         V = gv;
         this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
         break;
@@ -1891,13 +1956,18 @@ export class CameraController {
     this.sync();
     if (touched) {
       this.landed = true;
-      const nav = this.ourNav(cameraFrame(s));
-      if (nav) this.levelShip(nav.radial);
       const name = BODY_NAMES[ground as Body];
       const v = touched.speed;
-      this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+      if (touched.wheels && this.rolling) this.onPilotMessage?.(`Touchdown on ${name} · ${v.toFixed(1)} m/s down, ${touched.vh!.toFixed(0)} m/s along`);
+      else {
+        const nav = this.ourNav(cameraFrame(s));
+        if (nav) this.levelShip(nav.radial);
+        this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
+        if (v > TUNING.crashSpeed) this.crashed(`${VESSELS[fleet.active].name}: crashed on ${name} at ${v.toFixed(0)} m/s`);
+      }
       if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
     }
+    if (flown) this.landed = !!this.rolling || !!this.ourLanded;
     return t;
   }
 
@@ -1951,7 +2021,7 @@ export class CameraController {
     return {
       plasma: { q, flow, level: Math.min(Math.max((Math.log10(Math.max(q, 1)) - 5) / 1.5, 0), 1) },
       body: id as Body, alt: Math.max(alt, 0), vVert: sp.vv, vHor: sp.vh,
-      gLocal: (g * aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: !!this.ourLanded, air,
+      gLocal: (g * aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: !!this.ourLanded, rolling: !!this.rolling, air,
     };
   }
 
@@ -1960,6 +2030,7 @@ export class CameraController {
   /** Puts the ship down on a body's ground (a scene's start). */
   setOurLanded(l: { body: string; q: Vec3 } | null) {
     this.ourLanded = l;
+    this.rolling = null;
     this.landed = !!l;
   }
   /** where the ship rests in our universe (a saved game keeps it) */
@@ -2291,6 +2362,7 @@ export class CameraController {
    *  Earthrise, the Earth out of the frame) */
   settleMount() {
     this.airFlight.reset(fleet.active);
+    this.rolling = null;
     this.lastMount = this.s.shipMount;
     // (a scene's attach point: the one a reset comes back to; the outside views at the craft's own distances)
     if (MOUNTS[this.s.shipMount as Mount] && !(MOUNTS[this.s.shipMount as Mount] as { outside?: string }).outside) this.hullMount = this.s.shipMount as Mount;
@@ -2548,11 +2620,22 @@ export class CameraController {
     TUNING.turnAccel = tune.acc;
     TUNING.turnRate = tune.rate;
     this.rotateC(out.rot);
+    // (on its wheels: level on the ground, the nose within the runway's limits)
+    if (this.rolling) {
+      const nav = this.ourNav(cameraFrame(s));
+      if (nav) this.groundAttitude(nav.radial);
+    } else if (this.local?.L.rolling) this.groundAttitude(localToZamo(unitV(this.local.L.xi)));
     // (an assembly turns about its centre of mass: the flown craft's centre swings round it)
     if (before) this.turnAboutCom(before, mp.com);
     const simDt = s.animate ? s.timeSpeed * dt : 0;
     const tau0 = this.properTime;
     const pre = simDt > 0 ? this.contactPose() : null;
+    // the configuration: on the wheels, the engine idle, the spoilers out (the lift dumped, braking);
+    // the gear down on the ground and low and slow
+    const onWheels = !!this.rolling || !!this.local?.L.rolling;
+    const LA = this.airFlight.last;
+    this.airFlight.cfg.brake = onWheels && this.pilot.throttle <= 0 && this.pilot.auto === "none" ? 1 : this.airBrake;
+    this.airFlight.cfg.gear = onWheels || this.landed || (!!LA && LA.h < 600 && LA.speed < 160);
     this.airFlight.vacuum();
     if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
     if (pre) this.stationContact(pre);
@@ -2605,6 +2688,47 @@ export class CameraController {
     const v = 25 * air.a;
     const o = aeroForces(VESSELS[fleet.active].aero, ax.map((a) => (dot3(va, a) / vl) * v) as Vec3, air);
     return o.q > 0 ? o.D / o.q / m : 0;
+  }
+
+  /** The air brake asked for (0 … 1). */
+  airBrake = 0;
+
+  /** On the ground and rolling (our side): the body under the wheels. */
+  private rolling: { body: string } | null = null;
+
+  /** A crash (the damage on): the craft lost. */
+  private crashed(why: string) {
+    if (!this.s.damage || this.airFlight.failure) return;
+    this.airFlight.failure = why;
+    this.onCraftLost?.(why);
+  }
+
+  /**
+   * On its wheels: the wings level on the ground, the nose between 3° down and 15° up (the tail on the
+   * runway) — the pilot's turns in roll, and in pitch past those, stopped. `up`: the ground's normal,
+   * camera-local components.
+   */
+  private groundAttitude(up: Vec3) {
+    const cam = cameraFrame(this.s);
+    const toC = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    const S = this.shipMatrix();
+    const col = (i: number): Vec3 => [S[0][i]!, S[1][i]!, S[2][i]!];
+    const X = col(0), Z = col(2);
+    const u = unitV(toC(up));
+    const pitch = Math.asin(clamp(dot3(Z, u), -1, 1));
+    const D = Math.PI / 180;
+    const want = clamp(pitch, -3 * D, 15 * D);
+    // (about the ship's x — its left: a positive turn lowers the nose)
+    if (Math.abs(want - pitch) > 1e-6) {
+      this.rotateC(lin(X, pitch - want, X, 0));
+      this.pilot.omega[0] = 0;
+    }
+    const S2 = this.shipMatrix();
+    const Y2: Vec3 = [S2[0][1]!, S2[1][1]!, S2[2][1]!], Z2: Vec3 = [S2[0][2]!, S2[1][2]!, S2[2][2]!];
+    const u2 = unitV(lin(u, 1, Z2, -dot3(u, Z2)));
+    const ra = Math.atan2(dot3(cross(Y2, u2), Z2), dot3(Y2, u2));
+    if (Math.abs(ra) > 1e-6) this.rotateC(lin(Z2, ra, Z2, 0));
+    this.pilot.omega[2] = 0;
   }
 
   /** The flown craft in the air, for the displays: the flow (q, Mach, α, β), the heat, the skin, the load. */
@@ -4254,7 +4378,7 @@ export class CameraController {
     return {
       plasma: { q, flow, level: Math.min(Math.max((Math.log10(Math.max(q, 1)) - 5.5) / 2.5, 0), 1) },
       body: F.id as Body, alt: (d - groundR(F, L.xi)) * F.mPerM - GEAR, vVert: vv * c, vHor: vh * c,
-      gLocal: (g * F.aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: L.landed,
+      gLocal: (g * F.aUnit) / 9.80665, twr: this.thrustMax() / Math.max(g, 1e-30), landed: L.landed, rolling: !!L.rolling,
       air: airDensity(F, d - F.R),
       /** where on the world (its frame's ξ: the HUD's globe) */
       xi: L.xi,

@@ -1652,8 +1652,9 @@ export class FlightHud {
       if (air.stalled && air.mach < 3) w.push("⚠ STALL");
       if (air.heat > 5e4) w.push(`PLASMA · ${(air.heat / 1e4).toFixed(0)} W/cm² · MACH ${air.mach.toFixed(1)}`);
     }
-    if (i.surface?.landed) w.push(`LANDED ON ${nm(i.surface.body)}`);
-    else if (i.landed) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
+    if (i.surface?.rolling) w.push(`ON THE WHEELS · ${nm(i.surface.body)} · ${Math.round(i.surface.vHor)} M/S`);
+    else if (i.surface?.landed) w.push(`LANDED ON ${nm(i.surface.body)}`);
+    else if (i.landed && !i.surface) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
     if (i.ergo) w.push("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");
     else if (i.region === "hole" && i.r < i.photon) w.push("INSIDE THE PHOTON ORBIT");
     else if (i.region === "hole" && i.r < i.isco) w.push("BELOW THE ISCO · NO STABLE ORBIT");
