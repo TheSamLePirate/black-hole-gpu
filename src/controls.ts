@@ -1327,6 +1327,15 @@ export class CameraController {
    */
   update(dt: number, time?: number): boolean {
     if (!this.enabled) return false;
+    this.syncLook();
+    try {
+      return this.step(dt, time);
+    } finally {
+      this.markLook();
+    }
+  }
+
+  private step(dt: number, time?: number): boolean {
     if (!this.scripted) return this.advance(dt, time);
     // (a video steps the scene: the keys held, the controller's sticks do not reach it)
     const keys = this.keys, codes = this.codes;
@@ -2200,6 +2209,34 @@ export class CameraController {
   private setLookRaw(yaw: number, pitch: number) {
     this.s.shipLookYaw = yaw;
     this.s.shipLookPitch = pitch;
+    this.markLook();
+  }
+
+  /** The look and the camera's turn as the controller left them (null: not yet). */
+  private lookSeen: { yaw: number; pitch: number; cam: string } | null = null;
+  private markLook() {
+    const s = this.s;
+    this.lookSeen = { yaw: s.shipLookYaw, pitch: s.shipLookPitch, cam: `${s.yaw}|${s.pitch}|${s.roll}|${s.anchor}` };
+  }
+
+  /**
+   * The look changed from outside since the last frame — the settings panel's free-look fields,
+   * __bh.game.set —: the camera turned on its mount as setLook does, the ship left where it points.
+   * (The ship's attitude is the camera's less the look: the angles written alone would swing the ship
+   * round — in the air, a broken craft.) A new pose with it — a scene loaded, a placement —: as given.
+   */
+  private syncLook() {
+    const s = this.s;
+    const L = this.lookSeen;
+    if (!L || (L.yaw === s.shipLookYaw && L.pitch === s.shipLookPitch)) return;
+    const moved = L.cam !== `${s.yaw}|${s.pitch}|${s.roll}|${s.anchor}`;
+    if (!s.ship || moved) return;
+    const yaw = clamp(s.shipLookYaw, -170, 170), pitch = clamp(s.shipLookPitch, -85, 85);
+    const pose = this.shipPose();
+    const S0 = shipToCamera(pose, L.yaw, L.pitch).S;
+    s.shipLookYaw = yaw;
+    s.shipLookPitch = pitch;
+    this.reorient(S0, shipToCamera(pose, yaw, pitch).S);
   }
 
   /** Turns the camera on its mount (degrees); the ship stays where it points. */
@@ -2212,6 +2249,7 @@ export class CameraController {
     s.shipLookYaw = yaw;
     s.shipLookPitch = pitch;
     this.reorient(S0, this.shipMatrix());
+    this.markLook();
   }
 
   /** the last attach point on the hull (not an outside view): where a reset brings the camera back */
