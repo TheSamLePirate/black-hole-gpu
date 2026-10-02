@@ -1944,7 +1944,7 @@ export class CameraController {
     // it is where the camera is)
     if (!on && this.piloting) {
       const p = this.activePoseNow(true);
-      if (p && !fleet.assembly(fleet.active).includes("iss")) fleet.setFree(fleet.active, p, p.t);
+      if (p && !fleet.assembly(fleet.active).includes("iss")) fleet.setFree(fleet.active, p, p.t, this.coastCom());
     }
     if (on) delete fleet.free[fleet.active];
     this.piloting = on;
@@ -2476,6 +2476,36 @@ export class CameraController {
     this.spent += w;
     if (burn && this.nodeBurning) this.nodeDone += w;
     this.dockCheck();
+    this.measureSpin();
+  }
+
+  /** The flown craft's turn as flown — its axes now against last step's: its angular velocity (home)
+   *  per M of the scene's time, eased (what it keeps turning at when left to coast). */
+  private spin: { ax: [Vec3, Vec3, Vec3]; t: number; w: Vec3 } | null = null;
+  private measureSpin() {
+    const P = this.activePoseNow();
+    if (!P) return (this.spin = null);
+    const S = this.spin;
+    if (S && P.t > S.t) {
+      // (the rotation from the last axes to these: Σ eᵢ × R eᵢ = 2 sin θ k, Σ eᵢ·R eᵢ = 1 + 2 cos θ)
+      let v: Vec3 = [0, 0, 0];
+      let tr = 0;
+      for (let i = 0; i < 3; i++) {
+        v = lin(v, 1, cross(S.ax[i]!, P.ax[i]!), 0.5);
+        tr += dot3(S.ax[i]!, P.ax[i]!);
+      }
+      const sn = Math.hypot(...v);
+      const th = Math.atan2(sn, (tr - 1) / 2);
+      const w = sn > 1e-12 ? lin(v, th / sn / (P.t - S.t), v, 0) : ([0, 0, 0] as Vec3);
+      const k = 0.3;
+      this.spin = { ax: P.ax, t: P.t, w: lin(S.w, 1 - k, w, k) };
+    } else if (!S || P.t < S.t) this.spin = { ax: P.ax, t: P.t, w: [0, 0, 0] };
+  }
+
+  /** The flown assembly's centre of mass for coasting: its own (an assembly), else the craft's origin —
+   *  a lone craft turns about it as flown. */
+  private coastCom(): Vec3 {
+    return fleet.flownAssembly().length > 1 ? fleet.massProps().com : [0, 0, 0];
   }
 
   // ------------------------------------------------------------------------------ the fleet
@@ -2488,7 +2518,7 @@ export class CameraController {
     if (!nav) return null;
     const w = mouth(s).w;
     const ax = this.shipAxesLocal({ right: cam.right, up: cam.up, fwd: cam.fwd }).map((a) => unitV(repToHomeVec(w, cam.ell, cam.n, a))) as [Vec3, Vec3, Vec3];
-    return { X: nav.X, V: nav.V, ax, t: nav.t };
+    return { X: nav.X, V: nav.V, ax, t: nav.t, w: this.spin?.w };
   }
 
   /** The camera's axes (right, up, forward) in the home frame (our side), or null. */
@@ -2555,7 +2585,7 @@ export class CameraController {
     const me = this.activePoseNow();
     const group = fleet.assembly(old);
     // (the craft left: its assembly coasts as it — unless the new one or the station holds it)
-    if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t);
+    if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t, this.coastCom());
     for (const v of fleet.assembly(id)) if (v !== "iss") delete fleet.free[v];
     fleet.active = id;
     s.vessel = id;
@@ -2570,7 +2600,11 @@ export class CameraController {
     this.spent = 0;
     this.outside.dist = VESSELS[id].viewDist;
     this.settleMount();
-    this.placeOnPose(to);
+    // (an assembly flown: the camera's velocity its centre of mass's; turning, it keeps turning — the
+    // pilot's rates: per second of the pilot's clock, the other way round from the right-hand rule)
+    this.placeOnPose(fleet.flownAssembly().length > 1 && to.Vc ? { ...to, V: to.Vc } : to);
+    this.spin = null;
+    if (to.w && Math.hypot(...to.w) > 0) this.pilot.omega = to.ax.map((a) => -dot3(to.w!, a) * s.timeSpeed) as Vec3;
     this.dockInfo = null;
     // (the target now flown, or docked to it: the body it orbits instead)
     if (fleet.flownAssembly().includes(s.target as VesselId)) this.selectTarget(nav.ref as Body);
@@ -2851,7 +2885,7 @@ export class CameraController {
         const anchor = fleet.assembly(o.id).find((v) => v !== "iss" && fleet.free[v as VesselId]) as VesselId | undefined;
         if (Q && anchor) {
           const QA = fleet.pose(anchor, p1.t)!;
-          fleet.setFree(anchor, { X: QA.X, V: lin(QA.V, 1, dvRel, -(1 - kMe)), ax: QA.ax }, p1.t);
+          fleet.setFree(anchor, { X: QA.X, V: lin(QA.Vc ?? QA.V, 1, dvRel, -(1 - kMe)), ax: QA.ax, w: QA.w }, p1.t, fleet.free[anchor]?.com);
         }
       }
     }
@@ -3020,7 +3054,12 @@ export class CameraController {
       const group = fleet.assembly(v);
       if (group.includes(me) || group.includes("iss") || group.some((q) => q !== "iss" && fleet.free[q as VesselId])) continue;
       const q = before.get(v);
-      if (q) fleet.setFree(v, q, t);
+      if (!q) continue;
+      // (turning with the assembly: about the pieces' own centre of mass, its velocity the rigid one there)
+      const com = fleet.assembly(v).length > 1 ? fleet.massProps(v).com : ([0, 0, 0] as Vec3);
+      const C = lin(q.X, 1, onAxesV(q.ax, com), 1 / M_METRES);
+      const Vc = q.w ? lin(q.V, 1, cross(q.w, sub3(C, q.X)), 1) : q.V;
+      fleet.setFree(v, { X: q.X, V: Vc, ax: q.ax, w: q.w }, t, com);
     }
     const V = lin(P.V, 1, out, -0.05 / 299792458);
     setHomePose(s, P.X, unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.up)), V);

@@ -18,12 +18,30 @@ export interface Pose {
   X: Vec3;
   V: Vec3;
   ax: [Vec3, Vec3, Vec3];
+  /** how it turns: its angular velocity (home frame) [rad per M of time] */
+  w?: Vec3;
+  /** its assembly's centre of mass velocity, when it differs from the origin's (a turning assembly) */
+  Vc?: Vec3;
 }
 
-/** Coasting: its state at a time, around a body (Kepler from there). */
+/**
+ * Coasting: its state at a time, around a body — its assembly's centre of mass on a Kepler orbit (`V` its
+ * velocity), the assembly turning about it at a steady rate (`w`: no torque, its moment of inertia a
+ * scalar), `com` that centre in this craft's frame [m].
+ */
 export interface FreeState extends Pose {
   t: number;
   ref: string;
+  com?: Vec3;
+}
+
+/** v turned by the rotation vector r (Rodrigues) */
+function rotate(v: Vec3, r: Vec3): Vec3 {
+  const th = Math.hypot(...r);
+  if (th < 1e-15) return v;
+  const k = lin(r, 1 / th, r, 0);
+  const c = Math.cos(th), s = Math.sin(th);
+  return lin(lin(v, c, cross(k, v), s), 1, k, dot(k, v) * (1 - c));
 }
 
 /**
@@ -98,8 +116,16 @@ export class Fleet {
   private coast(f: FreeState, t: number): Pose {
     const mu = solarBody(f.ref)?.mass ?? solarBody("earth")!.mass;
     const B0 = ourState(f.ref, f.t), B1 = ourState(f.ref, t);
-    const k = keplerProp(mu, sub(f.X, B0.pos), sub(f.V, B0.vel), t - f.t);
-    return { X: lin(B1.pos, 1, k.r, 1), V: lin(B1.vel, 1, k.v, 1), ax: f.ax };
+    const w = f.w ?? [0, 0, 0];
+    const com = f.com ?? [0, 0, 0];
+    // the centre of mass on its orbit; the axes turned about it
+    const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
+    const k = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
+    const C = lin(B1.pos, 1, k.r, 1), Vc = lin(B1.vel, 1, k.v, 1);
+    const r = lin(w, t - f.t, w, 0);
+    const ax = f.ax.map((a) => rotate(a, r)) as [Vec3, Vec3, Vec3];
+    const X = lin(C, 1, onAxes(ax, com), -1 / M_METRES);
+    return { X, V: lin(Vc, 1, cross(w, sub(X, C)), 1), ax, w, Vc };
   }
 
   /**
@@ -164,8 +190,10 @@ export class Fleet {
           X = lin(Pu.X, 1, onAxes(Pu.ax, c), 1 / M_METRES);
           ax = Rt.map((col) => onAxes(Pu.ax, col)) as [Vec3, Vec3, Vec3];
         }
-        const V = om ? lin(P.V, 1, cross(om, sub(X, P.X)), 1) : Pu.V;
-        poses.set(w, { X, V, ax: ax.map(unit) as [Vec3, Vec3, Vec3] });
+        // (a rigid assembly: each point's velocity the root's plus the turn's, ω × r)
+        const spin = om ?? P.w ?? null;
+        const V = spin ? lin(P.V, 1, cross(spin, sub(X, P.X)), 1) : Pu.V;
+        poses.set(w, { X, V, ax: ax.map(unit) as [Vec3, Vec3, Vec3], w: om ?? P.w, Vc: P.Vc });
         seen.add(w);
         queue.push(w);
       }
@@ -194,16 +222,16 @@ export class Fleet {
     return out;
   }
 
-  /** The flown assembly's mass [kg], its centre of mass and moment of inertia (a scalar: Σ m (k² + d²))
-   *  in the flown craft's frame [m]. */
-  massProps(): { mass: number; com: Vec3; inertia: number; own: number } {
-    const me = VESSELS[this.active];
+  /** An assembly's mass [kg], its centre of mass and moment of inertia (a scalar: Σ m (k² + d²)) in one
+   *  of its craft's frame [m] (the flown one's by default). */
+  massProps(root: VesselId = this.active): { mass: number; com: Vec3; inertia: number; own: number } {
+    const me = VESSELS[root];
     const own = me.mass * me.gyr * me.gyr;
-    const group = this.flownAssembly();
+    const group = this.assembly(root).filter((v) => v !== "iss");
     if (group.length < 2) return { mass: me.mass, com: me.com, inertia: own, own };
     // each piece's frame in the flown one's (the links walked from it)
-    const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([[this.active, { c: [0, 0, 0], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }]]);
-    const queue: VesselId[] = [this.active];
+    const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([[root, { c: [0, 0, 0], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }]]);
+    const queue: VesselId[] = [root];
     while (queue.length) {
       const u = queue.shift()!;
       const F = frames.get(u)!;
@@ -244,10 +272,13 @@ export class Fleet {
   }
 
   /** Sets a craft coasting from a pose (the body it coasts around: the Earth near it, else the Sun). */
-  setFree(id: VesselId, p: Pose, t: number) {
+  /** Sets a craft coasting: its pose, its assembly's centre-of-mass velocity `Vc` (default: its own
+   *  velocity), the assembly's turn and that centre in its frame [m]. */
+  setFree(id: VesselId, p: Pose, t: number, com: Vec3 = [0, 0, 0]) {
     const E = ourState("earth", t);
     const near = Math.hypot(...sub(p.X, E.pos)) * M_METRES < 1.5e9;
-    this.free[id] = { X: p.X, V: p.V, ax: p.ax, t, ref: near ? "earth" : "sun" };
+    const w = p.w && Math.hypot(...p.w) > 0 ? p.w : undefined;
+    this.free[id] = { X: p.X, V: p.Vc ?? p.V, ax: p.ax, w, com, t, ref: near ? "earth" : "sun" };
   }
 
   /** A link's other craft frame relative to one: b's centre and axes in a's frame, from their poses. */

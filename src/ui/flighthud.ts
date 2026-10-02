@@ -21,7 +21,8 @@ import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
-import { VESSELS } from "../vessels";
+import { VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
+import { fleet } from "../fleet";
 import { bodyCentre, BODY_NAMES, starOrbitRadius } from "../targeting";
 import { rapidityCost } from "../engine";
 import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
@@ -57,6 +58,7 @@ const ICONS: Record<string, string> = {
   camera: '<path d="M3.5 8.5h3l2-2.5h7l2 2.5h3v10h-17z" /><circle cx="12" cy="13" r="3.4" />',
   plan: '<circle cx="6" cy="17" r="2" /><circle cx="18" cy="7" r="2" /><path d="M7.6 15.6C10 9 14 13 16.4 8.4" stroke-dasharray="2 2.2" />',
   chevron: '<path d="M7 10l5 5 5-5" />',
+  ship: '<path d="M12 3.5l2.2 6.5 6.3 3.2-6.3 1.6L12 20.5l-2.2-5.7-6.3-1.6 6.3-3.2z" /><circle cx="12" cy="12" r="1.3" class="f" />',
 };
 const icon = (name: string, cls = "fl-ic") => {
   const e = document.createElement("span");
@@ -160,6 +162,8 @@ export interface FlightHudActions {
   /** the app's camera panel (its views, the look, the lens, the target) — else the HUD's own menu */
   camera?(): void;
   mount(m: Mount): void;
+  /** fly another craft of the fleet */
+  vessel(id: VesselId): void;
   lookAhead(): void;
   throttle(t: number): void;
   /** lets go of the space station */
@@ -224,6 +228,7 @@ export class FlightHud {
   private mapBody: HTMLElement | null = null;
   private buttons = new Map<string, HTMLButtonElement>();
   private viewMenu: HTMLElement | null = null;
+  private craftMenu: HTMLElement | null = null;
   /** the target's and the Ranger's instruments (canvases), and their tooltips' regions (CSS px) */
   private tgtCanvas = h("canvas", "fl-instr fl-tgtc");
   private stCanvas = h("canvas", "fl-instr fl-stc");
@@ -376,6 +381,51 @@ export class FlightHud {
     });
     viewBox.append(viewBtn);
     this.viewMenu = viewMenu;
+    // the craft flown: a menu of the fleet — each craft, what it is doing (flown, docked, how far), [ ]
+    const craftBox = h("div", "fl-viewbox");
+    const craftBtn = h("button", "fl-tools fl-viewbtn fl-craftbtn") as HTMLButtonElement;
+    const craftName = h("span", "fl-viewname", "");
+    craftBtn.append(icon("ship"), craftName, icon("chevron", "fl-ic fl-caret"));
+    craftBtn.title = "The craft flown ([ ]): the Ranger, the Lander, the Endurance";
+    this.missionEls.craftName = craftName;
+    const craftMenu = h("div", "fl-menu fl-craftmenu");
+    craftMenu.hidden = true;
+    const fillCraft = () => {
+      craftMenu.replaceChildren(h("div", "fl-menu-h", "Fly · [ ] in turn"));
+      const t = this.lastTime;
+      const me = fleet.activePose?.();
+      for (const id of VESSEL_IDS) {
+        const V = VESSELS[id];
+        const b = h("button", "fl-menu-i") as HTMLButtonElement;
+        // (what it does now: flown, docked to the flown one, docked elsewhere, coasting — how far)
+        const mine = fleet.flownAssembly();
+        const p = Number.isFinite(t) ? fleet.pose(id, t) : null;
+        const far = p && me ? Math.hypot(p.X[0] - me.X[0], p.X[1] - me.X[1], p.X[2] - me.X[2]) * 1.476625e11 : NaN;
+        const dist = !Number.isFinite(far) ? "" : far < 1000 ? `${far.toFixed(0)} m` : `${(far / 1000).toLocaleString("en-US", { maximumFractionDigits: far < 1e5 ? 1 : 0 })} km`;
+        const docked = fleet.links.filter((l) => l.a === id || l.b === id).map((l) => (l.a === id ? l.b : l.a)).map((o) => (o === "iss" ? "ISS" : VESSELS[o as VesselId].name));
+        const state = id === fleet.active ? "flown" : mine.includes(id) ? "docked to it" : docked.length ? `docked to the ${docked.join(", ")}${dist ? ` · ${dist}` : ""}` : `coasting${dist ? ` · ${dist}` : ""}`;
+        b.append(h("b", "", V.name), h("span", "", `${Math.round(V.mass / 1e3)} t · ${state}`));
+        b.classList.toggle("on", id === fleet.active);
+        b.onclick = () => {
+          act.vessel(id);
+          craftMenu.hidden = true;
+        };
+        craftMenu.append(b);
+      }
+    };
+    craftBtn.onclick = () => {
+      craftMenu.hidden = !craftMenu.hidden;
+      if (craftMenu.hidden) return;
+      fillCraft();
+      const r = craftBtn.getBoundingClientRect();
+      craftMenu.style.top = `${r.bottom + 8}px`;
+      craftMenu.style.left = `${Math.max(8, Math.min(innerWidth - 268, r.left))}px`;
+    };
+    addEventListener("pointerdown", (e) => {
+      if (!craftMenu.hidden && !craftBox.contains(e.target as Node) && !craftMenu.contains(e.target as Node)) craftMenu.hidden = true;
+    });
+    craftBox.append(craftBtn);
+    this.craftMenu = craftMenu;
     const group = (cls: string, ...els: HTMLElement[]) => {
       const g = h("div", `fl-mgroup ${cls}`);
       g.append(...els);
@@ -400,7 +450,7 @@ export class FlightHud {
         clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
         clock("lost", "Earth +", "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)"),
       ),
-      group("fl-mg-acts", planBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
+      group("fl-mg-acts", craftBox, planBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
     this.buildPlanner();
 
@@ -654,7 +704,7 @@ export class FlightHud {
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
 
-    this.root.append(this.warn, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!);
+    this.root.append(this.warn, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!, this.craftMenu!);
     this.dock.hidden = true;
     document.body.append(this.hud, this.root);
     this.initTips();
@@ -702,7 +752,7 @@ export class FlightHud {
     const within = (e: Event) => {
       const el = (e.target as HTMLElement | null)?.closest?.("[data-tip],[title]") as HTMLElement | null;
       if (el?.classList.contains("fl-instr")) return null; // (its regions: below)
-      return el && (this.root.contains(el) || this.viewMenu?.contains(el)) ? el : null;
+      return el && (this.root.contains(el) || this.viewMenu?.contains(el) || this.craftMenu?.contains(el)) ? el : null;
     };
     // the instruments (canvases): a tooltip per region under the pointer
     for (const c of [this.tgtCanvas, this.stCanvas]) {
@@ -1343,8 +1393,11 @@ export class FlightHud {
   /** Called every frame while piloting. */
   /** drawn at least once since shown */
   drawn = false;
+  /** the scene time of the last update (the craft menu's distances) */
+  private lastTime = NaN;
   update(info: Info, time: number) {
     this.drawn = true;
+    this.lastTime = time;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
     this.ground.observe(info, time);
@@ -1462,6 +1515,8 @@ export class FlightHud {
       M.soundBtn!.replaceChildren(icon(s.sound ? "sound" : "mute"));
     }
     M.viewName!.textContent = MOUNTS[s.shipMount as Mount]?.short ?? "";
+    const cn = VESSELS[i.vessel].name;
+    if (M.craftName!.textContent !== cn) M.craftName!.textContent = cn;
     this.drawStatus(i.status ?? null);
     setChip("hold", i.hold !== "none", i.hold === "none" ? "HOLD" : HOLD_NAMES[i.hold].toUpperCase());
     let auto = "AUTO";

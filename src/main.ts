@@ -818,6 +818,11 @@ async function main() {
   document.body.append(touchFlight.el);
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
+    vessel: (id) => {
+      settings.vessel = id;
+      refreshGui();
+      scheduleUrlSave();
+    },
     camera: () => {
       camPanel!.toggle();
       syncCameraButton();

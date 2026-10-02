@@ -1172,6 +1172,7 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-menu-i:hover { background: rgba(160, 210, 255, 0.1); }
 .fl-menu-i.on { background: rgba(255, 179, 92, 0.14); }
 .fl-menu-i.on b { color: var(--hud-amber); }
+.fl-craftmenu .fl-menu-i { grid-template-columns: 92px 1fr; }
 .fl-menu .fl-ahead { margin-top: 3px; border-top: 1px solid rgba(160, 210, 255, 0.08); border-radius: 0 0 5px 5px; }
 
 /* ---- warnings: caution banners above the centre */
