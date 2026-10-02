@@ -227,8 +227,8 @@ interface OfflineJob {
 export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
-  private tracePipeline: GPUComputePipeline; // realtime kernel
-  private qualityPipeline: GPUComputePipeline; // + error-controlled integrator
+  private tracePipeline!: GPUComputePipeline; // realtime kernel
+  private qualityPipeline!: GPUComputePipeline; // + error-controlled integrator
   private traceLayout: GPUBindGroupLayout;
   private displayPipeline: GPURenderPipeline; // SDR canvas (preferred format)
   private sdrFormat: GPUTextureFormat;
@@ -268,7 +268,7 @@ export class Renderer {
   private lastTime = 0;
   /** GPU time per pass (timestamp queries; off unless switched on) */
   readonly prof: GpuProfiler;
-  private envPipeline: GPUComputePipeline;
+  private envPipeline!: GPUComputePipeline;
   private envReset = true;
   /** frames left of a spread reset (every texel written over, one of each 2×2 block a frame) */
   private envSpread = 0;
@@ -373,6 +373,8 @@ export class Renderer {
   private clampSampler: GPUSampler;
 
   private traceSource: string;
+  /** the tracer's general pipelines compiled (create() waits for it: nothing is drawn before) */
+  private tracerCompiled: Promise<void>;
   private live: Target | null = null;
   private offline: OfflineJob | null = null;
 
@@ -500,13 +502,15 @@ export class Renderer {
     });
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
+    // (compiled asynchronously, all at once: the tracer is a huge shader — on Windows (D3D12) one takes a
+    // minute or more, and a synchronous compile stalls the GPU process until the browser's watchdog kills it)
     const mkTrace = (quality: boolean) =>
-      device.createComputePipeline({
+      device.createComputePipelineAsync({
         layout: this.mainLayout,
         compute: { module: traceModule, entryPoint: "main", constants: { QUALITY_PIPELINE: quality ? 1 : 0 } },
       });
     const mkLut = (quality: boolean) =>
-      device.createComputePipeline({
+      device.createComputePipelineAsync({
         layout: this.lutLayout,
         compute: { module: traceModule, entryPoint: "lut", constants: { QUALITY_PIPELINE: quality ? 1 : 0 } },
       });
@@ -514,11 +518,19 @@ export class Renderer {
       const tx = [device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }), device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING })];
       this.lutDummy = device.createBindGroup({ layout: this.lutReadLayout, entries: [{ binding: 2, resource: tx[0]!.createView() }, { binding: 3, resource: tx[1]!.createView() }] });
     }
-    this.lutPipeline = mkLut(false);
-    this.lutQPipeline = mkLut(true);
-    this.qualityPipeline = mkTrace(true);
-    this.tracePipeline = mkTrace(false);
-    this.envPipeline = device.createComputePipeline({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } });
+    this.tracerCompiled = Promise.all([
+      mkLut(false),
+      mkLut(true),
+      mkTrace(true),
+      mkTrace(false),
+      device.createComputePipelineAsync({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } }),
+    ]).then(([lut, lutq, q, rt, env]) => {
+      this.lutPipeline = lut;
+      this.lutQPipeline = lutq;
+      this.qualityPipeline = q;
+      this.tracePipeline = rt;
+      this.envPipeline = env;
+    });
     this.traceModule = traceModule;
     this.tracePipeLayout = layout;
     this.ship = new ShipRenderer(device, src.ship);
@@ -754,6 +766,9 @@ export class Renderer {
     loading.stage("shaders", "Shaders — geodesics, disk, sky, Ranger", { weight: 1 });
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!adapter) throw new Error("No WebGPU adapter found.");
+    // (the tracer's bind group holds 10 storage buffers: said plainly here rather than by a layout's validation error)
+    const storageBuffers = adapter.limits.maxStorageBuffersPerShaderStage;
+    if (storageBuffers < 10) throw new Error(`This GPU binds ${storageBuffers} storage buffers per shader stage; the ray tracer needs 10.`);
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
       // (and the compressed textures it samples: the colour maps' KTX2, transcoded to BC7 or ASTC)
@@ -761,7 +776,7 @@ export class Renderer {
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
-        maxStorageBuffersPerShaderStage: Math.min(adapter.limits.maxStorageBuffersPerShaderStage, 10),
+        maxStorageBuffersPerShaderStage: 10,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
       },
     });
@@ -795,8 +810,10 @@ export class Renderer {
       console.error("WebGPU error:", m);
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
-    // (the pipelines compile in the GPU process; the first frame waits for them)
+    // (the pipelines compile in the GPU process: the tracer's awaited below, the others' by the first frame)
     loading.stage("pipelines", "Compiling the ray tracer — first image", { weight: 4, indeterminate: true, eta: 3 });
+    // (its failure held as a value: told after the WGSL's own messages, which name the line)
+    const tracerFailure = r.tracerCompiled.then(() => null, (e: Error) => e);
     let checked = 0;
     for (const [name, code] of Object.entries(src)) {
       const info = await device.createShaderModule({ code }).getCompilationInfo();
@@ -806,6 +823,8 @@ export class Renderer {
         throw new Error(`${name}.wgsl failed to compile:\n` + errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n"));
       }
     }
+    const failure = await tracerFailure;
+    if (failure) throw new Error(`The ray tracer's pipelines failed to compile: ${failure.message}`);
     const err = await device.popErrorScope();
     if (err) throw new Error(`WebGPU pipeline creation failed: ${err.message}`);
     loading.done("shaders");
@@ -2994,7 +3013,7 @@ export class Renderer {
   ) {
     const d = this.device;
     const module = d.createShaderModule({ code: this.traceSource });
-    const pipeline = d.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "probe", constants: { QUALITY_PIPELINE: 1 } } });
+    const pipeline = await d.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "probe", constants: { QUALITY_PIPELINE: 1 } } });
     const params = new Float32Array(PARAM_VEC4S * 4);
     params.set([job.a, horizon(job.a), isco(job.a), 22], 8 * 4);
     params.set([0.02, 400000, job.rEscape, job.captureTol], 10 * 4);
