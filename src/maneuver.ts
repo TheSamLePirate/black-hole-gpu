@@ -21,6 +21,8 @@
 import { advance, fromZamo, predict, step, thrust, toZamo, type Lens, type Lenses, type Massive } from "./geodesic";
 import { horizon, zamo, type Vec3 } from "./physics";
 
+export type KerrGoal = { apsis: number; side: "max" | "min"; dir: number } | { circ: number; trim?: boolean } | { plane: Vec3 } | { period: number; dir: number };
+
 export interface ManeuverNode {
   /** coordinate time of the burn's centre [M] */
   t: number;
@@ -31,6 +33,13 @@ export interface ManeuverNode {
   /** our universe: the node's part in a mission (re-aimed in flight), the body of a capture */
   role?: "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
   body?: string;
+  /** flown to a goal rather than its Δv (the hole's long burns: hours to days of an orbit's): the
+   *  path's farthest ("max") or nearest ("min") point put at a radius [M] by a prograde (dir 1) or
+   *  retrograde (−1) burn — cut when the path has it —; or circular (about the radius `circ`): the
+   *  thrust along the velocity still to gain to the circular orbit where the craft is */
+  goal?: KerrGoal;
+  /** the flight computer's name for it */
+  label?: string;
 }
 
 /** Integration tolerance of the planners (thousands of trial paths; the burns are refined anyway). */
@@ -178,7 +187,7 @@ export function circularBeta(st: Massive, w: World): Vec3 | null {
 }
 
 /** Node Δv that turns the state's velocity into β_target (both local). */
-function matchDv(st: Massive, betaT: Vec3, a: number): Vec3 {
+export function matchDv(st: Massive, betaT: Vec3, a: number): Vec3 {
   const b = toZamo(st, a);
   const U = scale(b, 1 / Math.sqrt(1 - dot(b, b)));
   const UT = scale(betaT, 1 / Math.sqrt(1 - dot(betaT, betaT)));

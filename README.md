@@ -84,6 +84,16 @@ GPU process being lost.
   inclination, phase angle and window, closest approach; the plan's burns editable to the m/s and second,
   snapped to the apsides and nodes. Our side flies them as manoeuvre nodes (the map's n-body path);
   Gargantua's worlds, as the flight computer's own burns in their frames.
+- **About Gargantua itself** (`src/fc/kerr-ops.ts`): the same operations — circularize, apoapsis,
+  periapsis, Hohmann, inclination, resonance, the target's plane — on the Kerr geodesics, not conics:
+  the apsides where the path has them (the periapsis advances by tens of degrees a turn), the circular
+  velocity where the free fall has no radial pull, nothing inside the ISCO. The analysis is the
+  geodesic's own (apsides and their times, the period and the radial period, the periapsis's advance,
+  the equator crossings). The hole's burns last days — a good part of an orbit at 2 g —, so each is
+  flown to its goal rather than its Δv: the far apsis (re-estimated in flight by Newton on the path),
+  the circle (the velocity still to gain), the plane (the angular momentum turned by Δh × r, coasting
+  where the thrust would not turn it), the period; a circularization that ends off its radius gets a
+  correction.
 - **Saves**: the game saves itself in the browser and resumes at the next visit; named saves, export and
   import, and links (`#save=…`) in the game tools ([docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)). The URL hash
   is read once at start, then cleared.

@@ -888,6 +888,8 @@ async function main() {
       panel.toast(m);
       return null;
     },
+    kerrInfo: () => camera.fcKerrInfo(),
+    kerrOp: (kind, x) => camera.fcKerrOp(kind, x),
     setPlan: (burns, note) => camera.fcSetPlan(burns, note),
     execute: () => camera.fcExecute(),
     clear: () => camera.fcClear(),

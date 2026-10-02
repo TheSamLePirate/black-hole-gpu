@@ -12,6 +12,8 @@ export interface Burn {
   /** prograde, normal, radial [m/s] (the orbit at that moment) */
   dv: V3;
   label: string;
+  /** about Gargantua: what the burn is flown to (maneuver.ts ManeuverNode.goal) */
+  goal?: { apsis: number; side: "max" | "min"; dir: number } | { circ: number; trim?: boolean } | { plane: V3 } | { period: number; dir: number };
 }
 
 export interface Porkchop {
@@ -29,6 +31,8 @@ export interface OpResult {
   dvTotal: number;
   /** the orbit after the burns (two bodies) */
   after?: Elements;
+  /** about Gargantua itself: the orbit after, on the geodesics, as text */
+  afterText?: string;
   grid?: Porkchop;
 }
 

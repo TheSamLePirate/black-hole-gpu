@@ -21,12 +21,13 @@ import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type Ent
 import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site } from "./game/sites";
 import { fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
-import type { Burn, FcContext } from "./fc/ops";
+import type { Burn, FcContext, OpResult } from "./fc/ops";
+import { apsisLeft, circLeft, periodLeft, planeLeft, kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kMatchPlane, kPeriapsis, kResonant, type KerrOp, type KerrOrbit } from "./fc/kerr-ops";
 import { issOrbit } from "./system/iss";
 import { aeroForces, airAt, airTop, entryInterface } from "./aero";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type FlightMode, type PilotInput } from "./pilot";
-import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
+import { dvLocal, nodeComponents, type KerrGoal, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "./mounts";
 import { fleet, type Pose } from "./fleet";
 import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "./vessels";
@@ -3149,6 +3150,13 @@ export class CameraController {
       if (was) this.pilot.setAuto("node");
       return null;
     }
+    if (this.fcAboutHole()) {
+      const st = this.stateNow()!;
+      this.clearPlan();
+      this.plan = { nodes: burns.map((b, i) => ({ t: st.t + b.t / Msec, dv: [b.dv[0] / c, b.dv[1] / c, b.dv[2] / c] as Vec3, then: null, goal: b.goal, label: b.label })), path: null, at: 0, note };
+      this.refreshPlan(true);
+      return null;
+    }
     if (!this.local || cam.region !== "hole") return "The flight computer: near a body";
     const now = this.nowTime() * Msec;
     this.fcBurns = burns.map((b) => ({ tAbs: now + b.t, dv: b.dv, label: b.label, firing: false, done: 0 }));
@@ -3160,6 +3168,11 @@ export class CameraController {
   fcExecute(): string | null {
     const nav = this.ourNav(cameraFrame(this.s));
     if (nav) {
+      if (!this.plan.nodes.length) return "No burns planned";
+      if (this.pilot.auto !== "node") this.pilot.setAuto("node");
+      return null;
+    }
+    if (this.fcAboutHole()) {
       if (!this.plan.nodes.length) return "No burns planned";
       if (this.pilot.auto !== "node") this.pilot.setAuto("node");
       return null;
@@ -3185,9 +3198,77 @@ export class CameraController {
       if (!this.plan.nodes.length) return null;
       return { burns: this.plan.nodes.map((n, i) => ({ t: (n.t - nav.t) * Msec, dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3, label: (n as { role?: string }).role ?? `node ${i + 1}` })), note: this.plan.note, executing: this.pilot.auto === "node" };
     }
+    if (this.fcAboutHole()) {
+      const st = this.stateNow();
+      const nodes = st ? this.plan.nodes.filter((n) => n.t > st.t - 1e-9) : [];
+      if (!st || !nodes.length) return null;
+      return { burns: nodes.map((n, i) => ({ t: (n.t - st.t) * Msec, dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3, label: n.label ?? `burn ${i + 1}`, goal: n.goal })), note: this.plan.note, executing: this.pilot.auto === "node" };
+    }
     if (!this.fcBurns.length) return null;
     const now = this.nowTime() * Msec;
     return { burns: this.fcBurns.map((b) => ({ t: b.tAbs - now, dv: b.dv, label: b.label })), note: this.fcNote, executing: this.pilot.auto === "burns" };
+  }
+
+  /** About Gargantua itself (no world's frame, not our side): the hole's operations, on its geodesics. */
+  fcAboutHole(): boolean {
+    const cam = cameraFrame(this.s);
+    return cam.region === "hole" && !this.ourNav(cam) && !this.fcContext();
+  }
+
+  private kerrInfoCache: { at: number; key: string; o: KerrOrbit; t: number } | null = null;
+  /** The orbit about the hole as its path shows it (once a second, or when a burn changed it), with
+   *  the scene's units: seconds and metres per M. */
+  fcKerrInfo(): { o: KerrOrbit; t: number; Msec: number; Mm: number; a: number } | null {
+    if (!this.fcAboutHole()) return null;
+    const st = this.stateNow();
+    if (!st) return null;
+    const now = performance.now();
+    const key = `${st.E.toFixed(9)}|${st.L.toFixed(7)}|${this.s.spin}`;
+    const C = this.kerrInfoCache;
+    if (!C || C.key !== key || now - C.at > 1000) this.kerrInfoCache = { at: now, key, o: kerrOrbit(st, this.world()), t: st.t };
+    const K = this.kerrInfoCache!;
+    return { o: K.o, t: st.t, Msec: 4.925490947e-6 * this.s.massSolar, Mm: 1476.625 * this.s.massSolar, a: this.s.spin };
+  }
+
+  /** One of the hole's orbital operations (fc/kerr-ops.ts), as the flight computer shows it: burns in
+   *  seconds and m/s, the orbit after on the geodesics. A string: why not. */
+  fcKerrOp(kind: "circ" | "ap" | "pe" | "hohmann" | "inc" | "res" | "plane", x?: number | "now" | "pe" | "ap"): OpResult | string {
+    if (!this.fcAboutHole()) return "About Gargantua itself (away from its worlds)";
+    const st = this.stateNow();
+    if (!st) return "About Gargantua itself";
+    const s = this.s;
+    const w = this.world();
+    const D = Math.PI / 180;
+    let r: KerrOp;
+    if (kind === "circ") r = kCircularize(st, w, (x as "now" | "pe" | "ap") ?? "ap");
+    else if (kind === "ap") r = kApoapsis(st, w, x as number);
+    else if (kind === "pe") r = kPeriapsis(st, w, x as number);
+    else if (kind === "hohmann") r = kHohmann(st, w, x as number);
+    else if (kind === "inc") r = kInclination(st, w, (x as number) * D);
+    else if (kind === "res") r = kResonant(st, w, x as number);
+    else {
+      // the target's plane: a world's (or the companion's) orbit about the hole
+      const body = s.target as Body;
+      if (s.system === "none" && body !== "star") return "No target in this scene";
+      if (s.target === "hole" || s.target === "wormhole" || s.target === "barycentre") return "Target a world or the star (a click on the map)";
+      if (body === "star" && !s.sun) return "No companion star in this scene";
+      const n = cross(bodyCentre(s, body, st.t), bodyVelocity(s, body, st.t));
+      if (Math.hypot(...n) < 1e-12) return "The target has no orbit's plane";
+      r = kMatchPlane(st, w, n, `${BODY_NAMES[body]}'s plane`);
+    }
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    if (!r.ok) return { ok: false, note: r.note, burns: [], dvTotal: 0 };
+    const burns: Burn[] = r.nodes.map((n, i) => ({ t: (n.t - st.t) * Msec, dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3, label: kind === "circ" || (kind === "hohmann" && i === 1) ? "circularize" : kind === "hohmann" ? "transfer" : kind === "inc" || kind === "plane" ? "plane change" : kind === "ap" ? "apoapsis" : kind === "pe" ? "periapsis" : kind === "res" ? "resonance" : `burn ${i + 1}`, goal: n.goal }));
+    const a = r.after;
+    const afterText = a ? (a.fate === "horizon" ? "After: into the horizon" : a.fate === "escape" ? `After: an escape (periapsis ${a.rp.toFixed(2)} M)` : `After: Pe ${a.rp.toFixed(2)} M · Ap ${a.ra.toFixed(2)} M · i ${(a.inc / D).toFixed(2)}° · period ${fmtDur(a.T * Msec)}${a.advance ? ` · the periapsis ${(a.advance / D).toFixed(1)}° on a turn` : ""}${a.prograde ? "" : " · retrograde"}`) : undefined;
+    // (a burn a good part of an orbit long — the hole's are, at its scale —: flown to its goal, but the
+    // orbit's other side moves with it)
+    const acc = this.fcBudget().accel;
+    const T = r.after?.T ?? kerrOrbit(st, w).T;
+    const long = acc > 0 && Number.isFinite(T) ? Math.max(...burns.map((b) => Math.hypot(...b.dv) / acc)) / (T * Msec) : 0;
+    const warn = long > 0.2 ? ` · ⚠ a burn ${(long * 100).toFixed(0)} % of an orbit long: flown to its goal, the other side moves` : "";
+    return { ok: true, note: r.note, burns, dvTotal: burns.reduce((q, b) => q + Math.hypot(...b.dv), 0), afterText: afterText && afterText + warn };
   }
 
   /** The propellant's Δv left [m/s] (no gauge: a full tank's), the acceleration at full thrust [m/s²]. */
@@ -4806,6 +4887,25 @@ export class CameraController {
     this.burnDir = null;
   }
 
+  /** A goal burn's direction (local): along the velocity still to gain to a circle, or its sense. */
+  private goalDir(node: ManeuverNode, cam: ReturnType<typeof cameraFrame>, total: number): Vec3 {
+    const g = node.goal!;
+    if ("plane" in g) {
+      const st = this.stateNow();
+      return st ? planeLeft(st, this.world(), g.plane).dir : dvLocal(cam.beta, node.dv);
+    }
+    if ("circ" in g) {
+      const st = this.stateNow();
+      const d = st && circLeft(st, this.world());
+      if (d && Math.hypot(...d) > 1e-12) return dvLocal(cam.beta, d);
+      return dvLocal(cam.beta, node.dv);
+    }
+    return dvLocal(cam.beta, [g.dir * total, 0, 0]);
+  }
+
+  /** A goal burn's estimate: the Δv the path still needs [c], when, at what was given then. */
+  private goalRem: { node: ManeuverNode; rem: number; at: number; done: number } | null = null;
+
   /** The pilot's own warp during a manoeuvre, auto warp off (null: not chosen yet). */
   private nodeWarpWant: number | null = null;
   private nodeWarpSet = NaN;
@@ -4866,9 +4966,10 @@ export class CameraController {
     // (a Crew burn lasts a good part of an orbit: it follows the orbital frame — prograde, normal,
     // radial turn with the ship — and is centred on the node, a finite burn)
     // (our universe: the burn follows the orbital frame of the reference body, as a Crew burn)
-    const follow = s.engine === "crew" || !!nav;
+    // (a goal burn about the hole follows the prograde — or the retrograde —, as its estimate has it)
+    const follow = s.engine === "crew" || !!nav || (!!node.goal && !nav);
     const dir = this.nodeBurning && this.burnDir && !follow ? this.burnDir
-      : nav ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, node.dv)) : dvLocal(cam.beta, node.dv);
+      : nav ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, node.dv)) : node.goal ? this.goalDir(node, cam, total) : dvLocal(cam.beta, node.dv);
     const dl = Math.hypot(...dir) || 1;
     const aMax = Math.max(this.thrustMax(), 1e-9);
     const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
@@ -4882,9 +4983,44 @@ export class CameraController {
       this.nodeBurning = true;
       this.burnDir = lin(dir, 1 / dl, dir, 0);
     }
+    // (a goal burn about the hole: what is left is what the path still needs — re-estimated a few
+    // times a second)
+    let goalLeft: number | null = null;
+    // (a goal burn's throttle where its thrust does little: a plane change away from the nodes)
+    let goalGate = 1;
+    if (this.nodeBurning && !nav && node.goal && "plane" in node.goal) {
+      const st = this.stateNow();
+      const pl = st ? planeLeft(st, this.world(), node.goal.plane) : null;
+      goalLeft = pl ? pl.left : 0;
+      goalGate = pl ? clamp((pl.eff - 0.55) / 0.3, 0, 1) : 1;
+      // (a long turn costs more than the node's impulse, spread over the orbit)
+      if (this.nodeDone > 2.5 * total) goalLeft = 0;
+    } else if (this.nodeBurning && !nav && node.goal && "circ" in node.goal) {
+      const st = this.stateNow();
+      const d = st && circLeft(st, this.world());
+      goalLeft = d ? Math.hypot(...d) : 0;
+      if (this.nodeDone > 1.5 * total) goalLeft = 0;
+    } else if (this.nodeBurning && !nav && node.goal) {
+      const goal = node.goal as Extract<KerrGoal, { apsis: number } | { period: number }>;
+      {
+        const G = this.goalRem;
+        const tw = performance.now();
+        if (!G || G.node !== node || tw - G.at > 250) {
+          const st = this.stateNow();
+          const guess = G && G.node === node ? Math.max(G.rem - (this.nodeDone - G.done), 0) : left;
+          if (st) this.goalRem = { node, rem: "period" in goal ? periodLeft(st, this.world(), goal, Math.max(guess, 0.02 * total)) : apsisLeft(st, this.world(), goal, Math.max(guess, 0.02 * total)), at: tw, done: this.nodeDone };
+        }
+        const H = this.goalRem;
+        goalLeft = H && H.node === node ? Math.max(H.rem - (this.nodeDone - H.done), 0) : left;
+        // (runaway: no more than thrice the plan's — a burn longer than the orbit spirals, and costs more)
+        if (this.nodeDone > 3 * total) goalLeft = 0;
+      }
+    }
     if (this.nodeBurning) {
       // burn: about 2 s of the pilot's time for the whole burn (warp adapted); a Crew burn, ~10 s
       let w = follow ? Math.min(Math.max(burnT / 10, 0.05), 5000) : Math.min(Math.max(burnT / 2, 0.05), 200);
+      // (a goal burn's end slowed: its last part over ~3 s, the path re-estimated meanwhile)
+      if (goalLeft !== null) w = Math.min(w, Math.max(goalLeft / aMax / Math.max(dtau, 1e-3) / 3, 0.05));
       // (our universe: the end of a burn slowed down — a frame gives at most half of what is left —
       // to cut it within a cm/s: 1 m/s at the Earth's departure is ~1 000 km at the Moon)
       if (nav) w = Math.min(w, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
@@ -4892,11 +5028,28 @@ export class CameraController {
       const perFrame = aMax * s.timeSpeed * dt * dtau;
       // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
       // within a cm/s)
-      if ((nav ? left <= Math.max(3e-11, 1e-6 * total) : left <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || left < 1e-12) {
+      const lft = goalLeft ?? left;
+      if ((nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || lft < 1e-12) {
+        this.goalRem = null;
         P.nodes.shift();
         this.nodeDone = 0;
         this.nodeBurning = false;
         this.burnDir = null;
+        // (a circularization a long burn left off its radius: a Hohmann's correction, its burns short)
+        const g = node.goal;
+        if (g && "circ" in g && g.trim && !P.nodes.length && !nav) {
+          const st = this.stateNow();
+          if (st && Math.abs(st.r - g.circ) > 0.005 * g.circ) {
+            const fix = kHohmann(st, this.world(), g.circ);
+            if (fix.ok) {
+              P.nodes = fix.nodes.map((n, i) => ({ ...n, label: i ? "circularize (correction)" : "correction", goal: n.goal && "circ" in n.goal ? { circ: n.goal.circ } : n.goal }));
+              P.note = `${P.note} — correction to ${g.circ.toFixed(2)} M`;
+              this.onPilotMessage?.(`Circular at ${st.r.toFixed(2)} M: a correction to ${g.circ.toFixed(2)} M (${(fix.nodes.reduce((q, n) => q + Math.hypot(...n.dv), 0) * 299792.458).toFixed(0)} km/s)`);
+              this.refreshPlan(true);
+              return null;
+            }
+          }
+        }
         // (the pilot's warp before the plan between its nodes — not a choice of the pilot's)
         s.timeSpeed = this.nodeWarpSet = this.userWarp;
         if (!P.nodes.length) {
@@ -4921,7 +5074,7 @@ export class CameraController {
         } else this.refreshPlan(true);
         return null;
       }
-      return { dir: lin(dir, 1 / dl, dir, 0), throttle: Math.min(1, left / Math.max(perFrame, 1e-12)) };
+      return { dir: lin(dir, 1 / dl, dir, 0), throttle: goalGate * Math.min(1, lft / Math.max(perFrame, 1e-12)) };
     }
     // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
     // on the burn: it turns while coasting)
@@ -6786,6 +6939,15 @@ function flareRef(R: { flareTau?: number }, agl: number, steep: number, sp: numb
   else if (R.flareTau !== undefined && agl > 2 * Math.max(tau * sink, 40) + 100) R.flareTau = undefined;
   if (R.flareTau === undefined) return steep;
   return Math.max(steep, -Math.asin(Math.min((0.8 + agl / R.flareTau) / Math.max(sp, 1), 0.5)));
+}
+
+/** A duration [s], briefly. */
+function fmtDur(s: number): string {
+  if (!Number.isFinite(s)) return "—";
+  if (s < 60) return `${s.toFixed(0)} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+  return `${(s / 86400).toFixed(1)} d`;
 }
 
 /** v turned by ang about the unit axis k (Rodrigues) */

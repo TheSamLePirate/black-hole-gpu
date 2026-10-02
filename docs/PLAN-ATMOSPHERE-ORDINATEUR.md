@@ -109,9 +109,8 @@ Décisions de l'utilisateur :
 | P7–P8 ordinateur de bord | fait (opérations, porkchop, analyse, plan éditable ; Terre, Edmunds, Gargantua) | `a23d345`, `ef7f4ff` · 146 |
 | P9 finitions | fait : calculs d'entrée dans le worker, écrans du cockpit, documentation | `90b169b`, `7b0dd25` |
 | Pistes | fait : ralliement de l'axe, énergie, arrondi ; Kennedy, Edwards, Tanegashima, Edmunds | · 147 |
+| Opérations autour de Gargantua | fait : circulariser, Ap, Pe, Hohmann, inclinaison, résonance, plan de la cible sur les géodésiques de Kerr ; poussées longues guidées vers leur objectif | · 148 |
 
 Limites connues :
 - les traînées de condensation des moteurs ne sont pas dessinées (le cône de vapeur, oui) ;
 - les missions entre corps (onglet MISSION) restent celles du planificateur existant (notre système) ;
-- autour de Gargantua même, l'ordinateur de bord propose les planificateurs de Kerr existants (orbite
-  circulaire, alignement, rendez-vous, trou de ver), pas encore les opérations à deux corps.

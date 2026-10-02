@@ -12,6 +12,8 @@ import { circularize, hohmann, matchPlanes, matchVelocities, relation, resonant,
 import { elements, len, nodesAgainst, timeTo, type Elements, type V3 } from "../../fc/kepler";
 import * as kep from "../../fc/kepler";
 import type { Site } from "../../game/sites";
+import type { KerrOrbit } from "../../fc/kerr-ops";
+import { horizon, isco } from "../../physics";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -21,6 +23,11 @@ export interface FcHost {
   /** about Gargantua (Kerr): its own planners */
   kerr(): { r: number; target: string | null } | null;
   kerrPlan(kind: "circular" | "align" | "target" | "wormhole", r?: number): string | null;
+  /** about Gargantua: the orbit on the geodesics (apsides, times [M, absolute]), now [M], the scene's
+   *  seconds and metres per M, the spin */
+  kerrInfo(): { o: KerrOrbit; t: number; Msec: number; Mm: number; a: number } | null;
+  /** about Gargantua: an orbital operation on the geodesics (fc/kerr-ops.ts) */
+  kerrOp(kind: "circ" | "ap" | "pe" | "hohmann" | "inc" | "res" | "plane", x?: number | "now" | "pe" | "ap"): OpResult | string;
   /** the plan flown: set (replacing), executed, cleared; the current one as burns (s from now) */
   setPlan(burns: Burn[], note: string): string | null;
   execute(): string | null;
@@ -56,7 +63,12 @@ const dur = (s: number) => {
   if (a < 86400) return `${sg}${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60).toString().padStart(2, "0")} min`;
   return `${sg}${(a / 86400).toFixed(a < 864000 ? 1 : 0)} d`;
 };
-const ms = (v: number) => (!Number.isFinite(v) ? "∞" : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km/s` : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`);
+const C = 299792458;
+const ms = (v: number) => (!Number.isFinite(v) ? "∞" : Math.abs(v) >= 3e6 ? `${(v / C).toFixed(4)} c` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km/s` : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`);
+/** A burn's part: m/s, or km/s for the hole's (fractions of c). */
+const part = (v: number, big: boolean) => (big ? (v / 1000).toFixed(0) : v.toFixed(1));
+/** A radius about the hole: in M, and its distance. */
+const rM = (r: number, Mm: number) => (!Number.isFinite(r) ? "∞" : `${r.toFixed(2)} M · ${km(r * Mm)}`);
 
 /** A number field with its unit and steppers (⇧ ×10, ⌥ ×0.1). */
 function numField(label: string, value: number, unit: string, step: number, onChange: (v: number) => void, o: { min?: number; max?: number; digits?: number } = {}) {
@@ -303,18 +315,46 @@ export class FlightComputer {
     this.op("Transfer to the target body", "Patched conics aimed with the n-body predictor: the departure, mid-course corrections, the capture — the B-plane aimed at the altitude asked", [seg, alt.el], () => this.host.mission(c.targetName, arrival, alt.get()), "PLAN");
   }
 
-  /** Gargantua's own planners, about the hole (the Kerr geodesics). */
+  /** About Gargantua itself: the orbital operations on the Kerr geodesics (fc/kerr-ops.ts), the
+   *  rendezvous and the wormhole by Gargantua's own planners. */
   private buildKerr(t: Tab) {
     const k = this.host.kerr()!;
+    const I = this.host.kerrInfo();
+    const o = I?.o;
     if (t === "orbit") {
-      const r = numField("Radius", Math.round(k.r * 1.2), "M", 1, () => {}, { min: 2, digits: 1 });
-      this.op("Circular orbit", "Hohmann-like on the real geodesics: a burn now-ish, the opposite apsis at r, circularized there", [r.el], () => this.host.kerrPlan("circular", r.get()));
-      this.op("Align the plane", "Into the equatorial plane — the disk's, the planets' — at the cheaper crossing", [], () => this.host.kerrPlan("align"));
+      if (I) {
+        const iscoR = isco(o!.prograde ? Math.abs(I.a) : -Math.abs(I.a));
+        this.body.append(h("div", "fc-tgt", `1 M = ${km(I.Mm)} · ${(I.Msec).toFixed(0)} s — horizon ${horizon(I.a).toFixed(2)} M, ISCO ${iscoR.toFixed(2)} M (${o!.prograde ? "prograde" : "retrograde"})`));
+      }
+      let where: "ap" | "pe" | "now" = "ap";
+      const seg = h("div", "fc-seg");
+      for (const [w, l] of [["ap", "AT AP"], ["pe", "AT PE"], ["now", "NOW"]] as ["ap" | "pe" | "now", string][]) {
+        const b = h("button", w === where ? "on" : "", l);
+        b.onclick = () => {
+          where = w;
+          for (const x of seg.children) x.classList.toggle("on", x === b);
+        };
+        seg.append(b);
+      }
+      this.op("Circularize", "The velocity made the circular orbit's there — tangential, the speed whose free fall has no radial pull (not Kepler's: the hole's own)", [seg], () => this.host.kerrOp("circ", where));
+      const fin = (x: number) => (Number.isFinite(x) ? x : 0);
+      const ap = numField("Apoapsis", Math.round(fin(o?.ra ?? k.r) * 1.5), "M", 1, () => {}, { min: 2, digits: 1 });
+      this.op("Apoapsis", "A burn at the periapsis: the far side put there — found on the real path (it precesses)", [ap.el], () => this.host.kerrOp("ap", ap.get()));
+      const pe = numField("Periapsis", Math.round(fin(o?.rp ?? k.r) * 0.8), "M", 1, () => {}, { min: 0.5, digits: 1 });
+      this.op("Periapsis", "A burn at the apoapsis: the near side put there — inside the horizon, a plunge", [pe.el], () => this.host.kerrOp("pe", pe.get()));
+      const ho = numField("Radius", Math.round(k.r * 2), "M", 1, () => {}, { min: 2, digits: 1 });
+      this.op("Hohmann transfer", "From the periapsis (to rise) or the apoapsis (to fall), the far apsis there, circularized on arrival — not below the ISCO", [ho.el], () => this.host.kerrOp("hohmann", ho.get()));
+      const inc = numField("Inclination", o ? (o.inc * 180) / Math.PI : 0, "°", 1, () => {}, { min: 0, max: 180, digits: 1 });
+      this.op("Inclination", "To the equator — the disk's, the worlds' — turned at the cheaper crossing of the new plane (0°: into the disk)", [inc.el], () => this.host.kerrOp("inc", inc.get()));
+      const rs = numField("Period ×", 1.5, "", 0.25, () => {}, { min: 0.2, max: 20, digits: 3 });
+      this.op("Resonant orbit", "The period a ratio of this one's — back where it is every few turns — on the geodesic's own clock", [rs.el], () => this.host.kerrOp("res", rs.get()));
     } else if (t === "target") {
       this.body.append(h("div", "fc-tgt", `Target: ${k.target ?? "—"}`));
+      this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () => this.host.kerrOp("plane"));
       this.op("Rendezvous", "The apsis burn timed for the target to be there, a velocity match at the closest approach", [], () => this.host.kerrPlan("target"));
       this.op("The wormhole", "A 3-D burn aimed by Newton's method at the mouth's centre", [], () => this.host.kerrPlan("wormhole"));
-    } else this.body.append(h("div", "fc-empty", "About Gargantua: the orbits and the rendezvous (Kerr's geodesics)"));
+      this.op("Circular orbit, now", "Gargantua's planner: a burn now-ish, the opposite apsis at the radius, circularized there", [], () => this.host.kerrPlan("circular", Math.round(k.r)));
+    } else this.body.append(h("div", "fc-empty", "About Gargantua: ORBIT and TARGET (Kerr's geodesics)"));
   }
 
   /** A planned operation, before it is flown: its burns, the orbit after, the budget; its porkchop. */
@@ -329,14 +369,16 @@ export class FlightComputer {
     const card = h("div", "fc-card");
     card.append(h("div", "fc-card-t", r.note));
     const tab = h("table", "fc-burns");
-    tab.innerHTML = `<tr><th></th><th>T−</th><th>PRO</th><th>NRM</th><th>RAD</th><th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
-      `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${b.dv[0].toFixed(1)}</td><td>${b.dv[1].toFixed(1)}</td><td>${b.dv[2].toFixed(1)}</td><td><b>${ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`).join("");
+    // (about the hole the burns are fractions of c: their parts in km/s)
+    const big = r.burns.some((b) => len(b.dv) >= 1e5);
+    tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th><th>NRM</th><th>RAD</th><th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
+      `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${part(b.dv[0], big)}</td><td>${part(b.dv[1], big)}</td><td>${part(b.dv[2], big)}</td><td><b>${big ? part(len(b.dv), true) : ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`).join("");
     card.append(tab);
     const a = r.after;
     if (a && c) {
       const R = c.ctx.R;
       card.append(h("div", "fc-after", `After: Pe ${km(a.rp - R)} · Ap ${km(a.ra - R)} · i ${(a.i * D).toFixed(2)}° · e ${a.e.toFixed(4)} · T ${dur(a.T)}`));
-    }
+    } else if (r.afterText) card.append(h("div", "fc-after", r.afterText));
     const ok = r.dvTotal <= B.dv;
     const bar = h("div", "fc-budget");
     bar.innerHTML = `<i><b style="width:${Number.isFinite(B.dv) ? Math.min(100, (r.dvTotal / Math.max(B.dv, 1e-9)) * 100) : 0}%" class="${ok ? "" : "hot"}"></b></i><span>${ms(r.dvTotal)}${Number.isFinite(B.dv) ? ` of ${ms(B.dv)} left` : " · no propellant gauge"}</span>`;
@@ -456,6 +498,24 @@ export class FlightComputer {
           ["Synodic period", dur(rel.synodic)], ["Closest approach", `${km(rel.ca.dist)} in ${dur(rel.ca.t)}`],
         ].map(([a, b]) => `<div class="fc-kv"><span>${a}</span><b>${b}</b></div>`).join("")
         : `<div class="fc-empty">${c.targetName ? `${c.targetName}: not about ${c.bodyName}` : "No target"}</div>`;
+    } else if (k && this.host.kerrInfo()) {
+      // about the hole: the orbit as its geodesic has it
+      const I = this.host.kerrInfo()!;
+      const o = I.o;
+      const tm = (t: number) => (Number.isFinite(t) ? `T− ${dur((t - I.t) * I.Msec)}` : "—");
+      const rows: [string, string][] = [
+        ["Periapsis", `${rM(o.rp, I.Mm)} · ${tm(o.tPe)}`],
+        ["Apoapsis", o.fate === "escape" ? "— (an escape)" : `${rM(o.ra, I.Mm)} · ${tm(o.tAp)}`],
+        ["Radius", rM(o.rNow, I.Mm)],
+        ["Period", Number.isFinite(o.T) ? `${dur(o.T * I.Msec)} (${o.T.toFixed(0)} M)` : "—"],
+        ["Radial period", Number.isFinite(o.Tr) ? `${dur(o.Tr * I.Msec)} · periapsis +${(o.advance * D).toFixed(1)}°/turn` : "— (circular)"],
+        ["Inclination", `${(o.inc * D).toFixed(3)}° · ${o.prograde ? "prograde" : "retrograde"}`],
+        ["Equator crossings", o.tNodes.length ? o.tNodes.map(tm).join(" · ") : "—"],
+        ["ISCO · horizon", `${isco(o.prograde ? Math.abs(I.a) : -Math.abs(I.a)).toFixed(2)} M · ${horizon(I.a).toFixed(2)} M`],
+        ["Fate", o.fate === "horizon" ? "into the horizon" : o.fate === "escape" ? "an escape" : "bound"],
+      ];
+      E.orbit!.innerHTML = rows.map(([a, b]) => `<div class="fc-kv"><span>${a}</span><b>${b}</b></div>`).join("");
+      E.target!.innerHTML = `<div class="fc-empty">${k.target && k.target !== "hole" ? `Target: ${k.target}` : "No target"}</div>`;
     } else {
       E.orbit!.innerHTML = `<div class="fc-empty">${k ? `About Gargantua: r = ${k.r.toFixed(2)} M (the map's apsides)` : "Far from any body"}</div>`;
       E.target!.innerHTML = "";
@@ -494,23 +554,42 @@ export class FlightComputer {
     });
     E.append(list);
     const b = P.burns[this.sel]!;
+    // (the hole's burns in km/s)
+    const f = P.burns.some((x) => len(x.dv) >= 1e5) ? 1000 : 1;
     const edit = (k: number) => (v: number) => {
       const nb = P.burns.map((x) => ({ ...x, dv: [...x.dv] as V3 }));
-      if (k < 3) nb[this.sel]!.dv[k] = v;
+      // (edited by hand: flown as given, its goal dropped)
+      delete nb[this.sel]!.goal;
+      if (k < 3) nb[this.sel]!.dv[k] = v * f;
       else nb[this.sel]!.t = Math.max(v * 60, 0);
       this.host.setPlan(nb, P.note);
       this.planSig = "";
     };
     const box = h("div", "fc-insp");
     box.append(
-      numField("Prograde", b.dv[0], "m/s", 1, edit(0), { digits: 2 }).el,
-      numField("Normal", b.dv[1], "m/s", 1, edit(1), { digits: 2 }).el,
-      numField("Radial", b.dv[2], "m/s", 1, edit(2), { digits: 2 }).el,
+      numField("Prograde", b.dv[0] / f, f > 1 ? "km/s" : "m/s", 1, edit(0), { digits: 2 }).el,
+      numField("Normal", b.dv[1] / f, f > 1 ? "km/s" : "m/s", 1, edit(1), { digits: 2 }).el,
+      numField("Radial", b.dv[2] / f, f > 1 ? "km/s" : "m/s", 1, edit(2), { digits: 2 }).el,
       numField("Time", b.t / 60, "min", 1, edit(3), { digits: 2, min: 0 }).el,
     );
     // (snapped to where the orbit is then: its apsides, its equator's nodes, a turn on or back)
     const c = this.host.context();
+    const I = c ? null : this.host.kerrInfo();
     const snaps = h("div", "fc-seg fc-snap");
+    if (I) {
+      // (about the hole: the geodesic's own apsides and equator crossings, its radial period)
+      const s = (t: number) => (t - I.t) * I.Msec;
+      const opts: [string, number][] = [["AP", s(I.o.tAp)], ["PE", s(I.o.tPe)], ...I.o.tNodes.map((t, i) => [i ? "NODE 2" : "NODE", s(t)] as [string, number])];
+      // (a turn: the radial period — back at the same apsis —, the orbital one for a circle)
+      const turn = Number.isFinite(I.o.Tr) ? I.o.Tr : I.o.T;
+      if (Number.isFinite(turn)) opts.push(["+1 ORBIT", b.t + turn * I.Msec], ["−1 ORBIT", b.t - turn * I.Msec]);
+      for (const [l, t] of opts) {
+        if (!Number.isFinite(t) || t < 0) continue;
+        const bt = h("button", "", l);
+        bt.onclick = () => edit(3)(t / 60);
+        snaps.append(bt);
+      }
+    }
     if (c) {
       const el = elements(c.ctx.mu, c.ctx.r, c.ctx.v, c.ctx.pole);
       const nd = nodesAgainst(el, c.ctx.pole ?? [0, 0, 1]);
