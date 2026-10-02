@@ -14,22 +14,22 @@ export type PlanRequest =
   | { id: number; kind: "transfer"; X: Vec3; V: Vec3; t: number; goal: OurGoal; o: PlanOptions }
   | { id: number; kind: "orbit"; X: Vec3; V: Vec3; t: number; altM: number; o: PlanOptions }
   | { id: number; kind: "refine"; X: Vec3; V: Vec3; t: number; mission: OurMission; node: PlanNode; o: PlanOptions }
-  | { id: number; kind: "predict"; X: Vec3; V: Vec3; t: number; mouthR: number }
+  | { id: number; kind: "predict"; X: Vec3; V: Vec3; t: number; mouthR: number; drag?: number }
   | { id: number; kind: "extend"; X: Vec3; V: Vec3; t: number; ref: string; horizon: number }
-  | { id: number; kind: "predictPlan"; X: Vec3; V: Vec3; t: number; nodes: { t: number; dv: Vec3 }[]; mouthR: number; accel: number }
+  | { id: number; kind: "predictPlan"; X: Vec3; V: Vec3; t: number; nodes: { t: number; dv: Vec3 }[]; mouthR: number; accel: number; drag?: number }
   | { id: number; kind: "kerrPath"; s: Settings; st: Massive; tMax: number };
 
 export function runPlan(q: PlanRequest) {
   if (q.kind === "transfer") return planOurTransfer(q.X, q.V, q.t, q.goal, q.o);
   if (q.kind === "orbit") return planOurOrbit(q.X, q.V, q.t, q.altM, q.o);
   // (the ship's free fall for the map and the telemetry: off the frame loop too)
-  if (q.kind === "predict") return predictOurs(q.X, q.V, q.t, [], { mouthR: q.mouthR });
+  if (q.kind === "predict") return predictOurs(q.X, q.V, q.t, [], { mouthR: q.mouthR, drag: q.drag });
   // (the map's preview beyond the predictions: patched conics)
   if (q.kind === "extend") return extendFrom(q.X, q.V, q.t, q.ref, q.horizon);
   // (hand-made nodes: the path through them, far — a turn of the orbit after the last burn)
   // (the camera's free fall around the hole, for the overlay's lensed tube: 480 points)
   if (q.kind === "kerrPath") return predict(q.st, q.s.spin, q.tMax, 480, lensesOf(q.s), 1e-7);
-  if (q.kind === "predictPlan") return predictOurs(q.X, q.V, q.t, q.nodes, { mouthR: q.mouthR, accel: q.accel, maxSteps: 12000 });
+  if (q.kind === "predictPlan") return predictOurs(q.X, q.V, q.t, q.nodes, { mouthR: q.mouthR, accel: q.accel, maxSteps: 12000, drag: q.drag });
   return { node: refineOurNode(q.X, q.V, q.t, q.mission, q.node, q.o) };
 }
 

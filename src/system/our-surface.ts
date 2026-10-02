@@ -7,6 +7,7 @@ import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
 import { craterRelief } from "../terrain";
+import { airAt } from "../aero";
 
 export { GEAR };
 
@@ -33,9 +34,7 @@ export function groundVelocity(id: string, X: Vec3, t: number): Vec3 {
 
 /** Air density [kg/m³] at a height [m] above a body (none: 0). */
 export function airDensity(id: string, hM: number) {
-  const a = solarBody(id)?.atmosphere;
-  if (!a || hM > 30 * a.H) return 0;
-  return a.rho0 * Math.exp(-Math.max(hM, 0) / a.H);
+  return airAt(solarBody(id)?.atmosphere, Math.max(hM, 0)).rho;
 }
 
 /** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air. */

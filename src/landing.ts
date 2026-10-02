@@ -16,6 +16,7 @@
 // Contact: the ship stops on the ground (above its gear) and turns with it; it takes off when its
 // thrust beats its weight there.
 
+import { airAt, type Atmosphere } from "./aero";
 import { TUNING } from "./game/tuning";
 import { coordToZamo, zamo, zamoToCoord, type Vec3 } from "./physics";
 import { epicycle } from "./lowthrust";
@@ -50,7 +51,7 @@ export interface PlanetFrame {
   S: Vec3;
   /** the relative motion's system matrix in proper coordinates and time */
   A: M6;
-  atm: { rho0: number; H: number } | null;
+  atm: Atmosphere | null;
   /** its surface kind (terrain.ts) */
   surf: number;
   /** metres per M */
@@ -176,18 +177,26 @@ export function groundR(F: PlanetFrame, xi: Vec3): number {
 
 /** Air density at a height [kg/m³]. */
 export function airDensity(F: PlanetFrame, hM: number): number {
-  if (!F.atm) return 0;
-  const h = Math.max(hM, 0) * F.mPerM;
-  return h > 30 * F.atm.H ? 0 : F.atm.rho0 * Math.exp(-h / F.atm.H);
+  return airAt(F.atm, Math.max(hM, 0) * F.mPerM).rho;
 }
 
-/** Acceleration in the local frame [c²/M]: primary's field (linear), planet's gravity, drag, thrust. */
-export function localAccel(F: PlanetFrame, xi: Vec3, w: Vec3, thrust: Vec3): Vec3 {
+/** The air's acceleration on the flown craft (flightair.ts): from its height [m] and velocity through
+ *  the air [m/s], local axes → [m/s²]. */
+export type AeroFn = (h: number, va: Vec3) => Vec3;
+
+/** Acceleration in the local frame [c²/M]: primary's field (linear), planet's gravity, the air (the
+ *  craft's own aerodynamics if given, else a ballistic drag), thrust. */
+export function localAccel(F: PlanetFrame, xi: Vec3, w: Vec3, thrust: Vec3, aero?: AeroFn): Vec3 {
   const s = [...xi, ...w];
   const a: Vec3 = [0, 1, 2].map((i) => F.A[3 + i]!.reduce((acc, v, j) => acc + v * s[j]!, 0)) as Vec3;
   const d = len(xi);
   const g = F.m / Math.max(d * d * d, 1e-300);
   let out: Vec3 = [a[0] - g * xi[0] + thrust[0], a[1] - g * xi[1] + thrust[1], a[2] - g * xi[2] + thrust[2]];
+  if (aero && F.atm) {
+    const c = 299792458;
+    const f = aero((d - F.R) * F.mPerM, [w[0] * c, w[1] * c, w[2] * c]);
+    return [out[0] + f[0] / F.aUnit, out[1] + f[1] / F.aUnit, out[2] + f[2] / F.aUnit];
+  }
   const rho = airDensity(F, d - F.R);
   const sp = len(w);
   if (rho > 0 && sp > 0) {
@@ -210,7 +219,7 @@ export function weightUp(F: PlanetFrame, xi: Vec3): number {
  * acceleration, local axes, c²/M): RK4 substeps small against the orbit around the planet, the drag
  * time and the time to the ground. Returns the impact speed [m/s] if it touched down.
  */
-export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3): { impact: number | null } {
+export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3, aero?: AeroFn): { impact: number | null } {
   const gear = GEAR / F.mPerM;
   if (L.landed) {
     // on the ground: stays, unless the thrust lifts it
@@ -225,12 +234,18 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
     const sp = len(L.w) + 1e-30;
     const hNow = Math.max(d - groundR(F, L.xi) - gear, 1e-12);
     const rho = airDensity(F, d - F.R);
-    // (v/a of the drag, in M: B a_unit / (½ ρ v c²))
-    const dragT = rho > 0 ? (TUNING.ballistic * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
+    // (v/a of the drag, in M: B a_unit / (½ ρ v c²) — the craft's own: its speed over its air's pull)
+    let dragT = rho > 0 ? (TUNING.ballistic * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
+    if (aero && rho > 0) {
+      const c = 299792458;
+      const f = aero((d - F.R) * F.mPerM, [L.w[0] * c, L.w[1] * c, L.w[2] * c]);
+      const fa = Math.hypot(f[0], f[1], f[2]) / F.aUnit;
+      dragT = fa > 0 ? sp / fa : Infinity;
+    }
     const orbitT = Math.sqrt((d * d * d) / F.m);
     let h = Math.min(left, 0.02 * orbitT, 0.2 * dragT, Math.max(0.2 * hNow / sp, 1e-3 * orbitT));
     h = Math.max(h, 1e-14);
-    const f = (x: Vec3, v: Vec3) => localAccel(F, x, v, thrust);
+    const f = (x: Vec3, v: Vec3) => localAccel(F, x, v, thrust, aero);
     const x0 = L.xi, v0 = L.w;
     const k1v = f(x0, v0), k1x = v0;
     const x1: Vec3 = [x0[0] + 0.5 * h * k1x[0], x0[1] + 0.5 * h * k1x[1], x0[2] + 0.5 * h * k1x[2]];

@@ -8,7 +8,8 @@
 
 import type { Vec3 } from "../physics";
 import { referenceBody, soiOf } from "./our-side";
-import { mouthAccel, SOLAR_BODIES, solarState } from "./solar";
+import { M_METRES, mouthAccel, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
+import { airAt, airTop } from "../aero";
 
 export interface OurNode {
   /** scene time [M] and Δv [P, N, R] (c) */
@@ -102,7 +103,7 @@ export function nodeDvComponents(X: Vec3, V: Vec3, t: number, d: Vec3): Vec3 {
  * The path from (X, V) at t0 for about a turn of the orbit around its reference body (or, leaving it,
  * on until tMax), the nodes' impulses applied on the way. maxSteps bounds the work.
  */
-export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [], o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number } = {}): OurPath {
+export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [], o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number; drag?: number } = {}): OurPath {
   const maxSteps = o.maxSteps ?? 2500;
   const out: OurPath = { pts: [X0], vels: [V0], times: [t0], refs: [], fate: "continues", nodeAt: [] };
   let X = X0, V = V0, t = t0;
@@ -141,20 +142,37 @@ export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [
     const l = Math.hypot(...d) || 1;
     return [(d[0] / l) * acc, (d[1] / l) * acc, (d[2] / l) * acc];
   };
+  // (the air: the craft's drag, C_D A / m [m²/kg] — through the air turning with its body)
+  const air = (Xq: Vec3, Vq: Vec3, tq: number): { a: Vec3; rate: number } | null => {
+    const b = o.drag ? solarBody(ref) : undefined;
+    if (!b?.atmosphere || b.kind === "star") return null;
+    const st = solarState(ref, tq);
+    const d = sub(Xq, st.pos);
+    const h = (Math.hypot(...d) - b.radius) * M_METRES;
+    if (h > airTop(b.atmosphere)) return null;
+    const w = spinVector(b, tq);
+    const va = sub(Vq, add(st.vel, cross(w, d)));
+    const v = Math.hypot(...va);
+    const k = 0.5 * airAt(b.atmosphere, h).rho * v * o.drag! * M_METRES;
+    return { a: [-k * va[0], -k * va[1], -k * va[2]], rate: k };
+  };
   for (let i = 0; i < maxSteps && t < tEnd; i++) {
     let dt = (o.step ?? 0.02) * g.tDyn;
+    const inAir = air(X, V, t);
+    if (inAir) dt = Math.min(dt, 0.004 * g.tDyn, inAir.rate > 0 ? 0.05 / inAir.rate : Infinity);
     // (land on the next node — or its burn's start — exactly)
     const next: OurNode | undefined = burn ? undefined : pending[0];
     if (next && t + dt >= startOf(next)) dt = Math.max(startOf(next) - t, 0);
     if (burn) dt = Math.min(dt, burn.T / 40, burn.left / acc);
     dt = Math.min(dt, tEnd - t);
-    if (burn) {
-      const a0 = add(g.a, thrust(X, V, t));
+    if (burn || inAir) {
+      const drag = (Xq: Vec3, Vq: Vec3, tq: number): Vec3 => air(Xq, Vq, tq)?.a ?? [0, 0, 0];
+      const a0 = add(add(g.a, thrust(X, V, t)), drag(X, V, t));
       V = add(V, a0, dt / 2);
       X = add(X, V, dt);
       t += dt;
       g = pull(X, t, set);
-      V = add(V, add(g.a, thrust(X, V, t)), dt / 2);
+      V = add(V, add(add(g.a, thrust(X, V, t)), drag(X, V, t)), dt / 2);
     } else {
       // (coasting: Yoshida's composition of three velocity-Verlet steps — fourth order, still
       // symplectic: months between the planets stay within a few km)

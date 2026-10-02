@@ -16,6 +16,8 @@ import { lensesOf } from "./lenses";
 import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
+import { AirFlight, AIR_WARP } from "./flightair";
+import { aeroForces, airAt, airTop } from "./aero";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
@@ -180,6 +182,14 @@ export class CameraController {
   readonly touchInput = { pitch: 0, yaw: 0, roll: 0 };
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
+  /** the flown craft entering the air (the last moment before an entry: a point to resume from) */
+  onAirEntry?: () => void;
+  /** the craft lost to the air (heat, load): why */
+  onCraftLost?: (why: string) => void;
+  /** the flown craft in the air: its forces, skin, load (flightair.ts) */
+  readonly airFlight = new AirFlight();
+  /** the time warp held down in the air: said once per descent */
+  private airWarpSaid = false;
   /** The camera's place on the ship: moves smoothly (0.6 s) from one attach point to the next. */
   /** the outside views (mounts.ts: around, free): about the ship — yaw, pitch [deg] (0: behind it),
    *  distance [m]; free — the eye [m] and the look's yaw, pitch [deg] in the ship's frame (0: its nose) */
@@ -1625,7 +1635,9 @@ export class CameraController {
         const { F, L } = lf;
         const dtau = simDt / F.ut;
         const was = L.landed;
-        const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)));
+        // (the flown craft: its own aerodynamics, its axes on the planet's local ones)
+        const aero = acc && F.atm ? this.airFlight.forceFn(F.atm, F.id, fleet.massProps().mass, this.shipAxesLocal(cam).map((v) => zamoToLocal(unitV(v))) as [Vec3, Vec3, Vec3], this.spinPhysical()) : undefined;
+        const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)), aero);
         this.properTime += dtau;
         this.landed = L.landed;
         const F1 = planetFrame(F.id, t0 + simDt, a, s.massSolar);
@@ -1679,7 +1691,7 @@ export class CameraController {
     const ours = p.l < -m.w.a && s.system === "gargantua";
     // (our side: the home frame's Cartesian flight — the planner's — down to 12 throat radii, where
     // the Dneg space is flat to 0.4 %; closer, along the metric's geodesics, through the throat)
-    if (ours && homeOfPose(m.w, p).r > 12 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w);
+    if (ours && homeOfPose(m.w, p).r > 12 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w, !!acc);
     let steps = 1;
     let span = simDt;
     if (ours) {
@@ -1724,7 +1736,7 @@ export class CameraController {
    * Our universe far from the mouth (flat): velocity Verlet in the home frame's Cartesian
    * coordinates, the attitude fixed against the stars; a body met: the ship rests on it.
    */
-  private flyHome(p: ReturnType<typeof repPose>, vRep: Vec3, simDt: number, t0: number, w: Dneg) {
+  private flyHome(p: ReturnType<typeof repPose>, vRep: Vec3, simDt: number, t0: number, w: Dneg, flown = false) {
     const s = this.s;
     let X = homeOf(w, p.l, p.n);
     let V = repToHomeVec(w, p.l, p.n, vRep);
@@ -1767,9 +1779,27 @@ export class CameraController {
     // the ground under the ship: the body of the sphere of influence, if solid (its air: drag)
     const ref = referenceBody(X, t0);
     const ground = solidBody(ref) ? ref : null;
-    const airy = ref !== "sun" && ourAir(ref, 0) > 0;
+    const atm = ref !== "sun" ? solarBody(ref)?.atmosphere : undefined;
+    const airy = !!atm && flown;
     let g = gravityHome(X, t0);
-    const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => (airy ? lin(gq.acc, 1, dragAccel(ref, Xq, Vq, tq), 1) : gq.acc);
+    // (the flown craft's own aerodynamics — its attitude, its configuration — in the home frame)
+    const right = cross(fwd, up);
+    const S = this.shipMatrix();
+    const axes = [0, 1, 2].map((i) => unitV(lin(lin(right, S[0]![i]!, up, S[1]![i]!), 1, fwd, S[2]![i]!))) as [Vec3, Vec3, Vec3];
+    const aero = airy ? this.airFlight.forceFn(atm, ref, fleet.massProps().mass, axes, this.spinPhysical()) : null;
+    const rb = airy ? solarBody(ref)!.radius : 0;
+    const kA = M_METRES / 299792458 ** 2;
+    let aAir = 0;
+    const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => {
+      if (!aero) return gq.acc;
+      const st = ourState(ref, tq);
+      const h = (Math.hypot(...sub3(Xq, st.pos)) - rb) * M_METRES;
+      const va = sub3(Vq, groundVelocity(ref, Xq, tq));
+      const f = aero(h, [va[0] * 299792458, va[1] * 299792458, va[2] * 299792458]);
+      const a: Vec3 = [f[0] * kA, f[1] * kA, f[2] * kA];
+      aAir = Math.hypot(...a) / (Math.hypot(...va) + 1e-30);
+      return lin(gq.acc, 1, a, 1);
+    };
     // steps: a small part of the fall time; near the ground, of the time to reach it
     const stepOf = () => {
       // (fourth order in the vacuum: longer steps — the map's prediction's own)
@@ -1778,6 +1808,8 @@ export class CameraController {
         const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
         const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
         dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+        // (a small part of the time the air takes to change the speed)
+        if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
       }
       return dt;
     };
@@ -1886,7 +1918,7 @@ export class CameraController {
     const a = -b.mass / (2 * eps);
     const h = cross(r, v);
     const e = Math.sqrt(Math.max(1 - dot3(h, h) / (b.mass * a), 0));
-    const clear = b.radius * 1.01 + (b.atmosphere ? (30 * b.atmosphere.H) / M_METRES : 0);
+    const clear = b.radius * 1.01 + airTop(b.atmosphere) / M_METRES;
     if (a * (1 - e) < clear || a * (1 + e) > 0.25 * soiOf(ref, t)) return null;
     return { ref, mass: b.mass, period: 2 * Math.PI * Math.sqrt(a ** 3 / b.mass) };
   }
@@ -2258,6 +2290,7 @@ export class CameraController {
    *  (the ship kept still meanwhile, the view the scene turned onto its body turned away: 21° on the Moon's
    *  Earthrise, the Earth out of the frame) */
   settleMount() {
+    this.airFlight.reset(fleet.active);
     this.lastMount = this.s.shipMount;
     // (a scene's attach point: the one a reset comes back to; the outside views at the craft's own distances)
     if (MOUNTS[this.s.shipMount as Mount] && !(MOUNTS[this.s.shipMount as Mount] as { outside?: string }).outside) this.hullMount = this.s.shipMount as Mount;
@@ -2489,8 +2522,19 @@ export class CameraController {
     TUNING.turnRate = tune.rate * Math.min(1, 1.4 * Math.sqrt(ag));
     const assembled = fleet.flownAssembly().length > 1;
     const before = assembled ? this.camAxesHome() : null;
+    // in the air: the time sped up no more than ×4, and the craft's turns on its own clock (the air's
+    // moments and the pilot's commands in step with the flight)
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const thick = this.airFlight.inAir;
+    if (thick && s.timeSpeed * Msec > AIR_WARP) {
+      s.timeSpeed = this.warpSet = AIR_WARP / Msec;
+      if (!this.airWarpSaid) this.onPilotMessage?.(`In the air: the time warp held at ×${AIR_WARP}`);
+      this.airWarpSaid = true;
+    }
+    if (!thick) this.airWarpSaid = false;
+    const dtPilot = thick ? dt * Math.min(s.timeSpeed * Msec, AIR_WARP) : dt;
     const out = this.pilot.step({
-      dt, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
+      dt: dtPilot, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
       radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
       target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
       dock: this.pilot.auto === "dock" ? this.dockAuto?.att ?? null : null,
@@ -2509,8 +2553,11 @@ export class CameraController {
     const simDt = s.animate ? s.timeSpeed * dt : 0;
     const tau0 = this.properTime;
     const pre = simDt > 0 ? this.contactPose() : null;
+    this.airFlight.vacuum();
     if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
     if (pre) this.stationContact(pre);
+    this.airAfter(simDt * Msec, out.acc, dtPilot);
+    if (!thick && this.airFlight.inAir && this.airFlight.last!.speed > 1000) this.onAirEntry?.();
     // rapidity spent (the propellant gauge), and the Δv delivered to the executing node (proper
     // acceleration × proper time)
     const w = Math.hypot(...out.acc) * (this.properTime - tau0);
@@ -2518,6 +2565,65 @@ export class CameraController {
     if (burn && this.nodeBurning) this.nodeDone += w;
     this.dockCheck();
     this.measureSpin();
+  }
+
+  /**
+   * After a frame's flight: the skin's temperatures, the load, the limits (flightair.ts); the air's
+   * moment turns the craft (the pilot's rates the other way round from the right-hand rule).
+   */
+  private airAfter(dtSec: number, acc: Vec3, dtPilot: number) {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const ax = this.shipAxesLocal(cam);
+    const aU = 299792458 ** 2 / (1476.625 * s.massSolar);
+    const thrust = ax.map((a) => (dot3(acc, a) / Math.max(Math.hypot(...a), 1e-12)) * aU) as Vec3;
+    const mp = fleet.massProps();
+    const was = this.airFlight.failure;
+    const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.inertia, s.damage);
+    if (this.airFlight.inAir) for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! - alpha[i]! * dtPilot;
+    if (this.airFlight.failure && !was) this.onCraftLost?.(this.airFlight.failure);
+  }
+
+  /**
+   * The flown craft's drag per unit mass, C_D A / m [m²/kg], as it flies now — its attitude to its
+   * motion through the air (out of the air: as if it entered so, at Mach 25) — for the map's paths.
+   */
+  private dragPerMass(): number {
+    if (!this.piloting) return 0;
+    const m = fleet.massProps().mass;
+    const L = this.airFlight.last;
+    if (L && L.out.q > 0) return L.out.D / L.out.q / m;
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const nav = this.ourNav(cam);
+    if (!nav || nav.ref === "sun" || !solarBody(nav.ref)?.atmosphere) return 0;
+    const w = mouth(s).w;
+    const ax = this.shipAxesLocal(cam).map((a) => unitV(repToHomeVec(w, cam.ell, cam.n, a)));
+    const va = sub3(nav.V, groundVelocity(nav.ref, nav.X, nav.t));
+    const vl = Math.hypot(...va) || 1;
+    const air = airAt(solarBody(nav.ref)!.atmosphere, 70e3);
+    const v = 25 * air.a;
+    const o = aeroForces(VESSELS[fleet.active].aero, ax.map((a) => (dot3(va, a) / vl) * v) as Vec3, air);
+    return o.q > 0 ? o.D / o.q / m : 0;
+  }
+
+  /** The flown craft in the air, for the displays: the flow (q, Mach, α, β), the heat, the skin, the load. */
+  private airInfo() {
+    const A = this.airFlight;
+    const L = A.last;
+    const V = VESSELS[fleet.active].aero;
+    return {
+      inAir: A.inAir, q: L?.out.q ?? 0, mach: L?.out.mach ?? 0, alpha: L?.out.alpha ?? 0, beta: L?.out.beta ?? 0, heat: L?.out.heat ?? 0,
+      lift: L?.out.L ?? 0, drag: L?.out.D ?? 0, stalled: L?.out.stalled ?? false, h: L?.h ?? NaN, speed: L?.speed ?? 0, airT: L?.air.T ?? NaN,
+      shield: A.skin.shield, hull: A.skin.hull, shieldMax: V.shield?.tMax ?? 0, hullMax: V.hull.tMax, g: A.g, gMax: V.gMax, gPeak: A.gPeak,
+      margins: A.margins(), failure: A.failure, damage: this.s.damage, body: A.body,
+    };
+  }
+
+  /** The flown craft's angular velocity, ship frame, right-handed [rad/s of its time] (the pilot's
+   *  rates are the other way round; in the air they run on the craft's clock). */
+  private spinPhysical(): Vec3 {
+    return [-this.pilot.omega[0], -this.pilot.omega[1], -this.pilot.omega[2]];
   }
 
   /** The flown craft's turn as flown — its axes now against last step's: its angular velocity (home)
@@ -3775,7 +3881,7 @@ export class CameraController {
         // (a mission: the flight's own step — the display's path is the one flown)
         const span = { tMax: Math.max(m.tEnd - nav.t, 0) * 1.1 + 0.3 * 86400 / 492.55, maxSteps: 6000, step: 0.025 };
         const t0 = performance.now();
-        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, ...span });
+        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, ...span, drag: this.dragPerMass() });
         this.planCost = performance.now() - t0;
         return (P.path = null);
       }
@@ -3789,12 +3895,12 @@ export class CameraController {
       else {
         const t0 = performance.now();
         const last = list[list.length - 1]!.t;
-        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, tMax: Math.max(last - nav.t, 0) + 1800 / 492.5490947, maxSteps: 3000 });
+        this.ourPlan = predictOurs(nav.X, nav.V, nav.t, list, { mouthR, accel, tMax: Math.max(last - nav.t, 0) + 1800 / 492.5490947, maxSteps: 3000, drag: this.dragPerMass() });
         this.planCost = performance.now() - t0;
       }
       if (!this.farBusy && (!far || far.key !== key || now - far.at > 2000)) {
         this.farBusy = true;
-        runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes: list, mouthR, accel })
+        runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes: list, mouthR, accel, drag: this.dragPerMass() })
           .then((path) => {
             if (!path || (path as unknown as { error?: string }).error) return;
             this.farPlan = { key, path, at: performance.now() };
@@ -5395,6 +5501,7 @@ export class CameraController {
         : null,
       /** near a planet: its frame's figures (landing.ts) */
       surface: this.surfaceInfo(),
+      air: this.airInfo(),
       /** the engine and the tank */
       engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
       /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
@@ -5561,11 +5668,11 @@ export class CameraController {
       // (the first one here, whole: without it the telemetry and the map fall back to costlier work —
       // measured: a 150–220 ms task when it came from the worker a few frames later)
       if (!this.ourFree) {
-        this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR });
+        this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR, drag: this.dragPerMass() });
         return (this.path = null);
       }
       this.predicting = true;
-      runPlanner<OurPath>({ kind: "predict", X: nav.X, V: nav.V, t: nav.t, mouthR }).then(
+      runPlanner<OurPath>({ kind: "predict", X: nav.X, V: nav.V, t: nav.t, mouthR, drag: this.dragPerMass() }).then(
         (p) => {
           this.predicting = false;
           if (p && Array.isArray(p.pts) && this.ourFreeKey === key) this.ourFree = p;

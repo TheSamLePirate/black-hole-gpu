@@ -984,8 +984,13 @@ export const SCHEMA: ControlDef[] = [
   },
   {
     key: "ballistic", type: "number", section: "game", group: "Ground & air", label: "Ballistic coefficient", min: 50, max: 10000, scale: "log", precision: 3, unit: "kg/m²", effect: "none",
-    help: "m/(C_D A): how hard the air brakes the ship (lower: more drag). 900: a dense lander.",
+    help: "m/(C_D A): how hard the air brakes what has no shape of its own (the predictions, the station). The flown craft has its own aerodynamics.",
     keywords: "drag air atmosphere reentry",
+  },
+  {
+    key: "damage", type: "toggle", section: "game", group: "Ground & air", label: "Damage", effect: "none",
+    help: "The air can destroy the craft: its heat shield or hull past their temperature limits, or a load past its structure. Off: alarms only.",
+    keywords: "reentry heat shield destruction g load damage",
   },
   {
     key: "rangerStatus", type: "toggle", section: "game", group: "Displays", label: "Ranger status", effect: "none",

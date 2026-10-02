@@ -2253,3 +2253,14 @@ body.mobile.portrait .fl-plan { top: auto; left: 8px; right: 8px; bottom: calc(8
 /* the touch controls: a little tighter upright */
 body.mobile.portrait .tf-stick { width: 124px; height: 124px; left: calc(14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); }
 body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+
+/* the craft lost to the air (ui/craftlost.ts) */
+.craft-lost { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(60, 8, 0, 0.55), rgba(0, 0, 0, 0.78)); animation: cl-in 0.6s ease-out; }
+@keyframes cl-in { from { opacity: 0; } to { opacity: 1; } }
+.cl-box { max-width: min(560px, calc(100vw - 32px)); padding: 26px 28px; border: 1px solid rgba(255, 120, 70, 0.45); border-radius: 10px; background: rgba(14, 10, 10, 0.88); box-shadow: 0 0 60px rgba(255, 80, 30, 0.25); color: #f2e8e4; font: 500 14px/1.45 -apple-system, "Helvetica Neue", sans-serif; }
+.cl-title { font: 700 22px/1.2 -apple-system, "Helvetica Neue", sans-serif; letter-spacing: 0.22em; color: #ff7a4a; margin-bottom: 10px; }
+.cl-why { color: #e8d6cf; margin-bottom: 18px; }
+.cl-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cl-row button { font: 600 13px -apple-system, "Helvetica Neue", sans-serif; padding: 8px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.06); color: #f4ece8; cursor: pointer; }
+.cl-row button:hover { background: rgba(255, 255, 255, 0.14); }
+.cl-row button.cl-main { border-color: rgba(255, 130, 80, 0.7); background: rgba(255, 110, 60, 0.22); }

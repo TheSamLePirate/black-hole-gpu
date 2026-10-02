@@ -1641,6 +1641,17 @@ export class FlightHud {
     // (in a planet's frame the Kerr path ignores the planet's own pull: its status knows better)
     const orbiting = i.status?.soi === hit && (i.status.status === "orbit" || i.status.status === "escape" || i.status.status === "hyperbolic");
     if (p?.fate === "star" && !onGround && !orbiting && !((i.auto === "approach" || i.auto === "orbit" || i.auto === "land" || i.auto === "takeoff") && i.target === hit)) w.push(`⚠ COLLISION COURSE — ${nm(hit)}`);
+    // the air's limits: the shield, the hull, the load
+    const air = i.air;
+    if (air && (air.inAir || air.margins.shield > 0.6 || air.margins.hull > 0.6)) {
+      const pc = (x: number) => `${Math.round(x * 100)} %`;
+      if (air.failure) w.push(`⚠ ${air.failure.toUpperCase()}`);
+      if (air.margins.shield > 0.85) w.push(`⚠ HEAT SHIELD ${Math.round(air.shield)} K · ${pc(air.margins.shield)}`);
+      if (air.margins.hull > 0.8) w.push(`⚠ HULL ${Math.round(air.hull)} K · ${pc(air.margins.hull)}`);
+      if (air.margins.g > 0.75) w.push(`⚠ LOAD ${air.g.toFixed(1)} g · ${pc(air.margins.g)}`);
+      if (air.stalled && air.mach < 3) w.push("⚠ STALL");
+      if (air.heat > 5e4) w.push(`PLASMA · ${(air.heat / 1e4).toFixed(0)} W/cm² · MACH ${air.mach.toFixed(1)}`);
+    }
     if (i.surface?.landed) w.push(`LANDED ON ${nm(i.surface.body)}`);
     else if (i.landed) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
     if (i.ergo) w.push("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");

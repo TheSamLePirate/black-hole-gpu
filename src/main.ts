@@ -35,6 +35,7 @@ import { cappedRatio } from "./tier";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
+import { CraftLost } from "./ui/craftlost";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
@@ -85,7 +86,7 @@ const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "farFieldLut", "volumetricClouds", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "lookAt", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
-  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
+  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "damage", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
   "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
   "skyLines", "skyNames", "starNames", "gridEquatorial", "gridHorizontal", "skyEcliptic", "skyChartOpacity",
 ];
@@ -1315,6 +1316,34 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
+  let entryPoint: GameSave | null = null;
+  const craftLost = new CraftLost();
+  camera.onAirEntry = () => {
+    entryPoint = tools.snapshot("before the entry");
+  };
+  camera.onCraftLost = (why) => {
+    settings.animate = false;
+    camera.onPilotMessage?.(why);
+    craftLost.show(why, {
+      resume: entryPoint
+        ? () => {
+            tools.load(entryPoint!, { quiet: true });
+            camera.airFlight.reset(fleet.active);
+            settings.animate = true;
+            onSettingsChange(["animate"]);
+          }
+        : null,
+      undamaged: () => {
+        settings.damage = false;
+        camera.airFlight.failure = null;
+        settings.animate = true;
+        onSettingsChange(["damage", "animate"]);
+        panel.toast("Damage off — the air's limits are alarms only (Settings › Game › Ground & air)");
+      },
+      restart: currentScene ? () => applyPreset(currentScene!) : null,
+    });
+  };
   addEventListener("pagehide", (e) => {
     if (settings.autosave && firstFrame) tools.autosaveNow();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is

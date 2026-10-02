@@ -255,6 +255,7 @@ export interface Settings {
   rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   ballistic: number; // ballistic coefficient m/(C_D A): how hard the air brakes the ship [kg/m²]
+  damage: boolean; // the air's heat and loads can destroy the craft (off: alarms only)
   autosave: boolean; // keep the flight in the browser and resume it at the next visit
   autosaveEvery: number; // [s]
   rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
@@ -448,6 +449,7 @@ export function defaultSettings(): Settings {
     rcsFraction: 0.08,
     crashSpeed: 12,
     ballistic: 900,
+    damage: true,
     autosave: true,
     autosaveEvery: 10,
     rangerStatus: true,
