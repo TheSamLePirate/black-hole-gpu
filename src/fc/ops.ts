@@ -204,10 +204,12 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
   if (!T) return fail("No target");
   const elS = elements(c.mu, c.r, c.v, c.pole), elT = elements(c.mu, T.r, T.v, c.pole);
   if (elS.e >= 1 || elT.e >= 1) return fail("Bound orbits only");
-  const span = Math.min(Math.max(synodic(elS.T, elT.T), elS.T), 6 * Math.max(elS.T, elT.T));
+  // (departures over a whole synodic period — the phase comes round once in it —, at most a month;
+  // a step no more than a twelfth of the craft's orbit)
+  const span = Math.min(Math.max(1.05 * synodic(elS.T, elT.T), elS.T), 30 * 86400);
   const aH = (elS.a + elT.a) / 2;
   const tH = Math.PI * Math.sqrt(aH ** 3 / c.mu);
-  const nD = o.nDep ?? 72, nT = o.nTof ?? 40;
+  const nD = o.nDep ?? Math.min(Math.max(Math.ceil(span / (elS.T / 12)), 72), 480), nT = o.nTof ?? 40;
   const dep = Array.from({ length: nD }, (_, i) => (span * i) / nD);
   const tof = Array.from({ length: nT }, (_, j) => tH * (0.25 + (1.25 * j) / (nT - 1)));
   const N = unit(cross(c.r, c.v));

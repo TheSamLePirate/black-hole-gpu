@@ -72,3 +72,15 @@ test("a rendezvous: the porkchop's best, the craft at the target with its veloci
   const mv = matchVelocities(ctx(circ(400e3, 0, 0), circ(400e3, 0.01, 0.05)));
   expect(mv.ok).toBe(true);
 });
+
+test("a rendezvous a long synodic period off: the window found, near Hohmann's cost", () => {
+  // 425 km and 800 km, the same plane, the target 40° behind: the window ~17 h on
+  const s = circ(425e3, 0, 0), tg = circ(800e3, 0, -40 * D);
+  const t0 = performance.now();
+  const r = transfer(ctx(s, tg), { rendezvous: true });
+  const r1 = R + 425e3, r2 = R + 800e3;
+  const hoh = Math.sqrt(mu / r1) * (Math.sqrt((2 * r2) / (r1 + r2)) - 1) + Math.sqrt(mu / r2) * (1 - Math.sqrt((2 * r1) / (r1 + r2)));
+  expect(r.ok).toBe(true);
+  expect(r.dvTotal).toBeLessThan(hoh * 1.25);
+  expect(performance.now() - t0).toBeLessThan(3000);
+});

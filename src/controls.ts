@@ -2974,15 +2974,20 @@ export class CameraController {
       if (R.phase === "wait") {
         // (the time sped up to a minute before the burn, then real time)
         const want = left > 40 ? Math.min(1000, Math.max((left - 25) / 3, 1)) : 1;
+        this.warpWant = null;
         s.timeSpeed = this.warpSet = want / Msec;
         if (left <= 0) {
           R.phase = "burn";
           R.done = 0;
-          s.timeSpeed = this.warpSet = 1 / Msec;
+          this.warpWant = null;
+        s.timeSpeed = this.warpSet = 1 / Msec;
           this.onPilotMessage?.(`Deorbit burn: ${R.dv.toFixed(0)} m/s retrograde`);
         }
         return retro();
       }
+      // (burning: real time, every frame — a sped-up frame would fire seconds of thrust at once)
+      this.warpWant = null;
+      s.timeSpeed = this.warpSet = 1 / Msec;
       if (R.done >= R.dv) {
         R.phase = "entry";
         this.onPilotMessage?.(`Deorbit burn done (${R.done.toFixed(0)} m/s) — falling to the entry`);
@@ -2996,8 +3001,10 @@ export class CameraController {
       if (h > ei) {
         const vr = dot3(fr.s.v, up);
         const tEI = vr < 0 ? (h - ei) / -vr : Infinity;
+        this.warpWant = null;
         s.timeSpeed = this.warpSet = (Number.isFinite(tEI) ? Math.min(500, Math.max(1, (tEI - 20) / 4)) : 100) / Msec;
-      } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) s.timeSpeed = this.warpSet = AIR_WARP / Msec; // (the entry flown at ×4)
+      } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) this.warpWant = null;
+        s.timeSpeed = this.warpSet = AIR_WARP / Msec; // (the entry flown at ×4)
       // the guidance: the bank, every second of the fall (the site carried by the ground)
       // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)
       const wall = performance.now() / 1000;
@@ -3197,15 +3204,19 @@ export class CameraController {
     const dir = unitV(fromPNR(at.r, at.v, B.dv) as Vec3);
     const att = { nose: fr.toLocal(dir), up: fr.toLocal(unitV(fc.ctx.r as Vec3)) };
     if (!B.firing) {
-      s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
+      this.warpWant = null;
+        s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
       if (wait <= 0) {
         B.firing = true;
         B.done = 0;
+        this.warpWant = null;
         s.timeSpeed = this.warpSet = 1 / Msec;
         this.onPilotMessage?.(`Burn ${B.label}: ${size.toFixed(1)} m/s`);
       }
       return att;
     }
+    this.warpWant = null;
+    s.timeSpeed = this.warpSet = 1 / Msec;
     if (B.done >= size) {
       this.fcBurns.shift();
       this.onPilotMessage?.(`Burn ${B.label} done (${B.done.toFixed(1)} m/s)`);
