@@ -50,6 +50,14 @@ export interface MapHost {
 
 type PlaneMode = "system" | "equator" | "orbit" | "target";
 /** An event on the timeline: its time (scene time), what it is, its name. */
+/**
+ * A label on the map: where it goes first (x, y: its baseline's left end [px]); what it names (the anchor
+ * — a body's centre, a path's apsis — and how far round it the label keeps: then it may move round it,
+ * to the other side, above, below, when the first place is taken); its colour (an "r, g, b"), its
+ * priority (≥ 4 always drawn, the others only where they fit), its size [CSS px] and weight.
+ */
+interface MapLabel { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number; ax?: number; ay?: number; ar?: number }
+
 interface Mark { t: number; kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact" | "cand"; label: string }
 const MARK_COL: Record<Mark["kind"], string> = {
   node: "#5ad8ff", ca: "#ff8a5c", soi: "#c88cff", pe: "#9fe3ff", ap: "#9fe3ff", arrive: "#ffaa50", impact: "#ff5a46", cand: "#c48cff",
@@ -79,8 +87,10 @@ function fmtDist(d: number, ours: boolean, s: Settings) {
   if (!ours) return fmtLen(d, s);
   const k = d * KM;
   if (k >= 1e7) return `${(k / 1.495978707e8).toFixed(k >= 1.5e9 ? 1 : 3)} AU`;
-  return `${Math.round(k).toLocaleString("en-US")} km`;
+  return `${GROUPED.format(Math.round(k))} km`;
 }
+/** (one formatter kept: toLocaleString builds one a call — dozens of labels a frame) */
+const GROUPED = new Intl.NumberFormat("en-US");
 
 export class Map3D {
   readonly canvas = h("canvas", "fl-map");
@@ -143,7 +153,14 @@ export class Map3D {
   private r0 = 1;
 
   constructor(private host: MapHost) {
-    this.stage.append(this.canvas, this.crumbs, this.menu);
+    this.legend.hidden = true;
+    try {
+      this.legend.hidden = localStorage.getItem("kerr.map-legend") !== "1";
+    } catch {
+      /* private mode */
+    }
+    this.legend.addEventListener("pointerdown", (e) => e.stopPropagation());
+    this.stage.append(this.canvas, this.crumbs, this.menu, this.legend);
     this.buildTimeline();
     this.buildBar();
     this.buildMenu();
@@ -501,6 +518,7 @@ export class Map3D {
       fit: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><circle cx="12" cy="12" r="2.4"/>',
       full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
       plane: '<path d="M3 16l5-6h13l-5 6z"/>',
+      key: '<path d="M3 7h5M3 12h5M3 17h5"/><path d="M11 7h10M11 12h10M11 17h10" stroke-dasharray="2.2 2"/>',
     };
     /** a button: an icon (or a short text), its name and what it does for the tooltip */
     const b = (id: string, icon: string, label: string, tip: string, fn: () => void, cls = "") => {
@@ -557,6 +575,7 @@ export class Map3D {
         else this.logTheirs = !this.isLog();
         this.autoDist = true;
       }),
+      b("legend", "key", "Legend", "What the map's lines and marks are", () => this.showLegend(this.legend.hidden)),
       b("fit", "fit", "Frame", "Frame the focus and the ship's paths again (or double-click on empty space)", () => this.fit()),
       b("cm", "CoM", "Centre of mass", "The inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
       b("holeF", "Hole", "Gargantua's frame", "Gargantua fixed at the centre", () => (this.frame = "hole")),
@@ -854,19 +873,25 @@ export class Map3D {
 
   /** The GPU's layer, made the first time the host has one (the stage's under-layer). */
   private gpuLayer(): MapGpu | null {
-    if (this.gpu || this.gpuTried) return this.gpu;
-    const src = this.host.gpu?.();
-    if (!src) return null;
-    this.gpuTried = true;
-    try {
-      this.gpu = new MapGpu(src.device, src.textures);
-      this.stage.insertBefore(this.gpu.canvas, this.canvas);
-      this.stage.classList.add("gpu");
-    } catch (e) {
-      console.warn("The map's GPU layer: none —", e);
-      this.gpu = null;
+    if (!this.gpu && !this.gpuTried) {
+      const src = this.host.gpu?.();
+      if (!src) return null;
+      this.gpuTried = true;
+      try {
+        this.gpu = new MapGpu(src.device, src.textures);
+      } catch (e) {
+        console.warn("The map's GPU layer: none —", e);
+        this.gpu = null;
+      }
     }
-    return this.gpu;
+    // (its pipelines still building, or refused: the canvas draws alone)
+    const G = this.gpu;
+    if (!G || G.status !== "ok") return null;
+    if (!G.canvas.parentNode) {
+      this.stage.insertBefore(G.canvas, this.canvas);
+      this.stage.classList.add("gpu");
+    }
+    return G;
   }
 
   /** A body for the GPU: its place and size in view space, its light, its axes, what it is drawn as. */
@@ -937,6 +962,7 @@ export class Map3D {
     this.cam.resize(cw, ch);
     const ins = this.host.mapView() ? this.host.insets?.() : null;
     this.cam.inset((ins?.l ?? 0) * dpr, (ins?.r ?? 0) * dpr, (ins?.t ?? 0) * dpr, (ins?.b ?? 0) * dpr);
+    this.syncLegend(!!(i.ref && i.X), ins ?? null);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, cw, ch);
     this.lastInfo = i;
@@ -1107,7 +1133,7 @@ export class Map3D {
         return add(C, add(scale(e1, R * Math.cos(a)), scale(e2, R * Math.sin(a))));
       });
     };
-    const labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number; below?: boolean }[] = [];
+    const labels: MapLabel[] = [];
 
 
     // ---- the hole (theirs): the disk, its rings, the horizon
@@ -1200,7 +1226,7 @@ export class Map3D {
         ctx.stroke();
       }
       const prio = b.id === fid ? 5 : b.id === tgt ? 4 : b.id === i.ref ? 3 : b.kind === "moon" ? 1 : 2;
-      labels.push({ text: b.name, x: p.x + shown + 4 * dpr, y: p.y - 3 * dpr, col: b.col, prio, size: moon ? 8.5 : 9.5, weight: moon ? 500 : 600 });
+      labels.push({ text: b.name, x: p.x + shown + 4 * dpr, y: p.y - 3 * dpr, col: b.col, prio, size: moon ? 8.5 : 9.5, weight: moon ? 500 : 600, ax: p.x, ay: p.y, ar: shown + 3 * dpr });
     }
 
     // ---- stems: the ship and the target down to the reference plane (above: solid; below: dashed)
@@ -1245,24 +1271,11 @@ export class Map3D {
     if (previewing) {
       const q = P(ship);
       const how = later?.beyond ? (later.conics ? " · end of the conics" : " · end of the prediction") : later?.conics ? " · conics" : later ? "" : " · no prediction";
-      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${how}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700 });
+      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${how}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
     }
 
     // ---- labels, kept apart (the focus and the target first)
-    labels.sort((a, b) => b.prio - a.prio);
-    const boxes: [number, number, number, number][] = [];
-    ctx.textAlign = "left";
-    for (const l of labels) {
-      ctx.font = `${Math.max(Number(l.weight) || 600, 600)} ${l.size * 1.2 * dpr}px ${FONT}`;
-      const w = ctx.measureText(l.text).width;
-      const box: [number, number, number, number] = [l.x - 2 * dpr, l.y - l.size * dpr, w + 4 * dpr, (l.size + 3) * dpr];
-      if (l.prio < 4 && boxes.some((q) => box[0] < q[0] + q[2] && q[0] < box[0] + box[2] && box[1] < q[1] + q[3] && q[1] < box[1] + box[3])) continue;
-      boxes.push(box);
-      ctx.fillStyle = "rgba(4, 8, 14, 0.55)";
-      ctx.fillText(l.text, l.x + 0.8 * dpr, l.y + 0.8 * dpr);
-      ctx.fillStyle = `rgba(${l.col}, ${l.prio >= 3 ? 0.95 : 0.8})`;
-      ctx.fillText(l.text, l.x, l.y);
-    }
+    this.placeLabels(ctx, labels, dpr, P(ship));
 
     // ---- the card of the body under the pointer
     if (this.hover && !this.gizmo && !this.nodeDrag) {
@@ -1549,6 +1562,123 @@ export class Map3D {
     return out;
   }
 
+  /** The legend: what each line and mark of the map is, for the universe shown. */
+  private legend = h("div", "m3-legend");
+  private legendKey = "";
+  private showLegend(on: boolean) {
+    this.legend.hidden = !on;
+    this.btns.legend?.classList.toggle("on", on);
+    try {
+      localStorage.setItem("kerr.map-legend", on ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
+  }
+  private syncLegend(ours: boolean, ins: { r: number; t: number } | null) {
+    this.btns.legend?.classList.toggle("on", !this.legend.hidden);
+    if (this.legend.hidden) return;
+    const st = this.legend.style;
+    const r = `${(ins?.r ?? 0) + 8}px`, t = `${(ins?.t ?? 0) + 8}px`;
+    if (st.right !== r) st.right = r;
+    if (st.top !== t) st.top = t;
+    const key = ours ? "ours" : "theirs";
+    if (key === this.legendKey) return;
+    this.legendKey = key;
+    // (a line: its colour, its dashes; a mark: a small drawing)
+    const ln = (col: string, dash = "", w = 1.8) => `<svg viewBox="0 0 28 8"><path d="M1 4h26" stroke="rgb(${col})" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/></svg>`;
+    const mk = (body: string) => `<svg viewBox="0 0 28 12">${body}</svg>`;
+    const rows: [string, string][] = ours
+      ? [
+          [ln("90, 220, 255"), "The ship's path — predicted, every body's pull"],
+          [ln("255, 170, 80", "5 3"), "The plan — after its burns"],
+          [ln(CAND, "8 4", 2.2), "Preview — a plan not yet adopted"],
+          [ln("170, 205, 255", "2 4", 1.3), "Beyond: patched conics"],
+          [ln("255, 154, 74", "7 4", 2.2), "Entry — the fall to the site"],
+          [ln("255, 150, 100"), "The target's orbit"],
+          [ln("150, 170, 200", "3 4", 1.2), "Sphere of influence"],
+        ]
+      : [
+          [ln("124, 214, 255", "", 1.4), "The ship's wake"],
+          [ln("255, 190, 80", "5 3"), "Its geodesic ahead — red: into the horizon"],
+          [ln("255, 170, 80", "5 3"), "The plan — after its burns"],
+          [ln(CAND, "8 4", 2.2), "Preview — a plan not yet adopted"],
+          [ln("170, 205, 255", "2 4", 1.3), "Beyond: conics"],
+          [ln("120, 230, 150", "4 3", 1.1), "ISCO — the last stable circle"],
+          [ln("255, 211, 107", "4 3", 1.5), "The companion star ahead"],
+        ];
+    const marks: [string, string][] = [
+      [mk('<path d="M8 2l5 8H3z" fill="rgb(111,227,161)"/><path d="M20 10l5-8H15z" fill="rgb(255,179,92)"/>'), "Ascending · descending node"],
+      [mk('<circle cx="8" cy="6" r="2.6" fill="rgb(159,227,255)"/><circle cx="20" cy="6" r="2.6" fill="rgb(184,212,255)"/>'), "Periapsis, apoapsis"],
+      [mk('<path d="M14 0.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#2fa4d0" stroke="#04121a" stroke-width="1.2"/>'), "A burn — drag its handles"],
+      [mk('<path d="M3 6h22" stroke="rgb(255,138,92)" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="24" cy="6" r="3.4" fill="none" stroke="rgb(255,138,92)" stroke-width="1.2"/>'), "Closest approach (CA)"],
+      [mk('<path d="M14 1l5 9H9z" fill="#ffc85a" stroke="rgba(0,0,0,.6)"/>'), "The ship"],
+    ];
+    const row = ([a, b]: [string, string]) => `<div class="m3-lg-row">${a}<span>${b}</span></div>`;
+    this.legend.innerHTML = `<div class="m3-lg-head">Legend</div>${rows.map(row).join("")}<div class="m3-lg-sep"></div>${marks.map(row).join("")}<div class="m3-lg-hint">Hover a body: its card · click: target · double-click: focus</div>`;
+  }
+
+  /**
+   * The labels, kept apart: the most important first; each tried where it was asked, then round its
+   * anchor (right, left, above, below, the corners), away from the labels already drawn, the bodies'
+   * discs, the ship's mark and the view's edges (the panels'). A label that fits nowhere: left out — unless it matters
+   * (priority ≥ 4: drawn where it overlaps least). Each on a dark halo (read over a lit planet).
+   */
+  private placeLabels(ctx: CanvasRenderingContext2D, labels: MapLabel[], dpr: number, ship: Proj) {
+    type Box = [number, number, number, number];
+    // (the view: the free middle between the panels, full screen)
+    const [vx, vy, vw, vh] = this.cam.view;
+    labels.sort((a, b) => b.prio - a.prio);
+    const boxes: Box[] = [];
+    const seen: { val: string; x: number; y: number }[] = [];
+    const discs = this.bodyHits.filter((q) => q.r > 3 * dpr).map((q) => ({ x: q.x, y: q.y, r: q.r + 1.5 * dpr }));
+    if (ship.ok) discs.push({ x: ship.x, y: ship.y, r: 10 * dpr });
+    const over = (a: Box, b: Box) => Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
+    const onDisc = (b: Box, d: { x: number; y: number; r: number }) => {
+      const nx = Math.min(Math.max(d.x, b[0]), b[0] + b[2]), ny = Math.min(Math.max(d.y, b[1]), b[1] + b[3]);
+      return Math.hypot(nx - d.x, ny - d.y) < d.r;
+    };
+    ctx.textAlign = "left";
+    ctx.lineJoin = "round";
+    for (const l of labels) {
+      ctx.font = `${Math.max(Number(l.weight) || 600, 600)} ${l.size * 1.2 * dpr}px ${FONT}`;
+      const w = ctx.measureText(l.text).width;
+      const hgt = l.size * 1.2 * dpr;
+      const at = (x: number, y: number): Box => [x - 2 * dpr, y - hgt * 0.82, w + 4 * dpr, hgt * 1.05];
+      // (where it may go: as asked, then round its anchor; or nudged up and down)
+      const spots: [number, number][] = [[l.x, l.y]];
+      if (l.ax !== undefined && l.ay !== undefined) {
+        const g = (l.ar ?? 4 * dpr) + 2 * dpr, mid = l.ay + hgt * 0.32, d = g * 0.72;
+        spots.push([l.ax + g, mid], [l.ax - g - w, mid], [l.ax - w / 2, l.ay - g], [l.ax - w / 2, l.ay + g + hgt * 0.7],
+          [l.ax + d, l.ay - d], [l.ax - d - w, l.ay - d], [l.ax + d, l.ay + d + hgt * 0.7], [l.ax - d - w, l.ay + d + hgt * 0.7]);
+      } else spots.push([l.x, l.y - hgt * 1.1], [l.x, l.y + hgt * 1.1]);
+      // (the same apsis named twice — the prediction's and the conics' —: once)
+      const val = /\b(Pe|Ap) [^·]+$/.exec(l.text)?.[0];
+      if (val && l.ax !== undefined && seen.some((q) => q.val === val && Math.hypot(q.x - l.ax!, q.y - l.ay!) < 40 * dpr)) continue;
+      let best: { x: number; y: number; cost: number; hard: number } | null = null;
+      for (const [x, y] of spots) {
+        const b = at(x, y);
+        let lab = 0;
+        for (const q of boxes) lab += over(b, q);
+        const disc = discs.some((d) => onDisc(b, d)) ? 1 : 0;
+        const out = b[0] < vx || b[1] < vy || b[0] + b[2] > vx + vw || b[1] + b[3] > vy + vh ? 1 : 0;
+        // (an overlap or the edge: hard; a body's disc under it: only if nowhere else — a planet filling
+        // the view keeps its low orbit's labels)
+        const hard = lab + out * b[2] * b[3];
+        const cost = hard * 4 + disc;
+        if (!best || cost < best.cost) best = { x, y, cost, hard };
+        if (cost === 0) break;
+      }
+      if (!best || (best.hard > 0 && l.prio < 4)) continue;
+      boxes.push(at(best.x, best.y));
+      if (val && l.ax !== undefined) seen.push({ val, x: l.ax, y: l.ay! });
+      ctx.strokeStyle = "rgba(3, 6, 12, 0.7)";
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeText(l.text, best.x, best.y);
+      ctx.fillStyle = `rgba(${l.col}, ${l.prio >= 3 ? 0.97 : 0.82})`;
+      ctx.fillText(l.text, best.x, best.y);
+    }
+  }
+
   private drawShip(ctx: CanvasRenderingContext2D, i: Info, ship: V3, vel: V3, P: (X: V3) => Proj, dpr: number, ours: boolean) {
     const p = P(ship);
     if (!p.ok) return;
@@ -1658,7 +1788,7 @@ export class Map3D {
   }
 
   /** Where a path crosses the reference plane (through the focus): AN going up, DN going down. */
-  private crossings(ctx: CanvasRenderingContext2D, pts: V3[], P: (X: V3) => Proj, n: V3, dpr: number, from = 0) {
+  private crossings(ctx: CanvasRenderingContext2D, pts: V3[], P: (X: V3) => Proj, n: V3, dpr: number, labels: MapLabel[], from = 0) {
     if (this.plane === "orbit") return;
     const h0 = (X: V3) => dot(sub(X, this.W), n);
     let marks = 0;
@@ -1685,16 +1815,14 @@ export class Map3D {
       }
       ctx.closePath();
       ctx.fill();
-      ctx.font = `700 ${10.4 * dpr}px ${FONT}`;
-      ctx.textAlign = "left";
-      ctx.fillText(up ? "AN" : "DN", p.x + 6 * dpr, p.y + 3 * dpr);
+      labels.push({ text: up ? "AN" : "DN", x: p.x + 6 * dpr, y: p.y + 3 * dpr, col: up ? "111, 227, 161" : "255, 179, 92", prio: 2, size: 8.5, weight: 700, ax: p.x, ay: p.y, ar: 5 * dpr });
     }
   }
 
   private drawOurPaths(
     ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, tView: number, fid: string, fb: MapBody | null, dpr: number,
     P: (X: V3) => Proj, line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
-    labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number }[], pn: V3,
+    labels: MapLabel[], pn: V3,
   ) {
     const s = this.host.s;
     // (the paths in the frame of the focus body — or of the ship's primary when the ship is the focus:
@@ -1715,16 +1843,14 @@ export class Map3D {
       }
       return c.pts;
     };
-    const tag = (X: V3, text: string, col: string, below = false) => {
+    const tag = (X: V3, text: string, col: string, below = false, prio = 3) => {
       const p = P(X);
       if (!p.ok) return;
-      ctx.fillStyle = col;
+      ctx.fillStyle = `rgb(${col})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 2.6 * dpr, 0, 2 * Math.PI);
       ctx.fill();
-      ctx.font = `600 ${11 * dpr}px ${FONT}`;
-      ctx.textAlign = "left";
-      ctx.fillText(text, p.x + 5 * dpr, p.y + (below ? 11 : -5) * dpr);
+      labels.push({ text, x: p.x + 5 * dpr, y: p.y + (below ? 12 : -5) * dpr, col, prio, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 4 * dpr });
     };
     const km = (d: number) => fmtDist(d, true, s);
     // the entry: the guidance's predicted fall and the site it flies to (relative to their body)
@@ -1733,8 +1859,14 @@ export class Map3D {
       const Bp = solarState(E.body, tView).pos;
       const at = (x: V3): V3 => FA([Bp[0] + x[0], Bp[1] + x[1], Bp[2] + x[2]], tView);
       if (E.path && E.path.length > 1) line(E.path.map(at), "#ff9a4a", 0.95, 2.2, [7, 4]);
-      if (E.site) tag(at(E.site.X), `◎ ${E.site.name}`, "#ffd27a", true);
+      if (E.site) tag(at(E.site.X), `◎ ${E.site.name}`, "255, 210, 122", true, 4);
     }
+    // (an apsis a few pixels from its body's centre — an orbit too small on the screen: its label unread)
+    const apart = (body: string, X: V3, t: number) => {
+      if (!solarBody(body)) return true;
+      const q = P(FA(X, t)), c = P(FA(solarState(body, t).pos, t));
+      return !c.ok || !q.ok || Math.hypot(q.x - c.x, q.y - c.y) > 14 * dpr;
+    };
     const apsides = (p: OurPath, from: number, label: string) => {
       const body = p.refs[from];
       if (!body || (body === "sun" && frameId !== "sun")) return;
@@ -1746,8 +1878,10 @@ export class Map3D {
         memo.set(key, ourApsides(tail, body));
       }
       const a = memo.get(key) as ReturnType<typeof ourApsides>;
-      if (a.pe) tag(FA(p.pts[from + a.pe.i]!, p.times[from + a.pe.i]!), `${label}Pe ${km(a.pe.alt)}`, "#9fe3ff", true);
-      if (a.ap) tag(FA(p.pts[from + a.ap.i]!, p.times[from + a.ap.i]!), `${label}Ap ${km(a.ap.alt)}`, "#9fe3ff");
+      // (an orbit a few pixels across: its apsides unread, their labels left out)
+      const far = (j: number) => apart(body, p.pts[from + j]!, p.times[from + j]!);
+      if (a.pe && far(a.pe.i)) tag(FA(p.pts[from + a.pe.i]!, p.times[from + a.pe.i]!), `${label}Pe ${km(a.pe.alt)}`, "159, 227, 255", true);
+      if (a.ap && far(a.ap.i)) tag(FA(p.pts[from + a.ap.i]!, p.times[from + a.ap.i]!), `${label}Ap ${km(a.ap.alt)}`, "159, 227, 255");
     };
     const free = i.ourFree, plan = i.ourPlan;
     const hits = (p: OurPath) => {
@@ -1763,7 +1897,7 @@ export class Map3D {
       const cut = plan && plan.nodeAt.length ? Math.min(plan.nodeAt[0]!, free.pts.length - 1) : free.pts.length - 1;
       line(pts, "90, 220, 255", plan ? 0.35 : 0.95, 1.7);
       if (plan) line(pts.slice(0, cut + 1), "90, 220, 255", 0.95, 1.7);
-      this.crossings(ctx, pts, P, pn, dpr);
+      this.crossings(ctx, pts, P, pn, dpr, labels);
       apsides(free, 0, "");
       hits(free);
       if (free.fate === "impact") {
@@ -1775,9 +1909,7 @@ export class Map3D {
           ctx.moveTo(q.x - 5 * dpr, q.y - 5 * dpr); ctx.lineTo(q.x + 5 * dpr, q.y + 5 * dpr);
           ctx.moveTo(q.x + 5 * dpr, q.y - 5 * dpr); ctx.lineTo(q.x - 5 * dpr, q.y + 5 * dpr);
           ctx.stroke();
-          ctx.fillStyle = RED;
-          ctx.font = `600 ${11 * dpr}px ${FONT}`;
-          ctx.fillText(`IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, q.x + 7 * dpr, q.y + 4 * dpr);
+          labels.push({ text: `IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, x: q.x + 7 * dpr, y: q.y + 4 * dpr, col: "255, 90, 90", prio: 5, size: 9.5, weight: 700, ax: q.x, ay: q.y, ar: 6 * dpr });
         }
       }
     }
@@ -1807,12 +1939,12 @@ export class Map3D {
             ctx.arc(q.x, q.y, 7 * dpr, 0, 2 * Math.PI);
             ctx.stroke();
             ctx.setLineDash([]);
-            labels.push({ text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`, x: q.x + 9 * dpr, y: q.y + 3 * dpr, col: CAND, prio: 5, size: 9, weight: 700 });
+            labels.push({ text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`, x: q.x + 9 * dpr, y: q.y + 3 * dpr, col: CAND, prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
           }
         }
       } else if (cand.busy) {
         const q = P(FA(i.X!, t0));
-        if (q.ok) labels.push({ text: "◇ PREVIEW · computing the path…", x: q.x + 12 * dpr, y: q.y + 18 * dpr, col: CAND, prio: 5, size: 9, weight: 700 });
+        if (q.ok) labels.push({ text: "◇ PREVIEW · computing the path…", x: q.x + 12 * dpr, y: q.y + 18 * dpr, col: CAND, prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
       }
     }
     // beyond the prediction: the patched conics (faint, dotted), their lowest points, an impact
@@ -1822,7 +1954,7 @@ export class Map3D {
       hits(ext);
       for (const a of ext.apsides) {
         const name = sc.byId.get(a.body)?.name ?? a.body;
-        tag(FA(ext.pts[a.i]!, ext.times[a.i]!), `${name} Pe ${km(a.alt)}`, "#b8d4ff", true);
+        if (apart(a.body, ext.pts[a.i]!, ext.times[a.i]!)) tag(FA(ext.pts[a.i]!, ext.times[a.i]!), `${name} Pe ${km(a.alt)}`, "184, 212, 255", true, 2);
       }
       if (ext.fate === "impact") {
         const q = P(FA(ext.pts[ext.pts.length - 1]!, ext.times[ext.times.length - 1]!));
@@ -1836,7 +1968,7 @@ export class Map3D {
         }
       }
       const q0 = P(FA(ext.pts[0]!, ext.times[0]!));
-      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600 });
+      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
     }
     // closest approach to the target, on the plan or the free path (or, closer, along the conics)
     const tp = plan ?? free;
@@ -1865,10 +1997,8 @@ export class Map3D {
           ctx.arc(b.x, b.y, 5 * dpr, 0, 2 * Math.PI);
           ctx.stroke();
           const R = sc.byId.get(i.target)!.radius;
-          ctx.fillStyle = "#ff8a5c";
-          ctx.font = `600 ${11 * dpr}px ${FONT}`;
-          ctx.textAlign = "left";
-          ctx.fillText(`CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`, (a.x + b.x) / 2 + 6 * dpr, (a.y + b.y) / 2);
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          labels.push({ text: `CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`, x: mx + 6 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
         }
       }
     }
@@ -1883,7 +2013,7 @@ export class Map3D {
         ctx.arc(q.x, q.y, 6 * dpr, 0, 2 * Math.PI);
         ctx.stroke();
         ctx.setLineDash([]);
-        labels.push({ text: `${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, s)}`, x: q.x + 8 * dpr, y: q.y + 3 * dpr, col: "255, 170, 80", prio: 4, size: 8.5, weight: 600 });
+        labels.push({ text: `${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, s)}`, x: q.x + 8 * dpr, y: q.y + 3 * dpr, col: "255, 170, 80", prio: 4, size: 8.5, weight: 600, ax: q.x, ay: q.y, ar: 5 * dpr });
       }
     }
     // the nodes and the selected one's handles
@@ -1912,7 +2042,7 @@ export class Map3D {
   private drawTheirPaths(
     ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, dpr: number,
     P: (X: V3) => Proj, line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
-    labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number }[], pn: V3, cm: boolean,
+    labels: MapLabel[], pn: V3, cm: boolean,
   ) {
     const s = this.host.s;
     const at = (X: V3, t: number): V3 => sub(X, sc.origin(t));
@@ -1954,7 +2084,7 @@ export class Map3D {
       const fut = [at(i.X!, t0), ...path.pts.map((q, j) => at(q, t0 + (j + 1) * path.dt))];
       const bad = path.fate === "horizon" || path.fate === "star";
       line(fut, bad ? "255, 90, 70" : "255, 190, 80", 0.95, 1.7, [5, 3]);
-      this.crossings(ctx, fut, P, pn, dpr);
+      this.crossings(ctx, fut, P, pn, dpr, labels);
       ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
       tickTimes.forEach((tt, j) => {
         const idx = (tt - t0) / path.dt - 1;
@@ -1967,7 +2097,7 @@ export class Map3D {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 2.2 * dpr, 0, 2 * Math.PI);
         ctx.fill();
-        if (j % 2 === 1) ctx.fillText(`+${fmtShort((j + 1) * tick)}`, p.x + 4 * dpr, p.y - 3 * dpr);
+        if (j % 2 === 1) labels.push({ text: `+${fmtShort((j + 1) * tick)}`, x: p.x + 4 * dpr, y: p.y - 3 * dpr, col: "255, 255, 255", prio: 1, size: 8.5, weight: 600, ax: p.x, ay: p.y, ar: 3 * dpr });
       });
       let iMin = -1, iMax = -1, rMin = Infinity, rMax = -Infinity;
       path.pts.forEach((q, j) => {
@@ -1978,10 +2108,13 @@ export class Map3D {
       const lbl = (j: number, txt: string) => {
         if (j <= 0 || j >= path.pts.length - 1) return;
         const p = P(at(path.pts[j]!, t0 + (j + 1) * path.dt));
-        if (p.ok) labels.push({ text: txt, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "124, 214, 255", prio: 4, size: 10, weight: 600 });
+        if (p.ok) labels.push({ text: txt, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "124, 214, 255", prio: 4, size: 9.5, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
       };
-      lbl(iMin, "Pe");
-      if (path.fate === "continues") lbl(iMax, "Ap");
+      // (a circle's apsides: nowhere in particular — not marked)
+      if (rMax - rMin > 0.01 * rMax) {
+        lbl(iMin, `Pe ${rMin.toFixed(2)} M`);
+        if (path.fate === "continues") lbl(iMax, `Ap ${rMax.toFixed(2)} M`);
+      }
       if (bad) {
         const p = P(fut[fut.length - 1]!);
         if (p.ok) {
@@ -2009,9 +2142,8 @@ export class Map3D {
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = "#ff8a5c";
-            ctx.textAlign = "left";
-            ctx.fillText(`CA ${fmtLen(ca.d, s)}`, (a.x + b.x) / 2 + 5 * dpr, (a.y + b.y) / 2);
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            labels.push({ text: `CA ${fmtLen(ca.d, s)}`, x: mx + 5 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
           }
         }
       }
@@ -2034,7 +2166,7 @@ export class Map3D {
         const p = P(pts[a.i]!);
         if (!p.ok) continue;
         const who = a.body === "hole" ? "" : `${sc.byId.get(a.body)?.name ?? a.body} `;
-        labels.push({ text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? sc.hole?.rH ?? 0 : 0), s)}${a.body === "hole" ? " (r)" : ""}`, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "184, 212, 255", prio: 3, size: 9, weight: 600 });
+        labels.push({ text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? sc.hole?.rH ?? 0 : 0), s)}${a.body === "hole" ? " (r)" : ""}`, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "184, 212, 255", prio: 3, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
         ctx.fillStyle = "#b8d4ff";
         ctx.beginPath();
         ctx.arc(p.x, p.y, 2.4 * dpr, 0, 2 * Math.PI);
@@ -2052,7 +2184,7 @@ export class Map3D {
         }
       }
       const q0 = P(pts[0]!);
-      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600 });
+      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
     }
     // the flight plan: its path through the nodes, the nodes
     if (i.plan?.path && i.plan.path.pts.length > 1) {
@@ -2092,7 +2224,7 @@ export class Map3D {
           ctx.arc(p.x, p.y, 7 * dpr, 0, 2 * Math.PI);
           ctx.stroke();
           ctx.setLineDash([]);
-          labels.push({ text: "RDV", x: p.x + 9 * dpr, y: p.y + 4 * dpr, col: "255, 211, 107", prio: 4, size: 9.5, weight: 600 });
+          labels.push({ text: "RDV", x: p.x + 9 * dpr, y: p.y + 4 * dpr, col: "255, 211, 107", prio: 4, size: 9.5, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
         }
       } else if (pp.fate === "horizon" || pp.fate === "star" || pp.fate === "wormhole") {
         const p = P(at(pp.pts[pp.pts.length - 1]!, pp.times[pp.times.length - 1]!));
@@ -2145,14 +2277,14 @@ export class Map3D {
         }
         for (const [j, name] of [[lo, "Pe"], [hi, "Ap"]] as [number, string][]) {
           const q = P(W[j]!);
-          if (q.ok && j > k1 && j < cp.pts.length - 1) labels.push({ text: `◇ ${name} ${len(cp.pts[j]!).toFixed(2)} M`, x: q.x + 6 * dpr, y: q.y - 6 * dpr, col: CAND, prio: 4, size: 8.5, weight: 600 });
+          if (q.ok && j > k1 && j < cp.pts.length - 1) labels.push({ text: `◇ ${name} ${len(cp.pts[j]!).toFixed(2)} M`, x: q.x + 6 * dpr, y: q.y - 6 * dpr, col: CAND, prio: 4, size: 8.5, weight: 600, ax: q.x, ay: q.y, ar: 5 * dpr });
         }
       }
     }
   }
 
   /** The preview's burns: hollow diamonds, numbered, the operation named at the first. */
-  private candMarks(ctx: CanvasRenderingContext2D, places: Proj[], note: string, labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number }[], dpr: number) {
+  private candMarks(ctx: CanvasRenderingContext2D, places: Proj[], note: string, labels: MapLabel[], dpr: number) {
     places.forEach((q, k) => {
       if (!q.ok) return;
       const r = 6.5 * dpr;
@@ -2174,7 +2306,7 @@ export class Map3D {
       if (k === 0) {
         // (the operation's name, short — the card has the rest)
         const head = note.split(" · ")[0]!;
-        labels.push({ text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700 });
+        labels.push({ text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
       }
     });
   }

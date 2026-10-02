@@ -213,29 +213,35 @@ fn bodyFs(in: VOut) -> @location(0) vec4f {
     // ring a thin bright circle
     let a2 = b.a2.xyz;
     let dn = dot(d, a2);
-    let hitH = perp < R;
-    let tH = select(1e30, cl * cosA - sqrt(max(R * R - perp * perp, 0.0)), hitH);
+    // (the horizon's edge anti-aliased: its coverage of the pixel)
+    let covH = clamp((1.0 - perp / R) / px + 0.5, 0.0, 1.0);
+    let hitH = covH > 0.0;
+    let pH = min(perp, R);
+    let tH = select(1e30, cl * cosA - sqrt(max(R * R - pH * pH, 0.0)), hitH);
     var disk = vec4f(0.0);
     var tD = 1e30;
     if (abs(dn) > 1e-6) {
       let t = dot(c, a2) / dn;
       let p = d * t - c;
       let rr = length(p) / R;
-      if (t > 0.0 && rr > b.k.w && rr < b.L.w) {
+      // (a pixel's width across the disk, in radii: its edges anti-aliased)
+      let pxd = px * t / cl / sqrt(max(abs(dn), 0.05));
+      if (t > 0.0 && rr > b.k.w - pxd && rr < b.L.w) {
         tD = t;
-        let x = (rr - b.k.w) / max(b.L.w - b.k.w, 1e-3);
+        let edge = clamp((rr - b.k.w) / pxd + 0.5, 0.0, 1.0);
+        let x = max(rr - b.k.w, 0.0) / max(b.L.w - b.k.w, 1e-3);
         let hot = mix(vec3f(1.0, 0.92, 0.75), vec3f(1.0, 0.45, 0.14), smoothstep(0.0, 0.6, x));
         let tang = normalize(cross(a2, p));
         let dop = max(1.0 + 0.7 * dot(tang, -d), 0.2);
         let swirl = 0.65 + 0.35 * fbm(vec3f(rr * 9.0, atan2(dot(p, b.a1.xyz), dot(p, b.a0.xyz)) * 3.0, 0.0));
         let fall = pow(1.0 - x, 1.6) * swirl;
-        let a = clamp(fall * 1.2, 0.0, 1.0);
-        disk = vec4f(hot * fall * dop * 1.3, a);
+        let a = clamp(fall * 1.2, 0.0, 1.0) * edge;
+        disk = vec4f(hot * fall * dop * 1.3 * edge, a);
       }
     }
     var out = disk;
     if (hitH) {
-      out = select(vec4f(0.0, 0.0, 0.0, 1.0), vec4f(disk.rgb, 1.0), tD < tH);
+      out = mix(disk, select(vec4f(0.0, 0.0, 0.0, 1.0), vec4f(disk.rgb, 1.0), tD < tH), covH);
     }
     let ring = select(exp(-pow((perp / R - 1.5) / 0.05, 2.0)) * 0.9, 0.0, hitH);
     let o = vec4f(out.rgb + vec3f(1.0, 0.85, 0.6) * ring * (1.0 - out.a), out.a + ring * (1.0 - out.a));
@@ -247,8 +253,11 @@ fn bodyFs(in: VOut) -> @location(0) vec4f {
   let air = b.k.z > 0.5;
   var out = vec4f(0.0);
   var tS = 1e30;
-  if (perp < R) {
-    tS = cl * cosA - sqrt(max(R * R - perp * perp, 0.0));
+  // (the limb anti-aliased: the pixel's coverage by the disc, the surface shaded at the limb just inside)
+  let cov = clamp((1.0 - perp / R) / px + 0.5, 0.0, 1.0);
+  if (cov > 0.0) {
+    let pS = min(perp, R * 0.9995);
+    tS = cl * cosA - sqrt(max(R * R - pS * pS, 0.0));
     let n = normalize(d * tS - c);
     let nb = vec3f(dot(n, b.a0.xyz), dot(n, b.a1.xyz), dot(n, b.a2.xyz));
     // (texels across a pixel: the far side's mip, steeper at the limb)
@@ -285,14 +294,15 @@ fn bodyFs(in: VOut) -> @location(0) vec4f {
       let rim = pow(1.0 - limb, 3.0);
       col = mix(col, b.air.rgb * max(dot(n, L) + 0.25, 0.0), clamp(rim * b.col.w, 0.0, 0.8));
     }
-    out = vec4f(col, 1.0);
-  } else if (air && perp < R * 1.1) {
+    out = vec4f(col * cov, cov);
+  }
+  if (air && perp > R * (1.0 - px) && perp < R * 1.1) {
     // the air's glow beyond the limb, lit on the day side
-    let h = (perp - R) / (R * 0.1);
+    let h = max(perp - R, 0.0) / (R * 0.1);
     let pc = normalize(d * (cl * cosA) - c);
     let day = smoothstep(-0.35, 0.4, dot(pc, L));
     let g = exp(-h * 3.2) * (1.0 - h) * day * b.col.w;
-    out = vec4f(b.air.rgb * g, g);
+    out = out + vec4f(b.air.rgb * g, g) * (1.0 - out.a);
   }
   // the rings, before or behind the world
   let rg = ringHit(b, d, R);

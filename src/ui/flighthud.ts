@@ -218,6 +218,8 @@ export class FlightHud {
   private planSig = "";
   plannerOpen = false;
   /** the tracer's GPU and its maps, for the map's textured bodies (main.ts) */
+  /** The hole's orbit (radii [M]: the periapsis, the apoapsis on the geodesic) — the strip's Pe and Ap. */
+  kerrApsides: (() => { rp: number; ra: number; fate: string } | null) | null = null;
   mapGpu: { device: GPUDevice; textures(): import("./map3d/gpu").MapTextures | null } | null = null;
 
   /** Why an autopilot cannot be engaged now (the hub's own reason), "" when it can. */
@@ -312,8 +314,10 @@ export class FlightHud {
     set("state", st ? `${st.label} · ${st.soiName}` : "—");
     set("alt", st ? (st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm)) : "—");
     set("spd", st ? ms(st.speed) : "—");
-    set("pe", st?.orbit ? km(st.orbit.peKm) : "—");
-    set("ap", st?.orbit ? km(st.orbit.apKm) : "—");
+    const ko = st?.kerr ? this.kerrApsides?.() : null;
+    const r = (x: number) => (Number.isFinite(x) ? `${x.toFixed(2)} M` : "∞");
+    set("pe", ko ? (ko.fate === "horizon" ? "horizon" : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
+    set("ap", ko ? (ko.fate === "bound" ? r(ko.ra) : "escape") : st?.orbit ? km(st.orbit.apKm) : "—");
     for (const [a, b] of this.stripBtns) {
       b.classList.toggle("on", i.auto === a);
       const why = this.buttons.get(a)?.dataset.why;

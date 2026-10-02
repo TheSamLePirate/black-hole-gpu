@@ -1,9 +1,11 @@
 # The map (3D)
 
 The minimap (bottom right while flying) and the full-screen map (**M**) are one 3D view: a camera
-orbiting a focus, its angles measured in a reference plane. Canvas 2D over the tracer's pinhole
-projection, float64 throughout — from a low Earth orbit to the edge of the solar system
-(`src/ui/map3d/`: `camera.ts` the eased orbit camera, `scene.ts` what each universe holds,
+orbiting a focus, its angles measured in a reference plane, float64 throughout — from a low Earth orbit
+to the edge of the solar system. Two layers with one projection: the **bodies on the GPU** (WebGPU, the
+tracer's own device and maps — `gpu.ts`, `shaders/map.wgsl`) under a Canvas 2D overlay (orbits, paths,
+marks, labels, handles); without WebGPU, or if its pipelines are refused, the canvas draws the bodies
+itself (`src/ui/map3d/`: `camera.ts` the eased orbit camera, `scene.ts` what each universe holds,
 `map3d.ts` the drawing, gestures and bar). The flight HUD's map panel (`src/ui/flighthud.ts`) puts
 it under three tabs — **3D**, **Globe**, **Planisphere** (see *The ground track* below).
 
@@ -18,6 +20,16 @@ it under three tabs — **3D**, **Globe**, **Planisphere** (see *The ground trac
 | Double-click a body | centre it (eased); on empty space: back to the automatic view |
 | Click on a path | a manoeuvre node there; drag a node along the path, pull its handles (Δv), right-click / Delete: remove it |
 | Hover a body | its card: distance from the ship, radius, distance from its primary, period, sphere of influence |
+
+## Full screen
+
+**M** opens the map over the whole screen; the flight HUD's instruments are hidden but for the top bar.
+The flight computer on the left, its analysis on the right (each folds to a tab), a compact **strip**
+along the bottom — the orbit's state, altitude, speed, periapsis and apoapsis (r in M about Gargantua),
+the hub's actions (HOLD POS, CIRC, APPROACH, LAND, TAKE OFF, ENTRY: the flight computer's own operations).
+The map frames itself in the free middle (its bar, its timeline, its footer there; nothing over anything,
+from 1280×720 to 2560×1440); the strip sheds its state, then the buttons' names, then the apsides as it
+narrows.
 
 ## The bar
 
@@ -36,8 +48,9 @@ cannot apply is dimmed, with why (the *Target* plane when the target has no orbi
   **target**'s orbit. Changing it turns the camera (eased) — the view keeps its angles to the plane.
 - **View** — ⊤ from above the plane, ◿ 30° above it, ⟂ edge-on (in the plane).
 - **Log** — the distance from the focus as r₀ ln(1 + r/r₀), directions kept (the whole system and a
-  low orbit on one map); **Fit** — back to the automatic framing; **CoM / Hole** (Gargantua's side
-  with a massive companion star) — the frame; **⛶** — full screen.
+  low orbit on one map); **Legend** — what each line and mark is, for the universe shown (remembered);
+  **Fit** — back to the automatic framing; **CoM / Hole** (Gargantua's side with a massive companion
+  star) — the frame; **⛶** — full screen.
 
 ## The timeline
 
@@ -77,9 +90,14 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
 ## What it shows
 
 - The reference plane's grid (rings labelled in km / AU / M, spokes every 30°, the vernal equinox ♈).
-- Bodies as spheres lit by their star (a night side, an atmosphere's rim), stars with a glow, Saturn's
-  rings in front of and behind it, the hole with its disk, ISCO, photon orbit and ergosphere, the
-  wormhole's mouths.
+- Bodies as true spheres on the GPU (each a quad whose pixels' rays meet the sphere: right in
+  perspective, a planet filling the view as well as a dot), textured on their own axes with the
+  tracer's maps — the planets' and moons' images, the Earth's day, clouds, city lights and the sea's
+  glint —, lit by their star (the terminator, the air's rim), their limbs anti-aliased; Saturn's rings
+  in front of and behind it with the planet's shadow; the Sun and the star glowing; Gargantua's horizon,
+  its disk (brighter on the approaching side) and photon ring; its worlds drawn as the tracer draws them
+  (Miller's water, Mann's ice, Edmunds' plateaus); a field of stars behind. The grid is cut round the
+  bodies and the lines behind them hidden.
 - Each body's orbit (a turn around its primary; moons once they spread on the screen), dimmed with
   depth and where a body hides it; spheres of influence (the ship's own, the focus's, the target's —
   all with Settings › Game › *Spheres of influence*).
@@ -90,6 +108,17 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
 - The ship's paths: free fall (cyan), through the nodes (orange), apsides, where they cross the plane
   (**AN** / **DN**), impacts, the closest approach to the target, the target where the plan meets it;
   Gargantua's side: time ticks, the companion star's arc, the ship's track.
+- **The preview** (violet, long dashes): an operation or a mission asked of the flight computer is
+  drawn before it is flown — its burns, its path, its arrival, its marks on the timeline, the globe
+  and the planisphere — then *TO THE PLAN* adopts it, *DISCARD* (or another tab) drops it. Our side:
+  the planner's n-body path; about the hole: the geodesics; about Gargantua's worlds: their orbit in
+  their own frame (Kepler), carried on the map as the world moves.
+- **The entry**: the guidance's predicted fall to the site (orange, dashed) and the site.
+- The labels are placed, the most important first, where they fit: each tried where it was asked, then
+  round what it names (the other side, above, below, the corners), off the bodies' discs and the ship's
+  mark; one that fits nowhere is left out unless it matters (the focus, the target, the preview, an
+  impact). An apsis a few pixels from its body (an orbit too small on the screen) goes unlabelled; the
+  same apsis named by the prediction and by the conics, once.
 
 Through the wormhole the ship, the target, the scene and the paths are not all on one side: a target
 on the other side (the wormhole's mouth as seen from ours, a body of Gargantua's) gets no closest
@@ -102,8 +131,9 @@ inside a planet's or a moon's sphere of influence (ours; Miller, Mann, Edmunds o
 elsewhere the tabs are dimmed and the 3D map shows, the tab chosen kept (remembered in
 `localStorage` `kerr.map-tab`).
 
-- **Globe** — orthographic, the world's map sampled per pixel and lit by the Sun (soft terminator, the
-  night a little blue, the limb darkened, an atmosphere's rim), turning under the ship, centred on it.
+- **Globe** — on the GPU (the map's renderer: the world's map at the screen's resolution, the Earth's
+  clouds and city lights, the night side faintly lit to stay readable, an atmosphere's rim; without
+  WebGPU a CPU raster), turning under the ship, centred on it.
   Drag turns it (the ship no longer followed), the wheel zooms (×1–8), a double-click follows the
   ship again.
 - **Planisphere** — equirectangular, the night laid over it.
@@ -112,11 +142,13 @@ elsewhere the tabs are dimmed and the 3D map shows, the tab chosen kept (remembe
   turns under it), periapsis / apoapsis with their heights, the horizon the ship sees, the point under
   the Sun, the ship's chevron; the ISS and the fleet's craft where they are, their ground track an orbit
   ahead (brighter when targeted). The readout: latitude, longitude, altitude, Pe · Ap · i.
-- Gargantua's worlds have no map: their tint, banded, in their own frame (x away from the hole).
+- Gargantua's worlds: procedural, as the tracer draws them, in their own frame (x away from the hole).
+- The sites (spaceports, runways, Gargantua's camps), the preview's path, the entry's fall.
 - The same drawing picks a place in F2 › Place: a click on the globe or the planisphere — where to land,
   or the orbit passing over it.
 
-The globe's raster (≤ 420 px across) is redrawn only when the view or the light moved; the tracks over
-it at 15 Hz (every frame while dragged).
+The tracks over the globe are drawn at 15 Hz (every frame while dragged).
 
-Cost: ~1 ms a frame on the main thread (the orbits cached and re-sampled a few a frame as time goes by).
+Cost: ~1 ms a frame on the main thread (the orbits cached and re-sampled a few a frame as time goes by);
+the GPU's bodies, one draw call. Full screen at 1600×900 holds 60 frames a second (16.7 ms median and
+95th percentile, Earth or the whole system in view).

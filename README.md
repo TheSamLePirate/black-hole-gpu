@@ -81,11 +81,15 @@ GPU process being lost.
   everywhere, on Venus never), widening and thinning for a few minutes, carried with the air; the
   Ranger's wingtips' vortices condensing when it pulls near its stall in warm dense air. Drawn lit by the
   sun (strongly forward: bright against it) and the sky, dimming what is behind, hidden by the ground.
-- **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — circularize,
-  apoapsis, periapsis, Hohmann, inclination, resonance; match planes, rendezvous and intercept (their
-  porkchop, a click flies a cell), match velocities, fine-tune the approach; land; our side's missions;
-  Gargantua's own planners about the hole — each previewed (its burns' Δv and duration, the orbit after,
-  the budget) before it is flown; the analysis — the elements and their times, the target's relative
+- **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — launch to
+  orbit (height, inclination), circularize (at an apsis, or NOW in closed loop), apoapsis, periapsis,
+  Hohmann, inclination, resonance; match planes, rendezvous and intercept (their porkchop, a click flies a
+  cell), match velocities, approach, hold position, fine-tune the approach; land, deorbit and entry;
+  **missions between bodies** (the MISSION tab, O: in both universes — our planets, moons, the ISS, the
+  craft, the wormhole; Gargantua's worlds, the star, the mouth — an orbit, a fly-by or a free return, the
+  window); Gargantua's own planners about the hole — each **previewed on the map** (its path drawn in
+  violet, its burns' Δv and duration, the orbit after, the budget) before it is adopted and flown. The
+  hub's buttons (HOLD POS, CIRC, APPROACH, LAND, TAKE OFF, ENTRY) are the same operations; the analysis — the elements and their times, the target's relative
   inclination, phase angle and window, closest approach; the plan's burns editable to the m/s and second,
   snapped to the apsides and nodes. Our side flies them as manoeuvre nodes (the map's n-body path);
   Gargantua's worlds, as the flight computer's own burns in their frames.
@@ -463,7 +467,9 @@ altitude, clock rate, thrust), the **effective potential** of the orbit — V(r)
 constant Q, R(r) = [E(r² + a²) − aL]² − Δ[r² + (L − aE)² + Q] = 0, with the energy line, the escape line and the
 region the ship can reach —, and the cockpit: the attitude ball inside throttle and g-load arc gauges, holds
 on the left, SAS and autopilots on the right.
-The map's tabs add the **ground track** of the world the ship orbits (in its sphere of influence: our
+The full-screen map draws its bodies on the GPU — the tracer's own maps on true spheres, the Earth's
+clouds and city lights, Saturn's rings, Gargantua's disk and photon ring, its worlds procedural — under its
+orbits, paths and labels, with a legend ([docs/MAP.md](docs/MAP.md)). The map's tabs add the **ground track** of the world the ship orbits (in its sphere of influence: our
 planets and moons, Mann, Edmunds): a **globe** — its map lit by the Sun, the day and the night, turning under
 the ship (drag it, the wheel zooms, a double click follows the ship again) — or a **planisphere**; on both the
 track left (fading), the free-fall path ahead and the planned one through the nodes, periapsis and apoapsis
@@ -482,7 +488,7 @@ the target where it is seen: light delay and aberration included.
 Keys (KSP's layout, by physical position — Z S · Q D · A E on AZERTY): W S / A D / Q E pitch, yaw, roll;
 I K · J L · H N RCS translation; ⇧ / Alt (or ↑ ↓) throttle up / down, Z full, X cut; Caps Lock precision
 controls; T SAS; R roll alignment; 1–7 holds; autopilots 8 hold position · 9 circularize · 0 approach · G land ·
-U take off · B dock; O flight planner; M the 3D map, ⇧M the settings; V · ⇧V camera; ⇧R camera reset; ⇧Y the
+U take off · B dock; O missions (the flight computer's MISSION tab); M the 3D map, ⇧M the settings; V · ⇧V camera; ⇧R camera reset; ⇧Y the
 future path in the view; [ ] the craft flown; ⇧K leave the ship; , . time warp; drag looks around from the
 attach point. The pad: left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde, D-pad ▲▼
 camera. Touch: a stick, a throttle lever, roll buttons. Default lighting of the hull: 1 (physical: strong

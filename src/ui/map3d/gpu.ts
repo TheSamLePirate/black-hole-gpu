@@ -70,42 +70,61 @@ export class MapGpu {
   readonly canvas = document.createElement("canvas");
   private ctx: GPUCanvasContext;
   private format: GPUTextureFormat;
-  private bodyPipe: GPURenderPipeline;
-  private skyPipe: GPURenderPipeline;
+  private bodyPipe!: GPURenderPipeline;
+  private skyPipe!: GPURenderPipeline;
   private uniform: GPUBuffer;
   private inst: GPUBuffer;
   private data = new Float32Array(MAX * FLOATS);
   private sampler: GPUSampler;
   private bind: { group: GPUBindGroup; key: MapTextures } | null = null;
-  private skyBind: GPUBindGroup;
+  private skyBind!: GPUBindGroup;
   private n = 0;
+  /** Its pipelines being built, built, or not to be had (a shader refused: the map draws in 2D). */
+  status: "pending" | "ok" | "failed" = "pending";
 
   constructor(private device: GPUDevice, private textures: () => MapTextures | null) {
     this.canvas.className = "m3-gpu";
     this.ctx = this.canvas.getContext("webgpu")!;
     this.format = navigator.gpu.getPreferredCanvasFormat();
     this.ctx.configure({ device, format: this.format, alphaMode: "premultiplied" });
-    const module = device.createShaderModule({ code: mapWGSL, label: "map" });
-    const blend: GPUBlendState = {
-      color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-      alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-    };
-    this.bodyPipe = device.createRenderPipeline({
-      label: "map: bodies", layout: "auto",
-      vertex: { module, entryPoint: "bodyVs" },
-      fragment: { module, entryPoint: "bodyFs", targets: [{ format: this.format, blend }] },
-      primitive: { topology: "triangle-list" },
-    });
-    this.skyPipe = device.createRenderPipeline({
-      label: "map: stars", layout: "auto",
-      vertex: { module, entryPoint: "skyVs" },
-      fragment: { module, entryPoint: "skyFs", targets: [{ format: this.format, blend }] },
-      primitive: { topology: "triangle-list" },
-    });
     this.uniform = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.inst = device.createBuffer({ size: this.data.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge", maxAnisotropy: 8 });
-    this.skyBind = device.createBindGroup({ layout: this.skyPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
+    void this.build();
+  }
+
+  /** The pipelines, checked: a shader's error, a pipeline refused — the layer given up. */
+  private async build() {
+    const device = this.device;
+    try {
+      // (a development server may hand the shader over by its URL rather than its text: fetched then)
+      const code = mapWGSL.includes("@fragment") ? mapWGSL : await (await fetch(mapWGSL)).text();
+      device.pushErrorScope("validation");
+      const module = device.createShaderModule({ code, label: "map" });
+      const blend: GPUBlendState = {
+        color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+        alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+      };
+      this.bodyPipe = device.createRenderPipeline({
+        label: "map: bodies", layout: "auto",
+        vertex: { module, entryPoint: "bodyVs" },
+        fragment: { module, entryPoint: "bodyFs", targets: [{ format: this.format, blend }] },
+        primitive: { topology: "triangle-list" },
+      });
+      this.skyPipe = device.createRenderPipeline({
+        label: "map: stars", layout: "auto",
+        vertex: { module, entryPoint: "skyVs" },
+        fragment: { module, entryPoint: "skyFs", targets: [{ format: this.format, blend }] },
+        primitive: { topology: "triangle-list" },
+      });
+      this.skyBind = device.createBindGroup({ layout: this.skyPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
+      const err = await device.popErrorScope();
+      if (err) throw new Error(err.message);
+      this.status = "ok";
+    } catch (e) {
+      console.warn("The map's GPU layer: none —", e);
+      this.status = "failed";
+    }
   }
 
   /** The frame's bodies, back to front. */
@@ -133,6 +152,7 @@ export class MapGpu {
    * view's centre [px], its axes in the world (the stars behind) —, the time (the stars' twinkle).
    */
   render(w: number, h: number, f: number, cx: number, cy: number, axes: [V3, V3, V3], time: number) {
+    if (this.status !== "ok") return;
     const c = this.canvas;
     if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
     const T = this.textures();

@@ -931,6 +931,10 @@ async function main() {
   flightHud.attach(flightComputer.root);
   // (the map's bodies drawn on the tracer's GPU, with its maps)
   flightHud.mapGpu = renderer.mapGpuSource();
+  flightHud.kerrApsides = () => {
+    const k = camera.fcKerrInfo();
+    return k && { rp: k.o.rp, ra: k.o.ra, fate: k.o.fate };
+  };
   // (the planner — its key, its button —: the map, the flight computer's MISSION tab)
   flightHud.onPlanner = () => openMissions();
   openMissions = () => {

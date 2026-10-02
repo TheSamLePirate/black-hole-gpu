@@ -91,4 +91,4 @@ Décisions de l'utilisateur :
 | C3 missions | fait : destinations groupées des deux univers, arrivée (orbite, survol, retour libre ; en orbite, à côté), aperçu puis adoption entière ; touche O | · 152 |
 | C4 hub = ordinateur de bord | fait : chaque bouton du hub = une opération (mise en orbite, circulariser maintenant, approche, tenir, atterrir, rentrée), engager sans basculer ; décollage 299 × 301 km à 51,59° | · 153 |
 | C5 carte WebGPU | fait : sphères texturées (cartes du traceur, Terre jour/nuages/nuit), anneaux, Gargantua (disque, anneau de photons), mondes procéduraux, étoiles ; globe GPU | · 154 |
-| C6 finitions | à faire | |
+| C6 finitions | fait : étiquettes placées (9 positions autour de l'ancre, priorités, hors disques, dans la zone libre, doublons retirés), légende, bande Kerr (Pe/Ap géodésiques) et adaptative, limbes/horizon/disque anticrénelés, couche GPU vérifiée (repli 2D), fondu entre vues, 60 i/s ; MAP.md, README, guide | · 155 |

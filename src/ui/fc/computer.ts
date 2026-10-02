@@ -14,6 +14,7 @@ import * as kep from "../../fc/kepler";
 import type { Site } from "../../game/sites";
 import type { KerrOrbit } from "../../fc/kerr-ops";
 import { horizon, isco } from "../../physics";
+import { BODY_NAMES } from "../../targeting";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -538,7 +539,7 @@ export class FlightComputer {
     } else if (t === "target") {
       this.autoOp("approach", "Approach the target", "Flies to the target and stops beside it, station-keeping — the hub's APPROACH");
       this.autoOp("hover", "Hold position", "Kills the speed relative to the hole's frame and holds the place — the hub's HOLD POS");
-      this.body.append(h("div", "fc-tgt", `Target: ${k.target ?? "—"}`));
+      this.body.append(h("div", "fc-tgt", `Target: ${k.target ? BODY_NAMES[k.target as keyof typeof BODY_NAMES] ?? k.target : "—"}`));
       this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () => this.host.kerrOp("plane"));
       // (a rendezvous, the wormhole: the MISSION tab's planner — previewed before it is flown)
       const mission = (target: string, orbit: boolean) => () => {
@@ -731,7 +732,7 @@ export class FlightComputer {
         ["Fate", o.fate === "horizon" ? "into the horizon" : o.fate === "escape" ? "an escape" : "bound"],
       ];
       E.orbit!.innerHTML = rows.map(([a, b]) => `<div class="fc-kv"><span>${a}</span><b>${b}</b></div>`).join("");
-      E.target!.innerHTML = `<div class="fc-empty">${k.target && k.target !== "hole" ? `Target: ${k.target}` : "No target"}</div>`;
+      E.target!.innerHTML = `<div class="fc-empty">${k.target && k.target !== "hole" ? `Target: ${BODY_NAMES[k.target as keyof typeof BODY_NAMES] ?? k.target}` : "No target"}</div>`;
     } else {
       E.orbit!.innerHTML = `<div class="fc-empty">${k ? `About Gargantua: r = ${k.r.toFixed(2)} M (the map's apsides)` : "Far from any body"}</div>`;
       E.target!.innerHTML = "";

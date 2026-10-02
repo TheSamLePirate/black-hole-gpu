@@ -376,18 +376,24 @@ export class GroundTrack {
   private gpu: MapGpu | null = null;
   private gpuTried = false;
   private gpuLayer(): MapGpu | null {
-    if (this.gpu || this.gpuTried) return this.gpu;
-    const src = this.gpuSource?.();
-    if (!src) return null;
-    this.gpuTried = true;
-    try {
-      this.gpu = new MapGpu(src.device, src.textures);
-      this.stage.insertBefore(this.gpu.canvas, this.canvas);
-    } catch (e) {
-      console.warn("The globe's GPU layer: none —", e);
-      this.gpu = null;
+    if (!this.gpu && !this.gpuTried) {
+      const src = this.gpuSource?.();
+      if (!src) return null;
+      this.gpuTried = true;
+      try {
+        this.gpu = new MapGpu(src.device, src.textures);
+      } catch (e) {
+        console.warn("The globe's GPU layer: none —", e);
+        this.gpu = null;
+      }
     }
-    return this.gpu;
+    // (its pipelines still building, or refused: the canvas draws alone)
+    const G = this.gpu;
+    if (!G || G.status !== "ok") return null;
+    if (!G.canvas.parentNode) {
+      this.stage.insertBefore(G.canvas, this.canvas);
+    }
+    return G;
   }
 
   /** full screen: the panels over the stage's edges [CSS px] (the host's measure) */
