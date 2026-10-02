@@ -54,29 +54,31 @@ import t50 from "../../assets/scenes/mann-gargantua-over-the-ice.webp";
 import t51 from "../../assets/scenes/edmunds-gargantua-at-dusk.webp";
 import t52 from "../../assets/scenes/game-interstellar.webp";
 import t53 from "../../assets/scenes/earth-docking-to-the-iss.webp";
-import t54 from "../../assets/scenes/game-artemis.webp";
-import t55 from "../../assets/scenes/gargantua-system-departure-near-saturn.webp";
-import t56 from "../../assets/scenes/mission-through-the-wormhole-to-the-companion-star-automatic.webp";
-import t57 from "../../assets/scenes/wormhole-our-milky-way-from-gargantua-s-side.webp";
-import t58 from "../../assets/scenes/cinematic-the-liquid-wormhole.webp";
-import t59 from "../../assets/scenes/wormhole-long-throat-images-wrapped-around-it.webp";
-import t60 from "../../assets/scenes/wormhole-strong-lensing-w-0-43.webp";
-import t61 from "../../assets/scenes/the-mouth-before-gargantua-banking-flight.webp";
-import t62 from "../../assets/scenes/companion-star-close-up.webp";
-import t63 from "../../assets/scenes/the-star-passing-gargantua.webp";
-import t64 from "../../assets/scenes/gargantua-under-the-distant-galaxy.webp";
-import t65 from "../../assets/scenes/schwarzschild-no-spin-no-bz-jet.webp";
-import t66 from "../../assets/scenes/luminet-1979-bolometric.webp";
-import t67 from "../../assets/scenes/hot-disk-t-50-000-k-uv-bright-agn.webp";
-import t68 from "../../assets/scenes/eht-m87-at-230-ghz-20-as-beam.webp";
-import t69 from "../../assets/scenes/orbiting-hot-spot-flare-light-echoes.webp";
-import t70 from "../../assets/scenes/face-on-m87-like-hot-flow.webp";
-import t71 from "../../assets/scenes/jet-launch-blazar-like-i-20.webp";
-import t72 from "../../assets/scenes/jet-side-view.webp";
-import t73 from "../../assets/scenes/extreme-spin-a-0-998-edge-on.webp";
-import t74 from "../../assets/scenes/orbiting-at-r-8-aberration.webp";
-import t75 from "../../assets/scenes/falling-in-rain-frame.webp";
-import t76 from "../../assets/scenes/lensing-grid-shadow-guide.webp";
+import t54 from "../../assets/scenes/earth-the-endurance-800-km-up.webp";
+import t55 from "../../assets/scenes/earth-the-lander-500-km-up.webp";
+import t56 from "../../assets/scenes/game-artemis.webp";
+import t57 from "../../assets/scenes/gargantua-system-departure-near-saturn.webp";
+import t58 from "../../assets/scenes/mission-through-the-wormhole-to-the-companion-star-automatic.webp";
+import t59 from "../../assets/scenes/wormhole-our-milky-way-from-gargantua-s-side.webp";
+import t60 from "../../assets/scenes/cinematic-the-liquid-wormhole.webp";
+import t61 from "../../assets/scenes/wormhole-long-throat-images-wrapped-around-it.webp";
+import t62 from "../../assets/scenes/wormhole-strong-lensing-w-0-43.webp";
+import t63 from "../../assets/scenes/the-mouth-before-gargantua-banking-flight.webp";
+import t64 from "../../assets/scenes/companion-star-close-up.webp";
+import t65 from "../../assets/scenes/the-star-passing-gargantua.webp";
+import t66 from "../../assets/scenes/gargantua-under-the-distant-galaxy.webp";
+import t67 from "../../assets/scenes/schwarzschild-no-spin-no-bz-jet.webp";
+import t68 from "../../assets/scenes/luminet-1979-bolometric.webp";
+import t69 from "../../assets/scenes/hot-disk-t-50-000-k-uv-bright-agn.webp";
+import t70 from "../../assets/scenes/eht-m87-at-230-ghz-20-as-beam.webp";
+import t71 from "../../assets/scenes/orbiting-hot-spot-flare-light-echoes.webp";
+import t72 from "../../assets/scenes/face-on-m87-like-hot-flow.webp";
+import t73 from "../../assets/scenes/jet-launch-blazar-like-i-20.webp";
+import t74 from "../../assets/scenes/jet-side-view.webp";
+import t75 from "../../assets/scenes/extreme-spin-a-0-998-edge-on.webp";
+import t76 from "../../assets/scenes/orbiting-at-r-8-aberration.webp";
+import t77 from "../../assets/scenes/falling-in-rain-frame.webp";
+import t78 from "../../assets/scenes/lensing-grid-shadow-guide.webp";
 
 export const SCENE_THUMBS: Record<string, string> = {
   "Kerr a=0.94, near edge-on": t0,
@@ -133,27 +135,29 @@ export const SCENE_THUMBS: Record<string, string> = {
   "Edmunds: Gargantua at dusk": t51,
   "game:interstellar": t52,
   "Earth: docking to the ISS": t53,
-  "game:artemis": t54,
-  "Gargantua system: departure near Saturn": t55,
-  "Mission: through the wormhole to the companion star (automatic flight)": t56,
-  "Wormhole: our Milky Way from Gargantua's side": t57,
-  "Cinematic: the liquid wormhole": t58,
-  "Wormhole: long throat (images wrapped around it)": t59,
-  "Wormhole: strong lensing (W = 0.43 ρ)": t60,
-  "The mouth before Gargantua (banking flight)": t61,
-  "Companion star close-up": t62,
-  "The star passing Gargantua": t63,
-  "Gargantua under the distant galaxy": t64,
-  "Schwarzschild (no spin → no BZ jet)": t65,
-  "Luminet 1979 (bolometric)": t66,
-  "Hot disk (T = 50 000 K, UV-bright AGN)": t67,
-  "EHT: M87* at 230 GHz (20 µas beam)": t68,
-  "Orbiting hot spot (flare, light echoes)": t69,
-  "Face-on (M87*-like hot flow)": t70,
-  "Jet launch (blazar-like, i=20°)": t71,
-  "Jet side view": t72,
-  "Extreme spin a=0.998, edge-on": t73,
-  "Orbiting at r=8 (aberration)": t74,
-  "Falling in (rain frame)": t75,
-  "Lensing grid + shadow guide": t76,
+  "Earth: the Endurance, 800 km up": t54,
+  "Earth: the Lander, 500 km up": t55,
+  "game:artemis": t56,
+  "Gargantua system: departure near Saturn": t57,
+  "Mission: through the wormhole to the companion star (automatic flight)": t58,
+  "Wormhole: our Milky Way from Gargantua's side": t59,
+  "Cinematic: the liquid wormhole": t60,
+  "Wormhole: long throat (images wrapped around it)": t61,
+  "Wormhole: strong lensing (W = 0.43 ρ)": t62,
+  "The mouth before Gargantua (banking flight)": t63,
+  "Companion star close-up": t64,
+  "The star passing Gargantua": t65,
+  "Gargantua under the distant galaxy": t66,
+  "Schwarzschild (no spin → no BZ jet)": t67,
+  "Luminet 1979 (bolometric)": t68,
+  "Hot disk (T = 50 000 K, UV-bright AGN)": t69,
+  "EHT: M87* at 230 GHz (20 µas beam)": t70,
+  "Orbiting hot spot (flare, light echoes)": t71,
+  "Face-on (M87*-like hot flow)": t72,
+  "Jet launch (blazar-like, i=20°)": t73,
+  "Jet side view": t74,
+  "Extreme spin a=0.998, edge-on": t75,
+  "Orbiting at r=8 (aberration)": t76,
+  "Falling in (rain frame)": t77,
+  "Lensing grid + shadow guide": t78,
 };
