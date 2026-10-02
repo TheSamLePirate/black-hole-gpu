@@ -83,6 +83,7 @@ export class Simulation {
       if (r.shipThrust) changed = true;
       r.shipThrust = null;
       r.shipReentry = null;
+      r.shipContrails = null;
       r.shake = [0, 0];
       return changed;
     }
@@ -103,6 +104,8 @@ export class Simulation {
     r.shipReentry = A && (A.u || A.shield > 700 || A.hull > 700)
       ? { u: A.u ?? [0, 0, 1], heat: A.u ? A.heat : 0, shield: A.shield, hull: A.hull, mach: A.mach, rho: A.rho, glow: A.glow ?? [1, 0.45, 0.32], time: this.play }
       : null;
+    // the condensation trails (kept in the air: paused, as they were)
+    r.shipContrails = c.contrailsFrame();
     if (!s.animate) return changed;
     const pl = info?.surface?.plasma;
     r.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];

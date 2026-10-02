@@ -358,6 +358,8 @@ export class Renderer {
   shipReentry: Reentry | null = null;
   /** the Ranger's thrusters firing (ship.ts: Thrust), or null */
   shipThrust: Thrust | null = null;
+  /** the condensation trails (contrails.ts: segments in the ship's frame), or null */
+  shipContrails: { data: Float32Array<ArrayBuffer>; n: number } | null = null;
   /** the last frame's local patch (inspection) */
   lastNear: ReturnType<typeof localPatch> = null;
   /** the planets' light probes (system/planet-probe.ts), by body id */
@@ -2173,7 +2175,7 @@ export class Renderer {
           inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"), dash: this.cockpitDash ?? undefined,
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, reentry: this.shipReentry, probeAxes: this.shipProbeAxes,
-          thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
+          thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)), contrails: this.shipContrails,
         }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined, t.moments);
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));

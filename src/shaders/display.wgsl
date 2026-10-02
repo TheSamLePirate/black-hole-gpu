@@ -269,7 +269,10 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       let sp = textureLoad(ship, vec2i(uv * D.img.xy), 0);
       c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
     }
-    c += min(textureSampleLevel(plumes, samp, uv, 0.0).rgb, vec3f(60000.0));
+    // (the flames and the plasma added; the condensation trails over what is behind them — their
+    // coverage in alpha)
+    let pl = textureSampleLevel(plumes, samp, uv, 0.0);
+    c = c * (1.0 - clamp(pl.a, 0.0, 1.0)) + min(pl.rgb, vec3f(60000.0));
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);

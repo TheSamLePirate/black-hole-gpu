@@ -240,7 +240,8 @@ fn withShip(uv: vec2f) -> vec3f {
     let sp = textureSampleLevel(shipTex, samp, pc / dim, 0.0);
     c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
   }
-  return c + min(textureSampleLevel(plumeTex, samp, uv, 0.0).rgb, vec3f(60000.0));
+  let pl = textureSampleLevel(plumeTex, samp, uv, 0.0);
+  return c * (1.0 - clamp(pl.a, 0.0, 1.0)) + min(pl.rgb, vec3f(60000.0));
 }
 
 const BLOOM_CAP = 6.0;

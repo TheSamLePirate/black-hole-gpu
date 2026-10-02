@@ -1040,6 +1040,98 @@ fn sheathFs(in: SOut) -> @location(0) vec4f {
   return vec4f(1.8 * (1.0 - exp(-g / 1.8)) * S.jet.y, 0.0);
 }
 
+// ------------------------------------------------------------------------------------ contrails
+// The condensation trails (contrails.ts): each segment a ribbon facing the camera, as wide as the trail
+// is there; across it the optical depth of a round tube (a soft profile), puffs along it fixed in the
+// air. Ice scatters the light it gets — the key light's, strongly forward (the trail bright between the
+// camera and the star), and the sky's —: the colour added, the coverage (1 − transmittance) in alpha (the
+// display dims what is behind by it). Hidden by the hull (the depth) and by what the traced image holds
+// nearer (the ground, a mountain); fading into the distance's haze.
+
+struct Seg {
+  a: vec4f, // end a (ship frame), its width [m]
+  b: vec4f,
+  k: vec4f, // optical depths at a and b, distances along the trail [m]
+  m: vec4f, // kind (0 an engine's, 1 a wingtip's)
+};
+@group(0) @binding(19) var<storage, read> segs: array<Seg>;
+
+struct TOut {
+  @builtin(position) clip: vec4f,
+  @location(0) p: vec3f, // camera frame
+  @location(1) v: f32,   // across: −1 … 1
+  @location(2) tau: f32,
+  @location(3) s: f32,
+  @location(4) @interpolate(flat) kind: f32,
+};
+
+@vertex
+fn trailVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> TOut {
+  let G = segs[ii];
+  let pa = (S.model * vec4f(G.a.xyz, 1.0)).xyz;
+  let pb = (S.model * vec4f(G.b.xyz, 1.0)).xyz;
+  let E = array<f32, 6>(0.0, 1.0, 0.0, 0.0, 1.0, 1.0);
+  let SD = array<f32, 6>(-1.0, -1.0, 1.0, 1.0, -1.0, 1.0);
+  let e = E[vi];
+  let sd = SD[vi];
+  let p = mix(pa, pb, e);
+  // (the ribbon's side: across the segment and the line of sight; along it, any)
+  var d = pb - pa;
+  if (dot(d, d) < 1e-8) { d = vec3f(0.0, 0.0, 1.0); }
+  var side = cross(normalize(d), normalize(p));
+  if (dot(side, side) < 1e-8) { side = cross(normalize(d), vec3f(0.0, 1.0, 0.0)); }
+  side = normalize(side);
+  let w = mix(G.a.w, G.b.w, e);
+  var o: TOut;
+  o.p = p + side * (sd * w);
+  o.clip = projectFull(o.p);
+  // (the ship's near and far planes hold it and its flames, not kilometres of trail: the depth kept
+  // within them — before the camera, still hidden by the hull)
+  if (o.clip.w > 0.0) { o.clip.z = clamp(o.clip.z, 1e-6 * o.clip.w, 0.99999 * o.clip.w); }
+  o.v = sd;
+  o.tau = mix(G.k.x, G.k.y, e);
+  o.s = mix(G.k.z, G.k.w, e);
+  o.kind = G.m.x;
+  return o;
+}
+
+@fragment
+fn trailFs(in: TOut) -> @location(0) vec4f {
+  // hidden where the traced image holds something nearer (the ground below the trail, a ridge)
+  let dist = length(in.p);
+  if (S.img.w > 0.5 && in.p.z > 0.0) {
+    let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
+    let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
+    if (moments[q.y * u32(S.img.x) + q.x].y * S.img.z < dist) { discard; }
+  }
+  // across a round tube: the chord through it, a soft edge; puffs along it (fixed in the air) and
+  // ragged edges, the wingtips' a twisting thread
+  let x = in.v;
+  let chord = sqrt(max(1.0 - x * x, 0.0));
+  let tip = in.kind > 0.5;
+  let sc = select(45.0, 6.0, tip);
+  let nz = vnoise(vec3f(in.s / sc, x * 1.7, in.kind * 7.3)) * 0.65 + vnoise(vec3f(in.s / (0.3 * sc), x * 4.1, 3.1)) * 0.35;
+  let edge = smoothstep(0.0, 0.35, chord - 0.25 * (nz - 0.5));
+  var tau = in.tau * chord * edge * (0.55 + 0.9 * nz);
+  // (the haze between: a far trail paler)
+  tau *= exp(-dist / 120000.0);
+  let a = 1.0 - exp(-tau);
+  if (a < 1e-4) { discard; }
+  // the light it scatters: the key light (a star) or the probe's dominant one, through a phase strongly
+  // forward (Henyey–Greenstein, g 0.6, its mean 1: the trail glowing with the star behind it), and the
+  // sky's all round
+  let vdir = normalize(-in.p);
+  let keyOn = sh[11].w > 0.5;
+  let l = fromProbe(sh[9].xyz);
+  let Ek = select(irradiance(l) * sh[9].w * 2.0, sh[11].rgb, keyOn);
+  let g = 0.6;
+  let ct = dot(-l, vdir);
+  let hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5);
+  let Ea = 0.5 * (irradiance(vdir) + irradiance(-vdir));
+  let L = (0.85 / PI) * (Ek * (0.35 + 0.65 * hg) + Ea);
+  return vec4f(L * S.light.x * a, a);
+}
+
 // ------------------------------------------------------------------------------------ composite
 @group(0) @binding(0) var shipTex: texture_2d<f32>;
 

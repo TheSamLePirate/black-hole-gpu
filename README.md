@@ -76,6 +76,11 @@ GPU process being lost.
 - **The look of an entry**: the bow shock's plasma marched through (the gas's colour, the stagnation
   point's white core, the ionized wake), the hot skin as a black body, the cabin lit through the windows,
   the vapour cone at Mach 1, the camera shaking, the plasma's roar and the sonic boom.
+- **Condensation trails** (`src/contrails.ts`): the engines' exhaust freezing into a trail where the air
+  is cold enough (the Schmidt–Appleman criterion for a rocket's wet exhaust: on Earth from ~7 km, on Titan
+  everywhere, on Venus never), widening and thinning for a few minutes, carried with the air; the
+  Ranger's wingtips' vortices condensing when it pulls near its stall in warm dense air. Drawn lit by the
+  sun (strongly forward: bright against it) and the sky, dimming what is behind, hidden by the ground.
 - **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — circularize,
   apoapsis, periapsis, Hohmann, inclination, resonance; match planes, rendezvous and intercept (their
   porkchop, a click flies a cell), match velocities, fine-tune the approach; land; our side's missions;

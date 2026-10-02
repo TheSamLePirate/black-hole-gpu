@@ -15,6 +15,7 @@ import cockpitUrl from "../assets/ranger/cockpit.bin";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
+import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
 
 type V3 = [number, number, number];
@@ -55,6 +56,8 @@ export interface ShipView {
   plasma?: [number, number, number, number];
   /** the re-entry's plasma and heat (the flown craft): see Reentry */
   reentry?: Reentry | null;
+  /** the condensation trails: segments in the ship's frame (contrails.ts) */
+  contrails?: { data: Float32Array<ArrayBuffer>; n: number } | null;
   /** the camera's axes (x right, y up, z forward) in the light probe's axes (default: the same) */
   probeAxes?: [V3, V3, V3];
   /** the thrusters: see Thrust */
@@ -145,6 +148,9 @@ interface ShipTargetRes {
   /** the hull's distance at the plumes' resolution (where the plasma's march ends), its bind group */
   hullDist: GPUTexture;
   sheathBind?: GPUBindGroup;
+  /** the trails' bind group, with this target's traced depths */
+  trailBind?: GPUBindGroup;
+  trailMoments?: GPUBuffer;
   /** the shading's bind group, with this target's traced image and depths (and the bindings' generation) */
   bind?: GPUBindGroup;
   bindGen?: number;
@@ -165,6 +171,9 @@ export class ShipRenderer {
   private uniform: GPUBuffer;
   private jetBuf: GPUBuffer;
   private jetData = new Float32Array(MAX_JETS * JET_FLOATS);
+  /** the condensation trails' segments (contrails.ts), how many this frame */
+  private trailBuf!: GPUBuffer;
+  private trailCount = 0;
   private jetCount = 0;
   private plumeBinds: { plume: GPUBindGroup; plumeIn: GPUBindGroup; hullDepth: GPUBindGroup; glow: GPUBindGroup; dist: GPUBindGroup } | null = null;
   /** this frame's re-entry: the hull glowing, the plasma (or the vapour) drawn */
@@ -211,6 +220,7 @@ export class ShipRenderer {
     hullDepth: GPURenderPipeline;
     glow: GPURenderPipeline;
     sheath: GPURenderPipeline;
+    trail: GPURenderPipeline;
     dist: GPURenderPipeline;
     glass: GPURenderPipeline;
     cabin: GPURenderPipeline;
@@ -277,6 +287,7 @@ export class ShipRenderer {
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.uniform = d.createBuffer({ size: 64 + 192 + 96 + 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.mapSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
     this.shadowTex = d.createTexture({
@@ -355,6 +366,18 @@ export class ShipRenderer {
             fragment: { module, entryPoint: "sheathFs", targets: [{ format: "rgba16float", blend }] },
             primitive: { topology: "triangle-list", cullMode: "front" },
             depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "always" },
+          }),
+          // the condensation trails: their scattered light added, their coverage summed in alpha (the
+          // display dims what is behind by it); hidden by the hull's depth
+          trail: d.createRenderPipeline({
+            layout: "auto",
+            vertex: { module, entryPoint: "trailVs" },
+            fragment: { module, entryPoint: "trailFs", targets: [{ format: "rgba16float", blend: {
+              color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+              alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
+            } }] },
+            primitive: { topology: "triangle-list", cullMode: "none" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less" },
           }),
           dist: d.createRenderPipeline({
             layout: "auto",
@@ -797,6 +820,9 @@ export class ShipRenderer {
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
     this.writeReentry(v.reentry, mesh);
+    const tr = this.flown ? v.contrails : null;
+    this.trailCount = tr ? Math.min(tr.n, MAX_SEGMENTS) : 0;
+    if (this.trailCount) this.device.queue.writeBuffer(this.trailBuf, 0, tr!.data, 0, this.trailCount * SEG_FLOATS);
     // the cockpit: the sticks following the attitude commands (the effort the wheels give: the pilot's
     // and the autopilots'), eased over a tenth of a second; the dashboard's figures
     if (inCabin) {
@@ -1031,7 +1057,8 @@ export class ShipRenderer {
     }
     rp.end();
     const re = this.reOn;
-    if (jets || re.glow || re.sheath) {
+    const trails = this.trailCount > 0;
+    if (jets || re.glow || re.sheath || trails) {
       const B = this.plumeBinds!;
       // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
       const occl = this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.count };
@@ -1060,6 +1087,18 @@ export class ShipRenderer {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
         pp.setBindGroup(0, inside ? B.plumeIn : B.plume);
         for (let i = 0; i < this.jetCount; i++) if (this.jetInside[i] === inside) pp.draw(36, 1, 0, i);
+      }
+      if (trails) {
+        if (!res.trailBind || res.trailMoments !== mb) {
+          res.trailBind = this.device.createBindGroup({
+            layout: this.pipes.trail.getBindGroupLayout(0),
+            entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 1, resource: { buffer: this.shBuf } }, { binding: 11, resource: { buffer: mb } }, { binding: 19, resource: { buffer: this.trailBuf } }],
+          });
+          res.trailMoments = mb;
+        }
+        pp.setPipeline(this.pipes.trail);
+        pp.setBindGroup(0, res.trailBind);
+        pp.draw(6, this.trailCount);
       }
       if (re.glow && !this.inCabin) {
         pp.setPipeline(this.pipes.glow);

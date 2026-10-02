@@ -22,6 +22,7 @@ import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site } from "./game/sites";
 import { fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext, OpResult } from "./fc/ops";
+import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kMatchPlane, kPeriapsis, kResonant, type KerrOp, type KerrOrbit } from "./fc/kerr-ops";
 import { issOrbit } from "./system/iss";
 import { aeroForces, airAt, airTop, entryInterface } from "./aero";
@@ -3525,6 +3526,46 @@ export class CameraController {
       mode: this.flightModeNow(), antigrav: this.s.antigrav, flaps: A.cfg.flaps ?? 0, brake: A.cfg.brake ?? 0, gear: !!A.cfg.gear,
       sf: this.sfCmd ? { ...this.sfCmd } : null, ...this.attitudeNow(),
     };
+  }
+
+  /** the engines' and the wingtips' condensation trails (contrails.ts), kept in the air */
+  readonly contrails = new Contrails();
+  private contrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
+
+  /**
+   * The condensation trails this frame: drawn on from the main engines (their exhaust, when the air is
+   * cold enough for it to freeze — contrails.ts) and the Ranger's wingtips (pulling hard in moist air),
+   * carried with the air, aged; handed over in the ship's frame for the renderer. Null: none.
+   */
+  contrailsFrame(): { data: Float32Array<ArrayBuffer>; n: number } | null {
+    const cam = cameraFrame(this.s);
+    const fr = this.s.ship ? this.entryFrame(cam) : null;
+    if (!fr || !fr.env.atm) {
+      if (this.contrails.trails.length) this.contrails.clear();
+      return null;
+    }
+    const x = fr.s.x;
+    const ax = this.shipAxesLocal(cam).map((a) => fr.fromLocal(a)) as [Vec3, Vec3, Vec3];
+    // (a ship-frame point in the body's frame)
+    const at = (q: Vec3): Vec3 => [0, 1, 2].map((k) => x[k]! + ax[0][k]! * q[0] + ax[1][k]! * q[1] + ax[2][k]! * q[2]) as Vec3;
+    const src: ContrailSource[] = [];
+    const LA = this.airFlight.last;
+    const V = VESSELS[fleet.active];
+    if (LA && LA.air.rho > 0) {
+      const f = this.pilot.fired;
+      const thr = performance.now() - f.at < 300 ? f.throttle : 0;
+      const e = engineTrail(thr, LA.air.rho, LA.air.T, LA.air.gas.R);
+      // (from a little behind each exit: the exhaust condenses as it mixes)
+      if (e > 0) V.jets.forEach((J, i) => J.main && src.push({ key: `e${i}`, p: at(lin(J.p, 1, J.d, 2)), kind: 0, str: e }));
+      const wing = V.aero.wing;
+      if (fleet.active === "ranger" && wing && LA.out.q > 0) {
+        const t = tipTrail(Math.abs(LA.out.L) / (LA.out.q * wing.S), LA.air.rho, LA.air.T, LA.speed);
+        if (t > 0) for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([4.1 * sx, 0.44, -0.3]), kind: 1, str: t });
+      }
+    }
+    this.contrails.step(fr.now, fr.body, fr.env.carry, src);
+    const n = this.contrails.view(fr.now, x, ax, this.contrailBuf);
+    return n ? { data: this.contrailBuf, n } : null;
   }
 
   /** The flight path's angle over the local horizon [rad] (0 away from a body). */
