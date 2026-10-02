@@ -360,7 +360,7 @@ export class FlightHud {
       }
     }
     const ahead = h("button", "fl-menu-i fl-ahead") as HTMLButtonElement;
-    ahead.append(h("b", "", "↺"), h("span", "", "Look ahead again"));
+    ahead.append(h("b", "", "↺"), h("span", "", "Reset the camera — on the hull, looking ahead (⇧R)"));
     ahead.onclick = () => {
       act.lookAhead();
       viewMenu.hidden = true;

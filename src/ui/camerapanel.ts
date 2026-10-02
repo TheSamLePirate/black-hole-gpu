@@ -259,7 +259,15 @@ export class CameraPanel {
         around || s.lookAt, () => !around && c.setLookAt(!s.lookAt), "C"),
       this.chip(ICON.tele, "Telescope", "A long lens down to a 0.02° field, held on the target, with a reticle and the angular scale — the wheel zooms", s.telescope, () => c.setTelescope(!s.telescope), "Y"),
     );
-    if (s.ship) row.append(this.chip(ICON.ahead, "Look ahead", "The camera back along its mount's axis (double-click)", false, () => c.setLook(0, 0)));
+    if (s.ship) {
+      row.append(
+        this.chip(ICON.ahead, "Look ahead", "The camera back along its mount's axis (double-click)", false, () => c.setLook(0, 0)),
+        this.chip(ICON.ahead, "Reset camera", "Back to the craft's attach points as they are: looking ahead, no lock, the outside views' own places — from outside, back on the hull", false, () => {
+          this.d.toast(c.resetShipView());
+          this.refresh?.();
+        }, "⇧R"),
+      );
+    }
     else {
       row.append(
         this.chip(ICON.mouse, "Mouse look", "Game-style flight: the mouse turns the camera, the wheel sets the speed (middle click; Esc leaves)", c.flyMode, () => c.setFlyMode(!c.flyMode)),

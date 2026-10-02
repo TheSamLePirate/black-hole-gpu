@@ -2100,6 +2100,31 @@ export class CameraController {
     this.reorient(S0, this.shipMatrix());
   }
 
+  /** the last attach point on the hull (not an outside view): where a reset brings the camera back */
+  private hullMount: Mount = "chase";
+
+  /**
+   * The camera back to the craft's attach points as they are: the look straight along the mount's axis,
+   * no lock on the target, the outside views' own places again (around: behind and above at the craft's
+   * distance; free: off its quarter; the fly-by afresh) — and from an outside view, back on the hull, at
+   * the last attach point used there. What it did.
+   */
+  resetShipView(): string {
+    const s = this.s;
+    const V = VESSELS[fleet.active];
+    const k = V.viewDist / 42;
+    s.lookAt = false;
+    this.lookOff = [0, 0];
+    this.shipAim = null;
+    Object.assign(this.outside, { yaw: 0, pitch: 12, dist: V.viewDist, eye: [18 * k, 6 * k, -36 * k] as Vec3, fyaw: -25, fpitch: -5, fvel: [0, 0, 0] as Vec3 });
+    this.flyby.E = null;
+    const wasOut = !!this.outsideView();
+    if (wasOut) s.shipMount = this.hullMount;
+    // (the look recentred: the ship keeps its attitude — the camera turns back with the mount)
+    this.setLook(0, 0);
+    return `Camera reset · ${MOUNTS[s.shipMount as Mount]?.label ?? s.shipMount}`;
+  }
+
   /** Next / previous attach point (the view travels there; the ship keeps its attitude). */
   cycleMount(dir: 1 | -1) {
     const s = this.s;
@@ -2225,6 +2250,10 @@ export class CameraController {
    *  Earthrise, the Earth out of the frame) */
   settleMount() {
     this.lastMount = this.s.shipMount;
+    // (a scene's attach point: the one a reset comes back to; the outside views at the craft's own distances)
+    if (MOUNTS[this.s.shipMount as Mount] && !(MOUNTS[this.s.shipMount as Mount] as { outside?: string }).outside) this.hullMount = this.s.shipMount as Mount;
+    const k = VESSELS[fleet.active].viewDist / 42;
+    Object.assign(this.outside, { yaw: 0, pitch: 12, dist: VESSELS[fleet.active].viewDist, eye: [18 * k, 6 * k, -36 * k] as Vec3, fyaw: -25, fpitch: -5, fvel: [0, 0, 0] as Vec3 });
     this.mountAnim = null;
     this.mountEff = null;
     this.lastPose = this.mountTarget();
@@ -2237,6 +2266,7 @@ export class CameraController {
     const S0 = this.lastPose && !this.mountAnim ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
     if (s.shipMount !== this.lastMount) {
       if (this.lastMount && s.ship) this.mountAnim = { from: this.lastPose ?? this.shipPose(), t: 0 };
+      if (MOUNTS[s.shipMount as Mount] && !(MOUNTS[s.shipMount as Mount] as { outside?: string }).outside) this.hullMount = s.shipMount as Mount;
       const prevMount = this.lastMount;
       this.lastMount = s.shipMount;
       const v = this.outsideView();

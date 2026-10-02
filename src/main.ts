@@ -11,6 +11,7 @@ import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targe
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetStart } from "./fleet";
+import { VESSELS } from "./vessels";
 import { SOLAR_BODIES } from "./system/solar";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
@@ -838,7 +839,10 @@ async function main() {
     select: (b) => {
       if (camera.selectTarget(b as Target, { focus: false })) panel.toast(`Target: ${BODY_NAMES[settings.target]}`);
     },
-    lookAhead: () => camera.setLook(0, 0),
+    lookAhead: () => {
+      panel.toast(camera.resetShipView());
+      refreshGui();
+    },
     undock: () => camera.undock(),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
@@ -918,7 +922,10 @@ async function main() {
     if (holds[e.code]) pilotHold(holds[e.code]!);
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
-    else if (e.code === "KeyR") pilotRoll();
+    else if (e.code === "KeyR" && e.shiftKey) {
+      panel.toast(camera.resetShipView()); // (the camera back to the attach points)
+      refreshGui();
+    } else if (e.code === "KeyR") pilotRoll();
     else if (e.code === "KeyY" && e.shiftKey) togglePathInView(); // (Y alone: the telescope, every mode)
     else if ((e.code === "KeyZ" || e.code === "KeyX") && camera.outsideView() === "free") e.preventDefault(); // (the free camera's keys)
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
@@ -1663,7 +1670,7 @@ async function main() {
       py = ((1 - t[1] / t[2] / tanH) / 2) * H;
       onScreen = px > 0 && px < W && py > 0 && py < H;
     }
-    const label = `RANGER · ${d < 1e3 ? `${d.toFixed(0)} m` : `${(d / 1e3).toFixed(d < 1e4 ? 2 : 1)} km`}`;
+    const label = `${VESSELS[settings.vessel].name.toUpperCase()} · ${d < 1e3 ? `${d.toFixed(0)} m` : `${(d / 1e3).toFixed(d < 1e4 ? 2 : 1)} km`}`;
     const dir = Math.atan2(-t[1], t[0]);
     return { px, py, onScreen, dir, alpha, label, key: [px.toFixed(1), py.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join() };
   }
