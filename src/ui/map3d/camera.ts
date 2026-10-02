@@ -106,6 +106,10 @@ export class MapCamera {
   private w = 1;
   private h = 1;
   private f = 1;
+  /** the free part of the canvas (the panels over its edges left out): its margins [px], its centre */
+  private ins = { l: 0, r: 0, t: 0, b: 0 };
+  private cx = 0.5;
+  private cy = 0.5;
 
   /** Eases the view towards the goal; true while it still moves. */
   update(dt: number): boolean {
@@ -150,7 +154,29 @@ export class MapCamera {
   resize(w: number, h: number) {
     this.w = w;
     this.h = h;
-    this.f = h / 2 / Math.tan(this.fov / 2);
+    this.frame();
+  }
+
+  /** The panels over the canvas's edges [px]: the view centred, and framed, in what is left free. */
+  inset(l: number, r: number, t: number, b: number) {
+    const i = this.ins;
+    if (i.l === l && i.r === r && i.t === t && i.b === b) return;
+    this.ins = { l, r, t, b };
+    this.frame();
+  }
+
+  /** The free rectangle [px]: x, y, width, height. */
+  get view(): [number, number, number, number] {
+    const i = this.ins;
+    return [i.l, i.t, Math.max(this.w - i.l - i.r, 1), Math.max(this.h - i.t - i.b, 1)];
+  }
+
+  private frame() {
+    const [x, y, w, h] = this.view;
+    this.cx = x + w / 2;
+    this.cy = y + h / 2;
+    // (the field of view across the free part's smaller side: a fit fills it, whatever its shape)
+    this.f = Math.min(h, w * 1.25) / 2 / Math.tan(this.fov / 2);
   }
 
   get focal() {
@@ -175,12 +201,12 @@ export class MapCamera {
     const d = sub(p, this.eye);
     const z = dot(d, this.fwd);
     const k = this.f / Math.max(z, 1e-30);
-    return { x: this.w / 2 + dot(d, this.right) * k, y: this.h / 2 - dot(d, this.up) * k, z, k };
+    return { x: this.cx + dot(d, this.right) * k, y: this.cy - dot(d, this.up) * k, z, k };
   }
 
   /** The view ray through a screen point (world direction). */
   ray(x: number, y: number): V3 {
-    const u = (x - this.w / 2) / this.f, v = -(y - this.h / 2) / this.f;
+    const u = (x - this.cx) / this.f, v = -(y - this.cy) / this.f;
     return norm(add(this.fwd, add(scale(this.right, u), scale(this.up, v))));
   }
 
@@ -210,7 +236,7 @@ export class MapCamera {
     const nd = clamp(g.dist * factor, this.minDist, this.maxDist);
     if (x !== undefined && y !== undefined) {
       // (the point at the focus's depth under the pointer, kept under it)
-      const u = (x - this.w / 2) / this.f, v = -(y - this.h / 2) / this.f;
+      const u = (x - this.cx) / this.f, v = -(y - this.cy) / this.f;
       const shift = (g.dist - nd) * 1;
       g.focus = add(g.focus, add(scale(this.right, u * shift), scale(this.up, v * shift)));
     }

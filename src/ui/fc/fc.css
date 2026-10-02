@@ -2,16 +2,16 @@
 .fc-root { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .fc-root[hidden] { display: none; }
 .fc-panel {
-  position: absolute; top: 96px; bottom: 22px; pointer-events: auto; overflow-y: auto; overflow-x: hidden;
+  box-sizing: border-box; position: absolute; top: 62px; bottom: 12px; pointer-events: auto; overflow-y: auto; overflow-x: hidden;
   background: linear-gradient(180deg, rgba(8, 13, 23, 0.9), rgba(5, 9, 16, 0.86));
   border: 1px solid rgba(140, 200, 255, 0.14); border-radius: 10px; padding: 10px 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(10px); color: rgba(214, 226, 242, 0.92); font: 500 12px/1.4 var(--hud-font, Rajdhani, Inter, sans-serif);
   scrollbar-width: thin; scrollbar-color: rgba(120, 180, 255, 0.25) transparent;
 }
-.fc-ops { left: 26px; width: 340px; }
-.fc-info { right: 26px; width: 318px; }
-@media (max-width: 1100px) { .fc-ops { width: 290px; } .fc-info { width: 270px; } }
+.fc-ops { left: 12px; width: 360px; }
+.fc-info { right: 12px; width: 336px; }
+@media (max-width: 1100px) { .fc-ops { width: 302px; } .fc-info { width: 276px; } }
 .fc-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
 .fc-title { font: 700 13px var(--hud-font); letter-spacing: 0.24em; color: #ffb35c; }
 .fc-title::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #ffb35c; box-shadow: 0 0 8px #ffb35c; vertical-align: 1px; }
@@ -75,3 +75,20 @@
 .fc-porkw { display: flex; flex-direction: column; gap: 4px; }
 .fc-pork-t { font: 600 10.5px "JetBrains Mono", monospace; color: rgba(214, 226, 242, 0.85); }
 .fc-pork { border-radius: 6px; cursor: crosshair; border: 1px solid rgba(160, 210, 255, 0.18); }
+
+/* (a panel folded to its edge: its tab alone, the label upright) */
+.fc-fold { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; padding: 0; font: 700 14px var(--hud-font); color: rgba(176, 196, 222, 0.75); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(160, 210, 255, 0.14); border-radius: 5px; cursor: pointer; }
+.fc-info .fc-fold { top: 6px; right: 8px; }
+.fc-info-head { display: flex; align-items: center; justify-content: space-between; margin: -2px 30px 6px 0; font: 700 13px var(--hud-font); letter-spacing: 0.24em; color: rgba(150, 200, 255, 0.85); }
+.fc-fold:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.fc-tab { display: none; }
+.fc-panel.min { width: 34px; padding: 0; overflow: hidden; }
+.fc-panel.min > :not(.fc-tab) { display: none !important; }
+.fc-panel.min .fc-tab {
+  display: block; width: 100%; height: 100%; padding: 0; border: none; background: none; cursor: pointer;
+  writing-mode: vertical-rl; font: 700 11px var(--hud-font); letter-spacing: 0.3em; color: #ffb35c;
+}
+.fc-info.min .fc-tab { color: rgba(150, 200, 255, 0.85); }
+.fc-panel.min:hover { background: rgba(20, 30, 46, 0.95); }
+.fl-root.mapview.fc-l-off { --fc-l: 58px; }
+.fl-root.mapview.fc-r-off { --fc-r: 58px; }

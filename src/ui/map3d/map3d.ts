@@ -40,6 +40,8 @@ export interface MapHost {
   /** the map over the whole screen */
   mapView(): boolean;
   toggleMapView(): void;
+  /** the panels over the map's edges (full screen) [CSS px]: what it is centred and framed without */
+  insets?(): { l: number; r: number; t: number; b: number };
 }
 
 type PlaneMode = "system" | "equator" | "orbit" | "target";
@@ -834,6 +836,8 @@ export class Map3D {
     const ch = Math.round((c.clientHeight || 250) * dpr);
     if (c.width !== cw || c.height !== ch) (c.width = cw), (c.height = ch);
     this.cam.resize(cw, ch);
+    const ins = this.host.mapView() ? this.host.insets?.() : null;
+    this.cam.inset((ins?.l ?? 0) * dpr, (ins?.r ?? 0) * dpr, (ins?.t ?? 0) * dpr, (ins?.b ?? 0) * dpr);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, cw, ch);
     this.lastInfo = i;
@@ -845,7 +849,8 @@ export class Map3D {
       ctx.fillStyle = "rgba(220, 225, 235, 0.8)";
       ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
-      ctx.fillText(`In the wormhole · ℓ = ${i.ell.toFixed(2)} M`, cw / 2, ch / 2);
+      const [vx, vy, vw, vh] = this.cam.view;
+      ctx.fillText(`In the wormhole · ℓ = ${i.ell.toFixed(2)} M`, vx + vw / 2, vy + vh / 2);
       this.moving = false;
       return;
     }
@@ -2090,33 +2095,36 @@ export class Map3D {
 
   private drawFooter(ctx: CanvasRenderingContext2D, t0: number, cw: number, ch: number, dpr: number, ours: boolean) {
     const s = this.host.s;
-    // (above the timeline in the minimap; full screen, the timeline is centred: the corners are free)
-    const by = ch - (this.host.mapView() ? 0 : 30 * dpr);
+    // (above the timeline in the minimap; full screen, the free part's bottom corners)
+    const [vx, vy, vw, vh] = this.cam.view;
+    const by = this.host.mapView() ? vy + vh : ch - 30 * dpr;
+    const xr = this.host.mapView() ? vx + vw : cw;
+    const xl = this.host.mapView() ? vx : 0;
     // a scale bar at the focus's depth (true scale only)
     if (!this.log) {
       const k = this.cam.focal / this.cam.cur.dist;
-      const bar = niceStep((cw * 0.22) / k);
+      const bar = niceStep((vw * 0.22) / k);
       ctx.strokeStyle = "rgba(230, 235, 245, 0.75)";
       ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath();
-      const x0 = cw - 10 * dpr - bar * k;
+      const x0 = xr - 10 * dpr - bar * k;
       ctx.moveTo(x0, by - 10 * dpr);
-      ctx.lineTo(cw - 10 * dpr, by - 10 * dpr);
+      ctx.lineTo(xr - 10 * dpr, by - 10 * dpr);
       ctx.moveTo(x0, by - 13 * dpr);
       ctx.lineTo(x0, by - 7 * dpr);
-      ctx.moveTo(cw - 10 * dpr, by - 13 * dpr);
-      ctx.lineTo(cw - 10 * dpr, by - 7 * dpr);
+      ctx.moveTo(xr - 10 * dpr, by - 13 * dpr);
+      ctx.lineTo(xr - 10 * dpr, by - 7 * dpr);
       ctx.stroke();
       ctx.fillStyle = "rgba(230, 235, 245, 0.85)";
       ctx.font = `${9 * dpr}px ${MONO}`;
       ctx.textAlign = "right";
-      ctx.fillText(fmtDist(bar, ours, s), cw - 10 * dpr, by - 16 * dpr);
+      ctx.fillText(fmtDist(bar, ours, s), xr - 10 * dpr, by - 16 * dpr);
     }
     const plane = PLANES.find((p) => p.id === this.plane)!.label.toLowerCase();
     ctx.fillStyle = "rgba(220, 225, 235, 0.55)";
     ctx.textAlign = "left";
     ctx.font = `600 ${11 * dpr}px ${FONT}`;
     const date = ours ? `${dateOf(t0).toISOString().slice(0, 10)} · ` : "";
-    ctx.fillText(`${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`, 8 * dpr, by - 8 * dpr);
+    ctx.fillText(`${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`, xl + 8 * dpr, by - 8 * dpr);
   }
 }

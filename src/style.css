@@ -1324,10 +1324,8 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-maptabs button:hover { color: #fff; border-color: rgba(160, 210, 255, 0.4); }
 .fl-maptabs button.on { color: #ffe6c6; border-color: var(--hud-amber); background: rgba(255, 179, 92, 0.18); }
 .fl-maptabs button.off { opacity: 0.4; }
-.fl-root.mapview .fl-maptabs { align-self: flex-end; }
 .fl-root.mapview .fl-maptabs button { flex: none; padding: 4px 12px; font-size: 10.5px; }
 .gt-stage { position: relative; width: 100%; height: 196px; border-radius: 5px; overflow: hidden; background: radial-gradient(circle at 50% 45%, rgba(20, 40, 64, 0.4), rgba(0, 0, 0, 0.5)); }
-.fl-root.mapview .gt-stage { flex: 1; height: auto; min-height: 0; }
 .fl-mapbody:not(.ground) .gt-stage, .fl-mapbody.ground .m3-bar, .fl-mapbody.ground .m3-stage { display: none !important; }
 .gt-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .gt-canvas:active { cursor: grabbing; }
@@ -1338,7 +1336,6 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 
 /* ---- the 3D map: its stage (canvas, breadcrumb, the focus's menu) and its bar */
 .m3-stage { position: relative; width: 100%; height: 196px; border-radius: 5px; overflow: hidden; }
-.fl-root.mapview .m3-stage { flex: 1; height: auto; min-height: 0; }
 .m3-bar { row-gap: 4px; }
 .m3-bar .m3-focus { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; }
 .m3-bar .m3-focus i, .m3-item i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #9aa; }
@@ -1411,21 +1408,10 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .m3-now:hover { color: var(--hud-text); }
 .m3-time:not(.on) .m3-now { visibility: hidden; }
 .fl-root:not(.mapview) .m3-tlabel, .fl-root:not(.mapview) .m3-now { display: none; }
-/* (full screen: the cockpit covers the bottom — the timeline goes to the top, under the breadcrumb) */
-.fl-root.mapview .m3-time { left: 50%; right: auto; top: 30px; bottom: auto; width: min(760px, calc(100% - 520px)); min-width: 360px; transform: translateX(-50%); padding: 6px 10px; }
 .fl-root.mapview .m3-track { height: 22px; }
 .fl-root.mapview .m3-track::before, .fl-root.mapview .m3-fill { top: 10px; }
 .fl-root.mapview .m3-handle { top: 5px; }
 .fl-root.mapview .m3-time .m3-mark { top: 5px; }
-.fl-root.mapview .m3-crumbs { left: 50%; transform: translateX(-50%); justify-content: center; }
-.fl-root.mapview .m3-menu { left: auto; right: 6px; }
-/* map view (M while flying): the map over the whole screen, the ball and the cockpit above it */
-.fl-root.mapview .fl-right { left: 14px; top: 52px; right: 14px; bottom: 14px; width: auto; z-index: 0; background: rgba(4, 8, 14, 0.92); }
-.fl-root.mapview .fl-right.collapsed > :not(.fl-title) { display: flex !important; }
-.fl-root.mapview .fl-map { height: 100%; }
-.fl-root.mapview .fl-mapbar { justify-content: flex-end; align-self: flex-end; }
-.fl-root.mapview .fl-cockpit, .fl-root.mapview .fl-target, .fl-root.mapview .fl-planner { z-index: 1; }
-.fl-root.mapview .fl-tel, .fl-root.mapview .fl-orbit { display: none; }
 
 /* ---- the docking aid (the space station near): under the mission bar, in the middle */
 .fl-dock { top: 138px; left: 50%; transform: translateX(-50%); min-width: 210px; padding: 6px 10px 8px; }
@@ -2276,3 +2262,59 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-ad-bar b { display: block; height: 100%; background: #6fd3ff; }
 .fl-ad-bar.warm b { background: #ffb35c; }
 .fl-ad-bar.hot b { background: #ff5a3c; }
+
+/* ---- the full-screen map (M while flying): the map edge to edge under the top bar; the flight computer
+   on the left, its analysis on the right; the strip of the flight's essentials and the timeline under
+   the map's free middle, its bar and breadcrumb over it — nothing over anything. The HUD's instruments
+   (the tapes, the ball, the panels) are hidden: the strip and the panels say what they said. */
+.fl-root.mapview { --fc-l: 384px; --fc-r: 360px; }
+@media (max-width: 1100px) { .fl-root.mapview { --fc-l: 326px; --fc-r: 300px; } }
+.fl-hud.mapview { display: none; }
+.fl-root.mapview > :not(.fl-warn):not(.fl-mission):not(.fl-right):not(.fl-mapstrip):not(.fc-root):not(.fl-menu):not(.fl-transport) { display: none !important; }
+.fl-root[data-density].mapview > .fl-right, .fl-root[data-density].mapview > .fl-mapstrip { display: flex !important; }
+.fl-root[data-density].mapview > .fc-root:not([hidden]) { display: block !important; }
+.fl-root[data-density].mapview > .fl-mission { display: flex !important; }
+.fl-root.mapview .fl-right {
+  inset: 0; width: auto; padding: 0; z-index: 0; border: none; border-radius: 0; clip-path: none;
+  background: radial-gradient(120% 90% at 50% 40%, #0a1322 0%, #060b14 55%, #03060b 100%);
+}
+.fl-root.mapview .fl-right.collapsed > :not(.fl-title) { display: flex !important; }
+.fl-root.mapview .fl-mapbody { position: relative; flex: 1; height: 100%; }
+.fl-root.mapview .m3-stage, .fl-root.mapview .gt-stage { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; }
+/* (the tabs and the bar: over the free middle's top, the tabs left, the bar right) */
+.fl-root.mapview .fl-maptabs { position: absolute; z-index: 3; top: 62px; left: var(--fc-l); }
+.fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: 62px; right: var(--fc-r); left: calc(var(--fc-l) + 220px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
+@media (max-width: 1500px) { .fl-root.mapview .fl-mapbar > .fl-label { display: none; } }
+.fl-root.mapview .m3-crumbs { top: 100px; left: var(--fc-l); right: auto; transform: none; justify-content: flex-start; }
+.fl-root.mapview .m3-menu { top: 100px; left: auto; right: var(--fc-r); }
+/* (the timeline: over the strip) */
+.fl-root.mapview .m3-time { top: auto; bottom: 78px; left: calc(var(--fc-l) + 24px); right: calc(var(--fc-r) + 24px); width: auto; min-width: 0; transform: none; padding: 6px 10px; }
+.fl-root.mapview .gt-tag { left: auto; right: calc(var(--fc-r) + 4px); top: 100px; }
+.fl-root.mapview .gt-read { left: calc(var(--fc-l) + 4px); bottom: 82px; }
+/* the strip */
+.fl-mapstrip { display: none; }
+.fl-root.mapview .fl-mapstrip {
+  display: flex; align-items: center; gap: 14px; position: absolute; bottom: 12px; left: var(--fc-l); right: var(--fc-r); height: 56px; padding: 0 12px;
+  background: linear-gradient(180deg, rgba(10, 16, 28, 0.92), rgba(6, 10, 18, 0.9)); border: 1px solid rgba(140, 200, 255, 0.14); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.fl-ms-state { flex: none; max-width: 190px; font: 700 11px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-ms-read { display: flex; gap: 16px; flex: 1; min-width: 0; }
+.fl-ms-cell { display: flex; flex-direction: column; flex: none; }
+.fl-ms-read { overflow: hidden; }
+.fl-root.mapview .fl-mission, .fl-root.mapview .fl-warn { z-index: 5; }
+.fl-ms-cell small { font: 700 9px var(--hud-font); letter-spacing: 0.16em; color: var(--hud-dim); }
+.fl-ms-cell b { font: 600 14px var(--mono); color: #fff; white-space: nowrap; }
+.fl-ms-autos { display: flex; gap: 4px; flex: none; }
+.fl-ms-auto {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; width: 58px; padding: 4px 2px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(160, 210, 255, 0.14); color: rgba(214, 226, 242, 0.85);
+}
+.fl-ms-auto svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.fl-ms-auto svg .f { fill: currentColor; stroke: none; }
+.fl-ms-auto span { font: 700 8.5px var(--hud-font); letter-spacing: 0.1em; white-space: nowrap; }
+.fl-ms-auto:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.fl-ms-auto.on { color: #0b1220; background: linear-gradient(180deg, #ffd08a, #ffb35c); border-color: #ffd08a; }
+.fl-ms-auto.off { opacity: 0.38; }
+@media (max-width: 1560px) { .fl-ms-state { display: none; } }
+@media (max-width: 1400px) { .fl-ms-auto { width: 40px; } .fl-ms-auto span { display: none; } .fl-ms-read { gap: 12px; } .fl-ms-cell:nth-child(n+3) { display: none; } }

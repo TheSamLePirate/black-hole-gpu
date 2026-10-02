@@ -222,6 +222,10 @@ export class FlightHud {
   private cockpit = h("div", "fl-cockpit");
   private ball = h("canvas", "fl-ball");
   private right = h("div", "fl-right fl-panel");
+  /** full screen: the flight's essentials in a strip under the map (the HUD's instruments hidden) */
+  private strip = h("div", "fl-mapstrip");
+  private stripEls: Record<string, HTMLElement> = {};
+  private stripBtns = new Map<Auto, HTMLButtonElement>();
   /** the map (3D): the minimap in the right panel, over the whole screen with M */
   private map3d!: Map3D;
   /** the ground track (a globe, a planisphere) of the world the ship orbits; the tab shown and its buttons */
@@ -254,6 +258,88 @@ export class FlightHud {
   toggleMapView() {
     this.mapView = !this.mapView;
     this.root.classList.toggle("mapview", this.mapView);
+    this.hud.classList.toggle("mapview", this.mapView);
+    document.body.classList.toggle("map-open", this.mapView);
+    this.insetAt = -1e9;
+    this.drawnAt.map = -1e9;
+  }
+
+  /**
+   * Full screen: the strip of the flight's essentials under the map — where it is (the state, the body),
+   * its height and speed, its apsides — and the autopilots, the hub's own buttons (the same actions).
+   */
+  private buildStrip(svg: Record<string, string>, tips: Record<string, string>) {
+    const S = this.strip;
+    const cell = (k: string, label: string) => {
+      const c = h("div", "fl-ms-cell");
+      const v = h("b", "", "—");
+      c.append(h("small", "", label), v);
+      this.stripEls[k] = v;
+      return c;
+    };
+    const state = h("div", "fl-ms-state");
+    this.stripEls.state = state;
+    const read = h("div", "fl-ms-read");
+    read.append(cell("alt", "ALTITUDE"), cell("spd", "SPEED"), cell("pe", "PERIAPSIS"), cell("ap", "APOAPSIS"));
+    const autos = h("div", "fl-ms-autos");
+    for (const [a, label, key] of AUTO_KEYS) {
+      const b = h("button", "fl-ms-auto") as HTMLButtonElement;
+      b.innerHTML = `<svg viewBox="-12 -12 24 24">${svg[a] ?? ""}</svg><span>${label}</span>`;
+      b.dataset.label = label;
+      b.dataset.tip = `${tips[a] ?? ""}${key ? ` (${key})` : ""}`;
+      b.onclick = () => this.act.auto(a);
+      this.stripBtns.set(a, b);
+      autos.append(b);
+    }
+    S.append(state, read, autos);
+  }
+
+  private drawStrip(i: Info) {
+    const E = this.stripEls;
+    const st = i.status;
+    const km = (x: number) => (!Number.isFinite(x) ? "∞" : Math.abs(x) >= 1e7 ? `${(x / 1.495978707e8).toFixed(2)} AU` : Math.abs(x) >= 1e4 ? `${Math.round(x).toLocaleString("en")} km` : `${x.toFixed(1)} km`);
+    const ms = (v: number) => (!Number.isFinite(v) ? "—" : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`);
+    const set = (k: string, t: string) => E[k] && E[k]!.textContent !== t && (E[k]!.textContent = t);
+    set("state", st ? `${st.label} · ${st.soiName}` : "—");
+    set("alt", st ? (st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm)) : "—");
+    set("spd", st ? ms(st.speed) : "—");
+    set("pe", st?.orbit ? km(st.orbit.peKm) : "—");
+    set("ap", st?.orbit ? km(st.orbit.apKm) : "—");
+    for (const [a, b] of this.stripBtns) {
+      b.classList.toggle("on", i.auto === a);
+      const why = this.buttons.get(a)?.dataset.why;
+      b.classList.toggle("off", !!why);
+      if (why) b.dataset.why = why;
+      else delete b.dataset.why;
+    }
+  }
+
+  /** The panels over the full-screen map's edges [CSS px], measured a few times a second. */
+  private insetAt = -1e9;
+  private insetVal = { l: 0, r: 0, t: 0, b: 0 };
+  private mapInsets() {
+    const now = performance.now();
+    if (now - this.insetAt < 250) return this.insetVal;
+    this.insetAt = now;
+    const stage = this.right.getBoundingClientRect();
+    const vis = (el: Element | null) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden" ? r : null;
+    };
+    const ops = vis(this.root.querySelector(".fc-ops:not([hidden])"));
+    const info = vis(this.root.querySelector(".fc-info:not([hidden])"));
+    const strip = vis(this.strip);
+    const time = this.mapTab === "orbit" ? vis(this.right.querySelector(".m3-time")) : null;
+    const tops = [this.right.querySelector(".fl-mapbar"), this.right.querySelector(".fl-maptabs"), this.right.querySelector(".m3-crumbs")].map(vis).filter((r): r is DOMRect => !!r);
+    const pad = 12;
+    this.insetVal = {
+      l: ops ? Math.max(ops.right - stage.left + pad, 0) : pad,
+      r: info ? Math.max(stage.right - info.left + pad, 0) : pad,
+      t: tops.length ? Math.max(...tops.map((r) => r.bottom - stage.top)) + pad : pad,
+      b: Math.max(...[strip, time].filter((r): r is DOMRect => !!r).map((r) => stage.bottom - r.top), 0) + pad,
+    };
+    return this.insetVal;
   }
   /** The map's tab: the 3D system, or the ground track (a globe, a planisphere). */
   setMapTab(t: "orbit" | "globe" | "map") {
@@ -606,6 +692,7 @@ export class FlightHud {
       takeoff: "Lifts off and climbs to orbit",
       entry: "From orbit: the deorbit burn, the guided entry (the angle of attack held, the bank flown to the site), the glide and the landing — at the chosen site, or the nearest",
     };
+    this.buildStrip(AUTO_SVG, AUTO_TIPS);
     const rightIds: [string, string, string, () => void][] = [
       ["sas", "Stability assist", "Holds the attitude, damps any rotation", () => act.sas()],
       ["roll", "Roll alignment", "While the nose is held, the wings stay in the orbital plane", () => act.roll()],
@@ -676,6 +763,7 @@ export class FlightHud {
       closestApproach: (i, t) => this.closestApproach(i, t),
       mapView: () => this.mapView,
       toggleMapView: () => this.toggleMapView(),
+      insets: () => this.mapInsets(),
     });
     addEventListener("keydown", (e: KeyboardEvent) => {
       // Delete / Backspace: the selected node (map view or planner open)
@@ -713,7 +801,8 @@ export class FlightHud {
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
 
-    this.root.append(this.warn, this.airData, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!, this.craftMenu!);
+    this.root.append(this.warn, this.airData, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.strip, this.viewMenu!, this.craftMenu!);
+    this.ground.insets = () => this.mapInsets();
     this.dock.hidden = true;
     document.body.append(this.hud, this.root);
     this.initTips();
@@ -1415,15 +1504,20 @@ export class FlightHud {
     // (the markers follow the view every frame; the instruments at their own pace — the map 20 times
     // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame —,
     // one of them a frame, the most overdue: never all on the same frame, every 100 ms)
-    cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
+    // (full screen: the map, the strip under it — the instruments hidden, not drawn)
+    const full = this.mapView;
+    if (!full) cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
     this.drawAirData(info);
     this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
-    if (this.density < 2) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
-    if (this.density === 0) {
-      tasks.push(["instr", 15, () => cpuProf.time("HUD: target & Ranger", () => (this.drawTargetInstr(info), this.drawRangerInstr(info)))]);
-      tasks.push(["tel", 10, () => cpuProf.time("HUD: telemetry", () => this.drawTelemetry())]);
-      tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
+    if (this.density < 2 && !full) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
+    if (full) tasks.push(["strip", 8, () => this.drawStrip(info)]);
+    if (this.density === 0 || full) {
+      if (!full) {
+        tasks.push(["instr", 15, () => cpuProf.time("HUD: target & Ranger", () => (this.drawTargetInstr(info), this.drawRangerInstr(info)))]);
+        tasks.push(["tel", 10, () => cpuProf.time("HUD: telemetry", () => this.drawTelemetry())]);
+        tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
+      }
       // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
       if (this.syncMapTab()) {
         if (this.ground.animating) cpuProf.time("HUD: ground track", () => this.ground.draw(info, time));

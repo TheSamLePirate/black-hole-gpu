@@ -350,9 +350,13 @@ export class GroundTrack {
   }
 
   /** The room kept free above and below the world [device px]: the labels; full screen, the cockpit. */
+  /** full screen: the panels over the stage's edges [CSS px] (the host's measure) */
+  insets: (() => { l: number; r: number; t: number; b: number }) | null = null;
   private margins(dpr: number) {
     const full = !!this.stage.closest(".mapview");
-    return { top: (full ? 40 : 16) * dpr, bottom: (full ? 200 : 22) * dpr };
+    const i = full ? this.insets?.() : null;
+    if (i) return { top: (i.t + 8) * dpr, bottom: (i.b + 8) * dpr, left: i.l * dpr, right: i.r * dpr };
+    return { top: (full ? 40 : 16) * dpr, bottom: (full ? 200 : 22) * dpr, left: 0, right: 0 };
   }
 
   // ---------------------------------------------------------------------------------- the globe
@@ -377,9 +381,9 @@ export class GroundTrack {
       v.lat += far ? la - v.lat : (la - v.lat) * 0.35;
     }
     const { C, E, N } = this.axes();
-    const { top, bottom } = this.margins(dpr);
-    const R = (Math.min(W, H - top - bottom) / 2 - 6 * dpr) * v.zoom;
-    const cx = W / 2, cy = top + (H - top - bottom) / 2;
+    const { top, bottom, left, right } = this.margins(dpr);
+    const R = (Math.min(W - left - right, H - top - bottom) / 2 - 6 * dpr) * v.zoom;
+    const cx = left + (W - left - right) / 2, cy = top + (H - top - bottom) / 2;
     const proj = (q: V3) => ({ x: cx + dot(q, E) * R, y: cy - dot(q, N) * R, vis: dot(q, C) > 0 });
     this.hit = { globe: true, cx, cy, R, C, E, N };
 
@@ -483,10 +487,10 @@ export class GroundTrack {
 
   // ---------------------------------------------------------------------------------- the planisphere
   private drawMap(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
-    const { top, bottom } = this.margins(dpr);
-    const aw = W - 8 * dpr, ah = H - top - bottom;
+    const { top, bottom, left, right } = this.margins(dpr);
+    const aw = W - left - right - 8 * dpr, ah = H - top - bottom;
     const mw = Math.min(aw, 2 * ah), mh = mw / 2;
-    const x0 = (W - mw) / 2, y0 = top + (ah - mh) / 2;
+    const x0 = left + (W - left - right - mw) / 2, y0 = top + (ah - mh) / 2;
     const at = (q: V3): [number, number] => {
       const [la, lo] = latLon(q);
       return [x0 + (0.5 + lo / (2 * Math.PI)) * mw, y0 + (0.5 - la / Math.PI) * mh];

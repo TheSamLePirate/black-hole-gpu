@@ -115,6 +115,31 @@ export class FlightComputer {
     // the operations
     const head = h("div", "fc-head");
     head.append(h("span", "fc-title", "FLIGHT COMPUTER"), this.ctxLine);
+    // (each panel folds to its edge — the map then takes the room; a click on the tab brings it back)
+    const fold = (panel: HTMLElement, side: "l" | "r", label: string) => {
+      const b = h("button", "fc-fold", side === "l" ? "‹" : "›");
+      b.dataset.tip = `Fold the ${label} to the edge (the map takes the room)`;
+      const tab = h("button", "fc-tab", label);
+      tab.onclick = b.onclick = () => {
+        const off = !panel.classList.contains("min");
+        panel.classList.toggle("min", off);
+        this.root.closest(".fl-root")?.classList.toggle(`fc-${side}-off`, off);
+        try {
+          localStorage.setItem(`kerr.fc-${side}`, off ? "0" : "1");
+        } catch {
+          /* private mode */
+        }
+      };
+      panel.append(b, tab);
+      try {
+        if (localStorage.getItem(`kerr.fc-${side}`) === "0") requestAnimationFrame(() => b.click());
+      } catch {
+        /* private mode */
+      }
+    };
+    fold(this.ops, "l", "FLIGHT COMPUTER");
+    fold(this.info, "r", "ANALYSIS");
+    this.info.querySelector(".fc-fold")!.textContent = "›";
     const tb = h("div", "fc-tabs");
     for (const [t, label] of [["orbit", "ORBIT"], ["target", "TARGET"], ["land", "LAND"], ["mission", "MISSION"]] as [Tab, string][]) {
       const b = h("button", "", label);
@@ -132,7 +157,7 @@ export class FlightComputer {
       this.infoEls[id] = b;
       return s;
     };
-    this.info.append(sec("ORBIT", "orbit"), sec("TARGET", "target"), sec("Δv BUDGET", "budget"), sec("PLAN", "plan"));
+    this.info.append(h("div", "fc-info-head", "ANALYSIS"), sec("ORBIT", "orbit"), sec("TARGET", "target"), sec("Δv BUDGET", "budget"), sec("PLAN", "plan"));
     this.root.append(this.ops, this.info);
     this.root.hidden = true;
     this.setTab("orbit");
