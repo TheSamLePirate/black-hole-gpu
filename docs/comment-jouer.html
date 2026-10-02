@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comment jouer — Gargantua</title>
+<meta name="description" content="Comment jouer : du pas de tir de Kennedy à Saturne, au trou de ver et à Gargantua — commandes, pilotage du Ranger, carte, planificateur et outils.">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg2: #0d1018;
+    --card: #121623;
+    --line: #232a3d;
+    --text: #e6e8ef;
+    --muted: #9aa3b8;
+    --accent: #ffb347;
+    --accent2: #6fd3ff;
+    --flight: #ff7a59;
+    --kbd: #1b2133;
+    --kbd-edge: #2d3550;
+    --radius: 12px;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f5f1; --bg2: #ecebe5; --card: #ffffff; --line: #dcdad2; --text: #1b1d24; --muted: #5d6272;
+      --accent: #b8650a; --accent2: #0a7aa8; --flight: #c2410c; --kbd: #f1f0ea; --kbd-edge: #c9c6bb;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent2); }
+  .hero {
+    position: relative; overflow: hidden; padding: 64px 16px 190px; text-align: center; color: #e6e8ef;
+    background:
+      radial-gradient(circle at 50% calc(100% - 70px), #000 0 46px, transparent 47px),
+      radial-gradient(ellipse 210px 26px at 50% calc(100% - 70px), rgba(255,200,120,.95), rgba(255,140,40,.5) 45%, transparent 75%),
+      radial-gradient(circle at 50% calc(100% - 70px), transparent 0 47px, rgba(255,190,110,.9) 48px, rgba(255,150,60,.25) 58px, transparent 80px),
+      radial-gradient(ellipse 80% 70% at 50% 100%, #141826, #05060a);
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55;
+    background-image:
+      radial-gradient(1px 1px at 12% 20%, #fff, transparent), radial-gradient(1px 1px at 78% 14%, #fff, transparent),
+      radial-gradient(1px 1px at 33% 72%, #fff, transparent), radial-gradient(1px 1px at 88% 66%, #fff, transparent),
+      radial-gradient(1px 1px at 60% 30%, #fff, transparent), radial-gradient(1px 1px at 22% 88%, #fff, transparent),
+      radial-gradient(1px 1px at 92% 38%, #fff, transparent), radial-gradient(1px 1px at 6% 52%, #fff, transparent);
+  }
+  .hero h1 { position: relative; margin: 0 0 8px; font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: .02em; }
+  .hero p { position: relative; margin: 0 auto; max-width: 640px; color: #b4bbcc; font-size: 1.08rem; }
+  .cta { position: relative; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .hero .btn:not(.primary) { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); color: #e6e8ef; }
+  .btn {
+    display: inline-block; padding: 10px 18px; border-radius: 999px; text-decoration: none; font-weight: 600;
+    border: 1px solid var(--line); color: var(--text); background: var(--card);
+  }
+  .btn.primary { background: var(--accent); color: #1a1205; border-color: transparent; }
+  nav.toc {
+    position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+  }
+  nav.toc ul { display: flex; gap: 4px; margin: 0 auto; padding: 8px 16px; list-style: none; max-width: 1040px; overflow-x: auto; }
+  nav.toc a { display: block; white-space: nowrap; padding: 4px 10px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: .9rem; }
+  nav.toc a:hover { color: var(--text); background: var(--card); }
+  main { max-width: 1040px; margin: 0 auto; padding: 8px 16px 64px; }
+  section { padding-top: 40px; }
+  h2 { font-size: 1.6rem; margin: 0 0 6px; }
+  h2 small { display: block; font-size: .95rem; font-weight: 400; color: var(--muted); }
+  h3 { font-size: 1.1rem; margin: 26px 0 8px; color: var(--accent); }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .95rem; }
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 16px 0 0; }
+  ol.steps > li {
+    counter-increment: s; position: relative; padding: 14px 16px 14px 60px; margin-bottom: 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  ol.steps > li::before {
+    content: counter(s); position: absolute; left: 16px; top: 14px; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 700; background: var(--accent); color: #1a1205;
+  }
+  ol.steps strong { display: block; }
+  kbd {
+    display: inline-block; white-space: nowrap; min-width: 1.7em; padding: 1px 6px; text-align: center;
+    font: 600 .85em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
+    background: var(--kbd); border: 1px solid var(--kbd-edge); border-bottom-width: 3px; border-radius: 6px;
+  }
+  kbd.f { border-color: var(--flight); color: var(--flight); }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  .tbl { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 14px; border-top: 1px solid var(--line); }
+  thead th { border-top: 0; background: var(--bg2); color: var(--muted); font-weight: 600; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+  td:first-child { white-space: nowrap; width: 1%; }
+  .note {
+    margin: 16px 0; padding: 12px 16px; border-left: 3px solid var(--accent2); background: var(--card);
+    border-radius: 0 var(--radius) var(--radius) 0; font-size: .95rem;
+  }
+  .note.warn { border-left-color: var(--flight); }
+  /* the AZERTY keyboard */
+  .kb { display: grid; gap: 6px; margin: 18px auto 6px; width: max-content; max-width: 100%; }
+  .kb .row { display: flex; gap: 6px; }
+  .kb .row:nth-child(2) { margin-left: 22px; }
+  .kb .row:nth-child(3) { margin-left: 34px; }
+  .kb .row:nth-child(4) { margin-left: 10px; }
+  .kb .k {
+    width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center; position: relative;
+    background: var(--kbd); border: 1px solid var(--kbd-edge); border-bottom-width: 3px;
+    font: 700 .95rem ui-monospace, Menlo, monospace; color: var(--muted);
+  }
+  .kb .k.w { width: 72px; }
+  .kb .k small { position: absolute; bottom: 1px; font: 500 .52rem system-ui; color: var(--muted); }
+  .kb .k.f { border-color: var(--flight); color: var(--flight); background: color-mix(in srgb, var(--flight) 12%, var(--kbd)); }
+  .kb .k.r { border-color: var(--accent2); color: var(--accent2); background: color-mix(in srgb, var(--accent2) 12%, var(--kbd)); }
+  .kb .k.t { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--kbd)); }
+  .legend { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend .lf::before { background: var(--flight); } .legend .lr::before { background: var(--accent2); } .legend .lt::before { background: var(--accent); }
+  .kbwrap { overflow-x: auto; padding-bottom: 4px; }
+  figure.shot { margin: 16px 0; }
+  figure.shot a { display: block; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #000; cursor: zoom-in; }
+  figure.shot img { display: block; width: 100%; height: auto; }
+  figure.shot figcaption { margin-top: 6px; font-size: .88rem; color: var(--muted); }
+  figure.shot.narrow { max-width: 520px; }
+  .shots { display: grid; gap: 0 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .icons { display: grid; gap: 6px 18px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 8px 0 0; padding: 0; list-style: none; font-size: .93rem; }
+  .icons b { color: var(--accent); font-weight: 600; }
+  dialog.lb { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
+  dialog.lb::backdrop { background: rgba(0,0,0,.85); }
+  dialog.lb img { display: block; max-width: 96vw; max-height: 94vh; border-radius: 8px; }
+  footer { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); }
+  @media (max-width: 600px) {
+    td:first-child { white-space: normal; }
+    th, td { padding: 8px 10px; }
+    ol.steps > li { padding-left: 54px; }
+    .kb .k { width: 32px; height: 34px; font-size: .78rem; }
+    .kb .k.w { width: 50px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Comment jouer</h1>
+  <p>Partez du pas de tir du Kennedy Space Center en 2067, mettez le Ranger en orbite, traversez le système solaire jusqu'à Saturne, plongez dans le trou de ver… et rejoignez Gargantua, ses mondes et son disque.</p>
+  <div class="cta">
+    <a class="btn primary" href="../#scene=game:interstellar">▶ Lancer la partie</a>
+    <a class="btn" href="../#scene=game:artemis">Entraînement : Artemis II</a>
+    <a class="btn" href="#touches">Toutes les touches</a>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sommaire">
+  <ul>
+    <li><a href="#avant">Avant de commencer</a></li>
+    <li><a href="#interface">L'interface</a></li>
+    <li><a href="#parcours">Le parcours</a></li>
+    <li><a href="#pilotage">Piloter le Ranger</a></li>
+    <li><a href="#autopilotes">Autopilotes</a></li>
+    <li><a href="#carte">Carte &amp; planificateur</a></li>
+    <li><a href="#camera">Caméra &amp; temps</a></li>
+    <li><a href="#touches">Toutes les touches</a></li>
+    <li><a href="#manette">Manette &amp; tactile</a></li>
+    <li><a href="#outils">Outils &amp; sauvegardes</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section id="avant">
+  <h2>Avant de commencer<small>Ce qu'il faut pour jouer</small></h2>
+  <div class="grid">
+    <div class="card"><h4>Un navigateur WebGPU</h4><p>Chrome, Edge ou Arc récents (ou Safari avec WebGPU activé). Tout le rendu — le trou noir, la lentille gravitationnelle, les planètes — est calculé sur la carte graphique.</p></div>
+    <div class="card"><h4>Un clavier, une manette ou un écran tactile</h4><p>Le clavier donne accès à tout. Une manette Xbox / PlayStation est reconnue ; sur téléphone et tablette, un manche et une manette des gaz apparaissent à l'écran.</p></div>
+    <div class="card"><h4>La qualité « jeu »</h4><p>Les scènes de jeu démarrent en qualité <kbd>6</kbd> (game). Si l'image saccade, essayez <kbd>5</kbd> ; pour une image fixe très fine, <kbd>3</kbd> ou <kbd>4</kbd>.</p></div>
+    <div class="card"><h4>Les textes du jeu sont en anglais</h4><p>Les boutons et messages à l'écran sont en anglais : cette page les cite tels quels (<em>PLAN</em>, <em>EXECUTE</em>, <em>Free return</em>…).</p></div>
+  </div>
+  <div class="note">Appuyez sur <kbd>?</kbd> à tout moment pour afficher l'aide‑mémoire des touches dans le jeu. <kbd>M</kbd> ouvre les réglages hors vol (<kbd>⇧M</kbd> en vol) et <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> y cherche un réglage par son nom.</div>
+</section>
+
+
+<section id="interface">
+  <h2>L'interface<small>Ce que vous voyez à l'ouverture, hors vol</small></h2>
+  <figure class="shot"><a href="img/comment-jouer/01_accueil.webp"><img src="img/comment-jouer/01_accueil.webp" alt="L’écran d’accueil : Gargantua en direct. En haut à gauche, la fréquence d’image et la vue ; en haut à droite, les réglages ; en bas, la barre du temps et la barre d’outils." loading="lazy"></a><figcaption>L’écran d’accueil : Gargantua en direct. En haut à gauche, la fréquence d’image et la vue ; en haut à droite, les réglages ; en bas, la barre du temps et la barre d’outils.</figcaption></figure>
+  <h3>La barre d'outils</h3>
+  <figure class="shot narrow"><a href="img/comment-jouer/c_toolbar.webp"><img src="img/comment-jouer/c_toolbar.webp" alt="La barre du temps (pause, plus lent / plus rapide, temps réel, REC) au‑dessus de la barre d’outils." loading="lazy"></a><figcaption>La barre du temps (pause, plus lent / plus rapide, temps réel, REC) au‑dessus de la barre d’outils.</figcaption></figure>
+  <ul class="icons">
+    <li><b>⊞ Scènes</b> — la galerie de toutes les scènes</li>
+    <li><b>📷 Caméra</b> — placement, cible, objectif, télescope (la vue et la cible sont écrites à côté)</li>
+    <li><b>⇕ Jet</b> — le jet relativiste</li>
+    <li><b>✦ Ranger</b> — activer / désactiver le vaisseau (<kbd>K</kbd>)</li>
+    <li><b>⊜ Cinéma</b> — surface liquide du trou de ver</li>
+    <li><b>◌ Guide</b> — guide analytique de l'ombre</li>
+    <li><b>⟋ Ciel</b> — la carte du ciel</li>
+    <li><b>🔧 Outils</b> — les outils de jeu (<kbd>F2</kbd>)</li>
+    <li><b>🔊 Son</b> — son activé / coupé</li>
+    <li><b>🖥 Rendu</b> — rendu hors ligne &amp; vidéo</li>
+    <li><b>📷 PNG</b> — capture d'écran (<kbd>P</kbd>)</li>
+    <li><b>⛶ · 👁 · ?</b> — plein écran · masquer l'interface · aide</li>
+  </ul>
+
+  <h3>Les scènes</h3>
+  <figure class="shot"><a href="img/comment-jouer/02_scenes.webp"><img src="img/comment-jouer/02_scenes.webp" alt="La galerie des scènes : Jeu, Terre, Système solaire, Gargantua, Trou de ver, Trous noirs — avec une recherche. Les deux premières cartes lancent le jeu et l’entraînement Artemis II." loading="lazy"></a><figcaption>La galerie des scènes : Jeu, Terre, Système solaire, Gargantua, Trou de ver, Trous noirs — avec une recherche. Les deux premières cartes lancent le jeu et l’entraînement Artemis II.</figcaption></figure>
+
+  <h3>Les réglages</h3>
+  <p>Le bouton <em>Settings</em> (ou <kbd>M</kbd> hors vol, <kbd>⇧M</kbd> en vol) ouvre le panneau : la scène, vos préréglages, la qualité, puis des onglets <em>Camera · Scene · Matter · Sky · Physics · Render · Game</em>. Chaque réglage modifié se remet par défaut d'un clic sur son point ; <kbd>⌘Z</kbd> annule.</p>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/47_reglages_game.webp"><img src="img/comment-jouer/47_reglages_game.webp" alt="L’onglet Game : le Ranger (activé, vaisseau piloté, vue, moteur), l’auto‑warp pendant les manœuvres, l’apparence du vaisseau…" loading="lazy"></a><figcaption>L’onglet Game : le Ranger (activé, vaisseau piloté, vue, moteur), l’auto‑warp pendant les manœuvres, l’apparence du vaisseau…</figcaption></figure><figure class="shot"><a href="img/comment-jouer/04_settings_search.webp"><img src="img/comment-jouer/04_settings_search.webp" alt="La recherche (⌘K / Ctrl+K) : « ship » trouve les scènes et tous les réglages qui en parlent." loading="lazy"></a><figcaption>La recherche (⌘K / Ctrl+K) : « ship » trouve les scènes et tous les réglages qui en parlent.</figcaption></figure></div>
+
+  <h3>Activer ou désactiver le vaisseau</h3>
+  <p>Le bouton <strong>✦ Ranger</strong> de la barre d'outils (ou <kbd>K</kbd>) fait apparaître le vaisseau dans n'importe quelle scène et vous met aux commandes : la barre d'outils laisse place au HUD de vol. <kbd>⇧K</kbd> en vol vous fait quitter le vaisseau ; la caméra redevient libre et la barre d'outils revient.</p>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/40_ranger_gargantua.webp"><img src="img/comment-jouer/40_ranger_gargantua.webp" alt="Vaisseau activé : le Ranger en orbite de Kerr autour de Gargantua, avec son HUD de vol." loading="lazy"></a><figcaption>Vaisseau activé : le Ranger en orbite de Kerr autour de Gargantua, avec son HUD de vol.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/41_sans_vaisseau.webp"><img src="img/comment-jouer/41_sans_vaisseau.webp" alt="Vaisseau désactivé : même scène, caméra libre, barre d’outils de retour." loading="lazy"></a><figcaption>Vaisseau désactivé : même scène, caméra libre, barre d’outils de retour.</figcaption></figure></div>
+
+  <h3>Les autres panneaux</h3>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/05_camera.webp"><img src="img/comment-jouer/05_camera.webp" alt="Le panneau Caméra : autour, suivi, libre, trépied, chute libre ; regard sur la cible, télescope, objectif, vitesse, cinématiques." loading="lazy"></a><figcaption>Le panneau Caméra : autour, suivi, libre, trépied, chute libre ; regard sur la cible, télescope, objectif, vitesse, cinématiques.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/06_details.webp"><img src="img/comment-jouer/06_details.webp" alt="Les détails (I) : toutes les grandeurs physiques du trou noir et de l’observateur." loading="lazy"></a><figcaption>Les détails (I) : toutes les grandeurs physiques du trou noir et de l’observateur.</figcaption></figure></div>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/08_render.webp"><img src="img/comment-jouer/08_render.webp" alt="Le rendu hors ligne : n’importe quelle résolution, des centaines d’échantillons par pixel, export PNG / EXR, et la vidéo." loading="lazy"></a><figcaption>Le rendu hors ligne : n’importe quelle résolution, des centaines d’échantillons par pixel, export PNG / EXR, et la vidéo.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/07_help.webp"><img src="img/comment-jouer/07_help.webp" alt="L’aide‑mémoire (?) : toutes les touches, toujours à jour." loading="lazy"></a><figcaption>L’aide‑mémoire (?) : toutes les touches, toujours à jour.</figcaption></figure></div>
+</section>
+<section id="parcours">
+  <h2>Le parcours<small>Le voyage du film, de la Terre à Gargantua</small></h2>
+  <p>La scène <strong>game:interstellar</strong> commence le 1<sup>er</sup> janvier 2067 à 10 h, le Ranger posé sur le pas de tir de Kennedy, en temps réel. Le système solaire est à l'échelle, les planètes à leur vraie place (éphémérides de la NASA).</p>
+  <ol class="steps">
+    <li><strong>Décoller</strong>Appuyez sur <kbd>U</kbd> : l'autopilote fait le virage gravitationnel jusqu'à l'orbite basse. Vous pouvez aussi décoller à la main : gaz à fond (<kbd class="f">W</kbd> en AZERTY), puis inclinez doucement le nez vers l'est.<div class="shots"><figure class="shot"><a href="img/comment-jouer/10_pas_de_tir.webp"><img src="img/comment-jouer/10_pas_de_tir.webp" alt="1er janvier 2067 : le Ranger posé sur le pas de tir, Saturne visée." loading="lazy"></a><figcaption>1er janvier 2067 : le Ranger posé sur le pas de tir, Saturne visée.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/22_ascension.webp"><img src="img/comment-jouer/22_ascension.webp" alt="Quelques dizaines de secondes après U : moteurs allumés, « TAKE‑OFF TO ORBIT »." loading="lazy"></a><figcaption>Quelques dizaines de secondes après U : moteurs allumés, « TAKE‑OFF TO ORBIT ».</figcaption></figure></div></li>
+    <li><strong>Viser Saturne</strong>Ouvrez la carte avec <kbd>M</kbd>. Un clic sur un astre le prend pour cible ; <kbd>Tab</kbd> / <kbd>⇧Tab</kbd> font défiler les cibles. Saturne est la cible par défaut.</li>
+    <li><strong>Planifier le transfert</strong>Appuyez sur <kbd>O</kbd> pour le planificateur de vol : choisissez un objectif (<em>Orbit</em>, <em>Flyby</em>, rendez‑vous, passage du trou de ver…), cliquez <em>PLAN</em>, puis <em>EXECUTE</em>. Les allumages se font tout seuls ; accélérez le temps avec <kbd>.</kbd> entre deux.</li>
+    <li><strong>Trouver le trou de ver</strong>Il attend à 0,7 UA derrière Saturne. Ciblez‑le sur la carte puis <kbd>0</kbd> : l'autopilote d'approche vous y conduit.</li>
+    <li><strong>Traverser</strong>De l'autre côté : Gargantua (10⁸ masses solaires, spin 0,998), son disque, et les mondes de Miller, Mann et Edmunds. Mêmes outils : carte, planificateur, autopilotes.<figure class="shot"><a href="img/comment-jouer/49_miller.webp"><img src="img/comment-jouer/49_miller.webp" alt="Posé sur Miller, Gargantua au‑dessus de l’océan." loading="lazy"></a><figcaption>Posé sur Miller, Gargantua au‑dessus de l’océan.</figcaption></figure></li>
+    <li><strong>Se poser</strong><kbd>G</kbd> pose le vaisseau sur le monde visé. Depuis le sol, <kbd>U</kbd> redécolle.</li>
+  </ol>
+  <div class="note"><strong>Pour apprendre :</strong> la scène <a href="../#scene=game:artemis">game:artemis</a> vous place à 400 km au‑dessus de la Terre, la Lune visée. <kbd>O</kbd> → <em>Free return</em> → <em>PLAN</em> → <em>EXECUTE</em>, et regardez Artemis II se dérouler sur la carte (<kbd>M</kbd>). C'est le meilleur moyen de comprendre le planificateur.</div><div class="shots"><figure class="shot"><a href="img/comment-jouer/32_planif_free_return.webp"><img src="img/comment-jouer/32_planif_free_return.webp" alt="Le planificateur après PLAN : 4 nœuds — départ (3,10 km/s), deux corrections visées en vol, capture au retour." loading="lazy"></a><figcaption>Le planificateur après PLAN : 4 nœuds — départ (3,10 km/s), deux corrections visées en vol, capture au retour.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/33_carte_artemis.webp"><img src="img/comment-jouer/33_carte_artemis.webp" alt="La carte (M) : l’orbite de retour libre autour de la Lune, les nœuds, et la frise temporelle en haut." loading="lazy"></a><figcaption>La carte (M) : l’orbite de retour libre autour de la Lune, les nœuds, et la frise temporelle en haut.</figcaption></figure></div>
+  <p class="muted">Le jeu se sauvegarde tout seul dans le navigateur et reprend là où vous l'avez laissé à la visite suivante. Les autres scènes (galerie <em>Scenes</em> dans la barre d'outils) sont des points de vue libres : le trou noir, l'ISS, la flotte, les mondes de Gargantua…</p>
+</section>
+
+<section id="pilotage">
+  <h2>Piloter le Ranger<small>La disposition de Kerbal Space Program, adaptée à l'AZERTY</small></h2>
+  <p>Les touches de vol sont lues par leur <strong>position physique</strong> : sur un clavier AZERTY, ce sont <kbd class="f">Z</kbd> <kbd class="f">Q</kbd> <kbd class="f">S</kbd> <kbd class="f">D</kbd>, <kbd class="f">A</kbd> <kbd class="f">E</kbd> et <kbd class="f">W</kbd> <kbd class="f">X</kbd>. Elles ne servent qu'à voler — aucun autre raccourci n'est posé dessus.</p>
+
+  <div class="kbwrap">
+    <div class="kb" aria-label="Clavier AZERTY : touches de vol">
+      <div class="row">
+        <div class="k f">A<small>roulis</small></div><div class="k f">Z<small>tangage</small></div><div class="k f">E<small>roulis</small></div><div class="k">R</div><div class="k">T</div><div class="k">Y</div><div class="k">U</div><div class="k r">I<small>RCS</small></div><div class="k">O</div><div class="k">P</div>
+      </div>
+      <div class="row">
+        <div class="k f">Q<small>lacet</small></div><div class="k f">S<small>tangage</small></div><div class="k f">D<small>lacet</small></div><div class="k">F</div><div class="k">G</div><div class="k r">H<small>RCS</small></div><div class="k r">J<small>RCS</small></div><div class="k r">K<small>RCS</small></div><div class="k r">L<small>RCS</small></div><div class="k">M</div>
+      </div>
+      <div class="row">
+        <div class="k f">W<small>plein</small></div><div class="k f">X<small>coupé</small></div><div class="k">C</div><div class="k">V</div><div class="k">B</div><div class="k r">N<small>RCS</small></div>
+      </div>
+      <div class="row">
+        <div class="k w t">⇪<small>précision</small></div><div class="k w t">⇧<small>gaz +</small></div><div class="k w t">Alt<small>gaz −</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend"><span class="lf">Rotation &amp; gaz</span><span class="lr">Translation RCS</span><span class="lt">Gaz &amp; précision</span></div>
+
+  <h3>Le HUD de vol</h3>
+  <figure class="shot"><a href="img/comment-jouer/c_flightbar.webp"><img src="img/comment-jouer/c_flightbar.webp" alt="La barre de vol : SAS · HOLD · AUTO, le temps, REC, les horloges (temps du vaisseau, temps lointain, leur rapport, date terrestre), puis le vaisseau piloté, PLAN, la vue, le tube de trajectoire, le son, les outils, la barre d’outils et la densité du HUD." loading="lazy"></a><figcaption>La barre de vol : SAS · HOLD · AUTO, le temps, REC, les horloges (temps du vaisseau, temps lointain, leur rapport, date terrestre), puis le vaisseau piloté, PLAN, la vue, le tube de trajectoire, le son, les outils, la barre d’outils et la densité du HUD.</figcaption></figure>
+  <ul class="icons">
+    <li><b>En haut à gauche</b> — la cible : distance, vitesse d'approche, plus courte distance</li>
+    <li><b>En haut à droite</b> — le Ranger : statut (posé, en vol, en orbite…), altitude, vitesse, Pe · Ap</li>
+    <li><b>À gauche / à droite</b> — les échelles de vitesse et d'altitude</li>
+    <li><b>En bas à gauche</b> — l'orbite à l'échelle autour de l'astre</li>
+    <li><b>En bas au centre</b> — la boule de navigation, les maintiens et les autopilotes</li>
+    <li><b>En bas à droite</b> — la mini‑carte (3D · Globe · Planisphère)</li>
+  </ul>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/10_pas_de_tir.webp"><img src="img/comment-jouer/10_pas_de_tir.webp" alt="HUD complet." loading="lazy"></a><figcaption>HUD complet.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/12_hud_vue_nette.webp"><img src="img/comment-jouer/12_hud_vue_nette.webp" alt="Vue nette (² ou le bouton de densité) : seuls la boule et les marqueurs restent." loading="lazy"></a><figcaption>Vue nette (² ou le bouton de densité) : seuls la boule et les marqueurs restent.</figcaption></figure></div>
+
+  <h3>Les commandes de vol</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>AZERTY</th><th>QWERTY</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><kbd class="f">Z</kbd> <kbd class="f">S</kbd></td><td><kbd>W</kbd> <kbd>S</kbd></td><td>Tangage : piquer · cabrer</td></tr>
+      <tr><td><kbd class="f">Q</kbd> <kbd class="f">D</kbd></td><td><kbd>A</kbd> <kbd>D</kbd></td><td>Lacet : gauche · droite</td></tr>
+      <tr><td><kbd class="f">A</kbd> <kbd class="f">E</kbd></td><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Roulis</td></tr>
+      <tr><td><kbd>⇧</kbd> · <kbd>Alt</kbd><br><kbd>↑</kbd> · <kbd>↓</kbd></td><td>idem</td><td>Gaz : monter · baisser (maintenu)</td></tr>
+      <tr><td><kbd class="f">W</kbd> · <kbd class="f">X</kbd></td><td><kbd>Z</kbd> · <kbd>X</kbd></td><td>Plein gaz · gaz coupés</td></tr>
+      <tr><td><kbd>I</kbd> <kbd>K</kbd> · <kbd>J</kbd> <kbd>L</kbd> · <kbd>H</kbd> <kbd>N</kbd></td><td>idem</td><td>RCS (translation) : bas/haut · gauche/droite · avant/arrière</td></tr>
+      <tr><td><kbd>⇪ Verr.Maj</kbd></td><td><kbd>Caps Lock</kbd></td><td>Commandes de précision (rotation, gaz et RCS fins)</td></tr>
+      <tr><td><kbd>T</kbd></td><td><kbd>T</kbd></td><td>SAS : maintien de l'attitude</td></tr>
+      <tr><td><kbd>R</kbd></td><td><kbd>R</kbd></td><td>Alignement du roulis : les ailes dans le plan de l'orbite, le nez tenu</td></tr>
+      <tr><td><kbd>⇧K</kbd></td><td><kbd>⇧K</kbd></td><td>Quitter le Ranger (caméra libre) — <kbd>K</kbd> pour y revenir</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">Les gaz se règlent avec <kbd>⇧</kbd> et <kbd>Alt</kbd>, jamais avec <kbd>Ctrl</kbd> : <kbd>Ctrl+W</kbd> fermerait l'onglet.</div>
+
+  <h3>Les trois vaisseaux</h3>
+  <p><kbd>[</kbd> et <kbd>]</kbd> passent d'un vaisseau à l'autre : le <strong>Ranger</strong>, le <strong>Lander</strong> et l'<strong>Endurance</strong>. Ceux qu'on ne pilote pas continuent leur trajectoire — et leur rotation — comme on les a laissés.</p><figure class="shot narrow"><a href="img/comment-jouer/13_menu_vaisseau.webp"><img src="img/comment-jouer/13_menu_vaisseau.webp" alt="Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun." loading="lazy"></a><figcaption>Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun.</figcaption></figure>
+
+  <h3>Les vues de bord</h3>
+  <p><kbd>V</kbd> / <kbd>⇧V</kbd> font défiler les caméras du vaisseau : le <strong>cockpit</strong> (le siège du pilote, avec ses écrans), la coque, autour du vaisseau, libre, survol… <kbd>⇧R</kbd> ramène la caméra à sa place d'origine. Glisser à la souris regarde autour ; un double‑clic regarde droit devant. <kbd>²</kbd> règle la densité du HUD : complet · minimal · vue nette.</p><div class="shots"><figure class="shot"><a href="img/comment-jouer/14_menu_vues.webp"><img src="img/comment-jouer/14_menu_vues.webp" alt="Le menu des vues (bouton de caméra) : à bord — cockpit, cabine, film, chase, dorsale, aile, ventre, arrière, dock — et dehors — autour, libre, survol, port cam." loading="lazy"></a><figcaption>Le menu des vues (bouton de caméra) : à bord — cockpit, cabine, film, chase, dorsale, aile, ventre, arrière, dock — et dehors — autour, libre, survol, port cam.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/20_cockpit.webp"><img src="img/comment-jouer/20_cockpit.webp" alt="La vue cockpit : le siège du pilote, ses écrans et la boule de navigation." loading="lazy"></a><figcaption>La vue cockpit : le siège du pilote, ses écrans et la boule de navigation.</figcaption></figure></div>
+</section>
+
+<section id="autopilotes">
+  <h2>Maintiens &amp; autopilotes<small>Les chiffres du haut du clavier, en vol</small></h2>
+  <p>Ils sont aussi sur la couronne de la boule de navigation : à gauche <strong>ATTITUDE</strong> (les maintiens), à droite <strong>AUTOPILOT</strong> (les autopilotes). Un clic les active.</p>
+  <figure class="shot narrow"><a href="img/comment-jouer/c_navball.webp"><img src="img/comment-jouer/c_navball.webp" alt="La boule de navigation : horizon, marqueurs prograde / rétrograde / cible, et les deux couronnes de boutons. En dessous, la poussée et l’accélération." loading="lazy"></a><figcaption>La boule de navigation : horizon, marqueurs prograde / rétrograde / cible, et les deux couronnes de boutons. En dessous, la poussée et l’accélération.</figcaption></figure>
+  <div class="tbl"><table>
+    <thead><tr><th>Touche</th><th>Effet</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>1</kbd> <kbd>2</kbd></td><td>Tenir le prograde · le rétrograde</td></tr>
+      <tr><td><kbd>3</kbd> <kbd>4</kbd></td><td>Tenir le radial + · radial −</td></tr>
+      <tr><td><kbd>5</kbd> <kbd>6</kbd></td><td>Tenir la normale + · normale −</td></tr>
+      <tr><td><kbd>7</kbd></td><td>Tenir la cible (ANTI et NODE sont sur le panneau du HUD)</td></tr>
+      <tr><td><kbd>8</kbd></td><td>Autopilote : tenir la position</td></tr>
+      <tr><td><kbd>9</kbd></td><td>Autopilote : circulariser l'orbite</td></tr>
+      <tr><td><kbd>0</kbd></td><td>Autopilote : approche de la cible</td></tr>
+      <tr><td><kbd>G</kbd></td><td>Autopilote : atterrir</td></tr>
+      <tr><td><kbd>U</kbd></td><td>Autopilote : décoller (virage gravitationnel jusqu'en orbite)</td></tr>
+      <tr><td><kbd>B</kbd></td><td>Autopilote : amarrage (l'ISS à moins de 3 km, ou un autre vaisseau de la flotte)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Les autopilotes rendent la main à votre accélération du temps quand ils ont fini. Pendant la croisière, le SAS affiche PRO.</p><figure class="shot"><a href="img/comment-jouer/50_iss.webp"><img src="img/comment-jouer/50_iss.webp" alt="Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK." loading="lazy"></a><figcaption>Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK.</figcaption></figure>
+</section>
+
+<section id="carte">
+  <h2>La carte &amp; le planificateur<small>Voir où l'on va, et y aller</small></h2>
+  <h3>La carte 3D — <kbd>M</kbd> en vol</h3>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><td>Glisser</td><td>Tourner autour du point visé</td></tr>
+      <tr><td>Clic droit glissé · <kbd>⇧</kbd> glissé</td><td>Déplacer la vue</td></tr>
+      <tr><td>Molette</td><td>Zoomer vers le pointeur</td></tr>
+      <tr><td>Clic sur un astre</td><td>Le prendre pour cible</td></tr>
+      <tr><td>Double‑clic sur un astre</td><td>Le centrer (dans le vide : retour au cadrage automatique)</td></tr>
+      <tr><td>Clic sur la trajectoire</td><td>Poser un nœud de manœuvre ; tirer ses poignées pour régler le Δv ; clic droit ou <kbd>Suppr</kbd> pour l'enlever</td></tr>
+      <tr><td>Survol d'un astre</td><td>Sa fiche : distance, rayon, période, sphère d'influence</td></tr>
+    </tbody>
+  </table></div>
+  <p>La barre de la carte choisit le <strong>Focus</strong> (l'astre au centre), le <strong>Plane</strong> (plan de référence : écliptique, équateur, orbite du vaisseau ou de la cible), la vue de dessus / en biais / par la tranche, et l'échelle <strong>Log</strong> pour voir à la fois tout le système et une orbite basse. La <strong>frise temporelle</strong> en bas montre où tout sera : faites glisser la poignée, cliquez sur un repère (nœud, approche au plus près, entrée dans une sphère d'influence, périapside, impact…) pour y sauter.</p>
+  <figure class="shot"><a href="img/comment-jouer/16_carte_ksc.webp"><img src="img/comment-jouer/16_carte_ksc.webp" alt="La carte au départ de Kennedy : la Terre au centre, Saturne visée (la ligne), la frise en bas." loading="lazy"></a><figcaption>La carte au départ de Kennedy : la Terre au centre, Saturne visée (la ligne), la frise en bas.</figcaption></figure><p>Dans la vue elle‑même, <kbd>⇧Y</kbd> affiche la trajectoire future sous forme de tube cyan.</p>
+
+  <h3>Le planificateur de vol — <kbd>O</kbd> en vol</h3>
+  <ol class="steps">
+    <li><strong>Choisir la cible</strong>Sur la carte ou avec <kbd>Tab</kbd>.</li>
+    <li><strong>Choisir l'objectif</strong><em>Orbit</em> (transfert puis capture en orbite circulaire), <em>Flyby</em> (survol, assistance gravitationnelle), <em>Free return</em> (tour de la Lune et retour sans allumage, comme Apollo 13 ou Artemis II), rendez‑vous avec un vaisseau ou l'ISS, ou passage du trou de ver. <em>ALIGN PLANE</em> aligne d'abord le plan orbital.</li>
+    <li><strong>PLAN</strong>Le planificateur vise ses trajectoires en N corps (en arrière‑plan, l'image ne ralentit pas) et affiche les nœuds et le Δv total.</li>
+    <li><strong>EXECUTE</strong>Le vaisseau s'oriente et allume tout seul à chaque nœud, corrections en route comprises. Vous pouvez aussi créer vos nœuds à la main (<em>+ NODE</em> ou un clic sur la trajectoire) et les façonner.</li>
+  </ol>
+</section>
+
+<section id="camera">
+  <h2>Caméra &amp; temps<small>Valables dans tous les modes, en vol comme hors vol</small></h2>
+  <h3>Le temps</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>AZERTY</th><th>QWERTY</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>Espace</kbd></td><td><kbd>Space</kbd></td><td>Lancer · mettre en pause (en pause, l'image s'affine)</td></tr>
+      <tr><td><kbd>;</kbd> · <kbd>:</kbd></td><td><kbd>,</kbd> · <kbd>.</kbd></td><td>Accélération du temps : moins vite · plus vite (jusqu'à ×1 000 000)</td></tr>
+      <tr><td><kbd>!</kbd></td><td><kbd>/</kbd></td><td>Retour au temps réel</td></tr>
+      <tr><td colspan="2">● sur la barre du temps</td><td>Enregistrer une prise — <em>Render › Video</em> la rend en pleine qualité</td></tr>
+    </tbody>
+  </table></div><figure class="shot narrow"><a href="img/comment-jouer/24_warp.webp"><img src="img/comment-jouer/24_warp.webp" alt="Un clic sur l’accélération ouvre toute l’échelle : de ×0,1 à ×5911 (et jusqu’à ×1 000 000 dans les outils)." loading="lazy"></a><figcaption>Un clic sur l’accélération ouvre toute l’échelle : de ×0,1 à ×5911 (et jusqu’à ×1 000 000 dans les outils).</figcaption></figure>
+
+  <h3>La caméra</h3>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><td><kbd>V</kbd> · <kbd>⇧V</kbd></td><td>Vue suivante · précédente (sans vaisseau : autour · suivi · libre · trépied · chute libre)</td></tr>
+      <tr><td><kbd>C</kbd></td><td>Regard verrouillé sur la cible, où que soit la caméra</td></tr>
+      <tr><td><kbd>Y</kbd></td><td>Télescope : champ jusqu'à 0,02°, tenu sur la cible (la molette zoome)</td></tr>
+      <tr><td><kbd>Tab</kbd> · <kbd>⇧Tab</kbd></td><td>Cible suivante · précédente (ou un clic dessus dans la vue)</td></tr>
+      <tr><td>Glisser</td><td>Tourner autour de la cible · sinon regarder autour</td></tr>
+      <tr><td>Molette · pincer</td><td>Distance · avancer / reculer · zoom du télescope</td></tr>
+      <tr><td><kbd>Alt</kbd> + molette</td><td>Objectif (champ de vision)</td></tr>
+      <tr><td>Double‑clic</td><td>Voler jusqu'à un astre et le cadrer · sur le ciel : recentrer / remettre à niveau</td></tr>
+      <tr><td><kbd>R</kbd> · <kbd>⇧R</kbd></td><td>Vue suivante · recentrer (hors vol)</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> · <kbd>+</kbd> <kbd>−</kbd></td><td>Tourner (libre : pivoter) · zoom</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/45_lune_andes.webp"><img src="img/comment-jouer/45_lune_andes.webp" alt="Pleine Lune sur les Andes…" loading="lazy"></a><figcaption>Pleine Lune sur les Andes…</figcaption></figure><figure class="shot"><a href="img/comment-jouer/46_telescope.webp"><img src="img/comment-jouer/46_telescope.webp" alt="…et au télescope (Y) : 534 mm, champ de 1,28°, suivi de la cible." loading="lazy"></a><figcaption>…et au télescope (Y) : 534 mm, champ de 1,28°, suivi de la cible.</figcaption></figure></div><h3>La caméra libre (sans vaisseau)</h3>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><td><kbd class="f">Z</kbd> <kbd class="f">Q</kbd> <kbd class="f">S</kbd> <kbd class="f">D</kbd></td><td>Avancer · gauche · reculer · droite (<kbd>⇧</kbd> plus vite)</td></tr>
+      <tr><td><kbd class="f">A</kbd> · <kbd class="f">E</kbd></td><td>Descendre · monter</td></tr>
+      <tr><td><kbd class="f">W</kbd> · <kbd class="f">X</kbd></td><td>Roulis</td></tr>
+      <tr><td>Clic du milieu</td><td>Regard à la souris, comme dans un jeu (<kbd>Échap</kbd> pour sortir)</td></tr>
+      <tr><td><kbd>B</kbd></td><td>Chute libre le long de la géodésique (les touches poussent) ⟷ libre</td></tr>
+      <tr><td><kbd>O</kbd> · <kbd>⇧C</kbd> · <kbd>T</kbd></td><td>Orbite automatique · plongée vers l'horizon · voyage par le trou de ver</td></tr>
+      <tr><td><kbd>⇧T</kbd></td><td>Trépied posé au sol du monde visé (sinon le plus proche), face à l'horizon</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="touches">
+  <h2>Toutes les autres touches<small>Le ciel, la scène, l'interface</small></h2>
+  <div class="grid">
+    <div class="tbl"><table>
+      <thead><tr><th colspan="2">Le ciel (notre côté)</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>N</kbd> · <kbd>⇧N</kbd></td><td>Constellations · noms des étoiles brillantes</td></tr>
+        <tr><td><kbd>U</kbd></td><td>Grilles : équatoriale · horizontale · les deux · aucune</td></tr>
+        <tr><td>Bouton <em>Sky</em></td><td>La carte du ciel complète</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th colspan="2">La scène</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>J</kbd> · <kbd>G</kbd></td><td>Jet · guide de l'ombre</td></tr>
+        <tr><td><kbd>L</kbd></td><td>Mode cinéma : surface liquide du trou de ver</td></tr>
+        <tr><td><kbd>K</kbd> · <kbd>⇧K</kbd></td><td>Monter à bord du Ranger · vue suivante</td></tr>
+        <tr><td><kbd>1</kbd>–<kbd>6</kbd></td><td>Qualité (5 : temps réel max, 6 : jeu)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th colspan="2">L'interface</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>M</kbd> · <kbd>⌘K</kbd></td><td>Réglages · les chercher</td></tr>
+        <tr><td><kbd>I</kbd></td><td>Détails &amp; mesures physiques</td></tr>
+        <tr><td><kbd>H</kbd> · <kbd>F</kbd> · <kbd>P</kbd></td><td>Masquer l'interface · plein écran · capture PNG</td></tr>
+        <tr><td><kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd></td><td>Annuler · rétablir</td></tr>
+        <tr><td><kbd>F2</kbd></td><td>Outils de jeu</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Aide‑mémoire des touches</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/43_constellations.webp"><img src="img/comment-jouer/43_constellations.webp" alt="N et U : les figures et noms des constellations, la grille équatoriale." loading="lazy"></a><figcaption>N et U : les figures et noms des constellations, la grille équatoriale.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/44_carte_du_ciel.webp"><img src="img/comment-jouer/44_carte_du_ciel.webp" alt="Le bouton Ciel : figures, noms, étoiles, grilles, écliptique, opacité, et « aller à » une constellation ou une étoile." loading="lazy"></a><figcaption>Le bouton Ciel : figures, noms, étoiles, grilles, écliptique, opacité, et « aller à » une constellation ou une étoile.</figcaption></figure></div>
+  <p class="muted">En vol, certaines lettres changent de sens (<kbd>M</kbd> carte, <kbd>O</kbd> planificateur, <kbd>U</kbd> décollage, <kbd>G</kbd> atterrissage, <kbd>B</kbd> amarrage…) : ce sont celles des sections précédentes qui s'appliquent.</p>
+</section>
+
+<section id="manette">
+  <h2>Manette &amp; écran tactile</h2>
+  <h3>Manette (Xbox · PlayStation)</h3>
+  <div class="grid">
+    <div class="tbl"><table>
+      <thead><tr><th colspan="2">Caméra libre</th></tr></thead>
+      <tbody>
+        <tr><td>Stick gauche</td><td>Avancer · reculer · de côté (L3 maintenu : boost)</td></tr>
+        <tr><td>Stick droit</td><td>Tourner autour de la cible · regarder</td></tr>
+        <tr><td>RT · LT (R2 · L2)</td><td>Monter · descendre</td></tr>
+        <tr><td>LB · RB (L1 · R1)</td><td>Roulis</td></tr>
+        <tr><td>A (✕)</td><td>Voler jusqu'à la cible</td></tr>
+        <tr><td>B · X · Y (○ □ △)</td><td>Chute libre · orbite auto · vue suivante</td></tr>
+        <tr><td>Croix ◀ ▶ · ▲ ▼</td><td>Cible précédente / suivante · plus près / plus loin</td></tr>
+        <tr><td>R3 · View · Menu</td><td>Recentrer · lancer / pause · réglages</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th colspan="2">En vol</th></tr></thead>
+      <tbody>
+        <tr><td>Stick gauche</td><td>Tangage · lacet</td></tr>
+        <tr><td>LB · RB</td><td>Roulis</td></tr>
+        <tr><td>RT · LT</td><td>Gaz + · −</td></tr>
+        <tr><td>A</td><td>SAS</td></tr>
+        <tr><td>X · Y</td><td>Prograde · rétrograde</td></tr>
+        <tr><td>B</td><td>Couper les gaz</td></tr>
+        <tr><td>Croix ▲ ▼</td><td>Caméra</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="muted">Manette non détectée ? Appuyez sur un bouton avec la page au premier plan. Une manette Xbox 360 filaire dans Chrome, Edge ou Arc se connecte en USB depuis l'aide‑mémoire (<kbd>?</kbd>).</p>
+  <h3>Écran tactile</h3>
+  <p>Sur téléphone ou tablette, en vol : un <strong>manche</strong> en bas à gauche (tirer vers soi : cabrer ; gauche / droite : lacet), une <strong>manette des gaz</strong> en bas à droite qui reste où on la laisse, et deux boutons de roulis à maintenir. SAS, maintiens, autopilotes et planificateur sont des boutons du HUD.</p><figure class="shot"><a href="img/comment-jouer/60_mobile.webp"><img src="img/comment-jouer/60_mobile.webp" alt="Sur téléphone, à l’horizontale : le manche à gauche, les boutons de roulis et la manette des gaz à droite." loading="lazy"></a><figcaption>Sur téléphone, à l’horizontale : le manche à gauche, les boutons de roulis et la manette des gaz à droite.</figcaption></figure>
+</section>
+
+<section id="outils">
+  <h2>Outils &amp; sauvegardes<small><kbd>F2</kbd>, ou 🛠 dans la barre de mission</small></h2>
+  <div class="grid">
+    <div class="card"><h4>Ranger</h4><p>L'état en direct : sphère d'influence, statut (posé, en vol, suborbital, en orbite…), altitude, vitesses, périapside, apoapside, inclinaison, période, prochain événement.</p></div>
+    <div class="card"><h4>Place</h4><p>Mettre le Ranger en orbite autour de n'importe quel astre, ou le poser au sol en cliquant sur un globe ou un planisphère. Raccourcis : orbite basse, pas de tir KSC, orbite lunaire basse.</p></div>
+    <div class="card"><h4>Target · SOI</h4><p>La chaîne des sphères d'influence et tous les astres, avec rayon et distance — un clic les vise.</p></div>
+    <div class="card"><h4>Time</h4><p>Accélération de ×1 à ×1 000 000, pause, et réglage de la date de la scène.</p></div>
+    <div class="card"><h4>Saves</h4><p>Sauvegardes nommées, sauvegarde automatique, export / import d'un fichier, lien à partager vers un moment précis.</p></div>
+    <div class="card"><h4>Audit &amp; Journal</h4><p>Des vérifications automatiques de la simulation, et l'historique de la partie : messages du pilote, changements de sphère, sauvegardes.</p></div>
+  </div>
+  <div class="shots"><figure class="shot"><a href="img/comment-jouer/17_outils_ranger.webp"><img src="img/comment-jouer/17_outils_ranger.webp" alt="Ranger : l’état en direct." loading="lazy"></a><figcaption>Ranger : l’état en direct.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/18_outils_place.webp"><img src="img/comment-jouer/18_outils_place.webp" alt="Place : choisir l’astre, l’orbite ou un point sur le globe." loading="lazy"></a><figcaption>Place : choisir l’astre, l’orbite ou un point sur le globe.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/19_outils_saves.webp"><img src="img/comment-jouer/19_outils_saves.webp" alt="Saves : sauvegardes nommées et automatique." loading="lazy"></a><figcaption>Saves : sauvegardes nommées et automatique.</figcaption></figure></div>
+  <p class="muted">Pour aller plus loin : la console du navigateur expose <code>__bh.game</code> (<code>__bh.game.help()</code> pour la liste) — voir <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/GAME-TOOLS.md">GAME-TOOLS.md</a> et <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/MAP.md">MAP.md</a>.</p>
+</section>
+
+<section>
+  <h2>Astuces</h2>
+  <div class="grid">
+    <div class="card"><h4>Rien ne bouge ?</h4><p>Le temps est peut‑être en pause : <kbd>Espace</kbd>. Ou revenez au temps réel avec <kbd>!</kbd>.</p></div>
+    <div class="card"><h4>Le voyage est long</h4><p>Une fois le plan lancé (<em>EXECUTE</em>), le temps s’accélère tout seul entre les allumages (auto‑warp). Vous pouvez choisir le vôtre avec <kbd>;</kbd> <kbd>:</kbd> — il reste plafonné pour ne pas rater un allumage.</p></div>
+    <div class="card"><h4>Perdu dans l'espace ?</h4><p><kbd>M</kbd> en vol, puis <em>Fit</em> pour recadrer la carte ; <kbd>⇧R</kbd> remet la caméra à sa place.</p></div>
+    <div class="card"><h4>Une belle image</h4><p>Pause (<kbd>Espace</kbd>) pour que l'image s'affine, <kbd>H</kbd> pour cacher l'interface, <kbd>P</kbd> pour l'enregistrer.</p></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Gargantua — simulateur de trou noir de Kerr en WebGPU. <a href="../">Lancer le jeu</a> · <a href="./">Atlas de Kerr (rendus &amp; vidéos)</a>.<br>
+  Ranger : « Interstellar Ranger One » par Max Vizell, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+</footer>
+
+<dialog class="lb" id="lb"><img alt=""></dialog>
+<script>
+  const lb = document.getElementById("lb");
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("figure.shot a");
+    if (a) { e.preventDefault(); lb.querySelector("img").src = a.href; lb.querySelector("img").alt = a.querySelector("img").alt; lb.showModal(); }
+    else if (e.target.closest("#lb")) lb.close();
+  });
+</script>
+</body>
+</html>
