@@ -1369,6 +1369,8 @@ export class CameraController {
       if (this.orbiting) this.orbitBy(-kx * kRate, -ky * kRate);
       else this.rotateView(kx * kRate, ky * kRate, 0);
     }
+    // (about the cabin the keys walk, the throttle is off: the arrows turn the look — 90°/s, 70°/s)
+    if ((kx || ky) && pilotNow && s.shipMount === "cabin" && !s.lookAt) this.setLook(s.shipLookYaw + kx * 90 * dt, s.shipLookPitch + ky * 70 * dt);
     if (pad && (pad.look[0] || pad.look[1])) {
       // right stick: orbit the target, or turn the camera (free rotation, flight); piloting: look
       if (pilotNow) this.setLook(s.shipLookYaw + pad.look[0] * 90 * dt, s.shipLookPitch + pad.look[1] * 70 * dt);

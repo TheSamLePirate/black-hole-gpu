@@ -951,7 +951,7 @@ async function main() {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     } else if (e.code === "KeyB") pilotAuto("dock");
     else if (e.code === "BracketLeft" || e.code === "BracketRight") camera.cycleVessel(e.code === "BracketRight" ? 1 : -1); // (the craft flown: KSP's [ ])
-    else if (e.code === "ArrowUp" || e.code === "ArrowDown") e.preventDefault(); // throttle (held)
+    else if (e.code.startsWith("Arrow")) e.preventDefault(); // throttle (held) — about the cabin, the look
     else return false;
     e.preventDefault();
     return true;

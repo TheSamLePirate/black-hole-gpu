@@ -1,7 +1,8 @@
 // The Ranger's cockpit screens: the flight's real telemetry, drawn as the film's displays — cyan
 // monochrome, sharp text — into a 2048 × 1024 picture of 4 × 2 slots (512 px each) that the cabin's
-// shader shows on its screens (ship.wgsl fsCabin: a screen's number picks its slot). Redrawn a few times
-// a second while the cabin is seen.
+// shader shows on its screens (ship.wgsl fsCabin; each screen's display given by where it is,
+// scripts/build-cockpit.ts: the attitude straight before the pilot). Redrawn a few times a second while
+// the cabin is seen.
 //
 //   0 PFD        the attitude (the horizon, the pitch ladder, the roll), the motion's marker, speed and
 //                height tapes, the vertical speed

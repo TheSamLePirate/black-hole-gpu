@@ -919,7 +919,8 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   let ng = normalize(in.n) * side;
   let qn = normalize(in.qn) * side;
   let fw = max(length(fwidth(in.q)), 1e-5);
-  // the screens' picture: its slot in the texture (the screen's number), the derivatives taken here
+  // the screens' picture: its slot in the texture (the display the build gave it, by where it is), the
+  // derivatives taken here
   let k = floor(in.uv.x * 0.5);
   // (the model's screen UVs: the picture upside down)
   let su = vec2f(in.uv.x - 2.0 * k, in.uv.y);

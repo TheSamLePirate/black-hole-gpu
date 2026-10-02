@@ -295,8 +295,9 @@ the commands (the pilot's and the autopilots'). The screens show the flight's re
 (`src/ui/cockpitscreens.ts`, a 2048 × 1024 texture of eight displays redrawn eight times a second): the
 attitude (horizon, pitch ladder, roll, the motion's marker, speed and height), the orbit to scale, the target
 and the path's next event, the systems (thrust, propellant, mass, SAS, autopilot), the docking cross-hair, the
-manoeuvre plan, the clocks, the pilot's log. The view "Cabin" lets the camera move about it (the flight keys;
-it glides along the walls). The cabin has its own lean shader (`fsCabin`) and a depth pre-pass.
+manoeuvre plan, the clocks, the pilot's log — each screen its display by where it is, the attitude straight
+before the pilot. The view "Cabin" lets the camera move about it (the flight keys; it glides along the walls),
+the drag or the arrows turning the look. The cabin has its own lean shader (`fsCabin`) and a depth pre-pass.
 
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,

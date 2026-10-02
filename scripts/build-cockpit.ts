@@ -13,7 +13,7 @@
 //     leave the cabin (through the windows): what the outside lights it with.
 // Binary (little endian, gzip): "CKPT", u32 version 2, vertex count, index count, 6 × f32 bounds, u32 stick
 // count and per stick 4 × f32 (its pivot, 0) — then
-// vertices (10 × f32: position 3, normal 3, material, AO, then — the screens (68): 2 × its number + its own
+// vertices (10 × f32: position 3, normal 3, material, AO, then — the screens (68): 2 × its display + its own
 // u (0…1), its v; the rest: the sky seen, the part's size [cm] + a hash of it in [0, 1)) and u32 indices. Materials: 60 floor, 61 walls and
 // ceiling, 62 consoles, 63 seats, 64 cryo pods, 65 bags, 66 metal (beams, handles), 67 laptops, 68 screens,
 // 69 TARS's platform, 70 airlock, 71 glass, 72 the flight sticks' grips.
@@ -88,18 +88,39 @@ for (let i = 0; i < RAYS; i++) {
   const ph = i * 2.399963229728653;
   dirs.push([r * Math.cos(ph), r * Math.sin(ph), Math.sqrt(1 - r * r)]);
 }
-// the screens: each its own rectangle of the (missing) texture atlas — its UVs made 0…1 on it, and a
-// number (its content: horizon, telemetry, orbit, radar, systems)
-const screenRect = new Map<number, { u0: number; u1: number; v0: number; v1: number; k: number }>();
+// the screens: each its own rectangle of the (missing) texture atlas — its UVs made 0…1 on it, and the
+// display it shows (src/ui/cockpitscreens.ts: 0 attitude, 1 orbit, 2 target, 3 systems, 4 docking, 5 plan,
+// 6 clocks, 7 log), by where it is (the OBJ's frame: x to the pilot's side, z the nose)
+const slotOf = ([x, y, z]: V3) => {
+  const ax = Math.abs(x), pilot = x > 0;
+  // (the rear console: the log, the clocks, the systems)
+  if (z < -3) return y > 1.6 ? 7 : y > 1.4 ? 6 : 3;
+  // (the dashboard: straight before the pilot the attitude, the target beside it; the copilot's orbit, systems)
+  if (z > 3.7) return ax > 0.9 ? (pilot ? 0 : 1) : pilot ? 2 : 3;
+  // (between the seats: the docking above, the plan)
+  if (ax < 0.3) return y > 1.5 ? 4 : 5;
+  // (beside the seats: the clocks, the log; the large ones the systems, the target)
+  if (z > 3.15) return ax > 1.95 ? (z > 3.33 ? 6 : 7) : pilot ? 3 : 2;
+  // (overhead, behind: the systems, the orbit, the target; the pilot's side wall: the orbit)
+  if (y > 1.6) return z > 1.5 ? 3 : ax < 1.45 ? 1 : 2;
+  if (y > 1.2) return 1;
+  // (the low side consoles: the clocks, the log, the plan; the large ones aft: the plan)
+  if (ax > 1.95) return z > 2 ? 6 : z > 1.6 ? 7 : 5;
+  return 5;
+};
+const screenRect = new Map<number, { u0: number; u1: number; v0: number; v1: number; c: V3; n: number; k: number }>();
 for (const v of order) {
   if (Math.round(RV[11 * v + 6]!) !== 68) continue;
   const h = RV[11 * v + 8]!;
-  const r = screenRect.get(h) ?? { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity, k: screenRect.size };
+  const r = screenRect.get(h) ?? { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity, c: [0, 0, 0] as V3, n: 0, k: 0 };
   r.u0 = Math.min(r.u0, RV[11 * v + 9]!); r.u1 = Math.max(r.u1, RV[11 * v + 9]!);
   r.v0 = Math.min(r.v0, RV[11 * v + 10]!); r.v1 = Math.max(r.v1, RV[11 * v + 10]!);
+  for (let i = 0; i < 3; i++) r.c[i]! += RV[11 * v + i]!;
+  r.n++;
   screenRect.set(h, r);
 }
-console.log(`${screenRect.size} screens`);
+for (const r of screenRect.values()) r.k = slotOf(r.c.map((x) => x / r.n) as V3);
+console.log(`${screenRect.size} screens, displays ${[...screenRect.values()].map((r) => r.k).join("")}`);
 const out = new Float32Array(nv * 10);
 const t0 = performance.now();
 let lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
