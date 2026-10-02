@@ -235,7 +235,7 @@ export class Map3D {
    * are not all on the same side yet).
    */
   private extClosest(e: Extension, id: string, ours = this.universe === "ours"): { i: number; d: number } | null {
-    if (ours !== (!!solarBody(id) || id === "iss")) return null;
+    if (ours !== (!!solarBody(id) || id === "iss" || id === "ranger" || id === "lander" || id === "endurance")) return null;
     let m = this.pathMemo.get(e);
     if (!m) this.pathMemo.set(e, (m = new Map()));
     const key = `ca:${ours ? "o" : "g"}:${id}`;
@@ -1703,7 +1703,7 @@ export class Map3D {
       }
     }
     // the target where the plan meets it
-    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || i.ourArrive.body === "iss") && plan) {
+    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || ["iss", "ranger", "lander", "endurance"].includes(i.ourArrive.body)) && plan) {
       const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
         ctx.strokeStyle = "rgba(255, 170, 80, 0.9)";

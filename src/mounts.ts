@@ -23,9 +23,9 @@ export const MOUNTS = {
   // (a fly-by: the camera stands still where the ship will pass — in the frame of the body it flies by —,
   // turns to follow it, and waits for it further on once it is gone)
   flyby: { label: "Fly-by, the ship passing", short: "Fly-by", eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
-  // (the space station's own docking camera: on the nearest port's axis, looking out at the ship
-  // coming in — moving with the station; elsewhere, around the ship)
-  station: { label: "ISS docking camera, on the port", short: "ISS cam", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "station" },
+  // (the docking camera of what the ship docks to — the space station, another craft: on the nearest
+  // port's axis, looking out at the ship coming in, moving with it; elsewhere, around the ship)
+  station: { label: "Docking camera, on the target's port (the ISS, a craft)", short: "Port cam", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "station" },
 } satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
 /** The views from outside the ship: around it, free, a fly-by. */
 export type OutsideView = "around" | "free" | "flyby" | "station";

@@ -15,11 +15,18 @@ import { mouth } from "../../wormhole";
 import { isco, horizon, photonOrbits } from "../../physics";
 import { OUR_COLOURS } from "../hudkit";
 import { issAxes, issOrbit, issTrack } from "../../system/iss";
-import { M_METRES } from "../../system/solar";
+import { M_METRES, solarBody } from "../../system/solar";
+import { fleet } from "../../fleet";
+import { keplerProp } from "../../system/our-plan";
+import { VESSELS, type VesselId } from "../../vessels";
 
-/** A place in our universe's home frame at t: a body of the solar system's, or the space station's. */
+const CRAFT = ["ranger", "lander", "endurance"] as const;
+const isCraftId = (id: string): id is VesselId => (CRAFT as readonly string[]).includes(id);
+
+/** A place in our universe's home frame at t: a body of the solar system's, the space station's, a craft's. */
 export function ourPos(id: string, t: number): V3 {
   if (id === "iss") return (issTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
+  if (isCraftId(id)) return (fleet.pose(id, t)?.X ?? solarState("earth", t).pos) as V3;
   return solarState(id, t).pos as V3;
 }
 import type { V3 } from "./camera";
@@ -153,6 +160,35 @@ export function ourScene(t0: number): MapScene {
       pole: [-A[1][0], -A[1][1], -A[1][2]], soi: 0, orbit, orbitOff: off, light: "sun", period: T,
     });
   }
+  // the fleet's craft not flown (fleet.ts): where they are, a turn of their Kepler orbit around the Earth
+  const mu = solarBody("earth")!.mass;
+  for (const id of CRAFT) {
+    if (fleet.activePose?.() && fleet.flownAssembly().includes(id)) continue;
+    const p = fleet.pose(id, t0);
+    if (!p) continue;
+    const E = pos.get("earth")!;
+    const Es = solarState("earth", t0);
+    const r0 = sub(p.X as V3, Es.pos as V3), v0 = sub(p.V as V3, Es.vel as V3);
+    const eps = (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / 2 - mu / Math.hypot(...r0);
+    if (!(eps < 0)) continue;
+    const T = 2 * Math.PI * Math.sqrt((-mu / (2 * eps)) ** 3 / mu);
+    const orbit = cachedOrbit(`ours:${id}`, t0, () => {
+      const pts: V3[] = [];
+      for (let j = 0; j <= 96; j++) {
+        const k = keplerProp(mu, r0, v0, (T * j) / 96);
+        pts.push(add(k.r as V3, E));
+      }
+      return pts;
+    }, T / 40);
+    const c = orbitCache.get(`ours:${id}`)!;
+    const off = sub(E, (c.q ??= solarState("earth", c.at).pos as V3));
+    const n = [r0[1] * v0[2] - r0[2] * v0[1], r0[2] * v0[0] - r0[0] * v0[2], r0[0] * v0[1] - r0[1] * v0[0]];
+    const nl = Math.hypot(...n) || 1;
+    bodies.push({
+      id, name: VESSELS[id].name, kind: "moon", parent: "earth", pos: p.X as V3, radius: 40 / M_METRES, col: OUR_COLOURS[id] ?? "255, 255, 255",
+      pole: [n[0]! / nl, n[1]! / nl, n[2]! / nl], soi: 0, orbit, orbitOff: off, light: "sun", period: T,
+    });
+  }
   return {
     universe: "ours", bodies, byId: new Map(bodies.map((b) => [b.id, b])), systemPole: Z, systemX: [1, 0, 0], hole: null,
     origin: () => [0, 0, 0],
@@ -244,7 +280,7 @@ export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1000)
 export function bodyPosAt(sc: MapScene, s: Settings, id: string, t: number): V3 | null {
   if (sc.universe === "ours") {
     if (id === "wormhole") return [0, 0, 0];
-    return SOLAR_BODIES.some((b) => b.id === id) || id === "iss" ? ourPos(id, t) : null;
+    return SOLAR_BODIES.some((b) => b.id === id) || id === "iss" || isCraftId(id) ? ourPos(id, t) : null;
   }
   const o = sc.origin(t);
   if (id === "hole") return sub([0, 0, 0], o);

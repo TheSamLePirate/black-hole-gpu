@@ -16,7 +16,12 @@ import { issOrbit, issTrack } from "../system/iss";
 import { M_SECONDS } from "../system/solar";
 import { planetMapUrl } from "../system/planet-maps";
 import { BODY_NAMES, type Body } from "../targeting";
-import { AMBER, CYAN, FONT } from "./hudkit";
+import { AMBER, CYAN, FONT, OUR_COLOURS } from "./hudkit";
+import { fleet } from "../fleet";
+import { keplerProp } from "../system/our-plan";
+import { VESSELS } from "../vessels";
+
+const sub3 = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 import { planetFrame, toLocal } from "../landing";
 import type { Settings } from "../settings";
 
@@ -70,6 +75,8 @@ interface Scene {
   plan: V3[];
   /** the space station over the Earth: where it is, its ground track an orbit ahead (unit directions on its axes) */
   iss?: { q: V3; track: V3[]; target: boolean } | null;
+  /** the fleet's craft not flown: where they are, their ground track an orbit ahead (Kepler) */
+  crafts?: { id: string; name: string; col: string; q: V3; track: V3[]; target: boolean }[];
   /** the periapsis / apoapsis on the path ahead, with their heights [km] */
   pe: { q: V3; km: number } | null;
   ap: { q: V3; km: number } | null;
@@ -214,6 +221,7 @@ export class GroundTrack {
       sun: unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)),
       ahead: ahead?.pts ?? [], plan: plan?.pts ?? [], pe: ahead?.pe ?? null, ap: ahead?.ap ?? null,
       iss: id === "earth" && this.s.iss ? this.issTrack(t) : null,
+      crafts: id === "earth" ? this.craftTracks(t) : [],
     };
   }
 
@@ -234,6 +242,39 @@ export class GroundTrack {
       this.issCache = { t, track };
     }
     return { q: unit(toBodyFixed("earth", now.X as V3, t)), track: this.issCache.track, target: this.s.target === "iss" };
+  }
+
+  /** The fleet's craft not flown, near the Earth: their ground tracks (Kepler, an orbit ahead — redone every
+   *  30 s of the scene's time) and where they are. */
+  private craftCache = new Map<string, { t: number; track: V3[] }>();
+  private craftTracks(t: number) {
+    const out: NonNullable<Scene["crafts"]> = [];
+    const mu = solarBody("earth")!.mass;
+    for (const id of ["ranger", "lander", "endurance"] as const) {
+      if (fleet.activePose?.() && fleet.flownAssembly().includes(id)) continue;
+      const p = fleet.pose(id, t);
+      if (!p) continue;
+      const E = solarState("earth", t);
+      const r0 = sub3(p.X as V3, E.pos as V3), v0 = sub3(p.V as V3, E.vel as V3);
+      const r = Math.hypot(...r0);
+      if (r * M_METRES > 1e8) continue;
+      const eps = (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / 2 - mu / r;
+      if (!(eps < 0)) continue;
+      const P = 2 * Math.PI * Math.sqrt((-mu / (2 * eps)) ** 3 / mu);
+      let c = this.craftCache.get(id);
+      if (!c || Math.abs(t - c.t) > 30 / M_SECONDS) {
+        const track: V3[] = [];
+        for (let k = 0; k <= 120; k++) {
+          const tk = t + (P * k) / 120;
+          const q = keplerProp(mu, r0, v0, tk - t).r as V3;
+          const Ek = solarState("earth", tk).pos as V3;
+          track.push(unit(toBodyFixed("earth", [Ek[0] + q[0], Ek[1] + q[1], Ek[2] + q[2]], tk)));
+        }
+        this.craftCache.set(id, (c = { t, track }));
+      }
+      out.push({ id, name: VESSELS[id].name, col: OUR_COLOURS[id] ?? "255, 255, 255", q: unit(toBodyFixed("earth", p.X as V3, t)), track: c.track, target: this.s.target === id });
+    }
+    return out;
   }
 
   /**
@@ -587,6 +628,24 @@ export class GroundTrack {
         ctx.textBaseline = "middle";
         ctx.fillText("ISS", p[0] + 10 * dpr, p[1] - 6 * dpr);
       }
+    }
+    // the fleet's craft: their tracks, where they are (a diamond)
+    for (const c of sc.crafts ?? []) {
+      path(c.track, `rgba(${c.col}, ${c.target ? 0.85 : 0.35})`, c.target ? 1.4 : 1, [4, 3]);
+      const p = at(c.q);
+      if (!p) continue;
+      ctx.fillStyle = `rgb(${c.col})`;
+      ctx.beginPath();
+      ctx.moveTo(p[0], p[1] - 4 * dpr);
+      ctx.lineTo(p[0] + 4 * dpr, p[1]);
+      ctx.lineTo(p[0], p[1] + 4 * dpr);
+      ctx.lineTo(p[0] - 4 * dpr, p[1]);
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = `700 ${10 * dpr}px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(c.name, p[0] + 7 * dpr, p[1] - 6 * dpr);
     }
     // the point under the Sun
     if (sc.sun) {

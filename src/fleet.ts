@@ -126,11 +126,17 @@ export class Fleet {
       }
     }
     if (!root || !P) return null;
-    // walk the links from the root to id
+    return (this.posesFrom(root, P, t).get(id) as Pose | undefined) ?? null;
+  }
+
+  /**
+   * The places of an assembly's pieces from one of them (its pose at t): the links walked from it — the
+   * station's frame turning (a point of it moves with ω × r), the craft's held still against each other.
+   */
+  posesFrom(root: VesselId | "iss", P: Pose, t: number): Map<VesselId | "iss", Pose> {
     const seen = new Set<VesselId | "iss">([root]);
     const poses = new Map<VesselId | "iss", Pose>([[root, P]]);
     const queue: (VesselId | "iss")[] = [root];
-    // (the station's frame turns once an orbit: a point of it moves with ω × r)
     let om: Vec3 | null = null;
     if (root === "iss") {
       const E = ourState("earth", t);
@@ -162,7 +168,17 @@ export class Fleet {
         queue.push(w);
       }
     }
-    return (poses.get(id) as Pose | undefined) ?? null;
+    return poses;
+  }
+
+  /** The ports a craft's links hold (their indices). */
+  usedPorts(id: VesselId | "iss"): Set<number> {
+    const used = new Set<number>();
+    for (const l of this.links) {
+      if (l.a === id) used.add(l.pa);
+      if (l.b === id) used.add(l.pb);
+    }
+    return used;
   }
 
   /** Every craft but the flown one, where it is at t. */

@@ -18,8 +18,9 @@ export const OUR_TARGETS: OurBody[] = [
   "callisto", "saturn", "mimas", "enceladus", "tethys", "dione", "rhea", "titan", "iapetus", "uranus", "neptune", "triton",
   "pluto", "charon",
 ];
-/** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts) */
-export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss";
+/** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts); "ranger",
+ *  "lander", "endurance": the fleet's craft not flown (fleet.ts) */
+export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";

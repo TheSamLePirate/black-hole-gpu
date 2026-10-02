@@ -1,13 +1,13 @@
 import { Renderer, type FrameStats, type OfflineOptions } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, homePosition, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
+import { bodyView, earthGround, earthStart, ourState, saturnDeparture, tiltAway } from "./system/our-side";
 import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { mouth } from "./wormhole";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyState } from "./system/ephemeris";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
-import { BODY_NAMES, bodyLook, onOurSide, type Body } from "./targeting";
+import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetStart } from "./fleet";
@@ -470,6 +470,30 @@ async function main() {
    */
   function goTo(b: Target): string | null {
     if (settings.ship) return "The Ranger flies there: the planner (O), the autopilot (0: approach)";
+    if (b === "ranger" || b === "lander" || b === "endurance") {
+      // a craft of the fleet: the camera a few of its sizes off it — behind, to its side, above —, moving
+      // with it, around it
+      if (!(settings.system === "gargantua" && settings.wormhole)) return "The craft fly in our universe (through the wormhole of the Gargantua-system scenes)";
+      const p = fleet.pose(b, sim.time);
+      if (!p) return `The ${BODY_NAMES[b]}: not known now`;
+      const R = craftRadius(b);
+      const o = [1.1 * R, 0.8 * R, -1.9 * R];
+      const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [number, number, number];
+      const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
+      const l = Math.hypot(...d);
+      camera.setCinematic(null);
+      if (camera.gravity) camera.setGravity(false);
+      setHomePose(settings, X, [d[0] / l, d[1] / l, d[2] / l], p.ax[1], p.V);
+      settings.motion = "geodesic";
+      camera.setOurLanded(null);
+      camera.sync();
+      settings.rotation = "orbit";
+      camera.selectTarget(b, { focus: true });
+      panel.toast(`Camera: around the ${BODY_NAMES[b]}`);
+      refreshGui();
+      touch();
+      return null;
+    }
     if (b === "iss") {
       // the space station: the camera 110 m off it — behind, to starboard, above —, moving with it,
       // around it
@@ -1293,6 +1317,8 @@ async function main() {
       goTo,
       /** the fleet: the craft, where they are, their dockings (fleet.ts) */
       fleet,
+      /** our side's bodies: place and velocity at a time (home frame) */
+      ourState,
       /** the sky chart: turn to a constellation or star by name, rebuild it (a video frame), what it drew */
       sky: {
         goTo: (name: string) => {

@@ -276,7 +276,13 @@ near the Earth in the space station's plane, the Endurance 800 km up, the Lander
 carries the camera; the others coast on Kepler orbits, or stay docked (`src/fleet.ts`) — docked craft fly as
 one: the one flown pushes the others, the masses added, the assembly turning about its common centre of mass,
 slower by its moment of inertia. All are drawn in one pass (`ship.wgsl`: their depths shared, reversed in
-float; those not flown hidden by what the traced image holds nearer), lit like the Ranger.
+float; those not flown hidden by what the traced image holds nearer), lit like the Ranger. The craft not flown
+are targets like the bodies (Tab, a click, the camera panel's Spacecraft, Go to): on the 3D map with their
+orbits, their ground tracks on the globe and the planisphere, the lock-on HUD (the distance to the hull); PLAN
+gives a rendezvous 200 m off a free docking port of theirs, then the docking autopilot. Any free port docks to
+any other — a craft's, the station's: the capture makes one rigid assembly (the momenta shared), held by the
+station when docked to it; UNDOCK lets the flown craft go, what is left coasting as its own assembly. The
+craft collide with each other and with the station (a blow shared by their masses).
 
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,

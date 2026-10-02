@@ -931,8 +931,9 @@ export class FlightHud {
     E.rBox!.hidden = true;
     E.sBox!.hidden = true;
     E.align!.hidden = true;
-    // (the space station: a rendezvous — no arrival to choose, no orbit's height)
-    const iss = i.target === "iss";
+    // (the space station, a craft of the fleet: a rendezvous — no arrival to choose, no orbit's height)
+    const craft = i.target === "ranger" || i.target === "lander" || i.target === "endurance";
+    const iss = i.target === "iss" || craft;
     E.aBox!.hidden = this.goal !== "star" || iss;
     E.altBox!.hidden = this.goal === "star" && iss;
     // (a free return: from an orbit around the moon's planet)
@@ -945,7 +946,7 @@ export class FlightHud {
     E.retLabel!.hidden = !free;
     E.altV!.textContent = `${this.ourAlt.toLocaleString("en-US")} km`;
     E.retV!.textContent = `${this.ourRet.toLocaleString("en-US")} km`;
-    E.desc!.textContent = this.goal === "orbit" ? `Circular orbit around ${refName} at` : this.goal === "star" ? (iss ? "Rendezvous with the ISS: 200 m off IDA-2, its velocity matched" : `To ${tgtName}:`) : "Through the wormhole's mouth (0.7 AU behind Saturn)";
+    E.desc!.textContent = this.goal === "orbit" ? `Circular orbit around ${refName} at` : this.goal === "star" ? (iss ? (craft ? `Rendezvous with the ${tgtName}: 200 m off its docking port, its velocity matched — then docking` : "Rendezvous with the ISS: 200 m off IDA-2, its velocity matched — then docking") : `To ${tgtName}:`) : "Through the wormhole's mouth (0.7 AU behind Saturn)";
     const busy = !!i.planBusy;
     E.go!.textContent = busy ? "PLANNING…" : "PLAN";
     (E.go as HTMLButtonElement).disabled = busy;
@@ -1723,11 +1724,12 @@ export class FlightHud {
    */
   private drawDock(i: Info) {
     const d = i.dock;
-    this.dock.hidden = !d;
-    if (!d) return;
+    const links = i.links ?? [];
+    this.dock.hidden = !d && !links.length;
+    if (!d && !links.length) return;
     const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
     const ok = (b: boolean) => (b ? "ok" : "");
-    const key = d.docked ? `docked${d.port}` : [d.port, d.range.toFixed(1), d.closing.toFixed(2), d.lateral.toFixed(2), d.lateralRate.toFixed(2), d.angle.toFixed(0), i.dockPhase].join();
+    const key = [links.map((l) => l.title + l.port).join(), d ? [d.target, d.port, d.range.toFixed(1), d.closing.toFixed(2), d.lateral.toFixed(2), d.lateralRate.toFixed(2), d.angle.toFixed(0), i.dockPhase].join() : ""].join("|");
     if (key === this.dockKey) return;
     this.dockKey = key;
     this.dock.replaceChildren();
@@ -1736,17 +1738,20 @@ export class FlightHud {
       r.append(h("span", "", label), h("b", cls, value));
       this.dock.append(r);
     };
-    this.dock.append(h("div", "fl-title", d.docked ? "Docked · ISS" : "Docking · ISS"), h("div", "fl-dock-port", d.name));
-    if (d.docked) {
+    // docked: to what, by which port; UNDOCK lets the flown craft go
+    if (links.length) {
+      this.dock.append(h("div", "fl-title", `Docked · ${links.map((l) => l.title).join(" · ")}`));
+      for (const l of links) this.dock.append(h("div", "fl-dock-port", `${l.title} · ${l.port}`));
       const b = h("button", "fl-go", "UNDOCK") as HTMLButtonElement;
       b.onclick = () => this.act.undock();
       this.dock.append(b);
-      return;
     }
+    if (!d) return;
+    this.dock.append(h("div", "fl-title", `Docking · ${d.title}`), h("div", "fl-dock-port", d.name));
     row("Range", f(d.range, d.range < 100 ? 2 : 1));
     row("Closing", `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
     row("Offset", `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
-    row("Nose to port axis", `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
+    row("Ports' axes", `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
     // the docking autopilot: what it does; the button that engages or stops it (B)
     if (i.dockPhase) row("Autopilot", i.dockPhase, "ok");
     const b = h("button", "fl-go", i.dockPhase ? "STOP AUTO-DOCK" : "AUTO-DOCK · B") as HTMLButtonElement;

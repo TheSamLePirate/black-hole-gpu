@@ -14,6 +14,8 @@ import { OUR_TARGETS, SYSTEM_BODIES, type OurBody, type Settings, type SystemBod
 import { homeOf, homeToRep, ourState } from "./system/our-side";
 import { M_METRES, seenFrom, solarBody, SOLAR_BODIES } from "./system/solar";
 import { issTrack } from "./system/iss";
+import { fleet } from "./fleet";
+import { vesselHulls } from "./system/collide";
 import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
@@ -24,14 +26,24 @@ export type Body = Target;
 export const BODY_NAMES: Record<Body, string> = {
   hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass",
   miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds", iss: "ISS",
+  ranger: "Ranger", lander: "Lander", endurance: "Endurance",
   ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
 };
 
 const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
 /** A body of our universe (the solar system, beyond our end of the wormhole) */
 export const isOurBody = (b: Body): b is OurBody => (OUR_TARGETS as string[]).includes(b);
-/** A target of our universe: a body of the solar system, or the space station */
-export const isOurs = (b: Body) => isOurBody(b) || b === "iss";
+/** One of the fleet's craft (fleet.ts) */
+export const isCraft = (b: Body): b is "ranger" | "lander" | "endurance" => b === "ranger" || b === "lander" || b === "endurance";
+/** A target of our universe: a body of the solar system, the space station, a craft of the fleet */
+export const isOurs = (b: Body) => isOurBody(b) || b === "iss" || isCraft(b);
+/** A craft's half-size, for framing and picking [m] (its hull's sphere; before its mesh loads, a guess) */
+export const craftRadius = (b: "ranger" | "lander" | "endurance") => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40 }[b];
+/** The craft that can be targeted: the fleet's, but the one flown (and those docked to it) */
+export function targetCrafts(s: Settings): Body[] {
+  const mine = s.ship ? fleet.assembly(fleet.active) : [];
+  return (["ranger", "lander", "endurance"] as Body[]).filter((v) => !mine.includes(v as never) && !(s.ship && v === fleet.active));
+}
 /** The space station's half-span, for framing and picking [m] */
 export const ISS_RADIUS_M = 55;
 /** In the black hole's frame, a body of our universe is reached through the mouth: the mouth stands for it */
@@ -182,6 +194,7 @@ export function bodyRadius(s: Settings, body: Body) {
   if (body === "wormhole") return mouth(s).w.rho;
   if (isOurBody(body)) return solarBody(body)!.radius;
   if (body === "iss") return ISS_RADIUS_M / M_METRES;
+  if (isCraft(body)) return craftRadius(body) / M_METRES;
   const sb = systemBody(s, body);
   if (sb) return sb.radius;
   return horizon(s.spin);
@@ -198,7 +211,7 @@ export function angularRadius(s: Settings, body: Body, d: number) {
  * those beyond the wormhole (reached through it: the mouth stands for them until the ship is there).
  */
 export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
-  const ours: Body[] = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : [])] : [];
+  const ours: Body[] = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : []), ...targetCrafts(s)] : [];
   if (onOurSide(s, cam)) return ["wormhole", ...ours, ...(s.system === "gargantua" ? (["hole", ...SYSTEM_BODIES] as Body[]) : [])];
   const list: Body[] = ["hole"];
   if (s.sun) list.push("star");
@@ -225,6 +238,11 @@ export function ourTarget(s: Settings, b: Body, t: number): { pos: Vec3; vel: Ve
     // (where the game flies it: SGP4, or near the ship its own fall)
     const st = issTrack.peek(t) ?? { X: ourState("earth", t).pos, V: ourState("earth", t).vel };
     return { pos: st.X, vel: st.V, radius: ISS_RADIUS_M / M_METRES, mass: 0 };
+  }
+  if (isCraft(b)) {
+    // (where the fleet has it: its Kepler orbit, docked, or — flown — the camera's place)
+    const p = fleet.pose(b, t) ?? { X: ourState("earth", t).pos, V: ourState("earth", t).vel };
+    return { pos: p.X, vel: p.V, radius: craftRadius(b) / M_METRES, mass: 0 };
   }
   return { pos: [0, 0, 0], vel: [0, 0, 0], radius: mouth(s).w.rho, mass: 0 };
 }
@@ -401,7 +419,7 @@ export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): B
   if (onOurSide(s, cam)) {
     const X = cameraHome(s, cam);
     let best: Body | null = null, bestOff = Infinity;
-    for (const b of ["wormhole", ...OUR_TARGETS, ...(s.iss ? ["iss"] : [])] as Body[]) {
+    for (const b of ["wormhole", ...OUR_TARGETS, ...(s.iss ? ["iss"] : []), ...targetCrafts(s)] as Body[]) {
       const T = ourTarget(s, b, time);
       const d = sub(T.pos, X);
       const D = Math.hypot(...d);
