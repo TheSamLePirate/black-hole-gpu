@@ -291,7 +291,12 @@ glass see-through (the lamps' highlights on it), the outside's light let in only
 point sees, baked; the Sun's patches through the windows from the shadow map), cool lamps along the ceiling,
 the consoles charcoal with their silk-screened labels and LEDs, the screens in the film's cyan — block
 diagrams, text, the attitude (the horizon turning with the ship), the orbit —, the flight sticks moving with
-the commands (the pilot's and the autopilots').
+the commands (the pilot's and the autopilots'). The screens show the flight's real telemetry, drawn sharp
+(`src/ui/cockpitscreens.ts`, a 2048 × 1024 texture of eight displays redrawn eight times a second): the
+attitude (horizon, pitch ladder, roll, the motion's marker, speed and height), the orbit to scale, the target
+and the path's next event, the systems (thrust, propellant, mass, SAS, autopilot), the docking cross-hair, the
+manoeuvre plan, the clocks, the pilot's log. The view "Cabin" lets the camera move about it (the flight keys;
+it glides along the walls). The cabin has its own lean shader (`fsCabin`) and a depth pre-pass.
 
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,

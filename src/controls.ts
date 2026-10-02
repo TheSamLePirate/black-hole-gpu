@@ -33,7 +33,7 @@ import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelie
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "./system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint, type RendezvousPoint } from "./system/iss-plan";
-import { stationHulls, vesselHulls, type TriBVH } from "./system/collide";
+import { cockpitHull, stationHulls, vesselHulls, type TriBVH } from "./system/collide";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -1400,6 +1400,7 @@ export class CameraController {
     this.rig.on = false; // (set again below while the rig moves the camera)
     if (pilotNow) {
       if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
+      else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
       this.flyShip(dt, pad);
       this.flyVel = [0, 0, 0];
     } else if (!this.gravity && free && this.rigStep(dt, move, fast)) {
@@ -2118,6 +2119,7 @@ export class CameraController {
     this.shipAim = null;
     Object.assign(this.outside, { yaw: 0, pitch: 12, dist: V.viewDist, eye: [18 * k, 6 * k, -36 * k] as Vec3, fyaw: -25, fpitch: -5, fvel: [0, 0, 0] as Vec3 });
     this.flyby.E = null;
+    this.cabinCam = { eye: null, vel: [0, 0, 0] };
     const wasOut = !!this.outsideView();
     if (wasOut) s.shipMount = this.hullMount;
     // (the look recentred: the ship keeps its attitude — the camera turns back with the mount)
@@ -2237,6 +2239,11 @@ export class CameraController {
       return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
     }
     if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
+    // (about the cabin: where the camera has moved to, looking along the nose — the look turns it)
+    if (this.s.shipMount === "cabin") {
+      const e = this.cabinCam.eye ?? mountPose("cockpit").eye;
+      return { eye: e, aim: [e[0], e[1], e[2] + 10] };
+    }
     if (v === "station") {
       const sc = this.stationCam();
       if (sc) return sc;
@@ -2267,6 +2274,8 @@ export class CameraController {
     if (s.shipMount !== this.lastMount) {
       if (this.lastMount && s.ship) this.mountAnim = { from: this.lastPose ?? this.shipPose(), t: 0 };
       if (MOUNTS[s.shipMount as Mount] && !(MOUNTS[s.shipMount as Mount] as { outside?: string }).outside) this.hullMount = s.shipMount as Mount;
+      // (about the cabin: from where the camera was in it — the pilot's seat, else its own)
+      if (s.shipMount === "cabin") this.cabinCam = { eye: this.lastMount === "cockpit" && this.lastPose ? ([...this.lastPose.eye] as Vec3) : this.cabinCam.eye, vel: [0, 0, 0] };
       const prevMount = this.lastMount;
       this.lastMount = s.shipMount;
       const v = this.outsideView();
@@ -2387,8 +2396,8 @@ export class CameraController {
     // down (not Ctrl: Ctrl+W closes the tab), arrows too
     const k = (c: string) => (this.codes.has(c) ? 1 : 0);
     const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
-    // (outside, free: the keys move the camera — the ship flies on as it was)
-    if (this.outsideView() === "free") return i;
+    // (outside, free — or about the cabin: the keys move the camera; the ship flies on as it was)
+    if (this.outsideView() === "free" || this.s.shipMount === "cabin") return i;
     i.pitch = k("KeyS") - k("KeyW");
     i.yaw = k("KeyD") - k("KeyA");
     i.roll = k("KeyE") - k("KeyQ");
@@ -2584,6 +2593,53 @@ export class CameraController {
     setMountVessel(fleet.active);
     this.settleMount();
     this.placeOnPose(p);
+  }
+
+  /** About the cabin: the camera's place (ship frame [m]; null: the pilot's seat), its velocity. */
+  private cabinCam: { eye: Vec3 | null; vel: Vec3 } = { eye: null, vel: [0, 0, 0] };
+
+  /**
+   * The keys move the camera about the cabin (Z Q S D, A E on AZERTY; Shift faster): along the look,
+   * eased (~0.12 s), 1.1 m/s; it glides along what it meets (a 15 cm sphere against the cabin's
+   * triangles), within the cabin's box.
+   */
+  private moveCabin(dt: number, move: number[], fast: boolean) {
+    const s = this.s;
+    const C = this.cabinCam;
+    const e0 = C.eye ?? mountPose("cockpit").eye;
+    const S = shipToCamera({ eye: e0, aim: [e0[0], e0[1], e0[2] + 10] }, s.shipLookYaw, s.shipLookPitch).S;
+    const v = fast ? 3 : 1.1;
+    const want = lin(lin(S[2], move[0]! * v, S[0], move[1]! * v), 1, S[1], move[2]! * v);
+    C.vel = lin(C.vel, 1, sub3(want, C.vel), 1 - Math.exp(-dt / 0.12));
+    if (Math.hypot(...C.vel) < 1e-3) return (C.vel = [0, 0, 0]);
+    this.activity = performance.now();
+    let e: Vec3 = [...e0] as Vec3;
+    let d = lin(C.vel, dt, C.vel, 0);
+    const R = 0.15;
+    const H = cockpitHull;
+    for (let k = 0; k < 3 && H.bvh; k++) {
+      const len = Math.hypot(...d);
+      if (len < 1e-6) break;
+      const dir = lin(d, 1 / len, d, 0);
+      const hit = H.bvh.segment(e, lin(e, 1, dir, len + R));
+      if (!hit) {
+        e = lin(e, 1, d, 1);
+        d = [0, 0, 0];
+        break;
+      }
+      // (up to the wall, a sphere's radius off it; then along it)
+      const go = Math.max(0, hit.t * (len + R) - R);
+      e = lin(e, 1, dir, go);
+      let n = hit.n;
+      if (dot3(n, dir) > 0) n = lin(n, -1, n, 0);
+      const rest = lin(d, 1, dir, -go);
+      d = lin(rest, 1, n, -dot3(rest, n));
+      C.vel = lin(C.vel, 1, n, -dot3(C.vel, n));
+    }
+    if (!H.bvh) e = lin(e, 1, d, 1);
+    // (within the cabin's box)
+    if (H.bvh) e = [0, 1, 2].map((i) => clamp(e[i]!, H.lo[i]! + R, H.hi[i]! - R)) as Vec3;
+    C.eye = e;
   }
 
   /** Puts the camera on the flown craft at a pose (home): the camera's axes from the craft's, through the

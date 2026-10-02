@@ -193,6 +193,8 @@ const emptyHull = (): Hull => ({ points: [], bvh: null, radius: 0, lo: [0, 0, 0]
 export const vesselHulls: Record<"ranger" | "lander" | "endurance", Hull> = { ranger: emptyHull(), lander: emptyHull(), endurance: emptyHull() };
 /** The Ranger's. */
 export const rangerHull = vesselHulls.ranger;
+/** The Ranger's cabin (ship frame, metres): its triangles — what the camera moving about it meets — and its box. */
+export const cockpitHull: { bvh: TriBVH | null; lo: Vec3; hi: Vec3 } = { bvh: null, lo: [0, 0, 0], hi: [0, 0, 0] };
 
 /** The space station's parts for contacts (their rest frame, metres): one hierarchy each (0: the
  *  station itself, k + 1: joint k's). */

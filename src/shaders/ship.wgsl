@@ -492,91 +492,8 @@ fn cabinHeight(kind: u32, c: vec2f, fw: f32) -> f32 {
   }
 }
 
-fn glyph(p: vec2f, seed: f32) -> f32 {
-  // a 3 × 5 cell block of "characters": lit cells by a hash — text, from afar
-  let cell = floor(p * vec2f(3.0, 5.0));
-  return step(0.45, hash3(vec3i(vec2i(cell), i32(seed * 977.0))));
-}
-
-/** A screen's picture (its own UV 0…1, its number), as the film's: cyan monochrome — block diagrams,
- *  columns of text, the attitude, the orbit; one in four black with white and amber text. The flight's
- *  figures drive them. Linear radiance, display-referred. */
-fn screenUI(uv: vec2f, k: f32, t: f32) -> vec3f {
-  let id = u32(k + 0.5) % 5u;
-  let base = vec3f(0.05, 0.3, 0.42);     // the lit screen
-  let ink = vec3f(0.55, 0.92, 1.0);      // its brighter lines and text
-  let dark = vec3f(0.015, 0.08, 0.12);   // its darker text
-  let p = uv * 2.0 - 1.0;
-  let up = S.dash0.xyz;
-  var c = base;
-  if (id == 0u) {
-    // the attitude: the horizon turned by the roll, moved by the pitch (the local up in the ship's frame)
-    let roll = atan2(-up.x, up.y);
-    let pitch = asin(clamp(up.z, -1.0, 1.0));
-    let q = vec2f(cos(roll) * p.x + sin(roll) * p.y, -sin(roll) * p.x + cos(roll) * p.y);
-    let y = q.y + pitch * 1.6;
-    c = mix(base * 1.25, base * 0.55, step(0.0, -y));
-    c = mix(c, ink, 1.0 - smoothstep(0.0, 0.02, abs(y)));
-    for (var i = -3; i <= 3; i++) {
-      if (i == 0) { continue; }
-      let yy = y - f32(i) * 0.28;
-      c = mix(c, ink, 0.8 * (1.0 - smoothstep(0.0, 0.012, abs(yy))) * step(abs(q.x), 0.18 + 0.06 * f32(abs(i) % 2)));
-    }
-    c = mix(c, vec3f(1.0, 0.8, 0.4), (1.0 - smoothstep(0.0, 0.025, abs(p.y))) * step(0.12, abs(p.x)) * step(abs(p.x), 0.4));
-  } else if (id == 1u || id == 4u) {
-    // a block diagram: boxes, the lines between them, labels in them
-    let cell = floor(uv * vec2f(3.0, 4.0));
-    let f = fract(uv * vec2f(3.0, 4.0));
-    let hb = hash3(vec3i(vec2i(cell), i32(id) * 7 + i32(k)));
-    let inBox = step(0.12, f.x) * step(f.x, 0.88) * step(0.2, f.y) * step(f.y, 0.8) * step(0.25, hb);
-    let edge = inBox * (1.0 - step(0.15, f.x) * step(f.x, 0.85) * step(0.24, f.y) * step(f.y, 0.76));
-    c = mix(c, base * 1.5, inBox * 0.6);
-    c = mix(c, ink, edge);
-    let line = (1.0 - smoothstep(0.0, 0.015, abs(f.y - 0.5))) * step(f.x, 0.12) + (1.0 - smoothstep(0.0, 0.015, abs(f.x - 0.5))) * step(f.y, 0.2) * step(0.6, hb);
-    c = mix(c, ink, clamp(line, 0.0, 1.0) * 0.8);
-    let lab = glyph(fract(vec2f(f.x * 10.0, f.y * 6.0)), floor(f.x * 10.0) + hb * 91.0) * inBox * step(0.3, f.x) * step(f.x, 0.75) * step(0.42, f.y) * step(f.y, 0.58);
-    c = mix(c, dark, lab);
-    // (a figure that changes: the thrust's level, flickering in one of them)
-    let blink = step(0.5, fract(t * 1.5 + hb * 3.0)) * step(0.85, hb);
-    c = mix(c, ink * 1.3, blink * inBox * 0.3);
-  } else if (id == 2u) {
-    // columns of text, scrolling slowly; a trace at the foot
-    let rows = 16.0;
-    let row = floor(uv.y * rows - t * 0.6);
-    let lx = uv.x * 22.0;
-    let word = hash3(vec3i(i32(floor(lx / 5.0)), i32(row), i32(k)));
-    let on = glyph(fract(vec2f(lx, uv.y * rows - t * 0.6)), floor(lx) + row * 31.0) * step(fract(lx), 0.75) * step(fract(uv.y * rows - t * 0.6), 0.7) * step(0.3, word) * step(fract(lx / 5.0), 0.8) * step(uv.y, 0.7);
-    c = mix(c, dark, on);
-    let wave = 0.84 + 0.06 * sin(uv.x * 18.0 + t * 1.3) * (0.4 + 0.6 * S.dash2.w);
-    c = mix(c, ink, 1.0 - smoothstep(0.0, 0.012, abs(uv.y - wave)));
-  } else {
-    // black with white and amber text (the film's upper screen): the flight's figures, a blinking line
-    c = vec3f(0.006, 0.008, 0.01);
-    let rows = 9.0;
-    let row = floor(uv.y * rows);
-    let lx = uv.x * 14.0;
-    let on = glyph(fract(vec2f(lx, uv.y * rows)), floor(lx) + row * 17.0 + floor(t * 0.5) * step(4.0, row)) * step(fract(lx), 0.75) * step(fract(uv.y * rows), 0.7) * step(0.3, hash3(vec3i(i32(floor(lx / 4.0)), i32(row), 5)));
-    let col = select(vec3f(1.0, 0.95, 0.75), vec3f(1.0, 0.7, 0.2), row > 5.0);
-    c = mix(c, col * 0.9, on * select(1.0, step(0.5, fract(t * 0.9)), row == 8.0));
-  }
-  // (the screen's fine lines, its edges' fall-off)
-  c *= 0.9 + 0.1 * sin(uv.y * 600.0);
-  let edge = smoothstep(0.0, 0.03, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
-  return c * edge;
-}
-
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
-  return shade(in, front, false);
-}
-
-// the cockpit's glass (71): see-through, its reflections over the view (blended, premultiplied)
-@fragment
-fn fsGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
-  return shade(in, front, true);
-}
-
-fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   // (the space station before it: hidden there — the station is composited first, into the traced image)
   if (S.box.z > 0.0) {
     let dims = vec2f(textureDimensions(scene));
@@ -601,9 +518,6 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   let ng = normalize(in.n) * side;       // geometric (smoothed) normal, camera frame
   let qn = normalize(in.qn) * side;      // same, ship frame
   let part = u32(in.mat + 0.5);
-  // (the cockpit's glass in its own pass; the rest in the opaque one)
-  if ((part == 71u) != glassPass) { discard; }
-  let cabin = part >= 60u && part != 71u;
   let fw = max(length(fwidth(in.q)), 1e-5);
   // specular anti-aliasing (Kaplanyan & Hoffman 2016): normal variation within the pixel
   let dn = fwidth(ng);
@@ -619,25 +533,12 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   let size = w.x * vec2f(1.1, 0.7) + w.y * vec2f(0.7, 1.1) + w.z * vec2f(0.7, 0.7);
   let axis = i32(w.y + 2.0 * w.z);
   let e = max(0.5 * fw, 0.0015);
-  // (the hull's plating: the Ranger's hull alone — the cabin has its own relief)
-  var h0 = vec2f(0.0, 0.5);
-  var g = vec2f(0.0);
-  if (!cabin) {
-    h0 = plate(c, size, axis, fw);
-    g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
-  }
+  let h0 = plate(c, size, axis, fw);
+  let g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
   var grad = w.x * vec3f(0.0, g.y, g.x) + w.y * vec3f(g.x, 0.0, g.y) + w.z * vec3f(g.x, g.y, 0.0);
   grad -= dot(grad, qn) * qn;
   let bumpOn = select(0.0, 1.0, kind == 0u && (part == 0u || part == 4u));
-  var qb = normalize(qn - grad * bumpOn);
-  // (the cabin: its own relief, on the same plane)
-  if (cabin) {
-    let hc = cabinHeight(part, c, fw);
-    let gc = (vec2f(cabinHeight(part, c + vec2f(e, 0.0), fw), cabinHeight(part, c + vec2f(0.0, e), fw)) - hc) / e;
-    var gr = w.x * vec3f(0.0, gc.y, gc.x) + w.y * vec3f(gc.x, 0.0, gc.y) + w.z * vec3f(gc.x, gc.y, 0.0);
-    gr -= dot(gr, qn) * qn;
-    qb = normalize(qn - gr);
-  }
+  let qb = normalize(qn - grad * bumpOn);
   var n = normalize((model * vec4f(qb, 0.0)).xyz);
   // (the maps' footprint: the UV's and the position's derivatives, taken here — in uniform control flow)
   let duvx = dpdx(in.uv);
@@ -648,9 +549,7 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   // ---- material
   let tone = h0.y;
   let seamDepth = clamp(-h0.x / 0.003, 0.0, 1.0);
-  // (the cabin: one octave — its surfaces fill the view, the shading's cost counts)
-  var grime = vnoise(in.q * 1.3) * 0.55;
-  if (!cabin) { grime += vnoise(in.q * 6.1) * 0.3 + vnoise(in.q * 23.0) * 0.15; } else { grime += 0.25; }
+  let grime = vnoise(in.q * 1.3) * 0.55 + vnoise(in.q * 6.1) * 0.3 + vnoise(in.q * 23.0) * 0.15;
   var albedo = vec3f(S.mat.x) * (0.92 + 0.12 * tone) * (1.0 - 0.22 * grime * grime) * mix(1.0, 0.45, seamDepth * bumpOn);
   var metal = S.mat.y;
   var rough = 0.5 + 0.2 * grime;
@@ -688,56 +587,7 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
     case 24u: { albedo = vec3f(0.1); metal = 0.0; rough = 0.5; coat = 0.0; emit = vec3f(0.35, 0.6, 1.0) * 0.6; }
     case 25u: { albedo = vec3f(0.25); metal = 0.0; rough = 0.8; coat = 0.0; }
     case 26u: { albedo = vec3f(0.62, 0.62, 0.6); metal = 0.3; rough = 0.5; coat = 0.2 * coat; }
-    // the cockpit (each part's tone varied by its hash; the small parts on the consoles: switches, some
-    // of them lit)
-    case 60u: { albedo = vec3f(0.07, 0.075, 0.085) * (1.0 - 0.3 * grime); metal = 0.6; rough = 0.42 + 0.25 * grime; coat = 0.0; }
-    case 61u, 70u: { albedo = vec3f(0.6, 0.62, 0.64) * (0.9 + 0.2 * fract(in.uv.y)) * (1.0 - 0.12 * grime); metal = 0.0; rough = 0.85; coat = 0.0; }
-    case 62u: {
-      // the consoles: charcoal, their panels' markings silk-screened light grey (labels, lines), the small
-      // parts — switches — a little lighter
-      let small = floor(in.uv.y) < 4.0;
-      // (labels: a thin strip — text from arm's length — in one cell of eight on a 6 × 2.5 cm grid; a rule
-      // every 20 cm; faded out where a pixel spans them)
-      let gc = c / vec2f(0.06, 0.025);
-      let fc = fract(gc);
-      let hc = hash3(vec3i(vec2i(floor(gc)), 3));
-      let fadeL = clamp(0.004 / (1.5 * fw) - 0.35, 0.0, 1.0);
-      let lab = step(0.87, hc) * step(0.1, fc.x) * step(fc.x, 0.25 + 0.6 * fract(hc * 13.0)) * step(0.38, fc.y) * step(fc.y, 0.62) * fadeL;
-      let ruled = (1.0 - smoothstep(0.0, 0.0008, abs(fract(c.y * 5.0 + 0.5) - 0.5) / 5.0)) * fadeL;
-      albedo = select(vec3f(0.03, 0.033, 0.036) * (0.85 + 0.3 * fract(in.uv.y)), vec3f(0.07, 0.072, 0.075), small);
-      albedo = mix(albedo, vec3f(0.5), clamp(lab * 0.85 + ruled * 0.3, 0.0, 1.0) * select(1.0, 0.0, small));
-      metal = 0.0; rough = 0.55 + 0.15 * grime; coat = 0.1 * coat;
-    }
-    case 63u: { albedo = vec3f(0.04, 0.045, 0.055) * (0.85 + 0.3 * fract(in.uv.y)); metal = 0.0; rough = 0.92; coat = 0.0; }
-    case 64u: { albedo = vec3f(0.8, 0.8, 0.78) * (1.0 - 0.08 * grime); metal = 0.0; rough = 0.22; coat = 0.6 * coat; }
-    case 65u: { albedo = vec3f(0.37, 0.34, 0.26) * (0.85 + 0.3 * fract(in.uv.y)) * (1.0 - 0.2 * grime); metal = 0.0; rough = 0.95; coat = 0.0; }
-    case 66u: {
-      // brushed aluminium: streaks along the part's longest axis (the noise stretched)
-      let st = vnoise(in.q * vec3f(3.0, 3.0, 3.0) + vec3f(0.0, 0.0, in.q.x * 80.0));
-      albedo = vec3f(0.62, 0.62, 0.64) * (0.92 + 0.08 * st); metal = 1.0; rough = 0.24 + 0.14 * st + 0.1 * grime; coat = 0.0;
-    }
-    case 67u: { albedo = vec3f(0.03, 0.032, 0.035); metal = 0.2; rough = 0.45; coat = 0.0; }
-    case 68u: { albedo = vec3f(0.008); metal = 0.0; rough = 0.06; coat = 0.0; }
-    case 69u: { albedo = vec3f(0.16, 0.16, 0.17) * (1.0 - 0.2 * grime); metal = 0.75; rough = 0.38 + 0.2 * grime; coat = 0.0; }
-    case 72u: { albedo = vec3f(0.025); metal = 0.0; rough = 0.62; coat = 0.0; }
-    // (the glass: no diffuse light of its own — the lamps' highlights only)
-    case 71u: { albedo = vec3f(0.0); metal = 0.0; rough = 0.05; coat = 0.0; }
     default: {}
-  }
-  // the cabin's own light: the screens' pictures, the switches' LEDs (green, amber, red, blue — a few
-  // blinking), the clock the screens run on
-  let tm = S.dash2.x;
-  if (part == 68u) {
-    let k = floor(in.uv.x * 0.5);
-    emit = screenUI(vec2f(in.uv.x - 2.0 * k, in.uv.y), k, tm) * 2.2;
-  } else if ((part == 62u || part == 66u || part == 69u) && floor(in.uv.y) < 2.5 && fract(in.uv.y) > 0.72) {
-    // (the tiniest parts only — indicators, not the switches —, a soft dome lit from within)
-    let hh = fract(in.uv.y);
-    // (the film's: white and amber, a rare red)
-    let led = select(select(vec3f(1.0, 0.95, 0.85), vec3f(1.0, 0.55, 0.12), hh > 0.84), vec3f(1.0, 0.18, 0.08), hh > 0.94);
-    let blink = select(1.0, step(0.5, fract(tm * (0.7 + hh) + hh * 7.0)), hh > 0.95);
-    emit = led * 1.2 * blink * (0.5 + 0.5 * clamp(dot(n, normalize(-in.p)), 0.0, 1.0));
-    albedo = led * 0.15;
   }
   rough = clamp(rough * S.mat.z, 0.03, 1.0);
   let alpha = rough * rough;
@@ -745,8 +595,6 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   metal = clamp(metal, 0.0, 1.0);
   // baked per vertex (≈ 0.45 m triangles): softened a little, and the seams' own cavity added
   let ao = pow(clamp(in.ao, 0.0, 1.0), 0.8) * mix(1.0, 0.55, seamDepth * bumpOn);
-  // (the cabin: the outside's light only through its windows — the share of the sky each point sees, baked)
-  let skyV = select(1.0, clamp(in.uv.x, 0.0, 1.0), cabin && part != 68u);
 
   // ---- lighting
   let v = normalize(-in.p);
@@ -781,12 +629,10 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   // the probe elsewhere; rougher ones the probe (one cone of taps, as sharp as the smoother layer)
   let cr = clamp(0.05 * S.mat.z, 0.03, 1.0);
   let ar = min(rough, cr);
-  // (the traced image's own reflection: for the smooth layers only — the cabin's matt surfaces skip it)
-  var sr = vec4f(0.0);
-  if (!cabin || ar < 0.3) { sr = screenRefl(r, ar * ar); }
+  let sr = screenRefl(r, ar * ar);
   let wB = sr.w * (1.0 - smoothstep(0.1, 0.3, rough));
   let wC = sr.w * (1.0 - smoothstep(0.1, 0.3, cr));
-  var col = (mix(envSpec(r, rough), sr.rgb, wB) * fss * occS + (emsE + kd) * E / PI * occD) * skyV;
+  var col = mix(envSpec(r, rough), sr.rgb, wB) * fss * occS + (emsE + kd) * E / PI * occD;
 
   // the key light (a star, a disc of angular radius rs): Lambert and GGX on the base, the varnish's own
   // sharp highlight on top — shadowed by the hull (its shadow map, from this light)
@@ -844,34 +690,9 @@ fn shade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   }
   // (resolved by the MSAA as c / (1 + L): a highlight's sample no longer outweighs the pixel's others —
   // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
-  // the cabin's lamps: warm lights along the ceiling and over the consoles (display-referred, as the
-  // thrusters': the cabin as lit whatever the exposure the outside sets), GGX highlights too
-  var cl = vec3f(0.0);
-  if (cabin || glassPass) {
-    let lamps = array<vec3f, 4>(vec3f(0.0, 2.1, -3.2), vec3f(0.0, 2.15, -0.3), vec3f(0.85, 2.05, 2.4), vec3f(-0.85, 2.05, 2.4));
-    for (var k = 0; k < 4; k++) {
-      let lp = (model * vec4f(lamps[k], 1.0)).xyz;
-      let L = lp - in.p;
-      let d2 = dot(L, L);
-      let l = L * inverseSqrt(d2);
-      let nl = max(dot(n, l), 0.0);
-      let hv = normalize(l + v);
-      let spec = ggxSpec(clamp(dot(n, hv), 0.0, 1.0), nv, nl, max(rough, 0.08), 0.05) * (f0 + (1.0 - f0) * pow(1.0 - clamp(dot(v, hv), 0.0, 1.0), 5.0));
-      cl += vec3f(0.85, 0.93, 1.0) * (albedo * (1.0 - metal) / PI + spec) * nl / (d2 + 0.25);
-    }
-    // (and the light the cabin's pale walls send round it: a soft fill)
-    cl = (cl * 3.5 + albedo * (1.0 - metal) * vec3f(0.12, 0.14, 0.16)) * ao;
-  }
   // (the thrusters light the flown craft; the lights, display-referred too: seen whatever the exposure)
   let own = select(0.0, 1.0, in.ii == 0u);
-  if (glassPass) {
-    // the glass: the cabin reflected (its lamps, a faint glow) by Fresnel, the outside seen through it
-    let F = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
-    let og = (cl + vec3f(0.02, 0.025, 0.03) * F) * S.jet.y;
-    let a = clamp(0.02 + 0.9 * F, 0.0, 1.0);
-    return vec4f(og / (1.0 + dot(og, vec3f(0.2126, 0.7152, 0.0722))), a);
-  }
-  let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0 + cl) * S.jet.y;
+  let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }
 
@@ -1031,4 +852,187 @@ fn compFs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let m = c.rgb / c.a;
   let h = m / max(1.0 - dot(m, vec3f(0.2126, 0.7152, 0.0722)), 1.0 / 60000.0);
   return vec4f(min(h, vec3f(60000.0)) * c.a, c.a); // premultiplied (MSAA-resolved coverage)
+}
+
+// ------------------------------------------------------------------------------------ the cabin
+// The Ranger's cockpit (materials 60–72: scripts/build-cockpit.ts), its own pipeline: the cabin fills the
+// view from inside — a lean shader (no hull plating, no maps, no thrusters, no traced reflections). Its
+// screens show the telemetry drawn in a texture (ui/cockpitscreens.ts: 4 × 2 slots); its glass, the
+// outside seen through it, in a blended pass.
+@group(0) @binding(17) var screenTex: texture_2d<f32>;
+
+fn glyph(p: vec2f, seed: f32) -> f32 {
+  // a 3 × 5 cell block of "characters": lit cells by a hash — text, from afar
+  let cell = floor(p * vec2f(3.0, 5.0));
+  return step(0.45, hash3(vec3i(vec2i(cell), i32(seed * 977.0))));
+}
+
+
+// a 4-tap shadow (the cabin's sun patches)
+fn shadowCabin(p: vec3f, ng: vec3f, l: vec3f) -> f32 {
+  let q = lightClip(p + ng * 0.05 + l * 0.02);
+  let uv = vec2f(0.5 + 0.5 * q.x, 0.5 - 0.5 * q.y);
+  if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 1.0; }
+  let texel = 1.0 / vec2f(textureDimensions(shadowTex));
+  var sum = 0.0;
+  for (var i = 0; i < 4; i++) {
+    let o = vec2f(select(-1.0, 1.0, (i & 1) == 1), select(-1.0, 1.0, (i & 2) == 2)) * 1.2;
+    sum += textureSampleCompareLevel(shadowTex, shadowSamp, uv + o * texel, q.z - 0.0015);
+  }
+  return sum * 0.25;
+}
+
+@fragment
+fn fsCabin(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  return cabinShade(in, front, false);
+}
+
+// the glass (71): see-through, the lamps' highlights over the view (blended, premultiplied)
+@fragment
+fn fsCabinGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  return cabinShade(in, front, true);
+}
+
+fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
+  let part = u32(in.mat + 0.5);
+  if ((part == 71u) != glassPass) { discard; }
+  let model = inst[in.ii].model;
+  if (glassPass) {
+    // the glass, the short way: its Fresnel, the lamps' highlights on it, the outside seen through it
+    let gn = normalize(in.n) * select(-1.0, 1.0, front);
+    let gv = normalize(-in.p);
+    let gnv = clamp(dot(gn, gv), 1e-4, 1.0);
+    let F = 0.04 + 0.96 * pow(1.0 - gnv, 5.0);
+    let lampsG = array<vec3f, 4>(vec3f(0.0, 2.1, -3.2), vec3f(0.0, 2.15, -0.3), vec3f(0.85, 2.05, 2.4), vec3f(-0.85, 2.05, 2.4));
+    var hl = 0.0;
+    for (var i = 0; i < 4; i++) {
+      let L = (model * vec4f(lampsG[i], 1.0)).xyz - in.p;
+      let d2 = dot(L, L);
+      let hv = normalize(L * inverseSqrt(d2) + gv);
+      hl += pow(clamp(dot(gn, hv), 0.0, 1.0), 400.0) * 60.0 / (d2 + 0.25);
+    }
+    let og = vec3f(0.85, 0.93, 1.0) * (hl * F + 0.02 * F) * S.jet.y;
+    let a = clamp(0.02 + 0.9 * F, 0.0, 1.0);
+    return vec4f(og / (1.0 + dot(og, vec3f(0.2126, 0.7152, 0.0722))), a);
+  }
+  let side = select(-1.0, 1.0, front);
+  let ng = normalize(in.n) * side;
+  let qn = normalize(in.qn) * side;
+  let fw = max(length(fwidth(in.q)), 1e-5);
+  // the screens' picture: its slot in the texture (the screen's number), the derivatives taken here
+  let k = floor(in.uv.x * 0.5);
+  // (the model's screen UVs: the picture upside down)
+  let su = vec2f(in.uv.x - 2.0 * k, in.uv.y);
+  let slot = u32(k + 0.5) % 8u;
+  let auv = (vec2f(f32(slot % 4u), f32(slot / 4u)) + vec2f(0.02) + su * 0.96) / vec2f(4.0, 2.0);
+  let gx = dpdx(auv);
+  let gy = dpdy(auv);
+  // relief on the dominant plane
+  let aq = abs(qn);
+  let w = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), aq.y >= aq.z), vec3f(1.0, 0.0, 0.0), aq.x >= aq.y && aq.x >= aq.z);
+  let c = w.x * in.q.zy + w.y * in.q.xz + w.z * in.q.xy;
+  let e = max(0.5 * fw, 0.0015);
+  let hc = cabinHeight(part, c, fw);
+  let gc = (vec2f(cabinHeight(part, c + vec2f(e, 0.0), fw), cabinHeight(part, c + vec2f(0.0, e), fw)) - hc) / e;
+  var gr = w.x * vec3f(0.0, gc.y, gc.x) + w.y * vec3f(gc.x, 0.0, gc.y) + w.z * vec3f(gc.x, gc.y, 0.0);
+  gr -= dot(gr, qn) * qn;
+  let n = normalize((model * vec4f(normalize(qn - gr), 0.0)).xyz);
+  // the material
+  let grime = vnoise(in.q * 1.3) * 0.55 + 0.25;
+  var albedo = vec3f(0.5);
+  var metal = 0.0;
+  var rough = 0.6;
+  var coat = 0.0;
+  var emit = vec3f(0.0);
+  switch part {
+    // the cockpit (each part's tone varied by its hash; the small parts on the consoles: switches, some
+    // of them lit)
+    case 60u: { albedo = vec3f(0.07, 0.075, 0.085) * (1.0 - 0.3 * grime); metal = 0.6; rough = 0.42 + 0.25 * grime; coat = 0.0; }
+    case 61u, 70u: { albedo = vec3f(0.6, 0.62, 0.64) * (0.9 + 0.2 * fract(in.uv.y)) * (1.0 - 0.12 * grime); metal = 0.0; rough = 0.85; coat = 0.0; }
+    case 62u: {
+      // the consoles: charcoal, their panels' markings silk-screened light grey (labels, lines), the small
+      // parts — switches — a little lighter
+      let small = floor(in.uv.y) < 4.0;
+      // (labels: a thin strip — text from arm's length — in one cell of eight on a 6 × 2.5 cm grid; a rule
+      // every 20 cm; faded out where a pixel spans them)
+      let gc = c / vec2f(0.06, 0.025);
+      let fc = fract(gc);
+      let hc = hash3(vec3i(vec2i(floor(gc)), 3));
+      let fadeL = clamp(0.004 / (1.5 * fw) - 0.35, 0.0, 1.0);
+      let lab = step(0.87, hc) * step(0.1, fc.x) * step(fc.x, 0.25 + 0.6 * fract(hc * 13.0)) * step(0.38, fc.y) * step(fc.y, 0.62) * fadeL;
+      let ruled = (1.0 - smoothstep(0.0, 0.0008, abs(fract(c.y * 5.0 + 0.5) - 0.5) / 5.0)) * fadeL;
+      albedo = select(vec3f(0.03, 0.033, 0.036) * (0.85 + 0.3 * fract(in.uv.y)), vec3f(0.07, 0.072, 0.075), small);
+      albedo = mix(albedo, vec3f(0.5), clamp(lab * 0.85 + ruled * 0.3, 0.0, 1.0) * select(1.0, 0.0, small));
+      metal = 0.0; rough = 0.55 + 0.15 * grime; coat = 0.1 * coat;
+    }
+    case 63u: { albedo = vec3f(0.04, 0.045, 0.055) * (0.85 + 0.3 * fract(in.uv.y)); metal = 0.0; rough = 0.92; coat = 0.0; }
+    case 64u: { albedo = vec3f(0.8, 0.8, 0.78) * (1.0 - 0.08 * grime); metal = 0.0; rough = 0.22; coat = 0.6 * coat; }
+    case 65u: { albedo = vec3f(0.37, 0.34, 0.26) * (0.85 + 0.3 * fract(in.uv.y)) * (1.0 - 0.2 * grime); metal = 0.0; rough = 0.95; coat = 0.0; }
+    case 66u: {
+      // brushed aluminium: streaks along the part's longest axis (the noise stretched)
+      let st = vnoise(in.q * vec3f(3.0, 3.0, 3.0) + vec3f(0.0, 0.0, in.q.x * 80.0));
+      albedo = vec3f(0.62, 0.62, 0.64) * (0.92 + 0.08 * st); metal = 1.0; rough = 0.24 + 0.14 * st + 0.1 * grime; coat = 0.0;
+    }
+    case 67u: { albedo = vec3f(0.03, 0.032, 0.035); metal = 0.2; rough = 0.45; coat = 0.0; }
+    case 68u: { albedo = vec3f(0.008); metal = 0.0; rough = 0.35; coat = 0.0; }
+    case 69u: { albedo = vec3f(0.16, 0.16, 0.17) * (1.0 - 0.2 * grime); metal = 0.75; rough = 0.38 + 0.2 * grime; coat = 0.0; }
+    case 72u: { albedo = vec3f(0.025); metal = 0.0; rough = 0.62; coat = 0.0; }
+    // (the glass: no diffuse light of its own — the lamps' highlights only)
+    case 71u: { albedo = vec3f(0.0); metal = 0.0; rough = 0.05; coat = 0.0; }
+    default: {}
+  }
+  let tm = S.dash2.x;
+  if (part == 68u) {
+    // (the telemetry, drawn: display-referred, as bright whatever the exposure)
+    emit = textureSampleGrad(screenTex, linSamp, auv, gx, gy).rgb * 2.4;
+  } else if ((part == 62u || part == 66u || part == 69u) && floor(in.uv.y) < 2.5 && fract(in.uv.y) > 0.72) {
+    // (the tiniest parts — indicators —: white and amber, a rare red, a few blinking)
+    let hh = fract(in.uv.y);
+    let led = select(select(vec3f(1.0, 0.95, 0.85), vec3f(1.0, 0.55, 0.12), hh > 0.84), vec3f(1.0, 0.18, 0.08), hh > 0.94);
+    let blink = select(1.0, step(0.5, fract(tm * (0.7 + hh) + hh * 7.0)), hh > 0.95);
+    emit = led * 1.2 * blink * (0.5 + 0.5 * clamp(dot(n, normalize(-in.p)), 0.0, 1.0));
+    albedo = led * 0.15;
+  }
+  rough = clamp(rough, 0.04, 1.0);
+  let ao = pow(clamp(in.ao, 0.0, 1.0), 0.8);
+  // the outside's light: only through the windows — the share of the sky each point sees, baked
+  let sky = select(clamp(in.uv.x, 0.0, 1.0), 1.0, part == 68u);
+  let v = normalize(-in.p);
+  let nv = clamp(dot(n, v), 1e-4, 1.0);
+  let r = reflect(-v, n);
+  let f0 = mix(vec3f(0.04), albedo, metal);
+  let ab = envAB(rough, nv);
+  let fss = f0 * ab.x + ab.y;
+  let kd = albedo * (1.0 - metal);
+  var col = (envSpec(r, rough) * fss + kd * irradiance(n) / PI) * sky * ao;
+  // the Sun (the key light, or the probe's dominant light) through the windows: its patches
+  let dom = vec4f(fromProbe(sh[9].xyz), sh[9].w);
+  let keyOn = sh[11].w > 0.5;
+  let l = dom.xyz;
+  let nl = dot(n, l);
+  if (nl > 0.0 && dot(ng, l) > 0.0) {
+    let vis = shadowCabin(in.p, ng, l);
+    let Ek = select(irradiance(l) * dom.w * 2.0, sh[11].rgb, keyOn);
+    let hv = normalize(l + v);
+    let nh = clamp(dot(n, hv), 0.0, 1.0);
+    let vh = clamp(dot(v, hv), 0.0, 1.0);
+    let fk = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
+    col += (kd * (1.0 - fk) / PI + ggxSpec(nh, nv, nl, rough, sh[10].w) * fk) * Ek * nl * vis;
+  }
+  // the lamps: cool lights along the ceiling and over the consoles, a soft fill (display-referred: the
+  // cabin as lit whatever the exposure the outside sets)
+  let lamps = array<vec3f, 4>(vec3f(0.0, 2.1, -3.2), vec3f(0.0, 2.15, -0.3), vec3f(0.85, 2.05, 2.4), vec3f(-0.85, 2.05, 2.4));
+  var cl = vec3f(0.0);
+  for (var i = 0; i < 4; i++) {
+    let L = (model * vec4f(lamps[i], 1.0)).xyz - in.p;
+    let d2 = dot(L, L);
+    let lv = L * inverseSqrt(d2);
+    let lnl = max(dot(n, lv), 0.0);
+    let hv = normalize(lv + v);
+    let spec = pow(clamp(dot(n, hv), 0.0, 1.0), 2.0 / max(rough * rough * rough * rough, 1e-4) - 2.0) * (2.0 / max(rough * rough * rough * rough, 1e-4) + 2.0) / (8.0 * PI);
+    cl += (kd / PI + f0 * spec) * lnl / (d2 + 0.25);
+  }
+  cl = (cl * 3.5 * vec3f(0.85, 0.93, 1.0) + kd * vec3f(0.12, 0.14, 0.16)) * ao;
+  let o = col * S.light.x + (emit * 2.0 + cl) * S.jet.y;
+  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }

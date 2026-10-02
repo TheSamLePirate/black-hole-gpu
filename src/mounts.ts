@@ -10,6 +10,8 @@ export type V3 = [number, number, number];
 export const MOUNTS = {
   // (inside: the pilot's seat — the Ranger's cabin drawn instead of its hull)
   cockpit: { label: "Cockpit, the pilot's seat", short: "Cockpit", eye: [1.0, 1.45, 3.1], aim: [1.0, 1.22, 13] },
+  // (inside, free: the keys move the camera about the cabin — the ship flies on —, the drag turns the look)
+  cabin: { label: "Cabin, free — the keys move about it", short: "Cabin", eye: [1.0, 1.45, 3.1], aim: [1.0, 1.45, 13] },
   quarter: { label: "Hull quarter (film)", short: "Film", eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
   chase: { label: "Chase, above the tail", short: "Chase", eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
   dorsal: { label: "Dorsal, behind the cockpit", short: "Dorsal", eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },

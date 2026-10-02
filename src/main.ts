@@ -11,6 +11,7 @@ import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targe
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetStart } from "./fleet";
+import { CockpitScreens } from "./ui/cockpitscreens";
 import { VESSELS } from "./vessels";
 import { SOLAR_BODIES } from "./system/solar";
 import { FlightHud } from "./ui/flighthud";
@@ -817,6 +818,8 @@ async function main() {
     },
   });
   document.body.append(touchFlight.el);
+  // the Ranger's cockpit screens (the cabin's shader shows them)
+  const cockpitScreens = new CockpitScreens();
   const flightHud = new FlightHud(settings, {
     hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
     vessel: (id) => {
@@ -894,6 +897,7 @@ async function main() {
   }
   camera.onPilotMessage = (t) => {
     panel.toast(t);
+    cockpitScreens.message(t);
     gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, sim.time);
   };
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
@@ -927,7 +931,7 @@ async function main() {
       refreshGui();
     } else if (e.code === "KeyR") pilotRoll();
     else if (e.code === "KeyY" && e.shiftKey) togglePathInView(); // (Y alone: the telescope, every mode)
-    else if ((e.code === "KeyZ" || e.code === "KeyX") && camera.outsideView() === "free") e.preventDefault(); // (the free camera's keys)
+    else if ((e.code === "KeyZ" || e.code === "KeyX") && (camera.outsideView() === "free" || settings.shipMount === "cabin")) e.preventDefault(); // (the free camera's keys)
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "CapsLock") {
@@ -1537,7 +1541,9 @@ async function main() {
       } catch {
         /* (between two frames of a jump) */
       }
-      // the cockpit's screens: the local up and the motion on the ship's axes, the speed, the height
+      // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
+      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time })) renderer.ship.updateScreens(cockpitScreens.canvas);
+      // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
       {
         const S = info.S as number[][];
         const toShip = (v: number[] | null | undefined) => (v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null);

@@ -14,7 +14,7 @@ import cockpitUrl from "../assets/ranger/cockpit.bin";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import type { GpuProfiler } from "./gpuprof";
-import { samplePoints, TriBVH, vesselHulls } from "./system/collide";
+import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
 
 type V3 = [number, number, number];
@@ -100,6 +100,9 @@ const GGX_SAMPLES = [0, 48, 64, 96, 128, 128];
 const SHADOW = 2048;
 const STRIDE = 10 * 4; // position, normal, material, ambient occlusion, UV
 
+/** whether the cockpit's t-th triangle (in idx) is glass */
+const isGlassTri = (idx: Uint32Array, verts: Float32Array, t: number) => Math.round(verts[10 * idx[3 * t]! + 6]!) === 71;
+
 interface Mesh {
   vbuf: GPUBuffer;
   ibuf: GPUBuffer;
@@ -125,12 +128,6 @@ interface ShipTargetRes {
   bind?: GPUBindGroup;
   bindGen?: number;
   bindMoments?: GPUBuffer;
-  /** the cockpit glass's bind groups (its pipeline's own layouts) */
-  glassBind?: GPUBindGroup;
-  glassOcc?: GPUBindGroup;
-  glassGen?: number;
-  glassMoments?: GPUBuffer;
-  glassOccTex?: GPUTexture;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
 }
@@ -160,9 +157,9 @@ export class ShipRenderer {
   private instBuf: GPUBuffer;
   private instData = new Float32Array(MAX_INST * INST_FLOATS);
   /** this frame's draws: mesh, and whether in the shadow map */
-  private draws: { mesh: Mesh; shadow: boolean }[] = [];
+  private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean }[] = [];
   /** the cockpit (the Ranger's cabin): its mesh, its sticks' pivots; loading */
-  private cockpit: { mesh: Mesh; pivots: V3[] } | null = null;
+  private cockpit: { mesh: Mesh; pivots: V3[]; solid: number } | null = null;
   private cockpitLoading = false;
   /** the sticks' deflections, eased (forward, right, twist) [rad], and when last eased */
   private stick: V3 = [0, 0, 0];
@@ -190,6 +187,7 @@ export class ShipRenderer {
     plumeIn: GPURenderPipeline;
     hullDepth: GPURenderPipeline;
     glass: GPURenderPipeline;
+    cabin: GPURenderPipeline;
     depthPre: GPURenderPipeline;
   };
   private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
@@ -325,12 +323,21 @@ export class ShipRenderer {
           }),
         };
       })(),
-      // the cockpit's glass: over what the opaque draw left, premultiplied, its depth not written; both faces
+      // the cabin (fsCabin: its own lean shader) and its glass — over what the opaque draws left,
+      // premultiplied, its depth not written, both faces
+      cabin: d.createRenderPipeline({
+        layout: "auto",
+        vertex,
+        fragment: { module, entryPoint: "fsCabin", targets: [{ format: "rgba16float" }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
       glass: d.createRenderPipeline({
         layout: "auto",
         vertex,
         fragment: {
-          module, entryPoint: "fsGlass",
+          module, entryPoint: "fsCabinGlass",
           targets: [{ format: "rgba16float", blend: { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" } } }],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
@@ -466,13 +473,26 @@ export class ShipRenderer {
           off = 44 + 16 * n;
         }
         const verts = new Float32Array(buf.slice(off, off + nv * STRIDE));
-        const idx = new Uint32Array(buf.slice(off + nv * STRIDE, off + nv * STRIDE + ni * 4));
+        const idx0 = new Uint32Array(buf.slice(off + nv * STRIDE, off + nv * STRIDE + ni * 4));
+        // (the glass's triangles last: its pass draws them alone)
+        const isGlass = (t: number) => Math.round(verts[10 * idx0[3 * t]! + 6]!) === 71;
+        const idx = new Uint32Array(ni);
+        let o = 0;
+        for (const glassPass of [false, true]) for (let t = 0; t < ni / 3; t++) if (isGlass(t) === glassPass) idx.set(idx0.subarray(3 * t, 3 * t + 3), (o++) * 3);
+        let firstGlass = 0;
+        while (firstGlass < ni / 3 && !isGlassTri(idx, verts, firstGlass)) firstGlass++;
         const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         d.queue.writeBuffer(vbuf, 0, verts);
         const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
         d.queue.writeBuffer(ibuf, 0, idx);
         const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
-        this.cockpit = { mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } }, pivots };
+        this.cockpit = { mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } }, pivots, solid: firstGlass * 3 };
+        // (its walls for the camera moving about it: the triangles in a hierarchy)
+        const pos = new Float32Array(nv * 3);
+        for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
+        cockpitHull.bvh = new TriBVH(pos, idx);
+        cockpitHull.lo = lo;
+        cockpitHull.hi = hi;
         this.onLoaded?.();
       })
       .catch((e) => console.error("cockpit:", e));
@@ -692,7 +712,7 @@ export class ShipRenderer {
       const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
       model(it.R, it.t, this.instData, i * INST_FLOATS);
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, 0], i * INST_FLOATS + 16);
-      this.draws.push({ mesh: me, shadow: it.shadow });
+      this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin });
       const b = me.bound;
       for (let k = 0; k < 8; k++) {
         const q: V3 = [k & 1 ? b.hi[0] : b.lo[0], k & 2 ? b.hi[1] : b.lo[1], k & 4 ? b.hi[2] : b.lo[2]];
@@ -748,6 +768,37 @@ export class ShipRenderer {
   }
   /** the cabin drawn this frame (its glass then) */
   private inCabin = false;
+  private cabinBinds: { gen: number; cabin: GPUBindGroup; glass: GPUBindGroup } | null = null;
+  /** the cockpit's screens: the telemetry drawn (ui/cockpitscreens.ts), 4 × 2 slots, mip-mapped */
+  private screens: GPUTexture | null = null;
+  private screenTexture() {
+    return (this.screens ??= this.device.createTexture({
+      size: [2048, 1024], format: "rgba8unorm-srgb", mipLevelCount: 11,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    }));
+  }
+  /** The screens' new picture: a 2048 × 1024 canvas, then its mips (halved on canvases). */
+  updateScreens(src: HTMLCanvasElement | OffscreenCanvas) {
+    const tex = this.screenTexture();
+    let level: HTMLCanvasElement | OffscreenCanvas = src;
+    for (let l = 0; l < tex.mipLevelCount; l++) {
+      const w = Math.max(1, 2048 >> l), h = Math.max(1, 1024 >> l);
+      if (l > 0) {
+        const c = (this.mipCanvases[l] ??= new OffscreenCanvas(w, h));
+        const g = c.getContext("2d")!;
+        g.imageSmoothingQuality = "high";
+        g.clearRect(0, 0, w, h);
+        g.drawImage(level, 0, 0, w, h);
+        level = c;
+      }
+      this.device.queue.copyExternalImageToTexture({ source: level }, { texture: tex, mipLevel: l }, [w, h]);
+    }
+  }
+  private mipCanvases: OffscreenCanvas[] = [];
+  /** Whether the cabin is drawn (its screens are worth drawing). */
+  get cabinShown() {
+    return this.inCabin;
+  }
   private depthBind: GPUBindGroup | null = null;
 
   /** The ship's own images for an HDR target (its size): created on first use. */
@@ -831,7 +882,7 @@ export class ShipRenderer {
         if (!dr.shadow) return;
         sp.setVertexBuffer(0, dr.mesh.vbuf);
         sp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        sp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
+        sp.drawIndexed(dr.cabin ? this.cockpit!.solid : dr.mesh.count, 1, 0, 0, i);
       });
       sp.end();
     }
@@ -851,7 +902,7 @@ export class ShipRenderer {
     this.draws.forEach((dr, i) => {
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      rp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
+      rp.drawIndexed(dr.cabin ? this.cockpit!.solid : dr.mesh.count, 1, 0, 0, i);
     });
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
@@ -868,28 +919,33 @@ export class ShipRenderer {
     rp.setBindGroup(0, res.bind);
     rp.setBindGroup(1, res.occBind!.g);
     this.draws.forEach((dr, i) => {
+      if (dr.cabin) return;
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
     });
-    // the cockpit's glass, over the cabin and the view (its own bindings: the same resources)
+    // the cabin (its own shader), then its glass, over the cabin and the view
     if (this.inCabin && this.cockpit) {
-      if (!res.glassBind || res.glassGen !== this.bindGen || res.glassMoments !== mb || res.glassOccTex !== occTex) {
-        res.glassBind = this.device.createBindGroup({
-          layout: this.pipes.glass.getBindGroupLayout(0),
-          entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+      if (!this.cabinBinds || this.cabinBinds.gen !== this.bindGen) {
+        const make = (layout: GPUBindGroupLayout) => this.device.createBindGroup({
+          layout,
+          entries: [
+            ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
+            { binding: 17, resource: this.screenTexture().createView() },
+          ],
         });
-        res.glassOcc = this.device.createBindGroup({ layout: this.pipes.glass.getBindGroupLayout(1), entries: [{ binding: 0, resource: occTex.createView() }] });
-        res.glassGen = this.bindGen;
-        res.glassMoments = mb;
-        res.glassOccTex = occTex;
+        this.cabinBinds = { gen: this.bindGen, cabin: make(this.pipes.cabin.getBindGroupLayout(0)), glass: make(this.pipes.glass.getBindGroupLayout(0)) };
       }
-      rp.setPipeline(this.pipes.glass);
-      rp.setBindGroup(0, res.glassBind);
-      rp.setBindGroup(1, res.glassOcc!);
       rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
       rp.setIndexBuffer(this.cockpit.mesh.ibuf, "uint32");
-      rp.drawIndexed(this.cockpit.mesh.count, 1, 0, 0, 0);
+      // (the solid triangles, then the glass's — the last of the indices)
+      const ck = this.cockpit;
+      rp.setPipeline(this.pipes.cabin);
+      rp.setBindGroup(0, this.cabinBinds.cabin);
+      rp.drawIndexed(ck.solid, 1, 0, 0, 0);
+      rp.setPipeline(this.pipes.glass);
+      rp.setBindGroup(0, this.cabinBinds.glass);
+      rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
     }
     rp.end();
     if (jets) {

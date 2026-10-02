@@ -49,7 +49,7 @@ export interface VesselDef {
   lands: boolean;
   jets: JetDef[];
   /** the camera's attach points on it (mounts.ts: the same names, its own places) */
-  mounts: Record<"cockpit" | "quarter" | "chase" | "dorsal" | "wing" | "belly" | "rear" | "dock", { eye: V3; aim: V3 }>;
+  mounts: Record<"cockpit" | "cabin" | "quarter" | "chase" | "dorsal" | "wing" | "belly" | "rear" | "dock", { eye: V3; aim: V3 }>;
   /** the main engines' flame length scale (× the Ranger's) */
   flame: number;
 }
@@ -117,6 +117,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     mounts: {
       // (the pilot's seat, front left: the cabin, scripts/build-cockpit.ts)
       cockpit: { eye: [1.0, 1.45, 3.1], aim: [1.0, 1.22, 13] },
+      cabin: { eye: [1.0, 1.45, 3.1], aim: [1.0, 1.45, 13] },
       quarter: { eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
       chase: { eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
       dorsal: { eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },
@@ -134,6 +135,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     mounts: {
       // (behind the nose's windows — the Lander's cabin is not modelled: the hull seen from within)
       cockpit: { eye: [0, 3.4, 10.4], aim: [0, 3.1, 30] },
+      cabin: { eye: [0, 3.4, 10.4], aim: [0, 3.4, 30] },
       quarter: { eye: [10.5, 8.5, -19], aim: [-5, 3.5, 22] },
       chase: { eye: [0, 9.5, -24], aim: [0, 3, 20] },
       dorsal: { eye: [0, 7.6, -7.5], aim: [0, 5, 30] },
@@ -155,6 +157,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     mounts: {
       // (in the hub, looking ahead along it)
       cockpit: { eye: [0, 1.2, 7.5], aim: [0, 1.0, 40] },
+      cabin: { eye: [0, 1.2, 7.5], aim: [0, 1.2, 40] },
       quarter: { eye: [46, 26, -62], aim: [-10, 0, 40] },
       chase: { eye: [0, 30, -80], aim: [0, 0, 40] },
       dorsal: { eye: [0, 38, -12], aim: [0, 30, 60] },

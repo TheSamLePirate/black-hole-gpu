@@ -23,7 +23,7 @@ import bpy, bmesh, struct, sys, time, math
 argv = sys.argv[sys.argv.index("--") + 1:]
 SRC, OUT = argv[0], argv[1]
 # triangles kept in all (the original's ~1.1 M after triangulation)
-BUDGET = 300_000
+BUDGET = 150_000
 
 # the kinds: (prefix, kind) — the first that matches the object's name
 KINDS = [
@@ -61,7 +61,8 @@ for ob in obs:
     k = kind_of(ob.name)
     if k < 0:
         continue
-    keep = k in (67, 68, 71)
+    # (the screens and the glass whole — few faces; the laptops decimated like the rest)
+    keep = k in (68, 71)
     # (the share of the budget: the object's faces' share; the screens, laptops whole)
     ratio = 1.0 if keep else min(1.0, BUDGET / (2.0 * total))
     bpy.context.view_layer.objects.active = ob

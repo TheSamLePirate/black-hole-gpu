@@ -989,6 +989,7 @@ export class SettingsPanel {
         ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
         ["V · ⇧V", "Camera: next · previous view — on the hull, around the ship, free, fly-by"],
         ["⇧R", "Camera reset: back to the craft's attach points, looking ahead (the outside views' own places)"],
+        ["View “Cabin”", "Inside the Ranger: Z Q S D · A E move the camera about the cabin (⇧ faster), the drag turns the look — the ship flies on"],
         ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
         ["⇧Y", "The future path in the view"],
         ["²  (`)", "HUD density: full · minimal · clean view"],
