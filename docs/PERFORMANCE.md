@@ -5,6 +5,10 @@ Measured in the game (`#scene=game:artemis`, the Ranger in low Earth orbit, full
 analysis added: the GPU profiler (timestamp queries per pass, `src/gpuprof.ts`), the main-thread
 profiler (`src/perf.ts`), both in **F2 › Perf** and `__bh.game.perf()`.
 
+The sections *Before* → *After* are that analysis. What followed — the audit plan (waves A–C, every
+step measured with `scripts/bench.ts`) and the changes since — is summed up under **Since then**
+(updated 2026-10-02); the plan's own log, step by step with its measures, is `docs/perf/audit-plan.md`.
+
 ## Before
 
 17 frames rendered per second (the loop itself at 68 Hz), with the settings the game had:
@@ -40,7 +44,7 @@ profiler (`src/perf.ts`), both in **F2 › Perf** and `__bh.game.perf()`.
 | Ranger composited by the display pass (no full-screen pass) | −5 to −7.6 ms |
 | Ranger shadow map every other frame; its passes scissored | −0.6 ms |
 | Subsampling adapted with the trace pass's own time (the GPU profiler) | finer blocks (2–6) when there is room |
-| **Game quality** (the game scenes): 16 ms budget, render scale ≤ 1.25, dynamic resolution | ≈ 60 fps target |
+| **Game quality** (the game scenes): 16 ms budget, pixel ratio ≤ 1.25, dynamic resolution | ≈ 60 fps target |
 | Dynamic resolution: the render scale lowered by eighths (to ½) when the GPU misses the budget with coarse blocks, raised back when it has room | holds the frame rate on slower GPUs |
 
 ## After
@@ -52,6 +56,76 @@ profiler (`src/perf.ts`), both in **F2 › Perf** and `__bh.game.perf()`.
 
 GPU per frame (Game): display 4–6 ms, trace 1.5–3.5, Ranger MSAA 1.5, gather/resolve 1–1.5, Ranger
 probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
+
+## Since then (2026-09-28 → 10-02)
+
+**The frame's hidden costs** (outside the GPU's passes):
+- The HUD's glows are drawn, not blurred (`0491062`): the canvas's `shadowBlur` was a Gaussian blur
+  the GPU ran per draw (the orbit's 240 segments: 133 ms of GPU a frame). LEO: 9 → 23 rendered fps.
+- No backdrop blur behind panels by default (`3ca979b`, `82e651e`): the browser re-blurred what lay
+  under each panel every frame, its compositing delaying the tracer's frames (27.8 → 32.6 fps in LEO).
+  Settings › Render › Realtime › *Frosted panels* brings it back.
+- The HUD's heavy instruments one a frame, the most overdue (`4825766`): loop p95 27 → 22 ms. The
+  flight HUD drawn on the loop's turns that rendered an image (`e2fc250`).
+- Main thread: the Kerr free-fall path computed in the planner's worker (`src/lenses.ts` shared);
+  the Earth's heights extracted by the GPU into a one-byte texture, read back in bands (`f2e9014`).
+
+**The automatic controls** (subsampling, dynamic resolution, refinement):
+- The budget is fitted to a whole number of the display's refreshes, a tenth under — the Game's 16 ms
+  is 15 on a 60 Hz screen, two refreshes on a 120 Hz one; a *Frame rate cap* (Display, 30, 60, 120)
+  leaves room the subsampling spends on a sharper image (`e2fc250`).
+- Robust to spikes (`a791d21`): each frame bounded by twice the median of the last 15, frames after new
+  resources or a probe reset left out; coarser after 150 ms over the budget, finer after 400 ms of room.
+- Coarser only where it is measured to pay (`31e5b33`): each block size and each render scale keeps
+  its measured frame time (20 s, 30 s); a coarser block or a smaller scale only when unmeasured or a
+  tenth faster at least (a frame bound by the browser's compositing gains nothing from fewer pixels);
+  a new scale held 3 s before it is judged. The dynamic resolution moves by eighths, every 1.5 s,
+  between half the pixel ratio and all of it.
+- The converging phase's bands sized to the quality's budget (`4f1048e`, ≤ 28 ms).
+
+**The hardware tier** (`src/tier.ts`, `935f7b6`): guessed at start from the adapter's info (vendor,
+architecture, fallback/software), `navigator.deviceMemory` and a coarse pointer — 0 software 0.5 Mpx ·
+1 integrated, Intel, touch or ≤ 4 GB 0.9 · 2 Apple, mobile/laptop NVIDIA/AMD 2.2 · 3 discrete 3.5 ·
+(4: 6 Mpx, never guessed today). With the dynamic resolution on (the Game quality) the realtime image
+stays within that pixel budget (`cappedRatio`) — a 4K screen no longer renders 4× a laptop's pixels;
+the finer qualities keep the ratio asked for. This Mac: tier 2, unchanged. Shown in `perf().tier`.
+
+**The kernel:**
+- Specialised to the scene (`a0899ba`, `f35567a`, `148399f`): features (radio bands, polarization,
+  jet, hot spot, hot flow, wormhole, thick disk, bodies) are WGSL `override` constants; a pipeline with
+  the unused ones compiled out is built in the background (~10 s) and swapped in, the general one
+  meanwhile; cached by feature set. Classic Kerr 53 → 17 ms at fixed b4.
+- Disk turbulence read from a baked 3D noise texture (`743ea28`, `src/noise3d.ts`): along the disk
+  93 → 67 ms (b4). Integer hashing for the noise (`a00d41f`), step reuse (`8900ecf`).
+- Far-field LUT (`ef51aac`, setting *Far-field LUT*): rays between clean samples interpolated in scenes
+  with only the hole and its disk (+5–7 %).
+- Temporal reprojection (TAAU, `03988c3`, *Temporal reprojection*): the history carried by the
+  camera's rotation, +2.4 to +4 dB on the realtime image for 0.4 ms.
+- **Compilation**: the tracer compiles in seconds (`842e5a0`: `traceLook` and the Earth's drawing each
+  called at one place — every call site is a copy the compiler builds; it was 33 s + 45 s). Its five
+  general pipelines and the precision probe are built with `createComputePipelineAsync`, all at once
+  (`f86c03a`): on Windows (D3D12 → DXC) a synchronous compile of the trace shader stalled the GPU
+  process past the browser's watchdog. The adapter must offer 10 storage buffers a stage (said at start).
+
+**Memory** (Earth orbit 1246 → 695 MiB over the plan):
+- Maps streamed by footprint and freed (`b1bd4ae`): the Earth's none / med / high by its disk's size and
+  the texel under the camera; a world's HD maps once its coarse texel outgrows a pixel, freed beyond
+  twice that.
+- Colour maps GPU-compressed (`c84750b`): KTX2 (UASTC + Zstandard, mip-mapped, `scripts/build-ktx2.ts`)
+  transcoded in a worker (`src/system/ktx-worker.ts`, Basis Universal in `vendor/basis`) to BC7 or
+  ASTC 4×4 — a quarter of rgba8 —, the JPEG path kept without either; HD maps stay JPEG.
+- The polarization buffer and the bloom's passes only when used (`beeacef`).
+- The real terrain's clipmap (`ad67843`): 8 levels of 4 × 4 elevation tiles round the camera, 32 MB of
+  GPU memory; ~13.6 MB downloaded on arriving somewhere. Yosemite 32 ms vs 16 (more march steps on
+  real cliffs), Burgos 37 vs 85 (the octaves the data holds are skipped).
+
+**Robustness** (`229bc17`): a lost device autosaves the flight and offers a Reload panel; uncaptured
+GPU errors counted, the first three toasted; the Earth's maps load under an out-of-memory scope and
+fall back a tier (high → med → the solar system's map).
+
+**The ships:** the Endurance in four levels of detail, each downloaded when first needed (`adcac61`);
+the Ranger's cockpit with a depth pre-pass and its own lean shader (`fsCabin`, `089c112`): ~19 → 35–45
+renders/s in headless Chrome at 1600 × 900 (50 outside).
 
 ## Left as they are (measured, for later)
 
@@ -108,8 +182,17 @@ probe ~1 on average, the rest < 1 each. Main thread: ~1.5 ms a loop.
 
 ## Tools
 
-- `__bh.game.perf()` — frame rates, GPU frame and pass times, image size, render scale, block, the
-  main thread's sections (mean and worst).
-- `__bh.game.quality("game" | "realtime" | …)`, Settings › Render › Quality (**Game** button, key 6),
-  *Dynamic resolution*, *Frame budget*, *Pixel ratio*.
+- `__bh.game.perf()` — frame rates (loop and rendered), GPU frame and pass times, image size, pixel
+  ratio, hardware tier, render scale, quality, budget, block, the main thread's sections (mean and
+  worst). The first call switches the GPU timestamps on (they sample one frame in eight, `7194173`:
+  every frame cost 2–3 %); read again a few seconds later.
+- `__bh.game.quality("game" | "realtime" | …)`, Settings › Render › Quality (**Game** button; keys 1–6,
+  6 = Game, outside flight — in flight 1–7 are the attitude holds), and in Render › Realtime:
+  *Dynamic resolution*, *Frame budget*, *Frame rate cap*, *Temporal reprojection*, *Far-field LUT*,
+  *Frosted panels*; Render › Image: *Pixel ratio*.
 - F2 › **Perf**: the same, live; F2 › Audit: the frame rate check.
+- `bun scripts/bench.ts [--label name] [--scenes "a|b"] [--quick] [--compare <url> [--reps 2]] [--warm ms]`
+  — eight reference scenes in headless Chrome, Game quality: frame intervals p50/p95/p99, rays per
+  pixel, then a fixed subsampling 4 at full scale (the kernel's cost), GPU memory allocated;
+  `--compare` alternates a reference build scene by scene. Results in `docs/perf/bench-<label>.json`.
+  Measure alone: another page rendering shares the GPU.

@@ -2,8 +2,16 @@
 
 Loaded by `src/system/earth-maps.ts` and packed on the GPU for the tracer (trace.wgsl: the Earth).
 
+Two tiers: `med` (faces 2048², equirectangular maps 4096 × 2048), loaded with the solar system's maps;
+`high` (faces 4096², 8192 × 4096), when the camera comes near the Earth.
+
 - `day-med/`, `day-high/` — the surface's colour, a cube map (faces 2048² and 4096²).
 - `cloud-med/`, `cloud-high/` — the cloud cover, a cube map (the same faces).
+- `ktx2/<tier>-<face>.ktx2` — the day cube GPU-compressed: each face its day colour with its cloud cover
+  as alpha, UASTC (RDO, Zstandard), mip-mapped, transcoded by the page to BC7 or ASTC
+  (`src/system/ktx2.ts`; a quarter of rgba8's memory). Built by `bun scripts/build-ktx2.ts earth` (needs
+  `basisu`: `brew install basis_universal`). Where the GPU has neither format, the JPEG faces above are
+  used.
 - `night/` — the city lights at night, a cube map (2048²; its red channel is used).
 - `ocean-med.jpg`, `ocean-high.jpg` — the oceans' mask (white: water), equirectangular.
 - `relief-med.bin` (4096 × 2048), `relief-high.bin` (8192 × 4096) — the height above the sea [m],

@@ -853,7 +853,7 @@
         <span>polarisation · 230 GHz</span>
         <span>unités de <b>M = GM/c²</b></span>
       </div>
-      <p class="launch"><a href="../">Ouvrir le simulateur (WebGPU) →</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu">code source</a></p>
+      <p class="launch"><a href="../">Ouvrir le simulateur (WebGPU) →</a> · <a href="comment-jouer.html">Comment jouer</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu">code source</a></p>
     </div>
   </div>
 </header>
@@ -868,6 +868,7 @@
     <a href="#simulateur">Le simulateur</a>
     <a href="#modele">Le modèle de calcul</a>
     <a href="#journal">Journal</a>
+    <a href="comment-jouer.html">Comment jouer</a>
   </nav>
   <section id="effects" aria-labelledby="effects-title">
     <div class="section-head">
@@ -966,19 +967,19 @@
     <div class="section-head">
       <h2 id="sim-title">Le simulateur</h2>
       <p>Tout ce qui est dans cet atlas se calcule en direct dans le navigateur (WebGPU). L'interface laisse la place à la vue : un indicateur d'état en haut à gauche, une barre d'icônes en bas, les réglages et l'aide à la demande. <a href="../">Ouvrir le simulateur →</a></p>
+      <p>Le simulateur est aussi devenu un jeu : le voyage du film, de l'orbite terrestre jusqu'à Gargantua. De notre côté du trou de ver, le système solaire à l'échelle (éphémérides DE440 du JPL), la Terre avec son vrai relief, ses nuages et ses éclipses, la Station spatiale sur son orbite réelle ; de l'autre, Miller, Mann et Edmunds. On pilote le Ranger (jusque dans son cockpit), le Lander ou l'Endurance, avec une carte 3D, un planificateur de vol (retour libre d'Artemis II, transferts vers Mars ou Saturne, passage par le trou de ver), des pilotes automatiques, l'atterrissage et l'amarrage. Au clavier, à la manette ou au doigt sur téléphone. Tout est expliqué, en images, dans <a href="comment-jouer.html">Comment jouer →</a></p>
     </div>
     <figure class="journey">
       <a href="img/journal/30_interface.jpg" target="_blank" rel="noopener"><img src="img/journal/30_interface.jpg" alt="L'ancienne interface (titre, statistiques, encadré des mesures, barre légendée, réglages ouverts) et la nouvelle : un indicateur d'état, une barre d'icônes avec infobulles, l'aide clavier par sections, les réglages à la demande, et la version téléphone." loading="lazy" /></a>
       <figcaption><b>Avant / après.</b> L'indicateur « Live · Refining · Converged » dit où en est l'image et ce que fait la caméra ; un clic (ou <kbd>I</kbd>) le déplie sur les détails et les mesures physiques. Chaque icône donne son nom et sa touche au survol ; <kbd>?</kbd> ouvre l'aide complète.</figcaption>
     </figure>
     <ul class="howto">
-      <li><b>Glisser</b> : tourner autour de la cible · <b>molette</b> : s'en approcher</li>
-      <li><b>Cliquer un corps</b> (même une image déviée) : le choisir comme cible · <b>double-clic</b> : y voler</li>
-      <li><kbd>R</kbd> : autour de la cible ⟷ rotation libre · <kbd>Tab</kbd> : cible suivante</li>
-      <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> : voler (6 degrés de liberté) · <kbd>V</kbd> : vol à la souris</li>
-      <li><kbd>B</kbd> : gravité, la caméra suit sa géodésique · <kbd>T</kbd> : le voyage par le trou de ver</li>
-      <li><kbd>L</kbd> : mode cinématique, le trou de ver liquide · <kbd>K</kbd> : piloter le Ranger (<kbd>Z</kbd><kbd>S</kbd> <kbd>Q</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> attitude, <kbd>↑</kbd><kbd>↓</kbd> poussée, <kbd>1</kbd>–<kbd>0</kbd> pilotes automatiques)</li>
-      <li><kbd>Espace</kbd> : le temps · <kbd>M</kbd> : réglages · <kbd>H</kbd> : masquer l'interface</li>
+      <li><b>Glisser</b> : tourner autour de la cible · <b>molette</b> : s'en approcher · <b>cliquer un corps</b> (même une image déviée) : le choisir comme cible · <b>double-clic</b> : y voler</li>
+      <li><kbd>Tab</kbd> : cible suivante · <kbd>V</kbd> : vue suivante (autour, suivre, libre, trépied, chute libre) · <kbd>C</kbd> : viser la cible · <kbd>Y</kbd> : télescope · <kbd>⇧R</kbd> : recentrer</li>
+      <li>Caméra libre : <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> : voler (6 degrés de liberté) · clic du milieu : vue à la souris · <kbd>B</kbd> : chute libre sur la géodésique · <kbd>T</kbd> : le voyage par le trou de ver</li>
+      <li><kbd>L</kbd> : mode cinématique, le trou de ver liquide · <kbd>N</kbd> : constellations · <kbd>U</kbd> : grilles du ciel</li>
+      <li><kbd>K</kbd> : piloter le Ranger (<kbd>Z</kbd><kbd>S</kbd> <kbd>Q</kbd><kbd>D</kbd> <kbd>A</kbd><kbd>E</kbd> attitude, <kbd>⇧</kbd> / <kbd>Alt</kbd> ou <kbd>↑</kbd><kbd>↓</kbd> poussée, <kbd>1</kbd>–<kbd>7</kbd> maintiens d'attitude, <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> <kbd>G</kbd> <kbd>U</kbd> <kbd>B</kbd> pilotes automatiques, <kbd>M</kbd> carte 3D, <kbd>O</kbd> planificateur, <kbd>[</kbd> <kbd>]</kbd> changer de vaisseau)</li>
+      <li><kbd>Espace</kbd> : le temps · <kbd>,</kbd> <kbd>.</kbd> <kbd>/</kbd> : ralentir, accélérer, temps réel · <kbd>M</kbd> : réglages · <kbd>H</kbd> : masquer l'interface · <kbd>?</kbd> : toutes les touches</li>
     </ul>
   </section>
 
@@ -1300,7 +1301,7 @@
 
     <div class="checks">
       <div>
-        <h3 class="sub-title">Ce qui est vérifié (33 tests automatiques + une sonde GPU)</h3>
+        <h3 class="sub-title">Ce qui est vérifié (parmi plus de 180 tests automatiques, et une sonde GPU)</h3>
         <ul>
           <li>Les paramètres d'impact critiques b = ∓a + 6 cos(⅓ arccos(∓a)) sont retrouvés à ±0,01 M avec le pas fixe et à <b>±0,001 M</b> avec l'erreur contrôlée, pour a de 0 à 0,998.</li>
           <li>La contrainte H = 0 reste sous <b>10⁻⁸</b> le long d'un rayon presque critique.</li>
@@ -1328,7 +1329,7 @@
   <section id="journal" aria-labelledby="journal-title">
     <div class="section-head">
       <h2 id="journal-title">Journal des améliorations</h2>
-      <p>Les étapes qui ont mené au moteur v2, au trou de ver puis au système de Gargantua, chacune mesurée et enregistrée dans l'historique git du projet. Cliquez pour ouvrir une planche en grand.</p>
+      <p>Les étapes qui ont mené au moteur v2, au trou de ver puis au système de Gargantua, chacune mesurée et enregistrée dans l'historique git du projet. Cliquez pour ouvrir une planche en grand. Les touches citées sont celles de l'époque ; les touches actuelles sont dans <a href='comment-jouer.html'>Comment jouer</a>. La suite (le système solaire, la Terre, le jeu) n'est pas encore illustrée ici.</p>
     </div>
     <div class="journal">
       <figure>
@@ -1477,7 +1478,7 @@
       </figure>
       <figure>
         <a href="img/journal/38_game_hud.jpg" target="_blank" rel="noopener"><img src="img/journal/38_game_hud.jpg" alt="C13 · Le HUD de vol façon jeu vidéo : rubans, jauges, graphiques, carte radar." loading="lazy" /></a>
-        <figcaption><b>C13 · Un HUD de jeu vidéo</b> Les instruments vivent sur les bords de l'écran : rubans de vitesse et d'altitude (échelle log, horizon, ISCO, périapse, apoapse), horloge du vaisseau face à l'horloge lointaine, télémétrie de la dernière minute, potentiel effectif de l'orbite (Kerr, avec la constante de Carter), boule d'attitude dans ses jauges de poussée et d'accélération, carte radar. La touche N allège l'affichage.</figcaption>
+        <figcaption><b>C13 · Un HUD de jeu vidéo</b> Les instruments vivent sur les bords de l'écran : rubans de vitesse et d'altitude (échelle log, horizon, ISCO, périapse, apoapse), horloge du vaisseau face à l'horloge lointaine, télémétrie de la dernière minute, potentiel effectif de l'orbite (Kerr, avec la constante de Carter), boule d'attitude dans ses jauges de poussée et d'accélération, carte radar. Une touche allège l'affichage (aujourd'hui <kbd>²</kbd>).</figcaption>
       </figure>
       <figure>
         <a href="img/journal/39_flight_planner.jpg" target="_blank" rel="noopener"><img src="img/journal/39_flight_planner.jpg" alt="C14 · Le planificateur de vol : alignement du plan orbital, rendez-vous avec l'étoile, passage par le trou de ver." loading="lazy" /></a>
@@ -1505,7 +1506,7 @@
       </figure>
       <figure>
         <a href="img/journal/45_landing.jpg" target="_blank" rel="noopener"><img src="img/journal/45_landing.jpg" alt="D6 · L'atterrissage : Atterrissage et décollage automatiques dans le repère de la planète." loading="lazy" /></a>
-        <figcaption><b>D6 · L'atterrissage</b> Dans le repère tournant de la planète : gravité, traînée, contact au sol et décollage. Les pilotes automatiques ATTERRIR (L) et DÉCOLLER (U), avec altitude radar, vitesses verticale et horizontale, et rapport poussée/poids dans le HUD.</figcaption>
+        <figcaption><b>D6 · L'atterrissage</b> Dans le repère tournant de la planète : gravité, traînée, contact au sol et décollage. Les pilotes automatiques ATTERRIR (aujourd'hui touche G) et DÉCOLLER (U), avec altitude radar, vitesses verticale et horizontale, et rapport poussée/poids dans le HUD.</figcaption>
       </figure>
       <figure>
         <a href="img/journal/46_surfaces.jpg" target="_blank" rel="noopener"><img src="img/journal/46_surfaces.jpg" alt="D7 · Surfaces et atmosphères : Relief de Mann et d'Edmunds, vagues de Miller, diffusion atmosphérique, plasma de rentrée." loading="lazy" /></a>

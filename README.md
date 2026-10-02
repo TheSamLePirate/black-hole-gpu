@@ -3,17 +3,67 @@
 **Live:** [the simulator](https://thesamlepirate.github.io/black-hole-gpu/) (needs WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+) · [Atlas de Kerr](https://thesamlepirate.github.io/black-hole-gpu/docs/), the gallery of renders and videos. Deployed by `.github/workflows/pages.yml` on every push to `main` (`bun run build:pages` → `_site/`: the app at the root, `gallery/` under `docs/` with the videos of `docs/video/`).
 
 Real-time and progressively converged rendering of a rotating (Kerr) black hole, its accretion disk
-and the lensed sky, written in TypeScript + WGSL, served with Bun.
+and the lensed sky, written in TypeScript + WGSL, served with Bun — and, around it, a space game: fly
+Interstellar's Ranger (and the Lander, the Endurance) from the pad at the Kennedy Space Center through the
+solar system to scale, to the wormhole near Saturn and Gargantua's side (Miller, Mann, Edmunds).
 
 ```bash
 bun install
-bun run dev        # http://localhost:3000 (hot reload)
-bun test           # physics unit tests (geodesics, closed-form Kerr solutions, ISCO, colorimetry…)
-bun run build      # static bundle in dist/
+bun run dev        # http://localhost:3000 (hot reload; server.ts)
+bun test           # physics unit tests (geodesics, closed-form Kerr solutions, ISCO, colorimetry, ephemerides…)
+bun run typecheck  # tsc --noEmit
+bun run build      # static bundle in dist/ (+ the planner's worker)
+bun run build:pages  # the GitHub Pages site in _site/ (app, workers, gallery, docs/comment-jouer.html)
+bun run gallery    # the scene gallery's pictures recaptured and compared (visual regression; dev server running)
+bun scripts/bench.ts             # frame-time benchmark of the reference scenes (headless Chrome, dev server running)
 bun scripts/build-sky.ts <dir>   # rebuild assets/sky/ from the NASA map + HYG catalogue (see assets/sky/README.md)
 ```
 
-Requires a WebGPU browser (Chrome/Edge ≥ 113, Safari 26, Firefox 141+).
+Requires a WebGPU browser (Chrome/Edge ≥ 113, Safari 26, Firefox 141+) whose adapter binds 10 storage
+buffers per shader stage (said plainly at start otherwise). The tracer's pipelines compile asynchronously
+(`createComputePipelineAsync`): on Windows (D3D12/DXC) the first compile can take a minute, without the
+GPU process being lost.
+
+## Documentation
+
+- [`docs/comment-jouer.html`](docs/comment-jouer.html) — **how to play** (French, illustrated): the journey,
+  the interface, flying, autopilots, map and planner, camera and time, every key, controller and touch.
+  Published with the site under `docs/`.
+- [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window (F2), saves, `__bh.game`.
+- [`docs/MAP.md`](docs/MAP.md) — the 3D map: gestures, bar, timeline, what it shows.
+- [`docs/SOUND.md`](docs/SOUND.md) — the synthesized sound and its director.
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — the performance analysis, the profilers, the Game quality.
+- `docs/progress/` — a screenshot sheet per step; `docs/video/` — the videos of the gallery.
+
+## The game
+
+- **Scenes** (the toolbar's Scenes button): a gallery of cards by group — *Game* (the missions), *Earth*,
+  *Solar system*, *Gargantua*, *Wormhole*, *Black holes* — with a filter and a search (`src/ui/scenes.ts`).
+  `#scene=<name>` in the URL starts one (e.g. `#scene=game:interstellar`).
+- **Missions**: *Interstellar — the journey* (2067, on the pad at the Kennedy Space Center: take off, reach
+  Saturn and the wormhole behind it, then Gargantua; real time, real distances) and *Artemis II — around the
+  Moon* (400 km up, the Moon targeted: plan a free return with the flight planner and fly it).
+- **Worlds**: the 27 bodies of the solar system on their real ephemerides, the Earth on its real relief;
+  Gargantua's planets Miller (its sea), Mann (its ice) and Edmunds (its desert), flown in each planet's own
+  frame (`src/landing.ts`: gravity, the primary's tide; land and take off with the autopilots).
+- **Saves**: the game saves itself in the browser and resumes at the next visit; named saves, export and
+  import, and links (`#save=…`) in the game tools ([docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)). The URL hash
+  is read once at start, then cleared.
+- **Sky chart** (N · ⇧N constellations and star names, U grids, the toolbar's Sky button; `src/skychart.ts`,
+  `src/ui/skypanel.ts`): our sky's constellation figures and names, the bright stars' names, the equatorial
+  grid of the date, the horizontal grid of the place the camera stands over, the ecliptic — drawn as the
+  camera sees them (its aberration included), over the image where the sky shows; hover a star for its card.
+- **Sound** (Settings › Game › Sound, the toolbar's Sound button): synthesized live with Web Audio, no
+  sample — engine, RCS, wheels, cabin, the flight computer's calls ([docs/SOUND.md](docs/SOUND.md)).
+- **Game tools** (F2, the toolbar's Tools button): the Ranger's state, place it in orbit or on a ground
+  anywhere, targets and spheres of influence, time and date, saves, a self-audit, the performance meters
+  ([docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)).
+- **Touch screens**: the page never zooms; on a phone the HUD is laid out for it, and flying uses a stick, a
+  throttle lever and roll buttons (`src/ui/touchflight.ts`, `src/ui/mobile.ts`).
+- **Performance tiers** (`src/tier.ts`): the hardware's tier (0 software … 4 high-end) is guessed at start
+  from the adapter, the device's memory and a touch screen, and caps the realtime image's pixels (0.5 to
+  6 Mpx); the **Game** quality (key 6: a ~16 ms GPU budget, dynamic resolution) works under that cap. The
+  kernel is specialised to the scene's features. Details in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Physics
 
@@ -131,6 +181,16 @@ Progress screenshots of each improvement step are in `docs/progress/`.
 
 Real sky: NASA/Goddard Space Flight Center Scientific Visualization Studio, *Deep Star Maps 2020*
 (Gaia DR2: ESA/Gaia/DPAC); HYG star database v4.4 (CC BY-SA 4.0). Details in `assets/sky/README.md`.
+Sky chart: the 88 constellations' traditional figures (676 segments) on the Hipparcos catalogue, 102 named
+bright stars (IAU Working Group on Star Names), built by `scripts/build-constellations.ts`.
+
+**The worlds' maps**: colour, normal and height maps derived from NASA/USGS/JPL mission imagery (LRO, MGS/
+Viking, MESSENGER, Galileo, Cassini, New Horizons, Dawn) — `assets/planets/`, the close-up ones streamed from
+`assets/planets-hd/` (see its README); colour maps GPU-compressed as KTX2 (BC7 / ASTC, `scripts/build-ktx2.ts`).
+
+**The craft and the station**: the Ranger and its cockpit, the Lander, the Endurance (Sketchfab, CC BY 4.0,
+modified) and NASA's ISS — credited below and in `assets/ranger/`, `assets/lander/`, `assets/endurance/`,
+`assets/iss/` READMEs.
 
 **The Earth's relief**: NOAA/NCEI's **ETOPO 2022** (60″, public domain; doi:10.25921/fd45-gt74) for the whole
 globe (`assets/earth/relief-*.bin`, `scripts/build-earth-relief.py`), and near the camera the real ground streamed
@@ -178,10 +238,10 @@ range, linear/log scale, a physics explanation (hover the ⓘ), dependencies and
 * **Modified markers**: an orange dot per changed setting (click it or double-click the label to reset),
   per-group reset, "Reset everything".
 * **Undo / redo** (⌘Z / ⇧⌘Z) of every panel edit; a whole slider drag is one step.
-* **Scene presets**, **your own presets** (saved in the browser), **quality** Low → Ultra (shows
-  "Custom" when edited by hand), **Advanced** toggle for expert integrator/sampling parameters.
-* **Share link**, **export / import JSON**, keyboard-shortcut sheet. `S` shows/hides the panel; on small
-  screens it becomes a bottom sheet.
+* **Scene presets**, **your own presets** (saved in the browser), **quality** Low → Ultra, RT max and
+  Game (shows "Custom" when edited by hand), **Advanced** toggle for expert integrator/sampling parameters.
+* **Share link**, **export / import JSON**, keyboard-shortcut sheet (?). `M` shows/hides the panel (⇧M while
+  flying, where M is the map); on small screens it becomes a bottom sheet.
 
 ## Controls
 
@@ -340,7 +400,7 @@ ground relative to the hole, the orbital markers around the nose), prograde / re
 in the view, warnings (collision course, ergosphere, below the ISCO, inside the photon orbit), and a **top-view
 map**: horizon, ergosphere, photon orbit, ISCO, disk, the star and its orbit, the mouth, the ship, its velocity
 and its **future geodesic** with periapsis, apoapsis and impact — the same path drawn, lensed, in the view.
-The **flight HUD** is laid out like a game's, on the edges of the screen so the view stays clear (N cycles
+The **flight HUD** is laid out like a game's, on the edges of the screen so the view stays clear (² / ` cycles
 full · minimal · clean; the app's toolbar folds behind ⋯): a mission bar (SAS / hold / autopilot lamps, time
 warp, the ship's clock τ against the distant clock t and their ratio), a **speed tape** (moving scale, value
 box, the autopilot's target bug, trend) and an **altitude tape** (log r with horizon, photon orbit, ISCO, the
@@ -366,10 +426,14 @@ that would fight the pilot leave it): speed and altitude, the attitude ball insi
 the autopilot's phase and remaining Δv, SAS / holds (with their marker glyphs) / autopilots; the orbit panel
 adds periapsis and apoapsis with the time to reach them and the closest approach. The target hold points at
 the target where it is seen: light delay and aberration included.
-Keys: W S / A D / Q E pitch, yaw, roll (by physical position); with Shift, RCS translation; ↑ ↓ throttle, Z full,
-X cut; T SAS; 1–7 holds; 8 9 0 autopilots; V camera; , . time warp; drag looks around from the attach point. The pad:
-left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde. Default lighting of the hull: 1
-(physical: strong contrasts).
+Keys (KSP's layout, by physical position — Z S · Q D · A E on AZERTY): W S / A D / Q E pitch, yaw, roll;
+I K · J L · H N RCS translation; ⇧ / Alt (or ↑ ↓) throttle up / down, Z full, X cut; Caps Lock precision
+controls; T SAS; R roll alignment; 1–7 holds; autopilots 8 hold position · 9 circularize · 0 approach · G land ·
+U take off · B dock; O flight planner; M the 3D map, ⇧M the settings; V · ⇧V camera; ⇧R camera reset; ⇧Y the
+future path in the view; [ ] the craft flown; ⇧K leave the ship; , . time warp; drag looks around from the
+attach point. The pad: left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde, D-pad ▲▼
+camera. Touch: a stick, a throttle lever, roll buttons. Default lighting of the hull: 1 (physical: strong
+contrasts).
 
 **Automatic flight: the flight planner** (O, or PLAN in the mission bar; `src/maneuver.ts`). Manoeuvre nodes —
 an impulse Δ(γβ) at a coordinate time, split along the orbital frame (prograde, normal, radial) — and the
@@ -453,7 +517,8 @@ toasts are debounced (Safari hands a pad over between two internal providers).
 
 **Selecting a body**: click its image — picking traces the pixel's ray (horizon or disk → the hole, star,
 gluing sphere → the wormhole), so even a lensed secondary image works; the hover label names it. Tab cycles
-the targets available in the camera's universe (from our side of the wormhole, only the wormhole).
+the targets available in the camera's universe (our side: the Sun, the planets and moons, the wormhole,
+the station and the craft not flown; Gargantua's: the hole, the star, its planets, the mouth).
 Double-click a body to orbit it and **fly the view to it**: the orientation turns by a quaternion slerp
 while the camera flies on an arc around the body to a framing distance, bending its approach so that the
 line of sight clears the hole and its disk. Double-click the sky (or ⇧R) to recentre (free: level the
@@ -485,13 +550,17 @@ journey: line up with the mouth, cross the throat, emerge facing the black hole 
 the black hole's universe: the way back home).
 
 Keys: space time · , . / warp and real time · V view · C look at the target · Y telescope · Tab target ·
-O cinematic orbit · ⇧C free-fall dive (exact E=1, L=Q=0 geodesic in proper time, seen from the rain frame) ·
-T wormhole journey · ⇧T tripod on the ground · B free fall · middle click mouse look · J jet · G shadow guide · L liquid wormhole ·
+R · ⇧R next view · recentre · O cinematic orbit · ⇧C free-fall dive (exact E=1, L=Q=0 geodesic in proper time,
+seen from the rain frame) · T wormhole journey · ⇧T tripod on the ground · B free fall · middle click mouse look ·
+N · ⇧N constellations · star names · U sky grids · J jet · G shadow guide · L liquid wormhole ·
 K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · ⌘K search · ⌘Z undo ·
-1–6 quality · P PNG · F fullscreen · H hide UI.
+1–6 quality (5 RT max, 6 Game) · P PNG · F fullscreen · H hide UI · F2 game tools · ? the shortcut sheet.
 
-Settings that differ from the defaults are kept in the URL hash, so a view can be shared by link.
+The URL is not kept in sync with the settings any more: a link (`#save=…`, Copy a link in the game tools;
+or the panel's share link) restores a moment, `#scene=…` starts a scene, and old setting links are read once.
 
 In dev, `window.__bh` exposes `settings`, `touch()`, `preset(name)`, `snapshot(name)` (saves the
 converged frame to `snapshots/`) and `render(name, preset, patch, options)` (offline render saved to
-`snapshots/`); `__bh.renderer.precisionProbe(...)` runs the GPU precision probe.
+`snapshots/`); `__bh.renderer.precisionProbe(...)` runs the GPU precision probe; `__bh.game` holds the
+game tools (`__bh.game.help()`, see [docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)), `__bh.iss` the station,
+`__bh.sky` the sky chart, `__bh.captureScenes()` the scene gallery's pictures (`scripts/scene-thumbs.ts`).

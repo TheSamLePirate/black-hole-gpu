@@ -2,7 +2,33 @@
 
 **26 septembre 2026 · v4 (toutes les décisions intégrées) · Sources : `SYSTEME.md`, `results.json` et le code de `black-hole-gpu` (commit `39fd55d`)**
 
-Pendant cette étude, je n'ai rien modifié dans `black-hole-gpu` et je n'ai lancé aucun serveur. J'ai calculé les ordres de grandeur avec des scripts Python jetables, en reprenant les formules de `calculations.py`. **Le plan n'est pas commencé.**
+Pendant cette étude, je n'ai rien modifié dans `black-hole-gpu` et je n'ai lancé aucun serveur. J'ai calculé les ordres de grandeur avec des scripts Python jetables, en reprenant les formules de `calculations.py`. **Le plan n'est pas commencé** (au 26 septembre, avant la phase 0 ; voir l'état ci-dessous).
+
+> **État au 2 octobre 2026.** Le plan ci-dessous est conservé tel qu'il a été écrit ; cette note dit ce qui en a été fait.
+>
+> **Phases faites (26–27 septembre)**, une par commit, chacune avec ses tests et sa capture :
+>
+> | # | Phase | Commit |
+> |---|---|---|
+> | 0 | Modèle et validation (`kerr-orbits.ts`, `bodies.ts`, `ephemeris.ts`) | `8c67e2f` |
+> | 1 | Corps génériques, époque de temps, bouche en orbite | `de96c4c` |
+> | 2 | Points lentillés | `a6f366b` |
+> | 3 | Vol longue distance | `63f3f47` |
+> | 4 | Deux moteurs, guidage à faible poussée, propergol | `677c355` |
+> | 5 | Patch local, sondes de lumière, garde-fou d'irradiance | `39aaf63` |
+> | 6 | Atterrissage | `8147da3` |
+> | 7 | Surfaces et atmosphères | `01919e7` |
+> | 8 | Saturne et notre côté (bouche à 0,7 UA derrière Saturne) | `5cc8f38` |
+>
+> Planches D1–D8 de la galerie : `f61fc6d`.
+>
+> **Phase 9 (mission et vidéo) : pas faite telle quelle.** Pas de `mission2.ts` ni de mission automatique Saturne → Miller → Mann → Edmunds. À la place, le système est devenu un jeu : la scène `game:interstellar` part d'une orbite terrestre à 400 km (`18b35c1`), et le planificateur va de la Terre à la bouche puis à travers le col (`c1fb139`). Les vidéos se font avec `__bh.video` (`9d0955b`) et les prises enregistrées en direct (`e658e9a`). La mission automatique d'avant le plan (`src/mission.ts`, `39fd55d`) reste celle du trou de ver vers l'étoile compagnon.
+>
+> **Phase 10 (modèle thermique de rentrée) : en cours, non commitée.** Son plan est dans `docs/PLAN-ATMOSPHERE-ORDINATEUR.md` ; `src/aero.ts` (atmosphère standard, portance et traînée, flux de Sutton–Graves) et `tests/aero.test.ts` existent dans l'arbre de travail.
+>
+> **Écarts avec l'architecture du §4.** Le repère local est `src/landing.ts` (pas `local-frame.ts`) ; le patch local est `src/system/local-patch.ts`, les planètes restant dessinées par `trace.wgsl` (pas de `planet-local.ts` ni de `planet.wgsl`) ; les points lentillés sont calculés dans le traceur avec `src/system/scene-bodies.ts` (pas de `sprites.ts`) ; les moteurs, le propergol et la poussée finie sont dans `src/engine.ts` et `src/lowthrust.ts` (pas de `finite-burn.ts` ni de `propellant.ts`) ; les lentilles faibles du vol sont dans `src/lenses.ts` ; `src/system/our-side.ts` existe comme prévu, `reentry.ts` non (la lueur de rentrée de la phase 7 est une lueur de coque, `src/shaders/ship.wgsl`).
+>
+> **Ajouté depuis, hors du plan** (détail dans l'historique git et `docs/`) : le système solaire à l'échelle de notre côté (`955d4a7`), puis les éphémérides DE440 du JPL, les rotations UAI et les échelles de temps (`a513d35`) ; la carte interactive puis 3D (`1b8e14d`, `6f9243d`) ; le vol manuel façon KSP et les nœuds de manœuvre (`488a170`, `d3885d4`) ; les planificateurs du système solaire, du retour libre d'Artemis II à Saturne (`02cd811`, `616ca0d`, `f1401a7`) ; la Terre (cartes, air, nuages, `fc7e2fd`), son vrai relief ETOPO 2022 en tuiles (`f5e699c`, `ad67843`) et les éclipses (`c7906ef`) ; des atmosphères pour les mondes du système solaire (`d27560c`) ; les surfaces de Miller, Mann et Edmunds reprises (`9ed6b11`) ; le disque, la fumée, la profondeur de champ et l'étalonnage du film (`502feaa`, `93b126a`, `5e2d465`) ; **l'Endurance** en orbite autour de Gargantua, l'option 10 du §6 (`fa7833e`) ; une caméra et une horloge communes à tous les modes (`87ac267`, `f875d6e`) ; la Station spatiale sur son orbite réelle et l'amarrage (`57e13f5`, `90f08e0`) ; la flotte Ranger, Lander, Endurance (`00e1b9f`) ; le cockpit du Ranger (`2ea4197`) ; les vagues A–C de l'audit de performance (`docs/PERFORMANCE.md`).
 
 ---
 
@@ -287,7 +313,7 @@ Coût GPU : quelques tests sphère-segment par pas, seulement près d'un corps ;
 
 ---
 
-## 5. Plan par phases (non commencé)
+## 5. Plan par phases (phases 0 à 8 faites ; voir l'état en tête)
 
 Chaque phase est livrable seule, avec `bun test`, une capture et un commit.
 

@@ -1,7 +1,7 @@
 # Game tools
 
-Tools to manage, place, audit and improve the game — from the interface (**F2**, or 🛠 in the
-mission bar / *Tools* in the toolbar) and from code (`__bh.game` in the console).
+Tools to manage, place, audit and improve the game — from the interface (**F2**, or the tools button
+in the mission bar / *Tools* in the toolbar) and from code (`__bh.game` in the console).
 
 ## The window (F2)
 
@@ -11,8 +11,11 @@ mission bar / *Tools* in the toolbar) and from code (`__bh.game` in the console)
 | **Place** | Puts the Ranger in orbit around any body (ours: the 27 of the solar system; Gargantua's: Miller, Mann, Edmunds, and Gargantua itself on a Kerr circular orbit) — periapsis / apoapsis altitudes, inclination from the body's equator, Ω, ω, ν, retrograde — or on a ground (latitude, longitude, known sites; Gargantua's worlds too). **The world as a globe or a planisphere** (its map, the day and the night): a click chooses the place — on the ground, where to land; in orbit, the orbit passing over it now (its node Ω and anomaly ν found when placed, the inclination raised to the latitude; typing Ω or ν goes back to them). Quick buttons: orbit the target, LEO, KSC pad, low lunar orbit. |
 | **Target · SOI** | The chain of spheres of influence the ship is in; every body with its radius, SOI and distance — a click targets it. |
 | **Time** | Warp ×1 … ×1 000 000, pause; set the scene's clock to a date. |
-| **Saves** | Named saves (every setting exact, the date, the pilot, the flight plan), the autosave, load / export / delete, import a file, copy a link. |
-| **Audit** | Self-checks: settings finite, ephemeris velocities vs positions, ship state, SOI agreement, free-fall predictor vs Kepler, save round trip, frame rate, steadiness of the ship's light and of the auto exposure, errors, and (optional) the planner on the target. Report downloadable. |
+| **Saves** | Named saves (every setting exact, the date, the pilot, the flight plan), the autosave, load / export (⤓) / delete (✕), *Import a file…*, *Export now*, *Copy a link* (this moment, without the plan). |
+| **Perf** | Where the frame's time goes: frames rendered and loop rate, GPU time per frame and of its passes, the image size (pixel ratio × render scale), quality · frame budget · realtime block, the worst loop; tables of the GPU passes (ms, last) and of the main thread's sections (ms, worst over 3 s). Buttons: quality *Game* (≈ 60 fps), *RT max* (≈ 30), *High*; dynamic resolution on / off. |
+| **Audit** | Self-checks (*Run the audit*): settings finite, ephemeris velocities vs positions, ship state, SOI agreement, free-fall predictor vs Kepler, save round trip, frame rate, steadiness of the ship's light and of the auto exposure, errors, and (optional) the planner on the target. Report downloadable. |
+
+The window remembers its last tab.
 | **Journal** | What happened: pilot messages, SOI and status changes, placements, saves, audits, errors — filter, copy, download. |
 
 ## The HUD
@@ -23,12 +26,21 @@ mission bar / *Tools* in the toolbar) and from code (`__bh.game` in the console)
   Kepler figures; near Gargantua, the Kerr effective potential as before.
 - **Map**: the spheres of influence (dashed; the ship's own brighter). Its tabs: *3D*, *Globe*,
   *Planisphere* — the ground track of the world the ship orbits (track left and ahead, horizon, Sun).
-- **⌇ / Y**: the future path's cyan tube in the view, on / off (the map keeps it).
+- **Lock-on** (`src/ui/targethud.ts`): around the target (a body, or the station once clicked) a ring
+  its apparent size, its name, the distance to its surface, the closing speed (▼ closing, ▲ away), the
+  relative velocity's arrow, the closest approach or the time to impact; off the view, an arrow at the
+  edge.
+- **Path button** (mission bar) / **⇧Y**: the future path's cyan tube in the view, on / off (the map
+  keeps it). Y alone is the telescope.
 
 ## Settings › Game
 
-Turn rate, turn acceleration, RCS authority, free look; crash speed, ballistic coefficient;
-Ranger status, SOI rings, future path in the view; autosave and its period.
+Grouped: *Ranger* (on / off, craft, view, engine, crew g, auto warp for manoeuvres, propellant
+gauge, exhaust speed, mass ratio); *Ranger: appearance* (lighting, hull brightness, metalness, clear
+coat, roughness); *Ranger handling* (turn rate, turn acceleration, RCS authority, free look yaw /
+pitch); *Ground & air* (crash speed, ballistic coefficient); *Displays* (Ranger status, future path in
+the view, spheres of influence on the map); *Sound* (volume, flight computer, engines & RCS, cabin &
+wind, interface); *Saved games* (autosave, every 2–120 s).
 
 ## Saved games instead of the URL
 
@@ -49,13 +61,18 @@ __bh.game.land("moon", 0.674, 23.473)               // Tranquility Base
 __bh.game.land("mann", 10, -30)                     // Gargantua's worlds: lat / lon on their frame (x away from Gargantua)
 __bh.game.orbitOver("earth", 48.86, 2.35, { altKm: 400, inc: 51.6 })  // an orbit passing over Paris now
 __bh.game.orbitTarget()                             // around the current target
-__bh.game.target("saturn"); __bh.game.soi(); __bh.game.bodies()
-__bh.game.warp(1000); __bh.game.pause(); __bh.game.setDate("2067-06-01T12:00")
-__bh.game.set("crashSpeed", 20); __bh.game.get("turnRate")
-__bh.game.save("before TMI"); __bh.game.load("before TMI"); __bh.game.saves()
-__bh.game.exportSave(); __bh.game.importSave(json); __bh.game.shareLink()
+__bh.game.placeAt({ frame, X, vel, fwd, up })        // at a state (home frame / the hole's map)
+__bh.game.target("saturn"); __bh.game.targets(); __bh.game.soi(); __bh.game.bodies("gargantua")
+__bh.game.warp(1000); __bh.game.realTime(); __bh.game.pause(false); __bh.game.setDate("2067-06-01T12:00"); __bh.game.date()
+__bh.game.set("crashSpeed", 20); __bh.game.get("turnRate"); __bh.game.settings()
+__bh.game.quality("game")                           // low · medium · high · ultra · realtime · game
+__bh.game.perf()                                    // what the Perf tab shows (switches GPU timestamps on; read again a few s later)
+__bh.game.preset("game:interstellar")               // a scene
+__bh.game.save("before TMI"); __bh.game.load("before TMI"); __bh.game.saves(); __bh.game.deleteSave("before TMI")
+__bh.game.exportSave(); __bh.game.importSave(json); __bh.game.shareLink(); __bh.game.autosaveNow()
+__bh.game.pilotState(); __bh.game.snapshot()        // the pilot's modes in a line; a save object, not stored
 await __bh.game.audit({ planner: true })
 __bh.game.log.events; __bh.game.log.text()
 ```
 
-Sources: `src/game/` (orbit, place, status, save, log, audit, tuning, tools), `src/ui/gametools.ts`.
+Sources: `src/game/` (orbit, kepler, place, status, save, log, audit, tuning, tools), `src/ui/gametools.ts`, `src/ui/targethud.ts`.
