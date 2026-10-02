@@ -143,6 +143,19 @@ export function airTop(atm: Atmosphere | null | undefined): number {
   return atm.H * Math.log(atm.rho0 / AIR_FLOOR);
 }
 
+/** The entry interface: the height where the air's density reaches 10⁻⁸ kg/m³ (the Earth: ~125 km) —
+ *  above it a fall is a coast (the time may be sped up), below it the air flies the craft. */
+export function entryInterface(atm: Atmosphere | null | undefined): number {
+  if (!atm) return 0;
+  let lo = 0, hi = airTop(atm);
+  for (let i = 0; i < 50; i++) {
+    const m = (lo + hi) / 2;
+    if (airAt(atm, m).rho > 1e-8) lo = m;
+    else hi = m;
+  }
+  return lo;
+}
+
 // ---- the craft
 
 /** A craft's aerodynamics and thermal protection (its own frame: x left, y up, z the nose). */

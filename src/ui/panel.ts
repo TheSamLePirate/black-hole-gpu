@@ -993,6 +993,7 @@ export class SettingsPanel {
         ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
         ["F · ⇧F", "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity"],
         ["P · ⇧P", "Flaps (up · half · full) · air brake"],
+        ["⇧G", "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing"],
         ["⇧Y", "The future path in the view"],
         ["²  (`)", "HUD density: full · minimal · clean view"],
         ["O", "Flight planner: align the orbital plane · transfer · rendezvous · through the wormhole · nodes, then EXECUTE"],

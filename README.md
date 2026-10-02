@@ -46,6 +46,37 @@ GPU process being lost.
 - **Worlds**: the 27 bodies of the solar system on their real ephemerides, the Earth on its real relief;
   Gargantua's planets Miller (its sea), Mann (its ice) and Edmunds (its desert), flown in each planet's own
   frame (`src/landing.ts`: gravity, the primary's tide; land and take off with the autopilots).
+- **The air** (`src/aero.ts`, `src/flightair.ts`): every world's atmosphere — the Earth's U.S. Standard
+  Atmosphere 1976, the others' exponentials with their temperature and gas — acts on the flown craft through
+  its own aerodynamics: a Newtonian box (modified-Newtonian Cp at hypersonic speeds, curved faces), a wing
+  (lift with Mach, stall, induced drag, flaps), the transonic rise; lift, drag and their moments where they
+  act. The heat of an entry (Sutton–Graves convection, Tauber–Sutton radiation) warms a shield and a hull,
+  radiating; past their limits — or a load past the structure — the craft is lost (Settings › Ground & air
+  › Damage; a point kept at the entry to resume from). In the air the time warp holds at ×4. The map's paths
+  fall through the air with the craft's drag, to their impact.
+- **On the wheels**: a level touchdown rolls (the crash judged on the vertical speed); brakes and spoilers
+  at idle, the tyres' grip; the take-off roll, the rotation, the lift-off — on our worlds and Gargantua's.
+- **Three ways to fly the air** (F; the Ranger and the Lander, the Endurance a rocket): **rocket** (as in
+  space), **plane** (fly-by-wire: the control surfaces' authority with the dynamic pressure; let go, the
+  climb angle and the bank held, the turns coordinated, the stall kept off; hypersonic, the angle of attack
+  held), **flight computer** (the throttle sets the speed — 0 a hover —, the stick the climb and the heading;
+  it flies that velocity with thrust in any direction, never into the ground; ⇧F antigravity: the hold
+  free). P flaps, ⇧P air brake. The HUD's flight path vector and air data.
+- **Entry & landing** (⇧G, or the flight computer's LAND tab; `src/entry.ts`): from orbit the deorbit burn
+  timed and sized for a site — the first pass the craft's lift can reach, a day of orbits scanned —, the
+  guided entry (the angle of attack held, the bank from a predictor–corrector, its reversals), then the
+  Ranger's glide to the site and its landing, or the Lander's powered one. Sites: `src/game/sites.ts`.
+- **The look of an entry**: the bow shock's plasma marched through (the gas's colour, the stagnation
+  point's white core, the ionized wake), the hot skin as a black body, the cabin lit through the windows,
+  the vapour cone at Mach 1, the camera shaking, the plasma's roar and the sonic boom.
+- **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — circularize,
+  apoapsis, periapsis, Hohmann, inclination, resonance; match planes, rendezvous and intercept (their
+  porkchop, a click flies a cell), match velocities, fine-tune the approach; land; our side's missions;
+  Gargantua's own planners about the hole — each previewed (its burns' Δv and duration, the orbit after,
+  the budget) before it is flown; the analysis — the elements and their times, the target's relative
+  inclination, phase angle and window, closest approach; the plan's burns editable to the m/s and second,
+  snapped to the apsides and nodes. Our side flies them as manoeuvre nodes (the map's n-body path);
+  Gargantua's worlds, as the flight computer's own burns in their frames.
 - **Saves**: the game saves itself in the browser and resumes at the next visit; named saves, export and
   import, and links (`#save=…`) in the game tools ([docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)). The URL hash
   is read once at start, then cleared.

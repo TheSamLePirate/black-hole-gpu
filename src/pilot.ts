@@ -14,7 +14,7 @@ import { TUNING } from "./game/tuning";
 import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
-export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock";
+export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock" | "entry" | "burns";
 /** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
  *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
 export type FlightMode = "rocket" | "plane" | "sf";
@@ -24,7 +24,7 @@ export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
   normal: "Normal", antinormal: "Anti-normal", target: "Target", antiTarget: "Anti-target", maneuver: "Manoeuvre",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit", dock: "Docking" };
+export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit", dock: "Docking", entry: "Entry & landing", burns: "Flight computer burns" };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -70,6 +70,9 @@ export interface FlightContext {
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
    *  the hold given free (antigravity: no engine, no propellant) */
   sf?: { beta: V3; ff: V3; nose: V3; up: V3; free: V3 } | null;
+  /** the entry autopilot: the attitude it holds (local: the nose, the ship's top) and the throttle it
+   *  asks once the nose is on (the deorbit's burn) */
+  att?: { nose: V3; up: V3; throttle?: number } | null;
   /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
    *  far: the burn is still far off (an attitude hold may point the nose meanwhile) */
   burn?: { dir: V3; throttle: number; far?: boolean } | null;
@@ -183,6 +186,13 @@ export class FlightComputer {
       point = toC(c.sf.nose);
       upC = toC(c.sf.up);
       this.burn = len(A) > 0 ? scale(A, 1 / len(A)) : null;
+    } else if ((this.auto === "entry" || this.auto === "burns") && c.att) {
+      // the entry: the attitude the guidance asks (the angle of attack, the bank — or retrograde for the
+      // deorbit's burn, fired once the nose is on it)
+      point = toC(c.att.nose);
+      upC = toC(c.att.up);
+      const align = c.snap ? 1 : dot(Z, point);
+      throttle = (c.att.throttle ?? 0) * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
     } else if (this.auto === "node" && c.burn) {
       // manoeuvre node: point along the burn, fire only when on it (within ~3°); long before it, an
       // attitude hold may keep the nose elsewhere
@@ -257,7 +267,7 @@ export class FlightComputer {
     const want: V3 = [...this.omega];
     const active = manual.some((m) => m !== 0);
     // the control surfaces' authority, added to the thrusters' (the plane and the sci-fi laws)
-    const A3 = c.air && c.air.mode !== "rocket" ? c.air.auth : [0, 0, 0];
+    const A3 = c.air && (c.air.mode !== "rocket" || this.auto === "entry") ? c.air.auth : [0, 0, 0];
     const acc3: V3 = [TUNING.turnAccel + A3[0], TUNING.turnAccel + A3[1], TUNING.turnAccel + A3[2]];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);

@@ -269,6 +269,16 @@ export class CockpitScreens {
     g.font = `600 20px ${FONT}`;
     g.fillStyle = DIM;
     g.fillText(`PITCH ${((pitch * 180) / Math.PI).toFixed(1)}°  ROLL ${((roll * 180) / Math.PI).toFixed(1)}°`, cx, 535);
+    // in the air: Mach, the dynamic pressure, the angle of attack, the load
+    const A = (d.info as { air?: { inAir: boolean; mach: number; q: number; alpha: number; g: number; margins: { shield: number; hull: number; g: number }; mode: string } }).air;
+    if (A?.inAir) {
+      const hot = Math.max(A.margins.shield, A.margins.hull, A.margins.g) > 0.85;
+      g.fillStyle = hot ? RED : AMBER;
+      g.font = `700 19px ${FONT}`;
+      g.fillText(`M ${A.mach.toFixed(2)} · q ${A.q >= 1000 ? `${(A.q / 1000).toFixed(1)} kPa` : `${A.q.toFixed(0)} Pa`} · α ${((A.alpha * 180) / Math.PI).toFixed(1)}° · ${A.g.toFixed(2)} G`, cx, 503);
+      g.font = `600 20px ${FONT}`;
+      g.fillStyle = DIM;
+    }
     g.fillStyle = st && st.vVert < 0 ? AMBER : TEXT;
     g.fillText(st ? `V/S ${st.vVert >= 0 ? "+" : "−"}${fmtSpeed(Math.abs(st.vVert))}` : "", cx, 570);
     g.textAlign = "left";
@@ -342,7 +352,14 @@ export class CockpitScreens {
     rows.push(["STATUS", st?.label ?? "—"]);
     if (st?.next) rows.push([st.next.kind === "impact" ? "⚠ IMPACT" : st.next.kind === "enter" ? "ENTERS" : st.next.kind === "exit" ? "LEAVES" : "MOUTH", `${st.next.name} · ${fmtDur(st.next.inS)}`, st.next.kind === "impact" ? RED : TEXT]);
     rows.push(["SOI", st ? `${st.soiName} · ${fmtKm(st.soiKm)}` : "—"]);
-    this.rows(g, rows, 100, TEXT, 70);
+    // the entry: its phase, its site, the guidance's bank and miss, the deorbit's countdown
+    const E = (d.info as { entry?: { phase: string; site: { name: string } | null; bank: number; miss: { along: number; across: number; dist: number } | null; tBurn: number | null; dv: number } | null }).entry;
+    if (E) {
+      rows.push(["ENTRY", `${E.phase.toUpperCase()}${E.site ? ` · ${E.site.name.split(",")[0]!.toUpperCase()}` : ""}`, AMBER]);
+      if (E.tBurn !== null) rows.push(["DEORBIT", `${E.dv.toFixed(0)} m/s · ${fmtDur(E.tBurn)}`, AMBER]);
+      else rows.push(["BANK", `${((E.bank * 180) / Math.PI).toFixed(0)}°${E.miss ? ` · MISS ${fmtKm(E.miss.dist / 1e3)}` : ""}`]);
+    }
+    this.rows(g, rows, 100, TEXT, E ? 58 : 70);
   }
 
   // ---------------------------------------------------------------------------------- 3 SYSTEMS
@@ -357,6 +374,13 @@ export class CockpitScreens {
     this.bar(g, 30, 100, 60, 250, i.throttle, i.throttle > 0.02 ? AMBER : LINE, "THR");
     this.bar(g, 120, 100, 60, 250, fuel ? fuel.fraction : 1, fuel && fuel.fraction < 0.15 ? RED : GREEN, "PROP");
     this.bar(g, 210, 100, 60, 250, Math.min(1, Math.hypot(...(i.omega as number[])) / 0.5), LINE, "RATE");
+    // the skin against its limits (the shield, the hull)
+    const A = (i as { air?: { shield: number; hull: number; shieldMax: number; hullMax: number; mode: string } }).air;
+    if (A) {
+      const ms = A.shieldMax ? A.shield / A.shieldMax : 0, mh = A.hull / A.hullMax;
+      if (A.shieldMax) this.bar(g, 300, 100, 60, 250, Math.min(ms, 1), ms > 0.85 ? RED : ms > 0.6 ? AMBER : GREEN, "SHLD");
+      this.bar(g, 390, 100, 60, 250, Math.min(mh, 1), mh > 0.85 ? RED : mh > 0.6 ? AMBER : GREEN, "HULL");
+    }
     const others = i.assembly.filter((q) => q !== i.vessel);
     this.rows(g, [
       ["ENGINE", `${maxG.toFixed(2)} g max`],
@@ -365,10 +389,11 @@ export class CockpitScreens {
       ["SAS", i.sas ? "ON" : "OFF", i.sas ? GREEN : AMBER],
       ["HOLD", i.hold === "none" ? "—" : i.hold.toUpperCase()],
       ["AUTO", i.auto === "none" ? "—" : i.auto.toUpperCase(), i.auto !== "none" ? AMBER : TEXT],
-    ], 420, TEXT, 44, 18, 23);
+      ["FLIGHT", A ? `${A.mode.toUpperCase()} · ${Math.round(A.shield || A.hull)} K` : "—"],
+    ], 400, TEXT, 40, 18, 23);
     g.font = `600 18px ${FONT}`;
     g.fillStyle = DIM;
-    g.fillText(others.length ? `+ ${others.map((q) => VESSELS[q].name).join(" + ")}` : "", 300, 120);
+    g.fillText(others.length ? `+ ${others.map((q) => VESSELS[q].name).join(" + ")}` : "", 300, 90);
   }
 
   // ---------------------------------------------------------------------------------- 4 DOCKING

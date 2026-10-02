@@ -128,7 +128,7 @@ const HOLD_KEYS: [Hold, string, string][] = [
   ["normal", "NRM+", "5"], ["antinormal", "NRM−", "6"], ["target", "TGT", "7"], ["antiTarget", "ANTI", ""], ["maneuver", "NODE", ""],
 ];
 const AUTO_KEYS: [Auto, string, string][] = [
-  ["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"], ["land", "LAND", "G"], ["takeoff", "TAKE OFF", "U"],
+  ["hover", "HOLD POS", "8"], ["circularize", "CIRC", "9"], ["approach", "APPROACH", "0"], ["land", "LAND", "G"], ["takeoff", "TAKE OFF", "U"], ["entry", "ENTRY", "⇧G"],
 ];
 
 const GLYPH: Record<string, string> = {
@@ -247,6 +247,10 @@ export class FlightHud {
 
   /** the map over the whole screen (M) */
   mapView = false;
+  /** Another layer over the HUD (the flight computer's), shown with it. */
+  attach(el: HTMLElement) {
+    this.root.append(el);
+  }
   toggleMapView() {
     this.mapView = !this.mapView;
     this.root.classList.toggle("mapview", this.mapView);
@@ -591,6 +595,7 @@ export class FlightHud {
       approach: '<path d="M-9 0H2.5M-.5-3.5L3 0L-.5 3.5"/><circle cx="7.5" r="2" class="f"/>',
       land: '<path d="M0-8V3M-3.5-.5L0 3L3.5-.5M-8 7.5H8"/>',
       takeoff: '<path d="M0 5V-7M-3.5-3.5L0-7L3.5-3.5M-8 8H8"/>',
+      entry: '<path d="M-8-7Q-2-6 1 0T4 8M-8 8H8"/><circle cx="1" cy="0" r="2.2" class="f"/>',
       speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
     };
     const AUTO_TIPS: Record<string, string> = {
@@ -599,6 +604,7 @@ export class FlightHud {
       approach: "Flies to the target and stops beside it",
       land: "Descends, kills the horizontal speed, touches down",
       takeoff: "Lifts off and climbs to orbit",
+      entry: "From orbit: the deorbit burn, the guided entry (the angle of attack held, the bank flown to the site), the glide and the landing — at the chosen site, or the nearest",
     };
     const rightIds: [string, string, string, () => void][] = [
       ["sas", "Stability assist", "Holds the attitude, damps any rotation", () => act.sas()],

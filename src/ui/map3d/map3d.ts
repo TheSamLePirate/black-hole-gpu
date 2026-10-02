@@ -1593,6 +1593,14 @@ export class Map3D {
       ctx.fillText(text, p.x + 5 * dpr, p.y + (below ? 11 : -5) * dpr);
     };
     const km = (d: number) => fmtDist(d, true, s);
+    // the entry: the guidance's predicted fall and the site it flies to (relative to their body)
+    const E = (i as { entry?: { body: string; path: V3[] | null; site: { name: string; X: V3 } | null; ours: boolean } | null }).entry;
+    if (E && E.ours && solarBody(E.body)) {
+      const Bp = solarState(E.body, tView).pos;
+      const at = (x: V3): V3 => FA([Bp[0] + x[0], Bp[1] + x[1], Bp[2] + x[2]], tView);
+      if (E.path && E.path.length > 1) line(E.path.map(at), "#ff9a4a", 0.95, 2.2, [7, 4]);
+      if (E.site) tag(at(E.site.X), `◎ ${E.site.name}`, "#ffd27a", true);
+    }
     const apsides = (p: OurPath, from: number, label: string) => {
       const body = p.refs[from];
       if (!body || (body === "sun" && frameId !== "sun")) return;

@@ -36,6 +36,8 @@ import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { CraftLost } from "./ui/craftlost";
+import { FlightComputer } from "./ui/fc/computer";
+import { sitesOf } from "./game/sites";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
@@ -873,6 +875,42 @@ async function main() {
     tools: () => toolsWin.toggle(),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
+  // the flight computer, over the full-screen map (ui/fc/computer.ts)
+  const flightComputer = new FlightComputer({
+    context: () => camera.fcContext(),
+    kerr: () => {
+      if (!camera.piloting || camera.fcContext()) return null;
+      const cam = cameraFrame(settings);
+      return cam.region === "hole" ? { r: cam.r, target: settings.target } : null;
+    },
+    kerrPlan: (kind, r) => {
+      const m = kind === "circular" ? camera.planTransfer("orbit", r ?? 30) : kind === "align" ? camera.planAlign("orbit") : kind === "target" ? camera.planTransfer("star") : camera.planTransfer("wormhole");
+      panel.toast(m);
+      return null;
+    },
+    setPlan: (burns, note) => camera.fcSetPlan(burns, note),
+    execute: () => camera.fcExecute(),
+    clear: () => camera.fcClear(),
+    plan: () => camera.fcPlan(),
+    budget: () => camera.fcBudget(),
+    sites: () => {
+      const c = camera.fcContext();
+      return c ? sitesOf(c.body) : [];
+    },
+    site: () => camera.entrySite,
+    setSite: (st) => (camera.entrySite = st),
+    land: () => {
+      pilotAuto("entry");
+      return null;
+    },
+    mission: (target, arrival, altKm) => {
+      if (!target) return "Target a body first (a click on the map)";
+      void camera.planOurs("target", arrival, altKm, 200).then((m) => m && panel.toast(m));
+      return null;
+    },
+    say: (t) => panel.toast(t),
+  });
+  flightHud.attach(flightComputer.root);
   // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
   const tpDock = document.createElement("div");
   tpDock.id = "tp-dock";
@@ -932,6 +970,7 @@ async function main() {
       return true;
     }
     if (holds[e.code]) pilotHold(holds[e.code]!);
+    else if (e.code === "KeyG" && e.shiftKey) pilotAuto("entry");
     else if (autos[e.code]) pilotAuto(autos[e.code]!);
     else if (e.code === "KeyT") pilotSas();
     else if (e.code === "KeyR" && e.shiftKey) {
@@ -1611,8 +1650,11 @@ async function main() {
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)
       if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time));
+      flightComputer.show(flightHud.mapView);
+      flightComputer.update();
       cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
     } else {
+      flightComputer.show(false);
       audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
     }
     hudTimer += dt;

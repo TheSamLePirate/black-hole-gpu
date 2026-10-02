@@ -17,7 +17,12 @@ import { bodyState, bodyTrack } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { AirFlight, AIR_WARP } from "./flightair";
-import { aeroForces, airAt, airTop } from "./aero";
+import { attitudeFor, EntryGuidance, planDeorbit, predictEntry, type EntryCraft, type EntryEnv, type EntryState } from "./entry";
+import { siteDir, sitesOf, type Site } from "./game/sites";
+import { fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
+import type { Burn, FcContext } from "./fc/ops";
+import { issOrbit } from "./system/iss";
+import { aeroForces, airAt, airTop, entryInterface } from "./aero";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
 import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type FlightMode, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
@@ -31,7 +36,7 @@ import { nodeDvHome, predictOurs, YOSHIDA, type OurPath } from "./system/our-pre
 import { keplerProp } from "./system/our-plan";
 import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
 import { plan as runPlanner } from "./system/plan-client";
-import { airDensity as ourAir, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
+import { airDensity as ourAir, bodyFixedOf, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "./system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint, type RendezvousPoint } from "./system/iss-plan";
@@ -2617,12 +2622,21 @@ export class CameraController {
       path: this.airFlight.pathRate.map((x) => -x) as Vec3, ground: onWheels0, stall: AV.wing?.stall ?? 0.35, q: LA0.out.q, gamma: this.pathAngle(cam), bank: (this.attitudeNow() as { bank?: number }).bank ?? 0, mach: LA0.out.mach,
     } : null;
     const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
+    // the entry autopilot: the deorbit, the guided entry, the glide (its attitude, its burn)
+    if (this.pilot.auto !== "entry" && this.entryRun) {
+      // (off: the time back to real if it was sped up waiting for the burn; the air brake in)
+      if (this.entryRun.phase === "wait") s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+      this.airBrake = 0;
+      this.entryRun = null;
+    }
+    const entryAtt = this.pilot.auto === "entry" ? this.entryStep(cam, dtPilot) : this.pilot.auto === "burns" ? this.burnsStep(cam) : null;
     if (mode !== "sf" || !sfCtx) this.sfCmd = null;
     const out = this.pilot.step({
       air: airCtx, sf: sfCtx,
       dt: dtPilot, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
       radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
-      target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
+      target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" && this.pilot.auto !== "entry" && this.pilot.auto !== "burns" ? this.autopilotWant(cam) : null),
+      att: entryAtt,
       dock: this.pilot.auto === "dock" ? this.dockAuto?.att ?? null : null,
       burn,
       // (the Crew engine's autopilots, when a frame lasts more than ~20 s of the ship's time: a real
@@ -2659,6 +2673,8 @@ export class CameraController {
     // acceleration × proper time)
     // (the antigravity's hold is free)
     const w = Math.hypot(...(sfCtx ? sub3(out.acc, sfCtx.free) : out.acc)) * (this.properTime - tau0);
+    if (this.entryRun?.phase === "burn") this.entryRun.done += w * 299792458;
+    if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing) this.fcBurns[0].done += w * 299792458;
     this.spent += w;
     if (burn && this.nodeBurning) this.nodeDone += w;
     this.dockCheck();
@@ -2824,6 +2840,380 @@ export class CameraController {
     return { beta: o.beta, ff: o.ff, free: fr.out([0, 0, 0], free).ff, nose: fr.toLocal(nose), up: fr.toLocal(upB) };
   }
 
+  /** Where the entry autopilot comes down (null: the nearest site under the track). */
+  entrySite: Site | null = null;
+  /** The entry autopilot's run: its phase, the deorbit's burn (its time [s of the scene], Δv, done
+   *  [m/s]), the guidance and its bank, the angle of attack, the next guidance's update [s]. */
+  entryRun: {
+    phase: "wait" | "burn" | "entry" | "glide"; site: Site | null; tBurn: number; dv: number; done: number;
+    guid: EntryGuidance | null; bank: number; next: number; alpha: number; gPrev: number | null; short: number; handover: number;
+    plan?: { heat: number; shield: number; g: number };
+  } | null = null;
+
+  /**
+   * The frame an entry is flown in, both universes (entry.ts EntryEnv): body-centred, SI — our side
+   * the home axes (the ground turning in them), Gargantua's worlds their own turning frames (the ground
+   * at rest) — the state, where a site is now, the conversions to the pilot's local components.
+   */
+  private entryFrame(cam: ReturnType<typeof cameraFrame>) {
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * this.s.massSolar;
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const id = nav.ref;
+      const b = solarBody(id);
+      if (!b || id === "sun" || b.kind === "star") return null;
+      const mu = b.mass * M_METRES * c * c;
+      const w = lin(spinVector(b, nav.t), 1 / Msec, nav.X, 0);
+      const wl = Math.hypot(...w);
+      const wa = wl > 0 ? lin(w, 1 / wl, w, 0) : ([0, 0, 1] as Vec3);
+      const env: EntryEnv = {
+        R: b.radius * M_METRES, atm: b.atmosphere ?? null,
+        gravity: (x) => {
+          const r = Math.hypot(...x);
+          return lin(x, -mu / (r * r * r), x, 0);
+        },
+        ground: (x) => cross(w, x),
+        carry: (p, dt) => rotateAbout(p, wa, wl * dt),
+      };
+      const st: EntryState = { x: lin(sub3(nav.X, nav.refPos), M_METRES, nav.X, 0), v: lin(sub3(nav.V, nav.refVel), c, nav.V, 0) };
+      const w0 = mouth(this.s).w;
+      return {
+        env, s: st, body: id, now: nav.t * Msec,
+        place: (site: Site) => lin(sub3(fromBodyFixed(id, bodyFixedOf(id, site.lat, site.lon, 0), nav.t), nav.refPos), M_METRES, nav.X, 0),
+        toLocal: (v: Vec3) => unitV(nav.toRep(v)),
+        fromLocal: (v: Vec3) => unitV(repToHomeVec(w0, cam.ell, cam.n, v)),
+      };
+    }
+    const lf = this.local;
+    if (!lf || cam.region !== "hole") return null;
+    const { F, L } = lf;
+    const env: EntryEnv = {
+      R: F.R * F.mPerM, atm: F.atm,
+      gravity: (x, v) => lin(localAccel(F, lin(x, 1 / F.mPerM, x, 0), lin(v, 1 / c, v, 0), [0, 0, 0], () => [0, 0, 0]), F.aUnit, x, 0),
+      ground: () => [0, 0, 0],
+      carry: (p) => p,
+    };
+    return {
+      env, s: { x: lin(L.xi, F.mPerM, L.xi, 0), v: lin(L.w, c, L.w, 0) } as EntryState, body: F.id as string, now: this.nowTime() * Msec,
+      place: (site: Site) => lin(siteDir(site), F.R * F.mPerM, L.xi, 0),
+      toLocal: (v: Vec3) => unitV(localToZamo(v)),
+      fromLocal: (v: Vec3) => unitV(zamoToLocal(v)),
+    };
+  }
+
+  /** The craft as the entry flies it: its aerodynamics, the assembly's mass, its angle of attack (the
+   *  Ranger 40°, a lifting body's; the Lander 65°, its shield to the flow). */
+  private entryCraft(): EntryCraft {
+    const D = Math.PI / 180;
+    return { aero: VESSELS[fleet.active].aero, mass: fleet.massProps().mass, alpha: (fleet.active === "ranger" ? 40 : 65) * D };
+  }
+
+  /**
+   * The entry autopilot, a frame: from orbit the deorbit (planned when engaged: the burn's time and
+   * size for the site; waiting retrograde, the time sped up; the burn), then the guided entry (the
+   * angle of attack held, the bank from the guidance), then — slow — the Ranger's glide to the site
+   * (the bank onto it, the climb angle down a glide path, the flare) or the Lander's powered landing.
+   * The attitude it asks (local), and the throttle for the burn. Null: off (said why).
+   */
+  private entryStep(cam: ReturnType<typeof cameraFrame>, dt: number): { nose: Vec3; up: Vec3; throttle?: number } | null {
+    const s = this.s;
+    const P = this.pilot;
+    const say = (t: string) => {
+      P.setAuto("none");
+      this.entryRun = null;
+      this.onPilotMessage?.(t);
+      return null;
+    };
+    const V = VESSELS[fleet.active];
+    if (!V.flies) return say(`Entry: the ${V.name} has no heat shield — it was built in orbit and never comes down`);
+    const fr = this.entryFrame(cam);
+    if (!fr || !fr.env.atm && !solidBody(fr.body)) return say("Entry: get near a world with air or ground first");
+    const craft = this.entryCraft();
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const D = Math.PI / 180;
+    const up = unitV(fr.s.x);
+    const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
+    const h = Math.hypot(...fr.s.x) - fr.env.R;
+    const top = airTop(fr.env.atm);
+    const ranger = fleet.active === "ranger";
+    const name = BODY_NAMES[fr.body as Body] ?? fr.body;
+    if (!this.entryRun) {
+      // the site: the one chosen on this body, else the nearest to the orbit's plane (the ground track
+      // sweeps over it soonest)
+      const sites = sitesOf(fr.body);
+      let site = this.entrySite && this.entrySite.body === fr.body ? this.entrySite : null;
+      if (!site && sites.length) {
+        const n = unitV(cross(fr.s.x, fr.s.v));
+        site = sites.reduce((a, b) => (Math.abs(dot3(unitV(fr.place(b)), n)) < Math.abs(dot3(unitV(fr.place(a)), n)) ? b : a));
+      }
+      const handover = ranger ? 2.5 : 1.4;
+      const shortM = ranger ? 90e3 : 8e3;
+      this.entryRun = { phase: "entry", site, tBurn: 0, dv: 0, done: 0, guid: site ? new EntryGuidance({ handoverMach: handover, short: shortM }) : null, bank: 0, next: -Infinity, alpha: craft.alpha, gPrev: null, short: shortM, handover };
+      if (!fr.env.atm) return say(`Entry: ${name} has no air — land with the engines (G)`);
+      if (h > top) {
+        // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
+        if (!site) return say(`Entry: no landing site on ${name} — fly the entry by hand (F: the plane law holds α hypersonic)`);
+        const plan = planDeorbit(fr.env, craft, fr.s, fr.place(site), { peH: ranger ? 45e3 : 30e3, handoverMach: handover, short: shortM, orbits: 16, reach: ranger ? 600e3 : 150e3 });
+        if (!plan) return say(`Entry: no deorbit to ${site.name} within a day of orbits — the orbit never passes near it`);
+        const R = this.entryRun;
+        R.phase = "wait";
+        R.tBurn = fr.now + plan.t;
+        R.dv = plan.dv;
+        R.plan = { heat: plan.result.heatPeak, shield: plan.result.shieldPeak, g: plan.result.gPeak };
+        const mm = Math.floor(plan.t / 60), ss = Math.round(plan.t % 60);
+        this.onPilotMessage?.(`Entry to ${site.name}: the deorbit burn in ${mm} min ${ss} s, ${plan.dv.toFixed(0)} m/s — then ${(plan.result.heatPeak / 1e4).toFixed(0)} W/cm², ${plan.result.gPeak.toFixed(1)} g, the shield ${Math.round(plan.result.shieldPeak)} K at most`);
+      } else this.onPilotMessage?.(site ? `Entry: guided to ${site.name}` : `Entry: no site on ${name} — lift up, the controls yours when slow`);
+    }
+    const R = this.entryRun!;
+    const retro = () => ({ nose: fr.toLocal(lin(va, -1, va, 0)), up: fr.toLocal(up) });
+    if (R.phase === "wait" || R.phase === "burn") {
+      const thrSI = this.thrustMax() * (299792458 ** 2 / (1476.625 * s.massSolar));
+      const burnT = thrSI > 0 ? R.dv / thrSI : 0;
+      const left = R.tBurn - burnT / 2 - fr.now;
+      if (R.phase === "wait") {
+        // (the time sped up to a minute before the burn, then real time)
+        const want = left > 40 ? Math.min(1000, Math.max((left - 25) / 3, 1)) : 1;
+        s.timeSpeed = this.warpSet = want / Msec;
+        if (left <= 0) {
+          R.phase = "burn";
+          R.done = 0;
+          s.timeSpeed = this.warpSet = 1 / Msec;
+          this.onPilotMessage?.(`Deorbit burn: ${R.dv.toFixed(0)} m/s retrograde`);
+        }
+        return retro();
+      }
+      if (R.done >= R.dv) {
+        R.phase = "entry";
+        this.onPilotMessage?.(`Deorbit burn done (${R.done.toFixed(0)} m/s) — falling to the entry`);
+      } else return { ...retro(), throttle: Math.min(1, Math.max((R.dv - R.done) / Math.max(thrSI * 0.25, 1e-9), 0.02)) };
+    }
+    const LA = this.airFlight.last;
+    if (R.phase === "entry") {
+      // (falling to the air: the time sped up to some twenty seconds before its entry interface — the
+      // air holds it at ×4 below)
+      const ei = entryInterface(fr.env.atm);
+      if (h > ei) {
+        const vr = dot3(fr.s.v, up);
+        const tEI = vr < 0 ? (h - ei) / -vr : Infinity;
+        s.timeSpeed = this.warpSet = (Number.isFinite(tEI) ? Math.min(500, Math.max(1, (tEI - 20) / 4)) : 100) / Msec;
+      } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) s.timeSpeed = this.warpSet = AIR_WARP / Msec; // (the entry flown at ×4)
+      // the guidance: the bank, every second of the fall (the site carried by the ground)
+      // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)
+      const wall = performance.now() / 1000;
+      if (R.guid && R.site && wall >= R.next) {
+        R.bank = R.guid.update(fr.env, craft, fr.s, fr.place(R.site));
+        R.next = wall + 1;
+      }
+      if (LA && LA.out.mach < R.handover && LA.h < top * 0.5) {
+        if (!R.site) return say(`Entry done over ${name}: Mach ${LA.out.mach.toFixed(1)}, the controls are yours`);
+        if (!ranger) {
+          // (the Lander: its engines bring it down, the speed killed)
+          P.auto = "none";
+          P.setAuto("land");
+          this.entryRun = null;
+          this.onPilotMessage?.(`Entry done: Mach ${LA.out.mach.toFixed(1)} — the engines land the Lander`);
+          return null;
+        }
+        R.phase = "glide";
+        R.alpha = LA.out.alpha;
+        this.onPilotMessage?.(`Mach ${LA.out.mach.toFixed(1)}: gliding to ${R.site.name}`);
+      }
+      const ax = attitudeFor(fr.s.x, va, craft.alpha, R.bank);
+      return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
+    }
+    // the glide (the Ranger): the bank onto the site, the climb angle down a glide path, the flare
+    const pl = fr.place(R.site!);
+    const pu = unitV(pl);
+    const ang = Math.acos(clamp(dot3(up, pu), -1, 1));
+    const dist = ang * fr.env.R;
+    const vh = unitV(lin(va, 1, up, -dot3(va, up)));
+    const tdir = unitV(lin(pu, 1, up, -dot3(pu, up)));
+    const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
+    const sp = Math.hypot(...va);
+    const agl = this.ourNav(cam) ? Math.max(gearHeight(fr.body, this.ourNav(cam)!.X, this.ourNav(cam)!.t), 0) : Math.max(h - GEAR, 0);
+    const bank = clamp(1.4 * dpsi, -0.6, 0.6) * (agl < 150 ? agl / 150 : 1);
+    let gRef = clamp(-Math.atan2(agl, Math.max(dist - 2000, 1500)), -0.35, -0.035);
+    if (agl < 60) gRef = -Math.max(0.006, 0.0012 * agl);
+    const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
+    const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
+    R.gPrev = gam;
+    const stall = (V.aero.wing?.stall ?? 0.35) - 0.05;
+    R.alpha = clamp(R.alpha + (1.2 * (gRef - gam) - 0.9 * gdot) * dt, 0, stall);
+    // (too fast down the path: the air brake)
+    const vT = Math.min(110 + 0.004 * dist, 320);
+    this.airBrake = clamp((sp - vT) / 60, 0, 1);
+    const ax = attitudeFor(fr.s.x, va, R.alpha, bank);
+    return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
+  }
+
+  // ------------------------------------------------------------------------- the flight computer
+  /**
+   * The flight computer's context (fc/ops.ts): the craft about the body of its sphere, SI — our side in
+   * the home axes (centred on the body), Gargantua's worlds in their frames made inertial (their turn
+   * about their pole added) —, the body's pole, and the target if it goes about the same body (a moon,
+   * a craft, the station). Null far from any body.
+   */
+  fcContext(): { ctx: FcContext; body: string; bodyName: string; targetName: string | null; universe: "ours" | "gargantua" } | null {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const c = 299792458;
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const id = nav.ref;
+      const b = solarBody(id);
+      if (!b || b.kind === "star") return null;
+      const rel = (X: Vec3, V: Vec3) => ({ r: lin(sub3(X, nav.refPos), M_METRES, X, 0) as KV3, v: lin(sub3(V, nav.refVel), c, V, 0) as KV3 });
+      const ctx: FcContext = { mu: b.mass * M_METRES * c * c, R: b.radius * M_METRES, ...rel(nav.X, nav.V), pole: unitV(spinAxis(id)) as KV3 };
+      const T = s.target as string;
+      let st: { X: Vec3; V: Vec3 } | null = null;
+      let targetName: string | null = null;
+      if (T === "iss") {
+        targetName = "ISS";
+        const o = id === "earth" ? issOrbit(nav.t) : null;
+        if (o) st = o;
+      } else if (isCraft(T as Target)) {
+        targetName = VESSELS[T as VesselId].name;
+        const p = fleet.pose(T as VesselId, nav.t);
+        if (p && !fleet.flownAssembly().includes(T as VesselId)) st = { X: p.X, V: p.V };
+      } else {
+        const tb = solarBody(T);
+        targetName = tb?.name ?? null;
+        if (tb && tb.parent === id) {
+          const o = ourState(T, nav.t);
+          st = { X: o.pos, V: o.vel };
+        }
+      }
+      if (st && targetName) ctx.target = { ...rel(st.X, st.V), name: targetName };
+      return { ctx, body: id, bodyName: b.name, targetName, universe: "ours" };
+    }
+    const lf = this.local;
+    if (!lf || cam.region !== "hole") return null;
+    const { F, L } = lf;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const x = lin(L.xi, F.mPerM, L.xi, 0) as KV3;
+    const n = F.n / Msec;
+    const v = [L.w[0] * c - n * x[1], L.w[1] * c + n * x[0], L.w[2] * c] as KV3;
+    return { ctx: { mu: F.m * F.mPerM * c * c, R: F.R * F.mPerM, r: x, v, pole: [0, 0, 1] }, body: F.id, bodyName: BODY_NAMES[F.id as Body] ?? F.id, targetName: null, universe: "gargantua" };
+  }
+
+  /** The flight computer's burns about one of Gargantua's worlds (its frame): their time [s of the
+   *  scene], prograde-normal-radial parts [m/s], what is done of the one firing. */
+  fcBurns: { tAbs: number; dv: KV3; label: string; firing: boolean; done: number }[] = [];
+  private fcNote = "";
+
+  /** The flight computer's plan set: our side, as manoeuvre nodes (the map's path, the node autopilot);
+   *  about Gargantua's worlds, its own burns. Why not, or null. */
+  fcSetPlan(burns: Burn[], note: string): string | null {
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const was = this.pilot.auto === "node";
+      this.clearPlan();
+      this.plan = { nodes: burns.map((b) => ({ t: nav.t + b.t / Msec, dv: [b.dv[0] / c, b.dv[1] / c, b.dv[2] / c] as Vec3 })), path: null, at: 0, note };
+      this.refreshPlan(true);
+      if (was) this.pilot.setAuto("node");
+      return null;
+    }
+    if (!this.local || cam.region !== "hole") return "The flight computer: near a body";
+    const now = this.nowTime() * Msec;
+    this.fcBurns = burns.map((b) => ({ tAbs: now + b.t, dv: b.dv, label: b.label, firing: false, done: 0 }));
+    this.fcNote = note;
+    return null;
+  }
+
+  /** Flies the plan: the node autopilot (our side), the flight computer's burns (Gargantua's worlds). */
+  fcExecute(): string | null {
+    const nav = this.ourNav(cameraFrame(this.s));
+    if (nav) {
+      if (!this.plan.nodes.length) return "No burns planned";
+      if (this.pilot.auto !== "node") this.pilot.setAuto("node");
+      return null;
+    }
+    if (!this.fcBurns.length) return "No burns planned";
+    if (this.pilot.auto !== "burns") this.pilot.setAuto("burns");
+    return null;
+  }
+
+  fcClear() {
+    this.clearPlan();
+    this.fcBurns = [];
+    if (this.pilot.auto === "burns") this.pilot.setAuto("burns");
+  }
+
+  /** The plan as burns (seconds from now). */
+  fcPlan(): { burns: Burn[]; note: string; executing: boolean } | null {
+    const s = this.s;
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const nav = this.ourNav(cameraFrame(s));
+    if (nav) {
+      if (!this.plan.nodes.length) return null;
+      return { burns: this.plan.nodes.map((n, i) => ({ t: (n.t - nav.t) * Msec, dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3, label: (n as { role?: string }).role ?? `node ${i + 1}` })), note: this.plan.note, executing: this.pilot.auto === "node" };
+    }
+    if (!this.fcBurns.length) return null;
+    const now = this.nowTime() * Msec;
+    return { burns: this.fcBurns.map((b) => ({ t: b.tAbs - now, dv: b.dv, label: b.label })), note: this.fcNote, executing: this.pilot.auto === "burns" };
+  }
+
+  /** The propellant's Δv left [m/s] (no gauge: a full tank's), the acceleration at full thrust [m/s²]. */
+  fcBudget(): { dv: number; accel: number } {
+    const s = this.s;
+    const c = 299792458;
+    // (no gauge: the propellant is not counted)
+    const left = s.fuel ? tank(s, this.spent).left * c : Infinity;
+    return { dv: left, accel: (this.thrustMax() * c * c) / (1476.625 * s.massSolar) };
+  }
+
+  /**
+   * The flight computer's burns flown about one of Gargantua's worlds: each pointed at its time — its
+   * prograde, normal and radial parts at the orbit then (two bodies about the world: its frame made
+   * inertial) — and fired until its Δv is given (the proper acceleration's), the time sped up between.
+   */
+  private burnsStep(cam: ReturnType<typeof cameraFrame>): { nose: Vec3; up: Vec3; throttle?: number } | null {
+    const s = this.s;
+    const P = this.pilot;
+    const say = (t: string) => {
+      P.setAuto("none");
+      this.onPilotMessage?.(t);
+      return null;
+    };
+    const B = this.fcBurns[0];
+    if (!B) return say(`Flight computer: ${this.fcNote || "the plan"} — done`);
+    const fr = this.entryFrame(cam);
+    const fc = this.fcContext();
+    if (!fr || !fc) return say("Flight computer: away from the world — the burns dropped");
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const now = fr.now;
+    const thr = (this.thrustMax() * 299792458 ** 2) / (1476.625 * s.massSolar);
+    const size = Math.hypot(...B.dv);
+    const burnT = thr > 0 ? size / thr : 0;
+    // the burn's direction where the craft is then (the inertial frame's: its parts as the orbit then)
+    const wait = Math.max(B.tAbs - burnT / 2 - now, 0);
+    const at = kepProp(fc.ctx.mu, fc.ctx.r, fc.ctx.v, Math.max(B.tAbs - now, 0));
+    const dir = unitV(fromPNR(at.r, at.v, B.dv) as Vec3);
+    const att = { nose: fr.toLocal(dir), up: fr.toLocal(unitV(fc.ctx.r as Vec3)) };
+    if (!B.firing) {
+      s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
+      if (wait <= 0) {
+        B.firing = true;
+        B.done = 0;
+        s.timeSpeed = this.warpSet = 1 / Msec;
+        this.onPilotMessage?.(`Burn ${B.label}: ${size.toFixed(1)} m/s`);
+      }
+      return att;
+    }
+    if (B.done >= size) {
+      this.fcBurns.shift();
+      this.onPilotMessage?.(`Burn ${B.label} done (${B.done.toFixed(1)} m/s)`);
+      return att;
+    }
+    return { ...att, throttle: Math.min(1, Math.max((size - B.done) / Math.max(thr * 0.5, 1e-9), 0.05)) };
+  }
+
   /** The air brake asked for (0 … 1). */
   airBrake = 0;
 
@@ -2863,6 +3253,24 @@ export class CameraController {
     const ra = Math.atan2(dot3(cross(Y2, u2), Z2), dot3(Y2, u2));
     if (Math.abs(ra) > 1e-6) this.rotateC(lin(Z2, ra, Z2, 0));
     this.pilot.omega[2] = 0;
+  }
+
+  /** The entry autopilot, for the map: its phase, the site (its place, body-centred home axes [M]), the
+   *  guidance's predicted fall (likewise), its bank and miss. Null when off. */
+  private entryInfo() {
+    const R = this.entryRun;
+    if (!R) return null;
+    const cam = cameraFrame(this.s);
+    const nav = this.ourNav(cam);
+    const fr = this.entryFrame(cam);
+    if (!fr) return null;
+    const k = nav ? 1 / M_METRES : 1;
+    const toMap = (x: Vec3): Vec3 => lin(x, k, x, 0);
+    const path = R.guid?.last?.path.map((x) => toMap(x as Vec3)) ?? null;
+    return {
+      phase: R.phase, body: fr.body, site: R.site ? { name: R.site.name, X: toMap(fr.place(R.site)) } : null, path, bank: R.bank,
+      miss: R.guid?.lastMiss ?? null, tBurn: R.phase === "wait" ? R.tBurn - fr.now : null, dv: R.dv, plan: R.plan ?? null, ours: !!nav,
+    };
   }
 
   /** The flown craft in the air, for the displays: the flow (q, Mach, α, β), the heat, the skin, the load. */
@@ -5532,11 +5940,13 @@ export class CameraController {
     // (inertial east speed: the ground already gives its turning at lift-off)
     const vGroundE = dot3(sub3(gv, nav.refVel), east);
     let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
-    // in the air: the speed through it no more than keeps the drag (½ ρ v² / B) under 30 % of the
-    // thrust — straight up through the thick air first, turning east as it thins (a gravity turn)
+    // in the air: the speed through it no more than keeps the craft's own drag (½ ρ v² C_D A / m) under
+    // 30 % of the thrust, and the dynamic pressure under 35 kPa (max-Q) — straight up through the thick
+    // air first, turning east as it thins (a gravity turn)
     const rho = ourAir(id, h * M_METRES);
     if (rho > 0) {
-      const vMax = Math.sqrt((2 * TUNING.ballistic * 0.3 * thr * (c * c / M_METRES)) / rho) / c;
+      const k = Math.max(this.dragPerMass(), 1e-6);
+      const vMax = Math.min(Math.sqrt((0.6 * thr * (c * c / M_METRES)) / (rho * k)), Math.sqrt((2 * 35e3) / rho)) / c;
       vUp = Math.min(vUp, vMax);
       const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
       vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
@@ -5786,6 +6196,7 @@ export class CameraController {
       /** near a planet: its frame's figures (landing.ts) */
       surface: this.surfaceInfo(),
       air: this.airInfo(),
+      entry: this.entryInfo(),
       /** the engine and the tank */
       engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
       /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
