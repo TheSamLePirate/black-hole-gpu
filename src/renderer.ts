@@ -2138,6 +2138,7 @@ export class Renderer {
       if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
           vessel: s.ship ? s.vessel : undefined, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
+          inside: s.ship && s.shipMount === "cockpit", dash: this.cockpitDash ?? undefined,
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
@@ -2227,6 +2228,10 @@ export class Renderer {
       );
     }
   }
+
+  /** the cockpit's dashboard (main.ts, from the flight's figures): the local up and the motion on the
+   *  ship's axes, the speed [km/s], the height [km], the clock [s] */
+  cockpitDash: { up: Vec3; fwd: Vec3; speed: number; alt: number; time: number } | null = null;
 
   /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
   craftsShown = false;

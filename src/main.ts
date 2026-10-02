@@ -1537,6 +1537,13 @@ async function main() {
       } catch {
         /* (between two frames of a jump) */
       }
+      // the cockpit's screens: the local up and the motion on the ship's axes, the speed, the height
+      {
+        const S = info.S as number[][];
+        const toShip = (v: number[] | null | undefined) => (v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null);
+        const up = toShip(info.dirs.radialOut as number[] | null), fwd = toShip(info.dirs.prograde as number[] | null);
+        renderer.cockpitDash = { up: up ?? [0, 1, 0], fwd: fwd ?? [0, 0, 1], speed: (status?.speed ?? 0) / 1000, alt: status?.altKm ?? 0, time: performance.now() / 1000 };
+      }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)
       if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time));

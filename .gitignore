@@ -43,6 +43,8 @@ assets/Interstellar Ranger One/
 assets/Interstellar Endurance/
 # raw Lander model as supplied; the app uses assets/lander (scripts/build-lander.ts)
 assets/Lander Exterior Interstellar Model/
+# raw Ranger cockpit as supplied; the app uses assets/ranger/cockpit.bin (scripts/cockpit-convert.py, build-cockpit.ts)
+assets/Interstellar Ranger One Cockpit/
 # local texture packs, not used by the app (340 MB together)
 assets/tex/
 assets/textures/

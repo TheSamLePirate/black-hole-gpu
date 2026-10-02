@@ -284,6 +284,15 @@ any other — a craft's, the station's: the capture makes one rigid assembly (th
 station when docked to it; UNDOCK lets the flown craft go, what is left coasting as its own assembly. The
 craft collide with each other and with the station (a blow shared by their masses).
 
+**The Ranger's cockpit** (the view "Cockpit", the pilot's seat) — the Ranger's cabin ("Interstellar Ranger
+One Cockpit", Sketchfab, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified — see
+`assets/ranger/README.md`) at its own proportions, drawn alone from inside (the hull alone from outside): its
+glass see-through (the lamps' highlights on it), the outside's light let in only through it (the sky each
+point sees, baked; the Sun's patches through the windows from the shadow map), cool lamps along the ceiling,
+the consoles charcoal with their silk-screened labels and LEDs, the screens in the film's cyan — block
+diagrams, text, the attitude (the horizon turning with the ship), the orbit —, the flight sticks moving with
+the commands (the pilot's and the autopilots').
+
 **The Ranger — a camera holder** (K, the toolbar's ship button, Scene → Spaceship, or the preset
 "Ranger: approaching Gargantua"; ⇧K cycles the attach points: hull quarter (the film's view), chase, dorsal,
 wingtip, belly, nose looking back). Interstellar's Ranger — [“Interstellar Ranger One” by Max Vizell](https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f),

@@ -10,6 +10,7 @@ import landerAlbedoUrl from "../assets/lander/lander-albedo.webp";
 import landerNormalUrl from "../assets/lander/lander-normal.webp";
 import landerLightsUrl from "../assets/lander/lander-lights.webp";
 import enduranceUrl from "../assets/endurance/endurance.bin";
+import cockpitUrl from "../assets/ranger/cockpit.bin";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import type { GpuProfiler } from "./gpuprof";
@@ -34,6 +35,11 @@ export interface ShipView {
   others?: ShipInstance[];
   /** metres per M (the traced image's depths: the other craft hidden behind what it holds) */
   mPerM?: number;
+  /** the camera in the Ranger's cabin: the cockpit drawn instead of its hull */
+  inside?: boolean;
+  /** the cockpit's dashboard: the local up and the motion in the ship's frame, the speed [km/s], the
+   *  height [km], the clock [s] */
+  dash?: { up: V3; fwd: V3; speed: number; alt: number; time: number };
   mount: Mount | MountPose;
   look: [number, number]; // free look on the mount: yaw, pitch [deg]
   fov: number; // vertical, degrees
@@ -119,6 +125,12 @@ interface ShipTargetRes {
   bind?: GPUBindGroup;
   bindGen?: number;
   bindMoments?: GPUBuffer;
+  /** the cockpit glass's bind groups (its pipeline's own layouts) */
+  glassBind?: GPUBindGroup;
+  glassOcc?: GPUBindGroup;
+  glassGen?: number;
+  glassMoments?: GPUBuffer;
+  glassOccTex?: GPUTexture;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
 }
@@ -149,6 +161,12 @@ export class ShipRenderer {
   private instData = new Float32Array(MAX_INST * INST_FLOATS);
   /** this frame's draws: mesh, and whether in the shadow map */
   private draws: { mesh: Mesh; shadow: boolean }[] = [];
+  /** the cockpit (the Ranger's cabin): its mesh, its sticks' pivots; loading */
+  private cockpit: { mesh: Mesh; pivots: V3[] } | null = null;
+  private cockpitLoading = false;
+  /** the sticks' deflections, eased (forward, right, twist) [rad], and when last eased */
+  private stick: V3 = [0, 0, 0];
+  private stickAt = NaN;
   /** the Lander's maps (1×1 until loaded) */
   private maps: { albedo: GPUTexture; normal: GPUTexture; lights: GPUTexture } | null = null;
   private mapSamp: GPUSampler;
@@ -171,6 +189,8 @@ export class ShipRenderer {
     plume: GPURenderPipeline;
     plumeIn: GPURenderPipeline;
     hullDepth: GPURenderPipeline;
+    glass: GPURenderPipeline;
+    depthPre: GPURenderPipeline;
   };
   private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
   /** the shading's bindings but the traced image (one bind group per target: shipBindFor) */
@@ -231,7 +251,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 192 + 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.mapSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
@@ -266,8 +286,9 @@ export class ShipRenderer {
         // (back faces culled: the mesh's inward-wound triangles are its hidden inner faces — none of its
         // pixels goes missing from 288 viewpoints around it — and the pass is ~20 % faster)
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-        // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact)
-        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+        // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact;
+        // after the depth pre-pass: the nearest surface only)
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
         multisample: { count: 4 },
       }),
       shadow: d.createRenderPipeline({
@@ -304,6 +325,27 @@ export class ShipRenderer {
           }),
         };
       })(),
+      // the cockpit's glass: over what the opaque draw left, premultiplied, its depth not written; both faces
+      glass: d.createRenderPipeline({
+        layout: "auto",
+        vertex,
+        fragment: {
+          module, entryPoint: "fsGlass",
+          targets: [{ format: "rgba16float", blend: { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" } } }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
+      // the depth alone, first: the shading then runs once a pixel
+      depthPre: d.createRenderPipeline({
+        layout: "auto",
+        vertex: { ...vertex, entryPoint: "depthVs" },
+        fragment: { module, entryPoint: "hullDepthFs", targets: [{ format: "rgba16float", writeMask: 0 }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+        multisample: { count: 4 },
+      }),
       comp: d.createRenderPipeline({
         layout: "auto",
         vertex: { module, entryPoint: "compVs" },
@@ -396,6 +438,44 @@ export class ShipRenderer {
     d.queue.writeBuffer(ibuf, 0, idx);
     if (id === "lander") await this.loadMaps();
     this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r, lo, hi } };
+  }
+
+  /** The Ranger's cockpit (assets/ranger/cockpit.bin, gzip: scripts/build-cockpit.ts), when first needed. */
+  private loadCockpit() {
+    if (this.cockpitLoading) return;
+    this.cockpitLoading = true;
+    const d = this.device;
+    this.getter(cockpitUrl)
+      .then(async (r) => {
+        // (served compressed: inflated here)
+        const raw = await r.arrayBuffer();
+        const gz = new Uint8Array(raw, 0, 2);
+        const buf = gz[0] === 0x1f && gz[1] === 0x8b ? await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer() : raw;
+        if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "CKPT") throw new Error("bad cockpit.bin");
+        const [ver, nv, ni] = new Uint32Array(buf, 4, 3) as unknown as [number, number, number];
+        const bb = new Float32Array(buf, 16, 6);
+        const lo: V3 = [bb[0]!, bb[1]!, bb[2]!], hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
+        let off = 40;
+        const pivots: V3[] = [];
+        if (ver >= 2) {
+          const n = new Uint32Array(buf, 40, 1)[0]!;
+          for (let i = 0; i < n; i++) {
+            const p = new Float32Array(buf, 44 + 16 * i, 3);
+            pivots.push([p[0]!, p[1]!, p[2]!]);
+          }
+          off = 44 + 16 * n;
+        }
+        const verts = new Float32Array(buf.slice(off, off + nv * STRIDE));
+        const idx = new Uint32Array(buf.slice(off + nv * STRIDE, off + nv * STRIDE + ni * 4));
+        const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(vbuf, 0, verts);
+        const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(ibuf, 0, idx);
+        const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+        this.cockpit = { mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } }, pivots };
+        this.onLoaded?.();
+      })
+      .catch((e) => console.error("cockpit:", e));
   }
 
   /** The Lander's maps: colour (sRGB), normals, the lights' emission (sRGB); mip-mapped here. */
@@ -598,6 +678,10 @@ export class ShipRenderer {
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
     const kind = { ranger: 0, lander: 1, endurance: 2 } as const;
+    // (inside the Ranger: its cabin instead of its hull)
+    if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
+    const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
+    this.inCabin = inCabin;
     const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: false }] : [];
     for (const o of v.others ?? []) if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
     this.draws = [];
@@ -605,7 +689,7 @@ export class ShipRenderer {
     // (the shadow map's sphere: about the flown craft and those near it)
     let sc: V3 | null = null, sr = 0;
     list.forEach((it, i) => {
-      const me = this.meshes[it.id]!;
+      const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
       model(it.R, it.t, this.instData, i * INST_FLOATS);
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, 0], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow });
@@ -643,7 +727,28 @@ export class ShipRenderer {
     m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
+    // the cockpit: the sticks following the attitude commands (the effort the wheels give: the pilot's
+    // and the autopilots'), eased over a tenth of a second; the dashboard's figures
+    if (inCabin) {
+      const th = v.thrust;
+      const tq = th?.torque ?? [0, 0, 0];
+      const want: V3 = [-tq[0] * 0.26, -tq[2] * 0.26, -tq[1] * 0.2];
+      const now = th?.time ?? 0;
+      const k = Number.isFinite(this.stickAt) ? 1 - Math.exp(-Math.max(now - this.stickAt, 0) / 0.1) : 1;
+      this.stickAt = now;
+      this.stick = this.stick.map((a, j) => a + (want[j]! - a) * k) as V3;
+      const P = this.cockpit!.pivots;
+      const D = v.dash ?? { up: [0, 1, 0], fwd: [0, 0, 1], speed: 0, alt: 0, time: now };
+      this.device.queue.writeBuffer(this.uniform, 256, new Float32Array([
+        ...this.stick, th?.throttle ?? 0,
+        ...(P[0] ?? [1.2, 1.2, 2.9]), 0, ...(P[1] ?? [-1.2, 1.2, 2.9]), 0,
+        ...D.up, D.speed, ...D.fwd, D.alt, D.time, 0, 0, th?.throttle ?? 0,
+      ]));
+    }
   }
+  /** the cabin drawn this frame (its glass then) */
+  private inCabin = false;
+  private depthBind: GPUBindGroup | null = null;
 
   /** The ship's own images for an HDR target (its size): created on first use. */
   target(hdr: GPUTexture): ShipTargetRes {
@@ -736,6 +841,18 @@ export class ShipRenderer {
       colorAttachments: [{ view: b.color.createView(), resolveTarget: b.small.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
       depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     }));
+    // the depth pre-pass (its bindings: the uniform, the instances)
+    this.depthBind ??= this.device.createBindGroup({
+      layout: this.pipes.depthPre.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 12, resource: { buffer: this.instBuf } }],
+    });
+    rp.setPipeline(this.pipes.depthPre);
+    rp.setBindGroup(0, this.depthBind);
+    this.draws.forEach((dr, i) => {
+      rp.setVertexBuffer(0, dr.mesh.vbuf);
+      rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+      rp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
+    });
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
     // depths: what hides the other craft)
@@ -755,6 +872,25 @@ export class ShipRenderer {
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.count, 1, 0, 0, i);
     });
+    // the cockpit's glass, over the cabin and the view (its own bindings: the same resources)
+    if (this.inCabin && this.cockpit) {
+      if (!res.glassBind || res.glassGen !== this.bindGen || res.glassMoments !== mb || res.glassOccTex !== occTex) {
+        res.glassBind = this.device.createBindGroup({
+          layout: this.pipes.glass.getBindGroupLayout(0),
+          entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+        });
+        res.glassOcc = this.device.createBindGroup({ layout: this.pipes.glass.getBindGroupLayout(1), entries: [{ binding: 0, resource: occTex.createView() }] });
+        res.glassGen = this.bindGen;
+        res.glassMoments = mb;
+        res.glassOccTex = occTex;
+      }
+      rp.setPipeline(this.pipes.glass);
+      rp.setBindGroup(0, res.glassBind);
+      rp.setBindGroup(1, res.glassOcc!);
+      rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
+      rp.setIndexBuffer(this.cockpit.mesh.ibuf, "uint32");
+      rp.drawIndexed(this.cockpit.mesh.count, 1, 0, 0, 0);
+    }
     rp.end();
     if (jets) {
       const pp = enc.beginRenderPass(this.pass("ship: thrusters", {

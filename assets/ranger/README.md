@@ -11,3 +11,16 @@ This derived file is distributed under the same licence.
 
 Format (little endian): `"RNGR"`, `u32` version 2, vertex count, index count, 6 × `f32` bounds (min, max),
 then vertices (8 × `f32`: position, normal, material, ambient occlusion) and `u32` indices.
+
+# The cockpit
+
+`cockpit.bin` is derived from **"Interstellar Ranger One Cockpit"** (Sketchfab), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — supplied as an OBJ (objects "Ra…": the floor,
+the consoles, the seats, the cryo pods, the screens, the glass), without its maps.
+
+Changes: `scripts/cockpit-convert.py` (Blender: each object's kind from its name, the two flight sticks
+found, decimated to ~170 k triangles, normals smoothed below 35°, each loose part's size and a hash), then
+`bun scripts/build-cockpit.ts` (placed in the Ranger's frame at its own scale, its windows on the hull's;
+ambient occlusion and the sky seen through its windows baked per vertex; the screens' UVs made 0…1 each;
+the sticks' pivots). The app shades it procedurally (the materials, the screens' pictures, the lights).
+This derived file is distributed under the same licence.
