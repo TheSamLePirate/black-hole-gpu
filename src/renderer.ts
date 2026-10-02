@@ -3025,6 +3025,9 @@ export class Renderer {
     const buf = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(buf, 0, io);
     const read = d.createBuffer({ size: io.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    // the integrator's helpers reach `bodies` (binding 15); with no bodies (P.bodyCfg.x = 0) it is never
+    // read, but the layout wants it: an empty one rather than the scene's
+    const bodies = d.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE });
     const enc = d.createCommandEncoder();
     const pass = enc.beginComputePass();
     pass.setPipeline(pipeline);
@@ -3033,6 +3036,7 @@ export class Renderer {
       entries: [
         { binding: 0, resource: { buffer: pbuf } },
         { binding: 12, resource: { buffer: buf } },
+        { binding: 15, resource: { buffer: bodies } },
       ],
     }));
     pass.dispatchWorkgroups(Math.ceil(job.rays.length / 64));
@@ -3042,7 +3046,7 @@ export class Renderer {
     await read.mapAsync(GPUMapMode.READ);
     const out = new Float32Array(read.getMappedRange().slice(0));
     read.unmap();
-    for (const b of [pbuf, buf, read]) b.destroy();
+    for (const b of [pbuf, buf, read, bodies]) b.destroy();
     return job.rays.map((_, i) => ({
       state: Array.from(out.subarray(i * 12, i * 12 + 4)),
       fate: out[i * 12 + 6]!,
