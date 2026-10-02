@@ -6,6 +6,7 @@
 // around the hole) and "ours" (the far side of the wormhole: positions in the rep frame of our mouth).
 
 import { SI, units } from "./kerr-orbits";
+import type { Atmosphere } from "../aero";
 import { eclipticOf, SOLAR_BODIES, type MapName, type SolarBody } from "./solar";
 
 export type BodyKind = "hole" | "planet" | "star" | "mouth";
@@ -25,8 +26,8 @@ export interface Surface {
   kind: "ocean" | "ice" | "rock" | "gas";
   /** surface gravity [g] */
   gravity: number;
-  /** exponential atmosphere: sea-level density [kg/m³], scale height [m] (null: none) */
-  atmosphere: { rho0: number; H: number } | null;
+  /** the air (aero.ts): sea-level density [kg/m³], scale height [m], temperature, gas (null: none) */
+  atmosphere: Atmosphere | null;
 }
 
 export interface BodyDef {
@@ -97,13 +98,13 @@ export const GARGANTUA_SYSTEM: System = {
     {
       id: "miller", name: "Miller", parent: "gargantua", universe: "gargantua", kind: "planet", ...miller,
       orbit: { type: "kerr", r: 10, phase: 2.55 },
-      surface: { kind: "ocean", gravity: 1.3, atmosphere: { rho0: 1.2, H: 8500 } },
+      surface: { kind: "ocean", gravity: 1.3, atmosphere: { rho0: 1.2, H: 8500, T: 295 } },
       note: "1 hour here ≈ 1 h 11 min far away (x = 10, a* = 0.998)",
     },
     {
       id: "mann", name: "Mann", parent: "gargantua", universe: "gargantua", kind: "planet", ...mann,
       orbit: { type: "kerr", r: 40, phase: 0.72 },
-      surface: { kind: "ice", gravity: 1, atmosphere: { rho0: 0.9, H: 7000 } },
+      surface: { kind: "ice", gravity: 1, atmosphere: { rho0: 0.9, H: 7000, T: 235 } },
     },
     {
       id: "mouth", name: "Wormhole", parent: "gargantua", universe: "gargantua", kind: "mouth", mass: 0, radius: 0.05,
@@ -118,7 +119,7 @@ export const GARGANTUA_SYSTEM: System = {
     {
       id: "edmunds", name: "Edmunds", parent: "k2", universe: "gargantua", kind: "planet", ...edmunds,
       orbit: { type: "kepler", a: au(Math.sqrt(K2.L)), phase: 2.2 },
-      surface: { kind: "rock", gravity: 1, atmosphere: { rho0: 1.1, H: 8000 } },
+      surface: { kind: "rock", gravity: 1, atmosphere: { rho0: 1.1, H: 8000, T: 280 } },
     },
     // our side: the solar system (solar.ts), in the home frame of our mouth
     ...SOLAR_BODIES.map(ourBody),

@@ -7,6 +7,7 @@
 // y ≈ 0 (the landing gear's reference: landing.ts GEAR).
 
 import type { V3 } from "./mounts";
+import type { VesselAero } from "./aero";
 
 export type VesselId = "ranger" | "lander" | "endurance";
 export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance"];
@@ -52,6 +53,10 @@ export interface VesselDef {
   mounts: Record<"cockpit" | "cabin" | "quarter" | "chase" | "dorsal" | "wing" | "belly" | "rear" | "dock", { eye: V3; aim: V3 }>;
   /** the main engines' flame length scale (× the Ranger's) */
   flame: number;
+  /** its aerodynamics and heat protection (aero.ts) */
+  aero: VesselAero;
+  /** built for the air: its three ways of flying there (plane, rocket, the flight computer's) */
+  flies: boolean;
 }
 
 /** Attitude thrusters: a quad at each corner (lateral, up, down) and fore / aft pairs. */
@@ -113,7 +118,16 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     id: "ranger", name: "Ranger", mass: 40e3, accel: 1, gyr: 4.2, agility: 1, com: [0, 1.25, 1.5], centre: [0, 1.5, 0], viewDist: 42,
     // the rear hatch: its ring's centre, the axis out of the ship's back
     ports: [{ name: "rear hatch", centre: [0.04, 1.11, -5.34], axis: [0, 0, -1] }],
-    lands: true, jets: RANGER_JETS, flame: 1,
+    lands: true, jets: RANGER_JETS, flame: 1, flies: true,
+    // a lifting body (8.3 m span, 14.8 m long, 91 m² of planform: the hull, scripts/hullsize): a flat
+    // belly, a fine nose; the shield under the belly and round the nose (the Shuttle's tiles and RCC) —
+    // 98 m/s at 16° on the approach, L/D ≈ 6 gliding, ≈ 1 at 40° in hypersonic flow
+    aero: {
+      area: [23, 91, 1.3], cdA0: 1.6, wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85 },
+      cp: [[0, 0.3, -2.5], [0, 0, -0.25], [0, 0.6, 0]], cw: [0, 0, -0.9], curve: [0, 0.1, 0.6], damp: [4, 4, 0.6], len: 14.8, noseR: 1.2,
+      shield: { dir: [0, -0.94, 0.34], cos: 0.42, tMax: 1950, cap: 2.2e4, eps: 0.85 },
+      hull: { tMax: 1150, cap: 9e3, eps: 0.7 }, gMax: 9,
+    },
     mounts: {
       // (the pilot's seat, front left: the cabin, scripts/build-cockpit.ts)
       cockpit: { eye: [1.0, 1.45, 3.1], aim: [1.0, 1.22, 13] },
@@ -131,7 +145,14 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     id: "lander", name: "Lander", mass: 160e3, accel: 0.75, gyr: 7.5, agility: 0.55, com: [0, 2.6, 0.5], centre: [0, 2.8, 0], viewDist: 62,
     // the round hatch on its back, amidships (scripts/build-lander.ts)
     ports: [{ name: "dorsal hatch", centre: [0, 5.55, 0.58], axis: [0, 1, 0] }],
-    lands: true, jets: LANDER_JETS, flame: 1.6,
+    lands: true, jets: LANDER_JETS, flame: 1.6, flies: true,
+    // a broad lifting body (17.3 × 24 m, 304 m² of planform), blunt: its shield the whole belly
+    aero: {
+      area: [92, 304, 26], cdA0: 4, wing: { S: 304, AR: 1, cla: 1.5, stall: 0.45, e: 0.8 },
+      cp: [[0, 0.6, -2.5], [0, 3.5, -0.1], [0, 1.2, 0]], cw: [0, 0, -0.8], curve: [0.3, 0.7, 0.5], damp: [3, 3, 0.5], len: 24, noseR: 3,
+      shield: { dir: [0, -1, 0], cos: 0.5, tMax: 2300, cap: 3e4, eps: 0.85 },
+      hull: { tMax: 1000, cap: 1e4, eps: 0.7 }, gMax: 6,
+    },
     mounts: {
       // (behind the nose's windows — the Lander's cabin is not modelled: the hull seen from within)
       cockpit: { eye: [0, 3.4, 10.4], aim: [0, 3.1, 30] },
@@ -153,7 +174,12 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       { name: "hub, fore", centre: [0, 0, 9.3], axis: [0, 0, 1] },
       { name: "hub, aft", centre: [0, 0, -10.7], axis: [0, 0, -1] },
     ],
-    lands: false, jets: ENDURANCE_JETS, flame: 2.2,
+    lands: false, jets: ENDURANCE_JETS, flame: 2.2, flies: false,
+    // a ring of modules, no shield, no wing: it tumbles and burns
+    aero: {
+      area: [900, 900, 1500], cdA0: 60, cp: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], cw: [0, 0, 0], curve: [0.8, 0.8, 0.8], damp: [1, 1, 1], len: 64, noseR: 2,
+      shield: null, hull: { tMax: 700, cap: 6e3, eps: 0.6 }, gMax: 1.5,
+    },
     mounts: {
       // (in the hub, looking ahead along it)
       cockpit: { eye: [0, 1.2, 7.5], aim: [0, 1.0, 40] },

@@ -11,6 +11,7 @@
 // (10⁸ M☉: 1 M = 0.98706 AU), time t in M of the scene's clock, t = 0 on EPOCH_DATE.
 
 import type { Vec3 } from "../physics";
+import type { Atmosphere } from "../aero";
 import { deState } from "./de440";
 import { earthAxes, eclDir, eclOf, iauAxes, iauRate } from "./orientation";
 import { tdbOf } from "./timescale";
@@ -52,7 +53,7 @@ export interface SolarBody {
   temperature?: number;
   map?: MapName;
   surface: "ocean" | "ice" | "rock" | "gas";
-  atmosphere?: { rho0: number; H: number };
+  atmosphere?: Atmosphere;
   rings?: { inner: number; outer: number };
   /** heliocentric elements [a AU, e, I°, L°, ϖ°, Ω°] and their rates per Julian century */
   elements?: [number[], number[]];
@@ -87,13 +88,13 @@ export const SOLAR_BODIES: SolarBody[] = [
     [[0.38709927, 0.20563593, 7.00497902, 252.2503235, 77.45779628, 48.33076593], [0.00000037, 0.00001906, -0.00594749, 149472.67411175, 0.16047689, -0.12534081]]),
   planet("venus", "Venus", 324858.59, 6051.8, -5832.5, [272.76, 67.16], 0.689, "gas", "venus",
     [[0.72333566, 0.00677672, 3.39467605, 181.9790995, 131.60246718, 76.67984255], [0.0000039, -0.00004107, -0.0007889, 58517.81538729, 0.00268329, -0.27769418]],
-    { atmosphere: { rho0: 65, H: 15900 } }),
+    { atmosphere: { rho0: 65, H: 15900, T: 737, gas: "co2" } }),
   planet("earth", "Earth", 398600.44, 6371, 23.9345, [0, 90], 0.434, "ocean", "earth",
     [[1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0], [0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0]],
-    { atmosphere: { rho0: 1.225, H: 8500 } }),
+    { atmosphere: { rho0: 1.225, H: 8500, model: "us76" } }),
   planet("mars", "Mars", 42828.37, 3389.5, 24.6229, [317.68, 52.89], 0.17, "rock", "mars",
     [[1.52371034, 0.0933941, 1.84969142, -4.55343205, -23.94362959, 49.55953891], [0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343]],
-    { atmosphere: { rho0: 0.02, H: 11100 } }),
+    { atmosphere: { rho0: 0.02, H: 11100, T: 210, gas: "co2" } }),
   planet("ceres", "Ceres", 62.6, 469.7, 9.074, [291.42, 66.76], 0.09, "rock", "ceres",
     [[2.7675, 0.0785, 10.59, 153.6, 153.9, 80.3], [0, 0, 0, 7824.7, 0, 0]]),
   planet("jupiter", "Jupiter", 126686534, 69911, 9.925, [268.057, 64.495], 0.538, "gas", "jupiter",
@@ -121,7 +122,7 @@ export const SOLAR_BODIES: SolarBody[] = [
   moon("tethys", "Tethys", "saturn", 41.21, 531.1, 295000, 1.887802, el([40.6, 83.5], 0.001, 335.3, 0.0, 1.1, 273.0, 0, 4.982), 1.23, "ice", "tethys"),
   moon("dione", "Dione", "saturn", 73.11, 561.4, 377700, 2.736915, el([40.6, 83.5], 0.002, 116.0, 212.0, 0.0, 0.0, 11.698), 1.0, "ice", "dione"),
   moon("rhea", "Rhea", "saturn", 153.94, 763.8, 527200, 4.518212, el([40.6, 83.5], 0.001, 44.3, 31.5, 0.3, 133.7, 33.939, 35.775), 0.95, "ice", "rhea"),
-  moon("titan", "Titan", "saturn", 8978.14, 2574.7, 1221900, 15.945421, el([36.4, 84.0], 0.029, 78.3, 11.7, 0.3, 78.6, 346.68, 687.37), 0.22, "gas", "titan", { atmosphere: { rho0: 5.3, H: 21000 } }),
+  moon("titan", "Titan", "saturn", 8978.14, 2574.7, 1221900, 15.945421, el([36.4, 84.0], 0.029, 78.3, 11.7, 0.3, 78.6, 346.68, 687.37), 0.22, "gas", "titan", { atmosphere: { rho0: 5.3, H: 21000, T: 94, gas: "n2ch4" } }),
   moon("iapetus", "Iapetus", "saturn", 120.52, 734.5, 3561700, 79.3215, el([288.7, 78.9], 0.028, 254.5, 74.8, 7.6, 86.5, 1662.9, 3130.302), 0.6, "rock"),
   // (Triton: retrograde — its inclination on its Laplace plane over 90°)
   moon("triton", "Triton", "neptune", 1428.5, 1353.4, 354800, -5.876854, el([299.8, 43.1], 0.000016, 0, 63.0, 157.3, 178.1, 0, 340.379), 0.76, "ice"),
