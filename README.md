@@ -29,6 +29,11 @@ GPU process being lost.
 - [`docs/comment-jouer.html`](docs/comment-jouer.html) — **how to play** (French, illustrated): the journey,
   the interface, flying, autopilots, map and planner, camera and time, every key, controller and touch.
   Published with the site under `docs/`.
+- [`docs/decouvrir.html`](docs/decouvrir.html) — the presentation page (French): hero, physics, the journey,
+  the game's features, the film, a gallery. Published with the site under `docs/`.
+- [`docs/systemes/`](docs/systemes/README.md) — **how the code works** (French): one sheet per system —
+  the geodesic tracer, the render pipeline, the universe and ephemerides, controls and camera, pilot and
+  autopilots, flight planning, 3D models, the interface, game/sound/tools/build.
 - [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window (F2), saves, `__bh.game`.
 - [`docs/MAP.md`](docs/MAP.md) — the 3D map: gestures, bar, timeline, what it shows.
 - [`docs/SOUND.md`](docs/SOUND.md) — the synthesized sound and its director.

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gargantua — le trou noir d'Interstellar, calculé en temps réel</title>
+<meta name="description" content="Pilotez le Ranger de la Terre jusqu'à Gargantua. Un trou noir de Kerr tracé rayon par rayon dans votre navigateur, le Système solaire à l'échelle, la Terre, l'ISS, le trou de ver et les mondes de Miller, Mann et Edmunds.">
+<meta property="og:title" content="Gargantua — le trou noir d'Interstellar, calculé en temps réel">
+<meta property="og:description" content="Un simulateur de vol relativiste dans le navigateur : de Kennedy à Saturne, puis à travers le trou de ver.">
+<meta property="og:image" content="img/marketing/endurance-og.jpg">
+<meta name="theme-color" content="#050507">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050507;
+    --bg2: #0b0c12;
+    --card: #10121a;
+    --line: rgba(255,255,255,.09);
+    --text: #eef0f5;
+    --muted: #9aa1b2;
+    --gold: #ffb347;
+    --gold2: #ff7a2f;
+    --ice: #8fd6ff;
+    --radius: 14px;
+    --sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; }
+  img { display: block; max-width: 100%; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+  .eyebrow { font: 600 .78rem/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--gold); }
+  h2 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.05; letter-spacing: -.02em; margin: 14px 0 18px; font-weight: 700; }
+  h2 em { font-style: normal; background: linear-gradient(90deg, var(--gold), var(--gold2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: 1.15rem; color: var(--muted); max-width: 640px; }
+  section { padding: 120px 0; position: relative; }
+
+  /* ---------- nav ---------- */
+  .nav { position: fixed; inset: 0 0 auto 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: 18px 28px; transition: background .3s, backdrop-filter .3s, padding .3s; }
+  .nav.solid { background: rgba(5,5,7,.78); backdrop-filter: blur(12px); padding: 12px 28px; border-bottom: 1px solid var(--line); }
+  .brand { font: 700 1rem/1 var(--mono); letter-spacing: .3em; text-decoration: none; }
+  .brand span { color: var(--gold); }
+  .nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-size: .92rem; color: var(--muted); }
+  .nav ul a { text-decoration: none; }
+  .nav ul a:hover { color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 999px; font: 600 .98rem/1 var(--sans); text-decoration: none; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.06); backdrop-filter: blur(6px); transition: transform .2s, background .2s, box-shadow .2s; }
+  .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,.12); }
+  .btn.primary { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #1c0f02; border: 0; box-shadow: 0 10px 40px -10px rgba(255,140,40,.7); }
+  .btn.primary:hover { box-shadow: 0 16px 50px -10px rgba(255,140,40,.9); }
+  .btn.small { padding: 9px 18px; font-size: .88rem; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; height: 100vh; min-height: 640px; display: flex; align-items: flex-end; overflow: hidden; padding: 0; }
+  .hero-bg { position: absolute; inset: -4%; background: url(img/marketing/endurance.webp) center 45% / cover no-repeat; animation: drift 40s ease-in-out infinite alternate; }
+  @keyframes drift { from { transform: scale(1.02) translate(0,0); } to { transform: scale(1.12) translate(-2%, 1.5%); } }
+  .hero::after { content: ""; position: absolute; inset: 0; background:
+      linear-gradient(180deg, rgba(5,5,7,.55) 0%, rgba(5,5,7,0) 22%, rgba(5,5,7,0) 45%, rgba(5,5,7,.85) 82%, var(--bg) 100%),
+      radial-gradient(ellipse 70% 60% at 20% 80%, rgba(5,5,7,.7), transparent 70%); }
+  .hero-content { position: relative; z-index: 2; padding-bottom: 11vh; width: 100%; }
+  .hero h1 { margin: 18px 0 0; font-size: clamp(3.2rem, 11vw, 9.5rem); line-height: .9; letter-spacing: -.04em; font-weight: 700; }
+  .hero h1 .thin { display: block; font-size: .32em; letter-spacing: .02em; font-weight: 500; color: #c8ccd6; margin-top: 18px; line-height: 1.2; text-shadow: 0 2px 18px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.6); }
+  .hero h1 .glow { background: linear-gradient(180deg, #fff 30%, #ffd9a8 70%, #ff9f4a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 40px rgba(255,160,60,.35)); }
+  .hero .ctas { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 36px; }
+  .hero .meta { margin-top: 26px; font: .82rem/1.5 var(--mono); color: var(--muted); letter-spacing: .04em; }
+  .scroll-cue { position: absolute; z-index: 2; bottom: 26px; left: 50%; transform: translateX(-50%); width: 24px; height: 38px; border: 1.5px solid rgba(255,255,255,.4); border-radius: 12px; }
+  .scroll-cue::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; margin-left: -1.5px; border-radius: 2px; background: #fff; animation: cue 1.8s infinite; }
+  @keyframes cue { 0% { opacity: 0; transform: translateY(0); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(12px); } }
+
+  /* ---------- stats ---------- */
+  .stats { padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg2); }
+  .stats .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .stat { padding: 34px 20px; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: 0; }
+  .stat b { display: block; font: 600 clamp(1.6rem, 3.4vw, 2.4rem)/1.1 var(--mono); color: var(--text); }
+  .stat b sup { font-size: .55em; }
+  .stat span { display: block; margin-top: 8px; font-size: .9rem; color: var(--muted); }
+
+  /* ---------- physics ---------- */
+  .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; }
+  .frame { position: relative; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: 0 40px 120px -40px rgba(255,130,40,.35); }
+  .frame img { width: 100%; height: 100%; object-fit: cover; }
+  .frame figcaption { position: absolute; left: 14px; bottom: 12px; font: .74rem/1.3 var(--mono); color: rgba(255,255,255,.75); letter-spacing: .05em; text-shadow: 0 1px 6px #000; }
+  .points { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 18px; }
+  .points li { display: grid; grid-template-columns: 42px 1fr; gap: 14px; }
+  .points .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,179,71,.1); border: 1px solid rgba(255,179,71,.25); color: var(--gold); font: 600 1rem var(--mono); }
+  .points strong { display: block; font-weight: 600; }
+  .points p { margin: 2px 0 0; color: var(--muted); font-size: .97rem; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 56px; }
+  .duo .frame { aspect-ratio: 16/9; box-shadow: none; }
+
+  /* ---------- journey ---------- */
+  .journey { background: linear-gradient(180deg, var(--bg), var(--bg2) 30%, var(--bg2) 70%, var(--bg)); }
+  .track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 40px 20px 30px; margin: 0 -20px; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+  .stop { scroll-snap-align: start; position: relative; }
+  .stop .ph { aspect-ratio: 4/5; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); position: relative; }
+  .stop .ph img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s; }
+  .stop:hover .ph img { transform: scale(1.06); }
+  .stop .ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.94)); }
+  .stop .txt { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 1; }
+  .stop .n { font: 600 .72rem var(--mono); color: var(--gold); letter-spacing: .18em; }
+  .stop h3 { margin: 4px 0 4px; font-size: 1.3rem; }
+  .stop p { margin: 0; font-size: .88rem; color: #c9cdd8; line-height: 1.45; }
+  .track-hint { font: .78rem var(--mono); color: var(--muted); letter-spacing: .08em; }
+
+  /* ---------- features ---------- */
+  .features { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 54px; }
+  .feat { grid-column: span 2; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: border-color .3s, transform .3s; }
+  .feat:hover { border-color: rgba(255,179,71,.35); transform: translateY(-3px); }
+  .feat.wide { grid-column: span 3; }
+  .feat .shot { aspect-ratio: 16/9; overflow: hidden; background: #000; }
+  .feat .shot img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .feat .body { padding: 20px 22px 24px; }
+  .feat h3 { margin: 0 0 6px; font-size: 1.15rem; }
+  .feat p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .feat .tag { display: inline-block; margin-bottom: 10px; font: 600 .68rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ice); }
+
+  /* ---------- film ---------- */
+  .film { padding-top: 60px; }
+  .video { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16/9; background: #000; box-shadow: 0 60px 140px -50px rgba(255,140,40,.45); }
+  .video video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* ---------- gallery ---------- */
+  .mosaic { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 210px; gap: 12px; margin-top: 50px; }
+  .mosaic a { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .mosaic img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s, filter .4s; filter: saturate(.95); }
+  .mosaic a:hover img { transform: scale(1.05); filter: saturate(1.1); }
+  .mosaic .big { grid-column: span 2; grid-row: span 2; }
+  .mosaic .tall { grid-row: span 2; }
+  .mosaic span { position: absolute; left: 12px; bottom: 10px; font: .72rem var(--mono); color: #fff; text-shadow: 0 1px 6px #000; letter-spacing: .05em; opacity: 0; transition: opacity .3s; }
+  .mosaic a:hover span { opacity: 1; }
+
+  /* ---------- cta ---------- */
+  .final { text-align: center; overflow: hidden; padding: 160px 0; }
+  .final::before { content: ""; position: absolute; inset: 0; background: url(img/marketing/q1_hero.webp) center / cover; opacity: .35; mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 30%, transparent 75%); }
+  .final .wrap { position: relative; }
+  .final h2 { font-size: clamp(2.4rem, 7vw, 5rem); }
+  .final .lead { margin: 0 auto; }
+  .final .ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 36px; }
+  .req { margin-top: 26px; font: .8rem var(--mono); color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 50px; color: var(--muted); font-size: .85rem; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  footer a { color: var(--text); }
+
+  /* ---------- reveal ---------- */
+  .rv { opacity: 0; transform: translateY(28px); transition: opacity .9s ease, transform .9s cubic-bezier(.2,.7,.2,1); }
+  .rv.in { opacity: 1; transform: none; }
+  .rv.d1 { transition-delay: .1s; } .rv.d2 { transition-delay: .2s; } .rv.d3 { transition-delay: .3s; }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-bg { animation: none; }
+    .rv { opacity: 1; transform: none; transition: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  @media (max-width: 960px) {
+    .split { grid-template-columns: 1fr; gap: 40px; }
+    .features { grid-template-columns: 1fr 1fr; }
+    .feat, .feat.wide { grid-column: span 1; }
+    .mosaic { grid-template-columns: 1fr 1fr; grid-auto-rows: 160px; }
+    .nav ul { display: none; }
+  }
+  @media (max-width: 640px) {
+    section { padding: 80px 0; }
+    .wrap { padding: 0 16px; }
+    .nav { padding: 14px 16px; }
+    .nav.solid { padding: 10px 16px; }
+    .stats .wrap { grid-template-columns: 1fr 1fr; }
+    .stat:nth-child(3) { border-left: 0; }
+    .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+    .duo { grid-template-columns: 1fr; }
+    .features { grid-template-columns: 1fr; }
+    .mosaic .big { grid-column: span 2; }
+    .hero-content { padding-bottom: 14vh; }
+    .hero-bg { background-position: 62% 40%; }
+    .hero::after { background: linear-gradient(180deg, rgba(5,5,7,.5) 0%, rgba(5,5,7,0) 18%, rgba(5,5,7,.15) 34%, rgba(5,5,7,.88) 58%, var(--bg) 100%); }
+    .track { margin: 0 -16px; padding-left: 16px; padding-right: 16px; grid-auto-columns: 78%; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <a class="brand" href="#top">GARGANTUA<span>·</span></a>
+  <ul>
+    <li><a href="#physique">La physique</a></li>
+    <li><a href="#voyage">Le voyage</a></li>
+    <li><a href="#jeu">Le jeu</a></li>
+    <li><a href="#film">Le film</a></li>
+    <li><a href="#galerie">Galerie</a></li>
+  </ul>
+  <a class="btn small primary" href="../">Jouer</a>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-bg" role="img" aria-label="L'Endurance devant Gargantua, son disque d'accrétion courbé par la gravité"></div>
+  <div class="hero-content wrap">
+    <div class="eyebrow rv">Simulateur de vol relativiste · dans le navigateur</div>
+    <h1 class="rv d1"><span class="glow">Gargantua</span><span class="thin">Le trou noir d'<em>Interstellar</em>, calculé rayon par rayon. Et vous êtes aux commandes.</span></h1>
+    <div class="ctas rv d2">
+      <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Décoller de Kennedy</a>
+      <a class="btn" href="#film">Voir le film</a>
+      <a class="btn" href="comment-jouer.html">Comment jouer</a>
+    </div>
+    <div class="meta rv d3">WebGPU · sans installation · clavier, manette ou écran tactile</div>
+  </div>
+  <div class="scroll-cue" aria-hidden="true"></div>
+</header>
+
+<section class="stats" aria-label="En chiffres">
+  <div class="wrap">
+    <div class="stat rv"><b>10<sup>8</sup> M☉</b><span>la masse de Gargantua</span></div>
+    <div class="stat rv d1"><b>a* = 0,998</b><span>un trou noir de Kerr presque extrême</span></div>
+    <div class="stat rv d2"><b>DE440</b><span>les éphémérides de la NASA pour le Système solaire</span></div>
+    <div class="stat rv d3"><b>0 Mo</b><span>à installer : tout tourne sur votre carte graphique</span></div>
+  </div>
+</section>
+
+<section id="physique">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">La physique</div>
+        <h2 class="rv d1">Calculé, <em>pas dessiné.</em></h2>
+        <p class="lead rv d2">Chaque pixel est un photon suivi à rebours dans l'espace-temps courbé par un trou noir en rotation. Ce que vous voyez, c'est ce que la relativité générale prédit — pas un effet visuel.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">⟲</span><div><strong>La lumière qui fait le tour</strong><p>Le disque apparaît au‑dessus et au‑dessous du trou : ses rayons sont courbés par‑dessus l'horizon. Anneaux d'Einstein, images secondaires, ombre décalée par la rotation.</p></div></li>
+          <li class="rv d2"><span class="ic">≋</span><div><strong>Doppler et décalage vers le rouge</strong><p>Le côté du disque qui vient vers vous brille et bleuit, l'autre s'éteint. La gravité rougit la lumière qui s'échappe des profondeurs.</p></div></li>
+          <li class="rv d3"><span class="ic">◎</span><div><strong>Le trou de ver du film</strong><p>La métrique conçue pour <em>Interstellar</em> : une sphère qui montre un autre ciel — notre Voie lactée d'un côté, Gargantua de l'autre.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 4/3; margin: 0;">
+        <img src="img/marketing/g08_interstellar.webp" alt="Gargantua vu dans le plan du disque, l'arc lumineux passant au‑dessus de l'ombre" loading="lazy">
+        <figcaption>GARGANTUA · LE PASSAGE RASANT DU FILM</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="img/marketing/q9_extreme.webp" alt="Le disque vu par la tranche, déformé par l'effet Doppler" loading="lazy"><figcaption>SPIN 0,998 · PAR LA TRANCHE</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="img/marketing/n1_mouth.webp" alt="La bouche du trou de ver montrant Gargantua de l'autre côté" loading="lazy"><figcaption>LA BOUCHE DU TROU DE VER</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="journey" id="voyage">
+  <div class="wrap">
+    <div class="eyebrow rv">Le voyage</div>
+    <h2 class="rv d1">Du pas de tir <em>à l'horizon.</em></h2>
+    <p class="lead rv d2">1<sup>er</sup> janvier 2067, Kennedy Space Center. Le Système solaire est à l'échelle, chaque planète à sa vraie place. Gargantua attend derrière Saturne.</p>
+    <div class="track" tabindex="0" aria-label="Les étapes du voyage, défilement horizontal">
+      <article class="stop rv"><div class="ph"><img src="img/marketing/blue_marble.webp" alt="La Terre vue de l'espace" loading="lazy"></div><div class="txt"><div class="n">01 · TERRE</div><h3>La Terre, la vraie</h3><p>Relief réel, nuages, jour et nuit, éclipses. On décolle du pas de tir, virage gravitationnel jusqu'à l'orbite.</p></div></article>
+      <article class="stop rv d1"><div class="ph"><img src="img/marketing/iss.webp" alt="La Station spatiale internationale au‑dessus de la Terre" loading="lazy"></div><div class="txt"><div class="n">02 · ORBITE BASSE</div><h3>L'ISS, là où elle est</h3><p>Sur son orbite réelle du jour. Rendez‑vous, approche, et amarrage au port Harmony.</p></div></article>
+      <article class="stop rv d2"><div class="ph"><img src="img/marketing/earthrise.webp" alt="Lever de Terre au‑dessus de l'horizon lunaire" loading="lazy"></div><div class="txt"><div class="n">03 · LUNE</div><h3>Le retour libre</h3><p>Le tour de la Lune d'Artemis II, planifié en n corps et exécuté par l'ordinateur de bord.</p></div></article>
+      <article class="stop rv d3"><div class="ph"><img src="img/marketing/saturn.webp" alt="Saturne et ses anneaux vus d'en haut" loading="lazy"></div><div class="txt"><div class="n">04 · SATURNE</div><h3>9,5 UA plus loin</h3><p>Transfert interplanétaire, anneaux et ombres. Le trou de ver orbite 0,7 UA derrière.</p></div></article>
+      <article class="stop rv"><div class="ph"><img src="img/marketing/w1_ourside.webp" alt="La bouche du trou de ver de notre côté" loading="lazy"></div><div class="txt"><div class="n">05 · LE TROU DE VER</div><h3>La sphère</h3><p>Une autre galaxie dans une sphère. On y entre en visant juste.</p></div></article>
+      <article class="stop rv d1"><div class="ph"><img src="img/marketing/ranger.webp" alt="Le Ranger en orbite autour de Gargantua" loading="lazy"></div><div class="txt"><div class="n">06 · GARGANTUA</div><h3>En orbite de Kerr</h3><p>Le Ranger autour du trou noir : les horloges du bord et celles de la Terre ne battent plus au même rythme.</p></div></article>
+      <article class="stop rv d2"><div class="ph"><img src="img/marketing/mann.webp" alt="Le monde de Mann et son ciel" loading="lazy"></div><div class="txt"><div class="n">07 · LES MONDES</div><h3>Miller, Mann, Edmunds</h3><p>L'océan, la glace, le désert. On s'y pose, on en redécolle.</p></div></article>
+    </div>
+    <div class="track-hint">← faites défiler →</div>
+  </div>
+</section>
+
+<section id="jeu">
+  <div class="wrap">
+    <div class="eyebrow rv">Le jeu</div>
+    <h2 class="rv d1">Un vrai vaisseau. <em>De vrais outils.</em></h2>
+    <p class="lead rv d2">Pilotage à la Kerbal Space Program, planificateur de vol, carte 3D, cockpit vivant — et des autopilotes quand vous voulez regarder par le hublot.</p>
+    <div class="features">
+      <article class="feat wide rv"><div class="shot"><img src="img/comment-jouer/20_cockpit.webp" alt="Le cockpit du Ranger et ses écrans" loading="lazy"></div><div class="body"><span class="tag">Cockpit</span><h3>Le siège du pilote</h3><p>Écrans de télémétrie en direct, manches qui bougent avec vos commandes, et une vue cabine pour regarder autour de soi.</p></div></article>
+      <article class="feat wide rv d1"><div class="shot"><img src="img/comment-jouer/33_carte_artemis.webp" alt="La carte 3D avec la trajectoire de retour libre" loading="lazy"></div><div class="body"><span class="tag">Carte 3D</span><h3>Voir où l'on va</h3><p>Trajectoires prédites, nœuds de manœuvre à tirer à la souris, frise temporelle, globe et planisphère avec la trace au sol.</p></div></article>
+      <article class="feat rv"><div class="shot"><img src="img/comment-jouer/32_planif_free_return.webp" alt="Le planificateur de vol" loading="lazy"></div><div class="body"><span class="tag">Planificateur</span><h3>PLAN, puis EXECUTE</h3><p>Orbite, survol, retour libre, rendez‑vous, trou de ver : les trajectoires sont visées en n corps, les allumages se font seuls.</p></div></article>
+      <article class="feat rv d1"><div class="shot"><img src="img/comment-jouer/50_iss.webp" alt="Amarrage à l'ISS" loading="lazy"></div><div class="body"><span class="tag">Autopilotes</span><h3>Décoller, se poser, s'amarrer</h3><p>Maintiens d'attitude, circularisation, approche, atterrissage, décollage et amarrage automatiques.</p></div></article>
+      <article class="feat rv d2"><div class="shot"><img src="img/comment-jouer/44_carte_du_ciel.webp" alt="La carte du ciel et les constellations" loading="lazy"></div><div class="body"><span class="tag">Ciel</span><h3>Le vrai ciel</h3><p>88 constellations, les étoiles nommées, grilles équatoriale et horizontale, et un télescope qui suit sa cible.</p></div></article>
+      <article class="feat rv"><div class="shot"><img src="img/comment-jouer/60_mobile.webp" alt="Le jeu sur téléphone avec les commandes tactiles" loading="lazy"></div><div class="body"><span class="tag">Partout</span><h3>Clavier, manette, tactile</h3><p>AZERTY ou QWERTY, manette Xbox ou PlayStation, ou un manche et une manette des gaz au doigt sur téléphone.</p></div></article>
+      <article class="feat rv d1"><div class="shot"><img src="img/marketing/sunset_orbit.webp" alt="Coucher de soleil vu de l'orbite" loading="lazy"></div><div class="body"><span class="tag">Son</span><h3>Entièrement synthétisé</h3><p>Grondement du moteur, sifflement du RCS, bips de l'ordinateur de bord, vent dans l'atmosphère — tout est généré en direct.</p></div></article>
+      <article class="feat rv d2"><div class="shot"><img src="img/marketing/q1_hero.webp" alt="Rendu hors ligne de Gargantua" loading="lazy"></div><div class="body"><span class="tag">Studio</span><h3>Rendus et vidéos</h3><p>Rendu hors ligne à n'importe quelle résolution, export PNG 16 bits et EXR, prises de vue rejouées en vidéo.</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="film" id="film">
+  <div class="wrap">
+    <div class="eyebrow rv">Le film</div>
+    <h2 class="rv d1">À travers <em>le trou de ver.</em></h2>
+    <p class="lead rv d2" style="margin-bottom:40px">Le Ranger plonge dans la bouche et ressort de l'autre côté, face à Gargantua. Rendu par le simulateur, image par image.</p>
+    <div class="video rv">
+      <video src="video/ranger_wormhole.mp4" poster="img/marketing/n1_mouth.webp" controls playsinline preload="none" muted loop></video>
+    </div>
+  </div>
+</section>
+
+<section id="galerie">
+  <div class="wrap">
+    <div class="eyebrow rv">Galerie</div>
+    <h2 class="rv d1">Rien n'est <em>peint.</em></h2>
+    <p class="lead rv d2">Toutes ces images sortent du simulateur. Le carnet complet des rendus et de leur physique est dans l'<a href="./">Atlas de Kerr</a>.</p>
+    <div class="mosaic">
+      <a class="big rv" href="img/marketing/endurance.webp"><img src="img/marketing/endurance.webp" alt="L'Endurance devant Gargantua" loading="lazy"><span>L'ENDURANCE DEVANT GARGANTUA</span></a>
+      <a class="rv d1" href="img/marketing/g04_m87.webp"><img src="img/marketing/g04_m87.webp" alt="Un trou noir comme M87* vu de face" loading="lazy"><span>FACE · M87*</span></a>
+      <a class="tall rv d2" href="img/marketing/n2_star.webp"><img src="img/marketing/n2_star.webp" alt="L'étoile compagne et Gargantua" loading="lazy"><span>L'ÉTOILE COMPAGNE</span></a>
+      <a class="rv d1" href="img/marketing/w4_gargside.webp"><img src="img/marketing/w4_gargside.webp" alt="La bouche du trou de ver vue du côté de Gargantua" loading="lazy"><span>NOTRE CIEL, DE L'AUTRE CÔTÉ</span></a>
+      <a class="rv" href="img/marketing/iss.webp"><img src="img/marketing/iss.webp" alt="L'ISS" loading="lazy"><span>L'ISS</span></a>
+      <a class="big rv d1" href="img/marketing/ranger.webp"><img src="img/marketing/ranger.webp" alt="Le Ranger et Gargantua" loading="lazy"><span>LE RANGER EN ORBITE DE KERR</span></a>
+      <a class="rv d2" href="img/marketing/saturn.webp"><img src="img/marketing/saturn.webp" alt="Saturne" loading="lazy"><span>SATURNE</span></a>
+      <a class="rv d3" href="img/marketing/earthrise.webp"><img src="img/marketing/earthrise.webp" alt="Lever de Terre" loading="lazy"><span>LEVER DE TERRE</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <div class="eyebrow rv">Prêt au décollage</div>
+    <h2 class="rv d1">L'horizon vous <em>attend.</em></h2>
+    <p class="lead rv d2">Ouvrez la page, appuyez sur <b>U</b> : le Ranger quitte le pas de tir. Le reste du chemin jusqu'à Gargantua, c'est vous qui le tracez.</p>
+    <div class="ctas rv d3">
+      <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Lancer la partie</a>
+      <a class="btn" href="../#scene=game:artemis">S'entraîner avec Artemis II</a>
+      <a class="btn" href="comment-jouer.html">Comment jouer</a>
+    </div>
+    <p class="req">Navigateur avec WebGPU : Chrome, Edge ou Arc récents · Safari avec WebGPU activé</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>Gargantua — simulateur de trou noir de Kerr en WebGPU.<br>
+      <a href="./">Atlas de Kerr</a> · <a href="comment-jouer.html">Comment jouer</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu">Code source</a></div>
+    <div>Éphémérides : NASA JPL DE440. Ranger : « Interstellar Ranger One » par Max Vizell,
+      <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.<br>Œuvre de fan, sans lien avec les ayants droit du film.</div>
+  </div>
+</footer>
+
+<script>
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("solid", scrollY > 60);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
+  // the film plays when it comes into view (muted), pauses when it leaves
+  const vid = document.querySelector(".video video");
+  if (vid && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    new IntersectionObserver(([e]) => { if (e.isIntersecting) vid.play().catch(() => {}); else vid.pause(); }, { threshold: 0.5 }).observe(vid);
+  }
+</script>
+</body>
+</html>

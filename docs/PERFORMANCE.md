@@ -184,8 +184,9 @@ renders/s in headless Chrome at 1600 × 900 (50 outside).
 
 - `__bh.game.perf()` — frame rates (loop and rendered), GPU frame and pass times, image size, pixel
   ratio, hardware tier, render scale, quality, budget, block, the main thread's sections (mean and
-  worst). The first call switches the GPU timestamps on (they sample one frame in eight, `7194173`:
-  every frame cost 2–3 %); read again a few seconds later.
+  worst). The GPU timestamps are on from the start when the device has them (`renderer.ts`: the
+  realtime subsampling uses them; they sample one frame in eight, `7194173`: every frame cost 2–3 %);
+  `perf()` only switches them back on if they were turned off.
 - `__bh.game.quality("game" | "realtime" | …)`, Settings › Render › Quality (**Game** button; keys 1–6,
   6 = Game, outside flight — in flight 1–7 are the attitude holds), and in Render › Realtime:
   *Dynamic resolution*, *Frame budget*, *Frame rate cap*, *Temporal reprojection*, *Far-field LUT*,

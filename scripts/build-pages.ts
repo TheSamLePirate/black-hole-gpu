@@ -12,7 +12,7 @@ await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;
-// (the how-to-play page, in French)
-await $`mkdir -p _site/docs/img && cp docs/comment-jouer.html _site/docs/ && cp -R docs/img/comment-jouer _site/docs/img/`;
+// (the French pages: how to play, the presentation; their images)
+await $`mkdir -p _site/docs/img && cp docs/comment-jouer.html docs/decouvrir.html _site/docs/ && cp -R docs/img/comment-jouer docs/img/marketing _site/docs/img/`;
 await $`touch _site/.nojekyll`;
 console.log("site ready in _site/");

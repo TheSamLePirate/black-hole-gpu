@@ -66,7 +66,7 @@ __bh.game.target("saturn"); __bh.game.targets(); __bh.game.soi(); __bh.game.bodi
 __bh.game.warp(1000); __bh.game.realTime(); __bh.game.pause(false); __bh.game.setDate("2067-06-01T12:00"); __bh.game.date()
 __bh.game.set("crashSpeed", 20); __bh.game.get("turnRate"); __bh.game.settings()
 __bh.game.quality("game")                           // low · medium · high · ultra · realtime · game
-__bh.game.perf()                                    // what the Perf tab shows (switches GPU timestamps on; read again a few s later)
+__bh.game.perf()                                    // what the Perf tab shows (GPU timestamps: on from the start when the GPU has them)
 __bh.game.preset("game:interstellar")               // a scene
 __bh.game.save("before TMI"); __bh.game.load("before TMI"); __bh.game.saves(); __bh.game.deleteSave("before TMI")
 __bh.game.exportSave(); __bh.game.importSave(json); __bh.game.shareLink(); __bh.game.autosaveNow()
