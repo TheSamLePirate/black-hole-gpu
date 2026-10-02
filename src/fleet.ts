@@ -112,9 +112,11 @@ export class Fleet {
     // station even with the flown craft in the assembly — where the station carries it)
     let root: VesselId | "iss" | null = null;
     let P: Pose | null = null;
-    if (group.includes(this.active) && !(fromStation && group.includes("iss"))) {
+    // (the flown craft's place: the camera's — while it is flown; left, it coasts as the others)
+    const flown = group.includes(this.active) && !(fromStation && group.includes("iss")) ? (this.activePose?.() ?? null) : null;
+    if (flown) {
       root = this.active;
-      P = this.activePose?.() ?? null;
+      P = flown;
     } else if (group.includes("iss")) {
       root = "iss";
       P = this.stationPose(t);
@@ -181,11 +183,11 @@ export class Fleet {
     return used;
   }
 
-  /** Every craft but the flown one, where it is at t. */
-  others(t: number): { id: VesselId; pose: Pose }[] {
+  /** Every craft but the flown one (or, none flown, all of them), where it is at t. */
+  others(t: number, all = false): { id: VesselId; pose: Pose }[] {
     const out: { id: VesselId; pose: Pose }[] = [];
     for (const id of VESSEL_IDS) {
-      if (id === this.active) continue;
+      if (id === this.active && !all) continue;
       const p = this.pose(id, t);
       if (p) out.push({ id, pose: p });
     }

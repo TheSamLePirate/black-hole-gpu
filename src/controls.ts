@@ -1940,6 +1940,13 @@ export class CameraController {
    */
   setPilot(on: boolean) {
     const s = this.s;
+    // (leaving the craft: it coasts where it is, docked or not — the camera steps off; boarding it again,
+    // it is where the camera is)
+    if (!on && this.piloting) {
+      const p = this.activePoseNow(true);
+      if (p && !fleet.assembly(fleet.active).includes("iss")) fleet.setFree(fleet.active, p, p.t);
+    }
+    if (on) delete fleet.free[fleet.active];
     this.piloting = on;
     this.shipSide = null; // (a new flight: no crossing to announce)
     this.pilot.omega = [0, 0, 0];
@@ -2473,9 +2480,9 @@ export class CameraController {
 
   // ------------------------------------------------------------------------------ the fleet
   /** The flown craft's place now (home): its centre, velocity and axes (fleet.ts reads it). */
-  private activePoseNow(): (Pose & { t: number }) | null {
+  private activePoseNow(evenOff = false): (Pose & { t: number }) | null {
     const s = this.s;
-    if (!s.ship) return null;
+    if (!s.ship && !evenOff) return null;
     const cam = cameraFrame(s);
     const nav = this.ourNav(cam);
     if (!nav) return null;

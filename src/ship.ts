@@ -155,6 +155,8 @@ export class ShipRenderer {
   /** the flown craft's mesh bound (the plumes' depth range), and its thrusters */
   private bound = { c: [0, 0, 0] as V3, r: 1, lo: [-1, -1, -1] as V3, hi: [1, 1, 1] as V3 };
   private vessel: VesselId = "ranger";
+  /** a craft flown this frame (else only the others are drawn) */
+  private flown = true;
   /** the moments buffer bound into the per-target groups */
   private momentsBuf: GPUBuffer | null = null;
   private shadowTex: GPUTexture;
@@ -577,7 +579,7 @@ export class ShipRenderer {
     const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
     // (the camera in the ship's frame: −Rᵀ t)
     this.camShip = [0, 1, 2].map((k) => -(R[0]![k]! * t[0] + R[1]![k]! * t[1] + R[2]![k]! * t[2])) as V3;
-    this.writeJets(v.thrust);
+    this.writeJets(this.flown ? v.thrust : null);
     // column-major mat4: columns = images of the ship's x, y, z axes, then the translation
     const m = new Float32Array(56);
     const model = (R: M3, t: V3, out: Float32Array, o: number) => {
@@ -596,7 +598,7 @@ export class ShipRenderer {
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
     const kind = { ranger: 0, lander: 1, endurance: 2 } as const;
-    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = [{ id: this.vessel, R, t, shadow: true, far: false }];
+    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: false }] : [];
     for (const o of v.others ?? []) if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
     this.draws = [];
     const corners: V3[] = [];
@@ -630,8 +632,10 @@ export class ShipRenderer {
       }
     });
     this.device.queue.writeBuffer(this.instBuf, 0, this.instData, 0, list.length * INST_FLOATS);
-    m.set([sc![0], sc![1], sc![2], sr * 1.02], 24);
-    this.onScreen = { c: sc!, r: sr * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
+    // (none in the shadow map: its sphere about the first, unused)
+    if (!sc) (sc = list[0]!.t), (sr = this.meshes[list[0]!.id]!.bound.r);
+    m.set([sc[0], sc[1], sc[2], sr * 1.02], 24);
+    this.onScreen = { c: sc, r: sr * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -672,10 +676,13 @@ export class ShipRenderer {
    */
   encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView, occluder?: { depth: GPUTexture; rect: [number, number, number, number] }, moments?: GPUBuffer) {
     if (!this.ready) return;
+    // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
+    this.flown = !!v.vessel;
     this.vessel = v.vessel ?? "ranger";
     const mesh = this.meshes[this.vessel];
     if (!this.has(this.vessel) || !mesh) return;
     for (const o of v.others ?? []) this.has(o.id);
+    if (!this.flown && !(v.others ?? []).some((o) => this.meshes[o.id])) return;
     const res = this.target(hdr);
     this.writeUniform(v, mesh);
     // (the image's size and the metres per M: the other craft's depths against the traced image's)

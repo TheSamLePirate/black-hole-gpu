@@ -857,7 +857,7 @@ export class Renderer {
     const cv = this.context.canvas as HTMLCanvasElement;
     const css = Math.max(cv.clientWidth || cv.width, 1);
     const shown = toCanvas ? css : this.offline ? this.displayView(t, cv.width, cv.height, true)[0] * css : css;
-    const ship = s.ship && this.ship.ready ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) } : null;
+    const ship = (s.ship || this.craftsShown) && this.ship.ready ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) } : null;
     this.chart.encode(enc, view, format, outW, outH, this.displayView(t, outW, outH, letterbox), t.moments, t.width, t.height, outW / shown, ship);
   }
 
@@ -1323,6 +1323,8 @@ export class Renderer {
     this.featureKey = this.featuresOf(s);
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
+    // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
+    if (!o.probe) this.craftsShown = !s.ship && this.shipOthers(s).some((q) => Math.hypot(...q.t) < 2e4);
     const dc = this.diskConstants(s);
     const a = s.spin;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -1714,7 +1716,7 @@ export class Renderer {
       })(),
       // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
       target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, s.band === "230GHz" ? 1 : 0,
-      this.beamSetup(s, target)?.level ?? 0, s.ship && this.ship.ready ? 1 : 0, this.dofOn(s, target) ? 1 : 0, 0,
+      this.beamSetup(s, target)?.level ?? 0, (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0, this.dofOn(s, target) ? 1 : 0, 0,
     ]);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;
@@ -1742,7 +1744,7 @@ export class Renderer {
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
   private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
-    if (!s.ship) {
+    if (!s.ship && !this.craftsShown) {
       this.envReset = true; // stale by the time the ship comes back
       return;
     }
@@ -2133,9 +2135,9 @@ export class Renderer {
       if (s && i === r0 && t === this.live) this.encodeTemporal(enc, t, s);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
-      if (s && i === r0 && s.ship && this.ship.ready) {
+      if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {
         this.ship.encodeShip(enc, t.hdr, {
-          vessel: s.vessel, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
+          vessel: s.ship ? s.vessel : undefined, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
           mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
           plasma: this.shipPlasma, probeAxes: this.shipProbeAxes,
           thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)),
@@ -2226,6 +2228,9 @@ export class Renderer {
     }
   }
 
+  /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
+  craftsShown = false;
+
   /**
    * The craft not flown (fleet.ts), where they are seen from the camera's eye: within 60 km, on our side;
    * in the shadow map those within 150 m of the flown one (docked, alongside). Their transforms: the craft's
@@ -2246,16 +2251,17 @@ export class Renderer {
       const l = Math.hypot(...v) || 1;
       return [v[0] / l, v[1] / l, v[2] / l];
     };
-    const eye = this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
     const out: ShipInstance[] = [];
-    for (const o of fleet.others(time)) {
+    for (const o of fleet.others(time, !s.ship)) {
       const rel = toCam([o.pose.X[0] - Xc[0], o.pose.X[1] - Xc[1], o.pose.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
       // (the flown craft's origin is the camera's place: its distance from it, not from the eye)
       const sep = Math.hypot(...rel.map((c, k) => c - eye[k]!));
       if (Math.hypot(...rel) > 6e4) continue;
       const a = o.pose.ax.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
       const S: [Vec3, Vec3, Vec3] = [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3];
-      out.push({ id: o.id, S, t: rel, shadow: sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 150 });
+      // (none flown: the craft near the camera in the shadow map)
+      out.push({ id: o.id, S, t: rel, shadow: s.ship ? sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 150 : sep < 4 * (vesselHulls[o.id].radius || 40) });
     }
     return out;
   }
