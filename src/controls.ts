@@ -2848,8 +2848,12 @@ export class CameraController {
   entryRun: {
     phase: "plan" | "wait" | "burn" | "entry" | "glide"; site: Site | null; tBurn: number; dv: number; done: number;
     guid: EntryGuidance | null; bank: number; next: number; alpha: number; gPrev: number | null; short: number; handover: number;
+    /** the flare's time constant [s], set as it starts */
+    flareTau?: number;
     /** a guidance update in the planner's worker */
     pending?: boolean;
+    /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
+    app?: { along: number; across: number; final: boolean; agl: number; speed: number; gRef?: number; gam?: number };
     plan?: { heat: number; shield: number; g: number };
   } | null = null;
 
@@ -3047,7 +3051,10 @@ export class CameraController {
       const ax = attitudeFor(fr.s.x, va, craft.alpha, R.bank);
       return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
     }
-    // the glide (the Ranger): the bank onto the site, the climb angle down a glide path, the flare
+    // the glide (the Ranger): onto the runway's axis — a point 12 km before its threshold, then the
+    // final along it (the cross-track error banked out) — down a glide path, the flare
+    const site = R.site!;
+    if (site.rwy !== undefined) return this.approach(fr, R, site, va, up, h, dt, cam);
     const pl = fr.place(R.site!);
     const pu = unitV(pl);
     const ang = Math.acos(clamp(dot3(up, pu), -1, 1));
@@ -3056,15 +3063,14 @@ export class CameraController {
     const tdir = unitV(lin(pu, 1, up, -dot3(pu, up)));
     const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
     const sp = Math.hypot(...va);
-    const agl = this.ourNav(cam) ? Math.max(gearHeight(fr.body, this.ourNav(cam)!.X, this.ourNav(cam)!.t), 0) : Math.max(h - GEAR, 0);
+    const agl = this.aglNow(cam, h);
     const bank = clamp(1.4 * dpsi, -0.6, 0.6) * (agl < 150 ? agl / 150 : 1);
-    let gRef = clamp(-Math.atan2(agl, Math.max(dist - 2000, 1500)), -0.35, -0.035);
-    if (agl < 60) gRef = -Math.max(0.006, 0.0012 * agl);
     const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
+    const gRef = flareRef(R, agl, clamp(-Math.atan2(agl, Math.max(dist - 2000, 1500)), -0.35, -0.035), sp, gam);
     const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
     R.gPrev = gam;
     const stall = (V.aero.wing?.stall ?? 0.35) - 0.05;
-    R.alpha = clamp(R.alpha + (1.2 * (gRef - gam) - 0.9 * gdot) * dt, 0, stall);
+    R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35);
     // (too fast down the path: the air brake)
     const vT = Math.min(110 + 0.004 * dist, 320);
     this.airBrake = clamp((sp - vT) / 60, 0, 1);
@@ -3243,6 +3249,129 @@ export class CameraController {
     return { ...att, throttle: Math.min(1, Math.max((size - B.done) / Math.max(thr * 0.5, 1e-9), 0.05)) };
   }
 
+  /**
+   * The angle of attack a glide asks: the lift that turns the path onto the climb angle wanted —
+   * m (g cos γ + V k (γ_ref − γ) − V γ̇ d) / cos bank — from the lift the wing gives now at the angle it has
+   * (its slope), eased over a few tenths of a second; slower than ~1.25 × the stall's, the nose
+   * lowered. Low (1.5 km), the time back to real.
+   */
+  private glideAlpha(R: NonNullable<CameraController["entryRun"]>, gRef: number, gam: number, gdot: number, sp: number, bank: number, agl: number, dt: number, stall: number, prot: number): number {
+    const LA = this.airFlight.last;
+    const m = fleet.massProps().mass;
+    const g = 9.81;
+    const k = agl < 80 ? 1.6 : 0.8;
+    const need = (m * (g * Math.cos(gam) + sp * (k * (gRef - gam) - 0.6 * gdot))) / Math.max(Math.cos(bank), 0.5);
+    // (the angle whose lift — signed, the craft's own aerodynamics in the air it is in — is that:
+    // Newton's steps from the angle it has)
+    let want = R.alpha;
+    let vStall = 0;
+    if (LA && LA.air.rho > 0 && sp > 1) {
+      const A = VESSELS[fleet.active].aero;
+      const lift = (al: number) => {
+        const o = aeroForces(A, [0, -sp * Math.sin(al), sp * Math.cos(al)], LA.air, [0, 0, 0], this.airFlight.cfg);
+        return o.F[1] * Math.cos(al) + o.F[2] * Math.sin(al);
+      };
+      for (let i = 0; i < 3; i++) {
+        const l0 = lift(want), l1 = lift(want + 0.01);
+        const slope = (l1 - l0) / 0.01;
+        if (!(slope > 1e-6)) break;
+        want = clamp(want + (need - l0) / slope, -0.05, stall);
+      }
+      // (the stall's speed here: the lift at the stall's angle grows as the speed squared)
+      const ls = lift(stall);
+      if (ls > 0) vStall = sp * Math.sqrt((m * g) / ls);
+    }
+    // (the speed kept — `prot` × the stall's: the energy the flare needs, ×1.1 in it; slower, the nose down, the path
+    // given up rather than the wing)
+    want -= 0.01 * Math.max(prot * vStall - sp, 0);
+    const a = R.alpha + (clamp(want, 0, stall) - R.alpha) * Math.min(1, dt / 0.35);
+    if (agl < 1500) {
+      const Msec = 4.925490947e-6 * this.s.massSolar;
+      if (Math.abs(this.s.timeSpeed * Msec - 1) > 1e-6) {
+        this.warpWant = null;
+        this.s.timeSpeed = this.warpSet = 1 / Msec;
+      }
+    }
+    return clamp(a, 0, stall);
+  }
+
+  /** The gear's height over the ground below — its relief: our worlds', Gargantua's (h: over the sphere,
+   *  the fallback) [m]. */
+  private aglNow(cam: ReturnType<typeof cameraFrame>, h: number): number {
+    const nav = this.ourNav(cam);
+    if (nav) return Math.max(gearHeight(nav.ref, nav.X, nav.t), 0);
+    const lf = this.local;
+    if (lf) return Math.max((Math.hypot(...lf.L.xi) - groundR(lf.F, lf.L.xi)) * lf.F.mPerM - GEAR, 0);
+    return Math.max(h - GEAR, 0);
+  }
+
+  /**
+   * The Ranger's approach to a runway: the axis intercepted well before the final's start (12 km before
+   * the threshold, ~3.5 km up) — or, from too close, flown to it and turned there; then the final — the bank against the cross-track error and
+   * its rate, a steep glide path (as the Shuttle's, 18°) to an aim point 2 km short, the flare to a
+   * shallow one, the touchdown on the centreline, the wheels and the brakes after.
+   */
+  private approach(fr: NonNullable<ReturnType<CameraController["entryFrame"]>>, R: NonNullable<CameraController["entryRun"]>, site: Site, va: Vec3, up: Vec3, h: number, dt: number, cam: ReturnType<typeof cameraFrame>) {
+    const D = Math.PI / 180;
+    const T = fr.place(site);
+    const tu = unitV(T);
+    // (the site's north: the body's pole on it — ours: the spin axis; Gargantua's worlds: their z)
+    const nav = this.ourNav(cam);
+    const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+    const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
+    const east = cross(north, tu);
+    const hd = (site.rwy ?? 0) * D;
+    const along = lin(north, Math.cos(hd), east, Math.sin(hd));
+    const rgt = cross(along, tu);
+    const x = fr.s.x;
+    const rel = sub3(x, T);
+    const sAl = dot3(rel, along); // (negative before the threshold)
+    const xt = dot3(rel, rgt);
+    const sp = Math.hypot(...va);
+    const agl = this.aglNow(cam, h);
+    const vh = unitV(lin(va, 1, up, -dot3(va, up)));
+    const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
+    const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
+    R.gPrev = gam;
+    const onFinal = sAl > -14e3 && Math.abs(xt) < 3e3 && dot3(vh, along) > 0.8;
+    let bank: number, gRef: number;
+    if (!onFinal) {
+      // (far enough back: the axis joined — the course turned onto it as the offset closes, atan(xt/L)
+      // off it, L about a turn's radius: no overshoot. Too close or past: to the final's start, turned
+      // there. A glide path to 3.5 km over the final's start along the way still to fly.)
+      const L0 = Math.max(6e3, (0.8 * Math.min(sp, 350) ** 2) / (9.81 * Math.tan(0.6)));
+      const far = sAl < -(12e3 + 0.5 * Math.abs(xt) + L0);
+      let tdir: Vec3, dGo: number;
+      if (far) {
+        const off = Math.min(Math.atan2(Math.abs(xt), L0), 1.4);
+        tdir = lin(along, Math.cos(off), rgt, -Math.sign(xt) * Math.sin(off));
+        dGo = -12e3 - sAl + 0.5 * Math.abs(xt);
+      } else {
+        const toA = sub3(lin(T, 1, along, -12e3), x);
+        tdir = unitV(lin(toA, 1, up, -dot3(toA, up)));
+        // (and the turn onto the axis there: an arc of ~8 km radius)
+        dGo = Math.hypot(...lin(toA, 1, up, -dot3(toA, up))) + 8e3 * Math.acos(clamp(dot3(tdir, along), -1, 1));
+      }
+      const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
+      bank = clamp(1.4 * dpsi, -0.6, 0.6);
+      gRef = clamp(-Math.atan2(Math.max(agl - 3500, 0), Math.max(dGo, 1500)), -0.35, -0.035);
+    } else {
+      // (the final: the axis held, steep to 300 m, then the flare)
+      const xdot = dot3(va, rgt);
+      const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
+      bank = clamp(-0.00025 * xt - 0.012 * xdot - 1.2 * dpsi, -0.5, 0.5) * (agl < 60 ? agl / 60 : 1);
+      const toAim = Math.max(-(sAl + 2000), 300);
+      gRef = flareRef(R, agl, clamp(-Math.atan2(agl, toAim), -0.33, -0.05), sp, gam);
+    }
+    R.app = { along: sAl, across: xt, final: onFinal, agl, speed: sp, gRef, gam };
+    const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
+    R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, onFinal && R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35);
+    const vT = onFinal ? (agl > 600 ? 175 : 115) : 230;
+    this.airBrake = clamp((sp - vT) / 50, 0, 1);
+    const ax = attitudeFor(fr.s.x, va, R.alpha, bank);
+    return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
+  }
+
   /** The air brake asked for (0 … 1). */
   airBrake = 0;
 
@@ -3298,7 +3427,7 @@ export class CameraController {
     const path = R.guid?.last?.path.map((x) => toMap(x as Vec3)) ?? null;
     return {
       phase: R.phase, body: fr.body, site: R.site ? { name: R.site.name, X: toMap(fr.place(R.site)) } : null, path, bank: R.bank,
-      miss: R.guid?.lastMiss ?? null, tBurn: R.phase === "wait" ? R.tBurn - fr.now : null, dv: R.dv, plan: R.plan ?? null, ours: !!nav,
+      miss: R.guid?.lastMiss ?? null, tBurn: R.phase === "wait" ? R.tBurn - fr.now : null, dv: R.dv, plan: R.plan ?? null, ours: !!nav, app: R.app ?? null,
     };
   }
 
@@ -6644,6 +6773,21 @@ const unitV = (a: Vec3): Vec3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
+/**
+ * A glider's climb angle down to the runway [rad]: the steep path (the Shuttle's ~18°) to the flare,
+ * then the flare — the sink rate eased exponentially to a touchdown's ~1 m/s, its time constant set as it
+ * starts from the sink it comes down with (≈ 0.4 g of pull: a steep fast final flares from ~500 m, a
+ * slow one from ~50 m). `R.flareTau` keeps it; above twice its height again (a go-around), cleared.
+ */
+function flareRef(R: { flareTau?: number }, agl: number, steep: number, sp: number, gam: number): number {
+  const sink = -sp * Math.sin(gam);
+  const tau = R.flareTau ?? clamp(sink / 8, 3, 8);
+  if (R.flareTau === undefined && agl <= Math.max(tau * sink, 40)) R.flareTau = tau;
+  else if (R.flareTau !== undefined && agl > 2 * Math.max(tau * sink, 40) + 100) R.flareTau = undefined;
+  if (R.flareTau === undefined) return steep;
+  return Math.max(steep, -Math.asin(Math.min((0.8 + agl / R.flareTau) / Math.max(sp, 1), 0.5)));
+}
+
 /** v turned by ang about the unit axis k (Rodrigues) */
 function rotateAbout(v: Vec3, k: Vec3, ang: number): Vec3 {
   const c = Math.cos(ang), s = Math.sin(ang);

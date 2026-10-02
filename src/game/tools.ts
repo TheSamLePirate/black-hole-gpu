@@ -16,7 +16,9 @@ import type { CameraController } from "../controls";
 import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose } from "../camera";
 import { BODY_NAMES } from "../targeting";
-import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState } from "../system/solar";
+import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
+import { bodyFixedOf, fromBodyFixed, groundVelocity } from "../system/our-surface";
+import { SITES } from "./sites";
 import { soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
@@ -180,6 +182,49 @@ export class GameTools {
     this.log.add("place", p.note, this.ctx.time());
     this.ctx.toast(p.note);
     return p.note;
+  }
+
+  /**
+   * On a site's approach (our worlds): `distKm` before its runway's threshold on the runway's line (or
+   * north of a pad), `altKm` up, flying towards it at `speed` m/s — the entry autopilot's glide takes
+   * it from there (the practice of the last minutes of an entry).
+   */
+  glideTo(name: string, distKm = 80, altKm = 25, speed = 750) {
+    const site = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase()));
+    if (!site) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}`);
+    if (universeOf(site.body) !== "ours") throw new Error("glideTo: our worlds' sites");
+    const t = this.ctx.time();
+    const b = solarBody(site.body)!;
+    const P = solarState(site.body, t).pos;
+    const D = Math.PI / 180;
+    const T = fromBodyFixed(site.body, bodyFixedOf(site.body, site.lat, site.lon, 0), t);
+    const sub = (a: V3, c: V3): V3 => [a[0] - c[0], a[1] - c[1], a[2] - c[2]];
+    const unit = (a: V3): V3 => {
+      const l = Math.hypot(...a) || 1;
+      return [a[0] / l, a[1] / l, a[2] / l];
+    };
+    const dot = (a: V3, c: V3) => a[0] * c[0] + a[1] * c[1] + a[2] * c[2];
+    const cross = (a: V3, c: V3): V3 => [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]];
+    const up = unit(sub(T, P));
+    const pole = unit(spinVector(b, t) as V3);
+    const north = unit(sub(pole, up.map((x) => x * dot(pole, up)) as V3));
+    const east = cross(north, up);
+    const hd = (site.rwy ?? 180) * D;
+    const along: V3 = [north[0] * Math.cos(hd) + east[0] * Math.sin(hd), north[1] * Math.cos(hd) + east[1] * Math.sin(hd), north[2] * Math.cos(hd) + east[2] * Math.sin(hd)];
+    const ang = (distKm * 1e3) / (b.radius * M_METRES);
+    const dir = unit([up[0] * Math.cos(ang) - along[0] * Math.sin(ang), up[1] * Math.cos(ang) - along[1] * Math.sin(ang), up[2] * Math.cos(ang) - along[2] * Math.sin(ang)]);
+    const r = b.radius + (altKm * 1e3) / M_METRES;
+    const X: V3 = [P[0] + dir[0] * r, P[1] + dir[1] * r, P[2] + dir[2] * r];
+    const fwd = unit(sub(along, dir.map((x) => x * dot(along, dir)) as V3));
+    const g = groundVelocity(site.body, X, t);
+    const k = speed / 299792458;
+    const vel: V3 = [g[0] + fwd[0] * k, g[1] + fwd[1] * k, g[2] + fwd[2] * k];
+    const note = this.placeAt({ frame: "ours", X, vel, fwd, up: dir, note: `${site.name}: ${distKm} km out, ${altKm} km up, ${speed} m/s — the approach` });
+    const c = this.ctx.camera;
+    c.entrySite = site;
+    c.pilot.auto = "none";
+    c.pilot.setAuto("entry");
+    return note;
   }
 
   /** In orbit around a body (ours or Gargantua's side; the hole: `rM` its radius in M). */

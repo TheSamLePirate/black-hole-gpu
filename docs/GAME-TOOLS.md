@@ -59,6 +59,7 @@ __bh.game.orbit("gargantua", { rM: 12 })            // Kerr circular orbit, radi
 __bh.game.orbit("miller", { altKm: 300 })           // in Miller's frame (Gargantua's tides: ±70 km)
 __bh.game.land("moon", 0.674, 23.473)               // Tranquility Base
 __bh.game.land("mann", 10, -30)                     // Gargantua's worlds: lat / lon on their frame (x away from Gargantua)
+__bh.game.glideTo("Kennedy", 80, 25, 750)           // the Ranger on a runway's line, 80 km out, 25 km up, 750 m/s — the glide autopilot lands it
 __bh.game.orbitOver("earth", 48.86, 2.35, { altKm: 400, inc: 51.6 })  // an orbit passing over Paris now
 __bh.game.orbitTarget()                             // around the current target
 __bh.game.placeAt({ frame, X, vel, fwd, up })        // at a state (home frame / the hole's map)

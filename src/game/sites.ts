@@ -9,16 +9,18 @@ export interface Site {
   lon: number;
   /** a runway (the Ranger glides onto it) or a pad */
   runway?: boolean;
+  /** the runway's landing heading [° from north] (its threshold at the place) */
+  rwy?: number;
 }
 
 export const SITES: Site[] = [
-  { body: "earth", name: "Kennedy Space Center, Shuttle Landing Facility", lat: 28.615, lon: -80.695, runway: true },
-  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true },
-  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true },
-  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true },
-  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true },
-  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true },
-  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true },
+  { body: "earth", name: "Kennedy Space Center, Shuttle Landing Facility", lat: 28.615, lon: -80.695, runway: true, rwy: 150 },
+  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220 },
+  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70 },
+  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60 },
+  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270 },
+  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340 },
+  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0 },
   { body: "mars", name: "Jezero crater", lat: 18.44, lon: 77.45 },
   { body: "mars", name: "Gale crater", lat: -5.4, lon: 137.8 },
   { body: "mars", name: "Utopia Planitia", lat: 47.6, lon: 118.0 },
@@ -27,7 +29,7 @@ export const SITES: Site[] = [
   { body: "titan", name: "Huygens' landing site", lat: -10.25, lon: 192.32 },
   { body: "miller", name: "Miller's shallows (the Ranger's landing)", lat: 0, lon: 20 },
   { body: "mann", name: "Mann's camp", lat: 12, lon: -35 },
-  { body: "edmunds", name: "Edmunds' plain (Brand's camp)", lat: 6, lon: 55, runway: true },
+  { body: "edmunds", name: "Edmunds' plain (Brand's camp)", lat: 6, lon: 55, runway: true, rwy: 90 },
 ];
 
 export const sitesOf = (body: string) => SITES.filter((s) => s.body === body);
