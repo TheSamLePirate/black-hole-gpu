@@ -92,3 +92,5 @@
 .fc-panel.min:hover { background: rgba(20, 30, 46, 0.95); }
 .fl-root.mapview.fc-l-off { --fc-l: 58px; }
 .fl-root.mapview.fc-r-off { --fc-r: 58px; }
+
+.fc-card { overflow-x: auto; }

@@ -890,6 +890,7 @@ async function main() {
     },
     kerrInfo: () => camera.fcKerrInfo(),
     kerrOp: (kind, x) => camera.fcKerrOp(kind, x),
+    preview: (burns, note) => camera.fcPreview(burns, note),
     setPlan: (burns, note) => camera.fcSetPlan(burns, note),
     execute: () => camera.fcExecute(),
     clear: () => camera.fcClear(),

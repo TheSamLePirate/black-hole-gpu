@@ -20,7 +20,7 @@ import { AirFlight, AIR_WARP } from "./flightair";
 import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type EntryState } from "./entry";
 import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site } from "./game/sites";
-import { fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
+import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext, OpResult } from "./fc/ops";
 import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kMatchPlane, kPeriapsis, kResonant, type KerrOp, type KerrOrbit } from "./fc/kerr-ops";
@@ -178,7 +178,7 @@ export class CameraController {
   private flyVel: Vec3 = [0, 0, 0];
   /** Last free-fall prediction for the overlay (dt: coordinate time between points [M]). */
   /** (hit: the body the path runs into, when its fate is "star") */
-  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star"; at: number; dt: number; hit?: Body } | null = null;
+  path: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" | "local"; at: number; dt: number; hit?: Body } | null = null;
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
   piloting = false;
@@ -3173,9 +3173,126 @@ export class CameraController {
   fcBurns: { tAbs: number; dv: KV3; label: string; firing: boolean; done: number }[] = [];
   private fcNote = "";
 
+  /**
+   * The flight computer's candidate: an operation previewed — not in the plan — and the path it would
+   * fly, drawn on the maps before it is executed: our side by the n-body predictor (the planner's
+   * worker), about the hole on its geodesics, about Gargantua's worlds their two bodies in the world's
+   * frame (carried back onto the hole's map). Null: none.
+   */
+  /** about a world: the free orbit's ground track ahead (unit, on the world's turning axes) */
+  private localGround: Vec3[] | null = null;
+
+  fcCand: {
+    key: string; note: string; kind: "ours" | "hole" | "local"; t0: number;
+    /** the burns' times [scene time: ours and the hole, M; the worlds, s] */
+    nodes: { t: number }[];
+    ours?: OurPath | null; kerr?: PlanPath | null;
+    /** about a world: the path relative to the world's centre (the map puts it where the world is) */
+    local?: { pts: Vec3[]; times: number[]; nodeAt: number[]; world: string; rot: Vec3[] } | null;
+    arrive?: { body: string; t: number } | null;
+    busy: boolean;
+  } | null = null;
+  private candGen = 0;
+
+  /**
+   * Previews burns (seconds from now; their parts, m/s), or a mission's planned path; null clears the
+   * candidate. The path computed now (the hole's, the worlds') or in the worker (ours).
+   */
+  fcPreview(burns: Burn[] | null, note = "", o: { ours?: OurPath | null; arrive?: { body: string; t: number } | null } = {}) {
+    const gen = ++this.candGen;
+    if (!burns || !burns.length) {
+      this.fcCand = null;
+      return;
+    }
+    const s = this.s;
+    const cam = cameraFrame(s);
+    const c = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const key = `${gen}`;
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const nodes = burns.map((b) => ({ t: nav.t + b.t / Msec, dv: [b.dv[0] / c, b.dv[1] / c, b.dv[2] / c] as Vec3 }));
+      this.fcCand = { key, note, kind: "ours", t0: nav.t, nodes, ours: o.ours ?? null, arrive: o.arrive ?? null, busy: !o.ours };
+      if (o.ours) return;
+      const mouthR = mouth(s).w.rho, accel = this.thrustMax();
+      void runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes, mouthR, accel, drag: this.dragPerMass() })
+        .then((path) => {
+          if (gen !== this.candGen || !this.fcCand || !path || (path as unknown as { error?: string }).error) return;
+          this.fcCand.ours = path;
+          this.fcCand.busy = false;
+        })
+        .catch(() => this.fcCand && gen === this.candGen && (this.fcCand.busy = false));
+      return;
+    }
+    if (this.fcAboutHole()) {
+      const st = this.stateNow();
+      if (!st) return;
+      const nodes: ManeuverNode[] = burns.map((b) => ({ t: st.t + b.t / Msec, dv: [b.dv[0] / c, b.dv[1] / c, b.dv[2] / c] as Vec3, goal: b.goal }));
+      const last = nodes[nodes.length - 1]!.t;
+      const tail = Math.max(2 * 2 * Math.PI * st.r ** 1.5, 1.5 * (last - st.t), 600);
+      const res = planPath(st, nodes, this.world(), Math.min(tail, 60000));
+      this.fcCand = { key, note, kind: "hole", t0: st.t, nodes, kerr: res?.path ?? null, busy: false };
+      return;
+    }
+    // about one of Gargantua's worlds: the burns on its two bodies (the frame made inertial), the path
+    // carried onto the hole's map
+    const tr = this.localTrack(burns, 1.2);
+    if (!tr) return;
+    const now = this.nowTime() * Msec;
+    const C = this.local!.F.C;
+    const rel = { pts: tr.pts.map((q) => sub3(q, C)), times: tr.times, nodeAt: tr.nodeAt, world: this.local!.F.id, rot: tr.rot };
+    this.fcCand = { key, note, kind: "local", t0: now / Msec, nodes: burns.map((b) => ({ t: (now + b.t) / Msec })), local: rel, busy: false };
+  }
+
+  /**
+   * About one of Gargantua's worlds: the path through burns (seconds from now; their parts, m/s) on
+   * its two bodies — the world's frame made inertial —, `turns` orbits on after the last, as points on
+   * the hole's map: the orbit about the world as it is now (the map does not turn, the world's frame
+   * does), at even times [M]. Null away from a world.
+   */
+  private localTrack(burns: Burn[], turns: number, N = 360): { pts: Vec3[]; times: number[]; nodeAt: number[]; dt: number; rot: Vec3[] } | null {
+    const fc = this.fcContext();
+    const lf = this.local;
+    if (!fc || !lf || fc.universe !== "gargantua") return null;
+    const Msec = 4.925490947e-6 * this.s.massSolar;
+    const now = this.nowTime() * Msec;
+    const F0 = lf.F;
+    const total = burns.length ? burns[burns.length - 1]!.t : 0;
+    const el = kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v);
+    const T = Number.isFinite(el.T) && el.T > 0 ? el.T : 3600;
+    const span = total + turns * T;
+    const pts: Vec3[] = [], times: number[] = [], nodeAt: number[] = [], rot: Vec3[] = [];
+    let r = fc.ctx.r, v = fc.ctx.v, tPrev = 0, k = 0;
+    const n = F0.n / Msec;
+    for (let j = 0; j <= N; j++) {
+      const t = (span * j) / N;
+      // (a burn on the way: the state at it, the burn, then on)
+      while (k < burns.length && burns[k]!.t <= t) {
+        const st = kepProp(fc.ctx.mu, r, v, burns[k]!.t - tPrev);
+        r = st.r;
+        v = lin(st.v as Vec3, 1, fromPNR(st.r, st.v, burns[k]!.dv) as Vec3, 1) as KV3;
+        tPrev = burns[k]!.t;
+        nodeAt.push(pts.length);
+        k++;
+      }
+      const q = kepProp(fc.ctx.mu, r, v, t - tPrev);
+      // (impact: the path ends on the ground)
+      if (Math.hypot(...q.r) < fc.ctx.R) break;
+      const xi: Vec3 = [q.r[0] / F0.mPerM, q.r[1] / F0.mPerM, q.r[2] / F0.mPerM];
+      pts.push(toGlobal(F0, { xi, w: [0, 0, 0], landed: false }).X);
+      times.push((now + t) / Msec);
+      // (over the ground: the world's frame turned on by then — its sites and its ground fixed in it)
+      const ca = Math.cos(-n * t), sa = Math.sin(-n * t);
+      rot.push(unitV([q.r[0] * ca - q.r[1] * sa, q.r[0] * sa + q.r[1] * ca, q.r[2]]));
+    }
+    return pts.length > 1 ? { pts, times, nodeAt, dt: span / N / Msec, rot } : null;
+  }
+
   /** The flight computer's plan set: our side, as manoeuvre nodes (the map's path, the node autopilot);
    *  about Gargantua's worlds, its own burns. Why not, or null. */
   fcSetPlan(burns: Burn[], note: string): string | null {
+    // (the candidate adopted: the plan's own path from now on)
+    this.fcPreview(null);
     const s = this.s;
     const cam = cameraFrame(s);
     const c = 299792458;
@@ -3200,7 +3317,26 @@ export class CameraController {
     const now = this.nowTime() * Msec;
     this.fcBurns = burns.map((b) => ({ tAbs: now + b.t, dv: b.dv, label: b.label, firing: false, done: 0 }));
     this.fcNote = note;
+    this.fcLocalPlan = null;
     return null;
+  }
+
+  /** about a world: the planned burns' path (relative to the world; on its turning axes), redone a few
+   *  times a second while there are burns */
+  private fcLocalPlan: { at: number; key: string; v: { pts: Vec3[]; times: number[]; nodeAt: number[]; world: string; rot: Vec3[] } | null } | null = null;
+  private localPlanNow() {
+    if (!this.fcBurns.length || !this.local) return null;
+    const P = this.fcPlan();
+    if (!P) return null;
+    const key = P.burns.map((b) => `${b.dv.join()}@${Math.round(b.t)}`).join(";");
+    const now = performance.now();
+    const c = this.fcLocalPlan;
+    if (c && c.key === key && now - c.at < 1000) return c.v;
+    const tr = this.localTrack(P.burns, 1.2);
+    const C = this.local.F.C;
+    const v = tr ? { pts: tr.pts.map((q) => sub3(q, C)), times: tr.times, nodeAt: tr.nodeAt, world: this.local.F.id, rot: tr.rot } : null;
+    this.fcLocalPlan = { at: now, key, v };
+    return v;
   }
 
   /** Flies the plan: the node autopilot (our side), the flight computer's burns (Gargantua's worlds). */
@@ -6618,6 +6754,11 @@ export class CameraController {
       /** a mission's target at its periapsis time (the map marks where it will be) */
       ourArrive: this.ourMission && this.plan.nodes.length ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive }
         : this.issGoal && this.plan.nodes.length ? { body: this.issGoal.body, t: this.issGoal.tArrive } : null,
+      // (the flight computer's previewed operation and its path, before it is executed)
+      cand: this.fcCand,
+      // (about one of Gargantua's worlds: the ground tracks, free and previewed, on its turning axes)
+      localGround: this.local ? { ahead: this.localGround, cand: this.fcCand?.local?.rot ?? null, plan: this.localPlanNow()?.rot ?? null } : null,
+      localPlan: this.localPlanNow(),
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
@@ -6768,6 +6909,16 @@ export class CameraController {
     }
     this.ourFree = null;
     if (cam.region !== "hole") return (this.path = null);
+    // in one of Gargantua's worlds' frames: the orbit about the world (its two bodies), not the hole's
+    // geodesic (a world's orbit about the hole, drawn from the ship — meaningless at its scale)
+    if (this.local && !this.local.L.landed) {
+      const tr = this.localTrack([], 1.05, 240);
+      if (tr) {
+        this.localGround = tr.rot;
+        const p = { pts: tr.pts.slice(1), fate: "local" as const, at: now, dt: tr.dt };
+        return (this.path = p);
+      }
+    }
     const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin, this.nowTime());
     // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
     // coming back past the camera (a segment that close would sweep across the whole view)

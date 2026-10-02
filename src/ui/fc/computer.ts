@@ -28,6 +28,8 @@ export interface FcHost {
   kerrInfo(): { o: KerrOrbit; t: number; Msec: number; Mm: number; a: number } | null;
   /** about Gargantua: an orbital operation on the geodesics (fc/kerr-ops.ts) */
   kerrOp(kind: "circ" | "ap" | "pe" | "hohmann" | "inc" | "res" | "plane", x?: number | "now" | "pe" | "ap"): OpResult | string;
+  /** an operation previewed — its path drawn on the maps before it is executed —; null: none */
+  preview(burns: Burn[] | null, note: string): void;
   /** the plan flown: set (replacing), executed, cleared; the current one as burns (s from now) */
   setPlan(burns: Burn[], note: string): string | null;
   execute(): string | null;
@@ -169,6 +171,7 @@ export class FlightComputer {
     this.shown = on;
     this.root.hidden = !on;
     if (on) this.setTab(this.tab);
+    else this.host.preview(null, "");
   }
 
   private setTab(t: Tab) {
@@ -177,6 +180,7 @@ export class FlightComputer {
     this.body.replaceChildren();
     this.result.replaceChildren();
     this.pending = null;
+    this.host.preview(null, "");
     const k = this.host.kerr();
     if (k && t !== "land") return this.buildKerr(t);
     if (t === "orbit") this.buildOrbit();
@@ -386,9 +390,12 @@ export class FlightComputer {
   private preview(r: OpResult) {
     this.result.replaceChildren();
     if (!r.ok) {
+      this.host.preview(null, "");
       this.result.append(h("div", "fc-err", r.note));
       return;
     }
+    // (its path on the maps at once — the operation previewed, not yet the plan)
+    this.host.preview(r.burns, r.note);
     const c = this.host.context();
     const B = this.host.budget();
     const card = h("div", "fc-card");
@@ -396,8 +403,12 @@ export class FlightComputer {
     const tab = h("table", "fc-burns");
     // (about the hole the burns are fractions of c: their parts in km/s)
     const big = r.burns.some((b) => len(b.dv) >= 1e5);
-    tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th><th>NRM</th><th>RAD</th><th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
-      `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${part(b.dv[0], big)}</td><td>${part(b.dv[1], big)}</td><td>${part(b.dv[2], big)}</td><td><b>${big ? part(len(b.dv), true) : ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`).join("");
+    // (the normal and radial columns only when a burn has them)
+    const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]) < 0.05 * Math.max(len(b.dv), 1e-9));
+    const showN = !tiny(1), showR = !tiny(2);
+    const col = (on: boolean, x: string) => (on ? x : "");
+    tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th>${col(showN, "<th>NRM</th>")}${col(showR, "<th>RAD</th>")}<th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
+      `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${part(b.dv[0], big)}</td>${col(showN, `<td>${part(b.dv[1], big)}</td>`)}${col(showR, `<td>${part(b.dv[2], big)}</td>`)}<td><b>${big ? part(len(b.dv), true) : ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`).join("");
     card.append(tab);
     const a = r.after;
     if (a && c) {
@@ -418,7 +429,10 @@ export class FlightComputer {
     const set = h("button", "fc-go", "TO THE PLAN");
     set.onclick = () => this.host.say(this.host.setPlan(r.burns, r.note) ?? `Planned: ${r.note} — the map shows it (EXECUTE, or edit the burns)`);
     const no = h("button", "fc-go fc-no", "DISCARD");
-    no.onclick = () => this.result.replaceChildren();
+    no.onclick = () => {
+      this.result.replaceChildren();
+      this.host.preview(null, "");
+    };
     row.append(fly, set, no);
     card.append(row);
     this.result.append(card);

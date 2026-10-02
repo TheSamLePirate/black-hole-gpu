@@ -20,6 +20,8 @@ import { AMBER, CYAN, FONT, OUR_COLOURS } from "./hudkit";
 import { fleet } from "../fleet";
 import { keplerProp } from "../system/our-plan";
 import { VESSELS } from "../vessels";
+import { siteDir, sitesOf } from "../game/sites";
+const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
 const sub3 = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 import { planetFrame, toLocal } from "../landing";
@@ -77,6 +79,11 @@ interface Scene {
   iss?: { q: V3; track: V3[]; target: boolean } | null;
   /** the fleet's craft not flown: where they are, their ground track an orbit ahead (Kepler) */
   crafts?: { id: string; name: string; col: string; q: V3; track: V3[]; target: boolean }[];
+  /** the flight computer's preview over the ground */
+  cand?: V3[];
+  /** the world's landing sites (unit, on its axes), the entry's predicted fall */
+  sites?: { name: string; q: V3; runway: boolean; chosen: boolean }[];
+  entry?: V3[];
   /** the periapsis / apoapsis on the path ahead, with their heights [km] */
   pe: { q: V3; km: number } | null;
   ap: { q: V3; km: number } | null;
@@ -201,6 +208,12 @@ export class GroundTrack {
     return true;
   }
 
+  /** A world's landing sites (unit, on its own axes), the entry's chosen one marked. */
+  private sitesOf(id: string, i: Info) {
+    const chosen = i.entry?.site?.name ?? null;
+    return sitesOf(id).map((st) => ({ name: st.name, q: siteDir(st) as V3, runway: !!st.runway, chosen: st.name === chosen }));
+  }
+
   // ---------------------------------------------------------------------------------- the scene
   private scene(i: Info, t: number): Scene | null {
     const id = this.worldOf(i);
@@ -209,14 +222,20 @@ export class GroundTrack {
     if (i.status!.side === "gargantua") {
       const xi = this.theirXi(i, id, t);
       const F = planetFrame(id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
-      return { id, name, Rkm: (F.R * F.mPerM) / 1e3, ours: false, ship: unit(xi), altKm: i.status!.altKm, sun: null, ahead: [], plan: [], pe: null, ap: null };
+      const lg = i.localGround;
+      return { id, name, Rkm: (F.R * F.mPerM) / 1e3, ours: false, ship: unit(xi), altKm: i.status!.altKm, sun: null, ahead: lg?.ahead ?? [], plan: lg?.plan ?? [], cand: lg?.cand ?? [], sites: this.sitesOf(id, i), entry: [], pe: null, ap: null };
     }
     const b = solarBody(id)!;
     const q = toBodyFixed(id, i.X as V3, t);
     const Rkm = (b.radius * M_METRES) / 1e3;
     const ahead = this.track(i.ourFree as OurPath | null, id, t, b.radius);
     const plan = this.track(i.ourPlan as OurPath | null, id, t, b.radius);
+    const cand = this.track((i.cand?.kind === "ours" ? i.cand.ours : null) as OurPath | null, id, t, b.radius);
+    // (the entry's predicted fall: body-centred home axes → the ground's, as the world stands now)
+    const E = i.entry;
+    const entry = E && E.ours && E.body === id && E.path ? E.path.map((x) => unit(toBodyFixed(id, add3(solarState(id, t).pos as V3, x as V3), t))) : [];
     return {
+      cand: cand?.pts ?? [], sites: this.sitesOf(id, i), entry,
       id, name, Rkm, ours: true, ship: unit(q), altKm: (Math.hypot(...q) - b.radius) * M_METRES / 1e3,
       sun: unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)),
       ahead: ahead?.pts ?? [], plan: plan?.pts ?? [], pe: ahead?.pe ?? null, ap: ahead?.ap ?? null,
@@ -615,6 +634,26 @@ export class GroundTrack {
     if (ship && this.past.id === sc.id) path(this.past.pts.map((p) => p.q).concat([ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
     if (ship) path([ship, ...sc.ahead], CYAN, 1.6, [5, 4]);
     path(sc.plan, AMBER, 1.6, [2, 3]);
+    // the flight computer's preview, the entry's predicted fall
+    if (sc.cand?.length) path(sc.cand, "rgb(196, 140, 255)", 2.2, [7, 4]);
+    if (sc.entry?.length) path(sc.entry, "rgb(255, 154, 74)", 2, [6, 3]);
+    // the world's landing sites: a ring (a runway: a bar), the chosen one bright
+    for (const st of sc.sites ?? []) {
+      const p = at(st.q);
+      if (!p) continue;
+      const col = st.chosen ? "rgb(255, 210, 122)" : "rgba(255, 210, 122, 0.6)";
+      ctx.strokeStyle = col;
+      ctx.fillStyle = col;
+      ctx.lineWidth = (st.chosen ? 2 : 1.2) * dpr;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], (st.chosen ? 5 : 3.5) * dpr, 0, 2 * Math.PI);
+      ctx.stroke();
+      if (st.runway) ctx.fillRect(p[0] - 5 * dpr, p[1] - 0.8 * dpr, 10 * dpr, 1.6 * dpr);
+      ctx.font = `${st.chosen ? 700 : 600} ${(st.chosen ? 10.5 : 9) * dpr}px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(st.name.split(",")[0]!, p[0] + 7 * dpr, p[1]);
+    }
     // the space station: its ground track an orbit ahead, where it is (brighter when it is the target)
     if (sc.iss) {
       const tc = sc.iss.target ? "rgba(95, 255, 208, 0.85)" : "rgba(95, 255, 208, 0.4)";

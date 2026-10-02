@@ -46,9 +46,9 @@ export interface MapHost {
 
 type PlaneMode = "system" | "equator" | "orbit" | "target";
 /** An event on the timeline: its time (scene time), what it is, its name. */
-interface Mark { t: number; kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact"; label: string }
+interface Mark { t: number; kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact" | "cand"; label: string }
 const MARK_COL: Record<Mark["kind"], string> = {
-  node: "#5ad8ff", ca: "#ff8a5c", soi: "#c88cff", pe: "#9fe3ff", ap: "#9fe3ff", arrive: "#ffaa50", impact: "#ff5a46",
+  node: "#5ad8ff", ca: "#ff8a5c", soi: "#c88cff", pe: "#9fe3ff", ap: "#9fe3ff", arrive: "#ffaa50", impact: "#ff5a46", cand: "#c48cff",
 };
 type Proj = { x: number; y: number; z: number; k: number; ok: boolean };
 
@@ -67,6 +67,8 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 };
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const KM = 1.476625e8; // km per M
+/** the flight computer's preview (rgb) */
+const CAND = "196, 140, 255";
 
 /** A length in the map's units for a card: km, AU (ours) — M and km (theirs). */
 function fmtDist(d: number, ours: boolean, s: Settings) {
@@ -297,6 +299,12 @@ export class Map3D {
       if (pp?.times.length) end = Math.max(end, pp.times[pp.times.length - 1]!);
     }
     for (const n of i.plan?.nodes ?? []) end = Math.max(end, n.t);
+    // (the preview: to its last burn and its arrival, a little after)
+    const c = i.cand;
+    if (c) {
+      for (const n of c.nodes) end = Math.max(end, n.t);
+      if (c.arrive) end = Math.max(end, c.arrive.t + 0.08 * (c.arrive.t - t0));
+    }
     // (beyond: up to the encounter with the target along the conics, when there is one)
     const e = this.extFor(i, t0, ours);
     const sc = this.scene;
@@ -313,6 +321,9 @@ export class Map3D {
   private marks(i: Info, t0: number, ours: boolean, sc: MapScene): Mark[] {
     const out: Mark[] = [];
     (i.plan?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "node", label: `Node ${k + 1}` }));
+    // (the preview's burns, and its arrival)
+    (i.cand?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "cand", label: `Preview · burn ${k + 1} · ${i.cand!.note}` }));
+    if (i.cand?.arrive) out.push({ t: i.cand.arrive.t, kind: "cand", label: `Preview · arrival` });
     if (ours) {
       const free = i.ourFree, plan = i.ourPlan;
       const memo = (p: OurPath) => {
@@ -639,7 +650,11 @@ export class Map3D {
     const i = this.lastInfo;
     const sc = this.scene;
     if (!sc || !i) return "hole";
-    if (sc.universe === "gargantua") return "hole";
+    // (Gargantua's side: the world whose frame the ship flies in — else the hole)
+    if (sc.universe === "gargantua") {
+      const w = i.status?.soi;
+      return w && w !== "gargantua" && w !== "hole" && sc.byId.has(w) ? w : "hole";
+    }
     const ref = i.ref ? sc.byId.get(i.ref) : null;
     if (!ref || ref.id === "sun") return "sun";
     return ref.kind === "moon" && ref.parent ? ref.parent : ref.id;
@@ -1186,11 +1201,22 @@ export class Map3D {
   private reach(sc: MapScene, i: Info, fid: string, fb: MapBody | null, F: V3, ship: V3, ours: boolean, t0: number) {
     const dist = (X: V3) => len(sub(X, F));
     if (!ours) {
+      // (a world, the ship about it: the world, the ship's orbit, the preview — not its whole Hill sphere)
+      if (fid !== "hole" && fb && dist(ship) < (Number.isFinite(fb.soi) ? fb.soi : fb.radius * 60)) {
+        let rw = Math.max(fb.radius * 2.4, dist(ship) * 1.25);
+        if (i.path?.fate === "local") for (let j = 0; j < i.path.pts.length; j += 3) rw = Math.max(rw, dist(sub(i.path.pts[j]!, sc.origin(t0))) * 1.1);
+        const cl = i.cand?.local;
+        if (cl && cl.world === fb.id) for (let j = 0; j < cl.pts.length; j += 3) rw = Math.max(rw, len(cl.pts[j]!) * 1.1);
+        return rw;
+      }
       let r = Math.max(dist(ship), 6);
       const hl = sc.hole;
       if (hl?.disk && fid === "hole") r = Math.max(r, hl.diskOuter);
       if (fid !== "hole" && fb) r = Math.min(Math.max(r, fb.radius * 30), Math.max(fb.soi * 2, dist(ship) * 1.3, fb.radius * 30));
-      if (i.path) for (let j = 0; j < i.path.pts.length; j += 4) r = Math.max(r, dist(sub(i.path.pts[j]!, sc.origin(t0 + (j + 1) * i.path.dt))));
+      if (i.path && fid === "hole") for (let j = 0; j < i.path.pts.length; j += 4) r = Math.max(r, dist(sub(i.path.pts[j]!, sc.origin(t0 + (j + 1) * i.path.dt))));
+      // (the preview's path, wherever it goes)
+      const cp = i.cand?.kerr ?? i.cand?.local;
+      if (cp) for (let j = 0; j < cp.pts.length; j += 4) r = Math.max(r, dist(sub(cp.pts[j]!, sc.origin(cp.times[j]!))));
       const tb = sc.byId.get(i.target);
       if (tb && fid === "hole") r = Math.max(r, dist(tb.pos));
       return r * 1.1;
@@ -1203,7 +1229,7 @@ export class Map3D {
     if (fb.id === "sun") {
       if (this.focus === "sun") return 31 * 1.0131;
       let rr = dist(ship);
-      for (const p of [i.ourFree, i.ourPlan]) {
+      for (const p of [i.ourFree, i.ourPlan, i.cand?.ours]) {
         if (!p) continue;
         for (let j = 0; j < p.pts.length; j += 4) rr = Math.max(rr, len(sub(p.pts[j]!, solarState("sun", p.times[j]!).pos)));
       }
@@ -1215,8 +1241,8 @@ export class Map3D {
     // (the ship within reach: it and its paths; far away: the body and its moons)
     const moons = sc.bodies.filter((b) => b.parent === fb.id);
     const shipNear = dist(ship) < cap;
-    let r = shipNear ? Math.max(fb.radius * 8, dist(ship) * 1.2) : Math.max(fb.radius * 12, moons.length ? Math.min(Math.max(...moons.map((m) => dist(m.pos))) * 1.15, fb.radius * 30) : 0);
-    for (const p of solarBody(fb.id) ? [i.ourFree, i.ourPlan] : []) {
+    let r = shipNear ? Math.max(fb.radius * 2.4, dist(ship) * 1.25) : Math.max(fb.radius * 12, moons.length ? Math.min(Math.max(...moons.map((m) => dist(m.pos))) * 1.15, fb.radius * 30) : 0);
+    for (const p of solarBody(fb.id) ? [i.ourFree, i.ourPlan, i.cand?.ours] : []) {
       if (!p) continue;
       for (let j = 0; j < p.pts.length; j += 4) {
         const q = solarState(fb.id, p.times[j]!).pos;
@@ -1658,6 +1684,34 @@ export class Map3D {
       apsides(plan, plan.nodeAt[plan.nodeAt.length - 1]!, "▸ ");
       hits(plan);
     }
+    // the flight computer's preview: the path its operation would fly, before it is executed
+    const cand = i.cand;
+    if (cand && cand.kind === "ours") {
+      const cp = cand.ours;
+      if (cp && cp.pts.length > 1) {
+        const k0 = cp.nodeAt[0] ?? 0;
+        const W = inFrame(cp, k0);
+        line(W, CAND, 0.95, 2.3, [9, 5]);
+        apsides(cp, cp.nodeAt[cp.nodeAt.length - 1] ?? 0, "◇ ");
+        this.candMarks(ctx, cp.nodeAt.map((j) => P(FA(cp.pts[j]!, cp.times[j]!))), cand.note, labels, dpr);
+        if (cand.arrive && (solarBody(cand.arrive.body) || cand.arrive.body === "iss")) {
+          const q = P(FA(ourPos(cand.arrive.body, cand.arrive.t), cand.arrive.t));
+          if (q.ok) {
+            ctx.strokeStyle = `rgba(${CAND}, 0.95)`;
+            ctx.lineWidth = 1.4 * dpr;
+            ctx.setLineDash([3 * dpr, 2 * dpr]);
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, 7 * dpr, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            labels.push({ text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`, x: q.x + 9 * dpr, y: q.y + 3 * dpr, col: CAND, prio: 5, size: 9, weight: 700 });
+          }
+        }
+      } else if (cand.busy) {
+        const q = P(FA(i.X!, t0));
+        if (q.ok) labels.push({ text: "◇ PREVIEW · computing the path…", x: q.x + 12 * dpr, y: q.y + 18 * dpr, col: CAND, prio: 5, size: 9, weight: 700 });
+      }
+    }
     // beyond the prediction: the patched conics (faint, dotted), their lowest points, an impact
     const ext = this.extension(i);
     if (ext && ext.pts.length > 1) {
@@ -1951,6 +2005,71 @@ export class Map3D {
       this.nodeHits = [];
       this.handleHits = [];
     }
+    // the flight computer's planned burns about a world (its two bodies), relative to it
+    const lp = i.localPlan;
+    if (lp && lp.pts.length > 1) {
+      const wp = sc.byId.get(lp.world)?.pos;
+      if (wp) {
+        const W = lp.pts.map((q) => add(q, wp));
+        line(W, "255, 170, 80", 0.95, 1.9, [5, 3]);
+        for (const j of lp.nodeAt) {
+          const q = P(W[j]!);
+          if (q.ok) marker(ctx, "burn", q.x, q.y, 5 * dpr, "rgba(255, 170, 80, 1)");
+        }
+      }
+    }
+    // the flight computer's preview (the hole's geodesics, or a world's two bodies carried on the map)
+    const cand = i.cand;
+    const cp = cand?.kind === "hole" ? cand.kerr : cand?.kind === "local" ? cand.local : null;
+    if (cand && cp && cp.pts.length > 1) {
+      // (about a world: relative to it, put where it is now on the map)
+      const wp = cand.kind === "local" && cand.local ? sc.byId.get(cand.local.world)?.pos ?? null : null;
+      const W = cp.pts.map((q, j) => (wp ? add(q, wp) : at(q, cp.times[j]!)));
+      line(cand.kind === "hole" ? [at(i.X!, t0), ...W] : W, CAND, 0.95, 2.3, [9, 5]);
+      const idx = cand.nodes.map((n) => {
+        const j = cp.times.findIndex((tt) => tt >= n.t);
+        return j < 0 ? cp.pts.length - 1 : j;
+      });
+      this.candMarks(ctx, idx.map((j) => P(W[j]!)), cand.note, labels, dpr);
+      // (the orbit after about the hole: its near and far points)
+      const k1 = idx[idx.length - 1] ?? 0;
+      if (cand.kind === "hole") {
+        let lo = -1, hi = -1;
+        for (let j = k1; j < cp.pts.length; j++) {
+          const r = len(cp.pts[j]!);
+          if (lo < 0 || r < len(cp.pts[lo]!)) lo = j;
+          if (hi < 0 || r > len(cp.pts[hi]!)) hi = j;
+        }
+        for (const [j, name] of [[lo, "Pe"], [hi, "Ap"]] as [number, string][]) {
+          const q = P(W[j]!);
+          if (q.ok && j > k1 && j < cp.pts.length - 1) labels.push({ text: `◇ ${name} ${len(cp.pts[j]!).toFixed(2)} M`, x: q.x + 6 * dpr, y: q.y - 6 * dpr, col: CAND, prio: 4, size: 8.5, weight: 600 });
+        }
+      }
+    }
+  }
+
+  /** The preview's burns: hollow diamonds, numbered, the operation named at the first. */
+  private candMarks(ctx: CanvasRenderingContext2D, places: Proj[], note: string, labels: { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number }[], dpr: number) {
+    places.forEach((q, k) => {
+      if (!q.ok) return;
+      const r = 6.5 * dpr;
+      ctx.strokeStyle = `rgba(${CAND}, 1)`;
+      ctx.fillStyle = "rgba(20, 10, 40, 0.75)";
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(q.x, q.y - r);
+      ctx.lineTo(q.x + r, q.y);
+      ctx.lineTo(q.x, q.y + r);
+      ctx.lineTo(q.x - r, q.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${CAND}, 1)`;
+      ctx.font = `700 ${8.5 * dpr}px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText(`${k + 1}`, q.x, q.y + 3 * dpr);
+      if (k === 0) labels.push({ text: `◇ PREVIEW · ${note}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700 });
+    });
   }
 
   /**

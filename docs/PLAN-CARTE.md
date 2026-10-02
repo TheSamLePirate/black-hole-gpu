@@ -87,7 +87,7 @@ Décisions de l'utilisateur :
 | Phase | État | Commit · fiche |
 |---|---|---|
 | C1 disposition | fait : HUD masqué, panneaux latéraux repliables, bande compacte, cadrage dans la zone libre, densité 1 | · 150 |
-| C2 aperçu du trajet | à faire | |
+| C2 aperçu du trajet | fait : candidat non destructif, tracé 3D/globe/planisphère/frise, mondes de Gargantua (orbite libre, plan, aperçu), sites | · 151 |
 | C3 missions | à faire | |
 | C4 hub = ordinateur de bord | à faire | |
 | C5 carte WebGPU | à faire | |
