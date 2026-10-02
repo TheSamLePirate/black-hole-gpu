@@ -3,8 +3,10 @@
 The minimap (bottom right while flying) and the full-screen map (**M**) are one 3D view: a camera
 orbiting a focus, its angles measured in a reference plane, float64 throughout — from a low Earth orbit
 to the edge of the solar system. Two layers with one projection: the **GPU** (WebGPU, the tracer's own
-device and maps — `gpu.ts`, `shaders/map.wgsl`) draws the bodies, the orbits and the paths; a Canvas 2D
-overlay the marks, labels and handles. The points are projected on the CPU in float64 (the log scale's
+device and maps — `gpu.ts`, `shaders/map.wgsl`) draws the bodies, the orbits and the paths, the
+reference plane's grid and the marks (apsides, nodes, AN / DN, the ship, the closest approaches, the
+spheres of influence — `paint.ts`, drawn there or on the canvas alike); a Canvas 2D overlay the text
+(labels, the node's card, the footer) and the nodes' handle glyphs. The points are projected on the CPU in float64 (the log scale's
 warp included) and handed over in pixels with their view depth. Without WebGPU, or if its pipelines are
 refused, the canvas draws everything itself (`src/ui/map3d/`: `camera.ts` the eased orbit camera, `scene.ts` what each universe holds,
 `map3d.ts` the drawing, gestures and bar). The flight HUD's map panel (`src/ui/flighthud.ts`) puts
@@ -98,7 +100,12 @@ Under the breadcrumb (full screen) or at the bottom of the minimap: where everyt
   in front of and behind it with the planet's shadow; the Sun and the star glowing; Gargantua's horizon,
   its disk (brighter on the approaching side) and photon ring; its worlds drawn as the tracer draws them
   (Miller's water, Mann's ice, Edmunds' plateaus); a field of stars behind. Lit in linear light and
-  encoded for the screen (sRGB): the maps' own colours. The grid is cut round the bodies.
+  encoded for the screen (sRGB): the maps' own colours. The grid is hidden behind them by the same depth
+  as the lines.
+- **The marks on the GPU**: discs, polygons (up to four corners: diamonds, triangles, the ship's
+  chevron), short screen lines and soft discs (a sphere of influence's faint fill), as signed distance
+  fields — anti-aliased at any size, filled and stroked, a disc's rim dashed. They are drawn over the
+  lines, always seen, under the canvas's labels.
 - **The lines on the GPU**: every orbit and path (the free fall, the plan, the preview, the conics, the
   entry, the bodies' arcs in the preview) anti-aliased at any width, round at their joints and ends,
   dashed by their length on the screen, faded with depth. The opaque bodies are drawn into a depth
@@ -161,5 +168,5 @@ broken across the planisphere's edge), drawn at 15 Hz (every frame while dragged
 
 Cost: ~1 ms a frame on the main thread (the orbits cached and re-sampled a few a frame as time goes by);
 on the GPU, four draw calls (the stars, the bodies' depth, the bodies, the lines — a few thousand
-segments). Full screen at 1600×900 holds 60 frames a second (16.7 ms median and
+segments) and a fifth for the marks. Full screen at 1600×900 holds 60 frames a second (16.7 ms median and
 95th percentile, Earth or the whole system in view).

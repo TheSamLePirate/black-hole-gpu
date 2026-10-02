@@ -57,8 +57,9 @@ export interface GpuBody {
 
 const FLOATS = 32;
 const MAX = 256;
-/** Floats per line segment (Seg in map.wgsl). */
+/** Floats per line segment (Seg in map.wgsl), per mark (Mark). */
 const SEG = 20;
+const MARK = 24;
 
 export interface MapTextures {
   hi: GPUTexture;
@@ -91,6 +92,7 @@ export class MapGpu {
   private skyPipe!: GPURenderPipeline;
   private linePipe!: GPURenderPipeline;
   private planiPipe!: GPURenderPipeline;
+  private markPipe!: GPURenderPipeline;
   private uniform: GPUBuffer;
   private inst: GPUBuffer;
   private data = new Float32Array(MAX * FLOATS);
@@ -105,6 +107,11 @@ export class MapGpu {
   private segBuf: GPUBuffer | null = null;
   private lineBind: GPUBindGroup | null = null;
   private depth: GPUTexture | null = null;
+  // the marks: discs, polygons, soft discs (over the lines, under the canvas's labels)
+  private marks = new Float32Array(512 * MARK);
+  private nMark = 0;
+  private markBuf: GPUBuffer | null = null;
+  private markBind: GPUBindGroup | null = null;
   private colours = new Map<string, [number, number, number, number]>();
   // the line being drawn: its style, its last point, its length so far, its last segment
   private ln = { r: 1, g: 1, b: 1, hw: 0.5, k: 1, on: 0, off: 0, x: 0, y: 0, iz: 0, a: 0, s: 0, has: false, last: -1 };
@@ -166,6 +173,11 @@ export class MapGpu {
         vertex: { module, entryPoint: "planiVs" },
         fragment: { module, entryPoint: "planiFs", targets: target },
       });
+      this.markPipe = device.createRenderPipeline({
+        label: "map: marks", layout: "auto", primitive: tri, depthStencil: ds(false, "always"),
+        vertex: { module, entryPoint: "markVs" },
+        fragment: { module, entryPoint: "markFs", targets: target },
+      });
       this.skyBind = device.createBindGroup({ layout: this.skyPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
       this.depthBind = device.createBindGroup({ layout: this.depthPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 1, resource: { buffer: this.inst } }] });
       const err = await device.popErrorScope();
@@ -181,6 +193,7 @@ export class MapGpu {
   begin() {
     this.n = 0;
     this.nSeg = 0;
+    this.nMark = 0;
     this.ln.has = false;
     this.rect = null;
   }
@@ -206,9 +219,7 @@ export class MapGpu {
    */
   line(col: string, width: number, dash?: readonly number[]) {
     this.gap();
-    let c = this.colours.get(col);
-    if (!c) this.colours.set(col, (c = cssColour(col)));
-    const [r, g, b, a] = c;
+    const [r, g, b, a] = this.rgba(col);
     const L = this.ln;
     L.r = r, L.g = g, L.b = b;
     // (a line thinner than a pixel: a pixel wide, fainter)
@@ -249,6 +260,39 @@ export class MapGpu {
     if (L.has && L.last >= 0) this.segs[L.last * SEG + 15] = 1;
     L.has = false;
     L.last = -1;
+  }
+
+  private rgba(col: string | null | undefined): [number, number, number, number] {
+    if (!col) return [0, 0, 0, 0];
+    let c = this.colours.get(col);
+    if (!c) this.colours.set(col, (c = cssColour(col)));
+    return c;
+  }
+  private mark(x: number, y: number, kind: number, n: number, fill: string | null | undefined, stroke: string | null | undefined, r: number, lw: number, dash: number, gap: number, p: number[]) {
+    if (this.nMark * MARK >= this.marks.length) {
+      const grown = new Float32Array(this.marks.length * 2);
+      grown.set(this.marks);
+      this.marks = grown;
+    }
+    const o = this.nMark++ * MARK, d = this.marks;
+    const f = this.rgba(fill), k = this.rgba(stroke);
+    d[o] = x, d[o + 1] = y, d[o + 2] = kind, d[o + 3] = n;
+    d[o + 4] = f[0], d[o + 5] = f[1], d[o + 6] = f[2], d[o + 7] = fill ? f[3] : 0;
+    d[o + 8] = k[0], d[o + 9] = k[1], d[o + 10] = k[2], d[o + 11] = stroke ? k[3] : 0;
+    d[o + 12] = r, d[o + 13] = lw, d[o + 14] = dash, d[o + 15] = gap;
+    for (let j = 0; j < 8; j++) d[o + 16 + j] = p[j] ?? 0;
+  }
+  /** A disc on the screen [px]: filled, stroked (lw [px]; dashed along its rim: dash, gap [px]). */
+  disc(x: number, y: number, r: number, fill?: string | null, stroke?: string | null, lw = 1, dash?: readonly number[]) {
+    this.mark(x, y, 0, 0, fill, stroke, r, lw, dash?.[0] ?? 0, dash?.[1] ?? 0, []);
+  }
+  /** A polygon on the screen: up to 4 corners [px from (x, y), y down], filled, stroked. */
+  poly(x: number, y: number, pts: readonly (readonly [number, number])[], fill?: string | null, stroke?: string | null, lw = 1) {
+    this.mark(x, y, 1, Math.min(pts.length, 4), fill, stroke, 0, lw, 0, 0, pts.slice(0, 4).flat());
+  }
+  /** A soft disc: clear within r0, its colour rising to the rim at r1 [px]. */
+  soft(x: number, y: number, r0: number, r1: number, col: string) {
+    this.mark(x, y, 2, 0, col, null, r0, 0, 0, 0, [0, 0, 0, 0, r1]);
   }
 
   /** The planisphere this frame: the first body's surface (its axes the identity, its light in its own
@@ -300,6 +344,15 @@ export class MapGpu {
       }
       dev.queue.writeBuffer(this.segBuf, 0, this.segs, 0, this.nSeg * SEG);
     }
+    if (this.nMark) {
+      const bytes = this.nMark * MARK * 4;
+      if (!this.markBuf || this.markBuf.size < bytes) {
+        this.markBuf?.destroy();
+        this.markBuf = dev.createBuffer({ size: Math.max(bytes, this.marks.byteLength), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        this.markBind = dev.createBindGroup({ layout: this.markPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 9, resource: { buffer: this.markBuf } }] });
+      }
+      dev.queue.writeBuffer(this.markBuf, 0, this.marks, 0, this.nMark * MARK);
+    }
     if (!this.depth || this.depth.width !== w || this.depth.height !== h) {
       this.depth?.destroy();
       this.depth = dev.createTexture({ size: [w, h], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
@@ -332,6 +385,11 @@ export class MapGpu {
       pass.setPipeline(this.linePipe);
       pass.setBindGroup(0, this.lineBind);
       pass.draw(6, this.nSeg);
+    }
+    if (this.nMark && this.markBind) {
+      pass.setPipeline(this.markPipe);
+      pass.setBindGroup(0, this.markBind);
+      pass.draw(6, this.nMark);
     }
     pass.end();
     dev.queue.submit([enc.finish()]);

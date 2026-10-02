@@ -46,6 +46,18 @@ struct B {
 @group(0) @binding(7) var samp: sampler;
 @group(0) @binding(8) var<storage, read> segs: array<Seg>;
 
+/** A mark on the screen: a disc, a polygon (up to 4 corners, around its centre [px]), or a soft disc
+ *  (a sphere of influence's faint fill) — filled, stroked (a disc's stroke dashed along its rim). */
+struct Mark {
+  c: vec4f,      // centre x, y [px]; kind (0 disc, 1 polygon, 2 soft disc); corners
+  fill: vec4f,   // display rgb, alpha (0: none)
+  stroke: vec4f, // display rgb, alpha (0: none)
+  s: vec4f,      // radius [px] (a soft disc: where its fill starts), stroke width, dash, gap [px]
+  p01: vec4f,    // corners 0, 1 [px from the centre, y down]
+  p23: vec4f,    // corners 2, 3; a soft disc: its outer radius in p23.x
+};
+@group(0) @binding(9) var<storage, read> marks: array<Mark>;
+
 /** A view depth's place in the depth buffer (0 near … 1 far, logarithmic). */
 fn depthOf(z: f32) -> f32 {
   return clamp((log2(max(z, 1e-30)) - u.centre.z) * u.centre.w, 0.0, 1.0);
@@ -524,4 +536,80 @@ fn planiFs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   // (no glint: a map seen from straight above everywhere would show one bright blob)
   let col = surface(b, n, n, -n, b.L.xyz, lod, b.k.z > 0.5, 0.0);
   return toDisplay(vec4f(col, 1.0));
+}
+
+// ------------------------------------------------------------------------------------ the marks
+struct MOut {
+  @builtin(position) pos: vec4f,
+  @location(0) @interpolate(flat) id: u32,
+  @location(1) @interpolate(linear) q: vec2f,
+};
+
+fn markReach(m: Mark) -> f32 {
+  var r = m.s.x;
+  if (m.c.z > 1.5) { r = m.p23.x; }
+  if (m.c.z > 0.5 && m.c.z < 1.5) {
+    r = max(max(length(m.p01.xy), length(m.p01.zw)), max(length(m.p23.xy), length(m.p23.zw)));
+  }
+  return r + m.s.y + 1.5;
+}
+
+@vertex
+fn markVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> MOut {
+  let m = marks[ii];
+  let e = markReach(m);
+  let cs = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0))[vi];
+  let q = cs * e;
+  let p = m.c.xy + q;
+  var o: MOut;
+  o.id = ii;
+  o.q = q;
+  o.pos = vec4f(p.x / u.size.x * 2.0 - 1.0, 1.0 - p.y / u.size.y * 2.0, 0.0, 1.0);
+  return o;
+}
+
+/** The signed distance to a polygon of n corners (< 0 inside; any simple polygon, concave too). */
+fn polyDist(q: vec2f, m: Mark) -> f32 {
+  let n = i32(m.c.w);
+  var v = array<vec2f, 4>(m.p01.xy, m.p01.zw, m.p23.xy, m.p23.zw);
+  var d = dot(q - v[0], q - v[0]);
+  var sgn = 1.0;
+  var j = n - 1;
+  for (var i = 0; i < n; i++) {
+    let e = v[j] - v[i];
+    let w = q - v[i];
+    let b = w - e * clamp(dot(w, e) / max(dot(e, e), 1e-6), 0.0, 1.0);
+    d = min(d, dot(b, b));
+    let c = vec3<bool>((q.y >= v[i].y), (q.y < v[j].y), (e.x * w.y > e.y * w.x));
+    if (all(c) || all(!c)) { sgn = -sgn; }
+    j = i;
+  }
+  return sgn * sqrt(d);
+}
+
+@fragment
+fn markFs(in: MOut) -> @location(0) vec4f {
+  let m = marks[in.id];
+  let kind = m.c.z;
+  let r = length(in.q);
+  if (kind > 1.5) {
+    // a soft disc: clear inside, rising to its rim
+    let a = m.fill.a * smoothstep(m.s.x, m.p23.x, r) * clamp(m.p23.x + 0.5 - r, 0.0, 1.0);
+    if (a <= 0.002) { discard; }
+    return vec4f(m.fill.rgb * a, a);
+  }
+  var d: f32;
+  if (kind < 0.5) { d = r - m.s.x; } else { d = polyDist(in.q, m); }
+  let fa = m.fill.a * clamp(0.5 - d, 0.0, 1.0);
+  var sa = m.stroke.a * clamp(m.s.y * 0.5 + 0.5 - abs(d), 0.0, 1.0);
+  // (a disc's stroke dashed along its rim)
+  if (kind < 0.5 && m.s.z > 0.0 && sa > 0.0) {
+    let s = (atan2(in.q.y, in.q.x) + PI) * m.s.x;
+    let per = m.s.z + m.s.w;
+    let ph = s - per * floor(s / per);
+    sa *= clamp(min(ph, m.s.z - ph) + 0.5, 0.0, 1.0);
+  }
+  let a = sa + fa * (1.0 - sa);
+  if (a <= 0.002) { discard; }
+  return vec4f(m.stroke.rgb * sa + m.fill.rgb * fa * (1.0 - sa), a);
 }

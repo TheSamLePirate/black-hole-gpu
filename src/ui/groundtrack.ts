@@ -22,6 +22,7 @@ import { keplerProp } from "../system/our-plan";
 import { VESSELS } from "../vessels";
 import { siteDir, sitesOf } from "../game/sites";
 import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./map3d/gpu";
+import { Paint } from "./map3d/paint";
 import { MAPS_HI, MAPS_LO } from "../system/solar";
 const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
@@ -94,6 +95,8 @@ interface Scene {
 export class GroundTrack {
   readonly stage = h("div", "gt-stage");
   private canvas = h("canvas", "gt-canvas");
+  /** the marks and the graticule: on the GPU when there is one, else on the canvas */
+  private pen = new Paint(this.canvas.getContext("2d")!);
   private read = h("div", "gt-read");
   private tag = h("div", "gt-tag");
   mode: GroundMode = "globe";
@@ -452,6 +455,7 @@ export class GroundTrack {
 
     // on the GPU: the world's own map at the screen's resolution, lit, its air — the canvas over it
     const G = this.gpuLayer();
+    this.pen.G = G;
     // (the globe seen from 100 radii: a sphere of radius 1 there)
     const far = 100;
     if (G) {
@@ -486,6 +490,17 @@ export class GroundTrack {
     // the graticule: every 30° (the equator and the prime meridian brighter)
     ctx.lineWidth = 1 * dpr;
     const line = (pts: V3[], col: string) => {
+      // (on the GPU: anti-aliased, the far side left out)
+      if (G) {
+        G.line(col, 1 * dpr);
+        for (const q of pts) {
+          const p = proj(q);
+          if (p.vis) G.to(p.x, p.y, 0, 1);
+          else G.gap();
+        }
+        G.gap();
+        return;
+      }
       ctx.strokeStyle = col;
       ctx.beginPath();
       let on = false;
@@ -574,6 +589,7 @@ export class GroundTrack {
     // on the GPU: the world's surface pixel by pixel — the map at the screen's resolution, lit by the Sun
     // (the terminator, the Earth's city lights at night), the tracks over it
     const G = this.gpuLayer();
+    this.pen.G = G;
     if (G) {
       G.canvas.style.display = "";
       G.begin();
@@ -610,26 +626,17 @@ export class GroundTrack {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(c, x0, y0, mw, mh);
     }
-    // the graticule
-    ctx.lineWidth = 1 * dpr;
+    // the graticule, the frame
+    const pt = this.pen;
     for (let k = 0; k <= 12; k++) {
       const x = x0 + (k / 12) * mw;
-      ctx.strokeStyle = k === 6 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)";
-      ctx.beginPath();
-      ctx.moveTo(x, y0);
-      ctx.lineTo(x, y0 + mh);
-      ctx.stroke();
+      pt.path([[x, y0], [x, y0 + mh]], k === 6 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)", 1 * dpr);
     }
     for (let k = 1; k < 6; k++) {
       const y = y0 + (k / 6) * mh;
-      ctx.strokeStyle = k === 3 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)";
-      ctx.beginPath();
-      ctx.moveTo(x0, y);
-      ctx.lineTo(x0 + mw, y);
-      ctx.stroke();
+      pt.path([[x0, y], [x0 + mw, y]], k === 3 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)", 1 * dpr);
     }
-    ctx.strokeStyle = "rgba(160, 210, 255, 0.35)";
-    ctx.strokeRect(x0, y0, mw, mh);
+    pt.path([[x0, y0], [x0 + mw, y0], [x0 + mw, y0 + mh], [x0, y0 + mh], [x0, y0]], "rgba(160, 210, 255, 0.35)", 1 * dpr);
     ctx.save();
     ctx.beginPath();
     ctx.rect(x0, y0, mw, mh);
@@ -646,6 +653,7 @@ export class GroundTrack {
    * its edge is broken there), 0 on the globe.
    */
   private overlays(ctx: CanvasRenderingContext2D, dpr: number, sc: Scene, at: (q: V3) => [number, number] | null, wrap: number, G: MapGpu | null = null) {
+    const pt = this.pen;
     const path = (pts: V3[], col: string, width: number, dash: number[] = [], alpha?: (k: number) => number) => {
       if (pts.length < 2) return;
       // (on the GPU: anti-aliased, faded along, broken where hidden or across the planisphere's edge)
@@ -720,13 +728,9 @@ export class GroundTrack {
       const p = at(st.q);
       if (!p) continue;
       const col = st.chosen ? "rgb(255, 210, 122)" : "rgba(255, 210, 122, 0.6)";
-      ctx.strokeStyle = col;
+      pt.disc(p[0], p[1], (st.chosen ? 5 : 3.5) * dpr, null, col, (st.chosen ? 2 : 1.2) * dpr);
+      if (st.runway) pt.poly(p[0], p[1], [[-5 * dpr, -0.8 * dpr], [5 * dpr, -0.8 * dpr], [5 * dpr, 0.8 * dpr], [-5 * dpr, 0.8 * dpr]], col);
       ctx.fillStyle = col;
-      ctx.lineWidth = (st.chosen ? 2 : 1.2) * dpr;
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], (st.chosen ? 5 : 3.5) * dpr, 0, 2 * Math.PI);
-      ctx.stroke();
-      if (st.runway) ctx.fillRect(p[0] - 5 * dpr, p[1] - 0.8 * dpr, 10 * dpr, 1.6 * dpr);
       ctx.font = `${st.chosen ? 700 : 600} ${(st.chosen ? 10.5 : 9) * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -738,12 +742,11 @@ export class GroundTrack {
       path(sc.iss.track, tc, sc.iss.target ? 1.4 : 1, [4, 3]);
       const p = at(sc.iss.q);
       if (p) {
-        ctx.fillStyle = "rgb(95, 255, 208)";
-        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.lineWidth = 1 * dpr;
         // (a station: a body and its wings)
-        ctx.fillRect(p[0] - 2.5 * dpr, p[1] - 2.5 * dpr, 5 * dpr, 5 * dpr);
-        ctx.fillRect(p[0] - 8 * dpr, p[1] - 1 * dpr, 16 * dpr, 2 * dpr);
+        const box = (w: number, hh: number) => [[-w, -hh], [w, -hh], [w, hh], [-w, hh]].map(([u, v]) => [u! * dpr, v! * dpr] as const);
+        pt.poly(p[0], p[1], box(8, 1), "rgb(95, 255, 208)");
+        pt.poly(p[0], p[1], box(2.5, 2.5), "rgb(95, 255, 208)");
+        ctx.fillStyle = "rgb(95, 255, 208)";
         ctx.font = `700 ${10 * dpr}px ${FONT}`;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
@@ -755,14 +758,8 @@ export class GroundTrack {
       path(c.track, `rgba(${c.col}, ${c.target ? 0.85 : 0.35})`, c.target ? 1.4 : 1, [4, 3]);
       const p = at(c.q);
       if (!p) continue;
+      pt.poly(p[0], p[1], [[0, -4 * dpr], [4 * dpr, 0], [0, 4 * dpr], [-4 * dpr, 0]], `rgb(${c.col})`);
       ctx.fillStyle = `rgb(${c.col})`;
-      ctx.beginPath();
-      ctx.moveTo(p[0], p[1] - 4 * dpr);
-      ctx.lineTo(p[0] + 4 * dpr, p[1]);
-      ctx.lineTo(p[0], p[1] + 4 * dpr);
-      ctx.lineTo(p[0] - 4 * dpr, p[1]);
-      ctx.closePath();
-      ctx.fill();
       ctx.font = `700 ${10 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -772,18 +769,10 @@ export class GroundTrack {
     if (sc.sun) {
       const p = at(sc.sun);
       if (p) {
-        ctx.fillStyle = "rgba(255, 220, 120, 0.95)";
-        ctx.strokeStyle = "rgba(255, 220, 120, 0.7)";
-        ctx.lineWidth = 1.2 * dpr;
-        ctx.beginPath();
-        ctx.arc(p[0], p[1], 3.2 * dpr, 0, 2 * Math.PI);
-        ctx.fill();
+        pt.disc(p[0], p[1], 3.2 * dpr, "rgba(255, 220, 120, 0.95)");
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * 2 * Math.PI;
-          ctx.beginPath();
-          ctx.moveTo(p[0] + Math.cos(a) * 5 * dpr, p[1] + Math.sin(a) * 5 * dpr);
-          ctx.lineTo(p[0] + Math.cos(a) * 7.5 * dpr, p[1] + Math.sin(a) * 7.5 * dpr);
-          ctx.stroke();
+          pt.path([[p[0] + Math.cos(a) * 5 * dpr, p[1] + Math.sin(a) * 5 * dpr], [p[0] + Math.cos(a) * 7.5 * dpr, p[1] + Math.sin(a) * 7.5 * dpr]], "rgba(255, 220, 120, 0.7)", 1.2 * dpr);
         }
       }
     }
@@ -792,13 +781,8 @@ export class GroundTrack {
     for (const [m, lab] of [[sc.pe, "Pe"], [sc.ap, "Ap"]] as const) {
       const p = m && at(m.q);
       if (!m || !p) continue;
+      pt.poly(p[0], p[1], [[0, -4 * dpr], [4 * dpr, 0], [0, 4 * dpr], [-4 * dpr, 0]], "#9fe3ff");
       ctx.fillStyle = "#9fe3ff";
-      ctx.beginPath();
-      ctx.moveTo(p[0], p[1] - 4 * dpr);
-      ctx.lineTo(p[0] + 4 * dpr, p[1]);
-      ctx.lineTo(p[0], p[1] + 4 * dpr);
-      ctx.lineTo(p[0] - 4 * dpr, p[1]);
-      ctx.fill();
       ctx.textAlign = "left";
       ctx.fillText(`${lab} ${fmtKm(m.km)}`, p[0] + 7 * dpr, p[1]);
     }
@@ -807,15 +791,8 @@ export class GroundTrack {
     if (pk) {
       const r = 6 * dpr;
       for (const [lw, col] of [[3.5, "rgba(0, 0, 0, 0.6)"], [1.6, "#6fe3a1"]] as const) {
-        ctx.lineWidth = lw * dpr;
-        ctx.strokeStyle = col;
-        ctx.beginPath();
-        ctx.arc(pk[0], pk[1], r, 0, 2 * Math.PI);
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          ctx.moveTo(pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45);
-          ctx.lineTo(pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8);
-        }
-        ctx.stroke();
+        pt.disc(pk[0], pk[1], r, null, col, lw * dpr);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) pt.path([[pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45], [pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8]], col, lw * dpr);
       }
     }
     // the ship: a chevron along its track
@@ -827,22 +804,9 @@ export class GroundTrack {
       const a = at(qa), b = at(qb);
       let ang = -Math.PI / 2;
       if (a && b && Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.1 && !(wrap && Math.abs(a[0] - b[0]) > wrap / 2)) ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
-      ctx.save();
-      ctx.translate(p[0], p[1]);
-      ctx.rotate(ang);
-      const r = 7 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(-0.7 * r, 0.65 * r);
-      ctx.lineTo(-0.35 * r, 0);
-      ctx.lineTo(-0.7 * r, -0.65 * r);
-      ctx.closePath();
-      ctx.fillStyle = AMBER;
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.7)";
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.stroke();
-      ctx.fill();
-      ctx.restore();
+      const r = 7 * dpr, ca = Math.cos(ang), sa = Math.sin(ang);
+      const turn = (x: number, y: number) => [x * ca - y * sa, x * sa + y * ca] as const;
+      pt.poly(p[0], p[1], [turn(r, 0), turn(-0.7 * r, 0.65 * r), turn(-0.35 * r, 0), turn(-0.7 * r, -0.65 * r)], AMBER, "rgba(0, 0, 0, 0.7)", 1.5 * dpr);
     }
   }
 

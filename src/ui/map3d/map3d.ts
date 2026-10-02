@@ -23,6 +23,7 @@ import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
 import { extendTheirs } from "../../system/their-extend";
 import { plan as planJob } from "../../system/plan-client";
+import { Paint } from "./paint";
 import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./gpu";
 import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
 
@@ -94,6 +95,8 @@ const GROUPED = new Intl.NumberFormat("en-US");
 
 export class Map3D {
   readonly canvas = h("canvas", "fl-map");
+  /** the marks: on the GPU when the map has its layer, else on the canvas */
+  private paint = new Paint(this.canvas.getContext("2d")!);
   /** the bodies on the GPU, under the canvas (null: none — the canvas draws them) */
   private gpu: MapGpu | null = null;
   private gpuTried = false;
@@ -966,6 +969,8 @@ export class Map3D {
     this.syncLegend(!!(i.ref && i.X), ins ?? null);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, cw, ch);
+    const pt = this.paint;
+    pt.G = G;
     this.lastInfo = i;
     this.bodyHits = [];
     this.pathHits = [];
@@ -1072,19 +1077,8 @@ export class Map3D {
     // (the GPU's bodies are solid: what they hide is not drawn, the grid cut round them)
     const hideK = 0.22;
 
-    // ---- the reference plane's grid (around the focus)
-    if (G && occluders.length) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, cw, ch);
-      for (const o of occluders) {
-        ctx.moveTo(o.x + o.r, o.y);
-        ctx.arc(o.x, o.y, o.r, 0, 2 * Math.PI, true);
-      }
-      ctx.clip("evenodd");
-      this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
-      ctx.restore();
-    } else this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
+    // ---- the reference plane's grid (around the focus; on the GPU, hidden behind the bodies by depth)
+    this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
 
     // a polyline (its points offset by off), depth-cued, broken behind the camera, faint where a body hides it
     // — on the GPU: anti-aliased, hidden pixel by pixel where a body stands in front of it
@@ -1201,19 +1195,9 @@ export class Map3D {
       if (!p.ok) continue;
       const R = rw(b.pos, b.soi) * p.k;
       if (R < 6 * dpr || R > 6 * Math.max(cw, ch)) continue;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, R, 0, 2 * Math.PI);
-      ctx.setLineDash([3 * dpr, 4 * dpr]);
-      ctx.strokeStyle = `rgba(${b.col}, ${mine ? 0.55 : 0.22})`;
-      ctx.lineWidth = (mine ? 1.3 : 1) * dpr;
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // (a faint fill: the sphere reads as a volume)
-      const gr = ctx.createRadialGradient(p.x, p.y, R * 0.6, p.x, p.y, R);
-      gr.addColorStop(0, `rgba(${b.col}, 0)`);
-      gr.addColorStop(1, `rgba(${b.col}, ${mine ? 0.06 : 0.03})`);
-      ctx.fillStyle = gr;
-      ctx.fill();
+      // (a faint fill: the sphere reads as a volume; its rim dashed)
+      pt.soft(p.x, p.y, R * 0.6, R, b.col, mine ? 0.06 : 0.03);
+      pt.disc(p.x, p.y, R, null, `rgba(${b.col}, ${mine ? 0.55 : 0.22})`, (mine ? 1.3 : 1) * dpr, [3 * dpr, 4 * dpr]);
     }
 
     // ---- bodies, back to front
@@ -1229,16 +1213,11 @@ export class Map3D {
       const r = rw(b.pos, b.radius) * p.k;
       // (on the GPU: textured, lit — the station and the craft stay the canvas's dots)
       const craft = ["iss", "ranger", "lander", "endurance"].includes(b.id);
-      if (!G || craft || !this.gpuBody(G, sc, b, tp, dpr, pw, rw)) this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
+      if (G && craft) pt.disc(p.x, p.y, Math.max(r, 3.2 * dpr), `rgba(${b.col}, 0.95)`, "rgba(0, 0, 0, 0.5)", 1 * dpr);
+      else if (!G || !this.gpuBody(G, sc, b, tp, dpr, pw, rw)) this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
       const shown = Math.max(r, b.kind === "star" ? 5 * dpr : moon ? 2 * dpr : 3.2 * dpr);
       this.bodyHits.push({ id: b.id, x: p.x, y: p.y, r: shown });
-      if (b.id === tgt) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, shown + 5 * dpr, 0, 2 * Math.PI);
-        ctx.strokeStyle = "rgba(255, 138, 92, 0.95)";
-        ctx.lineWidth = 1.4 * dpr;
-        ctx.stroke();
-      }
+      if (b.id === tgt) pt.disc(p.x, p.y, shown + 5 * dpr, null, "rgba(255, 138, 92, 0.95)", 1.4 * dpr);
       const prio = b.id === fid ? 5 : b.id === tgt ? 4 : b.id === i.ref ? 3 : b.kind === "moon" ? 1 : 2;
       labels.push({ text: b.name, x: p.x + shown + 4 * dpr, y: p.y - 3 * dpr, col: b.col, prio, size: moon ? 8.5 : 9.5, weight: moon ? 500 : 600, ax: p.x, ay: p.y, ar: shown + 3 * dpr });
     }
@@ -1250,22 +1229,10 @@ export class Map3D {
       const foot = sub(Xw, scale(pn, hgt));
       const a = cam.project(Xw), b = cam.project(foot);
       if (a.z <= near || b.z <= near || Math.hypot(a.x - b.x, a.y - b.y) < 4 * dpr) return;
-      ctx.strokeStyle = `rgba(${col}, 0.45)`;
-      ctx.lineWidth = 1 * dpr;
-      ctx.setLineDash(hgt < 0 ? [2 * dpr, 3 * dpr] : []);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      pt.path([[a.x, a.y], [b.x, b.y]], `rgba(${col}, 0.45)`, 1 * dpr, hgt < 0 ? [2 * dpr, 3 * dpr] : undefined);
       // (its foot: a small ellipse in the plane)
       const ring = circle3(foot, cam.cur.dist * 0.012, pn, 24).map((q) => cam.project(q));
-      if (ring.every((q) => q.z > near)) {
-        ctx.beginPath();
-        ring.forEach((q, j) => (j ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
-        ctx.strokeStyle = `rgba(${col}, 0.5)`;
-        ctx.stroke();
-      }
+      if (ring.every((q) => q.z > near)) pt.path(ring.map((q) => [q.x, q.y] as const), `rgba(${col}, 0.5)`, 1 * dpr);
     };
     if (Math.abs(this.cam.cur.pitch) < 1.45) {
       stem(ship, "124, 214, 255");
@@ -1403,8 +1370,11 @@ export class Map3D {
     const edge = Math.abs(Math.sin(cam.cur.pitch));
     const baseA = 0.05 + 0.08 * edge;
     ctx.lineWidth = 1 * dpr;
+    const G = this.paint.G;
     for (const { r, R } of radii) {
+      const fade = clamp(1.6 - r / (D * 1.6), 0, 1);
       ctx.beginPath();
+      G?.line("124, 214, 255", 1 * dpr);
       let open = false;
       for (let j = 0; j <= 96; j++) {
         const a = (j / 96) * 2 * Math.PI;
@@ -1412,15 +1382,19 @@ export class Map3D {
         const p = cam.project(X);
         if (p.z <= near) {
           open = false;
+          G?.gap();
           continue;
         }
-        if (open) ctx.lineTo(p.x, p.y);
+        if (G) G.to(p.x, p.y, p.z, baseA * fade);
+        else if (open) ctx.lineTo(p.x, p.y);
         else ctx.moveTo(p.x, p.y);
         open = true;
       }
-      const fade = clamp(1.6 - r / (D * 1.6), 0, 1);
-      ctx.strokeStyle = `rgba(124, 214, 255, ${(baseA * fade).toFixed(3)})`;
-      ctx.stroke();
+      G?.gap();
+      if (!G) {
+        ctx.strokeStyle = `rgba(124, 214, 255, ${(baseA * fade).toFixed(3)})`;
+        ctx.stroke();
+      }
       // its radius, along the reference direction
       const lp = cam.project(add(W, scale(e1, r)));
       if (lp.z > near && fade > 0.2 && lp.x > 0 && lp.x < cw && lp.y > 0 && lp.y < ch) {
@@ -1437,15 +1411,25 @@ export class Map3D {
       const d = add(scale(e1, Math.cos(a)), scale(e2, Math.sin(a)));
       const p0 = cam.project(add(W, scale(d, Rmax * 0.04))), p1 = cam.project(add(W, scale(d, Rmax)));
       if (p0.z <= near || p1.z <= near) continue;
-      const gr = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
       const a0 = j === 0 ? 0.28 : 0.1 * (0.4 + edge);
-      gr.addColorStop(0, `rgba(124, 214, 255, ${a0})`);
-      gr.addColorStop(1, "rgba(124, 214, 255, 0)");
-      ctx.strokeStyle = gr;
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.stroke();
+      if (G) {
+        // (fading out along: a few points, the depth right along it)
+        G.line("124, 214, 255", 1 * dpr);
+        for (let k = 0; k <= 8; k++) {
+          const q = cam.project(add(W, scale(d, Rmax * (0.04 + 0.96 * (k / 8)))));
+          if (q.z > near) G.to(q.x, q.y, q.z, a0 * (1 - k / 8));
+        }
+        G.gap();
+      } else {
+        const gr = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+        gr.addColorStop(0, `rgba(124, 214, 255, ${a0})`);
+        gr.addColorStop(1, "rgba(124, 214, 255, 0)");
+        ctx.strokeStyle = gr;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
       if (j === 0 && p1.x > 0 && p1.x < cw && p1.y > 0 && p1.y < ch) {
         ctx.fillStyle = "rgba(124, 214, 255, 0.4)";
         ctx.font = `600 ${11 * dpr}px ${FONT}`;
@@ -1693,6 +1677,12 @@ export class Map3D {
     }
   }
 
+  /** An ✕: an impact. */
+  private cross(x: number, y: number, r: number, col: string, lw: number) {
+    this.paint.path([[x - r, y - r], [x + r, y + r]], col, lw);
+    this.paint.path([[x + r, y - r], [x - r, y + r]], col, lw);
+  }
+
   private drawShip(ctx: CanvasRenderingContext2D, i: Info, ship: V3, vel: V3, P: (X: V3) => Proj, dpr: number, ours: boolean) {
     const p = P(ship);
     if (!p.ok) return;
@@ -1704,40 +1694,21 @@ export class Map3D {
       const q = P(add(ship, scale(dir, (this.cam.cur.dist * 0.05) / dl)));
       if (q.ok && Math.hypot(q.x - p.x, q.y - p.y) > 0.5) a = Math.atan2(q.y - p.y, q.x - p.x);
     }
+    const pt = this.paint;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, (9 + 4 * pulse) * dpr, 0, 2 * Math.PI);
-    ctx.strokeStyle = `rgba(124, 214, 255, ${0.25 + 0.2 * (1 - pulse)})`;
-    ctx.lineWidth = 1 * dpr;
-    ctx.stroke();
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(a);
-    ctx.beginPath();
-    ctx.moveTo(9 * dpr, 0);
-    ctx.lineTo(-5 * dpr, 5.5 * dpr);
-    ctx.lineTo(-2.5 * dpr, 0);
-    ctx.lineTo(-5 * dpr, -5.5 * dpr);
-    ctx.closePath();
-    ctx.fillStyle = "#ffc85a";
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.lineWidth = 1 * dpr;
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    // its velocity (a short tick)
+    pt.disc(p.x, p.y, (9 + 4 * pulse) * dpr, null, `rgba(124, 214, 255, ${(0.25 + 0.2 * (1 - pulse)).toFixed(3)})`, 1 * dpr);
+    // its velocity (a short tick, under the chevron)
     if (dl > 0 && ours) {
       const q = P(add(ship, scale(vel, (this.cam.cur.dist * 0.06) / dl)));
       if (q.ok) {
         const l = Math.hypot(q.x - p.x, q.y - p.y) || 1;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + ((q.x - p.x) / l) * 20 * dpr, p.y + ((q.y - p.y) / l) * 20 * dpr);
-        ctx.strokeStyle = "rgba(124, 214, 255, 0.9)";
-        ctx.lineWidth = 1.4 * dpr;
-        ctx.stroke();
+        pt.path([[p.x, p.y], [p.x + ((q.x - p.x) / l) * 20 * dpr, p.y + ((q.y - p.y) / l) * 20 * dpr]], "rgba(124, 214, 255, 0.9)", 1.4 * dpr);
       }
     }
+    // the chevron, turned to the heading
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const turn = (x: number, y: number) => [(x * ca - y * sa) * dpr, (x * sa + y * ca) * dpr] as const;
+    pt.poly(p.x, p.y, [turn(9, 0), turn(-5, 5.5), turn(-2.5, 0), turn(-5, -5.5)], "#ffc85a", "rgba(0, 0, 0, 0.6)", 1 * dpr);
   }
 
   /**
@@ -1750,13 +1721,7 @@ export class Map3D {
     const ring = (X: V3, col: string, r: number) => {
       const p = P(X);
       if (!p.ok) return null;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r * dpr, 0, 2 * Math.PI);
-      ctx.strokeStyle = `rgba(${col}, 0.55)`;
-      ctx.lineWidth = 1 * dpr;
-      ctx.setLineDash([2 * dpr, 2 * dpr]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      this.paint.disc(p.x, p.y, r * dpr, null, `rgba(${col}, 0.55)`, 1 * dpr, [2 * dpr, 2 * dpr]);
       return p;
     };
     const sp = ring(shipNow, "124, 214, 255", 5);
@@ -1821,20 +1786,8 @@ export class Map3D {
       if (!p.ok) continue;
       const up = b > a;
       marks++;
-      ctx.fillStyle = up ? "rgba(111, 227, 161, 0.95)" : "rgba(255, 179, 92, 0.95)";
-      ctx.beginPath();
       const r = 4.5 * dpr;
-      if (up) {
-        ctx.moveTo(p.x, p.y - r);
-        ctx.lineTo(p.x + r, p.y + r * 0.7);
-        ctx.lineTo(p.x - r, p.y + r * 0.7);
-      } else {
-        ctx.moveTo(p.x, p.y + r);
-        ctx.lineTo(p.x + r, p.y - r * 0.7);
-        ctx.lineTo(p.x - r, p.y - r * 0.7);
-      }
-      ctx.closePath();
-      ctx.fill();
+      this.paint.poly(p.x, p.y, up ? [[0, -r], [r, r * 0.7], [-r, r * 0.7]] : [[0, r], [r, -r * 0.7], [-r, -r * 0.7]], up ? "rgba(111, 227, 161, 0.95)" : "rgba(255, 179, 92, 0.95)");
       labels.push({ text: up ? "AN" : "DN", x: p.x + 6 * dpr, y: p.y + 3 * dpr, col: up ? "111, 227, 161" : "255, 179, 92", prio: 2, size: 8.5, weight: 700, ax: p.x, ay: p.y, ar: 5 * dpr });
     }
   }
@@ -1866,10 +1819,7 @@ export class Map3D {
     const tag = (X: V3, text: string, col: string, below = false, prio = 3) => {
       const p = P(X);
       if (!p.ok) return;
-      ctx.fillStyle = `rgb(${col})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.6 * dpr, 0, 2 * Math.PI);
-      ctx.fill();
+      this.paint.disc(p.x, p.y, 2.6 * dpr, `rgb(${col})`);
       labels.push({ text, x: p.x + 5 * dpr, y: p.y + (below ? 12 : -5) * dpr, col, prio, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 4 * dpr });
     };
     const km = (d: number) => fmtDist(d, true, s);
@@ -1923,12 +1873,7 @@ export class Map3D {
       if (free.fate === "impact") {
         const q = P(pts[pts.length - 1]!);
         if (q.ok) {
-          ctx.strokeStyle = RED;
-          ctx.lineWidth = 2 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(q.x - 5 * dpr, q.y - 5 * dpr); ctx.lineTo(q.x + 5 * dpr, q.y + 5 * dpr);
-          ctx.moveTo(q.x + 5 * dpr, q.y - 5 * dpr); ctx.lineTo(q.x - 5 * dpr, q.y + 5 * dpr);
-          ctx.stroke();
+          this.cross(q.x, q.y, 5 * dpr, RED, 2 * dpr);
           labels.push({ text: `IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, x: q.x + 7 * dpr, y: q.y + 4 * dpr, col: "255, 90, 90", prio: 5, size: 9.5, weight: 700, ax: q.x, ay: q.y, ar: 6 * dpr });
         }
       }
@@ -1952,13 +1897,7 @@ export class Map3D {
         if (cand.arrive && (solarBody(cand.arrive.body) || cand.arrive.body === "iss")) {
           const q = P(FA(ourPos(cand.arrive.body, cand.arrive.t), cand.arrive.t));
           if (q.ok) {
-            ctx.strokeStyle = `rgba(${CAND}, 0.95)`;
-            ctx.lineWidth = 1.4 * dpr;
-            ctx.setLineDash([3 * dpr, 2 * dpr]);
-            ctx.beginPath();
-            ctx.arc(q.x, q.y, 7 * dpr, 0, 2 * Math.PI);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            this.paint.disc(q.x, q.y, 7 * dpr, null, `rgba(${CAND}, 0.95)`, 1.4 * dpr, [3 * dpr, 2 * dpr]);
             labels.push({ text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`, x: q.x + 9 * dpr, y: q.y + 3 * dpr, col: CAND, prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
           }
         }
@@ -1978,14 +1917,7 @@ export class Map3D {
       }
       if (ext.fate === "impact") {
         const q = P(FA(ext.pts[ext.pts.length - 1]!, ext.times[ext.times.length - 1]!));
-        if (q.ok) {
-          ctx.strokeStyle = RED;
-          ctx.lineWidth = 1.6 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(q.x - 4 * dpr, q.y - 4 * dpr); ctx.lineTo(q.x + 4 * dpr, q.y + 4 * dpr);
-          ctx.moveTo(q.x + 4 * dpr, q.y - 4 * dpr); ctx.lineTo(q.x - 4 * dpr, q.y + 4 * dpr);
-          ctx.stroke();
-        }
+        if (q.ok) this.cross(q.x, q.y, 4 * dpr, RED, 1.6 * dpr);
       }
       const q0 = P(FA(ext.pts[0]!, ext.times[0]!));
       if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
@@ -2005,17 +1937,8 @@ export class Map3D {
         const t = cp.times[ca.i]!;
         const a = P(FA(cp.pts[ca.i]!, t)), b = P(FA(ourPos(i.target, t), t));
         if (a.ok && b.ok) {
-          ctx.strokeStyle = "rgba(255, 138, 92, 0.8)";
-          ctx.lineWidth = 1 * dpr;
-          ctx.setLineDash([2 * dpr, 2 * dpr]);
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.beginPath();
-          ctx.arc(b.x, b.y, 5 * dpr, 0, 2 * Math.PI);
-          ctx.stroke();
+          this.paint.path([[a.x, a.y], [b.x, b.y]], "rgba(255, 138, 92, 0.8)", 1 * dpr, [2 * dpr, 2 * dpr]);
+          this.paint.disc(b.x, b.y, 5 * dpr, null, "rgba(255, 138, 92, 0.8)", 1 * dpr);
           const R = sc.byId.get(i.target)!.radius;
           const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
           labels.push({ text: `CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`, x: mx + 6 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
@@ -2026,13 +1949,7 @@ export class Map3D {
     if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || ["iss", "ranger", "lander", "endurance"].includes(i.ourArrive.body)) && plan) {
       const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
-        ctx.strokeStyle = "rgba(255, 170, 80, 0.9)";
-        ctx.lineWidth = 1.2 * dpr;
-        ctx.setLineDash([2 * dpr, 2 * dpr]);
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, 6 * dpr, 0, 2 * Math.PI);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        this.paint.disc(q.x, q.y, 6 * dpr, null, "rgba(255, 170, 80, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);
         labels.push({ text: `${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, s)}`, x: q.x + 8 * dpr, y: q.y + 3 * dpr, col: "255, 170, 80", prio: 4, size: 8.5, weight: 600, ax: q.x, ay: q.y, ar: 5 * dpr });
       }
     }
@@ -2072,11 +1989,7 @@ export class Map3D {
     const tickTimes = Array.from({ length: Math.floor(T / tick) }, (_, j) => t0 + (j + 1) * tick);
     const dotAt = (X: V3, r: number, col: string) => {
       const p = P(X);
-      if (!p.ok) return;
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r * dpr, 0, 2 * Math.PI);
-      ctx.fill();
+      if (p.ok) this.paint.disc(p.x, p.y, r * dpr, col);
     };
     // the hole's own motion (the centre of mass's frame)
     if (cm) {
@@ -2113,10 +2026,7 @@ export class Map3D {
         const f = idx - Math.floor(idx);
         const p = P(at([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], tt));
         if (!p.ok) return;
-        ctx.fillStyle = "#fff";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.2 * dpr, 0, 2 * Math.PI);
-        ctx.fill();
+        this.paint.disc(p.x, p.y, 2.2 * dpr, "#fff");
         if (j % 2 === 1) labels.push({ text: `+${fmtShort((j + 1) * tick)}`, x: p.x + 4 * dpr, y: p.y - 3 * dpr, col: "255, 255, 255", prio: 1, size: 8.5, weight: 600, ax: p.x, ay: p.y, ar: 3 * dpr });
       });
       let iMin = -1, iMax = -1, rMin = Infinity, rMax = -Infinity;
@@ -2137,14 +2047,7 @@ export class Map3D {
       }
       if (bad) {
         const p = P(fut[fut.length - 1]!);
-        if (p.ok) {
-          ctx.strokeStyle = RED;
-          ctx.lineWidth = 2 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(p.x - 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x + 4 * dpr, p.y + 4 * dpr);
-          ctx.moveTo(p.x + 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x - 4 * dpr, p.y + 4 * dpr);
-          ctx.stroke();
-        }
+        if (p.ok) this.cross(p.x, p.y, 4 * dpr, RED, 2 * dpr);
       }
       const ca = this.host.closestApproach(i, t0);
       if (ca && ca.t > 0) {
@@ -2154,14 +2057,7 @@ export class Map3D {
         const a = P(at(q, tt)), b = P(at(bodyCentre(s, i.target as Body, tt), tt));
         {
           if (a.ok && b.ok) {
-            ctx.strokeStyle = "rgba(255, 138, 92, 0.9)";
-            ctx.lineWidth = 1.2 * dpr;
-            ctx.setLineDash([2 * dpr, 2 * dpr]);
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            this.paint.path([[a.x, a.y], [b.x, b.y]], "rgba(255, 138, 92, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);
             const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
             labels.push({ text: `CA ${fmtLen(ca.d, s)}`, x: mx + 5 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
           }
@@ -2187,21 +2083,11 @@ export class Map3D {
         if (!p.ok) continue;
         const who = a.body === "hole" ? "" : `${sc.byId.get(a.body)?.name ?? a.body} `;
         labels.push({ text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? sc.hole?.rH ?? 0 : 0), s)}${a.body === "hole" ? " (r)" : ""}`, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "184, 212, 255", prio: 3, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
-        ctx.fillStyle = "#b8d4ff";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.4 * dpr, 0, 2 * Math.PI);
-        ctx.fill();
+        this.paint.disc(p.x, p.y, 2.4 * dpr, "#b8d4ff");
       }
       if (ext.fate === "impact") {
         const p = P(pts[pts.length - 1]!);
-        if (p.ok) {
-          ctx.strokeStyle = RED;
-          ctx.lineWidth = 1.6 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(p.x - 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x + 4 * dpr, p.y + 4 * dpr);
-          ctx.moveTo(p.x + 4 * dpr, p.y - 4 * dpr); ctx.lineTo(p.x - 4 * dpr, p.y + 4 * dpr);
-          ctx.stroke();
-        }
+        if (p.ok) this.cross(p.x, p.y, 4 * dpr, RED, 1.6 * dpr);
       }
       const q0 = P(pts[0]!);
       if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
@@ -2237,24 +2123,12 @@ export class Map3D {
       if ((lastNode?.then === "approach" || lastNode?.then === "orbit") && s.sun) {
         const p = P(at(starCentre(s, lastNode.t), lastNode.t));
         if (p.ok) {
-          ctx.strokeStyle = "rgba(255, 211, 107, 0.9)";
-          ctx.lineWidth = 1.5 * dpr;
-          ctx.setLineDash([2 * dpr, 2 * dpr]);
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 7 * dpr, 0, 2 * Math.PI);
-          ctx.stroke();
-          ctx.setLineDash([]);
+          this.paint.disc(p.x, p.y, 7 * dpr, null, "rgba(255, 211, 107, 0.9)", 1.5 * dpr, [2 * dpr, 2 * dpr]);
           labels.push({ text: "RDV", x: p.x + 9 * dpr, y: p.y + 4 * dpr, col: "255, 211, 107", prio: 4, size: 9.5, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
         }
       } else if (pp.fate === "horizon" || pp.fate === "star" || pp.fate === "wormhole") {
         const p = P(at(pp.pts[pp.pts.length - 1]!, pp.times[pp.times.length - 1]!));
-        if (p.ok) {
-          ctx.strokeStyle = pp.fate === "wormhole" ? "#c88cff" : RED;
-          ctx.lineWidth = 2 * dpr;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 5 * dpr, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
+        if (p.ok) this.paint.disc(p.x, p.y, 5 * dpr, null, pp.fate === "wormhole" ? "#c88cff" : RED, 2 * dpr);
       }
     } else {
       this.nodeHits = [];
@@ -2308,17 +2182,7 @@ export class Map3D {
     places.forEach((q, k) => {
       if (!q.ok) return;
       const r = 6.5 * dpr;
-      ctx.strokeStyle = `rgba(${CAND}, 1)`;
-      ctx.fillStyle = "rgba(20, 10, 40, 0.75)";
-      ctx.lineWidth = 1.8 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(q.x, q.y - r);
-      ctx.lineTo(q.x + r, q.y);
-      ctx.lineTo(q.x, q.y + r);
-      ctx.lineTo(q.x - r, q.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      this.paint.poly(q.x, q.y, [[0, -r], [r, 0], [0, r], [-r, 0]], "rgba(20, 10, 40, 0.75)", `rgba(${CAND}, 1)`, 1.8 * dpr);
       ctx.fillStyle = `rgba(${CAND}, 1)`;
       ctx.font = `700 ${8.5 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
@@ -2363,17 +2227,7 @@ export class Map3D {
       const sel = k === this.host.sel;
       this.nodeHits.push({ k, x: pl.x, y: pl.y });
       const r = (sel ? 7.5 : 6) * dpr;
-      ctx.fillStyle = sel ? "#5ad8ff" : "#2fa4d0";
-      ctx.strokeStyle = "#04121a";
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(pl.x, pl.y - r);
-      ctx.lineTo(pl.x + r, pl.y);
-      ctx.lineTo(pl.x, pl.y + r);
-      ctx.lineTo(pl.x - r, pl.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      this.paint.poly(pl.x, pl.y, [[0, -r], [r, 0], [0, r], [-r, 0]], sel ? "#5ad8ff" : "#2fa4d0", "#04121a", 1.5 * dpr);
       ctx.fillStyle = "#dff6ff";
       ctx.textAlign = "left";
       ctx.font = `700 ${11.6 * dpr}px ${FONT}`;
@@ -2384,12 +2238,7 @@ export class Map3D {
         if (!(Math.hypot(d[0], d[1]) > 0.2)) d = c === 1 ? [0, -1] : [1, 0];
         for (const sign of [1, -1]) {
           const hx = pl.x + sign * d[0] * 36 * dpr, hy = pl.y + sign * d[1] * 36 * dpr;
-          ctx.strokeStyle = "rgba(220, 235, 255, 0.25)";
-          ctx.lineWidth = 1 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(pl.x + sign * d[0] * 10 * dpr, pl.y + sign * d[1] * 10 * dpr);
-          ctx.lineTo(hx, hy);
-          ctx.stroke();
+          this.paint.path([[pl.x + sign * d[0] * 10 * dpr, pl.y + sign * d[1] * 10 * dpr], [hx, hy]], "rgba(220, 235, 255, 0.25)", 1 * dpr);
           const on = this.gizmo && this.gizmo.k === k && this.gizmo.c === c && this.gizmo.sign === sign;
           marker(ctx, sign > 0 ? "prograde" : "retrograde", hx, hy, (on ? 9 : 7) * dpr, COLS[c]!);
           this.handleHits.push({ k, c, sign, x: hx, y: hy, dir: [sign * d[0], sign * d[1]] });
