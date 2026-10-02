@@ -467,9 +467,10 @@ altitude, clock rate, thrust), the **effective potential** of the orbit — V(r)
 constant Q, R(r) = [E(r² + a²) − aL]² − Δ[r² + (L − aE)² + Q] = 0, with the energy line, the escape line and the
 region the ship can reach —, and the cockpit: the attitude ball inside throttle and g-load arc gauges, holds
 on the left, SAS and autopilots on the right.
-The full-screen map draws its bodies on the GPU — the tracer's own maps on true spheres, the Earth's
-clouds and city lights, Saturn's rings, Gargantua's disk and photon ring, its worlds procedural — under its
-orbits, paths and labels, with a legend ([docs/MAP.md](docs/MAP.md)). The map's tabs add the **ground track** of the world the ship orbits (in its sphere of influence: our
+The full-screen map is drawn on the GPU — the tracer's own maps on true spheres, the Earth's clouds and
+city lights, Saturn's rings, Gargantua's disk and photon ring, its worlds procedural; the orbits and paths as
+anti-aliased lines cut exactly where a body stands in front of them; the globe and the planisphere lit pixel
+by pixel — with labels and a legend over it ([docs/MAP.md](docs/MAP.md)). The map's tabs add the **ground track** of the world the ship orbits (in its sphere of influence: our
 planets and moons, Mann, Edmunds): a **globe** — its map lit by the Sun, the day and the night, turning under
 the ship (drag it, the wheel zooms, a double click follows the ship again) — or a **planisphere**; on both the
 track left (fading), the free-fall path ahead and the planned one through the nodes, periapsis and apoapsis

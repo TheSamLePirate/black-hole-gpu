@@ -21,7 +21,7 @@ import { fleet } from "../fleet";
 import { keplerProp } from "../system/our-plan";
 import { VESSELS } from "../vessels";
 import { siteDir, sitesOf } from "../game/sites";
-import { BodyKind, MapGpu, type MapTextures } from "./map3d/gpu";
+import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./map3d/gpu";
 import { MAPS_HI, MAPS_LO } from "../system/solar";
 const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
@@ -416,6 +416,23 @@ export class GroundTrack {
     };
   }
 
+  /** The world for the GPU: its map (or the Earth's, or its procedural surface), its air, lit from L —
+   *  at c (view space, radius 1), on its axes, its night side at least so lit. */
+  private worldBody(sc: Scene, c: V3, L: V3, ax: [V3, V3, V3], night: number): GpuBody {
+    const lin = (x: number) => Math.pow(x / 255, 2.2);
+    const t = THEIRS[sc.id] ?? [150, 150, 150];
+    const col = t.map(lin) as V3;
+    const sb = solarBody(sc.id);
+    const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
+    const proc = { miller: 0, mann: 1, edmunds: 2 }[sc.id as "miller"];
+    const hi = sb?.map ? MAPS_HI.indexOf(sb.map) : -1, lo = sb?.map ? MAPS_LO.indexOf(sb.map) : -1;
+    const kind = sc.id === "earth" ? BodyKind.Earth : proc !== undefined ? BodyKind.Proc : hi >= 0 || lo >= 0 ? BodyKind.Map : BodyKind.Plain;
+    return {
+      c, R: 1, kind, layer: hi >= 0 ? hi : -(lo + 1), proc, L, col, ax,
+      air: AIR[sc.id] ? { col: AIR[sc.id]!, k: 0.9 } : undefined, minPx: 1, night,
+    };
+  }
+
   private drawGlobe(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
     const v = this.view;
     if (v.follow && sc.ship) {
@@ -435,28 +452,14 @@ export class GroundTrack {
 
     // on the GPU: the world's own map at the screen's resolution, lit, its air — the canvas over it
     const G = this.gpuLayer();
+    // (the globe seen from 100 radii: a sphere of radius 1 there)
+    const far = 100;
     if (G) {
       G.canvas.style.display = "";
       const view = (v: V3): V3 => [dot(v, E), dot(v, N), -dot(v, C)];
-      const D = 100;
-      const f = R * Math.sqrt(D * D - 1);
-      const lin = (x: number) => Math.pow(x / 255, 2.2);
-      const t = THEIRS[sc.id] ?? [150, 150, 150];
-      const col = t.map(lin) as V3;
-      const sb = solarBody(sc.id);
-      const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
-      const proc = { miller: 0, mann: 1, edmunds: 2 }[sc.id as "miller"];
-      const hi = sb?.map ? MAPS_HI.indexOf(sb.map) : -1, lo = sb?.map ? MAPS_LO.indexOf(sb.map) : -1;
-      const kind = sc.id === "earth" ? BodyKind.Earth : proc !== undefined ? BodyKind.Proc : hi >= 0 || lo >= 0 ? BodyKind.Map : BodyKind.Plain;
       // (the light: the Sun's, ours; Gargantua's worlds, over the viewer's shoulder)
-      const L = sc.sun ? view(sc.sun) : ([0.35, 0.45, -0.82] as V3);
       G.begin();
-      G.body({
-        c: [0, 0, D], R: 1, kind, layer: hi >= 0 ? hi : -(lo + 1), proc, L, col,
-        ax: [view([1, 0, 0]), view([0, 1, 0]), view([0, 0, 1])],
-        air: AIR[sc.id] ? { col: AIR[sc.id]!, k: 0.9 } : undefined, minPx: 1, night: 0.16,
-      });
-      G.render(W, H, f, cx, cy, [E, N, [-C[0], -C[1], -C[2]]], performance.now() / 1000);
+      G.body(this.worldBody(sc, [0, 0, far], sc.sun ? view(sc.sun) : [0.35, 0.45, -0.82], [view([1, 0, 0]), view([0, 1, 0]), view([0, 0, 1])], 0.035));
     }
     // the atmosphere's rim, the lit disc (the raster: at most 420 px across, scaled up)
     const halo = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.08);
@@ -505,7 +508,8 @@ export class GroundTrack {
     this.overlays(ctx, dpr, sc, (q) => {
       const p = proj(q);
       return p.vis ? [p.x, p.y] : null;
-    }, 0);
+    }, 0, G);
+    if (G) G.render(W, H, R * Math.sqrt(far * far - 1), cx, cy, [E, N, [-C[0], -C[1], -C[2]]], performance.now() / 1000);
     // (the rim)
     ctx.strokeStyle = "rgba(160, 210, 255, 0.35)";
     ctx.lineWidth = 1 * dpr;
@@ -558,7 +562,6 @@ export class GroundTrack {
 
   // ---------------------------------------------------------------------------------- the planisphere
   private drawMap(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
-    if (this.gpu) this.gpu.canvas.style.display = "none";
     const { top, bottom, left, right } = this.margins(dpr);
     const aw = W - left - right - 8 * dpr, ah = H - top - bottom;
     const mw = Math.min(aw, 2 * ah), mh = mw / 2;
@@ -568,14 +571,22 @@ export class GroundTrack {
       return [x0 + (0.5 + lo / (2 * Math.PI)) * mw, y0 + (0.5 - la / Math.PI) * mh];
     };
     this.hit = { globe: false, x0, y0, mw, mh };
-    if (tex) ctx.drawImage(tex.img, x0, y0, mw, mh);
+    // on the GPU: the world's surface pixel by pixel — the map at the screen's resolution, lit by the Sun
+    // (the terminator, the Earth's city lights at night), the tracks over it
+    const G = this.gpuLayer();
+    if (G) {
+      G.canvas.style.display = "";
+      G.begin();
+      G.body(this.worldBody(sc, [0, 0, 1], sc.sun ?? [0, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], sc.sun ? 0.06 : 0.92));
+      G.planisphere([x0, y0, mw, mh]);
+    } else if (tex) ctx.drawImage(tex.img, x0, y0, mw, mh);
     else {
       const t = THEIRS[sc.id] ?? [120, 120, 120];
       ctx.fillStyle = `rgb(${t.join(",")})`;
       ctx.fillRect(x0, y0, mw, mh);
     }
-    // the night: a mask computed on a 360 × 180 grid, laid over smoothed
-    if (sc.sun) {
+    // the night: a mask computed on a 360 × 180 grid, laid over smoothed (the GPU lights its own)
+    if (sc.sun && !G) {
       const key = sc.sun.map((x) => x.toFixed(3)).join();
       const c = this.night.c;
       if (this.night.key !== key) {
@@ -623,8 +634,9 @@ export class GroundTrack {
     ctx.beginPath();
     ctx.rect(x0, y0, mw, mh);
     ctx.clip();
-    this.overlays(ctx, dpr, sc, at, mw);
+    this.overlays(ctx, dpr, sc, at, mw, G);
     ctx.restore();
+    if (G) G.render(W, H, 1, 0, 0, [[1, 0, 0], [0, 1, 0], [0, 0, 1]], performance.now() / 1000, { sky: false });
   }
 
   // ---------------------------------------------------------------------------------- over the world
@@ -633,9 +645,22 @@ export class GroundTrack {
    * a direction's place on the canvas (null: hidden); `wrap`: the planisphere's width (a line across
    * its edge is broken there), 0 on the globe.
    */
-  private overlays(ctx: CanvasRenderingContext2D, dpr: number, sc: Scene, at: (q: V3) => [number, number] | null, wrap: number) {
+  private overlays(ctx: CanvasRenderingContext2D, dpr: number, sc: Scene, at: (q: V3) => [number, number] | null, wrap: number, G: MapGpu | null = null) {
     const path = (pts: V3[], col: string, width: number, dash: number[] = [], alpha?: (k: number) => number) => {
       if (pts.length < 2) return;
+      // (on the GPU: anti-aliased, faded along, broken where hidden or across the planisphere's edge)
+      if (G) {
+        G.line(col, width * dpr, dash.map((d) => d * dpr));
+        let prev: [number, number] | null = null;
+        pts.forEach((q, k) => {
+          const p = at(q);
+          if (!p || (prev && wrap && Math.abs(p[0] - prev[0]) > wrap / 2)) G.gap();
+          if (p) G.to(p[0], p[1], 0, alpha ? alpha(k / (pts.length - 1)) : 1);
+          prev = p;
+        });
+        G.gap();
+        return;
+      }
       ctx.lineWidth = width * dpr;
       ctx.setLineDash(dash.map((d) => d * dpr));
       ctx.lineCap = "round";

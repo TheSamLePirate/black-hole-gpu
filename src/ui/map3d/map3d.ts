@@ -948,7 +948,8 @@ export class Map3D {
     } finally {
       if (G) {
         const [vx, vy, vw, vh] = this.cam.view;
-        G.render(this.canvas.width, this.canvas.height, this.cam.focal, vx + vw / 2, vy + vh / 2, [this.cam.right, this.cam.up, this.cam.fwd], performance.now() / 1000);
+        const near = this.cam.cur.dist * 1e-3;
+        G.render(this.canvas.width, this.canvas.height, this.cam.focal, vx + vw / 2, vy + vh / 2, [this.cam.right, this.cam.up, this.cam.fwd], performance.now() / 1000, { near, far: near * 1e12 });
       }
     }
   }
@@ -1069,7 +1070,7 @@ export class Map3D {
       return false;
     };
     // (the GPU's bodies are solid: what they hide is not drawn, the grid cut round them)
-    const hideK = G ? 0 : 0.22;
+    const hideK = 0.22;
 
     // ---- the reference plane's grid (around the focus)
     if (G && occluders.length) {
@@ -1086,8 +1087,21 @@ export class Map3D {
     } else this.drawGrid(ctx, cw, ch, dpr, pe1, pn, g, ours);
 
     // a polyline (its points offset by off), depth-cued, broken behind the camera, faint where a body hides it
+    // — on the GPU: anti-aliased, hidden pixel by pixel where a body stands in front of it
     const line = (pts: V3[], col: string, a: number, w: number, dash: number[] = [], occl = true, off?: V3) => {
       if (pts.length < 2) return;
+      if (G) {
+        G.line(col, w * dpr, dash.map((d) => d * dpr));
+        const q: V3 = [0, 0, 0];
+        for (const X of pts) {
+          if (off) (q[0] = X[0] + off[0]), (q[1] = X[1] + off[1]), (q[2] = X[2] + off[2]);
+          const p = P(off ? q : X);
+          if (p.ok) G.to(p.x, p.y, p.z, a * depthA(p.z));
+          else G.gap();
+        }
+        G.gap();
+        return;
+      }
       ctx.lineWidth = w * dpr;
       ctx.setLineDash(dash.map((d) => d * dpr));
       let prev: Proj | null = null;
@@ -1108,7 +1122,7 @@ export class Map3D {
           continue;
         }
         if (prev) {
-          const hid = (occl || !!G) && occluders.length > 0 && hidden((p.x + prev.x) / 2, (p.y + prev.y) / 2, (p.z + prev.z) / 2);
+          const hid = occl && occluders.length > 0 && hidden((p.x + prev.x) / 2, (p.y + prev.y) / 2, (p.z + prev.z) / 2);
           const alpha = a * depthA(p.z) * (hid ? hideK : 1);
           const st = Math.round(alpha * 20);
           if (st !== state || !open) {
@@ -1264,7 +1278,7 @@ export class Map3D {
     else this.drawTheirPaths(ctx, i, sc, t0, dpr, P, line, labels, pn, cm);
 
     // ---- the preview: where things are now (faint rings), the trails the bodies follow until then
-    if (previewing) this.drawGhosts(ctx, sc, i, fid, t0, tp, shipNow, P, dpr);
+    if (previewing) this.drawGhosts(ctx, sc, i, fid, t0, tp, shipNow, P, dpr, G);
 
     // ---- the ship
     this.drawShip(ctx, i, ship, shipVel, P, dpr, ours);
@@ -1731,7 +1745,7 @@ export class Map3D {
    * (the target, the ship's primary, the focus and its moons) where they are now and the arc they follow
    * until the preview's time.
    */
-  private drawGhosts(ctx: CanvasRenderingContext2D, sc: MapScene, i: Info, fid: string, t0: number, tp: number, shipNow: V3, P: (X: V3) => Proj, dpr: number) {
+  private drawGhosts(ctx: CanvasRenderingContext2D, sc: MapScene, i: Info, fid: string, t0: number, tp: number, shipNow: V3, P: (X: V3) => Proj, dpr: number, G: MapGpu | null) {
     const s = this.host.s;
     const ring = (X: V3, col: string, r: number) => {
       const p = P(X);
@@ -1767,6 +1781,7 @@ export class Map3D {
       const T = Math.min(tp - t0, b.period ?? tp - t0);
       const steps = 32;
       ctx.beginPath();
+      G?.line(b.col, 1.6 * dpr);
       let open = false;
       for (let j = 0; j <= steps; j++) {
         const t = tp - T + (T * j) / steps;
@@ -1774,15 +1789,20 @@ export class Map3D {
         const q = X ? P(X) : null;
         if (!q || !q.ok) {
           open = false;
+          G?.gap();
           continue;
         }
-        if (open) ctx.lineTo(q.x, q.y);
+        if (G) G.to(q.x, q.y, q.z, 0.55);
+        else if (open) ctx.lineTo(q.x, q.y);
         else ctx.moveTo(q.x, q.y);
         open = true;
       }
-      ctx.strokeStyle = `rgba(${b.col}, 0.55)`;
-      ctx.lineWidth = 1.6 * dpr;
-      ctx.stroke();
+      G?.gap();
+      if (!G) {
+        ctx.strokeStyle = `rgba(${b.col}, 0.55)`;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.stroke();
+      }
       if (T >= tp - t0) ring(now, b.col, 3.5);
     }
   }
@@ -1858,7 +1878,7 @@ export class Map3D {
     if (E && E.ours && solarBody(E.body)) {
       const Bp = solarState(E.body, tView).pos;
       const at = (x: V3): V3 => FA([Bp[0] + x[0], Bp[1] + x[1], Bp[2] + x[2]], tView);
-      if (E.path && E.path.length > 1) line(E.path.map(at), "#ff9a4a", 0.95, 2.2, [7, 4]);
+      if (E.path && E.path.length > 1) line(E.path.map(at), "255, 154, 74", 0.95, 2.2, [7, 4]);
       if (E.site) tag(at(E.site.X), `◎ ${E.site.name}`, "255, 210, 122", true, 4);
     }
     // (an apsis a few pixels from its body's centre — an orbit too small on the screen: its label unread)
