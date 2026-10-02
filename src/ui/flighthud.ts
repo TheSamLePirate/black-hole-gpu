@@ -183,6 +183,9 @@ export class FlightHud {
   private root = h("div", "fl-root");
   private hud: HTMLCanvasElement;
   private warn = h("div", "fl-warn");
+  /** the air data (in the air): the flight law, the flow, the load, the skin, the configuration */
+  private airData = h("div", "fl-airdata");
+  private airKey = "";
   private mission = h("div", "fl-mission fl-panel");
   /** the docking aid: the station's nearest port and the ship's ring against it */
   private dock = h("div", "fl-dock fl-panel");
@@ -704,7 +707,7 @@ export class FlightHud {
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
 
-    this.root.append(this.warn, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!, this.craftMenu!);
+    this.root.append(this.warn, this.airData, this.mission, this.dock, this.target, this.tel, this.planner, this.orbit, this.cockpit, this.right, this.viewMenu!, this.craftMenu!);
     this.dock.hidden = true;
     document.body.append(this.hud, this.root);
     this.initTips();
@@ -1407,6 +1410,7 @@ export class FlightHud {
     // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame —,
     // one of them a frame, the most overdue: never all on the same frame, every 100 ms)
     cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
+    this.drawAirData(info);
     this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
     if (this.density < 2) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
@@ -1747,6 +1751,25 @@ export class FlightHud {
       ctx.lineTo(nose[0] + 2.2 * r, nose[1]);
       ctx.stroke();
     }
+    // in the air: the flight path vector — where the craft goes through the air
+    const A = i.air;
+    if (A && A.u && A.q > 20) {
+      const S = i.S;
+      const fp = proj([S[0][0] * A.u[0] + S[0][1] * A.u[1] + S[0][2] * A.u[2], S[1][0] * A.u[0] + S[1][1] * A.u[1] + S[1][2] * A.u[2], S[2][0] * A.u[0] + S[2][1] * A.u[1] + S[2][2] * A.u[2]]);
+      if (fp) for (const [lw, col] of [[4.5, UNDER], [2, A.stalled ? "rgba(255, 90, 70, 0.95)" : "rgba(120, 255, 170, 0.95)"]] as const) {
+        ctx.lineWidth = lw * dpr;
+        ctx.strokeStyle = col;
+        ctx.beginPath();
+        ctx.arc(fp[0], fp[1], 0.62 * r, 0, 2 * Math.PI);
+        ctx.moveTo(fp[0] - 0.62 * r, fp[1]);
+        ctx.lineTo(fp[0] - 1.7 * r, fp[1]);
+        ctx.moveTo(fp[0] + 0.62 * r, fp[1]);
+        ctx.lineTo(fp[0] + 1.7 * r, fp[1]);
+        ctx.moveTo(fp[0], fp[1] - 0.62 * r);
+        ctx.lineTo(fp[0], fp[1] - 1.3 * r);
+        ctx.stroke();
+      }
+    }
     for (const k of ["prograde", "retrograde", "burn", "maneuver", "tgtPrograde", "tgtRetrograde", "dock"] as const) {
       if (k === "maneuver" && i.dirs.burn) continue;
       const p = proj(i.dirs[k]);
@@ -1782,6 +1805,31 @@ export class FlightHud {
       if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - x, R.cy, R.h, u);
       else if (R && i.region === "hole") this.altTape(ctx, i, W - x, R.cy, R.h, u);
     }
+  }
+
+  /**
+   * The air data, in the air (or with the sci-fi computer on): the flight law and its commands, Mach,
+   * the dynamic pressure, α, β, the climb angle, the load, the skin's temperatures against their limits,
+   * the flaps, gear and brake.
+   */
+  private drawAirData(i: Info) {
+    const A = i.air;
+    const show = !!A && (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) && this.density < 2;
+    this.airData.hidden = !show;
+    if (!show || !A) return;
+    const d = 180 / Math.PI;
+    const mode = A.mode === "sf" ? `FLIGHT COMPUTER${A.antigrav ? " · ANTIGRAVITY" : ""}` : A.mode.toUpperCase();
+    const q = A.q >= 1000 ? `${(A.q / 1000).toFixed(1)} kPa` : `${A.q.toFixed(0)} Pa`;
+    const bar = (x: number) => `<i class="fl-ad-bar${x > 0.85 ? " hot" : x > 0.6 ? " warm" : ""}"><b style="width:${Math.min(x, 1) * 100}%"></b></i>`;
+    const flaps = A.flaps === 1 ? "FULL" : A.flaps === 0.5 ? "½" : "UP";
+    const cmd = A.sf ? `<span>CMD <b>${A.sf.speed.toFixed(0)} m/s</b> γ <b>${(A.sf.gamma * d).toFixed(0)}°</b> HDG <b>${(((A.sf.heading * d) % 360) + 360) % 360 | 0}°</b></span>` : "";
+    const html = `<div class="fl-ad-row"><span class="fl-ad-mode">${mode}</span>${cmd}<span>M <b>${A.mach.toFixed(2)}</b></span><span>q <b>${q}</b></span>`
+      + `<span>α <b>${(A.alpha * d).toFixed(1)}°</b></span><span>β <b>${(A.beta * d).toFixed(1)}°</b></span><span><b>${A.g.toFixed(2)}</b> g</span></div>`
+      + `<div class="fl-ad-row">${A.shieldMax ? `<span>SHIELD <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>HULL <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span>`
+      + `<span>LOAD${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">FLAPS ${flaps}</span><span class="${A.gear ? "on" : ""}">GEAR</span><span class="${A.brake ? "on" : ""}">BRAKE</span></div>`;
+    if (html === this.airKey) return;
+    this.airKey = html;
+    this.airData.innerHTML = html;
   }
 
   /**

@@ -15,6 +15,10 @@ import type { M3, V3 } from "./mounts";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
 export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock";
+/** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
+ *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
+export type FlightMode = "rocket" | "plane" | "sf";
+export const FLIGHT_MODE_NAMES: Record<FlightMode, string> = { rocket: "Rocket", plane: "Plane", sf: "Flight computer" };
 
 export const HOLD_NAMES: Record<Hold, string> = {
   none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
@@ -58,6 +62,14 @@ export interface FlightContext {
   maneuver?: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
   want?: { beta: V3; ff: V3; pos?: V3 } | null;
+  /** in the air: the flight law, the flow's angles (α, β [rad]), the control surfaces' authority added
+   *  to the thrusters' [rad/s², the pilot's axes], the flight path's own turn (the pilot's axes and
+   *  signs [rad/s]), on the wheels, the stall angle, the dynamic pressure [Pa] */
+  air?: { mode: FlightMode; alpha: number; beta: number; auth: V3; path: V3; ground: boolean; stall: number; q: number; gamma: number; bank: number } | null;
+  /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
+   *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
+   *  the hold given free (antigravity: no engine, no propellant) */
+  sf?: { beta: V3; ff: V3; nose: V3; up: V3; free: V3 } | null;
   /** executing a manoeuvre node: the burn's direction (local) and the throttle wanted once aligned;
    *  far: the burn is still far off (an attitude hold may point the nose meanwhile) */
   burn?: { dir: V3; throttle: number; far?: boolean } | null;
@@ -110,6 +122,12 @@ export class FlightComputer {
   anchor: V3 | null = null;
   /** precision controls (fine rotation and throttle, as KSP's Caps Lock) */
   precision = false;
+  /** the plane law's held flight path angle [rad] (set when the stick is let go), null: to be taken;
+   *  the last one seen (its rate) */
+  gammaHold: number | null = null;
+  private gammaPrev: number | null = null;
+  /** the plane law's held bank [rad] (wings level under 6°), null: to be taken */
+  bankHold: number | null = null;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
@@ -140,7 +158,30 @@ export class FlightComputer {
     let upC: V3 | null = null; // and, if set, where the ship's top goes (C)
     this.burn = null;
     let throttle = this.throttle;
-    if (this.auto === "node" && c.burn) {
+    if (c.sf && this.auto === "none") {
+      // the sci-fi flight computer: the velocity flown by thrust in any direction (the main engine
+      // along the nose, the vectored thrusters the rest), the feed-forward first; the attitude its own
+      const U = toU(c.beta);
+      const T = Math.max(1.2 * c.tauRate, 1e-3);
+      const err = scale(add(toU(c.sf.beta), scale(U, -1)), 1 / T);
+      let A = add(err, c.sf.ff);
+      if (len(A) > c.thrust) {
+        const ff = c.sf.ff;
+        const fl = len(ff);
+        if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
+        else {
+          const ee = dot(err, err), fe = dot(ff, err);
+          const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
+          A = add(ff, scale(err, clamp(k, 0, 1)));
+        }
+      }
+      const AC = toC(A);
+      throttle = c.thrust > 0 ? Math.max(dot(AC, Z), 0) / c.thrust : 0;
+      rcsC = add(add(AC, scale(Z, -throttle * c.thrust)), toC(c.sf.free));
+      point = toC(c.sf.nose);
+      upC = toC(c.sf.up);
+      this.burn = len(A) > 0 ? scale(A, 1 / len(A)) : null;
+    } else if (this.auto === "node" && c.burn) {
       // manoeuvre node: point along the burn, fire only when on it (within ~3°); long before it, an
       // attitude hold may keep the nose elsewhere
       this.burn = c.burn.dir;
@@ -209,10 +250,34 @@ export class FlightComputer {
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)
     const fine = this.precision ? 0.25 : 1;
-    const manual: V3 = [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
+    // (the sci-fi computer reads the stick as its commands: the attitude is its own)
+    const manual: V3 = c.sf && this.auto === "none" ? [0, 0, 0] : [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
     const want: V3 = [...this.omega];
     const active = manual.some((m) => m !== 0);
-    if (point && !active) {
+    // the control surfaces' authority, added to the thrusters' (the plane and the sci-fi laws)
+    const A3 = c.air && c.air.mode !== "rocket" ? c.air.auth : [0, 0, 0];
+    const acc3: V3 = [TUNING.turnAccel + A3[0], TUNING.turnAccel + A3[1], TUNING.turnAccel + A3[2]];
+    const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
+    if (!planeLaw || inp.pitch !== 0) this.gammaHold = null;
+    if (!planeLaw || inp.roll !== 0) this.bankHold = null;
+    if (planeLaw) {
+      // the plane: the stick asks for rates (pitch 20°/s, yaw 8°/s, roll 70°/s); let go, the flight
+      // path is held — the climb angle it had (more lift in a bank), no sideslip (the rudder
+      // coordinates), the bank kept — the nose turning with the path; the stall kept off
+      const P = c.air!;
+      const rates: V3 = [0.35, 0.14, 1.2];
+      const stallSafe = P.stall - 0.035;
+      if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
+      const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
+      this.gammaPrev = P.gamma;
+      if (P.ground) want[0] = manual[0] * rates[0];
+      else want[0] = manual[0] !== 0 ? P.path[0] + manual[0] * rates[0] : P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
+      if (P.alpha > stallSafe) want[0] = Math.min(want[0], P.path[0] - 2 * (P.alpha - stallSafe));
+      want[1] = P.ground ? manual[1] * 0.3 : P.path[1] - 2 * P.beta + manual[1] * rates[1];
+      if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
+      // (the bank: right is +; the pilot's roll: left is +)
+      want[2] = manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? 0 : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+    } else if (point && !active) {
       const e = cross(Z, point);
       const s = len(e);
       const ang = Math.atan2(s, dot(Z, point));
@@ -244,9 +309,9 @@ export class FlightComputer {
     let effort = 0;
     const torque: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) {
-      const d = clamp(want[i]! - this.omega[i]!, -TUNING.turnAccel * dt, TUNING.turnAccel * dt);
+      const d = clamp(want[i]! - this.omega[i]!, -acc3[i]! * dt, acc3[i]! * dt);
       if (dt > 0) {
-        torque[i] = d / (TUNING.turnAccel * dt);
+        torque[i] = d / (acc3[i]! * dt);
         effort = Math.max(effort, Math.abs(torque[i]!));
       }
       this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
@@ -262,7 +327,7 @@ export class FlightComputer {
     }
 
     // ---- thrust: main engine along the nose, RCS translation along the ship's axes
-    if (this.auto === "none") {
+    if (this.auto === "none" && !c.sf) {
       this.throttle = clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
       const rcsMax = TUNING.rcs * c.thrust;

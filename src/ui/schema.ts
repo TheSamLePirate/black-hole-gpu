@@ -988,6 +988,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "drag air atmosphere reentry",
   },
   {
+    key: "flightMode", type: "choice", section: "game", group: "Ground & air", label: "Flight in the air", style: "segmented", effect: "none",
+    options: [
+      { value: "rocket", label: "Rocket", hint: "As in space: the stick turns the craft, the throttle pushes along its nose; the air acts on it" },
+      { value: "plane", label: "Plane", hint: "The control surfaces: the stick asks for turn rates; let go, the flight path and the bank are held, the turns coordinated, the stall kept off" },
+      { value: "sf", label: "Computer", hint: "The flight computer flies a velocity: the throttle sets the speed (0: a hover), the stick the climb and the heading, roll slides sideways" },
+    ],
+    help: "How the Ranger and the Lander are flown in the air (F cycles; the Endurance flies as a rocket). The physics are the same — the air's lift, drag, heat and moments.",
+    keywords: "plane rocket fly by wire flight computer hover vtol mode aircraft",
+  },
+  {
+    key: "antigrav", type: "toggle", section: "game", group: "Ground & air", label: "Antigravity", effect: "none",
+    help: "With the flight computer: the hold against gravity and the air is free — no thrust, no propellant (⇧F).",
+    keywords: "antigravity hover sci-fi float",
+  },
+  {
     key: "damage", type: "toggle", section: "game", group: "Ground & air", label: "Damage", effect: "none",
     help: "The air can destroy the craft: its heat shield or hull past their temperature limits, or a load past its structure. Off: alarms only.",
     keywords: "reentry heat shield destruction g load damage",

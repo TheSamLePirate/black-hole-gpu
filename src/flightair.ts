@@ -43,6 +43,13 @@ export class AirFlight {
   /** a limit passed: why (the craft is lost) */
   failure: string | null = null;
   private overG = 0;
+  /** the air's acceleration [m/s²] in the integrator's frame, and that frame's motion direction; the
+   *  flight path's turn (ship frame, right-handed) [rad/s] */
+  accFrame: V3 = [0, 0, 0];
+  private uFrame: V3 | null = null;
+  private uPrev: V3 | null = null;
+  private axes: [V3, V3, V3] | null = null;
+  pathRate: V3 = [0, 0, 0];
 
   /** Starts afresh (a scene, another craft). */
   reset(vessel: VesselId, T?: number) {
@@ -52,6 +59,8 @@ export class AirFlight {
     this.g = this.gPeak = this.heatPeak = 0;
     this.failure = null;
     this.overG = 0;
+    this.uPrev = this.uFrame = null;
+    this.pathRate = [0, 0, 0];
   }
 
   /** In the air (above a trace of it). */
@@ -73,12 +82,15 @@ export class AirFlight {
       const out = aeroForces(A, v, air, w, this.cfg);
       const speed = Math.hypot(...v);
       this.last = { air, out, u: speed > 0 ? [v[0] / speed, v[1] / speed, v[2] / speed] : [0, 0, 1], speed, h };
+      const vf = Math.hypot(...va);
+      this.uFrame = vf > 0 ? [va[0] / vf, va[1] / vf, va[2] / vf] : null;
+      this.axes = axes;
       const k = 1 / mass;
-      return [
+      return (this.accFrame = [
         (out.F[0] * axes[0][0] + out.F[1] * axes[1][0] + out.F[2] * axes[2][0]) * k,
         (out.F[0] * axes[0][1] + out.F[1] * axes[1][1] + out.F[2] * axes[2][1]) * k,
         (out.F[0] * axes[0][2] + out.F[1] * axes[1][2] + out.F[2] * axes[2][2]) * k,
-      ];
+      ]);
     };
   }
 
@@ -86,6 +98,7 @@ export class AirFlight {
   vacuum() {
     this.last = null;
     this.body = "";
+    this.accFrame = [0, 0, 0];
   }
 
   /**
@@ -99,6 +112,14 @@ export class AirFlight {
     const L = this.last;
     const air = L?.air ?? airAt(null, 0);
     const out = L?.out ?? null;
+    // (the flight path's turn: the motion's direction now against last frame's, on the ship's axes)
+    if (L && this.uFrame && this.uPrev && this.axes && dt > 0) {
+      const a = this.uPrev, b = this.uFrame;
+      const w: V3 = [(a[1] * b[2] - a[2] * b[1]) / dt, (a[2] * b[0] - a[0] * b[2]) / dt, (a[0] * b[1] - a[1] * b[0]) / dt];
+      const ws: V3 = [dot(w, this.axes[0]), dot(w, this.axes[1]), dot(w, this.axes[2])];
+      for (let i = 0; i < 3; i++) this.pathRate[i] = this.pathRate[i]! + (ws[i]! - this.pathRate[i]!) * Math.min(1, dt / 0.3);
+    } else if (!L) this.pathRate = [0, 0, 0];
+    if (dt > 0) this.uPrev = L ? this.uFrame : null;
     if (dt > 0) this.skin = heatStep(A, this.skin, air, out ?? ({ heat: 0, Tr: 0, mach: 0 } as AeroOut), L?.u ?? [0, 0, 1], dt);
     const aF: V3 = out ? [out.F[0] / mass + thrust[0], out.F[1] / mass + thrust[1], out.F[2] / mass + thrust[2]] : thrust;
     this.g = Math.hypot(...aF) / G0;

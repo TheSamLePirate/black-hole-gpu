@@ -174,6 +174,9 @@ export interface VesselAero {
   hull: { tMax: number; cap: number; eps: number };
   /** structural limit [g] */
   gMax: number;
+  /** the control surfaces' authority: angular acceleration per kPa of dynamic pressure about the
+   *  pitch, yaw and roll axes [rad/s² / kPa] (none: 0) */
+  ctrl: V3;
 }
 
 /** The configuration: flaps (0…1), air brake (0…1), gear down. */

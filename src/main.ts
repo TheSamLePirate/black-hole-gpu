@@ -81,12 +81,19 @@ function sanitize(s: Settings): Settings {
   if (!(s.quality in QUALITY)) s.quality = d.quality;
   return s;
 }
+/** The flight laws, as said when chosen. */
+const FLIGHT_MODE_HELP: Record<Settings["flightMode"], string> = {
+  rocket: "a rocket — the stick turns it, the throttle pushes along the nose",
+  plane: "a plane — the control surfaces; let go, the flight path is held (F: next)",
+  sf: "the flight computer — the stick and throttle set the way and the speed, it flies them (⇧F: antigravity)",
+};
+
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
   "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "farFieldLut", "volumetricClouds", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
   "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
   "massSolar", "cinematicSpeed", "rotation", "lookAt", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
-  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "damage", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
+  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "damage", "antigrav", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
   "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
   "skyLines", "skyNames", "starNames", "gridEquatorial", "gridHorizontal", "skyEcliptic", "skyChartOpacity",
 ];
@@ -951,6 +958,28 @@ async function main() {
       camera.pilot.hold = "none";
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     } else if (e.code === "KeyB") pilotAuto("dock");
+    else if (e.code === "KeyF" && !e.shiftKey) {
+      // the flight law in the air: rocket → plane → the sci-fi flight computer
+      const V = VESSELS[fleet.active];
+      if (!V.flies) panel.toast(`The ${V.name} is no aircraft: it flies as a rocket`);
+      else {
+        const order: Settings["flightMode"][] = ["rocket", "plane", "sf"];
+        settings.flightMode = order[(order.indexOf(settings.flightMode) + 1) % 3]!;
+        onSettingsChange(["flightMode"]);
+        panel.toast(`${V.name}: flown as ${FLIGHT_MODE_HELP[settings.flightMode]}`);
+      }
+    } else if (e.code === "KeyF" && e.shiftKey) {
+      settings.antigrav = !settings.antigrav;
+      onSettingsChange(["antigrav"]);
+      panel.toast(settings.antigrav ? "Antigravity on — the flight computer holds against gravity and the air for free" : "Antigravity off — every hold costs thrust and propellant");
+    } else if (e.code === "KeyP" && !e.shiftKey) {
+      const cfg = camera.airFlight.cfg;
+      cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
+      panel.toast(`Flaps ${cfg.flaps === 0 ? "up" : cfg.flaps === 0.5 ? "half" : "full"}`);
+    } else if (e.code === "KeyP" && e.shiftKey) {
+      camera.airBrake = camera.airBrake > 0 ? 0 : 1;
+      panel.toast(camera.airBrake > 0 ? "Air brake out" : "Air brake in");
+    }
     else if (e.code === "BracketLeft" || e.code === "BracketRight") camera.cycleVessel(e.code === "BracketRight" ? 1 : -1); // (the craft flown: KSP's [ ])
     else if (e.code.startsWith("Arrow")) e.preventDefault(); // throttle (held) — about the cabin, the look
     else return false;

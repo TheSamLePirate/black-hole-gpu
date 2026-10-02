@@ -19,7 +19,7 @@ import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { AirFlight, AIR_WARP } from "./flightair";
 import { aeroForces, airAt, airTop } from "./aero";
 import { airDensity, betaToCoord, GEAR, groundR, localAccel, localToZamo, planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, zamoToLocal, type LocalState, type PlanetFrame } from "./landing";
-import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type PilotInput } from "./pilot";
+import { AUTO_NAMES, circularSpeed, FlightComputer, toU, type Auto, type FlightMode, type PilotInput } from "./pilot";
 import { dvLocal, nodeComponents, orbitNormal, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, type ManeuverNode, type PlanPath } from "./maneuver";
 import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "./mounts";
 import { fleet, type Pose } from "./fleet";
@@ -2362,6 +2362,8 @@ export class CameraController {
    *  Earthrise, the Earth out of the frame) */
   settleMount() {
     this.airFlight.reset(fleet.active);
+    // (the Lander flies as a rocket unless told otherwise; the Ranger as a plane)
+    if (fleet.active !== "ranger" && this.s.flightMode === "plane") this.s.flightMode = "rocket";
     this.rolling = null;
     this.lastMount = this.s.shipMount;
     // (a scene's attach point: the one a reset comes back to; the outside views at the craft's own distances)
@@ -2605,7 +2607,19 @@ export class CameraController {
     }
     if (!thick) this.airWarpSaid = false;
     const dtPilot = thick ? dt * Math.min(s.timeSpeed * Msec, AIR_WARP) : dt;
+    // the flight law in the air (the plane's surfaces; the sci-fi computer's commanded velocity)
+    const mode = this.flightModeNow();
+    const LA0 = this.airFlight.last;
+    const AV = VESSELS[fleet.active].aero;
+    const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
+    const airCtx = LA0 && LA0.out.q > 20 ? {
+      mode, alpha: LA0.out.alpha, beta: LA0.out.beta, auth: AV.ctrl.map((k) => Math.min((k * LA0.out.q) / 1000, 4)) as Vec3,
+      path: this.airFlight.pathRate.map((x) => -x) as Vec3, ground: onWheels0, stall: AV.wing?.stall ?? 0.35, q: LA0.out.q, gamma: this.pathAngle(cam), bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
+    } : null;
+    const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
+    if (mode !== "sf" || !sfCtx) this.sfCmd = null;
     const out = this.pilot.step({
+      air: airCtx, sf: sfCtx,
       dt: dtPilot, right: cam.right, up: cam.up, fwd: cam.fwd, beta: cam.beta, S: this.shipMatrix(), thrust: this.thrustMax(), tauRate,
       radialOut: this.radialOut(cam), refVel: this.speedMode === "target" ? this.targetVelLocal(cam) ?? undefined : this.ourNav(cam)?.refVelRep,
       target: this.targetDir(cam), maneuver: this.maneuverDir(cam), want: (this.lastWant = this.pilot.auto !== "none" && this.pilot.auto !== "node" ? this.autopilotWant(cam) : null),
@@ -2643,7 +2657,8 @@ export class CameraController {
     if (!thick && this.airFlight.inAir && this.airFlight.last!.speed > 1000) this.onAirEntry?.();
     // rapidity spent (the propellant gauge), and the Δv delivered to the executing node (proper
     // acceleration × proper time)
-    const w = Math.hypot(...out.acc) * (this.properTime - tau0);
+    // (the antigravity's hold is free)
+    const w = Math.hypot(...(sfCtx ? sub3(out.acc, sfCtx.free) : out.acc)) * (this.properTime - tau0);
     this.spent += w;
     if (burn && this.nodeBurning) this.nodeDone += w;
     this.dockCheck();
@@ -2688,6 +2703,125 @@ export class CameraController {
     const v = 25 * air.a;
     const o = aeroForces(VESSELS[fleet.active].aero, ax.map((a) => (dot3(va, a) / vl) * v) as Vec3, air);
     return o.q > 0 ? o.D / o.q / m : 0;
+  }
+
+  /** The flight law in the air: the settings' for the craft built for the air, a rocket's else. */
+  flightModeNow(): FlightMode {
+    return VESSELS[fleet.active].flies ? this.s.flightMode : "rocket";
+  }
+
+  /** The sci-fi flight computer's commands: speed [m/s], flight path angle and heading [rad]. */
+  private sfCmd: { speed: number; gamma: number; heading: number } | null = null;
+
+  /**
+   * The local frame the sci-fi computer flies in, both universes: up, north, east (the frame's own
+   * components — home, or the planet's turning axes), the velocity over the ground [m/s], the height
+   * over it [m], what holds the craft (gravity and the frame, the air) [m/s²], and the conversions to
+   * the pilot's local components. Null away from any ground or air.
+   */
+  private sfFrame(cam: ReturnType<typeof cameraFrame>) {
+    const c = 299792458;
+    const nav = this.ourNav(cam);
+    const LA = this.airFlight.last;
+    if (nav) {
+      const id = nav.ref;
+      const b = solarBody(id);
+      if (id === "sun" || !b) return null;
+      const P = nav.refPos;
+      const up = unitV(sub3(nav.X, P));
+      const ax = spinAxis(id);
+      let north = lin(ax, 1, up, -dot3(ax, up));
+      if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
+      north = unitV(north);
+      const east = cross(north, up);
+      const gv = groundVelocity(id, nav.X, nav.t);
+      const vRel = lin(sub3(nav.V, gv), c, nav.V, 0);
+      const h = solidBody(id) ? gearHeight(id, nav.X, nav.t) : (Math.hypot(...sub3(nav.X, P)) - b.radius) * M_METRES;
+      const top = Math.max(airTop(b.atmosphere), 100e3, 0.1 * b.radius * M_METRES);
+      if (h > top) return null;
+      const aU = c * c / M_METRES;
+      const grav = lin(gravityHome(nav.X, nav.t).acc, aU, up, 0);
+      const air = LA ? this.airFlight.accFrame : ([0, 0, 0] as Vec3);
+      const w = mouth(this.s).w;
+      return {
+        up, north, east, vRel, h, grav, air, g: Math.hypot(...grav),
+        out: (vWant: Vec3, ff: Vec3) => ({ beta: nav.toRep(lin(gv, 1, vWant, 1 / c)), ff: nav.toRep(lin(ff, 1 / aU, ff, 0)) }),
+        toLocal: (v: Vec3) => unitV(nav.toRep(v)),
+        fromLocal: (v: Vec3) => unitV(repToHomeVec(w, cam.ell, cam.n, v)),
+      };
+    }
+    const lf = this.local;
+    if (!lf || cam.region !== "hole") return null;
+    const { F, L } = lf;
+    const d = Math.hypot(...L.xi);
+    const up: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
+    let north: Vec3 = lin([0, 0, 1], 1, up, -up[2]);
+    if (Math.hypot(...north) < 1e-9) north = [1, 0, 0];
+    north = unitV(north);
+    const east = cross(north, up);
+    const h = (d - groundR(F, L.xi)) * F.mPerM - GEAR;
+    const grav = lin(localAccel(F, L.xi, L.w, [0, 0, 0], () => [0, 0, 0]), F.aUnit, up, 0);
+    const air = LA ? this.airFlight.accFrame : ([0, 0, 0] as Vec3);
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    return {
+      up, north, east, vRel: lin(L.w, c, up, 0), h, grav, air, g: Math.hypot(...grav),
+      out: (vWant: Vec3, ff: Vec3) => {
+        const gW = toGlobal(F, { xi: L.xi, w: lin(vWant, 1 / c, vWant, 0), landed: false });
+        return { beta: zamoBeta(X, gW.V, this.s.spin), ff: localToZamo(lin(ff, 1 / F.aUnit, ff, 0)) };
+      },
+      toLocal: (v: Vec3) => unitV(localToZamo(v)),
+      fromLocal: (v: Vec3) => unitV(zamoToLocal(v)),
+    };
+  }
+
+  /**
+   * The sci-fi flight computer: the stick and the throttle are its commands — the speed (the throttle:
+   * faster, slower; 0: a hover), the flight path's angle (pitch), the heading (yaw), a sideways slide
+   * (roll), the translation keys on top — and it flies the velocity they make with the thrust it has
+   * (or, the antigravity on, holds against gravity and the air for free). It keeps off the ground (a
+   * descent near it slowed to a touchdown's), turns its nose along the way, banks into the turns.
+   */
+  private sfWant(cam: ReturnType<typeof cameraFrame>, inp: PilotInput, dt: number) {
+    const fr = this.sfFrame(cam);
+    if (!fr) return null;
+    const { up, north, east, vRel } = fr;
+    const sp = Math.hypot(...vRel);
+    const vUp = dot3(vRel, up);
+    const vh = lin(vRel, 1, up, -vUp);
+    if (!this.sfCmd) {
+      const nose = fr.fromLocal(this.shipAxesLocal(cameraFrame(this.s))[2]);
+      const hd = Math.hypot(...vh) > 1 ? vh : nose;
+      this.sfCmd = { speed: sp, gamma: sp > 1 ? Math.asin(clamp(vUp / sp, -1, 1)) : 0, heading: Math.atan2(dot3(hd, east), dot3(hd, north)) };
+    }
+    const C = this.sfCmd;
+    C.speed = Math.max(0, C.speed + inp.throttle * Math.max(15, 0.8 * C.speed) * dt);
+    C.gamma = clamp(C.gamma + inp.pitch * 0.45 * dt, -1.45, 1.45);
+    const turn = inp.yaw * 0.6;
+    C.heading += turn * dt;
+    const hdir = lin(north, Math.cos(C.heading), east, Math.sin(C.heading));
+    const right = cross(hdir, up);
+    const side = inp.roll * Math.max(15, 0.2 * C.speed);
+    let v = lin(lin(hdir, C.speed * Math.cos(C.gamma) + inp.tz * 15, up, C.speed * Math.sin(C.gamma) + inp.ty * 15), 1, right, side + inp.tx * 15);
+    // (near the ground a descent slows to a touchdown's: never into it)
+    if (fr.h < 80) {
+      const vmin = -Math.max(0.8, 0.25 * Math.max(fr.h, 0));
+      const vu = dot3(v, up);
+      if (vu < vmin) v = lin(v, 1, up, vmin - vu);
+    }
+    let ff = lin(fr.grav, -1, fr.air, -1);
+    let free: Vec3 = [0, 0, 0];
+    if (this.s.antigrav) [free, ff] = [ff, [0, 0, 0]];
+    const o = fr.out(v, ff);
+    // the attitude: the nose along the way (level when slow), banked into the turn
+    const vl = Math.hypot(...v);
+    const wv = smoothstep(clamp((vl - 3) / 9, 0, 1));
+    let nose = vl > 1e-3 ? unitV(lin(hdir, 1 - wv, v, wv / vl)) : hdir;
+    if (Math.hypot(...nose) < 1e-6) nose = hdir;
+    const bank = clamp(Math.atan((C.speed * turn) / Math.max(fr.g, 0.1)), -1, 1) * wv;
+    const u0 = unitV(lin(up, 1, nose, -dot3(up, nose)));
+    const rN = cross(nose, u0);
+    const upB = lin(u0, Math.cos(bank), rN, Math.sin(bank));
+    return { beta: o.beta, ff: o.ff, free: fr.out([0, 0, 0], free).ff, nose: fr.toLocal(nose), up: fr.toLocal(upB) };
   }
 
   /** The air brake asked for (0 … 1). */
@@ -2738,9 +2872,32 @@ export class CameraController {
     const V = VESSELS[fleet.active].aero;
     return {
       inAir: A.inAir, q: L?.out.q ?? 0, mach: L?.out.mach ?? 0, alpha: L?.out.alpha ?? 0, beta: L?.out.beta ?? 0, heat: L?.out.heat ?? 0,
-      lift: L?.out.L ?? 0, drag: L?.out.D ?? 0, stalled: L?.out.stalled ?? false, h: L?.h ?? NaN, speed: L?.speed ?? 0, airT: L?.air.T ?? NaN,
+      u: L?.u ?? null, lift: L?.out.L ?? 0, drag: L?.out.D ?? 0, stalled: L?.out.stalled ?? false, h: L?.h ?? NaN, speed: L?.speed ?? 0, airT: L?.air.T ?? NaN,
       shield: A.skin.shield, hull: A.skin.hull, shieldMax: V.shield?.tMax ?? 0, hullMax: V.hull.tMax, g: A.g, gMax: V.gMax, gPeak: A.gPeak,
       margins: A.margins(), failure: A.failure, damage: this.s.damage, body: A.body,
+      mode: this.flightModeNow(), antigrav: this.s.antigrav, flaps: A.cfg.flaps ?? 0, brake: A.cfg.brake ?? 0, gear: !!A.cfg.gear,
+      sf: this.sfCmd ? { ...this.sfCmd } : null, ...this.attitudeNow(),
+    };
+  }
+
+  /** The flight path's angle over the local horizon [rad] (0 away from a body). */
+  private pathAngle(cam: ReturnType<typeof cameraFrame>): number {
+    const fr = this.sfFrame(cam);
+    const v = fr ? Math.hypot(...fr.vRel) : 0;
+    return fr && v > 0 ? Math.asin(clamp(dot3(fr.vRel, fr.up) / v, -1, 1)) : 0;
+  }
+
+  /** The flown craft's attitude over the ground below: pitch, bank (right: +), heading [rad]. */
+  private attitudeNow(): { pitch: number; bank: number; heading: number } | Record<string, never> {
+    const cam = cameraFrame(this.s);
+    const fr = this.sfFrame(cam);
+    if (!fr) return {};
+    const ax = this.shipAxesLocal(cam).map((a) => fr.fromLocal(a));
+    const [X, Y, Z] = ax as [Vec3, Vec3, Vec3];
+    return {
+      pitch: Math.asin(clamp(dot3(Z, fr.up), -1, 1)),
+      bank: Math.atan2(dot3(X, fr.up), dot3(Y, fr.up)),
+      heading: Math.atan2(dot3(Z, fr.east), dot3(Z, fr.north)),
     };
   }
 
@@ -2912,6 +3069,9 @@ export class CameraController {
     this.pilot.hold = "none";
     this.pilot.throttle = 0;
     this.pilot.omega = [0, 0, 0];
+    // (its own way of flying the air: the Ranger as a plane, the Lander as a rocket)
+    s.flightMode = id === "ranger" ? "plane" : "rocket";
+    this.sfCmd = null;
     this.plan = { nodes: [], path: null, at: 0, note: "" };
     this.issGoal = null;
     this.ourMission = null;

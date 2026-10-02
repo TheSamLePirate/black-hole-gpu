@@ -126,7 +126,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       area: [23, 91, 1.3], cdA0: 1.6, wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85 },
       cp: [[0, 0.3, -2.5], [0, 0, -0.25], [0, 0.6, 0]], cw: [0, 0, -0.9], curve: [0, 0.1, 0.6], damp: [4, 4, 0.6], len: 14.8, noseR: 1.2,
       shield: { dir: [0, -0.94, 0.34], cos: 0.42, tMax: 1950, cap: 2.2e4, eps: 0.85 },
-      hull: { tMax: 1150, cap: 9e3, eps: 0.7 }, gMax: 9,
+      hull: { tMax: 1150, cap: 9e3, eps: 0.7 }, gMax: 9, ctrl: [0.22, 0.1, 0.45],
     },
     mounts: {
       // (the pilot's seat, front left: the cabin, scripts/build-cockpit.ts)
@@ -151,7 +151,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       area: [92, 304, 26], cdA0: 4, wing: { S: 304, AR: 1, cla: 1.5, stall: 0.45, e: 0.8 },
       cp: [[0, 0.6, -2.5], [0, 3.5, -0.1], [0, 1.2, 0]], cw: [0, 0, -0.8], curve: [0.3, 0.7, 0.5], damp: [3, 3, 0.5], len: 24, noseR: 3,
       shield: { dir: [0, -1, 0], cos: 0.5, tMax: 2300, cap: 3e4, eps: 0.85 },
-      hull: { tMax: 1000, cap: 1e4, eps: 0.7 }, gMax: 6,
+      hull: { tMax: 1000, cap: 1e4, eps: 0.7 }, gMax: 6, ctrl: [0.08, 0.04, 0.15],
     },
     mounts: {
       // (behind the nose's windows — the Lander's cabin is not modelled: the hull seen from within)
@@ -178,7 +178,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     // a ring of modules, no shield, no wing: it tumbles and burns
     aero: {
       area: [900, 900, 1500], cdA0: 60, cp: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], cw: [0, 0, 0], curve: [0.8, 0.8, 0.8], damp: [1, 1, 1], len: 64, noseR: 2,
-      shield: null, hull: { tMax: 700, cap: 6e3, eps: 0.6 }, gMax: 1.5,
+      shield: null, hull: { tMax: 700, cap: 6e3, eps: 0.6 }, gMax: 1.5, ctrl: [0, 0, 0],
     },
     mounts: {
       // (in the hub, looking ahead along it)

@@ -991,6 +991,8 @@ export class SettingsPanel {
         ["⇧R", "Camera reset: back to the craft's attach points, looking ahead (the outside views' own places)"],
         ["View “Cabin”", "Inside the Ranger: Z Q S D · A E move the camera about the cabin (⇧ faster), the drag or the arrows turn the look — the ship flies on"],
         ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
+        ["F · ⇧F", "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity"],
+        ["P · ⇧P", "Flaps (up · half · full) · air brake"],
         ["⇧Y", "The future path in the view"],
         ["²  (`)", "HUD density: full · minimal · clean view"],
         ["O", "Flight planner: align the orbital plane · transfer · rendezvous · through the wormhole · nodes, then EXECUTE"],
