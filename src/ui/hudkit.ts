@@ -55,6 +55,28 @@ export const COL: Record<string, string> = {
   maneuver: "#4d8dff",
   dock: "#5fffd0",
 };
+const DEFAULT_COL = { ...COL };
+/** Okabe–Ito's palette, told apart with any colour vision (lightened for the dark sky). */
+const OKABE: Record<string, string> = {
+  prograde: "#f0e442",
+  retrograde: "#f0e442",
+  radialOut: "#56b4e9",
+  radialIn: "#56b4e9",
+  normal: "#cc79a7",
+  antinormal: "#cc79a7",
+  target: "#e8732a",
+  tgtPrograde: "#e8732a",
+  tgtRetrograde: "#e8732a",
+  antiTarget: "#e8732a",
+  burn: "#4fa3f0",
+  maneuver: "#4fa3f0",
+  dock: "#2bc79a",
+};
+/** The markers' palette (Settings › Accessibility): COL changed in place, every drawing reads it. */
+export function applyPalette(p: "default" | "okabe") {
+  Object.assign(COL, p === "okabe" ? OKABE : DEFAULT_COL);
+}
+
 /** the HUD's technical face for labels (sized ~1.2× Inter's: narrower), mono for figures */
 export const FONT = "Rajdhani, Inter, system-ui, sans-serif";
 export const MONO = '"JetBrains Mono", ui-monospace, monospace';

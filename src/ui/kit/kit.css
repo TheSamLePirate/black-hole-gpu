@@ -144,3 +144,14 @@
 
 /* (an element hidden is hidden, whatever display its own rule gives it) */
 #toolbar > [hidden], .fl-root button[hidden] { display: none !important; }
+
+/* ---------------------------------------------------------------- accessibility (Settings › Accessibility) */
+/* the interface's scale: the panels, the menus, the dock, the hints, the HUD's panels (not its symbols) */
+:root { --ui-scale: 1; }
+#panel, #toolbar, #tp-dock, .kh, .sp-toasts, .k-modal > .k-frame, .ts-panel, .ms-root > *, .fl-root .fl-panel:not(.fl-mission), .fl-root .fc-panel, #cam-pop, #sky-pop, .ph-bar {
+  zoom: var(--ui-scale);
+}
+/* the keyboard's focus, seen everywhere (a control styled its own way keeps its own) */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--k-on); outline-offset: 2px; }
+/* reduce motion: nothing blinks, slides or fades in */
+body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation: none !important; transition: none !important; }

@@ -85,6 +85,8 @@ import { dateNow } from "./util/now";
 import { KerrBench } from "./bench/runner";
 import { installVramHook } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
+import { setSteady } from "./ui/clock";
+import { applyPalette } from "./ui/hudkit";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -251,8 +253,19 @@ async function main() {
     touch();
   };
 
+  /** The accessibility settings, applied: the interface's scale, the markers' palette, the motion. */
+  function applyAccess() {
+    document.documentElement.style.setProperty("--ui-scale", String(settings.uiScale));
+    const still = settings.reduceMotion || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.body.classList.toggle("reduce-motion", still);
+    setSteady(still);
+    applyPalette(settings.hudPalette);
+  }
+  applyAccess();
+
   /** Routes a settings change to what it affects (re-trace, resolve only, resize, nothing). */
   function onSettingsChange(keys: (keyof Settings)[]) {
+    if (keys.some((k) => k === "uiScale" || k === "hudPalette" || k === "reduceMotion")) applyAccess();
     let scene = false;
     let resized = false;
     if (keys.includes("anchor")) {

@@ -12,4 +12,9 @@ export function setUiClock(ms: number | null) {
 }
 
 /** a blink's lit half: true for 250 ms, false for 250 ms */
-export const blinkOn = () => Math.floor(uiNow() / 250) % 2 === 0;
+let steady = false;
+/** No blinking (Settings › Accessibility › Reduce motion, or the system's own): what blinks stays lit. */
+export const setSteady = (on: boolean) => {
+  steady = on;
+};
+export const blinkOn = () => steady || Math.floor(uiNow() / 250) % 2 === 0;

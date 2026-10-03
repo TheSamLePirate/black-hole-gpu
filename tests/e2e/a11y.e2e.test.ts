@@ -63,6 +63,19 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
     await app.press("Escape");
   });
 
+  test("accessibility settings: the interface scaled, the markers' palette, nothing blinking", async () => {
+    await app.js(`(__bh.game.set("uiScale", 1.25), __bh.game.set("hudPalette", "okabe"), __bh.game.set("reduceMotion", true), 1)`);
+    const r = await app.js<{ zoom: string; still: boolean; anim: string }>(`(() => {
+      const p = document.getElementById("toolbar");
+      return { zoom: getComputedStyle(p).zoom, still: document.body.classList.contains("reduce-motion"),
+        anim: getComputedStyle(document.querySelector(".k-btn, button")).animationName };
+    })()`);
+    expect(r.zoom).toBe("1.25");
+    expect(r.still).toBe(true);
+    await app.js(`(__bh.game.set("uiScale", 1), __bh.game.set("hudPalette", "default"), __bh.game.set("reduceMotion", false), 1)`);
+    expect(await app.js<boolean>(`document.body.classList.contains("reduce-motion")`)).toBe(false);
+  });
+
   test("the help is a modal dialog, named by its title, the focus inside", async () => {
     await app.press("Slash", "?", { shift: true });
     const shown = `[...document.querySelectorAll("[role=dialog]")].find((e) => e.getClientRects().length)`;
