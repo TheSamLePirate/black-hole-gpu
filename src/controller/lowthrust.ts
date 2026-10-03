@@ -1390,20 +1390,21 @@ function futureCompute(this: CameraController, at: number[]): FutureView | null 
     // in — at Kennedy the Earth's turn is 400 m/s); higher, the orbit as it is (not turning)
     const turn = !!b && b.kind !== "star" && Math.hypot(...sub3(nav.X, B0)) - b.radius < Math.max(airTop(b.atmosphere), 60e3) / M_METRES;
     const A0 = turn ? bodyAxes(b!, t0) : null;
+    // (each sample relative to the body at its own time — and on the body's turning axes then: fixed
+    // for a path, kept with it, not recomputed ten times a second)
+    const rel = relOfPath(free, ref, b);
     for (let j = 0; j < free.pts.length; j++) {
       const t = free.times[j]!;
       if (t <= t0) continue;
-      let v = sub3(free.pts[j]!, solarState(ref, t).pos);
-      if (A0) {
-        const A1 = bodyAxes(b!, t);
-        const vb: Vec3 = [dot3(v, A1[0]), dot3(v, A1[1]), dot3(v, A1[2])];
-        v = lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]);
-      }
+      const vb = rel.body[j]!;
+      const v = A0 ? lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]) : rel.v[j]!;
       P.push(lin(v, 1, B0, 1));
       T.push((t - t0) * M_SECONDS);
     }
     eye = cameraHome(s, cam);
-    look = (d) => ourLook(s, cam, d);
+    // (the mouth's geometry once for all the points, not once a point)
+    const w = mouth(s).w;
+    look = (d) => ourLook(s, cam, d, w);
     mPer = M_METRES;
     if (b && b.kind !== "star") {
       body = { c: B0, R: b.radius };
@@ -1468,6 +1469,27 @@ function futureCompute(this: CameraController, at: number[]): FutureView | null 
       return { t, ...this.futureSee(C, look, eye, lin(P[j - 1]!, 1 - f, P[j]!, f), mPer, body) };
     });
   return { pts, marks, impact };
+}
+
+/** A free-fall path's samples relative to its body at their own times, and on the body's axes then. */
+const relCache = new WeakMap<object, { ref: string; v: Vec3[]; body: Vec3[] }>();
+function relOfPath(free: { pts: Vec3[]; times: number[] }, ref: string, b: ReturnType<typeof solarBody>) {
+  const hit = relCache.get(free);
+  if (hit && hit.ref === ref) return hit;
+  const v: Vec3[] = [],
+    body: Vec3[] = [];
+  for (let j = 0; j < free.pts.length; j++) {
+    const t = free.times[j]!;
+    const r = sub3(free.pts[j]!, solarState(ref, t).pos);
+    v.push(r);
+    if (b && b.kind !== "star") {
+      const A1 = bodyAxes(b, t);
+      body.push([dot3(r, A1[0]), dot3(r, A1[1]), dot3(r, A1[2])]);
+    } else body.push(r);
+  }
+  const out = { ref, v, body };
+  relCache.set(free, out);
+  return out;
 }
 
 /** A point of the future as the eye sees it: its direction (camera coordinates), distance [m], hidden

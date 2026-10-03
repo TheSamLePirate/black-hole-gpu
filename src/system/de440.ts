@@ -22,7 +22,11 @@ interface Body {
 const bodies = new Map<string, Body>();
 
 /** Reads an ephemeris file (EPHM, version 1): its bodies join the ones known. */
+/** Bumped by each ephemeris added: what was computed before it (the analytic models') is stale. */
+export let ephemerisVersion = 0;
+
 export function addEphemeris(buf: ArrayBuffer) {
+  ephemerisVersion++;
   const dv = new DataView(buf);
   if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "EPHM") throw new Error("not an ephemeris file");
   const hl = dv.getUint32(4, true);

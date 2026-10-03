@@ -12,7 +12,7 @@
 
 import type { Vec3 } from "../physics";
 import type { Atmosphere } from "../aero";
-import { deState } from "./de440";
+import { deState, ephemerisVersion } from "./de440";
 import { earthAxes, eclDir, eclOf, iauAxes, iauRate } from "./orientation";
 import { tdbOf } from "./timescale";
 import { AU_M, C_MPS, DEG, M_METRES, M_SECONDS } from "../units";
@@ -595,14 +595,27 @@ function moonGeo(d: number): State {
   });
 }
 
-// (the states of one instant, reused: the pull on the ship asks for every body at the same time)
-let memoD = NaN;
-const memo = new Map<string, State>();
-function helio(b: SolarBody, d: number): State {
-  if (d !== memoD) {
-    memoD = d;
-    memo.clear();
+// (the states of recent instants, reused: the pull on the ship asks for every body at the same time,
+// and the HUD's marks of the future, the light-time to each body and the map ask again and again for
+// the same few instants — one instant kept, they were recomputed tens of thousands of times a second)
+const MEMO_INSTANTS = 64;
+const memos = new Map<number, Map<string, State>>();
+let memoVersion = -1;
+function memoAt(d: number) {
+  // (an ephemeris come in since: the states kept were the analytic models')
+  if (memoVersion !== ephemerisVersion) {
+    memoVersion = ephemerisVersion;
+    memos.clear();
   }
+  let m = memos.get(d);
+  if (!m) {
+    if (memos.size >= MEMO_INSTANTS) memos.delete(memos.keys().next().value as number);
+    memos.set(d, (m = new Map()));
+  }
+  return m;
+}
+function helio(b: SolarBody, d: number): State {
+  const memo = memoAt(d);
   const hit = memo.get(b.id);
   if (hit) return hit;
   const st = helioNow(b, d);
@@ -733,14 +746,14 @@ export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
 /** Our mouth: on Saturn's orbit, 0.7 AU behind it (the same heliocentric turn, backwards) */
 const MOUTH_LAG = 2 * Math.asin(0.7 / (2 * 9.537));
 function mouthHelio(d: number): State {
-  const hit = d === memoD ? memo.get("#mouth") : undefined;
+  const hit = memoAt(d).get("#mouth");
   if (hit) return hit;
   const s = helio(solarBody("saturn")!, d);
   const c = Math.cos(-MOUTH_LAG),
     sn = Math.sin(-MOUTH_LAG);
   const rz = (v: Vec3): Vec3 => [c * v[0] - sn * v[1], sn * v[0] + c * v[1], v[2]];
   const st = lazy(rz(s.pos), () => rz(s.vel));
-  memo.set("#mouth", st);
+  memoAt(d).set("#mouth", st);
   return st;
 }
 

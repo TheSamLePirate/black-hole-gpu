@@ -18,7 +18,7 @@ import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
 import { FONT, fmtDist, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
-import { bodyPosAt, dateOf, lineage, ourPos, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
+import { bodyPosAt, dateOf, lineage, ourPos, ourScene, ourTrack, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
 import { extendTheirs } from "../../system/their-extend";
@@ -202,6 +202,16 @@ export class Map3D {
   get animating() {
     return this.moving || !!this.gizmo || this.playing;
   }
+  /** when the pointer last moved the view (a drag, the wheel) [performance.now] */
+  private handledAt = -1e9;
+  /**
+   * Easing a move the pointer made (or a gizmo, the timeline playing) — not the camera's own following
+   * of the ship and the paths, which never quite rests: the mini-map, drawn on its own schedule
+   * otherwise, is drawn every frame only then.
+   */
+  get eased() {
+    return (this.moving && performance.now() - this.handledAt < 2000) || !!this.gizmo || this.playing;
+  }
 
   // ------------------------------------------------------------------------------------ the timeline
   private buildTimeline() {
@@ -303,10 +313,10 @@ export class Map3D {
     const key = `ca:${ours ? "o" : "g"}:${id}`;
     if (!m.has(key)) {
       // (our side: the home frame; Gargantua's: the hole's flat map)
-      const at = (t: number): V3 => (ours ? ourPos(id, t) : (bodyCentre(this.host.s, id as Body, t) as V3));
+      const track = ours ? ourTrack(id, e.times) : e.times.map((t) => bodyCentre(this.host.s, id as Body, t) as V3);
       let best: { i: number; d: number } | null = null;
       for (let j = 0; j < e.pts.length; j++) {
-        const d = len(sub(e.pts[j]!, at(e.times[j]!)));
+        const d = len(sub(e.pts[j]!, track[j]!));
         if (!best || d < best.d) best = { i: j, d };
       }
       // (not at its very start: an approach, not where the path left it)
@@ -856,11 +866,13 @@ export class Map3D {
         const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
         this.cam.zoom(Math.exp(e.deltaY * k * 0.0016), x, y);
         this.autoDist = false;
+        this.handledAt = performance.now();
       },
       { passive: false },
     );
     c.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
+      this.handledAt = performance.now();
       c.setPointerCapture(e.pointerId);
       const [x, y] = at(e);
       const near = (q: { x: number; y: number }, r: number) => Math.hypot(q.x - x, q.y - y) < r * devicePixelRatio;
@@ -2120,7 +2132,8 @@ export class Map3D {
     const rel = (p: OurPath): V3[] => {
       let c = this.relCache.get(p);
       if (!c || c.frame !== frameId) {
-        c = { frame: frameId, pts: p.pts.map((X, j) => sub(X, solarState(frameId, p.times[j]!).pos)) };
+        const track = ourTrack(frameId, p.times);
+        c = { frame: frameId, pts: p.pts.map((X, j) => sub(X, track[j]!)) };
         this.relCache.set(p, c);
       }
       return c.pts;

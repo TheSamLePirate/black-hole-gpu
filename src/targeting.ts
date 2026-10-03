@@ -270,8 +270,7 @@ export function cameraHome(s: Settings, cam: CameraFrame): Vec3 {
 }
 
 /** A home-frame direction as the camera sees it (rep vector at the camera, aberrated by its motion). */
-export function ourLook(s: Settings, cam: CameraFrame, d: Vec3): Vec3 {
-  const w = mouth(s).w;
+export function ourLook(s: Settings, cam: CameraFrame, d: Vec3, w = mouth(s).w): Vec3 {
   return aberrateRep(norm(homeToRep(w, cam.ell, cam.n, d)), cam.beta);
 }
 

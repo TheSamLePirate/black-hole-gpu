@@ -29,6 +29,35 @@ export function ourPos(id: string, t: number): V3 {
   if (isCraftId(id)) return (fleet.pose(id, t)?.X ?? solarState("earth", t).pos) as V3;
   return solarState(id, t).pos as V3;
 }
+
+/** Two minutes [M]: a world's motion is smooth over it (the Earth's 6 mm/s² about the Sun: ~10 m off). */
+const TRACK_STEP = 120 / M_SECONDS;
+
+/**
+ * ourPos along a path's times: a world's exact every two minutes of the path and linear between — the
+ * map draws hundreds of samples a path, a few paths a second; the space station and the craft, whose
+ * orbits bend in minutes, exact at every sample.
+ */
+export function ourTrack(id: string, times: number[]): V3[] {
+  const n = times.length;
+  if (id === "iss" || isCraftId(id) || n < 3) return times.map((t) => ourPos(id, t));
+  const out: V3[] = new Array(n);
+  out[0] = ourPos(id, times[0]!);
+  let a = 0;
+  for (let j = 1; j < n; j++) {
+    if (j < n - 1 && times[j]! - times[a]! < TRACK_STEP) continue;
+    out[j] = ourPos(id, times[j]!);
+    const A = out[a]!,
+      B = out[j]!,
+      span = times[j]! - times[a]! || 1;
+    for (let k = a + 1; k < j; k++) {
+      const f = (times[k]! - times[a]!) / span;
+      out[k] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f];
+    }
+    a = j;
+  }
+  return out;
+}
 import type { V3 } from "./camera";
 import { add, sub } from "../../math/vec3";
 

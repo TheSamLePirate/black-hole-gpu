@@ -1298,8 +1298,10 @@ export class FlightHud {
       if (this.syncMapTab()) {
         if (this.ground.animating) cpuProf.time("HUD: ground track", () => this.ground.draw(info, time));
         else tasks.push(["map", this.mapView ? 30 : 15, () => cpuProf.time("HUD: ground track", () => this.ground.draw(info, time))]);
-      } else if (this.mapView || this.map3d.animating) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
-      else tasks.push(["map", 20, () => cpuProf.time("HUD: map", () => this.map3d.draw(info, time))]);
+      } else if (this.mapView || this.map3d.eased) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));
+      // (the mini-map: ten times a second — its marks move a few pixels a second; a draw is ~15 ms of
+      // ephemerides along the paths)
+      else tasks.push(["map", 10, () => cpuProf.time("HUD: map", () => this.map3d.draw(info, time))]);
     }
     tasks.push(["text", 10, () => cpuProf.time("HUD: text panels", () => (this.drawText(info, time), this.tidyRows()))]);
     let pick: (typeof tasks)[number] | null = null,
