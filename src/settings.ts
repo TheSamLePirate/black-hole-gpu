@@ -280,6 +280,7 @@ export interface Settings {
   hudBurn: boolean; // the next burn: countdown, Δv, its length, the aim ring
   hudDock: boolean; // the docking: gates along the port's axis, the scope down it, range, closing
   hudRelativity: boolean; // near Gargantua: the clock rate, γ, the sky's Doppler, bound or escaping, the radii, the tide
+  cockpitAids: boolean; // the same aids on the cabin's screens (the PFD, NAV, DOCKING / LANDING, PLAN, CLOCKS)
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -492,6 +493,7 @@ export function defaultSettings(): Settings {
     hudBurn: true,
     hudDock: true,
     hudRelativity: true,
+    cockpitAids: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,

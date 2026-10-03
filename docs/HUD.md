@@ -65,6 +65,21 @@ right from any mount); points (the future path, the runway, the docking gates) w
 |---|---|
 | Relativity box | dτ/dt and its bar; the speed against the local observer, γ, the sky ahead's Doppler factor; E per unit mass — bound and the margin to escape, or escaping; the radius against the ISCO, the photon orbit and the horizon (red inside, or in the ergosphere); the tide per metre of the craft. The radial-in marker named GARGANTUA. |
 
+## On the cockpit's screens
+
+The same aids on the cabin's screens (`src/ui/cockpitscreens.ts`, redrawn 8 times a second while the cabin
+is seen; the switch **Aids on the cockpit's screens**, each aid also by its own switch):
+
+| Screen | What it adds |
+|---|---|
+| PFD | In the air the flight path marker through the air (red stalled), the angle-of-attack bracket and stall marks above it, the energy chevron, the sideslip ball, the flight director on the rolled ladder; a heading tape over the ball. |
+| NAV → APPROACH | A runway in reach (40 km): the runway from above with its centreline, the aim point and the craft (its offset across ×4); the localizer's and the glide path's needles (an ILS's), the distance to the threshold, the offset, the height. |
+| DOCKING | The scope oriented down the port's axis: the offset where it is, its drift over 10 s; the closing rate coloured by the range. |
+| DOCKING → LANDING | Low and slow with no port in reach: the drift scope (the ship's forward up), the vertical speed's bar, DRIFT, V/S, the stop burn's countdown, TWR. |
+| PLAN | The next burn, large: its countdown, Δv, length at full thrust, the aim. |
+| ORBIT | About Gargantua: the relativity box — dτ/dt, speed and γ, the sky ahead's Doppler, the energy, r against the ISCO, the photon orbit and the horizon, the tide. |
+| CLOCKS | About Gargantua: dτ/dt in place of the local time. |
+
 Cost: the symbology is a few hundred canvas strokes a frame; the future path and the runway are
 recomputed ten times a second at most (`futureView`, `runwayView`). Full screen at 1280 × 720 and on a
 phone: 16.7 ms a frame (median).

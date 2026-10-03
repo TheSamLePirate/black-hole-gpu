@@ -1098,6 +1098,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud relativity time dilation doppler escape isco photon horizon tide",
   },
   {
+    key: "cockpitAids", type: "toggle", section: "game", group: "HUD aids", label: "Aids on the cockpit's screens", effect: "none",
+    help: "The cabin's screens get the HUD's aids: the PFD the flight path through the air, the angle-of-attack bracket and stall marks, the energy chevron, the sideslip ball, the flight director and a heading tape; NAV an approach view of the runway with its localizer and glide path deviations; DOCKING the oriented scope, or LANDING near the ground (drift, vertical speed, the stop burn); PLAN the next burn's countdown and aim; CLOCKS dτ/dt near Gargantua.",
+    keywords: "cockpit screens pfd nav approach landing burn aids",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",

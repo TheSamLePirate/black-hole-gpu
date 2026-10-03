@@ -1674,7 +1674,7 @@ async function main() {
         /* (between two frames of a jump) */
       }
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
-      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time })) renderer.ship.updateScreens(cockpitScreens.canvas);
+      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() })) renderer.ship.updateScreens(cockpitScreens.canvas);
       // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
       {
         const S = info.S as number[][];
