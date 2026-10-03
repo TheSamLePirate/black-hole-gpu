@@ -42,7 +42,7 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 | G0.2 | **Rapport** `kerr-bench/1` (`src/bench/report.ts`) : système (GPU, limites, navigateur, écran), chargement, scènes, thermique, VRAM, erreurs, Kerr Score, qualité conseillée ; `src/bench/sysinfo.ts`, `src/bench/vram.ts` | fait | `497ba4b` |
 | G0.3 | **Écran** `…/#bench` (`src/ui/bench.ts`, `bench.css`) : accueil, mesure, résultats, téléchargement, copie, partage, comparaison ; **FR/EN** (`src/i18n.ts`, premier usage) | fait | `497ba4b` |
 | G0.4 | `scripts/bench.ts` pilote `__bh.bench` (une seule logique de mesure) ; `version.json` (serveur et build) | fait | `497ba4b` |
-| G0.5 | **Référence du score** : Apple M1 Max, Chrome, test Standard = 1000 (débits fixes par scène dans `REFERENCE`) ; rapport de référence dans `docs/perf/field/` ; **`scripts/bench-merge.ts`** : tous les rapports reçus en un tableau Markdown et un CSV | fait | (ce commit) |
+| G0.5 | **Référence du score** : Apple M1 Max, Chrome, test Standard = 1000 (débits fixes par scène dans `REFERENCE`) ; rapport de référence dans `docs/perf/field/` ; **`scripts/bench-merge.ts`** : tous les rapports reçus en un tableau Markdown et un CSV | fait | `a15a0eb` |
 
 **Mode d'emploi pour tes amis :** ouvrir `https://thesamlepirate.github.io/black-hole-gpu/#bench`, choisir la durée, Lancer, puis Télécharger le rapport et te l'envoyer. Les rapports reçus vont dans `docs/perf/field/`, puis `bun scripts/bench-merge.ts`.
 
@@ -53,7 +53,12 @@ Découvertes en route :
 
 ## U0 : quick wins UI
 
-À venir. Détail : audit §17.
+| # | Étape | Statut | Commit |
+|---|---|---|---|
+| U0.1 | **Échap partout** (réglages, F2, rendu, carte plein écran, galerie, en plus de Caméra, Ciel et aide) ; `H` masque toutes les surfaces ; **échelle de z-index** en variables (`--z-hud` … `--z-tip`), galerie au-dessus des popovers, alertes au-dessus des modales ; **file de toasts** (3 empilés, durée selon la longueur, journal) | fait | `2d30a78` |
+| U0.2 | **HUD juste** : chevron d'énergie et tendance de vitesse en temps simulé (+10 s) et dans les bonnes unités ; boîte de vitesse dimensionnée (« 7.67 km/s ») ; barre mission en s et m/s ; distances de cible en km et UA ; plus d'« IMPACT » au sol ; verrou de cible masqué en finale (< 20 km d'une piste) ; flèche de bord rétrograde ; encadré de relativité ajusté à son texte ; un seul rythme de clignotement (2 Hz, `src/ui/clock.ts`) ; ombres floues remplacées. Vérifié en headless | fait | `5c33e26` |
+| U0.3 | **Moins « site web »** : lien Atlas retiré du HUD, bandeau « Drag to orbit » masqué en vol, fps seulement en dev ; **Craft Lost « signal perdu »** (scanlines, code télémétrie, FR/EN, plus de Helvetica) ; panneaux de vol opaques à ~90 % et **crochets d'angle** ; **police minimale 11 px** dans le DOM (58 déclarations) | fait | (ce commit) |
+| U0.4 | Retrait du code mort de l'ancien planificateur (`.fl-plan`, ~350 lignes) | reporté au découpage de `flighthud.ts` (phase 1) | |
 
 ## Journal
 
@@ -67,3 +72,4 @@ Découvertes en route :
 - 0.7 : 4 nouveaux fichiers de tests (16 tests) sur du code jusqu'ici à 0 %.
 - 0.8 : lint/format et validation des shaders en CI. **Phase 0 terminée.**
 - G0 : Kerr Bench livré (`#bench`), référence M1 Max = 1000, fusion des rapports. Phase Standard de référence : Artemis 49 fps, Gargantua 42, disque 44, Saturne 44, Kerr 57, trou de ver 47, Lune 53, Miller 51 (Game, headless).
+- U0 : Échap partout, toasts en pile, HUD juste (unités, temps simulé, fausses alarmes), Craft Lost refait, panneaux encadrés, 11 px minimum. Captures headless : pas de tir, orbite, carte, Craft Lost, réglages.

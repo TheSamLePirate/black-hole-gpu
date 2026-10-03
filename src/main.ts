@@ -72,7 +72,7 @@ import { rangerHull, stationHulls } from "./system/collide";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 import { store } from "./util/storage";
-import { caught } from "./debug";
+import { caught, DEV } from "./debug";
 import { KerrBench, BENCH_SCENES } from "./bench/runner";
 import { installVramHook, vram } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
@@ -2516,7 +2516,8 @@ async function main() {
       phase = `<span class="phase cv">Rendering ${(st.offline.progress * 100).toFixed(0)} %</span>`;
       progress = st.offline.progress;
     } else if (st.phase === "realtime") {
-      phase = `<span class="phase rt">Live · ${fpsNow.toFixed(0)} fps</span>`;
+      // (the frame rate is a developer's figure: on the dev server only — F2 › Perf has it everywhere)
+      phase = `<span class="phase rt">Live${DEV ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
     } else if (st.phase === "converging") {
       phase = `<span class="phase cv">Refining · ${Math.floor(st.spp)} / ${settings.targetSpp}</span>`;
       progress = st.spp / settings.targetSpp;

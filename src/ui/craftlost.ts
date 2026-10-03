@@ -1,6 +1,15 @@
 // The craft lost to the air (flightair.ts: its shield or hull burnt through, a load past its structure):
 // the time stopped, why, and the ways on — back to the moment before the entry, on without damage,
-// the scene again.
+// the scene again. Shown as the telemetry would: the signal lost, the last words frozen on a screen.
+import { tr } from "../i18n";
+
+const T = {
+  code: { fr: "TÉLÉMÉTRIE · SIGNAL PERDU", en: "TELEMETRY · SIGNAL LOST" },
+  title: { fr: "VAISSEAU PERDU", en: "CRAFT LOST" },
+  resume: { fr: "Reprendre avant la rentrée", en: "Resume before the entry" },
+  undamaged: { fr: "Continuer sans dégâts", en: "Go on without damage" },
+  restart: { fr: "Recommencer la scène", en: "Restart the scene" },
+};
 
 export interface CraftLostActions {
   /** back to the last point before the air (null: none kept) */
@@ -24,9 +33,12 @@ export class CraftLost {
     r.className = "craft-lost";
     const box = document.createElement("div");
     box.className = "cl-box";
+    const code = document.createElement("div");
+    code.className = "cl-code";
+    code.textContent = tr(T.code);
     const h = document.createElement("div");
     h.className = "cl-title";
-    h.textContent = "CRAFT LOST";
+    h.textContent = tr(T.title);
     const p = document.createElement("div");
     p.className = "cl-why";
     p.textContent = why;
@@ -43,10 +55,10 @@ export class CraftLost {
       };
       row.append(b);
     };
-    btn("Resume before the entry", a.resume, true);
-    btn("Go on without damage", a.undamaged);
-    btn("Restart the scene", a.restart);
-    box.append(h, p, row);
+    btn(tr(T.resume), a.resume, true);
+    btn(tr(T.undamaged), a.undamaged);
+    btn(tr(T.restart), a.restart);
+    box.append(code, h, p, row);
     r.append(box);
     document.body.append(r);
     this.root = r;
