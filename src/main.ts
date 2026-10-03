@@ -397,6 +397,7 @@ async function main() {
     fleet.active = settings.vessel;
     setMountVessel(settings.vessel);
     camera.settleMount();
+    camera.newFlight();
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards

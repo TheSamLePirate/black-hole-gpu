@@ -202,6 +202,7 @@ export class GameTools {
     s.motion = "geodesic";
     c.setCinematic(null);
     c.setPilot(true);
+    c.newFlight();
     c.setOurLanded(p.landed ?? null);
     c.sync();
     this.ctx.refresh();
@@ -445,6 +446,7 @@ export class GameTools {
     Object.assign(s, defaultSettings(), save.settings, own);
     this.ctx.setTime(save.time);
     c.setCinematic(null);
+    c.newFlight();
     if (save.ship.piloting && s.ship) {
       c.setPilot(true);
       // (setPilot's own choices — time running, the path shown — give way to the saved ones)

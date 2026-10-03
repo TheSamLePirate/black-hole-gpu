@@ -30,6 +30,7 @@ import { clamp, flareRef, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapY
 declare module "../controls" {
   interface CameraController {
     setPilot: typeof setPilot;
+    newFlight: typeof newFlight;
     stepOffMount: typeof stepOffMount;
     standOn: typeof standOn;
     placeShipRep: typeof placeShipRep;
@@ -110,6 +111,23 @@ function setPilot(this: CameraController, on: boolean) {
     const v = circularSpeed(cam.r, s.spin, true, cam.zamo);
     if (v !== null && cam.r > isco(s.spin)) [s.velR, s.velT, s.velP] = [0, 0, v];
   }
+}
+
+/**
+ * A new flight — a scene, a placement, a saved game: nothing of the last one carried into it (an
+ * entry's run and its glide, the docking's, the air's heat and gear, the air brake, the displays'
+ * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
+ */
+function newFlight(this: CameraController) {
+  this.entryRun = null;
+  this.dockAuto = null;
+  this.ourCirc = null;
+  this.airBrake = 0;
+  this.airFlight.reset(fleet.active);
+  this.airFlight.cfg = {};
+  this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
+  this.pilot.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
+  this.contrails.clear();
 }
 
 /**
@@ -1279,6 +1297,7 @@ function entryStep(
 export function installPiloting(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
     setPilot,
+    newFlight,
     stepOffMount,
     standOn,
     placeShipRep,

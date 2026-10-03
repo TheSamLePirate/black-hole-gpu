@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { FLIGHTS } from "./lib/flights";
 
 // Golden flights: scenes flown at fixed steps (__bh.freeze + step, 1/30 s), their end state against the
 // one recorded — the flight's code (controls.ts, its integrators, the autopilots) moved or split must
@@ -8,28 +9,6 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const FILE = `${import.meta.dir}/golden/flights.json`;
 const UPDATE = process.env.UPDATE === "1";
-
-interface Flight {
-  scene: string;
-  /** set up after the scene, before the steps (page code) */
-  setup: string;
-  steps: number;
-}
-
-export const FLIGHTS: Record<string, Flight> = {
-  "orbit-burn": { scene: "game:artemis", setup: "__bh.camera.pilot.throttle = 1", steps: 300 },
-  "orbit-retro-hold": {
-    scene: "game:artemis",
-    setup: `__bh.camera.pilot.setHold("retrograde"); __bh.camera.pilot.throttle = 0.4`,
-    steps: 600,
-  },
-  "entry-glide-edwards": { scene: "game:artemis", setup: `__bh.game.glideTo("Edwards")`, steps: 900 },
-  "iss-autodock": { scene: "Earth: docking to the ISS", setup: `__bh.camera.pilot.setAuto("dock")`, steps: 900 },
-  "moon-takeoff": { scene: "Moon: an afternoon on the plains", setup: `__bh.camera.pilot.setAuto("takeoff")`, steps: 600 },
-  "gargantua-thrust": { scene: "Ranger: approaching Gargantua", setup: "__bh.camera.pilot.throttle = 0.5", steps: 300 },
-  "wormhole-coast": { scene: "Interstellar: wormhole to Gargantua", setup: "", steps: 300 },
-  "miller-sea": { scene: "Miller: Gargantua over the sea", setup: "__bh.camera.pilot.throttle = 0.3", steps: 300 },
-};
 
 type State = Record<string, number | string | null>;
 
