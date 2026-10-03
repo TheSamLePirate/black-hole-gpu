@@ -6,6 +6,7 @@ import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
+import { PauseMenu } from "./ui/pause";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1240,6 +1241,46 @@ async function main() {
     }
   }
 
+  // the pause menu (Escape with nothing open): the time held, the game's own (ui/pause.ts)
+  const releaseControls = () => {
+    mission.stop("Mission stopped — you have the controls");
+    camera.pilot.hold = "none";
+    if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
+    if (camera.cinematic) camera.setCinematic(null);
+  };
+  // (made at its first opening: the game's tools are built further down)
+  let pauseMenu: PauseMenu | null = null;
+  const makePauseMenu = () =>
+    new PauseMenu({
+      tools,
+      hold: (on) => {
+        paused = on;
+        touch();
+      },
+      engaged: () => mission.active || camera.pilot.hold !== "none" || camera.pilot.auto !== "none" || !!camera.cinematic,
+      release: releaseControls,
+      settings: () => panel.toggle(true),
+      help: () => actions["btn-help"]!(),
+      titleScreen: () => titleScreen?.open(),
+      toast: (t) => panel.toast(t),
+    });
+  /** the title screen, once built (ui/title.ts) */
+  let titleScreen: { open(): void } | null = null;
+  const quickSave = () => {
+    try {
+      panel.toast(`Quick save — ${tools.save("Quick save")}`);
+    } catch (e) {
+      panel.toast((e as Error).message);
+    }
+  };
+  const quickLoad = () => {
+    try {
+      panel.toast(`Quick load — ${tools.load("Quick save")}`);
+    } catch {
+      panel.toast("No quick save yet — F5 makes one");
+    }
+  };
+
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
     tools: () => toolsWin.toggle(),
@@ -1303,11 +1344,10 @@ async function main() {
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
     missions: () => openMissions(),
-    stopFlight: () => {
-      mission.stop("Mission stopped — you have the controls");
-      camera.pilot.hold = "none";
-      if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
-    },
+    stopFlight: () => releaseControls(),
+    pause: () => (pauseMenu ??= makePauseMenu()).open(),
+    quickSave: () => quickSave(),
+    quickLoad: () => quickLoad(),
     leaveShip: () => actions["btn-ship"]!(),
     // time, in every mode
     playPause: () => playPause(),
@@ -1603,6 +1643,8 @@ async function main() {
   let fps = 0;
   let hudTimer = 0;
   let frozen = false;
+  /** the pause menu (or the title screen) open: the simulation holds, the image refines */
+  let paused = false;
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
 
@@ -1611,7 +1653,7 @@ async function main() {
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
-    if (!frozen) advanceFrameClock(dt * 1000);
+    if (!frozen && !paused) advanceFrameClock(dt * 1000);
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
     loopIv.push(now - last);
     if (loopIv.length > 31) loopIv.shift();
@@ -1626,7 +1668,7 @@ async function main() {
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the
     // scene held, or stepped by the video itself)
-    if (!frozen && !renderer.offlineActive) {
+    if (!frozen && !paused && !renderer.offlineActive) {
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
         changed = true;
         guiDirty = true;

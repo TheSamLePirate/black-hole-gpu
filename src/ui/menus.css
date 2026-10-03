@@ -1,0 +1,61 @@
+/* The game's menus (ui/pause.ts, ui/title.ts, ui/missions.ts): the kit's frame (kit.css), big items in
+   the HUD's capitals, a console's up / down / enter. */
+
+/* ---------------------------------------------------------------- pause */
+.pm-scrim { background: rgba(2, 4, 8, 0.55); }
+.pm {
+  width: min(440px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pm-title { font-size: 16px; letter-spacing: 0.32em; }
+.pm-list { display: flex; flex-direction: column; gap: 6px; }
+.pm-item {
+  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+}
+.pm-item:focus-visible, .pm-item:focus, .pm-item:hover:not(:disabled) { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 12px rgba(111, 210, 255, 0.2) inset; outline: none; }
+.pm-item:focus::before { content: "▸"; position: absolute; left: 4px; color: var(--k-on); }
+.pm-item { position: relative; }
+.pm-hint { font: 500 11px var(--mono); letter-spacing: 0; text-transform: none; color: var(--k-dim); }
+.pm-foot { margin: 2px 0 0; font: 500 11px var(--mono); color: var(--k-dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pm-row { display: flex; gap: 8px; }
+.pm-input {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  background: rgba(0, 0, 0, 0.35);
+  font: 500 13px var(--font);
+  color: var(--k-text);
+}
+.pm-input:focus { border-color: var(--k-on-edge); }
+.pm-saves { display: flex; flex-direction: column; gap: 6px; max-height: min(52vh, 420px); overflow-y: auto; }
+.pm-save {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+.pm-save-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.pm-save-text b { font: 700 13px var(--hud-font); letter-spacing: 0.06em; color: var(--k-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-save-text span { font: 500 11.5px var(--font); color: var(--k-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-save-text small { font: 500 11px var(--mono); color: rgba(176, 196, 222, 0.5); }
+.pm-save-acts { display: flex; gap: 6px; flex: none; }
+.pm-empty { margin: 8px 0; color: var(--k-dim); font: italic 500 12px var(--font); }
+/* paused: the HUD's clocks and the toolbar dim under the menu */
+body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.8); }

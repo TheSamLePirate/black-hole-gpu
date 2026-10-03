@@ -15,6 +15,9 @@ export type KeyLayer = "system" | "flight" | "time" | "scene";
 export type KeyAction =
   // system
   | "tools"
+  | "pause"
+  | "quickSave"
+  | "quickLoad"
   // flight
   | "held"
   | "throttleFull"
@@ -290,9 +293,9 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyO", "missions")],
       },
       {
-        keys: "Esc",
-        text: "Closes the panel on top; with nothing open, stops the mission, the hold and the autopilot",
-        bind: [fly("Escape", "stopFlight")],
+        keys: "⌫ Backspace",
+        text: "Releases the controls: stops the mission, the hold and the autopilot",
+        bind: [fly("Backspace", "stopFlight")],
       },
       { keys: "⇧K", text: "Leave the Ranger", bind: [fly("KeyK", "leaveShip", on)] },
       { keys: "Drag · double-click", text: "Look around from the attach point · look ahead" },
@@ -330,7 +333,13 @@ export const KEYMAP: KeySection[] = [
         text: "Hide the interface · fullscreen · save PNG (flying, these keys fly: the toolbar's buttons)",
         bind: [scene("h", "toggleUi"), scene("f", "fullscreen"), scene("p", "png")],
       },
-      { keys: "Esc", text: "Closes the panel on top · stops a cinematic", bind: [scene("Escape", "stopCinematic")] },
+      {
+        keys: "Esc",
+        text: "Closes the panel on top; with nothing open, the pause menu (the time stops): resume, save, load, settings",
+        bind: [codes("system", "Escape", "pause")],
+      },
+      { keys: "⌫ Backspace", text: "Stops a cinematic (flying: releases the controls)", bind: [scene("Backspace", "stopCinematic")] },
+      { keys: "F5 · F9", text: "Quick save · quick load", bind: [codes("system", "F5", "quickSave"), codes("system", "F9", "quickLoad")] },
       { keys: "⌘Z · ⇧⌘Z", text: "Undo · redo" },
       { keys: "?", text: "This sheet", bind: [scene("?", "help")] },
     ],

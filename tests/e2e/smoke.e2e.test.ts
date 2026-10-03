@@ -32,7 +32,7 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.waitFor(`__bh.phase().control === "manual"`, 5000);
   });
 
-  test("Escape closes the camera panel and leaves the hold engaged; a second one releases it", async () => {
+  test("Escape closes the camera panel and leaves the hold engaged; Backspace releases it", async () => {
     await app.press("Digit1");
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("prograde");
     await app.js(`(document.getElementById("btn-camera").click(), 1)`);
@@ -40,8 +40,40 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.press("Escape");
     expect(await app.js<boolean>(`document.getElementById("cam-pop").hidden`)).toBe(true);
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("prograde");
-    await app.press("Escape");
+    await app.press("Backspace");
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("none");
+  });
+
+  test("Escape with nothing open: the pause menu — the time held, Escape again resumes", async () => {
+    await app.press("Escape");
+    await app.waitFor(`!!document.querySelector("[data-testid=pause]")`);
+    const t0 = await app.js<number>("__bh.time()");
+    await Bun.sleep(400);
+    expect(await app.js<number>("__bh.time()")).toBe(t0);
+    await app.press("Escape");
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=pause]")`)).toBe(false);
+    await Bun.sleep(400);
+    expect(await app.js<number>("__bh.time()")).toBeGreaterThan(t0);
+  });
+
+  test("the pause menu saves a game by name, and loads it back", async () => {
+    await app.press("Escape");
+    await app.click("[data-testid=pause-save]");
+    await app.js(`(document.querySelector(".pm-input").value = "e2e flight", 1)`);
+    await app.click("[data-testid=pause-save-new]");
+    expect(await app.js<string[]>(`__bh.game.saves().map((g) => g.name)`)).toContain("e2e flight");
+    await app.click("[data-testid=pause-load]");
+    await app.waitFor(`[...document.querySelectorAll(".pm-save b")].some((b) => b.textContent === "e2e flight")`);
+    await app.press("Escape"); // (back to the menu)
+    await app.press("Escape"); // (resumed)
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=pause]")`)).toBe(false);
+  });
+
+  test("F5 quick-saves, F9 quick-loads", async () => {
+    await app.press("F5");
+    expect(await app.js<string[]>(`__bh.game.saves().map((g) => g.name)`)).toContain("Quick save");
+    await app.press("F9");
+    expect(app.cdp.errors).toEqual([]);
   });
 
   test("toasts stack: three messages in a row, none lost", async () => {
