@@ -62,16 +62,16 @@ Découvertes en route :
 | U0.3 | **Moins « site web »** : lien Atlas retiré du HUD, bandeau « Drag to orbit » masqué en vol, fps seulement en dev ; **Craft Lost « signal perdu »** (scanlines, code télémétrie, FR/EN, plus de Helvetica) ; panneaux de vol opaques à ~90 % et **crochets d'angle** ; **police minimale 11 px** dans le DOM (58 déclarations) | fait | `c7aa9d1` |
 | U0.4 | Retrait du code mort de l'ancien planificateur (`.fl-plan`, ~350 lignes) | reporté au découpage de `flighthud.ts` (phase 1) | |
 
-## U1 : kit et langage HUD (en cours)
+## U1 : kit et langage HUD (terminé)
 
 | # | Étape | Statut | Commit |
 |---|---|---|---|
-| U1.1 | **Polices auto-hébergées** (`src/fonts/`, 236 Ko, OFL : Inter, JetBrains Mono, Rajdhani en latin + latin-ext) à la place du CDN Google ; première frame après leur chargement (1,5 s au plus). **Trouvé** : les étiquettes du ciel écrivaient `var(--hud-font)` dans `ctx.font` — invalide sur un canvas, ignoré, donc en police par défaut 10 px ; les overlays en polices système. Tout passe par `FONT`/`MONO` (hudkit), 11 px au moins | fait | (ce commit) |
-| U1.2 | **Kit** `src/ui/kit/` : `el`, `h`, `icon` (registre unique), `button`, `kbd`, `modal` (rôle `dialog`, `aria-modal`, titre lié, focus pris puis rendu, Échap par la pile unique) ; `kit.css` : les tokens du langage HUD (cadre, crochets d'angle, titres ambre en capitales Rajdhani, valeurs en mono, cyan pour l'actionnable). 9 copies locales de `h()` remplacées | fait | (ce commit) |
-| U1.3 | **Réglages refaits dans le langage HUD** : `.glass` (réglages, menu, aide, galerie, barre d'outils, rendu) devient le cadre du kit, quasi opaque (le HUD ne transparaît plus), coins 3–6 px, crochets ; onglets, segments, interrupteurs, curseurs (pouce vertical étroit, piste cyan), champs de valeur, en-têtes de groupe en capitales. L'aide « ? » est une modale du kit | fait | (ce commit) |
-| U1.4 | Autres surfaces au kit (galerie de scènes, outils F2, panneau Caméra, Ciel, barre d'outils) ; e2e d'accessibilité (noms accessibles, dialogues) et « aucun overlay invisible » | à faire | |
+| U1.1 | **Polices auto-hébergées** (`src/fonts/`, OFL : Inter, JetBrains Mono, Rajdhani ; sous-ensemble latin seul, que le build de production inline : 146 Ko) à la place du CDN Google ; première frame après leur chargement (1,5 s au plus). **Trouvé** : les étiquettes du ciel écrivaient `var(--hud-font)` dans `ctx.font` — invalide sur un canvas, ignoré, donc en police par défaut 10 px ; les overlays en polices système. Tout passe par `FONT`/`MONO` (hudkit), 11 px au moins | fait | `e0e628b`, `b65b0db` |
+| U1.2 | **Kit** `src/ui/kit/` : `el`, `h`, `icon` (registre unique), `button`, `kbd`, `modal` (rôle `dialog`, `aria-modal`, titre lié, focus pris puis rendu, Échap par la pile unique) ; `kit.css` : les tokens du langage HUD (cadre, crochets d'angle, titres ambre en capitales Rajdhani, valeurs en mono, cyan pour l'actionnable). 9 copies locales de `h()` remplacées | fait | `e0e628b` |
+| U1.3 | **Réglages refaits dans le langage HUD** : `.glass` (réglages, menu, aide, galerie, barre d'outils, rendu) devient le cadre du kit, quasi opaque (le HUD ne transparaît plus), coins 3–6 px, crochets ; onglets, segments, interrupteurs, curseurs (pouce vertical étroit, piste cyan), champs de valeur, en-têtes de groupe en capitales. L'aide « ? » est une modale du kit | fait | `e0e628b` |
+| U1.4 | **Galerie de scènes, rendu offline, panneau Détails** dans le langage HUD (Caméra, Ciel et outils F2 l'étaient déjà). Corrigés : l'infobulle revenait après un clic (le bouton redessiné sous le pointeur) ; le panneau Caméra passait sous la légende de scène. **e2e d'accessibilité** `a11y.e2e.test.ts` (T2 et T8 de l'audit) : chaque contrôle visible nommé — en vol, réglages ouverts, à pied, panneau Caméra (5 curseurs et interrupteurs sans nom corrigés) ; l'aide est un dialogue modal nommé par son titre, le focus dedans ; une grille de 24 × 16 points n'atteint aucune couche invisible. **Harnais** : chaque Chrome headless efface son profil à la fermeture (97 profils, 12 Go, avaient rempli le disque) | fait | (ce commit) |
 
-Avant / après : `docs/img/aaa/u1-settings-before.png`, `u1-settings-after.png`, `u1-help.png`.
+Avant / après : `docs/img/aaa/u1-settings-before.png`, `u1-settings-after.png`, `u1-help.png`, `u1-scenes.png`, `u1-render.png`, `u1-camera.png`.
 
 ## Journal
 

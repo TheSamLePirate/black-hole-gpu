@@ -74,7 +74,7 @@ body {
    view changes — without it, a denser tint */
 body:not(.glass-blur) { --glass: rgba(12, 14, 22, 0.8); }
 body:not(.glass-blur) * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-body:not(.glass-blur) #cam-pop { background: linear-gradient(180deg, rgba(9, 14, 25, 0.9), rgba(6, 10, 18, 0.84)); }
+body:not(.glass-blur) #cam-pop { background: var(--k-panel-bg); }
 
 /* the interface's surfaces (settings, menus, dialogs, the toolbar): the HUD's frame (ui/kit/kit.css) —
    opaque enough to read over the disk; with the glass blur on (Settings › Render), lighter and blurred */
@@ -202,7 +202,7 @@ body.glass-blur .glass {
 #hud-more {
   display: none;
   padding: 8px 12px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--k-line);
   width: min(356px, calc(100vw - 52px));
 }
 
@@ -237,17 +237,18 @@ body.glass-blur .glass {
   justify-content: space-between;
   gap: 12px;
   padding: 3px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 11.5px;
+  border-top: 1px solid var(--k-line);
+  font: 600 12.5px/1.35 var(--hud-font);
+  letter-spacing: 0.03em;
 }
 
 #readouts .row span:first-child {
-  color: var(--dim);
+  color: var(--k-dim);
 }
 
 #readouts .row span:last-child {
-  font-family: var(--mono);
-  font-size: 11px;
+  font: var(--k-font-value);
+  color: #eef5ff;
   text-align: right;
 }
 
@@ -814,10 +815,16 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 }
 
 #render h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font: var(--k-font-title);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--k-amber);
 }
+#render h2::before { content: ""; width: 6px; height: 6px; transform: rotate(45deg); background: var(--k-amber); box-shadow: 0 0 8px rgba(255, 179, 92, 0.8); }
 
 #render header p {
   margin: 2px 0 0;
@@ -836,8 +843,10 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
   grid-template-columns: 1fr 1.25fr;
   align-items: center;
   gap: 10px;
-  font-size: 11.5px;
-  color: var(--dim);
+  font: 600 11px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--k-dim);
 }
 
 #render .pair {
@@ -856,10 +865,17 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
   box-sizing: border-box;
   width: 100%;
   padding: 5px 8px;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--text);
-  font: 11.5px var(--mono);
+  font: var(--k-font-value);
+  text-transform: none;
+  letter-spacing: 0;
+}
+#render select:focus-visible,
+#render input:focus-visible {
+  border-color: var(--k-on-edge);
 }
 
 #render select:disabled,
@@ -890,8 +906,8 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 }
 
 #render .progress {
-  height: 6px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.07);
   overflow: hidden;
 }
@@ -899,7 +915,7 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 #r-bar {
   width: 0;
   height: 100%;
-  background: linear-gradient(90deg, #ff8a3d, var(--accent));
+  background: linear-gradient(90deg, #46b9ee, #7fe0ff);
   transition: width 0.2s;
 }
 
@@ -917,14 +933,15 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 #r-video {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--k-line);
 }
 
 #r-video summary {
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
+  font: 700 12px var(--hud-font);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--k-text);
 }
 
 #r-video .form {
@@ -947,15 +964,23 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 #render button {
   all: unset;
   padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  font-size: 12px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  background: var(--k-ctl-bg);
+  color: var(--k-text);
+  font: 600 11px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 #render button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--k-ctl-bg-hover);
+  color: #fff;
+}
+#render button:focus-visible {
+  outline: 1px solid var(--k-on-edge);
+  outline-offset: 2px;
 }
 
 #render button:disabled {
@@ -964,9 +989,14 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 }
 
 #render button.primary {
-  background: linear-gradient(180deg, #ffb35c, #ff8a3d);
-  color: #1b1108;
-  font-weight: 600;
+  background: linear-gradient(180deg, #7fe0ff, #46b9ee);
+  border-color: #8de4ff;
+  color: #0b1220;
+  font-weight: 700;
+}
+#render button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #a2eaff, #5cc6f5);
+  color: #0b1220;
 }
 
 #render button.icon {
@@ -1640,14 +1670,18 @@ html :focus-visible {
   height: min(760px, 100%);
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
+  position: relative;
+  border-radius: var(--k-r-panel);
   overflow: hidden;
-  background: rgba(12, 13, 20, 0.86);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   transform: translateY(10px) scale(0.985);
   transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sg-backdrop.show .sg { transform: none; }
+/* the HUD's brackets on the gallery's frame */
+.sg::before, .sg::after { content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none; border: 1px solid var(--k-edge-hi); z-index: 1; }
+.sg::before { top: 4px; right: 4px; border-left: 0; border-bottom: 0; }
+.sg::after { bottom: 4px; left: 4px; border-right: 0; border-top: 0; }
 
 .sg-head {
   display: flex;
@@ -1655,7 +1689,8 @@ html :focus-visible {
   gap: 14px;
   padding: 16px 16px 8px 20px;
 }
-.sg-head h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+.sg-head h2 { margin: 0; font: 700 15px var(--hud-font); letter-spacing: 0.26em; text-transform: uppercase; color: var(--k-amber); display: flex; align-items: center; gap: 9px; }
+.sg-head h2::before { content: ""; width: 7px; height: 7px; transform: rotate(45deg); background: var(--k-amber); box-shadow: 0 0 8px rgba(255, 179, 92, 0.8); }
 
 .sg-search {
   flex: 1;
@@ -1664,11 +1699,11 @@ html :focus-visible {
   display: flex;
   align-items: center;
   padding: 0 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid transparent;
+  border-radius: var(--k-r);
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--k-ctl-edge);
 }
-.sg-search:focus-within { border-color: rgba(255, 179, 92, 0.45); }
+.sg-search:focus-within { border-color: var(--k-on-edge); }
 .sg-search input {
   all: unset;
   flex: 1;
@@ -1686,7 +1721,7 @@ html :focus-visible {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: var(--k-r);
   color: var(--dim);
   cursor: pointer;
 }
@@ -1697,23 +1732,26 @@ html :focus-visible {
   flex-wrap: wrap;
   gap: 6px;
   padding: 4px 20px 12px;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--k-line);
 }
 .sg-filters button {
   all: unset;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--dim);
-  background: rgba(255, 255, 255, 0.05);
+  padding: 5px 11px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  font: 600 11.5px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--k-dim);
+  background: var(--k-ctl-bg);
   cursor: pointer;
 }
-.sg-filters button small { font-size: 11px; opacity: 0.7; }
-.sg-filters button:hover, .sg-filters button:focus-visible { color: var(--text); }
-.sg-filters button.on { color: var(--accent); background: rgba(255, 179, 92, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 179, 92, 0.35); }
+.sg-filters button small { font: 500 11px var(--mono); letter-spacing: 0; opacity: 0.75; }
+.sg-filters button:hover, .sg-filters button:focus-visible { color: #fff; background: var(--k-ctl-bg-hover); }
+.sg-filters button.on { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 10px rgba(111, 210, 255, 0.18) inset; }
 
 .sg-body {
   flex: 1;
@@ -1730,11 +1768,10 @@ html :focus-visible {
   align-items: baseline;
   gap: 10px;
   margin: 18px 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font: 700 12px var(--hud-font);
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--text);
+  color: var(--k-amber);
 }
 .sg-gtitle small { font-size: 11.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--dim); }
 
@@ -1748,21 +1785,21 @@ html :focus-visible {
   all: unset;
   display: flex;
   flex-direction: column;
-  border-radius: 13px;
+  border-radius: var(--k-r);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--k-line);
   cursor: pointer;
   transition: transform 0.16s ease, border-color 0.16s, background 0.16s, box-shadow 0.16s;
 }
 .sg-card:hover, .sg-card:focus-visible {
   transform: translateY(-2px);
-  border-color: rgba(255, 179, 92, 0.45);
-  background: rgba(255, 179, 92, 0.06);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  border-color: var(--k-on-edge);
+  background: rgba(111, 210, 255, 0.06);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(111, 210, 255, 0.25);
   outline: none;
 }
-.sg-card.current { border-color: rgba(255, 179, 92, 0.6); }
+.sg-card.current { border-color: rgba(255, 179, 92, 0.65); }
 
 .sg-thumb {
   position: relative;
@@ -1785,15 +1822,17 @@ html :focus-visible {
   top: 8px;
   left: 8px;
   padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+  border-radius: var(--k-r);
+  font: 700 11px var(--hud-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: #1b1108;
-  background: var(--accent);
+  background: var(--k-amber);
+  box-shadow: 0 0 10px rgba(255, 179, 92, 0.5);
 }
 
 .sg-text { display: grid; gap: 3px; padding: 9px 11px 11px; }
-.sg-text b { font-size: 13px; font-weight: 600; color: var(--text); }
+.sg-text b { font: 700 14px var(--hud-font); letter-spacing: 0.04em; color: var(--text); }
 .sg-text span { font-size: 11.5px; line-height: 1.4; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 .sg-empty { padding: 40px 0; text-align: center; color: var(--dim); }
@@ -1813,10 +1852,11 @@ html :focus-visible {
 /* ---- the camera panel (the target button): the HUD's panel — behaviour tiles, targets by kind, speed */
 #cam-pop {
   position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 40;
-  width: min(600px, calc(100vw - 32px)); max-height: min(72vh, 720px); overflow-y: auto; overscroll-behavior: contain;
+  /* (its top below the toasts' line: a scene's caption no longer covers its title) */
+  box-sizing: border-box; width: min(600px, calc(100vw - 32px)); max-height: min(72vh, 720px, calc(100vh - 142px)); overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 12px; padding: 8px 14px 14px;
   font-family: var(--hud-font); color: var(--hud-text);
-  background: linear-gradient(180deg, rgba(9, 15, 27, 0.94), rgba(6, 10, 18, 0.9));
+  background: var(--k-panel-bg);
   animation: cp-in 0.2s ease-out both;
 }
 @keyframes cp-in { from { opacity: 0; transform: translate(-50%, 8px); } }
@@ -2044,7 +2084,7 @@ body.hide-ui #tp-dock { display: none; }
 #toolbar #btn-camera .cam-target { display: inline-flex; align-items: center; gap: 6px; }
 #toolbar #btn-camera .cam-target::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--body, #ccc); opacity: 0.5; }
 #toolbar #btn-camera.locked .cam-target::before { opacity: 1; box-shadow: 0 0 6px var(--body, #ccc); }
-body:not(.piloting) #cam-pop { bottom: 122px; max-height: min(calc(100vh - 150px), 760px); }
+body:not(.piloting) #cam-pop { bottom: 122px; max-height: min(calc(100vh - 122px - 72px), 760px); } /* (the top below the toasts' line) */
 
 /* the sky panel (skypanel.ts): the sky chart's switches, over the right of the view */
 #sky-pop {

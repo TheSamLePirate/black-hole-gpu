@@ -1957,18 +1957,23 @@ async function main() {
   for (const el of document.querySelectorAll<HTMLElement>("[data-tip]"))
     if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
   let tipEl: HTMLElement | null = null;
+  // (clicked: no tip for that element until the pointer leaves it — a button redrawn under the
+  // pointer, its label changed, would otherwise bring its tip back over what it opened)
+  let tipClicked: HTMLElement | null = null;
   document.addEventListener("pointerover", (e) => {
     const el = (e.target as Element | null)?.closest?.<HTMLElement>("[data-tip]") ?? null;
     if (el === tipEl) return;
     hideTip();
-    tipEl = el && !el.closest(".fl-root") ? el : null;
+    if (el !== tipClicked) tipClicked = null;
+    tipEl = el && el !== tipClicked && !el.closest(".fl-root") ? el : null;
     if (!tipEl) return;
     if (!tipEl.getAttribute("aria-label")) tipEl.setAttribute("aria-label", tipEl.dataset.tip!);
     const target = tipEl;
     tipTimer = window.setTimeout(() => target.isConnected && showTip(target), 280);
   });
-  document.addEventListener("pointerdown", () => {
+  document.addEventListener("pointerdown", (e) => {
     hideTip();
+    tipClicked = (e.target as Element | null)?.closest?.<HTMLElement>("[data-tip]") ?? null;
     tipEl = null;
   });
 

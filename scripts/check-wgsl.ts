@@ -5,6 +5,7 @@
 //
 // Exit 1 on a compile error. Without a WebGPU adapter (a machine with neither GPU nor SwiftShader) it
 // says so and exits 0: nothing could be checked, nothing is known to be broken.
+import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Glob } from "bun";
 
@@ -12,6 +13,8 @@ const linux = process.platform === "linux";
 const CHROME =
   process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 const port = 9500 + Math.floor(Math.random() * 300);
+// (its own profile, removed on exit)
+const profile = `${tmpdir()}/kerr-wgsl-${port}`;
 const shaders: Record<string, string> = {};
 for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
 
@@ -25,7 +28,7 @@ const chrome = Bun.spawn(
     CHROME,
     "--headless=new",
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=${tmpdir()}/kerr-wgsl-${port}`,
+    `--user-data-dir=${profile}`,
     "--enable-unsafe-webgpu",
     "--no-first-run",
     ...(linux
@@ -44,6 +47,7 @@ const chrome = Bun.spawn(
 const done = (code: number) => {
   chrome.kill();
   server.stop(true);
+  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   process.exit(code);
 };
 try {

@@ -377,6 +377,7 @@ export class CameraPanel {
     r.min = "0";
     r.max = "1000";
     r.step = "1";
+    r.setAttribute("aria-label", s.telescope ? "Telescope field" : "Lens focal length");
     const toU = (f: number) => Math.round((1000 * Math.log(f / lo)) / Math.log(hi / lo));
     const toF = (u: number) => lo * (hi / lo) ** (u / 1000);
     r.value = String(Math.min(1000, Math.max(0, toU(focalLength(s.fov)))));
@@ -528,6 +529,7 @@ export class CameraPanel {
     r.min = "-4";
     r.max = "4";
     r.step = "0.1";
+    r.setAttribute("aria-label", "Flight speed");
     r.value = String(Math.log2(c.flySpeed));
     const v = h("span", "cp-value", `×${c.flySpeed.toFixed(2)}`);
     r.oninput = () => {
@@ -562,6 +564,7 @@ export class CameraPanel {
       br.min = "0";
       br.max = "0.99";
       br.step = "0.01";
+      br.setAttribute("aria-label", "Observer speed β");
       br.value = String(s.beta);
       const bv = h("span", "cp-value", `β ${s.beta.toFixed(2)}`);
       br.oninput = () => {
@@ -610,6 +613,7 @@ export class CameraPanel {
     r.min = "0.5";
     r.max = "40";
     r.step = "0.5";
+    r.setAttribute("aria-label", "Cinematic speed");
     r.value = String(s.cinematicSpeed);
     const v = h("span", "cp-value", `${s.cinematicSpeed}`);
     r.oninput = () => {

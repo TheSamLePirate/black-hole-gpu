@@ -1,5 +1,6 @@
 // A headless Chrome over the DevTools protocol, no dependency (WebSocket is Bun's): launched with
 // WebGPU on (SwiftShader on Linux), the page's exceptions and console errors collected.
+import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 export interface Cdp {
@@ -19,12 +20,14 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
   const W = o.width ?? 1440,
     H = o.height ?? 900;
   const port = 9600 + Math.floor(Math.random() * 300);
+  // (its own profile, removed on close: a run leaves nothing behind — they were 300 MB each)
+  const profile = `${tmpdir()}/kerr-e2e-${port}`;
   const proc = Bun.spawn(
     [
       CHROME,
       "--headless=new",
       `--remote-debugging-port=${port}`,
-      `--user-data-dir=${tmpdir()}/kerr-e2e-${port}`,
+      `--user-data-dir=${profile}`,
       ...GPU,
       `--window-size=${W},${H}`,
       "--no-first-run",
@@ -47,6 +50,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
   }
   if (!page) {
     proc.kill();
+    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     throw new Error(`Chrome did not start (${CHROME})`);
   }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -77,6 +81,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
       ws.close();
       proc.kill();
       Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     },
   };
 }

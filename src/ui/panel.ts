@@ -707,7 +707,11 @@ export class SettingsPanel {
     );
     head.append(titleBtn);
     if (switchKey) {
-      const cb = h("input", { type: "checkbox", onchange: (e: Event) => this.set(switchKey, (e.target as HTMLInputElement).checked) });
+      const cb = h("input", {
+        type: "checkbox",
+        "aria-label": `Enable ${groupName.toLowerCase()}`,
+        onchange: (e: Event) => this.set(switchKey, (e.target as HTMLInputElement).checked),
+      });
       head.append(h("label", { class: "sp-toggle", title: `Enable ${groupName.toLowerCase()}` }, cb, h("span", { class: "sp-switch" })));
       this.updaters.push(() => {
         cb.checked = !!this.s[switchKey];
