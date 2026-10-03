@@ -1,7 +1,7 @@
 // The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { blToCartesian, cameraFrame } from "../camera";
-import { horizon, isco, photonOrbits, coordToZamo, type Vec3 } from "../physics";
+import { horizon, isco, coordToZamo, type Vec3 } from "../physics";
 import {
   bodyCentre,
   BODY_NAMES,
@@ -27,9 +27,7 @@ import { circularize as fcCircularize, type Burn } from "../fc/ops";
 import { timeTo as kepTimeTo } from "../fc/kepler";
 import { airTopKm } from "../game/place";
 import { airTop } from "../aero";
-import { AUTO_NAMES, circularSpeed, toU, type Auto } from "../pilot";
-import type { ManeuverNode } from "../maneuver";
-import { shipToCamera } from "../mounts";
+import { AUTO_NAMES, circularSpeed, type Auto } from "../pilot";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
@@ -38,14 +36,13 @@ import { predictOurs, type OurPath } from "../system/our-predict";
 import { plan as runPlanner } from "../system/plan-client";
 import { airDensity as ourAir, dragAccel, gearHeight, groundVelocity, solidBody } from "../system/our-surface";
 import { bodyAxes, solarBody, solarState } from "../system/solar";
-import { station } from "../system/iss";
 import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { caught } from "../debug";
 import { frameNow } from "../frameclock";
 
-import type { CameraController, DockInfo, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
-import { LANDING, add3, clamp, fmtDur, spinAxis, unitV } from "./util";
+import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
+import { LANDING, clamp, fmtDur, spinAxis, unitV } from "./util";
 
 declare module "../controls" {
   interface CameraController {
@@ -65,7 +62,6 @@ declare module "../controls" {
     circPlan: typeof circPlan;
     ourCircWant: typeof ourCircWant;
     autopilotWant: typeof autopilotWant;
-    flightInfo: typeof flightInfo;
     predictPath: typeof predictPath;
     driftDir: typeof driftDir;
     runwayView: typeof runwayView;
@@ -1172,308 +1168,6 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
   return null;
 }
 
-/** Everything the flight displays show, for this frame. */
-function flightInfo(this: CameraController) {
-  const s = this.s;
-  const cam = cameraFrame(s);
-  const a = s.spin;
-  const S = this.shipMatrix();
-  const C = (v: Vec3 | null): Vec3 | null => v && [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
-  const speed = Math.hypot(...cam.beta);
-  const pro = speed > 1e-6 ? lin(cam.beta, 1 / speed, cam.beta, 0) : null;
-  const R = this.radialOut(cam);
-  const hz = this.horizonAxes(cam);
-  let normal: Vec3 | null = null;
-  if (R && pro) {
-    const n = cross(R, pro);
-    const l = Math.hypot(...n);
-    if (l > 1e-6) normal = lin(n, 1 / l, n, 0);
-  }
-  const info = {
-    region: cam.region,
-    r: cam.r,
-    theta: cam.theta,
-    phi: cam.phi,
-    ell: cam.ell,
-    n: cam.n,
-    speed,
-    gamma: cam.gamma,
-    dtau: cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma,
-    E: NaN,
-    L: NaN,
-    /** Carter constant, the spin (for the effective potential), radial 3-velocity (> 0 outwards) */
-    Q: NaN,
-    spin: a,
-    vr: cam.region === "hole" ? cam.beta[0] : NaN,
-    /** the autopilot's target speed (relative to the ZAMO), if any */
-    wantSpeed: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...this.lastWant.beta) : NaN,
-    rH: horizon(a),
-    isco: isco(a),
-    photon: photonOrbits(a).pro,
-    ergo: cam.region === "hole" && cam.r < 1 + Math.sqrt(Math.max(0, 1 - a * a * Math.cos(cam.theta) ** 2)),
-    accel: this.pilot.accel,
-    throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(this.thrustMax(), 1e-12) : this.pilot.throttle,
-    sas: this.pilot.sas,
-    /** what holds the rails' warp back ("" : nothing) */
-    railsNote: this.railsNote,
-    rollAlign: this.pilot.rollAlign,
-    hold: this.pilot.hold,
-    auto: this.pilot.auto,
-    omega: this.pilot.omega,
-    properTime: this.properTime,
-    landed: this.landed,
-    /** the body landed on */
-    landedOn: this.landed ? (this.nearestBody(blToCartesian(cam.r, cam.theta, cam.phi), this.nowTime()) ?? null) : null,
-    // directions in camera coordinates, and the ship's axes
-    S,
-    dirs: {
-      prograde: C(pro),
-      retrograde: C(pro && lin(pro, -1, pro, 0)),
-      radialOut: C(R),
-      radialIn: C(R && lin(R, -1, R, 0)),
-      normal: C(normal),
-      antinormal: C(normal && lin(normal, -1, normal, 0)),
-      target: C(this.targetDir(cam)),
-      burn: C(this.pilot.burn),
-      maneuver: C(this.maneuverDir(cam)),
-      // velocity relative to the target (approach, docking)
-      tgtPrograde: null as Vec3 | null,
-      tgtRetrograde: null as Vec3 | null,
-      /** the station's nearest docking port, seen from the eye */
-      dock: null as Vec3 | null,
-      /** near a world (ours, or one of Gargantua's): the local vertical and its north (the horizon,
-       *  the pitch ladder, the heading) — at any height in its sphere */
-      up: C(hz?.up ?? null),
-      north: C(hz?.north ?? null),
-      /** near the ground: the velocity over it, its horizontal part's direction (the drift) */
-      drift: this.driftDir(cam, C),
-    },
-    // flat-map position, velocity and nose (black hole's frame), for the map
-    X: null as Vec3 | null,
-    V: null as Vec3 | null,
-    nose: null as Vec3 | null,
-    path: this.path,
-    /** the camera's view direction (flat map), the autopilot's remaining velocity change |ΔU| */
-    look: null as Vec3 | null,
-    dv: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...sub3(toU(this.lastWant.beta), toU(cam.beta))) : NaN,
-    mount: s.shipMount,
-    moving: this.mountAnim !== null,
-    /** the flight plan: nodes, the path through them, the executing burn */
-    /** the orbit's angle to each goal's plane [°] */
-    planes: this.planeOffsets(),
-    plan: this.plan.nodes.length
-      ? {
-          nodes: this.plan.nodes,
-          path: this.refreshPlan(),
-          note: this.plan.note,
-          burning: this.nodeBurning,
-          done: this.nodeDone,
-          now: this.nowTime(),
-          lowThrust: null as string | null,
-        }
-      : this.transfer
-        ? {
-            nodes: [] as ManeuverNode[],
-            path: null,
-            note: this.transfer.note ?? "",
-            burning: this.pilot.auto === "transfer" && this.pilot.accel > 0,
-            done: 0,
-            now: this.nowTime(),
-            lowThrust: this.transfer.stage as string | null,
-          }
-        : null,
-    /** near a planet: its frame's figures (landing.ts) */
-    surface: this.surfaceInfo(),
-    air: this.airInfo(),
-    entry: this.entryInfo(),
-    /** the engine and the tank */
-    engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
-    /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
-    target: s.target,
-    targetDist: NaN,
-    targetRate: NaN,
-    /** our universe: the body of the sphere of influence, the altitude above it [M] and the radial speed */
-    ref: null as string | null,
-    ourAlt: NaN,
-    ourVr: NaN,
-    ourCa: null as { d: number; t: number } | null,
-    /** the docking aid (the station near), or null */
-    dock: null as DockInfo | null,
-    /** the docking's guide for the HUD: lateral offset and drift [m, m/s], the port's axis, gates
-     *  along it (camera coordinates) */
-    dockGuide: null as { lat: Vec3; latRate: Vec3; axis: Vec3; gates: { d: Vec3; r: number; k: number }[] } | null,
-    /** what the flown craft is docked to (its own links) */
-    links: [] as { title: string; port: string }[],
-    /** the craft flown, and those docked to it; the assembly's mass [kg] */
-    vessel: fleet.active,
-    assembly: fleet.flownAssembly(),
-    mass: fleet.massProps().mass,
-    /** the docking autopilot's phase ("": off) */
-    dockPhase: this.pilot.auto === "dock" ? (this.dockAuto?.phase ?? "") : "",
-    speedMode: this.speedMode,
-    precision: this.pilot.precision,
-    /** our universe: the free-fall path and the path through the nodes */
-    ourFree: this.ourFree,
-    ourPlan: this.plan.nodes.length ? this.ourPlan : null,
-    /** the planner at work (our universe) */
-    planBusy: this.planBusy,
-    /** a mission's target at its periapsis time (the map marks where it will be) */
-    ourArrive:
-      this.ourMission && this.plan.nodes.length
-        ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive }
-        : this.issGoal && this.plan.nodes.length
-          ? { body: this.issGoal.body, t: this.issGoal.tArrive }
-          : null,
-    // (the flight computer's previewed operation and its path, before it is executed)
-    cand: this.fcCand,
-    // (about one of Gargantua's worlds: the ground tracks, free and previewed, on its turning axes)
-    localGround: this.local
-      ? { ahead: this.localGround, cand: this.fcCand?.local?.rot ?? null, plan: this.localPlanNow()?.rot ?? null }
-      : null,
-    localPlan: this.localPlanNow(),
-    /** the hub's card: the autopilot flying, its phase, figures, prediction */
-    hub: this.hubInfo(),
-  };
-  if (cam.region === "hole") {
-    const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
-    info.E = st.E;
-    info.L = st.L;
-    const ct = Math.cos(st.th),
-      s2 = Math.max(Math.sin(st.th) ** 2, 1e-12);
-    info.Q = st.uth * st.uth + ct * ct * (a * a * (1 - st.E * st.E) + (st.L * st.L) / s2);
-    const X = blToCartesian(cam.r, cam.theta, cam.phi);
-    const f = sphericalFrame(X);
-    const W = (v: Vec3) => add3(f.er, f.et, f.ep, v);
-    info.X = X;
-    info.V = W(cam.beta);
-    const b = { right: cam.right, up: cam.up, fwd: cam.fwd };
-    info.nose = W(this.shipAxesLocal(b)[2]);
-    info.look = W(cam.fwd);
-    const t = this.nowTime();
-    const Ct: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyCentre(s, s.target, t);
-    const Vt: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyVelocity(s, s.target, t);
-    const d = sub3(X, Ct);
-    info.targetDist = Math.hypot(...d);
-    info.targetRate = dot3(sub3(info.V, Vt), d) / Math.max(info.targetDist, 1e-9);
-    const rel = sub3(info.V, Vt);
-    const rl = Math.hypot(...rel);
-    if (s.target !== "hole" && rl > 1e-5) {
-      const loc: Vec3 = [dot3(rel, f.er) / rl, dot3(rel, f.et) / rl, dot3(rel, f.ep) / rl];
-      info.dirs.tgtPrograde = C(loc);
-      info.dirs.tgtRetrograde = C(lin(loc, -1, loc, 0));
-    }
-  }
-  // our universe: orbital directions and speed relative to the body of the sphere of influence we
-  // are in; the target in the home frame
-  const nav = this.ourNav(cam);
-  if (nav) {
-    const rel = sub3(nav.V, nav.refVel);
-    const rl = Math.hypot(...rel);
-    info.speed = rl;
-    info.ref = nav.ref;
-    const pr = rl > 1e-12 ? nav.toRep(rel) : null;
-    const p = pr && lin(pr, 1 / Math.hypot(...pr), pr, 0);
-    const R = nav.radial;
-    let nrm: Vec3 | null = null;
-    if (p) {
-      const n = cross(R, p);
-      const l = Math.hypot(...n);
-      if (l > 1e-6) nrm = lin(n, 1 / l, n, 0);
-    }
-    Object.assign(info.dirs, {
-      prograde: C(p),
-      retrograde: C(p && lin(p, -1, p, 0)),
-      radialOut: C(R),
-      radialIn: C(lin(R, -1, R, 0)),
-      normal: C(nrm),
-      antinormal: C(nrm && lin(nrm, -1, nrm, 0)),
-    });
-    info.X = nav.X;
-    info.V = nav.V;
-    const T = ourTarget(s, s.target, nav.t);
-    const d = sub3(nav.X, T.pos);
-    info.targetDist = Math.hypot(...d);
-    const vr = sub3(nav.V, T.vel);
-    info.targetRate = dot3(vr, d) / Math.max(info.targetDist, 1e-12);
-    const vl = Math.hypot(...vr);
-    // closest approach on straight lines (relative motion)
-    const tc = vl > 1e-15 ? -dot3(d, vr) / (vl * vl) : 0;
-    info.ourCa = tc > 0 ? { d: Math.hypot(...lin(d, 1, vr, tc)) - T.radius, t: tc } : { d: info.targetDist - T.radius, t: 0 };
-    if (vl > 1e-12) {
-      const loc = nav.toRep(vr);
-      const u = lin(loc, 1 / Math.hypot(...loc), loc, 0);
-      info.dirs.tgtPrograde = C(u);
-      info.dirs.tgtRetrograde = C(lin(u, -1, u, 0));
-    }
-    // above the reference body's surface
-    const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
-    info.ourAlt = Math.hypot(...sub3(nav.X, nav.refPos)) - rb;
-    info.ourVr = dot3(rel, sub3(nav.X, nav.refPos)) / Math.max(Math.hypot(...sub3(nav.X, nav.refPos)), 1e-12);
-  }
-  // the station near: its port where it is seen from the eye, the velocity relative to it (the
-  // docking's prograde and retrograde)
-  // (the flown craft's dockings: to what, by which port — the docking panel's UNDOCK)
-  info.links = fleet.links
-    .filter((l) => l.a === fleet.active || l.b === fleet.active)
-    .map((l) => {
-      const other = l.a === fleet.active ? l.b : l.a;
-      const k = l.a === fleet.active ? l.pb : l.pa;
-      return {
-        title: other === "iss" ? "ISS" : VESSELS[other].name,
-        port: other === "iss" ? (station.ports[k]?.name ?? "") : (VESSELS[other].ports[k]?.name ?? ""),
-      };
-    });
-  const di = this.dockInfo;
-  if (di && nav) {
-    info.dock = di;
-    const vl = Math.hypot(...di.vrel);
-    if (vl > 1e-4) {
-      const u = nav.toRep(lin(di.vrel, 1 / vl, di.vrel, 0));
-      const ul = Math.hypot(...u);
-      info.dirs.tgtPrograde = C(lin(u, 1 / ul, u, 0));
-      info.dirs.tgtRetrograde = C(lin(u, -1 / ul, u, 0));
-    }
-    const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
-    const pc = C(nav.toRep(lin(sub3(di.c, nav.X), M_METRES, di.c, 0)))!;
-    const q: Vec3 = [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]];
-    const ql = Math.hypot(...q);
-    if (ql > 1e-6) info.dirs.dock = [q[0] / ql, q[1] / ql, q[2] / ql];
-    // the docking's guide (the HUD's H5): the offset across the port's axis and its drift (camera
-    // coordinates, m and m/s), the axis, and gates along it — 5 to 100 m out — as the eye sees them
-    const toCam = (v: Vec3) => {
-      const l = Math.hypot(...v);
-      if (l < 1e-12) return [0, 0, 0] as Vec3;
-      const u = C(nav.toRep(lin(v, 1 / l, v, 0)))!;
-      return lin(u, l, u, 0);
-    };
-    const rel = sub3(di.ring, di.c);
-    const lat = lin(rel, M_METRES, di.a, -dot3(rel, di.a) * M_METRES);
-    const latRate = lin(di.vrel, 1, di.a, -dot3(di.vrel, di.a));
-    const axis = toCam(di.a);
-    info.dockGuide = {
-      lat: toCam(lat),
-      latRate: toCam(latRate),
-      axis,
-      gates: [5, 10, 20, 50, 100].map((k) => {
-        const g: Vec3 = [pc[0] + eye[0] + axis[0] * k, pc[1] + eye[1] + axis[1] * k, pc[2] + eye[2] + axis[2] * k];
-        const gl = Math.hypot(...g);
-        return { d: [g[0] / gl, g[1] / gl, g[2] / gl] as Vec3, r: gl, k };
-      }),
-    };
-  }
-  // the navball relative to the target: its speed, its prograde
-  if (this.speedMode === "target") {
-    const vt = this.targetVelLocal(cam);
-    if (vt) {
-      const rel = sub3(cam.beta, vt);
-      info.speed = Math.hypot(...rel);
-      info.dirs.prograde = info.dirs.tgtPrograde;
-      info.dirs.retrograde = info.dirs.tgtRetrograde;
-    }
-  }
-  return info;
-}
-
 /**
  * The camera's future free-fall path (no thrust) in the black hole's frame, for the overlay:
  * recomputed at most 4 times a second. Near the mouth the path is not predicted.
@@ -1872,7 +1566,6 @@ export function installLowthrust(C: { prototype: CameraController }) {
     circPlan,
     ourCircWant,
     autopilotWant,
-    flightInfo,
     predictPath,
     driftDir,
     runwayView,

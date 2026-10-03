@@ -9,26 +9,12 @@
 import type { CameraController } from "./controls";
 import type { Renderer } from "./renderer";
 import type { Settings } from "./settings";
+import type { FlightInfo as FullFlightInfo } from "./controller/telemetry";
 import { warpFactor } from "./clock";
 import { setSceneTime } from "./wormhole";
 
-/** The flight figures the renderer takes from (controls.ts flightInfo): the re-entry glow. */
-type FlightInfo = {
-  surface?: { plasma?: { flow: [number, number, number]; level: number } | null; air?: number } | null;
-  air?: {
-    u: [number, number, number] | null;
-    heat: number;
-    shield: number;
-    hull: number;
-    mach: number;
-    rho: number;
-    glow: [number, number, number] | null;
-    inAir: boolean;
-    q: number;
-    speed: number;
-    rolling?: boolean;
-  } | null;
-} | null;
+/** The flight figures the renderer takes from (controller/telemetry.ts): the re-entry glow. */
+type FlightInfo = Pick<FullFlightInfo, "surface" | "air"> | null;
 
 export class Simulation {
   /** the scene's time [M] */

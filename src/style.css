@@ -1337,13 +1337,13 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-mapbar .m3-cycle small { font: 700 11px var(--hud-font); letter-spacing: 0.08em; line-height: 1; margin-top: -1px; }
 .fl-mapbar button:disabled, .fl-mapbar button[data-why] { opacity: 0.38; }
 .fl-mapbar { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
-.fl-mapbar button, .fl-plan button:not(.fl-x), .gt-btn, #cam-pop button {
+.fl-mapbar button, .gt-btn, #cam-pop button {
   all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   font: 700 11px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 7px; min-height: 22px; border-radius: 4px;
   border: 1px solid rgba(160, 210, 255, 0.12); color: rgba(230, 238, 249, 0.84); background: rgba(8, 13, 24, 0.7);
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.fl-mapbar button:hover, .fl-plan button:not(.fl-x):hover:not(:disabled), .gt-btn:hover, #cam-pop button:hover { border-color: rgba(160, 210, 255, 0.45); color: #fff; background: rgba(40, 70, 110, 0.5); }
+.fl-mapbar button:hover, .gt-btn:hover, #cam-pop button:hover { border-color: rgba(160, 210, 255, 0.45); color: #fff; background: rgba(40, 70, 110, 0.5); }
 .fl-mapbar button.on, #cam-pop button.active { border-color: var(--hud-amber); color: #ffe6c6; background: rgba(255, 179, 92, 0.2); }
 .fl-mapbar .fl-label { width: auto; margin-right: 4px; }
 .fl-map { width: 100%; height: 100%; display: block; background: radial-gradient(circle at 50% 45%, rgba(20, 40, 64, 0.4), rgba(0, 0, 0, 0.45)); cursor: grab; touch-action: none; }
@@ -1476,49 +1476,6 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-dock-row b.ok { color: #5fffd0; }
 .fl-dock .fl-go { margin-top: 6px; width: 100%; }
 body.mobile .fl-dock { top: 92px; transform: translateX(-50%) scale(0.85); transform-origin: 50% 0; }
-
-/* ---- flight planner (top right, in place of the telemetry) */
-.fl-plan { top: 56px; right: 14px; width: 290px; display: none; max-height: calc(100vh - 64px - 390px); min-height: 120px; overflow-y: auto; }
-.fl-root.planning .fl-plan { display: block; }
-.fl-root.planning .fl-tel { display: none; }
-.fl-plan [hidden] { display: none !important; }
-.fl-plan .fl-title::before { background: var(--hud-cyan); box-shadow: 0 0 6px var(--hud-cyan); }
-.fl-x { all: unset; cursor: pointer; margin-left: auto; width: 20px; height: 20px; line-height: 20px; text-align: center; color: var(--hud-dim); font: 600 16px var(--font); }
-.fl-x:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.fl-plan button:disabled { opacity: 0.35; cursor: default; }
-.fl-plan button.on { border-color: var(--hud-cyan); color: #e2f7ff; background: rgba(90, 216, 255, 0.2); }
-.fl-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
-.fl-goal { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 8px 0 6px; font: 500 12px var(--font); color: rgba(230, 238, 249, 0.82); min-height: 24px; }
-.fl-rbox { display: inline-flex; align-items: center; gap: 3px; }
-.fl-rbox b { font: 600 12.5px var(--mono); color: var(--hud-cyan); min-width: 56px; text-align: center; }
-.fl-rbox button { padding: 2px 8px !important; }
-.fl-our { flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
-.fl-our > .fl-label { margin-left: 4px; }
-.fl-arr button { white-space: nowrap; }
-.fl-our[hidden], .fl-our [hidden] { display: none !important; }
-.fl-gorow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
-.fl-gorow:has(.fl-align[hidden]) { grid-template-columns: 1fr; }
-.fl-gorow .fl-align[hidden] { display: none; }
-.fl-plan .fl-align.aligned { color: var(--hud-green); border-color: rgba(111, 227, 161, 0.5); }
-.fl-plan .fl-go { width: 100%; padding: 7px !important; font-size: 12.5px !important; border-color: rgba(90, 216, 255, 0.6) !important; background: linear-gradient(180deg, rgba(90, 216, 255, 0.3), rgba(90, 216, 255, 0.1)) !important; color: #eafaff !important; }
-.fl-plan .fl-go.on { border-color: var(--hud-amber) !important; background: linear-gradient(180deg, rgba(255, 179, 92, 0.4), rgba(255, 179, 92, 0.14)) !important; color: #ffe6c6 !important; }
-.fl-nodes { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 6px; }
-.fl-node {
-  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 2px 8px; padding: 5px 8px; cursor: pointer;
-  border: 1px solid rgba(120, 200, 255, 0.1); border-left: 2px solid rgba(90, 216, 255, 0.4); background: rgba(120, 200, 255, 0.04);
-}
-.fl-node.sel { border-left-color: var(--hud-cyan); background: rgba(90, 216, 255, 0.12); }
-.fl-node b { font: 700 11.5px var(--hud-font); letter-spacing: 0.1em; color: var(--hud-cyan); }
-.fl-node .t { font: 600 12px var(--mono); color: #fff; }
-.fl-node .dv { font: 500 11.5px var(--mono); color: var(--hud-amber); }
-.fl-node .parts { grid-column: 1 / -1; font: 500 11px var(--mono); color: var(--hud-dim); }
-.fl-node .fl-x { grid-row: 1; grid-column: 4; }
-.fl-edit { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-bottom: 6px; }
-.fl-edit .fl-label { width: 100%; margin-top: 2px; }
-.fl-edit button { flex: 1; min-width: 40px; }
-.fl-result { font: 500 12px/1.45 var(--font); color: rgba(230, 238, 249, 0.85); padding: 6px 0; border-top: 1px solid var(--hud-line); }
-.fl-actions { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 3px; }
-.fl-actions .fl-go { width: auto; }
 
 /* the automatic mission's captions: a film's lower third */
 .mission-caption {
@@ -1956,19 +1913,6 @@ body .sp-tooltip, #tip {
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
 }
 
-/* ---- the planner's burn editor (a row per direction: its mark, less, more) and its actions */
-.fl-plan .fl-edit { display: grid; grid-template-columns: 1fr; gap: 3px; margin: 4px 0 6px; }
-.fl-plan .fl-edit .fl-sub { margin: 4px 0 2px; }
-.fl-eline { display: grid; grid-template-columns: 1fr 34px 34px; gap: 3px; align-items: center; }
-.fl-ename { display: flex; align-items: center; gap: 6px; font: 700 11px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: rgba(214, 226, 242, 0.8); }
-.fl-ename .fl-glyph { width: 14px; height: 14px; }
-.fl-eline button { font-size: 14px !important; padding: 1px 0 !important; }
-.fl-plan .fl-actions { grid-template-columns: 1fr 1fr 1.5fr; gap: 4px; }
-.fl-plan .fl-actions button, .fl-plan .fl-go { gap: 6px; }
-.fl-bi { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.fl-bi .f { fill: currentColor; stroke: none; }
-.fl-plan button[data-why], .fl-plan button:disabled { opacity: 0.38; }
-
 /* ---- the target and the Ranger: instrument tiles (a small label over its figure, two a row) */
 .fl-tname { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; }
 .fl-tname .fl-glyph { width: 15px; height: 15px; flex: none; filter: drop-shadow(0 0 4px rgba(255, 138, 92, 0.6)); }
@@ -2217,7 +2161,6 @@ body.piloting #sky-pop { top: 64px; bottom: auto; }
 .tf-thrk { position: absolute; top: 6px; left: 0; right: 0; text-align: center; font: 700 11px var(--hud-font); letter-spacing: 0.14em; color: rgba(214, 226, 242, 0.7); }
 .tf-thrv { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font: 600 11px var(--mono); color: #fff; text-shadow: 0 1px 3px #000; }
 
-
 /* ================================================================ phones (ui/mobile.ts: body.mobile)
    A touch screen with a phone's short side, held either way. The settings in a round button top right;
    flying, the mission bar across the top (two lines upright), the tapes smaller between it and the touch
@@ -2277,18 +2220,11 @@ body.mobile.portrait .fl-mg-warp { order: 2; flex-basis: 100%; justify-content: 
 body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(2px + env(safe-area-inset-bottom)); }
 body.mobile.portrait .fl-cockpit { transform: translateX(-50%) scale(0.82); bottom: calc(176px + env(safe-area-inset-bottom)); }
 
-/* (upright, planning: the planner's sheet where the ball stands) */
-body.mobile.portrait .fl-root.planning .fl-cockpit { display: none; }
-
 /* the panels (the full HUD): smaller, in their corners */
 body.mobile .fl-target { top: 52px; left: 8px; transform: scale(0.72); transform-origin: 0 0; }
 body.mobile .fl-right { display: flex; top: 52px; bottom: auto; right: 8px; transform: scale(0.72); transform-origin: 100% 0; }
 body.mobile.portrait .fl-right { top: auto; bottom: 380px; }
 body.mobile .fl-orbit, body.mobile .fl-tel { display: none; }
-
-/* the planner: a sheet — beside the view on its side, under it upright */
-body.mobile .fl-plan { top: 50px; right: 8px; width: min(330px, 48vw); max-height: calc(100vh - 60px); min-height: 0; }
-body.mobile.portrait .fl-plan { top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; max-height: 58vh; }
 
 /* the touch controls: a little tighter upright */
 body.mobile.portrait .tf-stick { width: 124px; height: 124px; left: calc(14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); }
