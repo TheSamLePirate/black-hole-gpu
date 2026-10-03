@@ -207,7 +207,57 @@ export class FlightHud {
   private hud: HTMLCanvasElement;
   private warn = h("div", "fl-warn");
   private caution = new MasterCaution();
+  /** the entry's panel (hud: the guidance shown — the site's range, the bank, the load, the heat) */
+  private entryBox = h("div", "fl-entry fl-panel");
+  private entryHeat: number[] = [];
+  private entryHeatAt = -1;
   private alertSig = "";
+
+  /**
+   * The entry's panel, while the guided entry flies (the air below, Mach above the handover): how far
+   * the site, how far off its heading, the bank commanded and flown, the load and its peak, the heat
+   * and its last half-minute, the flow — the Shuttle's ENTRY TRAJ, in a box.
+   */
+  private drawEntry(i: Info, time: number) {
+    const E = i.entry,
+      A = i.air;
+    const on = !!E && E.phase === "entry" && !!A && this.density < 2 && !this.mapView;
+    this.entryBox.hidden = !on;
+    if (!on || !E || !A) {
+      this.entryHeat = [];
+      return;
+    }
+    const D = 180 / Math.PI;
+    const side = (rad: number) => (Math.abs(rad * D) < 0.5 ? "" : rad > 0 ? " L" : " R");
+    const km = (m: number) => (Number.isFinite(m) ? `${Math.round(m / 1e3).toLocaleString("en")} km` : "—");
+    // (the heat's last half-minute of the scene's time, a sample a second)
+    const tS = time * M_SECONDS;
+    if (tS - this.entryHeatAt >= 1 || tS < this.entryHeatAt) {
+      this.entryHeatAt = tS;
+      this.entryHeat.push(A.heat);
+      if (this.entryHeat.length > 24) this.entryHeat.shift();
+    }
+    // (between the half-minute's least and most: the trend, not the level — flat when it holds)
+    const lo = Math.min(...this.entryHeat),
+      hi = Math.max(...this.entryHeat);
+    const bars = "▁▂▃▄▅▆▇█";
+    const spark = this.entryHeat
+      .map((x) => bars[hi - lo < 0.02 * Math.max(hi, 1) ? 3 : Math.min(7, Math.floor(((x - lo) / (hi - lo)) * 7.999))])
+      .join("");
+    const row = (k: string, v: string, cls = "") => `<div class="fe-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
+    const P = E.plan;
+    // (the attitude, when the craft has one over the ground)
+    const bankNow = "bank" in A && Number.isFinite(A.bank) ? A.bank : 0;
+    this.entryBox.innerHTML =
+      `<div class="fl-title">Entry${E.site ? ` · ${E.site.name}` : ""}</div>` +
+      row("Range", `${km(E.range)} · Δψ ${Number.isFinite(E.dpsi) ? `${Math.abs(E.dpsi * D).toFixed(1)}°${side(E.dpsi)}` : "—"}`) +
+      row("Bank", `cmd ${Math.abs(E.bank * D).toFixed(0)}°${side(-E.bank)} · now ${Math.abs(bankNow * D).toFixed(0)}°${side(-bankNow)}`) +
+      row("Load", `${A.g.toFixed(1)} g · max ${A.gPeak.toFixed(1)}`, A.margins.g > 0.75 ? "hot" : "") +
+      row("Heat", `${(A.heat / 1e4).toFixed(0)} W/cm²`, A.margins.shield > 0.85 ? "hot" : "") +
+      row("Heat · 30 s", `<i>${spark}</i>`) +
+      row("Flow", `M ${A.mach.toFixed(1)} · q ${(A.q / 1e3).toFixed(1)} kPa`) +
+      (P ? row("Peaks ahead", `${(P.heat / 1e4).toFixed(0)} W/cm² · ${Math.round(P.shield)} K · ${P.g.toFixed(1)} g`, "dim") : "");
+  }
 
   /** The master caution acknowledged (Enter, or the lamp clicked): the lamp out, the warning silent. */
   acknowledge() {
@@ -939,6 +989,7 @@ export class FlightHud {
 
     this.root.append(
       this.warn,
+      this.entryBox,
       this.airData,
       this.mission,
       this.dock,
@@ -1411,6 +1462,7 @@ export class FlightHud {
 
   private drawText(i: Info, time: number) {
     const s = this.s;
+    this.drawEntry(i, time);
     const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : "—");
     // mission bar
     const M = this.missionEls;

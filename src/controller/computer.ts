@@ -896,8 +896,23 @@ function entryInfo(this: CameraController) {
   const k = nav ? 1 / M_METRES : 1;
   const toMap = (x: Vec3): Vec3 => lin(x, k, x, 0);
   const path = R.guid?.last?.path.map((x) => toMap(x as Vec3)) ?? null;
+  // (the site from here: the distance over the ground [m], and how far off the heading to it the
+  // velocity runs [rad, > 0: the site to the left])
+  let range = NaN,
+    dpsi = NaN;
+  if (R.site) {
+    const up = unitV(fr.s.x);
+    const pu = unitV(fr.place(R.site));
+    range = Math.acos(clamp(dot3(up, pu), -1, 1)) * fr.env.R;
+    const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
+    const vh = unitV(lin(va, 1, up, -dot3(va, up)));
+    const tdir = unitV(lin(pu, 1, up, -dot3(pu, up)));
+    dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
+  }
   return {
     phase: R.phase,
+    range,
+    dpsi,
     body: fr.body,
     site: R.site ? { name: R.site.name, X: toMap(fr.place(R.site)) } : null,
     path,

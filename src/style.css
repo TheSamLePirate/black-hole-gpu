@@ -2394,3 +2394,13 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .m3-stage.gpu { background: radial-gradient(circle at 50% 45%, rgba(20, 40, 64, 0.4), rgba(0, 0, 0, 0.45)); }
 .m3-stage.gpu > .fl-map { position: relative; background: none; }
 .fl-root.mapview .m3-stage.gpu { background: none; }
+
+/* ---- the entry's panel (flighthud drawEntry): the guidance shown, left of the centre */
+.fl-entry { position: absolute; left: 120px; top: 30vh; width: 270px; display: flex; flex-direction: column; gap: 2px; }
+.fl-entry[hidden] { display: none; }
+.fl-entry .fe-row { display: flex; justify-content: space-between; gap: 10px; font: 600 12px var(--hud-font); letter-spacing: 0.04em; }
+.fl-entry .fe-row span { color: var(--hud-dim); text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; }
+.fl-entry .fe-row b { font: 500 12px var(--mono); color: #eef5ff; white-space: nowrap; }
+.fl-entry .fe-row b i { font-style: normal; font-size: 11px; color: var(--hud-amber); letter-spacing: -0.08em; }
+.fl-entry .fe-row.hot b { color: #ffb4a8; }
+.fl-entry .fe-row.dim b { color: var(--hud-dim); }
