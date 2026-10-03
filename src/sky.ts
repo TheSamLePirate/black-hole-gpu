@@ -1,4 +1,5 @@
 import type { Settings } from "./settings";
+import { cross, dot } from "./math/vec3";
 
 type Vec3 = [number, number, number];
 export type Mat3 = [Vec3, Vec3, Vec3]; // rows
@@ -10,8 +11,6 @@ const EQ_TO_GAL: Mat3 = [
   [-0.8676661490190047, -0.1980763734312015, 0.4559837761750669],
 ];
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a);
   return [a[0] / l, a[1] / l, a[2] / l];

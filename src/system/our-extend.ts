@@ -5,11 +5,11 @@ import type { V3 } from "../game/kepler";
 import { SOLAR_BODIES, solarState } from "./solar";
 import type { OurPath } from "./our-predict";
 import { patchedConics, type Extension, type PatchedBody } from "./patched";
+import { AU_M, M_METRES, M_SECONDS } from "../units";
+import { len, sub } from "../math/vec3";
 
 export type { Extension } from "./patched";
 
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 const BODY = new Map(SOLAR_BODIES.map((b) => [b.id, b]));
 
 /** The solar system as patched bodies at a time (their spheres then). */
@@ -21,7 +21,7 @@ function ourBodies(t: number): Map<string, PatchedBody> {
     // (a planet: its band of distances from the Sun, a cheap test before its place is computed)
     let band: [number, number] | undefined;
     if (p?.id === "sun" && b.elements) {
-      const a = b.elements[0]![0]! * (1.495978707e11 / 1.476625e11), e = b.elements[0]![1]!;
+      const a = b.elements[0]![0]! * (AU_M / M_METRES), e = b.elements[0]![1]!;
       band = [a * (1 - e) - 1.2 * soi, a * (1 + e) + 1.2 * soi];
     }
     out.set(b.id, { id: b.id, parent: b.parent, mass: b.mass, radius: b.radius, soi, band, state: (tt) => solarState(b.id, tt) });
@@ -38,7 +38,7 @@ export function extendOurs(p: OurPath, horizon = extensionHorizon(p.refs[p.refs.
 
 /** How far to look beyond a path ending in a body's sphere: a moon's 10 days, a planet's 40, the Sun's 2 years. */
 export function extensionHorizon(ref: string) {
-  const day = 86400 / 492.5490947;
+  const day = 86400 / M_SECONDS;
   const b = BODY.get(ref);
   return (!b?.parent ? 730 : b.parent === "sun" ? 40 : 10) * day;
 }

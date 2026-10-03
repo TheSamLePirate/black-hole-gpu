@@ -7,10 +7,8 @@
 
 import { propagate, type V3 } from "../game/kepler";
 import type { OurPath } from "./our-predict";
+import { add, len, sub } from "../math/vec3";
 
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 
 /** A body of the patched system: its field (GM), its size, its sphere of influence, its motion. */
 export interface PatchedBody {

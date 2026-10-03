@@ -7,13 +7,14 @@ import type { EntryEnv } from "./entry";
 import type { V3 } from "./aero";
 import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { localAccel, planetFrame } from "./landing";
+import { C_MPS } from "./units";
+import { cross } from "./math/vec3";
 
 export type EnvDesc =
   | { universe: "ours"; body: string; t: number; massSolar: number }
   | { universe: "gargantua"; body: string; t: number; spin: number; massSolar: number };
 
-const C = 299792458;
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const C = C_MPS;
 
 /** v turned about a unit axis by an angle. */
 function rot(v: V3, k: V3, a: number): V3 {

@@ -20,12 +20,13 @@ import type { RangerStatus } from "../game/status";
 import type { Settings } from "../settings";
 import { VESSELS } from "../vessels";
 import { EPOCH_DATE, M_SECONDS } from "../system/solar";
+import { C_MPS, G0, M_METRES } from "../units";
 
 const W = 2048, H = 1024, SLOT = 512;
 /** the screens are portrait (≈ 3:4): each slot drawn in 512 × 683 units, squeezed into its square — the
  *  screen stretches it back */
 const SH = 683;
-const C = 299792458;
+const C = C_MPS;
 const FONT = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace';
 // the film's palette: cyan screens, their lines and text; the black ones' white and amber
 const BG = "#04212c", PANEL = "#08394a", LINE = "#62e6ff", TEXT = "#c6f7ff", DIM = "#3c9fb6", AMBER = "#ffb347", RED = "#ff5a46", GREEN = "#7dff9a";
@@ -363,7 +364,7 @@ export class CockpitScreens {
       if (Number.isFinite(E.v) && now > E.t) E.a += ((A.speed! - E.v) / Math.max(now - E.t, 1e-3) - E.a) * Math.min(1, (now - E.t) / 0.6);
       E.t = now;
       E.v = A.speed!;
-      const y = my - Math.atan(E.a / 9.80665) * deg * pxDeg;
+      const y = my - Math.atan(E.a / G0) * deg * pxDeg;
       g.strokeStyle = Math.abs(E.a) < 0.3 ? TEXT : E.a > 0 ? GREEN : AMBER;
       g.lineWidth = 3;
       g.beginPath();
@@ -487,7 +488,7 @@ export class CockpitScreens {
       // about Gargantua: what its spacetime does to the flight (the HUD's relativity box)
       const I = d.info as unknown as { r: number; speed: number; gamma: number; dtau: number; E: number; rH: number; isco: number; photon: number; ergo: boolean };
       const Mm = 1476.625 * d.settings.massSolar;
-      const tide = (2 * C * C) / (I.r ** 3 * Mm * Mm) / 9.80665;
+      const tide = (2 * C * C) / (I.r ** 3 * Mm * Mm) / G0;
       const dop = I.speed < 1 ? Math.sqrt((1 + I.speed) / (1 - I.speed)) : Infinity;
       const inside = I.r < I.rH * 1.0001 ? "INSIDE THE HORIZON" : I.r < I.photon ? "INSIDE THE PHOTON ORBIT" : I.r < I.isco ? "BELOW THE ISCO" : I.ergo ? "IN THE ERGOSPHERE" : "";
       g.font = `700 30px ${FONT}`;
@@ -647,8 +648,8 @@ export class CockpitScreens {
     const i = d.info;
     const v = VESSELS[i.vessel];
     this.frame(g, `SYSTEMS · ${v.name.toUpperCase()}`);
-    const g0 = 9.80665;
-    const aU = (C * C) / 1.476625e11 / (d.settings.massSolar || 1e8) * 1e8;
+    const g0 = G0;
+    const aU = (C * C) / M_METRES / (d.settings.massSolar || 1e8) * 1e8;
     const maxG = (i.engine.max * aU) / g0;
     const fuel = i.engine.fuel;
     this.bar(g, 30, 100, 60, 250, i.throttle, i.throttle > 0.02 ? AMBER : LINE, "THR");
@@ -802,7 +803,7 @@ export class CockpitScreens {
     g.fillStyle = vDown > Math.max(2, sf.alt / 10) ? RED : vDown > 2 ? AMBER : GREEN;
     g.fillRect(bx - 10, Math.min(cy, cy - vv * (bh / 2)), 20, Math.abs(vv) * (bh / 2));
     // the stop burn
-    const gl = sf.gLocal * 9.80665, net = (sf.twr - 1) * gl;
+    const gl = sf.gLocal * G0, net = (sf.twr - 1) * gl;
     let cue = "—", col = TEXT;
     if (vDown > 1) {
       if (net <= 0.05) (cue = "TWR < 1"), (col = RED);
@@ -840,7 +841,7 @@ export class CockpitScreens {
     if (nx >= 0 && d.settings.cockpitAids && d.settings.hudBurn) {
       const n = p.nodes[nx]!;
       const dv = Math.hypot(...(n.dv as number[])) * C;
-      const aU = (C * C) / 1.476625e11 / (d.settings.massSolar || 1e8) * 1e8;
+      const aU = (C * C) / M_METRES / (d.settings.massSolar || 1e8) * 1e8;
       const a = d.info.engine.max * aU;
       const S = d.info.S as unknown as number[][];
       const bd = (d.info.dirs.burn ?? d.info.dirs.maneuver) as number[] | null;

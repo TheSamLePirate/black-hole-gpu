@@ -12,6 +12,7 @@ import { plan } from "../system/plan-client";
 import { elements, type V3 } from "./orbit";
 import type { RangerStatus } from "./status";
 import type { GameSave } from "./save";
+import { C_MPS } from "../units";
 
 export type Verdict = "pass" | "warn" | "fail" | "skip";
 export interface Check {
@@ -46,7 +47,7 @@ export interface AuditContext {
   errors(): string[];
 }
 
-const C = 299792458;
+const C = C_MPS;
 const verdict = (v: number, warn: number, fail: number): Verdict => (!Number.isFinite(v) ? "fail" : v >= fail ? "fail" : v >= warn ? "warn" : "pass");
 const rel = (xs: number[]) => {
   const m = xs.reduce((a, b) => a + b, 0) / xs.length;

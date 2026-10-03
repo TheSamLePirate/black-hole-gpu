@@ -14,10 +14,12 @@ import { EPOCH_DATE, M_METRES, M_SECONDS, solarBody, solarState, bodyAxes, utcOf
 import { gravityHome } from "./our-side";
 import { dragAccel } from "./our-surface";
 import { gmst, parseOmm, sgp4, type Elements, type Sgp4 } from "./sgp4";
+import { C_MPS } from "../units";
+import { cross, dot, lin, sub } from "../math/vec3";
 
 const C_KMS = 299792.458;
 /** seconds per M (the game's time unit) */
-const M_S = M_METRES / 299792458;
+const M_S = M_METRES / C_MPS;
 
 // the elements of 1 October 2026 (CelesTrak, GP data): the fallback, and the start before the fetch
 const BUNDLED = {
@@ -79,10 +81,6 @@ export function refreshIssElements(): Promise<void> {
   return fetching;
 }
 
-const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

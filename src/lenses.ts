@@ -8,8 +8,8 @@ import type { Settings } from "./settings";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { holeAcceleration, starCentre, starOrbitRadius, starVelocity } from "./targeting";
+import { lin } from "./math/vec3";
 
-const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
 
 export function lensesOf(s: Settings): Lens | Lens[] | undefined {
   const list: Lens[] = [];

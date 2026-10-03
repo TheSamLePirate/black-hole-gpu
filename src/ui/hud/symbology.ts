@@ -10,6 +10,8 @@
 import type { Settings } from "../../settings";
 import type { FutureView, RunwayView } from "../../controls";
 import { COL, FONT, MONO, marker } from "../hudkit";
+import { C_MPS, G0, M_METRES, M_SECONDS } from "../../units";
+import { dot } from "../../math/vec3";
 
 type V3 = [number, number, number];
 
@@ -92,7 +94,6 @@ export interface SymFrame {
 const UNDER = "rgba(0, 0, 0, 0.42)";
 const LADDER = "124, 214, 255";
 const D = Math.PI / 180;
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a: V3): V3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -458,7 +459,7 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
     let vu = comb(up, 1, v, -dot(up, v));
     if (Math.hypot(...vu) > 1e-6) {
       vu = norm(vu);
-      const gam = Math.atan(energy.a / 9.80665);
+      const gam = Math.atan(energy.a / G0);
       const q = pr(comb(v, Math.cos(gam), vu, Math.sin(gam)));
       if (q) {
         const x = fp[0] - 2.3 * r, y = q[1];
@@ -770,7 +771,7 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
   ctx.fillRect(bx - 3 * dpr, Math.min(cy, cy - vv * (bh / 2)), 6 * dpr, Math.abs(vv) * (bh / 2));
   text(`${sf.vVert >= 0 ? "▲" : "▼"} ${Math.abs(sf.vVert).toFixed(1)}`, bx + 8 * dpr, cy - vv * (bh / 2), vcol, 10.5, "left", true);
   // ---- the stop burn: the full-thrust deceleration against gravity, the distance it needs
-  const g = sf.gLocal * 9.80665;
+  const g = sf.gLocal * G0;
   const net = (sf.twr - 1) * g;
   let cue = "", ccol = "rgba(214, 236, 255, 0.9)";
   if (vDown > 1) {
@@ -806,8 +807,8 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
 }
 
 /** the scene's acceleration unit [m/s²] (c² per M) and its time unit [s] (M / c) */
-const A_UNIT = (299792458 * 299792458) / 1.476625e11;
-const T_UNIT = 492.5490947;
+const A_UNIT = (C_MPS * C_MPS) / M_METRES;
+const T_UNIT = M_SECONDS;
 
 /**
  * The next burn: a box with its number, its countdown, its Δv and how long the engine needs for it; the
@@ -820,7 +821,7 @@ function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
   const k = P.nodes.findIndex((n) => n.t >= P.now - 1e-9);
   if (k < 0) return;
   const n = P.nodes[k]!;
-  const dv = Math.hypot(...n.dv) * 299792458;
+  const dv = Math.hypot(...n.dv) * C_MPS;
   const tIn = (n.t - P.now) * T_UNIT;
   const a = (i.engine?.max ?? 0) * A_UNIT;
   const len = a > 0 ? dv / a : Infinity;
@@ -927,7 +928,7 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   const { ctx, dpr, W, H, i, s } = F;
   const r = i.r!, E = i.E ?? NaN, beta = i.speed ?? 0, g = i.gamma ?? 1, dt = i.dtau ?? NaN;
   const Mm = 1476.625 * s.massSolar;
-  const tide = (2 * 299792458 * 299792458) / (r * r * r * Mm * Mm) / 9.80665;
+  const tide = (2 * C_MPS * C_MPS) / (r * r * r * Mm * Mm) / G0;
   const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 150 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 112 * dpr);

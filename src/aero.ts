@@ -1,3 +1,5 @@
+import { G0 } from "./units";
+import { cross } from "./math/vec3";
 // The air of the planets and what it does to a ship: its density, temperature and speed of sound at a
 // height; the forces and moments on a craft from its motion through it (lift, drag, side force), the
 // heat it takes, its skin's temperatures. SI units throughout (m, s, kg, K, N, W).
@@ -69,7 +71,7 @@ const VACUUM: Air = { rho: 0, T: 3, a: 1, gas: GASES.air };
 export const AIR_FLOOR = 1e-10;
 
 // ---- the U.S. Standard Atmosphere 1976
-const G0 = 9.80665, M0 = 0.0289644, RSTAR = 8.31432, R_EARTH76 = 6356766;
+const M0 = 0.0289644, RSTAR = 8.31432, R_EARTH76 = 6356766;
 // (layers: base geopotential height [m'], base temperature [K], lapse rate [K/m'], base pressure [Pa])
 const LAYERS: [number, number, number, number][] = [];
 {
@@ -226,7 +228,6 @@ const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
   return t * t * (3 - 2 * t);
 };
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 /** Modified Newtonian flow's stagnation pressure coefficient (γ). */
 export const cpMax = (g: number) => ((g + 1) ** 2 / (4 * g)) ** (g / (g - 1)) * (4 / (g + 1));

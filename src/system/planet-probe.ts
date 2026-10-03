@@ -17,6 +17,7 @@ import { BB_LOG_T_MAX, BB_LOG_T_MIN, BB_LUT_SIZE, buildBlackbodyLUT, coordToZamo
 import { sphericalFrame } from "../wormhole";
 import { blToCartesian } from "../camera";
 import { aberrate } from "./local-patch";
+import { dot } from "../math/vec3";
 
 export const PROBE_W = 256;
 export const PROBE_H = 128;
@@ -43,7 +44,6 @@ export interface PlanetProbe {
   at: number;
 }
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /**
  * A light direction seen by the probe (its rest frame, ZAMO axes) as a direction of the black-hole

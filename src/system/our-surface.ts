@@ -8,13 +8,12 @@ import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
 import { craterRelief } from "../terrain";
 import { airAt } from "../aero";
+import { C_MPS } from "../units";
+import { cross, dot, sub } from "../math/vec3";
 
 export { GEAR };
 
-const C = 299792458;
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const C = C_MPS;
 
 /** A body one can stand on (not a gas giant, not the Sun). */
 export function solidBody(id: string) {

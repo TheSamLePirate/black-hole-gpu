@@ -20,6 +20,7 @@
 
 import { advance, fromZamo, predict, step, thrust, toZamo, type Lens, type Lenses, type Massive } from "./geodesic";
 import { horizon, zamo, type Vec3 } from "./physics";
+import { add, cross, dot, len, scale, sub, unit as norm } from "./math/vec3";
 
 export type KerrGoal = { apsis: number; side: "max" | "min"; dir: number } | { circ: number; trim?: boolean } | { plane: Vec3 } | { period: number; dir: number };
 
@@ -60,13 +61,6 @@ export interface PlanPath {
   fate: "horizon" | "escape" | "continues" | "star" | "wormhole";
 }
 
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
-const norm = (a: Vec3): Vec3 => scale(a, 1 / (len(a) || 1));
 
 /** Flat-map position of a state. */
 export function position(st: Massive): Vec3 {

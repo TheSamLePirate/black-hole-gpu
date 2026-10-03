@@ -10,11 +10,12 @@ import { M_METRES, M_SECONDS, solarBody, solarState } from "../system/solar";
 import { soiOf } from "../system/our-side";
 import { classify, elements, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
+import { C_MPS } from "../units";
+import { sub } from "../math/vec3";
 
 type Info = ReturnType<CameraController["flightInfo"]>;
 
-const C = 299792458;
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const C = C_MPS;
 const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? solarBody(id)?.name ?? id;
 
 export interface OrbitFigures {

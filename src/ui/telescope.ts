@@ -1,3 +1,4 @@
+import { AU_M } from "../units";
 // The telescope's overlay: a reticle, the target's disc, the angular scale, the lens (its focal length
 // on a 35 mm frame, the magnification against a 50 mm lens) and the target (its apparent diameter, its
 // distance, the tracking). Drawn on the overlay canvas (never into the renders: exports stay clean).
@@ -26,7 +27,7 @@ export const focalLength = (fovDeg: number) => 12 / Math.tan((fovDeg * Math.PI) 
 function fmtDistance(m: number): string {
   if (m < 1e4) return `${m.toFixed(0)} m`;
   if (m < 1e10) return `${Math.round(m / 1e3).toLocaleString("en-US").replace(/,/g, " ")} km`;
-  if (m < 1e15) return `${(m / 1.495978707e11).toPrecision(3)} AU`;
+  if (m < 1e15) return `${(m / AU_M).toPrecision(3)} AU`;
   return `${(m / 9.4607e15).toPrecision(3)} ly`;
 }
 

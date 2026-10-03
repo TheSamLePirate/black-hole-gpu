@@ -28,6 +28,7 @@ import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
 import type { V3 } from "./orbit";
 import { cpuProf } from "../perf";
+import { C_MPS } from "../units";
 
 export interface GameContext {
   settings: Settings;
@@ -217,7 +218,7 @@ export class GameTools {
     const X: V3 = [P[0] + dir[0] * r, P[1] + dir[1] * r, P[2] + dir[2] * r];
     const fwd = unit(sub(along, dir.map((x) => x * dot(along, dir)) as V3));
     const g = groundVelocity(site.body, X, t);
-    const k = speed / 299792458;
+    const k = speed / C_MPS;
     const vel: V3 = [g[0] + fwd[0] * k, g[1] + fwd[1] * k, g[2] + fwd[2] * k];
     const note = this.placeAt({ frame: "ours", X, vel, fwd, up: dir, note: `${site.name}: ${distKm} km out, ${altKm} km up, ${speed} m/s — the approach` });
     const c = this.ctx.camera;

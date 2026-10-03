@@ -12,19 +12,14 @@ import type { Vec3 } from "../physics";
 import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
 import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, M_SECONDS, solarBody, solarState, SOLAR_BODIES } from "./solar";
+import { C_MPS } from "../units";
+import { add, cross, dot, len as norm, scale, sub, unit } from "../math/vec3";
 
-const C = 299792458;
+const C = C_MPS;
 const MS = 1 / C; // 1 m/s
 const KM = 1e3 / M_METRES; // 1 km
 const DAY = 86400 / M_SECONDS;
 
-const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const norm = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
-const unit = (a: Vec3): Vec3 => scale(a, 1 / (norm(a) || 1));
 
 /** What to do at the target: go round it, pass it, or pass it and fall back home (a free return). */
 export type Arrival = "orbit" | "flyby" | "freeReturn";

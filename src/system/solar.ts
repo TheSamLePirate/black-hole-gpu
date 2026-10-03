@@ -15,17 +15,17 @@ import type { Atmosphere } from "../aero";
 import { deState } from "./de440";
 import { earthAxes, eclDir, eclOf, iauAxes, iauRate } from "./orientation";
 import { tdbOf } from "./timescale";
+import { AU_M, C_MPS, DEG, M_METRES, M_SECONDS } from "../units";
+import { add, dot, sub } from "../math/vec3";
 
 /** The scene's t = 0 (the Endurance's year, in the film's chronology) */
 export const EPOCH_DATE = Date.UTC(2067, 0, 1);
 const J2000 = Date.UTC(2000, 0, 1, 12);
-/** metres per M, seconds per M, metres per AU (10⁸ M☉) */
-export const M_METRES = 1.476625e11;
-export const M_SECONDS = 492.5490947;
-const AU = 1.495978707e11;
-const DEG = Math.PI / 180;
+// (metres and seconds per M: units.ts, re-exported for the modules that took them from here)
+export { M_METRES, M_SECONDS };
+const AU = AU_M;
 /** km³/s² → GM in M */
-const gm = (km3s2: number) => (km3s2 * 1e9) / (299792458 ** 2 * M_METRES);
+const gm = (km3s2: number) => (km3s2 * 1e9) / (C_MPS ** 2 * M_METRES);
 const km = (x: number) => (x * 1e3) / M_METRES;
 
 /** days since J2000 at the scene's time t */
@@ -189,8 +189,6 @@ class LazyState implements State {
   }
 }
 const lazy = (pos: Vec3, vel: () => Vec3): State => new LazyState(pos, vel);
-const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 /**
  * The Moon relative to the Earth [AU, AU/day] where DE440 does not reach: its mean elements (P.
@@ -522,7 +520,6 @@ export function spinVector(b: SolarBody, t?: number): Vec3 {
   return v;
 }
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

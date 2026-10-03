@@ -6,6 +6,7 @@
 // straight lines, or the time to impact. Off the screen: an arrow at its edge, the name and distance.
 
 import type { Vec3 } from "../physics";
+import { AU_M, C_MPS } from "../units";
 
 export interface LockDraw {
   name: string;
@@ -24,7 +25,7 @@ export interface LockDraw {
   impact: number;
 }
 
-const C = 299792458;
+const C = C_MPS;
 
 /** A distance for the eye: m, km, then AU and light-years. */
 export function fmtDistance(m: number) {
@@ -34,7 +35,7 @@ export function fmtDistance(m: number) {
   if (a < 1e4) return `${(m / 1e3).toFixed(2)} km`;
   if (a < 1e6) return `${(m / 1e3).toFixed(1)} km`;
   if (a < 1.5e9) return `${Math.round(m / 1e3).toLocaleString("en-US")} km`;
-  if (a < 9.46e14) return `${(m / 1.495978707e11).toFixed(a < 1.5e11 ? 3 : 2)} AU`;
+  if (a < 9.46e14) return `${(m / AU_M).toFixed(a < 1.5e11 ? 3 : 2)} AU`;
   return `${(m / 9.4607e15).toFixed(2)} ly`;
 }
 

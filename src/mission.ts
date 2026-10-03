@@ -12,6 +12,7 @@ import { zamo, type Vec3 } from "./physics";
 import { circularSpeed, type Hold } from "./pilot";
 import type { Settings } from "./settings";
 import { toMouth, mouth } from "./wormhole";
+import { cross } from "./math/vec3";
 
 export const MISSION_PRESET = "Interstellar: wormhole to Gargantua";
 
@@ -29,7 +30,6 @@ const norm = (v: Vec3): Vec3 => {
   const l = Math.hypot(...v) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
 };
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 export class Mission {
   active = false;

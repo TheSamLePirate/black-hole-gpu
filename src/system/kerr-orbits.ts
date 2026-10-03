@@ -1,4 +1,5 @@
 // Circular equatorial orbits of Kerr and what they mean for a body on them: the port of the audit
+import { C_MPS, G0 } from "../units";
 // script of the Gargantua system study (../interstellar-system/calculations.py), in float64.
 //
 // Units G = c = M = 1 (M: the hole's mass); x = r/M, a = a* (dimensionless spin). The SI constants
@@ -8,13 +9,13 @@
 // ---- constants (IAU 2015 B3 nominal values, as in the study)
 export const SI = {
   G: 6.6743e-11,
-  c: 299792458,
+  c: C_MPS,
   muSun: 1.3271244e20,
   muEarth: 3.986004e14,
   earthRadius: 6371000,
   au: 149597870700,
   year: 31557600,
-  g0: 9.80665,
+  g0: G0,
   sigma: 5.670374419e-8,
   lSun: 3.828e26,
   rSun: 6.957e8,

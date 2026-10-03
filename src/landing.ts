@@ -26,6 +26,8 @@ import { bodyTrack, meanMotion } from "./system/ephemeris";
 import { circularOrbit } from "./system/kerr-orbits";
 import { sphericalFrame } from "./wormhole";
 import { relief, SURF } from "./terrain";
+import { C_MPS } from "./units";
+import { dot, len } from "./math/vec3";
 
 type M6 = number[][];
 
@@ -78,8 +80,6 @@ export interface Wheels {
   lands: boolean;
 }
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const len = (a: Vec3) => Math.hypot(...a);
 const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
 
 /** The frame of a planet of the Gargantua system at coordinate time t (spin a, hole of massSolar). */
@@ -204,7 +204,7 @@ export function localAccel(F: PlanetFrame, xi: Vec3, w: Vec3, thrust: Vec3, aero
   const g = F.m / Math.max(d * d * d, 1e-300);
   let out: Vec3 = [a[0] - g * xi[0] + thrust[0], a[1] - g * xi[1] + thrust[1], a[2] - g * xi[2] + thrust[2]];
   if (aero && F.atm) {
-    const c = 299792458;
+    const c = C_MPS;
     const f = aero((d - F.R) * F.mPerM, [w[0] * c, w[1] * c, w[2] * c]);
     return [out[0] + f[0] / F.aUnit, out[1] + f[1] / F.aUnit, out[2] + f[2] / F.aUnit];
   }
@@ -212,7 +212,7 @@ export function localAccel(F: PlanetFrame, xi: Vec3, w: Vec3, thrust: Vec3, aero
   const sp = len(w);
   if (rho > 0 && sp > 0) {
     // ½ ρ v² / B, in c²/M: v [c] → m/s, the result → c²/M
-    const vs = sp * 299792458;
+    const vs = sp * C_MPS;
     const k = (0.5 * rho * vs * vs) / TUNING.ballistic / F.aUnit / sp;
     out = [out[0] - k * w[0], out[1] - k * w[1], out[2] - k * w[2]];
   }
@@ -232,7 +232,7 @@ export function weightUp(F: PlanetFrame, xi: Vec3): number {
  */
 export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3, aero?: AeroFn, wheels?: Wheels): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean } {
   const gear = GEAR / F.mPerM;
-  const C = 299792458;
+  const C = C_MPS;
   let touchdown: { vn: number; vh: number } | undefined;
   let airborne = false;
   if (L.landed) {
@@ -252,9 +252,9 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
     const hNow = Math.max(d - groundR(F, L.xi) - gear, 1e-12);
     const rho = airDensity(F, d - F.R);
     // (v/a of the drag, in M: B a_unit / (½ ρ v c²) — the craft's own: its speed over its air's pull)
-    let dragT = rho > 0 ? (TUNING.ballistic * F.aUnit) / (0.5 * rho * sp * 299792458 ** 2) : Infinity;
+    let dragT = rho > 0 ? (TUNING.ballistic * F.aUnit) / (0.5 * rho * sp * C_MPS ** 2) : Infinity;
     if (aero && rho > 0) {
-      const c = 299792458;
+      const c = C_MPS;
       const f = aero((d - F.R) * F.mPerM, [L.w[0] * c, L.w[1] * c, L.w[2] * c]);
       const fa = Math.hypot(f[0], f[1], f[2]) / F.aUnit;
       dragT = fa > 0 ? sp / fa : Infinity;

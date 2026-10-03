@@ -17,16 +17,13 @@ import { M_METRES, M_SECONDS, solarBody, solarState } from "./solar";
 import { issAxes, issTrack, station } from "./iss";
 import { fleet } from "../fleet";
 import { VESSELS, type VesselId } from "../vessels";
+import { C_MPS } from "../units";
+import { add, cross, dot, len as norm, sub } from "../math/vec3";
 
 /** Where a rendezvous ends at t: the point and its velocity (home), or null. */
 export type RendezvousPoint = (t: number) => { X: Vec3; V: Vec3 } | null;
 
-const C = 299792458;
-const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const norm = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
+const C = C_MPS;
 
 /** the rendezvous point's distance out on IDA-2's axis [m] */
 export const RENDEZVOUS_M = 200;

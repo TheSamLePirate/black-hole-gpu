@@ -17,6 +17,7 @@ import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
+import { cross, dot, sub } from "./math/vec3";
 
 type V3 = [number, number, number];
 
@@ -101,13 +102,10 @@ const MAX_INST = 8;
 const INST_FLOATS = 20;
 const JET_FLOATS = 16;
 
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
   return t * t * (3 - 2 * t);

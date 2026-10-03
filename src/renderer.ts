@@ -53,6 +53,7 @@ import {
 } from "./physics";
 import type { Settings } from "./settings";
 import { encodeEXR, encodePNG16 } from "./exporters";
+import { AU_M, C_MPS } from "./units";
 
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
@@ -1500,7 +1501,7 @@ export class Renderer {
     // point sources at the catalogue stars' scale: a flux F (radiance units × sr) has the magnitude
     // m = −26.74 − 2.5 log(F / F☉,1AU); the catalogue draws 10^(−0.4 m) × fluxScale, × ½ × bgIntensity
     const lumSun = 10 ** (blackbodyLogY(5772) - dc.logY);
-    const fSun1AU = lumSun * Math.PI * (6.957e8 / 1.495978707e11) ** 2;
+    const fSun1AU = lumSun * Math.PI * (6.957e8 / AU_M) ** 2;
     const pointScale = (0.5 * bg * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 26.74)) / fSun1AU;
     // highlight compression above magnitude −2: that flux spread over a glow of radius 0.75 pixel
     const f2 = 0.5 * bg * s.starBrightness * STAR_FLUX_SCALE * 10 ** (0.4 * 2);
@@ -2094,7 +2095,7 @@ export class Renderer {
       const turn = dist(onAxes(cam.fwd as Vec3, near.axes), onAxes(p.fwd, p.near.axes)) + dist(onAxes(cam.up as Vec3, near.axes), onAxes(p.up, p.near.axes));
       // (and the light not changed at once: a new date, the history lit as it was — within 5 s of the
       // scene's clock a frame, the Sun turns 0.02° over the ground)
-      const step = Math.abs(this.lastTime - p.time) * (1476.625 / 299792458) * (s.massSolar || 1);
+      const step = Math.abs(this.lastTime - p.time) * (1476.625 / C_MPS) * (s.massSolar || 1);
       still = this.carryGround && mMetres < 0.01 && turn < (0.25 * 2 * tanH) / t.height && step < 5; // (the centre's round-off: tenths of a millimetre)
       this.taStill = { still, mMetres, turn };
     }

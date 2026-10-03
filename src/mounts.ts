@@ -1,5 +1,6 @@
 // Attach points of the camera on the spaceship (the craft flown: vessels.ts — the Ranger's here).
 import { VESSELS, type VesselId } from "./vessels";
+import { cross, dot, sub } from "./math/vec3";
 
 export type V3 = [number, number, number];
 
@@ -53,13 +54,10 @@ export function mountPose(m: Mount): MountPose {
 
 export type M3 = [V3, V3, V3]; // rows
 
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /**
  * Ship → camera frame C (x right, y up, z forward): rows = the camera's axes in the ship's frame,

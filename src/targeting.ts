@@ -20,6 +20,8 @@ import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
 import { fromMouth, mouth, repToHole, sphericalFrame, toMouth, traceDneg } from "./wormhole";
+import { DEG } from "./units";
+import { cross, dot, lin, normalize as norm, sub } from "./math/vec3";
 
 export type Body = Target;
 
@@ -85,12 +87,6 @@ export function bodyHill(s: Settings, b: Body, t = 0) {
   return Math.hypot(...bodyCentre(s, b, t)) * Math.cbrt(m / 3);
 }
 
-const DEG = Math.PI / 180;
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
-const norm = (a: Vec3): Vec3 => lin(a, 1 / Math.hypot(...a), a, 0);
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 // ------------------------------------------------------------------------------------ the star
 /** Orbital radius of the star, as the shader clamps it. */

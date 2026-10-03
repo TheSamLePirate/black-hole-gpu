@@ -12,12 +12,9 @@
 // turning frames), given by its gravity (with the frame's own terms) and the air's velocity; SI.
 
 import { aeroForces, airAt, airTop, coldSkin, heatStep, type AeroOut, type Atmosphere, type Thermal, type V3, type VesselAero } from "./aero";
+import { G0 } from "./units";
+import { add, cross, dot, len, scale } from "./math/vec3";
 
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const add = (a: V3, b: V3, k = 1): V3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
-const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
 const unit = (a: V3): V3 => {
   const l = len(a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -139,7 +136,7 @@ export function predictEntry(env: EntryEnv, c: EntryCraft, s0: EntryState, bank:
       skin = heatStep(c.aero, skin, airAt(env.atm, A.h), A.out, u, dt);
       res.heatPeak = Math.max(res.heatPeak, A.out.heat);
       res.qPeak = Math.max(res.qPeak, A.out.q);
-      res.gPeak = Math.max(res.gPeak, len(A.a) / 9.80665);
+      res.gPeak = Math.max(res.gPeak, len(A.a) / G0);
       res.shieldPeak = Math.max(res.shieldPeak, skin.shield);
       res.hullPeak = Math.max(res.hullPeak, skin.hull);
       if ((o.handoverMach && A.out.mach < o.handoverMach) || (o.handoverH !== undefined && A.h < o.handoverH)) {

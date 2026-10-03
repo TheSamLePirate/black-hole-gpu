@@ -1,3 +1,4 @@
+import { add, cross, dot, len, scale } from "../math/vec3";
 // Two-body orbits for the game's tools and the Ranger's telemetry: the classical elements of a state
 // around a body (relative to its equator), a state from elements, the times to the apsides, and what
 // the ship is doing (landed, flying in the air, on a suborbital arc, in orbit, escaping).
@@ -7,11 +8,6 @@
 
 export type V3 = [number, number, number];
 
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
-const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const TAU = 2 * Math.PI;
 const wrap2pi = (x: number) => ((x % TAU) + TAU) % TAU;
 

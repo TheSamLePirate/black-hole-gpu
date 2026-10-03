@@ -30,6 +30,7 @@ export function ourPos(id: string, t: number): V3 {
   return solarState(id, t).pos as V3;
 }
 import type { V3 } from "./camera";
+import { add, sub } from "../../math/vec3";
 
 export type Universe = "ours" | "gargantua";
 
@@ -73,8 +74,6 @@ export interface MapScene {
 }
 
 const Z: V3 = [0, 0, 1];
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
 /**
  * Caches the orbits (a turn each: costly for the solar system's ephemeris), sampled again once the

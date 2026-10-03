@@ -35,6 +35,8 @@ import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
 import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
+import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
+import { sub } from "../math/vec3";
 
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
@@ -536,7 +538,7 @@ export class FlightHud {
         // (what it does now: flown, docked to the flown one, docked elsewhere, coasting — how far)
         const mine = fleet.flownAssembly();
         const p = Number.isFinite(t) ? fleet.pose(id, t) : null;
-        const far = p && me ? Math.hypot(p.X[0] - me.X[0], p.X[1] - me.X[1], p.X[2] - me.X[2]) * 1.476625e11 : NaN;
+        const far = p && me ? Math.hypot(p.X[0] - me.X[0], p.X[1] - me.X[1], p.X[2] - me.X[2]) * M_METRES : NaN;
         const dist = !Number.isFinite(far) ? "" : far < 1000 ? `${far.toFixed(0)} m` : `${(far / 1000).toLocaleString("en-US", { maximumFractionDigits: far < 1e5 ? 1 : 0 })} km`;
         const docked = fleet.links.filter((l) => l.a === id || l.b === id).map((l) => (l.a === id ? l.b : l.a)).map((o) => (o === "iss" ? "ISS" : VESSELS[o as VesselId].name));
         const state = id === fleet.active ? "flown" : mine.includes(id) ? "docked to it" : docked.length ? `docked to the ${docked.join(", ")}${dist ? ` · ${dist}` : ""}` : `coasting${dist ? ` · ${dist}` : ""}`;
@@ -1063,7 +1065,7 @@ export class FlightHud {
         const k = (e as MouseEvent).shiftKey ? 10 : (e as MouseEvent).altKey ? 0.1 : 1;
         // (our universe: 1 m/s and 1 minute a click)
         const our = !!this.lastInfo?.ref;
-        const kv = our ? k / 299792458 / step : k, kt = our ? (k * 60) / 492.5490947 / 10 : k;
+        const kv = our ? k / C_MPS / step : k, kt = our ? (k * 60) / M_SECONDS / 10 : k;
         this.act.nudge(this.sel, [dv[0] * kv, dv[1] * kv, dv[2] * kv], dt * kt);
       };
       return b;
@@ -1185,7 +1187,7 @@ export class FlightHud {
         };
         const dv = Math.hypot(...n.dv);
         const parts = ["PRO", "NRM", "RAD"]
-          .map((l, j) => (Math.abs(n.dv[j]!) * 299792458 > 0.5 ? `${l} ${n.dv[j]! >= 0 ? "+" : "−"}${fmtDv(Math.abs(n.dv[j]!))}` : ""))
+          .map((l, j) => (Math.abs(n.dv[j]!) * C_MPS > 0.5 ? `${l} ${n.dv[j]! >= 0 ? "+" : "−"}${fmtDv(Math.abs(n.dv[j]!))}` : ""))
           .filter(Boolean)
           .join(" · ");
         const role = n.role ? `${ROLE[n.role] ?? n.role}${n.body ? ` · ${BODY_NAMES[n.body as Target] ?? n.body}` : ""}` : "";
@@ -1600,7 +1602,7 @@ export class FlightHud {
     const w = performance.now() / 1000;
     const lastS = this.samples[this.samples.length - 1];
     if (!lastS || w - lastS.w >= 0.1) {
-      const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
+      const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / G0;
       const st = i.status;
       const si = !!st && Number.isFinite(st.altKm) && !st.kerr;
       if (this.samples.length && this.samples[this.samples.length - 1]!.si !== si) this.samples.length = 0; // (new units)
@@ -1731,7 +1733,7 @@ export class FlightHud {
     // our universe: the Sun's light where the ship is (T_eq of an Earth-like planet, albedo 0.3)
     if (i.ref && i.X) {
       const S = solarState("sun", time).pos;
-      const au = (Math.hypot(i.X[0] - S[0], i.X[1] - S[1], i.X[2] - S[2]) * 1.476625e11) / 1.495978707e11;
+      const au = (Math.hypot(i.X[0] - S[0], i.X[1] - S[1], i.X[2] - S[2]) * M_METRES) / AU_M;
       const e = EARTH_IRRADIANCE / (au * au);
       const txt = e >= 1e3 ? `${(e / 1e3).toFixed(1)} kW/m²` : `${e.toFixed(e >= 10 ? 0 : 1)} W/m²`;
       const teq = 254.6 / Math.sqrt(au);
@@ -2054,7 +2056,7 @@ export class FlightHud {
    */
   private speedTape(ctx: CanvasRenderingContext2D, i: Info, x0: number, cy: number, hgt: number, dpr: number) {
     const wdt = 58 * dpr;
-    const C = 299792458;
+    const C = C_MPS;
     const want = Number.isFinite(i.wantSpeed) ? i.wantSpeed : 0;
     const need = Math.max(i.speed, want, 1e-9);
     // a round number (1, 2, 2.5, 5 × 10ⁿ) at or above x
@@ -2265,7 +2267,7 @@ export class FlightHud {
     ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
     ctx.fillRect(S(x0 + cw / 2 - 0.5), S(yb - 3), S(1), S(10));
     if (Number.isFinite(rate) && rate !== 0) {
-      const ms = Math.abs(rate) * (i.ref ? 1e3 : 299792458);
+      const ms = Math.abs(rate) * (i.ref ? 1e3 : C_MPS);
       const f = Math.min(1, Math.log10(1 + ms) / 4.5) * (cw / 2);
       ctx.fillStyle = rate < 0 ? "#ff7a5c" : "#6fd2ff";
       ctx.fillRect(S(rate < 0 ? x0 + cw / 2 - f : x0 + cw / 2), S(yb), S(f), S(4));
@@ -3051,7 +3053,7 @@ export class FlightHud {
     const gl = Math.max(0, Math.min(1, i.accel / Math.max(i.engine.max, 1e-12)));
     arcGauge(Math.PI * 0.36, -Math.PI * 0.36, gl, "#3b8cff", "#9fe3ff", true);
     // (the throttle, the g-load, the engine and the tank: the readout above the ball)
-    const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
+    const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / G0;
     const fu = i.engine.fuel;
     const R = this.ballRead;
     if (R) {
@@ -3106,7 +3108,6 @@ export class FlightHud {
 }
 
 // ------------------------------------------------------------------------------------ drawing helpers
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 function hexA(hex: string, a: number) {
   const n = parseInt(hex.slice(1), 16);

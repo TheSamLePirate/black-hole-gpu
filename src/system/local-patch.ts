@@ -15,6 +15,7 @@ import type { CameraFrame } from "../camera";
 import { coordToZamo, type Vec3 } from "../physics";
 import { sideToRep, sphericalFrame } from "../wormhole";
 import type { GpuBody } from "./scene-bodies";
+import { dot } from "../math/vec3";
 
 /** Within this many of its radii a body is drawn in the local patch. */
 export const LOCAL_RANGE = 300;
@@ -61,7 +62,6 @@ export interface LocalPatch {
   distance: number;
 }
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

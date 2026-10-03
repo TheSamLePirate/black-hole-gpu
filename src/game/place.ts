@@ -13,15 +13,12 @@ import { GEAR as HOLE_GEAR, groundR, planetFrame, toGlobal, zamoBeta } from "../
 import { millerWaves, SURF } from "../terrain";
 import { sphericalFrame } from "../wormhole";
 import { ECLIPTIC, elements, stateFrom, type Axes, type OrbitSpec } from "./orbit";
+import { add, cross, dot, sub } from "../math/vec3";
 
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const KM = 1e3 / M_METRES;
 
 export interface Pose {

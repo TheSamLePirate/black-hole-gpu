@@ -1,3 +1,4 @@
+import { dot } from "../math/vec3";
 // Two-body propagation in universal variables (any conic: ellipse, parabola, hyperbola) — the map's
 // preview beyond the predicted paths (patched conics). Vallado, "Fundamentals of Astrodynamics",
 // algorithm 8 (Kepler's problem with the universal variable χ and Stumpff's c₂, c₃).
@@ -6,7 +7,6 @@
 
 export type V3 = [number, number, number];
 
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 function stumpff(psi: number): [number, number] {
   if (psi > 1e-6) {

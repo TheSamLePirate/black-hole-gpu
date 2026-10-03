@@ -12,6 +12,7 @@ import { ourState } from "./system/our-side";
 import { M_METRES, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
 import { dockedFrame, VESSELS, VESSEL_IDS, type VesselId } from "./vessels";
+import { cross, dot, lin, sub } from "./math/vec3";
 
 /** A craft's place: centre (the ship frame's origin), velocity, its axes (x left, y up, z nose; unit, home). */
 export interface Pose {
@@ -57,10 +58,6 @@ export interface DockLink {
   ax: [Vec3, Vec3, Vec3];
 }
 
-const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

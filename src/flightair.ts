@@ -8,9 +8,9 @@
 
 import { aeroForces, airAt, coldSkin, heatStep, type AeroConfig, type AeroOut, type Air, type Atmosphere, type Thermal, type V3 } from "./aero";
 import { VESSELS, type VesselId } from "./vessels";
+import { G0 } from "./units";
+import { dot } from "./math/vec3";
 
-const G0 = 9.80665;
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /** Below this dynamic pressure [Pa] the air is a trace: the time warp is free, the turns the pilot's. */
 export const Q_FREE = 1;

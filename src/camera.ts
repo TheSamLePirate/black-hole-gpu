@@ -5,18 +5,15 @@ import {
   velToMouth,
   type Mouth,
 } from "./wormhole";
+import { DEG } from "./units";
+import { add, dot, normalize as norm, scale } from "./math/vec3";
 
-const DEG = Math.PI / 180;
 
 const cross = (a: Vec3, b: Vec3): Vec3 => [
   a[1] * b[2] - a[2] * b[1],
   a[2] * b[0] - a[0] * b[2],
   a[0] * b[1] - a[1] * b[0],
 ];
-const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const norm = (a: Vec3): Vec3 => scale(a, 1 / Math.hypot(...a));
 
 export interface CameraFrame {
   /** "hole": Boyer–Lindquist position, vectors in the ZAMO frame (r̂, θ̂, φ̂).

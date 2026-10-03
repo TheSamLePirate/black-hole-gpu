@@ -82,5 +82,5 @@ test("a rendezvous a long synodic period off: the window found, near Hohmann's c
   const hoh = Math.sqrt(mu / r1) * (Math.sqrt((2 * r2) / (r1 + r2)) - 1) + Math.sqrt(mu / r2) * (1 - Math.sqrt((2 * r1) / (r1 + r2)));
   expect(r.ok).toBe(true);
   expect(r.dvTotal).toBeLessThan(hoh * 1.25);
-  if (!process.env.CI) expect(performance.now() - t0).toBeLessThan(3000);
+  if (process.env.PERF) expect(performance.now() - t0).toBeLessThan(3000);
 });

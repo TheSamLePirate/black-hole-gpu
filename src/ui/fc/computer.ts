@@ -16,6 +16,7 @@ import type { KerrOrbit } from "../../fc/kerr-ops";
 import { alignOverSite, firstReachable, sitePasses, type Pass, type SiteTrack } from "../../fc/land-ops";
 import { horizon, isco } from "../../physics";
 import { BODY_NAMES } from "../../targeting";
+import { AU_M, C_MPS, G0 } from "../../units";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -73,7 +74,7 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): 
   return e;
 };
 const D = 180 / Math.PI;
-const km = (m: number) => (!Number.isFinite(m) ? "∞" : Math.abs(m) >= 1e9 ? `${(m / 1.495978707e11).toFixed(3)} AU` : Math.abs(m) >= 1e6 ? `${(m / 1e3).toFixed(0)} km` : Math.abs(m) >= 1e4 ? `${(m / 1e3).toFixed(1)} km` : `${m.toFixed(0)} m`);
+const km = (m: number) => (!Number.isFinite(m) ? "∞" : Math.abs(m) >= 1e9 ? `${(m / AU_M).toFixed(3)} AU` : Math.abs(m) >= 1e6 ? `${(m / 1e3).toFixed(0)} km` : Math.abs(m) >= 1e4 ? `${(m / 1e3).toFixed(1)} km` : `${m.toFixed(0)} m`);
 const dur = (s: number) => {
   if (!Number.isFinite(s)) return "—";
   const a = Math.abs(s);
@@ -83,7 +84,7 @@ const dur = (s: number) => {
   if (a < 86400) return `${sg}${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60).toString().padStart(2, "0")} min`;
   return `${sg}${(a / 86400).toFixed(a < 864000 ? 1 : 0)} d`;
 };
-const C = 299792458;
+const C = C_MPS;
 const ms = (v: number) => (!Number.isFinite(v) ? "∞" : Math.abs(v) >= 3e6 ? `${(v / C).toFixed(4)} c` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km/s` : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`);
 /** A burn's part: m/s, or km/s for the hole's (fractions of c). */
 const part = (v: number, big: boolean) => (big ? (v / 1000).toFixed(0) : v.toFixed(1));
@@ -822,7 +823,7 @@ export class FlightComputer {
     const B = this.host.budget();
     const P = this.host.plan();
     const need = P ? P.burns.reduce((a, b) => a + len(b.dv), 0) : 0;
-    E.budget!.innerHTML = `<div class="fc-budget"><i><b style="width:${Number.isFinite(B.dv) ? Math.min(100, (need / Math.max(B.dv, 1e-9)) * 100) : 0}%" class="${need > B.dv ? "hot" : ""}"></b></i><span>${Number.isFinite(B.dv) ? `${ms(B.dv)} left` : "no gauge"} · plan ${ms(need)} · ${(B.accel / 9.80665).toFixed(2)} g</span></div>`;
+    E.budget!.innerHTML = `<div class="fc-budget"><i><b style="width:${Number.isFinite(B.dv) ? Math.min(100, (need / Math.max(B.dv, 1e-9)) * 100) : 0}%" class="${need > B.dv ? "hot" : ""}"></b></i><span>${Number.isFinite(B.dv) ? `${ms(B.dv)} left` : "no gauge"} · plan ${ms(need)} · ${(B.accel / G0).toFixed(2)} g</span></div>`;
     this.drawPlan(P);
   }
 

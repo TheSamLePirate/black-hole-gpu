@@ -10,6 +10,7 @@
 import { horizon, isco, type Vec3 } from "../physics";
 import { toZamo, type Massive } from "../geodesic";
 import { advanceTo, apsides, applyDv, circularBeta, matchDv, orbitNormal, pathFrom, planAlign, planeOffset, position, type KerrGoal, type ManeuverNode, type World } from "../maneuver";
+import { len } from "../math/vec3";
 
 export interface KerrOp {
   ok: boolean;
@@ -39,7 +40,6 @@ export interface KerrOrbit {
   fate: "bound" | "escape" | "horizon";
 }
 
-const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
 const fail = (note: string): KerrOp => ({ ok: false, note, nodes: [] });
 
 /** Kepler's semi-major axis from the state (G = M = 1): a guess at the orbit's size. */

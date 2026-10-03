@@ -12,6 +12,7 @@
 
 import { TUNING } from "./game/tuning";
 import type { M3, V3 } from "./mounts";
+import { add, cross, dot, len, scale } from "./math/vec3";
 
 export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
 export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock" | "entry" | "burns";
@@ -98,11 +99,6 @@ export interface FlightOutput {
 
 // (turning rate, angular acceleration, RCS authority: game/tuning.ts, from the settings)
 
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
 /** 4-velocity (spatial part, γβ) ↔ 3-velocity. */

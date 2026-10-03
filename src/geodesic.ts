@@ -13,6 +13,7 @@
 // the camera — the gravitational slingshot), dL/dτ = −∂δH/∂φ. On its surface the camera lands.
 
 import { horizon, zamo, type Vec3 } from "./physics";
+import { dot as dot3 } from "./math/vec3";
 
 /** A massive body moving on a known path (weak field). */
 export interface Lens {
@@ -67,7 +68,6 @@ export function hamiltonian(st: Massive, a: number) {
 
 type D = { t: number; r: number; th: number; ph: number; ur: number; uth: number; L: number; E: number };
 
-const dot3 = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /** Spherical basis and Cartesian position at (r, θ, φ) (flat map of BL). */
 function frame(r: number, th: number, ph: number) {

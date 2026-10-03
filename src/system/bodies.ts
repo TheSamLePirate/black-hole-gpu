@@ -8,6 +8,7 @@
 import { SI, units } from "./kerr-orbits";
 import type { Atmosphere } from "../aero";
 import { eclipticOf, SOLAR_BODIES, type MapName, type SolarBody } from "./solar";
+import { C_MPS, G0, M_METRES } from "../units";
 
 export type BodyKind = "hole" | "planet" | "star" | "mouth";
 export type Universe = "gargantua" | "ours";
@@ -128,7 +129,7 @@ export const GARGANTUA_SYSTEM: System = {
 
 /** A body of the solar system as a registry entry of our universe. */
 function ourBody(b: SolarBody): BodyDef {
-  const g = b.kind === "planet" ? (b.mass / b.radius ** 2) / (9.80665 * 1.476625e11 / 299792458 ** 2) : 0;
+  const g = b.kind === "planet" ? (b.mass / b.radius ** 2) / (G0 * M_METRES / C_MPS ** 2) : 0;
   return {
     id: b.id, name: b.name, parent: b.parent, universe: "ours", kind: b.kind, mass: b.mass, radius: b.radius,
     orbit: { type: "solar" }, temperature: b.temperature, luminosity: b.kind === "star" ? 1 : undefined,

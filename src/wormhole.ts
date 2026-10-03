@@ -16,8 +16,9 @@
 
 import { horizon, zamo, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
+import { DEG } from "./units";
+import { add, cross, dot, normalize, scale, sub } from "./math/vec3";
 
-const DEG = Math.PI / 180;
 
 /** W/M = (π/2√2) tan(π/2√2) − ln sec(π/2√2) = 1.42953 (lensing width over the lensing mass). */
 export const W_OVER_M = (() => {
@@ -66,12 +67,6 @@ export function ellOfR(w: Dneg, r: number): number {
 // flight of the camera (spatial geodesics: the metric is static with g_tt = −1).
 // ---------------------------------------------------------------------------------------------
 
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const normalize = (a: Vec3): Vec3 => scale(a, 1 / Math.hypot(...a));
 
 /**
  * Integration step: resolves the mouth's transition region (scale M), turns by at most 0.05 rad

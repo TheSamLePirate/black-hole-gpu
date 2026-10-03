@@ -26,9 +26,9 @@ import { Paint } from "./map3d/paint";
 import { MAPS_HI, MAPS_LO } from "../system/solar";
 const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
-const sub3 = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 import { planetFrame, toLocal } from "../landing";
 import type { Settings } from "../settings";
+import { cross, dot, sub as sub3 } from "../math/vec3";
 
 type V3 = [number, number, number];
 export type GroundMode = "globe" | "map";
@@ -39,8 +39,6 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") =
   if (text) e.textContent = text;
   return e;
 };
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

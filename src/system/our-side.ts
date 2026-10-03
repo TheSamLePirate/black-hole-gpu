@@ -12,6 +12,7 @@ import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity, toBodyFixed } from "./our-surface";
+import { M_METRES } from "../units";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
 export const OUR_BODIES = GARGANTUA_SYSTEM.bodies
@@ -93,7 +94,7 @@ export function saturnDeparture(t = 0): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec
   const e: Vec3 = [toSun[0] - ts * s[0], toSun[1] - ts * s[1], toSun[2] - ts * s[2]];
   const el = Math.hypot(...e);
   const a = (14 * Math.PI) / 180;
-  const d = 1e9 / 1.476625e11; // 10⁶ km in M (10⁸ M☉)
+  const d = 1e9 / M_METRES; // 10⁶ km in M (10⁸ M☉)
   const u: Vec3 = [0, 1, 2].map((i) => s[i]! * Math.cos(a) + (e[i]! / el) * Math.sin(a)) as Vec3;
   const X: Vec3 = [S[0] + d * u[0], S[1] + d * u[1], S[2] + d * u[2]];
   const toSat: Vec3 = [-u[0], -u[1], -u[2]];
@@ -158,7 +159,7 @@ export function earthStart(t = 0, altKm = 400, moonPlane = false): { X: Vec3; fw
   const e: Vec3 = [n[1] * s[2] - n[2] * s[1], n[2] * s[0] - n[0] * s[2], n[0] * s[1] - n[1] * s[0]];
   const c = Math.cos(Math.PI / 3), sn = Math.sin(Math.PI / 3);
   const u: Vec3 = [c * s[0] + sn * e[0], c * s[1] + sn * e[1], c * s[2] + sn * e[2]];
-  const r = earth.radius + (altKm * 1e3) / 1.476625e11;
+  const r = earth.radius + (altKm * 1e3) / M_METRES;
   const X: Vec3 = [E.pos[0] + r * u[0], E.pos[1] + r * u[1], E.pos[2] + r * u[2]];
   // prograde: counter-clockwise about the plane's normal
   const f: Vec3 = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];

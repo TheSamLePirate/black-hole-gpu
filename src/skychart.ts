@@ -18,19 +18,17 @@ import { eclOf, equatorOfDate } from "./system/orientation";
 import { bodyPole, SOLAR_BODIES, utcOf } from "./system/solar";
 import { tdbOf } from "./system/timescale";
 import { mouth } from "./wormhole";
+import { cross, dot, lin } from "./math/vec3";
 
 // ------------------------------------------------------------------------------------ the data
 export interface Constellation { abbr: string; name: string; label: Vec3 }
 export interface NamedStar { name: string; v: Vec3; mag: number; constellation: number }
 
 const D = Math.PI / 180;
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const lin = (a: Vec3, ka: number, b: Vec3, kb: number): Vec3 => [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb];
 
 /** the constellations, their figures' segments (home frame: J2000 ecliptic) and the named stars */
 export const CONSTELLATIONS: Constellation[] = sky.constellations.map((c) => ({ abbr: c.abbr, name: c.name, label: eclOf(c.label as Vec3) }));

@@ -1,4 +1,5 @@
 import type { BodyView } from "./system/our-side";
+import { M_SECONDS } from "./units";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** The camera's placement (controls.ts): around the target, following it, free (carried by the nearest
@@ -522,14 +523,14 @@ const EARTH_VIEW: Preset = {
   system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
   jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
   anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "dorsal",
-  engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, lensFlare: 0,
+  engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / M_SECONDS, lensFlare: 0,
 };
 // (the solar system's worlds, Gargantua's: the same system, the Ranger on its orbit, the camera behind its
 // cockpit — it moves with them: Miller runs round Gargantua at half the speed of light)
 const WORLD_VIEW: Preset = { ...EARTH_VIEW };
 const GARGANTUA_WORLD: Preset = { ...EARTH_VIEW, anchor: "hole", fov: 40, time: 109.6 };
 /** the game's start [M], a day [M] */
-const T0 = 109.6, DAY = 86400 / 492.5490947;
+const T0 = 109.6, DAY = 86400 / M_SECONDS;
 const SANTIAGO: [number, number] = [-33.45, -70.66];
 
 export const presets: Record<string, Preset> = {
@@ -596,14 +597,14 @@ export const presets: Record<string, Preset> = {
   // (the view 4° under the Sun: the Meseta's real horizon, flat, in the frame — the drawn hills that filled
   // its foot are gone)
   "Earth: total eclipse over Burgos, 12 Aug 2026": {
-    ...EARTH_VIEW, ship: false, target: "sun", lookAt: false, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    ...EARTH_VIEW, ship: false, target: "sun", lookAt: false, fov: 12, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 18, 27, 40) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [42.34, -3.7], look: "sun", off: [0, -4] },
   },
   // the same eclipse from 3 000 km over the Labrador Sea, the Sun behind the camera: the Moon's shadow on the
   // clouds west of Iceland at greatest eclipse (17:45:56 UTC, γ 0.8977), the penumbra dimming the Arctic
   // around it (DE440)
   "Earth: the Moon's shadow from orbit, 12 Aug 2026": {
-    ...EARTH_VIEW, ship: false, target: "earth", rotation: "free", lookAt: false, fov: 34, time: (Date.UTC(2026, 7, 12, 17, 45, 50) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    ...EARTH_VIEW, ship: false, target: "earth", rotation: "free", lookAt: false, fov: 34, time: (Date.UTC(2026, 7, 12, 17, 45, 50) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [52, -40], altKm: 3000, aim: [65.2, -25.2], off: [0, 3] },
   },
   // above the Potrerillos reservoir (Mendoza, 1 500 m), the Sun going down behind the Cordón del Plata,
@@ -629,19 +630,19 @@ export const presets: Record<string, Preset> = {
   // Yosemite Valley from Tunnel View, 17:30 on 12 August: El Capitan on the left, the valley's floor, Half
   // Dome's ridge far off, the light low from behind
   "Earth: Yosemite Valley from Tunnel View": {
-    ...EARTH_VIEW, ship: false, target: "earth", fov: 50, earthClouds: 0, time: (Date.UTC(2026, 7, 13, 0, 30) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 50, earthClouds: 0, time: (Date.UTC(2026, 7, 13, 0, 30) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [37.7156, -119.6773], aim: [37.74, -119.57] },
   },
   // Everest from Kala Patthar (5 645 m) at sunset, 15 October: the last light on the summits — Everest,
   // Nuptse, Changtse — the Khumbu glacier below in the shade
   "Earth: Everest at sunset from Kala Patthar": {
-    ...EARTH_VIEW, ship: false, target: "earth", fov: 40, earthClouds: 0, time: (Date.UTC(2026, 9, 15, 11, 45) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 40, earthClouds: 0, time: (Date.UTC(2026, 9, 15, 11, 45) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [27.9957, 86.8288], aim: [27.9881, 86.925] },
   },
   // Saint-Jean-de-Valériscle (Gard, 229 m) on a summer morning, 12 August: the Cévennes' foothills towards
   // Mont Lozère, 39 km to the north-west
   "Earth: Saint-Jean-de-Valériscle, the Cévennes": {
-    ...EARTH_VIEW, ship: false, target: "earth", fov: 60, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / 492.5490947,
+    ...EARTH_VIEW, ship: false, target: "earth", fov: 60, earthClouds: 0, time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391] },
   },
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
@@ -683,7 +684,7 @@ export const presets: Record<string, Preset> = {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "saturn", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
-    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthGround",
+    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / M_SECONDS, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthGround",
   },
   // the game's rehearsal: Artemis II — from a 400 km Earth orbit, round the Moon on a free return
   // and back (O: the planner, the Moon targeted: Free return, PLAN, EXECUTE)
@@ -700,13 +701,13 @@ export const presets: Record<string, Preset> = {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
     anchor: "wormhole", target: "moon", fov: 60, exposure: 0, bgIntensity: 1, autoExposure: true, ship: true, shipMount: "chase",
-    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / 492.5490947, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthMoon",
+    engine: "crew", crewG: 2, animate: true, timeSpeed: 1 / M_SECONDS, ...QUALITY.game, quality: "game", time: 109.6, pose: "earthMoon",
   },
   // our side: sunlit at 9.5 AU, ~10⁻⁷ of the disk's radiance — auto exposure
   "Gargantua system: departure near Saturn": {
     system: "gargantua", massSolar: 1e8, spin: 0.998, diskOuter: 7.5, diskTemp: 4600, turbulence: 0.9, diskThickness: 0.02, diskTau: 6,
     jet: false, sun: false, wormhole: true, whOrbit: true, whDist: 300, whPhase: 327.7, whRho: 0.05, whLength: 0.01, whLensing: 0.05,
-    anchor: "wormhole", target: "wormhole", fov: 50, exposure: 0, bgIntensity: 1, autoExposure: true, pose: "saturn", timeSpeed: 1 / 492.5490947,
+    anchor: "wormhole", target: "wormhole", fov: 50, exposure: 0, bgIntensity: 1, autoExposure: true, pose: "saturn", timeSpeed: 1 / M_SECONDS,
   },
   "Mission: through the wormhole to the companion star (automatic flight)": {
     wormhole: true, anchor: "wormhole", target: "wormhole", whL: -16, inclination: 90, azimuth: 0, yaw: 0, pitch: 0, roll: 0, fov: 55,
