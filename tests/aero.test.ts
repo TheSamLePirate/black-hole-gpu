@@ -28,13 +28,14 @@ test("the 1976 standard atmosphere: its densities and temperatures", () => {
   // (above 86 km, the table, continuous)
   expect(Math.abs(us76(86e3 - 1).rho / us76(86e3 + 1).rho - 1)).toBeLessThan(0.02);
   expect(us76(400e3).rho).toBeCloseTo(2.803e-12, 14);
-  // the top: ~230 km; Mars' exponential, its CO₂
+  // the top: ~230 km; Mars's measured profile (NASA Glenn's fit at the datum), its CO₂
   expect(airTop(earth) / 1e3).toBeGreaterThan(200);
   expect(airTop(earth) / 1e3).toBeLessThan(250);
   const mars = airAt(solarBody("mars")!.atmosphere, 0);
-  expect(mars.rho).toBeCloseTo(0.02, 6);
+  expect(mars.rho).toBeCloseTo(0.01459, 6);
   expect(mars.a).toBeGreaterThan(220);
-  expect(mars.a).toBeLessThan(235);
+  // (Glenn's 250 K at the datum: ~247 m/s)
+  expect(mars.a).toBeLessThan(255);
 });
 
 test("the Ranger glides: lift up, L/D ≈ 6, an approach near 100 m/s; stable in pitch", () => {

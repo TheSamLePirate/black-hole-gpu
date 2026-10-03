@@ -7,7 +7,7 @@ import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
 import { craterRelief } from "../terrain";
-import { airAt } from "../aero";
+import { airAt, airRaw } from "../aero";
 import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
 
@@ -36,18 +36,48 @@ export function airDensity(id: string, hM: number) {
   return airAt(solarBody(id)?.atmosphere, Math.max(hM, 0)).rho;
 }
 
-/** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air. */
-export function dragAccel(id: string, X: Vec3, V: Vec3, t: number): Vec3 {
+/** The thin air's density at a height [m] above a body, with no floor: the thermosphere's drag on an
+ *  orbit (the ISS's 400 km: 3·10⁻¹² kg/m³, some fifty metres a day) — beyond 2 500 km, none. */
+export function thinAirDensity(id: string, hM: number) {
+  const atm = solarBody(id)?.atmosphere;
+  return atm && hM < 2.5e6 ? airRaw(atm, Math.max(hM, 0)).rho : 0;
+}
+
+/** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air — the
+ *  thermosphere's too, above the flight's air (B: the ballistic coefficient, the craft's or given). */
+export function dragAccel(id: string, X: Vec3, V: Vec3, t: number, B = TUNING.ballistic): Vec3 {
   const b = solarBody(id)!;
   const st = solarState(id, t);
   const h = (Math.hypot(...sub(X, st.pos)) - b.radius) * M_METRES;
-  const rho = airDensity(id, h);
+  const rho = thinAirDensity(id, h);
   if (rho <= 0) return [0, 0, 0];
   const va = sub(V, groundVelocity(id, X, t));
   const v = Math.hypot(...va);
   // (a = ½ ρ (v c)² / B in m/s², × M/c² in the code's units)
-  const k = (-0.5 * rho * v * M_METRES) / TUNING.ballistic;
+  const k = (-0.5 * rho * v * M_METRES) / B;
   return [va[0] * k, va[1] * k, va[2] * k];
+}
+
+/**
+ * A near-circular orbit's decay through the thin air over dt on rails: its size shrinks at
+ * da/dt = −(ρ/B) √(μ a) (the drag's mean work over a turn), its shape kept — the state scaled (r by
+ * a′/a, v by √(a/a′)). An eccentric orbit, or one clear of the air, unchanged.
+ */
+export function railsDecay(id: string, mu: number, r: Vec3, v: Vec3, dt: number, B = TUNING.ballistic): { r: Vec3; v: Vec3 } {
+  const b = solarBody(id);
+  if (!b?.atmosphere) return { r, v };
+  const R = Math.hypot(...r);
+  const eps = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) / 2 - mu / R;
+  if (!(eps < 0)) return { r, v };
+  const a = -mu / (2 * eps);
+  if (Math.abs(R - a) > 0.05 * a) return { r, v };
+  const rho = thinAirDensity(id, (a - b.radius) * M_METRES);
+  if (!(rho > 0)) return { r, v };
+  // (in the code's units: a and t in M, μ = GM/c²: da/dt = −(ρ/B) M √(μ a))
+  const a1 = Math.max(a - (rho / B) * M_METRES * Math.sqrt(mu * a) * dt, b.radius);
+  const kr = a1 / a,
+    kv = Math.sqrt(a / a1);
+  return { r: [r[0] * kr, r[1] * kr, r[2] * kr], v: [v[0] * kv, v[1] * kv, v[2] * kv] };
 }
 
 /** Home-frame point ↔ the body's own coordinates (fixed on its ground), at time t. */

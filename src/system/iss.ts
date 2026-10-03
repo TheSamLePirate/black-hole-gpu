@@ -13,6 +13,9 @@ import type { Vec3 } from "../physics";
 import { EPOCH_DATE, M_METRES, M_SECONDS, solarBody, solarState, bodyAxes, utcOf } from "./solar";
 import { gravityHome } from "./our-side";
 import { dragAccel } from "./our-surface";
+
+/** the station's ballistic coefficient m/(C_D A) [kg/m²] */
+const ISS_BALLISTIC = 130;
 import { gmst, parseOmm, sgp4, type Elements, type Sgp4 } from "./sgp4";
 import { C_MPS } from "../units";
 import { cross, dot, lin, sub } from "../math/vec3";
@@ -311,7 +314,8 @@ export class IssTracker {
     const n = Math.max(1, Math.ceil((Math.abs(span) * M_S) / 2));
     const h = span / n;
     let { X, V, t } = st;
-    const acc = (Xq: Vec3, Vq: Vec3, tq: number) => lin(gravityHome(Xq, tq).acc, 1, dragAccel("earth", Xq, Vq, tq), 1);
+    // (the station's own ballistic coefficient: 420 t over C_D A ≈ 2.2 × 1 500 m²)
+    const acc = (Xq: Vec3, Vq: Vec3, tq: number) => lin(gravityHome(Xq, tq).acc, 1, dragAccel("earth", Xq, Vq, tq, ISS_BALLISTIC), 1);
     let a = acc(X, V, t);
     for (let i = 0; i < n; i++) {
       // (velocity Verlet: the ship's own scheme in the air)

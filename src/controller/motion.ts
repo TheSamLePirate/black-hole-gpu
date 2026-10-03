@@ -16,7 +16,9 @@ import { YOSHIDA } from "../system/our-predict";
 import { keplerProp } from "../system/our-plan";
 import {
   airDensity as ourAir,
+  dragAccel,
   fromBodyFixed,
+  railsDecay,
   gearHeight,
   groundRelief,
   groundSpeeds,
@@ -356,7 +358,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   if (rails && simDt > 0.02 * rails.period) {
     const kp = keplerProp(rails.mass, sub3(X, ourState(rails.ref, t0).pos), sub3(V, ourState(rails.ref, t0).vel), simDt);
     // (the body's oblateness: its secular drift — the node's regression, the periapsis's turn)
-    const k = secularZonal(rails.ref, rails.mass, kp.r as Vec3, kp.v as Vec3, simDt, t0);
+    const kz = secularZonal(rails.ref, rails.mass, kp.r as Vec3, kp.v as Vec3, simDt, t0);
+    // (and the thin air's: the orbit's decay)
+    const k = railsDecay(rails.ref, rails.mass, kz.r, kz.v, simDt);
     const B = ourState(rails.ref, tEnd);
     X = lin(B.pos, 1, k.r, 1);
     V = lin(B.vel, 1, k.v, 1);
@@ -389,6 +393,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       X = lin(X, 1, V, h);
       t = tn;
       last = h;
+      // (the thermosphere, above the flight's air: its drag a small kick each step — an orbit decays)
+      if (atm) V = lin(V, 1, dragAccel(ref, X, V, t), dt);
     } else {
       V = lin(V, 1, a, dt / 2);
       X = lin(X, 1, V, dt);

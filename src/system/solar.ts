@@ -188,7 +188,7 @@ export const SOLAR_BODIES: SolarBody[] = [
       [0.72333566, 0.00677672, 3.39467605, 181.9790995, 131.60246718, 76.67984255],
       [0.0000039, -0.00004107, -0.0007889, 58517.81538729, 0.00268329, -0.27769418],
     ],
-    { atmosphere: { rho0: 65, H: 15900, T: 737, gas: "co2" } },
+    { atmosphere: { rho0: 65, H: 15900, T: 737, gas: "co2", model: "venus" } },
   ),
   planet(
     "earth",
@@ -220,7 +220,7 @@ export const SOLAR_BODIES: SolarBody[] = [
       [1.52371034, 0.0933941, 1.84969142, -4.55343205, -23.94362959, 49.55953891],
       [0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343],
     ],
-    { atmosphere: { rho0: 0.02, H: 11100, T: 210, gas: "co2" } },
+    { atmosphere: { rho0: 0.0146, H: 11100, T: 210, gas: "co2", model: "mars" } },
   ),
   planet("ceres", "Ceres", 62.6, 469.7, 9.074, [291.42, 66.76], 0.09, "rock", "ceres", [
     [2.7675, 0.0785, 10.59, 153.6, 153.9, 80.3],
@@ -428,7 +428,7 @@ export const SOLAR_BODIES: SolarBody[] = [
     0.22,
     "gas",
     "titan",
-    { atmosphere: { rho0: 5.3, H: 21000, T: 94, gas: "n2ch4" } },
+    { atmosphere: { rho0: 5.43, H: 21000, T: 94, gas: "n2ch4", model: "titan" } },
   ),
   moon(
     "iapetus",

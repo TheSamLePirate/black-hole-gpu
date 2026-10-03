@@ -40,7 +40,7 @@ test("the body's own coordinates: a place kept over an hour, the ground velocity
   expect(Math.hypot(...fd.map((x, i) => x - gv[i]!)) * C).toBeLessThan(5e-3);
 });
 
-test("the air's drag: ½ ρ v² / B against the motion through the air, none above it", () => {
+test("the air's drag: ½ ρ v² / B against the motion through the air, the thermosphere's above it", () => {
   const g = earthGround(t0);
   const up = groundSpeeds("earth", g.X, g.vel, t0).up;
   // 100 m/s straight up, at the pad: 0.5 · 1.225 · 100² / 900 ≈ 6.8 m/s², downwards
@@ -49,7 +49,10 @@ test("the air's drag: ½ ρ v² / B against the motion through the air, none abo
   const aM = ((a[0] * up[0] + a[1] * up[1] + a[2] * up[2]) * (C * C)) / M_METRES;
   expect(aM).toBeCloseTo(-(0.5 * 1.225 * 100 * 100) / 900, 1);
   const high = g.X.map((x, i) => x + (400e3 / M_METRES) * up[i]!) as Vec3;
-  expect(Math.hypot(...dragAccel("earth", high, V, t0))).toBe(0);
+  // (above the flight's air, the thermosphere's drag only: billions of times less)
+  const thin = Math.hypot(...dragAccel("earth", high, V, t0));
+  expect(thin).toBeGreaterThan(0);
+  expect(thin).toBeLessThan(1e-9 * Math.hypot(...a));
 });
 
 test("the ephemeris' velocities: the rate of its places (the Moon's turning node and perigee too)", () => {

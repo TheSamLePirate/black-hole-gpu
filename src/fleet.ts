@@ -6,6 +6,7 @@
 //
 // Home frame, M units (lengths, times), velocities in c; the docking links in metres.
 
+import { railsDecay } from "./system/our-surface";
 import { massLeft } from "./engine";
 import { secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
@@ -132,7 +133,9 @@ export class Fleet {
     const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
     const kp = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
     // (the body's oblateness: the orbit's node and periapsis drift, as the flown craft's on rails)
-    const k = secularZonal(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
+    const kz = secularZonal(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
+    // (its orbit's decay in the thin air)
+    const k = railsDecay(f.ref, mu, kz.r, kz.v, t - f.t);
     const C = lin(B1.pos, 1, k.r, 1),
       Vc = lin(B1.vel, 1, k.v, 1);
     const r = lin(w, t - f.t, w, 0);

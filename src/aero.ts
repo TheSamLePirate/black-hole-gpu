@@ -52,7 +52,8 @@ export interface Atmosphere {
   /** temperature [K] (the exponential's); the Earth's from its model */
   T?: number;
   gas?: GasId;
-  model?: "us76";
+  /** a measured profile instead of the exponential: the Earth's standard, Venus's, Mars's, Titan's */
+  model?: "us76" | "venus" | "mars" | "titan";
 }
 
 /** The air at a height. */
@@ -144,16 +145,97 @@ export function us76(h: number): { rho: number; T: number } {
   return { rho: Math.exp(Math.log(r0) + f * (Math.log(r1) - Math.log(r0))), T: T0 + f * (T1 - T0) };
 }
 
+// ---- the other worlds' measured atmospheres: [height m, density kg/m³, temperature K], interpolated in
+// log ρ (audit P3: their isothermal exponentials were orders of magnitude off — Venus at 130 km)
+/** Venus: the VIRA reference (Seiff et al. 1985) to 100 km, its day-side thermosphere above. */
+const VENUS: [number, number, number][] = [
+  [0, 64.79, 735.3],
+  [10, 38.1, 658.2],
+  [20, 20.5, 580.7],
+  [30, 10.5, 496.9],
+  [40, 4.44, 417.6],
+  [50, 1.61, 350.5],
+  [60, 0.475, 262.8],
+  [70, 0.085, 229.8],
+  [80, 0.012, 197.1],
+  [90, 1.17e-3, 169.4],
+  [100, 8.0e-5, 175.4],
+  [110, 1.0e-5, 190],
+  [120, 1.1e-6, 215],
+  [130, 1.5e-7, 240],
+  [140, 3.0e-8, 260],
+  [150, 7.0e-9, 275],
+  [180, 2.0e-10, 295],
+  [200, 4.0e-11, 300],
+  [250, 1.5e-12, 300],
+].map(([h, r, T]) => [h! * 1e3, r!, T!]);
+/** Mars: NASA Glenn's fit to 40 km, a Mars Climate Database mean profile above. */
+const MARS: [number, number, number][] = [
+  [0, 1.459e-2, 249.7],
+  [10, 6.38e-3, 232.1],
+  [20, 2.71e-3, 222.1],
+  [30, 1.154e-3, 212.2],
+  [40, 4.92e-4, 202.2],
+  [60, 9.0e-5, 180],
+  [80, 8.6e-6, 150],
+  [100, 5.3e-7, 140],
+  [120, 3.6e-8, 150],
+  [150, 1.2e-9, 170],
+  [200, 1.3e-11, 210],
+  [300, 4.4e-15, 230],
+].map(([h, r, T]) => [h! * 1e3, r!, T!]);
+/** Titan: Yelle's recommended model and Huygens's descent (HASI); its thermosphere from Cassini. */
+const TITAN: [number, number, number][] = [
+  [0, 5.43, 93.7],
+  [10, 3.49, 84],
+  [20, 1.99, 76],
+  [30, 0.98, 72],
+  [40, 0.48, 70.5],
+  [50, 0.22, 72],
+  [60, 0.093, 80],
+  [80, 0.0193, 110],
+  [100, 5.7e-3, 135],
+  [150, 6.9e-4, 170],
+  [200, 1.5e-4, 180],
+  [300, 8.6e-6, 175],
+  [400, 6.0e-7, 160],
+  [500, 3.4e-8, 155],
+  [600, 5.0e-9, 155],
+  [800, 2.5e-10, 160],
+  [1000, 2.0e-11, 160],
+].map(([h, r, T]) => [h! * 1e3, r!, T!]);
+const TABLES = { venus: VENUS, mars: MARS, titan: TITAN };
+
+/** A measured profile at a height [m]: log ρ and T interpolated; above its top, its last scale height on. */
+export function tableAir(table: [number, number, number][], h: number): { rho: number; T: number } {
+  const n = table.length;
+  if (h <= table[0]![0]) return { rho: table[0]![1], T: table[0]![2] };
+  if (h >= table[n - 1]![0]) {
+    const [h0, r0] = table[n - 2]!,
+      [h1, r1, T1] = table[n - 1]!;
+    const H = (h1 - h0) / Math.log(r0 / r1);
+    return { rho: r1 * Math.exp(-(h - h1) / H), T: T1 };
+  }
+  let k = 0;
+  while (table[k + 1]![0] < h) k++;
+  const [h0, r0, T0] = table[k]!,
+    [h1, r1, T1] = table[k + 1]!;
+  const f = (h - h0) / (h1 - h0);
+  return { rho: Math.exp(Math.log(r0) + f * (Math.log(r1) - Math.log(r0))), T: T0 + f * (T1 - T0) };
+}
+
+/** The density and temperature at a height [m], with no floor: the thin thermosphere's drag on orbits. */
+export function airRaw(atm: Atmosphere, h: number): { rho: number; T: number } {
+  if (atm.model === "us76") return us76(h);
+  if (atm.model) return tableAir(TABLES[atm.model], h);
+  return { rho: atm.rho0 * Math.exp(-Math.max(h, -0.5 * atm.H) / atm.H), T: atm.T ?? 288 };
+}
+
 /** The air at a height [m] above the surface (none: vacuum). */
 export function airAt(atm: Atmosphere | null | undefined, h: number): Air {
   if (!atm) return VACUUM;
   const gas = GASES[atm.gas ?? "air"];
-  let rho: number, T: number;
-  if (atm.model === "us76") ({ rho, T } = us76(h));
-  else {
-    rho = atm.rho0 * Math.exp(-Math.max(h, -0.5 * atm.H) / atm.H);
-    T = atm.T ?? 288;
-  }
+  const { rho, T } = airRaw(atm, h);
   if (rho < AIR_FLOOR) return { ...VACUUM, T };
   return { rho, T, a: Math.sqrt(gas.gamma * gas.R * T), gas };
 }
@@ -161,18 +243,23 @@ export function airAt(atm: Atmosphere | null | undefined, h: number): Air {
 /** The air's top: the height where its density falls to AIR_FLOOR [m]. */
 export function airTop(atm: Atmosphere | null | undefined): number {
   if (!atm) return 0;
-  if (atm.model === "us76") {
-    let lo = 86e3,
-      hi = 1000e3;
-    for (let i = 0; i < 50; i++) {
+  if (atm.model) {
+    // (a measured profile: where it thins below the floor — kept: it is asked often)
+    const hit = topMemo.get(atm);
+    if (hit !== undefined) return hit;
+    let lo = 0,
+      hi = 3000e3;
+    for (let i = 0; i < 60; i++) {
       const m = (lo + hi) / 2;
-      if (us76(m).rho > AIR_FLOOR) lo = m;
+      if (airRaw(atm, m).rho > AIR_FLOOR) lo = m;
       else hi = m;
     }
+    topMemo.set(atm, lo);
     return lo;
   }
   return atm.H * Math.log(atm.rho0 / AIR_FLOOR);
 }
+const topMemo = new WeakMap<Atmosphere, number>();
 
 /** The entry interface: the height where the air's density reaches 10⁻⁸ kg/m³ (the Earth: ~125 km) —
  *  above it a fall is a coast (the time may be sped up), below it the air flies the craft. */
