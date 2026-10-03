@@ -79,4 +79,4 @@ Décisions de l'utilisateur :
 | H4 approche et atterrissage | fait : piste conforme (contour, seuil, axe 15 km), point visé de la pente, encadré (distance, écart, erreur de pente), FLARE ; atterrissage vertical : radar de dérive, vitesse verticale, AGL, allumage d'arrêt, point de toucher ; chute libre masquée en vol porté | · 161 |
 | H5 opérations dans l'espace | fait : encadré d'allumage (compte à rebours, Δv, durée, visée) et anneau de visée ; amarrage : portes le long de l'axe, viseur dans l'axe, portée, rapprochement, angle | · 162 |
 | H6 près de Gargantua | fait : encadré relativité (dτ/dt, vitesse et γ, Doppler du ciel devant, lié / évasion et marge, rayons ISCO / photons / horizon, ergosphère, marée), repère radial intérieur nommé | · 163 |
-| H7 finitions | à faire | |
+| H7 finitions | fait : mode compact (téléphone), mise en page vérifiée en 1280×720, docs/HUD.md, README, section du guide en français ; 16,7 ms par image | · 164 |

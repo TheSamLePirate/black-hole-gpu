@@ -457,6 +457,14 @@ ground relative to the hole, the orbital markers around the nose), prograde / re
 in the view, warnings (collision course, ergosphere, below the ISCO, inside the photon orbit), and a **top-view
 map**: horizon, ergosphere, photon orbit, ISCO, disk, the star and its orbit, the mouth, the ship, its velocity
 and its **future geodesic** with periapsis, apoapsis and impact — the same path drawn, lensed, in the view.
+**Piloting aids over the view** ([docs/HUD.md](docs/HUD.md), each switchable in Settings › HUD aids): the
+horizon and a pitch ladder where they are, the heading tape, the bank scale, radial and normal markers and
+arrows to those off screen; in the air the angle of attack drawn against the best lift-to-drag and the stall,
+the sideslip ball, the energy chevron, the load, the flight director; the predicted path in perspective (both
+universes), the places to come (+10/+30/+60 s, a quarter orbit) and the impact or entry point with its
+countdown; the runway where it is with its aim point and offsets, the vertical landing's drift scope and
+stop-burn countdown; the burn cue (countdown, Δv, length, aim); the docking gates and scope; near Gargantua
+the relativity box (dτ/dt, γ, Doppler, bound or escaping, the critical radii, the tide).
 The **flight HUD** is laid out like a game's, on the edges of the screen so the view stays clear (² / ` cycles
 full · minimal · clean; the app's toolbar folds behind ⋯): a mission bar (SAS / hold / autopilot lamps, time
 warp, the ship's clock τ against the distant clock t and their ratio), a **speed tape** (moving scale, value

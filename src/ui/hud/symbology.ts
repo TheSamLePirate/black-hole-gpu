@@ -84,6 +84,9 @@ export interface SymFrame {
   quarter?: number;
   /** the runway in reach (its outline, centreline, aim point; the craft's place along and across it) */
   runway?: RunwayView | null;
+  /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
+   *  scale left to the HUD's panels (set here) */
+  compact?: boolean;
 }
 
 const UNDER = "rgba(0, 0, 0, 0.42)";
@@ -102,6 +105,7 @@ const wrap360 = (a: number) => ((a % 360) + 360) % 360;
 
 export function drawSymbology(F: SymFrame) {
   const { ctx, W, H, dpr, s, i } = F;
+  F.compact = W / dpr < 1000 || H / dpr < 560;
   const tanH = Math.tan((F.fov * D) / 2);
   const asp = W / H;
   const fpx = H / (2 * tanH);
@@ -210,7 +214,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- the heading tape (the world's north), at the top
-  if (up && north && pilotView && s.hudHeading) {
+  if (up && north && pilotView && s.hudHeading && !F.compact) {
     const east = norm(crossW(north, up));
     const bearing = (d: V3 | null | undefined) => {
       if (!d) return null;
@@ -277,7 +281,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- the bank scale: fixed to the craft, its pointer to the sky's up
-  if (up && pilotView && s.hudBank) {
+  if (up && pilotView && s.hudBank && !F.compact) {
     const X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!], Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!];
     // (> 0 banked right: the left wing — the ship's +x — high)
     const bank = Math.atan2(dot(X, up), dot(Y, up));
@@ -313,10 +317,10 @@ export function drawSymbology(F: SymFrame) {
 
   // ---- approach and landing: the runway, the vertical landing's scope and cues
   if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
-  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2) drawHover(F, i.surface, up, pr, stroke, text, inside);
+  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2 && !F.compact) drawHover(F, i.surface, up, pr, stroke, text, inside);
 
   // ---- near Gargantua: the relativity box; the way to the hole named
-  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && Number.isFinite(i.r)) drawRelativity(F, pr, text, inside);
+  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r)) drawRelativity(F, pr, text, inside);
 
   // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
   if (i.plan && i.plan.nodes.length && s.hudBurn && !F.outside && F.density < 2) drawBurn(F, pr, stroke, text, inside, nose);
@@ -677,6 +681,10 @@ function drawRunway(F: SymFrame, rw: RunwayView, pr: Proj, stroke: Stroke, text:
   const dist = Math.max(-rw.along, 0);
   const km = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
   const off = Math.abs(rw.across) < 15 ? "ON AXIS" : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
+  if (F.compact) {
+    if (rw.final && rw.agl < 60 && rw.agl > 1 && Math.floor(performance.now() / 350) % 2 === 0) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+    return;
+  }
   // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
   const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 10 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
@@ -827,6 +835,7 @@ function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
       stroke(() => ctx.arc(p![0], p![1], 20 * dpr, 0, 2 * Math.PI), col, 1.6, err < 2 ? undefined : [5, 4]);
     }
   }
+  if (F.compact) return;
   // the box (left of centre, under the runway's place)
   const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 + 74 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
@@ -859,7 +868,7 @@ function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
     stroke(() => ctx.arc(p![0], p![1], rad, 0, 2 * Math.PI), `rgba(95, 255, 208, ${g.k <= 20 ? 0.8 : 0.45})`, 1.3, [6, 4]);
     text(`${g.k} m`, p![0] + rad + 4 * dpr, p![1], "rgba(95, 255, 208, 0.75)", 9.5, "left", true);
   }
-  if (D.range > 2000) return;
+  if (D.range > 2000 || F.compact) return;
   // the scope, down the axis: its x and y the view's right and up across the axis
   const ax = norm(G.axis);
   let ex = comb([1, 0, 0], 1, ax, -ax[0]), ey = comb([0, 1, 0], 1, ax, -ax[1]);
