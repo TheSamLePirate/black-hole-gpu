@@ -17,7 +17,7 @@
     "gallery": "bun scripts/gallery.ts",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "check": "biome ci . && tsc --noEmit"
+    "check": "biome ci . && tsc --noEmit && bun scripts/check-wgsl.ts"
   },
   "type": "module"
 }

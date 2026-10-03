@@ -28,6 +28,9 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
+      - run: bunx biome ci .
+      # (the shaders through the browser's own WebGPU compiler: SwiftShader on the runner)
+      - run: bun scripts/check-wgsl.ts
       - run: bun test --reporter=junit --reporter-outfile=junit.xml
       - if: always()
         uses: actions/upload-artifact@v4

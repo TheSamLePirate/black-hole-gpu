@@ -1,0 +1,3 @@
+# Mechanical reformatting commits (git config blame.ignoreRevsFile .git-blame-ignore-revs)
+# style: format the code with Biome
+f21f6f0662f729f39f88c41fee10efdf2bf97b1f
