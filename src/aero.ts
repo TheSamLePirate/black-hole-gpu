@@ -284,8 +284,12 @@ export interface VesselAero {
   area: V3;
   /** skin friction and base drag, C_D·A [m²] */
   cdA0: number;
-  /** the wing (in the xz plane): area [m²], aspect ratio, lift slope [/rad], stall angle [rad], Oswald's e */
-  wing?: { S: number; AR: number; cla: number; stall: number; e: number };
+  /** the wing (in the xz plane): area [m²], aspect ratio, lift slope [/rad], stall angle [rad], Oswald's e;
+   *  its dihedral [rad] (its halves tilted up: a sideslip rolls the craft away from it) */
+  wing?: { S: number; AR: number; cla: number; stall: number; e: number; dihedral?: number };
+  /** the fin (a vertical surface in the yz plane): area [m²], lift slope [/rad], where its force acts
+   *  from the centre of mass [m] — behind it: the craft turns into a sideslip */
+  fin?: { S: number; cla: number; at: V3 };
   /** where each face's push acts (x, y, z faces) and the wing's lift, from the centre of mass [m] —
    *  downstream of it: stable (the side and belly faces behind it for a nose-first flight, the nose face
    *  above it for a belly-first one) */
@@ -311,11 +315,14 @@ export interface VesselAero {
   ctrl: V3;
 }
 
-/** The configuration: flaps (0…1), air brake (0…1), gear down. */
+/** The configuration: flaps (0…1), air brake (0…1), gear down; the wing's height over the ground [m]
+ *  (its ground effect); the control surfaces' deflections (pitch, yaw, roll: −1…1 — their drag). */
 export interface AeroConfig {
   flaps?: number;
   brake?: number;
   gear?: boolean;
+  agl?: number;
+  deflect?: V3;
 }
 
 export interface AeroOut {
@@ -373,6 +380,19 @@ export function heatFlux(air: Air, V: number, noseR: number): number {
  * The air's force and moment on a craft moving at v (ship frame, m/s, relative to the air), turning at
  * w (ship frame, right-handed, rad/s).
  */
+/**
+ * How far into the free molecular regime the flow is around a craft of length L (0: a continuum, 1: free
+ * molecular): Knudsen's number λ/L, the mean free path λ = (μ/ρ) √(π / 2RT) (Sutherland's viscosity),
+ * bridged on log Kn from 0.01 to 10.
+ */
+export function freeMolecular(air: Air, L: number): number {
+  if (!(air.rho > 0)) return 0;
+  const mu = (1.458e-6 * air.T ** 1.5) / (air.T + 110.4);
+  const lam = (mu / air.rho) * Math.sqrt(Math.PI / (2 * air.gas.R * air.T));
+  const kn = lam / L;
+  return smooth(-2, 1, Math.log10(Math.max(kn, 1e-12)));
+}
+
 export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cfg: AeroConfig = {}): AeroOut {
   const V = Math.hypot(v[0], v[1], v[2]);
   if (air.rho <= 0 || V < 1e-3) return ZERO;
@@ -410,26 +430,79 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     const sup = Math.min(4 / Math.sqrt(Math.max(M * M - 1, 0.25)), sub);
     const cla = (sub + (sup - sub) * smooth(0.85, 1.25, M)) * (1 - smooth(3, 6, M));
     const s = W.stall;
-    const a = Math.abs(alpha);
-    // linear to the stall, then a fall to 60 % (the box carries the flat plate beyond)
-    const lin = cla * Math.min(a, s);
-    cl =
-      Math.sign(alpha) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) +
-      (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
-    stalled = a > s;
-    // (the spoilers — the air brake — spoil the lift)
-    cl *= 1 - 0.65 * (cfg.brake ?? 0);
-    // (sideslip: the wing sees the flow's part in its plane)
-    const cb = Math.cos(beta);
-    const Lw = q * W.S * cl * cb * cb;
-    // lift: across the motion, in the plane of the motion and the ship's up
+    // the ground effect (Wieselsberger): within a span of the ground the downwash is held back — the
+    // induced drag falls (φ = (16h/b)² / (1 + (16h/b)²)), the lift slope rises a little (the float)
+    const b = Math.sqrt(W.AR * W.S);
+    const hb = cfg.agl !== undefined && cfg.agl > 0 ? cfg.agl / b : Infinity;
+    const phi = Number.isFinite(hb) ? (16 * hb) ** 2 / (1 + (16 * hb) ** 2) : 1;
+    const ge = Number.isFinite(hb) ? 1 + 0.1 * Math.exp(-4 * hb) : 1;
+    // two halves, each at its own angle: the roll's rate raises one and lowers the other (the roll
+    // damped by the wing itself), the dihedral turns a sideslip into a roll; a half stalls alone
+    const gam = W.dihedral ?? 0;
+    const y0 = b / 4;
     const up: V3 = [-u[1] * u[0], 1 - u[1] * u[1], -u[1] * u[2]];
     const ul = Math.hypot(...up) || 1;
-    const Di = q * W.S * ((cl * cl) / (Math.PI * W.e * W.AR) + (cfg.flaps ?? 0) * 0.03);
     const fw: V3 = [0, 0, 0];
-    for (let i = 0; i < 3; i++) fw[i] = (Lw * up[i]!) / ul - Di * u[i]!;
-    const m = cross(A.cw, fw);
-    for (let i = 0; i < 3; i++) (F[i]! += fw[i]!), (Mo[i]! += m[i]!);
+    const mw: V3 = [0, 0, 0];
+    let clSum = 0;
+    for (const side of [1, -1]) {
+      const r: V3 = [side * y0 + A.cw[0], A.cw[1], A.cw[2]];
+      // (the half's own motion through the air: the craft's, and its turn at the half's arm)
+      const vh: V3 = [v[0] + (w[1] * r[2] - w[2] * r[1]), v[1] + (w[2] * r[0] - w[0] * r[2]), v[2] + (w[0] * r[1] - w[1] * r[0])];
+      const Vh = Math.hypot(...vh) || V;
+      const uh: V3 = [vh[0] / Vh, vh[1] / Vh, vh[2] / Vh];
+      // (its angle of attack: the flow across its surface, the half's normal tilted by the dihedral)
+      const al = Math.atan2(-(uh[1] * Math.cos(gam) - side * uh[0] * Math.sin(gam)), uh[2]);
+      const a = Math.abs(al);
+      const lin = cla * ge * Math.min(a, s);
+      let c =
+        Math.sign(al) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) +
+        (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
+      if (a > s) stalled = true;
+      // (the spoilers — the air brake — spoil the lift)
+      c *= 1 - 0.65 * (cfg.brake ?? 0);
+      clSum += c / 2;
+      const qh = 0.5 * air.rho * Vh * Vh;
+      const cb = Math.cos(Math.asin(Math.max(-1, Math.min(1, uh[0]))));
+      const Lh = (qh * W.S * c * cb * cb) / 2;
+      const Di = ((qh * W.S) / 2) * (((c * c) / (Math.PI * W.e * W.AR)) * phi + (cfg.flaps ?? 0) * 0.03);
+      const f: V3 = [0, 0, 0];
+      for (let i = 0; i < 3; i++) f[i] = (Lh * up[i]!) / ul - Di * uh[i]!;
+      const m = cross(r, f);
+      for (let i = 0; i < 3; i++) (fw[i]! += f[i]!), (mw[i]! += m[i]!);
+    }
+    cl = clSum;
+    for (let i = 0; i < 3; i++) (F[i]! += fw[i]!), (Mo[i]! += mw[i]!);
+  }
+  if (A.fin && u[2] > 0.05) {
+    // the fin: a side force against the sideslip at its place (behind: the nose turned into the flow;
+    // the yaw's rate seen there, damped)
+    const r = A.fin.at;
+    const vf: V3 = [v[0] + (w[1] * r[2] - w[2] * r[1]), v[1] + (w[2] * r[0] - w[0] * r[2]), v[2] + (w[0] * r[1] - w[1] * r[0])];
+    const Vf = Math.hypot(...vf) || V;
+    const bf = Math.atan2(vf[0], vf[2]);
+    const a = Math.abs(bf);
+    const cy = -Math.sign(bf) * A.fin.cla * Math.min(a, 0.35) * (1 - 0.5 * smooth(0.35, 0.6, a)) * (1 - smooth(3, 6, M));
+    const f: V3 = [0.5 * air.rho * Vf * Vf * A.fin.S * cy, 0, 0];
+    const m = cross(r, f);
+    for (let i = 0; i < 3; i++) (F[i]! += f[i]!), (Mo[i]! += m[i]!);
+  }
+  // the control surfaces deflected: their drag (a trimmed craft pays some)
+  if (cfg.deflect && A.wing) {
+    const d = cfg.deflect;
+    const k = 0.012 * (Math.abs(d[0]) + 0.5 * Math.abs(d[1]) + 0.5 * Math.abs(d[2])) * q * A.wing.S;
+    for (let i = 0; i < 3; i++) F[i]! -= k * u[i]!;
+  }
+  // the thin air: past the continuum (Knudsen's number λ/L from 0.01), towards free molecular flow
+  // (from 10) — the molecules striking the hull one by one, diffusely: a drag coefficient of ~2.2 on
+  // the area seen along the motion, little lift
+  const fm = freeMolecular(air, A.len);
+  if (fm > 0) {
+    const Aproj = A.area[0] * Math.abs(u[0]) + A.area[1] * Math.abs(u[1]) + A.area[2] * Math.abs(u[2]);
+    const Dfm = q * 2.2 * Aproj;
+    for (let i = 0; i < 3; i++) F[i] = (1 - fm) * F[i]! - fm * Dfm * u[i]!;
+    for (let i = 0; i < 3; i++) Mo[i] = (1 - fm) * Mo[i]!;
+    cl *= 1 - fm;
   }
   // lift and drag
   const fu = F[0] * u[0] + F[1] * u[1] + F[2] * u[2];
@@ -440,7 +513,11 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
   const kd = (q * Sref * A.len * A.len) / (2 * V);
   for (let i = 0; i < 3; i++) Mo[i]! -= kd * A.damp[i]! * w[i]!;
   const Tr = air.T * (1 + 0.85 * ((g - 1) / 2) * M * M);
-  return { F, M: Mo, q, mach: M, alpha, beta, L, D, cl, stalled, heat: heatFlux(air, V, A.noseR), Tr };
+  // (the stagnation flux: Sutton–Graves in a continuum, bounded in thin air by what the molecules bring —
+  // ½ ρ V³ — towards which it tends in free molecular flow)
+  const sg = heatFlux(air, V, A.noseR);
+  const heat = (1 - fm) * Math.min(sg, 0.5 * air.rho * V ** 3) + fm * 0.5 * air.rho * V ** 3;
+  return { F, M: Mo, q, mach: M, alpha, beta, L, D, cl, stalled, heat, Tr };
 }
 
 // ---- the skin's temperatures

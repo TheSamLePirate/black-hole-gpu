@@ -378,6 +378,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     if (!aero) return lin(gq.acc, 1, aG, 1);
     const st = ourState(ref, tq);
     const h = (Math.hypot(...sub3(Xq, st.pos)) - rb) * M_METRES;
+    // (the wing's height over the ground: its ground effect — the reference point is the gear's height up)
+    this.airFlight.cfg.agl = ground ? gearHeight(ground, Xq, tq) + GEAR : undefined;
     const va = sub3(Vq, groundVelocity(ref, Xq, tq));
     const f = aero(h, [va[0] * C_MPS, va[1] * C_MPS, va[2] * C_MPS]);
     const a: Vec3 = [f[0] * kA, f[1] * kA, f[2] * kA];

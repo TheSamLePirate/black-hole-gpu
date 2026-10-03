@@ -207,7 +207,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     aero: {
       area: [23, 91, 1.3],
       cdA0: 1.6,
-      wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85 },
+      wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85, dihedral: 0.05 },
+      // (its twin fins, as one: 8 m² some 6.5 m behind the centre of mass)
+      fin: { S: 8, cla: 2.2, at: [0, 1.6, -6.5] },
       cp: [
         [0, 0.3, -2.5],
         [0, 0, -0.25],
@@ -215,7 +217,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       ],
       cw: [0, 0, -0.9],
       curve: [0, 0.1, 0.6],
-      damp: [4, 4, 0.6],
+      // (the roll's own damping now partly the wing halves': 0.6 → 0.3)
+      damp: [4, 4, 0.3],
       len: 14.8,
       noseR: 1.2,
       shield: { dir: [0, -0.94, 0.34], cos: 0.42, tMax: 1950, cap: 2.2e4, eps: 0.85 },

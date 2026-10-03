@@ -844,6 +844,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   if (this.pilot.throttle > 0.05) this.groundSpoilers = false;
   this.airFlight.cfg.brake = (onWheels || this.groundSpoilers) && this.pilot.throttle <= 0 ? 1 : this.airBrake;
   this.airFlight.cfg.gear = onWheels || this.landed || (!!LA && LA.h < 600 && LA.speed < 160);
+  // (the control surfaces as deflected: the attitude's effort where the air answers — their drag)
+  this.airFlight.cfg.deflect = airCtx ? this.pilot.fired.torque : undefined;
   this.airFlight.vacuum();
   if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
   // (the gear's torque over the frame turns the craft: its pitch settling on the nose wheel, a bounce)
