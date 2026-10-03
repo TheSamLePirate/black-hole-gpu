@@ -18,6 +18,7 @@ Décisions de l'utilisateur :
 - **Interactions** : collisions et amarrages entre joueurs.
 - **Destruction** : on **réapparaît où l'on veut**.
 - **Voix** entre joueurs par WebRTC (ajoutée le 2026-10-02).
+- **Le réseau est une option** (2026-10-03) : on peut toujours jouer seul, exactement comme aujourd'hui. Voir « Solo ou réseau ».
 
 ## État de départ (exploration du 2026-10-02, revue le 2026-10-03 à `e9b772f`)
 
@@ -82,6 +83,34 @@ Décisions de l'utilisateur :
   - **Documentation d'architecture** : `docs/systemes/` (README, fiches 01–09). La fiche 04 §8–9 couvre la flotte et tous les limiteurs de warp, la fiche 08 la boucle, la fiche 09 le son, le serveur et Pages. Ses numéros de ligne ont dérivé : le code fait foi.
 
 ## Architecture
+
+### Solo ou réseau
+
+**Le jeu solo reste le jeu par défaut, et reste entier sans réseau.** Le réseau ne s'active que sur une action explicite du joueur.
+- **Aucune connexion au démarrage.**
+  - La page ne contacte `samlepirate.org` que lorsqu'on crée ou rejoint une salle, ou qu'on ajoute un écran.
+  - Pas de télémétrie, pas de « présence ».
+  - Si le serveur est absent ou en panne, le solo ne s'en aperçoit pas.
+- **Le code réseau est chargé à la demande.**
+  - Le module réseau est un bundle à part (`net.js`, chargé par URL comme `plan-worker.js`, ou par `import()` dynamique avec `--splitting`, à trancher en N0).
+  - Le solo ne télécharge ni ne compile une ligne de réseau.
+  - La taille du bundle solo est mesurée avant et après.
+- **En solo, les accroches sont transparentes** :
+  - `wantWarp()` applique directement ;
+  - l'horloge suit le vaisseau comme aujourd'hui ;
+  - `onCraftLost` garde la pause et le « reprendre avant l'entrée » ;
+  - les autopilotes, les sauvegardes et l'autosave sont inchangés.
+- **Les façons d'entrer en réseau**, toutes dans un menu **Réseau** (panneau et écran d'accueil) :
+  - **Ajouter un écran** : depuis une partie solo, un QR code ouvre une salle **privée** (sans autre pilote) pour une 2ᵉ vue ou un écran instruments. Le jeu reste « solo » pour tout le reste (pas de vote de warp, destruction du solo).
+  - **Ouvrir ma partie au réseau** : la partie solo en cours devient une salle (instantané envoyé au serveur), et des amis peuvent la rejoindre comme pilotes.
+  - **Rejoindre une salle** : code, lien ou QR.
+  - **Mes salles** : reprendre une salle persistante, ou la supprimer.
+- **Quitter le réseau** :
+  - Quitter une salle ramène à sa partie solo, telle qu'on l'avait laissée.
+  - Les mondes des salles et les sauvegardes solo sont **séparés** : une salle ne réécrit jamais l'autosave solo.
+  - Option : « garder une copie en solo » crée une sauvegarde solo à partir de l'état de la salle (son vaisseau, son `t`).
+- **Pendant une coupure réseau** : on continue de voler en local, avec un bandeau « hors ligne ». La reconnexion est automatique.
+- **Un réglage Réseau** dans les paramètres permet de **masquer entièrement** le menu et les boutons réseau.
 
 ### Un monde fait de lignes d'univers
 
@@ -357,6 +386,10 @@ Chaque phase donne un commit et une fiche `docs/progress/NNN_*.jpg`. La vérific
 - Protocole binaire versionné ; messages pour l'instantané, les échantillons, les événements, les votes et les baux.
 - Synchro d'horloge (décalage, dérive).
 - Lignes d'univers : stockage, interpolation d'Hermite, propagation Kepler et Kerr, fantômes.
+- **Solo intact** :
+  - module réseau dans un bundle séparé, chargé à la demande ;
+  - aucune requête réseau sans action du joueur (vérifié dans l'onglet réseau de la page en solo) ;
+  - taille du bundle solo mesurée.
 - Instantané complet : `GameSave` + flotte + TLE, et l'état de vol absent aujourd'hui de `GameSave` : `pilot.omega`, autopilote et sa phase (`entryRun`, `entrySite`, `fcBurns`, `launchGoal`), état de l'air (thermique, volets, aérofreins, train).
 - Labo réseau.
 - Serveur de salles Bun + SQLite, Dockerfile, compose (`bh-net` + coturn), job CI image GHCR + redéploiement Portainer, `/health`, guide d'installation `server/README.md`.
@@ -368,7 +401,7 @@ Chaque phase donne un commit et une fiche `docs/progress/NNN_*.jpg`. La vérific
 - **Client bot** : un faux joueur (Bun, sans rendu) qui vole une orbite scriptée, pour tester seul.
 
 ### N1 — L'observateur miroir
-- 2ᵉ fenêtre sur la même machine (`BroadcastChannel`), puis appareil distant par QR code.
+- Menu **Réseau**, commande **Ajouter un écran** : 2ᵉ fenêtre sur la même machine (`BroadcastChannel`), puis appareil distant par QR code, dans une salle privée.
 - L'hôte diffuse sa pose et son état visuel. L'observateur rejoue le vaisseau en marionnette, avec **tous les mounts**, son propre regard et sa propre qualité.
 - La marionnette inclut la rentrée (plasma, peau chaude), la secousse, les traînées recalculées sur place, et le son : le director est nourri par le `info.air` reçu.
 - **Vérification** : hôte et téléphone côte à côte, écart de temps mesuré, écran fluide au warp maximum.
@@ -402,6 +435,7 @@ Chaque phase donne un commit et une fiche `docs/progress/NNN_*.jpg`. La vérific
 - Mode de vol et antigravité par engin. « Sans dégâts » devient un réglage de la salle. Destruction sans pause ni retour en arrière.
 - Proxys des autres, cibles HUD, carte, pseudos et couleurs.
 - Une bulle, warp au vote, persistance (créer, rejoindre, lister, supprimer une salle), menu **Réapparaître**.
+- **Ouvrir ma partie au réseau**, **Rejoindre**, **Quitter** (retour à la partie solo), « garder une copie en solo ». Mondes des salles séparés des sauvegardes solo.
 - **Vérification** : 3 navigateurs et un bot en orbite basse, un rendez-vous au HUD.
 
 ### N6 — La voix
@@ -430,6 +464,7 @@ Chaque phase donne un commit et une fiche `docs/progress/NNN_*.jpg`. La vérific
 
 ## Risques
 
+- **Régression du solo** : chaque phase repasse les tests existants et un vol solo de référence (décollage, orbite, rentrée), réseau désactivé.
 - **Le mode marionnette, l'horloge imposée et l'arbitre du warp dans `controls.ts`** (7 400 lignes, un seul vaisseau supposé) : beaucoup d'écritures de `timeSpeed` à faire passer par `wantWarp`, sans casser le solo.
 - **Les autopilotes en attente de vote** : chaque phase doit tolérer un warp plus lent que demandé.
 - **Les proxys près du trou noir** : repère local, ombres, sonde de lumière.
