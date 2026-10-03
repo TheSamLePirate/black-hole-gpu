@@ -1,6 +1,7 @@
 {
   "name": "black-hole-gpu",
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/bun": "latest",
     "@webgpu/types": "^0.1.74",
     "typescript": "^5"
@@ -13,7 +14,10 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:pages": "bun scripts/build-pages.ts",
-    "gallery": "bun scripts/gallery.ts"
+    "gallery": "bun scripts/gallery.ts",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome ci . && tsc --noEmit"
   },
   "type": "module"
 }
