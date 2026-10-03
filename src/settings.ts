@@ -371,6 +371,7 @@ export interface Settings {
   turnAccel: number; // attitude control: angular acceleration (reaction wheels + RCS) [°/s²]
   rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
+  gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
   ballistic: number; // ballistic coefficient m/(C_D A): how hard the air brakes the ship [kg/m²]
   damage: boolean; // the air's heat and loads can destroy the craft (off: alarms only)
   flightMode: "rocket" | "plane" | "sf"; // how the flown craft is flown in the air (pilot.ts FlightMode)
@@ -588,7 +589,9 @@ export function defaultSettings(): Settings {
     turnRate: 43,
     turnAccel: 92,
     rcsFraction: 0.08,
-    crashSpeed: 12,
+    // (a real gear: 3 m/s a landing, 4.5 a collapse — the certification's 10 ft/s and a margin)
+    crashSpeed: 4.5,
+    gearForgiving: false,
     ballistic: 900,
     damage: true,
     flightMode: "plane",
@@ -1760,6 +1763,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   turnAccel: "carried",
   rcsFraction: "carried",
   crashSpeed: "carried",
+  gearForgiving: "pref",
   ballistic: "carried",
   damage: "carried",
   flightMode: "scene",

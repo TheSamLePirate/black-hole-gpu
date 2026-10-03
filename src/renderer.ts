@@ -1,4 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
+import { runwayWeight } from "./game/sites";
 import { bodyAxes, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
@@ -767,7 +768,8 @@ export class Renderer {
           const { map, W, H } = maps.heights;
           setGroundRelief(
             "earth",
-            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot)),
+            // (the runways graded: the gear rolls on them — game/sites.ts)
+            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot), runwayWeight),
           );
           // (a tile that will not load: the map's heights there)
           this.earthTiles.fallback = (q) => {

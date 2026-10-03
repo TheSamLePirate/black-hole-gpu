@@ -788,6 +788,9 @@ function approach(
     const L = landingProfile(sAl, agl, sp, R.gOuter);
     if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
     gRef = clamp(Math.atan(L.slope) + clamp((L.h - agl) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
+    // (the last metres: the sink eased to a touchdown a real gear takes — 0.8 m/s plus the height over
+    // 2.5 s, whatever the parabola's tracking left: ~1 m/s at the wheels, not 4)
+    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, -Math.asin(Math.min((0.8 + agl / 2.5) / Math.max(sp, 1), 0.5)));
     // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
     gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
     R.flareTau = L.phase === "flare" ? 1 : undefined;
@@ -830,7 +833,7 @@ function crashed(this: CameraController, why: string) {
  * The rollout after an autopilot's landing: the nose wheel steered along the runway — the course back
  * to its axis atan(xt / 150 m), 8° at most —, 4° a second at most; the pilot's yaw takes it over.
  */
-function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: number) {
+function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: number, lock?: number) {
   const site = this.rollSite;
   const cam = cameraFrame(this.s);
   const fr = site ? this.entryFrame(cam) : null;
@@ -861,6 +864,12 @@ function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: numb
   // (rolling backwards or across: not a rollout)
   if (Math.abs(a) > 60 * D) {
     this.rollSite = null;
+    return;
+  }
+  // (a gear of its own: the nose wheel steered onto the line — a turn about the ship's up the other way
+  // from the wheel's left; without, the heading turned to it)
+  if (lock !== undefined) {
+    this.noseSteer = -clamp(1.5 * a, -lock, lock);
     return;
   }
   const simS = this.s.timeSpeed * dt * 4.925490947e-6 * this.s.massSolar;

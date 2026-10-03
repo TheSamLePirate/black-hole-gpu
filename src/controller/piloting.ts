@@ -1,5 +1,6 @@
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { GEARS } from "../gear";
 import { basis, blToCartesian, cameraFrame, setHolePose, setHomePose, setRepPose, yawPitchRoll } from "../camera";
 import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
@@ -796,6 +797,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       // (the Crew engine's lag, over the frame's flight time; the Cinema engine's, none)
       inertia: mp.I,
       torque,
+      onGear: !!this.rolling && !!GEARS[fleet.active],
       spoolK: s.engine === "crew" ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool) : 1,
     },
     inp,
@@ -803,11 +805,22 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   TUNING.turnAccel = tune.acc;
   TUNING.turnRate = tune.rate;
   this.rotateC(out.rot);
-  // (on its wheels: level on the ground, the nose within the runway's limits)
+  // (on its wheels: a craft with a gear of its own sits on its springs and steers by its nose wheel —
+  // the pilot's yaw, full lock at a crawl, a few degrees fast; the rollout along the runway —; without,
+  // held level on the ground, the nose within the runway's limits)
+  this.noseSteer = 0;
   if (this.rolling) {
     const nav = this.ourNav(cameraFrame(s));
-    if (nav) this.groundAttitude(nav.radial);
-    if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw);
+    if (GEARS[fleet.active]) {
+      const sp = nav ? Math.hypot(...sub3(nav.V, groundVelocity(nav.ref, nav.X, nav.t))) * C_MPS : 0;
+      const lock = Math.min((60 * Math.PI) / 180, 5.2 / Math.max(sp, 1));
+      // (a positive yaw turns right: the wheel, + to the left, the other way)
+      this.noseSteer = -inp.yaw * lock;
+      if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw, lock);
+    } else {
+      if (nav) this.groundAttitude(nav.radial);
+      if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw);
+    }
   } else if (this.local?.L.rolling) this.groundAttitude(localToZamo(unitV(this.local.L.xi)));
   // (an assembly turns about its centre of mass: the flown craft's centre swings round it)
   if (before) this.turnAboutCom(before, mp.com);
@@ -818,10 +831,26 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // the gear down on the ground and low and slow
   const onWheels = !!this.rolling || !!this.local?.L.rolling;
   const LA = this.airFlight.last;
-  this.airFlight.cfg.brake = onWheels && this.pilot.throttle <= 0 && this.pilot.auto === "none" ? 1 : this.airBrake;
+  // (on the wheels, the engine idle: the ground spoilers out — the lift dumped at once, no bounce —,
+  // the autopilot's landing as the pilot's)
+  // (armed once down: a bounce keeps them out — the throttle opened takes them in)
+  if (onWheels) this.groundSpoilers = true;
+  if (this.groundSpoilers && !onWheels && !this.landed) {
+    // (off the wheels: the height over the ground — not the sphere's —; past 30 m, a go-around)
+    const nav = this.ourNav(cameraFrame(s));
+    const agl = nav && solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) : Infinity;
+    if (agl > 30) this.groundSpoilers = false;
+  }
+  if (this.pilot.throttle > 0.05) this.groundSpoilers = false;
+  this.airFlight.cfg.brake = (onWheels || this.groundSpoilers) && this.pilot.throttle <= 0 ? 1 : this.airBrake;
   this.airFlight.cfg.gear = onWheels || this.landed || (!!LA && LA.h < 600 && LA.speed < 160);
   this.airFlight.vacuum();
   if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
+  // (the gear's torque over the frame turns the craft: its pitch settling on the nose wheel, a bounce)
+  if (this.gearDw) {
+    for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! + this.gearDw[i]!;
+    this.gearDw = null;
+  }
   if (pre) this.stationContact(pre);
   this.airAfter(simDt * Msec, out.acc, dtPilot);
   if (!thick && this.airFlight.inAir && this.airFlight.last!.speed > 1000) this.onAirEntry?.();

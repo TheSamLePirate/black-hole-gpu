@@ -55,14 +55,15 @@ export class App {
   ) {}
 
   /** A fresh page on the app (a scene by #scene=…, or a hash), loaded and settled. */
-  static async boot(o: { hash?: string; width?: number; height?: number; lang?: "fr" | "en" } = {}) {
+  static async boot(o: { hash?: string; width?: number; height?: number; lang?: "fr" | "en"; tiles?: boolean } = {}) {
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);
     // (offline from the world: the station's latest elements (CelesTrak) and the relief's tiles (S3)
     // change from day to day — the app falls back on its bundled ones, the same every run)
     await cdp.send("Network.enable");
-    await cdp.send("Network.setBlockedURLs", { urls: ["*celestrak.org*", "*s3.amazonaws.com*"] });
+    // (the terrain tiles off unless asked: a test does not wait on the network)
+    await cdp.send("Network.setBlockedURLs", { urls: ["*celestrak.org*", ...(o.tiles ? [] : ["*s3.amazonaws.com*"])] });
     // (the first-visit hint already seen: it would sit over what the tests look at)
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); } catch {}`,

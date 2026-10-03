@@ -1,5 +1,8 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
+import { tf } from "../i18n";
+import { inv3 } from "../pilot";
 import { secularZonal } from "../system/geopotential";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
@@ -20,6 +23,7 @@ import {
   fromBodyFixed,
   railsDecay,
   gearHeight,
+  groundUnder,
   groundRelief,
   groundSpeeds,
   groundVelocity,
@@ -273,8 +277,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const s = this.s;
   let X = homeOf(w, p.l, p.n);
   let V = repToHomeVec(w, p.l, p.n, vRep);
-  const fwd = repToHomeVec(w, p.l, p.n, p.fwd);
-  const up = repToHomeVec(w, p.l, p.n, p.up);
+  let fwd = repToHomeVec(w, p.l, p.n, p.fwd);
+  let up = repToHomeVec(w, p.l, p.n, p.up);
   // (this frame's thrust: the velocity change the engines made before the fall)
   const dvT = sub3(V, repToHomeVec(w, p.l, p.n, p.vel));
   // on the ground: carried by the turning body, until the engine lifts the ship
@@ -327,15 +331,58 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const rb = airy ? solarBody(ref)!.radius : 0;
   const kA = M_METRES / C_MPS ** 2;
   let aAir = 0;
+  // the landing gear (gear.ts): the flown craft's legs on a solid ground — springs and dampers along the
+  // ground's normal, tyres, brakes —; its torque turns the craft after the frame (this.gearDw)
+  const gdef = flown && ground && VESSELS[fleet.active].lands ? GEARS[fleet.active] : undefined;
+  const mass = fleet.massProps().mass;
+  const secM = M_METRES / C_MPS;
+  const Iw = gdef ? worldTensor(fleet.massProps().I, axes) : null;
+  // (the centre of mass, from the reference point: the gear's torque about it)
+  const comB = fleet.massProps().com;
+  const comW = (): Vec3 => lin(lin(axes[0], comB[0], axes[1], comB[1]), 1, axes[2], comB[2]);
+  const IwInv = Iw ? inv3(Iw) : null;
+  let gearDw: Vec3 = [0, 0, 0];
+  let gearOut: GearOut | null = null;
+  // (the wheel brakes, the engine idle, once every wheel is down — the nose wheel lowered first: braked
+  // on the mains alone at speed, the craft would slam its nose down)
+  const allDown = !!gdef && this.gearLast?.contact === gdef.legs.length;
+  const brake = this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown ? 1 : 0;
+  const steer = this.noseSteer;
+  // (the craft's turn in the home frame: the camera's basis — right = fwd × up — is left-handed there,
+  // the pilot's rates turn the other way: ω = −Σ ωᵢ axisᵢ [rad/s])
+  const wWorld = (): Vec3 =>
+    lin(
+      lin(axes[0], -(this.pilot.omega[0] + gearDw[0]), axes[1], -(this.pilot.omega[1] + gearDw[1])),
+      1,
+      axes[2],
+      -(this.pilot.omega[2] + gearDw[2]),
+    );
+  const gearAt = (Xq: Vec3, Vq: Vec3, tq: number): Vec3 => {
+    if (!gdef || !ground) return [0, 0, 0];
+    // (cheap far off: the legs reach some metres below the reference point)
+    if (gearHeight(ground, Xq, tq) > 12) {
+      gearOut = null;
+      return [0, 0, 0];
+    }
+    const gv = groundVelocity(ground, Xq, tq);
+    const Vrel = sub3(Vq, gv);
+    gearOut = gearForces(
+      gdef,
+      { mass, X: [0, 0, 0], V: [Vrel[0] * C_MPS, Vrel[1] * C_MPS, Vrel[2] * C_MPS], axes, w: wWorld(), brake, steer, com: comW() },
+      groundUnder(ground, Xq, tq),
+    );
+    return lin(gearOut.F, kA / mass, gearOut.F, 0);
+  };
   const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => {
-    if (!aero) return gq.acc;
+    const aG = gearAt(Xq, Vq, tq);
+    if (!aero) return lin(gq.acc, 1, aG, 1);
     const st = ourState(ref, tq);
     const h = (Math.hypot(...sub3(Xq, st.pos)) - rb) * M_METRES;
     const va = sub3(Vq, groundVelocity(ref, Xq, tq));
     const f = aero(h, [va[0] * C_MPS, va[1] * C_MPS, va[2] * C_MPS]);
     const a: Vec3 = [f[0] * kA, f[1] * kA, f[2] * kA];
     aAir = Math.hypot(...a) / (Math.hypot(...va) + 1e-30);
-    return lin(gq.acc, 1, a, 1);
+    return lin(lin(gq.acc, 1, a, 1), 1, aG, 1);
   };
   // steps: a small part of the fall time; near the ground, of the time to reach it
   const stepOf = () => {
@@ -347,6 +394,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
       // (a small part of the time the air takes to change the speed)
       if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
+      // (on the gear, or about to be: steps of 4 ms — its springs' few hertz)
+      if (gdef && gearHeight(ref, X, t) < 12) dt = Math.min(dt, 0.004 / secM);
     }
     return dt;
   };
@@ -371,8 +420,11 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     return tEnd;
   }
   let a = accAt(X, V, t, g);
-  let touched: { speed: number; vh?: number; wheels?: boolean } | null = null;
+  let touched: { speed: number; vh?: number; wheels?: boolean; gear?: "landed" | "hard" | "crashed" | "tipped" } | null = null;
   for (let i = 0; i < this.subCap && t < tEnd - 1e-12; i++) {
+    // (the velocity before this step: a touchdown is judged by the sink it came down with, not by what
+    // the springs gave back within it)
+    const Vin = V;
     const dt = Math.min(stepOf(), tEnd - t);
     // (in the vacuum, clear of the ground: Yoshida's fourth-order composition — the planner's
     // integrator; the flight follows its plans over months)
@@ -401,8 +453,17 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       t = tn;
     }
     g = gravityHome(X, t);
-    // rolling on the ground: held on it, the wheels' friction along it, the tyres' grip across
-    if (this.rolling && ground === this.rolling.body) {
+    // (found deep in the ground — a scene placed before the relief was known, the relief come in under
+    // it —: set on it, its fall stopped, no spring flung from metres down)
+    if (gdef && ground && gearHeight(ground, X, t) < -1.5) {
+      const n = unitV(sub3(X, ourState(ground, t).pos));
+      X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
+      const vr = sub3(V, groundVelocity(ground, X, t));
+      if (dot3(vr, n) < 0) V = lin(V, 1, n, -dot3(vr, n));
+    }
+    // rolling on the ground (no gear of its own: held on it, the wheels' friction along it, the tyres'
+    // grip across — a gear's craft is on its springs, below)
+    if (!gdef && this.rolling && ground === this.rolling.body) {
       const P = ourState(ground, t).pos;
       const n = unitV(sub3(X, P));
       const gv = groundVelocity(ground, X, t);
@@ -445,7 +506,12 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     }
     // touchdown on a solid ground — coming down onto it (just lifted off, the gear a few mm up and
     // the home ↔ rep round trip as fine as that: climbing, it is no landing)
-    else if (ground && gearHeight(ground, X, t) < 0 && dot3(sub3(V, groundVelocity(ground, X, t)), sub3(X, ourState(ground, t).pos)) < 0) {
+    else if (
+      !gdef &&
+      ground &&
+      gearHeight(ground, X, t) < 0 &&
+      dot3(sub3(V, groundVelocity(ground, X, t)), sub3(X, ourState(ground, t).pos)) < 0
+    ) {
       const gv = groundVelocity(ground, X, t);
       const P = ourState(ground, t).pos;
       const n = unitV(sub3(X, P));
@@ -482,7 +548,73 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     V = lin(V, 1, a, last / 2);
     const sp = Math.hypot(...V);
     if (sp > 0.999) V = lin(V, 0.999 / sp, V, 0);
+    // the gear's events: its torque turning the craft, the touchdown judged, a tip-over, at rest, airborne
+    if (gdef && ground) {
+      const o = gearOut as GearOut | null;
+      if (o && o.contact > 0) {
+        const al = mulM3(IwInv!, o.M);
+        const dtSec = last * secM;
+        gearDw = [0, 1, 2].map((i) => gearDw[i]! - dot3(al, axes[i]!) * dtSec) as Vec3;
+        // (and the craft turned by it within the frame — its legs' compression answering its turn: a
+        // frame's impulse on a frozen attitude would fling it)
+        const wg = lin(lin(axes[0], -gearDw[0], axes[1], -gearDw[1]), 1, axes[2], -gearDw[2]);
+        const ang = Math.hypot(...wg) * dtSec;
+        if (ang > 1e-12) {
+          const k = unitV(wg);
+          fwd = rotateAbout(fwd, k, ang);
+          up = rotateAbout(up, k, ang);
+          for (let j = 0; j < 3; j++) axes[j] = rotateAbout(axes[j]!, k, ang);
+        }
+        const n = unitV(sub3(X, ourState(ground, t).pos));
+        const gv = groundVelocity(ground, X, t);
+        const vr = sub3(V, gv);
+        if (!this.rolling) {
+          const vin = sub3(Vin, gv);
+          const sink = -dot3(vin, n) * C_MPS;
+          const vh = Math.hypot(...lin(vin, 1, n, -dot3(vin, n))) * C_MPS;
+          const verdict = touchdownVerdict(sink, TUNING.crashSpeed, s.gearForgiving);
+          touched = { speed: sink, vh, wheels: true, gear: verdict };
+          if (verdict === "crashed") {
+            X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
+            V = gv;
+            this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+            break;
+          }
+          this.rolling = { body: ground };
+          this.rollSince = t;
+          // (the ground spoilers out at the touchdown itself — the lift dumped before any bounce)
+          if (this.pilot.throttle <= 0) this.groundSpoilers = true;
+        } else if (tippedOver(gdef, axes[1], n)) {
+          touched = { speed: Math.hypot(...vr) * C_MPS, wheels: true, gear: "tipped" };
+          V = gv;
+          this.rolling = null;
+          this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+          break;
+        }
+        // (at rest on all its legs, the engine idle, not turning: standing — carried by the ground)
+        const still = Math.hypot(...vr) * C_MPS < 0.05 && Math.hypot(...wWorld()) < 0.003;
+        if (o.contact === gdef.legs.length && still && this.pilot.throttle <= 0) {
+          this.rolling = null;
+          this.rollSite = null;
+          this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+          V = gv;
+          gearDw = [-this.pilot.omega[0], -this.pilot.omega[1], -this.pilot.omega[2]];
+          break;
+        }
+      } else if (this.rolling && (!o || o.contact === 0)) {
+        // (off the ground: a bounce says nothing — two seconds on the wheels first —, a lift-off its speed)
+        const vt = sub3(V, groundVelocity(ground, X, t));
+        const spd = Math.hypot(...vt) * C_MPS;
+        if (spd > 20 && (t - this.rollSince) * secM > 2) this.onPilotMessage?.(tf("Airborne · {0} m/s", spd.toFixed(0)));
+        this.rolling = null;
+        this.rollSite = null;
+      }
+    }
   }
+  // (the gear's torque, over the frame: the pilot's rates turned by it after the flight; its last state,
+  // for the displays — each leg's load and compression)
+  this.gearDw = gdef ? gearDw : null;
+  this.gearLast = gdef ? (gearOut as GearOut | null) : null;
   // (the frame's thrust went in whole before the fall; when the sub-steps ran out short of the
   // frame — the ship's clock lagging a warp — only the part flown counts, as for the propellant)
   if (t < tEnd - 1e-12 && !touched && !this.ourLanded && !g.inside) V = lin(V, 1, dvT, (t - t0) / simDt - 1);
@@ -491,7 +623,31 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   setHomePose(s, X, unitV(fwd), unitV(up), V);
   s.motion = "geodesic";
   this.sync();
-  if (touched) {
+  if (touched?.gear) {
+    // the gear's verdict (gear.ts): landed, a hard landing that damaged it, a collapse, tipped over
+    this.landed = true;
+    const name = BODY_NAMES[ground as Body];
+    const craft = VESSELS[fleet.active].name;
+    const v = touched.speed.toFixed(1);
+    if (touched.gear === "landed")
+      this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", name, v, touched.vh!.toFixed(0)));
+    else if (touched.gear === "hard") this.onPilotMessage?.(tf("Hard landing on {0} · {1} m/s down — the gear damaged", name, v));
+    else {
+      const nav = this.ourNav(cameraFrame(s));
+      if (nav && touched.gear === "crashed") this.levelShip(nav.radial);
+      const why =
+        touched.gear === "tipped"
+          ? tf("{0}: tipped over on {1}", craft, name)
+          : tf("{0}: the gear collapsed on {1} at {2} m/s", craft, name, touched.speed.toFixed(0));
+      this.onPilotMessage?.(why);
+      this.crashed(why);
+    }
+    this.rollSite =
+      touched.gear !== "crashed" && touched.gear !== "tipped" && this.rolling && this.pilot.auto === "entry" && this.entryRun?.site?.runway
+        ? this.entryRun.site
+        : null;
+    if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
+  } else if (touched) {
     this.landed = true;
     const name = BODY_NAMES[ground as Body];
     const v = touched.speed;

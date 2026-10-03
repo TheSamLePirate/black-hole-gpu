@@ -152,6 +152,9 @@ export interface FlightContext {
    */
   inertia?: M3;
   torque?: V3;
+  /** on its own gear: the stabiliser lets the springs set its pitch and roll (the nose lowered onto
+   *  its wheel after the touchdown — the derotation —, the craft level on the ground) */
+  onGear?: boolean;
 }
 
 export interface FlightOutput {
@@ -397,7 +400,8 @@ export class FlightComputer {
       if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
-      if (P.ground) want[0] = manual[0] * rates[0];
+      // (on its own gear, the springs set the pitch — the nose lowered onto its wheel — unless the stick asks)
+      if (P.ground) want[0] = c.onGear && manual[0] === 0 ? this.omega[0] : manual[0] * rates[0];
       else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
       else if (P.mach > 4) {
         // (hypersonic: the angle of attack held — the shield kept to the flow, as an entry is flown)
@@ -408,7 +412,8 @@ export class FlightComputer {
       want[1] = P.ground ? manual[1] * 0.3 : P.path[1] - 2 * P.beta + manual[1] * rates[1];
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
       // (the bank: right is +; the pilot's roll: left is +)
-      want[2] = manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? 0 : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+      want[2] =
+        manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? (c.onGear ? this.omega[2] : 0) : 1.2 * (P.bank - (this.bankHold ?? P.bank));
     } else if (point && !active) {
       const e = cross(Z, point);
       const s = len(e);
@@ -435,7 +440,7 @@ export class FlightComputer {
     } else {
       for (let i = 0; i < 3; i++) {
         if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
-        else if (this.sas) want[i] = 0;
+        else if (this.sas && !(c.onGear && i !== 1)) want[i] = 0;
       }
     }
     let effort = 0;

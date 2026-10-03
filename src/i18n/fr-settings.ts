@@ -651,7 +651,6 @@ export default {
   "The camera turned on its mount (the ship keeps its attitude).": "La caméra tournée sur son support (le vaisseau garde son attitude).",
   "Free look: pitch": "Vue libre : tangage",
   "Crash speed": "Vitesse d'écrasement",
-  "Touching the ground faster than this is a crash.": "Toucher le sol plus vite que cela, c'est l'écrasement.",
   "Ground & air": "Sol et air",
   "Ballistic coefficient": "Coefficient balistique",
   "m/(C_D A): how hard the air brakes what has no shape of its own (the predictions, the station). The flown craft has its own aerodynamics.":
@@ -1203,4 +1202,9 @@ export default {
   Propellant: "Propergol",
   "The Crew engine burns propellant (the Cinema engine has no tank): a relativistic rocket whose tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it and the craft lightens (m/m₀ = e^(−w/vₑ)) — the engine's force fixed, its acceleration grows. In the air the ambient pressure on the nozzle lowers the thrust and the Isp. Each craft has its own tank, full again with a new flight. When it is empty the engines stop; the planners show the plan's cost against what is left.":
     "Le moteur Équipage consomme du propergol (le moteur Cinéma n'a pas de réservoir) : une fusée relativiste dont le réservoir contient un budget de rapidité vₑ ln(m₀/m_sec) ; chaque poussée en dépense ∫a dτ et l'engin s'allège (m/m₀ = e^(−w/vₑ)) — la force du moteur restant la même, son accélération augmente. Dans l'air, la pression ambiante sur la tuyère réduit la poussée et l'Isp. Chaque engin a son propre réservoir, plein à chaque nouveau vol. Vide, les moteurs s'arrêtent ; les planificateurs montrent le coût du plan face à ce qui reste.",
+  "Coming down onto the ground faster than this is a crash: the gear collapses (a craft without one breaks). Two thirds of it is the gear's limit — between the two, a hard landing that damages it. A real gear: 3 m/s, a collapse near 4.5.":
+    "Toucher le sol plus vite que cela est un crash : le train cède (un engin sans train se brise). Les deux tiers sont la limite du train — entre les deux, un atterrissage dur qui l'endommage. Un vrai train : 3 m/s, il cède vers 4,5.",
+  "Forgiving landing gear": "Train d'atterrissage indulgent",
+  "The landing gear's limits three times a real one's: a landing up to 9 m/s down, a crash past 13.5.":
+    "Les limites du train trois fois celles d'un vrai : un atterrissage jusqu'à 9 m/s de descente, un crash au-delà de 13,5.",
 } satisfies Record<string, string>;

@@ -39,3 +39,37 @@ export function siteDir(s: { lat: number; lon: number }): [number, number, numbe
   const D = Math.PI / 180;
   return [Math.cos(s.lat * D) * Math.cos(s.lon * D), Math.cos(s.lat * D) * Math.sin(s.lon * D), Math.sin(s.lat * D)];
 }
+
+/**
+ * How much of a runway a point of the Earth is on (0…1; unit direction on the Earth's own axes): from
+ * 500 m before each runway's threshold to 4.5 km past it, 60 m either side of its axis — faded to none
+ * 60 m further across and 300 m further along. There the ground is graded: the relief's base, without
+ * the drawn detail (the gear rolls on a runway, not on the procedural bumps between the map's texels).
+ */
+const RUNWAYS = SITES.filter((s) => s.body === "earth" && s.runway).map((s) => {
+  const D = Math.PI / 180;
+  const la = s.lat * D,
+    lo = s.lon * D;
+  const p: [number, number, number] = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+  const north: [number, number, number] = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+  const east: [number, number, number] = [-Math.sin(lo), Math.cos(lo), 0];
+  const h = (s.rwy ?? 0) * D;
+  const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
+  const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
+  return { p, along, across };
+});
+const R_EARTH = 6371e3;
+export function runwayWeight(q: [number, number, number]): number {
+  let w = 0;
+  for (const r of RUNWAYS) {
+    const d: [number, number, number] = [q[0] - r.p[0], q[1] - r.p[1], q[2] - r.p[2]];
+    // (more than ~6 km off: not this one)
+    if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > 1e-6) continue;
+    const a = (d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2]) * R_EARTH;
+    const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]) * R_EARTH;
+    const wa = a < -500 ? Math.max(0, 1 + (a + 500) / 300) : a > 4500 ? Math.max(0, 1 - (a - 4500) / 300) : 1;
+    const wc = c < 60 ? 1 : Math.max(0, 1 - (c - 60) / 60);
+    w = Math.max(w, wa * wc);
+  }
+  return w;
+}

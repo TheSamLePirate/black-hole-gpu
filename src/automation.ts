@@ -3,6 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import { bodyFixedOf, groundRelief } from "./system/our-surface";
 import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
@@ -303,6 +304,9 @@ export function installBh(c: BhContext) {
       freeze: (on: boolean) => c.freeze(on),
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
       setDate: setDateNow,
+      /** the ground's height above a body's mean radius at latitude, east longitude [°] — the relief the
+       *  craft stands on (the Earth's: its tiles, once in) [m] */
+      relief: (body: string, lat: number, lon: number) => groundRelief(body, bodyFixedOf(body, lat, lon, 0)),
       step: (dt: number) => {
         advanceFrameClock(dt * 1000);
         sim.step(dt);

@@ -426,4 +426,10 @@ export default {
   "{0}.wgsl failed to compile:": "La compilation de {0}.wgsl a échoué :",
   "The ray tracer's pipelines failed to compile: {0}": "La compilation des pipelines du lancer de rayons a échoué : {0}",
   "WebGPU pipeline creation failed: {0}": "La création du pipeline WebGPU a échoué : {0}",
+  // (the landing gear: controller/motion.ts)
+  "Airborne · {0} m/s": "En l'air · {0} m/s",
+  "Touchdown on {0} · {1} m/s down, {2} m/s along": "Toucher sur {0} · {1} m/s de descente, {2} m/s le long",
+  "Hard landing on {0} · {1} m/s down — the gear damaged": "Atterrissage dur sur {0} · {1} m/s de descente — le train endommagé",
+  "{0}: tipped over on {1}": "{0} : renversé sur {1}",
+  "{0}: the gear collapsed on {1} at {2} m/s": "{0} : le train a cédé sur {1} à {2} m/s",
 } satisfies Record<string, string>;

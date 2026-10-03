@@ -632,6 +632,16 @@ export class CameraController {
 
   /** On the ground and rolling (our side): the body under the wheels. */
   rolling: { body: string } | null = null;
+  /** the nose wheel's steering [rad] (+: left) — the pilot's yaw on the ground, the rollout's */
+  noseSteer = 0;
+  /** the ground spoilers deployed at the touchdown, kept out through a bounce (piloting.ts) */
+  groundSpoilers = false;
+  /** when the wheels last touched [M of time] */
+  rollSince = 0;
+  /** the gear's last forces (gear.ts): its legs' loads and compressions — none off the ground */
+  gearLast: import("./gear").GearOut | null = null;
+  /** the gear's turn of the craft over the last frame, for the pilot's rates (motion.ts) */
+  gearDw: [number, number, number] | null = null;
 
   /**
    * On its wheels: the wings level on the ground, the nose between 3° down and 15° up (the tail on the

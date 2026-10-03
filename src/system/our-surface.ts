@@ -2,6 +2,7 @@
 // turning under a ship, their air, touching down and lifting off (Newton, home frame). The same
 // landing gear, crash speed and ballistic coefficient as near the hole (landing.ts).
 
+import type { Ground } from "../gear";
 import type { Vec3 } from "../physics";
 import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
@@ -132,6 +133,42 @@ export function gearHeight(id: string, X: Vec3, t: number) {
   const b = solarBody(id)!;
   const r = (Math.hypot(...sub(X, solarState(id, t).pos)) - b.radius) * M_METRES - GEAR;
   return reliefs.has(id) ? r - groundRelief(id, toBodyFixed(id, X, t)) : r;
+}
+
+/**
+ * The ground under the points about a home-frame place X at t, for the gear (gear.ts): a point p [m,
+ * home axes, from X] → its height above the ground [m], the ground's normal there (the relief's slope
+ * felt over 5 m), the ground's velocity relative to X's own (none: the wheels are metres apart).
+ */
+export function groundUnder(id: string, X: Vec3, t: number): Ground {
+  const b = solarBody(id)!;
+  const P = solarState(id, t).pos;
+  const relief = reliefs.has(id);
+  const height = (Xp: Vec3) => {
+    const r = (Math.hypot(...sub(Xp, P)) - b.radius) * M_METRES;
+    return relief ? r - groundRelief(id, toBodyFixed(id, Xp, t)) : r;
+  };
+  return {
+    at(p: Vec3) {
+      const Xp: Vec3 = [X[0] + p[0] / M_METRES, X[1] + p[1] / M_METRES, X[2] + p[2] / M_METRES];
+      const d = sub(Xp, P);
+      const dl = Math.hypot(...d);
+      const up: Vec3 = [d[0] / dl, d[1] / dl, d[2] / dl];
+      const h = height(Xp);
+      if (!relief) return { h, n: up, v: [0, 0, 0] };
+      // (the slope: the heights 5 m east and north of it, along the ground)
+      const e = cross([0, 0, 1], up);
+      const el = Math.hypot(...e) || 1;
+      const e1: Vec3 = [e[0] / el, e[1] / el, e[2] / el];
+      const e2 = cross(up, e1);
+      const k = 5 / M_METRES;
+      const h1 = height([Xp[0] + e1[0] * k, Xp[1] + e1[1] * k, Xp[2] + e1[2] * k]);
+      const h2 = height([Xp[0] + e2[0] * k, Xp[1] + e2[1] * k, Xp[2] + e2[2] * k]);
+      const n: Vec3 = [0, 1, 2].map((i) => up[i]! - ((h1 - h) / 5) * e1[i]! - ((h2 - h) / 5) * e2[i]!) as Vec3;
+      const nl = Math.hypot(...n);
+      return { h, n: [n[0] / nl, n[1] / nl, n[2] / nl], v: [0, 0, 0] };
+    },
+  };
 }
 
 /** Speeds relative to the ground [m/s]: vertical (> 0 up), horizontal; the local up. */
