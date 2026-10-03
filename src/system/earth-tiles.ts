@@ -11,6 +11,7 @@
 // the CPU (heightAt): the ground the ship stands on.
 
 import type { Vec3 } from "../physics";
+import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 
 export const TILE = 256;
 /** tiles along a level's window */
@@ -24,7 +25,7 @@ export const TILE_PARAM_VEC4S = 1 + 2 * LEVELS;
 /** The data's own resolution [m] (SRTM's 1″): no finer, whatever the level's texel. */
 export const TILE_RES_MIN = 25;
 
-const R = 6.371e6;
+const R = WGS84_A;
 const TAU = 2 * Math.PI;
 const MAX_INFLIGHT = 8;
 const TIMEOUT_MS = 15000;
@@ -160,16 +161,17 @@ export class EarthTiles {
   }
 
   /**
-   * Follows the camera: c, on the Earth's axes [its radii] (float64); pixAngle, a pixel's angle [rad] —
+   * Follows the camera: c, on the Earth's axes [its equatorial radii] (float64); pixAngle, a pixel's angle [rad] —
    * the levels wanted, those finer than the ground's footprint under the camera left as they are.
    */
   update(c: Vec3 | null, pixAngle: number) {
     if (!c) return this.clear();
-    const r = Math.hypot(...c);
-    this.lon = Math.atan2(c[1], c[0]);
-    this.sinLat = c[2] / r;
+    // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
+    const g = cartToGeodetic(1, WGS84_F, c);
+    this.lon = g.lon;
+    this.sinLat = Math.sin(g.lat);
     const cosLat = Math.sqrt(Math.max(1 - this.sinLat * this.sinLat, 1e-6));
-    const alt = Math.max((r - 1) * R, 1);
+    const alt = Math.max(g.h * R, 1);
     // (the finest level the nearest ground needs: its texel within the pixel's footprint there)
     const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), Z1);
     if (zNeed < Z0) return this.clear();

@@ -18,7 +18,7 @@ import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose } from "../camera";
 import { BODY_NAMES } from "../targeting";
 import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
-import { bodyFixedOf, fromBodyFixed, groundRelief, groundVelocity, toBodyFixed } from "../system/our-surface";
+import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity } from "../system/our-surface";
 import { SITES } from "./sites";
 import { soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
@@ -250,8 +250,10 @@ export class GameTools {
       up[2] * Math.cos(ang) - along[2] * Math.sin(ang),
     ]);
     // (the height above the ground there — the relief's, once known)
-    const rel = groundRelief(site.body, toBodyFixed(site.body, [P[0] + dir[0], P[1] + dir[1], P[2] + dir[2]], t));
-    const r = b.radius + (altKm * 1e3 + rel) / M_METRES;
+    // (over the figure — the Earth's ellipsoid, not its equator's sphere — measured there and set right)
+    const r0 = b.radius + (altKm * 1e3) / M_METRES;
+    const h0 = gearHeight(site.body, [P[0] + dir[0] * r0, P[1] + dir[1] * r0, P[2] + dir[2] * r0], t) + GEAR;
+    const r = r0 + (altKm * 1e3 - h0) / M_METRES;
     const X: V3 = [P[0] + dir[0] * r, P[1] + dir[1] * r, P[2] + dir[2] * r];
     const fwd = unit(sub(along, dir.map((x) => x * dot(along, dir)) as V3));
     const g = groundVelocity(site.body, X, t);

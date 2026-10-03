@@ -19,12 +19,14 @@ import { symmetricStep, YOSHIDA } from "../system/our-predict";
 import { keplerProp } from "../system/our-plan";
 import {
   airDensity as ourAir,
+  altitudeOver,
   dragAccel,
+  figureUp,
   fromBodyFixed,
   railsDecay,
   gearHeight,
   groundUnder,
-  groundRelief,
+  heightOverGround,
   groundSpeeds,
   groundVelocity,
   solidBody,
@@ -288,10 +290,13 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (on the ground as it is known now: a scene placed before the Earth's relief was read back
     // stood at its sphere, inside the mountain — raised onto it once the heights are in)
     const qr = Math.hypot(...L.q);
-    const rWant = b.radius + (GEAR + groundRelief(L.body, L.q)) / M_METRES;
-    if (Math.abs(qr - rWant) * M_METRES > 1) L.q = [L.q[0] * (rWant / qr), L.q[1] * (rWant / qr), L.q[2] * (rWant / qr)];
+    const off = GEAR - heightOverGround(L.body, L.q);
+    if (Math.abs(off) > 1) {
+      const k = 1 + off / M_METRES / qr;
+      L.q = [L.q[0] * k, L.q[1] * k, L.q[2] * k];
+    }
     const Xg = fromBodyFixed(L.body, L.q, t0);
-    const upL = unitV(sub3(Xg, ourState(L.body, t0).pos));
+    const upL = figureUp(L.body, Xg, t0);
     const gSurf = b.mass / Math.hypot(...sub3(Xg, ourState(L.body, t0).pos)) ** 2;
     // (pushed along the ground past the wheels' resistance: rolling)
     const along = Math.hypot(...lin(dvT, 1, upL, -dot3(dvT, upL)));
@@ -328,7 +333,6 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const S = this.shipMatrix();
   const axes = [0, 1, 2].map((i) => unitV(lin(lin(right, S[0]![i]!, up, S[1]![i]!), 1, fwd, S[2]![i]!))) as [Vec3, Vec3, Vec3];
   const aero = airy ? this.airFlight.forceFn(atm, ref, fleet.massProps().mass, axes, this.spinPhysical()) : null;
-  const rb = airy ? solarBody(ref)!.radius : 0;
   const kA = M_METRES / C_MPS ** 2;
   let aAir = 0;
   // the landing gear (gear.ts): the flown craft's legs on a solid ground — springs and dampers along the
@@ -378,8 +382,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => {
     const aG = gearAt(Xq, Vq, tq);
     if (!aero) return lin(gq.acc, 1, aG, 1);
-    const st = ourState(ref, tq);
-    const h = (Math.hypot(...sub3(Xq, st.pos)) - rb) * M_METRES;
+    const h = altitudeOver(ref, Xq, tq);
     // (the wing's height over the ground: its ground effect — the reference point is the gear's height up)
     this.airFlight.cfg.agl = ground ? gearHeight(ground, Xq, tq) + GEAR : undefined;
     // (the air's own motion: the wind — the craft flies through the air, not over the ground)

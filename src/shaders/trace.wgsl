@@ -1086,7 +1086,15 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let perp = c - b * d;
     let h = R * R - dot(perp, perp);
     if (h < 0.0) { continue; }
-    let t = b - sqrt(h);
+    var t = b - sqrt(h);
+    // (the Earth: its ellipsoid, inside that sphere — on its squashed axes the unit sphere)
+    if (isEarth(k)) {
+      let A = spunAxes(k);
+      let rs = squashed(A * d, EARTH_AB);
+      let m = length(rs);
+      let te = unitHit(squashed(A * (-c / R), EARTH_AB), rs / m);
+      t = select(-1.0, te * R / m, te >= 0.0);
+    }
     if (t >= 0.0 && t < tBest) {
       tBest = t;
       kBest = k;
@@ -1128,11 +1136,15 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       let top = airTop() * R;
       if (b + top < 0.0 || b - top > tBest || top < 0.5 * beam() * (travel + length(c))) { continue; }
       let A = spunAxes(k);
-      let rd = A * d;
+      // (on its squashed axes: the Earth's ellipsoid the unit sphere)
+      let ab = squashOf(k);
+      let rs = squashed(A * d, ab);
+      let m = length(rs);
+      let rd = rs / m;
       let t1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
       let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
       let met = hit && k == kBest;
-      let e = earthLook(k, A * (-c / R), rd, select(-1.0, tBest / R, met), A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz),
+      let e = earthLook(k, squashed(A * (-c / R), ab), rd, select(-1.0, tBest * m / R, met), normalize(squashed(A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz), ab)),
         earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5, false);
       (*out).glow += (*out).tint * e.col;
       (*out).tint *= e.T;
@@ -3415,7 +3427,26 @@ fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   if (mz < -0.05 || night <= 0.0 || P.earth3.w <= 0.0) { return vec3f(0.0); }
   return EARTH_MOON * pow(P.earth3.w, 1.5) * night * smoothstep(-0.05, 0.05, mz) * max(dot(n, Lm), 0.0) * sunThrough(h, mz);
 }
-const EARTH_RM = 6.371e6;     // metres per radius
+const EARTH_RM = 6.378137e6;  // metres per radius: WGS84's a, the equator's (src/system/ellipsoid.ts)
+// The Earth's figure: the WGS84 ellipsoid, its poles 21 km in. On the Earth's axes squashed — z × a/b —
+// it is the unit sphere: its ground, relief, clouds and air are marched there as on a sphere, the rays
+// taken there (squashed, renormalised; their lengths back by m), the maps read at the geodetic latitude
+const EARTH_AB = 1.0033640898209764;
+// a world's z scale into its squashed axes (the others are spheres: 1)
+fn squashOf(k: u32) -> f32 { return select(1.0, EARTH_AB, isEarth(k)); }
+fn squashed(v: vec3f, ab: f32) -> vec3f { return vec3f(v.x, v.y, v.z * ab); }
+// the geodetic direction (the ellipsoid's normal: the maps' latitude) at a unit direction of the squashed space
+fn geoQ(q: vec3f) -> vec3f { return normalize(vec3f(q.x, q.y, q.z * EARTH_AB)); }
+// the metres along the ground's normal a radial step of the squashed space is, per metre of a
+fn earthSq(q: vec3f) -> f32 { return sqrt(1.0 - (1.0 - 1.0 / (EARTH_AB * EARTH_AB)) * q.z * q.z); }
+// a ray from ro along rd against the unit sphere (ro outside or in: the near side ahead), −1 when missed
+fn unitHit(ro: vec3f, rd: vec3f) -> f32 {
+  let b = dot(ro, rd);
+  let off = ro - rd * b;
+  let h = 1.0 - dot(off, off);
+  if (h < 0.0 || b >= 0.0) { return -1.0; }
+  return -b - sqrt(h);
+}
 // A world's air (the Earth's, Mars' dust, Venus' and Titan's hazes, the giants' hydrogen, Pluto's blue
 // layers): its size, its scale heights, its molecules' scattering (and the Earth's ozone), its
 // aerosols' — coloured: their single-scattering albedo, a Henyey–Greenstein asymmetry per colour (Mars'
@@ -3447,7 +3478,7 @@ fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   var a: AirSpec;
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03)
-  a.rm = 6.371e6; a.top = 100e3; a.hr = 8000.0; a.hm = 1200.0;
+  a.rm = EARTH_RM; a.top = 100e3; a.hr = 8000.0; a.hm = 1200.0;
   a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6); a.bo = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
   a.bms = vec3f(2.1e-5); a.bme = 2.33e-5; a.g = vec3f(0.8); a.k = max(P.earth2.w, 1.0);
   a.sky = vec3f(0.035, 0.06, 0.12); a.moon = 1.0;
@@ -3909,13 +3940,18 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
   }
   return vec2f(h, res);
 }
-fn earthHeight(q: vec3f, foot: f32) -> f32 {
+fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
   return max(hr.x + earthDetail(q, hr.x, foot, hr.y), 0.0);
 }
+// The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
+// relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
+// (src/system/our-surface.ts: the gear's ground)
+fn earthHeight(q: vec3f, foot: f32) -> f32 { return earthHeightG(geoQ(q), foot) / earthSq(q); }
 // the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
-fn earthHeightStep(q: vec3f, foot: f32) -> f32 {
+fn earthHeightStep(q: vec3f, foot: f32) -> f32 { return earthHeightStepG(geoQ(q), foot) / earthSq(q); }
+fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
     return max(hr.x + earthDetail(q, hr.x, max(foot * 4.0, 1.0), hr.y), 0.0);
@@ -4022,7 +4058,7 @@ fn earthOct(fx: vec3f, fy: vec3f) -> f32 { return clamp(log2(earthTexel() / max(
 // (P.earth.y). Near, the map's soft texels break into puffs and wisps (most at their edges), their
 // relief lit from the sun (Ls): denser towards it, this side in the shade.
 fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
-  let q = rotZ(q0, P.earth.y);
+  let q = rotZ(geoQ(q0), P.earth.y);
   let base = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(rotZ(fx, P.earth.y)), eCube(rotZ(fy, P.earth.y))).a;
   var a = clamp((base - 0.06) * 1.25, 0.0, 1.0);
   var lit = 1.0;
@@ -4155,8 +4191,10 @@ fn snowLineAt(lat: f32) -> f32 {
 }
 
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
-  let day = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(fx), eCube(fy));
-  let rel = earthRelief(q, fx, fy);
+  // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
+  let gq = geoQ(q);
+  let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
+  let rel = earthRelief(gq, fx, fy);
   let ocean = smoothstep(0.35, 0.65, rel.b);
   var A = day.rgb * P.earth2.z;
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
@@ -4177,7 +4215,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   if (footM < texelM && ocean < 1.0) {
     let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
-    let lat = abs(asin(clamp(q.z, -1.0, 1.0))) * 57.29578;
+    let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
     let snowLine = snowLineAt(lat) + 300.0 * gnoise(q * 3000.0);
     let snow = smoothstep(snowLine - 250.0, snowLine + 250.0, hG) * (1.0 - smoothstep(0.25, 0.5, slope));
     let rock = smoothstep(0.22, 0.45, slope) * smoothstep(300.0, 1500.0, hG);
@@ -4244,7 +4282,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     col = mix(col, col * (1.0 - Fv) + spec, ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
-  let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(q), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
+  let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
   col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
   return col;
@@ -4335,7 +4373,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.3 + vec3f(5.1)) + 0.1 * dnoise(x * 5.3 + vec3f(1.7));
     // (the tops follow the cover smoothed over ~16 texels — tens of km —: gentle domes where the map's
     // cover ends sharply, not walls rising from its edge)
-    let qc = rotZ(q, P.earth.y);
+    let qc = rotZ(geoQ(q), P.earth.y);
     let soft = clamp((textureSampleGrad(earthCube, bgSamp, eCube(qc), eCube(rotZ(fx, P.earth.y)) * 16.0, eCube(rotZ(fy, P.earth.y)) * 16.0).a - 0.06) * 1.25, 0.0, 1.0);
     let top = (0.15 + 0.85 * soft) * (0.7 + 0.6 * sh);
     let hp = smoothstep(0.0, 0.05 + 0.12 * sh, hn) * (1.0 - smoothstep(0.45 * top, top, hn));
@@ -4421,18 +4459,24 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   setAir(k);
   // (the Earth's relief marched below ~3 000 km: its mountains on the horizon; higher, sub-pixel — the
   // sphere; the other worlds' ground, a sphere)
+  // (on its squashed axes — the Earth's ellipsoid the unit sphere; nearCam squashed by the CPU —, the
+  // ray's lengths there m times the camera's)
+  let ab = squashOf(k);
   let ro = nearCam();
-  var t = nearHit(look);
-  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, toBody(look), pixFoot()); }
+  let rs = squashed(toBody(look), ab);
+  let m = length(rs);
+  let rd = rs / m;
+  var t = unitHit(ro, rd);
+  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
   let lt = nearLight(k);
-  let e = earthLook(k, ro, toBody(look), t, toBody(lt.dir), lt.e, toBody(P.camRight.xyz), toBody(P.camUp.xyz),
+  let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
   let s = luminance(max(e.col - e.Lm, vec3f(0.0))) / max(luminance(lt.e) / PI, 1e-30);
   let veil = clamp(log(1e-2 / max(s, 1e-12)) / log(100.0), 0.0, 1.0);
-  return EarthNear(e.col, e.T, t, veil * veil);
+  return EarthNear(e.col, e.T, select(t, t / m, t > 0.0), veil * veil);
 }
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,
@@ -5456,12 +5500,12 @@ fn keyLight() {
   var E = lt.e * (0.5 + (x * sqrt(1.0 - x * x) + asin(x)) / PI);
   if (hasAir(kn)) {
     setAir(kn);
-    let rd = toBody(L);
+    let rd = normalize(squashed(toBody(L), squashOf(kn)));
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
     let e = earthLook(kn, nearCam(), rd, -1.0, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
     E *= e.T;
   }
-  if (luminance(E) > 0.0) { E *= keyRelief(kn, toBody(L)); }
+  if (luminance(E) > 0.0) { E *= keyRelief(kn, normalize(squashed(toBody(L), squashOf(kn)))); }
   // (to the probe's axes: the transpose of envX…Z)
   let Lp = vec3f(dot(L, P.envX.xyz), dot(L, P.envY.xyz), dot(L, P.envZ.xyz));
   let n = ENV_W * ENV_H;
@@ -5505,7 +5549,11 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // (an airless world near, lit by its star: its ground — the sunlit ground's light on the hull, the
   // sky hidden behind it; a sphere at the probe's resolution)
   let solid = HAS_BODIES && P.near0.w > 0.5 && !nearOn && bodyKind(kn) != 0u && P.near3.w < 0.5;
-  let t = select(-1.0, nearHit(look), nearOn || solid);
+  // (the Earth on its squashed axes: its ellipsoid — the ray's length there m times the camera's)
+  let abn = select(1.0, squashOf(kn), nearOn);
+  let rsn = squashed(toBody(look), abn);
+  let mn = length(rsn);
+  let t = select(-1.0, select(nearHit(look), unitHit(nearCam(), rsn / mn) / mn, nearOn), nearOn || solid);
   var col = vec3f(0.0);
   if (t <= 0.0) {
     let tr = traceLook(look, h.z, P.time.x);
@@ -5522,10 +5570,10 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // the ship — the sun through the air, reddened low, hidden at night; the sky's blue; its glow
   if (nearOn) {
     setAir(kn);
-    let rd = toBody(look);
+    let rd = rsn / mn;
     let lt = nearLight(kn);
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
-    let e = earthLook(kn, nearCam(), rd, t, toBody(lt.dir), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
+    let e = earthLook(kn, nearCam(), rd, select(t, t * mn, t > 0.0), normalize(squashed(toBody(lt.dir), abn)), lt.e, g1, cross(rd, g1), 0.0, PI / f32(ENV_H), h.w, false);
     col = select(col * e.T + e.col, e.col, t > 0.0);
   } else if (solid && t > 0.0) {
     BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);

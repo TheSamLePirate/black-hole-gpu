@@ -55,7 +55,7 @@ test("the fleet's start: the Endurance 800 km up, the Lander 500 km up, the Rang
   // coasting: a Kepler orbit with the Earth's J2 drift — an orbit later, where it was turned by the
   // node's regression and the periapsis's turn (≈ 27 km along a 800 km orbit)
   const mu = solarBody("earth")!.mass;
-  const r = 6371e3 + 800e3;
+  const r = solarBody("earth")!.radius * M_METRES + 800e3;
   const T = 2 * Math.PI * Math.sqrt((r / M_METRES) ** 3 / mu);
   const later = fleet.pose("endurance", t + T)!;
   const E2 = ourState("earth", t + T);

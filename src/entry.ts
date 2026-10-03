@@ -31,10 +31,15 @@ const unit = (a: V3): V3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
+/** The height over a body's figure at x [m]. */
+export const heightOf = (env: EntryEnv, x: V3): number => (env.alt ? env.alt(x) : len(x) - env.R);
+
 /** A body and its frame (body-centred, SI). */
 export interface EntryEnv {
-  /** the surface's radius [m] (a sphere: the relief left to the last phase) */
+  /** the surface's radius [m] (the relief left to the last phase; the Earth's: its equator's) */
   R: number;
+  /** the height over the figure at x [m] (the Earth's ellipsoid; none: a sphere of radius R) */
+  alt?: (x: V3) => number;
   atm: Atmosphere | null;
   /** gravity and the frame's own accelerations at (x, v) [m/s²] */
   gravity: (x: V3, v: V3) => V3;
@@ -73,7 +78,7 @@ export function attitudeFor(x: V3, va: V3, alpha: number, bank: number): [V3, V3
 
 /** The air's acceleration on the craft at a state, bank given [m/s²], with its figures. */
 function airAccel(env: EntryEnv, c: EntryCraft, x: V3, v: V3, bank: number): { a: V3; out: AeroOut | null; h: number } {
-  const h = len(x) - env.R;
+  const h = heightOf(env, x);
   const air = airAt(env.atm, h);
   if (air.rho <= 0) return { a: [0, 0, 0], out: null, h };
   const va = add(v, env.ground(x), -1);
@@ -126,13 +131,13 @@ export function predictEntry(
   let { x, v } = s0;
   let t = 0;
   const tMax = o.tMax ?? 4000;
-  const top = env.atm ? Math.max(len(x) - env.R, 0) + 1 : 0;
+  const top = env.atm ? Math.max(heightOf(env, x), 0) + 1 : 0;
   let skin = o.skin ?? coldSkin();
   const res: EntryResult = {
     end: s0,
     t: 0,
     speed: 0,
-    h: len(x) - env.R,
+    h: heightOf(env, x),
     handover: false,
     skip: false,
     heatPeak: 0,
@@ -148,7 +153,7 @@ export function predictEntry(
   const airH = airTop(env.atm);
   for (let i = 0; i < 40000 && t < tMax; i++) {
     const sp = len(add(v, env.ground(x), -1));
-    const h = len(x) - env.R;
+    const h = heightOf(env, x);
     // (steps: out of the air, 5 s — or to its top; in it, ~1.5 km of the way, finer low and slow)
     const vr = dot(unit(x), v);
     let dt = h > airH ? Math.min(5, vr < 0 ? Math.max((h - airH) / -vr, 0.5) : 5) : Math.min(Math.max(1500 / Math.max(sp, 1), 0.1), 2);
@@ -201,7 +206,7 @@ export function predictEntry(
   res.end = { x, v };
   res.t = t;
   res.speed = len(add(v, env.ground(x), -1));
-  res.h = len(x) - env.R;
+  res.h = heightOf(env, x);
   return res;
 }
 
@@ -251,7 +256,7 @@ export class EntryGuidance {
    *  it on while the craft falls). */
   update(env: EntryEnv, c: EntryCraft, s: EntryState, placeNow: V3): number {
     // (above the air the bank does nothing: the nominal kept, no prediction run)
-    if (len(s.x) - env.R > airTop(env.atm)) return this.sign * this.bank;
+    if (heightOf(env, s.x) > airTop(env.atm)) return this.sign * this.bank;
     const r = predictEntry(env, c, s, () => this.sign * this.bank, { handoverMach: this.o.handoverMach, tMax: 8000, sample: 30 });
     this.last = r;
     const place = env.carry(placeNow, r.t);

@@ -3,6 +3,8 @@
 // arithmetic, as on the GPU); heights in metres above the sphere at a unit direction on the body's
 // own axes (x away from its primary, y along its orbit, z north).
 
+import { WGS84_A } from "./system/ellipsoid";
+
 export type V3 = [number, number, number];
 
 /** surface kinds, as the GPU body list numbers them */
@@ -173,8 +175,8 @@ export function millerWaves(q: V3, tSec: number, mR: number, foot = 0.05): numbe
   return h * 1200;
 }
 
-/** The Earth's radius [m] (its relief's scale). */
-export const EARTH_RM = 6.371e6;
+/** The Earth's radius [m] (its relief's scale): WGS84's a — the ellipsoid on its squashed axes the sphere (ellipsoid.ts). */
+export const EARTH_RM = WGS84_A;
 
 /** Musgrave's ridged multifractal (the tracer's ridgedMF): sharp crests, smooth valleys; 0 … ~1; `oct`
  *  fractional (the last octave faded in). */

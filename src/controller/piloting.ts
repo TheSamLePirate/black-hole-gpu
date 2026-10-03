@@ -6,7 +6,7 @@ import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body, onOurSide } from "../targeting";
 import { AIR_WARP } from "../flightair";
-import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type EntryState } from "../entry";
+import { attitudeFor, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import { siteDir, sitesOf, type Site } from "../game/sites";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
@@ -20,7 +20,7 @@ import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
 import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
 import { plan as runPlanner } from "../system/plan-client";
-import { bodyFixedOf, fromBodyFixed, gearHeight, groundRelief, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import { bodyFixedOf, fromBodyFixed, gearHeight, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { daysOf, solarBody, spinVector } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
@@ -190,7 +190,7 @@ function standOn(this: CameraController, b?: Body): string | null {
   let X = lin(ref.C, 1, up, ref.R);
   let V = ref.V;
   if (w.ours) {
-    X = lin(ref.C, 1, up, ref.R + (groundRelief(ref.id, toBodyFixed(ref.id, X, t)) + 1.7) / mR);
+    X = lin(ref.C, 1, up, ref.R + (groundAboveSphere(ref.id, toBodyFixed(ref.id, X, t)) + 1.7) / mR);
     V = groundVelocity(ref.id, X, t);
   } else {
     const F = planetFrame(ref.id as "miller" | "mann" | "edmunds", t, s.spin, s.massSolar);
@@ -1202,7 +1202,7 @@ function entryStep(
   const Msec = 4.925490947e-6 * s.massSolar;
   const up = unitV(fr.s.x);
   const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
-  const h = Math.hypot(...fr.s.x) - fr.env.R;
+  const h = heightOf(fr.env, fr.s.x);
   const top = airTop(fr.env.atm);
   const ranger = fleet.active === "ranger";
   const name = BODY_NAMES[fr.body as Body] ?? fr.body;

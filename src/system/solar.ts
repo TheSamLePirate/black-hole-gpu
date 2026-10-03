@@ -194,7 +194,7 @@ export const SOLAR_BODIES: SolarBody[] = [
     "earth",
     "Earth",
     398600.44,
-    6371,
+    6378.137,
     23.9345,
     [0, 90],
     0.434,

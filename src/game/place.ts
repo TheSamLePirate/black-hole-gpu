@@ -6,7 +6,7 @@
 import type { Vec3 } from "../physics";
 import { eclipticOf, poleAxes, solarBody, solarState, spinVector, M_METRES, SOLAR_BODIES } from "../system/solar";
 import { soiOf } from "../system/our-side";
-import { bodyFixedOf, fromBodyFixed, groundRelief, groundVelocity, solidBody, GEAR } from "../system/our-surface";
+import { figureUp, fromBodyFixed, groundPointOf, groundVelocity, solidBody } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
 import { GEAR as HOLE_GEAR, groundR, planetFrame, toGlobal, zamoBeta } from "../landing";
@@ -106,9 +106,10 @@ export function ourOrbitPose(p: OrbitPlacement, t: number): Pose {
 export function ourGroundPose(id: string, lat: number, lon: number, t: number): Pose {
   const b = solarBody(id);
   if (!b || !solidBody(id)) throw new Error(`${b?.name ?? id}: no ground to land on`);
-  const q = bodyFixedOf(id, lat, lon, GEAR + groundRelief(id, bodyFixedOf(id, lat, lon, 0)));
+  const q = groundPointOf(id, lat, lon);
   const X = fromBodyFixed(id, q, t);
-  const up = unit(sub(X, solarState(id, t).pos));
+  // (the figure's normal: the Earth's geodetic up)
+  const up = figureUp(id, X, t);
   let east = cross(spinVector(b, t), up);
   if (Math.hypot(...east) < 1e-12) east = cross([1, 0, 0], up);
   return {

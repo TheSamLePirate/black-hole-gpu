@@ -11,6 +11,8 @@ import { craterRelief } from "../terrain";
 import { airAt, airRaw } from "../aero";
 import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
+import { cartToGeodetic, flatteningOf, geodeticToCart, squashedHeight } from "./ellipsoid";
+import { poleOfDate } from "./geopotential";
 
 export { GEAR };
 
@@ -47,9 +49,7 @@ export function thinAirDensity(id: string, hM: number) {
 /** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air — the
  *  thermosphere's too, above the flight's air (B: the ballistic coefficient, the craft's or given). */
 export function dragAccel(id: string, X: Vec3, V: Vec3, t: number, B = TUNING.ballistic): Vec3 {
-  const b = solarBody(id)!;
-  const st = solarState(id, t);
-  const h = (Math.hypot(...sub(X, st.pos)) - b.radius) * M_METRES;
+  const h = altitudeOver(id, X, t);
   const rho = thinAirDensity(id, h);
   if (rho <= 0) return [0, 0, 0];
   const va = sub(V, groundVelocity(id, X, t));
@@ -72,7 +72,8 @@ export function railsDecay(id: string, mu: number, r: Vec3, v: Vec3, dt: number,
   if (!(eps < 0)) return { r, v };
   const a = -mu / (2 * eps);
   if (Math.abs(R - a) > 0.05 * a) return { r, v };
-  const rho = thinAirDensity(id, (a - b.radius) * M_METRES);
+  // (over a turn, the figure's mean radius under it: the Earth's ellipsoid between 6 357 and 6 378 km)
+  const rho = thinAirDensity(id, (a - meanRadius(id)) * M_METRES);
   if (!(rho > 0)) return { r, v };
   // (in the code's units: a and t in M, μ = GM/c²: da/dt = −(ρ/B) M √(μ a))
   const a1 = Math.max(a - (rho / B) * M_METRES * Math.sqrt(mu * a) * dt, b.radius);
@@ -93,12 +94,25 @@ export function fromBodyFixed(id: string, q: Vec3, t: number): Vec3 {
   return [0, 1, 2].map((i) => P[i]! + q[0] * A[0][i]! + q[1] * A[1][i]! + q[2] * A[2][i]!) as Vec3;
 }
 
-/** A place on a body: latitude, east longitude [°], height above its mean radius [m] → its own coordinates. */
+/** A body's mean radius (the Earth's ellipsoid's: (2a + b)/3, 6 371,0 km; a sphere's own). */
+export function meanRadius(id: string): number {
+  return solarBody(id)!.radius * (1 - flatteningOf(id) / 3);
+}
+
+/** A home-frame point's height over a body's figure [m] — the Earth's ellipsoid (geodetic), a sphere's radius. */
+export function altitudeOver(id: string, X: Vec3, t: number): number {
+  const b = solarBody(id)!;
+  const f = flatteningOf(id);
+  const d = sub(X, solarState(id, t).pos);
+  if (f === 0) return (Math.hypot(...d) - b.radius) * M_METRES;
+  // (a figure of revolution: its pole alone — of date, kept an hour —, not the turning axes' nutation series)
+  const z = dot(d, poleOfDate(id, t));
+  return cartToGeodetic(b.radius, f, [Math.sqrt(Math.max(dot(d, d) - z * z, 0)), 0, z]).h * M_METRES;
+}
+
+/** A place on a body: geodetic latitude, east longitude [°], height above its figure [m] → its own coordinates. */
 export function bodyFixedOf(id: string, lat: number, lon: number, hM = GEAR): Vec3 {
-  const R = solarBody(id)!.radius + hM / M_METRES;
-  const f = (lat * Math.PI) / 180,
-    l = (lon * Math.PI) / 180;
-  return [R * Math.cos(f) * Math.cos(l), R * Math.cos(f) * Math.sin(l), R * Math.sin(f)];
+  return geodeticToCart(solarBody(id)!.radius, flatteningOf(id), (lat * Math.PI) / 180, (lon * Math.PI) / 180, hM / M_METRES);
 }
 
 /**
@@ -120,19 +134,87 @@ for (const b of SOLAR_BODIES) {
   }
 }
 
-/** The ground's height above the mean radius [m] under a body-fixed point (0: a sphere). */
+/**
+ * A body-fixed point's height over the figure as the ground is drawn [m] (the tracer's squashed space —
+ * ellipsoid.ts —: the Earth's to the millimetre what the shader marches), the relief's direction there
+ * (geodetic: the maps'), and the figure's normal (on the body's axes).
+ */
+function figureAt(id: string, p: Vec3): { h: number; g: Vec3 } {
+  const b = solarBody(id)!;
+  const f = flatteningOf(id);
+  if (f === 0) {
+    const l = Math.hypot(...p) || 1;
+    return { h: (l - b.radius) * M_METRES, g: [p[0] / l, p[1] / l, p[2] / l] };
+  }
+  const s = squashedHeight(p, b.radius, f);
+  return { h: s.h * M_METRES, g: s.g };
+}
+
+/** The ground's height above the figure [m] under a body-fixed point (0: none known). */
 export function groundRelief(id: string, q: Vec3): number {
   const f = reliefs.get(id);
   if (!f) return 0;
-  const l = Math.hypot(...q) || 1;
-  return f([q[0] / l, q[1] / l, q[2] / l]);
+  return f(figureAt(id, q).g);
 }
 
-/** Height of the ship's gear above the ground [m] (the mean radius, and the relief when known). */
+/** The relief's height [m] under a body-fixed point, and that point's height over the figure [m]. */
+function heightOver(id: string, p: Vec3) {
+  const fa = figureAt(id, p);
+  const f = reliefs.get(id);
+  return fa.h - (f ? f(fa.g) : 0);
+}
+
+/** A body-fixed point's height above the ground [m] (the figure, and the relief when known). */
+export function heightOverGround(id: string, q: Vec3): number {
+  return heightOver(id, q);
+}
+
+/**
+ * The ground's height above a body's sphere of its radius [m] along a body-fixed direction — the relief,
+ * and the Earth's ellipsoid below its equator's sphere (to −21 km at the poles): for the sphere-minded
+ * (the camera rig's floor and heights).
+ */
+export function groundAboveSphere(id: string, q: Vec3): number {
+  const R = solarBody(id)!.radius;
+  const l = Math.hypot(...q) || 1;
+  const u: Vec3 = [q[0] / l, q[1] / l, q[2] / l];
+  // (the ground along u: Newton on its height there, a metre per metre to 0.3 %)
+  let r = R;
+  for (let i = 0; i < 3; i++) {
+    const h = heightOver(id, [u[0] * r, u[1] * r, u[2] * r]);
+    r -= h / M_METRES;
+    if (Math.abs(h) < 0.01) break;
+  }
+  return (r - R) * M_METRES;
+}
+
+/**
+ * A body-fixed point `above` [m] over the ground at a geodetic latitude, east longitude [°] (the relief
+ * where known) — its height set as the ground is drawn (the tracer's squashed space: centimetres off the
+ * geodetic one on a plateau), so a craft put there stands on its gear.
+ */
+export function groundPointOf(id: string, lat: number, lon: number, above = GEAR): Vec3 {
+  const q = bodyFixedOf(id, lat, lon, above + groundRelief(id, bodyFixedOf(id, lat, lon, 0)));
+  const k = 1 + (above - heightOver(id, q)) / M_METRES / Math.hypot(...q);
+  return [q[0] * k, q[1] * k, q[2] * k];
+}
+
+/** Height of the ship's gear above the ground [m] (the figure, and the relief when known). */
 export function gearHeight(id: string, X: Vec3, t: number) {
-  const b = solarBody(id)!;
-  const r = (Math.hypot(...sub(X, solarState(id, t).pos)) - b.radius) * M_METRES - GEAR;
-  return reliefs.has(id) ? r - groundRelief(id, toBodyFixed(id, X, t)) : r;
+  return heightOver(id, toBodyFixed(id, X, t)) - GEAR;
+}
+
+/** The figure's normal (the Earth's: geodetic) under a home-frame point, on the home axes. */
+export function figureUp(id: string, X: Vec3, t: number): Vec3 {
+  const f = flatteningOf(id);
+  const d = sub(X, solarState(id, t).pos);
+  // (the squashed space's geodetic direction, back on the home axes: d + ((a/b)² − 1) z ẑ, z along the pole)
+  const k = 1 / (1 - f) ** 2 - 1;
+  const p = f === 0 ? ([0, 0, 0] as Vec3) : poleOfDate(id, t);
+  const z = dot(d, p) * k;
+  const n: Vec3 = [d[0] + z * p[0], d[1] + z * p[1], d[2] + z * p[2]];
+  const l = Math.hypot(...n);
+  return [n[0] / l, n[1] / l, n[2] / l];
 }
 
 /**
@@ -141,19 +223,20 @@ export function gearHeight(id: string, X: Vec3, t: number) {
  * felt over 5 m), the ground's velocity relative to X's own (none: the wheels are metres apart).
  */
 export function groundUnder(id: string, X: Vec3, t: number): Ground {
-  const b = solarBody(id)!;
-  const P = solarState(id, t).pos;
   const relief = reliefs.has(id);
-  const height = (Xp: Vec3) => {
-    const r = (Math.hypot(...sub(Xp, P)) - b.radius) * M_METRES;
-    return relief ? r - groundRelief(id, toBodyFixed(id, Xp, t)) : r;
+  // (the body's axes once: the points metres apart, the same instant)
+  const A = bodyAxes(solarBody(id)!, t);
+  const P = solarState(id, t).pos;
+  const fixed = (Xp: Vec3): Vec3 => {
+    const d = sub(Xp, P);
+    return [dot(d, A[0]), dot(d, A[1]), dot(d, A[2])];
   };
+  const height = (Xp: Vec3) => heightOver(id, fixed(Xp));
   return {
     at(p: Vec3) {
       const Xp: Vec3 = [X[0] + p[0] / M_METRES, X[1] + p[1] / M_METRES, X[2] + p[2] / M_METRES];
-      const d = sub(Xp, P);
-      const dl = Math.hypot(...d);
-      const up: Vec3 = [d[0] / dl, d[1] / dl, d[2] / dl];
+      const g = figureAt(id, fixed(Xp)).g;
+      const up = [0, 1, 2].map((i) => g[0] * A[0][i]! + g[1] * A[1][i]! + g[2] * A[2][i]!) as Vec3;
       const h = height(Xp);
       if (!relief) return { h, n: up, v: [0, 0, 0] };
       // (the slope: the heights 5 m east and north of it, along the ground)
@@ -173,10 +256,7 @@ export function groundUnder(id: string, X: Vec3, t: number): Ground {
 
 /** Speeds relative to the ground [m/s]: vertical (> 0 up), horizontal; the local up. */
 export function groundSpeeds(id: string, X: Vec3, V: Vec3, t: number) {
-  const P = solarState(id, t).pos;
-  const r = sub(X, P);
-  const d = Math.hypot(...r);
-  const up: Vec3 = [r[0] / d, r[1] / d, r[2] / d];
+  const up = figureUp(id, X, t);
   const va = sub(V, groundVelocity(id, X, t));
   const vv = dot(va, up);
   const vh = Math.hypot(va[0] - vv * up[0], va[1] - vv * up[1], va[2] - vv * up[2]);

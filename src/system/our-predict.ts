@@ -6,7 +6,9 @@
 //
 // A few thousand steps a call: the map's path is recomputed a few times a second.
 
-import { zonalAccel } from "./geopotential";
+import { poleOfDate, zonalAccel } from "./geopotential";
+import { flatteningOf, withinFigure } from "./ellipsoid";
+import { altitudeOver } from "./our-surface";
 import type { Vec3 } from "../physics";
 import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, mouthAccel, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
@@ -73,17 +75,20 @@ function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES, V?: Vec3) {
     const P = S.pos;
     const d = sub(P, X);
     const r = Math.hypot(...d);
-    if (r < b.radius) hit = b.id;
-    const re = Math.max(r, b.radius);
+    // (within its figure: the Earth's ellipsoid inside its equator's sphere — the poles 21 km in)
+    const within =
+      r < b.radius && (flatteningOf(b.id) === 0 || withinFigure(r * r, -dot(d, poleOfDate(b.id, t)), b.radius, flatteningOf(b.id)));
+    if (within) hit = b.id;
+    const re = within ? Math.max(r, b.radius) : r;
     a = add(a, d, b.mass / re ** 3);
     // (its oblateness, as the flight feels it)
-    const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
+    const z = !within ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
     if (z) a = add(a, z, 1);
     const td = Math.sqrt(re ** 3 / b.mass);
     if (td < tDyn) {
       tDyn = td;
       // (dτ/dt = 3/2 τ ṙ/r, ṙ the speed away from the body)
-      tDot = V && r > b.radius ? (-1.5 * td * dot(d, sub(V, S.vel))) / (r * r) : 0;
+      tDot = V && !within ? (-1.5 * td * dot(d, sub(V, S.vel))) / (r * r) : 0;
     }
   }
   return { a, tDyn, tDot, hit };
@@ -172,7 +177,7 @@ export function predictOurs(
     if (!b?.atmosphere || b.kind === "star") return null;
     const st = solarState(ref, tq);
     const d = sub(Xq, st.pos);
-    const h = (Math.hypot(...d) - b.radius) * M_METRES;
+    const h = altitudeOver(ref, Xq, tq);
     if (h > airTop(b.atmosphere)) return null;
     const w = spinVector(b, tq);
     const va = sub(Vq, add(st.vel, cross(w, d)));

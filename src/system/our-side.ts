@@ -8,12 +8,14 @@
 // frame's Cartesian coordinates; near it, along the Dneg metric's geodesics (controls.ts).
 
 import type { Vec3 } from "../physics";
+import { dot } from "../math/vec3";
 import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from "../wormhole";
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
-import { zonalAccel } from "./geopotential";
+import { poleOfDate, zonalAccel } from "./geopotential";
+import { flatteningOf, withinFigure } from "./ellipsoid";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
-import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity, toBodyFixed } from "./our-surface";
+import { bodyFixedOf, fromBodyFixed, groundPointOf, groundVelocity, toBodyFixed } from "./our-surface";
 import { M_METRES } from "../units";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
@@ -60,19 +62,21 @@ export function gravityHome(X: Vec3, t: number, V?: Vec3): { acc: Vec3; inside: 
     const P = S.pos;
     const d: Vec3 = [P[0] - X[0], P[1] - X[1], P[2] - X[2]];
     const r = Math.hypot(...d);
-    if (r < b.radius) inside = b.id;
-    const re = Math.max(r, b.radius);
+    // (within its figure: the Earth's ellipsoid inside its equator's sphere — the poles 21 km in)
+    const within =
+      r < b.radius && (flatteningOf(b.id) === 0 || withinFigure(r * r, -dot(d, poleOfDate(b.id, t)), b.radius, flatteningOf(b.id)));
+    if (within) inside = b.id;
+    const re = within ? Math.max(r, b.radius) : r;
     const k = b.mass / re ** 3;
     a = [a[0] + k * d[0], a[1] + k * d[1], a[2] + k * d[2]];
     // (its oblateness: J2, J3, J4 — geopotential.ts)
-    const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
+    const z = !within ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
     if (z) a = [a[0] + z[0], a[1] + z[1], a[2] + z[2]];
     const td = Math.sqrt(re ** 3 / b.mass);
     if (td < tDyn) {
       tDyn = td;
       // (with V: the rate the fall time changes at — a time-symmetric step: our-predict's symmetricStep)
-      tDot =
-        V && r > b.radius ? (-1.5 * td * (d[0] * (V[0] - S.vel[0]) + d[1] * (V[1] - S.vel[1]) + d[2] * (V[2] - S.vel[2]))) / (r * r) : 0;
+      tDot = V && !within ? (-1.5 * td * (d[0] * (V[0] - S.vel[0]) + d[1] * (V[1] - S.vel[1]) + d[2] * (V[2] - S.vel[2]))) / (r * r) : 0;
     }
   }
   return { acc: a, inside, tDyn, tDot };
@@ -327,7 +331,7 @@ export function tiltAway(d: Vec3, u: Vec3, a: number): [Vec3, Vec3] {
 
 /** On the ground of one of our solid bodies at a latitude, east longitude [°]: the ship on its gear, nose east. */
 export function bodyGround(id: string, t: number, lat: number, lon: number) {
-  const q = bodyFixedOf(id, lat, lon, GEAR + groundRelief(id, bodyFixedOf(id, lat, lon, 0)));
+  const q = groundPointOf(id, lat, lon);
   const X = fromBodyFixed(id, q, t);
   const C = ourState(id, t).pos;
   const r = [X[0] - C[0], X[1] - C[1], X[2] - C[2]] as Vec3;

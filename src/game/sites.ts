@@ -41,8 +41,8 @@ export function siteDir(s: { lat: number; lon: number }): [number, number, numbe
 }
 
 /**
- * How much of a runway a point of the Earth is on (0…1; unit direction on the Earth's own axes): from
- * 500 m before each runway's threshold to 4.5 km past it, 60 m either side of its axis — faded to none
+ * How much of a runway a point of the Earth is on (0…1; geodetic unit direction on the Earth's own axes):
+ * from 3 km before each runway's threshold (its approach's clear zone: no procedural hill under the final) to 4.5 km past it, 60 m either side of its axis — faded to none
  * 60 m further across and 300 m further along. There the ground is graded: the relief's base, without
  * the drawn detail (the gear rolls on a runway, not on the procedural bumps between the map's texels).
  */
@@ -67,7 +67,7 @@ export function runwayWeight(q: [number, number, number]): number {
     if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > 1e-6) continue;
     const a = (d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2]) * R_EARTH;
     const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]) * R_EARTH;
-    const wa = a < -500 ? Math.max(0, 1 + (a + 500) / 300) : a > 4500 ? Math.max(0, 1 - (a - 4500) / 300) : 1;
+    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 4500 ? Math.max(0, 1 - (a - 4500) / 300) : 1;
     const wc = c < 60 ? 1 : Math.max(0, 1 - (c - 60) / 60);
     w = Math.max(w, wa * wc);
   }

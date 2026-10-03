@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, Z0, Z1 } from "../src/system/earth-tiles";
+import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
 // The terrain tiles round the camera (src/system/earth-tiles.ts): the levels it wants, the heights it
 // gives the ship (the tracer's weights, trace.wgsl: earthH) — fed here with a known field instead of
@@ -16,6 +17,8 @@ const dir = (lat: number, lon: number): Vec3 => [
   Math.cos(lat * deg) * Math.sin(lon * deg),
   Math.sin(lat * deg),
 ];
+/** the camera h [m] above the ellipsoid at a geodetic place, on the Earth's axes [its equatorial radii] */
+const camAt = (lat: number, lon: number, h: number): Vec3 => geodeticToCart(1, WGS84_F, lat * deg, lon * deg, h / WGS84_A);
 // (a smooth field of heights [m] over the sphere, linear enough to be sampled exactly by the levels)
 const field = (lat: number, lon: number) => 1000 + 2000 * Math.sin(lat * deg * 40) + 1500 * Math.cos(lon * deg * 30);
 
@@ -36,12 +39,12 @@ test("the levels wanted follow the camera's height", () => {
   const t = new EarthTiles(fakeDevice());
   const pix = 1e-3;
   // (on the ground: every level, 4 × 4 tiles each)
-  t.update(dir(45.9, 6.87).map((c) => c * (1 + 2 / 6.371e6)) as Vec3, pix);
+  t.update(camAt(45.9, 6.87, 2), pix);
   expect(new Set(t.wanted().map((w) => w[0])).size).toBe(Z1 - Z0 + 1);
   expect(t.wanted().length).toBe(16 * (Z1 - Z0 + 1));
   // (from 400 km: none finer than the ground's footprint under the camera)
   const t2 = new EarthTiles(fakeDevice());
-  t2.update(dir(45.9, 6.87).map((c) => c * (1 + 400e3 / 6.371e6)) as Vec3, pix);
+  t2.update(camAt(45.9, 6.87, 400e3), pix);
   expect(Math.max(...t2.wanted().map((w) => w[0]))).toBeLessThanOrEqual(10);
   // (from the Moon's distance: none)
   const t3 = new EarthTiles(fakeDevice());
@@ -51,7 +54,7 @@ test("the levels wanted follow the camera's height", () => {
 
 test("the heights near the camera are the tiles', the global map's beyond them", () => {
   const t = new EarthTiles(fakeDevice());
-  const cam = dir(45.9, 6.87).map((c) => c * (1 + 2 / 6.371e6)) as Vec3;
+  const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   expect(t.pending).toBe(16 * (Z1 - Z0 + 1));
   // (no level drawn before all its tiles are in)
@@ -83,10 +86,10 @@ test("the heights near the camera are the tiles', the global map's beyond them",
 
 test("a level moves with the camera: the part it keeps stays drawn", () => {
   const t = new EarthTiles(fakeDevice());
-  t.update(dir(45.9, 6.87).map((c) => c * (1 + 2 / 6.371e6)) as Vec3, 1e-3);
+  t.update(camAt(45.9, 6.87, 2), 1e-3);
   fill(t);
   // (2 km east: the finest window shifts a column; until its new tiles are in, what it keeps is drawn)
-  t.update(dir(45.9, 6.896).map((c) => c * (1 + 2 / 6.371e6)) as Vec3, 1e-3);
+  t.update(camAt(45.9, 6.896, 2), 1e-3);
   expect(t.pending).toBeGreaterThan(0);
   expect(t.heightAt(dir(45.9, 6.896), 1).rem).toBe(0);
   fill(t);

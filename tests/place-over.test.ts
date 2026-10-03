@@ -21,10 +21,12 @@ test("orbitOver puts the ship over the place picked", () => {
   ] as const) {
     const q = bodyFixedOf(body, lat, lon, 0);
     const o = orbitOver(body, q as [number, number, number], t, { inc, argPe, retrograde: retro });
-    expect(o.inc).toBeGreaterThanOrEqual(Math.min(Math.abs(lat), 90) - 1e-9);
+    // (the place's geocentric latitude, on the equator of the orbits' frame — a few hundredths of a degree off the ground's axes of date)
+    expect(o.inc).toBeGreaterThanOrEqual(Math.min(Math.abs(latLon(q)[0]!), 90) - 0.05);
     const p = ourOrbitPose({ body, altKm: 400, inc: o.inc, raan: o.raan, argPe, nu: o.nu, retrograde: retro }, t);
     const [la, lo] = latLon(toBodyFixed(body, p.X, t));
-    expect(la).toBeCloseTo(lat, 4);
+    // (on the place's direction from the centre — the Earth's geocentric latitude, 0.19° at most off its geodetic one)
+    expect(la).toBeCloseTo(latLon(q)[0]!, 4);
     expect(((lo! - lon + 540) % 360) - 180).toBeCloseTo(0, 4);
   }
 });

@@ -13,6 +13,7 @@ import type { Info } from "./flighthud";
 import type { OurPath } from "../system/our-predict";
 import { M_METRES, solarBody, solarState, type MapName } from "../system/solar";
 import { toBodyFixed } from "../system/our-surface";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { issOrbit, issTrack } from "../system/iss";
 import { M_SECONDS } from "../system/solar";
 import { planetMapUrl } from "../system/planet-maps";
@@ -45,6 +46,14 @@ const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const smooth = (a: number, b: number, x: number) => {
   const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
+};
+/** A body-fixed point's place on the map: its unit direction — the Earth's, at its geodetic latitude (the
+ *  maps', the sites'; the ellipsoid's normal, not the direction from the centre: up to 0.19° apart). */
+const onMap = (id: string, q: V3): V3 => {
+  const f = flatteningOf(id);
+  if (f === 0) return unit(q);
+  const g = cartToGeodetic(1, f, q);
+  return fromLatLon(g.lat, g.lon);
 };
 /** a unit vector's latitude, east longitude [rad] (the maps' convention: x at longitude 0, z north) */
 const latLon = (q: V3): [number, number] => [Math.asin(clamp(q[2], -1, 1)), Math.atan2(q[1], q[0])];
@@ -152,7 +161,7 @@ export class GroundTrack {
   observe(i: Info, t: number) {
     const id = this.worldOf(i);
     if (!id) return;
-    const q = unit(i.status!.side === "gargantua" ? this.theirXi(i, id, t) : toBodyFixed(id, i.X as V3, t));
+    const q = i.status!.side === "gargantua" ? unit(this.theirXi(i, id, t)) : onMap(id, toBodyFixed(id, i.X as V3, t));
     this.record(id, q, t);
   }
 
@@ -270,7 +279,9 @@ export class GroundTrack {
     // (the entry's predicted fall: body-centred home axes → the ground's, as the world stands now)
     const E = i.entry;
     const entry =
-      E && E.ours && E.body === id && E.path ? E.path.map((x) => unit(toBodyFixed(id, add3(solarState(id, t).pos as V3, x as V3), t))) : [];
+      E && E.ours && E.body === id && E.path
+        ? E.path.map((x) => onMap(id, toBodyFixed(id, add3(solarState(id, t).pos as V3, x as V3), t)))
+        : [];
     return {
       cand: cand?.pts ?? [],
       sites: this.sitesOf(id, i),
@@ -279,8 +290,8 @@ export class GroundTrack {
       name,
       Rkm,
       ours: true,
-      ship: unit(q),
-      altKm: ((Math.hypot(...q) - b.radius) * M_METRES) / 1e3,
+      ship: onMap(id, q),
+      altKm: (cartToGeodetic(b.radius, flatteningOf(id), q).h * M_METRES) / 1e3,
       sun: unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)),
       ahead: ahead?.pts ?? [],
       plan: plan?.pts ?? [],
@@ -303,11 +314,11 @@ export class GroundTrack {
       for (let k = 0; k <= 120; k++) {
         const tk = t + (P * k) / 120;
         const o = issOrbit(tk);
-        if (o) track.push(unit(toBodyFixed("earth", o.X as V3, tk)));
+        if (o) track.push(onMap("earth", toBodyFixed("earth", o.X as V3, tk)));
       }
       this.issCache = { t, track };
     }
-    return { q: unit(toBodyFixed("earth", now.X as V3, t)), track: this.issCache.track, target: this.s.target === "iss" };
+    return { q: onMap("earth", toBodyFixed("earth", now.X as V3, t)), track: this.issCache.track, target: this.s.target === "iss" };
   }
 
   /** The fleet's craft not flown, near the Earth: their ground tracks (Kepler, an orbit ahead — redone every
@@ -335,7 +346,7 @@ export class GroundTrack {
           const tk = t + (P * k) / 120;
           const q = keplerProp(mu, r0, v0, tk - t).r as V3;
           const Ek = solarState("earth", tk).pos as V3;
-          track.push(unit(toBodyFixed("earth", [Ek[0] + q[0], Ek[1] + q[1], Ek[2] + q[2]], tk)));
+          track.push(onMap("earth", toBodyFixed("earth", [Ek[0] + q[0], Ek[1] + q[1], Ek[2] + q[2]], tk)));
         }
         this.craftCache.set(id, (c = { t, track }));
       }
@@ -343,7 +354,7 @@ export class GroundTrack {
         id,
         name: VESSELS[id].name,
         col: OUR_COLOURS[id] ?? "255, 255, 255",
-        q: unit(toBodyFixed("earth", p.X as V3, t)),
+        q: onMap("earth", toBodyFixed("earth", p.X as V3, t)),
         track: c.track,
         target: this.s.target === id,
       });
@@ -370,7 +381,7 @@ export class GroundTrack {
         }
         const q = toBodyFixed(id, p.pts[k] as V3, p.times[k]!);
         const r = Math.hypot(...q);
-        const u = unit(q);
+        const u = onMap(id, q);
         pts.push(u);
         times.push(p.times[k]!);
         if (r < lo.r) lo = { r, q: u };

@@ -20,7 +20,7 @@ import { planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
 import { toU } from "../pilot";
 import { mouth, sphericalFrame } from "../wormhole";
 import { ourState, repToHomeVec } from "../system/our-side";
-import { fromBodyFixed, groundRelief, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import { fromBodyFixed, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { solarBody } from "../system/solar";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
@@ -184,10 +184,10 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   const step = lin(R.vel, dt, w.fwd, R.dolly * h);
   R.dolly = 0;
   const floor = (X: Vec3) => {
-    // (not below the surface: a metre above its relief — where known —, its mean sphere else)
+    // (not below the surface: a metre above its ground — the figure, its relief where known —, its sphere else)
     const r = sub3(X, ref!.C);
     const l = Math.hypot(...r);
-    const g = w.ours && solidBody(ref!.id) && l < ref!.R * 1.01 ? groundRelief(ref!.id, toBodyFixed(ref!.id, X, t)) : 0;
+    const g = w.ours && solidBody(ref!.id) && l < ref!.R * 1.01 ? groundAboveSphere(ref!.id, toBodyFixed(ref!.id, X, t)) : 0;
     const m = ref!.R + (g + 1) / mR;
     return l < m ? lin(ref!.C, 1, r, m / l) : X;
   };
@@ -286,10 +286,10 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   return true;
 }
 
-/** The ground's height above a world's mean sphere under the camera [m] (known: our solid worlds'). */
+/** The ground's height above a world's sphere under the camera [m] (known: our solid worlds' — the Earth's ellipsoid below it, its relief). */
 function reliefUnder(this: CameraController, ref: { id: Body; C: Vec3; R: number }, w: { ours: boolean; X: Vec3 }, t: number) {
   if (!w.ours || !solidBody(ref.id) || Math.hypot(...sub3(w.X, ref.C)) > 1.01 * ref.R) return 0;
-  return groundRelief(ref.id, toBodyFixed(ref.id, w.X, t));
+  return groundAboveSphere(ref.id, toBodyFixed(ref.id, w.X, t));
 }
 
 /** A place on a body's own (turning) axes: ours — its body-fixed axes [M]; Gargantua's planets — their frame's ξ. */

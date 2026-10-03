@@ -46,6 +46,7 @@ import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from 
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler } from "./terrain";
+import { WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
@@ -1692,7 +1693,7 @@ export class Renderer {
           const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
           return t * t * (3 - 2 * t);
         };
-        this.shadowKeep = smooth(0.07, 0.26, mu) * smooth(0.3, 0.9, ecl) * (1 - smooth(20, 60, (r - 1) * 6371));
+        this.shadowKeep = smooth(0.07, 0.26, mu) * smooth(0.3, 0.9, ecl) * (1 - smooth(20, 60, ((r - 1) * EARTH_RM) / 1e3));
       }
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
@@ -1793,7 +1794,7 @@ export class Renderer {
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
     // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
     // twentieth: seen from below, lit areas would glare like a sunlit field)
-    const altKm = near && near.index === earthK ? (Math.hypot(...near.centre) - 1) * 6371 : 1e4;
+    const altKm = near && near.index === earthK ? ((Math.hypot(...near.centre) - 1) * EARTH_RM) / 1e3 : 1e4;
     const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
     set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
@@ -1834,7 +1835,7 @@ export class Renderer {
       set(63, 0, 0, 0, 0);
       set(64, 0, 0, 0, 0);
     }
-    set(59, 6000 / 6.371e6, s.earthClouds, 0.8, AIR_K);
+    set(59, 6000 / EARTH_RM, s.earthClouds, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
     // share of its disk seen from the Earth)
     let moon: [number, number, number, number] = [0, 0, 1, 0];
@@ -1873,6 +1874,8 @@ export class Renderer {
     // nearCam — turned there in float32, the ground shook by its rounding)
     if (near) {
       const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
+      // (the Earth's on its squashed axes — z × a/b: its ellipsoid the unit sphere, trace.wgsl: EARTH_AB)
+      if (near.index === earthK && this.earthMaps.tier) c[2] = c[2]! / (1 - WGS84_F);
       const A = c.map((x) => Math.fround(x));
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
@@ -2702,7 +2705,7 @@ export class Renderer {
     const Xc = homeOf(w, cam.ell, cam.n);
     const E = solarState("earth", time);
     const mR = 1476.625 * (s.massSolar || 1);
-    const hE = (Math.hypot(Xc[0] - E.pos[0], Xc[1] - E.pos[1], Xc[2] - E.pos[2]) * mR) / 1e3 - 6371;
+    const hE = (Math.hypot(Xc[0] - E.pos[0], Xc[1] - E.pos[1], Xc[2] - E.pos[2]) * mR - EARTH_RM) / 1e3;
     if (!(hE < 3000)) return;
     void refreshIssElements();
     if (!this.station.ready) {
@@ -2752,7 +2755,7 @@ export class Renderer {
     const sunH = unitV(toSun);
     const toE: Vec3 = [E.pos[0] - st.X[0], E.pos[1] - st.X[1], E.pos[2] - st.X[2]];
     const dE = Math.hypot(...toE);
-    const rE = (6371e3 + 30e3) / mR;
+    const rE = (EARTH_RM + 30e3) / mR;
     const rhoE = Math.asin(Math.min(rE / dE, 1));
     const rhoS = Math.asin(Math.min((sunB?.radius ?? 0.00471 * dS) / dS, 1));
     const sep = Math.acos(Math.max(-1, Math.min(1, (sunH[0] * toE[0] + sunH[1] * toE[1] + sunH[2] * toE[2]) / dE)));
@@ -2771,14 +2774,14 @@ export class Renderer {
     // fills, on order-2 harmonics (camera frame)
     const sh = new Array<number>(27).fill(0);
     const eDir = unitV(toE);
-    const cosCap = Math.cos(Math.asin(Math.min(6371e3 / mR / dE, 1)));
+    const cosCap = Math.cos(Math.asin(Math.min(EARTH_RM / mR / dE, 1)));
     const aux: Vec3 = Math.abs(eDir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
     const ex = unitV([eDir[1] * aux[2] - eDir[2] * aux[1], eDir[2] * aux[0] - eDir[0] * aux[2], eDir[0] * aux[1] - eDir[1] * aux[0]]);
     const ey: Vec3 = [eDir[1] * ex[2] - eDir[2] * ex[1], eDir[2] * ex[0] - eDir[0] * ex[2], eDir[0] * ex[1] - eDir[1] * ex[0]];
     const N = 96;
     const dOmega = (2 * Math.PI * (1 - cosCap)) / N;
     const earthCol = [0.85, 0.93, 1.0];
-    const rEm = 6371e3 / mR;
+    const rEm = EARTH_RM / mR;
     for (let k = 0; k < N; k++) {
       // (a Fibonacci spiral over the cap)
       const cz = 1 - ((k + 0.5) / N) * (1 - cosCap);

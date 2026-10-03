@@ -9,6 +9,7 @@ import type { Settings } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "../system/solar";
 import { soiOf } from "../system/our-side";
+import { altitudeOver } from "../system/our-surface";
 import { classify, elements, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
 import { C_MPS } from "../units";
@@ -102,7 +103,8 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       soiKm: soi * kmM,
       status: st,
       label: STATUS_LABEL[st],
-      altKm: (el.r - b.radius) * kmM,
+      // (over the figure: the Earth's ellipsoid — the poles 21 km nearer the centre than the equator)
+      altKm: altitudeOver(ref, info.X as V3, t) / 1e3,
       speed: el.v * C,
       vVert: (el.r > 0 ? (r[0] * v[0] + r[1] * v[1] + r[2] * v[2]) / el.r : 0) * C,
       orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS),
