@@ -3726,6 +3726,10 @@ export class CameraController {
       margins: A.margins(), failure: A.failure, damage: this.s.damage, body: A.body, rolling: !!this.rolling || !!this.local?.L.rolling,
       mode: this.flightModeNow(), antigrav: this.s.antigrav, flaps: A.cfg.flaps ?? 0, brake: A.cfg.brake ?? 0, gear: !!A.cfg.gear,
       sf: this.sfCmd ? { ...this.sfCmd } : null, ...this.attitudeNow(),
+      // (the wing's incidences, for the HUD's angle-of-attack cues: the stall; the best lift-to-drag —
+      // where the induced drag equals the zero-lift one, C_L = √(C_D0 π AR e))
+      stallA: V.wing?.stall ?? null,
+      bestA: V.wing ? Math.sqrt((V.cdA0 / V.wing.S) * Math.PI * V.wing.AR * V.wing.e) / V.wing.cla : null,
     };
   }
 

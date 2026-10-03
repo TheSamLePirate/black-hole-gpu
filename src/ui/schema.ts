@@ -1043,6 +1043,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud edge arrow offscreen marker",
   },
   {
+    key: "hudAoA", type: "toggle", section: "game", group: "HUD aids", label: "Angle of attack & sideslip", effect: "none",
+    help: "In the air, over the flight path vector: a green bracket on the best lift-to-drag incidence, an amber tick at 85 % of the stall and a red bar at the stall — the nose symbol among them shows the margin; α in figures; the sideslip ball under the flight path.",
+    keywords: "hud angle of attack aoa alpha stall bracket sideslip beta ball",
+  },
+  {
+    key: "hudEnergy", type: "toggle", section: "game", group: "HUD aids", label: "Energy chevron & load", effect: "none",
+    help: "In the air: a chevron beside the flight path vector — above its wings the craft gains speed, below it loses it (the climb angle that speed rate would buy); the load in g against the craft's limit.",
+    keywords: "hud energy acceleration chevron load g",
+  },
+  {
+    key: "hudDirector", type: "toggle", section: "game", group: "HUD aids", label: "Flight director", effect: "none",
+    help: "In the air with the flight computer: a magenta cue where it wants the flight path (its climb angle and heading) — put the flight path vector on it.",
+    keywords: "hud flight director cue command",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",

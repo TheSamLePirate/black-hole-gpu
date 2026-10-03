@@ -269,6 +269,9 @@ export interface Settings {
   hudBank: boolean; // the bank scale and its pointer
   hudMarkers: boolean; // radial and normal marked in the view
   hudEdge: boolean; // arrows at the screen's edge to the markers out of it
+  hudAoA: boolean; // in the air: the angle of attack's bracket and stall marks, the sideslip ball
+  hudEnergy: boolean; // in the air: the energy chevron (the speed's rate), the load
+  hudDirector: boolean; // in the air: the flight director (the flight computer's commanded path)
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -470,6 +473,9 @@ export function defaultSettings(): Settings {
     hudBank: true,
     hudMarkers: true,
     hudEdge: true,
+    hudAoA: true,
+    hudEnergy: true,
+    hudDirector: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,

@@ -16,7 +16,23 @@ type V3 = [number, number, number];
 export interface SymInfo {
   S: number[][];
   dirs: Record<string, V3 | null | undefined>;
-  air?: { u?: number[] | null; q: number } | null;
+  air?: {
+    u?: number[] | null;
+    q: number;
+    inAir?: boolean;
+    /** the angle of attack, the sideslip [rad]; the wing's stall and best lift-to-drag incidences */
+    alpha?: number;
+    beta?: number;
+    stalled?: boolean;
+    stallA?: number | null;
+    bestA?: number | null;
+    /** the speed through the air [m/s], the load and its limit [g] */
+    speed?: number;
+    g?: number;
+    gMax?: number;
+    /** the flight computer's command: speed [m/s], flight path angle, heading [rad] */
+    sf?: { speed: number; gamma: number; heading: number } | null;
+  } | null;
 }
 
 export interface SymFrame {
@@ -259,7 +275,11 @@ export function drawSymbology(F: SymFrame) {
     if (Math.abs(bank) > 1.5 * D) text(`${Math.abs(Math.round(bank / D))}° ${bank > 0 ? "R" : "L"}`, px - nx * 24 * dpr, py - ny * 24 * dpr, "#ffc85a", 11, "center", true);
   }
 
-  // ---- the orbital markers the view lacked: radial, normal, the target (its distance)
+  // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
+  const A = i.air;
+  if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, north, fpx);
+
+  // ---- the orbital markers the view lacked: radial, normal
   if (s.hudMarkers) {
     const r = 11 * dpr;
     // (the target: the lock's ring, name, distance and edge arrow already — targethud.ts)
@@ -312,3 +332,146 @@ export function drawSymbology(F: SymFrame) {
 
 const glyph = (k: string) => ({ radialOut: "prograde", radialIn: "retrograde", normal: "prograde", antinormal: "retrograde", target: "target", maneuver: "burn", burn: "burn", dock: "dock", prograde: "prograde" })[k] ?? "prograde";
 
+
+type Proj = (d: V3 | null | undefined) => [number, number] | null;
+type Stroke = (draw: () => void, col: string, lw: number, dash?: number[]) => void;
+type Text = (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void;
+
+/** The speed's rate, eased (the energy chevron): the last sample. */
+const energy = { t: 0, v: NaN, a: 0 };
+
+/**
+ * In the air, about the flight path vector (where the craft goes through the air):
+ * - the angle of attack drawn where it is — the nose stands above the flight path by α, so the cues lie
+ *   along that arc, in the craft's plane of symmetry: a green bracket on the best lift-to-drag incidence
+ *   (±1.5°), an amber tick at 85 % of the stall, a red bar at the stall; the nose symbol between them
+ *   reads the margin at a glance, α in figures beside it;
+ * - the energy chevron: the speed's rate as the flight path it would hold — above the wings: the craft
+ *   gains speed, below: it loses it (γ = atan(dV/dt / g));
+ * - the sideslip: a ball under the flight path, off centre by β;
+ * - the load in g, coloured against the craft's limit; STALL flashing;
+ * - the flight director: where the flight computer wants the flight path (its climb angle, its heading).
+ */
+function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: Stroke, text: Text, up: V3 | null, north: V3 | null, fpx: number) {
+  const { ctx, dpr, s, i } = F;
+  const S = i.S;
+  const u = A.u!;
+  const v = norm([S[0]![0]! * u[0]! + S[0]![1]! * u[1]! + S[0]![2]! * u[2]!, S[1]![0]! * u[0]! + S[1]![1]! * u[1]! + S[1]![2]! * u[2]!, S[2]![0]! * u[0]! + S[2]![1]! * u[1]! + S[2]![2]! * u[2]!]);
+  const fp = pr(v);
+  if (!fp) return;
+  const r = 11 * dpr;
+  // the craft's up and left about the flight path (the plane of symmetry: α measured in it)
+  const Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!], X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!];
+  let p = comb(Y, 1, v, -dot(Y, v));
+  if (Math.hypot(...p) < 1e-6) return;
+  p = norm(p);
+  const l = norm(comb(comb(X, 1, v, -dot(X, v)), 1, p, -dot(X, p)));
+  const along = (a: number, side = 0): V3 => comb(comb(v, Math.cos(a), p, Math.sin(a)), 1, l, side);
+  const alpha = A.alpha ?? 0;
+  const stall = A.stallA ?? null;
+  const best = A.bestA ?? null;
+
+  // ---- the angle of attack
+  if (s.hudAoA && stall) {
+    const w = (16 * dpr) / fpx;
+    const seg = (a: number, w0: number, w1: number) => [pr(along(a, w0 * w)), pr(along(a, w1 * w))] as const;
+    // the best lift-to-drag band: a bracket on the left
+    if (best) {
+      const lo = best - 1.5 * (Math.PI / 180), hi = best + 1.5 * (Math.PI / 180);
+      const pts = [pr(along(hi, 1.2 * w)), pr(along(hi, 2 * w)), pr(along(lo, 2 * w)), pr(along(lo, 1.2 * w))];
+      if (pts.every(Boolean)) stroke(() => pts.forEach((q, j) => (j ? ctx.lineTo(q![0], q![1]) : ctx.moveTo(q![0], q![1]))), "rgba(120, 255, 170, 0.9)", 1.6);
+    }
+    // 85 % of the stall (amber), the stall (red)
+    for (const [a, col, w0, w1] of [[stall * 0.85, "rgba(255, 200, 90, 0.9)", -1.4, 1.4], [stall, "rgba(255, 90, 70, 0.95)", -2.4, 2.4]] as const) {
+      const [a0, a1] = seg(a, w0, w1);
+      if (a0 && a1) stroke(() => {
+        ctx.moveTo(a0[0], a0[1]);
+        ctx.lineTo(a1[0], a1[1]);
+      }, col, a === stall ? 2.2 : 1.4);
+    }
+    // the incidence, in figures by the bracket
+    const k = alpha / stall;
+    const col = k >= 0.85 ? (k >= 1 ? "#ff5a46" : "#ffc85a") : best && Math.abs(alpha - best) < 1.5 * (Math.PI / 180) ? "#78ffaa" : "rgba(214, 236, 255, 0.95)";
+    const at = pr(along(Math.max(Math.min(alpha, stall * 1.2), -0.2), 2.6 * w));
+    if (at) text(`α ${((alpha * 180) / Math.PI).toFixed(1)}°`, at[0], at[1], col, 12, "right", true);
+  }
+
+  // ---- the energy chevron: the speed's rate as a flight path angle
+  if (s.hudEnergy && up && Number.isFinite(A.speed)) {
+    const now = performance.now() / 1000;
+    if (Number.isFinite(energy.v) && now > energy.t) {
+      const dt = Math.min(now - energy.t, 0.5);
+      const a = (A.speed! - energy.v) / Math.max(dt, 1e-3);
+      if (dt > 0) energy.a += (a - energy.a) * Math.min(1, dt / 0.6);
+    }
+    energy.t = now;
+    energy.v = A.speed!;
+    let vu = comb(up, 1, v, -dot(up, v));
+    if (Math.hypot(...vu) > 1e-6) {
+      vu = norm(vu);
+      const gam = Math.atan(energy.a / 9.80665);
+      const q = pr(comb(v, Math.cos(gam), vu, Math.sin(gam)));
+      if (q) {
+        const x = fp[0] - 2.3 * r, y = q[1];
+        const col = Math.abs(energy.a) < 0.3 ? "rgba(214, 236, 255, 0.85)" : energy.a > 0 ? "rgba(120, 255, 170, 0.95)" : "rgba(255, 200, 90, 0.95)";
+        stroke(() => {
+          ctx.moveTo(x - 7 * dpr, y - 6 * dpr);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x - 7 * dpr, y + 6 * dpr);
+        }, col, 2);
+      }
+    }
+  }
+
+  // ---- the sideslip: a ball under the flight path
+  if (s.hudAoA && Number.isFinite(A.beta)) {
+    const y = fp[1] + 2.4 * r, half = 22 * dpr;
+    const b = Math.max(-1, Math.min(1, (A.beta! * 180) / Math.PI / 8));
+    stroke(() => {
+      ctx.moveTo(fp[0] - half, y);
+      ctx.lineTo(fp[0] + half, y);
+      ctx.moveTo(fp[0] - 5 * dpr, y - 4 * dpr);
+      ctx.lineTo(fp[0] - 5 * dpr, y + 4 * dpr);
+      ctx.moveTo(fp[0] + 5 * dpr, y - 4 * dpr);
+      ctx.lineTo(fp[0] + 5 * dpr, y + 4 * dpr);
+    }, "rgba(214, 236, 255, 0.55)", 1.2);
+    ctx.beginPath();
+    ctx.arc(fp[0] + b * half, y, 3.6 * dpr, 0, 2 * Math.PI);
+    ctx.fillStyle = Math.abs(b) > 0.5 ? "#ffc85a" : "rgba(214, 236, 255, 0.95)";
+    ctx.fill();
+  }
+
+  // ---- the load, STALL
+  if (s.hudEnergy && Number.isFinite(A.g)) {
+    const g = A.g!, k = g / (A.gMax || 9);
+    if (Math.abs(g - 1) > 0.25 || k > 0.6) text(`${g.toFixed(1)} g`, fp[0] + 2.6 * r, fp[1] + 2.4 * r, k > 0.9 ? "#ff5a46" : k > 0.7 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)", 12, "left", true);
+  }
+  const k = A.stallA ? alpha / A.stallA : 0;
+  if (A.stalled || k > 0.92) {
+    const on = A.stalled ? Math.floor(performance.now() / 300) % 2 === 0 : true;
+    if (on) text(A.stalled ? "STALL" : "AOA", fp[0], fp[1] + 4 * r, A.stalled ? "#ff5a46" : "#ffc85a", 15);
+  }
+
+  // ---- the flight director: where the flight computer wants the flight path
+  if (s.hudDirector && A.sf && up && north) {
+    const east = norm(crossW(north, up));
+    const { gamma, heading } = A.sf;
+    const h = comb(north, Math.cos(heading), east, Math.sin(heading));
+    const q = pr(comb(h, Math.cos(gamma), up, Math.sin(gamma)));
+    if (q) {
+      const col = "rgba(224, 123, 255, 0.95)";
+      stroke(() => {
+        ctx.arc(q[0], q[1], 7 * dpr, 0, 2 * Math.PI);
+        ctx.moveTo(q[0] - 12 * dpr, q[1]);
+        ctx.lineTo(q[0] - 7 * dpr, q[1]);
+        ctx.moveTo(q[0] + 7 * dpr, q[1]);
+        ctx.lineTo(q[0] + 12 * dpr, q[1]);
+      }, col, 1.6);
+      // (a dotted line to it from the flight path: the way to steer)
+      if (Math.hypot(q[0] - fp[0], q[1] - fp[1]) > 3 * r) stroke(() => {
+        ctx.moveTo(fp[0], fp[1]);
+        ctx.lineTo(q[0], q[1]);
+      }, "rgba(224, 123, 255, 0.45)", 1, [2, 4]);
+    }
+  }
+}
