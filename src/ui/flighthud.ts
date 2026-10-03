@@ -43,6 +43,7 @@ import { DEV_TOOLS } from "../debug";
 import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
 import { hudShown } from "./hud/declutter";
+import { safeFrame } from "./hud/safe";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -1740,7 +1741,7 @@ export class FlightHud {
       quarter,
       runway: this.runway?.() ?? null,
       outside: ["around", "free", "flyby", "station"].includes(String(i.mount)),
-      top: Math.max(this.mission.getBoundingClientRect().bottom, 0) * dpr,
+      top: (safeFrame().top - 16) * dpr,
     });
     const r = 11 * dpr;
     // (each mark twice: a dark outline under it for the bright sky, then its colour)

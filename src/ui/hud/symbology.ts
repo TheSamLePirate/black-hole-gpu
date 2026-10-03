@@ -14,6 +14,7 @@ import { C_MPS, G0, M_METRES, M_SECONDS } from "../../units";
 import { dot } from "../../math/vec3";
 import { blinkOn } from "../clock";
 import type { HudItem } from "./declutter";
+import { safeFrame } from "./safe";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
 const on = (F: { show?: Record<HudItem, boolean> }, k: HudItem) => !F.show || F.show[k];
@@ -825,12 +826,13 @@ function drawFuture(
 
 /**
  * Where an arrow at the screen's edge goes for a screen direction (dx, dy, unit, y down): on the border
- * of the free frame — clear of the mission bar above and of the hub and its attitude ball below.
+ * of the free frame (hud/safe.ts) — clear of the mission bar above and of the hub and its ball below.
  */
 function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [number, number] {
-  const top = 120 * dpr,
-    bottom = Math.max(H * 0.62, H - 250 * dpr),
-    side = 60 * dpr;
+  const f = safeFrame();
+  const top = f.top * dpr,
+    bottom = Math.max(H * 0.55, H - f.bottom * dpr),
+    side = f.side * dpr;
   const cy = (top + bottom) / 2,
     hy = (bottom - top) / 2,
     hx = W / 2 - side;

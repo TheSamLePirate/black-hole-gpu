@@ -16,6 +16,7 @@ import { drawTelescope, type TelescopeView } from "./telescope";
 import { BODY_COLOURS } from "./camerapanel";
 import { drawLock, lockKey } from "./targethud";
 import { FONT, MONO } from "./hudkit";
+import { safeFrame } from "./hud/safe";
 
 export class ViewOverlay {
   private key = "";
@@ -84,7 +85,8 @@ export class ViewOverlay {
         Math.tan((this.settings.fov * Math.PI) / 360),
         k,
         lock.alpha,
-        this.camera.piloting ? { top: 56 * k, bottom: 255 * k } : { top: 0, bottom: 70 * k },
+        // (clear of the mission bar and the hub — or of the dock on foot: hud/safe.ts)
+        { top: safeFrame().top * k, bottom: safeFrame().bottom * k },
       );
     }
     if (hover && hover.body !== marker?.body && !(lock && hover.body === this.settings.target)) this.drawHover(ctx, hover);
