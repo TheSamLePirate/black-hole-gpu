@@ -6,6 +6,8 @@
 // Frames: the integrators give the air-relative velocity in their own axes (home, or the planet's local
 // x/y/z) with the ship's axes in the same — its x (left), y (up), z (the nose). SI here (m, s, N).
 
+import type { M3 } from "./mounts";
+import { inv3 } from "./pilot";
 import {
   aeroForces,
   airAt,
@@ -117,7 +119,7 @@ export class AirFlight {
    * acceleration on the craft (ship frame, right-handed) [rad/s²], for the attitude, given its moment
    * of inertia [kg m²].
    */
-  after(dt: number, thrust: V3, mass: number, inertia: number, damage: boolean): V3 {
+  after(dt: number, thrust: V3, mass: number, inertia: number | M3, damage: boolean): V3 {
     const A = VESSELS[this.vessel].aero;
     const L = this.last;
     const air = L?.air ?? airAt(null, 0);
@@ -146,8 +148,12 @@ export class AirFlight {
         this.failure = `${name}: the hull burnt through at ${Math.round(this.skin.hull)} K (its limit ${A.hull.tMax} K)`;
       else if (this.overG > 0.25) this.failure = `${name}: broke up under ${this.g.toFixed(1)} g (its limit ${A.gMax} g)`;
     }
-    if (!out || inertia <= 0) return [0, 0, 0];
-    return [out.M[0] / inertia, out.M[1] / inertia, out.M[2] / inertia];
+    if (!out) return [0, 0, 0];
+    // (the air's moment over the inertia — the tensor's inverse: an asymmetric body answers off-axis)
+    if (typeof inertia === "number") return inertia > 0 ? [out.M[0] / inertia, out.M[1] / inertia, out.M[2] / inertia] : [0, 0, 0];
+    const Ii = inv3(inertia);
+    const M = out.M;
+    return [0, 1, 2].map((i) => Ii[i]![0]! * M[0] + Ii[i]![1]! * M[1] + Ii[i]![2]! * M[2]) as V3;
   }
 
   /** How close to its limits the craft is (0 … 1): the shield, the hull, the load. */

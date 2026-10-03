@@ -6,6 +6,7 @@
 //
 // Home frame, M units (lengths, times), velocities in c; the docking links in metres.
 
+import type { M3 } from "./mounts";
 import { railsDecay } from "./system/our-surface";
 import { massLeft } from "./engine";
 import { secularZonal } from "./system/geopotential";
@@ -241,13 +242,44 @@ export class Fleet {
 
   /** An assembly's mass [kg], its centre of mass and moment of inertia (a scalar: Σ m (k² + d²)) in one
    *  of its craft's frame [m] (the flown one's by default). */
-  massProps(root: VesselId = this.active): { mass: number; com: Vec3; inertia: number; own: number } {
-    const me = VESSELS[root];
-    // (each craft as heavy as its propellant left: the dry mass when its tank is empty)
-    const m = (id: VesselId) => VESSELS[id].mass * this.massLeft(id);
-    const own = m(root) * me.gyr * me.gyr;
+  massProps(root: VesselId = this.active): {
+    mass: number;
+    com: Vec3;
+    /** the mean moment of inertia (the tensor's trace / 3) [kg m²] — and the flown craft's own */
+    inertia: number;
+    own: number;
+    /** the inertia tensor about the centre of mass, on the flown craft's axes [kg m²] */
+    I: M3;
+  } {
+    // (each craft as heavy as its propellant left — the dry mass when its tank is empty —, its centre of
+    // mass between its dry one and its tank's, its moments m k² scaled with its mass)
+    const piece = (id: VesselId) => {
+      const v = VESSELS[id];
+      const left = this.massLeft(id);
+      const m = v.mass * left;
+      const prop = this.tanks ? v.mass * (1 - 1 / Math.max(this.tanks.massRatio, 1)) : 0;
+      const dry = v.mass - prop;
+      // (full: com; the tank's share burnt: the dry centre plus what is left at the tank)
+      const comDry = prop > 0 ? lin(v.com, v.mass / dry, v.tank, -prop / dry) : v.com;
+      const inTank = Math.max(m - dry, 0);
+      const com = prop > 0 ? lin(comDry, dry / m, v.tank, inTank / m) : v.com;
+      return { m, com, k2: v.rg.map((r) => r * r) as Vec3 };
+    };
+    const me = piece(root);
+    const own = (me.m * (me.k2[0] + me.k2[1] + me.k2[2])) / 3;
     const group = this.assembly(root).filter((v) => v !== "iss");
-    if (group.length < 2) return { mass: m(root), com: me.com, inertia: own, own };
+    if (group.length < 2)
+      return {
+        mass: me.m,
+        com: me.com,
+        inertia: own,
+        own,
+        I: [
+          [me.m * me.k2[0], 0, 0],
+          [0, me.m * me.k2[1], 0],
+          [0, 0, me.m * me.k2[2]],
+        ],
+      };
     // each piece's frame in the flown one's (the links walked from it)
     const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([
       [
@@ -288,18 +320,30 @@ export class Fleet {
     let mass = 0;
     let com: Vec3 = [0, 0, 0];
     for (const [id, F] of frames) {
-      const v = VESSELS[id];
-      mass += m(id);
-      com = lin(com, 1, lin(F.c, 1, onAxes(F.ax, v.com), 1), m(id));
+      const p = piece(id);
+      mass += p.m;
+      com = lin(com, 1, lin(F.c, 1, onAxes(F.ax, p.com), 1), p.m);
     }
     com = lin(com, 1 / mass, com, 0);
-    let inertia = 0;
+    // (the tensor: each piece's own turned onto the flown craft's axes, R diag(m k²) Rᵀ, and Steiner's
+    // m (|d|² E − d dᵀ) for its centre off the assembly's)
+    const I: M3 = [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 0, 0],
+    ];
     for (const [id, F] of frames) {
-      const v = VESSELS[id];
-      const d = sub(lin(F.c, 1, onAxes(F.ax, v.com), 1), com);
-      inertia += m(id) * (v.gyr * v.gyr + dot(d, d));
+      const p = piece(id);
+      const d = sub(lin(F.c, 1, onAxes(F.ax, p.com), 1), com);
+      const dd = dot(d, d);
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          let own = 0;
+          for (let k = 0; k < 3; k++) own += F.ax[k]![i]! * p.m * p.k2[k]! * F.ax[k]![j]!;
+          I[i]![j]! += own + p.m * ((i === j ? dd : 0) - d[i]! * d[j]!);
+        }
     }
-    return { mass, com, inertia, own };
+    return { mass, com, inertia: (I[0]![0]! + I[1]![1]! + I[2]![2]!) / 3, own, I };
   }
 
   /** Sets a craft coasting from a pose (the body it coasts around: the Earth near it, else the Sun). */

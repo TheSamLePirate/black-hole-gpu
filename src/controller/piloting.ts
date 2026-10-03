@@ -708,8 +708,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // moment of inertia)
   const V0 = VESSELS[fleet.active];
   const mp = fleet.massProps();
-  const ag = (V0.agility * mp.own) / mp.inertia;
   const tune = { rate: TUNING.turnRate, acc: TUNING.turnAccel };
+  // (the rigid body: its wheels' and thrusters' torque about each axis — what turns it at the tuning's
+  // rate alone, full of propellant —, over its inertia now: lighter, it turns faster; docked, slower;
+  // about its long axis faster than end over end)
+  const torque = V0.rg.map((k) => V0.agility * V0.mass * k * k * tune.acc) as Vec3;
+  const ag = Math.min(...[0, 1, 2].map((i) => torque[i]! / mp.I[i]![i]!)) / tune.acc;
   TUNING.turnAccel = tune.acc * ag;
   TUNING.turnRate = tune.rate * Math.min(1, 1.4 * Math.sqrt(ag));
   const assembled = fleet.flownAssembly().length > 1;
@@ -790,6 +794,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         (this.nodeBurning && onOurSide(s, cam)),
       gimbal: this.nodeBurning && onOurSide(s, cam),
       // (the Crew engine's lag, over the frame's flight time; the Cinema engine's, none)
+      inertia: mp.I,
+      torque,
       spoolK: s.engine === "crew" ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool) : 1,
     },
     inp,
@@ -844,7 +850,7 @@ function airAfter(this: CameraController, dtSec: number, acc: Vec3, dtPilot: num
   const thrust = ax.map((a) => (dot3(acc, a) / Math.max(Math.hypot(...a), 1e-12)) * aU) as Vec3;
   const mp = fleet.massProps();
   const was = this.airFlight.failure;
-  const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.inertia, s.damage);
+  const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.I, s.damage);
   if (this.airFlight.inAir) for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! - alpha[i]! * dtPilot;
   if (this.airFlight.failure && !was) this.onCraftLost?.(this.airFlight.failure);
 }

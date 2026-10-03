@@ -42,6 +42,11 @@ export interface VesselDef {
   /** its radius of gyration [m]: the moment of inertia, m k² — how fast it turns (the Ranger's turn rates
    *  for its own) */
   gyr: number;
+  /** its principal radii of gyration [m] about its x (left: pitch), y (up: yaw), z (nose: roll) axes —
+   *  its inertia tensor, m k², full of propellant (phase 2: Euler's equations) */
+  rg: V3;
+  /** where its propellant sits (ship frame): the centre of mass moves as it burns */
+  tank: V3;
   /** how fast its own reaction wheels and thrusters turn it alone (× the Ranger's turn settings) */
   agility: number;
   /** its centre of mass (ship frame) */
@@ -183,6 +188,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     slThrust: 0.9,
     spool: 0.4,
     gyr: 4.2,
+    // (a delta: long and wide, thin — least about the nose)
+    rg: [4.6, 4.9, 3.0],
+    tank: [0, 1.1, -1.5],
     agility: 1,
     com: [0, 1.25, 1.5],
     centre: [0, 1.5, 0],
@@ -237,6 +245,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     slThrust: 0.85,
     spool: 0.3,
     gyr: 7.5,
+    rg: [7.3, 7.0, 8.2],
+    tank: [0, 1.8, 0.5],
     agility: 0.55,
     com: [0, 2.6, 0.5],
     centre: [0, 2.8, 0],
@@ -290,6 +300,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     slThrust: 0.4,
     spool: 1.5,
     gyr: 24,
+    // (a ring: most about its axis)
+    rg: [21, 21, 30],
+    tank: [0, 0, 0],
     agility: 0.2,
     com: [0, 0, 0],
     centre: [0, 0, 0],

@@ -145,6 +145,13 @@ export interface FlightContext {
   /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
    *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
   spoolK?: number;
+  /**
+   * the rigid body (phase 2): its inertia tensor on the ship's axes [kg m²] and the most torque its
+   * wheels and thrusters give about each [kg m² rad/s²] — the angular accelerations τ/I, and Euler's
+   * gyroscopic coupling ω × Iω; none: every axis turns at the tuning's rate (the old point model)
+   */
+  inertia?: M3;
+  torque?: V3;
 }
 
 export interface FlightOutput {
@@ -163,6 +170,50 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 /** 4-velocity (spatial part, γβ) ↔ 3-velocity. */
 export const toU = (b: V3): V3 => scale(b, 1 / Math.sqrt(Math.max(1 - dot(b, b), 1e-9)));
 export const toBeta = (u: V3): V3 => scale(u, 1 / Math.sqrt(1 + dot(u, u)));
+
+/** Inverse of a symmetric 3 × 3 matrix (an inertia tensor). */
+export function inv3(m: M3): M3 {
+  const [a, b, c] = m[0],
+    [, e, f] = m[1],
+    [, , i] = m[2];
+  const d = m[1][0],
+    g = m[2][0],
+    h = m[2][1];
+  const A = e * i - f * h,
+    B = -(d * i - f * g),
+    C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  const k = 1 / det;
+  return [
+    [A * k, -(b * i - c * h) * k, (b * f - c * e) * k],
+    [B * k, (a * i - c * g) * k, -(a * f - c * d) * k],
+    [C * k, -(a * h - b * g) * k, (a * e - b * d) * k],
+  ];
+}
+
+const mulM = (m: M3, v: V3): V3 => [
+  m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+  m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+  m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
+];
+
+/**
+ * The torque-free part of Euler's equations over dt (the ship's rates on its axes): ω̇ = I⁻¹(ω × Iω) in
+ * these components (the axes left-handed where the rotation is applied: the sign so that the angular
+ * momentum stays put), sub-stepped with the midpoint rule — a fast spin's coupling stays stable.
+ */
+export function gyroscopic(w: V3, I: M3, dt: number): V3 {
+  const Ii = inv3(I);
+  const f = (x: V3): V3 => mulM(Ii, cross(x, mulM(I, x)));
+  const n = Math.min(64, Math.max(1, Math.ceil(len(w) * dt * 8)));
+  const h = dt / n;
+  let x = w;
+  for (let k = 0; k < n; k++) {
+    const mid = add(x, scale(f(x), h / 2));
+    x = add(x, scale(f(mid), h));
+  }
+  return x;
+}
 
 export class FlightComputer {
   /** body rates about the ship's x (left), y (up), z (nose) axes [rad/s] */
@@ -329,7 +380,10 @@ export class FlightComputer {
     const active = manual.some((m) => m !== 0);
     // the control surfaces' authority, added to the thrusters' (the plane and the sci-fi laws)
     const A3 = c.air && (c.air.mode !== "rocket" || this.auto === "entry") ? c.air.auth : [0, 0, 0];
-    const acc3: V3 = [TUNING.turnAccel + A3[0]!, TUNING.turnAccel + A3[1]!, TUNING.turnAccel + A3[2]!];
+    const I = c.inertia,
+      tq = c.torque;
+    const axisAcc = (i: number) => (I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
+    const acc3: V3 = [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
@@ -395,6 +449,10 @@ export class FlightComputer {
       this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
+    // (Euler's equations: an asymmetric body's rates couple — ω̇ = I⁻¹(τ − ω × Iω), the torque above;
+    // its angular momentum kept in space. The ship's axes are a left-handed set in the components the
+    // rotation is applied in: the term's sign follows — tests/rigid-body.test.ts checks L is constant.)
+    if (I && dt > 0 && !c.snap) this.omega = gyroscopic(this.omega, I, dt);
     let rot = add(add(scale(X, this.omega[0] * dt), scale(Y, this.omega[1] * dt)), scale(Z, this.omega[2] * dt));
     if (c.snap && point && !active) {
       // attitude on rails: the nose straight onto the burn
