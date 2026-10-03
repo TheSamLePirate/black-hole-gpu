@@ -2948,6 +2948,10 @@ export class CameraController {
     guid: EntryGuidance | null; bank: number; next: number; alpha: number; gPrev: number | null; short: number; handover: number;
     /** the flare's time constant [s], set as it starts */
     flareTau?: number;
+    /** the final's steep slope, its angle [rad] frozen as the pull-up nears; the profile's phase, its
+     *  aim point and touchdown (along the runway from the threshold [m]), the height it asks */
+    gOuter?: LandingFix;
+    prof?: { phase: "outer" | "preflare" | "inner" | "flare" | "rollout"; aim: number; td: number; h: number };
     /** the circuit's side of the runway's axis (+1 its right), kept once chosen; its turn begun */
     side?: number;
     turning?: boolean;
@@ -3611,12 +3615,13 @@ export class CameraController {
    * (its slope), eased over a few tenths of a second; slower than ~1.25 × the stall's, the nose
    * lowered. Low (1.5 km), the time back to real.
    */
-  private glideAlpha(R: NonNullable<CameraController["entryRun"]>, gRef: number, gam: number, gdot: number, sp: number, bank: number, agl: number, dt: number, stall: number, prot: number): number {
+  private glideAlpha(R: NonNullable<CameraController["entryRun"]>, gRef: number, gam: number, gdot: number, sp: number, bank: number, agl: number, dt: number, stall: number, prot: number, gdotRef = 0): number {
     const LA = this.airFlight.last;
     const m = fleet.massProps().mass;
     const g = 9.81;
     const k = agl < 80 ? 1.6 : 0.8;
-    const need = (m * (g * Math.cos(gam) + sp * (k * (gRef - gam) - 0.6 * gdot))) / Math.max(Math.cos(bank), 0.5);
+    // (the reference's own turn fed forward — gdotRef —, the damping on what departs from it)
+    const need = (m * (g * Math.cos(gam) + sp * (gdotRef + k * (gRef - gam) - 0.6 * (gdot - gdotRef)))) / Math.max(Math.cos(bank), 0.5);
     // (the angle whose lift — signed, the craft's own aerodynamics in the air it is in — is that:
     // Newton's steps from the angle it has)
     let want = R.alpha;
@@ -3693,7 +3698,7 @@ export class CameraController {
     // leaves the craft a turn's diameter off, ~4 km at 120 m/s: joined from there, not sent back to the
     // start behind it to turn again, and again)
     const onFinal = sAl > -16e3 && Math.abs(xt) < 6e3 && dot3(vh, along) > 0.5;
-    let bank: number, gRef: number;
+    let bank: number, gRef: number, gdotRef = 0;
     if (!onFinal) {
       // (far enough back: the axis joined — the course turned onto it as the offset closes, atan(xt/L)
       // off it, L about a turn's radius: no overshoot. Down the runway but wide: to the final's start.
@@ -3753,13 +3758,25 @@ export class CameraController {
       const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
       const want = -Math.min(Math.max(Math.atan2(xt, 3000), -0.7), 0.7);
       bank = clamp(-1.2 * (dpsi - want), -0.5, 0.5) * (agl < 60 ? agl / 60 : 1);
-      const toAim = Math.max(-(sAl + 2000), 300);
-      gRef = flareRef(R, agl, clamp(-Math.atan2(agl, toAim), -0.33, -0.05), sp, gam);
+      // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
+      // landingProfile below —, its slope followed and the height's error closed over ~4 s)
+      const L = landingProfile(sAl, agl, sp, R.gOuter);
+      if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
+      gRef = clamp(Math.atan(L.slope) + clamp((L.h - agl) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
+      // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
+      gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
+      R.flareTau = L.phase === "flare" ? 1 : undefined;
+      R.prof = { phase: L.phase, aim: L.aim, td: LANDING.td, h: L.h };
+    }
+    if (!onFinal) {
+      R.gOuter = undefined;
+      R.prof = undefined;
     }
     R.app = { along: sAl, across: xt, final: onFinal, agl, speed: sp, gRef, gam };
     const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
-    R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, onFinal && R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35);
-    const vT = onFinal ? (agl > 600 ? 175 : 115) : 230;
+    R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, onFinal && R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35, gdotRef);
+    // (the air brake: the speed held down the steep slope, then bled on the shallow one)
+    const vT = !onFinal ? 230 : R.prof && R.prof.phase !== "outer" ? 130 : 160;
     this.airBrake = clamp((sp - vT) / 50, 0, 1);
     const ax = attitudeFor(fr.s.x, va, R.alpha, bank);
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
@@ -7438,7 +7455,7 @@ export class CameraController {
       name: site.name.split(",")[0]!, rwy: site.rwy ?? 0, along: sAl, across: xt, agl,
       corners: [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)].map(see),
       line: Array.from({ length: 16 }, (_, k) => see(at(-k * 1000, 0))),
-      aim: see(at(-2000, 0)),
+      aim: see(at(R?.prof?.aim ?? -2000, 0)),
       gRef: app?.final ? app.gRef ?? null : null, gam: app?.gam ?? null, final: !!app?.final,
     };
   }
@@ -7824,6 +7841,45 @@ function flareRef(R: { flareTau?: number }, agl: number, steep: number, sp: numb
   else if (R.flareTau !== undefined && agl > 2 * Math.max(tau * sink, 40) + 100) R.flareTau = undefined;
   if (R.flareTau === undefined) return steep;
   return Math.max(steep, -Math.asin(Math.min((0.8 + agl / R.flareTau) / Math.max(sp, 1), 0.5)));
+}
+
+/**
+ * The final's profile to the touchdown aimed (the Shuttle's, scaled to the Ranger): the steep slope from
+ * the craft down to a corner 90 m up, a pull-up at ~0.3 g onto a shallow slope of 1.5° (the speed bled
+ * there), and from 12 m a flare — a parabola tangent to the ground at the touchdown, 450 m past the
+ * threshold. Along the runway's axis x [m from the threshold], the height h [m] over the ground, the
+ * speed v [m/s]: the profile's height and slope there. The steep slope's angle follows the craft (the
+ * line from it to the corner, 15° at most) until the pull-up nears; then it and the pull-up's length (its
+ * radius v² / 0.3 g) are frozen (`fix`): the touchdown no longer drifts with the speed or the float.
+ */
+export const LANDING = { td: 450, gi: (1.5 * Math.PI) / 180, hF: 12, hC: 90, goMax: 0.26 };
+export type LandingFix = { go: number; lb: number };
+export function landingProfile(x: number, h: number, v = 150, fixed?: LandingFix): { h: number; slope: number; phase: "outer" | "preflare" | "inner" | "flare" | "rollout"; fix: LandingFix; freeze: boolean; aim: number } {
+  const { td, gi, hF, hC, goMax } = LANDING;
+  const tgi = Math.tan(gi);
+  const LF = (2 * hF) / tgi;
+  const xF = td - LF;
+  const xC = xF - (hC - hF) / tgi;
+  const go = fixed?.go ?? clamp(Math.atan2(h - hC, Math.max(xC - x, 1)), gi + 0.02, goMax);
+  const lb = fixed?.lb ?? clamp(((v * v) / (0.3 * 9.81)) * (go - gi), 300, 3000);
+  const fix = { go, lb };
+  const tgo = Math.tan(go);
+  const x0 = xC - lb / 2, x2 = xC + lb / 2;
+  const aim = xC + hC / tgo;
+  const freeze = x > x0 - 600;
+  if (x >= td) return { h: 0, slope: 0, phase: "rollout", fix, freeze, aim };
+  if (x >= xF) {
+    const u = td - x;
+    return { h: hF * (u / LF) ** 2, slope: (-2 * hF * u) / (LF * LF), phase: "flare", fix, freeze, aim };
+  }
+  if (x >= x2) return { h: hF + (xF - x) * tgi, slope: -tgi, phase: "inner", fix, freeze, aim };
+  if (x >= x0) {
+    // (a quadratic Bézier from the steep slope to the shallow one, through the corner's control point)
+    const h0 = hC + (lb / 2) * tgo, h2 = hC - (lb / 2) * tgi;
+    const u = (x - x0) / lb;
+    return { h: (1 - u) ** 2 * h0 + 2 * u * (1 - u) * hC + u * u * h2, slope: (2 * (1 - u) * (hC - h0) + 2 * u * (h2 - hC)) / lb, phase: "preflare", fix, freeze, aim };
+  }
+  return { h: hC + (xC - x) * tgo, slope: -tgo, phase: "outer", fix, freeze, aim };
 }
 
 /** A duration [s], briefly. */

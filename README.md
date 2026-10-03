@@ -72,7 +72,8 @@ GPU process being lost.
   guided entry (the angle of attack held, the bank from a predictor–corrector, its reversals), then the
   Ranger's glide onto the runway's line (an energy-managed approach: arriving against the runway, a
   circuit — downwind a turn's diameter off the axis, the turn onto it at the final's start —; the axis
-  intercepted, the glide slope, the flare, the air brakes; `__bh.game.glideTo("Edwards")` starts one) and
+  intercepted; the Shuttle's profile to a touchdown 450 m past the threshold — a steep slope, the
+  pull-up onto a shallow one, the flare —, the air brakes; `__bh.game.glideTo("Edwards")` starts one) and
   its rollout (the nose wheel steered along the axis), or the Lander's powered landing.
   Sites and runway headings: `src/game/sites.ts`.
 - **The look of an entry**: the bow shock's plasma marched through (the gas's colour, the stagnation
