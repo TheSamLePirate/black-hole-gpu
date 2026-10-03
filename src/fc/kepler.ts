@@ -4,6 +4,8 @@
 // period, the closest approach of two orbits, Lambert's problem; the burns' frame (prograde, normal,
 // radial — as our-predict's nodes: P the motion, N the orbit's normal, R = N × P).
 
+import { lambertAll } from "../system/lambert";
+
 export type V3 = [number, number, number];
 
 export const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -202,48 +204,34 @@ export function closestApproach(mu: number, s1: { r: V3; v: V3 }, s2: { r: V3; v
   return { t, dist: len(add(a.r, b.r, -1)), vRel: len(add(a.v, b.v, -1)) };
 }
 
-/** Lambert's problem (universal variables, the short way about `normal`; prograde): the velocities
- *  leaving r1 and arriving at r2 after tof. Null if none. */
+/** Lambert's problem (Izzo's method: lambert.ts), prograde about `normal`: the velocities leaving r1 and
+ *  arriving at r2 after tof on the direct transfer. Null if none. */
 export function lambert(mu: number, r1: V3, r2: V3, tof: number, normal: V3 = [0, 0, 1]): { v1: V3; v2: V3 } | null {
-  const R1 = len(r1),
-    R2 = len(r2);
-  let dnu = Math.acos(Math.min(Math.max(dot(r1, r2) / (R1 * R2), -1), 1));
-  if (dot(cross(r1, r2), normal) < 0) dnu = TAU - dnu;
-  const A = Math.sin(dnu) * Math.sqrt((R1 * R2) / (1 - Math.cos(dnu)));
-  if (Math.abs(A) < 1e-12) return null;
-  const y = (z: number) => {
-    const [C, S] = stumpff(z);
-    return R1 + R2 + (A * (z * S - 1)) / Math.sqrt(C);
-  };
-  const F = (z: number) => {
-    const [C, S] = stumpff(z);
-    const yz = y(z);
-    if (yz < 0) return NaN;
-    return (yz / C) ** 1.5 * S + A * Math.sqrt(yz) - Math.sqrt(mu) * tof;
-  };
-  // (bracket z: from where y > 0 up to 4π²)
-  let lo = -4 * Math.PI * Math.PI,
-    hi = 4 * Math.PI * Math.PI - 1e-6;
-  while (y(lo) < 0 || Number.isNaN(F(lo))) {
-    lo += 0.1;
-    if (lo > hi) return null;
+  return lambertAll(mu, r1, r2, tof, normal)[0] ?? null;
+}
+
+/**
+ * The cheapest of Lambert's arcs (the direct one and, up to `maxRevs` turns, the multi-revolution ones —
+ * a long flight to a target close ahead goes round a few times rather than on a steep fast ellipse):
+ * the burn leaving `vNow`, plus the velocity match to `vTarget` on arrival when given.
+ */
+export function lambertBest(
+  mu: number,
+  r1: V3,
+  r2: V3,
+  tof: number,
+  normal: V3,
+  vNow: V3,
+  vTarget: V3 | null,
+  maxRevs = 3,
+): { v1: V3; v2: V3; revs: number } | null {
+  let best: { v1: V3; v2: V3; revs: number } | null = null,
+    cost = Infinity;
+  for (const L of lambertAll(mu, r1, r2, tof, normal, maxRevs)) {
+    const x = len(add(L.v1, vNow, -1)) + (vTarget ? len(add(vTarget, L.v2, -1)) : 0);
+    if (x < cost) (cost = x), (best = L);
   }
-  if (F(lo) > 0 || F(hi) < 0) return null;
-  for (let k = 0; k < 200; k++) {
-    const m = (lo + hi) / 2;
-    const f = F(m);
-    if (Number.isNaN(f) || f < 0) lo = m;
-    else hi = m;
-    if (hi - lo < 1e-12) break;
-  }
-  const z = (lo + hi) / 2;
-  const yz = y(z);
-  const f = 1 - yz / R1;
-  const g = A * Math.sqrt(yz / mu);
-  const gd = 1 - yz / R2;
-  const v1 = scale(add(r2, r1, -f), 1 / g);
-  const v2 = scale(add(scale(r2, gd), r1, -1), 1 / g);
-  return { v1, v2 };
+  return best;
 }
 
 /** The burns' frame at a state: prograde, normal, radial (R = N × P). */

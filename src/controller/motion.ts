@@ -15,7 +15,7 @@ import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "../wormhole";
 import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "../system/our-side";
-import { YOSHIDA } from "../system/our-predict";
+import { symmetricStep, YOSHIDA } from "../system/our-predict";
 import { keplerProp } from "../system/our-plan";
 import {
   airDensity as ourAir,
@@ -322,7 +322,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const ground = solidBody(ref) ? ref : null;
   const atm = ref !== "sun" ? solarBody(ref)?.atmosphere : undefined;
   const airy = !!atm && flown;
-  let g = gravityHome(X, t0);
+  let g = gravityHome(X, t0, V);
   // (the flown craft's own aerodynamics — its attitude, its configuration — in the home frame)
   const right = cross(fwd, up);
   const S = this.shipMatrix();
@@ -393,7 +393,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // steps: a small part of the fall time; near the ground, of the time to reach it
   const stepOf = () => {
     // (fourth order in the vacuum: longer steps — the map's prediction's own)
-    let dt = (airy ? 0.01 : 0.025) * g.tDyn;
+    let dt = airy ? 0.01 * g.tDyn : symmetricStep(0.025, g.tDyn, g.tDot);
     if (ground || airy) {
       const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
       const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
@@ -442,7 +442,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         V = lin(V, 1, a, h / 2);
         X = lin(X, 1, V, h);
         t += h;
-        g = gravityHome(X, t);
+        g = gravityHome(X, t, V);
         a = g.acc;
         V = lin(V, 1, a, h / 2);
       }
@@ -458,7 +458,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       X = lin(X, 1, V, dt);
       t = tn;
     }
-    g = gravityHome(X, t);
+    g = gravityHome(X, t, V);
     // (found deep in the ground — a scene placed before the relief was known, the relief come in under
     // it —: set on it, its fall stopped, no spring flung from metres down)
     if (gdef && ground && gearHeight(ground, X, t) < -1.5) {

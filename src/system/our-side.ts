@@ -48,14 +48,16 @@ export function repToHomeVec(w: Dneg, l: number, n: Vec3, v: Vec3): Vec3 {
   return [u[0] + k * nh[0], u[1] + k * nh[1], u[2] + k * nh[2]];
 }
 
-/** The pull at a home-frame point at time t (the frame's own acceleration taken off). */
-export function gravityHome(X: Vec3, t: number): { acc: Vec3; inside: string | null; tDyn: number } {
+/** The pull at a home-frame point at time t (the frame's own acceleration taken off); with V, the rate its fall time changes at. */
+export function gravityHome(X: Vec3, t: number, V?: Vec3): { acc: Vec3; inside: string | null; tDyn: number; tDot: number } {
   const f = mouthAccel(t);
   let a: Vec3 = [-f[0], -f[1], -f[2]];
   let inside: string | null = null;
-  let tDyn = Infinity;
+  let tDyn = Infinity,
+    tDot = 0;
   for (const b of OUR_BODIES) {
-    const P = solarState(b.id, t).pos;
+    const S = solarState(b.id, t);
+    const P = S.pos;
     const d: Vec3 = [P[0] - X[0], P[1] - X[1], P[2] - X[2]];
     const r = Math.hypot(...d);
     if (r < b.radius) inside = b.id;
@@ -65,9 +67,15 @@ export function gravityHome(X: Vec3, t: number): { acc: Vec3; inside: string | n
     // (its oblateness: J2, J3, J4 — geopotential.ts)
     const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
     if (z) a = [a[0] + z[0], a[1] + z[1], a[2] + z[2]];
-    tDyn = Math.min(tDyn, Math.sqrt(re ** 3 / b.mass));
+    const td = Math.sqrt(re ** 3 / b.mass);
+    if (td < tDyn) {
+      tDyn = td;
+      // (with V: the rate the fall time changes at — a time-symmetric step: our-predict's symmetricStep)
+      tDot =
+        V && r > b.radius ? (-1.5 * td * (d[0] * (V[0] - S.vel[0]) + d[1] * (V[1] - S.vel[1]) + d[2] * (V[2] - S.vel[2]))) / (r * r) : 0;
+    }
   }
-  return { acc: a, inside, tDyn };
+  return { acc: a, inside, tDyn, tDot };
 }
 
 /**

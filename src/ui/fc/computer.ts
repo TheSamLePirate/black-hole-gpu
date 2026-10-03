@@ -1211,10 +1211,10 @@ export class FlightComputer {
 function transferAt(c: FcContext, dep: number, tof: number, rendezvous: boolean): OpResult | null {
   const T = c.target;
   if (!T) return null;
-  const { lambert, propagate, toPNR, add, unit, cross } = kep;
+  const { lambertBest, propagate, toPNR, add, unit, cross } = kep;
   const s = propagate(c.mu, c.r, c.v, dep);
   const tg = propagate(c.mu, T.r, T.v, dep + tof);
-  const L = lambert(c.mu, s.r, tg.r, tof, unit(cross(c.r, c.v)));
+  const L = lambertBest(c.mu, s.r, tg.r, tof, unit(cross(c.r, c.v)), s.v, rendezvous ? tg.v : null);
   if (!L) return null;
   const burns: Burn[] = [{ t: dep, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: t("departure") }];
   if (rendezvous) burns.push({ t: dep + tof, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: t("match") });

@@ -53,14 +53,24 @@ function bodiesNear(ref: string) {
 const Y1 = 1 / (2 - Math.cbrt(2));
 export const YOSHIDA = [Y1, 1 - 2 * Y1, Y1];
 
-/** The pull at X, time t, from a body set (the frame's own acceleration taken off). */
-function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES) {
+/**
+ * A step a fraction s of the fall time tDyn, symmetrised in time (audit P6: a step chosen at its start
+ * alone breaks the composition's symplecticity — an eccentric orbit's energy drifted 2e-5 over 200 turns):
+ * the mean of the fall times at the step's two ends, the end's from the rate it changes at (tDot) — the
+ * drift 1e-9, for no more pulls.
+ */
+export const symmetricStep = (s: number, tDyn: number, tDot: number) => (s * tDyn) / Math.max(1 - 0.5 * s * tDot, 0.5);
+
+/** The pull at X, time t, from a body set (the frame's own acceleration taken off); with V, the rate the fall time changes at. */
+function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES, V?: Vec3) {
   const f = mouthAccel(t);
   let a: Vec3 = [-f[0], -f[1], -f[2]];
-  let tDyn = Infinity;
+  let tDyn = Infinity,
+    tDot = 0;
   let hit: string | null = null;
   for (const b of set) {
-    const P = solarState(b.id, t).pos;
+    const S = solarState(b.id, t);
+    const P = S.pos;
     const d = sub(P, X);
     const r = Math.hypot(...d);
     if (r < b.radius) hit = b.id;
@@ -69,9 +79,14 @@ function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES) {
     // (its oblateness, as the flight feels it)
     const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
     if (z) a = add(a, z, 1);
-    tDyn = Math.min(tDyn, Math.sqrt(re ** 3 / b.mass));
+    const td = Math.sqrt(re ** 3 / b.mass);
+    if (td < tDyn) {
+      tDyn = td;
+      // (dτ/dt = 3/2 τ ṙ/r, ṙ the speed away from the body)
+      tDot = V && r > b.radius ? (-1.5 * td * dot(d, sub(V, S.vel))) / (r * r) : 0;
+    }
   }
-  return { a, tDyn, hit };
+  return { a, tDyn, tDot, hit };
 }
 
 /** A node's Δv [P, N, R] as a home-frame vector, at X, V, time t (the frame of the reference body there). */
@@ -138,7 +153,7 @@ export function predictOurs(
   const fixed = o.tMax !== undefined;
   let tEnd = fixed ? t0 + Math.min(o.tMax!, 2.6e6) : Math.min(t0 + horizon(), t0 + 1.3e5);
   if (pending.length && !fixed) tEnd = Math.max(tEnd, pending[pending.length - 1]!.t + 1);
-  let g = pull(X, t, set);
+  let g = pull(X, t, set, V);
   let lastRefCheck = t;
   // (finite burns, as the ship flies them: the engine's acceleration along the node's P/N/R
   // direction — turning with the orbit — centred on the node's time, until its Δv is given)
@@ -166,7 +181,7 @@ export function predictOurs(
     return { a: [-k * va[0], -k * va[1], -k * va[2]], rate: k };
   };
   for (let i = 0; i < maxSteps && t < tEnd; i++) {
-    let dt = (o.step ?? 0.02) * g.tDyn;
+    let dt = symmetricStep(o.step ?? 0.02, g.tDyn, g.tDot);
     const inAir = air(X, V, t);
     if (inAir) dt = Math.min(dt, 0.004 * g.tDyn, inAir.rate > 0 ? 0.05 / inAir.rate : Infinity);
     // (land on the next node — or its burn's start — exactly)
@@ -180,7 +195,7 @@ export function predictOurs(
       V = add(V, a0, dt / 2);
       X = add(X, V, dt);
       t += dt;
-      g = pull(X, t, set);
+      g = pull(X, t, set, V);
       V = add(V, add(add(g.a, thrust(X, V, t)), drag(X, V, t)), dt / 2);
     } else {
       // (coasting: Yoshida's composition of three velocity-Verlet steps — fourth order, still
@@ -192,7 +207,7 @@ export function predictOurs(
         X = add(X, V, h);
         // (the last substep lands on the step's end exactly: the weights' sum is 1 only to rounding)
         t = k === 2 ? tn : t + h;
-        g = pull(X, t, set);
+        g = pull(X, t, set, V);
         V = add(V, g.a, h / 2);
       }
     }
@@ -223,7 +238,7 @@ export function predictOurs(
       if (r2 !== ref) {
         ref = r2;
         set = bodiesNear(ref);
-        g = pull(X, t, set);
+        g = pull(X, t, set, V);
       }
     }
     out.pts.push(X);

@@ -8,6 +8,7 @@
 //
 // Units: lengths and times in M, velocities in c, GM in M (G = c = 1).
 
+import { lambertAll } from "./lambert";
 import { poleOfDate, secularRates, secularZonal, ZONAL } from "./geopotential";
 import type { Vec3 } from "../physics";
 import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
@@ -143,39 +144,11 @@ const stumpS = (z: number) => {
 };
 
 /**
- * Lambert's problem (universal variables, one revolution): the velocities at r1 and r2 of the
- * orbit around mu from r1 to r2 in tof, going round in the sense of `normal`.
+ * Lambert's problem (Izzo's method: lambert.ts — 180° is not singular): the velocities at r1 and r2 of
+ * the direct orbit around mu from r1 to r2 in tof, going round in the sense of `normal`.
  */
 export function lambert(mu: number, r1: Vec3, r2: Vec3, tof: number, normal: Vec3): { v1: Vec3; v2: Vec3 } | null {
-  const R1 = norm(r1),
-    R2 = norm(r2);
-  const cosd = Math.max(-1, Math.min(1, dot(r1, r2) / (R1 * R2)));
-  let dnu = Math.acos(cosd);
-  if (dot(cross(r1, r2), normal) < 0) dnu = 2 * Math.PI - dnu;
-  const A = Math.sin(dnu) * Math.sqrt((R1 * R2) / (1 - cosd));
-  if (!Number.isFinite(A) || Math.abs(A) < 1e-9 * (R1 + R2)) return null;
-  const y = (z: number) => R1 + R2 + (A * (z * stumpS(z) - 1)) / Math.sqrt(stumpC(z));
-  const time = (z: number) => {
-    const yy = y(z);
-    if (yy < 0) return -Infinity;
-    const x = Math.sqrt(yy / stumpC(z));
-    return (x ** 3 * stumpS(z) + A * Math.sqrt(yy)) / Math.sqrt(mu);
-  };
-  let lo = -400,
-    hi = 4 * Math.PI ** 2 - 1e-7;
-  if (time(lo) > tof || !(time(hi) > tof)) return null;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2;
-    if (time(mid) < tof) lo = mid;
-    else hi = mid;
-    if (hi - lo < 1e-13) break;
-  }
-  const z = (lo + hi) / 2;
-  const yy = y(z);
-  const f = 1 - yy / R1,
-    g = A * Math.sqrt(yy / mu),
-    gd = 1 - yy / R2;
-  return { v1: scale(sub(r2, scale(r1, f)), 1 / g), v2: scale(sub(scale(r2, gd), r1), 1 / g) };
+  return lambertAll(mu, r1, r2, tof, normal)[0] ?? null;
 }
 
 /** Kepler's problem (universal variables): (r, v) around mu after dt. */

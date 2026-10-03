@@ -11,7 +11,7 @@ import {
   dot,
   elements,
   fromPNR,
-  lambert,
+  lambertBest,
   len,
   nodesAgainst,
   nuAtRadius,
@@ -277,7 +277,7 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
     const row: number[] = [];
     for (let j = 0; j < nT; j++) {
       const tg = propagate(c.mu, T.r, T.v, dep[i]! + tof[j]!);
-      const L = lambert(c.mu, s.r, tg.r, tof[j]!, N);
+      const L = lambertBest(c.mu, s.r, tg.r, tof[j]!, N, s.v, o.rendezvous ? tg.v : null);
       const x = L ? len(add(L.v1, s.v, -1)) + (o.rendezvous ? len(add(tg.v, L.v2, -1)) : 0) : NaN;
       row.push(x);
       if (x < bv) (bv = x), (best = { i, j });
@@ -289,7 +289,7 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
     tFl = tof[best.j]!;
   const s = propagate(c.mu, c.r, c.v, td);
   const tg = propagate(c.mu, T.r, T.v, td + tFl);
-  const L = lambert(c.mu, s.r, tg.r, tFl, N)!;
+  const L = lambertBest(c.mu, s.r, tg.r, tFl, N, s.v, o.rendezvous ? tg.v : null)!;
   const burns: Burn[] = [{ t: td, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: t("departure") }];
   if (o.rendezvous) burns.push({ t: td + tFl, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: t("match") });
   const grid = { dep, tof, dv, best };
