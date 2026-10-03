@@ -22,7 +22,9 @@ import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site, SITES } from "./game/sites";
 import type { SiteTrack } from "./fc/land-ops";
 import { elements as kepElements, followDv, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
-import type { Burn, FcContext, OpResult } from "./fc/ops";
+import { circularize as fcCircularize, type Burn, type FcContext, type OpResult } from "./fc/ops";
+import { timeTo as kepTimeTo } from "./fc/kepler";
+import { airTopKm } from "./game/place";
 import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kMatchPlane, kPeriapsis, kResonant, type KerrOp, type KerrOrbit } from "./fc/kerr-ops";
 import { issOrbit } from "./system/iss";
@@ -2694,6 +2696,8 @@ export class CameraController {
       path: this.airFlight.pathRate.map((x) => -x) as Vec3, ground: onWheels0, stall: AV.wing?.stall ?? 0.35, q: LA0.out.q, gamma: this.pathAngle(cam), bank: (this.attitudeNow() as { bank?: number }).bank ?? 0, mach: LA0.out.mach,
     } : null;
     const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
+    // (the circularization's run ended with its autopilots: off by the pilot, or another engaged)
+    if (this.ourCirc && this.pilot.auto !== "node" && this.pilot.auto !== "circularize") this.ourCirc = null;
     // the entry autopilot: the deorbit, the guided entry, the glide (its attitude, its burn)
     if (this.pilot.auto !== "entry" && this.entryRun) {
       // (off: the time back to real if it was sped up waiting for the burn; the air brake in)
@@ -5670,6 +5674,8 @@ export class CameraController {
           this.userWarp = null;
           P.path = null;
           this.pilot.auto = "none";
+          // (a circularization after the node: the trim where it is — the pilot's run kept, else a new one)
+          if (then === "circularize") this.ourCirc = this.ourCirc ? { ...this.ourCirc, mode: "trim" } : { mode: "trim", spent0: this.spent };
           if (then) this.pilot.setAuto(then);
           if (then === "dock") this.onPilotMessage?.("At the ISS — the docking autopilot takes over");
           else if (node.role === "arrive") this.onPilotMessage?.(node.body === "wormhole" ? "Into the wormhole's throat — Gargantua's side at its end" : `${BODY_NAMES[node.body as Body] ?? node.body} passed`);
@@ -6722,7 +6728,8 @@ export class CameraController {
     // (a low orbit: 10 % of the radius, above 12 scale heights of air)
     const low = Tg.radius * 1.1 + (air ? (12 * air.H) / 1.476625e11 : 0);
     if (P.auto === "orbit" && !(Tg.mass > 0)) return say("Orbit: select a body with a mass");
-    const orbiting = circ || (P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius);
+    if (circ) return this.ourCircWant(nav, Tg, say, out);
+    const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;
     if (orbiting) {
       if (!this.ourOrbitR || this.ourOrbitR.body !== tgt) this.ourOrbitR = { body: tgt, r: circ ? Math.max(D, Tg.radius * 1.01) : Math.max(D, low) };
       const r = this.ourOrbitR.r;
@@ -6898,6 +6905,85 @@ export class CameraController {
   }
 
   private ourOrbitR: { body: string; r: number } | null = null;
+
+  /**
+   * Our universe's circularization, its run: engaged by the pilot, a burn at the next apsis above the
+   * air (the node autopilot flies it: its warp, its finite burn centred), then the trim; after a node
+   * (`then: "circularize"`: a capture at its periapsis), the trim where it is. Null: not running.
+   */
+  ourCirc: { mode: "node" | "trim"; where?: "ap" | "pe"; altKm?: number; dv?: number; tNode?: number; spent0?: number; since?: number } | null = null;
+
+  /**
+   * The circle the pilot asks for: the cheaper of a burn at the next apoapsis and one at the next
+   * periapsis — the sooner, both above the air (a hyperbola: its periapsis) —, as the flight computer's
+   * circularization (fc/ops.ts). Null: circular already (the trim alone). A string: why not.
+   */
+  private circPlan(): { burns: Burn[]; note: string; where: "ap" | "pe"; altKm: number; dv: number; t: number } | string | null {
+    const fc = this.fcContext();
+    if (!fc) return "Circularize: near a body";
+    const c = fc.ctx;
+    const el = kepElements(c.mu, c.r, c.v, c.pole ?? [0, 0, 1]);
+    const safe = c.R + (airTopKm(fc.body) + 10) * 1e3;
+    if (el.e < 1 && el.ra - el.rp < 2e3) return null;
+    const cands: { where: "ap" | "pe"; t: number; r: number }[] = [];
+    if (el.e < 1 && el.ra > safe) cands.push({ where: "ap", t: kepTimeTo(el, Math.PI), r: el.ra });
+    if (el.rp > safe) cands.push({ where: "pe", t: kepTimeTo(el, 0), r: el.rp });
+    if (!cands.length) return el.e < 1 ? `Circularize: the orbit is in the air (apoapsis ${((el.ra - c.R) / 1e3).toFixed(0)} km) — raise it first` : `Circularize: the periapsis is in the air or below — no circle on this path`;
+    // (an apsis half a burn away or passed: the other one, if there is one)
+    const ok = cands.filter((q) => Number.isFinite(q.t) && q.t > 20);
+    const pick = (ok.length ? ok : cands).sort((a, b) => a.t - b.t)[0]!;
+    const r = fcCircularize(c, pick.where);
+    if (!r.ok || !r.burns.length) return `Circularize: ${r.note}`;
+    return { burns: r.burns, note: r.note, where: pick.where, altKm: (pick.r - c.R) / 1e3, dv: r.dvTotal, t: r.burns[0]!.t };
+  }
+
+  /** The circularization's frame: the plan made (pilot's), or the trim — the circular velocity where it is. */
+  private ourCircWant(nav: NonNullable<ReturnType<CameraController["ourNav"]>>, Tg: { pos: Vec3; vel: Vec3; mass: number; radius: number }, say: (t: string) => null, out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 }) {
+    const P = this.pilot;
+    const C = 299792458;
+    const rel = sub3(nav.V, Tg.vel);
+    const Rv = sub3(nav.X, Tg.pos);
+    const D = Math.hypot(...Rv);
+    const Rh = lin(Rv, 1 / D, Rv, 0);
+    const fmtT = (x: number) => (x < 90 ? `${Math.round(x)} s` : x < 5400 ? `${Math.round(x / 60)} min` : `${(x / 3600).toFixed(1)} h`);
+    if (!this.ourCirc) {
+      const plan = this.circPlan();
+      if (typeof plan === "string") return say(plan);
+      if (plan) {
+        this.fcSetPlan(plan.burns, plan.note);
+        const n0 = this.plan.nodes[0] as { then?: string; t: number } | undefined;
+        if (n0) n0.then = "circularize";
+        this.ourCirc = { mode: "node", where: plan.where, altKm: plan.altKm, dv: plan.dv, tNode: n0?.t, spent0: this.spent };
+        P.auto = "none";
+        P.setAuto("node");
+        this.onPilotMessage?.(`Circularize at the ${plan.where === "ap" ? "apoapsis" : "periapsis"} (${plan.altKm.toFixed(0)} km) in ${fmtT(plan.t)}: ${plan.dv.toFixed(0)} m/s`);
+        return out(nav.V);
+      }
+      this.ourCirc = { mode: "trim", spent0: this.spent };
+    }
+    if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
+    const R = this.ourCirc;
+    R.since ??= performance.now();
+    // the trim: the circular velocity where the craft is — horizontal, in its plane —, no height held
+    let n = cross(Rh, rel);
+    if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
+    n = lin(n, 1 / Math.hypot(...n), n, 0);
+    const th = cross(n, Rh);
+    const vc = Math.sqrt(Tg.mass / D);
+    const err = Math.hypot(...sub3(rel, lin(th, vc, th, 0))) * C;
+    // (done: within 0.2 m/s — or, the trim's minute out, within 2)
+    const age = (performance.now() - R.since) / 1000;
+    if (err < 0.2 || (age > 60 && err < 2)) {
+      const fc = this.fcContext();
+      const el = fc ? kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]) : null;
+      const used = (this.spent - (R.spent0 ?? this.spent)) * C;
+      this.ourCirc = null;
+      P.setAuto("none");
+      this.onPilotMessage?.(el && fc ? `Circular: ${((el.rp - fc.ctx.R) / 1e3).toFixed(0)} × ${((el.ra - fc.ctx.R) / 1e3).toFixed(0)} km — ${used.toFixed(0)} m/s spent` : "Circular");
+      return null;
+    }
+    return out(lin(Tg.vel, 1, th, vc));
+  }
   /** the pilot's warp while our approach sets it (given back on arrival) */
   private ourWarp: number | null = null;
 

@@ -909,14 +909,16 @@ async function main() {
       return null;
     },
     // (the hub's autopilots: engaged — never toggled off by a second engage —, the same code)
-    engage: (a) => {
+    engage: (a, now) => {
+      // (circularize NOW: the trim where the ship is, not the burn at the next apsis)
+      if (a === "circularize" && now) camera.ourCirc = { mode: "trim", spent0: camera.spent };
       if (camera.pilot.auto !== a) pilotAuto(a);
       return null;
     },
     disengage: () => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     },
-    autoState: (a) => ({ on: camera.pilot.auto === a, why: flightHud.autoWhy(a) }),
+    autoState: (a) => ({ on: camera.pilot.auto === a || (a === "circularize" && camera.pilot.auto === "node" && !!camera.ourCirc), why: flightHud.autoWhy(a) }),
     launch: (altKm, incDeg) => {
       camera.launchGoal = { altKm, incDeg };
       if (camera.pilot.auto !== "takeoff") pilotAuto("takeoff");

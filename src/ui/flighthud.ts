@@ -705,7 +705,7 @@ export class FlightHud {
     };
     const AUTO_TIPS: Record<string, string> = {
       hover: "Kills the speed relative to the body and holds the place — the flight computer's Hold position",
-      circularize: "Makes the orbit circular where the ship is — the flight computer's Circularize NOW",
+      circularize: "Makes the orbit circular — the cheapest way: a burn at the next apsis above the air (planned, the time sped up to it), then trimmed; after a capture, where the ship is",
       approach: "Flies to the target and stops beside it — the flight computer's Approach the target",
       land: "Descends, kills the horizontal speed, touches down — the flight computer's Land here",
       takeoff: "Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)",

@@ -85,7 +85,8 @@ GPU process being lost.
   Ranger's wingtips' vortices condensing when it pulls near its stall in warm dense air. Drawn lit by the
   sun (strongly forward: bright against it) and the sky, dimming what is behind, hidden by the ground.
 - **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — launch to
-  orbit (height, inclination), circularize (at an apsis, or NOW in closed loop), apoapsis, periapsis,
+  orbit (height, inclination), circularize (at an apsis, or NOW in closed loop; the hub's CIRC: the
+  sooner apsis above the air, flown as a node, then trimmed to 0.2 m/s and off), apoapsis, periapsis,
   Hohmann, inclination, resonance; match planes, rendezvous and intercept (their porkchop, a click flies a
   cell), match velocities, approach, hold position, fine-tune the approach; land, deorbit and entry — the
   LAND tab lists each site's next pass within the craft's reach (the body turning under the orbit) and

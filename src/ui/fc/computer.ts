@@ -57,7 +57,7 @@ export interface FcHost {
   target(): string;
   /** the autopilots — the hub's own buttons do the same: engaged (not toggled), their state (on, why
    *  not); the launch to orbit (its height, its inclination: the hub's TAKE OFF flies them too) */
-  engage(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry"): string | null;
+  engage(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry", now?: boolean): string | null;
   disengage(): void;
   autoState(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry"): { on: boolean; why: string };
   launch(altKm: number | null, incDeg: number | null): string | null;
@@ -314,10 +314,10 @@ export class FlightComputer {
       };
       seg.append(b);
     }
-    this.op("Circularize", "The speed made circular there, the flight path levelled — NOW: the autopilot, closed on the circular speed (the hub's CIRC)", [seg], () => {
+    this.op("Circularize", "The speed made circular there, the flight path levelled — NOW: the autopilot, closed on the circular speed where the ship is (the hub's CIRC burns at the next apsis above the air)", [seg], () => {
       if (where === "now") {
-        const e = this.host.engage("circularize");
-        this.host.say(e ?? "Circularize: the autopilot (the hub's CIRC) — closed on the circular speed where the ship is");
+        const e = this.host.engage("circularize", true);
+        this.host.say(e ?? "Circularize NOW: the autopilot closed on the circular speed where the ship is");
         return null;
       }
       const x = this.ctxOrSay();
