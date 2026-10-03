@@ -1073,6 +1073,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud impact ground entry interface countdown",
   },
   {
+    key: "hudRunway", type: "toggle", section: "game", group: "HUD aids", label: "Runway & approach", effect: "none",
+    help: "The runway in reach (the entry's, or the nearest within 80 km): its outline where it is, its centreline 15 km back, the aim point of the glide path — the flight path vector on it, the craft on its glide path —, the distance and the offset from the axis, the glide path's error on the final, FLARE.",
+    keywords: "hud runway approach glide slope localizer aim flare landing",
+  },
+  {
+    key: "hudHover", type: "toggle", section: "game", group: "HUD aids", label: "Vertical landing", effect: "none",
+    help: "Low and slow over the ground: a drift scope (the velocity over the ground, heading up), the vertical speed, the height, the stop burn's countdown (when full thrust must start to stop at the ground), the touchdown spot in the view.",
+    keywords: "hud landing hover drift suicide burn touchdown vertical",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",

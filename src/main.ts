@@ -932,6 +932,7 @@ async function main() {
   // (the map's bodies drawn on the tracer's GPU, with its maps)
   flightHud.mapGpu = renderer.mapGpuSource();
   flightHud.future = (at) => camera.futureView(at);
+  flightHud.runway = () => camera.runwayView();
   flightHud.kerrApsides = () => {
     const k = camera.fcKerrInfo();
     return k && { rp: k.o.rp, ra: k.o.ra, fate: k.o.fate };

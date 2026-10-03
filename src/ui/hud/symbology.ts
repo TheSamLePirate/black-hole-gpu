@@ -8,7 +8,7 @@
 // markers and their arrows are drawn (the instruments belong to the pilot's seat and the chase).
 
 import type { Settings } from "../../settings";
-import type { FutureView } from "../../controls";
+import type { FutureView, RunwayView } from "../../controls";
 import { COL, FONT, MONO, marker } from "../hudkit";
 
 type V3 = [number, number, number];
@@ -18,6 +18,9 @@ export interface SymInfo {
   S: number[][];
   /** where the ship is (the hole's region: its lensed tube may draw the path instead) */
   region?: string;
+  /** near the ground: height over it [m], vertical and horizontal speeds [m/s], thrust over weight, the
+   *  local gravity [g], landed */
+  surface?: { alt: number; vVert: number; vHor: number; twr: number; gLocal: number; landed?: boolean } | null;
   dirs: Record<string, V3 | null | undefined>;
   air?: {
     u?: number[] | null;
@@ -33,6 +36,8 @@ export interface SymInfo {
     speed?: number;
     g?: number;
     gMax?: number;
+    /** how the craft flies in the air: rocket, plane, the sci-fi computer */
+    mode?: string;
     /** the flight computer's command: speed [m/s], flight path angle, heading [rad] */
     sf?: { speed: number; gamma: number; heading: number } | null;
   } | null;
@@ -58,6 +63,8 @@ export interface SymFrame {
   future?: FutureView | null;
   /** the quarter of the orbit asked among the places to come [s] (labelled so) */
   quarter?: number;
+  /** the runway in reach (its outline, centreline, aim point; the craft's place along and across it) */
+  runway?: RunwayView | null;
 }
 
 const UNDER = "rgba(0, 0, 0, 0.42)";
@@ -285,6 +292,10 @@ export function drawSymbology(F: SymFrame) {
   // ---- the future: the path in perspective, the places to come, the impact
   if (F.future && F.density < 2) drawFuture(F, F.future, pr, stroke, text, inside);
 
+  // ---- approach and landing: the runway, the vertical landing's scope and cues
+  if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
+  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2) drawHover(F, i.surface, up, pr, stroke, text, inside);
+
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
   if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, north, fpx);
@@ -503,6 +514,10 @@ function ahead(t: number): string {
 function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
   const { ctx, W, H, dpr, s, i } = F;
   const tube = i.region === "hole" && s.pathInView;
+  // (a wing carrying the craft: the free fall's path and its impact are not where it goes — the flight
+  // path vector and the runway's cues are)
+  const A = i.air;
+  if (A && A.inAir && A.q > 1000 && A.mode === "plane") return;
   // ---- the path
   if (s.hudPath && !tube && fu.pts.length > 1) {
     const runs: [number, number][][] = [];
@@ -586,4 +601,172 @@ function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [num
   const cy = (top + bottom) / 2, hy = (bottom - top) / 2, hx = W / 2 - side;
   const k = Math.min(hx / Math.max(Math.abs(dx), 1e-6), hy / Math.max(Math.abs(dy), 1e-6));
   return [W / 2 + dx * k, cy + dy * k];
+}
+
+/**
+ * The runway in reach, drawn where it is: its outline on the ground, its centreline drawn 15 km back
+ * (dashed, every kilometre), the aim point 2 km short of the threshold — the glide path's: the flight path
+ * vector on the diamond is the craft on its glide path —; a box with the runway, the distance to its
+ * threshold, the offset across the axis; on the final the glide path asked against the one flown;
+ * FLARE low over it.
+ */
+function drawRunway(F: SymFrame, rw: RunwayView, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+  const { ctx, dpr, W, H } = F;
+  const front = (q: { d: V3 }) => q.d[2] > 1e-3;
+  // the outline (its far end first: the near one may be behind the eye on the ground)
+  if (rw.corners.every(front)) {
+    const pts = rw.corners.map((q) => pr(q.d)!);
+    ctx.beginPath();
+    pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(255, 220, 160, 0.12)";
+    ctx.fill();
+    stroke(() => {
+      pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+      ctx.closePath();
+    }, "rgba(255, 220, 160, 0.95)", 1.8);
+    // (the threshold: a bar across)
+    stroke(() => {
+      ctx.moveTo(pts[0]![0], pts[0]![1]);
+      ctx.lineTo(pts[3]![0], pts[3]![1]);
+    }, "#ffffff", 3);
+  }
+  // the centreline drawn back from the threshold, its kilometres ticked
+  const line = rw.line.filter(front).map((q) => pr(q.d)!);
+  if (line.length > 1) stroke(() => line.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(124, 214, 255, 0.75)", 1.4, [8, 6]);
+  // the aim point
+  const a = front(rw.aim) ? pr(rw.aim.d) : null;
+  if (inside(a, 6 * dpr)) {
+    const R = 8 * dpr;
+    stroke(() => {
+      ctx.moveTo(a![0], a![1] - R);
+      ctx.lineTo(a![0] + R, a![1]);
+      ctx.lineTo(a![0], a![1] + R);
+      ctx.lineTo(a![0] - R, a![1]);
+      ctx.closePath();
+    }, "#78ffaa", 1.8);
+    text("AIM", a![0] + R + 6 * dpr, a![1], "#78ffaa", 10.5, "left", true);
+  }
+  // the box: the runway, the distance to its threshold, the offset across the axis, the glide path
+  const dist = Math.max(-rw.along, 0);
+  const km = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
+  const off = Math.abs(rw.across) < 15 ? "ON AXIS" : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
+  // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
+  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 10 * dpr;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.fillRect(x - 96 * dpr, y - 28 * dpr, 192 * dpr, rw.gRef !== null && rw.gam !== null ? 70 * dpr : 54 * dpr);
+  text(`RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`, x, y - 14 * dpr, "rgba(255, 220, 160, 0.95)", 11);
+  text(km, x, y + 4 * dpr, "#ffffff", 13, "center", true);
+  text(off, x, y + 20 * dpr, Math.abs(rw.across) > 300 ? "#ffc85a" : Math.abs(rw.across) < 15 ? "#78ffaa" : "rgba(214, 236, 255, 0.95)", 11.5, "center", true);
+  if (rw.gRef !== null && rw.gam !== null) {
+    const e = ((rw.gam - rw.gRef) * 180) / Math.PI;
+    text(`GLIDE ${e >= 0 ? "▲" : "▼"} ${Math.abs(e).toFixed(1)}°`, x, y + 35 * dpr, Math.abs(e) > 2 ? "#ffc85a" : "#78ffaa", 11.5, "center", true);
+  }
+  if (rw.final && rw.agl < 60 && rw.agl > 1) {
+    const on = Math.floor(performance.now() / 350) % 2 === 0;
+    if (on) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+  }
+}
+
+/**
+ * The vertical landing (low over the ground, slow — the Lander's, a hover):
+ * - the drift scope beside the view (heading up): the velocity over the ground, its scale chosen for it;
+ *   the vertical speed's bar, the height over the ground;
+ * - the stop burn: at full thrust, how long until it must start to stop at the ground (BURN IN …, BURN
+ *   NOW), from the descent rate, the thrust over weight and the local gravity;
+ * - the touchdown spot in the view: where the craft comes down at this drift and descent rate.
+ */
+function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | null, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+  const { ctx, dpr, W, H, i } = F;
+  const A = i.air;
+  // (a hover, a vertical descent: low and slow — not the glide to a runway)
+  if (!(sf.alt < 3000) || (A && A.speed && A.speed > 160 && A.q > 20)) return;
+  const drift = i.dirs.drift ?? null;
+  const vDown = Math.max(-sf.vVert, 0);
+  // ---- the scope
+  const R0 = 52 * dpr, cx = W / 2 + Math.min(W, H) * 0.44, cy = H / 2 + 20 * dpr;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, R0 + 6 * dpr, 0, 2 * Math.PI);
+  ctx.fill();
+  stroke(() => {
+    ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
+    ctx.moveTo(cx + R0 / 2, cy);
+    ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
+    ctx.moveTo(cx - R0, cy);
+    ctx.lineTo(cx + R0, cy);
+    ctx.moveTo(cx, cy - R0);
+    ctx.lineTo(cx, cy + R0);
+  }, "rgba(124, 214, 255, 0.45)", 1);
+  const scales = [2, 5, 10, 20, 50, 100, 200];
+  const full = scales.find((k) => k >= sf.vHor * 1.25) ?? 200;
+  if (drift && up && sf.vHor > 0.05) {
+    // (heading up: the view's horizontal forward, its right)
+    let f = comb([0, 0, 1], 1, up, -up[2]);
+    if (Math.hypot(...f) < 0.05) f = comb([0, 1, 0], 1, up, -up[1]);
+    f = norm(f);
+    const r = norm(crossW(up, f));
+    const k = Math.min(sf.vHor / full, 1.15) * R0;
+    const dx = dot(drift, r) * k * -1, dy = -dot(drift, f) * k;
+    const tx = cx + dx, ty = cy + dy;
+    const col = sf.vHor > 3 ? "#ffc85a" : "#78ffaa";
+    stroke(() => {
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tx, ty);
+    }, col, 2.2);
+    ctx.beginPath();
+    ctx.arc(tx, ty, 4 * dpr, 0, 2 * Math.PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+  }
+  text(`DRIFT ${sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)} m/s`, cx, cy + R0 + 18 * dpr, sf.vHor > 3 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)", 11, "center", true);
+  text(`${full} m/s`, cx + R0 - 2 * dpr, cy - R0 + 2 * dpr, "rgba(124, 214, 255, 0.6)", 9, "right", true);
+  text(`AGL ${sf.alt >= 1000 ? `${(sf.alt / 1000).toFixed(2)} km` : `${Math.round(sf.alt)} m`}`, cx, cy - R0 - 16 * dpr, "#ffffff", 12, "center", true);
+  // ---- the vertical speed's bar (±20 m/s), right of the scope
+  const bx = cx + R0 + 22 * dpr, bh = R0 * 2;
+  stroke(() => {
+    ctx.moveTo(bx, cy - bh / 2);
+    ctx.lineTo(bx, cy + bh / 2);
+    ctx.moveTo(bx - 4 * dpr, cy);
+    ctx.lineTo(bx + 4 * dpr, cy);
+  }, "rgba(124, 214, 255, 0.5)", 1.2);
+  const vv = Math.max(-1, Math.min(1, sf.vVert / 20));
+  const vcol = vDown > Math.max(2, sf.alt / 10) ? "#ff5a46" : vDown > 2 ? "#ffc85a" : "#78ffaa";
+  ctx.fillStyle = vcol;
+  ctx.fillRect(bx - 3 * dpr, Math.min(cy, cy - vv * (bh / 2)), 6 * dpr, Math.abs(vv) * (bh / 2));
+  text(`${sf.vVert >= 0 ? "▲" : "▼"} ${Math.abs(sf.vVert).toFixed(1)}`, bx + 8 * dpr, cy - vv * (bh / 2), vcol, 10.5, "left", true);
+  // ---- the stop burn: the full-thrust deceleration against gravity, the distance it needs
+  const g = sf.gLocal * 9.80665;
+  const net = (sf.twr - 1) * g;
+  let cue = "", ccol = "rgba(214, 236, 255, 0.9)";
+  if (vDown > 1) {
+    if (net <= 0.05) (cue = "TWR < 1 · NO STOP"), (ccol = "#ff5a46");
+    else {
+      const stop = (vDown * vDown) / (2 * net);
+      const tIn = (sf.alt - stop * 1.1) / vDown;
+      if (tIn <= 0) {
+        if (Math.floor(performance.now() / 300) % 2 === 0) (cue = "BURN NOW"), (ccol = "#ff5a46");
+        else cue = " ";
+      } else if (tIn < 60) (cue = `BURN IN ${tIn.toFixed(tIn < 10 ? 1 : 0)} s`), (ccol = tIn < 5 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)");
+      else cue = `STOP ${Math.round(stop)} m`;
+    }
+  }
+  if (cue) text(cue, cx, cy + R0 + 36 * dpr, ccol, 13, "center", true);
+  // ---- the touchdown spot in the view: down the height, along the drift for as long as the fall lasts
+  if (up && vDown > 0.3) {
+    const tg = sf.alt / vDown;
+    const v = comb(up, -sf.alt, drift ?? [0, 0, 0], sf.vHor * tg);
+    const p = pr(norm(v));
+    if (inside(p, 12 * dpr)) {
+      const R = 11 * dpr;
+      stroke(() => {
+        ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
+        ctx.moveTo(p![0] - R * 1.6, p![1]);
+        ctx.lineTo(p![0] + R * 1.6, p![1]);
+        ctx.moveTo(p![0], p![1] - R * 1.6);
+        ctx.lineTo(p![0], p![1] + R * 1.6);
+      }, "#78ffaa", 1.6);
+      text(`TD ${Math.round(tg)} s`, p![0], p![1] + R * 2.3, "#78ffaa", 11, "center", true);
+    }
+  }
 }

@@ -275,6 +275,8 @@ export interface Settings {
   hudPath: boolean; // the predicted path drawn in perspective in the view (both universes)
   hudFuture: boolean; // the ship's places to come: +10, +30, +60 s, a quarter of the orbit
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
+  hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
+  hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -482,6 +484,8 @@ export function defaultSettings(): Settings {
     hudPath: true,
     hudFuture: true,
     hudImpact: true,
+    hudRunway: true,
+    hudHover: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,

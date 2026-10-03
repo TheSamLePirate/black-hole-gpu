@@ -76,7 +76,7 @@ Décisions de l'utilisateur :
 | H1 socle | fait : horizon et échelle de tangage conformes (champ central, fondu), bande de cap (nez, route, cible), échelle de roulis, radial et normal dans la vue, flèches au bord ; allégé dehors ; interrupteurs | · 158 |
 | H2 vol dans l'air | fait : incidence posée sur la symbologie (plage de finesse max., 85 % et décrochage), α chiffré, bille de dérapage, chevron d'énergie, facteur de charge, STALL/AOA, directeur de vol | · 159 |
 | H3 position future | fait : trajectoire prédite en perspective (deux univers, repère tournant près du sol), repères +10/+30/+60 s et ¼ d'orbite (fractions de la prédiction autour du trou), impact au sol / entrée / horizon avec compte à rebours ; correctif du chemin du trou jamais redessiné | · 160 |
-| H4 approche et atterrissage | à faire | |
+| H4 approche et atterrissage | fait : piste conforme (contour, seuil, axe 15 km), point visé de la pente, encadré (distance, écart, erreur de pente), FLARE ; atterrissage vertical : radar de dérive, vitesse verticale, AGL, allumage d'arrêt, point de toucher ; chute libre masquée en vol porté | · 161 |
 | H5 opérations dans l'espace | à faire | |
 | H6 près de Gargantua | à faire | |
 | H7 finitions | à faire | |

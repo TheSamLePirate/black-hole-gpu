@@ -19,7 +19,7 @@ import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { AirFlight, AIR_WARP } from "./flightair";
 import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type EntryState } from "./entry";
 import { envOf, type EnvDesc } from "./entry-env";
-import { siteDir, sitesOf, type Site } from "./game/sites";
+import { siteDir, sitesOf, type Site, SITES } from "./game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext, OpResult } from "./fc/ops";
 import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
@@ -139,6 +139,22 @@ export interface DockInfo {
   om: Vec3;
   /** the velocity against the target's point at the ring [m/s] */
   vrel: Vec3;
+}
+
+/** The runway in reach as the eye sees it (CameraController.runwayView): directions in camera
+ *  coordinates, distances [m]; along (< 0 before the threshold) and across (> 0 right of the axis) [m]. */
+export interface RunwayView {
+  name: string;
+  rwy: number;
+  along: number;
+  across: number;
+  agl: number;
+  corners: { d: Vec3; r: number }[];
+  line: { d: Vec3; r: number }[];
+  aim: { d: Vec3; r: number };
+  gRef: number | null;
+  gam: number | null;
+  final: boolean;
 }
 
 /** The future as the eye sees it (CameraController.futureView): directions in camera coordinates. */
@@ -6953,6 +6969,8 @@ export class CameraController {
          *  the pitch ladder, the heading) — at any height in its sphere */
         up: C(hz?.up ?? null),
         north: C(hz?.north ?? null),
+        /** near the ground: the velocity over it, its horizontal part's direction (the drift) */
+        drift: this.driftDir(cam, C),
       },
       // flat-map position, velocity and nose (black hole's frame), for the map
       X: null as Vec3 | null,
@@ -7189,6 +7207,79 @@ export class CameraController {
       () => (this.kerrPending = false),
     );
     return this.path;
+  }
+
+  /** The drift over the ground near a world (the horizontal part of the velocity over it), camera
+   *  coordinates; null when still or away from the ground. */
+  private driftDir(cam: ReturnType<typeof cameraFrame>, C: (v: Vec3) => Vec3 | null): Vec3 | null {
+    const fr = this.sfFrame(cam);
+    if (!fr) return null;
+    const vh = lin(fr.vRel, 1, fr.up, -dot3(fr.vRel, fr.up));
+    if (Math.hypot(...vh) < 0.05) return null;
+    return C(fr.toLocal(vh));
+  }
+
+  /**
+   * The runway in reach (the HUD's H4): the entry's own when it flies to one, else the nearest on this
+   * world within 80 km, the craft below 20 km — its outline, its centreline drawn 15 km back, the aim
+   * point 2 km short of the threshold (the glide path's), as the eye sees them; the craft's place along
+   * it and across it [m], the glide path asked and flown (the approach's, when it flies).
+   */
+  runwayView(): RunwayView | null {
+    const now = performance.now();
+    if (this.runwayCache && now - this.runwayCache.at < 100) return this.runwayCache.v;
+    const v = this.runwayCompute();
+    this.runwayCache = { at: now, v };
+    return v;
+  }
+  private runwayCache: { at: number; v: RunwayView | null } | null = null;
+  private runwayCompute(): RunwayView | null {
+    const cam = cameraFrame(this.s);
+    const fr = this.entryFrame(cam);
+    if (!fr) return null;
+    const x = fr.s.x;
+    const R = this.entryRun;
+    let site: Site | null = R?.site?.runway ? R.site : null;
+    const agl = this.aglNow(cam, Math.hypot(...x) - fr.env.R);
+    if (!site) {
+      if (agl > 20e3) return null;
+      let best = 80e3;
+      for (const st of SITES) {
+        if (st.body !== fr.body || !st.runway) continue;
+        const T = fr.place(st);
+        const ang = Math.acos(clamp(dot3(unitV(T), unitV(x)), -1, 1));
+        const d = ang * Math.hypot(...T);
+        if (d < best) (best = d), (site = st);
+      }
+    }
+    if (!site) return null;
+    const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    const D = Math.PI / 180;
+    const T = fr.place(site);
+    const tu = unitV(T);
+    const nav = this.ourNav(cam);
+    const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+    const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
+    const east = cross(north, tu);
+    const hd = (site.rwy ?? 0) * D;
+    const along = lin(north, Math.cos(hd), east, Math.sin(hd));
+    const rgt = cross(along, tu);
+    const see = (P: Vec3) => {
+      const d = sub3(P, x);
+      return { d: C(fr.toLocal(d)), r: Math.hypot(...d) };
+    };
+    const L = 4500, Wd = 90;
+    const at = (a: number, b: number) => lin(lin(T, 1, along, a), 1, rgt, b);
+    const rel = sub3(x, T);
+    const sAl = dot3(rel, along), xt = dot3(rel, rgt);
+    const app = R?.app ?? null;
+    return {
+      name: site.name.split(",")[0]!, rwy: site.rwy ?? 0, along: sAl, across: xt, agl,
+      corners: [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)].map(see),
+      line: Array.from({ length: 16 }, (_, k) => see(at(-k * 1000, 0))),
+      aim: see(at(-2000, 0)),
+      gRef: app?.final ? app.gRef ?? null : null, gam: app?.gam ?? null, final: !!app?.final,
+    };
   }
 
   /**
