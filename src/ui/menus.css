@@ -54,7 +54,7 @@
 .pm-save-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .pm-save-text b { font: 700 13px var(--hud-font); letter-spacing: 0.06em; color: var(--k-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-save-text span { font: 500 11.5px var(--font); color: var(--k-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-save-text small { font: 500 11px var(--mono); color: rgba(176, 196, 222, 0.5); }
+.pm-save-text small { font: 500 11px var(--mono); color: rgba(176, 196, 222, 0.72); }
 .pm-save-acts { display: flex; gap: 6px; flex: none; }
 .pm-empty { margin: 8px 0; color: var(--k-dim); font: italic 500 12px var(--font); }
 /* paused: the HUD's clocks and the toolbar dim under the menu */

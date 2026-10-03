@@ -794,7 +794,11 @@ export class Map3D {
     this.crumbs.replaceChildren();
     const chain = fid === "ship" ? [] : lineage(sc, fid);
     chain.forEach((b, j) => {
-      if (j) this.crumbs.append(h("span", "m3-sep", "›"));
+      if (j) {
+        const sep = h("span", "m3-sep", "›");
+        sep.setAttribute("aria-hidden", "true");
+        this.crumbs.append(sep);
+      }
       const e = h("button", j === chain.length - 1 ? "on" : "", b.name) as HTMLButtonElement;
       e.onclick = (ev) => {
         ev.stopPropagation();

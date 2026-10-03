@@ -47,6 +47,9 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.waitFor(`!document.querySelector("[data-testid=wheel]")`, 3000);
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("retrograde");
     await app.press("Backspace");
+    // (the pointer back to the centre: on a slow machine the tap may last long enough to open the wheel,
+    // and the pointer left on a sector would pick it)
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: w / 2, y: h / 2 });
     const before = await app.js<string>("__bh.settings.target");
     await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
     await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });

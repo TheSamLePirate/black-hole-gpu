@@ -486,7 +486,7 @@ export class SettingsPanel {
     card.dataset.scene = key;
     card.dataset.group = name ? sceneGroup(name) : "";
     card.replaceChildren(
-      h("span", { class: "sp-scene-ico" }, info?.icon ?? "✦"),
+      h("span", { class: "sp-scene-ico", "aria-hidden": "true" }, info?.icon ?? "✦"),
       h(
         "span",
         { class: "sp-scene-text" },
@@ -644,7 +644,7 @@ export class SettingsPanel {
                 h(
                   "button",
                   { class: "sp-scene small", dataset: { group: sceneGroup(n) }, onclick: () => this.applyScene(n) },
-                  h("span", { class: "sp-scene-ico" }, PRESET_INFO[n]?.icon ?? "•"),
+                  h("span", { class: "sp-scene-ico", "aria-hidden": "true" }, PRESET_INFO[n]?.icon ?? "•"),
                   h("span", { class: "sp-scene-text" }, h("b", {}, sceneTitle(n)), h("small", {}, PRESET_INFO[n]?.description ?? "")),
                 ),
               ),
@@ -788,6 +788,8 @@ export class SettingsPanel {
       row.hidden = d.visible ? !d.visible(this.s) : false;
       const enabled = d.enabled ? d.enabled(this.s) : true;
       row.classList.toggle("disabled", !enabled);
+      // (said to a screen reader too — and exempt from the contrast rule, as an inactive control)
+      row.setAttribute("aria-disabled", String(!enabled));
       for (const el of row.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, .sp-seg button"))
         el.disabled = !enabled;
       reset.classList.toggle("on", !sameValue(this.s[d.key], def()));
