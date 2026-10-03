@@ -1018,6 +1018,31 @@ export const SCHEMA: ControlDef[] = [
     keywords: "path trajectory tube cyan geodesic prediction",
   },
   {
+    key: "hudHorizon", type: "toggle", section: "game", group: "HUD aids", label: "Horizon & pitch ladder", effect: "none",
+    help: "Near a world: its horizon drawn in the view where it is, and a ladder every 5° above (solid) and below it (dashed) — how far the view and the nose are above or below it.",
+    keywords: "hud horizon pitch ladder attitude conformal",
+  },
+  {
+    key: "hudHeading", type: "toggle", section: "game", group: "HUD aids", label: "Heading tape", effect: "none",
+    help: "Near a world: the compass bearing at the top of the view (its north); carets for the nose (amber), the track (green) and the target (orange).",
+    keywords: "hud heading compass tape bearing track north",
+  },
+  {
+    key: "hudBank", type: "toggle", section: "game", group: "HUD aids", label: "Bank scale", effect: "none",
+    help: "Near a world: the scale fixed to the craft, its pointer to the sky's up — the bank, red past 60°.",
+    keywords: "hud bank roll scale angle",
+  },
+  {
+    key: "hudMarkers", type: "toggle", section: "game", group: "HUD aids", label: "Radial and normal in the view", effect: "none",
+    help: "The orbital markers drawn in the view as on the attitude ball: radial out / in (cyan), normal / anti-normal (magenta). (The target has its lock: a ring, its name and distance.)",
+    keywords: "hud radial normal antinormal target marker",
+  },
+  {
+    key: "hudEdge", type: "toggle", section: "game", group: "HUD aids", label: "Arrows to markers off screen", effect: "none",
+    help: "When the prograde, the burn or the docking port is out of the view, an arrow at the screen's edge points to it (the target's lock has its own).",
+    keywords: "hud edge arrow offscreen marker",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",

@@ -2777,6 +2777,32 @@ export class CameraController {
    * over it [m], what holds the craft (gravity and the frame, the air) [m/s²], and the conversions to
    * the pilot's local components. Null away from any ground or air.
    */
+  /**
+   * The local vertical and north (home frame, unit) near a world — ours (in its sphere of influence, not
+   * the Sun) or one of Gargantua's —, at any height: the HUD's horizon, pitch ladder and heading. Null
+   * elsewhere (the hole itself, interplanetary space).
+   */
+  private horizonAxes(cam: ReturnType<typeof cameraFrame>): { up: Vec3; north: Vec3 } | null {
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const id = nav.ref;
+      if (id === "sun" || !solarBody(id)) return null;
+      const up = unitV(sub3(nav.X, nav.refPos));
+      const ax = spinAxis(id);
+      let north = lin(ax, 1, up, -dot3(ax, up));
+      if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
+      return { up: unitV(nav.toRep(up)), north: unitV(nav.toRep(unitV(north))) };
+    }
+    const lf = this.local;
+    if (!lf || cam.region !== "hole") return null;
+    const xi = lf.L.xi;
+    const d = Math.hypot(...xi);
+    const up: Vec3 = [xi[0] / d, xi[1] / d, xi[2] / d];
+    let north: Vec3 = lin([0, 0, 1], 1, up, -up[2]);
+    if (Math.hypot(...north) < 1e-9) north = [1, 0, 0];
+    return { up: unitV(localToZamo(up)), north: unitV(localToZamo(unitV(north))) };
+  }
+
   private sfFrame(cam: ReturnType<typeof cameraFrame>) {
     const c = 299792458;
     const nav = this.ourNav(cam);
@@ -6853,6 +6879,7 @@ export class CameraController {
     const speed = Math.hypot(...cam.beta);
     const pro = speed > 1e-6 ? lin(cam.beta, 1 / speed, cam.beta, 0) : null;
     const R = this.radialOut(cam);
+    const hz = this.horizonAxes(cam);
     let normal: Vec3 | null = null;
     if (R && pro) {
       const n = cross(R, pro);
@@ -6911,6 +6938,10 @@ export class CameraController {
         tgtRetrograde: null as Vec3 | null,
         /** the station's nearest docking port, seen from the eye */
         dock: null as Vec3 | null,
+        /** near a world (ours, or one of Gargantua's): the local vertical and its north (the horizon,
+         *  the pitch ladder, the heading) — at any height in its sphere */
+        up: C(hz?.up ?? null),
+        north: C(hz?.north ?? null),
       },
       // flat-map position, velocity and nose (black hole's frame), for the map
       X: null as Vec3 | null,

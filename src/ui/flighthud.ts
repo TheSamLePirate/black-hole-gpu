@@ -31,6 +31,7 @@ import type { Arrival } from "../system/our-plan";
 import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
 import { cpuProf } from "../perf";
+import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
 import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
@@ -1849,6 +1850,12 @@ export class FlightHud {
       if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) return null;
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
+    // the conformal symbology first, under the rest: horizon, pitch ladder, heading, bank, the markers
+    drawSymbology({
+      ctx, W, H, dpr, fov: this.s.fov, s: this.s, i, density: this.density,
+      outside: ["around", "free", "flyby", "station"].includes(String(i.mount)),
+      top: Math.max(this.mission.getBoundingClientRect().bottom, 0) * dpr,
+    });
     const r = 11 * dpr;
     // (each mark twice: a dark outline under it for the bright sky, then its colour)
     const UNDER = "rgba(0, 0, 0, 0.4)";

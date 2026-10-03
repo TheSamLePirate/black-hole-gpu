@@ -263,6 +263,12 @@ export interface Settings {
   rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
   soiRings: boolean; // the spheres of influence on the map
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
+  // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
+  hudHorizon: boolean; // the horizon and the pitch ladder about the local vertical
+  hudHeading: boolean; // the heading tape (the world's north)
+  hudBank: boolean; // the bank scale and its pointer
+  hudMarkers: boolean; // radial and normal marked in the view
+  hudEdge: boolean; // arrows at the screen's edge to the markers out of it
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -459,6 +465,11 @@ export function defaultSettings(): Settings {
     rangerStatus: true,
     soiRings: true,
     pathInView: true,
+    hudHorizon: true,
+    hudHeading: true,
+    hudBank: true,
+    hudMarkers: true,
+    hudEdge: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,
