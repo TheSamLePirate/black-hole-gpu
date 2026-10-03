@@ -166,6 +166,9 @@ test("the propellant counted unless the Cinema engine", () => {
 });
 
 test("a craft lightens as it burns: its mass and its acceleration for the same force", () => {
+  // (each craft alone: other tests leave the fleet docked together — the shared singleton)
+  const links = fleet.links;
+  fleet.links = [];
   const before = fleet.massProps("lander").mass;
   fleet.tanks = { exhaust: 0.1, massRatio: 20 };
   fleet.spent = { lander: 0.1 * Math.log(2) };
@@ -176,4 +179,5 @@ test("a craft lightens as it burns: its mass and its acceleration for the same f
   fleet.tanks = null;
   fleet.spent = {};
   expect(fleet.massProps("lander").mass).toBe(before);
+  fleet.links = links;
 });
