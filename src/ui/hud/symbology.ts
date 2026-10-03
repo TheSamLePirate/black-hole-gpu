@@ -885,6 +885,19 @@ function drawRunway(
   const line = rw.line.filter(front).map((q) => pr(q.d)!);
   if (line.length > 1)
     stroke(() => line.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(124, 214, 255, 0.75)", 1.4, [8, 6]);
+  // the path in the sky: the gates down the profile, the nearest brightest (guidance: magenta)
+  rw.gates.forEach((g, k) => {
+    if (!g.every(front)) return;
+    const pts = g.map((q) => pr(q.d)!);
+    stroke(
+      () => {
+        pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+      },
+      `rgba(255, 110, 230, ${(0.95 - k * 0.15).toFixed(2)})`,
+      k ? 1.4 : 2,
+    );
+  });
   // the aim point
   const a = front(rw.aim) ? pr(rw.aim.d) : null;
   if (inside(a, 6 * dpr)) {
@@ -917,7 +930,12 @@ function drawRunway(
   const x = W / 2 - Math.min(W, H) * 0.44,
     y = H / 2 - 10 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
-  ctx.fillRect(x - 96 * dpr, y - 28 * dpr, 192 * dpr, rw.gRef !== null && rw.gam !== null ? 70 * dpr : 54 * dpr);
+  ctx.fillRect(
+    x - 96 * dpr,
+    y - 28 * dpr,
+    192 * dpr,
+    (rw.gRef !== null && rw.gam !== null ? 70 : 54) * dpr + (rw.papi !== null ? 16 * dpr : 0),
+  );
   text(
     `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
     x,
@@ -946,6 +964,22 @@ function drawRunway(
       "center",
       true,
     );
+  }
+  // the PAPI: four lights under the box — white above the path, red below (two and two: on it)
+  if (rw.papi !== null) {
+    const r = 5 * dpr,
+      gap = 16 * dpr,
+      py = y + (rw.gRef !== null && rw.gam !== null ? 54 : 38) * dpr;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.arc(x + (k - 1.5) * gap, py, r, 0, 2 * Math.PI);
+      ctx.fillStyle = k < rw.papi ? "#f4f8ff" : "#ff3c32";
+      ctx.fill();
+      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.stroke();
+    }
+    text("PAPI", x + 2.6 * gap, py, "rgba(214, 236, 255, 0.8)", 10.5, "left", true);
   }
   if (rw.final && rw.agl < 60 && rw.agl > 1) {
     const on = blinkOn();

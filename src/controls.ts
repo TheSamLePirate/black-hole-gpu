@@ -129,6 +129,10 @@ export interface RunwayView {
   gRef: number | null;
   gam: number | null;
   final: boolean;
+  /** the PAPI on the final: how many of its four lights are white (4 high … 2 on the path … 0 low), null off it */
+  papi: number | null;
+  /** the path in the sky on the final: gates every 1.5 km down the landing profile, their corners as seen */
+  gates: { d: Vec3; r: number }[][];
 }
 
 /** The hub's card (CameraController.hubInfo): the autopilot, what it does now, its figures, its prediction. */

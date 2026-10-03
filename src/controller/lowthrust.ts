@@ -42,7 +42,7 @@ import { caught } from "../debug";
 import { frameNow } from "../frameclock";
 
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
-import { LANDING, clamp, fmtDur, spinAxis, unitV } from "./util";
+import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
 
 declare module "../controls" {
   interface CameraController {
@@ -1329,7 +1329,27 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const sAl = dot3(rel, along),
     xt = dot3(rel, rgt);
   const app = R?.app ?? null;
+  // the final's aids: the landing profile (the autopilot's own) ahead — gates every 1.5 km down it, and
+  // the PAPI: the height's deviation from it as an angle seen from the touchdown, in lights
+  let papi: number | null = null;
+  const gates: { d: Vec3; r: number }[][] = [];
+  if (app?.final && R?.gOuter) {
+    const sp = Math.max(app.speed, 50);
+    const L = landingProfile(sAl, agl, sp, R.gOuter);
+    const dev = (Math.atan2(agl - L.h, Math.max(LANDING.td - sAl, 200)) * 180) / Math.PI;
+    papi = dev > 1 ? 4 : dev > 0.35 ? 3 : dev >= -0.35 ? 2 : dev >= -1 ? 1 : 0;
+    for (let k = 1; k <= 5; k++) {
+      const xk = sAl + k * 1500;
+      if (xk > LANDING.td - 300) break;
+      const hk = landingProfile(xk, agl, sp, R.gOuter).h;
+      // (the site's frame is in metres: the gate hk up its local vertical)
+      const corner = (b: number, dh: number) => see(lin(at(xk, b), 1, tu, hk + dh));
+      gates.push([corner(-100, -40), corner(100, -40), corner(100, 40), corner(-100, 40)]);
+    }
+  }
   return {
+    papi,
+    gates,
     name: site.name.split(",")[0]!,
     rwy: site.rwy ?? 0,
     along: sAl,
