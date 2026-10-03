@@ -902,6 +902,7 @@ async function main() {
       return c ? sitesOf(c.body) : [];
     },
     site: () => camera.entrySite,
+    siteTrack: (st) => camera.fcSiteTrack(st),
     setSite: (st) => (camera.entrySite = st),
     land: () => {
       if (camera.pilot.auto !== "entry") pilotAuto("entry");

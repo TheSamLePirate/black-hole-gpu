@@ -63,6 +63,10 @@
 .fc-site { text-align: left; letter-spacing: 0.02em; display: flex; flex-direction: column; gap: 1px; }
 .fc-site b { font: 700 12px var(--hud-font); letter-spacing: 0.05em; }
 .fc-site small { font: 500 10px "JetBrains Mono", monospace; color: rgba(176, 196, 222, 0.65); }
+.fc-site i, .fc-burns i { font-style: normal; }
+.fc-okc { color: #78ffaa; }
+.fc-warnc { color: #ffc85a; }
+.fc-dim { color: rgba(176, 196, 222, 0.5); }
 .fc-sec { padding: 8px 0 10px; border-bottom: 1px solid rgba(160, 210, 255, 0.08); }
 .fc-sec-t { font: 700 11px var(--hud-font); letter-spacing: 0.22em; color: #ffb35c; margin-bottom: 5px; }
 .fc-kv { display: flex; justify-content: space-between; gap: 10px; padding: 1.5px 0; }

@@ -20,6 +20,7 @@ import { AirFlight, AIR_WARP } from "./flightair";
 import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type EntryState } from "./entry";
 import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site, SITES } from "./game/sites";
+import type { SiteTrack } from "./fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext, OpResult } from "./fc/ops";
 import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
@@ -3216,6 +3217,45 @@ export class CameraController {
     const n = F.n / Msec;
     const v = [L.w[0] * c - n * x[1], L.w[1] * c + n * x[0], L.w[2] * c] as KV3;
     return { ctx: { mu: F.m * F.mPerM * c * c, R: F.R * F.mPerM, r: x, v, pole: [0, 0, 1] }, body: F.id, bodyName: BODY_NAMES[F.id as Body] ?? F.id, targetName: null, universe: "gargantua" };
+  }
+
+  /**
+   * A landing site as the flight computer's LAND tab follows it (fc/land-ops.ts): where it will be in
+   * the context's axes (fcContext's: body-centred, not turning — the body turning the site under the
+   * orbit: ours on their own axes, Gargantua's worlds with their frame) at dt seconds from now, and the
+   * craft's reach across its track (the entry's crossrange: the Ranger's lift ~600 km, the Lander's
+   * ~150 km). Null away from its body.
+   */
+  fcSiteTrack(site: Site): SiteTrack | null {
+    const c = this.fcContext();
+    if (!c || c.body !== site.body) return null;
+    const reach = fleet.active === "ranger" ? 600e3 : 150e3;
+    const name = site.name.split(",")[0]!;
+    const cam = cameraFrame(this.s);
+    const nav = this.ourNav(cam);
+    if (nav) {
+      const id = nav.ref, bf = bodyFixedOf(id, site.lat, site.lon, 0), t0 = nav.t;
+      return {
+        name, reach,
+        at: (dt) => {
+          const t = t0 + dt / M_SECONDS;
+          const X = sub3(fromBodyFixed(id, bf, t), solarState(id, t).pos);
+          return lin(X, M_METRES, X, 0);
+        },
+      };
+    }
+    const lf = this.local;
+    if (!lf) return null;
+    const F = lf.F;
+    const n = F.n / (4.925490947e-6 * this.s.massSolar);
+    const d0 = siteDir(site), Rm = F.R * F.mPerM;
+    return {
+      name, reach,
+      at: (dt) => {
+        const a = n * dt;
+        return [(d0[0] * Math.cos(a) - d0[1] * Math.sin(a)) * Rm, (d0[0] * Math.sin(a) + d0[1] * Math.cos(a)) * Rm, d0[2] * Rm];
+      },
+    };
   }
 
   /** The flight computer's burns about one of Gargantua's worlds (its frame): their time [s of the

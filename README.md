@@ -84,7 +84,9 @@ GPU process being lost.
 - **The flight computer** (the full-screen map, M; `src/fc/`, `src/ui/fc/`): the operations — launch to
   orbit (height, inclination), circularize (at an apsis, or NOW in closed loop), apoapsis, periapsis,
   Hohmann, inclination, resonance; match planes, rendezvous and intercept (their porkchop, a click flies a
-  cell), match velocities, approach, hold position, fine-tune the approach; land, deorbit and entry;
+  cell), match velocities, approach, hold position, fine-tune the approach; land, deorbit and entry — the
+  LAND tab lists each site's next pass within the craft's reach (the body turning under the orbit) and
+  plans the plane change that puts a pass right over the chosen one (`src/fc/land-ops.ts`);
   **missions between bodies** (the MISSION tab, O: in both universes — our planets, moons, the ISS, the
   craft, the wormhole; Gargantua's worlds, the star, the mouth — an orbit, a fly-by or a free return, the
   window); Gargantua's own planners about the hole — each **previewed on the map** (its path drawn in
