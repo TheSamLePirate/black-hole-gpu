@@ -7,6 +7,9 @@ import { gameLog } from "./game/log";
 /** a development build: the dev server, the tests */
 export const DEV = typeof location === "undefined" || /^(localhost|127\.|\[::1\])/.test(location.hostname);
 
+/** the game tools (F2: placement, targets, audit, journal…): a development build, or a page opened with ?dev */
+export const DEV_TOOLS = DEV || (typeof location !== "undefined" && /[?&]dev\b/.test(location.search));
+
 export function assert(cond: unknown, msg: string): asserts cond {
   if (!cond && DEV) throw new Error(`assert: ${msg}`);
 }

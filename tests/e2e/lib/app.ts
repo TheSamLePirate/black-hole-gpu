@@ -8,6 +8,8 @@ const KEYCODES: Record<string, number> = {
   Space: 32,
   Tab: 9,
   Enter: 13,
+  ArrowDown: 40,
+  ArrowUp: 38,
   F2: 113,
   F5: 116,
   F9: 120,
@@ -105,7 +107,8 @@ export class App {
   async press(code: string, key?: string, o: { shift?: boolean } = {}) {
     const k =
       key ?? (code.startsWith("Key") ? code[3]!.toLowerCase() : code.startsWith("Digit") ? code[5]! : code === "Backquote" ? "`" : code);
-    const text = k.length === 1 ? k : undefined;
+    // (Enter types a carriage return, as a keyboard does: what activates a focused button)
+    const text = k.length === 1 ? k : code === "Enter" ? "\r" : undefined;
     const ev = { code, key: k, windowsVirtualKeyCode: vk(code), nativeVirtualKeyCode: vk(code), modifiers: o.shift ? 8 : 0 };
     await this.cdp.send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", ...ev, text });
     await this.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });

@@ -7,6 +7,7 @@ import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { PauseMenu } from "./ui/pause";
+import { TitleScreen } from "./ui/title";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -70,7 +71,7 @@ import { gameTimeOf, issAxes, issStart, issTrack } from "./system/iss";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 import { store } from "./util/storage";
-import { caught, DEV } from "./debug";
+import { caught, DEV, DEV_TOOLS } from "./debug";
 import { advanceFrameClock, frameNow } from "./frameclock";
 import { dateNow } from "./util/now";
 import { KerrBench } from "./bench/runner";
@@ -440,7 +441,7 @@ async function main() {
     scheduleUrlSave();
   };
   const actions: Record<string, () => void> = {
-    "btn-tools": () => toolsWin.toggle(),
+    "btn-tools": () => DEV_TOOLS && toolsWin.toggle(),
     "btn-scenes": () => scenes.toggle(),
     "btn-sound": () => toggleSound(),
     "btn-camera": () => {
@@ -1265,7 +1266,7 @@ async function main() {
       toast: (t) => panel.toast(t),
     });
   /** the title screen, once built (ui/title.ts) */
-  let titleScreen: { open(): void } | null = null;
+  let titleScreen: TitleScreen | null = null;
   const quickSave = () => {
     try {
       panel.toast(`Quick save — ${tools.save("Quick save")}`);
@@ -1283,7 +1284,7 @@ async function main() {
 
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
-    tools: () => toolsWin.toggle(),
+    tools: () => DEV_TOOLS && toolsWin.toggle(),
     // (held flight keys: translation, throttle — read each frame by the controller)
     held: () => {},
     throttleFull: () => {
@@ -1396,7 +1397,7 @@ async function main() {
     },
   };
   addEventListener("keydown", (e: KeyboardEvent) => {
-    if (isTyping(e) || e.metaKey || e.ctrlKey) return;
+    if (isTyping(e) || e.metaKey || e.ctrlKey || titleScreen?.isOpen) return;
     const b = matchKey(e, flying(), e.code in FLIGHT_KEYS);
     if (!b) return;
     e.preventDefault();
@@ -1529,6 +1530,8 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // (the game tools are the developers': a development build or ?dev — the player's saves are in the pause menu)
+  $("btn-tools").hidden = !DEV_TOOLS;
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   let appVersion = "dev";
   void fetch("version.json")
@@ -1869,13 +1872,49 @@ async function main() {
       panel.toast(`That link's saved game could not be read: ${(e as Error).message}`);
     }
     const last = autosave.get();
+    // (the flight saved last loaded behind the title screen: Continue only lifts it)
+    let resumed: string | null = null;
     try {
       if (shared) panel.toast(`Shared flight: ${tools.load(shared)}`);
       else if (scene && presets[scene]) applyPreset(scene);
-      else if (hash.length <= 1 && last && settings.autosave) panel.toast(`Resumed: ${tools.load(last)}`);
+      else if (hash.length <= 1 && last && settings.autosave) {
+        tools.load(last, { quiet: true });
+        resumed = last.summary;
+      }
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
     }
+    // the title screen (ui/title.ts), unless the link named a scene, a moment or the benchmark
+    // (Continue: the flight resumed behind the screen at launch; later — the screen opened from the
+    // pause menu — the game left there)
+    let started = false;
+    titleScreen = new TitleScreen({
+      saved: () => (started ? tools.snapshot("now").summary : resumed),
+      hold: (on) => {
+        paused = on;
+        if (!on) started = true;
+        touch();
+      },
+      missions: () => scenes.open("", "game"),
+      explore: () => scenes.open(),
+      photo: () => {
+        // (the view alone: the ship left, the interface hidden — H brings it back, P saves a PNG)
+        if (camera.piloting) actions["btn-ship"]!();
+        if (!document.body.classList.contains("hide-ui")) toggleUi();
+        panel.toast("Photo mode — H: the interface · P: a PNG · Render: offline, any size");
+      },
+      settings: () => panel.toggle(true),
+      bench: () => {
+        location.hash = "bench";
+        location.reload();
+      },
+      version: () => appVersion,
+    });
+    // (after the title, the game's own state: a flight resumed or not, the same)
+    if (!shared && !(scene && presets[scene]) && !benchPage) {
+      titleScreen.open();
+      void splash.gone.then(() => titleScreen?.focusFirst());
+    } else started = true;
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }
   // (the first frame once the fonts are in — at most a second and a half: a slow network draws in the

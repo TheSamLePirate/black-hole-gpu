@@ -69,9 +69,22 @@ Découvertes en route :
 | U1.1 | **Polices auto-hébergées** (`src/fonts/`, OFL : Inter, JetBrains Mono, Rajdhani ; sous-ensemble latin seul, que le build de production inline : 146 Ko) à la place du CDN Google ; première frame après leur chargement (1,5 s au plus). **Trouvé** : les étiquettes du ciel écrivaient `var(--hud-font)` dans `ctx.font` — invalide sur un canvas, ignoré, donc en police par défaut 10 px ; les overlays en polices système. Tout passe par `FONT`/`MONO` (hudkit), 11 px au moins | fait | `e0e628b`, `b65b0db` |
 | U1.2 | **Kit** `src/ui/kit/` : `el`, `h`, `icon` (registre unique), `button`, `kbd`, `modal` (rôle `dialog`, `aria-modal`, titre lié, focus pris puis rendu, Échap par la pile unique) ; `kit.css` : les tokens du langage HUD (cadre, crochets d'angle, titres ambre en capitales Rajdhani, valeurs en mono, cyan pour l'actionnable). 9 copies locales de `h()` remplacées | fait | `e0e628b` |
 | U1.3 | **Réglages refaits dans le langage HUD** : `.glass` (réglages, menu, aide, galerie, barre d'outils, rendu) devient le cadre du kit, quasi opaque (le HUD ne transparaît plus), coins 3–6 px, crochets ; onglets, segments, interrupteurs, curseurs (pouce vertical étroit, piste cyan), champs de valeur, en-têtes de groupe en capitales. L'aide « ? » est une modale du kit | fait | `e0e628b` |
-| U1.4 | **Galerie de scènes, rendu offline, panneau Détails** dans le langage HUD (Caméra, Ciel et outils F2 l'étaient déjà). Corrigés : l'infobulle revenait après un clic (le bouton redessiné sous le pointeur) ; le panneau Caméra passait sous la légende de scène. **e2e d'accessibilité** `a11y.e2e.test.ts` (T2 et T8 de l'audit) : chaque contrôle visible nommé — en vol, réglages ouverts, à pied, panneau Caméra (5 curseurs et interrupteurs sans nom corrigés) ; l'aide est un dialogue modal nommé par son titre, le focus dedans ; une grille de 24 × 16 points n'atteint aucune couche invisible. **Harnais** : chaque Chrome headless efface son profil à la fermeture (97 profils, 12 Go, avaient rempli le disque) | fait | (ce commit) |
+| U1.4 | **Galerie de scènes, rendu offline, panneau Détails** dans le langage HUD (Caméra, Ciel et outils F2 l'étaient déjà). Corrigés : l'infobulle revenait après un clic (le bouton redessiné sous le pointeur) ; le panneau Caméra passait sous la légende de scène. **e2e d'accessibilité** `a11y.e2e.test.ts` (T2 et T8 de l'audit) : chaque contrôle visible nommé — en vol, réglages ouverts, à pied, panneau Caméra (5 curseurs et interrupteurs sans nom corrigés) ; l'aide est un dialogue modal nommé par son titre, le focus dedans ; une grille de 24 × 16 points n'atteint aucune couche invisible. **Harnais** : chaque Chrome headless efface son profil à la fermeture (97 profils, 12 Go, avaient rempli le disque) | fait | `563627e` |
 
 Avant / après : `docs/img/aaa/u1-settings-before.png`, `u1-settings-after.png`, `u1-help.png`, `u1-scenes.png`, `u1-render.png`, `u1-camera.png`.
+
+## U2 : la couche jeu (en cours)
+
+Décisions du propriétaire (03/10) : **Échap = menu pause** (le temps s'arrête), couper l'autopilote, le maintien, la mission passe sur **⌫ Retour arrière** ; **écran titre à chaque lancement** (un lien `#scene=`, `#save=` ou `#bench` va droit à la scène).
+
+| # | Étape | Statut | Commit |
+|---|---|---|---|
+| U2.1 | **Menu pause** (`src/ui/pause.ts`, FR/EN) : reprendre, sauvegarder sous un nom (ou écraser), charger / supprimer (confirmé), rendre les commandes, réglages, commandes, écran titre ; ↑ ↓ Entrée ; Échap revient d'une sous-page. **⌫** rend les commandes, **F5 / F9** sauvegarde et chargement rapides. e2e : le temps tenu, une sauvegarde faite et listée, F5/F9 | fait | `96b71e6` |
+| U2.2 | **Écran titre** (`src/ui/title.ts`) : la dernière partie chargée derrière (Continuer ne fait que lever l'écran), le temps tenu, le HUD masqué ; Continuer, Missions (la galerie filtrée sur le jeu), Explorer, Mode photo (la vue seule), Réglages ; Kerr Bench, langue FR/EN, version. Rouvert depuis la pause, Continuer reprend la partie laissée. **Outils F2 réservés au développement** (build local ou `?dev`) : les sauvegardes du joueur sont dans la pause. e2e : ouverture, temps tenu, Échap n'ouvre pas la pause dessous, ↑ ↓ Entrée, retour depuis la pause | fait | (ce commit) |
+| U2.3 | Sélecteur de missions plein écran (briefing, LANCER) | à faire | |
+| U2.4 | Écran de chargement en « séquence de démarrage » | à faire | |
+
+Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`.
 
 ## Journal
 

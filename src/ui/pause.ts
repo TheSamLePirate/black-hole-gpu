@@ -155,11 +155,18 @@ export class PauseMenu {
     const list = h("div", { class: "pm-saves" });
     for (const g of slots.list())
       list.append(
-        this.saveRow(g.name, g.summary, g.savedAt, [button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name) })]),
+        this.saveRow(g.name, g.summary, g.savedAt, [
+          button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name) }),
+        ]),
       );
     this.page(
       tr(T.save),
-      h("div", { class: "pm-row" }, name, button({ label: tr(T.saveNew), kind: "primary", testid: "pause-save-new", onClick: () => doSave(name.value) })),
+      h(
+        "div",
+        { class: "pm-row" },
+        name,
+        button({ label: tr(T.saveNew), kind: "primary", testid: "pause-save-new", onClick: () => doSave(name.value) }),
+      ),
       list,
       button({ label: tr(T.back), onClick: () => this.main() }),
     );

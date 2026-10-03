@@ -39,6 +39,7 @@ import { sub } from "../math/vec3";
 import { store } from "../util/storage";
 import { onEscape } from "./keys";
 import { el as h } from "./kit";
+import { DEV_TOOLS } from "../debug";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -486,6 +487,8 @@ export class FlightHud {
     const soundBtn = iconBtn("sound", "Sound on / off (Settings › Game › Sound: the mix)", () => act.sound(), "fl-soundbtn");
     this.missionEls.soundBtn = soundBtn;
     const toolsBtn = iconBtn("tools", "Game tools: status, place, target, time, saves, audit, journal", () => act.tools());
+    // (the game tools are the developers': a development build or ?dev)
+    toolsBtn.hidden = !DEV_TOOLS;
     const dens = iconBtn("density", "HUD density: full · minimal · clean", () => this.cycleDensity());
     // the camera's view on the Ranger: a menu (its attach points, outside: around it, free)
     const viewBox = h("div", "fl-viewbox");

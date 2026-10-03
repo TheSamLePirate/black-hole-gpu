@@ -141,3 +141,6 @@
   stroke-linejoin: round;
   flex: none;
 }
+
+/* (an element hidden is hidden, whatever display its own rule gives it) */
+#toolbar > [hidden], .fl-root button[hidden] { display: none !important; }

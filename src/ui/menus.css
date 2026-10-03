@@ -59,3 +59,53 @@
 .pm-empty { margin: 8px 0; color: var(--k-dim); font: italic 500 12px var(--font); }
 /* paused: the HUD's clocks and the toolbar dim under the menu */
 body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.8); }
+
+/* ---------------------------------------------------------------- the title screen */
+.ts-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 clamp(20px, 7vw, 120px);
+  /* the scene behind, darkened towards the menu's side */
+  background: linear-gradient(90deg, rgba(2, 4, 9, 0.88) 0%, rgba(2, 4, 9, 0.62) 34%, rgba(2, 4, 9, 0.08) 70%, transparent 100%);
+  animation: ts-in 0.6s ease-out both;
+}
+@keyframes ts-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ts-root { animation: none; } }
+.ts-panel { width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.ts-logo {
+  margin: 0;
+  font: 700 clamp(56px, 9vw, 104px) / 0.9 var(--hud-font);
+  letter-spacing: 0.32em;
+  color: #f3f7ff;
+  text-shadow: 0 0 40px rgba(255, 179, 92, 0.35), 0 0 2px rgba(255, 255, 255, 0.6);
+}
+.ts-tagline { margin: 0 0 18px; font: 600 14px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-amber); }
+.ts-list { display: flex; flex-direction: column; gap: 6px; }
+.ts-item {
+  position: relative;
+  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 11px 16px 11px 22px;
+  font-size: 16px;
+  letter-spacing: 0.24em;
+  background: rgba(8, 13, 23, 0.55);
+}
+.ts-item:focus, .ts-item:hover:not(:disabled) { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 14px rgba(111, 210, 255, 0.22) inset; outline: none; }
+.ts-item:focus::before { content: "▸"; position: absolute; left: 7px; top: 11px; color: var(--k-on); }
+.ts-hint { font: 500 11.5px var(--font); letter-spacing: 0.02em; text-transform: none; color: var(--k-dim); }
+.ts-keys { margin: 6px 0 0; display: flex; align-items: center; gap: 5px; font: 500 11px var(--mono); color: var(--k-dim); }
+.ts-foot { position: absolute; left: clamp(20px, 7vw, 120px); right: 24px; bottom: 22px; display: flex; align-items: center; gap: 16px; font: 500 11px var(--mono); color: var(--k-dim); }
+.ts-bench { color: var(--k-on); text-decoration: none; letter-spacing: 0.04em; }
+.ts-bench:hover { text-decoration: underline; }
+.ts-lang { display: flex; gap: 4px; }
+.ts-lang .k-btn { padding: 3px 8px; }
+.ts-version { margin-left: auto; }
+/* the title over the scene: the flight's instruments, the tools and the toasts out of sight */
+body.title-open .fl-root, body.title-open .fl-hud, body.title-open #toolbar, body.title-open #hud, body.title-open #panel,
+body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root, body.title-open #tp-dock { display: none !important; }

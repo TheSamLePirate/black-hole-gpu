@@ -74,7 +74,8 @@ export class SceneGallery {
     return !this.root.hidden;
   }
 
-  open(query = "") {
+  /** Opens the gallery (a search typed in, or one group shown — the title screen's Missions). */
+  open(query = "", group?: SceneGroup) {
     if (this.isOpen) return;
     this.returnFocus = document.activeElement as HTMLElement | null;
     this.root.hidden = false;
@@ -82,6 +83,7 @@ export class SceneGallery {
     // (a fresh look each time)
     this.search.value = this.query = query.trim().toLowerCase();
     if (query) this.group = "all";
+    if (group) this.group = group;
     this.render();
     requestAnimationFrame(() => {
       this.root.classList.add("show");
