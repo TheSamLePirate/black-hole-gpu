@@ -2189,9 +2189,9 @@ export const SCHEMA: ControlDef[] = [
     type: "toggle",
     section: "game",
     group: "Ranger",
-    label: "Propellant gauge",
+    label: "Propellant",
     effect: "none",
-    help: "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.",
+    help: "The Crew engine burns propellant (the Cinema engine has no tank): a relativistic rocket whose tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it and the craft lightens (m/m₀ = e^(−w/vₑ)) — the engine's force fixed, its acceleration grows. In the air the ambient pressure on the nozzle lowers the thrust and the Isp. Each craft has its own tank, full again with a new flight. When it is empty the engines stop; the planners show the plan's cost against what is left.",
     keywords: "fuel propellant delta-v budget rocket mass ratio",
   },
   {

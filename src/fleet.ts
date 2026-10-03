@@ -6,6 +6,7 @@
 //
 // Home frame, M units (lengths, times), velocities in c; the docking links in metres.
 
+import { massLeft } from "./engine";
 import { secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
@@ -77,6 +78,15 @@ export class Fleet {
   links: DockLink[] = [];
   /** the flown craft's place now (controls.ts) */
   activePose: (() => (Pose & { t: number }) | null) | null = null;
+  /** the rapidity each craft's engines have spent since its tank was filled (the propellant gauge) */
+  spent: Partial<Record<VesselId, number>> = {};
+  /** the tanks' model (the scene's exhaust speed and mass ratio); null: no propellant counted */
+  tanks: { exhaust: number; massRatio: number } | null = null;
+
+  /** A craft's mass now over its full mass: its propellant burnt (engine.ts). */
+  massLeft(id: VesselId): number {
+    return this.tanks ? massLeft(this.tanks, this.spent[id] ?? 0) : 1;
+  }
 
   /** The craft (and the station) docked together with id, id included. */
   assembly(id: VesselId | "iss"): (VesselId | "iss")[] {
@@ -230,9 +240,11 @@ export class Fleet {
    *  of its craft's frame [m] (the flown one's by default). */
   massProps(root: VesselId = this.active): { mass: number; com: Vec3; inertia: number; own: number } {
     const me = VESSELS[root];
-    const own = me.mass * me.gyr * me.gyr;
+    // (each craft as heavy as its propellant left: the dry mass when its tank is empty)
+    const m = (id: VesselId) => VESSELS[id].mass * this.massLeft(id);
+    const own = m(root) * me.gyr * me.gyr;
     const group = this.assembly(root).filter((v) => v !== "iss");
-    if (group.length < 2) return { mass: me.mass, com: me.com, inertia: own, own };
+    if (group.length < 2) return { mass: m(root), com: me.com, inertia: own, own };
     // each piece's frame in the flown one's (the links walked from it)
     const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([
       [
@@ -274,15 +286,15 @@ export class Fleet {
     let com: Vec3 = [0, 0, 0];
     for (const [id, F] of frames) {
       const v = VESSELS[id];
-      mass += v.mass;
-      com = lin(com, 1, lin(F.c, 1, onAxes(F.ax, v.com), 1), v.mass);
+      mass += m(id);
+      com = lin(com, 1, lin(F.c, 1, onAxes(F.ax, v.com), 1), m(id));
     }
     com = lin(com, 1 / mass, com, 0);
     let inertia = 0;
     for (const [id, F] of frames) {
       const v = VESSELS[id];
       const d = sub(lin(F.c, 1, onAxes(F.ax, v.com), 1), com);
-      inertia += v.mass * (v.gyr * v.gyr + dot(d, d));
+      inertia += m(id) * (v.gyr * v.gyr + dot(d, d));
     }
     return { mass, com, inertia, own };
   }

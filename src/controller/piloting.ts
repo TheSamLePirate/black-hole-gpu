@@ -13,6 +13,7 @@ import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal,
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
 import { fleet } from "../fleet";
+import { fuelOn } from "../engine";
 import { VESSELS } from "../vessels";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
@@ -92,7 +93,6 @@ function setPilot(this: CameraController, on: boolean) {
   this.pilot.auto = "none";
   this.plan = { nodes: [], path: null, at: 0, note: "" };
   this.transfer = null;
-  this.spent = 0;
   this.local = null;
   this.warpAfter = null;
   this.restoreWarp();
@@ -127,6 +127,9 @@ function newFlight(this: CameraController) {
   this.airBrake = 0;
   this.airFlight.reset(fleet.active);
   this.airFlight.cfg = {};
+  // (the tanks full again: every craft's)
+  fleet.spent = {};
+  this.pilot.engineNow = 0;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.pilot.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   this.contrails.clear();
@@ -696,6 +699,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     this.ourWarp = null;
     this.warpWant = null;
   }
+  // (the tanks as the scene has them: the fleet's masses follow their propellant)
+  fleet.tanks = fuelOn(s) ? { exhaust: s.exhaust, massRatio: s.massRatio } : null;
   if (this.pilot.auto !== "node") this.rails(cam);
   const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
   const tauRate = s.animate ? s.timeSpeed * dtau : 0;
@@ -784,6 +789,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20) ||
         (this.nodeBurning && onOurSide(s, cam)),
       gimbal: this.nodeBurning && onOurSide(s, cam),
+      // (the Crew engine's lag, over the frame's flight time; the Cinema engine's, none)
+      spoolK: s.engine === "crew" ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool) : 1,
     },
     inp,
   );
@@ -818,7 +825,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const w = Math.hypot(...(sfCtx ? sub3(out.acc, sfCtx.free) : out.acc)) * (this.properTime - tau0);
   if (this.entryRun?.phase === "burn") this.entryRun.done += w * C_MPS;
   if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing) this.fcBurns[0].done += w * C_MPS;
-  this.spent += w;
+  // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
+  if (fuelOn(s)) this.spent += w / Math.max(this.pressureThrust(), 0.05);
   if (burn && this.nodeBurning) this.nodeDone += w;
   this.dockCheck();
   this.measureSpin();

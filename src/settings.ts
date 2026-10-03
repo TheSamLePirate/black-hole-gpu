@@ -430,7 +430,7 @@ export function defaultSettings(): Settings {
     thrust: 0.02,
     engine: "cinema",
     crewG: 1,
-    fuel: false,
+    fuel: true,
     exhaust: 0.1,
     massRatio: 20,
     showGeodesic: true,

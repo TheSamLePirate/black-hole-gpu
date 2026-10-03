@@ -10,6 +10,7 @@
 //   __bh.game.save("before TMI"); __bh.game.load("before TMI")
 //   await __bh.game.audit({ planner: true })
 
+import { fleet } from "../fleet";
 import type { Settings, Target } from "../settings";
 import { defaultSettings, pickSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
@@ -417,6 +418,7 @@ export class GameTools {
         speedMode: c.speedMode,
         landed: L ? { body: L.body, q: [...L.q] as V3 } : null,
         spent: c.spent,
+        spentBy: { ...fleet.spent },
         properTime: c.properTime,
       },
       plan: c.plan.nodes.length ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission } : null,
@@ -446,6 +448,7 @@ export class GameTools {
       p.precision = save.ship.precision;
       p.throttle = save.ship.throttle;
       c.speedMode = save.ship.speedMode;
+      if (save.ship.spentBy) fleet.spent = { ...save.ship.spentBy };
       c.spent = save.ship.spent;
       c.properTime = save.ship.properTime;
       if (save.plan) {

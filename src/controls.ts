@@ -268,8 +268,14 @@ export class CameraController {
   prevWant: { U: Vec3; tau: number; body: string } | null = null;
   /** the warp to give back once a low-thrust cruise has reached its orbit */
   warpAfter: number | null = null;
-  /** rapidity spent by the engines since the tank was filled (the propellant gauge) */
-  spent = 0;
+  /** rapidity spent by the flown craft's engines since its tank was filled (the propellant gauge) —
+   *  each craft keeps its own (fleet.spent) */
+  get spent() {
+    return fleet.spent[fleet.active] ?? 0;
+  }
+  set spent(w: number) {
+    fleet.spent[fleet.active] = w;
+  }
   pathKey = "";
   pathCost = 0;
   /** the free-fall path asked of the planner's worker, not back yet */

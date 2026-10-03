@@ -173,7 +173,6 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.plan = { nodes: [], path: null, at: 0, note: "" };
   this.issGoal = null;
   this.ourMission = null;
-  this.spent = 0;
   this.outside.dist = VESSELS[id].viewDist;
   this.settleMount();
   // (an assembly flown: the camera's velocity its centre of mass's; turning, it keeps turning — the

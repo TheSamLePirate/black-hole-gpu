@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { accelToG, engineThrust, gToAccel, rapidityCost, tank } from "../src/engine";
+import { fleet } from "../src/fleet";
+import { VESSELS } from "../src/vessels";
+import { accelToG, engineThrust, fuelOn, gToAccel, massLeft, P0, pressureFactor, rapidityCost, spool, tank } from "../src/engine";
 import { advance, fromZamo, toZamo } from "../src/geodesic";
 import { drift, epicycle, rendezvousPush, type State6 } from "../src/lowthrust";
 import { coordToZamo, zamo, zamoToCoord, type Vec3 } from "../src/physics";
@@ -133,3 +135,45 @@ test("minimum-energy rendezvous at 1 g: from 0.5 M behind Miller to its side, at
   expect(Math.hypot(end[3], end[4], end[5])).toBeLessThan(1e-4);
   expect(spent).toBeLessThan(0.01);
 }, 60000);
+
+// Phase 2 — the propulsion: the craft lightens as it burns (a = F/m), the air takes thrust and Isp off,
+// the engine lags its throttle; the Cinema engine has no tank.
+test("the mass left: e^(−w/vₑ), down to the dry mass and no lower", () => {
+  const s = { exhaust: 0.1, massRatio: 20 };
+  expect(massLeft(s, 0)).toBe(1);
+  expect(massLeft(s, 0.05)).toBeCloseTo(Math.exp(-0.5), 12);
+  expect(massLeft(s, 10)).toBeCloseTo(1 / 20, 12);
+});
+
+test("the ambient pressure: the vacuum's thrust, the sea level's share at 1 atm, none past the nozzle's limit", () => {
+  expect(pressureFactor(0.9, 0)).toBe(1);
+  expect(pressureFactor(0.9, P0)).toBeCloseTo(0.9, 12);
+  expect(pressureFactor(0.4, 3 * P0)).toBe(0);
+});
+
+test("the engine's lag: a first-order answer to the throttle", () => {
+  expect(spool(0, 1, 0.4, 0.4)).toBeCloseTo(1 - Math.exp(-1), 12);
+  expect(spool(0.3, 1, 0.1, 0)).toBe(1);
+  let x = 0;
+  for (let i = 0; i < 100; i++) x = spool(x, 1, 0.05, 0.4);
+  expect(x).toBeGreaterThan(0.999);
+});
+
+test("the propellant counted unless the Cinema engine", () => {
+  expect(fuelOn({ fuel: true, engine: "crew" })).toBe(true);
+  expect(fuelOn({ fuel: true, engine: "cinema" })).toBe(false);
+  expect(fuelOn({ fuel: false, engine: "crew" })).toBe(false);
+});
+
+test("a craft lightens as it burns: its mass and its acceleration for the same force", () => {
+  const before = fleet.massProps("lander").mass;
+  fleet.tanks = { exhaust: 0.1, massRatio: 20 };
+  fleet.spent = { lander: 0.1 * Math.log(2) };
+  const after = fleet.massProps("lander").mass;
+  expect(after / before).toBeCloseTo(0.5, 9);
+  // (the others untouched)
+  expect(fleet.massProps("endurance").mass).toBe(VESSELS.endurance.mass);
+  fleet.tanks = null;
+  fleet.spent = {};
+  expect(fleet.massProps("lander").mass).toBe(before);
+});

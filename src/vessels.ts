@@ -33,8 +33,12 @@ export interface VesselDef {
   name: string;
   /** dry mass with its propellant [kg] */
   mass: number;
-  /** its engines' acceleration alone, as a share of the crew setting's (the Ranger's: 1) */
+  /** its engines' acceleration alone, as a share of the crew setting's (the Ranger's: 1) — at full tanks */
   accel: number;
+  /** its main engine's thrust at sea level over its thrust in a vacuum (the nozzle's exit against the air) */
+  slThrust: number;
+  /** its main engine's answer to the throttle: a lag's time constant [s] */
+  spool: number;
   /** its radius of gyration [m]: the moment of inertia, m k² — how fast it turns (the Ranger's turn rates
    *  for its own) */
   gyr: number;
@@ -175,6 +179,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     name: "Ranger",
     mass: 40e3,
     accel: 1,
+    // (a spaceplane's engines: a short nozzle, quick)
+    slThrust: 0.9,
+    spool: 0.4,
     gyr: 4.2,
     agility: 1,
     com: [0, 1.25, 1.5],
@@ -226,6 +233,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     name: "Lander",
     mass: 160e3,
     accel: 0.75,
+    // (a lander's throttleable engine)
+    slThrust: 0.85,
+    spool: 0.3,
     gyr: 7.5,
     agility: 0.55,
     com: [0, 2.6, 0.5],
@@ -276,6 +286,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     name: "Endurance",
     mass: 900e3,
     accel: 0.12,
+    // (a vacuum engine's long bell: little thrust left at sea level; a big engine, slow)
+    slThrust: 0.4,
+    spool: 1.5,
     gyr: 24,
     agility: 0.2,
     com: [0, 0, 0],

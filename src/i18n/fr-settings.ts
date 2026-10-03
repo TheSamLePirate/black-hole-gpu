@@ -616,9 +616,6 @@ export default {
   "Auto warp for manoeuvres": "Accélération du temps auto en manœuvre",
   "On, executing a plan sets the warp itself: fast through the coasts, slow for the burns. Off, the warp is yours, live (, and . or the time bar), never faster than the autopilot's — a coast faster would pass the burn, a burn faster would overshoot its Δv. Also AUTO on the time bar while a plan is set.":
     "Activée, l'exécution d'un plan règle elle-même l'accélération : rapide pendant les phases balistiques, lente pendant les poussées. Désactivée, l'accélération est à vous, en direct (, et . ou la barre de temps), jamais plus rapide que celle du pilote automatique — une phase balistique plus rapide dépasserait la poussée, une poussée plus rapide dépasserait son Δv. Aussi AUTO sur la barre de temps quand un plan est défini.",
-  "Propellant gauge": "Jauge d'ergols",
-  "A relativistic rocket: the tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it (m/m₀ = e^(−w/vₑ)). When it is empty the engines stop. The planners show the plan's cost against what is left.":
-    "Une fusée relativiste : le réservoir contient un budget de rapidité vₑ ln(m₀/m_dry) ; chaque poussée en dépense ∫a dτ (m/m₀ = e^(−w/vₑ)). Quand il est vide, les moteurs s'arrêtent. Les planificateurs comparent le coût du plan à ce qui reste.",
   "Exhaust speed": "Vitesse d'éjection",
   "Effective exhaust speed vₑ (1 c: a photon rocket).": "Vitesse d'éjection effective vₑ (1 c : une fusée à photons).",
   "Mass ratio": "Rapport de masse",
@@ -1202,4 +1199,8 @@ export default {
   on: "activé",
   off: "désactivé",
   All: "Toutes",
+  // (phase 2: the propellant counted by default)
+  Propellant: "Propergol",
+  "The Crew engine burns propellant (the Cinema engine has no tank): a relativistic rocket whose tank holds a rapidity budget vₑ ln(m₀/m_dry); every burn spends ∫a dτ of it and the craft lightens (m/m₀ = e^(−w/vₑ)) — the engine's force fixed, its acceleration grows. In the air the ambient pressure on the nozzle lowers the thrust and the Isp. Each craft has its own tank, full again with a new flight. When it is empty the engines stop; the planners show the plan's cost against what is left.":
+    "Le moteur Équipage consomme du propergol (le moteur Cinéma n'a pas de réservoir) : une fusée relativiste dont le réservoir contient un budget de rapidité vₑ ln(m₀/m_sec) ; chaque poussée en dépense ∫a dτ et l'engin s'allège (m/m₀ = e^(−w/vₑ)) — la force du moteur restant la même, son accélération augmente. Dans l'air, la pression ambiante sur la tuyère réduit la poussée et l'Isp. Chaque engin a son propre réservoir, plein à chaque nouveau vol. Vide, les moteurs s'arrêtent ; les planificateurs montrent le coût du plan face à ce qui reste.",
 } satisfies Record<string, string>;

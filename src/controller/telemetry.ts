@@ -4,7 +4,7 @@ import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
 import { bodyCentre, bodyVelocity, ourTarget } from "../targeting";
 import { fromZamo } from "../geodesic";
-import { tank } from "../engine";
+import { fuelOn, tank } from "../engine";
 import { toU, type Auto } from "../pilot";
 import type { ManeuverNode } from "../maneuver";
 import { shipToCamera } from "../mounts";
@@ -296,7 +296,7 @@ function flightInfo(this: CameraController): FlightInfo {
     air: this.airInfo(),
     entry: this.entryInfo(),
     /** the engine and the tank */
-    engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
+    engine: { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null },
     /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
     target: s.target,
     targetDist: NaN,

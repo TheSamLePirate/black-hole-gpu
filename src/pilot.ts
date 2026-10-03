@@ -142,6 +142,9 @@ export interface FlightContext {
   /** the engine gimballed onto the burn: its thrust along the commanded direction (a node's burn
    *  in our universe — a nose lagging a mrad behind a turning prograde is 3 m/s off a TLI) */
   gimbal?: boolean;
+  /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
+   *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
+  spoolK?: number;
 }
 
 export interface FlightOutput {
@@ -172,6 +175,8 @@ export class FlightComputer {
   auto: Auto = "none";
   /** last proper acceleration [c²/M] and where the attitude controller points */
   accel = 0;
+  /** the main engine's thrust now, as a share of its maximum (the throttle's, lagging: engine.ts spool) */
+  engineNow = 0;
   burn: V3 | null = null;
   /** the position an autopilot holds (local frame of the moment it engaged), if any */
   anchor: V3 | null = null;
@@ -408,6 +413,10 @@ export class FlightComputer {
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));
     }
+    // (the engine follows the throttle with its lag)
+    const k = c.spoolK ?? 1;
+    this.engineNow = c.thrust > 0 ? this.engineNow + (throttle - this.engineNow) * Math.min(Math.max(k, 0), 1) : 0;
+    throttle = this.engineNow;
     const rcsAuth = TUNING.rcs * c.thrust;
     const rl = len(rcsC);
     this.fired = {

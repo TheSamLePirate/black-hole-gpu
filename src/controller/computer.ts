@@ -4,7 +4,7 @@ import { cameraFrame } from "../camera";
 import type { Vec3 } from "../physics";
 import type { Target } from "../settings";
 import { bodyCentre, BODY_NAMES, type Body, bodyVelocity, isCraft } from "../targeting";
-import { tank } from "../engine";
+import { fuelOn, tank } from "../engine";
 import { attitudeFor } from "../entry";
 import { siteDir, type Site } from "../game/sites";
 import type { SiteTrack } from "../fc/land-ops";
@@ -549,7 +549,7 @@ function fcBudget(this: CameraController): { dv: number; accel: number } {
   const s = this.s;
   const c = C_MPS;
   // (no gauge: the propellant is not counted)
-  const left = s.fuel ? tank(s, this.spent).left * c : Infinity;
+  const left = fuelOn(s) ? tank(s, this.spent).left * c : Infinity;
   return { dv: left, accel: (this.thrustMax() * c * c) / (1476.625 * s.massSolar) };
 }
 

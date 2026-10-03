@@ -19,7 +19,7 @@ import {
 import { fromZamo } from "../geodesic";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
-import { accelToG, tank } from "../engine";
+import { accelToG, fuelOn, tank } from "../engine";
 import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
 import { type Site, SITES } from "../game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
@@ -133,7 +133,7 @@ function planLowThrust(this: CameraController, goal: "orbit" | "star" | "wormhol
   this.plan = { nodes: [], path: null, at: 0, note: "" };
   this.transfer = tr;
   const w = Math.atanh(Math.min(dv, 0.999));
-  const budget = s.fuel ? tank(s, this.spent) : null;
+  const budget = fuelOn(s) ? tank(s, this.spent) : null;
   const over = !budget
     ? ""
     : w > budget.left

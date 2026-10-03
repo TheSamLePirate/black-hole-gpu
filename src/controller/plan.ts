@@ -20,7 +20,7 @@ import {
   ourTarget,
 } from "../targeting";
 import { fromZamo, step as geoStep, toZamo } from "../geodesic";
-import { engineThrust, tank } from "../engine";
+import { engineThrust, fuelOn, pressureFactor, tank } from "../engine";
 import { followDv, type V3 as KV3 } from "../fc/kepler";
 import type { Burn } from "../fc/ops";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kHohmann } from "../fc/kerr-ops";
@@ -92,6 +92,7 @@ declare module "../controls" {
     toZamo: typeof toZamoMethod;
     fromZamo: typeof fromZamoMethod;
     thrustMax: typeof thrustMax;
+    pressureThrust: typeof pressureThrust;
     refuel: typeof refuel;
     holeOmega: typeof holeOmega;
   }
@@ -1382,11 +1383,22 @@ function fromZamoMethod(this: CameraController, cam: ReturnType<typeof cameraFra
 /** The engine's maximum proper acceleration now [c²/M]: none once the tank is empty. */
 function thrustMax(this: CameraController) {
   const s = this.s;
-  if (s.fuel && tank(s, this.spent).empty) return 0;
-  // (the craft flown: its own engines — a share of the crew setting's —, over its assembly's mass: the
-  // craft docked to it are pushed along)
+  if (fuelOn(s) && tank(s, this.spent).empty) return 0;
+  // (the craft flown: its own engines' force — a share of the crew setting's at full tanks —, over its
+  // assembly's mass now: the craft docked to it pushed along, the propellant burnt lightening it; in the
+  // air, the ambient pressure on the nozzle's exit taken off)
   const V = VESSELS[fleet.active];
-  return (engineThrust(s) * V.accel * V.mass) / fleet.massProps().mass;
+  return (engineThrust(s) * V.accel * V.mass * this.pressureThrust()) / fleet.massProps().mass;
+}
+
+/** The main engine's thrust over its vacuum thrust here: the ambient pressure on its exit (engine.ts). */
+function pressureThrust(this: CameraController) {
+  if (this.s.engine !== "crew") return 1;
+  const A = this.airFlight.last?.air;
+  if (!A || !(A.rho > 0)) return 1;
+  // (p = ρ R T, the gas's own constant)
+  const p = A.rho * (A.gas?.R ?? 287.05) * A.T;
+  return pressureFactor(VESSELS[fleet.active].slThrust, p);
 }
 
 /** Fills the tank again. */
@@ -1434,6 +1446,7 @@ export function installPlan(C: { prototype: CameraController }) {
     toZamo: toZamoMethod,
     fromZamo: fromZamoMethod,
     thrustMax,
+    pressureThrust,
     refuel,
     holeOmega,
   });

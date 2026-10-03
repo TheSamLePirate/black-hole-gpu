@@ -38,6 +38,8 @@ export interface GameSave {
     speedMode: "orbit" | "target";
     landed: { body: string; q: [number, number, number] } | null;
     spent: number;
+    /** each craft's propellant spent (the fleet's tanks; older saves: the flown one's alone) */
+    spentBy?: Record<string, number>;
     properTime: number;
   };
   plan: { nodes: ManeuverNode[]; note: string; mission: unknown } | null;
