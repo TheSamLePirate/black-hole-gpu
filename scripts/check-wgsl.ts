@@ -39,7 +39,7 @@ const chrome = Bun.spawn(
       : []),
     "about:blank",
   ],
-  { stdout: "ignore", stderr: "ignore" },
+  { stdout: "ignore", stderr: "pipe" },
 );
 const done = (code: number) => {
   chrome.kill();
@@ -48,14 +48,18 @@ const done = (code: number) => {
 };
 try {
   let page: { webSocketDebuggerUrl: string } | undefined;
-  for (let i = 0; i < 100 && !page; i++) {
+  for (let i = 0; i < 300 && !page; i++) {
     page = await fetch(`http://127.0.0.1:${port}/json`)
       .then((r) => r.json() as Promise<{ type: string; webSocketDebuggerUrl: string }[]>)
       .then((l) => l.find((t) => t.type === "page"))
       .catch(() => undefined);
     if (!page) await Bun.sleep(100);
   }
-  if (!page) throw new Error(`Chrome did not start (${CHROME})`);
+  if (!page) {
+    chrome.kill();
+    const err = await new Response(chrome.stderr).text();
+    throw new Error(`Chrome did not start (${CHROME})\n${err.split("\n").slice(-15).join("\n")}`);
+  }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((ok) => (ws.onopen = ok));
   let id = 0;
