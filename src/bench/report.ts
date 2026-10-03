@@ -15,6 +15,48 @@ export interface FrameStats {
   over33: number;
 }
 
+/** A realtime subsampling, as the setting has it: the automatic choice, or one ray per N×N pixels. */
+export type Subsampling = "auto" | 1 | 2 | 3 | 4 | 6 | 8;
+
+/** The subsampling sweep's settings, in order (the complete run's, the script's default). */
+export const SUBSAMPLINGS: Subsampling[] = ["auto", 1, 2, 3, 4, 6, 8];
+
+/** The frame intervals' buckets [ms]: up to 120, 60, 30, 20, 10 fps, and slower. */
+export const HISTOGRAM_EDGES = [8.4, 16.7, 33.4, 50, 100];
+
+/**
+ * One subsampling measured on a scene (the sweep): the frame rate and its spread, the GPU's time per
+ * frame and per pass, the rays; with the automatic one, the blocks it chose and the render scales the
+ * dynamic resolution took. The manual ones at the Game quality's pixel ratio, the dynamic resolution off.
+ */
+export interface SubsamplingPoint extends FrameStats {
+  subsampling: Subsampling;
+  dynamicResolution: boolean;
+  /** frames measured over the window */
+  frames: number;
+  windowMs: number;
+  /** the frame intervals by bucket: "≤8.4", "≤16.7", "≤33.4", "≤50", "≤100", ">100" [frames] */
+  histogram: Record<string, number>;
+  /** the GPU's time per frame, from its start to its completion [ms] (mean, p50, p95, max) */
+  gpuMs: { mean: number; p50: number; p95: number; max: number };
+  /** the timestamps' sum over a profiled frame's passes [ms] (null: no timestamps here) */
+  gpuPassesMs: number | null;
+  gpuPasses: { pass: string; ms: number }[];
+  mraysPerS: number;
+  /** rays traced per frame [M] and per displayed pixel */
+  mraysPerFrame: number;
+  raysPerPx: number;
+  /** the subsampling each frame was drawn with, the render scale [frames] */
+  blocks: Record<string, number>;
+  scales: Record<string, number>;
+  /** the canvas [px] at the end of the window, the pixel ratio asked */
+  width: number;
+  height: number;
+  pixelRatio: number;
+  /** the image in motion at this setting (the script's capture: a path in the report's folder) */
+  shot?: string | null;
+}
+
 export interface SceneReport {
   scene: string;
   status: "ok" | "timeout" | "error" | "skipped";
@@ -34,6 +76,10 @@ export interface SceneReport {
   longTasks: number;
   vramMiB: number | null;
   errors: string[];
+  /** the subsampling sweep (the complete run, the script) */
+  subsampling?: SubsamplingPoint[];
+  /** the image still, converged to full resolution (the script's capture) and how long it took [ms] */
+  still?: { shot: string | null; convergeMs: number; spp: number } | null;
 }
 
 export interface QualityPoint {
@@ -62,6 +108,8 @@ export interface BenchReport {
   load: { firstImageMs: number | null; stages: { id: string; label: string; ms: number }[] };
   scenes: SceneReport[];
   quality: QualityPoint[];
+  /** the run's own settings: the viewport, the timings, the subsamplings swept */
+  run?: { viewport: [number, number, number]; subsamplings: Subsampling[]; sweepWarmMs: number; sweepMs: number; shots: boolean };
   thermal: { scene: string; firstMraysPerS: number; lastMraysPerS: number; driftPct: number } | null;
   peakVramMiB: number | null;
   errors: { gpu: number; caught: Record<string, number>; deviceLost: string | null };
@@ -99,6 +147,31 @@ export function tierOfScore(score: number | null): { tier: number | null; qualit
   if (score === null) return { tier: null, quality: null };
   const tier = score >= 1500 ? 4 : score >= 800 ? 3 : score >= 400 ? 2 : score >= 150 ? 1 : 0;
   return { tier, quality: ["low", "medium", "game", "high", "ultra"][tier]! };
+}
+
+/** Frame intervals by bucket (HISTOGRAM_EDGES). */
+export function histogram(intervals: number[]): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(
+    [...HISTOGRAM_EDGES.map((e) => `≤${e}`), `>${HISTOGRAM_EDGES.at(-1)}`].map((k) => [k, 0]),
+  );
+  for (const x of intervals) {
+    const e = HISTOGRAM_EDGES.find((e) => x <= e);
+    out[e === undefined ? `>${HISTOGRAM_EDGES.at(-1)}` : `≤${e}`]!++;
+  }
+  return out;
+}
+
+/** Mean, median, 95th percentile and maximum of samples. */
+export function spread(xs: number[]) {
+  const v = [...xs].sort((a, b) => a - b);
+  const r = (x: number) => +x.toFixed(2);
+  if (!v.length) return { mean: 0, p50: 0, p95: 0, max: 0 };
+  return {
+    mean: r(v.reduce((a, x) => a + x, 0) / v.length),
+    p50: r(v[Math.floor(0.5 * v.length)]!),
+    p95: r(v[Math.min(v.length - 1, Math.floor(0.95 * v.length))]!),
+    max: r(v.at(-1)!),
+  };
 }
 
 /** Percentiles of frame intervals [ms]. */

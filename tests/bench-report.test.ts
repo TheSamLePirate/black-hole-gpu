@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import {
   checkReport,
   frameStats,
+  histogram,
   kerrScore,
   reportFileName,
   SCHEMA,
+  spread,
   tierOfScore,
   type BenchReport,
   type SceneReport,
@@ -64,4 +66,10 @@ test("a report read back: its schema checked, a file name from the machine", () 
   } as unknown as BenchReport;
   expect(checkReport(r)).toBe(r);
   expect(reportFileName(r)).toBe("kerr-bench-NVIDIA-GeForce-RTX-3060-2026-10-04.json");
+});
+
+test("the subsampling sweep's figures: the frame times by bucket, the GPU times' spread", () => {
+  expect(histogram([5, 8.4, 9, 16, 20, 40, 60, 150])).toEqual({ "≤8.4": 2, "≤16.7": 2, "≤33.4": 1, "≤50": 1, "≤100": 1, ">100": 1 });
+  expect(spread([4, 1, 3, 2, 10])).toEqual({ mean: 4, p50: 3, p95: 10, max: 10 });
+  expect(spread([])).toEqual({ mean: 0, p50: 0, p95: 0, max: 0 });
 });

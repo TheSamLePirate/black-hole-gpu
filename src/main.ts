@@ -1730,6 +1730,12 @@ async function main() {
       if (!renderer.prof.enabled) (renderer.prof.enabled = true), renderer.prof.reset();
       return renderer.prof.table().map((p) => ({ pass: p.label, ms: Math.round(p.ms * 100) / 100 }));
     },
+    resetPasses: () => {
+      renderer.prof.enabled = true;
+      renderer.prof.reset();
+    },
+    gpuFrameMs: () => (renderer.prof.frames ? Math.round(renderer.prof.frameMs * 100) / 100 : null),
+    lastStats: () => lastStats,
     firstImageAt: () => firstFrameAt,
     get version() {
       return appVersion;

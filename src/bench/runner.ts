@@ -1,7 +1,10 @@
 // The Kerr Bench's runs: the reference scenes one after another, each measured as a player has it
 // (phase A: the Game quality, its automatic subsampling and dynamic resolution) and at a fixed setting
 // comparable between machines (phase B: subsampling 4, the image ~1.44 Mpx, its throughput in Mrays/s);
-// the first scene again at the end (the machine's heat); in the complete run, the qualities swept.
+// the first scene again at the end (the machine's heat); in the complete run, the qualities swept and,
+// on every scene, the realtime subsampling swept (auto, then one ray per 1×1 … 8×8 pixels: the frame
+// rate, the GPU's time per frame and per pass, the rays) — with the script's captures of each setting in
+// motion and of the image still (scripts/bench.ts: a JSON and its pictures).
 // The measuring logic of scripts/bench.ts, in the app: a friend's browser, the nightly headless run
 // and the local A/B all measure the same thing (__bh.bench).
 
@@ -19,9 +22,14 @@ import {
   REFERENCE,
   type BenchMode,
   type BenchReport,
+  histogram,
+  spread,
+  SUBSAMPLINGS,
   type FrameStats,
   type QualityPoint,
   type SceneReport,
+  type Subsampling,
+  type SubsamplingPoint,
 } from "./report";
 import { systemInfo } from "./sysinfo";
 import { vram } from "./vram";
@@ -38,6 +46,11 @@ export interface BenchContext {
   touch(): void;
   renderScale(): number;
   gpuPasses(): { pass: string; ms: number }[];
+  /** the GPU profiler's means started again (one measure's passes alone), its last frame's sum [ms] */
+  resetPasses(): void;
+  gpuFrameMs(): number | null;
+  /** the last frame drawn: realtime or converging, its samples per pixel */
+  lastStats(): { phase: string; spp: number } | null;
   /** when the first image was on screen [performance.now() ms] */
   firstImageAt(): number | null;
   version: string;
@@ -72,6 +85,22 @@ interface Timing {
   fixedWarm: number;
   fixed: number;
 }
+/** The subsampling sweep's timing per setting: warmed, then measured [ms]. */
+const SWEEP_TIMING: Record<BenchMode, { warm: number; ms: number }> = {
+  quick: { warm: 1000, ms: 2500 },
+  standard: { warm: 1500, ms: 4000 },
+  complete: { warm: 2000, ms: 5000 },
+};
+
+/** A scene's name as a file's (the captures' folders). */
+export const slug = (n: string) =>
+  n
+    .normalize("NFKD")
+    .replace(/[^\w]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase()
+    .slice(0, 60);
+
 const TIMING: Record<BenchMode, Timing> = {
   quick: { warm: 2500, auto: 4000, fixedWarm: 1500, fixed: 3000 },
   standard: { warm: 4000, auto: 8000, fixedWarm: 2500, fixed: 5000 },
@@ -103,6 +132,13 @@ export class KerrBench {
     machineLabel?: string;
     scenes?: string[];
     onProgress?: (p: BenchProgress) => void;
+    /** the realtime subsamplings swept on each scene (default: the complete run's all, else none) */
+    subsampling?: Subsampling[];
+    /**
+     * A capture of the screen as it is now (the script's, over the DevTools protocol): its path, or null.
+     * Called with "<scene>/<what>"; the frames keep being drawn as in the measure meanwhile.
+     */
+    shot?: (name: string) => Promise<string | null>;
   }): Promise<BenchReport> {
     this.cancelled = false;
     this.running = true;
@@ -115,13 +151,34 @@ export class KerrBench {
     const scenes = (o.scenes ?? (o.mode === "quick" ? BENCH_SCENES.slice(0, 4) : BENCH_SCENES)).filter((n) => n in c.presets);
     const T = TIMING[o.mode];
     const sweep = o.mode === "complete" ? scenes.slice(0, 2) : [];
-    const steps = scenes.length + 1 + sweep.length * SWEEP.length;
+    const subs = o.subsampling ?? (o.mode === "complete" ? SUBSAMPLINGS : []);
+    const ST = SWEEP_TIMING[o.mode];
+    // (a scene with its subsampling sweep weighs about twice a scene alone)
+    const per = subs.length ? 1 + (subs.length * (ST.warm + ST.ms)) / (T.warm + T.auto + T.fixedWarm + T.fixed) : 1;
+    const steps = scenes.length * per + 1 + sweep.length * SWEEP.length;
     let done = 0;
     const report = this.emptyReport(o.mode, o.machineLabel ?? "");
+    report.run = {
+      viewport: [innerWidth, innerHeight, devicePixelRatio],
+      subsamplings: subs,
+      sweepWarmMs: ST.warm,
+      sweepMs: ST.ms,
+      shots: !!o.shot,
+    };
     try {
       for (const name of scenes) {
-        report.scenes.push(await this.scene(name, T, (f) => this.progress((done + f) / steps, name)));
+        const sr = await this.scene(name, T, (f) => this.progress((done + f) / steps, name));
+        report.scenes.push(sr);
         done++;
+        if (subs.length && sr.status === "ok") {
+          sr.subsampling = [];
+          for (const [k, sub] of subs.entries()) {
+            this.progress((done + ((per - 1) * k) / subs.length) / steps, name, `subsampling ${sub === "auto" ? "auto" : `${sub}×`}`);
+            sr.subsampling.push(await this.subsamplingPoint(name, sub, ST, o.shot));
+          }
+          sr.still = await this.still(name, o.shot);
+        }
+        done += per - 1;
       }
       // the machine's heat: the first scene's fixed throughput again
       const first = report.scenes.find((s) => s.status === "ok" && s.fixed);
@@ -253,6 +310,86 @@ export class KerrBench {
     return { scene, quality: q, fps: w.fps, p95: w.p95, raysPerPx: w.raysPerPx };
   }
 
+  /**
+   * One realtime subsampling on the scene loaded: the Game quality at its pixel ratio, the subsampling
+   * set (the automatic one with the dynamic resolution, as in the game; a fixed one without), warmed,
+   * measured, then captured in motion.
+   */
+  async subsamplingPoint(
+    scene: string,
+    sub: Subsampling,
+    S: { warm: number; ms: number },
+    shot?: (name: string) => Promise<string | null>,
+  ): Promise<SubsamplingPoint> {
+    const c = this.c;
+    const pixelRatio = Math.min(devicePixelRatio, 1.25);
+    Object.assign(c.settings, QUALITY.game, {
+      quality: "game",
+      realtimeSubsampling: sub,
+      dynamicResolution: sub === "auto",
+      fpsCap: 0,
+      pixelRatio,
+      autosave: false,
+    });
+    c.resize();
+    c.refresh();
+    // (a fixed subsampling measured at the full scale: the dynamic resolution's last scale undone)
+    const ts = performance.now();
+    while (sub !== "auto" && c.renderScale() !== 1 && performance.now() - ts < 5000) await this.frame();
+    await this.hold(S.warm);
+    c.resetPasses();
+    const w = await this.window(S.ms, () => {}, sub === "auto" ? "auto" : `${sub}×`);
+    const point: SubsamplingPoint = {
+      subsampling: sub,
+      dynamicResolution: sub === "auto",
+      ...this.stats(w),
+      frames: w.frames,
+      windowMs: Math.round(w.spanMs),
+      histogram: histogram(w.intervals),
+      gpuMs: spread(w.gpu),
+      gpuPassesMs: c.gpuFrameMs(),
+      gpuPasses: c.gpuPasses().slice(0, 12),
+      mraysPerS: w.mraysPerS,
+      mraysPerFrame: +(w.raysPerFrame * 1e-6).toFixed(3),
+      raysPerPx: w.raysPerPx,
+      blocks: w.blocks,
+      scales: w.scales,
+      width: c.canvas.width,
+      height: c.canvas.height,
+      pixelRatio: +pixelRatio.toFixed(3),
+    };
+    if (shot) point.shot = await this.pose(() => shot(`${slug(scene)}/rt-${sub === "auto" ? "auto" : `x${sub}`}`));
+    return point;
+  }
+
+  /**
+   * The image still: the time held, nothing marked changed — the frames refine it to full resolution
+   * (at most 12 s) —, then captured.
+   */
+  private async still(scene: string, shot?: (name: string) => Promise<string | null>): Promise<SceneReport["still"]> {
+    const c = this.c;
+    c.settings.animate = false;
+    c.refresh();
+    const t0 = performance.now();
+    while (performance.now() - t0 < 12000) {
+      await nextFrame();
+      if (this.cancelled) throw new Cancelled();
+      if (c.renderer.lost) throw new Error(`the GPU was lost: ${c.renderer.lost}`);
+      if (performance.now() - t0 > 300 && c.lastStats()?.phase === "converged") break;
+    }
+    const convergeMs = Math.round(performance.now() - t0);
+    const spp = +(c.lastStats()?.spp ?? 0).toFixed(2);
+    return { shot: shot ? await shot(`${slug(scene)}/still`) : null, convergeMs, spp };
+  }
+
+  /** While `f` runs (a capture), the frames go on as in the measure (the realtime image, not refined). */
+  private async pose<T>(f: () => Promise<T>): Promise<T> {
+    let done = false;
+    const p = f().finally(() => (done = true));
+    while (!done) await this.frame();
+    return p;
+  }
+
   /** The Game quality as a player has it. */
   private game() {
     const c = this.c;
@@ -301,6 +438,7 @@ export class KerrBench {
     const c = this.c,
       r = c.renderer;
     const iv: number[] = [];
+    const gpu: number[] = [];
     const blocks: Record<string, number> = {},
       scales: Record<string, number> = {};
     let rays = 0,
@@ -314,6 +452,7 @@ export class KerrBench {
       if (d === last) continue;
       if (last) iv.push(d - last);
       last = d;
+      gpu.push(r.lastGpuMs);
       const b = r.realtimeBlockNow,
         sc = c.renderScale();
       blocks[b] = (blocks[b] ?? 0) + 1;
@@ -334,8 +473,13 @@ export class KerrBench {
       ...frameStats(iv, span),
       raysPerPx: +(raysPx / Math.max(n, 1)).toFixed(4),
       mraysPerS: +((rays / span) * 1e-3).toFixed(2),
+      raysPerFrame: rays / Math.max(n, 1),
       blocks,
       scales,
+      intervals: iv,
+      gpu,
+      frames: n,
+      spanMs: span,
     };
   }
 

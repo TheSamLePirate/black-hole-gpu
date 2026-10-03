@@ -1,20 +1,28 @@
-// Frame-time benchmark of the reference scenes in a headless Chrome over the DevTools protocol, against
-// a running server (bun --hot server.ts). The measuring itself is the app's own — the Kerr Bench
-// (src/bench/runner.ts, __bh.bench) — so this, the nightly and a friend's browser measure the same thing.
+// The Kerr Bench in a headless Chrome over the DevTools protocol, against a running server (bun --hot
+// server.ts). The measuring itself is the app's own — the Kerr Bench (src/bench/runner.ts, __bh.bench) —
+// so this, the nightly and a friend's browser measure the same thing.
 //
-//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick]
-//                        [--compare http://localhost:3012/ [--reps 2]]
+//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick | --mode complete]
+//                        [--subsampling auto,1,2,4,6,8] [--no-shots] [--out dir]
+//   bun scripts/bench.ts --compare http://localhost:3012/ [--reps 2]
 //
-// For each scene: phase A (the Game quality, its automatic subsampling and dynamic resolution — the
-// frame intervals' p50/p95/p99, frames over 33 ms, rays per displayed pixel) and phase B (subsampling 4,
-// the image ~1.44 Mpx — its throughput in Mrays/s, the figure that compares commits). Writes
-// docs/perf/bench-<label>.json. Compare mode alternates a reference build scene by scene (the machine's
-// drift, its clocks and heat, falls on both).
+// A run writes a folder, docs/perf/bench-<label>/: report.json (the app's report, kerr-bench/1: the
+// system, the load, each scene's phase A — the Game quality, its automatic subsampling and dynamic
+// resolution — and phase B — subsampling 4, the image ~1.44 Mpx, its Mrays/s, the Kerr Score's figure —,
+// then its realtime subsampling swept: auto, 1×, 2×, 3×, 4×, 6×, 8× — the frame rate and its spread, a
+// histogram of the frame times, the GPU's time per frame and per pass, the rays, the blocks the automatic
+// one chose) and shots/<scene>/: each subsampling's image in motion (rt-auto.jpg, rt-x1.jpg …) and the
+// image still, refined to full resolution (still.jpg).
+//
+// Compare mode alternates a reference build scene by scene (the machine's drift, its clocks and heat,
+// falls on both) and writes docs/perf/bench-<label>.json.
 //
 // Measure alone: another page rendering (the browser pane, a second headless) shares the GPU and halves
 // both. Chrome is killed on exit.
 import { tmpdir } from "node:os";
-import type { SceneReport } from "../src/bench/report";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import type { BenchReport, SceneReport } from "../src/bench/report";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -22,6 +30,11 @@ const arg = (k: string, d: string) => {
 };
 const URL = arg("url", "http://localhost:3000/");
 const quick = process.argv.includes("--quick");
+const MODE = quick ? "quick" : arg("mode", "standard");
+const SUBS = arg("subsampling", "auto,1,2,3,4,6,8")
+  .split(",")
+  .map((x) => (x === "auto" ? "auto" : Number(x)));
+const SHOTS = !process.argv.includes("--no-shots");
 const COMPARE = arg("compare", "");
 const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
 const label = arg("label", sha);
@@ -73,9 +86,11 @@ try {
   await new Promise((r) => (ws.onopen = r));
   let id = 0;
   const pending = new Map<number, (v: Evaluated) => void>();
+  const events = new Map<string, (params: { name: string; payload: string }) => void>();
   ws.onmessage = (m) => {
     const d = JSON.parse(String(m.data));
     if (d.id && pending.has(d.id)) pending.get(d.id)!(d.result ?? d.error);
+    else if (d.method === "Runtime.bindingCalled") events.get(d.params.name)?.(d.params);
   };
   const cdp = (method: string, params: object = {}) =>
     new Promise<Evaluated>((r) => {
@@ -110,6 +125,82 @@ try {
   };
   await open(URL);
   const scenes: string[] = arg("scenes", "") ? arg("scenes", "").split("|") : await js<string[]>("__bh.bench.scenes");
+
+  if (!COMPARE) {
+    // ---- a whole run: the report and its pictures
+    const out = arg("out", `docs/perf/bench-${label}`);
+    mkdirSync(`${out}/shots`, { recursive: true });
+    // (the pictures are the image alone: the page's panels — the bench's own screen — hidden)
+    await js(
+      `(() => { const st = document.createElement("style"); st.textContent = "body > :not(#view) { visibility: hidden !important; }"; document.head.append(st); })()`,
+    );
+    await cdp("Runtime.addBinding", { name: "kerrShot" });
+    await cdp("Runtime.addBinding", { name: "kerrProgress" });
+    // (a capture at the render's own pixels: the image the tracer made, its blocks as they are)
+    const renderPx = await js<number>("Math.min(devicePixelRatio, 1.25)");
+    events.set("kerrShot", async ({ payload: name }) => {
+      const r = (await cdp("Page.captureScreenshot", {
+        format: "jpeg",
+        quality: 90,
+        clip: { x: 0, y: 0, width: W, height: H, scale: renderPx / DPR },
+      })) as unknown as { data?: string };
+      const file = `shots/${name}.jpg`;
+      mkdirSync(dirname(`${out}/${file}`), { recursive: true });
+      if (r.data) await Bun.write(`${out}/${file}`, Buffer.from(r.data, "base64"));
+      await js(
+        `(window.__kerrShots.get(${JSON.stringify(name)})(${JSON.stringify(r.data ? file : null)}), window.__kerrShots.delete(${JSON.stringify(name)}))`,
+      );
+    });
+    let said = "";
+    const t0 = Date.now();
+    events.set("kerrProgress", ({ payload }) => {
+      const p = JSON.parse(payload) as { frac: number; scene: string; phase: string; fps: number };
+      // (the scene's own steps — compile, warm, A, B — said once each; the frame-by-frame updates not)
+      const line = `${p.scene}${p.phase ? ` · ${p.phase}` : ""}`;
+      if (line === said || (!p.phase && said.startsWith(p.scene))) return;
+      said = line;
+      console.log(
+        `[${String(Math.round(p.frac * 100)).padStart(3)} % ${String(Math.round((Date.now() - t0) / 1000)).padStart(4)} s] ${line}`,
+      );
+    });
+    const report = await js<BenchReport>(`__bh.bench.run({
+      mode: ${JSON.stringify(MODE)},
+      machineLabel: ${JSON.stringify(label)},
+      scenes: ${JSON.stringify(scenes)},
+      subsampling: ${JSON.stringify(SUBS)},
+      onProgress: (p) => kerrProgress(JSON.stringify(p)),
+      ${SHOTS ? `shot: (name) => new Promise((res) => { (window.__kerrShots ??= new Map()).set(name, res); kerrShot(name); }),` : ""}
+    })`);
+    const full = { ...report, bench: { label, sha, viewport: [W, H, DPR], chrome: CHROME, url: URL } };
+    await Bun.write(`${out}/report.json`, JSON.stringify(full, null, 1));
+    // the summary: each scene's subsampling sweep
+    const pad = (x: unknown, n: number) => String(x).padStart(n);
+    console.log(
+      `\nKerr Score ${report.score.kerrScore ?? "—"} (${report.score.reference}) · ${report.system.gpu.description || report.system.gpu.vendor}`,
+    );
+    for (const sc of report.scenes) {
+      console.log(
+        `\n${sc.scene}  [${sc.status}]  A: ${sc.auto?.fps ?? "—"} fps p95 ${sc.auto?.p95 ?? "—"} ms · B: ${sc.fixed?.mraysPerS ?? "—"} Mrays/s`,
+      );
+      if (sc.subsampling?.length) console.log("    sub     fps    p50    p95  gpu ms  Mrays/s  rays/px  scale  blocks");
+      for (const p of sc.subsampling ?? []) {
+        const sub = p.subsampling === "auto" ? "auto" : `${p.subsampling}×`;
+        const scales = Object.entries(p.scales)
+          .map(([k, v]) => `${(+k).toFixed(2)}:${v}`)
+          .join(" ");
+        const blocks = Object.entries(p.blocks)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(" ");
+        console.log(
+          `    ${sub.padEnd(5)}${pad(p.fps, 6)}${pad(p.p50, 7)}${pad(p.p95, 7)}${pad(p.gpuMs.mean, 8)}${pad(p.mraysPerS, 9)}${pad(p.raysPerPx, 9)}  ${scales.padEnd(6)} ${blocks}`,
+        );
+      }
+      if (sc.still) console.log(`    still: ${sc.still.convergeMs} ms to converge, ${sc.still.spp} spp`);
+    }
+    console.log(`\n${report.durationS} s · ${out}/report.json${SHOTS ? ` + ${out}/shots/` : ""}`);
+    kill();
+    process.exit(0);
+  }
 
   const mean = (a: number[]) => +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(a[0]! < 1 ? 4 : 1);
   const line = (tag: string, rs: SceneReport[]) =>

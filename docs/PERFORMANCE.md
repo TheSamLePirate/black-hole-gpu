@@ -192,8 +192,15 @@ renders/s in headless Chrome at 1600 × 900 (50 outside).
   *Dynamic resolution*, *Frame budget*, *Frame rate cap*, *Temporal reprojection*, *Far-field LUT*,
   *Frosted panels*; Render › Image: *Pixel ratio*.
 - F2 › **Perf**: the same, live; F2 › Audit: the frame rate check.
-- `bun scripts/bench.ts [--label name] [--scenes "a|b"] [--quick] [--compare <url> [--reps 2]] [--warm ms]`
-  — eight reference scenes in headless Chrome, Game quality: frame intervals p50/p95/p99, rays per
-  pixel, then a fixed subsampling 4 at full scale (the kernel's cost), GPU memory allocated;
-  `--compare` alternates a reference build scene by scene. Results in `docs/perf/bench-<label>.json`.
+- `bun scripts/bench.ts [--label name] [--scenes "a|b"] [--quick | --mode complete] [--subsampling auto,1,2,4,6,8] [--no-shots] [--out dir]`
+  — the Kerr Bench (`__bh.bench.run`) in headless Chrome: eight reference scenes, each at the Game
+  quality (frame intervals p50/p95/p99, rays per pixel), then a fixed subsampling 4 at ~1.44 Mpx (the
+  kernel's cost, Mrays/s — the Kerr Score), then **its realtime subsampling swept** — auto (with the
+  dynamic resolution, as in the game), 1×, 2×, 3×, 4×, 6×, 8× (at the Game pixel ratio, full scale): the
+  frame rate and its percentiles, a histogram of the frame times, the GPU time per frame and per pass,
+  Mrays/s, rays per frame and per pixel, the blocks the automatic choice took. Writes a folder
+  `docs/perf/bench-<label>/`: `report.json` and `shots/<scene>/` — each subsampling's image in motion
+  (`rt-auto.jpg`, `rt-x1.jpg` …, at the render's own pixels) and the image still, refined
+  (`still.jpg`). `--compare <url> [--reps 2]` alternates a reference build scene by scene instead
+  (`docs/perf/bench-<label>.json`). The in-app Complete run (…/#bench) sweeps the subsampling too.
   Measure alone: another page rendering shares the GPU.

@@ -21,7 +21,11 @@ const T = {
   complete: { fr: "Complet", en: "Complete" },
   quickT: { fr: "≈ 1 min 30 · 4 scènes", en: "≈ 1 min 30 · 4 scenes" },
   standardT: { fr: "≈ 4 min · 8 scènes", en: "≈ 4 min · 8 scenes" },
-  completeT: { fr: "≈ 8 min · + qualités", en: "≈ 8 min · + qualities" },
+  completeT: { fr: "≈ 15 min · + qualités, sous-échantillonnage", en: "≈ 15 min · + qualities, subsampling" },
+  subs: {
+    fr: "Sous-échantillonnage temps réel : images par seconde (survol : p95, temps GPU, Mrays/s)",
+    en: "Realtime subsampling: frames per second (hover: p95, GPU time, Mrays/s)",
+  },
   machine: { fr: "Nom de la machine (facultatif)", en: "Machine's name (optional)" },
   machinePh: { fr: "ex. PC de Max, RTX 3060", en: "e.g. Max's PC, RTX 3060" },
   collected: { fr: "Ce que le rapport contient", en: "What the report holds" },
@@ -210,6 +214,28 @@ export class BenchScreen {
       tb.append(tr_);
     }
     p.append(tb);
+    // the subsampling sweep (the complete run): a scene by row, a setting by column
+    const swept = r.scenes.filter((s) => s.subsampling?.length);
+    if (swept.length) {
+      const subs = r.run?.subsamplings ?? swept[0]!.subsampling!.map((x) => x.subsampling);
+      const st = el("table", "kb-table kb-subs");
+      const cap = el("caption", "", tr(T.subs));
+      const h2 = el("tr");
+      for (const h of [tr(T.scene), ...subs.map((x) => (x === "auto" ? "auto" : `${x}×`))]) h2.append(el("th", "", h));
+      st.append(cap, h2);
+      for (const s of swept) {
+        const row = el("tr");
+        row.append(el("td", "", s.scene));
+        for (const x of subs) {
+          const q = s.subsampling!.find((y) => y.subsampling === x);
+          const td = el("td", "", q ? q.fps.toFixed(0) : "—");
+          if (q) td.title = `p95 ${q.p95} ms · GPU ${q.gpuMs.mean} ms · ${q.mraysPerS} Mrays/s`;
+          row.append(td);
+        }
+        st.append(row);
+      }
+      p.append(st);
+    }
     if (r.thermal && r.thermal.driftPct < -5) p.append(el("div", "kb-warn", `${tr(T.thermal)} ${-r.thermal.driftPct} %`));
     if (r.errors.deviceLost) p.append(el("div", "kb-warn", tr(T.lost)));
     if (r.scenes.some((s) => s.errors.some((e) => e.includes("foreground")))) p.append(el("div", "kb-warn", tr(T.hidden)));
