@@ -16,7 +16,10 @@ const shaders: Record<string, string> = {};
 for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
 
 // (a page from localhost: WebGPU wants a secure context)
-const server = Bun.serve({ port: 0, fetch: () => new Response("<!doctype html><title>wgsl</title>", { headers: { "content-type": "text/html" } }) });
+const server = Bun.serve({
+  port: 0,
+  fetch: () => new Response("<!doctype html><title>wgsl</title>", { headers: { "content-type": "text/html" } }),
+});
 const chrome = Bun.spawn(
   [
     CHROME,
@@ -25,7 +28,15 @@ const chrome = Bun.spawn(
     `--user-data-dir=${tmpdir()}/kerr-wgsl-${port}`,
     "--enable-unsafe-webgpu",
     "--no-first-run",
-    ...(linux ? ["--no-sandbox", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader", "--disable-vulkan-surface"] : []),
+    ...(linux
+      ? [
+          "--no-sandbox",
+          "--enable-features=Vulkan",
+          "--use-vulkan=swiftshader",
+          "--use-webgpu-adapter=swiftshader",
+          "--disable-vulkan-surface",
+        ]
+      : []),
     "about:blank",
   ],
   { stdout: "ignore", stderr: "ignore" },
