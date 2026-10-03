@@ -30,8 +30,8 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 | 0.3 | Physique : **accélération du repère « home »** complète (Saturne tiré par tous les corps, Titan compris, et chute du Soleil autour du barycentre) : l'écart éphéméride / modèle de forces passe de 5,5e-6 à ≈ 5e-7 m/s², et un test le verrouille ; **Δv gratuit** supprimé (poussée au prorata du temps réellement volé, dans les deux intégrateurs). Poussée vérifiée en jeu, à pas fixe (2 g, identique avant et après) | fait | `2afc799` |
 | 0.4 | **`src/units.ts`** (C_MPS, M_METRES, M_SECONDS, DAY_S, AU_M, DEG, G0) : ~110 littéraux remplacés dans 30 fichiers, et les `492.55` divergents corrigés ; **`src/math/vec3.ts`** : 115 définitions locales identiques remplacées dans 40 fichiers (alias quand le nom était ambigu, sémantique identique) ; assertions de durée murale optionnelles (`PERF=1`) | fait | `a6edd32` |
 | 0.5 | Robustesse : **`src/util/storage.ts`** (24 `try/catch` localStorage remplacés) ; **`src/debug.ts`** (`assert` en dev, `caught()` : les erreurs des sections par frame, statut du Ranger, écrans du cockpit, hub, comptées et signalées une fois dans la console et le journal, au lieu d'être avalées) ; **sauvegardes validées** (`checkSave` : temps, modes, sol, plan ; réglage invalide réparé et signalé, sauvegarde corrompue refusée) ; `tests/save.test.ts` | fait | `8123c7f` |
-| 0.6 | TypeScript plus strict : **`noUncheckedIndexedAccess`, `noUnusedLocals`, `noImplicitReturns`** activés ; 63 erreurs corrigées (imports et constantes morts, tuples typés `as const`, retours implicites réécrits) | fait | (ce commit) |
-| 0.7 | Tests purs : sauvegarde et `#save`, `iss-plan`, `flightair`, symbologie | à faire | |
+| 0.6 | TypeScript plus strict : **`noUncheckedIndexedAccess`, `noUnusedLocals`, `noImplicitReturns`** activés ; 63 erreurs corrigées (imports et constantes morts, tuples typés `as const`, retours implicites réécrits) | fait | `6288aa7` |
+| 0.7 | Tests purs : **sauvegardes** (aller-retour JSON et `#save`, refus, réparation), **`flightair`** (vide, rentrée 70 km, rupture à 20 km avec et sans dégâts, virage de trajectoire), **`iss-plan`** (point de rendez-vous, plan depuis 50 km sous l'ISS, re-visée identique), **symbologie du HUD** via un enregistreur de contexte 2D réutilisable (`tests/helpers/recorder.ts` : cap, échelle de tangage, vue extérieure, aucun NaN, save/restore équilibrés) | fait | (ce commit) |
 | 0.8 | Lint/format (Biome) et validation WGSL en CI | à faire (téléchargements à confirmer) | |
 
 ## G0 : Kerr Bench
@@ -51,3 +51,4 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 - 0.4 : constantes et vecteurs uniques, avec tests identiques (expects égaux, à part les 3 assertions de durée devenues optionnelles). Leçon : après des éditions en rafale, redémarrer le serveur de dev (bundle HMR périmé).
 - 0.5 : stockage sûr, erreurs visibles, sauvegardes validées ; l'autosave existante se recharge (vérifié dans l'app).
 - 0.6 : typage strict, 0 erreur ; app vérifiée (poussée, journal sans erreur).
+- 0.7 : 4 nouveaux fichiers de tests (16 tests) sur du code jusqu'ici à 0 %.
