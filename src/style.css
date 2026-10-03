@@ -10,6 +10,16 @@
   --radius: 14px;
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* the layers, once: the HUD under the chrome under the panels, the popovers, the modals, the alerts,
+     then what speaks over everything (toasts, tooltips) */
+  --z-hud: 2;
+  --z-chrome: 3;
+  --z-panel: 4;
+  --z-popover: 40;
+  --z-modal: 50;
+  --z-alert: 60;
+  --z-toast: 70;
+  --z-tip: 72;
 }
 
 html,
@@ -251,7 +261,7 @@ body:not(.glass-blur) #cam-pop { background: linear-gradient(180deg, rgba(9, 14,
 /* ---------------------------------------------------------------- tooltip */
 #tip {
   position: fixed;
-  z-index: 20;
+  z-index: var(--z-tip);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -969,6 +979,10 @@ body.hide-ui #hud,
 body.hide-ui #hint,
 body.hide-ui #panel,
 body.hide-ui #render,
+body.hide-ui #cam-pop,
+body.hide-ui #sky-pop,
+body.hide-ui #sky-card,
+body.hide-ui .gt-root,
 body.hide-ui #toolbar > :not(#btn-hide) {
   display: none;
 }
@@ -1041,7 +1055,7 @@ body.hide-ui #toolbar:hover {
   white-space: pre-wrap;
   background: #000;
 }
-body.gpu-lost #error { z-index: 50; background: rgba(0, 0, 0, 0.82); }
+body.gpu-lost #error { z-index: calc(var(--z-alert) + 1); background: rgba(0, 0, 0, 0.82); }
 body.gpu-lost .fl-root, body.gpu-lost canvas.fl-hud { display: none; }
 #error .error-reload {
   margin-top: 14px; padding: 8px 22px; border-radius: 8px; border: 1px solid rgba(160, 210, 255, 0.3);
@@ -1268,7 +1282,7 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-bezel text { font: 700 9.5px var(--hud-font); letter-spacing: 0.34em; fill: rgba(176, 200, 228, 0.55); }
 /* the HUD's tooltips: a name, what it does (and why not, when dimmed) */
 .fl-tip {
-  position: fixed; z-index: 60; max-width: 260px; padding: 7px 10px 8px; border-radius: 6px; pointer-events: none;
+  position: fixed; z-index: var(--z-tip); max-width: 260px; padding: 7px 10px 8px; border-radius: 6px; pointer-events: none;
   display: flex; flex-direction: column; gap: 2px;
   background: rgba(8, 13, 24, 0.96); border: 1px solid rgba(160, 210, 255, 0.22); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
   opacity: 0; transform: translateY(3px); transition: opacity 0.12s, transform 0.12s;
@@ -1638,7 +1652,7 @@ html :focus-visible {
 .sg-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1917,14 +1931,15 @@ body .sp-opener {
 }
 body .sp-opener:hover { border-color: var(--hud-edge-hi); background: linear-gradient(180deg, rgba(20, 34, 54, 0.9), rgba(10, 18, 30, 0.8)); }
 
+body .sp-toasts { top: 66px; }
+body:not(.piloting) .sp-toasts { top: 18px; }
 body .sp-toast {
-  top: 66px; border-radius: 0; padding: 8px 18px 8px 14px;
+  border-radius: 0; padding: 8px 18px 8px 14px;
   font: 600 13.5px var(--hud-font); letter-spacing: 0.08em; color: #f2f6fc;
   background: linear-gradient(90deg, rgba(10, 18, 32, 0.96), rgba(8, 14, 26, 0.9));
   border: 1px solid var(--hud-edge); border-left: 3px solid var(--hud-amber);
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
-body:not(.piloting) .sp-toast { top: 18px; }
 body .sp-tooltip, #tip {
   border-radius: 0; background: var(--hud-bg-solid); border: 1px solid var(--hud-edge-hi);
   font: 600 12.5px/1.4 var(--hud-font); letter-spacing: 0.04em;
@@ -2270,7 +2285,7 @@ body.mobile.portrait .tf-stick { width: 124px; height: 124px; left: calc(14px + 
 body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); }
 
 /* the craft lost to the air (ui/craftlost.ts) */
-.craft-lost { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(60, 8, 0, 0.55), rgba(0, 0, 0, 0.78)); animation: cl-in 0.6s ease-out; }
+.craft-lost { position: fixed; inset: 0; z-index: var(--z-alert); display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(60, 8, 0, 0.55), rgba(0, 0, 0, 0.78)); animation: cl-in 0.6s ease-out; }
 @keyframes cl-in { from { opacity: 0; } to { opacity: 1; } }
 .cl-box { max-width: min(560px, calc(100vw - 32px)); padding: 26px 28px; border: 1px solid rgba(255, 120, 70, 0.45); border-radius: 10px; background: rgba(14, 10, 10, 0.88); box-shadow: 0 0 60px rgba(255, 80, 30, 0.25); color: #f2e8e4; font: 500 14px/1.45 -apple-system, "Helvetica Neue", sans-serif; }
 .cl-title { font: 700 22px/1.2 -apple-system, "Helvetica Neue", sans-serif; letter-spacing: 0.22em; color: #ff7a4a; margin-bottom: 10px; }

@@ -4,6 +4,7 @@
 
 import { PRESET_INFO, SCENE_GROUPS, type SceneGroup } from "./schema";
 import { SCENE_THUMBS } from "./scene-thumbs";
+import { onEscape } from "./keys";
 
 export interface SceneGalleryOptions {
   names: string[];
@@ -77,6 +78,7 @@ export class SceneGallery {
     if (this.isOpen) return;
     this.returnFocus = document.activeElement as HTMLElement | null;
     this.root.hidden = false;
+    this.unEscape = onEscape(() => this.close());
     // (a fresh look each time)
     this.search.value = this.query = query.trim().toLowerCase();
     if (query) this.group = "all";
@@ -89,8 +91,11 @@ export class SceneGallery {
     });
   }
 
+  private unEscape?: () => void;
   close() {
     if (!this.isOpen) return;
+    this.unEscape?.();
+    this.unEscape = undefined;
     this.root.classList.remove("show");
     setTimeout(() => (this.root.hidden = true), 180);
     this.returnFocus?.focus?.();

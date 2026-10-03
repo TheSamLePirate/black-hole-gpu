@@ -16,6 +16,7 @@ import {
   type SectionId,
 } from "./schema";
 import { store } from "../util/storage";
+import { gameLog } from "../game/log";
 
 type Key = keyof Settings;
 type Diff = { key: Key; before: unknown; after: unknown }[];
@@ -165,9 +166,10 @@ export class SettingsPanel {
     this.s = options.settings;
     this.loadUiState();
     this.tooltip = h("div", { class: "sp-tooltip", role: "tooltip" });
-    this.toastEl = h("div", { class: "sp-toast", "aria-live": "polite" });
+    this.toastEl = h("div", { class: "sp-toasts", "aria-live": "polite" });
     document.body.append(this.tooltip, this.toastEl);
     this.build();
+    if (this.isOpen) this.unEscape = onEscape(() => this.toggle(false));
     addEventListener("keydown", this.onKey);
     addEventListener("pointerup", () => this.commit());
   }
@@ -181,9 +183,12 @@ export class SettingsPanel {
     this.updateHistoryButtons();
   }
 
+  private unEscape?: () => void;
   toggle(show?: boolean) {
     const open = show ?? this.root.classList.contains("collapsed");
     this.root.classList.toggle("collapsed", !open);
+    this.unEscape?.();
+    this.unEscape = open ? onEscape(() => this.toggle(false)) : undefined;
     this.saveUiState();
   }
 
@@ -199,10 +204,22 @@ export class SettingsPanel {
       this.holdToasts.then(() => this.toast(msg));
       return;
     }
-    this.toastEl.textContent = msg;
-    this.toastEl.classList.add("show");
-    clearTimeout((this.toastEl as unknown as { t: number }).t);
-    (this.toastEl as unknown as { t: number }).t = window.setTimeout(() => this.toastEl.classList.remove("show"), 2200);
+    // (a stack of three at most, the newest below; each shown long enough to be read — 2.2 s, more for
+    // a long one —; the same message again refreshes it; all of them in the journal)
+    gameLog.add("info", msg);
+    const same = [...this.toastEl.children].find((e) => e.textContent === msg) as HTMLElement | undefined;
+    const el = same ?? h("div", { class: "sp-toast" }, msg);
+    if (!same) {
+      this.toastEl.append(el);
+      while (this.toastEl.children.length > 3) this.toastEl.firstElementChild!.remove();
+      requestAnimationFrame(() => el.classList.add("show"));
+    }
+    const ms = Math.min(8000, 2200 + Math.max(0, msg.length - 40) * 45);
+    clearTimeout((el as unknown as { t: number }).t);
+    (el as unknown as { t: number }).t = window.setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 250);
+    }, ms);
   }
 
   undo() {

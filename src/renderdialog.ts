@@ -5,6 +5,7 @@ import type { Simulation } from "./sim";
 import type { Take, TakeState } from "./take";
 import { fmtFactor, fmtWarp, realTimeSpeed, warpLadder } from "./clock";
 import { VideoWriter } from "./video";
+import { onEscape } from "./ui/keys";
 
 const RESOLUTIONS: Record<string, [number, number] | null> = {
   Viewport: null,
@@ -412,9 +413,12 @@ export function setupRenderDialog(d: DialogDeps) {
   exports[2]!.onclick = async () => d.download(await d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
   $<HTMLButtonElement>("render-close").onclick = () => toggle(false);
 
+  let unEscape: (() => void) | undefined;
   function toggle(show?: boolean) {
     const visible = show ?? panel.hidden;
     panel.hidden = !visible;
+    unEscape?.();
+    unEscape = visible ? onEscape(() => toggle(false)) : undefined;
     document.getElementById("btn-render")?.classList.toggle("active", visible || active);
     if (visible) {
       syncSize();

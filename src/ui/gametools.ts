@@ -13,6 +13,7 @@ import type { LogKind } from "../game/log";
 import type { Settings } from "../settings";
 import { GroundTrack } from "./groundtrack";
 import { store } from "../util/storage";
+import { onEscape } from "./keys";
 
 type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
@@ -140,9 +141,12 @@ export class GameToolsWindow {
     if (t && TABS.some(([id]) => id === t)) this.tab = t;
   }
 
+  private unEscape?: () => void;
   toggle(on = !this.open) {
     this.open = on;
     this.root.hidden = !on;
+    this.unEscape?.();
+    this.unEscape = on ? onEscape(() => this.toggle(false)) : undefined;
     if (on) this.show(this.tab);
   }
 
