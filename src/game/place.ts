@@ -9,11 +9,13 @@ import { soiOf } from "../system/our-side";
 import { figureUp, fromBodyFixed, groundPointOf, groundVelocity, solidBody } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
-import { GEAR as HOLE_GEAR, groundR, planetFrame, toGlobal, zamoBeta } from "../landing";
+import { GEAR as HOLE_GEAR, groundR, localToZamo, planetFrame, toGlobal, zamoBeta } from "../landing";
 import { millerWaves, SURF } from "../terrain";
 import { sphericalFrame } from "../wormhole";
 import { ECLIPTIC, elements, stateFrom, type Axes, type OrbitSpec } from "./orbit";
 import { add, cross, dot, sub } from "../math/vec3";
+import { airTop } from "../aero";
+import { C_MPS } from "../units";
 
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
@@ -238,6 +240,51 @@ export function theirOrbitPose(p: OrbitPlacement & { rM?: number }, t: number, s
 }
 
 /**
+ * In level flight over one of Gargantua's worlds, within its air: where its orbit at that height would
+ * be (`nu`, `inc`), the craft flying `speed` [m/s] through the air along that orbit's way, nose on the
+ * motion, wings level — not an orbit's kilometres a second in the air (a scene of its low views flown
+ * by the ship broke it up at once, at hundreds of g). Null for a world without air there.
+ */
+export function theirFlightPose(p: OrbitPlacement, t: number, spin: number, massSolar: number, speed = 250): Pose | null {
+  const F = planetFrame(p.body, t, spin, massSolar);
+  const alt = (p.altKm ?? 100) * 1e3;
+  if (!F.atm || !(alt < airTop(F.atm))) return null;
+  const mPerM = 1476.625 * massSolar;
+  const rp = F.R + alt / mPerM;
+  const { r, v } = stateFrom(F.m, {
+    rp,
+    ra: rp,
+    i: p.retrograde ? 180 - (p.inc ?? 0) : (p.inc ?? 0),
+    raan: p.raan ?? 0,
+    argPe: p.argPe ?? 0,
+    nu: p.nu ?? 0,
+  });
+  // (the air turns with the world — tidally locked, its frame's: at rest in the local axes; the flight
+  // along the orbit's horizontal way)
+  const rl = Math.hypot(...r);
+  const ru: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
+  const hv = sub(v, ru.map((c) => c * dot(v, ru)) as Vec3);
+  const hl = Math.hypot(...hv);
+  const w: Vec3 = [(hv[0] / hl) * (speed / C_MPS), (hv[1] / hl) * (speed / C_MPS), (hv[2] / hl) * (speed / C_MPS)];
+  const g = toGlobal(F, { xi: r, w, landed: false });
+  const b = zamoBeta(g.X, g.V, spin);
+  const f = sphericalFrame(g.X);
+  const cart = (q: Vec3): Vec3 => [0, 1, 2].map((i) => q[0] * f.er[i]! + q[1] * f.et[i]! + q[2] * f.ep[i]!) as Vec3;
+  // (the attitude as the local flight reads it: its axes on the ZAMO's by localToZamo — the nose on the
+  // motion through the air, the top away from the world's centre)
+  const fwd = cart(localToZamo(unit(w)));
+  const up = cart(localToZamo(ru));
+  return {
+    frame: "hole",
+    X: g.X,
+    vel: cart(b),
+    fwd,
+    up,
+    note: `${sysBody(GARGANTUA_SYSTEM, p.body).name}: flying ${Math.round(alt / 1e3)} km up at ${speed} m/s`,
+  };
+}
+
+/**
  * On the ground of one of Gargantua's worlds, the ship at rest on it (turning with it: tidally locked),
  * at the place where Gargantua stands `el` [°] above the horizon, `az` [°] round from its north (east
  * positive); the nose level towards Gargantua.
@@ -269,7 +316,6 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
     return unit([0, 1, 2].map((i) => g[i]! * Math.cos(z) + tilt[i]! * Math.sin(z)) as Vec3);
   };
   let q = placeAt(az);
-  let sea = 0;
   if (F.surf === SURF.ocean) {
     // Miller: between its giant waves (drawn, not felt: the ship in a trough, not inside a wall of water)
     const tSec = t * 4.925490947e-6 * massSolar,
@@ -279,12 +325,13 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
       const h = millerWaves(qk, tSec, mR);
       if (h < 1) {
         q = qk;
-        sea = h;
         break;
       }
     }
   }
-  const rG = groundR(F, [q[0] * F.R, q[1] * F.R, q[2] * F.R]) + (HOLE_GEAR + sea) / F.mPerM;
+  // (on the ground the gear feels — the waves are drawn, not felt: set on the drawn water the ship fell
+  // a metre onto the sea, 5 m/s, a crash for a real gear)
+  const rG = groundR(F, [q[0] * F.R, q[1] * F.R, q[2] * F.R]) + HOLE_GEAR / F.mPerM;
   const xi: Vec3 = [q[0] * rG, q[1] * rG, q[2] * rG];
   const glob = toGlobal(F, { xi, w: [0, 0, 0], landed: true });
   const b = zamoBeta(glob.X, glob.V, spin);

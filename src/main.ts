@@ -2,7 +2,7 @@ import { Renderer, type FrameStats } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
-import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
+import { theirFlightPose, theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
@@ -374,18 +374,23 @@ async function main() {
     } else if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
       // a view of one of Gargantua's worlds: on an orbit about it, looking straight down, the way it
       // goes at the top of the image, then the look turned off it
-      const p = theirOrbitPose(
-        { body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc },
-        time ?? sim.time,
-        settings.spin,
-        settings.massSolar,
-      );
+      const at = { body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc };
       settings.shipLookYaw = settings.shipLookPitch = 0;
-      const [fwd, up] = tiltAway([-p.up[0], -p.up[1], -p.up[2]], p.fwd, pose.tilt ?? 0);
-      setHolePose(settings, p.X, fwd, up, p.vel);
-      settings.motion = "geodesic";
       const off = pose.off ?? [0, 0];
-      void aimAt(null, [off[0], off[1] + (pose.tilt ?? 0)]);
+      // (the ship flown, low in a world's air: in level flight there — an orbit's speed in the air broke
+      // it up at once —, the look turned to the same view: off the nadir by the tilt, then by off)
+      const fly = settings.ship ? theirFlightPose(at, time ?? sim.time, settings.spin, settings.massSolar) : null;
+      if (fly) {
+        setHolePose(settings, fly.X, fly.fwd, fly.up, fly.vel);
+        settings.motion = "geodesic";
+        void aimAt(null, [off[0], off[1] + (pose.tilt ?? 0) - 90]);
+      } else {
+        const p = theirOrbitPose(at, time ?? sim.time, settings.spin, settings.massSolar);
+        const [fwd, up] = tiltAway([-p.up[0], -p.up[1], -p.up[2]], p.fwd, pose.tilt ?? 0);
+        setHolePose(settings, p.X, fwd, up, p.vel);
+        settings.motion = "geodesic";
+        void aimAt(null, [off[0], off[1] + (pose.tilt ?? 0)]);
+      }
     } else if (typeof pose === "object") {
       // a view of one of our bodies: placed, the look turned towards a body
       // (the camera placed along the ship's axes — the ship's attitude is the camera's less the look —
