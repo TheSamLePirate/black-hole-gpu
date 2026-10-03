@@ -15,7 +15,7 @@ import { gravityHome } from "./our-side";
 import { dragAccel } from "./our-surface";
 
 /** the station's ballistic coefficient m/(C_D A) [kg/m²] */
-const ISS_BALLISTIC = 130;
+export const ISS_BALLISTIC = 130;
 import { gmst, parseOmm, sgp4, type Elements, type Sgp4 } from "./sgp4";
 import { C_MPS } from "../units";
 import { cross, dot, lin, sub } from "../math/vec3";
