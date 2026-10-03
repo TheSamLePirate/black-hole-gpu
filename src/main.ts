@@ -157,6 +157,11 @@ function fail(msg: string) {
 
 async function main() {
   const splash = new Splash($("loading") ?? document.createElement("div"));
+  // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
+  // whatever is there at its first frame, and keeps it until redrawn)
+  const fonts = Promise.all(
+    [`600 12px Rajdhani`, `700 12px Rajdhani`, `500 12px "JetBrains Mono"`, `500 12px Inter`].map((f) => document.fonts.load(f)),
+  ).catch(() => {});
   let renderer: Renderer;
   try {
     renderer = await Renderer.create(canvas);
@@ -1831,7 +1836,12 @@ async function main() {
     }
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }
-  requestAnimationFrame(loop);
+  // (the first frame once the fonts are in — at most a second and a half: a slow network draws in the
+  // fallbacks, then redraws; not awaited, the rest of the set-up runs now)
+  void Promise.race([fonts, new Promise((r) => setTimeout(r, 1500))]).then(() => {
+    last = performance.now(); // (the first frame's step: from now, not from the set-up)
+    requestAnimationFrame(loop);
+  });
 
   /** Camera position for the HUD: distance to the hole, or ℓ through the wormhole. */
   function where() {

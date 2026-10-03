@@ -15,6 +15,7 @@ import { drawChartLabels } from "./skylabels";
 import { drawTelescope, type TelescopeView } from "./telescope";
 import { BODY_COLOURS } from "./camerapanel";
 import { drawLock, lockKey } from "./targethud";
+import { FONT, MONO } from "./hudkit";
 
 export class ViewOverlay {
   private key = "";
@@ -115,7 +116,7 @@ export class ViewOverlay {
     }
     ctx.setLineDash([]);
     ctx.fillStyle = "rgba(90, 255, 160, 0.9)";
-    ctx.font = `${11 * devicePixelRatio}px ui-monospace, Menlo, monospace`;
+    ctx.font = `${11 * devicePixelRatio}px ${MONO}`;
     ctx.fillText("critical curve (analytic)", 16 * devicePixelRatio, H - 16 * devicePixelRatio);
   }
 
@@ -161,7 +162,7 @@ export class ViewOverlay {
     ctx.strokeStyle = "rgba(120, 255, 200, 0.95)";
     ctx.fillStyle = "rgba(120, 255, 200, 0.95)";
     ctx.lineWidth = 1.5 * k;
-    ctx.font = `${11 * k}px ui-monospace, Menlo, monospace`;
+    ctx.font = `${11 * k}px ${MONO}`;
     ctx.textAlign = "center";
     if (m.onScreen) {
       const r = 7 * k;
@@ -269,7 +270,7 @@ export class ViewOverlay {
     ctx.strokeStyle = `rgba(${c}, 0.9)`;
     ctx.fillStyle = `rgba(${c}, 0.95)`;
     ctx.lineWidth = 1.4 * k;
-    ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = `600 ${12 * k}px ${FONT}`;
     ctx.shadowColor = "rgba(0,0,0,0.8)";
     // (a crisp drop shadow, not a blurred one: a blur is a GPU pass per draw — it cost the tracer
     // 23 → 9 fps once)
@@ -336,7 +337,7 @@ export class ViewOverlay {
     const k = devicePixelRatio;
     const c = BODY_COLOURS[h.body];
     ctx.save();
-    ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = `600 ${12 * k}px ${FONT}`;
     ctx.fillStyle = `rgba(${c}, 0.95)`;
     ctx.shadowColor = "rgba(0,0,0,0.85)";
     // (a crisp drop shadow, not a blurred one: a blur is a GPU pass per draw — it cost the tracer
@@ -347,7 +348,7 @@ export class ViewOverlay {
     const hint = h.body === this.settings.target ? "double-click: fly to" : "click: target";
     ctx.fillText(`${BODY_NAMES[h.body]}`, (h.x + 14) * k, (h.y + 22) * k);
     ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = `${9.5 * k}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = `500 ${11 * k}px ${FONT}`;
     ctx.fillText(hint, (h.x + 14) * k, (h.y + 35) * k);
     ctx.restore();
   }

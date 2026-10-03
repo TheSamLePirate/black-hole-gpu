@@ -6,13 +6,7 @@
 import type { Settings } from "../settings";
 import { onEscape } from "./keys";
 import { CONSTELLATIONS, NAMED_STARS, type Constellation, type NamedStar } from "../skychart";
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
+import { el as h } from "./kit";
 
 const ICON = {
   lines:

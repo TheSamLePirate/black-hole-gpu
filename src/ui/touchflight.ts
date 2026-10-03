@@ -5,19 +5,13 @@
 // piloting on a screen whose pointer is coarse; the rest of the HUD — SAS, holds, autopilots, the
 // planner — is its buttons.
 
+import { el as h } from "./kit";
 export interface TouchFlightDeps {
   /** the fingers' commands, read each frame by the flight computer (−1…1) */
   input: { pitch: number; yaw: number; roll: number };
   throttle(): number;
   setThrottle(t: number): void;
 }
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 
 /** A finger's command past a small dead zone, finer near the centre (|v|^1.6). */
 const shape = (v: number) => {

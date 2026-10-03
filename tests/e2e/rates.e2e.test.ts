@@ -19,6 +19,9 @@ const fly = (app: App, name: string, hz: number) => {
     __bh.freeze(true);
     __bh.setDate(Date.UTC(2026, 9, 1, 12));
     __bh.preset(${JSON.stringify(f.scene)});
+          // (a scene with no time of its own — none set, none from a place of the real time — at 0, not
+          // wherever the page's clock stood)
+          if (__bh.presets[${JSON.stringify(f.scene)}].time === undefined && __bh.presets[${JSON.stringify(f.scene)}].pose === undefined) __bh.setTime(0);
     ${f.setup};
     for (let i = 0; i < ${Math.round((f.steps / 30) * hz)}; i++) __bh.step(1 / ${hz});
     const st = __bh.game.status();

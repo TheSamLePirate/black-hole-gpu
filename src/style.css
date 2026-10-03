@@ -76,13 +76,18 @@ body:not(.glass-blur) { --glass: rgba(12, 14, 22, 0.8); }
 body:not(.glass-blur) * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 body:not(.glass-blur) #cam-pop { background: linear-gradient(180deg, rgba(9, 14, 25, 0.9), rgba(6, 10, 18, 0.84)); }
 
+/* the interface's surfaces (settings, menus, dialogs, the toolbar): the HUD's frame (ui/kit/kit.css) —
+   opaque enough to read over the disk; with the glass blur on (Settings › Render), lighter and blurred */
 .glass {
+  background: var(--k-panel-bg);
+  border: 1px solid var(--k-edge);
+  border-radius: var(--k-r-panel);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+body.glass-blur .glass {
   background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------------------------------------------------------------- HUD: status pill + details */

@@ -34,6 +34,7 @@ import { horizon, isco } from "../../physics";
 import { BODY_NAMES } from "../../targeting";
 import { AU_M, C_MPS, G0 } from "../../units";
 import { store } from "../../util/storage";
+import { el as h } from "../kit";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -96,12 +97,6 @@ export interface FcHost {
 }
 
 export type Tab = "orbit" | "target" | "land" | "mission";
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): HTMLElementTagNameMap[K] => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 const D = 180 / Math.PI;
 const km = (m: number) =>
   !Number.isFinite(m)

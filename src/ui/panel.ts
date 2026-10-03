@@ -1,5 +1,6 @@
 import { FLIGHT_KEYS, isTyping } from "../controls";
 import { KEYMAP } from "../input/keymap";
+import { h, icon, modal } from "./kit";
 import { onEscape } from "./keys";
 import { QUALITY, type Quality, type Settings } from "../settings";
 import { sceneGroup, sceneTitle } from "./scenes";
@@ -45,46 +46,6 @@ const STORE_PRESETS = "kerr.userPresets.v1";
 const STORE_UI = "kerr.panel.v1";
 
 // ------------------------------------------------------------------------------------ helpers
-function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs: Record<string, unknown> = {},
-  ...children: (Node | string | null | undefined | false)[]
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === undefined || v === null || v === false) continue;
-    if (k === "class") el.className = String(v);
-    else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v as EventListener);
-    else if (k === "dataset") Object.assign(el.dataset, v);
-    else el.setAttribute(k, v === true ? "" : String(v));
-  }
-  for (const c of children) if (c !== null && c !== undefined && c !== false) el.append(c);
-  return el;
-}
-
-function svgIcon(path: string, cls = "ico") {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("class", cls);
-  const p = document.createElementNS(ns, "path");
-  p.setAttribute("d", path);
-  svg.append(p);
-  return svg;
-}
-
-const ICONS = {
-  undo: "M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
-  redo: "M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3",
-  menu: "M5 12h.01M12 12h.01M19 12h.01",
-  close: "M6 6l12 12M18 6L6 18",
-  search: "M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M21 21l-4.3-4.3",
-  reset: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5",
-  gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
-  plus: "M12 5v14M5 12h14",
-  chevron: "M6 9l6 6 6-6",
-};
-
 function decimalsFor(step: number) {
   return Math.max(0, Math.min(6, -Math.floor(Math.log10(step) + 1e-9)));
 }
@@ -312,18 +273,18 @@ export class SettingsPanel {
     this.root.replaceChildren();
     this.root.classList.add("sp");
 
-    this.undoBtn = h("button", { class: "sp-icon", title: "Undo (⌘Z / Ctrl+Z)", onclick: () => this.undo() }, svgIcon(ICONS.undo));
-    this.redoBtn = h("button", { class: "sp-icon", title: "Redo (⇧⌘Z / Ctrl+Y)", onclick: () => this.redo() }, svgIcon(ICONS.redo));
+    this.undoBtn = h("button", { class: "sp-icon", title: "Undo (⌘Z / Ctrl+Z)", onclick: () => this.undo() }, icon("undo"));
+    this.redoBtn = h("button", { class: "sp-icon", title: "Redo (⇧⌘Z / Ctrl+Y)", onclick: () => this.redo() }, icon("redo"));
     const menuBtn = h(
       "button",
       { class: "sp-icon", title: "More", onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) },
-      svgIcon(ICONS.menu),
+      icon("menu"),
     );
-    const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (M)", onclick: () => this.toggle(false) }, svgIcon(ICONS.close));
+    const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (M)", onclick: () => this.toggle(false) }, icon("close"));
     const opener = h(
       "button",
       { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) },
-      svgIcon(ICONS.gear),
+      icon("gear"),
       h("span", {}, "Settings"),
     );
 
@@ -371,11 +332,11 @@ export class SettingsPanel {
       h(
         "header",
         { class: "sp-head" },
-        svgIcon(ICONS.gear, "ico sp-logo"),
+        icon("gear", "ico sp-logo"),
         h("h2", {}, "Settings"),
         h("div", { class: "sp-head-actions" }, this.undoBtn, this.redoBtn, menuBtn, closeBtn),
       ),
-      h("div", { class: "sp-search" }, svgIcon(ICONS.search), this.searchInput, advToggle),
+      h("div", { class: "sp-search" }, icon("search"), this.searchInput, advToggle),
       this.presetsEl,
       this.qualityEl,
       this.tabsEl,
@@ -506,7 +467,7 @@ export class SettingsPanel {
             nameIn.focus();
           },
         },
-        svgIcon(ICONS.plus),
+        icon("plus"),
         "Save current",
       ),
     );
@@ -530,7 +491,7 @@ export class SettingsPanel {
         h("b", {}, name ? sceneTitle(name) : "Your own view"),
         h("small", {}, name ? SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label : "Settings edited, or a saved flight"),
       ),
-      h("span", { class: "sp-scene-go" }, "Browse", svgIcon(ICONS.chevron, "ico")),
+      h("span", { class: "sp-scene-go" }, "Browse", icon("chevron", "ico")),
     );
   }
 
@@ -635,7 +596,7 @@ export class SettingsPanel {
               this.renderBody();
             },
           },
-          svgIcon(sec.icon),
+          icon(sec.icon),
           h("span", {}, sec.label),
         ),
       );
@@ -741,7 +702,7 @@ export class SettingsPanel {
           group.classList.toggle("collapsed");
         },
       },
-      svgIcon(ICONS.chevron, "ico chev"),
+      icon("chevron", "ico chev"),
       title,
     );
     head.append(titleBtn);
@@ -767,7 +728,7 @@ export class SettingsPanel {
           this.toast(`Reset ${groupName}`);
         },
       },
-      svgIcon(ICONS.reset),
+      icon("reset"),
     );
     head.append(gReset);
     this.updaters.push(() => {
@@ -1057,27 +1018,21 @@ export class SettingsPanel {
   }
 
   showShortcuts() {
-    document.querySelector(".sp-modal")?.remove();
-    const close = () => {
-      dlg.remove();
-      unEscape();
-    };
-    const unEscape = onEscape(close);
-    const dlg = h(
-      "div",
-      { class: "sp-modal", onclick: (e: Event) => e.target === dlg && close() },
-      h(
-        "div",
-        { class: "sp-modal-card glass sp-keys" },
-        h(
-          "header",
-          {},
-          h("h3", {}, "Keyboard & mouse"),
-          h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close)),
-        ),
+    this.keysDialog?.close();
+    this.keysDialog = modal({
+      title: "Keyboard & mouse",
+      cls: "sp-keys",
+      testid: "help",
+      onClose: () => (this.keysDialog = null),
+      body: [
         // (drawn from the table the keys are dispatched through: input/keymap.ts)
         ...KEYMAP.map(({ title, rows }) =>
-          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, r.keys), h("dd", {}, r.text)]))),
+          h(
+            "section",
+            {},
+            h("h4", { class: "k-label" }, title),
+            h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, r.keys), h("dd", {}, r.text)])),
+          ),
         ),
         this.o.connectController
           ? h(
@@ -1087,7 +1042,7 @@ export class SettingsPanel {
               h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, "connect it (USB)"),
               ".",
             )
-          : h("span", {}),
+          : null,
         h(
           "footer",
           {},
@@ -1109,10 +1064,10 @@ export class SettingsPanel {
             h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"),
           ),
         ),
-      ),
-    );
-    document.body.append(dlg);
+      ],
+    });
   }
+  private keysDialog: { close: () => void } | null = null;
 
   // ---------------------------------------------------------------------------------- keys & state
   private onKey = (e: KeyboardEvent) => {

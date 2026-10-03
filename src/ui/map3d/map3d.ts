@@ -27,6 +27,7 @@ import { Paint } from "./paint";
 import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./gpu";
 import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
 import { store } from "../../util/storage";
+import { el as h } from "../kit";
 
 export interface MapHost {
   readonly s: Settings;
@@ -100,12 +101,6 @@ const PLANES: { id: PlaneMode; label: string; short: string; title: string }[] =
   { id: "target", label: "Target", short: "Tgt", title: "The target's orbital plane (around its primary)" },
 ];
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 /** the flight computer's preview (rgb) */
 const CAND = "196, 140, 255";

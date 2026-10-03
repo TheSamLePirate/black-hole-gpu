@@ -38,17 +38,11 @@ import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
 import { sub } from "../math/vec3";
 import { store } from "../util/storage";
 import { onEscape } from "./keys";
+import { el as h } from "./kit";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
 type V3 = [number, number, number];
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 
 /** The HUD's line icons (24 × 24, stroked with the text's colour). */
 const ICONS: Record<string, string> = {

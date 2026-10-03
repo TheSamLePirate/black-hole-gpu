@@ -4,19 +4,23 @@
 // (the more important first: cardinal points, stars, constellations, graduations).
 
 import type { ChartLabel } from "../skychart";
+import { FONT, MONO } from "./hudkit";
+
+// (a canvas does not resolve CSS variables: the families by name)
+const SANS = "Inter, system-ui, sans-serif";
 
 const STYLE: Record<ChartLabel["kind"], { font: (k: number) => string; rgb: string; spacing: number; halo: number }> = {
-  cardinal: { font: (k) => `700 ${14 * k}px var(--hud-font), ui-sans-serif, sans-serif`, rgb: "255, 196, 120", spacing: 0.12, halo: 3.2 },
+  cardinal: { font: (k) => `700 ${14 * k}px ${FONT}`, rgb: "255, 196, 120", spacing: 0.12, halo: 3.2 },
   constellation: {
-    font: (k) => `600 ${11.5 * k}px var(--hud-font), ui-sans-serif, sans-serif`,
+    font: (k) => `600 ${11.5 * k}px ${FONT}`,
     rgb: "178, 206, 255",
     spacing: 0.24,
     halo: 3,
   },
-  star: { font: (k) => `500 ${11.5 * k}px var(--font), ui-sans-serif, sans-serif`, rgb: "255, 238, 214", spacing: 0.02, halo: 2.6 },
-  grid: { font: (k) => `500 ${10 * k}px var(--mono), ui-monospace, monospace`, rgb: "150, 220, 230", spacing: 0, halo: 2.4 },
+  star: { font: (k) => `500 ${11.5 * k}px ${SANS}`, rgb: "255, 238, 214", spacing: 0.02, halo: 2.6 },
+  grid: { font: (k) => `500 ${11 * k}px ${MONO}`, rgb: "150, 220, 230", spacing: 0, halo: 2.4 },
   ecliptic: {
-    font: (k) => `italic 500 ${11 * k}px var(--font), ui-sans-serif, sans-serif`,
+    font: (k) => `italic 500 ${11 * k}px ${SANS}`,
     rgb: "255, 216, 110",
     spacing: 0.04,
     halo: 2.6,

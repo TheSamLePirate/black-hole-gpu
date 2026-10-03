@@ -5,6 +5,7 @@
 
 import type { Settings } from "../settings";
 import { fmtClock, fmtFactor, fmtWarp, realTimeSpeed, secondsPerM, warpFactor, warpLadder } from "../clock";
+import { el as h } from "./kit";
 
 export interface TransportDeps {
   settings: Settings;
@@ -32,12 +33,6 @@ const ICON = {
   rec: '<circle cx="12" cy="12" r="5.2" class="f"/>',
 };
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 
 export class TransportBar {

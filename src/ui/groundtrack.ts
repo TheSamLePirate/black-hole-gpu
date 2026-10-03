@@ -29,16 +29,11 @@ const add3 = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 import { planetFrame, toLocal } from "../landing";
 import type { Settings } from "../settings";
 import { cross, dot, sub as sub3 } from "../math/vec3";
+import { el as h } from "./kit";
 
 type V3 = [number, number, number];
 export type GroundMode = "globe" | "map";
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 const unit = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];

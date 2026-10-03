@@ -1,4 +1,5 @@
 import { AU_M } from "../units";
+import { FONT, MONO } from "./hudkit";
 // The telescope's overlay: a reticle, the target's disc, the angular scale, the lens (its focal length
 // on a 35 mm frame, the magnification against a 50 mm lens) and the target (its apparent diameter, its
 // distance, the tracking). Drawn on the overlay canvas (never into the renders: exports stay clean).
@@ -114,7 +115,7 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
       `${t.name.toUpperCase()} · ⌀ ${fmtAngle((2 * t.ang * 180) / Math.PI)} · ${fmtDistance(t.dist * v.mPerM)}${v.tracking ? " · TRACKING" : ""}`,
     );
   }
-  ctx.font = `600 ${12 * k}px "Rajdhani", "Inter", system-ui, sans-serif`;
+  ctx.font = `600 ${12 * k}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   const top = 62 * k;
@@ -138,7 +139,7 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
   ctx.lineTo(cx + stepPx / 2, by + 4 * k);
   ctx.stroke();
   ctx.fillStyle = "rgba(220, 236, 255, 0.85)";
-  ctx.font = `500 ${11 * k}px "JetBrains Mono", ui-monospace, monospace`;
+  ctx.font = `500 ${11 * k}px ${MONO}`;
   ctx.fillText(fmtAngle(step / 3600), cx, by + 7 * k);
   ctx.restore();
 }

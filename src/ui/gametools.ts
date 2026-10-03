@@ -14,6 +14,7 @@ import type { Settings } from "../settings";
 import { GroundTrack } from "./groundtrack";
 import { store } from "../util/storage";
 import { onEscape } from "./keys";
+import { el as h } from "./kit";
 
 type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
@@ -49,12 +50,6 @@ const SITES: Record<string, [string, number, number][]> = {
   europa: [["Conamara Chaos", 9.7, -86.6]],
 };
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-};
 const btn = (text: string, onClick: () => void, cls = "") => {
   const b = h("button", `gt-btn ${cls}`, text) as HTMLButtonElement;
   b.onclick = onClick;

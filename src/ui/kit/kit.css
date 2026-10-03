@@ -1,0 +1,143 @@
+/* The interface's kit (ui/kit/index.ts): the HUD's language for every panel, menu and dialog — the
+   flight computer's (ui/fc) made the reference. Square-ish corners and corner brackets, not rounded
+   cards; Rajdhani in capitals for what names, JetBrains Mono for what measures, Inter for what reads;
+   cyan for what is on or can be acted on, amber for titles and attention; panels opaque enough to
+   read over a bright planet — menus and dialogs near-opaque (98 %: the HUD behind would ghost through), no blur unless asked (Settings › Render › glass). */
+:root {
+  --k-panel-bg: linear-gradient(180deg, rgba(8, 13, 23, 0.99), rgba(5, 9, 16, 0.98));
+  --k-panel-bg-solid: rgba(7, 11, 20, 0.96);
+  --k-edge: rgba(140, 200, 255, 0.14);
+  --k-edge-hi: rgba(120, 205, 255, 0.55);
+  --k-line: rgba(160, 210, 255, 0.08);
+  --k-ctl-bg: rgba(255, 255, 255, 0.04);
+  --k-ctl-bg-hover: rgba(255, 255, 255, 0.1);
+  --k-ctl-edge: rgba(160, 210, 255, 0.16);
+  --k-on: #6fd2ff;
+  --k-on-edge: rgba(111, 210, 255, 0.7);
+  --k-on-bg: rgba(111, 210, 255, 0.16);
+  --k-amber: #ffb35c;
+  --k-red: #ff5a46;
+  --k-text: rgba(222, 232, 246, 0.94);
+  --k-dim: rgba(176, 196, 222, 0.66);
+  /* corners: a panel's, a control's */
+  --k-r-panel: 6px;
+  --k-r: 3px;
+  --k-font-label: 700 11px/1.2 var(--hud-font);
+  --k-font-title: 700 13px/1.2 var(--hud-font);
+  --k-font-value: 500 11.5px/1.2 var(--mono);
+}
+
+/* a panel: the frame, its brackets (top right, bottom left) */
+.k-frame {
+  position: relative;
+  background: var(--k-panel-bg);
+  border: 1px solid var(--k-edge);
+  border-radius: var(--k-r-panel);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--k-text);
+}
+.k-frame::before,
+.k-frame::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border: 1px solid var(--k-edge-hi);
+}
+.k-frame::before { top: 3px; right: 3px; border-left: 0; border-bottom: 0; }
+.k-frame::after { bottom: 3px; left: 3px; border-right: 0; border-top: 0; }
+
+/* a panel's title: amber capitals behind a lit diamond */
+.k-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: var(--k-font-title);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--k-amber);
+}
+.k-title::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  transform: rotate(45deg);
+  background: var(--k-amber);
+  box-shadow: 0 0 8px rgba(255, 179, 92, 0.8);
+}
+/* a section's label */
+.k-label {
+  font: var(--k-font-label);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--k-dim);
+}
+
+/* buttons: plain, primary (the one to press), danger; on (a state held) */
+.k-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  background: var(--k-ctl-bg);
+  font: 600 11px/1.2 var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--k-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.k-btn:hover:not(:disabled) { background: var(--k-ctl-bg-hover); color: #fff; }
+.k-btn:focus-visible { outline: 1px solid var(--k-on-edge); outline-offset: 2px; }
+.k-btn:disabled { opacity: 0.35; cursor: default; }
+.k-btn.on { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 10px rgba(111, 210, 255, 0.18) inset; }
+.k-btn.primary { color: #0b1220; background: linear-gradient(180deg, #7fe0ff, #46b9ee); border-color: #8de4ff; font-weight: 700; }
+.k-btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #a2eaff, #5cc6f5); color: #0b1220; }
+.k-btn.danger { color: #ffb4a8; border-color: rgba(255, 90, 70, 0.45); }
+.k-btn.danger:hover:not(:disabled) { background: rgba(255, 90, 70, 0.16); color: #fff; }
+.k-btn .ico { width: 14px; height: 14px; }
+
+/* a key to press, as on the keyboard */
+.k-kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 5px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  font: 600 11px/1.3 var(--mono);
+  color: var(--k-text);
+  text-align: center;
+}
+
+/* a dialog over everything: the frame centred over a scrim */
+.k-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  background: rgba(2, 4, 8, 0.62);
+}
+.k-modal > .k-frame { max-width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+.k-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; column-span: all; }
+.k-modal-head .k-btn { padding: 4px; border-color: transparent; background: none; }
+
+/* icons drawn as strokes in the current colour */
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}

@@ -14,6 +14,7 @@ import type { Settings, Target } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { SOLAR_BODIES } from "../system/solar";
 import { fmtAngle, focalLength } from "./telescope";
+import { el as h } from "./kit";
 
 /** The camera's placements without the ship: the rig's four, and falling freely (gravity). */
 export type View = Settings["rotation"] | "fall";
@@ -142,12 +143,6 @@ export interface CameraPanelDeps {
   toast(t: string): void;
 }
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 const fmtFocal = (f: number) => (f >= 1e4 ? `${(f / 1e3).toFixed(f >= 1e5 ? 0 : 1)} m` : `${Math.round(f)} mm`);
 

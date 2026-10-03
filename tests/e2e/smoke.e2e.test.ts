@@ -67,12 +67,12 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
 
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
-    await app.waitFor(`!!document.querySelector(".sp-modal")`);
+    await app.waitFor(`!!document.querySelector("[data-testid=help] [role=dialog]")`);
     // (drawn from the table the keys go through: every section, every row)
     const rows = await app.js<number>(`document.querySelectorAll(".sp-keys dt").length`);
     expect(rows).toBe(KEYMAP.reduce((n, s) => n + s.rows.length, 0));
     await app.press("Escape");
-    expect(await app.js<boolean>(`!!document.querySelector(".sp-modal")`)).toBe(false);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=help] [role=dialog]")`)).toBe(false);
   });
 
   test("the settings: a real click on the opener opens them, Escape closes them", async () => {
