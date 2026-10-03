@@ -3033,7 +3033,11 @@ export class FlightHud {
         const h: V3 = [f0[0] / fl, f0[1] / fl, f0[2] / fl];
         for (const deg of [-60, -30, 30, 60]) {
           const a = (deg * Math.PI) / 180;
-          const d: V3 = [h[0] * Math.cos(a) + up[0] * Math.sin(a), h[1] * Math.cos(a) + up[1] * Math.sin(a), h[2] * Math.cos(a) + up[2] * Math.sin(a)];
+          const d: V3 = [
+            h[0] * Math.cos(a) + up[0] * Math.sin(a),
+            h[1] * Math.cos(a) + up[1] * Math.sin(a),
+            h[2] * Math.cos(a) + up[2] * Math.sin(a),
+          ];
           // (beside the vertical: the nose's mark and the mode sit on it)
           label(d, String(Math.abs(deg)), "rgba(235, 240, 250, 0.9)", 16 * dpr);
         }
