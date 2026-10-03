@@ -44,6 +44,7 @@ import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
 import { hudShown } from "./hud/declutter";
 import { safeFrame } from "./hud/safe";
+import { hudMode, shownSpeed } from "./hud/model";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -1932,7 +1933,10 @@ export class FlightHud {
    * smoothly when the speed outgrows it or falls well under it; the column filled to the speed, the
    * value box beside it, the autopilot's target bug, the trend.
    */
-  private speedTape(ctx: CanvasRenderingContext2D, i: Info, x0: number, cy: number, hgt: number, dpr: number) {
+  private speedTape(ctx: CanvasRenderingContext2D, info: Info, x0: number, cy: number, hgt: number, dpr: number) {
+    // (the speed in the mode's frame — hud/model.ts: over the ground or through the air down there)
+    const sp = shownSpeed(info, this.phase);
+    const i = { ...info, speed: sp.v };
     const wdt = 58 * dpr;
     const C = C_MPS;
     const want = Number.isFinite(i.wantSpeed) ? i.wantSpeed : 0;
@@ -2015,12 +2019,7 @@ export class FlightHud {
         ctx.stroke();
       }
     }
-    const relTo =
-      i.speedMode === "target"
-        ? `rel. ${BODY_NAMES[i.target as Target]} (target)`
-        : i.ref
-          ? `rel. ${BODY_NAMES[i.ref as Target] ?? i.ref}`
-          : "rel. ZAMO";
+    const relTo = sp.ref;
     label(ctx, x0, top - 16 * dpr, `SPEED · ${unit}`, relTo, dpr);
     // the value, beside the pointer
     const v = i.speed * unitK;
@@ -3063,15 +3062,7 @@ export class FlightHud {
       }
     }
     {
-      const ph = this.phase;
-      const mode =
-        i.speedMode === "target"
-          ? "TGT"
-          : i.region === "hole"
-            ? "KERR"
-            : ph?.mode === "landed" || (ph?.stage && ["air", "entry", "approach", "ground"].includes(ph.stage))
-              ? "SRF"
-              : "ORB";
+      const mode = hudMode(i, this.phase);
       const y = C0 - R0 * 0.62;
       ctx.font = `700 ${Math.round(10 * dpr)}px ${FONT}`;
       const w = ctx.measureText(mode).width + 10 * dpr;

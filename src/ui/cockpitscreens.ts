@@ -22,6 +22,7 @@ import { VESSELS } from "../vessels";
 import { EPOCH_DATE, M_SECONDS } from "../system/solar";
 import { C_MPS, G0, M_METRES } from "../units";
 import { caught } from "../debug";
+import { shownSpeed } from "./hud/model";
 
 const W = 2048,
   H = 1024,
@@ -336,7 +337,8 @@ export class CockpitScreens {
     g.font = `700 24px ${FONT}`;
     g.fillStyle = TEXT;
     g.textAlign = "left";
-    g.fillText(st ? fmtSpeed(st.speed) : "—", 14, 640);
+    // (the HUD's own speed — hud/model.ts: over the ground or through the air down there)
+    g.fillText(st ? fmtSpeed(shownSpeed(d.info).v * C_MPS) : "—", 14, 640);
     g.textAlign = "right";
     g.fillText(st ? fmtKm(st.altKm) : "—", SLOT - 14, 640);
     g.textAlign = "center";
