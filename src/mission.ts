@@ -323,7 +323,9 @@ export class Mission {
       }
     }
     const k = 1 - Math.exp(-dt / 1.1);
-    const y = s.shipLookYaw + (yaw - s.shipLookYaw) * k;
+    // (the yaw the short way round: the look wraps at 180°)
+    const dy = ((((yaw - s.shipLookYaw + 180) % 360) + 360) % 360) - 180;
+    const y = s.shipLookYaw + dy * k;
     const p = s.shipLookPitch + (pitch - s.shipLookPitch) * k;
     if (Math.abs(y - s.shipLookYaw) + Math.abs(p - s.shipLookPitch) > 1e-3 || (!this.aim && (s.shipLookYaw || s.shipLookPitch))) {
       this.cam.setLook(Math.abs(y) < 0.05 && !this.aim ? 0 : y, Math.abs(p) < 0.05 && !this.aim ? 0 : p);

@@ -971,7 +971,7 @@ export const SCHEMA: ControlDef[] = [
     keywords: "rcs translation thrusters docking",
   },
   {
-    key: "shipLookYaw", type: "number", section: "game", group: "Ranger handling", label: "Free look: yaw", min: -170, max: 170, step: 1, unit: "°", effect: "scene", advanced: true,
+    key: "shipLookYaw", type: "number", section: "game", group: "Ranger handling", label: "Free look: yaw", min: -180, max: 180, step: 1, unit: "°", effect: "scene", advanced: true,
     help: "The camera turned on its mount (the ship keeps its attitude).",
   },
   {

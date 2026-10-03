@@ -1171,7 +1171,7 @@ export class CameraController {
       this.rig.el = clamp(this.rig.el + dy * 0.25, -89, 89);
     } else if (rigTurn) {
       // on the tripod: the drag turns the view off the target
-      this.rig.yawOff = clamp(this.rig.yawOff - dx * kLook, -170, 170);
+      this.rig.yawOff = wrapYaw(this.rig.yawOff - dx * kLook);
       this.rig.pitchOff = clamp(this.rig.pitchOff + dy * kLook, -85, 85);
     } else if (ov === "around") {
       // outside, around the ship: the drag turns the camera about it
@@ -2231,7 +2231,7 @@ export class CameraController {
     if (!L || (L.yaw === s.shipLookYaw && L.pitch === s.shipLookPitch)) return;
     const moved = L.cam !== `${s.yaw}|${s.pitch}|${s.roll}|${s.anchor}`;
     if (!s.ship || moved) return;
-    const yaw = clamp(s.shipLookYaw, -170, 170), pitch = clamp(s.shipLookPitch, -85, 85);
+    const yaw = wrapYaw(s.shipLookYaw), pitch = clamp(s.shipLookPitch, -85, 85);
     const pose = this.shipPose();
     const S0 = shipToCamera(pose, L.yaw, L.pitch).S;
     s.shipLookYaw = yaw;
@@ -2239,10 +2239,11 @@ export class CameraController {
     this.reorient(S0, shipToCamera(pose, yaw, pitch).S);
   }
 
-  /** Turns the camera on its mount (degrees); the ship stays where it points. */
+  /** Turns the camera on its mount (degrees; the yaw all the way round, as many turns as wanted); the
+   *  ship stays where it points. */
   setLook(yaw: number, pitch: number) {
     const s = this.s;
-    yaw = clamp(yaw, -170, 170);
+    yaw = wrapYaw(yaw);
     pitch = clamp(pitch, -85, 85);
     if (yaw === s.shipLookYaw && pitch === s.shipLookPitch) return;
     const S0 = this.shipMatrix();
@@ -7397,3 +7398,9 @@ function rotateAbout(v: Vec3, k: Vec3, ang: number): Vec3 {
 }
 const spinAxis = (id: string) => spinVector(solarBody(id)!);
 const spinRate = (id: string) => Math.hypot(...spinVector(solarBody(id)!));
+
+/** A look's yaw kept in (−180°, 180°]: turning past behind goes on round, no stop. */
+export function wrapYaw(y: number): number {
+  const w = ((((y + 180) % 360) + 360) % 360) - 180;
+  return w === -180 ? 180 : w;
+}
