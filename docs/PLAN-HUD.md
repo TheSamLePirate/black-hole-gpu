@@ -77,6 +77,6 @@ Décisions de l'utilisateur :
 | H2 vol dans l'air | fait : incidence posée sur la symbologie (plage de finesse max., 85 % et décrochage), α chiffré, bille de dérapage, chevron d'énergie, facteur de charge, STALL/AOA, directeur de vol | · 159 |
 | H3 position future | fait : trajectoire prédite en perspective (deux univers, repère tournant près du sol), repères +10/+30/+60 s et ¼ d'orbite (fractions de la prédiction autour du trou), impact au sol / entrée / horizon avec compte à rebours ; correctif du chemin du trou jamais redessiné | · 160 |
 | H4 approche et atterrissage | fait : piste conforme (contour, seuil, axe 15 km), point visé de la pente, encadré (distance, écart, erreur de pente), FLARE ; atterrissage vertical : radar de dérive, vitesse verticale, AGL, allumage d'arrêt, point de toucher ; chute libre masquée en vol porté | · 161 |
-| H5 opérations dans l'espace | à faire | |
+| H5 opérations dans l'espace | fait : encadré d'allumage (compte à rebours, Δv, durée, visée) et anneau de visée ; amarrage : portes le long de l'axe, viseur dans l'axe, portée, rapprochement, angle | · 162 |
 | H6 près de Gargantua | à faire | |
 | H7 finitions | à faire | |

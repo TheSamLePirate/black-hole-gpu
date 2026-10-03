@@ -7005,6 +7005,9 @@ export class CameraController {
       ourCa: null as { d: number; t: number } | null,
       /** the docking aid (the station near), or null */
       dock: null as DockInfo | null,
+      /** the docking's guide for the HUD: lateral offset and drift [m, m/s], the port's axis, gates
+       *  along it (camera coordinates) */
+      dockGuide: null as { lat: Vec3; latRate: Vec3; axis: Vec3; gates: { d: Vec3; r: number; k: number }[] } | null,
       /** what the flown craft is docked to (its own links) */
       links: [] as { title: string; port: string }[],
       /** the craft flown, and those docked to it; the assembly's mass [kg] */
@@ -7123,6 +7126,26 @@ export class CameraController {
       const q: Vec3 = [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]];
       const ql = Math.hypot(...q);
       if (ql > 1e-6) info.dirs.dock = [q[0] / ql, q[1] / ql, q[2] / ql];
+      // the docking's guide (the HUD's H5): the offset across the port's axis and its drift (camera
+      // coordinates, m and m/s), the axis, and gates along it — 5 to 100 m out — as the eye sees them
+      const toCam = (v: Vec3) => {
+        const l = Math.hypot(...v);
+        if (l < 1e-12) return [0, 0, 0] as Vec3;
+        const u = C(nav.toRep(lin(v, 1 / l, v, 0)))!;
+        return lin(u, l, u, 0);
+      };
+      const rel = sub3(di.ring, di.c);
+      const lat = lin(rel, M_METRES, di.a, -dot3(rel, di.a) * M_METRES);
+      const latRate = lin(di.vrel, 1, di.a, -dot3(di.vrel, di.a));
+      const axis = toCam(di.a);
+      info.dockGuide = {
+        lat: toCam(lat), latRate: toCam(latRate), axis,
+        gates: [5, 10, 20, 50, 100].map((k) => {
+          const g: Vec3 = [pc[0] + eye[0] + axis[0] * k, pc[1] + eye[1] + axis[1] * k, pc[2] + eye[2] + axis[2] * k];
+          const gl = Math.hypot(...g);
+          return { d: [g[0] / gl, g[1] / gl, g[2] / gl] as Vec3, r: gl, k };
+        }),
+      };
     }
     // the navball relative to the target: its speed, its prograde
     if (this.speedMode === "target") {

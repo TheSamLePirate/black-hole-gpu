@@ -18,6 +18,13 @@ export interface SymInfo {
   S: number[][];
   /** where the ship is (the hole's region: its lensed tube may draw the path instead) */
   region?: string;
+  /** the flight plan: its burns (coordinate times [M], Δ(γβ) [c]), the one burning, now [M] */
+  plan?: { nodes: { t: number; dv: number[] }[]; burning?: boolean | number | null; now: number } | null;
+  /** the engine: its full thrust [the scene's acceleration unit] */
+  engine?: { max: number } | null;
+  /** the docking: the ports' range, closing rate, angle; the guide (camera coordinates) */
+  dock?: { range: number; closing: number; lateral: number; lateralRate: number; angle: number; docked: boolean; title: string; name: string } | null;
+  dockGuide?: { lat: V3; latRate: V3; axis: V3; gates: { d: V3; r: number; k: number }[] } | null;
   /** near the ground: height over it [m], vertical and horizontal speeds [m/s], thrust over weight, the
    *  local gravity [g], landed */
   surface?: { alt: number; vVert: number; vHor: number; twr: number; gLocal: number; landed?: boolean } | null;
@@ -295,6 +302,10 @@ export function drawSymbology(F: SymFrame) {
   // ---- approach and landing: the runway, the vertical landing's scope and cues
   if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
   if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2) drawHover(F, i.surface, up, pr, stroke, text, inside);
+
+  // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
+  if (i.plan && i.plan.nodes.length && s.hudBurn && !F.outside && F.density < 2) drawBurn(F, pr, stroke, text, inside, nose);
+  if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
@@ -769,4 +780,111 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
       text(`TD ${Math.round(tg)} s`, p![0], p![1] + R * 2.3, "#78ffaa", 11, "center", true);
     }
   }
+}
+
+/** the scene's acceleration unit [m/s²] (c² per M) and its time unit [s] (M / c) */
+const A_UNIT = (299792458 * 299792458) / 1.476625e11;
+const T_UNIT = 492.5490947;
+
+/**
+ * The next burn: a box with its number, its countdown, its Δv and how long the engine needs for it; the
+ * aim — the nose against the burn's direction —: a ring about the manoeuvre marker, green within 2°,
+ * amber within 10°, red beyond, and the angle in figures. While it burns: BURNING.
+ */
+function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean, nose: V3) {
+  const { ctx, dpr, W, H, i } = F;
+  const P = i.plan!;
+  const k = P.nodes.findIndex((n) => n.t >= P.now - 1e-9);
+  if (k < 0) return;
+  const n = P.nodes[k]!;
+  const dv = Math.hypot(...n.dv) * 299792458;
+  const tIn = (n.t - P.now) * T_UNIT;
+  const a = (i.engine?.max ?? 0) * A_UNIT;
+  const len = a > 0 ? dv / a : Infinity;
+  // the aim
+  const dir = i.dirs.burn ?? i.dirs.maneuver ?? null;
+  let err = NaN;
+  if (dir) {
+    err = (Math.acos(Math.max(-1, Math.min(1, dot(nose, dir)))) * 180) / Math.PI;
+    const p = pr(dir);
+    if (inside(p, 10 * dpr)) {
+      const col = err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46";
+      stroke(() => ctx.arc(p![0], p![1], 20 * dpr, 0, 2 * Math.PI), col, 1.6, err < 2 ? undefined : [5, 4]);
+    }
+  }
+  // the box (left of centre, under the runway's place)
+  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 + 74 * dpr;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 70 * dpr);
+  const burning = !!P.burning;
+  text(burning ? `BURNING ◆${k + 1}` : `BURN ◆${k + 1} IN ${ahead(Math.max(tIn, 0))}`, x, y - 12 * dpr, burning ? "#ffc85a" : "#7cd6ff", 11.5, "center", true);
+  text(`Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(1)} m/s`} · ${Number.isFinite(len) ? ahead(len) : "no thrust"}`, x, y + 6 * dpr, "#ffffff", 12, "center", true);
+  if (Number.isFinite(err)) text(`AIM ${err.toFixed(1)}°`, x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
+  // (the burn's start soon and the craft not turned: said)
+  if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && Math.floor(performance.now() / 400) % 2 === 0) text("TURN TO THE BURN", W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
+}
+
+/**
+ * The docking's guide: gates along the target port's axis — 5, 10, 20, 50, 100 m out —, the corridor to
+ * fly through, as the eye sees them; a scope looking down the axis: the offset across it (the dot), its
+ * drift over 10 s (the arrow), the scale chosen for it; the range, the closing rate (green slow, amber
+ * fast, red too fast that near), the ports' angle.
+ */
+function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+  const { ctx, dpr, W, H, i } = F;
+  const D = i.dock!, G = i.dockGuide!;
+  const fpx = H / (2 * Math.tan(((F.fov * Math.PI) / 180) / 2));
+  // the gates
+  if (D.range < 400) for (const g of G.gates) {
+    // (the gates still ahead: those between the craft and the port)
+    if (g.k >= D.range - 2) continue;
+    const p = g.d[2] > 1e-3 ? pr(g.d) : null;
+    if (!inside(p, -40 * dpr)) continue;
+    const rad = Math.max(((0.8 + g.k * 0.08) / g.r) * fpx, 6 * dpr);
+    stroke(() => ctx.arc(p![0], p![1], rad, 0, 2 * Math.PI), `rgba(95, 255, 208, ${g.k <= 20 ? 0.8 : 0.45})`, 1.3, [6, 4]);
+    text(`${g.k} m`, p![0] + rad + 4 * dpr, p![1], "rgba(95, 255, 208, 0.75)", 9.5, "left", true);
+  }
+  if (D.range > 2000) return;
+  // the scope, down the axis: its x and y the view's right and up across the axis
+  const ax = norm(G.axis);
+  let ex = comb([1, 0, 0], 1, ax, -ax[0]), ey = comb([0, 1, 0], 1, ax, -ax[1]);
+  if (Math.hypot(...ex) < 0.1 || Math.hypot(...ey) < 0.1) return;
+  ex = norm(ex);
+  ey = norm(ey);
+  const ox = dot(G.lat, ex), oy = dot(G.lat, ey);
+  const rx = dot(G.latRate, ex) * 10, ry = dot(G.latRate, ey) * 10;
+  const R0 = 52 * dpr, cx = W / 2 + Math.min(W, H) * 0.44, cy = H / 2 + 20 * dpr;
+  const scales = [0.5, 1, 2, 5, 10, 20, 50, 100, 200];
+  const full = scales.find((k) => k >= Math.max(Math.hypot(ox, oy), Math.hypot(ox + rx, oy + ry)) * 1.2) ?? 200;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, R0 + 6 * dpr, 0, 2 * Math.PI);
+  ctx.fill();
+  stroke(() => {
+    ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
+    ctx.moveTo(cx + R0 / 2, cy);
+    ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
+    ctx.moveTo(cx - R0, cy);
+    ctx.lineTo(cx + R0, cy);
+    ctx.moveTo(cx, cy - R0);
+    ctx.lineTo(cx, cy + R0);
+  }, "rgba(95, 255, 208, 0.45)", 1);
+  const k = R0 / full;
+  const px = cx + Math.max(-1.15, Math.min(1.15, ox / full)) * R0, py = cy - Math.max(-1.15, Math.min(1.15, oy / full)) * R0;
+  const on = Math.hypot(ox, oy) < Math.max(0.15, D.range * 0.02);
+  stroke(() => {
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + rx * k, py - ry * k);
+  }, "#ffc85a", 1.8);
+  ctx.beginPath();
+  ctx.arc(px, py, 5 * dpr, 0, 2 * Math.PI);
+  ctx.fillStyle = on ? "#78ffaa" : "#5fffd0";
+  ctx.fill();
+  text(`${full} m`, cx + R0 - 2 * dpr, cy - R0 + 2 * dpr, "rgba(95, 255, 208, 0.6)", 9, "right", true);
+  text(`${D.title.toUpperCase()} · ${D.name}`, cx, cy - R0 - 30 * dpr, "rgba(95, 255, 208, 0.95)", 10.5);
+  text(`RANGE ${D.range >= 1000 ? `${(D.range / 1000).toFixed(2)} km` : `${D.range.toFixed(D.range < 10 ? 2 : 1)} m`}`, cx, cy - R0 - 14 * dpr, "#ffffff", 12, "center", true);
+  const fast = D.closing > Math.max(0.3, D.range / 60);
+  const ccol = D.closing < 0 ? "#ffc85a" : fast ? (D.range < 20 ? "#ff5a46" : "#ffc85a") : "#78ffaa";
+  text(`${D.closing >= 0 ? "CLOSING" : "OPENING"} ${Math.abs(D.closing).toFixed(2)} m/s`, cx, cy + R0 + 18 * dpr, ccol, 11.5, "center", true);
+  text(`LAT ${Math.hypot(ox, oy).toFixed(2)} m · ${Math.abs(D.lateralRate).toFixed(2)} m/s · ∠ ${D.angle.toFixed(1)}°`, cx, cy + R0 + 34 * dpr, on ? "#78ffaa" : "rgba(214, 236, 255, 0.9)", 10.5, "center", true);
 }

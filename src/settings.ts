@@ -277,6 +277,8 @@ export interface Settings {
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
   hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
+  hudBurn: boolean; // the next burn: countdown, Δv, its length, the aim ring
+  hudDock: boolean; // the docking: gates along the port's axis, the scope down it, range, closing
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -486,6 +488,8 @@ export function defaultSettings(): Settings {
     hudImpact: true,
     hudRunway: true,
     hudHover: true,
+    hudBurn: true,
+    hudDock: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,

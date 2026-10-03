@@ -1083,6 +1083,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud landing hover drift suicide burn touchdown vertical",
   },
   {
+    key: "hudBurn", type: "toggle", section: "game", group: "HUD aids", label: "Burn cue", effect: "none",
+    help: "With a flight plan: the next burn — its countdown, its Δv, how long the engine needs —, and the aim: a ring about the manoeuvre marker, green within 2° of the nose, amber within 10°, red beyond; TURN TO THE BURN when it is near and the craft is not turned.",
+    keywords: "hud burn maneuver node countdown delta-v aim",
+  },
+  {
+    key: "hudDock", type: "toggle", section: "game", group: "HUD aids", label: "Docking guide", effect: "none",
+    help: "Near a free port: gates along its axis (5 to 100 m out) to fly through, a scope looking down the axis — the offset across it, its drift over 10 s —, the range, the closing rate (green slow, amber fast, red too fast that near), the ports' angle.",
+    keywords: "hud docking port gates corridor closing range",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",
