@@ -12,14 +12,15 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 
 | Pilier | Départ (audit) | Actuel | Cible AAA |
 |---|---:|---:|---:|
-| Physique | 64 | 66 | 80 |
-| Code + tests | 44 | 62 | 75 |
-| Technologie | 67 | 69 | 80 |
-| UI / UX / HUD | 44 | 48 | 80 |
-| Produit / gameplay | 50 | 51 | 80 |
-| **Global** | **≈ 54** | **≈ 59** | **≈ 78–80** |
+| Physique | 64 | 67 | 80 |
+| Code + tests | 44 | 66 | 75 |
+| Technologie | 67 | 71 | 80 |
+| UI / UX / HUD | 44 | 69 | 80 |
+| Produit / gameplay | 50 | 59 | 80 |
+| **Global** | **≈ 54** | **≈ 66** | **≈ 78–80** |
 
-*Réestimé à la fin de la phase 1 (03/10/2026).* Physique : la force de marée de la bouche (P1) et le vol qui n'hérite plus du précédent. Code + tests : Biome et CI de vérification, `controls.ts` 9 436 → 1 000 lignes en 13 modules, `main.ts` −24 %, table de touches unique, `FlightInfo` et genres de réglages typés, machine de phases, 286 tests unitaires et 24 e2e (vols de référence au bit près, indépendance à la fréquence) — mais l'e2e ne tourne pas encore en CI et `flighthud.ts` fait 3 000 lignes. Technologie : Kerr Bench, validation WGSL headless. UI : les gains rapides U0.
+*Réestimé après U1–U3 et U4 en partie (03/10/2026).* UI : le langage HUD partout (kit, polices, réglages, galerie, dialogues), écran titre, menu pause, missions briefées, mode photo, tablette, roue radiale, indices de touches, manette dans les menus, Master caution, HUD par phase, aides de rentrée et d'approche, glyphes distincts — restent la navball graduée, `safeRects`, le view-model du HUD et la localisation complète (U5). Produit : une boucle d'entrée (titre → missions → vol → pause/sauvegarde) existe ; pas encore de progression ni d'objectifs suivis. Technologie : HUD 11,6 → 2,7 ms par frame. Code + tests : 314 unitaires, 41 e2e (fumée, accessibilité, titre, manette, préférences, vols de référence, fréquence).
+
 
 Les notes « actuelles » sont réestimées à la fin de chaque phase, en reprenant les critères de l'audit.
 
