@@ -35,7 +35,8 @@ export function holeBending(A: Vec3, B: Vec3): number {
   const L = Math.hypot(...d);
   if (L < 1e-12) return 0;
   const u: Vec3 = [d[0] / L, d[1] / L, d[2] / L];
-  const sA = dot(A, u), sB = sA + L;
+  const sA = dot(A, u),
+    sB = sA + L;
   const b = Math.hypot(A[0] - sA * u[0], A[1] - sA * u[1], A[2] - sA * u[2]);
   if (sA < 0 && sB > 0) return b < 1e-12 ? Infinity : (2 / b) * (sB / Math.hypot(b, sB) - sA / Math.hypot(b, sA));
   // (on one side of the closest point — a radial way: b → 0 — as 1 − s/√(b² + s²) = b²/(h (h + s)),
@@ -105,7 +106,9 @@ export function mapToRest(v: Vec3, cam: CameraFrame): Vec3 {
  */
 export function seenFrom(x: Vec3, v: Vec3, beta: Vec3): Vec3 {
   const b2 = dot(beta, beta);
-  let xr = x, u = v, t = 0;
+  let xr = x,
+    u = v,
+    t = 0;
   if (b2 > 1e-16) {
     const g = 1 / Math.sqrt(1 - b2);
     const n = unit(beta);
@@ -155,7 +158,12 @@ export function poleAxes(N: Vec3): [Vec3, Vec3, Vec3] {
  * with the radial flip, their radial part in proper length (dℓ = dr / |dr/dℓ|). Static bodies: seen
  * at their place, Lorentz transformed and retarded for a moving camera.
  */
-export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number, velocity: (k: number) => Vec3 = () => [0, 0, 0]): LocalPatch | null {
+export function ourPatch(
+  cam: CameraFrame,
+  list: GpuBody[],
+  dRdL: number,
+  velocity: (k: number) => Vec3 = () => [0, 0, 0],
+): LocalPatch | null {
   const n = cam.n;
   const X: Vec3 = [cam.r * n[0], -cam.r * n[1], cam.r * n[2]];
   const nh: Vec3 = [n[0], -n[1], n[2]]; // the radial direction, home frame
@@ -188,7 +196,8 @@ export function ourPatch(cam: CameraFrame, list: GpuBody[], dRdL: number, veloci
     const host = b.light >= 0 ? list[b.light]!.pos : ([C[0] + 1, C[1], C[2]] as Vec3);
     // (its own axes: its pole, turned by its rotation — the tracer's spunAxes)
     const pa = poleAxes(b.pole ?? [0, 0, 1]);
-    const cw = Math.cos(b.spin ?? 0), sw = Math.sin(b.spin ?? 0);
+    const cw = Math.cos(b.spin ?? 0),
+      sw = Math.sin(b.spin ?? 0);
     const ax: [Vec3, Vec3, Vec3] = [
       [cw * pa[0][0] + sw * pa[1][0], cw * pa[0][1] + sw * pa[1][1], cw * pa[0][2] + sw * pa[1][2]],
       [-sw * pa[0][0] + cw * pa[1][0], -sw * pa[0][1] + cw * pa[1][1], -sw * pa[0][2] + cw * pa[1][2]],

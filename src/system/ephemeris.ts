@@ -97,14 +97,16 @@ export function bodyTrack(sys: System, id: string): Track {
     tr = {
       pos: (t) => {
         const ph = ph0 + w * t;
-        const x = R * Math.cos(ph), y = R * Math.sin(ph);
+        const x = R * Math.cos(ph),
+          y = R * Math.sin(ph);
         if (!parent) return [x, y, 0];
         const p = parent.pos(t);
         return [p[0] + x, p[1] + y, p[2]];
       },
       vel: (t) => {
         const ph = ph0 + w * t;
-        const x = -R * w * Math.sin(ph), y = R * w * Math.cos(ph);
+        const x = -R * w * Math.sin(ph),
+          y = R * w * Math.cos(ph);
         if (!parent) return [x, y, 0];
         const v = parent.vel(t);
         return [v[0] + x, v[1] + y, v[2]];

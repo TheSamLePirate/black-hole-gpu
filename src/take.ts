@@ -80,7 +80,12 @@ export class Take {
     for (const k in src) if (!prev || prev[k] !== src[k]) rec[k] = src[k];
     this.last = { ...s };
     this.frames.push({
-      t, diff, time: st.time, water: st.water, ev: st.ev, plasma: [...st.plasma],
+      t,
+      diff,
+      time: st.time,
+      water: st.water,
+      ev: st.ev,
+      plasma: [...st.plasma],
       ship: st.ship && { eye: [...st.ship.eye], aim: [...st.ship.aim] },
       thrust: st.thrust && { ...st.thrust, force: [...st.thrust.force], torque: [...st.thrust.torque] },
       path: st.path,

@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { defaultSettings } from "../src/settings";
-import {
-  W_OVER_M, dneg, ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, repToSide, sideToRep, traceDneg,
-} from "../src/wormhole";
+import { W_OVER_M, dneg, ellOfR, flyDneg, holeToRep, mouth, radius, repToHole, repToSide, sideToRep, traceDneg } from "../src/wormhole";
 
 const film = dneg({ whRho: 1, whLength: 0.01, whLensing: 0.05 }); // Interstellar: 2a = 0.01ρ, W = 0.05ρ
 const long = dneg({ whRho: 1, whLength: 1, whLensing: 0.43 });
@@ -81,7 +79,14 @@ describe("Dneg rays", () => {
   test("the step size is converged (final direction to 1e-5 rad, 1/70 of a 1080p pixel at 45°)", () => {
     for (const w of [film, long]) {
       // near-critical rays wind around the throat and amplify any error: looser bound for b = 0.999
-      for (const [b, tol] of [[0.3, 1e-5], [0.95, 1e-5], [0.999, 1e-3], [1.05, 1e-5], [3, 1e-5], [10, 1e-5]]) {
+      for (const [b, tol] of [
+        [0.3, 1e-5],
+        [0.95, 1e-5],
+        [0.999, 1e-3],
+        [1.05, 1e-5],
+        [3, 1e-5],
+        [10, 1e-5],
+      ]) {
         const { n, d } = rayFromHome(w, -30, b!);
         const a = traceDneg(w, -30, n, d, 1000, 1000);
         const c = traceDneg(w, -30, n, d, 1000, 1000, { stepScale: 0.02, maxSteps: 1e8 });
@@ -124,10 +129,17 @@ describe("gluing frames", () => {
     const n: Vec3 = [0.3, -0.5, 0.812];
     const nn = Math.hypot(...n);
     const nu = n.map((x) => x / nn) as Vec3;
-    const e: Vec3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const e: Vec3[] = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
     const m = e.map((v) => repToSide(-1, nu, v));
     expect(det(m[0]!, m[1]!, m[2]!)).toBeCloseTo(1, 10);
-    for (const v of [[0.2, 0.7, -0.1], [1, 0, 0]] as Vec3[]) {
+    for (const v of [
+      [0.2, 0.7, -0.1],
+      [1, 0, 0],
+    ] as Vec3[]) {
       const back = sideToRep(-1, nu, repToSide(-1, nu, v));
       for (let i = 0; i < 3; i++) expect(back[i]).toBeCloseTo(v[i]!, 12);
     }
@@ -152,7 +164,15 @@ describe("gluing frames", () => {
 describe("camera orientation (6 degrees of freedom)", () => {
   test("yaw/pitch/roll ↔ basis round trip, including straight up/down", async () => {
     const { basis, yawPitchRoll } = await import("../src/camera");
-    const cases = [[0, 0, 0], [30, 20, 10], [-170, -60, 120], [90, 90, 0], [45, -90, 30], [10, 89.9, -170], [179, 0, -45]];
+    const cases = [
+      [0, 0, 0],
+      [30, 20, 10],
+      [-170, -60, 120],
+      [90, 90, 0],
+      [45, -90, 30],
+      [10, 89.9, -170],
+      [179, 0, -45],
+    ];
     for (const [y, p, r] of cases) {
       const b = basis(y!, p!, r!);
       const e = yawPitchRoll(b.fwd, b.up);

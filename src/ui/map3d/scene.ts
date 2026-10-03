@@ -105,19 +105,26 @@ export function ourScene(t0: number): MapScene {
     const a = parent ? Math.hypot(...sub(P, pos.get(parent.id)!)) : 0;
     const days = b.circle ? Math.abs(b.circle.period) : b.id === "moon" ? 27.32 : b.elements ? 365.25 * b.elements[0]![0]! ** 1.5 : 0;
     const T = (days * 86400) / M_SECONDS;
-    const orbit = parent && T > 0
-      ? cachedOrbit(`ours:${b.id}`, t0, () => {
-          const pts: V3[] = [];
-          const q0 = pos.get(parent.id)!;
-          const n = moon ? 96 : 160;
-          for (let j = 0; j <= n; j++) {
-            const t = t0 + (T * j) / n;
-            const p = solarState(b.id, t).pos, q = solarState(parent.id, t).pos;
-            pts.push(add(sub(p, q), q0));
-          }
-          return pts;
-        }, T / 40)
-      : null;
+    const orbit =
+      parent && T > 0
+        ? cachedOrbit(
+            `ours:${b.id}`,
+            t0,
+            () => {
+              const pts: V3[] = [];
+              const q0 = pos.get(parent.id)!;
+              const n = moon ? 96 : 160;
+              for (let j = 0; j <= n; j++) {
+                const t = t0 + (T * j) / n;
+                const p = solarState(b.id, t).pos,
+                  q = solarState(parent.id, t).pos;
+                pts.push(add(sub(p, q), q0));
+              }
+              return pts;
+            },
+            T / 40,
+          )
+        : null;
     // (the orbit cached a while ago: moved to the primary's place now)
     let off: V3 = [0, 0, 0];
     if (orbit && parent) {
@@ -125,16 +132,36 @@ export function ourScene(t0: number): MapScene {
       off = sub(pos.get(parent.id)!, c.q ?? (c.q = solarState(parent.id, c.at).pos));
     }
     bodies.push({
-      id: b.id, name: b.name, kind: b.kind === "star" ? "star" : moon ? "moon" : "planet", parent: b.parent,
-      pos: P, radius: b.radius, col: OUR_COLOURS[b.id] ?? "200, 200, 200",
+      id: b.id,
+      name: b.name,
+      kind: b.kind === "star" ? "star" : moon ? "moon" : "planet",
+      parent: b.parent,
+      pos: P,
+      radius: b.radius,
+      col: OUR_COLOURS[b.id] ?? "200, 200, 200",
       pole: b.kind === "star" ? Z : eclipticOf(b.pole[0], b.pole[1]),
       soi: parent ? a * (b.mass / parent.mass) ** 0.4 : Infinity,
-      orbit, orbitOff: off, light: b.kind === "star" ? null : "sun", rings: b.rings, air: !!b.atmosphere, period: T || undefined,
+      orbit,
+      orbitOff: off,
+      light: b.kind === "star" ? null : "sun",
+      rings: b.rings,
+      air: !!b.atmosphere,
+      period: T || undefined,
     });
   }
   bodies.push({
-    id: "wormhole", name: "Wormhole", kind: "mouth", parent: "sun", pos: [0, 0, 0], radius: 0.05, col: "200, 140, 255",
-    pole: Z, soi: 0, orbit: null, orbitOff: [0, 0, 0], light: null,
+    id: "wormhole",
+    name: "Wormhole",
+    kind: "mouth",
+    parent: "sun",
+    pos: [0, 0, 0],
+    radius: 0.05,
+    col: "200, 140, 255",
+    pole: Z,
+    soi: 0,
+    orbit: null,
+    orbitOff: [0, 0, 0],
+    light: null,
   });
   // the space station: its place (SGP4, or near the ship its own fall), a turn of its orbit around the
   // Earth (SGP4: 92 minutes), its orbit's normal for a pole
@@ -142,21 +169,37 @@ export function ourScene(t0: number): MapScene {
   if (iss) {
     const E = pos.get("earth")!;
     const T = (92.9 * 60) / M_SECONDS;
-    const orbit = cachedOrbit("ours:iss", t0, () => {
-      const pts: V3[] = [];
-      for (let j = 0; j <= 96; j++) {
-        const t = t0 + (T * j) / 96;
-        const o = issOrbit(t);
-        if (o) pts.push(add(sub(o.X as V3, solarState("earth", t).pos as V3), E));
-      }
-      return pts;
-    }, T / 40);
+    const orbit = cachedOrbit(
+      "ours:iss",
+      t0,
+      () => {
+        const pts: V3[] = [];
+        for (let j = 0; j <= 96; j++) {
+          const t = t0 + (T * j) / 96;
+          const o = issOrbit(t);
+          if (o) pts.push(add(sub(o.X as V3, solarState("earth", t).pos as V3), E));
+        }
+        return pts;
+      },
+      T / 40,
+    );
     const c = orbitCache.get("ours:iss")!;
     const off = sub(E, (c.q ??= solarState("earth", c.at).pos as V3));
     const A = issAxes(iss.X, iss.V, t0);
     bodies.push({
-      id: "iss", name: "ISS", kind: "moon", parent: "earth", pos: iss.X as V3, radius: 55 / M_METRES, col: "95, 255, 208",
-      pole: [-A[1][0], -A[1][1], -A[1][2]], soi: 0, orbit, orbitOff: off, light: "sun", period: T,
+      id: "iss",
+      name: "ISS",
+      kind: "moon",
+      parent: "earth",
+      pos: iss.X as V3,
+      radius: 55 / M_METRES,
+      col: "95, 255, 208",
+      pole: [-A[1][0], -A[1][1], -A[1][2]],
+      soi: 0,
+      orbit,
+      orbitOff: off,
+      light: "sun",
+      period: T,
     });
   }
   // the fleet's craft not flown (fleet.ts): where they are, a turn of their Kepler orbit around the Earth
@@ -167,35 +210,62 @@ export function ourScene(t0: number): MapScene {
     if (!p) continue;
     const E = pos.get("earth")!;
     const Es = solarState("earth", t0);
-    const r0 = sub(p.X as V3, Es.pos as V3), v0 = sub(p.V as V3, Es.vel as V3);
+    const r0 = sub(p.X as V3, Es.pos as V3),
+      v0 = sub(p.V as V3, Es.vel as V3);
     const eps = (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / 2 - mu / Math.hypot(...r0);
     if (!(eps < 0)) continue;
     const T = 2 * Math.PI * Math.sqrt((-mu / (2 * eps)) ** 3 / mu);
-    const orbit = cachedOrbit(`ours:${id}`, t0, () => {
-      const pts: V3[] = [];
-      for (let j = 0; j <= 96; j++) {
-        const k = keplerProp(mu, r0, v0, (T * j) / 96);
-        pts.push(add(k.r as V3, E));
-      }
-      return pts;
-    }, T / 40);
+    const orbit = cachedOrbit(
+      `ours:${id}`,
+      t0,
+      () => {
+        const pts: V3[] = [];
+        for (let j = 0; j <= 96; j++) {
+          const k = keplerProp(mu, r0, v0, (T * j) / 96);
+          pts.push(add(k.r as V3, E));
+        }
+        return pts;
+      },
+      T / 40,
+    );
     const c = orbitCache.get(`ours:${id}`)!;
     const off = sub(E, (c.q ??= solarState("earth", c.at).pos as V3));
     const n = [r0[1] * v0[2] - r0[2] * v0[1], r0[2] * v0[0] - r0[0] * v0[2], r0[0] * v0[1] - r0[1] * v0[0]];
     const nl = Math.hypot(...n) || 1;
     bodies.push({
-      id, name: VESSELS[id].name, kind: "moon", parent: "earth", pos: p.X as V3, radius: 40 / M_METRES, col: OUR_COLOURS[id] ?? "255, 255, 255",
-      pole: [n[0]! / nl, n[1]! / nl, n[2]! / nl], soi: 0, orbit, orbitOff: off, light: "sun", period: T,
+      id,
+      name: VESSELS[id].name,
+      kind: "moon",
+      parent: "earth",
+      pos: p.X as V3,
+      radius: 40 / M_METRES,
+      col: OUR_COLOURS[id] ?? "255, 255, 255",
+      pole: [n[0]! / nl, n[1]! / nl, n[2]! / nl],
+      soi: 0,
+      orbit,
+      orbitOff: off,
+      light: "sun",
+      period: T,
     });
   }
   return {
-    universe: "ours", bodies, byId: new Map(bodies.map((b) => [b.id, b])), systemPole: Z, systemX: [1, 0, 0], hole: null,
+    universe: "ours",
+    bodies,
+    byId: new Map(bodies.map((b) => [b.id, b])),
+    systemPole: Z,
+    systemX: [1, 0, 0],
+    hole: null,
     origin: () => [0, 0, 0],
   };
 }
 
 // ------------------------------------------------------------------------------------ Gargantua's
-const THEIR_COLOURS: Record<string, string> = { miller: "120, 210, 225", mann: "215, 228, 245", edmunds: "220, 170, 120", k2: "255, 190, 120" };
+const THEIR_COLOURS: Record<string, string> = {
+  miller: "120, 210, 225",
+  mann: "215, 228, 245",
+  edmunds: "220, 170, 120",
+  k2: "255, 190, 120",
+};
 
 export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
   budget = 4;
@@ -203,20 +273,46 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
   const at = (X: V3, t: number): V3 => sub(X, B(t));
   const bodies: MapBody[] = [];
   const span = (key: string, fn: (t: number) => V3, period: number, n = 160) =>
-    cachedOrbit(key, t0, () => Array.from({ length: n + 1 }, (_, j) => {
-      const t = t0 + (period * j) / n;
-      return at(fn(t), t);
-    }), period / 50);
+    cachedOrbit(
+      key,
+      t0,
+      () =>
+        Array.from({ length: n + 1 }, (_, j) => {
+          const t = t0 + (period * j) / n;
+          return at(fn(t), t);
+        }),
+      period / 50,
+    );
   bodies.push({
-    id: "hole", name: "Gargantua", kind: "hole", parent: null, pos: at([0, 0, 0], t0), radius: horizon(s.spin), col: "255, 170, 90",
-    pole: Z, soi: Infinity, orbit: null, orbitOff: [0, 0, 0], light: null,
+    id: "hole",
+    name: "Gargantua",
+    kind: "hole",
+    parent: null,
+    pos: at([0, 0, 0], t0),
+    radius: horizon(s.spin),
+    col: "255, 170, 90",
+    pole: Z,
+    soi: Infinity,
+    orbit: null,
+    orbitOff: [0, 0, 0],
+    light: null,
   });
   if (s.sun) {
     const w = Math.max(starOmega(s), 1e-9);
     bodies.push({
-      id: "star", name: "Companion star", kind: "star", parent: "hole", pos: at(starCentre(s, t0), t0), radius: s.sunRadius, col: "255, 211, 107",
-      pole: Z, soi: s.sunMass > 0 ? bodyHill(s, "star", t0) : 0,
-      orbit: span(`star:${s.sunOrbit}:${s.sunRadius}`, (t) => starCentre(s, t), (2 * Math.PI) / w, 180), orbitOff: [0, 0, 0], light: null, period: (2 * Math.PI) / w,
+      id: "star",
+      name: "Companion star",
+      kind: "star",
+      parent: "hole",
+      pos: at(starCentre(s, t0), t0),
+      radius: s.sunRadius,
+      col: "255, 211, 107",
+      pole: Z,
+      soi: s.sunMass > 0 ? bodyHill(s, "star", t0) : 0,
+      orbit: span(`star:${s.sunOrbit}:${s.sunRadius}`, (t) => starCentre(s, t), (2 * Math.PI) / w, 180),
+      orbitOff: [0, 0, 0],
+      light: null,
+      period: (2 * Math.PI) / w,
     });
   }
   if (s.system === "gargantua") {
@@ -231,18 +327,34 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
       if (turn > 0 && b.parent === "gargantua") orbit = span(`sys:${b.id}`, pos, turn);
       else if (turn > 0 && b.parent) {
         const par = b.parent;
-        const rel = cachedOrbit(`sysrel:${b.id}`, t0, () => Array.from({ length: 121 }, (_, j) => {
-          const t = t0 + (turn * j) / 120;
-          return sub(pos(t), bodyState(GARGANTUA_SYSTEM, par, t).pos);
-        }), turn / 20);
+        const rel = cachedOrbit(
+          `sysrel:${b.id}`,
+          t0,
+          () =>
+            Array.from({ length: 121 }, (_, j) => {
+              const t = t0 + (turn * j) / 120;
+              return sub(pos(t), bodyState(GARGANTUA_SYSTEM, par, t).pos);
+            }),
+          turn / 20,
+        );
         orbit = rel;
         orbitOff = at(bodyState(GARGANTUA_SYSTEM, par, t0).pos, t0);
       }
       bodies.push({
-        id: b.id, name: b.name, kind: b.kind === "star" ? "star" : "planet", parent: b.parent === "gargantua" ? "hole" : b.parent,
-        pos: at(pos(t0), t0), radius: b.radius, col: THEIR_COLOURS[b.id] ?? "220, 220, 220", pole: Z,
-        soi: bodyHill(s, b.id as never, t0), orbit, orbitOff, light: b.kind === "star" ? null : b.parent === "gargantua" ? "hole" : b.parent,
-        air: !!b.surface?.atmosphere, period: turn || undefined,
+        id: b.id,
+        name: b.name,
+        kind: b.kind === "star" ? "star" : "planet",
+        parent: b.parent === "gargantua" ? "hole" : b.parent,
+        pos: at(pos(t0), t0),
+        radius: b.radius,
+        col: THEIR_COLOURS[b.id] ?? "220, 220, 220",
+        pole: Z,
+        soi: bodyHill(s, b.id as never, t0),
+        orbit,
+        orbitOff,
+        light: b.kind === "star" ? null : b.parent === "gargantua" ? "hole" : b.parent,
+        air: !!b.surface?.atmosphere,
+        period: turn || undefined,
       });
     }
   }
@@ -250,12 +362,26 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
     const m0 = mouth(s, t0);
     const orbit = s.whOrbit && m0.omega > 0 ? span(`mouth:${s.whDist}`, (t) => mouth(s, t).C as V3, (2 * Math.PI) / m0.omega) : null;
     bodies.push({
-      id: "wormhole", name: "Wormhole", kind: "mouth", parent: "hole", pos: at(m0.C as V3, t0), radius: m0.rGlue, col: "200, 140, 255",
-      pole: Z, soi: 0, orbit, orbitOff: [0, 0, 0], light: null,
+      id: "wormhole",
+      name: "Wormhole",
+      kind: "mouth",
+      parent: "hole",
+      pos: at(m0.C as V3, t0),
+      radius: m0.rGlue,
+      col: "200, 140, 255",
+      pole: Z,
+      soi: 0,
+      orbit,
+      orbitOff: [0, 0, 0],
+      light: null,
     });
   }
   return {
-    universe: "gargantua", bodies, byId: new Map(bodies.map((b) => [b.id, b])), systemPole: Z, systemX: [1, 0, 0],
+    universe: "gargantua",
+    bodies,
+    byId: new Map(bodies.map((b) => [b.id, b])),
+    systemPole: Z,
+    systemX: [1, 0, 0],
     hole: { rH: horizon(s.spin), isco: isco(s.spin), photon: photonOrbits(s.spin).pro, disk: s.disk, diskOuter: s.diskOuter },
     origin: B,
   };

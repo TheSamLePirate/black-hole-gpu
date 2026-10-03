@@ -60,7 +60,7 @@ export const SEG_FLOATS = 16;
 /** A trail point's width [m] and optical depth across its middle, at an age [s]. */
 export function trailLook(kind: 0 | 1, age: number, str: number): { w: number; tau: number } {
   const K = KIND[kind];
-  const w = K.w0 + K.spread * Math.pow(Math.max(age, 0), 0.7);
+  const w = K.w0 + K.spread * Math.max(age, 0) ** 0.7;
   const form = Math.min(Math.max(age / K.form, 0), 1);
   const fade = 1 - smooth(0.55 * K.life, K.life, age);
   return { w, tau: K.tau * str * Math.min(1, K.wRef / w) * form * form * (3 - 2 * form) * fade };
@@ -133,7 +133,8 @@ export class Contrails {
       const prev = P[P.length - 2];
       // (a new point when the head is far enough from the one before it — else the head moved on)
       const step = s.kind === 0 ? 12 : 1.5;
-      if (!head || !prev || dist(head.p, prev.p) > step || now - prev.t > 0.5) P.push({ p: s.p, t: now, str: s.str, s: head ? head.s + dist(head.p, s.p) : 0 });
+      if (!head || !prev || dist(head.p, prev.p) > step || now - prev.t > 0.5)
+        P.push({ p: s.p, t: now, str: s.str, s: head ? head.s + dist(head.p, s.p) : 0 });
       else {
         head.p = s.p;
         head.t = now;
@@ -166,7 +167,11 @@ export class Contrails {
     let n = 0;
     const toShip = (p: V3): V3 => {
       const d: V3 = [p[0] - x[0], p[1] - x[1], p[2] - x[2]];
-      return [d[0] * ax[0][0] + d[1] * ax[0][1] + d[2] * ax[0][2], d[0] * ax[1][0] + d[1] * ax[1][1] + d[2] * ax[1][2], d[0] * ax[2][0] + d[1] * ax[2][1] + d[2] * ax[2][2]];
+      return [
+        d[0] * ax[0][0] + d[1] * ax[0][1] + d[2] * ax[0][2],
+        d[0] * ax[1][0] + d[1] * ax[1][1] + d[2] * ax[1][2],
+        d[0] * ax[2][0] + d[1] * ax[2][1] + d[2] * ax[2][2],
+      ];
     };
     for (const tr of this.trails) {
       const P = tr.pts;
@@ -177,7 +182,27 @@ export class Contrails {
         const b = toShip(P[i]!.p);
         const lb = trailLook(tr.kind, now - P[i]!.t, P[i]!.str);
         if (la.tau > 1e-3 || lb.tau > 1e-3) {
-          out.set([a[0], a[1], a[2], la.w, b[0], b[1], b[2], lb.w, la.tau, lb.tau, P[i + 1]!.s % 1e4, P[i + 1]!.s % 1e4 - (P[i + 1]!.s - P[i]!.s), tr.kind, 0, 0, 0], n * SEG_FLOATS);
+          out.set(
+            [
+              a[0],
+              a[1],
+              a[2],
+              la.w,
+              b[0],
+              b[1],
+              b[2],
+              lb.w,
+              la.tau,
+              lb.tau,
+              P[i + 1]!.s % 1e4,
+              (P[i + 1]!.s % 1e4) - (P[i + 1]!.s - P[i]!.s),
+              tr.kind,
+              0,
+              0,
+              0,
+            ],
+            n * SEG_FLOATS,
+          );
           n++;
         }
         a = b;

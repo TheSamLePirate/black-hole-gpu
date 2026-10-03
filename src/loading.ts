@@ -32,8 +32,16 @@ class LoadTracker {
   /** Registers a stage (again: re-opens it, e.g. assets reloaded later). */
   stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number } = {}) {
     const s: Stage = {
-      id, label, weight: o.weight ?? 1, state: "active", frac: 0, loaded: 0, total: 0,
-      indeterminate: o.indeterminate ?? false, eta: o.eta ?? 3, startedAt: performance.now(),
+      id,
+      label,
+      weight: o.weight ?? 1,
+      state: "active",
+      frac: 0,
+      loaded: 0,
+      total: 0,
+      indeterminate: o.indeterminate ?? false,
+      eta: o.eta ?? 3,
+      startedAt: performance.now(),
     };
     this.stages.set(id, s);
     this.emit();
@@ -117,7 +125,8 @@ class LoadTracker {
 
   /** The start's progress, 0…1, by weight. */
   progress(now = performance.now()) {
-    let w = 0, f = 0;
+    let w = 0,
+      f = 0;
     for (const s of this.stages.values()) {
       w += s.weight;
       f += s.weight * this.fracOf(s, now);

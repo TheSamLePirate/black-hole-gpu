@@ -19,7 +19,6 @@ import type { Settings } from "./settings";
 import { DEG } from "./units";
 import { add, cross, dot, normalize, scale, sub } from "./math/vec3";
 
-
 /** W/M = (π/2√2) tan(π/2√2) − ln sec(π/2√2) = 1.42953 (lensing width over the lensing mass). */
 export const W_OVER_M = (() => {
   const k = Math.PI / (2 * Math.SQRT2);
@@ -66,7 +65,6 @@ export function ellOfR(w: Dneg, r: number): number {
 // with the impact parameter b conserved and p_ℓ² + b²/r² = 1. The same equations give the straight
 // flight of the camera (spatial geodesics: the metric is static with g_tt = −1).
 // ---------------------------------------------------------------------------------------------
-
 
 /**
  * Integration step: resolves the mouth's transition region (scale M), turns by at most 0.05 rad
@@ -150,8 +148,14 @@ export function traceDneg(
   const maxLength = opts.maxLength ?? Infinity;
   const k = opts.stepScale ?? 1;
   for (; steps < maxSteps; steps++) {
-    if (s.l >= lPlus && s.pl > 0) { side = 1; break; }
-    if (s.l <= -lMinus && s.pl < 0) { side = -1; break; }
+    if (s.l >= lPlus && s.pl > 0) {
+      side = 1;
+      break;
+    }
+    if (s.l <= -lMinus && s.pl < 0) {
+      side = -1;
+      break;
+    }
     if (length >= maxLength) break;
     const h = Math.min(landing(w, s, dnegStep(w, s.l, b) * k), maxLength - length);
     s = planarRK4(w, s, b, h);
@@ -161,8 +165,13 @@ export function traceDneg(
   const n = add(scale(n0, Math.cos(s.psi)), scale(e2, Math.sin(s.psi)));
   const t = add(scale(n0, -Math.sin(s.psi)), scale(e2, Math.cos(s.psi)));
   return {
-    side, l: s.l, n, d: normalize(add(scale(n, s.pl), scale(t, b / r))), steps,
-    constraint: s.pl * s.pl + (b * b) / (r * r) - 1, length,
+    side,
+    l: s.l,
+    n,
+    d: normalize(add(scale(n, s.pl), scale(t, b / r))),
+    steps,
+    constraint: s.pl * s.pl + (b * b) / (r * r) - 1,
+    length,
   };
 }
 
@@ -180,9 +189,7 @@ export function flyDneg(w: Dneg, l0: number, n0: Vec3, dir: Vec3, vectors: Vec3[
     const Nu = scale(N, 1 / nn);
     const perp0 = cross(Nu, dir);
     const perp1 = cross(Nu, end.d);
-    moved = vectors.map((v) =>
-      normalize(add(add(scale(Nu, dot(v, Nu)), scale(end.d, dot(v, dir))), scale(perp1, dot(v, perp0)))),
-    );
+    moved = vectors.map((v) => normalize(add(add(scale(Nu, dot(v, Nu)), scale(end.d, dot(v, dir))), scale(perp1, dot(v, perp0)))));
   }
   return { l: end.l, n: end.n, dir: end.d, vectors: moved };
 }
@@ -297,9 +304,14 @@ export function sphericalFrame(p: Vec3) {
   const r = Math.hypot(...p);
   const th = Math.acos(Math.min(1, Math.max(-1, p[2] / r)));
   const ph = Math.atan2(p[1], p[0]);
-  const st = Math.sin(th), ct = Math.cos(th), sp = Math.sin(ph), cp = Math.cos(ph);
+  const st = Math.sin(th),
+    ct = Math.cos(th),
+    sp = Math.sin(ph),
+    cp = Math.cos(ph);
   return {
-    r, th, ph,
+    r,
+    th,
+    ph,
     er: [st * cp, st * sp, ct] as Vec3,
     et: [ct * cp, ct * sp, -st] as Vec3,
     ep: [-sp, cp, 0] as Vec3,

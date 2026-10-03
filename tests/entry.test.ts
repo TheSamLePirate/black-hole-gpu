@@ -5,11 +5,18 @@ import { solarBody } from "../src/system/solar";
 import type { V3 } from "../src/aero";
 
 // the Earth: a sphere turning about z, its standard air
-const mu = 3.986004418e14, R = 6371e3, W = 7.2921159e-5;
+const mu = 3.986004418e14,
+  R = 6371e3,
+  W = 7.2921159e-5;
 const rot = (p: V3, a: number): V3 => [p[0] * Math.cos(a) - p[1] * Math.sin(a), p[0] * Math.sin(a) + p[1] * Math.cos(a), p[2]];
 const earth: EntryEnv = {
-  R, atm: solarBody("earth")!.atmosphere!,
-  gravity: (x) => { const r = Math.hypot(...x); const k = -mu / (r * r * r); return [x[0] * k, x[1] * k, x[2] * k]; },
+  R,
+  atm: solarBody("earth")!.atmosphere!,
+  gravity: (x) => {
+    const r = Math.hypot(...x);
+    const k = -mu / (r * r * r);
+    return [x[0] * k, x[1] * k, x[2] * k];
+  },
   ground: (x) => [-W * x[1], W * x[0], 0],
   carry: (p, dt) => rot(p, W * dt),
 };
@@ -17,11 +24,15 @@ const ranger: EntryCraft = { aero: VESSELS.ranger.aero, mass: VESSELS.ranger.mas
 const D = Math.PI / 180;
 // at 120 km over the equator heading north-east, 7.8 km/s, γ −1.2°
 const start = (): EntryState => {
-  const r = R + 120e3, g = -1.2 * D;
+  const r = R + 120e3,
+    g = -1.2 * D;
   const fwd: V3 = [0, Math.cos(45 * D), Math.sin(45 * D)];
   return { x: [r, 0, 0], v: [7800 * Math.sin(g), 7800 * Math.cos(g) * fwd[1], 7800 * Math.cos(g) * fwd[2]] };
 };
-const onGround = (x: V3): V3 => { const l = Math.hypot(...x); return [(x[0] * R) / l, (x[1] * R) / l, (x[2] * R) / l]; };
+const onGround = (x: V3): V3 => {
+  const l = Math.hypot(...x);
+  return [(x[0] * R) / l, (x[1] * R) / l, (x[2] * R) / l];
+};
 
 test("an entry predicted: Shuttle-like peaks, a handover at Mach 2.5 thousands of km on", () => {
   const r = predictEntry(earth, ranger, start(), () => 50 * D, { handoverMach: 2.5 });
@@ -29,7 +40,10 @@ test("an entry predicted: Shuttle-like peaks, a handover at Mach 2.5 thousands o
   expect(r.gPeak).toBeLessThan(3);
   expect(r.heatPeak / 1e4).toBeGreaterThan(30);
   expect(r.shieldPeak).toBeLessThan(VESSELS.ranger.aero.shield!.tMax);
-  const range = Math.acos(Math.min(1, (r.end.x[0] * start().x[0]) / (Math.hypot(...r.end.x) * Math.hypot(...start().x)) + (r.end.x[1] * 0 + r.end.x[2] * 0))) * R;
+  const range =
+    Math.acos(
+      Math.min(1, (r.end.x[0] * start().x[0]) / (Math.hypot(...r.end.x) * Math.hypot(...start().x)) + (r.end.x[1] * 0 + r.end.x[2] * 0)),
+    ) * R;
   expect(range / 1e3).toBeGreaterThan(1500);
   // more bank, a shorter fall
   const r2 = predictEntry(earth, ranger, start(), () => 75 * D, { handoverMach: 2.5 });
@@ -40,22 +54,40 @@ test("the guidance brings the handover over its aim — 400 km on and 120 km acr
   const free = predictEntry(earth, ranger, start(), () => 45 * D, { handoverMach: 2.5 });
   // the place: from the free fall's end, moved along and across the track (carried back to now)
   const end = free.end;
-  const up = (() => { const l = Math.hypot(...end.x); return end.x.map((c) => c / l) as V3; })();
+  const up = (() => {
+    const l = Math.hypot(...end.x);
+    return end.x.map((c) => c / l) as V3;
+  })();
   const va = [end.v[0] - earth.ground(end.x)[0], end.v[1] - earth.ground(end.x)[1], end.v[2] - earth.ground(end.x)[2]] as V3;
   const vu = va[0] * up[0] + va[1] * up[1] + va[2] * up[2];
-  const f = (() => { const h: V3 = [va[0] - vu * up[0], va[1] - vu * up[1], va[2] - vu * up[2]]; const l = Math.hypot(...h); return h.map((c) => c / l) as V3; })();
+  const f = (() => {
+    const h: V3 = [va[0] - vu * up[0], va[1] - vu * up[1], va[2] - vu * up[2]];
+    const l = Math.hypot(...h);
+    return h.map((c) => c / l) as V3;
+  })();
   const right: V3 = [f[1] * up[2] - f[2] * up[1], f[2] * up[0] - f[0] * up[2], f[0] * up[1] - f[1] * up[0]];
-  const there = onGround([end.x[0] + 400e3 * f[0] * -0.4 + 120e3 * right[0], end.x[1] + 400e3 * f[1] * -0.4 + 120e3 * right[1], end.x[2] + 400e3 * f[2] * -0.4 + 120e3 * right[2]]);
+  const there = onGround([
+    end.x[0] + 400e3 * f[0] * -0.4 + 120e3 * right[0],
+    end.x[1] + 400e3 * f[1] * -0.4 + 120e3 * right[1],
+    end.x[2] + 400e3 * f[2] * -0.4 + 120e3 * right[2],
+  ]);
   const place = earth.carry(there, -free.t);
   const g = new EntryGuidance({ handoverMach: 2.5, short: 40e3 });
-  let next = 0, b = 0;
-  const flown = predictEntry(earth, ranger, start(), (t, x, v) => {
-    if (t >= next) {
-      b = g.update(earth, ranger, { x, v }, earth.carry(place, t));
-      next = t + 8;
-    }
-    return b;
-  }, { handoverMach: 2.5 });
+  let next = 0,
+    b = 0;
+  const flown = predictEntry(
+    earth,
+    ranger,
+    start(),
+    (t, x, v) => {
+      if (t >= next) {
+        b = g.update(earth, ranger, { x, v }, earth.carry(place, t));
+        next = t + 8;
+      }
+      return b;
+    },
+    { handoverMach: 2.5 },
+  );
   expect(flown.handover).toBe(true);
   const m = miss(start(), flown.end.x, earth.carry(place, flown.t));
   // (the handover the aim's 40 km short of the place: as far from it, whatever the track's curve)
@@ -64,7 +96,9 @@ test("the guidance brings the handover over its aim — 400 km on and 120 km acr
 }, 20000);
 
 test("the deorbit from a 400 km orbit: a burn found whose entry ends over the place", () => {
-  const r0 = R + 400e3, v0 = Math.sqrt(mu / r0), inc = 51.6 * D;
+  const r0 = R + 400e3,
+    v0 = Math.sqrt(mu / r0),
+    inc = 51.6 * D;
   const s0: EntryState = { x: [r0, 0, 0], v: [0, v0 * Math.cos(inc), v0 * Math.sin(inc)] };
   // a place under the ground track, a third of a turn on
   const ang = 120 * D;

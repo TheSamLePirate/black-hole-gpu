@@ -100,10 +100,18 @@ export function nodeDvComponents(X: Vec3, V: Vec3, t: number, d: Vec3): Vec3 {
  * The path from (X, V) at t0 for about a turn of the orbit around its reference body (or, leaving it,
  * on until tMax), the nodes' impulses applied on the way. maxSteps bounds the work.
  */
-export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [], o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number; drag?: number } = {}): OurPath {
+export function predictOurs(
+  X0: Vec3,
+  V0: Vec3,
+  t0: number,
+  nodes: OurNode[] = [],
+  o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number; drag?: number } = {},
+): OurPath {
   const maxSteps = o.maxSteps ?? 2500;
   const out: OurPath = { pts: [X0], vels: [V0], times: [t0], refs: [], fate: "continues", nodeAt: [] };
-  let X = X0, V = V0, t = t0;
+  let X = X0,
+    V = V0,
+    t = t0;
   let ref = referenceBody(X, t);
   out.refs.push(ref);
   let set = bodiesNear(ref);
@@ -233,7 +241,8 @@ export function predictOurs(X0: Vec3, V0: Vec3, t0: number, nodes: OurNode[] = [
 
 /** Periapsis and apoapsis of a path around a body (its first stretch in that body's sphere). */
 export function ourApsides(p: OurPath, body: string) {
-  let pe = { d: Infinity, i: -1 }, ap = { d: -Infinity, i: -1 };
+  let pe = { d: Infinity, i: -1 },
+    ap = { d: -Infinity, i: -1 };
   let started = false;
   for (let i = 0; i < p.pts.length; i++) {
     if (p.refs[i] !== body) {

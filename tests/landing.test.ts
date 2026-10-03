@@ -9,7 +9,9 @@ import { sphericalFrame } from "../src/wormhole";
 
 const a = SYS.spin;
 const cart = (s: { r: number; th: number; ph: number }): Vec3 => [
-  s.r * Math.sin(s.th) * Math.cos(s.ph), s.r * Math.sin(s.th) * Math.sin(s.ph), s.r * Math.cos(s.th),
+  s.r * Math.sin(s.th) * Math.cos(s.ph),
+  s.r * Math.sin(s.th) * Math.sin(s.ph),
+  s.r * Math.cos(s.th),
 ];
 const shipAt = (X: Vec3, V: Vec3, t: number) => {
   const f = sphericalFrame(X);
@@ -58,7 +60,8 @@ test("an orbit at 1.6 Miller radii in the local frame stays bound for several tu
   // (the frame turns with the orbit, n per coordinate time: n uᵗ per proper time — a circular orbit
   // around the planet moves at v_c − Ω d in it)
   const L = { xi: [d0, 0, 0] as Vec3, w: [0, Math.sqrt(M.mass / d0) - F.n * F.ut * d0, 0] as Vec3, landed: false };
-  let dMin = Infinity, dMax = 0;
+  let dMin = Infinity,
+    dMax = 0;
   for (let k = 0; k < 400; k++) {
     stepLocal(F, L, 0.3, [0, 0, 0]);
     const d = Math.hypot(...L.xi);
@@ -87,7 +90,7 @@ test("on the ground: a fall lands, the weight holds it, enough thrust lifts it",
   expect((Math.hypot(...L.xi) - groundR(F, L.xi)) * F.mPerM).toBeCloseTo(GEAR, 3);
   // stays put under its weight, lifts off with 2 g up
   const g = weightUp(F, L.xi);
-  expect(g * F.aUnit / 9.80665).toBeGreaterThan(0.9);
+  expect((g * F.aUnit) / 9.80665).toBeGreaterThan(0.9);
   stepLocal(F, L, 1e-3, [0, 0, 0.5 * g]);
   expect(L.landed).toBe(true);
   stepLocal(F, L, 1e-3, [0, 0, 2 * g]);
@@ -99,9 +102,11 @@ test("on the ground: a fall lands, the weight holds it, enough thrust lifts it",
 import { relief, SURF } from "../src/terrain";
 
 test("relief: Mann's ice and Edmunds' rock within their bounds, Miller at sea level", () => {
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity,
+    hi = -Infinity;
   for (let i = 0; i < 400; i++) {
-    const th = Math.acos(1 - 2 * ((i * 0.618) % 1)), ph = i * 2.39996;
+    const th = Math.acos(1 - 2 * ((i * 0.618) % 1)),
+      ph = i * 2.39996;
     const q: Vec3 = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
     const h = relief(SURF.ice, q, 6.371e6);
     lo = Math.min(lo, h);

@@ -16,14 +16,34 @@ import { store } from "../util/storage";
 
 type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
-  ["ranger", "Ranger"], ["place", "Place"], ["target", "Target · SOI"], ["time", "Time"], ["saves", "Saves"], ["perf", "Perf"], ["audit", "Audit"], ["journal", "Journal"],
+  ["ranger", "Ranger"],
+  ["place", "Place"],
+  ["target", "Target · SOI"],
+  ["time", "Time"],
+  ["saves", "Saves"],
+  ["perf", "Perf"],
+  ["audit", "Audit"],
+  ["journal", "Journal"],
 ];
 
 /** landing sites (latitude, east longitude) */
 const SITES: Record<string, [string, number, number][]> = {
-  earth: [["Kennedy Space Center", 28.573, -80.649], ["Baikonur", 45.965, 63.305], ["Kourou", 5.236, -52.769], ["Paris", 48.857, 2.352]],
-  moon: [["Apollo 11 · Tranquility Base", 0.674, 23.473], ["Shackleton crater (south pole)", -89.9, 0], ["Tycho", -43.31, -11.36]],
-  mars: [["Jezero crater", 18.38, 77.58], ["Olympus Mons", 18.65, -133.8], ["Gale crater", -5.4, 137.8]],
+  earth: [
+    ["Kennedy Space Center", 28.573, -80.649],
+    ["Baikonur", 45.965, 63.305],
+    ["Kourou", 5.236, -52.769],
+    ["Paris", 48.857, 2.352],
+  ],
+  moon: [
+    ["Apollo 11 · Tranquility Base", 0.674, 23.473],
+    ["Shackleton crater (south pole)", -89.9, 0],
+    ["Tycho", -43.31, -11.36],
+  ],
+  mars: [
+    ["Jezero crater", 18.38, 77.58],
+    ["Olympus Mons", 18.65, -133.8],
+    ["Gale crater", -5.4, 137.8],
+  ],
   titan: [["Huygens site", -10.25, 167.7]],
   europa: [["Conamara Chaos", 9.7, -86.6]],
 };
@@ -62,7 +82,14 @@ const select = (opts: [string, string][], value?: string) => {
   return s;
 };
 
-const fmtKm = (km: number) => (!Number.isFinite(km) ? "∞" : Math.abs(km) >= 1e7 ? `${(km / 1.495978707e8).toFixed(3)} AU` : Math.abs(km) >= 1e4 ? `${Math.round(km).toLocaleString("en")} km` : `${km.toFixed(1)} km`);
+const fmtKm = (km: number) =>
+  !Number.isFinite(km)
+    ? "∞"
+    : Math.abs(km) >= 1e7
+      ? `${(km / 1.495978707e8).toFixed(3)} AU`
+      : Math.abs(km) >= 1e4
+        ? `${Math.round(km).toLocaleString("en")} km`
+        : `${km.toFixed(1)} km`;
 const fmtMs = (v: number) => (!Number.isFinite(v) ? "—" : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`);
 export const fmtS = (s: number) => {
   if (!Number.isFinite(s)) return "∞";
@@ -87,10 +114,16 @@ export class GameToolsWindow {
   /** the place picker (the Place tab): the chosen world as a globe or a planisphere */
   private picker: GroundTrack;
 
-  constructor(private g: GameTools, settings: Settings) {
+  constructor(
+    private g: GameTools,
+    settings: Settings,
+  ) {
     this.picker = new GroundTrack(settings);
     const head = h("div", "gt-head");
-    head.append(h("div", "fl-title", "Game tools"), btn("×", () => this.toggle(false), "gt-x"));
+    head.append(
+      h("div", "fl-title", "Game tools"),
+      btn("×", () => this.toggle(false), "gt-x"),
+    );
     const tabs = h("div", "gt-tabs");
     for (const [id, label] of TABS) {
       const b = btn(label, () => this.show(id), "gt-tab");
@@ -151,8 +184,14 @@ export class GameToolsWindow {
     this.body.replaceChildren();
     this.live = null;
     const views: Record<Tab, () => void> = {
-      ranger: () => this.ranger(), place: () => this.place(), target: () => this.target(), time: () => this.time(),
-      saves: () => this.saves(), perf: () => this.perf(), audit: () => this.audit(), journal: () => this.journal(),
+      ranger: () => this.ranger(),
+      place: () => this.place(),
+      target: () => this.target(),
+      time: () => this.time(),
+      saves: () => this.saves(),
+      perf: () => this.perf(),
+      audit: () => this.audit(),
+      journal: () => this.journal(),
     };
     views[tab]();
     (this.live as (() => void) | null)?.(); // (set by the view)
@@ -169,10 +208,25 @@ export class GameToolsWindow {
     };
     const badge = h("div", "gt-badge");
     for (const [k, l] of [
-      ["side", "Universe"], ["soi", "Sphere of influence"], ["alt", "Altitude"], ["speed", "Speed"], ["vv", "Vertical speed"],
-      ["pe", "Periapsis"], ["ap", "Apoapsis"], ["inc", "Inclination · e"], ["period", "Period"], ["tpe", "Next periapsis"], ["tap", "Next apoapsis"],
-      ["next", "Next event"], ["target", "Target"], ["tdist", "Range · rate"], ["tca", "Closest approach"], ["date", "Date · warp"], ["pilot", "Pilot"],
-    ] as const) row(k, l);
+      ["side", "Universe"],
+      ["soi", "Sphere of influence"],
+      ["alt", "Altitude"],
+      ["speed", "Speed"],
+      ["vv", "Vertical speed"],
+      ["pe", "Periapsis"],
+      ["ap", "Apoapsis"],
+      ["inc", "Inclination · e"],
+      ["period", "Period"],
+      ["tpe", "Next periapsis"],
+      ["tap", "Next apoapsis"],
+      ["next", "Next event"],
+      ["target", "Target"],
+      ["tdist", "Range · rate"],
+      ["tca", "Closest approach"],
+      ["date", "Date · warp"],
+      ["pilot", "Pilot"],
+    ] as const)
+      row(k, l);
     const copy = btn("Copy as JSON", () => this.run(() => navigator.clipboard.writeText(JSON.stringify(this.g.status(), null, 1))));
     this.body.append(badge, grid, h("div", "gt-row", ""), copy);
     this.live = () => {
@@ -194,7 +248,12 @@ export class GameToolsWindow {
       set("tpe", o ? fmtS(o.tPe) : "—");
       set("tap", o && Number.isFinite(o.tAp) ? fmtS(o.tAp) : "—");
       const n = st.next;
-      set("next", n ? `${n.kind === "exit" ? `leaving ${n.name}'s SOI` : n.kind === "enter" ? `entering ${n.name}'s SOI` : n.kind === "impact" ? `impact on ${n.name}` : "into the mouth"} · in ${fmtS(n.inS)}` : "—");
+      set(
+        "next",
+        n
+          ? `${n.kind === "exit" ? `leaving ${n.name}'s SOI` : n.kind === "enter" ? `entering ${n.name}'s SOI` : n.kind === "impact" ? `impact on ${n.name}` : "into the mouth"} · in ${fmtS(n.inS)}`
+          : "—",
+      );
       const t = st.target;
       set("target", t ? t.name : "—");
       set("tdist", t ? `${fmtKm(t.distKm)} · ${t.rate >= 0 ? "+" : ""}${fmtMs(t.rate)}` : "—");
@@ -210,20 +269,46 @@ export class GameToolsWindow {
   // ------------------------------------------------------------------------------ Place
   private place() {
     const st = this.g.status();
-    const uni = select([["ours", "Our universe (solar system)"], ["gargantua", "Gargantua's system"]], st.side === "ours" ? "ours" : "gargantua");
+    const uni = select(
+      [
+        ["ours", "Our universe (solar system)"],
+        ["gargantua", "Gargantua's system"],
+      ],
+      st.side === "ours" ? "ours" : "gargantua",
+    );
     const bodySel = h("select", "gt-in") as HTMLSelectElement;
-    const mode = select([["orbit", "In orbit"], ["ground", "On the ground"]]);
-    const pe = num(400, "1"), ap = num(400, "1"), inc = num(0, "0.1"), raan = num(0, "1"), argPe = num(0, "1"), nu = num(0, "1"), rM = num(12, "0.1");
+    const mode = select([
+      ["orbit", "In orbit"],
+      ["ground", "On the ground"],
+    ]);
+    const pe = num(400, "1"),
+      ap = num(400, "1"),
+      inc = num(0, "0.1"),
+      raan = num(0, "1"),
+      argPe = num(0, "1"),
+      nu = num(0, "1"),
+      rM = num(12, "0.1");
     const retro = h("input") as HTMLInputElement;
     retro.type = "checkbox";
     // (Gargantua's own: an element has one place in the page — shared, the orbit's box lost them)
     const az = num(0, "1");
     const retroH = h("input") as HTMLInputElement;
     retroH.type = "checkbox";
-    const lat = num(0, "0.001"), lon = num(0, "0.001");
+    const lat = num(0, "0.001"),
+      lon = num(0, "0.001");
     const site = h("select", "gt-in") as HTMLSelectElement;
-    const orbitBox = h("div", "gt-grid"), groundBox = h("div", "gt-grid"), holeBox = h("div", "gt-grid");
-    orbitBox.append(field("Periapsis alt. [km]", pe), field("Apoapsis alt. [km]", ap), field("Inclination [°]", inc), field("Node Ω [°]", raan), field("Periapsis ω [°]", argPe), field("True anomaly ν [°]", nu), field("Retrograde", retro));
+    const orbitBox = h("div", "gt-grid"),
+      groundBox = h("div", "gt-grid"),
+      holeBox = h("div", "gt-grid");
+    orbitBox.append(
+      field("Periapsis alt. [km]", pe),
+      field("Apoapsis alt. [km]", ap),
+      field("Inclination [°]", inc),
+      field("Node Ω [°]", raan),
+      field("Periapsis ω [°]", argPe),
+      field("True anomaly ν [°]", nu),
+      field("Retrograde", retro),
+    );
     holeBox.append(field("Radius [M]", rM), field("Azimuth [°]", az), field("Retrograde", retroH));
     groundBox.append(field("Site", site), field("Latitude [°]", lat), field("East longitude [°]", lon));
     // the picker: a click on the world — on the ground, the place; in orbit, the orbit passing over it now
@@ -233,7 +318,10 @@ export class GameToolsWindow {
     const pickBar = h("div", "gt-row gt-pickbar");
     const pickNote = h("span", "gt-picknote");
     const views: Record<string, HTMLButtonElement> = {};
-    for (const [m, label] of [["globe", "Globe"], ["map", "Planisphere"]] as const) {
+    for (const [m, label] of [
+      ["globe", "Globe"],
+      ["map", "Planisphere"],
+    ] as const) {
       views[m] = btn(label, () => {
         P.mode = m;
         for (const [k, b] of Object.entries(views)) b.classList.toggle("on", k === m);
@@ -246,22 +334,30 @@ export class GameToolsWindow {
     /** the orbit over the place picked (in orbit): its latitude, longitude */
     let over: [number, number] | null = null;
     const D = Math.PI / 180;
-    const dir = (la: number, lo: number): [number, number, number] => [Math.cos(la * D) * Math.cos(lo * D), Math.cos(la * D) * Math.sin(lo * D), Math.sin(la * D)];
+    const dir = (la: number, lo: number): [number, number, number] => [
+      Math.cos(la * D) * Math.cos(lo * D),
+      Math.cos(la * D) * Math.sin(lo * D),
+      Math.sin(la * D),
+    ];
     const pickable = () => bodySel.value !== "gargantua" && bodySel.value !== "sun";
     const drawPick = () => {
       pickBox.hidden = !pickable();
       if (pickBox.hidden) return;
       P.drawWorld(bodySel.value, this.g.now());
-      pickNote.textContent = mode.value === "ground"
-        ? "Click the world: the place to land"
-        : over ? `Over ${over[0].toFixed(2)}°, ${over[1].toFixed(2)}° now — Ω and ν found when placed` : "Click the world: the orbit passes over it now";
+      pickNote.textContent =
+        mode.value === "ground"
+          ? "Click the world: the place to land"
+          : over
+            ? `Over ${over[0].toFixed(2)}°, ${over[1].toFixed(2)}° now — Ω and ν found when placed`
+            : "Click the world: the orbit passes over it now";
     };
     const setPick = (la: number, lo: number, centre = false) => {
       P.pick = dir(la, lo);
       if (centre) P.centre(P.pick);
     };
     P.onPick = (q) => {
-      const la = Math.asin(Math.max(-1, Math.min(1, q[2]))) / D, lo = Math.atan2(q[1], q[0]) / D;
+      const la = Math.asin(Math.max(-1, Math.min(1, q[2]))) / D,
+        lo = Math.atan2(q[1], q[0]) / D;
       lat.value = la.toFixed(3);
       lon.value = lo.toFixed(3);
       site.value = site.options[0]?.value ?? "";
@@ -283,7 +379,14 @@ export class GameToolsWindow {
     const fillBodies = () => {
       const ours = uni.value === "ours";
       bodySel.replaceChildren();
-      const list: [string, string][] = ours ? SOLAR_BODIES.map((b) => [b.id, `${b.parent && b.parent !== "sun" ? "  · " : ""}${b.name}`]) : [["gargantua", "Gargantua (Kerr orbit)"], ["miller", "Miller"], ["mann", "Mann"], ["edmunds", "Edmunds"]];
+      const list: [string, string][] = ours
+        ? SOLAR_BODIES.map((b) => [b.id, `${b.parent && b.parent !== "sun" ? "  · " : ""}${b.name}`])
+        : [
+            ["gargantua", "Gargantua (Kerr orbit)"],
+            ["miller", "Miller"],
+            ["mann", "Mann"],
+            ["edmunds", "Edmunds"],
+          ];
       for (const [v, t] of list) {
         const o = h("option", "", t) as HTMLOptionElement;
         o.value = v;
@@ -334,15 +437,19 @@ export class GameToolsWindow {
     uni.onchange = fillBodies;
     bodySel.onchange = fillBody;
     mode.onchange = layout;
-    const go = btn("PLACE THE RANGER", () =>
-      this.run(() => {
-        const id = bodySel.value;
-        if (id === "gargantua") return this.g.orbit(id, { rM: +rM.value, nu: +az.value, retrograde: retroH.checked });
-        if (mode.value === "ground") return this.g.land(id, +lat.value, +lon.value);
-        const o = { peKm: +pe.value, apKm: +ap.value, inc: +inc.value, argPe: +argPe.value, retrograde: retro.checked };
-        if (over) return this.g.orbitOver(id, over[0], over[1], o);
-        return this.g.orbit(id, { ...o, raan: +raan.value, nu: +nu.value });
-      }), "gt-primary");
+    const go = btn(
+      "PLACE THE RANGER",
+      () =>
+        this.run(() => {
+          const id = bodySel.value;
+          if (id === "gargantua") return this.g.orbit(id, { rM: +rM.value, nu: +az.value, retrograde: retroH.checked });
+          if (mode.value === "ground") return this.g.land(id, +lat.value, +lon.value);
+          const o = { peKm: +pe.value, apKm: +ap.value, inc: +inc.value, argPe: +argPe.value, retrograde: retro.checked };
+          if (over) return this.g.orbitOver(id, over[0], over[1], o);
+          return this.g.orbit(id, { ...o, raan: +raan.value, nu: +nu.value });
+        }),
+      "gt-primary",
+    );
     const quick = h("div", "gt-row");
     quick.append(
       btn("Orbit the target", () => this.run(() => this.g.orbitTarget())),
@@ -352,7 +459,13 @@ export class GameToolsWindow {
     );
     const g2 = h("div", "gt-grid");
     g2.append(field("Universe", uni), field("Body", bodySel), field("Where", mode));
-    this.body.append(h("p", "gt-note", "Puts the Ranger there now, its flight started afresh (engine off, no plan). Altitudes above the mean radius; inclination from the body's equator. Click the world to choose the place."));
+    this.body.append(
+      h(
+        "p",
+        "gt-note",
+        "Puts the Ranger there now, its flight started afresh (engine off, no plan). Altitudes above the mean radius; inclination from the body's equator. Click the world to choose the place.",
+      ),
+    );
     this.body.append(g2, pickBox, orbitBox, holeBox, groundBox, go, quick);
     fillBodies();
     // (the world turns, the Sun with the time: redrawn every second)
@@ -374,7 +487,8 @@ export class GameToolsWindow {
     this.live = () => {
       const soi = this.g.soi();
       soiBox.replaceChildren();
-      for (const c of soi.chain) soiBox.append(h("span", "", c.id === soi.body ? "▶ in" : "within"), h("b", "", `${c.name} · SOI ${fmtKm(c.soiKm)}`));
+      for (const c of soi.chain)
+        soiBox.append(h("span", "", c.id === soi.body ? "▶ in" : "within"), h("b", "", `${c.name} · SOI ${fmtKm(c.soiKm)}`));
       if (!soi.chain.length) soiBox.append(h("span", "", "▶ in"), h("b", "", soi.name));
       const list = this.g.bodies();
       const tgt = String(this.g.get("target"));
@@ -389,7 +503,12 @@ export class GameToolsWindow {
           const tr = h("tr", b.id === tgt ? "on" : "");
           tr.dataset.id = b.id;
           tr.onclick = () => this.run(() => (this.g.target(b.id), (built = "")));
-          tr.append(h("td", "", `${b.parent && b.parent !== "sun" && b.parent !== "gargantua" ? "· " : ""}${b.name}`), h("td", "", fmtKm(b.radiusKm)), h("td", "", "soiKm" in b ? fmtKm(b.soiKm as number) : "—"), h("td"));
+          tr.append(
+            h("td", "", `${b.parent && b.parent !== "sun" && b.parent !== "gargantua" ? "· " : ""}${b.name}`),
+            h("td", "", fmtKm(b.radiusKm)),
+            h("td", "", "soiKm" in b ? fmtKm(b.soiKm as number) : "—"),
+            h("td"),
+          );
           tbl.append(tr);
         }
       }
@@ -399,7 +518,10 @@ export class GameToolsWindow {
       }
     };
     const extra = h("div", "gt-row");
-    extra.append(btn("Wormhole", () => this.run(() => this.g.target("wormhole"))), btn("Gargantua", () => this.run(() => this.g.target("hole"))));
+    extra.append(
+      btn("Wormhole", () => this.run(() => this.g.target("wormhole"))),
+      btn("Gargantua", () => this.run(() => this.g.target("hole"))),
+    );
     this.body.append(extra);
   }
 
@@ -407,17 +529,27 @@ export class GameToolsWindow {
   private time() {
     const now = h("div", "gt-big");
     const warps = h("div", "gt-row");
-    for (const x of [1, 10, 100, 1000, 1e4, 1e5, 1e6]) warps.append(btn(`×${x >= 1000 ? `${x / 1000}k` : x}`, () => this.run(() => this.g.warp(x))));
-    warps.append(btn("Pause", () => this.run(() => this.g.pause(true))), btn("Run", () => this.run(() => this.g.pause(false))));
+    for (const x of [1, 10, 100, 1000, 1e4, 1e5, 1e6])
+      warps.append(btn(`×${x >= 1000 ? `${x / 1000}k` : x}`, () => this.run(() => this.g.warp(x))));
+    warps.append(
+      btn("Pause", () => this.run(() => this.g.pause(true))),
+      btn("Run", () => this.run(() => this.g.pause(false))),
+    );
     const date = h("input", "gt-in") as HTMLInputElement;
     date.type = "datetime-local";
     date.step = "60";
     date.value = this.g.date().replace(" ", "T");
     const set = btn("Set the clock", () => this.run(() => this.g.setDate(date.value)));
     this.body.append(
-      now, warps,
-      h("p", "gt-note", "The clock moves the bodies along their orbits; the ship keeps its place (and speed) in the home frame — re-place it afterwards to be in orbit there."),
-      field("Date (UTC)", date), set,
+      now,
+      warps,
+      h(
+        "p",
+        "gt-note",
+        "The clock moves the bodies along their orbits; the ship keeps its place (and speed) in the home frame — re-place it afterwards to be in orbit there.",
+      ),
+      field("Date (UTC)", date),
+      set,
     );
     this.live = () => (now.textContent = `${this.g.date()} UTC`);
   }
@@ -449,14 +581,22 @@ export class GameToolsWindow {
     row2.append(
       btn("Import a file…", () => file.click()),
       btn("Export now", () => this.run(() => this.g.exportSave())),
-      btn("Copy a link", () => this.run(async () => {
-        await navigator.clipboard.writeText(this.g.shareLink());
-        this.g.log.add("save", "Link copied (this moment, without the plan)");
-      })),
+      btn("Copy a link", () =>
+        this.run(async () => {
+          await navigator.clipboard.writeText(this.g.shareLink());
+          this.g.log.add("save", "Link copied (this moment, without the plan)");
+        }),
+      ),
     );
     this.body.append(
-      h("p", "gt-note", `A save keeps every setting exactly, the date, the pilot and the flight plan. Autosave: ${this.g.get("autosave") ? `every ${this.g.get("autosaveEvery")} s, resumed at the next visit` : "off"} (settings › Game).`),
-      row, row2, list,
+      h(
+        "p",
+        "gt-note",
+        `A save keeps every setting exactly, the date, the pilot and the flight plan. Autosave: ${this.g.get("autosave") ? `every ${this.g.get("autosaveEvery")} s, resumed at the next visit` : "off"} (settings › Game).`,
+      ),
+      row,
+      row2,
+      list,
     );
     refresh();
   }
@@ -465,7 +605,10 @@ export class GameToolsWindow {
     const txt = h("div");
     txt.append(h("b", "", auto ? "Autosave" : nm), h("span", "", `${summary} · ${when}`));
     const acts = h("div", "gt-acts");
-    acts.append(btn("Load", () => this.run(() => this.g.load(nm))), btn("⤓", () => this.run(() => this.g.exportSave(nm))));
+    acts.append(
+      btn("Load", () => this.run(() => this.g.load(nm))),
+      btn("⤓", () => this.run(() => this.g.exportSave(nm))),
+    );
     if (!auto) acts.append(btn("✕", () => this.run(() => (this.g.deleteSave(nm), refresh()))));
     r.append(txt, acts);
     return r;
@@ -477,15 +620,26 @@ export class GameToolsWindow {
     const gpu = h("table", "gt-table");
     const cpu = h("table", "gt-table");
     const qual = h("div", "gt-row");
-    for (const [q, label] of [["game", "Game (≈ 60 fps)"], ["realtime", "RT max (sharp, ≈ 30)"], ["high", "High"]] as const) {
+    for (const [q, label] of [
+      ["game", "Game (≈ 60 fps)"],
+      ["realtime", "RT max (sharp, ≈ 30)"],
+      ["high", "High"],
+    ] as const) {
       qual.append(btn(label, () => this.run(() => this.g.quality(q))));
     }
     qual.append(btn("Dynamic resolution on/off", () => this.run(() => this.g.set("dynamicResolution", !this.g.get("dynamicResolution")))));
     this.body.append(
-      head, qual,
-      h("div", "fl-label", "GPU passes (ms per frame they run in)"), gpu,
-      h("div", "fl-label", "Main thread (ms per loop · worst over 3 s)"), cpu,
-      h("p", "gt-note", "The frame rate is the lower of the GPU's (its passes, two frames in flight) and the display's. A hidden page is throttled by the browser. Settings › Render: quality, pixel ratio, frame budget, dynamic resolution."),
+      head,
+      qual,
+      h("div", "fl-label", "GPU passes (ms per frame they run in)"),
+      gpu,
+      h("div", "fl-label", "Main thread (ms per loop · worst over 3 s)"),
+      cpu,
+      h(
+        "p",
+        "gt-note",
+        "The frame rate is the lower of the GPU's (its passes, two frames in flight) and the display's. A hidden page is throttled by the browser. Settings › Render: quality, pixel ratio, frame budget, dynamic resolution.",
+      ),
     );
     const fill = (t: HTMLElement, cols: string[], rows: (string | number)[][]) => {
       t.replaceChildren();
@@ -507,8 +661,16 @@ export class GameToolsWindow {
       kv("Image", `${p.image} · pixel ratio ${p.pixelRatio} × ${p.renderScale.toFixed(3)}`);
       kv("Quality", `${p.quality} · budget ${p.budgetMs} ms · 1 ray / ${p.block}×${p.block} px`);
       kv("Worst loop", `${p.worstLoopMs.toFixed(1)} ms`);
-      fill(gpu, ["Pass", "ms", "last"], p.gpu.slice(0, 14).map((g) => [g.pass, g.ms.toFixed(2), g.last.toFixed(2)]));
-      fill(cpu, ["Section", "ms", "worst"], p.cpu.slice(0, 12).map((c) => [c.section, c.ms.toFixed(2), c.worst.toFixed(1)]));
+      fill(
+        gpu,
+        ["Pass", "ms", "last"],
+        p.gpu.slice(0, 14).map((g) => [g.pass, g.ms.toFixed(2), g.last.toFixed(2)]),
+      );
+      fill(
+        cpu,
+        ["Section", "ms", "worst"],
+        p.cpu.slice(0, 12).map((c) => [c.section, c.ms.toFixed(2), c.worst.toFixed(1)]),
+      );
     };
   }
 
@@ -519,34 +681,53 @@ export class GameToolsWindow {
     const out = h("div");
     const show = (rep: AuditReport) => {
       out.replaceChildren();
-      out.append(h("div", "gt-note", `${rep.counts.pass} pass · ${rep.counts.warn} warn · ${rep.counts.fail} fail · ${rep.counts.skip} skipped — ${rep.sceneDate}`));
+      out.append(
+        h(
+          "div",
+          "gt-note",
+          `${rep.counts.pass} pass · ${rep.counts.warn} warn · ${rep.counts.fail} fail · ${rep.counts.skip} skipped — ${rep.sceneDate}`,
+        ),
+      );
       const tbl = h("table", "gt-table gt-audit");
       for (const c of rep.checks) {
         const tr = h("tr", c.verdict);
         tr.append(h("td", "gt-v", c.verdict.toUpperCase()), h("td", "", c.name), h("td", "", c.detail));
         tbl.append(tr);
       }
-      out.append(tbl, btn("Download the report", () => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 1)], { type: "application/json" }));
-        a.download = `audit-${rep.at.slice(0, 19).replace(/:/g, "-")}.json`;
-        a.click();
-      }));
+      out.append(
+        tbl,
+        btn("Download the report", () => {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 1)], { type: "application/json" }));
+          a.download = `audit-${rep.at.slice(0, 19).replace(/:/g, "-")}.json`;
+          a.click();
+        }),
+      );
     };
-    const go = btn("RUN THE AUDIT", () =>
-      this.run(async () => {
-        go.disabled = true;
-        go.textContent = "Running…";
-        try {
-          show(await this.g.audit({ planner: planner.checked }));
-        } finally {
-          go.disabled = false;
-          go.textContent = "RUN THE AUDIT";
-        }
-      }), "gt-primary");
+    const go = btn(
+      "RUN THE AUDIT",
+      () =>
+        this.run(async () => {
+          go.disabled = true;
+          go.textContent = "Running…";
+          try {
+            show(await this.g.audit({ planner: planner.checked }));
+          } finally {
+            go.disabled = false;
+            go.textContent = "RUN THE AUDIT";
+          }
+        }),
+      "gt-primary",
+    );
     this.body.append(
-      h("p", "gt-note", "Checks the ephemeris, the ship's state and sphere of influence, the free-fall predictor against Kepler, a save's round trip, the settings, the frame rate, the steadiness of the ship's light and of the auto exposure, the errors — and, ticked, the planner on the target."),
-      field("Include the planner (slow)", planner), go, out,
+      h(
+        "p",
+        "gt-note",
+        "Checks the ephemeris, the ship's state and sphere of influence, the free-fall predictor against Kepler, a save's round trip, the settings, the frame rate, the steadiness of the ship's light and of the auto exposure, the errors — and, ticked, the planner on the target.",
+      ),
+      field("Include the planner (slow)", planner),
+      go,
+      out,
     );
     if (this.g.lastAudit) show(this.g.lastAudit);
   }
@@ -554,14 +735,25 @@ export class GameToolsWindow {
   // ------------------------------------------------------------------------------ Journal
   private journal() {
     const kinds: (LogKind | "all")[] = ["all", "pilot", "soi", "status", "place", "save", "audit", "info", "warn", "error"];
-    const filter = select(kinds.map((k) => [k, k]), (this.body.dataset.filter as string) || "all");
+    const filter = select(
+      kinds.map((k) => [k, k]),
+      (this.body.dataset.filter as string) || "all",
+    );
     const list = h("div", "gt-log");
     const render = () => {
       list.replaceChildren();
-      const ev = this.g.log.events.filter((e) => filter.value === "all" || e.kind === filter.value).slice(-300).reverse();
+      const ev = this.g.log.events
+        .filter((e) => filter.value === "all" || e.kind === filter.value)
+        .slice(-300)
+        .reverse();
       for (const e of ev) {
         const r = h("div", `gt-ev ${e.kind}`);
-        r.append(h("span", "", new Date(e.at).toLocaleTimeString()), h("span", "", Number.isFinite(e.t) ? fmtDate(e.t) : ""), h("b", "", e.kind), h("div", "", e.text));
+        r.append(
+          h("span", "", new Date(e.at).toLocaleTimeString()),
+          h("span", "", Number.isFinite(e.t) ? fmtDate(e.t) : ""),
+          h("b", "", e.kind),
+          h("div", "", e.text),
+        );
         list.append(r);
       }
       if (!ev.length) list.append(h("p", "gt-note", "Nothing yet."));

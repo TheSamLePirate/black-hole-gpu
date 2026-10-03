@@ -109,7 +109,8 @@ export function saturnDeparture(t = 0): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec
  * planet's, a planet's within the Sun's): r_SOI = a (m / M)^0.4 around its primary. The Sun otherwise.
  */
 export function referenceBody(X: Vec3, t: number): string {
-  let best = "sun", bestR = Infinity;
+  let best = "sun",
+    bestR = Infinity;
   for (const b of SOLAR_BODIES) {
     if (!b.parent) continue;
     const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
@@ -128,7 +129,8 @@ export function soiOf(id: string, t: number): number {
   const b = SOLAR_BODIES.find((q) => q.id === id);
   if (!b || !b.parent) return Infinity;
   const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
-  const P = solarState(b.id, t).pos, Q = solarState(p.id, t).pos;
+  const P = solarState(b.id, t).pos,
+    Q = solarState(p.id, t).pos;
   return Math.hypot(P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]) * (b.mass / p.mass) ** 0.4;
 }
 
@@ -157,7 +159,8 @@ export function earthStart(t = 0, altKm = 400, moonPlane = false): { X: Vec3; fw
   const sl = Math.hypot(...sp);
   const s: Vec3 = [sp[0] / sl, sp[1] / sl, sp[2] / sl];
   const e: Vec3 = [n[1] * s[2] - n[2] * s[1], n[2] * s[0] - n[0] * s[2], n[0] * s[1] - n[1] * s[0]];
-  const c = Math.cos(Math.PI / 3), sn = Math.sin(Math.PI / 3);
+  const c = Math.cos(Math.PI / 3),
+    sn = Math.sin(Math.PI / 3);
   const u: Vec3 = [c * s[0] + sn * e[0], c * s[1] + sn * e[1], c * s[2] + sn * e[2]];
   const r = earth.radius + (altKm * 1e3) / M_METRES;
   const X: Vec3 = [E.pos[0] + r * u[0], E.pos[1] + r * u[1], E.pos[2] + r * u[2]];
@@ -235,7 +238,11 @@ export function bodyView(t: number, v: BodyView) {
   if (v.altKm !== undefined && v.phase !== undefined) {
     const ph = (v.phase * Math.PI) / 180;
     const e = unit(cross(pole, sun));
-    [lat, lon] = latLonOf([sun[0] * Math.cos(ph) + e[0] * Math.sin(ph), sun[1] * Math.cos(ph) + e[1] * Math.sin(ph), sun[2] * Math.cos(ph) + e[2] * Math.sin(ph)]);
+    [lat, lon] = latLonOf([
+      sun[0] * Math.cos(ph) + e[0] * Math.sin(ph),
+      sun[1] * Math.cos(ph) + e[1] * Math.sin(ph),
+      sun[2] * Math.cos(ph) + e[2] * Math.sin(ph),
+    ]);
     if (v.at) lat += v.at[0];
   } else if (v.altKm === undefined && v.lookEl !== undefined && v.look) {
     // (the longitude, along the latitude, where the looked-at body stands at lookEl — in the east)
@@ -297,8 +304,12 @@ export const earthView = bodyView;
 /** A ship's nose and up turned from a direction d (up u ⟂ d) by a [°] about their normal: d then that far
  *  above its nose. */
 export function tiltAway(d: Vec3, u: Vec3, a: number): [Vec3, Vec3] {
-  const c = Math.cos((a * Math.PI) / 180), s = Math.sin((a * Math.PI) / 180);
-  return [[d[0] * c - u[0] * s, d[1] * c - u[1] * s, d[2] * c - u[2] * s], [d[0] * s + u[0] * c, d[1] * s + u[1] * c, d[2] * s + u[2] * c]];
+  const c = Math.cos((a * Math.PI) / 180),
+    s = Math.sin((a * Math.PI) / 180);
+  return [
+    [d[0] * c - u[0] * s, d[1] * c - u[1] * s, d[2] * c - u[2] * s],
+    [d[0] * s + u[0] * c, d[1] * s + u[1] * c, d[2] * s + u[2] * c],
+  ];
 }
 
 /** On the ground of one of our solid bodies at a latitude, east longitude [°]: the ship on its gear, nose east. */

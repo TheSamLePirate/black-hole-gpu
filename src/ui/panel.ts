@@ -91,7 +91,11 @@ function formatValue(d: NumberDef, v: number): string {
   if (d.offAtZero && v === 0) return "off";
   if (d.scale === "log") {
     const a = Math.abs(v);
-    if (a !== 0 && (a >= 1e5 || a < 1e-3)) return v.toExponential(Math.max(0, (d.precision ?? 3) - 1)).replace(/\.?0+e/, "e").replace("e+", "e");
+    if (a !== 0 && (a >= 1e5 || a < 1e-3))
+      return v
+        .toExponential(Math.max(0, (d.precision ?? 3) - 1))
+        .replace(/\.?0+e/, "e")
+        .replace("e+", "e");
     return String(Number(v.toPrecision(d.precision ?? 3)));
   }
   return v.toFixed(decimalsFor(d.step ?? 0.01));
@@ -108,7 +112,7 @@ function toSlider(d: NumberDef, v: number): number {
 function fromSlider(d: NumberDef, x: number): number {
   if (d.scale === "log") {
     if (d.offAtZero && x <= 0) return 0;
-    const v = d.min * Math.pow(d.max / d.min, x / 1000);
+    const v = d.min * (d.max / d.min) ** (x / 1000);
     return Number(v.toPrecision(d.precision ?? 3));
   }
   const step = d.step ?? 0.01;
@@ -292,9 +296,18 @@ export class SettingsPanel {
 
     this.undoBtn = h("button", { class: "sp-icon", title: "Undo (⌘Z / Ctrl+Z)", onclick: () => this.undo() }, svgIcon(ICONS.undo));
     this.redoBtn = h("button", { class: "sp-icon", title: "Redo (⇧⌘Z / Ctrl+Y)", onclick: () => this.redo() }, svgIcon(ICONS.redo));
-    const menuBtn = h("button", { class: "sp-icon", title: "More", onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) }, svgIcon(ICONS.menu));
+    const menuBtn = h(
+      "button",
+      { class: "sp-icon", title: "More", onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) },
+      svgIcon(ICONS.menu),
+    );
     const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (M)", onclick: () => this.toggle(false) }, svgIcon(ICONS.close));
-    const opener = h("button", { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) }, svgIcon(ICONS.gear), h("span", {}, "Settings"));
+    const opener = h(
+      "button",
+      { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) },
+      svgIcon(ICONS.gear),
+      h("span", {}, "Settings"),
+    );
 
     this.searchInput = h("input", {
       type: "search",
@@ -313,7 +326,9 @@ export class SettingsPanel {
         }
       },
     });
-    const advToggle = h("label", { class: "sp-adv", title: "Show expert integration and sampling parameters" },
+    const advToggle = h(
+      "label",
+      { class: "sp-adv", title: "Show expert integration and sampling parameters" },
       h("input", {
         type: "checkbox",
         ...(this.advanced ? { checked: true } : {}),
@@ -332,8 +347,12 @@ export class SettingsPanel {
     this.tabsEl = h("nav", { class: "sp-tabs", role: "tablist" });
     this.body = h("div", { class: "sp-body" });
 
-    const shell = h("div", { class: "sp-shell glass" },
-      h("header", { class: "sp-head" },
+    const shell = h(
+      "div",
+      { class: "sp-shell glass" },
+      h(
+        "header",
+        { class: "sp-head" },
         svgIcon(ICONS.gear, "ico sp-logo"),
         h("h2", {}, "Settings"),
         h("div", { class: "sp-head-actions" }, this.undoBtn, this.redoBtn, menuBtn, closeBtn),
@@ -404,35 +423,44 @@ export class SettingsPanel {
     const userChips = h("div", { class: "sp-chips" });
     for (const name of Object.keys(user)) {
       const del = h("span", { class: "sp-chip-del", title: "Delete preset" }, "×");
-      const chip = h("button", {
-        class: "sp-chip user",
-        dataset: { help: "Your saved preset. Click to apply.", helpTitle: name },
-        onclick: (e: Event) => {
-          if (e.target === del) {
-            if (chip.classList.contains("confirm")) {
-              const all = this.userPresets();
-              delete all[name];
-              this.storeUserPresets(all);
-              this.renderPresets();
-              this.toast(`Deleted preset “${name}”`);
-            } else {
-              chip.classList.add("confirm");
-              del.textContent = "delete?";
-              setTimeout(() => {
-                chip.classList.remove("confirm");
-                del.textContent = "×";
-              }, 2500);
+      const chip = h(
+        "button",
+        {
+          class: "sp-chip user",
+          dataset: { help: "Your saved preset. Click to apply.", helpTitle: name },
+          onclick: (e: Event) => {
+            if (e.target === del) {
+              if (chip.classList.contains("confirm")) {
+                const all = this.userPresets();
+                delete all[name];
+                this.storeUserPresets(all);
+                this.renderPresets();
+                this.toast(`Deleted preset “${name}”`);
+              } else {
+                chip.classList.add("confirm");
+                del.textContent = "delete?";
+                setTimeout(() => {
+                  chip.classList.remove("confirm");
+                  del.textContent = "×";
+                }, 2500);
+              }
+              return;
             }
-            return;
-          }
-          this.applyObject(user[name]!, true);
-          this.toast(`Preset: ${name}`);
+            this.applyObject(user[name]!, true);
+            this.toast(`Preset: ${name}`);
+          },
         },
-      }, h("span", { class: "sp-chip-ico" }, "★"), name, del);
+        h("span", { class: "sp-chip-ico" }, "★"),
+        name,
+        del,
+      );
       userChips.append(chip);
     }
     const nameIn = h("input", { class: "sp-save-name", placeholder: "Preset name", maxlength: "40" });
-    const saveRow = h("div", { class: "sp-save", hidden: true }, nameIn,
+    const saveRow = h(
+      "div",
+      { class: "sp-save", hidden: true },
+      nameIn,
       h("button", { class: "sp-btn primary", onclick: () => save() }, "Save"),
       h("button", { class: "sp-btn", onclick: () => (saveRow.hidden = true) }, "Cancel"),
     );
@@ -450,22 +478,21 @@ export class SettingsPanel {
       if (e.key === "Escape") saveRow.hidden = true;
     });
     userChips.append(
-      h("button", {
-        class: "sp-chip add",
-        dataset: { help: "Save every setting that differs from the defaults as a named preset (stored in this browser)." },
-        onclick: () => {
-          saveRow.hidden = false;
-          nameIn.focus();
+      h(
+        "button",
+        {
+          class: "sp-chip add",
+          dataset: { help: "Save every setting that differs from the defaults as a named preset (stored in this browser)." },
+          onclick: () => {
+            saveRow.hidden = false;
+            nameIn.focus();
+          },
         },
-      }, svgIcon(ICONS.plus), "Save current"),
+        svgIcon(ICONS.plus),
+        "Save current",
+      ),
     );
-    el.append(
-      h("div", { class: "sp-label" }, "Scene"),
-      this.sceneCard,
-      h("div", { class: "sp-label" }, "My presets"),
-      userChips,
-      saveRow,
-    );
+    el.append(h("div", { class: "sp-label" }, "Scene"), this.sceneCard, h("div", { class: "sp-label" }, "My presets"), userChips, saveRow);
   }
 
   private updateSceneCard() {
@@ -479,7 +506,9 @@ export class SettingsPanel {
     card.dataset.group = name ? sceneGroup(name) : "";
     card.replaceChildren(
       h("span", { class: "sp-scene-ico" }, info?.icon ?? "✦"),
-      h("span", { class: "sp-scene-text" },
+      h(
+        "span",
+        { class: "sp-scene-text" },
         h("b", {}, name ? sceneTitle(name) : "Your own view"),
         h("small", {}, name ? SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label : "Settings edited, or a saved flight"),
       ),
@@ -530,21 +559,33 @@ export class SettingsPanel {
       ["medium", "Medium", "Balanced"],
       ["high", "High", "Error-controlled RK4 (1e-5), 64 spp"],
       ["ultra", "Ultra", "Error-controlled RK4 (2e-6), 256 spp, fine realtime steps"],
-      ["realtime", "RT max", "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still"],
-      ["game", "Game", "Fluid first (≈ 60 fps): a 16 ms frame budget, coarser realtime rays, the render scale lowered when needed (dynamic resolution)"],
+      [
+        "realtime",
+        "RT max",
+        "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still",
+      ],
+      [
+        "game",
+        "Game",
+        "Fluid first (≈ 60 fps): a 16 ms frame budget, coarser realtime rays, the render scale lowered when needed (dynamic resolution)",
+      ],
     ];
     for (const [q, label, help] of levels) {
       seg.append(
-        h("button", {
-          dataset: { value: q, help, helpTitle: `${label} quality` },
-          onclick: () => {
-            this.begin();
-            Object.assign(this.s, QUALITY[q], { quality: q });
-            this.o.onChange([...new Set([...QUALITY_KEYS, ...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality" as const])]);
-            this.commit();
-            this.refresh();
+        h(
+          "button",
+          {
+            dataset: { value: q, help, helpTitle: `${label} quality` },
+            onclick: () => {
+              this.begin();
+              Object.assign(this.s, QUALITY[q], { quality: q });
+              this.o.onChange([...new Set([...QUALITY_KEYS, ...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality" as const])]);
+              this.commit();
+              this.refresh();
+            },
           },
-        }, label),
+          label,
+        ),
       );
     }
     seg.append(h("span", { class: "sp-custom", dataset: { help: "Integration or sampling parameters were edited by hand." } }, "Custom"));
@@ -563,17 +604,22 @@ export class SettingsPanel {
     this.tabsEl.replaceChildren();
     for (const sec of SECTIONS) {
       this.tabsEl.append(
-        h("button", {
-          role: "tab",
-          class: sec.id === this.tab ? "on" : "",
-          "aria-selected": String(sec.id === this.tab),
-          onclick: () => {
-            this.tab = sec.id;
-            this.saveUiState();
-            this.renderTabs();
-            this.renderBody();
+        h(
+          "button",
+          {
+            role: "tab",
+            class: sec.id === this.tab ? "on" : "",
+            "aria-selected": String(sec.id === this.tab),
+            onclick: () => {
+              this.tab = sec.id;
+              this.saveUiState();
+              this.renderTabs();
+              this.renderBody();
+            },
           },
-        }, svgIcon(sec.icon), h("span", {}, sec.label)),
+          svgIcon(sec.icon),
+          h("span", {}, sec.label),
+        ),
       );
     }
   }
@@ -588,29 +634,44 @@ export class SettingsPanel {
     this.body.replaceChildren();
     const searching = this.query.length > 0;
     this.tabsEl.classList.toggle("dim", searching);
-    const defs = SCHEMA.filter((d) =>
-      searching ? this.matches(d, this.query) : d.section === this.tab && (this.advanced || !d.advanced),
-    );
+    const defs = SCHEMA.filter((d) => (searching ? this.matches(d, this.query) : d.section === this.tab && (this.advanced || !d.advanced)));
     // (the scenes match a search too)
     const scenes = searching
       ? this.o.presetNames.filter((n) => {
           const i = PRESET_INFO[n];
-          const hay = `${n} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(n))?.label}`.toLowerCase();
+          const hay =
+            `${n} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(n))?.label}`.toLowerCase();
           return this.query.split(/\s+/).every((w) => hay.includes(w));
         })
       : [];
     if (scenes.length) {
       this.body.append(
-        h("div", { class: "sp-group" },
+        h(
+          "div",
+          { class: "sp-group" },
           h("header", { class: "sp-ghead" }, h("span", { class: "sp-gtitle" }, `Scenes (${scenes.length})`)),
-          h("div", { class: "sp-rows sp-scene-hits" },
-            ...scenes.slice(0, 6).map((n) =>
-              h("button", { class: "sp-scene small", dataset: { group: sceneGroup(n) }, onclick: () => this.applyScene(n) },
-                h("span", { class: "sp-scene-ico" }, PRESET_INFO[n]?.icon ?? "•"),
-                h("span", { class: "sp-scene-text" }, h("b", {}, sceneTitle(n)), h("small", {}, PRESET_INFO[n]?.description ?? "")),
+          h(
+            "div",
+            { class: "sp-rows sp-scene-hits" },
+            ...scenes
+              .slice(0, 6)
+              .map((n) =>
+                h(
+                  "button",
+                  { class: "sp-scene small", dataset: { group: sceneGroup(n) }, onclick: () => this.applyScene(n) },
+                  h("span", { class: "sp-scene-ico" }, PRESET_INFO[n]?.icon ?? "•"),
+                  h("span", { class: "sp-scene-text" }, h("b", {}, sceneTitle(n)), h("small", {}, PRESET_INFO[n]?.description ?? "")),
+                ),
               ),
-            ),
-            ...(scenes.length > 6 ? [h("button", { class: "sp-btn block", onclick: () => this.o.openScenes(this.query) }, `All ${scenes.length} in the gallery…`)] : []),
+            ...(scenes.length > 6
+              ? [
+                  h(
+                    "button",
+                    { class: "sp-btn block", onclick: () => this.o.openScenes(this.query) },
+                    `All ${scenes.length} in the gallery…`,
+                  ),
+                ]
+              : []),
           ),
         ),
       );
@@ -629,8 +690,12 @@ export class SettingsPanel {
     for (const [title, list] of groups) this.body.append(this.renderGroup(title, list, searching));
     if (!searching && this.tab === "sky") {
       this.body.append(
-        h("div", { class: "sp-group" },
-          h("div", { class: "sp-rows" },
+        h(
+          "div",
+          { class: "sp-group" },
+          h(
+            "div",
+            { class: "sp-rows" },
             h("button", { class: "sp-btn block", onclick: () => this.o.loadImage() }, "Load equirectangular panorama…"),
             h("p", { class: "sp-note" }, "Any 2:1 image (JPEG, PNG, AVIF…). It stays in your browser."),
           ),
@@ -646,16 +711,21 @@ export class SettingsPanel {
     const collapsed = !searching && this.collapsedGroups.has(groupName);
     const rows = h("div", { class: "sp-rows" });
     const head = h("header", { class: "sp-ghead" });
-    const titleBtn = h("button", {
-      class: "sp-gtitle",
-      onclick: () => {
-        if (searching) return;
-        if (this.collapsedGroups.has(groupName)) this.collapsedGroups.delete(groupName);
-        else this.collapsedGroups.add(groupName);
-        this.saveUiState();
-        group.classList.toggle("collapsed");
+    const titleBtn = h(
+      "button",
+      {
+        class: "sp-gtitle",
+        onclick: () => {
+          if (searching) return;
+          if (this.collapsedGroups.has(groupName)) this.collapsedGroups.delete(groupName);
+          else this.collapsedGroups.add(groupName);
+          this.saveUiState();
+          group.classList.toggle("collapsed");
+        },
       },
-    }, svgIcon(ICONS.chevron, "ico chev"), title);
+      svgIcon(ICONS.chevron, "ico chev"),
+      title,
+    );
     head.append(titleBtn);
     if (switchKey) {
       const cb = h("input", { type: "checkbox", onchange: (e: Event) => this.set(switchKey, (e.target as HTMLInputElement).checked) });
@@ -666,21 +736,28 @@ export class SettingsPanel {
       });
     }
     const resetKeys = list.map((d) => d.key).concat(switchKey ? [switchKey] : []);
-    const gReset = h("button", {
-      class: "sp-icon small",
-      title: `Reset ${groupName.toLowerCase()} to defaults`,
-      onclick: () => {
-        const d = this.o.defaults();
-        this.begin();
-        this.applyValues(resetKeys.filter((k) => !sameValue(this.s[k], d[k])).map((k) => [k, d[k]]));
-        this.commit();
-        this.toast(`Reset ${groupName}`);
+    const gReset = h(
+      "button",
+      {
+        class: "sp-icon small",
+        title: `Reset ${groupName.toLowerCase()} to defaults`,
+        onclick: () => {
+          const d = this.o.defaults();
+          this.begin();
+          this.applyValues(resetKeys.filter((k) => !sameValue(this.s[k], d[k])).map((k) => [k, d[k]]));
+          this.commit();
+          this.toast(`Reset ${groupName}`);
+        },
       },
-    }, svgIcon(ICONS.reset));
+      svgIcon(ICONS.reset),
+    );
     head.append(gReset);
     this.updaters.push(() => {
       const d = this.o.defaults();
-      gReset.classList.toggle("hidden", resetKeys.every((k) => sameValue(this.s[k], d[k])));
+      gReset.classList.toggle(
+        "hidden",
+        resetKeys.every((k) => sameValue(this.s[k], d[k])),
+      );
     });
 
     for (const d of list) rows.append(this.renderControl(d));
@@ -697,11 +774,16 @@ export class SettingsPanel {
       title: "Modified — click to reset to default",
       onclick: () => this.set(d.key, def()),
     });
-    const label = h("span", {
-      class: "sp-rlabel",
-      dataset: d.help ? { help: d.help, helpTitle: d.label, helpFoot: this.footFor(d) } : { help: this.footFor(d), helpTitle: d.label },
-      ondblclick: () => this.set(d.key, def()),
-    }, d.label, d.help ? h("i", { class: "sp-info" }, "i") : null);
+    const label = h(
+      "span",
+      {
+        class: "sp-rlabel",
+        dataset: d.help ? { help: d.help, helpTitle: d.label, helpFoot: this.footFor(d) } : { help: this.footFor(d), helpTitle: d.label },
+        ondblclick: () => this.set(d.key, def()),
+      },
+      d.label,
+      d.help ? h("i", { class: "sp-info" }, "i") : null,
+    );
 
     let update: () => void;
     if (d.type === "number") update = this.numberControl(d, row, reset, label);
@@ -713,7 +795,8 @@ export class SettingsPanel {
       row.hidden = d.visible ? !d.visible(this.s) : false;
       const enabled = d.enabled ? d.enabled(this.s) : true;
       row.classList.toggle("disabled", !enabled);
-      for (const el of row.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, .sp-seg button")) el.disabled = !enabled;
+      for (const el of row.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, .sp-seg button"))
+        el.disabled = !enabled;
       reset.classList.toggle("on", !sameValue(this.s[d.key], def()));
       update();
     });
@@ -749,7 +832,11 @@ export class SettingsPanel {
 
     // accepts "36", "1e-5", "6.5×10^9", "36 M", "0,5"; "off" where allowed
     const parse = (text: string): number | null => {
-      const t = text.trim().toLowerCase().replace(",", ".").replace(/\s*[×x]\s*10\^/, "e");
+      const t = text
+        .trim()
+        .toLowerCase()
+        .replace(",", ".")
+        .replace(/\s*[×x]\s*10\^/, "e");
       if (d.offAtZero && (t === "off" || t === "0")) return 0;
       const v = parseFloat(t);
       return Number.isFinite(v) ? clamp(v) : null;
@@ -775,18 +862,19 @@ export class SettingsPanel {
         const dir = e.key === "ArrowUp" ? 1 : -1;
         const mult = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
         let v: number;
-        if (d.scale === "log") v = clamp((cur() || d.min) * Math.pow(10, 0.02 * dir * mult));
+        if (d.scale === "log") v = clamp((cur() || d.min) * 10 ** (0.02 * dir * mult));
         else v = clamp(cur() + dir * (d.step ?? 0.01) * mult);
-        this.set(d.key, d.scale === "log" ? Number(v.toPrecision(d.precision ?? 3)) : Number(v.toFixed(decimalsFor(d.step ?? 0.01))), false);
+        this.set(
+          d.key,
+          d.scale === "log" ? Number(v.toPrecision(d.precision ?? 3)) : Number(v.toFixed(decimalsFor(d.step ?? 0.01))),
+          false,
+        );
         val.value = formatValue(d, cur());
       }
     });
     val.addEventListener("blur", () => this.commit());
 
-    row.append(
-      h("div", { class: "sp-rhead" }, reset, label, h("div", { class: "sp-valbox" }, val, unit)),
-      slider,
-    );
+    row.append(h("div", { class: "sp-rhead" }, reset, label, h("div", { class: "sp-valbox" }, val, unit)), slider);
     return () => {
       const v = cur();
       if (document.activeElement !== val) val.value = formatValue(d, v);
@@ -796,7 +884,11 @@ export class SettingsPanel {
   }
 
   private toggleControl(d: ControlDef, row: HTMLElement, reset: HTMLElement, label: HTMLElement) {
-    const cb = h("input", { type: "checkbox", "aria-label": d.label, onchange: (e: Event) => this.set(d.key, (e.target as HTMLInputElement).checked) });
+    const cb = h("input", {
+      type: "checkbox",
+      "aria-label": d.label,
+      onchange: (e: Event) => this.set(d.key, (e.target as HTMLInputElement).checked),
+    });
     row.append(h("div", { class: "sp-rhead" }, reset, label, h("label", { class: "sp-toggle" }, cb, h("span", { class: "sp-switch" }))));
     return () => {
       cb.checked = !!this.s[d.key];
@@ -821,10 +913,14 @@ export class SettingsPanel {
       const seg = h("div", { class: "sp-seg" });
       for (const o of d.options) {
         seg.append(
-          h("button", {
-            dataset: { value: String(o.value), ...(o.hint ? { help: o.hint, helpTitle: o.label } : {}) },
-            onclick: () => this.set(d.key, o.value),
-          }, o.label),
+          h(
+            "button",
+            {
+              dataset: { value: String(o.value), ...(o.hint ? { help: o.hint, helpTitle: o.label } : {}) },
+              onclick: () => this.set(d.key, o.value),
+            },
+            o.label,
+          ),
         );
       }
       row.append(seg);
@@ -854,25 +950,39 @@ export class SettingsPanel {
       return;
     }
     const item = (label: string, hint: string, fn: () => void, danger = false) =>
-      h("button", {
-        class: `sp-mitem${danger ? " danger" : ""}`,
-        onclick: () => {
-          this.closeMenu();
-          fn();
+      h(
+        "button",
+        {
+          class: `sp-mitem${danger ? " danger" : ""}`,
+          onclick: () => {
+            this.closeMenu();
+            fn();
+          },
         },
-      }, h("span", {}, label), h("small", {}, hint));
-    const menu = h("div", { class: "sp-menu glass", role: "menu" },
+        h("span", {}, label),
+        h("small", {}, hint),
+      );
+    const menu = h(
+      "div",
+      { class: "sp-menu glass", role: "menu" },
       item("Copy share link", "URL with every non-default setting", () => this.copyLink()),
       item("Export settings…", "Download as JSON", () => this.exportJSON()),
       item("Import settings…", "Load a JSON file", () => this.importJSON()),
       h("hr", {}),
       item("Keyboard shortcuts", "", () => this.showShortcuts()),
-      ...(this.o.connectController ? [item("Connect a USB controller…", "If the browser does not see it", () => this.o.connectController!())] : []),
+      ...(this.o.connectController
+        ? [item("Connect a USB controller…", "If the browser does not see it", () => this.o.connectController!())]
+        : []),
       h("hr", {}),
-      item("Reset everything", "Restore all defaults (undoable)", () => {
-        this.applyObject({}, true);
-        this.toast("All settings reset — ⌘Z to undo");
-      }, true),
+      item(
+        "Reset everything",
+        "Restore all defaults (undoable)",
+        () => {
+          this.applyObject({}, true);
+          this.toast("All settings reset — ⌘Z to undo");
+        },
+        true,
+      ),
     );
     const r = anchor.getBoundingClientRect();
     menu.style.top = `${r.bottom + 6}px`;
@@ -931,112 +1041,180 @@ export class SettingsPanel {
   showShortcuts() {
     document.querySelector(".sp-modal")?.remove();
     const sections: [string, [string, string][]][] = [
-      ["Time — every mode", [
-        ["Space", "Run / pause (paused: everything the time drives holds, the image refines)"],
-        [", · . · /", "Time warp slower · faster · real time (; : ! on AZERTY)"],
-        ["● on the time bar", "Record a take — Render › Video renders it at full quality"],
-      ]],
-      ["The sky — our side", [
-        ["N · ⇧N", "Constellations: their figures and names · the bright stars' names"],
-        ["U", "Grids in turn: equatorial (of date) · horizontal (on a world) · both · none"],
-        ["Sky button", "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card"],
-      ]],
-      ["Camera — every mode", [
-        ["V · ⇧V", "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)"],
-        ["C", "Look at the target: the view locked on it, wherever the camera goes"],
-        ["Y", "Telescope: fields down to 0.02°, held on the target (the wheel zooms)"],
-        ["Tab · ⇧Tab", "Next · previous target (or click it in the view)"],
-        ["Drag", "Around: orbit the target · else: look around (locked: where the target sits)"],
-        ["Right / ⇧ drag", "Around: offset the view · Free: roll"],
-        ["Wheel · pinch", "Around: distance · Free: move forward / back · telescope: zoom"],
-        ["Alt + wheel", "Lens (field of view, eased)"],
-        ["Double-click", "Fly to a body and frame it · on the sky: recentre / level"],
-        ["R · ⇧R", "Next view · recentre / level"],
-        ["← → ↑ ↓ · + −", "Orbit (free: turn) · zoom"],
-      ]],
-      ["The free camera (no ship)", [
-        ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster)"],
-        ["A · E (Q · E)", "Down · up"],
-        ["W · X (Z · X)", "Roll"],
-        ["Middle click", "Mouse look, game-style (Esc leaves)"],
-        ["B", "Free fall along the geodesic (the keys thrust) ⟷ free"],
-        ["O · ⇧C · T", "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)"],
-        ["⇧T", "Tripod on the ground: the target's world (else the nearest), level, facing the horizon"],
-      ]],
-      ["Scene", [
-        ["J · G", "Jet · shadow guide"],
-        ["L", "Cinematic mode: liquid wormhole surface"],
-        ["K · ⇧K", "Ranger: camera on the spaceship · next view"],
-        ["1 – 6", "Quality (5: realtime max, 6: game)"],
-        ["⌘K / Ctrl+K", "Search the settings"],
-      ]],
-      ["Flying the Ranger (K) — KSP's layout", [
-        ["W S · A D · Q E", "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)"],
-        ["⇧ · Alt · ↑ ↓", "Throttle up · down (held)"],
-        ["Z · X", "Full throttle · cut (W · X on AZERTY)"],
-        ["I K · J L · H N", "RCS translation: down/up · left/right · forward/back"],
-        ["Caps Lock", "Precision controls (fine rotation, throttle, RCS)"],
-        ["T", "SAS: stability assist"],
-        ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
-        ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
-        ["8 · 9 · 0 · G · U · B", "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)"],
-        ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
-        ["V · ⇧V", "Camera: next · previous view — on the hull, around the ship, free, fly-by"],
-        ["⇧R", "Camera reset: back to the craft's attach points, looking ahead (the outside views' own places)"],
-        ["View “Cabin”", "Inside the Ranger: Z Q S D · A E move the camera about the cabin (⇧ faster), the drag or the arrows turn the look — the ship flies on"],
-        ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
-        ["F · ⇧F", "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity"],
-        ["P · ⇧P", "Flaps (up · half · full) · air brake"],
-        ["⇧G", "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing"],
-        ["⇧Y", "The future path in the view"],
-        ["²  (`)", "HUD density: full · minimal · clean view"],
-        ["O", "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE"],
-        ["Esc", "Closes the panel on top; with nothing open, stops the mission, the hold and the autopilot"],
-        ["⇧K", "Leave the Ranger"],
-        ["Drag · double-click", "Look around from the attach point · look ahead"],
-        ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
-      ]],
-      ["Controller (Xbox · PlayStation)", [
-        ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
-        ["Right stick", "Around: orbit the target · Free: look"],
-        ["RT · LT  (R2 · L2)", "Up · down"],
-        ["LB · RB  (L1 · R1)", "Roll"],
-        ["A  (✕)", "Fly to the target"],
-        ["B · X · Y  (○ □ △)", "Free fall · auto-orbit · next view"],
-        ["D-pad ◀ ▶ · ▲ ▼", "Previous / next target · closer / farther"],
-        ["R3 · View · Menu", "Recentre · run / pause time · settings (Share · Options)"],
-      ]],
-      ["Interface", [
-        ["M · ⌘K", "Settings · search them (flying: ⇧M)"],
-        ["F2", "Game tools: status, placement, targets, time, saves, performance"],
-        ["I", "Details & physical readouts"],
-        ["H · F · P", "Hide the interface · fullscreen · save PNG (flying, these keys fly: the toolbar's buttons)"],
-        ["Esc", "Closes the panel on top"],
-        ["⌘Z · ⇧⌘Z", "Undo · redo"],
-        ["?", "This sheet"],
-      ]],
+      [
+        "Time — every mode",
+        [
+          ["Space", "Run / pause (paused: everything the time drives holds, the image refines)"],
+          [", · . · /", "Time warp slower · faster · real time (; : ! on AZERTY)"],
+          ["● on the time bar", "Record a take — Render › Video renders it at full quality"],
+        ],
+      ],
+      [
+        "The sky — our side",
+        [
+          ["N · ⇧N", "Constellations: their figures and names · the bright stars' names"],
+          ["U", "Grids in turn: equatorial (of date) · horizontal (on a world) · both · none"],
+          [
+            "Sky button",
+            "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card",
+          ],
+        ],
+      ],
+      [
+        "Camera — every mode",
+        [
+          ["V · ⇧V", "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)"],
+          ["C", "Look at the target: the view locked on it, wherever the camera goes"],
+          ["Y", "Telescope: fields down to 0.02°, held on the target (the wheel zooms)"],
+          ["Tab · ⇧Tab", "Next · previous target (or click it in the view)"],
+          ["Drag", "Around: orbit the target · else: look around (locked: where the target sits)"],
+          ["Right / ⇧ drag", "Around: offset the view · Free: roll"],
+          ["Wheel · pinch", "Around: distance · Free: move forward / back · telescope: zoom"],
+          ["Alt + wheel", "Lens (field of view, eased)"],
+          ["Double-click", "Fly to a body and frame it · on the sky: recentre / level"],
+          ["R · ⇧R", "Next view · recentre / level"],
+          ["← → ↑ ↓ · + −", "Orbit (free: turn) · zoom"],
+        ],
+      ],
+      [
+        "The free camera (no ship)",
+        [
+          ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster)"],
+          ["A · E (Q · E)", "Down · up"],
+          ["W · X (Z · X)", "Roll"],
+          ["Middle click", "Mouse look, game-style (Esc leaves)"],
+          ["B", "Free fall along the geodesic (the keys thrust) ⟷ free"],
+          ["O · ⇧C · T", "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)"],
+          ["⇧T", "Tripod on the ground: the target's world (else the nearest), level, facing the horizon"],
+        ],
+      ],
+      [
+        "Scene",
+        [
+          ["J · G", "Jet · shadow guide"],
+          ["L", "Cinematic mode: liquid wormhole surface"],
+          ["K · ⇧K", "Ranger: camera on the spaceship · next view"],
+          ["1 – 6", "Quality (5: realtime max, 6: game)"],
+          ["⌘K / Ctrl+K", "Search the settings"],
+        ],
+      ],
+      [
+        "Flying the Ranger (K) — KSP's layout",
+        [
+          ["W S · A D · Q E", "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)"],
+          ["⇧ · Alt · ↑ ↓", "Throttle up · down (held)"],
+          ["Z · X", "Full throttle · cut (W · X on AZERTY)"],
+          ["I K · J L · H N", "RCS translation: down/up · left/right · forward/back"],
+          ["Caps Lock", "Precision controls (fine rotation, throttle, RCS)"],
+          ["T", "SAS: stability assist"],
+          ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
+          ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
+          ["8 · 9 · 0 · G · U · B", "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)"],
+          ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
+          ["V · ⇧V", "Camera: next · previous view — on the hull, around the ship, free, fly-by"],
+          ["⇧R", "Camera reset: back to the craft's attach points, looking ahead (the outside views' own places)"],
+          [
+            "View “Cabin”",
+            "Inside the Ranger: Z Q S D · A E move the camera about the cabin (⇧ faster), the drag or the arrows turn the look — the ship flies on",
+          ],
+          ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
+          [
+            "F · ⇧F",
+            "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity",
+          ],
+          ["P · ⇧P", "Flaps (up · half · full) · air brake"],
+          [
+            "⇧G",
+            "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing",
+          ],
+          ["⇧Y", "The future path in the view"],
+          ["²  (`)", "HUD density: full · minimal · clean view"],
+          [
+            "O",
+            "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE",
+          ],
+          ["Esc", "Closes the panel on top; with nothing open, stops the mission, the hold and the autopilot"],
+          ["⇧K", "Leave the Ranger"],
+          ["Drag · double-click", "Look around from the attach point · look ahead"],
+          ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
+        ],
+      ],
+      [
+        "Controller (Xbox · PlayStation)",
+        [
+          ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
+          ["Right stick", "Around: orbit the target · Free: look"],
+          ["RT · LT  (R2 · L2)", "Up · down"],
+          ["LB · RB  (L1 · R1)", "Roll"],
+          ["A  (✕)", "Fly to the target"],
+          ["B · X · Y  (○ □ △)", "Free fall · auto-orbit · next view"],
+          ["D-pad ◀ ▶ · ▲ ▼", "Previous / next target · closer / farther"],
+          ["R3 · View · Menu", "Recentre · run / pause time · settings (Share · Options)"],
+        ],
+      ],
+      [
+        "Interface",
+        [
+          ["M · ⌘K", "Settings · search them (flying: ⇧M)"],
+          ["F2", "Game tools: status, placement, targets, time, saves, performance"],
+          ["I", "Details & physical readouts"],
+          ["H · F · P", "Hide the interface · fullscreen · save PNG (flying, these keys fly: the toolbar's buttons)"],
+          ["Esc", "Closes the panel on top"],
+          ["⌘Z · ⇧⌘Z", "Undo · redo"],
+          ["?", "This sheet"],
+        ],
+      ],
     ];
     const close = () => {
       dlg.remove();
       unEscape();
     };
     const unEscape = onEscape(close);
-    const dlg = h("div", { class: "sp-modal", onclick: (e: Event) => e.target === dlg && close() },
-      h("div", { class: "sp-modal-card glass sp-keys" },
-        h("header", {}, h("h3", {}, "Keyboard & mouse"), h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close))),
+    const dlg = h(
+      "div",
+      { class: "sp-modal", onclick: (e: Event) => e.target === dlg && close() },
+      h(
+        "div",
+        { class: "sp-modal-card glass sp-keys" },
+        h(
+          "header",
+          {},
+          h("h3", {}, "Keyboard & mouse"),
+          h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close)),
+        ),
         ...sections.map(([title, rows]) =>
-          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])))),
+          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))),
+        ),
         this.o.connectController
-          ? h("p", { class: "sp-keys-note" },
+          ? h(
+              "p",
+              { class: "sp-keys-note" },
               "Controller not detected? Press a button with the page focused. A wired Xbox 360 pad in Chrome, Edge or Arc: ",
               h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, "connect it (USB)"),
-              ".")
+              ".",
+            )
           : h("span", {}),
-        h("footer", {},
+        h(
+          "footer",
+          {},
           h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗"),
-          h("span", { class: "credit" }, " · Ranger: ",
-            h("a", { href: "https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f", target: "_blank", rel: "noopener" }, "“Interstellar Ranger One” by Max Vizell"),
-            ", ", h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"))),
+          h(
+            "span",
+            { class: "credit" },
+            " · Ranger: ",
+            h(
+              "a",
+              {
+                href: "https://sketchfab.com/3d-models/interstellar-ranger-one-77c63df2062d4fd9863cc64711450c6f",
+                target: "_blank",
+                rel: "noopener",
+              },
+              "“Interstellar Ranger One” by Max Vizell",
+            ),
+            ", ",
+            h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"),
+          ),
+        ),
       ),
     );
     document.body.append(dlg);

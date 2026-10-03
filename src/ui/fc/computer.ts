@@ -8,7 +8,23 @@
 // metre per second and the second, snapped to the apsides and nodes.
 
 import "./fc.css";
-import { circularize, hohmann, matchPlanes, matchVelocities, relation, resonant, setApoapsis, setInclination, setPeriapsis, transfer, fineTune, type Burn, type FcContext, type OpResult, type Porkchop } from "../../fc/ops";
+import {
+  circularize,
+  hohmann,
+  matchPlanes,
+  matchVelocities,
+  relation,
+  resonant,
+  setApoapsis,
+  setInclination,
+  setPeriapsis,
+  transfer,
+  fineTune,
+  type Burn,
+  type FcContext,
+  type OpResult,
+  type Porkchop,
+} from "../../fc/ops";
 import { elements, len, nodesAgainst, timeTo, type Elements, type V3 } from "../../fc/kepler";
 import * as kep from "../../fc/kepler";
 import type { Site } from "../../game/sites";
@@ -51,9 +67,21 @@ export interface FcHost {
   land(): string | null;
   /** the MISSION tab: the destinations from here, a mission planned (previewed: its path on the maps),
    *  adopted into the plan */
-  missionTargets(): { universe: "ours" | "gargantua" | null; here: string | null; list: { id: string; name: string; group: string; far: string }[] };
-  missionPlan(spec: { target: string; arrival?: "orbit" | "flyby" | "freeReturn"; altKm?: number; retKm?: number; orbit?: boolean }): Promise<
-    { ok: true; note: string; burns: Burn[]; dvTotal: number; arrive: { body: string; t: number } | null; afterText: string } | { ok: false; note: string }>;
+  missionTargets(): {
+    universe: "ours" | "gargantua" | null;
+    here: string | null;
+    list: { id: string; name: string; group: string; far: string }[];
+  };
+  missionPlan(spec: {
+    target: string;
+    arrival?: "orbit" | "flyby" | "freeReturn";
+    altKm?: number;
+    retKm?: number;
+    orbit?: boolean;
+  }): Promise<
+    | { ok: true; note: string; burns: Burn[]; dvTotal: number; arrive: { body: string; t: number } | null; afterText: string }
+    | { ok: false; note: string }
+  >;
   missionCommit(): string | null;
   /** the current target (the map's, the analysis's) */
   target(): string;
@@ -75,25 +103,54 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): 
   return e;
 };
 const D = 180 / Math.PI;
-const km = (m: number) => (!Number.isFinite(m) ? "∞" : Math.abs(m) >= 1e9 ? `${(m / AU_M).toFixed(3)} AU` : Math.abs(m) >= 1e6 ? `${(m / 1e3).toFixed(0)} km` : Math.abs(m) >= 1e4 ? `${(m / 1e3).toFixed(1)} km` : `${m.toFixed(0)} m`);
+const km = (m: number) =>
+  !Number.isFinite(m)
+    ? "∞"
+    : Math.abs(m) >= 1e9
+      ? `${(m / AU_M).toFixed(3)} AU`
+      : Math.abs(m) >= 1e6
+        ? `${(m / 1e3).toFixed(0)} km`
+        : Math.abs(m) >= 1e4
+          ? `${(m / 1e3).toFixed(1)} km`
+          : `${m.toFixed(0)} m`;
 const dur = (s: number) => {
   if (!Number.isFinite(s)) return "—";
   const a = Math.abs(s);
   const sg = s < 0 ? "−" : "";
   if (a < 60) return `${sg}${a.toFixed(0)} s`;
-  if (a < 3600) return `${sg}${Math.floor(a / 60)} min ${Math.round(a % 60).toString().padStart(2, "0")} s`;
-  if (a < 86400) return `${sg}${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60).toString().padStart(2, "0")} min`;
+  if (a < 3600)
+    return `${sg}${Math.floor(a / 60)} min ${Math.round(a % 60)
+      .toString()
+      .padStart(2, "0")} s`;
+  if (a < 86400)
+    return `${sg}${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60)
+      .toString()
+      .padStart(2, "0")} min`;
   return `${sg}${(a / 86400).toFixed(a < 864000 ? 1 : 0)} d`;
 };
 const C = C_MPS;
-const ms = (v: number) => (!Number.isFinite(v) ? "∞" : Math.abs(v) >= 3e6 ? `${(v / C).toFixed(4)} c` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km/s` : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`);
+const ms = (v: number) =>
+  !Number.isFinite(v)
+    ? "∞"
+    : Math.abs(v) >= 3e6
+      ? `${(v / C).toFixed(4)} c`
+      : Math.abs(v) >= 1000
+        ? `${(v / 1000).toFixed(2)} km/s`
+        : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`;
 /** A burn's part: m/s, or km/s for the hole's (fractions of c). */
 const part = (v: number, big: boolean) => (big ? (v / 1000).toFixed(0) : v.toFixed(1));
 /** A radius about the hole: in M, and its distance. */
 const rM = (r: number, Mm: number) => (!Number.isFinite(r) ? "∞" : `${r.toFixed(2)} M · ${km(r * Mm)}`);
 
 /** A number field with its unit and steppers (⇧ ×10, ⌥ ×0.1). */
-function numField(label: string, value: number, unit: string, step: number, onChange: (v: number) => void, o: { min?: number; max?: number; digits?: number } = {}) {
+function numField(
+  label: string,
+  value: number,
+  unit: string,
+  step: number,
+  onChange: (v: number) => void,
+  o: { min?: number; max?: number; digits?: number } = {},
+) {
   const w = h("label", "fc-num");
   const l = h("span", "fc-num-l", label);
   const inp = h("input");
@@ -155,7 +212,12 @@ export class FlightComputer {
     fold(this.info, "r", "ANALYSIS");
     this.info.querySelector(".fc-fold")!.textContent = "›";
     const tb = h("div", "fc-tabs");
-    for (const [t, label] of [["orbit", "ORBIT"], ["target", "TARGET"], ["land", "LAND"], ["mission", "MISSION"]] as [Tab, string][]) {
+    for (const [t, label] of [
+      ["orbit", "ORBIT"],
+      ["target", "TARGET"],
+      ["land", "LAND"],
+      ["mission", "MISSION"],
+    ] as [Tab, string][]) {
       const b = h("button", "", label);
       b.onclick = () => this.setTab(t);
       this.tabs[t] = b;
@@ -171,7 +233,13 @@ export class FlightComputer {
       this.infoEls[id] = b;
       return s;
     };
-    this.info.append(h("div", "fc-info-head", "ANALYSIS"), sec("ORBIT", "orbit"), sec("TARGET", "target"), sec("Δv BUDGET", "budget"), sec("PLAN", "plan"));
+    this.info.append(
+      h("div", "fc-info-head", "ANALYSIS"),
+      sec("ORBIT", "orbit"),
+      sec("TARGET", "target"),
+      sec("Δv BUDGET", "budget"),
+      sec("PLAN", "plan"),
+    );
     this.root.append(this.ops, this.info);
     this.root.hidden = true;
     this.setTab("orbit");
@@ -214,7 +282,14 @@ export class FlightComputer {
    * An autopilot's row — the same as the hub's button: ENGAGE (the hub's lit button the same), its
    * state shown (ENGAGED — a click disengages), dimmed with the hub's reason when it cannot.
    */
-  private autoOp(a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry", title: string, help: string, fields: HTMLElement[] = [], go?: () => string | null, verb = "ENGAGE") {
+  private autoOp(
+    a: "hover" | "circularize" | "approach" | "land" | "takeoff" | "entry",
+    title: string,
+    help: string,
+    fields: HTMLElement[] = [],
+    go?: () => string | null,
+    verb = "ENGAGE",
+  ) {
     const r = h("div", "fc-op fc-auto");
     const t = h("div", "fc-op-t", title);
     t.append(h("span", "fc-hub", "HUB"));
@@ -289,7 +364,14 @@ export class FlightComputer {
     cb.type = "checkbox";
     cb.checked = g.incDeg === null;
     east.append(cb, h("span", "", "Due east (the ground's turn given)"));
-    this.autoOp("takeoff", "Launch to orbit", "Straight up through the thick air, the gravity turn, then circular at the height — the hub's TAKE OFF flies the same", [alt.el, inc.el, east], () => this.host.launch(alt.get(), cb.checked ? null : inc.get()), "LAUNCH");
+    this.autoOp(
+      "takeoff",
+      "Launch to orbit",
+      "Straight up through the thick air, the gravity turn, then circular at the height — the hub's TAKE OFF flies the same",
+      [alt.el, inc.el, east],
+      () => this.host.launch(alt.get(), cb.checked ? null : inc.get()),
+      "LAUNCH",
+    );
   }
 
   private buildOrbit() {
@@ -300,7 +382,11 @@ export class FlightComputer {
     const alt = (x: number) => Math.max((x - R) / 1e3, 0);
     let where: "ap" | "pe" | "now" = "ap";
     const seg = h("div", "fc-seg");
-    for (const [w, l] of [["ap", "AT AP"], ["pe", "AT PE"], ["now", "NOW"]] as ["ap" | "pe" | "now", string][]) {
+    for (const [w, l] of [
+      ["ap", "AT AP"],
+      ["pe", "AT PE"],
+      ["now", "NOW"],
+    ] as ["ap" | "pe" | "now", string][]) {
       const b = h("button", w === where ? "on" : "", l);
       b.onclick = () => {
         where = w;
@@ -308,15 +394,20 @@ export class FlightComputer {
       };
       seg.append(b);
     }
-    this.op("Circularize", "The speed made circular there, the flight path levelled — NOW: the autopilot, closed on the circular speed where the ship is (the hub's CIRC burns at the next apsis above the air)", [seg], () => {
-      if (where === "now") {
-        const e = this.host.engage("circularize", true);
-        this.host.say(e ?? "Circularize NOW: the autopilot closed on the circular speed where the ship is");
-        return null;
-      }
-      const x = this.ctxOrSay();
-      return x && circularize(x.ctx, where);
-    });
+    this.op(
+      "Circularize",
+      "The speed made circular there, the flight path levelled — NOW: the autopilot, closed on the circular speed where the ship is (the hub's CIRC burns at the next apsis above the air)",
+      [seg],
+      () => {
+        if (where === "now") {
+          const e = this.host.engage("circularize", true);
+          this.host.say(e ?? "Circularize NOW: the autopilot closed on the circular speed where the ship is");
+          return null;
+        }
+        const x = this.ctxOrSay();
+        return x && circularize(x.ctx, where);
+      },
+    );
     const ap = numField("Apoapsis", el ? alt(el.ra === Infinity ? el.rp * 2 : el.ra) : 400, "km", 10, () => {}, { min: 0 });
     this.op("Apoapsis", "A burn at the periapsis (or now) raises or lowers the far side", [ap.el], () => {
       const x = this.ctxOrSay();
@@ -358,10 +449,15 @@ export class FlightComputer {
       const x = this.ctxOrSay();
       return x && matchPlanes(x.ctx);
     });
-    this.op("Rendezvous", "The porkchop of departures × flight times (Lambert's arcs), the cheapest kept: a departure and the velocity matched on arrival", [], () => {
-      const x = this.ctxOrSay();
-      return x && transfer(x.ctx, { rendezvous: true });
-    });
+    this.op(
+      "Rendezvous",
+      "The porkchop of departures × flight times (Lambert's arcs), the cheapest kept: a departure and the velocity matched on arrival",
+      [],
+      () => {
+        const x = this.ctxOrSay();
+        return x && transfer(x.ctx, { rendezvous: true });
+      },
+    );
     this.op("Intercept", "The cheapest arc reaching the target (the departure alone — a flyby)", [], () => {
       const x = this.ctxOrSay();
       return x && transfer(x.ctx, { rendezvous: false });
@@ -392,23 +488,45 @@ export class FlightComputer {
     const sites = this.host.sites();
     const cur = this.host.site();
     if (!sites.length) {
-      this.autoOp("land", "Land here", "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND");
-      this.body.append(h("div", "fc-empty", "No landing site on this body for the guided entry — a world with ground and its sites (Earth, Mars, the Moon, Titan, Miller, Mann, Edmunds)"));
+      this.autoOp(
+        "land",
+        "Land here",
+        "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND",
+      );
+      this.body.append(
+        h(
+          "div",
+          "fc-empty",
+          "No landing site on this body for the guided entry — a world with ground and its sites (Earth, Mars, the Moon, Titan, Miller, Mann, Edmunds)",
+        ),
+      );
       return;
     }
     // each site's passes over the coming day of orbits (the body turning under the orbit) — redone every
     // two seconds while the tab is open (the countdowns, the orbit changed by a burn)
-    const passesOf = () => sites.map((st) => {
-      const tr = this.host.siteTrack(st);
-      const c = this.host.context();
-      const passes = tr && c ? sitePasses(c.ctx, tr, { orbits: 16, perOrbit: 120 }) : [];
-      return { st, tr, passes, first: tr ? firstReachable(passes, tr.reach) : null, closest: passes.length ? Math.min(...passes.map((p) => p.across)) : NaN };
-    });
+    const passesOf = () =>
+      sites.map((st) => {
+        const tr = this.host.siteTrack(st);
+        const c = this.host.context();
+        const passes = tr && c ? sitePasses(c.ctx, tr, { orbits: 16, perOrbit: 120 }) : [];
+        return {
+          st,
+          tr,
+          passes,
+          first: tr ? firstReachable(passes, tr.reach) : null,
+          closest: passes.length ? Math.min(...passes.map((p) => p.across)) : NaN,
+        };
+      });
     const info = passesOf();
     const reach = info.find((x) => x.tr)?.tr?.reach;
-    if (reach) this.body.append(h("div", "fc-tgt", `Reach across the track: ${km(reach)} (the entry's lift) · passes over the next 16 orbits`));
+    if (reach)
+      this.body.append(h("div", "fc-tgt", `Reach across the track: ${km(reach)} (the entry's lift) · passes over the next 16 orbits`));
     const status = (x: (typeof info)[number]) =>
-      !x.passes.length ? `<i class="fc-dim">no orbit to pass over it</i>` : x.first ? `<i class="fc-okc">▸ pass in ${dur(x.first.t)} · ${km(x.first.across)} off</i>` : `<i class="fc-warnc">out of reach · closest ${km(x.closest)}</i>`;
+      !x.passes.length
+        ? `<i class="fc-dim">no orbit to pass over it</i>`
+        : x.first
+          ? `<i class="fc-okc">▸ pass in ${dur(x.first.t)} · ${km(x.first.across)} off</i>`
+          : `<i class="fc-warnc">out of reach · closest ${km(x.closest)}</i>`;
     const nearest = (inf: typeof info) => {
       const soonest = inf.filter((x) => x.first).sort((a, b) => a.first!.t - b.first!.t)[0];
       return `the site the orbit passes nearest${soonest ? ` — now ${soonest.st.name.split(",")[0]}` : ""}`;
@@ -443,7 +561,14 @@ export class FlightComputer {
       const none = h("div", "fc-after", "No pass: the craft is not on a closed orbit about this world");
       const table = (x: (typeof info)[number]) => {
         const rows = x.passes.slice(0, 5);
-        tab.innerHTML = `<tr><th>in</th><th>across</th><th>going</th><th></th></tr>` + rows.map((p: Pass) => `<tr><td>${dur(p.t)}</td><td>${km(p.across)}</td><td>${p.north ? "north" : "south"}</td><td>${p.across <= x.tr!.reach ? `<b class="fc-okc">in reach</b>` : `<span class="fc-warnc">out</span>`}</td></tr>`).join("");
+        tab.innerHTML =
+          `<tr><th>in</th><th>across</th><th>going</th><th></th></tr>` +
+          rows
+            .map(
+              (p: Pass) =>
+                `<tr><td>${dur(p.t)}</td><td>${km(p.across)}</td><td>${p.north ? "north" : "south"}</td><td>${p.across <= x.tr!.reach ? `<b class="fc-okc">in reach</b>` : `<span class="fc-warnc">out</span>`}</td></tr>`,
+            )
+            .join("");
         none.hidden = rows.length > 0;
       };
       table(sel);
@@ -476,8 +601,16 @@ export class FlightComputer {
         inf.forEach((x, i) => (lines[i]!.innerHTML = status(x)));
       };
     }
-    this.autoOp("entry", "Deorbit, entry & landing", "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander) — the hub's ENTRY");
-    this.autoOp("land", "Land here", "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND");
+    this.autoOp(
+      "entry",
+      "Deorbit, entry & landing",
+      "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander) — the hub's ENTRY",
+    );
+    this.autoOp(
+      "land",
+      "Land here",
+      "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND",
+    );
   }
 
   /** The mission's choices, kept from one opening to the next. */
@@ -498,9 +631,18 @@ export class FlightComputer {
     const ids = T.list.map((x) => x.id);
     if (!ids.includes(M.target) || M.target === T.here) {
       const tg = this.host.target();
-      M.target = ids.includes(tg) && tg !== T.here ? tg : T.list.find((x) => x.id !== T.here && x.group !== "Planets")?.id ?? T.list.find((x) => x.id !== T.here)!.id;
+      M.target =
+        ids.includes(tg) && tg !== T.here
+          ? tg
+          : (T.list.find((x) => x.id !== T.here && x.group !== "Planets")?.id ?? T.list.find((x) => x.id !== T.here)!.id);
     }
-    this.body.append(h("div", "fc-tgt", `From: ${T.here ? (T.list.find((x) => x.id === T.here)?.name ?? T.here) : T.universe === "ours" ? "our solar system" : "Gargantua's orbit"}`));
+    this.body.append(
+      h(
+        "div",
+        "fc-tgt",
+        `From: ${T.here ? (T.list.find((x) => x.id === T.here)?.name ?? T.here) : T.universe === "ours" ? "our solar system" : "Gargantua's orbit"}`,
+      ),
+    );
     // the destinations
     const list = h("div", "fc-dests");
     let group = "";
@@ -527,7 +669,11 @@ export class FlightComputer {
     let help = "";
     if (T.universe === "ours" && !craft && dest.id !== "wormhole") {
       const seg = h("div", "fc-seg");
-      for (const [w, l] of [["orbit", "ORBIT"], ["flyby", "FLYBY"], ["freeReturn", "FREE RETURN"]] as [typeof M.arrival, string][]) {
+      for (const [w, l] of [
+        ["orbit", "ORBIT"],
+        ["flyby", "FLYBY"],
+        ["freeReturn", "FREE RETURN"],
+      ] as [typeof M.arrival, string][]) {
         const b = h("button", w === M.arrival ? "on" : "", l);
         b.onclick = () => {
           M.arrival = w;
@@ -535,14 +681,26 @@ export class FlightComputer {
         };
         seg.append(b);
       }
-      fields.push(seg, numField(M.arrival === "orbit" ? "Orbit altitude" : "Closest approach", M.altKm, "km", 50, (v) => (M.altKm = v), { min: 10 }).el);
+      fields.push(
+        seg,
+        numField(M.arrival === "orbit" ? "Orbit altitude" : "Closest approach", M.altKm, "km", 50, (v) => (M.altKm = v), { min: 10 }).el,
+      );
       if (M.arrival === "freeReturn") fields.push(numField("Back home at", M.retKm, "km", 50, (v) => (M.retKm = v), { min: 10 }).el);
-      help = "Patched conics aimed with the n-body predictor — the departure in its window, mid-course corrections, the capture; the B-plane aimed at the height asked";
-    } else if (craft) help = "A rendezvous 200 m off its free docking port — departure, two corrections, arrival — then the docking autopilot";
-    else if (dest.id === "wormhole") help = T.universe === "ours" ? "Into our mouth: the throat crossed to Gargantua's side" : "A 3-D burn aimed by Newton's method at the mouth's centre";
+      help =
+        "Patched conics aimed with the n-body predictor — the departure in its window, mid-course corrections, the capture; the B-plane aimed at the height asked";
+    } else if (craft)
+      help = "A rendezvous 200 m off its free docking port — departure, two corrections, arrival — then the docking autopilot";
+    else if (dest.id === "wormhole")
+      help =
+        T.universe === "ours"
+          ? "Into our mouth: the throat crossed to Gargantua's side"
+          : "A 3-D burn aimed by Newton's method at the mouth's centre";
     else {
       const seg = h("div", "fc-seg");
-      for (const [w, l] of [[true, "IN ORBIT"], [false, "BESIDE IT"]] as [boolean, string][]) {
+      for (const [w, l] of [
+        [true, "IN ORBIT"],
+        [false, "BESIDE IT"],
+      ] as [boolean, string][]) {
         const b = h("button", w === M.orbit ? "on" : "", l);
         b.onclick = () => {
           M.orbit = w;
@@ -551,7 +709,8 @@ export class FlightComputer {
         seg.append(b);
       }
       fields.push(seg);
-      help = "On Kerr's geodesics: the apsis burn timed for the world to be there, a velocity match at the closest approach — then in orbit about it, or station-keeping beside it";
+      help =
+        "On Kerr's geodesics: the apsis burn timed for the world to be there, a velocity match at the closest approach — then in orbit about it, or station-keeping beside it";
     }
     this.op(`To ${dest.name}`, help, fields, () => {
       this.result.replaceChildren(h("div", "fc-busy", `Planning the mission to ${dest.name}… (the n-body paths aimed)`));
@@ -577,11 +736,21 @@ export class FlightComputer {
     if (t === "orbit") {
       if (I) {
         const iscoR = isco(o!.prograde ? Math.abs(I.a) : -Math.abs(I.a));
-        this.body.append(h("div", "fc-tgt", `1 M = ${km(I.Mm)} · ${(I.Msec).toFixed(0)} s — horizon ${horizon(I.a).toFixed(2)} M, ISCO ${iscoR.toFixed(2)} M (${o!.prograde ? "prograde" : "retrograde"})`));
+        this.body.append(
+          h(
+            "div",
+            "fc-tgt",
+            `1 M = ${km(I.Mm)} · ${(I.Msec).toFixed(0)} s — horizon ${horizon(I.a).toFixed(2)} M, ISCO ${iscoR.toFixed(2)} M (${o!.prograde ? "prograde" : "retrograde"})`,
+          ),
+        );
       }
       let where: "ap" | "pe" | "now" = "ap";
       const seg = h("div", "fc-seg");
-      for (const [w, l] of [["ap", "AT AP"], ["pe", "AT PE"], ["now", "NOW"]] as ["ap" | "pe" | "now", string][]) {
+      for (const [w, l] of [
+        ["ap", "AT AP"],
+        ["pe", "AT PE"],
+        ["now", "NOW"],
+      ] as ["ap" | "pe" | "now", string][]) {
         const b = h("button", w === where ? "on" : "", l);
         b.onclick = () => {
           where = w;
@@ -589,30 +758,56 @@ export class FlightComputer {
         };
         seg.append(b);
       }
-      this.op("Circularize", "The velocity made the circular orbit's there — tangential, the speed whose free fall has no radial pull (not Kepler's: the hole's own) — NOW: the autopilot (the hub's CIRC)", [seg], () => {
-        if (where === "now") {
-          const e = this.host.engage("circularize");
-          this.host.say(e ?? "Circularize: the autopilot (the hub's CIRC)");
-          return null;
-        }
-        return this.host.kerrOp("circ", where);
-      });
+      this.op(
+        "Circularize",
+        "The velocity made the circular orbit's there — tangential, the speed whose free fall has no radial pull (not Kepler's: the hole's own) — NOW: the autopilot (the hub's CIRC)",
+        [seg],
+        () => {
+          if (where === "now") {
+            const e = this.host.engage("circularize");
+            this.host.say(e ?? "Circularize: the autopilot (the hub's CIRC)");
+            return null;
+          }
+          return this.host.kerrOp("circ", where);
+        },
+      );
       const fin = (x: number) => (Number.isFinite(x) ? x : 0);
       const ap = numField("Apoapsis", Math.round(fin(o?.ra ?? k.r) * 1.5), "M", 1, () => {}, { min: 2, digits: 1 });
-      this.op("Apoapsis", "A burn at the periapsis: the far side put there — found on the real path (it precesses)", [ap.el], () => this.host.kerrOp("ap", ap.get()));
+      this.op("Apoapsis", "A burn at the periapsis: the far side put there — found on the real path (it precesses)", [ap.el], () =>
+        this.host.kerrOp("ap", ap.get()),
+      );
       const pe = numField("Periapsis", Math.round(fin(o?.rp ?? k.r) * 0.8), "M", 1, () => {}, { min: 0.5, digits: 1 });
-      this.op("Periapsis", "A burn at the apoapsis: the near side put there — inside the horizon, a plunge", [pe.el], () => this.host.kerrOp("pe", pe.get()));
+      this.op("Periapsis", "A burn at the apoapsis: the near side put there — inside the horizon, a plunge", [pe.el], () =>
+        this.host.kerrOp("pe", pe.get()),
+      );
       const ho = numField("Radius", Math.round(k.r * 2), "M", 1, () => {}, { min: 2, digits: 1 });
-      this.op("Hohmann transfer", "From the periapsis (to rise) or the apoapsis (to fall), the far apsis there, circularized on arrival — not below the ISCO", [ho.el], () => this.host.kerrOp("hohmann", ho.get()));
+      this.op(
+        "Hohmann transfer",
+        "From the periapsis (to rise) or the apoapsis (to fall), the far apsis there, circularized on arrival — not below the ISCO",
+        [ho.el],
+        () => this.host.kerrOp("hohmann", ho.get()),
+      );
       const inc = numField("Inclination", o ? (o.inc * 180) / Math.PI : 0, "°", 1, () => {}, { min: 0, max: 180, digits: 1 });
-      this.op("Inclination", "To the equator — the disk's, the worlds' — turned at the cheaper crossing of the new plane (0°: into the disk)", [inc.el], () => this.host.kerrOp("inc", inc.get()));
+      this.op(
+        "Inclination",
+        "To the equator — the disk's, the worlds' — turned at the cheaper crossing of the new plane (0°: into the disk)",
+        [inc.el],
+        () => this.host.kerrOp("inc", inc.get()),
+      );
       const rs = numField("Period ×", 1.5, "", 0.25, () => {}, { min: 0.2, max: 20, digits: 3 });
-      this.op("Resonant orbit", "The period a ratio of this one's — back where it is every few turns — on the geodesic's own clock", [rs.el], () => this.host.kerrOp("res", rs.get()));
+      this.op(
+        "Resonant orbit",
+        "The period a ratio of this one's — back where it is every few turns — on the geodesic's own clock",
+        [rs.el],
+        () => this.host.kerrOp("res", rs.get()),
+      );
     } else if (t === "target") {
       this.autoOp("approach", "Approach the target", "Flies to the target and stops beside it, station-keeping — the hub's APPROACH");
       this.autoOp("hover", "Hold position", "Kills the speed relative to the hole's frame and holds the place — the hub's HOLD POS");
-      this.body.append(h("div", "fc-tgt", `Target: ${k.target ? BODY_NAMES[k.target as keyof typeof BODY_NAMES] ?? k.target : "—"}`));
-      this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () => this.host.kerrOp("plane"));
+      this.body.append(h("div", "fc-tgt", `Target: ${k.target ? (BODY_NAMES[k.target as keyof typeof BODY_NAMES] ?? k.target) : "—"}`));
+      this.op("Match planes", "The orbit turned into the target's plane (a world's, the companion's) where it crosses it", [], () =>
+        this.host.kerrOp("plane"),
+      );
       // (a rendezvous, the wormhole: the MISSION tab's planner — previewed before it is flown)
       const mission = (target: string, orbit: boolean) => () => {
         this.result.replaceChildren(h("div", "fc-busy", "Planning on the geodesics…"));
@@ -625,7 +820,12 @@ export class FlightComputer {
       };
       const tg = k.target && k.target !== "hole" && k.target !== "barycentre" && k.target !== "wormhole" ? k.target : null;
       if (tg) {
-        this.op("Orbit the target", "The apsis burn timed for it to be there, a velocity match at the closest approach, then in orbit about it", [], mission(tg, true));
+        this.op(
+          "Orbit the target",
+          "The apsis burn timed for it to be there, a velocity match at the closest approach, then in orbit about it",
+          [],
+          mission(tg, true),
+        );
         this.op("Rendezvous", "The same, then beside it, station-keeping", [], mission(tg, false));
       }
       this.op("The wormhole", "A 3-D burn aimed by Newton's method at the mouth's centre", [], mission("wormhole", false));
@@ -653,15 +853,28 @@ export class FlightComputer {
     // (the normal and radial columns only when a burn has them)
     const top = Math.max(...r.burns.map((b) => len(b.dv)), 1e-9);
     const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]!) < 0.02 * top);
-    const showN = !tiny(1), showR = !tiny(2);
+    const showN = !tiny(1),
+      showR = !tiny(2);
     const col = (on: boolean, x: string) => (on ? x : "");
-    tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th>${col(showN, "<th>NRM</th>")}${col(showR, "<th>RAD</th>")}<th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>
-      `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${part(b.dv[0], big)}</td>${col(showN, `<td>${part(b.dv[1], big)}</td>`)}${col(showR, `<td>${part(b.dv[2], big)}</td>`)}<td><b>${big ? part(len(b.dv), true) : ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`).join("");
+    tab.innerHTML =
+      `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th>${col(showN, "<th>NRM</th>")}${col(showR, "<th>RAD</th>")}<th>|Δv|</th><th>BURN</th></tr>` +
+      r.burns
+        .map(
+          (b, i) =>
+            `<tr><td>◆${i + 1} ${b.label}</td><td>${dur(b.t)}</td><td>${part(b.dv[0], big)}</td>${col(showN, `<td>${part(b.dv[1], big)}</td>`)}${col(showR, `<td>${part(b.dv[2], big)}</td>`)}<td><b>${big ? part(len(b.dv), true) : ms(len(b.dv))}</b></td><td>${B.accel > 0 ? dur(len(b.dv) / B.accel) : "—"}</td></tr>`,
+        )
+        .join("");
     card.append(tab);
     const a = r.after;
     if (a && c) {
       const R = c.ctx.R;
-      card.append(h("div", "fc-after", `After: Pe ${km(a.rp - R)} · Ap ${km(a.ra - R)} · i ${(a.i * D).toFixed(2)}° · e ${a.e.toFixed(4)} · T ${dur(a.T)}`));
+      card.append(
+        h(
+          "div",
+          "fc-after",
+          `After: Pe ${km(a.rp - R)} · Ap ${km(a.ra - R)} · i ${(a.i * D).toFixed(2)}° · e ${a.e.toFixed(4)} · T ${dur(a.T)}`,
+        ),
+      );
     } else if (r.afterText) card.append(h("div", "fc-after", r.afterText));
     const ok = r.dvTotal <= B.dv;
     const bar = h("div", "fc-budget");
@@ -690,7 +903,8 @@ export class FlightComputer {
 
   /** The porkchop: Δv over departure × flight time (log colour), the best marked; a click there plans it. */
   private porkchop(g: Porkchop) {
-    const W = 300, H = 170;
+    const W = 300,
+      H = 170;
     const cv = h("canvas", "fc-pork");
     const dpr = devicePixelRatio;
     cv.width = W * dpr;
@@ -699,20 +913,28 @@ export class FlightComputer {
     cv.style.height = `${H}px`;
     const ctx = cv.getContext("2d")!;
     ctx.scale(dpr, dpr);
-    const nD = g.dep.length, nT = g.tof.length;
+    const nD = g.dep.length,
+      nT = g.tof.length;
     const vals = g.dv.flat().filter(Number.isFinite);
-    const lo = Math.log(Math.min(...vals)), hi = Math.log(Math.min(Math.max(...vals), Math.min(...vals) * 8));
-    const L = 34, B = 18;
-    const cw = (W - L) / nD, ch = (H - B) / nT;
-    for (let i = 0; i < nD; i++) for (let j = 0; j < nT; j++) {
-      const v = g.dv[i]![j]!;
-      const x = Number.isFinite(v) ? Math.min(Math.max((Math.log(v) - lo) / (hi - lo), 0), 1) : 1;
-      // (cool to hot: the cheap blue-white, the dear dark red)
-      const r = Math.round(255 * Math.min(1, 0.15 + 1.6 * x)), gg = Math.round(255 * Math.max(0, 0.9 - 1.1 * x) ** 0.8), b = Math.round(255 * Math.max(0, 1 - 1.8 * x));
-      ctx.fillStyle = Number.isFinite(v) ? `rgb(${r},${gg},${b})` : "#111";
-      ctx.fillRect(L + i * cw, (nT - 1 - j) * ch, cw + 0.6, ch + 0.6);
-    }
-    const bx = L + (g.best.i + 0.5) * cw, by = (nT - 1 - g.best.j + 0.5) * ch;
+    const lo = Math.log(Math.min(...vals)),
+      hi = Math.log(Math.min(Math.max(...vals), Math.min(...vals) * 8));
+    const L = 34,
+      B = 18;
+    const cw = (W - L) / nD,
+      ch = (H - B) / nT;
+    for (let i = 0; i < nD; i++)
+      for (let j = 0; j < nT; j++) {
+        const v = g.dv[i]![j]!;
+        const x = Number.isFinite(v) ? Math.min(Math.max((Math.log(v) - lo) / (hi - lo), 0), 1) : 1;
+        // (cool to hot: the cheap blue-white, the dear dark red)
+        const r = Math.round(255 * Math.min(1, 0.15 + 1.6 * x)),
+          gg = Math.round(255 * Math.max(0, 0.9 - 1.1 * x) ** 0.8),
+          b = Math.round(255 * Math.max(0, 1 - 1.8 * x));
+        ctx.fillStyle = Number.isFinite(v) ? `rgb(${r},${gg},${b})` : "#111";
+        ctx.fillRect(L + i * cw, (nT - 1 - j) * ch, cw + 0.6, ch + 0.6);
+      }
+    const bx = L + (g.best.i + 0.5) * cw,
+      by = (nT - 1 - g.best.j + 0.5) * ch;
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -735,7 +957,8 @@ export class FlightComputer {
     wrap.append(h("div", "fc-pork-t", `PORKCHOP · best ${ms(g.dv[g.best.i]![g.best.j]!)} — click a cell to fly it`), cv);
     cv.onclick = (e) => {
       const rc = cv.getBoundingClientRect();
-      const i = Math.floor((e.clientX - rc.left - L) / cw), j = nT - 1 - Math.floor((e.clientY - rc.top) / ch);
+      const i = Math.floor((e.clientX - rc.left - L) / cw),
+        j = nT - 1 - Math.floor((e.clientY - rc.top) / ch);
       if (i < 0 || i >= nD || j < 0 || j >= nT || !this.pending) return;
       const x = this.pending.ctx;
       const res = transferAt(x, g.dep[i]!, g.tof[j]!, this.pending.r.burns.length > 1);
@@ -762,7 +985,11 @@ export class FlightComputer {
       this.landAt = now;
       this.landRefresh();
     }
-    this.ctxLine.textContent = c ? `${c.bodyName}${c.targetName ? ` · target ${c.targetName}` : ""}` : k ? "Gargantua · Kerr geodesics" : "far from any body";
+    this.ctxLine.textContent = c
+      ? `${c.bodyName}${c.targetName ? ` · target ${c.targetName}` : ""}`
+      : k
+        ? "Gargantua · Kerr geodesics"
+        : "far from any body";
     const E = this.infoEls;
     if (c) {
       const x = c.ctx;
@@ -785,11 +1012,18 @@ export class FlightComputer {
       const rel = x.target ? relation(x) : null;
       E.target!.innerHTML = rel
         ? [
-          ["Target", c.targetName ?? ""], ["Distance", km(rel.distance)], ["Relative speed", ms(rel.vRel)],
-          ["Rel. inclination", `${(rel.relInc * D).toFixed(3)}°`], ["To AN · DN", `${dur(rel.toAN)} · ${dur(rel.toDN)}`],
-          ["Phase angle", `${(rel.phase * D).toFixed(1)}° (Hohmann: ${(rel.phaseWant * D).toFixed(1)}°)`], ["Window", `T− ${dur(rel.window)}`],
-          ["Synodic period", dur(rel.synodic)], ["Closest approach", `${km(rel.ca.dist)} in ${dur(rel.ca.t)}`],
-        ].map(([a, b]) => `<div class="fc-kv"><span>${a}</span><b>${b}</b></div>`).join("")
+            ["Target", c.targetName ?? ""],
+            ["Distance", km(rel.distance)],
+            ["Relative speed", ms(rel.vRel)],
+            ["Rel. inclination", `${(rel.relInc * D).toFixed(3)}°`],
+            ["To AN · DN", `${dur(rel.toAN)} · ${dur(rel.toDN)}`],
+            ["Phase angle", `${(rel.phase * D).toFixed(1)}° (Hohmann: ${(rel.phaseWant * D).toFixed(1)}°)`],
+            ["Window", `T− ${dur(rel.window)}`],
+            ["Synodic period", dur(rel.synodic)],
+            ["Closest approach", `${km(rel.ca.dist)} in ${dur(rel.ca.t)}`],
+          ]
+            .map(([a, b]) => `<div class="fc-kv"><span>${a}</span><b>${b}</b></div>`)
+            .join("")
         : `<div class="fc-empty">${c.targetName ? `${c.targetName}: not about ${c.bodyName}` : "No target"}</div>`;
     } else if (k && this.host.kerrInfo()) {
       // about the hole: the orbit as its geodesic has it
@@ -801,7 +1035,10 @@ export class FlightComputer {
         ["Apoapsis", o.fate === "escape" ? "— (an escape)" : `${rM(o.ra, I.Mm)} · ${tm(o.tAp)}`],
         ["Radius", rM(o.rNow, I.Mm)],
         ["Period", Number.isFinite(o.T) ? `${dur(o.T * I.Msec)} (${o.T.toFixed(0)} M)` : "—"],
-        ["Radial period", Number.isFinite(o.Tr) ? `${dur(o.Tr * I.Msec)} · periapsis +${(o.advance * D).toFixed(1)}°/turn` : "— (circular)"],
+        [
+          "Radial period",
+          Number.isFinite(o.Tr) ? `${dur(o.Tr * I.Msec)} · periapsis +${(o.advance * D).toFixed(1)}°/turn` : "— (circular)",
+        ],
         ["Inclination", `${(o.inc * D).toFixed(3)}° · ${o.prograde ? "prograde" : "retrograde"}`],
         ["Equator crossings", o.tNodes.length ? o.tNodes.map(tm).join(" · ") : "—"],
         ["ISCO · horizon", `${isco(o.prograde ? Math.abs(I.a) : -Math.abs(I.a)).toFixed(2)} M · ${horizon(I.a).toFixed(2)} M`],
@@ -825,7 +1062,9 @@ export class FlightComputer {
    *  apsides and nodes; deleted. */
   private drawPlan(P: { burns: Burn[]; note: string; executing: boolean } | null) {
     const E = this.infoEls.plan!;
-    const sig = P ? `${P.note}|${P.executing}|${P.burns.map((b) => b.dv.map((x) => x.toFixed(2)).join(",") + "@" + Math.round(b.t / 5)).join(";")}` : "none";
+    const sig = P
+      ? `${P.note}|${P.executing}|${P.burns.map((b) => b.dv.map((x) => x.toFixed(2)).join(",") + "@" + Math.round(b.t / 5)).join(";")}`
+      : "none";
     if (sig === this.planSig) return;
     this.planSig = sig;
     E.replaceChildren();
@@ -872,7 +1111,11 @@ export class FlightComputer {
     if (I) {
       // (about the hole: the geodesic's own apsides and equator crossings, its radial period)
       const s = (t: number) => (t - I.t) * I.Msec;
-      const opts: [string, number][] = [["AP", s(I.o.tAp)], ["PE", s(I.o.tPe)], ...I.o.tNodes.map((t, i) => [i ? "NODE 2" : "NODE", s(t)] as [string, number])];
+      const opts: [string, number][] = [
+        ["AP", s(I.o.tAp)],
+        ["PE", s(I.o.tPe)],
+        ...I.o.tNodes.map((t, i) => [i ? "NODE 2" : "NODE", s(t)] as [string, number]),
+      ];
       // (a turn: the radial period — back at the same apsis —, the orbital one for a circle)
       const turn = Number.isFinite(I.o.Tr) ? I.o.Tr : I.o.T;
       if (Number.isFinite(turn)) opts.push(["+1 ORBIT", b.t + turn * I.Msec], ["−1 ORBIT", b.t - turn * I.Msec]);
@@ -886,7 +1129,10 @@ export class FlightComputer {
     if (c) {
       const el = elements(c.ctx.mu, c.ctx.r, c.ctx.v, c.ctx.pole);
       const nd = nodesAgainst(el, c.ctx.pole ?? [0, 0, 1]);
-      const opts: [string, number][] = [["AP", el.e < 1 ? timeTo(el, Math.PI) : NaN], ["PE", timeTo(el, 0)]];
+      const opts: [string, number][] = [
+        ["AP", el.e < 1 ? timeTo(el, Math.PI) : NaN],
+        ["PE", timeTo(el, 0)],
+      ];
       if (nd) opts.push(["AN", timeTo(el, nd.an)], ["DN", timeTo(el, nd.dn)]);
       if (Number.isFinite(el.T)) opts.push(["+1 ORBIT", b.t + el.T], ["−1 ORBIT", b.t - el.T]);
       for (const [l, t] of opts) {
@@ -927,7 +1173,12 @@ function transferAt(c: FcContext, dep: number, tof: number, rendezvous: boolean)
   if (!L) return null;
   const burns: Burn[] = [{ t: dep, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: "departure" }];
   if (rendezvous) burns.push({ t: dep + tof, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: "match" });
-  return { ok: true, note: `${rendezvous ? "Rendezvous" : "Intercept"} with ${T.name}: departing in ${dur(dep)}, ${dur(tof)} of flight`, burns, dvTotal: burns.reduce((a, b) => a + len(b.dv), 0) };
+  return {
+    ok: true,
+    note: `${rendezvous ? "Rendezvous" : "Intercept"} with ${T.name}: departing in ${dur(dep)}, ${dur(tof)} of flight`,
+    burns,
+    dvTotal: burns.reduce((a, b) => a + len(b.dv), 0),
+  };
 }
 
 export type { Elements };

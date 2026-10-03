@@ -13,7 +13,11 @@ const wrap2pi = (x: number) => ((x % TAU) + TAU) % TAU;
 
 /** A reference frame for the elements: x towards the node origin, z along the pole. */
 export type Axes = [V3, V3, V3];
-export const ECLIPTIC: Axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+export const ECLIPTIC: Axes = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
 
 export interface Elements {
   /** GM */
@@ -47,8 +51,10 @@ const fromAxes = (v: V3, ax: Axes): V3 => add(add(scale(ax[0], v[0]), scale(ax[1
 
 /** The classical elements of the state (r, v) relative to a body of GM mu, in the given axes. */
 export function elements(mu: number, rw: V3, vw: V3, axes: Axes = ECLIPTIC): Elements {
-  const r = inAxes(rw, axes), v = inAxes(vw, axes);
-  const R = len(r), V = len(v);
+  const r = inAxes(rw, axes),
+    v = inAxes(vw, axes);
+  const R = len(r),
+    V = len(v);
   const h = cross(r, v);
   const hl = len(h);
   const energy = (V * V) / 2 - mu / R;
@@ -114,7 +120,8 @@ export function stateFrom(mu: number, o: OrbitSpec, axes: Axes = ECLIPTIC): { r:
   let a: number, e: number;
   if (o.rp !== undefined) {
     const ra = o.ra ?? o.rp;
-    const lo = Math.min(o.rp, ra), hi = Math.max(o.rp, ra);
+    const lo = Math.min(o.rp, ra),
+      hi = Math.max(o.rp, ra);
     a = (lo + hi) / 2;
     e = (hi - lo) / (hi + lo);
   } else {
@@ -129,9 +136,13 @@ export function stateFrom(mu: number, o: OrbitSpec, axes: Axes = ECLIPTIC): { r:
   const k = Math.sqrt(mu / p);
   const vel: V3 = [-k * Math.sin(nu), k * (e + Math.cos(nu)), 0];
   const rot = (v: V3): V3 => {
-    const w = (o.argPe ?? 0) * D, inc = (o.i ?? 0) * D, W = (o.raan ?? 0) * D;
-    const x1 = Math.cos(w) * v[0] - Math.sin(w) * v[1], y1 = Math.sin(w) * v[0] + Math.cos(w) * v[1];
-    const y2 = Math.cos(inc) * y1, z2 = Math.sin(inc) * y1;
+    const w = (o.argPe ?? 0) * D,
+      inc = (o.i ?? 0) * D,
+      W = (o.raan ?? 0) * D;
+    const x1 = Math.cos(w) * v[0] - Math.sin(w) * v[1],
+      y1 = Math.sin(w) * v[0] + Math.cos(w) * v[1];
+    const y2 = Math.cos(inc) * y1,
+      z2 = Math.sin(inc) * y1;
     return [Math.cos(W) * x1 - Math.sin(W) * y2, Math.sin(W) * x1 + Math.cos(W) * y2, z2];
   };
   return { r: fromAxes(rot(pos), axes), v: fromAxes(rot(vel), axes) };
@@ -140,7 +151,12 @@ export function stateFrom(mu: number, o: OrbitSpec, axes: Axes = ECLIPTIC): { r:
 export type Status = "landed" | "flight" | "suborbital" | "orbit" | "escape" | "hyperbolic";
 
 export const STATUS_LABEL: Record<Status, string> = {
-  landed: "LANDED", flight: "IN FLIGHT", suborbital: "SUBORBITAL", orbit: "IN ORBIT", escape: "ESCAPING", hyperbolic: "HYPERBOLIC",
+  landed: "LANDED",
+  flight: "IN FLIGHT",
+  suborbital: "SUBORBITAL",
+  orbit: "IN ORBIT",
+  escape: "ESCAPING",
+  hyperbolic: "HYPERBOLIC",
 };
 
 /**

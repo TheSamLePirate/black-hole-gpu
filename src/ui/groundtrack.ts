@@ -54,13 +54,19 @@ const latLon = (q: V3): [number, number] => [Math.asin(clamp(q[2], -1, 1)), Math
 const fromLatLon = (lat: number, lon: number): V3 => [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
 const fmtLat = (r: number) => `${Math.abs(r / D).toFixed(2)}° ${r >= 0 ? "N" : "S"}`;
 const fmtLon = (r: number) => `${Math.abs(r / D).toFixed(2)}° ${r >= 0 ? "E" : "W"}`;
-const fmtKm = (km: number) => (!Number.isFinite(km) ? "—" : Math.abs(km) >= 1e4 ? `${Math.round(km).toLocaleString("en-US")} km` : `${km.toFixed(km < 100 ? 1 : 0)} km`);
+const fmtKm = (km: number) =>
+  !Number.isFinite(km) ? "—" : Math.abs(km) >= 1e4 ? `${Math.round(km).toLocaleString("en-US")} km` : `${km.toFixed(km < 100 ? 1 : 0)} km`;
 
 /** Gargantua's worlds (their frame's ξ: x away from the hole, z its pole): their tints. */
 const THEIRS: Record<string, [number, number, number]> = { miller: [70, 150, 170], mann: [215, 225, 238], edmunds: [196, 150, 104] };
 
 /** A world's map, read back once to sample on the CPU (≤ 1024 × 512). */
-interface Tex { w: number; h: number; px: Uint32Array; img: HTMLCanvasElement }
+interface Tex {
+  w: number;
+  h: number;
+  px: Uint32Array;
+  img: HTMLCanvasElement;
+}
 
 /** What the view shows: the world, the ship on it, its tracks. */
 interface Scene {
@@ -115,7 +121,10 @@ export class GroundTrack {
   onPick: ((q: V3) => void) | null = null;
   pick: V3 | null = null;
   /** where the world was drawn last (device px), to read a click back */
-  private hit: { globe: true; cx: number; cy: number; R: number; C: V3; E: V3; N: V3 } | { globe: false; x0: number; y0: number; mw: number; mh: number } | null = null;
+  private hit:
+    | { globe: true; cx: number; cy: number; R: number; C: V3; E: V3; N: V3 }
+    | { globe: false; x0: number; y0: number; mw: number; mh: number }
+    | null = null;
 
   constructor(private s: Settings) {
     this.stage.append(this.canvas, this.tag, this.read);
@@ -165,7 +174,9 @@ export class GroundTrack {
       `${fmtLat(la)}  ${fmtLon(lo)}`,
       `alt ${fmtKm(sc.altKm)}`,
       orb && Number.isFinite(orb.apKm) ? `Pe ${fmtKm(orb.peKm)} · Ap ${fmtKm(orb.apKm)} · i ${orb.incDeg.toFixed(1)}°` : "",
-    ].filter(Boolean).join("   ");
+    ]
+      .filter(Boolean)
+      .join("   ");
   }
 
   /**
@@ -178,8 +189,17 @@ export class GroundTrack {
     const b = ours ? solarBody(id) : null;
     const F = ours ? null : planetFrame(id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
     const sc: Scene = {
-      id, name: BODY_NAMES[id as Body] ?? id, Rkm: b ? (b.radius * M_METRES) / 1e3 : F ? (F.R * F.mPerM) / 1e3 : NaN, ours, ship, altKm: NaN,
-      sun: b ? unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)) : null, ahead: [], plan: [], pe: null, ap: null,
+      id,
+      name: BODY_NAMES[id as Body] ?? id,
+      Rkm: b ? (b.radius * M_METRES) / 1e3 : F ? (F.R * F.mPerM) / 1e3 : NaN,
+      ours,
+      ship,
+      altKm: NaN,
+      sun: b ? unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)) : null,
+      ahead: [],
+      plan: [],
+      pe: null,
+      ap: null,
     };
     this.view.follow = false;
     this.paint(sc);
@@ -199,7 +219,8 @@ export class GroundTrack {
   private paint(sc: Scene | null) {
     const cv = this.canvas;
     const dpr = devicePixelRatio || 1;
-    const W = Math.max(1, Math.round(this.stage.clientWidth * dpr)), H = Math.max(1, Math.round(this.stage.clientHeight * dpr));
+    const W = Math.max(1, Math.round(this.stage.clientWidth * dpr)),
+      H = Math.max(1, Math.round(this.stage.clientHeight * dpr));
     if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
     const ctx = cv.getContext("2d")!;
     ctx.clearRect(0, 0, W, H);
@@ -226,7 +247,22 @@ export class GroundTrack {
       const xi = this.theirXi(i, id, t);
       const F = planetFrame(id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
       const lg = i.localGround;
-      return { id, name, Rkm: (F.R * F.mPerM) / 1e3, ours: false, ship: unit(xi), altKm: i.status!.altKm, sun: null, ahead: lg?.ahead ?? [], plan: lg?.plan ?? [], cand: lg?.cand ?? [], sites: this.sitesOf(id, i), entry: [], pe: null, ap: null };
+      return {
+        id,
+        name,
+        Rkm: (F.R * F.mPerM) / 1e3,
+        ours: false,
+        ship: unit(xi),
+        altKm: i.status!.altKm,
+        sun: null,
+        ahead: lg?.ahead ?? [],
+        plan: lg?.plan ?? [],
+        cand: lg?.cand ?? [],
+        sites: this.sitesOf(id, i),
+        entry: [],
+        pe: null,
+        ap: null,
+      };
     }
     const b = solarBody(id)!;
     const q = toBodyFixed(id, i.X as V3, t);
@@ -236,12 +272,23 @@ export class GroundTrack {
     const cand = this.track((i.cand?.kind === "ours" ? i.cand.ours : null) as OurPath | null, id, t, b.radius);
     // (the entry's predicted fall: body-centred home axes → the ground's, as the world stands now)
     const E = i.entry;
-    const entry = E && E.ours && E.body === id && E.path ? E.path.map((x) => unit(toBodyFixed(id, add3(solarState(id, t).pos as V3, x as V3), t))) : [];
+    const entry =
+      E && E.ours && E.body === id && E.path ? E.path.map((x) => unit(toBodyFixed(id, add3(solarState(id, t).pos as V3, x as V3), t))) : [];
     return {
-      cand: cand?.pts ?? [], sites: this.sitesOf(id, i), entry,
-      id, name, Rkm, ours: true, ship: unit(q), altKm: (Math.hypot(...q) - b.radius) * M_METRES / 1e3,
+      cand: cand?.pts ?? [],
+      sites: this.sitesOf(id, i),
+      entry,
+      id,
+      name,
+      Rkm,
+      ours: true,
+      ship: unit(q),
+      altKm: ((Math.hypot(...q) - b.radius) * M_METRES) / 1e3,
       sun: unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)),
-      ahead: ahead?.pts ?? [], plan: plan?.pts ?? [], pe: ahead?.pe ?? null, ap: ahead?.ap ?? null,
+      ahead: ahead?.pts ?? [],
+      plan: plan?.pts ?? [],
+      pe: ahead?.pe ?? null,
+      ap: ahead?.ap ?? null,
       iss: id === "earth" && this.s.iss ? this.issTrack(t) : null,
       crafts: id === "earth" ? this.craftTracks(t) : [],
     };
@@ -253,7 +300,7 @@ export class GroundTrack {
   private issTrack(t: number) {
     const now = issTrack.peek(t);
     if (!now) return null;
-    const P = 92.9 * 60 / M_SECONDS;
+    const P = (92.9 * 60) / M_SECONDS;
     if (!this.issCache || Math.abs(t - this.issCache.t) > 30 / M_SECONDS) {
       const track: V3[] = [];
       for (let k = 0; k <= 120; k++) {
@@ -277,7 +324,8 @@ export class GroundTrack {
       const p = fleet.pose(id, t);
       if (!p) continue;
       const E = solarState("earth", t);
-      const r0 = sub3(p.X as V3, E.pos as V3), v0 = sub3(p.V as V3, E.vel as V3);
+      const r0 = sub3(p.X as V3, E.pos as V3),
+        v0 = sub3(p.V as V3, E.vel as V3);
       const r = Math.hypot(...r0);
       if (r * M_METRES > 1e8) continue;
       const eps = (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / 2 - mu / r;
@@ -294,7 +342,14 @@ export class GroundTrack {
         }
         this.craftCache.set(id, (c = { t, track }));
       }
-      out.push({ id, name: VESSELS[id].name, col: OUR_COLOURS[id] ?? "255, 255, 255", q: unit(toBodyFixed("earth", p.X as V3, t)), track: c.track, target: this.s.target === id });
+      out.push({
+        id,
+        name: VESSELS[id].name,
+        col: OUR_COLOURS[id] ?? "255, 255, 255",
+        q: unit(toBodyFixed("earth", p.X as V3, t)),
+        track: c.track,
+        target: this.s.target === id,
+      });
     }
     return out;
   }
@@ -307,8 +362,10 @@ export class GroundTrack {
     if (!p || !p.pts.length) return null;
     let c = this.cache.get(p);
     if (!c || c.id !== id) {
-      const pts: V3[] = [], times: number[] = [];
-      let lo = { r: Infinity, q: null as V3 | null }, hi = { r: -Infinity, q: null as V3 | null };
+      const pts: V3[] = [],
+        times: number[] = [];
+      let lo = { r: Infinity, q: null as V3 | null },
+        hi = { r: -Infinity, q: null as V3 | null };
       for (let k = 0; k < p.pts.length; k++) {
         if (p.refs[k] !== id) {
           if (pts.length) break;
@@ -325,7 +382,13 @@ export class GroundTrack {
       const km = (r: number) => ((r - R) * M_METRES) / 1e3;
       // (apsides only on an orbit that swings: more than 2 km between them)
       const swing = hi.q && lo.q && km(hi.r) - km(lo.r) > 2;
-      c = { id, pts, times, pe: swing && lo.q ? { q: lo.q, km: km(lo.r) } : null, ap: swing && hi.q && p.fate !== "impact" ? { q: hi.q, km: km(hi.r) } : null };
+      c = {
+        id,
+        pts,
+        times,
+        pe: swing && lo.q ? { q: lo.q, km: km(lo.r) } : null,
+        ap: swing && hi.q && p.fate !== "impact" ? { q: hi.q, km: km(hi.r) } : null,
+      };
       this.cache.set(p, c);
     }
     let k = 0;
@@ -356,7 +419,8 @@ export class GroundTrack {
     const img = new Image();
     img.decoding = "async";
     img.onload = () => {
-      const w = Math.min(1024, img.naturalWidth), hh = Math.round(w / 2);
+      const w = Math.min(1024, img.naturalWidth),
+        hh = Math.round(w / 2);
       const c = document.createElement("canvas");
       c.width = w;
       c.height = hh;
@@ -420,17 +484,36 @@ export class GroundTrack {
   /** The world for the GPU: its map (or the Earth's, or its procedural surface), its air, lit from L —
    *  at c (view space, radius 1), on its axes, its night side at least so lit. */
   private worldBody(sc: Scene, c: V3, L: V3, ax: [V3, V3, V3], night: number): GpuBody {
-    const lin = (x: number) => Math.pow(x / 255, 2.2);
+    const lin = (x: number) => (x / 255) ** 2.2;
     const t = THEIRS[sc.id] ?? [150, 150, 150];
     const col = t.map(lin) as V3;
     const sb = solarBody(sc.id);
-    const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
+    const AIR: Record<string, V3> = {
+      earth: [0.3, 0.55, 1],
+      mars: [0.85, 0.5, 0.32],
+      venus: [1, 0.85, 0.55],
+      titan: [0.95, 0.6, 0.22],
+      miller: [0.55, 0.75, 1],
+      mann: [0.75, 0.85, 1],
+      edmunds: [0.95, 0.75, 0.5],
+    };
     const proc = { miller: 0, mann: 1, edmunds: 2 }[sc.id as "miller"];
-    const hi = sb?.map ? MAPS_HI.indexOf(sb.map) : -1, lo = sb?.map ? MAPS_LO.indexOf(sb.map) : -1;
-    const kind = sc.id === "earth" ? BodyKind.Earth : proc !== undefined ? BodyKind.Proc : hi >= 0 || lo >= 0 ? BodyKind.Map : BodyKind.Plain;
+    const hi = sb?.map ? MAPS_HI.indexOf(sb.map) : -1,
+      lo = sb?.map ? MAPS_LO.indexOf(sb.map) : -1;
+    const kind =
+      sc.id === "earth" ? BodyKind.Earth : proc !== undefined ? BodyKind.Proc : hi >= 0 || lo >= 0 ? BodyKind.Map : BodyKind.Plain;
     return {
-      c, R: 1, kind, layer: hi >= 0 ? hi : -(lo + 1), proc, L, col, ax,
-      air: AIR[sc.id] ? { col: AIR[sc.id]!, k: 0.9 } : undefined, minPx: 1, night,
+      c,
+      R: 1,
+      kind,
+      layer: hi >= 0 ? hi : -(lo + 1),
+      proc,
+      L,
+      col,
+      ax,
+      air: AIR[sc.id] ? { col: AIR[sc.id]!, k: 0.9 } : undefined,
+      minPx: 1,
+      night,
     };
   }
 
@@ -447,7 +530,8 @@ export class GroundTrack {
     const { C, E, N } = this.axes();
     const { top, bottom, left, right } = this.margins(dpr);
     const R = (Math.min(W - left - right, H - top - bottom) / 2 - 6 * dpr) * v.zoom;
-    const cx = left + (W - left - right) / 2, cy = top + (H - top - bottom) / 2;
+    const cx = left + (W - left - right) / 2,
+      cy = top + (H - top - bottom) / 2;
     const proj = (q: V3) => ({ x: cx + dot(q, E) * R, y: cy - dot(q, N) * R, vis: dot(q, C) > 0 });
     this.hit = { globe: true, cx, cy, R, C, E, N };
 
@@ -461,7 +545,15 @@ export class GroundTrack {
       const view = (v: V3): V3 => [dot(v, E), dot(v, N), -dot(v, C)];
       // (the light: the Sun's, ours; Gargantua's worlds, over the viewer's shoulder)
       G.begin();
-      G.body(this.worldBody(sc, [0, 0, far], sc.sun ? view(sc.sun) : [0.35, 0.45, -0.82], [view([1, 0, 0]), view([0, 1, 0]), view([0, 0, 1])], 0.035));
+      G.body(
+        this.worldBody(
+          sc,
+          [0, 0, far],
+          sc.sun ? view(sc.sun) : [0.35, 0.45, -0.82],
+          [view([1, 0, 0]), view([0, 1, 0]), view([0, 0, 1])],
+          0.035,
+        ),
+      );
     }
     // the atmosphere's rim, the lit disc (the raster: at most 420 px across, scaled up)
     const halo = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.08);
@@ -514,14 +606,29 @@ export class GroundTrack {
       }
       ctx.stroke();
     };
-    for (let la = -60; la <= 60; la += 30) line(Array.from({ length: 73 }, (_, k) => fromLatLon(la * D, k * 5 * D)), la === 0 ? "rgba(200, 230, 255, 0.32)" : "rgba(200, 230, 255, 0.14)");
-    for (let lo = -180; lo < 180; lo += 30) line(Array.from({ length: 37 }, (_, k) => fromLatLon((-90 + k * 5) * D, lo * D)), lo === 0 ? "rgba(200, 230, 255, 0.32)" : "rgba(200, 230, 255, 0.14)");
+    for (let la = -60; la <= 60; la += 30)
+      line(
+        Array.from({ length: 73 }, (_, k) => fromLatLon(la * D, k * 5 * D)),
+        la === 0 ? "rgba(200, 230, 255, 0.32)" : "rgba(200, 230, 255, 0.14)",
+      );
+    for (let lo = -180; lo < 180; lo += 30)
+      line(
+        Array.from({ length: 37 }, (_, k) => fromLatLon((-90 + k * 5) * D, lo * D)),
+        lo === 0 ? "rgba(200, 230, 255, 0.32)" : "rgba(200, 230, 255, 0.14)",
+      );
     ctx.restore();
 
-    this.overlays(ctx, dpr, sc, (q) => {
-      const p = proj(q);
-      return p.vis ? [p.x, p.y] : null;
-    }, 0, G);
+    this.overlays(
+      ctx,
+      dpr,
+      sc,
+      (q) => {
+        const p = proj(q);
+        return p.vis ? [p.x, p.y] : null;
+      },
+      0,
+      G,
+    );
     if (G) G.render(W, H, R * Math.sqrt(far * far - 1), cx, cy, [E, N, [-C[0], -C[1], -C[2]]], performance.now() / 1000);
     // (the rim)
     ctx.strokeStyle = "rgba(160, 210, 255, 0.35)";
@@ -547,10 +654,13 @@ export class GroundTrack {
         const rr = px * px + py * py;
         if (rr >= 1) continue;
         const pz = Math.sqrt(1 - rr);
-        const q0 = px * E[0] + py * N[0] + pz * C[0], q1 = px * E[1] + py * N[1] + pz * C[1], q2 = px * E[2] + py * N[2] + pz * C[2];
+        const q0 = px * E[0] + py * N[0] + pz * C[0],
+          q1 = px * E[1] + py * N[1] + pz * C[1],
+          q2 = px * E[2] + py * N[2] + pz * C[2];
         let r: number, g: number, b: number;
         if (tex) {
-          const u = 0.5 + Math.atan2(q1, q0) / (2 * Math.PI), vv = 0.5 - Math.asin(q2 < -1 ? -1 : q2 > 1 ? 1 : q2) / Math.PI;
+          const u = 0.5 + Math.atan2(q1, q0) / (2 * Math.PI),
+            vv = 0.5 - Math.asin(q2 < -1 ? -1 : q2 > 1 ? 1 : q2) / Math.PI;
           const s = tex.px[Math.min(tex.h - 1, (vv * tex.h) | 0) * tex.w + Math.min(tex.w - 1, (u * tex.w) | 0)]!;
           (r = s & 255), (g = (s >> 8) & 255), (b = (s >> 16) & 255);
         } else {
@@ -576,9 +686,12 @@ export class GroundTrack {
   // ---------------------------------------------------------------------------------- the planisphere
   private drawMap(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, sc: Scene, tex: Tex | null) {
     const { top, bottom, left, right } = this.margins(dpr);
-    const aw = W - left - right - 8 * dpr, ah = H - top - bottom;
-    const mw = Math.min(aw, 2 * ah), mh = mw / 2;
-    const x0 = left + (W - left - right - mw) / 2, y0 = top + (ah - mh) / 2;
+    const aw = W - left - right - 8 * dpr,
+      ah = H - top - bottom;
+    const mw = Math.min(aw, 2 * ah),
+      mh = mw / 2;
+    const x0 = left + (W - left - right - mw) / 2,
+      y0 = top + (ah - mh) / 2;
     const at = (q: V3): [number, number] => {
       const [la, lo] = latLon(q);
       return [x0 + (0.5 + lo / (2 * Math.PI)) * mw, y0 + (0.5 - la / Math.PI) * mh];
@@ -591,7 +704,19 @@ export class GroundTrack {
     if (G) {
       G.canvas.style.display = "";
       G.begin();
-      G.body(this.worldBody(sc, [0, 0, 1], sc.sun ?? [0, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], sc.sun ? 0.06 : 0.92));
+      G.body(
+        this.worldBody(
+          sc,
+          [0, 0, 1],
+          sc.sun ?? [0, 0, 0],
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          sc.sun ? 0.06 : 0.92,
+        ),
+      );
       G.planisphere([x0, y0, mw, mh]);
     } else if (tex) ctx.drawImage(tex.img, x0, y0, mw, mh);
     else {
@@ -605,7 +730,8 @@ export class GroundTrack {
       const c = this.night.c;
       if (this.night.key !== key) {
         this.night.key = key;
-        const w = 360, hh = 180;
+        const w = 360,
+          hh = 180;
         if (c.width !== w) (c.width = w), (c.height = hh);
         const x = c.getContext("2d")!;
         const img = x.createImageData(w, hh);
@@ -628,20 +754,58 @@ export class GroundTrack {
     const pt = this.pen;
     for (let k = 0; k <= 12; k++) {
       const x = x0 + (k / 12) * mw;
-      pt.path([[x, y0], [x, y0 + mh]], k === 6 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)", 1 * dpr);
+      pt.path(
+        [
+          [x, y0],
+          [x, y0 + mh],
+        ],
+        k === 6 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)",
+        1 * dpr,
+      );
     }
     for (let k = 1; k < 6; k++) {
       const y = y0 + (k / 6) * mh;
-      pt.path([[x0, y], [x0 + mw, y]], k === 3 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)", 1 * dpr);
+      pt.path(
+        [
+          [x0, y],
+          [x0 + mw, y],
+        ],
+        k === 3 ? "rgba(200, 230, 255, 0.3)" : "rgba(200, 230, 255, 0.12)",
+        1 * dpr,
+      );
     }
-    pt.path([[x0, y0], [x0 + mw, y0], [x0 + mw, y0 + mh], [x0, y0 + mh], [x0, y0]], "rgba(160, 210, 255, 0.35)", 1 * dpr);
+    pt.path(
+      [
+        [x0, y0],
+        [x0 + mw, y0],
+        [x0 + mw, y0 + mh],
+        [x0, y0 + mh],
+        [x0, y0],
+      ],
+      "rgba(160, 210, 255, 0.35)",
+      1 * dpr,
+    );
     ctx.save();
     ctx.beginPath();
     ctx.rect(x0, y0, mw, mh);
     ctx.clip();
     this.overlays(ctx, dpr, sc, at, mw, G);
     ctx.restore();
-    if (G) G.render(W, H, 1, 0, 0, [[1, 0, 0], [0, 1, 0], [0, 0, 1]], performance.now() / 1000, { sky: false });
+    if (G)
+      G.render(
+        W,
+        H,
+        1,
+        0,
+        0,
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ],
+        performance.now() / 1000,
+        { sky: false },
+      );
   }
 
   // ---------------------------------------------------------------------------------- over the world
@@ -650,13 +814,24 @@ export class GroundTrack {
    * a direction's place on the canvas (null: hidden); `wrap`: the planisphere's width (a line across
    * its edge is broken there), 0 on the globe.
    */
-  private overlays(ctx: CanvasRenderingContext2D, dpr: number, sc: Scene, at: (q: V3) => [number, number] | null, wrap: number, G: MapGpu | null = null) {
+  private overlays(
+    ctx: CanvasRenderingContext2D,
+    dpr: number,
+    sc: Scene,
+    at: (q: V3) => [number, number] | null,
+    wrap: number,
+    G: MapGpu | null = null,
+  ) {
     const pt = this.pen;
     const path = (pts: V3[], col: string, width: number, dash: number[] = [], alpha?: (k: number) => number) => {
       if (pts.length < 2) return;
       // (on the GPU: anti-aliased, faded along, broken where hidden or across the planisphere's edge)
       if (G) {
-        G.line(col, width * dpr, dash.map((d) => d * dpr));
+        G.line(
+          col,
+          width * dpr,
+          dash.map((d) => d * dpr),
+        );
         let prev: [number, number] | null = null;
         pts.forEach((q, k) => {
           const p = at(q);
@@ -674,7 +849,8 @@ export class GroundTrack {
       if (alpha) {
         // (fading: a segment at a time)
         for (let k = 1; k < pts.length; k++) {
-          const a = at(pts[k - 1]!), b = at(pts[k]!);
+          const a = at(pts[k - 1]!),
+            b = at(pts[k]!);
           if (!a || !b || (wrap && Math.abs(b[0] - a[0]) > wrap / 2)) continue;
           ctx.globalAlpha = alpha(k / (pts.length - 1));
           ctx.strokeStyle = col;
@@ -715,7 +891,8 @@ export class GroundTrack {
       path(ring, "rgba(124, 214, 255, 0.45)", 1, [3, 3]);
     }
     // the track left (fading into the past), the one ahead, the planned one
-    if (ship && this.past.id === sc.id) path(this.past.pts.map((p) => p.q).concat([ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
+    if (ship && this.past.id === sc.id)
+      path(this.past.pts.map((p) => p.q).concat([ship]), "rgba(255, 196, 120, 0.9)", 1.6, [], (k) => 0.12 + 0.8 * k);
     if (ship) path([ship, ...sc.ahead], CYAN, 1.6, [5, 4]);
     path(sc.plan, AMBER, 1.6, [2, 3]);
     // the flight computer's preview, the entry's predicted fall
@@ -727,7 +904,18 @@ export class GroundTrack {
       if (!p) continue;
       const col = st.chosen ? "rgb(255, 210, 122)" : "rgba(255, 210, 122, 0.6)";
       pt.disc(p[0], p[1], (st.chosen ? 5 : 3.5) * dpr, null, col, (st.chosen ? 2 : 1.2) * dpr);
-      if (st.runway) pt.poly(p[0], p[1], [[-5 * dpr, -0.8 * dpr], [5 * dpr, -0.8 * dpr], [5 * dpr, 0.8 * dpr], [-5 * dpr, 0.8 * dpr]], col);
+      if (st.runway)
+        pt.poly(
+          p[0],
+          p[1],
+          [
+            [-5 * dpr, -0.8 * dpr],
+            [5 * dpr, -0.8 * dpr],
+            [5 * dpr, 0.8 * dpr],
+            [-5 * dpr, 0.8 * dpr],
+          ],
+          col,
+        );
       ctx.fillStyle = col;
       ctx.font = `${st.chosen ? 700 : 600} ${(st.chosen ? 10.5 : 9) * dpr}px ${FONT}`;
       ctx.textAlign = "left";
@@ -741,7 +929,13 @@ export class GroundTrack {
       const p = at(sc.iss.q);
       if (p) {
         // (a station: a body and its wings)
-        const box = (w: number, hh: number) => [[-w, -hh], [w, -hh], [w, hh], [-w, hh]].map(([u, v]) => [u! * dpr, v! * dpr] as const);
+        const box = (w: number, hh: number) =>
+          [
+            [-w, -hh],
+            [w, -hh],
+            [w, hh],
+            [-w, hh],
+          ].map(([u, v]) => [u! * dpr, v! * dpr] as const);
         pt.poly(p[0], p[1], box(8, 1), "rgb(95, 255, 208)");
         pt.poly(p[0], p[1], box(2.5, 2.5), "rgb(95, 255, 208)");
         ctx.fillStyle = "rgb(95, 255, 208)";
@@ -756,7 +950,17 @@ export class GroundTrack {
       path(c.track, `rgba(${c.col}, ${c.target ? 0.85 : 0.35})`, c.target ? 1.4 : 1, [4, 3]);
       const p = at(c.q);
       if (!p) continue;
-      pt.poly(p[0], p[1], [[0, -4 * dpr], [4 * dpr, 0], [0, 4 * dpr], [-4 * dpr, 0]], `rgb(${c.col})`);
+      pt.poly(
+        p[0],
+        p[1],
+        [
+          [0, -4 * dpr],
+          [4 * dpr, 0],
+          [0, 4 * dpr],
+          [-4 * dpr, 0],
+        ],
+        `rgb(${c.col})`,
+      );
       ctx.fillStyle = `rgb(${c.col})`;
       ctx.font = `700 ${10 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
@@ -770,16 +974,36 @@ export class GroundTrack {
         pt.disc(p[0], p[1], 3.2 * dpr, "rgba(255, 220, 120, 0.95)");
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * 2 * Math.PI;
-          pt.path([[p[0] + Math.cos(a) * 5 * dpr, p[1] + Math.sin(a) * 5 * dpr], [p[0] + Math.cos(a) * 7.5 * dpr, p[1] + Math.sin(a) * 7.5 * dpr]], "rgba(255, 220, 120, 0.7)", 1.2 * dpr);
+          pt.path(
+            [
+              [p[0] + Math.cos(a) * 5 * dpr, p[1] + Math.sin(a) * 5 * dpr],
+              [p[0] + Math.cos(a) * 7.5 * dpr, p[1] + Math.sin(a) * 7.5 * dpr],
+            ],
+            "rgba(255, 220, 120, 0.7)",
+            1.2 * dpr,
+          );
         }
       }
     }
     ctx.font = `600 ${10 * dpr}px ${FONT}`;
     ctx.textBaseline = "middle";
-    for (const [m, lab] of [[sc.pe, "Pe"], [sc.ap, "Ap"]] as const) {
+    for (const [m, lab] of [
+      [sc.pe, "Pe"],
+      [sc.ap, "Ap"],
+    ] as const) {
       const p = m && at(m.q);
       if (!m || !p) continue;
-      pt.poly(p[0], p[1], [[0, -4 * dpr], [4 * dpr, 0], [0, 4 * dpr], [-4 * dpr, 0]], "#9fe3ff");
+      pt.poly(
+        p[0],
+        p[1],
+        [
+          [0, -4 * dpr],
+          [4 * dpr, 0],
+          [0, 4 * dpr],
+          [-4 * dpr, 0],
+        ],
+        "#9fe3ff",
+      );
       ctx.fillStyle = "#9fe3ff";
       ctx.textAlign = "left";
       ctx.fillText(`${lab} ${fmtKm(m.km)}`, p[0] + 7 * dpr, p[1]);
@@ -788,9 +1012,25 @@ export class GroundTrack {
     const pk = this.pick && at(this.pick);
     if (pk) {
       const r = 6 * dpr;
-      for (const [lw, col] of [[3.5, "rgba(0, 0, 0, 0.6)"], [1.6, "#6fe3a1"]] as const) {
+      for (const [lw, col] of [
+        [3.5, "rgba(0, 0, 0, 0.6)"],
+        [1.6, "#6fe3a1"],
+      ] as const) {
         pt.disc(pk[0], pk[1], r, null, col, lw * dpr);
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) pt.path([[pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45], [pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8]], col, lw * dpr);
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const)
+          pt.path(
+            [
+              [pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45],
+              [pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8],
+            ],
+            col,
+            lw * dpr,
+          );
       }
     }
     // the ship: a chevron along its track
@@ -798,13 +1038,25 @@ export class GroundTrack {
     if (ship && p) {
       const nxt = sc.ahead.find((q) => Math.acos(clamp(dot(q, ship), -1, 1)) > 0.05 * D);
       const prv = this.past.pts.at(-2)?.q;
-      const qa = nxt ?? ship, qb = nxt ? ship : (prv ?? ship);
-      const a = at(qa), b = at(qb);
+      const qa = nxt ?? ship,
+        qb = nxt ? ship : (prv ?? ship);
+      const a = at(qa),
+        b = at(qb);
       let ang = -Math.PI / 2;
-      if (a && b && Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.1 && !(wrap && Math.abs(a[0] - b[0]) > wrap / 2)) ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
-      const r = 7 * dpr, ca = Math.cos(ang), sa = Math.sin(ang);
+      if (a && b && Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.1 && !(wrap && Math.abs(a[0] - b[0]) > wrap / 2))
+        ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
+      const r = 7 * dpr,
+        ca = Math.cos(ang),
+        sa = Math.sin(ang);
       const turn = (x: number, y: number) => [x * ca - y * sa, x * sa + y * ca] as const;
-      pt.poly(p[0], p[1], [turn(r, 0), turn(-0.7 * r, 0.65 * r), turn(-0.35 * r, 0), turn(-0.7 * r, -0.65 * r)], AMBER, "rgba(0, 0, 0, 0.7)", 1.5 * dpr);
+      pt.poly(
+        p[0],
+        p[1],
+        [turn(r, 0), turn(-0.7 * r, 0.65 * r), turn(-0.35 * r, 0), turn(-0.7 * r, -0.65 * r)],
+        AMBER,
+        "rgba(0, 0, 0, 0.7)",
+        1.5 * dpr,
+      );
     }
   }
 
@@ -849,12 +1101,16 @@ export class GroundTrack {
       this.view.follow = true;
       this.view.zoom = 1;
     });
-    cv.addEventListener("wheel", (e) => {
-      if (this.mode !== "globe") return;
-      e.preventDefault();
-      this.view.zoom = clamp(this.view.zoom * Math.exp(-e.deltaY * 0.0015), 1, 8);
-      this.redraw?.();
-    }, { passive: false });
+    cv.addEventListener(
+      "wheel",
+      (e) => {
+        if (this.mode !== "globe") return;
+        e.preventDefault();
+        this.view.zoom = clamp(this.view.zoom * Math.exp(-e.deltaY * 0.0015), 1, 8);
+        this.redraw?.();
+      },
+      { passive: false },
+    );
   }
 
   /** The place under a pointer event (a unit direction on the world's axes), or null (off the world). */
@@ -863,15 +1119,18 @@ export class GroundTrack {
     if (!H) return null;
     const r = this.canvas.getBoundingClientRect();
     const k = this.canvas.width / Math.max(r.width, 1);
-    const x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+    const x = (e.clientX - r.left) * k,
+      y = (e.clientY - r.top) * k;
     if (H.globe) {
-      const px = (x - H.cx) / H.R, py = -(y - H.cy) / H.R;
+      const px = (x - H.cx) / H.R,
+        py = -(y - H.cy) / H.R;
       const rr = px * px + py * py;
       if (rr >= 1) return null;
       const pz = Math.sqrt(1 - rr);
       return unit([0, 1, 2].map((i) => px * H.E[i]! + py * H.N[i]! + pz * H.C[i]!) as V3);
     }
-    const u = (x - H.x0) / H.mw, v = (y - H.y0) / H.mh;
+    const u = (x - H.x0) / H.mw,
+      v = (y - H.y0) / H.mh;
     if (u < 0 || u > 1 || v < 0 || v > 1) return null;
     return fromLatLon((0.5 - v) * Math.PI, (u - 0.5) * 2 * Math.PI);
   }

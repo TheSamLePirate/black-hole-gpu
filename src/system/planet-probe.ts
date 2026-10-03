@@ -44,7 +44,6 @@ export interface PlanetProbe {
   at: number;
 }
 
-
 /**
  * A light direction seen by the probe (its rest frame, ZAMO axes) as a direction of the black-hole
  * frame's map: back to the ZAMO (the aberration undone), then the metric's scale factors undone.
@@ -69,9 +68,19 @@ export function probeCamera(pos: Vec3, vel: Vec3, spin: number): CameraFrame {
   const speed = Math.min(Math.hypot(...b), 0.9999);
   // (any orthonormal basis: the probe's texels are turned back into these axes)
   return {
-    region: "hole", r: f.r, theta, phi: f.ph, ell: 0, n: [1, 0, 0],
-    right: [0, 0, 1], up: [0, -1, 0], fwd: [-1, 0, 0],
-    zamo: z, beta: b, gamma: 1 / Math.sqrt(1 - speed * speed), speed,
+    region: "hole",
+    r: f.r,
+    theta,
+    phi: f.ph,
+    ell: 0,
+    n: [1, 0, 0],
+    right: [0, 0, 1],
+    up: [0, -1, 0],
+    fwd: [-1, 0, 0],
+    zamo: z,
+    beta: b,
+    gamma: 1 / Math.sqrt(1 - speed * speed),
+    speed,
   };
 }
 
@@ -92,7 +101,8 @@ function colourTemperature(r: number, g: number, b: number, tMax = 1e5): { T: nu
   }
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const c: Vec3 = [r / lum, g / lum, b / lum];
-  let best = 0, bd = Infinity;
+  let best = 0,
+    bd = Infinity;
   const ltMax = Math.log10(tMax);
   for (let i = 0; i < lut.rgb.length; i += 2) {
     if (lut.logT[i]! > ltMax) break;
@@ -121,14 +131,22 @@ export function reduceProbe(data: Float32Array, cam: CameraFrame, logYref: numbe
     const dw = ((2 * Math.PI) / PROBE_W) * (Math.PI / PROBE_H) * Math.sin(th);
     for (let x = 0; x < PROBE_W; x++) {
       const i = 4 * (y * PROBE_W + x);
-      const r = data[i]!, g = data[i + 1]!, b = data[i + 2]!;
+      const r = data[i]!,
+        g = data[i + 1]!,
+        b = data[i + 2]!;
       const ph = ((x + 0.5) / PROBE_W - 0.5) * 2 * Math.PI;
       const dl: Vec3 = [Math.sin(th) * Math.sin(ph), Math.cos(th), Math.sin(th) * Math.cos(ph)];
       const d: Vec3 = [0, 1, 2].map((k) => dl[0] * cam.right[k]! + dl[1] * cam.up[k]! + dl[2] * cam.fwd[k]!) as Vec3;
       const basis = [
-        0.282095, 0.488603 * d[1], 0.488603 * d[2], 0.488603 * d[0],
-        1.092548 * d[0] * d[1], 1.092548 * d[1] * d[2], 0.315392 * (3 * d[2] * d[2] - 1),
-        1.092548 * d[0] * d[2], 0.546274 * (d[0] * d[0] - d[1] * d[1]),
+        0.282095,
+        0.488603 * d[1],
+        0.488603 * d[2],
+        0.488603 * d[0],
+        1.092548 * d[0] * d[1],
+        1.092548 * d[1] * d[2],
+        0.315392 * (3 * d[2] * d[2] - 1),
+        1.092548 * d[0] * d[2],
+        0.546274 * (d[0] * d[0] - d[1] * d[1]),
       ];
       for (let k = 0; k < 9; k++) {
         sh[k]![0] += r * basis[k]! * dw;
@@ -156,7 +174,8 @@ export function reduceProbe(data: Float32Array, cam: CameraFrame, logYref: numbe
   }
   const fl = Math.hypot(...flux);
   const dir: Vec3 = fl > 0 ? [flux[0] / fl, flux[1] / fl, flux[2] / fl] : [1, 0, 0];
-  let eMax = 0, eBol = 0;
+  let eMax = 0,
+    eBol = 0;
   for (let j = 0; j < lums.length; j++) {
     const c = Math.max(dot(dirs[j]!, dir), 0) * dws[j]!;
     eMax += lums[j]! * c;
@@ -178,10 +197,21 @@ export function blendProbe(old: PlanetProbe | undefined, p: PlanetProbe, w = 0.2
   if (!old) return p;
   const m = (a: number, b: number) => a + w * (b - a);
   const mv = (a: Vec3, b: Vec3): Vec3 => [m(a[0], b[0]), m(a[1], b[1]), m(a[2], b[2])];
-  const dir = mv(old.dir, p.dir), wd = mv(old.worldDir, p.worldDir);
-  const n = (v: Vec3): Vec3 => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const dir = mv(old.dir, p.dir),
+    wd = mv(old.worldDir, p.worldDir);
+  const n = (v: Vec3): Vec3 => {
+    const l = Math.hypot(...v) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
   return {
-    sh: old.sh.map((c, k) => mv(c, p.sh[k]!)), dir: n(dir), worldDir: n(wd), tColour: m(old.tColour, p.tColour),
-    eMax: m(old.eMax, p.eMax), eBol: m(old.eBol, p.eBol), meanBol: m(old.meanBol, p.meanBol), teq: m(old.teq, p.teq), at: p.at,
+    sh: old.sh.map((c, k) => mv(c, p.sh[k]!)),
+    dir: n(dir),
+    worldDir: n(wd),
+    tColour: m(old.tColour, p.tColour),
+    eMax: m(old.eMax, p.eMax),
+    eBol: m(old.eBol, p.eBol),
+    meanBol: m(old.meanBol, p.meanBol),
+    teq: m(old.teq, p.teq),
+    at: p.at,
   };
 }

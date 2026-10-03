@@ -4,7 +4,7 @@ import { TriBVH } from "../src/system/collide";
 // a field of random triangles; segments cast through it: the hierarchy's first hit is the brute force's
 function rng(seed: number) {
   let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
 }
 
 test("the hierarchy's first crossing is the brute force's", () => {
@@ -22,8 +22,11 @@ test("the hierarchy's first crossing is the brute force's", () => {
     let best = Infinity;
     const d = [e[0]! - o[0]!, e[1]! - o[1]!, e[2]! - o[2]!];
     for (let i = 0; i < nt; i++) {
-      const a = [0, 1, 2].map((k) => pos[9 * i + k]!), b = [0, 1, 2].map((k) => pos[9 * i + 3 + k]!), c = [0, 1, 2].map((k) => pos[9 * i + 6 + k]!);
-      const e1 = b.map((x, k) => x - a[k]!), e2 = c.map((x, k) => x - a[k]!);
+      const a = [0, 1, 2].map((k) => pos[9 * i + k]!),
+        b = [0, 1, 2].map((k) => pos[9 * i + 3 + k]!),
+        c = [0, 1, 2].map((k) => pos[9 * i + 6 + k]!);
+      const e1 = b.map((x, k) => x - a[k]!),
+        e2 = c.map((x, k) => x - a[k]!);
       const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!];
       const det = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!;
       if (Math.abs(det) < 1e-14) continue;

@@ -30,7 +30,13 @@ export const MOUNTS = {
   flyby: { label: "Fly-by, the ship passing", short: "Fly-by", eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
   // (the docking camera of what the ship docks to — the space station, another craft: on the nearest
   // port's axis, looking out at the ship coming in, moving with it; elsewhere, around the ship)
-  station: { label: "Docking camera, on the target's port (the ISS, a craft)", short: "Port cam", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "station" },
+  station: {
+    label: "Docking camera, on the target's port (the ISS, a craft)",
+    short: "Port cam",
+    eye: [0, 9, -42],
+    aim: [0, 1.5, 0],
+    outside: "station",
+  },
 } satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
 /** The views from outside the ship: around it, free, a fly-by. */
 export type OutsideView = "around" | "free" | "flyby" | "station";
@@ -38,7 +44,10 @@ export type Mount = keyof typeof MOUNTS;
 export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 
 /** A camera placement on the ship (an attach point, or between two while the view moves). */
-export interface MountPose { eye: V3; aim: V3 }
+export interface MountPose {
+  eye: V3;
+  aim: V3;
+}
 
 /** The craft flown (vessels.ts): its own places for the attach points on the hull. */
 let mountVessel: VesselId = "ranger";
@@ -50,7 +59,6 @@ export function mountPose(m: Mount): MountPose {
   const own = (VESSELS[mountVessel].mounts as Record<string, MountPose | undefined>)[m];
   return own ?? (MOUNTS[m] as MountPose);
 }
-
 
 export type M3 = [V3, V3, V3]; // rows
 

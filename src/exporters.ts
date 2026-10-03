@@ -68,7 +68,7 @@ export function toHalf(v: number): number {
   f32[0] = v;
   const x = u32[0]!;
   const sign = (x >>> 16) & 0x8000;
-  let exp = ((x >>> 23) & 0xff) - 127 + 15;
+  const exp = ((x >>> 23) & 0xff) - 127 + 15;
   let mant = x & 0x7fffff;
   if (((x >>> 23) & 0xff) === 0xff) return sign | 0x7c00 | (mant ? 0x200 : 0); // inf / nan
   if (exp >= 0x1f) return sign | 0x7c00; // overflow → inf

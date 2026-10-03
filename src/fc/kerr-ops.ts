@@ -9,7 +9,21 @@
 
 import { horizon, isco, type Vec3 } from "../physics";
 import { toZamo, type Massive } from "../geodesic";
-import { advanceTo, apsides, applyDv, circularBeta, matchDv, orbitNormal, pathFrom, planAlign, planeOffset, position, type KerrGoal, type ManeuverNode, type World } from "../maneuver";
+import {
+  advanceTo,
+  apsides,
+  applyDv,
+  circularBeta,
+  matchDv,
+  orbitNormal,
+  pathFrom,
+  planAlign,
+  planeOffset,
+  position,
+  type KerrGoal,
+  type ManeuverNode,
+  type World,
+} from "../maneuver";
 import { len } from "../math/vec3";
 
 export interface KerrOp {
@@ -68,7 +82,8 @@ export function nextApsis(st0: Massive, w: World, kind: "pe" | "ap", turns = 1.6
   const T = span(st0, w.a, turns);
   const n = 600;
   const p = pathFrom(st0, w, T, n);
-  const r = [st0.r, ...p.pts.map(len)], t = [st0.t, ...p.times];
+  const r = [st0.r, ...p.pts.map(len)],
+    t = [st0.t, ...p.times];
   for (let j = 1; j < r.length - 1; j++) {
     const turn = kind === "ap" ? r[j]! >= r[j - 1]! && r[j]! > r[j + 1]! : r[j]! <= r[j - 1]! && r[j]! < r[j + 1]!;
     if (!turn) continue;
@@ -76,7 +91,8 @@ export function nextApsis(st0: Massive, w: World, kind: "pe" | "ap", turns = 1.6
     if (!sA) return null;
     // (outwards before an apoapsis, inwards before a periapsis)
     const before = kind === "ap" ? 1 : -1;
-    let lo = t[j - 1]!, hi = t[j + 1]!;
+    let lo = t[j - 1]!,
+      hi = t[j + 1]!;
     for (let it = 0; it < 40 && hi - lo > 1e-6 * Math.max(1, lo); it++) {
       const mid = (lo + hi) / 2;
       const sm = advanceTo(sA, mid, w);
@@ -92,21 +108,26 @@ export function nextApsis(st0: Massive, w: World, kind: "pe" | "ap", turns = 1.6
 /** The orbit a state is on, as its path shows it. */
 export function kerrOrbit(st: Massive, w: World): KerrOrbit {
   const p = pathFrom(st, w, span(st, w.a, 2.2), 700);
-  const r = [st.r, ...p.pts.map(len)], t = [st.t, ...p.times];
+  const r = [st.r, ...p.pts.map(len)],
+    t = [st.t, ...p.times];
   const pos = [position(st), ...p.pts];
   const h = orbitNormal(st, w.a);
   const inc = Math.acos(Math.min(Math.max(h[2], -1), 1));
-  const pe: number[] = [], ap: number[] = [], nodes: number[] = [];
+  const pe: number[] = [],
+    ap: number[] = [],
+    nodes: number[] = [];
   for (let j = 1; j < r.length - 1; j++) {
     if (r[j]! <= r[j - 1]! && r[j]! < r[j + 1]!) pe.push(j);
     if (r[j]! >= r[j - 1]! && r[j]! > r[j + 1]!) ap.push(j);
   }
   for (let j = 1; j < pos.length && nodes.length < 2; j++) {
-    const z0 = pos[j - 1]![2], z1 = pos[j]![2];
+    const z0 = pos[j - 1]![2],
+      z1 = pos[j]![2];
     if (Math.sign(z0) !== Math.sign(z1)) nodes.push(t[j - 1]! + ((t[j]! - t[j - 1]!) * Math.abs(z0)) / (Math.abs(z0) + Math.abs(z1) || 1));
   }
   const fate = p.fate === "horizon" || p.fate === "star" ? "horizon" : ap.length ? "bound" : "escape";
-  const lo = Math.min(...r), hi = Math.max(...r);
+  const lo = Math.min(...r),
+    hi = Math.max(...r);
   const Tphi = turnTime(pos, t, h);
   // (a circle's apsides are the integrator's noise: no radial period, no advance)
   const round = hi - lo < 2e-3 * hi;
@@ -130,10 +151,12 @@ export function kerrOrbit(st: Massive, w: World): KerrOrbit {
 /** The time to go once round the plane of normal h [M]: the angle about it unwrapped along the path,
  *  2π reached (interpolated). NaN if not within the path. */
 function turnTime(pos: Vec3[], t: number[], h: Vec3): number {
-  const e1 = pos[0]!, l1 = len(e1);
+  const e1 = pos[0]!,
+    l1 = len(e1);
   const x: Vec3 = [e1[0] / l1, e1[1] / l1, e1[2] / l1];
   const y: Vec3 = [h[1] * x[2] - h[2] * x[1], h[2] * x[0] - h[0] * x[2], h[0] * x[1] - h[1] * x[0]];
-  let prev = 0, acc = 0;
+  let prev = 0,
+    acc = 0;
   for (let j = 1; j < pos.length; j++) {
     const q = pos[j]!;
     const ang = Math.atan2(q[0] * y[0] + q[1] * y[1] + q[2] * y[2], q[0] * x[0] + q[1] * x[1] + q[2] * x[2]);
@@ -171,7 +194,8 @@ export function apsisBurn(s: Massive, r2: number, w: World, side: "max" | "min")
   const f0 = f(0);
   if (Math.abs(f0) < 1e-4 * r2) return 0;
   const sg = f0 < 0 ? 1 : -1;
-  let lo = 0, hi = 0.003 * sg;
+  let lo = 0,
+    hi = 0.003 * sg;
   while (Math.sign(f(hi)) !== sg) {
     lo = hi;
     hi *= 1.7;
@@ -224,7 +248,11 @@ function done(st0: Massive, w: World, nodes: ManeuverNode[], note: string): Kerr
 }
 
 /** An apsis burn's goal: the far side (the one the burn does not sit on) at r2. */
-const apsisGoal = (s: Massive, r2: number, dv: number): KerrGoal => ({ apsis: r2, side: r2 > s.r ? "max" : "min", dir: Math.sign(dv) || 1 });
+const apsisGoal = (s: Massive, r2: number, dv: number): KerrGoal => ({
+  apsis: r2,
+  side: r2 > s.r ? "max" : "min",
+  dir: Math.sign(dv) || 1,
+});
 
 /** A circularizing burn's goal: the circular orbit where the craft is, steered to all along; then a
  *  correction if it ends off the radius. */
@@ -259,7 +287,12 @@ export function kPeriapsis(st0: Massive, w: World, r2: number, where: "ap" | "no
   if (r2 >= s.r) return fail(`The periapsis cannot be above the burn (${s.r.toFixed(2)} M)`);
   const dv = apsisBurn(s, r2, w, r2 > s.r ? "max" : "min");
   if (dv === null) return fail("Out of reach");
-  return done(st0, w, [{ t: s.t, dv: [dv, 0, 0], goal: r2 > horizon(w.a) ? apsisGoal(s, r2, dv) : undefined }], r2 <= horizon(w.a) ? "Periapsis inside the horizon: a plunge" : `Periapsis ${r2.toFixed(2)} M`);
+  return done(
+    st0,
+    w,
+    [{ t: s.t, dv: [dv, 0, 0], goal: r2 > horizon(w.a) ? apsisGoal(s, r2, dv) : undefined }],
+    r2 <= horizon(w.a) ? "Periapsis inside the horizon: a plunge" : `Periapsis ${r2.toFixed(2)} M`,
+  );
 }
 
 /** Hohmann's transfer on the geodesics: from the periapsis to rise (the apoapsis to fall), the
@@ -281,7 +314,15 @@ export function kHohmann(st0: Massive, w: World, r2: number): KerrOp {
   if (!s2) return fail("The transfer never reaches its far apsis");
   const bc = circularBeta(s2, w);
   if (!bc) return fail("No circular orbit there");
-  return done(st0, w, [{ t: s1.t, dv: [dv1, 0, 0], goal: apsisGoal(s1, r2, dv1) }, { t: s2.t, dv: matchDv(s2, bc, w.a), goal: circGoal(s2) }], `Hohmann to ${r2.toFixed(2)} M circular`);
+  return done(
+    st0,
+    w,
+    [
+      { t: s1.t, dv: [dv1, 0, 0], goal: apsisGoal(s1, r2, dv1) },
+      { t: s2.t, dv: matchDv(s2, bc, w.a), goal: circGoal(s2) },
+    ],
+    `Hohmann to ${r2.toFixed(2)} M circular`,
+  );
 }
 
 /** The plane of inclination `inc` to the equator through the orbit's own line of nodes — the
@@ -301,7 +342,12 @@ export function kInclination(st0: Massive, w: World, inc: number): KerrOp {
   const n: Vec3 = [m[0] * Math.sin(inc), m[1] * Math.sin(inc), Math.cos(inc)];
   const res = planAlign(s, w, n, `the ${((inc * 180) / Math.PI).toFixed(1)}° plane`);
   if (!res) return fail(`Already at ${((i0 * 180) / Math.PI).toFixed(2)}°`);
-  return done(st0, w, res.nodes.map((q) => ({ ...q, goal: { plane: n } })), `Inclination ${((i0 * 180) / Math.PI).toFixed(1)}° → ${((inc * 180) / Math.PI).toFixed(1)}°`);
+  return done(
+    st0,
+    w,
+    res.nodes.map((q) => ({ ...q, goal: { plane: n } })),
+    `Inclination ${((i0 * 180) / Math.PI).toFixed(1)}° → ${((inc * 180) / Math.PI).toFixed(1)}°`,
+  );
 }
 
 /** Into a plane of normal n (a target's orbit). */
@@ -312,7 +358,12 @@ export function kMatchPlane(st0: Massive, w: World, n: Vec3, name: string): Kerr
   const res = planAlign(s, w, n, name);
   if (!res) return fail(`Already in ${name}`);
   const nn = len(n);
-  return done(st0, w, res.nodes.map((q) => ({ ...q, goal: { plane: [n[0] / nn, n[1] / nn, n[2] / nn] as Vec3 } })), `Planes matched (${((off * 180) / Math.PI).toFixed(2)}° into ${name})`);
+  return done(
+    st0,
+    w,
+    res.nodes.map((q) => ({ ...q, goal: { plane: [n[0] / nn, n[1] / nn, n[2] / nn] as Vec3 } })),
+    `Planes matched (${((off * 180) / Math.PI).toFixed(2)}° into ${name})`,
+  );
 }
 
 /** A resonant orbit: the period × k — the craft back where it is every k turns (a probe dropped each) —
@@ -323,14 +374,15 @@ export function kResonant(st0: Massive, w: World, k: number): KerrOp {
   if (!s0) return fail("Not on this path");
   const o0 = kerrOrbit(s0, w);
   if (o0.fate !== "bound" || !Number.isFinite(o0.T)) return fail("Bound orbits only");
-  const s = Number.isFinite(o0.Tr) ? nextApsis(s0, w, "pe") ?? s0 : s0;
+  const s = Number.isFinite(o0.Tr) ? (nextApsis(s0, w, "pe") ?? s0) : s0;
   const want = k * o0.T;
   const f = (dv: number) => {
     const T = orbitPeriod(applyDv(s, [dv, 0, 0], w.a), w);
     return (Number.isFinite(T) ? T : 1e12) - want;
   };
   const up = k > 1;
-  let lo = 0, hi = up ? 0.002 : -0.002;
+  let lo = 0,
+    hi = up ? 0.002 : -0.002;
   while (up ? f(hi) < 0 : f(hi) > 0) {
     lo = hi;
     hi *= 1.7;
@@ -344,7 +396,12 @@ export function kResonant(st0: Massive, w: World, k: number): KerrOp {
   const dv = (lo + hi) / 2;
   const o = kerrOrbit(applyDv(s, [dv, 0, 0], w.a), w);
   if (o.fate === "horizon" || o.rp < rMinCircular(s, w) * 0.9) return fail("That period dives too near the hole");
-  return done(st0, w, [{ t: s.t, dv: [dv, 0, 0], goal: { period: want, dir: Math.sign(dv) || 1 } }], `Resonant ${k.toFixed(2)}:1 (period ${want.toFixed(0)} M)`);
+  return done(
+    st0,
+    w,
+    [{ t: s.t, dv: [dv, 0, 0], goal: { period: want, dir: Math.sign(dv) || 1 } }],
+    `Resonant ${k.toFixed(2)}:1 (period ${want.toFixed(0)} M)`,
+  );
 }
 
 /** In flight, a period goal's Δv still to give [c] along its sense: a Newton step on the period. */
@@ -399,10 +456,19 @@ export function circLeft(st: Massive, w: World): Vec3 | null {
  */
 export function planeLeft(st: Massive, w: World, n: Vec3): { dir: Vec3; left: number; eff: number } {
   const r = position(st);
-  const s = Math.sin(st.th), c = Math.cos(st.th), sp = Math.sin(st.ph), cp = Math.cos(st.ph);
-  const er: Vec3 = [s * cp, s * sp, c], et: Vec3 = [c * cp, c * sp, -s], ep: Vec3 = [-sp, cp, 0];
+  const s = Math.sin(st.th),
+    c = Math.cos(st.th),
+    sp = Math.sin(st.ph),
+    cp = Math.cos(st.ph);
+  const er: Vec3 = [s * cp, s * sp, c],
+    et: Vec3 = [c * cp, c * sp, -s],
+    ep: Vec3 = [-sp, cp, 0];
   const b = toZamo(st, w.a);
-  const V: Vec3 = [er[0] * b[0] + et[0] * b[1] + ep[0] * b[2], er[1] * b[0] + et[1] * b[1] + ep[1] * b[2], er[2] * b[0] + et[2] * b[1] + ep[2] * b[2]];
+  const V: Vec3 = [
+    er[0] * b[0] + et[0] * b[1] + ep[0] * b[2],
+    er[1] * b[0] + et[1] * b[1] + ep[1] * b[2],
+    er[2] * b[0] + et[2] * b[1] + ep[2] * b[2],
+  ];
   const cr = (a: Vec3, q: Vec3): Vec3 => [a[1] * q[2] - a[2] * q[1], a[2] * q[0] - a[0] * q[2], a[0] * q[1] - a[1] * q[0]];
   const dt = (a: Vec3, q: Vec3) => a[0] * q[0] + a[1] * q[1] + a[2] * q[2];
   const h = cr(r, V);

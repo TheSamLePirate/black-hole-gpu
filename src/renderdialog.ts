@@ -7,7 +7,7 @@ import { fmtFactor, fmtWarp, realTimeSpeed, warpLadder } from "./clock";
 import { VideoWriter } from "./video";
 
 const RESOLUTIONS: Record<string, [number, number] | null> = {
-  "Viewport": null,
+  Viewport: null,
   "HD 1280×720": [1280, 720],
   "Full HD 1920×1080": [1920, 1080],
   "QHD 2560×1440": [2560, 1440],
@@ -17,7 +17,7 @@ const RESOLUTIONS: Record<string, [number, number] | null> = {
   "Square 2048²": [2048, 2048],
   "Square 4096²": [4096, 4096],
   "Portrait 2160×3840": [2160, 3840],
-  "Custom": null,
+  Custom: null,
 };
 
 const INTEGRATORS: Record<string, { tolerance: number; eps: number; maxSteps: number }> = {
@@ -28,15 +28,24 @@ const INTEGRATORS: Record<string, { tolerance: number; eps: number; maxSteps: nu
 
 /** Render presets: what each purpose needs from resolution, sampling and integration. */
 const PRESETS: Record<string, { res: string; spp: string; integ: string; noise: string; budget: string; video?: boolean } | null> = {
-  "Custom": null,
+  Custom: null,
   // per frame: enough samples for a clean, temporally stable frame; fixed noise threshold so that
   // successive frames converge alike; motion blur (180° shutter) set in the Video section
   "Video · Full HD frames, motion blur": {
-    res: "Full HD 1920×1080", spp: "64", integ: "High · Dormand–Prince, tol 1e-5", noise: "1 %", budget: "Turbo (250 ms/frame)", video: true,
+    res: "Full HD 1920×1080",
+    spp: "64",
+    integ: "High · Dormand–Prince, tol 1e-5",
+    noise: "1 %",
+    budget: "Turbo (250 ms/frame)",
+    video: true,
   },
   // the largest resolution the GPU holds (8K if possible), reference integration, 1024 spp
   "Mega photo · 8K reference": {
-    res: "8K UHD 7680×4320", spp: "1024", integ: "Reference · Dormand–Prince, tol 1e-6", noise: "0.2 %", budget: "Turbo (250 ms/frame)",
+    res: "8K UHD 7680×4320",
+    spp: "1024",
+    integ: "Reference · Dormand–Prince, tol 1e-6",
+    noise: "0.2 %",
+    budget: "Turbo (250 ms/frame)",
   },
 };
 
@@ -49,7 +58,7 @@ const SHOTS = {
   dive: "Dive to the horizon",
 } as const;
 type Shot = keyof typeof SHOTS;
-const SHUTTERS: Record<string, number> = { "Off": 0, "180° (half a frame)": 0.5, "360° (whole frame)": 1 };
+const SHUTTERS: Record<string, number> = { Off: 0, "180° (half a frame)": 0.5, "360° (whole frame)": 1 };
 
 const BUDGETS: Record<string, number> = {
   "Interactive (30 ms/frame)": 30,
@@ -166,7 +175,7 @@ export function setupRenderDialog(d: DialogDeps) {
     const mem = (size[0] * size[1] * 24 * 1.5) / 2 ** 20;
     status.textContent = tooBig
       ? `⚠ ${size[0]}×${size[1]} exceeds this GPU's limits (max ${max.dimension}px, ${(max.pixels / 1e6).toFixed(0)} Mpx)`
-      : `${(size[0] * size[1] / 1e6).toFixed(1)} Mpx · ≈${mem.toFixed(0)} MB of GPU memory`;
+      : `${((size[0] * size[1]) / 1e6).toFixed(1)} Mpx · ≈${mem.toFixed(0)} MB of GPU memory`;
     btnStart.disabled = tooBig;
   };
   resSel.onchange = syncSize;
@@ -258,8 +267,11 @@ export function setupRenderDialog(d: DialogDeps) {
     const rt = realTimeSpeed(s);
     const rates = warpLadder(s).filter((w) => w !== s.timeSpeed);
     const keepRate = vRate.value;
-    vRate.innerHTML = [`<option value="live">As live · ${fmtWarp(s, false)}</option>`, `<option value="0">Frozen · bullet time</option>`,
-      ...rates.reverse().map((w) => `<option value="${w}">${fmtFactor(w / rt)} · ${+w.toPrecision(3)} M/s</option>`)].join("");
+    vRate.innerHTML = [
+      `<option value="live">As live · ${fmtWarp(s, false)}</option>`,
+      `<option value="0">Frozen · bullet time</option>`,
+      ...rates.reverse().map((w) => `<option value="${w}">${fmtFactor(w / rt)} · ${+w.toPrecision(3)} M/s</option>`),
+    ].join("");
     vRate.value = [...vRate.options].some((o) => o.value === keepRate) ? keepRate : "live";
     syncShot();
   };
@@ -272,7 +284,9 @@ export function setupRenderDialog(d: DialogDeps) {
       ? "The take replays what you did live — camera, ship, time — at the video's frame rate."
       : vSource.value === "live"
         ? "The scene goes on from now as it would live: the camera's mode, the ship and its autopilot, the mission, the time."
-        : vRate.value === "0" ? "Time frozen: the camera moves through a still instant." : "";
+        : vRate.value === "0"
+          ? "Time frozen: the camera moves through a still instant."
+          : "";
   };
   vSource.onchange = syncShot;
   vRate.onchange = syncShot;
@@ -385,7 +399,11 @@ export function setupRenderDialog(d: DialogDeps) {
     if (before) d.restore(before);
     setActive(false);
     syncShot();
-    status.textContent = error ? `⚠ video failed: ${error}` : run.stop ? "video stopped" : `✔ video saved · ${n} frames in ${fmtDuration((performance.now() - started) / 1000)}`;
+    status.textContent = error
+      ? `⚠ video failed: ${error}`
+      : run.stop
+        ? "video stopped"
+        : `✔ video saved · ${n} frames in ${fmtDuration((performance.now() - started) / 1000)}`;
   };
 
   const stem = () => `${d.fileStem()}-${sppSel.value}spp`;
@@ -424,7 +442,8 @@ export function setupRenderDialog(d: DialogDeps) {
       bar.style.width = `${(st.progress * 100).toFixed(2)}%`;
       bar.classList.toggle("done", st.done);
       const state = st.done ? "✔ done" : st.paused ? "paused" : "rendering";
-      status.textContent = (video?.label ?? "") +
+      status.textContent =
+        (video?.label ?? "") +
         `${state} · ${st.width}×${st.height} · ${st.spp.toFixed(1)} / ${st.targetSpp} spp · ` +
         `${(st.progress * 100).toFixed(1)} % · elapsed ${fmtDuration(st.elapsed)}` +
         (st.done ? "" : ` · ETA ${fmtDuration(st.eta)}`);

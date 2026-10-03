@@ -49,20 +49,39 @@ export function ktxLevels(url: string, target: KtxTarget): Promise<{ width: numb
   const id = next++;
   return new Promise((resolve, reject) => {
     waiting.set(id, (r) => (r.error ? reject(new Error(r.error)) : resolve({ width: r.width!, height: r.height!, levels: r.levels! })));
-    w.postMessage({ id, url: new URL(url, location.href).href, target, wasm: new URL("basis_transcoder.wasm", location.href).href } satisfies KtxRequest);
+    w.postMessage({
+      id,
+      url: new URL(url, location.href).href,
+      target,
+      wasm: new URL("basis_transcoder.wasm", location.href).href,
+    } satisfies KtxRequest);
   });
 }
 
 /** Writes transcoded levels into a texture's layer (block-compressed rows: 16 bytes per 4 × 4 block). */
-export function writeLevels(device: GPUDevice, tex: GPUTexture, levels: Uint8Array[], width: number, height: number, target: KtxTarget, layer = 0) {
+export function writeLevels(
+  device: GPUDevice,
+  tex: GPUTexture,
+  levels: Uint8Array[],
+  width: number,
+  height: number,
+  target: KtxTarget,
+  layer = 0,
+) {
   const n = Math.min(levels.length, tex.mipLevelCount);
   for (let l = 0; l < n; l++) {
-    const w = Math.max(1, width >> l), h = Math.max(1, height >> l);
+    const w = Math.max(1, width >> l),
+      h = Math.max(1, height >> l);
     const block = target !== "rgba";
     const bytesPerRow = block ? Math.ceil(w / 4) * 16 : w * 4;
     const rows = block ? Math.ceil(h / 4) : h;
     // (a level smaller than a block: the copy covers the whole block)
     const size = block ? [Math.ceil(w / 4) * 4, Math.ceil(h / 4) * 4] : [w, h];
-    device.queue.writeTexture({ texture: tex, mipLevel: l, origin: [0, 0, layer] }, levels[l]! as Uint8Array<ArrayBuffer>, { bytesPerRow, rowsPerImage: rows }, [size[0]!, size[1]!, 1]);
+    device.queue.writeTexture(
+      { texture: tex, mipLevel: l, origin: [0, 0, layer] },
+      levels[l]! as Uint8Array<ArrayBuffer>,
+      { bytesPerRow, rowsPerImage: rows },
+      [size[0]!, size[1]!, 1],
+    );
   }
 }

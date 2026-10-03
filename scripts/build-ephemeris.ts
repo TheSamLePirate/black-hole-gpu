@@ -40,7 +40,11 @@ function ssb(target: number, et: number): [number, number, number] {
 }
 // J2000 equatorial → J2000 ecliptic (SPICE's ECLIPJ2000: ε = 84381.448″)
 const EPS = (84381.448 / 3600) * (Math.PI / 180);
-const ecl = (v: number[]): [number, number, number] => [v[0]!, v[1]! * Math.cos(EPS) + v[2]! * Math.sin(EPS), -v[1]! * Math.sin(EPS) + v[2]! * Math.cos(EPS)];
+const ecl = (v: number[]): [number, number, number] => [
+  v[0]!,
+  v[1]! * Math.cos(EPS) + v[2]! * Math.sin(EPS),
+  -v[1]! * Math.sin(EPS) + v[2]! * Math.cos(EPS),
+];
 const sub = (a: number[], b: number[]) => a.map((x, i) => x - b[i]!);
 
 // ------------------------------------------------------------------------------------ the bodies
@@ -51,7 +55,14 @@ const sub = (a: number[], b: number[]) => a.map((x, i) => x - b[i]!);
  * found at run time from their moons (the Earth: the Moon and DE440's mass ratio; Jupiter: its
  * Galilean moons) — the Earth wobbling ±4 700 km about the barycentre each month cost 30 times more.
  */
-interface Fit { id: string; of: (et: number) => number[]; tol: number; prec: 32 | 64; from: number; to: number }
+interface Fit {
+  id: string;
+  of: (et: number) => number[];
+  tol: number;
+  prec: 32 | 64;
+  from: number;
+  to: number;
+}
 const J2000_MS = Date.UTC(2000, 0, 1, 12);
 const etOf = (y: number) => (Date.UTC(y, 0, 1) - J2000_MS) / 1000;
 const helio = (t: number) => (et: number) => ecl(sub(ssb(t, et), ssb(10, et)));
@@ -71,7 +82,14 @@ const FITS: Fit[] = [
 // (the Galilean moons from Jupiter's centre, over the game's years: Io turns in 1.8 days — 160 years
 // of it would weigh megabytes)
 const JUP_FITS: Fit[] = haveJup
-  ? ([["io", 501], ["europa", 502], ["ganymede", 503], ["callisto", 504]] as const).map(([id, n]) => ({ id, of: (et: number) => ecl(sub(ssb(n, et), ssb(599, et))), tol: 5, prec: 32 as const, from: 2040, to: 2100 }))
+  ? (
+      [
+        ["io", 501],
+        ["europa", 502],
+        ["ganymede", 503],
+        ["callisto", 504],
+      ] as const
+    ).map(([id, n]) => ({ id, of: (et: number) => ecl(sub(ssb(n, et), ssb(599, et))), tol: 5, prec: 32 as const, from: 2040, to: 2100 }))
   : [];
 
 /**
@@ -89,7 +107,9 @@ function chebFit(f: (et: number) => number[], a: number, b: number, n: number): 
   );
 }
 const chebEval = (cs: number[], x: number) => {
-  let t0 = 1, t1 = x, s = cs[0]! + (cs.length > 1 ? cs[1]! * x : 0);
+  let t0 = 1,
+    t1 = x,
+    s = cs[0]! + (cs.length > 1 ? cs[1]! * x : 0);
   for (let k = 2; k < cs.length; k++) {
     const t2 = 2 * x * t1 - t0;
     s += cs[k]! * t2;
@@ -105,7 +125,8 @@ const recBytes = (F: Fit, n: number) => (F.prec === 64 ? 24 * (n + 1) : 24 + 12 
 /** The error of a fit (interval L days, degree n) of a body: its worst over sampled intervals and points [km]. */
 function fitError(F: Fit, L: number, n: number, samples = 24) {
   let worst = 0;
-  const e0 = etOf(F.from), e1 = etOf(F.to);
+  const e0 = etOf(F.from),
+    e1 = etOf(F.to);
   for (let k = 0; k < samples; k++) {
     const a = e0 + ((e1 - e0 - L * 86400) * (k + 0.37)) / samples;
     const b = a + L * 86400;
@@ -120,7 +141,13 @@ function fitError(F: Fit, L: number, n: number, samples = 24) {
 }
 
 const LS = [0.5, 1, 2, 4, 8, 16, 32, 64, 128];
-interface Plan { F: Fit; L: number; n: number; err: number; bytesPerYear: number }
+interface Plan {
+  F: Fit;
+  L: number;
+  n: number;
+  err: number;
+  bytesPerYear: number;
+}
 function plan(F: Fit): Plan {
   let best: Plan | null = null;
   for (const L of LS) {
@@ -135,7 +162,9 @@ function plan(F: Fit): Plan {
     }
   }
   if (!best) throw new Error(`${F.id}: no fit within ${F.tol} km`);
-  console.log(`${F.id.padEnd(9)} ${String(best.L).padStart(5)} d  degree ${String(best.n).padStart(2)}  ${(best.err * 1000).toFixed(0).padStart(5)} m  ${(best.bytesPerYear / 1024).toFixed(1)} KB/yr  ${F.from}–${F.to}`);
+  console.log(
+    `${F.id.padEnd(9)} ${String(best.L).padStart(5)} d  degree ${String(best.n).padStart(2)}  ${(best.err * 1000).toFixed(0).padStart(5)} m  ${(best.bytesPerYear / 1024).toFixed(1)} KB/yr  ${F.from}–${F.to}`,
+  );
   return best;
 }
 
@@ -143,7 +172,14 @@ function plan(F: Fit): Plan {
 /** One file: "EPHM", the header's length, the header (JSON), then each body's records. */
 async function write(file: string, fits: Fit[], source: string) {
   const plans = fits.map(plan);
-  const header = { format: "EPHM", version: 1, source, frame: "J2000 ecliptic, km", time: "TDB seconds past J2000", bodies: [] as { id: string; center: string; et0: number; L: number; n: number; prec: number; count: number; offset: number }[] };
+  const header = {
+    format: "EPHM",
+    version: 1,
+    source,
+    frame: "J2000 ecliptic, km",
+    time: "TDB seconds past J2000",
+    bodies: [] as { id: string; center: string; et0: number; L: number; n: number; prec: number; count: number; offset: number }[],
+  };
   const CENTER: Record<string, string> = { moon: "earth", io: "jupiter", europa: "jupiter", ganymede: "jupiter", callisto: "jupiter" };
   const chunks: ArrayBuffer[] = [];
   let offset = 0;
@@ -191,9 +227,11 @@ async function textKernel(path: string): Promise<Map<string, (number | string)[]
   let data = "";
   for (const part of txt.split(/\\begindata/).slice(1)) data += part.split(/\\begintext/)[0] + "\n";
   const re = /([A-Z0-9_/]+)\s*(\+?=)\s*(\([^)]*\)|'[^']*'|@\S+|[-+.\dDE]+)/g;
-  for (let m; (m = re.exec(data)); ) {
+  for (let m: RegExpExecArray | null; (m = re.exec(data)); ) {
     const raw = m[3]!.replace(/^\(|\)$/g, "");
-    const vals = (raw.match(/'[^']*'|@\S+|[-+]?[\d.]+(?:[DE][-+]?\d+)?/g) ?? []).map((v) => (v.startsWith("'") || v.startsWith("@") ? v.replace(/'/g, "") : Number(v.replace("D", "E"))));
+    const vals = (raw.match(/'[^']*'|@\S+|[-+]?[\d.]+(?:[DE][-+]?\d+)?/g) ?? []).map((v) =>
+      v.startsWith("'") || v.startsWith("@") ? v.replace(/'/g, "") : Number(v.replace("D", "E")),
+    );
     if (m[2] === "+=") out.set(m[1]!, [...(out.get(m[1]!) ?? []), ...vals]);
     else out.set(m[1]!, vals);
   }
@@ -202,27 +240,63 @@ async function textKernel(path: string): Promise<Map<string, (number | string)[]
 const pck = await textKernel(K("kernels/pck00010.tpc"));
 const tls = await textKernel(K("kernels/naif0012.tls"));
 const NAIF: Record<string, number> = {
-  sun: 10, mercury: 199, venus: 299, earth: 399, moon: 301, mars: 499, phobos: 401, deimos: 402, ceres: 2000001, jupiter: 599, io: 501, europa: 502,
-  ganymede: 503, callisto: 504, saturn: 699, mimas: 601, enceladus: 602, tethys: 603, dione: 604, rhea: 605, titan: 606, iapetus: 608,
-  uranus: 799, neptune: 899, triton: 801, pluto: 999, charon: 901,
+  sun: 10,
+  mercury: 199,
+  venus: 299,
+  earth: 399,
+  moon: 301,
+  mars: 499,
+  phobos: 401,
+  deimos: 402,
+  ceres: 2000001,
+  jupiter: 599,
+  io: 501,
+  europa: 502,
+  ganymede: 503,
+  callisto: 504,
+  saturn: 699,
+  mimas: 601,
+  enceladus: 602,
+  tethys: 603,
+  dione: 604,
+  rhea: 605,
+  titan: 606,
+  iapetus: 608,
+  uranus: 799,
+  neptune: 899,
+  triton: 801,
+  pluto: 999,
+  charon: 901,
 };
 const rot: Record<string, unknown> = {};
 const systems: Record<number, number[]> = {};
 for (const [id, n] of Object.entries(NAIF)) {
   const g = (k: string) => pck.get(`BODY${n}_${k}`) as number[] | undefined;
-  const ra = g("POLE_RA"), dec = g("POLE_DEC"), pm = g("PM");
+  const ra = g("POLE_RA"),
+    dec = g("POLE_DEC"),
+    pm = g("PM");
   if (!ra || !dec || !pm) continue;
   const sys = n < 1000 && n % 100 !== 99 ? Math.floor(n / 100) : n < 1000 ? Math.floor(n / 100) : 0;
   const nut = { ra: g("NUT_PREC_RA"), dec: g("NUT_PREC_DEC"), pm: g("NUT_PREC_PM") };
   if ((nut.ra || nut.dec || nut.pm) && sys && !systems[sys]) systems[sys] = pck.get(`BODY${sys}_NUT_PREC_ANGLES`) as number[];
-  rot[id] = { ra, dec, pm, ...(nut.ra ? { nra: nut.ra } : {}), ...(nut.dec ? { ndec: nut.dec } : {}), ...(nut.pm ? { npm: nut.pm } : {}), ...(sys && (nut.ra || nut.dec || nut.pm) ? { sys } : {}) };
+  rot[id] = {
+    ra,
+    dec,
+    pm,
+    ...(nut.ra ? { nra: nut.ra } : {}),
+    ...(nut.dec ? { ndec: nut.dec } : {}),
+    ...(nut.pm ? { npm: nut.pm } : {}),
+    ...(sys && (nut.ra || nut.dec || nut.pm) ? { sys } : {}),
+  };
 }
 // the leap seconds: [UTC ms at which TAI − UTC becomes …, its value]
 const MON: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
 const dat = tls.get("DELTET/DELTA_AT")!;
 const leaps: [number, number][] = [];
 for (let i = 0; i < dat.length; i += 2) {
-  const [y, mo, d] = String(dat[i + 1]).replace("@", "").split("-");
+  const [y, mo, d] = String(dat[i + 1])
+    .replace("@", "")
+    .split("-");
   leaps.push([Date.UTC(Number(y), MON[mo!]!, Number(d)), dat[i] as number]);
 }
 const ts = `// Generated by scripts/build-ephemeris.ts from NASA/JPL NAIF's pck00010.tpc and naif0012.tls — do not edit.
@@ -241,4 +315,6 @@ export const IAU_ANGLES: Record<number, number[]> = ${JSON.stringify(systems).re
 export const LEAP_SECONDS: [number, number][] = ${JSON.stringify(leaps)};
 `;
 await Bun.write(`${ROOT}src/system/iau-data.ts`, ts);
-console.log(`src/system/iau-data.ts: ${Object.keys(rot).length} bodies, ${Object.keys(systems).length} systems of angles, ${leaps.length} leap seconds`);
+console.log(
+  `src/system/iau-data.ts: ${Object.keys(rot).length} bodies, ${Object.keys(systems).length} systems of angles, ${leaps.length} leap seconds`,
+);

@@ -4,13 +4,21 @@ import { VESSELS } from "../src/vessels";
 import { solarBody } from "../src/system/solar";
 
 const earth = solarBody("earth")!.atmosphere!;
-const R = VESSELS.ranger.aero, L = VESSELS.lander.aero;
+const R = VESSELS.ranger.aero,
+  L = VESSELS.lander.aero;
 // (a velocity at an angle of attack α, the nose along z: the flow from below for α > 0)
 const at = (V: number, a: number, b = 0): V3 => [V * Math.sin(b), -V * Math.sin(a) * Math.cos(b), V * Math.cos(a) * Math.cos(b)];
 const deg = Math.PI / 180;
 
 test("the 1976 standard atmosphere: its densities and temperatures", () => {
-  const ref: [number, number, number][] = [[0, 1.225, 288.15], [11e3, 0.36392, 216.77], [20e3, 0.08891, 216.65], [32e3, 0.013555, 228.49], [50e3, 1.0269e-3, 270.65], [80e3, 1.846e-5, 198.64]];
+  const ref: [number, number, number][] = [
+    [0, 1.225, 288.15],
+    [11e3, 0.36392, 216.77],
+    [20e3, 0.08891, 216.65],
+    [32e3, 0.013555, 228.49],
+    [50e3, 1.0269e-3, 270.65],
+    [80e3, 1.846e-5, 198.64],
+  ];
   for (const [h, rho, T] of ref) {
     const a = us76(h);
     expect(Math.abs(a.rho / rho - 1)).toBeLessThan(0.01);
@@ -31,7 +39,8 @@ test("the 1976 standard atmosphere: its densities and temperatures", () => {
 
 test("the Ranger glides: lift up, L/D ≈ 6, an approach near 100 m/s; stable in pitch", () => {
   const air = airAt(earth, 0);
-  let best = 0, at16 = 0;
+  let best = 0,
+    at16 = 0;
   for (let a = 0; a <= 30; a++) {
     const o = aeroForces(R, at(100, a * deg), air);
     best = Math.max(best, o.L / o.D);
@@ -113,9 +122,17 @@ test("the Lander falls belly-first, stable; the Endurance has no shield", () => 
 test("an entry from low orbit, full lift up: the Ranger within its limits, the Endurance burns", () => {
   const atm = solarBody("earth")!.atmosphere!;
   const fly = (id: "ranger" | "endurance", alpha: number) => {
-    const A = VESSELS[id].aero, m = VESSELS[id].mass;
-    const mu = 3.986e14, Re = 6371e3;
-    let r = Re + 120e3, v = 7800, g = -1.2 * deg, skin = coldSkin(), gMax = 0, hot = 0, hull = 0;
+    const A = VESSELS[id].aero,
+      m = VESSELS[id].mass;
+    const mu = 3.986e14,
+      Re = 6371e3;
+    let r = Re + 120e3,
+      v = 7800,
+      g = -1.2 * deg,
+      skin = coldSkin(),
+      gMax = 0,
+      hot = 0,
+      hull = 0;
     const u: V3 = [0, -Math.sin(alpha), Math.cos(alpha)];
     for (let t = 0; t < 4000 && r > Re && v > 150; t += 0.2) {
       const air = airAt(atm, r - Re);

@@ -18,7 +18,9 @@ const C = C_MPS;
 
 /** v turned about a unit axis by an angle. */
 function rot(v: V3, k: V3, a: number): V3 {
-  const c = Math.cos(a), s = Math.sin(a), d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+  const c = Math.cos(a),
+    s = Math.sin(a),
+    d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
   const x = cross(k, v);
   return [v[0] * c + x[0] * s + k[0] * d * (1 - c), v[1] * c + x[1] * s + k[1] * d * (1 - c), v[2] * c + x[2] * s + k[2] * d * (1 - c)];
 }
@@ -34,7 +36,8 @@ export function envOf(d: EnvDesc): EntryEnv | null {
     const wl = Math.hypot(...w);
     const wa: V3 = wl > 0 ? [w[0] / wl, w[1] / wl, w[2] / wl] : [0, 0, 1];
     return {
-      R: b.radius * M_METRES, atm: b.atmosphere ?? null,
+      R: b.radius * M_METRES,
+      atm: b.atmosphere ?? null,
       gravity: (x) => {
         const r = Math.hypot(...x);
         const k = -mu / (r * r * r);
@@ -46,7 +49,8 @@ export function envOf(d: EnvDesc): EntryEnv | null {
   }
   const F = planetFrame(d.body, d.t, d.spin, d.massSolar);
   return {
-    R: F.R * F.mPerM, atm: F.atm,
+    R: F.R * F.mPerM,
+    atm: F.atm,
     gravity: (x, v) => {
       const a = localAccel(F, [x[0] / F.mPerM, x[1] / F.mPerM, x[2] / F.mPerM], [v[0] / C, v[1] / C, v[2] / C], [0, 0, 0], () => [0, 0, 0]);
       return [a[0] * F.aUnit, a[1] * F.aUnit, a[2] * F.aUnit];

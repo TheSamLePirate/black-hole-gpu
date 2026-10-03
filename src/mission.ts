@@ -55,7 +55,11 @@ export class Mission {
   onStart?: () => void;
   onEnd?: () => void;
 
-  constructor(private s: Settings, private cam: CameraController, private say: (t: string) => void) {
+  constructor(
+    private s: Settings,
+    private cam: CameraController,
+    private say: (t: string) => void,
+  ) {
     this.el = document.createElement("div");
     this.el.className = "mission-caption";
     this.el.innerHTML = "<small></small><b></b><span></span>";
@@ -258,7 +262,11 @@ export class Mission {
     const Ch: Vec3 = [C[0] / D, C[1] / D, C[2] / D];
     const t0 = norm(cross([0, 0, 1], Ch)); // prograde, around the spin axis
     const sa = Math.min(m.rGlue / D, 0.6);
-    const dir = norm([t0[0] * Math.sqrt(1 - sa * sa) - Ch[0] * sa, t0[1] * Math.sqrt(1 - sa * sa) - Ch[1] * sa, t0[2] * Math.sqrt(1 - sa * sa) - Ch[2] * sa]);
+    const dir = norm([
+      t0[0] * Math.sqrt(1 - sa * sa) - Ch[0] * sa,
+      t0[1] * Math.sqrt(1 - sa * sa) - Ch[1] * sa,
+      t0[2] * Math.sqrt(1 - sa * sa) - Ch[2] * sa,
+    ]);
     const X: Vec3 = [C[0] + dir[0] * m.rGlue, C[1] + dir[1] * m.rGlue, C[2] + dir[2] * m.rGlue];
     this.rExit = Math.hypot(...X);
     const th = Math.acos(X[2] / this.rExit);
@@ -294,7 +302,7 @@ export class Mission {
 
   /** Phase name, for the HUD and the automation. */
   get phase() {
-    return this.active ? this.phases[this.i]?.key ?? "" : "";
+    return this.active ? (this.phases[this.i]?.key ?? "") : "";
   }
 
   /**
@@ -303,7 +311,8 @@ export class Mission {
    */
   private direct(dt: number) {
     const s = this.s;
-    let yaw = 0, pitch = 0;
+    let yaw = 0,
+      pitch = 0;
     if (this.aim) {
       const i = this.cam.flightInfo();
       const c = this.aim === "hole" ? i.dirs.radialIn : i.dirs.target;

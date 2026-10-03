@@ -65,7 +65,8 @@ export function fromBodyFixed(id: string, q: Vec3, t: number): Vec3 {
 /** A place on a body: latitude, east longitude [°], height above its mean radius [m] → its own coordinates. */
 export function bodyFixedOf(id: string, lat: number, lon: number, hM = GEAR): Vec3 {
   const R = solarBody(id)!.radius + hM / M_METRES;
-  const f = (lat * Math.PI) / 180, l = (lon * Math.PI) / 180;
+  const f = (lat * Math.PI) / 180,
+    l = (lon * Math.PI) / 180;
   return [R * Math.cos(f) * Math.cos(l), R * Math.cos(f) * Math.sin(l), R * Math.sin(f)];
 }
 

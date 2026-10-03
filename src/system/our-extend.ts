@@ -21,7 +21,8 @@ function ourBodies(t: number): Map<string, PatchedBody> {
     // (a planet: its band of distances from the Sun, a cheap test before its place is computed)
     let band: [number, number] | undefined;
     if (p?.id === "sun" && b.elements) {
-      const a = b.elements[0]![0]! * (AU_M / M_METRES), e = b.elements[0]![1]!;
+      const a = b.elements[0]![0]! * (AU_M / M_METRES),
+        e = b.elements[0]![1]!;
       band = [a * (1 - e) - 1.2 * soi, a * (1 + e) + 1.2 * soi];
     }
     out.set(b.id, { id: b.id, parent: b.parent, mass: b.mass, radius: b.radius, soi, band, state: (tt) => solarState(b.id, tt) });

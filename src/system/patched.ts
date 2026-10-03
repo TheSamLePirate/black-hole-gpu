@@ -9,7 +9,6 @@ import { propagate, type V3 } from "../game/kepler";
 import type { OurPath } from "./our-predict";
 import { add, len, sub } from "../math/vec3";
 
-
 /** A body of the patched system: its field (GM), its size, its sphere of influence, its motion. */
 export interface PatchedBody {
   id: string;
@@ -31,7 +30,12 @@ export interface Extension extends OurPath {
 
 /** The conics from a state in a body's sphere of influence, for `horizon` of time — at most `maxPts` samples. */
 export function patchedConics(
-  bodies: Map<string, PatchedBody>, X0: V3, V0: V3, tStart: number, ref0: string, horizon: number,
+  bodies: Map<string, PatchedBody>,
+  X0: V3,
+  V0: V3,
+  tStart: number,
+  ref0: string,
+  horizon: number,
   o: { maxPts?: number; rootApsides?: boolean } = {},
 ): Extension {
   const maxPts = o.maxPts ?? 900;
@@ -57,7 +61,8 @@ export function patchedConics(
   const isRoot = (id: string) => !bodies.get(id)!.parent;
   const closeLow = () => {
     // (a lowest point inside the segment: not where it starts or ends)
-    if ((!isRoot(low.body) || o.rootApsides) && Number.isFinite(low.alt) && low.i > segStart + 1 && low.i < out.pts.length - 1) out.apsides.push({ ...low });
+    if ((!isRoot(low.body) || o.rootApsides) && Number.isFinite(low.alt) && low.i > segStart + 1 && low.i < out.pts.length - 1)
+      out.apsides.push({ ...low });
   };
   const dtMax = horizon / 250;
   const inside = (X: V3, c: string, tt: number, rRef: number) => {
@@ -93,7 +98,8 @@ export function patchedConics(
         if (!isRoot(ref) && q.r > B.soi) return true;
         return !!enter && len(sub(q.X, bodies.get(enter)!.state(tt).pos)) < bodies.get(enter)!.soi;
       };
-      let a = t, b = tn;
+      let a = t,
+        b = tn;
       for (let k = 0; k < 24; k++) {
         const m = (a + b) / 2;
         if (test(m)) b = m;

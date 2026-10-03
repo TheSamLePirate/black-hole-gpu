@@ -5,8 +5,13 @@ const MU = 398600.4418; // km³/s², the Earth
 const R = 6371;
 
 test("elements ↔ state round trip (inclined, eccentric, in tilted axes)", () => {
-  const c = Math.cos(0.4), s = Math.sin(0.4);
-  const axes: Axes = [[1, 0, 0], [0, c, s], [0, -s, c]];
+  const c = Math.cos(0.4),
+    s = Math.sin(0.4);
+  const axes: Axes = [
+    [1, 0, 0],
+    [0, c, s],
+    [0, -s, c],
+  ];
   const spec = { rp: R + 300, ra: R + 20000, i: 51.6, raan: 120, argPe: 40, nu: 75 };
   const { r, v } = stateFrom(MU, spec, axes);
   const el = elements(MU, r, v, axes);
@@ -63,6 +68,13 @@ test("a planet frame's turning rate: Hill's equations give n", async () => {
   const { frameRate } = await import("../src/game/place");
   const n = 0.01;
   // (proper matrix of Hill's equations: ẍ = 3n²x + 2n ẏ, ÿ = −2n ẋ)
-  const A = [[0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 1], [3 * n * n, 0, 0, 0, 2 * n, 0], [0, 0, 0, -2 * n, 0, 0], [0, 0, -n * n, 0, 0, 0]];
+  const A = [
+    [0, 0, 0, 1, 0, 0],
+    [0, 0, 0, 0, 1, 0],
+    [0, 0, 0, 0, 0, 1],
+    [3 * n * n, 0, 0, 0, 2 * n, 0],
+    [0, 0, 0, -2 * n, 0, 0],
+    [0, 0, -n * n, 0, 0, 0],
+  ];
   expect(frameRate({ A })).toBeCloseTo(n, 12);
 });

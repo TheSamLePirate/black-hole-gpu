@@ -37,7 +37,16 @@ export interface SymInfo {
   /** the engine: its full thrust [the scene's acceleration unit] */
   engine?: { max: number } | null;
   /** the docking: the ports' range, closing rate, angle; the guide (camera coordinates) */
-  dock?: { range: number; closing: number; lateral: number; lateralRate: number; angle: number; docked: boolean; title: string; name: string } | null;
+  dock?: {
+    range: number;
+    closing: number;
+    lateral: number;
+    lateralRate: number;
+    angle: number;
+    docked: boolean;
+    title: string;
+    name: string;
+  } | null;
   dockGuide?: { lat: V3; latRate: V3; axis: V3; gates: { d: V3; r: number; k: number }[] } | null;
   /** near the ground: height over it [m], vertical and horizontal speeds [m/s], thrust over weight, the
    *  local gravity [g], landed */
@@ -118,7 +127,10 @@ export function drawSymbology(F: SymFrame) {
   const inside = (p: [number, number] | null, m = 0) => !!p && p[0] >= m && p[0] <= W - m && p[1] >= m && p[1] <= H - m;
   const stroke = (draw: () => void, col: string, lw: number, dash?: number[]) => {
     ctx.setLineDash(dash ? dash.map((x) => x * dpr) : []);
-    for (const [w, c] of [[lw + 2.4, UNDER], [lw, col]] as const) {
+    for (const [w, c] of [
+      [lw + 2.4, UNDER],
+      [lw, col],
+    ] as const) {
       ctx.lineWidth = w * dpr;
       ctx.strokeStyle = c;
       ctx.beginPath();
@@ -165,9 +177,11 @@ export function drawSymbology(F: SymFrame) {
         const p = pr(at(0, (k / 24) * aw));
         if (p) hz.push(p);
       }
-      if (hz.length > 1) stroke(() => hz.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), `rgba(${LADDER}, 0.8)`, 1.6);
+      if (hz.length > 1)
+        stroke(() => hz.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), `rgba(${LADDER}, 0.8)`, 1.6);
       // the rungs every 5° (labelled every 10°): solid above, dashed below, their ends' ticks to the horizon
-      const half = 95 * dpr, gap = 34 * dpr;
+      const half = 95 * dpr,
+        gap = 34 * dpr;
       // (the rungs within the HUD's field — a circle about the view's centre —, fading towards its rim)
       const field = Math.min(H, W) * 0.3;
       for (let deg = -85; deg <= 85; deg += 5) {
@@ -180,7 +194,8 @@ export function drawSymbology(F: SymFrame) {
         if (off > field) continue;
         const fade = Math.min(1, (field - off) / (field * 0.3));
         const ce = Math.max(Math.cos(e), 0.08);
-        const w = (deg % 10 === 0 ? half : half * 0.6) / fpx / ce, g = gap / fpx / ce;
+        const w = (deg % 10 === 0 ? half : half * 0.6) / fpx / ce,
+          g = gap / fpx / ce;
         const col = `rgba(${LADDER}, ${((deg % 10 === 0 ? 0.85 : 0.55) * fade).toFixed(3)})`;
         const dash = deg < 0 ? [7, 5] : undefined;
         for (const sg of [-1, 1]) {
@@ -192,10 +207,15 @@ export function drawSymbology(F: SymFrame) {
           // (the end's tick towards the horizon)
           const tip = pr(at(e - (Math.sign(deg) * 8 * dpr) / fpx, sg * w));
           if (pts.length < 2) continue;
-          stroke(() => {
-            pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-            if (tip) ctx.lineTo(tip[0], tip[1]);
-          }, col, 1.4, dash);
+          stroke(
+            () => {
+              pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+              if (tip) ctx.lineTo(tip[0], tip[1]);
+            },
+            col,
+            1.4,
+            dash,
+          );
           if (deg % 10 === 0) {
             const end = pts[pts.length - 1]!;
             text(`${deg}`, end[0] + sg * 18 * dpr, end[1], col, 11.5, "center", true);
@@ -203,12 +223,19 @@ export function drawSymbology(F: SymFrame) {
         }
       }
       // the zenith and the nadir
-      for (const [d, lab] of [[up, "ZEN"], [comb(up, -1, up, 0), "NAD"]] as const) {
+      for (const [d, lab] of [
+        [up, "ZEN"],
+        [comb(up, -1, up, 0), "NAD"],
+      ] as const) {
         const p = pr(d as V3);
         if (!inside(p, 10 * dpr)) continue;
-        stroke(() => {
-          ctx.arc(p![0], p![1], 9 * dpr, 0, 2 * Math.PI);
-        }, `rgba(${LADDER}, 0.7)`, 1.3);
+        stroke(
+          () => {
+            ctx.arc(p![0], p![1], 9 * dpr, 0, 2 * Math.PI);
+          },
+          `rgba(${LADDER}, 0.7)`,
+          1.3,
+        );
         text(lab, p![0], p![1] + 20 * dpr, `rgba(${LADDER}, 0.7)`, 10);
       }
     }
@@ -226,7 +253,10 @@ export function drawSymbology(F: SymFrame) {
     const view = bearing([0, 0, 1]) ?? bearing(nose);
     if (view !== null) {
       // (the scale's baseline; its figures above, the carets on it, the view's heading boxed under it)
-      const cx = W / 2, y = F.top + 46 * dpr, wd = Math.min(420 * dpr, W * 0.36), degPx = wd / 70;
+      const cx = W / 2,
+        y = F.top + 46 * dpr,
+        wd = Math.min(420 * dpr, W * 0.36),
+        degPx = wd / 70;
       // the scale: ticks every 5°, figures every 10°, the cardinal points named
       ctx.save();
       ctx.beginPath();
@@ -235,14 +265,26 @@ export function drawSymbology(F: SymFrame) {
       for (let a = Math.floor((view - 40) / 5) * 5; a <= view + 40; a += 5) {
         const x = cx + (a - view) * degPx;
         const big = a % 10 === 0;
-        stroke(() => {
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, y - (big ? 8 : 4) * dpr);
-        }, `rgba(${LADDER}, ${big ? 0.85 : 0.5})`, 1.2);
+        stroke(
+          () => {
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y - (big ? 8 : 4) * dpr);
+          },
+          `rgba(${LADDER}, ${big ? 0.85 : 0.5})`,
+          1.2,
+        );
         if (big) {
           const v = wrap360(a);
           const card = { 0: "N", 90: "E", 180: "S", 270: "W" }[v];
-          text(card ?? String(v / 10).padStart(2, "0"), x, y - 16 * dpr, card ? "rgba(255, 200, 90, 0.95)" : `rgba(${LADDER}, 0.85)`, card ? 13 : 11.5, "center", !card);
+          text(
+            card ?? String(v / 10).padStart(2, "0"),
+            x,
+            y - 16 * dpr,
+            card ? "rgba(255, 200, 90, 0.95)" : `rgba(${LADDER}, 0.85)`,
+            card ? 13 : 11.5,
+            "center",
+            !card,
+          );
         }
       }
       // the carets: the nose's heading, the track (where the craft goes), the target's bearing
@@ -265,7 +307,14 @@ export function drawSymbology(F: SymFrame) {
       };
       ctx.restore();
       const A = i.air;
-      const track = A && A.u && A.q > 20 ? bearing([S[0]![0]! * A.u[0]! + S[0]![1]! * A.u[1]! + S[0]![2]! * A.u[2]!, S[1]![0]! * A.u[0]! + S[1]![1]! * A.u[1]! + S[1]![2]! * A.u[2]!, S[2]![0]! * A.u[0]! + S[2]![1]! * A.u[1]! + S[2]![2]! * A.u[2]!]) : bearing(i.dirs.prograde);
+      const track =
+        A && A.u && A.q > 20
+          ? bearing([
+              S[0]![0]! * A.u[0]! + S[0]![1]! * A.u[1]! + S[0]![2]! * A.u[2]!,
+              S[1]![0]! * A.u[0]! + S[1]![1]! * A.u[1]! + S[1]![2]! * A.u[2]!,
+              S[2]![0]! * A.u[0]! + S[2]![1]! * A.u[1]! + S[2]![2]! * A.u[2]!,
+            ])
+          : bearing(i.dirs.prograde);
       caret(bearing(i.dirs.target), COL.target!, true);
       caret(track, "#78ffaa", true);
       caret(bearing(nose), "#ffc85a", true);
@@ -274,7 +323,8 @@ export function drawSymbology(F: SymFrame) {
       ctx.fillStyle = "rgba(4, 10, 18, 0.72)";
       ctx.strokeStyle = `rgba(${LADDER}, 0.85)`;
       ctx.lineWidth = 1.2 * dpr;
-      const bw = 52 * dpr, bh = 20 * dpr;
+      const bw = 52 * dpr,
+        bh = 20 * dpr;
       ctx.fillRect(cx - bw / 2, y + 12 * dpr, bw, bh);
       ctx.strokeRect(cx - bw / 2, y + 12 * dpr, bw, bh);
       text(box, cx, y + 22 * dpr, "#ffffff", 12.5, "center", true);
@@ -283,23 +333,33 @@ export function drawSymbology(F: SymFrame) {
 
   // ---- the bank scale: fixed to the craft, its pointer to the sky's up
   if (up && pilotView && s.hudBank && !F.compact) {
-    const X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!], Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!];
+    const X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!],
+      Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!];
     // (> 0 banked right: the left wing — the ship's +x — high)
     const bank = Math.atan2(dot(X, up), dot(Y, up));
-    const cx = W / 2, cy = H / 2, R = Math.min(H, W) * 0.34;
+    const cx = W / 2,
+      cy = H / 2,
+      R = Math.min(H, W) * 0.34;
     const col = `rgba(${LADDER}, 0.8)`;
     stroke(() => ctx.arc(cx, cy, R, -Math.PI / 2 - 60 * D, -Math.PI / 2 + 60 * D), `rgba(${LADDER}, 0.45)`, 1.2);
     for (const a of [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60]) {
-      const t = -Math.PI / 2 + a * D, l = a % 30 === 0 ? 12 : 7;
-      stroke(() => {
-        ctx.moveTo(cx + Math.cos(t) * R, cy + Math.sin(t) * R);
-        ctx.lineTo(cx + Math.cos(t) * (R + l * dpr), cy + Math.sin(t) * (R + l * dpr));
-      }, col, a === 0 ? 2 : 1.2);
+      const t = -Math.PI / 2 + a * D,
+        l = a % 30 === 0 ? 12 : 7;
+      stroke(
+        () => {
+          ctx.moveTo(cx + Math.cos(t) * R, cy + Math.sin(t) * R);
+          ctx.lineTo(cx + Math.cos(t) * (R + l * dpr), cy + Math.sin(t) * (R + l * dpr));
+        },
+        col,
+        a === 0 ? 2 : 1.2,
+      );
     }
     const b = Math.max(-62 * D, Math.min(62 * D, -bank));
     const t = -Math.PI / 2 + b;
-    const px = cx + Math.cos(t) * (R - 3 * dpr), py = cy + Math.sin(t) * (R - 3 * dpr);
-    const nx = Math.cos(t), ny = Math.sin(t);
+    const px = cx + Math.cos(t) * (R - 3 * dpr),
+      py = cy + Math.sin(t) * (R - 3 * dpr);
+    const nx = Math.cos(t),
+      ny = Math.sin(t);
     ctx.beginPath();
     ctx.moveTo(px, py);
     ctx.lineTo(px - nx * 11 * dpr - ny * 6 * dpr, py - ny * 11 * dpr + nx * 6 * dpr);
@@ -310,7 +370,16 @@ export function drawSymbology(F: SymFrame) {
     ctx.lineWidth = 2 * dpr;
     ctx.stroke();
     ctx.fill();
-    if (Math.abs(bank) > 1.5 * D) text(`${Math.abs(Math.round(bank / D))}° ${bank > 0 ? "R" : "L"}`, px - nx * 24 * dpr, py - ny * 24 * dpr, "#ffc85a", 11, "center", true);
+    if (Math.abs(bank) > 1.5 * D)
+      text(
+        `${Math.abs(Math.round(bank / D))}° ${bank > 0 ? "R" : "L"}`,
+        px - nx * 24 * dpr,
+        py - ny * 24 * dpr,
+        "#ffc85a",
+        11,
+        "center",
+        true,
+      );
   }
 
   // ---- the future: the path in perspective, the places to come, the impact
@@ -318,10 +387,12 @@ export function drawSymbology(F: SymFrame) {
 
   // ---- approach and landing: the runway, the vertical landing's scope and cues
   if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
-  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2 && !F.compact) drawHover(F, i.surface, up, pr, stroke, text, inside);
+  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2 && !F.compact)
+    drawHover(F, i.surface, up, pr, stroke, text, inside);
 
   // ---- near Gargantua: the relativity box; the way to the hole named
-  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r)) drawRelativity(F, pr, text, inside);
+  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r))
+    drawRelativity(F, pr, text, inside);
 
   // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
   if (i.plan && i.plan.nodes.length && s.hudBurn && !F.outside && F.density < 2) drawBurn(F, pr, stroke, text, inside, nose);
@@ -355,7 +426,8 @@ export function drawSymbology(F: SymFrame) {
       const p = pr(d);
       if (inside(p, m * 0.4)) continue;
       // (its direction on the screen: from the centre towards it — behind the eye, the other way round)
-      let dx = d[0], dy = -d[1];
+      let dx = d[0],
+        dy = -d[1];
       if (d[2] <= 1e-3 && Math.hypot(dx, dy) < 1e-6) dx = 1;
       const l = Math.hypot(dx, dy) || 1;
       dx /= l;
@@ -380,8 +452,18 @@ export function drawSymbology(F: SymFrame) {
   }
 }
 
-const glyph = (k: string) => ({ radialOut: "prograde", radialIn: "retrograde", normal: "prograde", antinormal: "retrograde", target: "target", maneuver: "burn", burn: "burn", dock: "dock", prograde: "prograde" })[k] ?? "prograde";
-
+const glyph = (k: string) =>
+  ({
+    radialOut: "prograde",
+    radialIn: "retrograde",
+    normal: "prograde",
+    antinormal: "retrograde",
+    target: "target",
+    maneuver: "burn",
+    burn: "burn",
+    dock: "dock",
+    prograde: "prograde",
+  })[k] ?? "prograde";
 
 type Proj = (d: V3 | null | undefined) => [number, number] | null;
 type Stroke = (draw: () => void, col: string, lw: number, dash?: number[]) => void;
@@ -402,16 +484,30 @@ const energy = { t: 0, v: NaN, a: 0 };
  * - the load in g, coloured against the craft's limit; STALL flashing;
  * - the flight director: where the flight computer wants the flight path (its climb angle, its heading).
  */
-function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: Stroke, text: Text, up: V3 | null, north: V3 | null, fpx: number) {
+function drawAir(
+  F: SymFrame,
+  A: NonNullable<SymInfo["air"]>,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  up: V3 | null,
+  north: V3 | null,
+  fpx: number,
+) {
   const { ctx, dpr, s, i } = F;
   const S = i.S;
   const u = A.u!;
-  const v = norm([S[0]![0]! * u[0]! + S[0]![1]! * u[1]! + S[0]![2]! * u[2]!, S[1]![0]! * u[0]! + S[1]![1]! * u[1]! + S[1]![2]! * u[2]!, S[2]![0]! * u[0]! + S[2]![1]! * u[1]! + S[2]![2]! * u[2]!]);
+  const v = norm([
+    S[0]![0]! * u[0]! + S[0]![1]! * u[1]! + S[0]![2]! * u[2]!,
+    S[1]![0]! * u[0]! + S[1]![1]! * u[1]! + S[1]![2]! * u[2]!,
+    S[2]![0]! * u[0]! + S[2]![1]! * u[1]! + S[2]![2]! * u[2]!,
+  ]);
   const fp = pr(v);
   if (!fp) return;
   const r = 11 * dpr;
   // the craft's up and left about the flight path (the plane of symmetry: α measured in it)
-  const Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!], X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!];
+  const Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!],
+    X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!];
   let p = comb(Y, 1, v, -dot(Y, v));
   if (Math.hypot(...p) < 1e-6) return;
   p = norm(p);
@@ -427,21 +523,38 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
     const seg = (a: number, w0: number, w1: number) => [pr(along(a, w0 * w)), pr(along(a, w1 * w))] as const;
     // the best lift-to-drag band: a bracket on the left
     if (best) {
-      const lo = best - 1.5 * (Math.PI / 180), hi = best + 1.5 * (Math.PI / 180);
+      const lo = best - 1.5 * (Math.PI / 180),
+        hi = best + 1.5 * (Math.PI / 180);
       const pts = [pr(along(hi, 1.2 * w)), pr(along(hi, 2 * w)), pr(along(lo, 2 * w)), pr(along(lo, 1.2 * w))];
-      if (pts.every(Boolean)) stroke(() => pts.forEach((q, j) => (j ? ctx.lineTo(q![0], q![1]) : ctx.moveTo(q![0], q![1]))), "rgba(120, 255, 170, 0.9)", 1.6);
+      if (pts.every(Boolean))
+        stroke(() => pts.forEach((q, j) => (j ? ctx.lineTo(q![0], q![1]) : ctx.moveTo(q![0], q![1]))), "rgba(120, 255, 170, 0.9)", 1.6);
     }
     // 85 % of the stall (amber), the stall (red)
-    for (const [a, col, w0, w1] of [[stall * 0.85, "rgba(255, 200, 90, 0.9)", -1.4, 1.4], [stall, "rgba(255, 90, 70, 0.95)", -2.4, 2.4]] as const) {
+    for (const [a, col, w0, w1] of [
+      [stall * 0.85, "rgba(255, 200, 90, 0.9)", -1.4, 1.4],
+      [stall, "rgba(255, 90, 70, 0.95)", -2.4, 2.4],
+    ] as const) {
       const [a0, a1] = seg(a, w0, w1);
-      if (a0 && a1) stroke(() => {
-        ctx.moveTo(a0[0], a0[1]);
-        ctx.lineTo(a1[0], a1[1]);
-      }, col, a === stall ? 2.2 : 1.4);
+      if (a0 && a1)
+        stroke(
+          () => {
+            ctx.moveTo(a0[0], a0[1]);
+            ctx.lineTo(a1[0], a1[1]);
+          },
+          col,
+          a === stall ? 2.2 : 1.4,
+        );
     }
     // the incidence, in figures by the bracket
     const k = alpha / stall;
-    const col = k >= 0.85 ? (k >= 1 ? "#ff5a46" : "#ffc85a") : best && Math.abs(alpha - best) < 1.5 * (Math.PI / 180) ? "#78ffaa" : "rgba(214, 236, 255, 0.95)";
+    const col =
+      k >= 0.85
+        ? k >= 1
+          ? "#ff5a46"
+          : "#ffc85a"
+        : best && Math.abs(alpha - best) < 1.5 * (Math.PI / 180)
+          ? "#78ffaa"
+          : "rgba(214, 236, 255, 0.95)";
     const at = pr(along(Math.max(Math.min(alpha, stall * 1.2), -0.2), 2.6 * w));
     if (at) text(`α ${((alpha * 180) / Math.PI).toFixed(1)}°`, at[0], at[1], col, 12, "right", true);
   }
@@ -462,29 +575,40 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
       const gam = Math.atan(energy.a / G0);
       const q = pr(comb(v, Math.cos(gam), vu, Math.sin(gam)));
       if (q) {
-        const x = fp[0] - 2.3 * r, y = q[1];
-        const col = Math.abs(energy.a) < 0.3 ? "rgba(214, 236, 255, 0.85)" : energy.a > 0 ? "rgba(120, 255, 170, 0.95)" : "rgba(255, 200, 90, 0.95)";
-        stroke(() => {
-          ctx.moveTo(x - 7 * dpr, y - 6 * dpr);
-          ctx.lineTo(x, y);
-          ctx.lineTo(x - 7 * dpr, y + 6 * dpr);
-        }, col, 2);
+        const x = fp[0] - 2.3 * r,
+          y = q[1];
+        const col =
+          Math.abs(energy.a) < 0.3 ? "rgba(214, 236, 255, 0.85)" : energy.a > 0 ? "rgba(120, 255, 170, 0.95)" : "rgba(255, 200, 90, 0.95)";
+        stroke(
+          () => {
+            ctx.moveTo(x - 7 * dpr, y - 6 * dpr);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x - 7 * dpr, y + 6 * dpr);
+          },
+          col,
+          2,
+        );
       }
     }
   }
 
   // ---- the sideslip: a ball under the flight path
   if (s.hudAoA && Number.isFinite(A.beta)) {
-    const y = fp[1] + 2.4 * r, half = 22 * dpr;
+    const y = fp[1] + 2.4 * r,
+      half = 22 * dpr;
     const b = Math.max(-1, Math.min(1, (A.beta! * 180) / Math.PI / 8));
-    stroke(() => {
-      ctx.moveTo(fp[0] - half, y);
-      ctx.lineTo(fp[0] + half, y);
-      ctx.moveTo(fp[0] - 5 * dpr, y - 4 * dpr);
-      ctx.lineTo(fp[0] - 5 * dpr, y + 4 * dpr);
-      ctx.moveTo(fp[0] + 5 * dpr, y - 4 * dpr);
-      ctx.lineTo(fp[0] + 5 * dpr, y + 4 * dpr);
-    }, "rgba(214, 236, 255, 0.55)", 1.2);
+    stroke(
+      () => {
+        ctx.moveTo(fp[0] - half, y);
+        ctx.lineTo(fp[0] + half, y);
+        ctx.moveTo(fp[0] - 5 * dpr, y - 4 * dpr);
+        ctx.lineTo(fp[0] - 5 * dpr, y + 4 * dpr);
+        ctx.moveTo(fp[0] + 5 * dpr, y - 4 * dpr);
+        ctx.lineTo(fp[0] + 5 * dpr, y + 4 * dpr);
+      },
+      "rgba(214, 236, 255, 0.55)",
+      1.2,
+    );
     ctx.beginPath();
     ctx.arc(fp[0] + b * half, y, 3.6 * dpr, 0, 2 * Math.PI);
     ctx.fillStyle = Math.abs(b) > 0.5 ? "#ffc85a" : "rgba(214, 236, 255, 0.95)";
@@ -493,8 +617,18 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
 
   // ---- the load, STALL
   if (s.hudEnergy && Number.isFinite(A.g)) {
-    const g = A.g!, k = g / (A.gMax || 9);
-    if (Math.abs(g - 1) > 0.25 || k > 0.6) text(`${g.toFixed(1)} g`, fp[0] + 2.6 * r, fp[1] + 2.4 * r, k > 0.9 ? "#ff5a46" : k > 0.7 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)", 12, "left", true);
+    const g = A.g!,
+      k = g / (A.gMax || 9);
+    if (Math.abs(g - 1) > 0.25 || k > 0.6)
+      text(
+        `${g.toFixed(1)} g`,
+        fp[0] + 2.6 * r,
+        fp[1] + 2.4 * r,
+        k > 0.9 ? "#ff5a46" : k > 0.7 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)",
+        12,
+        "left",
+        true,
+      );
   }
   const k = A.stallA ? alpha / A.stallA : 0;
   if (A.stalled || k > 0.92) {
@@ -510,18 +644,28 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
     const q = pr(comb(h, Math.cos(gamma), up, Math.sin(gamma)));
     if (q) {
       const col = "rgba(224, 123, 255, 0.95)";
-      stroke(() => {
-        ctx.arc(q[0], q[1], 7 * dpr, 0, 2 * Math.PI);
-        ctx.moveTo(q[0] - 12 * dpr, q[1]);
-        ctx.lineTo(q[0] - 7 * dpr, q[1]);
-        ctx.moveTo(q[0] + 7 * dpr, q[1]);
-        ctx.lineTo(q[0] + 12 * dpr, q[1]);
-      }, col, 1.6);
+      stroke(
+        () => {
+          ctx.arc(q[0], q[1], 7 * dpr, 0, 2 * Math.PI);
+          ctx.moveTo(q[0] - 12 * dpr, q[1]);
+          ctx.lineTo(q[0] - 7 * dpr, q[1]);
+          ctx.moveTo(q[0] + 7 * dpr, q[1]);
+          ctx.lineTo(q[0] + 12 * dpr, q[1]);
+        },
+        col,
+        1.6,
+      );
       // (a dotted line to it from the flight path: the way to steer)
-      if (Math.hypot(q[0] - fp[0], q[1] - fp[1]) > 3 * r) stroke(() => {
-        ctx.moveTo(fp[0], fp[1]);
-        ctx.lineTo(q[0], q[1]);
-      }, "rgba(224, 123, 255, 0.45)", 1, [2, 4]);
+      if (Math.hypot(q[0] - fp[0], q[1] - fp[1]) > 3 * r)
+        stroke(
+          () => {
+            ctx.moveTo(fp[0], fp[1]);
+            ctx.lineTo(q[0], q[1]);
+          },
+          "rgba(224, 123, 255, 0.45)",
+          1,
+          [2, 4],
+        );
     }
   }
 }
@@ -542,7 +686,14 @@ function ahead(t: number): string {
  * - where the path meets the ground (a red reticle on the spot as it turns now, its countdown) or the
  *   air's top (the entry, amber), or Gargantua's horizon; off screen, an arrow at the edge with the time.
  */
-function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+function drawFuture(
+  F: SymFrame,
+  fu: FutureView,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+) {
   const { ctx, W, H, dpr, s, i } = F;
   const tube = i.region === "hole" && s.pathInView;
   // (a wing carrying the craft: the free fall's path and its impact are not where it goes — the flight
@@ -563,7 +714,8 @@ function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text:
       run.push(p);
     }
     if (run.length > 1) runs.push(run);
-    for (const r of runs) stroke(() => r.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(90, 220, 255, 0.7)", 1.8, [10, 6]);
+    for (const r of runs)
+      stroke(() => r.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(90, 220, 255, 0.7)", 1.8, [10, 6]);
   }
   // ---- the places to come
   if (s.hudFuture) {
@@ -573,39 +725,69 @@ function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text:
       if (!inside(p, 8 * dpr)) continue;
       const big = m.t > 61;
       const quarter = F.quarter && Math.abs(m.t - F.quarter) < 1;
-      stroke(() => {
-        ctx.arc(p![0], p![1], 6.5 * dpr, 0, 2 * Math.PI);
-        ctx.moveTo(p![0] - 11 * dpr, p![1]);
-        ctx.lineTo(p![0] - 6.5 * dpr, p![1]);
-        ctx.moveTo(p![0] + 6.5 * dpr, p![1]);
-        ctx.lineTo(p![0] + 11 * dpr, p![1]);
-      }, big ? "rgba(214, 236, 255, 0.85)" : "rgba(90, 220, 255, 0.95)", 1.5);
+      stroke(
+        () => {
+          ctx.arc(p![0], p![1], 6.5 * dpr, 0, 2 * Math.PI);
+          ctx.moveTo(p![0] - 11 * dpr, p![1]);
+          ctx.lineTo(p![0] - 6.5 * dpr, p![1]);
+          ctx.moveTo(p![0] + 6.5 * dpr, p![1]);
+          ctx.lineTo(p![0] + 11 * dpr, p![1]);
+        },
+        big ? "rgba(214, 236, 255, 0.85)" : "rgba(90, 220, 255, 0.95)",
+        1.5,
+      );
       // (beside it, to the right: the marks of a path seen end-on stack up, their labels still read)
-      text(quarter ? "¼ ORBIT" : `+${ahead(m.t)}`, p![0] + 15 * dpr, p![1], big ? "rgba(214, 236, 255, 0.9)" : "rgba(90, 220, 255, 0.95)", 10.5, "left", true);
+      text(
+        quarter ? "¼ ORBIT" : `+${ahead(m.t)}`,
+        p![0] + 15 * dpr,
+        p![1],
+        big ? "rgba(214, 236, 255, 0.9)" : "rgba(90, 220, 255, 0.95)",
+        10.5,
+        "left",
+        true,
+      );
     }
   }
   // ---- the impact, the entry
   if (s.hudImpact && fu.impact) {
     const marks = [fu.impact, ...(fu.impact.ground ? [fu.impact.ground] : [])];
     for (const m of marks) {
-      const ground = m.kind === "ground", air = m.kind === "air";
+      const ground = m.kind === "ground",
+        air = m.kind === "air";
       const col = ground ? "#ff5a46" : air ? "#ffc85a" : "#ff8a5c";
-      const label = ground ? `IMPACT ${ahead(m.t)}` : air ? `ENTRY ${ahead(m.t)}` : m.kind === "horizon" ? `HORIZON ${ahead(m.t)}` : `THE STAR ${ahead(m.t)}`;
+      const label = ground
+        ? `IMPACT ${ahead(m.t)}`
+        : air
+          ? `ENTRY ${ahead(m.t)}`
+          : m.kind === "horizon"
+            ? `HORIZON ${ahead(m.t)}`
+            : `THE STAR ${ahead(m.t)}`;
       const p = m.hid ? null : pr(m.d);
       if (inside(p, 20 * dpr)) {
         const R = 13 * dpr;
-        stroke(() => {
-          ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-            ctx.moveTo(p![0] + dx * R * 0.45, p![1] + dy * R * 0.45);
-            ctx.lineTo(p![0] + dx * R * 1.5, p![1] + dy * R * 1.5);
-          }
-        }, col, 1.8, air ? [4, 3] : undefined);
+        stroke(
+          () => {
+            ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
+            for (const [dx, dy] of [
+              [1, 0],
+              [-1, 0],
+              [0, 1],
+              [0, -1],
+            ] as const) {
+              ctx.moveTo(p![0] + dx * R * 0.45, p![1] + dy * R * 0.45);
+              ctx.lineTo(p![0] + dx * R * 1.5, p![1] + dy * R * 1.5);
+            }
+          },
+          col,
+          1.8,
+          air ? [4, 3] : undefined,
+        );
         text(label, p![0], p![1] + R * 2.1, col, 12, "center", true);
       } else if (ground || m.kind === "horizon") {
         // (out of the view: an arrow at its edge, the countdown by it)
         const d = m.d;
-        let dx = d[0], dy = -d[1];
+        let dx = d[0],
+          dy = -d[1];
         const l = Math.hypot(dx, dy) || 1;
         dx /= l;
         dy /= l;
@@ -628,8 +810,12 @@ function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text:
  * of the free frame — clear of the mission bar above and of the hub and its attitude ball below.
  */
 function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [number, number] {
-  const top = 120 * dpr, bottom = Math.max(H * 0.62, H - 250 * dpr), side = 60 * dpr;
-  const cy = (top + bottom) / 2, hy = (bottom - top) / 2, hx = W / 2 - side;
+  const top = 120 * dpr,
+    bottom = Math.max(H * 0.62, H - 250 * dpr),
+    side = 60 * dpr;
+  const cy = (top + bottom) / 2,
+    hy = (bottom - top) / 2,
+    hx = W / 2 - side;
   const k = Math.min(hx / Math.max(Math.abs(dx), 1e-6), hy / Math.max(Math.abs(dy), 1e-6));
   return [W / 2 + dx * k, cy + dy * k];
 }
@@ -641,7 +827,14 @@ function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [num
  * threshold, the offset across the axis; on the final the glide path asked against the one flown;
  * FLARE low over it.
  */
-function drawRunway(F: SymFrame, rw: RunwayView, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+function drawRunway(
+  F: SymFrame,
+  rw: RunwayView,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+) {
   const { ctx, dpr, W, H } = F;
   const front = (q: { d: V3 }) => q.d[2] > 1e-3;
   // the outline (its far end first: the near one may be behind the eye on the ground)
@@ -652,50 +845,90 @@ function drawRunway(F: SymFrame, rw: RunwayView, pr: Proj, stroke: Stroke, text:
     ctx.closePath();
     ctx.fillStyle = "rgba(255, 220, 160, 0.12)";
     ctx.fill();
-    stroke(() => {
-      pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-      ctx.closePath();
-    }, "rgba(255, 220, 160, 0.95)", 1.8);
+    stroke(
+      () => {
+        pts.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+      },
+      "rgba(255, 220, 160, 0.95)",
+      1.8,
+    );
     // (the threshold: a bar across)
-    stroke(() => {
-      ctx.moveTo(pts[0]![0], pts[0]![1]);
-      ctx.lineTo(pts[3]![0], pts[3]![1]);
-    }, "#ffffff", 3);
+    stroke(
+      () => {
+        ctx.moveTo(pts[0]![0], pts[0]![1]);
+        ctx.lineTo(pts[3]![0], pts[3]![1]);
+      },
+      "#ffffff",
+      3,
+    );
   }
   // the centreline drawn back from the threshold, its kilometres ticked
   const line = rw.line.filter(front).map((q) => pr(q.d)!);
-  if (line.length > 1) stroke(() => line.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(124, 214, 255, 0.75)", 1.4, [8, 6]);
+  if (line.length > 1)
+    stroke(() => line.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(124, 214, 255, 0.75)", 1.4, [8, 6]);
   // the aim point
   const a = front(rw.aim) ? pr(rw.aim.d) : null;
   if (inside(a, 6 * dpr)) {
     const R = 8 * dpr;
-    stroke(() => {
-      ctx.moveTo(a![0], a![1] - R);
-      ctx.lineTo(a![0] + R, a![1]);
-      ctx.lineTo(a![0], a![1] + R);
-      ctx.lineTo(a![0] - R, a![1]);
-      ctx.closePath();
-    }, "#78ffaa", 1.8);
+    stroke(
+      () => {
+        ctx.moveTo(a![0], a![1] - R);
+        ctx.lineTo(a![0] + R, a![1]);
+        ctx.lineTo(a![0], a![1] + R);
+        ctx.lineTo(a![0] - R, a![1]);
+        ctx.closePath();
+      },
+      "#78ffaa",
+      1.8,
+    );
     text("AIM", a![0] + R + 6 * dpr, a![1], "#78ffaa", 10.5, "left", true);
   }
   // the box: the runway, the distance to its threshold, the offset across the axis, the glide path
   const dist = Math.max(-rw.along, 0);
   const km = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
-  const off = Math.abs(rw.across) < 15 ? "ON AXIS" : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
+  const off =
+    Math.abs(rw.across) < 15
+      ? "ON AXIS"
+      : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
   if (F.compact) {
-    if (rw.final && rw.agl < 60 && rw.agl > 1 && Math.floor(performance.now() / 350) % 2 === 0) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+    if (rw.final && rw.agl < 60 && rw.agl > 1 && Math.floor(performance.now() / 350) % 2 === 0)
+      text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
     return;
   }
   // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
-  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 10 * dpr;
+  const x = W / 2 - Math.min(W, H) * 0.44,
+    y = H / 2 - 10 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 28 * dpr, 192 * dpr, rw.gRef !== null && rw.gam !== null ? 70 * dpr : 54 * dpr);
-  text(`RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`, x, y - 14 * dpr, "rgba(255, 220, 160, 0.95)", 11);
+  text(
+    `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
+    x,
+    y - 14 * dpr,
+    "rgba(255, 220, 160, 0.95)",
+    11,
+  );
   text(km, x, y + 4 * dpr, "#ffffff", 13, "center", true);
-  text(off, x, y + 20 * dpr, Math.abs(rw.across) > 300 ? "#ffc85a" : Math.abs(rw.across) < 15 ? "#78ffaa" : "rgba(214, 236, 255, 0.95)", 11.5, "center", true);
+  text(
+    off,
+    x,
+    y + 20 * dpr,
+    Math.abs(rw.across) > 300 ? "#ffc85a" : Math.abs(rw.across) < 15 ? "#78ffaa" : "rgba(214, 236, 255, 0.95)",
+    11.5,
+    "center",
+    true,
+  );
   if (rw.gRef !== null && rw.gam !== null) {
     const e = ((rw.gam - rw.gRef) * 180) / Math.PI;
-    text(`GLIDE ${e >= 0 ? "▲" : "▼"} ${Math.abs(e).toFixed(1)}°`, x, y + 35 * dpr, Math.abs(e) > 2 ? "#ffc85a" : "#78ffaa", 11.5, "center", true);
+    text(
+      `GLIDE ${e >= 0 ? "▲" : "▼"} ${Math.abs(e).toFixed(1)}°`,
+      x,
+      y + 35 * dpr,
+      Math.abs(e) > 2 ? "#ffc85a" : "#78ffaa",
+      11.5,
+      "center",
+      true,
+    );
   }
   if (rw.final && rw.agl < 60 && rw.agl > 1) {
     const on = Math.floor(performance.now() / 350) % 2 === 0;
@@ -711,7 +944,15 @@ function drawRunway(F: SymFrame, rw: RunwayView, pr: Proj, stroke: Stroke, text:
  *   NOW), from the descent rate, the thrust over weight and the local gravity;
  * - the touchdown spot in the view: where the craft comes down at this drift and descent rate.
  */
-function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | null, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+function drawHover(
+  F: SymFrame,
+  sf: NonNullable<SymInfo["surface"]>,
+  up: V3 | null,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+) {
   const { ctx, dpr, W, H, i } = F;
   const A = i.air;
   // (a hover, a vertical descent: low and slow — not the glide to a runway)
@@ -719,20 +960,26 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
   const drift = i.dirs.drift ?? null;
   const vDown = Math.max(-sf.vVert, 0);
   // ---- the scope
-  const R0 = 52 * dpr, cx = W / 2 + Math.min(W, H) * 0.44, cy = H / 2 + 20 * dpr;
+  const R0 = 52 * dpr,
+    cx = W / 2 + Math.min(W, H) * 0.44,
+    cy = H / 2 + 20 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.beginPath();
   ctx.arc(cx, cy, R0 + 6 * dpr, 0, 2 * Math.PI);
   ctx.fill();
-  stroke(() => {
-    ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
-    ctx.moveTo(cx + R0 / 2, cy);
-    ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
-    ctx.moveTo(cx - R0, cy);
-    ctx.lineTo(cx + R0, cy);
-    ctx.moveTo(cx, cy - R0);
-    ctx.lineTo(cx, cy + R0);
-  }, "rgba(124, 214, 255, 0.45)", 1);
+  stroke(
+    () => {
+      ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
+      ctx.moveTo(cx + R0 / 2, cy);
+      ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
+      ctx.moveTo(cx - R0, cy);
+      ctx.lineTo(cx + R0, cy);
+      ctx.moveTo(cx, cy - R0);
+      ctx.lineTo(cx, cy + R0);
+    },
+    "rgba(124, 214, 255, 0.45)",
+    1,
+  );
   const scales = [2, 5, 10, 20, 50, 100, 200];
   const full = scales.find((k) => k >= sf.vHor * 1.25) ?? 200;
   if (drift && up && sf.vHor > 0.05) {
@@ -742,29 +989,56 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
     f = norm(f);
     const r = norm(crossW(up, f));
     const k = Math.min(sf.vHor / full, 1.15) * R0;
-    const dx = dot(drift, r) * k * -1, dy = -dot(drift, f) * k;
-    const tx = cx + dx, ty = cy + dy;
+    const dx = dot(drift, r) * k * -1,
+      dy = -dot(drift, f) * k;
+    const tx = cx + dx,
+      ty = cy + dy;
     const col = sf.vHor > 3 ? "#ffc85a" : "#78ffaa";
-    stroke(() => {
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(tx, ty);
-    }, col, 2.2);
+    stroke(
+      () => {
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tx, ty);
+      },
+      col,
+      2.2,
+    );
     ctx.beginPath();
     ctx.arc(tx, ty, 4 * dpr, 0, 2 * Math.PI);
     ctx.fillStyle = col;
     ctx.fill();
   }
-  text(`DRIFT ${sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)} m/s`, cx, cy + R0 + 18 * dpr, sf.vHor > 3 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)", 11, "center", true);
+  text(
+    `DRIFT ${sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)} m/s`,
+    cx,
+    cy + R0 + 18 * dpr,
+    sf.vHor > 3 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)",
+    11,
+    "center",
+    true,
+  );
   text(`${full} m/s`, cx + R0 - 2 * dpr, cy - R0 + 2 * dpr, "rgba(124, 214, 255, 0.6)", 9, "right", true);
-  text(`AGL ${sf.alt >= 1000 ? `${(sf.alt / 1000).toFixed(2)} km` : `${Math.round(sf.alt)} m`}`, cx, cy - R0 - 16 * dpr, "#ffffff", 12, "center", true);
+  text(
+    `AGL ${sf.alt >= 1000 ? `${(sf.alt / 1000).toFixed(2)} km` : `${Math.round(sf.alt)} m`}`,
+    cx,
+    cy - R0 - 16 * dpr,
+    "#ffffff",
+    12,
+    "center",
+    true,
+  );
   // ---- the vertical speed's bar (±20 m/s), right of the scope
-  const bx = cx + R0 + 22 * dpr, bh = R0 * 2;
-  stroke(() => {
-    ctx.moveTo(bx, cy - bh / 2);
-    ctx.lineTo(bx, cy + bh / 2);
-    ctx.moveTo(bx - 4 * dpr, cy);
-    ctx.lineTo(bx + 4 * dpr, cy);
-  }, "rgba(124, 214, 255, 0.5)", 1.2);
+  const bx = cx + R0 + 22 * dpr,
+    bh = R0 * 2;
+  stroke(
+    () => {
+      ctx.moveTo(bx, cy - bh / 2);
+      ctx.lineTo(bx, cy + bh / 2);
+      ctx.moveTo(bx - 4 * dpr, cy);
+      ctx.lineTo(bx + 4 * dpr, cy);
+    },
+    "rgba(124, 214, 255, 0.5)",
+    1.2,
+  );
   const vv = Math.max(-1, Math.min(1, sf.vVert / 20));
   const vcol = vDown > Math.max(2, sf.alt / 10) ? "#ff5a46" : vDown > 2 ? "#ffc85a" : "#78ffaa";
   ctx.fillStyle = vcol;
@@ -773,7 +1047,8 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
   // ---- the stop burn: the full-thrust deceleration against gravity, the distance it needs
   const g = sf.gLocal * G0;
   const net = (sf.twr - 1) * g;
-  let cue = "", ccol = "rgba(214, 236, 255, 0.9)";
+  let cue = "",
+    ccol = "rgba(214, 236, 255, 0.9)";
   if (vDown > 1) {
     if (net <= 0.05) (cue = "TWR < 1 · NO STOP"), (ccol = "#ff5a46");
     else {
@@ -794,13 +1069,17 @@ function drawHover(F: SymFrame, sf: NonNullable<SymInfo["surface"]>, up: V3 | nu
     const p = pr(norm(v));
     if (inside(p, 12 * dpr)) {
       const R = 11 * dpr;
-      stroke(() => {
-        ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
-        ctx.moveTo(p![0] - R * 1.6, p![1]);
-        ctx.lineTo(p![0] + R * 1.6, p![1]);
-        ctx.moveTo(p![0], p![1] - R * 1.6);
-        ctx.lineTo(p![0], p![1] + R * 1.6);
-      }, "#78ffaa", 1.6);
+      stroke(
+        () => {
+          ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
+          ctx.moveTo(p![0] - R * 1.6, p![1]);
+          ctx.lineTo(p![0] + R * 1.6, p![1]);
+          ctx.moveTo(p![0], p![1] - R * 1.6);
+          ctx.lineTo(p![0], p![1] + R * 1.6);
+        },
+        "#78ffaa",
+        1.6,
+      );
       text(`TD ${Math.round(tg)} s`, p![0], p![1] + R * 2.3, "#78ffaa", 11, "center", true);
     }
   }
@@ -815,7 +1094,14 @@ const T_UNIT = M_SECONDS;
  * aim — the nose against the burn's direction —: a ring about the manoeuvre marker, green within 2°,
  * amber within 10°, red beyond, and the angle in figures. While it burns: BURNING.
  */
-function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean, nose: V3) {
+function drawBurn(
+  F: SymFrame,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+  nose: V3,
+) {
   const { ctx, dpr, W, H, i } = F;
   const P = i.plan!;
   const k = P.nodes.findIndex((n) => n.t >= P.now - 1e-9);
@@ -838,15 +1124,34 @@ function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
   }
   if (F.compact) return;
   // the box (left of centre, under the runway's place)
-  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 + 74 * dpr;
+  const x = W / 2 - Math.min(W, H) * 0.44,
+    y = H / 2 + 74 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 70 * dpr);
   const burning = !!P.burning;
-  text(burning ? `BURNING ◆${k + 1}` : `BURN ◆${k + 1} IN ${ahead(Math.max(tIn, 0))}`, x, y - 12 * dpr, burning ? "#ffc85a" : "#7cd6ff", 11.5, "center", true);
-  text(`Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(1)} m/s`} · ${Number.isFinite(len) ? ahead(len) : "no thrust"}`, x, y + 6 * dpr, "#ffffff", 12, "center", true);
-  if (Number.isFinite(err)) text(`AIM ${err.toFixed(1)}°`, x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
+  text(
+    burning ? `BURNING ◆${k + 1}` : `BURN ◆${k + 1} IN ${ahead(Math.max(tIn, 0))}`,
+    x,
+    y - 12 * dpr,
+    burning ? "#ffc85a" : "#7cd6ff",
+    11.5,
+    "center",
+    true,
+  );
+  text(
+    `Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(1)} m/s`} · ${Number.isFinite(len) ? ahead(len) : "no thrust"}`,
+    x,
+    y + 6 * dpr,
+    "#ffffff",
+    12,
+    "center",
+    true,
+  );
+  if (Number.isFinite(err))
+    text(`AIM ${err.toFixed(1)}°`, x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
   // (the burn's start soon and the craft not turned: said)
-  if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && Math.floor(performance.now() / 400) % 2 === 0) text("TURN TO THE BURN", W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
+  if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && Math.floor(performance.now() / 400) % 2 === 0)
+    text("TURN TO THE BURN", W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
 }
 
 /**
@@ -857,61 +1162,101 @@ function drawBurn(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
  */
 function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
   const { ctx, dpr, W, H, i } = F;
-  const D = i.dock!, G = i.dockGuide!;
-  const fpx = H / (2 * Math.tan(((F.fov * Math.PI) / 180) / 2));
+  const D = i.dock!,
+    G = i.dockGuide!;
+  const fpx = H / (2 * Math.tan((F.fov * Math.PI) / 180 / 2));
   // the gates
-  if (D.range < 400) for (const g of G.gates) {
-    // (the gates still ahead: those between the craft and the port)
-    if (g.k >= D.range - 2) continue;
-    const p = g.d[2] > 1e-3 ? pr(g.d) : null;
-    if (!inside(p, -40 * dpr)) continue;
-    const rad = Math.max(((0.8 + g.k * 0.08) / g.r) * fpx, 6 * dpr);
-    stroke(() => ctx.arc(p![0], p![1], rad, 0, 2 * Math.PI), `rgba(95, 255, 208, ${g.k <= 20 ? 0.8 : 0.45})`, 1.3, [6, 4]);
-    text(`${g.k} m`, p![0] + rad + 4 * dpr, p![1], "rgba(95, 255, 208, 0.75)", 9.5, "left", true);
-  }
+  if (D.range < 400)
+    for (const g of G.gates) {
+      // (the gates still ahead: those between the craft and the port)
+      if (g.k >= D.range - 2) continue;
+      const p = g.d[2] > 1e-3 ? pr(g.d) : null;
+      if (!inside(p, -40 * dpr)) continue;
+      const rad = Math.max(((0.8 + g.k * 0.08) / g.r) * fpx, 6 * dpr);
+      stroke(() => ctx.arc(p![0], p![1], rad, 0, 2 * Math.PI), `rgba(95, 255, 208, ${g.k <= 20 ? 0.8 : 0.45})`, 1.3, [6, 4]);
+      text(`${g.k} m`, p![0] + rad + 4 * dpr, p![1], "rgba(95, 255, 208, 0.75)", 9.5, "left", true);
+    }
   if (D.range > 2000 || F.compact) return;
   // the scope, down the axis: its x and y the view's right and up across the axis
   const ax = norm(G.axis);
-  let ex = comb([1, 0, 0], 1, ax, -ax[0]), ey = comb([0, 1, 0], 1, ax, -ax[1]);
+  let ex = comb([1, 0, 0], 1, ax, -ax[0]),
+    ey = comb([0, 1, 0], 1, ax, -ax[1]);
   if (Math.hypot(...ex) < 0.1 || Math.hypot(...ey) < 0.1) return;
   ex = norm(ex);
   ey = norm(ey);
-  const ox = dot(G.lat, ex), oy = dot(G.lat, ey);
-  const rx = dot(G.latRate, ex) * 10, ry = dot(G.latRate, ey) * 10;
-  const R0 = 52 * dpr, cx = W / 2 + Math.min(W, H) * 0.44, cy = H / 2 + 20 * dpr;
+  const ox = dot(G.lat, ex),
+    oy = dot(G.lat, ey);
+  const rx = dot(G.latRate, ex) * 10,
+    ry = dot(G.latRate, ey) * 10;
+  const R0 = 52 * dpr,
+    cx = W / 2 + Math.min(W, H) * 0.44,
+    cy = H / 2 + 20 * dpr;
   const scales = [0.5, 1, 2, 5, 10, 20, 50, 100, 200];
   const full = scales.find((k) => k >= Math.max(Math.hypot(ox, oy), Math.hypot(ox + rx, oy + ry)) * 1.2) ?? 200;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.beginPath();
   ctx.arc(cx, cy, R0 + 6 * dpr, 0, 2 * Math.PI);
   ctx.fill();
-  stroke(() => {
-    ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
-    ctx.moveTo(cx + R0 / 2, cy);
-    ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
-    ctx.moveTo(cx - R0, cy);
-    ctx.lineTo(cx + R0, cy);
-    ctx.moveTo(cx, cy - R0);
-    ctx.lineTo(cx, cy + R0);
-  }, "rgba(95, 255, 208, 0.45)", 1);
+  stroke(
+    () => {
+      ctx.arc(cx, cy, R0, 0, 2 * Math.PI);
+      ctx.moveTo(cx + R0 / 2, cy);
+      ctx.arc(cx, cy, R0 / 2, 0, 2 * Math.PI);
+      ctx.moveTo(cx - R0, cy);
+      ctx.lineTo(cx + R0, cy);
+      ctx.moveTo(cx, cy - R0);
+      ctx.lineTo(cx, cy + R0);
+    },
+    "rgba(95, 255, 208, 0.45)",
+    1,
+  );
   const k = R0 / full;
-  const px = cx + Math.max(-1.15, Math.min(1.15, ox / full)) * R0, py = cy - Math.max(-1.15, Math.min(1.15, oy / full)) * R0;
+  const px = cx + Math.max(-1.15, Math.min(1.15, ox / full)) * R0,
+    py = cy - Math.max(-1.15, Math.min(1.15, oy / full)) * R0;
   const on = Math.hypot(ox, oy) < Math.max(0.15, D.range * 0.02);
-  stroke(() => {
-    ctx.moveTo(px, py);
-    ctx.lineTo(px + rx * k, py - ry * k);
-  }, "#ffc85a", 1.8);
+  stroke(
+    () => {
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + rx * k, py - ry * k);
+    },
+    "#ffc85a",
+    1.8,
+  );
   ctx.beginPath();
   ctx.arc(px, py, 5 * dpr, 0, 2 * Math.PI);
   ctx.fillStyle = on ? "#78ffaa" : "#5fffd0";
   ctx.fill();
   text(`${full} m`, cx + R0 - 2 * dpr, cy - R0 + 2 * dpr, "rgba(95, 255, 208, 0.6)", 9, "right", true);
   text(`${D.title.toUpperCase()} · ${D.name}`, cx, cy - R0 - 30 * dpr, "rgba(95, 255, 208, 0.95)", 10.5);
-  text(`RANGE ${D.range >= 1000 ? `${(D.range / 1000).toFixed(2)} km` : `${D.range.toFixed(D.range < 10 ? 2 : 1)} m`}`, cx, cy - R0 - 14 * dpr, "#ffffff", 12, "center", true);
+  text(
+    `RANGE ${D.range >= 1000 ? `${(D.range / 1000).toFixed(2)} km` : `${D.range.toFixed(D.range < 10 ? 2 : 1)} m`}`,
+    cx,
+    cy - R0 - 14 * dpr,
+    "#ffffff",
+    12,
+    "center",
+    true,
+  );
   const fast = D.closing > Math.max(0.3, D.range / 60);
   const ccol = D.closing < 0 ? "#ffc85a" : fast ? (D.range < 20 ? "#ff5a46" : "#ffc85a") : "#78ffaa";
-  text(`${D.closing >= 0 ? "CLOSING" : "OPENING"} ${Math.abs(D.closing).toFixed(2)} m/s`, cx, cy + R0 + 18 * dpr, ccol, 11.5, "center", true);
-  text(`LAT ${Math.hypot(ox, oy).toFixed(2)} m · ${Math.abs(D.lateralRate).toFixed(2)} m/s · ∠ ${D.angle.toFixed(1)}°`, cx, cy + R0 + 34 * dpr, on ? "#78ffaa" : "rgba(214, 236, 255, 0.9)", 10.5, "center", true);
+  text(
+    `${D.closing >= 0 ? "CLOSING" : "OPENING"} ${Math.abs(D.closing).toFixed(2)} m/s`,
+    cx,
+    cy + R0 + 18 * dpr,
+    ccol,
+    11.5,
+    "center",
+    true,
+  );
+  text(
+    `LAT ${Math.hypot(ox, oy).toFixed(2)} m · ${Math.abs(D.lateralRate).toFixed(2)} m/s · ∠ ${D.angle.toFixed(1)}°`,
+    cx,
+    cy + R0 + 34 * dpr,
+    on ? "#78ffaa" : "rgba(214, 236, 255, 0.9)",
+    10.5,
+    "center",
+    true,
+  );
 }
 
 /**
@@ -926,10 +1271,15 @@ function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
  */
 function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
   const { ctx, dpr, W, H, i, s } = F;
-  const r = i.r!, E = i.E ?? NaN, beta = i.speed ?? 0, g = i.gamma ?? 1, dt = i.dtau ?? NaN;
+  const r = i.r!,
+    E = i.E ?? NaN,
+    beta = i.speed ?? 0,
+    g = i.gamma ?? 1,
+    dt = i.dtau ?? NaN;
   const Mm = 1476.625 * s.massSolar;
   const tide = (2 * C_MPS * C_MPS) / (r * r * r * Mm * Mm) / G0;
-  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 150 * dpr;
+  const x = W / 2 - Math.min(W, H) * 0.44,
+    y = H / 2 - 150 * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 112 * dpr);
   text("RELATIVITY", x, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
@@ -943,16 +1293,57 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   }
   // the motion
   const dop = beta < 1 ? Math.sqrt((1 + beta) / (1 - beta)) : Infinity;
-  text(`${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`, x - 86 * dpr, y + 20 * dpr, "rgba(214, 236, 255, 0.95)", 10.5, "left", true);
+  text(
+    `${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`,
+    x - 86 * dpr,
+    y + 20 * dpr,
+    "rgba(214, 236, 255, 0.95)",
+    10.5,
+    "left",
+    true,
+  );
   // the orbit
   if (Number.isFinite(E)) {
     const bound = E < 1;
-    text(bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`, x - 86 * dpr, y + 36 * dpr, bound ? "#78ffaa" : "#ffc85a", 10.5, "left", true);
+    text(
+      bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`,
+      x - 86 * dpr,
+      y + 36 * dpr,
+      bound ? "#78ffaa" : "#ffc85a",
+      10.5,
+      "left",
+      true,
+    );
   }
   // the radius against the critical ones
-  const crit = i.rH !== undefined && r < i.rH * 1.0001 ? "INSIDE THE HORIZON" : i.photon !== undefined && r < i.photon ? "INSIDE THE PHOTON ORBIT" : i.isco !== undefined && r < i.isco ? "BELOW THE ISCO" : i.ergo ? "IN THE ERGOSPHERE" : "";
-  text(`r ${r.toFixed(2)} M · ISCO ${(i.isco ?? NaN).toFixed(2)} · γ-orbit ${(i.photon ?? NaN).toFixed(2)} · H ${(i.rH ?? NaN).toFixed(2)}`, x - 86 * dpr, y + 52 * dpr, crit ? "#ff5a46" : "rgba(214, 236, 255, 0.9)", 10, "left", true);
-  text(crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`, x - 86 * dpr, y + 68 * dpr, crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)", 10, "left", true);
+  const crit =
+    i.rH !== undefined && r < i.rH * 1.0001
+      ? "INSIDE THE HORIZON"
+      : i.photon !== undefined && r < i.photon
+        ? "INSIDE THE PHOTON ORBIT"
+        : i.isco !== undefined && r < i.isco
+          ? "BELOW THE ISCO"
+          : i.ergo
+            ? "IN THE ERGOSPHERE"
+            : "";
+  text(
+    `r ${r.toFixed(2)} M · ISCO ${(i.isco ?? NaN).toFixed(2)} · γ-orbit ${(i.photon ?? NaN).toFixed(2)} · H ${(i.rH ?? NaN).toFixed(2)}`,
+    x - 86 * dpr,
+    y + 52 * dpr,
+    crit ? "#ff5a46" : "rgba(214, 236, 255, 0.9)",
+    10,
+    "left",
+    true,
+  );
+  text(
+    crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`,
+    x - 86 * dpr,
+    y + 68 * dpr,
+    crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)",
+    10,
+    "left",
+    true,
+  );
   // the way to the hole
   const p = pr(i.dirs.radialIn);
   if (inside(p, 20 * dpr)) text("GARGANTUA", p![0], p![1] + 22 * dpr, "rgba(95, 211, 255, 0.9)", 10.5);

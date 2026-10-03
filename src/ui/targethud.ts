@@ -62,7 +62,18 @@ export function fmtTime(s: number) {
  */
 export function lockKey(v: LockDraw, W: number, H: number, tanH: number) {
   const p = project(v.dir, W, H, tanH);
-  return [v.name, p ? p[0].toFixed(1) : "off", p ? p[1].toFixed(1) : "", v.ang.toPrecision(3), fmtDistance(v.dist), fmtSpeed(v.closing), v.vrel.map((x) => x.toPrecision(2)), Number.isFinite(v.impact) ? v.impact.toFixed(0) : "", Number.isFinite(v.tca) ? fmtTime(v.tca) : "", fmtDistance(v.ca)].join();
+  return [
+    v.name,
+    p ? p[0].toFixed(1) : "off",
+    p ? p[1].toFixed(1) : "",
+    v.ang.toPrecision(3),
+    fmtDistance(v.dist),
+    fmtSpeed(v.closing),
+    v.vrel.map((x) => x.toPrecision(2)),
+    Number.isFinite(v.impact) ? v.impact.toFixed(0) : "",
+    Number.isFinite(v.tca) ? fmtTime(v.tca) : "",
+    fmtDistance(v.ca),
+  ].join();
 }
 
 function project(d: Vec3, W: number, H: number, tanH: number): [number, number] | null {
@@ -70,7 +81,16 @@ function project(d: Vec3, W: number, H: number, tanH: number): [number, number] 
   return [((d[0] / (d[2] * tanH * (W / H)) + 1) / 2) * W, ((1 - d[1] / (d[2] * tanH)) / 2) * H];
 }
 
-export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, H: number, tanH: number, k: number, alpha: number, inset = { top: 0, bottom: 0 }) {
+export function drawLock(
+  ctx: CanvasRenderingContext2D,
+  v: LockDraw,
+  W: number,
+  H: number,
+  tanH: number,
+  k: number,
+  alpha: number,
+  inset = { top: 0, bottom: 0 },
+) {
   const col = v.colour || "200, 220, 255";
   const p = project(v.dir, W, H, tanH);
   const margin = 28 * k;
@@ -80,24 +100,40 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
   ctx.shadowBlur = 4 * k;
   ctx.lineCap = "round";
   const on = p && p[0] > margin && p[0] < W - margin && p[1] > margin && p[1] < H - margin;
-  const label = (text: string, x: number, y: number, size: number, weight: number, fill: string, align: CanvasTextAlign = "center", font = "Rajdhani, Inter, system-ui, sans-serif") => {
+  const label = (
+    text: string,
+    x: number,
+    y: number,
+    size: number,
+    weight: number,
+    fill: string,
+    align: CanvasTextAlign = "center",
+    font = "Rajdhani, Inter, system-ui, sans-serif",
+  ) => {
     ctx.font = `${weight} ${size * k}px ${font}`;
     ctx.fillStyle = fill;
     ctx.textAlign = align;
     ctx.fillText(text, x, y);
   };
   const mono = '"JetBrains Mono", ui-monospace, monospace';
-  const warm = "255, 176, 92", cool = "124, 200, 255", red = "255, 90, 70";
+  const warm = "255, 176, 92",
+    cool = "124, 200, 255",
+    red = "255, 90, 70";
   if (!on) {
     // off the screen: an arrow at its edge, towards where it is (behind: the way to turn)
-    const dx = v.dir[0], dy = -v.dir[1];
+    const dx = v.dir[0],
+      dy = -v.dir[1];
     const a = Math.atan2(dy, dx);
     // (within the view less the HUD's bars: the mission bar above, the cockpit below)
-    const top = margin + inset.top, bottom = H - margin - inset.bottom;
-    const cx = W / 2, cy = (top + bottom) / 2;
-    const ex = Math.cos(a), ey = Math.sin(a);
-    const s = Math.min((W / 2 - margin) / Math.max(Math.abs(ex), 1e-6), ((bottom - top) / 2) / Math.max(Math.abs(ey), 1e-6));
-    const x = cx + ex * s, y = cy + ey * s;
+    const top = margin + inset.top,
+      bottom = H - margin - inset.bottom;
+    const cx = W / 2,
+      cy = (top + bottom) / 2;
+    const ex = Math.cos(a),
+      ey = Math.sin(a);
+    const s = Math.min((W / 2 - margin) / Math.max(Math.abs(ex), 1e-6), (bottom - top) / 2 / Math.max(Math.abs(ey), 1e-6));
+    const x = cx + ex * s,
+      y = cy + ey * s;
     ctx.fillStyle = `rgba(${col}, 0.95)`;
     ctx.beginPath();
     ctx.moveTo(x + ex * 12 * k, y + ey * 12 * k);
@@ -105,7 +141,8 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
     ctx.lineTo(x + ey * 7 * k - ex * 4 * k, y - ex * 7 * k - ey * 4 * k);
     ctx.closePath();
     ctx.fill();
-    const tx = x - ex * 34 * k, ty = y - ey * 22 * k;
+    const tx = x - ex * 34 * k,
+      ty = y - ey * 22 * k;
     label(v.name.toUpperCase(), tx, ty, 12, 700, `rgba(${col}, 0.95)`);
     label(fmtDistance(v.dist), tx, ty + 14 * k, 11, 500, "rgba(235, 240, 248, 0.9)", "center", mono);
     ctx.restore();
@@ -122,7 +159,12 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
   ctx.stroke();
   ctx.lineWidth = 2 * k;
   ctx.beginPath();
-  for (const [ux, uy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+  for (const [ux, uy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const) {
     ctx.moveTo(x + ux * r, y + uy * r);
     ctx.lineTo(x + ux * (r + 7 * k), y + uy * (r + 7 * k));
   }
@@ -133,7 +175,8 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
   ctx.fill();
   // its name above, the distance to its surface below (inside the view: a ring larger than it, the
   // figures inside the ring, by its centre)
-  const top = y - r - 12 * k, bot = y + r + 20 * k;
+  const top = y - r - 12 * k,
+    bot = y + r + 20 * k;
   const nameY = top > 30 * k ? top : y - 22 * k;
   const distY = bot + 24 * k < H - 8 * k ? bot : y + 30 * k;
   label(v.name.toUpperCase(), x, nameY, 13, 700, `rgba(${col}, 1)`);
@@ -144,17 +187,29 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
   const cc = Math.abs(v.closing) < 0.005 ? "220, 228, 240" : closing ? warm : cool;
   const sideX = x + r + 14 * k < W - 110 * k ? x + r + 14 * k : x - 10 * k;
   const sideY = x + r + 14 * k < W - 110 * k ? y + 5 * k : distY + 18 * k;
-  label(`${closing ? "▼" : "▲"} ${fmtSpeed(Math.abs(v.closing))}`, sideX, sideY, 13, 600, `rgba(${cc}, 1)`, sideX < x ? "center" : "left", mono);
+  label(
+    `${closing ? "▼" : "▲"} ${fmtSpeed(Math.abs(v.closing))}`,
+    sideX,
+    sideY,
+    13,
+    600,
+    `rgba(${cc}, 1)`,
+    sideX < x ? "center" : "left",
+    mono,
+  );
   // the relative velocity across the view: an arrow from the centre (log scale), the speed at its tip;
   // its part along the line of sight: ⊙ towards the eye, ⊗ away
   const vl = Math.hypot(...v.vrel);
   if (vl > 0.005) {
     const lat = Math.hypot(v.vrel[0], v.vrel[1]);
     const L = Math.min(150 * k, (14 + 34 * Math.log10(1 + lat / 0.05)) * k);
-    const ux = v.vrel[0] / (lat || 1), uy = -v.vrel[1] / (lat || 1);
+    const ux = v.vrel[0] / (lat || 1),
+      uy = -v.vrel[1] / (lat || 1);
     // (from its centre: the way it drifts across the view)
-    const sx = x + ux * 6 * k, sy = y + uy * 6 * k;
-    const tx = sx + ux * L, ty = sy + uy * L;
+    const sx = x + ux * 6 * k,
+      sy = y + uy * 6 * k;
+    const tx = sx + ux * L,
+      ty = sy + uy * L;
     if (lat > 0.005) {
       ctx.strokeStyle = `rgba(${cc}, 0.95)`;
       ctx.lineWidth = 2 * k;
@@ -171,11 +226,21 @@ export function drawLock(ctx: CanvasRenderingContext2D, v: LockDraw, W: number, 
     const toward = v.vrel[2] < 0;
     const ox = lat > 0.005 ? tx + ux * 10 * k : sideX;
     const oy = lat > 0.005 ? ty + uy * 10 * k + 4 * k : sideY + 17 * k;
-    label(`${toward ? "⊙" : "⊗"} ${fmtSpeed(vl)}`, ox, oy, 11, 500, "rgba(235, 240, 248, 0.85)", lat > 0.005 ? (ux >= 0 ? "left" : "right") : "left", mono);
+    label(
+      `${toward ? "⊙" : "⊗"} ${fmtSpeed(vl)}`,
+      ox,
+      oy,
+      11,
+      500,
+      "rgba(235, 240, 248, 0.85)",
+      lat > 0.005 ? (ux >= 0 ? "left" : "right") : "left",
+      mono,
+    );
   }
   // under the distance: the time to impact (red), or the closest approach
   const y2 = distY + 16 * k;
   if (Number.isFinite(v.impact)) label(`IMPACT ${fmtTime(v.impact)}`, x, y2, 13, 700, `rgba(${red}, 1)`);
-  else if (Number.isFinite(v.tca) && v.tca < 30 * 86400) label(`CLOSEST ${fmtDistance(v.ca)} · ${fmtTime(v.tca)}`, x, y2, 11, 600, "rgba(200, 214, 232, 0.85)");
+  else if (Number.isFinite(v.tca) && v.tca < 30 * 86400)
+    label(`CLOSEST ${fmtDistance(v.ca)} · ${fmtTime(v.tca)}`, x, y2, 11, 600, "rgba(200, 214, 232, 0.85)");
   ctx.restore();
 }

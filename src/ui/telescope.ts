@@ -8,12 +8,14 @@ export function fmtAngle(deg: number): string {
   const a = Math.abs(deg);
   if (a >= 10) return `${a.toFixed(1)}°`;
   if (a >= 1) {
-    const d = Math.floor(a), m = Math.round((a - d) * 60);
+    const d = Math.floor(a),
+      m = Math.round((a - d) * 60);
     return m === 60 ? `${d + 1}°` : m ? `${d}°${String(m).padStart(2, "0")}′` : `${d}°`;
   }
   const am = a * 60;
   if (am >= 1) {
-    const m = Math.floor(am), sec = Math.round((am - m) * 60);
+    const m = Math.floor(am),
+      sec = Math.round((am - m) * 60);
     return sec === 60 ? `${m + 1}′` : sec ? `${m}′${String(sec).padStart(2, "0")}″` : `${m}′`;
   }
   const as = a * 3600;
@@ -26,7 +28,10 @@ export const focalLength = (fovDeg: number) => 12 / Math.tan((fovDeg * Math.PI) 
 /** A distance [m] in its unit: m, km, AU, ly. */
 function fmtDistance(m: number): string {
   if (m < 1e4) return `${m.toFixed(0)} m`;
-  if (m < 1e10) return `${Math.round(m / 1e3).toLocaleString("en-US").replace(/,/g, " ")} km`;
+  if (m < 1e10)
+    return `${Math.round(m / 1e3)
+      .toLocaleString("en-US")
+      .replace(/,/g, " ")} km`;
   if (m < 1e15) return `${(m / AU_M).toPrecision(3)} AU`;
   return `${(m / 9.4607e15).toPrecision(3)} ly`;
 }
@@ -45,7 +50,8 @@ const SCALE_ARCSEC = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 36
 
 /** Draws the telescope's overlay on a canvas of W × H device pixels (k: device pixels per CSS pixel). */
 export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: number, k: number, v: TelescopeView) {
-  const cx = W / 2, cy = H / 2;
+  const cx = W / 2,
+    cy = H / 2;
   ctx.save();
   // a soft vignette: the eyepiece's field stop, faint
   const R = Math.hypot(W, H) / 2;
@@ -65,7 +71,12 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
   ctx.strokeStyle = "rgba(210, 236, 255, 0.55)";
   ctx.lineWidth = 1 * k;
   ctx.beginPath();
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const) {
     ctx.moveTo(cx + dx * gap, cy + dy * gap);
     ctx.lineTo(cx + dx * arm, cy + dy * arm);
     for (let t = stepPx; t <= arm + 0.5; t += stepPx) {
@@ -80,7 +91,8 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
   // the target's disc (its apparent size), where it is
   if (v.target?.ndc) {
     const [nx, ny] = v.target.ndc;
-    const x = ((nx + 1) / 2) * W, y = ((1 - ny) / 2) * H;
+    const x = ((nx + 1) / 2) * W,
+      y = ((1 - ny) / 2) * H;
     const r = ((v.target.ang * 180) / Math.PI) * pxPerDeg;
     if (r > 6 * k && r < 2 * Math.max(W, H)) {
       ctx.strokeStyle = "rgba(255, 179, 92, 0.55)";
@@ -98,7 +110,9 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
   const lines = [lens];
   if (v.target) {
     const t = v.target;
-    lines.push(`${t.name.toUpperCase()} · ⌀ ${fmtAngle((2 * t.ang * 180) / Math.PI)} · ${fmtDistance(t.dist * v.mPerM)}${v.tracking ? " · TRACKING" : ""}`);
+    lines.push(
+      `${t.name.toUpperCase()} · ⌀ ${fmtAngle((2 * t.ang * 180) / Math.PI)} · ${fmtDistance(t.dist * v.mPerM)}${v.tracking ? " · TRACKING" : ""}`,
+    );
   }
   ctx.font = `600 ${12 * k}px "Rajdhani", "Inter", system-ui, sans-serif`;
   ctx.textAlign = "center";

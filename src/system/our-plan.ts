@@ -20,7 +20,6 @@ const MS = 1 / C; // 1 m/s
 const KM = 1e3 / M_METRES; // 1 km
 const DAY = 86400 / M_SECONDS;
 
-
 /** What to do at the target: go round it, pass it, or pass it and fall back home (a free return). */
 export type Arrival = "orbit" | "flyby" | "freeReturn";
 export type Role = "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
@@ -116,10 +115,20 @@ export function elementsOf(mu: number, r: Vec3, v: Vec3) {
   const hh = dot(h, h);
   const rp = hh / mu / (1 + e);
   const a = eps < 0 ? -mu / (2 * eps) : Infinity;
-  return { h, e, evec, rp, a, ra: eps < 0 ? a * (1 + e) : Infinity, period: eps < 0 ? 2 * Math.PI * Math.sqrt(a ** 3 / mu) : Infinity, eps };
+  return {
+    h,
+    e,
+    evec,
+    rp,
+    a,
+    ra: eps < 0 ? a * (1 + e) : Infinity,
+    period: eps < 0 ? 2 * Math.PI * Math.sqrt(a ** 3 / mu) : Infinity,
+    eps,
+  };
 }
 
-const stumpC = (z: number) => (z > 1e-6 ? (1 - Math.cos(Math.sqrt(z))) / z : z < -1e-6 ? (Math.cosh(Math.sqrt(-z)) - 1) / -z : 0.5 - z / 24);
+const stumpC = (z: number) =>
+  z > 1e-6 ? (1 - Math.cos(Math.sqrt(z))) / z : z < -1e-6 ? (Math.cosh(Math.sqrt(-z)) - 1) / -z : 0.5 - z / 24;
 const stumpS = (z: number) => {
   if (z > 1e-6) {
     const s = Math.sqrt(z);
@@ -137,7 +146,8 @@ const stumpS = (z: number) => {
  * orbit around mu from r1 to r2 in tof, going round in the sense of `normal`.
  */
 export function lambert(mu: number, r1: Vec3, r2: Vec3, tof: number, normal: Vec3): { v1: Vec3; v2: Vec3 } | null {
-  const R1 = norm(r1), R2 = norm(r2);
+  const R1 = norm(r1),
+    R2 = norm(r2);
   const cosd = Math.max(-1, Math.min(1, dot(r1, r2) / (R1 * R2)));
   let dnu = Math.acos(cosd);
   if (dot(cross(r1, r2), normal) < 0) dnu = 2 * Math.PI - dnu;
@@ -150,7 +160,8 @@ export function lambert(mu: number, r1: Vec3, r2: Vec3, tof: number, normal: Vec
     const x = Math.sqrt(yy / stumpC(z));
     return (x ** 3 * stumpS(z) + A * Math.sqrt(yy)) / Math.sqrt(mu);
   };
-  let lo = -400, hi = 4 * Math.PI ** 2 - 1e-7;
+  let lo = -400,
+    hi = 4 * Math.PI ** 2 - 1e-7;
   if (time(lo) > tof || !(time(hi) > tof)) return null;
   for (let i = 0; i < 200; i++) {
     const mid = (lo + hi) / 2;
@@ -160,7 +171,9 @@ export function lambert(mu: number, r1: Vec3, r2: Vec3, tof: number, normal: Vec
   }
   const z = (lo + hi) / 2;
   const yy = y(z);
-  const f = 1 - yy / R1, g = A * Math.sqrt(yy / mu), gd = 1 - yy / R2;
+  const f = 1 - yy / R1,
+    g = A * Math.sqrt(yy / mu),
+    gd = 1 - yy / R2;
   return { v1: scale(sub(r2, scale(r1, f)), 1 / g), v2: scale(sub(scale(r2, gd), r1), 1 / g) };
 }
 
@@ -171,10 +184,11 @@ export function keplerProp(mu: number, r0: Vec3, v0: Vec3, dt: number): { r: Vec
   const alpha = 2 / R0 - dot(v0, v0) / mu;
   const sq = Math.sqrt(mu);
   let x = sq * Math.abs(alpha) * dt;
-  if (!(Math.abs(alpha) > 1e-12)) x = sq * dt / R0;
+  if (!(Math.abs(alpha) > 1e-12)) x = (sq * dt) / R0;
   for (let i = 0; i < 60; i++) {
     const z = alpha * x * x;
-    const Cz = stumpC(z), Sz = stumpS(z);
+    const Cz = stumpC(z),
+      Sz = stumpS(z);
     const F = ((R0 * vr0) / sq) * x * x * Cz + (1 - alpha * R0) * x ** 3 * Sz + R0 * x - sq * dt;
     const dF = ((R0 * vr0) / sq) * x * (1 - z * Sz) + (1 - alpha * R0) * x * x * Cz + R0;
     const d = F / dF;
@@ -197,7 +211,8 @@ export function keplerProp(mu: number, r0: Vec3, v0: Vec3, dt: number): { r: Vec
 export function stateAt(p: OurPath, t: number): { X: Vec3; V: Vec3 } | null {
   const T = p.times;
   if (!T.length || t < T[0]! - 1e-9 || t > T[T.length - 1]! + 1e-9) return null;
-  let lo = 0, hi = T.length - 1;
+  let lo = 0,
+    hi = T.length - 1;
   while (hi - lo > 1) {
     const m = (lo + hi) >> 1;
     if (T[m]! <= t) lo = m;
@@ -206,10 +221,20 @@ export function stateAt(p: OurPath, t: number): { X: Vec3; V: Vec3 } | null {
   const h = T[hi]! - T[lo]!;
   if (!(h > 0)) return { X: p.pts[lo]!, V: p.vels[lo]! };
   const s = Math.min(Math.max((t - T[lo]!) / h, 0), 1);
-  const s2 = s * s, s3 = s2 * s;
-  const P0 = p.pts[lo]!, P1 = p.pts[hi]!, V0 = p.vels[lo]!, V1 = p.vels[hi]!;
-  const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
-  const d00 = (6 * s2 - 6 * s) / h, d10 = 3 * s2 - 4 * s + 1, d01 = (-6 * s2 + 6 * s) / h, d11 = 3 * s2 - 2 * s;
+  const s2 = s * s,
+    s3 = s2 * s;
+  const P0 = p.pts[lo]!,
+    P1 = p.pts[hi]!,
+    V0 = p.vels[lo]!,
+    V1 = p.vels[hi]!;
+  const h00 = 2 * s3 - 3 * s2 + 1,
+    h10 = s3 - 2 * s2 + s,
+    h01 = -2 * s3 + 3 * s2,
+    h11 = s3 - s2;
+  const d00 = (6 * s2 - 6 * s) / h,
+    d10 = 3 * s2 - 4 * s + 1,
+    d01 = (-6 * s2 + 6 * s) / h,
+    d11 = 3 * s2 - 2 * s;
   const X = [0, 1, 2].map((i) => h00 * P0[i]! + h10 * h * V0[i]! + h01 * P1[i]! + h11 * h * V1[i]!) as Vec3;
   const V = [0, 1, 2].map((i) => d00 * P0[i]! + d10 * V0[i]! + d01 * P1[i]! + d11 * V1[i]!) as Vec3;
   return { X, V };
@@ -229,7 +254,8 @@ function closest(p: OurPath, id: string, from = 0) {
 function orbitNormal(id: string, t: number): Vec3 {
   const b = info(id);
   if (!b || !b.parent) return [0, 0, 1];
-  const s = stateOf(id, t), q = stateOf(b.parent, t);
+  const s = stateOf(id, t),
+    q = stateOf(b.parent, t);
   return unit(cross(sub(s.pos, q.pos), sub(s.vel, q.vel)));
 }
 
@@ -255,14 +281,17 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
     }
   }
   const st = stateOf(id, p.times[j]!);
-  const r = sub(p.pts[j]!, st.pos), v = sub(p.vels[j]!, st.vel);
+  const r = sub(p.pts[j]!, st.pos),
+    v = sub(p.vels[j]!, st.vel);
   let S: Vec3, B: Vec3, vinf: number;
   let rpOsc = ca.d;
   const vi2 = dot(v, v) - (2 * b.mass) / norm(r);
   if (b.mass > 0 && vi2 > 0) {
     const el = elementsOf(b.mass, r, v);
     rpOsc = el.rp;
-    const hh = unit(el.h), ph = unit(el.evec), qh = cross(hh, ph);
+    const hh = unit(el.h),
+      ph = unit(el.evec),
+      qh = cross(hh, ph);
     const s = Math.sqrt(Math.max(1 - 1 / (el.e * el.e), 0));
     S = unit(add(scale(ph, s), qh, el.e - 1 / el.e));
     vinf = Math.sqrt(vi2);
@@ -279,11 +308,20 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
   // (the pass's height: as flown, or — into the body, where the path stops — the hyperbola's own
   // periapsis below the ground, which goes on smoothly)
   const impact = p.fate === "impact" && p.hit === id;
-  return { bT: dot(B, T), bR: dot(B, R), vinf, ca, entry: j, captured: b.mass > 0 && !(vi2 > 0), rp: impact ? Math.min(rpOsc, ca.d) : ca.d };
+  return {
+    bT: dot(B, T),
+    bR: dot(B, R),
+    vinf,
+    ca,
+    entry: j,
+    captured: b.mass > 0 && !(vi2 > 0),
+    rp: impact ? Math.min(rpOsc, ca.d) : ca.d,
+  };
 }
 
 /** The impact parameter that gives a periapsis radius rp at a body (gravity's focusing). */
-const bFor = (mass: number, rp: number, vinf: number) => (mass > 0 ? rp * Math.sqrt(1 + (2 * mass) / (rp * Math.max(vinf * vinf, 1e-30))) : rp);
+const bFor = (mass: number, rp: number, vinf: number) =>
+  mass > 0 ? rp * Math.sqrt(1 + (2 * mass) / (rp * Math.max(vinf * vinf, 1e-30))) : rp;
 
 /**
  * Back home after passing a body (or leaving it): the perigee of the osculating orbit around home
@@ -295,7 +333,8 @@ export function returnPerigee(p: OurPath, passed: string, home: string, from = 0
   const ca = closest(p, passed, from);
   if (ca.i < 0) return null;
   const soi = soiOf(passed, p.times[ca.i]!);
-  let j = -1, j2 = -1;
+  let j = -1,
+    j2 = -1;
   for (let i = ca.i; i < p.pts.length; i++) {
     const d = norm(sub(p.pts[i]!, stateOf(passed, p.times[i]!).pos));
     if (j < 0 && d > soi) j = i;
@@ -335,9 +374,11 @@ function solve(goals: (x: number[]) => number[] | null, x0: number[], step: numb
   if (!r) return null;
   const cost = (q: number[]) => q.reduce((a, v, i) => a + (v / tol[i]!) ** 2, 0);
   for (let it = 0; it < maxIt; it++) {
-    if ((globalThis as { __planDebug?: boolean }).__planDebug) console.log("solve", it, r.map((v, i) => (v / tol[i]!).toFixed(1)).join(" "), x.map((v) => (v * C).toFixed(2)).join(" "));
+    if ((globalThis as { __planDebug?: boolean }).__planDebug)
+      console.log("solve", it, r.map((v, i) => (v / tol[i]!).toFixed(1)).join(" "), x.map((v) => (v * C).toFixed(2)).join(" "));
     if (r.every((v, i) => Math.abs(v) < tol[i]!)) return { x, r, ok: true };
-    const m = r.length, n = x.length;
+    const m = r.length,
+      n = x.length;
     // J scaled: columns by the steps (dimensionless unknowns), rows by the tolerances
     const J: number[][] = Array.from({ length: m }, () => new Array(n).fill(0));
     for (let j = 0; j < n; j++) {
@@ -349,12 +390,15 @@ function solve(goals: (x: number[]) => number[] | null, x0: number[], step: numb
     }
     // least-norm step: dx = −Jᵀ (J Jᵀ + λI)⁻¹ r
     const rs = r.map((v, i) => v / tol[i]!);
-    const JJ = Array.from({ length: m }, (_, a) => Array.from({ length: m }, (_, b) => J[a]!.reduce((s, _v, k) => s + J[a]![k]! * J[b]![k]!, 0) + (a === b ? 1e-9 : 0)));
+    const JJ = Array.from({ length: m }, (_, a) =>
+      Array.from({ length: m }, (_, b) => J[a]!.reduce((s, _v, k) => s + J[a]![k]! * J[b]![k]!, 0) + (a === b ? 1e-9 : 0)),
+    );
     const y = gauss(JJ, rs);
     if (!y) return { x, r, ok: false };
     const dx = Array.from({ length: n }, (_, k) => -J.reduce((s, row, i) => s + row[k]! * y[i]!, 0) * step[k]!);
     // (damped: halve the step until the goals get closer)
-    let lam = 1, done = false;
+    let lam = 1,
+      done = false;
     const c0 = cost(r);
     for (let k = 0; k < 8; k++) {
       const xn = x.map((v, i) => v + lam * dx[i]!);
@@ -424,11 +468,14 @@ function residualsCore(m: OurMission, p: OurPath, from: number, stage: Stage, mo
     }
     if (j < 0) return null;
     const st = stateOf(m.home, p.times[j]!);
-    const r = sub(p.pts[j]!, st.pos), v = sub(p.vels[j]!, st.vel);
+    const r = sub(p.pts[j]!, st.pos),
+      v = sub(p.vels[j]!, st.vel);
     const el = elementsOf(hb.mass, r, v);
     const vi2 = dot(v, v) - (2 * hb.mass) / norm(r);
     if (!(vi2 > 0) || el.e <= 1) return null;
-    const hh = unit(el.h), ph = unit(el.evec), qh = cross(hh, ph);
+    const hh = unit(el.h),
+      ph = unit(el.evec),
+      qh = cross(hh, ph);
     const S = unit(add(scale(ph, -Math.sqrt(1 - 1 / (el.e * el.e))), qh, el.e - 1 / el.e));
     const w = scale(S, Math.sqrt(vi2));
     return [w[0] - m.vinf![0], w[1] - m.vinf![1], w[2] - m.vinf![2]];
@@ -475,10 +522,24 @@ function residualsCore(m: OurMission, p: OurPath, from: number, stage: Stage, mo
  */
 type Stage = "out" | "back" | "escape";
 
-function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, stage: Stage, o: PlanOptions, moveTime = false, coarse = false, withTime = false, inFlight = false) {
+function aim(
+  m: OurMission,
+  X: Vec3,
+  V: Vec3,
+  t: number,
+  tn: number,
+  dv0: Vec3,
+  stage: Stage,
+  o: PlanOptions,
+  moveTime = false,
+  coarse = false,
+  withTime = false,
+  inFlight = false,
+) {
   const tMax = Math.max(m.tEnd - t, 0) * 1.15 + 2 * DAY;
   // (a finer integration than the map's: the aim differentiates the path)
-  const run = (dv: Vec3, tb: number) => predictOurs(X, V, t, [{ t: tb, dv }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: coarse ? 0.05 : 0.02 });
+  const run = (dv: Vec3, tb: number) =>
+    predictOurs(X, V, t, [{ t: tb, dv }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: coarse ? 0.05 : 0.02 });
   let cart = false;
   // (the meeting time kept for a moon's — days of flight, where the least change slides along the
   // family; not across the planets: an hour's slip after years is nothing, correcting it hundreds of m/s)
@@ -487,7 +548,9 @@ function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, 
   const nGoals = stage === "escape" ? 3 : stage === "back" || m.type === "parent" ? 1 : 2;
   // (leaving a moon for its planet: the perigee is very sensitive to the burn — tens of km of it
   // are the integration's noise; the correction halfway down takes the rest)
-  const tol: number[] = new Array(nGoals).fill(stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" && !inFlight ? 60 * KM : aimTol(m, inFlight));
+  const tol: number[] = new Array(nGoals).fill(
+    stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" && !inFlight ? 60 * KM : aimTol(m, inFlight),
+  );
   if (timed) tol.push(300 / M_SECONDS);
   // (the burn's time too, for a departure: moving it along the orbit turns the way out — cheaper
   // than a radial Δv; its step, a second, weighs as 0.05 m/s in the least change)
@@ -497,7 +560,13 @@ function aim(m: OurMission, X: Vec3, V: Vec3, t: number, tn: number, dv0: Vec3, 
   let start = x0;
   if (stage === "out" && m.goal.arrival !== "freeReturn" && m.type !== "parent") {
     cart = true;
-    const r0 = solve(goals, x0, step, tol.map((x) => 5 * x), 10);
+    const r0 = solve(
+      goals,
+      x0,
+      step,
+      tol.map((x) => 5 * x),
+      10,
+    );
     cart = false;
     if (r0) start = r0.x;
   }
@@ -533,12 +602,20 @@ export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM0: number, o: Plan
   const s1 = stateAt(free, t1);
   if (!s1) return { error: "Orbit: no path to plan from" };
   const P = stateOf(ref, t1);
-  const r = sub(s1.X, P.pos), v = sub(s1.V, P.vel);
+  const r = sub(s1.X, P.pos),
+    v = sub(s1.V, P.vel);
   const R = norm(r);
   let n = cross(r, v);
   if (norm(n) < 1e-30) n = cross(r, [0, 0, 1]);
   const along = unit(cross(unit(n), r)); // horizontal, in the orbit's sense
-  const mission: OurMission = { goal: { kind: "orbit", target: ref, arrival: "orbit", altM, returnAltM: 0 }, home: ref, type: "orbit", bDir: [1, 0], tEnd: t1, tArrive: t1 };
+  const mission: OurMission = {
+    goal: { kind: "orbit", target: ref, arrival: "orbit", altM, returnAltM: 0 },
+    home: ref,
+    type: "orbit",
+    bDir: [1, 0],
+    tEnd: t1,
+    tArrive: t1,
+  };
   const want = (vmag: number) => nodeDvComponents(s1.X, s1.V, t1, sub(scale(along, vmag), v));
   if (Math.abs(R - rt) < 0.01 * rt) {
     const dv = want(Math.sqrt(b.mass / R));
@@ -557,9 +634,16 @@ export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM0: number, o: Plan
   ];
   mission.tEnd = t2;
   mission.tArrive = t2;
-  const path = predictOurs(X, V, t, nodes, { mouthR: o.mouthR, accel: o.accel, maxSteps: 8000, tMax: t2 - t + Math.PI * Math.sqrt(rt ** 3 / b.mass) });
+  const path = predictOurs(X, V, t, nodes, {
+    mouthR: o.mouthR,
+    accel: o.accel,
+    maxSteps: 8000,
+    tMax: t2 - t + Math.PI * Math.sqrt(rt ** 3 / b.mass),
+  });
   return {
-    nodes, mission, path,
+    nodes,
+    mission,
+    path,
     note: `Hohmann to ${km(rt - b.radius)} around ${b.name} · ${kms(norm(dv1))} then ${kms(Math.abs(dv2[0]))} in ${days(t2 - t1)}`,
   };
 }
@@ -588,13 +672,21 @@ function planOurTransferRaw(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: st
   const hb = info(home)!;
   if (!tb) return { error: "Transfer: select a target (Tab, or a click on the map)" };
   if (goal.target === home) return planOurOrbit(X, V, t, goal.altM, o);
-  if (goal.arrival === "freeReturn" && tb.parent !== home) return { error: `Free return: from an orbit around ${info(tb.parent ?? "sun")?.name ?? "its planet"} (a moon's)` };
+  if (goal.arrival === "freeReturn" && tb.parent !== home)
+    return { error: `Free return: from an orbit around ${info(tb.parent ?? "sun")?.name ?? "its planet"} (a moon's)` };
   if (tb.parent === home) return planDirect(X, V, t, goal, home, o);
   if (hb.parent === goal.target) return planToParent(X, V, t, goal, home, o);
   if (tb.parent && tb.parent === hb.parent) return planSibling(X, V, t, goal, home, o);
   // (further: through a stop — the target's planet first, or home's planet)
   if (tb.parent && info(tb.parent)?.parent === hb.parent) {
-    const r = planSibling(X, V, t, { ...goal, target: tb.parent, arrival: "orbit", altM: Math.max(goal.altM, 0.5 * info(tb.parent)!.radius * M_METRES) }, home, o);
+    const r = planSibling(
+      X,
+      V,
+      t,
+      { ...goal, target: tb.parent, arrival: "orbit", altM: Math.max(goal.altM, 0.5 * info(tb.parent)!.radius * M_METRES) },
+      home,
+      o,
+    );
     return "error" in r ? r : { ...r, note: `first to ${info(tb.parent)!.name}: ${r.note} — then plan ${tb.name} from there` };
   }
   if (hb.parent && hb.parent !== "sun") {
@@ -610,7 +702,8 @@ function planOurTransferRaw(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: st
  * least Δv), then aimed on the target's B-plane — and for a free return on the perigee back home.
  */
 function planDirect(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o: PlanOptions): OurPlanResult {
-  const hb = info(home)!, tb = info(goal.target, o.mouthR)!;
+  const hb = info(home)!,
+    tb = info(goal.target, o.mouthR)!;
   const mu = hb.mass;
   const P0 = stateOf(home, t);
   const el = elementsOf(mu, sub(X, P0.pos), sub(V, P0.vel));
@@ -633,10 +726,12 @@ function planDirect(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o:
     const s1 = stateAt(free, t1);
     if (!s1) break;
     const A1 = stateOf(home, t1);
-    const r1 = sub(s1.X, A1.pos), v1s = sub(s1.V, A1.vel);
+    const r1 = sub(s1.X, A1.pos),
+      v1s = sub(s1.V, A1.vel);
     for (const k of tofs) {
       const tof = k * tofH;
-      const A2 = stateOf(home, t1 + tof), B2 = stateOf(goal.target, t1 + tof);
+      const A2 = stateOf(home, t1 + tof),
+        B2 = stateOf(goal.target, t1 + tof);
       const L = lambert(mu, r1, sub(B2.pos, A2.pos), tof, nrm);
       if (!L) continue;
       const dvH = sub(L.v1, v1s);
@@ -648,7 +743,14 @@ function planDirect(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o:
     }
   }
   if (!best) return { error: `Transfer: no path to ${tb.name} found` };
-  const mission: OurMission = { goal, home, type: "direct", bDir: [1, 0], tEnd: best.t1 + best.tof * (goal.arrival === "freeReturn" ? 2.4 : 1.1), tArrive: best.t1 + best.tof };
+  const mission: OurMission = {
+    goal,
+    home,
+    type: "direct",
+    bDir: [1, 0],
+    tEnd: best.t1 + best.tof * (goal.arrival === "freeReturn" ? 2.4 : 1.1),
+    tArrive: best.t1 + best.tof,
+  };
   const dv0 = nodeDvComponents(best.X1, best.V1, best.t1, best.dv);
   return aimAndBuild(X, V, t, mission, best.t1, dv0, o);
 }
@@ -667,11 +769,20 @@ function timeToRadius(mu: number, a: number, e: number, r: number) {
  * The flight time: 70 % of a Hohmann transfer's for a free return (~3.5 days to the Moon), 85 %
  * else. The ship's orbit is carried to the burn by two-body mechanics; then aimed from there.
  */
-function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, el: ReturnType<typeof elementsOf>, o: PlanOptions): OurPlanResult {
+function planFromParking(
+  X: Vec3,
+  V: Vec3,
+  t: number,
+  goal: OurGoal,
+  home: string,
+  el: ReturnType<typeof elementsOf>,
+  o: PlanOptions,
+): OurPlanResult {
   const hb = info(home)!;
   const mu = hb.mass;
   const P0 = stateOf(home, t);
-  const r0v = sub(X, P0.pos), v0v = sub(V, P0.vel);
+  const r0v = sub(X, P0.pos),
+    v0v = sub(V, P0.vel);
   const r0 = norm(r0v);
   const hh = unit(el.h);
   const rT = norm(sub(stateOf(goal.target, t).pos, P0.pos));
@@ -690,7 +801,8 @@ function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: strin
       const tt = tA0 + (Ttgt * i) / nS;
       const cur = off(tt);
       if (Math.sign(cur) !== Math.sign(prev)) {
-        let lo = tt - Ttgt / nS, hi = tt;
+        let lo = tt - Ttgt / nS,
+          hi = tt;
         for (let k = 0; k < 50; k++) {
           const mid = (lo + hi) / 2;
           if (Math.sign(off(mid)) === Math.sign(off(lo))) lo = mid;
@@ -704,7 +816,8 @@ function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: strin
   }
   // the ellipse from r0 that reaches the target's distance in tof (its apoapsis a little beyond)
   const rArr = norm(rel(tArr));
-  let lo = rArr * 1.0001, hi = rArr * 50;
+  let lo = rArr * 1.0001,
+    hi = rArr * 50;
   const tofAt = (ra: number) => timeToRadius(mu, (r0 + ra) / 2, (ra - r0) / (ra + r0), rArr);
   for (let k = 0; k < 80; k++) {
     const mid = Math.sqrt(lo * hi);
@@ -712,13 +825,15 @@ function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: strin
     else hi = mid;
   }
   const ra = Math.sqrt(lo * hi);
-  const a = (r0 + ra) / 2, e = (ra - r0) / (ra + r0);
+  const a = (r0 + ra) / 2,
+    e = (ra - r0) / (ra + r0);
   const nu = Math.acos(Math.max(-1, Math.min(1, ((a * (1 - e * e)) / rArr - 1) / e)));
   // the burn's place: the target's direction at the arrival, in the plane, turned back by ν
   const u = unit(sub(rel(tArr), scale(hh, dot(rel(tArr), hh))));
   const ph = add(scale(u, Math.cos(nu)), cross(hh, u), -Math.sin(nu));
   const tAim = tArr - tofAt(ra);
-  let t1 = tAim, bc = -2;
+  let t1 = tAim,
+    bc = -2;
   for (let i = -120; i <= 120; i++) {
     const tt = tAim + (el.period * i) / 240;
     if (tt < t + o.lead) continue;
@@ -729,7 +844,14 @@ function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: strin
   const r1 = norm(k1.r);
   const vp = Math.sqrt(mu * (2 / r1 - 2 / (r1 + ra)));
   const dv0: Vec3 = [vp - norm(k1.v), 0, 0];
-  const mission: OurMission = { goal, home, type: "direct", bDir: [1, 0], tEnd: t1 + tof * (goal.arrival === "freeReturn" ? 2.5 : 1.1), tArrive: t1 + tof };
+  const mission: OurMission = {
+    goal,
+    home,
+    type: "direct",
+    bDir: [1, 0],
+    tEnd: t1 + tof * (goal.arrival === "freeReturn" ? 2.5 : 1.1),
+    tArrive: t1 + tof,
+  };
   // (aimed from a quarter turn before the burn — a wait of days in a low orbit is not integrated;
   // the burn may move along the orbit)
   const ts = Math.max(t, t1 - 0.25 * el.period);
@@ -746,8 +868,10 @@ function planFromParking(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: strin
  * leaves the ship behind home's motion, so that it falls to the target's perigee; then aimed.
  */
 function planToParent(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o: PlanOptions): OurPlanResult {
-  const hb = info(home)!, tb = info(goal.target)!;
-  const A = stateOf(home, t), B = stateOf(goal.target, t);
+  const hb = info(home)!,
+    tb = info(goal.target)!;
+  const A = stateOf(home, t),
+    B = stateOf(goal.target, t);
   const el = elementsOf(hb.mass, sub(X, A.pos), sub(V, A.vel));
   if (!Number.isFinite(el.period)) return { error: `Transfer: in an orbit around ${hb.name} first` };
   const rA = norm(sub(A.pos, B.pos));
@@ -764,7 +888,8 @@ function planToParent(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, 
   const Sp = unit(sub(S, scale(hh, dot(S, hh))));
   const ph = add(scale(Sp, Math.cos(phi)), cross(hh, Sp), -Math.sin(phi));
   const free = predictOurs(X, V, t, [], { tMax: o.lead + el.period * 1.05, maxSteps: 20000, mouthR: o.mouthR, accel: o.accel });
-  let bestT = t + o.lead, bestC = -2;
+  let bestT = t + o.lead,
+    bestC = -2;
   for (let i = 0; i < 180; i++) {
     const t1 = t + o.lead + (el.period * i) / 180;
     const s1 = stateAt(free, t1);
@@ -787,7 +912,8 @@ function planToParent(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, 
  * turned onto its way out, then aimed on the target's B-plane.
  */
 function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o: PlanOptions): OurPlanResult {
-  const hb = info(home)!, tb = info(goal.target, o.mouthR)!;
+  const hb = info(home)!,
+    tb = info(goal.target, o.mouthR)!;
   const par = info(hb.parent!)!;
   const mu = par.mass;
   const A0 = stateOf(home, t);
@@ -795,15 +921,19 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   if (!Number.isFinite(el.period)) return { error: `Transfer: in an orbit around ${hb.name} first` };
   const rA = norm(sub(A0.pos, stateOf(par.id, t).pos));
   const rB = norm(sub(stateOf(goal.target, t).pos, stateOf(par.id, t).pos));
-  const TA = 2 * Math.PI * Math.sqrt(rA ** 3 / mu), TB = 2 * Math.PI * Math.sqrt(rB ** 3 / mu);
+  const TA = 2 * Math.PI * Math.sqrt(rA ** 3 / mu),
+    TB = 2 * Math.PI * Math.sqrt(rB ** 3 / mu);
   const syn = Math.min(1 / Math.abs(1 / TA - 1 / TB), 3 * 365.25 * DAY);
   const tofH = Math.PI * Math.sqrt(((rA + rB) / 2) ** 3 / mu);
   const r0 = norm(sub(X, A0.pos));
   const rp = tb.radius + goal.altM / M_METRES;
   const cost = (td: number, tof: number) => {
-    const Pd = stateOf(par.id, td), Pa = stateOf(par.id, td + tof);
-    const Ad = stateOf(home, td), Ba = stateOf(goal.target, td + tof);
-    const r1 = sub(Ad.pos, Pd.pos), r2 = sub(Ba.pos, Pa.pos);
+    const Pd = stateOf(par.id, td),
+      Pa = stateOf(par.id, td + tof);
+    const Ad = stateOf(home, td),
+      Ba = stateOf(goal.target, td + tof);
+    const r1 = sub(Ad.pos, Pd.pos),
+      r2 = sub(Ba.pos, Pa.pos);
     const L = lambert(mu, r1, r2, tof, orbitNormal(home, td));
     if (!L) return null;
     const vinfD = sub(L.v1, sub(Ad.vel, Pd.vel));
@@ -816,7 +946,8 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
     return { c: dep + arr, vinfD, dep, arr };
   };
   let best: { c: number; td: number; tof: number } | null = null;
-  const nD = 120, nF = 14;
+  const nD = 120,
+    nF = 14;
   const t0 = t + o.lead + el.period;
   for (let i = 0; i < nD; i++) {
     const td = t0 + (syn * i) / nD;
@@ -829,7 +960,8 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   if (!best) return { error: `Transfer: no path to ${tb.name} found` };
   // (finer, around the best)
   for (let pass = 0; pass < 2; pass++) {
-    const dT = syn / nD / (pass ? 8 : 2), dF = (tofH / (nF - 1)) / (pass ? 8 : 2);
+    const dT = syn / nD / (pass ? 8 : 2),
+      dF = tofH / (nF - 1) / (pass ? 8 : 2);
     const b0: { c: number; td: number; tof: number } = best;
     for (let i = -4; i <= 4; i++) {
       for (let j = -4; j <= 4; j++) {
@@ -854,8 +986,10 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   // about a day of escape before the departure)
   const tEsc = Math.min(2 * DAY * Math.sqrt(hb.mass / info("earth")!.mass), 0.3 * best.tof);
   const tAim = best.td - tEsc;
-  const r0v = sub(X, A0.pos), v0v = sub(V, A0.vel);
-  let tb1 = tAim, bc = -2;
+  const r0v = sub(X, A0.pos),
+    v0v = sub(V, A0.vel);
+  let tb1 = tAim,
+    bc = -2;
   for (let i = -90; i <= 90; i++) {
     const tt = tAim + (el.period * i) / 180;
     if (tt < t + o.lead) continue;
@@ -865,7 +999,15 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   }
   const k1 = keplerProp(hb.mass, r0v, v0v, tb1 - t);
   const dv0: Vec3 = [Math.sqrt(vinf * vinf + (2 * hb.mass) / norm(k1.r)) - norm(k1.v), 0, 0];
-  const mission: OurMission = { goal, home, type: "sibling", bDir: [1, 0], tEnd: best.td + best.tof * 1.05, tArrive: best.td + best.tof, vinf: q.vinfD };
+  const mission: OurMission = {
+    goal,
+    home,
+    type: "sibling",
+    bDir: [1, 0],
+    tEnd: best.td + best.tof * 1.05,
+    tArrive: best.td + best.tof,
+    vinf: q.vinfD,
+  };
   // (aimed from a quarter turn before the burn — months of a low orbit are not integrated)
   const ts = Math.max(t, tb1 - 0.25 * el.period);
   const k0 = ts > t ? keplerProp(hb.mass, r0v, v0v, ts - t) : { r: r0v, v: v0v };
@@ -884,14 +1026,21 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
  */
 function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number, dP0: number, o: PlanOptions) {
   const g = m.goal;
-  const tb = info(g.target)!, hb = info(m.home)!;
+  const tb = info(g.target)!,
+    hb = info(m.home)!;
   const rpT = tb.radius + g.altM / M_METRES;
   const rpH = hb.radius + g.returnAltM / M_METRES;
   const tMax = Math.max(m.tEnd - t, 0) * 1.15 + 2 * DAY;
   let runs = 0;
   const run = (dP: number, dt: number, fine: boolean) => {
     runs++;
-    return predictOurs(X, V, t, [{ t: t1 + dt, dv: [dP, 0, 0] }], { tMax, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: fine ? 0.02 : 0.05 });
+    return predictOurs(X, V, t, [{ t: t1 + dt, dv: [dP, 0, 0] }], {
+      tMax,
+      maxSteps: 200000,
+      mouthR: o.mouthR,
+      accel: o.accel,
+      step: fine ? 0.02 : 0.05,
+    });
   };
   const passSigned = (p: OurPath) => {
     const bp = bPlane(p, g.target, 0, o.mouthR);
@@ -899,12 +1048,14 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
   };
   // (the pass's height on a side, by the burn's time: secant steps)
   const inner = (dP: number, side: number, dt0: number, fine: boolean, tol: number) => {
-    let a = dt0, b = dt0 + 20 / M_SECONDS;
+    let a = dt0,
+      b = dt0 + 20 / M_SECONDS;
     const fa0 = passSigned(run(dP, a, fine));
     let pb = run(dP, b, fine);
     const fb0 = passSigned(pb);
     if (fa0 === null || fb0 === null) return null;
-    let fa = fa0 - side * rpT, fb = fb0 - side * rpT;
+    let fa = fa0 - side * rpT,
+      fb = fb0 - side * rpT;
     for (let k = 0; k < 8; k++) {
       if (Math.abs(fb) < tol) return { dt: b, path: pb };
       if (fb === fa) return null;
@@ -944,16 +1095,19 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
     const brackets: { A: (typeof pts)[0]; B: (typeof pts)[0]; sign: number }[] = [];
     for (const sign of [1, -1]) {
       for (let k = 0; k + 1 < pts.length; k++) {
-        const A = pts[k]!, B = pts[k + 1]!;
+        const A = pts[k]!,
+          B = pts[k + 1]!;
         if (Math.sign(A.r - sign * rpH) !== Math.sign(B.r - sign * rpH)) brackets.push({ A, B, sign });
       }
     }
     brackets.sort((a, b) => Math.abs(a.A.dP + a.B.dP - 2 * dP0) - Math.abs(b.A.dP + b.B.dP - 2 * dP0));
     for (const { A, B, sign } of brackets) {
       // false position (Illinois), fine paths once close
-      let lo = { dP: A.dP, dt: A.dt, f: A.r - sign * rpH }, hi = { dP: B.dP, dt: B.dt, f: B.r - sign * rpH };
+      let lo = { dP: A.dP, dt: A.dt, f: A.r - sign * rpH },
+        hi = { dP: B.dP, dt: B.dt, f: B.r - sign * rpH };
       let found: { dP: number; dt: number; path: OurPath } | null = null;
-      let fine = false, side0 = 0;
+      let fine = false,
+        side0 = 0;
       for (let it = 0; it < 12; it++) {
         const dP = (lo.dP * hi.f - hi.dP * lo.f) / (hi.f - lo.f);
         const q = inner(dP, side, lo.dt + ((hi.dt - lo.dt) * (dP - lo.dP)) / (hi.dP - lo.dP || 1), fine, fine ? 5 * KM : 40 * KM);
@@ -982,7 +1136,8 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
         }
       }
       // (every bracket tried: the least burn wins — the classic figure-8, ~4 days out and back)
-      if (found && fine && (!best || Math.abs(found.dP) < Math.abs(best.dP))) best = { dP: found.dP, t: t1 + found.dt, side, sign, path: found.path };
+      if (found && fine && (!best || Math.abs(found.dP) < Math.abs(best.dP)))
+        best = { dP: found.dP, t: t1 + found.dt, side, sign, path: found.path };
     }
   }
   if ((globalThis as { __planDebug?: boolean }).__planDebug) console.log("free return: paths", runs);
@@ -995,7 +1150,8 @@ function freeReturnSearch(m: OurMission, X: Vec3, V: Vec3, t: number, t1: number
  */
 function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0: Vec3, o: PlanOptions, tNow = t): OurPlanResult {
   const goal = m.goal;
-  const tb = info(goal.target, o.mouthR)!, hb = info(m.home)!;
+  const tb = info(goal.target, o.mouthR)!,
+    hb = info(m.home)!;
   let result: ReturnType<typeof aim> = null;
   let mcc: PlanNode | null = null;
   if (m.type === "parent") {
@@ -1007,7 +1163,8 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
     let esc = aim(m, X, V, t, t1, dv0, "escape", o, true);
     if (!esc) return { error: `Transfer: no escape towards ${tb.name} found` };
     const exitAt = (p: OurPath) => {
-      for (let i = 0; i < p.pts.length; i++) if (norm(sub(p.pts[i]!, stateOf(m.home, p.times[i]!).pos)) > 1.5 * soiOf(m.home, p.times[i]!)) return p.times[i]!;
+      for (let i = 0; i < p.pts.length; i++)
+        if (norm(sub(p.pts[i]!, stateOf(m.home, p.times[i]!).pos)) > 1.5 * soiOf(m.home, p.times[i]!)) return p.times[i]!;
       return null;
     };
     // (a differential correction: the first correction's Δv, found past home's sphere, is folded
@@ -1033,7 +1190,13 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
     }
     // (the correction aimed once more from the path the whole plan flies: what the map shows)
     if (c) {
-      const full = predictOurs(X, V, t, [{ t: esc.t, dv: esc.dv }], { tMax: c.t - t + 1e-6, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.02 });
+      const full = predictOurs(X, V, t, [{ t: esc.t, dv: esc.dv }], {
+        tMax: c.t - t + 1e-6,
+        maxSteps: 200000,
+        mouthR: o.mouthR,
+        accel: o.accel,
+        step: 0.02,
+      });
       // (from one of its own points — not interpolated: steps of days there, ~300 km at Mars)
       let j = full.times.length - 1;
       while (j > 0 && full.times[j]! > c.t - 0.5 * o.lead) j--;
@@ -1042,7 +1205,11 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
     }
     if (c) mcc = { t: c.t, dv: c.dv, role: "mcc" };
     const nodes = [{ t: esc.t, dv: esc.dv }, ...(mcc ? [{ t: mcc.t, dv: mcc.dv }] : [])];
-    result = { ...esc, path: predictOurs(X, V, t, nodes, { tMax: (m.tEnd - t) * 1.15, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.02 }), ok: esc.ok && !!c?.ok };
+    result = {
+      ...esc,
+      path: predictOurs(X, V, t, nodes, { tMax: (m.tEnd - t) * 1.15, maxSteps: 200000, mouthR: o.mouthR, accel: o.accel, step: 0.02 }),
+      ok: esc.ok && !!c?.ok,
+    };
   } else if (goal.arrival === "freeReturn") {
     const fr = freeReturnSearch(m, X, V, t, t1, dv0[0], o);
     if (!fr) return { error: `Free return: no path round ${tb.name} and back found from this orbit` };
@@ -1053,7 +1220,12 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
     result = aim(m, X, V, t, t1, [fr.dP, 0, 0], "out", o, true) ?? { dv: [fr.dP, 0, 0] as Vec3, t: t1, ok: false, path: fr.path, r: [] };
   } else {
     // the side the first guess passes on (the centre: T)
-    const first = predictOurs(X, V, t, [{ t: t1, dv: dv0 }], { tMax: (m.tEnd - t) * 1.15 + 2 * DAY, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
+    const first = predictOurs(X, V, t, [{ t: t1, dv: dv0 }], {
+      tMax: (m.tEnd - t) * 1.15 + 2 * DAY,
+      maxSteps: 60000,
+      mouthR: o.mouthR,
+      accel: o.accel,
+    });
     const bp = bPlane(first, goal.target, 0, o.mouthR);
     if (bp && Math.hypot(bp.bT, bp.bR) > 0.2 * tb.radius) {
       const l = Math.hypot(bp.bT, bp.bR);
@@ -1137,10 +1309,13 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     // (the arrival's time as the path now goes: the closest approach, or the throat's edge)
     const span = Math.max(m.tEnd - t, node.t - t) * 1.3 + 0.2 * DAY;
     const path = predictOurs(X, V, t, [], { tMax: span, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
-    const tIn = path.fate === "wormhole" ? path.times[path.times.length - 1]! : (() => {
-      const ca = closest(path, g.target);
-      return ca.i >= 0 ? path.times[ca.i]! : node.t;
-    })();
+    const tIn =
+      path.fate === "wormhole"
+        ? path.times[path.times.length - 1]!
+        : (() => {
+            const ca = closest(path, g.target);
+            return ca.i >= 0 ? path.times[ca.i]! : node.t;
+          })();
     return { ...node, t: Math.max(tIn, t + o.lead), dv: [0, 0, 0] };
   }
   if (node.role === "capture" || node.role === "captureHome" || node.role === "circ") {
@@ -1154,7 +1329,8 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     let i = ca.i;
     if (node.role === "circ") {
       const target = b.radius + g.altM / M_METRES;
-      let bestI = -1, bestE = Infinity;
+      let bestI = -1,
+        bestE = Infinity;
       for (let k = 1; k < path.pts.length - 1; k++) {
         const d = norm(sub(path.pts[k]!, stateOf(body, path.times[k]!).pos));
         const e = Math.abs(d - target);
@@ -1165,7 +1341,8 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     const tt = Math.max(path.times[i]!, t + o.lead);
     const s = stateAt(path, tt) ?? { X: path.pts[i]!, V: path.vels[i]! };
     const st = stateOf(body, tt);
-    const r = sub(s.X, st.pos), v = sub(s.V, st.vel);
+    const r = sub(s.X, st.pos),
+      v = sub(s.V, st.vel);
     let n = cross(r, v);
     if (norm(n) < 1e-30) n = cross(r, [0, 0, 1]);
     const along = unit(cross(unit(n), r));
@@ -1179,14 +1356,29 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     // sphere, as the path now goes)
     const span = Math.max(m.tEnd - t, 0) * 1.2 + 1 * DAY;
     const path = predictOurs(X, V, t, [], { tMax: span, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
-    const passed = m.type === "parent" ? m.home : g.target, home = m.type === "parent" ? g.target : m.home;
+    const passed = m.type === "parent" ? m.home : g.target,
+      home = m.type === "parent" ? g.target : m.home;
     const rp = returnPerigee(path, passed, home);
     if (rp && rp.pe.i >= 0) {
-      const tx = path.times[rp.exit]!, tp = path.times[rp.pe.i]!;
+      const tx = path.times[rp.exit]!,
+        tp = path.times[rp.pe.i]!;
       tAim = Math.max(t + o.lead, tx + 0.3 * (tp - tx));
     }
   }
-  const r = aim(m, X, V, t, tAim, node.role === "depart" ? node.dv : [0, 0, 0], stage, o, node.role === "depart", false, node.role === "mcc", node.role !== "depart");
+  const r = aim(
+    m,
+    X,
+    V,
+    t,
+    tAim,
+    node.role === "depart" ? node.dv : [0, 0, 0],
+    stage,
+    o,
+    node.role === "depart",
+    false,
+    node.role === "mcc",
+    node.role !== "depart",
+  );
   if (!r) return { ...node, t: tAim };
   // (dropped only when the aim is met without it — a failed aim is no reason to skip a correction)
   if (node.role !== "depart" && norm(r.dv) < 0.03 * MS) return r.ok ? null : { ...node, t: tAim };
@@ -1197,4 +1389,3 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
 
 /** The bodies one can plan for (targets of our universe). */
 export const PLANNABLE = SOLAR_BODIES.map((b) => b.id);
-

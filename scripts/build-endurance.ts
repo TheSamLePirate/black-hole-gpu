@@ -20,7 +20,15 @@ const src = process.argv[2] ?? "assets/Interstellar Endurance";
 const blender = process.argv[3] ?? "/Applications/Blender.app/Contents/MacOS/Blender";
 const out = "assets/endurance";
 const tmp = `${process.env.TMPDIR ?? "/tmp"}/endurance-build`;
-const MATERIALS: [RegExp, number][] = [[/^Non_Metal/, 1], [/^Metal/, 0], [/^Glass/, 2], [/^Tiles/, 3], [/^Light/, 4], [/^Interior/, 5], [/^RollingShuttle/, 6]];
+const MATERIALS: [RegExp, number][] = [
+  [/^Non_Metal/, 1],
+  [/^Metal/, 0],
+  [/^Glass/, 2],
+  [/^Tiles/, 3],
+  [/^Light/, 4],
+  [/^Interior/, 5],
+  [/^RollingShuttle/, 6],
+];
 const SMOOTH = Math.cos((40 * Math.PI) / 180);
 const AO_RAYS = 32;
 const AO_RANGE = 0.06; // (the ring's diameter: 1)
@@ -39,7 +47,9 @@ const norm = (a: V3): V3 => {
 async function build(ratio: number, name: string) {
   await $`mkdir -p ${tmp} ${out}`;
   const obj = `${tmp}/${name}.obj`;
-  const log = await $`${blender} -b --python scripts/endurance-convert.py -- ${`${src}/source/Endurance.fbx`} ${obj} ${ratio}`.quiet().text();
+  const log = await $`${blender} -b --python scripts/endurance-convert.py -- ${`${src}/source/Endurance.fbx`} ${obj} ${ratio}`
+    .quiet()
+    .text();
   console.log(log.split("\n").find((l) => l.startsWith("endurance:")) ?? "(blender: no report)");
 
   // ---------------------------------------------------------------------------------- parse
@@ -57,7 +67,8 @@ async function build(ratio: number, name: string) {
   }
 
   // ---------------------------------------------------------------------------------- frame
-  const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+  const lo: V3 = [Infinity, Infinity, Infinity],
+    hi: V3 = [-Infinity, -Infinity, -Infinity];
   for (const p of P) for (let k = 0; k < 3; k++) (lo[k] = Math.min(lo[k]!, p[k]!)), (hi[k] = Math.max(hi[k]!, p[k]!));
   const ext = [0, 1, 2].map((k) => hi[k]! - lo[k]!);
   const axis = ext.indexOf(Math.min(...ext));
@@ -99,11 +110,19 @@ async function build(ratio: number, name: string) {
 
   // ---------------------------------------------------------------------------------- AO bake
   const T = tris.map((t) => t.v.map((i) => P[i]!) as [V3, V3, V3]);
-  interface Node { lo: V3; hi: V3; l?: Node; r?: Node; items?: number[] }
+  interface Node {
+    lo: V3;
+    hi: V3;
+    l?: Node;
+    r?: Node;
+    items?: number[];
+  }
   const cen = (i: number, k: number) => (T[i]![0][k]! + T[i]![1][k]! + T[i]![2][k]!) / 3;
   function bvh(items: number[]): Node {
-    const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
-    const clo: V3 = [Infinity, Infinity, Infinity], chi: V3 = [-Infinity, -Infinity, -Infinity];
+    const lo: V3 = [Infinity, Infinity, Infinity],
+      hi: V3 = [-Infinity, -Infinity, -Infinity];
+    const clo: V3 = [Infinity, Infinity, Infinity],
+      chi: V3 = [-Infinity, -Infinity, -Infinity];
     for (const i of items) {
       for (const p of T[i]!) for (let k = 0; k < 3; k++) (lo[k] = Math.min(lo[k]!, p[k]!)), (hi[k] = Math.max(hi[k]!, p[k]!));
       for (let k = 0; k < 3; k++) (clo[k] = Math.min(clo[k]!, cen(i, k))), (chi[k] = Math.max(chi[k]!, cen(i, k)));
@@ -116,9 +135,11 @@ async function build(ratio: number, name: string) {
   }
   const root = bvh([...T.keys()]);
   const hitBox = (n: Node, o: V3, inv: V3, tMax: number) => {
-    let t0 = 0, t1 = tMax;
+    let t0 = 0,
+      t1 = tMax;
     for (let k = 0; k < 3; k++) {
-      let a = (n.lo[k]! - o[k]!) * inv[k]!, b = (n.hi[k]! - o[k]!) * inv[k]!;
+      let a = (n.lo[k]! - o[k]!) * inv[k]!,
+        b = (n.hi[k]! - o[k]!) * inv[k]!;
       if (a > b) [a, b] = [b, a];
       t0 = Math.max(t0, a);
       t1 = Math.min(t1, b);
@@ -139,7 +160,8 @@ async function build(ratio: number, name: string) {
       }
       for (const i of n.items) {
         const [a, b, cc] = T[i]!;
-        const e1 = sub(b, a), e2 = sub(cc, a);
+        const e1 = sub(b, a),
+          e2 = sub(cc, a);
         const pv = cross(dir, e2);
         const det = dot(e1, pv);
         if (Math.abs(det) < 1e-14) continue;
@@ -158,20 +180,24 @@ async function build(ratio: number, name: string) {
   };
   const dirs: V3[] = [];
   for (let i = 0; i < AO_RAYS; i++) {
-    const r = Math.sqrt((i + 0.5) / AO_RAYS), ph = i * 2.399963229728653;
+    const r = Math.sqrt((i + 0.5) / AO_RAYS),
+      ph = i * 2.399963229728653;
     dirs.push([r * Math.cos(ph), r * Math.sin(ph), Math.sqrt(1 - r * r)]);
   }
   const t0 = performance.now();
   for (const v of verts) {
-    const p = v.slice(0, 3) as V3, n = v.slice(3, 6) as V3;
+    const p = v.slice(0, 3) as V3,
+      n = v.slice(3, 6) as V3;
     const t1 = norm(cross(n, Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
     const t2 = cross(n, t1);
     const o = add(p, scale(n, 1e-4));
     const rot = ((Math.sin(p[0] * 1298.98 + p[1] * 7823.3 + p[2] * 3771.9) * 43758.5453) % 1) * 2 * Math.PI;
-    const cr = Math.cos(rot), sr = Math.sin(rot);
+    const cr = Math.cos(rot),
+      sr = Math.sin(rot);
     let occ = 0;
     for (const [x0, y0, z] of dirs) {
-      const x = x0 * cr - y0 * sr, y = x0 * sr + y0 * cr;
+      const x = x0 * cr - y0 * sr,
+        y = x0 * sr + y0 * cr;
       const dd: V3 = [t1[0] * x + t2[0] * y + n[0] * z, t1[1] * x + t2[1] * y + n[1] * z, t1[2] * x + t2[2] * y + n[2] * z];
       const t = cast(o, dd, AO_RANGE);
       if (t < AO_RANGE) occ += 1 - t / AO_RANGE;
@@ -180,17 +206,25 @@ async function build(ratio: number, name: string) {
   }
 
   // ---------------------------------------------------------------------------------- write
-  const blo: V3 = [Infinity, Infinity, Infinity], bhi: V3 = [-Infinity, -Infinity, -Infinity];
+  const blo: V3 = [Infinity, Infinity, Infinity],
+    bhi: V3 = [-Infinity, -Infinity, -Infinity];
   for (const p of P) for (let k = 0; k < 3; k++) (blo[k] = Math.min(blo[k]!, p[k]!)), (bhi[k] = Math.max(bhi[k]!, p[k]!));
   const head = new ArrayBuffer(16 + 24);
   new Uint8Array(head, 0, 4).set(new TextEncoder().encode("ENDR"));
   new Uint32Array(head, 4, 3).set([1, verts.length, indices.length]);
   new Float32Array(head, 16, 6).set([...blo, ...bhi]);
   await Bun.write(`${out}/${name}.bin`, new Blob([head, new Float32Array(verts.flat()), new Uint32Array(indices)]));
-  console.log(`${name}.bin: ${indices.length / 3} triangles, ${verts.length} vertices; AO ${AO_RAYS} rays in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  console.log(
+    `${name}.bin: ${indices.length / 3} triangles, ${verts.length} vertices; AO ${AO_RAYS} rays in ${((performance.now() - t0) / 1000).toFixed(1)} s`,
+  );
 }
 
-const LODS: [number, string][] = [[0.05, "endurance-lod2"], [0.1, "endurance-lod1"], [0.4, "endurance"], [1, "endurance-full"]];
+const LODS: [number, string][] = [
+  [0.05, "endurance-lod2"],
+  [0.1, "endurance-lod1"],
+  [0.4, "endurance"],
+  [1, "endurance-full"],
+];
 const only = process.argv[4]?.split(",");
 for (const [ratio, name] of LODS) if (!only || only.includes(name)) await build(ratio, name);
 console.log((await $`ls -la ${out}`.text()).trim());

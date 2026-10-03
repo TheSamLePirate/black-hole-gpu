@@ -1,7 +1,20 @@
 import { test, expect } from "bun:test";
 import { fromZamo } from "../src/geodesic";
 import { zamo, type Vec3 } from "../src/physics";
-import { applyDv, apsides, circularBeta, pathFrom, planAlign, planCircular, planeOffset, planIntercept, planPath, planRendezvous, position, type World } from "../src/maneuver";
+import {
+  applyDv,
+  apsides,
+  circularBeta,
+  pathFrom,
+  planAlign,
+  planCircular,
+  planeOffset,
+  planIntercept,
+  planPath,
+  planRendezvous,
+  position,
+  type World,
+} from "../src/maneuver";
 
 const a = 0.6;
 const w: World = { a };
@@ -50,7 +63,8 @@ test("rendezvous with a body on a circular orbit", () => {
   const body = {
     centre: (t: number): Vec3 => [D * Math.cos(1 + om * t), D * Math.sin(1 + om * t), 0],
     velocity: (t: number): Vec3 => [-D * om * Math.sin(1 + om * t), D * om * Math.cos(1 + om * t), 0],
-    radius: 2.5, standoff: 10,
+    radius: 2.5,
+    standoff: 10,
   };
   const plan = planRendezvous(st, w, body)!;
   expect(plan).not.toBeNull();
@@ -74,7 +88,9 @@ test("plane change: an inclined orbit is turned into the equatorial plane at a n
 });
 
 test("orbit insertion around a massive star: the free orbit after the last burn circles the star", () => {
-  const D = 70, m = 0.1, R = 2.5;
+  const D = 70,
+    m = 0.1,
+    R = 2.5;
   const om = 1 / (D ** 1.5 / Math.sqrt(1 + m) + a);
   const centre = (t: number): Vec3 => [D * Math.cos(om * t), D * Math.sin(om * t), 0];
   const velocity = (t: number): Vec3 => [-D * om * Math.sin(om * t), D * om * Math.cos(om * t), 0];

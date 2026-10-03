@@ -71,7 +71,13 @@ export class TransportBar {
     const slower = btn(h("button", "tp-btn"), ICON.slower, "Slower time", ",", () => d.warp(-1));
     const faster = btn(h("button", "tp-btn"), ICON.faster, "Faster time", ".", () => d.warp(1));
     btn(this.rtBtn, "", "Real time: a second per second", "/", () => d.realTime());
-    btn(this.autoBtn, "", "Auto warp for manoeuvres: on, the autopilot sets the warp; off, you choose it live (never faster than the manoeuvre allows)", "", () => d.toggleAutoWarp());
+    btn(
+      this.autoBtn,
+      "",
+      "Auto warp for manoeuvres: on, the autopilot sets the warp; off, you choose it live (never faster than the manoeuvre allows)",
+      "",
+      () => d.toggleAutoWarp(),
+    );
     this.warpBtn.append(this.warpMain, this.warpSub);
     this.warpBtn.dataset.tip = "Time warp — a click: every rung";
     this.warpBtn.onclick = () => this.toggleMenu();
@@ -79,7 +85,18 @@ export class TransportBar {
     btn(this.rec, ICON.rec, "Record a take: what you do, live — then Render › Video renders it at full quality", "", () => d.record());
     this.rec.append(this.recTime);
     this.menu.hidden = true;
-    this.el.append(this.play, slower, this.warpBtn, faster, this.rtBtn, this.autoBtn, h("i", "tp-sep"), this.clock, h("i", "tp-sep"), this.rec);
+    this.el.append(
+      this.play,
+      slower,
+      this.warpBtn,
+      faster,
+      this.rtBtn,
+      this.autoBtn,
+      h("i", "tp-sep"),
+      this.clock,
+      h("i", "tp-sep"),
+      this.rec,
+    );
     document.body.append(this.menu);
     addEventListener("pointerdown", (e) => {
       if (!this.menu.hidden && !this.menu.contains(e.target as Node) && !this.warpBtn.contains(e.target as Node)) this.menu.hidden = true;
@@ -103,7 +120,10 @@ export class TransportBar {
     for (const w of [...warpLadder(s)].reverse()) {
       const b = h("button", "tp-mi");
       const x = w / rt;
-      b.append(h("b", "", Math.abs(x - 1) < 1e-6 ? "×1 real time" : fmtFactor(x)), h("small", "", `${+w.toPrecision(3)} M/s${w > 500 ? " · rails" : ""}`));
+      b.append(
+        h("b", "", Math.abs(x - 1) < 1e-6 ? "×1 real time" : fmtFactor(x)),
+        h("small", "", `${+w.toPrecision(3)} M/s${w > 500 ? " · rails" : ""}`),
+      );
       b.classList.toggle("on", Math.abs(w - s.timeSpeed) <= 1e-6 * w);
       b.onclick = () => {
         this.d.setWarp(w);

@@ -4,7 +4,30 @@
 // then refine and fly them (our side's n-body predictor and node executor; Gargantua's worlds, their
 // frames).
 
-import { add, closestApproach, cross, dot, elements, fromPNR, lambert, len, nodesAgainst, nuAtRadius, phaseAngle, propagate, relInclination, scale, stateAt, synodic, timeTo, toPNR, unit, visViva, type Elements, type V3 } from "./kepler";
+import {
+  add,
+  closestApproach,
+  cross,
+  dot,
+  elements,
+  fromPNR,
+  lambert,
+  len,
+  nodesAgainst,
+  nuAtRadius,
+  phaseAngle,
+  propagate,
+  relInclination,
+  scale,
+  stateAt,
+  synodic,
+  timeTo,
+  toPNR,
+  unit,
+  visViva,
+  type Elements,
+  type V3,
+} from "./kepler";
 
 export interface Burn {
   /** seconds from now */
@@ -13,7 +36,11 @@ export interface Burn {
   dv: V3;
   label: string;
   /** about Gargantua: what the burn is flown to (maneuver.ts ManeuverNode.goal) */
-  goal?: { apsis: number; side: "max" | "min"; dir: number } | { circ: number; trim?: boolean } | { plane: V3 } | { period: number; dir: number };
+  goal?:
+    | { apsis: number; side: "max" | "min"; dir: number }
+    | { circ: number; trim?: boolean }
+    | { plane: V3 }
+    | { period: number; dir: number };
 }
 
 export interface Porkchop {
@@ -53,7 +80,8 @@ const fail = (note: string): OpResult => ({ ok: false, note, burns: [], dvTotal:
 
 /** The burns applied in turn (Kepler between them): the orbit after them. */
 export function afterBurns(c: FcContext, burns: Burn[]): { r: V3; v: V3; t: number } {
-  let s = { r: c.r, v: c.v }, t = 0;
+  let s = { r: c.r, v: c.v },
+    t = 0;
   for (const b of burns) {
     s = propagate(c.mu, s.r, s.v, b.t - t);
     t = b.t;
@@ -112,7 +140,11 @@ export function setApoapsis(c: FcContext, ra: number, where: Where = "pe"): OpRe
   const vt = len(add(s.v, up, -vr));
   const h2 = (2 * c.mu * r * ra) / (r + ra);
   const vtWant = Math.sqrt(h2) / r;
-  return result(c, [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "apoapsis" }], `Apoapsis ${((ra - c.R) / 1e3).toFixed(0)} km`);
+  return result(
+    c,
+    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "apoapsis" }],
+    `Apoapsis ${((ra - c.R) / 1e3).toFixed(0)} km`,
+  );
 }
 
 /** The periapsis to a distance: a burn at the apoapsis, or now. */
@@ -128,7 +160,11 @@ export function setPeriapsis(c: FcContext, rp: number, where: Where = "ap"): OpR
   const vt = len(add(s.v, up, -vr));
   const h2 = (2 * c.mu * r * rp) / (r + rp);
   const vtWant = Math.sqrt(h2) / r;
-  return result(c, [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "periapsis" }], `Periapsis ${((rp - c.R) / 1e3).toFixed(0)} km`);
+  return result(
+    c,
+    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "periapsis" }],
+    `Periapsis ${((rp - c.R) / 1e3).toFixed(0)} km`,
+  );
 }
 
 /** Hohmann's transfer to a circular orbit of radius r2: the first burn at the apsis from which it goes
@@ -163,9 +199,14 @@ export function setInclination(c: FcContext, inc: number): OpResult {
   // (the velocity turned about the radius — the node line — one way or the other: the one that gives it)
   const axis = unit(s.r);
   const incOf = (vv: V3) => Math.acos(Math.min(Math.max(dot(unit(cross(s.r, vv)), k), -1), 1));
-  const vA = rot(s.v, axis, inc - cur), vB = rot(s.v, axis, cur - inc);
+  const vA = rot(s.v, axis, inc - cur),
+    vB = rot(s.v, axis, cur - inc);
   const vN = Math.abs(incOf(vA) - inc) < Math.abs(incOf(vB) - inc) ? vA : vB;
-  return result(c, [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, s.v, -1)), label: "plane change" }], `Inclination ${((inc * 180) / Math.PI).toFixed(1)}°`);
+  return result(
+    c,
+    [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, s.v, -1)), label: "plane change" }],
+    `Inclination ${((inc * 180) / Math.PI).toFixed(1)}°`,
+  );
 }
 
 /** The orbit's plane onto the target's: at the nearer of their relative nodes (the farther from the
@@ -184,7 +225,11 @@ export function matchPlanes(c: FcContext): OpResult {
   const vIn = add(v, hT, -dot(v, hT));
   const vN = scale(unit(vIn), len(v));
   const ri = relInclination(cross(c.r, c.v), hT);
-  return result(c, [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, v, -1)), label: pick.nu === nd.an ? "AN" : "DN" }], `Planes matched (${((ri * 180) / Math.PI).toFixed(2)}° at the ${pick.nu === nd.an ? "ascending" : "descending"} node)`);
+  return result(
+    c,
+    [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, v, -1)), label: pick.nu === nd.an ? "AN" : "DN" }],
+    `Planes matched (${((ri * 180) / Math.PI).toFixed(2)}° at the ${pick.nu === nd.an ? "ascending" : "descending"} node)`,
+  );
 }
 
 /** A resonant orbit: the period × k (the apoapsis changed at the periapsis) — the craft back where it is
@@ -208,19 +253,22 @@ export function resonant(c: FcContext, k: number): OpResult {
 export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; nTof?: number } = { rendezvous: true }): OpResult {
   const T = c.target;
   if (!T) return fail("No target");
-  const elS = elements(c.mu, c.r, c.v, c.pole), elT = elements(c.mu, T.r, T.v, c.pole);
+  const elS = elements(c.mu, c.r, c.v, c.pole),
+    elT = elements(c.mu, T.r, T.v, c.pole);
   if (elS.e >= 1 || elT.e >= 1) return fail("Bound orbits only");
   // (departures over a whole synodic period — the phase comes round once in it —, at most a month;
   // a step no more than a twelfth of the craft's orbit)
   const span = Math.min(Math.max(1.05 * synodic(elS.T, elT.T), elS.T), 30 * 86400);
   const aH = (elS.a + elT.a) / 2;
   const tH = Math.PI * Math.sqrt(aH ** 3 / c.mu);
-  const nD = o.nDep ?? Math.min(Math.max(Math.ceil(span / (elS.T / 12)), 72), 480), nT = o.nTof ?? 40;
+  const nD = o.nDep ?? Math.min(Math.max(Math.ceil(span / (elS.T / 12)), 72), 480),
+    nT = o.nTof ?? 40;
   const dep = Array.from({ length: nD }, (_, i) => (span * i) / nD);
   const tof = Array.from({ length: nT }, (_, j) => tH * (0.25 + (1.25 * j) / (nT - 1)));
   const N = unit(cross(c.r, c.v));
   const dv: number[][] = [];
-  let best = { i: 0, j: 0 }, bv = Infinity;
+  let best = { i: 0, j: 0 },
+    bv = Infinity;
   for (let i = 0; i < nD; i++) {
     const s = propagate(c.mu, c.r, c.v, dep[i]!);
     const row: number[] = [];
@@ -234,14 +282,20 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
     dv.push(row);
   }
   if (!Number.isFinite(bv)) return fail("No transfer found");
-  const td = dep[best.i]!, tf = tof[best.j]!;
+  const td = dep[best.i]!,
+    tf = tof[best.j]!;
   const s = propagate(c.mu, c.r, c.v, td);
   const tg = propagate(c.mu, T.r, T.v, td + tf);
   const L = lambert(c.mu, s.r, tg.r, tf, N)!;
   const burns: Burn[] = [{ t: td, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: "departure" }];
   if (o.rendezvous) burns.push({ t: td + tf, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: "match" });
   const grid = { dep, tof, dv, best };
-  return result(c, burns, `${o.rendezvous ? "Rendezvous" : "Intercept"} with ${T.name}: departing in ${(td / 60).toFixed(0)} min, ${(tf / 60).toFixed(0)} min of flight`, grid);
+  return result(
+    c,
+    burns,
+    `${o.rendezvous ? "Rendezvous" : "Intercept"} with ${T.name}: departing in ${(td / 60).toFixed(0)} min, ${(tf / 60).toFixed(0)} min of flight`,
+    grid,
+  );
 }
 
 /** The velocities matched with the target's at the closest approach (within two orbits). */
@@ -250,8 +304,13 @@ export function matchVelocities(c: FcContext): OpResult {
   if (!T) return fail("No target");
   const el = elements(c.mu, c.r, c.v, c.pole);
   const ca = closestApproach(c.mu, { r: c.r, v: c.v }, T, Number.isFinite(el.T) ? 2 * el.T : 86400);
-  const s = propagate(c.mu, c.r, c.v, ca.t), tg = propagate(c.mu, T.r, T.v, ca.t);
-  return result(c, [{ t: ca.t, dv: toPNR(s.r, s.v, add(tg.v, s.v, -1)), label: "match" }], `Velocities matched at the closest approach: ${ca.dist < 1e4 ? `${ca.dist.toFixed(0)} m` : `${(ca.dist / 1e3).toFixed(1)} km`} off, in ${(ca.t / 60).toFixed(0)} min`);
+  const s = propagate(c.mu, c.r, c.v, ca.t),
+    tg = propagate(c.mu, T.r, T.v, ca.t);
+  return result(
+    c,
+    [{ t: ca.t, dv: toPNR(s.r, s.v, add(tg.v, s.v, -1)), label: "match" }],
+    `Velocities matched at the closest approach: ${ca.dist < 1e4 ? `${ca.dist.toFixed(0)} m` : `${(ca.dist / 1e3).toFixed(1)} km`} off, in ${(ca.t / 60).toFixed(0)} min`,
+  );
 }
 
 /** A small burn at time t that brings the closest approach to the target nearest (Newton on its three
@@ -261,22 +320,28 @@ export function fineTune(c: FcContext, t: number): OpResult {
   if (!T) return fail("No target");
   const el = elements(c.mu, c.r, c.v, c.pole);
   const span = Number.isFinite(el.T) ? 1.5 * el.T : 86400;
-  const s = propagate(c.mu, c.r, c.v, t), tg = propagate(c.mu, T.r, T.v, t);
+  const s = propagate(c.mu, c.r, c.v, t),
+    tg = propagate(c.mu, T.r, T.v, t);
   const cost = (d: V3) => closestApproach(c.mu, { r: s.r, v: add(s.v, fromPNR(s.r, s.v, d)) }, tg, span, 120).dist;
   let x: V3 = [0, 0, 0];
   let f = cost(x);
   let step = 1;
   for (let it = 0; it < 60 && step > 1e-3; it++) {
     let moved = false;
-    for (let k = 0; k < 3; k++) for (const sgn of [1, -1]) {
-      const y: V3 = [...x] as V3;
-      y[k]! += sgn * step;
-      const fy = cost(y);
-      if (fy < f) (x = y), (f = fy), (moved = true);
-    }
+    for (let k = 0; k < 3; k++)
+      for (const sgn of [1, -1]) {
+        const y: V3 = [...x] as V3;
+        y[k]! += sgn * step;
+        const fy = cost(y);
+        if (fy < f) (x = y), (f = fy), (moved = true);
+      }
     if (!moved) step /= 2;
   }
-  return result(c, [{ t, dv: x, label: "correction" }], `The closest approach brought to ${f < 1e4 ? `${f.toFixed(0)} m` : `${(f / 1e3).toFixed(1)} km`}`);
+  return result(
+    c,
+    [{ t, dv: x, label: "correction" }],
+    `The closest approach brought to ${f < 1e4 ? `${f.toFixed(0)} m` : `${(f / 1e3).toFixed(1)} km`}`,
+  );
 }
 
 /** The figures between the craft and its target: relative inclination, phase angle, the synodic period,
@@ -284,7 +349,8 @@ export function fineTune(c: FcContext, t: number): OpResult {
 export function relation(c: FcContext) {
   const T = c.target;
   if (!T) return null;
-  const elS = elements(c.mu, c.r, c.v, c.pole), elT = elements(c.mu, T.r, T.v, c.pole);
+  const elS = elements(c.mu, c.r, c.v, c.pole),
+    elT = elements(c.mu, T.r, T.v, c.pole);
   const hT = unit(cross(T.r, T.v));
   const nd = nodesAgainst(elS, hT);
   const ca = closestApproach(c.mu, { r: c.r, v: c.v }, T, Number.isFinite(elS.T) ? 2 * elS.T : 86400, 240);
@@ -295,11 +361,19 @@ export function relation(c: FcContext) {
   const ph = phaseAngle(c.r, c.v, T.r);
   // (its rate: the target's mean motion less the craft's)
   const rate = (2 * Math.PI) / elT.T - (2 * Math.PI) / elS.T;
-  let wait = rate !== 0 ? (wrapPi(want - ph) / rate) : Infinity;
+  let wait = rate !== 0 ? wrapPi(want - ph) / rate : Infinity;
   if (wait < 0) wait += synodic(elS.T, elT.T);
   return {
-    relInc: relInclination(elS.h, elT.h), phase: ph, phaseWant: wrapPi(want), window: wait, synodic: synodic(elS.T, elT.T),
-    ca, toAN: nd ? timeTo(elS, nd.an) : Infinity, toDN: nd ? timeTo(elS, nd.dn) : Infinity, distance: len(add(T.r, c.r, -1)), vRel: len(add(T.v, c.v, -1)),
+    relInc: relInclination(elS.h, elT.h),
+    phase: ph,
+    phaseWant: wrapPi(want),
+    window: wait,
+    synodic: synodic(elS.T, elT.T),
+    ca,
+    toAN: nd ? timeTo(elS, nd.an) : Infinity,
+    toDN: nd ? timeTo(elS, nd.dn) : Infinity,
+    distance: len(add(T.r, c.r, -1)),
+    vRel: len(add(T.v, c.v, -1)),
   };
 }
 
@@ -307,7 +381,8 @@ const wrapPi = (x: number) => ((((x + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) %
 
 /** v turned about a unit axis by an angle. */
 function rot(v: V3, k: V3, a: number): V3 {
-  const c = Math.cos(a), s = Math.sin(a);
+  const c = Math.cos(a),
+    s = Math.sin(a);
   return add(add(scale(v, c), cross(k, v), s), k, dot(k, v) * (1 - c));
 }
 

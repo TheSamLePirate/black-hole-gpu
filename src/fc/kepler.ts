@@ -95,7 +95,7 @@ export function propagate(mu: number, r0: V3, v0: V3, dt: number): { r: V3; v: V
   const vr0 = dot(r0, v0) / R0;
   const alpha = 2 / R0 - dot(v0, v0) / mu;
   const sm = Math.sqrt(mu);
-  let x = alpha > 1e-12 ? sm * alpha * dt : Math.sign(dt) * Math.sqrt(mu) * Math.abs(dt) / R0;
+  let x = alpha > 1e-12 ? sm * alpha * dt : (Math.sign(dt) * Math.sqrt(mu) * Math.abs(dt)) / R0;
   for (let it = 0; it < 60; it++) {
     const z = alpha * x * x;
     const [C, S] = stumpff(z);
@@ -131,7 +131,7 @@ export function timeTo(el: Elements, nuTo: number): number {
   const ok = (nu: number) => Math.abs(((nu + Math.PI) % TAU) - Math.PI) < lim;
   if (!ok(nuTo)) return Infinity;
   const Mh = (nu: number) => {
-    const s = ((nu + Math.PI) % TAU + TAU) % TAU - Math.PI;
+    const s = ((((nu + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
     const H = 2 * Math.atanh(Math.sqrt((e - 1) / (e + 1)) * Math.tan(s / 2));
     return e * Math.sinh(H) - H;
   };
@@ -142,7 +142,7 @@ export function timeTo(el: Elements, nuTo: number): number {
 
 /** The true anomaly at a distance r, outbound (inbound: its negative). NaN if never there. */
 export function nuAtRadius(el: Elements, r: number): number {
-  const p = (len(el.h) ** 2) / el.mu;
+  const p = len(el.h) ** 2 / el.mu;
   const c = (p / r - 1) / (el.e || 1e-12);
   if (Math.abs(c) > 1) return NaN;
   return Math.acos(c);
@@ -175,32 +175,38 @@ export const synodic = (T1: number, T2: number) => (Math.abs(1 / T1 - 1 / T2) > 
 /** The closest approach of two Kepler orbits within a span [s]: its time and distance, the relative speed. */
 export function closestApproach(mu: number, s1: { r: V3; v: V3 }, s2: { r: V3; v: V3 }, span: number, samples = 400) {
   const d = (t: number) => {
-    const a = propagate(mu, s1.r, s1.v, t), b = propagate(mu, s2.r, s2.v, t);
+    const a = propagate(mu, s1.r, s1.v, t),
+      b = propagate(mu, s2.r, s2.v, t);
     return len(add(a.r, b.r, -1));
   };
-  let best = 0, bd = Infinity;
+  let best = 0,
+    bd = Infinity;
   for (let k = 0; k <= samples; k++) {
     const t = (span * k) / samples;
     const x = d(t);
     if (x < bd) (bd = x), (best = t);
   }
   // (golden section about the best sample)
-  let lo = Math.max(best - span / samples, 0), hi = Math.min(best + span / samples, span);
+  let lo = Math.max(best - span / samples, 0),
+    hi = Math.min(best + span / samples, span);
   const g = 0.6180339887;
   for (let k = 0; k < 40; k++) {
-    const m1 = hi - g * (hi - lo), m2 = lo + g * (hi - lo);
+    const m1 = hi - g * (hi - lo),
+      m2 = lo + g * (hi - lo);
     if (d(m1) < d(m2)) hi = m2;
     else lo = m1;
   }
   const t = (lo + hi) / 2;
-  const a = propagate(mu, s1.r, s1.v, t), b = propagate(mu, s2.r, s2.v, t);
+  const a = propagate(mu, s1.r, s1.v, t),
+    b = propagate(mu, s2.r, s2.v, t);
   return { t, dist: len(add(a.r, b.r, -1)), vRel: len(add(a.v, b.v, -1)) };
 }
 
 /** Lambert's problem (universal variables, the short way about `normal`; prograde): the velocities
  *  leaving r1 and arriving at r2 after tof. Null if none. */
 export function lambert(mu: number, r1: V3, r2: V3, tof: number, normal: V3 = [0, 0, 1]): { v1: V3; v2: V3 } | null {
-  const R1 = len(r1), R2 = len(r2);
+  const R1 = len(r1),
+    R2 = len(r2);
   let dnu = Math.acos(Math.min(Math.max(dot(r1, r2) / (R1 * R2), -1), 1));
   if (dot(cross(r1, r2), normal) < 0) dnu = TAU - dnu;
   const A = Math.sin(dnu) * Math.sqrt((R1 * R2) / (1 - Math.cos(dnu)));
@@ -216,7 +222,8 @@ export function lambert(mu: number, r1: V3, r2: V3, tof: number, normal: V3 = [0
     return (yz / C) ** 1.5 * S + A * Math.sqrt(yz) - Math.sqrt(mu) * tof;
   };
   // (bracket z: from where y > 0 up to 4π²)
-  let lo = -4 * Math.PI * Math.PI, hi = 4 * Math.PI * Math.PI - 1e-6;
+  let lo = -4 * Math.PI * Math.PI,
+    hi = 4 * Math.PI * Math.PI - 1e-6;
   while (y(lo) < 0 || Number.isNaN(F(lo))) {
     lo += 0.1;
     if (lo > hi) return null;

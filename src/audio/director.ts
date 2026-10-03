@@ -39,8 +39,19 @@ export class SoundDirector {
   /** the last Mach number (the boom when it crosses 1) */
   private mach = 0;
   private prev: {
-    sas: boolean; hold: string; auto: string; precision: boolean; landed: boolean; burning: boolean; soi: string; side: string;
-    target: string; mount: string; empty: boolean; low: boolean; toNode: number;
+    sas: boolean;
+    hold: string;
+    auto: string;
+    precision: boolean;
+    landed: boolean;
+    burning: boolean;
+    soi: string;
+    side: string;
+    target: string;
+    mount: string;
+    empty: boolean;
+    low: boolean;
+    toNode: number;
   } | null = null;
   private spin = 0;
 
@@ -54,21 +65,32 @@ export class SoundDirector {
       else if (e.kind === "pilot" && /^(In orbit|Arrived|Manoeuvre done)/i.test(e.text)) sound.play("arrive");
     });
     // the interface: a click for every button, a breath on hover over the main controls
-    addEventListener("pointerdown", (e) => {
-      const b = (e.target as HTMLElement | null)?.closest?.("button, [role=tab], .sp-seg button, input[type=checkbox], select");
-      if (b && !(b as HTMLButtonElement).disabled) this.cue("click");
-    }, { capture: true, passive: true });
-    addEventListener("pointerover", (e: PointerEvent) => {
-      const t = e.target as HTMLElement | null;
-      const b = t?.closest?.("#toolbar button, .sg-card, .fl-btn");
-      if (b && !b.contains(e.relatedTarget as Node | null)) this.cue("hover");
-    }, { passive: true });
+    addEventListener(
+      "pointerdown",
+      (e) => {
+        const b = (e.target as HTMLElement | null)?.closest?.("button, [role=tab], .sp-seg button, input[type=checkbox], select");
+        if (b && !(b as HTMLButtonElement).disabled) this.cue("click");
+      },
+      { capture: true, passive: true },
+    );
+    addEventListener(
+      "pointerover",
+      (e: PointerEvent) => {
+        const t = e.target as HTMLElement | null;
+        const b = t?.closest?.("#toolbar button, .sg-card, .fl-btn");
+        if (b && !b.contains(e.relatedTarget as Node | null)) this.cue("hover");
+      },
+      { passive: true },
+    );
   }
 
   /** Volumes from the settings (after a change). */
   applyMix() {
     const s = this.s;
-    sound.setMix({ master: s.soundVolume, beeps: s.soundBeeps, engines: s.soundEngines, ambience: s.soundAmbience, ui: s.soundUi }, s.sound);
+    sound.setMix(
+      { master: s.soundVolume, beeps: s.soundBeeps, engines: s.soundEngines, ambience: s.soundAmbience, ui: s.soundUi },
+      s.sound,
+    );
   }
 
   cue(c: Cue, arg = 0) {
@@ -87,7 +109,7 @@ export class SoundDirector {
     sound.update({
       throttle: f.throttle,
       // (turning hard fires the RCS too, as the wheels saturate)
-      rcs: Math.max(f.rcs, 0.55 * Math.max(0, f.turn - 0.6) / 0.4),
+      rcs: Math.max(f.rcs, (0.55 * Math.max(0, f.turn - 0.6)) / 0.4),
       rcsPan: f.rcs > 0.05 ? -f.rcsSide : -0.5 * Math.sign(f.yaw),
       spin: this.spin,
       torque: f.turn,
@@ -109,11 +131,22 @@ export class SoundDirector {
     const burning = !!info.plan?.burning;
     const fuel = info.engine.fuel;
     const node = info.plan?.nodes[0];
-    const toNode = node && info.plan && info.auto === "node" && !burning && s.timeSpeed > 0 ? (node.t - info.plan.now) / s.timeSpeed : Infinity;
+    const toNode =
+      node && info.plan && info.auto === "node" && !burning && s.timeSpeed > 0 ? (node.t - info.plan.now) / s.timeSpeed : Infinity;
     const now = {
-      sas: info.sas, hold: info.hold, auto: info.auto, precision: info.precision, landed: info.landed, burning,
-      soi: status?.soi ?? "", side: status?.side ?? "", target: s.target, mount: s.shipMount,
-      empty: !!fuel?.empty, low: !!fuel && !fuel.empty && fuel.fraction < 0.15, toNode,
+      sas: info.sas,
+      hold: info.hold,
+      auto: info.auto,
+      precision: info.precision,
+      landed: info.landed,
+      burning,
+      soi: status?.soi ?? "",
+      side: status?.side ?? "",
+      target: s.target,
+      mount: s.shipMount,
+      empty: !!fuel?.empty,
+      low: !!fuel && !fuel.empty && fuel.fraction < 0.15,
+      toNode,
     };
     const p = this.prev;
     this.prev = now;
@@ -130,7 +163,7 @@ export class SoundDirector {
     if (now.target !== p.target) this.cue("target");
     // through Mach 1 in the air: the boom
     const M = info.air?.inAir ? info.air.mach : 0;
-    if ((this.mach < 1) !== (M < 1) && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2) this.cue("boom");
+    if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2) this.cue("boom");
     this.mach = M;
     if (now.mount !== p.mount) this.cue("mount");
     if (now.side !== p.side && p.side && now.side && now.side !== "throat" && p.side !== "throat") this.cue("wormhole");

@@ -37,21 +37,25 @@ const HI = new Uint32Array(hb, 40 + hnv * 32, hni);
 const hpos = new Float32Array(hnv * 3);
 for (let i = 0; i < hnv; i++) hpos.set(HV.subarray(8 * i, 8 * i + 3), 3 * i);
 const glass = (i: number) => Math.round(HV[8 * i + 6]!) === 1;
-let gLo: V3 = [Infinity, Infinity, Infinity], gHi: V3 = [-Infinity, -Infinity, -Infinity];
-for (let i = 0; i < hnv; i++) if (glass(i)) for (let c = 0; c < 3; c++) (gLo[c] = Math.min(gLo[c]!, hpos[3 * i + c]!)), (gHi[c] = Math.max(gHi[c]!, hpos[3 * i + c]!));
+let gLo: V3 = [Infinity, Infinity, Infinity],
+  gHi: V3 = [-Infinity, -Infinity, -Infinity];
+for (let i = 0; i < hnv; i++)
+  if (glass(i)) for (let c = 0; c < 3; c++) (gLo[c] = Math.min(gLo[c]!, hpos[3 * i + c]!)), (gHi[c] = Math.max(gHi[c]!, hpos[3 * i + c]!));
 // (symmetric across: the hull's glass is ±2 cm off its axis)
 const half = (gHi[0] - gLo[0]) / 2;
 gLo = [-half, gLo[1], gLo[2]];
 gHi = [half, gHi[1], gHi[2]];
 
 // ---- 1. the fit: the interior's glass bounds (the OBJ's RaGlass) onto the hull's
-const IG_LO: V3 = [-2.53, 1.11, -3.07], IG_HI: V3 = [2.53, 2.08, 5.06];
+const IG_LO: V3 = [-2.53, 1.11, -3.07],
+  IG_HI: V3 = [2.53, 2.08, 5.06];
 // (its own proportions, the film's — the cabin is never seen with the hull: from inside alone): moved only,
 // its windows' centre on the hull's along and across, their tops level
 const S: V3 = [1, 1, 1];
-const T: V3 = [((gLo[0] + gHi[0]) - (IG_LO[0] + IG_HI[0])) / 2, gHi[1] - IG_HI[1], ((gLo[2] + gHi[2]) - (IG_LO[2] + IG_HI[2])) / 2];
+const T: V3 = [(gLo[0] + gHi[0] - (IG_LO[0] + IG_HI[0])) / 2, gHi[1] - IG_HI[1], (gLo[2] + gHi[2] - (IG_LO[2] + IG_HI[2])) / 2];
 console.log("fit: scale", S.map((x) => x.toFixed(3)).join(", "), "offset", T.map((x) => x.toFixed(3)).join(", "));
-const P = new Float32Array(nv0 * 3), N = new Float32Array(nv0 * 3);
+const P = new Float32Array(nv0 * 3),
+  N = new Float32Array(nv0 * 3);
 for (let i = 0; i < nv0; i++) {
   for (let k = 0; k < 3; k++) P[3 * i + k] = RV[11 * i + k]! * S[k]! + T[k]!;
   // (normals: the inverse transpose of the scale)
@@ -81,7 +85,9 @@ for (let t = 0; t < idx.length / 3; t++) {
 const occPos = ipos;
 const occTri = new Uint32Array(occTriL);
 const occ = new TriBVH(occPos, occTri);
-const RAYS = 64, AO_R = 1.2, FAR = 30;
+const RAYS = 64,
+  AO_R = 1.2,
+  FAR = 30;
 const dirs: V3[] = [];
 for (let i = 0; i < RAYS; i++) {
   const r = Math.sqrt((i + 0.5) / RAYS);
@@ -92,7 +98,8 @@ for (let i = 0; i < RAYS; i++) {
 // display it shows (src/ui/cockpitscreens.ts: 0 attitude, 1 orbit, 2 target, 3 systems, 4 docking, 5 plan,
 // 6 clocks, 7 log), by where it is (the OBJ's frame: x to the pilot's side, z the nose)
 const slotOf = ([x, y, z]: V3) => {
-  const ax = Math.abs(x), pilot = x > 0;
+  const ax = Math.abs(x),
+    pilot = x > 0;
   // (the rear console: the log, the clocks, the systems)
   if (z < -3) return y > 1.6 ? 7 : y > 1.4 ? 6 : 3;
   // (the dashboard: straight before the pilot the attitude, the target beside it; the copilot's orbit, systems)
@@ -113,8 +120,10 @@ for (const v of order) {
   if (Math.round(RV[11 * v + 6]!) !== 68) continue;
   const h = RV[11 * v + 8]!;
   const r = screenRect.get(h) ?? { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity, c: [0, 0, 0] as V3, n: 0, k: 0 };
-  r.u0 = Math.min(r.u0, RV[11 * v + 9]!); r.u1 = Math.max(r.u1, RV[11 * v + 9]!);
-  r.v0 = Math.min(r.v0, RV[11 * v + 10]!); r.v1 = Math.max(r.v1, RV[11 * v + 10]!);
+  r.u0 = Math.min(r.u0, RV[11 * v + 9]!);
+  r.u1 = Math.max(r.u1, RV[11 * v + 9]!);
+  r.v0 = Math.min(r.v0, RV[11 * v + 10]!);
+  r.v1 = Math.max(r.v1, RV[11 * v + 10]!);
   for (let i = 0; i < 3; i++) r.c[i]! += RV[11 * v + i]!;
   r.n++;
   screenRect.set(h, r);
@@ -123,7 +132,8 @@ for (const r of screenRect.values()) r.k = slotOf(r.c.map((x) => x / r.n) as V3)
 console.log(`${screenRect.size} screens, displays ${[...screenRect.values()].map((r) => r.k).join("")}`);
 const out = new Float32Array(nv * 10);
 const t0 = performance.now();
-let lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+const lo: V3 = [Infinity, Infinity, Infinity],
+  hi: V3 = [-Infinity, -Infinity, -Infinity];
 for (let i = 0; i < nv; i++) {
   const v = order[i]!;
   const p: V3 = [P[3 * v]!, P[3 * v + 1]!, P[3 * v + 2]!];
@@ -138,32 +148,41 @@ for (let i = 0; i < nv; i++) {
   const o: V3 = [p[0] + n[0] * 0.004, p[1] + n[1] * 0.004, p[2] + n[2] * 0.004];
   // (the pattern turned per vertex: banding into fine noise)
   const rot = ((Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453) % 1) * 2 * Math.PI;
-  const cr = Math.cos(rot), sr = Math.sin(rot);
-  let ao = 0, sky = 0;
+  const cr = Math.cos(rot),
+    sr = Math.sin(rot);
+  let ao = 0,
+    sky = 0;
   for (const [x0, y0, z] of dirs) {
-    const x = x0 * cr - y0 * sr, y = x0 * sr + y0 * cr;
+    const x = x0 * cr - y0 * sr,
+      y = x0 * sr + y0 * cr;
     const d: V3 = [t1[0] * x + t2[0] * y + n[0] * z, t1[1] * x + t2[1] * y + n[1] * z, t1[2] * x + t2[2] * y + n[2] * z];
     const h = occ.segment(o, [o[0] + d[0] * FAR, o[1] + d[1] * FAR, o[2] + d[2] * FAR]);
     if (!h) sky++;
     else if (h.t * FAR < AO_R) ao += 1 - (h.t * FAR) / AO_R;
   }
-  const s = RV[11 * v + 7]!, hsh = RV[11 * v + 8]!;
+  const s = RV[11 * v + 7]!,
+    hsh = RV[11 * v + 8]!;
   out.set([...p, ...n, mat, 1 - ao / RAYS], 10 * i);
   if (Math.round(mat) === 68) {
     const r = screenRect.get(hsh)!;
-    const u = (RV[11 * v + 9]! - r.u0) / Math.max(r.u1 - r.u0, 1e-6), w = (RV[11 * v + 10]! - r.v0) / Math.max(r.v1 - r.v0, 1e-6);
+    const u = (RV[11 * v + 9]! - r.u0) / Math.max(r.u1 - r.u0, 1e-6),
+      w = (RV[11 * v + 10]! - r.v0) / Math.max(r.v1 - r.v0, 1e-6);
     out.set([2 * r.k + Math.min(Math.max(u, 0), 0.999), Math.min(Math.max(w, 0), 0.999)], 10 * i + 8);
-  }
-  else out.set([sky / RAYS, Math.min(Math.round(s * 100), 9999) + Math.min(hsh, 0.999)], 10 * i + 8);
+  } else out.set([sky / RAYS, Math.min(Math.round(s * 100), 9999) + Math.min(hsh, 0.999)], 10 * i + 8);
 }
 console.log(`light baked: ${nv} vertices × ${RAYS} rays in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
 
 // the sticks' pivots: the foot of each grip (its lowest, centred)
 const piv: V3[] = [];
 for (const side of [1, -1]) {
-  let y0 = Infinity, sx = 0, sz = 0, n = 0;
-  for (let i = 0; i < nv; i++) if (Math.round(out[10 * i + 6]!) === 72 && Math.sign(out[10 * i]!) === side) y0 = Math.min(y0, out[10 * i + 1]!);
-  for (let i = 0; i < nv; i++) if (Math.round(out[10 * i + 6]!) === 72 && Math.sign(out[10 * i]!) === side) (sx += out[10 * i]!), (sz += out[10 * i + 2]!), n++;
+  let y0 = Infinity,
+    sx = 0,
+    sz = 0,
+    n = 0;
+  for (let i = 0; i < nv; i++)
+    if (Math.round(out[10 * i + 6]!) === 72 && Math.sign(out[10 * i]!) === side) y0 = Math.min(y0, out[10 * i + 1]!);
+  for (let i = 0; i < nv; i++)
+    if (Math.round(out[10 * i + 6]!) === 72 && Math.sign(out[10 * i]!) === side) (sx += out[10 * i]!), (sz += out[10 * i + 2]!), n++;
   if (n) piv.push([sx / n, y0, sz / n]);
 }
 console.log("the sticks' pivots:", piv.map((p) => p.map((x) => x.toFixed(3)).join(", ")).join(" · "));
@@ -175,4 +194,6 @@ new Uint32Array(head, 40, 1).set([piv.length]);
 piv.forEach((p, i) => new Float32Array(head, 44 + 16 * i, 4).set([...p, 0]));
 const body = new Uint8Array(await new Blob([head, out, idx]).arrayBuffer());
 await Bun.write("assets/ranger/cockpit.bin", Bun.gzipSync(body, { level: 9 }));
-console.log(`assets/ranger/cockpit.bin: ${nv} vertices, ${idx.length / 3} triangles, ${(body.byteLength / 1e6).toFixed(1)} MB → gzip ${(Bun.file("assets/ranger/cockpit.bin").size / 1e6).toFixed(1)} MB; bounds ${lo.map((x) => x.toFixed(2))} … ${hi.map((x) => x.toFixed(2))}`);
+console.log(
+  `assets/ranger/cockpit.bin: ${nv} vertices, ${idx.length / 3} triangles, ${(body.byteLength / 1e6).toFixed(1)} MB → gzip ${(Bun.file("assets/ranger/cockpit.bin").size / 1e6).toFixed(1)} MB; bounds ${lo.map((x) => x.toFixed(2))} … ${hi.map((x) => x.toFixed(2))}`,
+);

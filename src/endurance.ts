@@ -39,7 +39,8 @@ export function endurancePose(s: Settings, t: number) {
   const q: Vec3 = [a * Math.cos(u), a * Math.sin(u) * Math.cos(i), a * Math.sin(u) * Math.sin(i)];
   const qv: Vec3 = [-a * om * Math.sin(u), a * om * Math.cos(u) * Math.cos(i), a * om * Math.cos(u) * Math.sin(i)];
   const rz = (v: Vec3): Vec3 => [v[0] * Math.cos(nd) - v[1] * Math.sin(nd), v[0] * Math.sin(nd) + v[1] * Math.cos(nd), v[2]];
-  const C = rz(q), V = rz(qv);
+  const C = rz(q),
+    V = rz(qv);
   // it flies along its hub's axis (as in the film): the axis along its velocity — prograde, the way the
   // disk turns — the ring spinning about it (right-handed about the motion), x0 its radial direction
   const z = unit(V);
@@ -51,8 +52,21 @@ export function endurancePose(s: Settings, t: number) {
   return { C, V, x, y, z };
 }
 
-interface Box { w: number; h: number; color: GPUTexture; depthColor: GPUTexture; depth: GPUTexture; resColor: GPUTexture; resDepth: GPUTexture; comp?: GPUBindGroup }
-interface Mesh { vbuf: GPUBuffer; ibuf: GPUBuffer; count: number }
+interface Box {
+  w: number;
+  h: number;
+  color: GPUTexture;
+  depthColor: GPUTexture;
+  depth: GPUTexture;
+  resColor: GPUTexture;
+  resDepth: GPUTexture;
+  comp?: GPUBindGroup;
+}
+interface Mesh {
+  vbuf: GPUBuffer;
+  ibuf: GPUBuffer;
+  count: number;
+}
 
 /** The levels of detail, coarsest first, and the box width [px] up to which each is drawn. */
 const LODS: { url: string; upTo: number }[] = [
@@ -64,9 +78,15 @@ const LODS: { url: string; upTo: number }[] = [
 
 // order-2 real spherical harmonics (as ship.wgsl's shBasis)
 const shBasis = (d: Vec3) => [
-  0.282095, 0.488603 * d[1], 0.488603 * d[2], 0.488603 * d[0],
-  1.092548 * d[0] * d[1], 1.092548 * d[1] * d[2], 0.315392 * (3 * d[2] * d[2] - 1),
-  1.092548 * d[0] * d[2], 0.546274 * (d[0] * d[0] - d[1] * d[1]),
+  0.282095,
+  0.488603 * d[1],
+  0.488603 * d[2],
+  0.488603 * d[0],
+  1.092548 * d[0] * d[1],
+  1.092548 * d[1] * d[2],
+  0.315392 * (3 * d[2] * d[2] - 1),
+  1.092548 * d[0] * d[2],
+  0.546274 * (d[0] * d[0] - d[1] * d[1]),
 ];
 const SH_A = [Math.PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398];
 
@@ -79,7 +99,8 @@ const SH_A = [Math.PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.78539
  */
 export function diskSH(C: Vec3, rin: number, rout: number, toCam: (w: Vec3) => Vec3) {
   const sh = new Array(9).fill(0);
-  const NR = 24, NP = 48;
+  const NR = 24,
+    NP = 48;
   const h = Math.abs(C[2]) || 1e-3;
   for (let i = 0; i < NR; i++) {
     // (rings spaced in √r: the bright inner edge sampled finer)
@@ -102,7 +123,10 @@ export function diskSH(C: Vec3, rin: number, rout: number, toCam: (w: Vec3) => V
   const m = Math.hypot(...l1);
   const dir: Vec3 = m > 0 ? [l1[0] / m, l1[1] / m, l1[2] / m] : [0, 0, 1];
   const b = shBasis(dir);
-  const E = Math.max(sh.reduce((a, c, k) => a + SH_A[k]! * b[k]! * c, 0), 1e-30);
+  const E = Math.max(
+    sh.reduce((a, c, k) => a + SH_A[k]! * b[k]! * c, 0),
+    1e-30,
+  );
   return { sh: sh.map((c) => c / E), dir, directional: Math.min(m / (1.7320508 * Math.max(sh[0], 1e-30)), 1) };
 }
 
@@ -124,7 +148,10 @@ export class EnduranceRenderer {
   rect: [number, number, number, number] = [0, 0, 0, 0];
   private dummy: GPUTexture;
 
-  constructor(private device: GPUDevice, wgsl: string) {
+  constructor(
+    private device: GPUDevice,
+    wgsl: string,
+  ) {
     const d = device;
     const module = d.createShaderModule({ code: wgsl, label: "endurance" });
     this.uniform = d.createBuffer({ size: 304, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -133,15 +160,17 @@ export class EnduranceRenderer {
       vertex: {
         module,
         entryPoint: "vs",
-        buffers: [{
-          arrayStride: STRIDE,
-          attributes: [
-            { shaderLocation: 0, offset: 0, format: "float32x3" },
-            { shaderLocation: 1, offset: 12, format: "float32x3" },
-            { shaderLocation: 2, offset: 24, format: "float32" },
-            { shaderLocation: 3, offset: 28, format: "float32" },
-          ],
-        }],
+        buffers: [
+          {
+            arrayStride: STRIDE,
+            attributes: [
+              { shaderLocation: 0, offset: 0, format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32x3" },
+              { shaderLocation: 2, offset: 24, format: "float32" },
+              { shaderLocation: 3, offset: 28, format: "float32" },
+            ],
+          },
+        ],
       },
       fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }, { format: "rg16float" }] },
       // (no culling: the model has open, single-sided parts)
@@ -155,14 +184,16 @@ export class EnduranceRenderer {
       fragment: {
         module,
         entryPoint: "compFs",
-        targets: [{
-          format: "rgba16float",
-          // premultiplied over; the alpha channel (the pixel's variance estimate) kept
-          blend: {
-            color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-            alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+        targets: [
+          {
+            format: "rgba16float",
+            // premultiplied over; the alpha channel (the pixel's variance estimate) kept
+            blend: {
+              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+              alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+            },
           },
-        }],
+        ],
       },
       primitive: { topology: "triangle-list" },
     });
@@ -180,7 +211,8 @@ export class EnduranceRenderer {
       const mesh = await this.get(LODS[i]!.url).then((r) => r.arrayBuffer());
       const u32 = new Uint32Array(mesh, 0, 4);
       if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "ENDR" || u32[1] !== 1) throw new Error("bad endurance mesh");
-      const nv = u32[2]!, ni = u32[3]!;
+      const nv = u32[2]!,
+        ni = u32[3]!;
       const d = this.device;
       const vbuf = d.createBuffer({ size: nv * STRIDE, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
       d.queue.writeBuffer(vbuf, 0, mesh, 40, nv * STRIDE);
@@ -202,7 +234,12 @@ export class EnduranceRenderer {
     // (a finer one released when far coarser is drawn: its buffers back when it is needed again)
     for (let i = want + 2; i < LODS.length; i++) {
       const m = this.meshes[i];
-      if (m) { m.vbuf.destroy(); m.ibuf.destroy(); this.meshes[i] = null; this.fetching[i] = null; }
+      if (m) {
+        m.vbuf.destroy();
+        m.ibuf.destroy();
+        this.meshes[i] = null;
+        this.fetching[i] = null;
+      }
     }
     for (let i = want; i >= 0; i--) if (this.meshes[i]) return this.meshes[i]!;
     for (let i = want + 1; i < LODS.length; i++) if (this.meshes[i]) return this.meshes[i]!;
@@ -221,7 +258,8 @@ export class EnduranceRenderer {
   encode(enc: GPUCommandEncoder, hdr: GPUTexture, moments: GPUBuffer, s: Settings, cam: CameraFrame, t: number, pre: number, glow: number) {
     this.rect = [0, 0, 0, 0];
     if (!this.ready || cam.region !== "hole") return;
-    const W = hdr.width, H = hdr.height;
+    const W = hdr.width,
+      H = hdr.height;
     const { C, V, x, y, z } = endurancePose(s, t);
     const X = blToCartesian(cam.r, cam.theta, cam.phi);
     // its place and velocity as the camera sees them (retarded, aberrated: local-patch.ts)
@@ -244,8 +282,10 @@ export class EnduranceRenderer {
     const x1 = Math.ceil(Math.max(sx(p[0] + R, zr), sx(p[0] + R, p[2] + R))) + 4;
     const y0 = Math.floor(Math.min(sy(p[1] + R, zr), sy(p[1] + R, p[2] + R))) - 4;
     const y1 = Math.ceil(Math.max(sy(p[1] - R, zr), sy(p[1] - R, p[2] + R))) + 4;
-    const bx = Math.max(0, x0), by = Math.max(0, y0);
-    const bw = Math.min(W, x1) - bx, bh = Math.min(H, y1) - by;
+    const bx = Math.max(0, x0),
+      by = Math.max(0, y0);
+    const bw = Math.min(W, x1) - bx,
+      bh = Math.min(H, y1) - by;
     if (bw <= 0 || bh <= 0) return;
     const box = this.ensureBox(Math.ceil(bw / 64) * 64, Math.ceil(bh / 64) * 64);
     // the ship's axes in the camera frame (directions at rest, as the camera sees them), times its size
@@ -289,8 +329,20 @@ export class EnduranceRenderer {
     const rp = enc.beginRenderPass({
       label: "endurance",
       colorAttachments: [
-        { view: box.color.createView(), resolveTarget: box.resColor.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] },
-        { view: box.depthColor.createView(), resolveTarget: box.resDepth.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] },
+        {
+          view: box.color.createView(),
+          resolveTarget: box.resColor.createView(),
+          loadOp: "clear",
+          storeOp: "discard",
+          clearValue: [0, 0, 0, 0],
+        },
+        {
+          view: box.depthColor.createView(),
+          resolveTarget: box.resDepth.createView(),
+          loadOp: "clear",
+          storeOp: "discard",
+          clearValue: [0, 0, 0, 0],
+        },
       ],
       depthStencilAttachment: { view: box.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "discard" },
     });
@@ -326,10 +378,20 @@ export class EnduranceRenderer {
     if (b && b.w >= w && b.h >= h && b.w <= 1.5 * w + 64 && b.h <= 1.5 * h + 64) return b;
     if (b) for (const t of [b.color, b.depthColor, b.depth, b.resColor, b.resDepth]) t.destroy();
     const d = this.device;
-    const ms = (format: GPUTextureFormat) => d.createTexture({ size: [w, h], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-    const res = (format: GPUTextureFormat) => d.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+    const ms = (format: GPUTextureFormat) =>
+      d.createTexture({ size: [w, h], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    const res = (format: GPUTextureFormat) =>
+      d.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
     // (its depth: distance and coverage — two channels)
-    this.box = { w, h, color: ms("rgba16float"), depthColor: ms("rg16float"), depth: ms("depth24plus"), resColor: res("rgba16float"), resDepth: res("rg16float") };
+    this.box = {
+      w,
+      h,
+      color: ms("rgba16float"),
+      depthColor: ms("rg16float"),
+      depth: ms("depth24plus"),
+      resColor: res("rgba16float"),
+      resDepth: res("rg16float"),
+    };
     return this.box;
   }
 }

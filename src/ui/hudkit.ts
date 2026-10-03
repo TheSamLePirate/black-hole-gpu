@@ -3,22 +3,56 @@ import type { Settings } from "../settings";
 
 /** our universe's bodies on the map */
 export const OUR_COLOURS: Record<string, string> = {
-  sun: "255, 236, 170", mercury: "190, 180, 170", venus: "240, 220, 170", earth: "120, 180, 255", moon: "210, 210, 210",
-  mars: "240, 130, 90", phobos: "170, 150, 130", deimos: "170, 150, 130", ceres: "180, 180, 180", jupiter: "230, 200, 160",
-  io: "240, 220, 120", europa: "220, 210, 190", ganymede: "190, 180, 170", callisto: "160, 150, 140", saturn: "235, 215, 160",
-  mimas: "210, 210, 210", enceladus: "240, 245, 255", tethys: "220, 220, 220", dione: "210, 210, 210", rhea: "210, 210, 210",
-  titan: "235, 170, 90", iapetus: "200, 190, 170", uranus: "160, 220, 230", neptune: "110, 150, 255", triton: "220, 210, 220",
-  pluto: "220, 190, 160", charon: "190, 190, 190", iss: "95, 255, 208",
-  ranger: "255, 214, 120", lander: "255, 160, 200", endurance: "200, 225, 255",
+  sun: "255, 236, 170",
+  mercury: "190, 180, 170",
+  venus: "240, 220, 170",
+  earth: "120, 180, 255",
+  moon: "210, 210, 210",
+  mars: "240, 130, 90",
+  phobos: "170, 150, 130",
+  deimos: "170, 150, 130",
+  ceres: "180, 180, 180",
+  jupiter: "230, 200, 160",
+  io: "240, 220, 120",
+  europa: "220, 210, 190",
+  ganymede: "190, 180, 170",
+  callisto: "160, 150, 140",
+  saturn: "235, 215, 160",
+  mimas: "210, 210, 210",
+  enceladus: "240, 245, 255",
+  tethys: "220, 220, 220",
+  dione: "210, 210, 210",
+  rhea: "210, 210, 210",
+  titan: "235, 170, 90",
+  iapetus: "200, 190, 170",
+  uranus: "160, 220, 230",
+  neptune: "110, 150, 255",
+  triton: "220, 210, 220",
+  pluto: "220, 190, 160",
+  charon: "190, 190, 190",
+  iss: "95, 255, 208",
+  ranger: "255, 214, 120",
+  lander: "255, 160, 200",
+  endurance: "200, 225, 255",
 };
 
 export const AMBER = "#ffb35c";
 export const CYAN = "#7cd6ff";
 export const RED = "#ff5a46";
 export const COL: Record<string, string> = {
-  prograde: "#d6f55b", retrograde: "#d6f55b", radialOut: "#5fd3ff", radialIn: "#5fd3ff",
-  normal: "#e07bff", antinormal: "#e07bff", target: "#ff8a5c", burn: "#4d8dff", tgtPrograde: "#ff8a5c", tgtRetrograde: "#ff8a5c",
-  antiTarget: "#ff8a5c", maneuver: "#4d8dff", dock: "#5fffd0",
+  prograde: "#d6f55b",
+  retrograde: "#d6f55b",
+  radialOut: "#5fd3ff",
+  radialIn: "#5fd3ff",
+  normal: "#e07bff",
+  antinormal: "#e07bff",
+  target: "#ff8a5c",
+  burn: "#4d8dff",
+  tgtPrograde: "#ff8a5c",
+  tgtRetrograde: "#ff8a5c",
+  antiTarget: "#ff8a5c",
+  maneuver: "#4d8dff",
+  dock: "#5fffd0",
 };
 /** the HUD's technical face for labels (sized ~1.2× Inter's: narrower), mono for figures */
 export const FONT = "Rajdhani, Inter, system-ui, sans-serif";
@@ -104,4 +138,3 @@ export function fmtDur(t: number, s: Settings) {
   if (sec < 365.25 * 86400 * 2) return `${(sec / 86400).toFixed(1)} d`;
   return `${(sec / (365.25 * 86400)).toFixed(1)} y`;
 }
-

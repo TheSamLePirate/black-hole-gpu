@@ -39,14 +39,28 @@ const SCENES = arg("scenes", "")
 const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
 const label = arg("label", sha);
 const port = 9350 + Math.floor(Math.random() * 40);
-const W = 1469, H = 965, DPR = 2;
+const W = 1469,
+  H = 965,
+  DPR = 2;
 
-const chrome = Bun.spawn([
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${tmpdir()}/kerr-bench-profile`,
-  "--enable-unsafe-webgpu", "--enable-gpu", "--ignore-gpu-blocklist", `--window-size=${W},${H}`, "--no-first-run",
-  "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows", "about:blank",
-], { stdout: "ignore", stderr: "ignore" });
+const chrome = Bun.spawn(
+  [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "--headless=new",
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${tmpdir()}/kerr-bench-profile`,
+    "--enable-unsafe-webgpu",
+    "--enable-gpu",
+    "--ignore-gpu-blocklist",
+    `--window-size=${W},${H}`,
+    "--no-first-run",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows",
+    "about:blank",
+  ],
+  { stdout: "ignore", stderr: "ignore" },
+);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const kill = () => {
   chrome.kill();
@@ -72,7 +86,16 @@ const VRAM_HOOK = `(() => {
 
 interface SceneResult {
   scene: string;
-  auto: { fps: number; p50: number; p95: number; p99: number; over33: number; raysPerPx: number; blocks: Record<string, number>; scales: Record<string, number> };
+  auto: {
+    fps: number;
+    p50: number;
+    p95: number;
+    p99: number;
+    over33: number;
+    raysPerPx: number;
+    blocks: Record<string, number>;
+    scales: Record<string, number>;
+  };
   fixed: { fps: number; p50: number; p95: number };
   vramMiB: number;
   gpuPasses: { pass: string; ms: number }[];
@@ -150,17 +173,24 @@ try {
     return { fps: +(n * 1000 / ${ms}).toFixed(1), p50: q(0.5), p95: q(0.95), p99: q(0.99), over33: iv.filter((x) => x > 33.4).length,
       raysPerPx: +(rays / Math.max(n, 1)).toFixed(4), blocks, scales };`;
 
-  const warm = quick ? 4000 : 7000, span = quick ? 5000 : 9000;
+  const warm = quick ? 4000 : 7000,
+    span = quick ? 5000 : 9000;
   const measure = async (scene: string): Promise<SceneResult | null> => {
     const ok = await js(`if (!(${JSON.stringify(scene)} in __bh.presets)) return false; __bh.preset(${JSON.stringify(scene)});
       Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: "auto", dynamicResolution: true, fpsCap: 0, pixelRatio: Math.min(devicePixelRatio, 1.25) });
       __bh.resize(); __bh.refresh?.(); return true;`);
     if (!ok) return null;
-    await js(`const t0 = performance.now(); while (performance.now() - t0 < ${warm}) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`);
+    await js(
+      `const t0 = performance.now(); while (performance.now() - t0 < ${warm}) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`,
+    );
     const auto = await js(window(span));
     const gpuPasses = await js(`return __bh.game.perf().gpu.slice(0, 8).map((g) => ({ pass: g.pass, ms: +g.ms.toFixed(2) }))`);
-    await js(`Object.assign(__bh.settings, { realtimeSubsampling: 4, dynamicResolution: false }); __bh.resize(); __bh.refresh?.(); return 0`);
-    await js(`const t0 = performance.now(); while (performance.now() - t0 < 2500) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`);
+    await js(
+      `Object.assign(__bh.settings, { realtimeSubsampling: 4, dynamicResolution: false }); __bh.resize(); __bh.refresh?.(); return 0`,
+    );
+    await js(
+      `const t0 = performance.now(); while (performance.now() - t0 < 2500) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`,
+    );
     const f = await js(window(quick ? 3000 : 5000));
     const vramMiB = +(await js(`return globalThis.__vram ? __vram().mib : NaN`)).toFixed(0);
     return { scene, auto, fixed: { fps: f.fps, p50: f.p50, p95: f.p95 }, vramMiB, gpuPasses };

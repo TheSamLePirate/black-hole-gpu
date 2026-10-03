@@ -23,8 +23,15 @@ const M_S = M_METRES / C_MPS;
 
 // the elements of 1 October 2026 (CelesTrak, GP data): the fallback, and the start before the fetch
 const BUNDLED = {
-  OBJECT_NAME: "ISS (ZARYA)", EPOCH: "2026-10-01T02:39:00.159264", MEAN_MOTION: 15.48700165, ECCENTRICITY: 0.00069663,
-  INCLINATION: 51.6315, RA_OF_ASC_NODE: 135.8796, ARG_OF_PERICENTER: 208.5453, MEAN_ANOMALY: 151.5154, BSTAR: 6.8953808e-5,
+  OBJECT_NAME: "ISS (ZARYA)",
+  EPOCH: "2026-10-01T02:39:00.159264",
+  MEAN_MOTION: 15.48700165,
+  ECCENTRICITY: 0.00069663,
+  INCLINATION: 51.6315,
+  RA_OF_ASC_NODE: 135.8796,
+  ARG_OF_PERICENTER: 208.5453,
+  MEAN_ANOMALY: 151.5154,
+  BSTAR: 6.8953808e-5,
 };
 const URL_GP = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=JSON";
 const CACHE_KEY = "kerr.iss-gp";
@@ -98,9 +105,12 @@ export function issOrbit(t: number): { X: Vec3; V: Vec3 } | null {
   if (!s) return null;
   // TEME → the Earth's axes (pseudo Earth-fixed): turned by the mean sidereal time; the inertial
   // velocity turned alike (no ω × r: the home frame does not turn)
-  const g = gmst(utc), c = Math.cos(g), sn = Math.sin(g);
+  const g = gmst(utc),
+    c = Math.cos(g),
+    sn = Math.sin(g);
   const turn = (v: readonly number[]): Vec3 => [c * v[0]! + sn * v[1]!, -sn * v[0]! + c * v[1]!, v[2]!];
-  const r = turn(s.r), v = turn(s.v);
+  const r = turn(s.r),
+    v = turn(s.v);
   const A = bodyAxes(solarBody("earth")!, t);
   const E = solarState("earth", t);
   const km = 1e3 / M_METRES;
@@ -115,7 +125,8 @@ export function issOrbit(t: number): { X: Vec3; V: Vec3 } | null {
  */
 export function issAxes(X: Vec3, V: Vec3, t: number): [Vec3, Vec3, Vec3] {
   const E = solarState("earth", t);
-  const r = sub(X, E.pos), v = sub(V, E.vel);
+  const r = sub(X, E.pos),
+    v = sub(V, E.vel);
   const z = unit(lin(r, -1, r, 0));
   const y = unit(cross(v, r)); // −h: r × v points along the normal; v × r against it
   const x = cross(y, z);
@@ -123,8 +134,18 @@ export function issAxes(X: Vec3, V: Vec3, t: number): [Vec3, Vec3, Vec3] {
 }
 
 /** The station's joints and docking ports (station frame, metres: x forward, y starboard, z nadir). */
-export interface StationJoint { pivot: Vec3; axis: Vec3; normal: Vec3; parent: number; kind: number }
-export interface StationPort { centre: Vec3; axis: Vec3; name: string }
+export interface StationJoint {
+  pivot: Vec3;
+  axis: Vec3;
+  normal: Vec3;
+  parent: number;
+  kind: number;
+}
+export interface StationPort {
+  centre: Vec3;
+  axis: Vec3;
+  name: string;
+}
 export const PORT_NAMES = ["IDA-2 · Harmony forward", "IDA-3 · Harmony zenith"];
 
 /** The station's joints and ports, once its model is in (station.ts). */
@@ -143,7 +164,8 @@ export function setStationGeometry(joints: StationJoint[], ports: StationPort[])
 
 /** Rotation by angle a about a unit axis k (Rodrigues), applied to v. */
 export function rotAbout(v: Vec3, k: Vec3, a: number): Vec3 {
-  const c = Math.cos(a), s = Math.sin(a);
+  const c = Math.cos(a),
+    s = Math.sin(a);
   const kx = cross(k, v);
   const kd = dot(k, v) * (1 - c);
   return [v[0] * c + kx[0] * s + k[0] * kd, v[1] * c + kx[1] * s + k[1] * kd, v[2] * c + kx[2] * s + k[2] * kd];
@@ -156,21 +178,29 @@ export const m34mul = (A: M34, B: M34): M34 => {
   return [ap(B[0], 0), ap(B[1], 0), ap(B[2], 0), ap(B[3], 1)];
 };
 /** x ↦ M x (w = 1: a point; 0: a direction), and its inverse (M rigid). */
-export const m34apply = (M: M34, v: Vec3, w = 1): Vec3 => [0, 1, 2].map((k) => M[0][k]! * v[0] + M[1][k]! * v[1] + M[2][k]! * v[2] + w * M[3][k]!) as Vec3;
+export const m34apply = (M: M34, v: Vec3, w = 1): Vec3 =>
+  [0, 1, 2].map((k) => M[0][k]! * v[0] + M[1][k]! * v[1] + M[2][k]! * v[2] + w * M[3][k]!) as Vec3;
 export const m34unapply = (M: M34, v: Vec3, w = 1): Vec3 => {
   const d: Vec3 = [v[0] - w * M[3][0], v[1] - w * M[3][1], v[2] - w * M[3][2]];
   return [dot(M[0], d), dot(M[1], d), dot(M[2], d)];
 };
 /** A rotation by a about the line through p along k. */
 const rotM = (p: Vec3, k: Vec3, a: number): M34 => {
-  const c0 = rotAbout([1, 0, 0], k, a), c1 = rotAbout([0, 1, 0], k, a), c2 = rotAbout([0, 0, 1], k, a);
+  const c0 = rotAbout([1, 0, 0], k, a),
+    c1 = rotAbout([0, 1, 0], k, a),
+    c2 = rotAbout([0, 0, 1], k, a);
   const rp = rotAbout(p, k, a);
   return [c0, c1, c2, [p[0] - rp[0], p[1] - rp[1], p[2] - rp[2]]];
 };
 
 /** The parts' transforms (the station, then each joint's): at rest → turned, a gimbal after its alpha joint. */
 export function partTransforms(joints: StationJoint[], angles: number[]): M34[] {
-  const I: M34 = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]];
+  const I: M34 = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, 0, 0],
+  ];
   const out: M34[] = [I];
   const own = joints.map((j, k) => rotM(j.pivot, j.axis, angles[k] ?? 0));
   joints.forEach((j, k) => out.push(j.parent >= 0 ? m34mul(own[j.parent]!, own[k]!) : own[k]!));
@@ -199,7 +229,8 @@ export function jointAngles(joints: StationJoint[], sun: Vec3): number[] {
       // (alpha: about the truss's axis a, the first beta's mast m0 turned to m ⊥ sun)
       const beta = joints.find((q) => q.parent === i && q.kind === 2);
       if (!beta) return;
-      const a = j.axis, m0 = beta.axis;
+      const a = j.axis,
+        m0 = beta.axis;
       const am = cross(a, m0);
       ang[i] = Math.atan2(-dot(m0, sun), dot(am, sun));
     }
@@ -216,7 +247,8 @@ export function jointAngles(joints: StationJoint[], sun: Vec3): number[] {
     } else if (j.kind === 3) {
       // (radiators: their normal square to the Sun — edge-on; the model's normal leans 0.4° along the
       // joint's axis: taken square to it)
-      const n0 = unit(lin(j.normal, 1, j.axis, -dot(j.normal, j.axis))), w = cross(j.axis, n0);
+      const n0 = unit(lin(j.normal, 1, j.axis, -dot(j.normal, j.axis))),
+        w = cross(j.axis, n0);
       ang[i] = Math.atan2(dot(n0, sun), -dot(w, sun)) + 0;
     }
   });
@@ -322,7 +354,8 @@ export function issStart(t: number, dist = 150, offset: Vec3 = [0, 0, 0]) {
   const ringH = lin(lin(x, RANGER_RING[0], y, RANGER_RING[1]), 1, z, RANGER_RING[2]);
   const X = lin(lin(iss.X, 1, st(lin(p.centre, 1, offset, 1)), m), 1, lin(z, dist, ringH, -1), m);
   const E = solarState("earth", t);
-  const r = sub(iss.X, E.pos), v = sub(iss.V, E.vel);
+  const r = sub(iss.X, E.pos),
+    v = sub(iss.V, E.vel);
   const om = lin(cross(r, v), 1 / dot(r, r), r, 0);
   const V = lin(iss.V, 1, cross(om, sub(X, iss.X)), 1);
   return { X, fwd: z, up: y, vel: V };

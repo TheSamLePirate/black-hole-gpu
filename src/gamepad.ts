@@ -8,7 +8,18 @@
 //   View  run / pause time            Menu  settings
 
 /** Discrete actions (edge-triggered buttons), handled by the app. */
-export type PadAction = "focus" | "gravity" | "auto" | "rotation" | "prevTarget" | "nextTarget" | "recentre" | "time" | "settings" | "dpadUp" | "dpadDown";
+export type PadAction =
+  | "focus"
+  | "gravity"
+  | "auto"
+  | "rotation"
+  | "prevTarget"
+  | "nextTarget"
+  | "recentre"
+  | "time"
+  | "settings"
+  | "dpadUp"
+  | "dpadDown";
 
 export interface PadState {
   /** [forward, right, up, roll] in −1 … 1, like the flight keys. */
@@ -45,7 +56,7 @@ const DEAD = 0.14;
 function stick(x: number, y: number): [number, number] {
   const m = Math.hypot(x, y);
   if (m < DEAD) return [0, 0];
-  const k = Math.pow(Math.min((m - DEAD) / (1 - DEAD), 1), 1.6) / m;
+  const k = Math.min((m - DEAD) / (1 - DEAD), 1) ** 1.6 / m;
   return [x * k, y * k];
 }
 
@@ -130,7 +141,10 @@ export class HidPads {
   constructor() {
     const hid = hidApi();
     if (!hid) return;
-    hid.getDevices().then((ds) => ds.forEach((d) => this.attach(d))).catch(() => {});
+    hid
+      .getDevices()
+      .then((ds) => ds.forEach((d) => this.attach(d)))
+      .catch(() => {});
     hid.addEventListener("connect", (e) => this.attach(e.device));
     hid.addEventListener("disconnect", (e) => {
       this.pads = this.pads.filter((p) => p.device !== e.device);

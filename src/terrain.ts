@@ -28,12 +28,21 @@ export function gnoise(p: V3): number {
     n.push(g[0]! * (f[0]! - o[0]!) + g[1]! * (f[1]! - o[1]!) + g[2]! * (f[2]! - o[2]!));
   }
   const mix = (a: number, b: number, t: number) => a + (b - a) * t;
-  return 1.6 * mix(mix(mix(n[0]!, n[1]!, u[0]!), mix(n[2]!, n[3]!, u[0]!), u[1]!), mix(mix(n[4]!, n[5]!, u[0]!), mix(n[6]!, n[7]!, u[0]!), u[1]!), u[2]!);
+  return (
+    1.6 *
+    mix(
+      mix(mix(n[0]!, n[1]!, u[0]!), mix(n[2]!, n[3]!, u[0]!), u[1]!),
+      mix(mix(n[4]!, n[5]!, u[0]!), mix(n[6]!, n[7]!, u[0]!), u[1]!),
+      u[2]!,
+    )
+  );
 }
 
 function tfbm(p0: V3, oct: number): number {
   let p = p0;
-  let a = 0.5, s = 0, n = 0;
+  let a = 0.5,
+    s = 0,
+    n = 0;
   for (let i = 0; i < oct; i++) {
     s += a * gnoise(p);
     n += a;
@@ -101,7 +110,9 @@ const u2f = (h: number) => (h >>> 8) / 16777216;
 /** The tracer's hash4: four uniform numbers from a lattice cell (x ^ a, y ^ b, z ^ c). */
 function hash4(x: number, y: number, z: number): [number, number, number, number] {
   const h = hash3u(x >>> 0, y >>> 0, z >>> 0);
-  const h2 = pcg(h), h3 = pcg(h2), h4 = pcg(h3);
+  const h2 = pcg(h),
+    h3 = pcg(h2),
+    h4 = pcg(h3);
   return [u2f(h), u2f(h2), u2f(h3), u2f(h4)];
 }
 
@@ -171,7 +182,9 @@ function ridgedMF(p0: V3, oct: number): number {
   let p = p0;
   let sig = 1 - Math.abs(gnoise(p));
   sig *= sig;
-  let sum = sig, amp = 1, norm = 1;
+  let sum = sig,
+    amp = 1,
+    norm = 1;
   for (let i = 1; i < oct; i++) {
     p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
     const w = Math.min(Math.max(sig * 1.8, 0), 1);
@@ -187,7 +200,9 @@ function ridgedMF(p0: V3, oct: number): number {
 /** Fractal noise with a fractional number of octaves (the tracer's tfbmF). */
 function tfbmF(p0: V3, oct: number): number {
   let p = p0;
-  let a = 0.5, s = 0, n = 0;
+  let a = 0.5,
+    s = 0,
+    n = 0;
   for (let i = 0; i < oct; i++) {
     const fade = Math.min(Math.max(oct - i, 0), 1);
     s += a * fade * gnoise(p);
@@ -205,7 +220,9 @@ const firstKept = (lam0: number, res: number) => Math.max(Math.floor(Math.fround
 function ridgedMFw(p0: V3, oct: number, lam0: number, res: number): number {
   const i0 = firstKept(lam0, res);
   let p = p0;
-  let lam = lam0, amp = 1, norm = 1;
+  let lam = lam0,
+    amp = 1,
+    norm = 1;
   for (let i = 1; i <= i0; i++) {
     p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
     lam /= 2.03;
@@ -232,7 +249,10 @@ function ridgedMFw(p0: V3, oct: number, lam0: number, res: number): number {
 function tfbmFw(p0: V3, oct: number, lam0: number, res: number): number {
   const i0 = firstKept(lam0, res);
   let p = p0;
-  let a = 0.5, s = 0, n = 0, lam = lam0;
+  let a = 0.5,
+    s = 0,
+    n = 0,
+    lam = lam0;
   for (let i = 0; i < oct; i++) {
     const fade = Math.min(Math.max(oct - i, 0), 1);
     if (i >= i0) s += a * fade * gnoise(p) * octaveKept(lam, res);
@@ -275,7 +295,8 @@ export const EARTH_MAP_RES = (EARTH_RM * 2 * Math.PI) / 8192;
 
 /** Cubic B-spline weights for the texels −1 … +2 around a fraction t. */
 const bspline4 = (t: number) => {
-  const t2 = t * t, t3 = t2 * t;
+  const t2 = t * t,
+    t3 = t2 * t;
   return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6];
 };
 
@@ -295,15 +316,22 @@ export function toHalf(v: number): number {
  * near the camera (tiles: earth-tiles.ts, their heights and what they leave to the map), and the detail
  * finer than them; the sea at 0.
  */
-export function earthHeightSampler(map: Int16Array, W: number, H: number, tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number }) {
+export function earthHeightSampler(
+  map: Int16Array,
+  W: number,
+  H: number,
+  tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number },
+) {
   const texelA = (EARTH_RM * 2 * Math.PI) / W;
   const fromMap = (q: V3): number => {
     const lon = Math.atan2(q[1], q[0]);
     const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
     const x = (0.5 + lon / (2 * Math.PI)) * W - 0.5;
     const y = (0.5 - lat / Math.PI) * H - 0.5;
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const wx = bspline4(x - x0), wy = bspline4(y - y0);
+    const x0 = Math.floor(x),
+      y0 = Math.floor(y);
+    const wx = bspline4(x - x0),
+      wy = bspline4(y - y0);
     let v = 0;
     for (let j = 0; j < 4; j++) {
       const yy = Math.min(Math.max(y0 + j - 1, 0), H - 1);

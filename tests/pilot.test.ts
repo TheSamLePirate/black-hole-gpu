@@ -18,12 +18,14 @@ test("circular speed: Kerr equatorial orbits, none inside the photon orbit", () 
 });
 
 test("a circular orbit stays circular (geodesic, no thrust)", () => {
-  const a = 0.9, r = 12;
+  const a = 0.9,
+    r = 12;
   const z = zamo(r, Math.PI / 2, a);
   const v = circularSpeed(r, a, true, z)!;
   let st = fromZamo(r, Math.PI / 2, 0, [0, 0, v], a);
   const period = 2 * Math.PI * (r ** 1.5 + a);
-  let rMin = r, rMax = r;
+  let rMin = r,
+    rMax = r;
   for (let i = 0; i < 50; i++) {
     st = advance(st, a, period / 50).st;
     rMin = Math.min(rMin, st.r);
@@ -36,7 +38,9 @@ test("a circular orbit stays circular (geodesic, no thrust)", () => {
 test("attitude hold turns the nose onto prograde and stops there", () => {
   const S = shipToCamera("chase").S;
   // camera axes in a local frame (start: identity), the velocity somewhere behind and to the side
-  let right: Vec3 = [1, 0, 0], up: Vec3 = [0, 1, 0], fwd: Vec3 = [0, 0, 1];
+  let right: Vec3 = [1, 0, 0],
+    up: Vec3 = [0, 1, 0],
+    fwd: Vec3 = [0, 0, 1];
   const beta: Vec3 = [0.3, -0.2, -0.1];
   const fc = new FlightComputer();
   fc.setHold("prograde");
@@ -57,14 +61,25 @@ test("attitude hold turns the nose onto prograde and stops there", () => {
   }
   const nose = lin(lin(right, S[0][2], up, S[1][2]), 1, fwd, S[2][2]);
   const pro = lin(beta, 1 / Math.hypot(...beta), beta, 0);
-  expect(Math.acos(Math.min(1, dot(nose, pro))) * 180 / Math.PI).toBeLessThan(0.5);
+  expect((Math.acos(Math.min(1, dot(nose, pro))) * 180) / Math.PI).toBeLessThan(0.5);
   expect(Math.hypot(...fc.omega)).toBeLessThan(1e-3);
 });
 
 test("manual keys: rates follow the stick with SAS, the engine follows the throttle", () => {
   const fc = new FlightComputer();
   const S = shipToCamera("quarter").S;
-  const ctx = { dt: 1 / 60, right: [1, 0, 0] as Vec3, up: [0, 1, 0] as Vec3, fwd: [0, 0, 1] as Vec3, beta: [0, 0, 0.1] as Vec3, S, thrust: 0.02, tauRate: 1, radialOut: null, target: null };
+  const ctx = {
+    dt: 1 / 60,
+    right: [1, 0, 0] as Vec3,
+    up: [0, 1, 0] as Vec3,
+    fwd: [0, 0, 1] as Vec3,
+    beta: [0, 0, 0.1] as Vec3,
+    S,
+    thrust: 0.02,
+    tauRate: 1,
+    radialOut: null,
+    target: null,
+  };
   for (let i = 0; i < 120; i++) fc.step(ctx, { ...NONE, pitch: 1, throttle: 1 });
   expect(Math.abs(fc.omega[0])).toBeCloseTo(0.75, 3); // full rate
   expect(fc.throttle).toBeCloseTo(1, 5); // 0.6 per second for 2 s, capped

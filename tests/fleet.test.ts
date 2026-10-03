@@ -10,9 +10,15 @@ const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const on = (ax: [V, V, V], v: V): V => [0, 1, 2].map((i) => ax[0][i]! * v[0] + ax[1][i]! * v[1] + ax[2][i]! * v[2]) as V;
 
 test("docked: the two rings together, the ports' axes facing, the guest's frame a rotation", () => {
-  const pairs: [VesselId, number, VesselId, number][] = [["ranger", 0, "endurance", 0], ["lander", 0, "endurance", 1], ["ranger", 0, "lander", 0], ["lander", 0, "ranger", 0]];
+  const pairs: [VesselId, number, VesselId, number][] = [
+    ["ranger", 0, "endurance", 0],
+    ["lander", 0, "endurance", 1],
+    ["ranger", 0, "lander", 0],
+    ["lander", 0, "ranger", 0],
+  ];
   for (const [g, gp, hst, hp] of pairs) {
-    const guest = VESSELS[g].ports[gp]!, host = VESSELS[hst].ports[hp]!;
+    const guest = VESSELS[g].ports[gp]!,
+      host = VESSELS[hst].ports[hp]!;
     const { c, ax } = dockedFrame(guest, host, [0, 1, 0]);
     // the guest's port, in the host's frame: on the host's, its axis against it
     const ring = on(ax, guest.centre).map((x, i) => x + c[i]!) as V;
@@ -20,7 +26,11 @@ test("docked: the two rings together, the ports' axes facing, the guest's frame 
     expect(dot(on(ax, guest.axis), host.axis)).toBeCloseTo(-1, 9);
     // (orthonormal, right-handed)
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) expect(dot(ax[i]!, ax[j]!)).toBeCloseTo(i === j ? 1 : 0, 9);
-    const cr: V = [ax[0][1] * ax[1][2] - ax[0][2] * ax[1][1], ax[0][2] * ax[1][0] - ax[0][0] * ax[1][2], ax[0][0] * ax[1][1] - ax[0][1] * ax[1][0]];
+    const cr: V = [
+      ax[0][1] * ax[1][2] - ax[0][2] * ax[1][1],
+      ax[0][2] * ax[1][0] - ax[0][0] * ax[1][2],
+      ax[0][0] * ax[1][1] - ax[0][1] * ax[1][0],
+    ];
     expect(dot(cr, ax[2])).toBeCloseTo(1, 9);
   }
 });
@@ -30,13 +40,14 @@ test("the fleet's start: the Endurance 800 km up, the Lander 500 km up, the Rang
   const starts = fleetStart(t, "lander");
   const E = ourState("earth", t);
   const R = solarBody("earth")!.radius;
-  const alt = (p: Pose) => (Math.hypot(p.X[0] - E.pos[0], p.X[1] - E.pos[1], p.X[2] - E.pos[2]) - R) * M_METRES / 1e3;
+  const alt = (p: Pose) => ((Math.hypot(p.X[0] - E.pos[0], p.X[1] - E.pos[1], p.X[2] - E.pos[2]) - R) * M_METRES) / 1e3;
   expect(alt(starts.endurance)).toBeCloseTo(800, 3);
   expect(alt(starts.lander)).toBeCloseTo(500, 3);
   // (the Lander flown: the camera gives its place)
   fleet.activePose = () => ({ ...starts.lander, t });
   // the Ranger, docked on the Endurance (coasting as it): its rear ring on the hub's fore port
-  const pe = fleet.pose("endurance", t)!, pr = fleet.pose("ranger", t)!;
+  const pe = fleet.pose("endurance", t)!,
+    pr = fleet.pose("ranger", t)!;
   const ringR = on(pr.ax, VESSELS.ranger.ports[0]!.centre).map((x, i) => pr.X[i]! + x / M_METRES) as V;
   const portE = on(pe.ax, VESSELS.endurance.ports[0]!.centre).map((x, i) => pe.X[i]! + x / M_METRES) as V;
   expect(Math.hypot(ringR[0] - portE[0], ringR[1] - portE[1], ringR[2] - portE[2]) * M_METRES).toBeLessThan(1e-3);
@@ -66,6 +77,8 @@ test("an assembly's mass, centre of mass and moment of inertia (the flown craft'
   fleet.active = "ranger";
   fleet.activePose = () => ({ ...pr, t });
   const pe = fleet.pose("endurance", t)!;
-  expect(Math.hypot(pe.X[0] - starts.endurance.X[0], pe.X[1] - starts.endurance.X[1], pe.X[2] - starts.endurance.X[2]) * M_METRES).toBeLessThan(1e-3);
+  expect(
+    Math.hypot(pe.X[0] - starts.endurance.X[0], pe.X[1] - starts.endurance.X[1], pe.X[2] - starts.endurance.X[2]) * M_METRES,
+  ).toBeLessThan(1e-3);
   for (let i = 0; i < 3; i++) expect(dot(pe.ax[i]!, starts.endurance.ax[i]!)).toBeCloseTo(1, 9);
 });

@@ -35,7 +35,13 @@ describe("error-controlled Dormand–Prince 5(4) (quality integrator)", () => {
     const a = 0.9;
     const b = criticalImpact(a).pro + 0.05; // strongly bent, near-critical ray
     const st = equatorialRay(b, a, 60);
-    const adaptive = traceBackwardAdaptive(st, b, a, { tol: 1e-8, epsMax: 0.5, maxSteps: 100000, rEscape: 200, captureTol: captureTolerance(a) });
+    const adaptive = traceBackwardAdaptive(st, b, a, {
+      tol: 1e-8,
+      epsMax: 0.5,
+      maxSteps: 100000,
+      rEscape: 200,
+      captureTol: captureTolerance(a),
+    });
     // fixed-step run with the same number of RK4 stages
     const eps = 0.05;
     const fixed = traceBackward(st, b, a, { eps, maxSteps: 100000, rEscape: 200, captureTol: captureTolerance(a) });
@@ -93,7 +99,8 @@ describe("export encoders", () => {
     expect(toHalf(1e9)).toBe(0x7c00);
   });
   test("EXR layout: magic, header and scanline offsets", async () => {
-    const w = 3, h = 2;
+    const w = 3,
+      h = 2;
     const rgba = new Float32Array(w * h * 4).map((_, i) => i * 0.25);
     const buf = new Uint8Array(await encodeEXR(rgba, w, h).arrayBuffer());
     expect([...buf.slice(0, 4)]).toEqual([0x76, 0x2f, 0x31, 0x01]);

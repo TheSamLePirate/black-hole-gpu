@@ -13,7 +13,6 @@ import { presets } from "../src/settings";
 import { readdirSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { sceneSlug } from "./scene-slug";
 
-
 mkdirSync("assets/scenes", { recursive: true });
 for (const f of existsSync("snapshots") ? readdirSync("snapshots") : []) {
   const m = /^scene-(.+\.webp)$/.exec(f);

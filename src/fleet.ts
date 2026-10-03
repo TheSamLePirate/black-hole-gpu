@@ -41,7 +41,8 @@ function rotate(v: Vec3, r: Vec3): Vec3 {
   const th = Math.hypot(...r);
   if (th < 1e-15) return v;
   const k = lin(r, 1 / th, r, 0);
-  const c = Math.cos(th), s = Math.sin(th);
+  const c = Math.cos(th),
+    s = Math.sin(th);
   return lin(lin(v, c, cross(k, v), s), 1, k, dot(k, v) * (1 - c));
 }
 
@@ -79,7 +80,7 @@ export class Fleet {
   /** The craft (and the station) docked together with id, id included. */
   assembly(id: VesselId | "iss"): (VesselId | "iss")[] {
     const out = new Set<VesselId | "iss">([id]);
-    for (let grew = true; grew;) {
+    for (let grew = true; grew; ) {
       grew = false;
       for (const l of this.links) {
         if (out.has(l.a) !== out.has(l.b)) {
@@ -112,13 +113,15 @@ export class Fleet {
   /** A coasting craft's pose at t: Kepler around its body, its attitude held. */
   private coast(f: FreeState, t: number): Pose {
     const mu = solarBody(f.ref)?.mass ?? solarBody("earth")!.mass;
-    const B0 = ourState(f.ref, f.t), B1 = ourState(f.ref, t);
+    const B0 = ourState(f.ref, f.t),
+      B1 = ourState(f.ref, t);
     const w = f.w ?? [0, 0, 0];
     const com = f.com ?? [0, 0, 0];
     // the centre of mass on its orbit; the axes turned about it
     const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
     const k = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
-    const C = lin(B1.pos, 1, k.r, 1), Vc = lin(B1.vel, 1, k.v, 1);
+    const C = lin(B1.pos, 1, k.r, 1),
+      Vc = lin(B1.vel, 1, k.v, 1);
     const r = lin(w, t - f.t, w, 0);
     const ax = f.ax.map((a) => rotate(a, r)) as [Vec3, Vec3, Vec3];
     const X = lin(C, 1, onAxes(ax, com), -1 / M_METRES);
@@ -165,7 +168,8 @@ export class Fleet {
     let om: Vec3 | null = null;
     if (root === "iss") {
       const E = ourState("earth", t);
-      const r = sub(P.X, E.pos), v = sub(P.V, E.vel);
+      const r = sub(P.X, E.pos),
+        v = sub(P.V, E.vel);
       om = lin(cross(r, v), 1 / dot(r, r), r, 0);
     }
     while (queue.length) {
@@ -227,7 +231,19 @@ export class Fleet {
     const group = this.assembly(root).filter((v) => v !== "iss");
     if (group.length < 2) return { mass: me.mass, com: me.com, inertia: own, own };
     // each piece's frame in the flown one's (the links walked from it)
-    const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([[root, { c: [0, 0, 0], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }]]);
+    const frames = new Map<VesselId, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>([
+      [
+        root,
+        {
+          c: [0, 0, 0],
+          ax: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+        },
+      ],
+    ]);
     const queue: VesselId[] = [root];
     while (queue.length) {
       const u = queue.shift()!;
@@ -322,16 +338,24 @@ export function fleetStart(t: number, active: VesselId): Record<VesselId, Pose> 
     const u = (du * Math.PI) / 180;
     const rh = lin(e1, Math.cos(u), e2, Math.sin(u));
     const vh = lin(e1, -Math.sin(u), e2, Math.cos(u));
-    const z = vh, y = rh, x = cross(y, z);
+    const z = vh,
+      y = rh,
+      x = cross(y, z);
     return { X: lin(E.pos, 1, rh, r), V: lin(E.vel, 1, vh, Math.sqrt(mu / r)), ax: [x, y, z] };
   };
-  const end = circ(800, -40), lan = circ(500, 25);
+  const end = circ(800, -40),
+    lan = circ(500, 25);
   if (active !== "endurance") fleet.setFree("endurance", end, t);
   if (active !== "lander") fleet.setFree("lander", lan, t);
   // (the Ranger on the Endurance's fore port, its rear hatch in, its top along the Endurance's)
-  const host = VESSELS.endurance.ports[0]!, guest = VESSELS.ranger.ports[0]!;
+  const host = VESSELS.endurance.ports[0]!,
+    guest = VESSELS.ranger.ports[0]!;
   const { c, ax } = dockedFrame(guest, host, [0, 1, 0]);
   if (active !== "ranger") fleet.links.push({ a: "endurance", b: "ranger", pa: 0, pb: 0, c, ax });
-  const ran: Pose = { X: lin(end.X, 1, onAxes(end.ax, c), 1 / M_METRES), V: end.V, ax: ax.map((v) => onAxes(end.ax, v)) as [Vec3, Vec3, Vec3] };
+  const ran: Pose = {
+    X: lin(end.X, 1, onAxes(end.ax, c), 1 / M_METRES),
+    V: end.V,
+    ax: ax.map((v) => onAxes(end.ax, v)) as [Vec3, Vec3, Vec3],
+  };
   return { endurance: end, lander: lan, ranger: ran };
 }

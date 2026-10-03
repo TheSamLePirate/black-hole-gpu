@@ -2,8 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { basis, cameraFrame } from "../src/camera";
 import { defaultSettings, type Settings } from "../src/settings";
 import {
-  aimFrame, apparentDirection, bodyLook, composeOffset, geometricLook, offsetFrom, pick, QUAT_ID, quatAngle, slerp,
-  starCentre, starOmega, traceRay, type Quat,
+  aimFrame,
+  apparentDirection,
+  bodyLook,
+  composeOffset,
+  geometricLook,
+  offsetFrom,
+  pick,
+  QUAT_ID,
+  quatAngle,
+  slerp,
+  starCentre,
+  starOmega,
+  traceRay,
+  type Quat,
 } from "../src/targeting";
 import type { Vec3 } from "../src/physics";
 
@@ -12,15 +24,33 @@ const angle = (a: Vec3, b: Vec3) => Math.acos(Math.min(1, dot(a, b) / Math.hypot
 
 function scene(patch: Partial<Settings> = {}): Settings {
   return {
-    ...defaultSettings(), wormhole: false, sun: true, sunOrbit: 70, sunRadius: 2.5, sunPhase: 0, spin: 0.9,
-    disk: true, diskOuter: 18, anchor: "hole", motion: "static", yaw: 0, pitch: 0, roll: 0, sunMass: 0, ...patch,
+    ...defaultSettings(),
+    wormhole: false,
+    sun: true,
+    sunOrbit: 70,
+    sunRadius: 2.5,
+    sunPhase: 0,
+    spin: 0.9,
+    disk: true,
+    diskOuter: 18,
+    anchor: "hole",
+    motion: "static",
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    sunMass: 0,
+    ...patch,
   };
 }
 
 describe("aiming at bodies through curved spacetime", () => {
   test("orientation offsets: compose ∘ offsetFrom = identity, and the identity offset looks along the aim", () => {
     const aim = aimFrame([0.3, -0.5, 0.8]);
-    for (const [y, p, r] of [[10, 20, 30], [170, -80, -120], [0, 0, 0]]) {
+    for (const [y, p, r] of [
+      [10, 20, 30],
+      [170, -80, -120],
+      [0, 0, 0],
+    ]) {
       const b = basis(y!, p!, r!);
       const q = offsetFrom(aim, b.fwd, b.up);
       const back = composeOffset(aim, q);
@@ -57,7 +87,9 @@ describe("aiming at bodies through curved spacetime", () => {
     const b = bodyLook(s, cam, "star", 0);
     expect(b.lensed).toBe(true);
     // (seen where it was a light-travel time ago: ≈ 15 M)
-    const d = Math.hypot(...starCentre(s, 0).map((v, i) => v - [80 * Math.cos(8 * Math.PI / 180), 80 * Math.sin(8 * Math.PI / 180), 0][i]!));
+    const d = Math.hypot(
+      ...starCentre(s, 0).map((v, i) => v - [80 * Math.cos((8 * Math.PI) / 180), 80 * Math.sin((8 * Math.PI) / 180), 0][i]!),
+    );
     expect(angle(b.look, geometricLook(s, cam, starCentre(s, -d)))).toBeLessThan(0.01);
     expect(angle(b.look, geometricLook(s, cam, starCentre(s, 0)))).toBeGreaterThan(0.05);
   });
@@ -80,19 +112,35 @@ describe("aiming at bodies through curved spacetime", () => {
     const X: Vec3 = [-8.41, 4.06, 12.49];
     const r = Math.hypot(...X);
     const s = scene({
-      wormhole: true, whDist: 22, whIncl: 70, whAzimuth: -160, anchor: "hole",
-      distance: r, inclination: (Math.acos(X[2] / r) * 180) / Math.PI, azimuth: (Math.atan2(X[1], X[0]) * 180) / Math.PI,
+      wormhole: true,
+      whDist: 22,
+      whIncl: 70,
+      whAzimuth: -160,
+      anchor: "hole",
+      distance: r,
+      inclination: (Math.acos(X[2] / r) * 180) / Math.PI,
+      azimuth: (Math.atan2(X[1], X[0]) * 180) / Math.PI,
     });
     const cam = cameraFrame(s);
     const primary = bodyLook(s, cam, "wormhole", 0);
     // a secondary image: seeded next to the hole's direction, bent around it
     const hole: Vec3 = [-1, 0, 0];
     const C = (): Vec3 => {
-      const th = (70 * Math.PI) / 180, ph = (-160 * Math.PI) / 180;
+      const th = (70 * Math.PI) / 180,
+        ph = (-160 * Math.PI) / 180;
       return [22 * Math.sin(th) * Math.cos(ph), 22 * Math.sin(th) * Math.sin(ph), 22 * Math.cos(th)];
     };
     let secondary: Vec3 | null = null;
-    for (const [y, z] of [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25], [0.18, 0.18], [-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18]]) {
+    for (const [y, z] of [
+      [0.25, 0],
+      [-0.25, 0],
+      [0, 0.25],
+      [0, -0.25],
+      [0.18, 0.18],
+      [-0.18, -0.18],
+      [0.18, -0.18],
+      [-0.18, 0.18],
+    ]) {
       const g = [hole[0], y!, z!] as Vec3;
       const sol = apparentDirection(s, cam, C, 0, g, 1e-4);
       if (sol && sol.miss < 1e-2 && angle(sol.look, primary.look) > 0.3) {
@@ -118,12 +166,20 @@ describe("aiming at bodies through curved spacetime", () => {
   test("the star's mass bends light by 4m/b × γ(1 − v∥) (moving lens, weak field)", () => {
     // camera 40 M from the star along y, looking along ±y: the ray passes the star at x-offset b, then
     // recedes from the hole (whose own bending is the same with or without the star's mass)
-    for (const [b, dirY] of [[6, 1], [12, 1], [10, -1]] as const) {
+    for (const [b, dirY] of [
+      [6, 1],
+      [12, 1],
+      [10, -1],
+    ] as const) {
       const X: Vec3 = [70 + b, -40 * dirY, 0.001];
       const r = Math.hypot(...X);
       const s0 = scene({
-        sunMass: 0, disk: false, spin: 0.5,
-        distance: r, inclination: 90 - (0.001 * (180 / Math.PI)) / r, azimuth: (Math.atan2(X[1], X[0]) * 180) / Math.PI,
+        sunMass: 0,
+        disk: false,
+        spin: 0.5,
+        distance: r,
+        inclination: 90 - (0.001 * (180 / Math.PI)) / r,
+        azimuth: (Math.atan2(X[1], X[0]) * 180) / Math.PI,
       });
       const s1 = { ...s0, sunMass: 0.1 };
       const cam = cameraFrame(s0);
@@ -137,7 +193,7 @@ describe("aiming at bodies through curved spacetime", () => {
       const defl = angle(r0.dir, r1.dir);
       // star velocity ≈ +y (0.12 c); the photon travels along −dirY·y: v∥ = −dirY v
       const v = 70 * starOmega(s1);
-      const expected = ((4 * 0.1) / r1.starMin) * (1 + dirY * v) / Math.sqrt(1 - v * v);
+      const expected = (((4 * 0.1) / r1.starMin) * (1 + dirY * v)) / Math.sqrt(1 - v * v);
       // (the camera is 40 M away: the part of the deflection behind it, ≈ 2 %, is missing)
       expect(Math.abs(defl / expected - 0.98)).toBeLessThan(0.025);
       expect(r1.dir[0]).toBeLessThan(r0.dir[0]); // bent towards the star (−x)

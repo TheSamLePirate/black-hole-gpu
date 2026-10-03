@@ -39,7 +39,7 @@ export interface Gas {
 
 export const GASES = {
   air: { gamma: 1.4, R: 287.05, ksg: 1.7415e-4, radiative: true, glow: [1.0, 0.36, 0.2] as V3 },
-  co2: { gamma: 1.29, R: 188.92, ksg: 1.8960e-4, radiative: false, glow: [1.0, 0.62, 0.38] as V3 },
+  co2: { gamma: 1.29, R: 188.92, ksg: 1.896e-4, radiative: false, glow: [1.0, 0.62, 0.38] as V3 },
   n2ch4: { gamma: 1.4, R: 296.8, ksg: 1.7407e-4, radiative: false, glow: [0.75, 0.42, 1.0] as V3 },
 } satisfies Record<string, Gas>;
 export type GasId = keyof typeof GASES;
@@ -71,12 +71,24 @@ const VACUUM: Air = { rho: 0, T: 3, a: 1, gas: GASES.air };
 export const AIR_FLOOR = 1e-10;
 
 // ---- the U.S. Standard Atmosphere 1976
-const M0 = 0.0289644, RSTAR = 8.31432, R_EARTH76 = 6356766;
+const M0 = 0.0289644,
+  RSTAR = 8.31432,
+  R_EARTH76 = 6356766;
 // (layers: base geopotential height [m'], base temperature [K], lapse rate [K/m'], base pressure [Pa])
 const LAYERS: [number, number, number, number][] = [];
 {
-  const base: [number, number][] = [[0, -0.0065], [11000, 0], [20000, 0.001], [32000, 0.0028], [47000, 0], [51000, -0.0028], [71000, -0.002], [84852, 0]];
-  let T = 288.15, P = 101325;
+  const base: [number, number][] = [
+    [0, -0.0065],
+    [11000, 0],
+    [20000, 0.001],
+    [32000, 0.0028],
+    [47000, 0],
+    [51000, -0.0028],
+    [71000, -0.002],
+    [84852, 0],
+  ];
+  let T = 288.15,
+    P = 101325;
   for (let i = 0; i < base.length; i++) {
     const [hb, L] = base[i]!;
     LAYERS.push([hb, T, L, P]);
@@ -90,11 +102,26 @@ const LAYERS: [number, number, number, number][] = [];
 }
 // (above 86 km: the standard's densities and temperatures, interpolated in log ρ)
 const HIGH: [number, number, number][] = [
-  [86e3, 6.958e-6, 186.87], [90e3, 3.416e-6, 186.87], [100e3, 5.604e-7, 195.08], [110e3, 9.708e-8, 240.0],
-  [120e3, 2.222e-8, 360.0], [130e3, 8.152e-9, 469.27], [150e3, 2.076e-9, 634.39], [180e3, 5.194e-10, 787.6],
-  [200e3, 2.541e-10, 854.56], [250e3, 6.073e-11, 941.3], [300e3, 1.916e-11, 976.0], [350e3, 7.014e-12, 990.1],
-  [400e3, 2.803e-12, 995.8], [450e3, 1.184e-12, 998.2], [500e3, 5.215e-13, 999.2], [600e3, 1.137e-13, 999.9],
-  [700e3, 3.07e-14, 1000], [800e3, 1.136e-14, 1000], [900e3, 5.759e-15, 1000], [1000e3, 3.561e-15, 1000],
+  [86e3, 6.958e-6, 186.87],
+  [90e3, 3.416e-6, 186.87],
+  [100e3, 5.604e-7, 195.08],
+  [110e3, 9.708e-8, 240.0],
+  [120e3, 2.222e-8, 360.0],
+  [130e3, 8.152e-9, 469.27],
+  [150e3, 2.076e-9, 634.39],
+  [180e3, 5.194e-10, 787.6],
+  [200e3, 2.541e-10, 854.56],
+  [250e3, 6.073e-11, 941.3],
+  [300e3, 1.916e-11, 976.0],
+  [350e3, 7.014e-12, 990.1],
+  [400e3, 2.803e-12, 995.8],
+  [450e3, 1.184e-12, 998.2],
+  [500e3, 5.215e-13, 999.2],
+  [600e3, 1.137e-13, 999.9],
+  [700e3, 3.07e-14, 1000],
+  [800e3, 1.136e-14, 1000],
+  [900e3, 5.759e-15, 1000],
+  [1000e3, 3.561e-15, 1000],
 ];
 
 /** The 1976 standard atmosphere at a geometric height [m]: density, temperature. */
@@ -111,7 +138,8 @@ export function us76(h: number): { rho: number; T: number } {
   if (h >= 1000e3) return { rho: HIGH[HIGH.length - 1]![1] * Math.exp(-(h - 1000e3) / 60e3), T: 1000 };
   let k = 0;
   while (HIGH[k + 1]![0] < h) k++;
-  const [h0, r0, T0] = HIGH[k]!, [h1, r1, T1] = HIGH[k + 1]!;
+  const [h0, r0, T0] = HIGH[k]!,
+    [h1, r1, T1] = HIGH[k + 1]!;
   const f = (h - h0) / (h1 - h0);
   return { rho: Math.exp(Math.log(r0) + f * (Math.log(r1) - Math.log(r0))), T: T0 + f * (T1 - T0) };
 }
@@ -134,7 +162,8 @@ export function airAt(atm: Atmosphere | null | undefined, h: number): Air {
 export function airTop(atm: Atmosphere | null | undefined): number {
   if (!atm) return 0;
   if (atm.model === "us76") {
-    let lo = 86e3, hi = 1000e3;
+    let lo = 86e3,
+      hi = 1000e3;
     for (let i = 0; i < 50; i++) {
       const m = (lo + hi) / 2;
       if (us76(m).rho > AIR_FLOOR) lo = m;
@@ -149,7 +178,8 @@ export function airTop(atm: Atmosphere | null | undefined): number {
  *  above it a fall is a coast (the time may be sped up), below it the air flies the craft. */
 export function entryInterface(atm: Atmosphere | null | undefined): number {
   if (!atm) return 0;
-  let lo = 0, hi = airTop(atm);
+  let lo = 0,
+    hi = airTop(atm);
   for (let i = 0; i < 50; i++) {
     const m = (lo + hi) / 2;
     if (airAt(atm, m).rho > 1e-8) lo = m;
@@ -284,7 +314,8 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
   for (let i = 0; i < 3; i++) F[i]! -= D0 * u[i]!;
   const alpha = Math.atan2(-u[1], u[2]);
   const beta = Math.asin(Math.max(-1, Math.min(1, u[0])));
-  let cl = 0, stalled = false;
+  let cl = 0,
+    stalled = false;
   if (A.wing && u[2] > 0.05) {
     const W = A.wing;
     // the lift slope with Mach: Prandtl–Glauert, Ackeret, faded where Newtonian flow takes over
@@ -295,7 +326,9 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     const a = Math.abs(alpha);
     // linear to the stall, then a fall to 60 % (the box carries the flat plate beyond)
     const lin = cla * Math.min(a, s);
-    cl = Math.sign(alpha) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) + (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
+    cl =
+      Math.sign(alpha) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) +
+      (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
     stalled = a > s;
     // (the spoilers — the air brake — spoil the lift)
     cl *= 1 - 0.65 * (cfg.brake ?? 0);
@@ -305,7 +338,7 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     // lift: across the motion, in the plane of the motion and the ship's up
     const up: V3 = [-u[1] * u[0], 1 - u[1] * u[1], -u[1] * u[2]];
     const ul = Math.hypot(...up) || 1;
-    const Di = q * W.S * (cl * cl / (Math.PI * W.e * W.AR) + (cfg.flaps ?? 0) * 0.03);
+    const Di = q * W.S * ((cl * cl) / (Math.PI * W.e * W.AR) + (cfg.flaps ?? 0) * 0.03);
     const fw: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) fw[i] = (Lw * up[i]!) / ul - Di * u[i]!;
     const m = cross(A.cw, fw);

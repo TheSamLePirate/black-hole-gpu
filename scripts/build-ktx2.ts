@@ -20,31 +20,38 @@ const UASTC = ["-uastc", "-uastc_level", "1", "-uastc_rdo_l", "1.0", "-ktx2", "-
 /** Runs jobs a few at a time (basisu uses ~3.5 cores each). */
 async function pool(jobs: (() => Promise<void>)[], n = 2) {
   let i = 0;
-  await Promise.all(Array.from({ length: n }, async () => {
-    while (i < jobs.length) await jobs[i++]!();
-  }));
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (i < jobs.length) await jobs[i++]!();
+    }),
+  );
 }
 
 const jobs: (() => Promise<void>)[] = [];
 if (!only || only === "earth") {
   mkdirSync("assets/earth/ktx2", { recursive: true });
-  for (const tier of ["med", "high"]) for (const f of FACES) {
-    jobs.push(async () => {
-      const out = `assets/earth/ktx2/${tier}-${f}.ktx2`;
-      await $`basisu ${UASTC} -alpha_file assets/earth/cloud-${tier}/${f}.jpg -output_file ${out} assets/earth/day-${tier}/${f}.jpg`.quiet();
-      console.log(out, (Bun.file(out).size / 1e6).toFixed(1), "MB");
-    });
-  }
+  for (const tier of ["med", "high"])
+    for (const f of FACES) {
+      jobs.push(async () => {
+        const out = `assets/earth/ktx2/${tier}-${f}.ktx2`;
+        await $`basisu ${UASTC} -alpha_file assets/earth/cloud-${tier}/${f}.jpg -output_file ${out} assets/earth/day-${tier}/${f}.jpg`.quiet();
+        console.log(out, (Bun.file(out).size / 1e6).toFixed(1), "MB");
+      });
+    }
 }
 if (!only || only === "planets") {
   mkdirSync("assets/planets/ktx2", { recursive: true });
-  for (const [names, w, h] of [[MAPS_HI, 2048, 1024], [MAPS_LO, 1024, 512]] as const) for (const name of names) {
-    jobs.push(async () => {
-      const out = `assets/planets/ktx2/${name}.ktx2`;
-      await $`basisu ${UASTC} -resample ${w} ${h} -output_file ${out} assets/planets/${name}.jpg`.quiet();
-      console.log(out, (Bun.file(out).size / 1e6).toFixed(1), "MB");
-    });
-  }
+  for (const [names, w, h] of [
+    [MAPS_HI, 2048, 1024],
+    [MAPS_LO, 1024, 512],
+  ] as const)
+    for (const name of names) {
+      jobs.push(async () => {
+        const out = `assets/planets/ktx2/${name}.ktx2`;
+        await $`basisu ${UASTC} -resample ${w} ${h} -output_file ${out} assets/planets/${name}.jpg`.quiet();
+        console.log(out, (Bun.file(out).size / 1e6).toFixed(1), "MB");
+      });
+    }
 }
 await pool(jobs);
 

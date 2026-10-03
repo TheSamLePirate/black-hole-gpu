@@ -35,8 +35,14 @@ export const tileUrl = (z: number, x: number, y: number) => `https://s3.amazonaw
 const mercY = (sinLat: number, n: number) => (0.5 - Math.atanh(Math.min(Math.max(sinLat, -0.999999), 0.999999)) / TAU) * n;
 
 /** tiles [x0, x1) × [y0, y1), x unwrapped (the date line: x0 < 0 or x1 > n) */
-interface Rect { x0: number; y0: number; x1: number; y1: number }
-const same = (a: Rect | null, b: Rect | null) => a === b || (!!a && !!b && a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1);
+interface Rect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+const same = (a: Rect | null, b: Rect | null) =>
+  a === b || (!!a && !!b && a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1);
 const inside = (r: Rect | null, x: number, y: number) => !!r && x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
 function intersect(a: Rect | null, b: Rect | null): Rect | null {
   if (!a || !b) return null;
@@ -97,11 +103,21 @@ export class EarthTiles {
 
   constructor(private device: GPUDevice) {
     this.texture = device.createTexture({
-      size: [CLIP, CLIP, LEVELS], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, label: "earth tiles",
+      size: [CLIP, CLIP, LEVELS],
+      format: "r32float",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      label: "earth tiles",
     });
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
-      this.levels.push({ z, n: 2 ** z, want: null, valid: null, key: new Array(SPAN * SPAN).fill(null), data: new Array(SPAN * SPAN).fill(null) });
+      this.levels.push({
+        z,
+        n: 2 ** z,
+        want: null,
+        valid: null,
+        key: new Array(SPAN * SPAN).fill(null),
+        data: new Array(SPAN * SPAN).fill(null),
+      });
     }
   }
 
@@ -110,7 +126,8 @@ export class EarthTiles {
     let k = 0;
     for (const L of this.levels) {
       if (!L.want) continue;
-      for (let y = L.want.y0; y < L.want.y1; y++) for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[slotOf(x, y)] !== this.keyOf(L, x, y)) k++;
+      for (let y = L.want.y0; y < L.want.y1; y++)
+        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[slotOf(x, y)] !== this.keyOf(L, x, y)) k++;
     }
     return k;
   }
@@ -185,7 +202,8 @@ export class EarthTiles {
     const now = performance.now();
     for (const L of this.levels) {
       if (!L.want) continue;
-      const cx = lonT * L.n, cy = mercY(sinLat, L.n);
+      const cx = lonT * L.n,
+        cy = mercY(sinLat, L.n);
       const todo: [number, number, number][] = [];
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
@@ -245,7 +263,9 @@ export class EarthTiles {
     L.data[s] = h;
     this.device.queue.writeTexture(
       { texture: this.texture, origin: [(s % SPAN) * TILE, Math.floor(s / SPAN) * TILE, L.z - Z0] },
-      h as Float32Array<ArrayBuffer>, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1],
+      h as Float32Array<ArrayBuffer>,
+      { bytesPerRow: TILE * 4 },
+      [TILE, TILE, 1],
     );
     this.complete(L);
   }
@@ -314,10 +334,13 @@ export class EarthTiles {
    * footprint and towards the windows' edges; what is left to the global map in rem.
    */
   heightAt(q: Vec3, foot: number): TileSample {
-    let h = 0, res = 0, rem = 1;
+    let h = 0,
+      res = 0,
+      rem = 1;
     const cosLat = Math.sqrt(Math.max(1 - q[2] * q[2], 1e-12));
     // (from the reference, as the tracer measures it)
-    const c = Math.cos(this.lon), s = Math.sin(this.lon);
+    const c = Math.cos(this.lon),
+      s = Math.sin(this.lon);
     const dlon = Math.atan2(-q[0] * s + q[1] * c, q[0] * c + q[1] * s);
     const sz = Math.min(Math.max(q[2], -0.999999), 0.999999);
     const dM = Math.atanh((sz - this.sinLat) / (1 - sz * this.sinLat));
@@ -333,13 +356,16 @@ export class EarthTiles {
       if (ax > S / 2) ax -= S;
       else if (ax < -S / 2) ax += S;
       const ay = mercY(this.sinLat, L.n) * TILE - v.y0 * TILE;
-      const px = ax + (dlon * S) / TAU, py = ay - (dM * S) / TAU;
+      const px = ax + (dlon * S) / TAU,
+        py = ay - (dM * S) / TAU;
       const w = wz * edge(px, py, (v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE);
       if (w <= 0) continue;
       const texel = (TAU * R * cosLat) / S;
       const at = (i: number, j: number) => {
-        const gx = v.x0 * TILE + i, gy = v.y0 * TILE + j;
-        const tx = Math.floor(gx / TILE), ty = Math.floor(gy / TILE);
+        const gx = v.x0 * TILE + i,
+          gy = v.y0 * TILE + j;
+        const tx = Math.floor(gx / TILE),
+          ty = Math.floor(gy / TILE);
         return L.data[slotOf(tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z);
@@ -362,7 +388,8 @@ export function edge(px: number, py: number, w: number, h: number) {
 }
 
 const bspline4 = (t: number) => {
-  const t2 = t * t, t3 = t2 * t;
+  const t2 = t * t,
+    t3 = t2 * t;
   return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6];
 };
 
@@ -372,14 +399,18 @@ const bspline4 = (t: number) => {
  * blended over an octave (trace.wgsl: tileSample).
  */
 export function sampleLevel(at: (i: number, j: number) => number, px: number, py: number, mag: number) {
-  const x = px - 0.5, y = py - 0.5;
-  const x0 = Math.floor(x), y0 = Math.floor(y);
-  const fx = x - x0, fy = y - y0;
+  const x = px - 0.5,
+    y = py - 0.5;
+  const x0 = Math.floor(x),
+    y0 = Math.floor(y);
+  const fx = x - x0,
+    fy = y - y0;
   const k = Math.min(Math.max(mag - 1, 0), 1);
   let lin = 0;
   if (k < 1) lin = (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
   if (k <= 0) return lin;
-  const wx = bspline4(fx), wy = bspline4(fy);
+  const wx = bspline4(fx),
+    wy = bspline4(fy);
   let b = 0;
   for (let j = 0; j < 4; j++) {
     let row = 0;

@@ -8,7 +8,11 @@ import { VESSELS } from "../src/vessels";
 // the limits — past them the craft is lost, unless the damage is off.
 
 const earth = solarBody("earth")!.atmosphere!;
-const axes: [V3, V3, V3] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const axes: [V3, V3, V3] = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
 const deg = Math.PI / 180;
 const belly = (v: number): V3 => [0, -v * Math.sin(40 * deg), v * Math.cos(40 * deg)];
 const R = VESSELS.ranger;

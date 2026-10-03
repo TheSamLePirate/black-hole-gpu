@@ -6,11 +6,21 @@
 // Frames: the integrators give the air-relative velocity in their own axes (home, or the planet's local
 // x/y/z) with the ship's axes in the same — its x (left), y (up), z (the nose). SI here (m, s, N).
 
-import { aeroForces, airAt, coldSkin, heatStep, type AeroConfig, type AeroOut, type Air, type Atmosphere, type Thermal, type V3 } from "./aero";
+import {
+  aeroForces,
+  airAt,
+  coldSkin,
+  heatStep,
+  type AeroConfig,
+  type AeroOut,
+  type Air,
+  type Atmosphere,
+  type Thermal,
+  type V3,
+} from "./aero";
 import { VESSELS, type VesselId } from "./vessels";
 import { G0 } from "./units";
 import { dot } from "./math/vec3";
-
 
 /** Below this dynamic pressure [Pa] the air is a trace: the time warp is free, the turns the pilot's. */
 export const Q_FREE = 1;
@@ -114,7 +124,8 @@ export class AirFlight {
     const out = L?.out ?? null;
     // (the flight path's turn: the motion's direction now against last frame's, on the ship's axes)
     if (L && this.uFrame && this.uPrev && this.axes && dt > 0) {
-      const a = this.uPrev, b = this.uFrame;
+      const a = this.uPrev,
+        b = this.uFrame;
       const w: V3 = [(a[1] * b[2] - a[2] * b[1]) / dt, (a[2] * b[0] - a[0] * b[2]) / dt, (a[0] * b[1] - a[1] * b[0]) / dt];
       const ws: V3 = [dot(w, this.axes[0]), dot(w, this.axes[1]), dot(w, this.axes[2])];
       for (let i = 0; i < 3; i++) this.pathRate[i] = this.pathRate[i]! + (ws[i]! - this.pathRate[i]!) * Math.min(1, dt / 0.3);
@@ -129,8 +140,10 @@ export class AirFlight {
       // (the load sustained a quarter of a second: a blow on landing is the gear's business)
       this.overG = this.g > A.gMax ? this.overG + dt : 0;
       const name = VESSELS[this.vessel].name;
-      if (A.shield && this.skin.shield > A.shield.tMax) this.failure = `${name}: the heat shield failed at ${Math.round(this.skin.shield)} K (its limit ${A.shield.tMax} K)`;
-      else if (this.skin.hull > A.hull.tMax) this.failure = `${name}: the hull burnt through at ${Math.round(this.skin.hull)} K (its limit ${A.hull.tMax} K)`;
+      if (A.shield && this.skin.shield > A.shield.tMax)
+        this.failure = `${name}: the heat shield failed at ${Math.round(this.skin.shield)} K (its limit ${A.shield.tMax} K)`;
+      else if (this.skin.hull > A.hull.tMax)
+        this.failure = `${name}: the hull burnt through at ${Math.round(this.skin.hull)} K (its limit ${A.hull.tMax} K)`;
       else if (this.overG > 0.25) this.failure = `${name}: broke up under ${this.g.toFixed(1)} g (its limit ${A.gMax} g)`;
     }
     if (!out || inertia <= 0) return [0, 0, 0];

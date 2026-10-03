@@ -17,7 +17,13 @@ export interface Readout {
 function fmt(x: number, unit = "", digits = 3): string {
   if (!Number.isFinite(x)) return "∞";
   const ax = Math.abs(x);
-  const s = ax !== 0 && (ax >= 1e5 || ax < 1e-3) ? x.toExponential(digits - 1).replace("e", "×10^").replace("+", "") : x.toPrecision(digits);
+  const s =
+    ax !== 0 && (ax >= 1e5 || ax < 1e-3)
+      ? x
+          .toExponential(digits - 1)
+          .replace("e", "×10^")
+          .replace("+", "")
+      : x.toPrecision(digits);
   return unit ? `${s} ${unit}` : s;
 }
 
@@ -41,7 +47,7 @@ function fmtLength(m: number): string {
 /** Specific energy of the circular orbit at the ISCO → radiative efficiency η = 1 − E_isco. */
 function iscoEnergy(a: number): number {
   const r = isco(a);
-  const x = Math.pow(r, 1.5);
+  const x = r ** 1.5;
   return (1 - 2 / r + a / x) / Math.sqrt(1 - 3 / r + (2 * a) / x);
 }
 
@@ -61,7 +67,7 @@ export function physicalReadouts(spin: number, massSolar: number, cam: CameraFra
   const omegaH = a / (2 * rp); // horizon angular velocity × GM/c³
   const Mirr = Math.sqrt(rp * rp + a * a) / 2;
   const eta = 1 - iscoEnergy(a);
-  const tIsco = 2 * Math.PI * (Math.pow(rI, 1.5) + a) * tg;
+  const tIsco = 2 * Math.PI * (rI ** 1.5 + a) * tg;
   const evap = (5120 * Math.PI * G * G * M * M * M) / (HBAR * C ** 4); // Schwarzschild estimate
 
   return [

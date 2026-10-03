@@ -173,7 +173,13 @@ export class ShipRenderer {
   private trailBuf!: GPUBuffer;
   private trailCount = 0;
   private jetCount = 0;
-  private plumeBinds: { plume: GPUBindGroup; plumeIn: GPUBindGroup; hullDepth: GPUBindGroup; glow: GPUBindGroup; dist: GPUBindGroup } | null = null;
+  private plumeBinds: {
+    plume: GPUBindGroup;
+    plumeIn: GPUBindGroup;
+    hullDepth: GPUBindGroup;
+    glow: GPUBindGroup;
+    dist: GPUBindGroup;
+  } | null = null;
   /** this frame's re-entry: the hull glowing, the plasma (or the vapour) drawn */
   private reOn = { glow: false, sheath: false };
   /** which jets have the camera inside their plume (drawn by their back faces) */
@@ -247,18 +253,25 @@ export class ShipRenderer {
     // (the mesh's box projected: a corner at or behind the near plane — the camera in or at the
     // ship — the whole image)
     if (!o || o.corners.some((q) => q[2] < 0.06)) return [0, 0, w, h];
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    let x0 = Infinity,
+      x1 = -Infinity,
+      y0 = Infinity,
+      y1 = -Infinity;
     for (const q of o.corners) {
-      const nx = q[0] / (q[2] * o.tx), ny = q[1] / (q[2] * o.ty);
-      x0 = Math.min(x0, nx), x1 = Math.max(x1, nx), y0 = Math.min(y0, ny), y1 = Math.max(y1, ny);
+      const nx = q[0] / (q[2] * o.tx),
+        ny = q[1] / (q[2] * o.ty);
+      (x0 = Math.min(x0, nx)), (x1 = Math.max(x1, nx)), (y0 = Math.min(y0, ny)), (y1 = Math.max(y1, ny));
     }
     // (a pixel of margin for the MSAA footprint)
-    const mx = 4 / w, my = 4 / h;
-    x0 -= mx, x1 += mx, y0 -= my, y1 += my;
+    const mx = 4 / w,
+      my = 4 / h;
+    (x0 -= mx), (x1 += mx), (y0 -= my), (y1 += my);
     const px = (n: number) => Math.min(w, Math.max(0, Math.floor(((n + 1) / 2) * w)));
     const py = (n: number) => Math.min(h, Math.max(0, Math.floor(((1 - n) / 2) * h)));
-    const X0 = px(Math.min(x0, x1)) , X1 = Math.min(w, px(Math.max(x0, x1)) + 2);
-    const Y0 = py(Math.max(y0, y1)), Y1 = Math.min(h, py(Math.min(y0, y1)) + 2);
+    const X0 = px(Math.min(x0, x1)),
+      X1 = Math.min(w, px(Math.max(x0, x1)) + 2);
+    const Y0 = py(Math.max(y0, y1)),
+      Y1 = Math.min(h, py(Math.min(y0, y1)) + 2);
     return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : [0, 0, 1, 1];
   }
 
@@ -270,10 +283,16 @@ export class ShipRenderer {
     return this.prof ? this.prof.pass(label, d) : ((d ?? {}) as T);
   }
 
-  constructor(private device: GPUDevice, shipWGSL: string) {
+  constructor(
+    private device: GPUDevice,
+    shipWGSL: string,
+  ) {
     const d = device;
     // (the probe's texels, then its key light: trace.wgsl env)
-    this.envBuf = d.createBuffer({ size: (ENV_W * ENV_H + 2) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+    this.envBuf = d.createBuffer({
+      size: (ENV_W * ENV_H + 2) * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
     const envUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING;
     this.envRaw = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: RAW_MIPS, usage: envUsage });
     this.envSpec = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: SPEC_MIPS, usage: envUsage });
@@ -287,25 +306,36 @@ export class ShipRenderer {
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    this.mapSamp = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
+    this.mapSamp = d.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      maxAnisotropy: 8,
+    });
     this.shadowTex = d.createTexture({
-      size: [SHADOW, SHADOW], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      size: [SHADOW, SHADOW],
+      format: "depth32float",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     const module = d.createShaderModule({ code: shipWGSL, label: "ship" });
     const cp = (entryPoint: string) => d.createComputePipeline({ layout: "auto", compute: { module, entryPoint } });
     const vertex: GPUVertexState = {
       module,
       entryPoint: "vs",
-      buffers: [{
-        arrayStride: STRIDE,
-        attributes: [
-          { shaderLocation: 0, offset: 0, format: "float32x3" },
-          { shaderLocation: 1, offset: 12, format: "float32x3" },
-          { shaderLocation: 2, offset: 24, format: "float32" },
-          { shaderLocation: 3, offset: 28, format: "float32" },
-          { shaderLocation: 4, offset: 32, format: "float32x2" },
-        ],
-      }],
+      buffers: [
+        {
+          arrayStride: STRIDE,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: "float32x3" },
+            { shaderLocation: 1, offset: 12, format: "float32x3" },
+            { shaderLocation: 2, offset: 24, format: "float32" },
+            { shaderLocation: 3, offset: 28, format: "float32" },
+            { shaderLocation: 4, offset: 32, format: "float32x2" },
+          ],
+        },
+      ],
     };
     this.pipes = {
       copy: cp("envCopy"),
@@ -339,13 +369,14 @@ export class ShipRenderer {
           color: { srcFactor: "one", dstFactor: "one", operation: "add" },
           alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
         };
-        const plume = (inside: boolean) => d.createRenderPipeline({
-          layout: "auto",
-          vertex: { module, entryPoint: "plumeVs" },
-          fragment: { module, entryPoint: "plumeFs", targets: [{ format: "rgba16float", blend }] },
-          primitive: { topology: "triangle-list", cullMode: inside ? "front" : "back" },
-          depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: inside ? "always" : "less" },
-        });
+        const plume = (inside: boolean) =>
+          d.createRenderPipeline({
+            layout: "auto",
+            vertex: { module, entryPoint: "plumeVs" },
+            fragment: { module, entryPoint: "plumeFs", targets: [{ format: "rgba16float", blend }] },
+            primitive: { topology: "triangle-list", cullMode: inside ? "front" : "back" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: inside ? "always" : "less" },
+          });
         return {
           plume: plume(false),
           plumeIn: plume(true),
@@ -370,10 +401,19 @@ export class ShipRenderer {
           trail: d.createRenderPipeline({
             layout: "auto",
             vertex: { module, entryPoint: "trailVs" },
-            fragment: { module, entryPoint: "trailFs", targets: [{ format: "rgba16float", blend: {
-              color: { srcFactor: "one", dstFactor: "one", operation: "add" },
-              alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
-            } }] },
+            fragment: {
+              module,
+              entryPoint: "trailFs",
+              targets: [
+                {
+                  format: "rgba16float",
+                  blend: {
+                    color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+                    alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
+                  },
+                },
+              ],
+            },
             primitive: { topology: "triangle-list", cullMode: "none" },
             depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less" },
           }),
@@ -407,8 +447,17 @@ export class ShipRenderer {
         layout: "auto",
         vertex,
         fragment: {
-          module, entryPoint: "fsCabinGlass",
-          targets: [{ format: "rgba16float", blend: { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" } } }],
+          module,
+          entryPoint: "fsCabinGlass",
+          targets: [
+            {
+              format: "rgba16float",
+              blend: {
+                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+              },
+            },
+          ],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
@@ -429,14 +478,16 @@ export class ShipRenderer {
         fragment: {
           module,
           entryPoint: "compFs",
-          targets: [{
-            format: "rgba16float",
-            // premultiplied over; the alpha channel (the pixel's variance estimate) is kept
-            blend: {
-              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-              alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+          targets: [
+            {
+              format: "rgba16float",
+              // premultiplied over; the alpha channel (the pixel's variance estimate) is kept
+              blend: {
+                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+              },
             },
-          }],
+          ],
         },
         primitive: { topology: "triangle-list" },
       }),
@@ -457,7 +508,10 @@ export class ShipRenderer {
     if (this.meshes[id]) return true;
     if (!this.loadingMesh.has(id) && this.ready) {
       this.loadingMesh.add(id);
-      this.loadVessel(id).then(() => this.onLoaded?.(), (e) => console.error(`${VESSELS[id].name}:`, e));
+      this.loadVessel(id).then(
+        () => this.onLoaded?.(),
+        (e) => console.error(`${VESSELS[id].name}:`, e),
+      );
     }
     return false;
   }
@@ -475,7 +529,8 @@ export class ShipRenderer {
     const buf = await this.getter(url).then((r) => r.arrayBuffer());
     const magic = new TextDecoder().decode(new Uint8Array(buf, 0, 4));
     const u32 = new Uint32Array(buf, 0, 4);
-    const nv = u32[2]!, ni = u32[3]!;
+    const nv = u32[2]!,
+      ni = u32[3]!;
     const inStride = magic === "LNDR" ? 10 : 8;
     if (!["RNGR", "ENDR", "LNDR"].includes(magic)) throw new Error(`bad mesh for ${id}`);
     const src = new Float32Array(buf, 40, nv * inStride);
@@ -484,9 +539,11 @@ export class ShipRenderer {
     const k = id === "endurance" ? 64 : 1;
     const matOff = id === "endurance" ? 20 : 0;
     const verts = new Float32Array(nv * 10);
-    const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+    const lo: V3 = [Infinity, Infinity, Infinity],
+      hi: V3 = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < nv; i++) {
-      const o = 10 * i, q = inStride * i;
+      const o = 10 * i,
+        q = inStride * i;
       for (let c = 0; c < 3; c++) {
         const x = src[q + c]! * k;
         verts[o + c] = x;
@@ -527,11 +584,15 @@ export class ShipRenderer {
         // (served compressed: inflated here)
         const raw = await r.arrayBuffer();
         const gz = new Uint8Array(raw, 0, 2);
-        const buf = gz[0] === 0x1f && gz[1] === 0x8b ? await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer() : raw;
+        const buf =
+          gz[0] === 0x1f && gz[1] === 0x8b
+            ? await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()
+            : raw;
         if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "CKPT") throw new Error("bad cockpit.bin");
         const [ver, nv, ni] = new Uint32Array(buf, 4, 3) as unknown as [number, number, number];
         const bb = new Float32Array(buf, 16, 6);
-        const lo: V3 = [bb[0]!, bb[1]!, bb[2]!], hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
+        const lo: V3 = [bb[0]!, bb[1]!, bb[2]!],
+          hi: V3 = [bb[3]!, bb[4]!, bb[5]!];
         let off = 40;
         const pivots: V3[] = [];
         if (ver >= 2) {
@@ -548,7 +609,8 @@ export class ShipRenderer {
         const isGlass = (t: number) => Math.round(verts[10 * idx0[3 * t]! + 6]!) === 71;
         const idx = new Uint32Array(ni);
         let o = 0;
-        for (const glassPass of [false, true]) for (let t = 0; t < ni / 3; t++) if (isGlass(t) === glassPass) idx.set(idx0.subarray(3 * t, 3 * t + 3), (o++) * 3);
+        for (const glassPass of [false, true])
+          for (let t = 0; t < ni / 3; t++) if (isGlass(t) === glassPass) idx.set(idx0.subarray(3 * t, 3 * t + 3), o++ * 3);
         let firstGlass = 0;
         while (firstGlass < ni / 3 && !isGlassTri(idx, verts, firstGlass)) firstGlass++;
         const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -556,7 +618,11 @@ export class ShipRenderer {
         const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
         d.queue.writeBuffer(ibuf, 0, idx);
         const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
-        this.cockpit = { mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } }, pivots, solid: firstGlass * 3 };
+        this.cockpit = {
+          mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } },
+          pivots,
+          solid: firstGlass * 3,
+        };
         // (its walls for the camera moving about it: the triangles in a hierarchy)
         const pos = new Float32Array(nv * 3);
         for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
@@ -574,15 +640,25 @@ export class ShipRenderer {
     const tex = async (url: string, format: GPUTextureFormat) => {
       const img = await createImageBitmap(await this.getter(url).then((r) => r.blob()));
       const levels = Math.floor(Math.log2(Math.max(img.width, img.height))) + 1;
-      const t = d.createTexture({ size: [img.width, img.height], format, mipLevelCount: levels, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+      const t = d.createTexture({
+        size: [img.width, img.height],
+        format,
+        mipLevelCount: levels,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
       for (let l = 0; l < levels; l++) {
-        const w = Math.max(1, img.width >> l), h = Math.max(1, img.height >> l);
+        const w = Math.max(1, img.width >> l),
+          h = Math.max(1, img.height >> l);
         const b = l === 0 ? img : await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
         d.queue.copyExternalImageToTexture({ source: b }, { texture: t, mipLevel: l }, [w, h]);
       }
       return t;
     };
-    const [albedo, normal, lights] = await Promise.all([tex(landerAlbedoUrl, "rgba8unorm-srgb"), tex(landerNormalUrl, "rgba8unorm"), tex(landerLightsUrl, "rgba8unorm-srgb")]);
+    const [albedo, normal, lights] = await Promise.all([
+      tex(landerAlbedoUrl, "rgba8unorm-srgb"),
+      tex(landerNormalUrl, "rgba8unorm"),
+      tex(landerLightsUrl, "rgba8unorm-srgb"),
+    ]);
     this.maps = { albedo, normal, lights };
     // (the shading's bind groups hold the maps: made again)
     this.bind();
@@ -598,13 +674,19 @@ export class ShipRenderer {
       copy: [raw(0), spec(0)].map((view) =>
         d.createBindGroup({
           layout: this.pipes.copy.getBindGroupLayout(0),
-          entries: [{ binding: 0, resource: { buffer: this.envBuf } }, { binding: 1, resource: view }],
+          entries: [
+            { binding: 0, resource: { buffer: this.envBuf } },
+            { binding: 1, resource: view },
+          ],
         }),
       ),
       down: Array.from({ length: RAW_MIPS - 1 }, (_, i) =>
         d.createBindGroup({
           layout: this.pipes.down.getBindGroupLayout(0),
-          entries: [{ binding: 1, resource: raw(i + 1) }, { binding: 2, resource: raw(i) }],
+          entries: [
+            { binding: 1, resource: raw(i + 1) },
+            { binding: 2, resource: raw(i) },
+          ],
         }),
       ),
       ggx: Array.from({ length: SPEC_MIPS - 1 }, (_, i) =>
@@ -620,11 +702,19 @@ export class ShipRenderer {
       ),
       sh: d.createBindGroup({
         layout: this.pipes.sh.getBindGroupLayout(0),
-        entries: [{ binding: 0, resource: { buffer: this.envBuf } }, { binding: 3, resource: { buffer: this.shBuf } }],
+        entries: [
+          { binding: 0, resource: { buffer: this.envBuf } },
+          { binding: 3, resource: { buffer: this.shBuf } },
+        ],
       }),
     };
     const samp = d.createSampler({
-      magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge", maxAnisotropy: 8,
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "clamp-to-edge",
+      maxAnisotropy: 8,
     });
     const cmp = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
     const dummy = (format: GPUTextureFormat) => d.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.TEXTURE_BINDING });
@@ -645,11 +735,18 @@ export class ShipRenderer {
     ];
     this.bindGen++;
 
-    const pb = (p: GPURenderPipeline, jets = true) => d.createBindGroup({
-      layout: p.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: this.uniform } }, ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [])],
-    });
-    this.plumeBinds = { plume: pb(this.pipes.plume), plumeIn: pb(this.pipes.plumeIn), hullDepth: pb(this.pipes.hullDepth, false), glow: pb(this.pipes.glow, false), dist: pb(this.pipes.dist, false) };
+    const pb = (p: GPURenderPipeline, jets = true) =>
+      d.createBindGroup({
+        layout: p.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.uniform } }, ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [])],
+      });
+    this.plumeBinds = {
+      plume: pb(this.pipes.plume),
+      plumeIn: pb(this.pipes.plumeIn),
+      hullDepth: pb(this.pipes.hullDepth, false),
+      glow: pb(this.pipes.glow, false),
+      dist: pb(this.pipes.dist, false),
+    };
     this.shadowBind = d.createBindGroup({
       layout: this.pipes.shadow.getBindGroupLayout(0),
       entries: [
@@ -736,7 +833,11 @@ export class ShipRenderer {
         const o = sub(this.camShip, J.p);
         const sAx = dot(o, J.d);
         const rad = (h: number) => (h + Math.max(sAx, 0) * spread) * 1.45 + 0.05 + 0.3;
-        this.jetInside[n] = sAx > -0.45 && sAx < 0.85 * len + 0.3 && Math.abs(dot(o, J.u)) < rad(J.half[0]) && Math.abs(dot(o, cross(J.d, J.u))) < rad(J.half[1]);
+        this.jetInside[n] =
+          sAx > -0.45 &&
+          sAx < 0.85 * len + 0.3 &&
+          Math.abs(dot(o, J.u)) < rad(J.half[0]) &&
+          Math.abs(dot(o, cross(J.d, J.u))) < rad(J.half[1]);
         n++;
       }
     }
@@ -772,12 +873,16 @@ export class ShipRenderer {
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
-    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: false }] : [];
-    for (const o of v.others ?? []) if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
+    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown
+      ? [{ id: this.vessel, R, t, shadow: true, far: false }]
+      : [];
+    for (const o of v.others ?? [])
+      if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
     this.draws = [];
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)
-    let sc: V3 | null = null, sr = 0;
+    let sc: V3 | null = null,
+      sr = 0;
     list.forEach((it, i) => {
       const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
       model(it.R, it.t, this.instData, i * INST_FLOATS);
@@ -812,7 +917,11 @@ export class ShipRenderer {
     this.onScreen = { c: sc, r: sr * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
     m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
-    const ax = v.probeAxes ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const ax = v.probeAxes ?? [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
     ax.forEach((a, i) => m.set([...a, 0], 36 + 4 * i));
     m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
@@ -833,11 +942,26 @@ export class ShipRenderer {
       this.stick = this.stick.map((a, j) => a + (want[j]! - a) * k) as V3;
       const P = this.cockpit!.pivots;
       const D = v.dash ?? { up: [0, 1, 0], fwd: [0, 0, 1], speed: 0, alt: 0, time: now };
-      this.device.queue.writeBuffer(this.uniform, 256, new Float32Array([
-        ...this.stick, th?.throttle ?? 0,
-        ...(P[0] ?? [1.2, 1.2, 2.9]), 0, ...(P[1] ?? [-1.2, 1.2, 2.9]), 0,
-        ...D.up, D.speed, ...D.fwd, D.alt, D.time, 0, 0, th?.throttle ?? 0,
-      ]));
+      this.device.queue.writeBuffer(
+        this.uniform,
+        256,
+        new Float32Array([
+          ...this.stick,
+          th?.throttle ?? 0,
+          ...(P[0] ?? [1.2, 1.2, 2.9]),
+          0,
+          ...(P[1] ?? [-1.2, 1.2, 2.9]),
+          0,
+          ...D.up,
+          D.speed,
+          ...D.fwd,
+          D.alt,
+          D.time,
+          0,
+          0,
+          th?.throttle ?? 0,
+        ]),
+      );
     }
   }
   /**
@@ -855,7 +979,8 @@ export class ShipRenderer {
       const c: V3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       const L: V3 = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
       const u = norm(re.u);
-      let front = -Infinity, back = Infinity;
+      let front = -Infinity,
+        back = Infinity;
       for (let k = 0; k < 8; k++) {
         const q: V3 = [(k & 1 ? hi[0] : lo[0]) - c[0], (k & 2 ? hi[1] : lo[1]) - c[1], (k & 4 ? hi[2] : lo[2]) - c[2]];
         const d = dot(q, u);
@@ -866,7 +991,26 @@ export class ShipRenderer {
       const Rp = Math.sqrt(area / Math.PI);
       const vapour = re.mach > 0.85 && re.mach < 1.15 && re.rho > 0.25;
       this.reOn = { glow: Math.max(re.shield, re.hull) > 720, sheath: lev > 0 || vapour };
-      blk.set([...u, lev, re.shield, re.hull, re.mach, re.rho / 1.225, ...re.glow, 0, 0, 0, 0, 0, front, back, Rp, Rp * (4 + 14 * lev), ...c, re.time]);
+      blk.set([
+        ...u,
+        lev,
+        re.shield,
+        re.hull,
+        re.mach,
+        re.rho / 1.225,
+        ...re.glow,
+        0,
+        0,
+        0,
+        0,
+        0,
+        front,
+        back,
+        Rp,
+        Rp * (4 + 14 * lev),
+        ...c,
+        re.time,
+      ]);
     }
     this.device.queue.writeBuffer(this.uniform, 352, blk);
   }
@@ -878,7 +1022,9 @@ export class ShipRenderer {
   private screens: GPUTexture | null = null;
   private screenTexture() {
     return (this.screens ??= this.device.createTexture({
-      size: [2048, 1024], format: "rgba8unorm-srgb", mipLevelCount: 11,
+      size: [2048, 1024],
+      format: "rgba8unorm-srgb",
+      mipLevelCount: 11,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     }));
   }
@@ -887,7 +1033,8 @@ export class ShipRenderer {
     const tex = this.screenTexture();
     let level: HTMLCanvasElement | OffscreenCanvas = src;
     for (let l = 0; l < tex.mipLevelCount; l++) {
-      const w = Math.max(1, 2048 >> l), h = Math.max(1, 1024 >> l);
+      const w = Math.max(1, 2048 >> l),
+        h = Math.max(1, 1024 >> l);
       if (l > 0) {
         const c = (this.mipCanvases[l] ??= new OffscreenCanvas(w, h));
         const g = c.getContext("2d")!;
@@ -912,13 +1059,25 @@ export class ShipRenderer {
     if (!res || res.w !== hdr.width || res.h !== hdr.height) {
       if (res) this.forget(hdr);
       const resolved = this.device.createTexture({
-        size: [hdr.width, hdr.height], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        size: [hdr.width, hdr.height],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
       const plume = this.device.createTexture({
-        size: [Math.ceil(hdr.width / 2), Math.ceil(hdr.height / 2)], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+        size: [Math.ceil(hdr.width / 2), Math.ceil(hdr.height / 2)],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      const plumeDepth = this.device.createTexture({ size: [plume.width, plume.height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
-      const hullDist = this.device.createTexture({ size: [plume.width, plume.height], format: "r16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
+      const plumeDepth = this.device.createTexture({
+        size: [plume.width, plume.height],
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      const hullDist = this.device.createTexture({
+        size: [plume.width, plume.height],
+        format: "r16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
       res = { w: hdr.width, h: hdr.height, resolved, box: null, rect: [0, 0, 0, 0], plume, plumeDepth, plumeDirty: true, hullDist };
       this.targets.set(hdr, res);
     }
@@ -936,7 +1095,13 @@ export class ShipRenderer {
    * fraction of the image — the whole-screen MSAA clear and resolve cost as much as the drawing),
    * resolved and copied into its image, which the display composites over the traced one.
    */
-  encodeShip(enc: GPUCommandEncoder, hdr: GPUTexture, v: ShipView, occluder?: { depth: GPUTexture; rect: [number, number, number, number] }, moments?: GPUBuffer) {
+  encodeShip(
+    enc: GPUCommandEncoder,
+    hdr: GPUTexture,
+    v: ShipView,
+    occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
+    moments?: GPUBuffer,
+  ) {
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
     this.flown = !!v.vessel;
@@ -950,19 +1115,29 @@ export class ShipRenderer {
     // (the image's size and the metres per M: the other craft's depths against the traced image's)
     this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, moments ? 1 : 0]));
     // the box: the sphere's screen box within the image, its size rounded up (few re-allocations)
-    const W = hdr.width, H = hdr.height;
+    const W = hdr.width,
+      H = hdr.height;
     const sc = this.scissor(W, H);
     const up = (x: number, max: number) => Math.min(max, Math.max(128, Math.ceil(x / 128) * 128));
-    const bw = up(sc[2], W), bh = up(sc[3], H);
-    const x0 = Math.min(Math.max(sc[0], 0), W - bw), y0 = Math.min(Math.max(sc[1], 0), H - bh);
+    const bw = up(sc[2], W),
+      bh = up(sc[3], H);
+    const x0 = Math.min(Math.max(sc[0], 0), W - bw),
+      y0 = Math.min(Math.max(sc[1], 0), H - bh);
     if (!res.box || res.box.w !== bw || res.box.h !== bh) {
       const old = res.box;
       if (old) this.device.queue.onSubmittedWorkDone().then(() => [old.color, old.depth, old.small].forEach((t) => t.destroy()));
-      const d = this.device, size = [bw, bh];
+      const d = this.device,
+        size = [bw, bh];
       res.box = {
-        w: bw, h: bh,
+        w: bw,
+        h: bh,
         color: d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
-        depth: d.createTexture({ size, format: "depth32float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING }),
+        depth: d.createTexture({
+          size,
+          format: "depth32float",
+          sampleCount: 4,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        }),
         small: d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC }),
       };
     }
@@ -971,17 +1146,27 @@ export class ShipRenderer {
     // (the station's box and depth: it hides the hull where it stands before it)
     const occ = occluder && occluder.rect[2] > 0 ? occluder : null;
     this.device.queue.writeBuffer(this.uniform, 224, new Float32Array(occ ? occ.rect : [0, 0, 0, 0]));
-    const occTex = occ?.depth ?? (this.occDummy ??= this.device.createTexture({ size: [1, 1], format: "rg16float", usage: GPUTextureUsage.TEXTURE_BINDING }));
+    const occTex =
+      occ?.depth ??
+      (this.occDummy ??= this.device.createTexture({ size: [1, 1], format: "rg16float", usage: GPUTextureUsage.TEXTURE_BINDING }));
     if (res.occBind?.tex !== occTex) {
-      res.occBind = { tex: occTex, g: this.device.createBindGroup({ layout: this.pipes!.ship.getBindGroupLayout(1), entries: [{ binding: 0, resource: occTex.createView() }] }) };
+      res.occBind = {
+        tex: occTex,
+        g: this.device.createBindGroup({
+          layout: this.pipes!.ship.getBindGroupLayout(1),
+          entries: [{ binding: 0, resource: occTex.createView() }],
+        }),
+      };
     }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
     if (this.shadowTick++ % 2 === 0) {
-      const sp = enc.beginRenderPass(this.pass("ship: shadow map", {
-        colorAttachments: [],
-        depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
-      }));
+      const sp = enc.beginRenderPass(
+        this.pass("ship: shadow map", {
+          colorAttachments: [],
+          depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+        }),
+      );
       sp.setPipeline(this.pipes.shadow);
       sp.setBindGroup(0, this.shadowBind!);
       this.draws.forEach((dr, i) => {
@@ -994,14 +1179,27 @@ export class ShipRenderer {
     }
     const b = res.box;
     const jets = this.jetCount > 0;
-    const rp = enc.beginRenderPass(this.pass("ship: shading (MSAA)", {
-      colorAttachments: [{ view: b.color.createView(), resolveTarget: b.small.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] }],
-      depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
-    }));
+    const rp = enc.beginRenderPass(
+      this.pass("ship: shading (MSAA)", {
+        colorAttachments: [
+          {
+            view: b.color.createView(),
+            resolveTarget: b.small.createView(),
+            loadOp: "clear",
+            storeOp: "discard",
+            clearValue: [0, 0, 0, 0],
+          },
+        ],
+        depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+      }),
+    );
     // the depth pre-pass (its bindings: the uniform, the instances)
     this.depthBind ??= this.device.createBindGroup({
       layout: this.pipes.depthPre.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 12, resource: { buffer: this.instBuf } }],
+      entries: [
+        { binding: 0, resource: { buffer: this.uniform } },
+        { binding: 12, resource: { buffer: this.instBuf } },
+      ],
     });
     rp.setPipeline(this.pipes.depthPre);
     rp.setBindGroup(0, this.depthBind);
@@ -1033,14 +1231,19 @@ export class ShipRenderer {
     // the cabin (its own shader), then its glass, over the cabin and the view
     if (this.inCabin && this.cockpit) {
       if (!this.cabinBinds || this.cabinBinds.gen !== this.bindGen) {
-        const make = (layout: GPUBindGroupLayout) => this.device.createBindGroup({
-          layout,
-          entries: [
-            ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
-            { binding: 17, resource: this.screenTexture().createView() },
-          ],
-        });
-        this.cabinBinds = { gen: this.bindGen, cabin: make(this.pipes.cabin.getBindGroupLayout(0)), glass: make(this.pipes.glass.getBindGroupLayout(0)) };
+        const make = (layout: GPUBindGroupLayout) =>
+          this.device.createBindGroup({
+            layout,
+            entries: [
+              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
+              { binding: 17, resource: this.screenTexture().createView() },
+            ],
+          });
+        this.cabinBinds = {
+          gen: this.bindGen,
+          cabin: make(this.pipes.cabin.getBindGroupLayout(0)),
+          glass: make(this.pipes.glass.getBindGroupLayout(0)),
+        };
       }
       rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
       rp.setIndexBuffer(this.cockpit.mesh.ibuf, "uint32");
@@ -1061,10 +1264,17 @@ export class ShipRenderer {
       // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
       const occl = this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.count };
       if (re.sheath) {
-        const dp = enc.beginRenderPass(this.pass("ship: hull distance", {
-          colorAttachments: [{ view: res.hullDist.createView(), loadOp: "clear", storeOp: "store", clearValue: [60000, 0, 0, 0] }],
-          depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
-        }));
+        const dp = enc.beginRenderPass(
+          this.pass("ship: hull distance", {
+            colorAttachments: [{ view: res.hullDist.createView(), loadOp: "clear", storeOp: "store", clearValue: [60000, 0, 0, 0] }],
+            depthStencilAttachment: {
+              view: res.plumeDepth.createView(),
+              depthClearValue: 1,
+              depthLoadOp: "clear",
+              depthStoreOp: "discard",
+            },
+          }),
+        );
         dp.setPipeline(this.pipes.dist);
         dp.setBindGroup(0, B.dist);
         dp.setVertexBuffer(0, occl.m.vbuf);
@@ -1072,10 +1282,12 @@ export class ShipRenderer {
         dp.drawIndexed(occl.n);
         dp.end();
       }
-      const pp = enc.beginRenderPass(this.pass("ship: thrusters and plasma", {
-        colorAttachments: [{ view: res.plume.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
-        depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
-      }));
+      const pp = enc.beginRenderPass(
+        this.pass("ship: thrusters and plasma", {
+          colorAttachments: [{ view: res.plume.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+          depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
+        }),
+      );
       pp.setPipeline(this.pipes.hullDepth);
       pp.setBindGroup(0, B.hullDepth);
       pp.setVertexBuffer(0, occl.m.vbuf);
@@ -1090,7 +1302,12 @@ export class ShipRenderer {
         if (!res.trailBind || res.trailMoments !== mb) {
           res.trailBind = this.device.createBindGroup({
             layout: this.pipes.trail.getBindGroupLayout(0),
-            entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 1, resource: { buffer: this.shBuf } }, { binding: 11, resource: { buffer: mb } }, { binding: 19, resource: { buffer: this.trailBuf } }],
+            entries: [
+              { binding: 0, resource: { buffer: this.uniform } },
+              { binding: 1, resource: { buffer: this.shBuf } },
+              { binding: 11, resource: { buffer: mb } },
+              { binding: 19, resource: { buffer: this.trailBuf } },
+            ],
           });
           res.trailMoments = mb;
         }
@@ -1108,7 +1325,10 @@ export class ShipRenderer {
       if (re.sheath) {
         res.sheathBind ??= this.device.createBindGroup({
           layout: this.pipes.sheath.getBindGroupLayout(0),
-          entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 18, resource: res.hullDist.createView() }],
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 18, resource: res.hullDist.createView() },
+          ],
         });
         pp.setPipeline(this.pipes.sheath);
         pp.setBindGroup(0, res.sheathBind);
@@ -1118,7 +1338,11 @@ export class ShipRenderer {
       res.plumeDirty = true;
     } else if (res.plumeDirty) {
       // (the flames out: their image cleared once)
-      enc.beginRenderPass({ colorAttachments: [{ view: res.plume.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }] }).end();
+      enc
+        .beginRenderPass({
+          colorAttachments: [{ view: res.plume.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+        })
+        .end();
       res.plumeDirty = false;
     }
     enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);

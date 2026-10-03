@@ -2,7 +2,6 @@ import type { CameraFrame } from "./camera";
 import type { State, Vec3 } from "./physics";
 import { dot } from "./math/vec3";
 
-
 /** Lorentz boost of a photon 4-momentum (E, p) from the ZAMO frame to the moving camera frame. */
 export function zamoToCamera(E: number, p: Vec3, beta: Vec3, gamma: number): { E: number; p: Vec3 } {
   const b2 = dot(beta, beta);

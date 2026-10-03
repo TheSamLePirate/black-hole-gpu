@@ -219,7 +219,11 @@ const icrs = (i: number): V3 => {
   const s = stars[i]!;
   return [s[0]!, -s[2]!, s[1]!];
 };
-const dir = (ra: number, dec: number): V3 => [Math.cos(dec * D) * Math.cos(ra * D), Math.cos(dec * D) * Math.sin(ra * D), Math.sin(dec * D)];
+const dir = (ra: number, dec: number): V3 => [
+  Math.cos(dec * D) * Math.cos(ra * D),
+  Math.cos(dec * D) * Math.sin(ra * D),
+  Math.sin(dec * D),
+];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: V3): V3 => {
   const l = Math.hypot(...a);
@@ -228,7 +232,8 @@ const unit = (a: V3): V3 => {
 const sum = (vs: V3[]): V3 => unit(vs.reduce<V3>((s, v) => [s[0] + v[0], s[1] + v[1], s[2] + v[2]], [0, 0, 0]));
 const centre = CONSTELLATIONS.map(([, , ra, dec]) => dir(ra * 15, dec));
 const nearest = (v: V3, among?: string[]) => {
-  let best = -1, bd = -2;
+  let best = -1,
+    bd = -2;
   CONSTELLATIONS.forEach(([a], k) => {
     if (among && !among.includes(a)) return;
     const d = dot(v, centre[k]!);
@@ -262,7 +267,8 @@ for (const piece of pieces.values()) {
   // (by hand: Hydra's middle falls near Sextans, Serpens Cauda near Ophiuchus, Telescopium's one line
   // near Corona Australis)
   if (ab === "Sex" && piece.length > 10) k = CONSTELLATIONS.findIndex((c) => c[0] === "Hya");
-  else if (ab === "Oph" && dot(sum(pts), dir(18.2 * 15, -5)) > Math.cos(12 * D) && piece.length < 6) k = CONSTELLATIONS.findIndex((c) => c[0] === "Ser");
+  else if (ab === "Oph" && dot(sum(pts), dir(18.2 * 15, -5)) > Math.cos(12 * D) && piece.length < 6)
+    k = CONSTELLATIONS.findIndex((c) => c[0] === "Ser");
   else if (ab === "CrA" && piece.length === 1) k = CONSTELLATIONS.findIndex((c) => c[0] === "Tel");
   const shared = SHARED[CONSTELLATIONS[k]![0]];
   for (const l of piece) seg.push({ a: icrs(l[0]), b: icrs(l[1]), c: shared ? nearest(mid(l), shared) : k });

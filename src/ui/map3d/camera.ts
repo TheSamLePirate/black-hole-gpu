@@ -22,9 +22,15 @@ const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 
 /** A right-handed basis (e1, e2 in the plane, n its normal) → the quaternion turning x, y, z onto it. */
 export function basisQuat(e1: V3, e2: V3, n: V3): Quat {
-  const m00 = e1[0], m10 = e1[1], m20 = e1[2];
-  const m01 = e2[0], m11 = e2[1], m21 = e2[2];
-  const m02 = n[0], m12 = n[1], m22 = n[2];
+  const m00 = e1[0],
+    m10 = e1[1],
+    m20 = e1[2];
+  const m01 = e2[0],
+    m11 = e2[1],
+    m21 = e2[2];
+  const m02 = n[0],
+    m12 = n[1],
+    m22 = n[2];
   const tr = m00 + m11 + m22;
   let q: Quat;
   if (tr > 0) {
@@ -61,7 +67,8 @@ function slerp(a: Quat, b: Quat, t: number): Quat {
   }
   const th = Math.acos(d);
   const s = Math.sin(th);
-  const ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
+  const ka = Math.sin((1 - t) * th) / s,
+    kb = Math.sin(t * th) / s;
   return a.map((x, i) => ka * x + kb * bb[i]!) as Quat;
 }
 
@@ -113,7 +120,8 @@ export class MapCamera {
 
   /** Eases the view towards the goal; true while it still moves. */
   update(dt: number): boolean {
-    const c = this.cur, g = this.goal;
+    const c = this.cur,
+      g = this.goal;
     const k = 1 - Math.exp(-dt * 7);
     const kd = 1 - Math.exp(-dt * 6);
     let moving = false;
@@ -185,7 +193,10 @@ export class MapCamera {
 
   private derive() {
     const c = this.cur;
-    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch), cy = Math.cos(c.yaw), sy = Math.sin(c.yaw);
+    const cp = Math.cos(c.pitch),
+      sp = Math.sin(c.pitch),
+      cy = Math.cos(c.yaw),
+      sy = Math.sin(c.yaw);
     // (in the plane's frame: the eye's offset, and "north" — the view's up, defined at every elevation)
     const o: V3 = [cp * sy, -cp * cy, sp];
     const north: V3 = [-sp * sy, sp * cy, cp];
@@ -206,7 +217,8 @@ export class MapCamera {
 
   /** The view ray through a screen point (world direction). */
   ray(x: number, y: number): V3 {
-    const u = (x - this.cx) / this.f, v = -(y - this.cy) / this.f;
+    const u = (x - this.cx) / this.f,
+      v = -(y - this.cy) / this.f;
     return norm(add(this.fwd, add(scale(this.right, u), scale(this.up, v))));
   }
 
@@ -236,7 +248,8 @@ export class MapCamera {
     const nd = clamp(g.dist * factor, this.minDist, this.maxDist);
     if (x !== undefined && y !== undefined) {
       // (the point at the focus's depth under the pointer, kept under it)
-      const u = (x - this.cx) / this.f, v = -(y - this.cy) / this.f;
+      const u = (x - this.cx) / this.f,
+        v = -(y - this.cy) / this.f;
       const shift = (g.dist - nd) * 1;
       g.focus = add(g.focus, add(scale(this.right, u * shift), scale(this.up, v * shift)));
     }

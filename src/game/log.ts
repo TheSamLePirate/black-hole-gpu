@@ -36,7 +36,10 @@ export class GameLog {
   /** One line per event: wall clock, scene date, kind, text. */
   text(dateOf?: (t: number) => string) {
     return this.events
-      .map((e) => `${new Date(e.at).toISOString().slice(11, 19)}  ${dateOf && Number.isFinite(e.t) ? dateOf(e.t) + "  " : ""}${e.kind.padEnd(6)}  ${e.text}`)
+      .map(
+        (e) =>
+          `${new Date(e.at).toISOString().slice(11, 19)}  ${dateOf && Number.isFinite(e.t) ? dateOf(e.t) + "  " : ""}${e.kind.padEnd(6)}  ${e.text}`,
+      )
       .join("\n");
   }
 }

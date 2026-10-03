@@ -105,7 +105,8 @@ export class SceneGallery {
     const i = PRESET_INFO[name];
     if (this.group !== "all" && sceneGroup(name) !== this.group) return false;
     if (!this.query) return true;
-    const hay = `${name} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(name))?.label}`.toLowerCase();
+    const hay =
+      `${name} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(name))?.label}`.toLowerCase();
     return this.query.split(/\s+/).every((w) => hay.includes(w));
   }
 
@@ -156,8 +157,12 @@ export class SceneGallery {
       thumb.append(img);
     } else thumb.append(h("span", "sg-glyph", info?.icon ?? "•"));
     if (current) thumb.append(h("span", "sg-badge", "Current"));
-    const card = h("button", `sg-card${current ? " current" : ""}`, thumb,
-      h("span", "sg-text", h("b", "", sceneTitle(name)), h("span", "", info?.description ?? "")));
+    const card = h(
+      "button",
+      `sg-card${current ? " current" : ""}`,
+      thumb,
+      h("span", "sg-text", h("b", "", sceneTitle(name)), h("span", "", info?.description ?? "")),
+    );
     card.onclick = () => {
       this.close();
       this.o.apply(name);
@@ -198,15 +203,23 @@ export class SceneGallery {
     }
     e.preventDefault();
     const r = cards[at]!.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    let best: HTMLElement | null = null, bestD = Infinity;
+    const cx = r.left + r.width / 2,
+      cy = r.top + r.height / 2;
+    let best: HTMLElement | null = null,
+      bestD = Infinity;
     for (const c of cards) {
       if (c === cards[at]) continue;
       const q = c.getBoundingClientRect();
-      const dx = q.left + q.width / 2 - cx, dy = q.top + q.height / 2 - cy;
-      const ok = e.key === "ArrowRight" ? dx > 4 && Math.abs(dy) < r.height / 2
-        : e.key === "ArrowLeft" ? dx < -4 && Math.abs(dy) < r.height / 2
-        : e.key === "ArrowDown" ? dy > 4 : dy < -4;
+      const dx = q.left + q.width / 2 - cx,
+        dy = q.top + q.height / 2 - cy;
+      const ok =
+        e.key === "ArrowRight"
+          ? dx > 4 && Math.abs(dy) < r.height / 2
+          : e.key === "ArrowLeft"
+            ? dx < -4 && Math.abs(dy) < r.height / 2
+            : e.key === "ArrowDown"
+              ? dy > 4
+              : dy < -4;
       if (!ok) continue;
       const d = e.key === "ArrowUp" || e.key === "ArrowDown" ? Math.abs(dy) * 4 + Math.abs(dx) : Math.abs(dx);
       if (d < bestD) (bestD = d), (best = c);

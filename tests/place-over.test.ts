@@ -12,8 +12,12 @@ const latLon = (q: number[]) => {
 test("orbitOver puts the ship over the place picked", () => {
   const t = 109.6;
   for (const [body, lat, lon, inc, retro, argPe] of [
-    ["earth", 48.86, 2.35, 51.6, false, 0], ["earth", -33.4, -70.6, 0, false, 0], ["earth", 10, 100, 98, false, 0],
-    ["earth", 5, -40, 30, true, 0], ["moon", 0.67, 23.47, 0, false, 45], ["mars", 18.4, 77.6, 25, false, 0],
+    ["earth", 48.86, 2.35, 51.6, false, 0],
+    ["earth", -33.4, -70.6, 0, false, 0],
+    ["earth", 10, 100, 98, false, 0],
+    ["earth", 5, -40, 30, true, 0],
+    ["moon", 0.67, 23.47, 0, false, 45],
+    ["mars", 18.4, 77.6, 25, false, 0],
   ] as const) {
     const q = bodyFixedOf(body, lat, lon, 0);
     const o = orbitOver(body, q as [number, number, number], t, { inc, argPe, retrograde: retro });

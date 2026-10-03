@@ -15,12 +15,15 @@ const iss = issOrbit(t)!;
 
 /** A circular orbit in the station's plane, h below it and `lag` behind (home frame). */
 function chaser(dh: number, lag: number): { X: Vec3; V: Vec3 } {
-  const r = sub(iss.X, E.pos), v = sub(iss.V, E.vel);
-  const n = unit(cross(r, v)), u = unit(r), w = cross(n, u);
+  const r = sub(iss.X, E.pos),
+    v = sub(iss.V, E.vel);
+  const n = unit(cross(r, v)),
+    u = unit(r),
+    w = cross(n, u);
   const R = len(r) - dh / M_METRES;
   const p = lin(u, Math.cos(-lag), w, Math.sin(-lag));
   const vt = lin(u, -Math.sin(-lag), w, Math.cos(-lag));
-  const vc = Math.sqrt(len(v) ** 2 * len(r) / R);
+  const vc = Math.sqrt((len(v) ** 2 * len(r)) / R);
   return { X: add(E.pos, scale(p, R)), V: add(E.vel, scale(vt, vc)) };
 }
 

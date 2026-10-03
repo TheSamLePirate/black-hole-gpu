@@ -62,7 +62,8 @@ export interface VesselDef {
 /** Attitude thrusters: a quad at each corner (lateral, up, down) and fore / aft pairs. */
 function rcsQuads(corners: V3[], fore: V3[]): JetDef[] {
   const jets: JetDef[] = [];
-  const rcs = (p: V3, d: V3, u: V3) => jets.push({ p: [p[0] + 0.06 * d[0], p[1] + 0.06 * d[1], p[2] + 0.06 * d[2]], d, half: [0.08, 0.08], u, main: false });
+  const rcs = (p: V3, d: V3, u: V3) =>
+    jets.push({ p: [p[0] + 0.06 * d[0], p[1] + 0.06 * d[1], p[2] + 0.06 * d[2]], d, half: [0.08, 0.08], u, main: false });
   for (const c of corners) {
     const sx = Math.sign(c[0]) || 1;
     rcs(c, [sx, 0, 0], [0, 0, 1]);
@@ -79,8 +80,14 @@ function rcsQuads(corners: V3[], fore: V3[]): JetDef[] {
 // the Ranger: its two main engines in the rear bays (the mesh's "nozzle" parts: 1.55 × 0.85 m, exits at
 // z = −4.65); quads on the nose's and the tail wing's corners, a pair at each wingtip for roll
 const RANGER_JETS: JetDef[] = (() => {
-  const jets: JetDef[] = ([[1.76, 1.19, -4.62], [-1.76, 1.19, -4.62]] as V3[]).map((p) => ({ p, d: [0, 0, -1] as V3, half: [0.6, 0.33] as [number, number], u: [1, 0, 0] as V3, main: true }));
-  const rcs = (p: V3, d: V3, u: V3) => jets.push({ p: [p[0] + 0.06 * d[0], p[1] + 0.06 * d[1], p[2] + 0.06 * d[2]], d, half: [0.08, 0.08], u, main: false });
+  const jets: JetDef[] = (
+    [
+      [1.76, 1.19, -4.62],
+      [-1.76, 1.19, -4.62],
+    ] as V3[]
+  ).map((p) => ({ p, d: [0, 0, -1] as V3, half: [0.6, 0.33] as [number, number], u: [1, 0, 0] as V3, main: true }));
+  const rcs = (p: V3, d: V3, u: V3) =>
+    jets.push({ p: [p[0] + 0.06 * d[0], p[1] + 0.06 * d[1], p[2] + 0.06 * d[2]], d, half: [0.08, 0.08], u, main: false });
   for (const sx of [1, -1]) {
     const nose: V3 = [2.52 * sx, 1.38, 7.55];
     const tail: V3 = [3.12 * sx, 1.5, -3.0];
@@ -102,31 +109,104 @@ const RANGER_JETS: JetDef[] = (() => {
 // the Lander: six nozzles, three in each of the canted pods at its tail (0.6 m exits, from the model's
 // rear view), quads on its four corners, pairs fore and aft on the spine
 const LANDER_JETS: JetDef[] = [
-  ...([[3.5, 3.8], [4.35, 2.7], [5.0, 1.55]] as [number, number][]).flatMap(([x, y]) => [x, -x].map((px) => ({ p: [px, y, -11.7] as V3, d: [0, 0, -1] as V3, half: [0.55, 0.55] as [number, number], u: [1, 0, 0] as V3, main: true }))),
-  ...rcsQuads([[8.2, 3.2, 8.5], [-8.2, 3.2, 8.5], [8.4, 3.0, -8.5], [-8.4, 3.0, -8.5]], [[0, 5.4, 9.5], [0, 5.4, -9.5]]),
+  ...(
+    [
+      [3.5, 3.8],
+      [4.35, 2.7],
+      [5.0, 1.55],
+    ] as [number, number][]
+  ).flatMap(([x, y]) =>
+    [x, -x].map((px) => ({
+      p: [px, y, -11.7] as V3,
+      d: [0, 0, -1] as V3,
+      half: [0.55, 0.55] as [number, number],
+      u: [1, 0, 0] as V3,
+      main: true,
+    })),
+  ),
+  ...rcsQuads(
+    [
+      [8.2, 3.2, 8.5],
+      [-8.2, 3.2, 8.5],
+      [8.4, 3.0, -8.5],
+      [-8.4, 3.0, -8.5],
+    ],
+    [
+      [0, 5.4, 9.5],
+      [0, 5.4, -9.5],
+    ],
+  ),
 ];
 
 // the Endurance: four engines at the back of its hub's frame (the film's ring of modules pushed along the
 // hub), quads on four of its ring modules
 const ENDURANCE_JETS: JetDef[] = [
-  ...([[0, 9], [9, 0], [0, -9], [-9, 0]] as [number, number][]).map(([x, y]) => ({ p: [x, y, -10.4] as V3, d: [0, 0, -1] as V3, half: [1.1, 1.1] as [number, number], u: [1, 0, 0] as V3, main: true })),
-  ...rcsQuads([[31.5, 0, 0], [-31.5, 0, 0], [22.3, 22.3, 0], [-22.3, -22.3, 0]], [[0, 31.5, 0], [0, -31.5, 0]]),
+  ...(
+    [
+      [0, 9],
+      [9, 0],
+      [0, -9],
+      [-9, 0],
+    ] as [number, number][]
+  ).map(([x, y]) => ({
+    p: [x, y, -10.4] as V3,
+    d: [0, 0, -1] as V3,
+    half: [1.1, 1.1] as [number, number],
+    u: [1, 0, 0] as V3,
+    main: true,
+  })),
+  ...rcsQuads(
+    [
+      [31.5, 0, 0],
+      [-31.5, 0, 0],
+      [22.3, 22.3, 0],
+      [-22.3, -22.3, 0],
+    ],
+    [
+      [0, 31.5, 0],
+      [0, -31.5, 0],
+    ],
+  ),
 ];
 
 export const VESSELS: Record<VesselId, VesselDef> = {
   ranger: {
-    id: "ranger", name: "Ranger", mass: 40e3, accel: 1, gyr: 4.2, agility: 1, com: [0, 1.25, 1.5], centre: [0, 1.5, 0], viewDist: 42,
+    id: "ranger",
+    name: "Ranger",
+    mass: 40e3,
+    accel: 1,
+    gyr: 4.2,
+    agility: 1,
+    com: [0, 1.25, 1.5],
+    centre: [0, 1.5, 0],
+    viewDist: 42,
     // the rear hatch: its ring's centre, the axis out of the ship's back
     ports: [{ name: "rear hatch", centre: [0.04, 1.11, -5.34], axis: [0, 0, -1] }],
-    lands: true, jets: RANGER_JETS, flame: 1, flies: true,
+    lands: true,
+    jets: RANGER_JETS,
+    flame: 1,
+    flies: true,
     // a lifting body (8.3 m span, 14.8 m long, 91 m² of planform: the hull, scripts/hullsize): a flat
     // belly, a fine nose; the shield under the belly and round the nose (the Shuttle's tiles and RCC) —
     // 98 m/s at 16° on the approach, L/D ≈ 6 gliding, ≈ 1 at 40° in hypersonic flow
     aero: {
-      area: [23, 91, 1.3], cdA0: 1.6, wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85 },
-      cp: [[0, 0.3, -2.5], [0, 0, -0.25], [0, 0.6, 0]], cw: [0, 0, -0.9], curve: [0, 0.1, 0.6], damp: [4, 4, 0.6], len: 14.8, noseR: 1.2,
+      area: [23, 91, 1.3],
+      cdA0: 1.6,
+      wing: { S: 91, AR: 2, cla: 2.6, stall: 0.4, e: 0.85 },
+      cp: [
+        [0, 0.3, -2.5],
+        [0, 0, -0.25],
+        [0, 0.6, 0],
+      ],
+      cw: [0, 0, -0.9],
+      curve: [0, 0.1, 0.6],
+      damp: [4, 4, 0.6],
+      len: 14.8,
+      noseR: 1.2,
       shield: { dir: [0, -0.94, 0.34], cos: 0.42, tMax: 1950, cap: 2.2e4, eps: 0.85 },
-      hull: { tMax: 1150, cap: 9e3, eps: 0.7 }, gMax: 9, ctrl: [0.22, 0.1, 0.45],
+      hull: { tMax: 1150, cap: 9e3, eps: 0.7 },
+      gMax: 9,
+      ctrl: [0.22, 0.1, 0.45],
     },
     mounts: {
       // (the pilot's seat, front left: the cabin, scripts/build-cockpit.ts)
@@ -142,16 +222,40 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     },
   },
   lander: {
-    id: "lander", name: "Lander", mass: 160e3, accel: 0.75, gyr: 7.5, agility: 0.55, com: [0, 2.6, 0.5], centre: [0, 2.8, 0], viewDist: 62,
+    id: "lander",
+    name: "Lander",
+    mass: 160e3,
+    accel: 0.75,
+    gyr: 7.5,
+    agility: 0.55,
+    com: [0, 2.6, 0.5],
+    centre: [0, 2.8, 0],
+    viewDist: 62,
     // the round hatch on its back, amidships (scripts/build-lander.ts)
     ports: [{ name: "dorsal hatch", centre: [0, 5.55, 0.58], axis: [0, 1, 0] }],
-    lands: true, jets: LANDER_JETS, flame: 1.6, flies: true,
+    lands: true,
+    jets: LANDER_JETS,
+    flame: 1.6,
+    flies: true,
     // a broad lifting body (17.3 × 24 m, 304 m² of planform), blunt: its shield the whole belly
     aero: {
-      area: [92, 304, 26], cdA0: 4, wing: { S: 304, AR: 1, cla: 1.5, stall: 0.45, e: 0.8 },
-      cp: [[0, 0.6, -2.5], [0, 3.5, -0.1], [0, 1.2, 0]], cw: [0, 0, -0.8], curve: [0.3, 0.7, 0.5], damp: [3, 3, 0.5], len: 24, noseR: 3,
+      area: [92, 304, 26],
+      cdA0: 4,
+      wing: { S: 304, AR: 1, cla: 1.5, stall: 0.45, e: 0.8 },
+      cp: [
+        [0, 0.6, -2.5],
+        [0, 3.5, -0.1],
+        [0, 1.2, 0],
+      ],
+      cw: [0, 0, -0.8],
+      curve: [0.3, 0.7, 0.5],
+      damp: [3, 3, 0.5],
+      len: 24,
+      noseR: 3,
       shield: { dir: [0, -1, 0], cos: 0.5, tMax: 2300, cap: 3e4, eps: 0.85 },
-      hull: { tMax: 1000, cap: 1e4, eps: 0.7 }, gMax: 6, ctrl: [0.08, 0.04, 0.15],
+      hull: { tMax: 1000, cap: 1e4, eps: 0.7 },
+      gMax: 6,
+      ctrl: [0.08, 0.04, 0.15],
     },
     mounts: {
       // (behind the nose's windows — the Lander's cabin is not modelled: the hull seen from within)
@@ -168,17 +272,42 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     },
   },
   endurance: {
-    id: "endurance", name: "Endurance", mass: 900e3, accel: 0.12, gyr: 24, agility: 0.2, com: [0, 0, 0], centre: [0, 0, 0], viewDist: 150,
+    id: "endurance",
+    name: "Endurance",
+    mass: 900e3,
+    accel: 0.12,
+    gyr: 24,
+    agility: 0.2,
+    com: [0, 0, 0],
+    centre: [0, 0, 0],
+    viewDist: 150,
     // the hub's two ends, on its axis (assets/endurance: the hub's tips at z = 9.2 and −10.7 m)
     ports: [
       { name: "hub, fore", centre: [0, 0, 9.3], axis: [0, 0, 1] },
       { name: "hub, aft", centre: [0, 0, -10.7], axis: [0, 0, -1] },
     ],
-    lands: false, jets: ENDURANCE_JETS, flame: 2.2, flies: false,
+    lands: false,
+    jets: ENDURANCE_JETS,
+    flame: 2.2,
+    flies: false,
     // a ring of modules, no shield, no wing: it tumbles and burns
     aero: {
-      area: [900, 900, 1500], cdA0: 60, cp: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], cw: [0, 0, 0], curve: [0.8, 0.8, 0.8], damp: [1, 1, 1], len: 64, noseR: 2,
-      shield: null, hull: { tMax: 700, cap: 6e3, eps: 0.6 }, gMax: 1.5, ctrl: [0, 0, 0],
+      area: [900, 900, 1500],
+      cdA0: 60,
+      cp: [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ],
+      cw: [0, 0, 0],
+      curve: [0.8, 0.8, 0.8],
+      damp: [1, 1, 1],
+      len: 64,
+      noseR: 2,
+      shield: null,
+      hull: { tMax: 700, cap: 6e3, eps: 0.6 },
+      gMax: 1.5,
+      ctrl: [0, 0, 0],
     },
     mounts: {
       // (in the hub, looking ahead along it)
@@ -206,16 +335,20 @@ export function dockedFrame(guest: Port, host: Port, up: V3): { c: V3; ax: [V3, 
   };
   // the guest's frame (columns: its x, y, z in the host's frame) from two pairs: its port's axis → −host's;
   // a reference perpendicular to it → `up` projected
-  const a = guest.axis, b: V3 = [-host.axis[0], -host.axis[1], -host.axis[2]];
+  const a = guest.axis,
+    b: V3 = [-host.axis[0], -host.axis[1], -host.axis[2]];
   const ra: V3 = Math.abs(a[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1];
   const pa = unit(cross(a, cross(ra, a)));
   let pb = cross(b, cross(up, b));
   if (Math.hypot(...pb) < 1e-6) pb = cross(b, cross(Math.abs(b[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], b));
   pb = unit(pb);
-  const qa = cross(a, pa), qb = cross(b, pb);
+  const qa = cross(a, pa),
+    qb = cross(b, pb);
   // R maps (a, pa, qa) to (b, pb, qb): R = Σ b_i ⊗ a_i
   const R = (v: V3): V3 => {
-    const x = dot(v, a), y = dot(v, pa), z = dot(v, qa);
+    const x = dot(v, a),
+      y = dot(v, pa),
+      z = dot(v, qa);
     return [b[0] * x + pb[0] * y + qb[0] * z, b[1] * x + pb[1] * y + qb[1] * z, b[2] * x + pb[2] * y + qb[2] * z];
   };
   const ax: [V3, V3, V3] = [R([1, 0, 0]), R([0, 1, 0]), R([0, 0, 1])];

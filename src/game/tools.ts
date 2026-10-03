@@ -22,7 +22,19 @@ import { SITES } from "./sites";
 import { soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
-import { orbitOver, ourGroundPose, ourOrbitPose, theirGroundAt, theirOrbitPose, universeOf, defaultAltKm, OUR_IDS, THEIR_IDS, type OrbitPlacement, type Pose } from "./place";
+import {
+  orbitOver,
+  ourGroundPose,
+  ourOrbitPose,
+  theirGroundAt,
+  theirOrbitPose,
+  universeOf,
+  defaultAltKm,
+  OUR_IDS,
+  THEIR_IDS,
+  type OrbitPlacement,
+  type Pose,
+} from "./place";
 import { autosave, downloadSave, parseSave, saveToHash, slots, type GameSave } from "./save";
 import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
@@ -50,7 +62,8 @@ export interface GameContext {
 }
 
 const KM = 1e3 / M_METRES;
-const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? solarBody(id)?.name ?? GARGANTUA_SYSTEM.bodies.find((b) => b.id === id)?.name ?? id;
+const nameOf = (id: string) =>
+  (BODY_NAMES as Record<string, string>)[id] ?? solarBody(id)?.name ?? GARGANTUA_SYSTEM.bodies.find((b) => b.id === id)?.name ?? id;
 
 /** The scene's date at time t [M] */
 export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1e3);
@@ -115,7 +128,8 @@ export class GameTools {
 
   /** The pilot's modes in a line. */
   pilotState() {
-    const c = this.ctx.camera, p = c.pilot;
+    const c = this.ctx.camera,
+      p = c.pilot;
     if (!c.piloting) return "not flying (the Ranger off)";
     const parts = [p.sas ? "SAS" : "SAS off"];
     if (p.hold !== "none") parts.push(`hold ${p.hold}`);
@@ -136,10 +150,20 @@ export class GameTools {
       return SOLAR_BODIES.map((b) => {
         const P = solarState(b.id, t).pos;
         const d = info.ref && info.X ? Math.hypot(P[0] - info.X[0], P[1] - info.X[1], P[2] - info.X[2]) / KM : NaN;
-        return { id: b.id, name: b.name, parent: b.parent, radiusKm: b.radius / KM, soiKm: soiOf(b.id, t) / KM, distKm: d, altKm: d - b.radius / KM };
+        return {
+          id: b.id,
+          name: b.name,
+          parent: b.parent,
+          radiusKm: b.radius / KM,
+          soiKm: soiOf(b.id, t) / KM,
+          distKm: d,
+          altKm: d - b.radius / KM,
+        };
       });
     }
-    return GARGANTUA_SYSTEM.bodies.filter((b) => b.universe === "gargantua").map((b) => ({ id: b.id, name: b.name, parent: b.parent, radiusKm: (b.radius * 1476.625 * this.ctx.settings.massSolar) / 1e3 }));
+    return GARGANTUA_SYSTEM.bodies
+      .filter((b) => b.universe === "gargantua")
+      .map((b) => ({ id: b.id, name: b.name, parent: b.parent, radiusKm: (b.radius * 1476.625 * this.ctx.settings.massSolar) / 1e3 }));
   }
 
   /** The sphere of influence the ship is in, and its primaries up to the Sun (our side). */
@@ -167,7 +191,8 @@ export class GameTools {
 
   /** Puts the Ranger at a pose (see place.ts) and restarts its flight there. */
   placeAt(p: Pose) {
-    const s = this.ctx.settings, c = this.ctx.camera;
+    const s = this.ctx.settings,
+      c = this.ctx.camera;
     this.shipOn();
     if (p.frame === "ours") {
       if (!s.wormhole) throw new Error("our universe is reached through the wormhole: pick a Gargantua-system scene (game:interstellar)");
@@ -211,16 +236,31 @@ export class GameTools {
     const north = unit(sub(pole, up.map((x) => x * dot(pole, up)) as V3));
     const east = cross(north, up);
     const hd = (site.rwy ?? 180) * D;
-    const along: V3 = [north[0] * Math.cos(hd) + east[0] * Math.sin(hd), north[1] * Math.cos(hd) + east[1] * Math.sin(hd), north[2] * Math.cos(hd) + east[2] * Math.sin(hd)];
+    const along: V3 = [
+      north[0] * Math.cos(hd) + east[0] * Math.sin(hd),
+      north[1] * Math.cos(hd) + east[1] * Math.sin(hd),
+      north[2] * Math.cos(hd) + east[2] * Math.sin(hd),
+    ];
     const ang = (distKm * 1e3) / (b.radius * M_METRES);
-    const dir = unit([up[0] * Math.cos(ang) - along[0] * Math.sin(ang), up[1] * Math.cos(ang) - along[1] * Math.sin(ang), up[2] * Math.cos(ang) - along[2] * Math.sin(ang)]);
+    const dir = unit([
+      up[0] * Math.cos(ang) - along[0] * Math.sin(ang),
+      up[1] * Math.cos(ang) - along[1] * Math.sin(ang),
+      up[2] * Math.cos(ang) - along[2] * Math.sin(ang),
+    ]);
     const r = b.radius + (altKm * 1e3) / M_METRES;
     const X: V3 = [P[0] + dir[0] * r, P[1] + dir[1] * r, P[2] + dir[2] * r];
     const fwd = unit(sub(along, dir.map((x) => x * dot(along, dir)) as V3));
     const g = groundVelocity(site.body, X, t);
     const k = speed / C_MPS;
     const vel: V3 = [g[0] + fwd[0] * k, g[1] + fwd[1] * k, g[2] + fwd[2] * k];
-    const note = this.placeAt({ frame: "ours", X, vel, fwd, up: dir, note: `${site.name}: ${distKm} km out, ${altKm} km up, ${speed} m/s — the approach` });
+    const note = this.placeAt({
+      frame: "ours",
+      X,
+      vel,
+      fwd,
+      up: dir,
+      note: `${site.name}: ${distKm} km out, ${altKm} km up, ${speed} m/s — the approach`,
+    });
     const c = this.ctx.camera;
     c.entrySite = site;
     c.pilot.auto = "none";
@@ -232,7 +272,8 @@ export class GameTools {
   orbit(body: string, o: Omit<OrbitPlacement, "body"> & { rM?: number } = {}) {
     const u = universeOf(body);
     if (!u) throw new Error(`unknown body "${body}" — ours: ${OUR_IDS.join(", ")}; Gargantua's: ${THEIR_IDS.join(", ")}`);
-    const s = this.ctx.settings, t = this.ctx.time();
+    const s = this.ctx.settings,
+      t = this.ctx.time();
     if (u === "gargantua" && !(s.system === "gargantua")) throw new Error("Gargantua's planets live in the Gargantua-system scenes");
     const pose = u === "ours" ? ourOrbitPose({ body, ...o }, t) : theirOrbitPose({ body, ...o }, t, s.spin, s.massSolar);
     const note = this.placeAt(pose);
@@ -342,21 +383,39 @@ export class GameTools {
 
   // ------------------------------------------------------------------------------ saved games
   snapshot(name = "autosave"): GameSave {
-    const c = this.ctx.camera, s = this.ctx.settings;
+    const c = this.ctx.camera,
+      s = this.ctx.settings;
     let summary = "";
     try {
       const st = this.status();
-      const alt = Number.isFinite(st.altKm) && st.side === "ours" ? ` ${st.altKm >= 1e5 ? `${(st.altKm / 1.496e8).toFixed(2)} AU` : `${Math.round(st.altKm)} km`}` : "";
+      const alt =
+        Number.isFinite(st.altKm) && st.side === "ours"
+          ? ` ${st.altKm >= 1e5 ? `${(st.altKm / 1.496e8).toFixed(2)} AU` : `${Math.round(st.altKm)} km`}`
+          : "";
       summary = `${st.soiName} · ${st.label}${alt} · ${fmtDate(this.ctx.time())}`;
     } catch {
       summary = fmtDate(this.ctx.time());
     }
     const L = c.ourLandedOn;
     return {
-      v: 1, name, savedAt: Date.now(), summary, scene: this.ctx.scene?.get() ?? null, settings: { ...s }, time: this.ctx.time(),
+      v: 1,
+      name,
+      savedAt: Date.now(),
+      summary,
+      scene: this.ctx.scene?.get() ?? null,
+      settings: { ...s },
+      time: this.ctx.time(),
       ship: {
-        piloting: c.piloting, sas: c.pilot.sas, hold: c.pilot.hold, auto: c.pilot.auto, throttle: c.pilot.throttle, precision: c.pilot.precision,
-        speedMode: c.speedMode, landed: L ? { body: L.body, q: [...L.q] as V3 } : null, spent: c.spent, properTime: c.properTime,
+        piloting: c.piloting,
+        sas: c.pilot.sas,
+        hold: c.pilot.hold,
+        auto: c.pilot.auto,
+        throttle: c.pilot.throttle,
+        precision: c.pilot.precision,
+        speedMode: c.speedMode,
+        landed: L ? { body: L.body, q: [...L.q] as V3 } : null,
+        spent: c.spent,
+        properTime: c.properTime,
       },
       plan: c.plan.nodes.length ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission } : null,
       camera: { gravity: c.gravity && !c.piloting },
@@ -368,9 +427,21 @@ export class GameTools {
   load(g: string | GameSave, o: { quiet?: boolean } = {}) {
     const save = typeof g === "string" ? (g === "autosave" ? autosave.get() : slots.get(g)) : g;
     if (!save) throw new Error(`no saved game "${g}"`);
-    const s = this.ctx.settings, c = this.ctx.camera;
+    const s = this.ctx.settings,
+      c = this.ctx.camera;
     // (this screen's pixel ratio and the listener's sound stay theirs)
-    const own = { pixelRatio: s.pixelRatio, fpsCap: s.fpsCap, glassBlur: s.glassBlur, temporalReprojection: s.temporalReprojection, sound: s.sound, soundVolume: s.soundVolume, soundBeeps: s.soundBeeps, soundEngines: s.soundEngines, soundAmbience: s.soundAmbience, soundUi: s.soundUi };
+    const own = {
+      pixelRatio: s.pixelRatio,
+      fpsCap: s.fpsCap,
+      glassBlur: s.glassBlur,
+      temporalReprojection: s.temporalReprojection,
+      sound: s.sound,
+      soundVolume: s.soundVolume,
+      soundBeeps: s.soundBeeps,
+      soundEngines: s.soundEngines,
+      soundAmbience: s.soundAmbience,
+      soundUi: s.soundUi,
+    };
     Object.assign(s, defaultSettings(), save.settings, own);
     this.ctx.setTime(save.time);
     c.setCinematic(null);
@@ -445,7 +516,8 @@ export class GameTools {
    * few seconds later), the image size and the realtime subsampling.
    */
   perf(o: { gpu?: boolean } = {}) {
-    const r = this.ctx.renderer, s = this.ctx.settings;
+    const r = this.ctx.renderer,
+      s = this.ctx.settings;
     if (o.gpu !== false && !r.prof.enabled) {
       r.prof.enabled = true;
       r.prof.reset();
@@ -453,9 +525,20 @@ export class GameTools {
     const cv = document.getElementById("view") as HTMLCanvasElement | null;
     const r2 = (x: number) => Math.round(x * 100) / 100;
     return {
-      loopFps: r2(cpuProf.loopFps), renderFps: r2(cpuProf.renderFps), worstLoopMs: r2(cpuProf.worstLoop),
-      gpuFrameMs: r2(r.lastGpuMs), gpuPassesMs: r2(r.prof.frameMs), gpuProfiled: r.prof.frames, gpuSupported: r.prof.supported,
-      image: cv ? `${cv.width}×${cv.height}` : "", pixelRatio: s.pixelRatio, tier: r.tier, renderScale: this.ctx.renderScale(), quality: s.quality, budgetMs: s.realtimeBudget, block: r.realtimeBlockNow,
+      loopFps: r2(cpuProf.loopFps),
+      renderFps: r2(cpuProf.renderFps),
+      worstLoopMs: r2(cpuProf.worstLoop),
+      gpuFrameMs: r2(r.lastGpuMs),
+      gpuPassesMs: r2(r.prof.frameMs),
+      gpuProfiled: r.prof.frames,
+      gpuSupported: r.prof.supported,
+      image: cv ? `${cv.width}×${cv.height}` : "",
+      pixelRatio: s.pixelRatio,
+      tier: r.tier,
+      renderScale: this.ctx.renderScale(),
+      quality: s.quality,
+      budgetMs: s.realtimeBudget,
+      block: r.realtimeBlockNow,
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
     };
@@ -463,7 +546,8 @@ export class GameTools {
 
   // ------------------------------------------------------------------------------ audit
   async audit(o: { planner?: boolean } = {}) {
-    const c = this.ctx.camera, r = this.ctx.renderer;
+    const c = this.ctx.camera,
+      r = this.ctx.renderer;
     const info = c.flightInfo();
     const st = rangerStatus(this.ctx.settings, c, info, this.ctx.time());
     const frames = async (n: number, f: () => Promise<number> | number) => {
@@ -474,16 +558,28 @@ export class GameTools {
       }
       return out;
     };
-    const rep = await runAudit({
-      settings: this.ctx.settings, time: this.ctx.time(), status: st,
-      ship: info.ref && info.X && info.V ? { X: info.X as V3, V: info.V as V3, ref: info.ref } : null,
-      snapshot: () => this.snapshot("audit"), fps: () => this.ctx.fps(), gpuMs: () => r.lastGpuMs,
-      probeSeries: async (n) => (this.ctx.settings.ship && r.shipReady ? frames(n, () => r.readShipLight()) : null),
-      evSeries: (n) => frames(n, () => r.autoEV),
-      errors: () => this.errors,
-    }, o);
+    const rep = await runAudit(
+      {
+        settings: this.ctx.settings,
+        time: this.ctx.time(),
+        status: st,
+        ship: info.ref && info.X && info.V ? { X: info.X as V3, V: info.V as V3, ref: info.ref } : null,
+        snapshot: () => this.snapshot("audit"),
+        fps: () => this.ctx.fps(),
+        gpuMs: () => r.lastGpuMs,
+        probeSeries: async (n) => (this.ctx.settings.ship && r.shipReady ? frames(n, () => r.readShipLight()) : null),
+        evSeries: (n) => frames(n, () => r.autoEV),
+        errors: () => this.errors,
+      },
+      o,
+    );
     this.lastAudit = rep;
-    this.log.add("audit", `Audit: ${rep.counts.pass} pass, ${rep.counts.warn} warn, ${rep.counts.fail} fail, ${rep.counts.skip} skipped`, this.ctx.time(), rep);
+    this.log.add(
+      "audit",
+      `Audit: ${rep.counts.pass} pass, ${rep.counts.warn} warn, ${rep.counts.fail} fail, ${rep.counts.skip} skipped`,
+      this.ctx.time(),
+      rep,
+    );
     return rep;
   }
 }

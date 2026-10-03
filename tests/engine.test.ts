@@ -38,16 +38,22 @@ test("relativistic rocket: budget vₑ ln R₀, mass left e^(−w/vₑ), cost of
 
 const dot = (u: Vec3, v: Vec3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 const frameAt = (X: Vec3) => {
-  const r = Math.hypot(...X), th = Math.acos(X[2] / r), ph = Math.atan2(X[1], X[0]);
+  const r = Math.hypot(...X),
+    th = Math.acos(X[2] / r),
+    ph = Math.atan2(X[1], X[0]);
   return {
-    r, th, ph,
+    r,
+    th,
+    ph,
     er: [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)] as Vec3,
     et: [Math.cos(th) * Math.cos(ph), Math.cos(th) * Math.sin(ph), -Math.sin(th)] as Vec3,
     ep: [-Math.sin(ph), Math.cos(ph), 0] as Vec3,
   };
 };
 const cart = (s: { r: number; th: number; ph: number }): Vec3 => [
-  s.r * Math.sin(s.th) * Math.cos(s.ph), s.r * Math.sin(s.th) * Math.sin(s.ph), s.r * Math.cos(s.th),
+  s.r * Math.sin(s.th) * Math.cos(s.ph),
+  s.r * Math.sin(s.th) * Math.sin(s.ph),
+  s.r * Math.cos(s.th),
 ];
 const miller = bodyTrack(SYS, "miller");
 
@@ -60,14 +66,16 @@ function relative(st: ReturnType<typeof fromZamo>, n: number): { s: State6; f: R
   const vl = zamoToCoord(toZamo(st, a) as Vec3, f.r, f.th, zamo(f.r, f.th, a));
   const V = [0, 1, 2].map((i) => vl[0] * f.er[i]! + vl[1] * f.et[i]! + vl[2] * f.ep[i]!) as Vec3;
   const rc = Math.hypot(X[0], X[1]);
-  const eR: Vec3 = [X[0] / rc, X[1] / rc, 0], eP: Vec3 = [-X[1] / rc, X[0] / rc, 0];
+  const eR: Vec3 = [X[0] / rc, X[1] / rc, 0],
+    eP: Vec3 = [-X[1] / rc, X[0] / rc, 0];
   const d = Math.atan2(X[1], X[0]) - Math.atan2(C[1], C[0]);
   return { s: [rc - R, R * Math.atan2(Math.sin(d), Math.cos(d)), X[2], dot(V, eR), R * (dot(V, eP) / rc - n), V[2]], f, eR, eP };
 }
 
 /** A ship near Miller: offsets along its circle (dy), in radius (dx), height (dz), co-moving. */
 function nearMiller(t: number, dx: number, dy: number, dz: number) {
-  const P = miller.pos(t), V = miller.vel(t);
+  const P = miller.pos(t),
+    V = miller.vel(t);
   const R = Math.hypot(...P);
   const ph = Math.atan2(P[1], P[0]) + dy / R;
   const X: Vec3 = [(R + dx) * Math.cos(ph), (R + dx) * Math.sin(ph), dz];

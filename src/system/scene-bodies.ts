@@ -69,8 +69,20 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
   const out: GpuBody[] = [];
   if (s.sun) {
     out.push({
-      id: "star", pos: starCentre(s, t), radius: s.sunRadius, omega: starOmega(s), parent: -1, kind: BODY_STAR,
-      mass: s.sunMass, temperature: s.sunTemp, brightness: s.sunBrightness, surface: 0, seed: 0, light: -1, illum: 0, where: 0,
+      id: "star",
+      pos: starCentre(s, t),
+      radius: s.sunRadius,
+      omega: starOmega(s),
+      parent: -1,
+      kind: BODY_STAR,
+      mass: s.sunMass,
+      temperature: s.sunTemp,
+      brightness: s.sunBrightness,
+      surface: 0,
+      seed: 0,
+      light: -1,
+      illum: 0,
+      where: 0,
     });
   }
   const sys = sceneSystem(s);
@@ -84,7 +96,7 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
     if (out.length >= MAX_BODIES) break;
     const st = bodyState(sys, b.id, t);
     const where = Math.hypot(...st.pos) > TRACED_RADIUS ? 1 : 0;
-    const parent = b.parent && b.parent !== "gargantua" ? index.get(b.parent) ?? -1 : -1;
+    const parent = b.parent && b.parent !== "gargantua" ? (index.get(b.parent) ?? -1) : -1;
     let pos = st.pos;
     if (parent >= 0) {
       const p = bodyState(sys, b.parent!, t).pos;
@@ -93,9 +105,19 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
     const lit = b.kind === "planet" ? planetLight(s, sys, b, parent, Math.hypot(...st.pos)) : { light: -1, illum: 0 };
     index.set(b.id, out.length);
     out.push({
-      id: b.id, pos, radius: b.radius, omega: meanMotion(sys, b), parent, kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
-      mass: b.kind === "star" ? b.mass : 0, temperature: b.temperature ?? 0, brightness: b.kind === "star" ? 1 : albedo(b),
-      surface: b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1, ...lit, where,
+      id: b.id,
+      pos,
+      radius: b.radius,
+      omega: meanMotion(sys, b),
+      parent,
+      kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
+      mass: b.kind === "star" ? b.mass : 0,
+      temperature: b.temperature ?? 0,
+      brightness: b.kind === "star" ? 1 : albedo(b),
+      surface: b.surface ? SURFACES[b.surface.kind] : 2,
+      seed: out.length * 17.3 + 3.1,
+      ...lit,
+      where,
     });
   }
   // our side: the solar system in the home frame of our mouth (the renderer makes the places relative
@@ -126,11 +148,23 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
       const sb = solarBody(b.id);
       index.set(b.id, out.length);
       out.push({
-        id: b.id, pos: st.pos, radius: b.radius, omega: 0, parent: -1, kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
-        mass: 0, temperature: b.temperature ?? 0, brightness: b.kind === "star" ? 1 : b.albedo ?? albedo(b),
-        surface: b.map ? SURFACE_MAPPED + mapIndex(b.map) : b.surface ? SURFACES[b.surface.kind] : 2, seed: out.length * 17.3 + 3.1,
+        id: b.id,
+        pos: st.pos,
+        radius: b.radius,
+        omega: 0,
+        parent: -1,
+        kind: b.kind === "star" ? BODY_STAR : BODY_PLANET,
+        mass: 0,
+        temperature: b.temperature ?? 0,
+        brightness: b.kind === "star" ? 1 : (b.albedo ?? albedo(b)),
+        surface: b.map ? SURFACE_MAPPED + mapIndex(b.map) : b.surface ? SURFACES[b.surface.kind] : 2,
+        seed: out.length * 17.3 + 3.1,
         // (the pole of now: the Earth's precesses, the Moon's librates — the map turned from its node)
-        ...lit, where, rings: b.rings, pole: sb ? bodyPole(sb, ts) : b.pole, spin: sb ? spinAngle(sb, ts) : 0,
+        ...lit,
+        where,
+        rings: b.rings,
+        pole: sb ? bodyPole(sb, ts) : b.pole,
+        spin: sb ? spinAngle(sb, ts) : 0,
       });
     }
   }
@@ -160,10 +194,14 @@ export function throatLight(s: Settings): { factor: number; temperature: number 
 
 function albedo(b: BodyDef) {
   switch (b.surface?.kind) {
-    case "ice": return 0.7;
-    case "ocean": return 0.2; // shallow water over a pale bed
-    case "gas": return 0.5;
-    default: return 0.25;
+    case "ice":
+      return 0.7;
+    case "ocean":
+      return 0.2; // shallow water over a pale bed
+    case "gas":
+      return 0.5;
+    default:
+      return 0.25;
   }
 }
 

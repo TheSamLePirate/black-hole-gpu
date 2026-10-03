@@ -14,18 +14,61 @@ import { TUNING } from "./game/tuning";
 import type { M3, V3 } from "./mounts";
 import { add, cross, dot, len, scale } from "./math/vec3";
 
-export type Hold = "none" | "prograde" | "retrograde" | "radialOut" | "radialIn" | "normal" | "antinormal" | "target" | "antiTarget" | "maneuver";
-export type Auto = "none" | "hover" | "circularize" | "approach" | "orbit" | "node" | "transfer" | "land" | "takeoff" | "dock" | "entry" | "burns";
+export type Hold =
+  | "none"
+  | "prograde"
+  | "retrograde"
+  | "radialOut"
+  | "radialIn"
+  | "normal"
+  | "antinormal"
+  | "target"
+  | "antiTarget"
+  | "maneuver";
+export type Auto =
+  | "none"
+  | "hover"
+  | "circularize"
+  | "approach"
+  | "orbit"
+  | "node"
+  | "transfer"
+  | "land"
+  | "takeoff"
+  | "dock"
+  | "entry"
+  | "burns";
 /** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
  *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
 export type FlightMode = "rocket" | "plane" | "sf";
 export const FLIGHT_MODE_NAMES: Record<FlightMode, string> = { rocket: "Rocket", plane: "Plane", sf: "Flight computer" };
 
 export const HOLD_NAMES: Record<Hold, string> = {
-  none: "Manual", prograde: "Prograde", retrograde: "Retrograde", radialOut: "Radial out", radialIn: "Radial in",
-  normal: "Normal", antinormal: "Anti-normal", target: "Target", antiTarget: "Anti-target", maneuver: "Manoeuvre",
+  none: "Manual",
+  prograde: "Prograde",
+  retrograde: "Retrograde",
+  radialOut: "Radial out",
+  radialIn: "Radial in",
+  normal: "Normal",
+  antinormal: "Anti-normal",
+  target: "Target",
+  antiTarget: "Anti-target",
+  maneuver: "Manoeuvre",
 };
-export const AUTO_NAMES: Record<Auto, string> = { none: "Off", hover: "Hold position", circularize: "Circularize", approach: "Approach target", orbit: "Orbit target", node: "Execute node", transfer: "Low-thrust transfer", land: "Landing", takeoff: "Take-off to orbit", dock: "Docking", entry: "Entry & landing", burns: "Flight computer burns" };
+export const AUTO_NAMES: Record<Auto, string> = {
+  none: "Off",
+  hover: "Hold position",
+  circularize: "Circularize",
+  approach: "Approach target",
+  orbit: "Orbit target",
+  node: "Execute node",
+  transfer: "Low-thrust transfer",
+  land: "Landing",
+  takeoff: "Take-off to orbit",
+  dock: "Docking",
+  entry: "Entry & landing",
+  burns: "Flight computer burns",
+};
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
 export interface PilotInput {
@@ -66,7 +109,19 @@ export interface FlightContext {
   /** in the air: the flight law, the flow's angles (α, β [rad]), the control surfaces' authority added
    *  to the thrusters' [rad/s², the pilot's axes], the flight path's own turn (the pilot's axes and
    *  signs [rad/s]), on the wheels, the stall angle, the dynamic pressure [Pa] */
-  air?: { mode: FlightMode; alpha: number; beta: number; auth: V3; path: V3; ground: boolean; stall: number; q: number; gamma: number; bank: number; mach: number } | null;
+  air?: {
+    mode: FlightMode;
+    alpha: number;
+    beta: number;
+    auth: V3;
+    path: V3;
+    ground: boolean;
+    stall: number;
+    q: number;
+    gamma: number;
+    bank: number;
+    mach: number;
+  } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
    *  the hold given free (antigravity: no engine, no propellant) */
@@ -148,7 +203,9 @@ export class FlightComputer {
   step(c: FlightContext, inp: PilotInput): FlightOutput {
     const { dt, S } = c;
     const col = (i: number): V3 => [S[0][i]!, S[1][i]!, S[2][i]!];
-    const X = col(0), Y = col(1), Z = col(2); // ship axes in C
+    const X = col(0),
+      Y = col(1),
+      Z = col(2); // ship axes in C
     const toC = (v: V3): V3 => [dot(v, c.right), dot(v, c.up), dot(v, c.fwd)];
     const fromC = (v: V3): V3 => add(add(scale(c.right, v[0]), scale(c.up, v[1])), scale(c.fwd, v[2]));
     const body = (vC: V3): V3 => [dot(X, vC), dot(Y, vC), dot(Z, vC)];
@@ -171,7 +228,8 @@ export class FlightComputer {
         const fl = len(ff);
         if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
         else {
-          const ee = dot(err, err), fe = dot(ff, err);
+          const ee = dot(err, err),
+            fe = dot(ff, err);
           const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
           A = add(ff, scale(err, clamp(k, 0, 1)));
         }
@@ -225,7 +283,8 @@ export class FlightComputer {
         const fl = len(ff);
         if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
         else {
-          const ee = dot(err, err), fe = dot(ff, err);
+          const ee = dot(err, err),
+            fe = dot(ff, err);
           const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
           A = add(ff, scale(err, clamp(k, 0, 1)));
         }
@@ -296,7 +355,7 @@ export class FlightComputer {
       const ang = Math.atan2(s, dot(Z, point));
       // braking curve far away (reach the target at rest), linear near it (no chattering)
       const rate = Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * ang), 3 * ang);
-      const wC = s > 1e-9 ? scale(e, rate / s) : [0, 0, 0] as V3;
+      const wC = s > 1e-9 ? scale(e, rate / s) : ([0, 0, 0] as V3);
       const wb = body(wC);
       want[0] = wb[0];
       want[1] = wb[1];
@@ -393,10 +452,18 @@ export class FlightComputer {
     const R = c.radialOut;
     let d: V3 | null = null;
     switch (this.hold) {
-      case "prograde": d = pro; break;
-      case "retrograde": d = pro && scale(pro, -1); break;
-      case "radialOut": d = R; break;
-      case "radialIn": d = R && scale(R, -1); break;
+      case "prograde":
+        d = pro;
+        break;
+      case "retrograde":
+        d = pro && scale(pro, -1);
+        break;
+      case "radialOut":
+        d = R;
+        break;
+      case "radialIn":
+        d = R && scale(R, -1);
+        break;
       case "normal":
       case "antinormal": {
         if (!R || !pro) break;
@@ -406,9 +473,15 @@ export class FlightComputer {
         d = scale(n, (this.hold === "normal" ? 1 : -1) / nl);
         break;
       }
-      case "target": d = c.target; break;
-      case "antiTarget": d = c.target && scale(c.target, -1); break;
-      case "maneuver": d = c.maneuver ?? null; break;
+      case "target":
+        d = c.target;
+        break;
+      case "antiTarget":
+        d = c.target && scale(c.target, -1);
+        break;
+      case "maneuver":
+        d = c.maneuver ?? null;
+        break;
     }
     return d && toC(d);
   }

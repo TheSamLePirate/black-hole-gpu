@@ -53,13 +53,17 @@ struct Slice { z: f32 };
 
 export function bakeNoise3d(device: GPUDevice): GPUTexture {
   const tex = device.createTexture({
-    size: [N, N, N], dimension: "3d", format: "r16float",
+    size: [N, N, N],
+    dimension: "3d",
+    format: "r16float",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
   });
   const mod = device.createShaderModule({ code: BAKE, label: "noise bake" });
   const pipe = device.createRenderPipeline({
-    layout: "auto", vertex: { module: mod, entryPoint: "vs" },
-    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "r16float" }] }, primitive: { topology: "triangle-list" },
+    layout: "auto",
+    vertex: { module: mod, entryPoint: "vs" },
+    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "r16float" }] },
+    primitive: { topology: "triangle-list" },
   });
   const bufs: GPUBuffer[] = [];
   const enc = device.createCommandEncoder();
@@ -68,9 +72,14 @@ export function bakeNoise3d(device: GPUDevice): GPUTexture {
     const buf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(buf, 0, new Float32Array([z, 0, 0, 0]));
     bufs.push(buf);
-    const pass = enc.beginRenderPass({ colorAttachments: [{ view, depthSlice: z, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }] });
+    const pass = enc.beginRenderPass({
+      colorAttachments: [{ view, depthSlice: z, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+    });
     pass.setPipeline(pipe);
-    pass.setBindGroup(0, device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }] }));
+    pass.setBindGroup(
+      0,
+      device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }] }),
+    );
     pass.draw(3);
     pass.end();
   }

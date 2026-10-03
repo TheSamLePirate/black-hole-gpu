@@ -75,7 +75,11 @@ test("the hole's bending of a straight way: a planet's patch kept, a star behind
   expect(holeBending([-29.66, 2.8, 0], [69.03, 11.6, 0])).toBeGreaterThan(0.5);
   // Miller (R ≈ 5.6e-5 M, 10 M out) seen from 300 radii, across or along the radial direction
   const R = 5.61e-5;
-  for (const X of [[10 + 300 * R, 0, 0], [10, 300 * R, 0], [10 - 300 * R, 0, 0]] as [number, number, number][])
+  for (const X of [
+    [10 + 300 * R, 0, 0],
+    [10, 300 * R, 0],
+    [10 - 300 * R, 0, 0],
+  ] as [number, number, number][])
     expect(holeBending(X, [10, 0, 0])).toBeLessThan(LOCAL_BEND);
   // radial: no transverse pull (no cancellation to NaN or Infinity)
   expect(holeBending([20, 0, 0], [10, 0, 0])).toBe(0);

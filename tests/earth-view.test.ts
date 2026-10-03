@@ -71,10 +71,16 @@ test("a view aimed at a place: the nose on it (the Moon's shadow from orbit)", (
 // a place on the ground by the Sun's height there, the ship tilted off the body (its back to it)
 test("other worlds: the phase, the Sun's height, the tilt", () => {
   const deg = 180 / Math.PI;
-  for (const [body, phase] of [["mars", 35], ["moon", 80], ["saturn", 150]] as const) {
+  for (const [body, phase] of [
+    ["mars", 35],
+    ["moon", 80],
+    ["saturn", 150],
+  ] as const) {
     const v = bodyView(t0, { body, altKm: 5000, phase, look: body });
-    const B = ourState(body, t0).pos, S = ourState("sun", t0).pos;
-    const c = unit([v.X[0] - B[0], v.X[1] - B[1], v.X[2] - B[2]]), s = unit([S[0] - B[0], S[1] - B[1], S[2] - B[2]]);
+    const B = ourState(body, t0).pos,
+      S = ourState("sun", t0).pos;
+    const c = unit([v.X[0] - B[0], v.X[1] - B[1], v.X[2] - B[2]]),
+      s = unit([S[0] - B[0], S[1] - B[1], S[2] - B[2]]);
     expect(Math.abs(Math.acos(dot(c, s)) * deg - phase)).toBeLessThan(0.5);
   }
   const g = bodyView(t0, { body: "mars", at: [-4.6, 0], sunEl: 2, look: "sun" });

@@ -24,7 +24,7 @@ describe("elliptic integrals (Carlson)", () => {
     const S = Math.sqrt(30 - r4);
     for (let i = 0; i < N; i++) {
       const s = ((i + 0.5) * S) / N;
-      num += ((2 * s) / Math.sqrt(R(r4 + s * s)) * S) / N;
+      num += (((2 * s) / Math.sqrt(R(r4 + s * s))) * S) / N;
     }
     expect(radialIntegral(30, r4, roots)).toBeCloseTo(num, 8);
   });

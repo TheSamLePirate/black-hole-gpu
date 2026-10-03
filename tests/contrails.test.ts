@@ -37,7 +37,8 @@ test("a trail drawn on, carried with the air, widening and thinning, then gone",
   expect(tr.pts.length).toBeGreaterThan(100);
   // (the oldest point drifted with the air: 20 s × 10 m/s)
   expect(tr.pts[0]!.p[0]).toBeGreaterThan(190);
-  const young = trailLook(0, 1, 1), old = trailLook(0, 60, 1);
+  const young = trailLook(0, 1, 1),
+    old = trailLook(0, 60, 1);
   expect(old.w).toBeGreaterThan(5 * young.w);
   expect(old.tau).toBeLessThan(young.tau);
   // the source off: the trail stays, then sublimates
@@ -47,10 +48,23 @@ test("a trail drawn on, carried with the air, widening and thinning, then gone",
 
 test("segments handed over in the ship's frame, at most MAX_SEGMENTS", () => {
   const C = new Contrails();
-  for (let t = 0; t <= 400; t += 0.02) C.step(t, "earth", (p) => p, [{ key: "e0", p: [0, 0, -300 * t], kind: 0, str: 1 }, { key: "e1", p: [5, 0, -300 * t], kind: 0, str: 1 }]);
+  for (let t = 0; t <= 400; t += 0.02)
+    C.step(t, "earth", (p) => p, [
+      { key: "e0", p: [0, 0, -300 * t], kind: 0, str: 1 },
+      { key: "e1", p: [5, 0, -300 * t], kind: 0, str: 1 },
+    ]);
   const out = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
   // the ship at the head, nose along −z of the body: its z axis is the body's −z
-  const n = C.view(400, [0, 0, -120000], [[-1, 0, 0], [0, 1, 0], [0, 0, -1]], out);
+  const n = C.view(
+    400,
+    [0, 0, -120000],
+    [
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, 0, -1],
+    ],
+    out,
+  );
   expect(n).toBeGreaterThan(100);
   expect(n).toBeLessThanOrEqual(MAX_SEGMENTS);
   // (the first segment starts at the engine: behind the ship's origin is −z in its frame, here 0)

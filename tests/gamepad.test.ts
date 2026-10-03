@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { GamepadInput } from "../src/gamepad";
 
-type FakePad = { axes: number[]; buttons: { pressed: boolean; value: number }[]; connected: boolean; mapping: string; index: number; id: string };
+type FakePad = {
+  axes: number[];
+  buttons: { pressed: boolean; value: number }[];
+  connected: boolean;
+  mapping: string;
+  index: number;
+  id: string;
+};
 const pad = (): FakePad => ({
   axes: [0, 0, 0, 0],
   buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
@@ -73,7 +80,14 @@ describe("game controller", () => {
 describe("wired Xbox 360 pad over WebHID", () => {
   test("the 20-byte report maps to the standard layout", async () => {
     const { HidPad } = await import("../src/gamepad");
-    const pad = new HidPad({ vendorId: 0x045e, productId: 0x028e, productName: "Controller", opened: true, open: async () => {}, addEventListener: () => {} });
+    const pad = new HidPad({
+      vendorId: 0x045e,
+      productId: 0x028e,
+      productName: "Controller",
+      opened: true,
+      open: async () => {},
+      addEventListener: () => {},
+    });
     const d = new DataView(new ArrayBuffer(20));
     d.setUint8(0, 0x00);
     d.setUint8(1, 0x14);

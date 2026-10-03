@@ -33,7 +33,8 @@ test("the body's own coordinates: a place kept over an hour, the ground velocity
   // (a finite difference of the carried place over ±1 min: the ground's velocity, to 5 mm/s — the
   // scene's days carry the time to ~0.3 µs)
   const h = 60 / M_SECONDS;
-  const a = fromBodyFixed("earth", q, t0 - h), b = fromBodyFixed("earth", q, t0 + h);
+  const a = fromBodyFixed("earth", q, t0 - h),
+    b = fromBodyFixed("earth", q, t0 + h);
   const fd = a.map((x, i) => (b[i]! - x) / (2 * h)) as Vec3;
   const gv = groundVelocity("earth", g.X, t0);
   expect(Math.hypot(...fd.map((x, i) => x - gv[i]!)) * C).toBeLessThan(5e-3);
@@ -45,7 +46,7 @@ test("the air's drag: ½ ρ v² / B against the motion through the air, none abo
   // 100 m/s straight up, at the pad: 0.5 · 1.225 · 100² / 900 ≈ 6.8 m/s², downwards
   const V = g.vel.map((v, i) => v + (100 / C) * up[i]!) as Vec3;
   const a = dragAccel("earth", g.X, V, t0);
-  const aM = (a[0] * up[0] + a[1] * up[1] + a[2] * up[2]) * (C * C) / M_METRES;
+  const aM = ((a[0] * up[0] + a[1] * up[1] + a[2] * up[2]) * (C * C)) / M_METRES;
   expect(aM).toBeCloseTo(-(0.5 * 1.225 * 100 * 100) / 900, 1);
   const high = g.X.map((x, i) => x + (400e3 / M_METRES) * up[i]!) as Vec3;
   expect(Math.hypot(...dragAccel("earth", high, V, t0))).toBe(0);
@@ -54,7 +55,9 @@ test("the air's drag: ½ ρ v² / B against the motion through the air, none abo
 test("the ephemeris' velocities: the rate of its places (the Moon's turning node and perigee too)", () => {
   const h = 60 / M_SECONDS;
   for (const id of ["earth", "moon", "sun", "saturn", "jupiter", "titan"]) {
-    const a = solarState(id, t0 - h).pos, b = solarState(id, t0 + h).pos, v = solarState(id, t0).vel;
+    const a = solarState(id, t0 - h).pos,
+      b = solarState(id, t0 + h).pos,
+      v = solarState(id, t0).vel;
     const err = Math.hypot(...a.map((x, i) => (b[i]! - x) / (2 * h) - v[i]!)) * C;
     expect(err).toBeLessThan(0.02);
   }

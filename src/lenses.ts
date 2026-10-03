@@ -9,13 +9,15 @@ import { bodyTrack } from "./system/ephemeris";
 import { holeAcceleration, starCentre, starOrbitRadius, starVelocity } from "./targeting";
 import { lin } from "./math/vec3";
 
-
 export function lensesOf(s: Settings): Lens | Lens[] | undefined {
   const list: Lens[] = [];
   if (s.sun && s.sunMass > 0) {
     const D3 = starOrbitRadius(s) ** 3;
     list.push({
-      m: s.sunMass, R: s.sunRadius, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
+      m: s.sunMass,
+      R: s.sunRadius,
+      centre: (t) => starCentre(s, t),
+      velocity: (t) => starVelocity(s, t),
       // Gargantua orbits the centre of mass: its frame falls towards the star
       accel: (t) => holeAcceleration(s, t),
       accelRate: (t) => lin(starVelocity(s, t), s.sunMass / D3, [0, 0, 0], 0),

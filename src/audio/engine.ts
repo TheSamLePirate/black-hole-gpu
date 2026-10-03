@@ -11,10 +11,34 @@
 // while the page is hidden.
 
 export type Cue =
-  | "sas-on" | "sas-off" | "hold" | "hold-off" | "auto-on" | "auto-off" | "warp-up" | "warp-down"
-  | "target" | "soi" | "node-tick" | "node-go" | "burn-end" | "touchdown" | "liftoff" | "error"
-  | "notify" | "precision-on" | "precision-off" | "mount" | "click" | "hover" | "open" | "close"
-  | "crash" | "arrive" | "wormhole" | "boom";
+  | "sas-on"
+  | "sas-off"
+  | "hold"
+  | "hold-off"
+  | "auto-on"
+  | "auto-off"
+  | "warp-up"
+  | "warp-down"
+  | "target"
+  | "soi"
+  | "node-tick"
+  | "node-go"
+  | "burn-end"
+  | "touchdown"
+  | "liftoff"
+  | "error"
+  | "notify"
+  | "precision-on"
+  | "precision-off"
+  | "mount"
+  | "click"
+  | "hover"
+  | "open"
+  | "close"
+  | "crash"
+  | "arrive"
+  | "wormhole"
+  | "boom";
 
 export interface Mix {
   master: number;
@@ -59,11 +83,25 @@ export class SoundEngine {
   private brown!: AudioBuffer;
   private slow!: AudioBuffer;
   private eng: {
-    rumble: GainNode; rumbleLP: BiquadFilterNode; roar: GainNode; roarBP: BiquadFilterNode; sub: GainNode; subOsc: OscillatorNode;
+    rumble: GainNode;
+    rumbleLP: BiquadFilterNode;
+    roar: GainNode;
+    roarBP: BiquadFilterNode;
+    sub: GainNode;
+    subOsc: OscillatorNode;
     crackle: GainNode;
   } | null = null;
   private rcsV: { gain: GainNode; bp: BiquadFilterNode; pan: StereoPannerNode } | null = null;
-  private amb: { hum: GainNode; air: GainNode; wheel: GainNode; wheelOsc: OscillatorNode; wheelOsc2: OscillatorNode; wind: GainNode; windBP: BiquadFilterNode; roar: GainNode } | null = null;
+  private amb: {
+    hum: GainNode;
+    air: GainNode;
+    wheel: GainNode;
+    wheelOsc: OscillatorNode;
+    wheelOsc2: OscillatorNode;
+    wind: GainNode;
+    windBP: BiquadFilterNode;
+    roar: GainNode;
+  } | null = null;
   private last: EngineState | null = null;
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
@@ -192,7 +230,9 @@ export class SoundEngine {
     const buf = ctx.createBuffer(2, n, ctx.sampleRate);
     for (let c = 0; c < 2; c++) {
       const d = buf.getChannelData(c);
-      let b = 0, s = 0, target = 0;
+      let b = 0,
+        s = 0,
+        target = 0;
       for (let i = 0; i < n; i++) {
         const w = Math.random() * 2 - 1;
         if (kind === "white") d[i] = w;
@@ -237,7 +277,7 @@ export class SoundEngine {
         const t = i / n;
         const a = 1 - t * 0.9;
         lp += (Math.random() * 2 - 1 - lp) * a;
-        d[i] = lp * Math.pow(1 - t, 3.2) * (i < 40 ? i / 40 : 1);
+        d[i] = lp * (1 - t) ** 3.2 * (i < 40 ? i / 40 : 1);
       }
     }
     return buf;
@@ -308,7 +348,12 @@ export class SoundEngine {
     const humLP = ctx.createBiquadFilter();
     humLP.type = "lowpass";
     humLP.frequency.value = 260;
-    for (const [f, a] of [[55, 1], [110, 0.5], [165, 0.25], [220, 0.12]] as const) {
+    for (const [f, a] of [
+      [55, 1],
+      [110, 0.5],
+      [165, 0.25],
+      [220, 0.12],
+    ] as const) {
       const o = ctx.createOscillator();
       o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.004);
       const g = ctx.createGain();
@@ -483,7 +528,12 @@ export class SoundEngine {
    * One tone of the flight computer: a clean oscillator with a soft attack and an exponential
    * decay, a touch of a second partial (a small speaker's colour).
    */
-  private tone(freq: number, at: number, dur: number, o: { level?: number; type?: OscillatorType; to?: number; out?: AudioNode; partial?: number; attack?: number } = {}) {
+  private tone(
+    freq: number,
+    at: number,
+    dur: number,
+    o: { level?: number; type?: OscillatorType; to?: number; out?: AudioNode; partial?: number; attack?: number } = {},
+  ) {
     const ctx = this.ctx!;
     const t = ctx.currentTime + at;
     const level = o.level ?? 0.25;
@@ -543,21 +593,57 @@ export class SoundEngine {
     if (!this.running || !this.enabled) return;
     const T = (f: number, at: number, dur: number, o?: Parameters<SoundEngine["tone"]>[3]) => this.tone(f, at, dur, o);
     switch (cue) {
-      case "sas-on": T(988, 0, 0.07, { partial: 0.15 }); T(1319, 0.08, 0.1, { partial: 0.15 }); break;
-      case "sas-off": T(1319, 0, 0.07, { partial: 0.15 }); T(988, 0.08, 0.12, { partial: 0.15 }); break;
+      case "sas-on":
+        T(988, 0, 0.07, { partial: 0.15 });
+        T(1319, 0.08, 0.1, { partial: 0.15 });
+        break;
+      case "sas-off":
+        T(1319, 0, 0.07, { partial: 0.15 });
+        T(988, 0.08, 0.12, { partial: 0.15 });
+        break;
       // (a hold: one blip, its pitch naming the mode — arg: 0…8)
-      case "hold": T(1047 * Math.pow(2, (arg % 9) / 12), 0, 0.09, { level: 0.22, partial: 0.2 }); T(1568, 0.1, 0.05, { level: 0.12 }); break;
-      case "hold-off": T(784, 0, 0.08, { level: 0.18 }); break;
-      case "auto-on": [659, 880, 1175].forEach((f, i) => T(f, i * 0.075, 0.09, { level: 0.2, partial: 0.12 })); break;
-      case "auto-off": [1175, 880, 659].forEach((f, i) => T(f, i * 0.075, 0.09, { level: 0.18 })); break;
-      case "warp-up": T(1400 + 90 * arg, 0, 0.035, { level: 0.14, type: "triangle" }); break;
-      case "warp-down": T(1100 + 60 * arg, 0, 0.035, { level: 0.14, type: "triangle" }); break;
-      case "target": T(1568, 0, 0.35, { level: 0.14 }); T(2093, 0.06, 0.4, { level: 0.07 }); break;
-      case "soi": this.bell(784, 0); this.bell(1175, 0.18, 0.12); break;
-      case "arrive": this.bell(988, 0, 0.16); this.bell(1319, 0.14, 0.13); this.bell(1976, 0.28, 0.08, 2.2); break;
-      case "node-tick": T(1000, 0, 0.06, { level: 0.2, type: "square", partial: 0 }); break;
-      case "node-go": T(1500, 0, 0.45, { level: 0.2, type: "square" }); break;
-      case "burn-end": T(1200, 0, 0.07, { level: 0.2 }); T(1200, 0.12, 0.07, { level: 0.2 }); break;
+      case "hold":
+        T(1047 * 2 ** ((arg % 9) / 12), 0, 0.09, { level: 0.22, partial: 0.2 });
+        T(1568, 0.1, 0.05, { level: 0.12 });
+        break;
+      case "hold-off":
+        T(784, 0, 0.08, { level: 0.18 });
+        break;
+      case "auto-on":
+        [659, 880, 1175].forEach((f, i) => T(f, i * 0.075, 0.09, { level: 0.2, partial: 0.12 }));
+        break;
+      case "auto-off":
+        [1175, 880, 659].forEach((f, i) => T(f, i * 0.075, 0.09, { level: 0.18 }));
+        break;
+      case "warp-up":
+        T(1400 + 90 * arg, 0, 0.035, { level: 0.14, type: "triangle" });
+        break;
+      case "warp-down":
+        T(1100 + 60 * arg, 0, 0.035, { level: 0.14, type: "triangle" });
+        break;
+      case "target":
+        T(1568, 0, 0.35, { level: 0.14 });
+        T(2093, 0.06, 0.4, { level: 0.07 });
+        break;
+      case "soi":
+        this.bell(784, 0);
+        this.bell(1175, 0.18, 0.12);
+        break;
+      case "arrive":
+        this.bell(988, 0, 0.16);
+        this.bell(1319, 0.14, 0.13);
+        this.bell(1976, 0.28, 0.08, 2.2);
+        break;
+      case "node-tick":
+        T(1000, 0, 0.06, { level: 0.2, type: "square", partial: 0 });
+        break;
+      case "node-go":
+        T(1500, 0, 0.45, { level: 0.2, type: "square" });
+        break;
+      case "burn-end":
+        T(1200, 0, 0.07, { level: 0.2 });
+        T(1200, 0.12, 0.07, { level: 0.2 });
+        break;
       case "boom":
         // (a sonic boom: two thumps, the bow's and the tail's shocks)
         this.burst(this.busses.listener, 1.0, 90, 0.35, 0.8);
@@ -565,18 +651,46 @@ export class SoundEngine {
         break;
       case "touchdown":
         this.burst(this.busses.engine, 0.6, 220, 0.4, 0.7);
-        T(880, 0.25, 0.08, { level: 0.18 }); T(1320, 0.36, 0.14, { level: 0.18 });
+        T(880, 0.25, 0.08, { level: 0.18 });
+        T(1320, 0.36, 0.14, { level: 0.18 });
         break;
-      case "liftoff": T(660, 0, 0.1, { level: 0.18 }); T(990, 0.12, 0.1, { level: 0.18 }); T(1320, 0.24, 0.18, { level: 0.18 }); break;
-      case "error": T(185, 0, 0.18, { level: 0.2, type: "square" }); T(175, 0.2, 0.22, { level: 0.2, type: "square" }); break;
-      case "notify": T(1175, 0, 0.08, { level: 0.1 }); T(1568, 0.07, 0.14, { level: 0.08 }); break;
-      case "precision-on": T(2093, 0, 0.04, { level: 0.1 }); T(2637, 0.05, 0.05, { level: 0.1 }); break;
-      case "precision-off": T(2637, 0, 0.04, { level: 0.1 }); T(2093, 0.05, 0.05, { level: 0.1 }); break;
-      case "mount": this.burst(this.busses.ui, 0.12, 1800, 0.08, 1.5); T(740, 0.02, 0.06, { level: 0.08, out: this.busses.ui }); break;
-      case "click": this.burst(this.busses.ui, 0.2, 3200, 0.025, 3); break;
-      case "hover": this.burst(this.busses.ui, 0.05, 4800, 0.015, 4); break;
-      case "open": T(620, 0, 0.06, { level: 0.08, to: 900, out: this.busses.ui }); break;
-      case "close": T(900, 0, 0.06, { level: 0.07, to: 600, out: this.busses.ui }); break;
+      case "liftoff":
+        T(660, 0, 0.1, { level: 0.18 });
+        T(990, 0.12, 0.1, { level: 0.18 });
+        T(1320, 0.24, 0.18, { level: 0.18 });
+        break;
+      case "error":
+        T(185, 0, 0.18, { level: 0.2, type: "square" });
+        T(175, 0.2, 0.22, { level: 0.2, type: "square" });
+        break;
+      case "notify":
+        T(1175, 0, 0.08, { level: 0.1 });
+        T(1568, 0.07, 0.14, { level: 0.08 });
+        break;
+      case "precision-on":
+        T(2093, 0, 0.04, { level: 0.1 });
+        T(2637, 0.05, 0.05, { level: 0.1 });
+        break;
+      case "precision-off":
+        T(2637, 0, 0.04, { level: 0.1 });
+        T(2093, 0.05, 0.05, { level: 0.1 });
+        break;
+      case "mount":
+        this.burst(this.busses.ui, 0.12, 1800, 0.08, 1.5);
+        T(740, 0.02, 0.06, { level: 0.08, out: this.busses.ui });
+        break;
+      case "click":
+        this.burst(this.busses.ui, 0.2, 3200, 0.025, 3);
+        break;
+      case "hover":
+        this.burst(this.busses.ui, 0.05, 4800, 0.015, 4);
+        break;
+      case "open":
+        T(620, 0, 0.06, { level: 0.08, to: 900, out: this.busses.ui });
+        break;
+      case "close":
+        T(900, 0, 0.06, { level: 0.07, to: 600, out: this.busses.ui });
+        break;
       case "crash":
         this.burst(this.busses.engine, 1, 160, 1.4, 0.5);
         this.burst(this.busses.engine, 0.6, 1200, 0.6, 0.8, 0.05);

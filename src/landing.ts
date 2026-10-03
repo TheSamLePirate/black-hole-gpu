@@ -87,7 +87,8 @@ export function planetFrame(id: string, t: number, a: number, massSolar: number)
   const sys = GARGANTUA_SYSTEM;
   const b: BodyDef = sysBody(sys, id);
   const tr = bodyTrack(sys, id);
-  const C = tr.pos(t), V = tr.vel(t);
+  const C = tr.pos(t),
+    V = tr.vel(t);
   const hostId = b.orbit.type === "kepler" && b.parent && b.parent !== "gargantua" ? b.parent : null;
   const H: Vec3 = hostId ? bodyTrack(sys, hostId).pos(t) : [0, 0, 0];
   const VH: Vec3 = hostId ? bodyTrack(sys, hostId).vel(t) : [0, 0, 0];
@@ -116,9 +117,22 @@ export function planetFrame(id: string, t: number, a: number, massSolar: number)
   const Td = [S[0], S[1], S[2], ut * S[0], ut * S[1], ut * S[2]];
   const Ap = A.map((row, i) => row.map((v, j) => (ut * Td[i]! * v) / Td[j]!));
   return {
-    id, R: b.radius, m: b.mass, H, VH, C, V, rOrb, n, ut, S, A: Ap,
-    atm: b.surface?.atmosphere ?? null, surf: SURF[b.surface?.kind ?? "rock"],
-    mPerM: 1476.625 * massSolar, aUnit: accelUnit({ massSolar }),
+    id,
+    R: b.radius,
+    m: b.mass,
+    H,
+    VH,
+    C,
+    V,
+    rOrb,
+    n,
+    ut,
+    S,
+    A: Ap,
+    atm: b.surface?.atmosphere ?? null,
+    surf: SURF[b.surface?.kind ?? "rock"],
+    mPerM: 1476.625 * massSolar,
+    aUnit: accelUnit({ massSolar }),
   };
 }
 
@@ -138,12 +152,15 @@ export function toLocal(F: PlanetFrame, X: Vec3, Vs: Vec3): LocalState {
   const rel: Vec3 = [X[0] - F.H[0], X[1] - F.H[1], X[2] - F.H[2]];
   const crel: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], F.C[2] - F.H[2]];
   const ws = Math.hypot(rel[0], rel[1]);
-  const eR: Vec3 = [rel[0] / ws, rel[1] / ws, 0], eP: Vec3 = [-rel[1] / ws, rel[0] / ws, 0];
+  const eR: Vec3 = [rel[0] / ws, rel[1] / ws, 0],
+    eP: Vec3 = [-rel[1] / ws, rel[0] / ws, 0];
   const dv: Vec3 = [Vs[0] - F.VH[0], Vs[1] - F.VH[1], Vs[2] - F.VH[2]];
   const x = ws - F.rOrb;
   const y = F.rOrb * wrap(Math.atan2(rel[1], rel[0]) - Math.atan2(crel[1], crel[0]));
   const z = rel[2] - crel[2];
-  const u = dot(dv, eR), v = F.rOrb * (dot(dv, eP) / ws - F.n), w = dv[2];
+  const u = dot(dv, eR),
+    v = F.rOrb * (dot(dv, eP) / ws - F.n),
+    w = dv[2];
   const { S, ut } = F;
   return { xi: [S[0] * x, S[1] * y, S[2] * z], w: [ut * S[0] * u, ut * S[1] * v, ut * S[2] * w], landed: false };
 }
@@ -151,12 +168,17 @@ export function toLocal(F: PlanetFrame, X: Vec3, Vs: Vec3): LocalState {
 /** Back to the map: place and coordinate velocity. */
 export function toGlobal(F: PlanetFrame, L: LocalState): { X: Vec3; V: Vec3 } {
   const { S, ut } = F;
-  const x = L.xi[0] / S[0], y = L.xi[1] / S[1], z = L.xi[2] / S[2];
-  const u = L.w[0] / (ut * S[0]), v = L.w[1] / (ut * S[1]), w = L.w[2] / (ut * S[2]);
+  const x = L.xi[0] / S[0],
+    y = L.xi[1] / S[1],
+    z = L.xi[2] / S[2];
+  const u = L.w[0] / (ut * S[0]),
+    v = L.w[1] / (ut * S[1]),
+    w = L.w[2] / (ut * S[2]);
   const crel: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], F.C[2] - F.H[2]];
   const ph = Math.atan2(crel[1], crel[0]) + y / F.rOrb;
   const ws = F.rOrb + x;
-  const eR: Vec3 = [Math.cos(ph), Math.sin(ph), 0], eP: Vec3 = [-Math.sin(ph), Math.cos(ph), 0];
+  const eR: Vec3 = [Math.cos(ph), Math.sin(ph), 0],
+    eP: Vec3 = [-Math.sin(ph), Math.cos(ph), 0];
   const X: Vec3 = [F.H[0] + ws * eR[0], F.H[1] + ws * eR[1], crel[2] + F.H[2] + z];
   const vp = ws * (F.n + v / F.rOrb);
   const V: Vec3 = [F.VH[0] + u * eR[0] + vp * eP[0], F.VH[1] + u * eR[1] + vp * eP[1], F.VH[2] + w];
@@ -230,7 +252,14 @@ export function weightUp(F: PlanetFrame, xi: Vec3): number {
  * acceleration, local axes, c²/M): RK4 substeps small against the orbit around the planet, the drag
  * time and the time to the ground. Returns the impact speed [m/s] if it touched down.
  */
-export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: Vec3, aero?: AeroFn, wheels?: Wheels): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean } {
+export function stepLocal(
+  F: PlanetFrame,
+  L: LocalState,
+  dtau: number,
+  thrust: Vec3,
+  aero?: AeroFn,
+  wheels?: Wheels,
+): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean } {
   const gear = GEAR / F.mPerM;
   const C = C_MPS;
   let touchdown: { vn: number; vh: number } | undefined;
@@ -260,20 +289,25 @@ export function stepLocal(F: PlanetFrame, L: LocalState, dtau: number, thrust: V
       dragT = fa > 0 ? sp / fa : Infinity;
     }
     const orbitT = Math.sqrt((d * d * d) / F.m);
-    let h = Math.min(left, 0.02 * orbitT, 0.2 * dragT, Math.max(0.2 * hNow / sp, 1e-3 * orbitT));
+    let h = Math.min(left, 0.02 * orbitT, 0.2 * dragT, Math.max((0.2 * hNow) / sp, 1e-3 * orbitT));
     h = Math.max(h, 1e-14);
     const f = (x: Vec3, v: Vec3) => localAccel(F, x, v, thrust, aero);
-    const x0 = L.xi, v0 = L.w;
-    const k1v = f(x0, v0), k1x = v0;
+    const x0 = L.xi,
+      v0 = L.w;
+    const k1v = f(x0, v0),
+      k1x = v0;
     const x1: Vec3 = [x0[0] + 0.5 * h * k1x[0], x0[1] + 0.5 * h * k1x[1], x0[2] + 0.5 * h * k1x[2]];
     const v1: Vec3 = [v0[0] + 0.5 * h * k1v[0], v0[1] + 0.5 * h * k1v[1], v0[2] + 0.5 * h * k1v[2]];
-    const k2v = f(x1, v1), k2x = v1;
+    const k2v = f(x1, v1),
+      k2x = v1;
     const x2: Vec3 = [x0[0] + 0.5 * h * k2x[0], x0[1] + 0.5 * h * k2x[1], x0[2] + 0.5 * h * k2x[2]];
     const v2: Vec3 = [v0[0] + 0.5 * h * k2v[0], v0[1] + 0.5 * h * k2v[1], v0[2] + 0.5 * h * k2v[2]];
-    const k3v = f(x2, v2), k3x = v2;
+    const k3v = f(x2, v2),
+      k3x = v2;
     const x3: Vec3 = [x0[0] + h * k3x[0], x0[1] + h * k3x[1], x0[2] + h * k3x[2]];
     const v3: Vec3 = [v0[0] + h * k3v[0], v0[1] + h * k3v[1], v0[2] + h * k3v[2]];
-    const k4v = f(x3, v3), k4x = v3;
+    const k4v = f(x3, v3),
+      k4x = v3;
     L.xi = [0, 1, 2].map((i) => x0[i]! + (h / 6) * (k1x[i]! + 2 * k2x[i]! + 2 * k3x[i]! + k4x[i]!)) as Vec3;
     L.w = [0, 1, 2].map((i) => v0[i]! + (h / 6) * (k1v[i]! + 2 * k2v[i]! + 2 * k3v[i]! + k4v[i]!)) as Vec3;
     left -= h;

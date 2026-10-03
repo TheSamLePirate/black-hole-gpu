@@ -58,16 +58,43 @@ type PlaneMode = "system" | "equator" | "orbit" | "target";
  * to the other side, above, below, when the first place is taken); its colour (an "r, g, b"), its
  * priority (≥ 4 always drawn, the others only where they fit), its size [CSS px] and weight.
  */
-interface MapLabel { text: string; x: number; y: number; col: string; prio: number; size: number; weight: number; ax?: number; ay?: number; ar?: number }
+interface MapLabel {
+  text: string;
+  x: number;
+  y: number;
+  col: string;
+  prio: number;
+  size: number;
+  weight: number;
+  ax?: number;
+  ay?: number;
+  ar?: number;
+}
 
-interface Mark { t: number; kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact" | "cand"; label: string }
+interface Mark {
+  t: number;
+  kind: "node" | "ca" | "soi" | "pe" | "ap" | "arrive" | "impact" | "cand";
+  label: string;
+}
 const MARK_COL: Record<Mark["kind"], string> = {
-  node: "#5ad8ff", ca: "#ff8a5c", soi: "#c88cff", pe: "#9fe3ff", ap: "#9fe3ff", arrive: "#ffaa50", impact: "#ff5a46", cand: "#c48cff",
+  node: "#5ad8ff",
+  ca: "#ff8a5c",
+  soi: "#c88cff",
+  pe: "#9fe3ff",
+  ap: "#9fe3ff",
+  arrive: "#ffaa50",
+  impact: "#ff5a46",
+  cand: "#c48cff",
 };
 type Proj = { x: number; y: number; z: number; k: number; ok: boolean };
 
 const PLANES: { id: PlaneMode; label: string; short: string; title: string }[] = [
-  { id: "system", label: "System", short: "Sys", title: "The system's plane: the ecliptic (the solar system), the hole's equator (Gargantua's)" },
+  {
+    id: "system",
+    label: "System",
+    short: "Sys",
+    title: "The system's plane: the ecliptic (the solar system), the hole's equator (Gargantua's)",
+  },
   { id: "equator", label: "Equator", short: "Eq", title: "The focus body's equator" },
   { id: "orbit", label: "Orbit", short: "Orb", title: "The ship's orbital plane (around its primary)" },
   { id: "target", label: "Target", short: "Tgt", title: "The target's orbital plane (around its primary)" },
@@ -127,7 +154,17 @@ export class Map3D {
   private pathHits: { x: number; y: number; t: number }[] = [];
   private nodeHits: { k: number; x: number; y: number }[] = [];
   private handleHits: { k: number; c: number; sign: number; x: number; y: number; dir: [number, number] }[] = [];
-  private gizmo: { k: number; c: number; sign: number; dir: [number, number]; x0: number; y0: number; x: number; y: number; at: number } | null = null;
+  private gizmo: {
+    k: number;
+    c: number;
+    sign: number;
+    dir: [number, number];
+    x0: number;
+    y0: number;
+    x: number;
+    y: number;
+    at: number;
+  } | null = null;
   private nodeDrag: { k: number } | null = null;
   private hover: { x: number; y: number } | null = null;
   private lastInfo: Info | null = null;
@@ -139,7 +176,16 @@ export class Map3D {
   private preview = 0;
   private span = 0;
   private playing = false;
-  private tl!: { root: HTMLElement; play: HTMLButtonElement; track: HTMLElement; fill: HTMLElement; handle: HTMLElement; marks: HTMLElement; label: HTMLElement; now: HTMLButtonElement };
+  private tl!: {
+    root: HTMLElement;
+    play: HTMLButtonElement;
+    track: HTMLElement;
+    fill: HTMLElement;
+    handle: HTMLElement;
+    marks: HTMLElement;
+    label: HTMLElement;
+    now: HTMLButtonElement;
+  };
   private tlKey = "";
   private tlMarks: Mark[] = [];
   private tlSpan = 1;
@@ -219,12 +265,16 @@ export class Map3D {
     });
     track.addEventListener("pointermove", (e) => dragging && setFrom(e.clientX));
     track.addEventListener("pointerup", () => (dragging = false));
-    track.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // (the span, ×/÷ with the wheel; the preview keeps its time)
-      this.span = clamp(this.tlSpan * Math.exp(e.deltaY * 0.002), 0.5, 1e8);
-    }, { passive: false });
+    track.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // (the span, ×/÷ with the wheel; the preview keeps its time)
+        this.span = clamp(this.tlSpan * Math.exp(e.deltaY * 0.002), 0.5, 1e8);
+      },
+      { passive: false },
+    );
     for (const ev of ["pointerdown", "dblclick", "contextmenu"]) root.addEventListener(ev, (e) => e.stopPropagation());
   }
 
@@ -296,7 +346,8 @@ export class Map3D {
     } else return null;
     if (fate !== "continues" && fate !== "escape") return null;
     const n = pts.length - 1;
-    const end = times[n]!, X = pts[n]!;
+    const end = times[n]!,
+      X = pts[n]!;
     const V = scale(sub(X, pts[n - 1]!), 1 / Math.max(end - times[n - 1]!, 1e-9));
     const cur = this.theirExt;
     const now = performance.now();
@@ -349,7 +400,8 @@ export class Map3D {
     (i.cand?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "cand", label: `Preview · burn ${k + 1} · ${i.cand!.note}` }));
     if (i.cand?.arrive) out.push({ t: i.cand.arrive.t, kind: "cand", label: `Preview · arrival` });
     if (ours) {
-      const free = i.ourFree, plan = i.ourPlan;
+      const free = i.ourFree,
+        plan = i.ourPlan;
       const memo = (p: OurPath) => {
         let m = this.pathMemo.get(p);
         if (!m) this.pathMemo.set(p, (m = new Map()));
@@ -390,33 +442,60 @@ export class Map3D {
       const e = this.extension(i);
       if (e) {
         for (let j = 1; j < e.refs.length; j++) {
-          if (e.refs[j] !== e.refs[j - 1]) out.push({ t: e.times[j]!, kind: "soi", label: `${sc.byId.get(e.refs[j]!)?.name ?? e.refs[j]}'s sphere of influence (conics)` });
+          if (e.refs[j] !== e.refs[j - 1])
+            out.push({
+              t: e.times[j]!,
+              kind: "soi",
+              label: `${sc.byId.get(e.refs[j]!)?.name ?? e.refs[j]}'s sphere of influence (conics)`,
+            });
         }
-        for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis at ${sc.byId.get(a.body)?.name ?? a.body} (conics)` });
+        for (const a of e.apsides)
+          out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis at ${sc.byId.get(a.body)?.name ?? a.body} (conics)` });
         if (sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
           const ca = this.extClosest(e, i.target, true);
           if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name} (conics)` });
         }
-        if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: `Impact · ${sc.byId.get(e.hit ?? "")?.name ?? e.hit} (conics)` });
+        if (e.fate === "impact")
+          out.push({
+            t: e.times[e.times.length - 1]!,
+            kind: "impact",
+            label: `Impact · ${sc.byId.get(e.hit ?? "")?.name ?? e.hit} (conics)`,
+          });
       }
-      if (i.ourArrive) out.push({ t: i.ourArrive.t, kind: "arrive", label: `Arrival · ${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body}` });
+      if (i.ourArrive)
+        out.push({ t: i.ourArrive.t, kind: "arrive", label: `Arrival · ${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body}` });
     } else {
       const ca = this.host.closestApproach(i, t0);
       if (ca && ca.t > 0) out.push({ t: t0 + ca.t, kind: "ca", label: `Closest approach · ${BODY_NAMES[i.target as Target] ?? i.target}` });
       const p = i.path;
-      if (p && (p.fate === "horizon" || p.fate === "star")) out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? "The horizon" : "Into the star" });
+      if (p && (p.fate === "horizon" || p.fate === "star"))
+        out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? "The horizon" : "Into the star" });
       const e = this.theirExtension(i, t0);
       if (e) {
         const name = (id: string) => sc.byId.get(id)?.name ?? BODY_NAMES[id as Target] ?? id;
         for (let j = 1; j < e.refs.length; j++) {
-          if (e.refs[j] !== e.refs[j - 1]) out.push({ t: e.times[j]!, kind: "soi", label: e.refs[j] === "hole" ? `Out of ${name(e.refs[j - 1]!)}'s Hill sphere (conics)` : `${name(e.refs[j]!)}'s Hill sphere (conics)` });
+          if (e.refs[j] !== e.refs[j - 1])
+            out.push({
+              t: e.times[j]!,
+              kind: "soi",
+              label:
+                e.refs[j] === "hole"
+                  ? `Out of ${name(e.refs[j - 1]!)}'s Hill sphere (conics)`
+                  : `${name(e.refs[j]!)}'s Hill sphere (conics)`,
+            });
         }
-        for (const a of e.apsides) out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis${a.body === "hole" ? "" : ` at ${name(a.body)}`} (conics)` });
+        for (const a of e.apsides)
+          out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis${a.body === "hole" ? "" : ` at ${name(a.body)}`} (conics)` });
         if (sc.byId.has(i.target) && i.target !== "hole") {
           const ca = this.extClosest(e, i.target, false);
           if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${name(i.target)} (conics)` });
         }
-        if (e.fate === "impact") out.push({ t: e.times[e.times.length - 1]!, kind: "impact", label: e.hit === "hole" ? "The horizon (conics)" : `Impact · ${name(e.hit ?? "")} (conics)` });
+        if (e.fate === "impact")
+          out.push({
+            t: e.times[e.times.length - 1]!,
+            kind: "impact",
+            label: e.hit === "hole" ? "The horizon (conics)" : `Impact · ${name(e.hit ?? "")} (conics)`,
+          });
       }
     }
     return out.filter((m) => m.t > t0);
@@ -452,17 +531,25 @@ export class Map3D {
     }
     const s = this.host.s;
     const tp = t0 + this.preview;
-    const text = this.preview <= 0
-      ? `Now · ${fmtDur(span, s)} ahead`
-      : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${note ? ` · ${note}` : ""}`;
+    const text =
+      this.preview <= 0
+        ? `Now · ${fmtDur(span, s)} ahead`
+        : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${note ? ` · ${note}` : ""}`;
     if (tl.label.textContent !== text) tl.label.textContent = text;
   }
 
   /** The ship at a later time along its predicted path (the plan's once past its first node), map frame. */
-  private shipAt(i: Info, tp: number, t0: number, ours: boolean, sc: MapScene): { X: V3; V: V3; ref: string | null; beyond: boolean; conics?: boolean } | null {
+  private shipAt(
+    i: Info,
+    tp: number,
+    t0: number,
+    ours: boolean,
+    sc: MapScene,
+  ): { X: V3; V: V3; ref: string | null; beyond: boolean; conics?: boolean } | null {
     const lerp = (a: V3, b: V3, f: number): V3 => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
     const find = (times: number[]) => {
-      let lo = 0, hi = times.length - 1;
+      let lo = 0,
+        hi = times.length - 1;
       if (tp >= times[hi]!) return { j: hi, f: 0, beyond: tp > times[hi]! };
       if (tp <= times[0]!) return { j: 0, f: 0, beyond: false };
       while (hi - lo > 1) {
@@ -473,7 +560,8 @@ export class Map3D {
       return { j: lo, f: (tp - times[lo]!) / Math.max(times[lo + 1]! - times[lo]!, 1e-30), beyond: false };
     };
     if (ours) {
-      const plan = i.ourPlan, free = i.ourFree;
+      const plan = i.ourPlan,
+        free = i.ourFree;
       const usePlan = !!plan && plan.nodeAt.length > 0 && tp >= plan.times[plan.nodeAt[0]!]!;
       let p: OurPath | null = usePlan ? plan! : free;
       if (!p || p.times.length < 2) return null;
@@ -554,15 +642,29 @@ export class Map3D {
       b("view:edge", "edge", "Edge-on", "Seen in the reference plane", () => this.setView(0.004)),
     );
     // (the minimap's rail: the plane and the view each one button, cycling)
-    const cyclePlane = b("cycle:plane", "", "Reference plane", "Click for the next one: the system's, the equator, the ship's orbit, the target's", () => {
-      const list = PLANES.filter((p) => !this.btns[`plane:${p.id}`]!.disabled);
-      const i = list.findIndex((p) => p.id === this.plane);
-      this.setPlane(list[(i + 1) % list.length]!.id);
-    }, "m3-cycle");
-    const cycleView = b("cycle:view", "3d", "View", "Click for the next one: from above, oblique, edge-on", () => {
-      const pitch = this.cam.goal.pitch;
-      this.setView(pitch > 1.5 ? 0.52 : Math.abs(pitch - 0.52) < 0.01 ? 0.004 : Math.PI / 2 - 1e-3);
-    }, "m3-cycle");
+    const cyclePlane = b(
+      "cycle:plane",
+      "",
+      "Reference plane",
+      "Click for the next one: the system's, the equator, the ship's orbit, the target's",
+      () => {
+        const list = PLANES.filter((p) => !this.btns[`plane:${p.id}`]!.disabled);
+        const i = list.findIndex((p) => p.id === this.plane);
+        this.setPlane(list[(i + 1) % list.length]!.id);
+      },
+      "m3-cycle",
+    );
+    const cycleView = b(
+      "cycle:view",
+      "3d",
+      "View",
+      "Click for the next one: from above, oblique, edge-on",
+      () => {
+        const pitch = this.cam.goal.pitch;
+        this.setView(pitch > 1.5 ? 0.52 : Math.abs(pitch - 0.52) < 0.01 ? 0.004 : Math.PI / 2 - 1e-3);
+      },
+      "m3-cycle",
+    );
     this.bar.append(
       h("span", "fl-label", "Map"),
       this.focusBtn,
@@ -570,11 +672,17 @@ export class Map3D {
       views,
       cyclePlane,
       cycleView,
-      b("log", "log", "Multi-scale", "The distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map", () => {
-        if (this.universe === "ours") this.logOurs = !this.logOurs;
-        else this.logTheirs = !this.isLog();
-        this.autoDist = true;
-      }),
+      b(
+        "log",
+        "log",
+        "Multi-scale",
+        "The distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map",
+        () => {
+          if (this.universe === "ours") this.logOurs = !this.logOurs;
+          else this.logTheirs = !this.isLog();
+          this.autoDist = true;
+        },
+      ),
       b("legend", "key", "Legend", "What the map's lines and marks are", () => this.showLegend(this.legend.hidden)),
       b("fit", "fit", "Frame", "Frame the focus and the ship's paths again (or double-click on empty space)", () => this.fit()),
       b("cm", "CoM", "Centre of mass", "The inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
@@ -708,13 +816,13 @@ export class Map3D {
   }
 
   private isLog() {
-    return this.universe === "ours" ? this.logOurs : this.logTheirs ?? this.host.s.system !== "none";
+    return this.universe === "ours" ? this.logOurs : (this.logTheirs ?? this.host.s.system !== "none");
   }
 
   private syncBar(sc: MapScene, fid: string) {
     const s = this.host.s;
-    const name = fid === "ship" ? "The ship" : sc.byId.get(fid)?.name ?? fid;
-    const col = fid === "ship" ? "124, 214, 255" : sc.byId.get(fid)?.col ?? "220, 220, 220";
+    const name = fid === "ship" ? "The ship" : (sc.byId.get(fid)?.name ?? fid);
+    const col = fid === "ship" ? "124, 214, 255" : (sc.byId.get(fid)?.col ?? "220, 220, 220");
     const key = `${name}|${this.focus === null}`;
     if (this.focusBtn.dataset.key !== key) {
       this.focusBtn.dataset.key = key;
@@ -739,7 +847,8 @@ export class Map3D {
     if (this.btns["plane:target"]!.disabled) this.btns["plane:target"]!.dataset.why = "The target has no orbit to take the plane of";
     else delete this.btns["plane:target"]!.dataset.why;
     // the rail's cycling buttons: the current plane (its short name), the current view (its icon)
-    const pc = this.btns["cycle:plane"]!, vc = this.btns["cycle:view"]!;
+    const pc = this.btns["cycle:plane"]!,
+      vc = this.btns["cycle:view"]!;
     const pShort = PLANES.find((p) => p.id === this.plane)?.short ?? "";
     if (pc.dataset.cur !== pShort) (pc.dataset.cur = pShort), (pc.innerHTML = `${this.planeIcon}<small>${pShort}</small>`);
     const vk = pitch > 1.5 ? "top" : Math.abs(pitch) < 0.02 ? "edge" : "3d";
@@ -754,14 +863,18 @@ export class Map3D {
       return [(e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio] as const;
     };
     let drag: { x: number; y: number; moved: boolean; pan: boolean } | null = null;
-    c.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const [x, y] = at(e);
-      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-      this.cam.zoom(Math.exp(e.deltaY * k * 0.0016), x, y);
-      this.autoDist = false;
-    }, { passive: false });
+    c.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const [x, y] = at(e);
+        const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        this.cam.zoom(Math.exp(e.deltaY * k * 0.0016), x, y);
+        this.autoDist = false;
+      },
+      { passive: false },
+    );
     c.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       c.setPointerCapture(e.pointerId);
@@ -810,10 +923,12 @@ export class Map3D {
         return;
       }
       if (!drag) {
-        c.style.cursor = this.bodyAt(x, y) || this.nodeHits.some((q) => Math.hypot(q.x - x, q.y - y) < 10 * devicePixelRatio) ? "pointer" : "grab";
+        c.style.cursor =
+          this.bodyAt(x, y) || this.nodeHits.some((q) => Math.hypot(q.x - x, q.y - y) < 10 * devicePixelRatio) ? "pointer" : "grab";
         return;
       }
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      const dx = e.clientX - drag.x,
+        dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > 3) drag.moved = true;
       if (!drag.moved) return;
       drag.x = e.clientX;
@@ -862,7 +977,8 @@ export class Map3D {
 
   /** The body under a point (device pixels): its disc, or within 16 px of its centre. */
   private bodyAt(x: number, y: number): string | null {
-    let best: string | null = null, bd = Infinity;
+    let best: string | null = null,
+      bd = Infinity;
     for (const q of this.bodyHits) {
       const d = Math.hypot(q.x - x, q.y - y);
       const reach = Math.max(q.r, 16 * devicePixelRatio);
@@ -895,11 +1011,19 @@ export class Map3D {
   }
 
   /** A body for the GPU: its place and size in view space, its light, its axes, what it is drawn as. */
-  private gpuBody(G: MapGpu, sc: MapScene, b: MapBody, t: number, dpr: number, pw: (X: V3) => V3, rw: (X: V3, R: number) => number): boolean {
+  private gpuBody(
+    G: MapGpu,
+    sc: MapScene,
+    b: MapBody,
+    t: number,
+    dpr: number,
+    pw: (X: V3) => V3,
+    rw: (X: V3, R: number) => number,
+  ): boolean {
     const cam = this.cam;
     const view = (v: V3): V3 => [dot(v, cam.right), dot(v, cam.up), dot(v, cam.fwd)];
     const c = view(sub(pw(b.pos), cam.eye));
-    const lin = (x: number) => Math.pow(x / 255, 2.2);
+    const lin = (x: number) => (x / 255) ** 2.2;
     const col = b.col.split(",").map((x) => lin(+x)) as V3;
     const src = b.light ? sc.byId.get(b.light)?.pos : null;
     const L = view(src ? norm(sub(src, b.pos)) : scale(cam.fwd, -1));
@@ -917,7 +1041,15 @@ export class Map3D {
     }
     const axV = ax.map(view) as [V3, V3, V3];
     const R = rw(b.pos, b.radius);
-    const AIR: Record<string, V3> = { earth: [0.3, 0.55, 1], mars: [0.85, 0.5, 0.32], venus: [1, 0.85, 0.55], titan: [0.95, 0.6, 0.22], miller: [0.55, 0.75, 1], mann: [0.75, 0.85, 1], edmunds: [0.95, 0.75, 0.5] };
+    const AIR: Record<string, V3> = {
+      earth: [0.3, 0.55, 1],
+      mars: [0.85, 0.5, 0.32],
+      venus: [1, 0.85, 0.55],
+      titan: [0.95, 0.6, 0.22],
+      miller: [0.55, 0.75, 1],
+      mann: [0.75, 0.85, 1],
+      edmunds: [0.95, 0.75, 0.5],
+    };
     const air = b.air ? { col: AIR[b.id] ?? col, k: 0.9 } : undefined;
     const base = { c, R, L, ax: axV, col, air, minPx: (b.kind === "moon" ? 2 : 3.2) * dpr } as GpuBody;
     if (b.kind === "star") return G.body({ ...base, kind: BodyKind.Star, minPx: 5 * dpr }), true;
@@ -928,10 +1060,13 @@ export class Map3D {
       const rings: [number, number] | undefined = hl?.disk ? [rw(b.pos, hl.isco) / Rh, rw(b.pos, hl.diskOuter) / Rh] : undefined;
       return G.body({ ...base, R: Rh, kind: BodyKind.Hole, rings, minPx: 3 * dpr }), true;
     }
-    const rings: [number, number] | undefined = b.rings ? [rw(b.pos, b.rings.inner * b.radius) / R, rw(b.pos, b.rings.outer * b.radius) / R] : undefined;
+    const rings: [number, number] | undefined = b.rings
+      ? [rw(b.pos, b.rings.inner * b.radius) / R, rw(b.pos, b.rings.outer * b.radius) / R]
+      : undefined;
     if (sb?.map) {
       if (b.id === "earth") return G.body({ ...base, kind: BodyKind.Earth, rings }), true;
-      const hi = MAPS_HI.indexOf(sb.map), lo = MAPS_LO.indexOf(sb.map);
+      const hi = MAPS_HI.indexOf(sb.map),
+        lo = MAPS_LO.indexOf(sb.map);
       if (hi >= 0 || lo >= 0) return G.body({ ...base, kind: BodyKind.Map, layer: hi >= 0 ? hi : -(lo + 1), rings }), true;
     }
     const proc = { miller: 0, mann: 1, edmunds: 2 }[b.id as "miller"];
@@ -949,7 +1084,16 @@ export class Map3D {
       if (G) {
         const [vx, vy, vw, vh] = this.cam.view;
         const near = this.cam.cur.dist * 1e-3;
-        G.render(this.canvas.width, this.canvas.height, this.cam.focal, vx + vw / 2, vy + vh / 2, [this.cam.right, this.cam.up, this.cam.fwd], performance.now() / 1000, { near, far: near * 1e12 });
+        G.render(
+          this.canvas.width,
+          this.canvas.height,
+          this.cam.focal,
+          vx + vw / 2,
+          vy + vh / 2,
+          [this.cam.right, this.cam.up, this.cam.fwd],
+          performance.now() / 1000,
+          { near, far: near * 1e12 },
+        );
       }
     }
   }
@@ -1011,7 +1155,7 @@ export class Map3D {
     // (the frame the ship goes through the wormhole, its primary may still be of the other side)
     const refState = ours && i.ref && solarBody(i.ref) ? solarState(i.ref, t0) : null;
     const ship: V3 = later ? later.X : shipNow;
-    const shipVel: V3 = later ? later.V : ours ? (refState ? sub(i.V!, refState.vel) : [...i.V!]) : (i.V ? [...i.V] : [0, 0, 0]);
+    const shipVel: V3 = later ? later.V : ours ? (refState ? sub(i.V!, refState.vel) : [...i.V!]) : i.V ? [...i.V] : [0, 0, 0];
     const refId = later?.ref ?? i.ref;
     const refPos: V3 = ours ? solarState(refId ?? "sun", tp).pos : sc.byId.get("hole")!.pos;
     const marks = this.marks(i, t0, ours, sc);
@@ -1082,7 +1226,11 @@ export class Map3D {
     const line = (pts: V3[], col: string, a: number, w: number, dash: number[] = [], occl = true, off?: V3) => {
       if (pts.length < 2) return;
       if (G) {
-        G.line(col, w * dpr, dash.map((d) => d * dpr));
+        G.line(
+          col,
+          w * dpr,
+          dash.map((d) => d * dpr),
+        );
         const q: V3 = [0, 0, 0];
         for (const X of pts) {
           if (off) (q[0] = X[0] + off[0]), (q[1] = X[1] + off[1]), (q[2] = X[2] + off[2]);
@@ -1140,7 +1288,6 @@ export class Map3D {
     };
     const labels: MapLabel[] = [];
 
-
     // ---- the hole (theirs): the disk, its rings, the horizon
     if (sc.hole) {
       const H = sc.byId.get("hole")!.pos;
@@ -1176,7 +1323,8 @@ export class Map3D {
       const par = b.parent ? sc.byId.get(b.parent) : null;
       // (a moon's orbit only once it spreads on the screen)
       if (par) {
-        const pp = P(par.pos), pb = P(add(b.orbit[0]!, b.orbitOff));
+        const pp = P(par.pos),
+          pb = P(add(b.orbit[0]!, b.orbitOff));
         if (pp.ok && pb.ok && Math.hypot(pp.x - pb.x, pp.y - pb.y) < 9 * dpr && b.id !== tgt && b.id !== fid) continue;
       }
       const hi = b.id === tgt ? 0.75 : b.id === fid || b.id === i.ref ? 0.55 : b.kind === "moon" ? 0.22 : 0.32;
@@ -1198,7 +1346,10 @@ export class Map3D {
     }
 
     // ---- bodies, back to front
-    const list = sc.bodies.map((b) => ({ b, p: P(b.pos) })).filter((q) => q.p.ok).sort((a, b) => b.p.z - a.p.z);
+    const list = sc.bodies
+      .map((b) => ({ b, p: P(b.pos) }))
+      .filter((q) => q.p.ok)
+      .sort((a, b) => b.p.z - a.p.z);
     for (const { b, p } of list) {
       const moon = b.kind === "moon";
       if (moon) {
@@ -1216,7 +1367,18 @@ export class Map3D {
       this.bodyHits.push({ id: b.id, x: p.x, y: p.y, r: shown });
       if (b.id === tgt) pt.disc(p.x, p.y, shown + 5 * dpr, null, "rgba(255, 138, 92, 0.95)", 1.4 * dpr);
       const prio = b.id === fid ? 5 : b.id === tgt ? 4 : b.id === i.ref ? 3 : b.kind === "moon" ? 1 : 2;
-      labels.push({ text: b.name, x: p.x + shown + 4 * dpr, y: p.y - 3 * dpr, col: b.col, prio, size: moon ? 8.5 : 9.5, weight: moon ? 500 : 600, ax: p.x, ay: p.y, ar: shown + 3 * dpr });
+      labels.push({
+        text: b.name,
+        x: p.x + shown + 4 * dpr,
+        y: p.y - 3 * dpr,
+        col: b.col,
+        prio,
+        size: moon ? 8.5 : 9.5,
+        weight: moon ? 500 : 600,
+        ax: p.x,
+        ay: p.y,
+        ar: shown + 3 * dpr,
+      });
     }
 
     // ---- stems: the ship and the target down to the reference plane (above: solid; below: dashed)
@@ -1224,12 +1386,26 @@ export class Map3D {
       const Xw = pw(X);
       const hgt = dot(sub(Xw, this.W), pn);
       const foot = sub(Xw, scale(pn, hgt));
-      const a = cam.project(Xw), b = cam.project(foot);
+      const a = cam.project(Xw),
+        b = cam.project(foot);
       if (a.z <= near || b.z <= near || Math.hypot(a.x - b.x, a.y - b.y) < 4 * dpr) return;
-      pt.path([[a.x, a.y], [b.x, b.y]], `rgba(${col}, 0.45)`, 1 * dpr, hgt < 0 ? [2 * dpr, 3 * dpr] : undefined);
+      pt.path(
+        [
+          [a.x, a.y],
+          [b.x, b.y],
+        ],
+        `rgba(${col}, 0.45)`,
+        1 * dpr,
+        hgt < 0 ? [2 * dpr, 3 * dpr] : undefined,
+      );
       // (its foot: a small ellipse in the plane)
       const ring = circle3(foot, cam.cur.dist * 0.012, pn, 24).map((q) => cam.project(q));
-      if (ring.every((q) => q.z > near)) pt.path(ring.map((q) => [q.x, q.y] as const), `rgba(${col}, 0.5)`, 1 * dpr);
+      if (ring.every((q) => q.z > near))
+        pt.path(
+          ring.map((q) => [q.x, q.y] as const),
+          `rgba(${col}, 0.5)`,
+          1 * dpr,
+        );
     };
     if (Math.abs(this.cam.cur.pitch) < 1.45) {
       stem(ship, "124, 214, 255");
@@ -1248,8 +1424,28 @@ export class Map3D {
     this.drawShip(ctx, i, ship, shipVel, P, dpr, ours);
     if (previewing) {
       const q = P(ship);
-      const how = later?.beyond ? (later.conics ? " · end of the conics" : " · end of the prediction") : later?.conics ? " · conics" : later ? "" : " · no prediction";
-      if (q.ok) labels.push({ text: `T+${fmtDur(this.preview, s)}${how}`, x: q.x + 14 * dpr, y: q.y + 14 * dpr, col: "255, 200, 90", prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
+      const how = later?.beyond
+        ? later.conics
+          ? " · end of the conics"
+          : " · end of the prediction"
+        : later?.conics
+          ? " · conics"
+          : later
+            ? ""
+            : " · no prediction";
+      if (q.ok)
+        labels.push({
+          text: `T+${fmtDur(this.preview, s)}${how}`,
+          x: q.x + 14 * dpr,
+          y: q.y + 14 * dpr,
+          col: "255, 200, 90",
+          prio: 5,
+          size: 9,
+          weight: 700,
+          ax: q.x,
+          ay: q.y,
+          ar: 5 * dpr,
+        });
     }
 
     // ---- labels, kept apart (the focus and the target first)
@@ -1266,7 +1462,13 @@ export class Map3D {
     this.drawFooter(ctx, tp, cw, ch, dpr, ours);
     this.renderCrumbs(sc, fid);
     this.syncBar(sc, fid);
-    this.syncTimeline(t0, span, marks, ours, later?.beyond ? (later.conics ? "end of the conics" : "beyond the prediction") : later?.conics ? "conics (Kepler)" : "");
+    this.syncTimeline(
+      t0,
+      span,
+      marks,
+      ours,
+      later?.beyond ? (later.conics ? "end of the conics" : "beyond the prediction") : later?.conics ? "conics (Kepler)" : "",
+    );
   }
 
   /** The reference plane's axes (e1 towards a fixed direction, n its normal). */
@@ -1298,7 +1500,8 @@ export class Map3D {
       // (a world, the ship about it: the world, the ship's orbit, the preview — not its whole Hill sphere)
       if (fid !== "hole" && fb && dist(ship) < (Number.isFinite(fb.soi) ? fb.soi : fb.radius * 60)) {
         let rw = Math.max(fb.radius * 2.4, dist(ship) * 1.25);
-        if (i.path?.fate === "local") for (let j = 0; j < i.path.pts.length; j += 3) rw = Math.max(rw, dist(sub(i.path.pts[j]!, sc.origin(t0))) * 1.1);
+        if (i.path?.fate === "local")
+          for (let j = 0; j < i.path.pts.length; j += 3) rw = Math.max(rw, dist(sub(i.path.pts[j]!, sc.origin(t0))) * 1.1);
         const cl = i.cand?.local;
         if (cl && cl.world === fb.id) for (let j = 0; j < cl.pts.length; j += 3) rw = Math.max(rw, len(cl.pts[j]!) * 1.1);
         return rw;
@@ -1307,7 +1510,8 @@ export class Map3D {
       const hl = sc.hole;
       if (hl?.disk && fid === "hole") r = Math.max(r, hl.diskOuter);
       if (fid !== "hole" && fb) r = Math.min(Math.max(r, fb.radius * 30), Math.max(fb.soi * 2, dist(ship) * 1.3, fb.radius * 30));
-      if (i.path && fid === "hole") for (let j = 0; j < i.path.pts.length; j += 4) r = Math.max(r, dist(sub(i.path.pts[j]!, sc.origin(t0 + (j + 1) * i.path.dt))));
+      if (i.path && fid === "hole")
+        for (let j = 0; j < i.path.pts.length; j += 4) r = Math.max(r, dist(sub(i.path.pts[j]!, sc.origin(t0 + (j + 1) * i.path.dt))));
       // (the preview's path, wherever it goes)
       const cp = i.cand?.kerr ?? i.cand?.local;
       if (cp) for (let j = 0; j < cp.pts.length; j += 4) r = Math.max(r, dist(sub(cp.pts[j]!, sc.origin(cp.times[j]!))));
@@ -1335,7 +1539,9 @@ export class Map3D {
     // (the ship within reach: it and its paths; far away: the body and its moons)
     const moons = sc.bodies.filter((b) => b.parent === fb.id);
     const shipNear = dist(ship) < cap;
-    let r = shipNear ? Math.max(fb.radius * 2.4, dist(ship) * 1.25) : Math.max(fb.radius * 12, moons.length ? Math.min(Math.max(...moons.map((m) => dist(m.pos))) * 1.15, fb.radius * 30) : 0);
+    let r = shipNear
+      ? Math.max(fb.radius * 2.4, dist(ship) * 1.25)
+      : Math.max(fb.radius * 12, moons.length ? Math.min(Math.max(...moons.map((m) => dist(m.pos))) * 1.15, fb.radius * 30) : 0);
     for (const p of solarBody(fb.id) ? [i.ourFree, i.ourPlan, i.cand?.ours] : []) {
       if (!p) continue;
       for (let j = 0; j < p.pts.length; j += 4) {
@@ -1347,7 +1553,16 @@ export class Map3D {
     return r;
   }
 
-  private drawGrid(ctx: CanvasRenderingContext2D, cw: number, ch: number, dpr: number, e1: V3, n: V3, g: (R: number) => number, ours: boolean) {
+  private drawGrid(
+    ctx: CanvasRenderingContext2D,
+    cw: number,
+    ch: number,
+    dpr: number,
+    e1: V3,
+    n: V3,
+    g: (R: number) => number,
+    ours: boolean,
+  ) {
     const cam = this.cam;
     const W = this.W;
     const e2 = cross(n, e1);
@@ -1406,7 +1621,8 @@ export class Map3D {
     for (let j = 0; j < 12; j++) {
       const a = (j / 12) * 2 * Math.PI;
       const d = add(scale(e1, Math.cos(a)), scale(e2, Math.sin(a)));
-      const p0 = cam.project(add(W, scale(d, Rmax * 0.04))), p1 = cam.project(add(W, scale(d, Rmax)));
+      const p0 = cam.project(add(W, scale(d, Rmax * 0.04))),
+        p1 = cam.project(add(W, scale(d, Rmax)));
       if (p0.z <= near || p1.z <= near) continue;
       const a0 = j === 0 ? 0.28 : 0.1 * (0.4 + edge);
       if (G) {
@@ -1436,7 +1652,16 @@ export class Map3D {
   }
 
   /** A body: a lit sphere (a dot when too small), a star's glow, the hole, rings in front and behind. */
-  private drawBody(ctx: CanvasRenderingContext2D, sc: MapScene, b: MapBody, p: Proj, r: number, dpr: number, pw: (X: V3) => V3, rw: (X: V3, R: number) => number) {
+  private drawBody(
+    ctx: CanvasRenderingContext2D,
+    sc: MapScene,
+    b: MapBody,
+    p: Proj,
+    r: number,
+    dpr: number,
+    pw: (X: V3) => V3,
+    rw: (X: V3, R: number) => number,
+  ) {
     const cam = this.cam;
     if (b.kind === "hole") {
       const R = Math.max(r, 3 * dpr);
@@ -1498,7 +1723,7 @@ export class Map3D {
         const pts = q.map((X) => cam.project(X));
         if (pts.some((x) => x.z <= 0)) continue;
         const z = (pts[0]!.z + pts[2]!.z) / 2;
-        if ((z < cz) !== front) continue;
+        if (z < cz !== front) continue;
         ctx.beginPath();
         pts.forEach((x, j) => (j ? ctx.lineTo(x.x, x.y) : ctx.moveTo(x.x, x.y)));
         ctx.closePath();
@@ -1516,12 +1741,21 @@ export class Map3D {
       // lit from its star: the light's direction on screen, the night side dark
       const src = b.light ? sc.byId.get(b.light)?.pos : null;
       const L = src ? norm(sub(src, b.pos)) : norm(scale(cam.fwd, -1));
-      const lx = dot(L, cam.right), ly = -dot(L, cam.up), lz = -dot(L, cam.fwd);
-      const cx = p.x + lx * r * 0.55, cy = p.y + ly * r * 0.55;
+      const lx = dot(L, cam.right),
+        ly = -dot(L, cam.up),
+        lz = -dot(L, cam.fwd);
+      const cx = p.x + lx * r * 0.55,
+        cy = p.y + ly * r * 0.55;
       const gs = ctx.createRadialGradient(cx, cy, r * 0.05, p.x - lx * r * 0.3, p.y - ly * r * 0.3, r * 1.35);
       const lit = 0.55 + 0.45 * Math.max(lz, 0);
       gs.addColorStop(0, `rgba(${b.col}, 1)`);
-      gs.addColorStop(0.45, `rgba(${b.col.split(",").map((v) => Math.round(+v * lit * 0.8)).join(",")}, 1)`);
+      gs.addColorStop(
+        0.45,
+        `rgba(${b.col
+          .split(",")
+          .map((v) => Math.round(+v * lit * 0.8))
+          .join(",")}, 1)`,
+      );
       gs.addColorStop(1, "rgba(6, 8, 12, 1)");
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
@@ -1546,11 +1780,13 @@ export class Map3D {
     const [e1, e2] = planeBasis(b.pole);
     const C = pw(b.pos);
     const k = rw(b.pos, b.radius) / b.radius;
-    const r1 = b.rings!.inner * b.radius * k, r2 = b.rings!.outer * b.radius * k;
+    const r1 = b.rings!.inner * b.radius * k,
+      r2 = b.rings!.outer * b.radius * k;
     const n = 48;
     const out: V3[][] = [];
     for (let j = 0; j < n; j++) {
-      const a0 = (j / n) * 2 * Math.PI, a1 = ((j + 1) / n) * 2 * Math.PI;
+      const a0 = (j / n) * 2 * Math.PI,
+        a1 = ((j + 1) / n) * 2 * Math.PI;
       const at = (r: number, a: number) => add(C, add(scale(e1, r * Math.cos(a)), scale(e2, r * Math.sin(a))));
       out.push([at(r1, a0), at(r2, a0), at(r2, a1), at(r1, a1)]);
     }
@@ -1569,14 +1805,16 @@ export class Map3D {
     this.btns.legend?.classList.toggle("on", !this.legend.hidden);
     if (this.legend.hidden) return;
     const st = this.legend.style;
-    const r = `${(ins?.r ?? 0) + 8}px`, t = `${(ins?.t ?? 0) + 8}px`;
+    const r = `${(ins?.r ?? 0) + 8}px`,
+      t = `${(ins?.t ?? 0) + 8}px`;
     if (st.right !== r) st.right = r;
     if (st.top !== t) st.top = t;
     const key = ours ? "ours" : "theirs";
     if (key === this.legendKey) return;
     this.legendKey = key;
     // (a line: its colour, its dashes; a mark: a small drawing)
-    const ln = (col: string, dash = "", w = 1.8) => `<svg viewBox="0 0 28 8"><path d="M1 4h26" stroke="rgb(${col})" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/></svg>`;
+    const ln = (col: string, dash = "", w = 1.8) =>
+      `<svg viewBox="0 0 28 8"><path d="M1 4h26" stroke="rgb(${col})" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/></svg>`;
     const mk = (body: string) => `<svg viewBox="0 0 28 12">${body}</svg>`;
     const rows: [string, string][] = ours
       ? [
@@ -1598,10 +1836,21 @@ export class Map3D {
           [ln("255, 211, 107", "4 3", 1.5), "The companion star ahead"],
         ];
     const marks: [string, string][] = [
-      [mk('<path d="M8 2l5 8H3z" fill="rgb(111,227,161)"/><path d="M20 10l5-8H15z" fill="rgb(255,179,92)"/>'), "Ascending · descending node"],
-      [mk('<circle cx="8" cy="6" r="2.6" fill="rgb(159,227,255)"/><circle cx="20" cy="6" r="2.6" fill="rgb(184,212,255)"/>'), "Periapsis, apoapsis"],
+      [
+        mk('<path d="M8 2l5 8H3z" fill="rgb(111,227,161)"/><path d="M20 10l5-8H15z" fill="rgb(255,179,92)"/>'),
+        "Ascending · descending node",
+      ],
+      [
+        mk('<circle cx="8" cy="6" r="2.6" fill="rgb(159,227,255)"/><circle cx="20" cy="6" r="2.6" fill="rgb(184,212,255)"/>'),
+        "Periapsis, apoapsis",
+      ],
       [mk('<path d="M14 0.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#2fa4d0" stroke="#04121a" stroke-width="1.2"/>'), "A burn — drag its handles"],
-      [mk('<path d="M3 6h22" stroke="rgb(255,138,92)" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="24" cy="6" r="3.4" fill="none" stroke="rgb(255,138,92)" stroke-width="1.2"/>'), "Closest approach (CA)"],
+      [
+        mk(
+          '<path d="M3 6h22" stroke="rgb(255,138,92)" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="24" cy="6" r="3.4" fill="none" stroke="rgb(255,138,92)" stroke-width="1.2"/>',
+        ),
+        "Closest approach (CA)",
+      ],
       [mk('<path d="M14 1l5 9H9z" fill="#ffc85a" stroke="rgba(0,0,0,.6)"/>'), "The ship"],
     ];
     const row = ([a, b]: [string, string]) => `<div class="m3-lg-row">${a}<span>${b}</span></div>`;
@@ -1623,9 +1872,12 @@ export class Map3D {
     const seen: { val: string; x: number; y: number }[] = [];
     const discs = this.bodyHits.filter((q) => q.r > 3 * dpr).map((q) => ({ x: q.x, y: q.y, r: q.r + 1.5 * dpr }));
     if (ship.ok) discs.push({ x: ship.x, y: ship.y, r: 10 * dpr });
-    const over = (a: Box, b: Box) => Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
+    const over = (a: Box, b: Box) =>
+      Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])) *
+      Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
     const onDisc = (b: Box, d: { x: number; y: number; r: number }) => {
-      const nx = Math.min(Math.max(d.x, b[0]), b[0] + b[2]), ny = Math.min(Math.max(d.y, b[1]), b[1] + b[3]);
+      const nx = Math.min(Math.max(d.x, b[0]), b[0] + b[2]),
+        ny = Math.min(Math.max(d.y, b[1]), b[1] + b[3]);
       return Math.hypot(nx - d.x, ny - d.y) < d.r;
     };
     ctx.textAlign = "left";
@@ -1638,9 +1890,19 @@ export class Map3D {
       // (where it may go: as asked, then round its anchor; or nudged up and down)
       const spots: [number, number][] = [[l.x, l.y]];
       if (l.ax !== undefined && l.ay !== undefined) {
-        const g = (l.ar ?? 4 * dpr) + 2 * dpr, mid = l.ay + hgt * 0.32, d = g * 0.72;
-        spots.push([l.ax + g, mid], [l.ax - g - w, mid], [l.ax - w / 2, l.ay - g], [l.ax - w / 2, l.ay + g + hgt * 0.7],
-          [l.ax + d, l.ay - d], [l.ax - d - w, l.ay - d], [l.ax + d, l.ay + d + hgt * 0.7], [l.ax - d - w, l.ay + d + hgt * 0.7]);
+        const g = (l.ar ?? 4 * dpr) + 2 * dpr,
+          mid = l.ay + hgt * 0.32,
+          d = g * 0.72;
+        spots.push(
+          [l.ax + g, mid],
+          [l.ax - g - w, mid],
+          [l.ax - w / 2, l.ay - g],
+          [l.ax - w / 2, l.ay + g + hgt * 0.7],
+          [l.ax + d, l.ay - d],
+          [l.ax - d - w, l.ay - d],
+          [l.ax + d, l.ay + d + hgt * 0.7],
+          [l.ax - d - w, l.ay + d + hgt * 0.7],
+        );
       } else spots.push([l.x, l.y - hgt * 1.1], [l.x, l.y + hgt * 1.1]);
       // (the same apsis named twice — the prediction's and the conics' —: once)
       const val = /\b(Pe|Ap) [^·]+$/.exec(l.text)?.[0];
@@ -1672,15 +1934,29 @@ export class Map3D {
 
   /** An ✕: an impact. */
   private cross(x: number, y: number, r: number, col: string, lw: number) {
-    this.paint.path([[x - r, y - r], [x + r, y + r]], col, lw);
-    this.paint.path([[x + r, y - r], [x - r, y + r]], col, lw);
+    this.paint.path(
+      [
+        [x - r, y - r],
+        [x + r, y + r],
+      ],
+      col,
+      lw,
+    );
+    this.paint.path(
+      [
+        [x + r, y - r],
+        [x - r, y + r],
+      ],
+      col,
+      lw,
+    );
   }
 
   private drawShip(ctx: CanvasRenderingContext2D, i: Info, ship: V3, vel: V3, P: (X: V3) => Proj, dpr: number, ours: boolean) {
     const p = P(ship);
     if (!p.ok) return;
     // (a heading: the velocity on screen; theirs, the nose if any)
-    const dir = ours ? vel : (i.nose as V3 | null) ?? vel;
+    const dir = ours ? vel : ((i.nose as V3 | null) ?? vel);
     let a = 0;
     const dl = len(dir);
     if (dl > 0) {
@@ -1695,11 +1971,19 @@ export class Map3D {
       const q = P(add(ship, scale(vel, (this.cam.cur.dist * 0.06) / dl)));
       if (q.ok) {
         const l = Math.hypot(q.x - p.x, q.y - p.y) || 1;
-        pt.path([[p.x, p.y], [p.x + ((q.x - p.x) / l) * 20 * dpr, p.y + ((q.y - p.y) / l) * 20 * dpr]], "rgba(124, 214, 255, 0.9)", 1.4 * dpr);
+        pt.path(
+          [
+            [p.x, p.y],
+            [p.x + ((q.x - p.x) / l) * 20 * dpr, p.y + ((q.y - p.y) / l) * 20 * dpr],
+          ],
+          "rgba(124, 214, 255, 0.9)",
+          1.4 * dpr,
+        );
       }
     }
     // the chevron, turned to the heading
-    const ca = Math.cos(a), sa = Math.sin(a);
+    const ca = Math.cos(a),
+      sa = Math.sin(a);
     const turn = (x: number, y: number) => [(x * ca - y * sa) * dpr, (x * sa + y * ca) * dpr] as const;
     pt.poly(p.x, p.y, [turn(9, 0), turn(-5, 5.5), turn(-2.5, 0), turn(-5, -5.5)], "#ffc85a", "rgba(0, 0, 0, 0.6)", 1 * dpr);
   }
@@ -1709,7 +1993,18 @@ export class Map3D {
    * (the target, the ship's primary, the focus and its moons) where they are now and the arc they follow
    * until the preview's time.
    */
-  private drawGhosts(ctx: CanvasRenderingContext2D, sc: MapScene, i: Info, fid: string, t0: number, tp: number, shipNow: V3, P: (X: V3) => Proj, dpr: number, G: MapGpu | null) {
+  private drawGhosts(
+    ctx: CanvasRenderingContext2D,
+    sc: MapScene,
+    i: Info,
+    fid: string,
+    t0: number,
+    tp: number,
+    shipNow: V3,
+    P: (X: V3) => Proj,
+    dpr: number,
+    G: MapGpu | null,
+  ) {
     const s = this.host.s;
     const ring = (X: V3, col: string, r: number) => {
       const p = P(X);
@@ -1732,7 +2027,8 @@ export class Map3D {
       if (!b || b.kind === "hole" || n >= 8) continue;
       const now = bodyPosAt(sc, s, id, t0);
       if (!now) continue;
-      const a = P(now), z = P(b.pos);
+      const a = P(now),
+        z = P(b.pos);
       if (!a.ok || !z.ok || Math.hypot(a.x - z.x, a.y - z.y) < 6 * dpr) continue;
       n++;
       // (its arc: up to a turn of its orbit)
@@ -1771,7 +2067,8 @@ export class Map3D {
     const h0 = (X: V3) => dot(sub(X, this.W), n);
     let marks = 0;
     for (let j = from + 1; j < pts.length && marks < 4; j++) {
-      const a = h0(pts[j - 1]!), b = h0(pts[j]!);
+      const a = h0(pts[j - 1]!),
+        b = h0(pts[j]!);
       if (a === 0 || Math.sign(a) === Math.sign(b)) continue;
       const f = a / (a - b);
       const X = add(pts[j - 1]!, scale(sub(pts[j]!, pts[j - 1]!), f));
@@ -1780,20 +2077,55 @@ export class Map3D {
       const up = b > a;
       marks++;
       const r = 4.5 * dpr;
-      this.paint.poly(p.x, p.y, up ? [[0, -r], [r, r * 0.7], [-r, r * 0.7]] : [[0, r], [r, -r * 0.7], [-r, -r * 0.7]], up ? "rgba(111, 227, 161, 0.95)" : "rgba(255, 179, 92, 0.95)");
-      labels.push({ text: up ? "AN" : "DN", x: p.x + 6 * dpr, y: p.y + 3 * dpr, col: up ? "111, 227, 161" : "255, 179, 92", prio: 2, size: 8.5, weight: 700, ax: p.x, ay: p.y, ar: 5 * dpr });
+      this.paint.poly(
+        p.x,
+        p.y,
+        up
+          ? [
+              [0, -r],
+              [r, r * 0.7],
+              [-r, r * 0.7],
+            ]
+          : [
+              [0, r],
+              [r, -r * 0.7],
+              [-r, -r * 0.7],
+            ],
+        up ? "rgba(111, 227, 161, 0.95)" : "rgba(255, 179, 92, 0.95)",
+      );
+      labels.push({
+        text: up ? "AN" : "DN",
+        x: p.x + 6 * dpr,
+        y: p.y + 3 * dpr,
+        col: up ? "111, 227, 161" : "255, 179, 92",
+        prio: 2,
+        size: 8.5,
+        weight: 700,
+        ax: p.x,
+        ay: p.y,
+        ar: 5 * dpr,
+      });
     }
   }
 
   private drawOurPaths(
-    ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, tView: number, fid: string, fb: MapBody | null, dpr: number,
-    P: (X: V3) => Proj, line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
-    labels: MapLabel[], pn: V3,
+    ctx: CanvasRenderingContext2D,
+    i: Info,
+    sc: MapScene,
+    t0: number,
+    tView: number,
+    fid: string,
+    fb: MapBody | null,
+    dpr: number,
+    P: (X: V3) => Proj,
+    line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
+    labels: MapLabel[],
+    pn: V3,
   ) {
     const s = this.host.s;
     // (the paths in the frame of the focus body — or of the ship's primary when the ship is the focus:
     // where it is when the ship is there, drawn relative to where it is now)
-    const f0 = fid === "ship" ? i.ref ?? "sun" : fb?.id === "wormhole" ? "sun" : fid;
+    const f0 = fid === "ship" ? (i.ref ?? "sun") : fb?.id === "wormhole" ? "sun" : fid;
     const frameId = solarBody(f0) ? f0 : "sun";
     const F0 = solarState(frameId, tView).pos;
     const FA = (X: V3, t: number): V3 => {
@@ -1813,7 +2145,18 @@ export class Map3D {
       const p = P(X);
       if (!p.ok) return;
       this.paint.disc(p.x, p.y, 2.6 * dpr, `rgb(${col})`);
-      labels.push({ text, x: p.x + 5 * dpr, y: p.y + (below ? 12 : -5) * dpr, col, prio, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 4 * dpr });
+      labels.push({
+        text,
+        x: p.x + 5 * dpr,
+        y: p.y + (below ? 12 : -5) * dpr,
+        col,
+        prio,
+        size: 9,
+        weight: 600,
+        ax: p.x,
+        ay: p.y,
+        ar: 4 * dpr,
+      });
     };
     const km = (d: number) => fmtDist(d, true, s);
     // the entry: the guidance's predicted fall and the site it flies to (relative to their body)
@@ -1827,7 +2170,8 @@ export class Map3D {
     // (an apsis a few pixels from its body's centre — an orbit too small on the screen: its label unread)
     const apart = (body: string, X: V3, t: number) => {
       if (!solarBody(body)) return true;
-      const q = P(FA(X, t)), c = P(FA(solarState(body, t).pos, t));
+      const q = P(FA(X, t)),
+        c = P(FA(solarState(body, t).pos, t));
       return !c.ok || !q.ok || Math.hypot(q.x - c.x, q.y - c.y) > 14 * dpr;
     };
     const apsides = (p: OurPath, from: number, label: string) => {
@@ -1837,7 +2181,14 @@ export class Map3D {
       let memo = this.pathMemo.get(p);
       if (!memo) this.pathMemo.set(p, (memo = new Map()));
       if (!memo.has(key)) {
-        const tail: OurPath = { ...p, pts: p.pts.slice(from), vels: p.vels.slice(from), times: p.times.slice(from), refs: p.refs.slice(from), nodeAt: [] };
+        const tail: OurPath = {
+          ...p,
+          pts: p.pts.slice(from),
+          vels: p.vels.slice(from),
+          times: p.times.slice(from),
+          refs: p.refs.slice(from),
+          nodeAt: [],
+        };
         memo.set(key, ourApsides(tail, body));
       }
       const a = memo.get(key) as ReturnType<typeof ourApsides>;
@@ -1846,7 +2197,8 @@ export class Map3D {
       if (a.pe && far(a.pe.i)) tag(FA(p.pts[from + a.pe.i]!, p.times[from + a.pe.i]!), `${label}Pe ${km(a.pe.alt)}`, "159, 227, 255", true);
       if (a.ap && far(a.ap.i)) tag(FA(p.pts[from + a.ap.i]!, p.times[from + a.ap.i]!), `${label}Ap ${km(a.ap.alt)}`, "159, 227, 255");
     };
-    const free = i.ourFree, plan = i.ourPlan;
+    const free = i.ourFree,
+      plan = i.ourPlan;
     const hits = (p: OurPath) => {
       const r = rel(p);
       for (let j = 0; j < p.pts.length; j += Math.max(1, Math.floor(p.pts.length / 400))) {
@@ -1854,7 +2206,10 @@ export class Map3D {
         if (q.ok) this.pathHits.push({ x: q.x, y: q.y, t: p.times[j]! });
       }
     };
-    const inFrame = (p: OurPath, a = 0, b = p.pts.length - 1) => rel(p).slice(a, b + 1).map((X) => add(X, F0));
+    const inFrame = (p: OurPath, a = 0, b = p.pts.length - 1) =>
+      rel(p)
+        .slice(a, b + 1)
+        .map((X) => add(X, F0));
     if (free && free.pts.length > 1) {
       const pts = inFrame(free);
       const cut = plan && plan.nodeAt.length ? Math.min(plan.nodeAt[0]!, free.pts.length - 1) : free.pts.length - 1;
@@ -1867,7 +2222,18 @@ export class Map3D {
         const q = P(pts[pts.length - 1]!);
         if (q.ok) {
           this.cross(q.x, q.y, 5 * dpr, RED, 2 * dpr);
-          labels.push({ text: `IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`, x: q.x + 7 * dpr, y: q.y + 4 * dpr, col: "255, 90, 90", prio: 5, size: 9.5, weight: 700, ax: q.x, ay: q.y, ar: 6 * dpr });
+          labels.push({
+            text: `IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`,
+            x: q.x + 7 * dpr,
+            y: q.y + 4 * dpr,
+            col: "255, 90, 90",
+            prio: 5,
+            size: 9.5,
+            weight: 700,
+            ax: q.x,
+            ay: q.y,
+            ar: 6 * dpr,
+          });
         }
       }
     }
@@ -1886,17 +2252,46 @@ export class Map3D {
         const W = inFrame(cp, k0);
         line(W, CAND, 0.95, 2.3, [9, 5]);
         apsides(cp, cp.nodeAt[cp.nodeAt.length - 1] ?? 0, "◇ ");
-        this.candMarks(ctx, cp.nodeAt.map((j) => P(FA(cp.pts[j]!, cp.times[j]!))), cand.note, labels, dpr);
+        this.candMarks(
+          ctx,
+          cp.nodeAt.map((j) => P(FA(cp.pts[j]!, cp.times[j]!))),
+          cand.note,
+          labels,
+          dpr,
+        );
         if (cand.arrive && (solarBody(cand.arrive.body) || cand.arrive.body === "iss")) {
           const q = P(FA(ourPos(cand.arrive.body, cand.arrive.t), cand.arrive.t));
           if (q.ok) {
             this.paint.disc(q.x, q.y, 7 * dpr, null, `rgba(${CAND}, 0.95)`, 1.4 * dpr, [3 * dpr, 2 * dpr]);
-            labels.push({ text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`, x: q.x + 9 * dpr, y: q.y + 3 * dpr, col: CAND, prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
+            labels.push({
+              text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`,
+              x: q.x + 9 * dpr,
+              y: q.y + 3 * dpr,
+              col: CAND,
+              prio: 5,
+              size: 9,
+              weight: 700,
+              ax: q.x,
+              ay: q.y,
+              ar: 5 * dpr,
+            });
           }
         }
       } else if (cand.busy) {
         const q = P(FA(i.X!, t0));
-        if (q.ok) labels.push({ text: "◇ PREVIEW · computing the path…", x: q.x + 12 * dpr, y: q.y + 18 * dpr, col: CAND, prio: 5, size: 9, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
+        if (q.ok)
+          labels.push({
+            text: "◇ PREVIEW · computing the path…",
+            x: q.x + 12 * dpr,
+            y: q.y + 18 * dpr,
+            col: CAND,
+            prio: 5,
+            size: 9,
+            weight: 700,
+            ax: q.x,
+            ay: q.y,
+            ar: 5 * dpr,
+          });
       }
     }
     // beyond the prediction: the patched conics (faint, dotted), their lowest points, an impact
@@ -1906,14 +2301,27 @@ export class Map3D {
       hits(ext);
       for (const a of ext.apsides) {
         const name = sc.byId.get(a.body)?.name ?? a.body;
-        if (apart(a.body, ext.pts[a.i]!, ext.times[a.i]!)) tag(FA(ext.pts[a.i]!, ext.times[a.i]!), `${name} Pe ${km(a.alt)}`, "184, 212, 255", true, 2);
+        if (apart(a.body, ext.pts[a.i]!, ext.times[a.i]!))
+          tag(FA(ext.pts[a.i]!, ext.times[a.i]!), `${name} Pe ${km(a.alt)}`, "184, 212, 255", true, 2);
       }
       if (ext.fate === "impact") {
         const q = P(FA(ext.pts[ext.pts.length - 1]!, ext.times[ext.times.length - 1]!));
         if (q.ok) this.cross(q.x, q.y, 4 * dpr, RED, 1.6 * dpr);
       }
       const q0 = P(FA(ext.pts[0]!, ext.times[0]!));
-      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
+      if (q0.ok)
+        labels.push({
+          text: "conics ▸",
+          x: q0.x + 6 * dpr,
+          y: q0.y - 6 * dpr,
+          col: "170, 205, 255",
+          prio: 1,
+          size: 8,
+          weight: 600,
+          ax: q0.x,
+          ay: q0.y,
+          ar: 5 * dpr,
+        });
     }
     // closest approach to the target, on the plan or the free path (or, closer, along the conics)
     const tp = plan ?? free;
@@ -1921,48 +2329,95 @@ export class Map3D {
       let memo = this.pathMemo.get(tp);
       if (!memo) this.pathMemo.set(tp, (memo = new Map()));
       const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
-      const caPred = (memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))) as ReturnType<typeof ourClosest>;
+      const caPred = (
+        memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))
+      ) as ReturnType<typeof ourClosest>;
       const caExt = ext ? this.extClosest(ext, i.target, true) : null;
       const useExt = !!caExt && (!caPred || caExt.d < caPred.d);
       const ca = useExt ? caExt : caPred;
       const cp = useExt ? ext! : tp;
       if (ca) {
         const t = cp.times[ca.i]!;
-        const a = P(FA(cp.pts[ca.i]!, t)), b = P(FA(ourPos(i.target, t), t));
+        const a = P(FA(cp.pts[ca.i]!, t)),
+          b = P(FA(ourPos(i.target, t), t));
         if (a.ok && b.ok) {
-          this.paint.path([[a.x, a.y], [b.x, b.y]], "rgba(255, 138, 92, 0.8)", 1 * dpr, [2 * dpr, 2 * dpr]);
+          this.paint.path(
+            [
+              [a.x, a.y],
+              [b.x, b.y],
+            ],
+            "rgba(255, 138, 92, 0.8)",
+            1 * dpr,
+            [2 * dpr, 2 * dpr],
+          );
           this.paint.disc(b.x, b.y, 5 * dpr, null, "rgba(255, 138, 92, 0.8)", 1 * dpr);
           const R = sc.byId.get(i.target)!.radius;
-          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          labels.push({ text: `CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`, x: mx + 6 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
+          const mx = (a.x + b.x) / 2,
+            my = (a.y + b.y) / 2;
+          labels.push({
+            text: `CA ${km(Math.max(ca.d - R, 0))} · T−${fmtDur(t - t0, s)}`,
+            x: mx + 6 * dpr,
+            y: my,
+            col: "255, 138, 92",
+            prio: 4,
+            size: 9,
+            weight: 600,
+            ax: mx,
+            ay: my,
+            ar: 4 * dpr,
+          });
         }
       }
     }
     // the target where the plan meets it
-    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || ["iss", "ranger", "lander", "endurance"].includes(i.ourArrive.body)) && plan) {
+    if (
+      i.ourArrive &&
+      i.ourArrive.body !== "wormhole" &&
+      (solarBody(i.ourArrive.body) || ["iss", "ranger", "lander", "endurance"].includes(i.ourArrive.body)) &&
+      plan
+    ) {
       const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
         this.paint.disc(q.x, q.y, 6 * dpr, null, "rgba(255, 170, 80, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);
-        labels.push({ text: `${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, s)}`, x: q.x + 8 * dpr, y: q.y + 3 * dpr, col: "255, 170, 80", prio: 4, size: 8.5, weight: 600, ax: q.x, ay: q.y, ar: 5 * dpr });
+        labels.push({
+          text: `${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body} · T−${fmtDur(i.ourArrive.t - t0, s)}`,
+          x: q.x + 8 * dpr,
+          y: q.y + 3 * dpr,
+          col: "255, 170, 80",
+          prio: 4,
+          size: 8.5,
+          weight: 600,
+          ax: q.x,
+          ay: q.y,
+          ar: 5 * dpr,
+        });
       }
     }
     // the nodes and the selected one's handles
     if (plan && i.plan) {
-      this.drawNodes(ctx, i, i.plan.nodes.map((n, k) => {
-        const j = plan.nodeAt[k];
-        if (j === undefined) return null;
-        const X = plan.pts[j]!, V = plan.vels[j - 1] ?? plan.vels[j]!, t = plan.times[j]!;
-        const base = P(FA(X, t));
-        if (!base.ok) return null;
-        const dirOf = (cmp: V3) => {
-          const d = nodeDvHome(X, V, t, cmp);
-          const e = this.cam.cur.dist * 0.02 / Math.max(len(d), 1e-30);
-          const q = P(FA(add(X, scale(d, e)), t));
-          const l = Math.hypot(q.x - base.x, q.y - base.y) || 1;
-          return [(q.x - base.x) / l, (q.y - base.y) / l] as [number, number];
-        };
-        return { x: base.x, y: base.y, t: n.t, dirs: [dirOf([1, 0, 0]), dirOf([0, 1, 0]), dirOf([0, 0, 1])] };
-      }), t0, dpr);
+      this.drawNodes(
+        ctx,
+        i,
+        i.plan.nodes.map((n, k) => {
+          const j = plan.nodeAt[k];
+          if (j === undefined) return null;
+          const X = plan.pts[j]!,
+            V = plan.vels[j - 1] ?? plan.vels[j]!,
+            t = plan.times[j]!;
+          const base = P(FA(X, t));
+          if (!base.ok) return null;
+          const dirOf = (cmp: V3) => {
+            const d = nodeDvHome(X, V, t, cmp);
+            const e = (this.cam.cur.dist * 0.02) / Math.max(len(d), 1e-30);
+            const q = P(FA(add(X, scale(d, e)), t));
+            const l = Math.hypot(q.x - base.x, q.y - base.y) || 1;
+            return [(q.x - base.x) / l, (q.y - base.y) / l] as [number, number];
+          };
+          return { x: base.x, y: base.y, t: n.t, dirs: [dirOf([1, 0, 0]), dirOf([0, 1, 0]), dirOf([0, 0, 1])] };
+        }),
+        t0,
+        dpr,
+      );
     } else {
       this.nodeHits = [];
       this.handleHits = [];
@@ -1970,9 +2425,16 @@ export class Map3D {
   }
 
   private drawTheirPaths(
-    ctx: CanvasRenderingContext2D, i: Info, sc: MapScene, t0: number, dpr: number,
-    P: (X: V3) => Proj, line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
-    labels: MapLabel[], pn: V3, cm: boolean,
+    ctx: CanvasRenderingContext2D,
+    i: Info,
+    sc: MapScene,
+    t0: number,
+    dpr: number,
+    P: (X: V3) => Proj,
+    line: (pts: V3[], col: string, a: number, w: number, dash?: number[], occl?: boolean, off?: V3) => void,
+    labels: MapLabel[],
+    pn: V3,
+    cm: boolean,
   ) {
     const s = this.host.s;
     const at = (X: V3, t: number): V3 => sub(X, sc.origin(t));
@@ -1995,10 +2457,11 @@ export class Map3D {
     if (s.sun) {
       const star = sc.byId.get("star")!;
       const period = star.period ?? 1e3;
-      const span = (a: number, b: number, n = 90) => Array.from({ length: n + 1 }, (_, j) => {
-        const t = a + ((b - a) * j) / n;
-        return at(starCentre(s, t), t);
-      });
+      const span = (a: number, b: number, n = 90) =>
+        Array.from({ length: n + 1 }, (_, j) => {
+          const t = a + ((b - a) * j) / n;
+          return at(starCentre(s, t), t);
+        });
       line(span(t0 - Math.min(T * 0.5, period * 0.3), t0), "255, 211, 107", 0.35, 1.5, [], false);
       line(span(t0, t0 + Math.min(T, period)), "255, 211, 107", 0.85, 1.5, [4, 3], false);
       for (const tt of tickTimes) dotAt(at(starCentre(s, tt), tt), 2, "rgba(255, 211, 107, 0.95)");
@@ -2015,14 +2478,30 @@ export class Map3D {
       tickTimes.forEach((tt, j) => {
         const idx = (tt - t0) / path.dt - 1;
         if (idx < 0 || idx >= path.pts.length - 1) return;
-        const a = path.pts[Math.floor(idx)]!, b = path.pts[Math.floor(idx) + 1]!;
+        const a = path.pts[Math.floor(idx)]!,
+          b = path.pts[Math.floor(idx) + 1]!;
         const f = idx - Math.floor(idx);
         const p = P(at([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], tt));
         if (!p.ok) return;
         this.paint.disc(p.x, p.y, 2.2 * dpr, "#fff");
-        if (j % 2 === 1) labels.push({ text: `+${fmtShort((j + 1) * tick)}`, x: p.x + 4 * dpr, y: p.y - 3 * dpr, col: "255, 255, 255", prio: 1, size: 8.5, weight: 600, ax: p.x, ay: p.y, ar: 3 * dpr });
+        if (j % 2 === 1)
+          labels.push({
+            text: `+${fmtShort((j + 1) * tick)}`,
+            x: p.x + 4 * dpr,
+            y: p.y - 3 * dpr,
+            col: "255, 255, 255",
+            prio: 1,
+            size: 8.5,
+            weight: 600,
+            ax: p.x,
+            ay: p.y,
+            ar: 3 * dpr,
+          });
       });
-      let iMin = -1, iMax = -1, rMin = Infinity, rMax = -Infinity;
+      let iMin = -1,
+        iMax = -1,
+        rMin = Infinity,
+        rMax = -Infinity;
       path.pts.forEach((q, j) => {
         const r = Math.hypot(...q);
         if (r < rMin) (rMin = r), (iMin = j);
@@ -2031,7 +2510,19 @@ export class Map3D {
       const lbl = (j: number, txt: string) => {
         if (j <= 0 || j >= path.pts.length - 1) return;
         const p = P(at(path.pts[j]!, t0 + (j + 1) * path.dt));
-        if (p.ok) labels.push({ text: txt, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "124, 214, 255", prio: 4, size: 9.5, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
+        if (p.ok)
+          labels.push({
+            text: txt,
+            x: p.x + 5 * dpr,
+            y: p.y + 11 * dpr,
+            col: "124, 214, 255",
+            prio: 4,
+            size: 9.5,
+            weight: 600,
+            ax: p.x,
+            ay: p.y,
+            ar: 5 * dpr,
+          });
       };
       // (a circle's apsides: nowhere in particular — not marked)
       if (rMax - rMin > 0.01 * rMax) {
@@ -2047,13 +2538,32 @@ export class Map3D {
         const j = Math.max(0, Math.round(ca.t / path.dt) - 1);
         const q = path.pts[Math.min(j, path.pts.length - 1)]!;
         const tt = t0 + ca.t;
-        const a = P(at(q, tt)), b = P(at(bodyCentre(s, i.target as Body, tt), tt));
-        {
-          if (a.ok && b.ok) {
-            this.paint.path([[a.x, a.y], [b.x, b.y]], "rgba(255, 138, 92, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);
-            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-            labels.push({ text: `CA ${fmtLen(ca.d, s)}`, x: mx + 5 * dpr, y: my, col: "255, 138, 92", prio: 4, size: 9, weight: 600, ax: mx, ay: my, ar: 4 * dpr });
-          }
+        const a = P(at(q, tt)),
+          b = P(at(bodyCentre(s, i.target as Body, tt), tt));
+        if (a.ok && b.ok) {
+          this.paint.path(
+            [
+              [a.x, a.y],
+              [b.x, b.y],
+            ],
+            "rgba(255, 138, 92, 0.9)",
+            1.2 * dpr,
+            [2 * dpr, 2 * dpr],
+          );
+          const mx = (a.x + b.x) / 2,
+            my = (a.y + b.y) / 2;
+          labels.push({
+            text: `CA ${fmtLen(ca.d, s)}`,
+            x: mx + 5 * dpr,
+            y: my,
+            col: "255, 138, 92",
+            prio: 4,
+            size: 9,
+            weight: 600,
+            ax: mx,
+            ay: my,
+            ar: 4 * dpr,
+          });
         }
       }
       for (let j = 0; j < path.pts.length; j += Math.max(1, Math.floor(path.pts.length / 300))) {
@@ -2075,7 +2585,18 @@ export class Map3D {
         const p = P(pts[a.i]!);
         if (!p.ok) continue;
         const who = a.body === "hole" ? "" : `${sc.byId.get(a.body)?.name ?? a.body} `;
-        labels.push({ text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? sc.hole?.rH ?? 0 : 0), s)}${a.body === "hole" ? " (r)" : ""}`, x: p.x + 5 * dpr, y: p.y + 11 * dpr, col: "184, 212, 255", prio: 3, size: 9, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
+        labels.push({
+          text: `${who}Pe ${fmtLen(a.alt + (a.body === "hole" ? (sc.hole?.rH ?? 0) : 0), s)}${a.body === "hole" ? " (r)" : ""}`,
+          x: p.x + 5 * dpr,
+          y: p.y + 11 * dpr,
+          col: "184, 212, 255",
+          prio: 3,
+          size: 9,
+          weight: 600,
+          ax: p.x,
+          ay: p.y,
+          ar: 5 * dpr,
+        });
         this.paint.disc(p.x, p.y, 2.4 * dpr, "#b8d4ff");
       }
       if (ext.fate === "impact") {
@@ -2083,7 +2604,19 @@ export class Map3D {
         if (p.ok) this.cross(p.x, p.y, 4 * dpr, RED, 1.6 * dpr);
       }
       const q0 = P(pts[0]!);
-      if (q0.ok) labels.push({ text: "conics ▸", x: q0.x + 6 * dpr, y: q0.y - 6 * dpr, col: "170, 205, 255", prio: 1, size: 8, weight: 600, ax: q0.x, ay: q0.y, ar: 5 * dpr });
+      if (q0.ok)
+        labels.push({
+          text: "conics ▸",
+          x: q0.x + 6 * dpr,
+          y: q0.y - 6 * dpr,
+          col: "170, 205, 255",
+          prio: 1,
+          size: 8,
+          weight: 600,
+          ax: q0.x,
+          ay: q0.y,
+          ar: 5 * dpr,
+        });
     }
     // the flight plan: its path through the nodes, the nodes
     if (i.plan?.path && i.plan.path.pts.length > 1) {
@@ -2093,31 +2626,49 @@ export class Map3D {
         const p = P(at(pp.pts[j]!, pp.times[j]!));
         if (p.ok) this.pathHits.push({ x: p.x, y: p.y, t: pp.times[j]! });
       }
-      this.drawNodes(ctx, i, i.plan.nodes.map((n) => {
-        let j = pp.times.findIndex((tt) => tt >= n.t);
-        if (j < 0) j = pp.pts.length - 1;
-        const X = pp.pts[j]!;
-        const A = pp.pts[Math.max(j - 1, 0)]!, B = pp.pts[Math.min(j + 1, pp.pts.length - 1)]!;
-        const v = norm(sub(B, A));
-        const rh = norm(X);
-        const Nn = norm(cross(rh, v));
-        const Rr = cross(Nn, v);
-        const base = P(at(X, n.t));
-        if (!base.ok) return null;
-        const e = 0.02 * Math.hypot(...X);
-        const dirOf = (d: V3) => {
-          const q = P(at(add(X, scale(d, e)), n.t));
-          const l = Math.hypot(q.x - base.x, q.y - base.y) || 1;
-          return [(q.x - base.x) / l, (q.y - base.y) / l] as [number, number];
-        };
-        return { x: base.x, y: base.y, t: n.t, dirs: [dirOf(v), dirOf(Nn), dirOf(Rr)] };
-      }), t0, dpr);
+      this.drawNodes(
+        ctx,
+        i,
+        i.plan.nodes.map((n) => {
+          let j = pp.times.findIndex((tt) => tt >= n.t);
+          if (j < 0) j = pp.pts.length - 1;
+          const X = pp.pts[j]!;
+          const A = pp.pts[Math.max(j - 1, 0)]!,
+            B = pp.pts[Math.min(j + 1, pp.pts.length - 1)]!;
+          const v = norm(sub(B, A));
+          const rh = norm(X);
+          const Nn = norm(cross(rh, v));
+          const Rr = cross(Nn, v);
+          const base = P(at(X, n.t));
+          if (!base.ok) return null;
+          const e = 0.02 * Math.hypot(...X);
+          const dirOf = (d: V3) => {
+            const q = P(at(add(X, scale(d, e)), n.t));
+            const l = Math.hypot(q.x - base.x, q.y - base.y) || 1;
+            return [(q.x - base.x) / l, (q.y - base.y) / l] as [number, number];
+          };
+          return { x: base.x, y: base.y, t: n.t, dirs: [dirOf(v), dirOf(Nn), dirOf(Rr)] };
+        }),
+        t0,
+        dpr,
+      );
       const lastNode = i.plan.nodes[i.plan.nodes.length - 1];
       if ((lastNode?.then === "approach" || lastNode?.then === "orbit") && s.sun) {
         const p = P(at(starCentre(s, lastNode.t), lastNode.t));
         if (p.ok) {
           this.paint.disc(p.x, p.y, 7 * dpr, null, "rgba(255, 211, 107, 0.9)", 1.5 * dpr, [2 * dpr, 2 * dpr]);
-          labels.push({ text: "RDV", x: p.x + 9 * dpr, y: p.y + 4 * dpr, col: "255, 211, 107", prio: 4, size: 9.5, weight: 600, ax: p.x, ay: p.y, ar: 5 * dpr });
+          labels.push({
+            text: "RDV",
+            x: p.x + 9 * dpr,
+            y: p.y + 4 * dpr,
+            col: "255, 211, 107",
+            prio: 4,
+            size: 9.5,
+            weight: 600,
+            ax: p.x,
+            ay: p.y,
+            ar: 5 * dpr,
+          });
         }
       } else if (pp.fate === "horizon" || pp.fate === "star" || pp.fate === "wormhole") {
         const p = P(at(pp.pts[pp.pts.length - 1]!, pp.times[pp.times.length - 1]!));
@@ -2145,26 +2696,48 @@ export class Map3D {
     const cp = cand?.kind === "hole" ? cand.kerr : cand?.kind === "local" ? cand.local : null;
     if (cand && cp && cp.pts.length > 1) {
       // (about a world: relative to it, put where it is now on the map)
-      const wp = cand.kind === "local" && cand.local ? sc.byId.get(cand.local.world)?.pos ?? null : null;
+      const wp = cand.kind === "local" && cand.local ? (sc.byId.get(cand.local.world)?.pos ?? null) : null;
       const W = cp.pts.map((q, j) => (wp ? add(q, wp) : at(q, cp.times[j]!)));
       line(cand.kind === "hole" ? [at(i.X!, t0), ...W] : W, CAND, 0.95, 2.3, [9, 5]);
       const idx = cand.nodes.map((n) => {
         const j = cp.times.findIndex((tt) => tt >= n.t);
         return j < 0 ? cp.pts.length - 1 : j;
       });
-      this.candMarks(ctx, idx.map((j) => P(W[j]!)), cand.note, labels, dpr);
+      this.candMarks(
+        ctx,
+        idx.map((j) => P(W[j]!)),
+        cand.note,
+        labels,
+        dpr,
+      );
       // (the orbit after about the hole: its near and far points)
       const k1 = idx[idx.length - 1] ?? 0;
       if (cand.kind === "hole") {
-        let lo = -1, hi = -1;
+        let lo = -1,
+          hi = -1;
         for (let j = k1; j < cp.pts.length; j++) {
           const r = len(cp.pts[j]!);
           if (lo < 0 || r < len(cp.pts[lo]!)) lo = j;
           if (hi < 0 || r > len(cp.pts[hi]!)) hi = j;
         }
-        for (const [j, name] of [[lo, "Pe"], [hi, "Ap"]] as [number, string][]) {
+        for (const [j, name] of [
+          [lo, "Pe"],
+          [hi, "Ap"],
+        ] as [number, string][]) {
           const q = P(W[j]!);
-          if (q.ok && j > k1 && j < cp.pts.length - 1) labels.push({ text: `◇ ${name} ${len(cp.pts[j]!).toFixed(2)} M`, x: q.x + 6 * dpr, y: q.y - 6 * dpr, col: CAND, prio: 4, size: 8.5, weight: 600, ax: q.x, ay: q.y, ar: 5 * dpr });
+          if (q.ok && j > k1 && j < cp.pts.length - 1)
+            labels.push({
+              text: `◇ ${name} ${len(cp.pts[j]!).toFixed(2)} M`,
+              x: q.x + 6 * dpr,
+              y: q.y - 6 * dpr,
+              col: CAND,
+              prio: 4,
+              size: 8.5,
+              weight: 600,
+              ax: q.x,
+              ay: q.y,
+              ar: 5 * dpr,
+            });
         }
       }
     }
@@ -2175,7 +2748,19 @@ export class Map3D {
     places.forEach((q, k) => {
       if (!q.ok) return;
       const r = 6.5 * dpr;
-      this.paint.poly(q.x, q.y, [[0, -r], [r, 0], [0, r], [-r, 0]], "rgba(20, 10, 40, 0.75)", `rgba(${CAND}, 1)`, 1.8 * dpr);
+      this.paint.poly(
+        q.x,
+        q.y,
+        [
+          [0, -r],
+          [r, 0],
+          [0, r],
+          [-r, 0],
+        ],
+        "rgba(20, 10, 40, 0.75)",
+        `rgba(${CAND}, 1)`,
+        1.8 * dpr,
+      );
       ctx.fillStyle = `rgba(${CAND}, 1)`;
       ctx.font = `700 ${8.5 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
@@ -2183,7 +2768,18 @@ export class Map3D {
       if (k === 0) {
         // (the operation's name, short — the card has the rest)
         const head = note.split(" · ")[0]!;
-        labels.push({ text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`, x: q.x + 10 * dpr, y: q.y - 10 * dpr, col: CAND, prio: 6, size: 9.5, weight: 700, ax: q.x, ay: q.y, ar: 5 * dpr });
+        labels.push({
+          text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`,
+          x: q.x + 10 * dpr,
+          y: q.y - 10 * dpr,
+          col: CAND,
+          prio: 6,
+          size: 9.5,
+          weight: 700,
+          ax: q.x,
+          ay: q.y,
+          ar: 5 * dpr,
+        });
       }
     });
   }
@@ -2194,7 +2790,13 @@ export class Map3D {
    * the faster its Δv grows), its Δv, burn time and countdown. places: each node's screen place and
    * its P, N, R directions on screen.
    */
-  private drawNodes(ctx: CanvasRenderingContext2D, i: Info, places: ({ x: number; y: number; t: number; dirs: [number, number][] } | null)[], t0: number, dpr: number) {
+  private drawNodes(
+    ctx: CanvasRenderingContext2D,
+    i: Info,
+    places: ({ x: number; y: number; t: number; dirs: [number, number][] } | null)[],
+    t0: number,
+    dpr: number,
+  ) {
     this.nodeHits = [];
     this.handleHits = [];
     const nodes = i.plan?.nodes ?? [];
@@ -2220,7 +2822,19 @@ export class Map3D {
       const sel = k === this.host.sel;
       this.nodeHits.push({ k, x: pl.x, y: pl.y });
       const r = (sel ? 7.5 : 6) * dpr;
-      this.paint.poly(pl.x, pl.y, [[0, -r], [r, 0], [0, r], [-r, 0]], sel ? "#5ad8ff" : "#2fa4d0", "#04121a", 1.5 * dpr);
+      this.paint.poly(
+        pl.x,
+        pl.y,
+        [
+          [0, -r],
+          [r, 0],
+          [0, r],
+          [-r, 0],
+        ],
+        sel ? "#5ad8ff" : "#2fa4d0",
+        "#04121a",
+        1.5 * dpr,
+      );
       ctx.fillStyle = "#dff6ff";
       ctx.textAlign = "left";
       ctx.font = `700 ${11.6 * dpr}px ${FONT}`;
@@ -2230,8 +2844,16 @@ export class Map3D {
         let d = pl.dirs[c]!;
         if (!(Math.hypot(d[0], d[1]) > 0.2)) d = c === 1 ? [0, -1] : [1, 0];
         for (const sign of [1, -1]) {
-          const hx = pl.x + sign * d[0] * 36 * dpr, hy = pl.y + sign * d[1] * 36 * dpr;
-          this.paint.path([[pl.x + sign * d[0] * 10 * dpr, pl.y + sign * d[1] * 10 * dpr], [hx, hy]], "rgba(220, 235, 255, 0.25)", 1 * dpr);
+          const hx = pl.x + sign * d[0] * 36 * dpr,
+            hy = pl.y + sign * d[1] * 36 * dpr;
+          this.paint.path(
+            [
+              [pl.x + sign * d[0] * 10 * dpr, pl.y + sign * d[1] * 10 * dpr],
+              [hx, hy],
+            ],
+            "rgba(220, 235, 255, 0.25)",
+            1 * dpr,
+          );
           const on = this.gizmo && this.gizmo.k === k && this.gizmo.c === c && this.gizmo.sign === sign;
           marker(ctx, sign > 0 ? "prograde" : "retrograde", hx, hy, (on ? 9 : 7) * dpr, COLS[c]!);
           this.handleHits.push({ k, c, sign, x: hx, y: hy, dir: [sign * d[0], sign * d[1]] });
@@ -2248,7 +2870,8 @@ export class Map3D {
       ];
       ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
       const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12 * dpr;
-      const bx = pl.x + 44 * dpr, by = pl.y + 16 * dpr;
+      const bx = pl.x + 44 * dpr,
+        by = pl.y + 16 * dpr;
       ctx.fillStyle = "rgba(4, 10, 18, 0.82)";
       ctx.fillRect(bx, by, w, 44 * dpr);
       ctx.strokeStyle = "rgba(90, 216, 255, 0.5)";
@@ -2259,7 +2882,17 @@ export class Map3D {
   }
 
   /** The card of a body under the pointer: its kind, distance from the ship, size, orbit. */
-  private drawCard(ctx: CanvasRenderingContext2D, b: MapBody, sc: MapScene, ship: V3, i: Info, ours: boolean, cw: number, ch: number, dpr: number) {
+  private drawCard(
+    ctx: CanvasRenderingContext2D,
+    b: MapBody,
+    sc: MapScene,
+    ship: V3,
+    i: Info,
+    ours: boolean,
+    cw: number,
+    ch: number,
+    dpr: number,
+  ) {
     const s = this.host.s;
     const d = len(sub(b.pos, ship)) - (b.kind === "mouth" ? 0 : b.radius);
     const rows: [string, string][] = [];
@@ -2277,7 +2910,8 @@ export class Map3D {
     for (const [k, v] of rows) w = Math.max(w, ctx.measureText(`${k}  ${v}`).width + 16 * dpr);
     w = Math.max(w, ctx.measureText(hint).width) + 20 * dpr;
     const hgt = (30 + rows.length * 14 + 16) * dpr;
-    let x = this.hover!.x + 16 * dpr, y = this.hover!.y + 12 * dpr;
+    let x = this.hover!.x + 16 * dpr,
+      y = this.hover!.y + 12 * dpr;
     if (x + w > cw - 6 * dpr) x = this.hover!.x - w - 16 * dpr;
     if (y + hgt > ch - 6 * dpr) y = ch - hgt - 6 * dpr;
     ctx.fillStyle = "rgba(6, 10, 18, 0.9)";
@@ -2345,6 +2979,10 @@ export class Map3D {
     ctx.textAlign = "left";
     ctx.font = `600 ${11 * dpr}px ${FONT}`;
     const date = ours ? `${dateOf(t0).toISOString().slice(0, 10)} · ` : "";
-    ctx.fillText(`${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`, xl + 8 * dpr, by - 8 * dpr);
+    ctx.fillText(
+      `${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`,
+      xl + 8 * dpr,
+      by - 8 * dpr,
+    );
   }
 }

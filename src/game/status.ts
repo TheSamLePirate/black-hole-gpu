@@ -55,8 +55,14 @@ export interface RangerStatus {
 
 function figures(el: Elements, R: number, km: number, sec: number): OrbitFigures {
   return {
-    peKm: (el.rp - R) * km, apKm: Number.isFinite(el.ra) ? (el.ra - R) * km : Infinity, incDeg: (el.i * 180) / Math.PI, ecc: el.e,
-    period: el.period * sec, tPe: el.tPe * sec, tAp: el.tAp * sec, aKm: el.a * km,
+    peKm: (el.rp - R) * km,
+    apKm: Number.isFinite(el.ra) ? (el.ra - R) * km : Infinity,
+    incDeg: (el.i * 180) / Math.PI,
+    ecc: el.e,
+    period: el.period * sec,
+    tPe: el.tPe * sec,
+    tAp: el.tAp * sec,
+    aKm: el.a * km,
   };
 }
 
@@ -64,27 +70,50 @@ function figures(el: Elements, R: number, km: number, sec: number): OrbitFigures
 export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: number): RangerStatus {
   const kmM = M_METRES / 1e3;
   const out: RangerStatus = {
-    side: "ours", soi: "sun", soiName: "Sun", soiKm: Infinity, status: "orbit", label: "", altKm: NaN, speed: NaN, vVert: NaN,
-    orbit: null, target: null, next: null, kerr: null,
+    side: "ours",
+    soi: "sun",
+    soiName: "Sun",
+    soiKm: Infinity,
+    status: "orbit",
+    label: "",
+    altKm: NaN,
+    speed: NaN,
+    vVert: NaN,
+    orbit: null,
+    target: null,
+    next: null,
+    kerr: null,
   };
   // ---- our universe (home frame, Newton)
   if (info.ref && info.X && info.V) {
     const ref = info.ref;
     const b = solarBody(ref)!;
     const B = solarState(ref, t);
-    const r = sub(info.X as V3, B.pos as V3), v = sub(info.V as V3, B.vel as V3);
+    const r = sub(info.X as V3, B.pos as V3),
+      v = sub(info.V as V3, B.vel as V3);
     const el = elements(b.mass, r, v, equatorAxes(ref));
     const soi = soiOf(ref, t);
     const st = classify(el, { R: b.radius, airTop: b.radius + airTopKm(ref) / kmM, soi, landed: info.landed });
     Object.assign(out, {
-      side: "ours", soi: ref, soiName: b.name, soiKm: soi * kmM, status: st, label: STATUS_LABEL[st],
-      altKm: (el.r - b.radius) * kmM, speed: el.v * C, vVert: (el.r > 0 ? (r[0] * v[0] + r[1] * v[1] + r[2] * v[2]) / el.r : 0) * C,
+      side: "ours",
+      soi: ref,
+      soiName: b.name,
+      soiKm: soi * kmM,
+      status: st,
+      label: STATUS_LABEL[st],
+      altKm: (el.r - b.radius) * kmM,
+      speed: el.v * C,
+      vVert: (el.r > 0 ? (r[0] * v[0] + r[1] * v[1] + r[2] * v[2]) / el.r : 0) * C,
       orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS),
     });
     if (info.target && info.target !== "hole" && Number.isFinite(info.targetDist)) {
       out.target = {
-        id: info.target, name: nameOf(info.target), distKm: info.targetDist * kmM, rate: info.targetRate * C,
-        caKm: info.ourCa ? info.ourCa.d * kmM : NaN, caIn: info.ourCa ? info.ourCa.t * M_SECONDS : NaN,
+        id: info.target,
+        name: nameOf(info.target),
+        distKm: info.targetDist * kmM,
+        rate: info.targetRate * C,
+        caKm: info.ourCa ? info.ourCa.d * kmM : NaN,
+        caIn: info.ourCa ? info.ourCa.t * M_SECONDS : NaN,
       };
     }
     // the free-fall path: the next change of sphere of influence, an impact, the mouth
@@ -94,7 +123,12 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       if (k > 0) {
         const to = p.refs[k]!;
         const enter = solarBody(to)?.parent === p.refs[0];
-        out.next = { kind: enter ? "enter" : "exit", body: enter ? to : p.refs[0]!, name: nameOf(enter ? to : p.refs[0]!), inS: (p.times[k]! - t) * M_SECONDS };
+        out.next = {
+          kind: enter ? "enter" : "exit",
+          body: enter ? to : p.refs[0]!,
+          name: nameOf(enter ? to : p.refs[0]!),
+          inS: (p.times[k]! - t) * M_SECONDS,
+        };
       } else if (p.fate === "impact" && p.hit) {
         out.next = { kind: "impact", body: p.hit, name: nameOf(p.hit), inS: (p.times.at(-1)! - t) * M_SECONDS };
       } else if (p.fate === "wormhole") {
@@ -105,7 +139,16 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
   }
   // ---- inside the wormhole's throat region
   if (info.region === "throat") {
-    return { ...out, side: "throat", soi: "wormhole", soiName: "Wormhole", status: "throat", label: "IN THE THROAT", altKm: NaN, speed: info.speed * C };
+    return {
+      ...out,
+      side: "throat",
+      soi: "wormhole",
+      soiName: "Wormhole",
+      status: "throat",
+      label: "IN THE THROAT",
+      altKm: NaN,
+      speed: info.speed * C,
+    };
   }
   // ---- Gargantua's side
   out.side = "gargantua";
@@ -121,21 +164,40 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     const top = F.atm ? F.R + (12 * F.atm.H) / F.mPerM : F.R;
     const st = classify(el, { R: F.R, airTop: top, landed: L.landed });
     Object.assign(out, {
-      soi: F.id, soiName: nameOf(F.id), status: st, label: STATUS_LABEL[st], altKm: (el.r - F.R) * km, speed: el.v * C,
-      vVert: ((L.xi[0] * w[0] + L.xi[1] * w[1] + L.xi[2] * w[2]) / el.r) * C, orbit: st === "landed" ? null : figures(el, F.R, km, sec),
+      soi: F.id,
+      soiName: nameOf(F.id),
+      status: st,
+      label: STATUS_LABEL[st],
+      altKm: (el.r - F.R) * km,
+      speed: el.v * C,
+      vVert: ((L.xi[0] * w[0] + L.xi[1] * w[1] + L.xi[2] * w[2]) / el.r) * C,
+      orbit: st === "landed" ? null : figures(el, F.R, km, sec),
     });
   } else {
     // Gargantua: a Kerr orbit (bound when E < 1); the path's fate
     const fate = info.path?.fate;
     const st = fate === "horizon" ? "plunge" : info.E < 1 ? "bound" : "unbound";
     Object.assign(out, {
-      soi: "gargantua", soiName: "Gargantua", status: st, label: st === "plunge" ? "PLUNGING" : st === "bound" ? "KERR ORBIT" : "UNBOUND",
-      altKm: info.r * M_METRES * (s.massSolar / 1e8) / 1e3, speed: info.speed * C, vVert: info.vr * C, kerr: { r: info.r, E: info.E, L: info.L },
+      soi: "gargantua",
+      soiName: "Gargantua",
+      status: st,
+      label: st === "plunge" ? "PLUNGING" : st === "bound" ? "KERR ORBIT" : "UNBOUND",
+      altKm: (info.r * M_METRES * (s.massSolar / 1e8)) / 1e3,
+      speed: info.speed * C,
+      vVert: info.vr * C,
+      kerr: { r: info.r, E: info.E, L: info.L },
     });
   }
   if (info.target && info.target !== "hole" && Number.isFinite(info.targetDist)) {
     const kmPerM = (1476.625 * s.massSolar) / 1e3;
-    out.target = { id: info.target, name: nameOf(info.target), distKm: info.targetDist * kmPerM, rate: info.targetRate * C, caKm: NaN, caIn: NaN };
+    out.target = {
+      id: info.target,
+      name: nameOf(info.target),
+      distKm: info.targetDist * kmPerM,
+      rate: info.targetRate * C,
+      caKm: NaN,
+      caIn: NaN,
+    };
   }
   return out;
 }

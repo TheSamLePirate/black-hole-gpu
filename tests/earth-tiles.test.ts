@@ -11,14 +11,19 @@ import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, Z0, Z1 } from ".
 globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
 const fakeDevice = () => ({ createTexture: () => ({}), queue: { writeTexture() {} } }) as unknown as GPUDevice;
 const deg = Math.PI / 180;
-const dir = (lat: number, lon: number): Vec3 => [Math.cos(lat * deg) * Math.cos(lon * deg), Math.cos(lat * deg) * Math.sin(lon * deg), Math.sin(lat * deg)];
+const dir = (lat: number, lon: number): Vec3 => [
+  Math.cos(lat * deg) * Math.cos(lon * deg),
+  Math.cos(lat * deg) * Math.sin(lon * deg),
+  Math.sin(lat * deg),
+];
 // (a smooth field of heights [m] over the sphere, linear enough to be sampled exactly by the levels)
 const field = (lat: number, lon: number) => 1000 + 2000 * Math.sin(lat * deg * 40) + 1500 * Math.cos(lon * deg * 30);
 
 /** fills every tile the windows want from the field, at its pixels' centres */
 function fill(t: EarthTiles) {
   for (const [z, x, y] of t.wanted()) {
-    const n = 2 ** z, h = new Float32Array(TILE * TILE);
+    const n = 2 ** z,
+      h = new Float32Array(TILE * TILE);
     for (let j = 0; j < TILE; j++) {
       const lat = Math.atan(Math.sinh((0.5 - (y + (j + 0.5) / TILE) / n) * 2 * Math.PI)) / deg;
       for (let i = 0; i < TILE; i++) h[j * TILE + i] = field(lat, ((x + (i + 0.5) / TILE) / n) * 360 - 180);
@@ -54,7 +59,11 @@ test("the heights near the camera are the tiles', the global map's beyond them",
   fill(t);
   expect(t.pending).toBe(0);
   expect(t.finest).toBe(Z1);
-  for (const [lat, lon] of [[45.9, 6.87], [45.905, 6.88], [45.89, 6.86]] as const) {
+  for (const [lat, lon] of [
+    [45.9, 6.87],
+    [45.905, 6.88],
+    [45.89, 6.86],
+  ] as const) {
     const s = t.heightAt(dir(lat, lon), 1);
     expect(s.rem).toBe(0);
     expect(Math.abs(s.h - field(lat, lon))).toBeLessThan(2);
@@ -86,7 +95,10 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
 
 test("a level's samples: bilinear and B-spline exact on a ramp, the windows' edges faded", () => {
   const ramp = (i: number, j: number) => 3 * i + 5 * j;
-  for (const [x, y] of [[10.3, 20.7], [100.5, 3.25]] as const) {
+  for (const [x, y] of [
+    [10.3, 20.7],
+    [100.5, 3.25],
+  ] as const) {
     expect(sampleLevel(ramp, x, y, 0)).toBeCloseTo(3 * (x - 0.5) + 5 * (y - 0.5), 9);
     expect(sampleLevel(ramp, x, y, 3)).toBeCloseTo(3 * (x - 0.5) + 5 * (y - 0.5), 9);
   }

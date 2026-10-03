@@ -15,7 +15,19 @@ import { setSceneTime } from "./wormhole";
 /** The flight figures the renderer takes from (controls.ts flightInfo): the re-entry glow. */
 type FlightInfo = {
   surface?: { plasma?: { flow: [number, number, number]; level: number } | null; air?: number } | null;
-  air?: { u: [number, number, number] | null; heat: number; shield: number; hull: number; mach: number; rho: number; glow: [number, number, number] | null; inAir: boolean; q: number; speed: number; rolling?: boolean } | null;
+  air?: {
+    u: [number, number, number] | null;
+    heat: number;
+    shield: number;
+    hull: number;
+    mach: number;
+    rho: number;
+    glow: [number, number, number] | null;
+    inAir: boolean;
+    q: number;
+    speed: number;
+    rolling?: boolean;
+  } | null;
 } | null;
 
 export class Simulation {
@@ -73,7 +85,9 @@ export class Simulation {
    * the flames and the glow hold as they were. Returns true when the traced image must be redone.
    */
   applyRender(info: FlightInfo): boolean {
-    const s = this.s, r = this.renderer, c = this.camera;
+    const s = this.s,
+      r = this.renderer,
+      c = this.camera;
     let changed = false;
     const path = c.gravity ? c.predictPath() : null;
     if (r.setCameraPath(s.showGeodesic && s.pathInView ? path : null)) changed = true;
@@ -99,11 +113,27 @@ export class Simulation {
       if (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin") amp *= 1.6;
     }
     const tt = this.play;
-    r.shake = amp > 0 ? [amp * (Math.sin(tt * 71.3) * 0.6 + Math.sin(tt * 43.1 + 1.3) * 0.4), amp * (Math.sin(tt * 59.7 + 0.7) * 0.6 + Math.sin(tt * 37.9 + 2.1) * 0.4)] : [0, 0];
+    r.shake =
+      amp > 0
+        ? [
+            amp * (Math.sin(tt * 71.3) * 0.6 + Math.sin(tt * 43.1 + 1.3) * 0.4),
+            amp * (Math.sin(tt * 59.7 + 0.7) * 0.6 + Math.sin(tt * 37.9 + 2.1) * 0.4),
+          ]
+        : [0, 0];
     // the re-entry's look: the plasma, the hot skin (cooling after, out of the air)
-    r.shipReentry = A && (A.u || A.shield > 700 || A.hull > 700)
-      ? { u: A.u ?? [0, 0, 1], heat: A.u ? A.heat : 0, shield: A.shield, hull: A.hull, mach: A.mach, rho: A.rho, glow: A.glow ?? [1, 0.45, 0.32], time: this.play }
-      : null;
+    r.shipReentry =
+      A && (A.u || A.shield > 700 || A.hull > 700)
+        ? {
+            u: A.u ?? [0, 0, 1],
+            heat: A.u ? A.heat : 0,
+            shield: A.shield,
+            hull: A.hull,
+            mach: A.mach,
+            rho: A.rho,
+            glow: A.glow ?? [1, 0.45, 0.32],
+            time: this.play,
+          }
+        : null;
     // the condensation trails (kept in the air: paused, as they were)
     r.shipContrails = c.contrailsFrame();
     if (!s.animate) return changed;
@@ -113,7 +143,13 @@ export class Simulation {
     const firing = this.play - this.firedAt < 0.3 && (fired.throttle > 0.01 || fired.rcs > 0.03 || fired.turn > 0.05);
     const was = r.shipThrust !== null;
     r.shipThrust = firing
-      ? { throttle: fired.throttle, force: fired.force, torque: fired.torque, air: Math.min((info?.surface?.air ?? 0) / 1.225, 1), time: this.play }
+      ? {
+          throttle: fired.throttle,
+          force: fired.force,
+          torque: fired.torque,
+          air: Math.min((info?.surface?.air ?? 0) / 1.225, 1),
+          time: this.play,
+        }
       : null;
     if (firing || was) changed = true;
     return changed;

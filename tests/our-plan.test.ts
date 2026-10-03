@@ -11,7 +11,7 @@ import { M_METRES, M_SECONDS, solarBody, solarState } from "../src/system/solar"
 const C = 299792458;
 const KM = 1e3 / M_METRES;
 const DAY = 86400 / M_SECONDS;
-const accel = (2 * 9.80665) / (C * C / M_METRES); // the Ranger's Crew engine at 2 g
+const accel = (2 * 9.80665) / ((C * C) / M_METRES); // the Ranger's Crew engine at 2 g
 const o = { lead: 60 / M_SECONDS, mouthR: 0.05, accel };
 
 test("Kepler's and Lambert's problems agree (an orbit and back)", () => {
@@ -34,8 +34,11 @@ test("a Hohmann transfer from 400 to 1 000 km: the textbook burns", () => {
   const s = earthStart(t0, 400, true);
   const p = planOurOrbit(s.X, s.vel, t0, 1000e3, { ...o, accel: 0 });
   if ("error" in p) throw new Error(p.error);
-  const mu = solarBody("earth")!.mass, R = solarBody("earth")!.radius;
-  const r1 = R + 400 * KM, r2 = R + 1000 * KM, a = (r1 + r2) / 2;
+  const mu = solarBody("earth")!.mass,
+    R = solarBody("earth")!.radius;
+  const r1 = R + 400 * KM,
+    r2 = R + 1000 * KM,
+    a = (r1 + r2) / 2;
   const dv1 = Math.sqrt(mu * (2 / r1 - 1 / a)) - Math.sqrt(mu / r1);
   const dv2 = Math.sqrt(mu / r2) - Math.sqrt(mu * (2 / r2 - 1 / a));
   expect(Math.abs(Math.hypot(...p.nodes[0]!.dv) - dv1) * C).toBeLessThan(2);
@@ -46,7 +49,13 @@ test("a Hohmann transfer from 400 to 1 000 km: the textbook burns", () => {
 test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 200 km perigee", () => {
   const t0 = 109.6;
   const s = earthStart(t0, 400, true);
-  const p = planOurTransfer(s.X, s.vel, t0, { kind: "transfer", target: "moon", arrival: "freeReturn", altM: 7000e3, returnAltM: 200e3 }, o);
+  const p = planOurTransfer(
+    s.X,
+    s.vel,
+    t0,
+    { kind: "transfer", target: "moon", arrival: "freeReturn", altM: 7000e3, returnAltM: 200e3 },
+    o,
+  );
   if ("error" in p) throw new Error(p.error);
   const tli = p.nodes[0]!;
   // (a TLI: ~3.1 km/s along the velocity)
@@ -63,7 +72,8 @@ test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 
   const rp = returnPerigee(path, "moon", "earth")!;
   expect(Math.abs(rp.rp / KM - 6371 - 200)).toBeLessThan(300);
   // (the pass after 3–5 days, home after 7–9)
-  const tPass = (path.times[bp.ca.i]! - t0) / DAY, tHome = (path.times[rp.pe.i]! - t0) / DAY;
+  const tPass = (path.times[bp.ca.i]! - t0) / DAY,
+    tHome = (path.times[rp.pe.i]! - t0) / DAY;
   expect(tPass).toBeGreaterThan(3);
   expect(tPass).toBeLessThan(5);
   expect(tHome).toBeGreaterThan(7);

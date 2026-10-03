@@ -22,7 +22,11 @@ import { advance, fromZamo, predict, step, thrust, toZamo, type Lens, type Lense
 import { horizon, zamo, type Vec3 } from "./physics";
 import { add, cross, dot, len, scale, sub, unit as norm } from "./math/vec3";
 
-export type KerrGoal = { apsis: number; side: "max" | "min"; dir: number } | { circ: number; trim?: boolean } | { plane: Vec3 } | { period: number; dir: number };
+export type KerrGoal =
+  | { apsis: number; side: "max" | "min"; dir: number }
+  | { circ: number; trim?: boolean }
+  | { plane: Vec3 }
+  | { period: number; dir: number };
 
 export interface ManeuverNode {
   /** coordinate time of the burn's centre [M] */
@@ -61,7 +65,6 @@ export interface PlanPath {
   fate: "horizon" | "escape" | "continues" | "star" | "wormhole";
 }
 
-
 /** Flat-map position of a state. */
 export function position(st: Massive): Vec3 {
   const s = Math.sin(st.th);
@@ -70,7 +73,10 @@ export function position(st: Massive): Vec3 {
 
 /** Local ZAMO basis (r̂, θ̂, φ̂) of a state in the flat map, to convert vectors. */
 export function localFrame(st: Massive) {
-  const s = Math.sin(st.th), c = Math.cos(st.th), sp = Math.sin(st.ph), cp = Math.cos(st.ph);
+  const s = Math.sin(st.th),
+    c = Math.cos(st.th),
+    sp = Math.sin(st.ph),
+    cp = Math.cos(st.ph);
   return { er: [s * cp, s * sp, c] as Vec3, et: [c * cp, c * sp, -s] as Vec3, ep: [-sp, cp, 0] as Vec3 };
 }
 
@@ -113,7 +119,11 @@ export function applyDv(st: Massive, dv: Vec3, a: number): Massive {
 export function pathFrom(st: Massive, w: World, tMax: number, n = 300, stop?: (p: Vec3, t: number) => boolean): PlanPath {
   const p = predict(st, w.a, tMax, n, w.lens, PLAN_TOL, stop);
   const dt = tMax / n;
-  return { pts: p.pts, times: p.pts.map((_, j) => st.t + (j + 1) * dt), fate: p.fate === "continues" || p.fate === "escape" || p.fate === "horizon" || p.fate === "star" ? p.fate : "continues" };
+  return {
+    pts: p.pts,
+    times: p.pts.map((_, j) => st.t + (j + 1) * dt),
+    fate: p.fate === "continues" || p.fate === "escape" || p.fate === "horizon" || p.fate === "star" ? p.fate : "continues",
+  };
 }
 
 /** The whole plan from the current state: coast, burn, coast… then the final path. */
@@ -139,7 +149,10 @@ export function planPath(st0: Massive, nodes: ManeuverNode[], w: World, tail: nu
 
 /** Apsides of a path (min, max of r) and when they happen. */
 export function apsides(p: PlanPath) {
-  let iMin = -1, iMax = -1, rMin = Infinity, rMax = -Infinity;
+  let iMin = -1,
+    iMax = -1,
+    rMin = Infinity,
+    rMax = -Infinity;
   p.pts.forEach((q, j) => {
     const r = len(q);
     if (r < rMin) (rMin = r), (iMin = j);
@@ -173,7 +186,8 @@ export function circularBeta(st: Massive, w: World): Vec3 | null {
   const Om = pro ? 1 / (st.r ** 1.5 + a) : -1 / (st.r ** 1.5 - a);
   const v0 = Math.abs((z.varpi * (Om - z.omega)) / z.alpha);
   if (!(v0 < 0.999)) return null;
-  const v1 = v0, v2 = Math.min(1.05 * v0, 0.999);
+  const v1 = v0,
+    v2 = Math.min(1.05 * v0, 0.999);
   const a1 = radialAccel(st, scale(t, v1), w);
   const a2 = radialAccel(st, scale(t, v2), w);
   const vc = a2 !== a1 ? Math.sqrt(Math.min(Math.max(v1 * v1 - (a1 * (v2 * v2 - v1 * v1)) / (a2 - a1), 0), 0.998)) : v1;
@@ -205,7 +219,8 @@ function apsisBurn(s1: Massive, r2: number, w: World): number | null {
   // bracket, growing the burn (the apsis is monotonic in the prograde Δv as long as the burn doesn't
   // reverse the orbit: a huge retrograde burn flips it and the far apsis runs away)
   const f = (dv: number) => (up ? apsis(dv) - r2 : r2 - apsis(dv));
-  let lo = 0, hi = up ? 0.004 : -0.004;
+  let lo = 0,
+    hi = up ? 0.004 : -0.004;
   while (f(hi) < 0) {
     lo = hi;
     hi *= 1.7;
@@ -236,7 +251,10 @@ export function planCircular(st0: Massive, r2: number, w: World): { nodes: Maneu
   const bc = circularBeta(s2, w);
   if (!bc) return null;
   return {
-    nodes: [{ t: s1.t, dv: [dv1, 0, 0] }, { t: t2, dv: matchDv(s2, bc, w.a), then: "circularize" }],
+    nodes: [
+      { t: s1.t, dv: [dv1, 0, 0] },
+      { t: t2, dv: matchDv(s2, bc, w.a), then: "circularize" },
+    ],
     note: `transfer to a circular orbit at ${r2.toFixed(1)} M`,
   };
 }
@@ -247,9 +265,13 @@ export function planCircular(st0: Massive, r2: number, w: World): { nodes: Maneu
  * at the closest approach.
  */
 export function planRendezvous(
-  st0: Massive, w: World,
+  st0: Massive,
+  w: World,
   body: {
-    centre: (t: number) => Vec3; velocity: (t: number) => Vec3; radius: number; standoff: number;
+    centre: (t: number) => Vec3;
+    velocity: (t: number) => Vec3;
+    radius: number;
+    standoff: number;
     /**
      * end on a circular orbit around the body instead of at rest: its mass, the orbit plane's normal,
      * the sense of motion around n (±1; default: the sense the ship arrives with)
@@ -342,7 +364,10 @@ export function planRendezvous(
   const al = zamo(s2.r, s2.th, w.a).alpha;
   const betaT: Vec3 = [dot(V, f.er) / al, dot(V, f.et) / al, dot(V, f.ep) / al];
   return {
-    nodes: [{ t: best.t1, dv: dv1 }, { t: m.t, dv: matchDv(s2, betaT, w.a), then }],
+    nodes: [
+      { t: best.t1, dv: dv1 },
+      { t: m.t, dv: matchDv(s2, betaT, w.a), then },
+    ],
     note: `${body.orbit ? "orbit insertion" : "rendezvous"}: closest approach ${m.d < 0.01 ? `${(m.d * 1e4).toFixed(2)}·10⁻⁴` : m.d.toFixed(1)} M`,
     miss: m.d,
   };
@@ -387,14 +412,16 @@ export function planAlign(st0: Massive, w: World, n: Vec3, name: string): { node
   if (!s0) return null;
   const p = pathFrom(s0, w, 1.6 * period(Math.max(s0.r, 3)), 720);
   const side = (q: Vec3) => dot(q, n);
-  const pts = [position(s0), ...p.pts], times = [s0.t, ...p.times];
+  const pts = [position(s0), ...p.pts],
+    times = [s0.t, ...p.times];
   const out: { t: number; dv: Vec3 }[] = [];
   for (let j = 1; j < pts.length && out.length < 2; j++) {
     if (Math.sign(side(pts[j - 1]!)) === Math.sign(side(pts[j]!))) continue;
     // the crossing, by bisection between the two samples
     let sA = advanceTo(s0, times[j - 1]!, w);
     if (!sA) break;
-    let lo = times[j - 1]!, hi = times[j]!;
+    let lo = times[j - 1]!,
+      hi = times[j]!;
     const sgn = Math.sign(side(position(sA)));
     for (let it = 0; it < 30 && hi - lo > 1e-4; it++) {
       const mid = (lo + hi) / 2;
@@ -424,7 +451,10 @@ export function planAlign(st0: Massive, w: World, n: Vec3, name: string): { node
  * method on the 3-D Δv drives the path's closest point to the target onto it; the cheapest wins.
  */
 export function planIntercept(
-  st0: Massive, target: Vec3 | ((t: number) => Vec3), w0: World, tol: number,
+  st0: Massive,
+  target: Vec3 | ((t: number) => Vec3),
+  w0: World,
+  tol: number,
 ): { nodes: ManeuverNode[]; note: string; miss: number } | null {
   // (the search's many trial paths feel the hole and the stars only: the planets' pull, far from
   // them, is below the aim's tolerance — the plan's path is then drawn with all of them)
@@ -450,7 +480,8 @@ export function planIntercept(
     let bd = Infinity;
     // closest point, refined on the segment
     for (let j = 0; j < p.pts.length; j++) {
-      const a = j ? p.pts[j - 1]! : position(s1), b = p.pts[j]!;
+      const a = j ? p.pts[j - 1]! : position(s1),
+        b = p.pts[j]!;
       const tgt = at(p.times[j]!);
       const e = sub(b, a);
       const u = Math.min(1, Math.max(0, dot(sub(tgt, a), e) / Math.max(dot(e, e), 1e-12)));

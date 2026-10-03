@@ -7,9 +7,25 @@ import { store } from "../src/util/storage";
 // refused (never half-loaded), a setting of the wrong kind repaired.
 
 const save = (): GameSave => ({
-  v: 1, name: "test", savedAt: 1, summary: "Earth · IN ORBIT 400 km", scene: "game:artemis",
-  settings: defaultSettings(), time: 109.7,
-  ship: { piloting: true, sas: true, hold: "prograde", auto: "none", throttle: 0.5, precision: false, speedMode: "orbit", landed: null, spent: 12, properTime: 3 },
+  v: 1,
+  name: "test",
+  savedAt: 1,
+  summary: "Earth · IN ORBIT 400 km",
+  scene: "game:artemis",
+  settings: defaultSettings(),
+  time: 109.7,
+  ship: {
+    piloting: true,
+    sas: true,
+    hold: "prograde",
+    auto: "none",
+    throttle: 0.5,
+    precision: false,
+    speedMode: "orbit",
+    landed: null,
+    spent: 12,
+    properTime: 3,
+  },
   plan: null,
 });
 

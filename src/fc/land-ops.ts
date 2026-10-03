@@ -59,7 +59,9 @@ export function sitePasses(c: FcContext, site: SiteTrack, o: { orbits?: number; 
   const h = el.T / per;
   const pole = c.pole ?? ([0, 0, 1] as V3);
   let s = { r: c.r, v: c.v };
-  const d: number[] = [], north: boolean[] = [], states: { r: V3; v: V3 }[] = [];
+  const d: number[] = [],
+    north: boolean[] = [],
+    states: { r: V3; v: V3 }[] = [];
   for (let i = 0; i <= N; i++) {
     if (i) s = propagate(c.mu, s.r, s.v, h);
     states.push(s);
@@ -72,10 +74,15 @@ export function sitePasses(c: FcContext, site: SiteTrack, o: { orbits?: number; 
     if (!(d[i]! <= d[i - 1]! && d[i]! < d[i + 1]!) || d[i]! > Math.PI / 2) continue;
     // (the closest moment between the samples about it: a golden-section search on the orbit itself —
     // the distance there is a V, its bottom between two samples hundreds of km apart)
-    const s0 = states[i - 1]!, t0 = (i - 1) * h;
+    const s0 = states[i - 1]!,
+      t0 = (i - 1) * h;
     const f = (t: number) => angle(propagate(c.mu, s0.r, s0.v, t - t0).r, site.at(t));
-    let a = t0, b = (i + 1) * h;
-    let x1 = b - gr * (b - a), x2 = a + gr * (b - a), f1 = f(x1), f2 = f(x2);
+    let a = t0,
+      b = (i + 1) * h;
+    let x1 = b - gr * (b - a),
+      x2 = a + gr * (b - a),
+      f1 = f(x1),
+      f2 = f(x2);
     for (let k = 0; k < 40 && b - a > 0.05; k++) {
       if (f1 < f2) (b = x2), (x2 = x1), (f2 = f1), (x1 = b - gr * (b - a)), (f1 = f(x1));
       else (a = x1), (x1 = x2), (f1 = f2), (x2 = a + gr * (b - a)), (f2 = f(x2));
@@ -100,7 +107,9 @@ export function alignOverSite(c: FcContext, site: SiteTrack, o: { orbits?: numbe
   if (!(el.e < 1)) return fail("A bound orbit first (circularize)");
   if (el.rp < c.R) return fail("The orbit meets the ground — raise the periapsis first");
   const orbits = o.orbits ?? 16;
-  const T = el.T, nMean = (2 * Math.PI) / T, span = orbits * T;
+  const T = el.T,
+    nMean = (2 * Math.PI) / T,
+    span = orbits * T;
   const nOld = unit(cross(c.r, c.v));
   const now = sitePasses(c, site, { orbits });
   const already = firstReachable(now, site.reach);
@@ -119,7 +128,9 @@ export function alignOverSite(c: FcContext, site: SiteTrack, o: { orbits?: numbe
     const vt = len(add(s.v, rb, -vr));
     for (let k = 0; k < orbits; k++) {
       // the arrival: the angle flown in the new plane, a few passes refined (the site moves meanwhile)
-      let theta = Math.PI, nNew: V3 = nOld, ta = 0;
+      let theta = Math.PI,
+        nNew: V3 = nOld,
+        ta = 0;
       for (let it = 0; it < 5; it++) {
         ta = tb + (theta + 2 * Math.PI * k) / nMean;
         const sd = unit(site.at(ta));
@@ -137,19 +148,27 @@ export function alignOverSite(c: FcContext, site: SiteTrack, o: { orbits?: numbe
       const vNew = add(scale(rb, vr), scale(unit(cross(nNew, rb)), vt));
       const dv = len(add(vNew, s.v, -1));
       // (the cheapest; a little for waiting: a day's wait worth a few m/s)
-      const cost = dv + ta / 3600 * 0.2;
-      if (!best || cost < best.dv + best.ta / 3600 * 0.2) best = { tb, ta, r: s.r, v: s.v, vNew, dv, di };
+      const cost = dv + (ta / 3600) * 0.2;
+      if (!best || cost < best.dv + (best.ta / 3600) * 0.2) best = { tb, ta, r: s.r, v: s.v, vNew, dv, di };
     }
   }
   if (!best) return fail(`No plane through ${site.name} within ${orbits} orbits`);
   // refined: the pass the new orbit really makes (Kepler, not the mean motion) gives the arrival — the
   // site where it is then — and the plane through it again, a few times
   const rb = unit(best.r);
-  const vr = dot(best.v, rb), vt = len(add(best.v, rb, -vr));
+  const vr = dot(best.v, rb),
+    vt = len(add(best.v, rb, -vr));
   for (let it = 0; it < 4; it++) {
     const trial = { ...c, r: best.r, v: best.vNew };
-    const ps = sitePasses(trial, { ...site, at: (dt) => site.at(dt + best!.tb) }, { orbits: Math.ceil((best.ta - best.tb) / T) + 1, perOrbit: 360 });
-    const near = ps.reduce<Pass | null>((a, p) => (!a || Math.abs(p.t + best!.tb - best!.ta) < Math.abs(a.t + best!.tb - best!.ta) ? p : a), null);
+    const ps = sitePasses(
+      trial,
+      { ...site, at: (dt) => site.at(dt + best!.tb) },
+      { orbits: Math.ceil((best.ta - best.tb) / T) + 1, perOrbit: 360 },
+    );
+    const near = ps.reduce<Pass | null>(
+      (a, p) => (!a || Math.abs(p.t + best!.tb - best!.ta) < Math.abs(a.t + best!.tb - best!.ta) ? p : a),
+      null,
+    );
     if (!near || near.across < 1e3) break;
     const ta: number = near.t + best.tb;
     let nNew = unit(cross(rb, unit(site.at(ta))));
@@ -167,5 +186,11 @@ export function alignOverSite(c: FcContext, site: SiteTrack, o: { orbits?: numbe
   const note = `${pre}over ${site.name}: the plane turned ${((best.di * 180) / Math.PI).toFixed(2)}° in ${fmt(best.tb)}, the pass over it in ${fmt(hit?.t ?? best.ta)}${hit ? `, ${km(hit.across)} off` : ""}`;
   // (the cost as the autopilot flies it: the velocity turned along the orbital frame — the arc v·Δi,
   // a little more than the chord)
-  return { ok: true, note, burns, dvTotal: len(followDv(burns[0]!.dv, len(best.v))), after: elements(c.mu, best.r, best.vNew, c.pole ?? [0, 0, 1]) };
+  return {
+    ok: true,
+    note,
+    burns,
+    dvTotal: len(followDv(burns[0]!.dv, len(best.v))),
+    after: elements(c.mu, best.r, best.vNew, c.pole ?? [0, 0, 1]),
+  };
 }

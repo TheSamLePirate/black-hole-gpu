@@ -14,8 +14,11 @@ async function joints(): Promise<StationJoint[]> {
   expect(new TextDecoder().decode(new Uint8Array(ab, 0, 4))).toBe("ISS1");
   const f = new Float32Array(ab, 24, u[4]! * 12);
   return Array.from({ length: u[4]! }, (_, k) => ({
-    pivot: [f[12 * k]!, f[12 * k + 1]!, f[12 * k + 2]!], axis: [f[12 * k + 3]!, f[12 * k + 4]!, f[12 * k + 5]!],
-    normal: [f[12 * k + 6]!, f[12 * k + 7]!, f[12 * k + 8]!], parent: Math.round(f[12 * k + 9]!), kind: Math.round(f[12 * k + 10]!),
+    pivot: [f[12 * k]!, f[12 * k + 1]!, f[12 * k + 2]!],
+    axis: [f[12 * k + 3]!, f[12 * k + 4]!, f[12 * k + 5]!],
+    normal: [f[12 * k + 6]!, f[12 * k + 7]!, f[12 * k + 8]!],
+    parent: Math.round(f[12 * k + 9]!),
+    kind: Math.round(f[12 * k + 10]!),
   }));
 }
 
@@ -35,7 +38,9 @@ test("the solar arrays face the Sun wherever it is; the radiators stand edge-on 
   const J = await joints();
   for (let k = 0; k < 200; k++) {
     // a direction all round (a deterministic spread)
-    const z = 1 - (2 * (k + 0.5)) / 200, r = Math.sqrt(1 - z * z), ph = k * 2.399963;
+    const z = 1 - (2 * (k + 0.5)) / 200,
+      r = Math.sqrt(1 - z * z),
+      ph = k * 2.399963;
     const sun: V = [r * Math.cos(ph), r * Math.sin(ph), z];
     // (the Sun along the truss: no turn can face it — the masts square to it both ways)
     if (Math.abs(sun[1]) > 0.98) continue;
@@ -63,7 +68,7 @@ test("the station now: 400 km up, flying +XVV, the Ranger's start 150 m out on I
   const E = solarState("earth", t);
   const r: V = [s.X[0] - E.pos[0], s.X[1] - E.pos[1], s.X[2] - E.pos[2]];
   const v: V = [s.V[0] - E.vel[0], s.V[1] - E.vel[1], s.V[2] - E.vel[2]];
-  const h = Math.hypot(...r) * M_METRES / 1e3 - 6371;
+  const h = (Math.hypot(...r) * M_METRES) / 1e3 - 6371;
   expect(h).toBeGreaterThan(380);
   expect(h).toBeLessThan(450);
   expect(Math.hypot(...v) * 299792.458).toBeCloseTo(7.66, 1);
@@ -87,11 +92,17 @@ test("the arrays as drawn (the parts' transforms): every blanket's vertices in a
   const buf = gunzipSync(new Uint8Array(await Bun.file("assets/iss/iss-lod0.bin").arrayBuffer()));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   const u = new Uint32Array(ab, 0, 6);
-  const nv = u[2]!, nj = u[4]!, np = u[5]!;
+  const nv = u[2]!,
+    nj = u[4]!,
+    np = u[5]!;
   const off = 24 + nj * 48 + np * 32;
   const f32 = new Float32Array(ab, off, (nv * 24) / 4);
   const u8 = new Uint8Array(ab, off, nv * 24);
-  for (const sun of [[0.3, 0.2, -0.93], [-0.8, 0.1, 0.59], [0.1, -0.6, 0.79]] as V[]) {
+  for (const sun of [
+    [0.3, 0.2, -0.93],
+    [-0.8, 0.1, 0.59],
+    [0.1, -0.6, 0.79],
+  ] as V[]) {
     const l = Math.hypot(...sun);
     const s: V = [sun[0] / l, sun[1] / l, sun[2] / l];
     const T = partTransforms(J, jointAngles(J, s));
@@ -102,13 +113,19 @@ test("the arrays as drawn (the parts' transforms): every blanket's vertices in a
     for (let p = 0; p < nj; p++) {
       if (J[p]!.kind !== 2) continue;
       const M = T[p + 1]!;
-      let lo = Infinity, hi = -Infinity, n = 0;
+      let lo = Infinity,
+        hi = -Infinity,
+        n = 0;
       for (let i = 0; i < nv; i++) {
         if (u8[24 * i + 20] !== p + 1 || u8[24 * i + 19] !== 1) continue;
-        const x = f32[6 * i]!, y = f32[6 * i + 1]!, z = f32[6 * i + 2]!;
+        const x = f32[6 * i]!,
+          y = f32[6 * i + 1]!,
+          z = f32[6 * i + 2]!;
         const q: V = [0, 1, 2].map((k) => M[0][k]! * x + M[1][k]! * y + M[2][k]! * z + M[3][k]!) as V;
         const d = dot(q, s);
-        lo = Math.min(lo, d); hi = Math.max(hi, d); n++;
+        lo = Math.min(lo, d);
+        hi = Math.max(hi, d);
+        n++;
       }
       expect(n).toBeGreaterThan(50);
       expect(hi - lo).toBeLessThan(7);

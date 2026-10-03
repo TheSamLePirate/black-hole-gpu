@@ -11,7 +11,18 @@
 // Any frame centred on the body (our side: the home axes, not turning; Gargantua's worlds: their
 // turning frames), given by its gravity (with the frame's own terms) and the air's velocity; SI.
 
-import { aeroForces, airAt, airTop, coldSkin, heatStep, type AeroOut, type Atmosphere, type Thermal, type V3, type VesselAero } from "./aero";
+import {
+  aeroForces,
+  airAt,
+  airTop,
+  coldSkin,
+  heatStep,
+  type AeroOut,
+  type Atmosphere,
+  type Thermal,
+  type V3,
+  type VesselAero,
+} from "./aero";
 import { G0 } from "./units";
 import { add, cross, dot, len, scale } from "./math/vec3";
 
@@ -70,7 +81,15 @@ function airAccel(env: EntryEnv, c: EntryCraft, x: V3, v: V3, bank: number): { a
   const ax = attitudeFor(x, va, c.alpha, bank);
   const out = aeroForces(c.aero, [dot(va, ax[0]), dot(va, ax[1]), dot(va, ax[2])], air);
   const k = 1 / c.mass;
-  return { a: [(out.F[0] * ax[0][0] + out.F[1] * ax[1][0] + out.F[2] * ax[2][0]) * k, (out.F[0] * ax[0][1] + out.F[1] * ax[1][1] + out.F[2] * ax[2][1]) * k, (out.F[0] * ax[0][2] + out.F[1] * ax[1][2] + out.F[2] * ax[2][2]) * k], out, h };
+  return {
+    a: [
+      (out.F[0] * ax[0][0] + out.F[1] * ax[1][0] + out.F[2] * ax[2][0]) * k,
+      (out.F[0] * ax[0][1] + out.F[1] * ax[1][1] + out.F[2] * ax[2][1]) * k,
+      (out.F[0] * ax[0][2] + out.F[1] * ax[1][2] + out.F[2] * ax[2][2]) * k,
+    ],
+    out,
+    h,
+  };
 }
 
 export interface EntryResult {
@@ -97,14 +116,32 @@ export interface EntryResult {
  * guidance's), the angle of attack held: to the handover speed (Mach, or below a height), to the
  * ground, or back out of the air (a skip). The skin's temperatures integrated too.
  */
-export function predictEntry(env: EntryEnv, c: EntryCraft, s0: EntryState, bank: (t: number, x: V3, v: V3) => number,
-  o: { handoverMach?: number; handoverH?: number; tMax?: number; skin?: Thermal; sample?: number } = {}): EntryResult {
+export function predictEntry(
+  env: EntryEnv,
+  c: EntryCraft,
+  s0: EntryState,
+  bank: (t: number, x: V3, v: V3) => number,
+  o: { handoverMach?: number; handoverH?: number; tMax?: number; skin?: Thermal; sample?: number } = {},
+): EntryResult {
   let { x, v } = s0;
   let t = 0;
   const tMax = o.tMax ?? 4000;
   const top = env.atm ? Math.max(len(x) - env.R, 0) + 1 : 0;
   let skin = o.skin ?? coldSkin();
-  const res: EntryResult = { end: s0, t: 0, speed: 0, h: len(x) - env.R, handover: false, skip: false, heatPeak: 0, gPeak: 0, qPeak: 0, shieldPeak: skin.shield, hullPeak: skin.hull, path: [x] };
+  const res: EntryResult = {
+    end: s0,
+    t: 0,
+    speed: 0,
+    h: len(x) - env.R,
+    handover: false,
+    skip: false,
+    heatPeak: 0,
+    gPeak: 0,
+    qPeak: 0,
+    shieldPeak: skin.shield,
+    hullPeak: skin.hull,
+    path: [x],
+  };
   let sampled = 0;
   let wasIn = false;
   const acc = (xq: V3, vq: V3, tq: number) => add(env.gravity(xq, vq), airAccel(env, c, xq, vq, bank(tq, xq, vq)).a);
@@ -117,13 +154,20 @@ export function predictEntry(env: EntryEnv, c: EntryCraft, s0: EntryState, bank:
     let dt = h > airH ? Math.min(5, vr < 0 ? Math.max((h - airH) / -vr, 0.5) : 5) : Math.min(Math.max(1500 / Math.max(sp, 1), 0.1), 2);
     dt = Math.max(Math.min(dt, (0.1 * h) / Math.max(-vr, 1e-3) + 0.05), 0.02);
     // RK4
-    const k1v = acc(x, v, t), k1x = v;
-    const x2 = add(x, k1x, dt / 2), v2 = add(v, k1v, dt / 2);
-    const k2v = acc(x2, v2, t + dt / 2), k2x = v2;
-    const x3 = add(x, k2x, dt / 2), v3 = add(v, k2v, dt / 2);
-    const k3v = acc(x3, v3, t + dt / 2), k3x = v3;
-    const x4 = add(x, k3x, dt), v4 = add(v, k3v, dt);
-    const k4v = acc(x4, v4, t + dt), k4x = v4;
+    const k1v = acc(x, v, t),
+      k1x = v;
+    const x2 = add(x, k1x, dt / 2),
+      v2 = add(v, k1v, dt / 2);
+    const k2v = acc(x2, v2, t + dt / 2),
+      k2x = v2;
+    const x3 = add(x, k2x, dt / 2),
+      v3 = add(v, k2v, dt / 2);
+    const k3v = acc(x3, v3, t + dt / 2),
+      k3x = v3;
+    const x4 = add(x, k3x, dt),
+      v4 = add(v, k3v, dt);
+    const k4v = acc(x4, v4, t + dt),
+      k4x = v4;
     x = [0, 1, 2].map((j) => x[j]! + (dt / 6) * (k1x[j]! + 2 * k2x[j]! + 2 * k3x[j]! + k4x[j]!)) as V3;
     v = [0, 1, 2].map((j) => v[j]! + (dt / 6) * (k1v[j]! + 2 * k2v[j]! + 2 * k3v[j]! + k4v[j]!)) as V3;
     t += dt;
@@ -167,7 +211,9 @@ export function predictEntry(env: EntryEnv, c: EntryCraft, s0: EntryState, bank:
  *  across it (+: the place to the right of the track). */
 export function miss(from: EntryState, end: V3, place: V3): { along: number; across: number; dist: number } {
   const R = len(place);
-  const u0 = unit(from.x), ue = unit(end), p = unit(place);
+  const u0 = unit(from.x),
+    ue = unit(end),
+    p = unit(place);
   const n = unit(cross(from.x, from.v));
   const fwd = cross(n, u0);
   const arc = (q: V3) => {
@@ -214,7 +260,12 @@ export class EntryGuidance {
     // the downrange: the aim `short` before the place
     const e = m.along + this.o.short;
     if (r.skip) this.bank = Math.min(this.bank + 0.2, 1.4);
-    else if (this.prev && Math.abs(this.bank - this.prev.b) > 1e-4 && Math.abs(e - this.prev.e) > 1 && (e - this.prev.e) / (this.bank - this.prev.b) < 0) {
+    else if (
+      this.prev &&
+      Math.abs(this.bank - this.prev.b) > 1e-4 &&
+      Math.abs(e - this.prev.e) > 1 &&
+      (e - this.prev.e) / (this.bank - this.prev.b) < 0
+    ) {
       // (the secant — the slope as the physics has it: more bank, less range; else the fixed step below)
       const slope = (e - this.prev.e) / (this.bank - this.prev.b);
       const nb = this.bank - e / slope;
@@ -240,8 +291,13 @@ export class EntryGuidance {
  * end at once — the coming `orbits` turns scanned for the downrange's zero crossings, the pass with the
  * least crossrange kept, its time refined with whole entries by the secant.
  */
-export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place: V3,
-  o: { peH: number; handoverMach: number; short: number; orbits?: number; bank?: number; reach?: number }): { t: number; dv: number; result: EntryResult; miss: { along: number; across: number; dist: number } } | null {
+export function planDeorbit(
+  env: EntryEnv,
+  c: EntryCraft,
+  s0: EntryState,
+  place: V3,
+  o: { peH: number; handoverMach: number; short: number; orbits?: number; bank?: number; reach?: number },
+): { t: number; dv: number; result: EntryResult; miss: { along: number; across: number; dist: number } } | null {
   const mu = len(env.gravity(s0.x, [0, 0, 0])) * dot(s0.x, s0.x);
   const bank = o.bank ?? 0.75;
   const reach = o.reach ?? 600e3;
@@ -265,10 +321,14 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
     const a = (xq: V3, vq: V3) => env.gravity(xq, vq);
     for (let i = 0; i < steps; i++) {
       for (let k = 0; k < sub; k++) {
-        const k1v = a(x, v), k1x = v;
-        const k2v = a(add(x, k1x, h / 2), add(v, k1v, h / 2)), k2x = add(v, k1v, h / 2);
-        const k3v = a(add(x, k2x, h / 2), add(v, k2v, h / 2)), k3x = add(v, k2v, h / 2);
-        const k4v = a(add(x, k3x, h), add(v, k3v, h)), k4x = add(v, k3v, h);
+        const k1v = a(x, v),
+          k1x = v;
+        const k2v = a(add(x, k1x, h / 2), add(v, k1v, h / 2)),
+          k2x = add(v, k1v, h / 2);
+        const k3v = a(add(x, k2x, h / 2), add(v, k2v, h / 2)),
+          k3x = add(v, k2v, h / 2);
+        const k4v = a(add(x, k3x, h), add(v, k3v, h)),
+          k4x = add(v, k3v, h);
         x = [0, 1, 2].map((j) => x[j]! + (h / 6) * (k1x[j]! + 2 * k2x[j]! + 2 * k3x[j]! + k4x[j]!)) as V3;
         v = [0, 1, 2].map((j) => v[j]! + (h / 6) * (k1v[j]! + 2 * k2v[j]! + 2 * k3v[j]! + k4v[j]!)) as V3;
       }
@@ -287,7 +347,9 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
   if (nom.res.skip || nom.dv <= 0) return null;
   // (the arc forward along the orbit's plane, 0…2π: a coast and an entry span more than half a turn)
   const n0 = unit(cross(s0.x, s0.v));
-  const u00 = unit(s0.x), f00 = cross(n0, u00), ue0 = unit(nom.res.end.x);
+  const u00 = unit(s0.x),
+    f00 = cross(n0, u00),
+    ue0 = unit(nom.res.end.x);
   let arc = Math.atan2(dot(ue0, f00), dot(ue0, u00));
   if (arc < 0) arc += 2 * Math.PI;
   const r0 = len(s0.x);
@@ -308,7 +370,8 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
   for (let i = 0; i <= N; i++) {
     const tb = (i * T) / N;
     const q = quick(states[i]!, tb);
-    if (prev && Math.sign(prev.e) !== Math.sign(q.e) && Math.abs(prev.e - q.e) < Math.PI * env.R) cands.push({ t: tb, across: Math.abs(q.m.across), lo: { t: prev.t, s: prev.s }, hi: tb, slope: Math.sign(q.e - prev.e) });
+    if (prev && Math.sign(prev.e) !== Math.sign(q.e) && Math.abs(prev.e - q.e) < Math.PI * env.R)
+      cands.push({ t: tb, across: Math.abs(q.m.across), lo: { t: prev.t, s: prev.s }, hi: tb, slope: Math.sign(q.e - prev.e) });
     prev = { t: tb, e: q.e, s: states[i]! };
   }
   // (the first pass the lift can reach — its crossrange within the craft's reach —, else the nearest)
@@ -319,7 +382,9 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
   let best: { t: number; dv: number; res: EntryResult; m: { along: number; across: number; dist: number } } | null = null;
   for (const cd of cands.slice(0, 2)) {
     const slope = (() => {
-      const a = quick(cd.lo.s, cd.lo.t), sh = coast(cd.lo.s, cd.hi - cd.lo.t, 1)[1]!, b = quick(sh, cd.hi);
+      const a = quick(cd.lo.s, cd.lo.t),
+        sh = coast(cd.lo.s, cd.hi - cd.lo.t, 1)[1]!,
+        b = quick(sh, cd.hi);
       return (b.e - a.e) / Math.max(cd.hi - cd.lo.t, 1e-9);
     })();
     let p0 = { t: cd.lo.t, s: cd.lo.s, ...full(cd.lo.s, cd.lo.t) };
@@ -336,8 +401,11 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
     let m = Math.abs(p1.e) < Math.abs(p0.e) ? p1 : p0;
     if (Math.sign(p1.e) !== Math.sign(p0.e) && Math.abs(m.e) > 300) {
       // (false position — Illinois — between them, the coast from the earlier)
-      let lo = p0.t < p1.t ? p0 : p1, hi = p0.t < p1.t ? p1 : p0;
-      let fl = lo.e, fh = hi.e, side = 0;
+      let lo = p0.t < p1.t ? p0 : p1,
+        hi = p0.t < p1.t ? p1 : p0;
+      let fl = lo.e,
+        fh = hi.e,
+        side = 0;
       for (let k = 0; k < 10 && Math.abs(m.e) > 300; k++) {
         const tm = Math.min(Math.max(hi.t - (fh * (hi.t - lo.t)) / (fh - fl), lo.t), hi.t);
         const sm = coast(lo.s, tm - lo.t, 1)[1]!;
@@ -355,7 +423,12 @@ export function planDeorbit(env: EntryEnv, c: EntryCraft, s0: EntryState, place:
         }
       }
     }
-    if (!m.res.skip && Math.abs(m.e) < 30e3 && (!best || rank({ t: m.t, across: Math.abs(m.m.across) }) < rank({ t: best.t, across: Math.abs(best.m.across) }))) best = { t: m.t, dv: m.dv, res: m.res, m: m.m };
+    if (
+      !m.res.skip &&
+      Math.abs(m.e) < 30e3 &&
+      (!best || rank({ t: m.t, across: Math.abs(m.m.across) }) < rank({ t: best.t, across: Math.abs(best.m.across) }))
+    )
+      best = { t: m.t, dv: m.dv, res: m.res, m: m.m };
     if (best && Math.abs(best.m.across) < reach) break;
   }
   return best ? { t: best.t, dv: best.dv, result: best.res, miss: best.m } : null;

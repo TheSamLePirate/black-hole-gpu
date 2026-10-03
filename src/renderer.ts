@@ -26,7 +26,19 @@ import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { mouth, radius, setSceneTime } from "./wormhole";
-import { BODY_PLANET, BODY_STAR, BODY_VEC4, MAX_BODIES, ourStart, packBodies, sceneBodies, SURFACE_MAPPED, throatLight, TRACED_RADIUS, type GpuBody } from "./system/scene-bodies";
+import {
+  BODY_PLANET,
+  BODY_STAR,
+  BODY_VEC4,
+  MAX_BODIES,
+  ourStart,
+  packBodies,
+  sceneBodies,
+  SURFACE_MAPPED,
+  throatLight,
+  TRACED_RADIUS,
+  type GpuBody,
+} from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
 import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
@@ -64,7 +76,8 @@ const TONEMAPS = { AgX: 0, "AgX punchy": 1, ACES: 2, clamp: 3, Film: 4 } as cons
 const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 /** A colour map's view read as sRGB: an rgba8 one through its sRGB view format, a compressed one (already
  *  an sRGB format) as it is. */
-const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) => t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
+const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
+  t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 255;
@@ -277,7 +290,11 @@ export class Renderer {
   // world axes; its velocity; its place around the hole), to size its running mean
   private probeSeen: { side: string; things: Map<string, Vec3>; beta: Vec3; er: Vec3; time: number; sky: number } | null = null;
   /** the camera's axes (right, up, forward) in the Ranger's probe's axes */
-  private shipProbeAxes: [Vec3, Vec3, Vec3] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  private shipProbeAxes: [Vec3, Vec3, Vec3] = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
   private envPhase = 0;
   /** the ship probe's refresh this frame: every texel (1), one of each 2×2 (2) or 4×4 (4) block */
   private envStride = 1;
@@ -363,7 +380,13 @@ export class Renderer {
   mapGpuSource() {
     return {
       device: this.device,
-      textures: () => ({ hi: this.planetMaps.hi, lo: this.planetMaps.lo, rings: this.planetMaps.rings, earthDay: this.earthMaps.cube, earthNight: this.earthMaps.night }),
+      textures: () => ({
+        hi: this.planetMaps.hi,
+        lo: this.planetMaps.lo,
+        rings: this.planetMaps.rings,
+        earthDay: this.earthMaps.cube,
+        earthNight: this.earthMaps.night,
+      }),
     };
   }
 
@@ -500,7 +523,13 @@ export class Renderer {
     });
     // (the disk's turbulence: a tiling noise baked once)
     this.noise3d = bakeNoise3d(device);
-    this.noiseSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat" });
+    this.noiseSampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      addressModeW: "repeat",
+    });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
     // (the far field's LUT: written by its own pass, read by the main kernel — a second bind group)
     this.lutWriteLayout = device.createBindGroupLayout({
@@ -530,15 +559,27 @@ export class Renderer {
         compute: { module: traceModule, entryPoint: "lut", constants: { QUALITY_PIPELINE: quality ? 1 : 0 } },
       });
     {
-      const tx = [device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }), device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING })];
-      this.lutDummy = device.createBindGroup({ layout: this.lutReadLayout, entries: [{ binding: 2, resource: tx[0]!.createView() }, { binding: 3, resource: tx[1]!.createView() }] });
+      const tx = [
+        device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
+        device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
+      ];
+      this.lutDummy = device.createBindGroup({
+        layout: this.lutReadLayout,
+        entries: [
+          { binding: 2, resource: tx[0]!.createView() },
+          { binding: 3, resource: tx[1]!.createView() },
+        ],
+      });
     }
     this.tracerCompiled = Promise.all([
       mkLut(false),
       mkLut(true),
       mkTrace(true),
       mkTrace(false),
-      device.createComputePipelineAsync({ layout, compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } } }),
+      device.createComputePipelineAsync({
+        layout,
+        compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } },
+      }),
     ]).then(([lut, lutq, q, rt, env]) => {
       this.lutPipeline = lut;
       this.lutQPipeline = lutq;
@@ -572,8 +613,7 @@ export class Renderer {
     this.displayPipeline = mkDisplay(format);
     this.export8Pipeline = mkDisplay("rgba8unorm");
     this.export16Pipeline = mkDisplay("rgba16float");
-    const mkPost = (entryPoint: string) =>
-      device.createComputePipeline({ layout: "auto", compute: { module: postModule, entryPoint } });
+    const mkPost = (entryPoint: string) => device.createComputePipeline({ layout: "auto", compute: { module: postModule, entryPoint } });
     this.postResolve = mkPost("resolve");
     this.postGatherH = mkPost("gatherH");
     this.postDown = mkPost("down");
@@ -591,10 +631,16 @@ export class Renderer {
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 
-    this.pathBuf = device.createBuffer({ size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.pathBuf = device.createBuffer({
+      size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     // (after the bodies: the light probe's harmonics, copied there on the GPU — see dispatchEnv; the
     // compute stage has no storage-buffer slot left for them)
-    this.bodyBuf = device.createBuffer({ size: this.bodyData.byteLength + SH_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.bodyBuf = device.createBuffer({
+      size: this.bodyData.byteLength + SH_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -608,11 +654,19 @@ export class Renderer {
     device.queue.writeBuffer(this.syncLutBuf, 0, sync);
     // trilinear + anisotropic: sky lookups use explicit gradients from the lensed pixel footprint
     this.sampler = device.createSampler({
-      magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 16, addressModeU: "repeat",
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      maxAnisotropy: 16,
+      addressModeU: "repeat",
     });
     this.clampSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
     const placeholder = () => {
-      const t = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      const t = device.createTexture({
+        size: [1, 1],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
       device.queue.writeTexture({ texture: t }, new Uint8Array([0, 0, 0, 255]), {}, [1, 1]);
       return t;
     };
@@ -640,10 +694,14 @@ export class Renderer {
       loadStarCatalogue(this.device, starCatalogueUrl, (u) => loading.fetch(u, "stars")),
     ]);
     const [bitmap, [lod, cat]] = await Promise.all([
-      loading.track("sky", "", loading
-        .fetch(milkyWayUrl, "sky")
-        .then((r) => r.blob())
-        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" }))),
+      loading.track(
+        "sky",
+        "",
+        loading
+          .fetch(milkyWayUrl, "sky")
+          .then((r) => r.blob())
+          .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" })),
+      ),
       loading.track("stars", "", stars),
     ]);
     this.mwTexture = this.skyBuilder.build(bitmap, "log16", this.device.limits.maxTextureDimension2D);
@@ -659,7 +717,12 @@ export class Renderer {
   private requestPlanetMaps() {
     this.mapsRequested = true;
     loading.stage("maps", "Planets & moons — the solar system's maps", { weight: 3 });
-    loading.track("maps", "", loadPlanetMaps(this.device, (u) => loading.fetch(u, "maps")))
+    loading
+      .track(
+        "maps",
+        "",
+        loadPlanetMaps(this.device, (u) => loading.fetch(u, "maps")),
+      )
       .then((maps) => {
         this.planetMaps = maps;
         if (this.live) this.bindTarget(this.live);
@@ -697,11 +760,16 @@ export class Renderer {
         // (the ground the ship stands on: the heights drawn — the terrain tiles over the map)
         if (maps.heights) {
           const { map, W, H } = maps.heights;
-          setGroundRelief("earth", earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot)));
+          setGroundRelief(
+            "earth",
+            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot)),
+          );
           // (a tile that will not load: the map's heights there)
           this.earthTiles.fallback = (q) => {
-            const x = (0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI)) * W - 0.5, y = (0.5 - Math.asin(q[2]) / Math.PI) * H - 0.5;
-            const i = ((Math.floor(x) % W) + W) % W, j = Math.min(Math.max(Math.floor(y), 0), H - 1);
+            const x = (0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI)) * W - 0.5,
+              y = (0.5 - Math.asin(q[2]) / Math.PI) * H - 0.5;
+            const i = ((Math.floor(x) % W) + W) % W,
+              j = Math.min(Math.max(Math.floor(y), 0), H - 1);
             return Math.max(map[j * W + i]!, 0);
           };
         }
@@ -790,7 +858,9 @@ export class Renderer {
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
       // (and the compressed textures it samples: the colour maps' KTX2, transcoded to BC7 or ASTC)
-      requiredFeatures: (["timestamp-query", "texture-compression-bc", "texture-compression-astc"] as GPUFeatureName[]).filter((f) => adapter.features.has(f)),
+      requiredFeatures: (["timestamp-query", "texture-compression-bc", "texture-compression-astc"] as GPUFeatureName[]).filter((f) =>
+        adapter.features.has(f),
+      ),
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
@@ -810,8 +880,14 @@ export class Renderer {
     context.configure({ device, format, alphaMode: "opaque" });
     loading.done("gpu");
     const src = {
-      trace: await wgsl(traceWGSL), display: await wgsl(displayWGSL), post: await wgsl(postWGSL), sky: await wgsl(skyWGSL),
-      ship: await wgsl(shipWGSL), endurance: await wgsl(enduranceWGSL), station: await wgsl(stationWGSL), overlay: await wgsl(overlayWGSL),
+      trace: await wgsl(traceWGSL),
+      display: await wgsl(displayWGSL),
+      post: await wgsl(postWGSL),
+      sky: await wgsl(skyWGSL),
+      ship: await wgsl(shipWGSL),
+      endurance: await wgsl(enduranceWGSL),
+      station: await wgsl(stationWGSL),
+      overlay: await wgsl(overlayWGSL),
     };
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
@@ -831,7 +907,10 @@ export class Renderer {
     // (the pipelines compile in the GPU process: the tracer's awaited below, the others' by the first frame)
     loading.stage("pipelines", "Compiling the ray tracer — first image", { weight: 4, indeterminate: true, eta: 3 });
     // (its failure held as a value: told after the WGSL's own messages, which name the line)
-    const tracerFailure = r.tracerCompiled.then(() => null, (e: Error) => e);
+    const tracerFailure = r.tracerCompiled.then(
+      () => null,
+      (e: Error) => e,
+    );
     let checked = 0;
     for (const [name, code] of Object.entries(src)) {
       const info = await device.createShaderModule({ code }).getCompilationInfo();
@@ -884,18 +963,44 @@ export class Renderer {
   private displayView(target: Target, outW: number, outH: number, letterbox: boolean): [number, number, number, number] {
     if (!letterbox) return [1, 1, 0, 0];
     const k = Math.min(outW / target.width, outH / target.height);
-    const sx = (target.width * k) / outW, sy = (target.height * k) / outH;
+    const sx = (target.width * k) / outW,
+      sy = (target.height * k) / outH;
     return [sx, sy, (1 - sx) / 2, (1 - sy) / 2];
   }
   /** (the lines' widths are CSS pixels of the view: output pixels per CSS pixel on the page, or — an export —
    *  per CSS pixel of the image as the page shows it) */
-  private encodeChart(enc: GPUCommandEncoder, s: Settings, t: Target, view: GPUTextureView, format: GPUTextureFormat, outW: number, outH: number, letterbox: boolean, toCanvas = true) {
+  private encodeChart(
+    enc: GPUCommandEncoder,
+    s: Settings,
+    t: Target,
+    view: GPUTextureView,
+    format: GPUTextureFormat,
+    outW: number,
+    outH: number,
+    letterbox: boolean,
+    toCanvas = true,
+  ) {
     if (!this.chart.active) return;
     const cv = this.context.canvas as HTMLCanvasElement;
     const css = Math.max(cv.clientWidth || cv.width, 1);
     const shown = toCanvas ? css : this.offline ? this.displayView(t, cv.width, cv.height, true)[0] * css : css;
-    const ship = (s.ship || this.craftsShown) && this.ship.ready ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) } : null;
-    this.chart.encode(enc, view, format, outW, outH, this.displayView(t, outW, outH, letterbox), t.moments, t.width, t.height, outW / shown, ship);
+    const ship =
+      (s.ship || this.craftsShown) && this.ship.ready
+        ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) }
+        : null;
+    this.chart.encode(
+      enc,
+      view,
+      format,
+      outW,
+      outH,
+      this.displayView(t, outW, outH, letterbox),
+      t.moments,
+      t.width,
+      t.height,
+      outW / shown,
+      ship,
+    );
   }
 
   private get canvasPipeline() {
@@ -932,7 +1037,8 @@ export class Renderer {
       const ctr = [0, 0, 0];
       for (let i = i0; i <= i1; i++) for (let k = 0; k < 3; k++) ctr[k]! += data[i * 4 + k]! / (i1 - i0 + 1);
       let rad = 0;
-      for (let i = i0; i <= i1; i++) rad = Math.max(rad, Math.hypot(data[i * 4]! - ctr[0]!, data[i * 4 + 1]! - ctr[1]!, data[i * 4 + 2]! - ctr[2]!));
+      for (let i = i0; i <= i1; i++)
+        rad = Math.max(rad, Math.hypot(data[i * 4]! - ctr[0]!, data[i * 4 + 1]! - ctr[1]!, data[i * 4 + 2]! - ctr[2]!));
       data.set([ctr[0]!, ctr[1]!, ctr[2]!, rad], (PATH_MAX + c) * 4);
     }
     this.device.queue.writeBuffer(this.pathBuf, 0, data);
@@ -976,7 +1082,10 @@ export class Renderer {
     const d = this.device;
     const px = width * height;
     const polAcc = d.createBuffer({ size: polarization ? px * 8 : 16, usage: GPUBufferUsage.STORAGE });
-    const polGrid = d.createBuffer({ size: Math.max(16, Math.ceil(width / 6) * Math.ceil(height / 6) * 16), usage: GPUBufferUsage.STORAGE });
+    const polGrid = d.createBuffer({
+      size: Math.max(16, Math.ceil(width / 6) * Math.ceil(height / 6) * 16),
+      usage: GPUBufferUsage.STORAGE,
+    });
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
@@ -986,7 +1095,12 @@ export class Renderer {
     const bloomLevels = Math.max(2, Math.min(8, Math.floor(Math.log2(Math.min(width, height))) - 3));
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     // (render attachment: the spaceship is composited over mip 0)
-    const hdr = d.createTexture({ size: [width, height], format: "rgba16float", mipLevelCount: bloomLevels, usage: usage | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
+    const hdr = d.createTexture({
+      size: [width, height],
+      format: "rgba16float",
+      mipLevelCount: bloomLevels,
+      usage: usage | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST,
+    });
     const bloomTex = d.createTexture({
       size: [Math.max(1, width >> 1), Math.max(1, height >> 1)],
       format: "rgba16float",
@@ -1162,7 +1276,11 @@ export class Renderer {
     if (t.dof) return t.dof;
     const d = this.device;
     // (half resolution: the blur has no fine detail; the display mixes it over the sharp image)
-    const tex = d.createTexture({ size: [Math.ceil(t.width / 2), Math.ceil(t.height / 2)], format: "rgba16float", usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+    const tex = d.createTexture({
+      size: [Math.ceil(t.width / 2), Math.ceil(t.height / 2)],
+      format: "rgba16float",
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
     const buf = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const bind = d.createBindGroup({
       layout: this.postDof.getBindGroupLayout(0),
@@ -1213,26 +1331,24 @@ export class Renderer {
         }),
       });
     }
-    t.postPasses.push(
-      {
-        label: "resolve",
-        pipeline: this.postResolve,
-        w: t.width,
-        h: t.height,
-        bind: d.createBindGroup({
-          layout: this.postResolve.getBindGroupLayout(0),
-          entries: [
-            { binding: 2, resource: hdrMip(0) },
-            { binding: 4, resource: { buffer: t.accum } },
-            { binding: 5, resource: { buffer: t.resolveBuf } },
-            { binding: 6, resource: { buffer: t.stamps } },
-            { binding: 7, resource: { buffer: t.polAcc } },
-            { binding: 11, resource: { buffer: t.moments } },
-            { binding: 13, resource: { buffer: t.gather } },
-          ],
-        }),
-      },
-    );
+    t.postPasses.push({
+      label: "resolve",
+      pipeline: this.postResolve,
+      w: t.width,
+      h: t.height,
+      bind: d.createBindGroup({
+        layout: this.postResolve.getBindGroupLayout(0),
+        entries: [
+          { binding: 2, resource: hdrMip(0) },
+          { binding: 4, resource: { buffer: t.accum } },
+          { binding: 5, resource: { buffer: t.resolveBuf } },
+          { binding: 6, resource: { buffer: t.stamps } },
+          { binding: 7, resource: { buffer: t.polAcc } },
+          { binding: 11, resource: { buffer: t.moments } },
+          { binding: 13, resource: { buffer: t.gather } },
+        ],
+      }),
+    });
     for (let l = 1; l < n; l++) {
       const [w, h] = mipSize(l);
       // (the first level takes the Ranger and its jets over the traced image: the glare is the whole
@@ -1444,7 +1560,18 @@ export class Renderer {
     }
     // a body near the camera: the local patch (floating origin), not a traced sphere
     const dRdL = s.wormhole && cam.region === "throat" ? radius(m.w, cam.ell)[1] : 1;
-    const near = this.localPatchOn && !o.probe ? localPatch(cam, bodies.slice(0, MAX_BODIES), (k) => (bodies[k]!.where === 2 || bodies[k]!.where === 4 ? solarState(bodies[k]!.id, time).vel : bodyVelocity(s, bodies[k]!.id as unknown as Body, time)), dRdL) : null;
+    const near =
+      this.localPatchOn && !o.probe
+        ? localPatch(
+            cam,
+            bodies.slice(0, MAX_BODIES),
+            (k) =>
+              bodies[k]!.where === 2 || bodies[k]!.where === 4
+                ? solarState(bodies[k]!.id, time).vel
+                : bodyVelocity(s, bodies[k]!.id as unknown as Body, time),
+            dRdL,
+          )
+        : null;
     if (near) bodies[near.index]!.where = 3;
     if (near && s.ship && this.shipPose) {
       // (the body seen from the camera's eye, not the ship's centre: its attach point, the outside
@@ -1587,7 +1714,13 @@ export class Renderer {
       this.envStride = this.envReset ? 1 : spread || !slow ? 2 : 4;
       this.envEvery = this.envReset || spread || !slow ? 1 : 4;
       const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
-      set(47, this.envReset || spread ? 1 : 0, this.envPhase % (slow && !spread ? 16 : 4), this.envReset ? 1 : slow && !spread ? 2 : 0, window);
+      set(
+        47,
+        this.envReset || spread ? 1 : 0,
+        this.envPhase % (slow && !spread ? 16 : 4),
+        this.envReset ? 1 : slow && !spread ? 2 : 0,
+        window,
+      );
       set(55, 1, 0, 0, 0);
       set(56, 0, 1, 0, 0);
       set(57, 0, 0, 1, 0);
@@ -1607,7 +1740,7 @@ export class Renderer {
         dE = Math.hypot(b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2]) / b.radius;
       }
       const diskPx = dE > 1 ? (2 * Math.asin(1 / dE)) / pixelAngle : Infinity;
-      const highAt = 1 + (Math.PI / 2 / 2048) / pixelAngle;
+      const highAt = 1 + Math.PI / 2 / 2048 / pixelAngle;
       const have = this.earthWant;
       let want: EarthTier | null = have;
       if (diskPx < 12) want = have && performance.now() - this.earthSeenAt > 5000 ? null : have;
@@ -1628,11 +1761,17 @@ export class Renderer {
     // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
     // twentieth: seen from below, lit areas would glare like a sunlit field)
     const altKm = near && near.index === earthK ? (Math.hypot(...near.centre) - 1) * 6371 : 1e4;
-    const lights = 0.6 * 20 ** (Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0));
+    const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
     set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    set(61, 4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1), 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
+    set(
+      61,
+      4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1),
+      0,
+      0,
+      s.volumetricClouds && altKm < 30 ? 1 : 0,
+    ); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -1640,7 +1779,7 @@ export class Renderer {
     // at a 60° view; freed beyond twice that)
     if (!o.probe) {
       const dN = near ? Math.hypot(...near.centre) : Infinity;
-      const hdAt = 1 + 1.3 * ((2 * Math.PI) / 4096) / pixelAngle;
+      const hdAt = 1 + (1.3 * ((2 * Math.PI) / 4096)) / pixelAngle;
       if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
       else if (this.hdMap.name && !(nearMap === this.hdMap.name && dN < 2 * hdAt)) this.releaseHd();
     }
@@ -1669,9 +1808,13 @@ export class Renderer {
     let eclipse: [number, number, number, number] = [0, 0, 0, 0];
     let sunAng = 0;
     if (earthK >= 0) {
-      const E = solarState("earth", time).pos, M = solarState("moon", time).pos, S = solarState("sun", time).pos;
-      const m = [M[0] - E[0], M[1] - E[1], M[2] - E[2]], sn = [S[0] - M[0], S[1] - M[1], S[2] - M[2]];
-      const ml = Math.hypot(...m), sl = Math.hypot(...sn);
+      const E = solarState("earth", time).pos,
+        M = solarState("moon", time).pos,
+        S = solarState("sun", time).pos;
+      const m = [M[0] - E[0], M[1] - E[1], M[2] - E[2]],
+        sn = [S[0] - M[0], S[1] - M[1], S[2] - M[2]];
+      const ml = Math.hypot(...m),
+        sl = Math.hypot(...sn);
       const A = bodyAxes(solarBody("earth")!, time);
       const q = A.map((a) => (a[0] * m[0]! + a[1] * m[1]! + a[2] * m[2]!) / ml);
       // (Sun–Moon–Earth angle: 0 at full Moon)
@@ -1680,7 +1823,8 @@ export class Renderer {
       // the eclipses: the Moon and the Sun where the light shows them from the camera (the Moon 1.3 s
       // ago — the shadow's place, to a kilometre), on the Earth's axes [its radii]; the Sun's angular radius
       const obs = homePosition(s) ?? E;
-      const Ms = seenFrom("moon", time, obs).pos, Ss = seenFrom("sun", time, obs).pos;
+      const Ms = seenFrom("moon", time, obs).pos,
+        Ss = seenFrom("sun", time, obs).pos;
       const RE = solarBody("earth")!.radius;
       const mv = [Ms[0] - E[0], Ms[1] - E[1], Ms[2] - E[2]];
       const mq = A.map((a) => (a[0] * mv[0]! + a[1] * mv[1]! + a[2] * mv[2]!) / RE);
@@ -1706,7 +1850,10 @@ export class Renderer {
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
-      this.earthTiles.update(onEarth ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3) : null, pixelAngle);
+      this.earthTiles.update(
+        onEarth ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3) : null,
+        pixelAngle,
+      );
     }
     f.set(this.earthTiles.params(), 69 * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
@@ -1723,7 +1870,8 @@ export class Renderer {
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside
     // a system's traced bodies, and an orbiting mouth, likewise
-    for (const b of sceneBodies(s, 0)) if (b.parent < 0 && b.where === 0) r = Math.max(r, Math.min(Math.hypot(...b.pos), TRACED_RADIUS) + b.radius + 5);
+    for (const b of sceneBodies(s, 0))
+      if (b.parent < 0 && b.where === 0) r = Math.max(r, Math.min(Math.hypot(...b.pos), TRACED_RADIUS) + b.radius + 5);
     if (s.wormhole && s.whOrbit) r = Math.max(r, s.whDist + mouth(s).rGlue + 5);
     return r;
   }
@@ -1752,17 +1900,35 @@ export class Renderer {
       sy *= z;
     }
     const d = new Float32Array([
-      outW, outH, Math.pow(2, this.ev(s)) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1), TONEMAPS[s.tonemap],
-      s.renderMode === "physical" ? 0 : 1, s.bloom, target.bloomLevels - 1, dither ? 1 : 0,
-      sx, sy, ox, oy,
-      hdr ? 1 : 0, Math.max(1, s.hdrPeak), 0, 0,
+      outW,
+      outH,
+      2 ** this.ev(s) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1),
+      TONEMAPS[s.tonemap],
+      s.renderMode === "physical" ? 0 : 1,
+      s.bloom,
+      target.bloomLevels - 1,
+      dither ? 1 : 0,
+      sx,
+      sy,
+      ox,
+      oy,
+      hdr ? 1 : 0,
+      Math.max(1, s.hdrPeak),
+      0,
+      0,
       ...(() => {
         const { cs, gw, gh } = this.polCells(s, target);
         return [s.polarization ? 1 : 0, cs, gw, gh];
       })(),
       // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
-      target.width, target.height, s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117, s.band === "230GHz" ? 1 : 0,
-      this.beamSetup(s, target)?.level ?? 0, (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0, this.dofOn(s, target) ? 1 : 0, 0,
+      target.width,
+      target.height,
+      s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117,
+      s.band === "230GHz" ? 1 : 0,
+      this.beamSetup(s, target)?.level ?? 0,
+      (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0,
+      this.dofOn(s, target) ? 1 : 0,
+      0,
     ]);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;
@@ -1779,7 +1945,10 @@ export class Renderer {
   private writeResolve(t: Target, s: Settings) {
     const view = s.polarization && s.polView === "intensity" ? 1 << 8 : 0;
     // x: block | view << 8 | image width << 16
-    const r = t === this.live ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom] : [1 | view | (t.width << 16), 0, 0, 0];
+    const r =
+      t === this.live
+        ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom]
+        : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
     this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(this.ev(s)), 0, 0, 0]));
     if (s.polarization) {
@@ -1795,7 +1964,16 @@ export class Renderer {
       return;
     }
     if (!this.ship.ready) {
-      this.shipLoading ??= loading.track("ranger", "The Ranger — hull & mounts", this.ship.load((u) => loading.fetch(u, "ranger"))).then(() => this.invalidate(), (e) => console.error("Ranger:", e));
+      this.shipLoading ??= loading
+        .track(
+          "ranger",
+          "The Ranger — hull & mounts",
+          this.ship.load((u) => loading.fetch(u, "ranger")),
+        )
+        .then(
+          () => this.invalidate(),
+          (e) => console.error("Ranger:", e),
+        );
       return;
     }
     // (256 × 128 probe: everything after a reset, else one texel of each 2×2 or 4×4 block per run)
@@ -1839,7 +2017,14 @@ export class Renderer {
       return;
     }
     this.writeParams(t, s, job.time, {
-      block: 1, eps: s.realtimeEps, steps: s.realtimeSteps, y0: 0, y1: 1, accumulate: false, sampleIndex: 0, flags: 0,
+      block: 1,
+      eps: s.realtimeEps,
+      steps: s.realtimeSteps,
+      y0: 0,
+      y1: 1,
+      accumulate: false,
+      sampleIndex: 0,
+      flags: 0,
       probe: { cam: job.cam, hide: job.b.id, slice: job.slice },
     });
     const enc = this.device.createCommandEncoder();
@@ -1885,12 +2070,28 @@ export class Renderer {
   private tracePipeLayout!: GPUPipelineLayout;
   /** the scene's features (bits: radio, polarization, jet, hot spot, hot flow, wormhole, thick disk) — set with its params */
   private featureKey = FEATURES_ALL;
-  private variants = new Map<number, { rt: GPUComputePipeline | null; q: GPUComputePipeline | null; env: GPUComputePipeline | null; lut: GPUComputePipeline | null; lutq: GPUComputePipeline | null }>();
+  private variants = new Map<
+    number,
+    {
+      rt: GPUComputePipeline | null;
+      q: GPUComputePipeline | null;
+      env: GPUComputePipeline | null;
+      lut: GPUComputePipeline | null;
+      lutq: GPUComputePipeline | null;
+    }
+  >();
 
   /** The features the kernel must keep for these settings (trace.wgsl: HAS_*). */
   private featuresOf(s: Settings) {
-    return (BANDS[s.band] ? 1 : 0) | (s.polarization && !s.wormhole ? 2 : 0) | (s.jet ? 4 : 0) | (s.hotSpot ? 8 : 0) | (s.hotFlow ? 16 : 0)
-      | (s.wormhole ? 32 : 0) | (s.diskThickness > 0 ? 64 : 0); // (bodies: 128, added with them)
+    return (
+      (BANDS[s.band] ? 1 : 0) |
+      (s.polarization && !s.wormhole ? 2 : 0) |
+      (s.jet ? 4 : 0) |
+      (s.hotSpot ? 8 : 0) |
+      (s.hotFlow ? 16 : 0) |
+      (s.wormhole ? 32 : 0) |
+      (s.diskThickness > 0 ? 64 : 0)
+    ); // (bodies: 128, added with them)
   }
 
   /**
@@ -1898,7 +2099,13 @@ export class Renderer {
    * background the first time — ~10 s —, the general one drawing meanwhile).
    */
   private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline {
-    const general = { rt: this.tracePipeline, q: this.qualityPipeline, env: this.envPipeline, lut: this.lutPipeline, lutq: this.lutQPipeline }[kind];
+    const general = {
+      rt: this.tracePipeline,
+      q: this.qualityPipeline,
+      env: this.envPipeline,
+      lut: this.lutPipeline,
+      lutq: this.lutQPipeline,
+    }[kind];
     const key = this.featureKey;
     if (key === FEATURES_ALL) return general;
     let v = this.variants.get(key);
@@ -1906,15 +2113,28 @@ export class Renderer {
       v = { rt: null, q: null, env: null, lut: null, lutq: null };
       this.variants.set(key, v);
       const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
-      const constants = { HAS_RADIO: has(1), HAS_POL: has(2), HAS_JET: has(4), HAS_SPOT: has(8), HAS_VOL: has(16), HAS_WH: has(32), HAS_THICK: has(64), HAS_BODIES: has(128) };
+      const constants = {
+        HAS_RADIO: has(1),
+        HAS_POL: has(2),
+        HAS_JET: has(4),
+        HAS_SPOT: has(8),
+        HAS_VOL: has(16),
+        HAS_WH: has(32),
+        HAS_THICK: has(64),
+        HAS_BODIES: has(128),
+      };
       const mk = (entryPoint: string, quality: boolean) =>
         this.device.createComputePipelineAsync({
           layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
           compute: { module: this.traceModule, entryPoint, constants: { ...constants, QUALITY_PIPELINE: quality ? 1 : 0 } },
         });
       const slot = v;
-      void mk("main", false).then((p) => ((slot.rt = p), mk("env", false))).then((p) => ((slot.env = p), mk("main", true)))
-        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", false) : null)).then((p) => ((slot.lut = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", true) : null)).then(
+      void mk("main", false)
+        .then((p) => ((slot.rt = p), mk("env", false)))
+        .then((p) => ((slot.env = p), mk("main", true)))
+        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", false) : null))
+        .then((p) => ((slot.lut = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", true) : null))
+        .then(
           (p) => (slot.lutq = p),
           (e) => console.warn("Specialised tracer unavailable:", e),
         );
@@ -1949,7 +2169,7 @@ export class Renderer {
   private beamSetup(s: Settings, t: Target) {
     if (s.band === "visible" || s.beamUas <= 0) return null;
     const pixelAngle = (2 * Math.tan((s.fov * Math.PI) / 360)) / t.height;
-    const sigmaPx = ((s.beamUas / 2.3548) / s.uasPerM / Math.max(s.distance, 2)) / pixelAngle;
+    const sigmaPx = s.beamUas / 2.3548 / s.uasPerM / Math.max(s.distance, 2) / pixelAngle;
     if (sigmaPx < 1) return null;
     const level = Math.max(0, Math.min(t.bloomLevels - 1, Math.floor(Math.log2(sigmaPx / 2))));
     return { level, sigma: sigmaPx / 2 ** level };
@@ -1964,7 +2184,11 @@ export class Renderer {
     if (!t.beam || t.beam.level !== b.level) {
       t.beam?.tex.destroy();
       t.beam?.buf.destroy();
-      const tex = d.createTexture({ size: [w, h], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+      const tex = d.createTexture({
+        size: [w, h],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      });
       const buf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const lv = t.hdr.createView({ baseMipLevel: b.level, mipLevelCount: 1 });
       const mk = (p: GPUComputePipeline, src: GPUTextureView, dst: GPUTextureView) =>
@@ -1979,7 +2203,10 @@ export class Renderer {
       t.beam = { level: b.level, tex, buf, h: mk(this.postBeamH, lv, tex.createView()), v: mk(this.postBeamV, tex.createView(), lv) };
     }
     d.queue.writeBuffer(t.beam.buf, 0, new Float32Array([b.sigma, Math.ceil(3 * b.sigma), 0, 0]));
-    for (const [p, g] of [[this.postBeamH, t.beam.h], [this.postBeamV, t.beam.v]] as const) {
+    for (const [p, g] of [
+      [this.postBeamH, t.beam.h],
+      [this.postBeamV, t.beam.v],
+    ] as const) {
       const pass = enc.beginComputePass(this.prof.pass("beam"));
       pass.setPipeline(p);
       pass.setBindGroup(0, g);
@@ -1996,13 +2223,31 @@ export class Renderer {
   /** the LUT's textures and bind groups for an image of W × H (a sample every 8 px, corners included) */
   private makeLut(W: number, H: number) {
     const d = this.device;
-    const w = Math.ceil(W / 8) + 2, h = Math.ceil(H / 8) + 2;
+    const w = Math.ceil(W / 8) + 2,
+      h = Math.ceil(H / 8) + 2;
     const usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
-    const tex = [d.createTexture({ size: [w, h], format: "rgba32float", usage }), d.createTexture({ size: [w, h], format: "r32float", usage })];
+    const tex = [
+      d.createTexture({ size: [w, h], format: "rgba32float", usage }),
+      d.createTexture({ size: [w, h], format: "r32float", usage }),
+    ];
     return {
-      tex, w, h,
-      write: d.createBindGroup({ layout: this.lutWriteLayout, entries: [{ binding: 0, resource: tex[0]!.createView() }, { binding: 1, resource: tex[1]!.createView() }] }),
-      read: d.createBindGroup({ layout: this.lutReadLayout, entries: [{ binding: 2, resource: tex[0]!.createView() }, { binding: 3, resource: tex[1]!.createView() }] }),
+      tex,
+      w,
+      h,
+      write: d.createBindGroup({
+        layout: this.lutWriteLayout,
+        entries: [
+          { binding: 0, resource: tex[0]!.createView() },
+          { binding: 1, resource: tex[1]!.createView() },
+        ],
+      }),
+      read: d.createBindGroup({
+        layout: this.lutReadLayout,
+        entries: [
+          { binding: 2, resource: tex[0]!.createView() },
+          { binding: 3, resource: tex[1]!.createView() },
+        ],
+      }),
     };
   }
   /** (targets without a LUT: a texel's worth, never read — the flag is off) */
@@ -2011,7 +2256,18 @@ export class Renderer {
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
   /** the previous live frame's camera (axes, tan of the half field, aspect), pre-exposure, place */
-  private taPrev: { right: Vec3; up: Vec3; fwd: Vec3; tanH: number; asp: number; pre: number; r: number; region: string; time: number; near: { index: number; centre: Vec3; radius: number; axes: [Vec3, Vec3, Vec3] } | null } | null = null;
+  private taPrev: {
+    right: Vec3;
+    up: Vec3;
+    fwd: Vec3;
+    tanH: number;
+    asp: number;
+    pre: number;
+    r: number;
+    region: string;
+    time: number;
+    near: { index: number; centre: Vec3; radius: number; axes: [Vec3, Vec3, Vec3] } | null;
+  } | null = null;
   /** the reprojection's weights: a pixel a ray landed on, one between rays; the clamp's width [σ] */
   taParams: [number, number, number] = [0.25, 0.05, 2.0];
   /** the near body's ground reprojected when the camera is carried with it (a switch for comparisons) */
@@ -2036,7 +2292,8 @@ export class Renderer {
     if (!t.temporal) {
       const hist = [0, 1].map(() =>
         d.createTexture({
-          size: [t.width, t.height], format: "rgba16float",
+          size: [t.width, t.height],
+          format: "rgba16float",
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
         }),
       );
@@ -2069,8 +2326,21 @@ export class Renderer {
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9);
     const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
     const ln = this.lastNear;
-    const near = ln ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius, axes: ln.axes.map((a) => [...a]) as [Vec3, Vec3, Vec3] } : null;
-    this.taPrev = { right: [...cam.right], up: [...cam.up], fwd: [...cam.fwd], tanH, asp, pre, r: cam.r, region: cam.region, time: this.lastTime, near };
+    const near = ln
+      ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius, axes: ln.axes.map((a) => [...a]) as [Vec3, Vec3, Vec3] }
+      : null;
+    this.taPrev = {
+      right: [...cam.right],
+      up: [...cam.up],
+      fwd: [...cam.fwd],
+      tanH,
+      asp,
+      pre,
+      r: cam.r,
+      region: cam.region,
+      time: this.lastTime,
+      near,
+    };
     if (!on) {
       // (refresh the history from the image: the next moving frame starts from it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
@@ -2094,22 +2364,43 @@ export class Renderer {
     if (near && p.near && p.near.index === near.index) {
       const onAxes = (v: Vec3, A: Vec3[]) => A.map((a) => v[0] * a[0]! + v[1] * a[1]! + v[2] * a[2]!);
       const dist = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
-      const mMetres = dist(onAxes(near.centre, near.axes), onAxes(p.near.centre, p.near.axes)) * near.radius * 1476.625 * (s.massSolar || 1);
-      const turn = dist(onAxes(cam.fwd as Vec3, near.axes), onAxes(p.fwd, p.near.axes)) + dist(onAxes(cam.up as Vec3, near.axes), onAxes(p.up, p.near.axes));
+      const mMetres =
+        dist(onAxes(near.centre, near.axes), onAxes(p.near.centre, p.near.axes)) * near.radius * 1476.625 * (s.massSolar || 1);
+      const turn =
+        dist(onAxes(cam.fwd as Vec3, near.axes), onAxes(p.fwd, p.near.axes)) +
+        dist(onAxes(cam.up as Vec3, near.axes), onAxes(p.up, p.near.axes));
       // (and the light not changed at once: a new date, the history lit as it was — within 5 s of the
       // scene's clock a frame, the Sun turns 0.02° over the ground)
       const step = Math.abs(this.lastTime - p.time) * (1476.625 / C_MPS) * (s.massSolar || 1);
       still = this.carryGround && mMetres < 0.01 && turn < (0.25 * 2 * tanH) / t.height && step < 5; // (the centre's round-off: tenths of a millimetre)
       this.taStill = { still, mMetres, turn };
     }
-    d.queue.writeBuffer(ta.buf, 0, new Float32Array([
-      ...cam.right, tanH, ...cam.up, asp, ...cam.fwd, this.taParams[2],
-      ...p.right, p.tanH, ...p.up, p.asp, ...p.fwd, 0,
-      // (the history's exposure to this frame's; on; the weight of a pixel a ray landed on, of one between)
-      pre / p.pre, 1, this.taParams[0], this.taParams[1],
-      // (w: the ground's reach — negative: carried with it, the same pixel)
-      ...move, near ? (still ? -30 : 30) * near.radius : 0,
-    ]));
+    d.queue.writeBuffer(
+      ta.buf,
+      0,
+      new Float32Array([
+        ...cam.right,
+        tanH,
+        ...cam.up,
+        asp,
+        ...cam.fwd,
+        this.taParams[2],
+        ...p.right,
+        p.tanH,
+        ...p.up,
+        p.asp,
+        ...p.fwd,
+        0,
+        // (the history's exposure to this frame's; on; the weight of a pixel a ray landed on, of one between)
+        pre / p.pre,
+        1,
+        this.taParams[0],
+        this.taParams[1],
+        // (w: the ground's reach — negative: carried with it, the same pixel)
+        ...move,
+        near ? (still ? -30 : 30) * near.radius : 0,
+      ]),
+    );
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
     pass.setBindGroup(0, ta.binds[ta.idx]!);
@@ -2182,13 +2473,35 @@ export class Renderer {
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {
-        this.ship.encodeShip(enc, t.hdr, {
-          vessel: s.ship ? s.vessel : undefined, others: this.shipOthers(s), mPerM: 1476.625 * (s.massSolar || 1),
-          inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"), dash: this.cockpitDash ?? undefined,
-          mount: this.shipPose ?? (s.shipMount as Mount), look: [s.shipLookYaw, s.shipLookPitch], fov: s.fov, aspect: t.width / t.height, albedo: s.shipAlbedo, metal: s.shipMetal, rough: s.shipRough, light: s.shipLight, coat: s.shipCoat, pre: preExposure(this.ev(s)),
-          plasma: this.shipPlasma, reentry: this.shipReentry, probeAxes: this.shipProbeAxes,
-          thrust: this.shipThrust, glow: preExposure(this.ev(s)) / Math.pow(2, this.ev(s)), contrails: this.shipContrails,
-        }, this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined, t.moments);
+        this.ship.encodeShip(
+          enc,
+          t.hdr,
+          {
+            vessel: s.ship ? s.vessel : undefined,
+            others: this.shipOthers(s),
+            mPerM: 1476.625 * (s.massSolar || 1),
+            inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
+            dash: this.cockpitDash ?? undefined,
+            mount: this.shipPose ?? (s.shipMount as Mount),
+            look: [s.shipLookYaw, s.shipLookPitch],
+            fov: s.fov,
+            aspect: t.width / t.height,
+            albedo: s.shipAlbedo,
+            metal: s.shipMetal,
+            rough: s.shipRough,
+            light: s.shipLight,
+            coat: s.shipCoat,
+            pre: preExposure(this.ev(s)),
+            plasma: this.shipPlasma,
+            reentry: this.shipReentry,
+            probeAxes: this.shipProbeAxes,
+            thrust: this.shipThrust,
+            glow: preExposure(this.ev(s)) / 2 ** this.ev(s),
+            contrails: this.shipContrails,
+          },
+          this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined,
+          t.moments,
+        );
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
@@ -2197,10 +2510,19 @@ export class Renderer {
       // the Endurance, over the traced image (before the bloom's levels are made from it)
       if (s && i === r0 && s.endurance && this.lastCam) {
         if (!this.endurance.ready) {
-          this.enduranceLoading ??= loading.track("endurance", "The Endurance", this.endurance.load((u) => loading.fetch(u, "endurance"))).then(() => this.invalidate(), (e) => console.error("Endurance:", e));
+          this.enduranceLoading ??= loading
+            .track(
+              "endurance",
+              "The Endurance",
+              this.endurance.load((u) => loading.fetch(u, "endurance")),
+            )
+            .then(
+              () => this.invalidate(),
+              (e) => console.error("Endurance:", e),
+            );
         } else {
           const pre = preExposure(this.ev(s));
-          this.endurance.encode(enc, t.hdr, t.moments, s, this.lastCam, this.lastTime, pre, pre / Math.pow(2, this.ev(s)));
+          this.endurance.encode(enc, t.hdr, t.moments, s, this.lastCam, this.lastTime, pre, pre / 2 ** this.ev(s));
         }
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
@@ -2238,7 +2560,7 @@ export class Renderer {
     // the lens flare's meter: where the light that burns out is (a level ≤ 128 px wide)
     if (s && s.lensFlare > 0 && t.flare.bind) {
       const level = Math.min(t.bloomLevels - 1, Math.max(1, Math.ceil(Math.log2(t.width / 128))));
-      this.device.queue.writeBuffer(t.flare.u, 0, new Float32Array([Math.pow(2, this.ev(s)) / preExposure(this.ev(s)), level, 0, 0]));
+      this.device.queue.writeBuffer(t.flare.u, 0, new Float32Array([2 ** this.ev(s) / preExposure(this.ev(s)), level, 0, 0]));
       const pass = enc.beginComputePass(this.prof.pass("lens flare meter"));
       pass.setPipeline(this.postFlare);
       pass.setBindGroup(0, t.flare.bind);
@@ -2250,13 +2572,16 @@ export class Renderer {
       this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
       const pass = enc.beginComputePass(this.prof.pass("light meter"));
       pass.setPipeline(this.meterPipeline);
-      pass.setBindGroup(0, this.device.createBindGroup({
-        layout: this.meterPipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
-          { binding: 20, resource: { buffer: this.histBuf } },
-        ],
-      }));
+      pass.setBindGroup(
+        0,
+        this.device.createBindGroup({
+          layout: this.meterPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+            { binding: 20, resource: { buffer: this.histBuf } },
+          ],
+        }),
+      );
       pass.dispatchWorkgroups(8, 8);
       pass.end();
       enc.copyBufferToBuffer(this.histBuf, 0, this.histStage, 0, 512);
@@ -2265,12 +2590,15 @@ export class Renderer {
       this.meterSkyUsed = this.meterSky;
       this.meterEVUsed = this.autoEVDrawn;
       this.device.queue.onSubmittedWorkDone().then(() =>
-        this.histStage.mapAsync(GPUMapMode.READ).then(() => {
-          const h = new Uint32Array(this.histStage.getMappedRange().slice(0));
-          this.histStage.unmap();
-          this.meterPending = false;
-          this.readMeter(h);
-        }).catch(() => (this.meterPending = false)),
+        this.histStage
+          .mapAsync(GPUMapMode.READ)
+          .then(() => {
+            const h = new Uint32Array(this.histStage.getMappedRange().slice(0));
+            this.histStage.unmap();
+            this.meterPending = false;
+            this.readMeter(h);
+          })
+          .catch(() => (this.meterPending = false)),
       );
     }
   }
@@ -2296,7 +2624,11 @@ export class Renderer {
     const mR = 1476.625 * (s.massSolar || 1);
     const toCam = (v: Vec3): Vec3 => {
       const r = homeToRep(w, cam.ell, cam.n, v);
-      return [r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2], r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2], r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2]];
+      return [
+        r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2],
+        r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2],
+        r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2],
+      ];
     };
     const unitV = (v: Vec3): Vec3 => {
       const l = Math.hypot(...v) || 1;
@@ -2312,7 +2644,12 @@ export class Renderer {
       const a = o.pose.ax.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
       const S: [Vec3, Vec3, Vec3] = [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3];
       // (none flown: the craft near the camera in the shadow map)
-      out.push({ id: o.id, S, t: rel, shadow: s.ship ? sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 150 : sep < 4 * (vesselHulls[o.id].radius || 40) });
+      out.push({
+        id: o.id,
+        S,
+        t: rel,
+        shadow: s.ship ? sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 150 : sep < 4 * (vesselHulls[o.id].radius || 40),
+      });
     }
     return out;
   }
@@ -2336,14 +2673,27 @@ export class Renderer {
     if (!(hE < 3000)) return;
     void refreshIssElements();
     if (!this.station.ready) {
-      this.stationLoading ??= loading.track("iss", "The space station", this.station.load((u) => loading.fetch(u, "iss"))).then(() => this.invalidate(), (e) => console.error("ISS:", e));
+      this.stationLoading ??= loading
+        .track(
+          "iss",
+          "The space station",
+          this.station.load((u) => loading.fetch(u, "iss")),
+        )
+        .then(
+          () => this.invalidate(),
+          (e) => console.error("ISS:", e),
+        );
       return;
     }
     const st = issTrack.state(time, Xc);
     if (!st) return;
     const toCam = (v: Vec3): Vec3 => {
       const r = homeToRep(w, cam.ell, cam.n, v);
-      return [r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2], r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2], r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2]];
+      return [
+        r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2],
+        r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2],
+        r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2],
+      ];
     };
     const unitV = (v: Vec3): Vec3 => {
       const l = Math.hypot(...v) || 1;
@@ -2380,7 +2730,8 @@ export class Renderer {
     const bb = blackbodyXYZ(T);
     const rgb0 = xyzToLinearSRGB([bb[0] / bb[1], 1, bb[2] / bb[1]]).map((c) => Math.max(c, 0)) as Vec3;
     const lum = 0.2126 * rgb0[0] + 0.7152 * rgb0[1] + 0.0722 * rgb0[2];
-    const Esun = Math.PI * 10 ** (this.logYOf(Math.round(T / 50) * 50) - this.lastLogY) * (sunB?.brightness ?? 1) * ((sunB?.radius ?? 0) / dS) ** 2;
+    const Esun =
+      Math.PI * 10 ** (this.logYOf(Math.round(T / 50) * 50) - this.lastLogY) * (sunB?.brightness ?? 1) * ((sunB?.radius ?? 0) / dS) ** 2;
     const tint: Vec3 = [1, 0.5 + 0.5 * red, 0.25 + 0.75 * red];
     const sunE = rgb0.map((c, k) => (c / lum) * Esun * share * tint[k]!) as Vec3;
     // the Earth's sunlit disc below: its radiance (albedo 0.3, Lambert, a little blue) over the cap it
@@ -2413,13 +2764,31 @@ export class Renderer {
       const dc = toCam(d);
       const dl = Math.hypot(...dc) || 1;
       const [nx, ny, nz] = [dc[0] / dl, dc[1] / dl, dc[2] / dl];
-      const Y = [0.282095, 0.488603 * ny, 0.488603 * nz, 0.488603 * nx, 1.092548 * nx * ny, 1.092548 * ny * nz, 0.315392 * (3 * nz * nz - 1), 1.092548 * nx * nz, 0.546274 * (nx * nx - ny * ny)];
+      const Y = [
+        0.282095,
+        0.488603 * ny,
+        0.488603 * nz,
+        0.488603 * nx,
+        1.092548 * nx * ny,
+        1.092548 * ny * nz,
+        0.315392 * (3 * nz * nz - 1),
+        1.092548 * nx * nz,
+        0.546274 * (nx * nx - ny * ny),
+      ];
       for (let q = 0; q < 9; q++) for (let ch = 0; ch < 3; ch++) sh[3 * q + ch]! += L * earthCol[ch]! * (rgb0[ch]! / lum) * Y[q]! * dOmega;
     }
     const view: StationView = {
-      rel, axes, angles: stationAngles(time, st.X, st.V),
-      sun: unitV(toCam(sunH)), sunRadius: rhoS, sunE, sh,
-      tanH: Math.tan((s.fov * Math.PI) / 360), aspect: t.width / t.height, pre: preExposure(this.ev(s)), mPerM: mR,
+      rel,
+      axes,
+      angles: stationAngles(time, st.X, st.V),
+      sun: unitV(toCam(sunH)),
+      sunRadius: rhoS,
+      sunE,
+      sh,
+      tanH: Math.tan((s.fov * Math.PI) / 360),
+      aspect: t.width / t.height,
+      pre: preExposure(this.ev(s)),
+      mPerM: mR,
     };
     this.station.encode(enc, t.hdr, t.moments, view);
   }
@@ -2431,7 +2800,15 @@ export class Renderer {
    * velocity, the ZAMO's axes turning as it goes round the hole. Infinity: a jump (the other side,
    * the sky's brightness changed).
    */
-  private probeDrift(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, m: ReturnType<typeof mouth>, time: number, sky: number) {
+  private probeDrift(
+    s: Settings,
+    cam: CameraFrame,
+    bodies: GpuBody[],
+    origin: Vec3,
+    m: ReturnType<typeof mouth>,
+    time: number,
+    sky: number,
+  ) {
     const texel = Math.PI / ENV_H;
     const things = new Map<string, Vec3>();
     const add = (id: string, v: Vec3, radius: number, star: boolean) => {
@@ -2447,14 +2824,16 @@ export class Renderer {
       list.forEach((b, k) => k >= start && add(b.id, sub(b.pos, origin), b.radius, b.kind === BODY_STAR));
     } else {
       const st = Math.sin(cam.theta);
-      const X: Vec3 = side === "hole" ? [cam.r * st * Math.cos(cam.phi), cam.r * st * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (m.C as Vec3);
+      const X: Vec3 =
+        side === "hole" ? [cam.r * st * Math.cos(cam.phi), cam.r * st * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (m.C as Vec3);
       if (side === "hole") er = [st * Math.cos(cam.phi), st * Math.sin(cam.phi), Math.cos(cam.theta)];
       add("hole", [-X[0], -X[1], -X[2]], Math.max(s.disk ? s.diskOuter : 0, 3), false);
       list.forEach((b, k) => k < start && add(b.id, sub(bodyPlace(list, k), X), b.radius, b.kind === BODY_STAR));
       if (s.wormhole && side === "hole") add("mouth", sub(m.C as Vec3, X), m.w.rho, false);
     }
     // (in the throat's region: the mouth around the camera)
-    if (s.wormhole && side !== "hole") add("mouth", [-cam.n[0], -cam.n[1], -cam.n[2]], m.w.rho / Math.max(radius(m.w, cam.ell)[0], m.w.rho), false);
+    if (s.wormhole && side !== "hole")
+      add("mouth", [-cam.n[0], -cam.n[1], -cam.n[2]], m.w.rho / Math.max(radius(m.w, cam.ell)[0], m.w.rho), false);
     const prev = this.probeSeen;
     this.probeSeen = { side, things, beta: [...cam.beta], er, time, sky };
     if (!prev || prev.side !== side) return Infinity;
@@ -2521,12 +2900,22 @@ export class Renderer {
    * albedo 0.3): the accretion disk seen from here (its face and lensed images, a first estimate —
    * scene-bodies.ts: planetLight) and the stars at their distance.
    */
-  private incidentLight(s: Settings, cam: CameraFrame, bodies: GpuBody[], origin: Vec3, logYRef: number, near: ReturnType<typeof localPatch> = null) {
+  private incidentLight(
+    s: Settings,
+    cam: CameraFrame,
+    bodies: GpuBody[],
+    origin: Vec3,
+    logYRef: number,
+    near: ReturnType<typeof localPatch> = null,
+  ) {
     const ours = s.wormhole && cam.region === "throat" && cam.ell < 0;
     let E = 0;
     let X: Vec3 | null = null;
     if (!ours) {
-      X = cam.region === "hole" ? [cam.r * Math.sin(cam.theta) * Math.cos(cam.phi), cam.r * Math.sin(cam.theta) * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)] : (mouth(s).C as Vec3);
+      X =
+        cam.region === "hole"
+          ? [cam.r * Math.sin(cam.theta) * Math.cos(cam.phi), cam.r * Math.sin(cam.theta) * Math.sin(cam.phi), cam.r * Math.cos(cam.theta)]
+          : (mouth(s).C as Vec3);
       const r = Math.max(Math.hypot(...X), 2);
       // (near a world the disk lights — Miller, Mann —: the light its probe measured there, the disk as
       // its ground sees it, part of it hidden, not the disk's whole face)
@@ -2581,8 +2970,10 @@ export class Renderer {
     const Lof = (b: number) => 2 ** ((b + 0.5) / 1.5 - 48) / this.meterPre;
     // (a quantile within its bin — its share of the bin's count, the bin's top down: the bins are 0.67 EV
     // wide, a quantile falling now in one, now in the next, jumped the exposure by that much, to and fro)
-    const within = (b: number, before: number, need: number) => 2 ** ((b + 1 - (need - before) / Math.max(h[b]!, 1)) / 1.5 - 48) / this.meterPre;
-    let acc = 0, Lhi = 0;
+    const within = (b: number, before: number, need: number) =>
+      2 ** ((b + 1 - (need - before) / Math.max(h[b]!, 1)) / 1.5 - 48) / this.meterPre;
+    let acc = 0,
+      Lhi = 0;
     // (the sky's brightest, as the exposure the light falling here asks for would draw it — not the
     // exposure in use: the sky's scale follows it, and a haze at that threshold made the meter swing
     // 0.3 EV from one reading to the next, the image pumping)
@@ -2652,9 +3043,11 @@ export class Renderer {
   }
 
   private encodeDisplay(enc: GPUCommandEncoder, t: Target, pipeline: GPURenderPipeline, view: GPUTextureView) {
-    const rp = enc.beginRenderPass(this.prof.pass("display", {
-      colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }],
-    }));
+    const rp = enc.beginRenderPass(
+      this.prof.pass("display", {
+        colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }],
+      }),
+    );
     rp.setPipeline(pipeline);
     rp.setBindGroup(0, t.displayBinds.get(pipeline)!);
     rp.draw(3);
@@ -2733,8 +3126,15 @@ export class Renderer {
       if (s.temporalBlend < 1) flags |= FLAG_TEMPORAL;
       if (s.temporalReprojection) flags |= FLAG_REPROJECT;
       this.writeParams(t, s, time, {
-        block, eps: s.realtimeEps, steps: s.realtimeSteps, y0: 0, y1: t.height, accumulate: false,
-        sampleIndex: 0, flags, offset,
+        block,
+        eps: s.realtimeEps,
+        steps: s.realtimeSteps,
+        y0: 0,
+        y1: t.height,
+        accumulate: false,
+        sampleIndex: 0,
+        flags,
+        offset,
       });
       this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
       this.dispatchEnv(enc, t, s);
@@ -2752,8 +3152,17 @@ export class Renderer {
       if (s.adaptiveIntegrator) flags |= FLAG_ADAPTIVE_RK;
       if (s.noiseThreshold > 0) flags |= FLAG_ADAPTIVE_SPP;
       this.writeParams(t, s, time, {
-        block: 1, eps: s.qualityEps, steps: s.qualitySteps, y0, y1, accumulate: this.sampleIndex > 0,
-        sampleIndex: this.sampleIndex, flags, tol: s.integratorTolerance, noise: s.noiseThreshold, minSpp: 8,
+        block: 1,
+        eps: s.qualityEps,
+        steps: s.qualitySteps,
+        y0,
+        y1,
+        accumulate: this.sampleIndex > 0,
+        sampleIndex: this.sampleIndex,
+        flags,
+        tol: s.integratorTolerance,
+        noise: s.noiseThreshold,
+        minSpp: 8,
       });
       this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
       if (this.sampleIndex < 32) this.dispatchEnv(enc, t, s);
@@ -2830,7 +3239,8 @@ export class Renderer {
     const i = BLOCKS.indexOf(b);
     const finer = i > 0 ? BLOCKS[i - 1]! : 0;
     const coarser = i < BLOCKS.length - 1 ? BLOCKS[i + 1]! : 0;
-    const kf = fresh(finer), kc = fresh(coarser);
+    const kf = fresh(finer),
+      kc = fresh(coarser);
     let best = est;
     for (const x of BLOCKS) best = Math.min(best, fresh(x)?.ms ?? Infinity);
     // (what the frame may cost: the budget, or a tenth over the fastest size when none reaches it)
@@ -2890,7 +3300,9 @@ export class Renderer {
   /** Starts a render of the current scene, frozen in time, at an arbitrary resolution. */
   /** The Earth's maps and terrain tiles the view wants are in (none loading). */
   get earthSettled() {
-    return !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier) && !(this.earthIsNear && !this.earthMaps.tier);
+    return (
+      !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier) && !(this.earthIsNear && !this.earthMaps.tier)
+    );
   }
   /** the camera in the Earth's local patch (its maps wanted, whether or not asked for yet) */
   private earthIsNear = false;
@@ -2957,8 +3369,12 @@ export class Renderer {
     const t = job.target;
     // the frozen scene, with the live exposure / tone mapping / bloom so they stay adjustable
     const s = {
-      ...job.settings, exposure: display.exposure, tonemap: display.tonemap, bloom: display.bloom,
-      hdr: display.hdr, hdrPeak: display.hdrPeak,
+      ...job.settings,
+      exposure: display.exposure,
+      tonemap: display.tonemap,
+      bloom: display.bloom,
+      hdr: display.hdr,
+      hdrPeak: display.hdrPeak,
     };
     this.configureOutput(s);
     const cv = this.context.canvas as HTMLCanvasElement;
@@ -2996,8 +3412,17 @@ export class Renderer {
       if (o.tolerance > 0) flags |= FLAG_ADAPTIVE_RK;
       if (o.noiseThreshold > 0) flags |= FLAG_ADAPTIVE_SPP;
       this.writeParams(t, s, job.time, {
-        block: 1, eps: o.eps, steps: o.maxSteps, y0, y1, accumulate: job.sampleIndex > 0,
-        sampleIndex: job.sampleIndex, flags, tol: o.tolerance, noise: o.noiseThreshold, minSpp: o.minSpp,
+        block: 1,
+        eps: o.eps,
+        steps: o.maxSteps,
+        y0,
+        y1,
+        accumulate: job.sampleIndex > 0,
+        sampleIndex: job.sampleIndex,
+        flags,
+        tol: o.tolerance,
+        noise: o.noiseThreshold,
+        minSpp: o.minSpp,
         shutter: o.shutter,
       });
       this.dispatchTrace(enc, t, t.width, rows, o.tolerance > 0);
@@ -3040,7 +3465,10 @@ export class Renderer {
   ) {
     const d = this.device;
     const module = d.createShaderModule({ code: this.traceSource });
-    const pipeline = await d.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "probe", constants: { QUALITY_PIPELINE: 1 } } });
+    const pipeline = await d.createComputePipelineAsync({
+      layout: "auto",
+      compute: { module, entryPoint: "probe", constants: { QUALITY_PIPELINE: 1 } },
+    });
     const params = new Float32Array(PARAM_VEC4S * 4);
     params.set([job.a, horizon(job.a), isco(job.a), 22], 8 * 4);
     params.set([0.02, 400000, job.rEscape, job.captureTol], 10 * 4);
@@ -3058,14 +3486,17 @@ export class Renderer {
     const enc = d.createCommandEncoder();
     const pass = enc.beginComputePass();
     pass.setPipeline(pipeline);
-    pass.setBindGroup(0, d.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: pbuf } },
-        { binding: 12, resource: { buffer: buf } },
-        { binding: 15, resource: { buffer: bodies } },
-      ],
-    }));
+    pass.setBindGroup(
+      0,
+      d.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: pbuf } },
+          { binding: 12, resource: { buffer: buf } },
+          { binding: 15, resource: { buffer: bodies } },
+        ],
+      }),
+    );
     pass.dispatchWorkgroups(Math.ceil(job.rays.length / 64));
     pass.end();
     enc.copyBufferToBuffer(buf, 0, read, 0, io.byteLength);
@@ -3131,13 +3562,19 @@ export class Renderer {
     const data = new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4);
     if (!this.exportWords) return { data, width: t.width, height: t.height };
     const c = this.withWords(data, t.width, t.height);
-    return { data: new Uint8Array(c.getContext("2d")!.getImageData(0, 0, t.width, t.height).data.buffer), width: t.width, height: t.height };
+    return {
+      data: new Uint8Array(c.getContext("2d")!.getImageData(0, 0, t.width, t.height).data.buffer),
+      width: t.width,
+      height: t.height,
+    };
   }
 
   async exportPNG(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
     const px = await this.renderDisplayed(s, t, 8);
-    return this.withWords(new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), t.width, t.height).convertToBlob({ type: "image/png" });
+    return this.withWords(new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), t.width, t.height).convertToBlob({
+      type: "image/png",
+    });
   }
 
   /** words drawn over an exported image (the sky chart's labels: main.ts), its width and height [px] */
@@ -3167,7 +3604,7 @@ export class Renderer {
     this.encodePost(enc, t, s);
     this.device.queue.submit([enc.finish()]);
     const half = new Uint16Array((await this.readTexture(t.hdr, t.width, t.height, 8)).buffer);
-    const k = Math.pow(2, this.ev(s)) / preExposure(this.ev(s));
+    const k = 2 ** this.ev(s) / preExposure(this.ev(s));
     const f = new Float32Array(half.length);
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!) * k;
     return encodeEXR(f, t.width, t.height);
@@ -3186,6 +3623,6 @@ export function preExposure(ev: number) {
 /** "#rrggbb" (sRGB) → linear RGB. */
 function hexToLinear(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
-  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
   return [lin(((n >> 16) & 255) / 255), lin(((n >> 8) & 255) / 255), lin((n & 255) / 255)];
 }

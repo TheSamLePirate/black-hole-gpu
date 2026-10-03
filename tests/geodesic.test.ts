@@ -24,7 +24,11 @@ describe("camera geodesics (timelike Kerr)", () => {
   });
 
   test("circular orbits stay circular with the Keplerian period (Schwarzschild and Kerr)", () => {
-    for (const [a, r] of [[0, 10], [0.9, 8], [0.9, 30]] as const) {
+    for (const [a, r] of [
+      [0, 10],
+      [0.9, 8],
+      [0.9, 30],
+    ] as const) {
       const st = circular(r, a);
       const period = (2 * Math.PI) / keplerOmega(r, a);
       const end = advance(st, a, period).st;
@@ -50,8 +54,8 @@ describe("camera geodesics (timelike Kerr)", () => {
   test("radial free fall from rest at r0 (Schwarzschild): proper time τ = π/2 · √(r0³/2M) to r = 0", () => {
     // to the horizon: τ(r0 → 2M) from the cycloid, r = r0/2 (1 + cos η), τ = √(r0³/8M) (η + sin η)
     const r0 = 20;
-    const eta = Math.acos(2 * 2 / r0 - 1);
-    const tauExpected = Math.sqrt((r0 ** 3) / 8) * (eta + Math.sin(eta));
+    const eta = Math.acos((2 * 2) / r0 - 1);
+    const tauExpected = Math.sqrt(r0 ** 3 / 8) * (eta + Math.sin(eta));
     const r = advance(fromZamo(r0, Math.PI / 2, 0, [0, 0, 0], 0), 0, 1e6, 0.001);
     expect(Math.abs(r.tau - tauExpected) / tauExpected).toBeLessThan(2e-3);
   });
@@ -69,12 +73,16 @@ describe("camera geodesics (timelike Kerr)", () => {
   // a star of mass 0.1 M, radius 2.5 M, on a circular orbit of radius 70 M
   const om = 1 / (70 ** 1.5 + 0.5);
   const lens: Lens = {
-    m: 0.1, R: 2.5,
+    m: 0.1,
+    R: 2.5,
     centre: (t) => [70 * Math.cos(om * t), 70 * Math.sin(om * t), 0],
     velocity: (t) => [-70 * om * Math.sin(om * t), 70 * om * Math.cos(om * t), 0],
   };
-  const cart = (st: { r: number; th: number; ph: number }): [number, number, number] =>
-    [st.r * Math.sin(st.th) * Math.cos(st.ph), st.r * Math.sin(st.th) * Math.sin(st.ph), st.r * Math.cos(st.th)];
+  const cart = (st: { r: number; th: number; ph: number }): [number, number, number] => [
+    st.r * Math.sin(st.th) * Math.cos(st.ph),
+    st.r * Math.sin(st.th) * Math.sin(st.ph),
+    st.r * Math.cos(st.th),
+  ];
 
   test("a massive star pulls the camera with Newton's m/d² (weak field)", () => {
     const a = 0.5;
@@ -126,7 +134,10 @@ describe("camera geodesics (timelike Kerr)", () => {
     const s = { ...defaultSettings(), spin: 0, sun: true, sunOrbit: 70, sunRadius: 2.5, sunMass: 0.1, sunPhase: 0 };
     const D3 = 70 ** 3;
     const lensB: Lens = {
-      m: 0.1, R: 2.5, centre: (t) => starCentre(s, t), velocity: (t) => starVelocity(s, t),
+      m: 0.1,
+      R: 2.5,
+      centre: (t) => starCentre(s, t),
+      velocity: (t) => starVelocity(s, t),
       accel: (t) => holeAcceleration(s, t),
       accelRate: (t) => starVelocity(s, t).map((v) => (0.1 / D3) * v) as [number, number, number],
     };

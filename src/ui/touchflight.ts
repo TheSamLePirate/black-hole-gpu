@@ -42,7 +42,10 @@ export class TouchFlight {
 
     const right = h("div", "tf-right");
     const rolls = h("div", "tf-rolls");
-    for (const [label, v] of [["⟲", -1], ["⟳", 1]] as const) {
+    for (const [label, v] of [
+      ["⟲", -1],
+      ["⟳", 1],
+    ] as const) {
       const b = h("button", "tf-roll", label);
       b.setAttribute("aria-label", v < 0 ? "Roll left" : "Roll right");
       const off = () => {

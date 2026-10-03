@@ -67,28 +67,31 @@ export class GpuProfiler {
     // (after the submission: read them back)
     queueMicrotask(() =>
       this.device.queue.onSubmittedWorkDone().then(() =>
-        this.readBuf!.mapAsync(GPUMapMode.READ).then(() => {
-          const t = new BigUint64Array(this.readBuf!.getMappedRange().slice(0, n * 8));
-          this.readBuf!.unmap();
-          this.reading = false;
-          let sum = 0;
-          const seen = new Map<string, number>();
-          labels.forEach((l, i) => {
-            const ms = Number(t[2 * i + 1]! - t[2 * i]!) / 1e6;
-            if (!(ms >= 0 && ms < 1e4)) return;
-            seen.set(l, (seen.get(l) ?? 0) + ms);
-            sum += ms;
-          });
-          for (const [l, ms] of seen) {
-            const p = this.stats.get(l) ?? { label: l, ms, last: ms, n: 0 };
-            p.ms = p.n ? 0.9 * p.ms + 0.1 * ms : ms;
-            p.last = ms;
-            p.n++;
-            this.stats.set(l, p);
-          }
-          this.frames++;
-          this.frameMs = sum;
-        }, () => (this.reading = false)),
+        this.readBuf!.mapAsync(GPUMapMode.READ).then(
+          () => {
+            const t = new BigUint64Array(this.readBuf!.getMappedRange().slice(0, n * 8));
+            this.readBuf!.unmap();
+            this.reading = false;
+            let sum = 0;
+            const seen = new Map<string, number>();
+            labels.forEach((l, i) => {
+              const ms = Number(t[2 * i + 1]! - t[2 * i]!) / 1e6;
+              if (!(ms >= 0 && ms < 1e4)) return;
+              seen.set(l, (seen.get(l) ?? 0) + ms);
+              sum += ms;
+            });
+            for (const [l, ms] of seen) {
+              const p = this.stats.get(l) ?? { label: l, ms, last: ms, n: 0 };
+              p.ms = p.n ? 0.9 * p.ms + 0.1 * ms : ms;
+              p.last = ms;
+              p.n++;
+              this.stats.set(l, p);
+            }
+            this.frames++;
+            this.frameMs = sum;
+          },
+          () => (this.reading = false),
+        ),
       ),
     );
   }

@@ -7,7 +7,6 @@ import { dot } from "../math/vec3";
 
 export type V3 = [number, number, number];
 
-
 function stumpff(psi: number): [number, number] {
   if (psi > 1e-6) {
     const s = Math.sqrt(psi);
@@ -34,9 +33,12 @@ export function propagate(mu: number, r0: V3, v0: V3, dt: number): { r: V3; v: V
     const a = 1 / alpha;
     const s = Math.sign(dt) || 1;
     chi = s * Math.sqrt(-a) * Math.log((-2 * mu * alpha * dt) / (rv + s * Math.sqrt(-mu * a) * (1 - R0 * alpha)));
-    if (!Number.isFinite(chi)) chi = sqmu * dt / R0;
+    if (!Number.isFinite(chi)) chi = (sqmu * dt) / R0;
   } else chi = (sqmu * dt) / R0;
-  let c2 = 0.5, c3 = 1 / 6, psi = 0, r = R0;
+  let c2 = 0.5,
+    c3 = 1 / 6,
+    psi = 0,
+    r = R0;
   for (let k = 0; k < 60; k++) {
     psi = chi * chi * alpha;
     [c2, c3] = stumpff(psi);

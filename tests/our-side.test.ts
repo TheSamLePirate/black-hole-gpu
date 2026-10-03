@@ -31,8 +31,10 @@ test("the solar system to scale: the Earth at 1 AU from the Sun, Saturn 0.7 AU f
   expect(em).toBeLessThan(407e3);
   // the Earth moves at ~30 km/s around the Sun (the frame's own motion taken off: ~10 km/s of it)
   const day = 86400 / M_SECONDS;
-  const a = solarState("earth", 0).pos, b = solarState("earth", day).pos;
-  const sa = solarState("sun", 0).pos, sb = solarState("sun", day).pos;
+  const a = solarState("earth", 0).pos,
+    b = solarState("earth", day).pos;
+  const sa = solarState("sun", 0).pos,
+    sb = solarState("sun", day).pos;
   const v = (dist([b[0] - sb[0], b[1] - sb[1], b[2] - sb[2]], [a[0] - sa[0], a[1] - sa[1], a[2] - sa[2]]) * 1.476625e8) / 86400;
   expect(v).toBeGreaterThan(29);
   expect(v).toBeLessThan(31);
@@ -83,7 +85,9 @@ test("a circular orbit around Saturn closes after one period (Dneg geodesics + N
     v = v.map((x, k) => x + g[k]! * dt) as Vec3;
     const sp = Math.hypot(...v);
     const q = flyDneg(w, l, n, v.map((x) => x / sp) as Vec3, [], sp * dt);
-    l = q.l; n = q.n; v = q.dir.map((x) => x * sp) as Vec3;
+    l = q.l;
+    n = q.n;
+    v = q.dir.map((x) => x * sp) as Vec3;
     minD = Math.min(minD, dist(homeOf(w, l, n), ourState("saturn", (i + 1) * dt).pos));
   }
   const Y = homeOf(w, l, n);
@@ -114,11 +118,19 @@ test("the solar system holds and turns: a century of orbits around the Sun, true
   const AU = 1.495978707e11 / 1.476625e11;
   const year = (365.25 * 86400) / M_SECONDS;
   const helio = (id: string, t: number) => {
-    const p = solarState(id, t).pos, sun = solarState("sun", t).pos;
+    const p = solarState(id, t).pos,
+      sun = solarState("sun", t).pos;
     return [p[0] - sun[0], p[1] - sun[1], p[2] - sun[2]] as Vec3;
   };
   // (every body stays on its orbit: perihelion–aphelion bounds over 100 years)
-  const bounds: Record<string, [number, number]> = { mercury: [0.3, 0.47], earth: [0.98, 1.02], mars: [1.38, 1.67], jupiter: [4.94, 5.46], saturn: [9.0, 10.1], neptune: [29.7, 30.4] };
+  const bounds: Record<string, [number, number]> = {
+    mercury: [0.3, 0.47],
+    earth: [0.98, 1.02],
+    mars: [1.38, 1.67],
+    jupiter: [4.94, 5.46],
+    saturn: [9.0, 10.1],
+    neptune: [29.7, 30.4],
+  };
   for (let y = 0; y <= 100; y += 0.37) {
     for (const [id, [lo, hi]] of Object.entries(bounds)) {
       const r = Math.hypot(...helio(id, y * year)) / AU;
@@ -130,7 +142,10 @@ test("the solar system holds and turns: a century of orbits around the Sun, true
     expect(em).toBeLessThan(407e3);
   }
   // periods: the heliocentric longitude comes back after one sidereal period
-  const lon = (id: string, t: number) => { const p = helio(id, t); return Math.atan2(p[1], p[0]); };
+  const lon = (id: string, t: number) => {
+    const p = helio(id, t);
+    return Math.atan2(p[1], p[0]);
+  };
   const turn = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
   expect(turn(lon("earth", 0), lon("earth", year * 1.0000174))).toBeLessThan(0.02);
   expect(turn(lon("jupiter", 0), lon("jupiter", year * 11.862))).toBeLessThan(0.02);
@@ -138,7 +153,8 @@ test("the solar system holds and turns: a century of orbits around the Sun, true
   // all prograde, counter-clockwise seen from the ecliptic north
   const t1 = year / 100;
   for (const id of ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"]) {
-    const a = helio(id, 0), b = helio(id, t1);
+    const a = helio(id, 0),
+      b = helio(id, t1);
     expect(a[0] * b[1] - a[1] * b[0]).toBeGreaterThan(0);
   }
 });
@@ -152,7 +168,9 @@ test("the home frame's forces move the bodies as the ephemerides do (the frame's
   for (const t of [0, 3e5, 2e6]) {
     for (const id of ["earth", "mars", "jupiter", "sun"]) {
       const p = (k: number) => solarState(id, t + k * h).pos;
-      const p0 = p(0), pm = p(-1), pp = p(1);
+      const p0 = p(0),
+        pm = p(-1),
+        pp = p(1);
       const fd = [0, 1, 2].map((i) => (pp[i]! - 2 * p0[i]! + pm[i]!) / h ** 2);
       const g = gravityHome(p0, t).acc;
       const err = Math.hypot(...[0, 1, 2].map((i) => fd[i]! - g[i]!)) * MS2;

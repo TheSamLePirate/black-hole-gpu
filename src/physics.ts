@@ -34,7 +34,7 @@ export function criticalImpact(a: number): { pro: number; retro: number } {
 
 /** Keplerian angular velocity of prograde circular equatorial orbits. */
 export function keplerOmega(r: number, a: number): number {
-  return 1 / (Math.pow(r, 1.5) + a);
+  return 1 / (r ** 1.5 + a);
 }
 
 /**
@@ -53,8 +53,7 @@ export function ntFlux(r: number, a: number, rIn: number): number {
     if (Math.abs(xi) < 1e-6) return 0; // a → 0 limit of the vanishing root
     return ((3 * (xi - a) * (xi - a)) / (xi * (xi - xj) * (xi - xk))) * Math.log((x - xi) / (x0 - xi));
   };
-  const bracket =
-    x - x0 - 1.5 * a * Math.log(x / x0) - term(x1, x2, x3) - term(x2, x1, x3) - term(x3, x1, x2);
+  const bracket = x - x0 - 1.5 * a * Math.log(x / x0) - term(x1, x2, x3) - term(x2, x1, x3) - term(x3, x1, x2);
   return bracket / (x * x * x * x * (x * x * x - 3 * x + 2 * a));
 }
 
@@ -100,7 +99,11 @@ export function coordToZamo(v: Vec3, r: number, th: number, z: ReturnType<typeof
 
 export function zamoToCoord(b: Vec3, r: number, th: number, z: ReturnType<typeof zamo>): Vec3 {
   const rs = r * Math.max(Math.sin(th), 1e-12);
-  return [(z.alpha * b[0]) / z.sqrtSigOverDel, (r * z.alpha * b[1]) / z.sqrtSig, rs * ((z.alpha * b[2]) / Math.max(z.varpi, 1e-12) + z.omega)];
+  return [
+    (z.alpha * b[0]) / z.sqrtSigOverDel,
+    (r * z.alpha * b[1]) / z.sqrtSig,
+    rs * ((z.alpha * b[2]) / Math.max(z.varpi, 1e-12) + z.omega),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -129,12 +132,7 @@ export function rhs(x: State["x"], p: State["p"], L: number, a: number): State {
   const dNdth = (-2 * L * L * c) / (s2 * s) + 2 * a2 * s * c;
   const dSigdth = -2 * a2 * s * c;
   return {
-    x: [
-      del * pr * isig,
-      pth * isig,
-      ((a * W) / del + L / s2 - a) * isig,
-      (((r2 + a2) * W) / del + a * ldel) * isig,
-    ],
+    x: [del * pr * isig, pth * isig, ((a * W) / del + L / s2 - a) * isig, (((r2 + a2) * W) / del + a * ldel) * isig],
     p: [-0.5 * dNdr * isig + N * r * isig * isig, -0.5 * dNdth * isig + 0.5 * N * dSigdth * isig * isig],
   };
 }
@@ -167,10 +165,7 @@ export function rk4(st: State, L: number, a: number, h: number): State {
       st.x[2] + f * (k1.x[2] + 2 * k2.x[2] + 2 * k3.x[2] + k4.x[2]),
       st.x[3] + f * (k1.x[3] + 2 * k2.x[3] + 2 * k3.x[3] + k4.x[3]),
     ],
-    p: [
-      st.p[0] + f * (k1.p[0] + 2 * k2.p[0] + 2 * k3.p[0] + k4.p[0]),
-      st.p[1] + f * (k1.p[1] + 2 * k2.p[1] + 2 * k3.p[1] + k4.p[1]),
-    ],
+    p: [st.p[0] + f * (k1.p[0] + 2 * k2.p[0] + 2 * k3.p[0] + k4.p[0]), st.p[1] + f * (k1.p[1] + 2 * k2.p[1] + 2 * k3.p[1] + k4.p[1])],
   };
 }
 
@@ -248,7 +243,9 @@ export function planck(lnm: number, T: number): number {
 }
 
 export function blackbodyXYZ(T: number): Vec3 {
-  let X = 0, Y = 0, Z = 0;
+  let X = 0,
+    Y = 0,
+    Z = 0;
   for (let l = 360; l <= 830; l += 1) {
     const b = planck(l, T);
     const [x, y, z] = cie1931(l);
@@ -260,11 +257,7 @@ export function blackbodyXYZ(T: number): Vec3 {
 }
 
 export function xyzToLinearSRGB([X, Y, Z]: Vec3): Vec3 {
-  return [
-    3.2406 * X - 1.5372 * Y - 0.4986 * Z,
-    -0.9689 * X + 1.8758 * Y + 0.0415 * Z,
-    0.0557 * X - 0.204 * Y + 1.057 * Z,
-  ];
+  return [3.2406 * X - 1.5372 * Y - 0.4986 * Z, -0.9689 * X + 1.8758 * Y + 0.0415 * Z, 0.0557 * X - 0.204 * Y + 1.057 * Z];
 }
 
 export const BB_LUT_SIZE = 1024;
@@ -304,7 +297,9 @@ let flatY = 0;
 
 export function spectrumRGB(f: (x: number) => number): Vec3 {
   if (!flatY) for (let l = 360; l <= 830; l++) flatY += (LAMBDA0 / l) ** 2 * cie1931(l)[1];
-  let X = 0, Y = 0, Z = 0;
+  let X = 0,
+    Y = 0,
+    Z = 0;
   for (let l = 360; l <= 830; l++) {
     const x = LAMBDA0 / l;
     const w = f(x) * x * x;
@@ -318,7 +313,7 @@ export function spectrumRGB(f: (x: number) => number): Vec3 {
 
 /** Optically thin power law I_ν ∝ ν^−α. */
 export function powerLawRGB(alpha: number): Vec3 {
-  return spectrumRGB((x) => Math.pow(x, -alpha));
+  return spectrumRGB((x) => x ** -alpha);
 }
 
 export const SYNC_LUT_SIZE = 512;
@@ -346,10 +341,7 @@ export function stepError(p: State, q: State): number {
     Math.abs(p.x[1] - q.x[1]),
     Math.abs(p.x[2] - q.x[2]) * Math.sin(p.x[1]),
   );
-  const eMom = Math.max(
-    Math.abs(p.p[0] - q.p[0]) / (Math.abs(p.p[0]) + 1),
-    Math.abs(p.p[1] - q.p[1]) / (Math.abs(p.p[1]) + 1),
-  );
+  const eMom = Math.max(Math.abs(p.p[0] - q.p[0]) / (Math.abs(p.p[0]) + 1), Math.abs(p.p[1] - q.p[1]) / (Math.abs(p.p[1]) + 1));
   return Math.max(ePos, eMom);
 }
 

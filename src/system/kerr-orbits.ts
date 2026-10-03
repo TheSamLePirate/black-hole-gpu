@@ -58,11 +58,18 @@ export function circularOrbit(x: number, a: number) {
   const K = (L - a * E) ** 2;
   const Om = omega(x, a);
   const delta = x * x - 2 * x + a * a;
-  const gtt = -(1 - 2 / x), gtp = -2 * a / x, gpp = x * x + a * a + 2 * a * a / x;
+  const gtt = -(1 - 2 / x),
+    gtp = (-2 * a) / x,
+    gpp = x * x + a * a + (2 * a * a) / x;
   const A = E * (x * x + a * a) - a * L;
   const B = x * x + (L - a * E) ** 2;
   return {
-    x, Omega: Om, ut, E, L, K,
+    x,
+    Omega: Om,
+    ut,
+    E,
+    L,
+    K,
     radialFactor: 1 - 6 / x + (8 * a) / (x * sx) - (3 * a * a) / (x * x),
     verticalFactor: 1 - (4 * a) / (x * sx) + (3 * a * a) / (x * x),
     vZamo: (x * x - 2 * a * sx + a * a) / ((x * sx + a) * Math.sqrt(delta)),
@@ -116,24 +123,32 @@ export function throatTide(rhoM: number, wOverRho: number, length: number) {
  * distance and osculating eccentricity, and the drift of the Jacobi constant over the local binding
  * scale GM★/a.
  */
-export function integrateHierarchy(o: {
-  mStar: number; mHole: number; A: number; a: number; step: number; years: number;
-}) {
+export function integrateHierarchy(o: { mStar: number; mHole: number; A: number; a: number; step: number; years: number }) {
   const muSun = (SI.muSun * SI.year ** 2) / SI.au ** 3; // AU³/yr² (≈ 4π²)
   const mus = muSun * o.mStar;
   const mub = muSun * o.mHole;
   const A = o.A;
   const n = Math.sqrt(mub / A ** 3);
-  let qx = o.a, qy = 0, vx = 0, vy = Math.sqrt(mus / o.a);
+  let qx = o.a,
+    qy = 0,
+    vx = 0,
+    vy = Math.sqrt(mus / o.a);
   // the star's place on its circle, advanced by an exact rotation each step (no cos/sin per step)
   const h = o.step;
-  const cr = Math.cos(n * h), sr = Math.sin(n * h);
-  let cb = 1, sb = 0; // cos, sin of n t
+  const cr = Math.cos(n * h),
+    sr = Math.sin(n * h);
+  let cb = 1,
+    sb = 0; // cos, sin of n t
   const A3 = A ** 3;
   const acc = (cb: number, sb: number, x: number, y: number): [number, number] => {
-    const bx = A * cb, by = A * sb;
-    const ds2 = x * x + y * y, dx = bx + x, dy = by + y, db2 = dx * dx + dy * dy;
-    const ks = mus / (ds2 * Math.sqrt(ds2)), kb = mub / (db2 * Math.sqrt(db2));
+    const bx = A * cb,
+      by = A * sb;
+    const ds2 = x * x + y * y,
+      dx = bx + x,
+      dy = by + y,
+      db2 = dx * dx + dy * dy;
+    const ks = mus / (ds2 * Math.sqrt(ds2)),
+      kb = mub / (db2 * Math.sqrt(db2));
     return [-ks * x - mub * (dx * (kb / mub) - bx / A3), -ks * y - mub * (dy * (kb / mub) - by / A3)];
   };
   const jacobi = (cb: number, sb: number, x: number, y: number, vx: number, vy: number) => {
@@ -142,7 +157,10 @@ export function integrateHierarchy(o: {
   };
   let [ax, ay] = acc(cb, sb, qx, qy);
   const j0 = jacobi(cb, sb, qx, qy, vx, vy);
-  let rMin = o.a, rMax = o.a, eMax = 0, jDrift = 0;
+  let rMin = o.a,
+    rMax = o.a,
+    eMax = 0,
+    jDrift = 0;
   const steps = Math.round(o.years / o.step);
   for (let i = 0; i < steps; i++) {
     qx += vx * h + 0.5 * ax * h * h;
@@ -165,8 +183,10 @@ export function integrateHierarchy(o: {
       const r = Math.hypot(qx, qy);
       rMin = Math.min(rMin, r);
       rMax = Math.max(rMax, r);
-      const rv = qx * vx + qy * vy, v2 = vx * vx + vy * vy;
-      const ex = ((v2 - mus / r) * qx - rv * vx) / mus, ey = ((v2 - mus / r) * qy - rv * vy) / mus;
+      const rv = qx * vx + qy * vy,
+        v2 = vx * vx + vy * vy;
+      const ex = ((v2 - mus / r) * qx - rv * vx) / mus,
+        ey = ((v2 - mus / r) * qy - rv * vy) / mus;
       eMax = Math.max(eMax, Math.hypot(ex, ey));
       jDrift = Math.max(jDrift, Math.abs(jacobi(cb, sb, qx, qy, vx, vy) - j0) / (mus / o.a));
     }

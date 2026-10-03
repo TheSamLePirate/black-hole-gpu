@@ -5,8 +5,19 @@
 import BASIS from "../../vendor/basis/basis_transcoder.js";
 
 export type KtxTarget = "bc7" | "astc" | "rgba";
-export interface KtxRequest { id: number; url: string; target: KtxTarget; wasm: string }
-export interface KtxReply { id: number; width?: number; height?: number; levels?: Uint8Array[]; error?: string }
+export interface KtxRequest {
+  id: number;
+  url: string;
+  target: KtxTarget;
+  wasm: string;
+}
+export interface KtxReply {
+  id: number;
+  width?: number;
+  height?: number;
+  levels?: Uint8Array[];
+  error?: string;
+}
 
 // (the transcoder's formats: basisu_transcoder.h, transcoder_texture_format)
 const FORMAT: Record<KtxTarget, [string, number]> = { bc7: ["cTFBC7_RGBA", 6], astc: ["cTFASTC_4x4_RGBA", 10], rgba: ["cTFRGBA32", 13] };
@@ -37,7 +48,10 @@ async function handle(q: KtxRequest) {
         levels.push(out);
       }
       const r: KtxReply = { id: q.id, width: f.getWidth(), height: f.getHeight(), levels };
-      g.postMessage(r, levels.map((x) => x.buffer as ArrayBuffer));
+      g.postMessage(
+        r,
+        levels.map((x) => x.buffer as ArrayBuffer),
+      );
     } finally {
       f.close();
       f.delete();

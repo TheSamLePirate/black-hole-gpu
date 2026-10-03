@@ -9,12 +9,18 @@ import { recorder } from "./helpers/recorder";
 
 type V3 = [number, number, number];
 const deg = Math.PI / 180;
-const W = 1600, H = 900;
-const S = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const W = 1600,
+  H = 900;
+const S = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
 
 /** the camera pitched up by `pitch` and turned right to heading `hdg` [°] (camera axes: x right, y up, z ahead) */
 function dirsFor(pitch: number, hdg: number): Record<string, V3> {
-  const p = pitch * deg, h = hdg * deg;
+  const p = pitch * deg,
+    h = hdg * deg;
   // (looking up, the world's up leans towards the line of sight)
   const up: V3 = [0, Math.cos(p), Math.sin(p)];
   // north, level, at heading 0 straight ahead; turned right by hdg it swings to the left
@@ -25,7 +31,18 @@ function dirsFor(pitch: number, hdg: number): Record<string, V3> {
 
 function draw(i: Partial<SymInfo> & { dirs: SymInfo["dirs"] }, o: { outside?: boolean; density?: number } = {}) {
   const R = recorder();
-  drawSymbology({ ctx: R.ctx, W, H, dpr: 1, fov: 60, s: defaultSettings(), outside: !!o.outside, density: o.density ?? 0, top: 60, i: { S, ...i } });
+  drawSymbology({
+    ctx: R.ctx,
+    W,
+    H,
+    dpr: 1,
+    fov: 60,
+    s: defaultSettings(),
+    outside: !!o.outside,
+    density: o.density ?? 0,
+    top: 60,
+    i: { S, ...i },
+  });
   return R;
 }
 
@@ -34,7 +51,8 @@ test("level flight, nose north: the heading 000° boxed at the centre, the ±10�
   const box = R.find(/^\d{3}°$/)!;
   expect(box.text).toBe("000°");
   expect(box.x).toBeCloseTo(W / 2, 0);
-  const up10 = R.texts.filter((t) => t.text === "10"), dn10 = R.texts.filter((t) => t.text === "-10");
+  const up10 = R.texts.filter((t) => t.text === "10"),
+    dn10 = R.texts.filter((t) => t.text === "-10");
   expect(up10.length).toBeGreaterThan(0);
   expect(dn10.length).toBeGreaterThan(0);
   expect(up10[0]!.y + dn10[0]!.y).toBeCloseTo(H, 0);
@@ -63,7 +81,13 @@ test("from outside the ship, or in the clean view: no heading tape, no ladder", 
 });
 
 test("no NaN in what is drawn, whatever the attitude", () => {
-  for (const [p, h] of [[0, 0], [45, 30], [89.9, 180], [-89.9, 270], [180, 0]] as const) {
+  for (const [p, h] of [
+    [0, 0],
+    [45, 30],
+    [89.9, 180],
+    [-89.9, 270],
+    [180, 0],
+  ] as const) {
     const R = draw({ dirs: { ...dirsFor(p, h), prograde: [0.3, 0.2, 0.93], retrograde: [-0.3, -0.2, -0.93] } });
     for (const [x, y] of R.points) expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true);
     for (const t of R.texts) expect(Number.isFinite(t.x) && Number.isFinite(t.y)).toBe(true);

@@ -26,7 +26,10 @@ export function addEphemeris(buf: ArrayBuffer) {
   const dv = new DataView(buf);
   if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "EPHM") throw new Error("not an ephemeris file");
   const hl = dv.getUint32(4, true);
-  const h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))) as { version: number; bodies: Omit<Body, "data" | "rec">[] & { offset: number }[] };
+  const h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))) as {
+    version: number;
+    bodies: Omit<Body, "data" | "rec">[] & { offset: number }[];
+  };
   if (h.version !== 1) throw new Error(`ephemeris version ${h.version}`);
   const base = 8 + hl;
   for (const b of h.bodies as (Omit<Body, "data" | "rec"> & { offset: number })[]) {
@@ -42,7 +45,8 @@ let loading: Promise<void> | null = null;
  */
 export function loadEphemerides(
   urls: string[],
-  fetchUrl: (u: string) => Promise<ArrayBuffer> = (u) => fetch(u).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
+  fetchUrl: (u: string) => Promise<ArrayBuffer> = (u) =>
+    fetch(u).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
 ): Promise<void> {
   return (loading ??= Promise.all(urls.map((u) => fetchUrl(u).then(addEphemeris)))
     .then(() => undefined)
@@ -65,13 +69,23 @@ export function deState(id: string, et: number): { pos: Vec3; vel: Vec3 } | null
   const i = Math.floor((et - b.et0) / b.L);
   if (i < 0 || i >= b.count) return null;
   const x = (2 * (et - b.et0 - i * b.L)) / b.L - 1;
-  const o = i * b.rec, n = b.n, d = b.data;
-  const coef = b.prec === 64 ? (c: number, k: number) => d.getFloat64(o + 8 * (c * (n + 1) + k), true) : (c: number, k: number) => (k === 0 ? d.getFloat64(o + 8 * c, true) : d.getFloat32(o + 24 + 4 * (c * n + k - 1), true));
-  const pos: Vec3 = [0, 0, 0], vel: Vec3 = [0, 0, 0];
+  const o = i * b.rec,
+    n = b.n,
+    d = b.data;
+  const coef =
+    b.prec === 64
+      ? (c: number, k: number) => d.getFloat64(o + 8 * (c * (n + 1) + k), true)
+      : (c: number, k: number) => (k === 0 ? d.getFloat64(o + 8 * c, true) : d.getFloat32(o + 24 + 4 * (c * n + k - 1), true));
+  const pos: Vec3 = [0, 0, 0],
+    vel: Vec3 = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
     // Tₖ(x) by recurrence, and Tₖ′ = k Uₖ₋₁ (Uₖ by the same recurrence)
-    let t0 = 1, t1 = x, u0 = 1, u1 = 2 * x;
-    let p = coef(c, 0) + coef(c, 1) * x, v = coef(c, 1);
+    let t0 = 1,
+      t1 = x,
+      u0 = 1,
+      u1 = 2 * x;
+    let p = coef(c, 0) + coef(c, 1) * x,
+      v = coef(c, 1);
     for (let k = 2; k <= n; k++) {
       const t2 = 2 * x * t1 - t0;
       const ck = coef(c, k);

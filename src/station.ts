@@ -15,8 +15,21 @@ const STRIDE = 24;
 const REACH = 62;
 const SHADOW = 2048;
 
-interface Mesh { vbuf: GPUBuffer; ibuf: GPUBuffer; count: number }
-interface Box { w: number; h: number; color: GPUTexture; depthColor: GPUTexture; depth: GPUTexture; resColor: GPUTexture; resDepth: GPUTexture; comp?: GPUBindGroup }
+interface Mesh {
+  vbuf: GPUBuffer;
+  ibuf: GPUBuffer;
+  count: number;
+}
+interface Box {
+  w: number;
+  h: number;
+  color: GPUTexture;
+  depthColor: GPUTexture;
+  depth: GPUTexture;
+  resColor: GPUTexture;
+  resDepth: GPUTexture;
+  comp?: GPUBindGroup;
+}
 
 /** What the renderer gives for a frame: the station seen from the camera. */
 export interface StationView {
@@ -40,7 +53,6 @@ export interface StationView {
   mPerM: number;
 }
 
-
 export class StationRenderer {
   ready = false;
   joints: StationJoint[] = [];
@@ -58,26 +70,31 @@ export class StationRenderer {
   private box: Box | null = null;
   /** its box's resolved depth (distance [m], coverage): the Ranger hidden behind it */
   depthTexture(): GPUTexture | null {
-    return this.rect[2] > 0 ? this.box?.resDepth ?? null : null;
+    return this.rect[2] > 0 ? (this.box?.resDepth ?? null) : null;
   }
   /** where it was drawn [x, y, w, h] (w = 0: not drawn) */
   rect: [number, number, number, number] = [0, 0, 0, 0];
   /** called when the finer level has come in */
   onLoaded: () => void = () => {};
 
-  constructor(private device: GPUDevice, wgsl: string) {
+  constructor(
+    private device: GPUDevice,
+    wgsl: string,
+  ) {
     const d = device;
     const module = d.createShaderModule({ code: wgsl, label: "station" });
     this.uniform = d.createBuffer({ size: (6 + 9 + 39) * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const buffers: GPUVertexBufferLayout[] = [{
-      arrayStride: STRIDE,
-      attributes: [
-        { shaderLocation: 0, offset: 0, format: "float32x3" },
-        { shaderLocation: 1, offset: 12, format: "snorm8x4" },
-        { shaderLocation: 2, offset: 16, format: "unorm8x4" },
-        { shaderLocation: 3, offset: 20, format: "uint8x4" },
-      ],
-    }];
+    const buffers: GPUVertexBufferLayout[] = [
+      {
+        arrayStride: STRIDE,
+        attributes: [
+          { shaderLocation: 0, offset: 0, format: "float32x3" },
+          { shaderLocation: 1, offset: 12, format: "snorm8x4" },
+          { shaderLocation: 2, offset: 16, format: "unorm8x4" },
+          { shaderLocation: 3, offset: 20, format: "uint8x4" },
+        ],
+      },
+    ];
     this.pipe = d.createRenderPipeline({
       layout: "auto",
       vertex: { module, entryPoint: "vs", buffers },
@@ -99,18 +116,27 @@ export class StationRenderer {
       fragment: {
         module,
         entryPoint: "compFs",
-        targets: [{
-          format: "rgba16float",
-          blend: {
-            color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-            alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+        targets: [
+          {
+            format: "rgba16float",
+            blend: {
+              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+              alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+            },
           },
-        }],
+        ],
       },
       primitive: { topology: "triangle-list" },
     });
-    this.shadowTex = d.createTexture({ size: [SHADOW, SHADOW], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-    this.shadowBind = d.createBindGroup({ layout: this.shadowPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
+    this.shadowTex = d.createTexture({
+      size: [SHADOW, SHADOW],
+      format: "depth32float",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    this.shadowBind = d.createBindGroup({
+      layout: this.shadowPipe.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.uniform } }],
+    });
   }
 
   /** Downloads the coarse level; the fine one follows when the station is drawn large. */
@@ -125,12 +151,25 @@ export class StationRenderer {
       const buf = await new Response(r.body!.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
       const u32 = new Uint32Array(buf, 0, 6);
       if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "ISS1" || u32[1] !== 2) throw new Error("bad station mesh");
-      const nv = u32[2]!, ni = u32[3]!, nj = u32[4]!, np = u32[5]!;
+      const nv = u32[2]!,
+        ni = u32[3]!,
+        nj = u32[4]!,
+        np = u32[5]!;
       const jf = new Float32Array(buf, 24, nj * 12);
       const pf = new Float32Array(buf, 24 + nj * 48, np * 8);
       const v3 = (f: Float32Array, o: number): Vec3 => [f[o]!, f[o + 1]!, f[o + 2]!];
-      this.joints = Array.from({ length: nj }, (_, k) => ({ pivot: v3(jf, 12 * k), axis: v3(jf, 12 * k + 3), normal: v3(jf, 12 * k + 6), parent: Math.round(jf[12 * k + 9]!), kind: Math.round(jf[12 * k + 10]!) }));
-      this.ports = Array.from({ length: np }, (_, k) => ({ centre: v3(pf, 8 * k), axis: v3(pf, 8 * k + 3), name: PORT_NAMES[k] ?? `port ${k + 1}` }));
+      this.joints = Array.from({ length: nj }, (_, k) => ({
+        pivot: v3(jf, 12 * k),
+        axis: v3(jf, 12 * k + 3),
+        normal: v3(jf, 12 * k + 6),
+        parent: Math.round(jf[12 * k + 9]!),
+        kind: Math.round(jf[12 * k + 10]!),
+      }));
+      this.ports = Array.from({ length: np }, (_, k) => ({
+        centre: v3(pf, 8 * k),
+        axis: v3(pf, 8 * k + 3),
+        name: PORT_NAMES[k] ?? `port ${k + 1}`,
+      }));
       setStationGeometry(this.joints, this.ports);
       const off = 24 + nj * 48 + np * 32;
       const d = this.device;
@@ -164,13 +203,17 @@ export class StationRenderer {
   encode(enc: GPUCommandEncoder, hdr: GPUTexture, moments: GPUBuffer, v: StationView) {
     this.rect = [0, 0, 0, 0];
     if (!this.ready) return;
-    const W = hdr.width, H = hdr.height;
+    const W = hdr.width,
+      H = hdr.height;
     const p = v.rel;
     const R = REACH;
     if (p[2] < -R) return;
     const dist = Math.hypot(...p);
     // the box: the bounding sphere's projection (all of the image when the camera is inside it)
-    let bx = 0, by = 0, bw = W, bh = H;
+    let bx = 0,
+      by = 0,
+      bw = W,
+      bh = H;
     if (p[2] > R + 0.5 && dist > R * 1.05) {
       const sx = (x: number, z: number) => ((x / (z * v.tanH * v.aspect) + 1) / 2) * W;
       const sy = (y: number, z: number) => ((1 - y / (z * v.tanH)) / 2) * H;
@@ -210,7 +253,11 @@ export class StationRenderer {
     this.device.queue.writeBuffer(this.uniform, 0, u);
     const d = this.device;
     // its shadow map (from the Sun), then the shading
-    const sp = enc.beginRenderPass({ label: "station: shadow map", colorAttachments: [], depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
+    const sp = enc.beginRenderPass({
+      label: "station: shadow map",
+      colorAttachments: [],
+      depthStencilAttachment: { view: this.shadowTex.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+    });
     sp.setPipeline(this.shadowPipe);
     sp.setBindGroup(0, this.shadowBind);
     sp.setVertexBuffer(0, mesh.vbuf);
@@ -234,8 +281,20 @@ export class StationRenderer {
     const rp = enc.beginRenderPass({
       label: "station",
       colorAttachments: [
-        { view: box.color.createView(), resolveTarget: box.resColor.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] },
-        { view: box.depthColor.createView(), resolveTarget: box.resDepth.createView(), loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 0] },
+        {
+          view: box.color.createView(),
+          resolveTarget: box.resColor.createView(),
+          loadOp: "clear",
+          storeOp: "discard",
+          clearValue: [0, 0, 0, 0],
+        },
+        {
+          view: box.depthColor.createView(),
+          resolveTarget: box.resDepth.createView(),
+          loadOp: "clear",
+          storeOp: "discard",
+          clearValue: [0, 0, 0, 0],
+        },
       ],
       depthStencilAttachment: { view: box.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "discard" },
     });
@@ -269,10 +328,19 @@ export class StationRenderer {
     if (b && b.w >= w && b.h >= h && b.w <= 1.5 * w + 64 && b.h <= 1.5 * h + 64) return b;
     if (b) for (const t of [b.color, b.depthColor, b.depth, b.resColor, b.resDepth]) t.destroy();
     const d = this.device;
-    const ms = (format: GPUTextureFormat) => d.createTexture({ size: [w, h], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-    const res = (format: GPUTextureFormat) => d.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-    this.box = { w, h, color: ms("rgba16float"), depthColor: ms("rg16float"), depth: ms("depth24plus"), resColor: res("rgba16float"), resDepth: res("rg16float") };
+    const ms = (format: GPUTextureFormat) =>
+      d.createTexture({ size: [w, h], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    const res = (format: GPUTextureFormat) =>
+      d.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+    this.box = {
+      w,
+      h,
+      color: ms("rgba16float"),
+      depthColor: ms("rg16float"),
+      depth: ms("depth24plus"),
+      resColor: res("rgba16float"),
+      resDepth: res("rg16float"),
+    };
     return this.box;
   }
 }
-

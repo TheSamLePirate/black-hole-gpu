@@ -20,7 +20,8 @@ export function recorder() {
       if (k in state) return state[k];
       switch (k) {
         case "fillText":
-          return (t: string, x: number, y: number) => texts.push({ text: String(t), x, y, fill: String(state.fillStyle), font: String(state.font) });
+          return (t: string, x: number, y: number) =>
+            texts.push({ text: String(t), x, y, fill: String(state.fillStyle), font: String(state.font) });
         case "moveTo":
         case "lineTo":
           return (x: number, y: number) => points.push([x, y]);

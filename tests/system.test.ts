@@ -7,7 +7,17 @@ import ref from "./data/gargantua-results.json";
 import { body, GARGANTUA_SYSTEM as SYS } from "../src/system/bodies";
 import { bodyState, meanMotion } from "../src/system/ephemeris";
 import {
-  circularOrbit, hillRadius, horizon, integrateHierarchy, isco, rocheLimit, SI, throatTide, tideRatio, tides, units,
+  circularOrbit,
+  hillRadius,
+  horizon,
+  integrateHierarchy,
+  isco,
+  rocheLimit,
+  SI,
+  throatTide,
+  tideRatio,
+  tides,
+  units,
 } from "../src/system/kerr-orbits";
 import { radius, W_OVER_M } from "../src/wormhole";
 
@@ -31,7 +41,10 @@ test("analytic checks of the audit: Schwarzschild ISCO, uᵗ(10, 0), weak-field 
 
 test("Kerr circular orbits of Miller, Mann, the star and the mouth reproduce results.json", () => {
   const cases: [keyof typeof base, number][] = [
-    ["miller", 10], ["mann", 40], ["star", base.star.x], ["wormhole", base.wormhole.x],
+    ["miller", 10],
+    ["mann", 40],
+    ["star", base.star.x],
+    ["wormhole", base.wormhole.x],
   ];
   for (const [name, x] of cases) {
     const o = circularOrbit(x, 0.998);
@@ -61,14 +74,15 @@ test("tides: the audit's Earth-sized Miller and Mann; Miller at 1.3 g keeps 0.58
     expect(rel(t.overSelfG, base[name].tide_over_self_g)).toBeLessThan(1e-11);
   }
   // Miller of the retained system: R = 1.3 R⊕ at the Earth's density (m = 1.3³ M⊕) → 1.3 g
-  const R = 1.3 * SI.earthRadius, mu = 1.3 ** 3 * SI.muEarth;
+  const R = 1.3 * SI.earthRadius,
+    mu = 1.3 ** 3 * SI.muEarth;
   expect(rel(mu / R ** 2 / (SI.muEarth / SI.earthRadius ** 2), 1.3)).toBeLessThan(1e-12);
   const t = tides(10, 0.998, 1e8, R, mu);
   expect(rel(t.overSelfG, base.miller.tide_over_self_g)).toBeLessThan(1e-11); // same density: same ratio
   expect(t.kerr).toBeCloseTo(0.0746, 3);
   // the registry agrees: 8 280 km, 1.3 g
   const miller = body(SYS, "miller");
-  expect(miller.radius * U.rg / 1000).toBeCloseTo(8282, 0);
+  expect((miller.radius * U.rg) / 1000).toBeCloseTo(8282, 0);
   expect(miller.surface!.gravity).toBe(1.3);
 });
 
@@ -78,14 +92,14 @@ test("Miller's clock: 1 hour there is 1 h 10 min 51 s far away; a turn is 28.04 
   expect(Math.floor(far / 3600)).toBe(1);
   expect(Math.floor((far % 3600) / 60)).toBe(10);
   expect(Math.round(far % 60)).toBe(51);
-  expect(o.period * U.tg / 3600).toBeCloseTo(28.0428, 3);
-  expect(o.properPeriod * U.tg / 3600).toBeCloseTo(23.7478, 3);
+  expect((o.period * U.tg) / 3600).toBeCloseTo(28.0428, 3);
+  expect((o.properPeriod * U.tg) / 3600).toBeCloseTo(23.7478, 3);
   expect(circularOrbit(40, 0.998).ut).toBeCloseTo(1.0394, 4);
 });
 
 test("the audit's checks: the solar star's Hill radius, Edmunds' year, the Roche limit", () => {
   expect(rel(hillRadius(10000, SI.muSun, SI.muSun * 1e8), ref.checks.star_hill_au)).toBeLessThan(1e-12);
-  expect(rel(2 * Math.PI * Math.sqrt(SI.au ** 3 / SI.muSun) / 86400, ref.checks.edmunds_period_days)).toBeLessThan(1e-12);
+  expect(rel((2 * Math.PI * Math.sqrt(SI.au ** 3 / SI.muSun)) / 86400, ref.checks.edmunds_period_days)).toBeLessThan(1e-12);
   expect(rel(rocheLimit(SI.earthRadius, SI.muEarth, SI.muSun * 1e8) / SI.au, ref.checks.roche_newton_earth_au)).toBeLessThan(1e-12);
   expect(rel(tideRatio(1e8, 1, 1, 10000), ref.checks.star_tide_relative_on_edmunds)).toBeLessThan(1e-12);
 });
@@ -101,7 +115,9 @@ test("the audit's Edmunds integration is reproduced (2 000 years, step 0.0025 yr
 });
 
 test("the retained K2 dwarf at 2 000 AU keeps Edmunds over 10 000 years (Hill 0.215, tide 0.66 %)", () => {
-  const K2 = { m: 0.78, L: 0.35 }, A = 2000, a = Math.sqrt(K2.L);
+  const K2 = { m: 0.78, L: 0.35 },
+    A = 2000,
+    a = Math.sqrt(K2.L);
   const rH = hillRadius(A, K2.m, 1e8);
   expect(a / rH).toBeCloseTo(0.215, 3);
   expect(a / rH).toBeLessThan(0.25); // ×2 margin under the empirical 0.4895
@@ -119,8 +135,9 @@ test("the retained K2 dwarf at 2 000 AU keeps Edmunds over 10 000 years (Hill 0.
   // the registry: Edmunds' year of 188 days, 0.59 AU from its star
   const sys = SYS;
   const w = meanMotion(sys, body(sys, "edmunds"));
-  expect(2 * Math.PI / w * U.tg / 86400).toBeCloseTo(188, 0);
-  const e = bodyState(sys, "edmunds", 1234.5), s = bodyState(sys, "k2", 1234.5);
+  expect((((2 * Math.PI) / w) * U.tg) / 86400).toBeCloseTo(188, 0);
+  const e = bodyState(sys, "edmunds", 1234.5),
+    s = bodyState(sys, "k2", 1234.5);
   const d = Math.hypot(e.pos[0] - s.pos[0], e.pos[1] - s.pos[1], e.pos[2] - s.pos[2]);
   expect(d * U.rgAu).toBeCloseTo(a, 6);
 }, 60000);
@@ -136,7 +153,7 @@ test("the 0.05 M throat: 0.19 m/s² of tide over 10 m; r''(ℓ) of the Dneg metr
   // the mouth's orbit at 300 M: 0.058 c, 0.51 year
   const o = circularOrbit(300, 0.998);
   expect(o.vZamo).toBeCloseTo(0.058, 3);
-  expect(o.period * U.tg / SI.year).toBeCloseTo(0.51, 2);
+  expect((o.period * U.tg) / SI.year).toBeCloseTo(0.51, 2);
 });
 
 // ---- phase 1: the orbiting mouth, velocities across its gluing sphere, the bodies sent to the GPU
@@ -148,7 +165,8 @@ const scene = () => Object.assign(defaultSettings(), presets["Gargantua system (
 
 test("the orbiting mouth: a circular Kerr orbit at 300 M, 0.058 c, axes fixed", () => {
   const s = scene();
-  const m0 = mouth(s, 0), m1 = mouth(s, 1000);
+  const m0 = mouth(s, 0),
+    m1 = mouth(s, 1000);
   expect(Math.hypot(...m0.C)).toBeCloseTo(300, 9);
   expect(m0.omega).toBeCloseTo(1 / (300 ** 1.5 + 0.998), 15);
   expect(Math.hypot(...m0.V)).toBeCloseTo(300 * m0.omega, 12); // ≈ 0.0577 (coordinate speed)
@@ -160,7 +178,11 @@ test("the orbiting mouth: a circular Kerr orbit at 300 M, 0.058 c, axes fixed", 
 
 test("velocities compose relativistically across the gluing sphere (round trip, below c)", () => {
   const m = mouth(scene(), 123);
-  for (const u of [[0.3, -0.2, 0.5], [0, 0, 0], [-0.9, 0.1, 0.2]] as [number, number, number][]) {
+  for (const u of [
+    [0.3, -0.2, 0.5],
+    [0, 0, 0],
+    [-0.9, 0.1, 0.2],
+  ] as [number, number, number][]) {
     const back = velToMouth(m, velFromMouth(m, u));
     for (let i = 0; i < 3; i++) expect(back[i]!).toBeCloseTo(u[i]!, 12);
     expect(Math.hypot(...velFromMouth(m, u))).toBeLessThan(1);
@@ -190,7 +212,8 @@ test("bodies for the GPU: the companion star as before, the system's traced plan
   // (within the Dneg region: Saturn and its inner moons, 0.7 AU from the mouth)
   expect(list.find((q) => q.id === "saturn")!.where).toBe(4);
   expect(list.find((q) => q.id === "earth")!.where).toBe(2);
-  const ed = list[3]!, k2 = list[2]!;
+  const ed = list[3]!,
+    k2 = list[2]!;
   expect(ed.parent).toBe(2); // around the K2 star, lit by it
   expect(ed.light).toBe(2);
   expect(Math.hypot(...ed.pos) * units(1e8).rgAu).toBeCloseTo(Math.sqrt(0.35), 6);

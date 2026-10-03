@@ -10,9 +10,13 @@ import { bodyState, bodyTrack } from "../src/system/ephemeris";
 const a = SYS.spin;
 const dot = (u: Vec3, v: Vec3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 const basis = (X: Vec3) => {
-  const r = Math.hypot(...X), th = Math.acos(X[2] / r), ph = Math.atan2(X[1], X[0]);
+  const r = Math.hypot(...X),
+    th = Math.acos(X[2] / r),
+    ph = Math.atan2(X[1], X[0]);
   return {
-    r, th, ph,
+    r,
+    th,
+    ph,
     er: [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)] as Vec3,
     et: [Math.cos(th) * Math.cos(ph), Math.cos(th) * Math.sin(ph), -Math.sin(th)] as Vec3,
     ep: [-Math.sin(ph), Math.cos(ph), 0] as Vec3,
@@ -25,14 +29,20 @@ const shipAt = (X: Vec3, W: Vec3, t: number) => {
   return fromZamo(f.r, f.th, f.ph, beta, a, t);
 };
 const cart = (s: { r: number; th: number; ph: number }): Vec3 => [
-  s.r * Math.sin(s.th) * Math.cos(s.ph), s.r * Math.sin(s.th) * Math.sin(s.ph), s.r * Math.cos(s.th),
+  s.r * Math.sin(s.th) * Math.cos(s.ph),
+  s.r * Math.sin(s.th) * Math.sin(s.ph),
+  s.r * Math.cos(s.th),
 ];
 const lenses: Lens[] = SYS.bodies
   .filter((b) => b.universe === "gargantua" && b.kind !== "hole" && b.mass > 0)
   .map((b) => ({ m: b.mass, R: b.radius, centre: bodyTrack(SYS, b.id).pos, velocity: bodyTrack(SYS, b.id).vel }));
 
 test("coordinate ↔ ZAMO velocity: round trip, and a body at rest on the map drifts at −ωϖ/α", () => {
-  for (const [r, th] of [[10, Math.PI / 2], [4, 1.1], [60, 0.4]] as const) {
+  for (const [r, th] of [
+    [10, Math.PI / 2],
+    [4, 1.1],
+    [60, 0.4],
+  ] as const) {
     const z = zamo(r, th, a);
     const v: Vec3 = [0.01, -0.02, 0.3];
     const back = zamoToCoord(coordToZamo(v, r, th, z), r, th, z);
@@ -66,7 +76,8 @@ test("an orbit around Miller stays bound for several turns, cheaply (the planet'
   const M = body(SYS, "miller");
   const tr = bodyTrack(SYS, "miller");
   const t = 3000;
-  const P = tr.pos(t), V = tr.vel(t);
+  const P = tr.pos(t),
+    V = tr.vel(t);
   const d0 = 1.6 * M.radius;
   const r = Math.hypot(...P);
   const er = P.map((x) => x / r) as Vec3;
@@ -75,7 +86,8 @@ test("an orbit around Miller stays bound for several turns, cheaply (the planet'
   const ut = 1 / bodyState(SYS, "miller", t).dtau;
   const vc = Math.sqrt(M.mass / d0) / (ut * Math.sqrt((r * r) / (r * r - 2 * r + a * a)));
   let st = shipAt([P[0], P[1], d0], [V[0] + vc * er[0], V[1] + vc * er[1], V[2]], t);
-  let dMin = Infinity, dMax = 0;
+  let dMin = Infinity,
+    dMax = 0;
   const t0 = performance.now();
   for (let k = 0; k < 900; k++) {
     const res = advance(st, a, 4 / 30, 0.05, 0, [0, 0, 0], lenses);

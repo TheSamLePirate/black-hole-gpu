@@ -68,10 +68,12 @@ export function hamiltonian(st: Massive, a: number) {
 
 type D = { t: number; r: number; th: number; ph: number; ur: number; uth: number; L: number; E: number };
 
-
 /** Spherical basis and Cartesian position at (r, θ, φ) (flat map of BL). */
 function frame(r: number, th: number, ph: number) {
-  const st = Math.sin(th), ct = Math.cos(th), sp = Math.sin(ph), cp = Math.cos(ph);
+  const st = Math.sin(th),
+    ct = Math.cos(th),
+    sp = Math.sin(ph),
+    cp = Math.cos(ph);
   const er: Vec3 = [st * cp, st * sp, ct];
   return { er, et: [ct * cp, ct * sp, -st] as Vec3, ep: [-sp, cp, 0] as Vec3, X: [r * er[0], r * er[1], r * er[2]] as Vec3, st };
 }
@@ -85,7 +87,13 @@ function lensField(lens: Lens, X: Vec3, t: number) {
   const dvv = dot3(dv, v);
   const d2 = Math.max(dot3(dv, dv) + g2 * dvv * dvv, lens.R * lens.R);
   const k = lens.m / (d2 * Math.sqrt(d2));
-  return { grad: [k * (dv[0] + g2 * dvv * v[0]), k * (dv[1] + g2 * dvv * v[1]), k * (dv[2] + g2 * dvv * v[2])] as Vec3, v, g2, c, dist: Math.hypot(...dv) };
+  return {
+    grad: [k * (dv[0] + g2 * dvv * v[0]), k * (dv[1] + g2 * dvv * v[1]), k * (dv[2] + g2 * dvv * v[2])] as Vec3,
+    v,
+    g2,
+    c,
+    dist: Math.hypot(...dv),
+  };
 }
 
 /** (distance from the body)² / (its Hill radius around the hole)²: how far out of its sphere of influence. */
@@ -97,10 +105,16 @@ function hillDepth(lens: Lens, X: Vec3, t: number) {
 
 /** (dt/dτ)² of a body moving at the coordinate velocity v (flat map, Cartesian) at (r, θ) of Kerr. */
 function kerrUt2(r: number, th: number, a: number, v: Vec3, f: ReturnType<typeof frame>) {
-  const s2 = f.st * f.st, c = Math.cos(th);
-  const sig = r * r + a * a * c * c, del = r * r - 2 * r + a * a;
-  const rd = dot3(v, f.er), thd = dot3(v, f.et) / r, phd = dot3(v, f.ep) / (r * Math.max(f.st, 1e-9));
-  const gtt = -(1 - (2 * r) / sig), gtp = (-2 * a * r * s2) / sig, gpp = (r * r + a * a + (2 * a * a * r * s2) / sig) * s2;
+  const s2 = f.st * f.st,
+    c = Math.cos(th);
+  const sig = r * r + a * a * c * c,
+    del = r * r - 2 * r + a * a;
+  const rd = dot3(v, f.er),
+    thd = dot3(v, f.et) / r,
+    phd = dot3(v, f.ep) / (r * Math.max(f.st, 1e-9));
+  const gtt = -(1 - (2 * r) / sig),
+    gtp = (-2 * a * r * s2) / sig,
+    gpp = (r * r + a * a + (2 * a * a * r * s2) / sig) * s2;
   const n = -(gtt + 2 * gtp * phd + gpp * phd * phd + (sig / del) * rd * rd + sig * thd * thd);
   return n > 1e-9 ? 1 / n : 1e9;
 }
@@ -161,8 +175,14 @@ function rhs(st: Massive, a: number, lenses?: Lenses): D {
 
 function add(st: Massive, d: D, h: number): Massive {
   return {
-    t: st.t + h * d.t, r: st.r + h * d.r, th: st.th + h * d.th, ph: st.ph + h * d.ph, ur: st.ur + h * d.ur, uth: st.uth + h * d.uth,
-    L: st.L + h * d.L, E: st.E + h * d.E,
+    t: st.t + h * d.t,
+    r: st.r + h * d.r,
+    th: st.th + h * d.th,
+    ph: st.ph + h * d.ph,
+    ur: st.ur + h * d.ur,
+    uth: st.uth + h * d.uth,
+    L: st.L + h * d.L,
+    E: st.E + h * d.E,
   };
 }
 
@@ -246,7 +266,9 @@ function stepMax(st: Massive, a: number, lenses?: Lenses) {
         // the ship's coordinate velocity (flat map) and dt/dτ
         const g = inverseMetric(st.r, st.th, a);
         tdot = -g.tt * st.E + g.tph * st.L;
-        const rd = (g.rr * st.ur) / tdot, thd = (g.thth * st.uth) / tdot, phd = (-g.tph * st.E + g.phph * st.L) / tdot;
+        const rd = (g.rr * st.ur) / tdot,
+          thd = (g.thth * st.uth) / tdot,
+          phd = (-g.tph * st.E + g.phph * st.L) / tdot;
         V = [0, 1, 2].map((i) => rd * f.er[i]! + st.r * thd * f.et[i]! + st.r * f.st * phd * f.ep[i]!) as Vec3;
       }
       const u = lens.velocity(st.t);
@@ -331,14 +353,15 @@ function stepDP(st: Massive, a: number, h: number, lenses: Lenses | undefined, t
   const y5 = combine(st, ks, DP_B5, h);
   const y4 = combine(st, ks, DP_B4, h);
   const u = Math.hypot(st.ur, st.uth / st.r, st.L / st.r) + 1e-3;
-  const err = Math.max(
-    Math.abs(y5.r - y4.r) / st.r,
-    Math.abs(y5.th - y4.th),
-    Math.abs(y5.ph - y4.ph) * Math.sin(st.th) + 1e-300,
-    Math.abs(y5.ur - y4.ur) / u,
-    Math.abs(y5.uth - y4.uth) / (u * st.r),
-    Math.abs(y5.t - y4.t) / (Math.abs(h * ks[0]!.t) + 1e-9),
-  ) / tol;
+  const err =
+    Math.max(
+      Math.abs(y5.r - y4.r) / st.r,
+      Math.abs(y5.th - y4.th),
+      Math.abs(y5.ph - y4.ph) * Math.sin(st.th) + 1e-300,
+      Math.abs(y5.ur - y4.ur) / u,
+      Math.abs(y5.uth - y4.uth) / (u * st.r),
+      Math.abs(y5.t - y4.t) / (Math.abs(h * ks[0]!.t) + 1e-9),
+    ) / tol;
   // across the polar axis: reflect (θ → −θ or 2π − θ, φ → φ + π)
   let n = y5;
   if (n.th < 0) n = { ...n, th: -n.th, ph: n.ph + Math.PI, uth: -n.uth };
@@ -419,7 +442,15 @@ export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel
 const hGuess = new Map<number, number>();
 
 /** Future path (no thrust): Cartesian points (flat map of BL) until `tMax` of coordinate time. */
-export function predict(st: Massive, a: number, tMax: number, maxPoints = 400, lens?: Lenses, tol = TOL, stop?: (p: Vec3, t: number) => boolean) {
+export function predict(
+  st: Massive,
+  a: number,
+  tMax: number,
+  maxPoints = 400,
+  lens?: Lenses,
+  tol = TOL,
+  stop?: (p: Vec3, t: number) => boolean,
+) {
   const pts: Vec3[] = [];
   let s = st;
   let fate: "horizon" | "escape" | "continues" | "star" = "continues";

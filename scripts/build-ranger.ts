@@ -19,7 +19,12 @@ import { $ } from "bun";
 
 const src = process.argv[2] ?? "assets/Interstellar Ranger One";
 const out = "assets/ranger";
-const PARTS: [RegExp, number][] = [[/^steklo/, 1], [/^soplo/, 2], [/^okna/, 3], [/^(stykovochniy|vorota)/, 4]];
+const PARTS: [RegExp, number][] = [
+  [/^steklo/, 1],
+  [/^soplo/, 2],
+  [/^okna/, 3],
+  [/^(stykovochniy|vorota)/, 4],
+];
 const SMOOTH = Math.cos((40 * Math.PI) / 180);
 const REFINE = 0.45;
 const AO_RAYS = 96;
@@ -39,7 +44,10 @@ const norm = (a: V3): V3 => {
 // ------------------------------------------------------------------------------------ parse
 const text = await Bun.file(`${src}/source/333.obj`).text();
 const P: V3[] = [];
-interface Face { v: number[]; part: number }
+interface Face {
+  v: number[];
+  part: number;
+}
 const faces: Face[] = [];
 let part = 0;
 for (const line of text.split("\n")) {
@@ -55,14 +63,19 @@ function earClip(pts: V3[]): [number, number, number][] {
   const n = pts.length;
   if (n === 3) return [[0, 1, 2]];
   // Newell normal → 2D projection on the dominant plane
-  let nx = 0, ny = 0, nz = 0;
+  let nx = 0,
+    ny = 0,
+    nz = 0;
   for (let i = 0; i < n; i++) {
-    const a = pts[i]!, b = pts[(i + 1) % n]!;
+    const a = pts[i]!,
+      b = pts[(i + 1) % n]!;
     nx += (a[1] - b[1]) * (a[2] + b[2]);
     ny += (a[2] - b[2]) * (a[0] + b[0]);
     nz += (a[0] - b[0]) * (a[1] + b[1]);
   }
-  const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+  const ax = Math.abs(nx),
+    ay = Math.abs(ny),
+    az = Math.abs(nz);
   const [i0, i1, s] = az >= ax && az >= ay ? [0, 1, Math.sign(nz)] : ax >= ay ? [1, 2, Math.sign(nx)] : [2, 0, Math.sign(ny)];
   const q = pts.map((p) => [p[i0], p[i1]] as [number, number]);
   const area2 = (a: number, b: number, c: number) =>
@@ -75,7 +88,9 @@ function earClip(pts: V3[]): [number, number, number][] {
   while (idx.length > 3 && guard++ < 10000) {
     let clipped = false;
     for (let k = 0; k < idx.length; k++) {
-      const a = idx[(k + idx.length - 1) % idx.length]!, b = idx[k]!, c = idx[(k + 1) % idx.length]!;
+      const a = idx[(k + idx.length - 1) % idx.length]!,
+        b = idx[k]!,
+        c = idx[(k + 1) % idx.length]!;
       if (area2(a, b, c) <= 1e-14) continue; // reflex or degenerate
       if (idx.some((p) => p !== a && p !== b && p !== c && inside(p, a, b, c))) continue;
       tris.push([a, b, c]);
@@ -89,7 +104,13 @@ function earClip(pts: V3[]): [number, number, number][] {
   return tris;
 }
 
-interface Tri { v: [number, number, number]; n: V3; area: number; part: number; cn?: [V3, V3, V3] }
+interface Tri {
+  v: [number, number, number];
+  n: V3;
+  area: number;
+  part: number;
+  cn?: [V3, V3, V3];
+}
 const faceNormal = (v: Tri["v"]) => {
   const cr = cross(sub(P[v[1]]!, P[v[0]]!), sub(P[v[2]]!, P[v[0]]!));
   return { n: norm(cr), area: Math.hypot(...cr) / 2 };
@@ -164,21 +185,31 @@ for (let pass = 0; pass < 12; pass++) {
     };
     if (n === 0) next.push(t);
     else if (n === 3) {
-      const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
-      mk([a, ab, ca]); mk([ab, b, bc]); mk([ca, bc, c]); mk([ab, bc, ca]);
+      const ab = mid(a, b),
+        bc = mid(b, c),
+        ca = mid(c, a);
+      mk([a, ab, ca]);
+      mk([ab, b, bc]);
+      mk([ca, bc, c]);
+      mk([ab, bc, ca]);
     } else {
       // rotate so that the first split edge is (x, y)
       const r = e[0] ? 0 : e[1] ? 1 : 2;
       const [x, y, z] = [t.v[r]!, t.v[(r + 1) % 3]!, t.v[(r + 2) % 3]!];
       const xy = mid(x, y);
       if (n === 1) {
-        mk([x, xy, z]); mk([xy, y, z]);
+        mk([x, xy, z]);
+        mk([xy, y, z]);
       } else if (e[(r + 1) % 3]) {
         const yz = mid(y, z);
-        mk([x, xy, z]); mk([xy, y, yz]); mk([xy, yz, z]);
+        mk([x, xy, z]);
+        mk([xy, y, yz]);
+        mk([xy, yz, z]);
       } else {
         const zx = mid(z, x);
-        mk([x, xy, zx]); mk([xy, y, z]); mk([xy, z, zx]);
+        mk([x, xy, zx]);
+        mk([xy, y, z]);
+        mk([xy, z, zx]);
       }
     }
     if (n) split++;
@@ -209,10 +240,18 @@ for (const t of tris) {
 // ------------------------------------------------------------------------------------ AO bake
 // BVH: median split on the longest centroid axis, leaves of ≤ 4 triangles
 const T = tris.map((t) => t.v.map((i) => P[i]!) as [V3, V3, V3]);
-interface Node { lo: V3; hi: V3; l?: Node; r?: Node; items?: number[] }
+interface Node {
+  lo: V3;
+  hi: V3;
+  l?: Node;
+  r?: Node;
+  items?: number[];
+}
 function build(items: number[]): Node {
-  const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
-  const clo: V3 = [Infinity, Infinity, Infinity], chi: V3 = [-Infinity, -Infinity, -Infinity];
+  const lo: V3 = [Infinity, Infinity, Infinity],
+    hi: V3 = [-Infinity, -Infinity, -Infinity];
+  const clo: V3 = [Infinity, Infinity, Infinity],
+    chi: V3 = [-Infinity, -Infinity, -Infinity];
   const cen = (i: number, k: number) => (T[i]![0][k]! + T[i]![1][k]! + T[i]![2][k]!) / 3;
   for (const i of items) {
     for (const p of T[i]!) for (let k = 0; k < 3; k++) (lo[k] = Math.min(lo[k]!, p[k]!)), (hi[k] = Math.max(hi[k]!, p[k]!));
@@ -227,9 +266,11 @@ function build(items: number[]): Node {
 const bvh = build([...T.keys()]);
 
 function hitBox(n: Node, o: V3, inv: V3, tMax: number) {
-  let t0 = 0, t1 = tMax;
+  let t0 = 0,
+    t1 = tMax;
   for (let k = 0; k < 3; k++) {
-    let a = (n.lo[k]! - o[k]!) * inv[k]!, b = (n.hi[k]! - o[k]!) * inv[k]!;
+    let a = (n.lo[k]! - o[k]!) * inv[k]!,
+      b = (n.hi[k]! - o[k]!) * inv[k]!;
     if (a > b) [a, b] = [b, a];
     t0 = Math.max(t0, a);
     t1 = Math.min(t1, b);
@@ -248,7 +289,8 @@ function cast(o: V3, d: V3, tMax: number): number {
     if (n.items) {
       for (const i of n.items) {
         const [a, b, c] = T[i]!;
-        const e1 = sub(b, a), e2 = sub(c, a);
+        const e1 = sub(b, a),
+          e2 = sub(c, a);
         const pv = cross(d, e2);
         const det = dot(e1, pv);
         if (Math.abs(det) < 1e-12) continue;
@@ -283,10 +325,12 @@ for (const v of verts) {
   const o = add(p, scale(n, 0.006));
   // rotate the pattern per vertex (hash) to turn banding into fine noise
   const rot = ((Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453) % 1) * 2 * Math.PI;
-  const cr = Math.cos(rot), sr = Math.sin(rot);
+  const cr = Math.cos(rot),
+    sr = Math.sin(rot);
   let occ = 0;
   for (const [x0, y0, z] of dirs) {
-    const x = x0 * cr - y0 * sr, y = x0 * sr + y0 * cr;
+    const x = x0 * cr - y0 * sr,
+      y = x0 * sr + y0 * cr;
     const d: V3 = [t1[0] * x + t2[0] * y + n[0] * z, t1[1] * x + t2[1] * y + n[1] * z, t1[2] * x + t2[2] * y + n[2] * z];
     const t = cast(o, d, AO_RANGE);
     if (t < AO_RANGE) occ += 1 - t / AO_RANGE;

@@ -61,10 +61,8 @@ export class Mp4Writer {
     const key = chunk.type === "key";
     // sample flags: sync sample (depends on nothing) / non-sync (depends on others)
     const flags = key ? 0x02000000 : 0x01010000;
-    const trun = (offset: number) =>
-      fbox("trun", 0, 0x000701, u32(1), u32(offset), u32(duration), u32(data.length), u32(flags));
-    const traf = (offset: number) =>
-      box("traf", fbox("tfhd", 0, 0x020000, u32(1)), fbox("tfdt", 1, 0, u64(this.decodeTime)), trun(offset));
+    const trun = (offset: number) => fbox("trun", 0, 0x000701, u32(1), u32(offset), u32(duration), u32(data.length), u32(flags));
+    const traf = (offset: number) => box("traf", fbox("tfhd", 0, 0x020000, u32(1)), fbox("tfdt", 1, 0, u64(this.decodeTime)), trun(offset));
     const moofOf = (offset: number) => box("moof", fbox("mfhd", 0, 0, u32(this.seq)), traf(offset));
     const moof = moofOf(moofOf(0).length + 8); // data offset from the start of moof to the sample
     this.fragments.push(moof, box("mdat", data));
@@ -78,14 +76,42 @@ export class Mp4Writer {
     const h = this.height;
     const ftyp = box("ftyp", enc.encode("isom"), u32(0x200), enc.encode("isomiso6avc1mp41"));
     const mvhd = fbox("mvhd", 0, 0, u32(0), u32(0), u32(1000), u32(0), u32(0x10000), u16(0x100), zeros(10), MATRIX, zeros(24), u32(2));
-    const tkhd = fbox("tkhd", 0, 3, u32(0), u32(0), u32(1), zeros(4), u32(0), zeros(8), u16(0), u16(0), u16(0), zeros(2), MATRIX, u32(w << 16), u32(h << 16));
+    const tkhd = fbox(
+      "tkhd",
+      0,
+      3,
+      u32(0),
+      u32(0),
+      u32(1),
+      zeros(4),
+      u32(0),
+      zeros(8),
+      u16(0),
+      u16(0),
+      u16(0),
+      zeros(2),
+      MATRIX,
+      u32(w << 16),
+      u32(h << 16),
+    );
     const mdhd = fbox("mdhd", 0, 0, u32(0), u32(0), u32(TIMESCALE), u32(0), u16(0x55c4), u16(0));
     const hdlr = fbox("hdlr", 0, 0, u32(0), enc.encode("vide"), zeros(12), enc.encode("Kerr ray tracer\0"));
     const vmhd = fbox("vmhd", 0, 1, zeros(8));
     const dinf = box("dinf", fbox("dref", 0, 0, u32(1), fbox("url ", 0, 1)));
     const avc1 = box(
       "avc1",
-      zeros(6), u16(1), zeros(16), u16(w), u16(h), u32(0x480000), u32(0x480000), zeros(4), u16(1), zeros(32), u16(0x18), u16(0xffff),
+      zeros(6),
+      u16(1),
+      zeros(16),
+      u16(w),
+      u16(h),
+      u32(0x480000),
+      u32(0x480000),
+      zeros(4),
+      u16(1),
+      zeros(32),
+      u16(0x18),
+      u16(0xffff),
       box("avcC", this.avcC),
     );
     const stbl = box(
@@ -114,7 +140,14 @@ export class VideoWriter {
   static async supported(width: number, height: number, fps: number) {
     if (typeof VideoEncoder === "undefined") return null;
     for (const codec of ["avc1.640034", "avc1.640033", "avc1.640028"]) {
-      const cfg: VideoEncoderConfig = { codec, width, height, framerate: fps, bitrate: VideoWriter.bitrate(width, height, fps), avc: { format: "avc" } };
+      const cfg: VideoEncoderConfig = {
+        codec,
+        width,
+        height,
+        framerate: fps,
+        bitrate: VideoWriter.bitrate(width, height, fps),
+        avc: { format: "avc" },
+      };
       try {
         if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg;
       } catch {

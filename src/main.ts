@@ -18,7 +18,18 @@ import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import { criticalCurveDirections, projectLook } from "./shadow";
-import { aimAngles, buildChart, chartOn, chartOptions, CONSTELLATIONS, horizonAt, lookOf, NAMED_STARS, pickChart, type ChartFrame } from "./skychart";
+import {
+  aimAngles,
+  buildChart,
+  chartOn,
+  chartOptions,
+  CONSTELLATIONS,
+  horizonAt,
+  lookOf,
+  NAMED_STARS,
+  pickChart,
+  type ChartFrame,
+} from "./skychart";
 import { drawChartLabels } from "./ui/skylabels";
 import { SkyPanel } from "./ui/skypanel";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
@@ -93,12 +104,81 @@ const FLIGHT_MODE_HELP: Record<Settings["flightMode"], string> = {
 
 /** Rendering / performance choices survive preset changes. */
 const KEEP_ON_PRESET: (keyof Settings)[] = [
-  "pixelRatio", "realtimeSubsampling", "realtimeBudget", "fpsCap", "glassBlur", "temporalReprojection", "farFieldLut", "volumetricClouds", "realtimeEps", "realtimeSteps", "qualityEps", "qualitySteps",
-  "targetSpp", "denoise", "denoiseStrength", "quality", "tonemap", "hdr", "hdrPeak", "bloom", "dof", "dofAperture", "dofFocus", "lensFlare", "exposure", "bgIntensity", "starSize", "starBrightness", "skyL", "skyB", "skyRoll",
-  "massSolar", "cinematicSpeed", "rotation", "lookAt", "cinematic", "waterRipples", "waterMirror", "waterSpeed", "waterGlow", "waterColor", "waterDensity", "waterGlowColor", "ship", "shipMount", "shipAlbedo", "shipMetal", "shipRough", "shipLight", "shipCoat",
-  "turnRate", "turnAccel", "rcsFraction", "crashSpeed", "ballistic", "damage", "antigrav", "autosave", "autosaveEvery", "rangerStatus", "soiRings", "pathInView",
-  "sound", "soundVolume", "soundBeeps", "soundEngines", "soundAmbience", "soundUi",
-  "skyLines", "skyNames", "starNames", "gridEquatorial", "gridHorizontal", "skyEcliptic", "skyChartOpacity",
+  "pixelRatio",
+  "realtimeSubsampling",
+  "realtimeBudget",
+  "fpsCap",
+  "glassBlur",
+  "temporalReprojection",
+  "farFieldLut",
+  "volumetricClouds",
+  "realtimeEps",
+  "realtimeSteps",
+  "qualityEps",
+  "qualitySteps",
+  "targetSpp",
+  "denoise",
+  "denoiseStrength",
+  "quality",
+  "tonemap",
+  "hdr",
+  "hdrPeak",
+  "bloom",
+  "dof",
+  "dofAperture",
+  "dofFocus",
+  "lensFlare",
+  "exposure",
+  "bgIntensity",
+  "starSize",
+  "starBrightness",
+  "skyL",
+  "skyB",
+  "skyRoll",
+  "massSolar",
+  "cinematicSpeed",
+  "rotation",
+  "lookAt",
+  "cinematic",
+  "waterRipples",
+  "waterMirror",
+  "waterSpeed",
+  "waterGlow",
+  "waterColor",
+  "waterDensity",
+  "waterGlowColor",
+  "ship",
+  "shipMount",
+  "shipAlbedo",
+  "shipMetal",
+  "shipRough",
+  "shipLight",
+  "shipCoat",
+  "turnRate",
+  "turnAccel",
+  "rcsFraction",
+  "crashSpeed",
+  "ballistic",
+  "damage",
+  "antigrav",
+  "autosave",
+  "autosaveEvery",
+  "rangerStatus",
+  "soiRings",
+  "pathInView",
+  "sound",
+  "soundVolume",
+  "soundBeeps",
+  "soundEngines",
+  "soundAmbience",
+  "soundUi",
+  "skyLines",
+  "skyNames",
+  "starNames",
+  "gridEquatorial",
+  "gridHorizontal",
+  "skyEcliptic",
+  "skyChartOpacity",
 ];
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
@@ -119,13 +199,17 @@ function wheelScrollsSideways(el: HTMLElement) {
   };
   el.addEventListener("scroll", edges, { passive: true });
   new ResizeObserver(edges).observe(el);
-  el.addEventListener("wheel", (e) => {
-    if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || el.scrollWidth <= el.clientWidth + 1) return;
-    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1;
-    const before = el.scrollLeft;
-    el.scrollLeft += e.deltaY * k;
-    if (el.scrollLeft !== before) e.preventDefault();
-  }, { passive: false });
+  el.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || el.scrollWidth <= el.clientWidth + 1) return;
+      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1;
+      const before = el.scrollLeft;
+      el.scrollLeft += e.deltaY * k;
+      if (el.scrollLeft !== before) e.preventDefault();
+    },
+    { passive: false },
+  );
 }
 
 function fail(msg: string) {
@@ -174,7 +258,13 @@ async function main() {
   const touchDisplay = () => (displayChanged = true);
   // the solar system's ephemerides (DE440, JUP365: 7 MB) — in while the rest is built
   loading.stage("ephemeris", "The solar system — NASA/JPL ephemerides (DE440)", { weight: 2 });
-  const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(), (u) => loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`))))));
+  const ephemerides = loading.track(
+    "ephemeris",
+    "",
+    loadEphemerides(ephemerisUrls(), (u) =>
+      loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
+    ),
+  );
   const skyLoading = renderer
     .loadSky()
     .then(() => touch())
@@ -317,7 +407,12 @@ async function main() {
     } else if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua") {
       // a view of one of Gargantua's worlds: on an orbit about it, looking straight down, the way it
       // goes at the top of the image, then the look turned off it
-      const p = theirOrbitPose({ body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc }, time ?? sim.time, settings.spin, settings.massSolar);
+      const p = theirOrbitPose(
+        { body: pose.body!, altKm: pose.altKm, nu: pose.nu, inc: pose.inc },
+        time ?? sim.time,
+        settings.spin,
+        settings.massSolar,
+      );
       settings.shipLookYaw = settings.shipLookPitch = 0;
       const [fwd, up] = tiltAway([-p.up[0], -p.up[1], -p.up[2]], p.fwd, pose.tilt ?? 0);
       setHolePose(settings, p.X, fwd, up, p.vel);
@@ -345,7 +440,14 @@ async function main() {
       const now = pose === "iss" || pose === "fleet";
       const t = time ?? (now ? gameTimeOf(Date.now()) : sim.time);
       if (now && time === undefined) sim.setTime(t);
-      const d = pose === "earthGround" ? earthGround(t) : pose === "iss" ? issStart(t, issDistance, issOffset) ?? earthStart(t, 400) : pose === "earth" || pose === "earthMoon" || pose === "fleet" ? earthStart(t, 400, pose === "earthMoon") : saturnDeparture(t);
+      const d =
+        pose === "earthGround"
+          ? earthGround(t)
+          : pose === "iss"
+            ? (issStart(t, issDistance, issOffset) ?? earthStart(t, 400))
+            : pose === "earth" || pose === "earthMoon" || pose === "fleet"
+              ? earthStart(t, 400, pose === "earthMoon")
+              : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
       settings.motion = "geodesic";
       camera.setOurLanded(pose === "earthGround" ? (d as ReturnType<typeof earthGround>).landed : null);
@@ -368,10 +470,14 @@ async function main() {
 
     if (withMission) mission.start();
     if (name === "game:artemis") {
-      panel.toast("Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)");
+      panel.toast(
+        "Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)",
+      );
     }
     if (name === "game:interstellar") {
-      panel.toast("2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)");
+      panel.toast(
+        "2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)",
+      );
     }
     refreshGui();
     touch();
@@ -409,7 +515,10 @@ async function main() {
     },
     "btn-cinema": () => {
       toggle("cinematic");
-      if (settings.cinematic && !settings.wormhole) panel.toast("Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”");
+      if (settings.cinematic && !settings.wormhole)
+        panel.toast(
+          "Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”",
+        );
       else panel.toast(settings.cinematic ? "Cinematic mode: liquid wormhole" : "Cinematic mode off");
     },
     "btn-shot": () => savePNG(),
@@ -445,7 +554,8 @@ async function main() {
       if (camera.gravity) camera.setGravity(false);
       camera.setRotation(v);
     }
-    if (say) panel.toast(`Camera: ${VIEW_LABEL[v]} — ${VIEW_HELP[v]}${v === "fall" && !settings.animate ? " (paused: Space runs time)" : ""}`);
+    if (say)
+      panel.toast(`Camera: ${VIEW_LABEL[v]} — ${VIEW_HELP[v]}${v === "fall" && !settings.animate ? " (paused: Space runs time)" : ""}`);
     refreshGui();
     touch();
   }
@@ -473,7 +583,9 @@ async function main() {
   }
   function toggleTelescope() {
     camera.setTelescope(!settings.telescope);
-    panel.toast(settings.telescope ? `Telescope on ${BODY_NAMES[settings.target]} — the wheel zooms (to a 0.02° field), Y leaves` : "Telescope off");
+    panel.toast(
+      settings.telescope ? `Telescope on ${BODY_NAMES[settings.target]} — the wheel zooms (to a 0.02° field), Y leaves` : "Telescope off",
+    );
     refreshGui();
     touch();
   }
@@ -486,12 +598,17 @@ async function main() {
     if (b === "ranger" || b === "lander" || b === "endurance") {
       // a craft of the fleet: the camera a few of its sizes off it — behind, to its side, above —, moving
       // with it, around it
-      if (!(settings.system === "gargantua" && settings.wormhole)) return "The craft fly in our universe (through the wormhole of the Gargantua-system scenes)";
+      if (!(settings.system === "gargantua" && settings.wormhole))
+        return "The craft fly in our universe (through the wormhole of the Gargantua-system scenes)";
       const p = fleet.pose(b, sim.time);
       if (!p) return `The ${BODY_NAMES[b]}: not known now`;
       const R = craftRadius(b);
       const o = [1.1 * R, 0.8 * R, -1.9 * R];
-      const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [number, number, number];
+      const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [
+        number,
+        number,
+        number,
+      ];
       const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
       const l = Math.hypot(...d);
       camera.setCinematic(null);
@@ -510,12 +627,17 @@ async function main() {
     if (b === "iss") {
       // the space station: the camera 110 m off it — behind, to starboard, above —, moving with it,
       // around it
-      if (!(settings.system === "gargantua" && settings.wormhole && settings.iss)) return "The space station flies in our universe (through the wormhole of the Gargantua-system scenes)";
+      if (!(settings.system === "gargantua" && settings.wormhole && settings.iss))
+        return "The space station flies in our universe (through the wormhole of the Gargantua-system scenes)";
       const st = issTrack.peek(sim.time);
       if (!st) return "The space station: no orbit known at this date";
       const A = issAxes(st.X, st.V, sim.time);
       const o = [-70, 60, -55];
-      const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [number, number, number];
+      const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [
+        number,
+        number,
+        number,
+      ];
       const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
       const l = Math.hypot(...d);
       camera.setCinematic(null);
@@ -540,13 +662,20 @@ async function main() {
       camera.selectTarget(b, { frame: true });
       return null;
     }
-    if (u === "ours" && !(settings.system === "gargantua" && settings.wormhole)) return "The solar system lies through the wormhole of the Gargantua-system scenes";
+    if (u === "ours" && !(settings.system === "gargantua" && settings.wormhole))
+      return "The solar system lies through the wormhole of the Gargantua-system scenes";
     try {
       const sb = u === "ours" ? solarBody(id) : null;
       const alt = sb ? Math.max(defaultAltKm(id), (2.2 * sb.radius * M_METRES) / 1e3) : undefined;
-      const p = u === "ours"
-        ? ourOrbitPose({ body: id, altKm: alt }, sim.time)
-        : theirOrbitPose({ body: id, rM: id === "gargantua" ? 40 : undefined, altKm: id === "gargantua" ? undefined : 20000 }, sim.time, settings.spin, settings.massSolar);
+      const p =
+        u === "ours"
+          ? ourOrbitPose({ body: id, altKm: alt }, sim.time)
+          : theirOrbitPose(
+              { body: id, rM: id === "gargantua" ? 40 : undefined, altKm: id === "gargantua" ? undefined : 20000 },
+              sim.time,
+              settings.spin,
+              settings.massSolar,
+            );
       if (camera.gravity) camera.setGravity(false);
       if (p.frame === "ours") setHomePose(settings, p.X, p.fwd, p.up, p.vel);
       else setHolePose(settings, p.X, p.fwd, p.up, p.vel);
@@ -575,8 +704,16 @@ async function main() {
     return null;
   }
   camPanel = new CameraPanel({
-    settings, camera, view, setView: (v) => setView(v), setMount: (m) => setMount(m), cinematic, goTo, standOn,
-    changed: (keys) => onSettingsChange(keys), toast: (t) => panel.toast(t),
+    settings,
+    camera,
+    view,
+    setView: (v) => setView(v),
+    setMount: (m) => setMount(m),
+    cinematic,
+    goTo,
+    standOn,
+    changed: (keys) => onSettingsChange(keys),
+    toast: (t) => panel.toast(t),
   });
 
   // ------------------------------------------------------------------ the sky chart (skychart.ts)
@@ -612,7 +749,8 @@ async function main() {
       for (let i = 0; i < 12; i++) {
         const c = cameraFrame(settings);
         const L = lookOf(settings, c, d);
-        const b = Math.atan2(L[0] * c.right[0] + L[1] * c.right[1] + L[2] * c.right[2], L[0] * c.fwd[0] + L[1] * c.fwd[1] + L[2] * c.fwd[2]) * deg;
+        const b =
+          Math.atan2(L[0] * c.right[0] + L[1] * c.right[1] + L[2] * c.right[2], L[0] * c.fwd[0] + L[1] * c.fwd[1] + L[2] * c.fwd[2]) * deg;
         const e = Math.asin(Math.max(-1, Math.min(1, L[0] * c.up[0] + L[1] * c.up[1] + L[2] * c.up[2]))) * deg;
         camera.setLook(settings.shipLookYaw + b, settings.shipLookPitch + e);
         if (Math.abs(b) < 0.01 && Math.abs(e) < 0.01) break;
@@ -645,7 +783,8 @@ async function main() {
   let chartKey = "";
   let chartHover = -1;
   /** the offline image's height on the page [CSS px] (letterboxed in the canvas) */
-  const displayedHeight = (off: { width: number; height: number }) => Math.min(canvas.clientHeight, (canvas.clientWidth * off.height) / off.width);
+  const displayedHeight = (off: { width: number; height: number }) =>
+    Math.min(canvas.clientHeight, (canvas.clientWidth * off.height) / off.width);
   /** Builds the chart for the image about to be drawn (the offline render's scene while one runs). */
   function updateChart(force = false) {
     const o = chartOptions(settings, chartHover);
@@ -655,7 +794,26 @@ async function main() {
     const cam = cameraFrame(s);
     const aspect = off ? off.width / off.height : canvas.width / Math.max(canvas.height, 1);
     const key = chartOn(o)
-      ? [cam.region, cam.ell, ...cam.n, ...cam.fwd, ...cam.up, ...cam.beta, s.fov, t, aspect, o.lines, o.names, o.stars, o.equatorial, o.horizontal, o.ecliptic, o.opacity, o.highlight, !!off].join()
+      ? [
+          cam.region,
+          cam.ell,
+          ...cam.n,
+          ...cam.fwd,
+          ...cam.up,
+          ...cam.beta,
+          s.fov,
+          t,
+          aspect,
+          o.lines,
+          o.names,
+          o.stars,
+          o.equatorial,
+          o.horizontal,
+          o.ecliptic,
+          o.opacity,
+          o.highlight,
+          !!off,
+        ].join()
       : "off";
     if (key === chartKey && !force) return;
     chartKey = key;
@@ -677,7 +835,8 @@ async function main() {
       return;
     }
     const r = canvas.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * 2 - 1, y = 1 - ((e.clientY - r.top) / r.height) * 2;
+    const x = ((e.clientX - r.left) / r.width) * 2 - 1,
+      y = 1 - ((e.clientY - r.top) / r.height) * 2;
     const what = pickChart(chart, x, y, (2 * 14) / r.height, r.width / r.height, sim.time);
     const hover = settings.skyLines ? what.constellationIndex : -1;
     if (hover !== chartHover) chartHover = hover;
@@ -697,7 +856,12 @@ async function main() {
     panel.toast(stars ? `Star names ${settings.starNames ? "on" : "off"}` : `Constellations ${settings.skyLines ? "on" : "off"}`);
   }
   function cycleGrids() {
-    const states: [boolean, boolean][] = [[false, false], [true, false], [false, true], [true, true]];
+    const states: [boolean, boolean][] = [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ];
     const i = states.findIndex(([e, h]) => e === settings.gridEquatorial && h === settings.gridHorizontal);
     const [e, h] = states[(i + 1) % states.length]!;
     settings.gridEquatorial = e;
@@ -706,7 +870,11 @@ async function main() {
     panel.refresh();
     const cam = cameraFrame(settings);
     const noHorizon = h && !horizonAt(settings, cam, sim.time);
-    panel.toast(!e && !h ? "Grids off" : `${[e && "Equatorial", h && "Horizontal"].filter(Boolean).join(" + ")} grid${e && h ? "s" : ""}${noHorizon ? " — no world under the camera" : ""}`);
+    panel.toast(
+      !e && !h
+        ? "Grids off"
+        : `${[e && "Equatorial", h && "Horizontal"].filter(Boolean).join(" + ")} grid${e && h ? "s" : ""}${noHorizon ? " — no world under the camera" : ""}`,
+    );
   }
 
   /** Next attach point of the camera on the Ranger (turns the ship on). */
@@ -722,7 +890,11 @@ async function main() {
   /** The toolbar's camera button: the view and the target. */
   function syncCameraButton() {
     const btn = $("btn-camera");
-    const v = settings.ship ? (MOUNTS[settings.shipMount as Mount]?.short ?? "Ranger") : camera.cinematic ? { orbit: "Auto-orbit", dive: "Dive", journey: "Journey" }[camera.cinematic] : VIEW_LABEL[view()];
+    const v = settings.ship
+      ? (MOUNTS[settings.shipMount as Mount]?.short ?? "Ranger")
+      : camera.cinematic
+        ? { orbit: "Auto-orbit", dive: "Dive", journey: "Journey" }[camera.cinematic]
+        : VIEW_LABEL[view()];
     btn.querySelector(".cam-mode")!.textContent = `${v}${settings.telescope ? " · 🔭" : ""}`;
     btn.querySelector(".cam-target")!.textContent = BODY_NAMES[settings.target];
     btn.classList.toggle("locked", settings.lookAt || (!settings.ship && view() === "orbit"));
@@ -733,7 +905,15 @@ async function main() {
   function syncButtons() {
     transport?.update(true);
     $("btn-guide").classList.toggle("active", settings.shadowGuide);
-    $("btn-sky").classList.toggle("active", settings.skyLines || settings.skyNames || settings.starNames || settings.gridEquatorial || settings.gridHorizontal || settings.skyEcliptic);
+    $("btn-sky").classList.toggle(
+      "active",
+      settings.skyLines ||
+        settings.skyNames ||
+        settings.starNames ||
+        settings.gridEquatorial ||
+        settings.gridHorizontal ||
+        settings.skyEcliptic,
+    );
     $("btn-jet").classList.toggle("active", settings.jet);
     $("btn-cinema").classList.toggle("active", settings.cinematic);
     $("btn-ship").classList.toggle("active", settings.ship);
@@ -767,7 +947,9 @@ async function main() {
     refreshGui();
     scheduleUrlSave();
     touch();
-    panel.toast(`Time warp ${fmtWarp(settings, false)}${settings.animate ? "" : " — paused (Space runs it)"} · ${+speed.toPrecision(3)} M/s`);
+    panel.toast(
+      `Time warp ${fmtWarp(settings, false)}${settings.animate ? "" : " — paused (Space runs it)"} · ${+speed.toPrecision(3)} M/s`,
+    );
   }
   /** Real time: 1 s of the scene per second. */
   function realTime() {
@@ -832,7 +1014,13 @@ async function main() {
   // the Ranger's cockpit screens (the cabin's shader shows them)
   const cockpitScreens = new CockpitScreens();
   const flightHud = new FlightHud(settings, {
-    hold: pilotHold, auto: pilotAuto, sas: pilotSas, warp, mount: setMount, roll: pilotRoll, sound: () => toggleSound(),
+    hold: pilotHold,
+    auto: pilotAuto,
+    sas: pilotSas,
+    warp,
+    mount: setMount,
+    roll: pilotRoll,
+    sound: () => toggleSound(),
     vessel: (id) => {
       settings.vessel = id;
       refreshGui();
@@ -886,7 +1074,14 @@ async function main() {
       return cam.region === "hole" ? { r: cam.r, target: settings.target } : null;
     },
     kerrPlan: (kind, r) => {
-      const m = kind === "circular" ? camera.planTransfer("orbit", r ?? 30) : kind === "align" ? camera.planAlign("orbit") : kind === "target" ? camera.planTransfer("star") : camera.planTransfer("wormhole");
+      const m =
+        kind === "circular"
+          ? camera.planTransfer("orbit", r ?? 30)
+          : kind === "align"
+            ? camera.planAlign("orbit")
+            : kind === "target"
+              ? camera.planTransfer("star")
+              : camera.planTransfer("wormhole");
       panel.toast(m);
       return null;
     },
@@ -919,7 +1114,10 @@ async function main() {
     disengage: () => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     },
-    autoState: (a) => ({ on: camera.pilot.auto === a || (a === "circularize" && camera.pilot.auto === "node" && !!camera.ourCirc), why: flightHud.autoWhy(a) }),
+    autoState: (a) => ({
+      on: camera.pilot.auto === a || (a === "circularize" && camera.pilot.auto === "node" && !!camera.ourCirc),
+      why: flightHud.autoWhy(a),
+    }),
     launch: (altKm, incDeg) => {
       camera.launchGoal = { altKm, incDeg };
       if (camera.pilot.auto !== "takeoff") pilotAuto("takeoff");
@@ -953,15 +1151,25 @@ async function main() {
   tpDock.id = "tp-dock";
   document.body.append(tpDock);
   transport = new TransportBar({
-    settings, time: () => sim.time, playPause: () => playPause(), warp, setWarp, realTime,
-    record: () => toggleTake(), recording: () => ({ on: take.recording, seconds: take.seconds, frames: take.length }),
+    settings,
+    time: () => sim.time,
+    playPause: () => playPause(),
+    warp,
+    setWarp,
+    realTime,
+    record: () => toggleTake(),
+    recording: () => ({ on: take.recording, seconds: take.seconds, frames: take.length }),
     railsNote: () => camera.railsNote,
     nodeWarp: () => camera.nodeWarp || (camera.plan.nodes.length && settings.ship ? "plan" : ""),
     toggleAutoWarp: () => {
       settings.autoWarp = !settings.autoWarp;
       refreshGui();
       scheduleUrlSave();
-      panel.toast(settings.autoWarp ? "Auto warp — the manoeuvre sets the warp" : "Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows");
+      panel.toast(
+        settings.autoWarp
+          ? "Auto warp — the manoeuvre sets the warp"
+          : "Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows",
+      );
     },
   });
   transport.mount(tpDock, false);
@@ -999,10 +1207,21 @@ async function main() {
   panel.flightKeys = (e) => flying() && (e.key === "m" || e.key === "M") && !e.shiftKey;
   /** Pilot keys (by physical position where it matters); true when handled. */
   function pilotKey(e: KeyboardEvent) {
-    const holds: Record<string, Hold> = { Digit1: "prograde", Digit2: "retrograde", Digit3: "radialOut", Digit4: "radialIn", Digit5: "normal", Digit6: "antinormal", Digit7: "target" };
+    const holds: Record<string, Hold> = {
+      Digit1: "prograde",
+      Digit2: "retrograde",
+      Digit3: "radialOut",
+      Digit4: "radialIn",
+      Digit5: "normal",
+      Digit6: "antinormal",
+      Digit7: "target",
+    };
     const autos: Record<string, Auto> = { Digit8: "hover", Digit9: "circularize", Digit0: "approach", KeyG: "land", KeyU: "takeoff" };
     // (held flight keys: translation, throttle — read each frame by the controller)
-    if (["KeyI", "KeyJ", "KeyK", "KeyL", "KeyH", "KeyN", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"].includes(e.code) && !(e.code === "KeyK" && e.shiftKey)) {
+    if (
+      ["KeyI", "KeyJ", "KeyK", "KeyL", "KeyH", "KeyN", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"].includes(e.code) &&
+      !(e.code === "KeyK" && e.shiftKey)
+    ) {
       e.preventDefault();
       return true;
     }
@@ -1014,15 +1233,18 @@ async function main() {
       panel.toast(camera.resetShipView()); // (the camera back to the attach points)
       refreshGui();
     } else if (e.code === "KeyR") pilotRoll();
-    else if (e.code === "KeyY" && e.shiftKey) togglePathInView(); // (Y alone: the telescope, every mode)
-    else if ((e.code === "KeyZ" || e.code === "KeyX") && (camera.outsideView() === "free" || settings.shipMount === "cabin")) e.preventDefault(); // (the free camera's keys)
+    else if (e.code === "KeyY" && e.shiftKey)
+      togglePathInView(); // (Y alone: the telescope, every mode)
+    else if ((e.code === "KeyZ" || e.code === "KeyX") && (camera.outsideView() === "free" || settings.shipMount === "cabin"))
+      e.preventDefault(); // (the free camera's keys)
     else if (e.code === "KeyZ") camera.pilot.throttle = 1;
     else if (e.code === "KeyX") camera.pilot.throttle = 0;
     else if (e.code === "CapsLock") {
       camera.pilot.precision = !camera.pilot.precision;
       panel.toast(camera.pilot.precision ? "Precision controls" : "Normal controls");
     } else if (e.code === "Backquote") panel.toast(flightHud.cycleDensity());
-    else if (e.code === "KeyK" && e.shiftKey) actions["btn-ship"]!(); // leave the Ranger
+    else if (e.code === "KeyK" && e.shiftKey)
+      actions["btn-ship"]!(); // leave the Ranger
     else if (e.key.toLowerCase() === "m" && !e.shiftKey) flightHud.toggleMapView();
     else if (e.code === "KeyO") openMissions();
     else if (e.code === "KeyV") {
@@ -1047,7 +1269,11 @@ async function main() {
     } else if (e.code === "KeyF" && e.shiftKey) {
       settings.antigrav = !settings.antigrav;
       onSettingsChange(["antigrav"]);
-      panel.toast(settings.antigrav ? "Antigravity on — the flight computer holds against gravity and the air for free" : "Antigravity off — every hold costs thrust and propellant");
+      panel.toast(
+        settings.antigrav
+          ? "Antigravity on — the flight computer holds against gravity and the air for free"
+          : "Antigravity off — every hold costs thrust and propellant",
+      );
     } else if (e.code === "KeyP" && !e.shiftKey) {
       const cfg = camera.airFlight.cfg;
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
@@ -1055,9 +1281,10 @@ async function main() {
     } else if (e.code === "KeyP" && e.shiftKey) {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? "Air brake out" : "Air brake in");
-    }
-    else if (e.code === "BracketLeft" || e.code === "BracketRight") camera.cycleVessel(e.code === "BracketRight" ? 1 : -1); // (the craft flown: KSP's [ ])
-    else if (e.code.startsWith("Arrow")) e.preventDefault(); // throttle (held) — about the cabin, the look
+    } else if (e.code === "BracketLeft" || e.code === "BracketRight")
+      camera.cycleVessel(e.code === "BracketRight" ? 1 : -1); // (the craft flown: KSP's [ ])
+    else if (e.code.startsWith("Arrow"))
+      e.preventDefault(); // throttle (held) — about the cabin, the look
     else return false;
     e.preventDefault();
     return true;
@@ -1068,10 +1295,14 @@ async function main() {
     if (flying()) {
       // in the Ranger: A SAS, B cut the engine, X prograde, Y retrograde, R3 look ahead
       const pa: Partial<Record<typeof a, () => void>> = {
-        focus: pilotSas, gravity: () => (camera.pilot.throttle = 0), auto: () => pilotHold("prograde"), rotation: () => pilotHold("retrograde"),
+        focus: pilotSas,
+        gravity: () => (camera.pilot.throttle = 0),
+        auto: () => pilotHold("prograde"),
+        rotation: () => pilotHold("retrograde"),
         recentre: () => camera.setLook(0, 0),
         dpadUp: () => setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + 1) % MOUNT_KEYS.length]!),
-        dpadDown: () => setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + MOUNT_KEYS.length - 1) % MOUNT_KEYS.length]!),
+        dpadDown: () =>
+          setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + MOUNT_KEYS.length - 1) % MOUNT_KEYS.length]!),
       };
       if (pa[a]) {
         pa[a]!();
@@ -1198,8 +1429,7 @@ async function main() {
     else if (k === "k") {
       if (e.shiftKey) nextMount();
       else actions["btn-ship"]!();
-    }
-    else if (k === "i") actions["hud-toggle"]!();
+    } else if (k === "i") actions["hud-toggle"]!();
     else if (e.key === "?") actions["btn-help"]!();
     else if (e.key === "Escape") camera.setCinematic(null);
     else if (/^[1-6]$/.test(e.key)) {
@@ -1244,7 +1474,13 @@ async function main() {
       setSceneTime(st.time);
     },
     // (the scene as it was: the flight — a saved game's state —, every setting, the clocks)
-    snapshot: () => ({ save: tools.snapshot("before the video"), settings: { ...settings }, time: sim.time, water: renderer.water.clock, ev: renderer.autoExposureEV }),
+    snapshot: () => ({
+      save: tools.snapshot("before the video"),
+      settings: { ...settings },
+      time: sim.time,
+      water: renderer.water.clock,
+      ev: renderer.autoExposureEV,
+    }),
     restore: (x) => {
       const b = x as { save: GameSave; settings: Settings; time: number; water: number; ev: number };
       tools.load(b.save, { quiet: true });
@@ -1291,7 +1527,9 @@ async function main() {
   function resize() {
     // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
     // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
-    const ratio = settings.dynamicResolution ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) : settings.pixelRatio;
+    const ratio = settings.dynamicResolution
+      ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx)
+      : settings.pixelRatio;
     const dpr = ratio * renderScale;
     const w = Math.round(canvas.clientWidth * dpr);
     const h = Math.round(canvas.clientHeight * dpr);
@@ -1333,8 +1571,17 @@ async function main() {
     for (let i = 0; i < 3; i++) await frame();
     const t0 = performance.now();
     renderer.startOffline(settings, o.time ?? sim.time, {
-      width: 1920, height: 1080, spp: 128, tolerance: 1e-6, eps: 0.02, maxSteps: 12000, noiseThreshold: 0.004,
-      minSpp: 16, shutter: 0, budgetMs: 250, ...o,
+      width: 1920,
+      height: 1080,
+      spp: 128,
+      tolerance: 1e-6,
+      eps: 0.02,
+      maxSteps: 12000,
+      noiseThreshold: 0.004,
+      minSpp: 16,
+      shutter: 0,
+      budgetMs: 250,
+      ...o,
     });
     while (!renderer.offlineState?.done) {
       await new Promise((r) => setTimeout(r, 500));
@@ -1358,8 +1605,17 @@ async function main() {
   ) => {
     const { seconds = 10, fps = 30, rate = settings.timeSpeed, path, ...off } = o;
     const opts: OfflineOptions = {
-      width: 1920, height: 1080, spp: 24, tolerance: 1e-5, eps: 0.03, maxSteps: 6000, noiseThreshold: 0.01,
-      minSpp: 8, shutter: 0, budgetMs: 250, ...off,
+      width: 1920,
+      height: 1080,
+      spp: 24,
+      tolerance: 1e-5,
+      eps: 0.03,
+      maxSteps: 6000,
+      noiseThreshold: 0.01,
+      minSpp: 8,
+      shutter: 0,
+      budgetMs: 250,
+      ...off,
     };
     opts.width &= ~1;
     opts.height &= ~1;
@@ -1404,7 +1660,9 @@ async function main() {
   };
   // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
   const tools = new GameTools({
-    settings, camera, renderer,
+    settings,
+    camera,
+    renderer,
     time: () => sim.time,
     setTime: (t) => sim.setTime(t),
     preset: (name) => applyPreset(name),
@@ -1460,9 +1718,28 @@ async function main() {
     __bh: {
       /** the game's tools: __bh.game.help() */
       game: tools,
-      settings, renderer, camera, touch, snapshot, render, video, videoState, resize, preset: applyPreset, presets, refresh: refreshGui, skyLoading,
+      settings,
+      renderer,
+      camera,
+      touch,
+      snapshot,
+      render,
+      video,
+      videoState,
+      resize,
+      preset: applyPreset,
+      presets,
+      refresh: refreshGui,
+      skyLoading,
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
-      iss: { orbit: issOrbit, track: issTrack, elements: issElements, station, start: issStart, hulls: { ranger: rangerHull, station: stationHulls } },
+      iss: {
+        orbit: issOrbit,
+        track: issTrack,
+        elements: issElements,
+        station,
+        start: issStart,
+        hulls: { ranger: rangerHull, station: stationHulls },
+      },
       /** the free camera to a target (the camera panel's Go to) */
       goTo,
       /** the fleet: the craft, where they are, their dockings (fleet.ts) */
@@ -1483,7 +1760,8 @@ async function main() {
         chart: () => chart,
       },
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
-      sound, audio,
+      sound,
+      audio,
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
       /** the built-in scenes' names (for __bh.preset) */
@@ -1491,7 +1769,13 @@ async function main() {
       /** the scene gallery's pictures: each scene applied, left to converge, cropped to 16:9, 640 × 360,
        *  posted to snapshots/scene-<slug>.webp (then: bun scripts/scene-thumbs.ts) */
       captureScenes: async (names = Object.keys(presets), maxMs = 14000) => {
-        const slug = (n: string) => n.normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60);
+        const slug = (n: string) =>
+          n
+            .normalize("NFKD")
+            .replace(/[^\w]+/g, "-")
+            .replace(/^-|-$/g, "")
+            .toLowerCase()
+            .slice(0, 60);
         const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
         const pixelRatio = settings.pixelRatio;
         for (const name of names) {
@@ -1511,8 +1795,10 @@ async function main() {
           const t1 = performance.now();
           while (performance.now() - t1 < (moving ? 9000 : maxMs) && !(lastStats?.phase === "converged" && !moving)) await wait(250);
           const img = await createImageBitmap(await renderer.exportPNG(settings));
-          const W = 640, H = 360;
-          const sw = Math.min(img.width, (img.height * W) / H), sh = (sw * H) / W;
+          const W = 640,
+            H = 360;
+          const sw = Math.min(img.width, (img.height * W) / H),
+            sh = (sw * H) / W;
           const cv = new OffscreenCanvas(W, H);
           const ctx = cv.getContext("2d")!;
           ctx.imageSmoothingQuality = "high";
@@ -1526,9 +1812,16 @@ async function main() {
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
       sys: {
-        bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t), setHolePose, mouth: (t?: number) => mouth(settings, t),
+        bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t),
+        setHolePose,
+        mouth: (t?: number) => mouth(settings, t),
         /** our universe (home frame, our mouth at the origin) */
-        setHomePose: (X: [number, number, number], fwd: [number, number, number], up?: [number, number, number], vel?: [number, number, number]) => setHomePose(settings, X, fwd, up, vel),
+        setHomePose: (
+          X: [number, number, number],
+          fwd: [number, number, number],
+          up?: [number, number, number],
+          vel?: [number, number, number],
+        ) => setHomePose(settings, X, fwd, up, vel),
         homePosition: () => homePosition(settings),
         /** where the camera sees a body (CPU geodesics, retarded, aberrated): a look direction */
         look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, sim.time).look,
@@ -1593,8 +1886,13 @@ async function main() {
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)
     if (take.recording && !renderer.offlineActive) {
       const ok = take.capture(settings, {
-        time: sim.time, water: renderer.water.clock, ev: renderer.autoExposureEV, ship: renderer.shipPose, thrust: renderer.shipThrust,
-        plasma: renderer.shipPlasma, path: renderer.cameraPath,
+        time: sim.time,
+        water: renderer.water.clock,
+        ev: renderer.autoExposureEV,
+        ship: renderer.shipPose,
+        thrust: renderer.shipThrust,
+        plasma: renderer.shipPlasma,
+        path: renderer.cameraPath,
       });
       if (!ok) {
         renderDialog.takeChanged();
@@ -1603,10 +1901,13 @@ async function main() {
       }
     }
     // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
-    const capped = settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
+    const capped =
+      settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
-    const st = capped ? null : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));
+    const st = capped
+      ? null
+      : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));
     if (st) {
       renderedAt = now;
       if (!firstFrame) {
@@ -1636,8 +1937,10 @@ async function main() {
         const m = scaleMs.get(x);
         return m && now - m.at < 30000 ? m.ms : undefined;
       };
-      const lower = Math.max(0.5, renderScale - 0.125), higher = Math.min(1, renderScale + 0.125);
-      const kl = known(lower), kh = known(higher);
+      const lower = Math.max(0.5, renderScale - 0.125),
+        higher = Math.min(1, renderScale + 0.125);
+      const kl = known(lower),
+        kh = known(higher);
       const budget = renderer.frameBudget(settings);
       let want = renderScale;
       if (!on) want = 1;
@@ -1645,7 +1948,11 @@ async function main() {
       else if (gpuEma > 1.2 * budget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
       // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
       // the frame grown as the pixels would stay within it)
-      else if (higher > renderScale && (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)) want = higher;
+      else if (
+        higher > renderScale &&
+        (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)
+      )
+        want = higher;
       if (want !== renderScale) {
         renderScale = want;
         gpuEma = 0; // (measured afresh at the new scale)
@@ -1667,7 +1974,9 @@ async function main() {
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
     }
     // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera)
-    touchFlight.update(pil && coarse && camera.outsideView() !== "free" && !flightHud.planning && !document.body.classList.contains("hide-ui"));
+    touchFlight.update(
+      pil && coarse && camera.outsideView() !== "free" && !flightHud.planning && !document.body.classList.contains("hide-ui"),
+    );
     if (pil && info) {
       // the Ranger's status (the telemetry; its changes go to the journal)
       let status: RangerStatus | null = null;
@@ -1678,20 +1987,34 @@ async function main() {
         caught("Ranger status", e);
       }
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
-      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() })) renderer.ship.updateScreens(cockpitScreens.canvas);
+      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() }))
+        renderer.ship.updateScreens(cockpitScreens.canvas);
       // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
       {
         const S = info.S as number[][];
-        const toShip = (v: number[] | null | undefined) => (v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null);
-        const up = toShip(info.dirs.radialOut as number[] | null), fwd = toShip(info.dirs.prograde as number[] | null);
-        renderer.cockpitDash = { up: up ?? [0, 1, 0], fwd: fwd ?? [0, 0, 1], speed: (status?.speed ?? 0) / 1000, alt: status?.altKm ?? 0, time: performance.now() / 1000 };
+        const toShip = (v: number[] | null | undefined) =>
+          v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null;
+        const up = toShip(info.dirs.radialOut as number[] | null),
+          fwd = toShip(info.dirs.prograde as number[] | null);
+        renderer.cockpitDash = {
+          up: up ?? [0, 1, 0],
+          fwd: fwd ?? [0, 0, 1],
+          speed: (status?.speed ?? 0) / 1000,
+          alt: status?.altKm ?? 0,
+          time: performance.now() / 1000,
+        };
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)
-      if (st || !flightHud.drawn) cpuProf.time("flight HUD (total)", () => flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time));
+      if (st || !flightHud.drawn)
+        cpuProf.time("flight HUD (total)", () =>
+          flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time),
+        );
       flightComputer.show(flightHud.mapView);
       flightComputer.update();
-      cpuProf.time("sound", () => audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }));
+      cpuProf.time("sound", () =>
+        audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }),
+      );
     } else {
       flightComputer.show(false);
       audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
@@ -1752,10 +2075,31 @@ async function main() {
     const tele = telescopeView(cam);
     // (the sky chart's words: over the live view — the offline one is letterboxed, its lines alone)
     const sky = chart && !renderer.offlineActive ? chart : null;
-    const key = guide || camera.flyMode || marker || lock || hover || ship || tele || sky
-      ? [lock ? lockKey(lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360)) + lock.alpha.toFixed(2) : "",settings.spin, cam.r, cam.theta, cam.phi, settings.yaw, settings.pitch, settings.roll, settings.fov, cam.speed, overlay.width, overlay.height, camera.flyMode, marker?.key, hover?.body, hover?.x, hover?.y, ship?.key,
-        tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking], sky ? chartKey : ""].join()
-      : "off";
+    const key =
+      guide || camera.flyMode || marker || lock || hover || ship || tele || sky
+        ? [
+            lock ? lockKey(lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360)) + lock.alpha.toFixed(2) : "",
+            settings.spin,
+            cam.r,
+            cam.theta,
+            cam.phi,
+            settings.yaw,
+            settings.pitch,
+            settings.roll,
+            settings.fov,
+            cam.speed,
+            overlay.width,
+            overlay.height,
+            camera.flyMode,
+            marker?.key,
+            hover?.body,
+            hover?.x,
+            hover?.y,
+            ship?.key,
+            tele && [tele.target?.name, tele.target?.ndc?.map((x) => x.toFixed(4)), tele.target?.dist.toPrecision(5), tele.tracking],
+            sky ? chartKey : "",
+          ].join()
+        : "off";
     if (key === guideKey) return;
     guideKey = key;
     const ctx = overlay.getContext("2d")!;
@@ -1767,7 +2111,16 @@ async function main() {
     if (marker && !tele) drawMarker(ctx, marker);
     if (lock && !tele) {
       const k = devicePixelRatio;
-      drawLock(ctx, lock.v, overlay.width, overlay.height, Math.tan((settings.fov * Math.PI) / 360), k, lock.alpha, camera.piloting ? { top: 56 * k, bottom: 255 * k } : { top: 0, bottom: 70 * k });
+      drawLock(
+        ctx,
+        lock.v,
+        overlay.width,
+        overlay.height,
+        Math.tan((settings.fov * Math.PI) / 360),
+        k,
+        lock.alpha,
+        camera.piloting ? { top: 56 * k, bottom: 255 * k } : { top: 0, bottom: 70 * k },
+      );
     }
     if (hover && hover.body !== marker?.body && !(lock && hover.body === settings.target)) drawHover(ctx, hover);
     if (ship) drawShipMarker(ctx, ship);
@@ -1811,12 +2164,15 @@ async function main() {
     if (!settings.ship || !camera.outsideView() || renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
     const t = shipToCamera(camera.shipPose(), settings.shipLookYaw, settings.shipLookPitch).t;
     const d = Math.hypot(...t);
-    const W = overlay.width, H = overlay.height;
+    const W = overlay.width,
+      H = overlay.height;
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const size = (26 / Math.max(d, 1) / tanH) * (H / 2); // (its length on the screen, px)
     if (size > 60) return null;
     const alpha = Math.min(1, (60 - size) / 30);
-    let px = W / 2, py = H / 2, onScreen = false;
+    let px = W / 2,
+      py = H / 2,
+      onScreen = false;
     if (t[2] > 1e-6) {
       px = ((t[0] / t[2] / (tanH * (W / H)) + 1) / 2) * W;
       py = ((1 - t[1] / t[2] / tanH) / 2) * H;
@@ -1824,7 +2180,15 @@ async function main() {
     }
     const label = `${VESSELS[settings.vessel].name.toUpperCase()} · ${d < 1e3 ? `${d.toFixed(0)} m` : `${(d / 1e3).toFixed(d < 1e4 ? 2 : 1)} km`}`;
     const dir = Math.atan2(-t[1], t[0]);
-    return { px, py, onScreen, dir, alpha, label, key: [px.toFixed(1), py.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join() };
+    return {
+      px,
+      py,
+      onScreen,
+      dir,
+      alpha,
+      label,
+      key: [px.toFixed(1), py.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join(),
+    };
   }
   function drawShipMarker(ctx: CanvasRenderingContext2D, m: NonNullable<ReturnType<typeof shipMarker>>) {
     const k = devicePixelRatio;
@@ -1850,10 +2214,14 @@ async function main() {
       ctx.fillText(m.label, m.px, m.py + r + 14 * k);
     } else {
       // (off the screen: an arrow at its edge, towards it)
-      const W = overlay.width, H = overlay.height, e = 34 * k;
-      const c = Math.cos(m.dir), s2 = Math.sin(m.dir);
+      const W = overlay.width,
+        H = overlay.height,
+        e = 34 * k;
+      const c = Math.cos(m.dir),
+        s2 = Math.sin(m.dir);
       const f = Math.min((W / 2 - e) / Math.max(Math.abs(c), 1e-6), (H / 2 - e) / Math.max(Math.abs(s2), 1e-6));
-      const x = W / 2 + c * f, y = H / 2 + s2 * f;
+      const x = W / 2 + c * f,
+        y = H / 2 + s2 * f;
       ctx.translate(x, y);
       ctx.rotate(m.dir);
       ctx.beginPath();
@@ -1915,7 +2283,14 @@ async function main() {
     const label = `${settings.rotation === "orbit" ? "↻ " : ""}${info.name.toUpperCase()} · ${info.dist < 1e4 ? info.dist.toFixed(info.dist < 10 ? 2 : 1) : "∞"} M${riding > 0.5 ? " · co-moving" : ""}`;
     const dir = Math.atan2(-y, x); // screen direction of the target (off-screen arrow)
     return {
-      body: info.body, px, py, radius, onScreen, dir, alpha, label,
+      body: info.body,
+      px,
+      py,
+      radius,
+      onScreen,
+      dir,
+      alpha,
+      label,
       key: [info.body, px.toFixed(1), py.toFixed(1), radius.toFixed(1), onScreen, dir.toFixed(3), alpha.toFixed(2), label].join(),
     };
   }
@@ -1947,7 +2322,12 @@ async function main() {
       const r = m.radius;
       const l = Math.min(r * 0.45, 12 * k);
       ctx.beginPath();
-      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const) {
         ctx.moveTo(m.px + sx * r, m.py + sy * (r - l));
         ctx.lineTo(m.px + sx * r, m.py + sy * r);
         ctx.lineTo(m.px + sx * (r - l), m.py + sy * r);
@@ -2014,7 +2394,9 @@ async function main() {
     const tanH = Math.tan((settings.fov * Math.PI) / 360);
     const ndc = info ? projectLook(cam, info.look, tanH, overlay.width / overlay.height) : null;
     return {
-      fov: settings.fov, mPerM: 1476.625 * settings.massSolar, tracking: settings.lookAt,
+      fov: settings.fov,
+      mPerM: 1476.625 * settings.massSolar,
+      tracking: settings.lookAt,
       target: info ? { name: info.name, ang: info.ang, dist: info.dist, ndc: ndc ? [ndc[0], ndc[1]] : null } : null,
     };
   }
@@ -2026,7 +2408,12 @@ async function main() {
     ctx.strokeStyle = "rgba(255,255,255,0.55)";
     ctx.lineWidth = 1.2 * k;
     ctx.beginPath();
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
       ctx.moveTo(x + dx! * 5 * k, y + dy! * 5 * k);
       ctx.lineTo(x + dx! * 12 * k, y + dy! * 12 * k);
     }
@@ -2064,7 +2451,10 @@ async function main() {
       progress = 1;
     }
     const chips: string[] = [];
-    if (camera.cinematic) chips.push(`<span class="chip hot">${camera.cinematic === "orbit" ? "Auto-orbit" : camera.cinematic === "dive" ? "Dive" : "Journey"}</span>`);
+    if (camera.cinematic)
+      chips.push(
+        `<span class="chip hot">${camera.cinematic === "orbit" ? "Auto-orbit" : camera.cinematic === "dive" ? "Dive" : "Journey"}</span>`,
+      );
     if (camera.flyMode) chips.push(`<span class="chip hot">Fly ×${camera.flySpeed.toFixed(1)}</span>`);
     else if (!settings.ship) {
       const rs = camera.rigStatus();
@@ -2072,9 +2462,14 @@ async function main() {
       const v = view();
       const glyph = { orbit: "↻", free: "✦", follow: "⇢", tripod: "⊥", fall: "↓" }[v];
       const aimed = v === "orbit" || settings.lookAt ? ` ${BODY_NAMES[settings.target]}` : "";
-      chips.push(`<span class="chip${v === "fall" ? " hot" : ""}">${glyph} ${v === "fall" && camera.landed ? "Landed" : VIEW_LABEL[v]}${aimed}${carried}</span>`);
+      chips.push(
+        `<span class="chip${v === "fall" ? " hot" : ""}">${glyph} ${v === "fall" && camera.landed ? "Landed" : VIEW_LABEL[v]}${aimed}${carried}</span>`,
+      );
     }
-    if (settings.telescope) chips.push(`<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`);
+    if (settings.telescope)
+      chips.push(
+        `<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`,
+      );
     if (camera.pad.connected) chips.push(`<span class="chip" title="Game controller">🎮</span>`);
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);
@@ -2086,7 +2481,8 @@ async function main() {
         (st.phase === "realtime" ? `1 ray / ${st.block}×${st.block} px` : `${st.spp.toFixed(1)} spp`),
       `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${sim.time.toFixed(0)} M${settings.animate ? "" : " (paused)"}`,
     ];
-    if (st.phase === "offline" && st.offline) lines.unshift(`offline ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`);
+    if (st.phase === "offline" && st.offline)
+      lines.unshift(`offline ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`);
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
       lines.push(`free fall · v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M`);
@@ -2098,7 +2494,8 @@ async function main() {
     readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)
       .map((r) => `<div class="row"${r.hint ? ` title="${r.hint}"` : ""}><span>${r.label}</span><span>${r.value}</span></div>`)
       .join("");
-    $("spin-badge").textContent = `a = ${settings.spin.toFixed(3)} · r₊ = ${horizon(settings.spin).toFixed(3)} M · ISCO = ${isco(settings.spin).toFixed(3)} M`;
+    $("spin-badge").textContent =
+      `a = ${settings.spin.toFixed(3)} · r₊ = ${horizon(settings.spin).toFixed(3)} M · ISCO = ${isco(settings.spin).toFixed(3)} M`;
   }
 
   // -------------------------------------------------------------------- tooltips (toolbar, HUD)
@@ -2126,7 +2523,8 @@ async function main() {
   };
   // (delegated: the panels built later — the transport bar, the camera panel — have theirs too; the
   // flight HUD shows its own)
-  for (const el of document.querySelectorAll<HTMLElement>("[data-tip]")) if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+  for (const el of document.querySelectorAll<HTMLElement>("[data-tip]"))
+    if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
   let tipEl: HTMLElement | null = null;
   document.addEventListener("pointerover", (e) => {
     const el = (e.target as Element | null)?.closest?.<HTMLElement>("[data-tip]") ?? null;

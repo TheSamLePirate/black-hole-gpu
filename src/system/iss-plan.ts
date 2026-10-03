@@ -41,7 +41,8 @@ function issPoint(t: number, distM: number): { X: Vec3; V: Vec3 } | null {
   const o: Vec3 = [p.centre[0] + p.axis[0] * distM, p.centre[1] + p.axis[1] * distM, p.centre[2] + p.axis[2] * distM];
   const off: Vec3 = [0, 1, 2].map((k) => (A[0][k]! * o[0] + A[1][k]! * o[1] + A[2][k]! * o[2]) / M_METRES) as Vec3;
   const E = solarState("earth", t);
-  const r = sub(st.X, E.pos), v = sub(st.V, E.vel);
+  const r = sub(st.X, E.pos),
+    v = sub(st.V, E.vel);
   const om = cross(r, v).map((c) => c / dot(r, r)) as Vec3;
   return { X: add(st.X, off), V: add(st.V, cross(om, off)) };
 }
@@ -87,11 +88,20 @@ export function craftPoint(id: VesselId, distM = RENDEZVOUS_M): RendezvousPoint 
   };
 }
 
-export function planIssRendezvous(X: Vec3, V: Vec3, t: number, lead: number, point: RendezvousPoint = rendezvousPoint, label = "the ISS", portName = "IDA-2"): IssPlan | null {
+export function planIssRendezvous(
+  X: Vec3,
+  V: Vec3,
+  t: number,
+  lead: number,
+  point: RendezvousPoint = rendezvousPoint,
+  label = "the ISS",
+  portName = "IDA-2",
+): IssPlan | null {
   const earth = solarBody("earth")!;
   const mu = earth.mass;
   const E0 = solarState("earth", t);
-  const r0 = sub(X, E0.pos), v0 = sub(V, E0.vel);
+  const r0 = sub(X, E0.pos),
+    v0 = sub(V, E0.vel);
   const h = cross(r0, v0);
   const floor = earth.radius + 200e3 / M_METRES;
   let best: { cost: number; t1: number; tof: number; dv1: Vec3; dv2: Vec3; r1: Vec3; v1: Vec3; v2arr: Vec3 } | null = null;
@@ -106,7 +116,8 @@ export function planIssRendezvous(X: Vec3, V: Vec3, t: number, lead: number, poi
       if (!P) continue;
       const Ea = solarState("earth", ta);
       // (the Earth carries both: its own motion over the arc taken out)
-      const r2 = sub(P.X, Ea.pos), v2t = sub(P.V, Ea.vel);
+      const r2 = sub(P.X, Ea.pos),
+        v2t = sub(P.V, Ea.vel);
       const L = lambert(mu, s1.r, r2, tof, h);
       if (!L) continue;
       // (its perigee, if the arc reaches it: above 200 km)
@@ -114,23 +125,26 @@ export function planIssRendezvous(X: Vec3, V: Vec3, t: number, lead: number, poi
       const e = norm(ev);
       const a = 1 / (2 / norm(s1.r) - dot(L.v1, L.v1) / mu);
       if (a > 0 && a * (1 - e) < floor) continue;
-      const dv1 = sub(L.v1, s1.v), dv2 = sub(v2t, L.v2);
-      const cost = norm(dv1) + norm(dv2) + 0.2 * MS * ((ta - t) * M_SECONDS / 3600);
+      const dv1 = sub(L.v1, s1.v),
+        dv2 = sub(v2t, L.v2);
+      const cost = norm(dv1) + norm(dv2) + 0.2 * MS * (((ta - t) * M_SECONDS) / 3600);
       if (!best || cost < best.cost) best = { cost, t1, tof, dv1, dv2, r1: s1.r, v1: s1.v, v2arr: L.v2 };
     }
   }
   if (!best) return null;
   const b = best;
   const ta = b.t1 + b.tof;
-  const E1 = solarState("earth", b.t1), Ea = solarState("earth", ta);
+  const E1 = solarState("earth", b.t1),
+    Ea = solarState("earth", ta);
   const P = point(ta)!;
   // the burns as the plan carries them: [prograde, normal, radial] at the ship's state then
-  const X1 = add(E1.pos, b.r1), V1 = add(E1.vel, b.v1);
+  const X1 = add(E1.pos, b.r1),
+    V1 = add(E1.vel, b.v1);
   const dvDep = nodeDvComponents(X1, V1, b.t1, b.dv1);
   const Va = add(Ea.vel, b.v2arr);
   const dvArr = nodeDvComponents(P.X, Va, ta, b.dv2);
   const total = (norm(b.dv1) + norm(b.dv2)) * C;
-  const wait = (b.t1 - t) * M_SECONDS / 60;
+  const wait = ((b.t1 - t) * M_SECONDS) / 60;
   return {
     nodes: [
       { t: b.t1, dv: dvDep, role: "depart" },
@@ -140,7 +154,7 @@ export function planIssRendezvous(X: Vec3, V: Vec3, t: number, lead: number, poi
     ],
     tArrive: ta,
     dv: norm(b.dv1) + norm(b.dv2),
-    note: `rendezvous with ${label}, ${RENDEZVOUS_M} m off ${portName} · departure in ${wait < 90 ? `${wait.toFixed(0)} min` : `${(wait / 60).toFixed(1)} h`}, ${(b.tof * M_SECONDS / 60).toFixed(0)} min of flight · Δv ${total.toFixed(1)} m/s`,
+    note: `rendezvous with ${label}, ${RENDEZVOUS_M} m off ${portName} · departure in ${wait < 90 ? `${wait.toFixed(0)} min` : `${(wait / 60).toFixed(1)} h`}, ${((b.tof * M_SECONDS) / 60).toFixed(0)} min of flight · Δv ${total.toFixed(1)} m/s`,
   };
 }
 
@@ -150,10 +164,18 @@ export function planIssRendezvous(X: Vec3, V: Vec3, t: number, lead: number, poi
  * arrival: the station's velocity there, less the ship's on its present course. Its Δv [P, N, R], or
  * null (the arc not found).
  */
-export function refineIssNode(X: Vec3, V: Vec3, t: number, node: { t: number; role?: string }, tArrive: number, point: RendezvousPoint = rendezvousPoint): Vec3 | null {
+export function refineIssNode(
+  X: Vec3,
+  V: Vec3,
+  t: number,
+  node: { t: number; role?: string },
+  tArrive: number,
+  point: RendezvousPoint = rendezvousPoint,
+): Vec3 | null {
   const mu = solarBody("earth")!.mass;
   const E0 = solarState("earth", t);
-  const r0 = sub(X, E0.pos), v0 = sub(V, E0.vel);
+  const r0 = sub(X, E0.pos),
+    v0 = sub(V, E0.vel);
   const P = point(tArrive);
   if (!P) return null;
   const Ea = solarState("earth", tArrive);

@@ -5,7 +5,8 @@ const energy = (mu: number, r: V3, v: V3) => (v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
 
 test("an ellipse: back to the start after a period, energy and angular momentum kept", () => {
   const mu = 3.986;
-  const r0: V3 = [1.2, 0.1, -0.3], v0: V3 = [0.2, 1.7, 0.4];
+  const r0: V3 = [1.2, 0.1, -0.3],
+    v0: V3 = [0.2, 1.7, 0.4];
   const a = 1 / (2 / Math.hypot(...r0) - (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / mu);
   const T = 2 * Math.PI * Math.sqrt(a ** 3 / mu);
   const end = propagate(mu, r0, v0, T);
@@ -20,7 +21,8 @@ test("an ellipse: back to the start after a period, energy and angular momentum 
 
 test("a hyperbola: energy kept, the right way out, and a circle's quarter", () => {
   const mu = 1;
-  const r0: V3 = [1, 0, 0], v0: V3 = [0, 1.8, 0.2];
+  const r0: V3 = [1, 0, 0],
+    v0: V3 = [0, 1.8, 0.2];
   const p = propagate(mu, r0, v0, 25);
   expect(energy(mu, p.r, p.v)).toBeCloseTo(energy(mu, r0, v0), 9);
   expect(Math.hypot(...p.r)).toBeGreaterThan(20);
@@ -36,9 +38,14 @@ import { solarState } from "../src/system/solar";
 test("patched conics: a ship aimed past the Moon enters its sphere, passes low, and leaves", () => {
   const t = 109.6;
   const km = 1 / 1.476625e8;
-  const M = solarState("moon", t), E = solarState("earth", t);
+  const M = solarState("moon", t),
+    E = solarState("earth", t);
   // from 120 000 km on the Earth's side of the Moon, towards it at 1 km/s (relative), aimed 5 000 km off
-  const u = (() => { const d = M.pos.map((x, k) => x - E.pos[k]!); const l = Math.hypot(...d); return d.map((x) => x / l); })();
+  const u = (() => {
+    const d = M.pos.map((x, k) => x - E.pos[k]!);
+    const l = Math.hypot(...d);
+    return d.map((x) => x / l);
+  })();
   const side = [-u[1]!, u[0]!, 0];
   const X = M.pos.map((x, k) => x - u[k]! * 120000 * km + side[k]! * 5000 * km) as [number, number, number];
   const V = M.vel.map((x, k) => x + u[k]! * (1 / 299792.458)) as [number, number, number];
@@ -60,7 +67,8 @@ test("a hand-made node flown as a finite burn: the path goes on for a turn of th
   const E = solarState("earth", t);
   // a circular 400 km orbit (in the ecliptic, about the Earth)
   const km = 1 / 1.476625e8;
-  const r = 6771 * km, v = 7.6686 / 299792.458;
+  const r = 6771 * km,
+    v = 7.6686 / 299792.458;
   const X = [E.pos[0] + r, E.pos[1], E.pos[2]] as [number, number, number];
   const V = [E.vel[0], E.vel[1] + v, E.vel[2]] as [number, number, number];
   const accel = (2 * 9.80665 * 1.476625e11) / 299792458 ** 2; // 2 g [c²/M]

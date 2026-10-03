@@ -10,7 +10,8 @@ import { earthDetail, earthHeightSampler, toHalf } from "../src/terrain";
 // map (metres, ETOPO 2022) as the tracer samples it near (a cubic B-spline over the texels, half floats),
 // the detail finer than it.
 
-const W = 64, H = 32;
+const W = 64,
+  H = 32;
 const t0 = 109.6;
 
 test("half floats: what the GPU's r16float keeps", () => {
@@ -45,7 +46,8 @@ test("the B-spline: smooth across texels and across the date line", () => {
   // (no jump between neighbouring points: continuous)
   let worst = 0;
   for (let i = 0; i < 400; i++) {
-    const a = (i / 400) * 2 * Math.PI, b = a + 1e-9;
+    const a = (i / 400) * 2 * Math.PI,
+      b = a + 1e-9;
     worst = Math.max(worst, Math.abs(f([Math.cos(a), Math.sin(a), 0.1]) - f([Math.cos(b), Math.sin(b), 0.1])));
   }
   expect(worst).toBeLessThan(0.1);
@@ -67,7 +69,8 @@ test("with the relief known, the gear stands on it: landing on a 2 000 m plateau
 
 test("the sunlight through the air: full overhead, reddened low, none in the planet's shadow", () => {
   expect(sunThroughY(400e3, 1)).toBeGreaterThan(0.999);
-  const noon = sunThroughY(0, 1), low = sunThroughY(0, 0.05);
+  const noon = sunThroughY(0, 1),
+    low = sunThroughY(0, 0.05);
   expect(noon).toBeGreaterThan(0.7);
   expect(low).toBeLessThan(0.5 * noon);
   expect(sunThroughY(0, -0.2)).toBeLessThan(1e-6);

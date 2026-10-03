@@ -23,7 +23,12 @@ test("time scales: TDB − UTC in 2026 is the leap seconds and 32.184 s", () => 
 // (before DE440 is read: the analytic models — the Moon's epoch once 1.5 days off, 20° on the sky)
 test("the models alone: the eclipses of 2024–2045 within a tenth of a degree of their geometry", () => {
   // the geocentric Sun–Moon separation at greatest eclipse ≈ γ × the Moon's parallax (~0.95°)
-  for (const [iso, gamma] of [["2024-04-08T18:17:20Z", 0.3431], ["2026-08-12T17:46:06Z", 0.8977], ["2027-08-02T10:07:50Z", 0.1421], ["2045-08-12T17:42:39Z", 0.2116]] as const) {
+  for (const [iso, gamma] of [
+    ["2024-04-08T18:17:20Z", 0.3431],
+    ["2026-08-12T17:46:06Z", 0.8977],
+    ["2027-08-02T10:07:50Z", 0.1421],
+    ["2045-08-12T17:42:39Z", 0.2116],
+  ] as const) {
     expect(Math.abs(sep("sun", "moon", iso) - gamma * 0.97)).toBeLessThan(0.1);
   }
 });
@@ -33,7 +38,7 @@ test("DE440: the planets where they were", async () => {
   for (const f of ["de440.bin", "jup365.bin"]) addEphemeris(await Bun.file(dir + f).arrayBuffer());
   // the great conjunction of 2020 (0.10°), Mars' closest approach (62.07 Mkm), the transit of Venus
   expect(sep("jupiter", "saturn", "2020-12-21T18:00:00Z")).toBeCloseTo(0.102, 2);
-  expect(Math.hypot(...from("earth", "mars", tOf("2020-10-06T14:18:00Z"))) * M_METRES / 1e9).toBeCloseTo(62.07, 1);
+  expect((Math.hypot(...from("earth", "mars", tOf("2020-10-06T14:18:00Z"))) * M_METRES) / 1e9).toBeCloseTo(62.07, 1);
   expect(sep("sun", "venus", "2012-06-06T01:29:00Z")).toBeLessThan(0.17);
 });
 
@@ -41,16 +46,28 @@ test("DE440: the planets where they were", async () => {
 function umbra(ms: number) {
   const t = tOf(ms);
   const E = solarState("earth", t).pos;
-  const S = sub(seenFrom("sun", t, E).pos, E), M = sub(seenFrom("moon", t, E).pos, E);
+  const S = sub(seenFrom("sun", t, E).pos, E),
+    M = sub(seenFrom("moon", t, E).pos, E);
   const n = sub(M, S).map((x, _, a) => x / Math.hypot(...a));
-  const RE = 6378.137e3 / M_METRES, k = 1 / (1 - 1 / 298.257223563);
+  const RE = 6378.137e3 / M_METRES,
+    k = 1 / (1 - 1 / 298.257223563);
   const Ax = bodyAxes(solarBody("earth")!, t);
-  const Mf = Ax.map((a) => dot(M, a)), nf = Ax.map((a) => dot(n, a));
-  const Ms = [Mf[0]!, Mf[1]!, Mf[2]! * k], ns = [nf[0]!, nf[1]!, nf[2]! * k];
-  const a2 = dot(ns, ns), b2 = 2 * dot(Ms, ns), c2 = dot(Ms, Ms) - RE * RE;
+  const Mf = Ax.map((a) => dot(M, a)),
+    nf = Ax.map((a) => dot(n, a));
+  const Ms = [Mf[0]!, Mf[1]!, Mf[2]! * k],
+    ns = [nf[0]!, nf[1]!, nf[2]! * k];
+  const a2 = dot(ns, ns),
+    b2 = 2 * dot(Ms, ns),
+    c2 = dot(Ms, Ms) - RE * RE;
   const s = (-b2 - Math.sqrt(b2 * b2 - 4 * a2 * c2)) / (2 * a2);
   const P = Mf.map((x, i) => x + s * nf[i]!);
-  const gamma = Math.hypot(...sub(M, n.map((x) => x * dot(M, n)))) / RE;
+  const gamma =
+    Math.hypot(
+      ...sub(
+        M,
+        n.map((x) => x * dot(M, n)),
+      ),
+    ) / RE;
   const lat = (Math.atan(Math.tan(Math.atan2(P[2]!, Math.hypot(P[0]!, P[1]!))) * k * k) * 180) / Math.PI;
   return { gamma, lat, lon: (Math.atan2(P[1]!, P[0]!) * 180) / Math.PI };
 }

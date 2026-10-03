@@ -45,7 +45,8 @@ const moving = (name: string) => !!presets[name]!.ship || !!presets[name]!.missi
 const UPDATE = process.argv.includes("--update");
 const SCENES = arg("scenes", "") ? arg("scenes", "").split("|") : Object.keys(presets);
 for (const s of SCENES) if (!presets[s]) throw new Error(`no scene “${s}”`);
-const CHROME = process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
+const CHROME =
+  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const port = 9500 + Math.floor(Math.random() * 40);
@@ -57,7 +58,11 @@ const kill = () => {
 process.on("SIGINT", () => (kill(), process.exit(1)));
 
 // (the dev server: started when the URL does not answer)
-const up = async () => fetch(URL_).then((r) => r.ok, () => false);
+const up = async () =>
+  fetch(URL_).then(
+    (r) => r.ok,
+    () => false,
+  );
 if (!(await up())) {
   const u = new URL(URL_);
   if (!/^(localhost|127\.0\.0\.1)$/.test(u.hostname)) throw new Error(`${URL_} does not answer`);
@@ -68,11 +73,26 @@ if (!(await up())) {
 // (old captures out of the way: what is in snapshots/ afterwards is this run's)
 for (const f of existsSync("snapshots") ? readdirSync("snapshots") : []) if (/^scene-.+\.webp$/.test(f)) rmSync(`snapshots/${f}`);
 
-procs.push(Bun.spawn([
-  CHROME, "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${tmpdir()}/kerr-gallery-profile`,
-  "--enable-unsafe-webgpu", "--enable-gpu", "--ignore-gpu-blocklist", "--window-size=1600,900", "--no-first-run",
-  "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows", "about:blank",
-], { stdout: "ignore", stderr: "ignore" }));
+procs.push(
+  Bun.spawn(
+    [
+      CHROME,
+      "--headless=new",
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${tmpdir()}/kerr-gallery-profile`,
+      "--enable-unsafe-webgpu",
+      "--enable-gpu",
+      "--ignore-gpu-blocklist",
+      "--window-size=1600,900",
+      "--no-first-run",
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows",
+      "about:blank",
+    ],
+    { stdout: "ignore", stderr: "ignore" },
+  ),
+);
 
 // The comparison, in the page: two pictures (data URLs) → metrics, and their difference drawn
 const COMPARE = `async (refUrl, newUrl) => {
@@ -171,7 +191,8 @@ try {
   ws.onmessage = (m) => {
     const d = JSON.parse(String(m.data));
     if (d.id && pending.has(d.id)) pending.get(d.id)!(d.result ?? d.error);
-    if (d.method === "Runtime.exceptionThrown") errors.add((d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text).split("\n")[0]);
+    if (d.method === "Runtime.exceptionThrown")
+      errors.add((d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text).split("\n")[0]);
   };
   const cdp = (method: string, params: object = {}) =>
     new Promise<any>((r) => {
@@ -200,30 +221,40 @@ try {
     await js(`__bh.preset(${JSON.stringify(name)}); return 0`);
     await sleep(WARM);
     await js(`return await __bh.captureScenes(${JSON.stringify([name])})`);
-    const cap = `snapshots/scene-${slug}.webp`, ref = `assets/scenes/${slug}.webp`;
+    const cap = `snapshots/scene-${slug}.webp`,
+      ref = `assets/scenes/${slug}.webp`;
     let row: (typeof report)[number];
     if (!existsSync(cap)) row = { name, ssim: 0, area: 1, flagged: true, i: -1, note: "not captured" };
     else if (!existsSync(ref)) row = { name, ssim: 0, area: 1, flagged: true, i: -1, note: "new: no picture yet" };
     else {
       const m = await js(`return await (${COMPARE})(${JSON.stringify(await dataUrl(ref))}, ${JSON.stringify(await dataUrl(cap))})`);
       // (the polarization's ticks: their noise leaves no structure to compare — SSIM ignored)
-      const [sMin, aMax, tMax] = moving(name) ? [presets[name]!.polarization ? 0 : SSIM_MOVING, AREA_MOVING, TONE_MOVING] : [SSIM_MIN, AREA_MAX, TONE_MAX];
+      const [sMin, aMax, tMax] = moving(name)
+        ? [presets[name]!.polarization ? 0 : SSIM_MOVING, AREA_MOVING, TONE_MOVING]
+        : [SSIM_MIN, AREA_MAX, TONE_MAX];
       row = { name, ...m, flagged: m.ssim < sMin || m.area > aMax || m.tone > tMax };
     }
     report.push(row);
     const eta = (((Date.now() - t0) / (k + 1)) * (SCENES.length - k - 1)) / 1000;
-    console.log(`${row.flagged ? "✗" : "✓"} ${name.padEnd(58)} ${row.note ?? `SSIM ${row.ssim.toFixed(3)}  moved ${(100 * row.area).toFixed(1).padStart(5)} %  colour ${(100 * row.tone!).toFixed(1).padStart(4)} %`}   (${Math.round(eta)} s left)`);
+    console.log(
+      `${row.flagged ? "✗" : "✓"} ${name.padEnd(58)} ${row.note ?? `SSIM ${row.ssim.toFixed(3)}  moved ${(100 * row.area).toFixed(1).padStart(5)} %  colour ${(100 * row.tone!).toFixed(1).padStart(4)} %`}   (${Math.round(eta)} s left)`,
+    );
   }
   const flagged = report.filter((r) => r.flagged && r.i >= 0);
   if (flagged.length) await js(`return await (${SHEET})(${JSON.stringify(flagged)})`);
-  await Bun.write("snapshots/gallery-report.json", JSON.stringify({ ssimMin: SSIM_MIN, areaMax: AREA_MAX, toneMax: TONE_MAX, scenes: report.map(({ i, ...r }) => r) }, null, 1));
+  await Bun.write(
+    "snapshots/gallery-report.json",
+    JSON.stringify({ ssimMin: SSIM_MIN, areaMax: AREA_MAX, toneMax: TONE_MAX, scenes: report.map(({ i, ...r }) => r) }, null, 1),
+  );
   if (errors.size) console.log(`\npage errors:\n  ${[...errors].join("\n  ")}`);
 } finally {
   kill();
 }
 
 const bad = report.filter((r) => r.flagged);
-console.log(`\n${report.length - bad.length} / ${report.length} scenes unchanged${bad.length ? ` — ${bad.length} flagged: snapshots/gallery-diff.png` : ""}`);
+console.log(
+  `\n${report.length - bad.length} / ${report.length} scenes unchanged${bad.length ? ` — ${bad.length} flagged: snapshots/gallery-diff.png` : ""}`,
+);
 if (UPDATE) {
   await Bun.$`bun scripts/scene-thumbs.ts`;
   process.exit(0);

@@ -21,8 +21,11 @@ export function epicycle(R: number, a: number) {
   const o = circularOrbit(R, a);
   const n = o.Omega;
   const phidot = (r: number) => {
-    const D = r * r - 2 * r + a * a, A = (r * r + a * a) ** 2 - a * a * D;
-    const gtt = -A / (r * r * D), gtp = (-2 * a) / (r * D), gpp = (D - a * a) / (r * r * D);
+    const D = r * r - 2 * r + a * a,
+      A = (r * r + a * a) ** 2 - a * a * D;
+    const gtt = -A / (r * r * D),
+      gtp = (-2 * a) / (r * D),
+      gpp = (D - a * a) / (r * r * D);
     return (-gtp * o.E + gpp * o.L) / (-gtt * o.E + gtp * o.L);
   };
   const h = 1e-5 * R;
@@ -54,7 +57,8 @@ function expm(A: M6, t: number): M6 {
   const norm = Math.max(...A.map((r) => r.reduce((s, v) => s + Math.abs(v), 0))) * Math.abs(t);
   const sq = Math.max(0, Math.ceil(Math.log2(norm + 1e-300)) + 2);
   const At = A.map((r) => r.map((v) => (v * t) / 2 ** sq));
-  let E = eye(), term = eye();
+  let E = eye(),
+    term = eye();
   for (let k = 1; k <= 12; k++) {
     term = mul(term, At).map((r) => r.map((v) => v / k));
     E = add(E, term);
@@ -92,7 +96,7 @@ export function rendezvousPush(e: ReturnType<typeof epicycle>, s: State6, T: num
   const N = 48;
   const step = expm(A, T / N);
   let Phi = eye();
-  let W: M6 = eye().map((r) => r.map(() => 0));
+  const W: M6 = eye().map((r) => r.map(() => 0));
   for (let k = 0; k <= N; k++) {
     const w = k === 0 || k === N ? 1 : k % 2 ? 4 : 2;
     // Φ B Bᵀ Φᵀ = (columns 3..5 of Φ) (…)ᵀ

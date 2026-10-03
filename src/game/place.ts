@@ -54,7 +54,8 @@ export interface OrbitPlacement {
 /** Our bodies, and Gargantua's side's (planets and the hole) */
 export const OUR_IDS = SOLAR_BODIES.map((b) => b.id);
 export const THEIR_IDS = ["gargantua", "miller", "mann", "edmunds"];
-export const universeOf = (id: string): "ours" | "gargantua" | null => (OUR_IDS.includes(id) ? "ours" : THEIR_IDS.includes(id) ? "gargantua" : null);
+export const universeOf = (id: string): "ours" | "gargantua" | null =>
+  OUR_IDS.includes(id) ? "ours" : THEIR_IDS.includes(id) ? "gargantua" : null;
 
 /** A body's equatorial axes (not turning with it): x on the ecliptic, z along its pole. */
 export function equatorAxes(id: string): Axes {
@@ -75,7 +76,7 @@ export function defaultAltKm(id: string) {
   const top = airTopKm(id);
   const b = solarBody(id);
   const Rkm = b ? b.radius / KM : 6000;
-  return top > 0 ? Math.ceil(top * 1.25 / 10) * 10 : Math.max(10, Math.min(100, Math.round(0.1 * Rkm)));
+  return top > 0 ? Math.ceil((top * 1.25) / 10) * 10 : Math.max(10, Math.min(100, Math.round(0.1 * Rkm)));
 }
 
 /** An orbit around one of our bodies at time t (home frame). */
@@ -86,11 +87,14 @@ export function ourOrbitPose(p: OrbitPlacement, t: number): Pose {
   const alt = p.altKm ?? defaultAltKm(p.body);
   const rp = R + (p.peKm ?? alt) * KM;
   const ra = R + (p.apKm ?? p.peKm ?? alt) * KM;
-  const inc = p.retrograde ? 180 - (p.inc ?? 0) : p.inc ?? 0;
+  const inc = p.retrograde ? 180 - (p.inc ?? 0) : (p.inc ?? 0);
   const spec: OrbitSpec = { rp, ra, i: inc, raan: p.raan ?? 0, argPe: p.argPe ?? 0, nu: p.nu ?? 0 };
   const { r, v } = stateFrom(b.mass, spec, equatorAxes(p.body));
   const soi = soiOf(p.body, t);
-  if (Math.max(rp, ra) > soi) throw new Error(`${b.name}: that orbit (${Math.round(Math.max(rp, ra) / KM - R / KM)} km) leaves its sphere of influence (${Math.round(soi / KM - R / KM)} km)`);
+  if (Math.max(rp, ra) > soi)
+    throw new Error(
+      `${b.name}: that orbit (${Math.round(Math.max(rp, ra) / KM - R / KM)} km) leaves its sphere of influence (${Math.round(soi / KM - R / KM)} km)`,
+    );
   const B = solarState(p.body, t);
   const X = add(B.pos, r);
   const el = elements(b.mass, r, v, equatorAxes(p.body));
@@ -107,7 +111,15 @@ export function ourGroundPose(id: string, lat: number, lon: number, t: number): 
   const up = unit(sub(X, solarState(id, t).pos));
   let east = cross(spinVector(b, t), up);
   if (Math.hypot(...east) < 1e-12) east = cross([1, 0, 0], up);
-  return { frame: "ours", X, vel: groundVelocity(id, X, t), fwd: unit(east), up, landed: { body: id, q }, note: `${b.name}: landed at ${lat.toFixed(2)}°, ${lon.toFixed(2)}°` };
+  return {
+    frame: "ours",
+    X,
+    vel: groundVelocity(id, X, t),
+    fwd: unit(east),
+    up,
+    landed: { body: id, q },
+    note: `${b.name}: landed at ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
+  };
 }
 
 /**
@@ -125,7 +137,8 @@ export function orbitOver(id: string, q: Vec3, t: number, o: { inc: number; argP
     const A = equatorAxes(id);
     e = [dot(d, A[0]), dot(d, A[1]), dot(d, A[2])];
   }
-  const lat = Math.asin(Math.min(Math.max(e[2], -1), 1)), lam = Math.atan2(e[1], e[0]);
+  const lat = Math.asin(Math.min(Math.max(e[2], -1), 1)),
+    lam = Math.atan2(e[1], e[0]);
   let inc = Math.min(Math.max(o.inc, 0), 90);
   // (the orbit's highest latitude is its inclination — retrograde: 180° − it, the same reach)
   if (Math.abs(lat) / D > inc) inc = Math.min(90, Math.ceil((Math.abs(lat) / D) * 10 + 1e-9) / 10);
@@ -149,7 +162,9 @@ export function theirGroundAt(body: string, q: Vec3, t: number, spin: number, ma
   const F = planetFrame(body, t, spin, massSolar);
   const S = F.S;
   const cr: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], 0];
-  const ex = unit(cr), ey: Vec3 = [-ex[1], ex[0], 0], ez: Vec3 = [0, 0, 1];
+  const ex = unit(cr),
+    ey: Vec3 = [-ex[1], ex[0], 0],
+    ez: Vec3 = [0, 0, 1];
   const g0 = unit([-F.C[0], -F.C[1], -F.C[2]]);
   const g = unit([dot(g0, ex) * S[0], dot(g0, ey) * S[1], dot(g0, ez) * S[2]]);
   let north = sub([0, 0, 1], g.map((c) => c * g[2]) as Vec3);
@@ -185,14 +200,21 @@ export function theirOrbitPose(p: OrbitPlacement & { rM?: number }, t: number, s
     const o = circularOrbit(r, p.retrograde ? -spin : spin);
     const f = sphericalFrame(X);
     const vel: Vec3 = f.ep.map((c) => c * o.vZamo * (p.retrograde ? -1 : 1)) as Vec3;
-    return { frame: "hole", X, vel, fwd: p.retrograde ? f.ep.map((c) => -c) as Vec3 : f.ep, up: f.er, note: `Gargantua: circular orbit at ${r.toFixed(2)} M (${o.vZamo.toFixed(3)} c)` };
+    return {
+      frame: "hole",
+      X,
+      vel,
+      fwd: p.retrograde ? (f.ep.map((c) => -c) as Vec3) : f.ep,
+      up: f.er,
+      note: `Gargantua: circular orbit at ${r.toFixed(2)} M (${o.vZamo.toFixed(3)} c)`,
+    };
   }
   const def = sysBody(GARGANTUA_SYSTEM, p.body);
   const F = planetFrame(p.body, t, spin, massSolar);
   const alt = p.altKm ?? 100;
-  const rp = F.R + (p.peKm ?? alt) * 1e3 / mPerM;
-  const ra = F.R + (p.apKm ?? p.peKm ?? alt) * 1e3 / mPerM;
-  const inc = p.retrograde ? 180 - (p.inc ?? 0) : p.inc ?? 0;
+  const rp = F.R + ((p.peKm ?? alt) * 1e3) / mPerM;
+  const ra = F.R + ((p.apKm ?? p.peKm ?? alt) * 1e3) / mPerM;
+  const inc = p.retrograde ? 180 - (p.inc ?? 0) : (p.inc ?? 0);
   // (local axes: x away from the primary, y along the orbit, z north)
   const { r, v } = stateFrom(F.m, { rp, ra, i: inc, raan: p.raan ?? 0, argPe: p.argPe ?? 0, nu: p.nu ?? 0 });
   // the frame turns about z: w = v − Ω ẑ × ξ (Ω in proper time: from its Coriolis terms)
@@ -204,7 +226,14 @@ export function theirOrbitPose(p: OrbitPlacement & { rM?: number }, t: number, s
   const cart = (q: Vec3): Vec3 => [0, 1, 2].map((i) => q[0] * f.er[i]! + q[1] * f.et[i]! + q[2] * f.ep[i]!) as Vec3;
   const up = unit(sub(g.X, F.C));
   const rel = sub(g.V, F.V);
-  return { frame: "hole", X: g.X, vel: cart(b), fwd: unit(rel), up, note: `${def.name}: orbit ${Math.round((rp - F.R) * mPerM / 1e3)} × ${Math.round((ra - F.R) * mPerM / 1e3)} km` };
+  return {
+    frame: "hole",
+    X: g.X,
+    vel: cart(b),
+    fwd: unit(rel),
+    up,
+    note: `${def.name}: orbit ${Math.round(((rp - F.R) * mPerM) / 1e3)} × ${Math.round(((ra - F.R) * mPerM) / 1e3)} km`,
+  };
 }
 
 /**
@@ -217,7 +246,9 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
   const def = sysBody(GARGANTUA_SYSTEM, body);
   // (the local axes: x away from its primary, y along its orbit, z north — on the map)
   const cr: Vec3 = [F.C[0] - F.H[0], F.C[1] - F.H[1], 0];
-  const ex = unit(cr), ey: Vec3 = [-ex[1], ex[0], 0], ez: Vec3 = [0, 0, 1];
+  const ex = unit(cr),
+    ey: Vec3 = [-ex[1], ex[0], 0],
+    ez: Vec3 = [0, 0, 1];
   // (its axes are proper lengths: S of the map's per unit)
   const S = F.S;
   const toMap = (v: Vec3): Vec3 => [0, 1, 2].map((i) => (v[0] / S[0]) * ex[i]! + (v[1] / S[1]) * ey[i]! + (v[2] / S[2]) * ez[i]!) as Vec3;
@@ -240,7 +271,8 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
   let sea = 0;
   if (F.surf === SURF.ocean) {
     // Miller: between its giant waves (drawn, not felt: the ship in a trough, not inside a wall of water)
-    const tSec = t * 4.925490947e-6 * massSolar, mR = F.R * F.mPerM;
+    const tSec = t * 4.925490947e-6 * massSolar,
+      mR = F.R * F.mPerM;
     for (let k = 0; k < 1440; k++) {
       const qk = placeAt(az + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25);
       const h = millerWaves(qk, tSec, mR);

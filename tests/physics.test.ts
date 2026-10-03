@@ -18,7 +18,7 @@ import {
 function equatorialRay(b: number, a: number, r0 = 2000): State {
   const del = r0 * r0 - 2 * r0 + a * a;
   const W = r0 * r0 + a * a - a * b;
-  const pr = Math.sqrt(Math.max(0, W * W / del - (b - a) ** 2) / del);
+  const pr = Math.sqrt(Math.max(0, (W * W) / del - (b - a) ** 2) / del);
   return { x: [r0, Math.PI / 2, 0, 0], p: [pr, 0] };
 }
 
@@ -28,7 +28,7 @@ describe("Kerr constants", () => {
   test("horizon & ISCO", () => {
     expect(horizon(0)).toBeCloseTo(2, 10);
     expect(isco(0)).toBeCloseTo(6, 10);
-    expect(isco(0.998)).toBeCloseTo(1.2370, 3);
+    expect(isco(0.998)).toBeCloseTo(1.237, 3);
     expect(isco(-1)).toBeCloseTo(9, 6);
   });
   test("Schwarzschild critical impact parameter is 3√3", () => {
@@ -52,11 +52,14 @@ describe("geodesic integrator (RK4, backward)", () => {
 
   test("null constraint H = 0 is preserved along an off-plane ray", () => {
     const a = 0.9;
-    const r0 = 30, th0 = 1.2, L = 3, pth = 2.5;
+    const r0 = 30,
+      th0 = 1.2,
+      L = 3,
+      pth = 2.5;
     const del = r0 * r0 - 2 * r0 + a * a;
     const s2 = Math.sin(th0) ** 2;
     const W = r0 * r0 + a * a - a * L;
-    const pr = Math.sqrt(W * W / del - pth * pth - (L - a * s2) ** 2 / s2) / Math.sqrt(del);
+    const pr = Math.sqrt((W * W) / del - pth * pth - (L - a * s2) ** 2 / s2) / Math.sqrt(del);
     const st: State = { x: [r0, th0, 0, 0], p: [pr, pth] };
     expect(Math.abs(hamiltonian(st, L, a))).toBeLessThan(1e-9);
     const res = traceBackward(st, L, a, { eps: 0.05, maxSteps: 5000, rEscape: 1000, captureTol: captureTolerance(a) });

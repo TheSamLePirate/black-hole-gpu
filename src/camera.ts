@@ -1,19 +1,25 @@
 import { horizon, keplerOmega, zamo, type Vec3 } from "./physics";
 import type { Settings } from "./settings";
 import {
-  ellOfR, fromMouth, holeToRep, mouth, radius, repToHole, repToSide, sidePosition, sideToRep, sphericalFrame, toMouth, velFromMouth,
+  ellOfR,
+  fromMouth,
+  holeToRep,
+  mouth,
+  radius,
+  repToHole,
+  repToSide,
+  sidePosition,
+  sideToRep,
+  sphericalFrame,
+  toMouth,
+  velFromMouth,
   velToMouth,
   type Mouth,
 } from "./wormhole";
 import { DEG } from "./units";
 import { add, dot, normalize as norm, scale } from "./math/vec3";
 
-
-const cross = (a: Vec3, b: Vec3): Vec3 => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
-];
+const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 export interface CameraFrame {
   /** "hole": Boyer–Lindquist position, vectors in the ZAMO frame (r̂, θ̂, φ̂).
@@ -128,10 +134,22 @@ function holeFromRep(s: Settings, m: Mouth, l: number, n: Vec3, v: { right: Vec3
   };
   // (the rep frame is the mouth's rest frame: velocities are composed with the mouth's own)
   const W = velFromMouth(m, v.vel);
-  return withMotion(s, {
-    region: "hole", r, theta, phi: f.ph, ell: 0, n: [1, 0, 0],
-    right: comps(v.right), up: comps(v.up), fwd: comps(v.fwd), zamo: zamo(r, theta, s.spin),
-  }, s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? [dot(W, f.er), dot(W, f.et), dot(W, f.ep)] : null);
+  return withMotion(
+    s,
+    {
+      region: "hole",
+      r,
+      theta,
+      phi: f.ph,
+      ell: 0,
+      n: [1, 0, 0],
+      right: comps(v.right),
+      up: comps(v.up),
+      fwd: comps(v.fwd),
+      zamo: zamo(r, theta, s.spin),
+    },
+    s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? [dot(W, f.er), dot(W, f.et), dot(W, f.ep)] : null,
+  );
 }
 
 /** Camera orbiting the wormhole: whL is ℓ; inclination/azimuth are angles in the frame of its side. */
@@ -139,7 +157,10 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   const side = s.whL >= 0 ? 1 : -1;
   const theta = Math.min(Math.max(s.inclination, 0.2), 179.8) * DEG;
   const phi = s.azimuth * DEG;
-  const st = Math.sin(theta), ct = Math.cos(theta), sp = Math.sin(phi), cp = Math.cos(phi);
+  const st = Math.sin(theta),
+    ct = Math.cos(theta),
+    sp = Math.sin(phi),
+    cp = Math.cos(phi);
   const er: Vec3 = [st * cp, st * sp, ct];
   const et: Vec3 = [ct * cp, ct * sp, -st];
   const ep: Vec3 = [-sp, cp, 0];
@@ -149,9 +170,22 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   const vel = rep([s.velR, s.velT, s.velP]);
   const v = { right: rep(b.right), up: rep(b.up), fwd: rep(b.fwd), vel };
   if (side > 0 && s.whL > m.lGlue) return holeFromRep(s, m, s.whL, n, v);
-  return withMotion(s, {
-    region: "throat", r: radius(m.w, s.whL)[0], theta, phi, ell: s.whL, n, right: v.right, up: v.up, fwd: v.fwd, zamo: STATIC_ZAMO,
-  }, s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? vel : null);
+  return withMotion(
+    s,
+    {
+      region: "throat",
+      r: radius(m.w, s.whL)[0],
+      theta,
+      phi,
+      ell: s.whL,
+      n,
+      right: v.right,
+      up: v.up,
+      fwd: v.fwd,
+      zamo: STATIC_ZAMO,
+    },
+    s.motion === "geodesic" || s.motion === "comoving" || s.motion === "barycentric" ? vel : null,
+  );
 }
 
 export function cameraFrame(s: Settings): CameraFrame {
@@ -167,8 +201,15 @@ export function cameraFrame(s: Settings): CameraFrame {
   const world = (c: Vec3) => add(add(scale(f.er, c[0]), scale(f.et, c[1])), scale(f.ep, c[2]));
   const toRep = (c: Vec3) => toMouth(m, world(c));
   return {
-    ...cam, region: "throat", ell: rep.l, n: rep.n, zamo: STATIC_ZAMO,
-    right: toRep(cam.right), up: toRep(cam.up), fwd: toRep(cam.fwd), beta: velToMouth(m, world(cam.beta)),
+    ...cam,
+    region: "throat",
+    ell: rep.l,
+    n: rep.n,
+    zamo: STATIC_ZAMO,
+    right: toRep(cam.right),
+    up: toRep(cam.up),
+    fwd: toRep(cam.fwd),
+    beta: velToMouth(m, world(cam.beta)),
   };
 }
 
@@ -181,7 +222,13 @@ export function blToCartesian(r: number, th: number, ph: number): Vec3 {
 // written back into the settings of either anchor (switching anchors keeps the view unchanged).
 // ---------------------------------------------------------------------------------------------
 
-export interface RepPose { l: number; n: Vec3; fwd: Vec3; up: Vec3; vel: Vec3 }
+export interface RepPose {
+  l: number;
+  n: Vec3;
+  fwd: Vec3;
+  up: Vec3;
+  vel: Vec3;
+}
 
 /** Current camera as a rep pose (any position in the wormhole world). */
 export function repPose(s: Settings): RepPose {

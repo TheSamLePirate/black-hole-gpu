@@ -58,12 +58,55 @@ import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
 
 // the maps GPU-compressed at their arrays' sizes (scripts/build-ktx2.ts), their means measured there
 const KTX: Record<MapName, string> = {
-earth: k_earth, moon: k_moon, mars: k_mars, mercury: k_mercury, jupiter: k_jupiter, saturn: k_saturn, venus: k_venus, ceres: k_ceres, phobos: k_phobos, deimos: k_deimos, io: k_io, europa: k_europa, ganymede: k_ganymede, callisto: k_callisto, mimas: k_mimas, enceladus: k_enceladus, tethys: k_tethys, dione: k_dione, rhea: k_rhea, titan: k_titan, uranus: k_uranus, neptune: k_neptune, pluto: k_pluto,
+  earth: k_earth,
+  moon: k_moon,
+  mars: k_mars,
+  mercury: k_mercury,
+  jupiter: k_jupiter,
+  saturn: k_saturn,
+  venus: k_venus,
+  ceres: k_ceres,
+  phobos: k_phobos,
+  deimos: k_deimos,
+  io: k_io,
+  europa: k_europa,
+  ganymede: k_ganymede,
+  callisto: k_callisto,
+  mimas: k_mimas,
+  enceladus: k_enceladus,
+  tethys: k_tethys,
+  dione: k_dione,
+  rhea: k_rhea,
+  titan: k_titan,
+  uranus: k_uranus,
+  neptune: k_neptune,
+  pluto: k_pluto,
 };
 
 const URLS: Record<MapName, string> = {
-  earth, moon, mars, mercury, jupiter, saturn, venus, ceres, phobos, deimos, io, europa, ganymede, callisto, mimas, enceladus,
-  tethys, dione, rhea, titan, uranus, neptune, pluto,
+  earth,
+  moon,
+  mars,
+  mercury,
+  jupiter,
+  saturn,
+  venus,
+  ceres,
+  phobos,
+  deimos,
+  io,
+  europa,
+  ganymede,
+  callisto,
+  mimas,
+  enceladus,
+  tethys,
+  dione,
+  rhea,
+  titan,
+  uranus,
+  neptune,
+  pluto,
 };
 
 /** A world's map (equirectangular, longitude 0 at its centre): its URL — the HUD's globe reads it. */
@@ -97,15 +140,20 @@ async function compressedArray(device: GPUDevice, names: MapName[], w: number, h
   const target = ktxTarget(device);
   if (target === "rgba") return null;
   const tex = device.createTexture({
-    size: [w, h, names.length], format: ktxFormat(target), mipLevelCount: levels(w, h), dimension: "2d",
+    size: [w, h, names.length],
+    format: ktxFormat(target),
+    mipLevelCount: levels(w, h),
+    dimension: "2d",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
   try {
-    await Promise.all(names.map(async (name, layer) => {
-      const k = await ktxLevels(KTX[name], target);
-      writeLevels(device, tex, k.levels, k.width, k.height, target, layer);
-      mean.set(name, (ktxMeans as Record<string, number>)[name] ?? 0.25);
-    }));
+    await Promise.all(
+      names.map(async (name, layer) => {
+        const k = await ktxLevels(KTX[name], target);
+        writeLevels(device, tex, k.levels, k.width, k.height, target, layer);
+        mean.set(name, (ktxMeans as Record<string, number>)[name] ?? 0.25);
+      }),
+    );
     return tex;
   } catch (e) {
     console.warn("Compressed planet maps unavailable, JPEG instead:", e);
@@ -120,34 +168,42 @@ async function mapArray(device: GPUDevice, names: MapName[], w: number, h: numbe
   if (packed) return packed;
   const n = levels(w, h);
   const tex = device.createTexture({
-    size: [w, h, names.length], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: n, dimension: "2d",
+    size: [w, h, names.length],
+    format: "rgba8unorm",
+    viewFormats: ["rgba8unorm-srgb"],
+    mipLevelCount: n,
+    dimension: "2d",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
   });
-  await Promise.all(names.map(async (name, layer) => {
-    const img = await bitmap(URLS[name]);
-    for (let l = 0; l < n; l++) {
-      const lw = Math.max(w >> l, 1), lh = Math.max(h >> l, 1);
-      const src = await createImageBitmap(img, { resizeWidth: lw, resizeHeight: lh, resizeQuality: "high" });
-      device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: l, origin: [0, 0, layer] }, [lw, lh]);
-      if (lw === 64) {
-        // (its mean linear luminance, area-weighted: cos latitude)
-        const cv = new OffscreenCanvas(lw, lh);
-        const ctx = cv.getContext("2d")!;
-        ctx.drawImage(src, 0, 0);
-        const px = ctx.getImageData(0, 0, lw, lh).data;
-        let sum = 0, wsum = 0;
-        for (let y = 0; y < lh; y++) {
-          const c = Math.cos(((y + 0.5) / lh - 0.5) * Math.PI);
-          for (let x = 0; x < lw; x++) {
-            const i = 4 * (y * lw + x);
-            sum += c * (0.2126 * lin(px[i]!) + 0.7152 * lin(px[i + 1]!) + 0.0722 * lin(px[i + 2]!));
-            wsum += c;
+  await Promise.all(
+    names.map(async (name, layer) => {
+      const img = await bitmap(URLS[name]);
+      for (let l = 0; l < n; l++) {
+        const lw = Math.max(w >> l, 1),
+          lh = Math.max(h >> l, 1);
+        const src = await createImageBitmap(img, { resizeWidth: lw, resizeHeight: lh, resizeQuality: "high" });
+        device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: l, origin: [0, 0, layer] }, [lw, lh]);
+        if (lw === 64) {
+          // (its mean linear luminance, area-weighted: cos latitude)
+          const cv = new OffscreenCanvas(lw, lh);
+          const ctx = cv.getContext("2d")!;
+          ctx.drawImage(src, 0, 0);
+          const px = ctx.getImageData(0, 0, lw, lh).data;
+          let sum = 0,
+            wsum = 0;
+          for (let y = 0; y < lh; y++) {
+            const c = Math.cos(((y + 0.5) / lh - 0.5) * Math.PI);
+            for (let x = 0; x < lw; x++) {
+              const i = 4 * (y * lw + x);
+              sum += c * (0.2126 * lin(px[i]!) + 0.7152 * lin(px[i + 1]!) + 0.0722 * lin(px[i + 2]!));
+              wsum += c;
+            }
           }
+          mean.set(name, Math.max(sum / wsum, 1e-3));
         }
-        mean.set(name, Math.max(sum / wsum, 1e-3));
       }
-    }
-  }));
+    }),
+  );
   return tex;
 }
 
@@ -161,16 +217,28 @@ async function ringTexture(device: GPUDevice): Promise<GPUTexture> {
   // (colour weighted by opacity, so the transparent texels' colour does not bleed in)
   let prof = new Float32Array(img.width * 4);
   for (let x = 0; x < img.width; x++) {
-    let r = 0, g = 0, b = 0, a = 0;
+    let r = 0,
+      g = 0,
+      b = 0,
+      a = 0;
     for (let y = 0; y < img.height; y++) {
       const i = 4 * (y * img.width + x);
       const w = px[i + 3]! / 255;
-      r += px[i]! * w; g += px[i + 1]! * w; b += px[i + 2]! * w; a += w;
+      r += px[i]! * w;
+      g += px[i + 1]! * w;
+      b += px[i + 2]! * w;
+      a += w;
     }
     prof.set(a > 0 ? [r / a, g / a, b / a, (255 * a) / img.height] : [0, 0, 0, 0], 4 * x);
   }
   const n = levels(img.width, 1);
-  const tex = device.createTexture({ size: [img.width, 1], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: n, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  const tex = device.createTexture({
+    size: [img.width, 1],
+    format: "rgba8unorm",
+    viewFormats: ["rgba8unorm-srgb"],
+    mipLevelCount: n,
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
   let w = img.width;
   for (let l = 0; l < n; l++) {
     const data = new Uint8Array(w * 4);
@@ -179,7 +247,8 @@ async function ringTexture(device: GPUDevice): Promise<GPUTexture> {
     if (w === 1) break;
     const next = new Float32Array((w >> 1) * 4);
     for (let x = 0; x < w >> 1; x++) {
-      const a0 = prof[8 * x + 3]!, a1 = prof[8 * x + 7]!;
+      const a0 = prof[8 * x + 3]!,
+        a1 = prof[8 * x + 7]!;
       const sa = a0 + a1;
       for (let c = 0; c < 3; c++) next[4 * x + c] = sa > 0 ? (prof[8 * x + c]! * a0 + prof[8 * x + 4 + c]! * a1) / sa : 0;
       next[4 * x + 3] = 0.5 * sa;
@@ -193,8 +262,15 @@ async function ringTexture(device: GPUDevice): Promise<GPUTexture> {
 /** Placeholder arrays (one black layer) until the maps are loaded. */
 export function placeholderMaps(device: GPUDevice): PlanetMaps {
   const mk = (layers: number) => {
-    const t = device.createTexture({ size: [1, 1, layers], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], dimension: "2d", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-    for (let l = 0; l < layers; l++) device.queue.writeTexture({ texture: t, origin: [0, 0, l] }, new Uint8Array([128, 128, 128, 255]), {}, [1, 1]);
+    const t = device.createTexture({
+      size: [1, 1, layers],
+      format: "rgba8unorm",
+      viewFormats: ["rgba8unorm-srgb"],
+      dimension: "2d",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    for (let l = 0; l < layers; l++)
+      device.queue.writeTexture({ texture: t, origin: [0, 0, l] }, new Uint8Array([128, 128, 128, 255]), {}, [1, 1]);
     return t;
   };
   return { hi: mk(2), lo: mk(2), rings: mk(1), mean: new Map() };

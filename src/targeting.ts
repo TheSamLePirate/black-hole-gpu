@@ -26,9 +26,18 @@ import { cross, dot, lin, normalize as norm, sub } from "./math/vec3";
 export type Body = Target;
 
 export const BODY_NAMES: Record<Body, string> = {
-  hole: "Gargantua", star: "Star", wormhole: "Wormhole", barycentre: "Centre of mass",
-  miller: "Miller", mann: "Mann", k2: "Edmunds' star", edmunds: "Edmunds", iss: "ISS",
-  ranger: "Ranger", lander: "Lander", endurance: "Endurance",
+  hole: "Gargantua",
+  star: "Star",
+  wormhole: "Wormhole",
+  barycentre: "Centre of mass",
+  miller: "Miller",
+  mann: "Mann",
+  k2: "Edmunds' star",
+  edmunds: "Edmunds",
+  iss: "ISS",
+  ranger: "Ranger",
+  lander: "Lander",
+  endurance: "Endurance",
   ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
 };
 
@@ -86,7 +95,6 @@ export function bodyHill(s: Settings, b: Body, t = 0) {
   }
   return Math.hypot(...bodyCentre(s, b, t)) * Math.cbrt(m / 3);
 }
-
 
 // ------------------------------------------------------------------------------------ the star
 /** Orbital radius of the star, as the shader clamps it. */
@@ -164,7 +172,10 @@ export function starGradPhi(s: Settings, X: Vec3, t: number) {
  * deflection is 4m/b × (1 − v∥) (Pyne & Birkinshaw 1993). `back`: unit backward ray direction.
  */
 export function starForce(s: Settings, r: number, th: number, ph: number, t: number, back: Vec3, indirect = true): Vec3 {
-  const st = Math.sin(th), ct = Math.cos(th), sp = Math.sin(ph), cp = Math.cos(ph);
+  const st = Math.sin(th),
+    ct = Math.cos(th),
+    sp = Math.sin(ph),
+    cp = Math.cos(ph);
   const er: Vec3 = [st * cp, st * sp, ct];
   const f = starGradPhi(s, lin(er, r, er, 0), t);
   const k = 1 + dot(f.v, back);
@@ -198,7 +209,16 @@ export function bodyRadius(s: Settings, body: Body) {
 
 /** Angular radius of a body seen from distance d (the hole: its shadow, ≈ 3√3 M far away). */
 export function angularRadius(s: Settings, body: Body, d: number) {
-  const R = body === "hole" ? 3 * Math.sqrt(3) : body === "wormhole" ? 1.6 * mouth(s).w.rho : body === "barycentre" ? 0.5 : body === "star" ? s.sunRadius : bodyRadius(s, body);
+  const R =
+    body === "hole"
+      ? 3 * Math.sqrt(3)
+      : body === "wormhole"
+        ? 1.6 * mouth(s).w.rho
+        : body === "barycentre"
+          ? 0.5
+          : body === "star"
+            ? s.sunRadius
+            : bodyRadius(s, body);
   return Math.asin(Math.min(1, R / Math.max(d, 1e-6)));
 }
 
@@ -207,7 +227,8 @@ export function angularRadius(s: Settings, body: Body, d: number) {
  * those beyond the wormhole (reached through it: the mouth stands for them until the ship is there).
  */
 export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
-  const ours: Body[] = s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : []), ...targetCrafts(s)] : [];
+  const ours: Body[] =
+    s.system === "gargantua" && s.wormhole ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : []), ...targetCrafts(s)] : [];
   if (onOurSide(s, cam)) return ["wormhole", ...ours, ...(s.system === "gargantua" ? (["hole", ...SYSTEM_BODIES] as Body[]) : [])];
   const list: Body[] = ["hole"];
   if (s.sun) list.push("star");
@@ -277,8 +298,19 @@ function staticFrameAt(X: Vec3, a: number): CameraFrame {
   const f = sphericalFrame(X);
   const r = Math.max(f.r, horizon(a) + 1e-3);
   return {
-    region: "hole", r, theta: f.th, phi: f.ph, ell: 0, n: [1, 0, 0], right: [0, 0, 1], up: [0, -1, 0], fwd: [-1, 0, 0],
-    zamo: zamo(r, f.th, a), beta: [0, 0, 0], gamma: 1, speed: 0,
+    region: "hole",
+    r,
+    theta: f.th,
+    phi: f.ph,
+    ell: 0,
+    n: [1, 0, 0],
+    right: [0, 0, 1],
+    up: [0, -1, 0],
+    fwd: [-1, 0, 0],
+    zamo: zamo(r, f.th, a),
+    beta: [0, 0, 0],
+    gamma: 1,
+    speed: 0,
   };
 }
 
@@ -286,7 +318,16 @@ function staticFrameAt(X: Vec3, a: number): CameraFrame {
  * Follows a backward ray through Kerr, calling `visit` for each chord (Cartesian end points and
  * coordinate times along the ray, t ≤ 0) until it returns true, or the ray falls in / escapes.
  */
-function walkKerr(s: Settings, st0: State, L0: number, visit: (c: Chord) => boolean, maxSteps = 6000, time = 0, noLens = false, indirect = true) {
+function walkKerr(
+  s: Settings,
+  st0: State,
+  L0: number,
+  visit: (c: Chord) => boolean,
+  maxSteps = 6000,
+  time = 0,
+  noLens = false,
+  indirect = true,
+) {
   const a = s.spin;
   const rH = horizon(a);
   const tol = 0.02 + 0.3 * (1 - Math.sqrt(Math.max(0, 1 - a * a)));
@@ -342,16 +383,25 @@ export function traceRay(s: Settings, cam: CameraFrame, look: Vec3, time = 0, o:
   if (!ray) return null;
   let dir: Vec3 = [0, 0, 0];
   let starMin = Infinity;
-  const fate = walkKerr(s, ray.state, ray.L, (c) => {
-    dir = sub(c.q1, c.q0);
-    if (s.sun) {
-      const C = starCentre(s, time + 0.5 * (c.t0 + c.t1));
-      const dv = sub(c.q1, c.q0);
-      const u = Math.min(1, Math.max(0, dot(sub(C, c.q0), dv) / Math.max(dot(dv, dv), 1e-18)));
-      starMin = Math.min(starMin, Math.hypot(...sub(lin(c.q0, 1, dv, u), C)));
-    }
-    return false;
-  }, 20000, time, false, o.indirect ?? true);
+  const fate = walkKerr(
+    s,
+    ray.state,
+    ray.L,
+    (c) => {
+      dir = sub(c.q1, c.q0);
+      if (s.sun) {
+        const C = starCentre(s, time + 0.5 * (c.t0 + c.t1));
+        const dv = sub(c.q1, c.q0);
+        const u = Math.min(1, Math.max(0, dot(sub(C, c.q0), dv) / Math.max(dot(dv, dv), 1e-18)));
+        starMin = Math.min(starMin, Math.hypot(...sub(lin(c.q0, 1, dv, u), C)));
+      }
+      return false;
+    },
+    20000,
+    time,
+    false,
+    o.indirect ?? true,
+  );
   return { fate, dir: norm(dir), starMin };
 }
 
@@ -375,27 +425,34 @@ function pickKerr(s: Settings, st: State, L: number, time: number, skipGlue = fa
   const rIn = isco(s.spin);
   let outside = !skipGlue;
   let hit: Body | null = null;
-  const fate = walkKerr(s, st, L, (c) => {
-    let best = Infinity;
-    if (s.sun) {
-      const f = sphereHit(c.q0, c.q1, starCentre(s, time + 0.5 * (c.t0 + c.t1)), s.sunRadius);
-      if (f >= 0 && f < best) (best = f), (hit = "star");
-    }
-    if (m) {
-      const inside = Math.hypot(...sub(c.q0, m.C)) < m.rGlue;
-      if (!outside && !inside) outside = true;
-      if (outside) {
-        const f = sphereHit(c.q0, c.q1, m.C, m.rGlue);
-        if (f >= 0 && f < best) (best = f), (hit = "wormhole");
+  const fate = walkKerr(
+    s,
+    st,
+    L,
+    (c) => {
+      let best = Infinity;
+      if (s.sun) {
+        const f = sphereHit(c.q0, c.q1, starCentre(s, time + 0.5 * (c.t0 + c.t1)), s.sunRadius);
+        if (f >= 0 && f < best) (best = f), (hit = "star");
       }
-    }
-    if (s.disk && (c.th0 - Math.PI / 2) * (c.th1 - Math.PI / 2) < 0) {
-      const f = (c.th0 - Math.PI / 2) / (c.th0 - c.th1);
-      const r = c.r0 + f * (c.r1 - c.r0);
-      if (r > 0.97 * rIn && r < s.diskOuter && f < best) (best = f), (hit = "hole");
-    }
-    return best < Infinity;
-  }, 6000, time);
+      if (m) {
+        const inside = Math.hypot(...sub(c.q0, m.C)) < m.rGlue;
+        if (!outside && !inside) outside = true;
+        if (outside) {
+          const f = sphereHit(c.q0, c.q1, m.C, m.rGlue);
+          if (f >= 0 && f < best) (best = f), (hit = "wormhole");
+        }
+      }
+      if (s.disk && (c.th0 - Math.PI / 2) * (c.th1 - Math.PI / 2) < 0) {
+        const f = (c.th0 - Math.PI / 2) / (c.th0 - c.th1);
+        const r = c.r0 + f * (c.r1 - c.r0);
+        if (r > 0.97 * rIn && r < s.diskOuter && f < best) (best = f), (hit = "hole");
+      }
+      return best < Infinity;
+    },
+    6000,
+    time,
+  );
   if (fate === "horizon") return "hole";
   return fate === "stopped" ? hit : null;
 }
@@ -414,7 +471,8 @@ export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): B
   // our universe: the body whose disc (or, small, a few pixels around it) holds the look
   if (onOurSide(s, cam)) {
     const X = cameraHome(s, cam);
-    let best: Body | null = null, bestOff = Infinity;
+    let best: Body | null = null,
+      bestOff = Infinity;
     for (const b of ["wormhole", ...OUR_TARGETS, ...(s.iss ? ["iss"] : []), ...targetCrafts(s)] as Body[]) {
       const T = ourTarget(s, b, time);
       const d = sub(T.pos, X);
@@ -469,17 +527,25 @@ function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: 
   let best: Vec3 | null = null;
   let bestD = Infinity;
   let far = 0;
-  walkKerr(s, ray.state, ray.L, (c) => {
-    const C = centre(time + 0.5 * (c.t0 + c.t1));
-    const dv = sub(c.q1, c.q0);
-    const u = Math.min(1, Math.max(0, dot(sub(C, c.q0), dv) / Math.max(dot(dv, dv), 1e-18)));
-    const miss = sub(lin(c.q0, 1, dv, u), C);
-    const d = Math.hypot(...miss);
-    if (d < bestD) (bestD = d), (best = miss);
-    // well past the closest approach: stop
-    far = d > 2 * bestD + 5 ? far + 1 : 0;
-    return far > 8;
-  }, 4000, time, noLens);
+  walkKerr(
+    s,
+    ray.state,
+    ray.L,
+    (c) => {
+      const C = centre(time + 0.5 * (c.t0 + c.t1));
+      const dv = sub(c.q1, c.q0);
+      const u = Math.min(1, Math.max(0, dot(sub(C, c.q0), dv) / Math.max(dot(dv, dv), 1e-18)));
+      const miss = sub(lin(c.q0, 1, dv, u), C);
+      const d = Math.hypot(...miss);
+      if (d < bestD) (bestD = d), (best = miss);
+      // well past the closest approach: stop
+      far = d > 2 * bestD + 5 ? far + 1 : 0;
+      return far > 8;
+    },
+    4000,
+    time,
+    noLens,
+  );
   return best ? { miss: best as Vec3, d: bestD } : null;
 }
 
@@ -489,7 +555,13 @@ function closestApproach(s: Settings, cam: CameraFrame, look: Vec3, centre: (t: 
  * the point is hidden behind the hole's shadow).
  */
 export function apparentDirection(
-  s: Settings, cam: CameraFrame, centre: (t: number) => Vec3, time: number, guess: Vec3, tol = 1e-3, noLens = false,
+  s: Settings,
+  cam: CameraFrame,
+  centre: (t: number) => Vec3,
+  time: number,
+  guess: Vec3,
+  tol = 1e-3,
+  noLens = false,
 ): { look: Vec3; miss: number } | null {
   if (cam.region !== "hole") return null;
   let d = norm(guess);
@@ -505,8 +577,11 @@ export function apparentDirection(
     const J1 = lin(r1.miss, 1 / h, res.miss, -1 / h);
     const J2 = lin(r2.miss, 1 / h, res.miss, -1 / h);
     // least squares: (JᵀJ) δ = −Jᵀ r
-    const a11 = dot(J1, J1), a12 = dot(J1, J2), a22 = dot(J2, J2);
-    const b1 = -dot(J1, res.miss), b2 = -dot(J2, res.miss);
+    const a11 = dot(J1, J1),
+      a12 = dot(J1, J2),
+      a22 = dot(J2, J2);
+    const b1 = -dot(J1, res.miss),
+      b2 = -dot(J2, res.miss);
     const det = a11 * a22 - a12 * a12;
     if (!(Math.abs(det) > 1e-30)) return null;
     let du = (b1 * a22 - b2 * a12) / det;
@@ -546,7 +621,7 @@ export function bodyLook(s: Settings, cam: CameraFrame, body0: Body, time: numbe
   }
   const body = holeProxy(body0);
   if (cam.region === "throat") {
-    if (body === "wormhole") return { look: cam.ell < 0 ? norm(cam.n) : norm(cam.n).map((v) => -v) as Vec3, lensed: false };
+    if (body === "wormhole") return { look: cam.ell < 0 ? norm(cam.n) : (norm(cam.n).map((v) => -v) as Vec3), lensed: false };
     return { look: geometricLook(s, cam, bodyCentre(s, body, time)), lensed: false };
   }
   if (body === "hole") return { look: aberrate(cam, [-1, 0, 0]), lensed: false };
@@ -583,10 +658,11 @@ export function bodyLook(s: Settings, cam: CameraFrame, body0: Body, time: numbe
       const ph = (j * Math.PI) / 4;
       seeds.push(norm(lin(hole, Math.cos(ang), lin(e1, Math.cos(ph), e2, Math.sin(ph)), Math.sin(ang))));
     }
-  const ranked = seeds
-    .map((g) => ({ g, d: closestApproach(s, cam, g, centre, time, noLens)?.d ?? Infinity }))
-    .sort((a, b) => a.d - b.d);
-  const found = ranked.slice(0, 4).map(({ g }) => solve(g)).filter((v): v is Vec3 => !!v);
+  const ranked = seeds.map((g) => ({ g, d: closestApproach(s, cam, g, centre, time, noLens)?.d ?? Infinity })).sort((a, b) => a.d - b.d);
+  const found = ranked
+    .slice(0, 4)
+    .map(({ g }) => solve(g))
+    .filter((v): v is Vec3 => !!v);
   if (found.length) return { look: found.sort((a, b) => off(a) - off(b))[0]!, lensed: true };
   return { look: geo, lensed: false };
 }

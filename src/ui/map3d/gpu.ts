@@ -14,7 +14,7 @@ import mapWGSL from "../../shaders/map.wgsl" with { type: "text" };
 export type V3 = [number, number, number];
 
 /** What a body is drawn as. */
-export const enum BodyKind {
+export enum BodyKind {
   /** a world with a map (the tracer's arrays) */
   Map = 0,
   /** the Earth: its day (clouds), its night */
@@ -81,7 +81,8 @@ export function cssColour(s: string): [number, number, number, number] {
   return [(v[0] ?? 255) / 255, (v[1] ?? 255) / 255, (v[2] ?? 255) / 255, v[3] ?? 1];
 }
 
-const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) => t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: "rgba8unorm-srgb" as GPUTextureFormat } : {}) });
+const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
+  t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: "rgba8unorm-srgb" as GPUTextureFormat } : {}) });
 
 export class MapGpu {
   readonly canvas = document.createElement("canvas");
@@ -120,14 +121,24 @@ export class MapGpu {
   /** Its pipelines being built, built, or not to be had (a shader refused: the map draws in 2D). */
   status: "pending" | "ok" | "failed" = "pending";
 
-  constructor(private device: GPUDevice, private textures: () => MapTextures | null) {
+  constructor(
+    private device: GPUDevice,
+    private textures: () => MapTextures | null,
+  ) {
     this.canvas.className = "m3-gpu";
     this.ctx = this.canvas.getContext("webgpu")!;
     this.format = navigator.gpu.getPreferredCanvasFormat();
     this.ctx.configure({ device, format: this.format, alphaMode: "premultiplied" });
     this.uniform = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.inst = device.createBuffer({ size: this.data.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge", maxAnisotropy: 8 });
+    this.sampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "clamp-to-edge",
+      maxAnisotropy: 8,
+    });
     void this.build();
   }
 
@@ -146,40 +157,71 @@ export class MapGpu {
       const target = [{ format: this.format, blend }];
       // (one pass, one depth buffer: the sky and the bodies' colours ignore it, the bodies' depth fills
       // it, the lines are tested against it)
-      const ds = (write: boolean, compare: GPUCompareFunction): GPUDepthStencilState => ({ format: "depth32float", depthWriteEnabled: write, depthCompare: compare });
+      const ds = (write: boolean, compare: GPUCompareFunction): GPUDepthStencilState => ({
+        format: "depth32float",
+        depthWriteEnabled: write,
+        depthCompare: compare,
+      });
       const tri: GPUPrimitiveState = { topology: "triangle-list" };
       this.bodyPipe = device.createRenderPipeline({
-        label: "map: bodies", layout: "auto", primitive: tri, depthStencil: ds(false, "always"),
+        label: "map: bodies",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(false, "always"),
         vertex: { module, entryPoint: "bodyVs" },
         fragment: { module, entryPoint: "bodyFs", targets: target },
       });
       this.depthPipe = device.createRenderPipeline({
-        label: "map: the bodies' depth", layout: "auto", primitive: tri, depthStencil: ds(true, "less"),
+        label: "map: the bodies' depth",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(true, "less"),
         vertex: { module, entryPoint: "bodyVs" },
         fragment: { module, entryPoint: "bodyDepthFs", targets: [{ format: this.format, writeMask: 0 }] },
       });
       this.skyPipe = device.createRenderPipeline({
-        label: "map: stars", layout: "auto", primitive: tri, depthStencil: ds(false, "always"),
+        label: "map: stars",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(false, "always"),
         vertex: { module, entryPoint: "skyVs" },
         fragment: { module, entryPoint: "skyFs", targets: target },
       });
       this.linePipe = device.createRenderPipeline({
-        label: "map: lines", layout: "auto", primitive: tri, depthStencil: ds(false, "less-equal"),
+        label: "map: lines",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(false, "less-equal"),
         vertex: { module, entryPoint: "lineVs" },
         fragment: { module, entryPoint: "lineFs", targets: target },
       });
       this.planiPipe = device.createRenderPipeline({
-        label: "map: planisphere", layout: "auto", primitive: tri, depthStencil: ds(false, "always"),
+        label: "map: planisphere",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(false, "always"),
         vertex: { module, entryPoint: "planiVs" },
         fragment: { module, entryPoint: "planiFs", targets: target },
       });
       this.markPipe = device.createRenderPipeline({
-        label: "map: marks", layout: "auto", primitive: tri, depthStencil: ds(false, "always"),
+        label: "map: marks",
+        layout: "auto",
+        primitive: tri,
+        depthStencil: ds(false, "always"),
         vertex: { module, entryPoint: "markVs" },
         fragment: { module, entryPoint: "markFs", targets: target },
       });
-      this.skyBind = device.createBindGroup({ layout: this.skyPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
-      this.depthBind = device.createBindGroup({ layout: this.depthPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 1, resource: { buffer: this.inst } }] });
+      this.skyBind = device.createBindGroup({
+        layout: this.skyPipe.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.uniform } }],
+      });
+      this.depthBind = device.createBindGroup({
+        layout: this.depthPipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          { binding: 1, resource: { buffer: this.inst } },
+        ],
+      });
       const err = await device.popErrorScope();
       if (err) throw new Error(err.message);
       this.status = "ok";
@@ -202,14 +244,43 @@ export class MapGpu {
     const o = this.n * FLOATS;
     const d = this.data;
     const ax = b.ax;
-    d.set([b.c[0], b.c[1], b.c[2], b.R,
-      b.kind, b.layer ?? 0, b.air ? 1 : 0, b.rings?.[0] ?? 0,
-      b.L[0], b.L[1], b.L[2], b.rings?.[1] ?? 0,
-      ax[0][0], ax[0][1], ax[0][2], b.proc ?? 0,
-      ax[1][0], ax[1][1], ax[1][2], b.night ?? 0,
-      ax[2][0], ax[2][1], ax[2][2], b.minPx,
-      b.col[0], b.col[1], b.col[2], b.air?.k ?? 0,
-      b.air?.col[0] ?? 0, b.air?.col[1] ?? 0, b.air?.col[2] ?? 0, 0], o);
+    d.set(
+      [
+        b.c[0],
+        b.c[1],
+        b.c[2],
+        b.R,
+        b.kind,
+        b.layer ?? 0,
+        b.air ? 1 : 0,
+        b.rings?.[0] ?? 0,
+        b.L[0],
+        b.L[1],
+        b.L[2],
+        b.rings?.[1] ?? 0,
+        ax[0][0],
+        ax[0][1],
+        ax[0][2],
+        b.proc ?? 0,
+        ax[1][0],
+        ax[1][1],
+        ax[1][2],
+        b.night ?? 0,
+        ax[2][0],
+        ax[2][1],
+        ax[2][2],
+        b.minPx,
+        b.col[0],
+        b.col[1],
+        b.col[2],
+        b.air?.k ?? 0,
+        b.air?.col[0] ?? 0,
+        b.air?.col[1] ?? 0,
+        b.air?.col[2] ?? 0,
+        0,
+      ],
+      o,
+    );
     this.n++;
   }
 
@@ -221,7 +292,7 @@ export class MapGpu {
     this.gap();
     const [r, g, b, a] = this.rgba(col);
     const L = this.ln;
-    L.r = r, L.g = g, L.b = b;
+    (L.r = r), (L.g = g), (L.b = b);
     // (a line thinner than a pixel: a pixel wide, fainter)
     L.hw = Math.max(width, 1) / 2;
     L.k = a * Math.min(width, 1);
@@ -242,17 +313,18 @@ export class MapGpu {
           this.segs = grown;
         }
         // (written in place: thousands a frame, no array made for each)
-        const o = this.nSeg * SEG, d = this.segs;
-        d[o] = L.x, d[o + 1] = L.y, d[o + 2] = L.iz, d[o + 3] = L.s;
-        d[o + 4] = x, d[o + 5] = y, d[o + 6] = iz, d[o + 7] = L.s + len;
-        d[o + 8] = L.r, d[o + 9] = L.g, d[o + 10] = L.b, d[o + 11] = 1;
-        d[o + 12] = L.a * L.k, d[o + 13] = a * L.k, d[o + 14] = L.hw, d[o + 15] = 0;
-        d[o + 16] = L.on, d[o + 17] = L.off, d[o + 18] = 0, d[o + 19] = 0;
+        const o = this.nSeg * SEG,
+          d = this.segs;
+        (d[o] = L.x), (d[o + 1] = L.y), (d[o + 2] = L.iz), (d[o + 3] = L.s);
+        (d[o + 4] = x), (d[o + 5] = y), (d[o + 6] = iz), (d[o + 7] = L.s + len);
+        (d[o + 8] = L.r), (d[o + 9] = L.g), (d[o + 10] = L.b), (d[o + 11] = 1);
+        (d[o + 12] = L.a * L.k), (d[o + 13] = a * L.k), (d[o + 14] = L.hw), (d[o + 15] = 0);
+        (d[o + 16] = L.on), (d[o + 17] = L.off), (d[o + 18] = 0), (d[o + 19] = 0);
         L.last = this.nSeg++;
         L.s += len;
       } else return;
     }
-    L.x = x, L.y = y, L.iz = iz, L.a = a, L.has = true;
+    (L.x = x), (L.y = y), (L.iz = iz), (L.a = a), (L.has = true);
   }
   /** The line broken here (behind the camera, across the planisphere's edge): its end capped. */
   gap() {
@@ -268,18 +340,32 @@ export class MapGpu {
     if (!c) this.colours.set(col, (c = cssColour(col)));
     return c;
   }
-  private mark(x: number, y: number, kind: number, n: number, fill: string | null | undefined, stroke: string | null | undefined, r: number, lw: number, dash: number, gap: number, p: number[]) {
+  private mark(
+    x: number,
+    y: number,
+    kind: number,
+    n: number,
+    fill: string | null | undefined,
+    stroke: string | null | undefined,
+    r: number,
+    lw: number,
+    dash: number,
+    gap: number,
+    p: number[],
+  ) {
     if (this.nMark * MARK >= this.marks.length) {
       const grown = new Float32Array(this.marks.length * 2);
       grown.set(this.marks);
       this.marks = grown;
     }
-    const o = this.nMark++ * MARK, d = this.marks;
-    const f = this.rgba(fill), k = this.rgba(stroke);
-    d[o] = x, d[o + 1] = y, d[o + 2] = kind, d[o + 3] = n;
-    d[o + 4] = f[0], d[o + 5] = f[1], d[o + 6] = f[2], d[o + 7] = fill ? f[3] : 0;
-    d[o + 8] = k[0], d[o + 9] = k[1], d[o + 10] = k[2], d[o + 11] = stroke ? k[3] : 0;
-    d[o + 12] = r, d[o + 13] = lw, d[o + 14] = dash, d[o + 15] = gap;
+    const o = this.nMark++ * MARK,
+      d = this.marks;
+    const f = this.rgba(fill),
+      k = this.rgba(stroke);
+    (d[o] = x), (d[o + 1] = y), (d[o + 2] = kind), (d[o + 3] = n);
+    (d[o + 4] = f[0]), (d[o + 5] = f[1]), (d[o + 6] = f[2]), (d[o + 7] = fill ? f[3] : 0);
+    (d[o + 8] = k[0]), (d[o + 9] = k[1]), (d[o + 10] = k[2]), (d[o + 11] = stroke ? k[3] : 0);
+    (d[o + 12] = r), (d[o + 13] = lw), (d[o + 14] = dash), (d[o + 15] = gap);
     for (let j = 0; j < 8; j++) d[o + 16 + j] = p[j] ?? 0;
   }
   /** A disc on the screen [px]: filled, stroked (lw [px]; dashed along its rim: dash, gap [px]). */
@@ -306,41 +392,88 @@ export class MapGpu {
    * view's centre [px], its axes in the world (the stars behind) —, the time (the stars' twinkle); the
    * depths the lines are hidden between (near, far: the view's), the stars or not.
    */
-  render(w: number, h: number, f: number, cx: number, cy: number, axes: [V3, V3, V3], time: number, opt: { near?: number; far?: number; sky?: boolean } = {}) {
+  render(
+    w: number,
+    h: number,
+    f: number,
+    cx: number,
+    cy: number,
+    axes: [V3, V3, V3],
+    time: number,
+    opt: { near?: number; far?: number; sky?: boolean } = {},
+  ) {
     if (this.status !== "ok") return;
     this.gap();
     const c = this.canvas;
     if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
     const T = this.textures();
     const dev = this.device;
-    const near = opt.near ?? 1e-3, far = opt.far ?? near * 1e12;
-    const ln = Math.log2(near), kz = 1 / Math.max(Math.log2(far) - ln, 1e-6);
+    const near = opt.near ?? 1e-3,
+      far = opt.far ?? near * 1e12;
+    const ln = Math.log2(near),
+      kz = 1 / Math.max(Math.log2(far) - ln, 1e-6);
     const r = this.rect ?? [0, 0, 1, 1];
-    dev.queue.writeBuffer(this.uniform, 0, new Float32Array([w, h, f, time, cx, cy, ln, kz, ...axes[0], 0, ...axes[1], 0, ...axes[2], 0, ...r]));
+    dev.queue.writeBuffer(
+      this.uniform,
+      0,
+      new Float32Array([w, h, f, time, cx, cy, ln, kz, ...axes[0], 0, ...axes[1], 0, ...axes[2], 0, ...r]),
+    );
     if (this.n) dev.queue.writeBuffer(this.inst, 0, this.data, 0, this.n * FLOATS);
-    if (T && (!this.bind || this.bind.key.hi !== T.hi || this.bind.key.lo !== T.lo || this.bind.key.earthDay !== T.earthDay || this.bind.key.earthNight !== T.earthNight || this.bind.key.rings !== T.rings)) {
-      const tex = (layout: GPUBindGroupLayout, all: boolean) => dev.createBindGroup({
-        layout,
-        entries: [
-          { binding: 0, resource: { buffer: this.uniform } },
-          { binding: 1, resource: { buffer: this.inst } },
-          { binding: 2, resource: srgbView(T.hi, "2d-array") },
-          { binding: 3, resource: srgbView(T.lo, "2d-array") },
-          ...(all ? [{ binding: 4, resource: T.rings.createView({ dimension: "2d", ...(T.rings.format === "rgba8unorm" ? { format: "rgba8unorm-srgb" } : {}) }) as GPUTextureView }] : []),
-          { binding: 5, resource: srgbView(T.earthDay, "cube") },
-          { binding: 6, resource: T.earthNight.createView({ dimension: "cube" }) },
-          { binding: 7, resource: this.sampler },
-        ],
-      });
-      this.bind = { key: { ...T }, group: tex(this.bodyPipe.getBindGroupLayout(0), true), plani: tex(this.planiPipe.getBindGroupLayout(0), false) };
+    if (
+      T &&
+      (!this.bind ||
+        this.bind.key.hi !== T.hi ||
+        this.bind.key.lo !== T.lo ||
+        this.bind.key.earthDay !== T.earthDay ||
+        this.bind.key.earthNight !== T.earthNight ||
+        this.bind.key.rings !== T.rings)
+    ) {
+      const tex = (layout: GPUBindGroupLayout, all: boolean) =>
+        dev.createBindGroup({
+          layout,
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 1, resource: { buffer: this.inst } },
+            { binding: 2, resource: srgbView(T.hi, "2d-array") },
+            { binding: 3, resource: srgbView(T.lo, "2d-array") },
+            ...(all
+              ? [
+                  {
+                    binding: 4,
+                    resource: T.rings.createView({
+                      dimension: "2d",
+                      ...(T.rings.format === "rgba8unorm" ? { format: "rgba8unorm-srgb" } : {}),
+                    }) as GPUTextureView,
+                  },
+                ]
+              : []),
+            { binding: 5, resource: srgbView(T.earthDay, "cube") },
+            { binding: 6, resource: T.earthNight.createView({ dimension: "cube" }) },
+            { binding: 7, resource: this.sampler },
+          ],
+        });
+      this.bind = {
+        key: { ...T },
+        group: tex(this.bodyPipe.getBindGroupLayout(0), true),
+        plani: tex(this.planiPipe.getBindGroupLayout(0), false),
+      };
     }
     // the lines' buffer, grown with them
     if (this.nSeg) {
       const bytes = this.nSeg * SEG * 4;
       if (!this.segBuf || this.segBuf.size < bytes) {
         this.segBuf?.destroy();
-        this.segBuf = dev.createBuffer({ size: Math.max(bytes, this.segs.byteLength), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-        this.lineBind = dev.createBindGroup({ layout: this.linePipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 8, resource: { buffer: this.segBuf } }] });
+        this.segBuf = dev.createBuffer({
+          size: Math.max(bytes, this.segs.byteLength),
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        this.lineBind = dev.createBindGroup({
+          layout: this.linePipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 8, resource: { buffer: this.segBuf } },
+          ],
+        });
       }
       dev.queue.writeBuffer(this.segBuf, 0, this.segs, 0, this.nSeg * SEG);
     }
@@ -348,8 +481,17 @@ export class MapGpu {
       const bytes = this.nMark * MARK * 4;
       if (!this.markBuf || this.markBuf.size < bytes) {
         this.markBuf?.destroy();
-        this.markBuf = dev.createBuffer({ size: Math.max(bytes, this.marks.byteLength), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-        this.markBind = dev.createBindGroup({ layout: this.markPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }, { binding: 9, resource: { buffer: this.markBuf } }] });
+        this.markBuf = dev.createBuffer({
+          size: Math.max(bytes, this.marks.byteLength),
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        this.markBind = dev.createBindGroup({
+          layout: this.markPipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 9, resource: { buffer: this.markBuf } },
+          ],
+        });
       }
       dev.queue.writeBuffer(this.markBuf, 0, this.marks, 0, this.nMark * MARK);
     }

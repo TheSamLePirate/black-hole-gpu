@@ -1,7 +1,17 @@
 import { test, expect } from "bun:test";
 import { fromZamo, thrust, type Massive } from "../src/geodesic";
 import { advanceTo, applyDv, circularBeta, type World } from "../src/maneuver";
-import { kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kPeriapsis, kResonant, planeLeft, type KerrOp } from "../src/fc/kerr-ops";
+import {
+  kApoapsis,
+  kCircularize,
+  kerrOrbit,
+  kHohmann,
+  kInclination,
+  kPeriapsis,
+  kResonant,
+  planeLeft,
+  type KerrOp,
+} from "../src/fc/kerr-ops";
 
 const w: World = { a: 0.6 };
 /** A circular prograde orbit in the equator at r (its velocity: the free fall with no radial pull). */

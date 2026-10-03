@@ -53,7 +53,8 @@ export function fmtWarp(s: Pick<Settings, "massSolar" | "timeSpeed" | "animate">
 
 /** A duration [s] in its largest units: 42 s, 3 min 20 s, 5 h 12 min, 12 d 4 h, 3.2 yr. */
 export function fmtSeconds(sec: number): string {
-  const a = Math.abs(sec), sg = sec < 0 ? "−" : "";
+  const a = Math.abs(sec),
+    sg = sec < 0 ? "−" : "";
   if (a < 60) return `${sg}${a < 10 ? a.toFixed(1) : a.toFixed(0)} s`;
   if (a < 3600) return `${sg}${Math.floor(a / 60)} min ${Math.floor(a % 60)} s`;
   if (a < 86400) return `${sg}${Math.floor(a / 3600)} h ${Math.floor((a % 3600) / 60)} min`;

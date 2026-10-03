@@ -66,16 +66,20 @@ export type EarthTier = "med" | "high";
 type Faces = [string, string, string, string, string, string];
 const SETS: Record<EarthTier, { size: number; day: Faces; cloud: Faces; ocean: string; relief: string; w: number }> = {
   med: {
-    size: 2048, w: 4096,
+    size: 2048,
+    w: 4096,
     day: [dayMedRt, dayMedLf, dayMedUp, dayMedDn, dayMedFt, dayMedBk],
     cloud: [cloudMedRt, cloudMedLf, cloudMedUp, cloudMedDn, cloudMedFt, cloudMedBk],
-    ocean: oceanMed, relief: reliefMed,
+    ocean: oceanMed,
+    relief: reliefMed,
   },
   high: {
-    size: 4096, w: 8192,
+    size: 4096,
+    w: 8192,
     day: [dayHighRt, dayHighLf, dayHighUp, dayHighDn, dayHighFt, dayHighBk],
     cloud: [cloudHighRt, cloudHighLf, cloudHighUp, cloudHighDn, cloudHighFt, cloudHighBk],
-    ocean: oceanHigh, relief: reliefHigh,
+    ocean: oceanHigh,
+    relief: reliefHigh,
   },
 };
 const NIGHT: Faces = [nightRt, nightLf, nightUp, nightDn, nightFt, nightBk];
@@ -97,7 +101,9 @@ async function compressedCube(device: GPUDevice, tier: EarthTier): Promise<GPUTe
     for (let f = 0; f < 6; f++) {
       const k = await ktxLevels(KTX[tier][f]!, target);
       cube ??= device.createTexture({
-        size: [k.width, k.height, 6], format: ktxFormat(target), mipLevelCount: k.levels.length,
+        size: [k.width, k.height, 6],
+        format: ktxFormat(target),
+        mipLevelCount: k.levels.length,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
       writeLevels(device, cube, k.levels, k.width, k.height, target, f);
@@ -112,7 +118,11 @@ async function compressedCube(device: GPUDevice, tier: EarthTier): Promise<GPUTe
 const NIGHT_SIZE = 2048;
 
 /** The Earth's heights [m] as the tracer has them (its elev map: their texels), W × H equirectangular. */
-export interface EarthHeights { map: Int16Array<ArrayBuffer>; W: number; H: number }
+export interface EarthHeights {
+  map: Int16Array<ArrayBuffer>;
+  W: number;
+  H: number;
+}
 
 export interface EarthMaps {
   cube: GPUTexture;
@@ -168,7 +178,12 @@ const levels = (n: number) => Math.floor(Math.log2(n)) + 1;
 /** Placeholders (one texel each) until the maps are loaded. */
 export function placeholderEarth(device: GPUDevice): EarthMaps {
   const mk = (format: GPUTextureFormat, layers: number, px: Uint8Array<ArrayBuffer>) => {
-    const t = device.createTexture({ size: [1, 1, layers], format, viewFormats: format === "rgba8unorm" ? ["rgba8unorm-srgb"] : [], usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const t = device.createTexture({
+      size: [1, 1, layers],
+      format,
+      viewFormats: format === "rgba8unorm" ? ["rgba8unorm-srgb"] : [],
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
     for (let l = 0; l < layers; l++) device.queue.writeTexture({ texture: t, origin: [0, 0, l] }, px, {}, [1, 1]);
     return t;
   };
@@ -216,10 +231,14 @@ class Packer {
     });
     const enc = d.createCommandEncoder();
     const pass = enc.beginRenderPass({
-      colorAttachments: [{
-        view: dst.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: level, mipLevelCount: 1 }),
-        loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0],
-      }],
+      colorAttachments: [
+        {
+          view: dst.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: level, mipLevelCount: 1 }),
+          loadOp: "clear",
+          storeOp: "store",
+          clearValue: [0, 0, 0, 0],
+        },
+      ],
     });
     pass.setPipeline(p);
     pass.setBindGroup(0, bind);
@@ -244,7 +263,8 @@ async function upload(device: GPUDevice, url: string, format: GPUTextureFormat =
   const blob = await (await get(url)).blob();
   const img = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
   const t = device.createTexture({
-    size: [img.width, img.height], format,
+    size: [img.width, img.height],
+    format,
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT,
   });
   device.queue.copyExternalImageToTexture({ source: img }, { texture: t }, [img.width, img.height]);
@@ -260,7 +280,13 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "r8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
   let cube = await compressedCube(device, tier);
   if (!cube) {
-    cube = device.createTexture({ size: [set.size, set.size, 6], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(set.size), usage });
+    cube = device.createTexture({
+      size: [set.size, set.size, 6],
+      format: "rgba8unorm",
+      viewFormats: ["rgba8unorm-srgb"],
+      mipLevelCount: levels(set.size),
+      usage,
+    });
     // (face by face: a few large images decoded at a time)
     for (let f = 0; f < 6; f++) {
       const [day, cloud] = await Promise.all([upload(device, set.day[f]!), upload(device, set.cloud[f]!, "r8unorm")]);
@@ -280,7 +306,11 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   }
   const [heights, o] = await Promise.all([loadHeights(set.relief), upload(device, set.ocean, "r8unorm")]);
   const elev = device.createTexture({ size: [set.w, set.w / 2], format: "rg16float", mipLevelCount: levels(set.w), usage });
-  const whole = device.createTexture({ size: [heights.W, heights.H], format: "r16sint", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  const whole = device.createTexture({
+    size: [heights.W, heights.H],
+    format: "r16sint",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
   device.queue.writeTexture({ texture: whole }, heights.map, { bytesPerRow: heights.W * 2 }, [heights.W, heights.H]);
   pk.draw("elev", elev, 0, 0, [whole.createView(), o.createView()]);
   pk.mips(elev, 0, false);
@@ -301,14 +331,17 @@ async function loadHeights(url: string): Promise<EarthHeights> {
   const buf = await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
   const head = new Uint32Array(buf, 0, 4);
   if (head[0] !== 0x31564c45) throw new Error("Earth relief: bad header");
-  const W = head[1]!, H = head[2]!, n = W * H;
-  const lo = new Uint8Array(buf, 16, n), hi = new Uint8Array(buf, 16 + n, n);
+  const W = head[1]!,
+    H = head[2]!,
+    n = W * H;
+  const lo = new Uint8Array(buf, 16, n),
+    hi = new Uint8Array(buf, 16 + n, n);
   const map = new Int16Array(n);
   for (let y0 = 0; y0 < H; y0 += 256) {
     for (let y = y0; y < Math.min(y0 + 256, H); y++) {
       let o = y * W;
       let v = 0;
-      for (let x = 0; x < W; x++, o++) map[o] = v = v + ((lo[o]! | (hi[o]! << 8)) << 16 >> 16);
+      for (let x = 0; x < W; x++, o++) map[o] = v = v + (((lo[o]! | (hi[o]! << 8)) << 16) >> 16);
     }
     await new Promise((r) => setTimeout(r, 0));
   }

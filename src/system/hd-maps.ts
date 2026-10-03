@@ -40,7 +40,12 @@ import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
 
 /** A body's finer maps: its colour; its normals, or its height map and the relief's scale for them. */
-interface HdSet { color: string; normal?: string; height?: string; relief?: number }
+interface HdSet {
+  color: string;
+  normal?: string;
+  height?: string;
+  relief?: number;
+}
 export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   moon: { color: moonColor, normal: moonNormal },
   mars: { color: marsColor, height: marsHeight, relief: 6 },
@@ -119,7 +124,12 @@ const lin = (c: number) => {
 
 export function placeholderHd(device: GPUDevice): HdMap {
   const mk = (px: number[]) => {
-    const t = device.createTexture({ size: [1, 1], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    const t = device.createTexture({
+      size: [1, 1],
+      format: "rgba8unorm",
+      viewFormats: ["rgba8unorm-srgb"],
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
     device.queue.writeTexture({ texture: t }, new Uint8Array(px), {}, [1, 1]);
     return t;
   };
@@ -141,8 +151,10 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
     let p = pipes.get(entry);
     if (!p) {
       p = device.createRenderPipeline({
-        layout: "auto", vertex: { module: mod, entryPoint: "vs" },
-        fragment: { module: mod, entryPoint: entry, targets: [{ format: "rgba8unorm" }] }, primitive: { topology: "triangle-list" },
+        layout: "auto",
+        vertex: { module: mod, entryPoint: "vs" },
+        fragment: { module: mod, entryPoint: entry, targets: [{ format: "rgba8unorm" }] },
+        primitive: { topology: "triangle-list" },
       });
       pipes.set(entry, p);
     }
@@ -158,7 +170,14 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
     });
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({
-      colorAttachments: [{ view: dst.createView({ baseMipLevel: level, mipLevelCount: 1 }), loadOp: "clear", storeOp: "store", clearValue: [0.5, 0.5, 1, 1] }],
+      colorAttachments: [
+        {
+          view: dst.createView({ baseMipLevel: level, mipLevelCount: 1 }),
+          loadOp: "clear",
+          storeOp: "store",
+          clearValue: [0.5, 0.5, 1, 1],
+        },
+      ],
     });
     pass.setPipeline(p);
     pass.setBindGroup(0, bind);
@@ -167,7 +186,8 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
     device.queue.submit([enc.finish()]);
   };
   const mips = (t: GPUTexture, srgb: boolean) => {
-    for (let l = 1; l < t.mipLevelCount; l++) draw(srgb ? "downSrgb" : "downLin", t, l, t.createView({ baseMipLevel: l - 1, mipLevelCount: 1 }));
+    for (let l = 1; l < t.mipLevelCount; l++)
+      draw(srgb ? "downSrgb" : "downLin", t, l, t.createView({ baseMipLevel: l - 1, mipLevelCount: 1 }));
   };
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST;
   const upload = (img: ImageBitmap) => {
@@ -178,7 +198,13 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
 
   // the colour, and its mean (a small copy of it, area-weighted)
   const cImg = await bitmap(set.color);
-  const color = device.createTexture({ size: [cImg.width, cImg.height], format: "rgba8unorm", viewFormats: ["rgba8unorm-srgb"], mipLevelCount: levels(cImg.width, cImg.height), usage });
+  const color = device.createTexture({
+    size: [cImg.width, cImg.height],
+    format: "rgba8unorm",
+    viewFormats: ["rgba8unorm-srgb"],
+    mipLevelCount: levels(cImg.width, cImg.height),
+    usage,
+  });
   const cSrc = upload(cImg);
   draw("copy", color, 0, cSrc.createView());
   mips(color, true);
@@ -187,7 +213,8 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   const ctx = cv.getContext("2d")!;
   ctx.drawImage(small, 0, 0);
   const px = ctx.getImageData(0, 0, 64, 32).data;
-  let sum = 0, wsum = 0;
+  let sum = 0,
+    wsum = 0;
   for (let y = 0; y < 32; y++) {
     const wgt = Math.cos(((y + 0.5) / 32 - 0.5) * Math.PI);
     for (let x = 0; x < 64; x++) {
@@ -205,7 +232,12 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   const rUrl = set.normal ?? set.height;
   if (rUrl) {
     const rImg = await bitmap(rUrl);
-    relief = device.createTexture({ size: [rImg.width, rImg.height], format: "rgba8unorm", mipLevelCount: levels(rImg.width, rImg.height), usage });
+    relief = device.createTexture({
+      size: [rImg.width, rImg.height],
+      format: "rgba8unorm",
+      mipLevelCount: levels(rImg.width, rImg.height),
+      usage,
+    });
     const rSrc = upload(rImg);
     if (set.normal) draw("copy", relief, 0, rSrc.createView());
     else {
@@ -217,7 +249,11 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
     rSrc.destroy();
     hasRelief = true;
   } else {
-    relief = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    relief = device.createTexture({
+      size: [1, 1],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
     device.queue.writeTexture({ texture: relief }, new Uint8Array([128, 128, 255, 255]), {}, [1, 1]);
   }
   await device.queue.onSubmittedWorkDone();
