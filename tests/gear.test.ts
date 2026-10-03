@@ -40,7 +40,7 @@ test("dropped at 2 m/s, it settles at the gear's height on its three wheels, the
   expect(r.X[1]).toBeLessThan(6.05);
   expect(Math.abs(r.V[1])).toBeLessThan(0.02);
   expect(r.out.contact).toBe(3);
-  // (the weight shared as designed: the nose 40 %)
+  // (the weight carried whole)
   const total = r.out.legs.reduce((s, l) => s + l.load, 0);
   expect(total / (m * g)).toBeCloseTo(1, 2);
   expect(r.peak).toBeLessThan(1);
@@ -54,8 +54,9 @@ test("a 3 m/s drop takes half the stroke; a 9 m/s one bottoms it out (the oleo's
 test("braking at the anti-skid's peak: about μ times the mains' share of g", () => {
   const r = drop(6.0, 0, 30, 1, 1);
   const decel = (30 - r.V[2]) / 1;
-  expect(decel).toBeGreaterThan(0.8 * def.muBrake * 0.6 * g);
-  expect(decel).toBeLessThan(1.2 * (def.muBrake * 0.6 + def.roll) * g);
+  const mains = def.legs.filter((l) => l.brakes).reduce((s, l) => s + l.share, 0);
+  expect(decel).toBeGreaterThan(0.8 * def.muBrake * mains * g);
+  expect(decel).toBeLessThan(1.2 * (def.muBrake * mains + def.roll) * g);
 });
 
 test("a sideways drift is taken out by the tyres' grip", () => {

@@ -341,7 +341,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const comB = fleet.massProps().com;
   const comW = (): Vec3 => lin(lin(axes[0], comB[0], axes[1], comB[1]), 1, axes[2], comB[2]);
   const IwInv = Iw ? inv3(Iw) : null;
+  // (the gear's change of the craft's turn over the frame; on the gear, the whole turn is integrated here)
   let gearDw: Vec3 = [0, 0, 0];
+  const turnAll = !!gdef && this.turnOnGear;
   let gearOut: GearOut | null = null;
   // (the wheel brakes, the engine idle, once every wheel is down — the nose wheel lowered first: braked
   // on the mains alone at speed, the craft would slam its nose down)
@@ -380,7 +382,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     const h = (Math.hypot(...sub3(Xq, st.pos)) - rb) * M_METRES;
     // (the wing's height over the ground: its ground effect — the reference point is the gear's height up)
     this.airFlight.cfg.agl = ground ? gearHeight(ground, Xq, tq) + GEAR : undefined;
-    const va = sub3(Vq, groundVelocity(ref, Xq, tq));
+    // (the air's own motion: the wind — the craft flies through the air, not over the ground)
+    const vg = sub3(Vq, groundVelocity(ref, Xq, tq));
+    const va = this.windHome ? sub3(vg, this.windHome) : vg;
     const f = aero(h, [va[0] * C_MPS, va[1] * C_MPS, va[2] * C_MPS]);
     const a: Vec3 = [f[0] * kA, f[1] * kA, f[2] * kA];
     aAir = Math.hypot(...a) / (Math.hypot(...va) + 1e-30);
@@ -557,9 +561,12 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         const al = mulM3(IwInv!, o.M);
         const dtSec = last * secM;
         gearDw = [0, 1, 2].map((i) => gearDw[i]! - dot3(al, axes[i]!) * dtSec) as Vec3;
-        // (and the craft turned by it within the frame — its legs' compression answering its turn: a
-        // frame's impulse on a frozen attitude would fling it)
-        const wg = lin(lin(axes[0], -gearDw[0], axes[1], -gearDw[1]), 1, axes[2], -gearDw[2]);
+        // (and the craft turned within the frame — its legs' compression answering its turn: a frame's
+        // impulse on a frozen attitude would fling it; on the gear, its whole turn, the pilot's too)
+        const wt: Vec3 = turnAll
+          ? [this.pilot.omega[0] + gearDw[0], this.pilot.omega[1] + gearDw[1], this.pilot.omega[2] + gearDw[2]]
+          : gearDw;
+        const wg = lin(lin(axes[0], -wt[0], axes[1], -wt[1]), 1, axes[2], -wt[2]);
         const ang = Math.hypot(...wg) * dtSec;
         if (ang > 1e-12) {
           const k = unitV(wg);
@@ -600,7 +607,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           this.rollSite = null;
           this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
           V = gv;
-          gearDw = [-this.pilot.omega[0], -this.pilot.omega[1], -this.pilot.omega[2]];
+          gearDw = [0, 0, 0];
+          this.pilot.omega = [0, 0, 0];
           break;
         }
       } else if (this.rolling && (!o || o.contact === 0)) {

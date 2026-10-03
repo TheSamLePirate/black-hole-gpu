@@ -2377,6 +2377,23 @@ export const SCHEMA: ControlDef[] = [
     keywords: "landing crash touchdown gear sink rate",
   },
   {
+    key: "wind",
+    type: "choice",
+    section: "game",
+    group: "Ground & air",
+    label: "Wind",
+    style: "segmented",
+    effect: "none",
+    options: [
+      { value: 0, label: "Calm", hint: "No wind, no turbulence" },
+      { value: 1, label: "Light", hint: "4 m/s at 10 m, light turbulence" },
+      { value: 2, label: "Moderate", hint: "9 m/s at 10 m, moderate turbulence and gusts" },
+      { value: 3, label: "Strong", hint: "15 m/s at 10 m, strong turbulence and gusts" },
+    ],
+    help: "The air's own motion: a mean wind growing with the height (a jet near 11 km, nothing above 30 km), its direction turning with the place and the day; the Dryden model's turbulence; now and then a gust. The same flight, the same weather.",
+    keywords: "wind turbulence gust weather crosswind",
+  },
+  {
     key: "gearForgiving",
     type: "toggle",
     section: "game",

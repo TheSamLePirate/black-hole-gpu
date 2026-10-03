@@ -67,6 +67,7 @@ declare module "../controls" {
     groundAttitude: typeof groundAttitude;
     entryInfo: typeof entryInfo;
     airInfo: typeof airInfo;
+    airVelocity: typeof airVelocity;
     contrailsFrame: typeof contrailsFrame;
     pathAngle: typeof pathAngle;
     attitudeNow: typeof attitudeNow;
@@ -782,7 +783,9 @@ function approach(
     // 300 m, then the flare)
     const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
     const want = -Math.min(Math.max(Math.atan2(xt, 3000), -0.7), 0.7);
-    bank = clamp(-1.2 * (dpsi - want), -0.5, 0.5) * (agl < 60 ? agl / 60 : 1);
+    // (held down to 15 m — a crosswind drifts the craft off the axis in the last seconds otherwise —,
+    // faded to the wings level at the touchdown)
+    bank = clamp(-1.2 * (dpsi - want), -0.5, 0.5) * (agl < 15 ? agl / 15 : 1);
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
     const L = landingProfile(sAl, agl, sp, R.gOuter);
@@ -818,8 +821,18 @@ function approach(
   // (the air brake: the speed held down the steep slope, then bled on the shallow one)
   const vT = !onFinal ? 230 : R.prof && R.prof.phase !== "outer" ? 130 : 160;
   this.airBrake = clamp((sp - vT) / 50, 0, 1);
-  const ax = attitudeFor(fr.s.x, va, R.alpha, bank);
+  // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
+  // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)
+  const vAir = this.airVelocity(va);
+  const k = onFinal && agl < 12 ? 1 - agl / 12 : 0;
+  const ax = attitudeFor(fr.s.x, lin(vAir, 1 - k, va, k), R.alpha, bank);
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
+}
+
+/** A ground-relative velocity [m/s, the entry frame's axes] made relative to the air: the wind taken off. */
+function airVelocity(this: CameraController, va: Vec3): Vec3 {
+  const w = this.windHome;
+  return w ? sub3(va, [w[0] * C_MPS, w[1] * C_MPS, w[2] * C_MPS]) : va;
 }
 
 /** A crash (the damage on): the craft lost. */
@@ -983,6 +996,8 @@ function airInfo(this: CameraController) {
     flaps: A.cfg.flaps ?? 0,
     brake: A.cfg.brake ?? 0,
     gear: !!A.cfg.gear,
+    // (the wind there: its speed [m/s], where it blows from [°])
+    wind: this.windNow,
     sf: this.sfCmd ? { ...this.sfCmd } : null,
     ...this.attitudeNow(),
     // (the wing's incidences, for the HUD's angle-of-attack cues: the stall; the best lift-to-drag —
@@ -1109,6 +1124,7 @@ export function installComputer(C: { prototype: CameraController }) {
     groundAttitude,
     entryInfo,
     airInfo,
+    airVelocity,
     contrailsFrame,
     pathAngle,
     attitudeNow,

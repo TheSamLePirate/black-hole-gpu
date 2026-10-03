@@ -18,10 +18,10 @@ import { fuelOn } from "../engine";
 import { VESSELS } from "../vessels";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
-import { gravityHome, repToHomeVec } from "../system/our-side";
+import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
 import { plan as runPlanner } from "../system/plan-client";
 import { bodyFixedOf, fromBodyFixed, gearHeight, groundRelief, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
-import { solarBody } from "../system/solar";
+import { daysOf, solarBody, spinVector } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
@@ -128,8 +128,18 @@ function newFlight(this: CameraController) {
   this.airBrake = 0;
   this.airFlight.reset(fleet.active);
   this.airFlight.cfg = {};
-  // (the tanks full again: every craft's)
+  // (the tanks full again: every craft's; the weather drawn anew from the flight's moment — the same
+  // flight, the same gusts; nothing of the last flight's gear — its spoilers, its steering, its springs)
   fleet.spent = {};
+  this.groundSpoilers = false;
+  this.noseSteer = 0;
+  this.turnOnGear = false;
+  this.gearLast = null;
+  this.gearDw = null;
+  this.rollSince = 0;
+  this.windHome = null;
+  this.windNow = null;
+  this.weather.reset(1 + (Math.floor(Math.abs(this.nowTime()) * 1e3) % 2147483646));
   this.pilot.engineNow = 0;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.pilot.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
@@ -700,6 +710,36 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     this.ourWarp = null;
     this.warpWant = null;
   }
+  // the wind (wind.ts): our worlds' air, flown through — the frame's mean wind, turbulence and gusts at
+  // the craft's place, in the home frame for the flight
+  this.windHome = null;
+  this.windNow = null;
+  {
+    const nav = this.ourNav(cameraFrame(s));
+    const b = nav && nav.ref !== "sun" ? solarBody(nav.ref) : undefined;
+    if (nav && b?.atmosphere && s.wind > 0) {
+      const P = ourState(nav.ref, nav.t).pos;
+      const d = sub3(nav.X, P);
+      const r = Math.hypot(...d);
+      const h = solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) + GEAR : (r - b.radius) * M_METRES;
+      if (h < 30e3) {
+        const q = toBodyFixed(nav.ref, nav.X, nav.t);
+        const ql = Math.hypot(...q);
+        const lat = (Math.asin(q[2] / ql) * 180) / Math.PI,
+          lon = (Math.atan2(q[1], q[0]) * 180) / Math.PI;
+        const Msec0 = 4.925490947e-6 * s.massSolar;
+        const dtSec = s.animate ? s.timeSpeed * dt * Msec0 : 0;
+        const V = this.airFlight.last?.speed ?? 0;
+        const w = this.weather.step(s.wind, h, lat, lon, daysOf(nav.t), V, dtSec);
+        const up = unitV(d);
+        const east = unitV(cross(unitV(spinVector(b, nav.t)), up));
+        const north = cross(up, east);
+        this.windHome = lin(lin(east, w[0] / C_MPS, north, w[1] / C_MPS), 1, up, w[2] / C_MPS);
+        const sp = Math.hypot(w[0], w[1]);
+        this.windNow = { speed: sp, from: ((Math.atan2(-w[0], -w[1]) * 180) / Math.PI + 360) % 360 };
+      }
+    }
+  }
   // (the tanks as the scene has them: the fleet's masses follow their propellant)
   fleet.tanks = fuelOn(s) ? { exhaust: s.exhaust, massRatio: s.massRatio } : null;
   if (this.pilot.auto !== "node") this.rails(cam);
@@ -804,7 +844,10 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   );
   TUNING.turnAccel = tune.acc;
   TUNING.turnRate = tune.rate;
-  this.rotateC(out.rot);
+  // (on its own gear, its turn is integrated within the flight's sub-steps — motion.ts —, with the
+  // springs; elsewhere at once)
+  this.turnOnGear = !!this.rolling && !!GEARS[fleet.active] && !!this.gearLast && this.gearLast.contact > 0;
+  if (!this.turnOnGear) this.rotateC(out.rot);
   // (on its wheels: a craft with a gear of its own sits on its springs and steers by its nose wheel —
   // the pilot's yaw, full lock at a crawl, a few degrees fast; the rollout along the runway —; without,
   // held level on the ground, the nose within the runway's limits)
@@ -1325,7 +1368,7 @@ function entryStep(
       R.alpha = LA.out.alpha;
       this.onPilotMessage?.(tf("Mach {0}: gliding to {1}", LA.out.mach.toFixed(1), R.site.name));
     }
-    const ax = attitudeFor(fr.s.x, va, craft.alpha, R.bank);
+    const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, R.bank);
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
   }
   // the glide (the Ranger): onto the runway's axis — a point 12 km before its threshold, then the
@@ -1351,7 +1394,7 @@ function entryStep(
   // (too fast down the path: the air brake)
   const vT = Math.min(110 + 0.004 * dist, 320);
   this.airBrake = clamp((sp - vT) / 60, 0, 1);
-  const ax = attitudeFor(fr.s.x, va, R.alpha, bank);
+  const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank);
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
 }
 

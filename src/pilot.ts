@@ -386,7 +386,11 @@ export class FlightComputer {
     const I = c.inertia,
       tq = c.torque;
     const axisAcc = (i: number) => (I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
-    const acc3: V3 = [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
+    // (on its own gear, the surfaces' authority no more than the wheels' and thrusters' own: a stiff
+    // control against stiff springs would fight them frame by frame)
+    const acc3: V3 = c.onGear
+      ? [axisAcc(0) + Math.min(A3[0]!, axisAcc(0)), axisAcc(1) + Math.min(A3[1]!, axisAcc(1)), axisAcc(2) + Math.min(A3[2]!, axisAcc(2))]
+      : [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
@@ -400,8 +404,9 @@ export class FlightComputer {
       if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
-      // (on its own gear, the springs set the pitch — the nose lowered onto its wheel — unless the stick asks)
-      if (P.ground) want[0] = c.onGear && manual[0] === 0 ? this.omega[0] : manual[0] * rates[0];
+      // (on its own gear, the springs set the pitch — the nose lowered onto its wheel, held back to 3°/s
+      // as a pilot's back pressure does: no slam —, unless the stick asks)
+      if (P.ground) want[0] = c.onGear && manual[0] === 0 ? Math.max(this.omega[0], -0.05) : manual[0] * rates[0];
       else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
       else if (P.mach > 4) {
         // (hypersonic: the angle of attack held — the shield kept to the flow, as an entry is flown)
@@ -409,11 +414,12 @@ export class FlightComputer {
         want[0] = P.path[0] - 1.5 * (P.alpha - this.alphaHold);
       } else want[0] = P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
       if (P.alpha > stallSafe) want[0] = Math.min(want[0], P.path[0] - 2 * (P.alpha - stallSafe));
-      want[1] = P.ground ? manual[1] * 0.3 : P.path[1] - 2 * P.beta + manual[1] * rates[1];
+      // (on its own gear the nose wheel steers it: the rudder only as the pedals ask)
+      want[1] = P.ground ? (c.onGear && manual[1] === 0 ? this.omega[1] : manual[1] * 0.3) : P.path[1] - 2 * P.beta + manual[1] * rates[1];
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
       // (the bank: right is +; the pilot's roll: left is +)
-      want[2] =
-        manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? (c.onGear ? this.omega[2] : 0) : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+      // (on the ground the wings held level — the ailerons into a crosswind, as a pilot's)
+      want[2] = manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? 0.4 * P.bank : 1.2 * (P.bank - (this.bankHold ?? P.bank));
     } else if (point && !active) {
       const e = cross(Z, point);
       const s = len(e);
@@ -440,7 +446,10 @@ export class FlightComputer {
     } else {
       for (let i = 0; i < 3; i++) {
         if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
-        else if (this.sas && !(c.onGear && i !== 1)) want[i] = 0;
+        // (on the gear: the roll still held, the pitch and the yaw left to the springs and the nose wheel)
+        else if (this.sas && !(c.onGear && i !== 2)) want[i] = 0;
+        // (on the gear, the nose lowered no faster than 3°/s: a pilot's back pressure)
+        if (c.onGear && i === 0 && manual[0] === 0) want[0] = Math.max(this.omega[0], -0.05);
       }
     }
     let effort = 0;

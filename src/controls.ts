@@ -1,4 +1,5 @@
 import type { cameraFrame } from "./camera";
+import { Weather } from "./wind";
 import type { Vec3 } from "./physics";
 import type { Settings } from "./settings";
 import type { Body, Quat } from "./targeting";
@@ -634,6 +635,11 @@ export class CameraController {
   rolling: { body: string } | null = null;
   /** the nose wheel's steering [rad] (+: left) — the pilot's yaw on the ground, the rollout's */
   noseSteer = 0;
+  /** the weather flown through (wind.ts), and its wind now in the home frame [c] — none: still air */
+  readonly weather = new Weather();
+  windHome: [number, number, number] | null = null;
+  /** the wind now: its speed [m/s] and where it blows from [° from north] — for the displays */
+  windNow: { speed: number; from: number } | null = null;
   /** the ground spoilers deployed at the touchdown, kept out through a bounce (piloting.ts) */
   groundSpoilers = false;
   /** when the wheels last touched [M of time] */
@@ -642,6 +648,9 @@ export class CameraController {
   gearLast: import("./gear").GearOut | null = null;
   /** the gear's turn of the craft over the last frame, for the pilot's rates (motion.ts) */
   gearDw: [number, number, number] | null = null;
+  /** on its own gear at the frame's start: the craft's whole turn integrated within the flight's
+   *  sub-steps (motion.ts), not in one go before them — a frame's rotation at once sinks the stiff legs */
+  turnOnGear = false;
 
   /**
    * On its wheels: the wings level on the ground, the nose between 3° down and 15° up (the tail on the

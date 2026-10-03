@@ -1207,4 +1207,15 @@ export default {
   "Forgiving landing gear": "Train d'atterrissage indulgent",
   "The landing gear's limits three times a real one's: a landing up to 9 m/s down, a crash past 13.5.":
     "Les limites du train trois fois celles d'un vrai : un atterrissage jusqu'à 9 m/s de descente, un crash au-delà de 13,5.",
+  Wind: "Vent",
+  Calm: "Calme",
+  "No wind, no turbulence": "Ni vent ni turbulence",
+  Light: "Léger",
+  "4 m/s at 10 m, light turbulence": "4 m/s à 10 m, turbulence légère",
+  Moderate: "Modéré",
+  "9 m/s at 10 m, moderate turbulence and gusts": "9 m/s à 10 m, turbulence modérée et rafales",
+  Strong: "Fort",
+  "15 m/s at 10 m, strong turbulence and gusts": "15 m/s à 10 m, forte turbulence et rafales",
+  "The air's own motion: a mean wind growing with the height (a jet near 11 km, nothing above 30 km), its direction turning with the place and the day; the Dryden model's turbulence; now and then a gust. The same flight, the same weather.":
+    "Le mouvement propre de l'air : un vent moyen qui forcit avec l'altitude (un courant-jet vers 11 km, rien au-dessus de 30 km), sa direction tournant avec le lieu et le jour ; la turbulence du modèle de Dryden ; de temps en temps une rafale. Le même vol, la même météo.",
 } satisfies Record<string, string>;

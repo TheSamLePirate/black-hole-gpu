@@ -1879,7 +1879,12 @@ export class FlightHud {
       `<div class="fl-ad-row"><span class="fl-ad-mode">${mode}</span>${cmd}<span>M <b>${A.mach.toFixed(2)}</b></span><span>q <b>${q}</b></span>` +
       `<span>α <b>${(A.alpha * d).toFixed(1)}°</b></span><span>β <b>${(A.beta * d).toFixed(1)}°</b></span><span><b>${A.g.toFixed(2)}</b> g</span></div>` +
       `<div class="fl-ad-row">${A.shieldMax ? `<span>${t("SHIELD")} <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>${t("HULL")} <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span>` +
-      `<span>${t("LOAD")}${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">${t("FLAPS")} ${flaps}</span><span class="${A.gear ? "on" : ""}">${t("GEAR")}</span><span class="${A.brake ? "on" : ""}">${t("BRAKE")}</span></div>`;
+      `<span>${t("LOAD")}${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">${t("FLAPS")} ${flaps}</span><span class="${A.gear ? "on" : ""}">${t("GEAR")}</span><span class="${A.brake ? "on" : ""}">${t("BRAKE")}</span>` +
+      // (the wind: where it blows from, its speed — the crosswind a landing has to hold)
+      (A.wind && A.wind.speed >= 0.5
+        ? `<span>${t("WIND")} <b>${String(Math.round(A.wind.from)).padStart(3, "0")}°/${A.wind.speed.toFixed(0)}</b></span>`
+        : "") +
+      `</div>`;
     if (html === this.airKey) return;
     this.airKey = html;
     this.airData.innerHTML = html;

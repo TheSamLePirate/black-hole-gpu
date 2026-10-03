@@ -21,6 +21,8 @@ export interface Leg {
   wheel: boolean;
   steers?: boolean;
   brakes?: boolean;
+  /** its own sideways grip (a nose wheel's, smaller: a light, castering tyre) — none: the gear's */
+  mu?: number;
 }
 
 export interface GearDef {
@@ -41,9 +43,12 @@ const G0 = 9.80665;
 export const GEARS: Record<string, GearDef> = {
   ranger: {
     legs: [
-      { at: [0, -6.13, 6.5], stroke: 0.4, share: 0.4, wheel: true, steers: true },
-      { at: [2.8, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
-      { at: [-2.8, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
+      // (the mains 3.3 m behind the centre of mass — z 1.5 —: the weight holds the nose down on the ground
+      // against the air's pitching moment; the nose wheel carries two fifths. Under the wings, 8 m apart: a
+      // centre of mass 7.4 m up needs the track — the Shuttle's was 6.9 m, lower)
+      { at: [0, -6.13, 6.5], stroke: 0.4, share: 0.4, wheel: true, steers: true, mu: 0.35 },
+      { at: [4, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
+      { at: [-4, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
     ],
     sag: 0.3,
     zeta: 0.6,
@@ -146,7 +151,7 @@ export function gearForces(def: GearDef, i: GearInput, ground: Ground): GearOut 
     // (an oleo strut: its gas stiffening towards the end of the stroke — three times at its stop —, its
     // orifice damping the rebound twice as hard as the stroke: no bounce)
     const x = Math.min(comp, L.stroke);
-    let N = k * x * (1 + 2 * (x / L.stroke) ** 2) + (closing < 0 ? 2 : 1) * c * closing;
+    let N = k * x * (1 + 2 * (x / L.stroke) ** 2) + c * closing;
     if (comp > L.stroke) {
       // (the stop: a stiff one, fifty times the spring, and a hard damper)
       bottomed = true;
@@ -177,7 +182,7 @@ export function gearForces(def: GearDef, i: GearInput, ground: Ground): GearOut 
     } else {
       // across: the slip angle's grip (at a crawl, as a damper: the angle undefined)
       slip = Math.atan2(vs, Math.max(Math.abs(vl), 1));
-      const lat = -tyreGrip(slip, def.mu) * N;
+      const lat = -tyreGrip(slip, L.mu ?? def.mu) * N;
       // along: rolling, and the brakes at the anti-skid's peak (none backwards past a crawl)
       const brake = L.brakes ? i.brake * def.muBrake : 0;
       const resist = (def.roll + brake) * N * Math.min(Math.abs(vl) / 0.3, 1);

@@ -496,4 +496,5 @@ export default {
   "double-click: follow": "double-clic : suivre",
   "alt {0}": "alt {0}",
   "Click: a place": "Clic : un lieu",
+  WIND: "VENT",
 } satisfies Record<string, string>;
