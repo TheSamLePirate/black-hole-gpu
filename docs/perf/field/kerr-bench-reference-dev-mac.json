@@ -1,0 +1,1174 @@
+{
+ "schema": "kerr-bench/1",
+ "runId": "a3b9a570-9959-47aa-b8da-aa15ac91c690",
+ "app": {
+  "version": "a69fe25",
+  "date": "2026-10-03T09:28:49.302Z",
+  "mode": "standard",
+  "url": "http://localhost:3000/"
+ },
+ "machineLabel": "reference (dev Mac, headless Chrome)",
+ "system": {
+  "gpu": {
+   "vendor": "apple",
+   "architecture": "metal-3",
+   "device": "",
+   "description": "",
+   "fallback": false
+  },
+  "features": [
+   "bgra8unorm-storage",
+   "chromium-experimental-subgroup-matrix",
+   "clip-distances",
+   "core-features-and-limits",
+   "depth-clip-control",
+   "depth32float-stencil8",
+   "dual-source-blending",
+   "float32-blendable",
+   "float32-filterable",
+   "indirect-first-instance",
+   "primitive-index",
+   "rg11b10ufloat-renderable",
+   "shader-f16",
+   "subgroup-size-control",
+   "subgroups",
+   "texture-component-swizzle",
+   "texture-compression-astc",
+   "texture-compression-astc-sliced-3d",
+   "texture-compression-bc",
+   "texture-compression-bc-sliced-3d",
+   "texture-compression-etc2",
+   "texture-compression-unaligned",
+   "texture-formats-tier1",
+   "texture-formats-tier2",
+   "timestamp-query"
+  ],
+  "limits": {
+   "maxStorageBuffersPerShaderStage": 10,
+   "maxSampledTexturesPerShaderStage": 48,
+   "maxBufferSize": 4294967292,
+   "maxStorageBufferBindingSize": 4294967292,
+   "maxTextureDimension2D": 16384,
+   "maxComputeInvocationsPerWorkgroup": 1024,
+   "maxComputeWorkgroupStorageSize": 32768,
+   "maxBindGroups": 4
+  },
+  "browser": {
+   "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+   "brands": [
+    "Chromium 154",
+    "Google Chrome 154"
+   ],
+   "platform": "macOS",
+   "mobile": false
+  },
+  "screen": {
+   "css": [
+    800,
+    600
+   ],
+   "dpr": 2,
+   "gamut": "srgb",
+   "hdr": false
+  },
+  "cpuThreads": 10,
+  "deviceMemoryGB": 32,
+  "tier": {
+   "guessed": 2,
+   "label": "apple · metal-3 · 32 GB",
+   "measured": null
+  }
+ },
+ "load": {
+  "firstImageMs": 1363,
+  "stages": [
+   {
+    "id": "gpu",
+    "label": "WebGPU — the graphics device",
+    "ms": 22
+   },
+   {
+    "id": "shaders",
+    "label": "Shaders — geodesics, disk, sky, Ranger",
+    "ms": 319
+   },
+   {
+    "id": "pipelines",
+    "label": "Compiling the ray tracer — first image",
+    "ms": 304
+   },
+   {
+    "id": "ephemeris",
+    "label": "The solar system — NASA/JPL ephemerides (DE440)",
+    "ms": 90
+   },
+   {
+    "id": "sky",
+    "label": "Milky Way — the Gaia DR2 map",
+    "ms": 409
+   },
+   {
+    "id": "stars",
+    "label": "Stars — the Hipparcos & HYG catalogue",
+    "ms": 57
+   }
+  ]
+ },
+ "scenes": [
+  {
+   "scene": "game:artemis",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 8.69
+    },
+    {
+     "pass": "trace",
+     "ms": 7.15
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 6.84
+    },
+    {
+     "pass": "display",
+     "ms": 6.83
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.49
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.49
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.48
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.37
+    },
+    {
+     "pass": "gather",
+     "ms": 0.35
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.27
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 2.48,
+     "max": 2.9
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.95,
+     "max": 1.1
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.42,
+     "max": 0.6
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.34,
+     "max": 0.4
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.11,
+     "max": 0.2
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.04,
+     "max": 0.6
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.03,
+     "max": 0.1
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "sound",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0
+    }
+   ],
+   "worstLoopMs": 5.5,
+   "longTasks": 6,
+   "vramMiB": 669,
+   "errors": [],
+   "auto": {
+    "fps": 49,
+    "p50": 17.4,
+    "p95": 33.6,
+    "p99": 36.2,
+    "over33": 22,
+    "raysPerPx": 0.0431,
+    "mraysPerS": 11.98,
+    "blocks": {
+     "3": 393
+    },
+    "scales": {
+     "1": 393
+    }
+   },
+   "fixed": {
+    "fps": 58.8,
+    "p50": 16.8,
+    "p95": 20.4,
+    "p99": 34.7,
+    "over33": 3,
+    "mraysPerS": 5.3,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Ranger: approaching Gargantua",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "display",
+     "ms": 8
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 6.99
+    },
+    {
+     "pass": "trace",
+     "ms": 6.29
+    },
+    {
+     "pass": "far-field LUT",
+     "ms": 2.58
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.52
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.51
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.49
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.38
+    },
+    {
+     "pass": "gather",
+     "ms": 0.34
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.27
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 0.59,
+     "max": 1
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.2,
+     "max": 0.4
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.19,
+     "max": 0.5
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.05,
+     "max": 0.2
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.04,
+     "max": 0.4
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.04,
+     "max": 0.6
+    },
+    {
+     "label": "sound",
+     "ms": 0.02,
+     "max": 0.2
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.01,
+     "max": 0.2
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 2.6,
+   "longTasks": 0,
+   "vramMiB": 348,
+   "errors": [],
+   "auto": {
+    "fps": 41.8,
+    "p50": 18.7,
+    "p95": 34,
+    "p99": 34.7,
+    "over33": 64,
+    "raysPerPx": 0.0242,
+    "mraysPerS": 5.75,
+    "blocks": {
+     "4": 335
+    },
+    "scales": {
+     "1": 335
+    }
+   },
+   "fixed": {
+    "fps": 59.4,
+    "p50": 16.7,
+    "p95": 19.6,
+    "p99": 29.6,
+    "over33": 0,
+    "mraysPerS": 5.35,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Interstellar: along the disk (the film's close pass)",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 12.06
+    },
+    {
+     "pass": "display",
+     "ms": 11.74
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 11.01
+    },
+    {
+     "pass": "far-field LUT",
+     "ms": 5.53
+    },
+    {
+     "pass": "trace",
+     "ms": 5.25
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 1.3
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.27
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.25
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.24
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.23
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 0.61,
+     "max": 1.1
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.07,
+     "max": 0.1
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.07,
+     "max": 0.3
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.07,
+     "max": 0.2
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.02,
+     "max": 0.2
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.01,
+     "max": 0.2
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.01,
+     "max": 0.2
+    },
+    {
+     "label": "sound",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "sky chart",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 1.6,
+   "longTasks": 0,
+   "vramMiB": 354,
+   "errors": [],
+   "auto": {
+    "fps": 44.4,
+    "p50": 21.1,
+    "p95": 33.9,
+    "p99": 34.8,
+    "over33": 37,
+    "raysPerPx": 0.0027,
+    "mraysPerS": 0.67,
+    "blocks": {
+     "8": 355
+    },
+    "scales": {
+     "0.75": 100,
+     "0.625": 255
+    }
+   },
+   "fixed": {
+    "fps": 24,
+    "p50": 40.9,
+    "p95": 52.6,
+    "p99": 58.7,
+    "over33": 119,
+    "mraysPerS": 2.16,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Saturn: backlit",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.72
+    },
+    {
+     "pass": "display",
+     "ms": 13.37
+    },
+    {
+     "pass": "trace",
+     "ms": 13.1
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 12.92
+    },
+    {
+     "pass": "far-field LUT",
+     "ms": 11.15
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 11.07
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.53
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.36
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.32
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.3
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 2.12,
+     "max": 5.1
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 1.05,
+     "max": 1.2
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.5,
+     "max": 0.6
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.24,
+     "max": 0.8
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.08,
+     "max": 0.3
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.04,
+     "max": 0.5
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.04,
+     "max": 0.2
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "sound",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 8.2,
+   "longTasks": 1,
+   "vramMiB": 400,
+   "errors": [],
+   "auto": {
+    "fps": 44.4,
+    "p50": 19.3,
+    "p95": 39.7,
+    "p99": 44.4,
+    "over33": 44,
+    "raysPerPx": 0.004,
+    "mraysPerS": 1,
+    "blocks": {
+     "8": 356
+    },
+    "scales": {
+     "0.875": 159,
+     "0.75": 197
+    }
+   },
+   "fixed": {
+    "fps": 18.5,
+    "p50": 49.6,
+    "p95": 69.9,
+    "p99": 73.8,
+    "over33": 93,
+    "mraysPerS": 1.67,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Kerr a=0.94, near edge-on",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "far-field LUT",
+     "ms": 11.15
+    },
+    {
+     "pass": "display",
+     "ms": 5.45
+    },
+    {
+     "pass": "trace",
+     "ms": 4.86
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 3.83
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 1.12
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 0.7
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.58
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.4
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.37
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.37
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 0.69,
+     "max": 1
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.25,
+     "max": 0.4
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.24,
+     "max": 0.4
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.06,
+     "max": 0.8
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.06,
+     "max": 0.2
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.02,
+     "max": 0.2
+    },
+    {
+     "label": "sound",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "sky chart",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 2.9,
+   "longTasks": 0,
+   "vramMiB": 400,
+   "errors": [],
+   "auto": {
+    "fps": 57.1,
+    "p50": 16.8,
+    "p95": 30.5,
+    "p99": 34.2,
+    "over33": 11,
+    "raysPerPx": 0.0046,
+    "mraysPerS": 1.5,
+    "blocks": {
+     "8": 457
+    },
+    "scales": {
+     "0.875": 457
+    }
+   },
+   "fixed": {
+    "fps": 54.6,
+    "p50": 16.8,
+    "p95": 31.6,
+    "p99": 33.4,
+    "over33": 3,
+    "mraysPerS": 4.92,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Interstellar: wormhole to Gargantua",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "far-field LUT",
+     "ms": 11.15
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 10.77
+    },
+    {
+     "pass": "display",
+     "ms": 10.3
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 8.93
+    },
+    {
+     "pass": "trace",
+     "ms": 8.71
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 2.16
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.55
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.43
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.39
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.37
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 0.67,
+     "max": 1
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.3,
+     "max": 0.5
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.09,
+     "max": 0.2
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.09,
+     "max": 0.2
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.04,
+     "max": 0.2
+    },
+    {
+     "label": "sound",
+     "ms": 0.02,
+     "max": 0.1
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.01,
+     "max": 0.2
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 2.3,
+   "longTasks": 0,
+   "vramMiB": 400,
+   "errors": [],
+   "auto": {
+    "fps": 46.5,
+    "p50": 18.5,
+    "p95": 34.4,
+    "p99": 35.7,
+    "over33": 33,
+    "raysPerPx": 0.0048,
+    "mraysPerS": 1.26,
+    "blocks": {
+     "8": 373
+    },
+    "scales": {
+     "1": 32,
+     "0.875": 341
+    }
+   },
+   "fixed": {
+    "fps": 42.3,
+    "p50": 23.2,
+    "p95": 29.9,
+    "p99": 35.4,
+    "over33": 5,
+    "mraysPerS": 3.81,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Moon: an afternoon on the plains",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "far-field LUT",
+     "ms": 11.15
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 7.11
+    },
+    {
+     "pass": "display",
+     "ms": 6.57
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 5.36
+    },
+    {
+     "pass": "trace",
+     "ms": 5.18
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.75
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.66
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.43
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.42
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.4
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 2.33,
+     "max": 6
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.83,
+     "max": 1
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.29,
+     "max": 0.5
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.27,
+     "max": 0.4
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.07,
+     "max": 0.3
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.04,
+     "max": 0.7
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.02,
+     "max": 0.1
+    },
+    {
+     "label": "sound",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.01,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0.1
+    }
+   ],
+   "worstLoopMs": 7.7,
+   "longTasks": 1,
+   "vramMiB": 720,
+   "errors": [],
+   "auto": {
+    "fps": 53,
+    "p50": 17.6,
+    "p95": 32.4,
+    "p99": 34.3,
+    "over33": 13,
+    "raysPerPx": 0.0046,
+    "mraysPerS": 1.4,
+    "blocks": {
+     "8": 425
+    },
+    "scales": {
+     "0.875": 425
+    }
+   },
+   "fixed": {
+    "fps": 44,
+    "p50": 21.9,
+    "p95": 28.1,
+    "p99": 32.9,
+    "over33": 1,
+    "mraysPerS": 3.96,
+    "width": 1481,
+    "height": 973
+   }
+  },
+  {
+   "scene": "Miller: Gargantua over the sea",
+   "status": "ok",
+   "compileMs": 0,
+   "assetsMs": 0,
+   "gpuPasses": [
+    {
+     "pass": "trace",
+     "ms": 14.01
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.17
+    },
+    {
+     "pass": "display",
+     "ms": 12.46
+    },
+    {
+     "pass": "far-field LUT",
+     "ms": 11.15
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 9.89
+    },
+    {
+     "pass": "planet probe",
+     "ms": 5.35
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 4.64
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.3
+    },
+    {
+     "pass": "depth of field",
+     "ms": 0.27
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.27
+    }
+   ],
+   "cpu": [
+    {
+     "label": "render (encode, submit)",
+     "ms": 2.68,
+     "max": 5.3
+    },
+    {
+     "label": "flight (camera.update)",
+     "ms": 0.93,
+     "max": 1.5
+    },
+    {
+     "label": "overlay (guide, marker)",
+     "ms": 0.24,
+     "max": 0.3
+    },
+    {
+     "label": "flight figures (flightInfo)",
+     "ms": 0.18,
+     "max": 0.3
+    },
+    {
+     "label": "panel & readouts",
+     "ms": 0.05,
+     "max": 0.6
+    },
+    {
+     "label": "free-fall prediction",
+     "ms": 0.05,
+     "max": 0.2
+    },
+    {
+     "label": "sky chart",
+     "ms": 0.02,
+     "max": 0.1
+    },
+    {
+     "label": "Ranger status",
+     "ms": 0.02,
+     "max": 0.1
+    },
+    {
+     "label": "sound",
+     "ms": 0,
+     "max": 0.1
+    },
+    {
+     "label": "game tools window",
+     "ms": 0,
+     "max": 0
+    }
+   ],
+   "worstLoopMs": 6.9,
+   "longTasks": 3,
+   "vramMiB": 400,
+   "errors": [],
+   "auto": {
+    "fps": 50.5,
+    "p50": 18.7,
+    "p95": 29.3,
+    "p99": 38,
+    "over33": 8,
+    "raysPerPx": 0.0026,
+    "mraysPerS": 0.75,
+    "blocks": {
+     "8": 405
+    },
+    "scales": {
+     "0.75": 92,
+     "0.625": 313
+    }
+   },
+   "fixed": {
+    "fps": 17.4,
+    "p50": 56.6,
+    "p95": 71.1,
+    "p99": 81.8,
+    "over33": 87,
+    "mraysPerS": 1.57,
+    "width": 1481,
+    "height": 973
+   }
+  }
+ ],
+ "quality": [],
+ "thermal": {
+  "scene": "game:artemis",
+  "firstMraysPerS": 5.3,
+  "lastMraysPerS": 4.34,
+  "driftPct": -18.1
+ },
+ "peakVramMiB": 1021.1940689086912,
+ "errors": {
+  "gpu": 0,
+  "caught": {},
+  "deviceLost": null
+ },
+ "score": {
+  "kerrScore": null,
+  "reference": "Apple M-series laptop, Chrome (2026-10) = 1000",
+  "recommendedQuality": null
+ },
+ "durationS": 170
+}

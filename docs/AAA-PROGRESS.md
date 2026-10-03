@@ -38,11 +38,13 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 
 | # | Étape | Statut | Commit |
 |---|---|---|---|
-| G0.1 | **Moteur** `src/bench/runner.ts` : 8 scènes de référence, phase A (Game, auto) et phase B (bloc 4, ~1,44 Mpx, Mrays/s), attente de la variante du traceur et des assets, contrôle thermique, balayage des qualités (Complet), détection d'onglet masqué, HUD non dessiné pendant la mesure | fait | (ce commit) |
-| G0.2 | **Rapport** `kerr-bench/1` (`src/bench/report.ts`) : système (GPU, limites, navigateur, écran), chargement, scènes, thermique, VRAM, erreurs, Kerr Score, qualité conseillée ; `src/bench/sysinfo.ts`, `src/bench/vram.ts` | fait | (ce commit) |
-| G0.3 | **Écran** `…/#bench` (`src/ui/bench.ts`, `bench.css`) : accueil, mesure, résultats, téléchargement, copie, partage, comparaison ; **FR/EN** (`src/i18n.ts`, premier usage) | fait | (ce commit) |
-| G0.4 | `scripts/bench.ts` pilote `__bh.bench` (une seule logique de mesure) ; `version.json` (serveur et build) | fait | (ce commit) |
-| G0.5 | Référence de score (cette machine, test Standard) et `scripts/bench-merge.ts` | à faire | |
+| G0.1 | **Moteur** `src/bench/runner.ts` : 8 scènes de référence, phase A (Game, auto) et phase B (bloc 4, ~1,44 Mpx, Mrays/s), attente de la variante du traceur et des assets, contrôle thermique, balayage des qualités (Complet), détection d'onglet masqué, HUD non dessiné pendant la mesure | fait | `497ba4b` |
+| G0.2 | **Rapport** `kerr-bench/1` (`src/bench/report.ts`) : système (GPU, limites, navigateur, écran), chargement, scènes, thermique, VRAM, erreurs, Kerr Score, qualité conseillée ; `src/bench/sysinfo.ts`, `src/bench/vram.ts` | fait | `497ba4b` |
+| G0.3 | **Écran** `…/#bench` (`src/ui/bench.ts`, `bench.css`) : accueil, mesure, résultats, téléchargement, copie, partage, comparaison ; **FR/EN** (`src/i18n.ts`, premier usage) | fait | `497ba4b` |
+| G0.4 | `scripts/bench.ts` pilote `__bh.bench` (une seule logique de mesure) ; `version.json` (serveur et build) | fait | `497ba4b` |
+| G0.5 | **Référence du score** : Apple M1 Max, Chrome, test Standard = 1000 (débits fixes par scène dans `REFERENCE`) ; rapport de référence dans `docs/perf/field/` ; **`scripts/bench-merge.ts`** : tous les rapports reçus en un tableau Markdown et un CSV | fait | (ce commit) |
+
+**Mode d'emploi pour tes amis :** ouvrir `https://thesamlepirate.github.io/black-hole-gpu/#bench`, choisir la durée, Lancer, puis Télécharger le rapport et te l'envoyer. Les rapports reçus vont dans `docs/perf/field/`, puis `bun scripts/bench-merge.ts`.
 
 Découvertes en route :
 - **`realtimeBlockNow` renvoyait le bloc automatique même en réglage fixe** : les débits de `perf()`, de l'ancien script et du benchmark divisaient par le mauvais bloc. Corrigé (il renvoie le bloc réellement utilisé).
@@ -64,3 +66,4 @@ Découvertes en route :
 - 0.6 : typage strict, 0 erreur ; app vérifiée (poussée, journal sans erreur).
 - 0.7 : 4 nouveaux fichiers de tests (16 tests) sur du code jusqu'ici à 0 %.
 - 0.8 : lint/format et validation des shaders en CI. **Phase 0 terminée.**
+- G0 : Kerr Bench livré (`#bench`), référence M1 Max = 1000, fusion des rapports. Phase Standard de référence : Artemis 49 fps, Gargantua 42, disque 44, Saturne 44, Kerr 57, trou de ver 47, Lune 53, Miller 51 (Game, headless).

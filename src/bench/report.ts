@@ -70,12 +70,21 @@ export interface BenchReport {
 }
 
 /**
- * The reference machine's fixed-setting throughput per scene [Mrays/s] (an Apple M-series laptop,
- * Chrome, 2026-10): the Kerr Score is 1000 times the geometric mean of a run's ratios to these.
+ * The reference machine's fixed-setting throughput per scene [Mrays/s] (Apple M1 Max, Chrome, a standard
+ * run on 2026-10-03): the Kerr Score is 1000 times the geometric mean of a run's ratios to these.
  */
 export const REFERENCE: { label: string; mraysPerS: Record<string, number> } = {
-  label: "Apple M-series laptop, Chrome (2026-10) = 1000",
-  mraysPerS: {},
+  label: "Apple M1 Max, Chrome (2026-10) = 1000",
+  mraysPerS: {
+    "game:artemis": 5.3,
+    "Ranger: approaching Gargantua": 5.35,
+    "Interstellar: along the disk (the film's close pass)": 2.16,
+    "Saturn: backlit": 1.67,
+    "Kerr a=0.94, near edge-on": 4.92,
+    "Interstellar: wormhole to Gargantua": 3.81,
+    "Moon: an afternoon on the plains": 3.96,
+    "Miller: Gargantua over the sea": 1.57,
+  },
 };
 
 /** The Kerr Score: 1000 × the geometric mean of the fixed throughputs over the reference's (null: no scene in common). */
