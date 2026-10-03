@@ -37,6 +37,7 @@ import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
 import { sub } from "../math/vec3";
+import { store } from "../util/storage";
 
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
@@ -72,11 +73,7 @@ const icon = (name: string, cls = "fl-ic") => {
 /** A panel's collapsed state, remembered (the header's chevron, or a click on it). */
 const COLLAPSED_KEY = "kerr.hud-collapsed";
 function collapsedSet(): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
+  return new Set(store.getJSON<string[]>(COLLAPSED_KEY, []));
 }
 /** A panel's header: its title (a span, rewritable) and a chevron that folds the panel. */
 function panelHead(panel: HTMLElement, key: string, title: string) {
@@ -92,11 +89,7 @@ function panelHead(panel: HTMLElement, key: string, title: string) {
     const set = collapsedSet();
     if (panel.classList.contains("collapsed")) set.add(key);
     else set.delete(key);
-    try {
-      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
-    } catch {
-      /* private mode */
-    }
+    store.setJSON(COLLAPSED_KEY, [...set]);
   };
   return { head, text: t };
 }
@@ -390,11 +383,7 @@ export class FlightHud {
   setMapTab(t: "orbit" | "globe" | "map") {
     this.mapTab = t;
     if (t !== "orbit") this.ground.mode = t;
-    try {
-      localStorage.setItem("kerr.map-tab", t);
-    } catch {
-      /* private mode */
-    }
+    store.set("kerr.map-tab", t);
     this.syncMapTab();
     this.drawnAt.map = -1e9;
   }
@@ -424,12 +413,8 @@ export class FlightHud {
     // until the pilot picks another)
     const small = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse) and (max-height: 560px), (pointer: coarse) and (max-width: 560px)").matches;
     this.density = small ? 1 : 0;
-    try {
-      const saved = localStorage.getItem("kerr.hud-density");
-      if (saved !== null) this.density = Math.min(2, Math.max(0, Number(saved) || 0));
-    } catch {
-      /* private mode */
-    }
+    const saved = store.get("kerr.hud-density");
+    if (saved !== null) this.density = Math.min(2, Math.max(0, Number(saved) || 0));
 
     // ---- mission bar
     // (the modes' lights: a click turns off what is engaged — SAS toggles)
@@ -825,12 +810,8 @@ export class FlightHud {
     const mapHead = panelHead(this.right, "map", "Map");
     const mapBody = h("div", "fl-body fl-mapbody");
     // (the map's tabs: the system in 3D, the globe and the planisphere of the world the ship orbits)
-    try {
-      const t = localStorage.getItem("kerr.map-tab");
-      if (t === "globe" || t === "map") this.mapTab = t;
-    } catch {
-      /* private mode */
-    }
+    const t = store.get("kerr.map-tab");
+    if (t === "globe" || t === "map") this.mapTab = t;
     this.ground = new GroundTrack(this.s);
     const tabs = h("div", "fl-maptabs");
     for (const [id, label, tip] of [
@@ -1524,11 +1505,7 @@ export class FlightHud {
 
   cycleDensity() {
     this.density = (this.density + 1) % 3;
-    try {
-      localStorage.setItem("kerr.hud-density", String(this.density));
-    } catch {
-      /* private mode */
-    }
+    store.set("kerr.hud-density", String(this.density));
     this.applyDensity();
     return ["Full HUD", "Minimal HUD", "Clean view"][this.density]!;
   }

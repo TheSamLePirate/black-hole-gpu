@@ -49,6 +49,7 @@ import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint
 import { cockpitHull, stationHulls, vesselHulls, type TriBVH } from "./system/collide";
 import { AU_M, C_MPS, DAY_S, DEG, G0, M_METRES, M_SECONDS } from "./units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "./math/vec3";
+import { caught } from "./debug";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -6951,8 +6952,8 @@ export class CameraController {
     let v: HubInfo | null = null;
     try {
       v = this.hubCompute();
-    } catch {
-      v = null;
+    } catch (e) {
+      caught("hub", e);
     }
     this.hubCache = { at: now, v };
     return v;

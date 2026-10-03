@@ -15,6 +15,7 @@ import {
   type NumberDef,
   type SectionId,
 } from "./schema";
+import { store } from "../util/storage";
 
 type Key = keyof Settings;
 type Diff = { key: Key; before: unknown; after: unknown }[];
@@ -382,19 +383,11 @@ export class SettingsPanel {
 
   // ---------------------------------------------------------------------------------- presets
   private userPresets(): Record<string, Partial<Settings>> {
-    try {
-      return JSON.parse(localStorage.getItem(STORE_PRESETS) ?? "{}");
-    } catch {
-      return {};
-    }
+    return store.getJSON<Record<string, Partial<Settings>>>(STORE_PRESETS, {});
   }
 
   private storeUserPresets(p: Record<string, Partial<Settings>>) {
-    try {
-      localStorage.setItem(STORE_PRESETS, JSON.stringify(p));
-    } catch {
-      this.toast("Could not save presets (storage unavailable)");
-    }
+    if (!store.setJSON(STORE_PRESETS, p)) this.toast("Could not save presets (storage unavailable)");
   }
 
   private renderPresets() {
@@ -1073,26 +1066,15 @@ export class SettingsPanel {
   };
 
   private loadUiState() {
-    try {
-      const st = JSON.parse(localStorage.getItem(STORE_UI) ?? "{}");
-      if (SECTIONS.some((s) => s.id === st.tab)) this.tab = st.tab;
-      this.advanced = !!st.advanced;
-      this.collapsedGroups = new Set(st.collapsed ?? []);
-      // closed until the user opens it once (the view first)
-      if (st.closed !== false || innerWidth < 800) this.root.classList.add("collapsed");
-    } catch {
-      /* private mode */
-    }
+    const st = store.getJSON<{ tab?: string; advanced?: boolean; collapsed?: string[]; closed?: boolean }>(STORE_UI, {});
+    if (SECTIONS.some((s) => s.id === st.tab)) this.tab = st.tab as typeof this.tab;
+    this.advanced = !!st.advanced;
+    this.collapsedGroups = new Set(st.collapsed ?? []);
+    // closed until the user opens it once (the view first)
+    if (st.closed !== false || innerWidth < 800) this.root.classList.add("collapsed");
   }
 
   private saveUiState() {
-    try {
-      localStorage.setItem(
-        STORE_UI,
-        JSON.stringify({ tab: this.tab, advanced: this.advanced, collapsed: [...this.collapsedGroups], closed: !this.isOpen }),
-      );
-    } catch {
-      /* private mode */
-    }
+    store.setJSON(STORE_UI, { tab: this.tab, advanced: this.advanced, collapsed: [...this.collapsedGroups], closed: !this.isOpen });
   }
 }

@@ -61,6 +61,8 @@ import { gameTimeOf, issAxes, issElements, issOrbit, issStart, issTrack, station
 import { rangerHull, stationHulls } from "./system/collide";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
+import { store } from "./util/storage";
+import { caught } from "./debug";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -1673,8 +1675,8 @@ async function main() {
       try {
         status = cpuProf.time("Ranger status", () => rangerStatus(settings, camera, info, sim.time));
         tools.watch(status);
-      } catch {
-        /* (between two frames of a jump) */
+      } catch (e) {
+        caught("Ranger status", e);
       }
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
       if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() })) renderer.ship.updateScreens(cockpitScreens.canvas);
@@ -2041,18 +2043,10 @@ async function main() {
   function setHudOpen(open: boolean) {
     $("hud").classList.toggle("open", open);
     $("hud-toggle").setAttribute("aria-expanded", String(open));
-    try {
-      localStorage.setItem(HUD_KEY, open ? "1" : "0");
-    } catch {
-      // private mode: not remembered
-    }
+    store.set(HUD_KEY, open ? "1" : "0");
     if (open && lastStats) updateHUD(lastStats, fps);
   }
-  try {
-    if (localStorage.getItem(HUD_KEY) === "1") setHudOpen(true);
-  } catch {
-    // storage unavailable
-  }
+  if (store.get(HUD_KEY) === "1") setHudOpen(true);
 
   /** Compact status (phase, what the camera does) and, unfolded, the details and readouts. */
   function updateHUD(st: FrameStats, fpsNow: number) {
@@ -2152,22 +2146,13 @@ async function main() {
 
   // -------------------------------------------------------------------- first-run hint
   const HINT_KEY = "kerr.hint-seen";
-  let hintSeen = false;
-  try {
-    hintSeen = localStorage.getItem(HINT_KEY) === "1";
-  } catch {
-    // storage unavailable: show it
-  }
+  const hintSeen = store.get(HINT_KEY) === "1";
   if (!hintSeen && !matchMedia("(hover: none)").matches) {
     const hint = $("hint");
     const dismiss = () => {
       hint.classList.add("gone");
       setTimeout(() => (hint.hidden = true), 700);
-      try {
-        localStorage.setItem(HINT_KEY, "1");
-      } catch {
-        // not remembered
-      }
+      store.set(HINT_KEY, "1");
       canvas.removeEventListener("pointerdown", dismiss);
       canvas.removeEventListener("wheel", dismiss);
     };

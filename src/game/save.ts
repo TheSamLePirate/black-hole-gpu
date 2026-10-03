@@ -3,7 +3,9 @@
 // resumed at the next visit, named slots), exported and imported as JSON files. The URL no longer
 // carries the scene: its six digits put a ship in low orbit a thousand kilometres off.
 
-import type { Settings } from "../settings";
+import { defaultSettings, type Settings } from "../settings";
+import { caught } from "../debug";
+import { store } from "../util/storage";
 import type { ManeuverNode } from "../maneuver";
 import type { Hold, Auto } from "../pilot";
 
@@ -38,55 +40,85 @@ export interface GameSave {
 const AUTO_KEY = "kerr.autosave";
 const SLOTS_KEY = "kerr.saves";
 
-function read<T>(key: string, fallback: T): T {
+/** A stored save, checked: a corrupted or foreign one is reported and left out, never half-loaded. */
+function stored(x: unknown, where: string): GameSave | null {
+  if (x === null || x === undefined) return null;
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-function write(key: string, v: unknown): boolean {
-  try {
-    localStorage.setItem(key, JSON.stringify(v));
-    return true;
-  } catch {
-    return false;
+    return checkSave(x);
+  } catch (e) {
+    caught(where, e);
+    return null;
   }
 }
 
 export const autosave = {
-  get: () => read<GameSave | null>(AUTO_KEY, null),
-  set: (g: GameSave) => write(AUTO_KEY, g),
-  clear: () => {
-    try {
-      localStorage.removeItem(AUTO_KEY);
-    } catch {
-      /* private mode */
-    }
-  },
+  get: () => stored(store.getJSON<unknown>(AUTO_KEY, null), "autosave"),
+  set: (g: GameSave) => store.setJSON(AUTO_KEY, g),
+  clear: () => store.remove(AUTO_KEY),
 };
 
+const allSlots = () => store.getJSON<Record<string, unknown>>(SLOTS_KEY, {});
 export const slots = {
-  list: (): GameSave[] => Object.values(read<Record<string, GameSave>>(SLOTS_KEY, {})).sort((a, b) => b.savedAt - a.savedAt),
-  get: (name: string) => read<Record<string, GameSave>>(SLOTS_KEY, {})[name] ?? null,
+  list: (): GameSave[] =>
+    Object.entries(allSlots())
+      .map(([name, g]) => stored(g, `save "${name}"`))
+      .filter((g): g is GameSave => !!g)
+      .sort((a, b) => b.savedAt - a.savedAt),
+  get: (name: string) => stored(allSlots()[name], `save "${name}"`),
   put: (g: GameSave) => {
-    const all = read<Record<string, GameSave>>(SLOTS_KEY, {});
+    const all = allSlots();
     all[g.name] = g;
-    return write(SLOTS_KEY, all);
+    return store.setJSON(SLOTS_KEY, all);
   },
   remove: (name: string) => {
-    const all = read<Record<string, GameSave>>(SLOTS_KEY, {});
+    const all = allSlots();
     delete all[name];
-    return write(SLOTS_KEY, all);
+    return store.setJSON(SLOTS_KEY, all);
   },
 };
 
-/** A save checked on the way in (a file, a link): the fields the game needs. */
-export function parseSave(json: string): GameSave {
-  const g = JSON.parse(json) as GameSave;
-  if (!g || g.v !== 1 || typeof g.time !== "number" || !g.settings || !g.ship) throw new Error("not a saved game");
+const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const isVec = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNum);
+
+/**
+ * A save checked on the way in (a file, a link, the browser's storage): the fields the game needs, of
+ * the kinds it needs — the time, the ship's modes, the ground, the plan (throws with the first fault:
+ * a corrupted save must not half-load a flight); settings of the wrong kind repaired to defaults.
+ */
+export function checkSave(x: unknown): GameSave {
+  const fault = (why: string): never => {
+    throw new Error(`not a saved game (${why})`);
+  };
+  if (!x || typeof x !== "object") fault("not an object");
+  const g = x as GameSave;
+  if (g.v !== 1) fault(`version ${String((g as { v?: unknown }).v)}`);
+  if (!isNum(g.time)) fault("time");
+  if (!g.settings || typeof g.settings !== "object") fault("settings");
+  // (a setting of the wrong kind — a NaN saved as null — is repaired to its default, and told: the
+  // flight still loads)
+  const ref = defaultSettings() as unknown as Record<string, unknown>;
+  const set = g.settings as unknown as Record<string, unknown>;
+  const repaired: string[] = [];
+  for (const [k, v] of Object.entries(set)) {
+    const want = typeof ref[k];
+    if ((want === "number" && !isNum(v)) || (want === "boolean" && typeof v !== "boolean")) {
+      set[k] = ref[k];
+      repaired.push(k);
+    }
+  }
+  if (repaired.length) caught("save", new Error(`settings repaired to their defaults: ${repaired.join(", ")}`));
+  const sh = g.ship;
+  if (!sh || typeof sh !== "object") fault("ship");
+  if (typeof sh.piloting !== "boolean" || typeof sh.hold !== "string" || typeof sh.auto !== "string") fault("ship's modes");
+  if (!isNum(sh.throttle) || sh.throttle < 0 || sh.throttle > 1) fault("throttle");
+  if (sh.landed !== null && (typeof sh.landed?.body !== "string" || !isVec(sh.landed.q))) fault("ground");
+  if (g.plan !== null && g.plan !== undefined && !Array.isArray(g.plan.nodes)) fault("plan");
   return g;
+}
+
+/** A save read from JSON text (a file, a link). */
+export function parseSave(json: string): GameSave {
+  return checkSave(JSON.parse(json));
 }
 
 /** Downloads a save as a JSON file. */

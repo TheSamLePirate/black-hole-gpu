@@ -26,6 +26,7 @@ import { plan as planJob } from "../../system/plan-client";
 import { Paint } from "./paint";
 import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./gpu";
 import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
+import { store } from "../../util/storage";
 
 export interface MapHost {
   readonly s: Settings;
@@ -157,11 +158,7 @@ export class Map3D {
 
   constructor(private host: MapHost) {
     this.legend.hidden = true;
-    try {
-      this.legend.hidden = localStorage.getItem("kerr.map-legend") !== "1";
-    } catch {
-      /* private mode */
-    }
+    this.legend.hidden = store.get("kerr.map-legend") !== "1";
     this.legend.addEventListener("pointerdown", (e) => e.stopPropagation());
     this.stage.append(this.canvas, this.crumbs, this.menu, this.legend);
     this.buildTimeline();
@@ -1566,11 +1563,7 @@ export class Map3D {
   private showLegend(on: boolean) {
     this.legend.hidden = !on;
     this.btns.legend?.classList.toggle("on", on);
-    try {
-      localStorage.setItem("kerr.map-legend", on ? "1" : "0");
-    } catch {
-      /* private mode */
-    }
+    store.set("kerr.map-legend", on ? "1" : "0");
   }
   private syncLegend(ours: boolean, ins: { r: number; t: number } | null) {
     this.btns.legend?.classList.toggle("on", !this.legend.hidden);

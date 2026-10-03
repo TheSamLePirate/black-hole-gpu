@@ -12,6 +12,7 @@ import type { AuditReport } from "../game/audit";
 import type { LogKind } from "../game/log";
 import type { Settings } from "../settings";
 import { GroundTrack } from "./groundtrack";
+import { store } from "../util/storage";
 
 type Tab = "ranger" | "place" | "target" | "time" | "saves" | "perf" | "audit" | "journal";
 const TABS: [Tab, string][] = [
@@ -102,12 +103,8 @@ export class GameToolsWindow {
     this.g.log.on(() => {
       if (this.open && this.tab === "journal") this.show("journal");
     });
-    try {
-      const t = localStorage.getItem("kerr.tools-tab") as Tab | null;
-      if (t && TABS.some(([id]) => id === t)) this.tab = t;
-    } catch {
-      /* private mode */
-    }
+    const t = store.get("kerr.tools-tab") as Tab | null;
+    if (t && TABS.some(([id]) => id === t)) this.tab = t;
   }
 
   toggle(on = !this.open) {
@@ -148,11 +145,7 @@ export class GameToolsWindow {
 
   show(tab: Tab) {
     this.tab = tab;
-    try {
-      localStorage.setItem("kerr.tools-tab", tab);
-    } catch {
-      /* private mode */
-    }
+    store.set("kerr.tools-tab", tab);
     this.tabEls.forEach((b, id) => b.classList.toggle("on", id === tab));
     this.body.replaceChildren();
     this.live = null;

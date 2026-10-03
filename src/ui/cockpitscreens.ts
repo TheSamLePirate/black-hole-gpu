@@ -21,6 +21,7 @@ import type { Settings } from "../settings";
 import { VESSELS } from "../vessels";
 import { EPOCH_DATE, M_SECONDS } from "../system/solar";
 import { C_MPS, G0, M_METRES } from "../units";
+import { caught } from "../debug";
 
 const W = 2048, H = 1024, SLOT = 512;
 /** the screens are portrait (≈ 3:4): each slot drawn in 512 × 683 units, squeezed into its square — the
@@ -102,8 +103,8 @@ export class CockpitScreens {
       g.scale(1, SLOT / SH);
       try {
         fn(g, d);
-      } catch {
-        /* (a frame between two states: the slot left as it was drawn) */
+      } catch (e) {
+        caught(`cockpit screen ${i}`, e); // (the slot left as it was drawn)
       }
       g.restore();
     });

@@ -17,6 +17,7 @@ import { alignOverSite, firstReachable, sitePasses, type Pass, type SiteTrack } 
 import { horizon, isco } from "../../physics";
 import { BODY_NAMES } from "../../targeting";
 import { AU_M, C_MPS, G0 } from "../../units";
+import { store } from "../../util/storage";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -145,18 +146,10 @@ export class FlightComputer {
         const off = !panel.classList.contains("min");
         panel.classList.toggle("min", off);
         this.root.closest(".fl-root")?.classList.toggle(`fc-${side}-off`, off);
-        try {
-          localStorage.setItem(`kerr.fc-${side}`, off ? "0" : "1");
-        } catch {
-          /* private mode */
-        }
+        store.set(`kerr.fc-${side}`, off ? "0" : "1");
       };
       panel.append(b, tab);
-      try {
-        if (localStorage.getItem(`kerr.fc-${side}`) === "0") requestAnimationFrame(() => b.click());
-      } catch {
-        /* private mode */
-      }
+      if (store.get(`kerr.fc-${side}`) === "0") requestAnimationFrame(() => b.click());
     };
     fold(this.ops, "l", "FLIGHT COMPUTER");
     fold(this.info, "r", "ANALYSIS");
