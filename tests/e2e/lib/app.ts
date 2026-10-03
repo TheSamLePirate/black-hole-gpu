@@ -54,6 +54,10 @@ export class App {
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);
+    // (offline from the world: the station's latest elements (CelesTrak) and the relief's tiles (S3)
+    // change from day to day — the app falls back on its bundled ones, the same every run)
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setBlockedURLs", { urls: ["*celestrak.org*", "*s3.amazonaws.com*"] });
     // (the first-visit hint already seen: it would sit over what the tests look at)
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("kerr.hint-seen", "1") } catch {}` });
     await app.load(o.hash ?? "");

@@ -154,6 +154,7 @@ import { cockpitHull, stationHulls, vesselHulls, type TriBVH } from "./system/co
 import { AU_M, C_MPS, DAY_S, DEG, G0, M_METRES, M_SECONDS } from "./units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "./math/vec3";
 import { caught } from "./debug";
+import { frameNow } from "./frameclock";
 
 type Cinematic = "orbit" | "dive" | "journey" | null;
 /** A low-thrust transfer in flight (see CameraController.transfer). */
@@ -3520,7 +3521,7 @@ export class CameraController {
       }
       // the guidance: the bank, every second of the fall (the site carried by the ground)
       // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)
-      const wall = performance.now() / 1000;
+      const wall = frameNow() / 1000;
       if (R.guid && R.site && wall >= R.next && !R.pending) {
         // (in the planner's worker: the next bank arrives a few frames on)
         const G = R.guid;
@@ -3909,7 +3910,7 @@ export class CameraController {
     const P = this.fcPlan();
     if (!P) return null;
     const key = P.burns.map((b) => `${b.dv.join()}@${Math.round(b.t)}`).join(";");
-    const now = performance.now();
+    const now = frameNow();
     const c = this.fcLocalPlan;
     if (c && c.key === key && now - c.at < 1000) return c.v;
     const tr = this.localTrack(P.burns, 1.2);
@@ -3998,7 +3999,7 @@ export class CameraController {
     if (!this.fcAboutHole()) return null;
     const st = this.stateNow();
     if (!st) return null;
-    const now = performance.now();
+    const now = frameNow();
     const key = `${st.E.toFixed(9)}|${st.L.toFixed(7)}|${this.s.spin}`;
     const C = this.kerrInfoCache;
     if (!C || C.key !== key || now - C.at > 1000) this.kerrInfoCache = { at: now, key, o: kerrOrbit(st, this.world()), t: st.t };
@@ -5458,7 +5459,7 @@ export class CameraController {
       // to the axis: a point on it, round the target if it stands in the way
       const S = Math.min(Math.max(along, 30), 200);
       const G = lin(g.c, 1, a, S / M_METRES);
-      const now = performance.now();
+      const now = frameNow();
       if (now - D.checked > 250) {
         D.checked = now;
         D.blocked = this.targetBlocks(D.target, g.ring, G, nav.t, g);
@@ -6307,7 +6308,7 @@ export class CameraController {
   /** The path through the nodes, from the current state (at most 3 times a second). */
   refreshPlan(force = false) {
     const P = this.plan;
-    const now = performance.now();
+    const now = frameNow();
     if (!P.nodes.length) {
       this.ourPlan = null;
       return (P.path = null);
@@ -6374,7 +6375,7 @@ export class CameraController {
         runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes: list, mouthR, accel, drag: this.dragPerMass() })
           .then((path) => {
             if (!path || (path as unknown as { error?: string }).error) return;
-            this.farPlan = { key, path, at: performance.now() };
+            this.farPlan = { key, path, at: frameNow() };
             // (still these nodes: shown at once)
             if (
               this.plan.nodes.length &&
@@ -6575,7 +6576,7 @@ export class CameraController {
       const goal = node.goal as Extract<KerrGoal, { apsis: number } | { period: number }>;
       {
         const G = this.goalRem;
-        const tw = performance.now();
+        const tw = frameNow();
         if (!G || G.node !== node || tw - G.at > 250) {
           const st = this.stateNow();
           const guess = G && G.node === node ? Math.max(G.rem - (this.nodeDone - G.done), 0) : left;
@@ -7962,7 +7963,7 @@ export class CameraController {
    * second at most. Null: no autopilot.
    */
   hubInfo(): HubInfo | null {
-    const now = performance.now();
+    const now = frameNow();
     if (this.hubCache && now - this.hubCache.at < 250) return this.hubCache.v;
     let v: HubInfo | null = null;
     try {
@@ -8290,7 +8291,7 @@ export class CameraController {
     }
     if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
     const R = this.ourCirc;
-    R.since ??= performance.now();
+    R.since ??= frameNow();
     // the trim: the circular velocity where the craft is — horizontal, in its plane —, no height held
     let n = cross(Rh, rel);
     if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
@@ -8299,7 +8300,7 @@ export class CameraController {
     const vc = Math.sqrt(Tg.mass / D);
     const err = Math.hypot(...sub3(rel, lin(th, vc, th, 0))) * C;
     // (done: within 0.2 m/s — or, the trim's minute out, within 2)
-    const age = (performance.now() - R.since) / 1000;
+    const age = (frameNow() - R.since) / 1000;
     if (err < 0.2 || (age > 60 && err < 2)) {
       const fc = this.fcContext();
       const el = fc ? kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]) : null;
@@ -8775,7 +8776,7 @@ export class CameraController {
    * recomputed at most 4 times a second. Near the mouth the path is not predicted.
    */
   predictPath() {
-    const now = performance.now();
+    const now = frameNow();
     if (!this.gravity) return (this.path = null);
     const s = this.s;
     // same state (e.g. time paused): same path object, so the renderer keeps converging
@@ -8882,7 +8883,7 @@ export class CameraController {
    * it and across it [m], the glide path asked and flown (the approach's, when it flies).
    */
   runwayView(): RunwayView | null {
-    const now = performance.now();
+    const now = frameNow();
     if (this.runwayCache && now - this.runwayCache.at < 100) return this.runwayCache.v;
     const v = this.runwayCompute();
     this.runwayCache = { at: now, v };
@@ -8955,7 +8956,7 @@ export class CameraController {
    * where the ship goes about the world the eye sees). Recomputed ten times a second at most.
    */
   futureView(at: number[] = []): FutureView | null {
-    const now = performance.now();
+    const now = frameNow();
     const key = at.join();
     if (this.futureCache && now - this.futureCache.at < 100 && this.futureCache.key === key) return this.futureCache.v;
     const v = this.futureCompute(at);

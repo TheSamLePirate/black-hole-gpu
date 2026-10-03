@@ -73,6 +73,8 @@ import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 import { store } from "./util/storage";
 import { caught, DEV } from "./debug";
+import { advanceFrameClock } from "./frameclock";
+import { dateNow, setDateNow } from "./util/now";
 import { KerrBench, BENCH_SCENES } from "./bench/runner";
 import { installVramHook, vram } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
@@ -446,7 +448,7 @@ async function main() {
     } else if (pose) {
       // (the station: at the real time now, unless the scene has its own)
       const now = pose === "iss" || pose === "fleet";
-      const t = time ?? (now ? gameTimeOf(Date.now()) : sim.time);
+      const t = time ?? (now ? gameTimeOf(dateNow()) : sim.time);
       if (now && time === undefined) sim.setTime(t);
       const d =
         pose === "earthGround"
@@ -1890,7 +1892,10 @@ async function main() {
       },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => (frozen = on),
+      /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
+      setDate: setDateNow,
       step: (dt: number) => {
+        advanceFrameClock(dt * 1000);
         sim.step(dt);
         sim.applyRender(camera.piloting && !camera.cinematic ? camera.flightInfo() : null);
         sim.timeDirty = true;
@@ -1920,6 +1925,8 @@ async function main() {
     requestAnimationFrame(loop);
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
+    // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
+    if (!frozen) advanceFrameClock(dt * 1000);
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
     loopIv.push(now - last);
     if (loopIv.length > 31) loopIv.shift();
