@@ -1742,21 +1742,23 @@ export class CameraController {
     const m = mouth(s);
     const p = repPose(s);
     const right = cross(p.fwd, p.up);
-    let v = p.vel;
-    if (accel > 0) {
-      // (acc is in the camera frame's rep components here, like p.fwd)
+    // (the thrust over a time dt: γβ changed along the thrust's direction — acc is in the camera
+    // frame's rep components here, like p.fwd)
+    const thrust = (dt: number) => {
+      const v = p.vel;
+      if (!(accel > 0)) return v;
       const d = acc ? lin(acc, 1 / accel, acc, 0) : normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
       const g = 1 / Math.sqrt(Math.max(1 - (v[0] ** 2 + v[1] ** 2 + v[2] ** 2), 1e-9));
-      const U = lin(v, g, d, accel * simDt);
-      v = lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
-    }
+      const U = lin(v, g, d, accel * dt);
+      return lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);
+    };
     // our universe: the Newtonian pull of the solar system, in sub-steps short against the time it
     // takes to fall towards its nearest body (a warp beyond them: the ship's clock lags the request)
     const t0 = this.nowTime();
     const ours = p.l < -m.w.a && s.system === "gargantua";
     // (our side: the home frame's Cartesian flight — the planner's — down to 12 throat radii, where
     // the Dneg space is flat to 0.4 %; closer, along the metric's geodesics, through the throat)
-    if (ours && homeOfPose(m.w, p).r > 12 * m.w.rho) return this.flyHome(p, v, simDt, t0, m.w, !!acc);
+    if (ours && homeOfPose(m.w, p).r > 12 * m.w.rho) return this.flyHome(p, thrust(simDt), simDt, t0, m.w, !!acc);
     let steps = 1;
     let span = simDt;
     if (ours) {
@@ -1764,6 +1766,8 @@ export class CameraController {
       span = Math.min(simDt, this.subCap * 0.01 * tDyn);
       steps = Math.min(Math.max(Math.ceil(span / (0.01 * tDyn)), 1), this.subCap);
     }
+    // (the thrust of the time flown, not of the frame asked: a capped warp gave free Δv)
+    let v = thrust(span);
     let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
     const dt = span / steps;
     for (let i = 0; i < steps; i++) {
@@ -2009,6 +2013,9 @@ export class CameraController {
       const sp = Math.hypot(...V);
       if (sp > 0.999) V = lin(V, 0.999 / sp, V, 0);
     }
+    // (the frame's thrust went in whole before the fall; when the sub-steps ran out short of the
+    // frame — the ship's clock lagging a warp — only the part flown counts, as for the propellant)
+    if (t < tEnd - 1e-12 && !touched && !this.ourLanded && !g.inside) V = lin(V, 1, dvT, (t - t0) / simDt - 1);
     const speed = Math.hypot(...V);
     this.properTime += (t - t0) * Math.sqrt(Math.max(1 - speed * speed, 0));
     setHomePose(s, X, unitV(fwd), unitV(up), V);

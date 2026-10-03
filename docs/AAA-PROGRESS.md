@@ -26,8 +26,8 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 | # | Étape | Statut | Commit |
 |---|---|---|---|
 | 0.1 | Build cohérent (`bun run build` produit ktx-worker et le WASM) ; CI : job `verify` (typecheck + tests + build, rapport junit, cache bun) dont dépend le déploiement, contrôles aussi sur les PR ; tests lents du planificateur à 180 s ; assertions de durée murale désactivées sur la CI ; test tautologique remplacé | fait | `cc6f00d` |
-| 0.2 | Bugs de gameplay : **pile d'Échap** (`src/ui/keys.ts`, Caméra, Ciel, aide) : fermer un panneau ne coupe plus le maintien ni l'autopilote ; « ? » (⇧/) ouvre l'aide en QWERTY ; `isTyping` limité aux champs texte (curseurs et cases ne bloquent plus le vol) et focus rendu après un clic sur un curseur ; aides et astuces à jour. **Vérifié dans l'app** (vraies touches) | fait | (ce commit) |
-| 0.3 | Physique : accélération du repère « home » (+ test éphéméride = modèle de forces) ; Δv gratuit quand les sous-pas sont plafonnés | à faire | |
+| 0.2 | Bugs de gameplay : **pile d'Échap** (`src/ui/keys.ts`, Caméra, Ciel, aide) : fermer un panneau ne coupe plus le maintien ni l'autopilote ; « ? » (⇧/) ouvre l'aide en QWERTY ; `isTyping` limité aux champs texte (curseurs et cases ne bloquent plus le vol) et focus rendu après un clic sur un curseur ; aides et astuces à jour. **Vérifié dans l'app** (vraies touches) | fait | `9a20bcf` |
+| 0.3 | Physique : **accélération du repère « home »** complète (Saturne tiré par tous les corps, Titan compris, et chute du Soleil autour du barycentre) : l'écart éphéméride / modèle de forces passe de 5,5e-6 à ≈ 5e-7 m/s², et un test le verrouille ; **Δv gratuit** supprimé (poussée au prorata du temps réellement volé, dans les deux intégrateurs). Poussée vérifiée en jeu, à pas fixe (2 g, identique avant et après) | fait | (ce commit) |
 | 0.4 | `src/units.ts` (constantes uniques) et `src/math/vec3.ts` ; constantes divergentes corrigées | à faire | |
 | 0.5 | Robustesse : `safeStorage`, `assert()` en dev, fin des exceptions avalées à chaque frame, sauvegardes validées | à faire | |
 | 0.6 | TypeScript plus strict : `noUncheckedIndexedAccess`, `noUnusedLocals` | à faire | |
@@ -47,3 +47,4 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 - **03/10/2026** : audit commité (`7328d0d`) ; démarrage de la phase 0.
 - 0.1 `cc6f00d` : CI `verify` avant déploiement, build local cohérent, tests stabilisés.
 - 0.2 : la pile d'Échap, testée en vol dans Artemis : maintien prograde, panneau Caméra ouvert, Échap ferme le panneau et le maintien reste ; un second Échap le relâche.
+- 0.3 : bug de repère P1 corrigé (10× moins d'écart) ; Δv gratuit P4 corrigé. Leçon : les onglets masqués du volet ralentissent la boucle, donc mesurer la physique avec `__bh.freeze` + `__bh.step`.

@@ -142,3 +142,21 @@ test("the solar system holds and turns: a century of orbits around the Sun, true
     expect(a[0] * b[1] - a[1] * b[0]).toBeGreaterThan(0);
   }
 });
+
+test("the home frame's forces move the bodies as the ephemerides do (the frame's own acceleration)", () => {
+  // a body's acceleration in the home frame, by finite differences of its ephemeris, against the pull
+  // gravityHome gives at its centre: the frame's acceleration must be the mouth's true one (Saturn's
+  // centre, Titan's tug and the Sun's own fall about the barycentre included)
+  const MS2 = 1.476625e11 / M_SECONDS ** 2; // [M/M²] → [m/s²]
+  const h = 3600 / M_SECONDS;
+  for (const t of [0, 3e5, 2e6]) {
+    for (const id of ["earth", "mars", "jupiter", "sun"]) {
+      const p = (k: number) => solarState(id, t + k * h).pos;
+      const p0 = p(0), pm = p(-1), pp = p(1);
+      const fd = [0, 1, 2].map((i) => (pp[i]! - 2 * p0[i]! + pm[i]!) / h ** 2);
+      const g = gravityHome(p0, t).acc;
+      const err = Math.hypot(...[0, 1, 2].map((i) => fd[i]! - g[i]!)) * MS2;
+      expect(err).toBeLessThan(1.5e-6);
+    }
+  }
+});

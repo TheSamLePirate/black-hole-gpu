@@ -410,13 +410,33 @@ export function sunShare(obs: Vec3, t: number): number {
   return diskShare(Math.asin(Math.min(SOLAR_BODIES[0]!.radius / ds, 1)), Math.asin(Math.min(solarBody("moon")!.radius / dm, 1)), d);
 }
 
-/** The home frame's own acceleration (our mouth falls around the Sun like Saturn) [M/M²]. */
+/**
+ * The home frame's own acceleration [M/M²]: our mouth is Saturn's centre turned about the Sun (same
+ * distance, 0.7 AU behind), so it falls as Saturn's centre does — pulled by the Sun, the planets and
+ * Saturn's own moons (Titan's tug) — turned the same way; and the Sun's frame itself falls about the
+ * barycentre (Jupiter's pull on the Sun): a = R (a_Saturn − a_Sun) + a_Sun. With the Sun's pull alone
+ * the ship and the bodies drifted apart by ~6·10⁻⁶ m/s² (≈ 100 km over a lunar transfer).
+ */
 export function mouthAccel(t: number): Vec3 {
   const d = daysOf(t);
-  const p = mouthHelio(d).pos.map((x) => x * toM) as Vec3;
-  const r = Math.hypot(...p);
-  const k = -SOLAR_BODIES[0]!.mass / r ** 3;
-  return [k * p[0], k * p[1], k * p[2]];
+  const sat = helio(solarBody("saturn")!, d).pos;
+  const aSat: Vec3 = [0, 0, 0], aSun: Vec3 = [0, 0, 0];
+  for (const b of SOLAR_BODIES) {
+    const P = helio(b, d).pos;
+    if (b.id !== "saturn") {
+      const dx = (P[0] - sat[0]) * toM, dy = (P[1] - sat[1]) * toM, dz = (P[2] - sat[2]) * toM;
+      const k = b.mass / Math.hypot(dx, dy, dz) ** 3;
+      aSat[0] += k * dx, aSat[1] += k * dy, aSat[2] += k * dz;
+    }
+    if (b.id !== "sun") {
+      const dx = P[0] * toM, dy = P[1] * toM, dz = P[2] * toM;
+      const k = b.mass / Math.hypot(dx, dy, dz) ** 3;
+      aSun[0] += k * dx, aSun[1] += k * dy, aSun[2] += k * dz;
+    }
+  }
+  const c = Math.cos(-MOUTH_LAG), sn = Math.sin(-MOUTH_LAG);
+  const x = aSat[0] - aSun[0], y = aSat[1] - aSun[1];
+  return [c * x - sn * y + aSun[0], sn * x + c * y + aSun[1], aSat[2]];
 }
 
 // ------------------------------------------------------------------------------------ turning
