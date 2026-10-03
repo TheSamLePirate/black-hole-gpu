@@ -495,26 +495,27 @@ kbd {
 
 .ld-title {
   margin: 0;
-  font-size: 30px;
-  font-weight: 500;
-  letter-spacing: 0.62em;
-  padding-left: 0.62em;
-  color: #f3eadf;
-  text-shadow: 0 0 24px rgba(255, 170, 90, 0.35);
+  font: 700 48px / 1 var(--hud-font);
+  letter-spacing: 0.4em;
+  padding-left: 0.4em;
+  color: #f3f7ff;
+  text-shadow: 0 0 34px rgba(255, 179, 92, 0.4), 0 0 2px rgba(255, 255, 255, 0.6);
 }
 
 .ld-sub {
-  margin: -2px 0 14px;
-  font-size: 12px;
-  color: var(--dim);
+  margin: 2px 0 16px;
+  font: 600 12px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--k-amber);
   text-align: center;
 }
 
 .ld-progress { width: 100%; }
 
 .ld-bar {
-  height: 3px;
-  border-radius: 3px;
+  height: 2px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
@@ -534,7 +535,7 @@ kbd {
   justify-content: space-between;
   gap: 12px;
   margin-top: 8px;
-  font-size: 12px;
+  font: 500 11.5px var(--mono);
 }
 
 .ld-stage {
@@ -550,19 +551,27 @@ kbd {
 .ld-steps {
   list-style: none;
   width: 100%;
-  margin: 8px 0 0;
-  padding: 0;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--k-line);
   display: grid;
-  gap: 5px;
+  gap: 4px;
+}
+.ld-steps::before {
+  content: "BOOT SEQUENCE";
+  margin-bottom: 2px;
+  font: var(--k-font-label);
+  letter-spacing: 0.24em;
+  color: var(--k-dim);
 }
 
 .ld-step {
   display: grid;
-  grid-template-columns: 14px 1fr auto;
+  grid-template-columns: 52px 1fr auto;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
-  color: var(--dim);
+  font: 500 11.5px var(--mono);
+  color: var(--k-dim);
   animation: ld-in 0.4s ease-out both;
 }
 
@@ -572,36 +581,38 @@ kbd {
 .ld-info { font-family: var(--mono); font-size: 11px; opacity: 0.85; }
 
 .ld-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-sizing: border-box;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  font: 600 11px var(--mono);
+  white-space: pre;
+  color: rgba(176, 196, 222, 0.4);
 }
+.ld-dot::before { content: "[    ]"; }
 
 .ld-step[data-state="active"] { color: var(--text); }
-.ld-step[data-state="active"] .ld-dot {
-  border-color: rgba(255, 179, 92, 0.25);
-  border-top-color: var(--accent);
-  animation: ld-rot 0.8s linear infinite;
-}
-.ld-step[data-state="done"] .ld-dot { border: 0; background: #7fd49a; box-shadow: 0 0 8px rgba(127, 212, 154, 0.6); }
-.ld-step[data-state="failed"] .ld-dot { border: 0; background: #ff8a80; }
+.ld-step[data-state="active"] .ld-dot { color: var(--k-amber); animation: ld-blink 0.9s steps(2) infinite; }
+.ld-step[data-state="active"] .ld-dot::before { content: "[ .. ]"; }
+.ld-step[data-state="done"] .ld-dot { color: #7fe0a0; text-shadow: 0 0 8px rgba(127, 224, 160, 0.5); }
+.ld-step[data-state="done"] .ld-dot::before { content: "[ OK ]"; }
+.ld-step[data-state="failed"] .ld-dot { color: #ff8a80; }
+.ld-step[data-state="failed"] .ld-dot::before { content: "[FAIL]"; }
+@keyframes ld-blink { 50% { opacity: 0.35; } }
 .ld-step[data-state="failed"] .ld-info { color: #ff8a80; }
 
 @keyframes ld-rot { to { transform: rotate(360deg); } }
 
 .ld-skip {
   all: unset;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 7px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 179, 92, 0.35);
-  color: var(--accent);
-  font-size: 12px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-on-edge);
+  background: var(--k-on-bg);
+  color: #fff;
+  font: 600 11px var(--hud-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   cursor: pointer;
 }
-.ld-skip:hover, .ld-skip:focus-visible { background: rgba(255, 179, 92, 0.12); }
+.ld-skip:hover, .ld-skip:focus-visible { background: rgba(111, 210, 255, 0.28); }
 .ld-skip[hidden] { display: none; }
 
 .ld-tip {
