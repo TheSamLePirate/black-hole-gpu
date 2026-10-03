@@ -13,6 +13,10 @@ import { COL, FONT, MONO, marker } from "../hudkit";
 import { C_MPS, G0, M_METRES, M_SECONDS } from "../../units";
 import { dot } from "../../math/vec3";
 import { blinkOn } from "../clock";
+import type { HudItem } from "./declutter";
+
+/** The phase lets this element show (hud/declutter.ts — none given: all). */
+const on = (F: { show?: Record<HudItem, boolean> }, k: HudItem) => !F.show || F.show[k];
 
 type V3 = [number, number, number];
 
@@ -98,6 +102,8 @@ export interface SymFrame {
   runway?: RunwayView | null;
   /** the scene's time [s] (the energy chevron's rate is taken in it) */
   simS?: number;
+  /** what the flight's phase lets the HUD draw (hud/declutter.ts; absent: everything) */
+  show?: Record<HudItem, boolean>;
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
    *  scale left to the HUD's panels (set here) */
   compact?: boolean;
@@ -162,7 +168,7 @@ export function drawSymbology(F: SymFrame) {
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
 
   // ---- the horizon and the pitch ladder (about the local vertical)
-  if (up && pilotView && s.hudHorizon) {
+  if (up && pilotView && s.hudHorizon && on(F, "horizon")) {
     // (the rungs centred on the view's own bearing — the ladder where the eye looks)
     let h0 = comb([0, 0, 1], 1, up, -up[2]);
     if (Math.hypot(...h0) < 0.05) h0 = comb(nose, 1, up, -dot(nose, up));
@@ -245,7 +251,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- the heading tape (the world's north), at the top
-  if (up && north && pilotView && s.hudHeading && !F.compact) {
+  if (up && north && pilotView && s.hudHeading && !F.compact && on(F, "heading")) {
     const east = norm(crossW(north, up));
     const bearing = (d: V3 | null | undefined) => {
       if (!d) return null;
@@ -335,7 +341,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- the bank scale: fixed to the craft, its pointer to the sky's up
-  if (up && pilotView && s.hudBank && !F.compact) {
+  if (up && pilotView && s.hudBank && !F.compact && on(F, "bank")) {
     const X: V3 = [S[0]![0]!, S[1]![0]!, S[2]![0]!],
       Y: V3 = [S[0]![1]!, S[1]![1]!, S[2]![1]!];
     // (> 0 banked right: the left wing — the ship's +x — high)
@@ -389,24 +395,25 @@ export function drawSymbology(F: SymFrame) {
   if (F.future && F.density < 2) drawFuture(F, F.future, pr, stroke, text, inside);
 
   // ---- approach and landing: the runway, the vertical landing's scope and cues
-  if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
-  if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2 && !F.compact)
+  if (F.runway && s.hudRunway && on(F, "runway") && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
+  if (i.surface && !i.surface.landed && s.hudHover && on(F, "hover") && !F.outside && F.density < 2 && !F.compact)
     drawHover(F, i.surface, up, pr, stroke, text, inside);
 
   // ---- near Gargantua: the relativity box; the way to the hole named
-  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r))
+  if (i.region === "hole" && s.hudRelativity && on(F, "relativity") && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r))
     drawRelativity(F, pr, text, inside);
 
   // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
-  if (i.plan && i.plan.nodes.length && s.hudBurn && !F.outside && F.density < 2) drawBurn(F, pr, stroke, text, inside, nose);
-  if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && F.density < 2) drawDock(F, pr, stroke, text, inside);
+  if (i.plan && i.plan.nodes.length && s.hudBurn && on(F, "burn") && !F.outside && F.density < 2)
+    drawBurn(F, pr, stroke, text, inside, nose);
+  if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
   if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, north, fpx);
 
   // ---- the orbital markers the view lacked: radial, normal
-  if (s.hudMarkers) {
+  if (s.hudMarkers && on(F, "markers")) {
     const r = 11 * dpr;
     // (the target: the lock's ring, name, distance and edge arrow already — targethud.ts)
     for (const k of ["radialOut", "radialIn", "normal", "antinormal"] as const) {
@@ -420,7 +427,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- what leaves the screen: an arrow at its edge, its glyph beside it
-  if (s.hudEdge) {
+  if (s.hudEdge && on(F, "edge")) {
     const m = 46 * dpr;
     // (the retrograde too when the prograde is off the screen as well — turned side-on, as before a
     // deorbit burn: the way to either end of the flight path)
@@ -526,7 +533,7 @@ function drawAir(
   const best = A.bestA ?? null;
 
   // ---- the angle of attack
-  if (s.hudAoA && stall) {
+  if (s.hudAoA && stall && on(F, "airData")) {
     const w = (16 * dpr) / fpx;
     const seg = (a: number, w0: number, w1: number) => [pr(along(a, w0 * w)), pr(along(a, w1 * w))] as const;
     // the best lift-to-drag band: a bracket on the left
@@ -568,7 +575,7 @@ function drawAir(
   }
 
   // ---- the energy chevron: the speed's rate as a flight path angle
-  if (s.hudEnergy && up && Number.isFinite(A.speed)) {
+  if (s.hudEnergy && up && Number.isFinite(A.speed) && on(F, "airData")) {
     // (in the scene's time: a warp does not multiply the rate, a pause holds it)
     const now = F.simS ?? performance.now() / 1000;
     if (now < energy.t) energy.v = Number.NaN; // (time turned back: a fresh start)
@@ -603,7 +610,7 @@ function drawAir(
   }
 
   // ---- the sideslip: a ball under the flight path
-  if (s.hudAoA && Number.isFinite(A.beta)) {
+  if (s.hudAoA && Number.isFinite(A.beta) && on(F, "airData")) {
     const y = fp[1] + 2.4 * r,
       half = 22 * dpr;
     const b = Math.max(-1, Math.min(1, (A.beta! * 180) / Math.PI / 8));
@@ -626,7 +633,7 @@ function drawAir(
   }
 
   // ---- the load, STALL
-  if (s.hudEnergy && Number.isFinite(A.g)) {
+  if (s.hudEnergy && Number.isFinite(A.g) && on(F, "airData")) {
     const g = A.g!,
       k = g / (A.gMax || 9);
     if (Math.abs(g - 1) > 0.25 || k > 0.6)
@@ -711,7 +718,7 @@ function drawFuture(
   const A = i.air;
   if (A && A.inAir && A.q > 1000 && A.mode === "plane") return;
   // ---- the path
-  if (s.hudPath && !tube && fu.pts.length > 1) {
+  if (s.hudPath && !tube && fu.pts.length > 1 && on(F, "path")) {
     const runs: [number, number][][] = [];
     let run: [number, number][] = [];
     for (const q of fu.pts) {
@@ -728,7 +735,7 @@ function drawFuture(
       stroke(() => r.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(90, 220, 255, 0.7)", 1.8, [10, 6]);
   }
   // ---- the places to come
-  if (s.hudFuture) {
+  if (s.hudFuture && on(F, "future")) {
     for (const m of fu.marks) {
       if (m.hid) continue;
       const p = pr(m.d);
@@ -760,7 +767,7 @@ function drawFuture(
   }
   // ---- the impact, the entry
   // (on the ground — landed, rolling — there is no impact to come: the prediction starts from it)
-  if (s.hudImpact && fu.impact && !i.surface?.landed) {
+  if (s.hudImpact && fu.impact && !i.surface?.landed && on(F, "impact")) {
     const marks = [fu.impact, ...(fu.impact.ground ? [fu.impact.ground] : [])];
     for (const m of marks) {
       const ground = m.kind === "ground",

@@ -42,6 +42,7 @@ import { el as h } from "./kit";
 import { DEV_TOOLS } from "../debug";
 import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
+import { hudShown } from "./hud/declutter";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -1680,6 +1681,8 @@ export class FlightHud {
       i,
       density: this.density,
       simS: this.lastTime * M_SECONDS,
+      // (what the flight's phase lets the HUD draw — hud/declutter.ts)
+      show: hudShown(this.phase),
       future: fut,
       quarter,
       runway: this.runway?.() ?? null,

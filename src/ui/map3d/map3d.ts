@@ -2215,7 +2215,8 @@ export class Map3D {
       this.crossings(ctx, pts, P, pn, dpr, labels);
       apsides(free, 0, "");
       hits(free);
-      if (free.fate === "impact") {
+      // (landed, the free path's "impact" is the ground the craft stands on: nothing to warn of)
+      if (free.fate === "impact" && !i.landed && !i.surface?.landed) {
         const q = P(pts[pts.length - 1]!);
         if (q.ok) {
           this.cross(q.x, q.y, 5 * dpr, RED, 2 * dpr);
