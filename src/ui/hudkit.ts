@@ -47,11 +47,11 @@ export const COL: Record<string, string> = {
   radialIn: "#5fd3ff",
   normal: "#e07bff",
   antinormal: "#e07bff",
-  target: "#ff8a5c",
+  target: "#ff6ad5",
   burn: "#4d8dff",
-  tgtPrograde: "#ff8a5c",
-  tgtRetrograde: "#ff8a5c",
-  antiTarget: "#ff8a5c",
+  tgtPrograde: "#ff6ad5",
+  tgtRetrograde: "#ff6ad5",
+  antiTarget: "#ff6ad5",
   maneuver: "#4d8dff",
   dock: "#5fffd0",
 };
@@ -71,6 +71,42 @@ export function marker(ctx: CanvasRenderingContext2D, kind: string, x: number, y
     ctx.moveTo(x + r * 0.1, y);
     ctx.arc(x, y, r * 0.1, 0, 2 * Math.PI);
     ctx.stroke();
+    return;
+  }
+  if (kind === "radialOut" || kind === "radialIn") {
+    // (the radial pair: a circle, four spokes on the diagonals — outwards, or reaching in)
+    ctx.arc(x, y, r * 0.55, 0, 2 * Math.PI);
+    for (const a of [0.25, 0.75, 1.25, 1.75]) {
+      const c = Math.cos(a * Math.PI),
+        sn = Math.sin(a * Math.PI);
+      const [r0, r1] = kind === "radialOut" ? [0.55, 1.15] : [0.1, 0.55];
+      ctx.moveTo(x + c * r * r0, y + sn * r * r0);
+      ctx.lineTo(x + c * r * r1, y + sn * r * r1);
+    }
+    ctx.stroke();
+    return;
+  }
+  if (kind === "normal" || kind === "antinormal") {
+    // (the normal pair: a triangle, apex up — or down, three ticks from its corners —, a dot inside)
+    const k = kind === "normal" ? 1 : -1;
+    const pts: [number, number][] = [
+      [x, y - k * r * 0.8],
+      [x + r * 0.7, y + k * r * 0.45],
+      [x - r * 0.7, y + k * r * 0.45],
+    ];
+    ctx.moveTo(pts[0]![0], pts[0]![1]);
+    ctx.lineTo(pts[1]![0], pts[1]![1]);
+    ctx.lineTo(pts[2]![0], pts[2]![1]);
+    ctx.closePath();
+    if (kind === "antinormal")
+      for (const [px, py] of pts) {
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + (px - x) * 0.5, py + (py - y) * 0.5);
+      }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.13, 0, 2 * Math.PI);
+    ctx.fill();
     return;
   }
   if (kind === "prograde") {

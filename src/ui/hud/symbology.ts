@@ -468,10 +468,10 @@ export function drawSymbology(F: SymFrame) {
 
 const glyph = (k: string) =>
   ({
-    radialOut: "prograde",
-    radialIn: "retrograde",
-    normal: "prograde",
-    antinormal: "retrograde",
+    radialOut: "radialOut",
+    radialIn: "radialIn",
+    normal: "normal",
+    antinormal: "antinormal",
     target: "target",
     maneuver: "burn",
     burn: "burn",

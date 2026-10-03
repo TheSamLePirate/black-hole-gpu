@@ -139,10 +139,11 @@ const AUTO_KEYS: [Auto, string, string][] = [
 const GLYPH: Record<string, string> = {
   prograde: "prograde",
   retrograde: "retrograde",
-  radialOut: "prograde",
-  radialIn: "retrograde",
-  normal: "prograde",
-  antinormal: "retrograde",
+  // (each pair its own shape — the colour alone does not tell them apart for every eye)
+  radialOut: "radialOut",
+  radialIn: "radialIn",
+  normal: "normal",
+  antinormal: "antinormal",
   target: "target",
   burn: "burn",
   tgtPrograde: "prograde",
