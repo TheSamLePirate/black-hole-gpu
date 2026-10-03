@@ -3009,6 +3009,72 @@ export class FlightHud {
       }
     }
     ctx.putImageData(img, 0, 0);
+    // the ball's figures: the pitch lines' degrees on the vertical through its centre, the cardinal
+    // points on the horizon, the mode its markers are taken in (ORB · SRF · TGT · KERR)
+    const north = i.dirs.north ? body(i.dirs.north) : null;
+    ctx.font = `600 ${Math.round(10 * dpr)}px ${MONO}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = (d: V3, t: string, col: string, dx = 0) => {
+      if (d[2] < 0.2) return;
+      const x = C0 - d[0] * R0 + dx,
+        y = C0 - d[1] * R0;
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.strokeText(t, x, y);
+      ctx.fillStyle = col;
+      ctx.fillText(t, x, y);
+    };
+    if (up) {
+      // (the forward way along the ground: the ball's centre brought down to the horizon)
+      const f0: V3 = [-up[0] * up[2], -up[1] * up[2], 1 - up[2] * up[2]];
+      const fl = Math.hypot(...f0);
+      if (fl > 1e-3) {
+        const h: V3 = [f0[0] / fl, f0[1] / fl, f0[2] / fl];
+        for (const deg of [-60, -30, 30, 60]) {
+          const a = (deg * Math.PI) / 180;
+          const d: V3 = [h[0] * Math.cos(a) + up[0] * Math.sin(a), h[1] * Math.cos(a) + up[1] * Math.sin(a), h[2] * Math.cos(a) + up[2] * Math.sin(a)];
+          // (beside the vertical: the nose's mark and the mode sit on it)
+          label(d, String(Math.abs(deg)), "rgba(235, 240, 250, 0.9)", 16 * dpr);
+        }
+      }
+      if (north) {
+        const nh: V3 = [north[0] - up[0] * (north[0] * up[0] + north[1] * up[1] + north[2] * up[2]), 0, 0];
+        const dn = north[0] * up[0] + north[1] * up[1] + north[2] * up[2];
+        nh[1] = north[1] - up[1] * dn;
+        nh[2] = north[2] - up[2] * dn;
+        const nl = Math.hypot(...nh);
+        if (nl > 1e-3) {
+          const n: V3 = [nh[0] / nl, nh[1] / nl, nh[2] / nl];
+          const e: V3 = [n[1] * up[2] - n[2] * up[1], n[2] * up[0] - n[0] * up[2], n[0] * up[1] - n[1] * up[0]];
+          for (const [d, t] of [
+            [n, "N"],
+            [e, "E"],
+            [[-n[0], -n[1], -n[2]] as V3, "S"],
+            [[-e[0], -e[1], -e[2]] as V3, "W"],
+          ] as [V3, string][])
+            label(d, t, t === "N" ? "#ffc85a" : "rgba(235, 240, 250, 0.95)");
+        }
+      }
+    }
+    {
+      const ph = this.phase;
+      const mode =
+        i.speedMode === "target"
+          ? "TGT"
+          : i.region === "hole"
+            ? "KERR"
+            : ph?.mode === "landed" || (ph?.stage && ["air", "entry", "approach", "ground"].includes(ph.stage))
+              ? "SRF"
+              : "ORB";
+      const y = C0 - R0 * 0.62;
+      ctx.font = `700 ${Math.round(10 * dpr)}px ${FONT}`;
+      const w = ctx.measureText(mode).width + 10 * dpr;
+      ctx.fillStyle = "rgba(4, 10, 18, 0.7)";
+      ctx.fillRect(C0 - w / 2, y - 7 * dpr, w, 14 * dpr);
+      ctx.fillStyle = mode === "TGT" ? COL.target! : "#7fe0ff";
+      ctx.fillText(mode, C0, y + 0.5 * dpr);
+    }
     const Ra = R0 + 9 * dpr;
     const arcGauge = (a0: number, a1: number, t: number, c0: string, c1: string, ccw: boolean) => {
       ctx.lineCap = "butt";
@@ -3051,7 +3117,7 @@ export class FlightHud {
     if (R) {
       R.thr.textContent = `${Math.round(t * 100)}%${i.precision ? " FINE" : ""}`;
       R.g.textContent = i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g";
-      R.eng.textContent = `${i.engine.kind === "crew" ? "CREW" : "CINEMA"} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}%`}` : ""}`;
+      R.eng.textContent = `${i.engine.kind === "crew" ? "CREW" : "CINEMA"} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}% · Δv ${fmtDvLeft(fu.dvLeft)}`}` : ""}`;
       R.eng.classList.toggle("hot", !!fu && (fu.empty || fu.fraction < 0.15));
     }
     // rotation rates: short bars (pitch right side, yaw bottom)
@@ -3252,6 +3318,12 @@ function glyphSvg(kind: string, col: string) {
   p.setAttribute("stroke-width", "2");
   svg.append(p);
   return svg;
+}
+
+/** The Δv left in the tank (c) in m/s, km/s — or c, past a hundredth of it. */
+function fmtDvLeft(c: number) {
+  const v = c * 2.99792458e8;
+  return c >= 0.01 ? `${c.toFixed(2)} c` : v >= 1e4 ? `${(v / 1e3).toFixed(1)} km/s` : `${Math.round(v)} m/s`;
 }
 
 function fmtG(g: number) {
