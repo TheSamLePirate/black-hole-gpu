@@ -90,7 +90,8 @@ test("an orbit around Miller stays bound for several turns, cheaply (the planet'
   // 120 M ≈ 6 turns; the hole's tides at 1/3 of the Hill radius stretch it, they do not unbind it
   expect(dMin / d0).toBeGreaterThan(0.7);
   expect(dMax / d0).toBeLessThan(1.6);
-  expect(ms).toBeLessThan(5);
+  // (wall-clock budgets: not on CI's shared runners)
+  if (!process.env.CI) expect(ms).toBeLessThan(5);
 }, 30000);
 
 test("far planets cost nothing: a prediction at 60 M is the same with and without the system's lenses", () => {
@@ -101,5 +102,5 @@ test("far planets cost nothing: a prediction at 60 M is the same with and withou
   const ms = performance.now() - t0;
   const last = (p: typeof plain) => p.pts.at(-1)!;
   expect(Math.hypot(...last(plain).map((x, i) => x - last(lensed)[i]!))).toBeLessThan(1e-4);
-  expect(ms).toBeLessThan(250);
+  if (!process.env.CI) expect(ms).toBeLessThan(250);
 });

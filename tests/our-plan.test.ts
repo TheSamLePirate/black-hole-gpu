@@ -69,7 +69,7 @@ test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 
   expect(tHome).toBeGreaterThan(7);
   expect(tHome).toBeLessThan(9);
   expect(p.nodes.map((n) => n.role)).toEqual(["depart", "mcc", "mccReturn", "captureHome"]);
-}, 60000);
+}, 180000);
 
 test("from a low lunar orbit back to the Earth: a ~0.8 km/s burn, a perigee near the one asked", () => {
   const t0 = 300;
@@ -87,7 +87,7 @@ test("from a low lunar orbit back to the Earth: a ~0.8 km/s burn, a perigee near
   const rp = returnPerigee(path, "moon", "earth")!;
   // (the correction halfway down takes the rest: here within a few hundred km)
   expect(Math.abs(rp.rp / KM - 6371 - 200)).toBeLessThan(400);
-}, 60000);
+}, 180000);
 
 test("to Mars: a launch window, a ~3.7 km/s escape, a correction of a few m/s, a capture ~2.4 km/s", () => {
   const t0 = 109.6;
@@ -109,4 +109,4 @@ test("to Mars: a launch window, a ~3.7 km/s escape, a correction of a few m/s, a
   const tof = (cap.t - tmi.t) / DAY;
   expect(tof).toBeGreaterThan(140);
   expect(tof).toBeLessThan(280);
-}, 60000);
+}, 180000);

@@ -68,7 +68,7 @@ test("hypersonic entry at 40°: L/D ≈ 1, Shuttle-like heating, its shield belo
   expect(Teq).toBeLessThan(R.shield!.tMax);
   // radiation: nothing at 7 km/s, much at 11 km/s (a lunar return)
   const fast = airAt(earth, 65e3);
-  expect(heatFlux(fast, 11000, 2) / heatFlux(fast, 11000, 2)).toBe(1);
+  expect(heatFlux(fast, 7000, 2) / (1.7415e-4 * Math.sqrt(fast.rho / 2) * 7000 ** 3)).toBeCloseTo(1, 6);
   const conv = 1.7415e-4 * Math.sqrt(fast.rho / 2) * 11000 ** 3;
   expect(heatFlux(fast, 11000, 2)).toBeGreaterThan(conv * 1.05);
 });

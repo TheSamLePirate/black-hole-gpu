@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "bun --hot server.ts",
     "start": "bun server.ts",
-    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser",
+    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser && bun build ./src/system/ktx-worker.ts --outfile dist/ktx-worker.js --minify --target browser && cp vendor/basis/basis_transcoder.wasm dist/basis_transcoder.wasm",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:pages": "bun scripts/build-pages.ts",
