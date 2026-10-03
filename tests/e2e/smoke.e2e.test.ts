@@ -179,6 +179,28 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.waitFor(`!document.querySelector("[data-alert=fuel-empty]")`, 3000);
   });
 
+  test("the controls screen: SAS moved onto V (swapping with the next view), flown so, then reset", async () => {
+    await app.press("Escape");
+    await app.click("[data-testid=pause-controls]");
+    await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
+    await app.click('[data-testid="bind-flight:sas::KeyT"]');
+    await app.press("KeyV");
+    expect(await app.js<string>(`document.querySelector('[data-testid="bind-flight:sas::KeyT"]').textContent`)).toMatch(/^V$/);
+    await app.press("Escape"); // (back to the pause menu)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause]")`);
+    await app.press("Escape"); // (resumed)
+    const sas = await app.js<boolean>("__bh.camera.pilot.sas");
+    await app.press("KeyV");
+    expect(await app.js<boolean>("__bh.camera.pilot.sas")).toBe(!sas);
+    await app.press("KeyV"); // (as it was)
+    await app.press("Escape");
+    await app.click("[data-testid=pause-controls]");
+    await app.click("[data-testid=controls-reset]");
+    expect(await app.js<string>(`document.querySelector('[data-testid="bind-flight:sas::KeyT"]').textContent`)).toMatch(/^T$/);
+    await app.press("Escape");
+    await app.press("Escape");
+  });
+
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
     await app.waitFor(`!!document.querySelector("[data-testid=help] [role=dialog]")`);

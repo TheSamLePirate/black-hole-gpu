@@ -3,10 +3,12 @@ import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
 import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
-import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
+import { CameraController, isTyping } from "./controls";
+import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { PauseMenu } from "./ui/pause";
+import { ControlsScreen } from "./ui/controls-screen";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { KeyHints } from "./ui/keyhints";
@@ -1270,6 +1272,12 @@ async function main() {
     if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     if (camera.cinematic) camera.setCinematic(null);
   };
+  // the controls screen (ui/controls-screen.ts): from the pause menu, back to it
+  const controlsScreen = new ControlsScreen({
+    help: () => actions["btn-help"]!(),
+    back: () => (pauseMenu ??= makePauseMenu()).open(),
+    toast: (t) => panel.toast(t),
+  });
   // (made at its first opening: the game's tools are built further down)
   let pauseMenu: PauseMenu | null = null;
   const makePauseMenu = () =>
@@ -1283,6 +1291,7 @@ async function main() {
       release: releaseControls,
       settings: () => panel.toggle(true),
       help: () => actions["btn-help"]!(),
+      controls: () => controlsScreen.open(),
       photo: () => openPhoto(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
@@ -1533,7 +1542,8 @@ async function main() {
     if (isTyping(e) || e.metaKey || e.ctrlKey || titleScreen?.isOpen) return;
     // (Enter on a focused button presses it, not the game's binding)
     if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button, a, [role=button]")) return;
-    const b = matchKey(e, flying(), e.code in FLIGHT_KEYS);
+    // (the keys as the player set them — input/bindings.ts)
+    const b = matchKey(e, flying(), e.code in freeCameraKeys(), effectiveBindings());
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);

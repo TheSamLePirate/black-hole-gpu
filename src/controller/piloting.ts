@@ -26,6 +26,7 @@ import { frameNow } from "../frameclock";
 
 import type { CameraController } from "../controls";
 import { clamp, flareRef, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
+import { heldCode, type HeldAxis } from "../input/bindings";
 
 declare module "../controls" {
   interface CameraController {
@@ -611,14 +612,17 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
   // (outside, free — or about the cabin: the keys move the camera; the ship flies on as it was)
   if (this.outsideView() === "free" || this.s.shipMount === "cabin") return i;
-  i.pitch = k("KeyS") - k("KeyW");
-  i.yaw = k("KeyD") - k("KeyA");
-  i.roll = k("KeyE") - k("KeyQ");
-  i.tx = k("KeyL") - k("KeyJ");
-  i.ty = k("KeyK") - k("KeyI");
-  i.tz = k("KeyH") - k("KeyN");
-  const up = k("ShiftLeft") || k("ShiftRight") || (this.keys.has("ArrowUp") ? 1 : 0);
-  const down = k("AltLeft") || k("AltRight") || (this.keys.has("ArrowDown") ? 1 : 0);
+  // (the keys as the player set them — input/bindings.ts; the defaults are KSP's)
+  const h = (a: HeldAxis) => k(heldCode(a));
+  i.pitch = h("pitchUp") - h("pitchDown");
+  i.yaw = h("yawRight") - h("yawLeft");
+  i.roll = h("rollRight") - h("rollLeft");
+  i.tx = h("rcsRight") - h("rcsLeft");
+  i.ty = h("rcsUp") - h("rcsDown");
+  i.tz = h("rcsForward") - h("rcsBack");
+  // (Shift and Alt on either side while they are the defaults)
+  const up = h("throttleUp") || (heldCode("throttleUp") === "ShiftLeft" && k("ShiftRight")) || (this.keys.has("ArrowUp") ? 1 : 0);
+  const down = h("throttleDown") || (heldCode("throttleDown") === "AltLeft" && k("AltRight")) || (this.keys.has("ArrowDown") ? 1 : 0);
   i.throttle = up - down;
   const t = this.touchInput;
   i.pitch = clamp(i.pitch + t.pitch, -1, 1);

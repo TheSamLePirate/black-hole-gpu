@@ -361,9 +361,9 @@ type KeyLike = Pick<KeyboardEvent, "code" | "key" | "shiftKey">;
 const keyOf = (e: KeyLike) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
 
 /** The binding a key press triggers in one layer, if any. */
-export function matchIn(layer: KeyLayer, e: KeyLike, flying = false): KeyBind | undefined {
+export function matchIn(layer: KeyLayer, e: KeyLike, flying = false, list: KeyBind[] = BINDINGS): KeyBind | undefined {
   const k = keyOf(e);
-  return BINDINGS.find(
+  return list.find(
     (b) =>
       b.layer === layer &&
       (b.shift === undefined || b.shift === e.shiftKey) &&
@@ -375,13 +375,14 @@ export function matchIn(layer: KeyLayer, e: KeyLike, flying = false): KeyBind | 
 
 /**
  * The binding a key press triggers, through the layers in order. `flightKey`: the key is a free-flight
- * key (it flies, nothing in the scene layer).
+ * key (it flies, nothing in the scene layer). `list`: the bindings as the player set them
+ * (input/bindings.ts effectiveBindings), the defaults otherwise.
  */
-export function matchKey(e: KeyLike, flying: boolean, flightKey: boolean): KeyBind | undefined {
+export function matchKey(e: KeyLike, flying: boolean, flightKey: boolean, list: KeyBind[] = BINDINGS): KeyBind | undefined {
   return (
-    matchIn("system", e) ??
-    (flying ? matchIn("flight", e) : undefined) ??
-    matchIn("time", e) ??
-    (flightKey ? undefined : matchIn("scene", e, flying))
+    matchIn("system", e, false, list) ??
+    (flying ? matchIn("flight", e, false, list) : undefined) ??
+    matchIn("time", e, false, list) ??
+    (flightKey ? undefined : matchIn("scene", e, flying, list))
   );
 }

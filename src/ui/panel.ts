@@ -1,4 +1,5 @@
-import { FLIGHT_KEYS, isTyping } from "../controls";
+import { isTyping } from "../controls";
+import { freeCameraKeys } from "../input/bindings";
 import { KEYMAP } from "../input/keymap";
 import { h, icon, modal } from "./kit";
 import { onEscape } from "./keys";
@@ -1091,7 +1092,7 @@ export class SettingsPanel {
       this.searchInput.focus();
     } else if (!mod && !typing && this.flightKeys?.(e)) {
       // (flying: M is the map — the panel keeps Shift+M)
-    } else if (!mod && !typing && (e.key === "m" || e.key === "M") && !(e.code in FLIGHT_KEYS)) {
+    } else if (!mod && !typing && (e.key === "m" || e.key === "M") && !(e.code in freeCameraKeys())) {
       this.toggle();
     }
   };

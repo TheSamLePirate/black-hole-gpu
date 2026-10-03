@@ -7,7 +7,8 @@ import { bodyDistance } from "../targeting";
 import { mouth } from "../wormhole";
 
 import type { CameraController } from "../controls";
-import { FLIGHT_KEYS, TELE_MIN, clamp } from "./util";
+import { TELE_MIN, clamp } from "./util";
+import { freeCameraKeys } from "../input/bindings";
 
 declare module "../controls" {
   interface CameraController {
@@ -165,7 +166,8 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   }
   // flying with the keys (or still gliding): the flight carries the view — no re-anchoring, no
   // aiming — so the camera can go anywhere, e.g. straight through the wormhole
-  const flightKeys = [...this.codes].some((c) => (FLIGHT_KEYS[c]?.slice(0, 3) ?? []).some((v) => v !== 0));
+  const FK = freeCameraKeys();
+  const flightKeys = [...this.codes].some((c) => (FK[c]?.slice(0, 3) ?? []).some((v) => v !== 0));
   const padFlight = !!pad && (pad.move[0] !== 0 || pad.move[1] !== 0 || pad.move[2] !== 0);
   const flying = !this.gravity && (flightKeys || padFlight || Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed);
   if (this.orbiting && !dragging && !flying) this.ensureAnchor();
@@ -198,8 +200,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (this.keys.has("-") || this.keys.has("_")) zoom(Math.exp(1.2 * dt));
   this.easeLens(dt);
   const move: [number, number, number, number] = [0, 0, 0, 0];
+  const keysNow = freeCameraKeys();
   for (const c of this.codes) {
-    const m = FLIGHT_KEYS[c];
+    const m = keysNow[c];
     if (m) for (let i = 0; i < 4; i++) move[i]! += m[i]!;
   }
   if (pad) for (let i = 0; i < 4; i++) move[i] = clamp(move[i]! + pad.move[i]!, -1, 1);

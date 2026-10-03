@@ -6,17 +6,15 @@
 import { tr, type Text } from "../i18n";
 import type { FlightPhase } from "../game/phase";
 import { el, kbd } from "./kit";
+import { currentKey, keyLabel, layout } from "../input/bindings";
 
 type Hint = [keys: string, what: Text];
 
-/** The letter a physical key carries on this keyboard (the QWERTY one until the layout is known). */
-const layout = new Map<string, string>();
-type LayoutNavigator = Navigator & { keyboard?: { getLayoutMap?: () => Promise<Map<string, string>> } };
-void (navigator as LayoutNavigator).keyboard
-  ?.getLayoutMap?.()
-  .then((m) => m.forEach((v, k) => layout.set(k, v.toUpperCase())))
-  .catch(() => {});
-const key = (code: string, qwerty: string) => layout.get(code) ?? qwerty;
+/** A flight key as the player set it, as this keyboard prints it (W on AZERTY for QWERTY's Z). */
+const key = (code: string, qwerty: string) => {
+  const k = currentKey(code);
+  return k.code === code ? (layout.get(code) ?? qwerty) : keyLabel(k);
+};
 
 const HINTS = {
   free: (): Hint[] => [

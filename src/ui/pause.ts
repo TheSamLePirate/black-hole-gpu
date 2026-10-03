@@ -41,6 +41,8 @@ export interface PauseDeps {
   release(): void;
   settings(): void;
   help(): void;
+  /** the controls screen (its back: this menu again) */
+  controls(): void;
   photo(): void;
   titleScreen(): void;
   toast(text: string): void;
@@ -120,7 +122,7 @@ export class PauseMenu {
           )
         : null,
       this.item(tr(T.settings), () => this.leaveFor(this.d.settings), { testid: "pause-settings" }),
-      this.item(tr(T.controls), () => this.leaveFor(this.d.help), { testid: "pause-controls" }),
+      this.item(tr(T.controls), () => this.leaveFor(this.d.controls), { testid: "pause-controls" }),
       this.item(tr(T.photo), () => this.leaveFor(this.d.photo), { testid: "pause-photo" }),
       this.item(tr(T.title2), () => this.leaveFor(this.d.titleScreen), { testid: "pause-title" }),
     );
