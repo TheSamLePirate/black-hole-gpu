@@ -6,6 +6,7 @@
 //
 // Home frame, M units (lengths, times), velocities in c; the docking links in metres.
 
+import { secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
 import { ourState } from "./system/our-side";
@@ -119,7 +120,9 @@ export class Fleet {
     const com = f.com ?? [0, 0, 0];
     // the centre of mass on its orbit; the axes turned about it
     const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
-    const k = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
+    const kp = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
+    // (the body's oblateness: the orbit's node and periapsis drift, as the flown craft's on rails)
+    const k = secularZonal(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
     const C = lin(B1.pos, 1, k.r, 1),
       Vc = lin(B1.vel, 1, k.v, 1);
     const r = lin(w, t - f.t, w, 0);

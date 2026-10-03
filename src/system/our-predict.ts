@@ -6,6 +6,7 @@
 //
 // A few thousand steps a call: the map's path is recomputed a few times a second.
 
+import { zonalAccel } from "./geopotential";
 import type { Vec3 } from "../physics";
 import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, mouthAccel, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
@@ -65,6 +66,9 @@ function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES) {
     if (r < b.radius) hit = b.id;
     const re = Math.max(r, b.radius);
     a = add(a, d, b.mass / re ** 3);
+    // (its oblateness, as the flight feels it)
+    const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
+    if (z) a = add(a, z, 1);
     tDyn = Math.min(tDyn, Math.sqrt(re ** 3 / b.mass));
   }
   return { a, tDyn, hit };

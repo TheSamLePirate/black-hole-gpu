@@ -1,5 +1,6 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { secularZonal } from "../system/geopotential";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
 import { horizon, type Vec3 } from "../physics";
@@ -353,7 +354,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // around the body, carried along with it (as KSP's time warp)
   const rails = Math.hypot(...dvT) < 1e-15 ? this.stableOrbit(X, V, t0) : null;
   if (rails && simDt > 0.02 * rails.period) {
-    const k = keplerProp(rails.mass, sub3(X, ourState(rails.ref, t0).pos), sub3(V, ourState(rails.ref, t0).vel), simDt);
+    const kp = keplerProp(rails.mass, sub3(X, ourState(rails.ref, t0).pos), sub3(V, ourState(rails.ref, t0).vel), simDt);
+    // (the body's oblateness: its secular drift — the node's regression, the periapsis's turn)
+    const k = secularZonal(rails.ref, rails.mass, kp.r as Vec3, kp.v as Vec3, simDt, t0);
     const B = ourState(rails.ref, tEnd);
     X = lin(B.pos, 1, k.r, 1);
     V = lin(B.vel, 1, k.v, 1);

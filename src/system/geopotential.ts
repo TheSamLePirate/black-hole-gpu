@@ -1,0 +1,134 @@
+// The bodies' oblateness (audit P2): the zonal harmonics J2, J3, J4 of the planets and the Moon, about
+// their pole of date. The potential outside the body
+//
+//   Φ = −(μ/r) [1 − Σₙ Jₙ (R/r)ⁿ Pₙ(sin φ)]
+//
+// pulls a craft a little more at the equator than at the poles: an orbit's node regresses (the ISS,
+// −5° a day), its periapsis turns (frozen at 63.4°), an orbit at 98° keeps its angle to the Sun (sun-
+// synchronous). The flight (our-side.ts) and the planner's predictions (our-predict.ts) feel it; on
+// rails (the time warp's Kepler orbits) its secular drift is applied (secularZonal).
+//
+// The coefficients are unnormalised, with their reference radius: the Earth's EGM2008, the Moon's
+// GRAIL (its C22 — the Earth-facing bulge — left out), Mars's MRO, Jupiter's and Saturn's Juno and
+// Cassini, Uranus's and Neptune's Voyager fits.
+
+import type { Vec3 } from "../physics";
+import { M_METRES, M_SECONDS } from "../units";
+import { bodyAxes, solarBody } from "./solar";
+
+const km = (x: number) => (x * 1e3) / M_METRES;
+
+export interface Zonal {
+  /** the coefficients' reference radius [M] */
+  R: number;
+  /** J2, J3, J4 */
+  J: [number, number, number];
+}
+
+export const ZONAL: Record<string, Zonal> = {
+  earth: { R: km(6378.137), J: [1.08262668e-3, -2.5326564853e-6, -1.6196215913e-6] },
+  moon: { R: km(1738.0), J: [2.033e-4, 8.4597e-6, 0] },
+  mars: { R: km(3396.19), J: [1.960454e-3, 3.145e-5, -1.5377e-5] },
+  jupiter: { R: km(71492), J: [1.4696572e-2, -4.2e-8, -5.86609e-4] },
+  saturn: { R: km(60330), J: [1.6290573e-2, 5.9e-8, -9.35314e-4] },
+  uranus: { R: km(25559), J: [3.34129e-3, 0, -3.044e-5] },
+  neptune: { R: km(25225), J: [3.4084e-3, 0, -3.34e-5] },
+};
+
+/** Beyond this many reference radii the harmonics are left out (J2 there: < 10⁻⁶ of the central pull). */
+const REACH = 40;
+
+/** The pole of date, kept an hour of time (its precession and nutation: arcseconds a day). */
+const POLE_EVERY = 3600 / M_SECONDS;
+const poles = new Map<string, { t: number; z: Vec3 }>();
+export function poleOfDate(id: string, t: number): Vec3 {
+  const c = poles.get(id);
+  if (c && Math.abs(t - c.t) < POLE_EVERY) return c.z;
+  const z = bodyAxes(solarBody(id)!, t)[2];
+  poles.set(id, { t, z });
+  return z;
+}
+
+/**
+ * The harmonics' pull (beyond the central μ/r²) at d — the point from the body's centre [M] — about the
+ * pole z: a = Σₙ μ Jₙ Rⁿ / r^(n+2) [((n+1) Pₙ(u) + u Pₙ′(u)) r̂ − Pₙ′(u) ẑ], u = r̂·ẑ (the gradient of
+ * the potential's terms, Legendre's recursions for Pₙ and Pₙ′).
+ */
+export function zonalAccelAbout(mu: number, z0: Zonal, z: Vec3, d: Vec3): Vec3 {
+  const r = Math.hypot(d[0], d[1], d[2]);
+  if (!(r > 0)) return [0, 0, 0];
+  const rh: Vec3 = [d[0] / r, d[1] / r, d[2] / r];
+  const u = rh[0] * z[0] + rh[1] * z[1] + rh[2] * z[2];
+  let P0 = 1,
+    P1 = u,
+    D0 = 0,
+    D1 = 1;
+  let ar = 0,
+    az = 0;
+  let k = (mu / (r * r)) * (z0.R / r);
+  for (let n = 2; n <= 4; n++) {
+    const Pn = ((2 * n - 1) * u * P1 - (n - 1) * P0) / n;
+    const Dn = D0 + (2 * n - 1) * P1;
+    k *= z0.R / r;
+    const J = z0.J[n - 2]!;
+    if (J) {
+      ar += k * J * ((n + 1) * Pn + u * Dn);
+      az -= k * J * Dn;
+    }
+    P0 = P1;
+    P1 = Pn;
+    D0 = D1;
+    D1 = Dn;
+  }
+  return [ar * rh[0] + az * z[0], ar * rh[1] + az * z[1], ar * rh[2] + az * z[2]];
+}
+
+/** The pull of a body's oblateness at d from its centre [M] at time t (zero for a round one or far off). */
+export function zonalAccel(id: string, mu: number, d: Vec3, t: number): Vec3 | null {
+  const z0 = ZONAL[id];
+  if (!z0) return null;
+  const r = Math.hypot(d[0], d[1], d[2]);
+  if (r > REACH * z0.R) return null;
+  return zonalAccelAbout(mu, z0, poleOfDate(id, t), d);
+}
+
+/** The J2 secular rates of an orbit [rad per M of time]: its node, its periapsis, its mean anomaly's excess. */
+export function secularRates(mu: number, z0: Zonal, a: number, e: number, cosI: number) {
+  const n = Math.sqrt(mu / a ** 3);
+  const p = a * (1 - e * e);
+  const k = 1.5 * z0.J[0] * (z0.R / p) ** 2 * n;
+  const s2 = 1 - cosI * cosI;
+  return { node: -k * cosI, peri: k * (2 - 2.5 * s2), mean: k * Math.sqrt(1 - e * e) * (1 - 1.5 * s2) };
+}
+
+const rot = (v: Vec3, k: Vec3, a: number): Vec3 => {
+  const c = Math.cos(a),
+    s = Math.sin(a);
+  const kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+  const x: Vec3 = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+  return [0, 1, 2].map((i) => v[i]! * c + x[i]! * s + k[i]! * kv * (1 - c)) as Vec3;
+};
+
+/**
+ * A Kepler orbit's state (r, v from the body's centre) after dt on rails, with the J2's secular drift:
+ * turned in its plane by the periapsis's and the mean anomaly's excess, then about the pole by the
+ * node's regression (about `pole`, the body's pole of date unless given). Unchanged for a round body.
+ */
+export function secularZonal(id: string, mu: number, r: Vec3, v: Vec3, dt: number, t: number, pole?: Vec3): { r: Vec3; v: Vec3 } {
+  const z0 = ZONAL[id];
+  if (!z0) return { r, v };
+  const R = Math.hypot(...r);
+  const eps = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) / 2 - mu / R;
+  if (!(eps < 0)) return { r, v };
+  const a = -mu / (2 * eps);
+  const h: Vec3 = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
+  const hl = Math.hypot(...h);
+  const e = Math.sqrt(Math.max(1 - (hl * hl) / (mu * a), 0));
+  const z = pole ?? poleOfDate(id, t);
+  const hn: Vec3 = [h[0] / hl, h[1] / hl, h[2] / hl];
+  const cosI = hn[0] * z[0] + hn[1] * z[1] + hn[2] * z[2];
+  const w = secularRates(mu, z0, a, e, cosI);
+  const inPlane = (w.peri + w.mean) * dt,
+    node = w.node * dt;
+  return { r: rot(rot(r, hn, inPlane), z, node), v: rot(rot(v, hn, inPlane), z, node) };
+}

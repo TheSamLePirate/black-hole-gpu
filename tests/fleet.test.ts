@@ -3,6 +3,7 @@ import { dockedFrame, VESSELS, type VesselId } from "../src/vessels";
 import { fleet, fleetStart, type Pose } from "../src/fleet";
 import { M_METRES, solarBody } from "../src/system/solar";
 import { ourState } from "../src/system/our-side";
+import { secularZonal } from "../src/system/geopotential";
 import { gameTimeOf } from "../src/system/iss";
 
 type V = [number, number, number];
@@ -51,15 +52,19 @@ test("the fleet's start: the Endurance 800 km up, the Lander 500 km up, the Rang
   const ringR = on(pr.ax, VESSELS.ranger.ports[0]!.centre).map((x, i) => pr.X[i]! + x / M_METRES) as V;
   const portE = on(pe.ax, VESSELS.endurance.ports[0]!.centre).map((x, i) => pe.X[i]! + x / M_METRES) as V;
   expect(Math.hypot(ringR[0] - portE[0], ringR[1] - portE[1], ringR[2] - portE[2]) * M_METRES).toBeLessThan(1e-3);
-  // coasting: a Kepler orbit — an orbit later, back where it was
+  // coasting: a Kepler orbit with the Earth's J2 drift — an orbit later, where it was turned by the
+  // node's regression and the periapsis's turn (≈ 27 km along a 800 km orbit)
   const mu = solarBody("earth")!.mass;
   const r = 6371e3 + 800e3;
   const T = 2 * Math.PI * Math.sqrt((r / M_METRES) ** 3 / mu);
   const later = fleet.pose("endurance", t + T)!;
   const E2 = ourState("earth", t + T);
   const d0: V = [pe.X[0] - E.pos[0], pe.X[1] - E.pos[1], pe.X[2] - E.pos[2]];
+  const v0: V = [pe.V[0] - E.vel[0], pe.V[1] - E.vel[1], pe.V[2] - E.vel[2]];
   const d1: V = [later.X[0] - E2.pos[0], later.X[1] - E2.pos[1], later.X[2] - E2.pos[2]];
-  expect(Math.hypot(d1[0] - d0[0], d1[1] - d0[1], d1[2] - d0[2]) * M_METRES).toBeLessThan(500);
+  const want = secularZonal("earth", mu, d0, v0, T, t).r;
+  expect(Math.hypot(d1[0] - want[0], d1[1] - want[1], d1[2] - want[2]) * M_METRES).toBeLessThan(500);
+  expect(Math.hypot(d1[0] - d0[0], d1[1] - d0[1], d1[2] - d0[2]) * M_METRES).toBeGreaterThan(5000);
 });
 
 test("an assembly's mass, centre of mass and moment of inertia (the flown craft's frame)", () => {

@@ -8,6 +8,7 @@
 //
 // Units: lengths and times in M, velocities in c, GM in M (G = c = 1).
 
+import { poleOfDate, secularRates, secularZonal, ZONAL } from "./geopotential";
 import type { Vec3 } from "../physics";
 import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
 import { referenceBody, soiOf } from "./our-side";
@@ -208,6 +209,50 @@ export function keplerProp(mu: number, r0: Vec3, v0: Vec3, dt: number): { r: Vec
 // ---- along a predicted path
 
 /** The ship's state at time t on a path (cubic Hermite between its points). */
+/**
+ * A parking orbit carried on by two-body mechanics, with its body's oblateness's secular drift (the
+ * node's regression, the periapsis's turn: geopotential.ts) — as the flight, which feels the J2, has it.
+ */
+export function coastOrbit(body: string, mu: number, r0: Vec3, v0: Vec3, dt: number, t: number): { r: Vec3; v: Vec3 } {
+  const k = keplerProp(mu, r0, v0, dt);
+  return secularZonal(body, mu, k.r, k.v, dt, t);
+}
+
+/**
+ * An orbit's normal at tt: its plane turned about its body's pole by the oblateness's node regression
+ * since t (the ISS's 5° a day) — what a departure weeks away has to leave from.
+ */
+function normalAt(body: string, mu: number, el: ReturnType<typeof elementsOf>, t: number, tt: number): Vec3 {
+  const z0 = ZONAL[body];
+  const h = unit(el.h);
+  if (!z0 || !Number.isFinite(el.a)) return h;
+  const z = poleOfDate(body, t);
+  const w = secularRates(mu, z0, el.a, el.e, dot(h, z));
+  const a = w.node * (tt - t);
+  const c = Math.cos(a),
+    sn = Math.sin(a);
+  const k = dot(z, h);
+  return add(add(scale(h, c), scale(cross(z, h), sn)), scale(z, k * (1 - c)));
+}
+
+/**
+ * The ship's state at ts carried on from (X, V) at t, relative to its body: integrated within three days
+ * (the oblateness's short-period terms — kilometres in a low orbit — with it: a free return's aim needs
+ * them), two-body with the secular drift beyond (the corrections in flight take the rest).
+ */
+function coastState(body: string, mu: number, X: Vec3, V: Vec3, t: number, ts: number): { r: Vec3; v: Vec3 } {
+  const B0 = stateOf(body, t);
+  if (ts - t <= 3 * DAY) {
+    const p = predictOurs(X, V, t, [], { tMax: ts - t, maxSteps: 400000, step: 0.02 });
+    const i = p.times.length - 1;
+    if (Math.abs(p.times[i]! - ts) < 1e-6) {
+      const B = stateOf(body, ts);
+      return { r: sub(p.pts[i]!, B.pos), v: sub(p.vels[i]!, B.vel) };
+    }
+  }
+  return coastOrbit(body, mu, sub(X, B0.pos), sub(V, B0.vel), ts - t, t);
+}
+
 export function stateAt(p: OurPath, t: number): { X: Vec3; V: Vec3 } | null {
   const T = p.times;
   if (!T.length || t < T[0]! - 1e-9 || t > T[T.length - 1]! + 1e-9) return null;
@@ -837,10 +882,10 @@ function planFromParking(
   for (let i = -120; i <= 120; i++) {
     const tt = tAim + (el.period * i) / 240;
     if (tt < t + o.lead) continue;
-    const c = dot(unit(keplerProp(mu, r0v, v0v, tt - t).r), ph);
+    const c = dot(unit(coastOrbit(home, mu, r0v, v0v, tt - t, t).r), ph);
     if (c > bc) (bc = c), (t1 = tt);
   }
-  const k1 = keplerProp(mu, r0v, v0v, t1 - t);
+  const k1 = coastOrbit(home, mu, r0v, v0v, t1 - t, t);
   const r1 = norm(k1.r);
   const vp = Math.sqrt(mu * (2 / r1 - 2 / (r1 + ra)));
   const dv0: Vec3 = [vp - norm(k1.v), 0, 0];
@@ -855,7 +900,7 @@ function planFromParking(
   // (aimed from a quarter turn before the burn — a wait of days in a low orbit is not integrated;
   // the burn may move along the orbit)
   const ts = Math.max(t, t1 - 0.25 * el.period);
-  const k0 = ts > t ? keplerProp(mu, r0v, v0v, ts - t) : { r: r0v, v: v0v };
+  const k0 = ts > t ? coastState(home, mu, X, V, t, ts) : { r: r0v, v: v0v };
   const As = stateOf(home, ts);
   const plan = aimAndBuild(add(As.pos, k0.r), add(As.vel, k0.v), ts, mission, t1, dv0, o, t);
   if ("error" in plan) return plan;
@@ -940,7 +985,8 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
     const vinfA = norm(sub(L.v2, sub(Ba.vel, Pa.vel)));
     // (from the ship's orbit as it is: a way out off its plane costs a turn of the hyperbola there)
     const vpH = Math.sqrt(dot(vinfD, vinfD) + (2 * hb.mass) / r0);
-    const dec = Math.abs(dot(unit(vinfD), unit(el.h)));
+    // (the plane as it will be at the departure: turned by the node's regression meanwhile)
+    const dec = Math.abs(dot(unit(vinfD), normalAt(home, hb.mass, el, t, td)));
     const dep = vpH - Math.sqrt(hb.mass / r0) + vpH * dec;
     const arr = goal.arrival === "orbit" && tb.mass > 0 ? Math.sqrt(vinfA * vinfA + (2 * tb.mass) / rp) - Math.sqrt(tb.mass / rp) : 0;
     return { c: dep + arr, vinfD, dep, arr };
@@ -993,11 +1039,11 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   for (let i = -90; i <= 90; i++) {
     const tt = tAim + (el.period * i) / 180;
     if (tt < t + o.lead) continue;
-    const k = keplerProp(hb.mass, r0v, v0v, tt - t);
+    const k = coastOrbit(home, hb.mass, r0v, v0v, tt - t, t);
     const c = dot(unit(k.r), ph);
     if (c > bc) (bc = c), (tb1 = tt);
   }
-  const k1 = keplerProp(hb.mass, r0v, v0v, tb1 - t);
+  const k1 = coastOrbit(home, hb.mass, r0v, v0v, tb1 - t, t);
   const dv0: Vec3 = [Math.sqrt(vinf * vinf + (2 * hb.mass) / norm(k1.r)) - norm(k1.v), 0, 0];
   const mission: OurMission = {
     goal,
@@ -1010,7 +1056,7 @@ function planSibling(X: Vec3, V: Vec3, t: number, goal: OurGoal, home: string, o
   };
   // (aimed from a quarter turn before the burn — months of a low orbit are not integrated)
   const ts = Math.max(t, tb1 - 0.25 * el.period);
-  const k0 = ts > t ? keplerProp(hb.mass, r0v, v0v, ts - t) : { r: r0v, v: v0v };
+  const k0 = ts > t ? coastState(home, hb.mass, X, V, t, ts) : { r: r0v, v: v0v };
   const As = stateOf(home, ts);
   const plan = aimAndBuild(add(As.pos, k0.r), add(As.vel, k0.v), ts, mission, tb1, dv0, o, t);
   if ("error" in plan) return plan;

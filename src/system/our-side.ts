@@ -1,5 +1,6 @@
 // Our universe, beyond our end of the wormhole (ANALYSE-INTEGRATION.md §3.9): the solar system
-// (solar.ts), in the home frame of our mouth. The ship feels the Newtonian pull of all its bodies,
+// (solar.ts), in the home frame of our mouth. The ship feels the Newtonian pull of all its bodies (and
+// of the oblate ones' J2, J3, J4: geopotential.ts),
 // less the frame's own acceleration (the mouth falls around the Sun with Saturn); the Dneg metric has
 // no gravity (g_tt = −1) and their bending of light (~10⁻⁸ rad at Saturn) is left out.
 //
@@ -10,6 +11,7 @@ import type { Vec3 } from "../physics";
 import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from "../wormhole";
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
+import { zonalAccel } from "./geopotential";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, groundRelief, groundVelocity, toBodyFixed } from "./our-surface";
 import { M_METRES } from "../units";
@@ -60,6 +62,9 @@ export function gravityHome(X: Vec3, t: number): { acc: Vec3; inside: string | n
     const re = Math.max(r, b.radius);
     const k = b.mass / re ** 3;
     a = [a[0] + k * d[0], a[1] + k * d[1], a[2] + k * d[2]];
+    // (its oblateness: J2, J3, J4 — geopotential.ts)
+    const z = r > b.radius ? zonalAccel(b.id, b.mass, [-d[0], -d[1], -d[2]], t) : null;
+    if (z) a = [a[0] + z[0], a[1] + z[1], a[2] + z[2]];
     tDyn = Math.min(tDyn, Math.sqrt(re ** 3 / b.mass));
   }
   return { acc: a, inside, tDyn };
