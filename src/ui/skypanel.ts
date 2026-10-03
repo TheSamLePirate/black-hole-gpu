@@ -4,6 +4,7 @@
 // button; N and U from the keyboard. And the card of what the pointer hovers in the sky.
 
 import type { Settings } from "../settings";
+import { onEscape } from "./keys";
 import { CONSTELLATIONS, NAMED_STARS, type Constellation, type NamedStar } from "../skychart";
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
@@ -47,16 +48,16 @@ export class SkyPanel {
     this.card.id = "sky-card";
     this.card.hidden = true;
     document.body.append(this.el, this.card);
-    addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !this.el.hidden && !(e.target as HTMLElement).closest?.("input")) this.toggle(false);
-    });
   }
+  private unEscape?: () => void;
 
   get open() {
     return !this.el.hidden;
   }
   toggle(open = this.el.hidden) {
     this.el.hidden = !open;
+    this.unEscape?.();
+    this.unEscape = open ? onEscape(() => this.toggle(false)) : undefined;
     this.lastKey = "";
     this.refresh();
   }

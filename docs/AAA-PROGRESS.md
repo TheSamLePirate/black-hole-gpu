@@ -25,8 +25,8 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 
 | # | Étape | Statut | Commit |
 |---|---|---|---|
-| 0.1 | Build cohérent (`bun run build` produit ktx-worker et le WASM) ; CI : job `verify` (typecheck + tests + build, rapport junit, cache bun) dont dépend le déploiement, contrôles aussi sur les PR ; tests lents du planificateur à 180 s ; assertions de durée murale désactivées sur la CI ; test tautologique remplacé | fait | (voir journal) |
-| 0.2 | Bugs de gameplay : Échap ne coupe plus l'autopilote en fermant un panneau ; « ? » en QWERTY ; `isTyping` limité aux champs texte ; aides et astuces à jour | à faire | |
+| 0.1 | Build cohérent (`bun run build` produit ktx-worker et le WASM) ; CI : job `verify` (typecheck + tests + build, rapport junit, cache bun) dont dépend le déploiement, contrôles aussi sur les PR ; tests lents du planificateur à 180 s ; assertions de durée murale désactivées sur la CI ; test tautologique remplacé | fait | `cc6f00d` |
+| 0.2 | Bugs de gameplay : **pile d'Échap** (`src/ui/keys.ts`, Caméra, Ciel, aide) : fermer un panneau ne coupe plus le maintien ni l'autopilote ; « ? » (⇧/) ouvre l'aide en QWERTY ; `isTyping` limité aux champs texte (curseurs et cases ne bloquent plus le vol) et focus rendu après un clic sur un curseur ; aides et astuces à jour. **Vérifié dans l'app** (vraies touches) | fait | (ce commit) |
 | 0.3 | Physique : accélération du repère « home » (+ test éphéméride = modèle de forces) ; Δv gratuit quand les sous-pas sont plafonnés | à faire | |
 | 0.4 | `src/units.ts` (constantes uniques) et `src/math/vec3.ts` ; constantes divergentes corrigées | à faire | |
 | 0.5 | Robustesse : `safeStorage`, `assert()` en dev, fin des exceptions avalées à chaque frame, sauvegardes validées | à faire | |
@@ -45,3 +45,5 @@ Les notes « actuelles » sont réestimées à la fin de chaque phase, en repren
 ## Journal
 
 - **03/10/2026** : audit commité (`7328d0d`) ; démarrage de la phase 0.
+- 0.1 `cc6f00d` : CI `verify` avant déploiement, build local cohérent, tests stabilisés.
+- 0.2 : la pile d'Échap, testée en vol dans Artemis : maintien prograde, panneau Caméra ouvert, Échap ferme le panneau et le maintien reste ; un second Échap le relâche.

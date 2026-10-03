@@ -8062,9 +8062,12 @@ function wrapDeg(d: number) {
   return ((((d + 360) % 720) + 720) % 720) - 360;
 }
 
+/** Is a key going into a text field? (A slider, a checkbox, a button keep the keys flying.) */
 export function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  if (!t) return false;
+  if (t.tagName === "INPUT") return !/^(range|checkbox|radio|color|button|submit|reset|file|image)$/.test((t as HTMLInputElement).type);
+  return t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable;
 }
 
 

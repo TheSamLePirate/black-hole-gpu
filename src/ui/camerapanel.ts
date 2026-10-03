@@ -7,6 +7,7 @@
 
 import type { CameraController } from "../controls";
 import { TELE_MIN } from "../controls";
+import { onEscape } from "./keys";
 import { cameraFrame } from "../camera";
 import { MOUNTS, type Mount } from "../mounts";
 import type { Settings, Target } from "../settings";
@@ -125,10 +126,8 @@ export class CameraPanel {
     this.el.id = "cam-pop";
     this.el.hidden = true;
     document.body.append(this.el);
-    addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !this.el.hidden && !(e.target as HTMLElement).closest?.("input")) this.toggle(false);
-    });
   }
+  private unEscape?: () => void;
 
   get open() {
     return !this.el.hidden;
@@ -136,6 +135,8 @@ export class CameraPanel {
 
   toggle(open = this.el.hidden) {
     this.el.hidden = !open;
+    this.unEscape?.();
+    this.unEscape = open ? onEscape(() => this.toggle(false)) : undefined;
     this.filter = "";
     this.lastKey = "";
     this.refresh();

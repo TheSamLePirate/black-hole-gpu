@@ -1160,7 +1160,7 @@ async function main() {
       warp(e.code === "Period" ? 1 : -1);
       return;
     }
-    if (e.code === "Slash") {
+    if (e.code === "Slash" && e.key !== "?") {
       e.preventDefault();
       realTime();
       return;

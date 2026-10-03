@@ -8,10 +8,10 @@ import { loading, type Stage } from "../loading";
 const TIPS = [
   "Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it.",
   "? lists every shortcut. The flight keys follow the keys' positions: ZQSD on AZERTY, WASD on QWERTY.",
-  "Settings › Scenes: the black holes, the wormhole, the Gargantua system and the game's missions.",
+  "The Scenes button (bottom left): the black holes, the wormhole, the Gargantua system and the game's missions.",
   "F2 opens the game tools: status, placement in orbit, targets, time, saves, performance.",
-  "M: the map. O: the flight planner. U: take off. G: land.",
-  "T: the journey through the wormhole — Saturn, the throat, then Gargantua's side.",
+  "Flying: M the map, O the mission planner, U take off, ⇧G entry and landing on a runway.",
+  "Free camera: T the journey through the wormhole — Saturn, the throat, then Gargantua's side.",
   "Every image is traced along Kerr geodesics: the disk, the stars and the planets are bent by the hole.",
   "Your flight is saved as you go: it resumes where you left it.",
 ];

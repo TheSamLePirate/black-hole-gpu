@@ -1,4 +1,5 @@
-import { FLIGHT_KEYS } from "../controls";
+import { FLIGHT_KEYS, isTyping } from "../controls";
+import { onEscape } from "./keys";
 import { QUALITY, type Quality, type Settings } from "../settings";
 import { sceneGroup, sceneTitle } from "./scenes";
 import {
@@ -996,7 +997,8 @@ export class SettingsPanel {
         ["⇧G", "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing"],
         ["⇧Y", "The future path in the view"],
         ["²  (`)", "HUD density: full · minimal · clean view"],
-        ["O", "Flight planner: align the orbital plane · transfer · rendezvous · through the wormhole · nodes, then EXECUTE"],
+        ["O", "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE"],
+        ["Esc", "Closes the panel on top; with nothing open, stops the mission, the hold and the autopilot"],
         ["⇧K", "Leave the Ranger"],
         ["Drag · double-click", "Look around from the attach point · look ahead"],
         ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
@@ -1012,24 +1014,20 @@ export class SettingsPanel {
         ["R3 · View · Menu", "Recentre · run / pause time · settings (Share · Options)"],
       ]],
       ["Interface", [
-        ["M · /", "Settings · search them"],
+        ["M · ⌘K", "Settings · search them (flying: ⇧M)"],
+        ["F2", "Game tools: status, placement, targets, time, saves, performance"],
         ["I", "Details & physical readouts"],
-        ["H · F · P", "Hide the interface · fullscreen · save PNG"],
+        ["H · F · P", "Hide the interface · fullscreen · save PNG (flying, these keys fly: the toolbar's buttons)"],
+        ["Esc", "Closes the panel on top"],
         ["⌘Z · ⇧⌘Z", "Undo · redo"],
         ["?", "This sheet"],
       ]],
     ];
     const close = () => {
       dlg.remove();
-      removeEventListener("keydown", onEsc, true);
+      unEscape();
     };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        close();
-      }
-    };
-    addEventListener("keydown", onEsc, true);
+    const unEscape = onEscape(close);
     const dlg = h("div", { class: "sp-modal", onclick: (e: Event) => e.target === dlg && close() },
       h("div", { class: "sp-modal-card glass sp-keys" },
         h("header", {}, h("h3", {}, "Keyboard & mouse"), h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close))),
@@ -1053,8 +1051,7 @@ export class SettingsPanel {
 
   // ---------------------------------------------------------------------------------- keys & state
   private onKey = (e: KeyboardEvent) => {
-    const t = e.target as HTMLElement;
-    const typing = t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+    const typing = isTyping(e);
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z" && !typing) {
       e.preventDefault();
