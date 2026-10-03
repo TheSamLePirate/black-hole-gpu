@@ -361,6 +361,10 @@ export class FlightHud {
 
   /** the map over the whole screen (M) */
   mapView = false;
+  /** the 3D map's view (automation) */
+  mapCamera() {
+    return this.map3d?.view ?? null;
+  }
   /** Another layer over the HUD (the flight computer's), shown with it. */
   attach(el: HTMLElement) {
     this.root.append(el);

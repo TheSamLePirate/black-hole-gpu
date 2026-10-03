@@ -51,6 +51,8 @@ export interface BhContext {
   lastStats(): FrameStats | null;
   /** the flight's phase (game/phase.ts) */
   phase(): FlightPhase | null;
+  /** the 3D map's view (its camera's goal: the gestures' effect), when the flight HUD has one */
+  mapView(): { dist: number; yaw: number; pitch: number; focus: number[] } | null;
   /** Freezes the loop's own simulation (the automation steps it). */
   freeze(on: boolean): void;
 }
@@ -278,6 +280,8 @@ export function installBh(c: BhContext) {
       time: () => sim.time,
       /** the flight's phase: mode, control, stage (game/phase.ts) */
       phase: () => c.phase(),
+      /** the 3D map's view: its distance and angles (the gestures' tests) */
+      mapView: () => c.mapView(),
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
       sys: {

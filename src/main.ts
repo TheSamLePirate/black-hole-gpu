@@ -986,7 +986,8 @@ async function main() {
     const help = m === "around" ? t("drag to turn around the ship") : m === "free" ? t("fly the camera, the ship flies on") : "";
     panel.toast(help ? tf("Camera: {0} — {1}", MOUNTS[m].label, help) : tf("Camera: {0}", MOUNTS[m].label));
   }
-  const coarse = matchMedia("(pointer: coarse)").matches;
+  // (read live: a tablet's keyboard docked or a touch screen emulated after the start — audit B5)
+  const coarse = matchMedia("(pointer: coarse)");
   const touchFlight = new TouchFlight({
     input: camera.touchInput,
     throttle: () => camera.pilot.throttle,
@@ -1806,6 +1807,7 @@ async function main() {
     chart: () => chart,
     lastStats: () => lastStats,
     phase: () => phaseWatch.current,
+    mapView: () => flightHud.mapCamera(),
     freeze: (on: boolean) => (frozen = on),
   });
 
@@ -1953,9 +1955,15 @@ async function main() {
       flightHud.show(pil);
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
     }
-    // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera)
+    // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera; the
+    // map open, they move the map — the stick would sit on the flight computer's panel)
     touchFlight.update(
-      pil && coarse && camera.outsideView() !== "free" && !flightHud.planning && !document.body.classList.contains("hide-ui"),
+      pil &&
+        coarse.matches &&
+        camera.outsideView() !== "free" &&
+        !flightHud.planning &&
+        !flightHud.mapView &&
+        !document.body.classList.contains("hide-ui"),
     );
     let status: RangerStatus | null = null;
     if (pil && info) {

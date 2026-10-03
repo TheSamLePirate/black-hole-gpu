@@ -139,6 +139,23 @@ export class App {
     await Bun.sleep(100);
   }
 
+  /**
+   * Fingers on the screen (CSS px): each step, every finger's point; the first step puts them down, the
+   * last lifts them (Chrome turns the touches into pointer events of type "touch").
+   */
+  async touch(steps: { x: number; y: number }[][], stepMs = 16) {
+    await this.cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    const pts = (s: { x: number; y: number }[]) => s.map((p, id) => ({ x: p.x, y: p.y, id, radiusX: 4, radiusY: 4, force: 1 }));
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(steps[0]!) });
+    for (const s of steps.slice(1)) {
+      await Bun.sleep(stepMs);
+      await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(s) });
+    }
+    await Bun.sleep(stepMs);
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await Bun.sleep(100);
+  }
+
   async shot(file: string) {
     const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
     await Bun.write(file, Buffer.from(r.data, "base64"));

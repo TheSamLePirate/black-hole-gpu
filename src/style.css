@@ -2404,3 +2404,12 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-entry .fe-row b i { font-style: normal; font-size: 11px; color: var(--hud-amber); letter-spacing: -0.08em; }
 .fl-entry .fe-row.hot b { color: #ffb4a8; }
 .fl-entry .fe-row.dim b { color: var(--hud-dim); }
+
+/* ---- the map under a finger (U5.4): its controls 44 px tall in the map view, the timeline's track
+   as tall, so a finger finds them (the mini-map keeps its size: its bar is the open-the-map door) */
+@media (pointer: coarse) {
+  .fl-root.mapview .fl-mapbar button, .fl-root.mapview .fl-maptabs button, .fl-root.mapview .m3-crumbs button, .gt-btn, #cam-pop button { min-height: 44px; min-width: 44px; }
+  .fl-root.mapview .fl-mapbar { gap: 4px; }
+  .fl-root.mapview .m3-track { height: 44px; }
+  .fl-root.mapview .m3-time button { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+}

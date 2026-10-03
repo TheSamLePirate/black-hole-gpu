@@ -8,6 +8,7 @@
 // again. The raster (the map lit, per pixel) is redrawn only when the view or the light moved; the
 // tracks and marks over it each time.
 
+import { Pinch } from "./pinch";
 import type { Info } from "./flighthud";
 import type { OurPath } from "../system/our-predict";
 import { M_METRES, solarBody, solarState, type MapName } from "../system/solar";
@@ -1060,7 +1061,28 @@ export class GroundTrack {
   private bindPointer() {
     const cv = this.canvas;
     let down: { x: number; y: number; moved: boolean } | null = null;
+    // (the globe under two fingers: their spread zooms, their middle turns it)
+    const pinch = new Pinch(cv, {
+      start: () => {
+        this.drag = null;
+        if (down) down.moved = true;
+      },
+      zoom: (k) => {
+        if (this.mode !== "globe") return;
+        this.view.zoom = clamp(this.view.zoom * k, 1, 8);
+        this.redraw?.();
+      },
+      pan: (dx, dy) => {
+        if (this.mode !== "globe") return;
+        const R = Math.max(40, Math.min(this.stage.clientWidth, this.stage.clientHeight) / 2) * this.view.zoom;
+        this.view.follow = false;
+        this.view.lon -= dx / R;
+        this.view.lat = clamp(this.view.lat + dy / R, -Math.PI / 2, Math.PI / 2);
+        this.redraw?.();
+      },
+    });
     cv.addEventListener("pointerdown", (e) => {
+      if (pinch.active) return;
       down = { x: e.clientX, y: e.clientY, moved: false };
       if (this.mode !== "globe") return;
       cv.setPointerCapture(e.pointerId);
@@ -1078,7 +1100,7 @@ export class GroundTrack {
     });
     cv.addEventListener("pointermove", (e) => {
       const d = this.drag;
-      if (!d) return;
+      if (!d || pinch.active) return;
       const R = Math.max(40, Math.min(this.stage.clientWidth, this.stage.clientHeight) / 2) * this.view.zoom;
       if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= 3) return;
       if (down) down.moved = true;

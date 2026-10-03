@@ -29,6 +29,7 @@ import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
 import { store } from "../../util/storage";
 import { el as h } from "../kit";
 import { t, tf, tr } from "../../i18n";
+import { longPress, Pinch, reach } from "../pinch";
 
 export interface MapHost {
   readonly s: Settings;
@@ -131,6 +132,20 @@ export class Map3D {
   private focusBtn = h("button", "m3-focus") as HTMLButtonElement;
   private btns: Record<string, HTMLButtonElement> = {};
   private cam = new MapCamera();
+  /** the view moved off its focus by a pan or a zoom towards the pointer (kept: the focus is set again
+   * every frame) — back to 0 with a new focus or a fit */
+  private panOff: V3 = [0, 0, 0];
+  /** A gesture that moves the focus (a pan, a zoom about the pointer): its shift kept in panOff. */
+  private shifting(f: () => void) {
+    const before = this.cam.goal.focus;
+    f();
+    this.panOff = add(this.panOff, sub(this.cam.goal.focus, before));
+  }
+  /** where the view is going (its distance, its angles): what the gestures set */
+  get view() {
+    const g = this.cam.goal;
+    return { dist: g.dist, yaw: g.yaw, pitch: g.pitch, focus: [...g.focus] };
+  }
   private scene: MapScene | null = null;
   private universe: Universe | null = null;
   /** the focus: a body's id, "ship", or null (automatic: the ship's primary) */
@@ -695,6 +710,7 @@ export class Map3D {
           if (this.universe === "ours") this.logOurs = !this.logOurs;
           else this.logTheirs = !this.isLog();
           this.autoDist = true;
+          this.panOff = [0, 0, 0];
         },
       ),
       b("legend", "key", t("Legend"), t("What the map's lines and marks are"), () => this.showLegend(this.legend.hidden)),
@@ -813,6 +829,7 @@ export class Map3D {
   setFocus(id: string | null) {
     this.focus = id;
     this.autoDist = true;
+    this.panOff = [0, 0, 0];
     this.renderMenu();
   }
 
@@ -827,6 +844,7 @@ export class Map3D {
   private fit() {
     this.focus = null;
     this.autoDist = true;
+    this.panOff = [0, 0, 0];
   }
 
   private isLog() {
@@ -877,6 +895,37 @@ export class Map3D {
       return [(e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio] as const;
     };
     let drag: { x: number; y: number; moved: boolean; pan: boolean } | null = null;
+    // (two fingers: zoom and pan; a second finger cancels the one-finger gesture under way)
+    const pinch = new Pinch(c, {
+      start: () => {
+        drag = null;
+        this.gizmo = null;
+        this.nodeDrag = null;
+      },
+      zoom: (k, cx, cy) => {
+        const r = c.getBoundingClientRect();
+        this.shifting(() => this.cam.zoom(1 / k, (cx - r.left) * devicePixelRatio, (cy - r.top) * devicePixelRatio));
+        this.autoDist = false;
+        this.handledAt = performance.now();
+      },
+      pan: (dx, dy) => {
+        this.shifting(() => this.cam.pan(dx * devicePixelRatio, dy * devicePixelRatio));
+        this.autoDist = false;
+        this.moving = true;
+        this.handledAt = performance.now();
+      },
+    });
+    // (a long press on a node deletes it: the touch's right click)
+    const pressed = longPress(c, (e) => {
+      if (pinch.active || drag?.moved) return;
+      const [x, y] = at(e);
+      const nd = this.nodeHits.find((q) => Math.hypot(q.x - x, q.y - y) < reach(e, 10) * devicePixelRatio);
+      if (!nd) return;
+      drag = null;
+      this.nodeDrag = null;
+      this.host.act.deleteNode(nd.k);
+      navigator.vibrate?.(15);
+    });
     c.addEventListener(
       "wheel",
       (e) => {
@@ -884,7 +933,7 @@ export class Map3D {
         e.stopPropagation();
         const [x, y] = at(e);
         const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-        this.cam.zoom(Math.exp(e.deltaY * k * 0.0016), x, y);
+        this.shifting(() => this.cam.zoom(Math.exp(e.deltaY * k * 0.0016), x, y));
         this.autoDist = false;
         this.handledAt = performance.now();
       },
@@ -893,9 +942,11 @@ export class Map3D {
     c.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       this.handledAt = performance.now();
+      if (pinch.active) return;
       c.setPointerCapture(e.pointerId);
       const [x, y] = at(e);
-      const near = (q: { x: number; y: number }, r: number) => Math.hypot(q.x - x, q.y - y) < r * devicePixelRatio;
+      // (under a finger, a 44 px zone)
+      const near = (q: { x: number; y: number }, r: number) => Math.hypot(q.x - x, q.y - y) < reach(e, r) * devicePixelRatio;
       if (e.button === 0) {
         // a node's handle (pull it), a node (select it; drag it along the path), else the view
         const hnd = this.handleHits.find((q) => near(q, 11));
@@ -914,6 +965,8 @@ export class Map3D {
     });
     c.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      // (a touch: its long press says it — a phone's own context menu would delete twice)
+      if ((e as PointerEvent).pointerType === "touch" || pressed()) return;
       // right-click on a node: delete it
       const [x, y] = at(e);
       const nd = this.nodeHits.find((q) => Math.hypot(q.x - x, q.y - y) < 10 * devicePixelRatio);
@@ -927,6 +980,7 @@ export class Map3D {
         this.gizmo.y = y;
         return;
       }
+      if (pinch.active) return;
       if (this.nodeDrag) {
         // along the path: the nearest of its points
         let best: { t: number; d: number } | null = null;
@@ -951,13 +1005,19 @@ export class Map3D {
       drag.y = e.clientY;
       c.style.cursor = "grabbing";
       if (drag.pan) {
-        this.cam.pan(dx * devicePixelRatio, dy * devicePixelRatio);
+        this.shifting(() => this.cam.pan(dx * devicePixelRatio, dy * devicePixelRatio));
         this.autoDist = false;
       } else this.cam.orbit(dx, dy);
       this.moving = true;
     });
     c.addEventListener("pointerleave", () => (this.hover = null));
     c.addEventListener("pointerup", (e) => {
+      if (pinch.active || pressed()) {
+        drag = null;
+        this.gizmo = null;
+        this.nodeDrag = null;
+        return;
+      }
       if (this.gizmo || this.nodeDrag) {
         this.gizmo = null;
         this.nodeDrag = null;
@@ -965,7 +1025,7 @@ export class Map3D {
       }
       if (drag && !drag.moved && e.button === 0) {
         const [x, y] = at(e);
-        const id = this.bodyAt(x, y);
+        const id = this.bodyAt(x, y, reach(e, 16));
         if (id) this.host.act.select(id);
         else {
           // on a path: a new node there
@@ -974,7 +1034,7 @@ export class Map3D {
             const d = Math.hypot(q.x - x, q.y - y);
             if (!p || d < p.d) p = { t: q.t, d };
           }
-          if (p && p.d < 9 * devicePixelRatio) {
+          if (p && p.d < reach(e, 9) * devicePixelRatio) {
             this.host.act.addNodeAt(p.t);
             this.host.sel = this.lastInfo?.plan ? this.lastInfo.plan.nodes.filter((n) => n.t < p.t).length : 0;
           }
@@ -991,14 +1051,14 @@ export class Map3D {
     });
   }
 
-  /** The body under a point (device pixels): its disc, or within 16 px of its centre. */
-  private bodyAt(x: number, y: number): string | null {
+  /** The body under a point (device pixels): its disc, or within `near` CSS px of its centre (16; a finger 22). */
+  private bodyAt(x: number, y: number, near = 16): string | null {
     let best: string | null = null,
       bd = Infinity;
     for (const q of this.bodyHits) {
       const d = Math.hypot(q.x - x, q.y - y);
-      const reach = Math.max(q.r, 16 * devicePixelRatio);
-      if (d < reach && d - q.r < bd) (bd = d - q.r), (best = q.id);
+      const r = Math.max(q.r, near * devicePixelRatio);
+      if (d < r && d - q.r < bd) (bd = d - q.r), (best = q.id);
     }
     return best;
   }
@@ -1162,6 +1222,7 @@ export class Map3D {
       this.focus = null;
       this.plane = "system";
       this.autoDist = true;
+      this.panOff = [0, 0, 0];
       this.cam.goal.pitch = 0.62;
       this.cam.goal.yaw = -0.5;
     }
@@ -1181,7 +1242,7 @@ export class Map3D {
     if (fid !== "ship" && !sc.byId.has(fid)) fid = this.homeFocus();
     const fb = fid === "ship" ? null : sc.byId.get(fid)!;
     const F: V3 = fb ? fb.pos : ship;
-    this.cam.goal.focus = F;
+    this.cam.goal.focus = add(F, this.panOff);
     const [pe1, pe2, pn] = this.planeAxes(sc, i, fb, ship, shipVel, refPos);
     this.cam.setPlane(pe1, pe2, pn);
     this.log = this.isLog();
