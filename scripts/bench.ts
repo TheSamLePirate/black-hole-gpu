@@ -1,18 +1,20 @@
-// Frame-time benchmark of the reference scenes (audit §17), in a headless Chrome over the DevTools
-// protocol, against a running server (bun --hot server.ts):
+// Frame-time benchmark of the reference scenes in a headless Chrome over the DevTools protocol, against
+// a running server (bun --hot server.ts). The measuring itself is the app's own — the Kerr Bench
+// (src/bench/runner.ts, __bh.bench) — so this, the nightly and a friend's browser measure the same thing.
 //
 //   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick]
-//                        [--compare http://localhost:3012/ [--reps 2]] [--warm ms]
+//                        [--compare http://localhost:3012/ [--reps 2]]
 //
-// For each scene: the Game quality, its automatic subsampling and dynamic resolution — the frame
-// intervals' p50/p95/p99, frames over 33 ms, the rays per displayed pixel —, then a fixed setting
-// (subsampling 4, full scale) whose frame time compares commits (the controllers otherwise turn a
-// faster kernel into a sharper image). The GPU memory the page allocated is summed from its
-// createTexture/createBuffer calls. Writes docs/perf/bench-<label>.json.
+// For each scene: phase A (the Game quality, its automatic subsampling and dynamic resolution — the
+// frame intervals' p50/p95/p99, frames over 33 ms, rays per displayed pixel) and phase B (subsampling 4,
+// the image ~1.44 Mpx — its throughput in Mrays/s, the figure that compares commits). Writes
+// docs/perf/bench-<label>.json. Compare mode alternates a reference build scene by scene (the machine's
+// drift, its clocks and heat, falls on both).
 //
-// Measure alone: another page rendering (the browser pane, a second headless) shares the GPU and
-// halves both. Chrome is killed on exit.
+// Measure alone: another page rendering (the browser pane, a second headless) shares the GPU and halves
+// both. Chrome is killed on exit.
 import { tmpdir } from "node:os";
+import type { SceneReport } from "../src/bench/report";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -20,32 +22,19 @@ const arg = (k: string, d: string) => {
 };
 const URL = arg("url", "http://localhost:3000/");
 const quick = process.argv.includes("--quick");
-// a reference build to alternate with (e.g. git archive HEAD~1 served on another port)
 const COMPARE = arg("compare", "");
-// time given to each page before its first measure [ms] (the specialised tracers compile in the background)
-const WARM = Number(arg("warm", "3000"));
-const SCENES = arg("scenes", "")
-  ? arg("scenes", "").split("|")
-  : [
-      "game:artemis",
-      "Ranger: approaching Gargantua",
-      "Interstellar: along the disk (the film's close pass)",
-      "Kerr a=0.94, near edge-on",
-      "Saturn: backlit",
-      "Interstellar: wormhole to Gargantua",
-      "Moon: an afternoon on the plains",
-      "Miller: Gargantua over the sea",
-    ];
 const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
 const label = arg("label", sha);
 const port = 9350 + Math.floor(Math.random() * 40);
 const W = 1469,
   H = 965,
   DPR = 2;
+const CHROME =
+  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 
 const chrome = Bun.spawn(
   [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    CHROME,
     "--headless=new",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${tmpdir()}/kerr-bench-profile`,
@@ -54,6 +43,7 @@ const chrome = Bun.spawn(
     "--ignore-gpu-blocklist",
     `--window-size=${W},${H}`,
     "--no-first-run",
+    "--mute-audio",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
@@ -68,38 +58,7 @@ const kill = () => {
 };
 process.on("SIGINT", () => (kill(), process.exit(1)));
 
-// (the page's GPU allocations, summed: textures by format, size, layers and mips; buffers)
-const VRAM_HOOK = `(() => {
-  const B = { rgba8unorm: 4, "rgba8unorm-srgb": 4, bgra8unorm: 4, "bgra8unorm-srgb": 4, rgba16float: 8, rgba32float: 16, r32float: 4,
-    rg32float: 8, r16float: 2, rg16float: 4, r8unorm: 1, rg8unorm: 2, depth32float: 4, depth24plus: 4, "depth24plus-stencil8": 4, r32uint: 4,
-    rgb10a2unorm: 4, rg11b10ufloat: 4, "bc7-rgba-unorm": 1, "bc7-rgba-unorm-srgb": 1, "bc5-rg-unorm": 1, "bc4-r-unorm": 0.5,
-    "bc6h-rgb-ufloat": 1, "astc-4x4-unorm": 1, "astc-4x4-unorm-srgb": 1 };
-  const live = new Map(); let total = 0, peak = 0;
-  const add = (o, n) => { live.set(o, n); total += n; peak = Math.max(peak, total); };
-  const P = GPUDevice.prototype, ct = P.createTexture, cb = P.createBuffer;
-  P.createTexture = function (d) { const t = ct.call(this, d); const s = d.size; const w = s.width ?? s[0], h = s.height ?? s[1] ?? 1, l = s.depthOrArrayLayers ?? s[2] ?? 1;
-    const m = (d.mipLevelCount ?? 1) > 1 ? 4 / 3 : 1; add(t, w * h * l * (B[d.format] ?? 4) * m * Math.max(1, d.sampleCount ?? 1)); return t; };
-  P.createBuffer = function (d) { const b = cb.call(this, d); add(b, d.size); return b; };
-  for (const C of [GPUTexture, GPUBuffer]) { const ds = C.prototype.destroy; C.prototype.destroy = function () { const n = live.get(this); if (n !== undefined) { total -= n; live.delete(this); } return ds.call(this); }; }
-  globalThis.__vram = () => ({ mib: total / 2 ** 20, peakMiB: peak / 2 ** 20 });
-})();`;
-
-interface SceneResult {
-  scene: string;
-  auto: {
-    fps: number;
-    p50: number;
-    p95: number;
-    p99: number;
-    over33: number;
-    raysPerPx: number;
-    blocks: Record<string, number>;
-    scales: Record<string, number>;
-  };
-  fixed: { fps: number; p50: number; p95: number };
-  vramMiB: number;
-  gpuPasses: { pass: string; ms: number }[];
-}
+type Evaluated = { result?: { value?: unknown }; exceptionDetails?: { exception?: { description?: string } } };
 
 try {
   let targets: { type: string; webSocketDebuggerUrl: string }[] = [];
@@ -113,119 +72,83 @@ try {
   const ws = new WebSocket(targets.find((t) => t.type === "page")!.webSocketDebuggerUrl);
   await new Promise((r) => (ws.onopen = r));
   let id = 0;
-  const pending = new Map<number, (v: any) => void>();
+  const pending = new Map<number, (v: Evaluated) => void>();
   ws.onmessage = (m) => {
     const d = JSON.parse(String(m.data));
     if (d.id && pending.has(d.id)) pending.get(d.id)!(d.result ?? d.error);
   };
   const cdp = (method: string, params: object = {}) =>
-    new Promise<any>((r) => {
-      const i = ++id;
-      pending.set(i, r);
-      ws.send(JSON.stringify({ id: i, method, params }));
+    new Promise<Evaluated>((r) => {
+      pending.set(++id, r);
+      ws.send(JSON.stringify({ id, method, params }));
     });
-  const js = async (body: string) => {
-    const r = await cdp("Runtime.evaluate", { expression: `(async () => { ${body} })()`, awaitPromise: true, returnByValue: true });
+  const js = async <T>(expr: string): Promise<T> => {
+    const r = await cdp("Runtime.evaluate", { expression: `(async () => (${expr}))()`, awaitPromise: true, returnByValue: true });
     if (r?.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? "page error");
-    return r?.result?.value;
+    return r?.result?.value as T;
   };
   await cdp("Runtime.enable");
   await cdp("Page.enable");
-  await cdp("Page.addScriptToEvaluateOnNewDocument", { source: VRAM_HOOK });
   await cdp("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: DPR, mobile: false });
-  // (compare mode: the reference build and this one, alternated scene by scene — the machine's own
-  // drift, its clocks and heat, falls on both)
   const urls = COMPARE ? [COMPARE, URL] : [URL];
   let at = "";
   const open = async (url: string) => {
     if (at === url) return;
-    await cdp("Page.navigate", { url });
+    // (#bench: the page counts its GPU memory from the first allocation)
+    await cdp("Page.navigate", { url: `${url}#bench` });
     at = url;
     await sleep(1000);
     for (let i = 0; i < 240; i++) {
-      if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`).catch(() => false)) break;
+      if (
+        await js<boolean>(`typeof __bh !== "undefined" && !!__bh.bench && !document.querySelector("#loading:not(.done)")`).catch(
+          () => false,
+        )
+      )
+        break;
       await sleep(500);
     }
-    // (the first scene applied at once: its specialised tracer compiles while the page warms)
-    await js(`__bh.preset(${JSON.stringify(SCENES[0])}); return 0`).catch(() => 0);
-    await sleep(WARM);
   };
+  await open(URL);
+  const scenes: string[] = arg("scenes", "") ? arg("scenes", "").split("|") : await js<string[]>("__bh.bench.scenes");
 
-  // a window of frames: every rAF marks the scene changed (the realtime path, as when flying); the
-  // intervals between the GPU's completions, the block and scale each frame was drawn with
-  const window = (ms: number) => `
-    const r = __bh.renderer, dpr = devicePixelRatio;
-    const iv = [], blocks = {}, scales = {}; let rays = 0, n = 0, last = r.lastDoneAt;
-    const t0 = performance.now();
-    while (performance.now() - t0 < ${ms}) {
-      __bh.touch();
-      await new Promise((q) => requestAnimationFrame(q));
-      if (r.lastDoneAt !== last) {
-        if (last) iv.push(r.lastDoneAt - last);
-        last = r.lastDoneAt;
-        const p = __bh.game.perf(), b = r.realtimeBlockNow, sc = p.renderScale;
-        blocks[b] = (blocks[b] ?? 0) + 1; scales[sc] = (scales[sc] ?? 0) + 1;
-        rays += (__bh.settings.pixelRatio * sc / dpr) ** 2 / (b * b); n++;
-      }
-    }
-    iv.sort((a, b) => a - b);
-    const q = (f) => iv.length ? +iv[Math.min(iv.length - 1, Math.floor(f * iv.length))].toFixed(2) : NaN;
-    return { fps: +(n * 1000 / ${ms}).toFixed(1), p50: q(0.5), p95: q(0.95), p99: q(0.99), over33: iv.filter((x) => x > 33.4).length,
-      raysPerPx: +(rays / Math.max(n, 1)).toFixed(4), blocks, scales };`;
-
-  const warm = quick ? 4000 : 7000,
-    span = quick ? 5000 : 9000;
-  const measure = async (scene: string): Promise<SceneResult | null> => {
-    const ok = await js(`if (!(${JSON.stringify(scene)} in __bh.presets)) return false; __bh.preset(${JSON.stringify(scene)});
-      Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: "auto", dynamicResolution: true, fpsCap: 0, pixelRatio: Math.min(devicePixelRatio, 1.25) });
-      __bh.resize(); __bh.refresh?.(); return true;`);
-    if (!ok) return null;
-    await js(
-      `const t0 = performance.now(); while (performance.now() - t0 < ${warm}) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`,
-    );
-    const auto = await js(window(span));
-    const gpuPasses = await js(`return __bh.game.perf().gpu.slice(0, 8).map((g) => ({ pass: g.pass, ms: +g.ms.toFixed(2) }))`);
-    await js(
-      `Object.assign(__bh.settings, { realtimeSubsampling: 4, dynamicResolution: false }); __bh.resize(); __bh.refresh?.(); return 0`,
-    );
-    await js(
-      `const t0 = performance.now(); while (performance.now() - t0 < 2500) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 0`,
-    );
-    const f = await js(window(quick ? 3000 : 5000));
-    const vramMiB = +(await js(`return globalThis.__vram ? __vram().mib : NaN`)).toFixed(0);
-    return { scene, auto, fixed: { fps: f.fps, p50: f.p50, p95: f.p95 }, vramMiB, gpuPasses };
-  };
   const mean = (a: number[]) => +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(a[0]! < 1 ? 4 : 1);
-  const line = (tag: string, rs: SceneResult[]) =>
-    `  ${tag.padEnd(4)} auto ${String(mean(rs.map((r) => r.auto.fps))).padStart(5)} fps  p50 ${String(mean(rs.map((r) => r.auto.p50))).padStart(6)}` +
-    `  p95 ${String(mean(rs.map((r) => r.auto.p95))).padStart(6)}  >33ms ${String(mean(rs.map((r) => r.auto.over33))).padStart(5)}` +
-    `  rays/px ${mean(rs.map((r) => r.auto.raysPerPx)).toFixed(4)}  | fixed b4 p50 ${String(mean(rs.map((r) => r.fixed.p50))).padStart(6)} ms  | VRAM ${mean(rs.map((r) => r.vramMiB))} MiB`;
+  const line = (tag: string, rs: SceneReport[]) =>
+    `  ${tag.padEnd(4)} auto ${String(mean(rs.map((r) => r.auto?.fps ?? 0))).padStart(5)} fps  p95 ${String(mean(rs.map((r) => r.auto?.p95 ?? 0))).padStart(6)}` +
+    `  >33ms ${String(mean(rs.map((r) => r.auto?.over33 ?? 0))).padStart(5)}  rays/px ${mean(rs.map((r) => r.auto?.raysPerPx ?? 0)).toFixed(4)}` +
+    `  | fixed b4 p50 ${String(mean(rs.map((r) => r.fixed?.p50 ?? 0))).padStart(6)} ms ${String(mean(rs.map((r) => r.fixed?.mraysPerS ?? 0))).padStart(6)} Mrays/s` +
+    `  | VRAM ${mean(rs.map((r) => r.vramMiB ?? 0))} MiB`;
 
-  const results: Record<string, SceneResult[]> = {};
+  const results: Record<string, SceneReport[]> = {};
   const reps = COMPARE ? Number(arg("reps", "2")) : 1;
-  for (const scene of SCENES) {
-    const per: SceneResult[][] = urls.map(() => []);
+  for (const scene of scenes) {
+    const per: SceneReport[][] = urls.map(() => []);
     for (let k = 0; k < reps; k++)
       for (const [i, url] of urls.entries()) {
         await open(url);
-        const r = await measure(scene);
-        if (r) per[i]!.push(r);
+        const r = await js<SceneReport>(`__bh.bench.scene(${JSON.stringify(scene)}, ${quick})`);
+        if (r.status === "ok") per[i]!.push(r);
+        else console.log(`  (${scene}: ${r.status} ${r.error ?? ""})`);
       }
-    if (!per[0]!.length) {
-      console.log(`(no scene "${scene}")`);
-      continue;
-    }
+    if (!per[urls.length - 1]!.length) continue;
     console.log(scene);
-    urls.forEach((u, i) => {
+    urls.forEach((_, i) => {
       if (per[i]!.length) console.log(line(COMPARE ? (i ? "new" : "ref") : "", per[i]!));
     });
     results[scene] = per[urls.length - 1]!;
     if (COMPARE) results[`${scene} (ref)`] = per[0]!;
   }
-  const peak = await js(`return globalThis.__vram ? +__vram().peakMiB.toFixed(0) : NaN`);
-  const out = { label, sha, date: new Date().toISOString(), viewport: [W, H, DPR], compare: COMPARE || null, peakVramMiB: peak, results };
+  const peak = await js<number | null>(`__bh.bench.vram()?.peakMiB ?? null`);
+  const out = {
+    label,
+    sha,
+    date: new Date().toISOString(),
+    viewport: [W, H, DPR],
+    compare: COMPARE || null,
+    peakVramMiB: peak && Math.round(peak),
+    results,
+  };
   await Bun.write(`docs/perf/bench-${label}.json`, JSON.stringify(out, null, 1));
-  console.log(`peak VRAM ${peak} MiB → docs/perf/bench-${label}.json`);
+  console.log(`peak VRAM ${out.peakVramMiB} MiB → docs/perf/bench-${label}.json`);
 } finally {
   kill();
 }

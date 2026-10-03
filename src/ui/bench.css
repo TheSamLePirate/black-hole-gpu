@@ -1,0 +1,291 @@
+/* The Kerr Bench's screen (#bench): an instrument panel over the scenes it renders — the direction the
+   audit chose for the whole interface ("Endurance / NASA 2067"): dark panels, one chamfer, hairlines,
+   condensed capitals for labels, figures in mono. */
+.kb {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  font-family: var(--hud-font);
+  color: var(--hud-text);
+}
+.kb-panel {
+  --cut: 12px;
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 22px 24px 20px;
+  background: rgba(7, 11, 18, 0.93);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  box-shadow: inset 0 0 0 1px var(--hud-edge);
+}
+.kb-panel::before,
+.kb-panel::after {
+  /* corner brackets */
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--hud-edge-hi);
+}
+.kb-panel::before {
+  right: 6px;
+  top: 6px;
+  border-left: 0;
+  border-bottom: 0;
+}
+.kb-panel::after {
+  left: 6px;
+  bottom: 6px;
+  border-right: 0;
+  border-top: 0;
+}
+.kb-code {
+  font: 600 11px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--hud-amber);
+}
+.kb h1 {
+  margin: 4px 0 6px;
+  font: 700 28px var(--hud-font);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.kb p {
+  margin: 0 0 12px;
+  font: 400 14px/1.45 var(--font);
+  color: var(--hud-dim);
+}
+.kb-label {
+  display: block;
+  margin: 14px 0 6px;
+  font: 600 12px var(--hud-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+.kb-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.kb-btn {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 10px 12px;
+  font: 600 13px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--hud-text);
+  background: rgba(111, 210, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--hud-edge);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.kb-btn:hover {
+  box-shadow: inset 0 0 0 1px var(--hud-edge-hi);
+}
+.kb-btn:active {
+  transform: translateY(1px);
+}
+.kb-btn:focus-visible {
+  outline: 2px solid var(--hud-amber);
+  outline-offset: 2px;
+}
+.kb-btn[aria-pressed="true"] {
+  box-shadow: inset 0 -2px 0 var(--hud-amber), inset 0 0 0 1px var(--hud-amber);
+  background: rgba(255, 179, 92, 0.12);
+}
+.kb-btn small {
+  display: block;
+  margin-top: 3px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--hud-dim);
+}
+.kb-btn.kb-go {
+  color: #0a0d12;
+  background: var(--hud-amber);
+  box-shadow: none;
+}
+.kb-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 0;
+  outline: 0;
+  font: 500 14px var(--font);
+  color: var(--hud-text);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hud-edge);
+}
+.kb-input:focus {
+  box-shadow: inset 0 0 0 1px var(--hud-amber);
+}
+.kb-collect {
+  margin: 0;
+  padding-left: 18px;
+  font: 400 12.5px/1.5 var(--font);
+  color: var(--hud-dim);
+}
+.kb-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.kb-row .kb-btn {
+  flex: 1 1 140px;
+}
+.kb-tips {
+  margin-top: 10px;
+  font: 400 12px var(--font);
+  color: var(--hud-dim);
+}
+/* running: a band at the bottom, the scene above it */
+.kb-run {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 18px;
+  background: rgba(7, 11, 18, 0.9);
+  box-shadow: inset 0 0 0 1px var(--hud-edge);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.kb-run-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font: 600 13px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.kb-run-head b {
+  font: 600 13px var(--mono);
+  letter-spacing: 0;
+  color: var(--hud-amber);
+}
+.kb-bar {
+  height: 4px;
+  margin: 10px 0 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.kb-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--hud-amber);
+  transition: width 0.25s linear;
+}
+.kb-run-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 500 12px var(--mono);
+  color: var(--hud-dim);
+}
+.kb-cancel {
+  all: unset;
+  cursor: pointer;
+  font: 600 12px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+.kb-cancel:hover {
+  color: var(--hud-text);
+}
+/* results */
+.kb-score {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+}
+.kb-score b {
+  font: 600 48px var(--mono);
+  color: var(--hud-amber);
+}
+.kb-score span {
+  font: 600 13px var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+.kb-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font: 500 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.kb-table th {
+  padding: 6px 6px;
+  font: 600 11px var(--hud-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: right;
+  color: var(--hud-dim);
+  border-bottom: 1px solid var(--hud-line);
+}
+.kb-table td {
+  padding: 6px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--hud-line);
+}
+.kb-table th:first-child,
+.kb-table td:first-child {
+  text-align: left;
+  font-family: var(--font);
+  max-width: 260px;
+}
+.kb-warn {
+  margin-top: 10px;
+  font: 500 12.5px var(--font);
+  color: var(--hud-amber);
+}
+.kb-sys {
+  margin-top: 8px;
+  font: 500 12px var(--mono);
+  color: var(--hud-dim);
+}
+@media (max-width: 560px) {
+  .kb-modes {
+    grid-template-columns: 1fr;
+  }
+  .kb h1 {
+    font-size: 22px;
+  }
+}
+/* the game's interface out of the way while the bench runs its scenes */
+body.benching #toolbar,
+body.benching #hud,
+body.benching #panel,
+body.benching #tp-dock,
+body.benching .fl-root,
+body.benching .sp-toast,
+body.benching #hint,
+body.benching .mission-caption,
+body.benching .asset-pill,
+body.benching #cam-pop,
+body.benching #sky-pop,
+body.benching .gt-root,
+body.benching .tf,
+body.benching canvas.fl-hud,
+body.benching #overlay {
+  display: none !important;
+}

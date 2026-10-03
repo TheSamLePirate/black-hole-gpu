@@ -21,6 +21,8 @@ export interface Stage {
   indeterminate: boolean;
   eta: number;
   startedAt: number;
+  /** when it finished [performance.now() ms] */
+  doneAt?: number;
   error?: string;
 }
 
@@ -60,6 +62,7 @@ class LoadTracker {
     if (!s || s.state === "done") return;
     s.state = "done";
     s.frac = 1;
+    s.doneAt = performance.now();
     this.emit();
   }
 

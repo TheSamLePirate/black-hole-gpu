@@ -29,6 +29,8 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // the build's version (the benchmark's report names it); the pages build writes the same file
+    "/version.json": async () => Response.json({ sha: (await Bun.$`git rev-parse --short HEAD`.nothrow().text()).trim() || "dev" }),
     "/basis_transcoder.wasm": () =>
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).

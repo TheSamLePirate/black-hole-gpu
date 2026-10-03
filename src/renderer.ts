@@ -427,9 +427,10 @@ export class Renderer {
   private bandY = 0;
   private bandRows = 64;
   private realtimeBlock = 2;
-  /** the realtime subsampling in use (one ray per block × block pixels) */
+  /** the realtime subsampling of the last realtime frame (one ray per block × block pixels) — the
+   *  automatic choice, or the fixed one the settings ask for */
   get realtimeBlockNow() {
-    return this.realtimeBlock;
+    return this.lastBlock;
   }
   private blockMs = new Map<number, { ms: number; at: number }>();
   private lastBlock = 2;
@@ -893,6 +894,29 @@ export class Renderer {
     device.pushErrorScope("validation");
     const r = new Renderer(device, context, format, src);
     r.tier = guessTier(adapter);
+    // (what the adapter is and can do: the benchmark's report)
+    const info = (adapter as GPUAdapter & { info?: GPUAdapterInfo }).info;
+    const lim = adapter.limits as unknown as Record<string, number>;
+    r.adapter = {
+      vendor: info?.vendor ?? "",
+      architecture: info?.architecture ?? "",
+      device: info?.device ?? "",
+      description: info?.description ?? "",
+      fallback: !!(info as (GPUAdapterInfo & { isFallbackAdapter?: boolean }) | undefined)?.isFallbackAdapter,
+      features: [...adapter.features].sort(),
+      limits: Object.fromEntries(
+        [
+          "maxStorageBuffersPerShaderStage",
+          "maxSampledTexturesPerShaderStage",
+          "maxBufferSize",
+          "maxStorageBufferBindingSize",
+          "maxTextureDimension2D",
+          "maxComputeInvocationsPerWorkgroup",
+          "maxComputeWorkgroupStorageSize",
+          "maxBindGroups",
+        ].map((k) => [k, lim[k] ?? 0]),
+      ),
+    };
     void lost.then((info) => {
       r.lost = info.reason === "destroyed" ? "released" : info.message || "the GPU was reset";
       if (info.reason !== "destroyed") r.onLost?.(r.lost);
@@ -3082,6 +3106,24 @@ export class Renderer {
    */
   /** the hardware's tier (its pixel budget for the realtime image) */
   tier: Tier = { level: 2, capMpx: 2.2, label: "" };
+  /** the adapter: what it is, its features and key limits (set at create) */
+  adapter: {
+    vendor: string;
+    architecture: string;
+    device: string;
+    description: string;
+    fallback: boolean;
+    features: string[];
+    limits: Record<string, number>;
+  } | null = null;
+  /** when the GPU last finished a frame [performance.now() ms] */
+  get lastFrameDoneAt() {
+    return this.lastDoneAt;
+  }
+  /** the scene's specialised tracer compiled (or none needed): the realtime image at full speed */
+  get variantReady() {
+    return this.featureKey === FEATURES_ALL || !!this.variants.get(this.featureKey)?.rt;
+  }
   /** the device was lost (its reason), or null */
   lost: string | null = null;
   onLost?: (why: string) => void;

@@ -73,6 +73,9 @@ import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 import { store } from "./util/storage";
 import { caught } from "./debug";
+import { KerrBench, BENCH_SCENES } from "./bench/runner";
+import { installVramHook, vram } from "./bench/vram";
+import { BenchScreen } from "./ui/bench";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -187,6 +190,11 @@ let displayChanged = true;
 let transport: TransportBar | null = null;
 
 let firstFrame = false;
+/** when the first image was on screen [performance.now() ms] */
+let firstFrameAt: number | null = null;
+/** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
+const benchPage = /[#&]bench\b/.test(location.hash);
+if (benchPage) installVramHook();
 
 /**
  * A row that overflows sideways scrolls with a plain (vertical) mouse wheel too — Windows mice have
@@ -1679,6 +1687,49 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
+  let appVersion = "dev";
+  void fetch("version.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v: { sha?: string } | null) => v?.sha && (appVersion = v.sha))
+    .catch(() => {});
+  const bench = new KerrBench({
+    settings,
+    renderer,
+    canvas,
+    presets,
+    preset: (name) => applyPreset(name),
+    resize,
+    refresh: () => {
+      refreshGui();
+      touch();
+      touchDisplay();
+    },
+    touch,
+    renderScale: () => renderScale,
+    gpuPasses: () => {
+      if (!renderer.prof.enabled) (renderer.prof.enabled = true), renderer.prof.reset();
+      return renderer.prof.table().map((p) => ({ pass: p.label, ms: Math.round(p.ms * 100) / 100 }));
+    },
+    firstImageAt: () => firstFrameAt,
+    get version() {
+      return appVersion;
+    },
+  });
+  if (benchPage) {
+    // (a benchmark's scenes are not the player's flight: nothing autosaved on this page)
+    settings.autosave = false;
+    void splash.gone.then(
+      () =>
+        new BenchScreen(bench, {
+          onStart: () => renderer.prof.reset(),
+          onClose: () => {
+            history.replaceState(null, "", location.pathname);
+            location.reload();
+          },
+        }),
+    );
+  }
   // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
   let entryPoint: GameSave | null = null;
   const craftLost = new CraftLost();
@@ -1718,6 +1769,17 @@ async function main() {
     __bh: {
       /** the game's tools: __bh.game.help() */
       game: tools,
+      /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */
+      bench: {
+        run: (o: Parameters<KerrBench["run"]>[0]) => bench.run(o),
+        scene: (name: string, quick = false) =>
+          bench.scene(
+            name,
+            quick ? { warm: 2500, auto: 4000, fixedWarm: 1500, fixed: 3000 } : { warm: 4000, auto: 8000, fixedWarm: 2500, fixed: 5000 },
+          ),
+        scenes: BENCH_SCENES,
+        vram,
+      },
       settings,
       renderer,
       camera,
@@ -1913,6 +1975,7 @@ async function main() {
       if (!firstFrame) {
         // the first image is on screen: the loading screen lifts once the scene's assets are in
         firstFrame = true;
+        firstFrameAt = performance.now();
         splash.firstImage();
       }
       fpsN++;
@@ -2006,7 +2069,8 @@ async function main() {
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)
-      if (st || !flightHud.drawn)
+      // (the benchmark measures the image alone: the HUD hidden and not drawn)
+      if ((st || !flightHud.drawn) && !bench.running)
         cpuProf.time("flight HUD (total)", () =>
           flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time),
         );
