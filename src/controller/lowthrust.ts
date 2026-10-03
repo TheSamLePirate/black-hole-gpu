@@ -1,0 +1,1886 @@
+// The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
+// (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { blToCartesian, cameraFrame } from "../camera";
+import { horizon, isco, photonOrbits, coordToZamo, type Vec3 } from "../physics";
+import {
+  bodyCentre,
+  BODY_NAMES,
+  type Body,
+  starOrbitRadius,
+  bodyVelocity,
+  bodyMass,
+  bodyRadius,
+  bodyHill,
+  cameraHome,
+  isOurs,
+  ourLook,
+  ourTarget,
+} from "../targeting";
+import { fromZamo } from "../geodesic";
+import { GARGANTUA_SYSTEM } from "../system/bodies";
+import { bodyState } from "../system/ephemeris";
+import { accelToG, tank } from "../engine";
+import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
+import { type Site, SITES } from "../game/sites";
+import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
+import { circularize as fcCircularize, type Burn } from "../fc/ops";
+import { timeTo as kepTimeTo } from "../fc/kepler";
+import { airTopKm } from "../game/place";
+import { airTop } from "../aero";
+import { AUTO_NAMES, circularSpeed, toU, type Auto } from "../pilot";
+import type { ManeuverNode } from "../maneuver";
+import { shipToCamera } from "../mounts";
+import { fleet } from "../fleet";
+import { VESSELS } from "../vessels";
+import { mouth, sphericalFrame } from "../wormhole";
+import { gravityHome, OUR_BODIES, ourState, soiOf } from "../system/our-side";
+import { predictOurs, type OurPath } from "../system/our-predict";
+import { plan as runPlanner } from "../system/plan-client";
+import { airDensity as ourAir, dragAccel, gearHeight, groundVelocity, solidBody } from "../system/our-surface";
+import { bodyAxes, solarBody, solarState } from "../system/solar";
+import { station } from "../system/iss";
+import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
+import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
+import { caught } from "../debug";
+import { frameNow } from "../frameclock";
+
+import type { CameraController, DockInfo, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
+import { LANDING, add3, clamp, fmtDur, spinAxis, unitV } from "./util";
+
+declare module "../controls" {
+  interface CameraController {
+    planLowThrust: typeof planLowThrust;
+    coorbit: typeof coorbit;
+    rendezvousGuidance: typeof rendezvousGuidance;
+    lineClears: typeof lineClears;
+    transferWant: typeof transferWant;
+    circularWant: typeof circularWant;
+    ourPeriod: typeof ourPeriod;
+    targetVelLocal: typeof targetVelLocal;
+    maneuverDir: typeof maneuverDir;
+    ourWant: typeof ourWant;
+    ourSurfaceWant: typeof ourSurfaceWant;
+    hubInfo: typeof hubInfo;
+    hubCompute: typeof hubCompute;
+    circPlan: typeof circPlan;
+    ourCircWant: typeof ourCircWant;
+    autopilotWant: typeof autopilotWant;
+    flightInfo: typeof flightInfo;
+    predictPath: typeof predictPath;
+    driftDir: typeof driftDir;
+    runwayView: typeof runwayView;
+    runwayCompute: typeof runwayCompute;
+    futureView: typeof futureView;
+    futureCompute: typeof futureCompute;
+    futureSee: typeof futureSee;
+    holeLook: typeof holeLook;
+    kerrPathFrom: typeof kerrPathFrom;
+  }
+}
+
+/** Plans a low-thrust transfer (the Crew engine's PLAN TRANSFER); EXECUTE flies it. */
+function planLowThrust(this: CameraController, goal: "orbit" | "star" | "wormhole", r2: number, orbitBody: boolean): string {
+  const s = this.s;
+  const cam = cameraFrame(s);
+  if (cam.region !== "hole") return "Planning works around the black hole";
+  const a = this.thrustMax();
+  if (!(a > 0)) return "No thrust: the tank is empty";
+  const r0 = cam.r;
+  const vc = (r: number) => 1 / Math.sqrt(r);
+  const days = (tM: number) => (tM * 4.925490947e-6 * s.massSolar) / 86400;
+  let tr: LowThrust;
+  let dv = 0;
+  let what = "";
+  if (goal === "orbit") {
+    const rMin = Math.max(isco(s.spin) * 1.02, horizon(s.spin) + 2);
+    const r = Math.max(r2, rMin);
+    tr = { goal: "orbit", r2: r, stage: "spiral", rs: r };
+    dv = Math.abs(vc(r0) - vc(r));
+    what = `spiral ${r0.toFixed(0)} → ${r.toFixed(0)} M, circularize`;
+  } else {
+    const body: Body =
+      goal === "wormhole"
+        ? "wormhole"
+        : s.system !== "none" && s.target !== "hole" && s.target !== "wormhole" && s.target !== "barycentre"
+          ? s.target
+          : "star";
+    if (body === "star" && !s.sun) return "No companion star in this scene: select a body (Tab)";
+    if (body === "wormhole" && !s.wormhole) return "No wormhole in this scene";
+    const t = this.nowTime();
+    const R = Math.hypot(...bodyCentre(s, body, t));
+    const co = 3 / (R * R) >= a; // the hole's pull beats the engine there
+    const orbit = orbitBody && bodyMass(s, body) > 0;
+    s.target = body;
+    if (co) {
+      const side = r0 >= R ? 1 : -1;
+      tr = { goal: "body", body, orbit, mode: "coorbital", stage: "spiral", rs: R * (1 + 0.1 * side) };
+      dv = Math.abs(vc(r0) - vc(R));
+      what = `spiral ${r0.toFixed(0)} → ${(R * (1 + 0.1 * side)).toFixed(1)} M, phase with ${BODY_NAMES[body]} (a few more % of Δv), spiral onto its circle`;
+    } else {
+      const rFree = Math.min(Math.max(Math.sqrt(3 / a), r0), 0.5 * R);
+      const D = R - rFree;
+      tr = { goal: "body", body, orbit, mode: "cruise", stage: "spiral", rs: rFree };
+      // (and the hole's pull fought along the straight flight: ∫ M/r² dt ≈ (1/r_free − 1/R)/v)
+      const vCruise = Math.min(0.05, Math.sqrt(a * D));
+      dv = Math.abs(vc(r0) - vc(rFree)) + 2 * vCruise + (1 / rFree - 1 / R) / vCruise;
+      what = `spiral out to ${rFree.toFixed(0)} M, then fly ${D.toFixed(0)} M to ${BODY_NAMES[body]}`;
+    }
+    what += orbit ? ", orbit it" : ", keep station";
+  }
+  this.plan = { nodes: [], path: null, at: 0, note: "" };
+  this.transfer = tr;
+  const w = Math.atanh(Math.min(dv, 0.999));
+  const budget = s.fuel ? tank(s, this.spent) : null;
+  const over = !budget
+    ? ""
+    : w > budget.left
+      ? ` — ⚠ over the propellant left (${budget.left.toFixed(3)})`
+      : ` — ≈ ${Math.round((100 * w) / Math.max(budget.budget, 1e-12))}% of the tank`;
+  tr.note = `Low thrust at ${accelToG(a, s).toFixed(1)} g: ${what} · Δv ≈ ${dv.toFixed(3)} c, ≥ ${days(dv / a).toFixed(0)} d of burning${over}`;
+  return `Plan: ${tr.note}`;
+}
+
+/**
+ * Meeting a body on its circle around the hole: its radius, the phase it is ahead of the ship, and
+ * the angular rate of circles.
+ */
+function coorbit(this: CameraController, body: Body, cam: ReturnType<typeof cameraFrame>, a: number) {
+  const s = this.s;
+  const C = bodyCentre(s, body, this.nowTime());
+  const X = blToCartesian(cam.r, cam.theta, cam.phi);
+  const R = Math.hypot(...C);
+  const om = (x: number) => 1 / (x ** 1.5 + Math.abs(s.spin));
+  const dphi = Math.atan2(
+    Math.sin(Math.atan2(C[1], C[0]) - Math.atan2(X[1], X[0])),
+    Math.cos(Math.atan2(C[1], C[0]) - Math.atan2(X[1], X[0])),
+  );
+  return {
+    R,
+    dphi,
+    om,
+  };
+}
+
+/**
+ * The last stretch to a body on its circle: the minimum-energy push of the linear relative motion
+ * (Kerr's epicycles about the body — the hole's tide and the frame's turning in closed form, see
+ * lowthrust.ts), re-solved every frame with the time left; that time is set at the start as the
+ * shortest for which the push stays within half the engine. Null once there (the orbit / approach
+ * autopilot takes over).
+ */
+function rendezvousGuidance(this: CameraController, T: LowThrust, cam: ReturnType<typeof cameraFrame>, a: number): Vec3 | null {
+  if (T.goal !== "body") return null;
+  const s = this.s;
+  const t = this.nowTime();
+  const C = bodyCentre(s, T.body, t);
+  const R = Math.hypot(...C);
+  const ep = epicycle(R, Math.abs(s.spin));
+  const X = blToCartesian(cam.r, cam.theta, cam.phi);
+  const f = sphericalFrame(X);
+  const Vs = this.fromZamo(cam, f, cam.beta);
+  // curvilinear coordinates about the body: x = ϖ − R, y = R Δφ, z
+  const rc = Math.hypot(X[0], X[1]);
+  const eR: Vec3 = [X[0] / rc, X[1] / rc, 0],
+    eP: Vec3 = [-X[1] / rc, X[0] / rc, 0];
+  const dph = Math.atan2(X[1], X[0]) - Math.atan2(C[1], C[0]);
+  const st: State6 = [rc - R, R * Math.atan2(Math.sin(dph), Math.cos(dph)), X[2], dot3(Vs, eR), R * (dot3(Vs, eP) / rc - ep.n), Vs[2]];
+  // the meeting point: on the body's circle, a few Hill radii behind or ahead of it (on the ship's
+  // side) — at rest there relative to it, where the orbit / approach autopilot takes over
+  const Rb = bodyRadius(s, T.body);
+  const hill = bodyHill(s, T.body, t) || 3 * Rb;
+  const stand = Math.max(1.5 * hill, 15 * Rb);
+  if (T.side === undefined) T.side = st[1] >= 0 ? 1 : -1;
+  const rs: State6 = [st[0], st[1] - T.side * stand, st[2], st[3], st[4], st[5]];
+  const dist = Math.hypot(rs[0], rs[1], rs[2]);
+  const rel = Math.hypot(st[3], st[4], st[5]);
+  if (dist < 0.5 * stand && rel < Math.max(Math.sqrt(a * stand), 1e-6)) return null;
+  const push = (tg: number) => rendezvousPush(ep, rs, tg);
+  if (T.tEnd === undefined) {
+    let best = Infinity,
+      tg0 = 2 / ep.n;
+    for (let tg = 0.5 / ep.n; tg < 60 / ep.n; tg *= 1.15) {
+      const p = push(tg);
+      const m = p ? Math.hypot(...p) : Infinity;
+      if (m <= 0.5 * a) {
+        tg0 = tg;
+        break;
+      }
+      if (m < best) (best = m), (tg0 = tg);
+    }
+    T.tEnd = t + tg0;
+  }
+  const tgo = T.tEnd - t;
+  // (the time is up: hand over wherever it is)
+  if (tgo < (3 * s.timeSpeed) / 30) return null;
+  const A = push(tgo);
+  if (!A) return null;
+  // local components; coordinate acceleration → proper (× (dt/dτ)² of the body's orbit)
+  const Aw = lin(lin(eR, A[0], eP, A[1]), 1, [0, 0, 1], A[2]);
+  const k = ep.ut ** 2;
+  const loc: Vec3 = [dot3(Aw, f.er) * k, dot3(Aw, f.et) * k, dot3(Aw, f.ep) * k];
+  const L = Math.hypot(...loc);
+  return L > a ? lin(loc, a / L, loc, 0) : loc;
+}
+
+/** The straight segment X → C passes the hole no closer than dMin. */
+function lineClears(this: CameraController, X: Vec3, C: Vec3, dMin: number) {
+  const d = sub3(C, X);
+  const u = clamp(-dot3(X, d) / Math.max(dot3(d, d), 1e-30), 0, 1);
+  return Math.hypot(...lin(X, 1, d, u)) >= dMin;
+}
+
+/** The transfer's goal for the pilot at this stage (stages advance by themselves). */
+function transferWant(
+  this: CameraController,
+  cam: ReturnType<typeof cameraFrame>,
+  say: (t: string) => null,
+): { beta: Vec3; ff: Vec3 } | null {
+  const s = this.s;
+  const T = this.transfer;
+  if (!T) return say("No low-thrust transfer planned (PLAN with the Crew engine)");
+  if (cam.region !== "hole") return say("Low-thrust transfer: only around the black hole");
+  const a = this.thrustMax();
+  if (!(a > 0)) return say("Transfer stopped: the tank is empty");
+  // (it flies itself at the highest warp the rails allow)
+  if (T.warp === undefined) {
+    T.warp = s.timeSpeed;
+    // (the wish is the rails' ceiling; this frame already runs at what they allow now)
+    this.warpWant = 1e5;
+    s.timeSpeed = this.warpSet = Math.min(1e5, this.railsLimit(cam).lim);
+  }
+  const r = cam.r;
+  const b = cam.beta;
+  // tangential direction (local), in the sense of the motion
+  let tv: Vec3 = [0, b[1], b[2]];
+  const tl = Math.hypot(...tv);
+  tv = tl > 1e-6 ? lin(tv, 1 / tl, tv, 0) : [0, 0, 1];
+  const coast = { beta: b, ff: [0, 0, 0] as Vec3 };
+  const next = (st: LowThrust["stage"]) => {
+    T.stage = st;
+    T.gap = undefined;
+    T.up = undefined;
+    T.tol = undefined;
+    T.tEnd = undefined;
+  };
+  // (a body on Gargantua's equator: the orbit's tilt is damped all along — a push against the
+  // vertical velocity, which swings with the tilt twice a turn — so the ship arrives in its plane)
+  const tilt = (ff: Vec3): Vec3 => (T.goal !== "body" ? ff : [ff[0], ff[1] - 0.5 * a * clamp(b[1] / 0.005, -1, 1), ff[2]]);
+  // a circle's velocity as the goal (its vertical part left to the damping)
+  const round = (c: { beta: Vec3; ff: Vec3 }) => (T.goal !== "body" ? c : { beta: [c.beta[0], b[1], c.beta[2]] as Vec3, ff: tilt(c.ff) });
+  const finish = (auto: Auto, msg: string) => {
+    this.transfer = null;
+    // (a cruise still has the long straight flight ahead: the rails keep the warp until the orbit)
+    if (T.goal === "body" && T.mode === "cruise") this.warpAfter = Math.min(T.warp ?? 4, 50);
+    else {
+      s.timeSpeed = this.warpSet = Math.min(T.warp ?? 4, 50);
+      this.warpWant = null;
+    }
+    this.pilot.auto = "none";
+    this.pilot.setAuto(auto);
+    this.onPilotMessage?.(msg);
+    return null;
+  };
+  // Newtonian osculating orbit (the spiral's stop: apoapsis or periapsis at the goal when the
+  // engine is strong for the place; the radius itself when it is weak and the orbit stays round)
+  const osc = () => {
+    const vr = b[0],
+      vt = tl;
+    const e = 0.5 * (vr * vr + vt * vt) - 1 / r;
+    if (e >= 0) return { pe: r, ap: Infinity };
+    const sma = -1 / (2 * e),
+      ecc = Math.sqrt(Math.max(0, 1 + 2 * e * (r * vt) ** 2));
+    return { pe: sma * (1 - ecc), ap: sma * (1 + ecc) };
+  };
+  if (T.stage === "spiral") {
+    if (T.up === undefined) T.up = T.rs > r;
+    // (the rails slow the last part of a spiral down: it stops within tol of its radius)
+    if (T.tol === undefined) T.tol = 0.002 * T.rs;
+    const up = T.up;
+    const o = osc();
+    // (a cruise leaves from where the engine beats the hole: the radius itself must be reached)
+    const strong = a > 0.3 / (r * r) && !(T.goal === "body" && T.mode === "cruise");
+    const reached = up ? r >= T.rs : r <= T.rs;
+    let done = reached || (strong && (up ? o.ap >= T.rs : o.pe <= T.rs));
+    if (done && T.goal === "body" && T.mode === "cruise") {
+      // (a cruise also waits, still climbing, for a straight line to the body that clears the hole
+      // — at half the way there it stops climbing and waits on its circle)
+      const C = bodyCentre(s, T.body, this.nowTime());
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const clear = this.lineClears(X, C, 0.5 * r);
+      if (clear) {
+        next("final");
+        return { beta: b, ff: [0, 0, 0] };
+      }
+      done = r >= 0.5 * Math.hypot(...C);
+    }
+    // (the circle's speed here as the goal — the pilot keeps the orbit round — and the tangential
+    // push on top: a spiral of near-circular turns)
+    if (!done) {
+      const c = this.circularWant(cam);
+      // (with the drift a tangential push gives a circular orbit: dr/dt = ±2 a r^{3/2})
+      const want: Vec3 = typeof c === "string" ? b : [clamp((up ? 2 : -2) * a * r ** 1.5, -0.1, 0.1), c.beta[1], c.beta[2]];
+      return { beta: [want[0], b[1], want[2]], ff: tilt(lin(tv, up ? a : -a, tv, 0)) };
+    }
+    // (stopped on the orbit's apsis, not on the radius: coast there, then round the orbit)
+    if (!reached) {
+      const u = !!up;
+      next("coast");
+      T.up = u;
+    } else next("circ");
+  }
+  if (T.stage === "coast") {
+    if (T.up ? b[0] > 0 : b[0] < 0) return { beta: b, ff: tilt([0, 0, 0]) };
+    next("circ");
+  }
+  if (T.stage === "circ") {
+    const c0 = this.circularWant(cam);
+    if (typeof c0 === "string") return say(c0);
+    const c = round(c0);
+    const err = Math.hypot(...sub3(c.beta, b));
+    if (err > 2e-3 * Math.hypot(...c.beta)) return c;
+    if (T.goal === "orbit") return finish("circularize", `Transfer done — circular orbit at ${r.toFixed(1)} M`);
+    if (T.mode === "cruise") next("wait");
+    else {
+      // co-orbital: on the body's circle and close enough behind or ahead of it — the final
+      // approach; on the circle but far — a parking circle a little off it (lower to catch up,
+      // higher to let it come), sized so the drift takes a few turns; off the circle — drift
+      // until the spiral back meets the body. Each round shrinks the offset tenfold or so.
+      const g = this.coorbit(T.body, cam, a);
+      // (the relative guidance re-solves every frame: it can start a little off the circle)
+      const near = Math.abs(r - g.R) < 0.05 * g.R;
+      if (near && Math.abs(g.dphi) < 0.15) next("rdv");
+      else if (!near) next("drift");
+      else {
+        const d = -Math.sign(g.dphi) * clamp(Math.abs(g.dphi) / (9 * Math.PI), 0.004, 0.1);
+        T.rs = g.R * (1 + d);
+        next("spiral");
+        return c;
+      }
+    }
+  }
+  if (T.goal !== "body") return coast;
+  if (T.stage === "wait") {
+    // (cruise: leave from the body's side of the hole — the straight flight must not pass it)
+    const C = bodyCentre(s, T.body, this.nowTime());
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    if (!this.lineClears(X, C, 0.5 * cam.r)) {
+      const c = this.circularWant(cam);
+      return typeof c === "string" ? coast : round(c);
+    }
+    next("final");
+  }
+  if (T.stage === "drift") {
+    // the gap left once the spiral back onto the circle has gained its share: start that spiral
+    // when it crosses zero (coasting on the parking circle meanwhile)
+    const g = this.coorbit(T.body, cam, a);
+    const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
+    const tBack = Math.abs(1 / Math.sqrt(r) - 1 / Math.sqrt(g.R)) / a;
+    const gap = wrap(g.dphi - 0.5 * (g.om(r) - g.om(g.R)) * tBack);
+    const prev = T.gap;
+    T.gap = gap;
+    if (!(prev !== undefined && Math.abs(gap) < 0.5 && Math.sign(gap) !== Math.sign(prev))) return { beta: b, ff: tilt([0, 0, 0]) };
+    T.rs = g.R;
+    next("spiral");
+    return { beta: b, ff: [0, 0, 0] };
+  }
+  if (T.stage === "rdv") {
+    const g = this.rendezvousGuidance(T, cam, a);
+    if (g) return { beta: b, ff: g };
+    next("final");
+  }
+  if (T.stage === "final") {
+    const name = BODY_NAMES[T.body];
+    if (T.orbit) return finish("orbit", `Transfer done — closing in on ${name}, then in orbit`);
+    return finish("approach", `Transfer done — closing in on ${name}, then station-keeping`);
+  }
+  return coast;
+}
+
+/** The circular orbit's velocity here, in the plane the ship moves in (or why there is none). */
+function circularWant(this: CameraController, cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | string {
+  const s = this.s;
+  const b = cam.beta;
+  let t: Vec3 = [0, b[1], b[2]];
+  let tl = Math.hypot(...t);
+  if (tl < 1e-4) (t = [0, 0, s.spin >= 0 ? 1 : -1]), (tl = 1);
+  t = lin(t, 1 / tl, t, 0);
+  const pro = t[2] * (s.spin >= 0 ? 1 : -1) >= 0;
+  const v = circularSpeed(cam.r, Math.abs(s.spin), pro, cam.zamo);
+  if (v === null) return "No circular orbit here: inside the photon orbit";
+  // the equatorial formula is only a first guess off the equator: the circular speed is the one
+  // whose free fall has no radial acceleration (a_r linear in v² — two probes)
+  const v1 = Math.abs(v),
+    v2 = Math.min(1.05 * v1, 0.999);
+  const a1 = this.freeFallAccel(cam, lin(t, v1, t, 0))[0];
+  const a2 = this.freeFallAccel(cam, lin(t, v2, t, 0))[0];
+  const vc = a2 !== a1 ? Math.sqrt(clamp(v1 * v1 - (a1 * (v2 * v2 - v1 * v1)) / (a2 - a1), 0, 0.998)) : v1;
+  return { beta: lin(t, vc, t, 0), ff: [0, 0, 0] };
+}
+
+/** A turn of the ship's orbit around its reference body (the Kepler period; unbound: a day). */
+function ourPeriod(this: CameraController, nav: NonNullable<ReturnType<CameraController["ourNav"]>>) {
+  const mb = OUR_BODIES.find((b) => b.id === nav.ref)?.mass ?? 1e-8;
+  const r = Math.hypot(...sub3(nav.X, nav.refPos));
+  const v = sub3(nav.V, nav.refVel);
+  const eps = dot3(v, v) / 2 - mb / r;
+  return eps < 0 ? 2 * Math.PI * Math.sqrt((-mb / (2 * eps)) ** 3 / mb) : DAY_S / M_SECONDS;
+}
+
+/** The target's velocity as a local 3-velocity (ZAMO near the hole, rep on our side). */
+function targetVelLocal(this: CameraController, cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+  const s = this.s;
+  if (s.target === "hole") return [0, 0, 0];
+  const nav = this.ourNav(cam);
+  if (nav) return nav.toRep(ourTarget(s, s.target, nav.t).vel);
+  if (cam.region !== "hole") return null;
+  const V = bodyVelocity(s, s.target, this.nowTime());
+  const f = sphericalFrame(blToCartesian(cam.r, cam.theta, cam.phi));
+  return coordToZamo([dot3(V, f.er), dot3(V, f.et), dot3(V, f.ep)], cam.r, cam.theta, cam.zamo);
+}
+
+/** The next manoeuvre node's burn direction (local), for the NODE hold and the navball. */
+function maneuverDir(this: CameraController, cam: ReturnType<typeof cameraFrame>): Vec3 | null {
+  if (this.nodeBurning && this.burnDir) return this.burnDir;
+  const n = this.plan.nodes[0];
+  if (!n) return null;
+  const v = this.nodeDirLocal ? this.nodeDirLocal(cam, n) : null;
+  return v;
+}
+
+/**
+ * Our universe's autopilots (Newton, home frame; wanted velocities returned as local rep vectors):
+ *  - approach: towards the target at the speed that still stops at the stand-off with 60 % of the
+ *    engine (accelerate, then brake: a brachistochrone), the side drift cancelled; the warp set for
+ *    an arrival in ~8 s, the pilot's given back there; a body with a mass: then its orbit;
+ *  - orbit: a circle around the target, at the height it is engaged at (from far: low orbit, above
+ *    its air), in the plane of the ship's motion;
+ *  - hover: at rest against the reference body where engaged, the pull cancelled.
+ */
+function ourWant(
+  this: CameraController,
+  cam: ReturnType<typeof cameraFrame>,
+  say: (t: string) => null,
+  T: number,
+): { beta: Vec3; ff: Vec3 } | null {
+  const s = this.s;
+  const P = this.pilot;
+  const nav = this.ourNav(cam)!;
+  const t = nav.t;
+  const g = gravityHome(nav.X, t);
+  const thr = this.thrustMax();
+  const out = (v: Vec3, ff: Vec3 = [0, 0, 0]) => ({ beta: nav.toRep(v), ff: nav.toRep(ff) });
+  if (P.auto === "hover") {
+    // (by the mouth — targeted, within a few of its stand-offs: at rest against it)
+    const byMouth = !isOurs(s.target) && Math.hypot(...nav.X) < 0.5;
+    const refId = byMouth ? "mouth" : nav.ref;
+    const ref = byMouth ? { pos: [0, 0, 0] as Vec3, vel: [0, 0, 0] as Vec3 } : ourState(nav.ref, t);
+    if (!this.ourAnchor || this.ourAnchor.ref !== refId) this.ourAnchor = { ref: refId, d: sub3(nav.X, ref.pos) };
+    const back = sub3(lin(ref.pos, 1, this.ourAnchor.d, 1), nav.X);
+    this.hubNote = { off: Math.hypot(...back) * M_METRES, drift: Math.hypot(...sub3(nav.V, ref.vel)) * C_MPS };
+    const k = Math.min(1 / (4 * T), 0.3 * Math.sqrt(thr / Math.max(Math.hypot(...back), 1e-15)));
+    return out(lin(ref.vel, 1, back, k), lin(g.acc, -1, g.acc, 0));
+  }
+  this.ourAnchor = null;
+  if (P.auto === "land" || P.auto === "takeoff") return this.ourSurfaceWant(nav, g, say, out, T);
+  if (P.auto === "dock") return this.dockWant(nav, say, out);
+  if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize")
+    return say(`${AUTO_NAMES[P.auto]}: not in our universe (yet)`);
+  // (circularize: around the body of the sphere of influence, at the height it is engaged at)
+  const circ = P.auto === "circularize";
+  const tgt = (circ ? nav.ref : s.target) as Body;
+  const Tg = ourTarget(s, tgt, t);
+  const d = sub3(Tg.pos, nav.X);
+  const D = Math.hypot(...d);
+  const dh = lin(d, 1 / Math.max(D, 1e-30), d, 0);
+  const rel = sub3(nav.V, Tg.vel);
+  const sb = OUR_BODIES.find((b) => b.id === tgt);
+  const soi = sb && sb.id !== "sun" ? soiOf(tgt, t) : Infinity;
+  const air = GARGANTUA_SYSTEM.bodies.find((b) => b.id === tgt)?.surface?.atmosphere;
+  // (a low orbit: 10 % of the radius, above 12 scale heights of air)
+  const low = Tg.radius * 1.1 + (air ? (12 * air.H) / M_METRES : 0);
+  if (P.auto === "orbit" && !(Tg.mass > 0)) return say("Orbit: select a body with a mass");
+  if (circ) return this.ourCircWant(nav, Tg, say, out);
+  const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;
+  if (orbiting) {
+    if (!this.ourOrbitR || this.ourOrbitR.body !== tgt)
+      this.ourOrbitR = { body: tgt, r: circ ? Math.max(D, Tg.radius * 1.01) : Math.max(D, low) };
+    const r = this.ourOrbitR.r;
+    const Rh = lin(dh, -1, dh, 0);
+    let n = cross(Rh, rel);
+    if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
+    if (Math.hypot(...n) < 1e-12) n = cross(Rh, [1, 0, 0]);
+    n = lin(n, 1 / Math.hypot(...n), n, 0);
+    const th = cross(n, Rh);
+    const vc = Math.sqrt(Tg.mass / D);
+    // (the height held: a gentle radial pull back, a small part of the circular speed)
+    const vr = Math.max(-0.2, Math.min(0.2, (r - D) / (0.1 * r))) * vc * 0.5;
+    return out(lin(lin(Tg.vel, 1, th, vc), 1, Rh, vr));
+  }
+  this.ourOrbitR = null;
+  // approach: the stand-off, and the speed that still stops there
+  const stand = Tg.mass > 0 ? (P.auto === "orbit" ? low : Math.max(3 * Tg.radius, low)) : Math.max(3 * Tg.radius, 1e-5);
+  const left = D - stand;
+  const a = 0.6 * thr;
+  const vmax = s.engine === "crew" ? 0.2 : 0.5;
+  const vClose = Math.min(vmax, Math.sqrt(2 * a * Math.max(left, 0)));
+  const closing = -dot3(rel, dh);
+  // (arrived: within a tenth of the stand-off, slower than a fifth of the orbital speed there — or,
+  // no mass, than what the engine stops over a tenth of it)
+  const vArrive = Math.max(Math.sqrt(Tg.mass / Math.max(D, 1e-30)), Math.sqrt(2 * 0.6 * thr * 0.1 * stand)) * 0.2;
+  if (Math.abs(left) < 0.1 * stand && D > Tg.radius && Math.hypot(...rel) < vArrive) {
+    if (this.ourWarp !== null) s.timeSpeed = this.ourWarp;
+    this.ourWarp = null;
+    // (the rails forget the approach's warps: not a wish of the pilot's)
+    this.warpWant = null;
+    this.warpSet = s.timeSpeed;
+    if (Tg.mass > 0) {
+      P.setAuto("orbit");
+      this.onPilotMessage?.(`In orbit around ${BODY_NAMES[tgt]}`);
+    } else {
+      P.setAuto("hover");
+      this.onPilotMessage?.(`Arrived: ${BODY_NAMES[tgt]}`);
+    }
+    return out(Tg.vel);
+  }
+  // the warp: an arrival in ~8 s (the rails still hold it near bodies); the pilot's wish kept
+  // (no Zeno ending: the last twentieth of the stand-off at the pace of a braking over it)
+  const ttg = (Math.abs(left) + 0.05 * stand) / Math.max(Math.abs(closing), vClose * 0.5, Math.sqrt(2 * 0.6 * thr * 0.05 * stand), 1e-12);
+  this.hubNote = {
+    left: left * M_METRES,
+    closing: -closing * C_MPS,
+    ttg: ttg * 4.925490947e-6 * s.massSolar,
+    stand: stand * M_METRES,
+    name: BODY_NAMES[tgt] ?? tgt,
+  };
+  if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
+  s.timeSpeed = Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5);
+  let want = lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left)));
+  // (never through a planet: near the body of the sphere of influence — not the target — the part
+  // of the wanted motion that dives towards it is taken off: the ship climbs, spiralling out)
+  if (nav.ref !== tgt && nav.ref !== "sun") {
+    const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
+    const Rv = sub3(nav.X, nav.refPos);
+    const Rd = Math.hypot(...Rv);
+    if (Rd < 10 * rb) {
+      const Rh = lin(Rv, 1 / Rd, Rv, 0);
+      const u = sub3(want, nav.refVel);
+      const ur = dot3(u, Rh);
+      if (ur < 0) want = lin(want, 1, Rh, -ur);
+    }
+  }
+  return out(want);
+}
+
+function ourSurfaceWant(
+  this: CameraController,
+  nav: NonNullable<ReturnType<CameraController["ourNav"]>>,
+  g: ReturnType<typeof gravityHome>,
+  say: (t: string) => null,
+  out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 },
+  T: number,
+) {
+  const P = this.pilot;
+  const id = nav.ref;
+  const what = P.auto === "land" ? "Landing" : "Take-off";
+  const name = BODY_NAMES[id as Body] ?? id;
+  if (id === "sun" || !solidBody(id)) return say(`${what}: get near a body with a ground first (${name} has none)`);
+  if (!VESSELS[fleet.active].lands)
+    return say(`${what}: the ${VESSELS[fleet.active].name} never lands — it was built in orbit (the Ranger and the Lander land)`);
+  const sb = solarBody(id)!;
+  const c = C_MPS;
+  const Pb = nav.refPos;
+  const r = Math.hypot(...sub3(nav.X, Pb));
+  const up = lin(sub3(nav.X, Pb), 1 / r, nav.X, 0);
+  const h = Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES;
+  const gw = sb.mass / (r * r);
+  const thr = this.thrustMax();
+  if (thr < 1.05 * gw) {
+    const gU = C_MPS ** 2 / M_METRES / G0;
+    return say(`${what}: the engine (${(thr * gU).toFixed(1)} g) cannot hold the weight on ${name} (${(gw * gU).toFixed(2)} g)`);
+  }
+  // (held against gravity and, in the air, its drag)
+  const ff = lin(lin(g.acc, 1, dragAccel(id, nav.X, nav.V, nav.t), 1), -1, g.acc, 0);
+  const minute = 60 / M_SECONDS; // [M]
+  const gv = groundVelocity(id, nav.X, nav.t);
+  if (P.auto === "land") {
+    if (this.ourLanded) {
+      P.setAuto("land");
+      this.onPilotMessage?.(`Landed on ${name}`);
+      return null;
+    }
+    const va = sub3(nav.V, gv);
+    const vv = dot3(va, up);
+    const vh = Math.hypot(va[0] - vv * up[0], va[1] - vv * up[1], va[2] - vv * up[2]);
+    const tH = vh / (0.5 * thr);
+    const vd = -Math.max(Math.min(Math.sqrt(2 * 0.5 * (thr - gw) * h), h / (minute / 12 + tH), 0.02), 1.5 / c);
+    // (the descent rate first: its correction rides with the hold against gravity, the horizontal
+    // speed is killed with the thrust left — a fall is never traded for a sideways error)
+    return out(lin(gv, 1, up, vv), lin(ff, 1, up, (vd - vv) / T));
+  }
+  // take-off
+  const air = sb.atmosphere;
+  const LG = this.launchGoal;
+  const d0 =
+    sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius, LG.altKm !== null ? (LG.altKm * 1e3) / M_METRES : 0);
+  // (the climb aimed a little above the height asked — it slows as it nears its aim — and the orbit
+  // made circular once the height is reached)
+  const dAim = d0 + 0.04 * (d0 - sb.radius);
+  const f = Math.min(Math.max((r - sb.radius) / (dAim - sb.radius), 0), 1);
+  const pole = unitV(spinAxis(id));
+  let east = cross(pole, up);
+  if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
+  east = unitV(east);
+  // (an inclination asked: the launch azimuth for it — sin az = cos i / cos latitude, prograde —, the
+  // nearest reachable when the site's latitude is above it)
+  if (LG.incDeg !== null) {
+    const north = cross(up, east);
+    const cl = Math.sqrt(Math.max(1 - dot3(up, pole) ** 2, 1e-9));
+    const sinAz = clamp(Math.cos((LG.incDeg * Math.PI) / 180) / cl, -1, 1);
+    const az = Math.asin(sinAz);
+    east = unitV(lin(north, Math.cos(az), east, sinAz));
+  }
+  const vc = Math.sqrt(sb.mass / r);
+  let vUp = Math.min(Math.sqrt((thr - gw) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
+  const vE = vc * Math.sqrt(f);
+  const vi = sub3(nav.V, nav.refVel);
+  if (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
+    P.auto = "none";
+    P.setAuto("circularize");
+    this.onPilotMessage?.(`In orbit around ${name}`);
+    return null;
+  }
+  // (inertial east speed: the ground already gives its turning at lift-off)
+  const vGroundE = dot3(sub3(gv, nav.refVel), east);
+  let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
+  // in the air: the speed through it no more than keeps the craft's own drag (½ ρ v² C_D A / m) under
+  // 30 % of the thrust, and the dynamic pressure under 35 kPa (max-Q) — straight up through the thick
+  // air first, turning east as it thins (a gravity turn)
+  const rho = ourAir(id, h * M_METRES);
+  if (rho > 0) {
+    const k = Math.max(this.dragPerMass(), 1e-6);
+    const vMax = Math.min(Math.sqrt((0.6 * thr * ((c * c) / M_METRES)) / (rho * k)), Math.sqrt((2 * 35e3) / rho)) / c;
+    vUp = Math.min(vUp, vMax);
+    const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
+    vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
+  }
+  // (an inclination asked: the ground's own turn across the launch's heading taken off as the craft
+  // climbs — else it is left in the orbit, which then comes out flatter)
+  let want = lin(lin(gv, 1, up, vUp), 1, east, vEastAir);
+  if (LG.incDeg !== null) {
+    const gi = sub3(gv, nav.refVel);
+    const across = lin(lin(gi, 1, east, -dot3(gi, east)), 1, up, -dot3(gi, up));
+    want = lin(want, 1, across, -f);
+  }
+  return out(want, ff);
+}
+
+/**
+ * The hub's card: the autopilot flying, what it does now, its figures, and what it predicts — the
+ * orbit after its burn, the deorbit's heat and load, the touchdown, the arrival. Redone 4 times a
+ * second at most. Null: no autopilot.
+ */
+function hubInfo(this: CameraController): HubInfo | null {
+  const now = frameNow();
+  if (this.hubCache && now - this.hubCache.at < 250) return this.hubCache.v;
+  let v: HubInfo | null = null;
+  try {
+    v = this.hubCompute();
+  } catch (e) {
+    caught("hub", e);
+  }
+  this.hubCache = { at: now, v };
+  return v;
+}
+
+function hubCompute(this: CameraController): HubInfo | null {
+  const P = this.pilot,
+    a = P.auto,
+    s = this.s;
+  if (a === "none") return null;
+  const C = C_MPS;
+  const Msec = 4.925490947e-6 * s.massSolar;
+  const km = (m: number) =>
+    !Number.isFinite(m)
+      ? "∞"
+      : Math.abs(m) >= 1e5
+        ? `${Math.round(m / 1e3).toLocaleString("en-US")} km`
+        : Math.abs(m) >= 1e3
+          ? `${(m / 1e3).toFixed(1)} km`
+          : `${Math.round(m)} m`;
+  const ms = (x: number) =>
+    !Number.isFinite(x) ? "—" : Math.abs(x) >= 1e4 ? `${(x / 1e3).toFixed(2)} km/s` : `${x.toFixed(Math.abs(x) < 10 ? 1 : 0)} m/s`;
+  const dur = (x: number) => (!Number.isFinite(x) ? "—" : x < 0 ? "now" : fmtDur(x));
+  const fc = this.fcContext();
+  const orbitOf = (r: KV3, v: KV3) => {
+    if (!fc) return "";
+    const e = kepElements(fc.ctx.mu, r, v, fc.ctx.pole ?? [0, 0, 1]);
+    const R = fc.ctx.R;
+    return e.e < 1 ? `${km(e.rp - R)} × ${km(e.ra - R)}` : `escape · Pe ${km(e.rp - R)}`;
+  };
+  const base = (
+    title: string,
+    phase: string,
+    rows: [string, string][] = [],
+    next: string | null = null,
+    bar: number | null = null,
+  ): HubInfo => ({ mode: a, title, phase, rows, next, bar });
+  // a burn planned and flown (the node autopilot; CIRC's own burn)
+  if (a === "node" || a === "burns") {
+    const pl = this.fcPlan();
+    const b = pl?.burns[0];
+    if (!pl || !b) return base("NODE", "no burn left");
+    const circ = !!this.ourCirc;
+    const dv = Math.hypot(...b.dv);
+    const thrSI = this.thrustMax() * (C ** 2 / (1476.625 * s.massSolar));
+    const burnT = thrSI > 0 ? dv / thrSI : NaN;
+    const doneM = a === "node" ? this.nodeDone * C : (this.fcBurns[0]?.done ?? 0);
+    const burning = a === "node" ? this.nodeBurning : !!this.fcBurns[0]?.firing;
+    const start = b.t - burnT / 2;
+    let next: string | null = null;
+    if (fc) {
+      // (after the burn, impulsive: the orbit it leaves)
+      const at = kepProp(fc.ctx.mu, fc.ctx.r, fc.ctx.v, Math.max(b.t, 0));
+      const d = fromPNR(at.r, at.v, b.dv as KV3);
+      const v2 = burning ? fc.ctx.v : ([at.v[0] + d[0], at.v[1] + d[1], at.v[2] + d[2]] as KV3);
+      next =
+        circ && this.ourCirc?.altKm !== undefined
+          ? `→ circular at ${this.ourCirc.altKm.toFixed(0)} km`
+          : burning
+            ? null
+            : `→ ${orbitOf(at.r, v2)}`;
+    }
+    const where = circ
+      ? this.ourCirc?.where === "pe"
+        ? "the periapsis"
+        : "the apoapsis"
+      : pl.burns.length > 1
+        ? `burn 1 of ${pl.burns.length}`
+        : "the burn";
+    const phase = burning ? "burning" : start > 120 ? `coasting to ${where}, the time sped up` : `turning to ${where}`;
+    const rows: [string, string][] = burning
+      ? [
+          ["Δv left", ms(Math.max(dv - doneM, 0))],
+          ["Burn", `${dur(Math.max(dv - doneM, 0) / Math.max(thrSI, 1e-9))} left`],
+        ]
+      : [
+          ["Burn in", dur(start)],
+          ["Δv", ms(dv)],
+          ["Length", dur(burnT)],
+        ];
+    return {
+      mode: circ ? "circularize" : a,
+      title: circ ? "CIRC" : "NODE",
+      phase,
+      rows,
+      next,
+      bar: burning ? Math.min(doneM / Math.max(dv, 1e-9), 1) : null,
+    };
+  }
+  if (a === "circularize") {
+    if (fc && this.ourCirc) {
+      const r = fc.ctx.r,
+        v = fc.ctx.v;
+      const rl = Math.hypot(...r);
+      const up = r.map((x) => x / rl) as KV3;
+      const vr = v[0] * up[0] + v[1] * up[1] + v[2] * up[2];
+      const vh = v.map((x, i) => x - vr * up[i]!) as KV3;
+      const vc = Math.sqrt(fc.ctx.mu / rl);
+      const err = Math.hypot(...vh.map((x, i) => x - (vc * x) / Math.hypot(...vh)), vr) || 0;
+      return base(
+        "CIRC",
+        "trimming to the circle",
+        [
+          ["Error", ms(err)],
+          ["Orbit", orbitOf(r, v)],
+        ],
+        `→ circular at ${km(rl - fc.ctx.R)}`,
+      );
+    }
+    return base("CIRC", fc?.universe === "ours" ? "planning the burn" : "closing on the circular velocity");
+  }
+  if (a === "entry") {
+    const R = this.entryRun;
+    const site = R?.site ? R.site.name.split(",")[0]! : "the nearest site";
+    if (!R) return base("ENTRY", "starting");
+    if (R.phase === "plan") return base("ENTRY", `planning the deorbit to ${site}`);
+    const nowS = this.nowTime() * Msec;
+    const heat = R.plan
+      ? `→ then ${(R.plan.heat / 1e4).toFixed(0)} W/cm² · ${R.plan.g.toFixed(1)} g · shield ${Math.round(R.plan.shield)} K, down at ${site}`
+      : `→ down at ${site}`;
+    if (R.phase === "wait")
+      return base(
+        "ENTRY",
+        "coasting to the deorbit burn, the time sped up",
+        [
+          ["Burn in", dur(R.tBurn - nowS)],
+          ["Δv", ms(R.dv)],
+          ["Site", site],
+        ],
+        heat,
+      );
+    if (R.phase === "burn")
+      return base(
+        "ENTRY",
+        "the deorbit burn, retrograde",
+        [
+          ["Δv", `${R.done.toFixed(0)} / ${R.dv.toFixed(0)} m/s`],
+          ["Site", site],
+        ],
+        heat,
+        Math.min(R.done / Math.max(R.dv, 1e-9), 1),
+      );
+    const LA = this.airFlight.last;
+    if (R.phase === "entry") {
+      const miss = R.guid?.lastMiss;
+      const rows: [string, string][] = [["Site", site]];
+      if (LA) rows.push(["Mach", LA.out.mach.toFixed(1)], ["Height", km(LA.h)]);
+      rows.push(["Bank", `${Math.round((R.bank * 180) / Math.PI)}°`]);
+      return base(
+        "ENTRY",
+        LA && LA.out.q > 50 ? "the guided entry — the bank flown to the site" : "falling to the air",
+        rows,
+        miss ? `→ hand-over ${km(miss.dist)} from its aim (Mach ${R.handover})` : heat,
+      );
+    }
+    // the glide
+    const app = R.app;
+    const legs: Record<string, string> = {
+      join: "joining the runway's axis",
+      toStart: "to the final's start",
+      downwind: "downwind",
+      turn: "turning onto the final",
+      final: "on the final",
+    };
+    const profs: Record<string, string> = {
+      outer: "the steep slope",
+      preflare: "the pull-up",
+      inner: "the shallow slope",
+      flare: "the flare",
+      rollout: "the touchdown",
+    };
+    const phase = R.leg === "final" && R.prof ? `${legs.final} — ${profs[R.prof.phase]}` : (legs[R.leg ?? "join"] ?? "gliding");
+    const rows: [string, string][] = [["Site", site]];
+    if (app) {
+      rows.push(["To the threshold", km(Math.hypot(app.along, app.across))], ["Height", km(app.agl)], ["Speed", ms(app.speed)]);
+      if (R.prof && R.leg === "final")
+        rows.push(["Profile", `${app.agl - R.prof.h >= 0 ? "+" : "−"}${Math.abs(Math.round(app.agl - R.prof.h))} m`]);
+    }
+    const td = R.prof?.td ?? LANDING.td;
+    const tGo = app ? (td - app.along) / Math.max(app.speed * 0.85, 1) : NaN;
+    return base(
+      "ENTRY",
+      phase,
+      rows,
+      app
+        ? `→ touchdown ${td} m past the threshold${R.leg === "final" && Number.isFinite(tGo) && tGo > 0 ? ` in ~${dur(tGo)}` : ""}`
+        : null,
+    );
+  }
+  const sf = this.surfaceInfo() as { alt?: number; vVert?: number; vHor?: number; landed?: boolean } | null;
+  if (a === "land") {
+    if (!sf || sf.alt === undefined) return base("LAND", "descending");
+    const vs = sf.vVert ?? 0;
+    const t = sf.alt / Math.max(-vs, 0.5);
+    return base(
+      "LAND",
+      sf.landed ? "down" : (sf.vHor ?? 0) > 2 ? "killing the sideways speed, descending" : sf.alt < 30 ? "the touchdown" : "descending",
+      [
+        ["Height", km(sf.alt)],
+        ["V/S", ms(vs)],
+        ["Sideways", ms(sf.vHor ?? 0)],
+      ],
+      sf.landed ? null : `→ touchdown in ~${dur(t)}, at ~1.5 m/s`,
+    );
+  }
+  if (a === "takeoff") {
+    const LG = this.launchGoal;
+    const rows: [string, string][] = [];
+    // (the height it climbs to: the one asked, else clear of the air — 1.5 × its top — or 3 % of the radius)
+    const Rkm = fc ? fc.ctx.R / 1e3 : 0;
+    const goal = LG.altKm ?? Math.round(Math.max(1.5 * airTopKm(fc?.body ?? ""), 0.03 * Rkm));
+    let next: string | null = `→ up to ~${goal} km, then CIRC at the apoapsis`;
+    if (fc) {
+      const e = kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]);
+      const rl = Math.hypot(...fc.ctx.r);
+      rows.push(
+        ["Height", km(rl - fc.ctx.R)],
+        ["Apoapsis", e.e < 1 ? km(e.ra - fc.ctx.R) : "escape"],
+        ["Speed", `${Math.round((100 * Math.hypot(...fc.ctx.v)) / Math.sqrt(fc.ctx.mu / rl))} % of circular`],
+      );
+      if (e.rp > fc.ctx.R) next = `→ in orbit: ${km(e.rp - fc.ctx.R)} × ${km(e.ra - fc.ctx.R)}`;
+    }
+    const thick = !!sf && (sf.alt ?? 0) < airTopKm(fc?.body ?? "") * 1e3 * 0.4;
+    return base("TAKE OFF", thick ? "climbing through the thick air" : "the gravity turn, to orbit", rows, next);
+  }
+  const N = this.hubNote;
+  if (a === "approach" && N.left !== undefined) {
+    return base(
+      "APPROACH",
+      N.left > 0 ? `closing on ${N.name}` : `backing off to the stand-off`,
+      [
+        ["To the stand-off", km(N.left)],
+        ["Closing", ms(N.closing ?? 0)],
+      ],
+      `→ beside ${N.name} (${km(N.stand ?? 0)} off) in ~${dur(N.ttg ?? NaN)}`,
+    );
+  }
+  if (a === "hover" && N.off !== undefined)
+    return base("HOLD POS", "holding the place", [
+      ["Off it", km(N.off)],
+      ["Drift", ms(N.drift ?? 0)],
+    ]);
+  if (a === "dock") return base("DOCK", this.dockAuto?.phase ?? "docking");
+  return base(AUTO_NAMES[a].toUpperCase(), "flying");
+}
+
+/**
+ * The circle the pilot asks for: the cheaper of a burn at the next apoapsis and one at the next
+ * periapsis — the sooner, both above the air (a hyperbola: its periapsis) —, as the flight computer's
+ * circularization (fc/ops.ts). Null: circular already (the trim alone). A string: why not.
+ */
+function circPlan(
+  this: CameraController,
+): { burns: Burn[]; note: string; where: "ap" | "pe"; altKm: number; dv: number; t: number } | string | null {
+  const fc = this.fcContext();
+  if (!fc) return "Circularize: near a body";
+  const c = fc.ctx;
+  const el = kepElements(c.mu, c.r, c.v, c.pole ?? [0, 0, 1]);
+  const safe = c.R + (airTopKm(fc.body) + 10) * 1e3;
+  if (el.e < 1 && el.ra - el.rp < 2e3) return null;
+  const cands: { where: "ap" | "pe"; t: number; r: number }[] = [];
+  if (el.e < 1 && el.ra > safe) cands.push({ where: "ap", t: kepTimeTo(el, Math.PI), r: el.ra });
+  if (el.rp > safe) cands.push({ where: "pe", t: kepTimeTo(el, 0), r: el.rp });
+  if (!cands.length)
+    return el.e < 1
+      ? `Circularize: the orbit is in the air (apoapsis ${((el.ra - c.R) / 1e3).toFixed(0)} km) — raise it first`
+      : `Circularize: the periapsis is in the air or below — no circle on this path`;
+  // (an apsis half a burn away or passed: the other one, if there is one)
+  const ok = cands.filter((q) => Number.isFinite(q.t) && q.t > 20);
+  const pick = (ok.length ? ok : cands).sort((a, b) => a.t - b.t)[0]!;
+  const r = fcCircularize(c, pick.where);
+  if (!r.ok || !r.burns.length) return `Circularize: ${r.note}`;
+  return { burns: r.burns, note: r.note, where: pick.where, altKm: (pick.r - c.R) / 1e3, dv: r.dvTotal, t: r.burns[0]!.t };
+}
+
+/** The circularization's frame: the plan made (pilot's), or the trim — the circular velocity where it is. */
+function ourCircWant(
+  this: CameraController,
+  nav: NonNullable<ReturnType<CameraController["ourNav"]>>,
+  Tg: { pos: Vec3; vel: Vec3; mass: number; radius: number },
+  say: (t: string) => null,
+  out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 },
+) {
+  const P = this.pilot;
+  const C = C_MPS;
+  const rel = sub3(nav.V, Tg.vel);
+  const Rv = sub3(nav.X, Tg.pos);
+  const D = Math.hypot(...Rv);
+  const Rh = lin(Rv, 1 / D, Rv, 0);
+  const fmtT = (x: number) => (x < 90 ? `${Math.round(x)} s` : x < 5400 ? `${Math.round(x / 60)} min` : `${(x / 3600).toFixed(1)} h`);
+  if (!this.ourCirc) {
+    const plan = this.circPlan();
+    if (typeof plan === "string") return say(plan);
+    if (plan) {
+      this.fcSetPlan(plan.burns, plan.note);
+      const n0 = this.plan.nodes[0] as { then?: string; t: number } | undefined;
+      if (n0) n0.then = "circularize";
+      this.ourCirc = { mode: "node", where: plan.where, altKm: plan.altKm, dv: plan.dv, tNode: n0?.t, spent0: this.spent };
+      P.auto = "none";
+      P.setAuto("node");
+      this.onPilotMessage?.(
+        `Circularize at the ${plan.where === "ap" ? "apoapsis" : "periapsis"} (${plan.altKm.toFixed(0)} km) in ${fmtT(plan.t)}: ${plan.dv.toFixed(0)} m/s`,
+      );
+      return out(nav.V);
+    }
+    this.ourCirc = { mode: "trim", spent0: this.spent };
+  }
+  if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
+  const R = this.ourCirc;
+  R.since ??= frameNow();
+  // the trim: the circular velocity where the craft is — horizontal, in its plane —, no height held
+  let n = cross(Rh, rel);
+  if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
+  n = lin(n, 1 / Math.hypot(...n), n, 0);
+  const th = cross(n, Rh);
+  const vc = Math.sqrt(Tg.mass / D);
+  const err = Math.hypot(...sub3(rel, lin(th, vc, th, 0))) * C;
+  // (done: within 0.2 m/s — or, the trim's minute out, within 2)
+  const age = (frameNow() - R.since) / 1000;
+  if (err < 0.2 || (age > 60 && err < 2)) {
+    const fc = this.fcContext();
+    const el = fc ? kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]) : null;
+    const used = (this.spent - (R.spent0 ?? this.spent)) * C;
+    this.ourCirc = null;
+    P.setAuto("none");
+    this.onPilotMessage?.(
+      el && fc
+        ? `Circular: ${((el.rp - fc.ctx.R) / 1e3).toFixed(0)} × ${((el.ra - fc.ctx.R) / 1e3).toFixed(0)} km — ${used.toFixed(0)} m/s spent`
+        : "Circular",
+    );
+    return null;
+  }
+  return out(lin(Tg.vel, 1, th, vc));
+}
+
+function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | null {
+  const s = this.s;
+  const P = this.pilot;
+  const say = (t: string) => {
+    P.setAuto("none");
+    this.onPilotMessage?.(t);
+    return null;
+  };
+  const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
+  const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
+  // our universe: Newtonian autopilots in the home frame
+  if (this.ourNav(cam)) return this.ourWant(cam, say, T);
+  if (P.auto === "dock") return say("Docking: with the ISS, in our solar system");
+  if (P.auto === "hover") {
+    if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
+    const z = cam.zamo;
+    // a static observer moves at −ωϖ/α relative to the ZAMO; none inside the ergosphere (hold the ZAMO)
+    const vs = (-z.omega * z.varpi) / z.alpha;
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    if (!P.anchor) P.anchor = X;
+    const f = sphericalFrame(X);
+    const d = sub3(P.anchor, X);
+    let back: Vec3 = [dot3(d, f.er), dot3(d, f.et), dot3(d, f.ep)];
+    const bl = Math.hypot(...back);
+    const k = Math.min(1 / (4 * T), 0.08 / Math.max(bl, 1e-9));
+    back = lin(back, k, back, 0);
+    return { beta: [back[0], back[1], (Math.abs(vs) < 0.99 ? vs : 0) + back[2]], ff: lin(this.freeFallAccel(cam), -1, cam.beta, 0) };
+  }
+  if (P.auto === "circularize") {
+    if (cam.region !== "hole") return say("Circularize: only around the black hole");
+    const c = this.circularWant(cam);
+    return typeof c === "string" ? say(c) : c;
+  }
+  if (P.auto === "transfer") return this.transferWant(cam, say);
+  if (P.auto === "land" || P.auto === "takeoff") return this.surfaceWant(cam, say);
+  if (P.auto === "orbit") {
+    // a circular orbit around the star (in its orbital plane), at the distance it was engaged at
+    if (cam.region !== "hole") return say("Orbit: only in the black hole's universe");
+    const mB = bodyMass(s, s.target);
+    if (s.target === "hole" || s.target === "barycentre" || !(mB > 0)) return say("Orbit: select a body with a mass (Tab)");
+    if (this.landed) return say(`Landed on ${BODY_NAMES[s.target]}`);
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const t = this.nowTime();
+    const C = bodyCentre(s, s.target, t);
+    const V = bodyVelocity(s, s.target, t);
+    const R = bodyRadius(s, s.target);
+    const rel = sub3(X, C);
+    const d = Math.hypot(...rel);
+    const Vs = this.fromZamo(cam, f, cam.beta);
+    // the orbit's plane: the star's (its orbital plane around the hole), or the one the ship is in
+    const h0 = cross(rel, sub3(Vs, V));
+    const hl = Math.hypot(...h0);
+    const n: Vec3 = s.target === "star" || hl < 1e-18 ? [0, 0, 1] : lin(h0, 1 / hl, h0, 0);
+    if (!P.anchor) {
+      // (the sense it goes round now; the distance now, kept above the surface and well inside the
+      // body's Hill sphere, where the hole's tides no longer tear the orbit apart)
+      const hill = bodyHill(s, s.target, t);
+      const lo = s.target === "star" ? 2.4 * R : 1.03 * R;
+      const hi = s.target === "star" ? 0.17 * starOrbitRadius(s) : Math.max(0.3 * hill, 1.1 * lo);
+      // (around a planet the plane is the ship's own, n = ĥ: always the positive sense)
+      P.anchor = [clamp(d, lo, hi), s.target === "star" ? Math.sign(h0[2]) || 1 : 1, 0];
+    }
+    const [d0, sense] = P.anchor as [number, number, number];
+    const planet = s.target !== "star";
+    if (planet && d > 2 * d0) {
+      // far from it still (a planet's Hill sphere is a few radii): fly in first — towards a point
+      // beside the body at the orbit's radius (the fall then ends in a pericentre there, not on the
+      // ground: a weak engine could not stop a fall straight at it — Miller pulls 1.3 g at its
+      // surface), at the speed that a braking at half thrust can still kill, its velocity matched
+      const rhat0 = lin(rel, 1 / d, rel, 0);
+      let across = cross([0, 0, 1], rhat0);
+      if (Math.hypot(...across) < 1e-6) across = cross([1, 0, 0], rhat0);
+      across = lin(across, 1 / Math.hypot(...across), across, 0);
+      const aim = sub3(axpy(C, across, d0), X);
+      const to = lin(aim, 1 / Math.hypot(...aim), aim, 0);
+      const span = d - d0;
+      // (and slow enough that the Coriolis push of the hole's frame, 2Ω v, stays within the engine)
+      const thr = this.thrustMax();
+      // (the braking left: half the engine less the body's own pull here)
+      const brake = Math.max(0.5 * thr - mB / (d * d), 0.1 * thr);
+      const vIn = Math.min(0.05, Math.sqrt(2 * brake * span), span / (4 * T), thr / (4 * this.holeOmega(C)));
+      const Wa = axpy(V, to, vIn);
+      const ba = this.toZamo(cam, f, Wa);
+      return { beta: ba, ff: this.followFF(cam, ba) };
+    }
+    // (the circular speed around it, in its proper time: in the scene's time, × its clock rate dτ/dt)
+    // (settled in orbit: the warp a low-thrust cruise ran at is given back)
+    if (this.warpAfter !== null && Math.abs(d - d0) < 0.2 * d0) {
+      s.timeSpeed = this.warpSet = this.warpAfter;
+      this.warpWant = null;
+      this.warpAfter = null;
+    }
+    const clock = s.target === "star" ? 1 : bodyState(GARGANTUA_SYSTEM, s.target, t).dtau;
+    // (around a planet: circular at the distance it is at, spiralling down to d0 over a few turns —
+    // the circle of d0 from farther out would fling it back out)
+    const dc = planet ? clamp(d, d0, 2 * d0) : d0;
+    const vc = Math.sqrt(mB / dc) * clock;
+    const w0 = vc / dc;
+    const relP = sub3(rel, lin(n, dot3(rel, n), n, 0));
+    const tl = Math.hypot(...relP) || 1;
+    const tdir = lin(cross(lin(n, sense, n, 0), relP), 1 / tl, n, 0);
+    const rhat = lin(rel, 1 / Math.max(d, 1e-30), rel, 0);
+    // distance and plane errors closed over a fraction of an orbit
+    const vr = planet ? clamp(-(d - d0) * w0 * 0.3, -0.15 * vc, 0.15 * vc) : clamp(-(d - d0) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+    const vz = clamp(-dot3(rel, n) * w0 * 0.6, -0.3 * vc, 0.3 * vc);
+    const W = axpy(axpy(axpy(V, tdir, vc), rhat, vr), n, vz);
+    const bw = this.toZamo(cam, f, W);
+    return { beta: bw, ff: planet ? this.followFF(cam, bw) : [0, 0, 0] };
+  }
+  if (P.auto === "approach") {
+    if (cam.region !== "hole") return say("Approach: only in the black hole's universe");
+    if (s.target === "hole" || s.target === "barycentre") return say("Approach: select a body (Tab)");
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const t = this.nowTime();
+    const C = bodyCentre(s, s.target, t);
+    const mB = bodyMass(s, s.target);
+    const star = mB > 0; // a body with its own pull: the star, a planet
+    const stand = s.target === "star" ? 4 * s.sunRadius : s.target === "wormhole" ? 1.3 * mouth(s).rGlue : 3 * bodyRadius(s, s.target);
+    const away = sub3(X, C);
+    const dist = Math.hypot(...away);
+    if (this.warpAfter !== null && dist < 3 * stand) {
+      s.timeSpeed = this.warpSet = this.warpAfter;
+      this.warpWant = null;
+      this.warpAfter = null;
+    }
+    const goal = axpy(C, away, stand / Math.max(dist, 1e-9));
+    const d = sub3(goal, X);
+    const dl = Math.hypot(...d);
+    // (no faster than a braking at half thrust can kill, nor than the hole's frame lets the engine
+    // follow: its Coriolis push 2Ω v)
+    const thr = this.thrustMax();
+    const close = Math.min(0.25, dl / (5 * T), Math.sqrt(thr * dl), thr / (4 * this.holeOmega(C)));
+    const V: Vec3 = bodyVelocity(s, s.target, t);
+    const W = axpy(V, d, close / Math.max(dl, 1e-30));
+    const loc = this.toZamo(cam, f, W);
+    if (star) {
+      // the hole's pull is shared with the star (both fall); its own pull is not: cancel it
+      if (this.landed) return say(`Landed on ${BODY_NAMES[s.target]}`);
+      const g = lin(away, mB / Math.max(dist, bodyRadius(s, s.target)) ** 3, away, 0);
+      return { beta: loc, ff: [dot3(g, f.er), dot3(g, f.et), dot3(g, f.ep)] };
+    }
+    // a static mouth is held against gravity; an orbiting one falls freely, and so does the ship
+    if (s.whOrbit) return { beta: loc, ff: [0, 0, 0] };
+    return { beta: loc, ff: lin(this.freeFallAccel(cam), -1, cam.beta, 0) };
+  }
+  return null;
+}
+
+/** Everything the flight displays show, for this frame. */
+function flightInfo(this: CameraController) {
+  const s = this.s;
+  const cam = cameraFrame(s);
+  const a = s.spin;
+  const S = this.shipMatrix();
+  const C = (v: Vec3 | null): Vec3 | null => v && [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+  const speed = Math.hypot(...cam.beta);
+  const pro = speed > 1e-6 ? lin(cam.beta, 1 / speed, cam.beta, 0) : null;
+  const R = this.radialOut(cam);
+  const hz = this.horizonAxes(cam);
+  let normal: Vec3 | null = null;
+  if (R && pro) {
+    const n = cross(R, pro);
+    const l = Math.hypot(...n);
+    if (l > 1e-6) normal = lin(n, 1 / l, n, 0);
+  }
+  const info = {
+    region: cam.region,
+    r: cam.r,
+    theta: cam.theta,
+    phi: cam.phi,
+    ell: cam.ell,
+    n: cam.n,
+    speed,
+    gamma: cam.gamma,
+    dtau: cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma,
+    E: NaN,
+    L: NaN,
+    /** Carter constant, the spin (for the effective potential), radial 3-velocity (> 0 outwards) */
+    Q: NaN,
+    spin: a,
+    vr: cam.region === "hole" ? cam.beta[0] : NaN,
+    /** the autopilot's target speed (relative to the ZAMO), if any */
+    wantSpeed: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...this.lastWant.beta) : NaN,
+    rH: horizon(a),
+    isco: isco(a),
+    photon: photonOrbits(a).pro,
+    ergo: cam.region === "hole" && cam.r < 1 + Math.sqrt(Math.max(0, 1 - a * a * Math.cos(cam.theta) ** 2)),
+    accel: this.pilot.accel,
+    throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(this.thrustMax(), 1e-12) : this.pilot.throttle,
+    sas: this.pilot.sas,
+    /** what holds the rails' warp back ("" : nothing) */
+    railsNote: this.railsNote,
+    rollAlign: this.pilot.rollAlign,
+    hold: this.pilot.hold,
+    auto: this.pilot.auto,
+    omega: this.pilot.omega,
+    properTime: this.properTime,
+    landed: this.landed,
+    /** the body landed on */
+    landedOn: this.landed ? (this.nearestBody(blToCartesian(cam.r, cam.theta, cam.phi), this.nowTime()) ?? null) : null,
+    // directions in camera coordinates, and the ship's axes
+    S,
+    dirs: {
+      prograde: C(pro),
+      retrograde: C(pro && lin(pro, -1, pro, 0)),
+      radialOut: C(R),
+      radialIn: C(R && lin(R, -1, R, 0)),
+      normal: C(normal),
+      antinormal: C(normal && lin(normal, -1, normal, 0)),
+      target: C(this.targetDir(cam)),
+      burn: C(this.pilot.burn),
+      maneuver: C(this.maneuverDir(cam)),
+      // velocity relative to the target (approach, docking)
+      tgtPrograde: null as Vec3 | null,
+      tgtRetrograde: null as Vec3 | null,
+      /** the station's nearest docking port, seen from the eye */
+      dock: null as Vec3 | null,
+      /** near a world (ours, or one of Gargantua's): the local vertical and its north (the horizon,
+       *  the pitch ladder, the heading) — at any height in its sphere */
+      up: C(hz?.up ?? null),
+      north: C(hz?.north ?? null),
+      /** near the ground: the velocity over it, its horizontal part's direction (the drift) */
+      drift: this.driftDir(cam, C),
+    },
+    // flat-map position, velocity and nose (black hole's frame), for the map
+    X: null as Vec3 | null,
+    V: null as Vec3 | null,
+    nose: null as Vec3 | null,
+    path: this.path,
+    /** the camera's view direction (flat map), the autopilot's remaining velocity change |ΔU| */
+    look: null as Vec3 | null,
+    dv: this.lastWant && this.pilot.auto !== "none" ? Math.hypot(...sub3(toU(this.lastWant.beta), toU(cam.beta))) : NaN,
+    mount: s.shipMount,
+    moving: this.mountAnim !== null,
+    /** the flight plan: nodes, the path through them, the executing burn */
+    /** the orbit's angle to each goal's plane [°] */
+    planes: this.planeOffsets(),
+    plan: this.plan.nodes.length
+      ? {
+          nodes: this.plan.nodes,
+          path: this.refreshPlan(),
+          note: this.plan.note,
+          burning: this.nodeBurning,
+          done: this.nodeDone,
+          now: this.nowTime(),
+          lowThrust: null as string | null,
+        }
+      : this.transfer
+        ? {
+            nodes: [] as ManeuverNode[],
+            path: null,
+            note: this.transfer.note ?? "",
+            burning: this.pilot.auto === "transfer" && this.pilot.accel > 0,
+            done: 0,
+            now: this.nowTime(),
+            lowThrust: this.transfer.stage as string | null,
+          }
+        : null,
+    /** near a planet: its frame's figures (landing.ts) */
+    surface: this.surfaceInfo(),
+    air: this.airInfo(),
+    entry: this.entryInfo(),
+    /** the engine and the tank */
+    engine: { kind: s.engine, max: this.thrustMax(), fuel: s.fuel ? tank(s, this.spent) : null },
+    /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
+    target: s.target,
+    targetDist: NaN,
+    targetRate: NaN,
+    /** our universe: the body of the sphere of influence, the altitude above it [M] and the radial speed */
+    ref: null as string | null,
+    ourAlt: NaN,
+    ourVr: NaN,
+    ourCa: null as { d: number; t: number } | null,
+    /** the docking aid (the station near), or null */
+    dock: null as DockInfo | null,
+    /** the docking's guide for the HUD: lateral offset and drift [m, m/s], the port's axis, gates
+     *  along it (camera coordinates) */
+    dockGuide: null as { lat: Vec3; latRate: Vec3; axis: Vec3; gates: { d: Vec3; r: number; k: number }[] } | null,
+    /** what the flown craft is docked to (its own links) */
+    links: [] as { title: string; port: string }[],
+    /** the craft flown, and those docked to it; the assembly's mass [kg] */
+    vessel: fleet.active,
+    assembly: fleet.flownAssembly(),
+    mass: fleet.massProps().mass,
+    /** the docking autopilot's phase ("": off) */
+    dockPhase: this.pilot.auto === "dock" ? (this.dockAuto?.phase ?? "") : "",
+    speedMode: this.speedMode,
+    precision: this.pilot.precision,
+    /** our universe: the free-fall path and the path through the nodes */
+    ourFree: this.ourFree,
+    ourPlan: this.plan.nodes.length ? this.ourPlan : null,
+    /** the planner at work (our universe) */
+    planBusy: this.planBusy,
+    /** a mission's target at its periapsis time (the map marks where it will be) */
+    ourArrive:
+      this.ourMission && this.plan.nodes.length
+        ? { body: this.ourMission.goal.target, t: this.ourMission.tArrive }
+        : this.issGoal && this.plan.nodes.length
+          ? { body: this.issGoal.body, t: this.issGoal.tArrive }
+          : null,
+    // (the flight computer's previewed operation and its path, before it is executed)
+    cand: this.fcCand,
+    // (about one of Gargantua's worlds: the ground tracks, free and previewed, on its turning axes)
+    localGround: this.local
+      ? { ahead: this.localGround, cand: this.fcCand?.local?.rot ?? null, plan: this.localPlanNow()?.rot ?? null }
+      : null,
+    localPlan: this.localPlanNow(),
+    /** the hub's card: the autopilot flying, its phase, figures, prediction */
+    hub: this.hubInfo(),
+  };
+  if (cam.region === "hole") {
+    const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
+    info.E = st.E;
+    info.L = st.L;
+    const ct = Math.cos(st.th),
+      s2 = Math.max(Math.sin(st.th) ** 2, 1e-12);
+    info.Q = st.uth * st.uth + ct * ct * (a * a * (1 - st.E * st.E) + (st.L * st.L) / s2);
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const W = (v: Vec3) => add3(f.er, f.et, f.ep, v);
+    info.X = X;
+    info.V = W(cam.beta);
+    const b = { right: cam.right, up: cam.up, fwd: cam.fwd };
+    info.nose = W(this.shipAxesLocal(b)[2]);
+    info.look = W(cam.fwd);
+    const t = this.nowTime();
+    const Ct: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyCentre(s, s.target, t);
+    const Vt: Vec3 = s.target === "hole" ? [0, 0, 0] : bodyVelocity(s, s.target, t);
+    const d = sub3(X, Ct);
+    info.targetDist = Math.hypot(...d);
+    info.targetRate = dot3(sub3(info.V, Vt), d) / Math.max(info.targetDist, 1e-9);
+    const rel = sub3(info.V, Vt);
+    const rl = Math.hypot(...rel);
+    if (s.target !== "hole" && rl > 1e-5) {
+      const loc: Vec3 = [dot3(rel, f.er) / rl, dot3(rel, f.et) / rl, dot3(rel, f.ep) / rl];
+      info.dirs.tgtPrograde = C(loc);
+      info.dirs.tgtRetrograde = C(lin(loc, -1, loc, 0));
+    }
+  }
+  // our universe: orbital directions and speed relative to the body of the sphere of influence we
+  // are in; the target in the home frame
+  const nav = this.ourNav(cam);
+  if (nav) {
+    const rel = sub3(nav.V, nav.refVel);
+    const rl = Math.hypot(...rel);
+    info.speed = rl;
+    info.ref = nav.ref;
+    const pr = rl > 1e-12 ? nav.toRep(rel) : null;
+    const p = pr && lin(pr, 1 / Math.hypot(...pr), pr, 0);
+    const R = nav.radial;
+    let nrm: Vec3 | null = null;
+    if (p) {
+      const n = cross(R, p);
+      const l = Math.hypot(...n);
+      if (l > 1e-6) nrm = lin(n, 1 / l, n, 0);
+    }
+    Object.assign(info.dirs, {
+      prograde: C(p),
+      retrograde: C(p && lin(p, -1, p, 0)),
+      radialOut: C(R),
+      radialIn: C(lin(R, -1, R, 0)),
+      normal: C(nrm),
+      antinormal: C(nrm && lin(nrm, -1, nrm, 0)),
+    });
+    info.X = nav.X;
+    info.V = nav.V;
+    const T = ourTarget(s, s.target, nav.t);
+    const d = sub3(nav.X, T.pos);
+    info.targetDist = Math.hypot(...d);
+    const vr = sub3(nav.V, T.vel);
+    info.targetRate = dot3(vr, d) / Math.max(info.targetDist, 1e-12);
+    const vl = Math.hypot(...vr);
+    // closest approach on straight lines (relative motion)
+    const tc = vl > 1e-15 ? -dot3(d, vr) / (vl * vl) : 0;
+    info.ourCa = tc > 0 ? { d: Math.hypot(...lin(d, 1, vr, tc)) - T.radius, t: tc } : { d: info.targetDist - T.radius, t: 0 };
+    if (vl > 1e-12) {
+      const loc = nav.toRep(vr);
+      const u = lin(loc, 1 / Math.hypot(...loc), loc, 0);
+      info.dirs.tgtPrograde = C(u);
+      info.dirs.tgtRetrograde = C(lin(u, -1, u, 0));
+    }
+    // above the reference body's surface
+    const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
+    info.ourAlt = Math.hypot(...sub3(nav.X, nav.refPos)) - rb;
+    info.ourVr = dot3(rel, sub3(nav.X, nav.refPos)) / Math.max(Math.hypot(...sub3(nav.X, nav.refPos)), 1e-12);
+  }
+  // the station near: its port where it is seen from the eye, the velocity relative to it (the
+  // docking's prograde and retrograde)
+  // (the flown craft's dockings: to what, by which port — the docking panel's UNDOCK)
+  info.links = fleet.links
+    .filter((l) => l.a === fleet.active || l.b === fleet.active)
+    .map((l) => {
+      const other = l.a === fleet.active ? l.b : l.a;
+      const k = l.a === fleet.active ? l.pb : l.pa;
+      return {
+        title: other === "iss" ? "ISS" : VESSELS[other].name,
+        port: other === "iss" ? (station.ports[k]?.name ?? "") : (VESSELS[other].ports[k]?.name ?? ""),
+      };
+    });
+  const di = this.dockInfo;
+  if (di && nav) {
+    info.dock = di;
+    const vl = Math.hypot(...di.vrel);
+    if (vl > 1e-4) {
+      const u = nav.toRep(lin(di.vrel, 1 / vl, di.vrel, 0));
+      const ul = Math.hypot(...u);
+      info.dirs.tgtPrograde = C(lin(u, 1 / ul, u, 0));
+      info.dirs.tgtRetrograde = C(lin(u, -1 / ul, u, 0));
+    }
+    const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+    const pc = C(nav.toRep(lin(sub3(di.c, nav.X), M_METRES, di.c, 0)))!;
+    const q: Vec3 = [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]];
+    const ql = Math.hypot(...q);
+    if (ql > 1e-6) info.dirs.dock = [q[0] / ql, q[1] / ql, q[2] / ql];
+    // the docking's guide (the HUD's H5): the offset across the port's axis and its drift (camera
+    // coordinates, m and m/s), the axis, and gates along it — 5 to 100 m out — as the eye sees them
+    const toCam = (v: Vec3) => {
+      const l = Math.hypot(...v);
+      if (l < 1e-12) return [0, 0, 0] as Vec3;
+      const u = C(nav.toRep(lin(v, 1 / l, v, 0)))!;
+      return lin(u, l, u, 0);
+    };
+    const rel = sub3(di.ring, di.c);
+    const lat = lin(rel, M_METRES, di.a, -dot3(rel, di.a) * M_METRES);
+    const latRate = lin(di.vrel, 1, di.a, -dot3(di.vrel, di.a));
+    const axis = toCam(di.a);
+    info.dockGuide = {
+      lat: toCam(lat),
+      latRate: toCam(latRate),
+      axis,
+      gates: [5, 10, 20, 50, 100].map((k) => {
+        const g: Vec3 = [pc[0] + eye[0] + axis[0] * k, pc[1] + eye[1] + axis[1] * k, pc[2] + eye[2] + axis[2] * k];
+        const gl = Math.hypot(...g);
+        return { d: [g[0] / gl, g[1] / gl, g[2] / gl] as Vec3, r: gl, k };
+      }),
+    };
+  }
+  // the navball relative to the target: its speed, its prograde
+  if (this.speedMode === "target") {
+    const vt = this.targetVelLocal(cam);
+    if (vt) {
+      const rel = sub3(cam.beta, vt);
+      info.speed = Math.hypot(...rel);
+      info.dirs.prograde = info.dirs.tgtPrograde;
+      info.dirs.retrograde = info.dirs.tgtRetrograde;
+    }
+  }
+  return info;
+}
+
+/**
+ * The camera's future free-fall path (no thrust) in the black hole's frame, for the overlay:
+ * recomputed at most 4 times a second. Near the mouth the path is not predicted.
+ */
+function predictPath(this: CameraController) {
+  const now = frameNow();
+  if (!this.gravity) return (this.path = null);
+  const s = this.s;
+  // same state (e.g. time paused): same path object, so the renderer keeps converging
+  const key = [
+    s.spin,
+    s.anchor,
+    s.distance,
+    s.inclination,
+    s.azimuth,
+    s.whL,
+    s.velR,
+    s.velT,
+    s.velP,
+    s.wormhole,
+    s.whDist,
+    s.whIncl,
+    s.whAzimuth,
+    s.sun,
+    s.sunMass,
+    s.sunOrbit,
+    this.nowTime(),
+  ].join();
+  // (at most 4 times a second, and never more than a fifth of the frame time)
+  if (this.path && (key === this.pathKey || now - this.path.at < Math.max(250, 5 * this.pathCost))) return this.path;
+  this.pathKey = key;
+  const cam = cameraFrame(s);
+  // our universe: the Newtonian prediction (the map draws it), no path in the hole's frame
+  const nav = this.ourNav(cam);
+  if (nav) {
+    // (the same throttle: there is no path object on this side to carry its time; computed in the
+    // planner's worker — up to ~17 ms a time on the main thread — the first one here)
+    if (this.predicting || (this.ourFree && (key === this.ourFreeKey || now - this.ourFreeAt < 250))) return (this.path = null);
+    this.ourFreeKey = key;
+    this.ourFreeAt = now;
+    const mouthR = mouth(s).w.rho;
+    // (the first one here, whole: without it the telemetry and the map fall back to costlier work —
+    // measured: a 150–220 ms task when it came from the worker a few frames later)
+    if (!this.ourFree) {
+      this.ourFree = predictOurs(nav.X, nav.V, nav.t, [], { mouthR, drag: this.dragPerMass() });
+      return (this.path = null);
+    }
+    this.predicting = true;
+    runPlanner<OurPath>({ kind: "predict", X: nav.X, V: nav.V, t: nav.t, mouthR, drag: this.dragPerMass() }).then(
+      (p) => {
+        this.predicting = false;
+        if (p && Array.isArray(p.pts) && this.ourFreeKey === key) this.ourFree = p;
+      },
+      () => (this.predicting = false),
+    );
+    return (this.path = null);
+  }
+  this.ourFree = null;
+  if (cam.region !== "hole") return (this.path = null);
+  // in one of Gargantua's worlds' frames: the orbit about the world (its two bodies), not the hole's
+  // geodesic (a world's orbit about the hole, drawn from the ship — meaningless at its scale)
+  if (this.local && !this.local.L.landed) {
+    const tr = this.localTrack([], 1.05, 240);
+    if (tr) {
+      this.localGround = tr.rot;
+      const p = { pts: tr.pts.slice(1), fate: "local" as const, at: now, dt: tr.dt };
+      return (this.path = p);
+    }
+  }
+  const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, s.spin, this.nowTime());
+  // up to 0.95 of a turn around the hole: a bound orbit shows almost a full revolution without
+  // coming back past the camera (a segment that close would sweep across the whole view)
+  const tMax = clamp(2 * 2 * Math.PI * cam.r ** 1.5, 300, 60000);
+  // (in the planner's worker — 6–12 ms a time here before —: the last path drawn meanwhile)
+  if (this.kerrPending) return this.path;
+  this.kerrPending = true;
+  // (the answer kept — a few hundred ms old at most — unless the ship has left the hole's region: the
+  // key holds the clock and the ship's motion, so in flight it is never the same twice — and a path
+  // left from elsewhere, old, let every call renew it: every answer was dropped, none drawn)
+  runPlanner<{ pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "star" } | { error: string }>({
+    kind: "kerrPath",
+    s: { ...s },
+    st,
+    tMax,
+  }).then(
+    (r) => {
+      this.kerrPending = false;
+      if (!r || "error" in r || cameraFrame(this.s).region !== "hole" || this.ourNav(cameraFrame(this.s))) return;
+      this.path = this.kerrPathFrom(r, st, tMax, now);
+    },
+    () => (this.kerrPending = false),
+  );
+  return this.path;
+}
+
+/** The drift over the ground near a world (the horizontal part of the velocity over it), camera
+ *  coordinates; null when still or away from the ground. */
+function driftDir(this: CameraController, cam: ReturnType<typeof cameraFrame>, C: (v: Vec3) => Vec3 | null): Vec3 | null {
+  const fr = this.sfFrame(cam);
+  if (!fr) return null;
+  const vh = lin(fr.vRel, 1, fr.up, -dot3(fr.vRel, fr.up));
+  if (Math.hypot(...vh) < 0.05) return null;
+  return C(fr.toLocal(vh));
+}
+
+/**
+ * The runway in reach (the HUD's H4): the entry's own when it flies to one, else the nearest on this
+ * world within 80 km, the craft below 20 km — its outline, its centreline drawn 15 km back, the aim
+ * point 2 km short of the threshold (the glide path's), as the eye sees them; the craft's place along
+ * it and across it [m], the glide path asked and flown (the approach's, when it flies).
+ */
+function runwayView(this: CameraController): RunwayView | null {
+  const now = frameNow();
+  if (this.runwayCache && now - this.runwayCache.at < 100) return this.runwayCache.v;
+  const v = this.runwayCompute();
+  this.runwayCache = { at: now, v };
+  return v;
+}
+
+function runwayCompute(this: CameraController): RunwayView | null {
+  const cam = cameraFrame(this.s);
+  const fr = this.entryFrame(cam);
+  if (!fr) return null;
+  const x = fr.s.x;
+  const R = this.entryRun;
+  let site: Site | null = R?.site?.runway ? R.site : null;
+  const agl = this.aglNow(cam, Math.hypot(...x) - fr.env.R);
+  if (!site) {
+    if (agl > 20e3) return null;
+    let best = 80e3;
+    for (const st of SITES) {
+      if (st.body !== fr.body || !st.runway) continue;
+      const T = fr.place(st);
+      const ang = Math.acos(clamp(dot3(unitV(T), unitV(x)), -1, 1));
+      const d = ang * Math.hypot(...T);
+      if (d < best) (best = d), (site = st);
+    }
+  }
+  if (!site) return null;
+  const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+  const D = Math.PI / 180;
+  const T = fr.place(site);
+  const tu = unitV(T);
+  const nav = this.ourNav(cam);
+  const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+  const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
+  const east = cross(north, tu);
+  const hd = (site.rwy ?? 0) * D;
+  const along = lin(north, Math.cos(hd), east, Math.sin(hd));
+  const rgt = cross(along, tu);
+  const see = (P: Vec3) => {
+    const d = sub3(P, x);
+    return { d: C(fr.toLocal(d)), r: Math.hypot(...d) };
+  };
+  const L = 4500,
+    Wd = 90;
+  const at = (a: number, b: number) => lin(lin(T, 1, along, a), 1, rgt, b);
+  const rel = sub3(x, T);
+  const sAl = dot3(rel, along),
+    xt = dot3(rel, rgt);
+  const app = R?.app ?? null;
+  return {
+    name: site.name.split(",")[0]!,
+    rwy: site.rwy ?? 0,
+    along: sAl,
+    across: xt,
+    agl,
+    corners: [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)].map(see),
+    line: Array.from({ length: 16 }, (_, k) => see(at(-k * 1000, 0))),
+    aim: see(at(R?.prof?.aim ?? -2000, 0)),
+    gRef: app?.final ? (app.gRef ?? null) : null,
+    gam: app?.gam ?? null,
+    final: !!app?.final,
+  };
+}
+
+/**
+ * The future in the view (the HUD's H3), from the predicted free fall (ours: the n-body path; Gargantua's
+ * side: the geodesic, or a world's orbit): what the eye sees of it — each sample's direction (camera
+ * coordinates), distance [m], time ahead [s], and whether the body hides it —, the ship's places at
+ * the times asked ([s] ahead), and where it meets the ground (on the ground as it turns now — the spot
+ * to look at) or the air's top. The path is kept relative to its body (the body's own motion out of it:
+ * where the ship goes about the world the eye sees). Recomputed ten times a second at most.
+ */
+function futureView(this: CameraController, at: number[] = []): FutureView | null {
+  const now = frameNow();
+  const key = at.join();
+  if (this.futureCache && now - this.futureCache.at < 100 && this.futureCache.key === key) return this.futureCache.v;
+  const v = this.futureCompute(at);
+  this.futureCache = { at: now, key, v };
+  return v;
+}
+
+function futureCompute(this: CameraController, at: number[]): FutureView | null {
+  const s = this.s;
+  // (the prediction refreshed here too — throttled —: the HUD needs it with the tube and the map off)
+  this.predictPath();
+  const cam = cameraFrame(s);
+  const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+  const nav = this.ourNav(cam);
+  // the samples: positions (relative to the body, at the body's place now), their times ahead [s]
+  let P: Vec3[] = [],
+    T: number[] = [],
+    eye: Vec3,
+    look: (d: Vec3) => Vec3,
+    mPer: number;
+  let body: { c: Vec3; R: number } | null = null;
+  let impact: FutureView["impact"] = null;
+  if (nav) {
+    const free = this.ourFree;
+    if (!free || free.pts.length < 2) return null;
+    const ref = free.refs[0] ?? nav.ref;
+    const b = solarBody(ref);
+    const t0 = nav.t;
+    const B0 = solarState(ref, t0).pos;
+    // (from where the ship is now: the path's first sample may be seconds ahead)
+    P.push(nav.X);
+    T.push(0);
+    // near the ground, in the air: the path over the ground as it turns (the frame the craft flies
+    // in — at Kennedy the Earth's turn is 400 m/s); higher, the orbit as it is (not turning)
+    const turn = !!b && b.kind !== "star" && Math.hypot(...sub3(nav.X, B0)) - b.radius < Math.max(airTop(b.atmosphere), 60e3) / M_METRES;
+    const A0 = turn ? bodyAxes(b!, t0) : null;
+    for (let j = 0; j < free.pts.length; j++) {
+      const t = free.times[j]!;
+      if (t <= t0) continue;
+      let v = sub3(free.pts[j]!, solarState(ref, t).pos);
+      if (A0) {
+        const A1 = bodyAxes(b!, t);
+        const vb: Vec3 = [dot3(v, A1[0]), dot3(v, A1[1]), dot3(v, A1[2])];
+        v = lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]);
+      }
+      P.push(lin(v, 1, B0, 1));
+      T.push((t - t0) * M_SECONDS);
+    }
+    eye = cameraHome(s, cam);
+    look = (d) => ourLook(s, cam, d);
+    mPer = M_METRES;
+    if (b && b.kind !== "star") {
+      body = { c: B0, R: b.radius };
+      const top = airTop(b.atmosphere) / M_METRES;
+      const alt = (X: Vec3) => Math.hypot(...sub3(X, B0)) - b.radius;
+      // the air's top crossed on the way down (from above it)
+      if (top > 0 && P.length && alt(P[0]!) > top) {
+        for (let j = 1; j < P.length; j++)
+          if (alt(P[j]!) <= top) {
+            impact = { kind: "air", t: T[j]!, ...this.futureSee(C, look, eye, P[j]!, mPer, body) };
+            break;
+          }
+      }
+      if (free.fate === "impact" && free.hit === ref) {
+        // (the ground there, turned back to where it is now: the spot to look at)
+        const tI = free.times[free.times.length - 1]!;
+        const v = sub3(free.pts[free.pts.length - 1]!, solarState(ref, tI).pos);
+        const A1 = bodyAxes(b, tI),
+          A0 = bodyAxes(b, t0);
+        const vb: Vec3 = [dot3(v, A1[0]), dot3(v, A1[1]), dot3(v, A1[2])];
+        const X = lin(lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]), 1, B0, 1);
+        const ground = { kind: "ground" as const, t: (tI - t0) * M_SECONDS, ...this.futureSee(C, look, eye, X, mPer, null) };
+        impact = impact && impact.kind === "air" ? { ...impact, ground } : ground;
+      }
+    }
+  } else {
+    const path = this.path;
+    // (a path left from another place — a world's orbit after leaving it —: none)
+    if (!path || cam.region !== "hole" || path.pts.length < 2 || (path.fate === "local") !== !!(this.local && !this.local.L.landed))
+      return null;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    eye = blToCartesian(cam.r, cam.theta, cam.phi);
+    const t0 = this.nowTime();
+    // (about one of Gargantua's worlds: its orbit relative to it; about the hole: the geodesic as it is)
+    const w = this.local && path.fate === "local" ? (this.local.F.id as Body) : null;
+    const W0 = w ? bodyCentre(s, w, t0) : null;
+    P.push(w ? lin(sub3(eye, bodyCentre(s, w, t0)), 1, W0!, 1) : eye);
+    T.push(0);
+    path.pts.forEach((X, j) => {
+      const t = t0 + (j + 1) * path.dt;
+      P.push(w ? lin(sub3(X, bodyCentre(s, w, t)), 1, W0!, 1) : X);
+      T.push((j + 1) * path.dt * Msec);
+    });
+    look = (d) => this.holeLook(cam, d);
+    mPer = 1476.625 * s.massSolar;
+    body = w ? { c: W0!, R: bodyRadius(s, w) } : { c: [0, 0, 0], R: horizon(s.spin) };
+    if (path.fate === "horizon" || path.fate === "star")
+      impact = { kind: path.fate, t: T[T.length - 1]!, ...this.futureSee(C, look, eye, P[P.length - 1]!, mPer, null) };
+    // (about the hole the seconds are nothing — a sample is minutes to hours —: the path's eighth,
+    // quarter and half instead, unless times were asked that it reaches)
+    const span = T[T.length - 1]!;
+    if (!at.some((t) => t > span * 0.02 && t <= span)) at = [span / 8, span / 4, span / 2];
+  }
+  const pts = P.map((X, j) => ({ ...this.futureSee(C, look, eye, X, mPer, body), t: T[j]! }));
+  // the ship's places at the times asked (interpolated along the path)
+  const marks = at
+    .filter((t) => t > 0 && t <= T[T.length - 1]!)
+    .map((t) => {
+      let j = 1;
+      while (j < T.length - 1 && T[j]! < t) j++;
+      const f = Math.min(Math.max((t - T[j - 1]!) / Math.max(T[j]! - T[j - 1]!, 1e-9), 0), 1);
+      return { t, ...this.futureSee(C, look, eye, lin(P[j - 1]!, 1 - f, P[j]!, f), mPer, body) };
+    });
+  return { pts, marks, impact };
+}
+
+/** A point of the future as the eye sees it: its direction (camera coordinates), distance [m], hidden
+ *  by the body (its sphere between the eye and the point, or the point inside it). */
+function futureSee(
+  this: CameraController,
+  C: (v: Vec3) => Vec3,
+  look: (d: Vec3) => Vec3,
+  eye: Vec3,
+  X: Vec3,
+  mPer: number,
+  body: { c: Vec3; R: number } | null,
+) {
+  const d = sub3(X, eye);
+  const l = Math.hypot(...d);
+  let hid = false;
+  if (body && l > 0) {
+    const oc = sub3(body.c, eye);
+    const tc = dot3(oc, d) / l;
+    const miss2 = dot3(oc, oc) - tc * tc;
+    hid = Math.hypot(...sub3(X, body.c)) < body.R * 0.999 || (tc > 0 && tc < l && miss2 < body.R * body.R);
+  }
+  return { d: l > 0 ? C(look(d)) : ([0, 0, 1] as Vec3), r: l * mPer, hid };
+}
+
+/** A direction from the eye in the hole's frame (Cartesian), as the moving ship sees it (local
+ *  components, aberration included) — the target's way (targetDir). */
+function holeLook(this: CameraController, cam: ReturnType<typeof cameraFrame>, d: Vec3): Vec3 {
+  const X = blToCartesian(cam.r, cam.theta, cam.phi);
+  const f = sphericalFrame(X);
+  const l = Math.hypot(...d) || 1;
+  const n: Vec3 = [dot3(d, f.er) / l, dot3(d, f.et) / l, dot3(d, f.ep) / l];
+  const b = cam.beta;
+  const b2 = dot3(b, b);
+  if (b2 < 1e-12) return n;
+  const g = 1 / Math.sqrt(1 - b2);
+  const bn = dot3(n, b) / Math.sqrt(b2);
+  const w = axpy(axpy(n, b, g), b, ((g - 1) * bn) / Math.sqrt(b2));
+  return lin(w, 1 / Math.hypot(...w), w, 0);
+}
+
+/** The free-fall path's points (from the worker) cut to what the overlay draws. */
+function kerrPathFrom(
+  this: CameraController,
+  r: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "star" },
+  st: ReturnType<typeof fromZamo>,
+  tMax: number,
+  now: number,
+) {
+  const s = this.s;
+  const p: { pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "wormhole" | "star" } = { pts: r.pts, fate: r.fate };
+  // keep at most 0.95 of a turn around the hole (accumulated angle of the position vector)
+  let turned = 0;
+  for (let i = 1; i < p.pts.length; i++) {
+    const u = p.pts[i - 1]!,
+      v = p.pts[i]!;
+    const c = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (Math.hypot(...u) * Math.hypot(...v));
+    turned += Math.acos(Math.min(1, Math.max(-1, c)));
+    if (turned > 0.95 * 2 * Math.PI) {
+      p.pts = p.pts.slice(0, i);
+      p.fate = "continues";
+      break;
+    }
+  }
+  if (s.wormhole) {
+    // the Kerr prediction stops where the path enters the far mouth (beyond: the other universe)
+    const m = mouth(s);
+    const i = p.pts.findIndex((q) => Math.hypot(q[0] - m.C[0], q[1] - m.C[1], q[2] - m.C[2]) < m.rGlue);
+    if (i >= 0) (p.pts = p.pts.slice(0, Math.max(i + 1, 2))), (p.fate = "wormhole");
+  }
+  this.pathCost = 0;
+  return {
+    ...p,
+    at: now,
+    dt: tMax / 480,
+    hit: p.fate === "star" ? this.nearestBody(p.pts.at(-1)!, st.t + p.pts.length * (tMax / 480)) : undefined,
+  };
+}
+
+/** Puts these methods on the controller's prototype (controls.ts, once). */
+export function installLowthrust(C: { prototype: CameraController }) {
+  Object.assign(C.prototype, {
+    planLowThrust,
+    coorbit,
+    rendezvousGuidance,
+    lineClears,
+    transferWant,
+    circularWant,
+    ourPeriod,
+    targetVelLocal,
+    maneuverDir,
+    ourWant,
+    ourSurfaceWant,
+    hubInfo,
+    hubCompute,
+    circPlan,
+    ourCircWant,
+    autopilotWant,
+    flightInfo,
+    predictPath,
+    driftDir,
+    runwayView,
+    runwayCompute,
+    futureView,
+    futureCompute,
+    futureSee,
+    holeLook,
+    kerrPathFrom,
+  });
+}
