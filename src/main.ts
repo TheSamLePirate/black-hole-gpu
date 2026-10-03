@@ -9,6 +9,7 @@ import { installBh } from "./automation";
 import { PauseMenu } from "./ui/pause";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
+import { KeyHints } from "./ui/keyhints";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1141,6 +1142,8 @@ async function main() {
     cockpitScreens.message(text);
     gameLog.add(/crash/i.test(text) ? "warn" : "pilot", text, t);
   });
+  // the keys that matter now (ui/keyhints.ts), from the flight's phase
+  const keyHints = new KeyHints();
   // the flight's phase (game/phase.ts): its changes in the journal
   const phaseWatch = new PhaseWatcher((from, to) => events.emit("phase", { from, to, t: sim.time }));
   events.on("phase", ({ from, to, t }) => {
@@ -1805,6 +1808,13 @@ async function main() {
         status: status?.status ?? null,
       }),
       frameNow() / 1000,
+    );
+    // (the keys that matter now: not over a menu, a clean HUD or a hidden interface)
+    keyHints.update(
+      settings.keyHints && !paused && !document.body.classList.contains("hide-ui") && (!pil || flightHud.density < 2)
+        ? phaseWatch.current
+        : null,
+      now,
     );
     if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)

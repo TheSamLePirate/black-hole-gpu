@@ -2590,6 +2590,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud landing hover drift suicide burn touchdown vertical",
   },
   {
+    key: "keyHints",
+    type: "toggle",
+    section: "game",
+    group: "HUD aids",
+    label: "Key hints",
+    effect: "none",
+    help: "The keys that matter now — flying by hand, on an autopilot, landed, in the air, docking, on foot — in a strip at the bottom left, shown when the flight's phase changes, fading after a few seconds.",
+    keywords: "keys hints shortcuts help prompts controls",
+  },
+  {
     key: "hudBurn",
     type: "toggle",
     section: "game",

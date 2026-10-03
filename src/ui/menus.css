@@ -161,3 +161,27 @@ body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, bod
 @media (max-width: 820px) {
   .ms-root { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------- contextual key hints (ui/keyhints.ts) */
+.kh {
+  position: fixed;
+  left: 16px;
+  bottom: 96px;
+  z-index: var(--z-chrome);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--k-on-edge);
+  background: linear-gradient(90deg, rgba(5, 9, 16, 0.78), rgba(5, 9, 16, 0));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.kh.show { opacity: 1; transform: none; transition-duration: 0.25s; }
+.kh.flying { bottom: 196px; }
+.kh-row { display: flex; align-items: center; gap: 8px; font: 600 12px var(--hud-font); letter-spacing: 0.04em; color: var(--k-text); }
+.kh-row .k-kbd { min-width: 1.8em; }
+body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.map-open .kh { display: none; }
+@media (prefers-reduced-motion: reduce) { .kh { transition: none; } }

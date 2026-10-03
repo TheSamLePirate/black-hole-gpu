@@ -21,6 +21,21 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     expect(app.cdp.errors).toEqual([]);
   });
 
+  test("key hints: shown at a change of phase — a hold's, then flying by hand's", async () => {
+    await app.press("Digit1");
+    await app.waitFor(
+      `!!document.querySelector(".kh.show") && [...document.querySelectorAll(".kh .k-kbd")].some((k) => k.textContent === "⌫")`,
+      5000,
+    );
+    await app.press("Backspace");
+    await app.waitFor(
+      `!!document.querySelector(".kh.show") && [...document.querySelectorAll(".kh .k-kbd")].some((k) => k.textContent === "M")`,
+      5000,
+    );
+    const first = await app.js<string>(`document.querySelector(".kh .k-kbd").textContent`);
+    expect(first).toMatch(/^[ZW]$/); // (the full throttle's key, as this keyboard labels it)
+  });
+
   test("the flight's phase follows the pilot, and the journal says so", async () => {
     expect(await app.js<object>("__bh.phase()")).toEqual({ mode: "flight", control: "manual", stage: "orbit", detail: "" });
     await app.press("Digit2");

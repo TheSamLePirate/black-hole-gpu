@@ -47,10 +47,16 @@ test("the watcher: a stage must hold a second; a mode changes at once", () => {
   w.update(phaseOf({ ...flying, status: "suborbital" }), 3.01);
   expect(seen.length).toBe(2);
   expect(seen[1]![1].stage).toBe("suborbital");
+  // (a hold engaged: at once)
+  w.update(phaseOf({ ...flying, status: "suborbital", hold: "prograde" }), 3.015);
+  expect(seen.length).toBe(3);
+  expect(seen[2]![1].control).toBe("hold");
+  w.update(phaseOf({ ...flying, status: "suborbital" }), 3.016);
+  expect(seen.length).toBe(4);
   // (landing: at once)
   w.update(phaseOf({ ...flying, landed: true }), 3.02);
-  expect(seen.length).toBe(3);
-  expect(seen[2]![0]!.stage).toBe("suborbital");
+  expect(seen.length).toBe(5);
+  expect(seen[4]![0]!.stage).toBe("suborbital");
 });
 
 test("the bus: typed events to their listeners, unsubscribed", () => {

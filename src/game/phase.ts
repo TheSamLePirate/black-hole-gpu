@@ -109,9 +109,9 @@ export function phaseText(p: FlightPhase): string {
 }
 
 /**
- * Follows the phase frame by frame: a change is emitted once it has held for `settle` seconds of the
- * flight (a status flickering at a boundary — the air's top, a periapsis grazing it — is not a phase).
- * The mode changes (boarding, landing, docking, a cinematic) are emitted at once.
+ * Follows the phase frame by frame: a change of stage is emitted once it has held for `settle` seconds
+ * of the flight (a status flickering at a boundary — the air's top, a periapsis grazing it — is not a
+ * phase). The mode (boarding, landing, docking, a cinematic) and who flies change at once.
  */
 export class PhaseWatcher {
   current: FlightPhase | null = null;
@@ -132,7 +132,9 @@ export class PhaseWatcher {
       this.pending = p;
       this.since = now;
     }
-    if (this.current === null || this.current.mode !== p.mode || now - this.since >= this.settle) {
+    // (who flies changes by the pilot's own action — at once; only the stage, read off the orbit, waits)
+    const c = this.current;
+    if (c === null || c.mode !== p.mode || c.control !== p.control || c.detail !== p.detail || now - this.since >= this.settle) {
       const from = this.current;
       this.current = p;
       this.pending = null;

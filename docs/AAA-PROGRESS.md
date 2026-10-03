@@ -82,9 +82,20 @@ Décisions du propriétaire (03/10) : **Échap = menu pause** (le temps s'arrêt
 | U2.1 | **Menu pause** (`src/ui/pause.ts`, FR/EN) : reprendre, sauvegarder sous un nom (ou écraser), charger / supprimer (confirmé), rendre les commandes, réglages, commandes, écran titre ; ↑ ↓ Entrée ; Échap revient d'une sous-page. **⌫** rend les commandes, **F5 / F9** sauvegarde et chargement rapides. e2e : le temps tenu, une sauvegarde faite et listée, F5/F9 | fait | `96b71e6` |
 | U2.2 | **Écran titre** (`src/ui/title.ts`) : la dernière partie chargée derrière (Continuer ne fait que lever l'écran), le temps tenu, le HUD masqué ; Continuer, Missions (la galerie filtrée sur le jeu), Explorer, Mode photo (la vue seule), Réglages ; Kerr Bench, langue FR/EN, version. Rouvert depuis la pause, Continuer reprend la partie laissée. **Outils F2 réservés au développement** (build local ou `?dev`) : les sauvegardes du joueur sont dans la pause. e2e : ouverture, temps tenu, Échap n'ouvre pas la pause dessous, ↑ ↓ Entrée, retour depuis la pause | fait | `02c9a8e` |
 | U2.3 | **Sélecteur de missions plein écran** (`src/ui/missions.ts`, données `src/game/missions.ts`) : six missions (Artemis II, amarrage ISS, décollage lunaire, Interstellar, approche de Gargantua, le trou de ver en automatique), chacune avec image, briefing, objectifs, touches utiles, difficulté et durée, en FR et EN ; ↑ ↓ choisir, Entrée lancer, Échap revient au titre ; la scène derrière reste figée pendant le choix. Les menus traitent Entrée eux-mêmes (un e2e instable dépendait de l'activation implicite). Test unitaire : chaque mission a sa scène et ses textes dans les deux langues | fait | `7f2e7c5` |
-| U2.4 | **Écran de chargement en séquence de démarrage** : le titre comme l'écran titre, le journal des étapes en mono avec statuts `[ OK ]` / `[ .. ]` clignotant / `[FAIL]`, le bouton « Entrer maintenant » du kit (CSS seul : les étapes restent celles de `loading.ts`) | fait | (ce commit) |
+| U2.4 | **Écran de chargement en séquence de démarrage** : le titre comme l'écran titre, le journal des étapes en mono avec statuts `[ OK ]` / `[ .. ]` clignotant / `[FAIL]`, le bouton « Entrer maintenant » du kit (CSS seul : les étapes restent celles de `loading.ts`) | fait | `5e2b734` |
 
 Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`, `u2-missions.png`, `u2-boot.png`.
+
+## U3 : tablette, roue, indices (en cours)
+
+| # | Étape | Statut | Commit |
+|---|---|---|---|
+| U3.1 | **Indices de touches contextuels** (`src/ui/keyhints.ts`) : 3 à 5 touches selon la phase (à pied, cinématique, à la main, en maintien, sur autopilote, posé, dans l'air, amarrage, amarré), affichés au changement de phase et effacés après 9 s ; la vraie lettre du clavier pour les touches de position (API Keyboard Layout Map : W sur AZERTY). Réglage *Key hints* (préférence). La phase : qui pilote change désormais à l'instant (seule l'étape, lue sur l'orbite, est lissée). e2e : maintien puis main | fait | (ce commit) |
+| U3.2 | Navigation des menus à la manette | à faire | |
+| U3.3 | Roue radiale (maintien de Tab) | à faire | |
+| U3.4 | Tablette MFD (carte, ordinateur, vaisseau, caméra, ciel, journal) | à faire | |
+| U3.5 | Mode photo unifié | à faire | |
+| U3.6 | Retrait de la barre d'outils | à faire | |
 
 ## Journal
 

@@ -394,6 +394,7 @@ export interface Settings {
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
   hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
+  keyHints: boolean; // the keys that matter now, in a strip that fades (ui/keyhints.ts)
   hudBurn: boolean; // the next burn: countdown, Δv, its length, the aim ring
   hudDock: boolean; // the docking: gates along the port's axis, the scope down it, range, closing
   hudRelativity: boolean; // near Gargantua: the clock rate, γ, the sky's Doppler, bound or escaping, the radii, the tide
@@ -607,6 +608,7 @@ export function defaultSettings(): Settings {
     hudImpact: true,
     hudRunway: true,
     hudHover: true,
+    keyHints: true,
     hudBurn: true,
     hudDock: true,
     hudRelativity: true,
@@ -1774,6 +1776,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudImpact: "pref",
   hudRunway: "pref",
   hudHover: "pref",
+  keyHints: "pref",
   hudBurn: "pref",
   hudDock: "pref",
   hudRelativity: "pref",
