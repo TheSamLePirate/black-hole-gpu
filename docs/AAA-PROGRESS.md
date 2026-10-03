@@ -80,11 +80,11 @@ Décisions du propriétaire (03/10) : **Échap = menu pause** (le temps s'arrêt
 | # | Étape | Statut | Commit |
 |---|---|---|---|
 | U2.1 | **Menu pause** (`src/ui/pause.ts`, FR/EN) : reprendre, sauvegarder sous un nom (ou écraser), charger / supprimer (confirmé), rendre les commandes, réglages, commandes, écran titre ; ↑ ↓ Entrée ; Échap revient d'une sous-page. **⌫** rend les commandes, **F5 / F9** sauvegarde et chargement rapides. e2e : le temps tenu, une sauvegarde faite et listée, F5/F9 | fait | `96b71e6` |
-| U2.2 | **Écran titre** (`src/ui/title.ts`) : la dernière partie chargée derrière (Continuer ne fait que lever l'écran), le temps tenu, le HUD masqué ; Continuer, Missions (la galerie filtrée sur le jeu), Explorer, Mode photo (la vue seule), Réglages ; Kerr Bench, langue FR/EN, version. Rouvert depuis la pause, Continuer reprend la partie laissée. **Outils F2 réservés au développement** (build local ou `?dev`) : les sauvegardes du joueur sont dans la pause. e2e : ouverture, temps tenu, Échap n'ouvre pas la pause dessous, ↑ ↓ Entrée, retour depuis la pause | fait | (ce commit) |
-| U2.3 | Sélecteur de missions plein écran (briefing, LANCER) | à faire | |
+| U2.2 | **Écran titre** (`src/ui/title.ts`) : la dernière partie chargée derrière (Continuer ne fait que lever l'écran), le temps tenu, le HUD masqué ; Continuer, Missions (la galerie filtrée sur le jeu), Explorer, Mode photo (la vue seule), Réglages ; Kerr Bench, langue FR/EN, version. Rouvert depuis la pause, Continuer reprend la partie laissée. **Outils F2 réservés au développement** (build local ou `?dev`) : les sauvegardes du joueur sont dans la pause. e2e : ouverture, temps tenu, Échap n'ouvre pas la pause dessous, ↑ ↓ Entrée, retour depuis la pause | fait | `02c9a8e` |
+| U2.3 | **Sélecteur de missions plein écran** (`src/ui/missions.ts`, données `src/game/missions.ts`) : six missions (Artemis II, amarrage ISS, décollage lunaire, Interstellar, approche de Gargantua, le trou de ver en automatique), chacune avec image, briefing, objectifs, touches utiles, difficulté et durée, en FR et EN ; ↑ ↓ choisir, Entrée lancer, Échap revient au titre ; la scène derrière reste figée pendant le choix. Les menus traitent Entrée eux-mêmes (un e2e instable dépendait de l'activation implicite). Test unitaire : chaque mission a sa scène et ses textes dans les deux langues | fait | (ce commit) |
 | U2.4 | Écran de chargement en « séquence de démarrage » | à faire | |
 
-Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`.
+Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`, `u2-missions.png`.
 
 ## Journal
 

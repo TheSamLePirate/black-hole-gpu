@@ -26,6 +26,8 @@ const T = {
 export interface TitleDeps {
   /** the saved flight behind the screen, in a line (null: none — no Continue) */
   saved(): string | null;
+  /** Continue: into the game behind the screen */
+  continue(): void;
   /** the simulation held (true) or running again */
   hold(on: boolean): void;
   missions(): void;
@@ -60,13 +62,20 @@ export class TitleScreen {
     const list = h(
       "nav",
       { class: "ts-list", "aria-label": tr(T.menu) },
-      saved ? item(tr(T.continue), saved, () => {}, "title-continue") : null,
+      saved ? item(tr(T.continue), saved, this.d.continue, "title-continue") : null,
       item(tr(T.missions), tr(T.missionsHint), this.d.missions, "title-missions"),
       item(tr(T.explore), tr(T.exploreHint), this.d.explore, "title-explore"),
       item(tr(T.photo), tr(T.photoHint), this.d.photo, "title-photo"),
       item(tr(T.settings), "", this.d.settings, "title-settings"),
     );
     list.addEventListener("keydown", (e) => {
+      // (Enter: the item focused, here — not left to the browser's activation of a focused button)
+      if (e.key === "Enter" && (e.target as HTMLElement).tagName === "BUTTON") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e.target as HTMLButtonElement).click();
+        return;
+      }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
       e.stopPropagation();

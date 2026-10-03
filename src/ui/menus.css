@@ -109,3 +109,55 @@ body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.
 /* the title over the scene: the flight's instruments, the tools and the toasts out of sight */
 body.title-open .fl-root, body.title-open .fl-hud, body.title-open #toolbar, body.title-open #hud, body.title-open #panel,
 body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root, body.title-open #tp-dock { display: none !important; }
+
+/* ---------------------------------------------------------------- the mission selector */
+.ms-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: clamp(16px, 3vw, 40px);
+  padding: clamp(20px, 5vh, 56px) clamp(20px, 5vw, 80px);
+  background: linear-gradient(90deg, rgba(2, 4, 9, 0.97), rgba(2, 4, 9, 0.9));
+  animation: ts-in 0.3s ease-out both;
+  overflow: auto;
+}
+.ms-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.ms-title { font-size: 16px; letter-spacing: 0.32em; margin-bottom: 6px; }
+.ms-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.ms-item {
+  position: relative;
+  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 14px 10px 20px;
+  font-size: 13.5px;
+  letter-spacing: 0.14em;
+  white-space: normal;
+  text-align: left;
+}
+.ms-item.on, .ms-item:focus, .ms-item:hover:not(:disabled) { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 14px rgba(111, 210, 255, 0.2) inset; outline: none; }
+.ms-item.on::before { content: "▸"; position: absolute; left: 6px; top: 10px; color: var(--k-on); }
+.ms-tag { font: 500 11.5px var(--font); letter-spacing: 0.02em; text-transform: none; color: var(--k-dim); }
+.ms-pips { font: 500 10px var(--mono); letter-spacing: 0.2em; color: var(--k-amber); }
+.ms-item .ms-pips { position: absolute; right: 10px; top: 11px; }
+.ms-keys { margin: 4px 0 0; display: flex; align-items: center; gap: 5px; font: 500 11px var(--mono); color: var(--k-dim); }
+.ms-brief { display: flex; flex-direction: column; gap: 10px; max-width: 760px; min-width: 0; }
+.ms-pic { aspect-ratio: 16 / 9; max-height: 34vh; border: 1px solid var(--k-edge); border-radius: var(--k-r-panel); overflow: hidden; background: #05080f; position: relative; }
+.ms-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ms-pic::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.ms-name { margin: 6px 0 0; font: 700 26px var(--hud-font); letter-spacing: 0.08em; color: #f3f7ff; }
+.ms-meta { margin: 0; font: 500 11.5px var(--mono); color: var(--k-dim); }
+.ms-text { margin: 0; font: 400 14px/1.55 var(--font); color: var(--k-text); max-width: 68ch; }
+.ms-goals { margin: 0; padding-left: 20px; display: grid; gap: 4px; font: 500 13px var(--font); color: var(--k-text); }
+.ms-goals li::marker { color: var(--k-amber); font: 600 12px var(--mono); }
+.ms-ctl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; font: 500 12.5px var(--font); color: var(--k-text); }
+.ms-ctl dt { margin: 0; }
+.ms-ctl dd { margin: 0; color: var(--k-dim); }
+.ms-acts { display: flex; gap: 10px; margin-top: 8px; }
+.ms-acts .k-btn { padding: 10px 22px; font-size: 13px; letter-spacing: 0.24em; }
+@media (max-width: 820px) {
+  .ms-root { grid-template-columns: 1fr; }
+}

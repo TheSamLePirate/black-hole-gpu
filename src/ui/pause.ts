@@ -123,6 +123,13 @@ export class PauseMenu {
     );
     // (↑ ↓ move between the items, as on a console)
     list.addEventListener("keydown", (e) => {
+      // (Enter: the item focused, here — not left to the browser's activation of a focused button)
+      if (e.key === "Enter" && (e.target as HTMLElement).tagName === "BUTTON") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e.target as HTMLButtonElement).click();
+        return;
+      }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
       e.stopPropagation();

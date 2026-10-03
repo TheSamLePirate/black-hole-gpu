@@ -324,7 +324,7 @@ export const KEYMAP: KeySection[] = [
       { keys: "M · ⌘K", text: "Settings · search them (flying: ⇧M)" },
       {
         keys: "F2",
-        text: "Game tools: status, placement, targets, time, saves, performance",
+        text: "Game tools (developers: a local build or ?dev) — status, placement, targets, time, performance",
         bind: [codes("system", "F2", "tools")],
       },
       { keys: "I", text: "Details & physical readouts", bind: [scene("i", "details")] },

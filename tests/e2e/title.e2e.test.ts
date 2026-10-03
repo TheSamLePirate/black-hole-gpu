@@ -27,16 +27,25 @@ describe.skipIf(!E2E)("the title screen", () => {
     expect(await app.js<boolean>(shown)).toBe(true);
   });
 
-  test("the keyboard walks the entries; Missions opens the game's scenes", async () => {
+  test("the keyboard walks the entries; Missions: the briefings, Escape back, Enter launches", async () => {
     expect(await app.js<string>("document.activeElement?.dataset.testid")).toBe("title-missions");
     await app.press("ArrowDown");
     expect(await app.js<string>("document.activeElement?.dataset.testid")).toBe("title-explore");
     await app.press("ArrowUp");
     await app.press("Enter");
-    await app.waitFor(`!document.querySelector(".sg-backdrop").hidden`);
+    await app.waitFor(`!!document.querySelector("[data-testid=missions]")`);
     expect(await app.js<boolean>(shown)).toBe(false);
-    expect(await app.js<string>(`document.querySelector(".sg-filters button.on")?.textContent ?? ""`)).toMatch(/game/i);
+    // (↓: the second mission briefed)
+    const first = await app.js<string>(`document.querySelector(".ms-name").textContent`);
+    await app.press("ArrowDown");
+    expect(await app.js<string>(`document.querySelector(".ms-name").textContent`)).not.toBe(first);
     await app.press("Escape");
+    await app.waitFor(shown);
+    await app.press("Enter"); // (Missions again)
+    await app.waitFor(`!!document.querySelector("[data-testid=missions]")`);
+    await app.click("[data-testid=mission-launch]");
+    await app.waitFor("__bh.camera.piloting", 30_000);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=missions]")`)).toBe(false);
   });
 
   test("from the pause menu, back to the title screen; then Continue resumes", async () => {
@@ -48,10 +57,10 @@ describe.skipIf(!E2E)("the title screen", () => {
     expect(await app.js<string>("document.activeElement?.dataset.testid")).toBe("title-continue");
     await app.press("Enter");
     expect(await app.js<boolean>(shown)).toBe(false);
-    // (the keys reach the game again: J the jet)
-    const jet = await app.js<boolean>("__bh.settings.jet");
-    await app.press("KeyJ");
-    expect(await app.js<boolean>("__bh.settings.jet")).toBe(!jet);
+    // (the keys reach the game again — flying the mission launched: T the SAS)
+    const sas = await app.js<boolean>("__bh.camera.pilot.sas");
+    await app.press("KeyT");
+    expect(await app.js<boolean>("__bh.camera.pilot.sas")).toBe(!sas);
     expect(app.cdp.errors).toEqual([]);
   });
 });

@@ -8,6 +8,7 @@ import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { PauseMenu } from "./ui/pause";
 import { TitleScreen } from "./ui/title";
+import { MissionSelect } from "./ui/missions";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1885,25 +1886,44 @@ async function main() {
       console.warn("Could not restore the saved game:", e);
     }
     // the title screen (ui/title.ts), unless the link named a scene, a moment or the benchmark
+    // the missions (ui/missions.ts): from the title screen; back, the title again
+    const missionSelect = new MissionSelect({
+      launch: (scene) => {
+        paused = false;
+        started = true;
+        panel.applyScene(scene);
+      },
+      back: () => titleScreen?.open(),
+    });
     // (Continue: the flight resumed behind the screen at launch; later — the screen opened from the
     // pause menu — the game left there)
     let started = false;
     titleScreen = new TitleScreen({
       saved: () => (started ? tools.snapshot("now").summary : resumed),
+      continue: () => (started = true),
       hold: (on) => {
         paused = on;
-        if (!on) started = true;
         touch();
       },
-      missions: () => scenes.open("", "game"),
-      explore: () => scenes.open(),
+      missions: () => {
+        paused = true; // (the scene behind held while one chooses)
+        missionSelect.open();
+      },
+      explore: () => {
+        started = true;
+        scenes.open();
+      },
       photo: () => {
+        started = true;
         // (the view alone: the ship left, the interface hidden — H brings it back, P saves a PNG)
         if (camera.piloting) actions["btn-ship"]!();
         if (!document.body.classList.contains("hide-ui")) toggleUi();
         panel.toast("Photo mode — H: the interface · P: a PNG · Render: offline, any size");
       },
-      settings: () => panel.toggle(true),
+      settings: () => {
+        started = true;
+        panel.toggle(true);
+      },
       bench: () => {
         location.hash = "bench";
         location.reload();
