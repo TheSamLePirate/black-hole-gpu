@@ -90,8 +90,8 @@ Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`, `u2-missi
 
 | # | Étape | Statut | Commit |
 |---|---|---|---|
-| U3.1 | **Indices de touches contextuels** (`src/ui/keyhints.ts`) : 3 à 5 touches selon la phase (à pied, cinématique, à la main, en maintien, sur autopilote, posé, dans l'air, amarrage, amarré), affichés au changement de phase et effacés après 9 s ; la vraie lettre du clavier pour les touches de position (API Keyboard Layout Map : W sur AZERTY). Réglage *Key hints* (préférence). La phase : qui pilote change désormais à l'instant (seule l'étape, lue sur l'orbite, est lissée). e2e : maintien puis main | fait | (ce commit) |
-| U3.2 | Navigation des menus à la manette | à faire | |
+| U3.1 | **Indices de touches contextuels** (`src/ui/keyhints.ts`) : 3 à 5 touches selon la phase (à pied, cinématique, à la main, en maintien, sur autopilote, posé, dans l'air, amarrage, amarré), affichés au changement de phase et effacés après 9 s ; la vraie lettre du clavier pour les touches de position (API Keyboard Layout Map : W sur AZERTY). Réglage *Key hints* (préférence). La phase : qui pilote change désormais à l'instant (seule l'étape, lue sur l'orbite, est lissée). e2e : maintien puis main | fait | `b7a3fbb` |
+| U3.2 | **Les menus à la manette** (`src/ui/padnav.ts`) : quand un menu tient le jeu (titre, pause, missions), la croix ou le stick gauche (répétition au maintien) parcourent les entrées, A choisit, B revient ; en jeu, Start ouvre la pause (au lieu des réglages). Les boutons deviennent les touches que les menus comprennent déjà. e2e avec une manette simulée (`navigator.getGamepads` remplacé) : titre, missions, lancement, pause | fait | (ce commit) |
 | U3.3 | Roue radiale (maintien de Tab) | à faire | |
 | U3.4 | Tablette MFD (carte, ordinateur, vaisseau, caméra, ciel, journal) | à faire | |
 | U3.5 | Mode photo unifié | à faire | |

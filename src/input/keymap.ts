@@ -315,7 +315,8 @@ export const KEYMAP: KeySection[] = [
       { keys: "A  (✕)", text: "Fly to the target" },
       { keys: "B · X · Y  (○ □ △)", text: "Free fall · auto-orbit · next view" },
       { keys: "D-pad ◀ ▶ · ▲ ▼", text: "Previous / next target · closer / farther" },
-      { keys: "R3 · View · Menu", text: "Recentre · run / pause time · settings (Share · Options)" },
+      { keys: "R3 · View · Menu", text: "Recentre · run / pause time · the pause menu (Share · Options)" },
+      { keys: "In the menus", text: "D-pad or left stick ▲ ▼ · A choose · B back · Start leaves the pause" },
     ],
   },
   {

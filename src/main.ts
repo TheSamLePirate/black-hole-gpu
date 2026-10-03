@@ -10,6 +10,7 @@ import { PauseMenu } from "./ui/pause";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { KeyHints } from "./ui/keyhints";
+import { MenuPad } from "./ui/padnav";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1212,7 +1213,8 @@ async function main() {
         playPause();
         break;
       case "settings":
-        panel.toggle();
+        // (Start: the pause menu, as in any game — the settings are in it)
+        (pauseMenu ??= makePauseMenu()).open();
         break;
     }
     touch();
@@ -1652,6 +1654,7 @@ async function main() {
   let frozen = false;
   /** the pause menu (or the title screen) open: the simulation holds, the image refines */
   let paused = false;
+  const menuPad = new MenuPad();
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
 
@@ -1675,6 +1678,9 @@ async function main() {
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the
     // scene held, or stepped by the video itself)
+    // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
+    // does not read it meanwhile)
+    if (paused) menuPad.tick(camera.pad.poll(), now);
     if (!frozen && !paused && !renderer.offlineActive) {
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
         changed = true;
