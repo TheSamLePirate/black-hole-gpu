@@ -57,7 +57,7 @@ Découvertes en route :
 |---|---|---|---|
 | U0.1 | **Échap partout** (réglages, F2, rendu, carte plein écran, galerie, en plus de Caméra, Ciel et aide) ; `H` masque toutes les surfaces ; **échelle de z-index** en variables (`--z-hud` … `--z-tip`), galerie au-dessus des popovers, alertes au-dessus des modales ; **file de toasts** (3 empilés, durée selon la longueur, journal) | fait | `2d30a78` |
 | U0.2 | **HUD juste** : chevron d'énergie et tendance de vitesse en temps simulé (+10 s) et dans les bonnes unités ; boîte de vitesse dimensionnée (« 7.67 km/s ») ; barre mission en s et m/s ; distances de cible en km et UA ; plus d'« IMPACT » au sol ; verrou de cible masqué en finale (< 20 km d'une piste) ; flèche de bord rétrograde ; encadré de relativité ajusté à son texte ; un seul rythme de clignotement (2 Hz, `src/ui/clock.ts`) ; ombres floues remplacées. Vérifié en headless | fait | `5c33e26` |
-| U0.3 | **Moins « site web »** : lien Atlas retiré du HUD, bandeau « Drag to orbit » masqué en vol, fps seulement en dev ; **Craft Lost « signal perdu »** (scanlines, code télémétrie, FR/EN, plus de Helvetica) ; panneaux de vol opaques à ~90 % et **crochets d'angle** ; **police minimale 11 px** dans le DOM (58 déclarations) | fait | (ce commit) |
+| U0.3 | **Moins « site web »** : lien Atlas retiré du HUD, bandeau « Drag to orbit » masqué en vol, fps seulement en dev ; **Craft Lost « signal perdu »** (scanlines, code télémétrie, FR/EN, plus de Helvetica) ; panneaux de vol opaques à ~90 % et **crochets d'angle** ; **police minimale 11 px** dans le DOM (58 déclarations) | fait | `c7aa9d1` |
 | U0.4 | Retrait du code mort de l'ancien planificateur (`.fl-plan`, ~350 lignes) | reporté au découpage de `flighthud.ts` (phase 1) | |
 
 ## Journal
@@ -73,3 +73,19 @@ Découvertes en route :
 - 0.8 : lint/format et validation des shaders en CI. **Phase 0 terminée.**
 - G0 : Kerr Bench livré (`#bench`), référence M1 Max = 1000, fusion des rapports. Phase Standard de référence : Artemis 49 fps, Gargantua 42, disque 44, Saturne 44, Kerr 57, trou de ver 47, Lune 53, Miller 51 (Game, headless).
 - U0 : Échap partout, toasts en pile, HUD juste (unités, temps simulé, fausses alarmes), Craft Lost refait, panneaux encadrés, 11 px minimum. Captures headless : pas de tir, orbite, carte, Craft Lost, réglages.
+
+## Phase 1 : consolidation (en cours)
+
+Ordre : les filets d'abord (e2e et trajectoires de référence), puis les découpages, chacun vérifié contre ces filets.
+
+| # | Étape | Statut | Commit |
+|---|---|---|---|
+| 1.1 | **Harnais e2e versionné** `tests/e2e/` (CDP natif, sans dépendance, serveur de production à lui, vrais événements, **hit-test à chaque clic**) : démarrage sans erreur, pile d'Échap avec maintien, toasts, carte au vrai clavier (canvas sous le pointeur), aide « ? », réglages au vrai clic, Kerr Bench. **7 scénarios, 25 s** ; `bun run e2e`. En CI plus tard : SwiftShader n'offre sans doute pas les 10 storage buffers (voir O4) | fait | (ce commit) |
+| 1.2 | **Trajectoires de référence** (caractérisation) : vols déterministes via `__bh.freeze` + `step`, empreintes d'état versionnées | à faire | |
+| 1.3 | **Découpage de `controls.ts`** par domaines (entrées, caméra, intégrateurs, autopilotes, plan, amarrage, télémétrie) | à faire | |
+| 1.4 | **Découpage de `main.ts`** : boucle, table de raccourcis unique (qui génère l'aide), câblage UI, `__bh` | à faire | |
+| 1.5 | `interface FlightInfo` explicite ; retrait de l'ancien planificateur | à faire | |
+| 1.6 | **Boucle à pas fixe** et interpolation | à faire | |
+| 1.7 | `Settings` séparé (préférences / rendu / état) et sauvegarde v2 | à faire | |
+| 1.8 | Machine à états des modes de vol | à faire | |
+
