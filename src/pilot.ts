@@ -147,7 +147,7 @@ export class FlightComputer {
 
   step(c: FlightContext, inp: PilotInput): FlightOutput {
     const { dt, S } = c;
-    const col = (i: number): V3 => [S[0][i], S[1][i], S[2][i]];
+    const col = (i: number): V3 => [S[0][i]!, S[1][i]!, S[2][i]!];
     const X = col(0), Y = col(1), Z = col(2); // ship axes in C
     const toC = (v: V3): V3 => [dot(v, c.right), dot(v, c.up), dot(v, c.fwd)];
     const fromC = (v: V3): V3 => add(add(scale(c.right, v[0]), scale(c.up, v[1])), scale(c.fwd, v[2]));
@@ -264,7 +264,7 @@ export class FlightComputer {
     const active = manual.some((m) => m !== 0);
     // the control surfaces' authority, added to the thrusters' (the plane and the sci-fi laws)
     const A3 = c.air && (c.air.mode !== "rocket" || this.auto === "entry") ? c.air.auth : [0, 0, 0];
-    const acc3: V3 = [TUNING.turnAccel + A3[0], TUNING.turnAccel + A3[1], TUNING.turnAccel + A3[2]];
+    const acc3: V3 = [TUNING.turnAccel + A3[0]!, TUNING.turnAccel + A3[1]!, TUNING.turnAccel + A3[2]!];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;

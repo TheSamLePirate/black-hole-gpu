@@ -2806,7 +2806,7 @@ export class FlightHud {
     ctx.textAlign = "right";
     ctx.fillText(course, cw - m - S(4), m + S(2));
     // periapsis and apoapsis: the height in figures, when in small
-    const split = (t: string) => {
+    const split = (t: string): [string, string] => {
       const j = t.indexOf(" · ");
       return j < 0 ? [t, ""] : [t.slice(0, j), t.slice(j + 3)];
     };

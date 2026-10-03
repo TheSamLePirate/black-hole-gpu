@@ -133,6 +133,7 @@ export class GameToolsWindow {
       return r;
     } catch (e) {
       this.fail(e);
+      return undefined;
     }
   }
   private fail(e: unknown) {

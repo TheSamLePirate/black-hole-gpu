@@ -3,7 +3,6 @@
 // and the planner's worker (the free-fall path, off the frame loop) share them.
 
 import type { Lens } from "./geodesic";
-import type { Vec3 } from "./physics";
 import type { Settings } from "./settings";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";

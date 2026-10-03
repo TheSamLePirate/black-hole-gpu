@@ -6,14 +6,14 @@ import { horizon, isco, photonOrbits, zamo, coordToZamo, zamoToCoord, type Vec3 
 import { SYSTEM_BODIES, type Settings, type SystemBody, type Target } from "./settings";
 import {
   aimFrame, angularRadius, availableBodies, bodyCentre, bodyDistance, bodyLook, BODY_NAMES, cameraPosition, composeOffset, offsetFrom, pick,
-  pixelLook, QUAT_ID, quatAngle, slerp, starCentre, starOmega, starPhase, starVelocity, type Body, type Quat,
-  baryFraction, barycentreVelocity, holeAcceleration, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
-  cameraHome, isCraft, isOurBody, isOurs, onOurSide, ourLook, ourTarget, craftRadius,
+  pixelLook, QUAT_ID, quatAngle, slerp, starOmega, starPhase, type Body, type Quat,
+  baryFraction, barycentreVelocity, starOrbitRadius, bodyVelocity, bodyMass, bodyRadius, bodyHill,
+  cameraHome, isCraft, isOurBody, isOurs, onOurSide, ourLook, ourTarget,
 } from "./targeting";
 import { advance, fromZamo, step as geoStep, toZamo, type Lens } from "./geodesic";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { lensesOf } from "./lenses";
-import { bodyState, bodyTrack } from "./system/ephemeris";
+import { bodyState } from "./system/ephemeris";
 import { accelToG, engineThrust, tank } from "./engine";
 import { epicycle, rendezvousPush, type State6 } from "./lowthrust";
 import { AirFlight, AIR_WARP } from "./flightair";
@@ -2252,7 +2252,10 @@ export class CameraController {
     const v = Math.max(5, 0.2 * Math.hypot(...o.eye)) * (fast ? 5 : 1);
     const want = lin(lin(S[2], move[0]! * v, S[0], move[1]! * v), 1, S[1], move[2]! * v);
     o.fvel = lin(o.fvel, 1, sub3(want, o.fvel), 1 - Math.exp(-dt / 0.15));
-    if (Math.hypot(...o.fvel) < 1e-3) return (o.fvel = [0, 0, 0]);
+    if (Math.hypot(...o.fvel) < 1e-3) {
+      o.fvel = [0, 0, 0];
+      return;
+    }
     const e = lin(o.eye, 1, o.fvel, dt);
     // (no farther than 50 km from the ship)
     const l = Math.hypot(...e);
@@ -3057,7 +3060,6 @@ export class CameraController {
     if (!fr || !fr.env.atm && !solidBody(fr.body)) return say("Entry: get near a world with air or ground first");
     const craft = this.entryCraft();
     const Msec = 4.925490947e-6 * s.massSolar;
-    const D = Math.PI / 180;
     const up = unitV(fr.s.x);
     const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
     const h = Math.hypot(...fr.s.x) - fr.env.R;
@@ -4010,7 +4012,10 @@ export class CameraController {
   private spin: { ax: [Vec3, Vec3, Vec3]; t: number; w: Vec3 } | null = null;
   private measureSpin() {
     const P = this.activePoseNow();
-    if (!P) return (this.spin = null);
+    if (!P) {
+      this.spin = null;
+      return;
+    }
     const S = this.spin;
     if (S && P.t > S.t) {
       // (the rotation from the last axes to these: Σ eᵢ × R eᵢ = 2 sin θ k, Σ eᵢ·R eᵢ = 1 + 2 cos θ)
@@ -4098,7 +4103,10 @@ export class CameraController {
     const v = fast ? 3 : 1.1;
     const want = lin(lin(S[2], move[0]! * v, S[0], move[1]! * v), 1, S[1], move[2]! * v);
     C.vel = lin(C.vel, 1, sub3(want, C.vel), 1 - Math.exp(-dt / 0.12));
-    if (Math.hypot(...C.vel) < 1e-3) return (C.vel = [0, 0, 0]);
+    if (Math.hypot(...C.vel) < 1e-3) {
+      C.vel = [0, 0, 0];
+      return;
+    }
     this.activity = performance.now();
     let e: Vec3 = [...e0] as Vec3;
     let d = lin(C.vel, dt, C.vel, 0);

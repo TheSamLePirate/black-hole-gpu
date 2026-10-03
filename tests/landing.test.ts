@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
-import { advance, fromZamo, toZamo, type Lens } from "../src/geodesic";
+import { advance, fromZamo, toZamo } from "../src/geodesic";
 import { planetFrame, stepLocal, toGlobal, toLocal, weightUp, zamoBeta, betaToCoord, GEAR, groundR } from "../src/landing";
 import type { Vec3 } from "../src/physics";
 import { GARGANTUA_SYSTEM as SYS, body } from "../src/system/bodies";
-import { bodyTrack } from "../src/system/ephemeris";
 import { sphericalFrame } from "../src/wormhole";
 
 // Phase 6: the planet's own frame (landing.ts) against the global Kerr integrator, and on the ground.
@@ -12,9 +11,6 @@ const a = SYS.spin;
 const cart = (s: { r: number; th: number; ph: number }): Vec3 => [
   s.r * Math.sin(s.th) * Math.cos(s.ph), s.r * Math.sin(s.th) * Math.sin(s.ph), s.r * Math.cos(s.th),
 ];
-const lenses: Lens[] = SYS.bodies
-  .filter((b) => b.universe === "gargantua" && b.kind !== "hole" && b.mass > 0)
-  .map((b) => ({ m: b.mass, R: b.radius, centre: bodyTrack(SYS, b.id).pos, velocity: bodyTrack(SYS, b.id).vel }));
 const shipAt = (X: Vec3, V: Vec3, t: number) => {
   const f = sphericalFrame(X);
   return fromZamo(f.r, f.th, f.ph, zamoBeta(X, V, a), a, t);

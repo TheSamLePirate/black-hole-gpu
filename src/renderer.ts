@@ -755,7 +755,10 @@ export class Renderer {
     loadHdMap(this.device, name)
       .then((m) => {
         // (superseded while it loaded: both its textures freed — the relief leaked before)
-        if (!m || this.hdLoading !== name) return m && (m.color.destroy(), m.relief.destroy());
+        if (!m || this.hdLoading !== name) {
+          if (m) m.color.destroy(), m.relief.destroy();
+          return;
+        }
         const old = this.hdMap;
         this.hdMap = m;
         this.hdLoading = null;

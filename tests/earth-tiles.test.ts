@@ -54,7 +54,7 @@ test("the heights near the camera are the tiles', the global map's beyond them",
   fill(t);
   expect(t.pending).toBe(0);
   expect(t.finest).toBe(Z1);
-  for (const [lat, lon] of [[45.9, 6.87], [45.905, 6.88], [45.89, 6.86]]) {
+  for (const [lat, lon] of [[45.9, 6.87], [45.905, 6.88], [45.89, 6.86]] as const) {
     const s = t.heightAt(dir(lat, lon), 1);
     expect(s.rem).toBe(0);
     expect(Math.abs(s.h - field(lat, lon))).toBeLessThan(2);
@@ -86,7 +86,7 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
 
 test("a level's samples: bilinear and B-spline exact on a ramp, the windows' edges faded", () => {
   const ramp = (i: number, j: number) => 3 * i + 5 * j;
-  for (const [x, y] of [[10.3, 20.7], [100.5, 3.25]]) {
+  for (const [x, y] of [[10.3, 20.7], [100.5, 3.25]] as const) {
     expect(sampleLevel(ramp, x, y, 0)).toBeCloseTo(3 * (x - 0.5) + 5 * (y - 0.5), 9);
     expect(sampleLevel(ramp, x, y, 3)).toBeCloseTo(3 * (x - 0.5) + 5 * (y - 0.5), 9);
   }

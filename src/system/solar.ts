@@ -176,7 +176,6 @@ function kepler(a: number, e: number, I: number, M: number, w: number, O: number
 
 /** DE440's Earth / Moon mass ratio */
 const EMRAT = 81.30056822149722;
-const EARTH_MOON = 1 / (1 + EMRAT); // m_moon / (m_earth + m_moon)
 const KM_AU = 1e3 / AU, KMS_AUD = (86400 * 1e3) / AU;
 
 export interface State { pos: Vec3; vel: Vec3 }

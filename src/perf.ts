@@ -14,7 +14,6 @@ export class CpuProfiler {
   /** loop iterations and rendered frames per second (EMA) */
   loopFps = 0;
   renderFps = 0;
-  private last = 0;
   private rendered = 0;
   private iters = 0;
   private winAt = 0;
@@ -62,7 +61,6 @@ export class CpuProfiler {
       this.iters = this.rendered = 0;
       this.winAt = now;
     }
-    this.last = now;
   }
 
   table(): CpuSection[] {

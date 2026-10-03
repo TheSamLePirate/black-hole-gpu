@@ -483,7 +483,7 @@ export function planIntercept(
       const J: Vec3[] = [];
       for (let c = 0; c < 3; c++) {
         const d2: Vec3 = [...dv];
-        d2[c] += h;
+        d2[c] = d2[c]! + h;
         const mc = missVec(s, d2);
         if (!mc) break;
         J.push(scale(sub(mc, m), 1 / h));

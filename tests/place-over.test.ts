@@ -21,6 +21,6 @@ test("orbitOver puts the ship over the place picked", () => {
     const p = ourOrbitPose({ body, altKm: 400, inc: o.inc, raan: o.raan, argPe, nu: o.nu, retrograde: retro }, t);
     const [la, lo] = latLon(toBodyFixed(body, p.X, t));
     expect(la).toBeCloseTo(lat, 4);
-    expect(((lo - lon + 540) % 360) - 180).toBeCloseTo(0, 4);
+    expect(((lo! - lon + 540) % 360) - 180).toBeCloseTo(0, 4);
   }
 });

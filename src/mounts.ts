@@ -80,7 +80,7 @@ export function shipToCamera(m: Mount | MountPose, lookYaw = 0, lookPitch = 0): 
     const f: V3 = [Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)];
     const r: V3 = [Math.cos(y), 0, -Math.sin(y)];
     const L: M3 = [r, cross(f, r), f];
-    S = L.map((row) => [0, 1, 2].map((k) => row[0] * S[0][k] + row[1] * S[1][k] + row[2] * S[2][k]) as V3) as M3;
+    S = L.map((row) => [0, 1, 2].map((k) => row[0] * S[0][k]! + row[1] * S[1][k]! + row[2] * S[2][k]!) as V3) as M3;
   }
   return { S, t: S.map((row) => -dot(row, eye)) as V3 };
 }

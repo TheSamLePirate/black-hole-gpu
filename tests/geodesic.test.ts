@@ -86,8 +86,8 @@ describe("camera geodesics (timelike Kerr)", () => {
     const pulled = advance(st, a, T, 0.05, 0, [0, 0, 0], lens).st;
     const d = cart(pulled).map((v, i) => v - cart(free)[i]!);
     // ½ (m/d²) T² towards the star (−y), to ~5 % (the star moves 0.36 M meanwhile)
-    expect(-d[1] / (0.5 * (0.1 / 100) * T * T)).toBeGreaterThan(0.93);
-    expect(-d[1] / (0.5 * (0.1 / 100) * T * T)).toBeLessThan(1.07);
+    expect(-d[1]! / (0.5 * (0.1 / 100) * T * T)).toBeGreaterThan(0.93);
+    expect(-d[1]! / (0.5 * (0.1 / 100) * T * T)).toBeLessThan(1.07);
   });
 
   test("falling onto the star, the camera lands and then rides on its surface", () => {

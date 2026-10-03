@@ -294,7 +294,6 @@ function land(st: Massive, a: number, lenses: Lenses): Massive | null {
 }
 
 // Dormand–Prince 5(4) coefficients
-const DP_C = [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1];
 const DP_A = [
   [],
   [1 / 5],
@@ -421,7 +420,6 @@ const hGuess = new Map<number, number>();
 
 /** Future path (no thrust): Cartesian points (flat map of BL) until `tMax` of coordinate time. */
 export function predict(st: Massive, a: number, tMax: number, maxPoints = 400, lens?: Lenses, tol = TOL, stop?: (p: Vec3, t: number) => boolean) {
-  const rH = horizon(a);
   const pts: Vec3[] = [];
   let s = st;
   let fate: "horizon" | "escape" | "continues" | "star" = "continues";

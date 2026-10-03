@@ -596,7 +596,7 @@ function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text:
         const R = 13 * dpr;
         stroke(() => {
           ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
             ctx.moveTo(p![0] + dx * R * 0.45, p![1] + dy * R * 0.45);
             ctx.lineTo(p![0] + dx * R * 1.5, p![1] + dy * R * 1.5);
           }

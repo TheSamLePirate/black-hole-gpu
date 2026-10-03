@@ -13,7 +13,6 @@ import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./
 import { fleet, fleetStart } from "./fleet";
 import { CockpitScreens } from "./ui/cockpitscreens";
 import { VESSELS } from "./vessels";
-import { SOLAR_BODIES } from "./system/solar";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -51,7 +50,7 @@ import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, typ
 import { defaultAltKm, ourOrbitPose } from "./game/place";
 import { solarBody, M_METRES } from "./system/solar";
 import { setSceneTime } from "./wormhole";
-import { fmtWarp, realTimeSpeed, stepWarp, warpFactor, warpLadder } from "./clock";
+import { fmtWarp, realTimeSpeed, stepWarp, warpLadder } from "./clock";
 import { loading } from "./loading";
 import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
@@ -497,7 +496,7 @@ async function main() {
       const l = Math.hypot(...d);
       camera.setCinematic(null);
       if (camera.gravity) camera.setGravity(false);
-      setHomePose(settings, X, [d[0] / l, d[1] / l, d[2] / l], p.ax[1], p.V);
+      setHomePose(settings, X, [d[0]! / l, d[1]! / l, d[2]! / l], p.ax[1], p.V);
       settings.motion = "geodesic";
       camera.setOurLanded(null);
       camera.sync();
@@ -521,7 +520,7 @@ async function main() {
       const l = Math.hypot(...d);
       camera.setCinematic(null);
       if (camera.gravity) camera.setGravity(false);
-      setHomePose(settings, X, [d[0] / l, d[1] / l, d[2] / l], [-A[2][0], -A[2][1], -A[2][2]], st.V);
+      setHomePose(settings, X, [d[0]! / l, d[1]! / l, d[2]! / l], [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], st.V);
       settings.motion = "geodesic";
       camera.setOurLanded(null);
       camera.sync();

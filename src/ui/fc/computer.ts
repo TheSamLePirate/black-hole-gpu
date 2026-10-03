@@ -652,7 +652,7 @@ export class FlightComputer {
     const big = r.burns.some((b) => len(b.dv) >= 1e5);
     // (the normal and radial columns only when a burn has them)
     const top = Math.max(...r.burns.map((b) => len(b.dv)), 1e-9);
-    const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]) < 0.02 * top);
+    const tiny = (k: number) => r.burns.every((b) => Math.abs(b.dv[k]!) < 0.02 * top);
     const showN = !tiny(1), showR = !tiny(2);
     const col = (on: boolean, x: string) => (on ? x : "");
     tab.innerHTML = `<tr><th>${big ? "km/s" : ""}</th><th>T−</th><th>PRO</th>${col(showN, "<th>NRM</th>")}${col(showR, "<th>RAD</th>")}<th>|Δv|</th><th>BURN</th></tr>` + r.burns.map((b, i) =>

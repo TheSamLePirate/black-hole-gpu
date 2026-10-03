@@ -790,7 +790,7 @@ export class GroundTrack {
       const r = 6 * dpr;
       for (const [lw, col] of [[3.5, "rgba(0, 0, 0, 0.6)"], [1.6, "#6fe3a1"]] as const) {
         pt.disc(pk[0], pk[1], r, null, col, lw * dpr);
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) pt.path([[pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45], [pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8]], col, lw * dpr);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) pt.path([[pk[0] + dx * r * 0.45, pk[1] + dy * r * 0.45], [pk[0] + dx * r * 1.8, pk[1] + dy * r * 1.8]], col, lw * dpr);
       }
     }
     // the ship: a chevron along its track

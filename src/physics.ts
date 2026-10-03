@@ -374,7 +374,6 @@ export function adaptiveRK4(st: State, L: number, a: number, hTry: number, hMax:
 }
 
 // Dormand–Prince 5(4) tableau (FSAL: the 7th stage is the derivative at the new point).
-const DP_C = [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1];
 const DP_A = [
   [],
   [1 / 5],
@@ -395,8 +394,8 @@ export function dopriStep(st: State, k1: State, L: number, a: number, h: number)
     const p = [...st.p] as State["p"];
     row.forEach((c, j) => {
       if (!c) return;
-      for (let i = 0; i < 4; i++) x[i] += h * c * k[j]!.x[i]!;
-      for (let i = 0; i < 2; i++) p[i] += h * c * k[j]!.p[i]!;
+      for (let i = 0; i < 4; i++) x[i] = x[i]! + h * c * k[j]!.x[i]!;
+      for (let i = 0; i < 2; i++) p[i] = p[i]! + h * c * k[j]!.p[i]!;
     });
     return { x, p };
   };
@@ -408,8 +407,8 @@ export function dopriStep(st: State, k1: State, L: number, a: number, h: number)
   k.push(rhs(y5.x, y5.p, L, a));
   const err: State = { x: [0, 0, 0, 0], p: [0, 0] };
   DP_E.forEach((e, j) => {
-    for (let i = 0; i < 4; i++) err.x[i] += h * e * k[j]!.x[i]!;
-    for (let i = 0; i < 2; i++) err.p[i] += h * e * k[j]!.p[i]!;
+    for (let i = 0; i < 4; i++) err.x[i] = err.x[i]! + h * e * k[j]!.x[i]!;
+    for (let i = 0; i < 2; i++) err.p[i] = err.p[i]! + h * e * k[j]!.p[i]!;
   });
   return { y: y5, k7: k[6]!, err };
 }
