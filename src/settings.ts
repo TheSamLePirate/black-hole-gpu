@@ -272,6 +272,9 @@ export interface Settings {
   hudAoA: boolean; // in the air: the angle of attack's bracket and stall marks, the sideslip ball
   hudEnergy: boolean; // in the air: the energy chevron (the speed's rate), the load
   hudDirector: boolean; // in the air: the flight director (the flight computer's commanded path)
+  hudPath: boolean; // the predicted path drawn in perspective in the view (both universes)
+  hudFuture: boolean; // the ship's places to come: +10, +30, +60 s, a quarter of the orbit
+  hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -476,6 +479,9 @@ export function defaultSettings(): Settings {
     hudAoA: true,
     hudEnergy: true,
     hudDirector: true,
+    hudPath: true,
+    hudFuture: true,
+    hudImpact: true,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,

@@ -8,6 +8,7 @@
 // markers and their arrows are drawn (the instruments belong to the pilot's seat and the chase).
 
 import type { Settings } from "../../settings";
+import type { FutureView } from "../../controls";
 import { COL, FONT, MONO, marker } from "../hudkit";
 
 type V3 = [number, number, number];
@@ -15,6 +16,8 @@ type V3 = [number, number, number];
 /** What the symbology needs from the flight (a slice of FlightHud's Info). */
 export interface SymInfo {
   S: number[][];
+  /** where the ship is (the hole's region: its lensed tube may draw the path instead) */
+  region?: string;
   dirs: Record<string, V3 | null | undefined>;
   air?: {
     u?: number[] | null;
@@ -51,6 +54,10 @@ export interface SymFrame {
   density: number;
   /** where the heading tape may sit: below this [device px] */
   top: number;
+  /** the future as the eye sees it: the predicted path, the places to come, the impact */
+  future?: FutureView | null;
+  /** the quarter of the orbit asked among the places to come [s] (labelled so) */
+  quarter?: number;
 }
 
 const UNDER = "rgba(0, 0, 0, 0.42)";
@@ -275,6 +282,9 @@ export function drawSymbology(F: SymFrame) {
     if (Math.abs(bank) > 1.5 * D) text(`${Math.abs(Math.round(bank / D))}° ${bank > 0 ? "R" : "L"}`, px - nx * 24 * dpr, py - ny * 24 * dpr, "#ffc85a", 11, "center", true);
   }
 
+  // ---- the future: the path in perspective, the places to come, the impact
+  if (F.future && F.density < 2) drawFuture(F, F.future, pr, stroke, text, inside);
+
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
   if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, north, fpx);
@@ -308,9 +318,7 @@ export function drawSymbology(F: SymFrame) {
       const l = Math.hypot(dx, dy) || 1;
       dx /= l;
       dy /= l;
-      const kx = (W / 2 - m) / Math.max(Math.abs(dx), 1e-6), ky = (H / 2 - m) / Math.max(Math.abs(dy), 1e-6);
-      const k2 = Math.min(kx, ky);
-      const x = W / 2 + dx * k2, y = H / 2 + dy * k2;
+      const [x, y] = edgeAt(W, H, dpr, dx, dy);
       const col = COL[k] ?? "#ffffff";
       ctx.beginPath();
       ctx.moveTo(x + dx * 16 * dpr, y + dy * 16 * dpr);
@@ -474,4 +482,108 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
       }, "rgba(224, 123, 255, 0.45)", 1, [2, 4]);
     }
   }
+}
+
+/** A time ahead, short: 42 s, 3 min 20 s, 1 h 05 min. */
+function ahead(t: number): string {
+  if (!Number.isFinite(t)) return "—";
+  if (t < 90) return `${Math.round(t)} s`;
+  if (t < 3600) return `${Math.floor(t / 60)} min ${String(Math.round(t % 60)).padStart(2, "0")} s`;
+  return `${Math.floor(t / 3600)} h ${String(Math.round((t % 3600) / 60)).padStart(2, "0")} min`;
+}
+
+/**
+ * The future in the view:
+ * - the predicted path in perspective (cyan), broken where its body hides it; on Gargantua's side the
+ *   lensed tube (⇧Y) draws it instead when it is on;
+ * - the ship's places to come — +10, +30, +60 s, a quarter of the orbit — as hollow rings, dated;
+ * - where the path meets the ground (a red reticle on the spot as it turns now, its countdown) or the
+ *   air's top (the entry, amber), or Gargantua's horizon; off screen, an arrow at the edge with the time.
+ */
+function drawFuture(F: SymFrame, fu: FutureView, pr: Proj, stroke: Stroke, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+  const { ctx, W, H, dpr, s, i } = F;
+  const tube = i.region === "hole" && s.pathInView;
+  // ---- the path
+  if (s.hudPath && !tube && fu.pts.length > 1) {
+    const runs: [number, number][][] = [];
+    let run: [number, number][] = [];
+    for (const q of fu.pts) {
+      const p = q.hid ? null : pr(q.d);
+      if (!p || Math.abs(p[0] - W / 2) > W * 3 || Math.abs(p[1] - H / 2) > H * 3) {
+        if (run.length > 1) runs.push(run);
+        run = [];
+        continue;
+      }
+      run.push(p);
+    }
+    if (run.length > 1) runs.push(run);
+    for (const r of runs) stroke(() => r.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), "rgba(90, 220, 255, 0.7)", 1.8, [10, 6]);
+  }
+  // ---- the places to come
+  if (s.hudFuture) {
+    for (const m of fu.marks) {
+      if (m.hid) continue;
+      const p = pr(m.d);
+      if (!inside(p, 8 * dpr)) continue;
+      const big = m.t > 61;
+      const quarter = F.quarter && Math.abs(m.t - F.quarter) < 1;
+      stroke(() => {
+        ctx.arc(p![0], p![1], 6.5 * dpr, 0, 2 * Math.PI);
+        ctx.moveTo(p![0] - 11 * dpr, p![1]);
+        ctx.lineTo(p![0] - 6.5 * dpr, p![1]);
+        ctx.moveTo(p![0] + 6.5 * dpr, p![1]);
+        ctx.lineTo(p![0] + 11 * dpr, p![1]);
+      }, big ? "rgba(214, 236, 255, 0.85)" : "rgba(90, 220, 255, 0.95)", 1.5);
+      // (beside it, to the right: the marks of a path seen end-on stack up, their labels still read)
+      text(quarter ? "¼ ORBIT" : `+${ahead(m.t)}`, p![0] + 15 * dpr, p![1], big ? "rgba(214, 236, 255, 0.9)" : "rgba(90, 220, 255, 0.95)", 10.5, "left", true);
+    }
+  }
+  // ---- the impact, the entry
+  if (s.hudImpact && fu.impact) {
+    const marks = [fu.impact, ...(fu.impact.ground ? [fu.impact.ground] : [])];
+    for (const m of marks) {
+      const ground = m.kind === "ground", air = m.kind === "air";
+      const col = ground ? "#ff5a46" : air ? "#ffc85a" : "#ff8a5c";
+      const label = ground ? `IMPACT ${ahead(m.t)}` : air ? `ENTRY ${ahead(m.t)}` : m.kind === "horizon" ? `HORIZON ${ahead(m.t)}` : `THE STAR ${ahead(m.t)}`;
+      const p = m.hid ? null : pr(m.d);
+      if (inside(p, 20 * dpr)) {
+        const R = 13 * dpr;
+        stroke(() => {
+          ctx.arc(p![0], p![1], R, 0, 2 * Math.PI);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            ctx.moveTo(p![0] + dx * R * 0.45, p![1] + dy * R * 0.45);
+            ctx.lineTo(p![0] + dx * R * 1.5, p![1] + dy * R * 1.5);
+          }
+        }, col, 1.8, air ? [4, 3] : undefined);
+        text(label, p![0], p![1] + R * 2.1, col, 12, "center", true);
+      } else if (ground || m.kind === "horizon") {
+        // (out of the view: an arrow at its edge, the countdown by it)
+        const d = m.d;
+        let dx = d[0], dy = -d[1];
+        const l = Math.hypot(dx, dy) || 1;
+        dx /= l;
+        dy /= l;
+        const [x, y] = edgeAt(W, H, dpr, dx, dy);
+        ctx.beginPath();
+        ctx.moveTo(x + dx * 16 * dpr, y + dy * 16 * dpr);
+        ctx.lineTo(x - dy * 8 * dpr, y + dx * 8 * dpr);
+        ctx.lineTo(x + dy * 8 * dpr, y - dx * 8 * dpr);
+        ctx.closePath();
+        ctx.fillStyle = col;
+        ctx.fill();
+        text(label, x - dx * 30 * dpr, y - dy * 30 * dpr, col, 11.5, "center", true);
+      }
+    }
+  }
+}
+
+/**
+ * Where an arrow at the screen's edge goes for a screen direction (dx, dy, unit, y down): on the border
+ * of the free frame — clear of the mission bar above and of the hub and its attitude ball below.
+ */
+function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [number, number] {
+  const top = 120 * dpr, bottom = Math.max(H * 0.62, H - 250 * dpr), side = 60 * dpr;
+  const cy = (top + bottom) / 2, hy = (bottom - top) / 2, hx = W / 2 - side;
+  const k = Math.min(hx / Math.max(Math.abs(dx), 1e-6), hy / Math.max(Math.abs(dy), 1e-6));
+  return [W / 2 + dx * k, cy + dy * k];
 }

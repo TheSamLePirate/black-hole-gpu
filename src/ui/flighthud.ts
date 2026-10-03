@@ -219,7 +219,10 @@ export class FlightHud {
   private planSig = "";
   plannerOpen = false;
   /** the tracer's GPU and its maps, for the map's textured bodies (main.ts) */
-  /** The hole's orbit (radii [M]: the periapsis, the apoapsis on the geodesic) — the strip's Pe and Ap. */
+  /** The future as the eye sees it, at the times asked [s ahead] (controls.ts futureView): the HUD's
+   *  path, its places to come, the impact. */
+  future: ((at: number[]) => import("../controls").FutureView | null) | null = null;
+    /** The hole's orbit (radii [M]: the periapsis, the apoapsis on the geodesic) — the strip's Pe and Ap. */
   kerrApsides: (() => { rp: number; ra: number; fate: string } | null) | null = null;
   mapGpu: { device: GPUDevice; textures(): import("./map3d/gpu").MapTextures | null } | null = null;
 
@@ -1851,8 +1854,12 @@ export class FlightHud {
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
     // the conformal symbology first, under the rest: horizon, pitch ladder, heading, bank, the markers
+    // (the future: +10, +30, +60 s and a quarter of the orbit, when there is one)
+    const T = i.status?.orbit?.period;
+    const quarter = T && Number.isFinite(T) && T / 4 > 90 ? T / 4 : undefined;
+    const fut = this.future?.([10, 30, 60, ...(quarter ? [quarter] : [])]) ?? null;
     drawSymbology({
-      ctx, W, H, dpr, fov: this.s.fov, s: this.s, i, density: this.density,
+      ctx, W, H, dpr, fov: this.s.fov, s: this.s, i, density: this.density, future: fut, quarter,
       outside: ["around", "free", "flyby", "station"].includes(String(i.mount)),
       top: Math.max(this.mission.getBoundingClientRect().bottom, 0) * dpr,
     });

@@ -1058,6 +1058,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud flight director cue command",
   },
   {
+    key: "hudPath", type: "toggle", section: "game", group: "HUD aids", label: "Predicted path in the view", effect: "none",
+    help: "The ship's predicted free fall drawn in perspective over the view (cyan dashes), hidden where its body stands in front of it — both universes (on Gargantua's side the lensed tube, Y, draws it instead when on).",
+    keywords: "hud future path trajectory prediction perspective",
+  },
+  {
+    key: "hudFuture", type: "toggle", section: "game", group: "HUD aids", label: "Places to come", effect: "none",
+    help: "Where the ship will be in 10, 30 and 60 s, and a quarter of the orbit on: hollow rings in the view, dated.",
+    keywords: "hud future position ghost seconds",
+  },
+  {
+    key: "hudImpact", type: "toggle", section: "game", group: "HUD aids", label: "Impact & entry points", effect: "none",
+    help: "Where the predicted path meets the ground (a red reticle on the spot, as the ground turns now) or the air's top (amber, the entry), or Gargantua's horizon — with the countdown; off screen, an arrow at the edge.",
+    keywords: "hud impact ground entry interface countdown",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",

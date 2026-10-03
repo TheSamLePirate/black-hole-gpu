@@ -40,7 +40,7 @@ import { keplerProp } from "./system/our-plan";
 import type { Arrival, OurMission, OurPlanResult, PlanNode } from "./system/our-plan";
 import { plan as runPlanner } from "./system/plan-client";
 import { airDensity as ourAir, bodyFixedOf, dragAccel, fromBodyFixed, gearHeight, groundRelief, groundSpeeds, groundVelocity, solidBody, toBodyFixed } from "./system/our-surface";
-import { M_METRES, SOLAR_BODIES, solarBody, solarState, spinVector } from "./system/solar";
+import { M_METRES, M_SECONDS, SOLAR_BODIES, bodyAxes, solarBody, solarState, spinVector } from "./system/solar";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "./system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint, type RendezvousPoint } from "./system/iss-plan";
 import { cockpitHull, stationHulls, vesselHulls, type TriBVH } from "./system/collide";
@@ -139,6 +139,13 @@ export interface DockInfo {
   om: Vec3;
   /** the velocity against the target's point at the ring [m/s] */
   vrel: Vec3;
+}
+
+/** The future as the eye sees it (CameraController.futureView): directions in camera coordinates. */
+export interface FutureView {
+  pts: { d: Vec3; r: number; t: number; hid: boolean }[];
+  marks: { t: number; d: Vec3; r: number; hid: boolean }[];
+  impact: ({ kind: "ground" | "air" | "horizon" | "star"; t: number; d: Vec3; r: number; hid: boolean; ground?: { kind: "ground"; t: number; d: Vec3; r: number; hid: boolean } }) | null;
 }
 
 export class CameraController {
@@ -7170,15 +7177,166 @@ export class CameraController {
     // (in the planner's worker — 6–12 ms a time here before —: the last path drawn meanwhile)
     if (this.kerrPending) return this.path;
     this.kerrPending = true;
+    // (the answer kept — a few hundred ms old at most — unless the ship has left the hole's region: the
+    // key holds the clock and the ship's motion, so in flight it is never the same twice — and a path
+    // left from elsewhere, old, let every call renew it: every answer was dropped, none drawn)
     runPlanner<{ pts: Vec3[]; fate: "horizon" | "escape" | "continues" | "star" } | { error: string }>({ kind: "kerrPath", s: { ...s }, st, tMax }).then(
       (r) => {
         this.kerrPending = false;
-        if (!r || "error" in r || this.pathKey !== key) return;
+        if (!r || "error" in r || cameraFrame(this.s).region !== "hole" || this.ourNav(cameraFrame(this.s))) return;
         this.path = this.kerrPathFrom(r, st, tMax, now);
       },
       () => (this.kerrPending = false),
     );
     return this.path;
+  }
+
+  /**
+   * The future in the view (the HUD's H3), from the predicted free fall (ours: the n-body path; Gargantua's
+   * side: the geodesic, or a world's orbit): what the eye sees of it — each sample's direction (camera
+   * coordinates), distance [m], time ahead [s], and whether the body hides it —, the ship's places at
+   * the times asked ([s] ahead), and where it meets the ground (on the ground as it turns now — the spot
+   * to look at) or the air's top. The path is kept relative to its body (the body's own motion out of it:
+   * where the ship goes about the world the eye sees). Recomputed ten times a second at most.
+   */
+  futureView(at: number[] = []): FutureView | null {
+    const now = performance.now();
+    const key = at.join();
+    if (this.futureCache && now - this.futureCache.at < 100 && this.futureCache.key === key) return this.futureCache.v;
+    const v = this.futureCompute(at);
+    this.futureCache = { at: now, key, v };
+    return v;
+  }
+  private futureCache: { at: number; key: string; v: FutureView | null } | null = null;
+
+  private futureCompute(at: number[]): FutureView | null {
+    const s = this.s;
+    // (the prediction refreshed here too — throttled —: the HUD needs it with the tube and the map off)
+    this.predictPath();
+    const cam = cameraFrame(s);
+    const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    const nav = this.ourNav(cam);
+    // the samples: positions (relative to the body, at the body's place now), their times ahead [s]
+    let P: Vec3[] = [], T: number[] = [], eye: Vec3, look: (d: Vec3) => Vec3, mPer: number;
+    let body: { c: Vec3; R: number } | null = null;
+    let impact: FutureView["impact"] = null;
+    if (nav) {
+      const free = this.ourFree;
+      if (!free || free.pts.length < 2) return null;
+      const ref = free.refs[0] ?? nav.ref;
+      const b = solarBody(ref);
+      const t0 = nav.t;
+      const B0 = solarState(ref, t0).pos;
+      // (from where the ship is now: the path's first sample may be seconds ahead)
+      P.push(nav.X);
+      T.push(0);
+      // near the ground, in the air: the path over the ground as it turns (the frame the craft flies
+      // in — at Kennedy the Earth's turn is 400 m/s); higher, the orbit as it is (not turning)
+      const turn = !!b && b.kind !== "star" && Math.hypot(...sub3(nav.X, B0)) - b.radius < Math.max(airTop(b.atmosphere), 60e3) / M_METRES;
+      const A0 = turn ? bodyAxes(b!, t0) : null;
+      for (let j = 0; j < free.pts.length; j++) {
+        const t = free.times[j]!;
+        if (t <= t0) continue;
+        let v = sub3(free.pts[j]!, solarState(ref, t).pos);
+        if (A0) {
+          const A1 = bodyAxes(b!, t);
+          const vb: Vec3 = [dot3(v, A1[0]), dot3(v, A1[1]), dot3(v, A1[2])];
+          v = lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]);
+        }
+        P.push(lin(v, 1, B0, 1));
+        T.push((t - t0) * M_SECONDS);
+      }
+      eye = cameraHome(s, cam);
+      look = (d) => ourLook(s, cam, d);
+      mPer = M_METRES;
+      if (b && b.kind !== "star") {
+        body = { c: B0, R: b.radius };
+        const top = airTop(b.atmosphere) / M_METRES;
+        const alt = (X: Vec3) => Math.hypot(...sub3(X, B0)) - b.radius;
+        // the air's top crossed on the way down (from above it)
+        if (top > 0 && P.length && alt(P[0]!) > top) {
+          for (let j = 1; j < P.length; j++) if (alt(P[j]!) <= top) {
+            impact = { kind: "air", t: T[j]!, ...this.futureSee(C, look, eye, P[j]!, mPer, body) };
+            break;
+          }
+        }
+        if (free.fate === "impact" && free.hit === ref) {
+          // (the ground there, turned back to where it is now: the spot to look at)
+          const tI = free.times[free.times.length - 1]!;
+          const v = sub3(free.pts[free.pts.length - 1]!, solarState(ref, tI).pos);
+          const A1 = bodyAxes(b, tI), A0 = bodyAxes(b, t0);
+          const vb: Vec3 = [dot3(v, A1[0]), dot3(v, A1[1]), dot3(v, A1[2])];
+          const X = lin(lin(lin(A0[0], vb[0], A0[1], vb[1]), 1, A0[2], vb[2]), 1, B0, 1);
+          const ground = { kind: "ground" as const, t: (tI - t0) * M_SECONDS, ...this.futureSee(C, look, eye, X, mPer, null) };
+          impact = impact && impact.kind === "air" ? { ...impact, ground } : ground;
+        }
+      }
+    } else {
+      const path = this.path;
+      // (a path left from another place — a world's orbit after leaving it —: none)
+      if (!path || cam.region !== "hole" || path.pts.length < 2 || (path.fate === "local") !== !!(this.local && !this.local.L.landed)) return null;
+      const Msec = 4.925490947e-6 * s.massSolar;
+      eye = blToCartesian(cam.r, cam.theta, cam.phi);
+      const t0 = this.nowTime();
+      // (about one of Gargantua's worlds: its orbit relative to it; about the hole: the geodesic as it is)
+      const w = this.local && path.fate === "local" ? this.local.F.id as Body : null;
+      const W0 = w ? bodyCentre(s, w, t0) : null;
+      P.push(w ? lin(sub3(eye, bodyCentre(s, w, t0)), 1, W0!, 1) : eye);
+      T.push(0);
+      path.pts.forEach((X, j) => {
+        const t = t0 + (j + 1) * path.dt;
+        P.push(w ? lin(sub3(X, bodyCentre(s, w, t)), 1, W0!, 1) : X);
+        T.push((j + 1) * path.dt * Msec);
+      });
+      look = (d) => this.holeLook(cam, d);
+      mPer = 1476.625 * s.massSolar;
+      body = w ? { c: W0!, R: bodyRadius(s, w) } : { c: [0, 0, 0], R: horizon(s.spin) };
+      if (path.fate === "horizon" || path.fate === "star") impact = { kind: path.fate, t: T[T.length - 1]!, ...this.futureSee(C, look, eye, P[P.length - 1]!, mPer, null) };
+      // (about the hole the seconds are nothing — a sample is minutes to hours —: the path's eighth,
+      // quarter and half instead, unless times were asked that it reaches)
+      const span = T[T.length - 1]!;
+      if (!at.some((t) => t > span * 0.02 && t <= span)) at = [span / 8, span / 4, span / 2];
+    }
+    const pts = P.map((X, j) => ({ ...this.futureSee(C, look, eye, X, mPer, body), t: T[j]! }));
+    // the ship's places at the times asked (interpolated along the path)
+    const marks = at.filter((t) => t > 0 && t <= T[T.length - 1]!).map((t) => {
+      let j = 1;
+      while (j < T.length - 1 && T[j]! < t) j++;
+      const f = Math.min(Math.max((t - T[j - 1]!) / Math.max(T[j]! - T[j - 1]!, 1e-9), 0), 1);
+      return { t, ...this.futureSee(C, look, eye, lin(P[j - 1]!, 1 - f, P[j]!, f), mPer, body) };
+    });
+    return { pts, marks, impact };
+  }
+
+  /** A point of the future as the eye sees it: its direction (camera coordinates), distance [m], hidden
+   *  by the body (its sphere between the eye and the point, or the point inside it). */
+  private futureSee(C: (v: Vec3) => Vec3, look: (d: Vec3) => Vec3, eye: Vec3, X: Vec3, mPer: number, body: { c: Vec3; R: number } | null) {
+    const d = sub3(X, eye);
+    const l = Math.hypot(...d);
+    let hid = false;
+    if (body && l > 0) {
+      const oc = sub3(body.c, eye);
+      const tc = dot3(oc, d) / l;
+      const miss2 = dot3(oc, oc) - tc * tc;
+      hid = Math.hypot(...sub3(X, body.c)) < body.R * 0.999 || (tc > 0 && tc < l && miss2 < body.R * body.R);
+    }
+    return { d: l > 0 ? C(look(d)) : ([0, 0, 1] as Vec3), r: l * mPer, hid };
+  }
+
+  /** A direction from the eye in the hole's frame (Cartesian), as the moving ship sees it (local
+   *  components, aberration included) — the target's way (targetDir). */
+  private holeLook(cam: ReturnType<typeof cameraFrame>, d: Vec3): Vec3 {
+    const X = blToCartesian(cam.r, cam.theta, cam.phi);
+    const f = sphericalFrame(X);
+    const l = Math.hypot(...d) || 1;
+    const n: Vec3 = [dot3(d, f.er) / l, dot3(d, f.et) / l, dot3(d, f.ep) / l];
+    const b = cam.beta;
+    const b2 = dot3(b, b);
+    if (b2 < 1e-12) return n;
+    const g = 1 / Math.sqrt(1 - b2);
+    const bn = dot3(n, b) / Math.sqrt(b2);
+    const w = axpy(axpy(n, b, g), b, ((g - 1) * bn) / Math.sqrt(b2));
+    return lin(w, 1 / Math.hypot(...w), w, 0);
   }
 
   /** The free-fall path's points (from the worker) cut to what the overlay draws. */
