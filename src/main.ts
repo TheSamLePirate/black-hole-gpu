@@ -437,7 +437,11 @@ async function main() {
   }
 
   // -------------------------------------------------------------------- toolbar & keys
-  const toggleUi = () => document.body.classList.toggle("hide-ui");
+  const toggleUi = () => {
+    // (hidden: nothing on screen says how to come back — a word, before it goes)
+    if (!document.body.classList.contains("hide-ui")) panel.toast("H: the interface back");
+    document.body.classList.toggle("hide-ui");
+  };
   const fullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
   const toggle = (key: "animate" | "shadowGuide" | "jet" | "cinematic" | "ship") => {
     settings[key] = !settings[key];
@@ -476,10 +480,13 @@ async function main() {
     "btn-full": () => fullscreen(),
     "btn-hide": () => toggleUi(),
     "hud-toggle": () => setHudOpen(!$("hud").classList.contains("open")),
+    "btn-photo": () => openPhoto(),
     "btn-help": () => panel.showShortcuts(),
     "btn-render": () => renderDialog.toggle(),
   };
-  for (const [id, fn] of Object.entries(actions)) $(id).addEventListener("click", fn);
+  // (the dock's buttons — ui: Camera, Scenes, Sky, Photo, Help; the other actions are keys, the wheel's
+  // sectors and the settings)
+  for (const [id, fn] of Object.entries(actions)) document.getElementById(id)?.addEventListener("click", fn);
   wheelScrollsSideways($("toolbar"));
   /** Next / previous target, named in a toast (or why there is nothing else to pick). */
   function nextTarget(dir: 1 | -1) {
@@ -855,7 +862,6 @@ async function main() {
   }
   function syncButtons() {
     transport?.update(true);
-    $("btn-guide").classList.toggle("active", settings.shadowGuide);
     $("btn-sky").classList.toggle(
       "active",
       settings.skyLines ||
@@ -865,10 +871,6 @@ async function main() {
         settings.gridHorizontal ||
         settings.skyEcliptic,
     );
-    $("btn-jet").classList.toggle("active", settings.jet);
-    $("btn-cinema").classList.toggle("active", settings.cinematic);
-    $("btn-ship").classList.toggle("active", settings.ship);
-    $("btn-sound").classList.toggle("muted", !settings.sound);
   }
   syncButtons();
   syncCameraButton();
@@ -1470,7 +1472,16 @@ async function main() {
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
       { label: { fr: "Regarder la cible", en: "Look at target" }, key: "C", on: settings.lookAt, run: toggleLookAt },
       { label: { fr: "Télescope", en: "Telescope" }, key: "Y", on: settings.telescope, run: toggleTelescope },
-      { label: { fr: "Cible suivante", en: "Next target" }, key: "Tab", run: () => nextTarget(1) },
+      {
+        label: { fr: "Scène", en: "Scene" },
+        sub: [
+          { label: { fr: "Jet", en: "Jet" }, key: "J", on: settings.jet, run: () => toggle("jet") },
+          { label: { fr: "Surface liquide", en: "Liquid surface" }, key: "L", on: settings.cinematic, run: () => actions["btn-cinema"]!() },
+          { label: { fr: "Guide d'ombre", en: "Shadow guide" }, key: "G", on: settings.shadowGuide, run: () => toggle("shadowGuide") },
+          { label: { fr: "Son", en: "Sound" }, on: settings.sound, run: () => toggleSound() },
+          { label: { fr: "Plein écran", en: "Fullscreen" }, key: "F", on: !!document.fullscreenElement, run: () => void fullscreen() },
+        ],
+      },
       { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
       {
         label: { fr: "Cinématique", en: "Cinematic" },
@@ -1651,8 +1662,6 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
-  // (the game tools are the developers': a development build or ?dev — the player's saves are in the pause menu)
-  $("btn-tools").hidden = !DEV_TOOLS;
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   let appVersion = "dev";
   void fetch("version.json")

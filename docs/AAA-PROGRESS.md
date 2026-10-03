@@ -86,7 +86,7 @@ Décisions du propriétaire (03/10) : **Échap = menu pause** (le temps s'arrêt
 
 Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`, `u2-missions.png`, `u2-boot.png`.
 
-## U3 : tablette, roue, indices (en cours)
+## U3 : tablette, roue, indices (terminé)
 
 | # | Étape | Statut | Commit |
 |---|---|---|---|
@@ -94,8 +94,8 @@ Captures : `docs/img/aaa/u2-title.png`, `u2-pause.png`, `u2-load.png`, `u2-missi
 | U3.2 | **Les menus à la manette** (`src/ui/padnav.ts`) : quand un menu tient le jeu (titre, pause, missions), la croix ou le stick gauche (répétition au maintien) parcourent les entrées, A choisit, B revient ; en jeu, Start ouvre la pause (au lieu des réglages). Les boutons deviennent les touches que les menus comprennent déjà. e2e avec une manette simulée (`navigator.getGamepads` remplacé) : titre, missions, lancement, pause | fait | `540632b` |
 | U3.3 | **Roue radiale** (`src/ui/wheel.ts`) : Tab maintenu 0,22 s l'ouvre au centre, la direction du pointeur choisit, relâcher (ou cliquer) fait ; un appui bref reste « cible suivante ». En vol : SAS, prograde, rétrograde, vers la cible, une sous-roue des sept autopilotes, carte, vue, densité du HUD ; à pied : vue, regarder la cible, télescope, cible suivante, piloter, une sous-roue des cinématiques, ciel, photo. Les secteurs engagés sont allumés. e2e : ouverture, choix au pointeur, maintien rétrograde, tape = cible | fait | `a36fba2` |
 | U3.4 | **Tablette** (`src/ui/tablet.ts`) : le panneau gauche de la carte (M) devient un appareil à pages — ORDINATEUR (ses ORBIT, TARGET, LAND, MISSION), VAISSEAU (l'état : orbite, cible, pilote — la vue des outils F2 extraite en `rangerView`), CAMÉRA et CIEL (leurs panneaux encastrés par `embed()`, rendus à leur popover quand la carte se ferme), JOURNAL (le journal du jeu, en direct). Les panneaux de l'ordinateur prennent le fond du kit. e2e : pages, encastrement et restitution | fait | `a4fda41` |
-| U3.5 | **Mode photo** (`src/ui/photo.ts`) : depuis le titre, la pause ou la roue — l'interface masquée, le temps figé (l'image s'affine) ; une barre : exposition, focale (8 à 2 400 mm, logarithmique), éclat, profondeur de champ, temps, PNG, rendu hors ligne ; H masque la barre, Échap rend la scène comme elle était. e2e : HUD masqué, temps tenu, exposition réglée, restitution | fait | (ce commit) |
-| U3.6 | Retrait de la barre d'outils | à faire | |
+| U3.5 | **Mode photo** (`src/ui/photo.ts`) : depuis le titre, la pause ou la roue — l'interface masquée, le temps figé (l'image s'affine) ; une barre : exposition, focale (8 à 2 400 mm, logarithmique), éclat, profondeur de champ, temps, PNG, rendu hors ligne ; H masque la barre, Échap rend la scène comme elle était. e2e : HUD masqué, temps tenu, exposition réglée, restitution | fait | `d284659` |
+| U3.6 | **Barre d'outils → dock compact** (choix du propriétaire, plutôt que la suppression de l'audit) : Scènes, Caméra (mode · cible), Ciel, Photo, Aide. Jet, surface liquide, guide d'ombre, son et plein écran passent dans une sous-roue « Scène » (et restent aux touches et dans les réglages) ; rendu et PNG dans le mode photo ; masquer l'interface (H) l'annonce, puisque plus rien à l'écran ne dit comment revenir. 40 e2e verts | fait | (ce commit) |
 
 ## Journal
 

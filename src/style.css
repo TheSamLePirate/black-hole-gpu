@@ -1029,21 +1029,11 @@ body.hide-ui #cam-pop,
 body.hide-ui #sky-pop,
 body.hide-ui #sky-card,
 body.hide-ui .gt-root,
-body.hide-ui #toolbar > :not(#btn-hide) {
+body.hide-ui #toolbar {
   display: none;
 }
 
-body.hide-ui #toolbar {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  opacity: 0.35;
-}
 
-body.hide-ui #toolbar:hover {
-  opacity: 1;
-}
 
 @media (max-width: 600px) {
   /* phones: touch-only or heavy tools stay in the settings */
