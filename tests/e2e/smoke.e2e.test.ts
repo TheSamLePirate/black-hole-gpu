@@ -168,6 +168,17 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.js(`(__bh.settings.exposure = 0, __bh.touch(), 1)`);
   });
 
+  test("the master caution: an empty tank lights MASTER WARNING; Enter acknowledges it, the line stays", async () => {
+    await app.js(`(__bh.settings.fuel = true, __bh.camera.spent = 1e12, __bh.touch(), 1)`);
+    await app.waitFor(`!!document.querySelector("[data-testid=master-caution].warning")`, 5000);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-alert=fuel-empty]")`)).toBe(true);
+    await app.press("Enter");
+    await app.waitFor(`!document.querySelector("[data-testid=master-caution]")`, 3000);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-alert=fuel-empty]")`)).toBe(true);
+    await app.js(`(__bh.camera.spent = 0, __bh.touch(), 1)`);
+    await app.waitFor(`!document.querySelector("[data-alert=fuel-empty]")`, 3000);
+  });
+
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
     await app.waitFor(`!!document.querySelector("[data-testid=help] [role=dialog]")`);

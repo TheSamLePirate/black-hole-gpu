@@ -39,6 +39,7 @@ export type KeyAction =
   | "hudDensity"
   | "missions"
   | "stopFlight"
+  | "ack"
   | "leaveShip"
   // time
   | "playPause"
@@ -301,6 +302,7 @@ export const KEYMAP: KeySection[] = [
         text: "Releases the controls: stops the mission, the hold and the autopilot",
         bind: [fly("Backspace", "stopFlight")],
       },
+      { keys: "Enter", text: "Acknowledges the master caution: the lamp out, the warning silent", bind: [fly("Enter", "ack")] },
       { keys: "⇧K", text: "Leave the Ranger", bind: [fly("KeyK", "leaveShip", on)] },
       { keys: "Drag · double-click", text: "Look around from the attach point · look ahead" },
       {

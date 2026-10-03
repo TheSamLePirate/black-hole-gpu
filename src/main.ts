@@ -1368,6 +1368,7 @@ async function main() {
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
     missions: () => openMissions(),
     stopFlight: () => releaseControls(),
+    ack: () => flightHud.acknowledge(),
     pause: () => (pauseMenu ??= makePauseMenu()).open(),
     quickSave: () => quickSave(),
     quickLoad: () => quickLoad(),
@@ -1530,6 +1531,8 @@ async function main() {
 
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey || titleScreen?.isOpen) return;
+    // (Enter on a focused button presses it, not the game's binding)
+    if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button, a, [role=button]")) return;
     const b = matchKey(e, flying(), e.code in FLIGHT_KEYS);
     if (!b) return;
     e.preventDefault();

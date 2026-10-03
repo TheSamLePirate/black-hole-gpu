@@ -1243,11 +1243,23 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
   display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
   font: 700 13px var(--hud-font); letter-spacing: 0.22em; text-transform: uppercase;
 }
-.fl-warn div { padding: 3px 14px; border-radius: 4px; color: #ffd9a0; background: rgba(50, 32, 6, 0.6); border: 1px solid rgba(255, 179, 92, 0.35); backdrop-filter: blur(8px); }
-.fl-warn div::before { content: "▲ "; color: var(--hud-amber); font-size: 11px; vertical-align: 1px; }
-.fl-warn div.hot { background: rgba(90, 12, 6, 0.72); color: #ffd0c8; border-color: rgba(255, 90, 70, 0.6); animation: fl-blink 0.9s steps(2, end) infinite; }
-.fl-warn div.hot::before { color: var(--hud-red); }
+/* (the master caution — hud/alerts.ts: a lamp until acknowledged, three lines, the gravest first) */
+.fl-warn div { padding: 3px 14px; border-radius: 3px; }
+.fl-warn .al-warning { color: #ffd0c8; background: rgba(90, 12, 6, 0.78); border: 1px solid rgba(255, 90, 70, 0.6); }
+.fl-warn .al-warning::before { content: "▲ "; color: var(--hud-red); font-size: 11px; vertical-align: 1px; }
+.fl-warn .al-caution { color: #ffd9a0; background: rgba(50, 32, 6, 0.7); border: 1px solid rgba(255, 179, 92, 0.4); }
+.fl-warn .al-caution::before { content: "▲ "; color: var(--hud-amber); font-size: 11px; vertical-align: 1px; }
+.fl-warn .al-advisory { color: rgba(230, 238, 249, 0.85); background: rgba(8, 13, 23, 0.6); border: 1px solid rgba(160, 210, 255, 0.18); font-weight: 600; letter-spacing: 0.16em; }
+.fl-warn .al-warning.fresh { animation: fl-blink 0.5s steps(2, end) infinite; }
+.fl-warn .al-more { padding: 0 8px; font: 500 11px var(--mono); letter-spacing: 0; color: var(--hud-dim); background: none; border: 0; }
+.fl-warn .al-lamp {
+  all: unset; pointer-events: auto; cursor: pointer; padding: 4px 16px; border-radius: 3px;
+  font: 700 13px var(--hud-font); letter-spacing: 0.26em;
+}
+.fl-warn .al-lamp.warning { color: #fff; background: #c4231a; box-shadow: 0 0 18px rgba(255, 60, 40, 0.7); animation: fl-blink 0.5s steps(2, end) infinite; }
+.fl-warn .al-lamp.caution { color: #1b1108; background: var(--hud-amber); box-shadow: 0 0 14px rgba(255, 179, 92, 0.6); }
 @keyframes fl-blink { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .fl-warn .al-warning.fresh, .fl-warn .al-lamp.warning { animation: none; } }
 
 /* ---- target (top left, under the status pill): compact */
 .fl-target { top: 56px; left: 14px; width: 232px; padding: 7px 10px 8px; }

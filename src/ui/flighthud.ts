@@ -40,6 +40,8 @@ import { store } from "../util/storage";
 import { onEscape } from "./keys";
 import { el as h } from "./kit";
 import { DEV_TOOLS } from "../debug";
+import { alertsOf, MasterCaution } from "./hud/alerts";
+import { sound } from "../audio/engine";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -203,6 +205,22 @@ export class FlightHud {
   private root = h("div", "fl-root");
   private hud: HTMLCanvasElement;
   private warn = h("div", "fl-warn");
+  private caution = new MasterCaution();
+  private alertSig = "";
+
+  /** The master caution acknowledged (Enter, or the lamp clicked): the lamp out, the warning silent. */
+  acknowledge() {
+    this.caution.acknowledge();
+    this.alertSig = "";
+  }
+
+  private lamp(level: "warning" | "caution") {
+    const b = h("button", `al-lamp ${level}`, level === "warning" ? "MASTER WARNING" : "MASTER CAUTION") as HTMLButtonElement;
+    b.title = "Acknowledge (Enter)";
+    b.dataset.testid = "master-caution";
+    b.onclick = () => this.acknowledge();
+    return b;
+  }
   /** the air data (in the air): the flight law, the flow, the load, the skin, the configuration */
   private airData = h("div", "fl-airdata");
   private airKey = "";
@@ -1551,43 +1569,25 @@ export class FlightHud {
         ks.orbit && Number.isFinite(ks.orbit.apKm) ? `${km(ks.orbit.apKm)} · T−${fmtS(ks.orbit.tAp)}` : ks.orbit ? "∞" : "—";
       O.el!.textContent = ks.orbit ? `i ${ks.orbit.incDeg.toFixed(1)}° · e ${ks.orbit.ecc.toFixed(3)}` : "—";
     }
-    // warnings
-    const w: string[] = [];
-    if (p?.fate === "horizon") w.push(`⚠ COLLISION COURSE — HORIZON IN ${fmtM(p.pts.length * p.dt, s).toUpperCase()}`);
-    // (not while an autopilot flies around that body: it keeps the ship off it)
-    const hit = p?.hit ?? "star";
-    const nm = (b: keyof typeof BODY_NAMES) => (b === "star" ? "THE STAR" : BODY_NAMES[b].toUpperCase());
-    // (not on the ground either: that is where the path ends)
-    const onGround = i.landed || i.surface?.landed;
-    // (in a planet's frame the Kerr path ignores the planet's own pull: its status knows better)
-    const orbiting =
-      i.status?.soi === hit && (i.status.status === "orbit" || i.status.status === "escape" || i.status.status === "hyperbolic");
-    if (
-      p?.fate === "star" &&
-      !onGround &&
-      !orbiting &&
-      !((i.auto === "approach" || i.auto === "orbit" || i.auto === "land" || i.auto === "takeoff") && i.target === hit)
-    )
-      w.push(`⚠ COLLISION COURSE — ${nm(hit)}`);
-    // the air's limits: the shield, the hull, the load
-    const air = i.air;
-    if (air && (air.inAir || air.margins.shield > 0.6 || air.margins.hull > 0.6)) {
-      const pc = (x: number) => `${Math.round(x * 100)} %`;
-      if (air.failure) w.push(`⚠ ${air.failure.toUpperCase()}`);
-      if (air.margins.shield > 0.85) w.push(`⚠ HEAT SHIELD ${Math.round(air.shield)} K · ${pc(air.margins.shield)}`);
-      if (air.margins.hull > 0.8) w.push(`⚠ HULL ${Math.round(air.hull)} K · ${pc(air.margins.hull)}`);
-      if (air.margins.g > 0.75) w.push(`⚠ LOAD ${air.g.toFixed(1)} g · ${pc(air.margins.g)}`);
-      if (air.stalled && air.mach < 3) w.push("⚠ STALL");
-      if (air.heat > 5e4) w.push(`PLASMA · ${(air.heat / 1e4).toFixed(0)} W/cm² · MACH ${air.mach.toFixed(1)}`);
+    // the alerts (hud/alerts.ts) and the master caution: three lines at most, the gravest first; the
+    // lamp lit — and the master warning sounding — until acknowledged (Enter, or a click on the lamp)
+    const alerts = alertsOf({ ...i, animate: s.animate, fmtM: (t) => fmtM(t, s) });
+    const mc = this.caution.update(alerts);
+    sound.alarm("master", s.sound && mc.sound, "warning");
+    const shown = alerts.slice(0, 3);
+    const sig = `${mc.lamp}|${shown.map((x) => `${x.id}:${x.level}:${mc.unacked.has(x.id)}:${x.text}`).join("|")}|${alerts.length}`;
+    if (sig !== this.alertSig) {
+      this.alertSig = sig;
+      this.warn.replaceChildren(
+        ...(mc.lamp ? [this.lamp(mc.lamp)] : []),
+        ...shown.map((x) => {
+          const d = h("div", `al-${x.level}${mc.unacked.has(x.id) ? " fresh" : ""}`, x.text);
+          d.dataset.alert = x.id;
+          return d;
+        }),
+        ...(alerts.length > 3 ? [h("div", "al-more", `+${alerts.length - 3}`)] : []),
+      );
     }
-    if (i.surface?.rolling) w.push(`ON THE WHEELS · ${nm(i.surface.body)} · ${Math.round(i.surface.vHor)} M/S`);
-    else if (i.surface?.landed) w.push(`LANDED ON ${nm(i.surface.body)}`);
-    else if (i.landed && !i.surface) w.push(`LANDED ON ${nm(i.landedOn ?? "star")}`);
-    if (i.ergo) w.push("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");
-    else if (i.region === "hole" && i.r < i.photon) w.push("INSIDE THE PHOTON ORBIT");
-    else if (i.region === "hole" && i.r < i.isco) w.push("BELOW THE ISCO · NO STABLE ORBIT");
-    if (!s.animate) w.push("TIME PAUSED · SPACE TO FLY");
-    this.warn.innerHTML = w.map((x) => `<div class="${x.startsWith("⚠") ? "hot" : ""}">${x}</div>`).join("");
     // buttons
     this.buttons.get("sas")!.classList.toggle("on", i.sas);
     this.buttons.get("roll")!.classList.toggle("on", i.rollAlign);
