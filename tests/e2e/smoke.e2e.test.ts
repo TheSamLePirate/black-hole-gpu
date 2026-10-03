@@ -130,6 +130,28 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     expect(await app.js<boolean>(`document.body.classList.contains("map-open")`)).toBe(false);
   });
 
+  test("the tablet: the map's pages — the ship, the camera moved in, back to its popover with the map closed", async () => {
+    await app.press("KeyM");
+    await app.waitFor(`document.body.classList.contains("map-open")`);
+    await app.click("[data-testid=tablet-ship]");
+    expect(await app.js<boolean>(`!!document.querySelector(".tb-page .gt-ranger")`)).toBe(true);
+    await app.click("[data-testid=tablet-camera]");
+    expect(
+      await app.js<boolean>(`(() => { const c = document.getElementById("cam-pop"); return !c.hidden && !!c.closest(".tb-page"); })()`),
+    ).toBe(true);
+    await app.press("Escape");
+    await app.waitFor(`!document.body.classList.contains("map-open")`);
+    expect(
+      await app.js<boolean>(
+        `(() => { const c = document.getElementById("cam-pop"); return c.hidden && c.parentElement === document.body; })()`,
+      ),
+    ).toBe(true);
+    // (the computer again for the next opening)
+    await app.press("KeyM");
+    await app.click("[data-testid=tablet-computer]");
+    await app.press("Escape");
+  });
+
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
     await app.waitFor(`!!document.querySelector("[data-testid=help] [role=dialog]")`);

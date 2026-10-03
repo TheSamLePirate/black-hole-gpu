@@ -12,6 +12,7 @@ import { MissionSelect } from "./ui/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
+import { Tablet } from "./ui/tablet";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -44,9 +45,9 @@ import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
-import { GameTools } from "./game/tools";
+import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
-import { GameToolsWindow } from "./ui/gametools";
+import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
 import { cappedRatio } from "./tier";
 import { cpuProf } from "./perf";
@@ -1093,8 +1094,18 @@ async function main() {
   openMissions = () => {
     if (!flightHud.mapView) flightHud.toggleMapView();
     flightComputer.show(true);
+    tablet.setPage("computer");
     flightComputer.openTab("mission");
   };
+  // the tablet (ui/tablet.ts): the map's left panel, the computer's and the ship's, the camera's, the
+  // sky's and the log's pages
+  const tablet = new Tablet(flightComputer.panel, {
+    ship: () => rangerView(tools),
+    camera: camPanel!,
+    sky: skyPanel,
+    log: gameLog,
+    dateOf: (t) => fmtDate(t),
+  });
   // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
   const tpDock = document.createElement("div");
   tpDock.id = "tp-dock";
@@ -1931,12 +1942,15 @@ async function main() {
           flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time),
         );
       flightComputer.show(flightHud.mapView);
+      tablet.setVisible(flightHud.mapView);
+      tablet.tick(now);
       flightComputer.update();
       cpuProf.time("sound", () =>
         audio.update(dt, { flying: true, live: settings.animate && !frozen, info, status, fired: camera.pilot.fired }),
       );
     } else {
       flightComputer.show(false);
+      tablet.setVisible(false);
       audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
     }
     hudTimer += dt;

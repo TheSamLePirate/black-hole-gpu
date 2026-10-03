@@ -240,6 +240,11 @@ export class FlightComputer {
     this.setTab("orbit");
   }
 
+  /** The left panel (the tablet's — ui/tablet.ts — pages live in it). */
+  get panel(): HTMLElement {
+    return this.ops;
+  }
+
   /** A tab brought up (the HUD's planner key: the MISSION tab). */
   openTab(t: Tab) {
     this.setTab(t);

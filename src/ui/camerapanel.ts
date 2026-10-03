@@ -166,6 +166,21 @@ export class CameraPanel {
     return !this.el.hidden;
   }
 
+  /**
+   * Into a page of the tablet (ui/tablet.ts) — shown there, no Escape of its own (the map's) — or
+   * back to its popover, closed (null).
+   */
+  embed(into: HTMLElement | null) {
+    this.unEscape?.();
+    this.unEscape = undefined;
+    if (into) into.append(this.el);
+    else document.body.append(this.el);
+    this.el.classList.toggle("embedded", !!into);
+    this.el.hidden = !into;
+    this.lastKey = "";
+    this.refresh();
+  }
+
   toggle(open = this.el.hidden) {
     this.el.hidden = !open;
     this.unEscape?.();

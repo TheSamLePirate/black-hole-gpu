@@ -6,8 +6,8 @@
 .fc-root[hidden] { display: none; }
 .fc-panel {
   box-sizing: border-box; position: absolute; top: 62px; bottom: 12px; pointer-events: auto; overflow-y: auto; overflow-x: hidden;
-  background: linear-gradient(180deg, rgba(8, 13, 23, 0.9), rgba(5, 9, 16, 0.86));
-  border: 1px solid rgba(140, 200, 255, 0.14); border-radius: 10px; padding: 10px 12px;
+  background: var(--k-panel-bg);
+  border: 1px solid var(--k-edge); border-radius: var(--k-r-panel); padding: 10px 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(10px); color: rgba(214, 226, 242, 0.92); font: 500 12px/1.4 var(--hud-font, Rajdhani, Inter, sans-serif);
   scrollbar-width: thin; scrollbar-color: rgba(120, 180, 255, 0.25) transparent;

@@ -198,70 +198,12 @@ export class GameToolsWindow {
 
   // ------------------------------------------------------------------------------ Ranger
   private ranger() {
-    const grid = h("div", "gt-kv");
-    const rows = new Map<string, HTMLElement>();
-    const row = (k: string, label: string) => {
-      const v = h("b");
-      grid.append(h("span", "", label), v);
-      rows.set(k, v);
-    };
-    const badge = h("div", "gt-badge");
-    for (const [k, l] of [
-      ["side", "Universe"],
-      ["soi", "Sphere of influence"],
-      ["alt", "Altitude"],
-      ["speed", "Speed"],
-      ["vv", "Vertical speed"],
-      ["pe", "Periapsis"],
-      ["ap", "Apoapsis"],
-      ["inc", "Inclination · e"],
-      ["period", "Period"],
-      ["tpe", "Next periapsis"],
-      ["tap", "Next apoapsis"],
-      ["next", "Next event"],
-      ["target", "Target"],
-      ["tdist", "Range · rate"],
-      ["tca", "Closest approach"],
-      ["date", "Date · warp"],
-      ["pilot", "Pilot"],
-    ] as const)
-      row(k, l);
+    const v = rangerView(this.g);
     const copy = btn("Copy as JSON", () => this.run(() => navigator.clipboard.writeText(JSON.stringify(this.g.status(), null, 1))));
-    this.body.append(badge, grid, h("div", "gt-row", ""), copy);
+    this.body.append(v.el, h("div", "gt-row", ""), copy);
     this.live = () => {
-      const st = this.g.status();
-      this.g.watch(st);
-      badge.textContent = st.label;
-      badge.dataset.status = st.status;
-      const set = (k: string, v: string) => (rows.get(k)!.textContent = v);
-      set("side", st.side === "ours" ? "Ours (solar system)" : st.side === "throat" ? "The wormhole's throat" : "Gargantua's");
-      set("soi", `${st.soiName}${Number.isFinite(st.soiKm) ? ` · r ${fmtKm(st.soiKm)}` : ""}`);
-      set("alt", st.kerr ? `r = ${st.kerr.r.toFixed(3)} M` : fmtKm(st.altKm));
-      set("speed", fmtMs(st.speed));
-      set("vv", fmtMs(st.vVert));
-      const o = st.orbit;
-      set("pe", o ? fmtKm(o.peKm) : st.kerr ? `E ${st.kerr.E.toFixed(5)}` : "—");
-      set("ap", o ? fmtKm(o.apKm) : st.kerr ? `L ${st.kerr.L.toFixed(3)} M` : "—");
-      set("inc", o ? `${o.incDeg.toFixed(2)}° · ${o.ecc.toFixed(4)}` : "—");
-      set("period", o ? fmtS(o.period) : "—");
-      set("tpe", o ? fmtS(o.tPe) : "—");
-      set("tap", o && Number.isFinite(o.tAp) ? fmtS(o.tAp) : "—");
-      const n = st.next;
-      set(
-        "next",
-        n
-          ? `${n.kind === "exit" ? `leaving ${n.name}'s SOI` : n.kind === "enter" ? `entering ${n.name}'s SOI` : n.kind === "impact" ? `impact on ${n.name}` : "into the mouth"} · in ${fmtS(n.inS)}`
-          : "—",
-      );
-      const t = st.target;
-      set("target", t ? t.name : "—");
-      set("tdist", t ? `${fmtKm(t.distKm)} · ${t.rate >= 0 ? "+" : ""}${fmtMs(t.rate)}` : "—");
-      set("tca", t && Number.isFinite(t.caKm) ? `${t.caKm < 0 ? "impact" : fmtKm(t.caKm)} · in ${fmtS(t.caIn)}` : "—");
-      const s = this.g.settings();
-      const warp = s.timeSpeed * 4.925490947e-6 * s.massSolar;
-      set("date", `${this.g.date()} · ${s.animate ? `×${warp >= 10 ? Math.round(warp) : warp.toPrecision(2)}` : "paused"}`);
-      const info = this.g.pilotState();
-      set("pilot", info);
+      this.g.watch(this.g.status());
+      v.live();
     };
   }
 
@@ -773,4 +715,73 @@ export class GameToolsWindow {
     this.body.append(acts, list);
     render();
   }
+}
+
+/** The craft's state in rows — the game tools' Ranger tab, the tablet's SHIP page: its element, its update. */
+export function rangerView(g: GameTools) {
+  const grid = h("div", "gt-kv");
+  const rows = new Map<string, HTMLElement>();
+  const row = (k: string, label: string) => {
+    const v = h("b");
+    grid.append(h("span", "", label), v);
+    rows.set(k, v);
+  };
+  const badge = h("div", "gt-badge");
+  for (const [k, l] of [
+    ["side", "Universe"],
+    ["soi", "Sphere of influence"],
+    ["alt", "Altitude"],
+    ["speed", "Speed"],
+    ["vv", "Vertical speed"],
+    ["pe", "Periapsis"],
+    ["ap", "Apoapsis"],
+    ["inc", "Inclination · e"],
+    ["period", "Period"],
+    ["tpe", "Next periapsis"],
+    ["tap", "Next apoapsis"],
+    ["next", "Next event"],
+    ["target", "Target"],
+    ["tdist", "Range · rate"],
+    ["tca", "Closest approach"],
+    ["date", "Date · warp"],
+    ["pilot", "Pilot"],
+  ] as const)
+    row(k, l);
+  const el = h("div", "gt-ranger");
+  el.append(badge, grid);
+  const live = () => {
+    const st = g.status();
+    badge.textContent = st.label;
+    badge.dataset.status = st.status;
+    const set = (k: string, v: string) => (rows.get(k)!.textContent = v);
+    set("side", st.side === "ours" ? "Ours (solar system)" : st.side === "throat" ? "The wormhole's throat" : "Gargantua's");
+    set("soi", `${st.soiName}${Number.isFinite(st.soiKm) ? ` · r ${fmtKm(st.soiKm)}` : ""}`);
+    set("alt", st.kerr ? `r = ${st.kerr.r.toFixed(3)} M` : fmtKm(st.altKm));
+    set("speed", fmtMs(st.speed));
+    set("vv", fmtMs(st.vVert));
+    const o = st.orbit;
+    set("pe", o ? fmtKm(o.peKm) : st.kerr ? `E ${st.kerr.E.toFixed(5)}` : "—");
+    set("ap", o ? fmtKm(o.apKm) : st.kerr ? `L ${st.kerr.L.toFixed(3)} M` : "—");
+    set("inc", o ? `${o.incDeg.toFixed(2)}° · ${o.ecc.toFixed(4)}` : "—");
+    set("period", o ? fmtS(o.period) : "—");
+    set("tpe", o ? fmtS(o.tPe) : "—");
+    set("tap", o && Number.isFinite(o.tAp) ? fmtS(o.tAp) : "—");
+    const n = st.next;
+    set(
+      "next",
+      n
+        ? `${n.kind === "exit" ? `leaving ${n.name}'s SOI` : n.kind === "enter" ? `entering ${n.name}'s SOI` : n.kind === "impact" ? `impact on ${n.name}` : "into the mouth"} · in ${fmtS(n.inS)}`
+        : "—",
+    );
+    const t = st.target;
+    set("target", t ? t.name : "—");
+    set("tdist", t ? `${fmtKm(t.distKm)} · ${t.rate >= 0 ? "+" : ""}${fmtMs(t.rate)}` : "—");
+    set("tca", t && Number.isFinite(t.caKm) ? `${t.caKm < 0 ? "impact" : fmtKm(t.caKm)} · in ${fmtS(t.caIn)}` : "—");
+    const s = g.settings();
+    const warp = s.timeSpeed * 4.925490947e-6 * s.massSolar;
+    set("date", `${g.date()} · ${s.animate ? `×${warp >= 10 ? Math.round(warp) : warp.toPrecision(2)}` : "paused"}`);
+    const info = g.pilotState();
+    set("pilot", info);
+  };
+  return { el, live };
 }
