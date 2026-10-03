@@ -12,6 +12,7 @@ import type { FutureView, RunwayView } from "../../controls";
 import { COL, FONT, MONO, marker } from "../hudkit";
 import { C_MPS, G0, M_METRES, M_SECONDS } from "../../units";
 import { dot } from "../../math/vec3";
+import { blinkOn } from "../clock";
 
 type V3 = [number, number, number];
 
@@ -95,6 +96,8 @@ export interface SymFrame {
   quarter?: number;
   /** the runway in reach (its outline, centreline, aim point; the craft's place along and across it) */
   runway?: RunwayView | null;
+  /** the scene's time [s] (the energy chevron's rate is taken in it) */
+  simS?: number;
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
    *  scale left to the HUD's panels (set here) */
   compact?: boolean;
@@ -419,8 +422,12 @@ export function drawSymbology(F: SymFrame) {
   // ---- what leaves the screen: an arrow at its edge, its glyph beside it
   if (s.hudEdge) {
     const m = 46 * dpr;
-    for (const k of ["prograde", "maneuver", "burn", "dock"] as const) {
+    // (the retrograde too when the prograde is off the screen as well — turned side-on, as before a
+    // deorbit burn: the way to either end of the flight path)
+    const proOn = inside(pr(i.dirs.prograde), m * 0.4);
+    for (const k of ["prograde", "retrograde", "maneuver", "burn", "dock"] as const) {
       if (k === "maneuver" && i.dirs.burn) continue;
+      if (k === "retrograde" && proOn) continue;
       const d = i.dirs[k];
       if (!d) continue;
       const p = pr(d);
@@ -463,6 +470,7 @@ const glyph = (k: string) =>
     burn: "burn",
     dock: "dock",
     prograde: "prograde",
+    retrograde: "retrograde",
   })[k] ?? "prograde";
 
 type Proj = (d: V3 | null | undefined) => [number, number] | null;
@@ -561,7 +569,9 @@ function drawAir(
 
   // ---- the energy chevron: the speed's rate as a flight path angle
   if (s.hudEnergy && up && Number.isFinite(A.speed)) {
-    const now = performance.now() / 1000;
+    // (in the scene's time: a warp does not multiply the rate, a pause holds it)
+    const now = F.simS ?? performance.now() / 1000;
+    if (now < energy.t) energy.v = Number.NaN; // (time turned back: a fresh start)
     if (Number.isFinite(energy.v) && now > energy.t) {
       const dt = Math.min(now - energy.t, 0.5);
       const a = (A.speed! - energy.v) / Math.max(dt, 1e-3);
@@ -632,7 +642,7 @@ function drawAir(
   }
   const k = A.stallA ? alpha / A.stallA : 0;
   if (A.stalled || k > 0.92) {
-    const on = A.stalled ? Math.floor(performance.now() / 300) % 2 === 0 : true;
+    const on = A.stalled ? blinkOn() : true;
     if (on) text(A.stalled ? "STALL" : "AOA", fp[0], fp[1] + 4 * r, A.stalled ? "#ff5a46" : "#ffc85a", 15);
   }
 
@@ -749,7 +759,8 @@ function drawFuture(
     }
   }
   // ---- the impact, the entry
-  if (s.hudImpact && fu.impact) {
+  // (on the ground — landed, rolling — there is no impact to come: the prediction starts from it)
+  if (s.hudImpact && fu.impact && !i.surface?.landed) {
     const marks = [fu.impact, ...(fu.impact.ground ? [fu.impact.ground] : [])];
     for (const m of marks) {
       const ground = m.kind === "ground",
@@ -892,8 +903,7 @@ function drawRunway(
       ? "ON AXIS"
       : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
   if (F.compact) {
-    if (rw.final && rw.agl < 60 && rw.agl > 1 && Math.floor(performance.now() / 350) % 2 === 0)
-      text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+    if (rw.final && rw.agl < 60 && rw.agl > 1 && blinkOn()) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
     return;
   }
   // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
@@ -931,7 +941,7 @@ function drawRunway(
     );
   }
   if (rw.final && rw.agl < 60 && rw.agl > 1) {
-    const on = Math.floor(performance.now() / 350) % 2 === 0;
+    const on = blinkOn();
     if (on) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
   }
 }
@@ -1055,7 +1065,7 @@ function drawHover(
       const stop = (vDown * vDown) / (2 * net);
       const tIn = (sf.alt - stop * 1.1) / vDown;
       if (tIn <= 0) {
-        if (Math.floor(performance.now() / 300) % 2 === 0) (cue = "BURN NOW"), (ccol = "#ff5a46");
+        if (blinkOn()) (cue = "BURN NOW"), (ccol = "#ff5a46");
         else cue = " ";
       } else if (tIn < 60) (cue = `BURN IN ${tIn.toFixed(tIn < 10 ? 1 : 0)} s`), (ccol = tIn < 5 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)");
       else cue = `STOP ${Math.round(stop)} m`;
@@ -1150,7 +1160,7 @@ function drawBurn(
   if (Number.isFinite(err))
     text(`AIM ${err.toFixed(1)}°`, x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
   // (the burn's start soon and the craft not turned: said)
-  if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && Math.floor(performance.now() / 400) % 2 === 0)
+  if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && blinkOn())
     text("TURN TO THE BURN", W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
 }
 
@@ -1280,42 +1290,8 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   const tide = (2 * C_MPS * C_MPS) / (r * r * r * Mm * Mm) / G0;
   const x = W / 2 - Math.min(W, H) * 0.44,
     y = H / 2 - 150 * dpr;
-  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
-  ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 112 * dpr);
-  text("RELATIVITY", x, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
-  // the clock
-  if (Number.isFinite(dt)) {
-    text(`dτ/dt ${dt.toFixed(4)}`, x - 86 * dpr, y + 4 * dpr, "#ffffff", 11.5, "left", true);
-    ctx.fillStyle = "rgba(124, 214, 255, 0.25)";
-    ctx.fillRect(x + 26 * dpr, y, 60 * dpr, 6 * dpr);
-    ctx.fillStyle = dt < 0.5 ? "#ff5a46" : dt < 0.9 ? "#ffc85a" : "#7cd6ff";
-    ctx.fillRect(x + 26 * dpr, y, 60 * dpr * Math.max(0, Math.min(1, dt)), 6 * dpr);
-  }
-  // the motion
+  // the lines first: the box as wide as the widest (a fixed 192 px let the radii's line run 90 px out)
   const dop = beta < 1 ? Math.sqrt((1 + beta) / (1 - beta)) : Infinity;
-  text(
-    `${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`,
-    x - 86 * dpr,
-    y + 20 * dpr,
-    "rgba(214, 236, 255, 0.95)",
-    10.5,
-    "left",
-    true,
-  );
-  // the orbit
-  if (Number.isFinite(E)) {
-    const bound = E < 1;
-    text(
-      bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`,
-      x - 86 * dpr,
-      y + 36 * dpr,
-      bound ? "#78ffaa" : "#ffc85a",
-      10.5,
-      "left",
-      true,
-    );
-  }
-  // the radius against the critical ones
   const crit =
     i.rH !== undefined && r < i.rH * 1.0001
       ? "INSIDE THE HORIZON"
@@ -1326,24 +1302,50 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
           : i.ergo
             ? "IN THE ERGOSPHERE"
             : "";
-  text(
-    `r ${r.toFixed(2)} M · ISCO ${(i.isco ?? NaN).toFixed(2)} · γ-orbit ${(i.photon ?? NaN).toFixed(2)} · H ${(i.rH ?? NaN).toFixed(2)}`,
-    x - 86 * dpr,
-    y + 52 * dpr,
-    crit ? "#ff5a46" : "rgba(214, 236, 255, 0.9)",
-    10,
-    "left",
-    true,
-  );
-  text(
-    crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`,
-    x - 86 * dpr,
-    y + 68 * dpr,
-    crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)",
-    10,
-    "left",
-    true,
-  );
+  const bound = E < 1;
+  const lines: { t: string; col: string; size: number; dy: number }[] = [
+    { t: `${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`, col: "rgba(214, 236, 255, 0.95)", size: 10.5, dy: 20 },
+    ...(Number.isFinite(E)
+      ? [
+          {
+            t: bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`,
+            col: bound ? "#78ffaa" : "#ffc85a",
+            size: 10.5,
+            dy: 36,
+          },
+        ]
+      : []),
+    {
+      t: `r ${r.toFixed(2)} M · ISCO ${(i.isco ?? NaN).toFixed(2)} · γ-orbit ${(i.photon ?? NaN).toFixed(2)} · H ${(i.rH ?? NaN).toFixed(2)}`,
+      col: crit ? "#ff5a46" : "rgba(214, 236, 255, 0.9)",
+      size: 10,
+      dy: 52,
+    },
+    {
+      t: crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`,
+      col: crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)",
+      size: 10,
+      dy: 68,
+    },
+  ];
+  let wide = 192 * dpr;
+  for (const l of lines) {
+    ctx.font = `600 ${l.size * dpr}px ${MONO}`;
+    wide = Math.max(wide, ctx.measureText(l.t).width + 20 * dpr);
+  }
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.fillRect(x - 96 * dpr, y - 26 * dpr, wide, 112 * dpr);
+  text("RELATIVITY", x - 96 * dpr + wide / 2, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
+  // the clock
+  if (Number.isFinite(dt)) {
+    text(`dτ/dt ${dt.toFixed(4)}`, x - 86 * dpr, y + 4 * dpr, "#ffffff", 11.5, "left", true);
+    ctx.fillStyle = "rgba(124, 214, 255, 0.25)";
+    ctx.fillRect(x + 26 * dpr, y, 60 * dpr, 6 * dpr);
+    ctx.fillStyle = dt < 0.5 ? "#ff5a46" : dt < 0.9 ? "#ffc85a" : "#7cd6ff";
+    ctx.fillRect(x + 26 * dpr, y, 60 * dpr * Math.max(0, Math.min(1, dt)), 6 * dpr);
+  }
+  // the motion, the orbit, the radius against the critical ones, the tide
+  for (const l of lines) text(l.t, x - 86 * dpr, y + l.dy * dpr, l.col, l.size, "left", true);
   // the way to the hole
   const p = pr(i.dirs.radialIn);
   if (inside(p, 20 * dpr)) text("GARGANTUA", p![0], p![1] + 22 * dpr, "rgba(95, 211, 255, 0.9)", 10.5);

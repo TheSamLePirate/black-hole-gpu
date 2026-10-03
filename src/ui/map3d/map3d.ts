@@ -16,7 +16,7 @@ import { solarBody, solarState } from "../../system/solar";
 import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../../system/our-predict";
 import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
-import { FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
+import { FONT, fmtDist, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
 import { bodyPosAt, dateOf, lineage, ourPos, ourScene, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
 import type { Info } from "../flighthud";
@@ -107,19 +107,8 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
   return e;
 };
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
-const KM = 1.476625e8; // km per M
 /** the flight computer's preview (rgb) */
 const CAND = "196, 140, 255";
-
-/** A length in the map's units for a card: km, AU (ours) — M and km (theirs). */
-function fmtDist(d: number, ours: boolean, s: Settings) {
-  if (!ours) return fmtLen(d, s);
-  const k = d * KM;
-  if (k >= 1e7) return `${(k / 1.495978707e8).toFixed(k >= 1.5e9 ? 1 : 3)} AU`;
-  return `${GROUPED.format(Math.round(k))} km`;
-}
-/** (one formatter kept: toLocaleString builds one a call — dozens of labels a frame) */
-const GROUPED = new Intl.NumberFormat("en-US");
 
 export class Map3D {
   readonly canvas = h("canvas", "fl-map");

@@ -34,10 +34,11 @@ import { cpuProf } from "../perf";
 import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
 import { GroundTrack } from "./groundtrack";
-import { AMBER, COL, CYAN, FONT, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
+import { AMBER, COL, CYAN, FONT, fmtDist, fmtDur, fmtDv, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
 import { sub } from "../math/vec3";
 import { store } from "../util/storage";
+import { onEscape } from "./keys";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -194,6 +195,9 @@ export interface FlightHudActions {
 /** (si: our universe or a planet's frame — speed in m/s, altitude in km — else c and M) */
 interface Sample {
   w: number;
+  /** the scene's time [s], the speed as the tape shows it [c] */
+  ts: number;
+  v: number;
   speed: number;
   r: number;
   dtau: number;
@@ -296,8 +300,11 @@ export class FlightHud {
   attach(el: HTMLElement) {
     this.root.append(el);
   }
+  private unEscapeMap?: () => void;
   toggleMapView() {
     this.mapView = !this.mapView;
+    this.unEscapeMap?.();
+    this.unEscapeMap = this.mapView ? onEscape(() => this.mapView && this.toggleMapView()) : undefined;
     this.root.classList.toggle("mapview", this.mapView);
     this.hud.classList.toggle("mapview", this.mapView);
     document.body.classList.toggle("map-open", this.mapView);
@@ -1830,6 +1837,8 @@ export class FlightHud {
       if (this.samples.length && this.samples[this.samples.length - 1]!.si !== si) this.samples.length = 0; // (new units)
       this.samples.push({
         w,
+        ts: t * M_SECONDS,
+        v: i.speed,
         speed: si ? st!.speed : i.speed,
         r: si ? st!.altKm : i.region === "hole" ? i.r : NaN,
         dtau: i.dtau,
@@ -1906,12 +1915,13 @@ export class FlightHud {
       const n = i.plan.nodes[0]!;
       // (CIRC's own burn: named so)
       const nm = i.hub?.mode === "circularize" ? "CIRC" : "NODE 1";
+      // (our side in seconds and m/s — the scene's M and c only near the hole)
       auto = i.plan.burning
-        ? `${nm} · BURN Δv ${Math.max(0, Math.hypot(...n.dv) - i.plan.done).toFixed(3)}`
-        : `${nm} · T−${fmtShort(Math.max(0, Math.round(n.t - time)))}`;
+        ? `${nm} · BURN Δv ${fmtDvC(Math.max(0, Math.hypot(...n.dv) - i.plan.done))}`
+        : `${nm} · T−${i.ref ? fmtDur(Math.max(0, n.t - time), s) : fmtShort(Math.max(0, Math.round(n.t - time)))}`;
     } else if (i.auto !== "none") {
       const phase = i.auto === "dock" && i.dockPhase ? i.dockPhase : i.dirs.burn ? (i.throttle > 0.02 ? "BURN" : "ALIGN") : "RCS";
-      auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${i.dv < 1e-3 ? "<.001" : i.dv.toFixed(3)}` : ""}`;
+      auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${fmtDvC(i.dv)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
     const st = this.start ?? { t: time, tau: i.properTime };
@@ -1926,7 +1936,8 @@ export class FlightHud {
     const hasTarget = Number.isFinite(i.targetDist) && i.target !== "hole";
     this.target.classList.toggle("empty", !hasTarget);
     T.name!.textContent = `${BODY_NAMES[i.target]}`;
-    T.dist!.textContent = Number.isFinite(i.targetDist) ? fmtLen(i.targetDist, this.s) : "—";
+    // (our side in km and AU — M only near the hole)
+    T.dist!.textContent = Number.isFinite(i.targetDist) ? fmtDist(i.targetDist, !!i.ref, this.s) : "—";
     // (our universe: solar-system speeds, in km/s)
     const kms = (v: number) =>
       Math.abs(v) * 299792.458 >= 100 ? (Math.abs(v) * 299792.458).toFixed(0) : (Math.abs(v) * 299792.458).toFixed(2);
@@ -1938,7 +1949,7 @@ export class FlightHud {
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
     const ca = i.ref ? i.ourCa : this.closestApproach(i, time);
     // (a closest approach below the surface: an impact — or, the wormhole, a way into its throat)
-    const caTxt = ca && ca.d < 0 ? (i.target === "wormhole" ? "into the mouth" : "impact") : ca ? fmtLen(ca.d, this.s) : "";
+    const caTxt = ca && ca.d < 0 ? (i.target === "wormhole" ? "into the mouth" : "impact") : ca ? fmtDist(ca.d, !!i.ref, this.s) : "";
     T.ca!.textContent = ca ? `${caTxt} · ${ca.t > 0 ? `T−${i.ref ? fmtDur(ca.t, this.s) : fmtShort(Math.round(ca.t))}` : "now"}` : "—";
     // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
     // temperature, from the planet's light probe
@@ -2167,6 +2178,7 @@ export class FlightHud {
       s: this.s,
       i,
       density: this.density,
+      simS: this.lastTime * M_SECONDS,
       future: fut,
       quarter,
       runway: this.runway?.() ?? null,
@@ -2432,10 +2444,12 @@ export class FlightHud {
       ctx.fill();
     }
     const yv = y(i.speed);
-    // trend over the last second (where the speed will be in 1 s)
-    const s1 = this.samples.find((q) => q.w >= this.samples[this.samples.length - 1]!.w - 1);
-    if (s1) {
-      const d = ((i.speed - s1.speed) / vmax) * hgt;
+    // the trend: where the speed will be in 10 s of the scene's time (Airbus's), its rate taken over the
+    // last second of samples — the same units as the tape, the warp and a pause taken into account
+    const last = this.samples[this.samples.length - 1];
+    const s1 = last && this.samples.find((q) => q.w >= last.w - 1);
+    if (s1 && last && last.ts - s1.ts > 1e-6) {
+      const d = (((last.v - s1.v) / (last.ts - s1.ts)) * 10 * hgt) / vmax;
       if (Math.abs(d) > 2 * dpr) {
         ctx.strokeStyle = "#d6f55b";
         ctx.lineWidth = 3 * dpr;
@@ -2989,7 +3003,9 @@ export class FlightHud {
     };
     // (a near-circular orbit: one mark for both)
     const same = Number.isFinite(pe) && Number.isFinite(ap) && pe >= 0 && Math.abs(ap - pe) < hmax * 0.03;
-    if (Number.isFinite(pe)) mark(Math.max(pe, 0), pe < 0 ? RED : CYAN, pe < 0 ? "IMPACT" : same ? "Pe·Ap" : "Pe");
+    // (on the ground the orbit's periapsis is deep under it — no impact to warn of, nothing to mark)
+    if (Number.isFinite(pe) && !(i.landed || i.surface?.landed))
+      mark(Math.max(pe, 0), pe < 0 ? RED : CYAN, pe < 0 ? "IMPACT" : same ? "Pe·Ap" : "Pe");
     if (Number.isFinite(ap) && !same) mark(ap, CYAN, "Ap");
     // the vertical speed: a bar beside the tape, its length on a log scale (±10 km/s at the ends)
     if (Number.isFinite(vv)) {
@@ -3590,6 +3606,13 @@ function panelBg(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
 }
 
 /** The current value of a tape: a pointer box with a big number, its unit and a sub-line. */
+/** A Δv given in c, as a pilot reads it: m/s, km/s — c only when relativistic. */
+function fmtDvC(c: number) {
+  const ms = c * C_MPS;
+  if (c >= 0.01) return `${c.toFixed(3)} c`;
+  return ms >= 1000 ? `${(ms / 1000).toFixed(2)} km/s` : `${ms.toFixed(ms < 10 ? 1 : 0)} m/s`;
+}
+
 function valueBox(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -3600,8 +3623,11 @@ function valueBox(
   side: "left" | "right",
   dpr: number,
 ) {
+  // (as wide as the figures and the unit, side by side: they overlapped when the unit was km/s)
+  ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
+  const uw = ctx.measureText(unit).width;
   ctx.font = `600 ${17 * dpr}px ${MONO}`;
-  const w = ctx.measureText(value).width + 34 * dpr;
+  const w = ctx.measureText(value).width + uw + 22 * dpr;
   const hgt = 24 * dpr;
   const x0 = side === "left" ? x : x - w;
   const tip = side === "left" ? x0 - 7 * dpr : x0 + w + 7 * dpr;

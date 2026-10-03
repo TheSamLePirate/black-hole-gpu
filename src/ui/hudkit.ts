@@ -1,5 +1,6 @@
 // Shared by the flight HUD and the map: colours, fonts, the markers, number formats.
 import type { Settings } from "../settings";
+import { AU_M, M_METRES } from "../units";
 
 /** our universe's bodies on the map */
 export const OUR_COLOURS: Record<string, string> = {
@@ -120,6 +121,16 @@ export function fmtLen(d: number, s: Settings) {
   const m = d * 1476.625 * s.massSolar;
   return m >= 1e4 ? `${Math.round(m / 1000).toLocaleString("en-US")} km` : `${Math.round(m).toLocaleString("en-US")} m`;
 }
+
+/** A length [M] as the side reads it: km and AU on ours, M and km near the hole. */
+export function fmtDist(d: number, ours: boolean, s: Settings) {
+  if (!ours) return fmtLen(d, s);
+  const k = (d * M_METRES) / 1e3;
+  if (k >= 1e7) return `${((k * 1e3) / AU_M).toFixed(k >= 1.5e9 ? 1 : 3)} AU`;
+  return `${GROUPED.format(Math.round(k))} km`;
+}
+/** (one formatter kept: toLocaleString builds one a call — dozens of labels a frame) */
+const GROUPED = new Intl.NumberFormat("en-US");
 
 /** A velocity change (c): m/s, km/s or c. */
 export function fmtDv(v: number) {

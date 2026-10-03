@@ -2311,6 +2311,10 @@ async function main() {
     const idle = (performance.now() - camera.activity) / 1000;
     const alpha = settings.ship ? 1 : idle < 1.6 ? 1 : Math.max(0, 1 - (idle - 1.6) / 0.8);
     if (alpha <= 0) return null;
+    // (on the approach, under 20 km over a runway: the eyes on the runway — no far target in the middle
+    // of the view down to the flare)
+    const rw = camera.piloting ? camera.runwayView() : null;
+    if (rw && rw.agl < 20e3) return null;
     const v = camera.lockView();
     if (!v || !v.dir.every(Number.isFinite)) return null;
     return { v: { ...v, colour: v.colour || BODY_COLOURS[v.id as Target] || "" }, alpha };
@@ -2369,7 +2373,10 @@ async function main() {
     ctx.lineWidth = 1.4 * k;
     ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
     ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 4 * k;
+    // (a crisp drop shadow, not a blurred one: a blur is a GPU pass per draw — it cost the tracer
+    // 23 → 9 fps once)
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = ctx.shadowOffsetY = 1 * k;
     if (m.onScreen && m.body === "barycentre") {
       // a point: ⊕
       const r = 9 * k;
@@ -2434,7 +2441,10 @@ async function main() {
     ctx.font = `600 ${10.5 * k}px ui-sans-serif, system-ui, sans-serif`;
     ctx.fillStyle = `rgba(${c}, 0.95)`;
     ctx.shadowColor = "rgba(0,0,0,0.85)";
-    ctx.shadowBlur = 4 * k;
+    // (a crisp drop shadow, not a blurred one: a blur is a GPU pass per draw — it cost the tracer
+    // 23 → 9 fps once)
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = ctx.shadowOffsetY = 1 * k;
     ctx.textAlign = "left";
     const hint = h.body === settings.target ? "double-click: fly to" : "click: target";
     ctx.fillText(`${BODY_NAMES[h.body]}`, (h.x + 14) * k, (h.y + 22) * k);

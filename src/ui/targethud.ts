@@ -97,7 +97,10 @@ export function drawLock(
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-  ctx.shadowBlur = 4 * k;
+  // (a crisp drop shadow, not a blurred one: a blur is a GPU pass per draw — it cost the tracer
+  // 23 → 9 fps once)
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = ctx.shadowOffsetY = 1 * k;
   ctx.lineCap = "round";
   const on = p && p[0] > margin && p[0] < W - margin && p[1] > margin && p[1] < H - margin;
   const label = (
