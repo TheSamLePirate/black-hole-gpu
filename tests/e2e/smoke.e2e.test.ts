@@ -22,7 +22,7 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   });
 
   test("the flight's phase follows the pilot, and the journal says so", async () => {
-    expect(await app.js("__bh.phase()")).toEqual({ mode: "flight", control: "manual", stage: "orbit", detail: "" });
+    expect(await app.js<object>("__bh.phase()")).toEqual({ mode: "flight", control: "manual", stage: "orbit", detail: "" });
     await app.press("Digit2");
     await app.waitFor(`__bh.phase().control === "hold"`, 5000);
     expect(await app.js<string>("__bh.phase().detail")).toBe("retrograde");
