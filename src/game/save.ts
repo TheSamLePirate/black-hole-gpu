@@ -2,15 +2,22 @@
 // pilot's modes, the ground under the ship, the flight plan) — kept in the browser (an automatic save
 // resumed at the next visit, named slots), exported and imported as JSON files. The URL no longer
 // carries the scene: its six digits put a ship in low orbit a thousand kilometres off.
+//
+// Versions: a save of an older version is migrated on the way in (MIGRATIONS, one step per version),
+// then checked; one of a newer version is refused. v2: the player's own settings (SETTING_KIND
+// "pref" — the budget, the display, the sound, the aids) are no longer in the save.
 
-import { defaultSettings, type Settings } from "../settings";
+import { defaultSettings, SETTING_KIND, settingKeys, type Settings } from "../settings";
 import { caught } from "../debug";
 import { store } from "../util/storage";
 import type { ManeuverNode } from "../maneuver";
 import type { Hold, Auto } from "../pilot";
 
+/** The current version of a save. */
+export const SAVE_VERSION = 2;
+
 export interface GameSave {
-  v: 1;
+  v: typeof SAVE_VERSION;
   name: string;
   /** Date.now() */
   savedAt: number;
@@ -18,7 +25,8 @@ export interface GameSave {
   summary: string;
   /** the scene it started from (older saves: none) */
   scene?: string | null;
-  settings: Settings;
+  /** the game's settings: the scene and what it carried (not the player's own) */
+  settings: Partial<Settings>;
   time: number;
   ship: {
     piloting: boolean;
@@ -77,6 +85,23 @@ export const slots = {
   },
 };
 
+/** One step up per version: MIGRATIONS[v] takes a save of version v to version v + 1. */
+const MIGRATIONS: Record<number, (g: Record<string, unknown>) => Record<string, unknown>> = {
+  // v1 → v2: the player's own settings left out of the save
+  1: (g) => {
+    const set = { ...(g.settings as Record<string, unknown>) };
+    for (const k of settingKeys("pref")) delete set[k];
+    return { ...g, v: 2, settings: set };
+  },
+};
+
+/** A save of any known version brought to the current one (unchanged when it is). */
+export function migrateSave(x: Record<string, unknown>): Record<string, unknown> {
+  let g = x;
+  while (typeof g.v === "number" && g.v < SAVE_VERSION && MIGRATIONS[g.v]) g = MIGRATIONS[g.v]!(g);
+  return g;
+}
+
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 const isVec = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNum);
 
@@ -90,8 +115,8 @@ export function checkSave(x: unknown): GameSave {
     throw new Error(`not a saved game (${why})`);
   };
   if (!x || typeof x !== "object") fault("not an object");
-  const g = x as GameSave;
-  if (g.v !== 1) fault(`version ${String((g as { v?: unknown }).v)}`);
+  const g = migrateSave(x as Record<string, unknown>) as unknown as GameSave;
+  if (g.v !== SAVE_VERSION) fault(`version ${String((g as { v?: unknown }).v)}`);
   if (!isNum(g.time)) fault("time");
   if (!g.settings || typeof g.settings !== "object") fault("settings");
   // (a setting of the wrong kind — a NaN saved as null — is repaired to its default, and told: the
@@ -99,6 +124,9 @@ export function checkSave(x: unknown): GameSave {
   const ref = defaultSettings() as unknown as Record<string, unknown>;
   const set = g.settings as unknown as Record<string, unknown>;
   const repaired: string[] = [];
+  // (a setting the game does not know — a later version's, a foreign file's — or the player's own
+  // is left out)
+  for (const k of Object.keys(set)) if (!(k in SETTING_KIND) || SETTING_KIND[k as keyof Settings] === "pref") delete set[k];
   for (const [k, v] of Object.entries(set)) {
     const want = typeof ref[k];
     if ((want === "number" && !isNum(v)) || (want === "boolean" && typeof v !== "boolean")) {

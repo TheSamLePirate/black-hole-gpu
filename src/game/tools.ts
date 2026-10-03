@@ -11,7 +11,7 @@
 //   await __bh.game.audit({ planner: true })
 
 import type { Settings, Target } from "../settings";
-import { defaultSettings, QUALITY } from "../settings";
+import { defaultSettings, pickSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
 import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose } from "../camera";
@@ -399,12 +399,13 @@ export class GameTools {
     }
     const L = c.ourLandedOn;
     return {
-      v: 1,
+      v: 2,
       name,
       savedAt: Date.now(),
       summary,
       scene: this.ctx.scene?.get() ?? null,
-      settings: { ...s },
+      // (not the player's own: a save is the game, not the screen it was played on)
+      settings: pickSettings(s, "carried", "scene"),
       time: this.ctx.time(),
       ship: {
         piloting: c.piloting,
@@ -430,19 +431,8 @@ export class GameTools {
     if (!save) throw new Error(`no saved game "${g}"`);
     const s = this.ctx.settings,
       c = this.ctx.camera;
-    // (this screen's pixel ratio and the listener's sound stay theirs)
-    const own = {
-      pixelRatio: s.pixelRatio,
-      fpsCap: s.fpsCap,
-      glassBlur: s.glassBlur,
-      temporalReprojection: s.temporalReprojection,
-      sound: s.sound,
-      soundVolume: s.soundVolume,
-      soundBeeps: s.soundBeeps,
-      soundEngines: s.soundEngines,
-      soundAmbience: s.soundAmbience,
-      soundUi: s.soundUi,
-    };
+    // (the player's own — the budget, the display, the sound, the aids — stay theirs: settings.ts SETTING_KIND)
+    const own = pickSettings(s, "pref");
     Object.assign(s, defaultSettings(), save.settings, own);
     this.ctx.setTime(save.time);
     c.setCinematic(null);

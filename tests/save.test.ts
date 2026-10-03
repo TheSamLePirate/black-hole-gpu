@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test";
-import { defaultSettings } from "../src/settings";
-import { checkSave, parseSave, saveFromHash, saveToHash, type GameSave } from "../src/game/save";
+import { defaultSettings, pickSettings, SETTING_KIND, settingKeys } from "../src/settings";
+import { checkSave, migrateSave, parseSave, SAVE_VERSION, saveFromHash, saveToHash, type GameSave } from "../src/game/save";
 import { store } from "../src/util/storage";
 
 // Saved games: a flight round-trips through JSON, a link and the browser's storage; a corrupted one is
 // refused (never half-loaded), a setting of the wrong kind repaired.
 
 const save = (): GameSave => ({
-  v: 1,
+  v: 2,
   name: "test",
   savedAt: 1,
   summary: "Earth · IN ORBIT 400 km",
   scene: "game:artemis",
-  settings: defaultSettings(),
+  settings: pickSettings(defaultSettings(), "carried", "scene"),
   time: 109.7,
   ship: {
     piloting: true,
@@ -58,4 +58,28 @@ test("storage without a browser: reads fall back, writes say they did not take",
   expect(store.get("kerr.nothing")).toBeNull();
   expect(store.getJSON("kerr.nothing", { a: 1 })).toEqual({ a: 1 });
   expect(typeof store.set("kerr.x", "1")).toBe("boolean");
+});
+
+test("a version 1 save (every setting) loads: migrated, the player's own left out", () => {
+  const v1 = { ...save(), v: 1, settings: { ...defaultSettings(), pixelRatio: 0.5, soundVolume: 0.1, hudBank: false, spin: 0.6 } };
+  const g = checkSave(v1);
+  expect(g.v).toBe(SAVE_VERSION);
+  expect(g.settings.spin).toBe(0.6);
+  for (const k of ["pixelRatio", "soundVolume", "hudBank", "quality"]) expect(k in g.settings).toBe(false);
+  expect(migrateSave({ v: 2, x: 1 })).toEqual({ v: 2, x: 1 });
+});
+
+test("a save from a later version is refused; settings the game does not know are left out", () => {
+  expect(() => checkSave({ ...save(), v: 3 })).toThrow(/version 3/);
+  const g = checkSave({ ...save(), settings: { ...save().settings, warpDrive: true } });
+  expect("warpDrive" in g.settings).toBe(false);
+});
+
+test("every setting has a kind; the player's own are the budget, the display, the sound, the aids", () => {
+  expect(Object.keys(SETTING_KIND).sort()).toEqual(Object.keys(defaultSettings()).sort());
+  const pref = settingKeys("pref");
+  for (const k of ["pixelRatio", "quality", "realtimeBudget", "soundVolume", "hudHorizon", "hudDock", "autosave"] as const)
+    expect(pref).toContain(k);
+  // (where the ship is, when, what it flies: the scene's)
+  for (const k of ["distance", "spin", "vessel", "timeSpeed", "target"] as const) expect(SETTING_KIND[k]).toBe("scene");
 });

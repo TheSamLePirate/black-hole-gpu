@@ -6,6 +6,7 @@ import { theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
+import { readPrefs, writePrefs } from "./game/prefs";
 import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, type Mount } from "./mounts";
@@ -30,7 +31,7 @@ import {
 } from "./skychart";
 import { drawChartLabels } from "./ui/skylabels";
 import { SkyPanel } from "./ui/skypanel";
-import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
+import { defaultSettings, presets, QUALITY, settingKeys, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
@@ -80,7 +81,13 @@ watchMobile();
 const overlay = $<HTMLCanvasElement>("overlay");
 const errorEl = $("error");
 
-const settings: Settings = sanitize({ ...defaultSettings(), ...loadFromUrl(defaultSettings()) });
+// (the player's own settings as they left them — game/prefs.ts —, then a link's; the benchmark measures
+// from the defaults)
+const settings: Settings = sanitize({
+  ...defaultSettings(),
+  ...(/[#&]bench\b/.test(location.hash) ? {} : readPrefs()),
+  ...loadFromUrl(defaultSettings()),
+});
 
 /** Replaces invalid enum values (e.g. from a hand-edited URL) by their defaults. */
 function sanitize(s: Settings): Settings {
@@ -101,84 +108,8 @@ const FLIGHT_MODE_HELP: Record<Settings["flightMode"], string> = {
   sf: "the flight computer — the stick and throttle set the way and the speed, it flies them (⇧F: antigravity)",
 };
 
-/** Rendering / performance choices survive preset changes. */
-const KEEP_ON_PRESET: (keyof Settings)[] = [
-  "pixelRatio",
-  "realtimeSubsampling",
-  "realtimeBudget",
-  "fpsCap",
-  "glassBlur",
-  "temporalReprojection",
-  "farFieldLut",
-  "volumetricClouds",
-  "realtimeEps",
-  "realtimeSteps",
-  "qualityEps",
-  "qualitySteps",
-  "targetSpp",
-  "denoise",
-  "denoiseStrength",
-  "quality",
-  "tonemap",
-  "hdr",
-  "hdrPeak",
-  "bloom",
-  "dof",
-  "dofAperture",
-  "dofFocus",
-  "lensFlare",
-  "exposure",
-  "bgIntensity",
-  "starSize",
-  "starBrightness",
-  "skyL",
-  "skyB",
-  "skyRoll",
-  "massSolar",
-  "cinematicSpeed",
-  "rotation",
-  "lookAt",
-  "cinematic",
-  "waterRipples",
-  "waterMirror",
-  "waterSpeed",
-  "waterGlow",
-  "waterColor",
-  "waterDensity",
-  "waterGlowColor",
-  "ship",
-  "shipMount",
-  "shipAlbedo",
-  "shipMetal",
-  "shipRough",
-  "shipLight",
-  "shipCoat",
-  "turnRate",
-  "turnAccel",
-  "rcsFraction",
-  "crashSpeed",
-  "ballistic",
-  "damage",
-  "antigrav",
-  "autosave",
-  "autosaveEvery",
-  "rangerStatus",
-  "soiRings",
-  "pathInView",
-  "sound",
-  "soundVolume",
-  "soundBeeps",
-  "soundEngines",
-  "soundAmbience",
-  "soundUi",
-  "skyLines",
-  "skyNames",
-  "starNames",
-  "gridEquatorial",
-  "gridHorizontal",
-  "skyEcliptic",
-  "skyChartOpacity",
-];
+/** What survives a change of scene: the player's own and what they left carried (settings.ts SETTING_KIND). */
+const KEEP_ON_PRESET = settingKeys("pref", "carried");
 
 let changed = true; // scene (camera / parameters) changed since the last rendered frame
 let displayChanged = true;
@@ -1613,6 +1544,7 @@ async function main() {
     });
   };
   addEventListener("pagehide", (e) => {
+    if (!benchPage) writePrefs(settings);
     if (settings.autosave && firstFrame) tools.autosaveNow();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is
     // collected: reloads in a row would stack them)
@@ -1769,11 +1701,14 @@ async function main() {
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;
-    if (settings.autosave && firstFrame && !renderer.offlineActive && (saveTimer > settings.autosaveEvery || (saveSoon && saveTimer > 2))) {
+    // (a setting changed: the player's own kept two seconds on, the game saved with them)
+    const soon = saveSoon && saveTimer > 2;
+    if (soon && !benchPage) writePrefs(settings); // (a benchmark's settings are not the player's)
+    if (settings.autosave && firstFrame && !renderer.offlineActive && (saveTimer > settings.autosaveEvery || soon)) {
       saveTimer = 0;
-      saveSoon = false;
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
+    if (soon) saveSoon = false;
     if (flightHud.visible !== pil) {
       flightHud.show(pil);
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
@@ -1860,7 +1795,7 @@ async function main() {
     try {
       if (shared) panel.toast(`Shared flight: ${tools.load(shared)}`);
       else if (scene && presets[scene]) applyPreset(scene);
-      else if (hash.length <= 1 && last && last.settings.autosave !== false) panel.toast(`Resumed: ${tools.load(last)}`);
+      else if (hash.length <= 1 && last && settings.autosave) panel.toast(`Resumed: ${tools.load(last)}`);
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
     }
