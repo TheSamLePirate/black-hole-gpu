@@ -7,6 +7,8 @@ import { CameraController, FLIGHT_KEYS, isTyping } from "./controls";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { readPrefs, writePrefs } from "./game/prefs";
+import { events } from "./game/events";
+import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
 import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, type Mount } from "./mounts";
@@ -68,7 +70,7 @@ import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls } from "./system/ephemeris-files";
 import { store } from "./util/storage";
 import { caught, DEV } from "./debug";
-import { advanceFrameClock } from "./frameclock";
+import { advanceFrameClock, frameNow } from "./frameclock";
 import { dateNow } from "./util/now";
 import { KerrBench } from "./bench/runner";
 import { installVramHook } from "./bench/vram";
@@ -1122,11 +1124,21 @@ async function main() {
     }
     transport?.update(true);
   }
-  camera.onPilotMessage = (t) => {
-    panel.toast(t);
-    cockpitScreens.message(t);
-    gameLog.add(/crash/i.test(t) ? "warn" : "pilot", t, sim.time);
-  };
+  // (the controller's news, onto the game's bus — game/events.ts — and from it to whoever shows them)
+  camera.onPilotMessage = (text) => events.emit("pilotMessage", { text, t: sim.time });
+  camera.onAirEntry = () => events.emit("airEntry", { t: sim.time });
+  camera.onCraftLost = (why) => events.emit("craftLost", { why, t: sim.time });
+  events.on("pilotMessage", ({ text, t }) => {
+    panel.toast(text);
+    cockpitScreens.message(text);
+    gameLog.add(/crash/i.test(text) ? "warn" : "pilot", text, t);
+  });
+  // the flight's phase (game/phase.ts): its changes in the journal
+  const phaseWatch = new PhaseWatcher((from, to) => events.emit("phase", { from, to, t: sim.time }));
+  events.on("phase", ({ from, to, t }) => {
+    if (from) gameLog.add("phase", phaseText(to), t, { from, to });
+    flightHud.phase = to;
+  });
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
   let hudDensity: number | null = null;
   const mission = new Mission(settings, camera, (t) => panel.toast(t));
@@ -1518,10 +1530,10 @@ async function main() {
   // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
   let entryPoint: GameSave | null = null;
   const craftLost = new CraftLost();
-  camera.onAirEntry = () => {
+  events.on("airEntry", () => {
     entryPoint = tools.snapshot("before the entry");
-  };
-  camera.onCraftLost = (why) => {
+  });
+  events.on("craftLost", ({ why }) => {
     settings.animate = false;
     camera.onPilotMessage?.(why);
     craftLost.show(why, {
@@ -1542,7 +1554,7 @@ async function main() {
       },
       restart: currentScene ? () => applyPreset(currentScene!) : null,
     });
-  };
+  });
   addEventListener("pagehide", (e) => {
     if (!benchPage) writePrefs(settings);
     if (settings.autosave && firstFrame) tools.autosaveNow();
@@ -1572,6 +1584,7 @@ async function main() {
     updateChart,
     chart: () => chart,
     lastStats: () => lastStats,
+    phase: () => phaseWatch.current,
     freeze: (on: boolean) => (frozen = on),
   });
 
@@ -1717,15 +1730,32 @@ async function main() {
     touchFlight.update(
       pil && coarse && camera.outsideView() !== "free" && !flightHud.planning && !document.body.classList.contains("hide-ui"),
     );
+    let status: RangerStatus | null = null;
     if (pil && info) {
       // the Ranger's status (the telemetry; its changes go to the journal)
-      let status: RangerStatus | null = null;
       try {
         status = cpuProf.time("Ranger status", () => rangerStatus(settings, camera, info, sim.time));
         tools.watch(status);
       } catch (e) {
         caught("Ranger status", e);
       }
+    }
+    phaseWatch.update(
+      phaseOf({
+        piloting: camera.piloting,
+        cinematic: camera.cinematic,
+        offline: renderer.offlineActive,
+        landed: !!info?.landed,
+        docked: !!info?.links.length,
+        hold: camera.pilot.hold,
+        auto: camera.pilot.auto,
+        entry: camera.entryRun?.phase ?? null,
+        inAir: !!info?.air?.inAir,
+        status: status?.status ?? null,
+      }),
+      frameNow() / 1000,
+    );
+    if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
       if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() }))
         renderer.ship.updateScreens(cockpitScreens.canvas);

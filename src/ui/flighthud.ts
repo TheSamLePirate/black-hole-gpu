@@ -245,6 +245,8 @@ export class FlightHud {
   autoWhy(a: Auto): string {
     return this.buttons.get(a)?.dataset.why ?? "";
   }
+  /** the flight's phase (game/phase.ts), as the watcher last settled it */
+  phase: import("../game/phase").FlightPhase | null = null;
   /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
   onPlanner: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");

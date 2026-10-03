@@ -12,12 +12,14 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 
 | Pilier | Départ (audit) | Actuel | Cible AAA |
 |---|---:|---:|---:|
-| Physique | 64 | 64 | 80 |
-| Code + tests | 44 | 44 | 75 |
-| Technologie | 67 | 67 | 80 |
-| UI / UX / HUD | 44 | 44 | 80 |
-| Produit / gameplay | 50 | 50 | 80 |
-| **Global** | **≈ 54** | **≈ 54** | **≈ 78–80** |
+| Physique | 64 | 66 | 80 |
+| Code + tests | 44 | 62 | 75 |
+| Technologie | 67 | 69 | 80 |
+| UI / UX / HUD | 44 | 48 | 80 |
+| Produit / gameplay | 50 | 51 | 80 |
+| **Global** | **≈ 54** | **≈ 59** | **≈ 78–80** |
+
+*Réestimé à la fin de la phase 1 (03/10/2026).* Physique : la force de marée de la bouche (P1) et le vol qui n'hérite plus du précédent. Code + tests : Biome et CI de vérification, `controls.ts` 9 436 → 1 000 lignes en 13 modules, `main.ts` −24 %, table de touches unique, `FlightInfo` et genres de réglages typés, machine de phases, 286 tests unitaires et 24 e2e (vols de référence au bit près, indépendance à la fréquence) — mais l'e2e ne tourne pas encore en CI et `flighthud.ts` fait 3 000 lignes. Technologie : Kerr Bench, validation WGSL headless. UI : les gains rapides U0.
 
 Les notes « actuelles » sont réestimées à la fin de chaque phase, en reprenant les critères de l'audit.
 
@@ -74,7 +76,7 @@ Découvertes en route :
 - G0 : Kerr Bench livré (`#bench`), référence M1 Max = 1000, fusion des rapports. Phase Standard de référence : Artemis 49 fps, Gargantua 42, disque 44, Saturne 44, Kerr 57, trou de ver 47, Lune 53, Miller 51 (Game, headless).
 - U0 : Échap partout, toasts en pile, HUD juste (unités, temps simulé, fausses alarmes), Craft Lost refait, panneaux encadrés, 11 px minimum. Captures headless : pas de tir, orbite, carte, Craft Lost, réglages.
 
-## Phase 1 : consolidation (en cours)
+## Phase 1 : consolidation (terminée)
 
 Ordre : les filets d'abord (e2e et trajectoires de référence), puis les découpages, chacun vérifié contre ces filets.
 
@@ -86,8 +88,10 @@ Ordre : les filets d'abord (e2e et trajectoires de référence), puis les décou
 | 1.4 | **Découpage de `main.ts`** (2 645 → 2 018 lignes) : **table de raccourcis unique** `src/input/keymap.ts` — les touches sont envoyées par elle et l'aide « ? » est dessinée depuis elle (plus de touche non documentée : I, H, F, P, F2, Échap y figurent) ; couches système → vol → temps → scène, aucune ambiguïté par couche (test) ; `__bh` → `src/automation.ts` ; overlays (verrou, crochets, survol, vaisseau vu de dehors, télescope, courbe critique) → `src/ui/overlay.ts`. La boucle reste pour 1.6. **6 tests clavier, e2e : l'aide contient chaque ligne de la table** | fait | `3f02080` |
 | 1.5 | **`interface FlightInfo` explicite** et documentée (`src/controller/telemetry.ts`, 70 champs groupés : lieu et espace-temps, moteur et pilote, carte, plan, monde proche, cible, amarrage et flotte) ; `sim.ts` en prend un `Pick` au lieu d'un type recopié. **Ancien planificateur retiré** : ~490 lignes de `flighthud.ts` (le bouton PLAN ouvre l'onglet MISSION de l'ordinateur de vol depuis des mois) et 54 règles CSS mortes. **−924 lignes** | fait | `26ff6bd` |
 | 1.6 | **Boucle à pas fixe : mesurée d'abord, reportée.** Les vols de référence rejoués à 30, 60 et 144 pas/s finissent à quelques mètres près (rentrée : 9 m et 0,06 m/s après 30 s ; décollage lunaire : 5 m) — les intégrateurs sous-pas déjà selon la dynamique, la physique ne dépend pas de la fréquence d'images. Une boucle à pas fixe + interpolation (état rendu à interpoler : pose de caméra en 3 repères, vaisseau, flotte) n'apporterait rien de mesurable ; **reportée à la phase réseau** (horodatage des lignes d'univers). **Bug trouvé en mesurant** : un preset, un placement ou une sauvegarde ne remettaient pas à zéro le vol précédent — une seconde planée démarrait en pleine approche, train rentré, aérofreins sortis (6,7 km → 20,9 km d'altitude après 30 s). `camera.newFlight()` : course d'entrée, d'amarrage, de circularisation, aéro (chaleur, train, volets, aérofreins), poussée affichée, traînées, caches des écrans. **Nouveau test e2e** `rates.e2e.test.ts` : 30 Hz ≈ 120 Hz sur 4 vols, et un vol rejoué deux fois finit identique au bit près | fait | `ed8f27d` |
-| 1.7 | **`Settings` classé** plutôt que scindé (209 clés, des centaines d'appels) : `SETTING_KIND: Record<keyof Settings, "pref" \| "carried" \| "scene">` — une clé sans genre ne compile pas. Il décide de tout : ce qu'un preset conserve (remplace la liste `KEEP_ON_PRESET` tenue à la main), ce qu'une sauvegarde contient, ce qu'un chargement laisse. **Préférences du joueur** (49 : budget, affichage, son, aides HUD) stockées à part (`kerr.prefs`, reprises d'une autosauvegarde v1) — avant, elles ne survivaient que dans l'autosauvegarde, et les aides HUD revenaient à chaque changement de scène. **Sauvegarde v2** : sans les préférences, chaîne de migrations (`MIGRATIONS[v]`), version future refusée, clés inconnues écartées. Le Kerr Bench part des défauts et n'écrit rien. Tests : 3 unitaires (migration, version, genres), 3 e2e (sauvegarde, scène, rechargement) | fait | (ce commit) |
-| 1.8 | Machine à états des modes de vol | à faire | |
+| 1.7 | **`Settings` classé** plutôt que scindé (209 clés, des centaines d'appels) : `SETTING_KIND: Record<keyof Settings, "pref" \| "carried" \| "scene">` — une clé sans genre ne compile pas. Il décide de tout : ce qu'un preset conserve (remplace la liste `KEEP_ON_PRESET` tenue à la main), ce qu'une sauvegarde contient, ce qu'un chargement laisse. **Préférences du joueur** (49 : budget, affichage, son, aides HUD) stockées à part (`kerr.prefs`, reprises d'une autosauvegarde v1) — avant, elles ne survivaient que dans l'autosauvegarde, et les aides HUD revenaient à chaque changement de scène. **Sauvegarde v2** : sans les préférences, chaîne de migrations (`MIGRATIONS[v]`), version future refusée, clés inconnues écartées. Le Kerr Bench part des défauts et n'écrit rien. Tests : 3 unitaires (migration, version, genres), 3 e2e (sauvegarde, scène, rechargement) | fait | `a150d41` |
+| 1.8 | **Phase de vol** (`src/game/phase.ts`) : mode (caméra libre, cinématique, rendu, posé, amarré, en vol) × qui pilote (main, maintien, autopilote) × étape (sol, air, entrée, approche, suborbital, orbite, échappement, amarrage, Kerr, gorge) — dérivée à chaque frame, **anti-rebond** d'une seconde pour l'étape (un périapside qui frôle l'air n'est pas une phase), immédiate pour le mode. **Bus d'événements typé** (`src/game/events.ts` : `phase`, `airEntry`, `craftLost`, `pilotMessage`) à la place des rappels un-à-un du contrôleur ; chaque changement de phase est une ligne du journal, et le HUD reçoit la phase (pour U4). Choix : dérivée plutôt que source de vérité — aucun changement de comportement, les drapeaux du contrôleur restent l'état. Tests : 3 unitaires, 1 e2e | fait | (ce commit) |
+- Phase 1 close. Reporté de l'audit : le job e2e en CI (SwiftShader : liaisons de stockage, voir O4), l'e2e de chacun des 79 presets et de la perte du GPU.
+- 1.7 : les aides HUD revenaient à leurs défauts à chaque scène — elles sont désormais des préférences.
 - 1.6 : mesurer avant de réécrire — la boucle à pas fixe n'était pas le problème ; l'état hérité d'un vol à l'autre l'était.
 - 1.4 : la table de raccourcis est la source unique (envoi + aide). Changement de comportement voulu : toute touche reconnue fait `preventDefault`. Noté pour U4 : en vue libre, le libellé de la cible passe sous la barre de temps.
 - 1.1–1.2 : harnais e2e (7 scénarios) et 8 vols de référence reproductibles. Découverte : 13 caches de vol réglés sur l'horloge murale rendaient le vol dépendant de la machine ; ils suivent désormais une horloge de frame.

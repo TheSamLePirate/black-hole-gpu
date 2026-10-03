@@ -2,7 +2,7 @@
 // and of status, placements, saves, audits, errors), with the wall clock and the scene's time. The
 // game tools show it; it can be copied or downloaded for a report.
 
-export type LogKind = "info" | "pilot" | "soi" | "status" | "place" | "save" | "audit" | "warn" | "error";
+export type LogKind = "info" | "pilot" | "phase" | "soi" | "status" | "place" | "save" | "audit" | "warn" | "error";
 
 export interface LogEvent {
   /** Date.now() */

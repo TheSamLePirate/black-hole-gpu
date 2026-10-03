@@ -27,6 +27,7 @@ import { mouth } from "./wormhole";
 import { bodyLook, type Body } from "./targeting";
 import { setDateNow } from "./util/now";
 import { advanceFrameClock } from "./frameclock";
+import type { FlightPhase } from "./game/phase";
 
 export interface BhContext {
   settings: Settings;
@@ -48,6 +49,8 @@ export interface BhContext {
   updateChart(force?: boolean): void;
   chart(): ChartFrame | null;
   lastStats(): FrameStats | null;
+  /** the flight's phase (game/phase.ts) */
+  phase(): FlightPhase | null;
   /** Freezes the loop's own simulation (the automation steps it). */
   freeze(on: boolean): void;
 }
@@ -273,6 +276,8 @@ export function installBh(c: BhContext) {
         return names.length;
       },
       time: () => sim.time,
+      /** the flight's phase: mode, control, stage (game/phase.ts) */
+      phase: () => c.phase(),
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
       sys: {

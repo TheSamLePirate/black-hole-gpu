@@ -21,6 +21,17 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     expect(app.cdp.errors).toEqual([]);
   });
 
+  test("the flight's phase follows the pilot, and the journal says so", async () => {
+    expect(await app.js("__bh.phase()")).toEqual({ mode: "flight", control: "manual", stage: "orbit", detail: "" });
+    await app.press("Digit2");
+    await app.waitFor(`__bh.phase().control === "hold"`, 5000);
+    expect(await app.js<string>("__bh.phase().detail")).toBe("retrograde");
+    const line = await app.js<string>(`__bh.game.log.events.filter((e) => e.kind === "phase").at(-1)?.text ?? ""`);
+    expect(line).toBe("In orbit — holding retrograde");
+    await app.press("Digit2"); // (released)
+    await app.waitFor(`__bh.phase().control === "manual"`, 5000);
+  });
+
   test("Escape closes the camera panel and leaves the hold engaged; a second one releases it", async () => {
     await app.press("Digit1");
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("prograde");
