@@ -1478,6 +1478,8 @@ async function main() {
       },
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
       sound, audio,
+      /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
+      cockpitScreens,
       /** the built-in scenes' names (for __bh.preset) */
       scenes: () => Object.keys(presets),
       /** the scene gallery's pictures: each scene applied, left to converge, cropped to 16:9, 640 × 360,

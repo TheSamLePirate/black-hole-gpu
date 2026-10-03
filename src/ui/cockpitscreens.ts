@@ -51,6 +51,17 @@ const fmtDur = (s: number) => {
   return `${sign}${(a / 86400).toFixed(1)} d`;
 };
 
+/**
+ * The attitude the PFD shows, from the local up on the ship's axes (x left, y up, z nose): the roll
+ * (> 0 banked right: the right wing low, the up leaning to the ship's left) and the pitch (> 0 nose up).
+ * The horizon is drawn turned by −roll — banked right, its right end rises, the ground on the right —,
+ * as the HUD's attitude ball shows it (its pixel to the right is the ship's −x).
+ */
+export function pfdAttitude(up: readonly number[] | null): { roll: number; pitch: number } {
+  if (!up) return { roll: 0, pitch: 0 };
+  return { roll: Math.atan2(up[0]!, up[1]!), pitch: Math.asin(Math.max(-1, Math.min(1, up[2]!))) };
+}
+
 export class CockpitScreens {
   readonly canvas = new OffscreenCanvas(W, H);
   private g = this.canvas.getContext("2d")!;
@@ -165,8 +176,7 @@ export class CockpitScreens {
     this.frame(g, "PFD · ATTITUDE");
     const { up, pro } = this.shipVectors(d.info);
     const cx = SLOT / 2, cy = 300, R = 180;
-    const roll = up ? Math.atan2(-up[0], up[1]) : 0;
-    const pitch = up ? Math.asin(Math.max(-1, Math.min(1, up[2]))) : 0;
+    const { roll, pitch } = pfdAttitude(up);
     const pxDeg = 5.2;
     g.save();
     g.beginPath();
