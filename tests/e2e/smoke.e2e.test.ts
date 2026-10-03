@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { KEYMAP } from "../../src/input/keymap";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The app played as a player would — real keys and clicks, each click proven to land — in a headless
@@ -56,6 +57,9 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
     await app.waitFor(`!!document.querySelector(".sp-modal")`);
+    // (drawn from the table the keys go through: every section, every row)
+    const rows = await app.js<number>(`document.querySelectorAll(".sp-keys dt").length`);
+    expect(rows).toBe(KEYMAP.reduce((n, s) => n + s.rows.length, 0));
     await app.press("Escape");
     expect(await app.js<boolean>(`!!document.querySelector(".sp-modal")`)).toBe(false);
   });

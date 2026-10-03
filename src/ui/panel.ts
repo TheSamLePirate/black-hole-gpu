@@ -1,4 +1,5 @@
 import { FLIGHT_KEYS, isTyping } from "../controls";
+import { KEYMAP } from "../input/keymap";
 import { onEscape } from "./keys";
 import { QUALITY, type Quality, type Settings } from "../settings";
 import { sceneGroup, sceneTitle } from "./scenes";
@@ -1057,131 +1058,6 @@ export class SettingsPanel {
 
   showShortcuts() {
     document.querySelector(".sp-modal")?.remove();
-    const sections: [string, [string, string][]][] = [
-      [
-        "Time — every mode",
-        [
-          ["Space", "Run / pause (paused: everything the time drives holds, the image refines)"],
-          [", · . · /", "Time warp slower · faster · real time (; : ! on AZERTY)"],
-          ["● on the time bar", "Record a take — Render › Video renders it at full quality"],
-        ],
-      ],
-      [
-        "The sky — our side",
-        [
-          ["N · ⇧N", "Constellations: their figures and names · the bright stars' names"],
-          ["U", "Grids in turn: equatorial (of date) · horizontal (on a world) · both · none"],
-          [
-            "Sky button",
-            "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card",
-          ],
-        ],
-      ],
-      [
-        "Camera — every mode",
-        [
-          ["V · ⇧V", "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)"],
-          ["C", "Look at the target: the view locked on it, wherever the camera goes"],
-          ["Y", "Telescope: fields down to 0.02°, held on the target (the wheel zooms)"],
-          ["Tab · ⇧Tab", "Next · previous target (or click it in the view)"],
-          ["Drag", "Around: orbit the target · else: look around (locked: where the target sits)"],
-          ["Right / ⇧ drag", "Around: offset the view · Free: roll"],
-          ["Wheel · pinch", "Around: distance · Free: move forward / back · telescope: zoom"],
-          ["Alt + wheel", "Lens (field of view, eased)"],
-          ["Double-click", "Fly to a body and frame it · on the sky: recentre / level"],
-          ["R · ⇧R", "Next view · recentre / level"],
-          ["← → ↑ ↓ · + −", "Orbit (free: turn) · zoom"],
-        ],
-      ],
-      [
-        "The free camera (no ship)",
-        [
-          ["Z Q S D (WASD)", "Fly forward · left · back · right (⇧ faster)"],
-          ["A · E (Q · E)", "Down · up"],
-          ["W · X (Z · X)", "Roll"],
-          ["Middle click", "Mouse look, game-style (Esc leaves)"],
-          ["B", "Free fall along the geodesic (the keys thrust) ⟷ free"],
-          ["O · ⇧C · T", "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)"],
-          ["⇧T", "Tripod on the ground: the target's world (else the nearest), level, facing the horizon"],
-        ],
-      ],
-      [
-        "Scene",
-        [
-          ["J · G", "Jet · shadow guide"],
-          ["L", "Cinematic mode: liquid wormhole surface"],
-          ["K · ⇧K", "Ranger: camera on the spaceship · next view"],
-          ["1 – 6", "Quality (5: realtime max, 6: game)"],
-          ["⌘K / Ctrl+K", "Search the settings"],
-        ],
-      ],
-      [
-        "Flying the Ranger (K) — KSP's layout",
-        [
-          ["W S · A D · Q E", "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)"],
-          ["⇧ · Alt · ↑ ↓", "Throttle up · down (held)"],
-          ["Z · X", "Full throttle · cut (W · X on AZERTY)"],
-          ["I K · J L · H N", "RCS translation: down/up · left/right · forward/back"],
-          ["Caps Lock", "Precision controls (fine rotation, throttle, RCS)"],
-          ["T", "SAS: stability assist"],
-          ["R", "Roll alignment: wings in the orbital plane while the nose is held"],
-          ["1 – 7", "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)"],
-          ["8 · 9 · 0 · G · U · B", "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)"],
-          ["M · ⇧M", "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel"],
-          ["V · ⇧V", "Camera: next · previous view — on the hull, around the ship, free, fly-by"],
-          ["⇧R", "Camera reset: back to the craft's attach points, looking ahead (the outside views' own places)"],
-          [
-            "View “Cabin”",
-            "Inside the Ranger: Z Q S D · A E move the camera about the cabin (⇧ faster), the drag or the arrows turn the look — the ship flies on",
-          ],
-          ["[ · ]", "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)"],
-          [
-            "F · ⇧F",
-            "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity",
-          ],
-          ["P · ⇧P", "Flaps (up · half · full) · air brake"],
-          [
-            "⇧G",
-            "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing",
-          ],
-          ["⇧Y", "The future path in the view"],
-          ["²  (`)", "HUD density: full · minimal · clean view"],
-          [
-            "O",
-            "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE",
-          ],
-          ["Esc", "Closes the panel on top; with nothing open, stops the mission, the hold and the autopilot"],
-          ["⇧K", "Leave the Ranger"],
-          ["Drag · double-click", "Look around from the attach point · look ahead"],
-          ["Pad", "Left stick pitch/yaw · LB RB roll · RT LT throttle · A SAS · X/Y pro/retrograde · B cut · D-pad ▲▼ camera"],
-        ],
-      ],
-      [
-        "Controller (Xbox · PlayStation)",
-        [
-          ["Left stick", "Fly: forward · back · sideways (L3 held: boost)"],
-          ["Right stick", "Around: orbit the target · Free: look"],
-          ["RT · LT  (R2 · L2)", "Up · down"],
-          ["LB · RB  (L1 · R1)", "Roll"],
-          ["A  (✕)", "Fly to the target"],
-          ["B · X · Y  (○ □ △)", "Free fall · auto-orbit · next view"],
-          ["D-pad ◀ ▶ · ▲ ▼", "Previous / next target · closer / farther"],
-          ["R3 · View · Menu", "Recentre · run / pause time · settings (Share · Options)"],
-        ],
-      ],
-      [
-        "Interface",
-        [
-          ["M · ⌘K", "Settings · search them (flying: ⇧M)"],
-          ["F2", "Game tools: status, placement, targets, time, saves, performance"],
-          ["I", "Details & physical readouts"],
-          ["H · F · P", "Hide the interface · fullscreen · save PNG (flying, these keys fly: the toolbar's buttons)"],
-          ["Esc", "Closes the panel on top"],
-          ["⌘Z · ⇧⌘Z", "Undo · redo"],
-          ["?", "This sheet"],
-        ],
-      ],
-    ];
     const close = () => {
       dlg.remove();
       unEscape();
@@ -1199,8 +1075,9 @@ export class SettingsPanel {
           h("h3", {}, "Keyboard & mouse"),
           h("button", { class: "sp-icon", title: "Close (Esc)", onclick: close }, svgIcon(ICONS.close)),
         ),
-        ...sections.map(([title, rows]) =>
-          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))),
+        // (drawn from the table the keys are dispatched through: input/keymap.ts)
+        ...KEYMAP.map(({ title, rows }) =>
+          h("section", {}, h("h4", {}, title), h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, r.keys), h("dd", {}, r.text)]))),
         ),
         this.o.connectController
           ? h(
