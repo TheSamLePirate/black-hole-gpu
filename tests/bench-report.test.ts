@@ -1,11 +1,29 @@
 import { expect, test } from "bun:test";
-import { checkReport, frameStats, kerrScore, reportFileName, SCHEMA, tierOfScore, type BenchReport, type SceneReport } from "../src/bench/report";
+import {
+  checkReport,
+  frameStats,
+  kerrScore,
+  reportFileName,
+  SCHEMA,
+  tierOfScore,
+  type BenchReport,
+  type SceneReport,
+} from "../src/bench/report";
 
 // The Kerr Bench's report: the frame statistics, the score against the reference machine, the tier
 // it measures, a report read back checked.
 
 const scene = (name: string, mrays: number, status: SceneReport["status"] = "ok"): SceneReport => ({
-  scene: name, status, compileMs: 0, assetsMs: 0, gpuPasses: [], cpu: [], worstLoopMs: 0, longTasks: 0, vramMiB: null, errors: [],
+  scene: name,
+  status,
+  compileMs: 0,
+  assetsMs: 0,
+  gpuPasses: [],
+  cpu: [],
+  worstLoopMs: 0,
+  longTasks: 0,
+  vramMiB: null,
+  errors: [],
   fixed: { fps: 30, p50: 33, p95: 40, p99: 45, over33: 1, mraysPerS: mrays, width: 1600, height: 900 },
 });
 
@@ -37,7 +55,13 @@ test("the tier and quality a score recommends", () => {
 test("a report read back: its schema checked, a file name from the machine", () => {
   expect(() => checkReport({})).toThrow(/kerr-bench/);
   expect(() => checkReport({ schema: SCHEMA })).toThrow(/incomplete/);
-  const r = { schema: SCHEMA, scenes: [], system: { gpu: { description: "NVIDIA GeForce RTX 3060" } }, machineLabel: "", app: { date: "2026-10-04T10:00:00Z" } } as unknown as BenchReport;
+  const r = {
+    schema: SCHEMA,
+    scenes: [],
+    system: { gpu: { description: "NVIDIA GeForce RTX 3060" } },
+    machineLabel: "",
+    app: { date: "2026-10-04T10:00:00Z" },
+  } as unknown as BenchReport;
   expect(checkReport(r)).toBe(r);
   expect(reportFileName(r)).toBe("kerr-bench-NVIDIA-GeForce-RTX-3060-2026-10-04.json");
 });
