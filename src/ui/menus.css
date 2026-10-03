@@ -185,3 +185,18 @@ body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, bod
 .kh-row .k-kbd { min-width: 1.8em; }
 body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.map-open .kh { display: none; }
 @media (prefers-reduced-motion: reduce) { .kh { transition: none; } }
+
+/* ---------------------------------------------------------------- the radial wheel (ui/wheel.ts) */
+.rw-root { position: fixed; inset: 0; z-index: var(--z-popover); display: grid; place-items: center; background: radial-gradient(circle at 50% 50%, rgba(2, 4, 9, 0.5), rgba(2, 4, 9, 0.15) 45%, transparent 70%); cursor: crosshair; }
+.rw-ring { position: relative; width: 344px; height: 344px; }
+.rw-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rw-sector { fill: rgba(8, 13, 23, 0.82); stroke: var(--k-edge); stroke-width: 1; transition: fill 0.12s; }
+.rw-sector.on { fill: rgba(111, 210, 255, 0.14); stroke: rgba(111, 210, 255, 0.4); }
+.rw-sector.hot { fill: rgba(111, 210, 255, 0.3); stroke: var(--k-on-edge); }
+.rw-label { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; max-width: 96px; }
+.rw-label b { font: 700 12px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-text); }
+.rw-label.on b { color: var(--k-on); }
+.rw-label.sub b { color: var(--k-amber); }
+.rw-label small { font: 500 11px var(--mono); color: var(--k-dim); }
+.rw-center { position: absolute; left: 50%; top: 50%; width: 104px; height: 104px; transform: translate(-50%, -50%); border-radius: 50%; display: grid; place-items: center; text-align: center; padding: 8px; box-sizing: border-box; background: rgba(5, 9, 16, 0.92); border: 1px solid var(--k-edge); font: 700 12px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-amber); }
+.rw-center.back { color: var(--k-on); font-size: 20px; }

@@ -163,7 +163,11 @@ export const KEYMAP: KeySection[] = [
       },
       { keys: "C", text: "Look at the target: the view locked on it, wherever the camera goes", bind: [scene("c", "lookAt", off)] },
       { keys: "Y", text: "Telescope: fields down to 0.02°, held on the target (the wheel zooms)", bind: [scene("y", "telescope")] },
-      { keys: "Tab · ⇧Tab", text: "Next · previous target (or click it in the view)", bind: [scene("Tab", "target")] },
+      {
+        keys: "Tab · ⇧Tab",
+        text: "Next · previous target (or click it in the view) — held: the radial wheel (views, holds, autopilots)",
+        bind: [scene("Tab", "target")],
+      },
       { keys: "Drag", text: "Around: orbit the target · else: look around (locked: where the target sits)" },
       { keys: "Right / ⇧ drag", text: "Around: offset the view · Free: roll" },
       { keys: "Wheel · pinch", text: "Around: distance · Free: move forward / back · telescope: zoom" },

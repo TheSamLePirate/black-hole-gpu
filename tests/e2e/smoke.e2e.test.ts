@@ -36,6 +36,24 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     expect(first).toMatch(/^[ZW]$/); // (the full throttle's key, as this keyboard labels it)
   });
 
+  test("the radial wheel: Tab held opens it, the pointer picks, Tab released does it; a tap is the next target", async () => {
+    const tab = { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 };
+    await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
+    await app.waitFor(`!!document.querySelector("[data-testid=wheel]")`, 3000);
+    // (the third of eight sectors, to the right of the centre: retrograde)
+    const [w, h] = await app.js<[number, number]>("[innerWidth, innerHeight]");
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: w / 2 + 120, y: h / 2 });
+    await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });
+    await app.waitFor(`!document.querySelector("[data-testid=wheel]")`, 3000);
+    expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("retrograde");
+    await app.press("Backspace");
+    const before = await app.js<string>("__bh.settings.target");
+    await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
+    await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });
+    await app.waitFor(`__bh.settings.target !== ${JSON.stringify(before)}`, 3000);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=wheel]")`)).toBe(false);
+  });
+
   test("the flight's phase follows the pilot, and the journal says so", async () => {
     expect(await app.js<object>("__bh.phase()")).toEqual({ mode: "flight", control: "manual", stage: "orbit", detail: "" });
     await app.press("Digit2");

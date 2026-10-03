@@ -11,6 +11,7 @@ import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
+import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1402,6 +1403,87 @@ async function main() {
       touch();
     },
   };
+  // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
+  // still the next target
+  const wheel = new RadialWheel();
+  const wheelItems = (): WheelItem[] => {
+    const P = camera.pilot;
+    if (flying())
+      return [
+        { label: { fr: "SAS", en: "SAS" }, key: "T", on: P.sas, run: pilotSas },
+        { label: { fr: "Prograde", en: "Prograde" }, key: "1", on: P.hold === "prograde", run: () => pilotHold("prograde") },
+        { label: { fr: "Rétrograde", en: "Retrograde" }, key: "2", on: P.hold === "retrograde", run: () => pilotHold("retrograde") },
+        { label: { fr: "Vers la cible", en: "To the target" }, key: "7", on: P.hold === "target", run: () => pilotHold("target") },
+        {
+          label: { fr: "Autopilote", en: "Autopilot" },
+          on: P.auto !== "none",
+          sub: (
+            [
+              ["hover", { fr: "Stationnaire", en: "Hover" }, "8"],
+              ["circularize", { fr: "Circulariser", en: "Circularize" }, "9"],
+              ["approach", { fr: "Approche", en: "Approach" }, "0"],
+              ["land", { fr: "Atterrir", en: "Land" }, "G"],
+              ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
+              ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
+              ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
+            ] as const
+          ).map(([a, label, key]) => ({ label, key, on: P.auto === a, run: () => pilotAuto(a) })),
+        },
+        { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
+        { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
+        { label: { fr: "HUD", en: "HUD" }, key: "²", run: () => panel.toast(flightHud.cycleDensity()) },
+      ];
+    return [
+      { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
+      { label: { fr: "Regarder la cible", en: "Look at target" }, key: "C", on: settings.lookAt, run: toggleLookAt },
+      { label: { fr: "Télescope", en: "Telescope" }, key: "Y", on: settings.telescope, run: toggleTelescope },
+      { label: { fr: "Cible suivante", en: "Next target" }, key: "Tab", run: () => nextTarget(1) },
+      { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
+      {
+        label: { fr: "Cinématique", en: "Cinematic" },
+        on: !!camera.cinematic,
+        sub: [
+          { label: { fr: "Orbite auto", en: "Auto-orbit" }, key: "O", on: camera.cinematic === "orbit", run: () => cinematic("orbit") },
+          { label: { fr: "Plongée", en: "Dive" }, key: "⇧C", on: camera.cinematic === "dive", run: () => cinematic("dive") },
+          { label: { fr: "Voyage", en: "Journey" }, key: "T", on: camera.cinematic === "journey", run: () => cinematic("journey") },
+          {
+            label: { fr: "Chute libre", en: "Free fall" },
+            key: "B",
+            on: view() === "fall",
+            run: () => setView(view() === "fall" ? "free" : "fall"),
+          },
+        ],
+      },
+      { label: { fr: "Ciel", en: "Sky" }, key: "N", run: () => actions["btn-sky"]!() },
+      { label: { fr: "Photo", en: "Photo" }, key: "H", run: toggleUi },
+    ];
+  };
+  let tabTimer = 0;
+  let tabShift = false;
+  addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key !== "Tab" || e.repeat || isTyping(e) || titleScreen?.isOpen || paused) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    tabShift = e.shiftKey;
+    clearTimeout(tabTimer);
+    tabTimer = window.setTimeout(() => {
+      tabTimer = 0;
+      wheel.open(wheelItems(), flying() ? { fr: "Pilotage", en: "Flight" } : { fr: "Caméra", en: "Camera" });
+    }, 220);
+  });
+  addEventListener("keyup", (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    if (tabTimer) {
+      // (a tap: the next target)
+      clearTimeout(tabTimer);
+      tabTimer = 0;
+      nextTarget(tabShift ? -1 : 1);
+    } else if (wheel.isOpen) {
+      if (wheel.selected >= 0) wheel.activate();
+      else wheel.close();
+    }
+  });
+
   addEventListener("keydown", (e: KeyboardEvent) => {
     if (isTyping(e) || e.metaKey || e.ctrlKey || titleScreen?.isOpen) return;
     const b = matchKey(e, flying(), e.code in FLIGHT_KEYS);
