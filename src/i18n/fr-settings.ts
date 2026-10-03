@@ -1205,6 +1205,9 @@ export default {
   "Coming down onto the ground faster than this is a crash: the gear collapses (a craft without one breaks). Two thirds of it is the gear's limit — between the two, a hard landing that damages it. A real gear: 3 m/s, a collapse near 4.5.":
     "Toucher le sol plus vite que cela est un crash : le train cède (un engin sans train se brise). Les deux tiers sont la limite du train — entre les deux, un atterrissage dur qui l'endommage. Un vrai train : 3 m/s, il cède vers 4,5.",
   "Forgiving landing gear": "Train d'atterrissage indulgent",
+  "Gyroscopic attitude near the hole": "Attitude gyroscopique près du trou",
+  "Near Gargantua the ship's axes are carried as gyroscopes are (Fermi–Walker transport): a ship that does not turn precesses against the distant stars — the geodetic precession, 59° a turn on an orbit at 10 M, and the hole's frame dragging. Off: its attitude held on the distant stars.":
+    "Près de Gargantua, les axes du vaisseau sont transportés comme ceux d'un gyroscope (transport de Fermi–Walker) : un vaisseau qui ne tourne pas précesse par rapport aux étoiles lointaines — la précession géodétique, 59° par tour sur une orbite à 10 M, et l'entraînement du référentiel par le trou. Désactivé : son attitude reste fixe par rapport aux étoiles lointaines.",
   "The landing gear's limits three times a real one's: a landing up to 9 m/s down, a crash past 13.5.":
     "Les limites du train trois fois celles d'un vrai : un atterrissage jusqu'à 9 m/s de descente, un crash au-delà de 13,5.",
   Wind: "Vent",

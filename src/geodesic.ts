@@ -14,6 +14,7 @@
 
 import { horizon, zamo, type Vec3 } from "./physics";
 import { dot as dot3 } from "./math/vec3";
+import { boostSpins, transportStep } from "./gyro";
 
 /** A massive body moving on a known path (weak field). */
 export interface Lens {
@@ -45,7 +46,7 @@ export interface Massive {
   L: number; // u_φ
 }
 
-function inverseMetric(r: number, th: number, a: number) {
+export function inverseMetric(r: number, th: number, a: number) {
   const s = Math.sin(th);
   const c = Math.cos(th);
   const s2 = Math.max(s * s, 1e-12);
@@ -394,9 +395,20 @@ const TOL = 1e-8;
  * far from the hole (≈ a few hundred per orbit at any distance), so years of flight cost little —
  * with the thrust applied as an impulse after each accepted step (a step no longer than 1/200 of
  * the time to change the velocity by 10 % while the engine burns). Returns the new state (its proper
- * time is the sum of the steps).
+ * time is the sum of the steps). `spins`: 4-vectors (BL) carried along as gyroscopes — parallel
+ * transported, turned with the thrust's boost (gyro.ts: the ship's axes, Fermi–Walker).
  */
-export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel = 0, dir: Vec3 = [0, 0, 0], lens?: Lenses, tol = TOL) {
+export function advance(
+  st: Massive,
+  a: number,
+  dt: number,
+  stopAt = 0.05,
+  accel = 0,
+  dir: Vec3 = [0, 0, 0],
+  lens?: Lenses,
+  tol = TOL,
+  spins?: number[][],
+) {
   const rH = horizon(a);
   const tEnd = st.t + dt;
   let s = st;
@@ -425,6 +437,11 @@ export function advance(st: Massive, a: number, dt: number, stopAt = 0.05, accel
     }
     let n = thrust(r.st, dir, accel, h, a);
     if (!Number.isFinite(n.r) || n.r < rH + stopAt) return { st: s, tau, stopped: true, landed };
+    // (the ship's axes as gyroscopes along the step, and turned with the thrust's boost: gyro.ts)
+    if (spins) {
+      transportStep(spins, s, r.st, h, a);
+      if (accel > 0) boostSpins(spins, r.st, n, a);
+    }
     if (lens) {
       const l = land(n, a, lens);
       if (l) (n = l), (landed = true);

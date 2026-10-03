@@ -372,6 +372,7 @@ export interface Settings {
   rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
+  gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
   wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts)
   ballistic: number; // ballistic coefficient m/(C_D A): how hard the air brakes the ship [kg/m²]
   damage: boolean; // the air's heat and loads can destroy the craft (off: alarms only)
@@ -593,6 +594,7 @@ export function defaultSettings(): Settings {
     // (a real gear: 3 m/s a landing, 4.5 a collapse — the certification's 10 ft/s and a margin)
     crashSpeed: 4.5,
     gearForgiving: false,
+    gyroscopes: true,
     wind: 1,
     ballistic: 900,
     damage: true,
@@ -1766,6 +1768,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   rcsFraction: "carried",
   crashSpeed: "carried",
   gearForgiving: "pref",
+  gyroscopes: "pref",
   wind: "pref",
   ballistic: "carried",
   damage: "carried",

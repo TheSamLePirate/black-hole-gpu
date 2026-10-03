@@ -9,6 +9,7 @@ import { TUNING } from "../game/tuning";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
 import { advance, fromZamo, toZamo } from "../geodesic";
+import { spinFromZamo, spinToZamo } from "../gyro";
 import { airTop } from "../aero";
 import { GEAR, localToZamo, planetFrame, stepLocal, toGlobal, zamoBeta, zamoToLocal } from "../landing";
 import { fleet } from "../fleet";
@@ -196,14 +197,23 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       }
       return t0 + simDt;
     }
-    const res = advance(fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime()), a, simDt, 0.05, accel, dirZ, this.lens());
+    const st0 = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
+    // (the ship's axes as gyroscopes — Fermi–Walker, gyro.ts —, or held on the distant stars)
+    const gyro = s.gyroscopes ? [spinFromZamo(st0, a, cam.beta, cam.fwd), spinFromZamo(st0, a, cam.beta, cam.up)] : undefined;
+    const res = advance(st0, a, simDt, 0.05, accel, dirZ, this.lens(), undefined, gyro);
     this.landed = res.landed;
     this.properTime += res.tau;
     const st = res.st;
     const X1 = blToCartesian(st.r, st.th, st.ph);
     const f1 = sphericalFrame(X1);
-    const vel = add3(f1.er, f1.et, f1.ep, toZamo(st, a));
-    setHolePose(s, X1, w0(cam.fwd), w0(cam.up), vel);
+    const b1 = toZamo(st, a);
+    const vel = add3(f1.er, f1.et, f1.ep, b1);
+    if (gyro && !res.stopped) {
+      const w1 = (v: Vec3) => add3(f1.er, f1.et, f1.ep, v);
+      const fw = unitV(spinToZamo(st, a, b1, gyro[0]!));
+      const upG = spinToZamo(st, a, b1, gyro[1]!);
+      setHolePose(s, X1, w1(fw), w1(unitV(lin(upG, 1, fw, -dot3(upG, fw)))), vel);
+    } else setHolePose(s, X1, w0(cam.fwd), w0(cam.up), vel);
     s.motion = "geodesic";
     this.targetDistance = s.distance;
     return st.t;

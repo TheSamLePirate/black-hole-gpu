@@ -2308,6 +2308,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "attitude rotation speed sas",
   },
   {
+    key: "gyroscopes",
+    type: "toggle",
+    section: "game",
+    group: "Ranger handling",
+    label: "Gyroscopic attitude near the hole",
+    effect: "none",
+    help: "Near Gargantua the ship's axes are carried as gyroscopes are (Fermi–Walker transport): a ship that does not turn precesses against the distant stars — the geodetic precession, 59° a turn on an orbit at 10 M, and the hole's frame dragging. Off: its attitude held on the distant stars.",
+    keywords: "gyroscope fermi walker geodetic precession frame dragging lense thirring attitude relativity",
+  },
+  {
     key: "turnAccel",
     type: "number",
     section: "game",
