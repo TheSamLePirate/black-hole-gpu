@@ -21,7 +21,7 @@ import { attitudeFor, EntryGuidance, type EntryCraft, type EntryResult, type Ent
 import { envOf, type EnvDesc } from "./entry-env";
 import { siteDir, sitesOf, type Site, SITES } from "./game/sites";
 import type { SiteTrack } from "./fc/land-ops";
-import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
+import { elements as kepElements, followDv, fromPNR, propagate as kepProp, type V3 as KV3 } from "./fc/kepler";
 import type { Burn, FcContext, OpResult } from "./fc/ops";
 import { Contrails, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, type ContrailSource } from "./contrails";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kApoapsis, kCircularize, kerrOrbit, kHohmann, kInclination, kMatchPlane, kPeriapsis, kResonant, type KerrOp, type KerrOrbit } from "./fc/kerr-ops";
@@ -245,6 +245,8 @@ export class CameraController {
   private burnDir: Vec3 | null = null;
   private nodeDone = 0;
   private nodeBurning = false;
+  /** our universe: the executing node's Δv [P, N, R] as its burn along the orbital frame delivers it */
+  private burnFollow: Vec3 | null = null;
   /** the prograde hold a mission's cruise set (given back before a burn) */
   private missionHold = false;
   /** the wormhole's side the ship was on (a crossing is said once) */
@@ -1923,6 +1925,7 @@ export class CameraController {
         const press = -dot3(aNow, n) - dot3(vt, vt) / Math.hypot(...sub3(X, P)) + dot3(dvT, n) * (-1 / simDt);
         if (press <= 0 && vn >= 0) {
           this.rolling = null;
+          this.rollSite = null;
           this.onPilotMessage?.(`Airborne · ${(Math.hypot(...vt) * 299792458).toFixed(0)} m/s`);
         } else {
           X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
@@ -1944,6 +1947,7 @@ export class CameraController {
           // (at rest, the engine idle: standing)
           if (Math.hypot(...vr) * 299792458 < 0.05 && this.pilot.throttle <= 0) {
             this.rolling = null;
+            this.rollSite = null;
             this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
             V = gv;
             break;
@@ -2006,6 +2010,8 @@ export class CameraController {
         this.onPilotMessage?.(v > TUNING.crashSpeed ? `Crashed on ${name} at ${v.toFixed(0)} m/s` : `Landed on ${name} · ${v.toFixed(1)} m/s`);
         if (v > TUNING.crashSpeed) this.crashed(`${VESSELS[fleet.active].name}: crashed on ${name} at ${v.toFixed(0)} m/s`);
       }
+      // (the entry's glide down on its runway: the rollout steered along it)
+      this.rollSite = touched.wheels && this.rolling && this.pilot.auto === "entry" && this.entryRun?.site?.runway ? this.entryRun.site : null;
       if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
     }
     if (flown) this.landed = !!this.rolling || !!this.ourLanded;
@@ -2718,6 +2724,7 @@ export class CameraController {
     if (this.rolling) {
       const nav = this.ourNav(cameraFrame(s));
       if (nav) this.groundAttitude(nav.radial);
+      if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw);
     } else if (this.local?.L.rolling) this.groundAttitude(localToZamo(unitV(this.local.L.xi)));
     // (an assembly turns about its centre of mass: the flown craft's centre swings round it)
     if (before) this.turnAboutCom(before, mp.com);
@@ -2941,6 +2948,9 @@ export class CameraController {
     guid: EntryGuidance | null; bank: number; next: number; alpha: number; gPrev: number | null; short: number; handover: number;
     /** the flare's time constant [s], set as it starts */
     flareTau?: number;
+    /** the circuit's side of the runway's axis (+1 its right), kept once chosen; its turn begun */
+    side?: number;
+    turning?: boolean;
     /** a guidance update in the planner's worker */
     pending?: boolean;
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
@@ -3679,33 +3689,70 @@ export class CameraController {
     const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
     const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
     R.gPrev = gam;
-    const onFinal = sAl > -14e3 && Math.abs(xt) < 3e3 && dot3(vh, along) > 0.8;
+    // (the final: within 6 km of the axis, heading down it — the turn onto it at the final's start
+    // leaves the craft a turn's diameter off, ~4 km at 120 m/s: joined from there, not sent back to the
+    // start behind it to turn again, and again)
+    const onFinal = sAl > -16e3 && Math.abs(xt) < 6e3 && dot3(vh, along) > 0.5;
     let bank: number, gRef: number;
     if (!onFinal) {
       // (far enough back: the axis joined — the course turned onto it as the offset closes, atan(xt/L)
-      // off it, L about a turn's radius: no overshoot. Too close or past: to the final's start, turned
-      // there. A glide path to 3.5 km over the final's start along the way still to fly.)
+      // off it, L about a turn's radius: no overshoot. Down the runway but wide: to the final's start.
+      // Against it, closer: a circuit — downwind, a turn's diameter off the axis on the craft's side,
+      // then abeam the final's start the turn towards the axis, rolled out on it. A glide path to
+      // 3.5 km over the final's start along the way still to fly.)
       const L0 = Math.max(6e3, (0.8 * Math.min(sp, 350) ** 2) / (9.81 * Math.tan(0.6)));
       const far = sAl < -(12e3 + 0.5 * Math.abs(xt) + L0);
-      let tdir: Vec3, dGo: number;
+      const dn = dot3(vh, along);
+      let tdir: Vec3 | null = null, dGo: number;
+      bank = 0;
       if (far) {
         const off = Math.min(Math.atan2(Math.abs(xt), L0), 1.4);
         tdir = lin(along, Math.cos(off), rgt, -Math.sign(xt) * Math.sin(off));
         dGo = -12e3 - sAl + 0.5 * Math.abs(xt);
-      } else {
+        R.side = undefined;
+        R.turning = false;
+      } else if (dn >= 0.5) {
         const toA = sub3(lin(T, 1, along, -12e3), x);
         tdir = unitV(lin(toA, 1, up, -dot3(toA, up)));
         // (and the turn onto the axis there: an arc of ~8 km radius)
         dGo = Math.hypot(...lin(toA, 1, up, -dot3(toA, up))) + 8e3 * Math.acos(clamp(dot3(tdir, along), -1, 1));
+        R.side = undefined;
+        R.turning = false;
+      } else {
+        // (the side kept once chosen: the turn crosses nothing, rolled out on the axis)
+        const side = (R.side ??= Math.sign(xt) || 1);
+        const Dd = clamp((2 * sp * sp) / (9.81 * Math.tan(0.6)), 4e3, 8e3);
+        // (turned early when the height left would no longer bring the craft round the turn and down
+        // the final to the runway — a glide ratio of 5.5, the turn's height counted: from a short final)
+        const hNeed = (Math.max(-sAl, 0) + 500 + (Math.PI * Dd) / 2) / 5.5;
+        if (!R.turning && sAl < -3e3 && agl < hNeed) R.turning = true;
+        if (sAl > -12e3 && !R.turning) {
+          // downwind: the line a turn's diameter off the axis joined (atan(e / 3 km), 40° at most)
+          const e = xt - side * Dd;
+          const off = Math.min(Math.atan2(Math.abs(e), 3000), 0.7);
+          tdir = lin(along, -Math.cos(off), rgt, -Math.sign(e) * Math.sin(off));
+          dGo = sAl + 12e3 + 0.5 * Math.abs(e) + (Math.PI * Dd) / 2;
+        } else {
+          // abeam the final's start (or sooner, low): the turn towards the axis, all the way round
+          R.turning = true;
+          bank = 0.6 * side;
+          dGo = (Math.acos(clamp(dn, -1, 1)) * Dd) / 2;
+        }
       }
-      const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
-      bank = clamp(1.4 * dpsi, -0.6, 0.6);
+      if (tdir) {
+        const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
+        bank = clamp(1.4 * dpsi, -0.6, 0.6);
+      }
       gRef = clamp(-Math.atan2(Math.max(agl - 3500, 0), Math.max(dGo, 1500)), -0.35, -0.035);
     } else {
-      // (the final: the axis held, steep to 300 m, then the flare)
-      const xdot = dot3(va, rgt);
+      R.side = undefined;
+      R.turning = false;
+      // (the final: the axis joined — the course to it atan(xt / 3 km) off the runway's, 40° at most:
+      // the offset closed in ~20 s once near, a turn's width away from it in ~40 —, held; steep to
+      // 300 m, then the flare)
       const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
-      bank = clamp(-0.00025 * xt - 0.012 * xdot - 1.2 * dpsi, -0.5, 0.5) * (agl < 60 ? agl / 60 : 1);
+      const want = -Math.min(Math.max(Math.atan2(xt, 3000), -0.7), 0.7);
+      bank = clamp(-1.2 * (dpsi - want), -0.5, 0.5) * (agl < 60 ? agl / 60 : 1);
       const toAim = Math.max(-(sAl + 2000), 300);
       gRef = flareRef(R, agl, clamp(-Math.atan2(agl, toAim), -0.33, -0.05), sp, gam);
     }
@@ -3736,6 +3783,51 @@ export class CameraController {
    * runway) — the pilot's turns in roll, and in pitch past those, stopped. `up`: the ground's normal,
    * camera-local components.
    */
+  /** The runway an autopilot's landing rolls out on (its nose wheel steered along it), until stopped. */
+  private rollSite: Site | null = null;
+
+  /**
+   * The rollout after an autopilot's landing: the nose wheel steered along the runway — the course back
+   * to its axis atan(xt / 150 m), 8° at most —, 4° a second at most; the pilot's yaw takes it over.
+   */
+  private rolloutSteer(upL: Vec3, dt: number, yawIn: number) {
+    const site = this.rollSite;
+    const cam = cameraFrame(this.s);
+    const fr = site ? this.entryFrame(cam) : null;
+    if (!site || !fr || Math.abs(yawIn) > 0.05) {
+      this.rollSite = null;
+      return;
+    }
+    const D = Math.PI / 180;
+    const T = fr.place(site);
+    const tu = unitV(T);
+    const pole = unitV(spinAxis(fr.body));
+    const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
+    const east = cross(north, tu);
+    const hd = (site.rwy ?? 0) * D;
+    const along = lin(north, Math.cos(hd), east, Math.sin(hd));
+    const rgt = cross(along, tu);
+    const xt = dot3(sub3(fr.s.x, T), rgt);
+    const w = clamp(Math.atan2(xt, 150), -8 * D, 8 * D);
+    const want = lin(along, Math.cos(w), rgt, -Math.sin(w));
+    const toC = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
+    const U = unitV(toC(upL)), W0 = toC(fr.toLocal(want));
+    const W = unitV(lin(W0, 1, U, -dot3(W0, U)));
+    const S = this.shipMatrix();
+    const Z: Vec3 = [S[0][2]!, S[1][2]!, S[2][2]!];
+    const Zh = unitV(lin(Z, 1, U, -dot3(Z, U)));
+    const a = Math.atan2(dot3(cross(Zh, W), U), dot3(Zh, W));
+    // (rolling backwards or across: not a rollout)
+    if (Math.abs(a) > 60 * D) {
+      this.rollSite = null;
+      return;
+    }
+    const simS = this.s.timeSpeed * dt * 4.925490947e-6 * this.s.massSolar;
+    const step = clamp(a, -4 * D * simS, 4 * D * simS);
+    if (Math.abs(step) > 1e-7) this.rotateC(lin(U, step, U, 0));
+    this.pilot.omega[1] = 0;
+  }
+
   private groundAttitude(up: Vec3) {
     const cam = cameraFrame(this.s);
     const toC = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
@@ -5276,7 +5368,7 @@ export class CameraController {
       let nodes = P.nodes.filter((n) => n.t > nav.t - 1e-6);
       if (this.nodeBurning && this.pilot.auto === "node" && nodes[0]) {
         const n0 = nodes[0];
-        const total = Math.hypot(...n0.dv);
+        const total = Math.hypot(...(this.burnFollow ?? n0.dv));
         const left = Math.max(0, total - this.nodeDone);
         nodes = [{ ...n0, t: nav.t, dv: lin(n0.dv, left / Math.max(total, 1e-15), n0.dv, 0) }, ...nodes.slice(1)];
       }
@@ -5373,6 +5465,7 @@ export class CameraController {
     this.nodeBurning = false;
     this.nodeDone = 0;
     this.burnDir = null;
+    this.burnFollow = null;
   }
 
   /** A goal burn's direction (local): along the velocity still to gain to a circle, or its sense. */
@@ -5447,7 +5540,10 @@ export class CameraController {
       return null;
     }
     if (this.userWarp === null) this.userWarp = s.timeSpeed;
-    const total = Math.hypot(...node.dv);
+    // (our universe: the burn follows the orbital frame — the node's impulse as that burn delivers it,
+    // a turn of the velocity flown as its arc (fc/kepler.ts followDv); fixed as the burn starts)
+    const ndv: Vec3 = nav ? (this.nodeBurning && this.burnFollow ? this.burnFollow : followDv(node.dv as KV3, Math.hypot(...sub3(nav.V, nav.refVel)))) : node.dv;
+    const total = Math.hypot(...ndv);
     const left = Math.max(0, total - this.nodeDone);
     // (the burn keeps the direction it had when it started: fixed in the local frame, not turning
     // with the velocity it changes)
@@ -5457,7 +5553,7 @@ export class CameraController {
     // (a goal burn about the hole follows the prograde — or the retrograde —, as its estimate has it)
     const follow = s.engine === "crew" || !!nav || (!!node.goal && !nav);
     const dir = this.nodeBurning && this.burnDir && !follow ? this.burnDir
-      : nav ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, node.dv)) : node.goal ? this.goalDir(node, cam, total) : dvLocal(cam.beta, node.dv);
+      : nav ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, ndv)) : node.goal ? this.goalDir(node, cam, total) : dvLocal(cam.beta, node.dv);
     const dl = Math.hypot(...dir) || 1;
     const aMax = Math.max(this.thrustMax(), 1e-9);
     const burnT = total / aMax / Math.max(dtau, 1e-3); // coordinate duration of the whole burn
@@ -5470,6 +5566,7 @@ export class CameraController {
       this.missionHold = false;
       this.nodeBurning = true;
       this.burnDir = lin(dir, 1 / dl, dir, 0);
+      this.burnFollow = nav ? ndv : null;
     }
     // (a goal burn about the hole: what is left is what the path still needs — re-estimated a few
     // times a second)
@@ -5523,6 +5620,7 @@ export class CameraController {
         this.nodeDone = 0;
         this.nodeBurning = false;
         this.burnDir = null;
+        this.burnFollow = null;
         // (a circularization a long burn left off its radius: a Hohmann's correction, its burns short)
         const g = node.goal;
         if (g && "circ" in g && g.trim && !P.nodes.length && !nav) {
@@ -7720,7 +7818,8 @@ const unitV = (a: Vec3): Vec3 => {
  */
 function flareRef(R: { flareTau?: number }, agl: number, steep: number, sp: number, gam: number): number {
   const sink = -sp * Math.sin(gam);
-  const tau = R.flareTau ?? clamp(sink / 8, 3, 8);
+  // (begun at tau × the sink: from a steep final's ~35 m/s some 230 m up — the pull-up within reach)
+  const tau = R.flareTau ?? clamp(sink / 5, 4, 7);
   if (R.flareTau === undefined && agl <= Math.max(tau * sink, 40)) R.flareTau = tau;
   else if (R.flareTau !== undefined && agl > 2 * Math.max(tau * sink, 40) + 100) R.flareTau = undefined;
   if (R.flareTau === undefined) return steep;

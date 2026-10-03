@@ -260,5 +260,21 @@ export function fromPNR(r: V3, v: V3, c: V3): V3 {
   return add(add(scale(P, c[0]), N, c[1]), R, c[2]);
 }
 
+/**
+ * An impulsive Δv [P, N, R] at speed v as a burn flown along the orbital frame must deliver it — the
+ * frame turning with the velocity the burn changes (our universe's node autopilot): its prograde part the
+ * change of speed |v + Δv| − v, its normal and radial parts the turn of the velocity — the arc at the
+ * burn's mean speed, not the chord. The same Δv when small; a plane change of 25° otherwise would take 9 %
+ * of the speed off along the prograde, the chord's — the orbit dropped into the air.
+ */
+export function followDv(dv: V3, v: number): V3 {
+  const p = v + dv[0];
+  const side = Math.hypot(dv[1], dv[2]);
+  if (!(v > 0) || p <= 0 || side <= 1e-12 * v) return dv;
+  const s = Math.hypot(p, side);
+  const arc = (Math.atan2(side, p) * (v + s)) / 2;
+  return [s - v, (dv[1] / side) * arc, (dv[2] / side) * arc];
+}
+
 /** Vis-viva: the speed at r on an orbit of semi-major axis a. */
 export const visViva = (mu: number, r: number, a: number) => Math.sqrt(Math.max(mu * (2 / r - 1 / a), 0));

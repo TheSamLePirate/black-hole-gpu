@@ -11,9 +11,10 @@
 // kept) into the plane through r_b and the site where the site will be when the craft gets there — the
 // arrival found by iterating the angle flown in the new plane (and whole turns more: the arrival a few
 // orbits later, the body having turned the site under it). Every burn point along the next orbit and
-// every arrival within the span: the cheapest kept. Δv = 2 v_t sin(Δi / 2).
+// every arrival within the span: the cheapest kept — Δv = 2 v_t sin(Δi / 2) the impulse, v_t Δi as the
+// autopilot flies it (along the turning orbital frame: kepler.ts followDv).
 
-import { add, cross, dot, elements, len, propagate, scale, toPNR, unit, type V3 } from "./kepler";
+import { add, cross, dot, elements, followDv, len, propagate, scale, toPNR, unit, type V3 } from "./kepler";
 import type { FcContext, OpResult } from "./ops";
 
 /** A site to come down on, as the computer sees it. */
@@ -47,11 +48,12 @@ const km = (m: number) => (m >= 1e4 ? `${Math.round(m / 1e3).toLocaleString("en-
  * The passes near a site over the coming orbits (span: so many of them, 16 — about a day in a low Earth
  * orbit): each one's time, its distance across, its sense; the orbit sampled a few hundred times a turn
  * (Kepler), each pass's closest point refined (a golden-section search between the samples about it). None on
- * an unbound orbit.
+ * an unbound orbit, nor one through the ground.
  */
 export function sitePasses(c: FcContext, site: SiteTrack, o: { orbits?: number; perOrbit?: number } = {}): Pass[] {
   const el = elements(c.mu, c.r, c.v, c.pole ?? [0, 0, 1]);
-  if (!(el.e < 1) || !Number.isFinite(el.T)) return [];
+  // (none on an orbit through the ground: on it, or in the air — a fall, not passes)
+  if (!(el.e < 1) || !Number.isFinite(el.T) || el.rp < c.R) return [];
   const per = o.perOrbit ?? 180;
   const N = Math.ceil((o.orbits ?? 16) * per);
   const h = el.T / per;
@@ -163,5 +165,7 @@ export function alignOverSite(c: FcContext, site: SiteTrack, o: { orbits?: numbe
   const hit = passes.reduce<Pass | null>((a, p) => (!a || Math.abs(p.t - best!.ta) < Math.abs(a.t - best!.ta) ? p : a), null);
   const pre = already ? `In reach already (a pass in ${fmt(already.t)}, ${km(already.across)} off) — this lines it up: ` : "";
   const note = `${pre}over ${site.name}: the plane turned ${((best.di * 180) / Math.PI).toFixed(2)}° in ${fmt(best.tb)}, the pass over it in ${fmt(hit?.t ?? best.ta)}${hit ? `, ${km(hit.across)} off` : ""}`;
-  return { ok: true, note, burns, dvTotal: best.dv, after: elements(c.mu, best.r, best.vNew, c.pole ?? [0, 0, 1]) };
+  // (the cost as the autopilot flies it: the velocity turned along the orbital frame — the arc v·Δi,
+  // a little more than the chord)
+  return { ok: true, note, burns, dvTotal: len(followDv(burns[0]!.dv, len(best.v))), after: elements(c.mu, best.r, best.vNew, c.pole ?? [0, 0, 1]) };
 }

@@ -203,6 +203,7 @@ export class FlightComputer {
     this.body.replaceChildren();
     this.result.replaceChildren();
     this.pending = null;
+    this.landRefresh = null;
     this.host.preview(null, "");
     const k = this.host.kerr();
     if (k && t !== "land" && t !== "mission") return this.buildKerr(t);
@@ -389,6 +390,10 @@ export class FlightComputer {
    * (previewed, then flown as a burn); the entry autopilot (deorbit, entry, landing) and the landing
    * where the craft is.
    */
+  /** the LAND tab's passes redone in place (its sites' lines, the chosen one's card) */
+  private landRefresh: (() => void) | null = null;
+  private landAt = 0;
+
   private buildLand() {
     const sites = this.host.sites();
     const cur = this.host.site();
@@ -397,30 +402,37 @@ export class FlightComputer {
       this.body.append(h("div", "fc-empty", "No landing site on this body for the guided entry — a world with ground and its sites (Earth, Mars, the Moon, Titan, Miller, Mann, Edmunds)"));
       return;
     }
-    // each site's passes over the coming day of orbits (the body turning under the orbit)
-    const info = sites.map((st) => {
+    // each site's passes over the coming day of orbits (the body turning under the orbit) — redone every
+    // two seconds while the tab is open (the countdowns, the orbit changed by a burn)
+    const passesOf = () => sites.map((st) => {
       const tr = this.host.siteTrack(st);
       const c = this.host.context();
       const passes = tr && c ? sitePasses(c.ctx, tr, { orbits: 16, perOrbit: 120 }) : [];
       return { st, tr, passes, first: tr ? firstReachable(passes, tr.reach) : null, closest: passes.length ? Math.min(...passes.map((p) => p.across)) : NaN };
     });
+    const info = passesOf();
     const reach = info.find((x) => x.tr)?.tr?.reach;
     if (reach) this.body.append(h("div", "fc-tgt", `Reach across the track: ${km(reach)} (the entry's lift) · passes over the next 16 orbits`));
     const status = (x: (typeof info)[number]) =>
       !x.passes.length ? `<i class="fc-dim">no orbit to pass over it</i>` : x.first ? `<i class="fc-okc">▸ pass in ${dur(x.first.t)} · ${km(x.first.across)} off</i>` : `<i class="fc-warnc">out of reach · closest ${km(x.closest)}</i>`;
+    const nearest = (inf: typeof info) => {
+      const soonest = inf.filter((x) => x.first).sort((a, b) => a.first!.t - b.first!.t)[0];
+      return `the site the orbit passes nearest${soonest ? ` — now ${soonest.st.name.split(",")[0]}` : ""}`;
+    };
     const list = h("div", "fc-sites");
     const auto = h("button", "fc-site" + (!cur ? " on" : ""));
-    const soonest = info.filter((x) => x.first).sort((a, b) => a.first!.t - b.first!.t)[0];
-    auto.innerHTML = `<b>Nearest</b><small>the site the orbit passes nearest${soonest ? ` — now ${soonest.st.name.split(",")[0]}` : ""}</small>`;
+    auto.innerHTML = `<b>Nearest</b><small>${nearest(info)}</small>`;
     auto.onclick = () => {
       this.host.setSite(null);
       this.setTab("land");
     };
     list.append(auto);
+    const lines: HTMLElement[] = [];
     for (const x of info) {
       const s = x.st;
       const b = h("button", "fc-site" + (cur && cur.name === s.name ? " on" : ""));
       b.innerHTML = `<b>${s.name}</b><small>${Math.abs(s.lat).toFixed(2)}° ${s.lat >= 0 ? "N" : "S"} · ${Math.abs(s.lon).toFixed(2)}° ${s.lon >= 0 ? "E" : "W"}${s.runway ? ` · runway ${String(Math.round((s.rwy ?? 0) / 10) % 36 || 36).padStart(2, "0")}` : ""}</small><small>${status(x)}</small>`;
+      lines.push(b.lastElementChild as HTMLElement);
       b.onclick = () => {
         this.host.setSite(s);
         this.setTab("land");
@@ -434,14 +446,25 @@ export class FlightComputer {
       const card = h("div", "fc-card");
       card.append(h("div", "fc-card-t", `${sel.st.name.split(",")[0]} — the next passes`));
       const tab = h("table", "fc-burns");
-      const rows = sel.passes.slice(0, 5);
-      tab.innerHTML = `<tr><th>in</th><th>across</th><th>going</th><th></th></tr>` + rows.map((p: Pass) => `<tr><td>${dur(p.t)}</td><td>${km(p.across)}</td><td>${p.north ? "north" : "south"}</td><td>${p.across <= sel.tr!.reach ? `<b class="fc-okc">in reach</b>` : `<span class="fc-warnc">out</span>`}</td></tr>`).join("");
-      card.append(tab);
-      if (!rows.length) card.append(h("div", "fc-after", "No pass: the craft is not on a closed orbit about this world"));
+      const none = h("div", "fc-after", "No pass: the craft is not on a closed orbit about this world");
+      const table = (x: (typeof info)[number]) => {
+        const rows = x.passes.slice(0, 5);
+        tab.innerHTML = `<tr><th>in</th><th>across</th><th>going</th><th></th></tr>` + rows.map((p: Pass) => `<tr><td>${dur(p.t)}</td><td>${km(p.across)}</td><td>${p.north ? "north" : "south"}</td><td>${p.across <= x.tr!.reach ? `<b class="fc-okc">in reach</b>` : `<span class="fc-warnc">out</span>`}</td></tr>`).join("");
+        none.hidden = rows.length > 0;
+      };
+      table(sel);
+      card.append(tab, none);
       this.body.append(card);
+      this.landRefresh = () => {
+        const inf = passesOf();
+        auto.lastElementChild!.textContent = nearest(inf);
+        inf.forEach((x, i) => (lines[i]!.innerHTML = status(x)));
+        const y = inf.find((x) => x.st.name === sel.st.name);
+        if (y && y.tr) table(y);
+      };
       this.op(
         "Align the orbit over the site",
-        `A plane change that puts a pass right over ${sel.st.name.split(",")[0]} within a day — the burn's point along the next orbit and the arrival chosen for the least Δv (2 v sin Δi/2); then the entry finds that pass`,
+        `A plane change that puts a pass right over ${sel.st.name.split(",")[0]} within a day — the burn's point along the next orbit and the arrival chosen for the least Δv (v Δi, the velocity turned); then the entry finds that pass`,
         [],
         () => {
           const c = this.host.context();
@@ -451,7 +474,14 @@ export class FlightComputer {
           return alignOverSite(c.ctx, sel.tr!, { orbits: 16, lead: 90 + (a > 0 ? Math.min(1500 / a, 1800) : 120) });
         },
       );
-    } else this.body.append(h("div", "fc-empty", "Choose a site above: its passes, and the plane change that puts one over it"));
+    } else {
+      this.body.append(h("div", "fc-empty", "Choose a site above: its passes, and the plane change that puts one over it"));
+      this.landRefresh = () => {
+        const inf = passesOf();
+        auto.lastElementChild!.textContent = nearest(inf);
+        inf.forEach((x, i) => (lines[i]!.innerHTML = status(x)));
+      };
+    }
     this.autoOp("entry", "Deorbit, entry & landing", "From orbit: the burn timed and sized for the site (its pass with the least crossrange), the guided entry — the angle of attack held, the bank flown — then the glide and the landing (the Ranger), or the engines' (the Lander) — the hub's ENTRY");
     this.autoOp("land", "Land here", "Down where the ship is: the descent rate held, the sideways speed killed, the touchdown — the hub's LAND");
   }
@@ -733,6 +763,10 @@ export class FlightComputer {
     if (sig !== this.sig) {
       this.sig = sig;
       this.setTab(this.tab);
+    }
+    if (this.tab === "land" && this.landRefresh && now - this.landAt > 2000) {
+      this.landAt = now;
+      this.landRefresh();
     }
     this.ctxLine.textContent = c ? `${c.bodyName}${c.targetName ? ` · target ${c.targetName}` : ""}` : k ? "Gargantua · Kerr geodesics" : "far from any body";
     const E = this.infoEls;
