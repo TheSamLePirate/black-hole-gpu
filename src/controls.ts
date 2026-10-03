@@ -160,6 +160,19 @@ export interface RunwayView {
   final: boolean;
 }
 
+/** The hub's card (CameraController.hubInfo): the autopilot, what it does now, its figures, its prediction. */
+export interface HubInfo {
+  /** the hub's own autopilot (CIRC's node: "circularize") */
+  mode: string;
+  title: string;
+  phase: string;
+  rows: [string, string][];
+  /** what it predicts ("→ …"), or null */
+  next: string | null;
+  /** the phase's progress 0…1, or null */
+  bar: number | null;
+}
+
 /** The future as the eye sees it (CameraController.futureView): directions in camera coordinates. */
 export interface FutureView {
   pts: { d: Vec3; r: number; t: number; hid: boolean }[];
@@ -2959,6 +2972,8 @@ export class CameraController {
     /** the circuit's side of the runway's axis (+1 its right), kept once chosen; its turn begun */
     side?: number;
     turning?: boolean;
+    /** the approach's leg: joining the axis from far back, to the final's start, downwind, the turn, the final */
+    leg?: "join" | "toStart" | "downwind" | "turn" | "final";
     /** a guidance update in the planner's worker */
     pending?: boolean;
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
@@ -3720,6 +3735,7 @@ export class CameraController {
         dGo = -12e3 - sAl + 0.5 * Math.abs(xt);
         R.side = undefined;
         R.turning = false;
+        R.leg = "join";
       } else if (dn >= 0.5) {
         const toA = sub3(lin(T, 1, along, -12e3), x);
         tdir = unitV(lin(toA, 1, up, -dot3(toA, up)));
@@ -3727,6 +3743,7 @@ export class CameraController {
         dGo = Math.hypot(...lin(toA, 1, up, -dot3(toA, up))) + 8e3 * Math.acos(clamp(dot3(tdir, along), -1, 1));
         R.side = undefined;
         R.turning = false;
+        R.leg = "toStart";
       } else {
         // (the side kept once chosen: the turn crosses nothing, rolled out on the axis)
         const side = (R.side ??= Math.sign(xt) || 1);
@@ -3735,6 +3752,7 @@ export class CameraController {
         // the final to the runway — a glide ratio of 5.5, the turn's height counted: from a short final)
         const hNeed = (Math.max(-sAl, 0) + 500 + (Math.PI * Dd) / 2) / 5.5;
         if (!R.turning && sAl < -3e3 && agl < hNeed) R.turning = true;
+        R.leg = sAl > -12e3 && !R.turning ? "downwind" : "turn";
         if (sAl > -12e3 && !R.turning) {
           // downwind: the line a turn's diameter off the axis joined (atan(e / 3 km), 40° at most)
           const e = xt - side * Dd;
@@ -3756,6 +3774,7 @@ export class CameraController {
     } else {
       R.side = undefined;
       R.turning = false;
+      R.leg = "final";
       // (the final: the axis joined — the course to it atan(xt / 3 km) off the runway's, 40° at most:
       // the offset closed in ~20 s once near, a turn's width away from it in ~40 —, held; steep to
       // 300 m, then the flare)
@@ -6707,6 +6726,7 @@ export class CameraController {
       const ref = byMouth ? { pos: [0, 0, 0] as Vec3, vel: [0, 0, 0] as Vec3 } : ourState(nav.ref, t);
       if (!this.ourAnchor || this.ourAnchor.ref !== refId) this.ourAnchor = { ref: refId, d: sub3(nav.X, ref.pos) };
       const back = sub3(lin(ref.pos, 1, this.ourAnchor.d, 1), nav.X);
+      this.hubNote = { off: Math.hypot(...back) * M_METRES, drift: Math.hypot(...sub3(nav.V, ref.vel)) * 299792458 };
       const k = Math.min(1 / (4 * T), 0.3 * Math.sqrt(thr / Math.max(Math.hypot(...back), 1e-15)));
       return out(lin(ref.vel, 1, back, k), lin(g.acc, -1, g.acc, 0));
     }
@@ -6773,6 +6793,7 @@ export class CameraController {
     // the warp: an arrival in ~8 s (the rails still hold it near bodies); the pilot's wish kept
     // (no Zeno ending: the last twentieth of the stand-off at the pace of a braking over it)
     const ttg = (Math.abs(left) + 0.05 * stand) / Math.max(Math.abs(closing), vClose * 0.5, Math.sqrt(2 * 0.6 * thr * 0.05 * stand), 1e-12);
+    this.hubNote = { left: left * M_METRES, closing: -closing * 299792458, ttg: ttg * 4.925490947e-6 * s.massSolar, stand: stand * M_METRES, name: BODY_NAMES[tgt] ?? tgt };
     if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
     s.timeSpeed = Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5);
     let want = lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left)));
@@ -6905,6 +6926,147 @@ export class CameraController {
   }
 
   private ourOrbitR: { body: string; r: number } | null = null;
+
+  /** what the autopilots measured as they flew (our universe): the approach's, the hold's */
+  private hubNote: { left?: number; closing?: number; ttg?: number; stand?: number; name?: string; off?: number; drift?: number } = {};
+  private hubCache: { at: number; v: HubInfo | null } | null = null;
+
+  /**
+   * The hub's card: the autopilot flying, what it does now, its figures, and what it predicts — the
+   * orbit after its burn, the deorbit's heat and load, the touchdown, the arrival. Redone 4 times a
+   * second at most. Null: no autopilot.
+   */
+  hubInfo(): HubInfo | null {
+    const now = performance.now();
+    if (this.hubCache && now - this.hubCache.at < 250) return this.hubCache.v;
+    let v: HubInfo | null = null;
+    try {
+      v = this.hubCompute();
+    } catch {
+      v = null;
+    }
+    this.hubCache = { at: now, v };
+    return v;
+  }
+
+  private hubCompute(): HubInfo | null {
+    const P = this.pilot, a = P.auto, s = this.s;
+    if (a === "none") return null;
+    const C = 299792458;
+    const Msec = 4.925490947e-6 * s.massSolar;
+    const km = (m: number) => (!Number.isFinite(m) ? "∞" : Math.abs(m) >= 1e5 ? `${Math.round(m / 1e3).toLocaleString("en-US")} km` : Math.abs(m) >= 1e3 ? `${(m / 1e3).toFixed(1)} km` : `${Math.round(m)} m`);
+    const ms = (x: number) => (!Number.isFinite(x) ? "—" : Math.abs(x) >= 1e4 ? `${(x / 1e3).toFixed(2)} km/s` : `${x.toFixed(Math.abs(x) < 10 ? 1 : 0)} m/s`);
+    const dur = (x: number) => (!Number.isFinite(x) ? "—" : x < 0 ? "now" : fmtDur(x));
+    const fc = this.fcContext();
+    const orbitOf = (r: KV3, v: KV3) => {
+      if (!fc) return "";
+      const e = kepElements(fc.ctx.mu, r, v, fc.ctx.pole ?? [0, 0, 1]);
+      const R = fc.ctx.R;
+      return e.e < 1 ? `${km(e.rp - R)} × ${km(e.ra - R)}` : `escape · Pe ${km(e.rp - R)}`;
+    };
+    const base = (title: string, phase: string, rows: [string, string][] = [], next: string | null = null, bar: number | null = null): HubInfo => ({ mode: a, title, phase, rows, next, bar });
+    // a burn planned and flown (the node autopilot; CIRC's own burn)
+    if (a === "node" || a === "burns") {
+      const pl = this.fcPlan();
+      const b = pl?.burns[0];
+      if (!pl || !b) return base("NODE", "no burn left");
+      const circ = !!this.ourCirc;
+      const dv = Math.hypot(...b.dv);
+      const thrSI = this.thrustMax() * (C ** 2 / (1476.625 * s.massSolar));
+      const burnT = thrSI > 0 ? dv / thrSI : NaN;
+      const doneM = a === "node" ? this.nodeDone * C : this.fcBurns[0]?.done ?? 0;
+      const burning = a === "node" ? this.nodeBurning : !!this.fcBurns[0]?.firing;
+      const start = b.t - burnT / 2;
+      let next: string | null = null;
+      if (fc) {
+        // (after the burn, impulsive: the orbit it leaves)
+        const at = kepProp(fc.ctx.mu, fc.ctx.r, fc.ctx.v, Math.max(b.t, 0));
+        const d = fromPNR(at.r, at.v, b.dv as KV3);
+        const v2 = burning ? fc.ctx.v : ([at.v[0] + d[0], at.v[1] + d[1], at.v[2] + d[2]] as KV3);
+        next = circ && this.ourCirc?.altKm !== undefined ? `→ circular at ${this.ourCirc.altKm.toFixed(0)} km` : burning ? null : `→ ${orbitOf(at.r, v2)}`;
+      }
+      const where = circ ? (this.ourCirc?.where === "pe" ? "the periapsis" : "the apoapsis") : pl.burns.length > 1 ? `burn 1 of ${pl.burns.length}` : "the burn";
+      const phase = burning ? "burning" : start > 120 ? `coasting to ${where}, the time sped up` : `turning to ${where}`;
+      const rows: [string, string][] = burning
+        ? [["Δv left", ms(Math.max(dv - doneM, 0))], ["Burn", `${dur(Math.max(dv - doneM, 0) / Math.max(thrSI, 1e-9))} left`]]
+        : [["Burn in", dur(start)], ["Δv", ms(dv)], ["Length", dur(burnT)]];
+      return { mode: circ ? "circularize" : a, title: circ ? "CIRC" : "NODE", phase, rows, next, bar: burning ? Math.min(doneM / Math.max(dv, 1e-9), 1) : null };
+    }
+    if (a === "circularize") {
+      if (fc && this.ourCirc) {
+        const r = fc.ctx.r, v = fc.ctx.v;
+        const rl = Math.hypot(...r);
+        const up = r.map((x) => x / rl) as KV3;
+        const vr = v[0] * up[0] + v[1] * up[1] + v[2] * up[2];
+        const vh = v.map((x, i) => x - vr * up[i]!) as KV3;
+        const vc = Math.sqrt(fc.ctx.mu / rl);
+        const err = Math.hypot(...vh.map((x, i) => x - (vc * x) / Math.hypot(...vh)), vr) || 0;
+        return base("CIRC", "trimming to the circle", [["Error", ms(err)], ["Orbit", orbitOf(r, v)]], `→ circular at ${km(rl - fc.ctx.R)}`);
+      }
+      return base("CIRC", fc?.universe === "ours" ? "planning the burn" : "closing on the circular velocity");
+    }
+    if (a === "entry") {
+      const R = this.entryRun;
+      const site = R?.site ? R.site.name.split(",")[0]! : "the nearest site";
+      if (!R) return base("ENTRY", "starting");
+      if (R.phase === "plan") return base("ENTRY", `planning the deorbit to ${site}`);
+      const nowS = this.nowTime() * Msec;
+      const heat = R.plan ? `→ then ${(R.plan.heat / 1e4).toFixed(0)} W/cm² · ${R.plan.g.toFixed(1)} g · shield ${Math.round(R.plan.shield)} K, down at ${site}` : `→ down at ${site}`;
+      if (R.phase === "wait") return base("ENTRY", "coasting to the deorbit burn, the time sped up", [["Burn in", dur(R.tBurn - nowS)], ["Δv", ms(R.dv)], ["Site", site]], heat);
+      if (R.phase === "burn") return base("ENTRY", "the deorbit burn, retrograde", [["Δv", `${R.done.toFixed(0)} / ${R.dv.toFixed(0)} m/s`], ["Site", site]], heat, Math.min(R.done / Math.max(R.dv, 1e-9), 1));
+      const LA = this.airFlight.last;
+      if (R.phase === "entry") {
+        const miss = R.guid?.lastMiss;
+        const rows: [string, string][] = [["Site", site]];
+        if (LA) rows.push(["Mach", LA.out.mach.toFixed(1)], ["Height", km(LA.h)]);
+        rows.push(["Bank", `${Math.round((R.bank * 180) / Math.PI)}°`]);
+        return base("ENTRY", LA && LA.out.q > 50 ? "the guided entry — the bank flown to the site" : "falling to the air", rows, miss ? `→ hand-over ${km(miss.dist)} from its aim (Mach ${R.handover})` : heat);
+      }
+      // the glide
+      const app = R.app;
+      const legs: Record<string, string> = { join: "joining the runway's axis", toStart: "to the final's start", downwind: "downwind", turn: "turning onto the final", final: "on the final" };
+      const profs: Record<string, string> = { outer: "the steep slope", preflare: "the pull-up", inner: "the shallow slope", flare: "the flare", rollout: "the touchdown" };
+      const phase = R.leg === "final" && R.prof ? `${legs.final} — ${profs[R.prof.phase]}` : legs[R.leg ?? "join"] ?? "gliding";
+      const rows: [string, string][] = [["Site", site]];
+      if (app) {
+        rows.push(["To the threshold", km(Math.hypot(app.along, app.across))], ["Height", km(app.agl)], ["Speed", ms(app.speed)]);
+        if (R.prof && R.leg === "final") rows.push(["Profile", `${app.agl - R.prof.h >= 0 ? "+" : "−"}${Math.abs(Math.round(app.agl - R.prof.h))} m`]);
+      }
+      const td = R.prof?.td ?? LANDING.td;
+      const tGo = app ? (td - app.along) / Math.max(app.speed * 0.85, 1) : NaN;
+      return base("ENTRY", phase, rows, app ? `→ touchdown ${td} m past the threshold${R.leg === "final" && Number.isFinite(tGo) && tGo > 0 ? ` in ~${dur(tGo)}` : ""}` : null);
+    }
+    const sf = this.surfaceInfo() as { alt?: number; vVert?: number; vHor?: number; landed?: boolean } | null;
+    if (a === "land") {
+      if (!sf || sf.alt === undefined) return base("LAND", "descending");
+      const vs = sf.vVert ?? 0;
+      const t = sf.alt / Math.max(-vs, 0.5);
+      return base("LAND", sf.landed ? "down" : (sf.vHor ?? 0) > 2 ? "killing the sideways speed, descending" : sf.alt < 30 ? "the touchdown" : "descending", [["Height", km(sf.alt)], ["V/S", ms(vs)], ["Sideways", ms(sf.vHor ?? 0)]], sf.landed ? null : `→ touchdown in ~${dur(t)}, at ~1.5 m/s`);
+    }
+    if (a === "takeoff") {
+      const LG = this.launchGoal;
+      const rows: [string, string][] = [];
+      // (the height it climbs to: the one asked, else clear of the air — 1.5 × its top — or 3 % of the radius)
+      const Rkm = fc ? fc.ctx.R / 1e3 : 0;
+      const goal = LG.altKm ?? Math.round(Math.max(1.5 * airTopKm(fc?.body ?? ""), 0.03 * Rkm));
+      let next: string | null = `→ up to ~${goal} km, then CIRC at the apoapsis`;
+      if (fc) {
+        const e = kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]);
+        const rl = Math.hypot(...fc.ctx.r);
+        rows.push(["Height", km(rl - fc.ctx.R)], ["Apoapsis", e.e < 1 ? km(e.ra - fc.ctx.R) : "escape"], ["Speed", `${Math.round((100 * Math.hypot(...fc.ctx.v)) / Math.sqrt(fc.ctx.mu / rl))} % of circular`]);
+        if (e.rp > fc.ctx.R) next = `→ in orbit: ${km(e.rp - fc.ctx.R)} × ${km(e.ra - fc.ctx.R)}`;
+      }
+      const thick = !!sf && (sf.alt ?? 0) < airTopKm(fc?.body ?? "") * 1e3 * 0.4;
+      return base("TAKE OFF", thick ? "climbing through the thick air" : "the gravity turn, to orbit", rows, next);
+    }
+    const N = this.hubNote;
+    if (a === "approach" && N.left !== undefined) {
+      return base("APPROACH", N.left > 0 ? `closing on ${N.name}` : `backing off to the stand-off`, [["To the stand-off", km(N.left)], ["Closing", ms(N.closing ?? 0)]], `→ beside ${N.name} (${km(N.stand ?? 0)} off) in ~${dur(N.ttg ?? NaN)}`);
+    }
+    if (a === "hover" && N.off !== undefined) return base("HOLD POS", "holding the place", [["Off it", km(N.off)], ["Drift", ms(N.drift ?? 0)]]);
+    if (a === "dock") return base("DOCK", this.dockAuto?.phase ?? "docking");
+    return base(AUTO_NAMES[a].toUpperCase(), "flying");
+  }
 
   /**
    * Our universe's circularization, its run: engaged by the pilot, a burn at the next apsis above the
@@ -7272,6 +7434,8 @@ export class CameraController {
       // (about one of Gargantua's worlds: the ground tracks, free and previewed, on its turning axes)
       localGround: this.local ? { ahead: this.localGround, cand: this.fcCand?.local?.rot ?? null, plan: this.localPlanNow()?.rot ?? null } : null,
       localPlan: this.localPlanNow(),
+      /** the hub's card: the autopilot flying, its phase, figures, prediction */
+      hub: this.hubInfo(),
     };
     if (cam.region === "hole") {
       const st = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());

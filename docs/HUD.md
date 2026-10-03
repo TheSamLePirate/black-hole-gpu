@@ -65,6 +65,24 @@ right from any mount); points (the future path, the runway, the docking gates) w
 |---|---|
 | Relativity box | dτ/dt and its bar; the speed against the local observer, γ, the sky ahead's Doppler factor; E per unit mass — bound and the margin to escape, or escaping; the radius against the ISCO, the photon orbit and the horizon (red inside, or in the ergosphere); the tide per metre of the craft. The radial-in marker named GARGANTUA. |
 
+## The hub's card
+
+Beside the ring of the autopilots (bottom centre), while one flies: what it does now, its figures, and what
+it predicts (`CameraController.hubInfo`, redone four times a second; `FlightHud.drawHubCard`).
+
+| Autopilot | Phase | Figures | Prediction |
+|---|---|---|---|
+| CIRC | coasting to the apsis (the time sped up), turning to it, burning, trimming | the burn in, Δv, its length; burning, Δv and time left (a bar); trimming, the error and the orbit | → circular at the apsis' height |
+| NODE | the same for any planned burn | the same | → the orbit the burn leaves (Pe × Ap) |
+| ENTRY | planning; coasting to the deorbit; the burn (a bar); the guided entry (Mach, height, bank); the glide — joining the axis, to the final's start, downwind, the turn, the final (its steep slope, pull-up, shallow slope, flare) | the site; the distance to the threshold, the height, the speed, the height off the profile | → the deorbit's heat, load and shield; the hand-over's miss; the touchdown 450 m past the threshold and when |
+| LAND | killing the sideways speed, descending, the touchdown | height, vertical and sideways speed | → the touchdown in ~… |
+| TAKE OFF | through the thick air, the gravity turn | height, apoapsis, speed against the circular | → the orbit's height, then CIRC; once above the ground, its Pe × Ap |
+| APPROACH | closing on the target, backing off | the distance to the stand-off, the closing speed | → beside it in ~… |
+| HOLD POS | holding the place | the offset, the drift | |
+
+The hub's CIRC stays lit while its own burn is flown as a node. On a phone held upright, the card sits above
+the ring.
+
 ## On the cockpit's screens
 
 The same aids on the cabin's screens (`src/ui/cockpitscreens.ts`, redrawn 8 times a second while the cabin

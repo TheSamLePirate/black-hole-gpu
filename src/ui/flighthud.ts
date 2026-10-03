@@ -237,6 +237,9 @@ export class FlightHud {
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
+  /** the hub's card, beside the ring: the autopilot flying, its phase, figures, prediction */
+  private hubCard = h("div", "fl-panel fl-hubcard");
+  private hubSig = "";
   private ball = h("canvas", "fl-ball");
   private right = h("div", "fl-right fl-panel");
   /** full screen: the flight's essentials in a strip under the map (the HUD's instruments hidden) */
@@ -311,6 +314,27 @@ export class FlightHud {
     S.append(state, read, autos);
   }
 
+  /** The hub's card: shown while an autopilot flies — what it does, its figures, what it predicts. */
+  private drawHubCard(i: Info) {
+    const H = i.hub;
+    const C = this.hubCard;
+    if (!H) {
+      if (!C.hidden) (C.hidden = true), (this.hubSig = "");
+      return;
+    }
+    const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+    const sig = JSON.stringify(H);
+    if (sig === this.hubSig && !C.hidden) return;
+    this.hubSig = sig;
+    C.hidden = false;
+    C.innerHTML =
+      `<div class="fl-title">${esc(H.title)}<i>AUTOPILOT</i></div>` +
+      `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
+      (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
+      (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
+      (H.next ? `<div class="fl-hub-next">${esc(H.next)}</div>` : "");
+  }
+
   private drawStrip(i: Info) {
     const E = this.stripEls;
     const st = i.status;
@@ -325,7 +349,7 @@ export class FlightHud {
     set("pe", ko ? (ko.fate === "horizon" ? "horizon" : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
     set("ap", ko ? (ko.fate === "bound" ? r(ko.ra) : "escape") : st?.orbit ? km(st.orbit.apKm) : "—");
     for (const [a, b] of this.stripBtns) {
-      b.classList.toggle("on", i.auto === a);
+      b.classList.toggle("on", i.auto === a || i.hub?.mode === a);
       const why = this.buttons.get(a)?.dataset.why;
       b.classList.toggle("off", !!why);
       if (why) b.dataset.why = why;
@@ -652,6 +676,8 @@ export class FlightHud {
     const CW = 2 * RING + 44, CH = BALL + RING + 70, CX = CW / 2, CY = CH - BALL - 40;
     this.cockpit.style.width = `${CW}px`;
     this.cockpit.style.height = `${CH}px`;
+    this.hubCard.hidden = true;
+    this.cockpit.append(this.hubCard);
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
       const b = h("button", "fl-rb") as HTMLButtonElement;
       const a = (deg * Math.PI) / 180;
@@ -1647,9 +1673,11 @@ export class FlightHud {
     let auto = "AUTO";
     if (i.auto === "node" && i.plan?.nodes.length) {
       const n = i.plan.nodes[0]!;
+      // (CIRC's own burn: named so)
+      const nm = i.hub?.mode === "circularize" ? "CIRC" : "NODE 1";
       auto = i.plan.burning
-        ? `NODE ${1} · BURN Δv ${Math.max(0, Math.hypot(...n.dv) - i.plan.done).toFixed(3)}`
-        : `NODE 1 · T−${fmtShort(Math.max(0, Math.round(n.t - time)))}`;
+        ? `${nm} · BURN Δv ${Math.max(0, Math.hypot(...n.dv) - i.plan.done).toFixed(3)}`
+        : `${nm} · T−${fmtShort(Math.max(0, Math.round(n.t - time)))}`;
     } else if (i.auto !== "none") {
       const phase = i.auto === "dock" && i.dockPhase ? i.dockPhase : i.dirs.burn ? (i.throttle > 0.02 ? "BURN" : "ALIGN") : "RCS";
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${i.dv < 1e-3 ? "<.001" : i.dv.toFixed(3)}` : ""}`;
@@ -1789,7 +1817,10 @@ export class FlightHud {
     this.buttons.get("sas")!.classList.toggle("on", i.sas);
     this.buttons.get("roll")!.classList.toggle("on", i.rollAlign);
     for (const [hold] of HOLD_KEYS) this.buttons.get(hold)!.classList.toggle("on", i.hold === hold);
-    for (const [a] of AUTO_KEYS) this.buttons.get(a)!.classList.toggle("on", i.auto === a);
+    // (CIRC lit while its own burn is flown as a node)
+    const lit = (a: string) => i.auto === a || i.hub?.mode === a;
+    for (const [a] of AUTO_KEYS) this.buttons.get(a)!.classList.toggle("on", lit(a));
+    this.drawHubCard(i);
     // what cannot apply now, dimmed (its tooltip says why)
     {
       const nearGround = !!i.surface || (!!i.status && !i.status.kerr && Number.isFinite(i.status.altKm) && i.status.altKm < 300);
