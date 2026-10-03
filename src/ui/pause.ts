@@ -17,6 +17,7 @@ const T = {
   releaseHint: { fr: "coupe l'autopilote, le maintien, la mission", en: "stops the autopilot, the hold, the mission" },
   settings: { fr: "Réglages", en: "Settings" },
   controls: { fr: "Commandes", en: "Controls" },
+  photo: { fr: "Mode photo", en: "Photo mode" },
   title2: { fr: "Écran titre", en: "Title screen" },
   back: { fr: "Retour", en: "Back" },
   name: { fr: "Nom de la sauvegarde", en: "Save name" },
@@ -40,6 +41,7 @@ export interface PauseDeps {
   release(): void;
   settings(): void;
   help(): void;
+  photo(): void;
   titleScreen(): void;
   toast(text: string): void;
 }
@@ -119,6 +121,7 @@ export class PauseMenu {
         : null,
       this.item(tr(T.settings), () => this.leaveFor(this.d.settings), { testid: "pause-settings" }),
       this.item(tr(T.controls), () => this.leaveFor(this.d.help), { testid: "pause-controls" }),
+      this.item(tr(T.photo), () => this.leaveFor(this.d.photo), { testid: "pause-photo" }),
       this.item(tr(T.title2), () => this.leaveFor(this.d.titleScreen), { testid: "pause-title" }),
     );
     // (↑ ↓ move between the items, as on a console)

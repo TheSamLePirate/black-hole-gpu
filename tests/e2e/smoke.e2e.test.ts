@@ -152,6 +152,22 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     await app.press("Escape");
   });
 
+  test("photo mode from the pause menu: the HUD away, the time held, the exposure set; Escape puts it back", async () => {
+    await app.press("Escape");
+    await app.click("[data-testid=pause-photo]");
+    await app.waitFor(`!!document.querySelector("[data-testid=photo]")`);
+    expect(await app.js<string>(`getComputedStyle(document.querySelector(".fl-root")).display`)).toBe("none");
+    expect(await app.js<boolean>("__bh.settings.animate")).toBe(false);
+    await app.js(
+      `(() => { const r = document.querySelector("[data-testid=photo] input[type=range]"); r.value = "1.5"; r.dispatchEvent(new Event("input")); return 1; })()`,
+    );
+    expect(await app.js<number>("__bh.settings.exposure")).toBeCloseTo(1.5);
+    await app.press("Escape");
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=photo]")`)).toBe(false);
+    expect(await app.js<boolean>("__bh.settings.animate")).toBe(true);
+    await app.js(`(__bh.settings.exposure = 0, __bh.touch(), 1)`);
+  });
+
   test("the help: ? opens the sheet, Escape closes it", async () => {
     await app.press("Slash", "?", { shift: true });
     await app.waitFor(`!!document.querySelector("[data-testid=help] [role=dialog]")`);

@@ -13,6 +13,7 @@ import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
+import { PhotoMode } from "./ui/photo";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -1280,6 +1281,7 @@ async function main() {
       release: releaseControls,
       settings: () => panel.toggle(true),
       help: () => actions["btn-help"]!(),
+      photo: () => openPhoto(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
@@ -1414,6 +1416,26 @@ async function main() {
       touch();
     },
   };
+  // photo mode (ui/photo.ts): the view alone, one bar for the picture
+  let photoMode: PhotoMode | null = null;
+  const openPhoto = () =>
+    (photoMode ??= new PhotoMode({
+      settings,
+      enter: () => {
+        const was = settings.animate;
+        playPause(false);
+        return () => playPause(was);
+      },
+      changed: (keys) => {
+        onSettingsChange(keys);
+        refreshGui();
+      },
+      setFov: (deg) => camera.setFov(deg),
+      playPause: (on) => playPause(on),
+      png: () => void savePNG(),
+      render: () => renderDialog.toggle(),
+    })).open();
+
   // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
   // still the next target
   const wheel = new RadialWheel();
@@ -1442,7 +1464,7 @@ async function main() {
         },
         { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
         { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
-        { label: { fr: "HUD", en: "HUD" }, key: "²", run: () => panel.toast(flightHud.cycleDensity()) },
+        { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
       ];
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
@@ -1466,7 +1488,7 @@ async function main() {
         ],
       },
       { label: { fr: "Ciel", en: "Sky" }, key: "N", run: () => actions["btn-sky"]!() },
-      { label: { fr: "Photo", en: "Photo" }, key: "H", run: toggleUi },
+      { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
     ];
   };
   let tabTimer = 0;
@@ -2027,10 +2049,7 @@ async function main() {
       },
       photo: () => {
         started = true;
-        // (the view alone: the ship left, the interface hidden — H brings it back, P saves a PNG)
-        if (camera.piloting) actions["btn-ship"]!();
-        if (!document.body.classList.contains("hide-ui")) toggleUi();
-        panel.toast("Photo mode — H: the interface · P: a PNG · Render: offline, any size");
+        openPhoto();
       },
       settings: () => {
         started = true;

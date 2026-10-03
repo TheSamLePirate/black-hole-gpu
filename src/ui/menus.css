@@ -224,3 +224,53 @@ body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.ma
 .tb-log li.tb-log-warn span, .tb-log li.tb-log-error span { color: #ffb4a8; }
 .tb-log li.tb-log-phase span { color: var(--k-on); }
 .tb-log-empty { color: var(--k-dim); font-style: italic; }
+
+/* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
+body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
+.ph-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: var(--z-popover);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px 16px;
+  transition: opacity 0.25s, transform 0.25s;
+}
+.ph-bar.ph-hidden { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.ph-title { font-size: 12px; margin-right: 4px; }
+.ph-ctl { display: flex; align-items: center; gap: 8px; }
+.ph-lab { font: 600 11px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-dim); }
+.ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
+.ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
+.ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
+
+/* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
+body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
+.ph-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: var(--z-popover);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px 16px;
+  transition: opacity 0.25s, transform 0.25s;
+}
+.ph-bar.ph-hidden { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.ph-title { font-size: 12px; margin-right: 4px; }
+.ph-ctl { display: flex; align-items: center; gap: 8px; }
+.ph-lab { font: 600 11px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-dim); }
+.ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
+.ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
+.ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
