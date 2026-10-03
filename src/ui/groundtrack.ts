@@ -30,6 +30,7 @@ import { planetFrame, toLocal } from "../landing";
 import type { Settings } from "../settings";
 import { cross, dot, sub as sub3 } from "../math/vec3";
 import { el as h } from "./kit";
+import { t, tf } from "../i18n";
 
 type V3 = [number, number, number];
 export type GroundMode = "globe" | "map";
@@ -154,20 +155,20 @@ export class GroundTrack {
     this.record(id, q, t);
   }
 
-  draw(i: Info, t: number) {
-    this.redraw = () => this.draw(i, t);
-    const sc = this.scene(i, t);
+  draw(i: Info, time: number) {
+    this.redraw = () => this.draw(i, time);
+    const sc = this.scene(i, time);
     if (!this.paint(sc) || !sc?.ship) {
       this.tag.textContent = "";
-      this.read.textContent = "Near a planet or a moon — in its sphere of influence";
+      this.read.textContent = t("Near a planet or a moon — in its sphere of influence");
       return;
     }
     const [la, lo] = latLon(sc.ship);
     const orb = i.status?.orbit;
-    this.tag.textContent = `${sc.name}${this.mode === "globe" && !this.view.follow ? " · double-click: follow" : ""}`;
+    this.tag.textContent = `${sc.name}${this.mode === "globe" && !this.view.follow ? ` · ${t("double-click: follow")}` : ""}`;
     this.read.textContent = [
       `${fmtLat(la)}  ${fmtLon(lo)}`,
-      `alt ${fmtKm(sc.altKm)}`,
+      tf("alt {0}", fmtKm(sc.altKm)),
       orb && Number.isFinite(orb.apKm) ? `Pe ${fmtKm(orb.peKm)} · Ap ${fmtKm(orb.apKm)} · i ${orb.incDeg.toFixed(1)}°` : "",
     ]
       .filter(Boolean)
@@ -178,11 +179,11 @@ export class GroundTrack {
    * A world alone at time t — the picker: its map lit by the Sun, the place picked (a click picks
    * another), the ship if it is over that world (`ship`).
    */
-  drawWorld(id: string, t: number, ship: V3 | null = null) {
-    this.redraw = () => this.drawWorld(id, t, ship);
+  drawWorld(id: string, time: number, ship: V3 | null = null) {
+    this.redraw = () => this.drawWorld(id, time, ship);
     const ours = !THEIRS[id];
     const b = ours ? solarBody(id) : null;
-    const F = ours ? null : planetFrame(id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
+    const F = ours ? null : planetFrame(id as "miller" | "mann" | "edmunds", time, this.s.spin, this.s.massSolar);
     const sc: Scene = {
       id,
       name: BODY_NAMES[id as Body] ?? id,
@@ -190,7 +191,7 @@ export class GroundTrack {
       ours,
       ship,
       altKm: NaN,
-      sun: b ? unit(toBodyFixed(id, solarState("sun", t).pos as V3, t)) : null,
+      sun: b ? unit(toBodyFixed(id, solarState("sun", time).pos as V3, time)) : null,
       ahead: [],
       plan: [],
       pe: null,
@@ -202,7 +203,7 @@ export class GroundTrack {
     if (this.pick) {
       const [la, lo] = latLon(this.pick);
       this.read.textContent = `${fmtLat(la)}  ${fmtLon(lo)}`;
-    } else this.read.textContent = "Click: a place";
+    } else this.read.textContent = t("Click: a place");
   }
 
   /** Centres the globe on a place (the picker: on the place picked). */

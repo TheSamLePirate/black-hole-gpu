@@ -2,7 +2,7 @@
 // free — and one bar for what a photograph needs: the exposure, the lens, the depth of field, the
 // bloom, the time, a PNG now or an offline render at any size. Escape leaves it as it found the scene.
 
-import { tr, type Text } from "../i18n";
+import { t, tr, type Text } from "../i18n";
 import type { Settings } from "../settings";
 import { onEscape } from "./keys";
 import { button, el, h, kbd } from "./kit";
@@ -132,7 +132,7 @@ export class PhotoMode {
       toggle(T.time, "animate"),
       button({ label: tr(T.png), testid: "photo-png", onClick: () => this.d.png() }),
       button({ label: tr(T.render), kind: "primary", testid: "photo-render", onClick: () => this.d.render() }),
-      h("span", { class: "ph-keys" }, kbd("H"), ` ${tr(T.hide)} · `, kbd("Esc"), ` ${tr(T.leave)}`),
+      h("span", { class: "ph-keys" }, kbd("H"), ` ${tr(T.hide)} · `, kbd(t("Esc")), ` ${tr(T.leave)}`),
     );
     document.body.append(this.bar);
     this.unEscape = onEscape(() => this.close());

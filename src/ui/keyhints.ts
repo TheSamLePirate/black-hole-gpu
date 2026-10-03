@@ -27,14 +27,14 @@ const HINTS = {
   cinematic: (): Hint[] => [
     ["⌫", { fr: "arrêter la cinématique", en: "stop the cinematic" }],
     ["V", { fr: "vue suivante", en: "next view" }],
-    ["Esc", { fr: "pause", en: "pause" }],
+    [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
   ],
   manual: (): Hint[] => [
     [key("KeyZ", "Z"), { fr: "plein gaz", en: "full throttle" }],
     ["1 – 7", { fr: "maintiens", en: "holds" }],
     ["O", { fr: "ordinateur de vol", en: "flight computer" }],
     ["M", { fr: "carte", en: "map" }],
-    ["Esc", { fr: "pause", en: "pause" }],
+    [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
   ],
   holding: (): Hint[] => [
     ["⌫", { fr: "rendre les commandes", en: "release the controls" }],
@@ -57,7 +57,7 @@ const HINTS = {
     [key("KeyF", "F"), { fr: "loi de vol : fusée · avion · ordinateur", en: "flight law: rocket · plane · computer" }],
     [`${key("KeyP", "P")} · ⇧${key("KeyP", "P")}`, { fr: "volets · aérofreins", en: "flaps · air brake" }],
     [`⇧${key("KeyG", "G")}`, { fr: "rentrée et atterrissage guidés", en: "guided entry and landing" }],
-    ["Esc", { fr: "pause", en: "pause" }],
+    [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
   ],
   docking: (): Hint[] => [
     [

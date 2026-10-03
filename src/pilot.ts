@@ -11,6 +11,7 @@
 // scene's time. Attitude runs in the pilot's (wall-clock) seconds.
 
 import { TUNING } from "./game/tuning";
+import { t } from "./i18n";
 import type { M3, V3 } from "./mounts";
 import { add, cross, dot, len, scale } from "./math/vec3";
 
@@ -41,33 +42,33 @@ export type Auto =
 /** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
  *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
 export type FlightMode = "rocket" | "plane" | "sf";
-export const FLIGHT_MODE_NAMES: Record<FlightMode, string> = { rocket: "Rocket", plane: "Plane", sf: "Flight computer" };
+export const FLIGHT_MODE_NAMES: Record<FlightMode, string> = { rocket: t("Rocket"), plane: t("Plane"), sf: t("Flight computer") };
 
 export const HOLD_NAMES: Record<Hold, string> = {
-  none: "Manual",
-  prograde: "Prograde",
-  retrograde: "Retrograde",
-  radialOut: "Radial out",
-  radialIn: "Radial in",
-  normal: "Normal",
-  antinormal: "Anti-normal",
-  target: "Target",
-  antiTarget: "Anti-target",
-  maneuver: "Manoeuvre",
+  none: t("Manual"),
+  prograde: t("Prograde"),
+  retrograde: t("Retrograde"),
+  radialOut: t("Radial out"),
+  radialIn: t("Radial in"),
+  normal: t("Normal"),
+  antinormal: t("Anti-normal"),
+  target: t("Target"),
+  antiTarget: t("Anti-target"),
+  maneuver: t("Manoeuvre"),
 };
 export const AUTO_NAMES: Record<Auto, string> = {
-  none: "Off",
-  hover: "Hold position",
-  circularize: "Circularize",
-  approach: "Approach target",
-  orbit: "Orbit target",
-  node: "Execute node",
-  transfer: "Low-thrust transfer",
-  land: "Landing",
-  takeoff: "Take-off to orbit",
-  dock: "Docking",
-  entry: "Entry & landing",
-  burns: "Flight computer burns",
+  none: t("Off"),
+  hover: t("Hold position"),
+  circularize: t("Circularize"),
+  approach: t("Approach target"),
+  orbit: t("Orbit target"),
+  node: t("Execute node"),
+  transfer: t("Low-thrust transfer"),
+  land: t("Landing"),
+  takeoff: t("Take-off to orbit"),
+  dock: t("Docking"),
+  entry: t("Entry & landing"),
+  burns: t("Flight computer burns"),
 };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */

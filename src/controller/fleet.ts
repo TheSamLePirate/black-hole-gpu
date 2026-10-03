@@ -10,6 +10,7 @@ import { mouth } from "../wormhole";
 import { repToHomeVec } from "../system/our-side";
 import { cockpitHull } from "../system/collide";
 import { M_METRES } from "../units";
+import { tf } from "../i18n";
 import { dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
 import type { CameraController } from "../controls";
@@ -148,10 +149,11 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   if (id === fleet.active) return null;
   const cam = cameraFrame(s);
   const nav = this.ourNav(cam);
-  if (!nav) return "The other craft are near the Earth — in our solar system";
+  // (tf: `t` is the time in these functions)
+  if (!nav) return tf("The other craft are near the Earth — in our solar system");
   const t = nav.t;
   const to = fleet.pose(id, t);
-  if (!to) return `${VESSELS[id].name}: not found`;
+  if (!to) return tf("{0}: not found", VESSELS[id].name);
   const old = fleet.active;
   const me = this.activePoseNow();
   const group = fleet.assembly(old);
@@ -182,16 +184,15 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.dockInfo = null;
   // (the target now flown, or docked to it: the body it orbits instead)
   if (fleet.flownAssembly().includes(s.target as VesselId)) this.selectTarget(nav.ref as Body);
+  const with_ = fleet
+    .flownAssembly()
+    .filter((v) => v !== id)
+    .map((v) => VESSELS[v].name)
+    .join(", ");
   this.onPilotMessage?.(
-    `Flying the ${VESSELS[id].name}${
-      fleet.flownAssembly().length > 1
-        ? ` — docked: ${fleet
-            .flownAssembly()
-            .filter((v) => v !== id)
-            .map((v) => VESSELS[v].name)
-            .join(", ")} with it`
-        : ""
-    }`,
+    fleet.flownAssembly().length > 1
+      ? tf("Flying the {0} — docked: {1} with it", VESSELS[id].name, with_)
+      : tf("Flying the {0}", VESSELS[id].name),
   );
   return null;
 }
@@ -203,12 +204,12 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
 function placeNearPort(this: CameraController, target: VesselId, distM: number, offset: Vec3 = [0, 0, 0]): string | null {
   const s = this.s;
   const nav = this.ourNav(cameraFrame(s));
-  if (!nav) return "In our solar system only";
+  if (!nav) return tf("In our solar system only");
   const t = nav.t;
   const P = fleet.pose(target, t);
   const used = fleet.usedPorts(target);
   const k = VESSELS[target].ports.findIndex((_, i) => !used.has(i));
-  if (!P || k < 0 || fleet.flownAssembly().includes(target)) return `The ${VESSELS[target].name}: no free port`;
+  if (!P || k < 0 || fleet.flownAssembly().includes(target)) return tf("The {0}: no free port", VESSELS[target].name);
   const host = VESSELS[target].ports[k]!;
   const guest = VESSELS[fleet.active].ports[0]!;
   // (docked there, then backed out along the port's axis)

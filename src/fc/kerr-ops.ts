@@ -25,6 +25,7 @@ import {
   type World,
 } from "../maneuver";
 import { len } from "../math/vec3";
+import { t, tf } from "../i18n";
 
 export interface KerrOp {
   ok: boolean;
@@ -262,36 +263,36 @@ const circGoal = (s: Massive): KerrGoal => ({ circ: s.r, trim: true });
  *  free fall has no radial acceleration). */
 export function kCircularize(st0: Massive, w: World, where: "now" | "pe" | "ap"): KerrOp {
   const s = burnAt(st0, w, where);
-  if (!s) return fail(where === "ap" ? "No apoapsis ahead (an escape): burn now" : "Not on this path (the hole first)");
-  if (s.r < rMinCircular(s, w)) return fail(`No stable circular orbit there: ${s.r.toFixed(2)} M is inside the ISCO`);
+  if (!s) return fail(where === "ap" ? t("No apoapsis ahead (an escape): burn now") : t("Not on this path (the hole first)"));
+  if (s.r < rMinCircular(s, w)) return fail(tf("No stable circular orbit there: {0} M is inside the ISCO", s.r.toFixed(2)));
   const bc = circularBeta(s, w);
-  if (!bc) return fail("Inside the photon orbit: no circular orbit");
-  return done(st0, w, [{ t: s.t, dv: matchDv(s, bc, w.a), goal: circGoal(s) }], `Circular at ${s.r.toFixed(2)} M`);
+  if (!bc) return fail(t("Inside the photon orbit: no circular orbit"));
+  return done(st0, w, [{ t: s.t, dv: matchDv(s, bc, w.a), goal: circGoal(s) }], tf("Circular at {0} M", s.r.toFixed(2)));
 }
 
 /** The apoapsis to r2: a prograde (retrograde) burn at the periapsis — the opposite apsis found on the
  *  real path by bisection. */
 export function kApoapsis(st0: Massive, w: World, r2: number, where: "pe" | "now" = "pe"): KerrOp {
   const s = burnAt(st0, w, where) ?? burnAt(st0, w, "now");
-  if (!s) return fail("Not on this path");
-  if (r2 <= s.r) return fail(`The apoapsis cannot be below the burn (${s.r.toFixed(2)} M)`);
+  if (!s) return fail(t("Not on this path"));
+  if (r2 <= s.r) return fail(tf("The apoapsis cannot be below the burn ({0} M)", s.r.toFixed(2)));
   const dv = apsisBurn(s, r2, w, r2 > s.r ? "max" : "min");
-  if (dv === null) return fail("Out of reach (an escape before that)");
-  return done(st0, w, [{ t: s.t, dv: [dv, 0, 0], goal: apsisGoal(s, r2, dv) }], `Apoapsis ${r2.toFixed(2)} M`);
+  if (dv === null) return fail(t("Out of reach (an escape before that)"));
+  return done(st0, w, [{ t: s.t, dv: [dv, 0, 0], goal: apsisGoal(s, r2, dv) }], tf("Apoapsis {0} M", r2.toFixed(2)));
 }
 
 /** The periapsis to r2: a burn at the apoapsis — below the horizon, a plunge. */
 export function kPeriapsis(st0: Massive, w: World, r2: number, where: "ap" | "now" = "ap"): KerrOp {
   const s = burnAt(st0, w, where) ?? burnAt(st0, w, "now");
-  if (!s) return fail("Not on this path");
-  if (r2 >= s.r) return fail(`The periapsis cannot be above the burn (${s.r.toFixed(2)} M)`);
+  if (!s) return fail(t("Not on this path"));
+  if (r2 >= s.r) return fail(tf("The periapsis cannot be above the burn ({0} M)", s.r.toFixed(2)));
   const dv = apsisBurn(s, r2, w, r2 > s.r ? "max" : "min");
-  if (dv === null) return fail("Out of reach");
+  if (dv === null) return fail(t("Out of reach"));
   return done(
     st0,
     w,
     [{ t: s.t, dv: [dv, 0, 0], goal: r2 > horizon(w.a) ? apsisGoal(s, r2, dv) : undefined }],
-    r2 <= horizon(w.a) ? "Periapsis inside the horizon: a plunge" : `Periapsis ${r2.toFixed(2)} M`,
+    r2 <= horizon(w.a) ? t("Periapsis inside the horizon: a plunge") : tf("Periapsis {0} M", r2.toFixed(2)),
   );
 }
 
@@ -299,21 +300,21 @@ export function kPeriapsis(st0: Massive, w: World, r2: number, where: "ap" | "no
  *  opposite apsis put at r2, circularized there. */
 export function kHohmann(st0: Massive, w: World, r2: number): KerrOp {
   const s = soon(st0, w);
-  if (!s) return fail("Not on this path");
+  if (!s) return fail(t("Not on this path"));
   const rMin = rMinCircular(s, w);
-  if (r2 < rMin) return fail(`Inside the ISCO: the innermost stable circular orbit is ${rMin.toFixed(2)} M`);
+  if (r2 < rMin) return fail(tf("Inside the ISCO: the innermost stable circular orbit is {0} M", rMin.toFixed(2)));
   const o = kerrOrbit(s, w);
-  if (o.fate !== "bound") return fail("Bound orbits only (circularize first)");
+  if (o.fate !== "bound") return fail(t("Bound orbits only (circularize first)"));
   const up = r2 >= (o.rp + o.ra) / 2;
   const s1 = nextApsis(s, w, up ? "pe" : "ap") ?? s;
   if (Math.abs(r2 - s1.r) < 1e-3) return kCircularize(st0, w, up ? "pe" : "ap");
   const dv1 = apsisBurn(s1, r2, w, r2 > s1.r ? "max" : "min");
-  if (dv1 === null) return fail("Out of reach");
+  if (dv1 === null) return fail(t("Out of reach"));
   const after = applyDv(s1, [dv1, 0, 0], w.a);
   const s2 = nextApsis(after, w, r2 > s1.r ? "ap" : "pe");
-  if (!s2) return fail("The transfer never reaches its far apsis");
+  if (!s2) return fail(t("The transfer never reaches its far apsis"));
   const bc = circularBeta(s2, w);
-  if (!bc) return fail("No circular orbit there");
+  if (!bc) return fail(t("No circular orbit there"));
   return done(
     st0,
     w,
@@ -321,7 +322,7 @@ export function kHohmann(st0: Massive, w: World, r2: number): KerrOp {
       { t: s1.t, dv: [dv1, 0, 0], goal: apsisGoal(s1, r2, dv1) },
       { t: s2.t, dv: matchDv(s2, bc, w.a), goal: circGoal(s2) },
     ],
-    `Hohmann to ${r2.toFixed(2)} M circular`,
+    tf("Hohmann to {0} M circular", r2.toFixed(2)),
   );
 }
 
@@ -329,10 +330,10 @@ export function kHohmann(st0: Massive, w: World, r2: number): KerrOp {
  *  velocity turned into it (its speed and sense kept) at the cheaper crossing. */
 export function kInclination(st0: Massive, w: World, inc: number): KerrOp {
   const s = soon(st0, w);
-  if (!s) return fail("Not on this path");
+  if (!s) return fail(t("Not on this path"));
   const h = orbitNormal(s, w.a);
   const i0 = Math.acos(Math.min(Math.max(h[2], -1), 1));
-  if (i0 < Math.PI / 2 !== inc < Math.PI / 2) return fail("That reverses the sense of motion about the spin: lower it to 90° first");
+  if (i0 < Math.PI / 2 !== inc < Math.PI / 2) return fail(t("That reverses the sense of motion about the spin: lower it to 90° first"));
   // (the node line k × h; equatorial: any — the x axis's)
   let l: Vec3 = [-h[1], h[0], 0];
   const ll = Math.hypot(l[0], l[1]);
@@ -340,29 +341,29 @@ export function kInclination(st0: Massive, w: World, inc: number): KerrOp {
   // (h = k cos i₀ + m sin i₀, m = l × k: the new normal turned in the same plane)
   const m: Vec3 = [l[1], -l[0], 0];
   const n: Vec3 = [m[0] * Math.sin(inc), m[1] * Math.sin(inc), Math.cos(inc)];
-  const res = planAlign(s, w, n, `the ${((inc * 180) / Math.PI).toFixed(1)}° plane`);
-  if (!res) return fail(`Already at ${((i0 * 180) / Math.PI).toFixed(2)}°`);
+  const res = planAlign(s, w, n, tf("the {0}° plane", ((inc * 180) / Math.PI).toFixed(1)));
+  if (!res) return fail(tf("Already at {0}°", ((i0 * 180) / Math.PI).toFixed(2)));
   return done(
     st0,
     w,
     res.nodes.map((q) => ({ ...q, goal: { plane: n } })),
-    `Inclination ${((i0 * 180) / Math.PI).toFixed(1)}° → ${((inc * 180) / Math.PI).toFixed(1)}°`,
+    tf("Inclination {0}° → {1}°", ((i0 * 180) / Math.PI).toFixed(1), ((inc * 180) / Math.PI).toFixed(1)),
   );
 }
 
 /** Into a plane of normal n (a target's orbit). */
 export function kMatchPlane(st0: Massive, w: World, n: Vec3, name: string): KerrOp {
   const s = soon(st0, w);
-  if (!s) return fail("Not on this path");
+  if (!s) return fail(t("Not on this path"));
   const off = planeOffset(s, w.a, n);
   const res = planAlign(s, w, n, name);
-  if (!res) return fail(`Already in ${name}`);
+  if (!res) return fail(tf("Already in {0}", name));
   const nn = len(n);
   return done(
     st0,
     w,
     res.nodes.map((q) => ({ ...q, goal: { plane: [n[0] / nn, n[1] / nn, n[2] / nn] as Vec3 } })),
-    `Planes matched (${((off * 180) / Math.PI).toFixed(2)}° into ${name})`,
+    tf("Planes matched ({0}° into {1})", ((off * 180) / Math.PI).toFixed(2), name),
   );
 }
 
@@ -371,9 +372,9 @@ export function kMatchPlane(st0: Massive, w: World, n: Vec3, name: string): Kerr
  *  that period. */
 export function kResonant(st0: Massive, w: World, k: number): KerrOp {
   const s0 = soon(st0, w);
-  if (!s0) return fail("Not on this path");
+  if (!s0) return fail(t("Not on this path"));
   const o0 = kerrOrbit(s0, w);
-  if (o0.fate !== "bound" || !Number.isFinite(o0.T)) return fail("Bound orbits only");
+  if (o0.fate !== "bound" || !Number.isFinite(o0.T)) return fail(t("Bound orbits only"));
   const s = Number.isFinite(o0.Tr) ? (nextApsis(s0, w, "pe") ?? s0) : s0;
   const want = k * o0.T;
   const f = (dv: number) => {
@@ -386,7 +387,7 @@ export function kResonant(st0: Massive, w: World, k: number): KerrOp {
   while (up ? f(hi) < 0 : f(hi) > 0) {
     lo = hi;
     hi *= 1.7;
-    if (Math.abs(hi) > 0.5) return fail("Out of reach");
+    if (Math.abs(hi) > 0.5) return fail(t("Out of reach"));
   }
   for (let i = 0; i < 26; i++) {
     const mid = (lo + hi) / 2;
@@ -395,12 +396,12 @@ export function kResonant(st0: Massive, w: World, k: number): KerrOp {
   }
   const dv = (lo + hi) / 2;
   const o = kerrOrbit(applyDv(s, [dv, 0, 0], w.a), w);
-  if (o.fate === "horizon" || o.rp < rMinCircular(s, w) * 0.9) return fail("That period dives too near the hole");
+  if (o.fate === "horizon" || o.rp < rMinCircular(s, w) * 0.9) return fail(t("That period dives too near the hole"));
   return done(
     st0,
     w,
     [{ t: s.t, dv: [dv, 0, 0], goal: { period: want, dir: Math.sign(dv) || 1 } }],
-    `Resonant ${k.toFixed(2)}:1 (period ${want.toFixed(0)} M)`,
+    tf("Resonant {0}:1 (period {1} M)", k.toFixed(2), want.toFixed(0)),
   );
 }
 

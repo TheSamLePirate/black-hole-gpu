@@ -15,17 +15,24 @@ import { BODY_NAMES } from "../targeting";
 import { SOLAR_BODIES } from "../system/solar";
 import { fmtAngle, focalLength } from "./telescope";
 import { el as h } from "./kit";
+import { t, tf } from "../i18n";
 
 /** The camera's placements without the ship: the rig's four, and falling freely (gravity). */
 export type View = Settings["rotation"] | "fall";
 export const VIEWS: View[] = ["orbit", "follow", "free", "tripod", "fall"];
-export const VIEW_LABEL: Record<View, string> = { orbit: "Around", follow: "Follow", free: "Free", tripod: "Tripod", fall: "Free fall" };
+export const VIEW_LABEL: Record<View, string> = {
+  orbit: t("Around"),
+  follow: t("Follow"),
+  free: t("Free"),
+  tripod: t("Tripod"),
+  fall: t("Free fall"),
+};
 export const VIEW_HELP: Record<View, string> = {
-  orbit: "Circles the target — drag to turn about it, scroll to come closer",
-  follow: "Moves with the target — drag to look around, fly to shift the camera",
-  free: "Flies freely, carried by the nearest world — drag to look around",
-  tripod: "Fixed on the nearest world, turning with it — a time-lapse's camera (⇧T: set down on the ground)",
-  fall: "A massive body in free fall along its geodesic — the keys thrust",
+  orbit: t("Circles the target — drag to turn about it, scroll to come closer"),
+  follow: t("Moves with the target — drag to look around, fly to shift the camera"),
+  free: t("Flies freely, carried by the nearest world — drag to look around"),
+  tripod: t("Fixed on the nearest world, turning with it — a time-lapse's camera (⇧T: set down on the ground)"),
+  fall: t("A massive body in free fall along its geodesic — the keys thrust"),
 };
 /** Their glyphs (24 × 24 line icons). */
 const VIEW_ICON: Record<View, string> = {
@@ -104,10 +111,10 @@ export const BODY_COLOURS: Record<Target, string> = {
 
 /** The relativistic observer's motion (settings.motion) as offered: the rest are the controller's. */
 const OBSERVER: [Settings["motion"], string, string][] = [
-  ["static", "Carried", "At rest where the camera is carried (a world, the star's frame, the centre of mass)"],
-  ["orbit", "Orbiting", "On a circular orbit: aberration and Doppler of the orbital speed"],
-  ["infall", "Falling", "Falling from rest at infinity (the rain frame): the sky crowds ahead"],
-  ["forward", "Boost", "Moving forwards at β: the searchlight effect"],
+  ["static", t("Carried"), t("At rest where the camera is carried (a world, the star's frame, the centre of mass)")],
+  ["orbit", t("Orbiting"), t("On a circular orbit: aberration and Doppler of the orbital speed")],
+  ["infall", t("Falling"), t("Falling from rest at infinity (the rain frame): the sky crowds ahead")],
+  ["forward", t("Boost"), t("Moving forwards at β: the searchlight effect")],
 ];
 
 /** The worlds one can stand on: our planets and moons with a ground, Gargantua's three. */
@@ -220,9 +227,9 @@ export class CameraPanel {
     const scroll = el.scrollTop;
     el.replaceChildren();
     const head = h("div", "fl-title cp-head");
-    head.append(h("span", "fl-htext", s.ship ? "Camera · Ranger" : "Camera"));
+    head.append(h("span", "fl-htext", s.ship ? t("Camera · Ranger") : t("Camera")));
     const x = h("button", "cp-x", "×");
-    x.title = "Close (Esc)";
+    x.title = t("Close (Esc)");
     x.onclick = () => this.toggle(false);
     head.append(x);
     const st = h("div", "cp-state");
@@ -285,7 +292,7 @@ export class CameraPanel {
   }
 
   private placements() {
-    const sec = this.section("Placement", "V · ⇧V");
+    const sec = this.section(t("Placement"), "V · ⇧V");
     const tiles = h("div", "cp-tiles cp-tiles-5");
     const now = this.d.view();
     for (const v of VIEWS) tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v)));
@@ -293,8 +300,8 @@ export class CameraPanel {
     row.append(
       this.chip(
         ICON.ground,
-        "Set down on the ground",
-        "The tripod on the target's ground when it is a world, else the nearest one's — level, looking at the horizon",
+        t("Set down on the ground"),
+        t("The tripod on the target's ground when it is a world, else the nearest one's — level, looking at the horizon"),
         false,
         () => {
           const why = this.d.standOn();
@@ -309,8 +316,8 @@ export class CameraPanel {
   private shipViews() {
     const s = this.d.settings;
     for (const [g, outside] of [
-      ["On the ship", false],
-      ["Outside", true],
+      [t("On the ship"), false],
+      [t("Outside"), true],
     ] as const) {
       const sec = this.section(g, outside ? "" : "V · ⇧V");
       const tiles = h("div", "cp-tiles cp-tiles-3");
@@ -327,24 +334,24 @@ export class CameraPanel {
 
   private looks() {
     const { settings: s, camera: c } = this.d;
-    const sec = this.section("View");
+    const sec = this.section(t("View"));
     const row = h("div", "cp-chips");
     const around = !s.ship && this.d.view() === "orbit";
     row.append(
       this.chip(
         ICON.look,
-        around ? "On the target" : "Look at target",
+        around ? t("On the target") : t("Look at target"),
         around
-          ? "Around the target the view is always on it (right-drag: an offset)"
-          : "The view locked on the target, wherever the camera goes (drag: where it sits in the view)",
+          ? t("Around the target the view is always on it (right-drag: an offset)")
+          : t("The view locked on the target, wherever the camera goes (drag: where it sits in the view)"),
         around || s.lookAt,
         () => !around && c.setLookAt(!s.lookAt),
         "C",
       ),
       this.chip(
         ICON.tele,
-        "Telescope",
-        "A long lens down to a 0.02° field, held on the target, with a reticle and the angular scale — the wheel zooms",
+        t("Telescope"),
+        t("A long lens down to a 0.02° field, held on the target, with a reticle and the angular scale — the wheel zooms"),
         s.telescope,
         () => c.setTelescope(!s.telescope),
         "Y",
@@ -352,11 +359,13 @@ export class CameraPanel {
     );
     if (s.ship) {
       row.append(
-        this.chip(ICON.ahead, "Look ahead", "The camera back along its mount's axis (double-click)", false, () => c.setLook(0, 0)),
+        this.chip(ICON.ahead, t("Look ahead"), t("The camera back along its mount's axis (double-click)"), false, () => c.setLook(0, 0)),
         this.chip(
           ICON.ahead,
-          "Reset camera",
-          "Back to the craft's attach points as they are: looking ahead, no lock, the outside views' own places — from outside, back on the hull",
+          t("Reset camera"),
+          t(
+            "Back to the craft's attach points as they are: looking ahead, no lock, the outside views' own places — from outside, back on the hull",
+          ),
           false,
           () => {
             this.d.toast(c.resetShipView());
@@ -369,12 +378,12 @@ export class CameraPanel {
       row.append(
         this.chip(
           ICON.mouse,
-          "Mouse look",
-          "Game-style flight: the mouse turns the camera, the wheel sets the speed (middle click; Esc leaves)",
+          t("Mouse look"),
+          t("Game-style flight: the mouse turns the camera, the wheel sets the speed (middle click; Esc leaves)"),
           c.flyMode,
           () => c.setFlyMode(!c.flyMode),
         ),
-        this.chip(ICON.level, "Level", "Recentre on the target, or level the horizon (⇧R, double-click on the sky)", false, () =>
+        this.chip(ICON.level, t("Level"), t("Recentre on the target, or level the horizon (⇧R, double-click on the sky)"), false, () =>
           c.resetView(),
         ),
       );
@@ -385,14 +394,14 @@ export class CameraPanel {
   private lens() {
     const s = this.d.settings,
       c = this.d.camera;
-    const sec = this.section(s.telescope ? "Telescope" : "Lens", "wheel · Alt+wheel");
+    const sec = this.section(s.telescope ? t("Telescope") : t("Lens"), t("wheel · Alt+wheel"));
     const [lo, hi] = s.telescope ? SCOPE_RANGE : LENS_RANGE;
     const r = this.lensRange;
     r.type = "range";
     r.min = "0";
     r.max = "1000";
     r.step = "1";
-    r.setAttribute("aria-label", s.telescope ? "Telescope field" : "Lens focal length");
+    r.setAttribute("aria-label", s.telescope ? t("Telescope field") : t("Lens focal length"));
     const toU = (f: number) => Math.round((1000 * Math.log(f / lo)) / Math.log(hi / lo));
     const toF = (u: number) => lo * (hi / lo) ** (u / 1000);
     r.value = String(Math.min(1000, Math.max(0, toU(focalLength(s.fov)))));
@@ -411,7 +420,7 @@ export class CameraPanel {
     if (s.telescope) {
       const b = h("button", "cp-chip cp-lens");
       b.innerHTML = svg(ICON.frame);
-      b.append(h("span", "", "Frame the target"));
+      b.append(h("span", "", t("Frame the target")));
       b.onclick = () => {
         const info = c.targetInfo();
         if (info && info.ang > 0) c.setFov(Math.min(20, Math.max(TELE_MIN, ((info.ang * 360) / Math.PI) * 3)));
@@ -423,16 +432,16 @@ export class CameraPanel {
 
   private targets() {
     const { settings: s, camera: c } = this.d;
-    const sec = this.section("Target", "Tab · click it in the view");
+    const sec = this.section(t("Target"), t("Tab · click it in the view"));
     const search = h("input", "cp-search") as HTMLInputElement;
     search.type = "search";
-    search.placeholder = "Search a body…";
+    search.placeholder = t("Search a body…");
     search.value = this.filter;
     const acts = h("div", "cp-chips");
     const name = BODY_NAMES[s.target];
     acts.append(
-      this.chip(ICON.frame, `Frame ${name}`, "Fly the view to it and frame it (double-click it)", false, () => {
-        if (s.ship) return this.d.toast("The Ranger flies there: the planner (O) or the autopilot (0: approach)");
+      this.chip(ICON.frame, tf("Frame {0}", name), t("Fly the view to it and frame it (double-click it)"), false, () => {
+        if (s.ship) return this.d.toast(t("The Ranger flies there: the planner (O) or the autopilot (0: approach)"));
         if (this.d.view() !== "orbit") this.d.setView("orbit");
         c.selectTarget(s.target, { frame: !c.gravity });
       }),
@@ -441,8 +450,8 @@ export class CameraPanel {
       acts.append(
         this.chip(
           ICON.go,
-          `Go to ${name}`,
-          "Take the camera there — anywhere in the world, through the wormhole too: in orbit around it",
+          tf("Go to {0}", name),
+          t("Take the camera there — anywhere in the world, through the wormhole too: in orbit around it"),
           false,
           () => {
             const why = this.d.goTo(s.target);
@@ -454,8 +463,8 @@ export class CameraPanel {
       acts.append(
         this.chip(
           ICON.ground,
-          `Stand on ${name}`,
-          "A tripod on its ground, under where the camera is (or on the side facing it), level, looking at the horizon",
+          tf("Stand on {0}", name),
+          t("A tripod on its ground, under where the camera is (or on the side facing it), level, looking at the horizon"),
           false,
           () => {
             const why = this.d.standOn(s.target);
@@ -521,37 +530,37 @@ export class CameraPanel {
     const here = cam.region === "throat" && cam.ell < 0;
     const g: [string, Target[]][] = here
       ? [
-          ["The Sun and the planets", planets],
-          ["Moons", moons],
-          ["Spacecraft", craft],
-          ["Beyond the wormhole", theirs],
+          [t("The Sun and the planets"), planets],
+          [t("Moons"), moons],
+          [t("Spacecraft"), craft],
+          [t("Beyond the wormhole"), theirs],
         ]
       : [
-          ["Gargantua's system", theirs],
-          ["Through the wormhole — the Sun and the planets", planets],
-          ["Moons", moons],
-          ["Spacecraft", craft],
+          [t("Gargantua's system"), theirs],
+          [t("Through the wormhole — the Sun and the planets"), planets],
+          [t("Moons"), moons],
+          [t("Spacecraft"), craft],
         ];
     return g.filter(([, l]) => l.length);
   }
 
   private motion() {
     const { settings: s, camera: c } = this.d;
-    const sec = this.section("Motion");
+    const sec = this.section(t("Motion"));
     const speed = h("div", "cp-speed");
     const r = h("input") as HTMLInputElement;
     r.type = "range";
     r.min = "-4";
     r.max = "4";
     r.step = "0.1";
-    r.setAttribute("aria-label", "Flight speed");
+    r.setAttribute("aria-label", t("Flight speed"));
     r.value = String(Math.log2(c.flySpeed));
     const v = h("span", "cp-value", `×${c.flySpeed.toFixed(2)}`);
     r.oninput = () => {
       c.flySpeed = 2 ** Number(r.value);
       v.textContent = `×${c.flySpeed.toFixed(2)}`;
     };
-    speed.append(h("span", "cp-sub", "Flight speed"), r, v);
+    speed.append(h("span", "cp-sub", t("Flight speed")), r, v);
     sec.append(speed);
     // (the observer's own motion for the relativistic view: near the hole, not falling — a falling
     // camera's is its geodesic's)
@@ -571,7 +580,7 @@ export class CameraPanel {
       };
       seg.append(b);
     }
-    sec.append(h("div", "cp-sub", "The observer's motion (aberration, Doppler)"), seg);
+    sec.append(h("div", "cp-sub", t("The observer's motion (aberration, Doppler)")), seg);
     if (s.motion === "forward") {
       const row = h("div", "cp-speed");
       const br = h("input") as HTMLInputElement;
@@ -579,7 +588,7 @@ export class CameraPanel {
       br.min = "0";
       br.max = "0.99";
       br.step = "0.01";
-      br.setAttribute("aria-label", "Observer speed β");
+      br.setAttribute("aria-label", t("Observer speed β"));
       br.value = String(s.beta);
       const bv = h("span", "cp-value", `β ${s.beta.toFixed(2)}`);
       br.oninput = () => {
@@ -594,29 +603,29 @@ export class CameraPanel {
 
   private cinematics() {
     const { settings: s, camera: c } = this.d;
-    const sec = this.section("Cinematics", "they run with the time");
+    const sec = this.section(t("Cinematics"), t("they run with the time"));
     const row = h("div", "cp-chips");
     row.append(
       this.chip(
         ICON.orbit,
-        "Auto-orbit",
-        "Circles the target at the cinematic speed",
+        t("Auto-orbit"),
+        t("Circles the target at the cinematic speed"),
         c.cinematic === "orbit",
         () => this.d.cinematic("orbit"),
         "O",
       ),
       this.chip(
         ICON.dive,
-        "Dive",
-        "Free fall from rest at infinity to the horizon, in the falling frame",
+        t("Dive"),
+        t("Free fall from rest at infinity to the horizon, in the falling frame"),
         c.cinematic === "dive",
         () => this.d.cinematic("dive"),
         "⇧C",
       ),
       this.chip(
         ICON.journey,
-        "Journey",
-        "Through the wormhole, to the black hole's universe or back",
+        t("Journey"),
+        t("Through the wormhole, to the black hole's universe or back"),
         c.cinematic === "journey",
         () => this.d.cinematic("journey"),
         "T",
@@ -628,7 +637,7 @@ export class CameraPanel {
     r.min = "0.5";
     r.max = "40";
     r.step = "0.5";
-    r.setAttribute("aria-label", "Cinematic speed");
+    r.setAttribute("aria-label", t("Cinematic speed"));
     r.value = String(s.cinematicSpeed);
     const v = h("span", "cp-value", `${s.cinematicSpeed}`);
     r.oninput = () => {
@@ -636,7 +645,7 @@ export class CameraPanel {
       v.textContent = `${s.cinematicSpeed}`;
       this.d.changed(["cinematicSpeed"]);
     };
-    speed.append(h("span", "cp-sub", "Speed (°/s · M/s)"), r, v);
+    speed.append(h("span", "cp-sub", t("Speed (°/s · M/s)")), r, v);
     sec.append(row, speed);
   }
 
@@ -650,24 +659,29 @@ export class CameraPanel {
       const [lo, hi] = s.telescope ? SCOPE_RANGE : LENS_RANGE;
       this.lensRange.value = String(Math.min(1000, Math.max(0, Math.round((1000 * Math.log(f / lo)) / Math.log(hi / lo)))));
     }
-    const look = s.lookAt || (!s.ship && this.d.view() === "orbit") ? ` · on ${BODY_NAMES[s.target]}` : "";
+    const look = s.lookAt || (!s.ship && this.d.view() === "orbit") ? ` · ${tf("on {0}", BODY_NAMES[s.target])}` : "";
+    const scope = s.telescope ? ` · ${t("telescope")}` : "";
     if (s.ship) {
       this.statusMode.textContent = MOUNTS[s.shipMount as Mount]?.short ?? "";
-      this.statusText.textContent = `Target: ${BODY_NAMES[s.target]}${s.lookAt ? " · locked" : ""}${s.telescope ? " · telescope" : ""}`;
+      this.statusText.textContent = `${tf("Target: {0}", BODY_NAMES[s.target])}${s.lookAt ? ` · ${t("locked")}` : ""}${scope}`;
       return;
     }
     const v = this.d.view();
     this.statusMode.textContent = VIEW_LABEL[v];
     const rs = c.rigStatus();
     const where = rs
-      ? `${v === "orbit" ? "around" : "by"} ${BODY_NAMES[rs.body]} · ${fmtHeight(rs.h * 1476.625 * s.massSolar)} above it`
+      ? v === "orbit"
+        ? tf("around {0} · {1} above it", BODY_NAMES[rs.body], fmtHeight(rs.h * 1476.625 * s.massSolar))
+        : tf("by {0} · {1} above it", BODY_NAMES[rs.body], fmtHeight(rs.h * 1476.625 * s.massSolar))
       : v === "orbit"
-        ? `around ${BODY_NAMES[s.target]}`
+        ? tf("around {0}", BODY_NAMES[s.target])
         : v === "fall"
-          ? "falling freely"
-          : "in open space";
-    this.statusText.textContent =
-      where + (v === "orbit" ? "" : look) + (s.telescope ? " · telescope" : "") + (c.cinematic ? ` · ${c.cinematic}` : "");
+          ? t("falling freely")
+          : t("in open space");
+    const cine = c.cinematic
+      ? (({ orbit: t("orbit"), dive: t("dive"), journey: t("journey") } as Record<string, string>)[c.cinematic] ?? c.cinematic)
+      : "";
+    this.statusText.textContent = where + (v === "orbit" ? "" : look) + scope + (cine ? ` · ${cine}` : "");
   }
 }
 

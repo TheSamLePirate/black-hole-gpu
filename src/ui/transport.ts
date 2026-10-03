@@ -6,6 +6,7 @@
 import type { Settings } from "../settings";
 import { fmtClock, fmtFactor, fmtWarp, realTimeSpeed, secondsPerM, warpFactor, warpLadder } from "../clock";
 import { el as h } from "./kit";
+import { t, tf } from "../i18n";
 
 export interface TransportDeps {
   settings: Settings;
@@ -62,22 +63,22 @@ export class TransportBar {
       };
       return b;
     };
-    btn(this.play, ICON.play, "Run / pause time — every mode (paused: the image refines)", "Space", () => d.playPause());
-    const slower = btn(h("button", "tp-btn"), ICON.slower, "Slower time", ",", () => d.warp(-1));
-    const faster = btn(h("button", "tp-btn"), ICON.faster, "Faster time", ".", () => d.warp(1));
-    btn(this.rtBtn, "", "Real time: a second per second", "/", () => d.realTime());
+    btn(this.play, ICON.play, t("Run / pause time — every mode (paused: the image refines)"), t("Space"), () => d.playPause());
+    const slower = btn(h("button", "tp-btn"), ICON.slower, t("Slower time"), ",", () => d.warp(-1));
+    const faster = btn(h("button", "tp-btn"), ICON.faster, t("Faster time"), ".", () => d.warp(1));
+    btn(this.rtBtn, "", t("Real time: a second per second"), "/", () => d.realTime());
     btn(
       this.autoBtn,
       "",
-      "Auto warp for manoeuvres: on, the autopilot sets the warp; off, you choose it live (never faster than the manoeuvre allows)",
+      t("Auto warp for manoeuvres: on, the autopilot sets the warp; off, you choose it live (never faster than the manoeuvre allows)"),
       "",
       () => d.toggleAutoWarp(),
     );
     this.warpBtn.append(this.warpMain, this.warpSub);
-    this.warpBtn.dataset.tip = "Time warp — a click: every rung";
+    this.warpBtn.dataset.tip = t("Time warp — a click: every rung");
     this.warpBtn.onclick = () => this.toggleMenu();
     this.clock.append(this.clockMain, this.clockSub);
-    btn(this.rec, ICON.rec, "Record a take: what you do, live — then Render › Video renders it at full quality", "", () => d.record());
+    btn(this.rec, ICON.rec, t("Record a take: what you do, live — then Render › Video renders it at full quality"), "", () => d.record());
     this.rec.append(this.recTime);
     this.menu.hidden = true;
     this.el.append(
@@ -116,8 +117,8 @@ export class TransportBar {
       const b = h("button", "tp-mi");
       const x = w / rt;
       b.append(
-        h("b", "", Math.abs(x - 1) < 1e-6 ? "×1 real time" : fmtFactor(x)),
-        h("small", "", `${+w.toPrecision(3)} M/s${w > 500 ? " · rails" : ""}`),
+        h("b", "", Math.abs(x - 1) < 1e-6 ? t("×1 real time") : fmtFactor(x)),
+        h("small", "", `${+w.toPrecision(3)} M/s${w > 500 ? ` · ${t("rails")}` : ""}`),
       );
       b.classList.toggle("on", Math.abs(w - s.timeSpeed) <= 1e-6 * w);
       b.onclick = () => {
@@ -138,11 +139,11 @@ export class TransportBar {
   /** Refreshes the bar (cheap when nothing changed). */
   update(force = false) {
     const s = this.d.settings;
-    const t = this.d.time();
+    const now = this.d.time();
     const rec = this.d.recording();
     const note = this.d.railsNote();
     const nw = this.d.nodeWarp();
-    const clock = fmtClock(s, t);
+    const clock = fmtClock(s, now);
     const key = [s.animate, s.timeSpeed, s.massSolar, clock.main, clock.sub, rec.on, Math.floor(rec.seconds), note, nw, s.autoWarp].join();
     if (!force && key === this.last) return;
     this.last = key;
@@ -151,15 +152,17 @@ export class TransportBar {
     this.el.classList.toggle("paused", !s.animate);
     const x = warpFactor(s);
     this.warpMain.textContent = s.animate ? fmtWarp(s) : `❚❚ ${fmtWarp(s, false)}`;
-    const man = nw === "auto" ? "auto · manoeuvre" : nw === "held" ? "max · manoeuvre" : nw === "manual" ? "yours · manoeuvre" : "";
-    this.warpSub.textContent = man || (note ? `rails ↓ ${note}` : s.timeSpeed > 500 ? "on rails" : `${+s.timeSpeed.toPrecision(3)} M/s`);
+    const man =
+      nw === "auto" ? t("auto · manoeuvre") : nw === "held" ? t("max · manoeuvre") : nw === "manual" ? t("yours · manoeuvre") : "";
+    this.warpSub.textContent =
+      man || (note ? tf("rails ↓ {0}", note) : s.timeSpeed > 500 ? t("on rails") : `${+s.timeSpeed.toPrecision(3)} M/s`);
     this.warpBtn.classList.toggle("held", !!note || nw === "held");
     this.autoBtn.hidden = !nw;
     this.autoBtn.classList.toggle("on", s.autoWarp);
     this.rtBtn.classList.toggle("on", Math.abs(x - 1) < 1e-6);
     this.clockMain.textContent = clock.main;
     this.clockSub.textContent = clock.sub;
-    this.clock.title = `Scene time ${t.toFixed(3)} M · 1 M = ${secondsPerM(s).toPrecision(4)} s`;
+    this.clock.title = tf("Scene time {0} M · 1 M = {1} s", now.toFixed(3), secondsPerM(s).toPrecision(4));
     this.rec.classList.toggle("on", rec.on);
     this.recTime.textContent = rec.on || rec.frames ? `${rec.seconds.toFixed(1)} s` : "REC";
   }

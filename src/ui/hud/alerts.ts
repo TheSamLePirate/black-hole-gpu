@@ -5,6 +5,7 @@
 
 import type { FlightInfo } from "../../controller/telemetry";
 import { BODY_NAMES } from "../../targeting";
+import { t, tf } from "../../i18n";
 
 export type AlertLevel = "warning" | "caution" | "advisory";
 
@@ -33,9 +34,9 @@ const RANK: Record<AlertLevel, number> = { warning: 0, caution: 1, advisory: 2 }
 export function alertsOf(i: AlertInput): Alert[] {
   const out: Alert[] = [];
   const add = (id: string, level: AlertLevel, text: string) => out.push({ id, level, text });
-  const nm = (b: string) => (b === "star" ? "THE STAR" : ((BODY_NAMES as Record<string, string>)[b] ?? b).toUpperCase());
+  const nm = (b: string) => (b === "star" ? t("THE STAR") : ((BODY_NAMES as Record<string, string>)[b] ?? b).toUpperCase());
   const p = i.path;
-  if (p?.fate === "horizon") add("horizon", "warning", `COLLISION COURSE — HORIZON IN ${i.fmtM(p.pts.length * p.dt).toUpperCase()}`);
+  if (p?.fate === "horizon") add("horizon", "warning", tf("COLLISION COURSE — HORIZON IN {0}", i.fmtM(p.pts.length * p.dt).toUpperCase()));
   const hit = p?.hit ?? "star";
   const onGround = i.landed || i.surface?.landed;
   // (in a planet's frame the Kerr path ignores the planet's own pull: its status knows better)
@@ -43,7 +44,7 @@ export function alertsOf(i: AlertInput): Alert[] {
     i.status?.soi === hit && (i.status.status === "orbit" || i.status.status === "escape" || i.status.status === "hyperbolic");
   // (not while an autopilot flies about that body: it keeps the ship off it)
   const flownAbout = (i.auto === "approach" || i.auto === "orbit" || i.auto === "land" || i.auto === "takeoff") && i.target === hit;
-  if (p?.fate === "star" && !onGround && !orbiting && !flownAbout) add("collision", "warning", `COLLISION COURSE — ${nm(hit)}`);
+  if (p?.fate === "star" && !onGround && !orbiting && !flownAbout) add("collision", "warning", tf("COLLISION COURSE — {0}", nm(hit)));
   // the air's limits: the shield, the hull, the load
   const air = i.air;
   if (air && (air.inAir || air.margins.shield > 0.6 || air.margins.hull > 0.6)) {
@@ -53,28 +54,28 @@ export function alertsOf(i: AlertInput): Alert[] {
       add(
         "shield",
         air.margins.shield > 0.95 ? "warning" : "caution",
-        `HEAT SHIELD ${Math.round(air.shield)} K · ${pc(air.margins.shield)}`,
+        tf("HEAT SHIELD {0} K · {1}", Math.round(air.shield), pc(air.margins.shield)),
       );
     if (air.margins.hull > 0.8)
-      add("hull", air.margins.hull > 0.95 ? "warning" : "caution", `HULL ${Math.round(air.hull)} K · ${pc(air.margins.hull)}`);
+      add("hull", air.margins.hull > 0.95 ? "warning" : "caution", tf("HULL {0} K · {1}", Math.round(air.hull), pc(air.margins.hull)));
     if (air.margins.g > 0.75)
-      add("load", air.margins.g > 0.92 ? "warning" : "caution", `LOAD ${air.g.toFixed(1)} g · ${pc(air.margins.g)}`);
-    if (air.stalled && air.mach < 3) add("stall", "warning", "STALL");
-    if (air.heat > 5e4) add("plasma", "advisory", `PLASMA · ${(air.heat / 1e4).toFixed(0)} W/cm² · MACH ${air.mach.toFixed(1)}`);
+      add("load", air.margins.g > 0.92 ? "warning" : "caution", tf("LOAD {0} g · {1}", air.g.toFixed(1), pc(air.margins.g)));
+    if (air.stalled && air.mach < 3) add("stall", "warning", t("STALL"));
+    if (air.heat > 5e4) add("plasma", "advisory", tf("PLASMA · {0} W/cm² · MACH {1}", (air.heat / 1e4).toFixed(0), air.mach.toFixed(1)));
   }
   // the tank
   const fuel = i.engine.fuel;
-  if (fuel?.empty) add("fuel-empty", "warning", "PROPELLANT EXHAUSTED");
-  else if (fuel && fuel.fraction < 0.1) add("fuel-low", "caution", `PROPELLANT LOW · ${Math.round(fuel.fraction * 100)} %`);
+  if (fuel?.empty) add("fuel-empty", "warning", t("PROPELLANT EXHAUSTED"));
+  else if (fuel && fuel.fraction < 0.1) add("fuel-low", "caution", tf("PROPELLANT LOW · {0} %", Math.round(fuel.fraction * 100)));
   // the hole
-  if (i.ergo) add("ergo", "advisory", "ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING");
-  else if (i.region === "hole" && i.r < i.photon) add("photon", "caution", "INSIDE THE PHOTON ORBIT");
-  else if (i.region === "hole" && i.r < i.isco) add("isco", "caution", "BELOW THE ISCO · NO STABLE ORBIT");
+  if (i.ergo) add("ergo", "advisory", t("ERGOSPHERE · NO STATIC OBSERVER · FRAME DRAGGING"));
+  else if (i.region === "hole" && i.r < i.photon) add("photon", "caution", t("INSIDE THE PHOTON ORBIT"));
+  else if (i.region === "hole" && i.r < i.isco) add("isco", "caution", t("BELOW THE ISCO · NO STABLE ORBIT"));
   // the ground, the time
-  if (i.surface?.rolling) add("wheels", "advisory", `ON THE WHEELS · ${nm(i.surface.body)} · ${Math.round(i.surface.vHor)} M/S`);
-  else if (i.surface?.landed) add("landed", "advisory", `LANDED ON ${nm(i.surface.body)}`);
-  else if (i.landed && !i.surface) add("landed", "advisory", `LANDED ON ${nm(i.landedOn ?? "star")}`);
-  if (!i.animate) add("paused", "advisory", "TIME PAUSED · SPACE TO FLY");
+  if (i.surface?.rolling) add("wheels", "advisory", tf("ON THE WHEELS · {0} · {1} M/S", nm(i.surface.body), Math.round(i.surface.vHor)));
+  else if (i.surface?.landed) add("landed", "advisory", tf("LANDED ON {0}", nm(i.surface.body)));
+  else if (i.landed && !i.surface) add("landed", "advisory", tf("LANDED ON {0}", nm(i.landedOn ?? "star")));
+  if (!i.animate) add("paused", "advisory", t("TIME PAUSED · SPACE TO FLY"));
   // (the gravest first, in the order found)
   return out
     .map((a, k) => ({ a, k }))

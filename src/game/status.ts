@@ -3,6 +3,7 @@
 // escaping), its orbit's elements, the target, and the next event on its free-fall path.
 // Physical units: km, m/s, s.
 
+import { t as tx } from "../i18n";
 import type { CameraController } from "../controls";
 import type { Settings } from "../settings";
 import { BODY_NAMES } from "../targeting";
@@ -16,7 +17,7 @@ import { sub } from "../math/vec3";
 type Info = ReturnType<CameraController["flightInfo"]>;
 
 const C = C_MPS;
-const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? solarBody(id)?.name ?? id;
+const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? tx(solarBody(id)?.name ?? id);
 
 export interface OrbitFigures {
   /** above the surface [km] */
@@ -72,7 +73,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
   const out: RangerStatus = {
     side: "ours",
     soi: "sun",
-    soiName: "Sun",
+    soiName: tx("Sun"),
     soiKm: Infinity,
     status: "orbit",
     label: "",
@@ -97,7 +98,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     Object.assign(out, {
       side: "ours",
       soi: ref,
-      soiName: b.name,
+      soiName: tx(b.name),
       soiKm: soi * kmM,
       status: st,
       label: STATUS_LABEL[st],
@@ -132,7 +133,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       } else if (p.fate === "impact" && p.hit) {
         out.next = { kind: "impact", body: p.hit, name: nameOf(p.hit), inS: (p.times.at(-1)! - t) * M_SECONDS };
       } else if (p.fate === "wormhole") {
-        out.next = { kind: "mouth", body: "wormhole", name: "Wormhole", inS: (p.times.at(-1)! - t) * M_SECONDS };
+        out.next = { kind: "mouth", body: "wormhole", name: tx("Wormhole"), inS: (p.times.at(-1)! - t) * M_SECONDS };
       }
     }
     return out;
@@ -143,7 +144,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       ...out,
       side: "throat",
       soi: "wormhole",
-      soiName: "Wormhole",
+      soiName: tx("Wormhole"),
       status: "throat",
       label: "IN THE THROAT",
       altKm: NaN,

@@ -90,3 +90,27 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
     expect(await app.js<boolean>(`!!${shown}`)).toBe(false);
   });
 });
+
+// In French (U5.3): the page says its language, and the flight's words — the state, the bodies, the
+// clock, the settings — are French; the game's API (its status label) stays English.
+describe.skipIf(!E2E)("a11y: in French", () => {
+  let app: App;
+  beforeAll(async () => {
+    app = await App.boot({ hash: "scene=game:artemis", lang: "fr" });
+    await app.waitFor("__bh.camera.piloting", 30_000);
+    await app.waitFor(`document.querySelector(".fl-badge")?.textContent !== ""`, 10_000);
+  });
+  afterAll(() => {
+    app?.close();
+    stopServer();
+  });
+
+  test("the HUD speaks French", async () => {
+    expect(await app.js<string>("document.documentElement.lang")).toBe("fr");
+    expect(await app.js<string>(`document.querySelector(".fl-badge").textContent`)).toBe("EN ORBITE");
+    expect(await app.js<string>("__bh.game.status().label")).toBe("IN ORBIT");
+    const text = await app.js<string>("document.body.innerText");
+    for (const w of ["autour de Terre", "temps réel", "réglages", "Échap"]) expect(text.toLowerCase()).toContain(w.toLowerCase());
+    expect(app.cdp.errors).toEqual([]);
+  });
+});

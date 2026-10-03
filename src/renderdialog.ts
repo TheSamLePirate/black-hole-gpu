@@ -6,6 +6,28 @@ import type { Take, TakeState } from "./take";
 import { fmtFactor, fmtWarp, realTimeSpeed, warpLadder } from "./clock";
 import { VideoWriter } from "./video";
 import { onEscape } from "./ui/keys";
+import { t, tf } from "./i18n";
+
+/** The options' names as shown (their values stay the English keys below). */
+const OPTION_TEXT: Record<string, string> = {
+  Viewport: t("Viewport"),
+  Custom: t("Custom"),
+  "Square 2048²": t("Square 2048²"),
+  "Square 4096²": t("Square 4096²"),
+  "Portrait 2160×3840": t("Portrait 2160×3840"),
+  "Reference · Dormand–Prince, tol 1e-6": t("Reference · Dormand–Prince, tol 1e-6"),
+  "High · Dormand–Prince, tol 1e-5": t("High · Dormand–Prince, tol 1e-5"),
+  "Draft · fixed-step RK4, ε 0.02": t("Draft · fixed-step RK4, ε 0.02"),
+  "Video · Full HD frames, motion blur": t("Video · Full HD frames, motion blur"),
+  "Mega photo · 8K reference": t("Mega photo · 8K reference"),
+  off: t("off"),
+  Off: t("Off"),
+  "180° (half a frame)": t("180° (half a frame)"),
+  "360° (whole frame)": t("360° (whole frame)"),
+  "Interactive (30 ms/frame)": t("Interactive (30 ms/frame)"),
+  "Balanced (80 ms/frame)": t("Balanced (80 ms/frame)"),
+  "Turbo (250 ms/frame)": t("Turbo (250 ms/frame)"),
+};
 
 const RESOLUTIONS: Record<string, [number, number] | null> = {
   Viewport: null,
@@ -52,12 +74,12 @@ const PRESETS: Record<string, { res: string; spp: string; integ: string; noise: 
 
 /** The video's shots: the scene going on from now (as live), a recorded take, or a cinematic. */
 const SHOTS = {
-  live: "Live: the scene goes on from now",
-  take: "Recorded take",
-  orbit: "Cinematic orbit around the target",
-  journey: "Journey through the wormhole",
-  dive: "Dive to the horizon",
-} as const;
+  live: t("Live: the scene goes on from now"),
+  take: t("Recorded take"),
+  orbit: t("Cinematic orbit around the target"),
+  journey: t("Journey through the wormhole"),
+  dive: t("Dive to the horizon"),
+};
 type Shot = keyof typeof SHOTS;
 const SHUTTERS: Record<string, number> = { Off: 0, "180° (half a frame)": 0.5, "360° (whole frame)": 1 };
 
@@ -129,7 +151,7 @@ export function setupRenderDialog(d: DialogDeps) {
   const vStop = $<HTMLButtonElement>("v-stop");
 
   const fill = (sel: HTMLSelectElement, opts: string[], selected: string) => {
-    sel.innerHTML = opts.map((o) => `<option${o === selected ? " selected" : ""}>${o}</option>`).join("");
+    sel.innerHTML = opts.map((o) => `<option value="${o}"${o === selected ? " selected" : ""}>${OPTION_TEXT[o] ?? o}</option>`).join("");
   };
   fill(resSel, Object.keys(RESOLUTIONS), "Full HD 1920×1080");
   fill(sppSel, ["16", "64", "256", "1024", "4096"], "256");
@@ -175,18 +197,20 @@ export function setupRenderDialog(d: DialogDeps) {
     const tooBig = size[0] > max.dimension || size[1] > max.dimension || size[0] * size[1] > max.pixels;
     const mem = (size[0] * size[1] * 24 * 1.5) / 2 ** 20;
     status.textContent = tooBig
-      ? `⚠ ${size[0]}×${size[1]} exceeds this GPU's limits (max ${max.dimension}px, ${(max.pixels / 1e6).toFixed(0)} Mpx)`
-      : `${((size[0] * size[1]) / 1e6).toFixed(1)} Mpx · ≈${mem.toFixed(0)} MB of GPU memory`;
+      ? `⚠ ${tf("{0} exceeds this GPU's limits (max {1}px, {2} Mpx)", `${size[0]}×${size[1]}`, max.dimension, (max.pixels / 1e6).toFixed(0))}`
+      : tf("{0} Mpx · ≈{1} MB of GPU memory", ((size[0] * size[1]) / 1e6).toFixed(1), mem.toFixed(0));
     btnStart.disabled = tooBig;
   };
   resSel.onchange = syncSize;
   wIn.onchange = hIn.onchange = syncSize;
 
   let active = false;
+  /** the offline render paused (its button: Resume) */
+  let offPaused = false;
   const setActive = (a: boolean) => {
     active = a;
     btnPause.disabled = !a;
-    btnStop.textContent = a ? "Close" : "Close";
+    btnStop.textContent = t("Close");
     btnStop.disabled = !a;
     for (const b of exports) b.disabled = !a;
     for (const el of [resSel, wIn, hIn, sppSel, intSel, noiseSel, shutterIn]) el.disabled = a;
@@ -228,18 +252,19 @@ export function setupRenderDialog(d: DialogDeps) {
       budgetMs: BUDGETS[budgetSel.value]!,
     };
     d.renderer.startOffline(d.settings, d.time(), opts);
-    btnPause.textContent = "Pause";
-    btnStart.textContent = "Restart";
+    offPaused = false;
+    btnPause.textContent = t("Pause");
+    btnStart.textContent = t("Restart");
     setActive(true);
   };
   btnPause.onclick = () => {
-    const paused = btnPause.textContent === "Pause";
-    d.renderer.pauseOffline(paused);
-    btnPause.textContent = paused ? "Resume" : "Pause";
+    offPaused = !offPaused;
+    d.renderer.pauseOffline(offPaused);
+    btnPause.textContent = offPaused ? t("Resume") : t("Pause");
   };
   btnStop.onclick = () => {
     d.renderer.cancelOffline();
-    btnStart.textContent = "Start render";
+    btnStart.textContent = t("Start render");
     bar.style.width = "0%";
     setActive(false);
   };
@@ -258,7 +283,7 @@ export function setupRenderDialog(d: DialogDeps) {
   };
   /** the shots: their names, what they need */
   const fillShots = () => {
-    const take = d.take.ready ? `Recorded take (${d.take.seconds.toFixed(1)} s)` : "Recorded take (none yet: ● on the time bar)";
+    const take = d.take.ready ? tf("Recorded take ({0} s)", d.take.seconds.toFixed(1)) : t("Recorded take (none yet: ● on the time bar)");
     const keep = vSource.value;
     vSource.innerHTML = (Object.keys(SHOTS) as Shot[])
       .map((k) => `<option value="${k}"${k === "take" && !d.take.ready ? " disabled" : ""}>${k === "take" ? take : SHOTS[k]}</option>`)
@@ -269,8 +294,8 @@ export function setupRenderDialog(d: DialogDeps) {
     const rates = warpLadder(s).filter((w) => w !== s.timeSpeed);
     const keepRate = vRate.value;
     vRate.innerHTML = [
-      `<option value="live">As live · ${fmtWarp(s, false)}</option>`,
-      `<option value="0">Frozen · bullet time</option>`,
+      `<option value="live">${tf("As live · {0}", fmtWarp(s, false))}</option>`,
+      `<option value="0">${t("Frozen · bullet time")}</option>`,
       ...rates.reverse().map((w) => `<option value="${w}">${fmtFactor(w / rt)} · ${+w.toPrecision(3)} M/s</option>`),
     ].join("");
     vRate.value = [...vRate.options].some((o) => o.value === keepRate) ? keepRate : "live";
@@ -282,11 +307,11 @@ export function setupRenderDialog(d: DialogDeps) {
     if (take) vDuration.value = d.take.seconds.toFixed(1);
     vDuration.disabled = take || !!video;
     vNote.textContent = take
-      ? "The take replays what you did live — camera, ship, time — at the video's frame rate."
+      ? t("The take replays what you did live — camera, ship, time — at the video's frame rate.")
       : vSource.value === "live"
-        ? "The scene goes on from now as it would live: the camera's mode, the ship and its autopilot, the mission, the time."
+        ? t("The scene goes on from now as it would live: the camera's mode, the ship and its autopilot, the mission, the time.")
         : vRate.value === "0"
-          ? "Time frozen: the camera moves through a still instant."
+          ? t("Time frozen: the camera moves through a still instant.")
           : "";
   };
   vSource.onchange = syncShot;
@@ -313,7 +338,7 @@ export function setupRenderDialog(d: DialogDeps) {
     const duration = shot === "take" ? d.take.seconds : Math.min(600, Math.max(1, Number(vDuration.value) || 24));
     const cfg = await VideoWriter.supported(w, h, fps);
     if (!cfg) {
-      status.textContent = `⚠ this browser cannot encode H.264 at ${w}×${h}`;
+      status.textContent = `⚠ ${tf("this browser cannot encode H.264 at {0}", `${w}×${h}`)}`;
       return;
     }
     const writer = new VideoWriter(cfg, fps);
@@ -333,7 +358,7 @@ export function setupRenderDialog(d: DialogDeps) {
     let error = "";
     const label = (i: number) => {
       const per = i > 0 ? (performance.now() - started) / 1000 / i : NaN;
-      run.label = `🎞 frame ${i + 1} / ${n} · ETA ${fmtDuration(per * (n - i))} · `;
+      run.label = `🎞 ${tf("frame {0} / {1} · ETA {2}", i + 1, n, fmtDuration(per * (n - i)))} · `;
     };
     try {
       if (shot === "take") {
@@ -391,7 +416,7 @@ export function setupRenderDialog(d: DialogDeps) {
     vStart.disabled = false;
     vStop.disabled = true;
     d.renderer.cancelOffline();
-    btnStart.textContent = "Start render";
+    btnStart.textContent = t("Start render");
     bar.style.width = "0%";
     if (shot !== "live" && shot !== "take") {
       cam.enabled = true;
@@ -401,10 +426,10 @@ export function setupRenderDialog(d: DialogDeps) {
     setActive(false);
     syncShot();
     status.textContent = error
-      ? `⚠ video failed: ${error}`
+      ? `⚠ ${tf("video failed: {0}", error)}`
       : run.stop
-        ? "video stopped"
-        : `✔ video saved · ${n} frames in ${fmtDuration((performance.now() - started) / 1000)}`;
+        ? t("video stopped")
+        : `✔ ${tf("video saved · {0} frames in {1}", n, fmtDuration((performance.now() - started) / 1000))}`;
   };
 
   const stem = () => `${d.fileStem()}-${sppSel.value}spp`;
@@ -445,12 +470,12 @@ export function setupRenderDialog(d: DialogDeps) {
     update(st: OfflineStatus) {
       bar.style.width = `${(st.progress * 100).toFixed(2)}%`;
       bar.classList.toggle("done", st.done);
-      const state = st.done ? "✔ done" : st.paused ? "paused" : "rendering";
+      const state = st.done ? `✔ ${t("done")}` : st.paused ? t("paused") : t("rendering");
       status.textContent =
         (video?.label ?? "") +
         `${state} · ${st.width}×${st.height} · ${st.spp.toFixed(1)} / ${st.targetSpp} spp · ` +
-        `${(st.progress * 100).toFixed(1)} % · elapsed ${fmtDuration(st.elapsed)}` +
-        (st.done ? "" : ` · ETA ${fmtDuration(st.eta)}`);
+        `${(st.progress * 100).toFixed(1)} % · ${tf("elapsed {0}", fmtDuration(st.elapsed))}` +
+        (st.done ? "" : ` · ${tf("ETA {0}", fmtDuration(st.eta))}`);
     },
   };
 }

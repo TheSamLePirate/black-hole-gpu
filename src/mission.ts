@@ -13,6 +13,7 @@ import { circularSpeed, type Hold } from "./pilot";
 import type { Settings } from "./settings";
 import { toMouth, mouth } from "./wormhole";
 import { cross } from "./math/vec3";
+import { t, tf } from "./i18n";
 
 export const MISSION_PRESET = "Interstellar: wormhole to Gargantua";
 
@@ -74,7 +75,7 @@ export class Mission {
       {
         key: "start",
         title: "Endurance · Ranger 1",
-        line: () => "Our side of the wormhole — Gargantua waits on the other side",
+        line: () => t("Our side of the wormhole — Gargantua waits on the other side"),
         enter: () => {
           mount("quarter");
           warp(2);
@@ -84,8 +85,8 @@ export class Mission {
       },
       {
         key: "ignition",
-        title: "Main engine",
-        line: () => `Accelerating to ${this.vExit.toFixed(2)} c towards the throat`,
+        title: t("Main engine"),
+        line: () => tf("Accelerating to {0} c towards the throat", this.vExit.toFixed(2)),
         enter: () => {
           mount("wing");
           P.throttle = 1;
@@ -98,8 +99,8 @@ export class Mission {
       },
       {
         key: "throat",
-        title: "The wormhole",
-        line: () => "Through the throat: a sphere, 1.5 M across",
+        title: t("The wormhole"),
+        line: () => t("Through the throat: a sphere, 1.5 M across"),
         enter: () => {
           mount("chase");
           hold("prograde");
@@ -110,7 +111,7 @@ export class Mission {
       {
         key: "arrival",
         title: "Gargantua",
-        line: () => `The other side · r = ${info().r.toFixed(1)} M · circularizing`,
+        line: () => tf("The other side · r = {0} M · circularizing", info().r.toFixed(1)),
         enter: () => {
           mount("quarter");
           warp(5);
@@ -130,12 +131,12 @@ export class Mission {
       {
         // this orbit comes back through the mouth one turn later: up, clear of the gluing sphere
         key: "raise",
-        title: "Orbit raise",
+        title: t("Orbit raise"),
         line: () => this.note,
         enter: () => {
           const r2 = Math.ceil(Math.hypot(...(mouth(s).C as Vec3)) + mouth(s).rGlue + 4);
           const msg = cam.planTransfer("orbit", r2);
-          this.note = cam.plan.nodes.length ? `${noteOf(cam.plan.note)} — clear of the wormhole's mouth` : msg;
+          this.note = cam.plan.nodes.length ? tf("{0} — clear of the wormhole's mouth", noteOf(cam.plan.note)) : msg;
           if (!cam.plan.nodes.length) return;
           P.setAuto("node");
           hold("prograde");
@@ -158,10 +159,10 @@ export class Mission {
       },
       {
         key: "orbit",
-        title: "In orbit around Gargantua",
+        title: t("In orbit around Gargantua"),
         line: () => {
           const i = info();
-          return `r = ${i.r.toFixed(1)} M · ${(i.speed).toFixed(3)} c · one hour here, ${(1 / i.dtau).toFixed(2)} hours far away`;
+          return tf("r = {0} M · {1} c · one hour here, {2} hours far away", i.r.toFixed(1), i.speed.toFixed(3), (1 / i.dtau).toFixed(2));
         },
         enter: () => {
           hold("prograde"); // (flying forwards: the best views, the wings in the orbital plane)
@@ -175,11 +176,11 @@ export class Mission {
       },
       {
         key: "align",
-        title: "Plane change",
+        title: t("Plane change"),
         line: () => this.note,
         enter: () => {
           const msg = cam.planAlign("star");
-          this.note = cam.plan.nodes.length ? noteOf(cam.plan.note) : "Already in the star's orbital plane";
+          this.note = cam.plan.nodes.length ? noteOf(cam.plan.note) : t("Already in the star's orbital plane");
           if (!cam.plan.nodes.length) return;
           this.say(msg);
           P.setAuto("node");
@@ -196,7 +197,7 @@ export class Mission {
       },
       {
         key: "transfer",
-        title: "Transfer to the companion star",
+        title: t("Transfer to the companion star"),
         line: () => this.note,
         enter: () => {
           const msg = cam.planTransfer("star", 30, { orbitStar: true });
@@ -218,10 +219,10 @@ export class Mission {
       },
       {
         key: "star",
-        title: "In orbit around the companion star",
+        title: t("In orbit around the companion star"),
         line: () => {
           const i = info();
-          return `${(i.targetDist ?? 0).toFixed(1)} M from its centre · Gargantua ${i.r.toFixed(0)} M away`;
+          return tf("{0} M from its centre · Gargantua {1} M away", (i.targetDist ?? 0).toFixed(1), i.r.toFixed(0));
         },
         enter: () => {
           if (P.auto !== "orbit") P.setAuto("orbit");
@@ -356,7 +357,7 @@ export class Mission {
     this.s.showGeodesic = this.geodesic;
     this.s.shipLight = this.light;
     this.cam.setLook(0, 0);
-    this.caption("Mission complete", "The Ranger keeps its orbit — take the controls whenever you like");
+    this.caption(t("Mission complete"), t("The Ranger keeps its orbit — take the controls whenever you like"));
     setTimeout(() => {
       if (!this.active) this.el.classList.remove("on");
     }, 6000);
@@ -381,10 +382,10 @@ export class Mission {
       const l = this.lightTo + (this.s.shipLight - this.lightTo) * Math.exp(-dt / 1.5);
       this.s.shipLight = Math.abs(l - this.lightTo) < 0.01 ? this.lightTo : l;
     }
-    if (!this.s.ship || !this.cam.piloting) return this.stop("Mission stopped");
+    if (!this.s.ship || !this.cam.piloting) return this.stop(t("Mission stopped"));
     // past the throat, the mission lives in Gargantua's universe
     const past = this.phases.findIndex((p) => p.key === "arrival");
-    if (this.i >= past && cameraFrame(this.s).region !== "hole") return this.stop("Mission stopped: back in the wormhole");
+    if (this.i >= past && cameraFrame(this.s).region !== "hole") return this.stop(t("Mission stopped: back in the wormhole"));
     this.caption(ph.title, ph.line(), `${this.i + 1} / ${this.phases.length}`);
     if (ph.step(dt)) this.next();
   }
@@ -394,7 +395,7 @@ export class Mission {
     if (key === this.shown) return;
     this.shown = key;
     const [st, b, sp] = this.el.children as unknown as HTMLElement[];
-    st!.textContent = step ? `Mission · ${step}` : "Mission";
+    st!.textContent = step ? tf("Mission · {0}", step) : t("Mission");
     b!.textContent = title;
     sp!.textContent = line;
     this.el.classList.add("on");

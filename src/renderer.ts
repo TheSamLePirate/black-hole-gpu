@@ -19,6 +19,7 @@ import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import { loading } from "./loading";
+import { t, tf } from "./i18n";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
@@ -66,6 +67,9 @@ import {
 import type { Settings } from "./settings";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { AU_M, C_MPS } from "./units";
+
+/** the space station's loading stage, as the loading screen names it */
+const STATION_LOADING = t("The space station");
 
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
@@ -688,8 +692,8 @@ export class Renderer {
    * procedural sky is shown until it is ready.
    */
   async loadSky(): Promise<void> {
-    loading.stage("sky", "Milky Way — the Gaia DR2 map", { weight: 2 });
-    loading.stage("stars", "Stars — the Hipparcos & HYG catalogue", { weight: 2 });
+    loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
+    loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
     const stars = Promise.all([
       loadPackedTexture(this.device, starLodUrl, (u) => loading.fetch(u, "stars")),
       loadStarCatalogue(this.device, starCatalogueUrl, (u) => loading.fetch(u, "stars")),
@@ -717,7 +721,7 @@ export class Renderer {
   /** Loads the solar system's maps in the background, the first time a scene needs them. */
   private requestPlanetMaps() {
     this.mapsRequested = true;
-    loading.stage("maps", "Planets & moons — the solar system's maps", { weight: 3 });
+    loading.stage("maps", t("Planets & moons — the solar system's maps"), { weight: 3 });
     loading
       .track(
         "maps",
@@ -739,7 +743,7 @@ export class Renderer {
     this.earthWant = tier;
     const token = ++this.earthJob;
     const first = !this.earthMaps.tier;
-    if (first) loading.stage("earth", "The Earth — day, night, clouds and relief", { weight: 3 });
+    if (first) loading.stage("earth", t("The Earth — day, night, clouds and relief"), { weight: 3 });
     // (out of GPU memory while the maps load: the tier below, or none — not a lost device)
     this.device.pushErrorScope("out-of-memory");
     const job = loadEarthMaps(this.device, tier, first ? (u) => loading.fetch(u, "earth") : undefined);
@@ -848,14 +852,15 @@ export class Renderer {
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
-    if (!navigator.gpu) throw new Error("WebGPU is not available in this browser.");
-    loading.stage("gpu", "WebGPU — the graphics device", { weight: 0.5, indeterminate: true, eta: 0.5 });
-    loading.stage("shaders", "Shaders — geodesics, disk, sky, Ranger", { weight: 1 });
+    if (!navigator.gpu) throw new Error(t("WebGPU is not available in this browser."));
+    loading.stage("gpu", t("WebGPU — the graphics device"), { weight: 0.5, indeterminate: true, eta: 0.5 });
+    loading.stage("shaders", t("Shaders — geodesics, disk, sky, Ranger"), { weight: 1 });
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-    if (!adapter) throw new Error("No WebGPU adapter found.");
+    if (!adapter) throw new Error(t("No WebGPU adapter found."));
     // (the tracer's bind group holds 10 storage buffers: said plainly here rather than by a layout's validation error)
     const storageBuffers = adapter.limits.maxStorageBuffersPerShaderStage;
-    if (storageBuffers < 10) throw new Error(`This GPU binds ${storageBuffers} storage buffers per shader stage; the ray tracer needs 10.`);
+    if (storageBuffers < 10)
+      throw new Error(tf("This GPU binds {0} storage buffers per shader stage; the ray tracer needs 10.", storageBuffers));
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
       // (and the compressed textures it samples: the colour maps' KTX2, transcoded to BC7 or ASTC)
@@ -876,7 +881,7 @@ export class Renderer {
       return info;
     });
     const context = canvas.getContext("webgpu");
-    if (!context) throw new Error("Could not create a WebGPU canvas context.");
+    if (!context) throw new Error(t("Could not create a WebGPU canvas context."));
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
     loading.done("gpu");
@@ -918,7 +923,7 @@ export class Renderer {
       ),
     };
     void lost.then((info) => {
-      r.lost = info.reason === "destroyed" ? "released" : info.message || "the GPU was reset";
+      r.lost = info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (info.reason !== "destroyed") r.onLost?.(r.lost);
     });
     // (errors the code did not scope: counted, the first ones told — a silent black image otherwise)
@@ -929,7 +934,7 @@ export class Renderer {
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
     // (the pipelines compile in the GPU process: the tracer's awaited below, the others' by the first frame)
-    loading.stage("pipelines", "Compiling the ray tracer — first image", { weight: 4, indeterminate: true, eta: 3 });
+    loading.stage("pipelines", t("Compiling the ray tracer — first image"), { weight: 4, indeterminate: true, eta: 3 });
     // (its failure held as a value: told after the WGSL's own messages, which name the line)
     const tracerFailure = r.tracerCompiled.then(
       () => null,
@@ -941,13 +946,15 @@ export class Renderer {
       loading.set("shaders", 0.3 + (0.7 * ++checked) / Object.keys(src).length);
       const errors = info.messages.filter((m) => m.type === "error");
       if (errors.length) {
-        throw new Error(`${name}.wgsl failed to compile:\n` + errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n"));
+        throw new Error(
+          `${tf("{0}.wgsl failed to compile:", name)}\n${errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n")}`,
+        );
       }
     }
     const failure = await tracerFailure;
-    if (failure) throw new Error(`The ray tracer's pipelines failed to compile: ${failure.message}`);
+    if (failure) throw new Error(tf("The ray tracer's pipelines failed to compile: {0}", failure.message));
     const err = await device.popErrorScope();
-    if (err) throw new Error(`WebGPU pipeline creation failed: ${err.message}`);
+    if (err) throw new Error(tf("WebGPU pipeline creation failed: {0}", err.message));
     loading.done("shaders");
     return r;
   }
@@ -2700,7 +2707,7 @@ export class Renderer {
       this.stationLoading ??= loading
         .track(
           "iss",
-          "The space station",
+          STATION_LOADING,
           this.station.load((u) => loading.fetch(u, "iss")),
         )
         .then(

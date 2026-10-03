@@ -2,6 +2,7 @@
 // its ladder (the keys , . / and the transport bar step along it), and how the clock reads — a date in
 // the game's world (the solar system and Gargantua's, 10⁸ M☉), a time in M elsewhere.
 
+import { t } from "./i18n";
 import type { Settings } from "./settings";
 import { EPOCH_DATE, M_SECONDS } from "./system/solar";
 
@@ -46,9 +47,9 @@ export function fmtFactor(x: number): string {
 
 /** The warp as the user reads it: "×1 real time", "×2.5k", "Paused". */
 export function fmtWarp(s: Pick<Settings, "massSolar" | "timeSpeed" | "animate">, withPause = true): string {
-  if (withPause && !s.animate) return "Paused";
+  if (withPause && !s.animate) return t("Paused");
   const x = warpFactor(s);
-  return Math.abs(x - 1) < 1e-6 ? "×1 real time" : fmtFactor(x);
+  return Math.abs(x - 1) < 1e-6 ? t("×1 real time") : fmtFactor(x);
 }
 
 /** A duration [s] in its largest units: 42 s, 3 min 20 s, 5 h 12 min, 12 d 4 h, 3.2 yr. */

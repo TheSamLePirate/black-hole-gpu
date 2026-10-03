@@ -8,6 +8,7 @@
 // A CPU mirror of the shader's ray tracing (same equations and emission-time convention).
 
 import type { CameraFrame } from "./camera";
+import { t } from "./i18n";
 import { blToCartesian } from "./camera";
 import { horizon, isco, rk4, stepSize, zamo, type State, type Vec3 } from "./physics";
 import { OUR_TARGETS, SYSTEM_BODIES, type OurBody, type Settings, type SystemBody, type Target } from "./settings";
@@ -25,21 +26,24 @@ import { cross, dot, lin, normalize as norm, sub } from "./math/vec3";
 
 export type Body = Target;
 
-export const BODY_NAMES: Record<Body, string> = {
-  hole: "Gargantua",
-  star: "Star",
-  wormhole: "Wormhole",
-  barycentre: "Centre of mass",
-  miller: "Miller",
-  mann: "Mann",
-  k2: "Edmunds' star",
-  edmunds: "Edmunds",
-  iss: "ISS",
-  ranger: "Ranger",
-  lander: "Lander",
-  endurance: "Endurance",
-  ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
-};
+/** The bodies' names, in the interface's language (the language is fixed at load). */
+export const BODY_NAMES: Record<Body, string> = Object.fromEntries(
+  Object.entries({
+    hole: "Gargantua",
+    star: "Star",
+    wormhole: "Wormhole",
+    barycentre: "Centre of mass",
+    miller: "Miller",
+    mann: "Mann",
+    k2: "Edmunds' star",
+    edmunds: "Edmunds",
+    iss: "ISS",
+    ranger: "Ranger",
+    lander: "Lander",
+    endurance: "Endurance",
+    ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
+  }).map(([k, v]) => [k, t(v)]),
+) as Record<Body, string>;
 
 const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
 /** A body of our universe (the solar system, beyond our end of the wormhole) */

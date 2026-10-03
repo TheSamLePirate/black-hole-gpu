@@ -2,6 +2,7 @@
 // otherwise), by group, with a filter and a search — a vertical grid, so a mouse wheel scrolls it
 // everywhere (a horizontal strip does not scroll with a wheel on Windows).
 
+import { t } from "../i18n";
 import { PRESET_INFO, SCENE_GROUPS, type SceneGroup } from "./schema";
 import { SCENE_THUMBS } from "./scene-thumbs";
 import { onEscape } from "./keys";
@@ -14,7 +15,7 @@ export interface SceneGalleryOptions {
 }
 
 export function sceneTitle(name: string) {
-  return PRESET_INFO[name]?.title ?? name;
+  return t(PRESET_INFO[name]?.title ?? name);
 }
 export function sceneGroup(name: string): SceneGroup {
   return PRESET_INFO[name]?.group ?? "hole";
@@ -40,25 +41,25 @@ export class SceneGallery {
   constructor(private o: SceneGalleryOptions) {
     this.search = document.createElement("input");
     this.search.type = "search";
-    this.search.placeholder = "Search scenes…";
+    this.search.placeholder = t("Search scenes…");
     this.search.spellcheck = false;
-    this.search.setAttribute("aria-label", "Search scenes");
+    this.search.setAttribute("aria-label", t("Search scenes"));
     this.search.oninput = () => {
       this.query = this.search.value.trim().toLowerCase();
       this.render();
     };
     const close = h("button", "sg-close", "✕");
-    close.title = "Close (Esc)";
-    close.setAttribute("aria-label", "Close");
+    close.title = t("Close (Esc)");
+    close.setAttribute("aria-label", t("Close"));
     close.onclick = () => this.close();
     this.filters = h("nav", "sg-filters");
     this.filters.setAttribute("role", "tablist");
     this.body = h("div", "sg-body");
-    const head = h("header", "sg-head", h("h2", "", "Scenes"), h("label", "sg-search", this.search), close);
+    const head = h("header", "sg-head", h("h2", "", t("Scenes")), h("label", "sg-search", this.search), close);
     this.dialog = h("section", "sg glass", head, this.filters, this.body);
     this.dialog.setAttribute("role", "dialog");
     this.dialog.setAttribute("aria-modal", "true");
-    this.dialog.setAttribute("aria-label", "Scenes");
+    this.dialog.setAttribute("aria-label", t("Scenes"));
     this.root = h("div", "sg-backdrop", this.dialog);
     this.root.hidden = true;
     this.root.addEventListener("pointerdown", (e) => {
@@ -113,7 +114,7 @@ export class SceneGallery {
     if (this.group !== "all" && sceneGroup(name) !== this.group) return false;
     if (!this.query) return true;
     const hay =
-      `${name} ${i?.title ?? ""} ${i?.description ?? ""} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(name))?.label}`.toLowerCase();
+      `${name} ${i?.title ?? ""} ${i?.description ?? ""} ${sceneTitle(name)} ${t(i?.description ?? "")} ${SCENE_GROUPS.find((g) => g.id === sceneGroup(name))?.label}`.toLowerCase();
     return this.query.split(/\s+/).every((w) => hay.includes(w));
   }
 
@@ -122,10 +123,10 @@ export class SceneGallery {
     this.filters.replaceChildren();
     const count = (g: SceneGroup | "all") => this.o.names.filter((n) => g === "all" || sceneGroup(n) === g).length;
     for (const g of [{ id: "all" as const, label: "All", hint: "Every scene" }, ...SCENE_GROUPS]) {
-      const b = h("button", g.id === this.group ? "on" : "", g.label, h("small", "", String(count(g.id))));
+      const b = h("button", g.id === this.group ? "on" : "", t(g.label), h("small", "", String(count(g.id))));
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(g.id === this.group));
-      b.title = g.hint;
+      b.title = t(g.hint);
       b.onclick = () => {
         this.group = g.id;
         this.render();
@@ -144,7 +145,7 @@ export class SceneGallery {
       any = true;
       const grid = h("div", "sg-grid");
       for (const name of names) grid.append(this.card(name, name === current));
-      this.body.append(h("h3", "sg-gtitle", g.label, h("small", "", g.hint)), grid);
+      this.body.append(h("h3", "sg-gtitle", t(g.label), h("small", "", t(g.hint))), grid);
     }
     if (!any) this.body.append(h("p", "sg-empty", `No scene matches “${this.query}”.`));
   }
@@ -163,12 +164,12 @@ export class SceneGallery {
       img.decoding = "async";
       thumb.append(img);
     } else thumb.append(h("span", "sg-glyph", info?.icon ?? "•"));
-    if (current) thumb.append(h("span", "sg-badge", "Current"));
+    if (current) thumb.append(h("span", "sg-badge", t("Current")));
     const card = h(
       "button",
       `sg-card${current ? " current" : ""}`,
       thumb,
-      h("span", "sg-text", h("b", "", sceneTitle(name)), h("span", "", info?.description ?? "")),
+      h("span", "sg-text", h("b", "", sceneTitle(name)), h("span", "", t(info?.description ?? ""))),
     );
     card.onclick = () => {
       this.close();

@@ -28,6 +28,7 @@ import {
   type Elements,
   type V3,
 } from "./kepler";
+import { t, tf } from "../i18n";
 
 export interface Burn {
   /** seconds from now */
@@ -116,24 +117,24 @@ function timeAt(el: Elements, w: Where): number {
 export function circularize(c: FcContext, where: Where): OpResult {
   const el = elements(c.mu, c.r, c.v, c.pole);
   const t = timeAt(el, where);
-  if (!Number.isFinite(t)) return fail("Not on this orbit (it never gets there)");
+  if (!Number.isFinite(t)) return fail(tf("Not on this orbit (it never gets there)"));
   const s = at(c, t);
   const r = len(s.r);
   const up = unit(s.r);
   const h = unit(cross(s.r, s.v));
   const want = scale(unit(cross(h, up)), Math.sqrt(c.mu / r));
   const dv = add(want, s.v, -1);
-  return result(c, [{ t, dv: toPNR(s.r, s.v, dv), label: "circularize" }], `Circular at ${((r - c.R) / 1e3).toFixed(0)} km`);
+  return result(c, [{ t, dv: toPNR(s.r, s.v, dv), label: tf("circularize") }], tf("Circular at {0} km", ((r - c.R) / 1e3).toFixed(0)));
 }
 
 /** The apoapsis to a distance: a prograde (retrograde) burn at the periapsis, or now. */
 export function setApoapsis(c: FcContext, ra: number, where: Where = "pe"): OpResult {
   const el = elements(c.mu, c.r, c.v, c.pole);
   const t = timeAt(el, where);
-  if (!Number.isFinite(t)) return fail("No periapsis ahead");
+  if (!Number.isFinite(t)) return fail(tf("No periapsis ahead"));
   const s = at(c, t);
   const r = len(s.r);
-  if (ra < r) return fail("The apoapsis cannot be below where the burn is");
+  if (ra < r) return fail(tf("The apoapsis cannot be below where the burn is"));
   // (a horizontal-speed change: the new orbit's other apsis at ra)
   const up = unit(s.r);
   const vr = dot(s.v, up);
@@ -142,8 +143,8 @@ export function setApoapsis(c: FcContext, ra: number, where: Where = "pe"): OpRe
   const vtWant = Math.sqrt(h2) / r;
   return result(
     c,
-    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "apoapsis" }],
-    `Apoapsis ${((ra - c.R) / 1e3).toFixed(0)} km`,
+    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: tf("apoapsis") }],
+    tf("Apoapsis {0} km", ((ra - c.R) / 1e3).toFixed(0)),
   );
 }
 
@@ -151,10 +152,10 @@ export function setApoapsis(c: FcContext, ra: number, where: Where = "pe"): OpRe
 export function setPeriapsis(c: FcContext, rp: number, where: Where = "ap"): OpResult {
   const el = elements(c.mu, c.r, c.v, c.pole);
   const t = timeAt(el, where);
-  if (!Number.isFinite(t)) return fail("No apoapsis ahead (an escape): burn now");
+  if (!Number.isFinite(t)) return fail(tf("No apoapsis ahead (an escape): burn now"));
   const s = at(c, t);
   const r = len(s.r);
-  if (rp > r) return fail("The periapsis cannot be above where the burn is");
+  if (rp > r) return fail(tf("The periapsis cannot be above where the burn is"));
   const up = unit(s.r);
   const vr = dot(s.v, up);
   const vt = len(add(s.v, up, -vr));
@@ -162,8 +163,8 @@ export function setPeriapsis(c: FcContext, rp: number, where: Where = "ap"): OpR
   const vtWant = Math.sqrt(h2) / r;
   return result(
     c,
-    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: "periapsis" }],
-    `Periapsis ${((rp - c.R) / 1e3).toFixed(0)} km`,
+    [{ t, dv: toPNR(s.r, s.v, scale(unit(add(s.v, up, -vr)), vtWant - vt)), label: tf("periapsis") }],
+    tf("Periapsis {0} km", ((rp - c.R) / 1e3).toFixed(0)),
   );
 }
 
@@ -171,7 +172,7 @@ export function setPeriapsis(c: FcContext, rp: number, where: Where = "ap"): OpR
  *  (periapsis to rise, apoapsis to fall), the second at the other end. */
 export function hohmann(c: FcContext, r2: number): OpResult {
   const el = elements(c.mu, c.r, c.v, c.pole);
-  if (el.e >= 1) return fail("Bound orbits only");
+  if (el.e >= 1) return fail(t("Bound orbits only"));
   const up = r2 > el.ra;
   const b1 = up ? setApoapsis(c, r2, "pe") : setPeriapsis(c, r2, "ap");
   if (!b1.ok) return b1;
@@ -179,8 +180,8 @@ export function hohmann(c: FcContext, r2: number): OpResult {
   const c1: FcContext = { ...c, r: s1.r, v: s1.v };
   const b2 = circularize(c1, up ? "ap" : "pe");
   if (!b2.ok) return b2;
-  const burns = [b1.burns[0]!, { ...b2.burns[0]!, t: b2.burns[0]!.t + s1.t, label: "circularize" }];
-  return result(c, burns, `Hohmann to ${((r2 - c.R) / 1e3).toFixed(0)} km circular`);
+  const burns = [b1.burns[0]!, { ...b2.burns[0]!, t: b2.burns[0]!.t + s1.t, label: t("circularize") }];
+  return result(c, burns, tf("Hohmann to {0} km circular", ((r2 - c.R) / 1e3).toFixed(0)));
 }
 
 /** The orbit's plane turned to an inclination (against the body's equator) at the cheaper node
@@ -189,7 +190,7 @@ export function setInclination(c: FcContext, inc: number): OpResult {
   const k = c.pole ?? [0, 0, 1];
   const el = elements(c.mu, c.r, c.v, k);
   const nd = nodesAgainst(el, k);
-  if (!nd) return fail("Equatorial: no node to turn the plane at");
+  if (!nd) return fail(t("Equatorial: no node to turn the plane at"));
   const choose = [nd.an, nd.dn].map((nu) => ({ nu, t: timeTo(el, nu), r: len(stateAt(el, nu).r) }));
   const pick = choose.sort((a, b) => b.r - a.r)[0]!;
   const s = at(c, pick.t);
@@ -204,19 +205,19 @@ export function setInclination(c: FcContext, inc: number): OpResult {
   const vN = Math.abs(incOf(vA) - inc) < Math.abs(incOf(vB) - inc) ? vA : vB;
   return result(
     c,
-    [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, s.v, -1)), label: "plane change" }],
-    `Inclination ${((inc * 180) / Math.PI).toFixed(1)}°`,
+    [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, s.v, -1)), label: t("plane change") }],
+    tf("Inclination {0}°", ((inc * 180) / Math.PI).toFixed(1)),
   );
 }
 
 /** The orbit's plane onto the target's: at the nearer of their relative nodes (the farther from the
  *  body if both are close: cheaper). */
 export function matchPlanes(c: FcContext): OpResult {
-  if (!c.target) return fail("No target");
+  if (!c.target) return fail(t("No target"));
   const el = elements(c.mu, c.r, c.v, c.pole);
   const hT = unit(cross(c.target.r, c.target.v));
   const nd = nodesAgainst(el, hT);
-  if (!nd) return fail("Already in the target's plane");
+  if (!nd) return fail(t("Already in the target's plane"));
   const opts = [nd.an, nd.dn].map((nu) => ({ nu, t: timeTo(el, nu), r: len(stateAt(el, nu).r) }));
   const pick = opts.sort((a, b) => a.t - b.t)[0]!;
   const s = at(c, pick.t);
@@ -228,7 +229,9 @@ export function matchPlanes(c: FcContext): OpResult {
   return result(
     c,
     [{ t: pick.t, dv: toPNR(s.r, s.v, add(vN, v, -1)), label: pick.nu === nd.an ? "AN" : "DN" }],
-    `Planes matched (${((ri * 180) / Math.PI).toFixed(2)}° at the ${pick.nu === nd.an ? "ascending" : "descending"} node)`,
+    pick.nu === nd.an
+      ? tf("Planes matched ({0}° at the ascending node)", ((ri * 180) / Math.PI).toFixed(2))
+      : tf("Planes matched ({0}° at the descending node)", ((ri * 180) / Math.PI).toFixed(2)),
   );
 }
 
@@ -236,12 +239,12 @@ export function matchPlanes(c: FcContext): OpResult {
  *  every k turns, a probe dropped each. */
 export function resonant(c: FcContext, k: number): OpResult {
   const el = elements(c.mu, c.r, c.v, c.pole);
-  if (el.e >= 1) return fail("Bound orbits only");
+  if (el.e >= 1) return fail(t("Bound orbits only"));
   const a2 = el.a * Math.cbrt(k * k);
   const ra = 2 * a2 - el.rp;
-  if (ra < el.rp) return fail("That period would need a lower periapsis");
+  if (ra < el.rp) return fail(t("That period would need a lower periapsis"));
   const r = setApoapsis(c, ra, "pe");
-  return { ...r, note: `Resonant ${k.toFixed(2)}:1 (period ${((el.T * k) / 60).toFixed(0)} min)` };
+  return { ...r, note: tf("Resonant {0}:1 (period {1} min)", k.toFixed(2), ((el.T * k) / 60).toFixed(0)) };
 }
 
 /**
@@ -252,10 +255,10 @@ export function resonant(c: FcContext, k: number): OpResult {
  */
 export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; nTof?: number } = { rendezvous: true }): OpResult {
   const T = c.target;
-  if (!T) return fail("No target");
+  if (!T) return fail(t("No target"));
   const elS = elements(c.mu, c.r, c.v, c.pole),
     elT = elements(c.mu, T.r, T.v, c.pole);
-  if (elS.e >= 1 || elT.e >= 1) return fail("Bound orbits only");
+  if (elS.e >= 1 || elT.e >= 1) return fail(t("Bound orbits only"));
   // (departures over a whole synodic period — the phase comes round once in it —, at most a month;
   // a step no more than a twelfth of the craft's orbit)
   const span = Math.min(Math.max(1.05 * synodic(elS.T, elT.T), elS.T), 30 * 86400);
@@ -281,19 +284,21 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
     }
     dv.push(row);
   }
-  if (!Number.isFinite(bv)) return fail("No transfer found");
+  if (!Number.isFinite(bv)) return fail(t("No transfer found"));
   const td = dep[best.i]!,
-    tf = tof[best.j]!;
+    tFl = tof[best.j]!;
   const s = propagate(c.mu, c.r, c.v, td);
-  const tg = propagate(c.mu, T.r, T.v, td + tf);
-  const L = lambert(c.mu, s.r, tg.r, tf, N)!;
-  const burns: Burn[] = [{ t: td, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: "departure" }];
-  if (o.rendezvous) burns.push({ t: td + tf, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: "match" });
+  const tg = propagate(c.mu, T.r, T.v, td + tFl);
+  const L = lambert(c.mu, s.r, tg.r, tFl, N)!;
+  const burns: Burn[] = [{ t: td, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: t("departure") }];
+  if (o.rendezvous) burns.push({ t: td + tFl, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: t("match") });
   const grid = { dep, tof, dv, best };
   return result(
     c,
     burns,
-    `${o.rendezvous ? "Rendezvous" : "Intercept"} with ${T.name}: departing in ${(td / 60).toFixed(0)} min, ${(tf / 60).toFixed(0)} min of flight`,
+    o.rendezvous
+      ? tf("Rendezvous with {0}: departing in {1} min, {2} min of flight", T.name, (td / 60).toFixed(0), (tFl / 60).toFixed(0))
+      : tf("Intercept with {0}: departing in {1} min, {2} min of flight", T.name, (td / 60).toFixed(0), (tFl / 60).toFixed(0)),
     grid,
   );
 }
@@ -301,15 +306,19 @@ export function transfer(c: FcContext, o: { rendezvous: boolean; nDep?: number; 
 /** The velocities matched with the target's at the closest approach (within two orbits). */
 export function matchVelocities(c: FcContext): OpResult {
   const T = c.target;
-  if (!T) return fail("No target");
+  if (!T) return fail(t("No target"));
   const el = elements(c.mu, c.r, c.v, c.pole);
   const ca = closestApproach(c.mu, { r: c.r, v: c.v }, T, Number.isFinite(el.T) ? 2 * el.T : 86400);
   const s = propagate(c.mu, c.r, c.v, ca.t),
     tg = propagate(c.mu, T.r, T.v, ca.t);
   return result(
     c,
-    [{ t: ca.t, dv: toPNR(s.r, s.v, add(tg.v, s.v, -1)), label: "match" }],
-    `Velocities matched at the closest approach: ${ca.dist < 1e4 ? `${ca.dist.toFixed(0)} m` : `${(ca.dist / 1e3).toFixed(1)} km`} off, in ${(ca.t / 60).toFixed(0)} min`,
+    [{ t: ca.t, dv: toPNR(s.r, s.v, add(tg.v, s.v, -1)), label: t("match") }],
+    tf(
+      "Velocities matched at the closest approach: {0} off, in {1} min",
+      ca.dist < 1e4 ? `${ca.dist.toFixed(0)} m` : `${(ca.dist / 1e3).toFixed(1)} km`,
+      (ca.t / 60).toFixed(0),
+    ),
   );
 }
 
@@ -317,7 +326,7 @@ export function matchVelocities(c: FcContext): OpResult {
  *  parts, the approach's distance as the cost). */
 export function fineTune(c: FcContext, t: number): OpResult {
   const T = c.target;
-  if (!T) return fail("No target");
+  if (!T) return fail(tf("No target"));
   const el = elements(c.mu, c.r, c.v, c.pole);
   const span = Number.isFinite(el.T) ? 1.5 * el.T : 86400;
   const s = propagate(c.mu, c.r, c.v, t),
@@ -339,8 +348,8 @@ export function fineTune(c: FcContext, t: number): OpResult {
   }
   return result(
     c,
-    [{ t, dv: x, label: "correction" }],
-    `The closest approach brought to ${f < 1e4 ? `${f.toFixed(0)} m` : `${(f / 1e3).toFixed(1)} km`}`,
+    [{ t, dv: x, label: tf("correction") }],
+    tf("The closest approach brought to {0}", f < 1e4 ? `${f.toFixed(0)} m` : `${(f / 1e3).toFixed(1)} km`),
   );
 }
 

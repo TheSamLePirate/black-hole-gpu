@@ -4,6 +4,9 @@
 // entry, the approach, in orbit…). Derived each frame from the controller's state; its changes are
 // the game's events (events.ts: "phase"), the journal's lines and, for the HUD, what to show.
 
+import { lang, t, tf } from "../i18n";
+import { AUTO_NAMES, HOLD_NAMES } from "../pilot";
+
 export type Mode = "free" | "cinematic" | "offline" | "landed" | "docked" | "flight";
 export type Control = "manual" | "hold" | "auto";
 export type Stage = "ground" | "air" | "entry" | "approach" | "suborbital" | "orbit" | "escape" | "docking" | "kerr" | "throat" | "space";
@@ -78,31 +81,38 @@ export const samePhase = (a: FlightPhase | null, b: FlightPhase) =>
   !!a && a.mode === b.mode && a.control === b.control && a.stage === b.stage && a.detail === b.detail;
 
 const STAGE_TEXT: Record<Stage, string> = {
-  ground: "on the ground",
-  air: "in the air",
-  entry: "entering the air",
-  approach: "on the approach",
-  suborbital: "on a suborbital arc",
-  orbit: "in orbit",
-  escape: "escaping",
-  docking: "docking",
-  kerr: "about Gargantua",
-  throat: "in the wormhole's throat",
-  space: "in space",
+  ground: t("on the ground"),
+  air: t("in the air"),
+  entry: t("entering the air"),
+  approach: t("on the approach"),
+  suborbital: t("on a suborbital arc"),
+  orbit: t("in orbit"),
+  escape: t("escaping"),
+  docking: t("docking"),
+  kerr: t("about Gargantua"),
+  throat: t("in the wormhole's throat"),
+  space: t("in space"),
 };
 
 /** The phase in words (the journal's line). */
 export function phaseText(p: FlightPhase): string {
   switch (p.mode) {
     case "free":
-      return "Free camera";
+      return t("Free camera");
     case "cinematic":
-      return `Cinematic: ${p.detail}`;
+      return tf("Cinematic: {0}", p.detail);
     case "offline":
-      return "Offline render";
+      return t("Offline render");
     default: {
-      const who = p.control === "auto" ? `autopilot ${p.detail}` : p.control === "hold" ? `holding ${p.detail}` : "by hand";
-      const where = p.mode === "landed" ? "landed" : p.mode === "docked" ? "docked" : STAGE_TEXT[p.stage ?? "space"];
+      // (the English names the hold or the autopilot by its id; the French by its name)
+      const named = (names: Record<string, string>) => (lang === "fr" ? (names[p.detail]?.toLowerCase() ?? p.detail) : p.detail);
+      const who =
+        p.control === "auto"
+          ? tf("autopilot {0}", named(AUTO_NAMES))
+          : p.control === "hold"
+            ? tf("holding {0}", named(HOLD_NAMES))
+            : t("by hand");
+      const where = p.mode === "landed" ? t("landed") : p.mode === "docked" ? t("docked") : STAGE_TEXT[p.stage ?? "space"];
       return `${where[0]!.toUpperCase()}${where.slice(1)} — ${who}`;
     }
   }

@@ -19,6 +19,7 @@ import { M_METRES, solarBody } from "../../system/solar";
 import { fleet } from "../../fleet";
 import { keplerProp } from "../../system/our-plan";
 import { VESSELS, type VesselId } from "../../vessels";
+import { t } from "../../i18n";
 
 const CRAFT = ["ranger", "lander", "endurance"] as const;
 const isCraftId = (id: string): id is VesselId => (CRAFT as readonly string[]).includes(id);
@@ -162,7 +163,7 @@ export function ourScene(t0: number): MapScene {
     }
     bodies.push({
       id: b.id,
-      name: b.name,
+      name: t(b.name),
       kind: b.kind === "star" ? "star" : moon ? "moon" : "planet",
       parent: b.parent,
       pos: P,
@@ -180,7 +181,7 @@ export function ourScene(t0: number): MapScene {
   }
   bodies.push({
     id: "wormhole",
-    name: "Wormhole",
+    name: t("Wormhole"),
     kind: "mouth",
     parent: "sun",
     pos: [0, 0, 0],
@@ -330,7 +331,7 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
     const w = Math.max(starOmega(s), 1e-9);
     bodies.push({
       id: "star",
-      name: "Companion star",
+      name: t("Companion star"),
       kind: "star",
       parent: "hole",
       pos: at(starCentre(s, t0), t0),
@@ -371,7 +372,7 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
       }
       bodies.push({
         id: b.id,
-        name: b.name,
+        name: t(b.name),
         kind: b.kind === "star" ? "star" : "planet",
         parent: b.parent === "gargantua" ? "hole" : b.parent,
         pos: at(pos(t0), t0),
@@ -392,7 +393,7 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
     const orbit = s.whOrbit && m0.omega > 0 ? span(`mouth:${s.whDist}`, (t) => mouth(s, t).C as V3, (2 * Math.PI) / m0.omega) : null;
     bodies.push({
       id: "wormhole",
-      name: "Wormhole",
+      name: t("Wormhole"),
       kind: "mouth",
       parent: "hole",
       pos: at(m0.C as V3, t0),

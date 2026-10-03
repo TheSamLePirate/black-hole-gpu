@@ -1,6 +1,7 @@
 // Attach points of the camera on the spaceship (the craft flown: vessels.ts — the Ranger's here).
 import { VESSELS, type VesselId } from "./vessels";
 import { cross, dot, sub } from "./math/vec3";
+import { t } from "./i18n";
 
 export type V3 = [number, number, number];
 
@@ -10,29 +11,29 @@ export type V3 = [number, number, number];
  */
 export const MOUNTS = {
   // (inside: the pilot's seat — the Ranger's cabin drawn instead of its hull)
-  cockpit: { label: "Cockpit, the pilot's seat", short: "Cockpit", eye: [1.0, 1.45, 3.1], aim: [1.0, 1.22, 13] },
+  cockpit: { label: t("Cockpit, the pilot's seat"), short: t("Cockpit"), eye: [1.0, 1.45, 3.1], aim: [1.0, 1.22, 13] },
   // (inside, free: the keys move the camera about the cabin — the ship flies on —, the drag turns the look)
-  cabin: { label: "Cabin, free — the keys move about it", short: "Cabin", eye: [1.0, 1.45, 3.1], aim: [1.0, 1.45, 13] },
-  quarter: { label: "Hull quarter (film)", short: "Film", eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
-  chase: { label: "Chase, above the tail", short: "Chase", eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
-  dorsal: { label: "Dorsal, behind the cockpit", short: "Dorsal", eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },
-  wing: { label: "Wingtip", short: "Wing", eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
-  belly: { label: "Belly", short: "Belly", eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
-  rear: { label: "Nose, looking back", short: "Rear", eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
+  cabin: { label: t("Cabin, free — the keys move about it"), short: t("Cabin"), eye: [1.0, 1.45, 3.1], aim: [1.0, 1.45, 13] },
+  quarter: { label: t("Hull quarter (film)"), short: t("Film"), eye: [6.2, 3.9, -10.5], aim: [-3.5, 2.6, 14] },
+  chase: { label: t("Chase, above the tail"), short: t("Chase"), eye: [0, 4.4, -13.5], aim: [0, 1.3, 12] },
+  dorsal: { label: t("Dorsal, behind the cockpit"), short: t("Dorsal"), eye: [0, 3.7, -3.0], aim: [0, 2.4, 20] },
+  wing: { label: t("Wingtip"), short: t("Wing"), eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
+  belly: { label: t("Belly"), short: t("Belly"), eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
+  rear: { label: t("Nose, looking back"), short: t("Rear"), eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
   // (the docking camera: in the rear hatch, on its axis, looking out — the port to back onto)
-  dock: { label: "Docking camera, rear hatch", short: "Dock", eye: [0.04, 1.11, -5.5], aim: [0.04, 1.11, -40] },
+  dock: { label: t("Docking camera, rear hatch"), short: t("Dock"), eye: [0.04, 1.11, -5.5], aim: [0.04, 1.11, -40] },
   // outside the ship (controls.ts: their poses move — around it: drag turns about it, the wheel its
   // distance; free: the keys move the camera, the drag turns it; it follows the ship's motion)
-  around: { label: "Outside, around the ship", short: "Around", eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "around" },
-  free: { label: "Outside, free", short: "Free", eye: [18, 6, -36], aim: [0, 1.5, 0], outside: "free" },
+  around: { label: t("Outside, around the ship"), short: t("Around"), eye: [0, 9, -42], aim: [0, 1.5, 0], outside: "around" },
+  free: { label: t("Outside, free"), short: t("Free"), eye: [18, 6, -36], aim: [0, 1.5, 0], outside: "free" },
   // (a fly-by: the camera stands still where the ship will pass — in the frame of the body it flies by —,
   // turns to follow it, and waits for it further on once it is gone)
-  flyby: { label: "Fly-by, the ship passing", short: "Fly-by", eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
+  flyby: { label: t("Fly-by, the ship passing"), short: t("Fly-by"), eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
   // (the docking camera of what the ship docks to — the space station, another craft: on the nearest
   // port's axis, looking out at the ship coming in, moving with it; elsewhere, around the ship)
   station: {
-    label: "Docking camera, on the target's port (the ISS, a craft)",
-    short: "Port cam",
+    label: t("Docking camera, on the target's port (the ISS, a craft)"),
+    short: t("Port cam"),
     eye: [0, 9, -42],
     aim: [0, 1.5, 0],
     outside: "station",

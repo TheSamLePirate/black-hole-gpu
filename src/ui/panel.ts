@@ -1,6 +1,7 @@
 import { isTyping } from "../controls";
 import { freeCameraKeys } from "../input/bindings";
 import { KEYMAP } from "../input/keymap";
+import { t, tf } from "../i18n";
 import { h, icon, modal } from "./kit";
 import { onEscape } from "./keys";
 import { QUALITY, type Quality, type Settings } from "../settings";
@@ -191,7 +192,7 @@ export class SettingsPanel {
     if (!d) return;
     this.redoStack.push(d);
     this.applyValues(d.map((x) => [x.key, x.before]));
-    this.toast(`Undo: ${this.describe(d)}`);
+    this.toast(tf("Undo: {0}", this.describe(d)));
   }
 
   redo() {
@@ -199,7 +200,7 @@ export class SettingsPanel {
     if (!d) return;
     this.undoStack.push(d);
     this.applyValues(d.map((x) => [x.key, x.after]));
-    this.toast(`Redo: ${this.describe(d)}`);
+    this.toast(tf("Redo: {0}", this.describe(d)));
   }
 
   /** Applies a built-in scene (one undo step). */
@@ -208,7 +209,7 @@ export class SettingsPanel {
     this.o.applyPreset(name);
     this.commit();
     this.refresh();
-    this.toast(`Scene: ${sceneTitle(name)}`);
+    this.toast(tf("Scene: {0}", sceneTitle(name)));
   }
 
   // ---------------------------------------------------------------------------------- history
@@ -232,8 +233,8 @@ export class SettingsPanel {
   }
 
   private describe(d: Diff) {
-    if (d.length === 1) return SCHEMA_BY_KEY.get(d[0]!.key)?.label ?? String(d[0]!.key);
-    return `${d.length} settings`;
+    if (d.length === 1) return t(SCHEMA_BY_KEY.get(d[0]!.key)?.label ?? String(d[0]!.key));
+    return tf("{0} settings", d.length);
   }
 
   private applyValues(entries: [Key, unknown][]) {
@@ -286,12 +287,12 @@ export class SettingsPanel {
       "button",
       { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) },
       icon("gear"),
-      h("span", {}, "Settings"),
+      h("span", {}, t("Settings")),
     );
 
     this.searchInput = h("input", {
       type: "search",
-      placeholder: "Search settings…  ⌘K",
+      placeholder: t("Search settings…  ⌘K"),
       spellcheck: "false",
       oninput: () => {
         this.query = this.searchInput.value.trim().toLowerCase();
@@ -319,7 +320,7 @@ export class SettingsPanel {
         },
       }),
       h("span", { class: "sp-switch" }),
-      "Advanced",
+      t("Advanced"),
     );
 
     this.presetsEl = h("div", { class: "sp-presets" });
@@ -334,7 +335,7 @@ export class SettingsPanel {
         "header",
         { class: "sp-head" },
         icon("gear", "ico sp-logo"),
-        h("h2", {}, "Settings"),
+        h("h2", {}, t("Settings")),
         h("div", { class: "sp-head-actions" }, this.undoBtn, this.redoBtn, menuBtn, closeBtn),
       ),
       h("div", { class: "sp-search" }, icon("search"), this.searchInput, advToggle),
@@ -386,7 +387,7 @@ export class SettingsPanel {
   }
 
   private storeUserPresets(p: Record<string, Partial<Settings>>) {
-    if (!store.setJSON(STORE_PRESETS, p)) this.toast("Could not save presets (storage unavailable)");
+    if (!store.setJSON(STORE_PRESETS, p)) this.toast(t("Could not save presets (storage unavailable)"));
   }
 
   private renderPresets() {
@@ -395,7 +396,7 @@ export class SettingsPanel {
     // the scene: the current one, a click opens the gallery
     this.sceneCard = h("button", {
       class: "sp-scene",
-      title: "All the scenes",
+      title: t("All the scenes"),
       onclick: () => this.o.openScenes(),
     });
     this.updateSceneCard();
@@ -407,7 +408,7 @@ export class SettingsPanel {
         "button",
         {
           class: "sp-chip user",
-          dataset: { help: "Your saved preset. Click to apply.", helpTitle: name },
+          dataset: { help: t("Your saved preset. Click to apply."), helpTitle: name },
           onclick: (e: Event) => {
             if (e.target === del) {
               if (chip.classList.contains("confirm")) {
@@ -415,7 +416,7 @@ export class SettingsPanel {
                 delete all[name];
                 this.storeUserPresets(all);
                 this.renderPresets();
-                this.toast(`Deleted preset “${name}”`);
+                this.toast(tf("Deleted preset “{0}”", name));
               } else {
                 chip.classList.add("confirm");
                 del.textContent = "delete?";
@@ -427,7 +428,7 @@ export class SettingsPanel {
               return;
             }
             this.applyObject(user[name]!, true);
-            this.toast(`Preset: ${name}`);
+            this.toast(tf("Preset: {0}", name));
           },
         },
         h("span", { class: "sp-chip-ico" }, "★"),
@@ -451,7 +452,7 @@ export class SettingsPanel {
       all[name] = this.diffFromDefaults();
       this.storeUserPresets(all);
       this.renderPresets();
-      this.toast(`Saved preset “${name}”`);
+      this.toast(tf("Saved preset “{0}”", name));
     };
     nameIn.addEventListener("keydown", (e) => {
       if (e.key === "Enter") save();
@@ -462,14 +463,14 @@ export class SettingsPanel {
         "button",
         {
           class: "sp-chip add",
-          dataset: { help: "Save every setting that differs from the defaults as a named preset (stored in this browser)." },
+          dataset: { help: t("Save every setting that differs from the defaults as a named preset (stored in this browser).") },
           onclick: () => {
             saveRow.hidden = false;
             nameIn.focus();
           },
         },
         icon("plus"),
-        "Save current",
+        t("Save current"),
       ),
     );
     el.append(h("div", { class: "sp-label" }, "Scene"), this.sceneCard, h("div", { class: "sp-label" }, "My presets"), userChips, saveRow);
@@ -489,8 +490,8 @@ export class SettingsPanel {
       h(
         "span",
         { class: "sp-scene-text" },
-        h("b", {}, name ? sceneTitle(name) : "Your own view"),
-        h("small", {}, name ? SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label : "Settings edited, or a saved flight"),
+        h("b", {}, name ? sceneTitle(name) : t("Your own view")),
+        h("small", {}, name ? t(SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label) : t("Settings edited, or a saved flight")),
       ),
       h("span", { class: "sp-scene-go" }, "Browse", icon("chevron", "ico")),
     );
@@ -532,22 +533,24 @@ export class SettingsPanel {
 
   private renderQuality() {
     const el = this.qualityEl;
-    el.replaceChildren(h("div", { class: "sp-label" }, "Quality"));
+    el.replaceChildren(h("div", { class: "sp-label" }, t("Quality")));
     const seg = h("div", { class: "sp-seg wide" });
     const levels: [Quality, string, string][] = [
-      ["low", "Low", "Fast preview: large RK4 steps, few samples"],
-      ["medium", "Medium", "Balanced"],
-      ["high", "High", "Error-controlled RK4 (1e-5), 64 spp"],
-      ["ultra", "Ultra", "Error-controlled RK4 (2e-6), 256 spp, fine realtime steps"],
+      ["low", t("Low"), t("Fast preview: large RK4 steps, few samples")],
+      ["medium", t("Medium"), t("Balanced")],
+      ["high", t("High"), t("Error-controlled RK4 (1e-5), 64 spp")],
+      ["ultra", t("Ultra"), t("Error-controlled RK4 (2e-6), 256 spp, fine realtime steps")],
       [
         "realtime",
         "RT max",
-        "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still",
+        t(
+          "Best interactive image: light realtime rays (small blocks, sharp while moving or animating), render scale ≤ 1.25, ultra refinement when still",
+        ),
       ],
       [
         "game",
-        "Game",
-        "Fluid first (≈ 60 fps): a 16 ms frame budget, coarser realtime rays, the render scale lowered when needed (dynamic resolution)",
+        t("Game"),
+        t("Fluid first (≈ 60 fps): a 16 ms frame budget, coarser realtime rays, the render scale lowered when needed (dynamic resolution)"),
       ],
     ];
     for (const [q, label, help] of levels) {
@@ -555,7 +558,7 @@ export class SettingsPanel {
         h(
           "button",
           {
-            dataset: { value: q, help, helpTitle: `${label} quality` },
+            dataset: { value: q, help, helpTitle: tf("{0} quality", label) },
             onclick: () => {
               this.begin();
               Object.assign(this.s, QUALITY[q], { quality: q });
@@ -598,14 +601,16 @@ export class SettingsPanel {
             },
           },
           icon(sec.icon),
-          h("span", {}, sec.label),
+          h("span", {}, t(sec.label)),
         ),
       );
     }
   }
 
   private matches(d: ControlDef, q: string) {
-    const hay = `${d.label} ${d.group} ${d.section} ${d.help ?? ""} ${d.keywords ?? ""} ${String(d.key)}`.toLowerCase();
+    // (the search finds a setting by its words in either language)
+    const hay =
+      `${d.label} ${d.group} ${d.section} ${d.help ?? ""} ${d.keywords ?? ""} ${String(d.key)} ${t(d.label)} ${t(d.group)} ${t(d.help ?? "")}`.toLowerCase();
     return q.split(/\s+/).every((w) => hay.includes(w));
   }
 
@@ -658,12 +663,12 @@ export class SettingsPanel {
     }
     if (!defs.length && scenes.length) return;
     if (!defs.length) {
-      this.body.append(h("div", { class: "sp-empty" }, searching ? `No setting matches “${this.query}”` : "Nothing here."));
+      this.body.append(h("div", { class: "sp-empty" }, searching ? tf("No setting matches “{0}”", this.query) : t("Nothing here.")));
       return;
     }
     const groups = new Map<string, ControlDef[]>();
     for (const d of defs) {
-      const gk = searching ? `${SECTIONS.find((s) => s.id === d.section)!.label} › ${d.group}` : d.group;
+      const gk = searching ? `${t(SECTIONS.find((s) => s.id === d.section)!.label)} › ${t(d.group)}` : d.group;
       if (!groups.has(gk)) groups.set(gk, []);
       groups.get(gk)!.push(d);
     }
@@ -676,8 +681,8 @@ export class SettingsPanel {
           h(
             "div",
             { class: "sp-rows" },
-            h("button", { class: "sp-btn block", onclick: () => this.o.loadImage() }, "Load equirectangular panorama…"),
-            h("p", { class: "sp-note" }, "Any 2:1 image (JPEG, PNG, AVIF…). It stays in your browser."),
+            h("button", { class: "sp-btn block", onclick: () => this.o.loadImage() }, t("Load equirectangular panorama…")),
+            h("p", { class: "sp-note" }, t("Any 2:1 image (JPEG, PNG, AVIF…). It stays in your browser.")),
           ),
         ),
       );
@@ -704,16 +709,18 @@ export class SettingsPanel {
         },
       },
       icon("chevron", "ico chev"),
-      title,
+      searching ? title : t(title),
     );
     head.append(titleBtn);
     if (switchKey) {
       const cb = h("input", {
         type: "checkbox",
-        "aria-label": `Enable ${groupName.toLowerCase()}`,
+        "aria-label": tf("Enable {0}", t(groupName).toLowerCase()),
         onchange: (e: Event) => this.set(switchKey, (e.target as HTMLInputElement).checked),
       });
-      head.append(h("label", { class: "sp-toggle", title: `Enable ${groupName.toLowerCase()}` }, cb, h("span", { class: "sp-switch" })));
+      head.append(
+        h("label", { class: "sp-toggle", title: tf("Enable {0}", t(groupName).toLowerCase()) }, cb, h("span", { class: "sp-switch" })),
+      );
       this.updaters.push(() => {
         cb.checked = !!this.s[switchKey];
         group.classList.toggle("off", !this.s[switchKey]);
@@ -730,7 +737,7 @@ export class SettingsPanel {
           this.begin();
           this.applyValues(resetKeys.filter((k) => !sameValue(this.s[k], d[k])).map((k) => [k, d[k]]));
           this.commit();
-          this.toast(`Reset ${groupName}`);
+          this.toast(tf("Reset {0}", t(groupName)));
         },
       },
       icon("reset"),
@@ -755,17 +762,19 @@ export class SettingsPanel {
     const def = () => this.o.defaults()[d.key];
     const reset = h("button", {
       class: "sp-mod",
-      title: "Modified — click to reset to default",
+      title: t("Modified — click to reset to default"),
       onclick: () => this.set(d.key, def()),
     });
     const label = h(
       "span",
       {
         class: "sp-rlabel",
-        dataset: d.help ? { help: d.help, helpTitle: d.label, helpFoot: this.footFor(d) } : { help: this.footFor(d), helpTitle: d.label },
+        dataset: d.help
+          ? { help: t(d.help), helpTitle: t(d.label), helpFoot: this.footFor(d) }
+          : { help: this.footFor(d), helpTitle: t(d.label) },
         ondblclick: () => this.set(d.key, def()),
       },
-      d.label,
+      t(d.label),
       d.help ? h("i", { class: "sp-info" }, "i") : null,
     );
 
@@ -790,11 +799,11 @@ export class SettingsPanel {
   private footFor(d: ControlDef) {
     const dv = this.o.defaults()[d.key];
     let shown = String(dv);
-    if (d.type === "number") shown = `${formatValue(d, dv as number)}${d.unit ? ` ${d.unit}` : ""}`;
+    if (d.type === "number") shown = `${formatValue(d, dv as number)}${d.unit ? ` ${t(d.unit)}` : ""}`;
     else if (d.type === "choice") shown = d.options.find((o) => o.value === dv)?.label ?? shown;
     else if (d.type === "color") shown = String(dv);
     else shown = dv ? "on" : "off";
-    return `Default: ${shown} · double-click the label to reset`;
+    return tf("Default: {0} · double-click the label to reset", t(shown));
   }
 
   private numberControl(d: NumberDef, row: HTMLElement, reset: HTMLElement, label: HTMLElement) {
@@ -806,7 +815,7 @@ export class SettingsPanel {
       "aria-label": d.label,
     });
     const val = h("input", { class: "sp-val", type: "text", inputmode: "decimal", spellcheck: "false", "aria-label": `${d.label} value` });
-    const unit = d.unit ? h("span", { class: "sp-unit" }, d.unit) : null;
+    const unit = d.unit ? h("span", { class: "sp-unit" }, t(d.unit)) : null;
     const clamp = (v: number) => (d.offAtZero && v <= 0 ? 0 : Math.min(d.max, Math.max(d.min, v)));
     const cur = () => this.s[d.key] as number;
 
@@ -900,10 +909,10 @@ export class SettingsPanel {
           h(
             "button",
             {
-              dataset: { value: String(o.value), ...(o.hint ? { help: o.hint, helpTitle: o.label } : {}) },
+              dataset: { value: String(o.value), ...(o.hint ? { help: t(o.hint), helpTitle: t(o.label) } : {}) },
               onclick: () => this.set(d.key, o.value),
             },
-            o.label,
+            t(o.label),
           ),
         );
       }
@@ -920,7 +929,7 @@ export class SettingsPanel {
         if (opt) this.set(d.key, opt.value);
       },
     });
-    for (const o of d.options) sel.append(h("option", { value: String(o.value), title: o.hint }, o.label));
+    for (const o of d.options) sel.append(h("option", { value: String(o.value), title: o.hint ? t(o.hint) : undefined }, t(o.label)));
     head.append(sel);
     return () => {
       sel.value = String(this.s[d.key]);
@@ -949,21 +958,21 @@ export class SettingsPanel {
     const menu = h(
       "div",
       { class: "sp-menu glass", role: "menu" },
-      item("Copy share link", "URL with every non-default setting", () => this.copyLink()),
-      item("Export settings…", "Download as JSON", () => this.exportJSON()),
-      item("Import settings…", "Load a JSON file", () => this.importJSON()),
+      item(t("Copy share link"), t("URL with every non-default setting"), () => this.copyLink()),
+      item(t("Export settings…"), t("Download as JSON"), () => this.exportJSON()),
+      item(t("Import settings…"), t("Load a JSON file"), () => this.importJSON()),
       h("hr", {}),
-      item("Keyboard shortcuts", "", () => this.showShortcuts()),
+      item(t("Keyboard shortcuts"), "", () => this.showShortcuts()),
       ...(this.o.connectController
-        ? [item("Connect a USB controller…", "If the browser does not see it", () => this.o.connectController!())]
+        ? [item(t("Connect a USB controller…"), t("If the browser does not see it"), () => this.o.connectController!())]
         : []),
       h("hr", {}),
       item(
-        "Reset everything",
-        "Restore all defaults (undoable)",
+        t("Reset everything"),
+        t("Restore all defaults (undoable)"),
         () => {
           this.applyObject({}, true);
-          this.toast("All settings reset — ⌘Z to undo");
+          this.toast(t("All settings reset — ⌘Z to undo"));
         },
         true,
       ),
@@ -990,9 +999,9 @@ export class SettingsPanel {
     const url = this.o.shareUrl();
     try {
       await navigator.clipboard.writeText(url);
-      this.toast("Link copied to the clipboard");
+      this.toast(t("Link copied to the clipboard"));
     } catch {
-      prompt("Copy this link:", url);
+      prompt(t("Copy this link:"), url);
     }
   }
 
@@ -1014,9 +1023,9 @@ export class SettingsPanel {
         const settings = obj?.settings ?? obj;
         if (typeof settings !== "object" || !settings) throw new Error("not an object");
         this.applyObject(settings, true);
-        this.toast(`Imported ${f.name}`);
+        this.toast(tf("Imported {0}", f.name));
       } catch (e) {
-        this.toast(`Import failed: ${(e as Error).message}`);
+        this.toast(tf("Import failed: {0}", (e as Error).message));
       }
     };
     input.click();
@@ -1025,7 +1034,7 @@ export class SettingsPanel {
   showShortcuts() {
     this.keysDialog?.close();
     this.keysDialog = modal({
-      title: "Keyboard & mouse",
+      title: t("Keyboard & mouse"),
       cls: "sp-keys",
       testid: "help",
       onClose: () => (this.keysDialog = null),
@@ -1035,23 +1044,23 @@ export class SettingsPanel {
           h(
             "section",
             {},
-            h("h4", { class: "k-label" }, title),
-            h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, r.keys), h("dd", {}, r.text)])),
+            h("h4", { class: "k-label" }, t(title)),
+            h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, t(r.keys)), h("dd", {}, t(r.text))])),
           ),
         ),
         this.o.connectController
           ? h(
               "p",
               { class: "sp-keys-note" },
-              "Controller not detected? Press a button with the page focused. A wired Xbox 360 pad in Chrome, Edge or Arc: ",
-              h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, "connect it (USB)"),
+              t("Controller not detected? Press a button with the page focused. A wired Xbox 360 pad in Chrome, Edge or Arc: "),
+              h("button", { class: "sp-link", onclick: () => this.o.connectController!() }, t("connect it (USB)")),
               ".",
             )
           : null,
         h(
           "footer",
           {},
-          h("a", { href: "docs/", target: "_blank", rel: "noopener" }, "Atlas de Kerr — renders & videos ↗"),
+          h("a", { href: "docs/", target: "_blank", rel: "noopener" }, t("Atlas de Kerr — renders & videos ↗")),
           h(
             "span",
             { class: "credit" },

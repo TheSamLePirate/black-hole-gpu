@@ -53,6 +53,7 @@ import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint
 import { AU_M, C_MPS, DAY_S, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
+import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
 import { add3, clamp, fmtDur } from "./util";
@@ -120,7 +121,8 @@ function rails(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
   const w = Math.max(Math.min(want, lim), Math.min(want, why === "ground" ? 1e-5 : 0.25));
   if (w < want) this.warpWant = want;
   else this.warpWant = null;
-  this.railsNote = w < want ? why : "";
+  // (what holds the warp, shown: in the interface's language)
+  this.railsNote = w < want ? t(why) : "";
   s.timeSpeed = w;
   this.warpSet = w;
 }
@@ -249,7 +251,7 @@ function planTransfer(this: CameraController, goal: "orbit" | "star" | "wormhole
   if (s.engine === "crew") return this.planLowThrust(goal, r2, !!o.orbitStar);
   this.transfer = null;
   const now = this.stateNow();
-  if (!now) return "Planning works around the black hole";
+  if (!now) return t("Planning works around the black hole");
   let w = this.world();
   // after a planned plane change: the transfer starts from the aligned orbit
   let st = now;
@@ -262,12 +264,12 @@ function planTransfer(this: CameraController, goal: "orbit" | "star" | "wormhole
   if (goal === "orbit") {
     const rMin = Math.max(isco(s.spin) * 1.02, horizon(s.spin) + 2);
     res = planCircular(st, Math.max(r2, rMin), w);
-    if (!res) return "No transfer found (inside the photon orbit, or out of reach)";
+    if (!res) return t("No transfer found (inside the photon orbit, or out of reach)");
   } else if (goal === "star") {
     // the companion star, or in a system the targeted body (a planet, Edmunds' star)
     const body: Body =
       s.system !== "none" && s.target !== "hole" && s.target !== "wormhole" && s.target !== "barycentre" ? s.target : "star";
-    if (body === "star" && !s.sun) return "No companion star in this scene: select a body (Tab)";
+    if (body === "star" && !s.sun) return t("No companion star in this scene: select a body (Tab)");
     const R = bodyRadius(s, body);
     const mB = bodyMass(s, body);
     res = planRendezvous(st, w, {
@@ -279,20 +281,22 @@ function planTransfer(this: CameraController, goal: "orbit" | "star" | "wormhole
       standoff: (o.orbitStar ? 3.2 : 4) * R,
       orbit: o.orbitStar && mB > 0 ? { mass: mB, n: [0, 0, 1] } : undefined,
     });
-    if (!res) return `No rendezvous with ${BODY_NAMES[body]} found`;
+    if (!res) return tf("No rendezvous with {0} found", BODY_NAMES[body]);
     s.target = body;
   } else {
-    if (!s.wormhole) return "No wormhole in this scene";
+    if (!s.wormhole) return t("No wormhole in this scene");
     const m = mouth(s);
     res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
-    if (!res) return "No path into the mouth found from this orbit";
+    if (!res) return t("No path into the mouth found from this orbit");
     s.target = "wormhole";
   }
   const nodes = [...pre, ...res.nodes];
-  this.plan = { nodes, path: null, at: 0, note: pre.length ? `plane aligned, then ${res.note}` : res.note };
+  this.plan = { nodes, path: null, at: 0, note: pre.length ? tf("plane aligned, then {0}", res.note) : res.note };
   this.refreshPlan(true);
   const dv = nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0);
-  return `Plan: ${this.plan.note} · ${nodes.length} burn${nodes.length > 1 ? "s" : ""} · Δv ${dv.toFixed(3)} c`;
+  return nodes.length > 1
+    ? tf("Plan: {0} · {1} burns · Δv {2} c", this.plan.note, nodes.length, dv.toFixed(3))
+    : tf("Plan: {0} · 1 burn · Δv {1} c", this.plan.note, dv.toFixed(3));
 }
 
 /**
@@ -309,13 +313,13 @@ async function planOurs(
 ): Promise<string> {
   const s = this.s;
   const nav = this.ourNav(cameraFrame(s));
-  if (!nav) return "Planning: in our universe (or around the black hole with PLAN TRANSFER)";
-  if (this.planBusy) return "Planning… (still working on the last one)";
+  if (!nav) return t("Planning: in our universe (or around the black hole with PLAN TRANSFER)");
+  if (this.planBusy) return t("Planning… (still working on the last one)");
   const target = kind === "wormhole" ? "wormhole" : kind === "orbit" ? nav.ref : String(s.target);
   // (the space station: a rendezvous beside its forward port — iss-plan.ts)
   if (kind === "target" && (s.target === "iss" || isCraft(s.target))) return this.planIss(nav);
   if (kind === "target" && !isOurBody(s.target as Body))
-    return "Transfer: select a body of ours as the target (Tab, or a click on the map)";
+    return t("Transfer: select a body of ours as the target (Tab, or a click on the map)");
   // (the first burn at least a minute away, and ~10 s of the pilot's time at this warp)
   const o = { lead: Math.max(60 / M_SECONDS, 10 * (s.animate ? s.timeSpeed : 0)), mouthR: mouth(s).w.rho, accel: this.thrustMax() };
   this.planBusy = true;
@@ -346,7 +350,7 @@ async function planOurs(
     if (kind === "wormhole") s.target = "wormhole";
     this.refreshPlan(true);
     const dv = res.nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS;
-    return `Plan: ${res.note} · Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(0)} m/s`}`;
+    return tf("Plan: {0} · Δv {1}", res.note, dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(0)} m/s`);
   } finally {
     if (gen === this.planGen) this.planBusy = false;
   }
@@ -380,34 +384,35 @@ async function missionPlan(
   const gen = ++this.planGen;
   this.pendingMission = null;
   const roleName: Record<string, string> = {
-    depart: "departure",
-    circ: "circularize",
-    mcc: "correction",
-    capture: "capture",
-    mccReturn: "return correction",
-    captureHome: "capture home",
-    arrive: "arrival",
+    depart: t("departure"),
+    circ: t("circularize"),
+    mcc: t("correction"),
+    capture: t("capture"),
+    mccReturn: t("return correction"),
+    captureHome: t("capture home"),
+    arrive: t("arrival"),
   };
   const burnsOf = (nodes: { t: number; dv: Vec3; role?: string }[], t0: number): Burn[] =>
     nodes.map((n, k) => ({
       t: (n.t - t0) * Msec,
       dv: [n.dv[0] * c, n.dv[1] * c, n.dv[2] * c] as KV3,
-      label: roleName[n.role ?? ""] ?? `burn ${k + 1}`,
+      label: roleName[n.role ?? ""] ?? tf("burn {0}", k + 1),
     }));
   const sum = (b: Burn[]) => b.reduce((q, x) => q + Math.hypot(...x.dv), 0);
   const name = (id: string) =>
     id === "wormhole"
-      ? "the wormhole"
-      : (BODY_NAMES[id as Body] ?? (isCraft(id as Target) ? `the ${VESSELS[id as VesselId].name}` : id === "iss" ? "the ISS" : id));
+      ? t("the wormhole")
+      : (BODY_NAMES[id as Body] ??
+        (isCraft(id as Target) ? tf("the {0}", VESSELS[id as VesselId].name) : id === "iss" ? t("the ISS") : id));
   const nav = this.ourNav(cam);
   if (nav) {
     const target = spec.target;
     const lead = Math.max(60 / M_SECONDS, 10 * (s.animate ? s.timeSpeed : 0));
     // the station, a craft of the fleet: the rendezvous beside a free docking port
     if (target === "iss" || isCraft(target as Target)) {
-      if (nav.ref !== "earth") return fail("A rendezvous: from an orbit around the Earth");
+      if (nav.ref !== "earth") return fail(t("A rendezvous: from an orbit around the Earth"));
       const craft = isCraft(target as Target) ? (target as VesselId) : null;
-      if (craft && freePort(craft) === null) return fail(`The ${VESSELS[craft].name}: no free docking port`);
+      if (craft && freePort(craft) === null) return fail(tf("The {0}: no free docking port", VESSELS[craft].name));
       const point = craft ? craftPoint(craft) : rendezvousPoint;
       const p = planIssRendezvous(
         nav.X,
@@ -415,10 +420,11 @@ async function missionPlan(
         nav.t,
         lead,
         point,
-        name(target),
+        // (the planner's own English note: the English name)
+        craft ? `the ${VESSELS[craft].name}` : "the ISS",
         craft ? `its ${VESSELS[craft].ports[freePort(craft)!]!.name}` : "IDA-2",
       );
-      if (!p) return fail(`No rendezvous with ${name(target)} found in the next day`);
+      if (!p) return fail(tf("No rendezvous with {0} found in the next day", name(target)));
       if (gen !== this.planGen) return fail("");
       const burns = burnsOf(
         p.nodes.map((n) => ({ t: n.t, dv: n.dv as Vec3, role: n.role })),
@@ -455,11 +461,12 @@ async function missionPlan(
         burns,
         dvTotal: sum(burns),
         arrive,
-        afterText: `Arrival 200 m off ${name(target)}'s port in ${fmtDur((p.tArrive - nav.t) * Msec)}, then the docking autopilot`,
+        afterText: tf("Arrival 200 m off {0}'s port in {1}, then the docking autopilot", name(target), fmtDur((p.tArrive - nav.t) * Msec)),
       };
     }
-    if (target !== "wormhole" && !isOurBody(target as Body)) return fail("Pick a destination (a body, the station, a craft, the wormhole)");
-    if (target === nav.ref) return fail(`Already about ${name(target)}: the ORBIT tab's operations`);
+    if (target !== "wormhole" && !isOurBody(target as Body))
+      return fail(t("Pick a destination (a body, the station, a craft, the wormhole)"));
+    if (target === nav.ref) return fail(tf("Already about {0}: the ORBIT tab's operations", name(target)));
     const arrival = target === "wormhole" ? "flyby" : (spec.arrival ?? "orbit");
     const o = { lead, mouthR: mouth(s).w.rho, accel: this.thrustMax() };
     this.planBusy = true;
@@ -499,17 +506,20 @@ async function missionPlan(
       this.fcPreview(burns, res.note, { ours: res.path, arrive });
       const what =
         arrival === "orbit"
-          ? `into a ${spec.altKm ?? 200} km orbit`
+          ? tf("into a {0} km orbit", spec.altKm ?? 200)
           : arrival === "flyby"
-            ? `a flyby at ${spec.altKm ?? 200} km`
-            : `round it at ${spec.altKm ?? 200} km and back home to ${spec.retKm ?? 200} km`;
+            ? tf("a flyby at {0} km", spec.altKm ?? 200)
+            : tf("round it at {0} km and back home to {1} km", spec.altKm ?? 200, spec.retKm ?? 200);
       return {
         ok: true,
         note: res.note,
         burns,
         dvTotal: sum(burns),
         arrive,
-        afterText: `${target === "wormhole" ? "Into the wormhole's mouth" : `Arrival at ${name(target)}`} in ${fmtDur((res.mission.tArrive - nav.t) * Msec)} — ${target === "wormhole" ? "the throat crossed" : what}`,
+        afterText:
+          target === "wormhole"
+            ? tf("Into the wormhole's mouth in {0} — the throat crossed", fmtDur((res.mission.tArrive - nav.t) * Msec))
+            : tf("Arrival at {0} in {1} — {2}", name(target), fmtDur((res.mission.tArrive - nav.t) * Msec), what),
       };
     } finally {
       if (gen === this.planGen) this.planBusy = false;
@@ -517,13 +527,13 @@ async function missionPlan(
   }
   // Gargantua's side: about the hole (or from a world's frame): its own planners on the geodesics
   const st = this.stateNow();
-  if (!st) return fail("Missions: about the hole or one of its worlds");
+  if (!st) return fail(t("Missions: about the hole or one of its worlds"));
   const w = this.world();
   if (spec.target === "wormhole") {
-    if (!s.wormhole) return fail("No wormhole in this scene");
+    if (!s.wormhole) return fail(t("No wormhole in this scene"));
     const m = mouth(s);
     const res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
-    if (!res) return fail("No path into the mouth found from this orbit");
+    if (!res) return fail(t("No path into the mouth found from this orbit"));
     const burns = burnsOf(res.nodes, st.t);
     this.pendingMission = { gen, note: res.note, commit: () => this.adoptKerr(res.nodes, res.note, "wormhole") };
     this.fcPreview(burns, res.note);
@@ -533,13 +543,13 @@ async function missionPlan(
       burns,
       dvTotal: sum(burns),
       arrive: null,
-      afterText: "Into the mouth — the throat crossed to our side",
+      afterText: t("Into the mouth — the throat crossed to our side"),
     };
   }
   const body = spec.target as Body;
-  if (body === "star" && !s.sun) return fail("No companion star in this scene");
+  if (body === "star" && !s.sun) return fail(t("No companion star in this scene"));
   if (body !== "star" && (s.system === "none" || !bodyRadius(s, body)))
-    return fail("Pick a destination: one of Gargantua's worlds, the star, the wormhole");
+    return fail(t("Pick a destination: one of Gargantua's worlds, the star, the wormhole"));
   const R = bodyRadius(s, body);
   const mB = bodyMass(s, body);
   const orbitIt = spec.orbit !== false && mB > 0;
@@ -550,7 +560,7 @@ async function missionPlan(
     standoff: (orbitIt ? 3.2 : 4) * R,
     orbit: orbitIt ? { mass: mB, n: [0, 0, 1] } : undefined,
   });
-  if (!res) return fail(`No rendezvous with ${name(body)} found`);
+  if (!res) return fail(tf("No rendezvous with {0} found", name(body)));
   const burns = burnsOf(res.nodes, st.t);
   const tArr = res.nodes[res.nodes.length - 1]!.t;
   this.pendingMission = { gen, note: res.note, commit: () => this.adoptKerr(res.nodes, res.note, body) };
@@ -562,7 +572,12 @@ async function missionPlan(
     burns,
     dvTotal: sum(burns),
     arrive,
-    afterText: `Arrival at ${name(body)} in ${fmtDur((tArr - st.t) * Msec)} — ${orbitIt ? "then in orbit about it" : "then beside it, station-keeping"}`,
+    afterText: tf(
+      "Arrival at {0} in {1} — {2}",
+      name(body),
+      fmtDur((tArr - st.t) * Msec),
+      orbitIt ? t("then in orbit about it") : t("then beside it, station-keeping"),
+    ),
   };
 }
 
@@ -590,18 +605,18 @@ function missionTargets(this: CameraController): {
     const dist = (X: Vec3) => Math.hypot(...sub3(X, nav.X)) * M_METRES;
     for (const b of SOLAR_BODIES) {
       if (b.kind === "star") continue;
-      const group = b.parent === "sun" ? "Planets" : `${solarBody(b.parent!)?.name ?? b.parent}'s moons`;
+      const group = b.parent === "sun" ? t("Planets") : tf("{0}'s moons", solarBody(b.parent!)?.name ?? b.parent ?? "");
       list.push({ id: b.id, name: b.name, group, far: fmt(dist(solarState(b.id, nav.t).pos)) });
     }
     if (nav.ref === "earth") {
-      if (s.iss) list.push({ id: "iss", name: "ISS", group: "Craft about the Earth", far: "" });
+      if (s.iss) list.push({ id: "iss", name: "ISS", group: t("Craft about the Earth"), far: "" });
       for (const id of ["ranger", "lander", "endurance"] as VesselId[]) {
         if (fleet.flownAssembly().includes(id)) continue;
         const p = fleet.pose(id, nav.t);
-        if (p) list.push({ id, name: VESSELS[id].name, group: "Craft about the Earth", far: fmt(dist(p.X as Vec3)) });
+        if (p) list.push({ id, name: VESSELS[id].name, group: t("Craft about the Earth"), far: fmt(dist(p.X as Vec3)) });
       }
     }
-    if (s.wormhole) list.push({ id: "wormhole", name: "The wormhole", group: "Beyond", far: fmt(Math.hypot(...nav.X) * M_METRES) });
+    if (s.wormhole) list.push({ id: "wormhole", name: t("The wormhole"), group: t("Beyond"), far: fmt(Math.hypot(...nav.X) * M_METRES) });
     return { universe: "ours", here: nav.ref, list };
   }
   if (cam.region !== "hole") return { universe: null, here: null, list: [] };
@@ -614,14 +629,14 @@ function missionTargets(this: CameraController): {
         return [q.r * sn * Math.cos(q.ph), q.r * sn * Math.sin(q.ph), q.r * Math.cos(q.th)] as Vec3;
       })()
     : null;
-  const t = this.nowTime();
-  const far = (b: Body) => (at ? `${Math.hypot(...sub3(bodyCentre(s, b, t), at)).toFixed(1)} M` : "");
+  const tNow = this.nowTime();
+  const far = (b: Body) => (at ? `${Math.hypot(...sub3(bodyCentre(s, b, tNow), at)).toFixed(1)} M` : "");
   if (s.system !== "none")
     for (const b of SYSTEM_BODIES)
       if (bodyRadius(s, b as Body) > 0)
-        list.push({ id: b, name: BODY_NAMES[b as Body] ?? b, group: "Gargantua's worlds", far: far(b as Body) });
-  if (s.sun) list.push({ id: "star", name: BODY_NAMES.star ?? "The star", group: "The companion", far: far("star") });
-  if (s.wormhole) list.push({ id: "wormhole", name: "The wormhole", group: "Beyond", far: "" });
+        list.push({ id: b, name: BODY_NAMES[b as Body] ?? b, group: t("Gargantua's worlds"), far: far(b as Body) });
+  if (s.sun) list.push({ id: "star", name: BODY_NAMES.star ?? t("The star"), group: t("The companion"), far: far("star") });
+  if (s.wormhole) list.push({ id: "wormhole", name: t("The wormhole"), group: t("Beyond"), far: "" });
   return { universe: "gargantua", here: this.local?.F.id ?? null, list };
 }
 
@@ -635,7 +650,7 @@ function adoptKerr(this: CameraController, nodes: ManeuverNode[], note: string, 
 
 function missionCommit(this: CameraController): string | null {
   const m = this.pendingMission;
-  if (!m) return "No mission previewed";
+  if (!m) return t("No mission previewed");
   this.fcPreview(null);
   this.clearPlan();
   m.commit();
@@ -649,10 +664,10 @@ function missionCommit(this: CameraController): string | null {
  */
 function planIss(this: CameraController, nav: NonNullable<ReturnType<CameraController["ourNav"]>>): string {
   const s = this.s;
-  if (nav.ref !== "earth") return "Rendezvous: from an orbit around the Earth";
+  if (nav.ref !== "earth") return t("Rendezvous: from an orbit around the Earth");
   const lead = Math.max(60 / M_SECONDS, 10 * (s.animate ? s.timeSpeed : 0));
   const craft = isCraft(s.target) ? s.target : null;
-  if (craft && freePort(craft) === null) return `The ${VESSELS[craft].name}: no free docking port`;
+  if (craft && freePort(craft) === null) return tf("The {0}: no free docking port", VESSELS[craft].name);
   const point = craft ? craftPoint(craft) : rendezvousPoint;
   const name = craft ? `the ${VESSELS[craft].name}` : "the ISS";
   const p = planIssRendezvous(
@@ -664,7 +679,7 @@ function planIss(this: CameraController, nav: NonNullable<ReturnType<CameraContr
     name,
     craft ? `its ${VESSELS[craft].ports[freePort(craft)!]!.name}` : "IDA-2",
   );
-  if (!p) return `No rendezvous with ${name} found in the next day`;
+  if (!p) return tf("No rendezvous with {0} found in the next day", craft ? tf("the {0}", VESSELS[craft].name) : t("the ISS"));
   this.ourMission = null;
   this.ourPlanned = null;
   // (arrived 200 m out: the docking autopilot takes the last of it)
@@ -683,7 +698,7 @@ function planIss(this: CameraController, nav: NonNullable<ReturnType<CameraContr
   this.issGoal = { tArrive: p.tArrive, refined: new Map(), body: craft ?? "iss", point };
   if (craft) for (const n of this.plan.nodes) if (n.role === "arrive") n.body = craft;
   this.refreshPlan(true);
-  return `Plan: ${p.note}`;
+  return tf("Plan: {0}", p.note);
 }
 
 /**
@@ -711,7 +726,7 @@ function issRefineTick(
     const i = this.plan.nodes.indexOf(node);
     if (i >= 0) {
       this.plan.nodes.splice(i, 1);
-      this.onPilotMessage?.("Mid-course correction not needed");
+      this.onPilotMessage?.(t("Mid-course correction not needed"));
     }
   } else node.dv = dv;
   this.refreshPlan(true);
@@ -779,7 +794,7 @@ function ourRefineTick(
       if (far) node.dv = [0, 0, 0];
       else {
         this.plan.nodes.splice(i, 1);
-        this.onPilotMessage?.(`${node.role === "mccReturn" ? "Return" : "Mid-course"} correction not needed`);
+        this.onPilotMessage?.(node.role === "mccReturn" ? t("Return correction not needed") : t("Mid-course correction not needed"));
       }
     } else {
       node.t = r.node.t;
@@ -799,27 +814,28 @@ function goalPlane(
   goal: "orbit" | "star" | "wormhole",
   st: NonNullable<ReturnType<CameraController["stateNow"]>>,
 ): { n: Vec3; name: string } | null {
-  if (goal !== "wormhole") return { n: [0, 0, 1], name: goal === "star" ? "the star's orbital plane" : "Gargantua's equatorial plane" };
+  if (goal !== "wormhole")
+    return { n: [0, 0, 1], name: goal === "star" ? t("the star's orbital plane") : t("Gargantua's equatorial plane") };
   if (!this.s.wormhole) return null;
   const C = mouth(this.s).C as Vec3;
   const c = lin(C, 1 / (Math.hypot(...C) || 1), C, 0);
   const h = orbitNormal(st, this.s.spin);
   let n = sub3(h, lin(c, h[0] * c[0] + h[1] * c[1] + h[2] * c[2], c, 0));
   if (Math.hypot(...n) < 1e-6) n = [-c[1], c[0], 0];
-  return { n, name: "the plane of the mouth" };
+  return { n, name: t("the plane of the mouth") };
 }
 
 /** Plans a plane change into the goal's plane (a later PLAN TRANSFER starts from there). */
 function planAlignMethod(this: CameraController, goal: "orbit" | "star" | "wormhole"): string {
   const st = this.stateNow();
-  if (!st) return "Planning works around the black hole";
+  if (!st) return t("Planning works around the black hole");
   const g = this.goalPlane(goal, st);
-  if (!g) return "No wormhole in this scene";
+  if (!g) return t("No wormhole in this scene");
   const res = planAlign(st, this.world(), g.n, g.name);
-  if (!res) return `Already in ${g.name}`;
+  if (!res) return tf("Already in {0}", g.name);
   this.plan = { nodes: res.nodes, path: null, at: 0, note: res.note, kind: "align" };
   this.refreshPlan(true);
-  return `Plan: ${res.note} · Δv ${Math.hypot(...res.nodes[0]!.dv).toFixed(3)} c — PLAN TRANSFER now starts from the new plane`;
+  return tf("Plan: {0} · Δv {1} c — PLAN TRANSFER now starts from the new plane", res.note, Math.hypot(...res.nodes[0]!.dv).toFixed(3));
 }
 
 /** Angle between the ship's orbit and each goal's plane [°], null away from the hole. */
@@ -842,7 +858,7 @@ function addNode(this: CameraController, after?: number) {
     const t = nav.t + (after ?? Math.max(0.1 * period, 8 * this.s.timeSpeed, 0.2));
     this.plan.nodes.push({ t, dv: [0, 0, 0] });
     this.plan.nodes.sort((a, b) => a.t - b.t);
-    this.plan.note = "manual node";
+    this.plan.note = tf("manual node");
     this.plan.kind = undefined;
     this.refreshPlan(true);
     return;
@@ -852,7 +868,7 @@ function addNode(this: CameraController, after?: number) {
   const t = st.t + (after ?? Math.max(30, 0.1 * 2 * Math.PI * st.r ** 1.5, 8 * this.s.timeSpeed));
   this.plan.nodes.push({ t, dv: [0, 0, 0] });
   this.plan.nodes.sort((a, b) => a.t - b.t);
-  this.plan.note = "manual node";
+  this.plan.note = tf("manual node");
   this.plan.kind = undefined;
   this.refreshPlan(true);
 }
@@ -1200,12 +1216,17 @@ function nodeBurn(
           if (fix.ok) {
             P.nodes = fix.nodes.map((n, i) => ({
               ...n,
-              label: i ? "circularize (correction)" : "correction",
+              label: i ? t("circularize (correction)") : t("correction"),
               goal: n.goal && "circ" in n.goal ? { circ: n.goal.circ } : n.goal,
             }));
-            P.note = `${P.note} — correction to ${g.circ.toFixed(2)} M`;
+            P.note = `${P.note} — ${tf("correction to {0} M", g.circ.toFixed(2))}`;
             this.onPilotMessage?.(
-              `Circular at ${st.r.toFixed(2)} M: a correction to ${g.circ.toFixed(2)} M (${(fix.nodes.reduce((q, n) => q + Math.hypot(...n.dv), 0) * 299792.458).toFixed(0)} km/s)`,
+              tf(
+                "Circular at {0} M: a correction to {1} M ({2} km/s)",
+                st.r.toFixed(2),
+                g.circ.toFixed(2),
+                (fix.nodes.reduce((q, n) => q + Math.hypot(...n.dv), 0) * 299792.458).toFixed(0),
+              ),
             );
             this.refreshPlan(true);
             return null;
@@ -1232,18 +1253,25 @@ function nodeBurn(
         // (a circularization after the node: the trim where it is — the pilot's run kept, else a new one)
         if (then === "circularize") this.ourCirc = this.ourCirc ? { ...this.ourCirc, mode: "trim" } : { mode: "trim", spent0: this.spent };
         if (then) this.pilot.setAuto(then);
-        if (then === "dock") this.onPilotMessage?.("At the ISS — the docking autopilot takes over");
+        if (then === "dock") this.onPilotMessage?.(t("At the ISS — the docking autopilot takes over"));
         else if (node.role === "arrive")
           this.onPilotMessage?.(
             node.body === "wormhole"
-              ? "Into the wormhole's throat — Gargantua's side at its end"
-              : `${BODY_NAMES[node.body as Body] ?? node.body} passed`,
+              ? t("Into the wormhole's throat — Gargantua's side at its end")
+              : tf("{0} passed", BODY_NAMES[node.body as Body] ?? node.body ?? ""),
           );
         else
           this.onPilotMessage?.(
             then
-              ? `Manoeuvre done — ${then === "circularize" ? "circularizing" : then === "orbit" ? `in orbit around ${this.s.target === "star" ? "the star" : BODY_NAMES[this.s.target]}` : "station-keeping"}`
-              : "Manoeuvre done",
+              ? tf(
+                  "Manoeuvre done — {0}",
+                  then === "circularize"
+                    ? t("circularizing")
+                    : then === "orbit"
+                      ? tf("in orbit around {0}", this.s.target === "star" ? t("the star") : BODY_NAMES[this.s.target])
+                      : t("station-keeping"),
+                )
+              : t("Manoeuvre done"),
           );
       } else this.refreshPlan(true);
       return null;

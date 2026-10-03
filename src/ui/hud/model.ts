@@ -7,6 +7,7 @@ import type { FlightInfo } from "../../controller/telemetry";
 import type { FlightPhase } from "../../game/phase";
 import { BODY_NAMES } from "../../targeting";
 import { C_MPS } from "../../units";
+import { t, tf } from "../../i18n";
 
 /** The markers' and the speed's frame: the orbit's, the surface's, the target's, the hole's. */
 export type HudMode = "ORB" | "SRF" | "TGT" | "KERR";
@@ -38,12 +39,12 @@ type SpeedInput = ModeInput & Pick<FlightInfo, "speed" | "target" | "ref">;
 export function shownSpeed(i: SpeedInput, phase?: FlightPhase | null): ShownSpeed {
   const mode = hudMode(i, phase);
   const name = (b: string | null) => (b ? ((BODY_NAMES as Record<string, string>)[b] ?? b) : "");
-  if (mode === "TGT") return { v: i.speed, ref: `rel. ${name(i.target)} (target)`, mode };
+  if (mode === "TGT") return { v: i.speed, ref: tf("rel. {0} (target)", name(i.target)), mode };
   if (mode === "SRF") {
     // (through the air while in it; over the ground on it, or below the air)
-    if (i.air?.inAir && Number.isFinite(i.air.speed)) return { v: i.air.speed / C_MPS, ref: "air", mode };
+    if (i.air?.inAir && Number.isFinite(i.air.speed)) return { v: i.air.speed / C_MPS, ref: t("air"), mode };
     const sf = i.surface;
-    if (sf && Number.isFinite(sf.vHor)) return { v: Math.hypot(sf.vHor, sf.vVert) / C_MPS, ref: "ground", mode };
+    if (sf && Number.isFinite(sf.vHor)) return { v: Math.hypot(sf.vHor, sf.vVert) / C_MPS, ref: t("ground"), mode };
   }
-  return { v: i.speed, ref: i.ref ? `rel. ${name(i.ref)}` : "rel. ZAMO", mode };
+  return { v: i.speed, ref: i.ref ? tf("rel. {0}", name(i.ref)) : t("rel. ZAMO"), mode };
 }

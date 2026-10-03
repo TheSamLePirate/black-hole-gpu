@@ -87,6 +87,7 @@ import { installVramHook } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
 import { setSteady } from "./ui/clock";
 import { applyPalette } from "./ui/hudkit";
+import { t, tf } from "./i18n";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -117,9 +118,9 @@ function sanitize(s: Settings): Settings {
 }
 /** The flight laws, as said when chosen. */
 const FLIGHT_MODE_HELP: Record<Settings["flightMode"], string> = {
-  rocket: "a rocket — the stick turns it, the throttle pushes along the nose",
-  plane: "a plane — the control surfaces; let go, the flight path is held (F: next)",
-  sf: "the flight computer — the stick and throttle set the way and the speed, it flies them (⇧F: antigravity)",
+  rocket: t("a rocket — the stick turns it, the throttle pushes along the nose"),
+  plane: t("a plane — the control surfaces; let go, the flight path is held (F: next)"),
+  sf: t("the flight computer — the stick and throttle set the way and the speed, it flies them (⇧F: antigravity)"),
 };
 
 /** What survives a change of scene: the player's own and what they left carried (settings.ts SETTING_KIND). */
@@ -178,7 +179,7 @@ async function main() {
   try {
     renderer = await Renderer.create(canvas);
   } catch (e) {
-    fail(`${(e as Error).message}\n\nUse a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+, Firefox 141+).`);
+    fail(`${(e as Error).message}\n\n${t("Use a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+, Firefox 141+).")}`);
     return;
   }
 
@@ -192,9 +193,9 @@ async function main() {
     fail("");
     document.body.classList.add("gpu-lost");
     const box = document.createElement("div");
-    box.textContent = `The graphics device was reset (${why}).\n\nYour flight was saved. Reload the page to go on.\n`;
+    box.textContent = tf("The graphics device was reset ({0}).\n\nYour flight was saved. Reload the page to go on.\n", why);
     const b = document.createElement("button");
-    b.textContent = "Reload";
+    b.textContent = t("Reload");
     b.className = "error-reload";
     b.onclick = () => location.reload();
     box.append(b);
@@ -202,7 +203,7 @@ async function main() {
   };
   renderer.onGpuError = (m) => {
     try {
-      panel.toast(`GPU error: ${m.split("\n")[0]!.slice(0, 140)}`);
+      panel.toast(tf("GPU error: {0}", m.split("\n")[0]!.slice(0, 140)));
     } catch {
       /* (before the panel exists: the console has it) */
     }
@@ -211,7 +212,7 @@ async function main() {
   renderer.onAssets = () => touch();
   const touchDisplay = () => (displayChanged = true);
   // the solar system's ephemerides (DE440, JUP365: 7 MB) — in while the rest is built
-  loading.stage("ephemeris", "The solar system — NASA/JPL ephemerides (DE440)", { weight: 2 });
+  loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
   const ephemerides = loading.track(
     "ephemeris",
     "",
@@ -280,7 +281,7 @@ async function main() {
     if (keys.includes("target")) {
       const want = settings.target;
       settings.target = previousTarget;
-      if (!camera.selectTarget(want)) panel.toast(`${BODY_NAMES[want]} is not in this universe`);
+      if (!camera.selectTarget(want)) panel.toast(tf("{0} is not in this universe", BODY_NAMES[want]));
       refreshGui();
     }
     for (const k of keys) {
@@ -437,12 +438,14 @@ async function main() {
     if (withMission) mission.start();
     if (name === "game:artemis") {
       panel.toast(
-        "Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)",
+        t("Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)"),
       );
     }
     if (name === "game:interstellar") {
       panel.toast(
-        "2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)",
+        t(
+          "2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)",
+        ),
       );
     }
     refreshGui();
@@ -454,7 +457,7 @@ async function main() {
   // -------------------------------------------------------------------- toolbar & keys
   const toggleUi = () => {
     // (hidden: nothing on screen says how to come back — a word, before it goes)
-    if (!document.body.classList.contains("hide-ui")) panel.toast("H: the interface back");
+    if (!document.body.classList.contains("hide-ui")) panel.toast(t("H: the interface back"));
     document.body.classList.toggle("hide-ui");
   };
   const fullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
@@ -481,15 +484,17 @@ async function main() {
     "btn-jet": () => toggle("jet"),
     "btn-ship": () => {
       toggle("ship");
-      panel.toast(settings.ship ? `Ranger: ${MOUNTS[settings.shipMount as Mount]?.label ?? ""}` : "Ranger off");
+      panel.toast(settings.ship ? tf("Ranger: {0}", MOUNTS[settings.shipMount as Mount]?.label ?? "") : t("Ranger off"));
     },
     "btn-cinema": () => {
       toggle("cinematic");
       if (settings.cinematic && !settings.wormhole)
         panel.toast(
-          "Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”",
+          t(
+            "Cinematic mode: the liquid surface is on the wormhole's throat — turn the wormhole on, or pick “Cinematic: the liquid wormhole”",
+          ),
         );
-      else panel.toast(settings.cinematic ? "Cinematic mode: liquid wormhole" : "Cinematic mode off");
+      else panel.toast(settings.cinematic ? t("Cinematic mode: liquid wormhole") : t("Cinematic mode off"));
     },
     "btn-shot": () => savePNG(),
     "btn-full": () => fullscreen(),
@@ -507,12 +512,12 @@ async function main() {
   function nextTarget(dir: 1 | -1) {
     const list = camera.availableTargets();
     if (list.length < 2) {
-      panel.toast(`Only ${BODY_NAMES[settings.target]} here — turn on the companion star or the wormhole, or pick a scene`);
+      panel.toast(tf("Only {0} here — turn on the companion star or the wormhole, or pick a scene", BODY_NAMES[settings.target]));
       return;
     }
     camera.cycleTarget(dir);
     camera.pad.rumble(0.1, 0.3, 50);
-    panel.toast(`Target: ${BODY_NAMES[settings.target]}  (${list.indexOf(settings.target) + 1} / ${list.length})`);
+    panel.toast(tf("Target: {0}  ({1} / {2})", BODY_NAMES[settings.target], list.indexOf(settings.target) + 1, list.length));
   }
   // ---- the camera: its view (a placement, falling freely), the look, the cinematics — one set of commands
   // for the camera panel, the keys and the controller
@@ -528,7 +533,10 @@ async function main() {
       camera.setRotation(v);
     }
     if (say)
-      panel.toast(`Camera: ${VIEW_LABEL[v]} — ${VIEW_HELP[v]}${v === "fall" && !settings.animate ? " (paused: Space runs time)" : ""}`);
+      panel.toast(
+        tf("Camera: {0} — {1}", VIEW_LABEL[v], VIEW_HELP[v]) +
+          (v === "fall" && !settings.animate ? ` ${t("(paused: Space runs time)")}` : ""),
+      );
     refreshGui();
     touch();
   }
@@ -542,22 +550,24 @@ async function main() {
   }
   /** A cinematic on or off (the dive and the journey are the free camera's). */
   function cinematic(c: "orbit" | "dive" | "journey") {
-    if (settings.ship && c !== "orbit") return panel.toast("The dive and the journey are the free camera's — leave the Ranger (⇧K)");
+    if (settings.ship && c !== "orbit") return panel.toast(t("The dive and the journey are the free camera's — leave the Ranger (⇧K)"));
     camera.setCinematic(camera.cinematic === c ? null : c);
-    if (camera.cinematic && !settings.animate) panel.toast("Cinematics run with the time — Space runs it");
+    if (camera.cinematic && !settings.animate) panel.toast(t("Cinematics run with the time — Space runs it"));
     refreshGui();
     touch();
   }
   function toggleLookAt() {
     camera.setLookAt(!settings.lookAt);
-    panel.toast(settings.lookAt ? `View locked on ${BODY_NAMES[settings.target]}` : "View free");
+    panel.toast(settings.lookAt ? tf("View locked on {0}", BODY_NAMES[settings.target]) : t("View free"));
     refreshGui();
     touch();
   }
   function toggleTelescope() {
     camera.setTelescope(!settings.telescope);
     panel.toast(
-      settings.telescope ? `Telescope on ${BODY_NAMES[settings.target]} — the wheel zooms (to a 0.02° field), Y leaves` : "Telescope off",
+      settings.telescope
+        ? tf("Telescope on {0} — the wheel zooms (to a 0.02° field), Y leaves", BODY_NAMES[settings.target])
+        : t("Telescope off"),
     );
     refreshGui();
     touch();
@@ -567,14 +577,14 @@ async function main() {
    * it (a planet, a moon: a few radii up), around it. Why it cannot, or null.
    */
   function goTo(b: Target): string | null {
-    if (settings.ship) return "The Ranger flies there: the planner (O), the autopilot (0: approach)";
+    if (settings.ship) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
     if (b === "ranger" || b === "lander" || b === "endurance") {
       // a craft of the fleet: the camera a few of its sizes off it — behind, to its side, above —, moving
       // with it, around it
       if (!(settings.system === "gargantua" && settings.wormhole))
-        return "The craft fly in our universe (through the wormhole of the Gargantua-system scenes)";
+        return t("The craft fly in our universe (through the wormhole of the Gargantua-system scenes)");
       const p = fleet.pose(b, sim.time);
-      if (!p) return `The ${BODY_NAMES[b]}: not known now`;
+      if (!p) return tf("The {0}: not known now", BODY_NAMES[b]);
       const R = craftRadius(b);
       const o = [1.1 * R, 0.8 * R, -1.9 * R];
       const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [
@@ -592,7 +602,7 @@ async function main() {
       camera.sync();
       settings.rotation = "orbit";
       camera.selectTarget(b, { focus: true });
-      panel.toast(`Camera: around the ${BODY_NAMES[b]}`);
+      panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
       refreshGui();
       touch();
       return null;
@@ -601,9 +611,9 @@ async function main() {
       // the space station: the camera 110 m off it — behind, to starboard, above —, moving with it,
       // around it
       if (!(settings.system === "gargantua" && settings.wormhole && settings.iss))
-        return "The space station flies in our universe (through the wormhole of the Gargantua-system scenes)";
+        return t("The space station flies in our universe (through the wormhole of the Gargantua-system scenes)");
       const st = issTrack.peek(sim.time);
-      if (!st) return "The space station: no orbit known at this date";
+      if (!st) return t("The space station: no orbit known at this date");
       const A = issAxes(st.X, st.V, sim.time);
       const o = [-70, 60, -55];
       const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [
@@ -621,7 +631,7 @@ async function main() {
       camera.sync();
       settings.rotation = "orbit";
       camera.selectTarget("iss", { focus: true });
-      panel.toast("Camera: around the ISS");
+      panel.toast(t("Camera: around the ISS"));
       refreshGui();
       touch();
       return null;
@@ -630,13 +640,13 @@ async function main() {
     const u = universeOf(id);
     camera.setCinematic(null);
     if (!u || (u === "gargantua" && id !== "gargantua" && settings.system !== "gargantua")) {
-      if (!camera.availableTargets().includes(b)) return `${BODY_NAMES[b]} is not in this world`;
+      if (!camera.availableTargets().includes(b)) return tf("{0} is not in this world", BODY_NAMES[b]);
       setView("orbit", false);
       camera.selectTarget(b, { frame: true });
       return null;
     }
     if (u === "ours" && !(settings.system === "gargantua" && settings.wormhole))
-      return "The solar system lies through the wormhole of the Gargantua-system scenes";
+      return t("The solar system lies through the wormhole of the Gargantua-system scenes");
     try {
       const sb = u === "ours" ? solarBody(id) : null;
       const alt = sb ? Math.max(defaultAltKm(id), (2.2 * sb.radius * M_METRES) / 1e3) : undefined;
@@ -657,7 +667,7 @@ async function main() {
       camera.sync();
       settings.rotation = "orbit";
       camera.selectTarget(b, { focus: true });
-      panel.toast(`Camera: around ${BODY_NAMES[b]}`);
+      panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
       refreshGui();
       touch();
       return null;
@@ -667,11 +677,13 @@ async function main() {
   }
   /** The camera set down on a world, on its tripod, looking at the horizon (⇧T; the camera panel). */
   function standOn(b?: Target): string | null {
-    if (settings.ship) return "The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down";
+    if (settings.ship) return t("The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down");
     const why = camera.standOn(b as Parameters<typeof camera.standOn>[0]);
     if (why) return why;
     const on = camera.rigStatus()?.body;
-    panel.toast(`Tripod on ${on ? BODY_NAMES[on as Target] : "the ground"} — drag to look around, the keys walk it, V another view`);
+    panel.toast(
+      tf("Tripod on {0} — drag to look around, the keys walk it, V another view", on ? BODY_NAMES[on as Target] : t("the ground")),
+    );
     refreshGui();
     touch();
     return null;
@@ -713,7 +725,7 @@ async function main() {
   function skyGoTo(kind: "constellation" | "star", index: number) {
     const name = kind === "star" ? NAMED_STARS[index]!.name : CONSTELLATIONS[index]!.name;
     let cam = cameraFrame(settings);
-    if (!onOurSide(settings, cam)) return void panel.toast("Our constellations are on the other side of the wormhole");
+    if (!onOurSide(settings, cam)) return void panel.toast(t("Our constellations are on the other side of the wormhole"));
     const d = kind === "star" ? NAMED_STARS[index]!.v : CONSTELLATIONS[index]!.label;
     if (settings.ship) {
       // (the Ranger's views: its look turned — as onto a body, aimAt)
@@ -826,7 +838,15 @@ async function main() {
     else settings.skyLines = settings.skyNames = !(settings.skyLines || settings.skyNames);
     onSettingsChange(stars ? ["starNames"] : ["skyLines", "skyNames"]);
     panel.refresh();
-    panel.toast(stars ? `Star names ${settings.starNames ? "on" : "off"}` : `Constellations ${settings.skyLines ? "on" : "off"}`);
+    panel.toast(
+      stars
+        ? settings.starNames
+          ? t("Star names on")
+          : t("Star names off")
+        : settings.skyLines
+          ? t("Constellations on")
+          : t("Constellations off"),
+    );
   }
   function cycleGrids() {
     const states: [boolean, boolean][] = [
@@ -843,11 +863,8 @@ async function main() {
     panel.refresh();
     const cam = cameraFrame(settings);
     const noHorizon = h && !horizonAt(settings, cam, sim.time);
-    panel.toast(
-      !e && !h
-        ? "Grids off"
-        : `${[e && "Equatorial", h && "Horizontal"].filter(Boolean).join(" + ")} grid${e && h ? "s" : ""}${noHorizon ? " — no world under the camera" : ""}`,
-    );
+    const grids = e && h ? t("Equatorial + Horizontal grids") : e ? t("Equatorial grid") : t("Horizontal grid");
+    panel.toast(!e && !h ? t("Grids off") : `${grids}${noHorizon ? ` — ${t("no world under the camera")}` : ""}`);
   }
 
   /** Next attach point of the camera on the Ranger (turns the ship on). */
@@ -866,7 +883,7 @@ async function main() {
     const v = settings.ship
       ? (MOUNTS[settings.shipMount as Mount]?.short ?? "Ranger")
       : camera.cinematic
-        ? { orbit: "Auto-orbit", dive: "Dive", journey: "Journey" }[camera.cinematic]
+        ? { orbit: t("Auto-orbit"), dive: t("Dive"), journey: t("Journey") }[camera.cinematic]
         : VIEW_LABEL[view()];
     btn.querySelector(".cam-mode")!.textContent = `${v}${settings.telescope ? " · 🔭" : ""}`;
     btn.querySelector(".cam-target")!.textContent = BODY_NAMES[settings.target];
@@ -906,7 +923,7 @@ async function main() {
   function autoWarpHeld() {
     if (camera.nodeWarp !== "auto") return false;
     audio.cue("error");
-    panel.toast("Auto warp: the manoeuvre sets the warp — AUTO on the time bar gives it to you");
+    panel.toast(t("Auto warp: the manoeuvre sets the warp — AUTO on the time bar gives it to you"));
     return true;
   }
   function setWarp(speed: number) {
@@ -916,7 +933,7 @@ async function main() {
     scheduleUrlSave();
     touch();
     panel.toast(
-      `Time warp ${fmtWarp(settings, false)}${settings.animate ? "" : " — paused (Space runs it)"} · ${+speed.toPrecision(3)} M/s`,
+      `${tf("Time warp {0}", fmtWarp(settings, false))}${settings.animate ? "" : ` — ${t("paused (Space runs it)")}`} · ${+speed.toPrecision(3)} M/s`,
     );
   }
   /** Real time: 1 s of the scene per second. */
@@ -936,38 +953,38 @@ async function main() {
     settings.sound = !settings.sound;
     audio.applyMix();
     refreshGui();
-    panel.toast(settings.sound ? "Sound on" : "Sound off");
+    panel.toast(settings.sound ? t("Sound on") : t("Sound off"));
   }
   function togglePathInView() {
     settings.pathInView = !settings.pathInView;
     refreshGui();
     touch();
-    panel.toast(settings.pathInView ? "Future path shown in the view" : "Future path hidden in the view (the map keeps it)");
+    panel.toast(settings.pathInView ? t("Future path shown in the view") : t("Future path hidden in the view (the map keeps it)"));
   }
   function pilotHold(h: Hold) {
     camera.pilot.setHold(h);
-    panel.toast(camera.pilot.hold === "none" ? "Attitude hold off" : `Hold: ${HOLD_NAMES[h]}`);
+    panel.toast(camera.pilot.hold === "none" ? t("Attitude hold off") : tf("Hold: {0}", HOLD_NAMES[h]));
   }
   function pilotAuto(a: Auto) {
-    if (a === "dock" && camera.docked) return panel.toast("Docked to the ISS — UNDOCK first");
+    if (a === "dock" && camera.docked) return panel.toast(t("Docked to the ISS — UNDOCK first"));
     camera.pilot.setAuto(a);
-    panel.toast(camera.pilot.auto === "none" ? "Autopilot off" : `Autopilot: ${AUTO_NAMES[a]}`);
+    panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }
   function pilotSas() {
     camera.pilot.sas = !camera.pilot.sas;
-    panel.toast(`SAS ${camera.pilot.sas ? "on" : "off"}`);
+    panel.toast(camera.pilot.sas ? t("SAS on") : t("SAS off"));
   }
   function pilotRoll() {
     camera.pilot.rollAlign = !camera.pilot.rollAlign;
-    panel.toast(`Roll alignment ${camera.pilot.rollAlign ? "on — wings in the orbital plane" : "off"}`);
+    panel.toast(camera.pilot.rollAlign ? t("Roll alignment on — wings in the orbital plane") : t("Roll alignment off"));
   }
   function setMount(m: Mount) {
     if (settings.shipMount === m) return;
     settings.shipMount = m;
     refreshGui();
     scheduleUrlSave();
-    const help = m === "around" ? " — drag to turn around the ship" : m === "free" ? " — fly the camera, the ship flies on" : "";
-    panel.toast(`Camera: ${MOUNTS[m].label}${help}`);
+    const help = m === "around" ? t("drag to turn around the ship") : m === "free" ? t("fly the camera, the ship flies on") : "";
+    panel.toast(help ? tf("Camera: {0} — {1}", MOUNTS[m].label, help) : tf("Camera: {0}", MOUNTS[m].label));
   }
   const coarse = matchMedia("(pointer: coarse)").matches;
   const touchFlight = new TouchFlight({
@@ -1004,10 +1021,10 @@ async function main() {
     },
     speedMode: () => {
       camera.speedMode = camera.speedMode === "orbit" ? "target" : "orbit";
-      panel.toast(camera.speedMode === "target" ? `Speed relative to ${BODY_NAMES[settings.target]}` : "Speed in orbit");
+      panel.toast(camera.speedMode === "target" ? tf("Speed relative to {0}", BODY_NAMES[settings.target]) : t("Speed in orbit"));
     },
     select: (b) => {
-      if (camera.selectTarget(b as Target, { focus: false })) panel.toast(`Target: ${BODY_NAMES[settings.target]}`);
+      if (camera.selectTarget(b as Target, { focus: false })) panel.toast(tf("Target: {0}", BODY_NAMES[settings.target]));
     },
     lookAhead: () => {
       panel.toast(camera.resetShipView());
@@ -1020,7 +1037,7 @@ async function main() {
     },
     plan: (goal, r2, orbitStar) => panel.toast(camera.planTransfer(goal, r2, { orbitStar })),
     planOur: (kind, arrival, altKm, retKm) => {
-      panel.toast("Planning… (aiming the n-body paths)");
+      panel.toast(t("Planning… (aiming the n-body paths)"));
       void camera.planOurs(kind, arrival, altKm, retKm).then((m) => m && panel.toast(m));
     },
     align: (goal) => panel.toast(camera.planAlign(goal)),
@@ -1145,22 +1162,22 @@ async function main() {
       scheduleUrlSave();
       panel.toast(
         settings.autoWarp
-          ? "Auto warp — the manoeuvre sets the warp"
-          : "Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows",
+          ? t("Auto warp — the manoeuvre sets the warp")
+          : t("Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows"),
       );
     },
   });
   transport.mount(tpDock, false);
   /** Starts or stops recording a take (● on the time bar). */
   function toggleTake() {
-    if (renderer.offlineActive) return panel.toast("A render is running");
+    if (renderer.offlineActive) return panel.toast(t("A render is running"));
     if (take.recording) {
       take.stop();
       renderDialog.takeChanged();
-      panel.toast(`Take recorded · ${take.seconds.toFixed(1)} s — Render › Video renders it at full quality`);
+      panel.toast(tf("Take recorded · {0} s — Render › Video renders it at full quality", take.seconds.toFixed(1)));
     } else {
       take.start();
-      panel.toast("Recording a take — fly, orbit, pause, warp as you like; ● again to stop");
+      panel.toast(t("Recording a take — fly, orbit, pause, warp as you like; ● again to stop"));
     }
     transport?.update(true);
   }
@@ -1260,10 +1277,10 @@ async function main() {
       if (now === padWas) return;
       padWas = now;
       if (now) {
-        const id = camera.pad.list()[0]?.id.replace(/\s*\(.*\)\s*$/, "") || "gamepad";
-        panel.toast(`Controller connected — ${id} · ? for the buttons`);
+        const id = camera.pad.list()[0]?.id.replace(/\s*\(.*\)\s*$/, "") || t("gamepad");
+        panel.toast(tf("Controller connected — {0} · ? for the buttons", id));
         camera.pad.rumble(0.2, 0.4, 120);
-      } else panel.toast("Controller disconnected");
+      } else panel.toast(t("Controller disconnected"));
       touch();
     }, 900);
   };
@@ -1272,15 +1289,15 @@ async function main() {
   camera.pad.hid.onChange = padChanged;
   async function connectController() {
     try {
-      if (!(await camera.pad.hid.request())) panel.toast("No controller chosen");
+      if (!(await camera.pad.hid.request())) panel.toast(t("No controller chosen"));
     } catch (e) {
-      panel.toast(`Could not open the controller: ${(e as Error).message}`);
+      panel.toast(tf("Could not open the controller: {0}", (e as Error).message));
     }
   }
 
   // the pause menu (Escape with nothing open): the time held, the game's own (ui/pause.ts)
   const releaseControls = () => {
-    mission.stop("Mission stopped — you have the controls");
+    mission.stop(t("Mission stopped — you have the controls"));
     camera.pilot.hold = "none";
     if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     if (camera.cinematic) camera.setCinematic(null);
@@ -1313,16 +1330,16 @@ async function main() {
   let titleScreen: TitleScreen | null = null;
   const quickSave = () => {
     try {
-      panel.toast(`Quick save — ${tools.save("Quick save")}`);
+      panel.toast(tf("Quick save — {0}", tools.save("Quick save")));
     } catch (e) {
       panel.toast((e as Error).message);
     }
   };
   const quickLoad = () => {
     try {
-      panel.toast(`Quick load — ${tools.load("Quick save")}`);
+      panel.toast(tf("Quick load — {0}", tools.load("Quick save")));
     } catch {
-      panel.toast("No quick save yet — F5 makes one");
+      panel.toast(t("No quick save yet — F5 makes one"));
     }
   };
 
@@ -1340,7 +1357,7 @@ async function main() {
     },
     precision: () => {
       camera.pilot.precision = !camera.pilot.precision;
-      panel.toast(camera.pilot.precision ? "Precision controls" : "Normal controls");
+      panel.toast(camera.pilot.precision ? t("Precision controls") : t("Normal controls"));
     },
     sas: () => pilotSas(),
     roll: () => pilotRoll(),
@@ -1360,12 +1377,12 @@ async function main() {
     flightMode: () => {
       // the flight law in the air: rocket → plane → the sci-fi flight computer
       const V = VESSELS[fleet.active];
-      if (!V.flies) panel.toast(`The ${V.name} is no aircraft: it flies as a rocket`);
+      if (!V.flies) panel.toast(tf("The {0} is no aircraft: it flies as a rocket", V.name));
       else {
         const order: Settings["flightMode"][] = ["rocket", "plane", "sf"];
         settings.flightMode = order[(order.indexOf(settings.flightMode) + 1) % 3]!;
         onSettingsChange(["flightMode"]);
-        panel.toast(`${V.name}: flown as ${FLIGHT_MODE_HELP[settings.flightMode]}`);
+        panel.toast(tf("{0}: flown as {1}", V.name, FLIGHT_MODE_HELP[settings.flightMode]));
       }
     },
     antigrav: () => {
@@ -1373,18 +1390,18 @@ async function main() {
       onSettingsChange(["antigrav"]);
       panel.toast(
         settings.antigrav
-          ? "Antigravity on — the flight computer holds against gravity and the air for free"
-          : "Antigravity off — every hold costs thrust and propellant",
+          ? t("Antigravity on — the flight computer holds against gravity and the air for free")
+          : t("Antigravity off — every hold costs thrust and propellant"),
       );
     },
     flaps: () => {
       const cfg = camera.airFlight.cfg;
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
-      panel.toast(`Flaps ${cfg.flaps === 0 ? "up" : cfg.flaps === 0.5 ? "half" : "full"}`);
+      panel.toast(cfg.flaps === 0 ? t("Flaps up") : cfg.flaps === 0.5 ? t("Flaps half") : t("Flaps full"));
     },
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
-      panel.toast(camera.airBrake > 0 ? "Air brake out" : "Air brake in");
+      panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
     },
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
@@ -1754,7 +1771,7 @@ async function main() {
         camera.airFlight.failure = null;
         settings.animate = true;
         onSettingsChange(["damage", "animate"]);
-        panel.toast("Damage off — the air's limits are alarms only (Settings › Game › Ground & air)");
+        panel.toast(t("Damage off — the air's limits are alarms only (Settings › Game › Ground & air)"));
       },
       restart: currentScene ? () => applyPreset(currentScene!) : null,
     });
@@ -1855,7 +1872,7 @@ async function main() {
       });
       if (!ok) {
         renderDialog.takeChanged();
-        panel.toast(`Take stopped at ${take.seconds.toFixed(0)} s (10 minutes at most) — Render › Video renders it`);
+        panel.toast(tf("Take stopped at {0} s (10 minutes at most) — Render › Video renders it", take.seconds.toFixed(0)));
         transport?.update(true);
       }
     }
@@ -2039,13 +2056,13 @@ async function main() {
     try {
       shared = saveFromHash(hash);
     } catch (e) {
-      panel.toast(`That link's saved game could not be read: ${(e as Error).message}`);
+      panel.toast(tf("That link's saved game could not be read: {0}", (e as Error).message));
     }
     const last = autosave.get();
     // (the flight saved last loaded behind the title screen: Continue only lifts it)
     let resumed: string | null = null;
     try {
-      if (shared) panel.toast(`Shared flight: ${tools.load(shared)}`);
+      if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
       else if (scene && presets[scene]) applyPreset(scene);
       else if (hash.length <= 1 && last && settings.autosave) {
         tools.load(last, { quiet: true });
@@ -2113,7 +2130,7 @@ async function main() {
   /** Camera position for the HUD: distance to the hole, or ℓ through the wormhole. */
   function where() {
     if (!settings.wormhole || settings.anchor === "hole") return `r = ${settings.distance.toFixed(2)} M`;
-    const side = settings.whL < 0 ? "our side" : "Gargantua side";
+    const side = settings.whL < 0 ? t("our side") : t("Gargantua side");
     return `ℓ = ${settings.whL.toFixed(2)} M (${side})`;
   }
 
@@ -2136,39 +2153,39 @@ async function main() {
     let phase: string;
     let progress = 0;
     if (st.phase === "offline" && st.offline) {
-      phase = `<span class="phase cv">Rendering ${(st.offline.progress * 100).toFixed(0)} %</span>`;
+      phase = `<span class="phase cv">${tf("Rendering {0} %", (st.offline.progress * 100).toFixed(0))}</span>`;
       progress = st.offline.progress;
     } else if (st.phase === "realtime") {
       // (the frame rate is a developer's figure: on the dev server only — F2 › Perf has it everywhere)
-      phase = `<span class="phase rt">Live${DEV ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
+      phase = `<span class="phase rt">${t("Live")}${DEV ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
     } else if (st.phase === "converging") {
-      phase = `<span class="phase cv">Refining · ${Math.floor(st.spp)} / ${settings.targetSpp}</span>`;
+      phase = `<span class="phase cv">${tf("Refining · {0} / {1}", Math.floor(st.spp), settings.targetSpp)}</span>`;
       progress = st.spp / settings.targetSpp;
     } else {
-      phase = `<span class="phase ok">Converged</span>`;
+      phase = `<span class="phase ok">${t("Converged")}</span>`;
       progress = 1;
     }
     const chips: string[] = [];
     if (camera.cinematic)
       chips.push(
-        `<span class="chip hot">${camera.cinematic === "orbit" ? "Auto-orbit" : camera.cinematic === "dive" ? "Dive" : "Journey"}</span>`,
+        `<span class="chip hot">${camera.cinematic === "orbit" ? t("Auto-orbit") : camera.cinematic === "dive" ? t("Dive") : t("Journey")}</span>`,
       );
-    if (camera.flyMode) chips.push(`<span class="chip hot">Fly ×${camera.flySpeed.toFixed(1)}</span>`);
+    if (camera.flyMode) chips.push(`<span class="chip hot">${tf("Fly ×{0}", camera.flySpeed.toFixed(1))}</span>`);
     else if (!settings.ship) {
       const rs = camera.rigStatus();
-      const carried = rs ? ` · on ${BODY_NAMES[rs.body]}, ${fmtHeight(rs.h * 1476.625 * settings.massSolar)}` : "";
+      const carried = rs ? ` · ${tf("on {0}, {1}", BODY_NAMES[rs.body], fmtHeight(rs.h * 1476.625 * settings.massSolar))}` : "";
       const v = view();
       const glyph = { orbit: "↻", free: "✦", follow: "⇢", tripod: "⊥", fall: "↓" }[v];
       const aimed = v === "orbit" || settings.lookAt ? ` ${BODY_NAMES[settings.target]}` : "";
       chips.push(
-        `<span class="chip${v === "fall" ? " hot" : ""}">${glyph} ${v === "fall" && camera.landed ? "Landed" : VIEW_LABEL[v]}${aimed}${carried}</span>`,
+        `<span class="chip${v === "fall" ? " hot" : ""}">${glyph} ${v === "fall" && camera.landed ? t("Landed") : VIEW_LABEL[v]}${aimed}${carried}</span>`,
       );
     }
     if (settings.telescope)
       chips.push(
         `<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`,
       );
-    if (camera.pad.connected) chips.push(`<span class="chip" title="Game controller">🎮</span>`);
+    if (camera.pad.connected) chips.push(`<span class="chip" title="${t("Game controller")}">🎮</span>`);
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);
     progressEl.classList.toggle("done", progress >= 1 && st.phase !== "offline");
@@ -2177,16 +2194,19 @@ async function main() {
     const lines = [
       `<b>${st.width}×${st.height}</b>${renderer.hdr ? " · HDR" : ""} · gpu ${st.gpuMs.toFixed(1)} ms · ` +
         (st.phase === "realtime" ? `1 ray / ${st.block}×${st.block} px` : `${st.spp.toFixed(1)} spp`),
-      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${sim.time.toFixed(0)} M${settings.animate ? "" : " (paused)"}`,
+      `${where()} · θ = ${settings.inclination.toFixed(1)}° · t = ${sim.time.toFixed(0)} M${settings.animate ? "" : ` (${t("paused")})`}`,
     ];
     if (st.phase === "offline" && st.offline)
-      lines.unshift(`offline ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`);
+      lines.unshift(
+        `${t("offline")} ${st.offline.width}×${st.offline.height} · ${st.offline.spp.toFixed(1)} / ${st.offline.targetSpp} spp`,
+      );
     if (camera.gravity) {
       const v = Math.hypot(settings.velR, settings.velT, settings.velP);
-      lines.push(`free fall · v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M`);
-    } else if (camera.riding > 0.01) lines.push(`co-moving with the star · β = ${Math.abs(settings.velP).toFixed(3)} c`);
-    else if (settings.motion === "barycentric") lines.push("at rest in the centre-of-mass frame");
-    for (const g of camera.pad.list()) lines.push(`controller: ${g.id} · ${g.mapping || "no mapping"} · ${g.buttons.length} buttons`);
+      lines.push(`${t("free fall")} · v = ${v.toFixed(3)} c · τ = ${camera.properTime.toFixed(1)} M`);
+    } else if (camera.riding > 0.01) lines.push(`${t("co-moving with the star")} · β = ${Math.abs(settings.velP).toFixed(3)} c`);
+    else if (settings.motion === "barycentric") lines.push(t("at rest in the centre-of-mass frame"));
+    for (const g of camera.pad.list())
+      lines.push(tf("controller: {0} · {1} · {2} buttons", g.id, g.mapping || t("no mapping"), g.buttons.length));
     statsEl.innerHTML = lines.join("<br>");
     const cam = cameraFrame(settings);
     readoutEl.innerHTML = physicalReadouts(settings.spin, settings.massSolar, cam)

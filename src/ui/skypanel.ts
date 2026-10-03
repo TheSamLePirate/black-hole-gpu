@@ -7,6 +7,7 @@ import type { Settings } from "../settings";
 import { onEscape } from "./keys";
 import { CONSTELLATIONS, NAMED_STARS, type Constellation, type NamedStar } from "../skychart";
 import { el as h } from "./kit";
+import { t, tf } from "../i18n";
 
 const ICON = {
   lines:
@@ -93,18 +94,18 @@ export class SkyPanel {
     const el = this.el;
     el.replaceChildren();
     const head = h("div", "fl-title skp-head");
-    head.append(h("span", "fl-htext", "Sky chart"));
+    head.append(h("span", "fl-htext", t("Sky chart")));
     const x = h("button", "skp-x", "×");
-    x.title = "Close (Esc)";
+    x.title = t("Close (Esc)");
     x.onclick = () => this.toggle(false);
     head.append(x);
     const st = h("div", "skp-state");
-    const chip = h("span", "skp-chip", w.ours ? "Our sky" : "Gargantua's sky");
+    const chip = h("span", "skp-chip", w.ours ? t("Our sky") : t("Gargantua's sky"));
     this.stateText.textContent = !w.ours
-      ? "The chart draws our constellations: go through the wormhole to see them"
+      ? t("The chart draws our constellations: go through the wormhole to see them")
       : w.horizon
-        ? `Horizon of ${w.horizon} — the horizontal grid is there`
-        : "In space — the horizontal grid needs a world under the camera";
+        ? tf("Horizon of {0} — the horizontal grid is there", w.horizon)
+        : t("In space — the horizontal grid needs a world under the camera");
     st.append(chip, this.stateText);
     el.append(head, st);
 
@@ -114,9 +115,9 @@ export class SkyPanel {
       b.disabled = disabled;
       const i = h("span", "skp-ti");
       i.innerHTML = `<svg viewBox="0 0 24 24">${icon}</svg>`;
-      const t = h("span", "skp-tt");
-      t.append(h("b", "", title), h("small", "", sub));
-      b.append(i, t);
+      const tt = h("span", "skp-tt");
+      tt.append(h("b", "", title), h("small", "", sub));
+      b.append(i, tt);
       b.onclick = () => {
         s[key] = !s[key];
         this.d.changed([key]);
@@ -133,36 +134,42 @@ export class SkyPanel {
     };
     el.append(
       sec(
-        "Constellations",
-        tile("skyLines", ICON.lines, "Figures", "The 88 constellations' lines — hover one"),
-        tile("skyNames", ICON.names, "Names", "Written across their figures"),
-        tile("starNames", ICON.stars, "Stars", "The bright stars' names — more as you zoom"),
+        t("Constellations"),
+        tile("skyLines", ICON.lines, t("Figures"), t("The 88 constellations' lines — hover one")),
+        tile("skyNames", ICON.names, t("Names"), t("Written across their figures")),
+        tile("starNames", ICON.stars, t("Stars"), t("The bright stars' names — more as you zoom")),
       ),
       sec(
-        "Grids",
-        tile("gridEquatorial", ICON.equatorial, "Equatorial", "Right ascension, declination (of date)"),
-        tile("gridHorizontal", ICON.horizontal, "Horizontal", "Altitude, azimuth, the cardinal points", !w.horizon && !s.gridHorizontal),
-        tile("skyEcliptic", ICON.ecliptic, "Ecliptic", "The Sun's path, the planets' road"),
+        t("Grids"),
+        tile("gridEquatorial", ICON.equatorial, t("Equatorial"), t("Right ascension, declination (of date)")),
+        tile(
+          "gridHorizontal",
+          ICON.horizontal,
+          t("Horizontal"),
+          t("Altitude, azimuth, the cardinal points"),
+          !w.horizon && !s.gridHorizontal,
+        ),
+        tile("skyEcliptic", ICON.ecliptic, t("Ecliptic"), t("The Sun's path, the planets' road")),
       ),
     );
     // find: a constellation or a star by its name, the camera turned to it
     const find = h("div", "skp-sec");
     const q = h("input", "skp-search") as HTMLInputElement;
     q.type = "search";
-    q.placeholder = "Go to a constellation or a star — Orion, Vega, Crux…";
+    q.placeholder = t("Go to a constellation or a star — Orion, Vega, Crux…");
     q.value = this.query;
     const hits = h("div", "skp-hits");
     const list = () => {
       hits.replaceChildren();
-      const t = this.query.trim().toLowerCase();
-      if (!t) return;
+      const qq = this.query.trim().toLowerCase();
+      if (!qq) return;
       const found: { kind: "constellation" | "star"; index: number; name: string; sub: string }[] = [];
       CONSTELLATIONS.forEach((c, i) => {
-        if (c.name.toLowerCase().includes(t) || c.abbr.toLowerCase() === t)
+        if (c.name.toLowerCase().includes(qq) || c.abbr.toLowerCase() === qq)
           found.push({ kind: "constellation", index: i, name: c.name, sub: c.abbr });
       });
       NAMED_STARS.forEach((st, i) => {
-        if (st.name.toLowerCase().includes(t))
+        if (st.name.toLowerCase().includes(qq))
           found.push({
             kind: "star",
             index: i,
@@ -171,7 +178,8 @@ export class SkyPanel {
           });
       });
       found.sort(
-        (a, b) => Number(!a.name.toLowerCase().startsWith(t)) - Number(!b.name.toLowerCase().startsWith(t)) || a.name.localeCompare(b.name),
+        (a, b) =>
+          Number(!a.name.toLowerCase().startsWith(qq)) - Number(!b.name.toLowerCase().startsWith(qq)) || a.name.localeCompare(b.name),
       );
       for (const f of found.slice(0, 10)) {
         const b = h("button", `skp-hit ${f.kind}`);
@@ -179,7 +187,7 @@ export class SkyPanel {
         b.onclick = () => this.d.goTo(f.kind, f.index);
         hits.append(b);
       }
-      if (!found.length) hits.append(h("span", "skp-none", "Nothing by that name"));
+      if (!found.length) hits.append(h("span", "skp-none", t("Nothing by that name")));
     };
     q.oninput = () => {
       this.query = q.value;
@@ -190,7 +198,7 @@ export class SkyPanel {
       e.stopPropagation();
     };
     list();
-    find.append(h("div", "skp-label", "Go to"), q, hits);
+    find.append(h("div", "skp-label", t("Go to")), q, hits);
     el.append(find);
     const op = h("div", "skp-sec");
     const row = h("div", "skp-op");
@@ -218,9 +226,9 @@ export class SkyPanel {
       this.d.changed(["skyChartOpacity"]);
     };
     row.append(range, val);
-    op.append(h("div", "skp-label", "Opacity"), row);
+    op.append(h("div", "skp-label", t("Opacity")), row);
     const keys = h("div", "skp-keys");
-    keys.innerHTML = "<kbd>N</kbd> constellations · <kbd>⇧N</kbd> star names · <kbd>U</kbd> grids · hover a star for its card";
+    keys.innerHTML = t("<kbd>N</kbd> constellations · <kbd>⇧N</kbd> star names · <kbd>U</kbd> grids · hover a star for its card");
     el.append(op, keys);
   }
 
@@ -249,17 +257,21 @@ export class SkyPanel {
       return `${deg < 0 ? "−" : "+"}${Math.floor(a / 60)}° ${String(a % 60).padStart(2, "0")}′`;
     };
     const rows: [string, string][] = [];
-    if (what.star) rows.push(["Magnitude", `V ${what.star.mag.toFixed(2)}`]);
-    rows.push(["RA · Dec J2000", `${ra(what.radec[0])} · ${dec(what.radec[1])}`]);
-    rows.push(["RA · Dec of date", `${ra(what.radecDate[0])} · ${dec(what.radecDate[1])}`]);
+    if (what.star) rows.push([t("Magnitude"), `V ${what.star.mag.toFixed(2)}`]);
+    rows.push([t("RA · Dec J2000"), `${ra(what.radec[0])} · ${dec(what.radec[1])}`]);
+    rows.push([t("RA · Dec of date"), `${ra(what.radecDate[0])} · ${dec(what.radecDate[1])}`]);
     if (what.altaz)
-      rows.push(["Alt · Az", `${what.altaz[0] >= 0 ? "+" : "−"}${Math.abs(what.altaz[0]).toFixed(1)}° · ${what.altaz[1].toFixed(1)}°`]);
+      rows.push([t("Alt · Az"), `${what.altaz[0] >= 0 ? "+" : "−"}${Math.abs(what.altaz[0]).toFixed(1)}° · ${what.altaz[1].toFixed(1)}°`]);
     c.replaceChildren();
     const title = h("div", "sc-title", what.star ? what.star.name : what.constellation!.name);
     const sub = h(
       "div",
       "sc-sub",
-      what.star ? (what.constellation ? `Star · in ${what.constellation.name}` : "Star") : `Constellation · ${what.constellation!.abbr}`,
+      what.star
+        ? what.constellation
+          ? tf("Star · in {0}", what.constellation.name)
+          : t("Star")
+        : tf("Constellation · {0}", what.constellation!.abbr),
     );
     c.append(title, sub);
     for (const [k, v] of rows) {

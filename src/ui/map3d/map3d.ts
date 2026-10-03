@@ -28,6 +28,7 @@ import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./gpu";
 import { bodyAxes, MAPS_HI, MAPS_LO } from "../../system/solar";
 import { store } from "../../util/storage";
 import { el as h } from "../kit";
+import { t, tf, tr } from "../../i18n";
 
 export interface MapHost {
   readonly s: Settings;
@@ -92,14 +93,23 @@ type Proj = { x: number; y: number; z: number; k: number; ok: boolean };
 const PLANES: { id: PlaneMode; label: string; short: string; title: string }[] = [
   {
     id: "system",
-    label: "System",
-    short: "Sys",
-    title: "The system's plane: the ecliptic (the solar system), the hole's equator (Gargantua's)",
+    label: t("System"),
+    short: t("Sys"),
+    title: t("The system's plane: the ecliptic (the solar system), the hole's equator (Gargantua's)"),
   },
-  { id: "equator", label: "Equator", short: "Eq", title: "The focus body's equator" },
-  { id: "orbit", label: "Orbit", short: "Orb", title: "The ship's orbital plane (around its primary)" },
-  { id: "target", label: "Target", short: "Tgt", title: "The target's orbital plane (around its primary)" },
+  { id: "equator", label: t("Equator"), short: t("Eq"), title: t("The focus body's equator") },
+  { id: "orbit", label: t("Orbit"), short: t("Orb"), title: t("The ship's orbital plane (around its primary)") },
+  { id: "target", label: t("Target"), short: t("Tgt"), title: t("The target's orbital plane (around its primary)") },
 ];
+
+/** a body's kind, as the focus menu says it */
+const KIND_NOTE: Record<MapBody["kind"], string> = {
+  star: t("star"),
+  planet: t("planet"),
+  moon: t("moon"),
+  hole: t("hole"),
+  mouth: t("mouth"),
+};
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 /** the flight computer's preview (rgb) */
@@ -217,7 +227,7 @@ export class Map3D {
   private buildTimeline() {
     const root = h("div", "m3-time");
     const play = h("button", "m3-play", "▶") as HTMLButtonElement;
-    play.title = "Play the preview: the bodies and the ship move on along their paths";
+    play.title = t("Play the preview: the bodies and the ship move on along their paths");
     play.onclick = () => {
       if (this.preview >= this.tlSpan * 0.999) this.preview = 0;
       this.playing = !this.playing;
@@ -227,10 +237,10 @@ export class Map3D {
     const marks = h("div", "m3-marks");
     const handle = h("b", "m3-handle");
     track.append(fill, marks, handle);
-    track.title = "Drag: the positions at that time · wheel: a longer or shorter span · a mark: jump to it";
-    const label = h("span", "m3-tlabel", "Now");
-    const now = h("button", "m3-now", "Now") as HTMLButtonElement;
-    now.title = "Back to the present";
+    track.title = t("Drag: the positions at that time · wheel: a longer or shorter span · a mark: jump to it");
+    const label = h("span", "m3-tlabel", t("Now"));
+    const now = h("button", "m3-now", t("Now")) as HTMLButtonElement;
+    now.title = t("Back to the present");
     now.onclick = () => {
       this.preview = 0;
       this.playing = false;
@@ -389,10 +399,10 @@ export class Map3D {
   /** The events ahead on the paths: nodes, closest approach, spheres of influence, apsides, arrival, impact. */
   private marks(i: Info, t0: number, ours: boolean, sc: MapScene): Mark[] {
     const out: Mark[] = [];
-    (i.plan?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "node", label: `Node ${k + 1}` }));
+    (i.plan?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "node", label: tf("Node {0}", k + 1) }));
     // (the preview's burns, and its arrival)
-    (i.cand?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "cand", label: `Preview · burn ${k + 1} · ${i.cand!.note}` }));
-    if (i.cand?.arrive) out.push({ t: i.cand.arrive.t, kind: "cand", label: `Preview · arrival` });
+    (i.cand?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "cand", label: tf("Preview · burn {0} · {1}", k + 1, i.cand!.note) }));
+    if (i.cand?.arrive) out.push({ t: i.cand.arrive.t, kind: "cand", label: t("Preview · arrival") });
     if (ours) {
       const free = i.ourFree,
         plan = i.ourPlan;
@@ -409,7 +419,7 @@ export class Map3D {
           for (let j = 1; j < p.refs.length; j++) {
             if (p.refs[j] !== p.refs[j - 1]) {
               const name = sc.byId.get(p.refs[j]!)?.name ?? p.refs[j];
-              ch.push({ t: p.times[j]!, kind: "soi", label: `${name}'s sphere of influence` });
+              ch.push({ t: p.times[j]!, kind: "soi", label: tf("{0}'s sphere of influence", name ?? "") });
             }
           }
           m.set("soi", ch);
@@ -421,9 +431,9 @@ export class Map3D {
         const m = memo(free);
         if (!m.has("aps:0")) m.set("aps:0", ourApsides(free, free.refs[0]!));
         const a = m.get("aps:0") as ReturnType<typeof ourApsides>;
-        if (a.pe) out.push({ t: free.times[a.pe.i]!, kind: "pe", label: "Periapsis" });
-        if (a.ap) out.push({ t: free.times[a.ap.i]!, kind: "ap", label: "Apoapsis" });
-        if (free.fate === "impact") out.push({ t: free.times[free.times.length - 1]!, kind: "impact", label: "Impact" });
+        if (a.pe) out.push({ t: free.times[a.pe.i]!, kind: "pe", label: t("Periapsis") });
+        if (a.ap) out.push({ t: free.times[a.ap.i]!, kind: "ap", label: t("Apoapsis") });
+        if (free.fate === "impact") out.push({ t: free.times[free.times.length - 1]!, kind: "impact", label: t("Impact") });
       }
       const tp = plan ?? free;
       if (tp && sc.byId.has(i.target) && solarBody(i.target) && i.target !== i.ref && i.target !== "wormhole") {
@@ -431,7 +441,7 @@ export class Map3D {
         const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
         if (!m.has(key)) m.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0));
         const ca = m.get(key) as ReturnType<typeof ourClosest>;
-        if (ca) out.push({ t: tp.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name}` });
+        if (ca) out.push({ t: tp.times[ca.i]!, kind: "ca", label: tf("Closest approach · {0}", sc.byId.get(i.target)!.name) });
       }
       const e = this.extension(i);
       if (e) {
@@ -440,30 +450,35 @@ export class Map3D {
             out.push({
               t: e.times[j]!,
               kind: "soi",
-              label: `${sc.byId.get(e.refs[j]!)?.name ?? e.refs[j]}'s sphere of influence (conics)`,
+              label: tf("{0}'s sphere of influence (conics)", sc.byId.get(e.refs[j]!)?.name ?? e.refs[j]!),
             });
         }
         for (const a of e.apsides)
-          out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis at ${sc.byId.get(a.body)?.name ?? a.body} (conics)` });
+          out.push({ t: e.times[a.i]!, kind: "pe", label: tf("Periapsis at {0} (conics)", sc.byId.get(a.body)?.name ?? a.body) });
         if (sc.byId.has(i.target) && i.target !== i.ref && i.target !== "wormhole") {
           const ca = this.extClosest(e, i.target, true);
-          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${sc.byId.get(i.target)!.name} (conics)` });
+          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: tf("Closest approach · {0} (conics)", sc.byId.get(i.target)!.name) });
         }
         if (e.fate === "impact")
           out.push({
             t: e.times[e.times.length - 1]!,
             kind: "impact",
-            label: `Impact · ${sc.byId.get(e.hit ?? "")?.name ?? e.hit} (conics)`,
+            label: tf("Impact · {0} (conics)", sc.byId.get(e.hit ?? "")?.name ?? e.hit ?? ""),
           });
       }
       if (i.ourArrive)
-        out.push({ t: i.ourArrive.t, kind: "arrive", label: `Arrival · ${BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body}` });
+        out.push({
+          t: i.ourArrive.t,
+          kind: "arrive",
+          label: tf("Arrival · {0}", BODY_NAMES[i.ourArrive.body as Target] ?? i.ourArrive.body),
+        });
     } else {
       const ca = this.host.closestApproach(i, t0);
-      if (ca && ca.t > 0) out.push({ t: t0 + ca.t, kind: "ca", label: `Closest approach · ${BODY_NAMES[i.target as Target] ?? i.target}` });
+      if (ca && ca.t > 0)
+        out.push({ t: t0 + ca.t, kind: "ca", label: tf("Closest approach · {0}", BODY_NAMES[i.target as Target] ?? i.target) });
       const p = i.path;
       if (p && (p.fate === "horizon" || p.fate === "star"))
-        out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? "The horizon" : "Into the star" });
+        out.push({ t: t0 + p.pts.length * p.dt, kind: "impact", label: p.fate === "horizon" ? t("The horizon") : t("Into the star") });
       const e = this.theirExtension(i, t0);
       if (e) {
         const name = (id: string) => sc.byId.get(id)?.name ?? BODY_NAMES[id as Target] ?? id;
@@ -474,21 +489,25 @@ export class Map3D {
               kind: "soi",
               label:
                 e.refs[j] === "hole"
-                  ? `Out of ${name(e.refs[j - 1]!)}'s Hill sphere (conics)`
-                  : `${name(e.refs[j]!)}'s Hill sphere (conics)`,
+                  ? tf("Out of {0}'s Hill sphere (conics)", name(e.refs[j - 1]!))
+                  : tf("{0}'s Hill sphere (conics)", name(e.refs[j]!)),
             });
         }
         for (const a of e.apsides)
-          out.push({ t: e.times[a.i]!, kind: "pe", label: `Periapsis${a.body === "hole" ? "" : ` at ${name(a.body)}`} (conics)` });
+          out.push({
+            t: e.times[a.i]!,
+            kind: "pe",
+            label: a.body === "hole" ? t("Periapsis (conics)") : tf("Periapsis at {0} (conics)", name(a.body)),
+          });
         if (sc.byId.has(i.target) && i.target !== "hole") {
           const ca = this.extClosest(e, i.target, false);
-          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: `Closest approach · ${name(i.target)} (conics)` });
+          if (ca) out.push({ t: e.times[ca.i]!, kind: "ca", label: tf("Closest approach · {0} (conics)", name(i.target)) });
         }
         if (e.fate === "impact")
           out.push({
             t: e.times[e.times.length - 1]!,
             kind: "impact",
-            label: e.hit === "hole" ? "The horizon (conics)" : `Impact · ${name(e.hit ?? "")} (conics)`,
+            label: e.hit === "hole" ? t("The horizon (conics)") : tf("Impact · {0} (conics)", name(e.hit ?? "")),
           });
       }
     }
@@ -527,7 +546,7 @@ export class Map3D {
     const tp = t0 + this.preview;
     const text =
       this.preview <= 0
-        ? `Now · ${fmtDur(span, s)} ahead`
+        ? tf("Now · {0} ahead", fmtDur(span, s))
         : `${ours ? `${dateOf(tp).toISOString().slice(5, 16).replace("T", " ")} · ` : ""}T+${fmtDur(this.preview, s)}${note ? ` · ${note}` : ""}`;
     if (tl.label.textContent !== text) tl.label.textContent = text;
   }
@@ -617,30 +636,31 @@ export class Map3D {
       this.btns[id] = e;
       return e;
     };
-    this.focusBtn.dataset.label = "Focus";
-    this.focusBtn.dataset.tip = "The body at the centre — double-click a body on the map; a click targets it";
+    // ("Focus" is the settings' camera focus too: a pair, not the dictionary)
+    this.focusBtn.dataset.label = tr({ fr: "Centre", en: "Focus" });
+    this.focusBtn.dataset.tip = t("The body at the centre — double-click a body on the map; a click targets it");
     this.focusBtn.onclick = (e) => {
       e.stopPropagation();
       this.openMenu(!this.menu.classList.contains("open"));
     };
     const planes = h("div", "m3-seg");
     for (const p of PLANES) {
-      const e = b(`plane:${p.id}`, "", `Plane: ${p.label}`, p.title, () => this.setPlane(p.id));
+      const e = b(`plane:${p.id}`, "", tf("Plane: {0}", p.label), p.title, () => this.setPlane(p.id));
       e.append(h("span", "m3-long", p.label), h("span", "m3-short", p.short));
       planes.append(e);
     }
     const views = h("div", "m3-seg");
     views.append(
-      b("view:top", "top", "From above", "Seen from above the reference plane", () => this.setView(Math.PI / 2 - 1e-3)),
-      b("view:3d", "3d", "Oblique", "Seen at 30° above the plane", () => this.setView(0.52)),
-      b("view:edge", "edge", "Edge-on", "Seen in the reference plane", () => this.setView(0.004)),
+      b("view:top", "top", t("From above"), t("Seen from above the reference plane"), () => this.setView(Math.PI / 2 - 1e-3)),
+      b("view:3d", "3d", t("Oblique"), t("Seen at 30° above the plane"), () => this.setView(0.52)),
+      b("view:edge", "edge", t("Edge-on"), t("Seen in the reference plane"), () => this.setView(0.004)),
     );
     // (the minimap's rail: the plane and the view each one button, cycling)
     const cyclePlane = b(
       "cycle:plane",
       "",
-      "Reference plane",
-      "Click for the next one: the system's, the equator, the ship's orbit, the target's",
+      t("Reference plane"),
+      t("Click for the next one: the system's, the equator, the ship's orbit, the target's"),
       () => {
         const list = PLANES.filter((p) => !this.btns[`plane:${p.id}`]!.disabled);
         const i = list.findIndex((p) => p.id === this.plane);
@@ -651,8 +671,8 @@ export class Map3D {
     const cycleView = b(
       "cycle:view",
       "3d",
-      "View",
-      "Click for the next one: from above, oblique, edge-on",
+      t("View"),
+      t("Click for the next one: from above, oblique, edge-on"),
       () => {
         const pitch = this.cam.goal.pitch;
         this.setView(pitch > 1.5 ? 0.52 : Math.abs(pitch - 0.52) < 0.01 ? 0.004 : Math.PI / 2 - 1e-3);
@@ -660,7 +680,7 @@ export class Map3D {
       "m3-cycle",
     );
     this.bar.append(
-      h("span", "fl-label", "Map"),
+      h("span", "fl-label", t("Map")),
       this.focusBtn,
       planes,
       views,
@@ -669,19 +689,19 @@ export class Map3D {
       b(
         "log",
         "log",
-        "Multi-scale",
-        "The distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map",
+        t("Multi-scale"),
+        t("The distance from the focus as ln(1 + r/r₀), directions kept — the whole system and a low orbit on one map"),
         () => {
           if (this.universe === "ours") this.logOurs = !this.logOurs;
           else this.logTheirs = !this.isLog();
           this.autoDist = true;
         },
       ),
-      b("legend", "key", "Legend", "What the map's lines and marks are", () => this.showLegend(this.legend.hidden)),
-      b("fit", "fit", "Frame", "Frame the focus and the ship's paths again (or double-click on empty space)", () => this.fit()),
-      b("cm", "CoM", "Centre of mass", "The inertial frame of the centre of mass: Gargantua moves too", () => (this.frame = "cm")),
-      b("holeF", "Hole", "Gargantua's frame", "Gargantua fixed at the centre", () => (this.frame = "hole")),
-      b("full", "full", "Full screen", "The map over the whole screen", () => this.host.toggleMapView(), "m3-full"),
+      b("legend", "key", t("Legend"), t("What the map's lines and marks are"), () => this.showLegend(this.legend.hidden)),
+      b("fit", "fit", t("Frame"), t("Frame the focus and the ship's paths again (or double-click on empty space)"), () => this.fit()),
+      b("cm", t("CoM"), t("Centre of mass"), t("The inertial frame of the centre of mass: Gargantua moves too"), () => (this.frame = "cm")),
+      b("holeF", t("Hole"), t("Gargantua's frame"), t("Gargantua fixed at the centre"), () => (this.frame = "hole")),
+      b("full", "full", t("Full screen"), t("The map over the whole screen"), () => this.host.toggleMapView(), "m3-full"),
     );
     this.planeIcon = svg(ICON.plane!);
     this.viewIcons = { top: svg(ICON.top!), "3d": svg(ICON["3d"]!), edge: svg(ICON.edge!) };
@@ -690,7 +710,7 @@ export class Map3D {
   private viewIcons: Record<string, string> = {};
 
   private buildMenu() {
-    this.menuSearch.placeholder = "Find a body…";
+    this.menuSearch.placeholder = t("Find a body…");
     this.menuSearch.spellcheck = false;
     this.menuSearch.oninput = () => this.renderMenu();
     this.menuSearch.onkeydown = (e) => {
@@ -732,10 +752,10 @@ export class Map3D {
       };
       this.menuList.append(e);
     };
-    if (!q || "ship ranger".includes(q)) item("ship", "The ship", 0, "follow the Ranger", "124, 214, 255");
+    if (!q || "ship ranger".includes(q)) item("ship", t("The ship"), 0, t("follow the Ranger"), "124, 214, 255");
     if (this.lastInfo && sc.byId.has(this.lastInfo.target) && (!q || "target".includes(q))) {
-      const t = sc.byId.get(this.lastInfo.target)!;
-      item(t.id, `Target · ${t.name}`, 0, "", t.col);
+      const tb = sc.byId.get(this.lastInfo.target)!;
+      item(tb.id, tf("Target · {0}", tb.name), 0, "", tb.col);
     }
     // the tree: each body under its primary
     const walk = (parent: string | null, depth: number) => {
@@ -743,12 +763,12 @@ export class Map3D {
         if (b.parent !== parent) continue;
         const kids = sc.bodies.some((c) => c.parent === b.id);
         const match = !q || b.name.toLowerCase().includes(q) || b.id.includes(q);
-        if (match) item(b.id, b.name, q ? 0 : depth, b.kind === "moon" ? "moon" : b.kind, b.col);
+        if (match) item(b.id, b.name, q ? 0 : depth, KIND_NOTE[b.kind], b.col);
         if (kids) walk(b.id, depth + 1);
       }
     };
     walk(null, 0);
-    if (!this.menuList.children.length) this.menuList.append(h("p", "m3-none", "No body by that name"));
+    if (!this.menuList.children.length) this.menuList.append(h("p", "m3-none", t("No body by that name")));
   }
 
   private renderCrumbs(sc: MapScene, fid: string) {
@@ -766,7 +786,7 @@ export class Map3D {
       };
       this.crumbs.append(e);
     });
-    if (fid === "ship") this.crumbs.append(h("button", "on", "The ship"));
+    if (fid === "ship") this.crumbs.append(h("button", "on", t("The ship")));
   }
 
   // ------------------------------------------------------------------------------------ view commands
@@ -815,7 +835,7 @@ export class Map3D {
 
   private syncBar(sc: MapScene, fid: string) {
     const s = this.host.s;
-    const name = fid === "ship" ? "The ship" : (sc.byId.get(fid)?.name ?? fid);
+    const name = fid === "ship" ? t("The ship") : (sc.byId.get(fid)?.name ?? fid);
     const col = fid === "ship" ? "124, 214, 255" : (sc.byId.get(fid)?.col ?? "220, 220, 220");
     const key = `${name}|${this.focus === null}`;
     if (this.focusBtn.dataset.key !== key) {
@@ -823,7 +843,7 @@ export class Map3D {
       this.focusBtn.replaceChildren();
       const d = h("i");
       d.style.background = `rgb(${col})`;
-      this.focusBtn.append(d, h("span", "", name), h("b", "", this.focus === null ? "auto ▾" : "▾"));
+      this.focusBtn.append(d, h("span", "", name), h("b", "", this.focus === null ? `${t("auto")} ▾` : "▾"));
     }
     for (const p of PLANES) this.btns[`plane:${p.id}`]!.classList.toggle("on", this.plane === p.id);
     const pitch = this.cam.goal.pitch;
@@ -838,7 +858,7 @@ export class Map3D {
     this.btns.holeF!.classList.toggle("on", this.frame === "hole");
     this.btns.full!.classList.toggle("on", this.host.mapView());
     this.btns["plane:target"]!.disabled = !this.lastInfo || !sc.byId.get(this.lastInfo.target)?.orbit;
-    if (this.btns["plane:target"]!.disabled) this.btns["plane:target"]!.dataset.why = "The target has no orbit to take the plane of";
+    if (this.btns["plane:target"]!.disabled) this.btns["plane:target"]!.dataset.why = t("The target has no orbit to take the plane of");
     else delete this.btns["plane:target"]!.dataset.why;
     // the rail's cycling buttons: the current plane (its short name), the current view (its icon)
     const pc = this.btns["cycle:plane"]!,
@@ -1118,7 +1138,7 @@ export class Map3D {
       ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
       const [vx, vy, vw, vh] = this.cam.view;
-      ctx.fillText(`In the wormhole · ℓ = ${i.ell.toFixed(2)} M`, vx + vw / 2, vy + vh / 2);
+      ctx.fillText(tf("In the wormhole · ℓ = {0} M", i.ell.toFixed(2)), vx + vw / 2, vy + vh / 2);
       this.moving = false;
       return;
     }
@@ -1422,13 +1442,13 @@ export class Map3D {
       const q = P(ship);
       const how = later?.beyond
         ? later.conics
-          ? " · end of the conics"
-          : " · end of the prediction"
+          ? ` · ${t("end of the conics")}`
+          : ` · ${t("end of the prediction")}`
         : later?.conics
-          ? " · conics"
+          ? ` · ${t("conics")}`
           : later
             ? ""
-            : " · no prediction";
+            : ` · ${t("no prediction")}`;
       if (q.ok)
         labels.push({
           text: `T+${fmtDur(this.preview, s)}${how}`,
@@ -1463,7 +1483,7 @@ export class Map3D {
       span,
       marks,
       ours,
-      later?.beyond ? (later.conics ? "end of the conics" : "beyond the prediction") : later?.conics ? "conics (Kepler)" : "",
+      later?.beyond ? (later.conics ? t("end of the conics") : t("beyond the prediction")) : later?.conics ? t("conics (Kepler)") : "",
     );
   }
 
@@ -1802,9 +1822,9 @@ export class Map3D {
     if (this.legend.hidden) return;
     const st = this.legend.style;
     const r = `${(ins?.r ?? 0) + 8}px`,
-      t = `${(ins?.t ?? 0) + 8}px`;
+      top = `${(ins?.t ?? 0) + 8}px`;
     if (st.right !== r) st.right = r;
-    if (st.top !== t) st.top = t;
+    if (st.top !== top) st.top = top;
     const key = ours ? "ours" : "theirs";
     if (key === this.legendKey) return;
     this.legendKey = key;
@@ -1814,43 +1834,46 @@ export class Map3D {
     const mk = (body: string) => `<svg viewBox="0 0 28 12">${body}</svg>`;
     const rows: [string, string][] = ours
       ? [
-          [ln("90, 220, 255"), "The ship's path — predicted, every body's pull"],
-          [ln("255, 170, 80", "5 3"), "The plan — after its burns"],
-          [ln(CAND, "8 4", 2.2), "Preview — a plan not yet adopted"],
-          [ln("170, 205, 255", "2 4", 1.3), "Beyond: patched conics"],
-          [ln("255, 154, 74", "7 4", 2.2), "Entry — the fall to the site"],
-          [ln("255, 150, 100"), "The target's orbit"],
-          [ln("150, 170, 200", "3 4", 1.2), "Sphere of influence"],
+          [ln("90, 220, 255"), t("The ship's path — predicted, every body's pull")],
+          [ln("255, 170, 80", "5 3"), t("The plan — after its burns")],
+          [ln(CAND, "8 4", 2.2), t("Preview — a plan not yet adopted")],
+          [ln("170, 205, 255", "2 4", 1.3), t("Beyond: patched conics")],
+          [ln("255, 154, 74", "7 4", 2.2), t("Entry — the fall to the site")],
+          [ln("255, 150, 100"), t("The target's orbit")],
+          [ln("150, 170, 200", "3 4", 1.2), t("Sphere of influence")],
         ]
       : [
-          [ln("124, 214, 255", "", 1.4), "The ship's wake"],
-          [ln("255, 190, 80", "5 3"), "Its geodesic ahead — red: into the horizon"],
-          [ln("255, 170, 80", "5 3"), "The plan — after its burns"],
-          [ln(CAND, "8 4", 2.2), "Preview — a plan not yet adopted"],
-          [ln("170, 205, 255", "2 4", 1.3), "Beyond: conics"],
-          [ln("120, 230, 150", "4 3", 1.1), "ISCO — the last stable circle"],
-          [ln("255, 211, 107", "4 3", 1.5), "The companion star ahead"],
+          [ln("124, 214, 255", "", 1.4), t("The ship's wake")],
+          [ln("255, 190, 80", "5 3"), t("Its geodesic ahead — red: into the horizon")],
+          [ln("255, 170, 80", "5 3"), t("The plan — after its burns")],
+          [ln(CAND, "8 4", 2.2), t("Preview — a plan not yet adopted")],
+          [ln("170, 205, 255", "2 4", 1.3), t("Beyond: conics")],
+          [ln("120, 230, 150", "4 3", 1.1), t("ISCO — the last stable circle")],
+          [ln("255, 211, 107", "4 3", 1.5), t("The companion star ahead")],
         ];
     const marks: [string, string][] = [
       [
         mk('<path d="M8 2l5 8H3z" fill="rgb(111,227,161)"/><path d="M20 10l5-8H15z" fill="rgb(255,179,92)"/>'),
-        "Ascending · descending node",
+        t("Ascending · descending node"),
       ],
       [
         mk('<circle cx="8" cy="6" r="2.6" fill="rgb(159,227,255)"/><circle cx="20" cy="6" r="2.6" fill="rgb(184,212,255)"/>'),
-        "Periapsis, apoapsis",
+        t("Periapsis, apoapsis"),
       ],
-      [mk('<path d="M14 0.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#2fa4d0" stroke="#04121a" stroke-width="1.2"/>'), "A burn — drag its handles"],
+      [
+        mk('<path d="M14 0.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#2fa4d0" stroke="#04121a" stroke-width="1.2"/>'),
+        t("A burn — drag its handles"),
+      ],
       [
         mk(
           '<path d="M3 6h22" stroke="rgb(255,138,92)" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="24" cy="6" r="3.4" fill="none" stroke="rgb(255,138,92)" stroke-width="1.2"/>',
         ),
-        "Closest approach (CA)",
+        t("Closest approach (CA)"),
       ],
-      [mk('<path d="M14 1l5 9H9z" fill="#ffc85a" stroke="rgba(0,0,0,.6)"/>'), "The ship"],
+      [mk('<path d="M14 1l5 9H9z" fill="#ffc85a" stroke="rgba(0,0,0,.6)"/>'), t("The ship")],
     ];
     const row = ([a, b]: [string, string]) => `<div class="m3-lg-row">${a}<span>${b}</span></div>`;
-    this.legend.innerHTML = `<div class="m3-lg-head">Legend</div>${rows.map(row).join("")}<div class="m3-lg-sep"></div>${marks.map(row).join("")}<div class="m3-lg-hint">Hover a body: its card · click: target · double-click: focus</div>`;
+    this.legend.innerHTML = `<div class="m3-lg-head">${t("Legend")}</div>${rows.map(row).join("")}<div class="m3-lg-sep"></div>${marks.map(row).join("")}<div class="m3-lg-hint">${t("Hover a body: its card · click: target · double-click: focus")}</div>`;
   }
 
   /**
@@ -2013,7 +2036,7 @@ export class Map3D {
       ctx.fillStyle = "rgba(124, 214, 255, 0.6)";
       ctx.font = `600 ${9.8 * dpr}px ${FONT}`;
       ctx.textAlign = "left";
-      ctx.fillText("now", sp.x + 7 * dpr, sp.y + 3 * dpr);
+      ctx.fillText(t("now"), sp.x + 7 * dpr, sp.y + 3 * dpr);
     }
     const ids = new Set<string>([i.target, i.ref ?? "", fid]);
     for (const b of sc.bodies) if (b.parent === fid) ids.add(b.id);
@@ -2090,7 +2113,7 @@ export class Map3D {
         up ? "rgba(111, 227, 161, 0.95)" : "rgba(255, 179, 92, 0.95)",
       );
       labels.push({
-        text: up ? "AN" : "DN",
+        text: up ? t("AN") : t("DN"),
         x: p.x + 6 * dpr,
         y: p.y + 3 * dpr,
         col: up ? "111, 227, 161" : "255, 179, 92",
@@ -2221,7 +2244,7 @@ export class Map3D {
         if (q.ok) {
           this.cross(q.x, q.y, 5 * dpr, RED, 2 * dpr);
           labels.push({
-            text: `IMPACT ${BODY_NAMES[free.hit as Target] ?? free.hit}`,
+            text: tf("IMPACT {0}", BODY_NAMES[free.hit as Target] ?? free.hit ?? ""),
             x: q.x + 7 * dpr,
             y: q.y + 4 * dpr,
             col: "255, 90, 90",
@@ -2262,7 +2285,7 @@ export class Map3D {
           if (q.ok) {
             this.paint.disc(q.x, q.y, 7 * dpr, null, `rgba(${CAND}, 0.95)`, 1.4 * dpr, [3 * dpr, 2 * dpr]);
             labels.push({
-              text: `${BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body} · arrival T−${fmtDur(cand.arrive.t - t0, s)}`,
+              text: tf("{0} · arrival T−{1}", BODY_NAMES[cand.arrive.body as Target] ?? cand.arrive.body, fmtDur(cand.arrive.t - t0, s)),
               x: q.x + 9 * dpr,
               y: q.y + 3 * dpr,
               col: CAND,
@@ -2279,7 +2302,7 @@ export class Map3D {
         const q = P(FA(i.X!, t0));
         if (q.ok)
           labels.push({
-            text: "◇ PREVIEW · computing the path…",
+            text: t("◇ PREVIEW · computing the path…"),
             x: q.x + 12 * dpr,
             y: q.y + 18 * dpr,
             col: CAND,
@@ -2309,7 +2332,7 @@ export class Map3D {
       const q0 = P(FA(ext.pts[0]!, ext.times[0]!));
       if (q0.ok)
         labels.push({
-          text: "conics ▸",
+          text: `${t("conics")} ▸`,
           x: q0.x + 6 * dpr,
           y: q0.y - 6 * dpr,
           col: "170, 205, 255",
@@ -2604,7 +2627,7 @@ export class Map3D {
       const q0 = P(pts[0]!);
       if (q0.ok)
         labels.push({
-          text: "conics ▸",
+          text: `${t("conics")} ▸`,
           x: q0.x + 6 * dpr,
           y: q0.y - 6 * dpr,
           col: "170, 205, 255",
@@ -2767,7 +2790,7 @@ export class Map3D {
         // (the operation's name, short — the card has the rest)
         const head = note.split(" · ")[0]!;
         labels.push({
-          text: `◇ PREVIEW · ${head.length > 46 ? `${head.slice(0, 44)}…` : head}`,
+          text: tf("◇ PREVIEW · {0}", head.length > 46 ? `${head.slice(0, 44)}…` : head),
           x: q.x + 10 * dpr,
           y: q.y - 10 * dpr,
           col: CAND,
@@ -2862,8 +2885,8 @@ export class Map3D {
       const kms = dvl * 299792.458;
       const burn = dvl / Math.max(i.engine.max, 1e-30);
       const lines = [
-        `NODE ${k + 1} · T−${fmtDur(n.t - t0, this.host.s)}`,
-        `Δv ${kms >= 1000 ? `${dvl.toFixed(4)} c` : `${kms >= 10 ? kms.toFixed(1) : (kms * 1000).toFixed(0) + " m/s"}${kms >= 10 ? " km/s" : ""}`}  ·  burn ${fmtDur(burn, this.host.s)}`,
+        tf("NODE {0} · T−{1}", k + 1, fmtDur(n.t - t0, this.host.s)),
+        `Δv ${kms >= 1000 ? `${dvl.toFixed(4)} c` : `${kms >= 10 ? kms.toFixed(1) : (kms * 1000).toFixed(0) + " m/s"}${kms >= 10 ? " km/s" : ""}`}  ·  ${t("burn")} ${fmtDur(burn, this.host.s)}`,
         `P ${fmtDv(n.dv[0])}  N ${fmtDv(n.dv[1])}  R ${fmtDv(n.dv[2])}`,
       ];
       ctx.font = `600 ${11.6 * dpr}px ${FONT}`;
@@ -2894,13 +2917,13 @@ export class Map3D {
     const s = this.host.s;
     const d = len(sub(b.pos, ship)) - (b.kind === "mouth" ? 0 : b.radius);
     const rows: [string, string][] = [];
-    rows.push(["From the ship", fmtDist(Math.max(d, 0), ours, s)]);
-    if (b.radius > 0 && b.kind !== "mouth") rows.push(["Radius", b.kind === "hole" ? fmtLen(b.radius, s) : fmtDist(b.radius, ours, s)]);
+    rows.push([t("From the ship"), fmtDist(Math.max(d, 0), ours, s)]);
+    if (b.radius > 0 && b.kind !== "mouth") rows.push([t("Radius"), b.kind === "hole" ? fmtLen(b.radius, s) : fmtDist(b.radius, ours, s)]);
     const par = b.parent ? sc.byId.get(b.parent) : null;
-    if (par) rows.push([`From ${par.name}`, fmtDist(len(sub(b.pos, par.pos)), ours, s)]);
-    if (b.period) rows.push(["Period", fmtDur(b.period, s)]);
-    if (b.soi > 0 && Number.isFinite(b.soi)) rows.push(["Sphere of influence", fmtDist(b.soi, ours, s)]);
-    const hint = b.id === i.target ? "the target · double-click: centre it" : "click: target · double-click: centre";
+    if (par) rows.push([tf("From {0}", par.name), fmtDist(len(sub(b.pos, par.pos)), ours, s)]);
+    if (b.period) rows.push([t("Period"), fmtDur(b.period, s)]);
+    if (b.soi > 0 && Number.isFinite(b.soi)) rows.push([t("Sphere of influence"), fmtDist(b.soi, ours, s)]);
+    const hint = b.id === i.target ? t("the target · double-click: centre it") : t("click: target · double-click: centre");
     const title = b.name;
     ctx.font = `700 ${13.4 * dpr}px ${FONT}`;
     let w = ctx.measureText(title).width;
@@ -2978,7 +3001,7 @@ export class Map3D {
     ctx.font = `600 ${11 * dpr}px ${FONT}`;
     const date = ours ? `${dateOf(t0).toISOString().slice(0, 10)} · ` : "";
     ctx.fillText(
-      `${date}${this.preview > 0 ? "preview · " : ""}${plane} plane · ${this.log ? "log scale" : "true scale"}`,
+      `${date}${this.preview > 0 ? `${t("preview")} · ` : ""}${tf("{0} plane", plane)} · ${this.log ? t("log scale") : t("true scale")}`,
       xl + 8 * dpr,
       by - 8 * dpr,
     );

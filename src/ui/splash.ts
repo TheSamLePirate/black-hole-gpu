@@ -4,16 +4,17 @@
 // loaded on demand show in a small pill.
 
 import { loading, type Stage } from "../loading";
+import { t } from "../i18n";
 
 const TIPS = [
-  "Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it.",
-  "? lists every shortcut. The flight keys follow the keys' positions: ZQSD on AZERTY, WASD on QWERTY.",
-  "The Scenes button (bottom left): the black holes, the wormhole, the Gargantua system and the game's missions.",
-  "Escape pauses the game: save, load, the settings. F5 and F9: the quick save.",
-  "Flying: M the map, O the mission planner, U take off, ⇧G entry and landing on a runway.",
-  "Free camera: T the journey through the wormhole — Saturn, the throat, then Gargantua's side.",
-  "Every image is traced along Kerr geodesics: the disk, the stars and the planets are bent by the hole.",
-  "Your flight is saved as you go: it resumes where you left it.",
+  t("Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it."),
+  t("? lists every shortcut. The flight keys follow the keys' positions: ZQSD on AZERTY, WASD on QWERTY."),
+  t("The Scenes button (bottom left): the black holes, the wormhole, the Gargantua system and the game's missions."),
+  t("Escape pauses the game: save, load, the settings. F5 and F9: the quick save."),
+  t("Flying: M the map, O the mission planner, U take off, ⇧G entry and landing on a runway."),
+  t("Free camera: T the journey through the wormhole — Saturn, the throat, then Gargantua's side."),
+  t("Every image is traced along Kerr geodesics: the disk, the stars and the planets are bent by the hole."),
+  t("Your flight is saved as you go: it resumes where you left it."),
 ];
 /** after the first image: at most this long for the remaining assets [ms] */
 const MAX_WAIT = 12000;
@@ -140,7 +141,7 @@ export class Splash {
     const active = loading.list().filter((s) => s.state === "active");
     // (the heaviest stage still running names the wait)
     const lead = active.sort((a, b) => b.weight - a.weight)[0];
-    this.stageEl.textContent = lead ? `${lead.label}…` : this.imageAt ? "Ready" : "Almost there…";
+    this.stageEl.textContent = lead ? `${lead.label}…` : this.imageAt ? t("Ready") : t("Almost there…");
   }
 
   private renderInfo(now: number) {
@@ -152,7 +153,7 @@ export class Splash {
 }
 
 function info(s: Stage, now: number) {
-  if (s.state === "failed") return "unavailable";
+  if (s.state === "failed") return t("unavailable");
   if (s.state === "done") return s.total ? `${fmtMB(s.total)} MB` : "✓";
   if (s.total) return `${fmtMB(s.loaded)} / ${fmtMB(s.total)} MB`;
   if (s.loaded) return `${fmtMB(s.loaded)} MB`;

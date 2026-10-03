@@ -45,6 +45,7 @@ import { sound } from "../audio/engine";
 import { hudShown } from "./hud/declutter";
 import { safeFrame } from "./hud/safe";
 import { hudMode, shownSpeed } from "./hud/model";
+import { t, tf } from "../i18n";
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -77,10 +78,10 @@ function collapsedSet(): Set<string> {
 /** A panel's header: its title (a span, rewritable) and a chevron that folds the panel. */
 function panelHead(panel: HTMLElement, key: string, title: string) {
   const head = h("div", "fl-title fl-head");
-  const t = h("span", "fl-htext", title);
+  const ht = h("span", "fl-htext", title);
   const fold = icon("chevron", "fl-fold");
-  head.append(t, fold);
-  head.title = "Fold / unfold";
+  head.append(ht, fold);
+  head.title = t("Fold / unfold");
   if (collapsedSet().has(key)) panel.classList.add("collapsed");
   head.onclick = (e) => {
     if ((e.target as HTMLElement).closest("button")) return;
@@ -90,32 +91,32 @@ function panelHead(panel: HTMLElement, key: string, title: string) {
     else set.delete(key);
     store.setJSON(COLLAPSED_KEY, [...set]);
   };
-  return { head, text: t };
+  return { head, text: ht };
 }
 
 /** What each figure of the panels means (their tooltips). */
 const ROW_TIPS: Record<string, string> = {
-  dist: "Distance to the target, centre to centre",
-  rate: "How fast the distance changes — negative: closing in",
-  ca: "The closest the path comes to the target, and when",
-  light: "The light falling on the target's surface, and its equilibrium temperature",
-  alt: "Height above the ground under the ship",
-  vv: "Speed up or down, relative to the ground",
-  vh: "Speed along the ground",
-  twr: "The engine's full thrust over the local weight — above 1, it can lift off",
-  soi: "The body whose gravity dominates: the orbit is reckoned around it",
-  pe: "The orbit's lowest point: its height above the surface",
-  ap: "The orbit's highest point",
-  inc: "The orbit's tilt to the body's equator",
-  ecc: "0: circular · below 1: an ellipse · 1 and above: escaping",
-  tpe: "Time until the next periapsis",
-  palt: "Height above its surface",
-  spd: "Orbital speed, and the vertical speed under it",
-  pa: "Periapsis · apoapsis heights: the orbit's lowest and highest points",
-  ie: "Inclination to the body's equator · eccentricity (0: circular)",
-  per: "The time one orbit takes",
-  next: "The next event on the path: a sphere change, an impact, a node",
-  tgt: "The selected target and its distance",
+  dist: t("Distance to the target, centre to centre"),
+  rate: t("How fast the distance changes — negative: closing in"),
+  ca: t("The closest the path comes to the target, and when"),
+  light: t("The light falling on the target's surface, and its equilibrium temperature"),
+  alt: t("Height above the ground under the ship"),
+  vv: t("Speed up or down, relative to the ground"),
+  vh: t("Speed along the ground"),
+  twr: t("The engine's full thrust over the local weight — above 1, it can lift off"),
+  soi: t("The body whose gravity dominates: the orbit is reckoned around it"),
+  pe: t("The orbit's lowest point: its height above the surface"),
+  ap: t("The orbit's highest point"),
+  inc: t("The orbit's tilt to the body's equator"),
+  ecc: t("0: circular · below 1: an ellipse · 1 and above: escaping"),
+  tpe: t("Time until the next periapsis"),
+  palt: t("Height above its surface"),
+  spd: t("Orbital speed, and the vertical speed under it"),
+  pa: t("Periapsis · apoapsis heights: the orbit's lowest and highest points"),
+  ie: t("Inclination to the body's equator · eccentricity (0: circular)"),
+  per: t("The time one orbit takes"),
+  next: t("The next event on the path: a sphere change, an impact, a node"),
+  tgt: t("The selected target and its distance"),
 };
 
 const HOLD_KEYS: [Hold, string, string][] = [
@@ -130,12 +131,12 @@ const HOLD_KEYS: [Hold, string, string][] = [
   ["maneuver", "NODE", ""],
 ];
 const AUTO_KEYS: [Auto, string, string][] = [
-  ["hover", "HOLD POS", "8"],
+  ["hover", t("HOLD POS"), "8"],
   ["circularize", "CIRC", "9"],
-  ["approach", "APPROACH", "0"],
-  ["land", "LAND", "G"],
-  ["takeoff", "TAKE OFF", "U"],
-  ["entry", "ENTRY", "⇧G"],
+  ["approach", t("APPROACH"), "0"],
+  ["land", t("LAND"), "G"],
+  ["takeoff", t("TAKE OFF"), "U"],
+  ["entry", t("ENTRY"), "⇧G"],
 ];
 
 const GLYPH: Record<string, string> = {
@@ -252,14 +253,21 @@ export class FlightHud {
     // (the attitude, when the craft has one over the ground)
     const bankNow = "bank" in A && Number.isFinite(A.bank) ? A.bank : 0;
     this.entryBox.innerHTML =
-      `<div class="fl-title">Entry${E.site ? ` · ${E.site.name}` : ""}</div>` +
-      row("Range", `${km(E.range)} · Δψ ${Number.isFinite(E.dpsi) ? `${Math.abs(E.dpsi * D).toFixed(1)}°${side(E.dpsi)}` : "—"}`) +
-      row("Bank", `cmd ${Math.abs(E.bank * D).toFixed(0)}°${side(-E.bank)} · now ${Math.abs(bankNow * D).toFixed(0)}°${side(-bankNow)}`) +
-      row("Load", `${A.g.toFixed(1)} g · max ${A.gPeak.toFixed(1)}`, A.margins.g > 0.75 ? "hot" : "") +
-      row("Heat", `${(A.heat / 1e4).toFixed(0)} W/cm²`, A.margins.shield > 0.85 ? "hot" : "") +
-      row("Heat · 30 s", `<i>${spark}</i>`) +
-      row("Flow", `M ${A.mach.toFixed(1)} · q ${(A.q / 1e3).toFixed(1)} kPa`) +
-      (P ? row("Peaks ahead", `${(P.heat / 1e4).toFixed(0)} W/cm² · ${Math.round(P.shield)} K · ${P.g.toFixed(1)} g`, "dim") : "");
+      `<div class="fl-title">${t("Entry")}${E.site ? ` · ${E.site.name}` : ""}</div>` +
+      row(t("Range"), `${km(E.range)} · Δψ ${Number.isFinite(E.dpsi) ? `${Math.abs(E.dpsi * D).toFixed(1)}°${side(E.dpsi)}` : "—"}`) +
+      row(
+        t("Bank"),
+        tf(
+          "cmd {0} · now {1}",
+          `${Math.abs(E.bank * D).toFixed(0)}°${side(-E.bank)}`,
+          `${Math.abs(bankNow * D).toFixed(0)}°${side(-bankNow)}`,
+        ),
+      ) +
+      row(t("Load"), `${A.g.toFixed(1)} g · max ${A.gPeak.toFixed(1)}`, A.margins.g > 0.75 ? "hot" : "") +
+      row(t("Heat"), `${(A.heat / 1e4).toFixed(0)} W/cm²`, A.margins.shield > 0.85 ? "hot" : "") +
+      row(t("Heat · 30 s"), `<i>${spark}</i>`) +
+      row(t("Flow"), `M ${A.mach.toFixed(1)} · q ${(A.q / 1e3).toFixed(1)} kPa`) +
+      (P ? row(t("Peaks ahead"), `${(P.heat / 1e4).toFixed(0)} W/cm² · ${Math.round(P.shield)} K · ${P.g.toFixed(1)} g`, "dim") : "");
   }
 
   /** The master caution acknowledged (Enter, or the lamp clicked): the lamp out, the warning silent. */
@@ -269,8 +277,8 @@ export class FlightHud {
   }
 
   private lamp(level: "warning" | "caution") {
-    const b = h("button", `al-lamp ${level}`, level === "warning" ? "MASTER WARNING" : "MASTER CAUTION") as HTMLButtonElement;
-    b.title = "Acknowledge (Enter)";
+    const b = h("button", `al-lamp ${level}`, level === "warning" ? t("MASTER WARNING") : t("MASTER CAUTION")) as HTMLButtonElement;
+    b.title = t("Acknowledge (Enter)");
     b.dataset.testid = "master-caution";
     b.onclick = () => this.acknowledge();
     return b;
@@ -385,7 +393,7 @@ export class FlightHud {
     const state = h("div", "fl-ms-state");
     this.stripEls.state = state;
     const read = h("div", "fl-ms-read");
-    read.append(cell("alt", "ALTITUDE"), cell("spd", "SPEED"), cell("pe", "PERIAPSIS"), cell("ap", "APOAPSIS"));
+    read.append(cell("alt", t("ALTITUDE")), cell("spd", t("SPEED")), cell("pe", t("PERIAPSIS")), cell("ap", t("APOAPSIS")));
     const autos = h("div", "fl-ms-autos");
     for (const [a, label, key] of AUTO_KEYS) {
       const b = h("button", "fl-ms-auto") as HTMLButtonElement;
@@ -413,7 +421,7 @@ export class FlightHud {
     this.hubSig = sig;
     C.hidden = false;
     C.innerHTML =
-      `<div class="fl-title">${esc(H.title)}<i>AUTOPILOT</i></div>` +
+      `<div class="fl-title">${esc(H.title)}<i>${t("AUTOPILOT")}</i></div>` +
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
       (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
@@ -432,14 +440,14 @@ export class FlightHud {
             ? `${Math.round(x).toLocaleString("en")} km`
             : `${x.toFixed(1)} km`;
     const ms = (v: number) => (!Number.isFinite(v) ? "—" : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`);
-    const set = (k: string, t: string) => E[k] && E[k]!.textContent !== t && (E[k]!.textContent = t);
-    set("state", st ? `${st.label} · ${st.soiName}` : "—");
+    const set = (k: string, v: string) => E[k] && E[k]!.textContent !== v && (E[k]!.textContent = v);
+    set("state", st ? `${t(st.label)} · ${st.soiName}` : "—");
     set("alt", st ? (st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm)) : "—");
     set("spd", st ? ms(st.speed) : "—");
     const ko = st?.kerr ? this.kerrApsides?.() : null;
     const r = (x: number) => (Number.isFinite(x) ? `${x.toFixed(2)} M` : "∞");
-    set("pe", ko ? (ko.fate === "horizon" ? "horizon" : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
-    set("ap", ko ? (ko.fate === "bound" ? r(ko.ra) : "escape") : st?.orbit ? km(st.orbit.apKm) : "—");
+    set("pe", ko ? (ko.fate === "horizon" ? t("horizon") : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
+    set("ap", ko ? (ko.fate === "bound" ? r(ko.ra) : t("escape")) : st?.orbit ? km(st.orbit.apKm) : "—");
     for (const [a, b] of this.stripBtns) {
       b.classList.toggle("on", i.auto === a || i.hub?.mode === a);
       const why = this.buttons.get(a)?.dataset.why;
@@ -496,7 +504,7 @@ export class FlightHud {
       b.classList.toggle("on", id === (ground ? this.mapTab : "orbit"));
       const off = id !== "orbit" && !world;
       b.classList.toggle("off", off);
-      b.dataset.why = off ? "Near a planet or a moon: in its sphere of influence" : "";
+      b.dataset.why = off ? t("Near a planet or a moon: in its sphere of influence") : "";
     }
     return ground;
   }
@@ -548,32 +556,32 @@ export class FlightHud {
       b.onclick = fn;
       return b;
     };
-    const tools = iconBtn("more", "The app's toolbar", () => document.body.classList.toggle("show-tools"));
+    const tools = iconBtn("more", t("The app's toolbar"), () => document.body.classList.toggle("show-tools"));
     const planBtn = h("button", "fl-tools fl-planbtn") as HTMLButtonElement;
-    planBtn.append(icon("plan"), h("span", "", "Plan"));
-    planBtn.title = "Flight planner: transfers, rendezvous, manoeuvre nodes";
+    planBtn.append(icon("plan"), h("span", "", t("Plan")));
+    planBtn.title = t("Flight planner: transfers, rendezvous, manoeuvre nodes");
     planBtn.onclick = () => this.onPlanner?.();
     this.missionEls.planBtn = planBtn;
-    const pathBtn = iconBtn("path", "Future path in the view (the cyan tube)", () => act.pathInView(), "fl-pathbtn");
+    const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
-    const soundBtn = iconBtn("sound", "Sound on / off (Settings › Game › Sound: the mix)", () => act.sound(), "fl-soundbtn");
+    const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
     this.missionEls.soundBtn = soundBtn;
-    const toolsBtn = iconBtn("tools", "Game tools: status, place, target, time, saves, audit, journal", () => act.tools());
+    const toolsBtn = iconBtn("tools", t("Game tools: status, place, target, time, saves, audit, journal"), () => act.tools());
     // (the game tools are the developers': a development build or ?dev)
     toolsBtn.hidden = !DEV_TOOLS;
-    const dens = iconBtn("density", "HUD density: full · minimal · clean", () => this.cycleDensity());
+    const dens = iconBtn("density", t("HUD density: full · minimal · clean"), () => this.cycleDensity());
     // the camera's view on the Ranger: a menu (its attach points, outside: around it, free)
     const viewBox = h("div", "fl-viewbox");
     const viewBtn = h("button", "fl-tools fl-viewbtn") as HTMLButtonElement;
     const viewName = h("span", "fl-viewname", "");
     viewBtn.append(icon("camera"), viewName, icon("chevron", "fl-ic fl-caret"));
-    viewBtn.title = "The camera's view";
+    viewBtn.title = t("The camera's view");
     this.missionEls.viewName = viewName;
     const viewMenu = h("div", "fl-menu");
     viewMenu.hidden = true;
     const groups: [string, Mount[]][] = [
-      ["On the ship", MOUNT_KEYS.filter((m) => !(MOUNTS[m] as { outside?: string }).outside)],
-      ["Outside", MOUNT_KEYS.filter((m) => !!(MOUNTS[m] as { outside?: string }).outside)],
+      [t("On the ship"), MOUNT_KEYS.filter((m) => !(MOUNTS[m] as { outside?: string }).outside)],
+      [t("Outside"), MOUNT_KEYS.filter((m) => !!(MOUNTS[m] as { outside?: string }).outside)],
     ];
     for (const [g, list] of groups) {
       viewMenu.append(h("div", "fl-menu-h", g));
@@ -589,7 +597,7 @@ export class FlightHud {
       }
     }
     const ahead = h("button", "fl-menu-i fl-ahead") as HTMLButtonElement;
-    ahead.append(h("b", "", "↺"), h("span", "", "Reset the camera — on the hull, looking ahead (⇧R)"));
+    ahead.append(h("b", "", "↺"), h("span", "", t("Reset the camera — on the hull, looking ahead (⇧R)")));
     ahead.onclick = () => {
       act.lookAhead();
       viewMenu.hidden = true;
@@ -615,20 +623,20 @@ export class FlightHud {
     const craftBtn = h("button", "fl-tools fl-viewbtn fl-craftbtn") as HTMLButtonElement;
     const craftName = h("span", "fl-viewname", "");
     craftBtn.append(icon("ship"), craftName, icon("chevron", "fl-ic fl-caret"));
-    craftBtn.title = "The craft flown ([ ]): the Ranger, the Lander, the Endurance";
+    craftBtn.title = t("The craft flown ([ ]): the Ranger, the Lander, the Endurance");
     this.missionEls.craftName = craftName;
     const craftMenu = h("div", "fl-menu fl-craftmenu");
     craftMenu.hidden = true;
     const fillCraft = () => {
-      craftMenu.replaceChildren(h("div", "fl-menu-h", "Fly · [ ] in turn"));
-      const t = this.lastTime;
+      craftMenu.replaceChildren(h("div", "fl-menu-h", t("Fly · [ ] in turn")));
+      const tm = this.lastTime;
       const me = fleet.activePose?.();
       for (const id of VESSEL_IDS) {
         const V = VESSELS[id];
         const b = h("button", "fl-menu-i") as HTMLButtonElement;
         // (what it does now: flown, docked to the flown one, docked elsewhere, coasting — how far)
         const mine = fleet.flownAssembly();
-        const p = Number.isFinite(t) ? fleet.pose(id, t) : null;
+        const p = Number.isFinite(tm) ? fleet.pose(id, tm) : null;
         const far = p && me ? Math.hypot(p.X[0] - me.X[0], p.X[1] - me.X[1], p.X[2] - me.X[2]) * M_METRES : NaN;
         const dist = !Number.isFinite(far)
           ? ""
@@ -641,12 +649,12 @@ export class FlightHud {
           .map((o) => (o === "iss" ? "ISS" : VESSELS[o as VesselId].name));
         const state =
           id === fleet.active
-            ? "flown"
+            ? t("flown")
             : mine.includes(id)
-              ? "docked to it"
+              ? t("docked to it")
               : docked.length
-                ? `docked to the ${docked.join(", ")}${dist ? ` · ${dist}` : ""}`
-                : `coasting${dist ? ` · ${dist}` : ""}`;
+                ? `${tf("docked to the {0}", docked.join(", "))}${dist ? ` · ${dist}` : ""}`
+                : `${t("coasting")}${dist ? ` · ${dist}` : ""}`;
         b.append(h("b", "", V.name), h("span", "", `${Math.round(V.mass / 1e3)} t · ${state}`));
         b.classList.toggle("on", id === fleet.active);
         b.onclick = () => {
@@ -677,12 +685,12 @@ export class FlightHud {
     this.mission.append(
       group(
         "fl-mg-modes",
-        chip("sas", "Stability assist", "Holds the attitude, damps any rotation — click to toggle", () => act.sas()),
-        chip("hold", "Attitude hold", "The direction the nose is held along — click to release it", () => {
+        chip("sas", t("Stability assist"), t("Holds the attitude, damps any rotation — click to toggle"), () => act.sas()),
+        chip("hold", t("Attitude hold"), t("The direction the nose is held along — click to release it"), () => {
           const hd = this.lastInfo?.hold;
           if (hd && hd !== "none") act.hold(hd);
         }),
-        chip("auto", "Autopilot", "What the autopilot flies — click to hand the controls back", () => {
+        chip("auto", t("Autopilot"), t("What the autopilot flies — click to hand the controls back"), () => {
           const a = this.lastInfo?.auto;
           if (a && a !== "none") act.auto(a);
         }),
@@ -690,20 +698,22 @@ export class FlightHud {
       group("fl-mg-warp", warpBox),
       group(
         "fl-mg-clocks",
-        clock("tau", "Ship τ", "Proper time on the ship since you took the controls"),
-        clock("t", "Far t", "Coordinate time: the clocks of distant observers"),
-        clock("ratio", "τ / t", "Time dilation: how fast the ship's clock runs"),
+        clock("tau", t("Ship τ"), t("Proper time on the ship since you took the controls")),
+        clock("t", t("Far t"), t("Coordinate time: the clocks of distant observers")),
+        clock("ratio", "τ / t", t("Time dilation: how fast the ship's clock runs")),
         clock(
           "lost",
-          "Earth +",
-          "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)",
+          t("Earth +"),
+          t(
+            "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)",
+          ),
         ),
       ),
       group("fl-mg-acts", craftBox, planBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles
-    this.target.append(panelHead(this.target, "target", "Target").head);
+    this.target.append(panelHead(this.target, "target", t("Target")).head);
     const tile = (box: HTMLElement, els: Record<string, HTMLElement>, k: string, label: string, wide = false) => {
       const t = h("div", `fl-tile${wide ? " wide" : ""}`);
       t.append(h("span", "", label));
@@ -719,19 +729,19 @@ export class FlightHud {
       const nm = h("b");
       const range = h("em", "fl-trange");
       range.dataset.tip = ROW_TIPS.dist!;
-      range.dataset.label = "Range";
+      range.dataset.label = t("Range");
       nameRow.append(mark, nm, range);
       this.targetEls.name = nm;
       this.targetEls.dist = range;
       this.target.append(nameRow);
       const tiles = h("div", "fl-tiles");
-      tile(tiles, this.targetEls, "rate", "Range rate");
-      tile(tiles, this.targetEls, "ca", "Closest");
-      tile(tiles, this.targetEls, "alt", "Radar alt.", true);
-      tile(tiles, this.targetEls, "vv", "Vertical");
-      tile(tiles, this.targetEls, "vh", "Ground");
-      tile(tiles, this.targetEls, "twr", "Thrust / weight", true);
-      tile(tiles, this.targetEls, "light", "Light received", true);
+      tile(tiles, this.targetEls, "rate", t("Range rate"));
+      tile(tiles, this.targetEls, "ca", t("Closest"));
+      tile(tiles, this.targetEls, "alt", t("Radar alt."), true);
+      tile(tiles, this.targetEls, "vv", t("Vertical"));
+      tile(tiles, this.targetEls, "vh", t("Ground"));
+      tile(tiles, this.targetEls, "twr", t("Thrust / weight"), true);
+      tile(tiles, this.targetEls, "light", t("Light received"), true);
       this.target.append(tiles, this.tgtCanvas);
       nameRow.classList.add("fl-legacy");
       tiles.classList.add("fl-legacy");
@@ -742,37 +752,37 @@ export class FlightHud {
       const stHead = h("div", "fl-sthead");
       const soi = h("span", "fl-stsoi");
       soi.dataset.tip = ROW_TIPS.soi!;
-      soi.dataset.label = "Sphere of influence";
+      soi.dataset.label = t("Sphere of influence");
       stHead.append(this.stBadge, soi);
       this.stEls.soi = soi;
       const tiles = h("div", "fl-tiles");
-      tile(tiles, this.stEls, "palt", "Altitude");
-      tile(tiles, this.stEls, "spd", "Speed");
-      tile(tiles, this.stEls, "pe", "Periapsis");
-      tile(tiles, this.stEls, "ap", "Apoapsis");
-      tile(tiles, this.stEls, "inc", "Inclination");
-      tile(tiles, this.stEls, "ecc", "Eccentricity");
-      tile(tiles, this.stEls, "per", "Period");
-      tile(tiles, this.stEls, "tpe", "To periapsis");
-      tile(tiles, this.stEls, "next", "Next", true);
+      tile(tiles, this.stEls, "palt", t("Altitude"));
+      tile(tiles, this.stEls, "spd", t("Speed"));
+      tile(tiles, this.stEls, "pe", t("Periapsis"));
+      tile(tiles, this.stEls, "ap", t("Apoapsis"));
+      tile(tiles, this.stEls, "inc", t("Inclination"));
+      tile(tiles, this.stEls, "ecc", t("Eccentricity"));
+      tile(tiles, this.stEls, "per", t("Period"));
+      tile(tiles, this.stEls, "tpe", t("To periapsis"));
+      tile(tiles, this.stEls, "next", t("Next"), true);
       this.stBox.append(stHead, tiles, this.stCanvas);
       tiles.classList.add("fl-legacy");
     }
     const telBody = h("div", "fl-body");
-    telBody.append(this.stBox, h("div", "fl-sub", "Telemetry · the last minute"), this.telCanvas);
+    telBody.append(this.stBox, h("div", "fl-sub", t("Telemetry · the last minute")), this.telCanvas);
     const telHead = panelHead(this.tel, "tel", "Ranger").head;
     this.telTitle = telHead.querySelector(".fl-htext");
     this.tel.append(telHead, telBody);
 
     // ---- orbit: effective potential + figures
-    const oh = panelHead(this.orbit, "orbit", "Orbit · effective potential");
+    const oh = panelHead(this.orbit, "orbit", t("Orbit · effective potential"));
     const orbitHead = oh.head;
     this.orbitHead = oh.text;
     const grid = h("div", "fl-grid");
     for (const [k, label] of [
-      ["course", "Course"],
-      ["pe", "Periapsis"],
-      ["ap", "Apoapsis"],
+      ["course", t("Course")],
+      ["pe", t("Periapsis")],
+      ["ap", t("Apoapsis")],
       ["el", "E · L"],
     ] as const) {
       const c = h("div", "fl-cell");
@@ -826,21 +836,21 @@ export class FlightHud {
       maneuver: '<path d="M0-7L7 0L0 7L-7 0Z"/><circle r="1.6" class="f"/>',
     };
     const HOLD_TIPS: Record<string, string> = {
-      prograde: "Nose along the motion — burn to speed up, raise the far side of the orbit",
-      retrograde: "Nose against the motion — burn to slow down, lower the far side",
-      radialOut: "Nose away from the body, across the motion — turns the orbit about the ship",
-      radialIn: "Nose towards the body, across the motion",
-      normal: "Nose along the orbit's normal — burn to tilt the orbit",
-      antinormal: "Nose against the orbit's normal — tilts it the other way",
-      target: "Nose at the target",
-      antiTarget: "Nose away from the target",
-      maneuver: "Nose along the next planned burn",
+      prograde: t("Nose along the motion — burn to speed up, raise the far side of the orbit"),
+      retrograde: t("Nose against the motion — burn to slow down, lower the far side"),
+      radialOut: t("Nose away from the body, across the motion — turns the orbit about the ship"),
+      radialIn: t("Nose towards the body, across the motion"),
+      normal: t("Nose along the orbit's normal — burn to tilt the orbit"),
+      antinormal: t("Nose against the orbit's normal — tilts it the other way"),
+      target: t("Nose at the target"),
+      antiTarget: t("Nose away from the target"),
+      maneuver: t("Nose along the next planned burn"),
     };
     HOLD_KEYS.forEach(([hold], j) => {
       ringBtn(
         hold,
         HOLD_NAMES[hold],
-        HOLD_TIPS[hold] ?? `Points the nose ${HOLD_NAMES[hold]} and holds it there`,
+        HOLD_TIPS[hold] ?? tf("Points the nose {0} and holds it there", HOLD_NAMES[hold]),
         () => act.hold(hold),
         108 + j * 14.5,
         HOLD_SVG[hold] ?? "",
@@ -859,27 +869,34 @@ export class FlightHud {
       speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
     };
     const AUTO_TIPS: Record<string, string> = {
-      hover: "Kills the speed relative to the body and holds the place — the flight computer's Hold position",
-      circularize:
+      hover: t("Kills the speed relative to the body and holds the place — the flight computer's Hold position"),
+      circularize: t(
         "Makes the orbit circular — the cheapest way: a burn at the next apsis above the air (planned, the time sped up to it), then trimmed; after a capture, where the ship is",
-      approach: "Flies to the target and stops beside it — the flight computer's Approach the target",
-      land: "Descends, kills the horizontal speed, touches down — the flight computer's Land here",
-      takeoff: "Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)",
-      entry:
+      ),
+      approach: t("Flies to the target and stops beside it — the flight computer's Approach the target"),
+      land: t("Descends, kills the horizontal speed, touches down — the flight computer's Land here"),
+      takeoff: t("Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)"),
+      entry: t(
         "From orbit: the deorbit burn, the guided entry (the angle of attack held, the bank flown to the site), the glide and the landing — at the chosen site, or the nearest",
+      ),
     };
     this.buildStrip(AUTO_SVG, AUTO_TIPS);
     const rightIds: [string, string, string, () => void][] = [
-      ["sas", "Stability assist", "Holds the attitude, damps any rotation", () => act.sas()],
-      ["roll", "Roll alignment", "While the nose is held, the wings stay in the orbital plane", () => act.roll()],
+      ["sas", t("Stability assist"), t("Holds the attitude, damps any rotation"), () => act.sas()],
+      ["roll", t("Roll alignment"), t("While the nose is held, the wings stay in the orbital plane"), () => act.roll()],
       ...AUTO_KEYS.map(
         ([a2]) =>
-          [a2, AUTO_NAMES[a2], AUTO_TIPS[a2] ?? `Autopilot: ${AUTO_NAMES[a2]}`, () => act.auto(a2)] as [string, string, string, () => void],
+          [a2, AUTO_NAMES[a2], AUTO_TIPS[a2] ?? tf("Autopilot: {0}", AUTO_NAMES[a2]), () => act.auto(a2)] as [
+            string,
+            string,
+            string,
+            () => void,
+          ],
       ),
       [
         "speedMode",
-        "Speed: orbit",
-        "The ball's speed and prograde — in orbit, or relative to the target (docking, rendezvous)",
+        t("Speed: orbit"),
+        t("The ball's speed and prograde — in orbit, or relative to the target (docking, rendezvous)"),
         () => act.speedMode(),
       ],
     ];
@@ -911,7 +928,7 @@ export class FlightHud {
         <path class="edge" d="${arc(232, 100, RING - 17)}"/>
         <path class="edge" d="${arc(80, -44, RING - 17)}"/>
         <text><textPath href="#fl-bz-l" startOffset="50%" text-anchor="middle">ATTITUDE</textPath></text>
-        <text><textPath href="#fl-bz-r" startOffset="50%" text-anchor="middle">AUTOPILOT</textPath></text>`;
+        <text><textPath href="#fl-bz-r" startOffset="50%" text-anchor="middle">${t("AUTOPILOT")}</textPath></text>`;
       this.cockpit.append(bez);
     }
     const ballBox = h("div", "fl-ballbox");
@@ -926,12 +943,13 @@ export class FlightHud {
       g = h("b", "fl-g"),
       eng = h("span", "fl-eng");
     const row = h("div");
-    row.append(h("i", "", "THR"), thr, g);
+    row.append(h("i", "", t("THR")), thr, g);
     read.append(row, eng);
     this.ballRead = { thr, g, eng };
     this.cockpit.append(read);
-    this.ball.title =
-      "Attitude: sky (away from the hole) and ground, markers around the nose. Left arc: throttle (drag it) · right arc: g-load";
+    this.ball.title = t(
+      "Attitude: sky (away from the hole) and ground, markers around the nose. Left arc: throttle (drag it) · right arc: g-load",
+    );
     this.ball.addEventListener("pointerdown", (e) => this.onBall(e, true));
     this.ball.addEventListener("pointermove", (e) => this.onBall(e, false));
     this.ball.addEventListener("pointerup", () => (this.throttleDrag = false));
@@ -963,21 +981,23 @@ export class FlightHud {
         this.act.deleteNode(Math.min(this.sel, this.lastInfo.plan.nodes.length - 1));
       }
     });
-    const mapHead = panelHead(this.right, "map", "Map");
+    const mapHead = panelHead(this.right, "map", t("Map"));
     const mapBody = h("div", "fl-body fl-mapbody");
     // (the map's tabs: the system in 3D, the globe and the planisphere of the world the ship orbits)
-    const t = store.get("kerr.map-tab");
-    if (t === "globe" || t === "map") this.mapTab = t;
+    const tab = store.get("kerr.map-tab");
+    if (tab === "globe" || tab === "map") this.mapTab = tab;
     this.ground = new GroundTrack(this.s);
     const tabs = h("div", "fl-maptabs");
     for (const [id, label, tip] of [
-      ["orbit", "3D", "The system in 3D: the orbits, the paths, the nodes"],
+      ["orbit", "3D", t("The system in 3D: the orbits, the paths, the nodes")],
       [
         "globe",
-        "Globe",
-        "The world the ship orbits, as a globe: where it is over the ground, the track left and ahead (drag: turn it, double click: follow the ship)",
+        t("Globe"),
+        t(
+          "The world the ship orbits, as a globe: where it is over the ground, the track left and ahead (drag: turn it, double click: follow the ship)",
+        ),
       ],
-      ["map", "Planisphere", "The world the ship orbits, flat: the ground track, the day and the night"],
+      ["map", t("Planisphere"), t("The world the ship orbits, flat: the ground track, the day and the night")],
     ] as const) {
       const b = h("button", "", label) as HTMLButtonElement;
       b.dataset.tip = tip;
@@ -1294,11 +1314,11 @@ export class FlightHud {
             ? `${Math.round(x).toLocaleString("en")} km`
             : `${x.toFixed(1)} km`;
     const ms = (v: number) => (!Number.isFinite(v) ? "—" : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`);
-    this.stBadge.textContent = st.label;
+    this.stBadge.textContent = t(st.label);
     this.stBadge.dataset.status = st.status;
     const E = this.stEls,
       o = st.orbit;
-    E.soi!.textContent = `around ${st.soiName}`;
+    E.soi!.textContent = tf("around {0}", st.soiName);
     E.palt!.textContent = st.kerr ? `r ${st.kerr.r.toFixed(3)} M` : km(st.altKm);
     E.spd!.textContent = ms(st.speed);
     E.spd!.parentElement!.dataset.sub = `${st.vVert >= 0 ? "▲" : "▼"} ${ms(Math.abs(st.vVert))}`;
@@ -1311,7 +1331,7 @@ export class FlightHud {
     E.tpe!.textContent = o && Number.isFinite(o.tPe) ? fmtS(o.tPe) : "—";
     const n = st.next;
     E.next!.textContent = n
-      ? `${n.kind === "exit" ? `exits ${n.name}` : n.kind === "enter" ? `enters ${n.name}` : n.kind === "impact" ? `IMPACT ${n.name}` : "mouth"} · ${fmtS(n.inS)}`
+      ? `${n.kind === "exit" ? tf("exits {0}", n.name) : n.kind === "enter" ? tf("enters {0}", n.name) : n.kind === "impact" ? tf("IMPACT {0}", n.name) : t("mouth")} · ${fmtS(n.inS)}`
       : "—";
     E.next!.className = n?.kind === "impact" ? "closing" : "";
   }
@@ -1326,7 +1346,7 @@ export class FlightHud {
     this.density = (this.density + 1) % 3;
     store.set("kerr.hud-density", String(this.density));
     this.applyDensity();
-    return ["Full HUD", "Minimal HUD", "Clean view"][this.density]!;
+    return [t("Full HUD"), t("Minimal HUD"), t("Clean view")][this.density]!;
   }
 
   private applyDensity() {
@@ -1484,18 +1504,18 @@ export class FlightHud {
     const cn = VESSELS[i.vessel].name;
     if (M.craftName!.textContent !== cn) M.craftName!.textContent = cn;
     this.drawStatus(i.status ?? null);
-    setChip("hold", i.hold !== "none", i.hold === "none" ? "HOLD" : HOLD_NAMES[i.hold].toUpperCase());
+    setChip("hold", i.hold !== "none", i.hold === "none" ? t("HOLD") : HOLD_NAMES[i.hold].toUpperCase());
     let auto = "AUTO";
     if (i.auto === "node" && i.plan?.nodes.length) {
       const n = i.plan.nodes[0]!;
       // (CIRC's own burn: named so)
-      const nm = i.hub?.mode === "circularize" ? "CIRC" : "NODE 1";
+      const nm = i.hub?.mode === "circularize" ? "CIRC" : t("NODE 1");
       // (our side in seconds and m/s — the scene's M and c only near the hole)
       auto = i.plan.burning
-        ? `${nm} · BURN Δv ${fmtDvC(Math.max(0, Math.hypot(...n.dv) - i.plan.done))}`
+        ? `${nm} · ${t("BURN")} Δv ${fmtDvC(Math.max(0, Math.hypot(...n.dv) - i.plan.done))}`
         : `${nm} · T−${i.ref ? fmtDur(Math.max(0, n.t - time), s) : fmtShort(Math.max(0, Math.round(n.t - time)))}`;
     } else if (i.auto !== "none") {
-      const phase = i.auto === "dock" && i.dockPhase ? i.dockPhase : i.dirs.burn ? (i.throttle > 0.02 ? "BURN" : "ALIGN") : "RCS";
+      const phase = i.auto === "dock" && i.dockPhase ? i.dockPhase : i.dirs.burn ? (i.throttle > 0.02 ? t("BURN") : t("ALIGN")) : "RCS";
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${fmtDvC(i.dv)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
@@ -1524,8 +1544,8 @@ export class FlightHud {
     T.rate!.className = i.targetRate < 0 ? "closing" : "";
     const ca = i.ref ? i.ourCa : this.closestApproach(i, time);
     // (a closest approach below the surface: an impact — or, the wormhole, a way into its throat)
-    const caTxt = ca && ca.d < 0 ? (i.target === "wormhole" ? "into the mouth" : "impact") : ca ? fmtDist(ca.d, !!i.ref, this.s) : "";
-    T.ca!.textContent = ca ? `${caTxt} · ${ca.t > 0 ? `T−${i.ref ? fmtDur(ca.t, this.s) : fmtShort(Math.round(ca.t))}` : "now"}` : "—";
+    const caTxt = ca && ca.d < 0 ? (i.target === "wormhole" ? t("into the mouth") : t("impact")) : ca ? fmtDist(ca.d, !!i.ref, this.s) : "";
+    T.ca!.textContent = ca ? `${caTxt} · ${ca.t > 0 ? `T−${i.ref ? fmtDur(ca.t, this.s) : fmtShort(Math.round(ca.t))}` : t("now")}` : "—";
     // the habitability guard: irradiance (bolometric, along the strongest direction) and equilibrium
     // temperature, from the planet's light probe
     const pr = i.ref ? null : i.probe;
@@ -1545,12 +1565,12 @@ export class FlightHud {
       const m = (x: number) =>
         Math.abs(x) >= 1e4 ? `${(x / 1000).toFixed(Math.abs(x) >= 1e5 ? 0 : 1)} km` : `${x.toFixed(Math.abs(x) >= 100 ? 0 : 1)} m`;
       T.alt!.textContent = sf.landed
-        ? `landed on ${BODY_NAMES[sf.body]}`
-        : `${m(sf.alt)}${sf.air > 1e-6 ? ` · air ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
+        ? tf("landed on {0}", BODY_NAMES[sf.body])
+        : `${m(sf.alt)}${sf.air > 1e-6 ? ` · ${t("air")} ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
       T.vv!.textContent = `${sf.vVert >= 0 ? "▲" : "▼"} ${m(Math.abs(sf.vVert))}/s`;
       T.vv!.className = sf.vVert < -12 && sf.alt < 2000 ? "closing" : "";
       T.vh!.textContent = `${m(sf.vHor)}/s`;
-      T.twr!.textContent = `${sf.twr.toFixed(2)} · local ${sf.gLocal.toFixed(2)} g`;
+      T.twr!.textContent = tf("{0} · local {1} g", sf.twr.toFixed(2), sf.gLocal.toFixed(2));
       T.twr!.className = sf.twr < 1 ? "closing" : "";
     }
     T.light!.parentElement!.hidden = !pr && !i.ref;
@@ -1589,13 +1609,13 @@ export class FlightHud {
     let course = "—",
       hot = false;
     if (p) {
-      const t = p.pts.length * p.dt;
-      if (p.fate === "horizon") (course = `HORIZON T−${fmtShort(Math.round(t))}`), (hot = true);
+      const tt = p.pts.length * p.dt;
+      if (p.fate === "horizon") (course = `${t("HORIZON")} T−${fmtShort(Math.round(tt))}`), (hot = true);
       else if (p.fate === "star")
-        (course = `${p.hit && p.hit !== "star" ? BODY_NAMES[p.hit].toUpperCase() : "STAR"} T−${fmtShort(Math.round(t))}`), (hot = true);
-      else if (p.fate === "wormhole") course = `WORMHOLE T−${fmtShort(Math.round(t))}`;
-      else if (p.fate === "escape") course = i.E >= 1 ? "ESCAPE" : "LEAVING";
-      else course = i.E < 1 ? "BOUND ORBIT" : "COASTING";
+        (course = `${p.hit && p.hit !== "star" ? BODY_NAMES[p.hit].toUpperCase() : t("STAR")} T−${fmtShort(Math.round(tt))}`), (hot = true);
+      else if (p.fate === "wormhole") course = `${t("WORMHOLE")} T−${fmtShort(Math.round(tt))}`;
+      else if (p.fate === "escape") course = i.E >= 1 ? t("ESCAPE") : t("LEAVING");
+      else course = i.E < 1 ? t("BOUND ORBIT") : t("COASTING");
     }
     O.course!.textContent = course;
     O.course!.classList.toggle("hot", hot);
@@ -1610,7 +1630,7 @@ export class FlightHud {
     // around a body (ours, or a planet's frame): the Kepler figures
     const ks = i.status;
     const kepler = !!ks && !ks.kerr && ks.side !== "throat";
-    if (this.orbitHead) this.orbitHead.textContent = kepler ? `Orbit · ${ks!.soiName}` : "Effective potential";
+    if (this.orbitHead) this.orbitHead.textContent = kepler ? tf("Orbit · {0}", ks!.soiName) : t("Effective potential");
     if (ks && kepler) {
       const km = (x: number) =>
         !Number.isFinite(x)
@@ -1618,7 +1638,7 @@ export class FlightHud {
           : Math.abs(x) >= 1e7
             ? `${(x / 1.495978707e8).toFixed(2)} AU`
             : `${Math.round(x).toLocaleString("en")} km`;
-      O.course!.textContent = `${ks.label} · ${ks.soiName.toUpperCase()}`;
+      O.course!.textContent = `${t(ks.label)} · ${ks.soiName.toUpperCase()}`;
       O.course!.classList.toggle("hot", ks.status === "suborbital" && !!ks.next && ks.next.kind === "impact");
       O.pe!.textContent = ks.orbit ? `${km(ks.orbit.peKm)}${ks.orbit.tPe > 0 ? ` · T−${fmtS(ks.orbit.tPe)}` : ""}` : "—";
       O.ap!.textContent =
@@ -1656,15 +1676,15 @@ export class FlightHud {
     {
       const nearGround = !!i.surface || (!!i.status && !i.status.kerr && Number.isFinite(i.status.altKm) && i.status.altKm < 300);
       const why: Record<string, string> = {};
-      if (!i.dirs.target) why.target = why.antiTarget = why.approach = why.speedMode = "No target";
-      if (!i.dirs.maneuver && !i.plan?.nodes.length) why.maneuver = "No planned burn";
+      if (!i.dirs.target) why.target = why.antiTarget = why.approach = why.speedMode = t("No target");
+      if (!i.dirs.maneuver && !i.plan?.nodes.length) why.maneuver = t("No planned burn");
       if (!i.dirs.prograde)
         for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal"])
-          why[k] = i.landed ? "On the ground" : "No orbit here";
-      if (i.landed) why.hover = why.circularize = why.land = "On the ground";
+          why[k] = i.landed ? t("On the ground") : t("No orbit here");
+      if (i.landed) why.hover = why.circularize = why.land = t("On the ground");
       else {
-        why.takeoff = "Not on the ground";
-        if (!nearGround) why.land = "No ground near";
+        why.takeoff = t("Not on the ground");
+        if (!nearGround) why.land = t("No ground near");
       }
       for (const [id, b] of this.buttons) {
         if (!b.classList.contains("fl-rb")) continue;
@@ -1678,7 +1698,7 @@ export class FlightHud {
     {
       const b = this.buttons.get("speedMode")!;
       b.classList.toggle("on", i.speedMode === "target");
-      b.dataset.label = i.speedMode === "target" ? "Speed: target" : "Speed: orbit";
+      b.dataset.label = i.speedMode === "target" ? t("Speed: target") : t("Speed: orbit");
       b.setAttribute("aria-label", b.dataset.label);
       b.setAttribute("aria-pressed", String(i.speedMode === "target"));
     }
@@ -1843,19 +1863,19 @@ export class FlightHud {
     this.airData.hidden = !show;
     if (!show || !A) return;
     const d = 180 / Math.PI;
-    const mode = A.mode === "sf" ? `FLIGHT COMPUTER${A.antigrav ? " · ANTIGRAVITY" : ""}` : A.mode.toUpperCase();
+    const mode = A.mode === "sf" ? `${t("FLIGHT COMPUTER")}${A.antigrav ? ` · ${t("ANTIGRAVITY")}` : ""}` : A.mode.toUpperCase();
     const q = A.q >= 1000 ? `${(A.q / 1000).toFixed(1)} kPa` : `${A.q.toFixed(0)} Pa`;
     const bar = (x: number) =>
       `<i class="fl-ad-bar${x > 0.85 ? " hot" : x > 0.6 ? " warm" : ""}"><b style="width:${Math.min(x, 1) * 100}%"></b></i>`;
-    const flaps = A.flaps === 1 ? "FULL" : A.flaps === 0.5 ? "½" : "UP";
+    const flaps = A.flaps === 1 ? t("FULL") : A.flaps === 0.5 ? "½" : t("UP");
     const cmd = A.sf
       ? `<span>CMD <b>${A.sf.speed.toFixed(0)} m/s</b> γ <b>${(A.sf.gamma * d).toFixed(0)}°</b> HDG <b>${((((A.sf.heading * d) % 360) + 360) % 360) | 0}°</b></span>`
       : "";
     const html =
       `<div class="fl-ad-row"><span class="fl-ad-mode">${mode}</span>${cmd}<span>M <b>${A.mach.toFixed(2)}</b></span><span>q <b>${q}</b></span>` +
       `<span>α <b>${(A.alpha * d).toFixed(1)}°</b></span><span>β <b>${(A.beta * d).toFixed(1)}°</b></span><span><b>${A.g.toFixed(2)}</b> g</span></div>` +
-      `<div class="fl-ad-row">${A.shieldMax ? `<span>SHIELD <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>HULL <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span>` +
-      `<span>LOAD${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">FLAPS ${flaps}</span><span class="${A.gear ? "on" : ""}">GEAR</span><span class="${A.brake ? "on" : ""}">BRAKE</span></div>`;
+      `<div class="fl-ad-row">${A.shieldMax ? `<span>${t("SHIELD")} <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>${t("HULL")} <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span>` +
+      `<span>${t("LOAD")}${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">${t("FLAPS")} ${flaps}</span><span class="${A.gear ? "on" : ""}">${t("GEAR")}</span><span class="${A.brake ? "on" : ""}">${t("BRAKE")}</span></div>`;
     if (html === this.airKey) return;
     this.airKey = html;
     this.airData.innerHTML = html;
@@ -1898,22 +1918,22 @@ export class FlightHud {
     };
     // docked: to what, by which port; UNDOCK lets the flown craft go
     if (links.length) {
-      this.dock.append(h("div", "fl-title", `Docked · ${links.map((l) => l.title).join(" · ")}`));
+      this.dock.append(h("div", "fl-title", tf("Docked · {0}", links.map((l) => l.title).join(" · "))));
       for (const l of links) this.dock.append(h("div", "fl-dock-port", `${l.title} · ${l.port}`));
-      const b = h("button", "fl-go", "UNDOCK") as HTMLButtonElement;
+      const b = h("button", "fl-go", t("UNDOCK")) as HTMLButtonElement;
       b.onclick = () => this.act.undock();
       this.dock.append(b);
     }
     if (!d) return;
-    this.dock.append(h("div", "fl-title", `Docking · ${d.title}`), h("div", "fl-dock-port", d.name));
-    row("Range", f(d.range, d.range < 100 ? 2 : 1));
-    row("Closing", `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
-    row("Offset", `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
-    row("Ports' axes", `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
+    this.dock.append(h("div", "fl-title", tf("Docking · {0}", d.title)), h("div", "fl-dock-port", d.name));
+    row(t("Range"), f(d.range, d.range < 100 ? 2 : 1));
+    row(t("Closing"), `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
+    row(t("Offset"), `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
+    row(t("Ports' axes"), `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
     // the docking autopilot: what it does; the button that engages or stops it (B)
-    if (i.dockPhase) row("Autopilot", i.dockPhase, "ok");
-    const b = h("button", "fl-go", i.dockPhase ? "STOP AUTO-DOCK" : "AUTO-DOCK · B") as HTMLButtonElement;
-    b.title = "The docking autopilot: on the thrusters, to the port's axis, then in along it to the capture";
+    if (i.dockPhase) row(t("Autopilot"), i.dockPhase, "ok");
+    const b = h("button", "fl-go", i.dockPhase ? t("STOP AUTO-DOCK") : t("AUTO-DOCK · B")) as HTMLButtonElement;
+    b.title = t("The docking autopilot: on the thrusters, to the port's axis, then in along it to the capture");
     b.onclick = () => this.act.auto("dock");
     this.dock.append(b);
   }
@@ -2020,7 +2040,7 @@ export class FlightHud {
       }
     }
     const relTo = sp.ref;
-    label(ctx, x0, top - 16 * dpr, `SPEED · ${unit}`, relTo, dpr);
+    label(ctx, x0, top - 16 * dpr, tf("SPEED · {0}", unit), relTo, dpr);
     // the value, beside the pointer
     const v = i.speed * unitK;
     const main = rel ? i.speed.toFixed(4) : v >= 1000 ? v.toFixed(0) : v >= 100 ? v.toFixed(1) : v.toFixed(2);
@@ -2161,8 +2181,8 @@ export class FlightHud {
       cy - R,
       2 * R,
       2 * R,
-      "Bearing",
-      "Where the target lies from the nose: dead ahead at the centre, astern at the rim (hollow: behind)",
+      t("Bearing"),
+      t("Where the target lies from the nose: dead ahead at the centre, astern at the rim (hollow: behind)"),
     );
     // the name, the range
     const x0 = 2 * R + 14,
@@ -2170,14 +2190,14 @@ export class FlightHud {
     ctx.textAlign = "left";
     ctx.font = `700 ${S(10)}px ${FONT}`;
     ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
-    ctx.fillText("TARGET", S(x0), S(13));
+    ctx.fillText(t("TARGET"), S(x0), S(13));
     ctx.font = `700 ${S(18)}px ${FONT}`;
     ctx.fillStyle = "#ff9466";
     ctx.fillText(txt("name").toUpperCase(), S(x0), S(30), S(cw));
     ctx.font = `600 ${S(16)}px ${MONO}`;
     ctx.fillStyle = "#ffffff";
     ctx.fillText(txt("dist"), S(x0), S(50), S(cw));
-    reg(x0, 0, cw, 54, "Range", "Distance to the target, centre to centre");
+    reg(x0, 0, cw, 54, t("Range"), t("Distance to the target, centre to centre"));
     // the range rate: a two-way bar round a centre line
     const rate = i.targetRate;
     const yb = 74;
@@ -2193,14 +2213,21 @@ export class FlightHud {
     }
     ctx.font = `600 ${S(9.5)}px ${FONT}`;
     ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
-    ctx.fillText("CLOSING", S(x0), S(yb + 15));
+    ctx.fillText(t("CLOSING"), S(x0), S(yb + 15));
     ctx.textAlign = "right";
-    ctx.fillText("RECEDING", S(x0 + cw), S(yb + 15));
+    ctx.fillText(t("RECEDING"), S(x0 + cw), S(yb + 15));
     ctx.textAlign = "center";
     ctx.font = `500 ${S(11)}px ${MONO}`;
     ctx.fillStyle = rate < 0 ? "#ffb0a0" : "#d9efff";
     ctx.fillText(txt("rate").replace(/^[▲▼]\s*/, ""), S(x0 + cw / 2), S(yb - 5));
-    reg(x0, yb - 16, cw, 34, "Range rate", "How fast the distance changes — the bar grows left when closing in, right when drawing away");
+    reg(
+      x0,
+      yb - 16,
+      cw,
+      34,
+      t("Range rate"),
+      t("How fast the distance changes — the bar grows left when closing in, right when drawing away"),
+    );
     // the closest approach
     const ca = txt("ca");
     if (ca && ca !== "—") {
@@ -2210,14 +2237,14 @@ export class FlightHud {
       ctx.textAlign = "left";
       ctx.font = `700 ${S(9.5)}px ${FONT}`;
       ctx.fillStyle = "rgba(176, 196, 222, 0.6)";
-      ctx.fillText("CLOSEST", S(x0), S(yc - 12));
+      ctx.fillText(t("CLOSEST"), S(x0), S(yc - 12));
       ctx.font = `500 ${S(12)}px ${MONO}`;
       ctx.fillStyle = "#eef4fb";
       ctx.fillText(cv, S(x0), S(yc + 2));
       ctx.textAlign = "right";
       ctx.fillStyle = "#ffc85a";
       ctx.fillText(ct, S(x0 + cw), S(yc + 2));
-      reg(x0, yc - 22, cw, 28, "Closest approach", "The closest the path comes to the target, and in how long");
+      reg(x0, yc - 22, cw, 28, t("Closest approach"), t("The closest the path comes to the target, and in how long"));
     }
     // near the ground: the landing figures, one line
     if (hasGround) {
@@ -2238,7 +2265,7 @@ export class FlightHud {
         ctx.fillStyle = l === "V/S" && T.vv?.classList.contains("closing") ? "#ffb0a0" : "#eef4fb";
         ctx.fillText(v || "—", S(j * colW + 2), S(yg + 2), S(colW - 4));
       });
-      reg(0, yg - 22, W, 28, "Landing", "Radar altitude · vertical speed · ground speed · thrust over the local weight");
+      reg(0, yg - 22, W, 28, t("Landing"), t("Radar altitude · vertical speed · ground speed · thrust over the local weight"));
     }
   }
 
@@ -2283,16 +2310,16 @@ export class FlightHud {
       ctx.fillText(t, S(x), S(y), S(W / 2 - 6));
     };
     // height and speed
-    small("ALTITUDE", 2, 11);
+    small(t("ALTITUDE"), 2, 11);
     big(st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm), 2, 29);
-    small("SPEED", W / 2 + 4, 11);
+    small(t("SPEED"), W / 2 + 4, 11);
     big(ms(st.speed), W / 2 + 4, 29);
     ctx.font = `500 ${S(10)}px ${MONO}`;
     ctx.fillStyle = st.vVert < 0 ? "#ffb0a0" : "#9fe3ff";
     ctx.textAlign = "left";
     if (Number.isFinite(st.vVert)) ctx.fillText(`${st.vVert >= 0 ? "▲" : "▼"} ${ms(Math.abs(st.vVert))}`, S(W / 2 + 4), S(42));
-    reg(0, 0, W / 2, 44, "Altitude", "Height above the surface of the body whose gravity dominates");
-    reg(W / 2, 0, W / 2, 46, "Speed", "Speed relative to that body, and the vertical speed under it");
+    reg(0, 0, W / 2, 44, t("Altitude"), t("Height above the surface of the body whose gravity dominates"));
+    reg(W / 2, 0, W / 2, 46, t("Speed"), t("Speed relative to that body, and the vertical speed under it"));
     if (!o) {
       if (st.kerr) {
         small("E", 2, 58);
@@ -2349,17 +2376,17 @@ export class FlightHud {
     ctx.fillStyle = "#ffc85a";
     ctx.fillRect(S(-3.5), S(-3.5), S(7), S(7));
     ctx.restore();
-    small(pe < 0 ? "IMPACT" : `PE ${o.tPe > 0 && Number.isFinite(o.tPe) ? `· ${fmtS(o.tPe)}` : ""}`, xa - 8, yb + 17);
+    small(pe < 0 ? t("IMPACT") : `PE ${o.tPe > 0 && Number.isFinite(o.tPe) ? `· ${fmtS(o.tPe)}` : ""}`, xa - 8, yb + 17);
     ctx.font = `500 ${S(11)}px ${MONO}`;
     ctx.fillStyle = pe < 0 ? "#ff8a70" : "#eef4fb";
     ctx.textAlign = "left";
-    ctx.fillText(pe < 0 ? "below ground" : km(pe), S(xa - 8), S(yb + 30));
-    small(Number.isFinite(ap) ? `AP ${Number.isFinite(o.tAp) ? `· ${fmtS(o.tAp)}` : ""}` : "ESCAPE", xb + 8, yb + 17, "right");
+    ctx.fillText(pe < 0 ? t("below ground") : km(pe), S(xa - 8), S(yb + 30));
+    small(Number.isFinite(ap) ? `AP ${Number.isFinite(o.tAp) ? `· ${fmtS(o.tAp)}` : ""}` : t("ESCAPE"), xb + 8, yb + 17, "right");
     ctx.font = `500 ${S(11)}px ${MONO}`;
     ctx.fillStyle = "#eef4fb";
     ctx.textAlign = "right";
     ctx.fillText(Number.isFinite(ap) ? km(ap) : "∞", S(xb + 8), S(yb + 30));
-    reg(0, yb - 12, W, 46, "Apsides", "The orbit from its lowest point (periapsis) to its highest (apoapsis), and the ship on it");
+    reg(0, yb - 12, W, 46, t("Apsides"), t("The orbit from its lowest point (periapsis) to its highest (apoapsis), and the ship on it"));
     // the dials
     const yd = 124,
       rd = 15;
@@ -2398,8 +2425,8 @@ export class FlightHud {
         ctx.lineTo(S(Math.cos(inc) * rd), S(-Math.sin(inc) * rd));
         ctx.stroke();
       },
-      "Inclination",
-      "The orbit's tilt to the body's equator (the white line): 0° equatorial, 90° polar",
+      t("Inclination"),
+      t("The orbit's tilt to the body's equator (the white line): 0° equatorial, 90° polar"),
     );
     dial(
       W / 2,
@@ -2428,13 +2455,13 @@ export class FlightHud {
           ctx.stroke();
         }
       },
-      "Eccentricity",
-      "The orbit's shape: 0 a circle, under 1 an ellipse (drawn true), 1 and above an open, escaping path",
+      t("Eccentricity"),
+      t("The orbit's shape: 0 a circle, under 1 an ellipse (drawn true), 1 and above an open, escaping path"),
     );
     const frac = Number.isFinite(o.period) && o.period > 0 && Number.isFinite(o.tPe) ? 1 - o.tPe / o.period : NaN;
     dial(
       (5 * W) / 6,
-      "PERIOD",
+      t("PERIOD"),
       Number.isFinite(o.period) ? fmtS(o.period) : "—",
       () => {
         if (!Number.isFinite(frac)) return;
@@ -2455,19 +2482,29 @@ export class FlightHud {
         ctx.fillText(`${Math.round(frac * 100)}%`, 0, 0);
         ctx.textBaseline = "alphabetic";
       },
-      "Period",
-      "The time one orbit takes; the ring: the part flown since the last periapsis",
+      t("Period"),
+      t("The time one orbit takes; the ring: the part flown since the last periapsis"),
     );
     // the next event
     if (st.next) {
       const n = st.next;
       const hot = n.kind === "impact";
-      const txt = `${n.kind === "exit" ? `Leaves ${n.name}` : n.kind === "enter" ? `Enters ${n.name}` : n.kind === "impact" ? `IMPACT · ${n.name}` : "The mouth"} in ${fmtS(n.inS)}`;
+      const txt = tf(
+        "{0} in {1}",
+        n.kind === "exit"
+          ? tf("Leaves {0}", n.name)
+          : n.kind === "enter"
+            ? tf("Enters {0}", n.name)
+            : n.kind === "impact"
+              ? tf("IMPACT · {0}", n.name)
+              : t("The mouth"),
+        fmtS(n.inS),
+      );
       ctx.font = `700 ${S(11)}px ${FONT}`;
       ctx.fillStyle = hot ? "#ff7a5c" : "#ffc85a";
       ctx.textAlign = "left";
       ctx.fillText(`▸ ${txt.toUpperCase()}`, S(2), S(188));
-      reg(0, 176, W, 16, "Next", "The next event on the free-fall path");
+      reg(0, 176, W, 16, t("Next"), t("The next event on the free-fall path"));
     }
   }
 
@@ -2560,7 +2597,7 @@ export class FlightHud {
     const same = Number.isFinite(pe) && Number.isFinite(ap) && pe >= 0 && Math.abs(ap - pe) < hmax * 0.03;
     // (on the ground the orbit's periapsis is deep under it — no impact to warn of, nothing to mark)
     if (Number.isFinite(pe) && !(i.landed || i.surface?.landed))
-      mark(Math.max(pe, 0), pe < 0 ? RED : CYAN, pe < 0 ? "IMPACT" : same ? "Pe·Ap" : "Pe");
+      mark(Math.max(pe, 0), pe < 0 ? RED : CYAN, pe < 0 ? t("IMPACT") : same ? "Pe·Ap" : "Pe");
     if (Number.isFinite(ap) && !same) mark(ap, CYAN, "Ap");
     // the vertical speed: a bar beside the tape, its length on a log scale (±10 km/s at the ends)
     if (Number.isFinite(vv)) {
@@ -2572,7 +2609,7 @@ export class FlightHud {
       ctx.fillRect(x0 - 9 * dpr, cy, 7 * dpr, 1 * dpr);
     }
     const body = near ? (BODY_NAMES[sf!.body as Target] ?? sf!.body) : (st?.soiName ?? "");
-    label(ctx, x0, top - 16 * dpr, `ALTITUDE · ${unit}`, near && sf!.landed ? `landed · ${body}` : `above ${body}`, dpr);
+    label(ctx, x0, top - 16 * dpr, tf("ALTITUDE · {0}", unit), near && sf!.landed ? tf("landed · {0}", body) : tf("above {0}", body), dpr);
     const u = km ? alt / 1e3 : alt;
     const main = u >= 1000 ? Math.round(u).toLocaleString("en") : u >= 100 ? u.toFixed(0) : u.toFixed(1);
     const vtxt = `${vv >= 0 ? "▲" : "▼"} ${Math.abs(vv) >= 1e3 ? `${(Math.abs(vv) / 1e3).toFixed(2)} km/s` : `${Math.abs(vv).toFixed(1)} m/s`}`;
@@ -2635,10 +2672,10 @@ export class FlightHud {
       ctx.textAlign = "left";
       ctx.font = `${10 * dpr}px ${MONO}`;
     };
-    mark(i.rH, RED, "HORIZON");
+    mark(i.rH, RED, t("HORIZON"));
     mark(i.photon, "#ffdc78", "PHOTON");
     mark(i.isco, "#78e696", "ISCO");
-    if (this.s.sun) mark(starOrbitRadius(this.s), "#ffd36b", "STAR");
+    if (this.s.sun) mark(starOrbitRadius(this.s), "#ffd36b", t("STAR"));
     const p = i.path;
     if (p && p.pts.length > 2) {
       const rs = p.pts.map((q) => Math.hypot(...q));
@@ -2656,7 +2693,7 @@ export class FlightHud {
       ctx.fillRect(x0 - 7 * dpr, cy + hgt / 2, 3 * dpr, 1 * dpr);
     }
     valueBox(ctx, x0 - 12 * dpr, cy, `${i.r.toFixed(2)}`, "M", `v_r ${i.vr >= 0 ? "+" : "−"}${Math.abs(i.vr).toFixed(3)} c`, "right", dpr);
-    label(ctx, x0, cy - hgt / 2 - 16 * dpr, "ALTITUDE · M", "r · log", dpr);
+    label(ctx, x0, cy - hgt / 2 - 16 * dpr, tf("ALTITUDE · {0}", "M"), "r · log", dpr);
   }
 
   // ------------------------------------------------------------------------------------ telemetry sparklines
@@ -2675,7 +2712,7 @@ export class FlightHud {
     const rows: [keyof Sample, string, string, (v: number) => string][] = [
       [
         "speed",
-        "SPEED",
+        t("SPEED"),
         "#d6f55b",
         (v) => (si ? (v >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(1)} m/s`) : `${v.toFixed(3)} c`),
       ],
@@ -2686,7 +2723,7 @@ export class FlightHud {
         (v) => (si ? (Math.abs(v) >= 1e4 ? `${Math.round(v).toLocaleString("en")} km` : `${v.toFixed(1)} km`) : `${v.toFixed(1)} M`),
       ],
       ["dtau", "dτ/dt", "#e07bff", (v) => v.toFixed(4)],
-      ["g", "THRUST", AMBER, (v) => fmtG(v)],
+      ["g", t("THRUST"), AMBER, (v) => fmtG(v)],
     ];
     const rh = ch / rows.length;
     rows.forEach(([key, name, col, fmt], j) => {
@@ -2779,7 +2816,7 @@ export class FlightHud {
     ctx.fillRect(0, 0, cw, ch);
     ctx.textBaseline = "top";
     // the title: what it shows; its inclination and eccentricity (or E and L) under it
-    const head = (this.orbitHead?.textContent ?? "Orbit").toUpperCase();
+    const head = (this.orbitHead?.textContent ?? t("Orbit")).toUpperCase();
     const k = head.indexOf(" · ");
     ctx.textAlign = "left";
     ctx.font = `700 ${S(9.5)}px ${FONT}`;
@@ -2796,7 +2833,8 @@ export class FlightHud {
     // the course: a badge in its colour
     const course = txt("course").toUpperCase();
     const hot = O.course?.classList.contains("hot");
-    const inOrbit = /ORBIT|BOUND/.test(course);
+    // (the French too: ORBITE, LIÉE)
+    const inOrbit = /ORBIT|BOUND|LIÉE/.test(course);
     const c = hot ? "255, 90, 70" : inOrbit ? "111, 227, 161" : "255, 179, 92";
     ctx.font = `700 ${S(10.5)}px ${FONT}`;
     const tw = ctx.measureText(course).width;
@@ -2917,7 +2955,7 @@ export class FlightHud {
       ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
       ctx.font = `600 ${10.4 * dpr}px ${FONT}`;
       ctx.textAlign = "right";
-      ctx.fillText("E = 1 · escape", cw - 4 * dpr, Y(1) - 8 * dpr);
+      ctx.fillText(t("E = 1 · escape"), cw - 4 * dpr, Y(1) - 8 * dpr);
     }
     ctx.beginPath();
     ctx.moveTo(X(r0), Y(E));
@@ -3102,8 +3140,8 @@ export class FlightHud {
       }
     };
     // left: throttle (bottom → top), right: g-load relative to the engine's full thrust
-    const t = Math.max(0, Math.min(1, i.throttle));
-    arcGauge(Math.PI * 0.64, Math.PI * 1.36, t, "#ff6a2c", "#ffd27a", false);
+    const thrK = Math.max(0, Math.min(1, i.throttle));
+    arcGauge(Math.PI * 0.64, Math.PI * 1.36, thrK, "#ff6a2c", "#ffd27a", false);
     const gl = Math.max(0, Math.min(1, i.accel / Math.max(i.engine.max, 1e-12)));
     arcGauge(Math.PI * 0.36, -Math.PI * 0.36, gl, "#3b8cff", "#9fe3ff", true);
     // (the throttle, the g-load, the engine and the tank: the readout above the ball)
@@ -3111,9 +3149,9 @@ export class FlightHud {
     const fu = i.engine.fuel;
     const R = this.ballRead;
     if (R) {
-      R.thr.textContent = `${Math.round(t * 100)}%${i.precision ? " FINE" : ""}`;
+      R.thr.textContent = `${Math.round(thrK * 100)}%${i.precision ? ` ${t("FINE")}` : ""}`;
       R.g.textContent = i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g";
-      R.eng.textContent = `${i.engine.kind === "crew" ? "CREW" : "CINEMA"} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? "TANK EMPTY" : `PROP ${Math.round(fu.fraction * 100)}% · Δv ${fmtDvLeft(fu.dvLeft)}`}` : ""}`;
+      R.eng.textContent = `${i.engine.kind === "crew" ? t("CREW") : t("CINEMA")} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? t("TANK EMPTY") : `${t("PROP")} ${Math.round(fu.fraction * 100)}% · Δv ${fmtDvLeft(fu.dvLeft)}`}` : ""}`;
       R.eng.classList.toggle("hot", !!fu && (fu.empty || fu.fraction < 0.15));
     }
     // rotation rates: short bars (pitch right side, yaw bottom)

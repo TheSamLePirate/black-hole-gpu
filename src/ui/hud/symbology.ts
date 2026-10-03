@@ -15,6 +15,7 @@ import { dot } from "../../math/vec3";
 import { blinkOn } from "../clock";
 import type { HudItem } from "./declutter";
 import { safeFrame } from "./safe";
+import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
 const on = (F: { show?: Record<HudItem, boolean> }, k: HudItem) => !F.show || F.show[k];
@@ -651,7 +652,7 @@ function drawAir(
   const k = A.stallA ? alpha / A.stallA : 0;
   if (A.stalled || k > 0.92) {
     const on = A.stalled ? blinkOn() : true;
-    if (on) text(A.stalled ? "STALL" : "AOA", fp[0], fp[1] + 4 * r, A.stalled ? "#ff5a46" : "#ffc85a", 15);
+    if (on) text(A.stalled ? t("STALL") : "AOA", fp[0], fp[1] + 4 * r, A.stalled ? "#ff5a46" : "#ffc85a", 15);
   }
 
   // ---- the flight director: where the flight computer wants the flight path
@@ -756,7 +757,7 @@ function drawFuture(
       );
       // (beside it, to the right: the marks of a path seen end-on stack up, their labels still read)
       text(
-        quarter ? "¼ ORBIT" : `+${ahead(m.t)}`,
+        quarter ? t("¼ ORBIT") : `+${ahead(m.t)}`,
         p![0] + 15 * dpr,
         p![1],
         big ? "rgba(214, 236, 255, 0.9)" : "rgba(90, 220, 255, 0.95)",
@@ -775,12 +776,12 @@ function drawFuture(
         air = m.kind === "air";
       const col = ground ? "#ff5a46" : air ? "#ffc85a" : "#ff8a5c";
       const label = ground
-        ? `IMPACT ${ahead(m.t)}`
+        ? tf("IMPACT {0}", ahead(m.t))
         : air
-          ? `ENTRY ${ahead(m.t)}`
+          ? tf("ENTRY {0}", ahead(m.t))
           : m.kind === "horizon"
-            ? `HORIZON ${ahead(m.t)}`
-            : `THE STAR ${ahead(m.t)}`;
+            ? tf("HORIZON {0}", ahead(m.t))
+            : tf("THE STAR {0}", ahead(m.t));
       const p = m.hid ? null : pr(m.d);
       if (inside(p, 20 * dpr)) {
         const R = 13 * dpr;
@@ -915,17 +916,17 @@ function drawRunway(
       "#78ffaa",
       1.8,
     );
-    text("AIM", a![0] + R + 6 * dpr, a![1], "#78ffaa", 10.5, "left", true);
+    text(t("AIM"), a![0] + R + 6 * dpr, a![1], "#78ffaa", 10.5, "left", true);
   }
   // the box: the runway, the distance to its threshold, the offset across the axis, the glide path
   const dist = Math.max(-rw.along, 0);
   const km = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
   const off =
     Math.abs(rw.across) < 15
-      ? "ON AXIS"
+      ? t("ON AXIS")
       : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
   if (F.compact) {
-    if (rw.final && rw.agl < 60 && rw.agl > 1 && blinkOn()) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+    if (rw.final && rw.agl < 60 && rw.agl > 1 && blinkOn()) text(t("FLARE"), W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
     return;
   }
   // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
@@ -958,7 +959,7 @@ function drawRunway(
   if (rw.gRef !== null && rw.gam !== null) {
     const e = ((rw.gam - rw.gRef) * 180) / Math.PI;
     text(
-      `GLIDE ${e >= 0 ? "▲" : "▼"} ${Math.abs(e).toFixed(1)}°`,
+      tf("GLIDE {0} {1}°", e >= 0 ? "▲" : "▼", Math.abs(e).toFixed(1)),
       x,
       y + 35 * dpr,
       Math.abs(e) > 2 ? "#ffc85a" : "#78ffaa",
@@ -985,7 +986,7 @@ function drawRunway(
   }
   if (rw.final && rw.agl < 60 && rw.agl > 1) {
     const on = blinkOn();
-    if (on) text("FLARE", W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
+    if (on) text(t("FLARE"), W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
   }
 }
 
@@ -1061,7 +1062,7 @@ function drawHover(
     ctx.fill();
   }
   text(
-    `DRIFT ${sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)} m/s`,
+    tf("DRIFT {0} m/s", sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)),
     cx,
     cy + R0 + 18 * dpr,
     sf.vHor > 3 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)",
@@ -1103,15 +1104,16 @@ function drawHover(
   let cue = "",
     ccol = "rgba(214, 236, 255, 0.9)";
   if (vDown > 1) {
-    if (net <= 0.05) (cue = "TWR < 1 · NO STOP"), (ccol = "#ff5a46");
+    if (net <= 0.05) (cue = t("TWR < 1 · NO STOP")), (ccol = "#ff5a46");
     else {
       const stop = (vDown * vDown) / (2 * net);
       const tIn = (sf.alt - stop * 1.1) / vDown;
       if (tIn <= 0) {
-        if (blinkOn()) (cue = "BURN NOW"), (ccol = "#ff5a46");
+        if (blinkOn()) (cue = t("BURN NOW")), (ccol = "#ff5a46");
         else cue = " ";
-      } else if (tIn < 60) (cue = `BURN IN ${tIn.toFixed(tIn < 10 ? 1 : 0)} s`), (ccol = tIn < 5 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)");
-      else cue = `STOP ${Math.round(stop)} m`;
+      } else if (tIn < 60)
+        (cue = tf("BURN IN {0} s", tIn.toFixed(tIn < 10 ? 1 : 0))), (ccol = tIn < 5 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)");
+      else cue = tf("STOP {0} m", Math.round(stop));
     }
   }
   if (cue) text(cue, cx, cy + R0 + 36 * dpr, ccol, 13, "center", true);
@@ -1183,7 +1185,7 @@ function drawBurn(
   ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 70 * dpr);
   const burning = !!P.burning;
   text(
-    burning ? `BURNING ◆${k + 1}` : `BURN ◆${k + 1} IN ${ahead(Math.max(tIn, 0))}`,
+    burning ? tf("BURNING ◆{0}", k + 1) : tf("BURN ◆{0} IN {1}", k + 1, ahead(Math.max(tIn, 0))),
     x,
     y - 12 * dpr,
     burning ? "#ffc85a" : "#7cd6ff",
@@ -1192,7 +1194,7 @@ function drawBurn(
     true,
   );
   text(
-    `Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(1)} m/s`} · ${Number.isFinite(len) ? ahead(len) : "no thrust"}`,
+    `Δv ${dv >= 1000 ? `${(dv / 1000).toFixed(2)} km/s` : `${dv.toFixed(1)} m/s`} · ${Number.isFinite(len) ? ahead(len) : t("no thrust")}`,
     x,
     y + 6 * dpr,
     "#ffffff",
@@ -1201,10 +1203,10 @@ function drawBurn(
     true,
   );
   if (Number.isFinite(err))
-    text(`AIM ${err.toFixed(1)}°`, x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
+    text(tf("AIM {0}°", err.toFixed(1)), x, y + 23 * dpr, err < 2 ? "#78ffaa" : err < 10 ? "#ffc85a" : "#ff5a46", 11.5, "center", true);
   // (the burn's start soon and the craft not turned: said)
   if (!burning && tIn < 30 && tIn > 0 && Number.isFinite(err) && err > 10 && blinkOn())
-    text("TURN TO THE BURN", W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
+    text(t("TURN TO THE BURN"), W / 2, H / 2 + 60 * dpr, "#ffc85a", 13);
 }
 
 /**
@@ -1282,7 +1284,7 @@ function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
   text(`${full} m`, cx + R0 - 2 * dpr, cy - R0 + 2 * dpr, "rgba(95, 255, 208, 0.6)", 9, "right", true);
   text(`${D.title.toUpperCase()} · ${D.name}`, cx, cy - R0 - 30 * dpr, "rgba(95, 255, 208, 0.95)", 10.5);
   text(
-    `RANGE ${D.range >= 1000 ? `${(D.range / 1000).toFixed(2)} km` : `${D.range.toFixed(D.range < 10 ? 2 : 1)} m`}`,
+    tf("RANGE {0}", D.range >= 1000 ? `${(D.range / 1000).toFixed(2)} km` : `${D.range.toFixed(D.range < 10 ? 2 : 1)} m`),
     cx,
     cy - R0 - 14 * dpr,
     "#ffffff",
@@ -1293,7 +1295,7 @@ function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
   const fast = D.closing > Math.max(0.3, D.range / 60);
   const ccol = D.closing < 0 ? "#ffc85a" : fast ? (D.range < 20 ? "#ff5a46" : "#ffc85a") : "#78ffaa";
   text(
-    `${D.closing >= 0 ? "CLOSING" : "OPENING"} ${Math.abs(D.closing).toFixed(2)} m/s`,
+    `${D.closing >= 0 ? t("CLOSING") : t("OPENING")} ${Math.abs(D.closing).toFixed(2)} m/s`,
     cx,
     cy + R0 + 18 * dpr,
     ccol,
@@ -1337,21 +1339,28 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   const dop = beta < 1 ? Math.sqrt((1 + beta) / (1 - beta)) : Infinity;
   const crit =
     i.rH !== undefined && r < i.rH * 1.0001
-      ? "INSIDE THE HORIZON"
+      ? t("INSIDE THE HORIZON")
       : i.photon !== undefined && r < i.photon
-        ? "INSIDE THE PHOTON ORBIT"
+        ? t("INSIDE THE PHOTON ORBIT")
         : i.isco !== undefined && r < i.isco
-          ? "BELOW THE ISCO"
+          ? t("BELOW THE ISCO")
           : i.ergo
-            ? "IN THE ERGOSPHERE"
+            ? t("IN THE ERGOSPHERE")
             : "";
   const bound = E < 1;
   const lines: { t: string; col: string; size: number; dy: number }[] = [
-    { t: `${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`, col: "rgba(214, 236, 255, 0.95)", size: 10.5, dy: 20 },
+    {
+      t: `${beta.toFixed(3)} c · γ ${g.toFixed(3)} · ${tf("sky ahead ×{0}", dop.toFixed(2))}`,
+      col: "rgba(214, 236, 255, 0.95)",
+      size: 10.5,
+      dy: 20,
+    },
     ...(Number.isFinite(E)
       ? [
           {
-            t: bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`,
+            t: bound
+              ? tf("E {0} · BOUND · {1} % to escape", E.toFixed(4), ((1 - E) * 100).toFixed(2))
+              : tf("E {0} · ESCAPING", E.toFixed(4)),
             col: bound ? "#78ffaa" : "#ffc85a",
             size: 10.5,
             dy: 36,
@@ -1365,7 +1374,7 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
       dy: 52,
     },
     {
-      t: crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`,
+      t: crit || tf("tide {0} g/m", tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)),
       col: crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)",
       size: 10,
       dy: 68,
@@ -1378,7 +1387,7 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   }
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 26 * dpr, wide, 112 * dpr);
-  text("RELATIVITY", x - 96 * dpr + wide / 2, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
+  text(t("RELATIVITY"), x - 96 * dpr + wide / 2, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
   // the clock
   if (Number.isFinite(dt)) {
     text(`dτ/dt ${dt.toFixed(4)}`, x - 86 * dpr, y + 4 * dpr, "#ffffff", 11.5, "left", true);

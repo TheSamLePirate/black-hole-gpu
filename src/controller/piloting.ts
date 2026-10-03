@@ -23,6 +23,7 @@ import { solarBody } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
+import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
 import { clamp, flareRef, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
@@ -160,15 +161,16 @@ function stepOffMount(this: CameraController) {
  */
 function standOn(this: CameraController, b?: Body): string | null {
   const s = this.s;
-  if (this.piloting) return "The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)";
+  // (tf: `t` is the time here)
+  if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)");
   const w = this.rigWorld();
-  if (!w) return "No world to stand on here";
+  if (!w) return tf("No world to stand on here");
   const t = this.nowTime();
   const solid = (id: Body) => (w.ours ? solidBody(id) : ["miller", "mann", "edmunds"].includes(id));
   const pick = (id: Body | null | undefined) => (id && solid(id) ? this.rigBody(id, w.ours, t) : null);
   const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t));
   if (!ref || !solid(ref.id))
-    return "Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)";
+    return tf("Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)");
   const up = unitV(sub3(w.X, ref.C));
   const mR = 1476.625 * s.massSolar;
   let X = lin(ref.C, 1, up, ref.R);
@@ -314,7 +316,7 @@ function resetShipView(this: CameraController): string {
   if (wasOut) s.shipMount = this.hullMount;
   // (the look recentred: the ship keeps its attitude — the camera turns back with the mount)
   this.setLook(0, 0);
-  return `Camera reset · ${MOUNTS[s.shipMount as Mount]?.label ?? s.shipMount}`;
+  return tf("Camera reset · {0}", MOUNTS[s.shipMount as Mount]?.label ?? s.shipMount);
 }
 
 /** Next / previous attach point (the view travels there; the ship keeps its attitude). */
@@ -649,7 +651,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     const side = cam.region === "throat" ? (cam.ell < 0 ? "ours" : "gargantua") : "gargantua";
     if (this.shipSide && side !== this.shipSide)
       this.onPilotMessage?.(
-        side === "gargantua" ? "Through the wormhole — Gargantua's system" : "Through the wormhole — back in the solar system",
+        side === "gargantua" ? t("Through the wormhole — Gargantua's system") : t("Through the wormhole — back in the solar system"),
       );
     this.shipSide = side;
     // (out of the throat after a crossing at warp: real time again — the pilot's to choose)
@@ -657,7 +659,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       this.traversing = false;
       s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
       this.warpWant = null;
-      this.onPilotMessage?.(`Out of the throat, ${Math.round(cam.r)} M from Gargantua — real time`);
+      this.onPilotMessage?.(tf("Out of the throat, {0} M from Gargantua — real time", Math.round(cam.r)));
     }
   }
   // (another craft chosen: the camera onto it)
@@ -713,7 +715,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const thick = this.airFlight.inAir;
   if (thick && s.timeSpeed * Msec > AIR_WARP) {
     s.timeSpeed = this.warpSet = AIR_WARP / Msec;
-    if (!this.airWarpSaid) this.onPilotMessage?.(`In the air: the time warp held at ×${AIR_WARP}`);
+    if (!this.airWarpSaid) this.onPilotMessage?.(tf("In the air: the time warp held at ×{0}", AIR_WARP));
     this.airWarpSaid = true;
   }
   if (!thick) this.airWarpSaid = false;
@@ -1105,9 +1107,9 @@ function entryStep(
     return null;
   };
   const V = VESSELS[fleet.active];
-  if (!V.flies) return say(`Entry: the ${V.name} has no heat shield — it was built in orbit and never comes down`);
+  if (!V.flies) return say(tf("Entry: the {0} has no heat shield — it was built in orbit and never comes down", V.name));
   const fr = this.entryFrame(cam);
-  if (!fr || (!fr.env.atm && !solidBody(fr.body))) return say("Entry: get near a world with air or ground first");
+  if (!fr || (!fr.env.atm && !solidBody(fr.body))) return say(t("Entry: get near a world with air or ground first"));
   const craft = this.entryCraft();
   const Msec = 4.925490947e-6 * s.massSolar;
   const up = unitV(fr.s.x);
@@ -1141,15 +1143,15 @@ function entryStep(
       short: shortM,
       handover,
     };
-    if (!fr.env.atm) return say(`Entry: ${name} has no air — land with the engines (G)`);
+    if (!fr.env.atm) return say(tf("Entry: {0} has no air — land with the engines (G)", name));
     if (h > top) {
       // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
-      if (!site) return say(`Entry: no landing site on ${name} — fly the entry by hand (F: the plane law holds α hypersonic)`);
+      if (!site) return say(tf("Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)", name));
       // (planned in the planner's worker: a second of predicted falls, off the frame loop)
       const R = this.entryRun;
       R.phase = "plan";
       const at = fr.now;
-      this.onPilotMessage?.(`Entry to ${site.name}: planning the deorbit…`);
+      this.onPilotMessage?.(tf("Entry to {0}: planning the deorbit…", site.name));
       void runPlanner<{ t: number; dv: number; heat: number; shield: number; g: number } | null>({
         kind: "deorbit",
         env: fr.desc,
@@ -1162,7 +1164,7 @@ function entryStep(
         if (!plan || (plan as { error?: string }).error) {
           if (P.auto === "entry") P.setAuto("none");
           this.entryRun = null;
-          this.onPilotMessage?.(`Entry: no deorbit to ${site.name} within a day of orbits — the orbit never passes near it`);
+          this.onPilotMessage?.(tf("Entry: no deorbit to {0} within a day of orbits — the orbit never passes near it", site.name));
           return;
         }
         R.phase = "wait";
@@ -1173,11 +1175,22 @@ function entryStep(
         const mm = Math.floor(wait / 60),
           ss = Math.round(wait % 60);
         this.onPilotMessage?.(
-          `Entry to ${site.name}: the deorbit burn in ${mm} min ${ss} s, ${plan.dv.toFixed(0)} m/s — then ${(plan.heat / 1e4).toFixed(0)} W/cm², ${plan.g.toFixed(1)} g, the shield ${Math.round(plan.shield)} K at most`,
+          tf(
+            "Entry to {0}: the deorbit burn in {1} min {2} s, {3} m/s — then {4} W/cm², {5} g, the shield {6} K at most",
+            site.name,
+            mm,
+            ss,
+            plan.dv.toFixed(0),
+            (plan.heat / 1e4).toFixed(0),
+            plan.g.toFixed(1),
+            Math.round(plan.shield),
+          ),
         );
       });
     } else
-      this.onPilotMessage?.(site ? `Entry: guided to ${site.name}` : `Entry: no site on ${name} — lift up, the controls yours when slow`);
+      this.onPilotMessage?.(
+        site ? tf("Entry: guided to {0}", site.name) : tf("Entry: no site on {0} — lift up, the controls yours when slow", name),
+      );
   }
   const R = this.entryRun!;
   const retro = () => ({ nose: fr.toLocal(lin(va, -1, va, 0)), up: fr.toLocal(up) });
@@ -1196,7 +1209,7 @@ function entryStep(
         R.done = 0;
         this.warpWant = null;
         s.timeSpeed = this.warpSet = 1 / Msec;
-        this.onPilotMessage?.(`Deorbit burn: ${R.dv.toFixed(0)} m/s retrograde`);
+        this.onPilotMessage?.(tf("Deorbit burn: {0} m/s retrograde", R.dv.toFixed(0)));
       }
       return retro();
     }
@@ -1205,7 +1218,7 @@ function entryStep(
     s.timeSpeed = this.warpSet = 1 / Msec;
     if (R.done >= R.dv) {
       R.phase = "entry";
-      this.onPilotMessage?.(`Deorbit burn done (${R.done.toFixed(0)} m/s) — falling to the entry`);
+      this.onPilotMessage?.(tf("Deorbit burn done ({0} m/s) — falling to the entry", R.done.toFixed(0)));
     } else return { ...retro(), throttle: Math.min(1, Math.max((R.dv - R.done) / Math.max(thrSI * 0.25, 1e-9), 0.02)) };
   }
   const LA = this.airFlight.last;
@@ -1254,18 +1267,18 @@ function entryStep(
       });
     }
     if (LA && LA.out.mach < R.handover && LA.h < top * 0.5) {
-      if (!R.site) return say(`Entry done over ${name}: Mach ${LA.out.mach.toFixed(1)}, the controls are yours`);
+      if (!R.site) return say(tf("Entry done over {0}: Mach {1}, the controls are yours", name, LA.out.mach.toFixed(1)));
       if (!ranger) {
         // (the Lander: its engines bring it down, the speed killed)
         P.auto = "none";
         P.setAuto("land");
         this.entryRun = null;
-        this.onPilotMessage?.(`Entry done: Mach ${LA.out.mach.toFixed(1)} — the engines land the Lander`);
+        this.onPilotMessage?.(tf("Entry done: Mach {0} — the engines land the Lander", LA.out.mach.toFixed(1)));
         return null;
       }
       R.phase = "glide";
       R.alpha = LA.out.alpha;
-      this.onPilotMessage?.(`Mach ${LA.out.mach.toFixed(1)}: gliding to ${R.site.name}`);
+      this.onPilotMessage?.(tf("Mach {0}: gliding to {1}", LA.out.mach.toFixed(1), R.site.name));
     }
     const ax = attitudeFor(fr.s.x, va, craft.alpha, R.bank);
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
