@@ -18,6 +18,18 @@ export interface SymInfo {
   S: number[][];
   /** where the ship is (the hole's region: its lensed tube may draw the path instead) */
   region?: string;
+  /** near the hole: the radius [M], the speed relative to the local observer [c] and γ, the clock rate
+   *  dτ/dt, the energy E per unit mass, the horizon's, ISCO's and photon orbit's radii [M], inside the
+   *  ergosphere */
+  r?: number;
+  speed?: number;
+  gamma?: number;
+  dtau?: number;
+  E?: number;
+  rH?: number;
+  isco?: number;
+  photon?: number;
+  ergo?: boolean;
   /** the flight plan: its burns (coordinate times [M], Δ(γβ) [c]), the one burning, now [M] */
   plan?: { nodes: { t: number; dv: number[] }[]; burning?: boolean | number | null; now: number } | null;
   /** the engine: its full thrust [the scene's acceleration unit] */
@@ -302,6 +314,9 @@ export function drawSymbology(F: SymFrame) {
   // ---- approach and landing: the runway, the vertical landing's scope and cues
   if (F.runway && s.hudRunway && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
   if (i.surface && !i.surface.landed && s.hudHover && !F.outside && F.density < 2) drawHover(F, i.surface, up, pr, stroke, text, inside);
+
+  // ---- near Gargantua: the relativity box; the way to the hole named
+  if (i.region === "hole" && s.hudRelativity && !F.outside && F.density < 2 && Number.isFinite(i.r)) drawRelativity(F, pr, text, inside);
 
   // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
   if (i.plan && i.plan.nodes.length && s.hudBurn && !F.outside && F.density < 2) drawBurn(F, pr, stroke, text, inside, nose);
@@ -887,4 +902,48 @@ function drawDock(F: SymFrame, pr: Proj, stroke: Stroke, text: Text, inside: (p:
   const ccol = D.closing < 0 ? "#ffc85a" : fast ? (D.range < 20 ? "#ff5a46" : "#ffc85a") : "#78ffaa";
   text(`${D.closing >= 0 ? "CLOSING" : "OPENING"} ${Math.abs(D.closing).toFixed(2)} m/s`, cx, cy + R0 + 18 * dpr, ccol, 11.5, "center", true);
   text(`LAT ${Math.hypot(ox, oy).toFixed(2)} m · ${Math.abs(D.lateralRate).toFixed(2)} m/s · ∠ ${D.angle.toFixed(1)}°`, cx, cy + R0 + 34 * dpr, on ? "#78ffaa" : "rgba(214, 236, 255, 0.9)", 10.5, "center", true);
+}
+
+/**
+ * Near Gargantua, what its spacetime does to the flight (a box at the view's left, above the others):
+ * - the clock: dτ/dt — the ship's seconds per far-away second —, a bar;
+ * - the motion: the speed against the local observer and γ; the sky ahead's Doppler factor (√((1+β)/(1−β)):
+ *   its light blue-shifted by it);
+ * - the orbit: E per unit mass — bound below 1, the margin to escape —;
+ * - the radius against the horizon, the photon orbit and the ISCO (inside one of them: said, red);
+ * - the tide: the stretch along the radius per metre of the craft (2c² / (r³ M²)), in g;
+ * and the radial-in marker named: the way to the hole.
+ */
+function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, number] | null, m?: number) => boolean) {
+  const { ctx, dpr, W, H, i, s } = F;
+  const r = i.r!, E = i.E ?? NaN, beta = i.speed ?? 0, g = i.gamma ?? 1, dt = i.dtau ?? NaN;
+  const Mm = 1476.625 * s.massSolar;
+  const tide = (2 * 299792458 * 299792458) / (r * r * r * Mm * Mm) / 9.80665;
+  const x = W / 2 - Math.min(W, H) * 0.44, y = H / 2 - 150 * dpr;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.fillRect(x - 96 * dpr, y - 26 * dpr, 192 * dpr, 112 * dpr);
+  text("RELATIVITY", x, y - 13 * dpr, "rgba(255, 211, 107, 0.95)", 10.5);
+  // the clock
+  if (Number.isFinite(dt)) {
+    text(`dτ/dt ${dt.toFixed(4)}`, x - 86 * dpr, y + 4 * dpr, "#ffffff", 11.5, "left", true);
+    ctx.fillStyle = "rgba(124, 214, 255, 0.25)";
+    ctx.fillRect(x + 26 * dpr, y, 60 * dpr, 6 * dpr);
+    ctx.fillStyle = dt < 0.5 ? "#ff5a46" : dt < 0.9 ? "#ffc85a" : "#7cd6ff";
+    ctx.fillRect(x + 26 * dpr, y, 60 * dpr * Math.max(0, Math.min(1, dt)), 6 * dpr);
+  }
+  // the motion
+  const dop = beta < 1 ? Math.sqrt((1 + beta) / (1 - beta)) : Infinity;
+  text(`${beta.toFixed(3)} c · γ ${g.toFixed(3)} · sky ahead ×${dop.toFixed(2)}`, x - 86 * dpr, y + 20 * dpr, "rgba(214, 236, 255, 0.95)", 10.5, "left", true);
+  // the orbit
+  if (Number.isFinite(E)) {
+    const bound = E < 1;
+    text(bound ? `E ${E.toFixed(4)} · BOUND · ${((1 - E) * 100).toFixed(2)} % to escape` : `E ${E.toFixed(4)} · ESCAPING`, x - 86 * dpr, y + 36 * dpr, bound ? "#78ffaa" : "#ffc85a", 10.5, "left", true);
+  }
+  // the radius against the critical ones
+  const crit = i.rH !== undefined && r < i.rH * 1.0001 ? "INSIDE THE HORIZON" : i.photon !== undefined && r < i.photon ? "INSIDE THE PHOTON ORBIT" : i.isco !== undefined && r < i.isco ? "BELOW THE ISCO" : i.ergo ? "IN THE ERGOSPHERE" : "";
+  text(`r ${r.toFixed(2)} M · ISCO ${(i.isco ?? NaN).toFixed(2)} · γ-orbit ${(i.photon ?? NaN).toFixed(2)} · H ${(i.rH ?? NaN).toFixed(2)}`, x - 86 * dpr, y + 52 * dpr, crit ? "#ff5a46" : "rgba(214, 236, 255, 0.9)", 10, "left", true);
+  text(crit || `tide ${tide < 1e-3 ? tide.toExponential(1) : tide.toFixed(3)} g/m`, x - 86 * dpr, y + 68 * dpr, crit ? "#ff5a46" : "rgba(214, 236, 255, 0.75)", 10, "left", true);
+  // the way to the hole
+  const p = pr(i.dirs.radialIn);
+  if (inside(p, 20 * dpr)) text("GARGANTUA", p![0], p![1] + 22 * dpr, "rgba(95, 211, 255, 0.9)", 10.5);
 }

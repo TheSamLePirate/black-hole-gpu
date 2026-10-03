@@ -1093,6 +1093,11 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud docking port gates corridor closing range",
   },
   {
+    key: "hudRelativity", type: "toggle", section: "game", group: "HUD aids", label: "Relativity box", effect: "none",
+    help: "Near Gargantua: the ship's clock rate dτ/dt, its speed against the local observer and γ, the sky ahead's Doppler factor, the orbit's energy (bound and the margin to escape, or escaping), the radius against the ISCO, the photon orbit and the horizon (red inside), the tide per metre; the radial-in marker named: the way to the hole.",
+    keywords: "hud relativity time dilation doppler escape isco photon horizon tide",
+  },
+  {
     key: "soiRings", type: "toggle", section: "game", group: "Displays", label: "Spheres of influence on the map", effect: "none",
     help: "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).",
     keywords: "soi sphere of influence map",
