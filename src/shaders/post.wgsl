@@ -455,6 +455,7 @@ struct Temporal {
   m0: vec4f,      // its turn since the previous frame, as rows: a point's offset from the centre now → then
   m1: vec4f,
   m2: vec4f,
+  mb: vec4f,      // the motion blur's shutter (a fraction of the frame; 0: none), unused ×3
 };
 @group(0) @binding(21) var<uniform> TA: Temporal;
 
@@ -496,6 +497,66 @@ fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
   return max(c, vec3f(0.0));
 }
 
+// A pixel's direction now (d0, the current camera's) as it was seen from the previous frame's camera:
+// what lies at a finite depth [M] moved by the camera's displacement — parallax —, a near body's ground
+// carried by the body's own rigid move (R4); the far sky by the turn alone
+fn reprojDir(d0: vec3f, depth: f32) -> vec3f {
+  if (depth >= 1e8) { return d0; }
+  let P = d0 * depth;
+  if (TA.cc.w > 0.5 && depth < abs(TA.drift.w)) {
+    let rel = P - TA.cc.xyz;
+    return normalize(TA.cc.xyz + TA.drift.xyz + vec3f(dot(rel, TA.m0.xyz), dot(rel, TA.m1.xyz), dot(rel, TA.m2.xyz)));
+  }
+  return normalize(P + TA.drift.xyz);
+}
+// the current camera's direction through a pixel (its centre + o [px])
+fn pixelDir(p: vec2f, size: vec2u) -> vec3f {
+  let ndc = vec2f(2.0 * p.x / f32(size.x) - 1.0, 1.0 - 2.0 * p.y / f32(size.y));
+  return normalize(TA.fwd.xyz + ndc.x * TA.right.w * TA.up.w * TA.right.xyz + ndc.y * TA.right.w * TA.up.xyz);
+}
+// where a direction was in the previous frame's image (uv), or −1 behind it
+fn prevUv(d: vec3f) -> vec2f {
+  let zf = dot(d, TA.pFwd.xyz);
+  if (zf <= 1e-3) { return vec2f(-1.0); }
+  let xp = dot(d, TA.pRight.xyz) / (zf * TA.pRight.w * TA.pUp.w);
+  let yp = dot(d, TA.pUp.xyz) / (zf * TA.pRight.w);
+  return vec2f(0.5 * (xp + 1.0), 0.5 * (1.0 - yp));
+}
+
+// The camera's motion blur: each pixel smeared along the way its point moved on the image since the
+// previous frame (reprojDir — the turn, the parallax, a near ground's move), over the shutter's share
+// of it (TA.mb.x); 2–12 taps along it, centred. The Ranger is drawn after it: sharp, as the camera
+// moves with it.
+@compute @workgroup_size(8, 8)
+fn motionBlur(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let p = vec2f(gid.xy) + 0.5;
+  let uvp = prevUv(reprojDir(pixelDir(p, size), moments[gid.y * size.x + gid.x].y));
+  let cur = textureLoad(src, vec2i(gid.xy), 0);
+  if (uvp.x < 0.0) {
+    textureStore(dst, gid.xy, cur);
+    return;
+  }
+  // (the pixel's travel this frame [px], the shutter's share, at most 40 px)
+  var v = (p - uvp * vec2f(size)) * TA.mb.x;
+  let lv = length(v);
+  if (lv < 0.75) {
+    textureStore(dst, gid.xy, cur);
+    return;
+  }
+  v *= min(lv, 40.0) / lv;
+  let n = clamp(i32(ceil(min(lv, 40.0))), 2, 12);
+  var acc = vec3f(0.0);
+  let hi = vec2f(size) - 1.0;
+  for (var i = 0; i < n; i++) {
+    let f = (f32(i) + 0.5) / f32(n) - 0.5;
+    let q = clamp(p + v * f, vec2f(0.0), hi);
+    acc += textureLoad(src, vec2i(q), 0).rgb;
+  }
+  textureStore(dst, gid.xy, vec4f(acc / f32(n), cur.a));
+}
+
 @compute @workgroup_size(8, 8)
 fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
@@ -508,10 +569,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let W = size.x;
   let block = max(R.u.x & 0xffu, 1u);
   // where this pixel's direction was in the previous frame
-  let tanH = TA.right.w;
-  let asp = TA.up.w;
-  let ndc = vec2f(2.0 * (f32(gid.x) + 0.5) / f32(size.x) - 1.0, 1.0 - 2.0 * (f32(gid.y) + 0.5) / f32(size.y));
-  let d0 = normalize(TA.fwd.xyz + ndc.x * tanH * asp * TA.right.xyz + ndc.y * tanH * TA.up.xyz);
+  let d0 = pixelDir(vec2f(gid.xy) + 0.5, size);
   // (what the pixel shows at a finite depth — a planet's ground under the ship — seen from where the
   // camera was: parallax; the far sky by the turn alone. A pixel reconstructed between rays takes the
   // nearest depth of the fresh samples around it — its own is a frame or more old (UE4's closest depth) —,
@@ -531,18 +589,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     }
     if (dn < 3e38) { depth = dn; }
   }
-  var d = d0;
-  if (depth < 1e8) {
-    let P = d0 * depth;
-    if (TA.cc.w > 0.5 && depth < abs(TA.drift.w)) {
-      // (the near body's ground: carried by the body's own motion — its centre's shift and its turn
-      // between the frames, a rigid move —, audit R4)
-      let rel = P - TA.cc.xyz;
-      d = normalize(TA.cc.xyz + TA.drift.xyz + vec3f(dot(rel, TA.m0.xyz), dot(rel, TA.m1.xyz), dot(rel, TA.m2.xyz)));
-    } else {
-      d = normalize(P + TA.drift.xyz);
-    }
-  }
+  let d = reprojDir(d0, depth);
   let zf = dot(d, TA.pFwd.xyz);
   var alpha = 1.0;
   var hist = cur.rgb;
@@ -563,11 +610,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   }
   let carried = byGround && TA.drift.w < 0.0;
   if ((zf > 1e-3 && !ground) || carried) {
-    let pt = TA.pRight.w;
-    let pa = TA.pUp.w;
-    let xp = dot(d, TA.pRight.xyz) / (zf * pt * pa);
-    let yp = dot(d, TA.pUp.xyz) / (zf * pt);
-    var uv = vec2f(0.5 * (xp + 1.0), 0.5 * (1.0 - yp));
+    var uv = prevUv(d);
     if (carried) { uv = (vec2f(gid.xy) + 0.5) / vec2f(size); }
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;

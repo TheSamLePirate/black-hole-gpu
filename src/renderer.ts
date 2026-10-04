@@ -221,6 +221,8 @@ interface Target {
   denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
   /** the temporal reprojection's history (ping-pong) and its uniform (made on first use, live only) */
   temporal: { hist: GPUTexture[]; buf: GPUBuffer; binds: GPUBindGroup[]; idx: number; valid: boolean } | null;
+  /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
+  blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
   /** the far field's LUT (live target): a ray every 8 pixels — directions + shift, clean flags */
   lut: { tex: GPUTexture[]; w: number; h: number; write: GPUBindGroup; read: GPUBindGroup } | null;
   traceBind: GPUBindGroup;
@@ -271,6 +273,7 @@ export class Renderer {
   private postBeamH: GPUComputePipeline;
   private postAtrous: GPUComputePipeline;
   private postTemporal: GPUComputePipeline;
+  private postMotion: GPUComputePipeline;
   private noise3d!: GPUTexture;
   private noiseSampler!: GPUSampler;
   private postBeamV: GPUComputePipeline;
@@ -638,6 +641,7 @@ export class Renderer {
     this.postBeamH = mkPost("beamH");
     this.postAtrous = mkPost("atrous");
     this.postTemporal = mkPost("temporal");
+    this.postMotion = mkPost("motionBlur");
     this.postBeamV = mkPost("beamV");
     this.meterPipeline = mkPost("meter");
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -1188,6 +1192,7 @@ export class Renderer {
       beam: null,
       denoise: null,
       temporal: null,
+      blur: null,
       lut: live ? this.makeLut(width, height) : null,
       traceBind: null as unknown as GPUBindGroup,
       probeBind: null as unknown as GPUBindGroup,
@@ -1213,6 +1218,7 @@ export class Renderer {
     t.denoise?.tex.destroy();
     t.denoise?.bufs.forEach((b) => b.destroy());
     t.temporal?.hist.forEach((h) => h.destroy());
+    t.blur?.tex.destroy();
     t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
   }
@@ -2385,10 +2391,11 @@ export class Renderer {
    * range of the current frame's samples at the block's scale, blended in (post.wgsl: temporal); on
    * the refining frames, or after a jump, the history is only refreshed from the image.
    */
-  private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings) {
+  /** The temporal reprojection's pass; true when it ran (its camera motion written: the motion blur may follow). */
+  private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
     const cam = this.lastCam;
-    if (!cam) return;
+    if (!cam) return false;
     if (!t.temporal) {
       const hist = [0, 1].map(() =>
         d.createTexture({
@@ -2397,7 +2404,7 @@ export class Renderer {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
         }),
       );
-      const buf = d.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const buf = d.createBuffer({ size: 208, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
       // (bind k: reads history k, writes history 1 − k)
       const binds = [0, 1].map((k) =>
@@ -2445,7 +2452,7 @@ export class Renderer {
       // (refresh the history from the image: the next moving frame starts from it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
       ta.valid = true;
-      return;
+      return false;
     }
     const p = prev!;
     // (the camera's move against the near body: its centre's shift, the other way)
@@ -2517,6 +2524,11 @@ export class Renderer {
         rigid ? 1 : 0,
         // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
         ...turnRows.flatMap((r) => [...r, 0]),
+        // (the motion blur's shutter)
+        s.motionBlur,
+        0,
+        0,
+        0,
       ]),
     );
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
@@ -2526,6 +2538,39 @@ export class Renderer {
     pass.end();
     ta.idx = 1 - ta.idx;
     enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
+    return true;
+  }
+
+  /**
+   * The camera's motion blur over the reprojected image (the temporal pass's camera motion and depth),
+   * into its own image, copied back: the bloom, the ship over it, the display follow.
+   */
+  private encodeMotionBlur(enc: GPUCommandEncoder, t: Target) {
+    const ta = t.temporal;
+    if (!ta) return;
+    if (!t.blur) {
+      const tex = this.device.createTexture({
+        size: [t.width, t.height],
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+      });
+      const bind = this.device.createBindGroup({
+        layout: this.postMotion.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+          { binding: 2, resource: tex.createView() },
+          { binding: 11, resource: { buffer: t.moments } },
+          { binding: 21, resource: { buffer: ta.buf } },
+        ],
+      });
+      t.blur = { tex, bind };
+    }
+    const pass = enc.beginComputePass(this.prof.pass("motion blur"));
+    pass.setPipeline(this.postMotion);
+    pass.setBindGroup(0, t.blur.bind);
+    pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    pass.end();
+    enc.copyTextureToTexture({ texture: t.blur.tex }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
   }
 
   private encodeDenoise(enc: GPUCommandEncoder, t: Target, s: Settings) {
@@ -2587,7 +2632,7 @@ export class Renderer {
       }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
-      if (s && i === r0 && t === this.live) this.encodeTemporal(enc, t, s);
+      if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0) this.encodeMotionBlur(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {

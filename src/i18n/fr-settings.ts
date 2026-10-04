@@ -528,6 +528,9 @@ export default {
     "Quand le sous-échantillonnage temps réel ne suffit pas à tenir le budget de trame, l'échelle de rendu est abaissée (jusqu'à la moitié du ratio de pixels) — seulement là où une image plus petite s'avère plus rapide —, puis remontée quand le GPU a de la marge ou n'y gagne rien. La qualité Jeu l'active.",
   "Temporal reprojection": "Reprojection temporelle",
   Sharpening: "Netteté",
+  "Motion blur": "Flou de mouvement",
+  "The camera's motion blur while it turns or flies: each point smeared along the way it moved on the image, over this share of a frame (a film camera's 180° shutter: 0.5). The ship stays sharp — it moves with the camera. 0: none.":
+    "Le flou de mouvement de la caméra quand elle tourne ou vole : chaque point étalé le long du chemin qu'il a parcouru sur l'image, sur cette part d'une image (l'obturateur à 180° d'une caméra de cinéma : 0,5). Le vaisseau reste net — il bouge avec la caméra. 0 : aucun.",
   "Night vision (Purkinje)": "Vision nocturne (Purkinje)",
   "The eye at night: under a twentieth of white the rods take over, blind to red and keen on blue-green — dark scenes bluer and greyer, a moonlit field as one sees it. 0: none.":
     "L'œil la nuit : sous un vingtième du blanc, les bâtonnets prennent le relais, aveugles au rouge et sensibles au bleu-vert — les scènes sombres plus bleues et plus grises, un champ au clair de lune tel qu'on le voit. 0 : aucun.",
