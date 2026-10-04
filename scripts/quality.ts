@@ -63,7 +63,7 @@ try {
   // (a scene named in the link: no title screen over the image — it covered the centre crop, and held the game)
   await cdp("Page.navigate", { url: `${url}#scene=${encodeURIComponent(scenes[0]!)}` });
   for (let i = 0; i < 120; i++) {
-    if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`)) break;
+    if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer && !document.querySelector("#loading:not(.done)")`)) break;
     await sleep(500);
   }
   await sleep(2500);

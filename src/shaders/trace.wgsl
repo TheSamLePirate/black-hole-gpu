@@ -4428,6 +4428,75 @@ fn snowLineAt(lat: f32) -> f32 {
   return mix(1500.0, 500.0, clamp((lat - 60.0) / 12.0, 0.0, 1.0));
 }
 
+// The sea's wind at 10 m [m/s] and the way it blows (a unit tangent at q, the Earth's axes): the
+// climatology's zonal belts over the oceans — the doldrums' 5 m/s, the trades' 7 from the east, the
+// horse latitudes' lull, the westerlies' 9–11 (the Southern Ocean's roaring forties the strongest), the
+// polar easterlies — and weather systems over them (±35 %, ±40° of direction, drifting over days)
+fn seaWind(q: vec3f) -> vec4f {
+  let lat = abs(asin(clamp(q.z, -1.0, 1.0))) * (180.0 / PI);
+  let bump = seaBelts(lat);
+  let days = P.time.x * P.near5.w / 86400.0;
+  let wx = q * 5.0 + vec3f(days * 0.6, 0.0, days * 0.2);
+  var U = (5.0 + 2.0 * bump.x - 1.2 * bump.y + select(4.0, 6.0, q.z < 0.0) * bump.z) * (1.0 + 0.35 * gnoise(wx));
+  U = clamp(U, 1.0, 20.0);
+  let east = normalize(vec3f(-q.y, q.x, 0.0) + vec3f(1e-6, 0.0, 0.0));
+  let north = cross(q, east);
+  // (towards the west in the trades and the polar easterlies, the east in the westerlies)
+  let psi = select(PI, 0.0, lat > 30.0 && lat < 62.0) + 0.7 * gnoise(wx + vec3f(11.0, 5.0, 3.0));
+  return vec4f(east * cos(psi) + north * sin(psi), U);
+}
+// (the belts' weights: the trades ~15°, the horse latitudes ~30°, the westerlies ~50°)
+fn seaBelts(lat: f32) -> vec3f {
+  let b = vec3f(lat - 15.0, lat - 30.0, lat - 50.0) / vec3f(10.0, 6.0, 12.0);
+  return exp(-b * b);
+}
+// Smith's masking for a Gaussian slope distribution (Walter et al. 2007's rational fit), m² the slopes'
+// mean square along the direction (twice the variance), cosine c to the normal
+fn smithBeckmann(c: f32, m2: f32) -> f32 {
+  let a = c / sqrt(max(m2 * (1.0 - c * c), 1e-8));
+  if (a >= 1.6) { return 1.0; }
+  return 1.0 / (1.0 + (1.0 - 1.259 * a + 0.396 * a * a) / (3.535 * a + 2.181 * a * a));
+}
+// The sea seen at q (from V, the sun along Ls, its light at the ground Eg, the sky's sky; under, the
+// colour below the surface, col): Cox & Munk's (1954) slopes for the wind there — Gaussian, their
+// variance growing with the wind, upwind 0.00316 U and crosswind 0.003 + 0.00192 U: every slope finer
+// than the pixel, which is all of them from above a few km (LEAN's unresolved variance) — the sun's glint
+// their distribution over the half vector, masked and shadowed (Smith), Fresnel's; the sky mirrored;
+// the whitecaps' cover (Monahan & O'Muircheartaigh 1980: 3.84·10⁻⁶ U^3.41 — 1 % at 10 m/s, 4 % at 15),
+// their foam a diffuse white
+fn seaShade(q: vec3f, V: vec3f, Ls: vec3f, Eg: vec3f, sky: vec3f, under: vec3f) -> vec3f {
+  let w = seaWind(q);
+  let U = w.w;
+  let su2 = 0.00316 * U;
+  let sc2 = 0.003 + 0.00192 * U;
+  let tu = w.xyz;
+  let tc = cross(q, tu);
+  let H = normalize(Ls + V);
+  let hz = max(dot(q, H), 1e-3);
+  let hu = dot(tu, H) / hz;
+  let hc = dot(tc, H) / hz;
+  let D = exp(-0.5 * (hu * hu / su2 + hc * hc / sc2)) / (2.0 * PI * sqrt(su2 * sc2) * hz * hz * hz * hz);
+  let nl = max(dot(q, Ls), 0.0);
+  let nv = max(dot(q, V), 0.02);
+  // (the masking along each direction: its slopes' variance there)
+  let lu = dot(tu, Ls);
+  let lc = dot(tc, Ls);
+  let vu = dot(tu, V);
+  let vc = dot(tc, V);
+  let m2l = 2.0 * (su2 * lu * lu + sc2 * lc * lc) / max(lu * lu + lc * lc, 1e-6);
+  let m2v = 2.0 * (su2 * vu * vu + sc2 * vc * vc) / max(vu * vu + vc * vc, 1e-6);
+  let G = smithBeckmann(nl, m2l) * smithBeckmann(nv, m2v);
+  let F = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
+  let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+  // (grazing, capped — no sparks along the limb)
+  let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
+  let sea = under * (1.0 - Fv) + glint + Fv * sky * 1.5 / PI;
+  // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky)
+  let W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1);
+  let foam = 0.6 / PI * (Eg * nl + sky);
+  return mix(sea, foam, W);
+}
+
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
@@ -4515,23 +4584,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
-  // the sea: GGX glint off a wind-roughened surface (its roughness varies from place to place),
-  // the sky mirrored (Fresnel)
+  // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
-    let rough = 0.2 + 0.12 * gnoise(q * 9.0);
-    let a2 = rough * rough;
-    let H = normalize(Ls + V);
-    let nh = max(dot(q, H), 0.0);
-    let nl = max(dot(q, Ls), 0.0);
-    let nv = max(dot(q, V), 0.05);
-    let dd = nh * nh * (a2 - 1.0) + 1.0;
-    let D = a2 / (PI * dd * dd);
-    let vis = 0.5 / (nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2) + 1e-5);
-    let F = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
-    let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
-    // (grazing, the visibility term unbounded: capped — no sparks along the limb)
-    let spec = Eg * min(D * vis * F * nl, 8.0) + Fv * sky * 1.5 / PI;
-    col = mix(col, col * (1.0 - Fv) + spec, ocean);
+    col = mix(col, seaShade(q, V, Ls, Eg, sky, col), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
   let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
