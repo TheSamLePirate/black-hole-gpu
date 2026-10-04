@@ -1,7 +1,7 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
 import { bodyAxes, daysOf, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
-import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
+import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { guessTier, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
@@ -1292,7 +1292,7 @@ export class Renderer {
         { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.elev.createView() },
-        { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
+        { binding: 22, resource: this.hdMap.color.createView({ format: hdColorFormat(this.hdMap.color) }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },
@@ -1324,7 +1324,7 @@ export class Renderer {
         { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
         { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
         { binding: 21, resource: this.earthMaps.elev.createView() },
-        { binding: 22, resource: this.hdMap.color.createView({ format: SRGB }) },
+        { binding: 22, resource: this.hdMap.color.createView({ format: hdColorFormat(this.hdMap.color) }) },
         { binding: 23, resource: this.hdMap.relief.createView() },
         { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
         { binding: 25, resource: this.noiseSampler },

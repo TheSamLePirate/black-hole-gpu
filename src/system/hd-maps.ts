@@ -38,6 +38,7 @@ import mimasColor from "../../assets/planets-hd/mimas-color.jpg";
 import mimasNormal from "../../assets/planets-hd/mimas-normal.jpg";
 import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
+import { blockCompress, canBlockCompress } from "./bc-encode";
 
 /** A body's finer maps: its colour; its normals, or its height map and the relief's scale for them. */
 interface HdSet {
@@ -258,5 +259,21 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   }
   await device.queue.onSubmittedWorkDone();
   kBuf.destroy();
-  return { name, color, relief, hasRelief, mean: Math.max(sum / wsum, 1e-3) };
+  // (block-compressed where the GPU samples it — BC7 the colour, BC5 the relief's two slopes —: a
+  // quarter of the memory, 340 → 86 MB for an 8K pair with its mips; the rgba8 freed)
+  const fits = (t: GPUTexture) => t.width % 4 === 0 && t.height % 4 === 0;
+  let c = color;
+  let r = relief;
+  if (canBlockCompress(device)) {
+    if (fits(color)) c = blockCompress(device, color, "bc7");
+    if (hasRelief && fits(relief)) r = blockCompress(device, relief, "bc5");
+    await device.queue.onSubmittedWorkDone();
+    if (c !== color) color.destroy();
+    if (r !== relief) relief.destroy();
+  }
+  return { name, color: c, relief: r, hasRelief, mean: Math.max(sum / wsum, 1e-3) };
 }
+
+/** The colour map's sRGB view's format (its texture rgba8 or BC7). */
+export const hdColorFormat = (t: GPUTexture): GPUTextureFormat =>
+  t.format === "bc7-rgba-unorm" ? "bc7-rgba-unorm-srgb" : "rgba8unorm-srgb";
