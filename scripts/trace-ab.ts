@@ -163,7 +163,12 @@ try {
         const r = await measure(sc).catch((e) => (console.log(`  ${side} ${sc}: ${(e as Error).message}`), null));
         if (r) res[sc]![side].push(r);
         if (SHOTS && k === 0) {
-          // (the clock still held, nothing touched: the frames refine the image, then it is captured)
+          // (the realtime image as measured — its steps the tracer's own —, then, the clock still held,
+          // nothing touched, the frames refining it: the still)
+          const rt = await cdp("Page.captureScreenshot", { format: "png" });
+          const rtData = (rt as unknown as { data?: string }).data;
+          if (rtData)
+            await Bun.write(`${SHOTS}/${side}-rt-${sc.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`, Buffer.from(rtData, "base64"));
           await sleep(8000);
           const img = await cdp("Page.captureScreenshot", { format: "png" });
           const data = (img as unknown as { data?: string }).data;
