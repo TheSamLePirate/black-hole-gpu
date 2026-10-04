@@ -1,6 +1,6 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
-import { bodyAxes, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
+import { bodyAxes, daysOf, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { guessTier, type Tier } from "./tier";
@@ -70,6 +70,7 @@ import {
 import type { Settings } from "./settings";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { AU_M, C_MPS } from "./units";
+import { WIND_10M, windFrom } from "./wind";
 
 /** the space station's loading stage, as the loading screen names it */
 const STATION_LOADING = t("The space station");
@@ -94,7 +95,18 @@ const BLOCK_MEMORY = 20000;
 const HANDOVER_PASSES = 8;
 /** the runways' block after the tiles' (trace.wgsl: Params.runways) */
 const RUNWAY_VEC4S = 17;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S;
+/** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
+const SEA_VEC4S = 15;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S;
+/**
+ * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
+ * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
+ * wavelengths 128 m down to 1.5 m, spread ±45° about the wind; their phases' offsets (fixed, scattered).
+ */
+const SEA_WAVES: { n: [number, number]; phase0: number }[] = [8, 12, 18, 27, 40, 60, 90, 135, 200, 300, 450, 680].map((k, i) => {
+  const a = ([0, 25, -20, 35, -30, 15, -40, 30, -15, 45, -35, 20][i]! * Math.PI) / 180;
+  return { n: [Math.round(k * Math.cos(a)), Math.round(k * Math.sin(a))], phase0: (i * 2.399963) % (2 * Math.PI) };
+});
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -1950,6 +1962,7 @@ export class Renderer {
       set(68, 0, 0, 0, 0);
     }
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
+    f.set(this.seaParams(near, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
@@ -2088,6 +2101,61 @@ export class Renderer {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
     }
+  }
+
+  /**
+   * The sea's resolved waves near the camera (trace.wgsl: Params.sea, seaWaves), under 30 km over the
+   * Earth: the flight's own wind there (wind.ts: its level's speed at 10 m, its direction), its axes on
+   * the Earth's, the camera on them from an anchor of whole kilometres (float64: the waves' phases exact in
+   * float32), the twelve trains — the resolved half of Cox–Munk's slope variance shared among them, cut
+   * above the wind sea's peak (Pierson–Moskowitz: λp ≈ 0.83 U² m) — and their phases now (ω = √(g k)).
+   */
+  private seaParams(
+    near: { index: number; centre: number[]; axes: number[][]; radius: number } | null,
+    earthK: number,
+    altKm: number,
+    time: number,
+    tSec: number,
+    s: Settings,
+  ): Float32Array {
+    const out = new Float32Array(SEA_VEC4S * 4);
+    if (!near || near.index !== earthK || !(altKm < 30)) return out;
+    // (in metres as the shader has it: P.near4.w)
+    const mR = near.radius * 1476.625 * s.massSolar;
+    const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
+    const r = Math.hypot(cb[0]!, cb[1]!, cb[2]!);
+    const up = cb.map((c) => c / r);
+    const lat = (Math.asin(up[2]!) * 180) / Math.PI,
+      lon = (Math.atan2(up[1]!, up[0]!) * 180) / Math.PI;
+    const eh = Math.hypot(up[0]!, up[1]!) || 1;
+    const east = [-up[1]! / eh, up[0]! / eh, 0];
+    const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
+    // (blowing from windFrom: towards the opposite way — as the flight's wind does)
+    const to = windFrom(lat, lon, daysOf(time)) + Math.PI;
+    const tu = [0, 1, 2].map((i) => east[i]! * Math.sin(to) + north[i]! * Math.cos(to));
+    const tc = [up[1]! * tu[2]! - up[2]! * tu[1]!, up[2]! * tu[0]! - up[0]! * tu[2]!, up[0]! * tu[1]! - up[1]! * tu[0]!];
+    const U = Math.max(WIND_10M[s.wind] ?? 4, 0.5);
+    const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
+    const uc = cb[0]! * tu[0]! + cb[1]! * tu[1]! + cb[2]! * tu[2]!;
+    const cc = cb[0]! * tc[0]! + cb[1]! * tc[1]! + cb[2]! * tc[2]!;
+    const u0 = Math.round(uc / 1024) * 1024,
+      c0 = Math.round(cc / 1024) * 1024;
+    out.set([...tu, U, ...tc, weight, uc - u0, cc - c0, u0 / 256, c0 / 256], 0);
+    // (the resolved range's share of the slopes' variance, among the trains below the peak)
+    const lp = 0.83 * U * U;
+    const cut = SEA_WAVES.map((w) => {
+      const lam = 1024 / Math.hypot(...w.n);
+      return Math.exp(-1.25 * (lam / lp) ** 2);
+    });
+    const sum = cut.reduce((a, b) => a + b, 0) || 1;
+    const budget = 0.5 * (0.003 + 0.00512 * U);
+    SEA_WAVES.forEach((w, i) => {
+      const k = (2 * Math.PI * Math.hypot(...w.n)) / 1024;
+      const a = Math.sqrt((2 * budget * cut[i]!) / sum);
+      const phase = (Math.sqrt(9.81 * k) * tSec + w.phase0) % (2 * Math.PI);
+      out.set([w.n[0], w.n[1], a, phase], 12 + 4 * i);
+    });
+    return out;
   }
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */

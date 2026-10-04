@@ -105,6 +105,12 @@ struct Params {
   // threshold's geodetic unit direction (w: its length [m]), its landing direction (w: its half width [m]),
   // its right, and the camera from its threshold on the Earth's squashed axes [m] (float64 on the CPU)
   runways: array<vec4f, 17>,
+  // the sea's resolved waves near the camera (renderer: seaParams; seaShade): [0] the wind's way at the
+  // camera (the Earth's axes), its speed at 10 m; [1] across it, w: their weight (1 under 15 km, 0 above
+  // 30); [2] the camera in that frame from an anchor of whole kilometres [m], the anchor in 256 m cells;
+  // [3…14] twelve waves: their wavenumber (integers, units of 2π/1024 m: exact from the anchor), slope
+  // amplitude, phase now
+  sea: array<vec4f, 15>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -631,6 +637,9 @@ var<private> FOOT_FAR: f32 = 1.0;
 // The catalogue stars splatted (R8: realtime under the reprojection, P.camFwd.w > 0): the main kernel's
 // ray of a block, at SPLAT_POS [px], owning the block from SPLAT_CELL; its sky light weighed by SPLAT_MUL
 // (what lies in front, the sky's share), its footprint over a pixel the sky filter's ÷ SPLAT_K
+// (the sea seen near: the point from the camera [m, the Earth's axes, unsquashed] — earthNear sets it)
+var<private> SEA_ON: bool = false;
+var<private> SEA_D: vec3f;
 var<private> SPLAT: bool = false;
 var<private> SPLAT_POS: vec2f;
 var<private> SPLAT_CELL: vec2f;
@@ -4458,41 +4467,103 @@ fn smithBeckmann(c: f32, m2: f32) -> f32 {
   return 1.0 / (1.0 + (1.0 - 1.259 * a + 0.396 * a * a) / (3.535 * a + 2.181 * a * a));
 }
 // The sea seen at q (from V, the sun along Ls, its light at the ground Eg, the sky's sky; under, the
-// colour below the surface, col): Cox & Munk's (1954) slopes for the wind there — Gaussian, their
-// variance growing with the wind, upwind 0.00316 U and crosswind 0.003 + 0.00192 U: every slope finer
-// than the pixel, which is all of them from above a few km (LEAN's unresolved variance) — the sun's glint
-// their distribution over the half vector, masked and shadowed (Smith), Fresnel's; the sky mirrored;
-// the whitecaps' cover (Monahan & O'Muircheartaigh 1980: 3.84·10⁻⁶ U^3.41 — 1 % at 10 m/s, 4 % at 15),
-// their foam a diffuse white
-fn seaShade(q: vec3f, V: vec3f, Ls: vec3f, Eg: vec3f, sky: vec3f, under: vec3f) -> vec3f {
+// colour below the surface, col; footM: the pixel's footprint [m]): Cox & Munk's (1954) slopes for the
+// wind there — Gaussian, their variance growing with the wind, upwind 0.00316 U and crosswind 0.003 +
+// 0.00192 U — the sun's glint their distribution over the half vector, masked and shadowed (Smith),
+// Fresnel's; the sky mirrored; the whitecaps' cover (Monahan & O'Muircheartaigh 1980: 3.84·10⁻⁶ U^3.41 —
+// 1 % at 10 m/s, 4 % at 15), their foam a diffuse white. Near (seaWaves), the waves longer than a few
+// pixels drawn — the surface's normal — and the rest of their slopes' variance left to the glint's (LEAN):
+// the same sea, resolved where it can be.
+struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32 };
+// The resolved waves at the point SEA_D: twelve trains (P.sea), their slopes summed where the pixel
+// resolves them (longer than ~4 footprints, faded from 6 to 2), their variance kept where it does not.
+// Crossing trains alone draw a lattice: their crests bent (the point displaced ±10 m over ~128 m), their
+// amplitudes in groups (the long trains' over ~256 m, the short ones' over ~64 m) — noise on the same
+// anchor (the trains themselves repeat every kilometre)
+fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
+  var o: SeaWaves;
+  let u0 = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+  let c0 = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+  let base = vec3i(i32(P.sea[2].z), i32(P.sea[2].w), 0);
+  let x = vec3f(u0, c0, 0.0);
+  let u = u0 + 10.0 * gnoiseI(base * 2 + vec3i(0, 0, 3), x / 128.0);
+  let c = c0 + 10.0 * gnoiseI(base * 2 + vec3i(0, 0, 5), x / 128.0);
+  let gl = 0.55 + 0.45 * gnoiseI(base, x / 256.0);
+  let gs = 0.55 + 0.45 * gnoiseI(base * 4 + vec3i(0, 0, 9), x / 64.0);
+  o.m = P.sea[1].w;
+  var su = 0.0;
+  var sc = 0.0;
+  for (var i = 0u; i < 12u; i++) {
+    let w = P.sea[3u + i];
+    let kv = w.xy * (TAU / 1024.0);
+    let kl = length(kv);
+    let kd = kv / kl;
+    let r = smoothstep(2.0 * footM, 6.0 * footM, TAU / kl);
+    let a = w.z * o.m * select(gs, gl, i < 6u);
+    let s = a * cos(dot(kv, vec2f(u, c)) - w.w);
+    su += r * s * kd.x;
+    sc += r * s * kd.y;
+    let v = (1.0 - r) * 0.5 * a * a;
+    o.vu += v * kd.x * kd.x;
+    o.vc += v * kd.y * kd.y;
+  }
+  o.n = normalize(q - su * tu - sc * tc);
+  return o;
+}
+fn seaShade(q: vec3f, V: vec3f, Ls: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32) -> vec3f {
   let w = seaWind(q);
-  let U = w.w;
-  let su2 = 0.00316 * U;
-  let sc2 = 0.003 + 0.00192 * U;
-  let tu = w.xyz;
-  let tc = cross(q, tu);
+  var U = w.w;
+  var tu = w.xyz;
+  var n = q;
+  var vu = 0.0;
+  var vc = 0.0;
+  // (the share of Cox–Munk's variance in slopes finer than the resolved range: half)
+  var fine = 1.0;
+  if (SEA_ON) {
+    // (near: the flight's own wind — the waves and the glint as the pilot feels it —, the trains drawn)
+    let b = P.sea[1].w;
+    U = mix(U, P.sea[0].w, b);
+    tu = P.sea[0].xyz;
+    let sw = seaWaves(q, tu, P.sea[1].xyz, footM);
+    n = sw.n;
+    vu = sw.vu;
+    vc = sw.vc;
+    fine = 1.0 - 0.5 * b;
+  }
+  let su2 = 0.00316 * U * fine + vu;
+  let sc2 = (0.003 + 0.00192 * U) * fine + vc;
+  let tun = normalize(tu - n * dot(n, tu));
+  let tcn = cross(n, tun);
   let H = normalize(Ls + V);
-  let hz = max(dot(q, H), 1e-3);
-  let hu = dot(tu, H) / hz;
-  let hc = dot(tc, H) / hz;
+  let hz = max(dot(n, H), 1e-3);
+  let hu = dot(tun, H) / hz;
+  let hc = dot(tcn, H) / hz;
   let D = exp(-0.5 * (hu * hu / su2 + hc * hc / sc2)) / (2.0 * PI * sqrt(su2 * sc2) * hz * hz * hz * hz);
-  let nl = max(dot(q, Ls), 0.0);
-  let nv = max(dot(q, V), 0.02);
+  let nl = max(dot(n, Ls), 0.0);
+  let nv = max(dot(n, V), 0.02);
   // (the masking along each direction: its slopes' variance there)
-  let lu = dot(tu, Ls);
-  let lc = dot(tc, Ls);
-  let vu = dot(tu, V);
-  let vc = dot(tc, V);
+  let lu = dot(tun, Ls);
+  let lc = dot(tcn, Ls);
+  let vvu = dot(tun, V);
+  let vvc = dot(tcn, V);
   let m2l = 2.0 * (su2 * lu * lu + sc2 * lc * lc) / max(lu * lu + lc * lc, 1e-6);
-  let m2v = 2.0 * (su2 * vu * vu + sc2 * vc * vc) / max(vu * vu + vc * vc, 1e-6);
+  let m2v = 2.0 * (su2 * vvu * vvu + sc2 * vvc * vvc) / max(vvu * vvu + vvc * vvc, 1e-6);
   let G = smithBeckmann(nl, m2l) * smithBeckmann(nv, m2v);
   let F = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
   let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
   // (grazing, capped — no sparks along the limb)
   let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
   let sea = under * (1.0 - Fv) + glint + Fv * sky * 1.5 / PI;
-  // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky)
-  let W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1);
+  // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky; near, in patches over
+  // ~8 m — on the same anchor —, their mean the cover)
+  var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1);
+  if (SEA_ON) {
+    let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+    let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+    let pn = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 7), vec3f(u, c, 0.0) / 8.0);
+    let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
+    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w);
+  }
   let foam = 0.6 / PI * (Eg * nl + sky);
   return mix(sea, foam, W);
 }
@@ -4586,7 +4657,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
-    col = mix(col, seaShade(q, V, Ls, Eg, sky, col), ocean);
+    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
   let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
@@ -4781,8 +4852,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
   if (HAS_RWY) { RWY_HIT = vec4f(rd * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u)); }
   let lt = nearLight(k);
+  SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0;
+  SEA_D = toBody(look) * (t / m * P.near4.w);
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+  SEA_ON = false;
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
