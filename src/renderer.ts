@@ -23,6 +23,7 @@ import { loading } from "./loading";
 import { t, tf } from "./i18n";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
+import lensDirtUrl from "../assets/tex/base/lensdirt-low.jpg";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
@@ -326,6 +327,8 @@ export class Renderer {
   private bgTexture: GPUTexture;
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
+  /** the lens's dust (display.wgsl: lensDirtGlow) — black until loaded */
+  private lensDirt: GPUTexture;
   /** the solar system's maps and Saturn's rings (placeholders until loaded, on first use) */
   private planetMaps: PlanetMaps;
   private mapsRequested = false;
@@ -653,7 +656,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     const lut = buildBlackbodyLUT();
     this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -682,6 +685,7 @@ export class Renderer {
     this.bgTexture = placeholder();
     this.mwTexture = placeholder();
     this.starLodTexture = placeholder();
+    this.lensDirt = placeholder();
     this.planetMaps = placeholderMaps(device);
     this.earthMaps = placeholderEarth(device);
     this.hdMap = placeholderHd(device);
@@ -715,6 +719,20 @@ export class Renderer {
     ]);
     this.mwTexture = this.skyBuilder.build(bitmap, "log16", this.device.limits.maxTextureDimension2D);
     this.starLodTexture = lod;
+    // (the lens's dust: shown by the glare over white, with the flare — display.wgsl lensDirtGlow)
+    await fetch(lensDirtUrl)
+      .then((r) => r.blob())
+      .then((b) => createImageBitmap(b))
+      .then((bmp) => {
+        const tex = this.device.createTexture({
+          size: [bmp.width, bmp.height],
+          format: "rgba8unorm",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        this.device.queue.copyExternalImageToTexture({ source: bmp }, { texture: tex }, [bmp.width, bmp.height]);
+        this.lensDirt = tex;
+      })
+      .catch(() => {});
     this.catalogue = cat;
     this.skyReady = true;
     if (this.live) this.bindTarget(this.live);
@@ -1301,6 +1319,7 @@ export class Renderer {
             { binding: 7, resource: (t.dof?.tex ?? this.dofDummy).createView() },
             { binding: 8, resource: t.bloomTex.createView() },
             { binding: 9, resource: { buffer: t.flare.out } },
+            { binding: 10, resource: this.lensDirt.createView() },
           ],
         }),
       );
@@ -1981,6 +2000,10 @@ export class Renderer {
     d[14] = s.lensFlare;
     d[15] = this.shadowKeep;
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
+    // (the eye: the night's Purkinje shift — display.wgsl eye.x —, by how dark the scene the exposure
+    // adapts to is: daylight EV ~14.4, night ~16.3 — the shadows of a sunlit day stay in colour)
+    const scotopic = Math.min(Math.max((this.ev(s) - 15) / 1.2, 0), 1);
+    this.device.queue.writeBuffer(this.displayBuf, 128, new Float32Array([s.purkinje * scotopic, 0, 0, 0]));
   }
 
   /**

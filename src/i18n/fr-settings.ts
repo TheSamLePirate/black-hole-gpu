@@ -528,6 +528,9 @@ export default {
     "Quand le sous-échantillonnage temps réel ne suffit pas à tenir le budget de trame, l'échelle de rendu est abaissée (jusqu'à la moitié du ratio de pixels) — seulement là où une image plus petite s'avère plus rapide —, puis remontée quand le GPU a de la marge ou n'y gagne rien. La qualité Jeu l'active.",
   "Temporal reprojection": "Reprojection temporelle",
   Sharpening: "Netteté",
+  "Night vision (Purkinje)": "Vision nocturne (Purkinje)",
+  "The eye at night: under a twentieth of white the rods take over, blind to red and keen on blue-green — dark scenes bluer and greyer, a moonlit field as one sees it. 0: none.":
+    "L'œil la nuit : sous un vingtième du blanc, les bâtonnets prennent le relais, aveugles au rouge et sensibles au bleu-vert — les scènes sombres plus bleues et plus grises, un champ au clair de lune tel qu'on le voit. 0 : aucun.",
   "The image sharpened after the temporal reconstruction (AMD's contrast-adaptive RCAS): edges brought back, no halo, noise left alone where the image is flat. 0: none.":
     "L'image affinée après la reconstruction temporelle (RCAS d'AMD, adaptatif au contraste) : les contours retrouvés, sans halo, le bruit laissé tranquille là où l'image est plate. 0 : aucune.",
   "While the camera moves, the previous frames' image is carried over — found by the camera's turn, exact for the sky and the lensed images — and refined by each new frame's rays: a sharp image in motion from few rays. What moved in the scene is taken from the new frame only.":

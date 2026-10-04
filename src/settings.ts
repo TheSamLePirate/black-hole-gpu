@@ -291,6 +291,7 @@ export interface Settings {
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
   sharpen: number; // the image's sharpening after the temporal pass (AMD's RCAS: 0 none … 1 strongest)
+  purkinje: number; // the night's Purkinje shift (the eye's rods: dark scenes bluer, greyer; 0 none … 1)
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
@@ -521,6 +522,7 @@ export function defaultSettings(): Settings {
     glassBlur: false,
     temporalReprojection: true,
     sharpen: 0.3,
+    purkinje: 0.6,
     farFieldLut: true,
     volumetricClouds: true,
     earthClouds: 1,
@@ -1697,6 +1699,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   glassBlur: "pref",
   temporalReprojection: "pref",
   sharpen: "pref",
+  purkinje: "pref",
   farFieldLut: "pref",
   volumetricClouds: "pref",
   earthClouds: "scene",

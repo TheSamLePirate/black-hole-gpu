@@ -10,6 +10,7 @@ struct Display {
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
   lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), sharpening (RCAS, 0…1)
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
+  eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), unused ×3
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -22,6 +23,7 @@ struct Display {
 @group(0) @binding(7) var dofImg: texture_2d<f32>; // the image through the depth of field (when on)
 @group(0) @binding(8) var bloomMips: texture_2d<f32>; // the bloom's levels (the flare's soft sources)
 @group(0) @binding(9) var<storage, read> flareM: array<vec4f>; // [0]: mean excess over white, its centroid (uv)
+@group(0) @binding(10) var lensDirt: texture_2d<f32>; // the lens's dust and smudges (black: none)
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
 
@@ -75,6 +77,18 @@ fn flareSrc(q: vec2f, lod: f32) -> vec3f {
   let b = textureSampleLevel(bloomMips, samp, q, l).rgb / max(D.flags.z - l, 1.0) * D.size.z;
   // (the coatings colour a ghost, not the light: its brightness only)
   return vec3f(max(dot(b, LUMA) - 0.35, 0.0));
+}
+// The lens's dust: a smudged front element shows only when bright light floods it — the glare over
+// white, spread wide (the bloom's coarsest levels), lighting its specks where they are (the screen's uv)
+fn lensDirtGlow(uvOut: vec2f, uv: vec2f) -> vec3f {
+  let dirt = textureSampleLevel(lensDirt, samp, uvOut, 0.0).rgb;
+  // (the glare at the specks — the bloom's wide levels, their mean — and over the whole lens)
+  let n = f32(textureNumLevels(bloomMips));
+  let l = max(n - 3.0, 0.0);
+  let near = textureSampleLevel(bloomMips, samp, clamp(uv, vec2f(0.0), vec2f(1.0)), l).rgb / max(D.flags.z - l, 1.0);
+  let all = textureSampleLevel(bloomMips, samp, vec2f(0.5), n - 1.0).rgb;
+  let glow = max(dot(near * D.size.z, LUMA) - 0.12, 0.0) + 0.3 * max(dot(all * D.size.z, LUMA) - 0.12, 0.0);
+  return dirt * glow * vec3f(1.0, 0.95, 0.88) * 2.5;
 }
 fn lensFlare(uv: vec2f) -> vec3f {
   let aspect = D.img.x / max(D.img.y, 1.0);
@@ -320,8 +334,17 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // (the film: the bloom a strong haze added over the sharp image — the camera's veiling glare —
     // rather than the eye's energy-conserving spread)
     if (tm == 4u) { c = c * (1.0 - 0.3 * D.flags.y) + b * (2.5 * D.flags.y); } else { c = mix(c, b, D.flags.y); }
-    if (D.hdr.z > 0.0) { c += D.hdr.z * lensFlare(uv) / max(D.size.z, 1e-30); }
+    if (D.hdr.z > 0.0) { c += D.hdr.z * (lensFlare(uv) + lensDirtGlow(uvOut, uv)) / max(D.size.z, 1e-30); }
     c *= D.size.z;
+    // (the eye at night — Purkinje: adapted to the dark (eye.x: from the exposure's level) the rods take
+    // over, blind to red, keen on blue-green — the dim parts bluer and greyer, as one sees a moonlit
+    // field; the bright lights still seen by the cones, in their colours)
+    if (D.eye.x > 0.0) {
+      let Lp = dot(c, LUMA);
+      let Ls = dot(c, vec3f(0.02, 0.42, 0.56));
+      let k = D.eye.x * (1.0 - smoothstep(0.08, 0.8, Lp));
+      c = mix(c, Ls * vec3f(0.62, 0.82, 1.08), 0.75 * k);
+    }
     if (D.img.w > 0.5) {
       // radio brightness temperature on the "afmhot" scale of EHT images (linear, exposure = peak)
       let t = clamp(c.g, 0.0, 1.0);
