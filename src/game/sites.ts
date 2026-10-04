@@ -46,7 +46,17 @@ export function siteDir(s: { lat: number; lon: number }): [number, number, numbe
  * 60 m further across and 300 m further along. There the ground is graded: the relief's base, without
  * the drawn detail (the gear rolls on a runway, not on the procedural bumps between the map's texels).
  */
-const RUNWAYS = SITES.filter((s) => s.body === "earth" && s.runway).map((s) => {
+export interface RunwayFrame {
+  site: Site;
+  /** its threshold's geodetic unit direction, the landing direction and its right (unit tangents) */
+  p: [number, number, number];
+  along: [number, number, number];
+  across: [number, number, number];
+}
+/** A runway as drawn [m] (trace.wgsl: runwayShade): the graded strip's paved middle, 4.5 km from its threshold. */
+export const RUNWAY_LENGTH = 4500;
+export const RUNWAY_HALF_WIDTH = 30;
+export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "earth" && s.runway).map((s) => {
   const D = Math.PI / 180;
   const la = s.lat * D,
     lo = s.lon * D;
@@ -56,12 +66,14 @@ const RUNWAYS = SITES.filter((s) => s.body === "earth" && s.runway).map((s) => {
   const h = (s.rwy ?? 0) * D;
   const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
-  return { p, along, across };
+  return { site: s, p, along, across };
 });
+/** the metres per radian the runways' frames are measured in (trace.wgsl: runwayGrade, the same) */
 const R_EARTH = 6371e3;
+// (the shader's runwayGrade holds the same figures: change both)
 export function runwayWeight(q: [number, number, number]): number {
   let w = 0;
-  for (const r of RUNWAYS) {
+  for (const r of EARTH_RUNWAYS) {
     const d: [number, number, number] = [q[0] - r.p[0], q[1] - r.p[1], q[2] - r.p[2]];
     // (more than ~6 km off: not this one)
     if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > 1e-6) continue;

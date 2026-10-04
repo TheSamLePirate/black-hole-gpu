@@ -101,6 +101,10 @@ struct Params {
   // pixels per radian, on
   tiles: vec4f,
   tileL: array<vec4f, 16>,
+  // the runways near the camera (src/game/sites.ts, at most RWY_MAX): [0].x their count; then each its
+  // threshold's geodetic unit direction (w: its length [m]), its landing direction (w: its half width [m]),
+  // its right, and the camera from its threshold on the Earth's squashed axes [m] (float64 on the CPU)
+  runways: array<vec4f, 17>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -119,6 +123,7 @@ override HAS_VOL: bool = true;
 override HAS_WH: bool = true;     // the wormhole world
 override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
+override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
 
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
@@ -3834,6 +3839,89 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   if (o3 > 0.0 && land > 0.0) { h += tfbmF(q * 200000.0 + vec3f(3.0), o3) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
   return h;
 }
+// ---- the runways (src/game/sites.ts: runwayWeight — the same figures, the ground graded alike for the
+// gear and for the eye)
+const RWY_MAX = 4u;
+fn rwyCount() -> u32 { return select(0u, min(u32(P.runways[0].x), RWY_MAX), HAS_RWY); }
+// How much of a runway's graded strip a geodetic direction is on (0…1): from 3 km before its threshold to
+// 4.5 km past it, 60 m either side — faded over 300 m along, 60 m across. There the drawn detail is off.
+fn runwayGrade(g: vec3f) -> f32 {
+  var w = 0.0;
+  for (var k = 0u; k < rwyCount(); k++) {
+    let d = g - P.runways[1u + 4u * k].xyz;
+    if (dot(d, d) > 1e-6) { continue; }
+    let a = dot(d, P.runways[2u + 4u * k].xyz) * 6371e3;
+    let c = abs(dot(d, P.runways[3u + 4u * k].xyz)) * 6371e3;
+    let wa = select(select(1.0, max(0.0, 1.0 - (a - 4500.0) / 300.0), a > 4500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
+    let wc = select(max(0.0, 1.0 - (c - 60.0) / 60.0), 1.0, c < 60.0);
+    w = max(w, wa * wc);
+  }
+  return w;
+}
+// the share of a pixel of footprint fw [m] a band lo…hi along x covers (the band thinner than the pixel:
+// its share of it)
+fn bandCover(x: f32, lo: f32, hi: f32, fw: f32) -> f32 {
+  return clamp((min(x - lo, hi - x) + 0.5 * fw) / fw, 0.0, min(1.0, (hi - lo) / fw));
+}
+// a periodic band (from 0 each period, w wide): the duty cycle once the pixel spans the period
+fn stripeCover(x: f32, period: f32, w: f32, fw: f32) -> f32 {
+  let u = x - period * floor(x / period);
+  let c = max(bandCover(u, 0.0, w, fw), bandCover(u, period, period + w, fw));
+  return mix(c, w / period, smoothstep(0.3 * period, period, fw));
+}
+// A point light's share of a pixel of footprint fw [m], d [m] from it: its flux spread over the pixel
+// (a 0.4 m lamp), so it stays one bright dot from afar
+fn lampAt(d: f32, fw: f32) -> f32 {
+  let sg = max(0.5 * fw, 0.4);
+  return exp(-0.5 * d * d / (sg * sg)) * (0.16 / (sg * sg));
+}
+struct RunwayLook { cover: f32, albedo: vec3f, lamps: vec3f };
+// The runway under a point at (a, c) [m] of its frame — along from the threshold, across to the right —
+// for a pixel of footprint fw [m], seen at an elevation el [rad] (the PAPI's): the paved strip, its
+// shoulders and markings (ICAO: threshold bars, centreline, edges, touchdown zone, aiming point), its
+// lights — edges white every 60 m, the threshold green, the end red — and the PAPI, set for the
+// autopilot's inner glide (1.5° to the touchdown 450 m in: two white, two red on it)
+fn runwayShade(a: f32, c: f32, L: f32, hw: f32, fw: f32, el: f32) -> RunwayLook {
+  var o: RunwayLook;
+  let ac = abs(c);
+  let paved = bandCover(a, -60.0, L + 60.0, fw) * bandCover(ac, -1.0, hw + 7.5, fw);
+  o.cover = paved;
+  var alb = mix(vec3f(0.17, 0.165, 0.155), vec3f(0.075, 0.075, 0.08), bandCover(ac, -1.0, hw, fw));
+  // (the touchdown zone's rubber: darker in the middle)
+  alb *= 1.0 - 0.35 * bandCover(a, 250.0, 1100.0, fw) * bandCover(ac, -1.0, 12.0, fw);
+  var m = 0.0;
+  // threshold bars: 30 m long, 1.8 m wide, 1.8 m apart, either side of a 3.6 m gap (and at the far end)
+  let bars = stripeCover(ac - 1.8, 3.6, 1.8, fw) * bandCover(ac, 1.8, hw - 3.0, fw);
+  m = max(m, bars * max(bandCover(a, 6.0, 36.0, fw), bandCover(a, L - 36.0, L - 6.0, fw)));
+  // centreline: 36 m dashes, 24 m gaps, 0.9 m wide
+  m = max(m, stripeCover(a - 80.0, 60.0, 36.0, fw) * bandCover(c, -0.45, 0.45, fw) * bandCover(a, 80.0, L - 80.0, fw));
+  // edges: 0.9 m lines
+  m = max(m, bandCover(ac, hw - 1.4, hw - 0.5, fw) * bandCover(a, 0.0, L, fw));
+  // aiming point: two 45 m × 9 m blocks 300 m in; touchdown zone: pairs of 22.5 m bars every 150 m
+  m = max(m, bandCover(a, 300.0, 345.0, fw) * bandCover(ac, 6.0, 15.0, fw));
+  let tz = stripeCover(a - 150.0, 150.0, 22.5, fw) * bandCover(a, 150.0, 922.5, fw) * (1.0 - bandCover(a, 280.0, 360.0, fw));
+  m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fw) * bandCover(ac, 4.5, 12.6, fw));
+  o.albedo = mix(alb, vec3f(0.72, 0.72, 0.7), m * paved);
+  // the lights: edges, threshold, end; the PAPI 20 m left of the edge, 450 m in
+  var lmp = vec3f(0.0);
+  let ke = round(a / 60.0);
+  if (ke >= 0.0 && ke * 60.0 <= L) { lmp += vec3f(1.0, 0.95, 0.85) * lampAt(length(vec2f(a - 60.0 * ke, ac - hw - 1.5)), fw); }
+  let kc = clamp(round(c / 3.0), -floor(hw / 3.0), floor(hw / 3.0));
+  lmp += vec3f(0.2, 1.0, 0.4) * lampAt(length(vec2f(a + 3.0, c - 3.0 * kc)), fw);
+  lmp += vec3f(1.0, 0.12, 0.08) * lampAt(length(vec2f(a - L - 3.0, c - 3.0 * kc)), fw);
+  let elDeg = el * 57.29578;
+  for (var i = 0u; i < 4u; i++) {
+    // (from the runway outwards: white above 2.0°, 1.67°, 1.33°, 1.0°)
+    let th = 2.0 - 0.3333 * f32(i);
+    let col = select(vec3f(1.0, 0.1, 0.06), vec3f(1.0, 0.97, 0.92), elDeg > th);
+    lmp += 2.5 * col * lampAt(length(vec2f(a - 450.0, c + hw + 20.0 + 9.0 * f32(i))), fw);
+  }
+  o.lamps = lmp;
+  return o;
+}
+// (the hit point from the camera [m, the Earth's squashed axes] — set by earthNear for its ground, w: on)
+var<private> RWY_HIT: vec4f = vec4f(0.0);
+
 fn earthUV(q: vec3f) -> vec2f {
   return vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
 }
@@ -3942,7 +4030,11 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
 }
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
-  return max(hr.x + earthDetail(q, hr.x, foot, hr.y), 0.0);
+  // (a runway's strip graded: its detail off — the gear's ground the same)
+  var flat = 0.0;
+  if (HAS_RWY) { flat = runwayGrade(q); }
+  if (flat >= 1.0) { return max(hr.x, 0.0); }
+  return max(hr.x + (1.0 - flat) * earthDetail(q, hr.x, foot, hr.y), 0.0);
 }
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
@@ -3952,13 +4044,15 @@ fn earthHeight(q: vec3f, foot: f32) -> f32 { return earthHeightG(geoQ(q), foot) 
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
 fn earthHeightStep(q: vec3f, foot: f32) -> f32 { return earthHeightStepG(geoQ(q), foot) / earthSq(q); }
 fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
+  var flat = 0.0;
+  if (HAS_RWY) { flat = runwayGrade(q); }
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
-    return max(hr.x + earthDetail(q, hr.x, max(foot * 4.0, 1.0), hr.y), 0.0);
+    return max(hr.x + (1.0 - flat) * earthDetail(q, hr.x, max(foot * 4.0, 1.0), hr.y), 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   let h0 = textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r;
-  return max(h0 + earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
+  return max(h0 + (1.0 - flat) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
@@ -4243,6 +4337,20 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
+  // (a runway: its pavement and markings over the ground, flat; its lights added below)
+  var rwyLamps = vec3f(0.0);
+  if (HAS_RWY && RWY_HIT.w > 0.5) {
+    for (var k = 0u; k < rwyCount(); k++) {
+      let rel = P.runways[4u + 4u * k].xyz + RWY_HIT.xyz;
+      let ra = dot(rel, P.runways[2u + 4u * k].xyz);
+      let rc = dot(rel, P.runways[3u + 4u * k].xyz);
+      if (ra < -120.0 || ra > P.runways[1u + 4u * k].w + 120.0 || abs(rc) > P.runways[2u + 4u * k].w + 120.0) { continue; }
+      let rl = runwayShade(ra, rc, P.runways[1u + 4u * k].w, P.runways[2u + 4u * k].w, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)));
+      A = mix(A, rl.albedo, rl.cover);
+      n = normalize(mix(n, q, rl.cover));
+      rwyLamps += rl.lamps;
+    }
+  }
   let V = -rd;
   let mu0 = dot(q, Ls);
   // the sunlight at the ground, through the air and under the clouds (their shadow, cast along the
@@ -4305,6 +4413,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
   col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
+  // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
+  if (HAS_RWY) { col += rwyLamps * (luminance(E) / PI) * mix(0.6, 40.0, dark); }
   return col;
 }
 
@@ -4488,6 +4598,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let rd = rs / m;
   var t = unitHit(ro, rd);
   if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
+  if (HAS_RWY) { RWY_HIT = vec4f(rd * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u)); }
   let lt = nearLight(k);
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);

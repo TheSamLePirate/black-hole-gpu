@@ -1,5 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { runwayWeight } from "./game/sites";
+import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
 import { bodyAxes, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
 import { HD_SETS, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
@@ -46,7 +46,7 @@ import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from 
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler } from "./terrain";
-import { WGS84_F } from "./system/ellipsoid";
+import { geodeticToCart, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
@@ -86,10 +86,12 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 255;
+const FEATURES_ALL = 511;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S;
+/** the runways' block after the tiles' (trace.wgsl: Params.runways) */
+const RUNWAY_VEC4S = 17;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S;
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
 const SH_BYTES = 10 * 16;
 /** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
@@ -1873,6 +1875,7 @@ export class Renderer {
     set(66, ...eclipse);
     // the camera on the near body's axes [radii], in float64: an anchor in float32 and the rest (trace.wgsl:
     // nearCam — turned there in float32, the ground shook by its rounding)
+    let runways: Float32Array = new Float32Array(RUNWAY_VEC4S * 4);
     if (near) {
       const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
       // (the Earth's on its squashed axes — z × a/b: its ellipsoid the unit sphere, trace.wgsl: EARTH_AB)
@@ -1880,10 +1883,16 @@ export class Renderer {
       const A = c.map((x) => Math.fround(x));
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
+      // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
+      // squashed axes like c, in float64 (the markings to the centimetre: trace.wgsl runwayShade)
+      if (near.index === earthK && this.earthMaps.tier) runways = this.nearRunways(c as Vec3);
+      // (runways near: the kernel with their code — elsewhere compiled out, a tenth of the Earth's cost)
+      if (runways[0]! > 0) this.featureKey |= 256;
     } else {
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
     }
+    f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
@@ -1972,6 +1981,31 @@ export class Renderer {
     d[14] = s.lensFlare;
     d[15] = this.shadowKeep;
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
+  }
+
+  /**
+   * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
+   * threshold's geodetic direction and length, its landing direction and half width, its right, and the
+   * camera from its threshold [m] — c, the camera on the Earth's squashed axes [its radii]. Their tangents
+   * projected, the threshold's height drops out.
+   */
+  private nearRunways(c: Vec3): Float32Array {
+    const out = new Float32Array(RUNWAY_VEC4S * 4);
+    const f = WGS84_F,
+      D = Math.PI / 180;
+    const near = EARTH_RUNWAYS.map((r) => {
+      const p = geodeticToCart(1, f, r.site.lat * D, r.site.lon * D, 0);
+      const d: Vec3 = [(c[0] - p[0]) * WGS84_A, (c[1] - p[1]) * WGS84_A, (c[2] - p[2] / (1 - f)) * WGS84_A];
+      return { r, d, dist: Math.hypot(...d) };
+    })
+      .filter((x) => x.dist < 150e3)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 4);
+    out[0] = near.length;
+    near.forEach(({ r, d }, k) => {
+      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, 0, ...d, 0], 4 + 16 * k);
+    });
+    return out;
   }
 
   private dofOn(s: Settings, t: Target) {
@@ -2129,7 +2163,7 @@ export class Renderer {
       (s.hotFlow ? 16 : 0) |
       (s.wormhole ? 32 : 0) |
       (s.diskThickness > 0 ? 64 : 0)
-    ); // (bodies: 128, added with them)
+    ); // (bodies: 128, added with them; runways near: 256)
   }
 
   /**
@@ -2160,6 +2194,7 @@ export class Renderer {
         HAS_WH: has(32),
         HAS_THICK: has(64),
         HAS_BODIES: has(128),
+        HAS_RWY: has(256),
       };
       const mk = (entryPoint: string, quality: boolean) =>
         this.device.createComputePipelineAsync({
