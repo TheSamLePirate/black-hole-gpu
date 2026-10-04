@@ -4,6 +4,7 @@ import { store } from "./util/storage";
 import frBodies from "./i18n/fr-bodies";
 import frFc from "./i18n/fr-fc";
 import frHud from "./i18n/fr-hud";
+import frPlace from "./i18n/fr-place";
 import frMain from "./i18n/fr-main";
 import frSettings from "./i18n/fr-settings";
 
@@ -56,5 +57,6 @@ export const hasFrench = (en: string) => FR.has(en);
 addFrench(frSettings);
 addFrench(frMain);
 addFrench(frHud);
+addFrench(frPlace);
 addFrench(frFc);
 addFrench(frBodies);

@@ -1,0 +1,45 @@
+/* Placing the ship (ui/placepanel.ts): the kit's language — a dialog of segmented choices, the bodies as
+   chips, the parameters in a grid, the globe to click. */
+.pp-frame { width: min(680px, calc(100vw - 32px)); padding: 16px 18px 18px; }
+.pp { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.pp-h { margin-top: 4px; }
+.pp-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-seg .k-btn { flex: 1 1 auto; }
+.pp-uni .k-btn { flex: 0 1 auto; }
+.pp-bodies { display: flex; flex-wrap: wrap; gap: 5px; }
+.pp-bodies .pp-body { padding: 4px 8px; font-size: 10.5px; }
+.pp-bodies .pp-moon { opacity: 0.86; font-weight: 500; }
+.pp-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pp-sides .k-btn { padding: 10px; }
+.pp-params > div[hidden],
+.pp [hidden] { display: none !important; }
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; align-items: end; }
+.pp-field { display: grid; grid-template-columns: 1fr auto; gap: 3px 6px; align-items: center; }
+.pp-field .k-label { grid-column: 1 / -1; }
+.pp-in {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--k-r);
+  border: 1px solid var(--k-ctl-edge);
+  background: var(--k-ctl-bg);
+  font: var(--k-font-value);
+  color: var(--k-text);
+}
+.pp-in:focus-visible { border-color: var(--k-on-edge); }
+.pp-unit { font: var(--k-font-value); color: var(--k-dim); }
+.pp-check { display: flex; align-items: center; gap: 6px; font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-dim); }
+.pp-pick { display: flex; flex-direction: column; gap: 4px; }
+.pp-pick .gt-stage { height: 240px; border: 1px solid var(--k-line); border-radius: var(--k-r); }
+.pp-picknote { font: var(--k-font-value); color: var(--k-on); }
+.pp-sites { display: flex; flex-wrap: wrap; gap: 5px; }
+.pp-sites .pp-site { font-weight: 500; letter-spacing: 0.06em; text-transform: none; }
+.pp-note { margin: 0; font: 13px/1.4 var(--font); color: var(--k-dim); }
+.pp-err { margin: 0; font: 13px/1.4 var(--font); color: var(--k-red); }
+.pp-err:empty { display: none; }
+.pp-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--k-amber); font: 13px/1.4 var(--font); }
+.pp-confirm:empty { display: none; }
+.pp-foot { display: flex; justify-content: flex-end; }
+.pp-foot .k-btn { padding: 8px 18px; }
+.pp-quick { display: flex; flex-wrap: wrap; gap: 6px; }

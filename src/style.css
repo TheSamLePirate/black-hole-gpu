@@ -1211,7 +1211,7 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-tools .fl-ic { display: grid; width: 16px; height: 16px; }
 .fl-pathbtn { color: var(--hud-cyan); }
 .fl-pathbtn.off, .fl-soundbtn.off { color: rgba(214, 226, 242, 0.32); }
-.fl-tools.fl-planbtn, .fl-tools.fl-viewbtn { padding: 0 8px 0 6px; font: 700 11.5px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; }
+.fl-tools.fl-planbtn, .fl-tools.fl-placebtn, .fl-tools.fl-viewbtn { padding: 0 8px 0 6px; font: 700 11.5px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; }
 .fl-tools.fl-planbtn.on { background: rgba(90, 216, 255, 0.2); color: #e6f8ff; }
 .fl-viewbtn .fl-caret { width: 11px; height: 11px; opacity: 0.55; }
 .fl-clock { display: flex; flex-direction: column; line-height: 1.05; }
@@ -1557,7 +1557,7 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 @media (max-width: 900px) {
   .fl-orbit, .fl-tel { display: none; }
   .fl-right { bottom: auto; top: 56px; }
-  .fl-warpbox > span, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
+  .fl-warpbox > span, .fl-viewname, .fl-planbtn > span:not(.fl-ic), .fl-placebtn > span:not(.fl-ic) { display: none; }
 }
 @media (max-width: 700px) {
   .fl-cockpit { transform: translateX(-50%) scale(0.72); }
@@ -2278,7 +2278,7 @@ body.mobile .fl-mgroup + .fl-mgroup { border-left: none; }
 body.mobile .fl-chip { padding: 5px 6px; font-size: 11px; letter-spacing: 0.08em; }
 body.mobile .fl-mission .fl-tools { min-width: 30px; height: 30px; }
 body.mobile .fl-mission .tp-btn { min-width: 28px; height: 28px; }
-body.mobile .fl-warpbox > span, body.mobile .fl-viewname, body.mobile .fl-planbtn > span:not(.fl-ic) { display: none; }
+body.mobile .fl-warpbox > span, body.mobile .fl-viewname, body.mobile .fl-planbtn > span:not(.fl-ic), body.mobile .fl-placebtn > span:not(.fl-ic) { display: none; }
 body.mobile.portrait .fl-mg-acts { order: 1; }
 body.mobile.portrait .fl-soundbtn { display: none; }
 body.mobile.portrait .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }

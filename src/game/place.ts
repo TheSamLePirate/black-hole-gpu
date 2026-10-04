@@ -11,7 +11,7 @@ import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
 import { GEAR as HOLE_GEAR, groundR, localToZamo, planetFrame, toGlobal, zamoBeta } from "../landing";
 import { millerWaves, SURF } from "../terrain";
-import { sphericalFrame } from "../wormhole";
+import { mouth, sphericalFrame } from "../wormhole";
 import { ECLIPTIC, elements, stateFrom, type Axes, type OrbitSpec } from "./orbit";
 import { add, cross, dot, sub } from "../math/vec3";
 import { airTop } from "../aero";
@@ -24,8 +24,9 @@ const unit = (a: Vec3): Vec3 => {
 const KM = 1e3 / M_METRES;
 
 export interface Pose {
-  /** "ours": home frame; "hole": Gargantua's map (Boyer–Lindquist Cartesian) */
-  frame: "ours" | "hole";
+  /** "ours": home frame; "hole": Gargantua's map (Boyer–Lindquist Cartesian); "mouth": by the far mouth
+   *  on Gargantua's side, its rest frame's axes (x at the hole, z towards its spin axis), X from its centre */
+  frame: "ours" | "hole" | "mouth";
   X: Vec3;
   /** velocity: home frame d/dt (ours); along the ZAMO axes as a Cartesian vector, β (hole) */
   vel: Vec3;
@@ -339,4 +340,101 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
   const cart = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * f.er[i]! + v[1] * f.et[i]! + v[2] * f.ep[i]!) as Vec3;
   const h = unit(sub(g, q.map((c) => c * dot(g, q)) as Vec3));
   return { frame: "hole", X: glob.X, vel: cart(b), fwd: toMap(h), up: toMap(q), note: `${def.name}: on the ground, Gargantua ${el}° up` };
+}
+
+/**
+ * Beside one of our bodies, at rest against it (the hover autopilot then holds it there): `altKm`
+ * above its surface (by default two radii: three from its centre, the approach's stand-off), on its
+ * sunlit side a little round towards its evening, nose on it; within its sphere of influence. The Sun:
+ * on the Earth's side.
+ */
+export function ourNearPose(id: string, t: number, altKm?: number): Pose {
+  const b = solarBody(id);
+  if (!b) throw new Error(`unknown body ${id}`);
+  const B = solarState(id, t);
+  const soi = soiOf(id, t);
+  const r = Math.min(b.radius + (altKm ?? (2 * b.radius) / KM) * KM, 0.7 * soi);
+  const toward = id === "sun" ? solarState("earth", t).pos : solarState("sun", t).pos;
+  const s = unit(sub(toward, B.pos));
+  // (35° round the ecliptic's pole from the light: the body three-quarters lit)
+  const c = Math.cos((35 * Math.PI) / 180),
+    k = Math.sin((35 * Math.PI) / 180);
+  const dir = unit([s[0] * c - s[1] * k, s[0] * k + s[1] * c, s[2]]);
+  const fwd: Vec3 = [-dir[0], -dir[1], -dir[2]];
+  const up = unit(sub([0, 0, 1], fwd.map((q) => q * fwd[2]) as Vec3));
+  return {
+    frame: "ours",
+    X: add(B.pos, dir.map((q) => q * r) as Vec3),
+    vel: B.vel,
+    fwd,
+    up,
+    note: `${b.name}: ${Math.round((r - b.radius) / KM)} km above it, at rest`,
+  };
+}
+
+/**
+ * Before our mouth of the wormhole (the home frame's origin), at rest against it, on its sunlit side,
+ * nose on it: `d` [M] from its centre (by default four of its throat's radii: the sphere 30° across).
+ */
+export function ourMouthPose(s: Parameters<typeof mouth>[0], t: number, d?: number): Pose {
+  const m = mouth(s, t);
+  const r = d ?? 4 * m.w.rho;
+  const dir = unit(solarState("sun", t).pos);
+  const fwd: Vec3 = [-dir[0], -dir[1], -dir[2]];
+  const up = unit(sub([0, 0, 1], fwd.map((q) => q * fwd[2]) as Vec3));
+  return { frame: "ours", X: dir.map((q) => q * r) as Vec3, vel: [0, 0, 0], fwd, up, note: "Before the wormhole (our side), at rest" };
+}
+
+/**
+ * Before the wormhole's far mouth (Gargantua's side), at rest against it: on its side away from the
+ * hole, `d` [M] from its centre (by default four of its throat's radii), nose on it — Gargantua beyond
+ * it. In the mouth's own frame (the camera there in the wormhole's coordinates, ℓ > 0).
+ */
+export function theirMouthPose(s: Parameters<typeof mouth>[0], t: number, d?: number): Pose {
+  const r = d ?? 4 * mouth(s, t).w.rho;
+  return {
+    frame: "mouth",
+    X: [-r, 0, 0],
+    vel: [0, 0, 0],
+    fwd: [1, 0, 0],
+    up: [0, 0, 1],
+    note: "Before the wormhole (Gargantua's side), at rest",
+  };
+}
+
+/**
+ * Beside one of Gargantua's worlds, at rest in its frame (turning with it, tidally locked): `altKm`
+ * above it (by default two of its radii), between it and Gargantua and round along its orbit, nose on
+ * it. Gargantua itself: a static observer `rM` [M] from its centre on its equator (the hover autopilot
+ * holds it there against the fall).
+ */
+export function theirNearPose(body: string, t: number, spin: number, massSolar: number, altKm?: number, rM = 12): Pose {
+  if (body === "gargantua") {
+    const X: Vec3 = [rM, 0, 0];
+    return { frame: "hole", X, vel: [0, 0, 0], fwd: [-1, 0, 0], up: [0, 0, 1], note: `Gargantua: ${rM} M from it, static` };
+  }
+  const F = planetFrame(body, t, spin, massSolar);
+  const def = sysBody(GARGANTUA_SYSTEM, body);
+  const ex = unit([F.C[0] - F.H[0], F.C[1] - F.H[1], 0]),
+    ey: Vec3 = [-ex[1], ex[0], 0],
+    ez: Vec3 = [0, 0, 1];
+  const S = F.S;
+  const toMap = (v: Vec3): Vec3 => [0, 1, 2].map((i) => (v[0] / S[0]) * ex[i]! + (v[1] / S[1]) * ey[i]! + (v[2] / S[2]) * ez[i]!) as Vec3;
+  const r = F.R + ((altKm ?? (2 * F.R * F.mPerM) / 1e3) * 1e3) / F.mPerM;
+  // (on its axes — x away from its primary —: towards Gargantua and along its orbit, a little above)
+  const dir = unit([-0.6, 0.75, 0.25]);
+  const glob = toGlobal(F, { xi: dir.map((q) => q * r) as Vec3, w: [0, 0, 0], landed: false });
+  const b = zamoBeta(glob.X, glob.V, spin);
+  const f = sphericalFrame(glob.X);
+  const cart = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * f.er[i]! + v[1] * f.et[i]! + v[2] * f.ep[i]!) as Vec3;
+  const fwd = unit(toMap(dir.map((q) => -q) as Vec3));
+  const up = unit(sub(ez, fwd.map((q) => q * fwd[2]) as Vec3));
+  return {
+    frame: "hole",
+    X: glob.X,
+    vel: cart(b),
+    fwd,
+    up,
+    note: `${def.name}: ${Math.round(((r - F.R) * F.mPerM) / 1e3)} km above it, at rest`,
+  };
 }

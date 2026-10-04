@@ -3,7 +3,16 @@
 Tools to manage, place, audit and improve the game — from the interface (**F2**, or the tools button
 in the mission bar / *Tools* in the toolbar) and from code (`__bh.game` in the console).
 
-## The window (F2)
+## Placing the ship (for every player)
+
+The HUD's **Place** button (also the radial wheel and the pause menu) opens `src/ui/placepanel.ts`: in
+orbit (periapsis, apoapsis, inclination, retrograde; a click on the globe: the orbit passes over the
+place now), on the ground (globe, the landing sites, latitude and longitude), beside a body at rest
+(the hover autopilot holds it, the body targeted), before the wormhole on our side or on Gargantua's,
+and quick ones. During a mission it asks first and ends the mission; from a scene without the game's
+world (a bare Kerr view) it loads it first.
+
+## The window (F2, developers: a development build or `?dev`)
 
 | Tab | What it does |
 |---|---|
@@ -59,6 +68,9 @@ __bh.game.orbit("gargantua", { rM: 12 })            // Kerr circular orbit, radi
 __bh.game.orbit("miller", { altKm: 300 })           // in Miller's frame (Gargantua's tides: ±70 km)
 __bh.game.land("moon", 0.674, 23.473)               // Tranquility Base
 __bh.game.land("mann", 10, -30)                     // Gargantua's worlds: lat / lon on their frame (x away from Gargantua)
+__bh.game.near("jupiter")                           // beside it at rest, two radii up: targeted, the hover autopilot on
+__bh.game.near("gargantua", { rM: 12 })             // a static observer 12 M from Gargantua
+__bh.game.wormhole("gargantua")                     // before the far mouth (or "ours": beyond Saturn), at rest
 __bh.game.glideTo("Kennedy", 80, 25, 750)           // the Ranger on a runway's line, 80 km out, 25 km up, 750 m/s — the glide autopilot lands it
 __bh.game.orbitOver("earth", 48.86, 2.35, { altKm: 400, inc: 51.6 })  // an orbit passing over Paris now
 __bh.game.orbitTarget()                             // around the current target

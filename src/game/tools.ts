@@ -15,7 +15,8 @@ import type { Settings, Target } from "../settings";
 import { defaultSettings, pickSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
 import type { Renderer } from "../renderer";
-import { setHolePose, setHomePose } from "../camera";
+import { setHolePose, setHomePose, setRepPose } from "../camera";
+import { ellOfR, mouth } from "../wormhole";
 import { BODY_NAMES } from "../targeting";
 import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity } from "../system/our-surface";
@@ -26,7 +27,11 @@ import { rangerStatus, type RangerStatus } from "./status";
 import {
   orbitOver,
   ourGroundPose,
+  ourMouthPose,
+  ourNearPose,
   ourOrbitPose,
+  theirMouthPose,
+  theirNearPose,
   theirGroundAt,
   theirOrbitPose,
   universeOf,
@@ -94,6 +99,8 @@ export class GameTools {
       "soi()                         the sphere of influence the ship is in, and the chain of its primaries",
       "orbit(body, {altKm, peKm, apKm, inc, raan, argPe, nu, retrograde})   put the Ranger in orbit",
       "land(body, lat, lon)          put it on the ground (our solid bodies)",
+      "near(body, {altKm, rM})       beside a body at rest (the hover autopilot holds it there)",
+      "wormhole('ours'|'gargantua', dM)   before a mouth of the wormhole, at rest",
       "placeAt({frame, X, vel, fwd, up})   put it at a state (home frame / the hole's map)",
       "target(id) · targets()        select the target",
       "warp(x) · pause(on) · realTime()   time: x times real time",
@@ -199,6 +206,10 @@ export class GameTools {
       if (!s.wormhole) throw new Error("our universe is reached through the wormhole: pick a Gargantua-system scene (game:interstellar)");
       setHomePose(s, p.X, p.fwd, p.up, p.vel);
       s.anchor = "wormhole";
+    } else if (p.frame === "mouth") {
+      if (!s.wormhole) throw new Error("the wormhole lives in the game's world: pick a scene of it first");
+      const r = Math.hypot(...p.X);
+      setRepPose(s, { l: ellOfR(mouth(s).w, r), n: [p.X[0] / r, p.X[1] / r, p.X[2] / r], fwd: p.fwd, up: p.up, vel: p.vel });
     } else setHolePose(s, p.X, p.fwd, p.up, p.vel);
     s.motion = "geodesic";
     c.setCinematic(null);
@@ -312,6 +323,40 @@ export class GameTools {
     const q: V3 = [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
     const w = orbitOver(body, q, this.ctx.time(), { inc: o.inc ?? 0, argPe: o.argPe ?? 0, retrograde: !!o.retrograde });
     return this.orbit(body, { ...o, inc: w.inc, raan: w.raan, nu: w.nu });
+  }
+
+  /**
+   * Beside a body, at rest against it — `altKm` above it (by default two of its radii), Gargantua
+   * `rM` [M] from its centre —, the body targeted, the hover autopilot holding the ship there.
+   */
+  near(body: string, o: { altKm?: number; rM?: number } = {}) {
+    const u = universeOf(body);
+    if (!u) throw new Error(`unknown body "${body}" — ours: ${OUR_IDS.join(", ")}; Gargantua's: ${THEIR_IDS.join(", ")}`);
+    const s = this.ctx.settings,
+      t = this.ctx.time();
+    const note = this.placeAt(u === "ours" ? ourNearPose(body, t, o.altKm) : theirNearPose(body, t, s.spin, s.massSolar, o.altKm, o.rM));
+    this.target(body === "gargantua" ? "hole" : body);
+    this.hover();
+    return note;
+  }
+
+  /** Before the wormhole on our side or on Gargantua's, `dM` [M] from its mouth's centre (by default the
+   *  approach's stand-off), the mouth targeted, the hover autopilot holding the ship there. */
+  wormhole(side: "ours" | "gargantua" = "ours", dM?: number) {
+    const s = this.ctx.settings,
+      t = this.ctx.time();
+    if (!s.wormhole) throw new Error("the wormhole lives in the game's world: pick a scene of it first");
+    const note = this.placeAt(side === "ours" ? ourMouthPose(s, t, dM) : theirMouthPose(s, t, dM));
+    this.target("wormhole");
+    this.hover();
+    return note;
+  }
+
+  /** the hover autopilot engaged afresh (a placement's: at rest where it was put) */
+  private hover() {
+    const p = this.ctx.camera.pilot;
+    p.auto = "none";
+    p.setAuto("hover");
   }
 
   /** The scene's time now [M]. */

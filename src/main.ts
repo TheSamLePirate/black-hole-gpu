@@ -11,6 +11,8 @@ import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
+import { PlacePanel } from "./ui/placepanel";
+import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
@@ -87,7 +89,7 @@ import { installVramHook } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
 import { setSteady } from "./ui/clock";
 import { applyPalette } from "./ui/hudkit";
-import { t, tf } from "./i18n";
+import { t, tf, tr } from "./i18n";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -1329,6 +1331,7 @@ async function main() {
       help: () => actions["btn-help"]!(),
       controls: () => controlsScreen.open(),
       photo: () => openPhoto(),
+      place: () => placePanel.open(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
@@ -1511,6 +1514,7 @@ async function main() {
           ).map(([a, label, key]) => ({ label, key, on: P.auto === a, run: () => pilotAuto(a) })),
         },
         { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
+        { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
         { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
         { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
       ];
@@ -1529,6 +1533,7 @@ async function main() {
         ],
       },
       { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
+      { label: { fr: "Placer le vaisseau", en: "Place the ship" }, run: () => placePanel.open() },
       {
         label: { fr: "Cinématique", en: "Cinematic" },
         on: !!camera.cinematic,
@@ -1718,6 +1723,24 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // placing the ship (ui/placepanel.ts): the HUD's Place button, the radial wheel, the pause menu — a
+  // mission running ends (asked first); a scene without the game's world loads it
+  const placePanel = new PlacePanel({
+    tools,
+    settings,
+    mission: () => {
+      const m = MISSIONS.find((q) => q.scene === currentScene);
+      return m ? tr(m.title) : mission.active ? t("The Interstellar journey") : null;
+    },
+    endMission: () => {
+      mission.stop(t("Mission ended — the ship placed"));
+      currentScene = null;
+    },
+    ensureWorld: () => {
+      if (!settings.wormhole || settings.system !== "gargantua") applyPreset("Earth: the Blue Marble");
+    },
+  });
+  flightHud.onPlace = () => placePanel.open();
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   let appVersion = "dev";
   void fetch("version.json")

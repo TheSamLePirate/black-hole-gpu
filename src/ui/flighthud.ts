@@ -62,6 +62,7 @@ const ICONS: Record<string, string> = {
   camera: '<path d="M3.5 8.5h3l2-2.5h7l2 2.5h3v10h-17z" /><circle cx="12" cy="13" r="3.4" />',
   plan: '<circle cx="6" cy="17" r="2" /><circle cx="18" cy="7" r="2" /><path d="M7.6 15.6C10 9 14 13 16.4 8.4" stroke-dasharray="2 2.2" />',
   chevron: '<path d="M7 10l5 5 5-5" />',
+  place: '<path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z" /><circle cx="12" cy="10.5" r="2.2" />',
   ship: '<path d="M12 3.5l2.2 6.5 6.3 3.2-6.3 1.6L12 20.5l-2.2-5.7-6.3-1.6 6.3-3.2z" /><circle cx="12" cy="12" r="1.3" class="f" />',
 };
 const icon = (name: string, cls = "fl-ic") => {
@@ -324,6 +325,8 @@ export class FlightHud {
   phase: import("../game/phase").FlightPhase | null = null;
   /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
   onPlanner: (() => void) | null = null;
+  /** the Place button: placing the ship (ui/placepanel.ts) */
+  onPlace: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
@@ -566,6 +569,11 @@ export class FlightHud {
     planBtn.title = t("Flight planner: transfers, rendezvous, manoeuvre nodes");
     planBtn.onclick = () => this.onPlanner?.();
     this.missionEls.planBtn = planBtn;
+    const placeBtn = h("button", "fl-tools fl-placebtn") as HTMLButtonElement;
+    placeBtn.append(icon("place"), h("span", "", t("Place")));
+    placeBtn.title = t("Place the ship: in orbit, on a ground, beside a body, before the wormhole");
+    placeBtn.dataset.testid = "hud-place";
+    placeBtn.onclick = () => this.onPlace?.();
     const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
     const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
@@ -713,7 +721,7 @@ export class FlightHud {
           ),
         ),
       ),
-      group("fl-mg-acts", craftBox, planBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
+      group("fl-mg-acts", craftBox, planBtn, placeBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles
