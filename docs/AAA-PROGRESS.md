@@ -13,13 +13,13 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 | Pilier | Départ (audit) | Actuel | Cible AAA |
 |---|---:|---:|---:|
 | Physique | 64 | 78 | 80 |
-| Code + tests | 44 | 71 | 75 |
-| Technologie | 67 | 71 | 80 |
+| Code + tests | 44 | 72 | 75 |
+| Technologie | 67 | 75 | 80 |
 | UI / UX / HUD | 44 | 76 | 80 |
 | Produit / gameplay | 50 | 59 | 80 |
-| **Global** | **≈ 54** | **≈ 71** | **≈ 78–80** |
+| **Global** | **≈ 54** | **≈ 72** | **≈ 78–80** |
 
-*Réestimé après la phase 2 (04/10/2026).* Physique : J2–J4 et dérive séculaire, propergol et masse, poussée selon la pression, atmosphères mesurées (Vénus, Mars, Titan) et thermosphère, corps rigide (tenseur, Euler), train d'atterrissage à ressorts et pneus, aérodynamique par surfaces, vent et turbulence de Dryden, Terre WGS84 (rendu et physique), Lambert d'Izzo, pas symplectique symétrisé, attitude gyroscopique (Fermi–Walker), vols de référence (ISS/SGP4, Apollo 4, Falcon 9). Restent : STS-1 (données), autorité des gouvernes abstraite, moment aéro une fois par image, attitude stockée en angles, pistes non dessinées, géoïde. Code + tests : 392 unitaires (dont les références), goldens ré-enregistrés à chaque changement voulu. *Avant : réestimé après U4 et U5 (03/10/2026).* UI : le langage HUD partout (kit, polices, réglages, galerie, dialogues), écran titre, menu pause, missions briefées, mode photo, tablette, roue radiale, indices de touches, manette dans les menus, Master caution, HUD par phase avec son view-model et son cadre libre, aides de rentrée et d'approche, glyphes distincts ; **toutes les touches remappables**, échelle d'interface, palette Okabe–Ito, réduction des animations, focus visible ; **interface entière en français** ; carte au doigt ; contraste AA vérifié sur le pire fond. Produit : une boucle d'entrée (titre → missions → vol → pause/sauvegarde) existe ; pas encore de progression ni d'objectifs suivis. Technologie : HUD 11,6 → 2,7 ms par frame. Code + tests : 334 unitaires, 58 e2e (fumée, accessibilité, français, tactile, S5 contraste/ratchet/fuites/tailles, titre, manette, préférences, vols de référence, fréquence).
+*Réestimé après G3 (04/10/2026).* Technologie : en mouvement, +6 à +8 dB à coût égal (gouverneur Pareto), les étoiles nettes (R8), la caméra tenue sans retour aux blocs, 270 Mo de VRAM rendus près d'une lune (BC7/BC5), pistes, océan, nuages et anneaux crédibles ; restent la reprojection relativiste, l'imagerie au sol, le PBR du Ranger (G4). Code + tests : les e2e de nouveau tous verts (déterminisme), la mesure de qualité fiable. *Avant : réestimé après la phase 2 (04/10/2026).* Physique : J2–J4 et dérive séculaire, propergol et masse, poussée selon la pression, atmosphères mesurées (Vénus, Mars, Titan) et thermosphère, corps rigide (tenseur, Euler), train d'atterrissage à ressorts et pneus, aérodynamique par surfaces, vent et turbulence de Dryden, Terre WGS84 (rendu et physique), Lambert d'Izzo, pas symplectique symétrisé, attitude gyroscopique (Fermi–Walker), vols de référence (ISS/SGP4, Apollo 4, Falcon 9). Restent : STS-1 (données), autorité des gouvernes abstraite, moment aéro une fois par image, attitude stockée en angles, pistes non dessinées, géoïde. Code + tests : 392 unitaires (dont les références), goldens ré-enregistrés à chaque changement voulu. *Avant : réestimé après U4 et U5 (03/10/2026).* UI : le langage HUD partout (kit, polices, réglages, galerie, dialogues), écran titre, menu pause, missions briefées, mode photo, tablette, roue radiale, indices de touches, manette dans les menus, Master caution, HUD par phase avec son view-model et son cadre libre, aides de rentrée et d'approche, glyphes distincts ; **toutes les touches remappables**, échelle d'interface, palette Okabe–Ito, réduction des animations, focus visible ; **interface entière en français** ; carte au doigt ; contraste AA vérifié sur le pire fond. Produit : une boucle d'entrée (titre → missions → vol → pause/sauvegarde) existe ; pas encore de progression ni d'objectifs suivis. Technologie : HUD 11,6 → 2,7 ms par frame. Code + tests : 334 unitaires, 58 e2e (fumée, accessibilité, français, tactile, S5 contraste/ratchet/fuites/tailles, titre, manette, préférences, vols de référence, fréquence).
 
 
 Les notes « actuelles » sont réestimées à la fin de chaque phase, en reprenant les critères de l'audit.
@@ -178,7 +178,7 @@ Mesures : `scripts/trace-ab.ts` (passe de tracé, désormais aussi les passes de
 
 Outils : `trace-ab` mesure aussi la reconstruction et s'arrête à 6 s par mesure (`55afbc4`, `2e58c63`) ; les tâches longues portent leur durée estimée dans leur titre.
 
-## G3 : le « look AAA » (en cours)
+## G3 : le « look AAA » (terminée, 04/10/2026)
 
 | # | Étape | Mesure | Statut | Commit |
 |---|---|---|---|---|
@@ -189,9 +189,24 @@ Outils : `trace-ab` mesure aussi la reconstruction et s'arrête à 6 s par mesur
 | R7 | SVGF-lite (à-trous 2 passes là où n < 4) | 4–5 ms pour un gain nul (±0,4 dB, dans le bruit) | écarté | |
 | R8 | **Étoiles du catalogue splattées là où elles tombent** en temps réel : chaque rayon de bloc cherche les étoiles de tout son bloc et dessine celles qui y tombent à leur place sous-pixel (jacobien de l'empreinte, radiance sur l'angle solide lentillé), dans un tampon ajouté par-dessus l'image reprojetée ; près des courbes critiques du trou, les rayons les attrapent comme avant. Les LUT corps noir et synchrotron partagent une liaison (le 10ᵉ tampon de stockage libéré) | Saturne en contre-jour 31,5 → 37,3 dB (le splat seul : +3,5), Kerr 26,8 → 27,5, Interstellar 25,2 → 26,7 ; noyau −1 à +3 % (bruit) | fait | `833ad21` |
 
+| Anneaux | **Anneaux de Saturne** : fonction de phase à deux lobes (blocs de glace en arrière, poussière en avant, plus de poussière dans les anneaux minces), **surtension d'opposition**, **ringshine** sur la nuit de la planète (10 éléments d'anneau, azimuts tirés par rayon) ; l'ombre des anneaux n'atténue plus que la lumière directe | noyau −7 à +4 % (bruit) ; le ringshine physique vaut quelques millièmes du jour (`g3-ringshine-x100.jpg` le montre ×100) | fait | `3df907a` |
+| Océan | **Mer de Cox-Munk** (pentes gaussiennes selon le vent : ceintures zonales et systèmes météo ; masquage de Smith), **écume de Monahan** ; **vagues proches** : 12 trains pour le vent du vol (vitesse et direction de `wind.ts`), nombres d'onde entiers sur une ancre kilométrique (exacts en float32), crêtes courbées et groupes par bruit ancré, **LEAN** (les vagues trop courtes passent leur variance au reflet) | préréglages −4,7 à +1,5 % ; au ras de l'eau ≈ +0,4 ms ; `g3-sea.jpg` | fait | `b926e76`, `b06be13` |
+| Nuages | **Phase double** (0,8 / −0,2) et **octaves de diffusion multiple** (Wrenninge) dans le volume ; **cirrus** à 9 km (fibres le long des courants-jets, bruit cuit) ; **ombres longues des sommets** au terminateur vu d'orbite | +6 % en vol bas nuageux (0,6–1 ms), neutre d'orbite (bruit haché : 5 ms → bruit cuit) ; `g3-cirrus.jpg` | fait | `6796788` |
+| Cartes HD | **Compression BC7 / BC5 sur le GPU au chargement** (`src/system/bc-encode.ts` : BC7 mode 6 par axe principal, BC5 pour les pentes du relief) | 358 → 89 Mo près d'une lune ; image à 45 dB du rgba8 | fait | `f69418e` |
+| P2 | **Gouverneur Pareto** : à rayons égaux, bloc 2 à l'échelle 0,5 bat bloc 4 à l'échelle 1 de 5 à 8 dB en mouvement (Kerr, orbite terrestre, rotations rapide et lente) ; blocs plafonnés à 2 tant que l'échelle peut baisser ; échelle pleine dès que la caméra est tenue (l'image fixe affinée à pleine résolution) | Saturne en contre-jour 32,9 → 39,5 dB ; Interstellar au budget (bloc 2 à 0,625) au lieu de 55 ms | fait | `c833214` |
+| O10 | Atmosphère de Hillaire : la marche de l'air n'est pas le coût (32 → 8 échantillons : rien gagné) ; la table de diffusion multiple (Ψ_ms, calculée sur le GPU par monde) rend le crépuscule plus bleu mais coûte 8 à 11 % en orbite (4 lectures par échantillon dans un noyau limité par ses registres) | écartée (patch gardé) | écarté | |
+| Rayons crépusculaires | En espace écran (Mitchell) : sans masque d'occlusion, voile, halo ou carré autour du soleil ; à refaire avec de vraies ombres volumétriques (froxels) | écartés | reporté | |
+| Cockpit éclairé | Les écrans comme sources étendues et leurs reflets sur la verrière : effet mesuré négligeable (0,09/255) — les quatre lampes de cabine dominent | décision à prendre : atténuer les lampes la nuit | en attente | |
+| display-p3 | Le rendu est en primaires sRGB (les couleurs de corps noir hors gamut écrêtées) : une sortie P3 n'apporterait rien sans élargir les sources | priorité basse | reporté | |
+| Déterminisme | Le test e2e « un vol rejoué deux fois » échouait depuis la phase 1 : le pilote gardait les vitesses angulaires du vol précédent (corrigé : `FlightComputer.newFlight`) ; le reste vient du sol en flux (cartes et tuiles) : tolérance de 10 m | 59 e2e verts | fait | `d936a2b` |
+
 ![R8 : avant, TAA sans splat, splat, convergée](img/aaa/g3-r8-stars.jpg)
 
+**Leçons de la vague** : la mesure de qualité en mouvement était faussée deux fois (écran titre, puis image de reconstruction brute) — corrigée, les gains de reconstruction se mesurent enfin ; sur Apple, trace-ab doit additionner tracé et sondes (leurs horodatages se chevauchent) ; le gouverneur Pareto est le plus gros gain de qualité de la vague (+6 à +8 dB à coût égal), devant les étoiles splattées (+3,5 dB).
+
 ## Journal
+
+- **G3** (04/10/2026) : pistes, post (Purkinje, poussière d'objectif, flou de mouvement), passation à l'arrêt de la caméra, étoiles splattées (R8), anneaux, océan, nuages, cartes BC7/BC5, gouverneur Pareto ; écartés à la mesure : R7, O10, rayons crépusculaires en espace écran ; cockpit éclairé en attente d'une décision. Leçons : mesurer ce qu'on croit mesurer (deux biais de `quality.ts`) ; un actif importé depuis un dossier ignoré par git casse la CI.
 
 - **03/10/2026** : audit commité (`7328d0d`) ; démarrage de la phase 0.
 - 0.1 `cc6f00d` : CI `verify` avant déploiement, build local cohérent, tests stabilisés.
