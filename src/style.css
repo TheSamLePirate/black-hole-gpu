@@ -2456,3 +2456,15 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-spect-t { font: 500 12px var(--mono); text-transform: none; letter-spacing: 0; color: var(--hud-cyan); }
 .fl-tools.fl-spect-b { padding: 0 8px; height: 24px; font: 700 11px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; }
 .fl-tools.fl-spect-b.on { background: rgba(90, 216, 255, 0.2); color: #e6f8ff; }
+.fl-spect-go {
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 3px;
+  border: 1px solid var(--hud-edge);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--hud-text);
+  font: 600 11px var(--hud-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color-scheme: dark;
+}

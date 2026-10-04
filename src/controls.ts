@@ -564,9 +564,13 @@ export class CameraController {
   };
 
   onWheel = (e: WheelEvent) => {
-    // (a spectator out: the pointer is its)
+    // (a spectator out: the pointer is its — following the ship, the wheel sets its distance to it)
     if (this.spectator) {
-      this.spectator.onWheel(e);
+      e.preventDefault();
+      if (this.spectatorFollow) {
+        const k = Math.exp(Math.max(-1, Math.min(1, e.deltaY * 0.002)));
+        for (let i = 0; i < 3; i++) this.specOff[i]! *= k;
+      } else this.spectator.onWheel(e);
       return;
     }
     e.preventDefault();

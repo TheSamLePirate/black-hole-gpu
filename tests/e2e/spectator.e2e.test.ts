@@ -48,6 +48,24 @@ describe.skipIf(!E2E)("the spectator", () => {
     expect(await app.js<boolean>(`document.querySelector(".fl-spect").hidden`)).toBe(true);
   });
 
+  test("go to Mars: the view around it, the ship on its Earth orbit", async () => {
+    const o0 = await orbit();
+    await app.press("F3", "F3");
+    await app.waitFor("__bh.camera.spectating");
+    await app.js(
+      `(() => { const g = document.querySelector("[data-testid=spect-goto]"); g.value = "mars"; g.dispatchEvent(new Event("change")); return 0 })()`,
+    );
+    await Bun.sleep(1000);
+    expect(await app.js<string>("__bh.camera.viewSettings().target")).toBe("mars");
+    expect(await app.js<boolean>("__bh.camera.spectatorFollow")).toBe(false);
+    expect(await away()).toBeGreaterThan(1e11);
+    const o1 = await orbit();
+    expect(await app.js<string>("__bh.game.status().soi")).toBe("earth");
+    expect(Math.abs(o1.pe - o0.pe)).toBeLessThan(1);
+    await app.press("F3", "F3");
+    await app.waitFor("!__bh.camera.spectating");
+  });
+
   test("landed on the Moon: the camera far away, the ground under the gear the same", async () => {
     await app.js(`__bh.game.land("moon", 0.674, 23.473)`);
     await app.waitFor(`!!__bh.renderer.hdMap?.dem`, 60_000);

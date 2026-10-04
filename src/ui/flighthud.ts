@@ -184,6 +184,8 @@ export interface FlightHudActions {
   spectator(): void;
   /** the spectator following the ship (carried with it) or free */
   spectatorFollow(on: boolean): void;
+  /** the spectator away to a body (free, around it) */
+  spectatorGoTo(b: Target): void;
   /** fly another craft of the fleet */
   vessel(id: VesselId): void;
   lookAhead(): void;
@@ -1053,7 +1055,43 @@ export class FlightHud {
     back.textContent = t("Back to the ship");
     back.dataset.testid = "spect-back";
     back.onclick = () => act.spectator();
-    this.spectBar.append(h("b", "", t("Spectator")), this.spectText, follow, back);
+    // (away to a body: the spectator free, around it)
+    const go = h("select", "fl-spect-go") as HTMLSelectElement;
+    go.dataset.testid = "spect-goto";
+    go.title = t("Go to a body: the camera around it, the ship flying on");
+    const opt = (v: string, label: string, parent: HTMLElement) => {
+      const o = h("option", "", label) as HTMLOptionElement;
+      o.value = v;
+      parent.append(o);
+    };
+    opt("", t("Go to…"), go);
+    const ours = h("optgroup") as HTMLOptGroupElement;
+    ours.label = t("Solar system");
+    for (const b of [
+      "sun",
+      "mercury",
+      "venus",
+      "earth",
+      "moon",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune",
+      "pluto",
+      "iss",
+      "wormhole",
+    ])
+      opt(b, BODY_NAMES[b as Target] ?? b, ours);
+    const theirs = h("optgroup") as HTMLOptGroupElement;
+    theirs.label = t("Gargantua's system");
+    for (const b of ["hole", "miller", "mann", "edmunds"]) opt(b, BODY_NAMES[b as Target] ?? b, theirs);
+    go.append(ours, theirs);
+    go.onchange = () => {
+      if (go.value) act.spectatorGoTo(go.value as Target);
+      go.value = "";
+    };
+    this.spectBar.append(h("b", "", t("Spectator")), this.spectText, go, follow, back);
     this.spectBar.hidden = true;
     this.root.append(
       this.spectBar,

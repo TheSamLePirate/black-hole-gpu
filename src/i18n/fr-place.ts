@@ -80,4 +80,6 @@ export default {
   "{0} at {1}": "{0} à {1}",
   "Following · free it": "Suit · libérer",
   "Free · follow the ship": "Libre · suivre le vaisseau",
+  "Go to a body: the camera around it, the ship flying on": "Aller à un corps : la caméra autour de lui, le vaisseau continue",
+  "Go to…": "Aller à…",
 } satisfies Record<string, string>;
