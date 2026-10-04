@@ -2,7 +2,8 @@ import { describe, test, expect } from "bun:test";
 import { nearCap, topPasses, analysis, qualityByScene, avgMrays, worstOver33, groupedBars, lineChart, histogramFrom, downsample, subsamplingSeries, cpuSeries, featureMatrix, limitsMatrix, SUB_MODES, subModes, subRow, cpuGpuVerdict, jitterStats, headroom, fpsSimulator, machineKey, groupRuns, regressions } from "./analysis.ts";
 import type { Bench } from "./types.ts";
 
-const load = async (f: string): Promise<Bench> => ({ ...(await Bun.file(f).json()), id: f.includes("iPad") ? "iPad Pro m1" : "nvidia", color: "#fff" }) as Bench;
+// (les JSON à côté du test, d'où que `bun test` soit lancé — la CI le lance depuis la racine)
+const load = async (f: string): Promise<Bench> => ({ ...(await Bun.file(new URL(f, import.meta.url)).json()), id: f.includes("iPad") ? "iPad Pro m1" : "nvidia", color: "#fff" }) as Bench;
 const ipad = await load("./data/kerr-bench-iPad-Pro-m1-2026-10-04.json");
 const nv = await load("./data/kerr-bench-nvidia-2026-10-04.json");
 
