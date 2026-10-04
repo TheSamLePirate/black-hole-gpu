@@ -68,6 +68,7 @@ declare module "../controls" {
     glideCard: typeof glideCard;
     descentAssist: typeof descentAssist;
     approachAssist: typeof approachAssist;
+    dockCard: typeof dockCard;
     descentCard: typeof descentCard;
     entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
@@ -1068,6 +1069,79 @@ function approachAssist(this: CameraController, leftM: number, closing: number, 
   return { graph, say: say.filter(Boolean) };
 }
 
+/**
+ * The docking's card and assistant (C7): what the docking autopilot does and why (its phases explained),
+ * the range, the distance along the port's axis and across it against the corridor's cone, the closing
+ * rate, the ports' angle; the graph: the closing rate against the distance along the axis, the autopilot's
+ * own (3 cm/s a metre, 8 cm/s at the ring, 3 m/s at most), the corridor about it — half to half again —,
+ * the 10 m hold marked; the director's: the rate as flown and as asked, the offset against the cone, the
+ * ports' angle, the hold's or the contact's countdown.
+ */
+function dockCard(this: CameraController): HubInfo | null {
+  const D = this.dockAuto;
+  const g = D ? this.dockGeometry({ target: D.target, port: D.port }) : null;
+  if (!D || !g) return null;
+  const why: Record<string, string> = {
+    APPROACH: t("in along the port's axis, slowing as it nears"),
+    FINAL: t("the last metres: on the axis, the ports facing — to the capture"),
+    "HOLD 10 m": t("held 10 m out until on the axis, the ports facing and the drift still"),
+    "TO THE AXIS": t("to a point on the port's axis, off the target"),
+  };
+  const phase = why[D.phase] ?? (D.blocked ? t("round the target, clear of its hull, to the axis") : t("docking"));
+  const along = g.along,
+    closing = g.closing;
+  const cone = 1 + 0.15 * Math.max(along, 0);
+  const want = (x: number) => Math.min(3, 0.08 + 0.012 * Math.max(x, 0));
+  const key = `dock:${D.target}:${D.port}`;
+  if (this.glideTrace?.key !== key) this.glideTrace = { key, pts: [] };
+  const tr = this.glideTrace.pts;
+  const last = tr[tr.length - 1];
+  if (D.corridor && (!last || Math.abs(last[0] - along) > Math.max(along * 0.01, 0.05) || Math.abs(last[1] - closing) > 0.01)) {
+    tr.push([along, closing]);
+    if (tr.length > 400) this.glideTrace.pts = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  const xMax = Math.max(along * 1.4, 20);
+  const xs = Array.from({ length: 40 }, (_, i) => (xMax * i) / 39);
+  const graph: AssistGraph = {
+    kind: "dock",
+    title: t("Docking"),
+    x: { label: t("Along the axis"), unit: "m", min: 0, max: xMax },
+    y: { label: t("Closing"), unit: "m/s", min: 0, max: Math.max(want(xMax) * 1.7, closing * 1.2, 0.2) },
+    ideal: xs.map((x) => [x, want(x)] as [number, number]),
+    lo: xs.map((x) => [x, want(x) * 0.5] as [number, number]),
+    hi: xs.map((x) => [x, want(x) * 1.5] as [number, number]),
+    flown: this.glideTrace.pts,
+    now: [Math.max(along, 0), Math.max(closing, 0)],
+    marks: [{ x: 10, label: t("HOLD") }],
+    state: !D.corridor ? "wait" : closing > want(along) * 1.5 + 0.02 ? "off" : closing < want(along) * 0.5 - 0.02 ? "wait" : "on",
+  };
+  const say = [tf("CLOSE {0} → {1} m/s", closing.toFixed(2), want(along).toFixed(2))];
+  say.push(tf("OFFSET {0} m · CONE {1} m", g.lateral.toFixed(1), cone.toFixed(1)), tf("PORTS {0}°", g.angle.toFixed(1)));
+  if (D.phase === "HOLD 10 m") say.push(t("HOLD AT 10 m — ALIGN"));
+  // (the contact: along the autopilot's profile from here — its rate slows as it nears, a logarithm)
+  else if (D.corridor && closing > 0.02) {
+    const x = Math.max(along, 0);
+    const tC = Math.log1p((0.012 * Math.min(x, 243)) / 0.08) / 0.012 + Math.max(x - 243, 0) / 3;
+    say.push(tf("CONTACT IN ~{0}", fmtDur(tC)));
+  }
+  const m = (x: number) => (x >= 1000 ? `${(x / 1000).toFixed(2)} km` : `${x.toFixed(x < 10 ? 2 : 1)} m`);
+  return {
+    mode: "dock",
+    title: "DOCK",
+    phase,
+    rows: [
+      [t("Range"), m(g.range)],
+      [t("Along · across"), `${m(along)} · ${m(g.lateral)}`],
+      [t("Closing"), `${closing.toFixed(2)} m/s`],
+      [t("Ports' axes"), `${g.angle.toFixed(1)}°`],
+    ],
+    next: D.corridor ? `→ ${tf("in the corridor (cone {0} m)", cone.toFixed(1))}` : null,
+    bar: null,
+    graph,
+    say,
+  };
+}
+
 /** The surface's figures the descent's assistant reads (planet.ts surfaceInfo): SI, the gravity in g. */
 type SurfaceLike = { alt?: number; vVert?: number; vHor?: number; landed?: boolean; twr?: number; gLocal?: number };
 
@@ -1541,7 +1615,7 @@ function hubCompute(this: CameraController): HubInfo | null {
     // (low over a ground: the descent's graph too — the hold a hover)
     return sf && !sf.landed && sf.alt !== undefined && sf.alt < 5000 ? { ...H, ...this.descentAssist(sf, true) } : H;
   }
-  if (a === "dock") return base("DOCK", this.dockAuto?.phase ?? t("docking"));
+  if (a === "dock") return this.dockCard() ?? base("DOCK", this.dockAuto?.phase ?? t("docking"));
   return base(AUTO_NAMES[a].toUpperCase(), t("flying"));
 }
 
@@ -2270,6 +2344,7 @@ export function installLowthrust(C: { prototype: CameraController }) {
     glideCard,
     descentAssist,
     approachAssist,
+    dockCard,
     descentCard,
     entryAssist,
     circPlan,

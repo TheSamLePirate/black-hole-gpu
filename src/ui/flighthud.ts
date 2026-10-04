@@ -156,6 +156,7 @@ const AUTO_KEYS: [Auto, string, string][] = [
   ["land", t("LAND"), "G"],
   ["takeoff", t("TAKE OFF"), "U"],
   ["entry", t("ENTRY"), "⇧G"],
+  ["dock", t("DOCK"), "B"],
 ];
 
 const GLYPH: Record<string, string> = {
@@ -455,6 +456,7 @@ export class FlightHud {
       b.dataset.label = label;
       b.dataset.tip = `${tips[a] ?? ""}${key ? ` (${key})` : ""}`;
       b.onclick = () => this.act.auto(a);
+      b.dataset.testid = `strip-${a}`;
       this.stripBtns.set(a, b);
       autos.append(b);
     }
@@ -937,6 +939,7 @@ export class FlightHud {
       b.dataset.label = label;
       b.dataset.tip = title;
       b.setAttribute("aria-label", label);
+      b.dataset.testid = `ring-${id}`;
       b.dataset.side = Math.cos(a) < 0 ? "l" : "r";
       b.innerHTML = `<svg viewBox="-12 -12 24 24" style="${col ? `--c:${col}` : ""}">${svgBody}</svg>`;
       b.onclick = fn;
@@ -987,6 +990,7 @@ export class FlightHud {
       land: '<path d="M0-8V3M-3.5-.5L0 3L3.5-.5M-8 7.5H8"/>',
       takeoff: '<path d="M0 5V-7M-3.5-3.5L0-7L3.5-3.5M-8 8H8"/>',
       entry: '<path d="M-8-7Q-2-6 1 0T4 8M-8 8H8"/><circle cx="1" cy="0" r="2.2" class="f"/>',
+      dock: '<rect x="1.5" y="-5" width="7" height="10" rx="1"/><circle cx="5" r="2"/><path d="M-9 0H-1.5M-4.5-3L-1.5 0L-4.5 3"/>',
       speedMode: '<path d="M-8 4A8 8 0 0 1 8 4"/><path d="M0 4L4.5-2.5"/><circle cy="4" r="1.4" class="f"/>',
     };
     const AUTO_TIPS: Record<string, string> = {
@@ -995,6 +999,7 @@ export class FlightHud {
         "Makes the orbit circular — the cheapest way: a burn at the next apsis above the air (planned, the time sped up to it), then trimmed; after a capture, where the ship is",
       ),
       approach: t("Flies to the target and stops beside it — the flight computer's Approach the target"),
+      dock: t("Docks to a free port within 3 km — on the thrusters, to the port's axis, then in along it to the capture"),
       orbit: t("Flies to the target and settles into a low circular orbit around it — the flight computer's Orbit the target"),
       land: t("Descends, kills the horizontal speed, touches down — the flight computer's Land here"),
       takeoff: t("Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)"),
@@ -1022,7 +1027,9 @@ export class FlightHud {
         () => act.speedMode(),
       ],
     ];
-    rightIds.forEach(([id, label, title, fn], j) => ringBtn(id, label, title, fn, 72 - j * 15, AUTO_SVG[id] ?? ""));
+    // (spread down the ring's right side: 15° apart, closer when there are more of them)
+    const stepDeg = Math.min(15, 135 / Math.max(rightIds.length - 1, 1));
+    rightIds.forEach(([id, label, title, fn], j) => ringBtn(id, label, title, fn, 72 - j * stepDeg, AUTO_SVG[id] ?? ""));
     {
       const NS = "http://www.w3.org/2000/svg";
       const bez = document.createElementNS(NS, "svg");
@@ -2020,8 +2027,8 @@ export class FlightHud {
     const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), ...infos, say].filter(Boolean);
     // (the words kept inside the image, clear of the tapes on its sides: drawn inwards of an edge arrow)
     const lx = Math.min(Math.max(cx + (W / 2 - cx) * 0.22, W * 0.2), W * 0.8);
-    // (and below the master caution's banner at the top)
-    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.22), H * 0.72);
+    // (and below the master caution's banner at the top — below the docking panel when it is up)
+    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * (this.dock.hidden ? 0.22 : 0.38)), H * 0.72);
     // (a backdrop: the words over the labels of what is behind them)
     const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16 * dpr;
     ctx.fillStyle = "rgba(4, 10, 18, 0.55)";

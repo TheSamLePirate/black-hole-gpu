@@ -123,4 +123,23 @@ export default {
   "BRAKE NOW": "FREINEZ",
   "BRAKE IN {0}": "FREINAGE DANS {0}",
   "Height held": "Altitude tenue",
+  // C7: the docking
+  "in along the port's axis, slowing as it nears": "le long de l'axe du port, en ralentissant à l'approche",
+  "the last metres: on the axis, the ports facing — to the capture":
+    "les derniers mètres : sur l'axe, les ports face à face — jusqu'à la capture",
+  "held 10 m out until on the axis, the ports facing and the drift still":
+    "tenu à 10 m tant qu'il n'est pas sur l'axe, les ports face à face et la dérive nulle",
+  "to a point on the port's axis, off the target": "vers un point de l'axe du port, à l'écart de la cible",
+  "round the target, clear of its hull, to the axis": "autour de la cible, à l'écart de sa coque, vers l'axe",
+  "Along the axis": "Le long de l'axe",
+  "CLOSE {0} → {1} m/s": "APPROCHE {0} → {1} m/s",
+  "OFFSET {0} m · CONE {1} m": "ÉCART {0} m · CÔNE {1} m",
+  "PORTS {0}°": "PORTS {0}°",
+  "HOLD AT 10 m — ALIGN": "ATTENTE À 10 m — ALIGNEZ",
+  "CONTACT IN ~{0}": "CONTACT DANS ~{0}",
+  "Along · across": "Axe · travers",
+  "in the corridor (cone {0} m)": "dans le couloir (cône de {0} m)",
+  DOCK: "AMARRAGE",
+  "Docks to a free port within 3 km — on the thrusters, to the port's axis, then in along it to the capture":
+    "S'amarre à un port libre à moins de 3 km — aux propulseurs, vers l'axe du port, puis le long de celui-ci jusqu'à la capture",
 } satisfies Record<string, string>;

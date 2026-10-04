@@ -33,7 +33,7 @@ describe.skipIf(!E2E)("the approach assisted, the target's orbit", () => {
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("BRAKE"))`, 60_000);
     // the ring's ORBIT: the target's orbit engaged
     await app.press("Digit0", "0");
-    await app.click(`.fl-rb[aria-label="Orbit target"]`);
+    await app.click(`[data-testid=ring-orbit]`);
     expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("orbit");
     await app.press("Digit0", "0", { shift: true });
     expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("none");
