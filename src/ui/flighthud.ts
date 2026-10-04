@@ -476,7 +476,8 @@ export class FlightHud {
     C.classList.toggle("assist", i.assist);
     this.drawHubGraph(H.graph ?? null);
     this.hubBody.innerHTML =
-      `<div class="fl-title">${esc(H.title)}<button class="fl-hub-mode" data-testid="hub-assist" title="${esc(tip)}">${mode}</button></div>` +
+      // (a hand-flown final's card: no autopilot to hand over to)
+      `<div class="fl-title">${esc(H.title)}${i.auto === "none" ? "" : `<button class="fl-hub-mode" data-testid="hub-assist" title="${esc(tip)}">${mode}</button>`}</div>` +
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
       (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +

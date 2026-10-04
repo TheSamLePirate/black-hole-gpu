@@ -102,4 +102,9 @@ export default {
   "REVERSAL IN ~{0}": "INVERSION DANS ~{0}",
   "Shield · load": "Bouclier · charge",
   "Reversal in": "Inversion dans",
+  // C4: the final, hand-flown or the autopilot's
+  "Final approach": "Approche finale",
+  "FLARE IN {0}": "ARRONDI DANS {0}",
+  "Flare in": "Arrondi dans",
+  "on the final — hand-flown, its profile the autopilot's": "en finale — pilotée à la main, sur le profil de l'autopilote",
 } satisfies Record<string, string>;

@@ -43,7 +43,7 @@ import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
-import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
+import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV, type LandingFix } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 import { entryCorridor, heightOf as heightOfEntry } from "../entry";
 
@@ -64,6 +64,8 @@ declare module "../controls" {
     hubCompute: typeof hubCompute;
     climbAssist: typeof climbAssist;
     deorbitAssist: typeof deorbitAssist;
+    glideAssist: typeof glideAssist;
+    glideCard: typeof glideCard;
     entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
     ourCircWant: typeof ourCircWant;
@@ -1011,6 +1013,74 @@ function entryAssist(
 }
 
 /**
+ * The final's assistant (C4), the autopilot's glide or a hand-flown one: the height over the ground
+ * against the distance to the threshold, the landing profile (its steep slope, the pull-up, the shallow
+ * slope, the flare), the PAPI's corridor about it (±1° seen from the touchdown), the trace flown, the flare
+ * and the threshold marked; the director's — the glide's error, the flare's countdown.
+ */
+function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "graph" | "say"> {
+  const fix = rw.fix!;
+  const { td, hF, gi } = LANDING;
+  const xF = td - (2 * hF) / Math.tan(gi);
+  const key = rw.name;
+  if (this.glideTrace?.key !== key) this.glideTrace = { key, pts: [] };
+  const tr = this.glideTrace.pts;
+  const last = tr[tr.length - 1];
+  if (!last || Math.abs(last[0] - rw.along / 1e3) > 0.02 || Math.abs(last[1] - rw.agl) > 5) {
+    tr.push([rw.along / 1e3, rw.agl]);
+    if (tr.length > 400) this.glideTrace.pts = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  const x0 = Math.min(tr[0]?.[0] ?? rw.along / 1e3, rw.along / 1e3) * 1e3 - 500;
+  const sp = Math.max(rw.speed, 50);
+  const xs = Array.from({ length: 64 }, (_, i) => x0 + ((td - x0) * i) / 63);
+  const prof = (x: number) => landingProfile(x, rw.agl, sp, fix).h;
+  const band = (x: number) => Math.tan(Math.PI / 180) * Math.max(td - x, 200);
+  const ideal = xs.map((x) => [x / 1e3, prof(x)] as [number, number]);
+  const dev = (Math.atan2(rw.agl - prof(rw.along), Math.max(td - rw.along, 200)) * 180) / Math.PI;
+  const hTop = Math.max(rw.agl, prof(x0)) * 1.15 + 20;
+  const graph: AssistGraph = {
+    kind: "glide",
+    title: t("Final approach"),
+    x: { label: t("To the threshold"), unit: "km", min: x0 / 1e3, max: (td + 300) / 1e3 },
+    y: { label: t("Height"), unit: "m", min: 0, max: hTop },
+    ideal,
+    lo: xs.map((x) => [x / 1e3, Math.max(prof(x) - band(x), 0)] as [number, number]),
+    hi: xs.map((x) => [x / 1e3, prof(x) + band(x)] as [number, number]),
+    flown: this.glideTrace.pts,
+    now: [rw.along / 1e3, rw.agl],
+    marks: [
+      { x: 0, label: t("THR") },
+      { x: xF / 1e3, label: t("FLARE") },
+    ],
+    state: Math.abs(dev) <= 1 ? "on" : "off",
+  };
+  const say: string[] = [tf("GLIDE {0} {1}°", dev >= 0 ? "▲" : "▼", Math.abs(dev).toFixed(1))];
+  if (rw.flareIn !== null && rw.flareIn < 60) say.push(tf("FLARE IN {0}", fmtDur(rw.flareIn)));
+  return { graph, say };
+}
+
+/** A hand-flown final's card (no autopilot): the runway, the distance, the height, the glide, the flare. */
+function glideCard(this: CameraController, rw: RunwayView): HubInfo {
+  const A = this.glideAssist(rw);
+  const dist = Math.max(-rw.along, 0);
+  const rows: [string, string][] = [
+    [t("To the threshold"), dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`],
+    [t("Height"), `${Math.round(rw.agl)} m`],
+    [t("Speed"), `${Math.round(rw.speed)} m/s`],
+  ];
+  if (rw.flareIn !== null) rows.push([t("Flare in"), fmtDur(rw.flareIn)]);
+  return {
+    mode: "none",
+    title: `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
+    phase: t("on the final — hand-flown, its profile the autopilot's"),
+    rows,
+    next: `→ ${tf("touchdown {0} m past the threshold", LANDING.td)}`,
+    bar: null,
+    ...A,
+  };
+}
+
+/**
  * The hub's card: the autopilot flying, what it does now, its figures, and what it predicts — the
  * orbit after its burn, the deorbit's heat and load, the touchdown, the arrival. Redone 4 times a
  * second at most. Null: no autopilot.
@@ -1034,7 +1104,11 @@ function hubCompute(this: CameraController): HubInfo | null {
   const P = this.pilot,
     a = P.auto,
     s = this.s;
-  if (a === "none") return null;
+  // (no autopilot: a hand-flown final still has its card — the runway, the profile, the graph)
+  if (a === "none") {
+    const rw = this.runwayView();
+    return rw?.manual ? this.glideCard(rw) : null;
+  }
   const C = C_MPS;
   const Msec = 4.925490947e-6 * s.massSolar;
   const km = (m: number) =>
@@ -1242,14 +1316,18 @@ function hubCompute(this: CameraController): HubInfo | null {
     }
     const td = R.prof?.td ?? LANDING.td;
     const tGo = app ? (td - app.along) / Math.max(app.speed * 0.85, 1) : NaN;
-    return base(
-      "ENTRY",
-      phase,
-      rows,
-      app
-        ? `→ ${R.leg === "final" && Number.isFinite(tGo) && tGo > 0 ? tf("touchdown {0} m past the threshold in ~{1}", td, dur(tGo)) : tf("touchdown {0} m past the threshold", td)}`
-        : null,
-    );
+    const rw = R.leg === "final" ? this.runwayView() : null;
+    return {
+      ...base(
+        "ENTRY",
+        phase,
+        rows,
+        app
+          ? `→ ${R.leg === "final" && Number.isFinite(tGo) && tGo > 0 ? tf("touchdown {0} m past the threshold in ~{1}", td, dur(tGo)) : tf("touchdown {0} m past the threshold", td)}`
+          : null,
+      ),
+      ...(rw?.final && rw.fix ? this.glideAssist(rw) : {}),
+    };
   }
   const sf = this.surfaceInfo() as { alt?: number; vVert?: number; vHor?: number; landed?: boolean } | null;
   if (a === "land") {
@@ -1725,19 +1803,51 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const sAl = dot3(rel, along),
     xt = dot3(rel, rgt);
   const app = R?.app ?? null;
-  // the final's aids: the landing profile (the autopilot's own) ahead — gates every 1.5 km down it, and
-  // the PAPI: the height's deviation from it as an angle seen from the touchdown, in lights
+  // the motion over the ground: its speed, its path's angle, its heading against the runway's
+  const va = sub3(fr.s.v, fr.env.ground(x));
+  const vv = dot3(va, tu);
+  const vhv = lin(va, 1, tu, -vv);
+  const vh = Math.hypot(...vhv);
+  // a hand-flown final (no autopilot on it): on the runway's axis — within a fifth of the distance, 1.5 km
+  // at least —, heading down it, below 6 km, within 40 km: the profile the pilot's own, as the
+  // autopilot's would be from where the final begins, frozen there — the pilot's drift from it shown
+  const manual =
+    this.pilot.auto !== "entry" &&
+    sAl > -40e3 &&
+    sAl < LANDING.td &&
+    Math.abs(xt) < Math.max(1500, 0.2 * -sAl) &&
+    agl < 6000 &&
+    vh > 30 &&
+    dot3(vhv, along) > 0.85 * vh;
+  let fix: LandingFix | null = app?.final && R?.gOuter ? R.gOuter : null;
+  if (manual) {
+    const MF = this.manualFix?.site === site.name ? this.manualFix.fix : null;
+    const L0 = landingProfile(sAl, agl, Math.max(vh, 50), MF ?? undefined);
+    fix = L0.fix;
+    if (!MF) this.manualFix = { site: site.name, fix };
+  } else if (!app?.final) this.manualFix = null;
+  // the final's aids: the landing profile ahead — gates every 1.5 km down it, and the PAPI: the
+  // height's deviation from it as an angle seen from the touchdown, in lights
   let papi: number | null = null;
   const gates: { d: Vec3; r: number }[][] = [];
-  if (app?.final && R?.gOuter) {
-    const sp = Math.max(app.speed, 50);
-    const L = landingProfile(sAl, agl, sp, R.gOuter);
+  let gRef: number | null = app?.final ? (app.gRef ?? null) : null;
+  let flareIn: number | null = null;
+  let aimX = R?.prof?.aim ?? -2000;
+  if (fix) {
+    const sp = Math.max(app?.final ? app.speed : vh, 50);
+    const L = landingProfile(sAl, agl, sp, fix);
+    aimX = L.aim;
+    if (manual) gRef = Math.atan(L.slope);
+    // (the flare's start: twice its height over the inner slope before the touchdown)
+    const xF = LANDING.td - (2 * LANDING.hF) / Math.tan(LANDING.gi);
+    const vAlong = dot3(vhv, along);
+    if (sAl < xF && vAlong > 1) flareIn = (xF - sAl) / vAlong;
     const dev = (Math.atan2(agl - L.h, Math.max(LANDING.td - sAl, 200)) * 180) / Math.PI;
     papi = dev > 1 ? 4 : dev > 0.35 ? 3 : dev >= -0.35 ? 2 : dev >= -1 ? 1 : 0;
     for (let k = 1; k <= 5; k++) {
       const xk = sAl + k * 1500;
       if (xk > LANDING.td - 300) break;
-      const hk = landingProfile(xk, agl, sp, R.gOuter).h;
+      const hk = landingProfile(xk, agl, sp, fix).h;
       // (the site's frame is in metres: the gate hk up its local vertical)
       const corner = (b: number, dh: number) => see(lin(at(xk, b), 1, tu, hk + dh));
       gates.push([corner(-100, -40), corner(100, -40), corner(100, 40), corner(-100, 40)]);
@@ -1753,10 +1863,14 @@ function runwayCompute(this: CameraController): RunwayView | null {
     agl,
     corners: [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)].map(see),
     line: Array.from({ length: 16 }, (_, k) => see(at(-k * 1000, 0))),
-    aim: see(at(R?.prof?.aim ?? -2000, 0)),
-    gRef: app?.final ? (app.gRef ?? null) : null,
-    gam: app?.gam ?? null,
-    final: !!app?.final,
+    aim: see(at(aimX, 0)),
+    gRef,
+    gam: app?.final ? (app.gam ?? null) : manual ? Math.atan2(vv, vh) : null,
+    final: !!app?.final || manual,
+    fix,
+    manual,
+    speed: vh,
+    flareIn,
   };
 }
 
@@ -2003,6 +2117,8 @@ export function installLowthrust(C: { prototype: CameraController }) {
     hubCompute,
     climbAssist,
     deorbitAssist,
+    glideAssist,
+    glideCard,
     entryAssist,
     circPlan,
     ourCircWant,

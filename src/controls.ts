@@ -136,6 +136,12 @@ export interface RunwayView {
   papi: number | null;
   /** the path in the sky on the final: gates every 1.5 km down the landing profile, their corners as seen */
   gates: { d: Vec3; r: number }[][];
+  /** the landing profile flown on the final (the autopilot's, or the pilot's own — hand-flown —: its
+   *  steep slope and pull-up frozen as it nears), the speed over the ground [m/s], the flare in [s] */
+  fix: LandingFix | null;
+  manual: boolean;
+  speed: number;
+  flareIn: number | null;
 }
 
 /** The hub's card (CameraController.hubInfo): the autopilot, what it does now, its figures, its prediction. */
@@ -928,6 +934,10 @@ export class CameraController {
   ourWarp: number | null = null;
 
   runwayCache: { at: number; v: RunwayView | null } | null = null;
+  /** a hand-flown final's profile, frozen as its pull-up nears (the runway it is for) */
+  manualFix: { site: string; fix: LandingFix } | null = null;
+  /** the final's trace for its graph: the runway, the path flown [along km, height m] */
+  glideTrace: { key: string; pts: [number, number][] } | null = null;
 
   futureCache: { at: number; key: string; v: FutureView | null } | null = null;
 }

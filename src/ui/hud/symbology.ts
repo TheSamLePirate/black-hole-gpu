@@ -984,7 +984,10 @@ function drawRunway(
     }
     text("PAPI", x + 2.6 * gap, py, "rgba(214, 236, 255, 0.8)", 10.5, "left", true);
   }
-  if (rw.final && rw.agl < 60 && rw.agl > 1) {
+  // the flare: counted down over its last fifteen seconds, then called
+  if (rw.final && rw.flareIn !== null && rw.flareIn > 0 && rw.flareIn <= 15 && rw.agl >= 60)
+    text(tf("FLARE IN {0}", `${Math.ceil(rw.flareIn)} s`), W / 2, H / 2 - 70 * dpr, "#7cd6ff", 14);
+  else if (rw.final && rw.agl < 60 && rw.agl > 1) {
     const on = blinkOn();
     if (on) text(t("FLARE"), W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
   }
