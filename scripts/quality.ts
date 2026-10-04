@@ -58,7 +58,8 @@ try {
     (await cdp("Runtime.evaluate", { expression: `(async () => { ${b} })()`, awaitPromise: true, returnByValue: true }))?.result?.value;
   await cdp("Runtime.enable");
   await cdp("Emulation.setDeviceMetricsOverride", { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
-  await cdp("Page.navigate", { url });
+  // (a scene named in the link: no title screen over the image — it covered the centre crop, and held the game)
+  await cdp("Page.navigate", { url: `${url}#scene=${encodeURIComponent(scenes[0]!)}` });
   for (let i = 0; i < 120; i++) {
     if (await js(`return typeof __bh !== "undefined" && !!__bh.renderer`)) break;
     await sleep(500);
