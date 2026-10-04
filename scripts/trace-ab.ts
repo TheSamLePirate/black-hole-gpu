@@ -2,7 +2,7 @@
 // move the scene's clock and its probes, ±20 % between runs on the heavy scenes, more than most
 // kernel changes win):
 //   bun scripts/trace-ab.ts --ref http://localhost:3012/ [--new http://localhost:3000/] [--scenes "a|b"]
-//                           [--reps 2] [--frames 150] [--out file.json]
+//                           [--reps 2] [--frames 150] [--out file.json] [--shots dir]
 // Each scene at a fixed subsampling 4 and ~1.44 Mpx, its clock held, the view marked changed every frame
 // (the realtime pass, the same rays each run: the interleave and the seeds follow the frame count); every
 // frame's passes timed on the GPU (timestamps) — the trace pass's median, its LUT's, the probes'. Each
@@ -19,6 +19,8 @@ const REF = arg("ref", "http://localhost:3012/");
 const NEW = arg("new", "http://localhost:3000/");
 const REPS = Number(arg("reps", "2"));
 const FRAMES = Number(arg("frames", "150"));
+// (each build's view of each scene, refined still, on the first run: <dir>/<ref|new>-<scene>.png)
+const SHOTS = arg("shots", "");
 const SCENES = arg(
   "scenes",
   "Interstellar: along the disk (the film's close pass)|Kerr a=0.94, near edge-on|Ranger: approaching Gargantua|Miller: Gargantua over the sea|Saturn: backlit|Moon: an afternoon on the plains",
@@ -160,6 +162,13 @@ try {
       for (const sc of SCENES) {
         const r = await measure(sc).catch((e) => (console.log(`  ${side} ${sc}: ${(e as Error).message}`), null));
         if (r) res[sc]![side].push(r);
+        if (SHOTS && k === 0) {
+          // (the clock still held, nothing touched: the frames refine the image, then it is captured)
+          await sleep(8000);
+          const img = await cdp("Page.captureScreenshot", { format: "png" });
+          const data = (img as unknown as { data?: string }).data;
+          if (data) await Bun.write(`${SHOTS}/${side}-${sc.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`, Buffer.from(data, "base64"));
+        }
         process.stdout.write(`  ${side}${k + 1} ${sc.slice(0, 40)}: trace ${r?.trace.toFixed(2)} ms (${r?.n} frames)\n`);
       }
     }

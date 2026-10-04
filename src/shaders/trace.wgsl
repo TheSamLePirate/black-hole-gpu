@@ -4022,24 +4022,44 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   let A = select(ro, P.nearCam0.xyz, fine);
   let e = select(dot(ro, ro) - 1.0, P.nearCam0.w, fine);
   let o = select(vec3f(0.0), P.nearCam1.xyz, fine);
+  // (audit O8: the steps on the cheap heights — the tiles bilinear, the detail two octaves coarser —
+  // lifted by what those octaves can add, ~9 footprints (the ridges' slope ~0.35 per wavelength) and 3 m
+  // (bilinear against the B-spline); the full heights only within that margin, and for the crossing:
+  // three steps of regula falsi on them)
+  var fPrev = 1.0;
+  // (once within the margin, the full heights to the end: near the ground both would be evaluated)
+  var band = false;
   for (var i = 0u; i < 256u; i++) {
     let v = o + rd * t;
     let p = A + v;
     let r = length(p);
-    let f = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+    let foot = max(t * fpK * EARTH_RM, 0.05);
+    let rad = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0);
+    var f = 0.0;
+    if (!band) {
+      f = rad - (earthHeightStep(p / r, foot) + 9.0 * foot + 3.0) / EARTH_RM;
+      band = f <= 0.0;
+    }
+    if (band) { f = rad - earthHeight(p / r, foot) / EARTH_RM; }
     if (f < 0.0) {
+      // (between the last point above — its full height's f, or the margin's, a lower bound — and this one)
       var lo = tPrev;
       var hi = t;
-      for (var j = 0u; j < 10u; j++) {
-        let m = 0.5 * (lo + hi);
+      var flo = max(fPrev, 1e-9);
+      var fhi = f;
+      for (var j = 0u; j < 3u; j++) {
+        let m = clamp(lo + (hi - lo) * flo / (flo - fhi), lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo));
         let vm = o + rd * m;
         let pm = A + vm;
         let rm = length(pm);
-        if ((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
+        let fm = (e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+        if (fm < 0.0) { hi = m; fhi = fm; } else { lo = m; flo = fm; }
       }
-      return hi;
+      // (the root between the last two: the side above may have closed in on it, the one below not)
+      return clamp(lo + (hi - lo) * flo / (flo - fhi), lo, hi);
     }
     tPrev = t;
+    fPrev = f;
     t += max(0.5 * f, 0.004 * t + 1e-9);
     if (t > t1) { return -1.0; }
   }
