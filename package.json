@@ -18,7 +18,8 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome ci . && tsc --noEmit && bun scripts/check-wgsl.ts",
-    "e2e": "E2E=1 bun test tests/e2e --timeout 600000"
+    "e2e": "E2E=1 bun test tests/e2e --timeout 600000",
+    "remote": "bun scripts/remote.ts"
   },
   "type": "module"
 }

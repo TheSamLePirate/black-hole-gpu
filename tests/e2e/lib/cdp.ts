@@ -1,5 +1,8 @@
 // A headless Chrome over the DevTools protocol, no dependency (WebSocket is Bun's): launched with
 // WebGPU on (SwiftShader on Linux), the page's exceptions and console errors collected.
+// E2E_HEADED=1: on the screen instead, full screen (kiosk: no tabs, no address bar) — to watch a test, not
+// to measure one (its frames follow the display's); the viewport is the emulated one either way.
+// E2E_HOLD=<s>: each Chrome left open <s> seconds at its close, to see where the test left it.
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
@@ -11,6 +14,8 @@ export interface Cdp {
 
 const CHROME =
   process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
+const HEADED = process.env.E2E_HEADED === "1";
+const HOLD = Number(process.env.E2E_HOLD || 0);
 const GPU =
   process.platform === "linux"
     ? ["--no-sandbox", "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader"]
@@ -25,12 +30,15 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
   const proc = Bun.spawn(
     [
       CHROME,
-      "--headless=new",
+      // (a window asks the login keychain for its profile's key — a dialog that blocks it; headless never does.
+      // Not --app=…: with it Chrome opens a second, ordinary window too — the one the tests then drove)
+      ...(HEADED ? ["--kiosk", "--use-mock-keychain"] : ["--headless=new"]),
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${profile}`,
       ...GPU,
       `--window-size=${W},${H}`,
       "--no-first-run",
+      "--no-default-browser-check",
       "--mute-audio",
       "--hide-scrollbars",
       "--disable-background-timer-throttling",
@@ -78,6 +86,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
     send,
     errors,
     close: () => {
+      if (HOLD) Bun.sleepSync(HOLD * 1000);
       ws.close();
       proc.kill();
       Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);

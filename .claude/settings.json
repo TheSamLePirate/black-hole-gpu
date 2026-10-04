@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["Bash(bun scripts/remote.ts:*)", "Bash(bun run remote:*)"]
+  }
+}
