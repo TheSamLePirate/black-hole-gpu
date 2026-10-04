@@ -900,7 +900,7 @@ fn shadePlanet(k: u32, X: vec3f, c: vec3f, g: f32, dW: vec3f, tEm: f32) -> vec3f
   // (as its light probe measured it: Miller's light comes from ahead of its motion, aberrated)
   let lm = bodies[BV * k + 4u];
   if (lm.w > 0.5) { ldir = rotZ(lm.xyz, bodyOmega(k) * (tEm - P.time.x)); }
-  return planetShade(k, nrm, bodyFixed(k, nrm, tEm), ldir, -dW, tEm, g);
+  return planetShade(k, nrm, bodyFixed(k, nrm, tEm), ldir, -dW, tEm, g, 1.0);
 }
 
 // A black-hole-frame direction on the body's own axes (x away from its primary, y along its orbit,
@@ -1022,11 +1022,24 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
   return vec4f(min(t.rgb * 3.6, vec3f(0.95)), -log(1.0 - min(t.a, 0.995)));
 }
 
-// Light scattered by a slab of icy particles (single scattering, Henyey–Greenstein g = −0.3: they
-// throw light back to the source) towards V, lit along L, N its normal: the reflected radiance per
-// unit of the source's F (πF = its irradiance), on the lit face or through the slab to the other;
+// Light scattered by a slab of icy particles towards V, lit along L, N its normal: the reflected radiance
+// per unit of the source's F (πF = its irradiance), on the lit face or through the slab to the other;
 // w: the slab's opacity along V. q: the point (its radii from the planet's centre), in the planet's
-// shadow or not.
+// shadow or not. The particles' phase function two-lobed: the metre-sized blocks of ice throw the light
+// back towards the source (Henyey–Greenstein g = −0.3), their dust forward (g = 0.7) — a dust share the
+// larger the thinner the ring (the C ring, the Cassini division, the A ring's outer edge: what shines
+// backlit; the B ring dark) —, and towards the source the opposition surge (the coherent backscattering
+// within a degree, the shadows hidden within several: Cassini's and Hubble's rings ×1.5 at zero phase).
+fn ringPhase(ct: f32, tau: f32) -> f32 {
+  let gb = -0.3;
+  let gf = 0.7;
+  let hb = (1.0 - gb * gb) / pow(1.0 + gb * gb - 2.0 * gb * ct, 1.5);
+  let hf = (1.0 - gf * gf) / pow(1.0 + gf * gf - 2.0 * gf * ct, 1.5);
+  let dust = 0.03 + 0.22 * (1.0 - smoothstep(0.05, 0.8, tau));
+  let alpha = acos(clamp(-ct, -1.0, 1.0)); // (the phase angle: the source and the eye seen from the ring)
+  let surge = 1.0 + 0.35 * exp(-alpha / 0.012) + 0.25 * exp(-alpha / 0.1);
+  return mix(hb * surge, hf, dust);
+}
 fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f) -> vec4f {
   let rr = length(q);
   let smp = ringSample(k, rr);
@@ -1034,9 +1047,8 @@ fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f) -> vec4f {
   if (tau <= 0.0) { return vec4f(0.0); }
   let mu = max(abs(dot(N, V)), 0.01);
   let mu0 = max(abs(dot(N, L)), 0.01);
-  let g = -0.3;
   let ct = -dot(L, V); // scattering angle: incident −L, out V
-  let ph = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5);
+  let ph = ringPhase(ct, tau);
   var R: f32;
   if (dot(N, V) * dot(N, L) > 0.0) {
     R = ph * mu0 / (4.0 * (mu + mu0)) * (1.0 - exp(-tau * (1.0 / mu + 1.0 / mu0)));
@@ -1049,6 +1061,37 @@ fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f) -> vec4f {
   let b = dot(q, L);
   let lit = select(1.0, 0.0, b < 0.0 && dot(q, q) - b * b < 1.0);
   return vec4f(smp.rgb * R * lit, 1.0 - exp(-tau / mu));
+}
+
+// Ringshine: the light of the rings on the planet — its night side lit by their sunlit face, or by the
+// light they let through: the irradiance at q (its radii, on the planet; n = q, the body's axes, its pole
+// z) from the ring plane, in units of the Sun's F (πF its irradiance), from ten patches of the annulus
+// facing q — two radii, five azimuths over ±1 rad about q's (the rest behind the planet, or grazing; the
+// night side's own azimuths in the planet's shadow: its light comes from the rings seen aslant) —, each
+// its radiance (ringLight: the planet's shadow on it, the light through) × cos at q × cos at the ring
+// × its area / d². Its level the physics': a few thousandths of the day — seen when the eye adapts to
+// the night side.
+fn ringShine(k: u32, q: vec3f, L: vec3f) -> vec3f {
+  let inner = bodies[BV * k + 2u].w;
+  let outer = ringOuter(k);
+  let w = outer - inner;
+  let az = atan2(q.y, q.x);
+  var E = vec3f(0.0);
+  for (var i = 0; i < 10; i++) {
+    let r = inner + w * (0.25 + 0.5 * f32(i / 5));
+    // (the azimuths jittered per ray — the planet's shadow on the rings crossed by a fixed sample made
+    // bands on the night —: noise the frames average)
+    let a = az + 0.5 * (f32(i % 5 - 2) + RND - 0.5);
+    let p = vec3f(r * cos(a), r * sin(a), 0.0);
+    let dv = p - q;
+    let d2 = dot(dv, dv);
+    let u = dv * inverseSqrt(d2);
+    let cq = dot(u, q);
+    if (cq <= 0.0) { continue; }
+    let rl = ringLight(k, p, vec3f(0.0, 0.0, 1.0), L, -u);
+    E += rl.rgb * (cq * abs(u.z) * r * 0.5 * w * 0.5 / d2);
+  }
+  return E;
 }
 
 // The rings' shadow on the planet: the sunlight's transmission to the point q (its radii)
@@ -1231,7 +1274,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
     BODYW = transpose(spunAxes(k));
-    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs) * ringShadow(k, nrm, N, L);
+    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, nrm, N, L));
   }
   (*out).glow += (*out).tint * col;
   (*out).tint = vec3f(0.0);
@@ -1264,7 +1307,8 @@ var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.
 
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
 // ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
-fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32) -> vec3f {
+// (rs: the sunlight's share through the rings — the direct light's, not the rings' own: their shine)
+fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32, rs: f32) -> vec3f {
   let b3 = bodies[BV * k + 3u];
   let src = lightSource(k);
   let Tl = src.x;
@@ -1292,7 +1336,13 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   // lit, a thin crescent bright; the gas giants, Venus and Titan's haze, as Lambert)
   var f = cosi;
   if (surf >= 4u && regolith(surf - 4u)) { f = 2.0 * cosi / max(cosi + mu, 1e-4); }
-  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * ((A.rgb + sky) * f + spec * cosi);
+  // (a ringed planet's night and twilight: the rings' light — its own axes, pat's: the pole z)
+  var shine = vec3f(0.0);
+  if (ringOuter(k) > 0.0 && cosi < 0.25) {
+    let Lb = spunAxes(k) * ldir;
+    shine = ringShine(k, pat, Lb) * (1.0 / PI) * (1.0 - 4.0 * cosi);
+  }
+  return blackbody(Tl * g, P.disk.w) * Bl * b3.y * (((A.rgb + sky) * f + spec * cosi) * rs + A.rgb * shine);
 }
 
 // Optically thin atmosphere above the photosphere (emission per unit length): the pink chromosphere
@@ -3386,7 +3436,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       }
     }
     // (in the shadows the light the lit ground around sheds: a few per cent)
-    let c = planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+    let c = planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0, ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz));
     ALB_GAIN = 1.0;
     return c * (sh + (1.0 - sh) * 0.03);
   }
@@ -4509,9 +4559,11 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   } else if (regolith(m)) {
     f = 2.0 * cosi / (cosi + mu);
   }
-  // (the rings' shadow: their plane the equator's)
+  // (the rings' shadow: their plane the equator's; their shine on the night and the twilight)
   let rs = ringShadow(k, q, vec3f(0.0, 0.0, 1.0), Ls);
-  return A / PI * E * (sunThrough(0.0, mu0) * f * rs + AIR.sky * smoothstep(-0.15, 0.25, mu0));
+  var shine = vec3f(0.0);
+  if (ringOuter(k) > 0.0 && mu0 < 0.25) { shine = ringShine(k, q, Ls) * ((1.0 - 4.0 * max(mu0, 0.0)) / PI); }
+  return A / PI * E * (sunThrough(0.0, mu0) * f * rs + AIR.sky * smoothstep(-0.15, 0.25, mu0) + shine);
 }
 
 // What a ray sees of the Earth: from ro along rd (its axes; radii), meeting the ground at tHit (< 0:
@@ -5795,7 +5847,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   } else if (solid && t > 0.0) {
     BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
     let nc = normalize(look * t - P.near0.xyz);
-    col = planetShade(kn, nc, toBody(nc), P.near4.xyz, -look, P.time.x, 1.0) * ringShadow(kn, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz);
+    col = planetShade(kn, nc, toBody(nc), P.near4.xyz, -look, P.time.x, 1.0, ringShadow(kn, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz));
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   col = min(col, vec3f(60000.0));
