@@ -447,7 +447,8 @@ struct Temporal {
   pRight: vec4f,  // the previous frame's (w: its tan, aspect)
   pUp: vec4f,
   pFwd: vec4f,
-  k: vec4f,       // history's exposure ratio (current / previous pre-exposure), on (0: copy), α fresh, α between
+  k: vec4f,       // history's exposure ratio (current / previous pre-exposure), on (0: copy), the least α of a fresh
+                  // pixel (1 / (n_max + 1): the history's weight capped at n_max), a pixel between rays' weight
   drift: vec4f,   // the camera's displacement since the previous frame [M], in these axes (the near body's frame);
                   // w: under this depth [M] a pixel shows the near body's ground — drawn afresh (0: none)
 };
@@ -459,6 +460,9 @@ fn rgbToYcocg(c: vec3f) -> vec3f {
 fn ycocgToRgb(y: vec3f) -> vec3f {
   return vec3f(y.x + y.y - y.z, y.x + y.z, y.x - y.y - y.z);
 }
+// a reversible tone map (Karis): the clamp and its statistics where a bright sample does not dominate
+fn tmFwd(c: vec3f) -> vec3f { return c / (1.0 + luminance(c)); }
+fn tmInv(c: vec3f) -> vec3f { return c / max(1.0 - luminance(c), 1e-4); }
 
 // The history read with a Catmull–Rom filter (9 bilinear taps): a bilinear read blurs it a little at
 // every frame's sub-pixel shift — over the 16 frames a block's rays take to cover it, as much as the
@@ -512,6 +516,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let zf = dot(d, TA.pFwd.xyz);
   var alpha = 1.0;
   var hist = cur.rgb;
+  var nOut = 0.0;
   // (the near body's ground: drawn afresh — or, the camera carried rigidly with it, where it was: the same
   // pixel — its ridges' edge too: a pixel by the ground (3×3) is carried, or the sky and the ground took
   // it in turn, one clamped, the other not: a checkerboard along the skyline)
@@ -536,35 +541,58 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     if (carried) { uv = (vec2f(gid.xy) + 0.5) / vec2f(size); }
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
-      // the range of the current frame around the pixel, at the block's scale (mean ± 1.25 σ, YCoCg)
+      // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
+      // tone-mapped values) — the samples a ray landed on this frame weighing more than those reconstructed
+      // between them (audit R2: the moments of the fresh samples)
       let st = i32(max(block / 2u, 1u));
       let hi = vec2i(size) - 1;
       var m1 = vec3f(0.0);
       var m2 = vec3f(0.0);
+      var ws = 0.0;
       for (var j = -1; j <= 1; j++) {
         for (var i = -1; i <= 1; i++) {
-          let q = rgbToYcocg(textureLoad(src, clamp(vec2i(gid.xy) + vec2i(i, j) * st, vec2i(0), hi), 0).rgb);
-          m1 += q;
-          m2 += q * q;
+          let qp = clamp(vec2i(gid.xy) + vec2i(i, j) * st, vec2i(0), hi);
+          let wq = select(0.25, 1.0, block <= 1u || stamps[u32(qp.y) * W + u32(qp.x)] >= R.u.w);
+          let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb));
+          m1 += wq * q;
+          m2 += wq * q * q;
+          ws += wq;
         }
       }
-      m1 /= 9.0;
-      let sd = sqrt(max(m2 / 9.0 - m1 * m1, vec3f(0.0)));
-      let h = rgbToYcocg(hist);
+      m1 /= ws;
+      let sd = sqrt(max(m2 / ws - m1 * m1, vec3f(0.0)));
+      let h = rgbToYcocg(tmFwd(hist));
       let g = TA.fwd.w;
       // a ray landed on this pixel this frame, or it was reconstructed between rays
       let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
-      alpha = select(TA.k.w, TA.k.z, fresh);
+      // (the history's accumulated weight, capped: α = w / (n + w) — a pixel's first samples count fully,
+      // then less and less, down to 1 / (n_max + 1); between rays w is small: the history kept)
+      let nMax = 1.0 / max(TA.k.z, 1e-3) - 1.0;
+      var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
+      let w = select(TA.k.w, 1.0, fresh);
       if (carried) {
         // (the ground carried with the camera: its history exact — not clamped to this frame's range, which
         // follows the ridges one ray march finds this frame; refined over ~10 frames: steady. Every pixel
         // alike: the ones between rays, taking half as much, lagged the light a quarter behind — a checkerboard)
         alpha = 0.1;
+        nOut = nPrev;
       } else {
-        hist = ycocgToRgb(clamp(h, m1 - g * sd, m1 + g * sd));
+        // (clipped towards the mean, not clamped per channel — Salvi —; far outside the range — a
+        // disocclusion, a change —, the history's weight cut)
+        let lo = m1 - g * sd;
+        let hb = m1 + g * sd;
+        let dv = h - m1;
+        let ext = max(hb - m1, vec3f(1e-5));
+        let k = max(max(abs(dv.x) / ext.x, abs(dv.y) / ext.y), abs(dv.z) / ext.z);
+        let hc = select(h, m1 + dv / k, k > 1.0);
+        if (k > 2.0) { nPrev *= 0.25; }
+        hist = tmInv(ycocgToRgb(clamp(hc, lo, hb)));
+        alpha = w / (nPrev + w);
+        nOut = min(nPrev + w, nMax);
       }
     }
   }
   let c = mix(max(hist, vec3f(0.0)), cur.rgb, alpha);
-  textureStore(dst, gid.xy, vec4f(c, cur.a));
+  // (the alpha: the history's weight — the variance the refining passes keep there is not needed while it moves)
+  textureStore(dst, gid.xy, vec4f(c, nOut));
 }

@@ -2307,7 +2307,9 @@ export class Renderer {
     near: { index: number; centre: Vec3; radius: number; axes: [Vec3, Vec3, Vec3] } | null;
   } | null = null;
   /** the reprojection's weights: a pixel a ray landed on, one between rays; the clamp's width [σ] */
-  taParams: [number, number, number] = [0.25, 0.05, 2.0];
+  // (the least α of a fresh pixel — 1/16: its history's weight capped at 15 frames (audit R2) —, a pixel
+  // between rays' weight, the clamp's width in σ)
+  taParams: [number, number, number] = [1 / 16, 0.05, 2.0];
   /** the near body's ground reprojected when the camera is carried with it (a switch for comparisons) */
   carryGround = true;
   /** (the last reprojection: the camera standing still on the near body's ground) */
@@ -2429,7 +2431,7 @@ export class Renderer {
         p.asp,
         ...p.fwd,
         0,
-        // (the history's exposure to this frame's; on; the weight of a pixel a ray landed on, of one between)
+        // (the history's exposure to this frame's; on; a fresh pixel's least α, a pixel between rays' weight)
         pre / p.pre,
         1,
         this.taParams[0],
