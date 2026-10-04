@@ -44,6 +44,7 @@ import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
 import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
+import { burnGraph } from "../ui/hud/graph";
 
 declare module "../controls" {
   interface CameraController {
@@ -748,19 +749,42 @@ function hubCompute(this: CameraController): HubInfo | null {
     const doneM = a === "node" ? this.nodeDone * C : (this.fcBurns[0]?.done ?? 0);
     const burning = a === "node" ? this.nodeBurning : !!this.fcBurns[0]?.firing;
     const start = b.t - burnT / 2;
+    const leftM = Math.max(dv - doneM, 0);
     let next: string | null = null;
+    let aimed: string | null = null,
+      nowOrbit: string | null = null;
     if (fc) {
-      // (after the burn, impulsive: the orbit it leaves)
-      const at = kepProp(fc.ctx.mu, fc.ctx.r, fc.ctx.v, Math.max(b.t, 0));
+      // (after the burn, impulsive: the orbit it leaves — burning, what is left of it given now)
+      const at = burning ? { r: fc.ctx.r, v: fc.ctx.v } : kepProp(fc.ctx.mu, fc.ctx.r, fc.ctx.v, Math.max(b.t, 0));
       const d = fromPNR(at.r, at.v, b.dv as KV3);
-      const v2 = burning ? fc.ctx.v : ([at.v[0] + d[0], at.v[1] + d[1], at.v[2] + d[2]] as KV3);
-      next =
-        circ && this.ourCirc?.altKm !== undefined
-          ? `→ ${tf("circular at {0} km", this.ourCirc.altKm.toFixed(0))}`
-          : burning
-            ? null
-            : `→ ${orbitOf(at.r, v2)}`;
+      const k = burning ? leftM / Math.max(dv, 1e-9) : 1;
+      aimed = orbitOf(at.r, [at.v[0] + d[0] * k, at.v[1] + d[1] * k, at.v[2] + d[2] * k] as KV3);
+      nowOrbit = orbitOf(fc.ctx.r, fc.ctx.v);
+      next = circ && this.ourCirc?.altKm !== undefined ? `→ ${tf("circular at {0} km", this.ourCirc.altKm.toFixed(0))}` : `→ ${aimed}`;
     }
+    // the graph: the Δv left against the time from the node, its trace kept while it is the same node
+    const nowS = this.nowTime() * Msec;
+    const key = `${a}:${Math.round(nowS + b.t)}`;
+    if (this.burnTrace?.key !== key) this.burnTrace = { key, pts: [] };
+    const tr = this.burnTrace.pts;
+    const x = -b.t;
+    if (burning && (!tr.length || x > tr[tr.length - 1]![0])) {
+      tr.push([x, leftM]);
+      // (a long burn: every other point dropped past 400)
+      if (tr.length > 400) this.burnTrace.pts = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+    }
+    const graph = burnGraph({
+      title: t("Δv left"),
+      dv,
+      left: leftM,
+      T: burnT,
+      x,
+      trace: this.burnTrace.pts,
+      burning,
+      labels: { y: t("Δv left"), x: t("from the node"), ignition: t("IGN"), cutoff: t("CUT") },
+    });
+    // (the director's cue: lit, what is left; done — within what a hand cuts — the engine to cut)
+    const cue = { tIgn: burning ? 0 : start, left: leftM, dv, burning, cut: burning && leftM <= Math.max(2e-3 * dv, 0.1) };
     const where = circ
       ? this.ourCirc?.where === "pe"
         ? t("the periapsis")
@@ -771,21 +795,24 @@ function hubCompute(this: CameraController): HubInfo | null {
     const phase = burning ? t("burning") : start > 120 ? tf("coasting to {0}, the time sped up", where) : tf("turning to {0}", where);
     const rows: [string, string][] = burning
       ? [
-          [t("Δv left"), ms(Math.max(dv - doneM, 0))],
-          [t("Burn"), tf("{0} left", dur(Math.max(dv - doneM, 0) / Math.max(thrSI, 1e-9)))],
+          [t("Δv left"), ms(leftM)],
+          [t("Burn"), tf("{0} left", dur(leftM / Math.max(thrSI, 1e-9)))],
         ]
       : [
           [t("Burn in"), dur(start)],
           ["Δv", ms(dv)],
           [t("Duration"), dur(burnT)],
         ];
+    if (nowOrbit && aimed && burning) rows.push([t("Orbit now"), nowOrbit]);
     return {
       mode: circ ? "circularize" : a,
       title: circ ? "CIRC" : "NODE",
-      phase,
+      phase: cue.cut ? t("Δv delivered — cut the engine") : phase,
       rows,
       next,
       bar: burning ? Math.min(doneM / Math.max(dv, 1e-9), 1) : null,
+      graph,
+      cue,
     };
   }
   if (a === "circularize") {

@@ -23,6 +23,7 @@ import { EPOCH_DATE, M_SECONDS } from "../system/solar";
 import { C_MPS, G0, M_METRES } from "../units";
 import { caught } from "../debug";
 import { shownSpeed } from "./hud/model";
+import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
 
 const W = 2048,
   H = 1024,
@@ -41,6 +42,21 @@ const BG = "#04212c",
   AMBER = "#ffb347",
   RED = "#ff5a46",
   GREEN = "#7dff9a";
+
+/** the assistants' graphs in the film's cyan */
+const SCREEN_GRAPH: GraphPalette = {
+  bg: PANEL,
+  grid: "rgba(98, 230, 255, 0.22)",
+  text: TEXT,
+  dim: DIM,
+  ideal: LINE,
+  corridor: "rgba(98, 230, 255, 0.16)",
+  flown: "#ffffff",
+  on: GREEN,
+  off: AMBER,
+  wait: TEXT,
+  font: FONT,
+};
 
 type V3 = [number, number, number];
 /** near the ground (FlightHud's Info.surface) */
@@ -1055,6 +1071,12 @@ export class CockpitScreens {
   private plan(g: OffscreenCanvasRenderingContext2D, d: ScreenData) {
     const p = d.info.plan;
     this.frame(g, "PLAN · MANOEUVRES");
+    // (the assistant's graph — the burn's Δv left against its time —, as the HUD's beside the hub)
+    const G = d.settings.cockpitAids ? (d.info.hub?.graph ?? null) : null;
+    if (G && (!p || !p.nodes.length)) {
+      this.graph(g, G, 70);
+      return;
+    }
     if (!p || !p.nodes.length) {
       g.font = `700 26px ${FONT}`;
       g.fillStyle = DIM;
@@ -1099,6 +1121,10 @@ export class CockpitScreens {
       }
       y0 = 250;
     }
+    if (G) {
+      this.graph(g, G, y0 - 20);
+      return;
+    }
     const rows: [string, string, string?][] = p.nodes.slice(0, y0 > 100 ? 4 : 7).map((n, k) => {
       const dv = Math.hypot(...(n.dv as number[])) * C;
       const t = (n.t - d.time) * M_SECONDS;
@@ -1123,6 +1149,19 @@ export class CockpitScreens {
       } else line = line ? `${line} ${w}` : w;
     }
     if (y <= 660) g.fillText(line, 18, y);
+  }
+
+  /** An assistant's graph (ui/hud/graph.ts) from y down: its title, its verdict, the figure. */
+  private graph(g: OffscreenCanvasRenderingContext2D, G: AssistGraph, y: number) {
+    g.font = `700 20px ${FONT}`;
+    g.fillStyle = TEXT;
+    g.textAlign = "left";
+    g.fillText(G.title.toUpperCase(), 24, y + 22);
+    g.textAlign = "right";
+    g.fillStyle = G.state === "on" ? GREEN : G.state === "off" ? AMBER : DIM;
+    g.fillText(G.state === "on" ? "ON PROFILE" : G.state === "off" ? "OFF PROFILE" : "WAITING", SLOT - 24, y + 22);
+    g.textAlign = "left";
+    drawGraph(g, G, { x: 12, y: y + 34, w: SLOT - 24, h: SH - y - 60 }, SCREEN_GRAPH, 1.9);
   }
 
   // ---------------------------------------------------------------------------------- 6 CLOCKS

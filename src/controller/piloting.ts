@@ -835,7 +835,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           ((s.engine === "crew" && cam.region === "hole") || onOurSide(s, cam)) &&
           s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20) ||
         (this.nodeBurning && onOurSide(s, cam)),
-      gimbal: this.nodeBurning && onOurSide(s, cam),
+      // (assisted: the pilot's nose and engine — none held on the burn for it)
+      gimbal: this.nodeBurning && onOurSide(s, cam) && !this.pilot.assist,
       // (the Crew engine's lag, over the frame's flight time; the Cinema engine's, none)
       inertia: mp.I,
       torque,
@@ -904,12 +905,18 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // rapidity spent (the propellant gauge), and the Δv delivered to the executing node (proper
   // acceleration × proper time)
   // (the antigravity's hold is free)
-  const w = Math.hypot(...(sfCtx ? sub3(out.acc, sfCtx.free) : out.acc)) * (this.properTime - tau0);
+  const net = sfCtx ? sub3(out.acc, sfCtx.free) : out.acc;
+  const dTau = this.properTime - tau0;
+  const w = Math.hypot(...net) * dTau;
+  // (assisted — the pilot flying the burn —: what serves it, the thrust's part along the burn's
+  // direction; thrust the other way takes it back)
+  const along = (d: Vec3 | null | undefined) => (this.pilot.assist && d ? dot3(net, d) * dTau : w);
   if (this.entryRun?.phase === "burn") this.entryRun.done += w * C_MPS;
-  if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing) this.fcBurns[0].done += w * C_MPS;
+  if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing)
+    this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
   if (fuelOn(s)) this.spent += w / Math.max(this.pressureThrust(), 0.05);
-  if (burn && this.nodeBurning) this.nodeDone += w;
+  if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();
 }

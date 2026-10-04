@@ -1329,6 +1329,23 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-hub-bar { height: 3px; background: rgba(160, 210, 255, 0.12); border-radius: 2px; margin: 0 0 6px; overflow: hidden; }
 .fl-hub-bar b { display: block; height: 100%; background: var(--hud-amber); }
 .fl-hub-next { margin-top: 6px; font: 500 11px var(--mono); color: #9fe8ff; line-height: 1.35; }
+/* the assistant's graph under the card: its title folds it; the dot's verdict on its edge */
+.fl-hub-graph { margin-top: 8px; border-top: 1px solid rgba(160, 210, 255, 0.14); padding-top: 5px; }
+.fl-hub-graph[hidden], .fl-hub-gc[hidden] { display: none; }
+.fl-hub-gt {
+  all: unset;
+  pointer-events: auto;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  font: 700 10.5px var(--hud-font);
+  letter-spacing: 0.14em;
+  color: rgba(190, 215, 240, 0.85);
+}
+.fl-hub-gt:hover, .fl-hub-gt:focus-visible { color: #fff; }
+.fl-hub-graph[data-state="on"] .fl-hub-gt { color: rgba(150, 255, 190, 0.95); }
+.fl-hub-graph[data-state="off"] .fl-hub-gt { color: var(--hud-amber); }
+.fl-hub-gc { display: block; width: 100%; height: 118px; margin-top: 4px; }
 body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); }
 .fl-ballbox { position: absolute; width: 176px; height: 176px; border-radius: 50%; }
 .fl-ballbox::before {

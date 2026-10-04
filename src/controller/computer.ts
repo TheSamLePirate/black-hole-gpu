@@ -418,7 +418,8 @@ function fcPlan(this: CameraController): { burns: Burn[]; note: string; executin
   }
   if (this.fcAboutHole()) {
     const st = this.stateNow();
-    const nodes = st ? this.plan.nodes.filter((n) => n.t > st.t - 1e-9) : [];
+    // (the node burning kept past its time: a burn is centred on it)
+    const nodes = st ? this.plan.nodes.filter((n, i) => n.t > st.t - 1e-9 || (i === 0 && this.nodeBurning)) : [];
     if (!st || !nodes.length) return null;
     return {
       burns: nodes.map((n, i) => ({
@@ -585,7 +586,8 @@ function burnsStep(this: CameraController, cam: ReturnType<typeof cameraFrame>):
   if (!B.firing) {
     this.warpWant = null;
     s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
-    if (wait <= 0) {
+    // (assisted: the pilot lighting it in the last half burn before its start starts it)
+    if (wait <= 0 || (P.assist && P.throttle > 0.02 && wait < burnT / 2)) {
       B.firing = true;
       B.done = 0;
       this.warpWant = null;
@@ -596,12 +598,14 @@ function burnsStep(this: CameraController, cam: ReturnType<typeof cameraFrame>):
   }
   this.warpWant = null;
   s.timeSpeed = this.warpSet = 1 / Msec;
-  if (B.done >= size) {
+  // (assisted: done within what a hand cuts — 0.2 % or 10 cm/s — and once the engine is cut)
+  const tol = P.assist ? Math.max(2e-3 * size, 0.1) : 0;
+  if (B.done >= size - tol && (!P.assist || P.throttle <= 0.01)) {
     this.fcBurns.shift();
     this.onPilotMessage?.(tf("Burn {0} done ({1} m/s)", B.label, B.done.toFixed(1)));
     return att;
   }
-  return { ...att, throttle: Math.min(1, Math.max((size - B.done) / Math.max(thr * 0.5, 1e-9), 0.05)) };
+  return { ...att, throttle: B.done >= size - tol ? 0 : Math.min(1, Math.max((size - B.done) / Math.max(thr * 0.5, 1e-9), 0.05)) };
 }
 
 /**

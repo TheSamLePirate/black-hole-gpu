@@ -13,6 +13,7 @@ import type { LocalState, PlanetFrame } from "./landing";
 import { FlightComputer } from "./pilot";
 import { dvLocal, type ManeuverNode, type PlanPath } from "./maneuver";
 import type { Mount, MountPose } from "./mounts";
+import type { AssistGraph } from "./ui/hud/graph";
 import { fleet } from "./fleet";
 import type { VesselId } from "./vessels";
 import { type GamepadInput, sharedPad, type PadAction } from "./gamepad";
@@ -148,6 +149,11 @@ export interface HubInfo {
   next: string | null;
   /** the phase's progress 0…1, or null */
   bar: number | null;
+  /** the assistant's graph (ui/hud/graph.ts), or none */
+  graph?: AssistGraph | null;
+  /** a burn's cue for the director: its ignition [s from now, ≤ 0 lit], the Δv left and planned [m/s],
+   *  lit, and done — the engine to cut */
+  cue?: { tIgn: number; left: number; dv: number; burning: boolean; cut: boolean } | null;
 }
 
 /** The future as the eye sees it (CameraController.futureView): directions in camera coordinates. */
@@ -883,6 +889,8 @@ export class CameraController {
   /** what the autopilots measured as they flew (our universe): the approach's, the hold's */
   hubNote: { left?: number; closing?: number; ttg?: number; stand?: number; name?: string; off?: number; drift?: number } = {};
   hubCache: { at: number; v: HubInfo | null } | null = null;
+  /** the burn's trace for its graph: the node it flies (its time), the Δv left against the time from it */
+  burnTrace: { key: string; pts: [number, number][] } | null = null;
 
   /**
    * Our universe's circularization, its run: engaged by the pilot, a burn at the next apsis above the

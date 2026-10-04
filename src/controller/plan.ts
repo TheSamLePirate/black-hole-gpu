@@ -1139,7 +1139,11 @@ function nodeBurn(
   const hold = nav ? (this.issGoal ? this.issRefineTick(nav, node, burnT) : this.ourRefineTick(nav, node, burnT)) : false;
   const toNode = node.t - this.nowTime();
   const start = toNode - burnT / 2;
-  if (!this.nodeBurning && start <= 0 && !hold) {
+  // (assisted: the pilot flies the burn — lit a little early, it starts then; the warp no faster than
+  // a pilot follows: the last seconds before it, and the burn itself, over 20 s at least, in real time)
+  const assisted = this.pilot.assist;
+  const realTime = 1 / (4.925490947e-6 * s.massSolar);
+  if (!this.nodeBurning && (start <= 0 || (assisted && this.pilot.throttle > 0.02 && start < burnT / 2)) && !hold) {
     if (this.missionHold && this.pilot.hold === "prograde") this.pilot.hold = "none";
     this.missionHold = false;
     this.nodeBurning = true;
@@ -1196,12 +1200,20 @@ function nodeBurn(
     // (our universe: the end of a burn slowed down — a frame gives at most half of what is left —
     // to cut it within a cm/s: 1 m/s at the Earth's departure is ~1 000 km at the Moon)
     if (nav) w = Math.min(w, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
+    const lft = goalLeft ?? left;
+    if (assisted) {
+      const rest = lft / aMax / Math.max(dtau, 1e-3);
+      w = Math.min(w, Math.max(burnT / 20, realTime), Math.max(rest / 4, realTime));
+    }
     this.setNodeWarp(w);
     const perFrame = aMax * s.timeSpeed * dt * dtau;
     // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
-    // within a cm/s)
-    const lft = goalLeft ?? left;
-    if ((nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || lft < 1e-12) {
+    // within a cm/s; assisted, within what a hand cuts — 0.2 % or 10 cm/s — and the engine cut)
+    const cut = assisted && lft <= Math.max(2e-3 * total, nav ? 0.1 / C_MPS : 1e-6);
+    const done = assisted
+      ? cut && this.pilot.throttle <= 0.01
+      : (nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || lft < 1e-12;
+    if (done) {
       this.goalRem = null;
       P.nodes.shift();
       this.nodeDone = 0;
@@ -1277,7 +1289,7 @@ function nodeBurn(
       } else this.refreshPlan(true);
       return null;
     }
-    return { dir: lin(dir, 1 / dl, dir, 0), throttle: goalGate * Math.min(1, lft / Math.max(perFrame, 1e-12)) };
+    return { dir: lin(dir, 1 / dl, dir, 0), throttle: cut ? 0 : goalGate * Math.min(1, lft / Math.max(perFrame, 1e-12)) };
   }
   // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
   // on the burn: it turns while coasting)
@@ -1288,6 +1300,8 @@ function nodeBurn(
   if (nav)
     w = coast > 0 ? Math.min(Math.max(start / 3, 0.002), 1e5) : Math.max(Math.min(start / 2, w), burnT * M_SECONDS > 30 ? 0.002 : 0.01);
   if (hold) w = Math.min(w, Math.max(start / 4, 0.002));
+  // (assisted: the ignition's last seconds in real time — its countdown followed)
+  if (assisted) w = Math.min(w, Math.max(start / 8, realTime));
   // (a long coast rides the rails, held back near bodies like any flight)
   if (s.system !== "none" || w > 500) w = Math.min(w, Math.max(this.railsLimit(cam).lim, 3));
   this.setNodeWarp(w);
@@ -1295,7 +1309,8 @@ function nodeBurn(
   // minutes, or a few burn lengths — then onto the burn; a hold the pilot chose is kept)
   const far = nav ? start > Math.max(600 / M_SECONDS, 3 * burnT) : start > 60;
   if (nav) {
-    if (far && this.pilot.hold === "none") {
+    // (assisted: the pilot's attitude, none set for it)
+    if (far && this.pilot.hold === "none" && !this.pilot.assist) {
       this.pilot.hold = "prograde";
       this.missionHold = true;
     } else if (!far && this.missionHold && this.pilot.hold === "prograde") {

@@ -289,14 +289,15 @@ export class FlightComputer {
     this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   }
 
+  /** (assisted, a hold is the pilot's way to follow the cue: the autopilot kept, and kept by it) */
   setHold(h: Hold) {
     this.hold = this.hold === h ? "none" : h;
-    if (this.hold !== "none") this.auto = "none";
+    if (this.hold !== "none" && !this.assist) this.auto = "none";
   }
   setAuto(a: Auto) {
     this.auto = this.auto === a ? "none" : a;
     this.anchor = null;
-    if (this.auto !== "none") this.hold = "none";
+    if (this.auto !== "none" && !this.assist) this.hold = "none";
     else this.throttle = 0;
   }
 

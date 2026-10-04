@@ -67,4 +67,16 @@ export default {
   "U: take off to orbit — or Place the ship elsewhere.": "U : décoller vers l'orbite — ou Placer le vaisseau ailleurs.",
   "Time is held: the image refines, the ship waits.": "Le temps est suspendu : l'image s'affine, le vaisseau attend.",
   "Space: run the time.": "Espace : relancer le temps.",
+  // C1: the burns flown by hand — the ignition counted down, the Δv left followed, the cutoff
+  "from the node": "depuis le nœud",
+  IGN: "ALLUM.",
+  CUT: "COUP",
+  "Orbit now": "Orbite actuelle",
+  "Δv delivered — cut the engine": "Δv fourni — coupez le moteur",
+  "Fold the graph": "Replier le graphe",
+  "Show the graph": "Afficher le graphe",
+  "CUT THE ENGINE": "COUPEZ LE MOTEUR",
+  "Δv DELIVERED": "Δv FOURNI",
+  "IGNITION IN {0}": "ALLUMAGE DANS {0}",
+  "Δv LEFT {0}": "Δv RESTANT {0}",
 } satisfies Record<string, string>;

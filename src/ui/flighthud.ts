@@ -29,6 +29,7 @@ import { solarState } from "../system/solar";
 import type { Arrival } from "../system/our-plan";
 import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
+import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
 import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
@@ -46,6 +47,22 @@ import { hudShown } from "./hud/declutter";
 import { safeFrame } from "./hud/safe";
 import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
+import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
+
+/** the HUD's colours for the assistants' graphs: the corridor green, the trace white, the dot's verdict */
+const HUD_GRAPH: GraphPalette = {
+  bg: null,
+  grid: "rgba(160, 210, 255, 0.16)",
+  text: "#e8f0fa",
+  dim: "rgba(190, 215, 240, 0.7)",
+  ideal: "rgba(120, 255, 170, 0.85)",
+  corridor: "rgba(120, 255, 170, 0.14)",
+  flown: "#ffffff",
+  on: GREEN,
+  off: AMBER,
+  wait: CYAN,
+  font: "Rajdhani, Inter, system-ui, sans-serif",
+};
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
@@ -350,6 +367,12 @@ export class FlightHud {
   private cockpit = h("div", "fl-cockpit");
   /** the hub's card, beside the ring: the autopilot flying, its phase, figures, prediction */
   private hubCard = h("div", "fl-panel fl-hubcard");
+  private hubBody = h("div", "fl-hub-body");
+  /** the assistant's graph under the card (ui/hud/graph.ts): folded with its title */
+  private hubGraph = h("div", "fl-hub-graph");
+  private hubGraphBtn = h("button", "fl-hub-gt") as HTMLButtonElement;
+  private hubGraphCv = h("canvas", "fl-hub-gc") as HTMLCanvasElement;
+  private graphOpen = store.get("kerr.assist-graph") !== "0";
   private hubSig = "";
   private ball = h("canvas", "fl-ball");
   private right = h("div", "fl-right fl-panel");
@@ -451,12 +474,38 @@ export class FlightHud {
       ? t("Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)")
       : t("The autopilot flies — click: you fly it, assisted (F4)");
     C.classList.toggle("assist", i.assist);
-    C.innerHTML =
+    this.drawHubGraph(H.graph ?? null);
+    this.hubBody.innerHTML =
       `<div class="fl-title">${esc(H.title)}<button class="fl-hub-mode" data-testid="hub-assist" title="${esc(tip)}">${mode}</button></div>` +
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
       (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
       (H.next ? `<div class="fl-hub-next">${esc(H.next)}</div>` : "");
+  }
+
+  /** The assistant's graph under the hub's card: its title folds it; drawn at the card's width. */
+  private drawHubGraph(G: AssistGraph | null) {
+    const B = this.hubGraph;
+    B.hidden = !G;
+    if (!G) return;
+    const head = `${this.graphOpen ? "▾" : "▸"} ${G.title.toUpperCase()}`;
+    if (this.hubGraphBtn.textContent !== head) this.hubGraphBtn.textContent = head;
+    this.hubGraphBtn.title = this.graphOpen ? t("Fold the graph") : t("Show the graph");
+    B.dataset.state = G.state;
+    const cv = this.hubGraphCv;
+    cv.hidden = !this.graphOpen;
+    if (!this.graphOpen) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(cv.clientWidth, 120),
+      hh = 118;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(hh * dpr);
+    }
+    const g = cv.getContext("2d");
+    if (!g) return;
+    g.clearRect(0, 0, cv.width, cv.height);
+    drawGraph(g, G, { x: 0, y: 0, w: cv.width, h: cv.height }, HUD_GRAPH, dpr);
   }
 
   private drawStrip(i: Info) {
@@ -858,6 +907,14 @@ export class FlightHud {
     this.hubCard.addEventListener("click", (e) => {
       if ((e.target as HTMLElement).closest(".fl-hub-mode")) act.assist();
     });
+    this.hubGraphBtn.dataset.testid = "assist-graph";
+    this.hubGraphBtn.onclick = () => {
+      this.graphOpen = !this.graphOpen;
+      store.set("kerr.assist-graph", this.graphOpen ? "1" : "0");
+      this.hubSig = "";
+    };
+    this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv);
+    this.hubCard.append(this.hubBody, this.hubGraph);
     this.cockpit.append(this.hubCard);
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
       const b = h("button", "fl-rb") as HTMLButtonElement;
@@ -1930,21 +1987,67 @@ export class FlightHud {
     const want = Math.round(D.throttle * 100),
       have = Math.round(i.throttle * 100);
     // (the autopilot fires only once its nose is on the burn: turning comes first)
-    const say = D.nose && !on ? t("TURN TO THE CUE") : want > 0 ? tf("THROTTLE {0} %", want) : have > 2 ? t("CUT THE THROTTLE") : "";
+    let say = D.nose && !on ? t("TURN TO THE CUE") : want > 0 ? tf("THROTTLE {0} %", want) : have > 2 ? t("CUT THE THROTTLE") : "";
+    // a burn's cue (C1): its ignition counted down, the Δv left as it is flown, the cutoff
+    const cue = i.hub?.cue ?? null;
+    const ms = (v: number) => (v >= 1e4 ? `${(v / 1e3).toFixed(2)} km/s` : `${v.toFixed(v < 100 ? 1 : 0)} m/s`);
+    let info = "";
+    if (cue?.cut) say = have > 2 ? t("CUT THE ENGINE") : t("Δv DELIVERED");
+    else if (cue && !cue.burning && cue.tIgn < 600) info = tf("IGNITION IN {0}", fmtS(Math.max(cue.tIgn, 0)));
+    else if (cue?.burning) info = tf("Δv LEFT {0}", ms(cue.left));
     ctx.font = `700 ${12 * dpr}px ${FONT}`;
     ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
     ctx.lineWidth = 3 * dpr;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
-    const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), say].filter(Boolean);
+    const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), info, say].filter(Boolean);
     // (the words kept inside the image, clear of the tapes on its sides: drawn inwards of an edge arrow)
     const lx = Math.min(Math.max(cx + (W / 2 - cx) * 0.22, W * 0.2), W * 0.8);
-    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.12), H * 0.78);
+    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.12), H * 0.72);
+    // (a backdrop: the words over the labels of what is behind them)
+    const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16 * dpr;
+    ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+    ctx.fillRect(lx - bw / 2, ly + 5 * dpr, bw, (15 * lines.length + 6 + (cue?.burning ? 8 : 0)) * dpr);
     lines.forEach((l, k) => {
       const y = ly + (16 + 15 * k) * dpr;
       ctx.strokeText(l, lx, y);
-      ctx.fillStyle = k === 0 ? col : (D.nose && !on) || (want > 0 && Math.abs(want - have) > 5) ? AMBER : GREEN;
+      const cutting = cue?.cut && have > 2 && l === say;
+      ctx.fillStyle =
+        k === 0
+          ? col
+          : l === info
+            ? CYAN
+            : cutting
+              ? blinkOn()
+                ? RED
+                : AMBER
+              : (D.nose && !on) || (want > 0 && Math.abs(want - have) > 5)
+                ? AMBER
+                : GREEN;
       ctx.fillText(l, lx, y);
     });
+    if (!cue) return;
+    // the last ten seconds before the ignition: counted down in large figures over the cue
+    if (!cue.burning && cue.tIgn > 0 && cue.tIgn <= 10) {
+      ctx.font = `700 ${34 * dpr}px ${MONO}`;
+      ctx.lineWidth = 4 * dpr;
+      const n = String(Math.ceil(cue.tIgn));
+      ctx.strokeText(n, cx, cy - R - 12 * dpr);
+      ctx.fillStyle = cue.tIgn <= 3 ? AMBER : CYAN;
+      ctx.fillText(n, cx, cy - R - 12 * dpr);
+    }
+    // burning: the Δv flown against the burn's, a gauge under the words — green when it is done
+    if (cue.burning && cue.dv > 0) {
+      const bw = 132 * dpr,
+        bh = 5 * dpr;
+      const bx = lx - bw / 2,
+        by = ly + (16 + 15 * lines.length - 6) * dpr;
+      const f = Math.min(Math.max(1 - cue.left / cue.dv, 0), 1);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(bx - dpr, by - dpr, bw + 2 * dpr, bh + 2 * dpr);
+      ctx.fillStyle = cue.cut ? GREEN : AMBER;
+      ctx.fillRect(bx, by, bw * f, bh);
+    }
   }
 
   /** a distance [m]: metres, kilometres, then as the HUD writes them (AU) */

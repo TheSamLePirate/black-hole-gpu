@@ -940,6 +940,8 @@ async function main() {
     camera.pilot.assist = !camera.pilot.assist;
     // (the throttle the pilot's from where the autopilot left it)
     if (camera.pilot.assist) camera.pilot.throttle = camera.pilot.engineNow;
+    // (the autopilot flying again: it points the nose — the pilot's hold off)
+    else if (camera.pilot.auto !== "none") camera.pilot.hold = "none";
     panel.toast(
       camera.pilot.assist
         ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies")
