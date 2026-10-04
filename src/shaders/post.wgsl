@@ -440,6 +440,23 @@ fn meter(@builtin(global_invocation_id) gid: vec3u) {
 // frame is a reconstruction from one ray a block, its own 3×3 would crush the history's detail), then
 // blended: a pixel a ray landed on this frame takes more of it than one reconstructed between rays.
 // ---------------------------------------------------------------------------------------------
+// the catalogue stars a realtime frame splatted where they fall (trace.wgsl: splatStar, R8): 3 × u32 per
+// pixel, the pre-exposed radiance × 2¹⁶
+@group(0) @binding(23) var<storage, read> starAcc: array<u32>;
+fn starsAt(i: u32) -> vec3f {
+  return vec3f(f32(starAcc[3u * i]), f32(starAcc[3u * i + 1u]), f32(starAcc[3u * i + 2u])) * (1.0 / 65536.0);
+}
+
+// The realtime image with its stars: the reprojected one (the history, which keeps none: its stars,
+// absent from the frame's range, clipped), the splatted stars over it
+@compute @workgroup_size(8, 8)
+fn stars(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(dst);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let c = textureLoad(src, vec2i(gid.xy), 0);
+  textureStore(dst, gid.xy, vec4f(c.rgb + starsAt(gid.y * size.x + gid.x), c.a));
+}
+
 struct Temporal {
   right: vec4f,   // current camera axes (w: tan of the half vertical field, aspect, unused)
   up: vec4f,
@@ -577,12 +594,16 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     let idx = gid.y * W + gid.x;
     var c = h.rgb * TA.k.x;
     var n = h.a;
+    // (the last realtime frame's stars — the camera has not moved — where the refinement has not drawn its own)
+    var a = 0.0;
     if (stamps[idx] >= bitcast<u32>(TA.mb.z)) {
       let nc = accum[idx].a;
       let nh = h.a * TA.mb.y;
-      c = mix(c, cur.rgb, nc / max(nc + nh, 1e-6));
+      a = nc / max(nc + nh, 1e-6);
+      c = mix(c, cur.rgb, a);
       n = nh + nc;
     }
+    c += (1.0 - a) * starsAt(idx) * TA.k.x;
     textureStore(dst, gid.xy, vec4f(max(c, vec3f(0.0)), n));
     return;
   }

@@ -15,7 +15,7 @@ struct Params {
   cam: vec4f,      // r, θ, φ, tan(fov/2)
   camRight: vec4f, // camera basis in the ZAMO frame, components (r̂, θ̂, φ̂); w = aspect
   camUp: vec4f,    // w = pixel angular size
-  camFwd: vec4f,   // w = unused
+  camFwd: vec4f,   // w: the catalogue stars splatted (R8): radiance → fixed point (the pre-exposure × 2¹⁶); 0: not
   zamo: vec4f,     // α, ω, ϖ, √Σ at the camera
   zamo2: vec4f,    // √(Σ/Δ), unused...
   boost: vec4f,    // observer velocity β in the ZAMO frame (r̂, θ̂, φ̂), w = γ
@@ -135,12 +135,14 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 
 @group(0) @binding(0) var<uniform> P: Params;
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
-@group(0) @binding(2) var<storage, read> bbLut: array<vec4f>;
+@group(0) @binding(2) var<storage, read> luts: array<vec4f>; // the blackbody's colours (LUT_N), then the synchrotron's (SYNC_N)
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
 @group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
-@group(0) @binding(7) var<storage, read> syncLut: array<vec4f>;     // synchrotron spectrum colours
+// the catalogue stars of a realtime frame, splatted where they fall (R8): 3 × u32 per pixel, fixed point
+// (radiance × P.camFwd.w — the pre-exposure × 2¹⁶), cleared before the frame (post.wgsl: stars)
+@group(0) @binding(7) var<storage, read_write> starSplat: array<atomic<u32>>;
 @group(0) @binding(8) var mwTex: texture_2d<f32>;      // Gaia DR2 Milky Way (linear, mip-mapped)
 @group(0) @binding(9) var starLodTex: texture_2d<f32>; // catalogue radiance map (large footprints)
 // Star catalogue: [magic, grid, count, 0, cellStart[6·grid² + 1], stars (x, y, z, mag|T packed)]
@@ -268,7 +270,7 @@ fn bbLookup(T: f32) -> vec4f {
   let x = (lt - LUT_LOG_MIN) / (LUT_LOG_MAX - LUT_LOG_MIN) * (LUT_N - 1.0);
   let i0 = u32(floor(x));
   let i1 = min(i0 + 1u, u32(LUT_N) - 1u);
-  return mix(bbLut[i0], bbLut[i1], fract(x));
+  return mix(luts[i0], luts[i1], fract(x));
 }
 // Radiance of a blackbody at T, relative to a reference log10 luminance.
 fn blackbody(T: f32, logYref: f32) -> vec3f {
@@ -288,7 +290,8 @@ fn syncColor(sArg: f32) -> vec3f {
   let x = (ls - SYNC_LOG_MIN) / (SYNC_LOG_MAX - SYNC_LOG_MIN) * (SYNC_N - 1.0);
   let i0 = u32(floor(x));
   let i1 = min(i0 + 1u, u32(SYNC_N) - 1u);
-  return mix(syncLut[i0].rgb, syncLut[i1].rgb, fract(x));
+  let o = u32(LUT_N);
+  return mix(luts[o + i0].rgb, luts[o + i1].rgb, fract(x));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -625,6 +628,14 @@ var<private> FOOT: f32 = 1.0;
 // the near ground over the block — its parallax and relief defeat the reprojection, it is drawn afresh)
 var<private> FOOT_NEAR: f32 = 1.0;
 var<private> FOOT_FAR: f32 = 1.0;
+// The catalogue stars splatted (R8: realtime under the reprojection, P.camFwd.w > 0): the main kernel's
+// ray of a block, at SPLAT_POS [px], owning the block from SPLAT_CELL; its sky light weighed by SPLAT_MUL
+// (what lies in front, the sky's share), its footprint over a pixel the sky filter's ÷ SPLAT_K
+var<private> SPLAT: bool = false;
+var<private> SPLAT_POS: vec2f;
+var<private> SPLAT_CELL: vec2f;
+var<private> SPLAT_MUL: vec3f;
+var<private> SPLAT_K: f32 = 1.0;
 fn pixFoot() -> f32 { return P.camUp.w * FOOT; }
 fn beam() -> f32 { return max(pixFoot(), probeBeam); }
 // The pseudo surface point of a body whose light is spread over rEff > R: the ray passing at qc from
@@ -2275,7 +2286,10 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
 
   // Catalogue stars through the sky filter; beyond ~cell-sized footprints, the catalogue's
   // radiance map (same flux, mip-filtered) takes over.
-  let filt = skyFilter(d, fp, P.time.w);
+  // (splatted: the stars of the whole block searched — σ half a block, 1.5 blocks' reach —, each
+  // drawn where it falls by the one ray of the block it falls in)
+  let fs = select(1.0, 0.5 * P.res.z / SPLAT_K, SPLAT);
+  let filt = skyFilter(d, Footprint(fp.jx * fs, fp.jy * fs), P.time.w);
   let grid = max(catalogue[1], 1u);
   let cellAngle = 1.5708 / f32(grid);
   let reach = 3.0 * filt.radius;
@@ -2297,6 +2311,13 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
       for (var i = s0; i < s1; i++) {
         let b = starsBase + 4u * i;
         let sd = vec3f(bitcast<f32>(catalogue[b]), bitcast<f32>(catalogue[b + 1u]), bitcast<f32>(catalogue[b + 2u]));
+        if (SPLAT) {
+          let mt = unpack2x16float(catalogue[b + 3u]);
+          // (realSky's 0.5 below; the radiance map's share, 1 − w, kept)
+          let F = blackbodyShifted(mt.y * 1000.0, g) * (exp2(-1.3287712 * mt.x) * fluxScale * 0.5 * (1.0 - w));
+          splatStar(sd - d, fp.jx / SPLAT_K, fp.jy / SPLAT_K, F);
+          continue;
+        }
         let k = skyKernel(filt, d - sd);
         if (k < 1e-4 * filt.norm) { continue; }
         let mt = unpack2x16float(catalogue[b + 3u]);
@@ -2311,6 +2332,59 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
   }
   // map value 0.1 (bright star clouds) → radiance 0.05: the sky stays far fainter than the inner disk
   return col * 0.5;
+}
+
+// the sky's footprint over a pixel (fp ÷ k) within 1.5× of the unlensed pixel's both ways (its singular values)
+fn plainFootprint(fp: Footprint, k: f32) -> bool {
+  let a = dot(fp.jx, fp.jx);
+  let b = dot(fp.jx, fp.jy);
+  let c = dot(fp.jy, fp.jy);
+  let h = 0.5 * (a + c);
+  let r = sqrt(max(0.25 * (a - c) * (a - c) + b * b, 0.0));
+  let n2 = P.camUp.w * P.camUp.w * k * k;
+  return h + r < 2.25 * n2 && h - r > n2 / 2.25;
+}
+
+// A catalogue star's flux F (radiance × sr) splatted where it falls on the image: its offset v from the
+// ray's direction through the pixel Jacobian (J v = offset, least squares in the tangent plane), kept
+// when it falls in the ray's block (each star drawn once, by one ray); its radiance F / Ω — the lensed
+// pixel's solid angle: the magnification — over a 3×3 Gaussian (the star's size, the pixel filter),
+// normalized: no flux lost, and its peak steady as it crosses the pixels.
+fn splatStar(v: vec3f, jx: vec3f, jy: vec3f, F: vec3f) {
+  let a = dot(jx, jx);
+  let b = dot(jx, jy);
+  let c = dot(jy, jy);
+  let det = a * c - b * b;
+  if (det <= 0.0) { return; }
+  let px = dot(jx, v);
+  let py = dot(jy, v);
+  let p = SPLAT_POS + vec2f(c * px - b * py, a * py - b * px) / det;
+  let q = p - SPLAT_CELL;
+  let blk = P.res.z;
+  if (q.x < 0.0 || q.y < 0.0 || q.x >= blk || q.y >= blk) { return; }
+  let W = i32(P.res.x);
+  let H = i32(P.res.y);
+  let om = length(cross(jx, jy));
+  let sg = clamp(sqrt(0.1225 + P.time.w * P.time.w / om), 0.5, 1.2);
+  let L = SPLAT_MUL * F * (P.camFwd.w / om);
+  let p0 = vec2i(floor(p));
+  var wt: array<f32, 9>;
+  var ws = 0.0;
+  for (var k = 0; k < 9; k++) {
+    let e = vec2f(p0 + vec2i(k % 3 - 1, k / 3 - 1)) + 0.5 - p;
+    wt[k] = exp(-dot(e, e) / (2.0 * sg * sg));
+    ws += wt[k];
+  }
+  for (var k = 0; k < 9; k++) {
+    let o = p0 + vec2i(k % 3 - 1, k / 3 - 1);
+    if (o.x < 0 || o.y < 0 || o.x >= W || o.y >= H) { continue; }
+    let x = L * (wt[k] / ws);
+    if (max(x.r, max(x.g, x.b)) < 0.5) { continue; }
+    let i = 3u * u32(o.y * W + o.x);
+    atomicAdd(&starSplat[i], u32(min(x.r, 4e9) + 0.5));
+    atomicAdd(&starSplat[i + 1u], u32(min(x.g, 4e9) + 0.5));
+    atomicAdd(&starSplat[i + 2u], u32(min(x.b, 4e9) + 0.5));
+  }
 }
 
 fn background(d: vec3f, g: f32, fp: Footprint, sky: f32, org: vec4f) -> vec3f {
@@ -5519,7 +5593,19 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let k = select(0.35, 0.5 * FOOT_FAR, interleaved);
     fp.jx *= k;
     fp.jy *= k;
+    // (R8: realtime under the reprojection, the catalogue stars splatted where they fall rather than
+    // caught by the block's ray — one frame in b², spread over the block by the gather: squares, strobing.
+    // Where the image maps to the sky nearly as a plain camera does — the pixel's footprint within 1.5×
+    // of the unlensed one both ways —: there the block's linear map holds; near the hole's critical
+    // curves it does not — neighbouring blocks claimed the same star, a string of beads for an arc —, the
+    // rays catch them as before and the history gathers the arcs)
+    SPLAT = interleaved && P.camFwd.w > 0.0 && !(HAS_POL && P.pol.x > 0.5) && plainFootprint(fp, k);
+    SPLAT_POS = pos;
+    SPLAT_CELL = vec2f(gid.xy) * P.res.z;
+    SPLAT_MUL = tr.bgW * tr.tint * P.time.z; // (× the sky's intensity, as backgroundSky has it)
+    SPLAT_K = k;
     col += tr.bgW * tr.tint * background(tr.dir, tr.gBg, fp, tr.sky, tr.org);
+    SPLAT = false;
   }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
 

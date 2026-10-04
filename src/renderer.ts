@@ -90,7 +90,7 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 511;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
-/** the camera held after moving: the refinement's full passes over which the history hands over to it */
+/** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
 const HANDOVER_PASSES = 8;
 /** the runways' block after the tiles' (trace.wgsl: Params.runways) */
 const RUNWAY_VEC4S = 17;
@@ -216,6 +216,8 @@ interface Target {
   /** the image through the depth of field (made when it is first on) */
   dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup; endTex: GPUTexture } | null;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
+  /** the catalogue stars splatted by a realtime frame (R8: 3 × u32 fixed point per pixel; live view only) */
+  stars: GPUBuffer;
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
   polGridBuf: GPUBuffer; // cell px, grid W, grid H, image W
   polGridPass: GPUBindGroup;
@@ -238,6 +240,8 @@ interface Target {
     moving: boolean;
     /** the hand-over's first frame stamp: the pixels drawn since are the refinement's */
     from: number;
+    /** the splatted stars over history k, into the image (post.wgsl stars) */
+    starBinds: GPUBindGroup[];
   } | null;
   /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
   blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
@@ -292,6 +296,7 @@ export class Renderer {
   private postAtrous: GPUComputePipeline;
   private postTemporal: GPUComputePipeline;
   private postMotion: GPUComputePipeline;
+  private postStars: GPUComputePipeline;
   private noise3d!: GPUTexture;
   private noiseSampler!: GPUSampler;
   private postBeamV: GPUComputePipeline;
@@ -343,8 +348,8 @@ export class Renderer {
   private paramsU = new Uint32Array(this.params);
   private paramBuf: GPUBuffer;
   private displayBuf: GPUBuffer;
+  /** the blackbody's LUT, then the synchrotron's (one binding: the tracer's storage buffers are counted) */
   private lutBuf: GPUBuffer;
-  private syncLutBuf: GPUBuffer;
   private bgTexture: GPUTexture;
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
@@ -532,7 +537,7 @@ export class Renderer {
         { binding: 4, visibility: C, sampler: { type: "filtering" } },
         { binding: 5, visibility: C, buffer: { type: "storage" } },
         { binding: 6, visibility: C, buffer: { type: "storage" } },
-        { binding: 7, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 7, visibility: C, buffer: { type: "storage" } },
         { binding: 8, visibility: C, texture: { sampleType: "float" } },
         { binding: 9, visibility: C, texture: { sampleType: "float" } },
         { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
@@ -660,6 +665,7 @@ export class Renderer {
     this.postAtrous = mkPost("atrous");
     this.postTemporal = mkPost("temporal");
     this.postMotion = mkPost("motionBlur");
+    this.postStars = mkPost("stars");
     this.postBeamV = mkPost("beamV");
     this.meterPipeline = mkPost("meter");
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -680,12 +686,12 @@ export class Renderer {
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
+    // (trace.wgsl: luts — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
-    this.lutBuf = device.createBuffer({ size: lut.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    device.queue.writeBuffer(this.lutBuf, 0, lut);
     const sync = buildSynchrotronLUT();
-    this.syncLutBuf = device.createBuffer({ size: sync.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    device.queue.writeBuffer(this.syncLutBuf, 0, sync);
+    this.lutBuf = device.createBuffer({ size: lut.byteLength + sync.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(this.lutBuf, 0, lut);
+    device.queue.writeBuffer(this.lutBuf, lut.byteLength, sync);
     // trilinear + anisotropic: sky lookups use explicit gradients from the lensed pixel footprint
     this.sampler = device.createSampler({
       magFilter: "linear",
@@ -1168,6 +1174,10 @@ export class Renderer {
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
+    const stars = d.createBuffer({
+      size: live ? px * 12 : 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
     const bloomLevels = Math.max(2, Math.min(8, Math.floor(Math.log2(Math.min(width, height))) - 3));
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     // (render attachment: the spaceship is composited over mip 0)
@@ -1192,6 +1202,7 @@ export class Renderer {
       moments,
       stamps,
       gather,
+      stars,
       hdr,
       bloomTex,
       bloomLevels,
@@ -1223,7 +1234,8 @@ export class Renderer {
 
   private destroyTarget(t: Target | null) {
     if (!t) return;
-    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf]) b.destroy();
+    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.stars, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf])
+      b.destroy();
     this.ship.forget(t.hdr);
     t.dof?.tex.destroy();
     t.flare.u.destroy();
@@ -1254,7 +1266,7 @@ export class Renderer {
         { binding: 4, resource: this.sampler },
         { binding: 5, resource: { buffer: t.moments } },
         { binding: 6, resource: { buffer: t.stamps } },
-        { binding: 7, resource: { buffer: this.syncLutBuf } },
+        { binding: 7, resource: { buffer: t.stars } },
         { binding: 8, resource: this.mwTexture.createView() },
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
@@ -1286,7 +1298,7 @@ export class Renderer {
         { binding: 4, resource: this.sampler },
         { binding: 5, resource: { buffer: t.moments } },
         { binding: 6, resource: { buffer: t.stamps } },
-        { binding: 7, resource: { buffer: this.syncLutBuf } },
+        { binding: 7, resource: { buffer: t.stars } },
         { binding: 8, resource: this.mwTexture.createView() },
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
@@ -1546,6 +1558,8 @@ export class Renderer {
       noise?: number;
       minSpp?: number;
       shutter?: number;
+      /** the catalogue stars splatted (R8): radiance → fixed point (0: drawn by the rays) */
+      stars?: number;
       /** a planet's light probe: a camera at its centre, the planet itself left out */
       probe?: { cam: CameraFrame; hide: string; slice?: number };
     },
@@ -1567,7 +1581,7 @@ export class Renderer {
     set(1, cam.r, gpuTheta(cam.theta), cam.phi, tanH);
     set(2, ...cam.right, t.width / t.height);
     set(3, ...cam.up, pixelAngle);
-    set(4, ...cam.fwd, 0);
+    set(4, ...cam.fwd, o.stars ?? 0);
     set(5, cam.zamo.alpha, cam.zamo.omega, cam.zamo.varpi, cam.zamo.sqrtSig);
     set(6, cam.zamo.sqrtSigOverDel, 0, 0, 0);
     set(7, ...cam.beta, cam.gamma);
@@ -2392,6 +2406,10 @@ export class Renderer {
   // (the least α of a fresh pixel — 1/16: its history's weight capped at 15 frames (audit R2) —, a pixel
   // between rays' weight, the clamp's width in σ)
   taParams: [number, number, number] = [1 / 16, 0.05, 2.0];
+  /** the last realtime frame splatted the catalogue stars (R8: t.stars, over its reprojected image) */
+  private starsSplat = false;
+  /** the catalogue stars splatted in realtime under the reprojection (R8; a switch for comparisons) */
+  splatStars = true;
   /** the near body's ground reprojected when the camera is carried with it (a switch for comparisons) */
   carryGround = true;
   /** the near body's ground reprojected by its rigid motion while the camera moves over it (audit R4; a switch for comparisons) */
@@ -2438,10 +2456,21 @@ export class Renderer {
             { binding: 6, resource: { buffer: t.stamps } },
             { binding: 11, resource: { buffer: t.moments } },
             { binding: 21, resource: { buffer: buf } },
+            { binding: 23, resource: { buffer: t.stars } },
           ],
         }),
       );
-      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0 };
+      const starBinds = hist.map((h) =>
+        d.createBindGroup({
+          layout: this.postStars.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: h.createView() },
+            { binding: 2, resource: hdr0 },
+            { binding: 23, resource: { buffer: t.stars } },
+          ],
+        }),
+      );
+      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0, starBinds };
     }
     const ta = t.temporal;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -2472,26 +2501,31 @@ export class Renderer {
     // band has passed yet, handed over to the refined pixels by their samples, its weight gone after
     // HANDOVER_PASSES full passes. It was replaced at once by that image: a pause of one frame between two
     // inputs dropped the history to the blocks of a single frame — 27 dB in a turn, ~0 accumulated weight)
+    // (no refinement — its samples asked for: none —: the history and its stars kept as they are)
+    const passes = Math.max(1, Math.min(HANDOVER_PASSES, s.targetSpp));
     const hold =
       !on &&
       s.temporalReprojection &&
-      this.taPhase === "converging" &&
+      this.taPhase !== "realtime" &&
       ta.valid &&
       !jumped &&
       (ta.moving || ta.held) &&
-      this.sampleIndex < HANDOVER_PASSES;
+      this.sampleIndex < passes;
     if (hold) {
-      this.encodeHandover(enc, t, ta, pre);
+      this.encodeHandover(enc, t, ta, pre, passes);
       return false;
     }
     if (ta.held) ta.idx = 1 - ta.idx; // (the hand-over: the latest image)
     ta.held = false;
     ta.moving = on;
+    const stars = this.starsSplat && this.taPhase === "realtime";
     if (!on) {
-      // (refresh the history from the image: the next moving frame starts from it)
+      // (refresh the history from the image: the next moving frame starts from it — a realtime one, its
+      // splatted stars then drawn over it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
       ta.valid = true;
       ta.pre = pre;
+      if (stars) this.encodeStars(enc, t, ta.idx);
       return false;
     }
     const p = prev!;
@@ -2578,8 +2612,18 @@ export class Renderer {
     pass.end();
     ta.idx = 1 - ta.idx;
     ta.pre = pre;
-    enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
+    if (stars) this.encodeStars(enc, t, ta.idx);
+    else enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
     return true;
+  }
+
+  /** The image: history k with the realtime frame's splatted stars over it (R8; it keeps none itself). */
+  private encodeStars(enc: GPUCommandEncoder, t: Target, k: number) {
+    const pass = enc.beginComputePass(this.prof.pass("stars"));
+    pass.setPipeline(this.postStars);
+    pass.setBindGroup(0, t.temporal!.starBinds[k]!);
+    pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    pass.end();
   }
 
   /**
@@ -2587,13 +2631,13 @@ export class Renderer {
    * the same pixels: the camera has not moved since) blended into the refined ones, into the other
    * image — the display's, and the next move's history (held).
    */
-  private encodeHandover(enc: GPUCommandEncoder, t: Target, ta: NonNullable<Target["temporal"]>, pre: number) {
+  private encodeHandover(enc: GPUCommandEncoder, t: Target, ta: NonNullable<Target["temporal"]>, pre: number, passes: number) {
     if (!ta.held) ta.from = this.frameStamp;
     const k = new Float32Array(52);
     // (k: the history's exposure to this frame's, the mode; mb.y: the history's weight left, z: the
     // hand-over's first frame — the history has the samples before, the realtime ones)
     k.set([pre / ta.pre, 2], 24);
-    k[49] = Math.max(0, 1 - (this.sampleIndex + 1) / HANDOVER_PASSES); // (0 on the last: no step when it ends)
+    k[49] = Math.max(0, 1 - (this.sampleIndex + 1) / passes); // (0 on the last: no step when it ends)
     new Uint32Array(k.buffer)[50] = ta.from;
     this.device.queue.writeBuffer(ta.buf, 0, k);
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
@@ -3370,6 +3414,10 @@ export class Renderer {
       let flags = FLAG_INTERLEAVED;
       if (s.temporalBlend < 1) flags |= FLAG_TEMPORAL;
       if (s.temporalReprojection) flags |= FLAG_REPROJECT;
+      // (R8: under the reprojection, the catalogue stars splatted where they fall — added over the
+      // reprojected image, encodeTemporal; the pre-exposed radiance in 16.16 fixed point)
+      this.starsSplat = s.temporalReprojection && this.splatStars;
+      if (this.starsSplat) enc.clearBuffer(t.stars);
       this.writeParams(t, s, time, {
         block,
         eps: s.realtimeEps,
@@ -3380,6 +3428,7 @@ export class Renderer {
         sampleIndex: 0,
         flags,
         offset,
+        stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
       this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
       this.dispatchEnv(enc, t, s);
