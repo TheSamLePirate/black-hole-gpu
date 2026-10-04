@@ -66,6 +66,8 @@ declare module "../controls" {
     deorbitAssist: typeof deorbitAssist;
     glideAssist: typeof glideAssist;
     glideCard: typeof glideCard;
+    descentAssist: typeof descentAssist;
+    descentCard: typeof descentCard;
     entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
     ourCircWant: typeof ourCircWant;
@@ -1012,6 +1014,84 @@ function entryAssist(
   return { graph, say };
 }
 
+/** The surface's figures the descent's assistant reads (planet.ts surfaceInfo): SI, the gravity in g. */
+type SurfaceLike = { alt?: number; vVert?: number; vHor?: number; landed?: boolean; twr?: number; gLocal?: number };
+
+/**
+ * The vertical descent's assistant (C5): the descent rate against the height, the landing autopilot's
+ * own braking curve (half the thrust over the weight's, then a few seconds' fall, 1.5 m/s at the
+ * touchdown), the corridor about it — a quarter as fast to a quarter more, never past the curve a 90 % burn
+ * still stops on —, the trace: slower than the corridor is safe (cyan, the propellant spent), faster is
+ * not (amber); the director's: the rate as flown and as asked (not while a hold hovers), the stop burn's
+ * countdown, the drift.
+ */
+function descentAssist(this: CameraController, sf: SurfaceLike, hold = false): Pick<HubInfo, "graph" | "say"> {
+  const alt = Math.max(sf.alt ?? 0, 0);
+  const vDown = Math.max(-(sf.vVert ?? 0), 0);
+  const vHor = sf.vHor ?? 0;
+  const g = (sf.gLocal ?? 1) * G0;
+  const thr = (sf.twr ?? 0) * g;
+  const net = Math.max(thr - g, 1e-3);
+  const tH = vHor / Math.max(0.5 * thr, 1e-3);
+  const want = (h: number) => Math.max(Math.min(Math.sqrt(2 * 0.5 * net * h), h / (5 + tH)), 1.5);
+  const stopAt = (h: number) => Math.sqrt(2 * 0.9 * net * h);
+  const key = `descent:${fleet.active}`;
+  if (this.glideTrace?.key !== key) this.glideTrace = { key, pts: [] };
+  const tr = this.glideTrace.pts;
+  const last = tr[tr.length - 1];
+  if (!last || Math.abs(last[0] - vDown) > 0.3 || Math.abs(last[1] - alt) > Math.max(2, alt * 0.01)) {
+    tr.push([vDown, alt]);
+    if (tr.length > 400) this.glideTrace.pts = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  const hMax = Math.max(alt * 1.3, ...tr.map((p) => p[1]), 50);
+  const hs = Array.from({ length: 48 }, (_, i) => (hMax * i) / 47);
+  const loAt = (h: number) => Math.min(want(h) * 0.25, stopAt(h)),
+    hiAt = (h: number) => Math.min(want(h) * 1.25, stopAt(h));
+  const lo = hs.map((h) => [loAt(h), h] as [number, number]);
+  const hi = hs.map((h) => [hiAt(h), h] as [number, number]);
+  const graph: AssistGraph = {
+    kind: "descent",
+    title: t("Vertical descent"),
+    x: { label: t("Descent rate"), unit: "m/s", min: 0, max: Math.max(vDown * 1.3, want(hMax) * 1.6, 5) },
+    y: { label: t("Height"), unit: "m", min: 0, max: hMax },
+    ideal: hs.map((h) => [want(h), h] as [number, number]),
+    lo,
+    hi,
+    flown: this.glideTrace.pts,
+    now: [vDown, alt],
+    marks: [],
+    levels: [],
+    state: vDown > hiAt(alt) + 0.3 ? "off" : vDown < loAt(alt) - 0.3 ? "wait" : "on",
+  };
+  // (the stop burn at full thrust: when it must start — the HUD's hover scope says it too)
+  const stop = (vDown * vDown) / (2 * net);
+  const tIn = vDown > 1 ? (alt - stop * 1.1) / vDown : NaN;
+  const say = hold ? [] : [tf("DESCENT {0} → {1} m/s", vDown.toFixed(1), want(alt).toFixed(1))];
+  if (Number.isFinite(tIn)) say.push(tIn <= 0 ? t("BURN NOW") : tIn < 60 ? tf("BURN IN {0} s", tIn.toFixed(tIn < 10 ? 1 : 0)) : "");
+  if (vHor > 1) say.push(tf("DRIFT {0} m/s", vHor.toFixed(vHor < 10 ? 1 : 0)));
+  return { graph, say: say.filter(Boolean) };
+}
+
+/** A descent on the engines flown by hand (no autopilot): its card — the height, the rates, the stop burn. */
+function descentCard(this: CameraController, sf: SurfaceLike): HubInfo {
+  const A = this.descentAssist(sf);
+  const alt = sf.alt ?? 0;
+  const vDown = Math.max(-(sf.vVert ?? 0), 0);
+  return {
+    mode: "none",
+    title: t("DESCENT"),
+    phase: t("a descent on the engines — hand-flown, the landing autopilot's curve to follow"),
+    rows: [
+      [t("Height"), alt >= 1000 ? `${(alt / 1000).toFixed(2)} km` : `${Math.round(alt)} m`],
+      ["V/S", `▼ ${vDown.toFixed(1)} m/s`],
+      [t("Sideways"), `${(sf.vHor ?? 0).toFixed(1)} m/s`],
+    ],
+    next: `→ ${tf("touchdown in ~{0}", fmtDur(alt / Math.max(vDown, 0.5)))}`,
+    bar: null,
+    ...A,
+  };
+}
+
 /**
  * The final's assistant (C4), the autopilot's glide or a hand-flown one: the height over the ground
  * against the distance to the threshold, the landing profile (its steep slope, the pull-up, the shallow
@@ -1107,7 +1187,12 @@ function hubCompute(this: CameraController): HubInfo | null {
   // (no autopilot: a hand-flown final still has its card — the runway, the profile, the graph)
   if (a === "none") {
     const rw = this.runwayView();
-    return rw?.manual ? this.glideCard(rw) : null;
+    if (rw?.manual) return this.glideCard(rw);
+    // (a descent on the engines by hand: low, slow over the ground, coming down — its card and graph)
+    const sf = this.surfaceInfo() as SurfaceLike | null;
+    if (sf && !sf.landed && sf.alt !== undefined && sf.alt < 5000 && (sf.vHor ?? 0) < 60 && (sf.vVert ?? 0) < -0.5 && (sf.twr ?? 0) > 1)
+      return this.descentCard(sf);
+    return null;
   }
   const C = C_MPS;
   const Msec = 4.925490947e-6 * s.massSolar;
@@ -1329,12 +1414,12 @@ function hubCompute(this: CameraController): HubInfo | null {
       ...(rw?.final && rw.fix ? this.glideAssist(rw) : {}),
     };
   }
-  const sf = this.surfaceInfo() as { alt?: number; vVert?: number; vHor?: number; landed?: boolean } | null;
+  const sf = this.surfaceInfo() as SurfaceLike | null;
   if (a === "land") {
     if (!sf || sf.alt === undefined) return base("LAND", t("descending"));
     const vs = sf.vVert ?? 0;
     const tDown = sf.alt / Math.max(-vs, 0.5);
-    return base(
+    const H = base(
       "LAND",
       sf.landed
         ? t("down")
@@ -1350,6 +1435,7 @@ function hubCompute(this: CameraController): HubInfo | null {
       ],
       sf.landed ? null : `→ ${tf("touchdown in ~{0}, at ~1.5 m/s", dur(tDown))}`,
     );
+    return sf.landed ? H : { ...H, ...this.descentAssist(sf) };
   }
   if (a === "takeoff") {
     const LG = this.launchGoal;
@@ -1387,11 +1473,14 @@ function hubCompute(this: CameraController): HubInfo | null {
       `→ ${tf("beside {0} ({1} off) in ~{2}", N.name ?? "", km(N.stand ?? 0), dur(N.ttg ?? NaN))}`,
     );
   }
-  if (a === "hover" && N.off !== undefined)
-    return base("HOLD POS", t("holding the place"), [
+  if (a === "hover" && N.off !== undefined) {
+    const H = base("HOLD POS", t("holding the place"), [
       [t("Off it"), km(N.off)],
       [t("Drift"), ms(N.drift ?? 0)],
     ]);
+    // (low over a ground: the descent's graph too — the hold a hover)
+    return sf && !sf.landed && sf.alt !== undefined && sf.alt < 5000 ? { ...H, ...this.descentAssist(sf, true) } : H;
+  }
   if (a === "dock") return base("DOCK", this.dockAuto?.phase ?? t("docking"));
   return base(AUTO_NAMES[a].toUpperCase(), t("flying"));
 }
@@ -2119,6 +2208,8 @@ export function installLowthrust(C: { prototype: CameraController }) {
     deorbitAssist,
     glideAssist,
     glideCard,
+    descentAssist,
+    descentCard,
     entryAssist,
     circPlan,
     ourCircWant,

@@ -107,4 +107,12 @@ export default {
   "FLARE IN {0}": "ARRONDI DANS {0}",
   "Flare in": "Arrondi dans",
   "on the final — hand-flown, its profile the autopilot's": "en finale — pilotée à la main, sur le profil de l'autopilote",
+  // C5: the vertical descent and the hover
+  "Vertical descent": "Descente verticale",
+  "Descent rate": "Vitesse de descente",
+  "DESCENT {0} → {1} m/s": "DESCENTE {0} → {1} m/s",
+  DESCENT: "DESCENTE",
+  "a descent on the engines — hand-flown, the landing autopilot's curve to follow":
+    "une descente sur les moteurs — pilotée à la main, la courbe de l'autopilote d'atterrissage à suivre",
+  "touchdown in ~{0}": "toucher dans ~{0}",
 } satisfies Record<string, string>;
