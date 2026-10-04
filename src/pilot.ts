@@ -527,6 +527,8 @@ export class FlightComputer {
     // (the engine follows the throttle with its lag)
     const k = c.spoolK ?? 1;
     this.engineNow = c.thrust > 0 ? this.engineNow + (throttle - this.engineNow) * Math.min(Math.max(k, 0), 1) : 0;
+    // (spooling down towards nothing: nothing below a millionth — not a denormal, read as 1e-283 g)
+    if (throttle === 0 && this.engineNow < 1e-6) this.engineNow = 0;
     throttle = this.engineNow;
     const rcsAuth = TUNING.rcs * c.thrust;
     const rl = len(rcsC);

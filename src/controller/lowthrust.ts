@@ -878,6 +878,11 @@ function climbAssist(
     marks: [],
     levels: [{ y: topKm, label: t("TARGET") }, ...(Number.isFinite(apKm) && apKm > 1 ? [{ y: apKm, label: "Ap" }] : [])],
     state: h < 0.05 ? "wait" : on ? "on" : "off",
+    about: t("The height against the downrange: the take-off's optimum path, its corridor; the apoapsis and the height asked as levels"),
+    fix:
+      x > xi
+        ? t("Downrange of the path — too shallow: pitch up to the path angle asked")
+        : t("Short of the path — too steep: pitch over to the path angle asked"),
   };
   const say: string[] = [tf("PATH {0}° · HDG {1}°", gamAim.toFixed(0), hdgAim.toFixed(0).padStart(3, "0"))];
   if (Number.isFinite(toTurn)) say.push(tf("GRAVITY TURN IN {0}", fmtDur(toTurn)));
@@ -908,7 +913,7 @@ function deorbitAssist(this: CameraController, R: NonNullable<CameraController["
     x,
     trace: tr,
     burning,
-    labels: { y: t("Δv left"), x: t("from the burn"), ignition: t("IGN"), cutoff: t("CUT") },
+    labels: { y: t("Δv left"), x: t("from the burn"), ignition: t("IGN"), cutoff: t("CUT"), ...BURN_HELP() },
   });
   const cue = {
     tIgn: burning ? 0 : R.tBurn - burnT / 2 - nowS,
@@ -983,6 +988,13 @@ function entryAssist(
     now: [v / 1e3, h / 1e3],
     marks: [],
     state: inside ? "on" : h > at("hi") && !R.inCorr ? "wait" : "off",
+    about: t(
+      "The entry corridor: above it the lift cannot hold the fall's curve; below it the shield's heat or the load is too much. Dashed: the guidance's predicted fall",
+    ),
+    fix:
+      h < at("lo")
+        ? t("Too deep for the heat or the load: bank less — more of the lift up")
+        : t("Above the corridor again — a skip: bank more, less of the lift up"),
   };
   // the bank's reversal: the crossrange (on the bank's side) drifting to the deadband's far edge
   const miss = R.guid?.lastMiss;
@@ -1059,6 +1071,10 @@ function approachAssist(this: CameraController, leftM: number, closing: number, 
     now: [left / 1e3, Math.max(closing, 0)],
     marks: [],
     state: closing > hiAt(left) + 0.2 ? "off" : closing < loAt(left) - 0.2 ? "wait" : "on",
+    about: t(
+      "The closing rate against the distance to the stand-off: the approach autopilot's braking curve, its corridor; slower is safe",
+    ),
+    fix: t("Too fast to stop at the stand-off: brake now — full thrust against the closing"),
   };
   const say = [tf("CLOSING {0} → {1} m/s", closing.toFixed(closing < 100 ? 1 : 0), want(left).toFixed(want(left) < 100 ? 1 : 0))];
   // (the braking — at the autopilot's 60 % — must start when what is left is what it takes, and a tenth)
@@ -1114,6 +1130,8 @@ function dockCard(this: CameraController): HubInfo | null {
     now: [Math.max(along, 0), Math.max(closing, 0)],
     marks: [{ x: 10, label: t("HOLD") }],
     state: !D.corridor ? "wait" : closing > want(along) * 1.5 + 0.02 ? "off" : closing < want(along) * 0.5 - 0.02 ? "wait" : "on",
+    about: t("The closing rate against the distance along the port's axis: the docking autopilot's profile, its corridor"),
+    fix: t("Too fast for the distance: brake along the axis — the thrusters back"),
   };
   const say = [tf("CLOSE {0} → {1} m/s", closing.toFixed(2), want(along).toFixed(2))];
   say.push(tf("OFFSET {0} m · CONE {1} m", g.lateral.toFixed(1), cone.toFixed(1)), tf("PORTS {0}°", g.angle.toFixed(1)));
@@ -1141,6 +1159,15 @@ function dockCard(this: CameraController): HubInfo | null {
     say,
   };
 }
+
+/** A burn's graph explained: what it shows, what to do behind it or ahead of it. */
+const BURN_HELP = () => ({
+  about: t(
+    "The Δv left against the time from the node: the burn centred on it, its corridor (started up to 15 % of its length early or late)",
+  ),
+  late: t("Behind the burn: full throttle, the nose on the cue — and cut at the cue"),
+  early: t("Ahead of the burn: ease the throttle — the burn is best centred on its node"),
+});
 
 /** The surface's figures the descent's assistant reads (planet.ts surfaceInfo): SI, the gravity in g. */
 type SurfaceLike = { alt?: number; vVert?: number; vHor?: number; landed?: boolean; twr?: number; gLocal?: number };
@@ -1190,6 +1217,8 @@ function descentAssist(this: CameraController, sf: SurfaceLike, hold = false): P
     marks: [],
     levels: [],
     state: vDown > hiAt(alt) + 0.3 ? "off" : vDown < loAt(alt) - 0.3 ? "wait" : "on",
+    about: t("The descent rate against the height: the landing autopilot's braking curve, its corridor; slower is safe"),
+    fix: t("Too fast for the height: full throttle now — past this curve even a 90 % burn no longer stops in time"),
   };
   // (the stop burn at full thrust: when it must start — the HUD's hover scope says it too)
   const stop = (vDown * vDown) / (2 * net);
@@ -1261,6 +1290,11 @@ function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "gra
       { x: xF / 1e3, label: t("FLARE") },
     ],
     state: Math.abs(dev) <= 1 ? "on" : "off",
+    about: t("The final's height against the distance to the threshold: the landing profile, the PAPI's ±1° about it"),
+    fix:
+      dev > 0
+        ? t("High on the profile (the PAPI white): steepen — the nose down, the air brake out")
+        : t("Low on the profile (the PAPI red): shallow the descent — the nose up, or some thrust"),
   };
   const say: string[] = [tf("GLIDE {0} {1}°", dev >= 0 ? "▲" : "▼", Math.abs(dev).toFixed(1))];
   if (rw.flareIn !== null && rw.flareIn < 60) say.push(tf("FLARE IN {0}", fmtDur(rw.flareIn)));
@@ -1393,7 +1427,7 @@ function hubCompute(this: CameraController): HubInfo | null {
       x,
       trace: this.burnTrace.pts,
       burning,
-      labels: { y: t("Δv left"), x: t("from the node"), ignition: t("IGN"), cutoff: t("CUT") },
+      labels: { y: t("Δv left"), x: t("from the node"), ignition: t("IGN"), cutoff: t("CUT"), ...BURN_HELP() },
     });
     // (the director's cue: lit, what is left; done — within what a hand cuts — the engine to cut)
     const cue = { tIgn: burning ? 0 : start, left: leftM, dv, burning, cut: burning && leftM <= Math.max(2e-3 * dv, 0.1) };

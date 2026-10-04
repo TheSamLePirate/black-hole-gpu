@@ -1347,6 +1347,8 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-hub-graph[data-state="on"] .fl-hub-gt { color: rgba(150, 255, 190, 0.95); }
 .fl-hub-graph[data-state="off"] .fl-hub-gt { color: var(--hud-amber); }
 .fl-hub-gc { display: block; width: 100%; height: 118px; margin-top: 4px; }
+.fl-hub-gfix { margin-top: 4px; font: 600 11px/1.3 var(--hud-font); color: var(--hud-amber); }
+.fl-hub-gfix[hidden] { display: none; }
 body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); }
 .fl-ballbox { position: absolute; width: 176px; height: 176px; border-radius: 50%; }
 .fl-ballbox::before {

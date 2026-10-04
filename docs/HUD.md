@@ -81,7 +81,53 @@ it predicts (`CameraController.hubInfo`, redone four times a second; `FlightHud.
 | HOLD POS | holding the place | the offset, the drift | |
 
 The hub's CIRC stays lit while its own burn is flown as a node. On a phone held upright, the card sits above
+the ring. ORBIT (the target's orbit) and DOCK have their buttons on the ring and the map's strip too.
+
+## The assistants: every autopilot flown by hand
+
+**F4** (or the card's **AUTO / ASSISTED** button) switches all the autopilots at once: assisted, the
+autopilot works out what it would do — where the nose and the top go, the throttle, the thrusters' push —
+and leaves the ship to the pilot (`FlightComputer.assist`, its commands kept as `director`); back to AUTO, it
+flies on from where the ship is. A hold (1 – 7) keeps an assisted autopilot: it is the pilot's way to follow
 the ring.
+
+- **The flight director** (over the view): a ring where the nose should point — amber, green within 3° —
+  the top's tick, the thrusters' arrow, an arrow on the edge when out of view; under it the autopilot's
+  name and the phase's own words (below the master caution's banner and the docking panel): the throttle
+  to set or to cut, and per phase:
+
+| Phase | The director says |
+|---|---|
+| A burn (node, CIRC, Hohmann, plane, rendezvous, intercept, the FC's burns, the deorbit) | IGNITION IN … (large figures over its last 10 s), Δv LEFT and a gauge, CUT THE ENGINE (blinking) — the Δv counted along the burn as the pilot gives it, the burn lit by hand in its last half before its start, done once cut at the cue; the time no faster than real for the ignition's last seconds |
+| Take-off | PATH ° · HDG ° (asked), GRAVITY TURN IN, MAX-Q … kPa near it, MECO IN ~ |
+| Entry | ENTRY INTERFACE IN, BANK ° LEFT/RIGHT, REVERSAL IN ~ |
+| Final | GLIDE ▲▼ °, FLARE IN |
+| Vertical descent, hold low | DESCENT flown → asked m/s, BURN IN / BURN NOW, DRIFT |
+| Approach | CLOSING flown → asked m/s, BRAKE IN / BRAKE NOW |
+| Docking | CLOSE flown → asked m/s, OFFSET · CONE, PORTS °, HOLD AT 10 m — ALIGN or CONTACT IN ~ |
+
+- **The graph** under the hub's card (its title folds it; remembered), the same on the cockpit's PLAN screen:
+  one figure against another, the autopilot's optimum (dashed), its corridor (filled), the trace flown, the
+  craft's dot — green in the corridor, amber out of it (a line under the graph then says what to do), cyan
+  not yet in it or slower than it on the safe side; its title's tooltip says what it shows
+  (`src/ui/hud/graph.ts`, data from `hubCompute`).
+
+| Graph | x · y | Optimum · corridor |
+|---|---|---|
+| Burn | time from the node · Δv left | the burn centred on the node · started up to 15 % of its length early or late |
+| Ascent | downrange · height | the take-off's command integrated (`climbProfile`) · 15 % of the downrange, 2 km and a fifth of the height either side; the apoapsis and the height asked as levels |
+| Entry corridor | speed · height | the guidance's predicted fall · the lift's top, the heat's and the load's floor at the angle of attack held (`entryCorridor`) |
+| Final | distance to the threshold · height | the landing profile · the PAPI's ±1° from the touchdown |
+| Vertical descent | descent rate · height | the landing autopilot's braking curve · a quarter to 1.25 ×, never past a 90 % stop |
+| Approach | distance to the stand-off · closing rate | the approach's braking curve (60 % thrust) · from a quarter up to a 90 % stop |
+| Docking | distance along the axis · closing rate | 8 cm/s + 1.2 cm/s a metre (3 m/s at most) · half to 1.5 ×; the 10 m hold marked |
+
+- **By hand, no autopilot**: on a runway's final (on its axis, heading down it, below 6 km, within 40 km)
+  the profile is the one the autopilot would fly from where the final began, frozen there — the PAPI, the
+  gates, the aim and the glide's error work as under the autopilot, the card is the runway's; in a
+  descent on the engines (below 5 km, slow, falling) the card is the descent's.
+- **Alerts explained**: every alert's line has a tooltip, and a click opens why it is on and what to do.
+- **The key hints** add F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
 
 ## On the cockpit's screens
 
@@ -94,7 +140,7 @@ is seen; the switch **Aids on the cockpit's screens**, each aid also by its own 
 | NAV → APPROACH | A runway in reach (40 km): the runway from above with its centreline, the aim point and the craft (its offset across ×4); the localizer's and the glide path's needles (an ILS's), the distance to the threshold, the offset, the height. |
 | DOCKING | The scope oriented down the port's axis: the offset where it is, its drift over 10 s; the closing rate coloured by the range. |
 | DOCKING → LANDING | Low and slow with no port in reach: the drift scope (the ship's forward up), the vertical speed's bar, DRIFT, V/S, the stop burn's countdown, TWR. |
-| PLAN | The next burn, large: its countdown, Δv, length at full thrust, the aim. |
+| PLAN | The next burn, large: its countdown, Δv, length at full thrust, the aim; the assistant's graph under it (or alone) — the burn's, the ascent's, the entry corridor, the final, the descent, the approach, the docking. |
 | ORBIT | About Gargantua: the relativity box — dτ/dt, speed and γ, the sky ahead's Doppler, the energy, r against the ISCO, the photon orbit and the horizon, the tide. |
 | CLOCKS | About Gargantua: dτ/dt in place of the local time. |
 

@@ -25,6 +25,8 @@ describe.skipIf(!E2E)("the docking assisted", () => {
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBe(0);
     expect((await app.js<string>("__bh.camera.hubInfo().phase")).length).toBeGreaterThan(20);
     expect((await app.js<string[]>("__bh.camera.hubInfo().say")).some((l) => l.startsWith("CLOSE "))).toBe(true);
+    // (the card's mode button showing ASSISTED: the card up with its dock)
+    await app.waitFor(`document.querySelector("[data-testid=hub-assist]")?.textContent === "ASSISTED"`, 5_000);
     await app.click("[data-testid=hub-assist]");
     await app.waitFor(`__bh.camera.hubInfo()?.graph?.state === "on"`, 120_000);
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("CONTACT IN"))`, 30_000);

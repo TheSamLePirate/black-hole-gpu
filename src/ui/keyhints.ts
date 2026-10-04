@@ -44,6 +44,8 @@ const HINTS = {
   ],
   auto: (): Hint[] => [
     ["⌫", { fr: "reprendre les commandes", en: "take the controls" }],
+    ["F4", { fr: "assisté : vous pilotez, guidé par l'autopilote", en: "assisted: you fly, the autopilot guiding" }],
+    ["F3", { fr: "caméra libre — le vaisseau continue", en: "free camera — the ship flies on" }],
     ["M", { fr: "carte", en: "map" }],
     [". ,", { fr: "accélérer · ralentir le temps", en: "time warp faster · slower" }],
   ],
@@ -66,6 +68,7 @@ const HINTS = {
     ],
     ["Caps", { fr: "précision", en: "precision" }],
     [key("KeyB", "B"), { fr: "amarrage automatique", en: "automatic docking" }],
+    ["F4", { fr: "assisté : vous pilotez, guidé", en: "assisted: you fly, guided" }],
     ["⌫", { fr: "rendre les commandes", en: "release the controls" }],
   ],
   docked: (): Hint[] => [

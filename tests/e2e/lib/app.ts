@@ -30,7 +30,21 @@ let server: { url: string; stop(): void } | null = null;
 async function serve() {
   if (process.env.E2E_URL) return { url: process.env.E2E_URL, stop() {} };
   if (server) return server;
-  const port = 3200 + Math.floor(Math.random() * 500);
+  // (a port nothing listens on: tried before the server is started — macOS's media sharing holds 3689,
+  // and a run cut short leaves its server behind)
+  const free = (p: number) => {
+    try {
+      Bun.serve({ port: p, fetch: () => new Response("") }).stop(true);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  let port = 0;
+  for (let k = 0; k < 100 && !port; k++) {
+    const p = 3200 + Math.floor(Math.random() * 500);
+    if (free(p)) port = p;
+  }
   const proc = Bun.spawn(["bun", "server.ts"], {
     env: { ...process.env, PORT: String(port), NODE_ENV: "production" },
     stdout: "ignore",

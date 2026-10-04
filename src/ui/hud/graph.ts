@@ -24,6 +24,9 @@ export interface AssistGraph {
   levels?: { y: number; label: string }[];
   /** the verdict: in the corridor, out of it, not yet in it */
   state: "on" | "off" | "wait";
+  /** what the graph shows (its title's tooltip), and — out of the corridor — what to do */
+  about?: string;
+  fix?: string;
 }
 
 export interface GraphAxis {
@@ -254,7 +257,7 @@ export function burnGraph(o: {
   x: number;
   trace: [number, number][];
   burning: boolean;
-  labels: { y: string; x: string; ignition: string; cutoff: string };
+  labels: { y: string; x: string; ignition: string; cutoff: string; about?: string; late?: string; early?: string };
 }): AssistGraph {
   const T = Number.isFinite(o.T) && o.T > 0 ? o.T : 1;
   const slack = Math.max(0.15 * T, 2);
@@ -287,5 +290,7 @@ export function burnGraph(o: {
       { x: T / 2, label: o.labels.cutoff },
     ],
     state: !o.burning && o.x < -T / 2 - slack ? "wait" : inside ? "on" : "off",
+    about: o.labels.about,
+    fix: o.left > polyAt(hi, o.x) ? o.labels.late : o.labels.early,
   };
 }

@@ -16,8 +16,8 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 | Code + tests | 44 | 73 | 75 |
 | Technologie | 67 | 77 | 80 |
 | UI / UX / HUD | 44 | 76 | 80 |
-| Produit / gameplay | 50 | 59 | 80 |
-| **Global** | **≈ 54** | **≈ 73** | **≈ 78–80** |
+| Produit / gameplay | 50 | 68 | 80 |
+| **Global** | **≈ 54** | **≈ 75** | **≈ 78–80** |
 
 *Réestimé après G4 (04/10/2026).* Technologie : le vrai sol de la Lune et de Mars (LOLA, MOLA : cratères, ombres, terminateur), l'imagerie de la NASA près de la Terre (611 m le jour, les lumières de VIIRS la nuit), la Terre d'orbite 4 à 6 fois moins chère (O13) ; la reprojection relativiste (R9) mesurée inutile, le PBR du Ranger sans matière (textures génériques). Reste au sol : l'imagerie plus fine que 611 m (vol bas). Code + tests : le vol rejoué déterministe (météo, tuiles), la mesure à rayons égaux corrigée (le gouverneur P2 annulé). *Avant : réestimé après G3 (04/10/2026).* Technologie : les étoiles nettes en mouvement (R8, +3,5 dB), la caméra tenue sans retour aux blocs, 270 Mo de VRAM rendus près d'une lune (BC7/BC5), pistes, océan, nuages et anneaux crédibles ; restent la reprojection relativiste, l'imagerie au sol, le PBR du Ranger (G4). Code + tests : les e2e de nouveau tous verts (déterminisme), la mesure de qualité fiable. *Avant : réestimé après la phase 2 (04/10/2026).* Physique : J2–J4 et dérive séculaire, propergol et masse, poussée selon la pression, atmosphères mesurées (Vénus, Mars, Titan) et thermosphère, corps rigide (tenseur, Euler), train d'atterrissage à ressorts et pneus, aérodynamique par surfaces, vent et turbulence de Dryden, Terre WGS84 (rendu et physique), Lambert d'Izzo, pas symplectique symétrisé, attitude gyroscopique (Fermi–Walker), vols de référence (ISS/SGP4, Apollo 4, Falcon 9). Restent : STS-1 (données), autorité des gouvernes abstraite, moment aéro une fois par image, attitude stockée en angles, pistes non dessinées, géoïde. Code + tests : 392 unitaires (dont les références), goldens ré-enregistrés à chaque changement voulu. *Avant : réestimé après U4 et U5 (03/10/2026).* UI : le langage HUD partout (kit, polices, réglages, galerie, dialogues), écran titre, menu pause, missions briefées, mode photo, tablette, roue radiale, indices de touches, manette dans les menus, Master caution, HUD par phase avec son view-model et son cadre libre, aides de rentrée et d'approche, glyphes distincts ; **toutes les touches remappables**, échelle d'interface, palette Okabe–Ito, réduction des animations, focus visible ; **interface entière en français** ; carte au doigt ; contraste AA vérifié sur le pire fond. Produit : une boucle d'entrée (titre → missions → vol → pause/sauvegarde) existe ; pas encore de progression ni d'objectifs suivis. Technologie : HUD 11,6 → 2,7 ms par frame. Code + tests : 334 unitaires, 58 e2e (fumée, accessibilité, français, tactile, S5 contraste/ratchet/fuites/tailles, titre, manette, préférences, vols de référence, fréquence).
 
@@ -203,6 +203,27 @@ Outils : `trace-ab` mesure aussi la reconstruction et s'arrête à 6 s par mesur
 ![R8 : avant, TAA sans splat, splat, convergée](img/aaa/g3-r8-stars.jpg)
 
 **Leçons de la vague** : la mesure de qualité en mouvement était faussée deux fois (écran titre, puis image de reconstruction brute) — corrigée, les gains de reconstruction se mesurent enfin ; sur Apple, trace-ab doit additionner tracé et sondes (leurs horodatages se chevauchent) ; les étoiles splattées sont le plus gros gain de qualité de la vague (+3,5 dB). *Corrigé en G4 : le « gouverneur Pareto » (+6 à +8 dB) était un artefact de mesure — un `pixelRatio` changé ne redimensionne pas le rendu.*
+
+*Réestimé après le plan des assistants (05/10/2026).* Produit : **tout ce que fait le calculateur de vol se pilote aussi à la main, assisté** (F4) — directeur de vol, comptes à rebours, graphes avec couloir optimum pour la poussée, la montée, la rentrée, la finale, la descente verticale, l'approche et l'amarrage, alertes expliquées ; **placer le vaisseau** n'importe où depuis le HUD, **régler la date** ; une **caméra libre** pendant que le vaisseau vole. Restent : la progression et les objectifs suivis.
+
+## Assistants, placement, temps, caméra libre (terminé, 05/10/2026)
+
+Plan : [`PLAN-ASSISTANT.md`](PLAN-ASSISTANT.md) (décisions du propriétaire, contenu détaillé de chaque phase) ; aides : [`HUD.md`](HUD.md) › *The assistants*.
+
+| # | Étape | Commit |
+|---|---|---|
+| A1 | Placer le vaisseau depuis le HUD : en orbite, au sol (globe cliquable, sites), auprès de chaque corps, devant chaque bouche du trou de ver ; confirmation pendant une mission | `8c5a638` |
+| A2 | La date : maintenant, début de la scène, date choisie, pas ; le vaisseau porté avec le monde, un plan sur l'ancienne horloge annulé | `abb636d` |
+| B1–B2 | La caméra libre (spectateur) : un second contrôleur sur ses propres réglages, le vaisseau continue de voler (autopilotes, plan) ; suivre ou libre, « aller à » chaque corps | `6a7ac9e`, `1bf48a4` |
+| C0 | AUTO / ASSISTÉ pour tous les autopilotes, le directeur de vol, les alertes expliquées | `a4c9ac9` |
+| C1 | Les poussées à la main : Δv suivi le long de la poussée, compte à rebours, coupure, graphe et couloir (module `ui/hud/graph.ts`, aussi sur l'écran PLAN du cockpit) | `4eabf0f` |
+| C2 | Le décollage : trajectoire optimale intégrée, couloir, pente et cap visés, max-Q, virage gravitationnel et coupure comptés | `4f85332` |
+| C3 | La désorbitation à la main ; le couloir de rentrée (portance, chaleur, charge), la chute prédite, l'inclinaison et ses inversions | `efec543` |
+| C4 | La finale à la main : profil figé, PAPI, portes, arrondi compté ; graphe de finale | `71414dc` |
+| C5 | La descente verticale : courbe de freinage et couloir, à la main ou assistée | `1ecbc83` |
+| C6 | L'approche : courbe de freinage, freinage compté ; bouton « orbite de la cible » | `3bd80d0` |
+| C7 | L'amarrage : phases expliquées, profil le long de l'axe, contact compté ; bouton sur l'anneau ; testids de l'anneau (cliquet 51 → 33) | `1f35808` |
+| C8 | Finitions : chaque graphe dit ce qu'il montre et, hors couloir, quoi faire ; indices F4/F3 ; `HUD.md` ; e2e des passages AUTO ⇄ ASSISTÉ (5 autopilotes) | (ce commit) |
 
 ## G4 : la Terre et la Lune réelles, la reconstruction (terminée, 04/10/2026)
 

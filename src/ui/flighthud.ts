@@ -379,6 +379,8 @@ export class FlightHud {
   private hubGraph = h("div", "fl-hub-graph");
   private hubGraphBtn = h("button", "fl-hub-gt") as HTMLButtonElement;
   private hubGraphCv = h("canvas", "fl-hub-gc") as HTMLCanvasElement;
+  /** out of the corridor: what to do (the graph's own advice) */
+  private hubGraphFix = h("div", "fl-hub-gfix");
   private graphOpen = store.get("kerr.assist-graph") !== "0";
   private hubSig = "";
   private ball = h("canvas", "fl-ball");
@@ -503,8 +505,13 @@ export class FlightHud {
     if (!G) return;
     const head = `${this.graphOpen ? "▾" : "▸"} ${G.title.toUpperCase()}`;
     if (this.hubGraphBtn.textContent !== head) this.hubGraphBtn.textContent = head;
-    this.hubGraphBtn.title = this.graphOpen ? t("Fold the graph") : t("Show the graph");
+    const tip = `${G.about ? `${G.about} — ` : ""}${this.graphOpen ? t("Fold the graph") : t("Show the graph")}`;
+    if (this.hubGraphBtn.title !== tip) this.hubGraphBtn.title = tip;
     B.dataset.state = G.state;
+    // (out of the corridor: what to do, under the graph — folded or not)
+    const fix = G.state === "off" ? (G.fix ?? "") : "";
+    if (this.hubGraphFix.textContent !== fix) this.hubGraphFix.textContent = fix;
+    this.hubGraphFix.hidden = !fix;
     const cv = this.hubGraphCv;
     cv.hidden = !this.graphOpen;
     if (!this.graphOpen) return;
@@ -926,7 +933,7 @@ export class FlightHud {
       store.set("kerr.assist-graph", this.graphOpen ? "1" : "0");
       this.hubSig = "";
     };
-    this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv);
+    this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv, this.hubGraphFix);
     this.hubMode.dataset.testid = "hub-assist";
     this.hubHead.append(this.hubTitle, this.hubMode);
     this.hubCard.append(this.hubHead, this.hubBody, this.hubGraph);
@@ -3777,6 +3784,8 @@ function fmtDvLeft(c: number) {
 }
 
 function fmtG(g: number) {
+  // (a residue — a spool's tail, a rounding — is no acceleration)
+  if (!(g >= 1e-6)) return "0 g";
   return g >= 1e4 ? `${g.toExponential(1)} g` : g >= 100 ? `${g.toFixed(0)} g` : `${g.toPrecision(3)} g`;
 }
 

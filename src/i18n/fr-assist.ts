@@ -140,6 +140,43 @@ export default {
   "Along · across": "Axe · travers",
   "in the corridor (cone {0} m)": "dans le couloir (cône de {0} m)",
   DOCK: "AMARRAGE",
+  // C8: the graphs explained — what each shows, what to do out of its corridor
+  "The height against the downrange: the take-off's optimum path, its corridor; the apoapsis and the height asked as levels":
+    "L'altitude selon la distance au sol : la trajectoire optimale du décollage, son couloir ; l'apoapside et l'altitude visée en niveaux",
+  "Downrange of the path — too shallow: pitch up to the path angle asked":
+    "En aval de la trajectoire — trop à plat : cabrez jusqu'à la pente demandée",
+  "Short of the path — too steep: pitch over to the path angle asked":
+    "En amont de la trajectoire — trop raide : basculez jusqu'à la pente demandée",
+  "The entry corridor: above it the lift cannot hold the fall's curve; below it the shield's heat or the load is too much. Dashed: the guidance's predicted fall":
+    "Le couloir de rentrée : au-dessus, la portance ne tient plus la courbure de la chute ; en dessous, la chaleur du bouclier ou la charge sont trop fortes. En pointillé : la chute prédite par le guidage",
+  "Too deep for the heat or the load: bank less — more of the lift up":
+    "Trop bas pour la chaleur ou la charge : inclinez moins — plus de portance vers le haut",
+  "Above the corridor again — a skip: bank more, less of the lift up":
+    "De nouveau au-dessus du couloir — un rebond : inclinez davantage, moins de portance vers le haut",
+  "The closing rate against the distance to the stand-off: the approach autopilot's braking curve, its corridor; slower is safe":
+    "La vitesse de rapprochement selon la distance au point d'attente : la courbe de freinage de l'autopilote d'approche, son couloir ; plus lent est sûr",
+  "Too fast to stop at the stand-off: brake now — full thrust against the closing":
+    "Trop rapide pour s'arrêter au point d'attente : freinez maintenant — pleine poussée contre le rapprochement",
+  "The closing rate against the distance along the port's axis: the docking autopilot's profile, its corridor":
+    "La vitesse de rapprochement selon la distance le long de l'axe du port : le profil de l'autopilote d'amarrage, son couloir",
+  "Too fast for the distance: brake along the axis — the thrusters back":
+    "Trop rapide pour la distance : freinez le long de l'axe — les propulseurs vers l'arrière",
+  "The Δv left against the time from the node: the burn centred on it, its corridor (started up to 15 % of its length early or late)":
+    "Le Δv restant selon le temps depuis le nœud : la poussée centrée sur lui, son couloir (allumée jusqu'à 15 % de sa durée en avance ou en retard)",
+  "Behind the burn: full throttle, the nose on the cue — and cut at the cue":
+    "En retard sur la poussée : plein gaz, le nez sur l'anneau — et coupez à la consigne",
+  "Ahead of the burn: ease the throttle — the burn is best centred on its node":
+    "En avance sur la poussée : réduisez les gaz — elle est meilleure centrée sur son nœud",
+  "The descent rate against the height: the landing autopilot's braking curve, its corridor; slower is safe":
+    "La vitesse de descente selon l'altitude : la courbe de freinage de l'autopilote d'atterrissage, son couloir ; plus lent est sûr",
+  "Too fast for the height: full throttle now — past this curve even a 90 % burn no longer stops in time":
+    "Trop rapide pour l'altitude : plein gaz maintenant — au-delà de cette courbe, même une poussée à 90 % n'arrête plus à temps",
+  "The final's height against the distance to the threshold: the landing profile, the PAPI's ±1° about it":
+    "L'altitude de la finale selon la distance au seuil : le profil d'atterrissage, le ±1° du PAPI autour",
+  "High on the profile (the PAPI white): steepen — the nose down, the air brake out":
+    "Haut sur le profil (PAPI blanc) : plongez — le nez en bas, les aérofreins sortis",
+  "Low on the profile (the PAPI red): shallow the descent — the nose up, or some thrust":
+    "Bas sur le profil (PAPI rouge) : adoucissez la descente — le nez en haut, ou un peu de poussée",
   "Docks to a free port within 3 km — on the thrusters, to the port's axis, then in along it to the capture":
     "S'amarre à un port libre à moins de 3 km — aux propulseurs, vers l'axe du port, puis le long de celui-ci jusqu'à la capture",
 } satisfies Record<string, string>;

@@ -22,7 +22,8 @@ describe.skipIf(!E2E)("the deorbit and the entry assisted", () => {
     await app.press("F4", "F4");
     await app.press("KeyG", "G", { shift: true });
     await app.waitFor(`__bh.camera.entryRun?.phase === "wait"`, 60_000);
-    expect(await app.js<string>("__bh.camera.hubInfo().graph.kind")).toBe("burn");
+    // (the hub's card is redone four times a second: the burn's graph a moment after the phase)
+    await app.waitFor(`__bh.camera.hubInfo()?.graph?.kind === "burn"`, 5_000);
     await app.waitFor(`(() => { const c = __bh.camera.hubInfo()?.cue; return c && c.tIgn < 8; })()`, 420_000);
     await app.press("Digit2", "2");
     await app.waitFor(`__bh.camera.entryRun?.phase === "burn"`, 30_000);
