@@ -8,7 +8,7 @@ struct Display {
                 // kept from "AgX punchy"'s deepening (0…1: a landscape in the Earth's air)
   pol: vec4f,   // polarization ticks (0/1), cell size [image px], grid W, grid H
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
-  lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), unused
+  lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), sharpening (RCAS, 0…1)
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
 };
 
@@ -24,6 +24,43 @@ struct Display {
 @group(0) @binding(9) var<storage, read> flareM: array<vec4f>; // [0]: mean excess over white, its centroid (uv)
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
+
+// AMD FidelityFX RCAS (robust contrast-adaptive sharpening, FSR 1) on the HDR image's texel at p, in a
+// reversible tone-mapped space (x / (1 + x) of the exposed value: the sky's 10⁴ and the shadows alike):
+// the cross's four neighbours give the most negative lobe that keeps the result within their range — no
+// ringing —, damped where the cross is noisy (its centre an outlier); amount 0…1 (FSR's sharpness
+// 2 stops … 0). Returns the sharpened texel minus the texel: added to the bilinear sample.
+fn rcasDelta(p: vec2i, amount: f32, expo: f32) -> vec3f {
+  let dim = vec2i(textureDimensions(hdr, 0));
+  let q = clamp(p, vec2i(1), dim - 2);
+  let tm = 1.0 / max(expo, 1e-30);
+  let e0 = textureLoad(hdr, q, 0).rgb;
+  let e = e0 * expo / (1.0 + e0 * expo);
+  let bb = textureLoad(hdr, q + vec2i(0, -1), 0).rgb;
+  let dd = textureLoad(hdr, q + vec2i(-1, 0), 0).rgb;
+  let ff = textureLoad(hdr, q + vec2i(1, 0), 0).rgb;
+  let hh = textureLoad(hdr, q + vec2i(0, 1), 0).rgb;
+  let b = bb * expo / (1.0 + bb * expo);
+  let d = dd * expo / (1.0 + dd * expo);
+  let f = ff * expo / (1.0 + ff * expo);
+  let h = hh * expo / (1.0 + hh * expo);
+  let mn4 = min(min(b, d), min(f, h));
+  let mx4 = max(max(b, d), max(f, h));
+  let hitMin = mn4 / max(4.0 * mx4, vec3f(1e-6));
+  let hitMax = (vec3f(1.0) - mx4) / min(4.0 * mn4 - 4.0, vec3f(-1e-6));
+  let lobeRGB = max(-hitMin, hitMax);
+  var lobe = max(-0.1875, min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0.0)) * exp2(-2.0 * (1.0 - amount));
+  // (noise: the centre far off the cross's mean, against its range — the lobe eased)
+  let lb = dot(b, LUMA);
+  let ld = dot(d, LUMA);
+  let lf = dot(f, LUMA);
+  let lh = dot(h, LUMA);
+  let le = dot(e, LUMA);
+  let nz = abs(0.25 * (lb + ld + lf + lh) - le) / max(max(max(max(lb, ld), max(lf, lh)), le) - min(min(min(lb, ld), min(lf, lh)), le), 1e-6);
+  lobe *= 1.0 - 0.5 * clamp(nz, 0.0, 1.0);
+  let o = clamp((lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0), vec3f(0.0), vec3f(0.999));
+  return (o / (1.0 - o)) * tm - e0;
+}
 // (x² — WGSL's pow is exp2(y·log2 x): undefined for x < 0 on some backends, D3D and Vulkan among them)
 fn sq(x: f32) -> f32 { return x * x; }
 // Lens flare (a camera's, as in the film): what is brighter than SDR white in the bloom's image —
@@ -257,6 +294,9 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = (uvOut - D.view.zw) / D.view.xy;
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   var c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
+  if (D.lod.w > 0.0 && D.lod.x == 0.0 && D.flags.x < 0.5) {
+    c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
+  }
   if (D.lod.z > 0.5 && D.lod.x == 0.0) {
     // (the half-resolution blur where the circle of confusion is over a pixel or so)
     let dv = textureSampleLevel(dofImg, samp, uv, 0.0);

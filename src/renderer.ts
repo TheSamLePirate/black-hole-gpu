@@ -1965,7 +1965,8 @@ export class Renderer {
       this.beamSetup(s, target)?.level ?? 0,
       (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0,
       this.dofOn(s, target) ? 1 : 0,
-      0,
+      // (the sharpening, RCAS — the live view and its refining; the instrument's beam left soft)
+      s.sharpen,
     ]);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;

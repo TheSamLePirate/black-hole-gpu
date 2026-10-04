@@ -527,6 +527,9 @@ export default {
   "When the realtime subsampling alone cannot keep the frame budget, the render scale is lowered (down to half the pixel ratio) — only where a smaller image is measured to be faster —, and raised again when the GPU has room or when it gains nothing. The Game quality turns it on.":
     "Quand le sous-échantillonnage temps réel ne suffit pas à tenir le budget de trame, l'échelle de rendu est abaissée (jusqu'à la moitié du ratio de pixels) — seulement là où une image plus petite s'avère plus rapide —, puis remontée quand le GPU a de la marge ou n'y gagne rien. La qualité Jeu l'active.",
   "Temporal reprojection": "Reprojection temporelle",
+  Sharpening: "Netteté",
+  "The image sharpened after the temporal reconstruction (AMD's contrast-adaptive RCAS): edges brought back, no halo, noise left alone where the image is flat. 0: none.":
+    "L'image affinée après la reconstruction temporelle (RCAS d'AMD, adaptatif au contraste) : les contours retrouvés, sans halo, le bruit laissé tranquille là où l'image est plate. 0 : aucune.",
   "While the camera moves, the previous frames' image is carried over — found by the camera's turn, exact for the sky and the lensed images — and refined by each new frame's rays: a sharp image in motion from few rays. What moved in the scene is taken from the new frame only.":
     "Pendant que la caméra bouge, l'image des trames précédentes est reportée — retrouvée par la rotation de la caméra, exacte pour le ciel et les images lentillées — et affinée par les rayons de chaque nouvelle trame : une image nette en mouvement avec peu de rayons. Ce qui a bougé dans la scène est pris dans la nouvelle trame seulement.",
   "Cloud cover": "Couverture nuageuse",

@@ -290,6 +290,7 @@ export interface Settings {
   fpsCap: 0 | 30 | 60 | 120; // images rendered per second at most (0: as the display refreshes)
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
+  sharpen: number; // the image's sharpening after the temporal pass (AMD's RCAS: 0 none … 1 strongest)
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
@@ -519,6 +520,7 @@ export function defaultSettings(): Settings {
     fpsCap: 0,
     glassBlur: false,
     temporalReprojection: true,
+    sharpen: 0.3,
     farFieldLut: true,
     volumetricClouds: true,
     earthClouds: 1,
@@ -1694,6 +1696,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   fpsCap: "pref",
   glassBlur: "pref",
   temporalReprojection: "pref",
+  sharpen: "pref",
   farFieldLut: "pref",
   volumetricClouds: "pref",
   earthClouds: "scene",
