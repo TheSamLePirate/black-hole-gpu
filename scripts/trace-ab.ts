@@ -2,7 +2,9 @@
 // move the scene's clock and its probes, ±20 % between runs on the heavy scenes, more than most
 // kernel changes win):
 //   bun scripts/trace-ab.ts --ref http://localhost:3012/ [--new http://localhost:3000/] [--scenes "a|b"]
-//                           [--reps 2] [--frames 150] [--out file.json] [--shots dir]
+//                           [--reps 2] [--frames 150] [--seconds 6] [--out file.json] [--shots dir]
+// (~1 min a scene per run on the heavy ones; 5 scenes, 2 runs, the warm-up: ~12 min. --reps 1 for a
+// large effect)
 // Each scene at a fixed subsampling 4 and ~1.44 Mpx, its clock held, the view marked changed every frame
 // (the realtime pass, the same rays each run: the interleave and the seeds follow the frame count); every
 // frame's passes timed on the GPU (timestamps) — the trace pass's median, its LUT's, the probes'. Each
@@ -19,6 +21,7 @@ const REF = arg("ref", "http://localhost:3012/");
 const NEW = arg("new", "http://localhost:3000/");
 const REPS = Number(arg("reps", "2"));
 const FRAMES = Number(arg("frames", "150"));
+const SECONDS = Number(arg("seconds", "6"));
 // (each build's view of each scene, refined still, on the first run: <dir>/<ref|new>-<scene>.png)
 const SHOTS = arg("shots", "");
 const SCENES = arg(
@@ -118,11 +121,15 @@ try {
       __bh.touch();
       const t0 = performance.now();
       while (!r.variantReady && performance.now() - t0 < 90000) { __bh.touch(); await frame(); }
-      for (let i = 0; i < 240; i++) { __bh.touch(); await frame(); }
+      // (in regime: 120 frames or 3 s, whichever first — a heavy scene draws 7 a second)
+      const tw = performance.now();
+      for (let i = 0; i < 120 && performance.now() - tw < 3000; i++) { __bh.touch(); await frame(); }
       r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
       const tr = [], lu = [], pr = [];
       let seen = r.prof.frames;
-      for (let i = 0; i < ${FRAMES} * 3 && tr.length < ${FRAMES}; i++) {
+      // (the measure: FRAMES frames or SECONDS, whichever first — at least 20)
+      const tm = performance.now();
+      for (let i = 0; i < ${FRAMES} * 3 && tr.length < ${FRAMES} && (tr.length < 20 || performance.now() - tm < ${SECONDS} * 1000); i++) {
         __bh.touch();
         await frame();
         if (r.prof.frames === seen) continue;
