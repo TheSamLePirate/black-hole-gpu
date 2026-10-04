@@ -56,6 +56,8 @@ export interface BhContext {
   mapView(): { dist: number; yaw: number; pitch: number; focus: number[] } | null;
   /** Freezes the loop's own simulation (the automation steps it). */
   freeze(on: boolean): void;
+  /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
+  forceScale(x: number | null): void;
 }
 
 export function installBh(c: BhContext) {
@@ -302,6 +304,8 @@ export function installBh(c: BhContext) {
       },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => c.freeze(on),
+      /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
+      forceScale: (x: number | null) => c.forceScale(x),
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
       setDate: setDateNow,
       /** the ground's height above a body's mean radius at latitude, east longitude [°] — the relief the

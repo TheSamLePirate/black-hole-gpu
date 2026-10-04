@@ -1659,10 +1659,10 @@ async function main() {
 
   // -------------------------------------------------------------------- sizing
   // dynamic resolution: a fraction of the pixel ratio (1: as set), lowered when the GPU cannot keep
-  // the frame budget with the blocks at 2 (P2: a finer block on a smaller image is better in motion than
-  // a coarser one on a larger image), raised back when it has room. In motion only: the camera held, the
-  // image refines at the full scale (the moving one kept for the next move)
+  // the frame budget with the subsampling already coarse, raised back when it has room. In motion only:
+  // the camera held, the image refines at the full scale (the moving one kept for the next move)
   let renderScale = 1;
+  let forcedScale: number | null = null; // (a scale held by the automation: the benches, the tests)
   let movingScale = 0; // (the scale the motion had, while the camera is held at the full one; 0: none)
   let heldFor = 0; // (how long the camera has been held [s]: a pause between two inputs is not)
   let movingFor = 0; // (how long it has moved again [s]: a resize's own fresh frame is not a move)
@@ -1680,9 +1680,10 @@ async function main() {
     const ratio = settings.dynamicResolution
       ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx)
       : settings.pixelRatio;
-    const dpr = ratio * renderScale;
-    const w = Math.round(canvas.clientWidth * dpr);
-    const h = Math.round(canvas.clientHeight * dpr);
+    // (the canvas at the display's size; the image rendered at its scale of it — upscaled by the display
+    // pass, not by the browser: R10)
+    const w = Math.round(canvas.clientWidth * ratio);
+    const h = Math.round(canvas.clientHeight * ratio);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -1690,7 +1691,7 @@ async function main() {
     const odpr = devicePixelRatio;
     overlay.width = Math.round(canvas.clientWidth * odpr);
     overlay.height = Math.round(canvas.clientHeight * odpr);
-    renderer.resize(w, h);
+    renderer.resize(w * renderScale, h * renderScale);
     touch();
   }
   new ResizeObserver(resize).observe(canvas);
@@ -1826,6 +1827,11 @@ async function main() {
     phase: () => phaseWatch.current,
     mapView: () => flightHud.mapCamera(),
     freeze: (on: boolean) => (frozen = on),
+    forceScale: (x: number | null) => {
+      forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
+      if (forcedScale === null) renderScale = 1;
+      resize();
+    },
   });
 
   // -------------------------------------------------------------------- loop
@@ -1923,7 +1929,11 @@ async function main() {
     const held = lastStats?.phase === "converging" || lastStats?.phase === "converged";
     heldFor = held ? heldFor + dt : 0;
     movingFor = held ? 0 : movingFor + dt;
-    const dynOn = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive;
+    const dynOn = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive && forcedScale === null;
+    if (forcedScale !== null && renderScale !== forcedScale) {
+      renderScale = forcedScale;
+      resize();
+    }
     if (dynOn && heldFor > 0.4 && renderScale < 1) {
       movingScale = renderScale;
       renderScale = 1;
@@ -1939,8 +1949,6 @@ async function main() {
       }
       movingScale = 0;
     }
-    // (the blocks held at 2 while the scale can still come down; at its floor, free to grow)
-    renderer.blockCap = dynOn && renderScale > 0.5 + 1e-6 ? 2 : 8;
     // (every 1.5 s in motion, by eighths, between half the pixel ratio and all of it)
     scaleTimer += dt;
     if (scaleTimer > 1.5) {
@@ -1961,18 +1969,17 @@ async function main() {
         kh = known(higher);
       const budget = renderer.frameBudget(settings);
       let want = renderScale;
-      if (!dynOn) want = 1;
+      if (forcedScale !== null) want = forcedScale;
+      else if (!dynOn) want = 1;
       else if (held) want = renderScale;
       else if (!settled) want = renderScale;
-      // (down once the blocks are at their cap — the scale gives way before the blocks grow: Pareto, P2 —,
-      // or while they are over it, within the budget too: the smaller image lets them come back to 2)
-      else if (block > renderer.blockCap && renderScale > 0.5) want = lower;
-      else if (gpuEma > 1.2 * budget && block >= renderer.blockCap && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
+      // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
+      // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)
+      else if (gpuEma > 1.2 * budget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
       // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
       // the frame grown as the pixels would stay within it)
       else if (
         higher > renderScale &&
-        block <= 2 &&
         (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)
       )
         want = higher;

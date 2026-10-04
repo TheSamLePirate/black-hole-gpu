@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 // bun scripts/quality.ts [url] ["scene|scene"] [configs JSON] [stops] [after] — needs python3 with numpy and Pillow
 // (after: frames left to draw once the camera stopped before the capture — the hand-over to the refinement)
 // Environment: SPEED — the turn per frame [°] (0.2); REF_JS — run before the converged reference (e.g. a
-// common resolution for configurations at different scales: "__bh.settings.pixelRatio = 1")
+// common resolution for configurations at different scales: "__bh.settings.pixelRatio = 1"); STEP_JS — each
+// frame's move in place of the turn (e.g. an orbit round the hole, the camera translated: "__bh.settings.azimuth += 0.3");
+// ANIMATE=1 — the scene's time running (the disk turning)
 const S = `${tmpdir()}/kerr-quality`;
 mkdirSync(`${S}/ui`, { recursive: true });
 const url = process.argv[2] ?? "http://localhost:3000/";
@@ -19,6 +21,8 @@ const stops = Number(process.argv[5] ?? 3);
 const after = Number(process.argv[6] ?? 0);
 const speed = Number(process.env.SPEED ?? 0.2);
 const refJs = process.env.REF_JS ?? "";
+const step = process.env.STEP_JS ?? `__bh.camera.rotateView(${speed}, ${0.15 * speed}, 0)`;
+const animate = process.env.ANIMATE === "1";
 const port = 9570 + Math.floor(Math.random() * 20);
 const chrome = Bun.spawn(
   [
@@ -83,16 +87,16 @@ try {
     for (const cfg of configs)
       for (let k = 0; k < stops; k++) {
         await js(
-          `__bh.preset(${JSON.stringify(sc)}); Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: 4, dynamicResolution: false, animate: false }); ${cfg.js}; __bh.refresh?.(); return 0`,
+          `__bh.preset(${JSON.stringify(sc)}); Object.assign(__bh.settings, { quality: "game", realtimeSubsampling: 4, dynamicResolution: false, animate: ${animate} }); ${cfg.js}; __bh.refresh?.(); return 0`,
         );
         await sleep(2500);
         // frame-locked turn: one step per completed frame, 40 + 10k frames
         const n = 40 + 10 * k;
         await js(`const r = __bh.renderer; let done = 0, last = r.lastDoneAt;
-      __bh.camera.rotateView(${speed}, ${0.15 * speed}, 0); __bh.touch();
-      while (done < ${n}) { await new Promise((q) => requestAnimationFrame(q)); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; if (done < ${n}) { __bh.camera.rotateView(${speed}, ${0.15 * speed}, 0); __bh.touch(); } } }
+      ${step}; __bh.touch();
+      while (done < ${n}) { await new Promise((q) => requestAnimationFrame(q)); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; if (done < ${n}) { ${step}; __bh.touch(); } } }
       for (let a = 0; a < ${after}; ) { await new Promise((q) => requestAnimationFrame(q)); if (r.lastDoneAt !== last) { last = r.lastDoneAt; a++; } }
-      window.__spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; return 0`);
+      window.__spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; __bh.settings.animate = false; return 0`);
         await sleep(500);
         const base = `${S}/ui/ev_${sc.replace(/[^\w]+/g, "_").slice(0, 16)}_${cfg.name}_${k}`;
         await shot(`${base}.png`);

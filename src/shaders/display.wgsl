@@ -27,6 +27,34 @@ struct Display {
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
 
+// The HDR image at uv by a Catmull–Rom spline (9 bilinear taps; Jimenez's): its negative lobes keep the
+// edges an upscale would blur; clamped at 0 (its ringing below black)
+fn catmullRom(uv: vec2f) -> vec3f {
+  let size = vec2f(textureDimensions(hdr, 0));
+  let sp = uv * size;
+  let t1 = floor(sp - 0.5) + 0.5;
+  let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let t0 = (t1 - 1.0) / size;
+  let t3 = (t1 + 2.0) / size;
+  let t12 = (t1 + w2 / w12) / size;
+  var c = vec3f(0.0);
+  c += textureSampleLevel(hdr, samp, vec2f(t0.x, t0.y), 0.0).rgb * w0.x * w0.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t12.x, t0.y), 0.0).rgb * w12.x * w0.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t3.x, t0.y), 0.0).rgb * w3.x * w0.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t0.x, t12.y), 0.0).rgb * w0.x * w12.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t12.x, t12.y), 0.0).rgb * w12.x * w12.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t3.x, t12.y), 0.0).rgb * w3.x * w12.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t0.x, t3.y), 0.0).rgb * w0.x * w3.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t12.x, t3.y), 0.0).rgb * w12.x * w3.y;
+  c += textureSampleLevel(hdr, samp, vec2f(t3.x, t3.y), 0.0).rgb * w3.x * w3.y;
+  return max(c, vec3f(0.0));
+}
+
 // AMD FidelityFX RCAS (robust contrast-adaptive sharpening, FSR 1) on the HDR image's texel at p, in a
 // reversible tone-mapped space (x / (1 + x) of the exposed value: the sky's 10⁴ and the shadows alike):
 // the cross's four neighbours give the most negative lobe that keeps the result within their range — no
@@ -307,9 +335,18 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let uvOut = in.pos.xy / D.size.xy;
   let uv = (uvOut - D.view.zw) / D.view.xy;
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
-  var c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
-  if (D.lod.w > 0.0 && D.lod.x == 0.0 && D.flags.x < 0.5) {
-    c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
+  // (the image upscaled here when rendered under the canvas — its render scale: a Catmull–Rom, sharper
+  // than the browser's bilinear; at the canvas's size, RCAS's sharpening instead — per image texel, it
+  // would draw that texel's blocks once upscaled)
+  let up = D.lod.x == 0.0 && (D.size.x > D.img.x * 1.01 || D.size.y > D.img.y * 1.01);
+  var c: vec3f;
+  if (up) {
+    c = catmullRom(uv);
+  } else {
+    c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
+    if (D.lod.w > 0.0 && D.lod.x == 0.0 && D.flags.x < 0.5) {
+      c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
+    }
   }
   if (D.lod.z > 0.5 && D.lod.x == 0.0) {
     // (the half-resolution blur where the circle of confusion is over a pixel or so)
@@ -320,7 +357,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // the Ranger over the traced image, within its box (the glare below still spills over its silhouette)
     let q = uv * D.img.xy - D.ship.xy;
     if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) {
-      let sp = textureLoad(ship, vec2i(uv * D.img.xy), 0);
+      let sp = select(textureLoad(ship, vec2i(uv * D.img.xy), 0), textureSampleLevel(ship, samp, uv, 0.0), up);
       c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
     }
     // (the flames and the plasma added; the condensation trails over what is behind them — their
