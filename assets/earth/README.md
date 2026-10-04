@@ -26,3 +26,9 @@ Sources: from the texture pack in `assets/tex` (its `cubemap/earth-*` and `base/
 is that of NASA's Blue Marble (day, clouds) and Black Marble (night lights) — NASA imagery, in the
 public domain. The heights: NOAA National Centers for Environmental Information, ETOPO 2022 15 Arc-Second
 Global Relief Model (here its 60″ grid), doi:10.25921/fd45-gt74.
+
+Near the camera (`src/system/earth-tiles.ts`), streamed and not stored here: the terrain tiles (Mapzen's
+Terrarium on AWS Open Data) and, on their levels up to z 8 (611 m), NASA's imagery from **GIBS** — the
+Blue Marble Next Generation by day, VIIRS's night lights (2016) by night —: "We acknowledge the use of
+imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth
+Science Data and Information System (ESDIS)."

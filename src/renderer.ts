@@ -579,7 +579,7 @@ export class Renderer {
         { binding: 24, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
         { binding: 26, visibility: C, texture: { sampleType: "depth" } },
-        { binding: 28, visibility: C, texture: { sampleType: "unfilterable-float", viewDimension: "2d-array" } },
+        { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
       ],
     });
     // (the disk's turbulence: a tiling noise baked once)

@@ -3,12 +3,17 @@
 // 256² PNGs, height = R·256 + G + B/256 − 32 768 m) — in nested levels, z 6 to 13 (2.4 km down to 19 m a
 // texel at the equator), each a window of 4 × 4 tiles kept round the camera.
 //
-// A level's window lives in one layer of a 1024² r32float array, its tiles at their coordinates modulo 4
-// (a toroidal clipmap): the window follows the camera tile by tile, the tiles it leaves overwritten by the
-// ones it enters. A level is drawn only where all its tiles are in (its "valid" rectangle): while it
+// The levels up to z 8 (611 m) bring their imagery too, from NASA's GIBS (Global Imagery Browse
+// Services; public domain, CORS open): the Blue Marble Next Generation by day, VIIRS's city lights by
+// night — the same Web Mercator tiles —, four to eight times finer than the global maps.
+//
+// A level's window lives in one layer of a 1024² rg32uint array — its heights' float bits, its imagery
+// (rgba8: the day's colour in sRGB, the night's lights; 0: none) —, its tiles at their coordinates modulo
+// 4 (a toroidal clipmap): the window follows the camera tile by tile, the tiles it leaves overwritten by
+// the ones it enters. A level is drawn only where all its tiles are in (its "valid" rectangle): while it
 // moves, the part it keeps; once the new tiles are loaded, all of it. Beyond the windows, and while they
-// load, the tracer falls back on the global map (earth-maps.ts: ETOPO 2022, 4.9 km). The same heights on
-// the CPU (heightAt): the ground the ship stands on.
+// load, the tracer falls back on the global maps (earth-maps.ts: ETOPO 2022, 4.9 km; the day 2.4 km). The
+// same heights on the CPU (heightAt): the ground the ship stands on.
 
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
@@ -24,6 +29,8 @@ export const LEVELS = Z1 - Z0 + 1;
 export const TILE_PARAM_VEC4S = 1 + 2 * LEVELS;
 /** The data's own resolution [m] (SRTM's 1″): no finer, whatever the level's texel. */
 export const TILE_RES_MIN = 25;
+/** the finest level with imagery (GIBS: the Blue Marble's 500 m) */
+export const IMG_Z1 = 8;
 
 const R = WGS84_A;
 const TAU = 2 * Math.PI;
@@ -31,6 +38,11 @@ const MAX_INFLIGHT = 8;
 const TIMEOUT_MS = 15000;
 
 export const tileUrl = (z: number, x: number, y: number) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
+export const dayUrl = (z: number, x: number, y: number) =>
+  `${GIBS}/BlueMarble_NextGeneration/default/default/GoogleMapsCompatible_Level8/${z}/${y}/${x}.jpeg`;
+export const nightUrl = (z: number, x: number, y: number) =>
+  `${GIBS}/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
 
 /** Mercator's y [tiles, 0 at the north edge] of a latitude's sine, at a level of n tiles. */
 const mercY = (sinLat: number, n: number) => (0.5 - Math.atanh(Math.min(Math.max(sinLat, -0.999999), 0.999999)) / TAU) * n;
@@ -63,14 +75,19 @@ interface Level {
 
 const slotOf = (x: number, y: number) => (((y % SPAN) + SPAN) % SPAN) * SPAN + (((x % SPAN) + SPAN) % SPAN);
 
-/** The heights of a tile from its PNG (Terrarium's encoding). */
-async function decode(blob: Blob): Promise<Float32Array> {
+/** A tile's pixels (rgba, row by row), as they are in its file. */
+async function pixels(blob: Blob): Promise<Uint8ClampedArray> {
   const img = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
   const cv = new OffscreenCanvas(TILE, TILE);
   const ctx = cv.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
   img.close();
-  const px = ctx.getImageData(0, 0, TILE, TILE).data;
+  return ctx.getImageData(0, 0, TILE, TILE).data;
+}
+
+/** The heights of a tile from its PNG (Terrarium's encoding). */
+async function decode(blob: Blob): Promise<Float32Array> {
+  const px = await pixels(blob);
   const h = new Float32Array(TILE * TILE);
   for (let i = 0; i < h.length; i++) h[i] = px[4 * i]! * 256 + px[4 * i + 1]! + px[4 * i + 2]! / 256 - 32768;
   return h;
@@ -105,7 +122,7 @@ export class EarthTiles {
   constructor(private device: GPUDevice) {
     this.texture = device.createTexture({
       size: [CLIP, CLIP, LEVELS],
-      format: "r32float",
+      format: "rg32uint",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       label: "earth tiles",
     });
@@ -230,10 +247,14 @@ export class EarthTiles {
     this.inflight.set(key, ctl);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let h: Float32Array | null = null;
+    // (its imagery alongside, on the levels that have some: none if it will not come — the global maps there)
+    const xw = ((x % L.n) + L.n) % L.n;
+    const img = L.z <= IMG_Z1 ? imagery(L.z, xw, y, ctl.signal) : Promise.resolve(null);
+    let col: Uint32Array | null = null;
     try {
-      const res = await fetch(tileUrl(L.z, ((x % L.n) + L.n) % L.n, y), { signal: ctl.signal });
+      const res = await fetch(tileUrl(L.z, xw, y), { signal: ctl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      h = await decode(await res.blob());
+      [h, col] = await Promise.all([res.blob().then(decode), img]);
       this.loaded++;
     } catch (e) {
       if (!this.inflight.has(key)) return; // (cleared)
@@ -253,22 +274,28 @@ export class EarthTiles {
       clearTimeout(timer);
       if (this.inflight.get(key) === ctl) this.inflight.delete(key);
     }
-    if (h) this.put(L.z, x, y, h);
+    if (h) this.put(L.z, x, y, h, col);
     this.request(cx0(this.lon), this.sinLat);
   }
 
-  /** A tile's heights in (z, x — unwrapped as its level's window has it —, y; 256² row by row [m]):
-   *  kept and sent to the GPU while its window wants it. */
-  put(z: number, x: number, y: number, h: Float32Array) {
+  /** A tile's heights in (z, x — unwrapped as its level's window has it —, y; 256² row by row [m]), with
+   *  its imagery (rgba8 packed; none: 0): kept and sent to the GPU while its window wants it. */
+  put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
     const s = slotOf(x, y);
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
+    const hb = new Uint32Array(h.buffer, h.byteOffset, h.length);
+    const texels = new Uint32Array(2 * TILE * TILE);
+    for (let i = 0; i < hb.length; i++) {
+      texels[2 * i] = hb[i]!;
+      texels[2 * i + 1] = col ? col[i]! : 0;
+    }
     this.device.queue.writeTexture(
       { texture: this.texture, origin: [(s % SPAN) * TILE, Math.floor(s / SPAN) * TILE, L.z - Z0] },
-      h as Float32Array<ArrayBuffer>,
-      { bytesPerRow: TILE * 4 },
+      texels,
+      { bytesPerRow: TILE * 8 },
       [TILE, TILE, 1],
     );
     this.complete(L);
@@ -378,6 +405,33 @@ export class EarthTiles {
       rem *= 1 - w;
     }
     return { h, res, rem };
+  }
+}
+
+/**
+ * A tile's imagery (GIBS: the day's colour, the night's lights), packed rgba8 — the day's sRGB, the
+ * lights' level —, never 0 (the tracer's mark of none); null if either will not come. The lights on the
+ * global night map's scale (its Black Marble: a ground of 0.07 under them, cities bloomed to 1): VIIRS's
+ * sharper, darker levels v as 0.07 + 0.93 · min(1.06 √v, 1) — its 99.5th percentile over the cities of
+ * Japan, Europe and the United States at 1, as the map's.
+ */
+async function imagery(z: number, x: number, y: number, signal: AbortSignal): Promise<Uint32Array | null> {
+  try {
+    const get = async (url: string) => {
+      const res = await fetch(url, { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return pixels(await res.blob());
+    };
+    const [d, n] = await Promise.all([get(dayUrl(z, x, y)), get(nightUrl(z, x, y))]);
+    const out = new Uint32Array(TILE * TILE);
+    for (let i = 0; i < out.length; i++) {
+      const v = (n[4 * i]! * n[4 * i + 3]!) / (255 * 255);
+      const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
+      out[i] = (Math.max(d[4 * i]!, 1) | (d[4 * i + 1]! << 8) | (d[4 * i + 2]! << 16) | (lights << 24)) >>> 0;
+    }
+    return out;
+  } catch {
+    return null;
   }
 }
 

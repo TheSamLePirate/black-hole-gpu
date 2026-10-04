@@ -1963,7 +1963,7 @@ export const SCHEMA: ControlDef[] = [
     group: "The Earth",
     label: "Real terrain",
     effect: "scene",
-    help: "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are. Off, or while they load: NOAA's global map (4.9 km) with drawn detail.",
+    help: "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are —, and down to 611 m NASA's imagery (GIBS: the Blue Marble by day, VIIRS's city lights by night). Off, or while they load: NOAA's global map (4.9 km) with drawn detail, the global day and night maps.",
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
   },
   {

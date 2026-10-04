@@ -62,8 +62,10 @@ export class App {
     // (offline from the world: the station's latest elements (CelesTrak) and the relief's tiles (S3)
     // change from day to day — the app falls back on its bundled ones, the same every run)
     await cdp.send("Network.enable");
-    // (the terrain tiles off unless asked: a test does not wait on the network)
-    await cdp.send("Network.setBlockedURLs", { urls: ["*celestrak.org*", ...(o.tiles ? [] : ["*s3.amazonaws.com*"])] });
+    // (the terrain tiles and their imagery (GIBS) off unless asked: a test does not wait on the network)
+    await cdp.send("Network.setBlockedURLs", {
+      urls: ["*celestrak.org*", ...(o.tiles ? [] : ["*s3.amazonaws.com*", "*gibs.earthdata.nasa.gov*"])],
+    });
     // (the first-visit hint already seen: it would sit over what the tests look at)
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); } catch {}`,

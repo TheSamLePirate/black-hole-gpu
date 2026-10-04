@@ -3629,7 +3629,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 @group(0) @binding(19) var earthCube: texture_cube<f32>;  // day colour (sRGB), cloud cover (alpha)
 @group(0) @binding(20) var earthNight: texture_cube<f32>; // city lights (r)
 @group(0) @binding(21) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022), the oceans
-@group(0) @binding(28) var earthTiles: texture_2d_array<f32>; // the terrain tiles' levels [m] (r32float, 1024²)
+// the terrain tiles' levels (rg32uint, 1024²): their heights' float bits [m]; up to z 8 their imagery
+// (rgba8: the day's sRGB, the night's lights; 0: none)
+@group(0) @binding(28) var earthTiles: texture_2d_array<u32>;
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -4220,7 +4222,59 @@ const TILE_RES_MIN = 25.0;
 // a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo 1024)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
   let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
-  return textureLoad(earthTiles, t, l, 0).r;
+  return bitcast<f32>(textureLoad(earthTiles, t, l, 0).r);
+}
+fn tileImage(l: u32, i: vec2i) -> u32 {
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
+  return textureLoad(earthTiles, t, l, 0).g;
+}
+const TILE_IMG_LEVELS = 3u; // (z 6 … 8: src/system/earth-tiles.ts, IMG_Z1)
+// The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS): the finest level
+// within the footprint and the next coarser, blended by the footprint and towards their windows' edges
+// (as earthH); rgb the day's colour (linear), a the night's lights; w its weight — the global maps' the rest
+// (none beyond the windows, nor where a tile's imagery did not come)
+struct TileImage { c: vec4f, w: f32 };
+fn earthImagery(q: vec3f, foot: f32) -> TileImage {
+  var o: TileImage;
+  o.c = vec4f(0.0);
+  o.w = 0.0;
+  if (P.tiles.w < 0.5) { return o; }
+  let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let sz = clamp(q.z, -0.999999, 0.999999);
+  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.5)));
+  var rem = 1.0;
+  for (var li = 0; li < i32(TILE_IMG_LEVELS); li++) {
+    let l = TILE_IMG_LEVELS - 1u - u32(li);
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let wz = clamp(zf - f32(TILE_Z0 + l) + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p = a.xy + vec2f(dlon, -dM) * b.z;
+    let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
+    var w = wz * smoothstep(2.0, 48.0, d);
+    if (w <= 0.0) { continue; }
+    // (bilinear over its texels, the day's colour in linear light; a texel without imagery: none here)
+    let x = p - 0.5;
+    let i0 = vec2i(floor(x));
+    let f = x - floor(x);
+    let t00 = tileImage(l, i0);
+    let t10 = tileImage(l, i0 + vec2i(1, 0));
+    let t01 = tileImage(l, i0 + vec2i(0, 1));
+    let t11 = tileImage(l, i0 + vec2i(1, 1));
+    if (min(min(t00, t10), min(t01, t11)) == 0u) { continue; }
+    let c = mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
+    // (the sRGB curve, as the maps' -srgb views decode them: the two meet without a seam)
+    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
+    o.c += rem * w * vec4f(lin, c.a);
+    o.w += rem * w;
+    rem *= 1.0 - w;
+    if (rem < 1e-4) { break; }
+  }
+  if (o.w > 0.0) { o.c /= o.w; }
+  return o;
 }
 // a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
 // (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
@@ -4698,7 +4752,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   let rel = earthRelief(gq, fx, fy);
   let ocean = smoothstep(0.35, 0.65, rel.b);
-  var A = day.rgb * P.earth2.z;
+  // (near, the tiles' imagery over the maps: four to eight times finer)
+  let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
+  var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
@@ -4784,7 +4840,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
-  let lamp = max(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r - 0.07, 0.0) / 0.93;
+  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
+  let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
   col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
   // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
