@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kerr-Bench — Analyse comparative</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="errBanner" hidden></div>
+
+  <header class="hero">
+    <h1>Kerr-Bench <em>Analyse comparative</em></h1>
+    <p>Les benchmarks du moteur Gargantua passés au crible : scores, frame-times réels, passes GPU, subsampling, thermique — deux machines face à face, chaque mesure expliquée.</p>
+    <div class="hero-actions">
+      <button class="btn primary" id="heroDash">▸ Ouvrir le dashboard</button>
+      <label class="btn" title="Ajouter un fichier JSON de benchmark">＋ Importer JSON<input id="fileInput" type="file" accept=".json,application/json" multiple hidden></label>
+      <button class="btn" id="heroAnalyse">Analyse automatique</button>
+    </div>
+  </header>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="bh"></span>
+      <div>
+        <h1>Kerr-Bench <em>Analyse</em></h1>
+        <p class="sub" style="margin:0;color:var(--muted);font-size:.8rem">WebGPU · les mesures parlent, l'analyse explique</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="reloadBtn" class="btn ghost" title="Recharger les fichiers du dossier data/">↻ Recharger</button>
+    </div>
+  </div>
+
+  <nav id="benchTabs" class="tabs"></nav>
+
+  <nav class="mainnav" aria-label="Vues">
+    <button class="nav-btn on" data-view="dashboard">Dashboard</button>
+    <button class="nav-btn" data-view="overview">Vue d'ensemble</button>
+    <button class="nav-btn" data-view="compare">Comparaison</button>
+    <button class="nav-btn" data-view="scene">Scènes</button>
+    <button class="nav-btn" data-view="subs">Subsampling</button>
+    <button class="nav-btn" data-view="trends">Tendances</button>
+    <button class="nav-btn" data-view="analyse">Analyse</button>
+    <button class="nav-btn" data-view="data">Données brutes</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="view on"></section>
+    <section id="overview" class="view"></section>
+    <section id="compare" class="view"></section>
+    <section id="scene" class="view"></section>
+    <section id="subs" class="view"></section>
+    <section id="trends" class="view"></section>
+    <section id="analyse" class="view"></section>
+    <section id="data" class="view"></section>
+  </main>
+
+  <footer>
+    <p>Docs « benchmark-analyse » · black-hole-gpu · données : <code>docs/bench-result-externes/</code> (copiées dans <code>data/</code>) · glisser-déposer des fichiers JSON pour enrichir la comparaison</p>
+  </footer>
+
+  <div id="dropOverlay"><div class="drop-box">Déposez les fichiers <strong>kerr-bench-*.json</strong> ici</div></div>
+
+  <script type="module" src="./app.ts"></script>
+</body>
+</html>
