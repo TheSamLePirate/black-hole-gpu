@@ -1,17 +1,20 @@
 // The solar system's worlds up close (assets/planets-hd): the finer map of the body near the camera,
-// streamed in as it nears — its colour (4096 or 8192 wide) and its relief's normals (from its normal
-// map, or computed from its height map: Mars, Mercury), packed on the GPU:
+// streamed in as it nears — its colour (4096 or 8192 wide) and its relief, packed on the GPU:
 //   color (rgba8): the map (sRGB), mip-mapped in linear light
-//   relief (rgba8): the normals' east and south components (0.5: flat), mip-mapped
+//   relief: the Moon's and Mars's heights from their laser altimeters (LOLA, MOLA: scripts/build-dem.py)
+//   — rg16float [m]: their mean and, down the mips, their highest (the marches' local bound); the
+//   tracer's ground and its normals —; elsewhere (rgba8) the normals'
+//   east and south components (0.5: flat), from the body's normal map or computed from its height map
+//   (Mercury), mip-mapped
 // One body at a time (the tracer's P.hd names it); its mean albedo measured, so that the finer map
 // keeps the body's brightness (the coarse map's mean sets it).
 
 import type { MapName } from "./solar";
 
 import moonColor from "../../assets/planets-hd/moon-color.jpg";
-import moonNormal from "../../assets/planets-hd/moon-normal.jpg";
+import moonDem from "../../assets/planets-hd/moon-dem.bin";
 import marsColor from "../../assets/planets-hd/mars-color.jpg";
-import marsHeight from "../../assets/planets-hd/mars-height.jpg";
+import marsDem from "../../assets/planets-hd/mars-dem.bin";
 import mercuryColor from "../../assets/planets-hd/mercury-color.jpg";
 import mercuryHeight from "../../assets/planets-hd/mercury-height.jpg";
 import jupiterColor from "../../assets/planets-hd/jupiter-color.jpg";
@@ -39,17 +42,22 @@ import mimasNormal from "../../assets/planets-hd/mimas-normal.jpg";
 import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
 import { blockCompress, canBlockCompress } from "./bc-encode";
+import { type HeightMap, loadHeights } from "./heights-file";
 
-/** A body's finer maps: its colour; its normals, or its height map and the relief's scale for them. */
+/**
+ * A body's finer maps: its colour; its heights [m] (an altimeter's: the ground drawn and stood on), or
+ * its normals, or an image's heights and the relief's scale for them (its shading alone).
+ */
 interface HdSet {
   color: string;
+  dem?: string;
   normal?: string;
   height?: string;
   relief?: number;
 }
 export const HD_SETS: Partial<Record<MapName, HdSet>> = {
-  moon: { color: moonColor, normal: moonNormal },
-  mars: { color: marsColor, height: marsHeight, relief: 6 },
+  moon: { color: moonColor, dem: moonDem },
+  mars: { color: marsColor, dem: marsDem },
   mercury: { color: mercuryColor, height: mercuryHeight, relief: 5 },
   jupiter: { color: jupiterColor },
   saturn: { color: saturnColor },
@@ -72,6 +80,8 @@ export interface HdMap {
   relief: GPUTexture;
   /** the relief is there (not a flat placeholder) */
   hasRelief: boolean;
+  /** the relief's heights [m] (the texture holds them, as half floats), with their range: or none */
+  dem: (HeightMap & { lo: number; hi: number }) | null;
   /** the colour map's mean linear luminance (area-weighted) */
   mean: number;
 }
@@ -89,6 +99,12 @@ struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
   return o;
 }
 @fragment fn copy(v: V) -> @location(0) vec4f { return textureSampleLevel(a, s, v.uv, 0.0); }
+// an altimeter's heights [m] as floats (the target's texels: the map's)
+@group(0) @binding(3) var dem: texture_2d<i32>;
+@fragment fn fromDem(v: V) -> @location(0) vec4f {
+  let h = f32(textureLoad(dem, vec2u(v.p.xy), 0).r);
+  return vec4f(h, h, 0.0, 1.0);
+}
 // the normals from a height map (the normal maps' convention: red east, green south)
 @fragment fn fromHeight(v: V) -> @location(0) vec4f {
   let du = vec2f(k.y, 0.0);
@@ -114,6 +130,11 @@ fn quad(p: vec2u) -> array<vec4f, 4> {
   let q = quad(vec2u(v.p.xy));
   return (q[0] + q[1] + q[2] + q[3]) * 0.25;
 }
+// the heights' mips: their mean, and their highest
+@fragment fn downDem(v: V) -> @location(0) vec4f {
+  let q = quad(vec2u(v.p.xy));
+  return vec4f((q[0].r + q[1].r + q[2].r + q[3].r) * 0.25, max(max(q[0].g, q[1].g), max(q[2].g, q[3].g)), 0.0, 1.0);
+}
 `;
 
 const levels = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
@@ -134,7 +155,7 @@ export function placeholderHd(device: GPUDevice): HdMap {
     device.queue.writeTexture({ texture: t }, new Uint8Array(px), {}, [1, 1]);
     return t;
   };
-  return { name: null, color: mk([128, 128, 128, 255]), relief: mk([128, 128, 255, 255]), hasRelief: false, mean: 0.25 };
+  return { name: null, color: mk([128, 128, 128, 255]), relief: mk([128, 128, 255, 255]), hasRelief: false, dem: null, mean: 0.25 };
 }
 
 async function bitmap(url: string) {
@@ -148,26 +169,26 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   const mod = device.createShaderModule({ code: PACK, label: "hd pack" });
   const samp = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat" });
   const pipes = new Map<string, GPURenderPipeline>();
-  const pipe = (entry: string) => {
-    let p = pipes.get(entry);
+  const pipe = (entry: string, format: GPUTextureFormat) => {
+    let p = pipes.get(entry + format);
     if (!p) {
       p = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: mod, entryPoint: "vs" },
-        fragment: { module: mod, entryPoint: entry, targets: [{ format: "rgba8unorm" }] },
+        fragment: { module: mod, entryPoint: entry, targets: [{ format }] },
         primitive: { topology: "triangle-list" },
       });
-      pipes.set(entry, p);
+      pipes.set(entry + format, p);
     }
     return p;
   };
   const kBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const draw = (entry: string, dst: GPUTexture, level: number, src: GPUTextureView) => {
-    const p = pipe(entry);
-    const uses = entry === "copy" ? [0, 1] : entry === "fromHeight" ? [0, 1, 2] : [0];
+    const p = pipe(entry, dst.format);
+    const uses = entry === "copy" ? [0, 1] : entry === "fromHeight" ? [0, 1, 2] : entry === "fromDem" ? [3] : [0];
     const bind = device.createBindGroup({
       layout: p.getBindGroupLayout(0),
-      entries: uses.map((b) => ({ binding: b, resource: b === 0 ? src : b === 1 ? samp : { buffer: kBuf } })),
+      entries: uses.map((b) => ({ binding: b, resource: b === 0 || b === 3 ? src : b === 1 ? samp : { buffer: kBuf } })),
     });
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({
@@ -186,9 +207,8 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
     pass.end();
     device.queue.submit([enc.finish()]);
   };
-  const mips = (t: GPUTexture, srgb: boolean) => {
-    for (let l = 1; l < t.mipLevelCount; l++)
-      draw(srgb ? "downSrgb" : "downLin", t, l, t.createView({ baseMipLevel: l - 1, mipLevelCount: 1 }));
+  const mips = (t: GPUTexture, srgb: boolean, entry = srgb ? "downSrgb" : "downLin") => {
+    for (let l = 1; l < t.mipLevelCount; l++) draw(entry, t, l, t.createView({ baseMipLevel: l - 1, mipLevelCount: 1 }));
   };
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST;
   const upload = (img: ImageBitmap) => {
@@ -230,8 +250,31 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   // the relief
   let relief: GPUTexture;
   let hasRelief = false;
+  let dem: HdMap["dem"] = null;
   const rUrl = set.normal ?? set.height;
-  if (rUrl) {
+  if (set.dem) {
+    const h = await loadHeights(set.dem);
+    let lo = 0,
+      hi = 0;
+    for (let i = 0; i < h.map.length; i++) {
+      const v = h.map[i]!;
+      if (v < lo) lo = v;
+      else if (v > hi) hi = v;
+    }
+    dem = { ...h, lo, hi };
+    relief = device.createTexture({ size: [h.W, h.H], format: "rg16float", mipLevelCount: levels(h.W, h.H), usage });
+    const whole = device.createTexture({
+      size: [h.W, h.H],
+      format: "r16sint",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: whole }, h.map, { bytesPerRow: h.W * 2 }, [h.W, h.H]);
+    draw("fromDem", relief, 0, whole.createView());
+    mips(relief, false, "downDem");
+    await device.queue.onSubmittedWorkDone();
+    whole.destroy();
+    hasRelief = true;
+  } else if (rUrl) {
     const rImg = await bitmap(rUrl);
     relief = device.createTexture({
       size: [rImg.width, rImg.height],
@@ -266,12 +309,12 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   let r = relief;
   if (canBlockCompress(device)) {
     if (fits(color)) c = blockCompress(device, color, "bc7");
-    if (hasRelief && fits(relief)) r = blockCompress(device, relief, "bc5");
+    if (hasRelief && !dem && fits(relief)) r = blockCompress(device, relief, "bc5");
     await device.queue.onSubmittedWorkDone();
     if (c !== color) color.destroy();
     if (r !== relief) relief.destroy();
   }
-  return { name, color: c, relief: r, hasRelief, mean: Math.max(sum / wsum, 1e-3) };
+  return { name, color: c, relief: r, hasRelief, dem, mean: Math.max(sum / wsum, 1e-3) };
 }
 
 /** The colour map's sRGB view's format (its texture rgba8 or BC7). */

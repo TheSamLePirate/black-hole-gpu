@@ -62,3 +62,9 @@ assets/iss/*.glb
 
 # the Kerr Bench's captures stay local: only its report.json files are versioned
 docs/perf/**/shots/
+
+# LOLA / MOLA raw elevation grids (NASA PDS, ~1 GB; reduced by scripts/build-dem.py)
+assets/dem/
+
+# what scripts/remote.ts brings back from the remote Mac (each run's log, meta.json, artifacts/)
+remote-results/

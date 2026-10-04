@@ -126,12 +126,25 @@ export function setGroundRelief(id: string, f: ((q: Vec3) => number) | null) {
 }
 // our airless worlds' ground: the tracer's craters (by their maps' indices: the Moon, Mercury, Ceres,
 // Phobos … Rhea — trace.wgsl: airless)
+const craters = new Map<string, (q: Vec3) => number>();
 for (const b of SOLAR_BODIES) {
   const m = b.map ? mapIndex(b.map) : -1;
   if (m === 1 || m === 3 || (m >= 7 && m <= 18)) {
     const mR = b.radius * M_METRES;
-    reliefs.set(b.id, (q) => craterRelief(m, q, mR));
+    craters.set(b.id, (q) => craterRelief(m, q, mR));
   }
+}
+for (const [id, f] of craters) reliefs.set(id, f);
+
+/**
+ * A body's measured heights, while the tracer draws them (its finer maps in: the Moon's LOLA, Mars's
+ * MOLA — hd-maps.ts): under its craters, height [m] at a unit direction on its axes; null: the craters alone.
+ */
+export function setGroundHeights(id: string, f: ((q: Vec3) => number) | null) {
+  const c = craters.get(id);
+  if (f) reliefs.set(id, c ? (q) => f(q) + c(q) : f);
+  else if (c) reliefs.set(id, c);
+  else reliefs.delete(id);
 }
 
 /**

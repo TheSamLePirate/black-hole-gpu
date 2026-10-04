@@ -1,6 +1,17 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
-import { bodyAxes, daysOf, M_METRES, mapIndex, seenFrom, solarBody, solarState, sunShare, type MapName } from "./system/solar";
+import {
+  bodyAxes,
+  daysOf,
+  M_METRES,
+  mapIndex,
+  SOLAR_BODIES,
+  seenFrom,
+  solarBody,
+  solarState,
+  sunShare,
+  type MapName,
+} from "./system/solar";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { guessTier, type Tier } from "./tier";
@@ -45,8 +56,8 @@ import {
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
 import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
-import { setGroundRelief } from "./system/our-surface";
-import { EARTH_RM, earthHeightSampler } from "./terrain";
+import { setGroundHeights, setGroundRelief } from "./system/our-surface";
+import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
 import { geodeticToCart, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
@@ -97,7 +108,7 @@ const HANDOVER_PASSES = 8;
 const RUNWAY_VEC4S = 17;
 /** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
 const SEA_VEC4S = 15;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -876,12 +887,20 @@ export class Renderer {
   /** Frees the finer maps (the camera left their world): the placeholder back. */
   private releaseHd() {
     const old = this.hdMap;
+    this.groundHeights(old, null);
     this.hdMap = placeholderHd(this.device);
     this.hdLoading = null;
     if (this.live) this.bindTarget(this.live);
     if (this.offline) this.bindTarget(this.offline.target);
     void this.device.queue.onSubmittedWorkDone().then(() => (old.color.destroy(), old.relief.destroy()));
     this.invalidate();
+  }
+
+  /** The ground a craft stands on: a world's measured heights while its finer maps are drawn (or not). */
+  private groundHeights(m: HdMap, on: HdMap | null) {
+    const id = m.name && m.dem ? SOLAR_BODIES.find((b) => b.map === m.name)?.id : undefined;
+    if (!id) return;
+    setGroundHeights(id, on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null);
   }
 
   /** Streams in a world's finer maps (the previous ones freed once loaded). */
@@ -896,8 +915,10 @@ export class Renderer {
           return;
         }
         const old = this.hdMap;
+        this.groundHeights(old, null);
         this.hdMap = m;
         this.hdLoading = null;
+        this.groundHeights(m, m);
         if (this.live) this.bindTarget(this.live);
         if (this.offline) this.bindTarget(this.offline.target);
         void this.device.queue.onSubmittedWorkDone().then(() => (old.color.destroy(), old.relief.destroy()));
@@ -1896,8 +1917,17 @@ export class Renderer {
     }
     const hd = this.hdMap;
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
-    const hdRelief = !hd.hasRelief ? 0 : HD_SETS[hd.name!]?.height ? 1 : 1.2;
+    const hdRelief = !hd.hasRelief ? 0 : hd.dem || HD_SETS[hd.name!]?.height ? 1 : 1.2;
     set(62, hdOn ? mapIndex(hd.name!) : -1, (this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean, hdRelief, hd.color.width);
+    // (its measured heights: on, their highest and lowest [m] — the relief's shell —, the body's radius [m])
+    const hdBody = hd.name ? SOLAR_BODIES.find((b) => b.map === hd.name) : undefined;
+    set(
+      69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S,
+      hdOn && hd.dem ? 1 : 0,
+      hd.dem?.hi ?? 0,
+      hd.dem?.lo ?? 0,
+      hdBody ? hdBody.radius * M_METRES : 1,
+    );
     // an airless world's finest ground (trace.wgsl: fineGround): the camera on the body's axes in metres,
     // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
     const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;

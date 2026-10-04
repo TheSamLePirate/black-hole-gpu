@@ -111,6 +111,9 @@ struct Params {
   // [3…14] twelve waves: their wavenumber (integers, units of 2π/1024 m: exact from the anchor), slope
   // amplitude, phase now
   sea: array<vec4f, 15>,
+  // the near body's measured heights in its finer relief (hd-maps.ts: the Moon's LOLA, Mars's MOLA): on
+  // (0/1), their highest and lowest [m] (the relief's shell), the body's radius [m]
+  hd2: vec4f,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1306,6 +1309,7 @@ fn isHd(k: u32) -> bool {
 }
 fn hdNormal(k: u32, q: vec3f) -> vec3f {
   if (!isHd(k)) { return q; }
+  if (P.hd2.x > 0.5) { return demNormal(q); }
   let uv = vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
   let rl = textureSampleLevel(hdRelief, bgSamp, uv, max(mapLod() + log2(f32(textureDimensions(hdRelief).x) / 2048.0), 0.0));
   var east = vec3f(-q.y, q.x, 0.0);
@@ -1313,6 +1317,86 @@ fn hdNormal(k: u32, q: vec3f) -> vec3f {
   let north = cross(q, east);
   let tn = vec2f(rl.r * 2.0 - 1.0, 1.0 - rl.g * 2.0) * P.hd.z;
   return normalize(q + tn.x * east + tn.y * north);
+}
+// The near body's measured heights [m] (P.hd2; hdRelief: half floats, mip-mapped) at q (its axes) for a
+// footprint [m]: near, a cubic B-spline over the texels (src/terrain.ts: mapHeightSampler, the same — the
+// ground the gear stands on); from afar, the footprint's mip level
+fn hasDem(surf: u32) -> bool { return P.hd2.x > 0.5 && surf >= 4u && i32(surf - 4u) == i32(P.hd.x); }
+fn demH0(q: vec3f, foot: f32) -> f32 {
+  let dim = vec2i(textureDimensions(hdRelief));
+  let texelM = P.hd2.w * TAU / f32(dim.x);
+  let lod = log2(max(foot, 1.0) / texelM);
+  let uv = earthUV(q);
+  if (lod > 0.5) { return textureSampleLevel(hdRelief, bgSamp, uv, lod).r; }
+  let x = uv.x * f32(dim.x) - 0.5;
+  let y = uv.y * f32(dim.y) - 0.5;
+  let x0 = floor(x);
+  let y0 = floor(y);
+  let wx = bspline4(x - x0);
+  let wy = bspline4(y - y0);
+  var s = 0.0;
+  for (var j = 0; j < 4; j++) {
+    let yy = clamp(i32(y0) + j - 1, 0, dim.y - 1);
+    var row = 0.0;
+    for (var i = 0; i < 4; i++) {
+      let xx = ((i32(x0) + i - 1) % dim.x + dim.x) % dim.x;
+      row += wx[i] * textureLoad(hdRelief, vec2i(xx, yy), 0).r;
+    }
+    s += wy[j] * row;
+  }
+  return s;
+}
+// the same, cheaply (the marches' steps): near, the B-spline from four of the hardware's bilinear reads
+// (Sigg & Hadwiger 2005: its weights rounded to 1/256 of a texel — metres off demH0, which refines the
+// crossing; a plain bilinear read was tens of metres off it on the crests: the march stopped short there)
+fn demStep(q: vec3f, foot: f32) -> f32 {
+  let dim = vec2f(textureDimensions(hdRelief));
+  let lod = log2(max(foot, 1.0) / (P.hd2.w * TAU / dim.x));
+  let uv = earthUV(q);
+  if (lod > 0.5) { return textureSampleLevel(hdRelief, bgSamp, uv, lod).r; }
+  let x = uv * dim - 0.5;
+  let i = floor(x);
+  let f = x - i;
+  let wx = bspline4(f.x);
+  let wy = bspline4(f.y);
+  let g0 = vec2f(wx.x + wx.y, wy.x + wy.y);
+  let g1 = vec2f(wx.z + wx.w, wy.z + wy.w);
+  let p0 = (i - 0.5 + vec2f(wx.y, wy.y) / g0) / dim;
+  let p1 = (i + 1.5 + vec2f(wx.w, wy.w) / g1) / dim;
+  return g0.y * (g0.x * textureSampleLevel(hdRelief, bgSamp, p0, 0.0).r + g1.x * textureSampleLevel(hdRelief, bgSamp, vec2f(p1.x, p0.y), 0.0).r) +
+    g1.y * (g0.x * textureSampleLevel(hdRelief, bgSamp, vec2f(p0.x, p1.y), 0.0).r + g1.x * textureSampleLevel(hdRelief, bgSamp, p1, 0.0).r);
+}
+// their highest within reach [m] of q (the mips' g: their maximum), from the 2 × 2 texels round it at
+// the level whose texel is twice the reach (shrunk towards the poles)
+fn demTop(q: vec3f, reach: f32) -> f32 {
+  let dim = vec2i(textureDimensions(hdRelief));
+  let cosLat = max(sqrt(max(1.0 - q.z * q.z, 0.0)), 0.05);
+  let top = i32(textureNumLevels(hdRelief)) - 1;
+  let l = clamp(i32(ceil(log2(2.0 * reach / (P.hd2.w * TAU / f32(dim.x) * cosLat)))), 0, top);
+  let dl = max(dim >> vec2u(u32(l)), vec2i(1));
+  let x = earthUV(q) * vec2f(dl) - 0.5;
+  let i = vec2i(floor(x));
+  let x0 = (i.x % dl.x + dl.x) % dl.x;
+  let x1 = (x0 + 1) % dl.x;
+  let y0 = clamp(i.y, 0, dl.y - 1);
+  let y1 = clamp(i.y + 1, 0, dl.y - 1);
+  return max(max(textureLoad(hdRelief, vec2i(x0, y0), l).g, textureLoad(hdRelief, vec2i(x1, y0), l).g),
+    max(textureLoad(hdRelief, vec2i(x0, y1), l).g, textureLoad(hdRelief, vec2i(x1, y1), l).g));
+}
+// their normal at q (its axes), at the map's footprint (mapLod), no finer than half a texel (the cheap
+// heights: a slope's metres off are nothing over a texel)
+fn demNormal(q: vec3f) -> vec3f {
+  let R = P.hd2.w;
+  let foot = R * TAU / 2048.0 * exp2(mapLod());
+  let e = max(foot, 0.5 * R * TAU / f32(textureDimensions(hdRelief).x)) / R;
+  let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
+  let t2 = cross(q, t1);
+  var hs = array<f32, 3>(0.0, 0.0, 0.0);
+  for (var i = 0; i < 3; i++) {
+    let qi = select(select(q, normalize(q + t1 * e), i == 1), normalize(q + t2 * e), i == 2);
+    hs[i] = demStep(qi, foot);
+  }
+  return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * R));
 }
 // the body's axes in the frame planetShade is called in (columns): set by its callers for our worlds
 var<private> ALB_GAIN: f32 = 1.0; // (near: the ground's own brightening — fresh ejecta, regolith)
@@ -3046,6 +3130,8 @@ fn reliefMax(surf: u32) -> f32 {
   if (airless(surf)) { return 500.0; }
   return 0.0;
 }
+// the shell of the ground drawn: the relief's, over the measured heights where there are some
+fn reliefTop(surf: u32) -> f32 { return reliefMax(surf) + select(0.0, max(P.hd2.y, 0.0), hasDem(surf)); }
 
 // Our airless worlds (the Moon, Mercury, the rocky and icy moons, Ceres, Phobos, Deimos): their ground
 // finer than their maps — craters in seven sizes (cells 4 km … 5 m, one crater at most in each: a bowl,
@@ -3135,8 +3221,17 @@ fn ridged(p: vec3f, oct: i32) -> f32 {
   return r * r;
 }
 
-// foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
+// The ground's height [m] at q: the relief over the measured heights (P.hd2) where there are some; cheap:
+// these filtered by the hardware (the marches' steps)
 fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demH0(q, foot), hasDem(surf));
+}
+fn reliefStep(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demStep(q, foot), hasDem(surf));
+}
+// the relief alone (its normal: the measured heights' is the finer map's, hdNormal)
+// foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
+fn reliefBase(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
   if (surf >= 4u) { return select(0.0, craterRelief(surf - 4u, q, foot, mR), airless(surf)); }
   if (surf == 1u) {
     // Mann: ice sheets, ridges, hills, rubble
@@ -3209,7 +3304,7 @@ fn nearMarch(look: vec3f) -> NearHit {
   let c = P.near0.xyz;
   let mR = P.near4.w;
   let tSec = P.time.x * P.near5.w;
-  let hmax = reliefMax(surf) / mR;
+  let hmax = reliefTop(surf) / mR;
   let Rs = 1.0 + hmax;
   let b = dot(look, c);
   let off = c - look * b;
@@ -3236,13 +3331,34 @@ fn nearMarch(look: vec3f) -> NearHit {
   let e = select(dot(A, A) - 1.0, P.nearCam0.w, fine);
   let oc = select(vec3f(0.0), P.nearCam1.xyz, fine);
   let rd = toBody(look);
+  let dem = hasDem(surf);
+  let rmax = reliefMax(surf);
+  // (the least step, a share of the distance: two of the probe's beams in the light probe — its texels wide)
+  let least = max(0.02, 2.0 * probeBeam);
   for (var i = 0u; i < 220u; i++) {
     let v = oc + rd * t;
     let p = A + v;
     let r = length(p);
     let qb = p / r;
-    let h = relief(surf, qb, reliefFoot(t), mR, tSec) / mR;
-    let f = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - h;
+    let hgt = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0);
+    // (over the measured ground: above its highest within a reach growing with the distance, a stride of
+    // that reach — or, falling, of what its fall leaves above it. Their shell is their highest anywhere,
+    // kilometres over a plain: the rays grazing it took the 220 steps of 2 % of the distance)
+    if (dem) {
+      let reach = 0.25 * t * mR + 2000.0;
+      let above = hgt * mR - demTop(qb, reach) - rmax;
+      let rise = dot(p, rd) / r;
+      let stride = select(min(reach, above / max(-rise, 1e-6)), reach, rise >= 0.0) / mR;
+      // (no shorter than the march's own least step)
+      if (above > 0.0 && stride > least * t) {
+        t += stride;
+        tPrev = t;
+        if (t > t1) { break; }
+        continue;
+      }
+    }
+    let h = reliefStep(surf, qb, reliefFoot(t), mR, tSec) / mR;
+    let f = hgt - h;
     if (f < 0.0) {
       // bisect between the last point above and this one
       var lo = tPrev;
@@ -3260,7 +3376,7 @@ fn nearMarch(look: vec3f) -> NearHit {
       return o;
     }
     tPrev = t;
-    t += max(0.6 * f, 0.02 * t + 1e-9);
+    t += max(0.6 * f, least * t + 1e-9);
     if (t > t1) { break; }
   }
   return o;
@@ -3289,9 +3405,9 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
   let e = max(t * pixFoot(), 2.0 * max(minFoot, 5.0) / mR);
   let t1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
   let t2 = cross(qb, t1);
-  let h0 = relief(surf, qb, foot, mR, tSec);
-  let h1 = relief(surf, normalize(qb + t1 * e), foot, mR, tSec);
-  let h2 = relief(surf, normalize(qb + t2 * e), foot, mR, tSec);
+  let h0 = reliefBase(surf, qb, foot, mR, tSec);
+  let h1 = reliefBase(surf, normalize(qb + t1 * e), foot, mR, tSec);
+  let h2 = reliefBase(surf, normalize(qb + t2 * e), foot, mR, tSec);
   let g = ((h1 - h0) * t1 + (h2 - h0) * t2) / (e * mR);
   return normalize(fromBody(normalize(qb - g)));
 }
@@ -3352,21 +3468,25 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
 // bands), soft over the source's half degree
 fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f32 {
   let mR = P.near4.w;
-  let hmax = reliefMax(surf) / mR;
+  // (the shell: the relief's over the measured heights' highest within the march's reach, ~60 km)
+  let hmax = select(reliefTop(surf), reliefMax(surf) + demTop(q, 6.0e4), hasDem(surf)) / mR;
   let p0 = q * (1.0 + h / mR);
   if (dot(L, q) < -0.2) { return 0.0; } // (the night side: in the planet's own shadow)
+  // (the steps' cheap ground against the point's own: their difference there taken off — no self-shadow)
+  let b0 = select(0.0, demStep(q, foot) - demH0(q, foot), hasDem(surf));
   var s = 1.0;
   var d = max(0.5, foot) / mR * exp2(0.3 * RND);
   for (var i = 0u; i < 56u; i++) {
     let pp = p0 + L * d;
     let r = length(pp);
     if (r - 1.0 > hmax) { break; }
-    let hh = relief(surf, pp / r, max(foot, d * mR * 0.02), mR, tSec) / mR;
+    let hh = (reliefStep(surf, pp / r, max(foot, d * mR * 0.02), mR, tSec) - b0) / mR;
     // (its clearance [m], less a bias: the ground there drawn at a coarser footprint than the pixel's)
     let cl = (r - 1.0 - hh) * mR + 0.5 + 0.01 * d * mR;
     s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
     if (s <= 0.0) { break; }
-    d *= 1.23;
+    // (the light probe's texels wide: its shadows coarser)
+    d *= select(1.23, 1.6, probeBeam > 0.0);
   }
   return s;
 }
@@ -3425,7 +3545,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
     BODYW = mat3x3f(P.near1.xyz, P.near2.xyz, P.near3.xyz);
     var sh = 1.0;
     var n = n0;
-    if (reliefMax(surf) > 0.0) {
+    if (reliefTop(surf) > 0.0) {
       // the relief's shadows (a light source: its penumbra half a degree), and on our airless worlds the
       // fresh craters' bright ejecta, the regolith's mottling
       let foot = reliefFoot(t);
@@ -6006,7 +6126,7 @@ fn keyRelief(kn: u32, L: vec3f) -> f32 {
     }
     return sh;
   }
-  if (airless(surf) && (rc - 1.0) * mR < 2.0 * reliefMax(surf)) {
+  if ((airless(surf) || hasDem(surf)) && (rc - 1.0) * mR < 2.0 * reliefTop(surf)) {
     RND = 0.5;
     return nearShadow(surf, c / rc, (rc - 1.0) * mR, L, 0.5, P.time.x * P.near5.w);
   }

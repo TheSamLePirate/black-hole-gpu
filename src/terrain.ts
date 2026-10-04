@@ -312,22 +312,13 @@ export function toHalf(v: number): number {
 }
 
 /**
- * The Earth's height [m] at a unit direction on its axes, from its height map (whole metres per texel,
- * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
- * samples it near — a cubic B-spline over its texels, wrapping in longitude — under the terrain tiles
- * near the camera (tiles: earth-tiles.ts, their heights and what they leave to the map), and the detail
- * finer than them; the sea at 0.
+ * A height map's height [m] at a unit direction on its body's axes (whole metres per texel, W × H
+ * equirectangular: u = 0.5 + longitude/360°, texel centres — as the tracer holds them: half floats) as
+ * the tracer samples it near: a cubic B-spline over its texels, wrapping in longitude (trace.wgsl:
+ * earthH0, demH0 — the same weights).
  */
-export function earthHeightSampler(
-  map: Int16Array,
-  W: number,
-  H: number,
-  tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number },
-  /** where the ground is graded (runways: game/sites.ts), 0…1 — the drawn detail taken off there */
-  graded?: (q: V3) => number,
-) {
-  const texelA = (EARTH_RM * 2 * Math.PI) / W;
-  const fromMap = (q: V3): number => {
+export function mapHeightSampler(map: Int16Array, W: number, H: number) {
+  return (q: V3): number => {
     const lon = Math.atan2(q[1], q[0]);
     const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
     const x = (0.5 + lon / (2 * Math.PI)) * W - 0.5;
@@ -345,6 +336,25 @@ export function earthHeightSampler(
     }
     return v;
   };
+}
+
+/**
+ * The Earth's height [m] at a unit direction on its axes, from its height map (whole metres per texel,
+ * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
+ * samples it near — a cubic B-spline over its texels, wrapping in longitude — under the terrain tiles
+ * near the camera (tiles: earth-tiles.ts, their heights and what they leave to the map), and the detail
+ * finer than them; the sea at 0.
+ */
+export function earthHeightSampler(
+  map: Int16Array,
+  W: number,
+  H: number,
+  tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number },
+  /** where the ground is graded (runways: game/sites.ts), 0…1 — the drawn detail taken off there */
+  graded?: (q: V3) => number,
+) {
+  const texelA = (EARTH_RM * 2 * Math.PI) / W;
+  const fromMap = mapHeightSampler(map, W, H);
   return (q: V3, foot = 0.05): number => {
     let h0: number, res: number;
     const t = tiles?.(q, foot);

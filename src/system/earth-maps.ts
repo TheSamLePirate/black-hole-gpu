@@ -59,6 +59,7 @@ import ktxHighDn from "../../assets/earth/ktx2/high-dn.ktx2";
 import ktxHighFt from "../../assets/earth/ktx2/high-ft.ktx2";
 import ktxHighBk from "../../assets/earth/ktx2/high-bk.ktx2";
 import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
+import { type HeightMap, loadHeights } from "./heights-file";
 
 export type EarthTier = "med" | "high";
 
@@ -118,11 +119,7 @@ async function compressedCube(device: GPUDevice, tier: EarthTier): Promise<GPUTe
 const NIGHT_SIZE = 2048;
 
 /** The Earth's heights [m] as the tracer has them (its elev map: their texels), W × H equirectangular. */
-export interface EarthHeights {
-  map: Int16Array<ArrayBuffer>;
-  W: number;
-  H: number;
-}
+export type EarthHeights = HeightMap;
 
 export interface EarthMaps {
   cube: GPUTexture;
@@ -304,7 +301,7 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
     pk.mips(night, f, false);
     lights.destroy();
   }
-  const [heights, o] = await Promise.all([loadHeights(set.relief), upload(device, set.ocean, "r8unorm")]);
+  const [heights, o] = await Promise.all([loadHeights(set.relief, get), upload(device, set.ocean, "r8unorm")]);
   const elev = device.createTexture({ size: [set.w, set.w / 2], format: "rg16float", mipLevelCount: levels(set.w), usage });
   const whole = device.createTexture({
     size: [heights.W, heights.H],
@@ -318,32 +315,4 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   o.destroy();
   await device.queue.onSubmittedWorkDone();
   return { cube, night, elev, heights, tier };
-}
-
-/**
- * The heights [m] from their file (scripts/build-earth-relief.py: "ELV1", gzip; each row's values after
- * its first as differences, the low bytes then the high), the rows summed a band at a time (no long
- * task on the main thread).
- */
-async function loadHeights(url: string): Promise<EarthHeights> {
-  const res = await get(url);
-  if (!res.ok || !res.body) throw new Error(`Earth relief: HTTP ${res.status}`);
-  const buf = await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
-  const head = new Uint32Array(buf, 0, 4);
-  if (head[0] !== 0x31564c45) throw new Error("Earth relief: bad header");
-  const W = head[1]!,
-    H = head[2]!,
-    n = W * H;
-  const lo = new Uint8Array(buf, 16, n),
-    hi = new Uint8Array(buf, 16 + n, n);
-  const map = new Int16Array(n);
-  for (let y0 = 0; y0 < H; y0 += 256) {
-    for (let y = y0; y < Math.min(y0 + 256, H); y++) {
-      let o = y * W;
-      let v = 0;
-      for (let x = 0; x < W; x++, o++) map[o] = v = v + (((lo[o]! | (hi[o]! << 8)) << 16) >> 16);
-    }
-    await new Promise((r) => setTimeout(r, 0));
-  }
-  return { map, W, H };
 }
