@@ -23,7 +23,7 @@ import { loading } from "./loading";
 import { t, tf } from "./i18n";
 import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
-import lensDirtUrl from "../assets/tex/base/lensdirt-low.jpg";
+import lensDirtUrl from "../assets/lens/lensdirt.jpg";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
 import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
