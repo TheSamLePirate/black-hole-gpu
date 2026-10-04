@@ -140,9 +140,8 @@ function newFlight(this: CameraController) {
   this.windHome = null;
   this.windNow = null;
   this.weather.reset(1 + (Math.floor(Math.abs(this.nowTime()) * 1e3) % 2147483646));
-  this.pilot.engineNow = 0;
+  this.pilot.newFlight();
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
-  this.pilot.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   this.contrails.clear();
 }
 

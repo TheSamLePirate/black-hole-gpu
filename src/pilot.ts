@@ -249,6 +249,25 @@ export class FlightComputer {
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
   fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0] as V3, torque: [0, 0, 0] as V3 };
 
+  /**
+   * A new flight: nothing of the last one's motion or laws carried — the ship's body rates, the engine's
+   * spool, the burn, the anchor, the plane law's held path, attack and bank (a second glide began turning
+   * as the first had ended: 3 m apart after 30 s). Its settings (SAS, the roll's alignment, precision,
+   * the throttle, the hold and the autopilot the new flight sets) stay.
+   */
+  newFlight() {
+    this.omega = [0, 0, 0];
+    this.accel = 0;
+    this.engineNow = 0;
+    this.burn = null;
+    this.anchor = null;
+    this.gammaHold = null;
+    this.gammaPrev = null;
+    this.alphaHold = null;
+    this.bankHold = null;
+    this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
+  }
+
   setHold(h: Hold) {
     this.hold = this.hold === h ? "none" : h;
     if (this.hold !== "none") this.auto = "none";
