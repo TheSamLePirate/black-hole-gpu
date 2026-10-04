@@ -56,7 +56,8 @@ try {
     errSeen = 0,
     touched = 0,
     every = 10_000,
-    lastAlong: number | null = null;
+    lastAlong: number | null = null,
+    lastAt = 0;
   let stopped = 0;
   for (;;) {
     await Bun.sleep(every);
@@ -109,12 +110,14 @@ try {
     }
     // (stopped: by its place on the runway — the status's speed is against the Earth's centre, its turning
     // ground's 300 m/s and more in it)
-    const gs = touched && r.rwy && lastAlong !== null ? Math.abs(r.rwy.along - lastAlong) / (every / 1000) : null;
+    const now = Date.now();
+    const gs = touched && r.rwy && lastAlong !== null ? Math.abs(r.rwy.along - lastAlong) / ((now - lastAt) / 1000) : null;
     if (touched && r.rwy)
       say(
         `  rollout: ${r.rwy.along.toFixed(0)} m past the threshold, ${r.rwy.across.toFixed(1)} m off its axis${gs === null ? "" : `, ${gs.toFixed(1)} m/s`}`,
       );
     lastAlong = r.rwy ? r.rwy.along : null;
+    lastAt = now;
     if (gs !== null && gs < 0.25) {
       if (++stopped >= 2) {
         const on = Math.abs(r.rwy!.across) < 45 && r.rwy!.along > 0 && r.rwy!.along < RUNWAY_LENGTH;
