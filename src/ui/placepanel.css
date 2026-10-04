@@ -43,3 +43,10 @@
 .pp-foot { display: flex; justify-content: flex-end; }
 .pp-foot .k-btn { padding: 8px 18px; }
 .pp-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* the time panel (ui/timepanel.ts) */
+.tm-clock { display: flex; align-items: baseline; gap: 10px; }
+.tm-clock b { font: 600 28px/1 var(--mono); color: var(--k-text); letter-spacing: 0.04em; }
+.tm-clock small { font: var(--k-font-value); color: var(--k-dim); }
+.tm-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tm-pick .tm-date { width: auto; min-width: 220px; color-scheme: dark; }

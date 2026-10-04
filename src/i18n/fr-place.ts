@@ -45,4 +45,21 @@ export default {
   Place: "Placer",
   "Place the ship: in orbit, on a ground, beside a body, before the wormhole":
     "Placer le vaisseau : en orbite, au sol, auprès d'un corps, devant le trou de ver",
+  // ---- the date and time (ui/timepanel.ts)
+  "Date and time": "Date et heure",
+  "The ship keeps its orbit, or its place on the ground, around its body; a manoeuvre plan made on the old clock is dropped.":
+    "Le vaisseau garde son orbite, ou sa place au sol, autour de son corps ; un plan de manœuvre fait sur l'ancienne horloge est annulé.",
+  "The clock moved: the plan made on the old clock was dropped": "L'horloge a bougé : le plan fait sur l'ancienne horloge est annulé",
+  "The clock moved": "L'horloge a bougé",
+  "Now (the real date)": "Maintenant (la date réelle)",
+  "Start of the scene": "Début de la scène",
+  Set: "Régler",
+  "Not a date": "Ce n'est pas une date",
+  "Back to": "Revenir à",
+  "A date": "Une date",
+  Steps: "Pas",
+  "−1 d": "−1 j",
+  "+1 d": "+1 j",
+  "+30 d": "+30 j",
+  "Date and time: now, the start of the scene, a date chosen": "Date et heure : maintenant, le début de la scène, une date choisie",
 } satisfies Record<string, string>;

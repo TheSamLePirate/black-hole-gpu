@@ -16,12 +16,13 @@ import { defaultSettings, pickSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
 import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose, setRepPose } from "../camera";
-import { ellOfR, mouth } from "../wormhole";
+import { ellOfR, mouth, sphericalFrame } from "../wormhole";
+import { betaToCoord, planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
 import { BODY_NAMES } from "../targeting";
 import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity } from "../system/our-surface";
 import { SITES } from "./sites";
-import { soiOf } from "../system/our-side";
+import { ourState, soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
 import {
@@ -400,12 +401,72 @@ export class GameTools {
     return on ? "Paused" : "Running";
   }
   /** The scene's clock to a date (ISO) or a time [M]; the bodies move, the ship keeps its place. */
+  /**
+   * The scene's clock set to t [M], the ship carried as the world moves on: on our side with the body it
+   * moves about (its reference body's motion added: the same orbit, the same place over it), against
+   * the mouth when by it; on Gargantua's side in its world's frame; landed, where it stands (its place is
+   * the ground's). A plan made on the old clock (nodes, the flight computer's burns, an entry) is
+   * dropped — said in the journal and returned.
+   */
+  jumpTo(t1: number) {
+    const s = this.ctx.settings,
+      c = this.ctx.camera,
+      t0 = this.ctx.time();
+    if (!Number.isFinite(t1)) throw new Error(`not a time: ${t1}`);
+    let carry: (() => void) | null = null;
+    if (s.ship && !c.ourLanded && s.system === "gargantua") {
+      const st = this.status();
+      if (st.side === "ours" && st.soi) {
+        const p = c.activePoseNow();
+        // (by the mouth — within a few of its gluing radii —: kept against it, the home frame's origin)
+        if (p && Math.hypot(...p.X) > 3 * mouth(s).rGlue) {
+          const a = ourState(st.soi, t0),
+            ref = st.soi;
+          carry = () => {
+            const b = ourState(ref, t1);
+            const X = [0, 1, 2].map((i) => p.X[i]! - a.pos[i]! + b.pos[i]!) as V3;
+            const V = [0, 1, 2].map((i) => p.V[i]! - a.vel[i]! + b.vel[i]!) as V3;
+            setHomePose(s, X, p.ax[2], p.ax[1], V);
+            s.anchor = "wormhole";
+          };
+        }
+      } else if (st.side === "gargantua" && st.soi && st.soi !== "gargantua" && s.anchor === "hole") {
+        const D = Math.PI / 180,
+          r = s.distance,
+          th = s.inclination * D,
+          ph = s.azimuth * D;
+        const X: V3 = [r * Math.sin(th) * Math.cos(ph), r * Math.sin(th) * Math.sin(ph), r * Math.cos(th)];
+        const L = toLocal(planetFrame(st.soi, t0, s.spin, s.massSolar), X, betaToCoord(X, [s.velR, s.velT, s.velP], s.spin));
+        const ref = st.soi;
+        carry = () => {
+          const g = toGlobal(planetFrame(ref, t1, s.spin, s.massSolar), L);
+          const f = sphericalFrame(g.X);
+          s.distance = f.r;
+          s.inclination = Math.min(Math.max(f.th / D, 0.2), 179.8);
+          s.azimuth = f.ph / D;
+          [s.velR, s.velT, s.velP] = zamoBeta(g.X, g.V, s.spin);
+        };
+      }
+    }
+    // (the plan's times were the old clock's)
+    const auto = c.pilot.auto;
+    const planned = c.plan.nodes.length > 0 || auto === "node" || auto === "burns" || auto === "transfer" || auto === "entry";
+    c.fcClear();
+    if (c.pilot.auto === "entry") c.pilot.setAuto("entry");
+    c.entryRun = null;
+    this.ctx.setTime(t1);
+    carry?.();
+    c.sync();
+    this.ctx.refresh();
+    const note = `Clock set to ${fmtDate(t1)}${planned ? " — the plan made on the old clock dropped" : ""}`;
+    this.log.add("info", note, t1);
+    return { date: fmtDate(t1), planDropped: planned };
+  }
+
   setDate(d: string | number) {
     const t = typeof d === "number" ? d : (Date.parse(d.endsWith("Z") ? d : `${d}Z`) - EPOCH_DATE) / 1e3 / M_SECONDS;
     if (!Number.isFinite(t)) throw new Error(`not a date: ${d}`);
-    this.ctx.setTime(t);
-    this.log.add("info", `Clock set to ${fmtDate(t)}`, t);
-    return fmtDate(t);
+    return this.jumpTo(t).date;
   }
 
   get<K extends keyof Settings>(key: K): Settings[K] {

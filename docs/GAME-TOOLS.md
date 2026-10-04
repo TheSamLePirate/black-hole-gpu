@@ -12,6 +12,14 @@ place now), on the ground (globe, the landing sites, latitude and longitude), be
 and quick ones. During a mission it asks first and ends the mission; from a scene without the game's
 world (a bare Kerr view) it loads it first.
 
+## The date and time (for every player)
+
+The transport bar's clock (in flight: its clock button; also the pause menu) opens `src/ui/timepanel.ts`:
+back to now (the real date) or to the start of the scene, a date chosen (UTC), steps of an hour, a day,
+thirty days — `__bh.game.jumpTo(t)`: the ship carried with the world (on our side with its reference
+body: the same orbit, the same place over it; by a mouth, against it; on Gargantua's side in its world's
+frame; landed, where it stands), a plan made on the old clock dropped.
+
 ## The window (F2, developers: a development build or `?dev`)
 
 | Tab | What it does |

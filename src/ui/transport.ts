@@ -24,6 +24,8 @@ export interface TransportDeps {
    *  the pilot's held down to the manoeuvre's) */
   nodeWarp(): "" | "plan" | "auto" | "manual" | "held";
   toggleAutoWarp(): void;
+  /** the date and time (ui/timepanel.ts) */
+  openTime(): void;
 }
 
 const ICON = {
@@ -32,6 +34,7 @@ const ICON = {
   slower: '<path d="M11.5 7l-5 5 5 5M18 7l-5 5 5 5"/>',
   faster: '<path d="M12.5 7l5 5-5 5M6 7l5 5-5 5"/>',
   rec: '<circle cx="12" cy="12" r="5.2" class="f"/>',
+  clock: '<circle cx="12" cy="12" r="7.5"/><path d="M12 7.5V12l3 2"/>',
 };
 
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
@@ -44,7 +47,8 @@ export class TransportBar {
   private warpSub = h("small");
   private rtBtn = h("button", "tp-btn tp-rt", "1×");
   private autoBtn = h("button", "tp-btn tp-auto", "AUTO");
-  private clock = h("div", "tp-clock");
+  private clock = h("button", "tp-clock");
+  private timeBtn = h("button", "tp-btn tp-time");
   private clockMain = h("b");
   private clockSub = h("small");
   private rec = h("button", "tp-btn tp-rec");
@@ -78,6 +82,10 @@ export class TransportBar {
     this.warpBtn.dataset.tip = t("Time warp — a click: every rung");
     this.warpBtn.onclick = () => this.toggleMenu();
     this.clock.append(this.clockMain, this.clockSub);
+    this.clock.dataset.tip = t("Date and time: now, the start of the scene, a date chosen");
+    this.clock.onclick = () => d.openTime();
+    btn(this.timeBtn, ICON.clock, t("Date and time: now, the start of the scene, a date chosen"), "", () => d.openTime());
+    this.timeBtn.dataset.testid = "time-open";
     btn(this.rec, ICON.rec, t("Record a take: what you do, live — then Render › Video renders it at full quality"), "", () => d.record());
     this.rec.append(this.recTime);
     this.menu.hidden = true;
@@ -90,6 +98,7 @@ export class TransportBar {
       this.autoBtn,
       h("i", "tp-sep"),
       this.clock,
+      this.timeBtn,
       h("i", "tp-sep"),
       this.rec,
     );

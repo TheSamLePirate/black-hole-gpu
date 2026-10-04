@@ -12,6 +12,7 @@ import { ControlsScreen } from "./ui/controls-screen";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
+import { TimePanel } from "./ui/timepanel";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
@@ -302,6 +303,8 @@ async function main() {
 
   /** the scene applied last (the panel and the gallery show it) */
   let currentScene: string | null = null;
+  /** the scene's clock when it was applied [M] */
+  let sceneStart = 0;
   const panel = new SettingsPanel($("panel"), {
     settings,
     defaults: defaultSettings,
@@ -455,6 +458,8 @@ async function main() {
         ),
       );
     }
+    // (the scene's own start: the time panel's "start of the scene")
+    sceneStart = sim.time;
     refreshGui();
     touch();
     touchDisplay();
@@ -1174,6 +1179,7 @@ async function main() {
           : t("Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows"),
       );
     },
+    openTime: () => timePanel.open(),
   });
   transport.mount(tpDock, false);
   /** Starts or stops recording a take (● on the time bar). */
@@ -1332,6 +1338,7 @@ async function main() {
       controls: () => controlsScreen.open(),
       photo: () => openPhoto(),
       place: () => placePanel.open(),
+      time: () => timePanel.open(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
@@ -1741,6 +1748,8 @@ async function main() {
     },
   });
   flightHud.onPlace = () => placePanel.open();
+  // the date and time (ui/timepanel.ts): the transport bar's clock, the pause menu
+  const timePanel = new TimePanel({ tools, settings, sceneStart: () => sceneStart, toast: (x) => panel.toast(x) });
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   let appVersion = "dev";
   void fetch("version.json")

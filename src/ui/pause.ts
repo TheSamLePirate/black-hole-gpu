@@ -14,6 +14,7 @@ const T = {
   save: { fr: "Sauvegarder", en: "Save game" },
   load: { fr: "Charger", en: "Load game" },
   place: { fr: "Placer le vaisseau", en: "Place the ship" },
+  time: { fr: "Date et heure", en: "Date and time" },
   release: { fr: "Rendre les commandes", en: "Release the controls" },
   releaseHint: { fr: "coupe l'autopilote, le maintien, la mission", en: "stops the autopilot, the hold, the mission" },
   settings: { fr: "Réglages", en: "Settings" },
@@ -47,6 +48,8 @@ export interface PauseDeps {
   photo(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
+  /** the date and time (ui/timepanel.ts) */
+  time(): void;
   titleScreen(): void;
   toast(text: string): void;
 }
@@ -115,6 +118,7 @@ export class PauseMenu {
       this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
       this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
+      this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.d.engaged()
         ? this.item(
             tr(T.release),
