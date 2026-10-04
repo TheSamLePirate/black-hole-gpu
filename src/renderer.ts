@@ -1655,8 +1655,9 @@ export class Renderer {
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
     const sb = !o.probe && s.ship && this.ship.ready && near ? this.ship.shadowBound : null;
     set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
-    // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet)
-    this.lutOn = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut;
+    // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
+    // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
+    this.lutOn = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut && o.block <= 2;
     if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
