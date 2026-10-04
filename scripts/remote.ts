@@ -78,7 +78,13 @@ async function withSyncLock<T>(f: () => Promise<T>) {
 async function pullClone() {
   if (!CLONE) return;
   const p = Bun.spawn(
-    ["ssh", "-o", "BatchMode=yes", HOST, `cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`],
+    [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      HOST,
+      `cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`,
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   const out = (await new Response(p.stdout).text()).trim();
