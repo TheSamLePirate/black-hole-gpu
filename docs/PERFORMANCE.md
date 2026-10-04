@@ -192,6 +192,12 @@ renders/s in headless Chrome at 1600 × 900 (50 outside).
   *Dynamic resolution*, *Frame budget*, *Frame rate cap*, *Temporal reprojection*, *Far-field LUT*,
   *Frosted panels*; Render › Image: *Pixel ratio*.
 - F2 › **Perf**: the same, live; F2 › Audit: the frame rate check.
+- `bun scripts/trace-ab.ts --ref http://localhost:3012/ [--new http://localhost:3000/] [--scenes "a|b"] [--reps 2] [--frames 150]`
+  — the tracer's GPU time, A/B, on frozen views: two builds (a frozen copy of HEAD served on another
+  port, and the working tree) alternated, each scene at subsampling 4 and ~1.44 Mpx with its clock held,
+  every frame's passes timed by timestamps, the trace pass's median. ±1 % on the heavy scenes (the Kerr
+  Bench: ±20 % there, its clock and probes moving). Every change to the trace kernel goes through it: on
+  Apple GPUs the kernel is register-bound — code added to its loop costs 3–15 % even where it never runs.
 - `bun scripts/bench.ts [--label name] [--scenes "a|b"] [--quick | --mode complete] [--subsampling auto,1,2,4,6,8] [--no-shots] [--out dir]`
   — the Kerr Bench (`__bh.bench.run`) in headless Chrome: eight reference scenes, each at the Game
   quality (frame intervals p50/p95/p99, rays per pixel), then a fixed subsampling 4 at ~1.44 Mpx (the
