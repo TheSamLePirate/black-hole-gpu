@@ -90,6 +90,8 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
 const FEATURES_ALL = 511;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
+/** the camera held after moving: the refinement's full passes over which the history hands over to it */
+const HANDOVER_PASSES = 8;
 /** the runways' block after the tiles' (trace.wgsl: Params.runways) */
 const RUNWAY_VEC4S = 17;
 const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S;
@@ -220,7 +222,21 @@ interface Target {
   beam: { level: number; tex: GPUTexture; buf: GPUBuffer; h: GPUBindGroup; v: GPUBindGroup } | null;
   denoise: { tex: GPUTexture; bufs: GPUBuffer[]; binds: GPUBindGroup[] } | null;
   /** the temporal reprojection's history (ping-pong) and its uniform (made on first use, live only) */
-  temporal: { hist: GPUTexture[]; buf: GPUBuffer; binds: GPUBindGroup[]; idx: number; valid: boolean } | null;
+  /**
+   * the temporal reprojection's history (ping-pong: idx the latest), its pre-exposure; held: the camera
+   * stopped after moving, the refinement handed over to (the other image holds the hand-over, idx the
+   * history it started from)
+   */
+  temporal: {
+    hist: GPUTexture[];
+    buf: GPUBuffer;
+    binds: GPUBindGroup[];
+    idx: number;
+    valid: boolean;
+    pre: number;
+    held: boolean;
+    moving: boolean;
+  } | null;
   /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
   blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
   /** the far field's LUT (live target): a ray every 8 pixels — directions + shift, clean flags */
@@ -2415,6 +2431,7 @@ export class Renderer {
             { binding: 1, resource: this.clampSampler },
             { binding: 2, resource: hist[1 - k]!.createView() },
             { binding: 3, resource: hist[k]!.createView() },
+            { binding: 4, resource: { buffer: t.accum } },
             { binding: 5, resource: { buffer: t.resolveBuf } },
             { binding: 6, resource: { buffer: t.stamps } },
             { binding: 11, resource: { buffer: t.moments } },
@@ -2422,7 +2439,7 @@ export class Renderer {
           ],
         }),
       );
-      t.temporal = { hist, buf, binds, idx: 0, valid: false };
+      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false };
     }
     const ta = t.temporal;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -2448,10 +2465,31 @@ export class Renderer {
       time: this.lastTime,
       near,
     };
+    // (the camera stopped after moving — a pause between two inputs, or for good: the refinement's first
+    // passes drawn in bands, the rest of the image the last frame's sparse rays; the history kept where no
+    // band has passed yet, handed over to the refined pixels by their samples, its weight gone after
+    // HANDOVER_PASSES full passes. It was replaced at once by that image: a pause of one frame between two
+    // inputs dropped the history to the blocks of a single frame — 27 dB in a turn, ~0 accumulated weight)
+    const hold =
+      !on &&
+      s.temporalReprojection &&
+      this.taPhase === "converging" &&
+      ta.valid &&
+      !jumped &&
+      (ta.moving || ta.held) &&
+      this.sampleIndex < HANDOVER_PASSES;
+    if (hold) {
+      this.encodeHandover(enc, t, ta, pre);
+      return false;
+    }
+    if (ta.held) ta.idx = 1 - ta.idx; // (the hand-over: the latest image)
+    ta.held = false;
+    ta.moving = on;
     if (!on) {
       // (refresh the history from the image: the next moving frame starts from it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
       ta.valid = true;
+      ta.pre = pre;
       return false;
     }
     const p = prev!;
@@ -2537,8 +2575,29 @@ export class Renderer {
     pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
     pass.end();
     ta.idx = 1 - ta.idx;
+    ta.pre = pre;
     enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
     return true;
+  }
+
+  /**
+   * The camera held after moving (post.wgsl temporal, TA.k.y = 2): the history it ended with (ta.idx,
+   * the same pixels: the camera has not moved since) blended into the refined ones, into the other
+   * image — the display's, and the next move's history (held).
+   */
+  private encodeHandover(enc: GPUCommandEncoder, t: Target, ta: NonNullable<Target["temporal"]>, pre: number) {
+    const k = new Float32Array(52);
+    // (k: the history's exposure to this frame's, the mode; mb.y: the history's weight left)
+    k.set([pre / ta.pre, 2], 24);
+    k[49] = Math.max(0, 1 - this.sampleIndex / HANDOVER_PASSES);
+    this.device.queue.writeBuffer(ta.buf, 0, k);
+    const pass = enc.beginComputePass(this.prof.pass("temporal"));
+    pass.setPipeline(this.postTemporal);
+    pass.setBindGroup(0, ta.binds[ta.idx]!);
+    pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    pass.end();
+    ta.held = true;
+    enc.copyTextureToTexture({ texture: ta.hist[1 - ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
   }
 
   /**

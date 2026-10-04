@@ -447,7 +447,8 @@ struct Temporal {
   pRight: vec4f,  // the previous frame's (w: its tan, aspect)
   pUp: vec4f,
   pFwd: vec4f,
-  k: vec4f,       // history's exposure ratio (current / previous pre-exposure), on (0: copy), the least α of a fresh
+  k: vec4f,       // history's exposure ratio (current / previous pre-exposure), on (0: copy; 2: the camera held, the
+                  // history handed over to the refinement), the least α of a fresh
                   // pixel (1 / (n_max + 1): the history's weight capped at n_max), a pixel between rays' weight
   drift: vec4f,   // the camera's displacement since the previous frame [M], in these axes (the near body's frame);
                   // w: under this depth [M] a pixel shows the near body's ground — drawn afresh (0: none)
@@ -455,7 +456,8 @@ struct Temporal {
   m0: vec4f,      // its turn since the previous frame, as rows: a point's offset from the centre now → then
   m1: vec4f,
   m2: vec4f,
-  mb: vec4f,      // the motion blur's shutter (a fraction of the frame; 0: none), unused ×3
+  mb: vec4f,      // the motion blur's shutter (a fraction of the frame; 0: none); y: the camera held, the history's
+                  // weight left (1 → 0 over the refinement's first passes), unused ×2
 };
 @group(0) @binding(21) var<uniform> TA: Temporal;
 
@@ -567,6 +569,22 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let W = size.x;
+  if (TA.k.y > 1.5) {
+    // the camera held after moving: the history where it was (the same pixel); a pixel the refinement has
+    // drawn since (in this epoch) takes over by its samples against the history's weight, fading (mb.y)
+    let h = textureLoad(addTex, vec2i(gid.xy), 0);
+    let idx = gid.y * W + gid.x;
+    var c = h.rgb * TA.k.x;
+    var n = h.a;
+    if (stamps[idx] >= R.u.w) {
+      let nc = accum[idx].a;
+      let nh = h.a * TA.mb.y;
+      c = mix(c, cur.rgb, nc / max(nc + nh, 1e-6));
+      n = nh + nc;
+    }
+    textureStore(dst, gid.xy, vec4f(max(c, vec3f(0.0)), n));
+    return;
+  }
   let block = max(R.u.x & 0xffu, 1u);
   // where this pixel's direction was in the previous frame
   let d0 = pixelDir(vec2f(gid.xy) + 0.5, size);
