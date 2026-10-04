@@ -33,6 +33,17 @@ export function guessTier(adapter: GPUAdapter): Tier {
   return { level, capMpx: CAP[level], label: [vendor || "?", arch || "?", `${mem} GB`, touch ? "touch" : ""].filter(Boolean).join(" · ") };
 }
 
+/**
+ * The tier one step up, the measure having shown the GPU idle at the cap (audit P3: every Apple chip is
+ * guessed at the middle — the base M1 and the M1 Max alike, a factor 4 to 8 apart): its pixel budget
+ * raised, the dynamic resolution then taking it back down if need be. Null at the top.
+ */
+export function promoted(t: Tier): Tier | null {
+  if (t.level >= 4) return null;
+  const level = (t.level + 1) as Tier["level"];
+  return { level, capMpx: CAP[level], label: `${t.label} · measured ↑` };
+}
+
 /** The pixel ratio that keeps a CSS area of w × h within the tier's cap (and the settings' ratio). */
 export function cappedRatio(ratio: number, w: number, h: number, capMpx: number) {
   const area = Math.max(w * h, 1);

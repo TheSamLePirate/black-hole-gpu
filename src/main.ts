@@ -52,7 +52,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { cappedRatio } from "./tier";
+import { cappedRatio, promoted } from "./tier";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -1668,6 +1668,7 @@ async function main() {
   // no faster, only blurrier
   const scaleMs = new Map<number, { ms: number; at: number }>();
   let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
+  let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
   function resize() {
     // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
     // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
@@ -1948,6 +1949,22 @@ async function main() {
         gpuEma = 0; // (measured afresh at the new scale)
         scaleHeld = 0;
         resize();
+      }
+      // (the hardware's tier measured, not guessed: at full scale, the finest blocks, the GPU's work under
+      // half the budget for 12 s while the image is held at the tier's pixel cap — one tier up, its cap
+      // raised; the scale governor above brings it down again if the larger image does not fit)
+      const capped =
+        on && cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) < settings.pixelRatio - 1e-3;
+      idleAtCap = capped && renderScale === 1 && block <= 2 && gpuEma > 0 && gpuEma < 0.5 * budget ? idleAtCap + 1.5 : 0;
+      if (idleAtCap >= 12) {
+        const up = promoted(renderer.tier);
+        idleAtCap = 0;
+        if (up) {
+          renderer.tier = up;
+          gpuEma = 0;
+          scaleHeld = 0;
+          resize();
+        }
       }
     }
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
