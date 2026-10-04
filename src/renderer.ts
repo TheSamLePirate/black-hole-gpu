@@ -236,6 +236,8 @@ interface Target {
     pre: number;
     held: boolean;
     moving: boolean;
+    /** the hand-over's first frame stamp: the pixels drawn since are the refinement's */
+    from: number;
   } | null;
   /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
   blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
@@ -2439,7 +2441,7 @@ export class Renderer {
           ],
         }),
       );
-      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false };
+      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0 };
     }
     const ta = t.temporal;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -2586,10 +2588,13 @@ export class Renderer {
    * image — the display's, and the next move's history (held).
    */
   private encodeHandover(enc: GPUCommandEncoder, t: Target, ta: NonNullable<Target["temporal"]>, pre: number) {
+    if (!ta.held) ta.from = this.frameStamp;
     const k = new Float32Array(52);
-    // (k: the history's exposure to this frame's, the mode; mb.y: the history's weight left)
+    // (k: the history's exposure to this frame's, the mode; mb.y: the history's weight left, z: the
+    // hand-over's first frame — the history has the samples before, the realtime ones)
     k.set([pre / ta.pre, 2], 24);
-    k[49] = Math.max(0, 1 - this.sampleIndex / HANDOVER_PASSES);
+    k[49] = Math.max(0, 1 - (this.sampleIndex + 1) / HANDOVER_PASSES); // (0 on the last: no step when it ends)
+    new Uint32Array(k.buffer)[50] = ta.from;
     this.device.queue.writeBuffer(ta.buf, 0, k);
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);

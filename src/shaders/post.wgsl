@@ -457,7 +457,7 @@ struct Temporal {
   m1: vec4f,
   m2: vec4f,
   mb: vec4f,      // the motion blur's shutter (a fraction of the frame; 0: none); y: the camera held, the history's
-                  // weight left (1 → 0 over the refinement's first passes), unused ×2
+                  // weight left (1 → 0 over the refinement's first passes), z: its first frame stamp (bits), unused
 };
 @group(0) @binding(21) var<uniform> TA: Temporal;
 
@@ -571,12 +571,13 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let W = size.x;
   if (TA.k.y > 1.5) {
     // the camera held after moving: the history where it was (the same pixel); a pixel the refinement has
-    // drawn since (in this epoch) takes over by its samples against the history's weight, fading (mb.y)
+    // drawn since the hand-over began (mb.z) takes over by its samples against the history's weight,
+    // fading (mb.y) — the realtime rays before are in the history already
     let h = textureLoad(addTex, vec2i(gid.xy), 0);
     let idx = gid.y * W + gid.x;
     var c = h.rgb * TA.k.x;
     var n = h.a;
-    if (stamps[idx] >= R.u.w) {
+    if (stamps[idx] >= bitcast<u32>(TA.mb.z)) {
       let nc = accum[idx].a;
       let nh = h.a * TA.mb.y;
       c = mix(c, cur.rgb, nc / max(nc + nh, 1e-6));
