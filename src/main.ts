@@ -1659,8 +1659,13 @@ async function main() {
 
   // -------------------------------------------------------------------- sizing
   // dynamic resolution: a fraction of the pixel ratio (1: as set), lowered when the GPU cannot keep
-  // the frame budget with the subsampling already coarse, raised back when it has room
+  // the frame budget with the blocks at 2 (P2: a finer block on a smaller image is better in motion than
+  // a coarser one on a larger image), raised back when it has room. In motion only: the camera held, the
+  // image refines at the full scale (the moving one kept for the next move)
   let renderScale = 1;
+  let movingScale = 0; // (the scale the motion had, while the camera is held at the full one; 0: none)
+  let heldFor = 0; // (how long the camera has been held [s]: a pause between two inputs is not)
+  let movingFor = 0; // (how long it has moved again [s]: a resize's own fresh frame is not a move)
   let gpuEma = 0;
   let scaleTimer = 0;
   // the frame time measured at each scale (remembered 30 s, then tried again): a lower scale only when
@@ -1914,11 +1919,33 @@ async function main() {
       if (st.offline) renderDialog.update(st.offline);
       gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
     }
-    // (every 1.5 s, by eighths, between half the pixel ratio and all of it)
+    // (the camera held for 0.4 s: the full scale, the image refined there; moving again: the motion's)
+    const held = lastStats?.phase === "converging" || lastStats?.phase === "converged";
+    heldFor = held ? heldFor + dt : 0;
+    movingFor = held ? 0 : movingFor + dt;
+    const dynOn = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive;
+    if (dynOn && heldFor > 0.4 && renderScale < 1) {
+      movingScale = renderScale;
+      renderScale = 1;
+      gpuEma = 0;
+      scaleHeld = 0;
+      resize();
+    } else if (movingFor > 0.15 && movingScale > 0) {
+      if (dynOn && renderScale !== movingScale) {
+        renderScale = movingScale;
+        gpuEma = 0;
+        scaleHeld = 0;
+        resize();
+      }
+      movingScale = 0;
+    }
+    // (the blocks held at 2 while the scale can still come down; at its floor, free to grow)
+    renderer.blockCap = dynOn && renderScale > 0.5 + 1e-6 ? 2 : 8;
+    // (every 1.5 s in motion, by eighths, between half the pixel ratio and all of it)
     scaleTimer += dt;
     if (scaleTimer > 1.5) {
       scaleTimer = 0;
-      const on = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive;
+      const on = dynOn && !held;
       const block = renderer.realtimeBlockNow;
       const now = performance.now();
       scaleHeld += 1.5;
@@ -1934,13 +1961,18 @@ async function main() {
         kh = known(higher);
       const budget = renderer.frameBudget(settings);
       let want = renderScale;
-      if (!on) want = 1;
+      if (!dynOn) want = 1;
+      else if (held) want = renderScale;
       else if (!settled) want = renderScale;
-      else if (gpuEma > 1.2 * budget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
+      // (down once the blocks are at their cap — the scale gives way before the blocks grow: Pareto, P2 —,
+      // or while they are over it, within the budget too: the smaller image lets them come back to 2)
+      else if (block > renderer.blockCap && renderScale > 0.5) want = lower;
+      else if (gpuEma > 1.2 * budget && block >= renderer.blockCap && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
       // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
       // the frame grown as the pixels would stay within it)
       else if (
         higher > renderScale &&
+        block <= 2 &&
         (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)
       )
         want = higher;

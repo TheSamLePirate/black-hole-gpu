@@ -476,6 +476,13 @@ export class Renderer {
   private bandY = 0;
   private bandRows = 64;
   private realtimeBlock = 2;
+  /**
+   * the coarsest realtime block the auto mode may take (main.ts' scale governor sets it): 2 while the
+   * render scale can still come down — at the same rays a finer block on a smaller image is 5–8 dB better
+   * in motion (G3 P2: block 2 at half scale against block 4 at full, Kerr and Earth orbit, fast and slow
+   * turns) —, any once it is at its floor
+   */
+  blockCap = 8;
   /** the realtime subsampling of the last realtime frame (one ray per block × block pixels) — the
    *  automatic choice, or the fixed one the settings ask for */
   get realtimeBlockNow() {
@@ -3612,7 +3619,7 @@ export class Renderer {
     const trace = this.prof.traceMs();
     const guess = trace > 0 ? est + trace * ((b / finer) ** 2 - 1) : est * (0.5 + 0.5 * (b / finer) ** 2);
     const finerFits = !!finer && (kf ? kf.ms <= limit : guess < 0.9 * limit);
-    const coarserPays = !!coarser && (kc ? kc.ms < 0.9 * est && est > 1.1 * limit : est > 1.1 * budget);
+    const coarserPays = !!coarser && coarser <= this.blockCap && (kc ? kc.ms < 0.9 * est && est > 1.1 * limit : est > 1.1 * budget);
     // (decided on time, not frames: 150 ms over the budget for a coarser block, 400 ms of room for a
     // finer one — the same at 20 fps as at 120)
     if (coarserPays) {
