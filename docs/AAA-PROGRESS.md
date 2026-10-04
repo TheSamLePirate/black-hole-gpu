@@ -209,8 +209,9 @@ Outils : `trace-ab` mesure aussi la reconstruction et s'arrête à 6 s par mesur
 | # | Étape | Mesure | Statut | Commit |
 |---|---|---|---|---|
 | O13 | **Les rayons qui passent loin de la gorge vont droit**, déviés par sa lentille faible (α ≈ (M/b)(1 + b/√(b² + b_g²)), la masse d'Ellis vue de loin) ; variante du noyau sans Kerr (`override HAS_KERR`) quand le trou est hors champ | Terre d'orbite (Blue Marble) 29,0 → 4,6 ms de tracé, Amazonie 6,9 → 2,7 ms ; Saturne et Kerr inchangés | fait | `a968d88` |
-| P2 | **Retour à l'ancien gouverneur** (l'échelle ne baisse qu'une fois les blocs à 4) après le balayage à rayons égaux, vrai redimensionnement (`__bh.forceScale`) — PSNR en rotation, bloc 4 éch. 1 / bloc 3 éch. 0,75 / bloc 2 éch. 0,5 : Kerr 27,7 / 27,6 / 27,6 ; Saturne 37,3 / 36,8 / 34,7 ; Amazonie 34,3 / 27,9 / 27,9. L'échelle pleine quand la caméra est tenue est gardée | — | fait | ce commit |
-| R10 (1) | Toile à la taille de l'affichage, rendu à l'échelle dynamique, **agrandissement Catmull-Rom** dans la passe d'affichage (au lieu du bilinéaire du navigateur) | neutre (Kerr 27,44 contre 27,53 dB) : la base du TAAU à la résolution d'affichage (étape 2) | fait | ce commit |
+| P2 | **Retour à l'ancien gouverneur** (l'échelle ne baisse qu'une fois les blocs à 4) après le balayage à rayons égaux, vrai redimensionnement (`__bh.forceScale`) — PSNR en rotation, bloc 4 éch. 1 / bloc 3 éch. 0,75 / bloc 2 éch. 0,5 : Kerr 27,7 / 27,6 / 27,6 ; Saturne 37,3 / 36,8 / 34,7 ; Amazonie 34,3 / 27,9 / 27,9. L'échelle pleine quand la caméra est tenue est gardée | — | fait | `331ad10` |
+| R10 (1) | Toile à la taille de l'affichage, rendu à l'échelle dynamique, **agrandissement Catmull-Rom** dans la passe d'affichage (au lieu du bilinéaire du navigateur) | neutre (Kerr 27,44 contre 27,53 dB) : la base du TAAU à la résolution d'affichage (étape 2) | fait | `331ad10` |
+| Déterminisme (2) | **La météo d'un vol tirée à son premier pas** (sa graine était l'horloge du vaisseau du vol précédent : la même descente rejouée rencontrait d'autres rafales, 300 m d'écart) ; **une tuile de relief en échec redemandée par minuterie** (l'image convergée ne demandait plus rien : la fenêtre restait incomplète) | test « vol rejoué » 148 s instable → 36 s, 3/3 | fait | `bc137cb` |
 
 ## Journal
 
