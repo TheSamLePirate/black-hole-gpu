@@ -2005,7 +2005,8 @@ export class FlightHud {
     const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), ...infos, say].filter(Boolean);
     // (the words kept inside the image, clear of the tapes on its sides: drawn inwards of an edge arrow)
     const lx = Math.min(Math.max(cx + (W / 2 - cx) * 0.22, W * 0.2), W * 0.8);
-    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.12), H * 0.72);
+    // (and below the master caution's banner at the top)
+    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.22), H * 0.72);
     // (a backdrop: the words over the labels of what is behind them)
     const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16 * dpr;
     ctx.fillStyle = "rgba(4, 10, 18, 0.55)";

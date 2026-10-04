@@ -1,5 +1,14 @@
 import { test, expect } from "bun:test";
-import { EntryGuidance, miss, planDeorbit, predictEntry, type EntryEnv, type EntryCraft, type EntryState } from "../src/entry";
+import {
+  EntryGuidance,
+  entryCorridor,
+  miss,
+  planDeorbit,
+  predictEntry,
+  type EntryEnv,
+  type EntryCraft,
+  type EntryState,
+} from "../src/entry";
 import { VESSELS } from "../src/vessels";
 import { solarBody } from "../src/system/solar";
 import type { V3 } from "../src/aero";
@@ -111,3 +120,25 @@ test("the deorbit from a 400 km orbit: a burn found whose entry ends over the pl
   // (the first pass whose crossrange the Ranger's lift reaches)
   expect(Math.abs(plan!.miss.across) / 1e3).toBeLessThan(600);
 }, 20000);
+
+test("the entry corridor: the lift's top over the heat's and load's floor; a Ranger's predicted fall within it", () => {
+  const C = entryCorridor(earth, ranger, [1000, 3000, 5000, 7000, 7800]);
+  for (const c of C) expect(c.hi).toBeGreaterThan(c.lo);
+  // (near the orbital speed the curve alone holds the craft: the top is the air's; slower, the lift
+  // must, lower down)
+  expect(C[4]!.hi).toBeGreaterThan(100e3);
+  expect(C[0]!.hi).toBeLessThan(C[3]!.hi);
+  // (fast, the heat's floor some tens of km up)
+  expect(C[3]!.lo).toBeGreaterThan(20e3);
+  const r = predictEntry(earth, ranger, start(), () => 50 * D, { handoverMach: 2.5, sample: 20 });
+  expect(r.track.length).toBe(r.path.length);
+  const inside = r.track.filter(([v, h]) => {
+    const k = C.findIndex((c) => c.v >= v);
+    if (k <= 0) return true;
+    const a = C[k - 1]!,
+      b = C[k]!;
+    const u = (v - a.v) / (b.v - a.v);
+    return h >= a.lo + u * (b.lo - a.lo) - 2e3 && h <= a.hi + u * (b.hi - a.hi) + 2e3;
+  });
+  expect(inside.length / r.track.length).toBeGreaterThan(0.8);
+});

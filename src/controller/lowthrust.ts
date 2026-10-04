@@ -26,7 +26,7 @@ import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 
 import { circularize as fcCircularize, type Burn } from "../fc/ops";
 import { timeTo as kepTimeTo } from "../fc/kepler";
 import { airTopKm } from "../game/place";
-import { airTop } from "../aero";
+import { airTop, entryInterface } from "../aero";
 import { AUTO_NAMES, circularSpeed, type Auto } from "../pilot";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
@@ -45,6 +45,7 @@ import { t, tf } from "../i18n";
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
 import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
+import { entryCorridor, heightOf as heightOfEntry } from "../entry";
 
 declare module "../controls" {
   interface CameraController {
@@ -62,6 +63,8 @@ declare module "../controls" {
     hubInfo: typeof hubInfo;
     hubCompute: typeof hubCompute;
     climbAssist: typeof climbAssist;
+    deorbitAssist: typeof deorbitAssist;
+    entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
     ourCircWant: typeof ourCircWant;
     autopilotWant: typeof autopilotWant;
@@ -877,6 +880,137 @@ function climbAssist(
 }
 
 /**
+ * The deorbit burn's assistant (C3), as a node's (C1): the Δv left against the time from the burn's
+ * centre, its corridor, the trace; the director's cue — the ignition counted down, the Δv left, the cutoff.
+ */
+function deorbitAssist(this: CameraController, R: NonNullable<CameraController["entryRun"]>, nowS: number): Pick<HubInfo, "graph" | "cue"> {
+  const thrSI = this.thrustMax() * (C_MPS ** 2 / (1476.625 * this.s.massSolar));
+  const burnT = thrSI > 0 ? R.dv / thrSI : NaN;
+  const burning = R.phase === "burn";
+  const left = burning ? Math.max(R.dv - R.done, 0) : R.dv;
+  const x = nowS - R.tBurn;
+  const key = `deorbit:${Math.round(R.tBurn)}`;
+  if (this.burnTrace?.key !== key) this.burnTrace = { key, pts: [] };
+  const tr = this.burnTrace.pts;
+  if (burning && (!tr.length || x > tr[tr.length - 1]![0])) tr.push([x, left]);
+  const graph = burnGraph({
+    title: t("Deorbit Δv left"),
+    dv: R.dv,
+    left,
+    T: burnT,
+    x,
+    trace: tr,
+    burning,
+    labels: { y: t("Δv left"), x: t("from the burn"), ignition: t("IGN"), cutoff: t("CUT") },
+  });
+  const cue = {
+    tIgn: burning ? 0 : R.tBurn - burnT / 2 - nowS,
+    left,
+    dv: R.dv,
+    burning,
+    cut: burning && left <= Math.max(2e-3 * R.dv, 0.1),
+  };
+  return { graph, cue };
+}
+
+/**
+ * The entry's assistant (C3): the corridor in the height–speed plane at the angle of attack held (entry.ts
+ * entryCorridor — the lift's top, the heat's and the load's floor), the guidance's predicted fall in it,
+ * the path flown; the bank asked and its side, the countdown to its next reversal (the crossrange's drift
+ * against the deadband), to the entry interface; the shield's and the load's margins.
+ */
+function entryAssist(
+  this: CameraController,
+  R: NonNullable<CameraController["entryRun"]>,
+  nowS: number,
+  rows: [string, string][],
+): Pick<HubInfo, "graph" | "say"> {
+  const fr = this.entryFrame(cameraFrame(this.s));
+  if (!fr || !fr.env.atm) return {};
+  const craft = this.entryCraft();
+  const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
+  const v = Math.hypot(...va);
+  const h = heightOfEntry(fr.env, fr.s.x);
+  const top = airTop(fr.env.atm);
+  if (!R.corr) {
+    const vMax = Math.max(v * 1.05, 2000);
+    R.corr = entryCorridor(
+      fr.env,
+      craft,
+      Array.from({ length: 48 }, (_, i) => 150 + ((vMax - 150) * i) / 47),
+    );
+  }
+  const C = R.corr;
+  const vMax = C[C.length - 1]!.v;
+  // the path flown, in the air
+  R.trace ??= [];
+  const tr = R.trace;
+  const last = tr[tr.length - 1];
+  if (h < top && (!last || Math.abs(last[0] - v / 1e3) + Math.abs(last[1] - h / 1e3) > 0.02)) {
+    tr.push([v / 1e3, h / 1e3]);
+    if (tr.length > 400) R.trace = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  const at = (k: "lo" | "hi") => {
+    for (let i = 1; i < C.length; i++)
+      if (C[i]!.v >= v) {
+        const a = C[i - 1]!,
+          b = C[i]!;
+        return a[k] + ((b[k] - a[k]) * (v - a.v)) / Math.max(b.v - a.v, 1e-9);
+      }
+    return C[C.length - 1]![k];
+  };
+  const inside = h >= at("lo") - 500 && h <= at("hi") + 500;
+  // (above the corridor while falling into it is the way in; above it again after, a skip)
+  if (inside) R.inCorr = true;
+  const ei = entryInterface(fr.env.atm);
+  const pred = (R.guid?.last?.track ?? []).map(([sv, sh]) => [sv / 1e3, Math.max(sh, 0) / 1e3] as [number, number]);
+  const graph: AssistGraph = {
+    kind: "entry",
+    title: t("Entry corridor"),
+    x: { label: t("Speed"), unit: "km/s", min: 0, max: (vMax / 1e3) * 1.02 },
+    y: { label: t("Height"), unit: "km", min: 0, max: (ei / 1e3) * 1.08 },
+    ideal: pred,
+    lo: C.map((c) => [c.v / 1e3, c.lo / 1e3] as [number, number]),
+    hi: C.map((c) => [c.v / 1e3, c.hi / 1e3] as [number, number]),
+    flown: R.trace,
+    now: [v / 1e3, h / 1e3],
+    marks: [],
+    state: inside ? "on" : h > at("hi") && !R.inCorr ? "wait" : "off",
+  };
+  // the bank's reversal: the crossrange (on the bank's side) drifting to the deadband's far edge
+  const miss = R.guid?.lastMiss;
+  let tRev = NaN;
+  // (in the air: above it the guidance holds its nominal — no crossrange to follow)
+  if (miss && R.guid && h < ei) {
+    const a = miss.across * R.guid.sign;
+    const band = Math.max(4e3, 7 * v);
+    const P = R.rev;
+    if (!P) R.rev = { t: nowS, a, rate: 0 };
+    else if (nowS - P.t > 0.5 && a !== P.a) {
+      const r = (a - P.a) / (nowS - P.t);
+      R.rev = { t: nowS, a, rate: P.rate ? 0.75 * P.rate + 0.25 * r : r };
+    }
+    // (a quarter of each new reading: the guidance's crossrange jumps a little at each update)
+    const rate = R.rev!.rate;
+    // (past the band's edge already: the guidance reverses at its next update — now)
+    if (rate < 0) tRev = Math.max((a + band) / -rate, 0);
+  }
+  const say: string[] = [];
+  const up = unitV(fr.s.x);
+  const vr = dot3(fr.s.v, up);
+  if (h > ei && vr < 0) say.push(tf("ENTRY INTERFACE IN {0}", fmtDur((h - ei) / -vr)));
+  else {
+    const deg = Math.round((Math.abs(R.bank) * 180) / Math.PI);
+    say.push(tf("BANK {0}° {1}", deg, deg < 1 ? "" : R.bank > 0 ? t("RIGHT") : t("LEFT")));
+    if (Number.isFinite(tRev) && tRev < 600) say.push(tf("REVERSAL IN ~{0}", fmtDur(tRev)));
+  }
+  const M = this.airFlight.margins();
+  rows.push([t("Shield · load"), `${Math.round(M.shield * 100)} % · ${Math.round(M.g * 100)} %`]);
+  if (Number.isFinite(tRev) && tRev < 600) rows.push([t("Reversal in"), `~${fmtDur(tRev)}`]);
+  return { graph, say };
+}
+
+/**
  * The hub's card: the autopilot flying, what it does now, its figures, and what it predicts — the
  * orbit after its burn, the deorbit's heat and load, the touchdown, the arrival. Redone 4 times a
  * second at most. Null: no autopilot.
@@ -1038,39 +1172,50 @@ function hubCompute(this: CameraController): HubInfo | null {
       ? `→ ${tf("then {0} W/cm² · {1} g · shield {2} K, down at {3}", (R.plan.heat / 1e4).toFixed(0), R.plan.g.toFixed(1), Math.round(R.plan.shield), site)}`
       : `→ ${tf("down at {0}", site)}`;
     if (R.phase === "wait")
-      return base(
-        "ENTRY",
-        t("coasting to the deorbit burn, the time sped up"),
-        [
-          [t("Burn in"), dur(R.tBurn - nowS)],
-          ["Δv", ms(R.dv)],
-          [t("Site"), site],
-        ],
-        heat,
-      );
-    if (R.phase === "burn")
-      return base(
-        "ENTRY",
-        t("the deorbit burn, retrograde"),
-        [
-          ["Δv", `${R.done.toFixed(0)} / ${R.dv.toFixed(0)} m/s`],
-          [t("Site"), site],
-        ],
-        heat,
-        Math.min(R.done / Math.max(R.dv, 1e-9), 1),
-      );
+      return {
+        ...base(
+          "ENTRY",
+          t("coasting to the deorbit burn, the time sped up"),
+          [
+            [t("Burn in"), dur(R.tBurn - nowS)],
+            ["Δv", ms(R.dv)],
+            [t("Site"), site],
+          ],
+          heat,
+        ),
+        ...this.deorbitAssist(R, nowS),
+      };
+    if (R.phase === "burn") {
+      const D = this.deorbitAssist(R, nowS);
+      return {
+        ...base(
+          "ENTRY",
+          D.cue?.cut ? t("Δv delivered — cut the engine") : t("the deorbit burn, retrograde"),
+          [
+            ["Δv", `${R.done.toFixed(0)} / ${R.dv.toFixed(0)} m/s`],
+            [t("Site"), site],
+          ],
+          heat,
+          Math.min(R.done / Math.max(R.dv, 1e-9), 1),
+        ),
+        ...D,
+      };
+    }
     const LA = this.airFlight.last;
     if (R.phase === "entry") {
       const miss = R.guid?.lastMiss;
       const rows: [string, string][] = [[t("Site"), site]];
       if (LA) rows.push(["Mach", LA.out.mach.toFixed(1)], [t("Height"), km(LA.h)]);
       rows.push([t("Bank"), `${Math.round((R.bank * 180) / Math.PI)}°`]);
-      return base(
-        "ENTRY",
-        LA && LA.out.q > 50 ? t("the guided entry — the bank flown to the site") : t("falling to the air"),
-        rows,
-        miss ? `→ ${tf("hand-over {0} from its aim (Mach {1})", km(miss.dist), R.handover)}` : heat,
-      );
+      return {
+        ...base(
+          "ENTRY",
+          LA && LA.out.q > 50 ? t("the guided entry — the bank flown to the site") : t("falling to the air"),
+          rows,
+          miss ? `→ ${tf("hand-over {0} from its aim (Mach {1})", km(miss.dist), R.handover)}` : heat,
+        ),
+        ...this.entryAssist(R, nowS, rows),
+      };
     }
     // the glide
     const app = R.app;
@@ -1857,6 +2002,8 @@ export function installLowthrust(C: { prototype: CameraController }) {
     hubInfo,
     hubCompute,
     climbAssist,
+    deorbitAssist,
+    entryAssist,
     circPlan,
     ourCircWant,
     autopilotWant,

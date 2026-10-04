@@ -91,4 +91,15 @@ export default {
   "PATH {0}° · HDG {1}°": "PENTE {0}° · CAP {1}°",
   "MAX-Q {0} kPa": "MAX-Q {0} kPa",
   "MECO IN ~{0}": "COUPURE DANS ~{0}",
+  // C3: the deorbit and the entry
+  "Deorbit Δv left": "Δv de désorbitation restant",
+  "from the burn": "depuis la poussée",
+  "Entry corridor": "Couloir de rentrée",
+  "ENTRY INTERFACE IN {0}": "INTERFACE DE RENTRÉE DANS {0}",
+  "BANK {0}° {1}": "INCLINAISON {0}° {1}",
+  RIGHT: "DROITE",
+  LEFT: "GAUCHE",
+  "REVERSAL IN ~{0}": "INVERSION DANS ~{0}",
+  "Shield · load": "Bouclier · charge",
+  "Reversal in": "Inversion dans",
 } satisfies Record<string, string>;

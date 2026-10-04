@@ -641,6 +641,12 @@ export class CameraController {
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
     app?: { along: number; across: number; final: boolean; agl: number; speed: number; gRef?: number; gam?: number };
     plan?: { heat: number; shield: number; g: number };
+    /** the assistant's (lowthrust.ts entryAssist): the corridor in the height–speed plane (entry.ts
+     *  entryCorridor), the path flown [km/s, km], the crossrange against its deadband as it was last seen */
+    corr?: { v: number; lo: number; hi: number }[];
+    trace?: [number, number][];
+    rev?: { t: number; a: number; rate: number };
+    inCorr?: boolean;
   } | null = null;
 
   /** The flight computer's burns about one of Gargantua's worlds (its frame): their time [s of the

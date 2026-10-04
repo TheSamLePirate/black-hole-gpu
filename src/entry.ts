@@ -114,6 +114,8 @@ export interface EntryResult {
   hullPeak: number;
   /** the path (frame positions, sampled) */
   path: V3[];
+  /** the same samples' speed through the air and height [m/s, m] */
+  track: [number, number][];
 }
 
 /**
@@ -146,6 +148,7 @@ export function predictEntry(
     shieldPeak: skin.shield,
     hullPeak: skin.hull,
     path: [x],
+    track: [[len(add(v, env.ground(x), -1)), heightOf(env, x)]],
   };
   let sampled = 0;
   let wasIn = false;
@@ -200,14 +203,54 @@ export function predictEntry(
     if (t - sampled > (o.sample ?? 10)) {
       sampled = t;
       res.path.push(x);
+      res.track.push([len(add(v, env.ground(x), -1)), A.h]);
     }
   }
   res.path.push(x);
+  res.track.push([len(add(v, env.ground(x), -1)), heightOf(env, x)]);
   res.end = { x, v };
   res.t = t;
   res.speed = len(add(v, env.ground(x), -1));
   res.h = heightOf(env, x);
   return res;
+}
+
+/**
+ * The entry corridor in the height–speed plane, at the angle of attack held: above its top the lift
+ * cannot hold the fall's curve (½ ρ v² C_L S / m < g − v²/r: a dive); below its floor the stagnation
+ * point takes more heat than the shield radiates at its limit (εσT⁴), or the load passes the
+ * structure's. For each speed [m/s]: the floor and the top [m] (the top the air's when the orbit's
+ * curve alone holds it; the floor 0 where no limit bites).
+ */
+export function entryCorridor(env: EntryEnv, c: EntryCraft, speeds: number[]): { v: number; lo: number; hi: number }[] {
+  const A = c.aero;
+  const top = airTop(env.atm);
+  const skin = A.shield ?? A.hull;
+  const qMax = skin.eps * 5.670374419e-8 * skin.tMax ** 4;
+  const forces = (v: number, h: number) => aeroForces(A, [0, -v * Math.sin(c.alpha), v * Math.cos(c.alpha)], airAt(env.atm, h));
+  // (the height where f — growing as the craft goes deeper — reaches 0: bisection; none: the bound)
+  const cross0 = (f: (h: number) => number, none: number) => {
+    if (f(0) < 0) return none === top ? 0 : none;
+    if (f(top) >= 0) return top;
+    let a = 0,
+      b = top;
+    for (let i = 0; i < 40; i++) {
+      const m = (a + b) / 2;
+      if (f(m) >= 0) a = m;
+      else b = m;
+    }
+    return (a + b) / 2;
+  };
+  return speeds.map((v) => {
+    const g = (h: number) => len(env.gravity([env.R + h, 0, 0], [0, 0, 0]));
+    const heat = cross0((h) => forces(v, h).heat - qMax, 0);
+    const load = cross0((h) => {
+      const o = forces(v, h);
+      return Math.hypot(o.L, o.D) / c.mass / G0 - A.gMax;
+    }, 0);
+    const lift = cross0((h) => forces(v, h).L / c.mass - (g(h) - (v * v) / (env.R + h)), top);
+    return { v, lo: Math.max(heat, load), hi: lift };
+  });
 }
 
 /** The miss of an end point against a place [m], on the sphere, measured from where the craft is

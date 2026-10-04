@@ -67,7 +67,15 @@ export function runPlan(q: PlanRequest) {
     const g = new EntryGuidance(q.g.o);
     Object.assign(g, { bank: q.g.bank, sign: q.g.sign, prev: q.g.prev });
     const bank = g.update(env, q.craft, q.s, q.place);
-    return { out: bank, bank: g.bank, sign: g.sign, prev: g.prev, miss: g.lastMiss, path: g.last?.path ?? null };
+    return {
+      out: bank,
+      bank: g.bank,
+      sign: g.sign,
+      prev: g.prev,
+      miss: g.lastMiss,
+      path: g.last?.path ?? null,
+      track: g.last?.track ?? null,
+    };
   }
   return { node: refineOurNode(q.X, q.V, q.t, q.mission, q.node, q.o) };
 }

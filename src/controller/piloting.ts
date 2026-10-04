@@ -910,8 +910,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const w = Math.hypot(...net) * dTau;
   // (assisted — the pilot flying the burn —: what serves it, the thrust's part along the burn's
   // direction; thrust the other way takes it back)
-  const along = (d: Vec3 | null | undefined) => (this.pilot.assist && d ? dot3(net, d) * dTau : w);
-  if (this.entryRun?.phase === "burn") this.entryRun.done += w * C_MPS;
+  const along = (d: Vec3 | null | undefined) => (this.pilot.assist && d ? (dot3(net, d) / (Math.hypot(...d) || 1)) * dTau : w);
+  if (this.entryRun?.phase === "burn") this.entryRun.done = Math.max(this.entryRun.done + along(entryAtt?.nose) * C_MPS, 0);
   if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing)
     this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
@@ -1301,7 +1301,8 @@ function entryStep(
       const want = left > 40 ? Math.min(1000, Math.max((left - 25) / 3, 1)) : 1;
       this.warpWant = null;
       s.timeSpeed = this.warpSet = want / Msec;
-      if (left <= 0) {
+      // (assisted: the pilot lighting it in the last half burn before its start starts it)
+      if (left <= 0 || (P.assist && P.throttle > 0.02 && left < burnT / 2)) {
         R.phase = "burn";
         R.done = 0;
         this.warpWant = null;
@@ -1313,10 +1314,16 @@ function entryStep(
     // (burning: real time, every frame — a sped-up frame would fire seconds of thrust at once)
     this.warpWant = null;
     s.timeSpeed = this.warpSet = 1 / Msec;
-    if (R.done >= R.dv) {
+    // (assisted: done within what a hand cuts — 0.2 % or 10 cm/s — once the engine is cut)
+    const tol = P.assist ? Math.max(2e-3 * R.dv, 0.1) : 0;
+    if (R.done >= R.dv - tol && (!P.assist || P.throttle <= 0.01)) {
       R.phase = "entry";
       this.onPilotMessage?.(tf("Deorbit burn done ({0} m/s) — falling to the entry", R.done.toFixed(0)));
-    } else return { ...retro(), throttle: Math.min(1, Math.max((R.dv - R.done) / Math.max(thrSI * 0.25, 1e-9), 0.02)) };
+    } else
+      return {
+        ...retro(),
+        throttle: R.done >= R.dv - tol ? 0 : Math.min(1, Math.max((R.dv - R.done) / Math.max(thrSI * 0.25, 1e-9), 0.02)),
+      };
   }
   const LA = this.airFlight.last;
   if (R.phase === "entry") {
@@ -1348,6 +1355,7 @@ function entryStep(
         prev: { b: number; e: number } | null;
         miss: EntryGuidance["lastMiss"];
         path: Vec3[] | null;
+        track: [number, number][] | null;
       } | null>({
         kind: "guide",
         env: fr.desc,
@@ -1359,7 +1367,7 @@ function entryStep(
         R.pending = false;
         if (this.entryRun !== R || !r || (r as { error?: string }).error) return;
         Object.assign(G, { bank: r.bank, sign: r.sign, prev: r.prev, lastMiss: r.miss });
-        G.last = { path: r.path ?? [] } as unknown as EntryResult;
+        G.last = { path: r.path ?? [], track: r.track ?? [] } as unknown as EntryResult;
         R.bank = r.out;
       });
     }

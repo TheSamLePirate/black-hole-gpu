@@ -6,7 +6,7 @@
 /** An assistant's graph, in its own units (the axes'). */
 export interface AssistGraph {
   /** what it plots: the e2e's handle, the cockpit's choice */
-  kind: "burn" | "climb";
+  kind: "burn" | "climb" | "entry";
   title: string;
   x: GraphAxis;
   y: GraphAxis;
@@ -29,7 +29,7 @@ export interface AssistGraph {
 export interface GraphAxis {
   label: string;
   /** "s", "m/s", "m", "km": the ticks' format */
-  unit: "s" | "m/s" | "m" | "km";
+  unit: "s" | "m/s" | "km/s" | "m" | "km";
   min: number;
   max: number;
 }
@@ -59,6 +59,7 @@ export function fmtAxis(v: number, unit: GraphAxis["unit"]): string {
     return `${sg}${(a / 86400).toFixed(1)} d`;
   }
   if (unit === "m/s") return a >= 1e4 ? `${(v / 1e3).toFixed(a >= 1e5 ? 0 : 1)} km/s` : `${v.toFixed(a < 10 ? 1 : 0)} m/s`;
+  if (unit === "km/s") return `${v.toFixed(a < 10 ? 1 : 0)} km/s`;
   if (unit === "m") return a >= 1e4 ? `${(v / 1e3).toFixed(0)} km` : `${v.toFixed(0)} m`;
   return `${v.toFixed(a < 10 ? 1 : 0)} km`;
 }
