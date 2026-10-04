@@ -130,6 +130,10 @@ override HAS_WH: bool = true;     // the wormhole world
 override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
+// the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
+// Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
+// Dneg integrators out of the kernel (its registers)
+override HAS_KERR: bool = true;
 
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
@@ -5094,27 +5098,50 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
 
   // Our universe, the camera beyond the Dneg region: the straight piece up to it (or to infinity, when
-  // the ray does not come back towards the mouth) meets the solar system's bodies first
+  // the ray does not come back towards the mouth) meets the solar system's bodies first.
+  // A ray passing the mouth wide — beyond B — is not integrated through its Dneg region (5 AU across in
+  // the solar system: nearly every sky ray entered it): straight on through our bodies to our sky, bent
+  // by the mouth's weak lensing. The Dneg metric's is that of half a point mass M (only space is curved:
+  // g_tt = −1): from here to infinity α = (M/b)(1 − s₀/√(s₀² + b²)), b the closest approach, s₀ the camera
+  // from it along the ray — measured against the integrator: within 3 % at b = 20ρ, its error falling as
+  // 1/b², under a quarter pixel beyond √(0.26 M / pixel) (and 4ρ: the throat's own shape)
   var outward = false; // (the ray never enters the Dneg region: nothing further to meet)
-  if (seg == 1u && P.wh2.y < 0.0 && ourStart() < bodyCount()) {
+  var straight = !HAS_KERR;
+  if (seg == 1u && P.wh2.y < 0.0) {
     let m = -P.ourCam.xyz;
     let R2 = P.ourCam.w * P.ourCam.w;
     if (dot(m, m) > R2) {
       let dH = normalize(repToHome(wn, wd));
       let b = dot(m, dH);
       let perp = m - b * dH;
-      let hh = R2 - dot(perp, perp);
-      var tEnter = 3e38;
-      if (hh > 0.0 && b > 0.0) { tEnter = b - sqrt(hh); } else { outward = true; }
-      var wo: WhOut;
-      wo.tint = vec3f(1.0);
-      let stop = ourSegment(vec3f(0.0), dH, tEnter, &wo, 1.0 / eloc, 0.0, false);
-      colW += thr * wo.glow;
-      thr *= wo.tint;
-      if (stop) { return traceOut(colW); }
+      let bb = length(perp);
+      straight = straight || bb > max(4.0 * P.wh.y, sqrt(0.26 * P.wh.w / P.camUp.w));
+      if (ourStart() < bodyCount()) {
+        let hh = R2 - bb * bb;
+        var tEnter = 3e38;
+        if (!straight && hh > 0.0 && b > 0.0) { tEnter = b - sqrt(hh); } else { outward = true; }
+        var wo: WhOut;
+        wo.tint = vec3f(1.0);
+        let stop = ourSegment(vec3f(0.0), dH, tEnter, &wo, 1.0 / eloc, 0.0, false);
+        colW += thr * wo.glow;
+        thr *= wo.tint;
+        if (stop) { return traceOut(colW); }
+      }
+      if (straight) {
+        let al = P.wh.w / max(bb, 1e-9) * (1.0 + b / sqrt(b * b + bb * bb));
+        skyDir = normalize(dH * cos(al) + perp * (sin(al) / max(bb, 1e-9)));
+      }
     }
   }
 
+  if (straight) {
+    // (straight on to our sky — the Earth-only tracer, or a ray passing the mouth wide)
+    fate = 2u;
+    if (!HAS_KERR && dot(skyDir, skyDir) < 0.5) { skyDir = repToHome(wn, wd); }
+    skyG = 1.0 / eloc;
+    skyId = SKY_HOME;
+    skyOrg = vec4f(0.0);
+  } else {
   for (var segN = 0u; segN < 6u; segN++) {
   if (seg == 1u) {
     let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc, travel);
@@ -5578,6 +5605,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
   break;
   } // segments
+  } // (HAS_KERR)
 
   col = colW + thr * col;
   out.tint = thr;

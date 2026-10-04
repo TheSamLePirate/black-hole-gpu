@@ -88,7 +88,7 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 511;
+const FEATURES_ALL = 1023;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -1720,6 +1720,11 @@ export class Renderer {
     // over their map's mean
     const origin = s.wormhole && cam.region === "throat" && cam.ell < 0 ? homeOf(m.w, cam.ell, cam.n) : ([0, 0, 0] as Vec3);
     set(54, ...origin, 100 * m.w.rho);
+    // (the hole's and the mouth's metrics in the kernel — O13 —, unless the camera is in our universe
+    // beyond the mouth's Dneg region and the region is under a pixel: the Earth-only tracer)
+    const dMouth = Math.hypot(...origin);
+    const earthOnly = !o.probe && dMouth > 100 * m.w.rho && (100 * m.w.rho) / dMouth < pixelAngle;
+    if (!earthOnly) this.featureKey |= 512;
     for (const b of bodies) {
       const map = b.surface >= SURFACE_MAPPED ? GARGANTUA_SYSTEM.bodies.find((q) => q.id === b.id)?.map : undefined;
       if (map) {
@@ -2299,7 +2304,7 @@ export class Renderer {
       (s.hotFlow ? 16 : 0) |
       (s.wormhole ? 32 : 0) |
       (s.diskThickness > 0 ? 64 : 0)
-    ); // (bodies: 128, added with them; runways near: 256)
+    ); // (bodies: 128, added with them; runways near: 256; the hole's metrics: 512, unless from afar — O13)
   }
 
   /**
@@ -2331,6 +2336,7 @@ export class Renderer {
         HAS_THICK: has(64),
         HAS_BODIES: has(128),
         HAS_RWY: has(256),
+        HAS_KERR: has(512),
       };
       const mk = (entryPoint: string, quality: boolean) =>
         this.device.createComputePipelineAsync({
