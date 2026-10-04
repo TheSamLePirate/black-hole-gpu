@@ -178,6 +178,19 @@ Mesures : `scripts/trace-ab.ts` (passe de tracé, désormais aussi les passes de
 
 Outils : `trace-ab` mesure aussi la reconstruction et s'arrête à 6 s par mesure (`55afbc4`, `2e58c63`) ; les tâches longues portent leur durée estimée dans leur titre.
 
+## G3 : le « look AAA » (en cours)
+
+| # | Étape | Mesure | Statut | Commit |
+|---|---|---|---|---|
+| Pistes | **Pistes dessinées** : revêtement, marquages OACI, feux de bord/seuil/fin, PAPI sur la pente du pilote auto ; la bande nivelée comme le train la ressent | le code coûtait 8–17 % partout dans le noyau : compilé seulement près d'une piste (variante `HAS_RWY`) | fait | `9d8242a` |
+| Post | **Nuit de l'œil** (décalage de Purkinje piloté par l'adaptation), **poussière d'objectif** éclairée par l'éblouissement, **flou de mouvement** de la caméra (demi-image, vaisseau net) | flou : 0,09 ms | fait | `c4443ec`, `a1ddea1` |
+| Mesure | `quality.ts` ouvrait sur l'écran titre (il couvrait le recadrage et mettait le jeu en pause), et figeait l'image sur la reconstruction brute, pas sur l'historique temporel | **les PSNR en mouvement de G2 (R2, R4) sont à relire** : ils mesuraient en partie le menu et le gather ; l'ordre de grandeur réel en rotation à blocs 4 est ~27 dB | corrigé | `4761d5f`, `833ad21` |
+| Passation | **La caméra arrêtée passe son historique à l'affinage** : une image sans entrée (entre deux mouvements de souris) remplaçait l'historique par l'image d'un seul tirage épars — poids accumulé ~0 après un virage, les blocs revenaient ; l'historique est gardé là où l'affinage n'est pas passé, fondu dans les pixels affinés selon leurs échantillons sur 8 passes | poids après 40 images de virage : ~0 → 4,6 ; 1 à 3 images après l'arrêt : +1 à +4 dB | fait | `2a52310`, `798325d` |
+| R7 | SVGF-lite (à-trous 2 passes là où n < 4) | 4–5 ms pour un gain nul (±0,4 dB, dans le bruit) | écarté | |
+| R8 | **Étoiles du catalogue splattées là où elles tombent** en temps réel : chaque rayon de bloc cherche les étoiles de tout son bloc et dessine celles qui y tombent à leur place sous-pixel (jacobien de l'empreinte, radiance sur l'angle solide lentillé), dans un tampon ajouté par-dessus l'image reprojetée ; près des courbes critiques du trou, les rayons les attrapent comme avant. Les LUT corps noir et synchrotron partagent une liaison (le 10ᵉ tampon de stockage libéré) | Saturne en contre-jour 31,5 → 37,3 dB (le splat seul : +3,5), Kerr 26,8 → 27,5, Interstellar 25,2 → 26,7 ; noyau −1 à +3 % (bruit) | fait | `833ad21` |
+
+![R8 : avant, TAA sans splat, splat, convergée](img/aaa/g3-r8-stars.jpg)
+
 ## Journal
 
 - **03/10/2026** : audit commité (`7328d0d`) ; démarrage de la phase 0.
