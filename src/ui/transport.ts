@@ -84,6 +84,7 @@ export class TransportBar {
     this.clock.append(this.clockMain, this.clockSub);
     this.clock.dataset.tip = t("Date and time: now, the start of the scene, a date chosen");
     this.clock.onclick = () => d.openTime();
+    this.clock.dataset.testid = "time-clock";
     btn(this.timeBtn, ICON.clock, t("Date and time: now, the start of the scene, a date chosen"), "", () => d.openTime());
     this.timeBtn.dataset.testid = "time-open";
     btn(this.rec, ICON.rec, t("Record a take: what you do, live — then Render › Video renders it at full quality"), "", () => d.record());
