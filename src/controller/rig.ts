@@ -171,11 +171,15 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   }
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
+  // (a spectator: no faster than its distance to the ship either — two metres a second at least by it)
   const h = Math.max(
-    Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
-      ref.R -
-      this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR,
-    1 / mR,
+    Math.min(
+      Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
+        ref.R -
+        this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR,
+      this.nearShip,
+    ),
+    (Number.isFinite(this.nearShip) ? 2 : 1) / mR,
   );
   const v = 0.8 * h * this.flySpeed * (fast ? 3 : 1);
   const want = lin(lin(w.fwd, move[0]! * v, w.right, move[1]! * v), 1, w.up, move[2]! * v);

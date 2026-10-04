@@ -78,6 +78,9 @@ export class Simulation {
     const path = c.gravity ? c.predictPath() : null;
     if (r.setCameraPath(s.showGeodesic && s.pathInView ? path : null)) changed = true;
     r.shipPose = s.ship ? c.shipPose() : null;
+    // (a spectator out: the ship where it is in its view — moving: the view drawn afresh)
+    r.shipPlace = c.spectating ? c.shipFromView() : null;
+    if (r.shipPlace && r.shipPlace.dist < 2e4) changed = true;
     const flying = c.piloting && !c.cinematic;
     if (!flying) {
       if (r.shipThrust) changed = true;
@@ -98,6 +101,7 @@ export class Simulation {
       if (A.rolling) amp += 0.0008 * Math.min(A.speed / 120, 1);
       if (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin") amp *= 1.6;
     }
+    if (c.spectating) amp = 0;
     const tt = this.play;
     r.shake =
       amp > 0

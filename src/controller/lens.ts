@@ -143,7 +143,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   this.shipTime = NaN;
   const before = this.poseKey();
   const dragging = this.pointers.size > 0;
-  const pad = this.scripted ? null : this.pad.poll();
+  const pad = this.scripted ? null : this.padFrame !== undefined ? this.padFrame : this.pad.poll();
   if (pad?.active) this.activity = performance.now();
   if (pad) for (const a of pad.actions) this.onPadAction?.(a);
 
@@ -156,6 +156,8 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   }
   this.stepMount(dt);
   const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
+  // (a spectator out: the keys, the sticks, the zoom are its — the ship's view keeps still)
+  const away = !!this.spectator;
 
   // the target must be in the camera's universe; orbiting uses the target's anchor
   const avail = this.availableTargets();
@@ -182,9 +184,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     else this.rotateView(kx * kRate, ky * kRate, 0);
   }
   // (about the cabin the keys walk, the throttle is off: the arrows turn the look — 90°/s, 70°/s)
-  if ((kx || ky) && pilotNow && s.shipMount === "cabin" && !s.lookAt)
+  if ((kx || ky) && pilotNow && !away && s.shipMount === "cabin" && !s.lookAt)
     this.setLook(s.shipLookYaw + kx * 90 * dt, s.shipLookPitch + ky * 70 * dt);
-  if (pad && (pad.look[0] || pad.look[1])) {
+  if (pad && !away && (pad.look[0] || pad.look[1])) {
     // right stick: orbit the target, or turn the camera (free rotation, flight); piloting: look
     if (pilotNow) this.setLook(s.shipLookYaw + pad.look[0] * 90 * dt, s.shipLookPitch + pad.look[1] * 70 * dt);
     else if (this.orbiting) this.orbitBy(-pad.look[0] * 75 * dt, -pad.look[1] * 75 * dt);
@@ -195,9 +197,11 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   }
   // (+ − and the pad's zoom: the distance — the lens with the telescope)
   const zoom = (f: number) => (s.telescope ? this.zoomLens(f) : this.zoomBy(f));
-  if (pad?.zoom) zoom(Math.exp(-1.4 * pad.zoom * dt));
-  if (this.keys.has("+") || this.keys.has("=")) zoom(Math.exp(-1.2 * dt));
-  if (this.keys.has("-") || this.keys.has("_")) zoom(Math.exp(1.2 * dt));
+  if (!away) {
+    if (pad?.zoom) zoom(Math.exp(-1.4 * pad.zoom * dt));
+    if (this.keys.has("+") || this.keys.has("=")) zoom(Math.exp(-1.2 * dt));
+    if (this.keys.has("-") || this.keys.has("_")) zoom(Math.exp(1.2 * dt));
+  }
   this.easeLens(dt);
   const move: [number, number, number, number] = [0, 0, 0, 0];
   const keysNow = freeCameraKeys();
@@ -215,7 +219,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
   this.rig.on = false; // (set again below while the rig moves the camera)
   if (pilotNow) {
-    if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
+    if (away) {
+      // (the view is the spectator's)
+    } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
     else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
     this.flyShip(dt, pad);
     this.flyVel = [0, 0, 0];
@@ -287,7 +293,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (this.tracking && !flying && !this.inThroat()) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;
-  return this.changedSince(before);
+  // the spectator, after the ship (its frame's pose): its own flight
+  const viewMoved = this.spectator ? this.advanceSpectator(dt, time, pad) : false;
+  return this.changedSince(before) || viewMoved;
 }
 
 /** Inside the wormhole's throat (|ℓ| < a + 1.5 ρ): "aiming at the wormhole" means nothing there. */

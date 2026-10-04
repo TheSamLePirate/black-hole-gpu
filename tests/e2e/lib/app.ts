@@ -5,6 +5,7 @@ import { type Cdp, launch } from "./cdp";
 
 const KEYCODES: Record<string, number> = {
   Escape: 27,
+  F3: 114,
   Space: 32,
   Tab: 9,
   Enter: 13,

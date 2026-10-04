@@ -224,6 +224,8 @@ function placeNearPort(this: CameraController, target: VesselId, distM: number, 
 
 /** The next (or previous) craft of the fleet. */
 function cycleVessel(this: CameraController, dir: 1 | -1) {
+  // (another craft flown: the view back with it)
+  this.stopSpectator();
   const ids: VesselId[] = ["ranger", "lander", "endurance"];
   const i = ids.indexOf(fleet.active);
   this.s.vessel = ids[(i + dir + ids.length) % ids.length]!;

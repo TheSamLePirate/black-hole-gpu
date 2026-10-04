@@ -180,6 +180,10 @@ export interface FlightHudActions {
   /** the app's camera panel (its views, the look, the lens, the target) — else the HUD's own menu */
   camera?(): void;
   mount(m: Mount): void;
+  /** the spectator: a free camera away from the ship (it flies on), or back */
+  spectator(): void;
+  /** the spectator following the ship (carried with it) or free */
+  spectatorFollow(on: boolean): void;
   /** fly another craft of the fleet */
   vessel(id: VesselId): void;
   lookAhead(): void;
@@ -325,6 +329,14 @@ export class FlightHud {
   phase: import("../game/phase").FlightPhase | null = null;
   /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
   onPlanner: (() => void) | null = null;
+  /**
+   * The spectator away from the ship (main sets it each frame): the ship's place in the view camera's axes
+   * [m] (null: across the throat, another universe), following it or free.
+   */
+  spectating: { at: V3 | null; follow: boolean } | null = null;
+  /** the spectator's banner: what it is, the ship's distance, following or free, back */
+  private spectBar = h("div", "fl-spect");
+  private spectText = h("span", "fl-spect-t");
   /** the Place button: placing the ship (ui/placepanel.ts) */
   onPlace: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
@@ -608,6 +620,17 @@ export class FlightHud {
         viewMenu.append(b);
       }
     }
+    // (the spectator: the camera away from the ship, anywhere — it flies on)
+    viewMenu.append(h("div", "fl-menu-h", t("Free")));
+    const spect = h("button", "fl-menu-i") as HTMLButtonElement;
+    spect.append(h("b", "", t("Spectator")), h("span", "", t("A free camera, anywhere — the ship flies on (F3)")));
+    spect.dataset.testid = "view-spectator";
+    spect.onclick = () => {
+      act.spectator();
+      viewMenu.hidden = true;
+    };
+    this.buttons.set("spectator", spect);
+    viewMenu.append(spect);
     const ahead = h("button", "fl-menu-i fl-ahead") as HTMLButtonElement;
     ahead.append(h("b", "", "↺"), h("span", "", t("Reset the camera — on the hull, looking ahead (⇧R)")));
     ahead.onclick = () => {
@@ -1022,7 +1045,18 @@ export class FlightHud {
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
 
+    // the spectator's banner
+    const follow = h("button", "fl-tools fl-spect-b") as HTMLButtonElement;
+    follow.dataset.testid = "spect-follow";
+    follow.onclick = () => act.spectatorFollow(!this.spectating?.follow);
+    const back = h("button", "fl-tools fl-spect-b") as HTMLButtonElement;
+    back.textContent = t("Back to the ship");
+    back.dataset.testid = "spect-back";
+    back.onclick = () => act.spectator();
+    this.spectBar.append(h("b", "", t("Spectator")), this.spectText, follow, back);
+    this.spectBar.hidden = true;
     this.root.append(
+      this.spectBar,
       this.warn,
       this.entryBox,
       this.airData,
@@ -1372,6 +1406,7 @@ export class FlightHud {
   private lastTime = NaN;
   update(info: Info, time: number) {
     this.drawn = true;
+    this.updateSpectator();
     this.lastTime = time;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
@@ -1512,7 +1547,7 @@ export class FlightHud {
       M.soundBtn!.dataset.on = String(s.sound);
       M.soundBtn!.replaceChildren(icon(s.sound ? "sound" : "mute"));
     }
-    M.viewName!.textContent = MOUNTS[s.shipMount as Mount]?.short ?? "";
+    M.viewName!.textContent = this.spectating ? t("Spectator") : (MOUNTS[s.shipMount as Mount]?.short ?? "");
     const cn = VESSELS[i.vessel].name;
     if (M.craftName!.textContent !== cn) M.craftName!.textContent = cn;
     this.drawStatus(i.status ?? null);
@@ -1714,7 +1749,8 @@ export class FlightHud {
       b.setAttribute("aria-label", b.dataset.label);
       b.setAttribute("aria-pressed", String(i.speedMode === "target"));
     }
-    for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", i.mount === m);
+    for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", !this.spectating && i.mount === m);
+    this.buttons.get("spectator")!.classList.toggle("on", !!this.spectating);
     this.buttons.get("ahead")!.classList.toggle("on", s.shipLookYaw !== 0 || s.shipLookPitch !== 0);
   }
 
@@ -1736,6 +1772,75 @@ export class FlightHud {
   }
 
   // ------------------------------------------------------------------------------------ full-screen HUD: tapes, markers
+  /** The spectator's banner: the ship's distance, following or free. */
+  private updateSpectator() {
+    const sp = this.spectating;
+    this.spectBar.hidden = !sp;
+    if (!sp) return;
+    const d = sp.at ? Math.hypot(...sp.at) : null;
+    this.spectText.textContent =
+      d === null ? t("the ship beyond the wormhole") : tf("{0} at {1}", VESSELS[fleet.active].name, this.fmtMetres(d));
+    const b = this.spectBar.querySelector<HTMLButtonElement>("[data-testid=spect-follow]")!;
+    b.textContent = sp.follow ? t("Following · free it") : t("Free · follow the ship");
+    b.classList.toggle("on", sp.follow);
+  }
+
+  /** a distance [m]: metres, kilometres, then as the HUD writes them (AU) */
+  private fmtMetres(d: number) {
+    return d < 1e3
+      ? `${Math.round(d)} m`
+      : d < 1e7
+        ? `${(d / 1e3).toFixed(d < 1e4 ? 2 : d < 1e5 ? 1 : 0)} km`
+        : fmtDist(d / M_METRES, true, this.s);
+  }
+
+  /** The ship in the spectator's view: a diamond where it is (on the image's edge, an arrow, when out of it), its name and distance. */
+  private drawShipMark(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number) {
+    const at = this.spectating?.at;
+    if (!at) return;
+    const d = Math.hypot(...at);
+    const tanH = Math.tan((this.s.fov * Math.PI) / 360);
+    const asp = W / H;
+    // (behind the camera: the direction mirrored, pinned to the edge)
+    const z = Math.max(at[2], 1e-6);
+    let x = at[0] / (z * tanH * asp),
+      y = at[1] / (z * tanH);
+    const off = at[2] <= 0 || Math.abs(x) > 0.92 || Math.abs(y) > 0.88;
+    if (at[2] <= 0) (x = -x * 1e3), (y = -y * 1e3);
+    const k = off ? Math.min(0.92 / Math.abs(x || 1e-9), 0.88 / Math.abs(y || 1e-9)) : 1;
+    const px = ((x * k + 1) / 2) * W,
+      py = ((1 - y * k) / 2) * H;
+    const r = 9 * dpr;
+    ctx.lineWidth = 1.6 * dpr;
+    for (const [lw, col] of [
+      [3.2 * dpr, "rgba(0, 0, 0, 0.45)"],
+      [1.6 * dpr, CYAN],
+    ] as const) {
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      if (off) {
+        // an arrow towards it
+        const a = Math.atan2(-(y * k), x * k);
+        ctx.moveTo(px + Math.cos(a) * r, py + Math.sin(a) * r);
+        ctx.lineTo(px + Math.cos(a + 2.5) * r, py + Math.sin(a + 2.5) * r);
+        ctx.lineTo(px + Math.cos(a - 2.5) * r, py + Math.sin(a - 2.5) * r);
+        ctx.closePath();
+      } else {
+        ctx.moveTo(px, py - r);
+        ctx.lineTo(px + r, py);
+        ctx.lineTo(px, py + r);
+        ctx.lineTo(px - r, py);
+        ctx.closePath();
+      }
+      ctx.stroke();
+    }
+    ctx.font = `600 ${12 * dpr}px ${MONO}`;
+    ctx.fillStyle = CYAN;
+    ctx.textAlign = px > W * 0.8 ? "right" : "left";
+    ctx.fillText(`${VESSELS[fleet.active].name.toUpperCase()} ${this.fmtMetres(d)}`, px + (px > W * 0.8 ? -1.6 : 1.6) * r, py - 1.2 * r);
+  }
+
   private drawHud(i: Info) {
     const c = this.hud;
     const dpr = devicePixelRatio;
@@ -1744,6 +1849,8 @@ export class FlightHud {
     if (c.width !== W || c.height !== H) (c.width = W), (c.height = H);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, W, H);
+    // (a spectator out: the conformal symbology is the ship's eye's — not drawn; the ship marked instead)
+    if (this.spectating) return this.drawShipMark(ctx, W, H, dpr);
     const tanH = Math.tan((this.s.fov * Math.PI) / 360);
     const asp = W / H;
     const proj = (d: V3 | null) => {

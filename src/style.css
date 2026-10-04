@@ -2430,3 +2430,29 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
   .fl-root.mapview .m3-track { height: 44px; }
   .fl-root.mapview .m3-time button { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 }
+
+/* the spectator's banner (ui/flighthud.ts): the camera away from the ship */
+.fl-spect {
+  position: fixed;
+  top: calc(var(--safe-top, 0px) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-chrome);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px 5px 12px;
+  background: var(--hud-bg-solid);
+  border: 1px solid var(--hud-edge-hi);
+  border-radius: 4px;
+  font: 600 12px/1 var(--hud-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hud-text);
+  pointer-events: auto;
+}
+.fl-spect[hidden] { display: none; }
+.fl-spect > b { color: var(--hud-amber); }
+.fl-spect-t { font: 500 12px var(--mono); text-transform: none; letter-spacing: 0; color: var(--hud-cyan); }
+.fl-tools.fl-spect-b { padding: 0 8px; height: 24px; font: 700 11px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; }
+.fl-tools.fl-spect-b.on { background: rgba(90, 216, 255, 0.2); color: #e6f8ff; }

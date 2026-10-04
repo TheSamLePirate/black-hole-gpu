@@ -79,6 +79,8 @@ declare module "../controls" {
  */
 function setPilot(this: CameraController, on: boolean) {
   const s = this.s;
+  // (no ship: no spectator away from it)
+  if (!on) this.stopSpectator();
   // (leaving the craft: it coasts where it is, docked or not — the camera steps off; boarding it again,
   // it is where the camera is)
   if (!on && this.piloting) {
@@ -626,7 +628,8 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   const k = (c: string) => (this.codes.has(c) ? 1 : 0);
   const i: PilotInput = { pitch: 0, yaw: 0, roll: 0, tx: 0, ty: 0, tz: 0, throttle: 0 };
   // (outside, free — or about the cabin: the keys move the camera; the ship flies on as it was)
-  if (this.outsideView() === "free" || this.s.shipMount === "cabin") return i;
+  // (the spectator away: the keys move it; the ship flies on as it was — its autopilots, its holds)
+  if (this.outsideView() === "free" || this.s.shipMount === "cabin" || this.spectator) return i;
   // (the keys as the player set them — input/bindings.ts; the defaults are KSP's)
   const h = (a: HeldAxis) => k(heldCode(a));
   i.pitch = h("pitchUp") - h("pitchDown");

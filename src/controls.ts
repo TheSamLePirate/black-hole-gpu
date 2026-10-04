@@ -15,7 +15,7 @@ import { dvLocal, type ManeuverNode, type PlanPath } from "./maneuver";
 import type { Mount, MountPose } from "./mounts";
 import { fleet } from "./fleet";
 import type { VesselId } from "./vessels";
-import { GamepadInput, type PadAction } from "./gamepad";
+import { type GamepadInput, sharedPad, type PadAction } from "./gamepad";
 import { nodeDvHome, type OurPath } from "./system/our-predict";
 import type { OurMission } from "./system/our-plan";
 import type { RendezvousPoint } from "./system/iss-plan";
@@ -34,6 +34,7 @@ import { installRig } from "./controller/rig";
 import { installLowthrust } from "./controller/lowthrust";
 import { installJourney } from "./controller/journey";
 import { installTelemetry } from "./controller/telemetry";
+import { installSpectator } from "./controller/spectator";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
@@ -293,7 +294,20 @@ export class CameraController {
   /** Last user interaction with the camera (performance.now()), to show / fade the target marker. */
   activity = -1e9;
   /** Game controller: the sticks and triggers fly and turn like the keys; buttons go to the app. */
-  readonly pad = new GamepadInput();
+  readonly pad: GamepadInput = sharedPad();
+  /**
+   * The spectator (src/controller/spectator.ts): a second, headless controller over its own settings —
+   * the camera away from the ship, anywhere —, the ship flying on as it was; null: the view is the ship's.
+   */
+  spectator: CameraController | null = null;
+  /** the spectator follows the ship (carried with it; its offset from it [m, world axes] and that offset's rate), or is free */
+  spectatorFollow = true;
+  specOff: [number, number, number] = [0, 0, 0];
+  specVel: [number, number, number] = [0, 0, 0];
+  /** a spectator's distance to the flown ship [M] (its keys' speed scales with it too: slow by the ship) */
+  nearShip = Infinity;
+  /** a headless controller's pad this frame, polled by the main one (undefined: poll its own) */
+  padFrame: ReturnType<GamepadInput["poll"]> | undefined = undefined;
   onPadAction?: (a: PadAction) => void;
   lastSide = 0;
   hoverAt = 0;
@@ -323,9 +337,12 @@ export class CameraController {
     public canvas: HTMLCanvasElement,
     public s: Settings,
     public onCinematicChange: (mode: Cinematic) => void,
+    /** headless: a spectator's — no listeners of its own (the main controller hands it the input), not the fleet's flown craft */
+    readonly headless = false,
   ) {
     this.targetDistance = s.distance;
     this.targetL = s.whL;
+    if (headless) return;
     fleet.activePose = () => this.activePoseNow();
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("pointerdown", this.onDown);
@@ -342,8 +359,10 @@ export class CameraController {
     // fly mode: the mouse turns the camera like in a game (right = turn right, up = look up)
     document.addEventListener("mousemove", (e) => {
       if (!this.flyMode || !this.enabled) return;
-      const k = 0.12 * Math.min(1, this.s.fov / 60);
-      this.rotateView(e.movementX * k, -e.movementY * k, 0);
+      // (a spectator out: the mouse turns its view)
+      const v = this.spectator ?? this;
+      const k = 0.12 * Math.min(1, v.s.fov / 60);
+      v.rotateView(e.movementX * k, -e.movementY * k, 0);
     });
     addEventListener("keydown", (e: KeyboardEvent) => {
       if (isTyping(e)) return;
@@ -414,6 +433,11 @@ export class CameraController {
   }
 
   onDown = (e: PointerEvent) => {
+    // (a spectator out: the pointer is its)
+    if (this.spectator) {
+      this.spectator.onDown(e);
+      return;
+    }
     if (!this.enabled || this.flyMode) return;
     // (a middle click: game-style mouse look, the free camera's)
     if (e.button === 1 && !this.piloting) {
@@ -439,6 +463,11 @@ export class CameraController {
   };
 
   onUp = (e: PointerEvent) => {
+    // (a spectator out: the pointer is its)
+    if (this.spectator) {
+      this.spectator.onUp(e);
+      return;
+    }
     this.pointers.delete(e.pointerId);
     this.pinchMid = null;
     // released after a pause: no fling
@@ -471,6 +500,10 @@ export class CameraController {
 
   /** Double-click: on a body, orbit it and fly the view to it (framed); on the sky, recentre / level. */
   onDblClick = (e: MouseEvent, tap = false) => {
+    if (this.spectator) {
+      this.spectator.onDblClick(e, tap);
+      return;
+    }
     if (!this.enabled || this.flyMode) return;
     // (the double tap taken already: not again from the browser's dblclick)
     if (!tap && performance.now() - this.tapDblAt < 600) return;
@@ -486,6 +519,11 @@ export class CameraController {
   };
 
   onMove = (e: PointerEvent) => {
+    // (a spectator out: the pointer is its)
+    if (this.spectator) {
+      this.spectator.onMove(e);
+      return;
+    }
     const p = this.pointers.get(e.pointerId);
     if (!p) {
       // hover: what is under the pointer (throttled; one traced ray)
@@ -526,6 +564,11 @@ export class CameraController {
   };
 
   onWheel = (e: WheelEvent) => {
+    // (a spectator out: the pointer is its)
+    if (this.spectator) {
+      this.spectator.onWheel(e);
+      return;
+    }
     e.preventDefault();
     if (!this.enabled) return;
     this.zoomStep(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, e.altKey);
@@ -878,3 +921,4 @@ installRig(CameraController);
 installLowthrust(CameraController);
 installJourney(CameraController);
 installTelemetry(CameraController);
+installSpectator(CameraController);

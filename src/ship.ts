@@ -43,6 +43,9 @@ export interface ShipView {
    *  height [km], the clock [s] */
   dash?: { up: V3; fwd: V3; speed: number; alt: number; time: number };
   mount: Mount | MountPose;
+  /** the flown ship placed in the view directly (a spectator's): its axes in the camera's, its origin
+   *  there [m] — instead of the mount's */
+  place?: { S: M3; t: V3 };
   look: [number, number]; // free look on the mount: yaw, pitch [deg]
   fov: number; // vertical, degrees
   aspect: number;
@@ -847,7 +850,7 @@ export class ShipRenderer {
 
   private writeUniform(v: ShipView, mesh: Mesh) {
     this.bound = mesh.bound;
-    const { S: R, t } = shipToCamera(v.mount, v.look[0], v.look[1]);
+    const { S: R, t } = v.place ?? shipToCamera(v.mount, v.look[0], v.look[1]);
     // (the camera in the ship's frame: −Rᵀ t)
     this.camShip = [0, 1, 2].map((k) => -(R[0]![k]! * t[0] + R[1]![k]! * t[1] + R[2]![k]! * t[2])) as V3;
     this.writeJets(this.flown ? v.thrust : null);

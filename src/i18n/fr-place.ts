@@ -1,4 +1,5 @@
-// French for placing the ship and the time (ui/placepanel.ts; keyed by the English: see src/i18n.ts).
+// French for placing the ship, the time and the spectator (ui/placepanel.ts, ui/timepanel.ts,
+// controller/spectator.ts; keyed by the English: see src/i18n.ts).
 export default {
   "The Interstellar journey": "Le voyage d'Interstellar",
   "Mission ended — the ship placed": "Mission terminée — le vaisseau placé",
@@ -62,4 +63,21 @@ export default {
   "+1 d": "+1 j",
   "+30 d": "+30 j",
   "Date and time: now, the start of the scene, a date chosen": "Date et heure : maintenant, le début de la scène, une date choisie",
+  // ---- the spectator (controller/spectator.ts)
+  "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)":
+    "Spectateur : une caméra libre, n'importe où — le vaisseau continue, ses autopilotes et son plan (F3 ou V : retour)",
+  "The spectator leaves a ship flown: fly one first (K)": "Le spectateur quitte un vaisseau piloté : pilotez-en un d'abord (K)",
+  "Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F3 or V: back)":
+    "Spectateur — caméra libre : Z Q S D · A E pour bouger (⇧ plus vite), glisser pour tourner ; le vaisseau continue (F3 ou V : retour)",
+  "Back on the ship": "De retour sur le vaisseau",
+  "Following the ship: the camera carried with it": "Suit le vaisseau : la caméra emportée avec lui",
+  "Free: the camera stays where it is — away to the planets (the keys' speed grows with the distance)":
+    "Libre : la caméra reste où elle est — vers les planètes (la vitesse des touches croît avec la distance)",
+  Spectator: "Spectateur",
+  "A free camera, anywhere — the ship flies on (F3)": "Une caméra libre, n'importe où — le vaisseau continue (F3)",
+  "Back to the ship": "Retour au vaisseau",
+  "the ship beyond the wormhole": "le vaisseau de l'autre côté du trou de ver",
+  "{0} at {1}": "{0} à {1}",
+  "Following · free it": "Suit · libérer",
+  "Free · follow the ship": "Libre · suivre le vaisseau",
 } satisfies Record<string, string>;

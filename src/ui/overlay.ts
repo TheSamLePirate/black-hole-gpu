@@ -22,10 +22,17 @@ export class ViewOverlay {
   private key = "";
   constructor(
     private overlay: HTMLCanvasElement,
-    private settings: Settings,
-    private camera: CameraController,
+    _settings: Settings,
+    private main: CameraController,
     private renderer: Renderer,
   ) {}
+  /** the view's controller and settings: a spectator's when one is out (its locks, brackets, telescope) */
+  private get camera() {
+    return this.main.viewController();
+  }
+  private get settings() {
+    return this.camera.s;
+  }
 
   /** Draws the overlay, if anything on it changed. `sky`: the sky chart's labels (`skyKey`: their version). */
   draw(sky: ChartFrame | null, skyKey: string) {

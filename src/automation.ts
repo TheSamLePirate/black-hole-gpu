@@ -58,6 +58,8 @@ export interface BhContext {
   freeze(on: boolean): void;
   /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
   forceScale(x: number | null): void;
+  /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
+  spectate(on: boolean): boolean;
 }
 
 export function installBh(c: BhContext) {
@@ -306,6 +308,7 @@ export function installBh(c: BhContext) {
       freeze: (on: boolean) => c.freeze(on),
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
+      spectate: (on: boolean) => c.spectate(on),
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
       setDate: setDateNow,
       /** the ground's height above a body's mean radius at latitude, east longitude [°] — the relief the

@@ -30,6 +30,7 @@ export type KeyAction =
   | "auto"
   | "map"
   | "mount"
+  | "spectator"
   | "vessel"
   | "flightMode"
   | "antigrav"
@@ -264,6 +265,11 @@ export const KEYMAP: KeySection[] = [
         keys: "V · ⇧V",
         text: "Camera: next · previous view — on the hull, around the ship, free, fly-by",
         bind: [fly("KeyV", "mount")],
+      },
+      {
+        keys: "F3",
+        text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)",
+        bind: [fly("F3", "spectator")],
       },
       {
         keys: "⇧R",

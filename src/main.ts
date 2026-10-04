@@ -1,7 +1,8 @@
 import { Renderer, type FrameStats } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { bodyView, earthGround, earthStart, saturnDeparture, tiltAway } from "./system/our-side";
+import { bodyView, earthGround, earthStart, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
+import { toBodyFixed } from "./system/our-surface";
 import { theirFlightPose, theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
@@ -351,6 +352,7 @@ async function main() {
   let exposedForOurSide = false;
   function applyPreset(name: string) {
     currentScene = presets[name] ? name : null;
+    if (camera.spectating) setSpectator(false);
     renderer.resetTemporal(); // (another scene: no history carried into it)
     const { time, mission: withMission, pose, issDistance, issOffset, ...preset } = presets[name] ?? {};
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
@@ -786,7 +788,7 @@ async function main() {
   function updateChart(force = false) {
     const o = chartOptions(settings, chartHover);
     const off = renderer.offlineScene;
-    const s = off?.settings ?? settings;
+    const s = off?.settings ?? camera.viewSettings();
     const t = off?.time ?? sim.time;
     const cam = cameraFrame(s);
     const aspect = off ? off.width / off.height : canvas.width / Math.max(canvas.height, 1);
@@ -877,6 +879,41 @@ async function main() {
     const noHorizon = h && !horizonAt(settings, cam, sim.time);
     const grids = e && h ? t("Equatorial + Horizontal grids") : e ? t("Equatorial grid") : t("Horizontal grid");
     panel.toast(!e && !h ? t("Grids off") : `${grids}${noHorizon ? ` — ${t("no world under the camera")}` : ""}`);
+  }
+
+  /**
+   * The spectator (controller/spectator.ts): a free camera away from the ship, anywhere, the ship flying
+   * on — its autopilots, its plan; off: the view back on the ship as it was.
+   */
+  function setSpectator(on: boolean) {
+    if (on === camera.spectating) return;
+    if (on && !camera.startSpectator()) {
+      panel.toast(t("The spectator leaves a ship flown: fly one first (K)"));
+      return;
+    }
+    if (!on) camera.stopSpectator();
+    renderer.resetTemporal(); // (a cut: no history across it)
+    renderer.shipPlace = null;
+    renderer.shipFocus = null;
+    syncButtons();
+    touch();
+    panel.toast(
+      on
+        ? t("Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F3 or V: back)")
+        : t("Back on the ship"),
+    );
+  }
+
+  /** The flown ship's body and its place on the body's axes [radii], its height [km] (the renderer keeps its ground streamed). */
+  function shipFocus() {
+    const p = camera.activePoseNow();
+    if (!p) return null;
+    const id = referenceBody(p.X, sim.time);
+    const b = solarBody(id);
+    if (!b || b.kind === "star") return null;
+    const q = toBodyFixed(id, p.X, sim.time);
+    const r = Math.hypot(...q);
+    return { body: id, c: q.map((x) => x / b.radius) as [number, number, number], altKm: ((r - b.radius) * M_METRES) / 1e3 };
   }
 
   /** Next attach point of the camera on the Ranger (turns the ship on). */
@@ -991,6 +1028,8 @@ async function main() {
     panel.toast(camera.pilot.rollAlign ? t("Roll alignment on — wings in the orbital plane") : t("Roll alignment off"));
   }
   function setMount(m: Mount) {
+    // (a view on the ship: the spectator back)
+    if (camera.spectating) setSpectator(false);
     if (settings.shipMount === m) return;
     settings.shipMount = m;
     refreshGui();
@@ -1017,6 +1056,15 @@ async function main() {
     sas: pilotSas,
     warp,
     mount: setMount,
+    spectator: () => setSpectator(!camera.spectating),
+    spectatorFollow: (on: boolean) => {
+      camera.setSpectatorFollow(on);
+      panel.toast(
+        camera.spectatorFollow
+          ? t("Following the ship: the camera carried with it")
+          : t("Free: the camera stays where it is — away to the planets (the keys' speed grows with the distance)"),
+      );
+    },
     roll: pilotRoll,
     sound: () => toggleSound(),
     vessel: (id) => {
@@ -1385,10 +1433,17 @@ async function main() {
     auto: (_, a) => pilotAuto(a as Auto),
     map: () => flightHud.toggleMapView(),
     mount: (e) => {
+      // (the views' cycle goes through the spectator: after the last of the ship's, before its first)
       const keys = Object.keys(MOUNTS) as Mount[];
       const i = keys.indexOf(settings.shipMount as Mount);
-      setMount(keys[(i + (e.shiftKey ? -1 : 1) + keys.length) % keys.length]!);
+      const dir = e.shiftKey ? -1 : 1;
+      if (camera.spectating) {
+        setSpectator(false);
+        setMount(keys[dir > 0 ? 0 : keys.length - 1]!);
+      } else if ((dir > 0 && i === keys.length - 1) || (dir < 0 && i === 0)) setSpectator(true);
+      else setMount(keys[(i + dir + keys.length) % keys.length]!);
     },
+    spectator: () => setSpectator(!camera.spectating),
     vessel: (_, d) => camera.cycleVessel(d === "1" ? 1 : -1), // (the craft flown: KSP's [ ])
     flightMode: () => {
       // the flight law in the air: rocket → plane → the sci-fi flight computer
@@ -1591,7 +1646,9 @@ async function main() {
     // (Enter on a focused button presses it, not the game's binding)
     if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button, a, [role=button]")) return;
     // (the keys as the player set them — input/bindings.ts)
-    const b = matchKey(e, flying(), e.code in freeCameraKeys(), effectiveBindings());
+    // (a spectator out: its keys move it — not the ship's flight keys)
+    const camKey = e.code in freeCameraKeys();
+    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings());
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);
@@ -1859,6 +1916,10 @@ async function main() {
     phase: () => phaseWatch.current,
     mapView: () => flightHud.mapCamera(),
     freeze: (on: boolean) => (frozen = on),
+    spectate: (on: boolean) => {
+      setSpectator(on);
+      return camera.spectating;
+    },
     forceScale: (x: number | null) => {
       forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
       if (forcedScale === null) renderScale = 1;
@@ -1938,9 +1999,12 @@ async function main() {
       settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
+    renderer.shipFocus = camera.spectating ? shipFocus() : null;
     const st = capped
       ? null
-      : cpuProf.time("render (encode, submit)", () => renderer.frame(settings, sim.time, changed, sim.timeDirty, displayChanged));
+      : cpuProf.time("render (encode, submit)", () =>
+          renderer.frame(camera.viewSettings(), sim.time, changed, sim.timeDirty, displayChanged),
+        );
     if (st) {
       renderedAt = now;
       if (!firstFrame) {
@@ -2119,8 +2183,12 @@ async function main() {
       // shown, not a pose one or two frames ahead of it)
       // (the benchmark measures the image alone: the HUD hidden and not drawn)
       if ((st || !flightHud.drawn) && !bench.running)
-        cpuProf.time("flight HUD (total)", () =>
-          flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time),
+        cpuProf.time(
+          "flight HUD (total)",
+          () => (
+            (flightHud.spectating = camera.spectating ? { at: renderer.shipPlace?.t ?? null, follow: camera.spectatorFollow } : null),
+            flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time)
+          ),
         );
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);

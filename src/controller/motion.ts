@@ -65,7 +65,7 @@ function fly(this: CameraController, local: Vec3, dt: number) {
   const k = n * dt;
   // (near a planet, a moon, a star: its surface's distance too — a metre at least — not the hole's
   // or the mouth's alone, tens of M away: the keys would throw the camera at millions of km/s)
-  const near = Math.max(this.surfaceDistance(), 1 / (1476.625 * s.massSolar));
+  const near = Math.max(Math.min(this.surfaceDistance(), this.nearShip), 1 / (1476.625 * s.massSolar));
   const c: Vec3 = [local[0] / n, local[1] / n, local[2] / n];
   /** Camera axes in the flat frame of the hole (hole region). */
   const holeAxes = () => {

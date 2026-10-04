@@ -231,3 +231,7 @@ export class GamepadInput {
     p?.vibrationActuator?.playEffect?.("dual-rumble", { duration: ms, strongMagnitude: strong, weakMagnitude: weak }).catch(() => {});
   }
 }
+
+/** The one gamepad input of the page (its WebHID listeners attached once): every controller shares it. */
+let shared: GamepadInput | null = null;
+export const sharedPad = () => (shared ??= new GamepadInput());

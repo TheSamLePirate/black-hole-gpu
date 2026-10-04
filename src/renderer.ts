@@ -28,7 +28,7 @@ import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
 import { GpuProfiler } from "./gpuprof";
-import { shipToCamera, type Mount, type MountPose } from "./mounts";
+import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
 import { loading } from "./loading";
 import { t, tf } from "./i18n";
@@ -362,6 +362,21 @@ export class Renderer {
   private shipLoading: Promise<void> | null = null;
   /** Where the camera sits on the ship now (the app sets it every frame: it moves between attach points). */
   shipPose: MountPose | null = null;
+  /**
+   * The flown ship seen from a spectator (controller/spectator.ts): its axes in the view camera's and its
+   * origin there [m], its distance [m] — drawn within 20 km; null: the view is the ship's.
+   */
+  shipPlace: { S: M3; t: Vec3; dist: number } | null = null;
+  /**
+   * While a spectator is out: the flown ship's body, its place on the body's axes [its radii] and its
+   * height [km] — what the ship stands on kept streamed round the ship, not round the view (the Earth's
+   * maps and terrain tiles, a world's finer maps: the ground under its gear is the heights drawn).
+   */
+  shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
+  /** the spectator's view holds the flown ship (near enough to draw) */
+  private get shipInView() {
+    return !!this.shipPlace && this.shipPlace.dist < 2e4;
+  }
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
    * splash left where the camera last went through (centre on the throat, clock then).
@@ -1603,7 +1618,7 @@ export class Renderer {
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
-    if (!o.probe) this.craftsShown = !s.ship && this.shipOthers(s).some((q) => Math.hypot(...q.t) < 2e4);
+    if (!o.probe) this.craftsShown = !s.ship && (this.shipInView || this.shipOthers(s).some((q) => Math.hypot(...q.t) < 2e4));
     const dc = this.diskConstants(s);
     const a = s.spin;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -1881,6 +1896,9 @@ export class Renderer {
         if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
+      // (the ship by the Earth, the view away: its maps kept, the finer ones low over it)
+      const F = this.shipFocus;
+      if (F?.body === "earth") want = F.altKm < 2000 ? "high" : (want ?? "med");
       if (want === "high" && this.earthCap !== "high") want = this.earthCap === "med" ? "med" : null;
       if (want === "med" && this.earthCap === "none") want = null;
       if (want !== have) {
@@ -1912,7 +1930,13 @@ export class Renderer {
     if (!o.probe) {
       const dN = near ? Math.hypot(...near.centre) : Infinity;
       const hdAt = 1 + (1.3 * ((2 * Math.PI) / 4096)) / pixelAngle;
-      if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
+      // (the ship within three radii of a world with finer maps, the view away: its maps kept — its
+      // measured ground under the gear —, whatever the view nears)
+      const F = this.shipFocus;
+      const fb = F ? solarBody(F.body) : undefined;
+      const pin = fb && HD_SETS[fb.map as MapName] && (F!.altKm * 1e3) / (fb.radius * M_METRES) < 2 ? (fb.map as MapName) : undefined;
+      if (pin) this.requestHd(pin);
+      else if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
       else if (this.hdMap.name && !(nearMap === this.hdMap.name && dN < 2 * hdAt)) this.releaseHd();
     }
     const hd = this.hdMap;
@@ -2001,8 +2025,15 @@ export class Renderer {
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
+      // (the ship low over the Earth, the view away: the tiles round the ship — its ground)
+      const F = this.shipFocus;
+      const shipLow = s.earthTerrain && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
       this.earthTiles.update(
-        onEarth ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3) : null,
+        shipLow
+          ? F!.c
+          : onEarth
+            ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
+            : null,
         pixelAngle,
       );
     }
@@ -2852,7 +2883,8 @@ export class Renderer {
           enc,
           t.hdr,
           {
-            vessel: s.ship ? s.vessel : undefined,
+            vessel: s.ship || this.shipInView ? s.vessel : undefined,
+            place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
             others: this.shipOthers(s),
             mPerM: 1476.625 * (s.massSolar || 1),
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
@@ -3011,7 +3043,7 @@ export class Renderer {
     };
     const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
     const out: ShipInstance[] = [];
-    for (const o of fleet.others(time, !s.ship)) {
+    for (const o of fleet.others(time, !s.ship && !this.shipPlace)) {
       const rel = toCam([o.pose.X[0] - Xc[0], o.pose.X[1] - Xc[1], o.pose.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
       // (the flown craft's origin is the camera's place: its distance from it, not from the eye)
       const sep = Math.hypot(...rel.map((c, k) => c - eye[k]!));
