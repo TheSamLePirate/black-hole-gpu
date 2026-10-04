@@ -5,7 +5,7 @@ import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
 import { bodyCentre, bodyVelocity, ourTarget } from "../targeting";
 import { fromZamo } from "../geodesic";
 import { fuelOn, tank } from "../engine";
-import { toU, type Auto } from "../pilot";
+import { toU, type Auto, type Director } from "../pilot";
 import type { ManeuverNode } from "../maneuver";
 import { shipToCamera } from "../mounts";
 import { fleet } from "../fleet";
@@ -72,6 +72,9 @@ export interface FlightInfo {
   rollAlign: boolean;
   hold: Hold;
   auto: Auto;
+  /** the autopilots assisted (the pilot flies, their commands the HUD's cue), and the cue this frame */
+  assist: boolean;
+  director: Director | null;
   /** the body rates */
   omega: V3;
   properTime: number;
@@ -228,6 +231,8 @@ function flightInfo(this: CameraController): FlightInfo {
     rollAlign: this.pilot.rollAlign,
     hold: this.pilot.hold,
     auto: this.pilot.auto,
+    assist: this.pilot.assist,
+    director: this.pilot.director,
     omega: this.pilot.omega,
     properTime: this.properTime,
     landed: this.landed,

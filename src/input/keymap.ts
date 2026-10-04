@@ -31,6 +31,7 @@ export type KeyAction =
   | "map"
   | "mount"
   | "spectator"
+  | "assist"
   | "vessel"
   | "flightMode"
   | "antigrav"
@@ -270,6 +271,11 @@ export const KEYMAP: KeySection[] = [
         keys: "F3",
         text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)",
         bind: [fly("F3", "spectator")],
+      },
+      {
+        keys: "F4",
+        text: "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle",
+        bind: [fly("F4", "assist")],
       },
       {
         keys: "⇧R",

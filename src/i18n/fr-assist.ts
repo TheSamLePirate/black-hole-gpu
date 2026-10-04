@@ -1,0 +1,70 @@
+// French for the flight assistants (pilot.ts assist, the HUD's director, the graphs; keyed by the
+// English: see src/i18n.ts).
+export default {
+  "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle":
+    "Autopilote : il vole, ou il assiste — vous pilotez, son directeur dans le HUD montre où pointer, combien de poussée",
+  "Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies":
+    "Assisté : vous pilotez — le directeur (l'anneau) montre où pointer, la poussée à régler ; F4 : l'autopilote vole",
+  "The autopilots fly again (F4: assisted)": "Les autopilotes volent de nouveau (F4 : assisté)",
+  ASSISTED: "ASSISTÉ",
+  AUTO: "AUTO",
+  "Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)":
+    "Assisté : vous pilotez, le directeur montre ses commandes — clic : l'autopilote vole (F4)",
+  "The autopilot flies — click: you fly it, assisted (F4)": "L'autopilote vole — clic : vous pilotez, assisté (F4)",
+  "TURN TO THE CUE": "TOURNEZ VERS LA CIBLE",
+  "THROTTLE {0} %": "POUSSÉE {0} %",
+  "CUT THE THROTTLE": "COUPEZ LA POUSSÉE",
+  "{0} · ASSISTED": "{0} · ASSISTÉ",
+  // ---- the alerts explained (ui/hud/alerts.ts)
+  Why: "Pourquoi",
+  "What to do": "Que faire",
+  "The predicted path falls into Gargantua's horizon: beyond it nothing comes back, not even light.":
+    "La trajectoire prévue tombe dans l'horizon de Gargantua : au-delà, rien ne revient, pas même la lumière.",
+  "Burn now, prograde or radially out — the earlier, the cheaper; or let an autopilot hold the ship (8: hold position).":
+    "Poussez maintenant, prograde ou radial sortant — plus tôt, moins cher ; ou laissez un autopilote tenir le vaisseau (8 : maintien de position).",
+  "The predicted path meets the body's surface.": "La trajectoire prévue rencontre la surface du corps.",
+  "Raise the periapsis (prograde at the apoapsis, or radially out); to come down on purpose: land (G) or entry and landing (⇧G).":
+    "Remontez le périapside (prograde à l'apoapside, ou radial sortant) ; pour descendre exprès : atterrir (G) ou rentrée et atterrissage (⇧G).",
+  "A limit was exceeded and a part failed: the load, or the heat on the shield or the hull.":
+    "Une limite a été dépassée et une pièce a cédé : la charge, ou la chaleur sur le bouclier ou la coque.",
+  "Ease off at once: less speed, less bank, the shield to the flow — then check what still works.":
+    "Relâchez tout de suite : moins de vitesse, moins d'inclinaison, le bouclier face à l'écoulement — puis vérifiez ce qui marche encore.",
+  "The heat shield nears its temperature limit: the flow heats it as the density times the cube of the speed.":
+    "Le bouclier approche de sa température limite : l'écoulement le chauffe comme la densité fois le cube de la vitesse.",
+  "Stay higher in thinner air (less bank: more lift up), keep the shield to the flow (angle of attack ~40°), or slow down.":
+    "Restez plus haut dans un air plus fin (moins d'inclinaison : plus de portance vers le haut), gardez le bouclier face à l'écoulement (incidence ~40°), ou ralentissez.",
+  "The hull's skin overheats where the shield does not shade it.": "La peau de la coque surchauffe là où le bouclier ne la protège pas.",
+  "Turn the shield to the flow (the nose up), lower the speed, avoid steep dives.":
+    "Tournez le bouclier vers l'écoulement (le nez haut), réduisez la vitesse, évitez les piqués.",
+  "The acceleration nears what the structure bears.": "L'accélération approche de ce que la structure supporte.",
+  "Ease the pull: less angle of attack, less bank, a gentler throttle.":
+    "Relâchez : moins d'incidence, moins d'inclinaison, une poussée plus douce.",
+  "The wing is past its stalling angle: its lift collapses.": "L'aile a dépassé son angle de décrochage : sa portance s'effondre.",
+  "Lower the nose, add throttle, level the wings.": "Baissez le nez, remettez de la poussée, mettez les ailes à plat.",
+  "At these speeds the shock ionises the air round the ship: the glow, the radio blackout.":
+    "À ces vitesses le choc ionise l'air autour du vaisseau : la lueur, le silence radio.",
+  "Expected during an entry: nothing to do but watch the heat and the load.":
+    "Normal pendant une rentrée : rien à faire, sinon surveiller la chaleur et la charge.",
+  "No propellant left: the main engine and the thrusters are out.": "Plus d'ergols : le moteur principal et les propulseurs sont éteints.",
+  "Coast; an orbit lasts. Settings: the sci-fi antigravity, or place the ship (Place).":
+    "Laissez-vous porter ; une orbite dure. Réglages : l'antigravité SF, ou placez le vaisseau (Placer).",
+  "Less than a tenth of the propellant is left.": "Il reste moins d'un dixième des ergols.",
+  "Check the Δv budget (the flight computer) before the next burn; burn where it pays most — fast, near the periapsis.":
+    "Vérifiez le budget de Δv (l'ordinateur de vol) avant la prochaine poussée ; poussez là où c'est le plus rentable — vite, près du périapside.",
+  "Inside the ergosphere space itself turns with the hole: nothing can stay still against the stars.":
+    "Dans l'ergosphère, l'espace lui-même tourne avec le trou : rien ne peut rester immobile par rapport aux étoiles.",
+  "No hovering here: orbit, or climb out radially.": "Pas de vol stationnaire ici : orbitez, ou remontez radialement.",
+  "Below the photon orbit not even light can circle: any path here falls in or flies off.":
+    "Sous l'orbite des photons, même la lumière ne peut tourner : toute trajectoire y tombe ou s'échappe.",
+  "Climb out at once (radially out, full throttle).": "Remontez tout de suite (radial sortant, pleine poussée).",
+  "Below the innermost stable circular orbit, a circle is unstable: a nudge spirals in.":
+    "Sous la dernière orbite circulaire stable, un cercle est instable : une poussée minime fait spiraler vers l'intérieur.",
+  "Climb above the ISCO before circularizing, or hold with thrust (8: hold position).":
+    "Remontez au-dessus de l'ISCO avant de circulariser, ou tenez à la poussée (8 : maintien de position).",
+  "Rolling on the ground.": "Roulage au sol.",
+  "Keep straight; the brakes come once the nose wheel is down.": "Restez droit ; les freins viennent une fois la roue avant posée.",
+  "Resting on the gear.": "Posé sur le train.",
+  "U: take off to orbit — or Place the ship elsewhere.": "U : décoller vers l'orbite — ou Placer le vaisseau ailleurs.",
+  "Time is held: the image refines, the ship waits.": "Le temps est suspendu : l'image s'affine, le vaisseau attend.",
+  "Space: run the time.": "Espace : relancer le temps.",
+} satisfies Record<string, string>;

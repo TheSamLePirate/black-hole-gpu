@@ -40,6 +40,8 @@ export const OUR_COLOURS: Record<string, string> = {
 export const AMBER = "#ffb35c";
 export const CYAN = "#7cd6ff";
 export const RED = "#ff5a46";
+/** on what was asked (a cue met) */
+export const GREEN = "#6fe3a1";
 export const COL: Record<string, string> = {
   prograde: "#d6f55b",
   retrograde: "#d6f55b",

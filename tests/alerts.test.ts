@@ -72,3 +72,18 @@ test("the master caution: lit until acknowledged, again for a new one or one bac
   const mc2 = new MasterCaution();
   expect(mc2.update([{ id: "paused", level: "advisory", text: "" }]).lamp).toBeNull();
 });
+
+test("each alert says why it is on and what to do", () => {
+  const a = alertsOf({
+    ...calm(),
+    animate: false,
+    ergo: true,
+    engine: { kind: "crew", max: 1, fuel: { budget: 1, left: 0.05, dvLeft: 1, fraction: 0.05, empty: false } },
+    path: { pts: [[0, 0, 0]], fate: "horizon", at: 0, dt: 2 },
+  });
+  expect(a.length).toBeGreaterThan(2);
+  for (const x of a) {
+    expect(x.why.length, x.id).toBeGreaterThan(10);
+    expect(x.todo.length, x.id).toBeGreaterThan(10);
+  }
+});

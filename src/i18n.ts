@@ -5,6 +5,7 @@ import frBodies from "./i18n/fr-bodies";
 import frFc from "./i18n/fr-fc";
 import frHud from "./i18n/fr-hud";
 import frPlace from "./i18n/fr-place";
+import frAssist from "./i18n/fr-assist";
 import frMain from "./i18n/fr-main";
 import frSettings from "./i18n/fr-settings";
 
@@ -58,5 +59,6 @@ addFrench(frSettings);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);
+addFrench(frAssist);
 addFrench(frFc);
 addFrench(frBodies);

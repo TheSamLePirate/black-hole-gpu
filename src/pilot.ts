@@ -218,6 +218,19 @@ export function gyroscopic(w: V3, I: M3, dt: number): V3 {
   return x;
 }
 
+/**
+ * An assisted autopilot's cue (the camera frame C): where it would point the nose and the ship's top,
+ * the throttle it would set (0…1), the thrusters' push as a share of their authority (null: none), and
+ * how far the nose is from its point (the cosine).
+ */
+export interface Director {
+  nose: V3 | null;
+  up: V3 | null;
+  throttle: number;
+  rcs: V3 | null;
+  align: number;
+}
+
 export class FlightComputer {
   /** body rates about the ship's x (left), y (up), z (nose) axes [rad/s] */
   omega: V3 = [0, 0, 0];
@@ -236,6 +249,14 @@ export class FlightComputer {
   anchor: V3 | null = null;
   /** precision controls (fine rotation and throttle, as KSP's Caps Lock) */
   precision = false;
+  /**
+   * Assisted: an autopilot engaged works out what it would do — where the nose should point, its top,
+   * the throttle, the thrusters' push — but the pilot flies: its commands are the director's cue (the
+   * HUD's), not the ship's. Off: the autopilots fly.
+   */
+  assist = false;
+  /** the assisted autopilot's cue this step (camera frame C), null when none: see Director */
+  director: Director | null = null;
   /** the plane law's held flight path angle [rad] (set when the stick is let go), null: to be taken;
    *  the last one seen (its rate) */
   gammaHold: number | null = null;
@@ -296,29 +317,7 @@ export class FlightComputer {
     this.burn = null;
     let throttle = this.throttle;
     if (c.sf && this.auto === "none") {
-      // the sci-fi flight computer: the velocity flown by thrust in any direction (the main engine
-      // along the nose, the vectored thrusters the rest), the feed-forward first; the attitude its own
-      const U = toU(c.beta);
-      const T = Math.max(1.2 * c.tauRate, 1e-3);
-      const err = scale(add(toU(c.sf.beta), scale(U, -1)), 1 / T);
-      let A = add(err, c.sf.ff);
-      if (len(A) > c.thrust) {
-        const ff = c.sf.ff;
-        const fl = len(ff);
-        if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
-        else {
-          const ee = dot(err, err),
-            fe = dot(ff, err);
-          const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
-          A = add(ff, scale(err, clamp(k, 0, 1)));
-        }
-      }
-      const AC = toC(A);
-      throttle = c.thrust > 0 ? Math.max(dot(AC, Z), 0) / c.thrust : 0;
-      rcsC = add(add(AC, scale(Z, -throttle * c.thrust)), toC(c.sf.free));
-      point = toC(c.sf.nose);
-      upC = toC(c.sf.up);
-      this.burn = len(A) > 0 ? scale(A, 1 / len(A)) : null;
+      ({ point, upC, throttle, rcsC } = this.sfCommand(c, toC, Z));
     } else if ((this.auto === "entry" || this.auto === "burns") && c.att) {
       // the entry: the attitude the guidance asks (the angle of attack, the bank — or retrograde for the
       // deorbit's burn, fired once the nose is on it)
@@ -392,12 +391,32 @@ export class FlightComputer {
       point = this.holdDirection(c, toC);
     }
 
+    // ---- assisted: the autopilot's commands kept as the director's cue — the pilot flies
+    const assisted = this.assist && this.auto !== "none";
+    this.director = null;
+    if (assisted) {
+      const nose = point ?? (this.burn ? toC(this.burn) : null);
+      this.director = {
+        nose,
+        up: upC,
+        throttle: clamp(throttle, 0, 1),
+        rcs: len(rcsC) > 1e-12 && c.thrust > 0 ? (scale(rcsC, 1 / (TUNING.rcs * c.thrust)) as V3) : null,
+        align: nose ? dot(Z, nose) : 1,
+      };
+      point = null;
+      upC = null;
+      if (this.hold !== "none") point = this.holdDirection(c, toC);
+      // (the sci-fi law: the stick's velocity flown, as without an autopilot)
+      if (c.sf) ({ point, upC, throttle, rcsC } = this.sfCommand(c, toC, Z));
+    }
+
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)
     const fine = this.precision ? 0.25 : 1;
     // (the sci-fi computer reads the stick as its commands: the attitude is its own)
-    const manual: V3 = c.sf && this.auto === "none" ? [0, 0, 0] : [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
+    const flown = this.auto === "none" || assisted;
+    const manual: V3 = c.sf && flown ? [0, 0, 0] : [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
     const want: V3 = [...this.omega];
     const active = manual.some((m) => m !== 0);
     // the control surfaces' authority, added to the thrusters' (the plane and the sci-fi laws)
@@ -410,7 +429,7 @@ export class FlightComputer {
     const acc3: V3 = c.onGear
       ? [axisAcc(0) + Math.min(A3[0]!, axisAcc(0)), axisAcc(1) + Math.min(A3[1]!, axisAcc(1)), axisAcc(2) + Math.min(A3[2]!, axisAcc(2))]
       : [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
-    const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && this.auto === "none";
+    const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && flown;
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
     if (planeLaw) {
@@ -496,7 +515,7 @@ export class FlightComputer {
     }
 
     // ---- thrust: main engine along the nose, RCS translation along the ship's axes
-    if (this.auto === "none" && !c.sf) {
+    if (flown && !c.sf) {
       this.throttle = clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
       const rcsMax = TUNING.rcs * c.thrust;
@@ -526,6 +545,38 @@ export class FlightComputer {
     const acc = fromC(accC);
     this.accel = len(acc);
     return { rot, acc, burn: this.burn };
+  }
+
+  /**
+   * The sci-fi flight computer: the velocity flown by thrust in any direction (the main engine along the
+   * nose, the vectored thrusters the rest), the feed-forward first; the attitude its own.
+   */
+  private sfCommand(c: FlightContext, toC: (v: V3) => V3, Z: V3) {
+    const sf = c.sf!;
+    const U = toU(c.beta);
+    const T = Math.max(1.2 * c.tauRate, 1e-3);
+    const err = scale(add(toU(sf.beta), scale(U, -1)), 1 / T);
+    let A = add(err, sf.ff);
+    if (len(A) > c.thrust) {
+      const ff = sf.ff;
+      const fl = len(ff);
+      if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
+      else {
+        const ee = dot(err, err),
+          fe = dot(ff, err);
+        const k = ee > 0 ? (-fe + Math.sqrt(Math.max(fe * fe - ee * (fl * fl - c.thrust * c.thrust), 0))) / ee : 0;
+        A = add(ff, scale(err, clamp(k, 0, 1)));
+      }
+    }
+    const AC = toC(A);
+    const throttle = c.thrust > 0 ? Math.max(dot(AC, Z), 0) / c.thrust : 0;
+    this.burn = len(A) > 0 ? scale(A, 1 / len(A)) : null;
+    return {
+      point: toC(sf.nose) as V3 | null,
+      upC: toC(sf.up) as V3 | null,
+      throttle,
+      rcsC: add(add(AC, scale(Z, -throttle * c.thrust)), toC(sf.free)),
+    };
   }
 
   /** The orbit's normal (C), or radial in when the nose is on the normal (the hole overhead): where the ship's top goes. */

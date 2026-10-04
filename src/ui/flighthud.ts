@@ -33,7 +33,7 @@ import { cpuProf } from "../perf";
 import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
 import { GroundTrack } from "./groundtrack";
-import { AMBER, COL, CYAN, FONT, fmtDist, fmtDur, fmtShort, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
+import { AMBER, COL, CYAN, FONT, fmtDist, fmtDur, fmtShort, GREEN, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
 import { sub } from "../math/vec3";
 import { store } from "../util/storage";
@@ -184,6 +184,8 @@ export interface FlightHudActions {
   spectator(): void;
   /** the spectator following the ship (carried with it) or free */
   spectatorFollow(on: boolean): void;
+  /** the autopilots assisted (the pilot flies, the director shows their commands) or flying */
+  assist(): void;
   /** the spectator away to a body (free, around it) */
   spectatorGoTo(b: Target): void;
   /** fly another craft of the fleet */
@@ -217,6 +219,8 @@ export class FlightHud {
   private root = h("div", "fl-root");
   private hud: HTMLCanvasElement;
   private warn = h("div", "fl-warn");
+  /** the alert whose explanation is open (a click on its line), "" none */
+  private alertOpen = "";
   private caution = new MasterCaution();
   /** the entry's panel (hud: the guidance shown — the site's range, the bank, the load, the heat) */
   private entryBox = h("div", "fl-entry fl-panel");
@@ -437,12 +441,18 @@ export class FlightHud {
       return;
     }
     const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-    const sig = JSON.stringify(H);
+    const sig = JSON.stringify(H) + i.assist;
     if (sig === this.hubSig && !C.hidden) return;
     this.hubSig = sig;
     C.hidden = false;
+    // (the mode: the autopilot flies, or it assists — the pilot flies, its commands the HUD's director)
+    const mode = i.assist ? t("ASSISTED") : t("AUTO");
+    const tip = i.assist
+      ? t("Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)")
+      : t("The autopilot flies — click: you fly it, assisted (F4)");
+    C.classList.toggle("assist", i.assist);
     C.innerHTML =
-      `<div class="fl-title">${esc(H.title)}<i>${t("AUTOPILOT")}</i></div>` +
+      `<div class="fl-title">${esc(H.title)}<button class="fl-hub-mode" data-testid="hub-assist" title="${esc(tip)}">${mode}</button></div>` +
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
       (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
@@ -845,6 +855,9 @@ export class FlightHud {
     this.cockpit.style.width = `${CW}px`;
     this.cockpit.style.height = `${CH}px`;
     this.hubCard.hidden = true;
+    this.hubCard.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".fl-hub-mode")) act.assist();
+    });
     this.cockpit.append(this.hubCard);
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
       const b = h("button", "fl-rb") as HTMLButtonElement;
@@ -1736,17 +1749,33 @@ export class FlightHud {
     const mc = this.caution.update(alerts);
     sound.alarm("master", s.sound && mc.sound, "warning");
     const shown = alerts.slice(0, 3);
-    const sig = `${mc.lamp}|${shown.map((x) => `${x.id}:${x.level}:${mc.unacked.has(x.id)}:${x.text}`).join("|")}|${alerts.length}`;
+    const open = alerts.find((x) => x.id === this.alertOpen) ?? null;
+    const sig = `${mc.lamp}|${shown.map((x) => `${x.id}:${x.level}:${mc.unacked.has(x.id)}:${x.text}`).join("|")}|${alerts.length}|${open?.id ?? ""}`;
     if (sig !== this.alertSig) {
       this.alertSig = sig;
       this.warn.replaceChildren(
         ...(mc.lamp ? [this.lamp(mc.lamp)] : []),
         ...shown.map((x) => {
-          const d = h("div", `al-${x.level}${mc.unacked.has(x.id) ? " fresh" : ""}`, x.text);
+          const d = h("div", `al-${x.level}${mc.unacked.has(x.id) ? " fresh" : ""}${open?.id === x.id ? " open" : ""}`, x.text);
           d.dataset.alert = x.id;
+          // (its explanation: in the tooltip, and opened under the lines by a click)
+          d.title = `${x.why}\n→ ${x.todo}`;
+          d.onclick = () => {
+            this.alertOpen = this.alertOpen === x.id ? "" : x.id;
+            this.alertSig = "";
+          };
           return d;
         }),
         ...(alerts.length > 3 ? [h("div", "al-more", `+${alerts.length - 3}`)] : []),
+        ...(open
+          ? [
+              (() => {
+                const e = h("div", `al-help al-help-${open.level}`);
+                e.append(h("b", "", t("Why")), h("span", "", open.why), h("b", "", t("What to do")), h("span", "", open.todo));
+                return e;
+              })(),
+            ]
+          : []),
       );
     }
     // buttons
@@ -1821,6 +1850,101 @@ export class FlightHud {
     const b = this.spectBar.querySelector<HTMLButtonElement>("[data-testid=spect-follow]")!;
     b.textContent = sp.follow ? t("Following · free it") : t("Free · follow the ship");
     b.classList.toggle("on", sp.follow);
+  }
+
+  /**
+   * The flight director of an assisted autopilot (pilot.ts: Director): a ring where it would point the nose
+   * — amber while the nose is off it, green on it (within 3°) —, a tick towards where the ship's top
+   * goes, its thrusters' push as an arrow, the throttle it asks; off the image, an arrow on its edge.
+   */
+  private drawDirector(ctx: CanvasRenderingContext2D, i: Info, W: number, H: number, dpr: number, tanH: number, asp: number) {
+    const D = i.director!;
+    const on = D.align > 0.99863; // (3°)
+    const col = on ? GREEN : AMBER;
+    const at = (d: V3) => {
+      const z = Math.max(d[2], 1e-6);
+      return { x: d[0] / (z * tanH * asp), y: d[1] / (z * tanH), behind: d[2] <= 0 };
+    };
+    const R = 15 * dpr;
+    let cx = W / 2,
+      cy = H / 2;
+    if (D.nose) {
+      const p = at(D.nose);
+      let { x, y } = p;
+      if (p.behind) (x = -x * 1e3 || 1e3), (y = -y * 1e3);
+      const off = p.behind || Math.abs(x) > 0.9 || Math.abs(y) > 0.86;
+      const k = off ? Math.min(0.9 / Math.abs(x || 1e-9), 0.86 / Math.abs(y || 1e-9)) : 1;
+      cx = ((x * k + 1) / 2) * W;
+      cy = ((1 - y * k) / 2) * H;
+      for (const [lw, c] of [
+        [3.4 * dpr, "rgba(0, 0, 0, 0.45)"],
+        [1.8 * dpr, col],
+      ] as const) {
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = c;
+        ctx.beginPath();
+        if (off) {
+          const a = Math.atan2(-(y * k), x * k);
+          ctx.moveTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+          ctx.lineTo(cx + Math.cos(a + 2.4) * R, cy + Math.sin(a + 2.4) * R);
+          ctx.lineTo(cx + Math.cos(a - 2.4) * R, cy + Math.sin(a - 2.4) * R);
+          ctx.closePath();
+        } else {
+          ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+          ctx.moveTo(cx - 0.35 * R, cy);
+          ctx.lineTo(cx + 0.35 * R, cy);
+          ctx.moveTo(cx, cy - 0.35 * R);
+          ctx.lineTo(cx, cy + 0.35 * R);
+          // (the top's tick: where the ship's top goes, seen from the nose)
+          if (D.up) {
+            const u = Math.hypot(D.up[0], D.up[1]);
+            if (u > 0.1) {
+              ctx.moveTo(cx + (D.up[0] / u) * R, cy - (D.up[1] / u) * R);
+              ctx.lineTo(cx + (D.up[0] / u) * 1.7 * R, cy - (D.up[1] / u) * 1.7 * R);
+            }
+          }
+        }
+        ctx.stroke();
+      }
+    }
+    // (the thrusters' push: an arrow from the ring, across the image)
+    if (D.rcs) {
+      const l = Math.hypot(D.rcs[0], D.rcs[1]);
+      if (l > 0.05) {
+        const L = (1.2 + 1.6 * Math.min(l, 1)) * R;
+        const ex = cx + (D.rcs[0] / l) * L,
+          ey = cy - (D.rcs[1] / l) * L;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.strokeStyle = CYAN;
+        ctx.beginPath();
+        ctx.moveTo(cx + (D.rcs[0] / l) * 1.1 * R, cy - (D.rcs[1] / l) * 1.1 * R);
+        ctx.lineTo(ex, ey);
+        const a = Math.atan2(ey - cy, ex - cx);
+        ctx.lineTo(ex - Math.cos(a - 0.5) * 0.4 * R, ey - Math.sin(a - 0.5) * 0.4 * R);
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.cos(a + 0.5) * 0.4 * R, ey - Math.sin(a + 0.5) * 0.4 * R);
+        ctx.stroke();
+      }
+    }
+    // the throttle it asks, against the one set
+    const want = Math.round(D.throttle * 100),
+      have = Math.round(i.throttle * 100);
+    // (the autopilot fires only once its nose is on the burn: turning comes first)
+    const say = D.nose && !on ? t("TURN TO THE CUE") : want > 0 ? tf("THROTTLE {0} %", want) : have > 2 ? t("CUT THE THROTTLE") : "";
+    ctx.font = `700 ${12 * dpr}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.lineWidth = 3 * dpr;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), say].filter(Boolean);
+    // (the words kept inside the image, clear of the tapes on its sides: drawn inwards of an edge arrow)
+    const lx = Math.min(Math.max(cx + (W / 2 - cx) * 0.22, W * 0.2), W * 0.8);
+    const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.12), H * 0.78);
+    lines.forEach((l, k) => {
+      const y = ly + (16 + 15 * k) * dpr;
+      ctx.strokeText(l, lx, y);
+      ctx.fillStyle = k === 0 ? col : (D.nose && !on) || (want > 0 && Math.abs(want - have) > 5) ? AMBER : GREEN;
+      ctx.fillText(l, lx, y);
+    });
   }
 
   /** a distance [m]: metres, kilometres, then as the HUD writes them (AU) */
@@ -1978,6 +2102,8 @@ export class FlightHud {
       ctx.lineWidth = 2 * dpr;
       marker(ctx, GLYPH[k]!, p[0], p[1], r, COL[k]!);
     }
+    // the assisted autopilot's director: where it would point the nose, its top, its throttle, its thrusters
+    if (i.director) this.drawDirector(ctx, i, W, H, dpr, tanH, asp);
     if (this.density < 2) {
       // each tape in the free band between the panels above and below it on its side (a phone: between
       // the mission bar and the touch controls, smaller)

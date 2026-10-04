@@ -935,6 +935,18 @@ async function main() {
     return { body: id, c: q.map((x) => x / b.radius) as [number, number, number], altKm: ((r - b.radius) * M_METRES) / 1e3 };
   }
 
+  /** The autopilots: flying, or assisting (the pilot flies, the HUD's director shows their commands). */
+  function toggleAssist() {
+    camera.pilot.assist = !camera.pilot.assist;
+    // (the throttle the pilot's from where the autopilot left it)
+    if (camera.pilot.assist) camera.pilot.throttle = camera.pilot.engineNow;
+    panel.toast(
+      camera.pilot.assist
+        ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies")
+        : t("The autopilots fly again (F4: assisted)"),
+    );
+  }
+
   /** Next attach point of the camera on the Ranger (turns the ship on). */
   function nextMount() {
     if (!settings.ship) {
@@ -1076,6 +1088,7 @@ async function main() {
     warp,
     mount: setMount,
     spectator: () => setSpectator(!camera.spectating),
+    assist: () => toggleAssist(),
     spectatorGoTo: (b: Target) => {
       camera.setSpectatorFollow(false);
       const why = goTo(b);
@@ -1468,6 +1481,7 @@ async function main() {
       else setMount(keys[(i + dir + keys.length) % keys.length]!);
     },
     spectator: () => setSpectator(!camera.spectating),
+    assist: () => toggleAssist(),
     vessel: (_, d) => camera.cycleVessel(d === "1" ? 1 : -1), // (the craft flown: KSP's [ ])
     flightMode: () => {
       // the flight law in the air: rocket → plane → the sci-fi flight computer
