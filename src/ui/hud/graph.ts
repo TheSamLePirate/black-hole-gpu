@@ -6,7 +6,7 @@
 /** An assistant's graph, in its own units (the axes'). */
 export interface AssistGraph {
   /** what it plots: the e2e's handle, the cockpit's choice */
-  kind: "burn" | "climb" | "entry" | "glide" | "descent";
+  kind: "burn" | "climb" | "entry" | "glide" | "descent" | "approach";
   title: string;
   x: GraphAxis;
   y: GraphAxis;

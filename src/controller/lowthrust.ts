@@ -67,6 +67,7 @@ declare module "../controls" {
     glideAssist: typeof glideAssist;
     glideCard: typeof glideCard;
     descentAssist: typeof descentAssist;
+    approachAssist: typeof approachAssist;
     descentCard: typeof descentCard;
     entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
@@ -531,6 +532,7 @@ function ourWant(
     n = lin(n, 1 / Math.hypot(...n), n, 0);
     const th = cross(n, Rh);
     const vc = Math.sqrt(Tg.mass / D);
+    this.hubNote = { name: BODY_NAMES[tgt] ?? tgt, orbitAlt: (r - Tg.radius) * M_METRES };
     // (the height held: a gentle radial pull back, a small part of the circular speed)
     const vr = Math.max(-0.2, Math.min(0.2, (r - D) / (0.1 * r))) * vc * 0.5;
     return out(lin(lin(Tg.vel, 1, th, vc), 1, Rh, vr));
@@ -1014,6 +1016,58 @@ function entryAssist(
   return { graph, say };
 }
 
+/**
+ * The approach's assistant (C6): the closing rate against the distance to the stand-off, the approach
+ * autopilot's own braking curve (a stop at 60 % of the thrust), its corridor (a quarter as fast up to
+ * the curve a 90 % burn still stops on — a body's pull may carry the autopilot itself above its own
+ * curve), the trace — slower is safe (cyan), past the stop is not (amber) —, the frame following the
+ * approach; the director's: the closing rate as flown
+ * and as asked, the braking's countdown.
+ */
+function approachAssist(this: CameraController, leftM: number, closing: number, name: string): Pick<HubInfo, "graph" | "say"> {
+  const thrSI = this.thrustMax() * (C_MPS ** 2 / (1476.625 * this.s.massSolar));
+  const a = 0.6 * thrSI;
+  const want = (d: number) => Math.sqrt(2 * a * Math.max(d, 0));
+  const stopAt = (d: number) => Math.sqrt(2 * 0.9 * thrSI * Math.max(d, 0));
+  const loAt = (d: number) => Math.min(0.25 * want(d), stopAt(d)),
+    hiAt = (d: number) => stopAt(d);
+  const left = Math.max(leftM, 0);
+  const key = `approach:${name}`;
+  if (this.glideTrace?.key !== key) this.glideTrace = { key, pts: [] };
+  const tr = this.glideTrace.pts;
+  const last = tr[tr.length - 1];
+  if (
+    !last ||
+    Math.abs(last[0] - left / 1e3) > Math.max(left / 1e3, 0.01) * 0.01 ||
+    Math.abs(last[1] - closing) > Math.max(closing * 0.01, 0.1)
+  ) {
+    tr.push([left / 1e3, closing]);
+    if (tr.length > 400) this.glideTrace.pts = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  const xMax = Math.max((left / 1e3) * 1.5, 0.5);
+  const ds = Array.from({ length: 48 }, (_, i) => (xMax * 1e3 * i) / 47);
+  const graph: AssistGraph = {
+    kind: "approach",
+    title: t("Approach"),
+    x: { label: t("To the stand-off"), unit: "km", min: 0, max: xMax },
+    y: { label: t("Closing"), unit: "m/s", min: 0, max: Math.max(closing * 1.3, want(xMax * 1e3) * 1.3, 1) },
+    ideal: ds.map((d) => [d / 1e3, want(d)] as [number, number]),
+    lo: ds.map((d) => [d / 1e3, loAt(d)] as [number, number]),
+    hi: ds.map((d) => [d / 1e3, hiAt(d)] as [number, number]),
+    flown: this.glideTrace.pts,
+    now: [left / 1e3, Math.max(closing, 0)],
+    marks: [],
+    state: closing > hiAt(left) + 0.2 ? "off" : closing < loAt(left) - 0.2 ? "wait" : "on",
+  };
+  const say = [tf("CLOSING {0} → {1} m/s", closing.toFixed(closing < 100 ? 1 : 0), want(left).toFixed(want(left) < 100 ? 1 : 0))];
+  // (the braking — at the autopilot's 60 % — must start when what is left is what it takes, and a tenth)
+  if (closing > 0.5) {
+    const tB = (left - ((closing * closing) / (2 * a)) * 1.1) / closing;
+    say.push(tB <= 0 ? t("BRAKE NOW") : tB < 600 ? tf("BRAKE IN {0}", fmtDur(tB)) : "");
+  }
+  return { graph, say: say.filter(Boolean) };
+}
+
 /** The surface's figures the descent's assistant reads (planet.ts surfaceInfo): SI, the gravity in g. */
 type SurfaceLike = { alt?: number; vVert?: number; vHor?: number; landed?: boolean; twr?: number; gLocal?: number };
 
@@ -1462,17 +1516,23 @@ function hubCompute(this: CameraController): HubInfo | null {
     return H;
   }
   const N = this.hubNote;
-  if (a === "approach" && N.left !== undefined) {
-    return base(
-      "APPROACH",
-      N.left > 0 ? tf("closing on {0}", N.name ?? "") : t("backing off to the stand-off"),
-      [
-        [t("To the stand-off"), km(N.left)],
-        [t("Closing"), ms(N.closing ?? 0)],
-      ],
-      `→ ${tf("beside {0} ({1} off) in ~{2}", N.name ?? "", km(N.stand ?? 0), dur(N.ttg ?? NaN))}`,
-    );
+  // (the approach — and the target's orbit on its way there)
+  if ((a === "approach" || (a === "orbit" && N.orbitAlt === undefined)) && N.left !== undefined) {
+    return {
+      ...base(
+        a === "orbit" ? "ORBIT" : "APPROACH",
+        N.left > 0 ? tf("closing on {0}", N.name ?? "") : t("backing off to the stand-off"),
+        [
+          [t("To the stand-off"), km(N.left)],
+          [t("Closing"), ms(N.closing ?? 0)],
+        ],
+        `→ ${tf("beside {0} ({1} off) in ~{2}", N.name ?? "", km(N.stand ?? 0), dur(N.ttg ?? NaN))}`,
+      ),
+      ...this.approachAssist(N.left, N.closing ?? 0, N.name ?? ""),
+    };
   }
+  if (a === "orbit" && N.orbitAlt !== undefined)
+    return base("ORBIT", tf("in orbit around {0}", N.name ?? ""), [[t("Height held"), km(N.orbitAlt)]]);
   if (a === "hover" && N.off !== undefined) {
     const H = base("HOLD POS", t("holding the place"), [
       [t("Off it"), km(N.off)],
@@ -2209,6 +2269,7 @@ export function installLowthrust(C: { prototype: CameraController }) {
     glideAssist,
     glideCard,
     descentAssist,
+    approachAssist,
     descentCard,
     entryAssist,
     circPlan,

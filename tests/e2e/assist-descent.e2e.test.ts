@@ -24,7 +24,7 @@ describe.skipIf(!E2E)("the vertical descent assisted", () => {
     // the hold let go: falling, the descent's own card
     await app.press("Digit8", "8");
     await app.waitFor(`__bh.camera.hubInfo()?.title === "DESCENT"`, 15_000);
-    expect(await app.js<boolean>(`!document.querySelector("[data-testid=hub-assist]")`)).toBe(true);
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=hub-assist]").hidden`)).toBe(true);
     const G = await app.js<{ ideal: number; lo: number; state: string }>(
       `(() => { const g = __bh.camera.hubInfo().graph; return { ideal: g.ideal.length, lo: g.lo.length, state: g.state }; })()`,
     );

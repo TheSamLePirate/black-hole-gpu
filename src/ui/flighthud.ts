@@ -152,6 +152,7 @@ const AUTO_KEYS: [Auto, string, string][] = [
   ["hover", t("HOLD POS"), "8"],
   ["circularize", "CIRC", "9"],
   ["approach", t("APPROACH"), "0"],
+  ["orbit", t("ORBIT"), "⇧0"],
   ["land", t("LAND"), "G"],
   ["takeoff", t("TAKE OFF"), "U"],
   ["entry", t("ENTRY"), "⇧G"],
@@ -367,6 +368,11 @@ export class FlightHud {
   private cockpit = h("div", "fl-cockpit");
   /** the hub's card, beside the ring: the autopilot flying, its phase, figures, prediction */
   private hubCard = h("div", "fl-panel fl-hubcard");
+  /** the card's title and its mode's button, kept from one refresh to the next (a click spanning a
+   *  refresh would otherwise press one button and release another) */
+  private hubHead = h("div", "fl-title");
+  private hubTitle = h("span", "fl-hub-t");
+  private hubMode = h("button", "fl-hub-mode") as HTMLButtonElement;
   private hubBody = h("div", "fl-hub-body");
   /** the assistant's graph under the card (ui/hud/graph.ts): folded with its title */
   private hubGraph = h("div", "fl-hub-graph");
@@ -475,9 +481,13 @@ export class FlightHud {
       : t("The autopilot flies — click: you fly it, assisted (F4)");
     C.classList.toggle("assist", i.assist);
     this.drawHubGraph(H.graph ?? null);
+    if (this.hubTitle.textContent !== H.title) this.hubTitle.textContent = H.title;
+    // (a hand-flown final's or descent's card: no autopilot to hand over to)
+    const M = this.hubMode;
+    M.hidden = i.auto === "none";
+    if (M.textContent !== mode) M.textContent = mode;
+    if (M.title !== tip) M.title = tip;
     this.hubBody.innerHTML =
-      // (a hand-flown final's card: no autopilot to hand over to)
-      `<div class="fl-title">${esc(H.title)}${i.auto === "none" ? "" : `<button class="fl-hub-mode" data-testid="hub-assist" title="${esc(tip)}">${mode}</button>`}</div>` +
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
       (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
@@ -915,7 +925,9 @@ export class FlightHud {
       this.hubSig = "";
     };
     this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv);
-    this.hubCard.append(this.hubBody, this.hubGraph);
+    this.hubMode.dataset.testid = "hub-assist";
+    this.hubHead.append(this.hubTitle, this.hubMode);
+    this.hubCard.append(this.hubHead, this.hubBody, this.hubGraph);
     this.cockpit.append(this.hubCard);
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {
       const b = h("button", "fl-rb") as HTMLButtonElement;
@@ -971,6 +983,7 @@ export class FlightHud {
       hover: '<path d="M0-9V-3.5M0 3.5V9M-9 0H-3.5M3.5 0H9"/><circle r="1.7" class="f"/>',
       circularize: '<circle r="7"/><circle cx="7" r="1.8" class="f"/>',
       approach: '<path d="M-9 0H2.5M-.5-3.5L3 0L-.5 3.5"/><circle cx="7.5" r="2" class="f"/>',
+      orbit: '<circle r="2.6" class="f"/><ellipse rx="9.5" ry="4.6"/><circle cx="9.5" r="1.6" class="f"/>',
       land: '<path d="M0-8V3M-3.5-.5L0 3L3.5-.5M-8 7.5H8"/>',
       takeoff: '<path d="M0 5V-7M-3.5-3.5L0-7L3.5-3.5M-8 8H8"/>',
       entry: '<path d="M-8-7Q-2-6 1 0T4 8M-8 8H8"/><circle cx="1" cy="0" r="2.2" class="f"/>',
@@ -982,6 +995,7 @@ export class FlightHud {
         "Makes the orbit circular — the cheapest way: a burn at the next apsis above the air (planned, the time sped up to it), then trimmed; after a capture, where the ship is",
       ),
       approach: t("Flies to the target and stops beside it — the flight computer's Approach the target"),
+      orbit: t("Flies to the target and settles into a low circular orbit around it — the flight computer's Orbit the target"),
       land: t("Descends, kills the horizontal speed, touches down — the flight computer's Land here"),
       takeoff: t("Lifts off and climbs to orbit — the height and inclination the flight computer's LAUNCH sets (its ORBIT tab)"),
       entry: t(

@@ -901,7 +901,17 @@ export class CameraController {
   ourOrbitR: { body: string; r: number } | null = null;
 
   /** what the autopilots measured as they flew (our universe): the approach's, the hold's */
-  hubNote: { left?: number; closing?: number; ttg?: number; stand?: number; name?: string; off?: number; drift?: number } = {};
+  hubNote: {
+    left?: number;
+    closing?: number;
+    ttg?: number;
+    stand?: number;
+    name?: string;
+    off?: number;
+    drift?: number;
+    /** the target's orbit, settled: the height it holds [m] */
+    orbitAlt?: number;
+  } = {};
   hubCache: { at: number; v: HubInfo | null } | null = null;
   /** the take-off's record for its assistant (lowthrust.ts climbAssist): its pad (body-fixed unit), the
    *  path flown [downrange, height km], the peak dynamic pressure [Pa], the optimum path */

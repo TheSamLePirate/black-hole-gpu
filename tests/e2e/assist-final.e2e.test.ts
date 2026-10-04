@@ -34,7 +34,7 @@ describe.skipIf(!E2E)("a final flown by hand", () => {
     // the runway's card: its graph, no mode to switch
     await app.waitFor(`__bh.camera.hubInfo()?.graph?.kind === "glide"`, 5_000);
     expect(await app.js<string>(`document.querySelector(".fl-hubcard .fl-title").textContent`)).toStartWith("RWY 15");
-    expect(await app.js<boolean>(`!document.querySelector("[data-testid=hub-assist]")`)).toBe(true);
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=hub-assist]").hidden`)).toBe(true);
     // (the profile frozen: the glide's error grows as the craft floats above it, the PAPI whitens)
     await app.waitFor(`__bh.camera.runwayView().papi >= 3`, 30_000);
   }, 300_000);

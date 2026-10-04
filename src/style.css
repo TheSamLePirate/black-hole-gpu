@@ -1322,6 +1322,7 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
   color: rgba(150, 255, 190, 0.92);
   cursor: pointer;
 }
+.fl-hubcard .fl-hub-mode[hidden] { display: none; }
 .fl-hubcard.assist { border-color: rgba(255, 179, 92, 0.55); }
 .fl-hubcard.assist .fl-hub-mode { border-color: rgba(255, 179, 92, 0.7); background: rgba(255, 179, 92, 0.14); color: var(--hud-amber); }
 .fl-hubcard .fl-title i { margin-left: auto; font: 600 11px var(--hud-font); letter-spacing: 0.16em; color: rgba(120, 255, 170, 0.75); font-style: normal; }

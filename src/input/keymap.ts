@@ -246,12 +246,13 @@ export const KEYMAP: KeySection[] = [
         bind: HOLDS.map((h, i) => fly(`Digit${i + 1}`, "hold", { arg: h })),
       },
       {
-        keys: "8 · 9 · 0 · G · U · B",
-        text: "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)",
+        keys: "8 · 9 · 0 · ⇧0 · G · U · B",
+        text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)",
         bind: [
           fly("Digit8", "auto", { arg: "hover" }),
           fly("Digit9", "auto", { arg: "circularize" }),
-          fly("Digit0", "auto", { arg: "approach" }),
+          fly("Digit0", "auto", { arg: "approach", shift: false }),
+          fly("Digit0", "auto", { arg: "orbit", shift: true }),
           fly("KeyG", "auto", { arg: "land", shift: false }),
           fly("KeyU", "auto", { arg: "takeoff" }),
           fly("KeyB", "auto", { arg: "dock" }),

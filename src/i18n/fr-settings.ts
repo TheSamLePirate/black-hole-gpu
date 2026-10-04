@@ -1072,8 +1072,8 @@ export default {
   "Roll alignment: wings in the orbital plane while the nose is held": "Alignement en roulis : ailes dans le plan orbital, le nez maintenu",
   "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)":
     "Maintien prograde · rétrograde · radial ± · normal ± · cible (ANTI, NODE sur le panneau)",
-  "Autopilot: hold position · circularize · approach · land · take off · dock (the ISS within 3 km)":
-    "Pilote auto : maintien de position · circulariser · approche · atterrir · décoller · amarrage (l'ISS à moins de 3 km)",
+  "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)":
+    "Pilote auto : maintien de position · circulariser · approche · orbite de la cible · atterrir · décoller · amarrage (l'ISS à moins de 3 km)",
   "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel":
     "Carte 3D (glisser : tourner · glisser-droit : déplacer · molette : zoom · clic : cible · double-clic : centrer) · panneau de réglages",
   "Camera: next · previous view — on the hull, around the ship, free, fly-by":

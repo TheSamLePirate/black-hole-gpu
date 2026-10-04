@@ -115,4 +115,12 @@ export default {
   "a descent on the engines — hand-flown, the landing autopilot's curve to follow":
     "une descente sur les moteurs — pilotée à la main, la courbe de l'autopilote d'atterrissage à suivre",
   "touchdown in ~{0}": "toucher dans ~{0}",
+  // C6: the approach, the rendezvous, the target's orbit
+  "Flies to the target and settles into a low circular orbit around it — the flight computer's Orbit the target":
+    "Rejoint la cible et s'installe sur une orbite basse circulaire autour d'elle — le « Orbiter la cible » du calculateur de vol",
+  Approach: "Approche",
+  "CLOSING {0} → {1} m/s": "RAPPROCHEMENT {0} → {1} m/s",
+  "BRAKE NOW": "FREINEZ",
+  "BRAKE IN {0}": "FREINAGE DANS {0}",
+  "Height held": "Altitude tenue",
 } satisfies Record<string, string>;
