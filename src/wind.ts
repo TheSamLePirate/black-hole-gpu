@@ -77,15 +77,21 @@ export class Weather {
   /** a gust under way: its peak [m/s], its length [m], how far through it [m]; the distance to the next */
   private gust: { peak: number; len: number; at: number } | null = null;
   private nextGust = 0;
+  /** a new flight's field not drawn yet: at its first step, from that step's moment */
+  private unseeded = false;
 
   constructor(seed = 1) {
     this.r = rng(seed);
     this.nextGust = 2000 + 6000 * this.r.next();
   }
 
-  /** A new flight: the field drawn anew from the seed (the same flight, the same weather). */
-  reset(seed: number) {
-    this.r = rng(seed);
+  /**
+   * A new flight: the field drawn anew from the seed (the same flight, the same weather) — none given,
+   * from the flight's first step's moment (the clocks at the flight's setting-up are the last flight's).
+   */
+  reset(seed?: number) {
+    this.unseeded = seed === undefined;
+    this.r = rng(seed ?? 1);
     this.turb = [0, 0, 0];
     this.gust = null;
     this.nextGust = 2000 + 6000 * this.r.next();
@@ -96,6 +102,7 @@ export class Weather {
    * [°] on day `days`, for a craft moving through the air at V [m/s], advanced by dt [s].
    */
   step(level: WindLevel, h: number, lat: number, lon: number, days: number, V: number, dt: number): V3 {
+    if (this.unseeded) this.reset(1 + (Math.floor(Math.abs(days) * 864e5) % 2147483646));
     if (level === 0 || !(h < 30e3)) {
       this.turb = [0, 0, 0];
       return [0, 0, 0];

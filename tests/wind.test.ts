@@ -25,6 +25,19 @@ test("the same seed, the same weather", () => {
   for (let i = 0; i < 500; i++) expect(a.step(2, 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(2, 300, 35, -118, 1000, 120, 0.02));
 });
 
+test("a new flight draws its weather at its first step: whatever the last flight left", () => {
+  const a = new Weather(42),
+    b = new Weather(9);
+  for (let i = 0; i < 300; i++) b.step(2, 300, 35, -118, 990, 120, 0.02);
+  a.reset();
+  b.reset();
+  for (let i = 0; i < 500; i++) expect(a.step(2, 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(2, 300, 35, -118, 1000, 120, 0.02));
+  // (another moment, another field)
+  const c = new Weather();
+  c.reset();
+  expect(c.step(2, 300, 35, -118, 1000.5, 120, 0.02)).not.toEqual(new Weather(1).step(2, 300, 35, -118, 1000, 120, 0.02));
+});
+
 test("flown through: the mean is the mean wind, the spread the Dryden intensity", () => {
   const w = new Weather(7);
   const h = 300;

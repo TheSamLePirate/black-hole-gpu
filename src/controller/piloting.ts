@@ -128,7 +128,7 @@ function newFlight(this: CameraController) {
   this.airBrake = 0;
   this.airFlight.reset(fleet.active);
   this.airFlight.cfg = {};
-  // (the tanks full again: every craft's; the weather drawn anew from the flight's moment — the same
+  // (the tanks full again: every craft's; the weather drawn anew at the flight's first moment — the same
   // flight, the same gusts; nothing of the last flight's gear — its spoilers, its steering, its springs)
   fleet.spent = {};
   this.groundSpoilers = false;
@@ -139,7 +139,7 @@ function newFlight(this: CameraController) {
   this.rollSince = 0;
   this.windHome = null;
   this.windNow = null;
-  this.weather.reset(1 + (Math.floor(Math.abs(this.nowTime()) * 1e3) % 2147483646));
+  this.weather.reset();
   this.pilot.newFlight();
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();

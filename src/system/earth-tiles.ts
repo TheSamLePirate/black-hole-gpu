@@ -241,6 +241,8 @@ export class EarthTiles {
       f.n++;
       f.at = performance.now() + 3000 * f.n;
       this.failures.set(key, f);
+      // (asked again once it may be: the image converged, no frame asks — the tile would wait for a move)
+      if (f.n < 2) setTimeout(() => this.request(cx0(this.lon), this.sinLat), 3000 * f.n + 10);
       // (twice failed: the global map's heights there, the level not held back)
       if (f.n >= 2) {
         h = this.fromFallback(L, x, y);
