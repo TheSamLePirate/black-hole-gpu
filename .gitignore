@@ -59,3 +59,6 @@ assets/etopo/
 
 # the space station's source models (scripts/build-iss.py builds assets/iss/iss-lod*.bin from ISS2.glb)
 assets/iss/*.glb
+
+# the Kerr Bench's captures stay local: only its report.json files are versioned
+docs/perf/**/shots/
