@@ -4341,7 +4341,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let sk = skySeen(q, Ls);
   let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
-  let top = 0.85 / PI * (E * Ts * (wrap * lit + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
+  let top = 0.85 / PI * (E * Ts * (wrap * lit * select(cloudLongShadow(q, Ls), 1.0, below) + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   return select(top, top * 0.35, below);
 }
 
@@ -4702,6 +4702,75 @@ struct EarthLook { col: vec3f, T: vec3f, Lm: vec3f };
 // (its column from the cover) with the powder term, a forward lobe (Henyey–Greenstein) and multiple
 // scattering's brightening, the sky's light; x: opacity, rgb in cl: its mean radiance, t: where it starts
 struct CloudVol { alpha: f32, cl: vec3f, t: f32 };
+// the clouds' phase function: Henyey–Greenstein forward (0.8) and back (−0.2) lobes, 65/35, their
+// eccentricities scaled by c (the multiple-scattering octaves: rounder)
+fn hgPhase(g: f32, ct: f32) -> f32 { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * ct, 1e-4), 1.5)); }
+fn cloudPhase(ct: f32, c: f32) -> f32 { return 0.65 * hgPhase(0.8 * c, ct) + 0.35 * hgPhase(-0.2 * c, ct); }
+
+// Cirrus: a shell of ice at 9 km, in streaks along the jet streams (between ~25° and 65° of latitude)
+// and the anvils over the tropics' convergence, drifting with the weather; x: its opacity at q (its
+// axes), resolved to a footprint fpM [m] (beyond the streaks' scale, their mean)
+fn cirrusCover(q: vec3f, fpM: f32) -> f32 {
+  let qd = rotZ(q, P.earth.y * 1.3 + 0.7);
+  let lat = asin(clamp(qd.z, -1.0, 1.0));
+  let band = smoothstep(0.42, 0.62, abs(lat)) * (1.0 - smoothstep(1.0, 1.2, abs(lat))) + 0.6 * exp(-lat * lat / 0.015);
+  if (band <= 0.01) { return 0.0; }
+  // (fibres a few km wide, tens long: stretched along the east — the noise's northward component seven
+  // times finer —, the field of them over ~100 km)
+  let e = normalize(vec3f(-qd.y, qd.x, 1e-6));
+  let nn = cross(qd, e);
+  let s = qd * (EARTH_RM / 12000.0);
+  let p = s + nn * dot(s, nn) * 6.0;
+  // (the gradient noise baked in its texture, not hashed: the cirrus are drawn on every ray of the sky)
+  let field = smoothstep(-0.1, 0.4, dnoise(qd * (EARTH_RM / 100000.0)));
+  if (field <= 0.0) { return 0.0; }
+  let detail = smoothstep(1500.0, 12000.0, fpM);
+  var n = 0.55 * dnoise(p) + 0.3 * dnoise(p * 2.7 + vec3f(3.1, 7.7, 1.3));
+  n += (1.0 - detail) * 0.15 * dnoise(p * 7.9 + vec3f(5.5, 1.1, 9.4));
+  let a = mix(smoothstep(0.15, 0.6, n), 0.12, detail);
+  return 0.3 * band * field * a;
+}
+// their light at q: thin ice lit through the air at their height — a strong forward lobe (a halo's worth
+// round the sun, capped), the sky's light from above
+fn cirrusLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f) -> vec3f {
+  let h = 9000.0;
+  let mu0 = dot(q, Ls);
+  let Ts = sunThrough(h, mu0) * sunSeen(q * (1.0 + h / EARTH_RM), Ls);
+  let ct = dot(rd, Ls);
+  let ph = min(0.75 * hgPhase(0.85, ct) + 0.25 * hgPhase(-0.1, ct), 1.0);
+  let sk = skySeen(q, Ls);
+  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+  return E * (Ts * ph * 4.0 + 0.6 / PI * amb);
+}
+
+// The cloud cover smoothed at a map level (lod), on the clouds' drift — the long shadows' heights
+fn cloudCoverAt(q0: vec3f, lod: f32) -> f32 {
+  let q = rotZ(geoQ(q0), P.earth.y);
+  return clamp((textureSampleLevel(earthCube, bgSamp, eCube(q), lod).a - 0.06) * 1.25, 0.0, 1.0);
+}
+// Seen from orbit near the terminator: the tops' long shadows — the cover taken for height (up to 8 km
+// for a thick deck), the sun's slant from the tops 8, 25 and 60 km towards it: a taller cloud between
+// shades this one; soft over 1.5 km
+fn cloudLongShadow(q: vec3f, Ls: vec3f) -> f32 {
+  let mu0 = dot(q, Ls);
+  if (mu0 <= -0.02 || mu0 >= 0.3) { return 1.0; }
+  let Lt = Ls - q * mu0;
+  let lt = length(Lt);
+  if (lt < 1e-4) { return 1.0; }
+  let dir = Lt / lt;
+  let tanE = max(mu0, 0.0) / lt;
+  let lod = clamp(log2(25000.0 / EARTH_RM / earthTexel()), 0.0, 8.0);
+  let h0 = 8000.0 * cloudCoverAt(q, lod);
+  var sh = 1.0;
+  for (var i = 0; i < 3; i++) {
+    let d = array<f32, 3>(8000.0, 25000.0, 60000.0)[i];
+    let qi = normalize(q + dir * (d / EARTH_RM));
+    let hi = 8000.0 * cloudCoverAt(qi, lod);
+    sh *= 1.0 - 0.6 * smoothstep(0.0, 1500.0, hi - h0 - d * tanE);
+  }
+  return mix(1.0, sh, smoothstep(0.3, 0.15, mu0));
+}
+
 fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32) -> CloudVol {
   var o: CloudVol;
   o.t = -1.0;
@@ -4726,8 +4795,12 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   if (t1 <= t0) { return o; }
   let N = 16u;
   let ct = dot(rd, Ls);
-  let g = 0.55;
-  let hg = (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * ct, 1e-4), 1.5));
+  // (the droplets' phase function two-lobed — the silver lining round the sun, a glow away from it —, and
+  // the light scattered many times as octaves of it, each fainter, rounder, less dimmed: Wrenninge 2015)
+  let hg = cloudPhase(ct, 1.0);
+  let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
+  let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
+  let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
   var Tv = 1.0;
   var col = vec3f(0.0);
   var tPrev = t0;
@@ -4776,7 +4849,11 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
     let sk = skySeen(q, Ls);
     let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
-    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * exp(-0.12 * tauSun) * smoothstep(-0.1, 0.1, mu0))
+    // (the octaves' dimming from one exponential: e^(−0.04 τ), its square, its cube)
+    let e1 = exp(-0.04 * tauSun);
+    let e2 = e1 * e1;
+    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
+    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
       + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, (r - 1.0) * EARTH_RM, mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
@@ -4814,6 +4891,32 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
       let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
       alpha = cv.x;
       cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
+    }
+  }
+  // the cirrus at 9 km (from far above, a third: the cloud map's own already holds them), before the
+  // clouds or behind them
+  if (earth && P.earth2.y > 0.0) {
+    let ri = 1.0 + 9000.0 / EARTH_RM;
+    let hi2 = ri * ri - dot(off, off);
+    if (hi2 > 0.0) {
+      let under = dot(ro, ro) < ri * ri;
+      let ti = select(-b - sqrt(hi2), -b + sqrt(hi2), under);
+      if (ti > 0.0 && (tHit <= 0.0 || ti < tHit)) {
+        let qi = normalize(ro + rd * ti);
+        let alt = (length(ro) - 1.0) * EARTH_RM;
+        let ai = cirrusCover(qi, (fp0 + fpK * ti) * EARTH_RM) * mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
+        if (ai > 0.0) {
+          let ci = cirrusLight(qi, rd, Ls, E);
+          if (alpha <= 0.0 || ti < tc) {
+            cl = (ai * ci + (1.0 - ai) * alpha * cl) / max(ai + (1.0 - ai) * alpha, 1e-5);
+            alpha = ai + (1.0 - ai) * alpha;
+            tc = ti;
+          } else {
+            cl = (alpha * cl + (1.0 - alpha) * ai * ci) / max(alpha + (1.0 - alpha) * ai, 1e-5);
+            alpha = alpha + (1.0 - alpha) * ai;
+          }
+        }
+      }
     }
   }
   // the air: to the ground (or out), and to the cloud — seen through the air before it only
