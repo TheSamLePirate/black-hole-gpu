@@ -514,10 +514,11 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let d0 = normalize(TA.fwd.xyz + ndc.x * tanH * asp * TA.right.xyz + ndc.y * tanH * TA.up.xyz);
   // (what the pixel shows at a finite depth — a planet's ground under the ship — seen from where the
   // camera was: parallax; the far sky by the turn alone. A pixel reconstructed between rays takes the
-  // nearest depth of the fresh samples around it — its own is a frame or more old (UE4's closest depth))
+  // nearest depth of the fresh samples around it — its own is a frame or more old (UE4's closest depth) —,
+  // where a near body's ground is reprojected)
   let isFresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
   var depth = moments[gid.y * W + gid.x].y;
-  if (!isFresh) {
+  if (!isFresh && TA.cc.w > 0.5) {
     let stp = i32(max(block / 2u, 1u));
     let hiD = vec2i(size) - 1;
     var dn = 3e38;
@@ -571,8 +572,8 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
-      // tone-mapped values) — the samples a ray landed on this frame weighing more than those reconstructed
-      // between them (audit R2: the moments of the fresh samples)
+      // tone-mapped values; the fresh samples' alone, R2's suggestion, read the stamps nine times more for
+      // +0.3 ms and nothing measurable)
       let st = i32(max(block / 2u, 1u));
       let hi = vec2i(size) - 1;
       var m1 = vec3f(0.0);
@@ -581,11 +582,10 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       for (var j = -1; j <= 1; j++) {
         for (var i = -1; i <= 1; i++) {
           let qp = clamp(vec2i(gid.xy) + vec2i(i, j) * st, vec2i(0), hi);
-          let wq = select(0.25, 1.0, block <= 1u || stamps[u32(qp.y) * W + u32(qp.x)] >= R.u.w);
           let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb));
-          m1 += wq * q;
-          m2 += wq * q * q;
-          ws += wq;
+          m1 += q;
+          m2 += q * q;
+          ws += 1.0;
         }
       }
       m1 /= ws;

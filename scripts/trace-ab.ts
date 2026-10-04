@@ -64,6 +64,8 @@ interface Run {
   trace: number;
   lut: number;
   probes: number;
+  /** the reconstruction's passes: resolve, gather, temporal */
+  post: number;
   n: number;
 }
 
@@ -125,7 +127,7 @@ try {
       const tw = performance.now();
       for (let i = 0; i < 120 && performance.now() - tw < 3000; i++) { __bh.touch(); await frame(); }
       r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
-      const tr = [], lu = [], pr = [];
+      const tr = [], lu = [], pr = [], po = [];
       let seen = r.prof.frames;
       // (the measure: FRAMES frames or SECONDS, whichever first — at least 20)
       const tm = performance.now();
@@ -139,10 +141,11 @@ try {
         tr.push(get((p) => p.label === "trace"));
         lu.push(get((p) => p.label === "far-field LUT"));
         pr.push(get((p) => p.label.includes("probe")));
+        po.push(get((p) => p.label === "resolve" || p.label === "gather" || p.label === "temporal"));
       }
       r.prof.enabled = false; r.prof.every = 8;
       const med = (a) => { const b = [...a].sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
-      return { trace: med(tr), lut: med(lu), probes: med(pr), n: tr.length };
+      return { trace: med(tr), lut: med(lu), probes: med(pr), post: med(po), n: tr.length };
     })()`);
 
   // (each build's scenes loaded once first: their specialised tracers compiled and cached — a changed
@@ -185,7 +188,7 @@ try {
       }
     }
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
-  console.log("\nscene                                     trace+LUT ref → new          probes ref → new");
+  console.log("\nscene                                     trace+LUT ref → new          probes ref → new   post ref → new");
   for (const sc of SCENES) {
     const R = res[sc]!.ref,
       N = res[sc]!.new;
@@ -193,7 +196,7 @@ try {
     const a = mean(R.map((x) => x.trace + x.lut)),
       b = mean(N.map((x) => x.trace + x.lut));
     console.log(
-      `${sc.slice(0, 40).padEnd(40)} ${a.toFixed(2).padStart(7)} → ${b.toFixed(2).padStart(7)} ms (${((100 * (b - a)) / a).toFixed(1).padStart(5)} %)  [${R.map((x) => x.trace.toFixed(1))} | ${N.map((x) => x.trace.toFixed(1))}]  ${mean(R.map((x) => x.probes)).toFixed(2)} → ${mean(N.map((x) => x.probes)).toFixed(2)}`,
+      `${sc.slice(0, 40).padEnd(40)} ${a.toFixed(2).padStart(7)} → ${b.toFixed(2).padStart(7)} ms (${((100 * (b - a)) / a).toFixed(1).padStart(5)} %)  [${R.map((x) => x.trace.toFixed(1))} | ${N.map((x) => x.trace.toFixed(1))}]  ${mean(R.map((x) => x.probes)).toFixed(2)} → ${mean(N.map((x) => x.probes)).toFixed(2)}  ${mean(R.map((x) => x.post)).toFixed(2)} → ${mean(N.map((x) => x.post)).toFixed(2)}`,
     );
   }
   const out = arg("out", "");
