@@ -36,6 +36,10 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
   notified when it ends); put the estimated duration in the task's title (e.g. "e2e landing on the
   mini (~4 min)"). A full e2e suite there: ~3.5 min.
 - The command is run by zsh in the copy: `VAR=1 cmd`, `&&` work as typed.
+- A whole flight live, orbit → runway: `bun scripts/live-entry.ts --site Bourget --inc 52` (~14 min; ends
+  0 stopped on the runway). To instrument the page without touching the code: a script outside the
+  repo, `scp` to `kerr-mini:/tmp/`, run as `bun /tmp/x.ts` (imports by `process.cwd()`) — the recipes and
+  the troubleshooting table: `docs/REMOTE-TESTS.md` (French, the user's guide).
 - Each run also pulls the mini's own clone (`~/Documents/DEV/black-hole-gpu`) — the user wants it kept
   current. A `WARNING … not pulled` line: tell the user (local changes there, or no network).
 - Results land in `remote-results/<id>/` (git-ignored): `log`, `meta.json`, `artifacts/` (every file the
