@@ -79,4 +79,16 @@ export default {
   "Δv DELIVERED": "Δv FOURNI",
   "IGNITION IN {0}": "ALLUMAGE DANS {0}",
   "Δv LEFT {0}": "Δv RESTANT {0}",
+  // C2: the take-off and the climb
+  "Path angle": "Pente",
+  "q · max": "q · max",
+  Heading: "Cap",
+  "Gravity turn in": "Virage grav. dans",
+  "MECO in": "Coupure dans",
+  Ascent: "Montée",
+  Downrange: "Distance au sol",
+  "GRAVITY TURN IN {0}": "VIRAGE GRAVITATIONNEL DANS {0}",
+  "PATH {0}° · HDG {1}°": "PENTE {0}° · CAP {1}°",
+  "MAX-Q {0} kPa": "MAX-Q {0} kPa",
+  "MECO IN ~{0}": "COUPURE DANS ~{0}",
 } satisfies Record<string, string>;

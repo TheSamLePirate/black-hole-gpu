@@ -6,7 +6,7 @@
 /** An assistant's graph, in its own units (the axes'). */
 export interface AssistGraph {
   /** what it plots: the e2e's handle, the cockpit's choice */
-  kind: "burn";
+  kind: "burn" | "climb";
   title: string;
   x: GraphAxis;
   y: GraphAxis;
@@ -20,6 +20,8 @@ export interface AssistGraph {
   now: [number, number] | null;
   /** vertical marks on the time (the ignition, the cutoff) */
   marks: { x: number; label: string }[];
+  /** horizontal levels (the height asked, the apoapsis) */
+  levels?: { y: number; label: string }[];
   /** the verdict: in the corridor, out of it, not yet in it */
   state: "on" | "off" | "wait";
 }
@@ -101,7 +103,8 @@ export function drawGraph(
   g.lineWidth = 1 * k;
   g.font = `500 ${9.5 * k}px ${pal.font}`;
   g.textBaseline = "middle";
-  const dy = step(ay.max - ay.min, 3);
+  // (as many ticks as their labels have room for)
+  const dy = step(ay.max - ay.min, Math.max(2, Math.floor(H / (28 * k))));
   g.textAlign = "right";
   for (let v = Math.ceil(ay.min / dy) * dy; v <= ay.max + 1e-9 * dy; v += dy) {
     const py = sy(v);
@@ -113,9 +116,11 @@ export function drawGraph(
     g.fillStyle = pal.dim;
     g.fillText(fmtAxis(v, ay.unit), X0 - 4 * k, py);
   }
-  const dx = step(ax.max - ax.min, 4);
+  const dx = step(ax.max - ax.min, Math.max(2, Math.floor(W / (58 * k))));
   g.textAlign = "center";
   g.textBaseline = "top";
+  // (a label that would touch the one before it left out — its line kept)
+  let lastEnd = -Infinity;
   for (let v = Math.ceil(ax.min / dx) * dx; v <= ax.max + 1e-9 * dx; v += dx) {
     const px = sx(v);
     g.strokeStyle = pal.grid;
@@ -123,8 +128,13 @@ export function drawGraph(
     g.moveTo(px, Y0);
     g.lineTo(px, Y0 + H);
     g.stroke();
+    const label = fmtAxis(v, ax.unit);
+    const w = g.measureText(label).width;
+    const lx = Math.min(Math.max(px, X0 + w / 2), X0 + W - w / 2);
+    if (lx - w / 2 < lastEnd + 4 * k) continue;
+    lastEnd = lx + w / 2;
     g.fillStyle = pal.dim;
-    g.fillText(fmtAxis(v, ax.unit), Math.min(Math.max(px, X0 + 14 * k), X0 + W - 14 * k), Y0 + H + 3 * k);
+    g.fillText(label, lx, Y0 + H + 3 * k);
   }
   g.save();
   g.beginPath();
@@ -166,6 +176,23 @@ export function drawGraph(
     g.setLineDash([]);
     g.fillStyle = pal.dim;
     g.fillText(m.label, px + 3 * k, Y0 + 2 * k);
+  }
+  // the levels
+  for (const l of G.levels ?? []) {
+    const py = sy(l.y);
+    if (py < Y0 - 1 || py > Y0 + H + 1) continue;
+    g.strokeStyle = pal.wait;
+    g.lineWidth = 1 * k;
+    g.setLineDash([6 * k, 4 * k]);
+    g.beginPath();
+    g.moveTo(X0, py);
+    g.lineTo(X0 + W, py);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = pal.wait;
+    g.textAlign = "right";
+    g.fillText(l.label, X0 + W - 3 * k, py - 6 * k);
+    g.textAlign = "left";
   }
   // the flight
   const col = G.state === "on" ? pal.on : G.state === "off" ? pal.off : pal.wait;

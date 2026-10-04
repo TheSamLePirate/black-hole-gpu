@@ -34,7 +34,7 @@ import { mouth, sphericalFrame } from "../wormhole";
 import { gravityHome, OUR_BODIES, ourState, soiOf } from "../system/our-side";
 import { predictOurs, type OurPath } from "../system/our-predict";
 import { plan as runPlanner } from "../system/plan-client";
-import { airDensity as ourAir, dragAccel, gearHeight, groundVelocity, solidBody } from "../system/our-surface";
+import { airDensity as ourAir, altitudeOver, dragAccel, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { bodyAxes, solarBody, solarState } from "../system/solar";
 import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
@@ -44,7 +44,7 @@ import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
 import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
-import { burnGraph } from "../ui/hud/graph";
+import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 
 declare module "../controls" {
   interface CameraController {
@@ -61,6 +61,7 @@ declare module "../controls" {
     ourSurfaceWant: typeof ourSurfaceWant;
     hubInfo: typeof hubInfo;
     hubCompute: typeof hubCompute;
+    climbAssist: typeof climbAssist;
     circPlan: typeof circPlan;
     ourCircWant: typeof ourCircWant;
     autopilotWant: typeof autopilotWant;
@@ -631,30 +632,10 @@ function ourSurfaceWant(
     return out(lin(gv, 1, up, vv), lin(ff, 1, up, (vd - vv) / T));
   }
   // take-off
-  const air = sb.atmosphere;
   const LG = this.launchGoal;
-  const d0 =
-    sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius, LG.altKm !== null ? (LG.altKm * 1e3) / M_METRES : 0);
-  // (the climb aimed a little above the height asked — it slows as it nears its aim — and the orbit
-  // made circular once the height is reached)
-  const dAim = d0 + 0.04 * (d0 - sb.radius);
-  const f = Math.min(Math.max((r - sb.radius) / (dAim - sb.radius), 0), 1);
-  const pole = unitV(spinAxis(id));
-  let east = cross(pole, up);
-  if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
-  east = unitV(east);
-  // (an inclination asked: the launch azimuth for it — sin az = cos i / cos latitude, prograde —, the
-  // nearest reachable when the site's latitude is above it)
-  if (LG.incDeg !== null) {
-    const north = cross(up, east);
-    const cl = Math.sqrt(Math.max(1 - dot3(up, pole) ** 2, 1e-9));
-    const sinAz = clamp(Math.cos((LG.incDeg * Math.PI) / 180) / cl, -1, 1);
-    const az = Math.asin(sinAz);
-    east = unitV(lin(north, Math.cos(az), east, sinAz));
-  }
+  const d0 = climbTop(id, LG.altKm);
+  const east = launchEast(id, up, LG.incDeg);
   const vc = Math.sqrt(sb.mass / r);
-  let vUp = Math.min(Math.sqrt((thr - gw) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
-  const vE = vc * Math.sqrt(f);
   const vi = sub3(nav.V, nav.refVel);
   if (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
     P.auto = "none";
@@ -664,18 +645,7 @@ function ourSurfaceWant(
   }
   // (inertial east speed: the ground already gives its turning at lift-off)
   const vGroundE = dot3(sub3(gv, nav.refVel), east);
-  let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
-  // in the air: the speed through it no more than keeps the craft's own drag (½ ρ v² C_D A / m) under
-  // 30 % of the thrust, and the dynamic pressure under 35 kPa (max-Q) — straight up through the thick
-  // air first, turning east as it thins (a gravity turn)
-  const rho = ourAir(id, h * M_METRES);
-  if (rho > 0) {
-    const k = Math.max(this.dragPerMass(), 1e-6);
-    const vMax = Math.min(Math.sqrt((0.6 * thr * ((c * c) / M_METRES)) / (rho * k)), Math.sqrt((2 * 35e3) / rho)) / c;
-    vUp = Math.min(vUp, vMax);
-    const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
-    vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
-  }
+  const { vUp, vEastAir, f } = climbCmd(id, thr, this.dragPerMass(), d0, vGroundE, r, h);
   // (an inclination asked: the ground's own turn across the launch's heading taken off as the craft
   // climbs — else it is left in the orbit, which then comes out flatter)
   let want = lin(lin(gv, 1, up, vUp), 1, east, vEastAir);
@@ -688,6 +658,225 @@ function ourSurfaceWant(
 }
 
 /**
+ * The take-off's heading over the ground at `up`: east, or — an inclination asked — the launch azimuth
+ * for it (sin az = cos i / cos latitude, prograde), the nearest reachable when the site's latitude is
+ * above it.
+ */
+export function launchEast(id: string, up: Vec3, incDeg: number | null): Vec3 {
+  const pole = unitV(spinAxis(id));
+  let east = cross(pole, up);
+  if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
+  east = unitV(east);
+  if (incDeg !== null) {
+    const north = cross(up, east);
+    const cl = Math.sqrt(Math.max(1 - dot3(up, pole) ** 2, 1e-9));
+    const sinAz = clamp(Math.cos((incDeg * Math.PI) / 180) / cl, -1, 1);
+    const az = Math.asin(sinAz);
+    east = unitV(lin(north, Math.cos(az), east, sinAz));
+  }
+  return east;
+}
+
+/** The take-off's top [M from the body's centre]: the height asked, else clear of the air (1.5 × its top) or 3 % of the radius. */
+export function climbTop(id: string, altKm: number | null): number {
+  const sb = solarBody(id)!;
+  const air = sb.atmosphere;
+  return sb.radius + Math.max(air ? (1.5 * 12 * air.H) / M_METRES : 0, 0.03 * sb.radius, altKm !== null ? (altKm * 1e3) / M_METRES : 0);
+}
+
+/**
+ * The take-off's climb as commanded at `r` from the body's centre, `h` over its ground [M]: the vertical
+ * speed and the east speed over the ground [c], the share of the climb done. The climb is aimed a little
+ * above its top — it slows as it nears it —, its east speed the circular one's √f; in the air the speed
+ * through it no more than keeps the craft's own drag (½ ρ v² C_D A / m) under 30 % of the thrust, and the
+ * dynamic pressure under 35 kPa (max-Q) — straight up through the thick air first, turning east as it
+ * thins (a gravity turn). `thr` the thrust [c²/M], `dragK` the drag per mass, `vGroundE` the ground's east speed.
+ */
+export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGroundE: number, r: number, h: number) {
+  const sb = solarBody(id)!;
+  const c = C_MPS;
+  const minute = 60 / M_SECONDS;
+  const gw = sb.mass / (r * r);
+  const dAim = d0 + 0.04 * (d0 - sb.radius);
+  const f = Math.min(Math.max((r - sb.radius) / (dAim - sb.radius), 0), 1);
+  const vc = Math.sqrt(sb.mass / r);
+  let vUp = Math.min(Math.sqrt(Math.max(thr - gw, 0) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
+  const vE = vc * Math.sqrt(f);
+  let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
+  const rho = ourAir(id, h * M_METRES);
+  if (rho > 0) {
+    const k = Math.max(dragK, 1e-6);
+    const vMax = Math.min(Math.sqrt((0.6 * thr * ((c * c) / M_METRES)) / (rho * k)), Math.sqrt((2 * 35e3) / rho)) / c;
+    vUp = Math.min(vUp, vMax);
+    const hMax = Math.sqrt(Math.max(vMax * vMax - vUp * vUp, 0));
+    vEastAir = Math.max(Math.min(vEastAir, hMax), -hMax);
+  }
+  return { vUp, vEastAir, f };
+}
+
+/**
+ * The take-off's optimum path as its command flies it: the downrange and the height [km] from the pad
+ * up to its top (the ground's east speed as at the pad), the time along it [s], and where its gravity
+ * turn starts — the path 15° off the vertical — [km].
+ */
+export function climbProfile(id: string, thr: number, dragK: number, d0: number, vGroundE: number) {
+  const R = solarBody(id)!.radius;
+  const km = M_METRES / 1e3;
+  const pts: [number, number][] = [[0, 0]];
+  const ts = [0];
+  let x = 0,
+    tt = 0,
+    turn = NaN;
+  const N = 160;
+  // (heights in steps fine near the ground — the thick air —, coarser above)
+  let h0 = 0;
+  for (let i = 1; i <= N; i++) {
+    const h1 = (d0 - R) * 0.995 * (i / N) ** 2;
+    const hm = (h0 + h1) / 2;
+    const cm = climbCmd(id, thr, dragK, d0, vGroundE, R + hm, hm);
+    if (!Number.isFinite(turn) && Math.atan2(cm.vUp, Math.abs(cm.vEastAir)) < (75 * Math.PI) / 180) turn = h0 * km;
+    x += (Math.abs(cm.vEastAir) / Math.max(cm.vUp, 1e-12)) * (h1 - h0);
+    tt += ((h1 - h0) / Math.max(cm.vUp, 1e-12)) * M_SECONDS;
+    pts.push([x * km, h1 * km]);
+    ts.push(tt);
+    h0 = h1;
+  }
+  return { pts, ts, turn: Number.isFinite(turn) ? turn : 0 };
+}
+
+/**
+ * The take-off's assistant (C2), our universe: the path flown — the downrange from the pad and the
+ * height — against the optimum its command flies (climbProfile) and the corridor about it, the
+ * apoapsis it leaves, the height asked; the path's angle and heading, the dynamic pressure and its
+ * peak (max-Q); the countdowns to the gravity turn and to the engine's cutoff (MECO). Its rows are
+ * added to the card's.
+ */
+function climbAssist(
+  this: CameraController,
+  nav: NonNullable<ReturnType<CameraController["ourNav"]>>,
+  mu: number,
+  rows: [string, string][],
+): Pick<HubInfo, "graph" | "say"> {
+  const id = nav.ref;
+  const sb = solarBody(id)!;
+  const kmM = M_METRES / 1e3;
+  const C = C_MPS;
+  const Pb = nav.refPos;
+  const rel = sub3(nav.X, Pb);
+  const r = Math.hypot(...rel);
+  const up = lin(rel, 1 / r, rel, 0);
+  const h = Math.max(altitudeOver(id, nav.X, nav.t) / 1e3, 0);
+  const d0 = climbTop(id, this.launchGoal.altKm);
+  const thr = this.thrustMax();
+  const dragK = this.dragPerMass();
+  // the pad (body-fixed, at the first look), the ground's east speed there
+  const q = toBodyFixed(id, nav.X, nav.t);
+  const ql = Math.hypot(...q);
+  const gv = groundVelocity(id, nav.X, nav.t);
+  const pole = unitV(spinAxis(id));
+  let eastG = cross(pole, up);
+  if (Math.hypot(...eastG) < 1e-12) eastG = cross([0, 0, 1], up);
+  eastG = unitV(eastG);
+  const north = cross(up, eastG);
+  const east = launchEast(id, up, this.launchGoal.incDeg);
+  if (!this.climbRec || this.climbRec.id !== id) {
+    const vGroundE = dot3(sub3(gv, nav.refVel), east);
+    this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
+  }
+  const R = this.climbRec;
+  const cosA = Math.min(Math.max(dot3(R.pad, lin(q, 1 / ql, q, 0)), -1), 1);
+  const x = Math.acos(cosA) * sb.radius * kmM;
+  const tr = R.trace;
+  const last = tr[tr.length - 1];
+  if (!last || Math.abs(x - last[0]) + Math.abs(h - last[1]) > 0.05) {
+    tr.push([x, h]);
+    if (tr.length > 400) R.trace = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+  }
+  // the path: its angle over the ground's horizon, its heading
+  const va = sub3(nav.V, gv);
+  const vv = dot3(va, up);
+  const vhv = lin(va, 1, up, -vv);
+  const vh = Math.hypot(...vhv);
+  const gam = (Math.atan2(vv, vh) * 180) / Math.PI;
+  const az = (v: Vec3) => ((Math.atan2(dot3(v, eastG), dot3(v, north)) * 180) / Math.PI + 360) % 360;
+  const hdg = vh * C > 1 ? az(vhv) : NaN;
+  // (what the command asks here: its path's angle, its heading)
+  const cmd = climbCmd(id, thr, dragK, d0, dot3(sub3(gv, nav.refVel), east), r, Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES);
+  const gamAim = (Math.atan2(cmd.vUp, Math.abs(cmd.vEastAir)) * 180) / Math.PI;
+  const hdgAim = az(east);
+  const deg3 = (a: number) => (Number.isFinite(a) ? `${a.toFixed(0).padStart(3, "0")}°` : "—");
+  // the dynamic pressure and its peak
+  const LA = this.airFlight.last;
+  const qPa = LA && LA.air.rho > 0 ? LA.out.q : 0;
+  R.qMax = Math.max(R.qMax, qPa);
+  const passed = R.qMax > 1000 && qPa < 0.97 * R.qMax;
+  // the orbit it leaves
+  const vi = lin(sub3(nav.V, nav.refVel), C, nav.V, 0) as KV3;
+  const e = kepElements(mu, lin(rel, M_METRES, rel, 0) as KV3, vi);
+  const apKm = e.e < 1 ? e.ra / 1e3 - sb.radius * kmM : Infinity;
+  const topKm = (d0 - sb.radius) * kmM;
+  // the countdowns, along the optimum's own time: to the gravity turn, to the cutoff (MECO) — from where
+  // the craft is on it (its height)
+  const P = R.profile.pts,
+    TS = R.profile.ts;
+  const along = (hh: number, k: 0 | 1) => {
+    for (let i = 1; i < P.length; i++)
+      if (P[i]![1] >= hh) {
+        const y0 = P[i - 1]![1],
+          y1 = P[i]![1];
+        const u = (hh - y0) / Math.max(y1 - y0, 1e-9);
+        return k === 0 ? P[i - 1]![0] + (P[i]![0] - P[i - 1]![0]) * u : TS[i - 1]! + (TS[i]! - TS[i - 1]!) * u;
+      }
+    return k === 0 ? P[P.length - 1]![0] : TS[TS.length - 1]!;
+  };
+  const tNow = along(h, 1);
+  const toTurn = h < R.profile.turn ? along(R.profile.turn, 1) - tNow : NaN;
+  const tMeco = Math.max(TS[TS.length - 1]! - tNow, 0);
+  const dur = (t: number) => fmtDur(t);
+  // (the height over the ground's figure — the card's from the mean sphere, off by kilometres on the Earth's)
+  rows[0] = [
+    t("Height"),
+    h >= 100 ? `${Math.round(h).toLocaleString("en-US")} km` : h >= 1 ? `${h.toFixed(1)} km` : `${Math.round(h * 1e3)} m`,
+  ];
+  rows.push(
+    [t("Path angle"), `${gam.toFixed(0)}° → ${gamAim.toFixed(0)}°`],
+    [t("Heading"), `${deg3(hdg)} → ${deg3(hdgAim)}`],
+    [R.qMax > 1000 ? t("q · max") : "q", `${(qPa / 1e3).toFixed(1)}${R.qMax > 1000 ? ` · ${(R.qMax / 1e3).toFixed(1)}` : ""} kPa`],
+  );
+  if (Number.isFinite(toTurn)) rows.push([t("Gravity turn in"), dur(toTurn)]);
+  rows.push([t("MECO in"), `~${dur(tMeco)}`]);
+  // the graph: the height against the downrange, the optimum, its corridor (15 % of the downrange, 2 km
+  // and a fifth of the height either side — the vertical climb drifts); its frame following the climb —
+  // 2.5 × the height, the top's at the end
+  const ideal = P;
+  const slack = (px: number, py: number) => 0.15 * px + 2 + 0.2 * py;
+  const lo = P.map(([px, py]) => [px - slack(px, py), py] as [number, number]);
+  const hi = P.map(([px, py]) => [px + slack(px, py), py] as [number, number]);
+  const xi = along(h, 0);
+  const on = Math.abs(x - xi) <= slack(xi, h);
+  const yMax = Math.min(Math.max(h * 2.5, 12), topKm * 1.25);
+  const graph: AssistGraph = {
+    kind: "climb",
+    title: t("Ascent"),
+    x: { label: t("Downrange"), unit: "km", min: 0, max: Math.max(along(Math.min(yMax, topKm * 0.995), 0) * 1.15 + 2, x * 1.2, 4) },
+    y: { label: t("Height"), unit: "km", min: 0, max: yMax },
+    ideal,
+    lo,
+    hi,
+    flown: R.trace,
+    now: [x, h],
+    marks: [],
+    levels: [{ y: topKm, label: t("TARGET") }, ...(Number.isFinite(apKm) && apKm > 1 ? [{ y: apKm, label: "Ap" }] : [])],
+    state: h < 0.05 ? "wait" : on ? "on" : "off",
+  };
+  const say: string[] = [tf("PATH {0}° · HDG {1}°", gamAim.toFixed(0), hdgAim.toFixed(0).padStart(3, "0"))];
+  if (Number.isFinite(toTurn)) say.push(tf("GRAVITY TURN IN {0}", fmtDur(toTurn)));
+  if (qPa > 1000 && !passed && qPa > 0.9 * R.qMax) say.push(tf("MAX-Q {0} kPa", (qPa / 1e3).toFixed(0)));
+  if (h > 0.05) say.push(tf("MECO IN ~{0}", fmtDur(tMeco)));
+  return { graph, say };
+}
+
+/**
  * The hub's card: the autopilot flying, what it does now, its figures, and what it predicts — the
  * orbit after its burn, the deorbit's heat and load, the touchdown, the arrival. Redone 4 times a
  * second at most. Null: no autopilot.
@@ -695,6 +884,8 @@ function ourSurfaceWant(
 function hubInfo(this: CameraController): HubInfo | null {
   const now = frameNow();
   if (this.hubCache && now - this.hubCache.at < 250) return this.hubCache.v;
+  // (the climb's own record — its pad, its trace, its max-Q — kept while the take-off flies)
+  if (this.pilot.auto !== "takeoff") this.climbRec = null;
   let v: HubInfo | null = null;
   try {
     v = this.hubCompute();
@@ -955,7 +1146,11 @@ function hubCompute(this: CameraController): HubInfo | null {
       if (e.rp > fc.ctx.R) next = `→ ${tf("in orbit: {0} × {1}", km(e.rp - fc.ctx.R), km(e.ra - fc.ctx.R))}`;
     }
     const thick = !!sf && (sf.alt ?? 0) < airTopKm(fc?.body ?? "") * 1e3 * 0.4;
-    return base("TAKE OFF", thick ? t("climbing through the thick air") : t("the gravity turn, to orbit"), rows, next);
+    const H = base("TAKE OFF", thick ? t("climbing through the thick air") : t("the gravity turn, to orbit"), rows, next);
+    // our universe: the climb's assistant — the path against its optimum, the countdowns, max-Q
+    const nav = this.ourNav(cameraFrame(s));
+    if (nav && fc && solidBody(nav.ref)) Object.assign(H, this.climbAssist(nav, fc.ctx.mu, rows));
+    return H;
   }
   const N = this.hubNote;
   if (a === "approach" && N.left !== undefined) {
@@ -1661,6 +1856,7 @@ export function installLowthrust(C: { prototype: CameraController }) {
     ourSurfaceWant,
     hubInfo,
     hubCompute,
+    climbAssist,
     circPlan,
     ourCircWant,
     autopilotWant,

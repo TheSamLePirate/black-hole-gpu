@@ -154,6 +154,8 @@ export interface HubInfo {
   /** a burn's cue for the director: its ignition [s from now, ≤ 0 lit], the Δv left and planned [m/s],
    *  lit, and done — the engine to cut */
   cue?: { tIgn: number; left: number; dv: number; burning: boolean; cut: boolean } | null;
+  /** the director's lines (assisted): the countdowns and figures the phase calls for */
+  say?: string[];
 }
 
 /** The future as the eye sees it (CameraController.futureView): directions in camera coordinates. */
@@ -889,6 +891,15 @@ export class CameraController {
   /** what the autopilots measured as they flew (our universe): the approach's, the hold's */
   hubNote: { left?: number; closing?: number; ttg?: number; stand?: number; name?: string; off?: number; drift?: number } = {};
   hubCache: { at: number; v: HubInfo | null } | null = null;
+  /** the take-off's record for its assistant (lowthrust.ts climbAssist): its pad (body-fixed unit), the
+   *  path flown [downrange, height km], the peak dynamic pressure [Pa], the optimum path */
+  climbRec: {
+    id: string;
+    pad: Vec3;
+    trace: [number, number][];
+    qMax: number;
+    profile: { pts: [number, number][]; ts: number[]; turn: number };
+  } | null = null;
   /** the burn's trace for its graph: the node it flies (its time), the Δv left against the time from it */
   burnTrace: { key: string; pts: [number, number][] } | null = null;
 

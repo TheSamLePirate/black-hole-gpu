@@ -2000,7 +2000,9 @@ export class FlightHud {
     ctx.textBaseline = "alphabetic";
     ctx.lineWidth = 3 * dpr;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
-    const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), info, say].filter(Boolean);
+    // (the phase's own countdowns and figures — the climb's —, under the title)
+    const infos = cue ? [info] : (i.hub?.say ?? []);
+    const lines = [tf("{0} · ASSISTED", (AUTO_NAMES[i.auto] ?? i.auto).toUpperCase()), ...infos, say].filter(Boolean);
     // (the words kept inside the image, clear of the tapes on its sides: drawn inwards of an edge arrow)
     const lx = Math.min(Math.max(cx + (W / 2 - cx) * 0.22, W * 0.2), W * 0.8);
     const ly = Math.min(Math.max(cy + (H / 2 - cy) * 0.12 + R, H * 0.12), H * 0.72);
@@ -2015,7 +2017,7 @@ export class FlightHud {
       ctx.fillStyle =
         k === 0
           ? col
-          : l === info
+          : infos.includes(l)
             ? CYAN
             : cutting
               ? blinkOn()

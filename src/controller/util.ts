@@ -164,9 +164,16 @@ export function landingProfile(
 /** A duration [s], briefly. */
 export function fmtDur(s: number): string {
   if (!Number.isFinite(s)) return "—";
-  if (s < 60) return `${s.toFixed(0)} s`;
-  if (s < 3600) return `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+  if (s < 59.5) return `${s.toFixed(0)} s`;
+  // (rounded first: 17 min 59.6 s is 18 min 0 s, not 17 min 60 s)
+  if (s < 3599.5) {
+    const r = Math.round(s);
+    return `${Math.floor(r / 60)} min ${r % 60} s`;
+  }
+  if (s < 86400) {
+    const m = Math.round(s / 60);
+    return `${Math.floor(m / 60)} h ${m % 60} min`;
+  }
   return `${(s / 86400).toFixed(1)} d`;
 }
 
