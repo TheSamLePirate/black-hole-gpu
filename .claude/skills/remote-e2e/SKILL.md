@@ -36,6 +36,8 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
   notified when it ends); put the estimated duration in the task's title (e.g. "e2e landing on the
   mini (~4 min)"). A full e2e suite there: ~3.5 min.
 - The command is run by zsh in the copy: `VAR=1 cmd`, `&&` work as typed.
+- Each run also pulls the mini's own clone (`~/Documents/DEV/black-hole-gpu`) — the user wants it kept
+  current. A `WARNING … not pulled` line: tell the user (local changes there, or no network).
 - Results land in `remote-results/<id>/` (git-ignored): `log`, `meta.json`, `artifacts/` (every file the
   job wrote, at its path). **Never copy an artifact into the tree without looking at it** — a golden
   re-recorded there (`UPDATE=1`) is compared with the one here first, and said to the user.

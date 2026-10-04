@@ -27,6 +27,10 @@ bun scripts/remote.ts cancel <id>
   that writes a file — a golden, a shot — writes it in its own copy only), `node_modules` shared. So a
   job runs on the tree as it was when it started, whatever is edited here meanwhile.
 - **`bun install`** there only when `bun.lock` changed (`--frozen-lockfile`).
+- **That Mac's own clone** (`~/Documents/DEV/black-hole-gpu`, `KERR_REMOTE_CLONE`; empty: none) is brought
+  up to GitHub's `main` at each sync (fetch, then fast-forward only — a warning, never a failure, when it
+  cannot: local changes there, no network). The jobs do not run on it: the copy sent from here is newer
+  (what is not pushed, not committed).
 - **One browser job at a time** (`~/kerr-runner/gpu.lock`): two renderers on one GPU halve both, and the
   measures with them. The others wait in a queue (`status` shows it). `--cpu`: a job without a browser
   (unit tests, typecheck) runs beside them.

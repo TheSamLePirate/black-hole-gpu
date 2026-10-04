@@ -20,11 +20,15 @@
 // log, meta.json and artifacts/ (every file it wrote, at its path in the tree) land in remote-results/<id>/.
 // The machine: ssh's alias KERR_REMOTE (kerr-mini), the folder there KERR_REMOTE_DIR (kerr-runner, in its
 // home) — nothing of it in the repository.
+// Its own clone of the repository (KERR_REMOTE_CLONE, Documents/DEV/black-hole-gpu in its home; empty: none)
+// is pulled at each sync — fast-forward only, never in the way of the run: the jobs run on the copy sent
+// from here, not on it.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
 const DIR = process.env.KERR_REMOTE_DIR ?? "kerr-runner";
 const RESULTS = "remote-results";
+const CLONE = process.env.KERR_REMOTE_CLONE ?? "Documents/DEV/black-hole-gpu";
 const RUNNER = `~/.bun/bin/bun ${DIR}/base/scripts/remote-runner.ts`;
 
 const die = (msg: string): never => {
@@ -70,8 +74,22 @@ async function withSyncLock<T>(f: () => Promise<T>) {
   }
 }
 
+/** The remote Mac's clone brought up to GitHub's main — said when it cannot (local changes, no network). */
+async function pullClone() {
+  if (!CLONE) return;
+  const p = Bun.spawn(
+    ["ssh", "-o", "BatchMode=yes", HOST, `cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const out = (await new Response(p.stdout).text()).trim();
+  const err = (await new Response(p.stderr).text()).trim();
+  if ((await p.exited) === 0) console.error(`remote: ${HOST}:~/${CLONE} pulled — at ${out.split("\n").pop()}`);
+  else console.error(`remote: WARNING — ${HOST}:~/${CLONE} not pulled: ${(out || err).split("\n").slice(-2).join(" ")}`);
+}
+
 /** The tree as git sees it, ignored files out — the remote base made equal to it; then a run's copy. */
 async function sync(id?: string) {
+  const pulled = pullClone();
   const files = (await Bun.$`git ls-files -co --exclude-standard -z`.text()).split("\0").filter((f) => f && existsSync(f));
   const list = new TextEncoder().encode(files.join("\0"));
   const t0 = performance.now();
@@ -92,6 +110,7 @@ async function sync(id?: string) {
   }
   const sent = stats.match(/Total transferred file size: ([\d,.]+\s*\w*)/)?.[1] ?? "?";
   console.error(`remote: synced ${files.length} files to ${HOST} (${sent} sent, ${((performance.now() - t0) / 1000).toFixed(1)} s)`);
+  await pulled;
   if (id && (await runner(["prepare", id], { stdin: list })).code !== 0) die("prepare failed");
 }
 
