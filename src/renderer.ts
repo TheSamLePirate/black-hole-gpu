@@ -2312,6 +2312,8 @@ export class Renderer {
   taParams: [number, number, number] = [1 / 16, 0.05, 2.0];
   /** the near body's ground reprojected when the camera is carried with it (a switch for comparisons) */
   carryGround = true;
+  /** the near body's ground reprojected by its rigid motion while the camera moves over it (audit R4; a switch for comparisons) */
+  reprojectGround = true;
   /** (the last reprojection: the camera standing still on the near body's ground) */
   taStill: { still: boolean; mMetres: number; turn: number } | null = null;
   /** the history is dropped on the next frame (a new scene, a jump) */
@@ -2337,7 +2339,7 @@ export class Renderer {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
         }),
       );
-      const buf = d.createBuffer({ size: 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const buf = d.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
       // (bind k: reads history k, writes history 1 − k)
       const binds = [0, 1].map((k) =>
@@ -2415,6 +2417,19 @@ export class Renderer {
       still = this.carryGround && mMetres < 0.01 && turn < (0.25 * 2 * tanH) / t.height && step < 5; // (the centre's round-off: tenths of a millimetre)
       this.taStill = { still, mMetres, turn };
     }
+    // (rigid: the camera moving over the near body — its ground reprojected by the body's motion, R4)
+    const rigid = !!(near && p.near && p.near.index === near.index && !still && this.reprojectGround);
+    const turnRows: [Vec3, Vec3, Vec3] = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
+    if (rigid) {
+      const A = near!.axes,
+        B = p.near!.axes;
+      for (let j = 0; j < 3; j++)
+        for (let k = 0; k < 3; k++) turnRows[j]![k] = B[0]![j]! * A[0]![k]! + B[1]![j]! * A[1]![k]! + B[2]![j]! * A[2]![k]!;
+    }
     d.queue.writeBuffer(
       ta.buf,
       0,
@@ -2439,6 +2454,11 @@ export class Renderer {
         // (w: the ground's reach — negative: carried with it, the same pixel)
         ...move,
         near ? (still ? -30 : 30) * near.radius : 0,
+        // (the near body's centre now [M], its ground reprojected rigidly — moving over it, not carried: R4)
+        ...(rigid ? near!.centre.map((c) => c * near!.radius) : [0, 0, 0]),
+        rigid ? 1 : 0,
+        // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
+        ...turnRows.flatMap((r) => [...r, 0]),
       ]),
     );
     const pass = enc.beginComputePass(this.prof.pass("temporal"));

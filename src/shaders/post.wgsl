@@ -451,6 +451,10 @@ struct Temporal {
                   // pixel (1 / (n_max + 1): the history's weight capped at n_max), a pixel between rays' weight
   drift: vec4f,   // the camera's displacement since the previous frame [M], in these axes (the near body's frame);
                   // w: under this depth [M] a pixel shows the near body's ground — drawn afresh (0: none)
+  cc: vec4f,      // the near body's centre from the camera now [M]; w: its ground reprojected rigidly (1) — R4
+  m0: vec4f,      // its turn since the previous frame, as rows: a point's offset from the centre now → then
+  m1: vec4f,
+  m2: vec4f,
 };
 @group(0) @binding(21) var<uniform> TA: Temporal;
 
@@ -509,10 +513,35 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let ndc = vec2f(2.0 * (f32(gid.x) + 0.5) / f32(size.x) - 1.0, 1.0 - 2.0 * (f32(gid.y) + 0.5) / f32(size.y));
   let d0 = normalize(TA.fwd.xyz + ndc.x * tanH * asp * TA.right.xyz + ndc.y * tanH * TA.up.xyz);
   // (what the pixel shows at a finite depth — a planet's ground under the ship — seen from where the
-  // camera was: parallax; the far sky by the turn alone)
-  let depth = moments[gid.y * W + gid.x].y;
+  // camera was: parallax; the far sky by the turn alone. A pixel reconstructed between rays takes the
+  // nearest depth of the fresh samples around it — its own is a frame or more old (UE4's closest depth))
+  let isFresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
+  var depth = moments[gid.y * W + gid.x].y;
+  if (!isFresh) {
+    let stp = i32(max(block / 2u, 1u));
+    let hiD = vec2i(size) - 1;
+    var dn = 3e38;
+    for (var j = -1; j <= 1; j++) {
+      for (var i = -1; i <= 1; i++) {
+        let qp = clamp(vec2i(gid.xy) + vec2i(i, j) * stp, vec2i(0), hiD);
+        let qi = u32(qp.y) * W + u32(qp.x);
+        if (stamps[qi] >= R.u.w) { dn = min(dn, moments[qi].y); }
+      }
+    }
+    if (dn < 3e38) { depth = dn; }
+  }
   var d = d0;
-  if (depth < 1e8) { d = normalize(d0 * depth + TA.drift.xyz); }
+  if (depth < 1e8) {
+    let P = d0 * depth;
+    if (TA.cc.w > 0.5 && depth < abs(TA.drift.w)) {
+      // (the near body's ground: carried by the body's own motion — its centre's shift and its turn
+      // between the frames, a rigid move —, audit R4)
+      let rel = P - TA.cc.xyz;
+      d = normalize(TA.cc.xyz + TA.drift.xyz + vec3f(dot(rel, TA.m0.xyz), dot(rel, TA.m1.xyz), dot(rel, TA.m2.xyz)));
+    } else {
+      d = normalize(P + TA.drift.xyz);
+    }
+  }
   let zf = dot(d, TA.pFwd.xyz);
   var alpha = 1.0;
   var hist = cur.rgb;
@@ -520,7 +549,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   // (the near body's ground: drawn afresh — or, the camera carried rigidly with it, where it was: the same
   // pixel — its ridges' edge too: a pixel by the ground (3×3) is carried, or the sky and the ground took
   // it in turn, one clamped, the other not: a checkerboard along the skyline)
-  let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w);
+  let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w) && TA.cc.w < 0.5;
   var byGround = ground;
   if (TA.drift.w < 0.0 && !ground) {
     let H = size.y;
