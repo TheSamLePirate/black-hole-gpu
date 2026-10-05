@@ -64,6 +64,13 @@ terminal.
 
 ---
 
+## L'iPad
+
+Un **iPad** est branché en USB au mini : `scripts/ipad.ts` y pilote Safari (vérification, vol orbite →
+piste, réglages), lancé par `remote.ts run --cpu`. Tout est dans [IPAD-TESTS.md](IPAD-TESTS.md).
+
+---
+
 ## Recettes
 
 **Un fichier e2e** (~30 s à 1 min) :

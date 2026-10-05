@@ -47,6 +47,25 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
   re-recorded there (`UPDATE=1`) is compared with the one here first, and said to the user.
 - `cancel <id>` stops a job and what it started; `clean --keep 10` trims the runs there.
 
+## The iPad (plugged into the mini)
+
+The user's iPad Pro M1 is plugged into the mini by USB; `scripts/ipad.ts` drives its Safari over
+`safaridriver` — reference: `docs/IPAD-TESTS.md`. Always `--cpu` (the iPad renders, not the mini):
+
+```bash
+bun scripts/remote.ts run --cpu --name ipad-check -- bun scripts/ipad.ts check          # ~1 min
+bun scripts/remote.ts run --cpu --name ipad-flight -- bun scripts/ipad.ts flight --site Bourget --no-shots  # ~15 min
+bun scripts/remote.ts run --cpu --name ipad-settings -- bun scripts/ipad.ts settings
+```
+
+- It tests the **deployed site** (WebGPU needs HTTPS on the iPad), not the tree here: say which version
+  ran (`version.json` on the site) — a push mid-series changes the code under the next flights.
+- One iPad session at a time; the script waits for the last one to be let go (up to 2 min).
+- The iPad must stay unlocked (Auto-Lock: Never). `invalid session id` mid-flight: Safari dropped the
+  page (memory) — report it, try `--no-shots`; don't loop retries.
+- Screenshots: `remote-results/<id>/artifacts/remote-results/ipad-…/` — look at them, send the telling
+  ones to the user (SendUserFile).
+
 ## When it fails
 
 - `Chrome did not start` / a test stuck at its boot: the mini has likely lost the internet (Chrome
