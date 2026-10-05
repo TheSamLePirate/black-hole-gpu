@@ -298,7 +298,7 @@ export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
   private tracePipeline!: GPUComputePipeline; // realtime kernel
-  private qualityPipeline!: GPUComputePipeline; // + error-controlled integrator
+  private qualityPipeline: GPUComputePipeline | null = null; // + error-controlled integrator (compiled in the background)
   private traceLayout: GPUBindGroupLayout;
   private displayPipeline: GPURenderPipeline; // SDR canvas (preferred format)
   private sdrFormat: GPUTextureFormat;
@@ -487,6 +487,9 @@ export class Renderer {
 
   private traceSource: string;
   /** the tracer's general pipelines compiled (create() waits for it: nothing is drawn before) */
+  /** the pipelines the first image needs: the realtime kernel and the ship's probe (awaited at create) */
+  private tracerCore: Promise<void>;
+  /** all five pipelines of the tracer: the core's plus the LUT's and the quality kernel's */
   private tracerCompiled: Promise<void>;
   private live: Target | null = null;
   private offline: OfflineJob | null = null;
@@ -647,21 +650,23 @@ export class Renderer {
         ],
       });
     }
-    this.tracerCompiled = Promise.all([
-      mkLut(false),
-      mkLut(true),
-      mkTrace(true),
+    // (the first image needs only the realtime kernel and the ship's probe: awaited at create —
+    // the LUT and the quality kernel compile in the background; until they land a still view stays
+    // on the realtime path and the LUT pass is skipped — see frame() and dispatchTrace)
+    this.tracerCore = Promise.all([
       mkTrace(false),
       device.createComputePipelineAsync({
         layout,
         compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } },
       }),
-    ]).then(([lut, lutq, q, rt, env]) => {
+    ]).then(([rt, env]) => {
+      this.tracePipeline = rt;
+      this.envPipeline = env;
+    });
+    this.tracerCompiled = Promise.all([this.tracerCore, mkLut(false), mkLut(true), mkTrace(true)]).then(([, lut, lutq, q]) => {
       this.lutPipeline = lut;
       this.lutQPipeline = lutq;
       this.qualityPipeline = q;
-      this.tracePipeline = rt;
-      this.envPipeline = env;
     });
     this.traceModule = traceModule;
     this.tracePipeLayout = layout;
@@ -1032,10 +1037,16 @@ export class Renderer {
       console.error("WebGPU error:", m);
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
-    // (the pipelines compile in the GPU process: the tracer's awaited below, the others' by the first frame)
+    // (the pipelines compile in the GPU process: the realtime kernel and the probe awaited below,
+    // the LUT's and the quality kernel's in the background — a failure there only forfeits the
+    // still view's refinement and the LUT: told in the console, the realtime image unaffected)
     loading.stage("pipelines", t("Compiling the ray tracer — first image"), { weight: 4, indeterminate: true, eta: 3 });
+    void r.tracerCompiled.then(
+      () => {},
+      (e: Error) => console.error("The ray tracer's quality pipelines failed to compile:", e),
+    );
     // (its failure held as a value: told after the WGSL's own messages, which name the line)
-    const tracerFailure = r.tracerCompiled.then(
+    const tracerFailure = r.tracerCore.then(
       () => null,
       (e: Error) => e,
     );
@@ -1769,7 +1780,13 @@ export class Renderer {
     set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
     // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
-    this.lutOn = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut && o.block <= 2;
+    this.lutOn =
+      t === this.live &&
+      !o.probe &&
+      (this.featureKey & LUT_BLOCKERS) === 0 &&
+      s.farFieldLut &&
+      o.block <= 2 &&
+      this.lutPipeline !== null; // (its pass skipped while the background compile runs — no FLAG_LUT on a LUT never written)
     if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
@@ -2246,8 +2263,10 @@ export class Renderer {
     // (256 × 128 probe: everything after a reset, else one texel of each 2×2 or 4×4 block per run)
     if (this.envEvery > 1 && this.envTick++ % this.envEvery !== 0) return;
     const k = this.envStride;
+    const pipeline = this.traceVariant("env");
+    if (!pipeline) return; // (its epoch unmarked: the next frame tries again)
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
-    pass.setPipeline(this.traceVariant("env"));
+    pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
     pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
@@ -2295,8 +2314,10 @@ export class Renderer {
       probe: { cam: job.cam, hide: job.b.id, slice: job.slice },
     });
     const enc = this.device.createCommandEncoder();
+    const pipeline = this.traceVariant("env");
+    if (!pipeline) return; // (still compiling: the next slice's frame tries again)
     const pass = enc.beginComputePass(this.prof.pass("planet probe"));
-    pass.setPipeline(this.traceVariant("env"));
+    pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.probeBind);
     pass.dispatchWorkgroups(PROBE_W / 32, PROBE_H / 32);
     pass.end();
@@ -2328,8 +2349,8 @@ export class Renderer {
   private lutReadLayout!: GPUBindGroupLayout;
   private mainLayout!: GPUPipelineLayout;
   private lutLayout!: GPUPipelineLayout;
-  private lutPipeline!: GPUComputePipeline;
-  private lutQPipeline!: GPUComputePipeline;
+  private lutPipeline: GPUComputePipeline | null = null; // (background compile — null until it lands)
+  private lutQPipeline: GPUComputePipeline | null = null;
   /** this frame's params want the far field's LUT (set with them) */
   private lutOn = false;
   /** the LUT's epoch on the live target (refining a still view: computed once) */
@@ -2365,7 +2386,7 @@ export class Renderer {
    * The tracer for the scene's features: a pipeline with the unused ones compiled out (built in the
    * background the first time — ~10 s —, the general one drawing meanwhile).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline {
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
@@ -2412,18 +2433,26 @@ export class Renderer {
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
-    // (the far field's LUT first: every realtime frame, once an epoch while a still view refines)
+    // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
+    // skipped while its pipeline is still compiling in the background, the epoch left unmarked so
+    // the next frame tries again)
     if (this.lutOn && t.lut && (!quality || this.lutEpoch !== this.epoch)) {
-      this.lutEpoch = quality ? this.epoch : -1;
-      const lp = enc.beginComputePass(this.prof.pass("far-field LUT"));
-      lp.setPipeline(this.traceVariant(quality ? "lutq" : "lut"));
-      lp.setBindGroup(0, t.traceBind);
-      lp.setBindGroup(1, t.lut.write);
-      lp.dispatchWorkgroups(Math.ceil(t.lut.w / 8), Math.ceil(t.lut.h / 8));
-      lp.end();
+      const lut = this.traceVariant(quality ? "lutq" : "lut");
+      if (lut) {
+        this.lutEpoch = quality ? this.epoch : -1;
+        const lp = enc.beginComputePass(this.prof.pass("far-field LUT"));
+        lp.setPipeline(lut);
+        lp.setBindGroup(0, t.traceBind);
+        lp.setBindGroup(1, t.lut.write);
+        lp.dispatchWorkgroups(Math.ceil(t.lut.w / 8), Math.ceil(t.lut.h / 8));
+        lp.end();
+      }
     }
+    const pipeline = this.traceVariant(quality ? "q" : "rt");
+    // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then)
+    if (!pipeline) return;
     const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
-    pass.setPipeline(this.traceVariant(quality ? "q" : "rt"));
+    pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
@@ -3536,7 +3565,9 @@ export class Renderer {
     let phase: FrameStats["phase"];
     let rows = 0;
 
-    if (sceneChanged || timeChanged) {
+    // (the quality kernel still compiling in the background: a still view keeps the realtime path
+    // — sampleIndex stays at 0, the convergence starts when the kernel lands)
+    if (sceneChanged || timeChanged || (this.sampleIndex < s.targetSpp && !this.qualityPipeline)) {
       phase = "realtime";
       this.frameStamp++;
       this.updateValidFrom(time);
@@ -3822,6 +3853,8 @@ export class Renderer {
       offline: this.offlineStatus(job),
     });
     if (!working && job.shown && !displayChanged) return result();
+    // (the quality kernel still compiling: the job waits — the dialog polls offlineState.done)
+    if (!this.qualityPipeline) return result();
 
     const enc = this.device.createCommandEncoder();
     let rows = 0;
