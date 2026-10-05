@@ -2405,6 +2405,8 @@ export class Renderer {
       env: GPUComputePipeline | null;
       lut: GPUComputePipeline | null;
       lutq: GPUComputePipeline | null;
+      /** the quality cascade (q, lutq) started: a still view asked for it */
+      qStarted: boolean;
     }
   >();
 
@@ -2437,38 +2439,64 @@ export class Renderer {
     if (key === FEATURES_ALL) return general;
     let v = this.variants.get(key);
     if (!v) {
-      v = { rt: null, q: null, env: null, lut: null, lutq: null };
+      v = { rt: null, q: null, env: null, lut: null, lutq: null, qStarted: false };
       this.variants.set(key, v);
-      const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
-      const constants = {
-        HAS_RADIO: has(1),
-        HAS_POL: has(2),
-        HAS_JET: has(4),
-        HAS_SPOT: has(8),
-        HAS_VOL: has(16),
-        HAS_WH: has(32),
-        HAS_THICK: has(64),
-        HAS_BODIES: has(128),
-        HAS_RWY: has(256),
-        HAS_KERR: has(512),
-      };
-      const mk = (entryPoint: string, quality: boolean) =>
-        this.device.createComputePipelineAsync({
-          layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
-          compute: { module: this.traceModule, entryPoint, constants: { ...constants, QUALITY_PIPELINE: quality ? 1 : 0 } },
-        });
+      this.evictVariants();
       const slot = v;
-      void mk("main", false)
-        .then((p) => ((slot.rt = p), mk("env", false)))
-        .then((p) => ((slot.env = p), mk("main", true)))
-        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", false) : null))
-        .then((p) => ((slot.lut = p), (key & LUT_BLOCKERS) === 0 ? mk("lut", true) : null))
+      // (the realtime kernel first, then its probe and its LUT; the quality cascade only when a
+      // still view asks for it below — five specialised compiles of a 6 362-line kernel are tens
+      // of seconds of GPU process, not spent while the player flies — plan §2.2-F)
+      void this.mkVariant(key, "main", false)
+        .then((p) => ((slot.rt = p), this.mkVariant(key, "env", false)))
+        .then((p) => ((slot.env = p), (key & LUT_BLOCKERS) === 0 ? this.mkVariant(key, "lut", false) : null))
+        .then(
+          (p) => (slot.lut = p),
+          (e) => console.warn("Specialised tracer unavailable:", e),
+        );
+    }
+    if ((kind === "q" || kind === "lutq") && !v.qStarted) {
+      v.qStarted = true;
+      const slot = v;
+      void this.mkVariant(key, "main", true)
+        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? this.mkVariant(key, "lut", true) : null))
         .then(
           (p) => (slot.lutq = p),
           (e) => console.warn("Specialised tracer unavailable:", e),
         );
     }
     return v[kind] ?? general;
+  }
+
+  /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
+  private mkVariant(key: number, entryPoint: "main" | "env" | "lut", quality: boolean): Promise<GPUComputePipeline> {
+    const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
+    return this.device.createComputePipelineAsync({
+      layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
+      compute: {
+        module: this.traceModule,
+        entryPoint,
+        constants: {
+          HAS_RADIO: has(1),
+          HAS_POL: has(2),
+          HAS_JET: has(4),
+          HAS_SPOT: has(8),
+          HAS_VOL: has(16),
+          HAS_WH: has(32),
+          HAS_THICK: has(64),
+          HAS_BODIES: has(128),
+          HAS_RWY: has(256),
+          HAS_KERR: has(512),
+          QUALITY_PIPELINE: quality ? 1 : 0,
+        },
+      },
+    });
+  }
+
+  /** At most the current key plus the previous one (LRU): each key is up to five specialised
+   *  compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
+  private evictVariants() {
+    const keys = [...this.variants.keys()];
+    for (const k of keys.slice(0, Math.max(0, keys.length - 2))) this.variants.delete(k);
   }
 
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
