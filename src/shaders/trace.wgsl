@@ -3721,6 +3721,7 @@ fn unitHit(ro: vec3f, rd: vec3f) -> f32 {
 // thicker it is drawn (k: its scale heights × k, its densities / k — the same columns, a limb's glow k
 // times as tall). Set for the body being drawn (setAir): the functions below read it.
 struct AirSpec {
+  ab: f32,     // z scale into this body's atmospheric march space (Earth a/b; spheres 1)
   rm: f32,     // metres per radius
   top: f32,    // the air's top [m]
   hr: f32,     // scale heights [m]: the molecules, the aerosols
@@ -3744,6 +3745,7 @@ fn hasAir(k: u32) -> bool {
 fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   var a: AirSpec;
+  a.ab = squashOf(k);
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03)
   a.rm = EARTH_RM; a.top = 100e3; a.hr = 8000.0; a.hm = 1200.0;
   a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6); a.bo = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
@@ -3824,10 +3826,13 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
   return exp(-((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK());
 }
 
-// The eclipses: the share of the Sun's disk the Moon leaves uncovered, seen from p (the Earth's axes, its
-// radii; the Sun along Ls) — two disks' overlap (angles by their sines: f32 keeps them to 0.1″); the Sun's
+// The atmospheric march uses squashed axes; eclipse positions and angular radii use physical axes.
+// Undo the body's z scale before comparing them (the other worlds' spherical axes stay unchanged).
+fn eclipsePhysical(v: vec3f) -> vec3f { return vec3f(v.xy, v.z / AIR.ab); }
+// The eclipses: the share of the Sun's disk the Moon leaves uncovered, seen from p (physical Earth
+// axes, equatorial radii; the Sun along Ls) — two disks' overlap (angles by their sines: f32 keeps them to 0.1″); the Sun's
 // disk uniform (its limb's darkening left out). 1: none.
-fn sunSeen(p: vec3f, Ls: vec3f) -> f32 {
+fn sunSeenPhysical(p: vec3f, Ls: vec3f) -> f32 {
   if (P.eclipse.w <= 0.0) { return 1.0; }
   let m = P.eclipse.xyz - p;
   let dm = length(m);
@@ -3848,17 +3853,22 @@ fn sunSeen(p: vec3f, Ls: vec3f) -> f32 {
   }
   return clamp(1.0 - a / (PI * rs * rs), 0.0, 1.0);
 }
+fn sunSeen(p: vec3f, Ls: vec3f) -> f32 {
+  return sunSeenPhysical(eclipsePhysical(p), normalize(eclipsePhysical(Ls)));
+}
 // The sky's own light at p under an eclipse: the sunlit air around it — the Sun's share seen from p and
 // from four places 200 km about it (across the shadow), averaged: at the umbra's heart a thousandth or so
 // (the totality's deep blue, the horizon's glow beyond), the day's in the penumbra's outer parts.
 fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   if (P.eclipse.w <= 0.0) { return 1.0; }
-  let s0 = sunSeen(p, Ls);
+  let physicalP = eclipsePhysical(p);
+  let physicalLs = normalize(eclipsePhysical(Ls));
+  let s0 = sunSeenPhysical(physicalP, physicalLs);
   if (s0 >= 1.0) { return 1.0; }
-  let e1 = normalize(cross(Ls, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(Ls.z) > 0.9)));
-  let e2 = cross(Ls, e1);
+  let e1 = normalize(cross(physicalLs, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(physicalLs.z) > 0.9)));
+  let e2 = cross(physicalLs, e1);
   let L = 200000.0 / EARTH_RM;
-  let avg = 0.2 * (s0 + sunSeen(p + e1 * L, Ls) + sunSeen(p - e1 * L, Ls) + sunSeen(p + e2 * L, Ls) + sunSeen(p - e2 * L, Ls));
+  let avg = 0.2 * (s0 + sunSeenPhysical(physicalP + e1 * L, physicalLs) + sunSeenPhysical(physicalP - e1 * L, physicalLs) + sunSeenPhysical(physicalP + e2 * L, physicalLs) + sunSeenPhysical(physicalP - e2 * L, physicalLs));
   // (squared: that light scatters twice, from farther the deeper the shadow — the sky of totality a
   // thousandth of the day's, the inner corona hundreds of times brighter than it)
   return mix(0.0004, 1.0, avg * avg);
