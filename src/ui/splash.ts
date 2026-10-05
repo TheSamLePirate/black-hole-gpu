@@ -62,14 +62,26 @@ export class Splash {
     this.steps = root.querySelector(".ld-steps")!;
     this.skip = root.querySelector(".ld-skip")!;
     this.tipEl = root.querySelector(".ld-tip")!;
-    this.skip.onclick = () => this.lift();
+    this.skip.onclick = () => this.wantSkip();
     this.tip = Math.floor(Math.random() * TIPS.length);
     this.showTip();
     this.tipTimer = window.setInterval(() => this.showTip(), 5200);
-    // (a stuck start — a very slow compile — can be skipped once something is on screen)
-    setTimeout(() => (this.skip.hidden = !this.imageAt), 9000);
+    // (a stuck start — a very slow compile — can be skipped: without an image yet the click is
+    // remembered and acted on at the first image — never a black page over an unwired HUD (plan §2.1-D))
+    setTimeout(() => (this.skip.hidden = false), 9000);
     loading.on(() => this.renderSteps());
     requestAnimationFrame(this.tick);
+  }
+
+  /** a skip asked for before the first image: acted on when it arrives */
+  private skipWanted = false;
+
+  /** Skip asked for before the first image (a slow compile): acknowledged, done at the first image. */
+  private wantSkip() {
+    if (this.imageAt) return this.lift();
+    this.skipWanted = true;
+    this.skip.disabled = true;
+    this.skip.textContent = t("Entering as soon as the first image is ready…");
   }
 
   /** The first image is on screen. */
@@ -77,6 +89,8 @@ export class Splash {
     if (this.imageAt) return;
     this.imageAt = performance.now();
     loading.done("pipelines");
+    // (a skip asked for during the compile: in now, the remaining assets under the pill)
+    if (this.skipWanted) this.lift();
   }
 
   private tick = () => {
