@@ -74,7 +74,8 @@ export function iauRate(id: string, et: number): number | null {
     for (let i = 0; i < r.npm.length && 2 * i + 1 < ang.length; i++) {
       if (!r.npm[i]) continue;
       const A = (ang[2 * i]! + ang[2 * i + 1]! * T) * D;
-      w += r.npm[i]! * Math.cos(A) * ang[2 * i + 1]! * (D / 36525) * (180 / Math.PI);
+      // npm is in degrees; only the sine argument's derivative converts °/century to rad/day.
+      w += r.npm[i]! * Math.cos(A) * ang[2 * i + 1]! * (D / 36525);
     }
   return w;
 }

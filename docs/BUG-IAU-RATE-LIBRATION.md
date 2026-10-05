@@ -1,7 +1,7 @@
 # Bug report — `iauRate`: spurious 180/π factor inflates the libration term of the spin rate
 
 **File:** `src/system/orientation.ts`, line 75 (function `iauRate`)
-**Status:** confirmed — analytically and numerically
+**Status:** confirmed and fixed on `test-kimi` — independently reverified on 2026-10-05
 **Severity:** medium (wrong physics for the Moon's spin rate, up to ~9 % instantaneous error; no crash, silently wrong)
 **Introduced:** commit `a513d35` ("feat(solar): JPL's DE440 ephemerides, the IAU rotations, the time scales") — present since the function's birth
 
@@ -59,16 +59,17 @@ angle-rate units (°/century → rad/day conversion applied twice, once in the w
 
 ## 4. Numerical evidence
 
-Reference: central finite difference of `iauAngles(id, ·).W` (the ground truth by construction — it
-differentiates the same W model). Sweep: every 2 days over ~22 years, h = 60 s.
+Reference: central finite difference of `iauAngles(id, ·).W` (a consistency reference for the same
+W model, not an independent observational ephemeris). Reverified sweep: J2000 − 4018 days through
+J2000 + 4018 days, every 2 days (4019 epochs over ~22 years), h = 60 s.
 
 | Body | Mean rate | Max \|numeric\| | **Buggy** max / RMS error | **Corrected** max / RMS error |
 |---|---|---|---|---|
-| Moon | 13.1764 °/day | 13.196 °/day | **1.2130** / 0.6275 °/day | 6.0×10⁻⁵ / 1.1×10⁻⁵ °/day |
-| Mercury | 6.1385 °/day | 6.139 °/day | 0.0474 / 0.0289 °/day | 2.0×10⁻⁵ / 3.5×10⁻⁶ °/day |
+| Moon | 13.1764 °/day | 13.1966 °/day | **1.212812** / 0.633925 °/day | 2.57×10⁻⁸ / 5.74×10⁻⁹ °/day |
+| Mercury | 6.1385 °/day | 6.13905 °/day | 0.047404 / 0.028891 °/day | 8.60×10⁻⁹ / 1.78×10⁻⁹ °/day |
 
-Per-term check (Moon, one epoch): correct contribution −0.0146 °/day, buggy −0.8351 °/day → ratio
-**57.3**.
+For every nonzero periodic contribution, the buggy/corrected ratio is algebraically
+**180/π = 57.2957795…**.
 
 Two traps worth recording for whoever re-verifies this:
 
@@ -88,10 +89,12 @@ the branch taken by bodies with no parent or parent `"sun"`, plus the Moon (spec
 orbit-period branch). Among bodies with `npm` terms, only:
 
 - **Moon** — the dominant case (13 libration terms, amplitudes up to 3.561°);
-- **Mercury** — one small term (−0.48°), max error 0.047 °/day ≈ 0.8 % of its rate.
+- **Mercury** — five terms in `pck00010`: amplitudes +0.00993822°, −0.00104581°,
+  −0.00010280°, −0.00002364°, −0.00000532°; max rate error 0.0474 °/day ≈ 0.77 %.
 
-The Galilean moons and Saturn's moons also carry `npm` data, but their `spinVector` takes the
-orbit-period branch (they are parented), so this code path never touches them. Bodies without `npm`
+Other satellites (including Phobos, Deimos and the Galilean/Saturnian moons) also carry `npm`
+data. Their direct `iauRate` result was wrong, but their time-dependent `spinVector` takes the
+orbit-period branch, so its magnitude is unaffected. Bodies without nonzero `npm`
 (Sun, Venus, Mars, Jupiter…) are unaffected.
 
 **Consumers of the wrong magnitude** (`spinVector` returns pole-direction × rate; the direction is
@@ -100,9 +103,9 @@ unaffected):
 | Consumer | Use | Impact |
 |---|---|---|
 | `groundVelocity` (`our-surface.ts`) | `cross(w, r)` — surface ground speed | Moon equator: ~4.6 m/s true; error up to **±0.4 m/s** (9 %) |
-| `entry-env.ts` (relativistic frame) | Kerr spin parameter `w/Msec` | Moon's frame-dragging parameter off by up to ~9 % |
-| `spinRate` (`controller/util.ts`) | displayed spin magnitude | Moon's displayed rate wrong by up to ~1.2 °/day |
-| `our-predict` air drag | `cross(w, d)` in relative airspeed | Mercury only; thin atmosphere → negligible |
+| `entry-env.ts` (`ours` branch) | `w/Msec` converts scene angular speed to rad/s for `ground` and `carry` | Surface velocity/transport affected; no Kerr or frame-dragging parameter is changed |
+| `spinRate` (`controller/util.ts`) | `spinVector(body)` without a time | Unaffected: this uses the memoized mean rotation, not `iauRate` |
+| `our-predict` air drag | `cross(w, d)` only for bodies with `atmosphere` | Unaffected: neither Mercury nor the Moon has an atmosphere in `SOLAR_BODIES` |
 | `our-side` surface frames | pole/east directions only | none (magnitude unused) |
 
 ## 6. Why the existing tests missed it
@@ -114,7 +117,7 @@ in this codebase deserves a numerical-derivative comparison test.
 
 ## 7. Proposed solution
 
-### Fix (one line, `src/system/orientation.ts:75`)
+### Applied fix (`src/system/orientation.ts`)
 
 ```ts
 // before
@@ -123,30 +126,27 @@ w += r.npm[i]! * Math.cos(A) * ang[2 * i + 1]! * (D / 36525) * (180 / Math.PI);
 w += r.npm[i]! * Math.cos(A) * ang[2 * i + 1]! * (D / 36525);
 ```
 
-### Regression test (`tests/orientation.test.ts`, new)
+### Regression coverage (`tests/orientation.test.ts`, added)
 
-```ts
-import { test, expect } from "bun:test";
-import { iauAngles, iauRate } from "../src/system/orientation";
+The implemented tests cover:
 
-// The analytic rate must be the derivative of the angle model: compare against a central
-// finite difference of W. Sweep many epochs — a single instant can pass by coincidence
-// (the error is a sum of oscillating cos terms).
-test("iauRate is the numerical derivative of the IAU prime-meridian angle", () => {
-  const day = 86400, h = 60;
-  for (const id of ["moon", "mercury"]) {
-    for (let k = 0; k < 400; k++) {
-      const et = 1e9 + k * 86400000 * 2; // ~2 years of sweep, kept near J2000 for float noise
-      const num = (iauAngles(id, et + h)!.W - iauAngles(id, et - h)!.W) / (2 * h / day);
-      expect(Math.abs(iauRate(id, et)! - num)).toBeLessThan(1e-4); // °/day
-    }
-  }
-});
-```
+- Moon and Mercury: the numerical derivative of W at 4019 epochs each over ±11 years from
+  J2000, including negative epochs and J2000; central difference h = 60 s, tolerance 10⁻⁶ °/day.
+- Every other generated IAU model over ±10 years, including quadratic W terms. A fourth-order
+  stencil is used because the second-order 60 s stencil truncates Phobos' fast terms by about
+  4.8×10⁻⁴ °/day; tolerance 10⁻⁵ °/day accommodates floating-point cancellation.
+- Unknown body IDs remain null, and Venus retains its negative (retrograde) rate.
+- `spinVector(body, t)` for the Moon and Mercury around the simulation epoch (2067), compared
+  with the numerical W derivative converted from °/day to radians per scene time unit.
 
-Expected result after the fix: max deviation ~10⁻⁸ °/day near these epochs (bounded by 1e-4 with margin
-for finite-difference truncation + float cancellation). The current code fails the sweep by ~4 orders
-of magnitude at multiple epochs (max 1.21 °/day for the Moon).
+The proposed original test used `86400000 * 2` **seconds** per step, which is 2000 days,
+not two days; 400 samples spanned approximately 2185 years, not two. The implemented sweep uses
+`days * 86400` and bounds epochs around J2000 to avoid needlessly amplifying subtraction noise.
+
+Before correction, the new suite produced **4 failures and 1 pass**; after correction and using
+the appropriate numerical stencil for fast satellites, all five tests pass. This checks the
+closed-form derivative's consistency with the selected IAU model; it does not upgrade that model
+or account for the pole's separate RA/declination derivatives in the `spinVector` approximation.
 
 ## 8. Secondary observations (no action required)
 
@@ -158,5 +158,11 @@ of magnitude at multiple epochs (max 1.21 °/day for the Moon).
 
 ---
 
-*Verification method: no file was modified during the analysis; all checks were run as throwaway
-`bun -e` scripts against `iauAngles`/`IAU_ROTATION`/`IAU_ANGLES`.*
+Independent verification and correction performed on 2026-10-05. The numerical error table
+above was reproduced before/after the change using Bun scripts; regression tests were added.
+
+Primary references: [NAIF PCK orientation equations and time units](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/pck.html),
+[NAIF pck00010 coefficients, including Mercury's five periodic terms](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00010.tpc).
+Validation finale : `bun test` — **374 pass, 146 skip, 0 fail** ; suites ciblées orientation,
+éphémérides, surface et rentrée — **20 pass**. `bun run check` et `bun run build` passent
+(TypeScript, Biome et 9/9 shaders Metal ; avertissements Biome préexistants).
