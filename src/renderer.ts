@@ -1833,12 +1833,7 @@ export class Renderer {
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
     // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
     this.lutOn =
-      t === this.live &&
-      !o.probe &&
-      (this.featureKey & LUT_BLOCKERS) === 0 &&
-      s.farFieldLut &&
-      o.block <= 2 &&
-      this.lutPipeline !== null; // (its pass skipped while the background compile runs — no FLAG_LUT on a LUT never written)
+      t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut && o.block <= 2 && this.lutPipeline !== null; // (its pass skipped while the background compile runs — no FLAG_LUT on a LUT never written)
     if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);

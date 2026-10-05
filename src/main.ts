@@ -2146,9 +2146,7 @@ async function main() {
       // (block ≤ 4, not ≤ 2: on a fast GPU in a heavy scene the blocks can settle at 3–4 with the
       // GPU idle — the promotion would never fire; and a minute's cooldown after a demotion)
       idleAtCap =
-        capped && renderScale === 1 && block <= 4 && now - demotedAt > 60_000 && gpuEma > 0 && gpuEma < 0.5 * budget
-          ? idleAtCap + 1.5
-          : 0;
+        capped && renderScale === 1 && block <= 4 && now - demotedAt > 60_000 && gpuEma > 0 && gpuEma < 0.5 * budget ? idleAtCap + 1.5 : 0;
       if (idleAtCap >= 12) {
         const up = promoted(renderer.tier);
         idleAtCap = 0;
