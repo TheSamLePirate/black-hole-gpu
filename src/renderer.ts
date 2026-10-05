@@ -14,7 +14,7 @@ import {
 } from "./system/solar";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
-import { guessTier, type Tier } from "./tier";
+import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
@@ -1048,6 +1048,10 @@ export class Renderer {
         ].map((k) => [k, lim[k] ?? 0]),
       ),
     };
+    // (this adapter's tier measured an earlier session: start from it rather than the guess — the
+    // measure corrects the guess's known blindnesses, Apple's especially — plan §3.4)
+    const remembered = rememberedLevel(adapterId(r.adapter));
+    if (remembered !== null && remembered !== r.tier.level) r.tier = tierAt(remembered, `${r.tier.label} · remembered`);
     void lost.then((info) => {
       r.lost = info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (info.reason !== "destroyed") r.onLost?.(r.lost);

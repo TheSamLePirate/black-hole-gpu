@@ -57,7 +57,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { cappedRatio, promoted } from "./tier";
+import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -1793,6 +1793,8 @@ async function main() {
   const scaleMs = new Map<number, { ms: number; at: number }>();
   let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
   let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
+  let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
+  let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
   function resize() {
     // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
     // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
@@ -2141,7 +2143,12 @@ async function main() {
       // raised; the scale governor above brings it down again if the larger image does not fit)
       const capped =
         on && cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) < settings.pixelRatio - 1e-3;
-      idleAtCap = capped && renderScale === 1 && block <= 2 && gpuEma > 0 && gpuEma < 0.5 * budget ? idleAtCap + 1.5 : 0;
+      // (block ≤ 4, not ≤ 2: on a fast GPU in a heavy scene the blocks can settle at 3–4 with the
+      // GPU idle — the promotion would never fire; and a minute's cooldown after a demotion)
+      idleAtCap =
+        capped && renderScale === 1 && block <= 4 && now - demotedAt > 60_000 && gpuEma > 0 && gpuEma < 0.5 * budget
+          ? idleAtCap + 1.5
+          : 0;
       if (idleAtCap >= 12) {
         const up = promoted(renderer.tier);
         idleAtCap = 0;
@@ -2150,6 +2157,22 @@ async function main() {
           gpuEma = 0;
           scaleHeld = 0;
           resize();
+          if (renderer.adapter) rememberLevel(adapterId(renderer.adapter), up);
+        }
+      }
+      // (and the other way — the promotion's missing half (plan §3.4): over the budget and a half
+      // at the coarsest block and the smallest scale, for 12 s — one tier down, its cap lowered)
+      overAtFloor = on && renderScale === 0.5 && block >= 8 && gpuEma > 1.5 * budget ? overAtFloor + 1.5 : 0;
+      if (overAtFloor >= 12) {
+        const down = demoted(renderer.tier);
+        overAtFloor = 0;
+        if (down) {
+          renderer.tier = down;
+          gpuEma = 0;
+          scaleHeld = 0;
+          demotedAt = now;
+          resize();
+          if (renderer.adapter) rememberLevel(adapterId(renderer.adapter), down);
         }
       }
     }

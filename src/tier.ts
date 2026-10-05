@@ -12,6 +12,8 @@ export interface Tier {
   label: string;
 }
 
+import { store } from "./util/storage";
+
 const CAP = [0.5, 0.9, 2.2, 3.5, 6] as const;
 
 export function guessTier(adapter: GPUAdapter): Tier {
@@ -42,6 +44,41 @@ export function promoted(t: Tier): Tier | null {
   if (t.level >= 4) return null;
   const level = (t.level + 1) as Tier["level"];
   return { level, capMpx: CAP[level], label: `${t.label} · measured ↑` };
+}
+
+/**
+ * The tier one step down, the measure having shown the GPU over its budget at the coarsest block
+ * and the smallest scale — the dynamic resolution with nowhere left to retreat but the pixel
+ * budget itself (the promotion's missing half, plan §3.4). Null at the bottom.
+ */
+export function demoted(t: Tier): Tier | null {
+  if (t.level <= 0) return null;
+  const level = (t.level - 1) as Tier["level"];
+  return { level, capMpx: CAP[level], label: `${t.label} · measured ↓` };
+}
+
+/** A tier by its level (the pixel budget's table), with the given label. */
+export function tierAt(level: Tier["level"], label: string): Tier {
+  return { level, capMpx: CAP[level], label };
+}
+
+/** The adapter's identity, under which its measured tier is remembered between sessions. */
+export function adapterId(a: { vendor: string; architecture: string; device: string }): string {
+  return `${a.vendor}|${a.architecture}|${a.device}`;
+}
+
+const TIER_KEY = "kerr.tier";
+
+/** The tier level measured for this adapter in an earlier session, or null. */
+export function rememberedLevel(id: string): Tier["level"] | null {
+  const kept = store.getJSON<{ adapter?: string; level?: number } | null>(TIER_KEY, null);
+  if (!kept || kept.adapter !== id || typeof kept.level !== "number") return null;
+  return Math.max(0, Math.min(CAP.length - 1, Math.trunc(kept.level))) as Tier["level"];
+}
+
+/** Remembers the level measured for this adapter (each time the measure moves it). */
+export function rememberLevel(id: string, t: Tier) {
+  store.setJSON(TIER_KEY, { adapter: id, level: t.level });
 }
 
 /** The pixel ratio that keeps a CSS area of w × h within the tier's cap (and the settings' ratio). */
