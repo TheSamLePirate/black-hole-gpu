@@ -245,7 +245,17 @@ Plan : [`PLAN-ASSISTANT.md`](PLAN-ASSISTANT.md) (décisions du propriétaire, co
 
 **Leçons de la vague** : mesurer avant de coder évite des semaines (R9 : l'historique gagnait déjà autant en translation qu'en rotation) ; une mesure à rayons égaux doit vraiment changer la taille du rendu (le gouverneur P2 reposait sur un artefact) ; le vrai relief coûte surtout par les rayons rasants et la sonde de lumière — les mips du maximum les bornent ; sur Apple, la sonde de lumière se lit dans le temps du tracé ; une comparaison dans la même page qui coupe le relief laisse le vaisseau sur l'autre sol (comparer des builds).
 
+## M1 : PWA et cache (fait, 05/10/2026)
+
+| # | Étape | Statut | Commit |
+|---|---|---|---|
+| M1.1 | **Service Worker** `src/sw.ts` (les règles pures dans `src/pwa/rules.ts`, testées) : à l'install, la coquille (le `precache.json` du build : la page, son script et styles, les workers, le WASM) ; les actifs hachés **cache-first à jamais** ; la page, `version.json`, docs/ réseau-puis-cache ; **les tuiles de la Terre** (S3, GIBS) cache-first sous un **budget de 300 Mo** — l'index (URL, dernier usage, taille) en IndexedDB puisque la Cache API ne garde pas de dates, éviction LRU jusqu'à 90 % du budget ; les éléments de la station réseau-puis-cache | fait | `6140d81` |
+| M1.2 | **La page** `src/pwa.ts` : manifest et icônes déclarés, worker enregistré (pas sur le serveur de dev à rechargement à chaud, pas dans l'e2e sauf `sw=1`, pas sur `#bench` — un chargement à froid est ce qu'il mesure), toast quand un build attend, rechargement dessus, **coquille réchauffée en temps libre** (ce que la page a chargé avant que le worker ne la contrôle), `__bh.pwa` (ready, stats, clearTiles, update) ; `server.ts` et `scripts/build-pages.ts` servent `sw.js` (nommé par le build), le manifest, les icônes, `precache.json` ; `bun run build` complet | fait | `6140d81` |
+| M1.3 | **e2e** `tests/e2e/pwa.e2e.test.ts` (à vraies entrées, réseau du monde coupé comme partout sauf demandé) : le worker contrôle la page, la coquille (63 fichiers) et les tuiles mises en cache (224, ~9,8 Mo au cap Canaveral), le manifest servi ; **le réseau coupé : la page se recharge de son cache et la scène joue** (unitaires : les règles et l'éviction) | fait | `6140d81` |
+
 ## Journal
+
+- **M1** (05/10/2026) : la PWA — coquille cache-first, tuiles de la Terre sous budget (LRU, index en IndexedDB), hors ligne la dernière scène joue. Leçon : une assertion e2e qui cherche `index-<hash>.js` ne voit pas le chunk du serveur de dev (`chunk-<hash>.js`) — viser le script principal chargé par la page, pas un nom.
 
 - **G4** (04/10/2026) : O13 (la Terre d'orbite 4–6× moins chère), le gouverneur P2 annulé (artefact de mesure), R10 étape 1, déterminisme du vol rejoué (météo, tuiles), LOLA/MOLA, imagerie GIBS ; écartés à la mesure ou à l'examen : R9, R10 étape 2, PBR du Ranger.
 
