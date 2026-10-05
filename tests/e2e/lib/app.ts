@@ -94,9 +94,14 @@ export class App {
   /** the Service Worker wanted (`sw=1`: the page registers it despite the e2e flag) */
   sw = false;
 
+  /** the last load's navigation → splash-lifted wall time [ms] */
+  lastLoadMs = 0;
+
   async load(hash: string) {
+    const t0 = performance.now();
     await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}` });
     await this.waitFor(`typeof __bh !== "undefined" && !!__bh.renderer && !document.querySelector("#loading:not(.done)")`, 180_000);
+    this.lastLoadMs = performance.now() - t0;
     await Bun.sleep(1500);
   }
 
