@@ -5,7 +5,7 @@
 //   - the solar system's maps at their texture arrays' sizes (2048 × 1024, 1024 × 512)
 //     (assets/planets/ktx2/<name>.ktx2), their mean linear albedos in means.json (the page scaled
 //     each body's albedo by it; measured from the JPEG before).
-// The finer (HD) maps stay JPEG: 8K in UASTC would add hundreds of MB to the repository.
+// The finer (HD) maps stay JPEG, except Jupiter's dedicated 8K build (scripts/build-jupiter.ts).
 //
 //   bun scripts/build-ktx2.ts [earth|planets]      (needs basisu — brew install basis_universal — and
 //                                                   python3 with Pillow for the means)

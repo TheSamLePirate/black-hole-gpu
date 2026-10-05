@@ -1,6 +1,6 @@
 // The solar system's worlds up close (assets/planets-hd): the finer map of the body near the camera,
 // streamed in as it nears — its colour (4096 or 8192 wide) and its relief, packed on the GPU:
-//   color (rgba8): the map (sRGB), mip-mapped in linear light
+//   color (rgba8, or Jupiter's native BC7/ASTC): the map (sRGB), mip-mapped in linear light
 //   relief: the Moon's and Mars's heights from their laser altimeters (LOLA, MOLA: scripts/build-dem.py)
 //   — rg16float [m]: their mean and, down the mips, their highest (the marches' local bound); the
 //   tracer's ground and its normals —; elsewhere (rgba8) the normals'
@@ -18,6 +18,10 @@ import marsDem from "../../assets/planets-hd/mars-dem.bin";
 import mercuryColor from "../../assets/planets-hd/mercury-color.jpg";
 import mercuryHeight from "../../assets/planets-hd/mercury-height.jpg";
 import jupiterColor from "../../assets/planets-hd/jupiter-color.jpg";
+import jupiterKtx from "../../assets/planets-hd/jupiter-color.ktx2";
+import jupiterMetadata from "../../assets/planets-hd/jupiter.json";
+import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
+import { gpuDiagnostics } from "../gpu-diagnostics";
 import saturnColor from "../../assets/planets-hd/saturn-color.jpg";
 import ioColor from "../../assets/planets-hd/io-color.jpg";
 import ioNormal from "../../assets/planets-hd/io-normal.jpg";
@@ -159,13 +163,68 @@ export function placeholderHd(device: GPUDevice): HdMap {
 }
 
 async function bitmap(url: string) {
-  const blob = await (await fetch(url)).blob();
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HD map: HTTP ${response.status} (${url})`);
+  const blob = await response.blob();
   return createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+}
+
+/** Upload prebuilt mips directly: no full-size RGBA staging image or runtime BC encoder. */
+async function jupiterCompressed(device: GPUDevice): Promise<HdMap | null> {
+  const target = ktxTarget(device);
+  if (target === "rgba" || device.limits.maxTextureDimension2D < jupiterMetadata.width) return null;
+  let color: GPUTexture | null = null;
+  let relief: GPUTexture | null = null;
+  try {
+    const data = await ktxLevels(jupiterKtx, target);
+    if (
+      data.width !== jupiterMetadata.width ||
+      data.height !== jupiterMetadata.height ||
+      data.levels.length !== levels(data.width, data.height)
+    )
+      throw new Error("Jupiter KTX2 dimensions or mip chain do not match metadata");
+    device.pushErrorScope("out-of-memory");
+    device.pushErrorScope("validation");
+    let validation: Promise<GPUError | null>;
+    let allocation: Promise<GPUError | null>;
+    try {
+      color = device.createTexture({
+        size: [data.width, data.height],
+        format: ktxFormat(target),
+        mipLevelCount: data.levels.length,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      writeLevels(device, color, data.levels, data.width, data.height, target);
+      relief = device.createTexture({
+        size: [1, 1],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      device.queue.writeTexture({ texture: relief }, new Uint8Array([128, 128, 255, 255]), {}, [1, 1]);
+    } finally {
+      validation = device.popErrorScope();
+      allocation = device.popErrorScope();
+    }
+    const errors = await Promise.all([validation, allocation]);
+    const error = errors.find((e) => e !== null);
+    if (error) throw new Error(`Jupiter compressed upload: ${error.message}`);
+    return { name: "jupiter", color, relief, hasRelief: false, dem: null, mean: jupiterMetadata.mean };
+  } catch (error) {
+    color?.destroy();
+    relief?.destroy();
+    gpuDiagnostics.record("jupiter-hd-fallback", error);
+    console.warn("Jupiter compressed map unavailable, using the 4K JPEG:", error);
+    return null;
+  }
 }
 
 export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap | null> {
   const set = HD_SETS[name];
   if (!set) return null;
+  if (name === "jupiter") {
+    const compressed = await jupiterCompressed(device);
+    if (compressed) return compressed;
+  }
   const mod = device.createShaderModule({ code: PACK, label: "hd pack" });
   const samp = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat" });
   const pipes = new Map<string, GPURenderPipeline>();
@@ -317,6 +376,6 @@ export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap
   return { name, color: c, relief: r, hasRelief, dem, mean: Math.max(sum / wsum, 1e-3) };
 }
 
-/** The colour map's sRGB view's format (its texture rgba8 or BC7). */
+/** The colour map's sRGB view's format (RGBA8, BC7 or native ASTC). */
 export const hdColorFormat = (t: GPUTexture): GPUTextureFormat =>
-  t.format === "bc7-rgba-unorm" ? "bc7-rgba-unorm-srgb" : "rgba8unorm-srgb";
+  t.format.endsWith("-srgb") ? t.format : t.format === "bc7-rgba-unorm" ? "bc7-rgba-unorm-srgb" : "rgba8unorm-srgb";

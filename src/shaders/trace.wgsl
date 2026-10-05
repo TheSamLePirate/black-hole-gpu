@@ -985,7 +985,7 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     var gain = 1.0;
     if (i32(m) == i32(P.hd.x)) {
       // (its finer map, the camera near: its level from the footprint, its brightness the coarse map's)
-      t = textureSampleLevel(hdColor, bgSamp, uv, max(mapLod() + log2(P.hd.w / 2048.0), 0.0)).rgb;
+      t = textureSampleLevel(hdColor, bgSamp, uv, hdMapLod(P.hd.w)).rgb;
       gain = P.hd.y;
     } else if (m < MAPS_HI) {
       t = textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb;
@@ -1017,10 +1017,13 @@ fn lightSource(k: u32) -> vec2f {
 // Saturn's map and rings: mip level from the pixel's footprint (set by the caller before shading)
 var<private> mapLodV: f32 = 0.0;
 var<private> ringLodV: f32 = 0.0;
-fn mapLod() -> f32 { return mapLodV; }
+fn mapLod() -> f32 { return clamp(mapLodV, 0.0, 11.0); }
+// Retain sub-texel footprints until the actual texture width is known. Clamping the 2K level
+// first forced a 6K map to level >= 1.55, throwing away its close-up detail.
+fn hdMapLod(width: f32) -> f32 { return max(mapLodV + log2(width / 2048.0), 0.0); }
 // fpAngle: the pixel's footprint on the sphere (radians of it); fpRing: across the rings (its radii)
 fn setMapLod(fpAngle: f32, fpRing: f32, k: u32) {
-  mapLodV = clamp(log2(max(fpAngle * 2048.0 / TAU, 1e-6)), 0.0, 11.0);
+  mapLodV = log2(max(fpAngle * 2048.0 / TAU, 1e-6));
   let w = max(bodies[BV * k + 3u].w - bodies[BV * k + 2u].w, 1e-3);
   ringLodV = clamp(log2(max(fpRing * 2048.0 / w, 1e-6)), 0.0, 11.0);
 }
@@ -1311,7 +1314,7 @@ fn hdNormal(k: u32, q: vec3f) -> vec3f {
   if (!isHd(k)) { return q; }
   if (P.hd2.x > 0.5) { return demNormal(q); }
   let uv = vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
-  let rl = textureSampleLevel(hdRelief, bgSamp, uv, max(mapLod() + log2(f32(textureDimensions(hdRelief).x) / 2048.0), 0.0));
+  let rl = textureSampleLevel(hdRelief, bgSamp, uv, hdMapLod(f32(textureDimensions(hdRelief).x)));
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
   let north = cross(q, east);
