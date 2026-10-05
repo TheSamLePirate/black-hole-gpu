@@ -4,13 +4,14 @@
     "@biomejs/biome": "^2.5.15",
     "@types/bun": "latest",
     "@webgpu/types": "^0.1.74",
+    "playwright": "^1.63.0",
     "typescript": "^5"
   },
   "private": true,
   "scripts": {
     "dev": "bun --hot server.ts",
     "start": "bun server.ts",
-    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser && bun build ./src/system/ktx-worker.ts --outfile dist/ktx-worker.js --minify --target browser && cp vendor/basis/basis_transcoder.wasm dist/basis_transcoder.wasm",
+    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser && bun build ./src/system/ktx-worker.ts --outfile dist/ktx-worker.js --minify --target browser && bun build ./src/sw.ts --outfile dist/sw.js --minify --target browser --define __BUILD__=\"\\\"local\\\"\" && cp vendor/basis/basis_transcoder.wasm dist/basis_transcoder.wasm && cp pwa/manifest.webmanifest dist/ && mkdir -p dist/icons && cp pwa/icons/* dist/icons/",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:pages": "bun scripts/build-pages.ts",

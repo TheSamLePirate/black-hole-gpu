@@ -71,7 +71,7 @@ export class App {
   ) {}
 
   /** A fresh page on the app (a scene by #scene=…, or a hash), loaded and settled. */
-  static async boot(o: { hash?: string; width?: number; height?: number; lang?: "fr" | "en"; tiles?: boolean } = {}) {
+  static async boot(o: { hash?: string; width?: number; height?: number; lang?: "fr" | "en"; tiles?: boolean; sw?: boolean } = {}) {
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);
@@ -86,12 +86,16 @@ export class App {
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); } catch {}`,
     });
+    app.sw = !!o.sw;
     await app.load(o.hash ?? "");
     return app;
   }
 
+  /** the Service Worker wanted (`sw=1`: the page registers it despite the e2e flag) */
+  sw = false;
+
   async load(hash: string) {
-    await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${hash ? `#${hash}` : ""}` });
+    await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}` });
     await this.waitFor(`typeof __bh !== "undefined" && !!__bh.renderer && !document.querySelector("#loading:not(.done)")`, 180_000);
     await Bun.sleep(1500);
   }

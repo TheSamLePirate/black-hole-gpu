@@ -31,6 +31,26 @@ const server = Bun.serve({
     },
     // the build's version (the benchmark's report names it); the pages build writes the same file
     "/version.json": async () => Response.json({ sha: (await Bun.$`git rev-parse --short HEAD`.nothrow().text()).trim() || "dev" }),
+    // the Service Worker (src/sw.ts), the manifest and the icons (pwa/), the precache list (none in dev)
+    "/sw.js": async () => {
+      const r = await Bun.build({
+        entrypoints: ["./src/sw.ts"],
+        target: "browser",
+        minify: !dev,
+        define: { __BUILD__: JSON.stringify(dev ? `dev-${Date.now()}` : "local") },
+      });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), {
+        headers: { "content-type": "text/javascript", "service-worker-allowed": "/", "cache-control": "no-cache" },
+      });
+    },
+    "/manifest.webmanifest": () =>
+      new Response(Bun.file("pwa/manifest.webmanifest"), { headers: { "content-type": "application/manifest+json" } }),
+    "/icons/:file": (req) => {
+      const f = req.params.file.replace(/[^\w.-]/g, "");
+      return new Response(Bun.file(`pwa/icons/${f}`));
+    },
+    "/precache.json": () => Response.json([]),
     "/basis_transcoder.wasm": () =>
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).

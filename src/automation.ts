@@ -29,6 +29,7 @@ import { bodyLook, type Body } from "./targeting";
 import { setDateNow } from "./util/now";
 import { advanceFrameClock } from "./frameclock";
 import type { FlightPhase } from "./game/phase";
+import type { Pwa } from "./pwa";
 
 export interface BhContext {
   settings: Settings;
@@ -60,6 +61,8 @@ export interface BhContext {
   forceScale(x: number | null): void;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
+  /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
+  pwa: Pwa;
 }
 
 export function installBh(c: BhContext) {
@@ -309,6 +312,8 @@ export function installBh(c: BhContext) {
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
       spectate: (on: boolean) => c.spectate(on),
+      /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
+      pwa: c.pwa,
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
       setDate: setDateNow,
       /** the ground's height above a body's mean radius at latitude, east longitude [°] — the relief the

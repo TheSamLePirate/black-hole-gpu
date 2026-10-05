@@ -8,6 +8,7 @@ import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
+import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
 import { TitleScreen } from "./ui/title";
@@ -318,6 +319,8 @@ async function main() {
     connectController: HidPads.supported ? () => connectController() : undefined,
     shareUrl: () => tools.shareLink(),
   });
+  // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
+  const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
   const audio = new SoundDirector(settings);
   const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
   panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));
@@ -1963,6 +1966,7 @@ async function main() {
       setSpectator(on);
       return camera.spectating;
     },
+    pwa,
     forceScale: (x: number | null) => {
       forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
       if (forcedScale === null) renderScale = 1;

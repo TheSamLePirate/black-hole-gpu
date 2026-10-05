@@ -19,5 +19,15 @@ await Bun.write(
   "_site/version.json",
   JSON.stringify({ sha: (await $`git rev-parse --short HEAD`.text()).trim(), date: new Date().toISOString() }),
 );
+// the PWA (PLAN-MONDE M1): the Service Worker named by the build, the manifest and icons, the shell's
+// core files to precache (the page, its script and styles, the workers, the WASM — not the textures)
+const sha = (await $`git rev-parse --short HEAD`.text()).trim();
+await $`bun build ./src/sw.ts --outfile _site/sw.js --minify --target browser --define __BUILD__=${JSON.stringify(sha)}`;
+await $`cp pwa/manifest.webmanifest _site/ && mkdir -p _site/icons && cp pwa/icons/* _site/icons/`;
+const core = (await Array.fromAsync(new Bun.Glob("*").scan({ cwd: "_site", onlyFiles: true })))
+  .filter((f) => /\.(js|css|wasm|html|json)$/.test(f) && f !== "sw.js" && f !== "precache.json")
+  .map((f) => (f === "index.html" ? "./" : f))
+  .sort();
+await Bun.write("_site/precache.json", JSON.stringify(core));
 await $`touch _site/.nojekyll`;
 console.log("site ready in _site/");
