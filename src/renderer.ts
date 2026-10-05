@@ -323,29 +323,31 @@ export class Renderer {
   private tracePipeline!: GPUComputePipeline; // realtime kernel
   private qualityPipeline: GPUComputePipeline | null = null; // + error-controlled integrator (compiled in the background)
   private traceLayout: GPUBindGroupLayout;
-  private displayPipeline: GPURenderPipeline; // SDR canvas (preferred format)
+  private displayPipeline!: GPURenderPipeline; // SDR canvas (preferred format) — set from the async compile (auxCompiled)
   private sdrFormat: GPUTextureFormat;
   private hdrActive = false;
-  private export8Pipeline: GPURenderPipeline;
-  private export16Pipeline: GPURenderPipeline;
-  private postResolve: GPUComputePipeline;
-  private postGatherH: GPUComputePipeline;
-  private postDown: GPUComputePipeline;
-  private postDownShip: GPUComputePipeline;
-  private postDof: GPUComputePipeline;
-  private postFlare: GPUComputePipeline;
+  private export8Pipeline!: GPURenderPipeline;
+  private export16Pipeline!: GPURenderPipeline;
+  private postResolve!: GPUComputePipeline;
+  private postGatherH!: GPUComputePipeline;
+  private postDown!: GPUComputePipeline;
+  private postDownShip!: GPUComputePipeline;
+  private postDof!: GPUComputePipeline;
+  private postFlare!: GPUComputePipeline;
   /** (bound where a target has no depth-of-field image yet) */
   private dofDummy: GPUTexture;
-  private postUp: GPUComputePipeline;
-  private postPolGrid: GPUComputePipeline;
-  private postBeamH: GPUComputePipeline;
-  private postAtrous: GPUComputePipeline;
-  private postTemporal: GPUComputePipeline;
-  private postMotion: GPUComputePipeline;
-  private postStars: GPUComputePipeline;
+  private postUp!: GPUComputePipeline;
+  private postPolGrid!: GPUComputePipeline;
+  private postBeamH!: GPUComputePipeline;
+  private postAtrous!: GPUComputePipeline;
+  private postTemporal!: GPUComputePipeline;
+  private postMotion!: GPUComputePipeline;
+  private postStars!: GPUComputePipeline;
   private noise3d!: GPUTexture;
   private noiseSampler!: GPUSampler;
-  private postBeamV: GPUComputePipeline;
+  private postBeamV!: GPUComputePipeline;
+  /** the display's and the post chain's pipelines (async compiles, awaited with the tracer's core) */
+  private auxCompiled: Promise<void>;
   private params = new ArrayBuffer(PARAM_VEC4S * 16);
   /** The spaceship carrying the camera, and the light probe that lights it. */
   readonly ship: ShipRenderer;
@@ -709,32 +711,40 @@ export class Renderer {
     this.prof.enabled = this.prof.supported;
     this.ship.prof = this.prof;
     const mkDisplay = (fmt: GPUTextureFormat) =>
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         layout: "auto",
         vertex: { module: displayModule, entryPoint: "vs" },
         fragment: { module: displayModule, entryPoint: "fs", targets: [{ format: fmt }] },
         primitive: { topology: "triangle-list" },
       });
-    this.displayPipeline = mkDisplay(format);
-    this.export8Pipeline = mkDisplay("rgba8unorm");
-    this.export16Pipeline = mkDisplay("rgba16float");
-    const mkPost = (entryPoint: string) => device.createComputePipeline({ layout: "auto", compute: { module: postModule, entryPoint } });
-    this.postResolve = mkPost("resolve");
-    this.postGatherH = mkPost("gatherH");
-    this.postDown = mkPost("down");
-    this.postDownShip = mkPost("downShip");
-    this.postDof = mkPost("dof");
-    this.postFlare = mkPost("flareMeter");
+    const mkPost = (entryPoint: string) =>
+      device.createComputePipelineAsync({ layout: "auto", compute: { module: postModule, entryPoint } });
+    // (compiled asynchronously, all at once, and awaited with the tracer's core at create(): eighteen
+    // sync round-trips to the GPU process no longer stall the constructor, and their compiles overlap
+    // the tracer's — plan §2.2-H. The vessels' renderers stay synchronous: their draw is already
+    // gated on their models' download (ready + onLoaded), seconds behind these pipelines, so an
+    // async conversion would buy nothing at the first image and risk a hitch on the first flight)
     this.dofDummy = device.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
-    this.postUp = mkPost("up");
-    this.postPolGrid = mkPost("polgrid");
-    this.postBeamH = mkPost("beamH");
-    this.postAtrous = mkPost("atrous");
-    this.postTemporal = mkPost("temporal");
-    this.postMotion = mkPost("motionBlur");
-    this.postStars = mkPost("stars");
-    this.postBeamV = mkPost("beamV");
-    this.meterPipeline = mkPost("meter");
+    this.auxCompiled = Promise.all([
+      mkDisplay(format).then((p) => (this.displayPipeline = p)),
+      mkDisplay("rgba8unorm").then((p) => (this.export8Pipeline = p)),
+      mkDisplay("rgba16float").then((p) => (this.export16Pipeline = p)),
+      mkPost("resolve").then((p) => (this.postResolve = p)),
+      mkPost("gatherH").then((p) => (this.postGatherH = p)),
+      mkPost("down").then((p) => (this.postDown = p)),
+      mkPost("downShip").then((p) => (this.postDownShip = p)),
+      mkPost("dof").then((p) => (this.postDof = p)),
+      mkPost("flareMeter").then((p) => (this.postFlare = p)),
+      mkPost("up").then((p) => (this.postUp = p)),
+      mkPost("polgrid").then((p) => (this.postPolGrid = p)),
+      mkPost("beamH").then((p) => (this.postBeamH = p)),
+      mkPost("atrous").then((p) => (this.postAtrous = p)),
+      mkPost("temporal").then((p) => (this.postTemporal = p)),
+      mkPost("motionBlur").then((p) => (this.postMotion = p)),
+      mkPost("stars").then((p) => (this.postStars = p)),
+      mkPost("beamV").then((p) => (this.postBeamV = p)),
+      mkPost("meter").then((p) => (this.meterPipeline = p)),
+    ]).then(() => {});
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 
@@ -1071,8 +1081,9 @@ export class Renderer {
       () => {},
       (e: Error) => console.error("The ray tracer's quality pipelines failed to compile:", e),
     );
-    // (its failure held as a value: told after the WGSL's own messages, which name the line)
-    const tracerFailure = r.tracerCore.then(
+    // (its failure held as a value: told after the WGSL's own messages, which name the line; the
+    // display's and the post chain's async compiles are part of what the first frame needs)
+    const tracerFailure = Promise.all([r.tracerCore, r.auxCompiled]).then(
       () => null,
       (e: Error) => e,
     );
