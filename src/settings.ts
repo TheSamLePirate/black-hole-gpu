@@ -296,7 +296,7 @@ export interface Settings {
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
-  autoWarp: boolean; // a manoeuvre's execution sets the warp (off: the pilot's, never above the manoeuvre's)
+  autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   realtimeEps: number;
   realtimeSteps: number;

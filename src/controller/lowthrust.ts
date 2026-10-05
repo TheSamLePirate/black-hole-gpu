@@ -273,12 +273,8 @@ function transferWant(
   const a = this.thrustMax();
   if (!(a > 0)) return say(t("Transfer stopped: the tank is empty"));
   // (it flies itself at the highest warp the rails allow)
-  if (T.warp === undefined) {
-    T.warp = s.timeSpeed;
-    // (the wish is the rails' ceiling; this frame already runs at what they allow now)
-    this.warpWant = 1e5;
-    s.timeSpeed = this.warpSet = Math.min(1e5, this.railsLimit(cam).lim);
-  }
+  if (T.warp === undefined) T.warp = s.timeSpeed;
+  this.setHubWarp(Math.min(1e5, this.railsLimit(cam).lim));
   const r = cam.r;
   const b = cam.beta;
   // tangential direction (local), in the sense of the motion
@@ -585,7 +581,7 @@ function ourWant(
     name: BODY_NAMES[tgt] ?? tgt,
   };
   if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
-  s.timeSpeed = Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5);
+  this.setHubWarp(Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5));
   let want = lin(Tg.vel, 1, dh, left >= 0 ? vClose : -Math.min(vmax, Math.sqrt(2 * a * -left)));
   // (never through a planet: near the body of the sphere of influence — not the target — the part
   // of the wanted motion that dives towards it is taken off: the ship climbs, spiralling out)

@@ -205,6 +205,8 @@ export interface FlightHudActions {
   spectatorFollow(on: boolean): void;
   /** the autopilots assisted (the pilot flies, the director shows their commands) or flying */
   assist(): void;
+  /** Time warp managed by the hub or by the user below its ceiling. */
+  hubWarp(): void;
   /** the spectator away to a body (free, around it) */
   spectatorGoTo(b: Target): void;
   /** fly another craft of the fleet */
@@ -374,6 +376,7 @@ export class FlightHud {
   private hubHead = h("div", "fl-title");
   private hubTitle = h("span", "fl-hub-t");
   private hubMode = h("button", "fl-hub-mode") as HTMLButtonElement;
+  private hubWarp = h("button", "fl-hub-warp") as HTMLButtonElement;
   private hubBody = h("div", "fl-hub-body");
   /** the assistant's graph under the card (ui/hud/graph.ts): folded with its title */
   private hubGraph = h("div", "fl-hub-graph");
@@ -474,7 +477,7 @@ export class FlightHud {
       return;
     }
     const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-    const sig = JSON.stringify(H) + i.assist;
+    const sig = JSON.stringify(H) + i.assist + this.s.autoWarp;
     if (sig === this.hubSig && !C.hidden) return;
     this.hubSig = sig;
     C.hidden = false;
@@ -491,6 +494,12 @@ export class FlightHud {
     M.hidden = i.auto === "none";
     if (M.textContent !== mode) M.textContent = mode;
     if (M.title !== tip) M.title = tip;
+    this.hubWarp.textContent = this.s.autoWarp ? t("WARP: HUB") : t("WARP: YOU");
+    this.hubWarp.title = this.s.autoWarp
+      ? t("Warp managed by the hub — click to control it below the hub's limit")
+      : t("Warp managed by you — never above the hub's limit (, and .)");
+    this.hubWarp.setAttribute("aria-pressed", String(this.s.autoWarp));
+    this.hubWarp.classList.toggle("manual", !this.s.autoWarp);
     this.hubBody.innerHTML =
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
@@ -935,7 +944,12 @@ export class FlightHud {
     };
     this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv, this.hubGraphFix);
     this.hubMode.dataset.testid = "hub-assist";
-    this.hubHead.append(this.hubTitle, this.hubMode);
+    this.hubWarp.dataset.testid = "hub-warp";
+    this.hubWarp.type = "button";
+    this.hubWarp.onclick = () => act.hubWarp();
+    const hubControls = h("span", "fl-hub-controls");
+    hubControls.append(this.hubMode, this.hubWarp);
+    this.hubHead.append(this.hubTitle, hubControls);
     this.hubCard.append(this.hubHead, this.hubBody, this.hubGraph);
     this.cockpit.append(this.hubCard);
     const ringBtn = (id: string, label: string, title: string, fn: () => void, deg: number, svgBody: string, col?: string) => {

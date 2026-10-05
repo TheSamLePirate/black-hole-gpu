@@ -696,6 +696,10 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       this.onPilotMessage?.(why);
     }
   }
+  // Capture an explicit user change before the rails or guidance writes the effective warp.
+  if (this.pilot.auto === "none") this.hubWarpWant = null;
+  else if (!s.autoWarp && s.timeSpeed !== this.warpSet) this.hubWarpWant = s.timeSpeed;
+  this.hubWarpLimit = null;
   const inp = this.pilotInput(pad);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
   if (this.pilot.auto !== "dock" && this.dockAuto) {
@@ -780,6 +784,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     if (!this.airWarpSaid) this.onPilotMessage?.(tf("In the air: the time warp held at ×{0}", AIR_WARP));
     this.airWarpSaid = true;
   }
+  if (thick && this.pilot.auto !== "none" && this.pilot.auto !== "node") this.hubWarpLimit = AIR_WARP / Msec;
   if (!thick) this.airWarpSaid = false;
   const dtPilot = thick ? dt * Math.min(s.timeSpeed * Msec, AIR_WARP) : dt;
   // the flight law in the air (the plane's surfaces; the sci-fi computer's commanded velocity)
@@ -1309,21 +1314,18 @@ function entryStep(
     if (R.phase === "wait") {
       // (the time sped up to a minute before the burn, then real time)
       const want = left > 40 ? Math.min(1000, Math.max((left - 25) / 3, 1)) : 1;
-      this.warpWant = null;
-      s.timeSpeed = this.warpSet = want / Msec;
+      this.setHubWarp(want / Msec);
       // (assisted: the pilot lighting it in the last half burn before its start starts it)
       if (left <= 0 || (P.assist && P.throttle > 0.02 && left < burnT / 2)) {
         R.phase = "burn";
         R.done = 0;
-        this.warpWant = null;
-        s.timeSpeed = this.warpSet = 1 / Msec;
+        this.setHubWarp(1 / Msec);
         this.onPilotMessage?.(tf("Deorbit burn: {0} m/s retrograde", R.dv.toFixed(0)));
       }
       return retro();
     }
     // (burning: real time, every frame — a sped-up frame would fire seconds of thrust at once)
-    this.warpWant = null;
-    s.timeSpeed = this.warpSet = 1 / Msec;
+    this.setHubWarp(1 / Msec);
     // (assisted: done within what a hand cuts — 0.2 % or 10 cm/s — once the engine is cut)
     const tol = P.assist ? Math.max(2e-3 * R.dv, 0.1) : 0;
     if (R.done >= R.dv - tol && (!P.assist || P.throttle <= 0.01)) {
@@ -1343,12 +1345,10 @@ function entryStep(
     if (h > ei) {
       const vr = dot3(fr.s.v, up);
       const tEI = vr < 0 ? (h - ei) / -vr : Infinity;
-      this.warpWant = null;
-      s.timeSpeed = this.warpSet = (Number.isFinite(tEI) ? Math.min(500, Math.max(1, (tEI - 20) / 4)) : 100) / Msec;
-    } else if (Math.abs(s.timeSpeed * Msec - AIR_WARP) > 1e-6) {
+      this.setHubWarp((Number.isFinite(tEI) ? Math.min(500, Math.max(1, (tEI - 20) / 4)) : 100) / Msec);
+    } else {
       // (the entry flown at ×4)
-      this.warpWant = null;
-      s.timeSpeed = this.warpSet = AIR_WARP / Msec;
+      this.setHubWarp(AIR_WARP / Msec);
     }
     // the guidance: the bank, every second of the fall (the site carried by the ground)
     // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)

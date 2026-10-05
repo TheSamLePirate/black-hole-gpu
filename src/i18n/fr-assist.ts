@@ -8,6 +8,14 @@ export default {
   "The autopilots fly again (F4: assisted)": "Les autopilotes volent de nouveau (F4 : assisté)",
   ASSISTED: "ASSISTÉ",
   AUTO: "AUTO",
+  "WARP: HUB": "WARP : HUB",
+  "WARP: YOU": "WARP : VOUS",
+  "Warp managed by the hub": "Warp géré par le hub",
+  "Warp managed by you — never above the hub's limit (, and .)": "Warp géré par vous — limité à la consigne du hub (, et .)",
+  "Warp managed by the hub — click to control it below the hub's limit":
+    "Warp géré par le hub — clic : vous le réglez dans la limite de sa consigne",
+  "Warp managed by the hub — use WARP on its card to take control":
+    "Warp géré par le hub — utilisez WARP sur sa carte pour prendre la main",
   "Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)":
     "Assisté : vous pilotez, le directeur montre ses commandes — clic : l'autopilote vole (F4)",
   "The autopilot flies — click: you fly it, assisted (F4)": "L'autopilote vole — clic : vous pilotez, assisté (F4)",

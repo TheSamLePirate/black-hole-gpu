@@ -771,6 +771,9 @@ export class CameraController {
   /** Warp the pilot asked for, while the rails hold it lower (null: none held back). */
   warpWant: number | null = null;
   warpSet = NaN;
+  /** User warp retained while the hub temporarily imposes a lower ceiling. */
+  hubWarpWant: number | null = null;
+  hubWarpLimit: number | null = null;
   /** Why the rails hold the warp back (for the HUD), or "". */
   railsNote = "";
 

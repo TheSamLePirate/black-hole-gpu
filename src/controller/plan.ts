@@ -84,6 +84,7 @@ declare module "../controls" {
     restoreWarp: typeof restoreWarp;
     goalDir: typeof goalDir;
     setNodeWarp: typeof setNodeWarp;
+    setHubWarp: typeof setHubWarp;
     nodeBurn: typeof nodeBurn;
     ourNav: typeof ourNav;
     radialOut: typeof radialOut;
@@ -1040,6 +1041,17 @@ function restoreWarp(this: CameraController) {
   this.burnFollow = null;
 }
 
+/** Hub warp is independent of who flies: manual may slow down, never exceed its ceiling. */
+function setHubWarp(this: CameraController, ceiling: number) {
+  const s = this.s;
+  // Multiple safety constraints in a frame combine; none may relax an earlier ceiling.
+  this.hubWarpLimit = Math.min(this.hubWarpLimit ?? Infinity, ceiling);
+  if (s.autoWarp) this.hubWarpWant = null;
+  else if (this.hubWarpWant === null) this.hubWarpWant = s.timeSpeed;
+  this.warpWant = null; // the rails must not restore a wish above the hub's limit
+  s.timeSpeed = this.warpSet = Math.min(s.autoWarp ? ceiling : this.hubWarpWant!, this.hubWarpLimit);
+}
+
 /** A goal burn's direction (local): along the velocity still to gain to a circle, or its sense. */
 function goalDir(this: CameraController, node: ManeuverNode, cam: ReturnType<typeof cameraFrame>, total: number): Vec3 {
   const g = node.goal!;
@@ -1063,6 +1075,7 @@ function goalDir(this: CameraController, node: ManeuverNode, cam: ReturnType<typ
  */
 function setNodeWarp(this: CameraController, auto: number) {
   const s = this.s;
+  this.hubWarpLimit = auto;
   if (s.autoWarp) this.nodeWarpWant = null;
   else {
     // (the pilot changed the warp since the last frame: that is the new choice; auto warp just
@@ -1453,6 +1466,7 @@ export function installPlan(C: { prototype: CameraController }) {
     restoreWarp,
     goalDir,
     setNodeWarp,
+    setHubWarp,
     nodeBurn,
     ourNav,
     radialOut,

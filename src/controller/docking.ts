@@ -605,7 +605,8 @@ function dockWant(
   const real = 1 / M_SECONDS;
   const cap = (g.range > 150 ? 10 : g.range > 40 ? 5 : g.range > 4 ? 2 : 1) * real;
   if (s.timeSpeed !== D.set && Number.isFinite(D.set)) D.warp = s.timeSpeed;
-  s.timeSpeed = D.set = s.autoWarp ? cap : Math.min(D.warp ?? cap, cap);
+  this.setHubWarp(cap);
+  D.set = s.timeSpeed;
   // (the lateral gain within what the velocity loop follows at this warp: damped)
   const Ts = 1.2 * s.timeSpeed * M_SECONDS;
   const kLat = Math.min(0.08, 0.3 / Math.max(Ts, 1e-3));

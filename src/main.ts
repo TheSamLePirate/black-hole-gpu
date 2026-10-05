@@ -1076,13 +1076,27 @@ async function main() {
   }
   /** A manoeuvre executing under auto warp: the warp is the autopilot's (the pilot's once AUTO is off). */
   function autoWarpHeld() {
-    if (camera.nodeWarp !== "auto") return false;
+    if (camera.pilot.auto !== "none" && settings.autoWarp && camera.hubWarpLimit !== null) {
+      audio.cue("error");
+      panel.toast(t("Warp managed by the hub — use WARP on its card to take control"));
+      return true;
+    }
+    if (camera.nodeWarp !== "auto" || !settings.autoWarp) return false;
     audio.cue("error");
     panel.toast(t("Auto warp: the manoeuvre sets the warp — AUTO on the time bar gives it to you"));
     return true;
   }
   function setWarp(speed: number) {
     if (autoWarpHeld()) return;
+    if (camera.pilot.auto !== "none" && !settings.autoWarp) {
+      camera.hubWarpWant = speed;
+      if (camera.pilot.auto === "node") camera.nodeWarpWant = speed;
+      speed = Math.min(speed, camera.hubWarpLimit ?? Infinity);
+      // Keep the requested warp distinct from the capped value written to the scene.
+      camera.warpWant = null;
+      camera.warpSet = speed;
+      if (camera.pilot.auto === "node") camera.nodeWarpSet = speed;
+    }
     settings.timeSpeed = speed;
     refreshGui();
     scheduleUrlSave();
@@ -1090,6 +1104,17 @@ async function main() {
     panel.toast(
       `${tf("Time warp {0}", fmtWarp(settings, false))}${settings.animate ? "" : ` — ${t("paused (Space runs it)")}`} · ${+speed.toPrecision(3)} M/s`,
     );
+  }
+  function toggleAutoWarp() {
+    settings.autoWarp = !settings.autoWarp;
+    camera.hubWarpWant = settings.autoWarp ? null : settings.timeSpeed;
+    camera.nodeWarpWant = settings.autoWarp ? null : settings.timeSpeed;
+    if (camera.hubWarpLimit !== null && camera.pilot.auto !== "none" && camera.pilot.auto !== "node")
+      camera.setHubWarp(camera.hubWarpLimit);
+    refreshGui();
+    scheduleUrlSave();
+    touch();
+    panel.toast(settings.autoWarp ? t("Warp managed by the hub") : t("Warp managed by you — never above the hub's limit (, and .)"));
   }
   /** Real time: 1 s of the scene per second. */
   function realTime() {
@@ -1164,6 +1189,7 @@ async function main() {
     mount: setMount,
     spectator: () => setSpectator(!camera.spectating),
     assist: () => toggleAssist(),
+    hubWarp: toggleAutoWarp,
     spectatorGoTo: (b: Target) => {
       camera.setSpectatorFollow(false);
       const why = goTo(b);
@@ -1329,16 +1355,7 @@ async function main() {
     recording: () => ({ on: take.recording, seconds: take.seconds, frames: take.length }),
     railsNote: () => camera.railsNote,
     nodeWarp: () => camera.nodeWarp || (camera.plan.nodes.length && settings.ship ? "plan" : ""),
-    toggleAutoWarp: () => {
-      settings.autoWarp = !settings.autoWarp;
-      refreshGui();
-      scheduleUrlSave();
-      panel.toast(
-        settings.autoWarp
-          ? t("Auto warp — the manoeuvre sets the warp")
-          : t("Manual warp — yours to choose live (, and .), never faster than the manoeuvre allows"),
-      );
-    },
+    toggleAutoWarp,
     openTime: () => timePanel.open(),
   });
   transport.mount(tpDock, false);

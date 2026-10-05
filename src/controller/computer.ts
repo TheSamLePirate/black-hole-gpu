@@ -584,20 +584,17 @@ function burnsStep(this: CameraController, cam: ReturnType<typeof cameraFrame>):
   const dir = unitV(fromPNR(at.r, at.v, B.dv) as Vec3);
   const att = { nose: fr.toLocal(dir), up: fr.toLocal(unitV(fc.ctx.r as Vec3)) };
   if (!B.firing) {
-    this.warpWant = null;
-    s.timeSpeed = this.warpSet = (wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec;
+    this.setHubWarp((wait > 40 ? Math.min(1000, Math.max((wait - 25) / 3, 1)) : 1) / Msec);
     // (assisted: the pilot lighting it in the last half burn before its start starts it)
     if (wait <= 0 || (P.assist && P.throttle > 0.02 && wait < burnT / 2)) {
       B.firing = true;
       B.done = 0;
-      this.warpWant = null;
-      s.timeSpeed = this.warpSet = 1 / Msec;
+      this.setHubWarp(1 / Msec);
       this.onPilotMessage?.(tf("Burn {0}: {1} m/s", B.label, size.toFixed(1)));
     }
     return att;
   }
-  this.warpWant = null;
-  s.timeSpeed = this.warpSet = 1 / Msec;
+  this.setHubWarp(1 / Msec);
   // (assisted: done within what a hand cuts — 0.2 % or 10 cm/s — and once the engine is cut)
   const tol = P.assist ? Math.max(2e-3 * size, 0.1) : 0;
   if (B.done >= size - tol && (!P.assist || P.throttle <= 0.01)) {
@@ -661,10 +658,8 @@ function glideAlpha(
   const a = R.alpha + (clamp(want, 0, stall) - R.alpha) * Math.min(1, dt / 0.35);
   if (agl < 1500) {
     const Msec = 4.925490947e-6 * this.s.massSolar;
-    if (Math.abs(this.s.timeSpeed * Msec - 1) > 1e-6) {
-      this.warpWant = null;
-      this.s.timeSpeed = this.warpSet = 1 / Msec;
-    }
+    if (this.pilot.auto !== "none") this.setHubWarp(1 / Msec);
+    else this.s.timeSpeed = this.warpSet = Math.min(this.s.timeSpeed, 1 / Msec);
   }
   return clamp(a, 0, stall);
 }
