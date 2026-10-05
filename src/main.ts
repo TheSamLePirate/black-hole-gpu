@@ -1,4 +1,4 @@
-import { Renderer, type FrameStats } from "./renderer";
+import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
@@ -180,6 +180,19 @@ async function main() {
   const fonts = Promise.all(
     [`600 12px Rajdhani`, `700 12px Rajdhani`, `500 12px "JetBrains Mono"`, `500 12px Inter`].map((f) => document.fonts.load(f)),
   ).catch(() => {});
+  // the solar system's ephemerides (DE440, JUP365: 7 MB) and the sky's assets: downloading while
+  // the shaders compile, not after them (plan §2.1-C)
+  loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
+  const ephemerides = loading.track(
+    "ephemeris",
+    "",
+    loadEphemerides(ephemerisUrls(), (u) =>
+      loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
+    ),
+  );
+  loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
+  loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
+  prefetchSkyAssets((u, id) => loading.fetch(u, id));
   let renderer: Renderer;
   try {
     renderer = await Renderer.create(canvas);
@@ -216,15 +229,6 @@ async function main() {
   const touch = () => (changed = true);
   renderer.onAssets = () => touch();
   const touchDisplay = () => (displayChanged = true);
-  // the solar system's ephemerides (DE440, JUP365: 7 MB) — in while the rest is built
-  loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
-  const ephemerides = loading.track(
-    "ephemeris",
-    "",
-    loadEphemerides(ephemerisUrls(), (u) =>
-      loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
-    ),
-  );
   const skyLoading = renderer
     .loadSky()
     .then(() => touch())

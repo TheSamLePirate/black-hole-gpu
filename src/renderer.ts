@@ -151,6 +151,29 @@ async function wgsl(src: string): Promise<string> {
   return src;
 }
 
+// (the sky's assets fetched before Renderer.create() even returns: their megabytes download while
+// the shaders compile; loadSky consumes the buffers, wrapped back as Responses for its loaders)
+const skyPrefetch = new Map<string, Promise<ArrayBuffer>>();
+
+/** Starts the sky's downloads (the Gaia map, the star catalogues) ahead of loadSky — idempotent. */
+export function prefetchSkyAssets(get: (url: string, id: string) => Promise<Response>): void {
+  for (const [url, id] of [
+    [milkyWayUrl, "sky"],
+    [starLodUrl, "stars"],
+    [starCatalogueUrl, "stars"],
+  ] as const) {
+    if (skyPrefetch.has(url)) continue;
+    const p = get(url, id).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${url}: ${r.status}`))));
+    p.catch(() => {}); // (a failure is told by loadSky's own chain — never an unhandled rejection)
+    skyPrefetch.set(url, p);
+  }
+}
+
+/** A prefetched asset as a fresh Response (an ArrayBuffer's body can be re-read), or null. */
+function prefetched(url: string): Promise<Response> | null {
+  return skyPrefetch.get(url)?.then((buf) => new Response(buf)) ?? null;
+}
+
 export function halfToFloat(h: number): number {
   const s = h & 0x8000 ? -1 : 1;
   const e = (h >> 10) & 0x1f;
@@ -769,21 +792,19 @@ export class Renderer {
 
   /**
    * Loads the real sky (Gaia DR2 Milky Way map + Hipparcos/HYG catalogue) in the background; the
-   * procedural sky is shown until it is ready.
+   * procedural sky is shown until it is ready. Its downloads may already be running (started
+   * before Renderer.create() returned — prefetchSkyAssets): the buffers then come from there.
    */
   async loadSky(): Promise<void> {
-    loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
-    loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
     const stars = Promise.all([
-      loadPackedTexture(this.device, starLodUrl, (u) => loading.fetch(u, "stars")),
-      loadStarCatalogue(this.device, starCatalogueUrl, (u) => loading.fetch(u, "stars")),
+      loadPackedTexture(this.device, starLodUrl, (u) => prefetched(u) ?? loading.fetch(u, "stars")),
+      loadStarCatalogue(this.device, starCatalogueUrl, (u) => prefetched(u) ?? loading.fetch(u, "stars")),
     ]);
     const [bitmap, [lod, cat]] = await Promise.all([
       loading.track(
         "sky",
         "",
-        loading
-          .fetch(milkyWayUrl, "sky")
+        (prefetched(milkyWayUrl) ?? loading.fetch(milkyWayUrl, "sky"))
           .then((r) => r.blob())
           .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" })),
       ),
