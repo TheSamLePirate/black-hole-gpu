@@ -622,6 +622,28 @@ et le budget de cache réellement appliqué à WebGPU sur les plateformes cibles
 
 ---
 
+## 8. Mise en œuvre (branche `test-kimi`, 2026-10-05)
+
+Chaque action du §4 appliquée dans l'ordre conseillé, un commit par étape, `bun test` +
+`tsc --noEmit` + e2e Chrome (`title`, `smoke`, `reload`) verts à chaque étape.
+
+| # | État | Commit | Note |
+|---|---|---|---|
+| 1 | **fait** | `33625d0` | rt + env attendus ; lut/q/lutq en arrière-plan ; le garde LUT (`lutOn && this.lutPipeline`, `FLAG_LUT` éteint tant que la LUT n'a jamais été écrite) et le garde converging (vue immobile maintenue en realtime tant que `qualityPipeline` est null) — les corrections de la rév. 2 |
+| 2 | **fait** | `d997ec1` | modules existants relus (le traceur n'est pas re-parsé), `Promise.all` ; les modules des sous-renderers exposés `readonly` |
+| 3 | **fait** | `2d7b4bc` | éphémérides + ciel démarrés avant `Renderer.create()` (`prefetchSkyAssets`, idempotent) ; le `<link rel=preload>` abandonné : Bun hache les URLs d'assets et ne réécrit pas les href de preload — un lien statique renverrait 404 |
+| 9 | **fait** | `33b5d9f` | skip affiché à 9 s sans condition d'image ; cliqué avant la première image, il est mémorisé et exécuté à son arrivée — jamais de page noire sur un HUD non câblé |
+| 8 | **fait** | `fd0c732` | cascade variants par phase (rt/env/lut d'abord, q/lutq à la première vue immobile) ; LRU à 2 clés |
+| 5 | **fait** | `8b6d381` | `demoted()` + démotion (1,5× budget, bloc 8, échelle 0,5, 12 s) ; persistance `kerr.tier` par identité d'adapter ; déclencheur de promotion élargi (bloc ≤ 4) + cooldown 60 s après démotion |
+| 6 | **fait** | `8119f4e` | plafonds realtime (steps 150/250/350, eps 0,18/0,14/0,10), convergence ≤ 16 spp + seuil de bruit 0,03 sur tier ≤ 1, cube Terre `high` non téléchargé sur tier ≤ 1 — plafonds liés au tier **courant** (ils se lèvent avec la promotion, un réglage plus fin du joueur est toujours respecté). Features non forcées off : les défauts excluent déjà polarisation et hot flow |
+| 4 | **fait (périmètre ajusté)** | `3e96fbf` | les 18 pipelines display/post en async, attendus avec le cœur — constructeur non bloquant, compilations recouvertes, prêt identique à la première frame. Les vessels **restent sync** : leur dessin est déjà cadencé par le téléchargement des modèles (`ready` + `onLoaded`), des secondes derrière ces pipelines — une conversion async n'achèterait rien à la première image et risquerait un à-coup au premier vol |
+| 11 | **non appliqué (mesuré)** | — | les candidats du plan sont câblés au démarrage : `controller/*` (handlers d'entrée installés au boot), `flighthud` (construit et dessiné dès la première frame), `map3d` (construit dans le constructeur de FlightHud, DOM inséré à l'avance). Cibles sûres mesurées ≤ ~60 Ko source (bench, renderdialog) ≈ 2 % du bundle — le refactor ne se justifie pas (composition réelle du bundle mesurée par `bun build`, 426 modules) |
+| 7 | **reporté** | — | population concernée : adapters rapportant 8–9 storage buffers (mode compat, expérimental) ; le refactor (packing des bindings + offsets dans un kernel de 6 362 lignes couvert par les golden e2e) a un rapport risque/gain défavorable aujourd'hui. Le gate d'erreur explicite reste en place |
+| 10 | **reporté** | — | après les actions 1–3, la première image n'attend plus que 2 compilations de pipelines ; la valeur marginale d'un mode attente sans le traceur (effort « élevé » du plan) s'en trouve d'autant réduite |
+| 12 | **fait** | `f31ea4d` | e2e `reload` (profil Chrome frais → premier chargement réellement froid ; le second ne doit pas être plus lent — verrou de régression sur la stabilité des clés). **Première mesure** Chrome/macOS (Metal) : froid 4 399 ms → rechargement 3 280 ms (**−25 %**) — le cache disque tient pour cette application |
+
+---
+
 ### Annexes — sources externes consultées
 
 - MDN : `GPUAdapterInfo` (attribut sync `info`, `isFallbackAdapter`), `GPUSupportedLimits`,
