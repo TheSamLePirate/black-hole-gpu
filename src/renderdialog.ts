@@ -321,7 +321,11 @@ export function setupRenderDialog(d: DialogDeps) {
   /** Waits for the offline frame, then encodes it. */
   const encodeFrame = async (run: { stop: boolean }, writer: VideoWriter, opts: OfflineOptions, time: number) => {
     d.renderer.startOffline(d.settings, time, opts);
-    while (!d.renderer.offlineState?.done && !run.stop) await sleep(20);
+    while (!d.renderer.offlineState?.done && !run.stop) {
+      if (d.renderer.offlineState?.error) throw new Error(d.renderer.offlineState.error);
+      if (!d.renderer.offlineActive) throw new Error("Render cancelled");
+      await sleep(20);
+    }
     if (run.stop) return;
     const px = await d.renderer.exportRGBA(d.settings);
     await writer.addFrame(px.data, px.width, px.height);
@@ -409,6 +413,8 @@ export function setupRenderDialog(d: DialogDeps) {
       }
     } catch (e) {
       error = (e as Error).message;
+    } finally {
+      writer.close();
     }
     cam.scripted = false;
     cam.bulletTime = false;
@@ -433,9 +439,16 @@ export function setupRenderDialog(d: DialogDeps) {
   };
 
   const stem = () => `${d.fileStem()}-${sppSel.value}spp`;
-  exports[0]!.onclick = async () => d.download(await d.renderer.exportPNG(d.settings), `${stem()}.png`);
-  exports[1]!.onclick = async () => d.download(await d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`);
-  exports[2]!.onclick = async () => d.download(await d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
+  const save = async (encode: () => Promise<Blob>, name: string) => {
+    try {
+      d.download(await encode(), name);
+    } catch (error) {
+      status.textContent = `⚠ ${error instanceof Error ? error.message : String(error)}`;
+    }
+  };
+  exports[0]!.onclick = () => save(() => d.renderer.exportPNG(d.settings), `${stem()}.png`);
+  exports[1]!.onclick = () => save(() => d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`);
+  exports[2]!.onclick = () => save(() => d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
   $<HTMLButtonElement>("render-close").onclick = () => toggle(false);
 
   let unEscape: (() => void) | undefined;
@@ -468,6 +481,12 @@ export function setupRenderDialog(d: DialogDeps) {
     },
     size: () => ({ width: size[0], height: size[1] }),
     update(st: OfflineStatus) {
+      for (const b of exports) b.disabled = !!st.error;
+      btnPause.disabled = !!st.error;
+      if (st.error) {
+        status.textContent = `⚠ ${st.error}`;
+        return;
+      }
       bar.style.width = `${(st.progress * 100).toFixed(2)}%`;
       bar.classList.toggle("done", st.done);
       const state = st.done ? `✔ ${t("done")}` : st.paused ? t("paused") : t("rendering");

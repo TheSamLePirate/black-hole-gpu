@@ -68,17 +68,37 @@ export function adapterId(a: { vendor: string; architecture: string; device: str
 }
 
 const TIER_KEY = "kerr.tier";
+const TIER_VERSION = 1;
+const TIER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The tier level measured for this adapter in an earlier session, or null. */
-export function rememberedLevel(id: string): Tier["level"] | null {
-  const kept = store.getJSON<{ adapter?: string; level?: number } | null>(TIER_KEY, null);
-  if (!kept || kept.adapter !== id || typeof kept.level !== "number") return null;
-  return Math.max(0, Math.min(CAP.length - 1, Math.trunc(kept.level))) as Tier["level"];
+/** A remembered measurement is a temporary starting hint, not a hardware benchmark. */
+export function rememberedLevel(id: string, now = Date.now()): Tier["level"] | null {
+  const kept = store.getJSON<{ version?: number; adapter?: string; level?: number; measuredAt?: number } | null>(TIER_KEY, null);
+  if (
+    !id.replaceAll("|", "").trim() ||
+    !kept ||
+    kept.version !== TIER_VERSION ||
+    kept.adapter !== id ||
+    !Number.isInteger(kept.level) ||
+    kept.level! < 0 ||
+    kept.level! >= CAP.length ||
+    !Number.isFinite(kept.measuredAt) ||
+    kept.measuredAt! > now ||
+    now - kept.measuredAt! > TIER_MAX_AGE_MS
+  )
+    return null;
+  return kept.level as Tier["level"];
 }
 
-/** Remembers the level measured for this adapter (each time the measure moves it). */
-export function rememberLevel(id: string, t: Tier) {
-  store.setJSON(TIER_KEY, { adapter: id, level: t.level });
+/** Remember only an identified adapter, with a schema version and an expiry. */
+export function rememberLevel(id: string, t: Tier, now = Date.now()) {
+  if (!id.replaceAll("|", "").trim()) return;
+  store.setJSON(TIER_KEY, { version: TIER_VERSION, adapter: id, level: t.level, measuredAt: now });
+}
+
+/** Return to hardware detection at the next startup. */
+export function resetRememberedTier() {
+  store.remove(TIER_KEY);
 }
 
 /** The pixel ratio that keeps a CSS area of w × h within the tier's cap (and the settings' ratio). */

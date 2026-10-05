@@ -183,17 +183,28 @@ export class VideoWriter {
       timestamp: Math.round((this.index * 1e6) / this.fps),
       duration: Math.round(1e6 / this.fps),
     });
-    this.encoder.encode(frame, { keyFrame: this.index % Math.round(2 * this.fps) === 0 });
-    frame.close();
+    try {
+      this.encoder.encode(frame, { keyFrame: this.index % Math.round(2 * this.fps) === 0 });
+    } finally {
+      frame.close();
+    }
     this.index++;
     // keep the encoder queue short (memory)
     while (this.encoder.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 5));
   }
 
+  /** Release native codec resources on success, cancellation, or a failed render. */
+  close() {
+    if (this.encoder.state !== "closed") this.encoder.close();
+  }
+
   async finish(): Promise<Blob> {
-    await this.encoder.flush();
-    this.encoder.close();
-    if (this.error) throw this.error;
-    return this.mp4.finish();
+    try {
+      await this.encoder.flush();
+      if (this.error) throw this.error;
+      return this.mp4.finish();
+    } finally {
+      this.close();
+    }
   }
 }

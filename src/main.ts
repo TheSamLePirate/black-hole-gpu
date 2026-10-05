@@ -57,6 +57,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
+import { automaticQuality, promotionEligible } from "./quality-policy";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
 import { gameLog } from "./game/log";
@@ -1792,13 +1793,16 @@ async function main() {
   // no faster, only blurrier
   const scaleMs = new Map<number, { ms: number; at: number }>();
   let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
+  let measuredFrames = 0;
+  let calibrationWasReady = false;
   let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
   function resize() {
+    if (!automaticQuality(settings) && forcedScale === null) renderScale = 1;
     // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
     // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
-    const ratio = settings.dynamicResolution
+    const ratio = automaticQuality(settings)
       ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx)
       : settings.pixelRatio;
     // (the canvas at the display's size; the image rendered at its scale of it — upscaled by the display
@@ -2058,27 +2062,37 @@ async function main() {
       : cpuProf.time("render (encode, submit)", () =>
           renderer.frame(camera.viewSettings(), sim.time, changed, sim.timeDirty, displayChanged),
         );
+    if (!firstFrame && renderer.firstFrameDoneAt > 0) {
+      firstFrame = true;
+      firstFrameAt = renderer.firstFrameDoneAt;
+      splash.firstImage();
+    }
     if (st) {
       renderedAt = now;
-      if (!firstFrame) {
-        // the first image is on screen: the loading screen lifts once the scene's assets are in
-        firstFrame = true;
-        firstFrameAt = performance.now();
-        splash.firstImage();
-      }
       fpsN++;
       changed = false;
       sim.timeDirty = false;
       displayChanged = false;
       lastStats = st;
       if (st.offline) renderDialog.update(st.offline);
-      gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
+      if (renderer.completedFrames !== measuredFrames) {
+        measuredFrames = renderer.completedFrames;
+        gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
+      }
+    }
+    const calibrationReady = renderer.calibrationReady;
+    if (calibrationReady !== calibrationWasReady) {
+      calibrationWasReady = calibrationReady;
+      gpuEma = 0;
+      scaleHeld = idleAtCap = overAtFloor = 0;
+      scaleMs.clear();
+      renderer.resetQualityTiming();
     }
     // (the camera held for 0.4 s: the full scale, the image refined there; moving again: the motion's)
     const held = lastStats?.phase === "converging" || lastStats?.phase === "converged";
     heldFor = held ? heldFor + dt : 0;
     movingFor = held ? 0 : movingFor + dt;
-    const dynOn = settings.dynamicResolution && settings.realtimeSubsampling === "auto" && !renderer.offlineActive && forcedScale === null;
+    const dynOn = automaticQuality(settings) && !renderer.offlineActive && forcedScale === null;
     if (forcedScale !== null && renderScale !== forcedScale) {
       renderScale = forcedScale;
       resize();
@@ -2145,13 +2159,27 @@ async function main() {
         on && cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) < settings.pixelRatio - 1e-3;
       // (block ≤ 4, not ≤ 2: on a fast GPU in a heavy scene the blocks can settle at 3–4 with the
       // GPU idle — the promotion would never fire; and a minute's cooldown after a demotion)
-      idleAtCap =
-        capped && renderScale === 1 && block <= 4 && now - demotedAt > 60_000 && gpuEma > 0 && gpuEma < 0.5 * budget ? idleAtCap + 1.5 : 0;
+      idleAtCap = promotionEligible({
+        automatic: on,
+        stable: renderer.calibrationReady && settled,
+        pixelCapped: capped,
+        precisionCapped: renderer.effectiveQuality(settings).capped,
+        tier: renderer.tier,
+        scale: renderScale,
+        block,
+        sinceDemotionMs: now - demotedAt,
+        measuredMs: gpuEma,
+        budgetMs: budget,
+      })
+        ? idleAtCap + 1.5
+        : 0;
       if (idleAtCap >= 12) {
         const up = promoted(renderer.tier);
         idleAtCap = 0;
         if (up) {
           renderer.tier = up;
+          renderer.resetQualityTiming();
+          scaleMs.clear();
           gpuEma = 0;
           scaleHeld = 0;
           resize();
@@ -2160,12 +2188,15 @@ async function main() {
       }
       // (and the other way — the promotion's missing half (plan §3.4): over the budget and a half
       // at the coarsest block and the smallest scale, for 12 s — one tier down, its cap lowered)
-      overAtFloor = on && renderScale === 0.5 && block >= 8 && gpuEma > 1.5 * budget ? overAtFloor + 1.5 : 0;
+      overAtFloor =
+        on && renderer.calibrationReady && settled && renderScale === 0.5 && block >= 8 && gpuEma > 1.5 * budget ? overAtFloor + 1.5 : 0;
       if (overAtFloor >= 12) {
         const down = demoted(renderer.tier);
         overAtFloor = 0;
         if (down) {
           renderer.tier = down;
+          renderer.resetQualityTiming();
+          scaleMs.clear();
           gpuEma = 0;
           scaleHeld = 0;
           demotedAt = now;
@@ -2413,8 +2444,8 @@ async function main() {
       // (the frame rate is a developer's figure: on the dev server only — F2 › Perf has it everywhere)
       phase = `<span class="phase rt">${t("Live")}${DEV ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
     } else if (st.phase === "converging") {
-      phase = `<span class="phase cv">${tf("Refining · {0} / {1}", Math.floor(st.spp), settings.targetSpp)}</span>`;
-      progress = st.spp / settings.targetSpp;
+      phase = `<span class="phase cv">${tf("Refining · {0} / {1}", Math.floor(st.spp), st.targetSpp ?? settings.targetSpp)}</span>`;
+      progress = st.spp / (st.targetSpp ?? settings.targetSpp);
     } else {
       phase = `<span class="phase ok">${t("Converged")}</span>`;
       progress = 1;
@@ -2440,6 +2471,8 @@ async function main() {
         `<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`,
       );
     if (camera.pad.connected) chips.push(`<span class="chip" title="${t("Game controller")}">🎮</span>`);
+    if (st.qualityError) chips.push(`<span class="chip hot">⚠ ${t("Refinement unavailable")}</span>`);
+    statusEl.title = st.qualityError ?? "";
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);
     progressEl.classList.toggle("done", progress >= 1 && st.phase !== "offline");

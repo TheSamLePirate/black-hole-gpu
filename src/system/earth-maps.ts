@@ -90,6 +90,38 @@ const KTX: Record<EarthTier, Faces> = {
   high: [ktxHighRt, ktxHighLf, ktxHighUp, ktxHighDn, ktxHighFt, ktxHighBk],
 };
 
+// Only completion promises are retained: bodies live in the browser's HTTP/SW cache, not JS memory.
+const downloads = new Map<string, Promise<void>>();
+
+/** Warm the medium Earth maps independently of the scene, without decoding or allocating VRAM.
+ * Use the GPU's preferred representation, not both compressed and JPEG day/cloud cubes.
+ * Failed requests are evicted so later prefetches or normal on-demand loading can retry. */
+export function prefetchEarthMaps(
+  device: Pick<GPUDevice, "features">,
+  fetcher: (url: string) => Promise<Response> = (url) => fetch(url, { cache: "force-cache", priority: "low" }),
+): Promise<void> {
+  const color = ktxTarget(device) === "rgba" ? [...SETS.med.day, ...SETS.med.cloud] : KTX.med;
+  const urls = [...color, ...NIGHT, SETS.med.ocean, SETS.med.relief];
+  const tasks = urls.map((url) => {
+    let task = downloads.get(url);
+    if (!task) {
+      task = Promise.resolve()
+        .then(() => fetcher(url))
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`${url}: ${response.status}`);
+          await response.arrayBuffer(); // consume fully to populate the cache, then discard the body
+        });
+      downloads.set(url, task);
+      const pending = task;
+      void task.catch(() => {
+        if (downloads.get(url) === pending) downloads.delete(url);
+      });
+    }
+    return task;
+  });
+  return Promise.all(tasks).then(() => {});
+}
+
 /**
  * The day cube from its KTX2 faces, in this GPU's compressed format (BC7, ASTC): a quarter of rgba8's
  * memory. Null when it has none, or the transcoder is not there (the JPEG faces then).

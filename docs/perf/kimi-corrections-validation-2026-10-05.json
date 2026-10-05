@@ -1,0 +1,219 @@
+{
+  "date": "2026-10-05",
+  "scope": "Protocol validation: both targets serve the same corrected local working tree; no comparison of main versus test-kimi",
+  "baseCommit": "64b8833cf4e3dd5eb0283382a517961ba0f2b33b",
+  "uncommittedCorrections": true,
+  "cacheIsolation": "Fresh browser profile per target; GPU driver cache and system load not isolated",
+  "runs": {
+    "A-main": {
+      "url": "http://localhost:52763/",
+      "cold": {
+        "firstFrameMs": 630.3000001907349,
+        "splashLiftedMs": 1325
+      },
+      "warm": {
+        "firstFrameMs": 390.60000014305115,
+        "splashLiftedMs": 3381
+      },
+      "mission": "Artemis II — autour de la Lune",
+      "frames": {
+        "elapsedMs": 3014.7000000476837,
+        "completed": 171,
+        "renderedFps": 56.72206189580896,
+        "animationCallbacksPerSecond": 57.38547782441491,
+        "retainedDurationSamples": 171,
+        "queueCompletionMedianMs": 9.400000095367432,
+        "queueCompletionP95Ms": 12.700000047683716
+      },
+      "build": {
+        "sha": "64b8833"
+      },
+      "effectiveQuality": {
+        "realtimeSteps": 350,
+        "realtimeEps": 0.1,
+        "targetSpp": 32,
+        "noiseThreshold": 0.02,
+        "capped": true
+      },
+      "pipelines": {
+        "quality": "ready",
+        "qualityError": null,
+        "lut": "idle",
+        "lutQuality": "idle"
+      },
+      "actualImage": {
+        "width": 1440,
+        "height": 900,
+        "block": 3
+      },
+      "firstFrameMeasurement": "completion timestamp",
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "device": "",
+        "description": "",
+        "fallback": false,
+        "features": [
+          "bgra8unorm-storage",
+          "chromium-experimental-subgroup-matrix",
+          "clip-distances",
+          "core-features-and-limits",
+          "depth-clip-control",
+          "depth32float-stencil8",
+          "dual-source-blending",
+          "float32-blendable",
+          "float32-filterable",
+          "indirect-first-instance",
+          "primitive-index",
+          "rg11b10ufloat-renderable",
+          "shader-f16",
+          "subgroup-size-control",
+          "subgroups",
+          "texture-component-swizzle",
+          "texture-compression-astc",
+          "texture-compression-astc-sliced-3d",
+          "texture-compression-bc",
+          "texture-compression-bc-sliced-3d",
+          "texture-compression-etc2",
+          "texture-compression-unaligned",
+          "texture-formats-tier1",
+          "texture-formats-tier2",
+          "timestamp-query"
+        ],
+        "limits": {
+          "maxStorageBuffersPerShaderStage": 10,
+          "maxSampledTexturesPerShaderStage": 48,
+          "maxBufferSize": 4294967292,
+          "maxStorageBufferBindingSize": 4294967292,
+          "maxTextureDimension2D": 16384,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxBindGroups": 4
+        }
+      },
+      "settings": {
+        "pixelRatio": 1,
+        "dynamicResolution": true,
+        "realtimeSteps": 500,
+        "realtimeEps": 0.08,
+        "targetSpp": 32,
+        "farFieldLut": true
+      },
+      "gpuFrameMs": 25.374440999999997,
+      "gpuErrors": 0,
+      "lost": null,
+      "tierRemembered": null,
+      "consoleErrors": []
+    },
+    "B-test-kimi": {
+      "url": "http://localhost:52763/",
+      "cold": {
+        "firstFrameMs": 637.2000000476837,
+        "splashLiftedMs": 1324
+      },
+      "warm": {
+        "firstFrameMs": 371.90000009536743,
+        "splashLiftedMs": 3364
+      },
+      "mission": "Artemis II — autour de la Lune",
+      "frames": {
+        "elapsedMs": 3014.7999999523163,
+        "completed": 181,
+        "renderedFps": 60.03715006065503,
+        "animationCallbacksPerSecond": 60.03715006065503,
+        "retainedDurationSamples": 181,
+        "queueCompletionMedianMs": 10.5,
+        "queueCompletionP95Ms": 12.5
+      },
+      "build": {
+        "sha": "64b8833"
+      },
+      "effectiveQuality": {
+        "realtimeSteps": 350,
+        "realtimeEps": 0.1,
+        "targetSpp": 32,
+        "noiseThreshold": 0.02,
+        "capped": true
+      },
+      "pipelines": {
+        "quality": "ready",
+        "qualityError": null,
+        "lut": "idle",
+        "lutQuality": "idle"
+      },
+      "actualImage": {
+        "width": 1440,
+        "height": 900,
+        "block": 2
+      },
+      "firstFrameMeasurement": "completion timestamp",
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "device": "",
+        "description": "",
+        "fallback": false,
+        "features": [
+          "bgra8unorm-storage",
+          "chromium-experimental-subgroup-matrix",
+          "clip-distances",
+          "core-features-and-limits",
+          "depth-clip-control",
+          "depth32float-stencil8",
+          "dual-source-blending",
+          "float32-blendable",
+          "float32-filterable",
+          "indirect-first-instance",
+          "primitive-index",
+          "rg11b10ufloat-renderable",
+          "shader-f16",
+          "subgroup-size-control",
+          "subgroups",
+          "texture-component-swizzle",
+          "texture-compression-astc",
+          "texture-compression-astc-sliced-3d",
+          "texture-compression-bc",
+          "texture-compression-bc-sliced-3d",
+          "texture-compression-etc2",
+          "texture-compression-unaligned",
+          "texture-formats-tier1",
+          "texture-formats-tier2",
+          "timestamp-query"
+        ],
+        "limits": {
+          "maxStorageBuffersPerShaderStage": 10,
+          "maxSampledTexturesPerShaderStage": 48,
+          "maxBufferSize": 4294967292,
+          "maxStorageBufferBindingSize": 4294967292,
+          "maxTextureDimension2D": 16384,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxBindGroups": 4
+        }
+      },
+      "settings": {
+        "pixelRatio": 1,
+        "dynamicResolution": true,
+        "realtimeSteps": 500,
+        "realtimeEps": 0.08,
+        "targetSpp": 32,
+        "farFieldLut": true
+      },
+      "gpuFrameMs": 25.076656,
+      "gpuErrors": 0,
+      "lost": null,
+      "tierRemembered": null,
+      "consoleErrors": []
+    }
+  }
+}

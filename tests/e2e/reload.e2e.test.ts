@@ -1,13 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The plan's action #12 (protocols A and C): does the browser's shader disk cache make a reload
-// cheaper than the cold start? A fresh Chrome profile (lib/cdp.ts): the first load compiles cold;
-// the second — same scene, same settings, so the same cache keys — must not be slower, and where
-// the cache holds (Chrome/Edge) it should be markedly faster. The measure: navigation → splash
-// lifted, the number that sums the shaders' compilation and the assets' arrival.
-
-describe.skipIf(!E2E)("reload: the second load rides the shaders' disk cache", () => {
+// A reload must produce a completed GPU image without errors. Timings are observations:
+// a fresh browser profile does not control the driver's cache, and HTTP/SW caches also change.
+describe.skipIf(!E2E)("reload: completed GPU image and startup timings", () => {
   let app: App;
   beforeAll(async () => {
     app = await App.boot({ hash: "scene=game:artemis" });
@@ -17,13 +13,15 @@ describe.skipIf(!E2E)("reload: the second load rides the shaders' disk cache", (
     stopServer();
   });
 
-  test("the reload is no slower than the cold load", async () => {
+  test("cold and warm loads both complete without GPU or console errors", async () => {
     const cold = app.lastLoadMs;
     await app.load("scene=game:artemis");
     const warm = app.lastLoadMs;
     console.log(`  load: cold ${Math.round(cold)} ms, reload ${Math.round(warm)} ms (Δ ${Math.round(cold - warm)} ms)`);
-    // (a regression lock, not a promise of speed: the cache's budget and its evictions are the
-    // browser's — but a reload *slower* than the cold start would mean our keys are unstable)
-    expect(warm).toBeLessThanOrEqual(cold + 2500);
+    expect(await app.js<number>("__bh.renderer.firstFrameDoneAt")).toBeGreaterThan(0);
+    expect(await app.js<number>("__bh.renderer.completedFrames")).toBeGreaterThan(0);
+    expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
+    expect(await app.js<string | null>("__bh.renderer.lost")).toBeNull();
+    expect(app.cdp.errors).toEqual([]);
   });
 });

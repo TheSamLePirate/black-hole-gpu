@@ -635,12 +635,12 @@ Chaque action du §4 appliquée dans l'ordre conseillé, un commit par étape, `
 | 9 | **fait** | `33b5d9f` | skip affiché à 9 s sans condition d'image ; cliqué avant la première image, il est mémorisé et exécuté à son arrivée — jamais de page noire sur un HUD non câblé |
 | 8 | **fait** | `fd0c732` | cascade variants par phase (rt/env/lut d'abord, q/lutq à la première vue immobile) ; LRU à 2 clés |
 | 5 | **fait** | `8b6d381` | `demoted()` + démotion (1,5× budget, bloc 8, échelle 0,5, 12 s) ; persistance `kerr.tier` par identité d'adapter ; déclencheur de promotion élargi (bloc ≤ 4) + cooldown 60 s après démotion |
-| 6 | **fait** | `8119f4e` | plafonds realtime (steps 150/250/350, eps 0,18/0,14/0,10), convergence ≤ 16 spp + seuil de bruit 0,03 sur tier ≤ 1, cube Terre `high` non téléchargé sur tier ≤ 1 — plafonds liés au tier **courant** (ils se lèvent avec la promotion, un réglage plus fin du joueur est toujours respecté). Features non forcées off : les défauts excluent déjà polarisation et hot flow |
-| 4 | **fait (périmètre ajusté)** | `3e96fbf` | les 18 pipelines display/post en async, attendus avec le cœur — constructeur non bloquant, compilations recouvertes, prêt identique à la première frame. Les vessels **restent sync** : leur dessin est déjà cadencé par le téléchargement des modèles (`ready` + `onLoaded`), des secondes derrière ces pipelines — une conversion async n'achèterait rien à la première image et risquerait un à-coup au premier vol |
+| 6 | **fait** | `8119f4e` | plafonds realtime (steps 150/250/350, eps 0,18/0,14/0,10), convergence ≤ 16 spp + seuil de bruit 0,03 sur tier ≤ 1, cube Terre `high` non téléchargé sur tier ≤ 1 — plafonds liés au tier **courant** (ils se lèvent avec la promotion, la préservation des réglages manuels était une intention, contredite par le code initial ; corrigée ensuite dans `quality-policy.ts`). Features non forcées off : les défauts excluent déjà polarisation et hot flow |
+| 4 | **fait (périmètre ajusté)** | `3e96fbf` | les 18 pipelines display/post en async, attendus avec le cœur — display/post sans créations synchrones de pipelines, compilations recouvertes ; le constructeur complet reste partiellement synchrone, prêt identique à la première frame. Les vessels **restent sync** : leur dessin est déjà cadencé par le téléchargement des modèles (`ready` + `onLoaded`), des secondes derrière ces pipelines — leur compilation synchrone a néanmoins lieu dans le constructeur ; le gain d'une conversion reste à mesurer |
 | 11 | **non appliqué (mesuré)** | — | les candidats du plan sont câblés au démarrage : `controller/*` (handlers d'entrée installés au boot), `flighthud` (construit et dessiné dès la première frame), `map3d` (construit dans le constructeur de FlightHud, DOM inséré à l'avance). Cibles sûres mesurées ≤ ~60 Ko source (bench, renderdialog) ≈ 2 % du bundle — le refactor ne se justifie pas (composition réelle du bundle mesurée par `bun build`, 426 modules) |
 | 7 | **reporté** | — | population concernée : adapters rapportant 8–9 storage buffers (mode compat, expérimental) ; le refactor (packing des bindings + offsets dans un kernel de 6 362 lignes couvert par les golden e2e) a un rapport risque/gain défavorable aujourd'hui. Le gate d'erreur explicite reste en place |
-| 10 | **reporté** | — | après les actions 1–3, la première image n'attend plus que 2 compilations de pipelines ; la valeur marginale d'un mode attente sans le traceur (effort « élevé » du plan) s'en trouve d'autant réduite |
-| 12 | **fait** | `f31ea4d` | e2e `reload` (profil Chrome frais → premier chargement réellement froid ; le second ne doit pas être plus lent — verrou de régression sur la stabilité des clés). **Première mesure** Chrome/macOS (Metal) : froid 4 399 ms → rechargement 3 280 ms (**−25 %**) — le cache disque tient pour cette application |
+| 10 | **reporté** | — | après les actions 1–3, le traceur attend 2 pipelines, auxquels s'ajoutent le display/post et les créations synchrones du constructeur ; la valeur marginale d'un mode attente sans le traceur (effort « élevé » du plan) s'en trouve d'autant réduite |
+| 12 | **fait** | `f31ea4d` | e2e `reload` (profil Chrome frais → caches de profil distincts ; comparaison de durées observationnelle, sans contrôle du cache du pilote ni isolation HTTP/SW). **Première mesure** Chrome/macOS (Metal) : froid 4 399 ms → rechargement 3 280 ms (**−25 %**) — ce résultat n'isole pas le cache disque des shaders |
 
 ---
 
@@ -663,3 +663,39 @@ Chaque action du §4 appliquée dans l'ordre conseillé, un commit par étape, `
   micro-benchmark + mesure du temps de compile comme proxy — §3.4.
 - gpuweb issue #4536 + intent-to-ship Blink : passage de `requestAdapterInfo()` async à
   l'attribut sync `adapter.info` — §3.1.
+
+### Correctifs issus de l'audit — 2026-10-05
+
+Le bilan précédent décrit les commits d'origine. Les correctifs locaux après @64b8833 ajoutent :
+
+- ressources optionnelles indépendantes, démarrage différé, états explicites et timeout de 180 s ;
+  une LUT rejetée ne désactive pas l'intégrateur, et un export impossible retourne une erreur ;
+- compilation du pipeline PNG/RGBA 8 bits au premier export ; **17** pipelines display/post restent
+  attendus au démarrage, dont le `rgba16float` également utilisé par le canvas HDR ;
+- plafonds de pixels/précision/textures réservés à `quality === "game"`, résolution dynamique active
+  et subsampling `auto` ; aucun plafond de tier sur les options offline, hors repli mémoire des textures ;
+- politique Terre appliquée après la caméra et le vaisseau ; qualité effective exposée et objectif
+  spp du HUD identique à celui du renderer ;
+- promotion possible sans cap de pixels quand la précision est plafonnée ; mesures exclues pendant
+  les compilations/transitions de ressources, historiques remis à zéro après transition/changement de tier ;
+- véritable recency LRU, compilations spécialisées sérialisées, étapes obsolètes ignorées avant lancement ;
+- persistance versionnée, valide sept jours, rejet des valeurs invalides et identités entièrement vides ;
+- première image signalée après completion GPU ; entrée précoce clairement annoncée comme mise en
+  attente, et bouton Recharger proposé après 180 s sans image ;
+- télémétrie séparant soumissions GPU terminées et callbacks navigateur, avec médiane/p95 et qualité réelle ;
+- tests unitaires et tests Chrome/WebGPU des pannes et de la politique réellement exécutée.
+
+Les créations synchrones de shaders/pipelines des vaisseaux, du ciel et de certains utilitaires
+ne sont pas converties par ce correctif. Le nombre de pipelines évités ne fournit pas une estimation
+fiable du gain de démarrage : il faut mesurer les backends et configurations cibles. La précision
+visuelle des plafonds Game sur GPU faibles reste une validation matérielle distincte.
+
+
+### Préchargement Terre indépendant de la scène
+
+À la demande de l'utilisateur, `Renderer.create()` lance maintenant `prefetchEarthMaps(device)`
+après `requestDevice()`, avant les compilations. Le niveau moyen est téléchargé dans le format
+adapté au GPU, avec nuit, océans et relief, même si la Terre est absente de la scène initiale.
+Les demandes sont de priorité basse, partagées et réessayables après échec. Le préchargement
+alimente le cache réseau ; décodage et résidence GPU restent à la demande, sans attente au splash.
+Le niveau élevé continue à suivre la vue et la politique de qualité.

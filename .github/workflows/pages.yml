@@ -12,8 +12,10 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  # Serialize the entire snapshot → verification → deployment, across both publishing branches.
+  # PR checks retain their own cancellable group. An artifact cannot wait behind a newer deployment.
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # types, unit tests and the production build: nothing deploys unless all three pass
@@ -45,42 +47,74 @@ jobs:
   # bundle, the shell, the manifest and the Service Worker's registration is relative, and the
   # /test/sw.js scope (/test/) wins over the root worker's (/) for the pages under it.
   site:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
     needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: oven-sh/setup-bun@v2
-      # (gone after the branch is merged and deleted: the root site alone, not a failing checkout)
-      - name: Is the test-kimi branch still there?
-        id: testbranch
+      - name: Snapshot both branch revisions
+        id: revisions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          if gh api "repos/${{ github.repository }}/branches/test-kimi" --jq '.name' > /dev/null 2>&1; then
-            echo "exists=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=no" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          resolve_ref() {
+            local branch="$1" response status sha
+            response=$(mktemp)
+            status=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "https://api.github.com/repos/$REPOSITORY/git/ref/heads/$branch") || { rm -f "$response"; return 1; }
+            if [ "$status" = 200 ]; then
+              sha=$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' "$response") || { rm -f "$response"; return 1; }
+              echo "$sha"
+            elif [ "$status" = 404 ] && [ "$branch" = test-kimi ]; then
+              echo absent
+            else
+              echo "Cannot resolve $branch: HTTP $status" >&2
+              rm -f "$response"
+              return 1
+            fi
+            rm -f "$response"
+          }
+          main_sha=$(resolve_ref main)
+          test_sha=$(resolve_ref test-kimi)
+          echo "main=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "test=$test_sha" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.revisions.outputs.main }}
           path: main-src
       - uses: actions/checkout@v4
-        if: steps.testbranch.outputs.exists == 'yes'
+        if: steps.revisions.outputs.test != 'absent'
         with:
-          ref: test-kimi
+          ref: ${{ steps.revisions.outputs.test }}
           path: test-src
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('main-src/bun.lock') }}
-      - name: Build main → the root
+      - name: Verify and build the exact main revision → the root
         working-directory: main-src
-        run: bun install --frozen-lockfile && bun run build:pages
-      - name: Build test-kimi → /test/
-        if: steps.testbranch.outputs.exists == 'yes'
+        run: |
+          bun install --frozen-lockfile
+          bun run typecheck
+          bunx biome ci .
+          bun scripts/check-wgsl.ts
+          bun test
+          bun run build:pages
+      - name: Verify and build the exact test-kimi revision → /test/
+        if: steps.revisions.outputs.test != 'absent'
         working-directory: test-src
-        run: bun install --frozen-lockfile && bun run build:pages
+        run: |
+          bun install --frozen-lockfile
+          bun run typecheck
+          bunx biome ci .
+          bun scripts/check-wgsl.ts
+          bun test
+          bun run build:pages
       - name: Assemble the site
         run: |
           mkdir -p _site
@@ -97,14 +131,9 @@ jobs:
   # before its first step: Settings → Environments → github-pages → deployment branches — main and
   # test-kimi are both registered; after the branch is merged and deleted, its entry is inert)
   deploy:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
     needs: site
     runs-on: ubuntu-latest
-    # (one deployment at a time, whatever the triggering branch: the last one's artifact holds
-    # both sites, a queued one would only be newer)
-    concurrency:
-      group: pages-deployment
-      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

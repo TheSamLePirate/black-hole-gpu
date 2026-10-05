@@ -106,6 +106,7 @@ export function installBh(c: BhContext) {
       ...o,
     });
     while (!renderer.offlineState?.done) {
+      if (renderer.offlineState?.error) throw new Error(renderer.offlineState.error);
       await new Promise((r) => setTimeout(r, 500));
       if (!renderer.offlineActive) return "cancelled";
     }
@@ -150,35 +151,47 @@ export function installBh(c: BhContext) {
     const n = videoState.frames;
     // (a path: the camera set frame by frame, the time at the rate; else the scene goes on as live —
     // the simulation's step, the user's inputs left out)
-    settings.timeSpeed = rate;
-    let clock = 0;
-    for (let i = 0; i < n; i++) {
-      if (path) Object.assign(settings, path(n > 1 ? i / (n - 1) : 0));
-      else {
-        camera.scripted = true;
-        const tf = i / fps;
-        while (clock < tf - 1e-9) {
-          const dt = Math.min(1 / 60, tf - clock);
-          sim.step(dt);
-          clock += dt;
+    const previousRate = settings.timeSpeed;
+    try {
+      settings.timeSpeed = rate;
+      let clock = 0;
+      for (let i = 0; i < n; i++) {
+        if (path) Object.assign(settings, path(n > 1 ? i / (n - 1) : 0));
+        else {
+          camera.scripted = true;
+          const tf = i / fps;
+          while (clock < tf - 1e-9) {
+            const dt = Math.min(1 / 60, tf - clock);
+            sim.step(dt);
+            clock += dt;
+          }
+          sim.applyRender(camera.piloting && !camera.cinematic ? camera.flightInfo() : null);
+          camera.scripted = false;
         }
-        sim.applyRender(camera.piloting && !camera.cinematic ? camera.flightInfo() : null);
-        camera.scripted = false;
+        renderer.startOffline(settings, path ? t0 + (i / fps) * rate : sim.time, opts);
+        while (!renderer.offlineState?.done) {
+          if (renderer.offlineState?.error) throw new Error(renderer.offlineState.error);
+          await new Promise((r) => setTimeout(r, 20));
+          if (!renderer.offlineActive) return (videoState.result = "cancelled");
+        }
+        updateChart(true);
+        const px = await renderer.exportRGBA(settings);
+        await writer.addFrame(px.data, px.width, px.height);
+        videoState.frame = i + 1;
       }
-      renderer.startOffline(settings, path ? t0 + (i / fps) * rate : sim.time, opts);
-      while (!renderer.offlineState?.done) {
-        await new Promise((r) => setTimeout(r, 20));
-        if (!renderer.offlineActive) return (videoState.result = "cancelled");
-      }
-      updateChart(true);
-      const px = await renderer.exportRGBA(settings);
-      await writer.addFrame(px.data, px.width, px.height);
-      videoState.frame = i + 1;
+      await fetch(`/__snapshot?name=${encodeURIComponent(name)}.mp4`, { method: "POST", body: await writer.finish() });
+      renderer.cancelOffline();
+      videoState.done = true;
+      return (videoState.result = `${name}.mp4: ${videoState.frames} frames in ${((performance.now() - videoState.started) / 1000).toFixed(0)} s`);
+    } catch (error) {
+      videoState.result = error instanceof Error ? error.message : String(error);
+      throw error;
+    } finally {
+      writer.close();
+      renderer.cancelOffline();
+      camera.scripted = false;
+      settings.timeSpeed = previousRate;
     }
-    await fetch(`/__snapshot?name=${encodeURIComponent(name)}.mp4`, { method: "POST", body: await writer.finish() });
-    renderer.cancelOffline();
-    videoState.done = true;
-    return (videoState.result = `${name}.mp4: ${videoState.frames} frames in ${((performance.now() - videoState.started) / 1000).toFixed(0)} s`);
   };
   Object.assign(globalThis, {
     __bh: {

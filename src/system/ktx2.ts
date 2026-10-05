@@ -31,7 +31,7 @@ function getWorker(): Worker | null {
 }
 
 /** What this device can sample of the compressed formats (the features the renderer asked for). */
-export function ktxTarget(device: GPUDevice): KtxTarget {
+export function ktxTarget(device: Pick<GPUDevice, "features">): KtxTarget {
   if (device.features.has("texture-compression-bc")) return "bc7";
   if (device.features.has("texture-compression-astc")) return "astc";
   return "rgba";

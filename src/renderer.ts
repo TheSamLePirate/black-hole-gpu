@@ -14,6 +14,8 @@ import {
 } from "./system/solar";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
+import { AsyncResource, CompileQueue } from "./util/async-resource";
+import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
@@ -54,7 +56,7 @@ import {
   type GpuBody,
 } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
-import { loadEarthMaps, placeholderEarth, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { loadEarthMaps, placeholderEarth, prefetchEarthMaps, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
@@ -164,14 +166,23 @@ export function prefetchSkyAssets(get: (url: string, id: string) => Promise<Resp
   ] as const) {
     if (skyPrefetch.has(url)) continue;
     const p = get(url, id).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${url}: ${r.status}`))));
-    p.catch(() => {}); // (a failure is told by loadSky's own chain — never an unhandled rejection)
+    void p.catch(() => {
+      if (skyPrefetch.get(url) === p) skyPrefetch.delete(url);
+    });
     skyPrefetch.set(url, p);
   }
 }
 
 /** A prefetched asset as a fresh Response (an ArrayBuffer's body can be re-read), or null. */
 function prefetched(url: string): Promise<Response> | null {
-  return skyPrefetch.get(url)?.then((buf) => new Response(buf)) ?? null;
+  const pending = skyPrefetch.get(url);
+  skyPrefetch.delete(url); // transfer ownership: do not retain megabytes after loadSky
+  return pending?.then((buf) => new Response(buf)) ?? null;
+}
+
+/** Retry a failed speculative request once through the normal loading path. */
+function skyAsset(url: string, id: string): Promise<Response> {
+  return prefetched(url)?.catch(() => loading.fetch(url, id)) ?? loading.fetch(url, id);
 }
 
 export function halfToFloat(h: number): number {
@@ -232,6 +243,7 @@ export interface OfflineStatus {
   eta: number; // s
   paused: boolean;
   done: boolean;
+  error?: string;
 }
 
 export interface FrameStats {
@@ -241,6 +253,8 @@ export interface FrameStats {
   gpuMs: number;
   width: number;
   height: number;
+  targetSpp?: number;
+  qualityError?: string;
   offline?: OfflineStatus;
 }
 
@@ -312,6 +326,7 @@ interface OfflineJob {
   lastTick: number;
   paused: boolean;
   done: boolean;
+  error?: string;
   shown: boolean;
   /** the terrain tiles drawn when it started (EarthTiles.stamp): restarted when more come in */
   tiles: number;
@@ -326,7 +341,8 @@ export class Renderer {
   private displayPipeline!: GPURenderPipeline; // SDR canvas (preferred format) — set from the async compile (auxCompiled)
   private sdrFormat: GPUTextureFormat;
   private hdrActive = false;
-  private export8Pipeline!: GPURenderPipeline;
+  private export8Pipeline: GPURenderPipeline | null = null;
+  private export8Compile!: AsyncResource<GPURenderPipeline>;
   private export16Pipeline!: GPURenderPipeline;
   private postResolve!: GPUComputePipeline;
   private postGatherH!: GPUComputePipeline;
@@ -514,8 +530,11 @@ export class Renderer {
   /** the tracer's general pipelines compiled (create() waits for it: nothing is drawn before) */
   /** the pipelines the first image needs: the realtime kernel and the ship's probe (awaited at create) */
   private tracerCore: Promise<void>;
-  /** all five pipelines of the tracer: the core's plus the LUT's and the quality kernel's */
-  private tracerCompiled: Promise<void>;
+  /** Optional pipelines compile independently, after the first image or on demand. */
+  private qualityCompile!: AsyncResource<GPUComputePipeline>;
+  private lutCompile!: AsyncResource<GPUComputePipeline>;
+  private lutQCompile!: AsyncResource<GPUComputePipeline>;
+  private readonly variantQueue = new CompileQueue();
   private live: Target | null = null;
   private offline: OfflineJob | null = null;
 
@@ -651,7 +670,7 @@ export class Renderer {
     });
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
-    // (compiled asynchronously, all at once: the tracer is a huge shader — on Windows (D3D12) one takes a
+    // (compiled asynchronously: the tracer is a huge shader — on Windows (D3D12) one takes a
     // minute or more, and a synchronous compile stalls the GPU process until the browser's watchdog kills it)
     const mkTrace = (quality: boolean) =>
       device.createComputePipelineAsync({
@@ -689,11 +708,32 @@ export class Renderer {
       this.tracePipeline = rt;
       this.envPipeline = env;
     });
-    this.tracerCompiled = Promise.all([this.tracerCore, mkLut(false), mkLut(true), mkTrace(true)]).then(([, lut, lutq, q]) => {
-      this.lutPipeline = lut;
-      this.lutQPipeline = lutq;
-      this.qualityPipeline = q;
-    });
+    const optional = (compile: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
+      const resource = new AsyncResource(compile, () => {
+        if (resource.value) publish(resource.value);
+        else console.warn("Optional tracer pipeline unavailable:", resource.error);
+        this.onAssets?.();
+      });
+      return resource;
+    };
+    this.qualityCompile = optional(
+      () => mkTrace(true),
+      (p) => {
+        this.qualityPipeline = p;
+      },
+    );
+    this.lutCompile = optional(
+      () => mkLut(false),
+      (p) => {
+        this.lutPipeline = p;
+      },
+    );
+    this.lutQCompile = optional(
+      () => mkLut(true),
+      (p) => {
+        this.lutQPipeline = p;
+      },
+    );
     this.traceModule = traceModule;
     this.tracePipeLayout = layout;
     this.ship = new ShipRenderer(device, src.ship);
@@ -710,8 +750,9 @@ export class Renderer {
     // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
     this.prof.enabled = this.prof.supported;
     this.ship.prof = this.prof;
-    const mkDisplay = (fmt: GPUTextureFormat) =>
+    const mkDisplay = (fmt: GPUTextureFormat, label: string) =>
       device.createRenderPipelineAsync({
+        label,
         layout: "auto",
         vertex: { module: displayModule, entryPoint: "vs" },
         fragment: { module: displayModule, entryPoint: "fs", targets: [{ format: fmt }] },
@@ -719,16 +760,19 @@ export class Renderer {
       });
     const mkPost = (entryPoint: string) =>
       device.createComputePipelineAsync({ layout: "auto", compute: { module: postModule, entryPoint } });
-    // (compiled asynchronously, all at once, and awaited with the tracer's core at create(): eighteen
-    // sync round-trips to the GPU process no longer stall the constructor, and their compiles overlap
-    // the tracer's — plan §2.2-H. The vessels' renderers stay synchronous: their draw is already
-    // gated on their models' download (ready + onLoaded), seconds behind these pipelines, so an
-    // async conversion would buy nothing at the first image and risk a hitch on the first flight)
+    // The live display/post chain is awaited at create. The 8-bit export compiles on demand;
+    // rgba16float remains in the core because the HDR canvas uses it too. Vessel constructors
+    // still create synchronous pipelines: model readiness does not defer that compilation work.
     this.dofDummy = device.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
+    this.export8Compile = new AsyncResource(
+      () => mkDisplay("rgba8unorm", "8-bit export"),
+      () => {
+        this.export8Pipeline = this.export8Compile.value;
+      },
+    );
     this.auxCompiled = Promise.all([
-      mkDisplay(format).then((p) => (this.displayPipeline = p)),
-      mkDisplay("rgba8unorm").then((p) => (this.export8Pipeline = p)),
-      mkDisplay("rgba16float").then((p) => (this.export16Pipeline = p)),
+      mkDisplay(format, "SDR canvas").then((p) => (this.displayPipeline = p)),
+      mkDisplay("rgba16float", "HDR canvas and 16-bit export").then((p) => (this.export16Pipeline = p)),
       mkPost("resolve").then((p) => (this.postResolve = p)),
       mkPost("gatherH").then((p) => (this.postGatherH = p)),
       mkPost("down").then((p) => (this.postDown = p)),
@@ -807,14 +851,14 @@ export class Renderer {
    */
   async loadSky(): Promise<void> {
     const stars = Promise.all([
-      loadPackedTexture(this.device, starLodUrl, (u) => prefetched(u) ?? loading.fetch(u, "stars")),
-      loadStarCatalogue(this.device, starCatalogueUrl, (u) => prefetched(u) ?? loading.fetch(u, "stars")),
+      loadPackedTexture(this.device, starLodUrl, (u) => skyAsset(u, "stars")),
+      loadStarCatalogue(this.device, starCatalogueUrl, (u) => skyAsset(u, "stars")),
     ]);
     const [bitmap, [lod, cat]] = await Promise.all([
       loading.track(
         "sky",
         "",
-        (prefetched(milkyWayUrl) ?? loading.fetch(milkyWayUrl, "sky"))
+        skyAsset(milkyWayUrl, "sky")
           .then((r) => r.blob())
           .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" })),
       ),
@@ -1010,6 +1054,9 @@ export class Renderer {
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
       },
     });
+    // Start downloads while shaders compile, even for a scene with no Earth. This does not gate
+    // startup or allocate Earth textures; the scene-dependent loader still controls GPU residency.
+    void prefetchEarthMaps(device).catch((error) => console.warn("Earth prefetch unavailable:", error));
     // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
     // flight and offers a reload; nothing more is sent to it)
     const lost = device.lost.then((info) => {
@@ -1064,6 +1111,7 @@ export class Renderer {
     if (remembered !== null && remembered !== r.tier.level) r.tier = tierAt(remembered, `${r.tier.label} · remembered`);
     void lost.then((info) => {
       r.lost = info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
+      if (r.offline) r.offline.error = r.lost;
       if (info.reason !== "destroyed") r.onLost?.(r.lost);
     });
     // (errors the code did not scope: counted, the first ones told — a silent black image otherwise)
@@ -1074,13 +1122,9 @@ export class Renderer {
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
     // (the pipelines compile in the GPU process: the realtime kernel and the probe awaited below,
-    // the LUT's and the quality kernel's in the background — a failure there only forfeits the
-    // still view's refinement and the LUT: told in the console, the realtime image unaffected)
+    // optional LUT/quality pipelines start later. Their independent failures preserve realtime
+    // rendering and are exposed through pipelineStatus, the HUD and offlineStatus.error.)
     loading.stage("pipelines", t("Compiling the ray tracer — first image"), { weight: 4, indeterminate: true, eta: 3 });
-    void r.tracerCompiled.then(
-      () => {},
-      (e: Error) => console.error("The ray tracer's quality pipelines failed to compile:", e),
-    );
     // (its failure held as a value: told after the WGSL's own messages, which name the line; the
     // display's and the post chain's async compiles are part of what the first frame needs)
     const tracerFailure = Promise.all([r.tracerCore, r.auxCompiled]).then(
@@ -1450,6 +1494,7 @@ export class Renderer {
     const d = this.device;
     t.displayBinds.clear();
     for (const p of [this.displayPipeline, this.export8Pipeline, this.export16Pipeline]) {
+      if (!p) continue;
       t.displayBinds.set(
         p,
         d.createBindGroup({
@@ -1832,8 +1877,9 @@ export class Renderer {
     set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
     // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
-    this.lutOn =
-      t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut && o.block <= 2 && this.lutPipeline !== null; // (its pass skipped while the background compile runs — no FLAG_LUT on a LUT never written)
+    this.lutWanted = t === this.live && !o.probe && (this.featureKey & LUT_BLOCKERS) === 0 && s.farFieldLut && o.block <= 2;
+    const lutReady = (o.flags & FLAG_ADAPTIVE_RK) !== 0 ? this.lutQPipeline !== null : this.lutPipeline !== null;
+    this.lutOn = this.lutWanted && lutReady; // (its pass skipped while the background compile runs — no FLAG_LUT on a LUT never written)
     if (this.lutOn) u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_LUT;
     this.device.queue.writeBuffer(this.bodyBuf, 0, this.bodyData);
     const massive = bodies.findIndex((b) => b.id === "star" && b.mass > 0);
@@ -1959,14 +2005,13 @@ export class Renderer {
         this.earthSeenAt = performance.now();
         // (the tier's texture cap — plan §3.5: the high cube is ~60 MB of network and ~96 MB of
         // VRAM a weak tier never asked for; the live view only — exports keep their choice)
-        if (dE < highAt) want = this.tier.level <= 1 ? "med" : "high";
+        if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
       // (the ship by the Earth, the view away: its maps kept, the finer ones low over it)
       const F = this.shipFocus;
       if (F?.body === "earth") want = F.altKm < 2000 ? "high" : (want ?? "med");
-      if (want === "high" && this.earthCap !== "high") want = this.earthCap === "med" ? "med" : null;
-      if (want === "med" && this.earthCap === "none") want = null;
+      want = earthMapQuality(want, automaticQuality(s), t !== this.live, this.tier, this.earthCap);
       if (want !== have) {
         if (want) this.requestEarthMaps(want);
         else this.releaseEarthMaps();
@@ -2404,6 +2449,7 @@ export class Renderer {
   private lutQPipeline: GPUComputePipeline | null = null;
   /** this frame's params want the far field's LUT (set with them) */
   private lutOn = false;
+  private lutWanted = false;
   /** the LUT's epoch on the live target (refining a still view: computed once) */
   private lutEpoch = -1;
   private tracePipeLayout!: GPUPipelineLayout;
@@ -2448,19 +2494,25 @@ export class Renderer {
       lutq: this.lutQPipeline,
     }[kind];
     const key = this.featureKey;
-    if (key === FEATURES_ALL) return general;
+    if (key === FEATURES_ALL || this.completedFrames === 0) return general;
     let v = this.variants.get(key);
+    if (v) {
+      this.variants.delete(key);
+      this.variants.set(key, v);
+    }
     if (!v) {
       v = { rt: null, q: null, env: null, lut: null, lutq: null, qStarted: false };
       this.variants.set(key, v);
       this.evictVariants();
       const slot = v;
+      const current = () => this.variants.get(key) === slot && !this.lost;
+      const compile = (entry: "main" | "env" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, false));
       // (the realtime kernel first, then its probe and its LUT; the quality cascade only when a
       // still view asks for it below — five specialised compiles of a 6 362-line kernel are tens
       // of seconds of GPU process, not spent while the player flies — plan §2.2-F)
-      void this.mkVariant(key, "main", false)
-        .then((p) => ((slot.rt = p), this.mkVariant(key, "env", false)))
-        .then((p) => ((slot.env = p), (key & LUT_BLOCKERS) === 0 ? this.mkVariant(key, "lut", false) : null))
+      void compile("main")
+        .then((p) => ((slot.rt = p), compile("env")))
+        .then((p) => ((slot.env = p), (key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
         .then(
           (p) => (slot.lut = p),
           (e) => console.warn("Specialised tracer unavailable:", e),
@@ -2469,8 +2521,10 @@ export class Renderer {
     if ((kind === "q" || kind === "lutq") && !v.qStarted) {
       v.qStarted = true;
       const slot = v;
-      void this.mkVariant(key, "main", true)
-        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? this.mkVariant(key, "lut", true) : null))
+      const current = () => this.variants.get(key) === slot && !this.lost;
+      const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, true));
+      void compile("main")
+        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
         .then(
           (p) => (slot.lutq = p),
           (e) => console.warn("Specialised tracer unavailable:", e),
@@ -3574,15 +3628,30 @@ export class Renderer {
     this.prof.end(enc);
     this.device.queue.submit([enc.finish()]);
     this.inFlight++;
-    this.device.queue.onSubmittedWorkDone().then(() => {
-      this.inFlight--;
-      // (this frame's own time: from when the GPU could start on it — after the one before)
-      const now = performance.now();
-      const ms = now - Math.max(t0, this.lastDoneAt);
-      this.lastDoneAt = now;
-      this.lastGpuMs = ms;
-      done(ms);
-    });
+    void this.device.queue.onSubmittedWorkDone().then(
+      () => {
+        this.inFlight--;
+        const now = performance.now();
+        const ms = now - Math.max(t0, this.lastDoneAt);
+        this.lastDoneAt = now;
+        this.lastGpuMs = ms;
+        this.completedFrames++;
+        this.firstFrameDoneAt ||= now;
+        this.completedDurations.push(ms);
+        if (this.completedDurations.length > 512) this.completedDurations.shift();
+        // Optional LUT work starts only after the first image has completed on the GPU.
+        if (this.lutWanted) void this.lutCompile.start();
+        if (this.lutWanted && this.qualityCompile.state === "ready") void this.lutQCompile.start();
+        done(ms);
+      },
+      (error: unknown) => {
+        this.inFlight--;
+        const message = error instanceof Error ? error.message : String(error);
+        this.lost = message;
+        if (this.offline) this.offline.error = message;
+        this.onLost?.(message);
+      },
+    );
   }
 
   // ------------------------------------------------------------------------------------ live view
@@ -3598,18 +3667,6 @@ export class Renderer {
   /** the hardware's tier (its pixel budget for the realtime image) */
   tier: Tier = { level: 2, capMpx: 2.2, label: "" };
 
-  // (the tier's ceilings — plan §3.5: the integration's cost follows the hardware, not only the
-  // pixels — the anti-pattern of adapting the pixels alone ends at block 8 with a full kernel.
-  // They move with the measured tier (a promotion lifts them), and a finer setting is respected:
-  // they are ceilings and floors, never a raised quality the player did not ask for)
-  /** realtime integration: the most steps per ray by tier */
-  private static STEPS_CAP = [150, 250, 350, Infinity, Infinity];
-  /** realtime integration: the least epsilon (accuracy) by tier */
-  private static EPS_FLOOR = [0.18, 0.14, 0.1, 0, 0];
-  /** the still view's convergence: the most samples per pixel by tier */
-  private static SPP_CAP = [16, 16, Infinity, Infinity, Infinity];
-  /** the still view's convergence: the least noise threshold (an earlier stop) by tier */
-  private static NOISE_FLOOR = [0.03, 0.03, 0, 0, 0];
   /** the adapter: what it is, its features and key limits (set at create) */
   adapter: {
     vendor: string;
@@ -3620,6 +3677,46 @@ export class Renderer {
     features: string[];
     limits: Record<string, number>;
   } | null = null;
+  /** Completed GPU submissions, independent of browser animation callbacks. */
+  completedFrames = 0;
+  firstFrameDoneAt = 0;
+  private completedDurations: number[] = [];
+  get frameTelemetry() {
+    return { completedFrames: this.completedFrames, firstFrameDoneAt: this.firstFrameDoneAt, durationsMs: [...this.completedDurations] };
+  }
+  /** The effective live quality used by both the renderer and diagnostics. */
+  effectiveQuality(s: Settings) {
+    return effectiveQuality(s, this.tier);
+  }
+  /** Optional pipeline states are observable without starting a compilation. */
+  get pipelineStatus() {
+    return {
+      quality: this.qualityCompile.state,
+      qualityError: this.qualityCompile.error,
+      lut: this.lutCompile.state,
+      lutQuality: this.lutQCompile.state,
+    };
+  }
+  /** Calibration excludes resource transitions and optional compilation load. */
+  get calibrationReady() {
+    return (
+      this.variantReady &&
+      this.earthSettled &&
+      this.variantQueue.pending === 0 &&
+      ![this.qualityCompile, this.lutCompile, this.lutQCompile].some((r) => r.state === "pending")
+    );
+  }
+  private timingGeneration = 0;
+  /** Forget timing history when the hardware policy changes. */
+  resetQualityTiming() {
+    this.timingGeneration++;
+    this.blockMs.clear();
+    this.recentMs.length = 0;
+    this.slowMs = this.fastMs = 0;
+    this.frameTimes.length = 0;
+    this.lastGpuMs = 0;
+    this.invalidate();
+  }
   /** when the GPU last finished a frame [performance.now() ms] */
   get lastFrameDoneAt() {
     return this.lastDoneAt;
@@ -3658,10 +3755,15 @@ export class Renderer {
     let rows = 0;
 
     // (the tier's convergence cap, plan §3.5: a still view on weak hardware refines less)
-    const targetSpp = Math.min(s.targetSpp, Renderer.SPP_CAP[this.tier.level]!);
+    const effective = effectiveQuality(s, this.tier);
+    const targetSpp = effective.targetSpp;
+    this.liveTargetSpp = targetSpp;
+    this.liveQualityError = s.adaptiveIntegrator ? (this.qualityCompile.error ?? undefined) : undefined;
+    if (this.completedFrames > 0 && !sceneChanged && !timeChanged && s.adaptiveIntegrator && this.sampleIndex < targetSpp)
+      void this.qualityCompile.start();
     // (the quality kernel still compiling in the background: a still view keeps the realtime path
     // — sampleIndex stays at 0, the convergence starts when the kernel lands)
-    if (sceneChanged || timeChanged || (this.sampleIndex < targetSpp && !this.qualityPipeline)) {
+    if (sceneChanged || timeChanged || (s.adaptiveIntegrator && this.sampleIndex < targetSpp && !this.qualityPipeline)) {
       phase = "realtime";
       this.frameStamp++;
       this.updateValidFrom(time);
@@ -3682,8 +3784,8 @@ export class Renderer {
       this.writeParams(t, s, time, {
         block,
         // (the tier's ceilings: the kernel's cost follows the hardware — plan §3.5)
-        eps: Math.max(s.realtimeEps, Renderer.EPS_FLOOR[this.tier.level]!),
-        steps: Math.min(s.realtimeSteps, Renderer.STEPS_CAP[this.tier.level]!),
+        eps: effective.realtimeEps,
+        steps: effective.realtimeSteps,
         y0: 0,
         y1: t.height,
         accumulate: false,
@@ -3717,7 +3819,7 @@ export class Renderer {
         sampleIndex: this.sampleIndex,
         flags,
         tol: s.integratorTolerance,
-        noise: Math.max(s.noiseThreshold, Renderer.NOISE_FLOOR[this.tier.level]!),
+        noise: effective.noiseThreshold,
         minSpp: 8,
       });
       this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
@@ -3742,8 +3844,9 @@ export class Renderer {
     this.chartDirty = false;
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
+    const generation = this.timingGeneration;
     this.submit(enc, (ms) => {
-      if (phase === "realtime" && auto) this.adaptBlock(ms, this.frameBudget(s), used);
+      if (phase === "realtime" && auto && generation === this.timingGeneration) this.adaptBlock(ms, this.frameBudget(s), used);
       if (phase === "converging" && rows > 0) {
         const perRow = ms / rows;
         // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
@@ -3827,10 +3930,15 @@ export class Renderer {
     }
   }
 
+  private liveTargetSpp = 0;
+  private liveQualityError: string | undefined;
+
   private stats(phase: FrameStats["phase"], t: Target): FrameStats {
     const frac = this.bandY / Math.max(t.height, 1);
     return {
       phase,
+      targetSpp: this.liveTargetSpp,
+      qualityError: this.liveQualityError,
       block: this.lastBlock,
       spp: phase === "realtime" ? 0 : this.sampleIndex + (phase === "converging" ? frac : 0),
       gpuMs: this.lastGpuMs,
@@ -3917,6 +4025,7 @@ export class Renderer {
       eta: progress > 0.002 && !job.done ? (job.elapsed * (1 - progress)) / progress : NaN,
       paused: job.paused,
       done: job.done,
+      error: job.error,
     };
   }
 
@@ -3935,7 +4044,7 @@ export class Renderer {
     this.configureOutput(s);
     const cv = this.context.canvas as HTMLCanvasElement;
     const now = performance.now();
-    const working = !job.paused && !job.done;
+    const working = !job.paused && !job.done && !job.error;
     if (working) job.elapsed += (now - job.lastTick) / 1000;
     job.lastTick = now;
     const result = (): FrameStats => ({
@@ -3949,7 +4058,12 @@ export class Renderer {
     });
     if (!working && job.shown && !displayChanged) return result();
     // (the quality kernel still compiling: the job waits — the dialog polls offlineState.done)
-    if (!this.qualityPipeline) return result();
+    if (job.opts.tolerance > 0 && !this.qualityPipeline) {
+      void this.qualityCompile.start();
+      if (this.qualityCompile.error) job.error = `Quality pipeline unavailable: ${this.qualityCompile.error}`;
+      return result();
+    }
+    if (job.error) return result();
 
     const enc = this.device.createCommandEncoder();
     let rows = 0;
@@ -4088,13 +4202,20 @@ export class Renderer {
   }
 
   private exportTarget(): Target {
+    if (this.lost || this.offline?.error) throw new Error(this.lost ?? this.offline!.error);
     return this.offline?.target ?? this.live!;
   }
 
   /** Tone-mapped image of a target at its native resolution (8- or 16-bit float output). */
   private async renderDisplayed(s: Settings, t: Target, bits: 8 | 16): Promise<Uint8Array> {
+    if (bits === 8) {
+      await this.export8Compile.start();
+      if (!this.export8Pipeline) throw new Error(`Export pipeline unavailable: ${this.export8Compile.error}`);
+      if (t !== this.exportTarget()) throw new Error("The export target changed while its pipeline compiled");
+      this.bindDisplay(t);
+    }
     const format: GPUTextureFormat = bits === 8 ? "rgba8unorm" : "rgba16float";
-    const pipeline = bits === 8 ? this.export8Pipeline : this.export16Pipeline;
+    const pipeline = bits === 8 ? this.export8Pipeline! : this.export16Pipeline;
     const tex = this.device.createTexture({
       size: [t.width, t.height],
       format,

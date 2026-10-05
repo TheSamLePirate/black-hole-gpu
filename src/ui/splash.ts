@@ -66,9 +66,22 @@ export class Splash {
     this.tip = Math.floor(Math.random() * TIPS.length);
     this.showTip();
     this.tipTimer = window.setInterval(() => this.showTip(), 5200);
-    // (a stuck start — a very slow compile — can be skipped: without an image yet the click is
+    // (during a slow compile the user can queue entry: without an image yet the click is
     // remembered and acted on at the first image — never a black page over an unwired HUD (plan §2.1-D))
-    setTimeout(() => (this.skip.hidden = false), 9000);
+    setTimeout(() => {
+      if (this.lifted || this.imageAt) return;
+      this.skip.textContent = t("Enter when the first image is ready");
+      this.skip.hidden = false;
+    }, 9000);
+    // A hung driver can leave the core promise pending indefinitely. Offer an explicit restart.
+    setTimeout(() => {
+      if (this.lifted || this.imageAt) return;
+      this.skip.hidden = false;
+      this.skip.disabled = false;
+      this.skip.textContent = t("Reload");
+      this.skip.title = t("The first image is still unavailable. Reload to restart graphics initialization.");
+      this.skip.onclick = () => location.reload();
+    }, 180_000);
     loading.on(() => this.renderSteps());
     requestAnimationFrame(this.tick);
   }
@@ -88,6 +101,7 @@ export class Splash {
   firstImage() {
     if (this.imageAt) return;
     this.imageAt = performance.now();
+    this.skip.textContent = t("Enter now");
     loading.done("pipelines");
     // (a skip asked for during the compile: in now, the remaining assets under the pill)
     if (this.skipWanted) this.lift();

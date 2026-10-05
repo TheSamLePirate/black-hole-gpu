@@ -1,10 +1,15 @@
-import { beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import { adapterId, demoted, promoted, rememberedLevel, rememberLevel, tierAt } from "../src/tier";
 
 // The hardware's tier: the measure moving it both ways (plan §3.4), and its memory between sessions.
 
 // (Bun's test runner has no localStorage: a small in-memory stand-in — the store util only needs
 // getItem/setItem/removeItem/clear)
+const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+afterAll(() => {
+  if (originalStorage) Object.defineProperty(globalThis, "localStorage", originalStorage);
+  else Reflect.deleteProperty(globalThis, "localStorage");
+});
 const mem = new Map<string, string>();
 globalThis.localStorage = {
   getItem: (k: string) => mem.get(k) ?? null,
@@ -37,8 +42,22 @@ test("the measured tier is remembered for the same adapter only", () => {
   expect(rememberedLevel(adapterId({ vendor: "intel", architecture: "", device: "" }))).toBeNull();
   // a corrupt or out-of-range record: no memory
   rememberLevel(id, tierAt(3, "x"));
-  localStorage.setItem("kerr.tier", JSON.stringify({ adapter: id, level: 99 }));
-  expect(rememberedLevel(id)).toBe(4); // (clamped into the table)
+  localStorage.setItem("kerr.tier", JSON.stringify({ version: 1, adapter: id, level: 99, measuredAt: Date.now() }));
+  expect(rememberedLevel(id)).toBeNull(); // invalid records are not hardware measurements
   localStorage.setItem("kerr.tier", "not json");
+  expect(rememberedLevel(id)).toBeNull();
+});
+
+test("stored hints expire and reject unidentified adapters, future timestamps and old schemas", () => {
+  const id = "apple|metal-3|";
+  const now = 1000000000;
+  rememberLevel(id, tierAt(3, "x"), now);
+  expect(rememberedLevel(id, now + 6 * 86400000)).toBe(3);
+  expect(rememberedLevel(id, now + 8 * 86400000)).toBeNull();
+  expect(rememberedLevel(id, now - 1)).toBeNull();
+  localStorage.clear();
+  rememberLevel("||", tierAt(4, "x"));
+  expect(localStorage.getItem("kerr.tier")).toBeNull();
+  localStorage.setItem("kerr.tier", JSON.stringify({ adapter: id, level: 3 }));
   expect(rememberedLevel(id)).toBeNull();
 });
