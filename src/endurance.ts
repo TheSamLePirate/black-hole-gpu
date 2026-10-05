@@ -131,6 +131,8 @@ export function diskSH(C: Vec3, rin: number, rout: number, toCam: (w: Vec3) => V
 }
 
 export class EnduranceRenderer {
+  /** the endurance's module (read back at start-up for its compilation messages) */
+  readonly module: GPUShaderModule;
   /** a level of detail is loaded (the coarsest first) */
   ready = false;
   private meshes: (Mesh | null)[] = LODS.map(() => null);
@@ -153,7 +155,7 @@ export class EnduranceRenderer {
     wgsl: string,
   ) {
     const d = device;
-    const module = d.createShaderModule({ code: wgsl, label: "endurance" });
+    const module = (this.module = d.createShaderModule({ code: wgsl, label: "endurance" }));
     this.uniform = d.createBuffer({ size: 304, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.pipe = d.createRenderPipeline({
       layout: "auto",

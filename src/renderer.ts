@@ -565,8 +565,9 @@ export class Renderer {
     this.traceSource = src.trace;
 
     const traceModule = device.createShaderModule({ code: src.trace, label: "trace" });
-    const displayModule = device.createShaderModule({ code: src.display, label: "display" });
-    const postModule = device.createShaderModule({ code: src.post, label: "post" });
+    // (kept on the instance: read back at start-up for their compilation messages, not re-parsed)
+    const displayModule = (this.displayModule = device.createShaderModule({ code: src.display, label: "display" }));
+    const postModule = (this.postModule = device.createShaderModule({ code: src.post, label: "post" }));
     // explicit layout shared by the realtime and quality variants of the tracer
     const C = GPUShaderStage.COMPUTE;
     this.traceLayout = device.createBindGroupLayout({
@@ -1050,17 +1051,32 @@ export class Renderer {
       () => null,
       (e: Error) => e,
     );
+    // (the shaders' own messages, which name the line: the modules the constructor already made
+    // are read back — the tracer's 6 362 lines are not parsed twice — and all in parallel, the
+    // loading bar advancing as each answers)
+    const modules: [string, GPUShaderModule][] = [
+      ["trace", r.traceModule],
+      ["display", r.displayModule],
+      ["post", r.postModule],
+      ["sky", r.skyBuilder.module],
+      ["ship", r.ship.module],
+      ["endurance", r.endurance.module],
+      ["station", r.station.module],
+      ["overlay", r.chart.module],
+    ];
     let checked = 0;
-    for (const [name, code] of Object.entries(src)) {
-      const info = await device.createShaderModule({ code }).getCompilationInfo();
-      loading.set("shaders", 0.3 + (0.7 * ++checked) / Object.keys(src).length);
-      const errors = info.messages.filter((m) => m.type === "error");
-      if (errors.length) {
-        throw new Error(
-          `${tf("{0}.wgsl failed to compile:", name)}\n${errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n")}`,
-        );
-      }
-    }
+    const failures = await Promise.all(
+      modules.map(async ([name, module]) => {
+        const info = await module.getCompilationInfo();
+        loading.set("shaders", 0.3 + (0.7 * ++checked) / modules.length);
+        const errors = info.messages.filter((m) => m.type === "error");
+        return errors.length
+          ? `${tf("{0}.wgsl failed to compile:", name)}\n${errors.map((m) => `  ${m.lineNum}:${m.linePos} ${m.message}`).join("\n")}`
+          : null;
+      }),
+    );
+    const failure0 = failures.find((f) => f !== null);
+    if (failure0) throw new Error(failure0);
     const failure = await tracerFailure;
     if (failure) throw new Error(tf("The ray tracer's pipelines failed to compile: {0}", failure.message));
     const err = await device.popErrorScope();
@@ -2345,6 +2361,8 @@ export class Renderer {
 
   // ------------------------------------------------------------------ kernel specialisation
   private traceModule!: GPUShaderModule;
+  private displayModule!: GPUShaderModule;
+  private postModule!: GPUShaderModule;
   private lutWriteLayout!: GPUBindGroupLayout;
   private lutReadLayout!: GPUBindGroupLayout;
   private mainLayout!: GPUPipelineLayout;

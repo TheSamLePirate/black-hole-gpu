@@ -4,7 +4,8 @@
 const SEG_FLOATS = 10;
 
 export class ChartOverlay {
-  private module: GPUShaderModule;
+  /** the overlay's module (read back at start-up for its compilation messages) */
+  readonly module: GPUShaderModule;
   private linePipe: GPURenderPipeline;
   private composites = new Map<GPUTextureFormat, GPURenderPipeline>();
   private ubuf: GPUBuffer;

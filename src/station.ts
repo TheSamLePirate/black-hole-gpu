@@ -54,6 +54,8 @@ export interface StationView {
 }
 
 export class StationRenderer {
+  /** the station's module (read back at start-up for its compilation messages) */
+  readonly module: GPUShaderModule;
   ready = false;
   joints: StationJoint[] = [];
   ports: StationPort[] = [];
@@ -82,7 +84,7 @@ export class StationRenderer {
     wgsl: string,
   ) {
     const d = device;
-    const module = d.createShaderModule({ code: wgsl, label: "station" });
+    const module = (this.module = d.createShaderModule({ code: wgsl, label: "station" }));
     this.uniform = d.createBuffer({ size: (6 + 9 + 39) * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const buffers: GPUVertexBufferLayout[] = [
       {

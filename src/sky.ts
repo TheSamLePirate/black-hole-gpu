@@ -122,13 +122,15 @@ export async function loadStarCatalogue(
  * mip chain, on the GPU.
  */
 export class SkyTextureBuilder {
+  /** the sky's module (read back at start-up for its compilation messages) */
+  readonly module: GPUShaderModule;
   private decode: GPUComputePipeline;
   private down: GPUComputePipeline;
   constructor(
     private device: GPUDevice,
     code: string,
   ) {
-    const module = device.createShaderModule({ code, label: "sky" });
+    const module = (this.module = device.createShaderModule({ code, label: "sky" }));
     this.decode = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "decode" } });
     this.down = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "down" } });
   }

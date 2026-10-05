@@ -162,6 +162,8 @@ interface ShipTargetRes {
 
 export class ShipRenderer {
   ready = false;
+  /** the ship's module (read back at start-up for its compilation messages) */
+  readonly module: GPUShaderModule;
   /** Light probe written by the tracer's `env` kernel (camera rest frame, equirectangular). */
   readonly envBuf: GPUBuffer;
   private envRaw: GPUTexture;
@@ -322,7 +324,7 @@ export class ShipRenderer {
       format: "depth32float",
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
-    const module = d.createShaderModule({ code: shipWGSL, label: "ship" });
+    const module = (this.module = d.createShaderModule({ code: shipWGSL, label: "ship" }));
     const cp = (entryPoint: string) => d.createComputePipeline({ layout: "auto", compute: { module, entryPoint } });
     const vertex: GPUVertexState = {
       module,
