@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, test-kimi]
   pull_request:
   workflow_dispatch:
 
@@ -38,18 +38,77 @@ jobs:
           name: junit
           path: junit.xml
       - run: bun run build:pages
+
+  # the site assembled for deployment: main at the root, test-kimi under /test/ — one artifact,
+  # one deployment (a Pages deployment replaces the whole site, so a main-only build would wipe
+  # /test/ and a branch-only build would wipe /). The app is base-path-agnostic: every URL in the
+  # bundle, the shell, the manifest and the Service Worker's registration is relative, and the
+  # /test/sw.js scope (/test/) wins over the root worker's (/) for the pages under it.
+  site:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: oven-sh/setup-bun@v2
+      # (gone after the branch is merged and deleted: the root site alone, not a failing checkout)
+      - name: Is the test-kimi branch still there?
+        id: testbranch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/${{ github.repository }}/branches/test-kimi" --jq '.name' > /dev/null 2>&1; then
+            echo "exists=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=no" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-src
+      - uses: actions/checkout@v4
+        if: steps.testbranch.outputs.exists == 'yes'
+        with:
+          ref: test-kimi
+          path: test-src
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('main-src/bun.lock') }}
+      - name: Build main → the root
+        working-directory: main-src
+        run: bun install --frozen-lockfile && bun run build:pages
+      - name: Build test-kimi → /test/
+        if: steps.testbranch.outputs.exists == 'yes'
+        working-directory: test-src
+        run: bun install --frozen-lockfile && bun run build:pages
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -a main-src/_site/. _site/
+          if [ -d test-src/_site ]; then
+            mkdir -p _site/test
+            cp -a test-src/_site/. _site/test/
+          fi
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main'
         with:
           path: _site
 
   deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: verify
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
+    needs: site
     runs-on: ubuntu-latest
+    # (one deployment at a time, whatever the triggering branch: the last one's artifact holds
+    # both sites, a queued one would only be newer)
+    concurrency:
+      group: pages-deployment
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: The two addresses
+        run: |
+          echo "main:      ${{ steps.deployment.outputs.page_url }}"
+          echo "test-kimi: ${{ steps.deployment.outputs.page_url }}test/"
