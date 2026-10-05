@@ -1951,7 +1951,9 @@ export class Renderer {
       if (diskPx < 12) want = have && performance.now() - this.earthSeenAt > 5000 ? null : have;
       else {
         this.earthSeenAt = performance.now();
-        if (dE < highAt) want = "high";
+        // (the tier's texture cap — plan §3.5: the high cube is ~60 MB of network and ~96 MB of
+        // VRAM a weak tier never asked for; the live view only — exports keep their choice)
+        if (dE < highAt) want = this.tier.level <= 1 ? "med" : "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
       // (the ship by the Earth, the view away: its maps kept, the finer ones low over it)
@@ -3589,6 +3591,19 @@ export class Renderer {
    */
   /** the hardware's tier (its pixel budget for the realtime image) */
   tier: Tier = { level: 2, capMpx: 2.2, label: "" };
+
+  // (the tier's ceilings — plan §3.5: the integration's cost follows the hardware, not only the
+  // pixels — the anti-pattern of adapting the pixels alone ends at block 8 with a full kernel.
+  // They move with the measured tier (a promotion lifts them), and a finer setting is respected:
+  // they are ceilings and floors, never a raised quality the player did not ask for)
+  /** realtime integration: the most steps per ray by tier */
+  private static STEPS_CAP = [150, 250, 350, Infinity, Infinity];
+  /** realtime integration: the least epsilon (accuracy) by tier */
+  private static EPS_FLOOR = [0.18, 0.14, 0.1, 0, 0];
+  /** the still view's convergence: the most samples per pixel by tier */
+  private static SPP_CAP = [16, 16, Infinity, Infinity, Infinity];
+  /** the still view's convergence: the least noise threshold (an earlier stop) by tier */
+  private static NOISE_FLOOR = [0.03, 0.03, 0, 0, 0];
   /** the adapter: what it is, its features and key limits (set at create) */
   adapter: {
     vendor: string;
@@ -3636,9 +3651,11 @@ export class Renderer {
     let phase: FrameStats["phase"];
     let rows = 0;
 
+    // (the tier's convergence cap, plan §3.5: a still view on weak hardware refines less)
+    const targetSpp = Math.min(s.targetSpp, Renderer.SPP_CAP[this.tier.level]!);
     // (the quality kernel still compiling in the background: a still view keeps the realtime path
     // — sampleIndex stays at 0, the convergence starts when the kernel lands)
-    if (sceneChanged || timeChanged || (this.sampleIndex < s.targetSpp && !this.qualityPipeline)) {
+    if (sceneChanged || timeChanged || (this.sampleIndex < targetSpp && !this.qualityPipeline)) {
       phase = "realtime";
       this.frameStamp++;
       this.updateValidFrom(time);
@@ -3658,8 +3675,9 @@ export class Renderer {
       if (this.starsSplat) enc.clearBuffer(t.stars);
       this.writeParams(t, s, time, {
         block,
-        eps: s.realtimeEps,
-        steps: s.realtimeSteps,
+        // (the tier's ceilings: the kernel's cost follows the hardware — plan §3.5)
+        eps: Math.max(s.realtimeEps, Renderer.EPS_FLOOR[this.tier.level]!),
+        steps: Math.min(s.realtimeSteps, Renderer.STEPS_CAP[this.tier.level]!),
         y0: 0,
         y1: t.height,
         accumulate: false,
@@ -3672,7 +3690,7 @@ export class Renderer {
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
       this.lastOffset = offset;
-    } else if (this.sampleIndex < s.targetSpp) {
+    } else if (this.sampleIndex < targetSpp) {
       phase = "converging";
       this.frameStamp++;
       this.validFrom = this.epoch;
@@ -3693,7 +3711,7 @@ export class Renderer {
         sampleIndex: this.sampleIndex,
         flags,
         tol: s.integratorTolerance,
-        noise: s.noiseThreshold,
+        noise: Math.max(s.noiseThreshold, Renderer.NOISE_FLOOR[this.tier.level]!),
         minSpp: 8,
       });
       this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
