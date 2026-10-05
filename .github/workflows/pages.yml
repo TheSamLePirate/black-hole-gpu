@@ -93,6 +93,9 @@ jobs:
         with:
           path: _site
 
+  # (the github-pages environment's branch policy must name the branch, or this job is rejected
+  # before its first step: Settings → Environments → github-pages → deployment branches — main and
+  # test-kimi are both registered; after the branch is merged and deleted, its entry is inert)
   deploy:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
     needs: site
