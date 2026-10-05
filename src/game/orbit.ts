@@ -1,4 +1,5 @@
 import { add, cross, dot, len, scale } from "../math/vec3";
+import { cartToGeodetic } from "../system/ellipsoid";
 // Two-body orbits for the game's tools and the Ranger's telemetry: the classical elements of a state
 // around a body (relative to its equator), a state from elements, the times to the apsides, and what
 // the ship is doing (landed, flying in the air, on a suborbital arc, in orbit, escaping).
@@ -150,6 +151,52 @@ export function stateFrom(mu: number, o: OrbitSpec, axes: Axes = ECLIPTIC): { r:
 
 export type Status = "landed" | "flight" | "suborbital" | "orbit" | "escape" | "hyperbolic";
 
+/** Geodetic heights at the Kepler apsides, using the body's equator as the elements' reference. */
+export function apsisHeights(el: Elements, R: number, flattening: number): { pe: number; ap: number } {
+  if (flattening === 0) return { pe: el.rp - R, ap: el.ra - R };
+  const z = Math.sin(el.i) * Math.sin(el.argPe);
+  const at = (r: number) => cartToGeodetic(R, flattening, [r * Math.sqrt(Math.max(1 - z * z, 0)), 0, r * z]).h;
+  return { pe: at(el.rp), ap: Number.isFinite(el.ra) ? at(el.ra) : Infinity };
+}
+
+/** Lowest geodetic height on a bound orbit. Radial periapsis need not be closest to an ellipsoid. */
+export function minimumOrbitHeight(el: Elements, R: number, f: number): number {
+  if (f === 0 || el.e < 1e-9 || Math.abs(Math.sin(el.i)) < 1e-12) return el.rp - R;
+  if (!Number.isFinite(el.ra)) return apsisHeights(el, R, f).pe;
+  const p = el.rp * (1 + el.e);
+  const sinI = Math.sin(el.i);
+  const at = (nu: number) => {
+    const r = p / (1 + el.e * Math.cos(nu));
+    const z = r * sinI * Math.sin(el.argPe + nu);
+    return cartToGeodetic(R, f, [Math.sqrt(Math.max(r * r - z * z, 0)), 0, z]).h;
+  };
+  const N = 64,
+    step = TAU / N;
+  let best = Infinity;
+  for (let k = 0; k < N; k++) {
+    const nu = k * step,
+      h = at(nu);
+    if (h > at(nu - step) || h > at(nu + step)) continue;
+    let lo = nu - step,
+      hi = nu + step;
+    for (let j = 0; j < 24; j++) {
+      const a = lo + (hi - lo) / 3,
+        b = hi - (hi - lo) / 3;
+      if (at(a) < at(b)) hi = b;
+      else lo = a;
+    }
+    best = Math.min(best, at((lo + hi) / 2));
+  }
+  return best;
+}
+
+/** Fast clearance decision: only the band between the equatorial and polar radius needs a search. */
+export function orbitClearsHeight(el: Elements, R: number, f: number, threshold: number): boolean {
+  if (el.rp - R >= threshold) return true;
+  if (el.rp - R * (1 - f) < threshold || f === 0) return false;
+  return minimumOrbitHeight(el, R, f) >= threshold;
+}
+
 export const STATUS_LABEL: Record<Status, string> = {
   landed: "LANDED",
   flight: "IN FLIGHT",
@@ -165,12 +212,15 @@ export const STATUS_LABEL: Record<Status, string> = {
  * (the whole orbit clear of the air, within the sphere of influence); escaping (the apoapsis beyond
  * the sphere of influence); hyperbolic (unbound).
  */
-export function classify(el: Elements, o: { R: number; airTop?: number; soi?: number; landed?: boolean }): Status {
+export function classify(
+  el: Elements,
+  o: { R: number; airTop?: number; soi?: number; landed?: boolean; clearOfAir?: boolean; altitude?: number },
+): Status {
   if (o.landed) return "landed";
   const top = Math.max(o.airTop ?? o.R, o.R);
   if (el.energy >= 0) return "hyperbolic";
   if (el.ra > (o.soi ?? Infinity)) return "escape";
-  if (el.rp >= top) return "orbit";
+  if (o.clearOfAir ?? el.rp >= top) return "orbit";
   // (the orbit dips into the air or the ground: slow and in the air, a flight; else an arc)
-  return el.r < top && el.v < 0.5 * Math.sqrt(el.mu / el.r) ? "flight" : "suborbital";
+  return (o.altitude ?? el.r - o.R) < top - o.R && el.v < 0.5 * Math.sqrt(el.mu / el.r) ? "flight" : "suborbital";
 }

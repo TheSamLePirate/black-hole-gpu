@@ -40,6 +40,10 @@ export interface EntryEnv {
   R: number;
   /** the height over the figure at x [m] (the Earth's ellipsoid; none: a sphere of radius R) */
   alt?: (x: V3) => number;
+  /** geodetic vertical in this frame; omitted for a sphere */
+  normal?: (x: V3) => V3;
+  /** radius along a direction at height h; omitted for a sphere */
+  radiusAtHeight?: (direction: V3, h: number) => number;
   atm: Atmosphere | null;
   /** gravity and the frame's own accelerations at (x, v) [m/s²] */
   gravity: (x: V3, v: V3) => V3;
@@ -63,11 +67,14 @@ export interface EntryState {
 
 /** The attitude for an angle of attack and a bank about the motion through the air: the ship's axes
  *  (x left, y up, z the nose) in the frame. Bank > 0: the lift to the right. */
-export function attitudeFor(x: V3, va: V3, alpha: number, bank: number): [V3, V3, V3] {
+export function attitudeFor(x: V3, va: V3, alpha: number, bank: number, normal?: V3): [V3, V3, V3] {
   const vh = unit(va);
-  const up = unit(x);
+  const up = normal ?? unit(x);
   let n0 = add(up, vh, -dot(up, vh));
-  if (len(n0) < 1e-9) n0 = add([0, 0, 1], vh, -vh[2]);
+  if (len(n0) < 1e-9) {
+    const ref: V3 = Math.abs(vh[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    n0 = add(ref, vh, -dot(ref, vh));
+  }
   n0 = unit(n0);
   const right = cross(vh, n0);
   const l = add([n0[0] * Math.cos(bank), n0[1] * Math.cos(bank), n0[2] * Math.cos(bank)], right, Math.sin(bank));
@@ -83,7 +90,7 @@ function airAccel(env: EntryEnv, c: EntryCraft, x: V3, v: V3, bank: number): { a
   if (air.rho <= 0) return { a: [0, 0, 0], out: null, h };
   const va = add(v, env.ground(x), -1);
   if (len(va) < 1) return { a: [0, 0, 0], out: null, h };
-  const ax = attitudeFor(x, va, c.alpha, bank);
+  const ax = attitudeFor(x, va, c.alpha, bank, env.normal?.(x));
   const out = aeroForces(c.aero, [dot(va, ax[0]), dot(va, ax[1]), dot(va, ax[2])], air);
   const k = 1 / c.mass;
   return {
@@ -183,7 +190,7 @@ export function predictEntry(
     if (A.out) {
       wasIn = true;
       const va = add(v, env.ground(x), -1);
-      const ax = attitudeFor(x, va, c.alpha, bank(t, x, v));
+      const ax = attitudeFor(x, va, c.alpha, bank(t, x, v), env.normal?.(x));
       const u = unit([dot(va, ax[0]), dot(va, ax[1]), dot(va, ax[2])]);
       skin = heatStep(c.aero, skin, airAt(env.atm, A.h), A.out, u, dt);
       res.heatPeak = Math.max(res.heatPeak, A.out.heat);
@@ -352,7 +359,7 @@ export function planDeorbit(
   // the burn's size: the periapsis at peH (Kepler, a horizontal burn where it is)
   const burned = (s: EntryState): { b: EntryState; dv: number } => {
     const r = len(s.x);
-    const rp = env.R + o.peH;
+    const rp = env.radiusAtHeight?.(s.x, o.peH) ?? env.R + o.peH;
     const up = unit(s.x);
     const vt = len(add(s.v, up, -dot(s.v, up)));
     const vWant = Math.sqrt((2 * mu * rp) / (r * (r + rp)));

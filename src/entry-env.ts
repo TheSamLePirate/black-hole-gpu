@@ -9,7 +9,7 @@ import { M_METRES, solarBody, spinVector } from "./system/solar";
 import { localAccel, planetFrame } from "./landing";
 import { C_MPS } from "./units";
 import { cross } from "./math/vec3";
-import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
+import { cartToGeodetic, flatteningOf, geodeticNormal, radiusAtHeight } from "./system/ellipsoid";
 
 export type EnvDesc =
   | { universe: "ours"; body: string; t: number; massSolar: number }
@@ -39,13 +39,33 @@ export function envOf(d: EnvDesc): EntryEnv | null {
     // (the figure: the Earth's ellipsoid about its pole — the spin's axis —, a sphere's radius)
     const f = flatteningOf(b.id);
     const R = b.radius * M_METRES;
+    const coordinates = (x: V3) => {
+      const z = x[0] * wa[0] + x[1] * wa[1] + x[2] * wa[2];
+      const equatorial = x.map((v, i) => v - z * wa[i]!) as V3;
+      return { z, equatorial, rho: Math.hypot(...equatorial) };
+    };
     return {
       R,
       alt:
         f > 0
           ? (x) => {
-              const z = x[0] * wa[0] + x[1] * wa[1] + x[2] * wa[2];
-              return cartToGeodetic(R, f, [Math.hypot(x[0] - z * wa[0], x[1] - z * wa[1], x[2] - z * wa[2]), 0, z]).h;
+              const { rho, z } = coordinates(x);
+              return cartToGeodetic(R, f, [rho, 0, z]).h;
+            }
+          : undefined,
+      normal:
+        f > 0
+          ? (x) => {
+              const { rho, z, equatorial } = coordinates(x);
+              const n = geodeticNormal(R, f, [rho, 0, z]);
+              return equatorial.map((v, i) => (rho > 1e-20 ? (v / rho) * n[0] : 0) + wa[i]! * n[2]) as V3;
+            }
+          : undefined,
+      radiusAtHeight:
+        f > 0
+          ? (x, h) => {
+              const { rho, z } = coordinates(x);
+              return radiusAtHeight(R, f, [rho, 0, z], h);
             }
           : undefined,
       atm: b.atmosphere ?? null,

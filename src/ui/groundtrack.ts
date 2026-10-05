@@ -12,7 +12,7 @@ import { Pinch } from "./pinch";
 import type { Info } from "./flighthud";
 import type { OurPath } from "../system/our-predict";
 import { M_METRES, solarBody, solarState, type MapName } from "../system/solar";
-import { toBodyFixed } from "../system/our-surface";
+import { bodyMapDirection as onMap, toBodyFixed } from "../system/our-surface";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { issOrbit, issTrack } from "../system/iss";
 import { M_SECONDS } from "../system/solar";
@@ -46,14 +46,6 @@ const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const smooth = (a: number, b: number, x: number) => {
   const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
-};
-/** A body-fixed point's place on the map: its unit direction — the Earth's, at its geodetic latitude (the
- *  maps', the sites'; the ellipsoid's normal, not the direction from the centre: up to 0.19° apart). */
-const onMap = (id: string, q: V3): V3 => {
-  const f = flatteningOf(id);
-  if (f === 0) return unit(q);
-  const g = cartToGeodetic(1, f, q);
-  return fromLatLon(g.lat, g.lon);
 };
 /** a unit vector's latitude, east longitude [rad] (the maps' convention: x at longitude 0, z north) */
 const latLon = (q: V3): [number, number] => [Math.asin(clamp(q[2], -1, 1)), Math.atan2(q[1], q[0])];
@@ -372,8 +364,8 @@ export class GroundTrack {
     if (!c || c.id !== id) {
       const pts: V3[] = [],
         times: number[] = [];
-      let lo = { r: Infinity, q: null as V3 | null },
-        hi = { r: -Infinity, q: null as V3 | null };
+      let lo = { r: Infinity, h: 0, q: null as V3 | null },
+        hi = { r: -Infinity, h: 0, q: null as V3 | null };
       for (let k = 0; k < p.pts.length; k++) {
         if (p.refs[k] !== id) {
           if (pts.length) break;
@@ -384,18 +376,19 @@ export class GroundTrack {
         const u = onMap(id, q);
         pts.push(u);
         times.push(p.times[k]!);
-        if (r < lo.r) lo = { r, q: u };
-        if (r > hi.r) hi = { r, q: u };
+        const h = cartToGeodetic(R, flatteningOf(id), q).h;
+        if (r < lo.r) lo = { r, h, q: u };
+        if (r > hi.r) hi = { r, h, q: u };
       }
-      const km = (r: number) => ((r - R) * M_METRES) / 1e3;
+      const km = (h: number) => (h * M_METRES) / 1e3;
       // (apsides only on an orbit that swings: more than 2 km between them)
-      const swing = hi.q && lo.q && km(hi.r) - km(lo.r) > 2;
+      const swing = hi.q && lo.q && (hi.r - lo.r) * M_METRES > 2000;
       c = {
         id,
         pts,
         times,
-        pe: swing && lo.q ? { q: lo.q, km: km(lo.r) } : null,
-        ap: swing && hi.q && p.fate !== "impact" ? { q: hi.q, km: km(hi.r) } : null,
+        pe: swing && lo.q ? { q: lo.q, km: km(lo.h) } : null,
+        ap: swing && hi.q && p.fate !== "impact" ? { q: hi.q, km: km(hi.h) } : null,
       };
       this.cache.set(p, c);
     }

@@ -59,13 +59,13 @@ import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/plane
 import { loadEarthMaps, placeholderEarth, prefetchEarthMaps, type EarthMaps, type EarthTier } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
-import { setGroundHeights, setGroundRelief } from "./system/our-surface";
+import { altitudeOver, setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
-import { geodeticToCart, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { figureDiskShare, figureSourceElevation, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
-import { bodyPlace, localPatch } from "./system/local-patch";
+import { bodyPlace, localPatch, patchGeodetic } from "./system/local-patch";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { blendProbe, PROBE_H, PROBE_W, probeCamera, reduceProbe, type PlanetProbe } from "./system/planet-probe";
 import { bodyVelocity, starOmega, type Body } from "./targeting";
@@ -1902,6 +1902,7 @@ export class Renderer {
       const k = 1 / (near.radius * 1476.625 * s.massSolar);
       near.centre = [0, 1, 2].map((i) => near.centre[i]! + (t[0] * cam.right[i]! + t[1] * cam.up[i]! + t[2] * cam.fwd[i]!) * k) as Vec3;
     }
+    const earthSurface = near && bodies[near.index]?.id === "earth" ? patchGeodetic(near, WGS84_F) : null;
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
     set(49, ...(near?.axes[0] ?? [1, 0, 0]), near?.index ?? 0);
@@ -1973,23 +1974,23 @@ export class Renderer {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
       this.meterHome = s.wormhole ? homePosition(s) : null;
       this.meterTime = time;
-      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near);
+      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near, earthSurface);
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
       this.earthIsNear = !!near && bodies[near.index]?.id === "earth";
-      this.meterInAir = this.earthIsNear && !!this.earthMaps.tier;
+      this.meterInAir = this.earthIsNear;
       // (a landscape by day — the camera low in the Earth's air, the Sun over 4–15° there, not eclipsed —:
       // its shade kept from "AgX punchy"'s deepening, a dark grey as the eye sees it, not black; dusk, night,
       // totality and the views from orbit keep their depth)
       this.shadowKeep = 0;
       if (this.meterInAir && near) {
-        const r = Math.hypot(...near.centre);
-        const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
+        const surface = earthSurface!;
+        const mu = surface.up.reduce((v, n, i) => v + n * near.light[i]!, 0);
         const ecl = this.meterHome ? sunShare(this.meterHome, this.meterTime) : 1;
         const smooth = (a: number, b: number, x: number) => {
           const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
           return t * t * (3 - 2 * t);
         };
-        this.shadowKeep = smooth(0.07, 0.26, mu) * smooth(0.3, 0.9, ecl) * (1 - smooth(20, 60, ((r - 1) * EARTH_RM) / 1e3));
+        this.shadowKeep = smooth(0.07, 0.26, mu) * smooth(0.3, 0.9, ecl) * (1 - smooth(20, 60, (surface.h * EARTH_RM) / 1e3));
       }
     }
     // camera path tube: radius = 1.8 pixel angles × distance along the ray (constant apparent width)
@@ -2094,7 +2095,7 @@ export class Renderer {
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
     // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
     // twentieth: seen from below, lit areas would glare like a sunlit field)
-    const altKm = near && near.index === earthK ? ((Math.hypot(...near.centre) - 1) * EARTH_RM) / 1e3 : 1e4;
+    const altKm = earthSurface ? (earthSurface.h * EARTH_RM) / 1e3 : 1e4;
     const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
     set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
@@ -2191,12 +2192,12 @@ export class Renderer {
     if (near) {
       const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
       // (the Earth's on its squashed axes — z × a/b: its ellipsoid the unit sphere, trace.wgsl: EARTH_AB)
-      if (near.index === earthK && this.earthMaps.tier) c[2] = c[2]! / (1 - WGS84_F);
+      if (near.index === earthK) c[2] = c[2]! / (1 - WGS84_F);
       const A = c.map((x) => Math.fround(x));
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
       // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
-      // squashed axes like c, in float64 (the markings to the centimetre: trace.wgsl runwayShade)
+      // physical body axes, in float64 (the markings to the centimetre: trace.wgsl runwayShade)
       if (near.index === earthK && this.earthMaps.tier) runways = this.nearRunways(c as Vec3);
       // (runways near: the kernel with their code — elsewhere compiled out, a tenth of the Earth's cost)
       if (runways[0]! > 0) this.featureKey |= 256;
@@ -2310,16 +2311,13 @@ export class Renderer {
   /**
    * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
    * threshold's geodetic direction and length, its landing direction and half width, its right, and the
-   * camera from its threshold [m] — c, the camera on the Earth's squashed axes [its radii]. Their tangents
+   * camera from its threshold in physical body-fixed metres — c is in squashed radii. Their tangents
    * projected, the threshold's height drops out.
    */
   private nearRunways(c: Vec3): Float32Array {
     const out = new Float32Array(RUNWAY_VEC4S * 4);
-    const f = WGS84_F,
-      D = Math.PI / 180;
     const near = EARTH_RUNWAYS.map((r) => {
-      const p = geodeticToCart(1, f, r.site.lat * D, r.site.lon * D, 0);
-      const d: Vec3 = [(c[0] - p[0]) * WGS84_A, (c[1] - p[1]) * WGS84_A, (c[2] - p[2] / (1 - f)) * WGS84_A];
+      const d: Vec3 = [c[0] * WGS84_A - r.origin[0], c[1] * WGS84_A - r.origin[1], c[2] * (1 - WGS84_F) * WGS84_A - r.origin[2]];
       return { r, d, dist: Math.hypot(...d) };
     })
       .filter((x) => x.dist < 150e3)
@@ -2361,7 +2359,7 @@ export class Renderer {
    * above the wind sea's peak (Pierson–Moskowitz: λp ≈ 0.83 U² m) — and their phases now (ω = √(g k)).
    */
   private seaParams(
-    near: { index: number; centre: number[]; axes: number[][]; radius: number } | null,
+    near: ReturnType<typeof localPatch>,
     earthK: number,
     altKm: number,
     time: number,
@@ -2373,10 +2371,10 @@ export class Renderer {
     // (in metres as the shader has it: P.near4.w)
     const mR = near.radius * 1476.625 * s.massSolar;
     const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
-    const r = Math.hypot(cb[0]!, cb[1]!, cb[2]!);
-    const up = cb.map((c) => c / r);
-    const lat = (Math.asin(up[2]!) * 180) / Math.PI,
-      lon = (Math.atan2(up[1]!, up[0]!) * 180) / Math.PI;
+    const surface = patchGeodetic(near, WGS84_F);
+    const up = surface.normal;
+    const lat = (surface.lat * 180) / Math.PI,
+      lon = (surface.lon * 180) / Math.PI;
     const eh = Math.hypot(up[0]!, up[1]!) || 1;
     const east = [-up[1]! / eh, up[0]! / eh, 0];
     const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
@@ -3311,7 +3309,7 @@ export class Renderer {
     const Xc = homeOf(w, cam.ell, cam.n);
     const E = solarState("earth", time);
     const mR = 1476.625 * (s.massSolar || 1);
-    const hE = (Math.hypot(Xc[0] - E.pos[0], Xc[1] - E.pos[1], Xc[2] - E.pos[2]) * mR - EARTH_RM) / 1e3;
+    const hE = altitudeOver("earth", Xc, time) / 1e3;
     if (!(hE < 3000)) return;
     void refreshIssElements();
     if (!this.station.ready) {
@@ -3361,12 +3359,15 @@ export class Renderer {
     const sunH = unitV(toSun);
     const toE: Vec3 = [E.pos[0] - st.X[0], E.pos[1] - st.X[1], E.pos[2] - st.X[2]];
     const dE = Math.hypot(...toE);
-    const rE = (EARTH_RM + 30e3) / mR;
-    const rhoE = Math.asin(Math.min(rE / dE, 1));
+    const earthAxes = bodyAxes(solarBody("earth")!, time);
+    const inEarth = (v: Vec3): Vec3 => earthAxes.map((axis) => axis[0] * v[0] + axis[1] * v[1] + axis[2] * v[2]) as Vec3;
+    const observer = inEarth(toE.map((v) => -v) as Vec3);
+    const source = inEarth(sunH);
     const rhoS = Math.asin(Math.min((sunB?.radius ?? 0.00471 * dS) / dS, 1));
-    const sep = Math.acos(Math.max(-1, Math.min(1, (sunH[0] * toE[0] + sunH[1] * toE[1] + sunH[2] * toE[2]) / dE)));
-    const x = Math.max(-1, Math.min(1, (sep - rhoE) / Math.max(rhoS, 1e-6)));
-    const share = 0.5 + (x * Math.sqrt(1 - x * x) + Math.asin(x)) / Math.PI;
+    const airA = (WGS84_A + 30e3) / mR;
+    const airF = (WGS84_A * WGS84_F) / (WGS84_A + 30e3);
+    const share = figureDiskShare(observer, source, rhoS, airA, airF);
+    const x = Math.max(-1, Math.min(1, figureSourceElevation(observer, source, airA, airF) / Math.max(rhoS, 1e-6)));
     const red = Math.sqrt(Math.max(0, Math.min(1, (x + 1) / 2)));
     const T = sunB?.temperature ?? 5772;
     const bb = blackbodyXYZ(T);
@@ -3395,12 +3396,12 @@ export class Renderer {
       const ph = k * 2.399963229728653;
       const d: Vec3 = [0, 1, 2].map((i) => eDir[i]! * cz + (ex[i]! * Math.cos(ph) + ey[i]! * Math.sin(ph)) * sz) as Vec3;
       // where it meets the ground, the Sun's height there
-      const b = d[0] * toE[0] + d[1] * toE[1] + d[2] * toE[2];
-      const c2 = dE * dE - rEm * rEm;
-      const tt = b - Math.sqrt(Math.max(b * b - c2, 0));
-      const P: Vec3 = [st.X[0] + d[0] * tt - E.pos[0], st.X[1] + d[1] * tt - E.pos[1], st.X[2] + d[2] * tt - E.pos[2]];
-      const pl = Math.hypot(...P);
-      const mu = Math.max(0, (P[0] * sunH[0] + P[1] * sunH[1] + P[2] * sunH[2]) / pl);
+      const ray = inEarth(d);
+      const tt = rayFigure(observer, ray, rEm, WGS84_F);
+      if (tt === null) continue;
+      const point = observer.map((v, i) => v + ray[i]! * tt) as Vec3;
+      const normal = geodeticNormal(rEm, WGS84_F, point);
+      const mu = Math.max(0, normal[0] * source[0] + normal[1] * source[1] + normal[2] * source[2]);
       if (mu <= 0) continue;
       const L = (0.3 / Math.PI) * Esun * mu;
       const dc = toCam(d);
@@ -3549,6 +3550,7 @@ export class Renderer {
     origin: Vec3,
     logYRef: number,
     near: ReturnType<typeof localPatch> = null,
+    earthSurface: ReturnType<typeof patchGeodetic> | null = null,
   ) {
     const ours = s.wormhole && cam.region === "throat" && cam.ell < 0;
     let E = 0;
@@ -3578,7 +3580,11 @@ export class Renderer {
         d = Math.hypot(P[0] - X[0], P[1] - X[1], P[2] - X[2]);
       }
       const T = Math.round(b.temperature / 50) * 50;
-      E += 10 ** (this.logYOf(T) - logYRef) * b.brightness * (b.radius / Math.max(d, b.radius)) ** 2 * this.earthSunlight(bodies, near);
+      E +=
+        10 ** (this.logYOf(T) - logYRef) *
+        b.brightness *
+        (b.radius / Math.max(d, b.radius)) ** 2 *
+        this.earthSunlight(bodies, near, earthSurface);
     });
     return 0.3 * E;
   }
@@ -3588,14 +3594,14 @@ export class Renderer {
    * reddened and dimmed low, none in its shadow — a quarter at least (twilight, night: 2
    * stops more; the cities show already, more and the stars fade, the ship's own lights blind).
    */
-  private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>) {
-    if (!near || bodies[near.index]?.id !== "earth" || !this.earthMaps.tier) return 1;
-    const r = Math.hypot(...near.centre);
-    const mu = -(near.centre[0] * near.light[0] + near.centre[1] * near.light[1] + near.centre[2] * near.light[2]) / r;
+  private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>, surface: ReturnType<typeof patchGeodetic> | null) {
+    if (!near || bodies[near.index]?.id !== "earth") return 1;
+    const place = surface ?? patchGeodetic(near, WGS84_F);
+    const mu = place.up.reduce((v, n, i) => v + n * near.light[i]!, 0);
     // (and an eclipse: the Sun's disk the Moon leaves — the totality's twilight, ten stops down)
     const home = this.meterHome;
     const ecl = home ? sunShare(home, this.meterTime) : 1;
-    return Math.max(sunThroughY((r - 1) * EARTH_RM, mu), 0.25) * Math.max(ecl, 0.002);
+    return Math.max(sunThroughY(Math.max(place.h * EARTH_RM, 0), mu), 0.25) * Math.max(ecl, 0.002);
   }
   /** where the meter reads the light (home frame) and when */
   private meterHome: Vec3 | null = null;

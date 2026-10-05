@@ -9,8 +9,9 @@ import type { Settings } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "../system/solar";
 import { soiOf } from "../system/our-side";
-import { altitudeOver } from "../system/our-surface";
-import { classify, elements, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
+import { altitudeOver, figureUp } from "../system/our-surface";
+import { flatteningOf } from "../system/ellipsoid";
+import { apsisHeights, classify, elements, orbitClearsHeight, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
 import { C_MPS } from "../units";
 import { sub } from "../math/vec3";
@@ -21,6 +22,8 @@ const C = C_MPS;
 const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? tx(solarBody(id)?.name ?? id);
 
 export interface OrbitFigures {
+  /** equatorial radius for orbit drawings; apsis heights cannot be used to reconstruct it */
+  radiusKm: number;
   /** above the surface [km] */
   peKm: number;
   apKm: number;
@@ -55,10 +58,12 @@ export interface RangerStatus {
   kerr: { r: number; E: number; L: number } | null;
 }
 
-function figures(el: Elements, R: number, km: number, sec: number): OrbitFigures {
+function figures(el: Elements, R: number, km: number, sec: number, flattening = 0): OrbitFigures {
+  const height = apsisHeights(el, R, flattening);
   return {
-    peKm: (el.rp - R) * km,
-    apKm: Number.isFinite(el.ra) ? (el.ra - R) * km : Infinity,
+    radiusKm: R * km,
+    peKm: height.pe * km,
+    apKm: height.ap * km,
     incDeg: (el.i * 180) / Math.PI,
     ecc: el.e,
     period: el.period * sec,
@@ -95,7 +100,18 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       v = sub(info.V as V3, B.vel as V3);
     const el = elements(b.mass, r, v, equatorAxes(ref));
     const soi = soiOf(ref, t);
-    const st = classify(el, { R: b.radius, airTop: b.radius + airTopKm(ref) / kmM, soi, landed: info.landed });
+    const f = flatteningOf(ref);
+    const altitude = altitudeOver(ref, info.X as V3, t);
+    const top = airTopKm(ref) / kmM;
+    const st = classify(el, {
+      R: b.radius,
+      airTop: b.radius + top,
+      soi,
+      landed: info.landed,
+      clearOfAir: orbitClearsHeight(el, b.radius, f, top),
+      altitude: altitude / M_METRES,
+    });
+    const vertical = figureUp(ref, info.X as V3, t);
     Object.assign(out, {
       side: "ours",
       soi: ref,
@@ -104,10 +120,10 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       status: st,
       label: STATUS_LABEL[st],
       // (over the figure: the Earth's ellipsoid — the poles 21 km nearer the centre than the equator)
-      altKm: altitudeOver(ref, info.X as V3, t) / 1e3,
+      altKm: altitude / 1e3,
       speed: el.v * C,
-      vVert: (el.r > 0 ? (r[0] * v[0] + r[1] * v[1] + r[2] * v[2]) / el.r : 0) * C,
-      orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS),
+      vVert: (vertical[0] * v[0] + vertical[1] * v[1] + vertical[2] * v[2]) * C,
+      orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS, f),
     });
     if (info.target && info.target !== "hole" && Number.isFinite(info.targetDist)) {
       out.target = {

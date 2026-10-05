@@ -20,8 +20,8 @@ import { planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
 import { toU } from "../pilot";
 import { mouth, sphericalFrame } from "../wormhole";
 import { ourState, repToHomeVec } from "../system/our-side";
-import { fromBodyFixed, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
-import { solarBody } from "../system/solar";
+import { altitudeOver, figureUp, fromBodyFixed, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import { M_METRES, solarBody } from "../system/solar";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
 import type { CameraController } from "../controls";
@@ -269,7 +269,7 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     }
     // aiming at the target (its centre; the hole: its place), the local vertical up, then the offsets
     const T = w.ours ? ourTarget(s, s.target, t).pos : bodyCentre(s, s.target, t);
-    const up0 = unitV(sub3(X, ref.C));
+    const up0 = w.ours && isOurBody(ref.id) ? figureUp(ref.id, X, t) : unitV(sub3(X, ref.C));
     let fwd = unitV(sub3(T, X));
     if (Math.abs(dot3(fwd, up0)) > 0.999) fwd = unitV(cross(up0, [0, 0, 1]));
     const east = unitV(cross(fwd, up0));
@@ -322,7 +322,12 @@ function rigStatus(this: CameraController): { body: Body; h: number } | null {
   if (!R.on || !R.ref) return null;
   const w = this.rigWorld();
   const b = w && this.rigBody(R.ref, w.ours, this.nowTime());
-  return w && b ? { body: b.id, h: Math.hypot(...sub3(w.X, b.C)) - b.R } : null;
+  return w && b
+    ? {
+        body: b.id,
+        h: w.ours && isOurBody(b.id) ? altitudeOver(b.id, w.X, this.nowTime()) / M_METRES : Math.hypot(...sub3(w.X, b.C)) - b.R,
+      }
+    : null;
 }
 
 /** The camera's distance [M] to the nearest surface of a body of its universe (planets, moons, stars). */

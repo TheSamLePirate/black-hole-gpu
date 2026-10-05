@@ -20,7 +20,16 @@ import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
 import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
 import { plan as runPlanner } from "../system/plan-client";
-import { bodyFixedOf, fromBodyFixed, gearHeight, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import {
+  bodyFixedOf,
+  figureUp,
+  fromBodyFixed,
+  gearHeight,
+  groundAboveSphere,
+  groundVelocity,
+  solidBody,
+  toBodyFixed,
+} from "../system/our-surface";
 import { daysOf, solarBody, spinVector } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
@@ -186,7 +195,7 @@ function standOn(this: CameraController, b?: Body): string | null {
   const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t));
   if (!ref || !solid(ref.id))
     return tf("Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)");
-  const up = unitV(sub3(w.X, ref.C));
+  let up = unitV(sub3(w.X, ref.C));
   const mR = 1476.625 * s.massSolar;
   let X = lin(ref.C, 1, up, ref.R);
   let V = ref.V;
@@ -200,6 +209,7 @@ function standOn(this: CameraController, b?: Body): string | null {
     const P = toGlobal(F, { xi: lin(xi, (g + 1.7 / F.mPerM) / Math.hypot(...xi), xi, 0), w: [0, 0, 0], landed: true });
     [X, V] = [P.X, P.V];
   }
+  if (w.ours) up = figureUp(ref.id, X, t);
   // (the heading: the camera's forward on the horizon — looking straight down, its up)
   let f = sub3(w.fwd, lin(up, dot3(w.fwd, up), up, 0));
   if (Math.hypot(...f) < 1e-3) f = sub3(w.up, lin(up, dot3(w.up, up), up, 0));
@@ -982,7 +992,7 @@ function horizonAxes(this: CameraController, cam: ReturnType<typeof cameraFrame>
   if (nav) {
     const id = nav.ref;
     if (id === "sun" || !solarBody(id)) return null;
-    const up = unitV(sub3(nav.X, nav.refPos));
+    const up = figureUp(id, nav.X, nav.t);
     const ax = spinAxis(id);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
@@ -1007,7 +1017,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     const b = solarBody(id);
     if (id === "sun" || !b) return null;
     const P = nav.refPos;
-    const up = unitV(sub3(nav.X, P));
+    const up = figureUp(id, nav.X, nav.t);
     const ax = spinAxis(id);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
@@ -1209,7 +1219,7 @@ function entryStep(
   if (!fr || (!fr.env.atm && !solidBody(fr.body))) return say(t("Entry: get near a world with air or ground first"));
   const craft = this.entryCraft();
   const Msec = 4.925490947e-6 * s.massSolar;
-  const up = unitV(fr.s.x);
+  const up = fr.env.normal?.(fr.s.x) ?? unitV(fr.s.x);
   const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
   const h = heightOf(fr.env, fr.s.x);
   const top = airTop(fr.env.atm);
@@ -1385,7 +1395,7 @@ function entryStep(
       R.alpha = LA.out.alpha;
       this.onPilotMessage?.(tf("Mach {0}: gliding to {1}", LA.out.mach.toFixed(1), R.site.name));
     }
-    const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, R.bank);
+    const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, R.bank, fr.env.normal?.(fr.s.x));
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
   }
   // the glide (the Ranger): onto the runway's axis — a point 12 km before its threshold, then the
@@ -1393,7 +1403,7 @@ function entryStep(
   const site = R.site!;
   if (site.rwy !== undefined) return this.approach(fr, R, site, va, up, h, dt, cam);
   const pl = fr.place(R.site!);
-  const pu = unitV(pl);
+  const pu = fr.env.normal?.(pl) ?? unitV(pl);
   const ang = Math.acos(clamp(dot3(up, pu), -1, 1));
   const dist = ang * fr.env.R;
   const vh = unitV(lin(va, 1, up, -dot3(va, up)));
@@ -1411,7 +1421,7 @@ function entryStep(
   // (too fast down the path: the air brake)
   const vT = Math.min(110 + 0.004 * dist, 320);
   this.airBrake = clamp((sp - vT) / 60, 0, 1);
-  const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank);
+  const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank, fr.env.normal?.(fr.s.x));
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
 }
 

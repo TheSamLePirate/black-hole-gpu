@@ -3689,10 +3689,10 @@ fn nightFloor(sk: f32, mu0: f32) -> vec3f {
 const EARTH_MOON = vec3f(0.07, 0.085, 0.11);
 fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   let Lm = P.earth3.xyz;
-  let mz = dot(q, Lm);
+  let mz = dot(airPhysicalNormal(q), Lm);
   let night = 1.0 - smoothstep(-0.12, 0.06, mu0);
   if (mz < -0.05 || night <= 0.0 || P.earth3.w <= 0.0) { return vec3f(0.0); }
-  return EARTH_MOON * pow(P.earth3.w, 1.5) * night * smoothstep(-0.05, 0.05, mz) * max(dot(n, Lm), 0.0) * sunThrough(h, mz);
+  return EARTH_MOON * pow(P.earth3.w, 1.5) * night * smoothstep(-0.05, 0.05, mz) * max(dot(airPhysicalNormal(n), Lm), 0.0) * sunThrough(h, mz);
 }
 const EARTH_RM = 6.378137e6;  // metres per radius: WGS84's a, the equator's (src/system/ellipsoid.ts)
 // The Earth's figure: the WGS84 ellipsoid, its poles 21 km in. On the Earth's axes squashed — z × a/b —
@@ -3706,6 +3706,44 @@ fn squashed(v: vec3f, ab: f32) -> vec3f { return vec3f(v.x, v.y, v.z * ab); }
 fn geoQ(q: vec3f) -> vec3f { return normalize(vec3f(q.x, q.y, q.z * EARTH_AB)); }
 // the metres along the ground's normal a radial step of the squashed space is, per metre of a
 fn earthSq(q: vec3f) -> f32 { return sqrt(1.0 - (1.0 - 1.0 / (EARTH_AB * EARTH_AB)) * q.z * q.z); }
+// Finite source above an ellipsoid's limb, in physical body axes and equatorial radii.
+// The tangent cone intersected with the observer/source plane gives the limb angle exactly.
+// Its angular normal accounts for the ellipse's tilt; a locally straight limb clips the small disk.
+fn figureSunShare(ro: vec3f, light: vec3f, rs: f32, ab: f32) -> f32 {
+  let R = length(ro);
+  let radial = ro / max(R, 1e-20);
+  let L = normalize(light);
+  let cosSep = clamp(dot(-radial, L), -1.0, 1.0);
+  let sep = acos(cosSep);
+  let lateral = L + radial * cosSep;
+  let lateralLength = length(lateral);
+  let os = squashed(ro, ab);
+  var distance: f32;
+  if (dot(os, os) <= 1.0) {
+    let normal = normalize(vec3f(ro.xy, ro.z * ab * ab));
+    distance = asin(clamp(dot(normal, L), -1.0, 1.0));
+  } else if (lateralLength < 1e-7) {
+    return select(1.0, 0.0, cosSep > 0.0);
+  } else {
+    let tangent = lateral / lateralLength;
+    let nr = squashed(radial, ab);
+    let er = squashed(tangent, ab);
+    let c = dot(os, os) - 1.0;
+    let A = dot(nr, nr);
+    let B = -dot(nr, er);
+    let C = dot(os, er) * dot(os, er) - c * dot(er, er);
+    let limb = atan2(A, sqrt(max(B * B - A * C, 0.0)) - B);
+    let grazing = -radial * cos(limb) + tangent * sin(limb);
+    let gs = squashed(grazing, ab);
+    let gradS = dot(os, gs) * os - c * gs;
+    let grad = squashed(gradS, ab);
+    let angularNormal = normalize(grad - grazing * dot(grad, grazing));
+    let towardsSource = radial * sin(limb) + tangent * cos(limb);
+    distance = (sep - limb) * abs(dot(angularNormal, towardsSource));
+  }
+  let x = clamp(distance / max(rs, 1e-8), -1.0, 1.0);
+  return 0.5 + (x * sqrt(max(1.0 - x * x, 0.0)) + asin(x)) / PI;
+}
 // a ray from ro along rd against the unit sphere (ro outside or in: the near side ahead), −1 when missed
 fn unitHit(ro: vec3f, rd: vec3f) -> f32 {
   let b = dot(ro, rd);
@@ -3740,7 +3778,7 @@ var<private> AIR: AirSpec;
 fn airOf(m: u32) -> bool { return m == 0u || m == 2u || m == 4u || m == 5u || m == 6u || m == 19u || m == 20u || m == 21u || m == 22u; }
 fn hasAir(k: u32) -> bool {
   let surf = u32(bodies[BV * k + 2u].z);
-  return bodyKind(k) != 0u && surf >= 4u && airOf(surf - 4u) && (surf != EARTH_SURF || earthOn());
+  return bodyKind(k) != 0u && surf >= 4u && airOf(surf - 4u);
 }
 fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
@@ -3791,7 +3829,7 @@ fn setAir(k: u32) {
   AIR = a;
 }
 fn airK() -> f32 { return AIR.k; }
-fn airTop() -> f32 { return 1.0 + AIR.top * AIR.k / AIR.rm; }
+fn airTop() -> f32 { return 1.0 + AIR.top * AIR.k * AIR.ab / AIR.rm; }
 fn airHR() -> f32 { return AIR.hr * AIR.k; }
 fn airHM() -> f32 { return AIR.hm * AIR.k; }
 // Henyey–Greenstein (Cornette–Shanks) per colour
@@ -3801,7 +3839,7 @@ fn phaseM(g: vec3f, mu: f32) -> vec3f {
 }
 
 fn earthOn() -> bool { return P.earth.x > 0.5; }
-fn isEarth(k: u32) -> bool { return earthOn() && bodyKind(k) != 0u && u32(bodies[BV * k + 2u].z) == EARTH_SURF; }
+fn isEarth(k: u32) -> bool { return bodyKind(k) != 0u && u32(bodies[BV * k + 2u].z) == EARTH_SURF; }
 // its axes → the cube map's direction
 fn eCube(q: vec3f) -> vec3f { return vec3f(q.y, q.z, q.x); }
 
@@ -3824,6 +3862,17 @@ fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
 // the sunlight's transmission down to a height h [m], the sun at mu from the zenith
 fn sunThrough(h: f32, mu: f32) -> vec3f {
   return exp(-((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK());
+}
+
+// Directions transform by the inverse scale; normals by its transpose. Optical lengths are physical.
+fn airPhysicalDirection(d: vec3f) -> vec3f { return normalize(vec3f(d.xy, d.z / AIR.ab)); }
+fn airPhysicalNormal(n: vec3f) -> vec3f { return normalize(vec3f(n.xy, n.z * AIR.ab)); }
+fn airRayScale(rd: vec3f) -> f32 { return length(vec3f(rd.xy, rd.z / AIR.ab)); }
+// Same height model as the ground/gear: radial march height projected onto the figure's normal.
+fn airHeight(p: vec3f) -> f32 {
+  let r = length(p);
+  let qz = p.z / max(r, 1e-20);
+  return (r - 1.0) * AIR.rm * sqrt(1.0 - (1.0 - 1.0 / (AIR.ab * AIR.ab)) * qz * qz);
 }
 
 // The atmospheric march uses squashed axes; eclipse positions and angular radii use physical axes.
@@ -3891,14 +3940,17 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   let ta = max(-b - sq, 0.0);
   let tb = min(-b + sq, tEnd);
   if (tb <= ta) { return o; }
-  let mu = dot(rd, Ls);
+  let physicalRd = airPhysicalDirection(rd);
+  let physicalLs = airPhysicalDirection(Ls);
+  let stepScale = airRayScale(rd);
+  let mu = dot(physicalRd, physicalLs);
   let pR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
   let pM = phaseM(AIR.g, mu);
   // the Moon's light scattered too, where the sun is down (the moonlit sky's blue): its phase functions,
   // its irradiance over the sun's — a third of what lights the ground (EARTH_MOON): the moonlit sky a deep
   // blue, not a day's (Lm: its share — the stars' veil leaves it out: they stay, drawn, under the Moon)
   let Lm = P.earth3.xyz;
-  let mm = dot(rd, Lm);
+  let mm = dot(physicalRd, Lm);
   let pRm = 3.0 / (16.0 * PI) * (1.0 + mm * mm);
   let pMm = phaseM(AIR.g, mm);
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
@@ -3914,16 +3966,17 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   for (var i = 0u; i < N; i++) {
     let u1 = (f32(i) + 1.0) / f32(N);
     let t1 = ta + (tb - ta) * select(u1, u1 * u1, inside);
-    let ds = (t1 - tPrev) * AIR.rm;
+    let ds = (t1 - tPrev) * AIR.rm * stepScale;
     let t = mix(tPrev, t1, jit);
     tPrev = t1;
     let p = ro + rd * t;
     let r = length(p);
-    let h = (r - 1.0) * AIR.rm;
+    let h = airHeight(p);
     let dR = exp(-h / airHR()) / airK();
     let dM = exp(-h / airHM()) / airK();
     let ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
-    let Ts = sunThrough(h, dot(p, Ls) / r);
+    let normal = airPhysicalNormal(p / r);
+    let Ts = sunThrough(h, dot(normal, physicalLs));
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
     // the molecules' single scattering, a third of the aerosols'; under an eclipse the single scattering
     // needs the Sun seen from there, the multiple the sunlit air around: the totality's sky a deep blue)
@@ -3932,8 +3985,8 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
     let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     o.L += sc * Ts * Tv;
-    let mz = dot(p, Lm) / r;
-    let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(p, Ls) / r);
+    let mz = dot(normal, Lm);
+    let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(normal, physicalLs));
     if (nightS > 0.0 && mz > -0.1 && P.earth3.w > 0.0 && AIR.moon > 0.5) {
       let scm = AIR.br * dR * (pRm + 0.8 / (4.0 * PI)) + AIR.bms * dM * (pMm + 0.3 / (4.0 * PI));
       o.Lm += scm * sunThrough(h, mz) * moonE * nightS * Tv;
@@ -4117,13 +4170,20 @@ const RWY_MAX = 4u;
 fn rwyCount() -> u32 { return select(0u, min(u32(P.runways[0].x), RWY_MAX), HAS_RWY); }
 // How much of a runway's graded strip a geodetic direction is on (0…1): from 3 km before its threshold to
 // 4.5 km past it, 60 m either side — faded over 300 m along, 60 m across. There the drawn detail is off.
+// WGS84 surface point from its geodetic unit normal, body-fixed metres.
+fn earthSurface(g: vec3f) -> vec3f {
+  let ba = 1.0 / EARTH_AB;
+  let N = EARTH_RM / sqrt(1.0 - (1.0 - ba * ba) * g.z * g.z);
+  return N * vec3f(g.xy, g.z * ba * ba);
+}
 fn runwayGrade(g: vec3f) -> f32 {
+  let point = earthSurface(g);
   var w = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
-    let d = g - P.runways[1u + 4u * k].xyz;
-    if (dot(d, d) > 1e-6) { continue; }
-    let a = dot(d, P.runways[2u + 4u * k].xyz) * 6371e3;
-    let c = abs(dot(d, P.runways[3u + 4u * k].xyz)) * 6371e3;
+    let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
+    if (dot(d, d) > 6500.0 * 6500.0) { continue; }
+    let a = dot(d, P.runways[2u + 4u * k].xyz);
+    let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
     let wa = select(select(1.0, max(0.0, 1.0 - (a - 4500.0) / 300.0), a > 4500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
     let wc = select(max(0.0, 1.0 - (c - 60.0) / 60.0), 1.0, c < 60.0);
     w = max(w, wa * wc);
@@ -4522,13 +4582,13 @@ fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
 
 // the clouds' light at q (their top, or their base seen from below), lit through the air
 fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f32) -> vec3f {
-  let hc = P.earth2.x * EARTH_RM;
-  let mu0 = dot(q, Ls);
+  let hc = P.earth2.x * EARTH_RM * earthSq(q);
+  let mu0 = dot(geoQ(q), airPhysicalDirection(Ls));
   let Ts = sunThrough(hc, mu0) * sunSeen(q * (1.0 + P.earth2.x), Ls);
   // thick clouds: a diffuse, bright top (a soft terminator: they stand above it), forward scattering
   // round the sun; their base, dimmer
   let wrap = clamp((mu0 + 0.08) / 1.08, 0.0, 1.0);
-  let ct = dot(rd, Ls);
+  let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let sk = skySeen(q, Ls);
   let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
@@ -4701,11 +4761,14 @@ fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   o.n = normalize(q - su * tu - sc * tc);
   return o;
 }
-fn seaShade(q: vec3f, V: vec3f, Ls: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32) -> vec3f {
-  let w = seaWind(q);
+fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32) -> vec3f {
+  let normal = geoQ(q);
+  let V = airPhysicalDirection(view);
+  let Ls = airPhysicalDirection(light);
+  let w = seaWind(normal);
   var U = w.w;
   var tu = w.xyz;
-  var n = q;
+  var n = normal;
   var vu = 0.0;
   var vc = 0.0;
   // (the share of Cox–Munk's variance in slopes finer than the resolved range: half)
@@ -4715,7 +4778,7 @@ fn seaShade(q: vec3f, V: vec3f, Ls: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, 
     let b = P.sea[1].w;
     U = mix(U, P.sea[0].w, b);
     tu = P.sea[0].xyz;
-    let sw = seaWaves(q, tu, P.sea[1].xyz, footM);
+    let sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
     n = sw.n;
     vu = sw.vu;
     vc = sw.vc;
@@ -4809,13 +4872,16 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     }
   }
   let V = -rd;
-  let mu0 = dot(q, Ls);
+  let physicalLs = airPhysicalDirection(Ls);
+  let physicalNormal = airPhysicalNormal(n);
+  let mu0 = dot(gq, physicalLs);
   // the sunlight at the ground, through the air and under the clouds (their shadow, cast along the
   // sun's slant from their height; softened)
   let hc = P.earth2.x;
-  let qs = normalize(q + (Ls - q * mu0) * (hc / max(mu0, 0.06)));
+  let marchMu = dot(q, Ls);
+  let qs = normalize(q + (Ls - q * marchMu) * (hc / max(marchMu, 0.06)));
   let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
-  var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / EARTH_RM), Ls);
+  var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -4844,9 +4910,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // —: on the steep faces in the shade, the sky's light halved and the light the ground sends back — the
   // sun's and the sky's on it, at an albedo of 0.18: a cliff's shadow 2–3 stops under the sunlit ground,
   // as the eye sees it, not black)
-  let up = dot(n, q);
+  let up = dot(physicalNormal, gq);
   let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
-  var col = A / PI * (Eg * max(dot(n, Ls), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
+  var col = A / PI * (Eg * max(dot(physicalNormal, physicalLs), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
@@ -4867,7 +4933,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
 // the giants darkened towards the limb (Minnaert), the dusty worlds as regolith (Lommel–Seeliger)
 fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec3f {
   setMapLod(fp, fp, k);
-  let A = planetAlbedo(k, q, P.time.x).rgb;
+  var A = planetAlbedo(k, q, P.time.x).rgb;
+  if (isEarth(k)) { A = max(A, vec3f(0.015, 0.04, 0.07)); }
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   let mu0 = dot(q, Ls);
   let mu = max(dot(q, -rd), 0.02);
@@ -4883,7 +4950,13 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   let rs = ringShadow(k, q, vec3f(0.0, 0.0, 1.0), Ls);
   var shine = vec3f(0.0);
   if (ringOuter(k) > 0.0 && mu0 < 0.25) { shine = ringShine(k, q, Ls) * ((1.0 - 4.0 * max(mu0, 0.0)) / PI); }
-  return A / PI * E * (sunThrough(0.0, mu0) * f * rs + AIR.sky * smoothstep(-0.15, 0.25, mu0) + shine);
+  var direct = 1.0;
+  var sky = AIR.sky * smoothstep(-0.15, 0.25, mu0);
+  if (isEarth(k)) {
+    direct = sunSeenPhysical(earthSurface(q) / EARTH_RM, Ls);
+    sky = max(sky * direct, nightFloor(direct, mu0));
+  }
+  return A / PI * E * (sunThrough(0.0, mu0) * f * rs * direct + sky + shine);
 }
 
 // What a ray sees of the Earth: from ro along rd (its axes; radii), meeting the ground at tHit (< 0:
@@ -4928,9 +5001,9 @@ fn cirrusCover(q: vec3f, fpM: f32) -> f32 {
 // round the sun, capped), the sky's light from above
 fn cirrusLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f) -> vec3f {
   let h = 9000.0;
-  let mu0 = dot(q, Ls);
-  let Ts = sunThrough(h, mu0) * sunSeen(q * (1.0 + h / EARTH_RM), Ls);
-  let ct = dot(rd, Ls);
+  let mu0 = dot(geoQ(q), airPhysicalDirection(Ls));
+  let Ts = sunThrough(h * earthSq(q), mu0) * sunSeen(q * (1.0 + h / EARTH_RM), Ls);
+  let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let ph = min(0.75 * hgPhase(0.85, ct) + 0.25 * hgPhase(-0.1, ct), 1.0);
   let sk = skySeen(q, Ls);
   let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
@@ -4988,7 +5061,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   t1 = min(t1, t0 + 250000.0 / EARTH_RM);
   if (t1 <= t0) { return o; }
   let N = 16u;
-  let ct = dot(rd, Ls);
+  let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   // (the droplets' phase function two-lobed — the silver lining round the sun, a glow away from it —, and
   // the light scattered many times as octaves of it, each fainter, rounder, less dimmed: Wrenninge 2015)
   let hg = cloudPhase(ct, 1.0);
@@ -5003,7 +5076,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let u1 = (f32(i) + 1.0) / f32(N);
     let tn = t0 + (t1 - t0) * u1 * u1;
     let t = mix(tPrev, tn, jit);
-    let dm = (tn - tPrev) * EARTH_RM;
+    let dm = (tn - tPrev) * EARTH_RM * airRayScale(rd);
     tPrev = tn;
     let p = ro + rd * t;
     let r = length(p);
@@ -5030,9 +5103,9 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0); // (thin cover eroded to puffs and gaps)
     if (rho <= 0.0) { continue; }
     let sigma = rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2)); // (per metre: τ ~ 25 through a thick one)
-    let mu0 = dot(q, Ls);
+    let mu0 = dot(geoQ(q), airPhysicalDirection(Ls));
     // the sunlight: through the air to this height, then the cloud above it towards the sun
-    let Ts = sunThrough((r - 1.0) * EARTH_RM, mu0) * sunSeen(p, Ls);
+    let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls);
     // (the cloud above this point, to its top; the sun's path through it — the clouds broken, it comes in by
     // their sides too: shortened)
     let tauUp = c * 25.0 * max(top - hn, 0.0) / max(top, 0.2);
@@ -5048,7 +5121,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let e2 = e1 * e1;
     let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
     let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
-      + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, (r - 1.0) * EARTH_RM, mu0));
+      + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -5062,7 +5135,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
 
 fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
   var o: EarthLook;
-  let earth = isEarth(k);
+  let earth = isEarth(k) && earthOn();
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
   let rc = 1.0 + P.earth2.x;
   let b = dot(ro, rd);
@@ -5097,8 +5170,8 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
       let ti = select(-b - sqrt(hi2), -b + sqrt(hi2), under);
       if (ti > 0.0 && (tHit <= 0.0 || ti < tHit)) {
         let qi = normalize(ro + rd * ti);
-        let alt = (length(ro) - 1.0) * EARTH_RM;
-        let ai = cirrusCover(qi, (fp0 + fpK * ti) * EARTH_RM) * mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
+        let alt = airHeight(ro);
+        let ai = cirrusCover(geoQ(qi), (fp0 + fpK * ti) * EARTH_RM) * mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
         if (ai > 0.0) {
           let ci = cirrusLight(qi, rd, Ls, E);
           if (alpha <= 0.0 || ti < tc) {
@@ -5122,9 +5195,9 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
     if (earth) {
-      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max((length(ph) - 1.0) * EARTH_RM, 0.0));
+      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
     } else {
-      G = otherGround(k, q, rd, Ls, E, fp);
+      G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
     }
   }
   o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
@@ -5146,8 +5219,8 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let m = length(rs);
   let rd = rs / m;
   var t = unitHit(ro, rd);
-  if (isEarth(k) && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
-  if (HAS_RWY) { RWY_HIT = vec4f(rd * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u)); }
+  if (isEarth(k) && earthOn() && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
+  if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u)); }
   let lt = nearLight(k);
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0;
   SEA_D = toBody(look) * (t / m * P.near4.w);
@@ -6209,14 +6282,18 @@ fn keyLight() {
   let L = lt.dir;
   // (the star's angular radius: its irradiance factor is (R/D)²)
   let rs = asin(clamp(sqrt(max(bodies[BV * kn + 3u].y, 0.0)), 1e-5, 1.0));
-  // the world's disc before it: the share of the star's above its limb
+  // Spherical worlds keep their camera-rest-frame coverage (including its aberration).
   let c = P.near0.xyz;
   let dc = length(c);
   let rb = asin(clamp(1.0 / dc, 0.0, 1.0));
   let sep = acos(clamp(dot(L, c / dc), -1.0, 1.0));
   let x = clamp((sep - rb) / rs, -1.0, 1.0);
-  // (the area of a disc above a chord at x radii from its centre)
   var E = lt.e * (0.5 + (x * sqrt(1.0 - x * x) + asin(x)) / PI);
+  // Earth's physical geometry is independent of material availability and GPU map quality.
+  if (isEarth(kn)) {
+    let physicalCamera = vec3f(nearCam().xy, nearCam().z / EARTH_AB);
+    E = lt.e * figureSunShare(physicalCamera, toBody(L), rs, EARTH_AB);
+  }
   if (hasAir(kn)) {
     setAir(kn);
     let rd = normalize(squashed(toBody(L), squashOf(kn)));

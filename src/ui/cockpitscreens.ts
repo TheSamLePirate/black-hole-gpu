@@ -558,7 +558,7 @@ export class CockpitScreens {
     const cx = SLOT / 2,
       cy = 245;
     if (o && Number.isFinite(o.apKm) && st) {
-      const Rkm = o.aKm * (1 - o.ecc) - o.peKm; // the body's radius
+      const Rkm = o.radiusKm; // the body's radius
       const a = o.aKm,
         e = o.ecc;
       const b = a * Math.sqrt(Math.max(1 - e * e, 0));

@@ -16,6 +16,7 @@ import { coordToZamo, type Vec3 } from "../physics";
 import { sideToRep, sphericalFrame } from "../wormhole";
 import type { GpuBody } from "./scene-bodies";
 import { dot } from "../math/vec3";
+import { cartToGeodetic } from "./ellipsoid";
 
 /** Within this many of its radii a body is drawn in the local patch. */
 export const LOCAL_RANGE = 300;
@@ -61,6 +62,16 @@ export interface LocalPatch {
   light: Vec3;
   radius: number;
   distance: number;
+}
+
+/** Camera's geodetic place and normal, from physical patch coordinates in units of its radius. */
+export function patchGeodetic(p: Pick<LocalPatch, "centre" | "axes">, flattening: number) {
+  const body = p.axes.map((a) => -dot(p.centre, a)) as Vec3;
+  const g = cartToGeodetic(1, flattening, body);
+  const c = Math.cos(g.lat);
+  const normal: Vec3 = [c * Math.cos(g.lon), c * Math.sin(g.lon), Math.sin(g.lat)];
+  const up = [0, 1, 2].map((i) => normal[0] * p.axes[0][i]! + normal[1] * p.axes[1][i]! + normal[2] * p.axes[2][i]!) as Vec3;
+  return { ...g, body, normal, up };
 }
 
 const unit = (a: Vec3): Vec3 => {

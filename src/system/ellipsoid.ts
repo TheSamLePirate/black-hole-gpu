@@ -11,7 +11,7 @@
 //    ground's normal) — what the ground is drawn by and the gear touches (the two must agree to the
 //    millimetre), equal to the geodetic height on the ground, to 5 cm 10 km up (2 m in low orbit).
 
-import type { Vec3 } from "../math/vec3";
+import { add, dot, len, scale, sub, type Vec3 } from "../math/vec3";
 
 /** WGS84: the semi-major axis [m] and the flattening. */
 export const WGS84_A = 6378137;
@@ -54,6 +54,80 @@ export function cartToGeodetic(a: number, f: number, p: Vec3): { lat: number; lo
     lat = Math.atan2(p[2], rho * (1 - (e2 * N) / (N + h)));
   }
   return { lat, lon, h };
+}
+
+/** The geodetic normal under p, in the same Cartesian frame (also the map's unit direction). */
+export function geodeticNormal(a: number, f: number, p: Vec3): Vec3 {
+  const g = cartToGeodetic(a, f, p);
+  const c = Math.cos(g.lat);
+  return [c * Math.cos(g.lon), c * Math.sin(g.lon), Math.sin(g.lat)];
+}
+
+/** Radius along a direction at a given geodetic height, in the units of a. */
+export function radiusAtHeight(a: number, f: number, direction: Vec3, h: number): number {
+  if (f === 0) return a + h;
+  const l = Math.hypot(...direction);
+  const u = direction.map((v) => v / l) as Vec3;
+  let r = a / Math.sqrt(u[0] ** 2 + u[1] ** 2 + (u[2] / (1 - f)) ** 2) + h;
+  for (let i = 0; i < 3; i++) {
+    const p = u.map((v) => v * r) as Vec3;
+    const n = geodeticNormal(a, f, p);
+    r -= (cartToGeodetic(a, f, p).h - h) / (u[0] * n[0] + u[1] * n[1] + u[2] * n[2]);
+  }
+  return r;
+}
+
+/** First forward ray intersection with the figure; direction must be unit, result in units of a. */
+export function rayFigure(origin: Vec3, direction: Vec3, a: number, f: number): number | null {
+  const ro = squash(origin, a, f);
+  const rs = squash(direction, a, f);
+  const m = len(rs);
+  const rd = scale(rs, 1 / m);
+  const b = dot(ro, rd);
+  const off = sub(ro, scale(rd, b));
+  const h = 1 - dot(off, off);
+  if (h < 0) return null;
+  const t = -b - Math.sqrt(h);
+  return t >= 0 ? t / m : null;
+}
+
+/** Signed angular distance above the ellipsoid's limb, in physical body axes (radians).
+ * The local tangent to the limb clips a small finite source; mirrored in trace.wgsl figureSunShare. */
+export function figureSourceElevation(origin: Vec3, light: Vec3, a: number, f: number): number {
+  const ro = scale(origin, 1 / a);
+  const radial = scale(ro, 1 / len(ro));
+  const L = scale(light, 1 / len(light));
+  const cosSep = Math.max(-1, Math.min(1, -dot(radial, L)));
+  const sep = Math.acos(cosSep);
+  const lateral = add(L, scale(radial, cosSep));
+  const ab = 1 / (1 - f);
+  const stretch = (v: Vec3): Vec3 => [v[0], v[1], v[2] * ab];
+  const os = stretch(ro);
+  if (dot(os, os) <= 1) {
+    const n = [ro[0], ro[1], ro[2] * ab * ab] as Vec3;
+    return Math.asin(Math.max(-1, Math.min(1, dot(n, L) / len(n))));
+  }
+  if (len(lateral) < 1e-12) return cosSep > 0 ? -Math.PI / 2 : Math.PI / 2;
+  const tangent = scale(lateral, 1 / len(lateral));
+  const nr = stretch(radial),
+    er = stretch(tangent);
+  const c = dot(os, os) - 1;
+  const A = dot(nr, nr),
+    B = -dot(nr, er);
+  const C = dot(os, er) ** 2 - c * dot(er, er);
+  const limb = Math.atan2(A, Math.sqrt(Math.max(B * B - A * C, 0)) - B);
+  const grazing = add(scale(radial, -Math.cos(limb)), scale(tangent, Math.sin(limb)));
+  const gs = stretch(grazing);
+  const grad = stretch(sub(scale(os, dot(os, gs)), scale(gs, c)));
+  const angular = sub(grad, scale(grazing, dot(grad, grazing)));
+  const towards = add(scale(radial, Math.sin(limb)), scale(tangent, Math.cos(limb)));
+  return (sep - limb) * Math.abs(dot(angular, towards) / len(angular));
+}
+
+/** Uniform small disk above the local tangent to the limb (0 hidden, 1 fully visible). */
+export function figureDiskShare(origin: Vec3, light: Vec3, angularRadius: number, a: number, f: number): number {
+  const x = Math.max(-1, Math.min(1, figureSourceElevation(origin, light, a, f) / Math.max(angularRadius, 1e-8)));
+  return 0.5 + (x * Math.sqrt(Math.max(1 - x * x, 0)) + Math.asin(x)) / Math.PI;
 }
 
 /** The squashed space's point of a body-fixed one [units of a: the ellipsoid there the unit sphere]. */

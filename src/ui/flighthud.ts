@@ -1311,7 +1311,7 @@ export class FlightHud {
     const o = st.orbit!;
     const dpr = devicePixelRatio;
     const S = (v: number) => v * dpr;
-    const R = o.aKm * (1 - o.ecc) - o.peKm; // the body's radius [km]
+    const R = o.radiusKm; // the body's radius [km]
     const e = o.ecc;
     const bound = e < 1 && Number.isFinite(o.apKm);
     const a = Math.abs(o.aKm);

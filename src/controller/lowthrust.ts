@@ -34,7 +34,17 @@ import { mouth, sphericalFrame } from "../wormhole";
 import { gravityHome, OUR_BODIES, ourState, soiOf } from "../system/our-side";
 import { predictOurs, type OurPath } from "../system/our-predict";
 import { plan as runPlanner } from "../system/plan-client";
-import { airDensity as ourAir, altitudeOver, dragAccel, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import {
+  airDensity as ourAir,
+  altitudeOver,
+  dragAccel,
+  figureUp,
+  gearHeight,
+  groundVelocity,
+  solidBody,
+  toBodyFixed,
+} from "../system/our-surface";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { bodyAxes, solarBody, solarState } from "../system/solar";
 import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
@@ -612,7 +622,7 @@ function ourSurfaceWant(
   const c = C_MPS;
   const Pb = nav.refPos;
   const r = Math.hypot(...sub3(nav.X, Pb));
-  const up = lin(sub3(nav.X, Pb), 1 / r, nav.X, 0);
+  const up = figureUp(id, nav.X, nav.t);
   const h = Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES;
   const gw = sb.mass / (r * r);
   const thr = this.thrustMax();
@@ -774,7 +784,8 @@ function climbAssist(
   const Pb = nav.refPos;
   const rel = sub3(nav.X, Pb);
   const r = Math.hypot(...rel);
-  const up = lin(rel, 1 / r, rel, 0);
+  const radial = lin(rel, 1 / r, rel, 0);
+  const up = figureUp(id, nav.X, nav.t);
   const h = Math.max(altitudeOver(id, nav.X, nav.t) / 1e3, 0);
   const d0 = climbTop(id, this.launchGoal.altKm);
   const thr = this.thrustMax();
@@ -788,7 +799,7 @@ function climbAssist(
   if (Math.hypot(...eastG) < 1e-12) eastG = cross([0, 0, 1], up);
   eastG = unitV(eastG);
   const north = cross(up, eastG);
-  const east = launchEast(id, up, this.launchGoal.incDeg);
+  const east = launchEast(id, radial, this.launchGoal.incDeg);
   if (!this.climbRec || this.climbRec.id !== id) {
     const vGroundE = dot3(sub3(gv, nav.refVel), east);
     this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
@@ -823,7 +834,9 @@ function climbAssist(
   // the orbit it leaves
   const vi = lin(sub3(nav.V, nav.refVel), C, nav.V, 0) as KV3;
   const e = kepElements(mu, lin(rel, M_METRES, rel, 0) as KV3, vi);
-  const apKm = e.e < 1 ? e.ra / 1e3 - sb.radius * kmM : Infinity;
+  const axes = bodyAxes(sb, nav.t);
+  const apo = axes.map((axis) => -dot3(axis, e.P as Vec3) * e.ra) as Vec3;
+  const apKm = e.e < 1 ? cartToGeodetic(sb.radius * M_METRES, flatteningOf(id), apo).h / 1e3 : Infinity;
   const topKm = (d0 - sb.radius) * kmM;
   // the countdowns, along the optimum's own time: to the gravity turn, to the cutoff (MECO) — from where
   // the craft is on it (its height)
@@ -1015,7 +1028,7 @@ function entryAssist(
     if (rate < 0) tRev = Math.max((a + band) / -rate, 0);
   }
   const say: string[] = [];
-  const up = unitV(fr.s.x);
+  const up = fr.env.normal?.(fr.s.x) ?? unitV(fr.s.x);
   const vr = dot3(fr.s.v, up);
   if (h > ei && vr < 0) say.push(tf("ENTRY INTERFACE IN {0}", fmtDur((h - ei) / -vr)));
   else {
@@ -2175,7 +2188,7 @@ function futureCompute(this: CameraController, at: number[]): FutureView | null 
     T.push(0);
     // near the ground, in the air: the path over the ground as it turns (the frame the craft flies
     // in — at Kennedy the Earth's turn is 400 m/s); higher, the orbit as it is (not turning)
-    const turn = !!b && b.kind !== "star" && Math.hypot(...sub3(nav.X, B0)) - b.radius < Math.max(airTop(b.atmosphere), 60e3) / M_METRES;
+    const turn = !!b && b.kind !== "star" && altitudeOver(ref, nav.X, t0) < Math.max(airTop(b.atmosphere), 60e3);
     const A0 = turn ? bodyAxes(b!, t0) : null;
     // (each sample relative to the body at its own time — and on the body's turning axes then: fixed
     // for a path, kept with it, not recomputed ten times a second)
@@ -2196,7 +2209,8 @@ function futureCompute(this: CameraController, at: number[]): FutureView | null 
     if (b && b.kind !== "star") {
       body = { c: B0, R: b.radius };
       const top = airTop(b.atmosphere) / M_METRES;
-      const alt = (X: Vec3) => Math.hypot(...sub3(X, B0)) - b.radius;
+      const axes = bodyAxes(b, t0);
+      const alt = (X: Vec3) => cartToGeodetic(b.radius, flatteningOf(ref), axes.map((axis) => dot3(sub3(X, B0), axis)) as Vec3).h;
       // the air's top crossed on the way down (from above it)
       if (top > 0 && P.length && alt(P[0]!) > top) {
         for (let j = 1; j < P.length; j++)

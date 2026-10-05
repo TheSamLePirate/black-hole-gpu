@@ -11,7 +11,7 @@ import { craterRelief } from "../terrain";
 import { airAt, airRaw } from "../aero";
 import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
-import { cartToGeodetic, flatteningOf, geodeticToCart, squashedHeight } from "./ellipsoid";
+import { cartToGeodetic, flatteningOf, geodeticNormal, geodeticToCart, squashedHeight } from "./ellipsoid";
 import { poleOfDate } from "./geopotential";
 
 export { GEAR };
@@ -113,6 +113,11 @@ export function altitudeOver(id: string, X: Vec3, t: number): number {
 /** A place on a body: geodetic latitude, east longitude [°], height above its figure [m] → its own coordinates. */
 export function bodyFixedOf(id: string, lat: number, lon: number, hM = GEAR): Vec3 {
   return geodeticToCart(solarBody(id)!.radius, flatteningOf(id), (lat * Math.PI) / 180, (lon * Math.PI) / 180, hM / M_METRES);
+}
+
+/** Map direction of a body-fixed point in M; preserve geodetic latitude even in orbit. */
+export function bodyMapDirection(id: string, q: Vec3): Vec3 {
+  return geodeticNormal(solarBody(id)!.radius, flatteningOf(id), q);
 }
 
 /**
@@ -221,13 +226,17 @@ export function gearHeight(id: string, X: Vec3, t: number) {
 export function figureUp(id: string, X: Vec3, t: number): Vec3 {
   const f = flatteningOf(id);
   const d = sub(X, solarState(id, t).pos);
-  // (the squashed space's geodetic direction, back on the home axes: d + ((a/b)² − 1) z ẑ, z along the pole)
-  const k = 1 / (1 - f) ** 2 - 1;
-  const p = f === 0 ? ([0, 0, 0] as Vec3) : poleOfDate(id, t);
-  const z = dot(d, p) * k;
-  const n: Vec3 = [d[0] + z * p[0], d[1] + z * p[1], d[2] + z * p[2]];
-  const l = Math.hypot(...n);
-  return [n[0] / l, n[1] / l, n[2] / l];
+  if (f === 0) {
+    const l = Math.hypot(...d);
+    return [d[0] / l, d[1] / l, d[2] / l];
+  }
+  const p = poleOfDate(id, t);
+  const z = dot(d, p);
+  const rho = Math.hypot(d[0] - z * p[0], d[1] - z * p[1], d[2] - z * p[2]);
+  const lat = cartToGeodetic(solarBody(id)!.radius, f, [rho, 0, z]).lat;
+  const c = Math.cos(lat),
+    s = Math.sin(lat);
+  return d.map((v, i) => (rho > 1e-30 ? ((v - z * p[i]!) / rho) * c : 0) + p[i]! * s) as Vec3;
 }
 
 /**

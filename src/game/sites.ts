@@ -1,3 +1,5 @@
+import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+
 // Places to come down on: each world's runways, landing sites and the film's — latitude and east
 // longitude [°] (our bodies: on their own turning axes; Gargantua's worlds: on their frames' axes, x away
 // from Gargantua, z their pole). The entry autopilot flies to one (the nearest, unless chosen).
@@ -52,6 +54,8 @@ export interface RunwayFrame {
   p: [number, number, number];
   along: [number, number, number];
   across: [number, number, number];
+  /** threshold on the WGS84 surface, body-fixed metres */
+  origin: [number, number, number];
 }
 /** A runway as drawn [m] (trace.wgsl: runwayShade): the graded strip's paved middle, 4.5 km from its threshold. */
 export const RUNWAY_LENGTH = 4500;
@@ -66,19 +70,17 @@ export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "eart
   const h = (s.rwy ?? 0) * D;
   const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
-  return { site: s, p, along, across };
+  return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0) };
 });
-/** the metres per radian the runways' frames are measured in (trace.wgsl: runwayGrade, the same) */
-const R_EARTH = 6371e3;
 // (the shader's runwayGrade holds the same figures: change both)
 export function runwayWeight(q: [number, number, number]): number {
+  const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
   let w = 0;
   for (const r of EARTH_RUNWAYS) {
-    const d: [number, number, number] = [q[0] - r.p[0], q[1] - r.p[1], q[2] - r.p[2]];
-    // (more than ~6 km off: not this one)
-    if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > 1e-6) continue;
-    const a = (d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2]) * R_EARTH;
-    const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]) * R_EARTH;
+    const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
+    if (Math.hypot(...d) > 6500) continue;
+    const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
+    const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
     const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 4500 ? Math.max(0, 1 - (a - 4500) / 300) : 1;
     const wc = c < 60 ? 1 : Math.max(0, 1 - (c - 60) / 60);
     w = Math.max(w, wa * wc);

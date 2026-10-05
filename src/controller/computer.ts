@@ -698,7 +698,7 @@ function approach(
 ) {
   const D = Math.PI / 180;
   const T = fr.place(site);
-  const tu = unitV(T);
+  const tu = fr.env.normal?.(T) ?? unitV(T);
   // (the site's north: the body's pole on it — ours: the spin axis; Gargantua's worlds: their z)
   const nav = this.ourNav(cam);
   const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
@@ -829,7 +829,7 @@ function approach(
   // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)
   const vAir = this.airVelocity(va);
   const k = onFinal && agl < 12 ? 1 - agl / 12 : 0;
-  const ax = attitudeFor(fr.s.x, lin(vAir, 1 - k, va, k), R.alpha, bank);
+  const ax = attitudeFor(fr.s.x, lin(vAir, 1 - k, va, k), R.alpha, bank, fr.env.normal?.(fr.s.x));
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
 }
 
@@ -860,7 +860,7 @@ function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: numb
   }
   const D = Math.PI / 180;
   const T = fr.place(site);
-  const tu = unitV(T);
+  const tu = fr.env.normal?.(T) ?? unitV(T);
   const pole = unitV(spinAxis(fr.body));
   const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
   const east = cross(north, tu);
@@ -937,8 +937,9 @@ function entryInfo(this: CameraController) {
   let range = NaN,
     dpsi = NaN;
   if (R.site) {
-    const up = unitV(fr.s.x);
-    const pu = unitV(fr.place(R.site));
+    const up = fr.env.normal?.(fr.s.x) ?? unitV(fr.s.x);
+    const place = fr.place(R.site);
+    const pu = fr.env.normal?.(place) ?? unitV(place);
     range = Math.acos(clamp(dot3(up, pu), -1, 1)) * fr.env.R;
     const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
     const vh = unitV(lin(va, 1, up, -dot3(va, up)));

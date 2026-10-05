@@ -15,7 +15,7 @@ import { bodyState } from "./ephemeris";
 import { poleOfDate, zonalAccel } from "./geopotential";
 import { flatteningOf, withinFigure } from "./ellipsoid";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
-import { bodyFixedOf, fromBodyFixed, groundPointOf, groundVelocity, toBodyFixed } from "./our-surface";
+import { bodyFixedOf, figureUp, fromBodyFixed, groundPointOf, groundVelocity, toBodyFixed } from "./our-surface";
 import { M_METRES } from "../units";
 
 /** Our universe's massive bodies: the Sun, the planets and their moons. */
@@ -267,7 +267,7 @@ export function bodyView(t: number, v: BodyView) {
     let best = Infinity;
     for (let l = -180; l < 180; l += 0.25) {
       const X = fromBodyFixed(id, bodyFixedOf(id, lat, l, 0), t);
-      const up = unit([X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]]);
+      const up = figureUp(id, X, t);
       const d = unit([L[0] - X[0], L[1] - X[1], L[2] - X[2]]);
       if (dot(unit(cross(pole, up)), d) < 0) continue;
       const el = (Math.asin(Math.max(-1, Math.min(1, dot(up, d)))) * 180) / Math.PI;
@@ -278,7 +278,7 @@ export function bodyView(t: number, v: BodyView) {
     let best = Infinity;
     for (let l = -180; l < 180; l += 0.25) {
       const X = fromBodyFixed(id, bodyFixedOf(id, lat, l, 0), t);
-      const up = unit([X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]]);
+      const up = figureUp(id, X, t);
       const east = unit(cross(pole, up));
       if (dot(east, sun) > 0) continue;
       const el = (Math.asin(Math.max(-1, Math.min(1, dot(up, sun)))) * 180) / Math.PI;
@@ -333,10 +333,7 @@ export function tiltAway(d: Vec3, u: Vec3, a: number): [Vec3, Vec3] {
 export function bodyGround(id: string, t: number, lat: number, lon: number) {
   const q = groundPointOf(id, lat, lon);
   const X = fromBodyFixed(id, q, t);
-  const C = ourState(id, t).pos;
-  const r = [X[0] - C[0], X[1] - C[1], X[2] - C[2]] as Vec3;
-  const rl = Math.hypot(...r);
-  const up: Vec3 = [r[0] / rl, r[1] / rl, r[2] / rl];
+  const up = figureUp(id, X, t);
   const w = spinVector(SOLAR_BODIES.find((b) => b.id === id)!, t);
   let e: Vec3 = [w[1] * up[2] - w[2] * up[1], w[2] * up[0] - w[0] * up[2], w[0] * up[1] - w[1] * up[0]];
   if (Math.hypot(...e) < 1e-30) e = [0, -up[2], up[1]];
