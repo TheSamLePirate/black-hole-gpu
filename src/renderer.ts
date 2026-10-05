@@ -57,6 +57,7 @@ import {
 } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
 import { loadEarthMaps, placeholderEarth, prefetchEarthMaps, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
@@ -711,7 +712,10 @@ export class Renderer {
     const optional = (compile: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
       const resource = new AsyncResource(compile, () => {
         if (resource.value) publish(resource.value);
-        else console.warn("Optional tracer pipeline unavailable:", resource.error);
+        else {
+          gpuDiagnostics.record("optional-pipeline-failure", resource.error);
+          console.warn("Optional tracer pipeline unavailable:", resource.error);
+        }
         this.onAssets?.();
       });
       return resource;
@@ -1032,15 +1036,69 @@ export class Renderer {
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
+    let device: GPUDevice | null = null;
+    let abandoned = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let rejectLost!: (error: Error) => void;
+    const unavailable = new Promise<never>((_, reject) => {
+      rejectLost = reject;
+      timer = setTimeout(() => reject(new Error(`Graphics startup timed out after 180 s (${gpuDiagnostics.stage})`)), 180_000);
+    });
+    try {
+      return await Promise.race([
+        Renderer.createGraphics(canvas, (created) => {
+          device = created;
+          if (abandoned) {
+            created.destroy();
+            throw new Error("Graphics startup already terminated");
+          }
+          void created.lost.then((info) =>
+            rejectLost(new Error(`GPU lost during startup (${info.reason}): ${info.message || "No explanation supplied by browser"}`)),
+          );
+        }),
+        unavailable,
+      ]);
+    } catch (error) {
+      abandoned = true;
+      (device as GPUDevice | null)?.destroy();
+      throw error;
+    } finally {
+      clearTimeout(timer!);
+    }
+  }
+
+  private static async createGraphics(canvas: HTMLCanvasElement, onDevice: (device: GPUDevice) => void): Promise<Renderer> {
+    gpuDiagnostics.enter("webgpu-availability");
     if (!navigator.gpu) throw new Error(t("WebGPU is not available in this browser."));
     loading.stage("gpu", t("WebGPU — the graphics device"), { weight: 0.5, indeterminate: true, eta: 0.5 });
     loading.stage("shaders", t("Shaders — geodesics, disk, sky, Ranger"), { weight: 1 });
+    gpuDiagnostics.enter("adapter-request");
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!adapter) throw new Error(t("No WebGPU adapter found."));
+    gpuDiagnostics.setContext({
+      adapter: {
+        vendor: adapter.info?.vendor,
+        architecture: adapter.info?.architecture,
+        device: adapter.info?.device,
+        description: adapter.info?.description,
+        features: [...adapter.features].sort(),
+        limits: Object.fromEntries(
+          [
+            "maxStorageBuffersPerShaderStage",
+            "maxBufferSize",
+            "maxStorageBufferBindingSize",
+            "maxTextureDimension2D",
+            "maxComputeInvocationsPerWorkgroup",
+            "maxComputeWorkgroupStorageSize",
+          ].map((key) => [key, (adapter.limits as unknown as Record<string, number>)[key]]),
+        ),
+      },
+    });
     // (the tracer's bind group holds 10 storage buffers: said plainly here rather than by a layout's validation error)
     const storageBuffers = adapter.limits.maxStorageBuffersPerShaderStage;
     if (storageBuffers < 10)
       throw new Error(tf("This GPU binds {0} storage buffers per shader stage; the ray tracer needs 10.", storageBuffers));
+    gpuDiagnostics.enter("device-request");
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
       // (and the compressed textures it samples: the colour maps' KTX2, transcoded to BC7 or ASTC)
@@ -1054,20 +1112,31 @@ export class Renderer {
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
       },
     });
+    onDevice(device);
     // Start downloads while shaders compile, even for a scene with no Earth. This does not gate
     // startup or allocate Earth textures; the scene-dependent loader still controls GPU residency.
-    void prefetchEarthMaps(device).catch((error) => console.warn("Earth prefetch unavailable:", error));
+    void prefetchEarthMaps(device).catch((error) => {
+      gpuDiagnostics.record("earth-prefetch", error);
+      console.warn("Earth prefetch unavailable:", error);
+    });
     // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
     // flight and offers a reload; nothing more is sent to it)
     const lost = device.lost.then((info) => {
+      gpuDiagnostics.record(`device-lost:${info.reason}`, info.message || "Browser supplied no explanation", info.reason !== "destroyed");
       console.error("WebGPU device lost:", info.message);
       return info;
     });
+    // Capture errors from canvas setup and constructors as well as later frame submissions.
+    device.addEventListener("uncapturederror", (e) => {
+      gpuDiagnostics.record("uncaptured-gpu-error", (e as GPUUncapturedErrorEvent).error);
+    });
+    gpuDiagnostics.enter("canvas-configuration");
     const context = canvas.getContext("webgpu");
     if (!context) throw new Error(t("Could not create a WebGPU canvas context."));
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
     loading.done("gpu");
+    gpuDiagnostics.enter("shader-download");
     const src = {
       trace: await wgsl(traceWGSL),
       display: await wgsl(displayWGSL),
@@ -1080,6 +1149,7 @@ export class Renderer {
     };
     loading.set("shaders", 0.3);
     device.pushErrorScope("validation");
+    gpuDiagnostics.enter("pipeline-creation");
     const r = new Renderer(device, context, format, src);
     r.tier = guessTier(adapter);
     // (what the adapter is and can do: the benchmark's report)
@@ -1145,6 +1215,7 @@ export class Renderer {
       ["overlay", r.chart.module],
     ];
     let checked = 0;
+    gpuDiagnostics.enter("shader-validation");
     const failures = await Promise.all(
       modules.map(async ([name, module]) => {
         const info = await module.getCompilationInfo();
@@ -1157,11 +1228,13 @@ export class Renderer {
     );
     const failure0 = failures.find((f) => f !== null);
     if (failure0) throw new Error(failure0);
+    gpuDiagnostics.enter("core-pipeline-compilation");
     const failure = await tracerFailure;
     if (failure) throw new Error(tf("The ray tracer's pipelines failed to compile: {0}", failure.message));
     const err = await device.popErrorScope();
     if (err) throw new Error(tf("WebGPU pipeline creation failed: {0}", err.message));
     loading.done("shaders");
+    gpuDiagnostics.enter("first-frame");
     return r;
   }
 

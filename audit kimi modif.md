@@ -419,3 +419,45 @@ Après ce complément : **366 tests unitaires réussis, 141 ignorés, aucun éch
 **34 tests Chrome réussis** sur démarrage, rechargement, smoke, titre et golden flights.
 Le nouveau test contrôle également la réussite HTTP des téléchargements. Build de production,
 vérification TypeScript/Biome et compilation des neuf shaders WGSL validés localement.
+
+## Fiabilité multi-appareils et diagnostic des échecs — 2026-10-05
+
+Le chargement n'est pas déclaré « parfait sur tous les appareils ». Le moteur nécessite WebGPU
+et au moins **10 storage buffers par shader stage**. Une réduction de la qualité ne supprime pas
+cette exigence structurelle : les appareils sous cette limite sont refusés avec leur limite réelle.
+Les validations disponibles restent Chrome/macOS/Apple Metal ; Windows/D3D12/DXC, Android,
+iOS/Safari, Firefox et les GPU intégrés faibles restent à vérifier sur leurs appareils réels.
+
+Un rapport JSON local est désormais disponible via **Télécharger le diagnostic graphique**,
+sur l'écran d'erreur et dans le menu Pause. `__bh.graphicsDiagnostic()` fournit le même rapport.
+Il contient les étapes horodatées, les erreurs du navigateur (y compris les GPUError qui ne sont
+pas des Error JavaScript), les piles JavaScript disponibles, l'adaptateur, ses features/limites,
+la révision disponible, la qualité effective, le tier, les états des pipelines et les completions GPU.
+Les événements sont bornés ; une session précédente interrompue est conservée sans récursion.
+La collecte n'envoie aucune télémétrie réseau. Le rapport ne contient pas de sauvegarde de vol.
+L'indisponibilité du stockage local ne bloque pas le moteur.
+
+Le démarrage GPU se termine en erreur après 180 secondes d'attente au lieu de laisser une promesse
+sans fin ; un device reçu après expiration est détruit. Une perte du device pendant l'initialisation
+est interceptée avant les callbacks du HUD. L'attente de la première image est aussi surveillée
+avec 180 secondes de visibilité ; le temps passé en onglet caché n'est pas imputé à cette attente.
+Les échecs des pipelines facultatifs sont enregistrés sans bloquer le chemin temps réel.
+Une perte du GPU n'annonce une sauvegarde du vol que si l'écriture a effectivement réussi.
+
+Limites du diagnostic : un timeout décrit une absence de progression, pas une preuve de panne
+du pilote. Le navigateur peut fournir seulement `reason: unknown`, avec un message incomplet.
+Un crash complet du processus ou un thread JavaScript bloqué empêche les callbacks et timers de
+s'exécuter ; les dernières étapes déjà enregistrées restent consultables au rechargement si le
+stockage fonctionne. Une interruption par fermeture volontaire peut également apparaître comme
+session précédente incomplète. Aucun diagnostic n'invente une cause matérielle non fournie.
+
+Référence primaire : [WebGPU — device loss et erreurs](https://www.w3.org/TR/webgpu/).
+
+Validation de ce complément : **369 tests réussis, 146 ignorés, aucun échec** ;
+**10 tests Chrome de démarrage réussis**, dont cinq injections d'échecs (absence d'adaptateur,
+limite de buffers insuffisante, refus de compilation, compilation bloquée et device perdu pendant
+l'initialisation). Les suites reload/smoke/title passent également : 28 cas avec la première
+version des sept tests startup, puis les dix startup ont été rejoués après les dernières modifications.
+`bun run check` valide TypeScript, Biome (52 avertissements et 13 informations préexistants) et
+les neuf shaders sous Metal. Le build de production passe. Ces résultats ne constituent pas une
+validation Windows ou mobile.

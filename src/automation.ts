@@ -4,6 +4,7 @@
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
 import { bodyFixedOf, groundRelief } from "./system/our-surface";
+import { gpuDiagnostics } from "./gpu-diagnostics";
 import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
@@ -195,6 +196,7 @@ export function installBh(c: BhContext) {
   };
   Object.assign(globalThis, {
     __bh: {
+      graphicsDiagnostic: () => gpuDiagnostics.report(),
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */

@@ -490,6 +490,13 @@ export default {
     "La première image reste indisponible. Rechargez pour relancer le démarrage graphique.",
   "Enter when the first image is ready": "Entrer dès que la première image est prête",
   "Enter now": "Entrer maintenant",
+  "Download graphics diagnostic": "Télécharger le diagnostic graphique",
+  "The graphics device was reset ({0}). Reload the page to go on.":
+    "Le périphérique graphique a été réinitialisé ({0}). Rechargez la page pour continuer.",
+  "Your flight was saved.": "Votre vol a été sauvegardé.",
+  "Your flight could not be saved automatically.": "Votre vol n'a pas pu être sauvegardé automatiquement.",
+  "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.":
+    "Aucune première image après 180 s. Dernière étape graphique : {0}. Le navigateur n'a pas fourni de cause précise.",
   "Refinement unavailable": "Affinage indisponible",
   "Entering as soon as the first image is ready…": "Entrée dès que la première image est prête…",
   unavailable: "indisponible",

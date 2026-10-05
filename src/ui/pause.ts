@@ -2,7 +2,8 @@
 // load, hand the controls back (the autopilot, the hold, the mission: ⌫ does it without the menu), the
 // settings, the controls, the title screen. Its sub-pages (save, load) go back with Escape.
 
-import { tr, type Text } from "../i18n";
+import { t, tr, type Text } from "../i18n";
+import { downloadGpuDiagnostic } from "../gpu-diagnostics";
 import { autosave, slots } from "../game/save";
 import type { GameTools } from "../game/tools";
 import { onEscape } from "./keys";
@@ -117,6 +118,7 @@ export class PauseMenu {
       this.item(tr(T.resume), () => this.close(), { testid: "pause-resume" }),
       this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
       this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
+      this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.d.engaged()

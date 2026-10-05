@@ -22,6 +22,92 @@ function fault(entry: "main" | "lut") {
 describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
   afterAll(stopServer);
 
+  for (const failure of ["adapter", "limits", "pipeline"] as const) {
+    test(`${failure} startup failure exposes a downloadable diagnostic with the failing stage`, async () => {
+      const initScript =
+        failure === "adapter"
+          ? `navigator.gpu.requestAdapter = async () => null;`
+          : failure === "limits"
+            ? `(() => {
+              const original = navigator.gpu.requestAdapter.bind(navigator.gpu);
+              navigator.gpu.requestAdapter = async (options) => {
+                const adapter = await original(options);
+                Object.defineProperty(adapter, "limits", { value: { maxStorageBuffersPerShaderStage: 8 } });
+                return adapter;
+              };
+            })()`
+            : `GPUDevice.prototype.createComputePipelineAsync = function() { return Promise.reject(new Error("Injected core compilation failure")); };`;
+      const app = await App.boot({ hash: scene, width: 320, height: 240, initScript, startupFailure: true });
+      try {
+        const report = await app.js<{ status: string; stage: string; events: { message: string }[] }>(
+          `JSON.parse(localStorage.getItem("kerr.gpu-diagnostic.v1"))`,
+        );
+        expect(report.status).toBe("failed");
+        expect(report.stage).toBe(failure === "pipeline" ? "core-pipeline-compilation" : "adapter-request");
+        expect(
+          report.events.some((event) =>
+            event.message.includes(
+              failure === "adapter" ? "No WebGPU adapter" : failure === "limits" ? "needs 10" : "Injected core compilation failure",
+            ),
+          ),
+        ).toBe(true);
+        expect(
+          await app.js<boolean>(
+            `[...document.querySelectorAll("#error button")].some((button) => button.textContent.includes("diagnostic"))`,
+          ),
+        ).toBe(true);
+      } finally {
+        app.close();
+      }
+    }, 300_000);
+  }
+
+  test("a stalled core compilation terminates with a diagnostic instead of an endless splash", async () => {
+    const app = await App.boot({
+      hash: scene,
+      startupFailure: true,
+      initScript: `(() => {
+      const original = globalThis.setTimeout;
+      globalThis.setTimeout = (fn, ms, ...args) => original(fn, ms === 180000 ? 1500 : ms, ...args);
+      GPUDevice.prototype.createComputePipelineAsync = () => new Promise(() => {});
+    })()`,
+    });
+    try {
+      const report = await app.js<{ status: string; events: { message: string }[] }>(
+        `JSON.parse(localStorage.getItem("kerr.gpu-diagnostic.v1"))`,
+      );
+      expect(report.status).toBe("failed");
+      expect(report.events.some((event) => event.message.includes("Graphics startup timed out"))).toBe(true);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
+  test("device loss during initialization is reported even before runtime callbacks exist", async () => {
+    const app = await App.boot({
+      hash: scene,
+      startupFailure: true,
+      initScript: `(() => {
+      const original = GPUAdapter.prototype.requestDevice;
+      GPUAdapter.prototype.requestDevice = async function(options) {
+        const device = await original.call(this, options);
+        device.destroy();
+        return device;
+      };
+    })()`,
+    });
+    try {
+      const report = await app.js<{ status: string; events: { kind: string; message: string }[] }>(
+        `JSON.parse(localStorage.getItem("kerr.gpu-diagnostic.v1"))`,
+      );
+      expect(report.status).toBe("failed");
+      expect(report.events.some((event) => event.message.includes("GPU lost during startup"))).toBe(true);
+      expect(report.events.some((event) => event.kind === "device-lost:destroyed")).toBe(true);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("failed quality LUT leaves the adaptive kernel and a PNG export usable", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("lut") });
     try {
@@ -35,6 +121,9 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       await app.waitFor("__bh.renderer.offlineState?.done || __bh.renderer.offlineState?.error", 120_000);
       expect(await app.js<string>("__bh.renderer.pipelineStatus.lutQuality")).toBe("failed");
       expect(await app.js<string>("__bh.renderer.pipelineStatus.quality")).toBe("ready");
+      expect(await app.js<boolean>(`__bh.graphicsDiagnostic().events.some((event) => event.kind === "optional-pipeline-failure")`)).toBe(
+        true,
+      );
       expect(await app.js<string | null>("__bh.renderer.offlineState.error ?? null")).toBeNull();
       expect(await app.js<boolean>("__bh.renderer.offlineState.done")).toBe(true);
       expect(await app.js<number>("(await __bh.renderer.exportPNG(__bh.settings)).size")).toBeGreaterThan(100);

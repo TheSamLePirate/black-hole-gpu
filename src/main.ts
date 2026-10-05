@@ -1,4 +1,5 @@
 import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
+import { downloadGpuDiagnostic, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
@@ -172,9 +173,60 @@ function fail(msg: string) {
   document.getElementById("loading")?.remove();
   errorEl.hidden = false;
   errorEl.textContent = msg;
+  const diagnostic = document.createElement("button");
+  diagnostic.textContent = t("Download graphics diagnostic");
+  diagnostic.className = "error-reload";
+  diagnostic.onclick = downloadGpuDiagnostic;
+  const reload = document.createElement("button");
+  reload.textContent = t("Reload");
+  reload.className = "error-reload";
+  reload.onclick = () => location.reload();
+  errorEl.append(document.createElement("br"), diagnostic, reload);
 }
 
 async function main() {
+  let appVersion = "dev";
+  void fetch("version.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v: { sha?: string } | null) => {
+      if (v?.sha) appVersion = v.sha;
+      gpuDiagnostics.setContext({ revision: appVersion });
+    })
+    .catch(() => {});
+  gpuDiagnostics.setContext({
+    browser: navigator.userAgent,
+    secureContext: window.isSecureContext,
+    webgpuAvailable: !!navigator.gpu,
+    screen: { width: screen.width, height: screen.height, pixelRatio: devicePixelRatio },
+  });
+  let startupFailed = false;
+  let visibleWaitMs = 0;
+  let lastWatchdogAt = performance.now();
+  let wasVisible = !document.hidden;
+  const watchdog = window.setInterval(() => {
+    const now = performance.now();
+    if (wasVisible && !document.hidden) visibleWaitMs += now - lastWatchdogAt;
+    wasVisible = !document.hidden;
+    lastWatchdogAt = now;
+    if (firstFrame || startupFailed) return clearInterval(watchdog);
+    if (visibleWaitMs < 180_000) return;
+    startupFailed = true;
+    clearInterval(watchdog);
+    const message = tf(
+      "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.",
+      gpuDiagnostics.stage,
+    );
+    gpuDiagnostics.record("first-image-timeout", message, true);
+    fail(message);
+  }, 1000);
+  const reportFatal = (kind: string, error: unknown) => {
+    startupFailed = true;
+    clearInterval(watchdog);
+    gpuDiagnostics.record(kind, error, true);
+    fail(error instanceof Error ? error.message : String(error));
+  };
+  window.addEventListener("error", (event) => reportFatal("javascript-error", event.error ?? event.message));
+  window.addEventListener("unhandledrejection", (event) => reportFatal("unhandled-rejection", event.reason));
   const splash = new Splash($("loading") ?? document.createElement("div"));
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
@@ -198,27 +250,40 @@ async function main() {
   try {
     renderer = await Renderer.create(canvas);
   } catch (e) {
+    startupFailed = true;
+    clearInterval(watchdog);
+    gpuDiagnostics.record("startup-failure", e, true);
     fail(`${(e as Error).message}\n\n${t("Use a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+, Firefox 141+).")}`);
     return;
   }
+  if (startupFailed) return;
+  gpuDiagnostics.setRuntime(() => ({
+    adapter: renderer.adapter,
+    tier: renderer.tier,
+    quality: renderer.effectiveQuality(settings),
+    pipelines: renderer.pipelineStatus,
+    frames: renderer.frameTelemetry,
+    gpuErrors: renderer.gpuErrors,
+    lost: renderer.lost,
+    canvas: { width: canvas.width, height: canvas.height },
+    loading: loading.list(),
+  }));
 
   // the device lost: the flight saved, the image frozen, a way back
   renderer.onLost = (why) => {
+    startupFailed = true;
+    clearInterval(watchdog);
+    let saved = false;
     try {
-      if (settings.autosave) tools.autosaveNow();
-    } catch {
-      /* (nothing to save yet) */
+      if (settings.autosave) saved = tools.autosaveNow();
+    } catch (error) {
+      gpuDiagnostics.record("autosave-after-device-loss", error);
     }
-    fail("");
+    gpuDiagnostics.record("autosave-after-device-loss", saved ? "saved" : "not saved");
+    fail(
+      `${tf("The graphics device was reset ({0}). Reload the page to go on.", why)}\n\n${t(saved ? "Your flight was saved." : "Your flight could not be saved automatically.")}`,
+    );
     document.body.classList.add("gpu-lost");
-    const box = document.createElement("div");
-    box.textContent = tf("The graphics device was reset ({0}).\n\nYour flight was saved. Reload the page to go on.\n", why);
-    const b = document.createElement("button");
-    b.textContent = t("Reload");
-    b.className = "error-reload";
-    b.onclick = () => location.reload();
-    box.append(b);
-    errorEl.append(box);
   };
   renderer.onGpuError = (m) => {
     try {
@@ -1864,11 +1929,6 @@ async function main() {
   // the date and time (ui/timepanel.ts): the transport bar's clock, the pause menu
   const timePanel = new TimePanel({ tools, settings, sceneStart: () => sceneStart, toast: (x) => panel.toast(x) });
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
-  let appVersion = "dev";
-  void fetch("version.json")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((v: { sha?: string } | null) => v?.sha && (appVersion = v.sha))
-    .catch(() => {});
   const bench = new KerrBench({
     settings,
     renderer,
@@ -2001,6 +2061,7 @@ async function main() {
   let saveTimer = 0;
 
   const loop = (now: number) => {
+    if (startupFailed) return;
     requestAnimationFrame(loop);
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -2065,6 +2126,8 @@ async function main() {
     if (!firstFrame && renderer.firstFrameDoneAt > 0) {
       firstFrame = true;
       firstFrameAt = renderer.firstFrameDoneAt;
+      clearInterval(watchdog);
+      gpuDiagnostics.ready();
       splash.firstImage();
     }
     if (st) {

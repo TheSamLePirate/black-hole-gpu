@@ -72,7 +72,16 @@ export class App {
 
   /** A fresh page on the app (a scene by #scene=…, or a hash), loaded and settled. */
   static async boot(
-    o: { hash?: string; width?: number; height?: number; lang?: "fr" | "en"; tiles?: boolean; sw?: boolean; initScript?: string } = {},
+    o: {
+      hash?: string;
+      width?: number;
+      height?: number;
+      lang?: "fr" | "en";
+      tiles?: boolean;
+      sw?: boolean;
+      initScript?: string;
+      startupFailure?: boolean;
+    } = {},
   ) {
     const s = await serve();
     const cdp = await launch(o);
@@ -90,7 +99,7 @@ export class App {
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
     app.sw = !!o.sw;
-    await app.load(o.hash ?? "");
+    await app.load(o.hash ?? "", !!o.startupFailure);
     return app;
   }
 
@@ -100,12 +109,12 @@ export class App {
   /** the last load's navigation → splash-lifted wall time [ms] */
   lastLoadMs = 0;
 
-  async load(hash: string) {
+  async load(hash: string, startupFailure = false) {
     const t0 = performance.now();
     const previousOrigin = await this.js<number>("performance.timeOrigin");
     await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}` });
     await this.waitFor(
-      `performance.timeOrigin !== ${previousOrigin} && typeof __bh !== "undefined" && __bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")`,
+      `performance.timeOrigin !== ${previousOrigin} && ${startupFailure ? 'document.querySelector("#error")?.hidden === false' : 'typeof __bh !== "undefined" && __bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")'}`,
       180_000,
     );
     this.lastLoadMs = performance.now() - t0;
