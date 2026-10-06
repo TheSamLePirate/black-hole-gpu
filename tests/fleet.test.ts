@@ -87,3 +87,19 @@ test("an assembly's mass, centre of mass and moment of inertia (the flown craft'
   ).toBeLessThan(1e-3);
   for (let i = 0; i < 3; i++) expect(dot(pe.ax[i]!, starts.endurance.ax[i]!)).toBeCloseTo(1, 9);
 });
+
+test("a coasting craft's velocity is its place's own rate — the J2 drift's turn in", () => {
+  // (the Endurance and the Lander coast on their mean orbits, turned by the oblateness's drift: their
+  // velocity once missed that turn's share — 1.5 to 5 m/s in a low orbit —, and the docking autopilot,
+  // matching it, drifted off a port it never reached)
+  fleetStart(109.6, "ranger");
+  for (const id of ["endurance", "lander"] as const)
+    for (const t of [110, 140]) {
+      const dt = 1e-3;
+      const a = fleet.pose(id, t - dt)!,
+        b = fleet.pose(id, t + dt)!,
+        m = fleet.pose(id, t)!;
+      const err = Math.hypot(...[0, 1, 2].map((k) => (b.X[k]! - a.X[k]!) / (2 * dt) - m.V[k]!)) * 299792458;
+      expect(err).toBeLessThan(0.05);
+    }
+});

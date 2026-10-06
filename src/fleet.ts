@@ -9,7 +9,7 @@
 import type { M3 } from "./mounts";
 import { railsDecay } from "./system/our-surface";
 import { massLeft } from "./engine";
-import { secularZonal } from "./system/geopotential";
+import { secularSpin, secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
 import { ourState } from "./system/our-side";
@@ -137,8 +137,11 @@ export class Fleet {
     const kz = secularZonal(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
     // (its orbit's decay in the thin air)
     const k = railsDecay(f.ref, mu, kz.r, kz.v, t - f.t);
+    // (its velocity the place's own rate: the drift's turn moves it too — without it the craft's velocity
+    // was some 2–5 m/s off its place's, and the docking autopilot chased a point that went elsewhere)
+    const spin = secularSpin(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
     const C = lin(B1.pos, 1, k.r, 1),
-      Vc = lin(B1.vel, 1, k.v, 1);
+      Vc = lin(lin(B1.vel, 1, k.v, 1), 1, spin ? cross(spin, k.r) : [0, 0, 0], 1);
     const r = lin(w, t - f.t, w, 0);
     const ax = f.ax.map((a) => rotate(a, r)) as [Vec3, Vec3, Vec3];
     const X = lin(C, 1, onAxes(ax, com), -1 / M_METRES);

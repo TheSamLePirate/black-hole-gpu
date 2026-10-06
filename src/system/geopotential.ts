@@ -193,3 +193,26 @@ export function secularTurn(id: string, mu: number, r: Vec3, v: Vec3, dt: number
     node = w.node * dt;
   return (x: Vec3) => rot(rot(x, hn, inPlane), z, node);
 }
+
+/**
+ * The J2 secular drift's rate after dt (secularTurn's): the angular velocity [rad per M] the turned orbit
+ * goes round at — its node about the pole, its periapsis and mean anomaly about its normal as turned. A
+ * point on the drifting orbit moves at turn(v) + ω × turn(r): the derivative of the place secularZonal
+ * gives, which turn(v) alone is not (some 5 m/s short in a low orbit). Null: no drift.
+ */
+export function secularSpin(id: string, mu: number, r: Vec3, v: Vec3, dt: number, t: number, pole?: Vec3): Vec3 | null {
+  const z0 = ZONAL[id];
+  if (!z0) return null;
+  const R = Math.hypot(...r);
+  const eps = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) / 2 - mu / R;
+  if (!(eps < 0)) return null;
+  const a = -mu / (2 * eps);
+  const h: Vec3 = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
+  const hl = Math.hypot(...h);
+  const e = Math.sqrt(Math.max(1 - (hl * hl) / (mu * a), 0));
+  const z = pole ?? poleOfDate(id, t);
+  const hn: Vec3 = [h[0] / hl, h[1] / hl, h[2] / hl];
+  const w = secularRates(mu, z0, a, e, hn[0] * z[0] + hn[1] * z[1] + hn[2] * z[2]);
+  const n = rot(hn, z, w.node * dt);
+  return [0, 1, 2].map((k) => z[k]! * w.node + n[k]! * (w.peri + w.mean)) as Vec3;
+}
