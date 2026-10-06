@@ -544,7 +544,10 @@ export class FlightComputer {
       force: rcsAuth > 0 ? (body(rcsC).map((x) => x / rcsAuth) as V3) : [0, 0, 0],
       torque: c.snap ? [0, 0, 0] : torque,
     };
-    const accC = add(scale(c.gimbal && point && throttle > 0 ? point : Z, throttle * c.thrust), rcsC);
+    // (the gimbal's reach: a few degrees off the nose — never a burn's thrust turned round with a
+    // burn that reversed, the engine still running down)
+    const gimballed = c.gimbal && point && throttle > 0 && dot(Z, point) > 0.985;
+    const accC = add(scale(gimballed ? point! : Z, throttle * c.thrust), rcsC);
     const acc = fromC(accC);
     this.accel = len(acc);
     return { rot, acc, burn: this.burn };

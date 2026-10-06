@@ -1323,7 +1323,13 @@ function nodeBurn(
     if (goalLeft !== null) w = Math.min(w, Math.max(goalLeft / aMax / Math.max(dtau, 1e-3) / 3, 0.05));
     // (our universe: the end of a burn slowed down — a frame gives at most half of what is left —
     // to cut it within a cm/s: 1 m/s at the Earth's departure is ~1 000 km at the Moon)
-    if (nav) w = Math.min(w, Math.max(left / (2 * aMax * Math.max(dt * dtau, 1e-6)), 0.0005));
+    // (a Crew engine answers its throttle with a lag: cut now, it still gives its thrust over its spool
+    // time — 8 m/s of the Ranger's at full thrust —; our universe's burns are cut that much early, and
+    // done once it has run down)
+    const tail = nav && !assisted && s.engine === "crew" ? this.pilot.engineNow * aMax * VESSELS[fleet.active].spool * realTime : 0;
+    // (the engine cut, running down: in real time — its tail is what it is, at any warp)
+    if (nav)
+      w = Math.min(w, Math.max((left - tail) / (2 * aMax * Math.max(dt * dtau, 1e-6)), tail > 0 && left <= tail ? realTime : 0.0005));
     const lft = goalLeft ?? left;
     if (assisted) {
       const rest = lft / aMax / Math.max(dtau, 1e-3);
@@ -1336,7 +1342,10 @@ function nodeBurn(
     const cut = assisted && lft <= Math.max(2e-3 * total, nav ? 0.1 / C_MPS : 1e-6);
     const done = assisted
       ? cut && this.pilot.throttle <= 0.01
-      : (nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) || lft < 1e-12;
+      : (nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) ||
+        lft < 1e-12 ||
+        // (the engine run down, a few cm/s from the end)
+        (!!nav && this.pilot.engineNow < 1e-3 && left <= 0.05 / C_MPS);
     if (done) {
       this.goalRem = null;
       P.nodes.shift();
@@ -1413,7 +1422,10 @@ function nodeBurn(
       } else this.refreshPlan(true);
       return null;
     }
-    return { dir: lin(dir, 1 / dl, dir, 0), throttle: cut ? 0 : goalGate * Math.min(1, lft / Math.max(perFrame, 1e-12)) };
+    return {
+      dir: lin(dir, 1 / dl, dir, 0),
+      throttle: cut ? 0 : goalGate * Math.min(1, Math.max(lft - tail, 0) / Math.max(perFrame, 1e-12)),
+    };
   }
   // coast: warp so that the burn's start comes in ~2.5 s, slower once close (the nose is already
   // on the burn: it turns while coasting)
