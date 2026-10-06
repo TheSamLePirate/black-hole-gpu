@@ -169,3 +169,73 @@ Ordre de fusion conseillé : corriger H1 et H2, puis M1 à M5, faire tourner l'e
 6. **M7 et M8** : délais en temps visible, état « personnalisé » de la qualité, `dynOn` restauré hors du mode Jeu.
 7. **M9** : réserver le KTX2 8K aux tiers ≥ 2 et le mettre en cache par le SW, ou le passer en LFS.
 8. Lancer la suite e2e complète sur kerr-mini, puis nettoyer la racine du dépôt.
+
+---
+
+## 8. Corrections appliquées — 2026-10-06
+
+Toutes les corrections ont été faites sur `test-kimi` : 30 commits, de `e0d5f7a` à `c62115a`. Chacune a un test de régression qui échoue sans le correctif.
+
+| Constat | État | Commit | Ce qui change |
+|---|---|---|---|
+| **H1** | corrigé | `6541c36` | Une erreur page n'est fatale qu'avant la première image. Après, elle est notée dans le diagnostic et un toast s'affiche une fois par type ; la boucle continue. |
+| **H2** | corrigé | `2037b74` | `AirSpec` est toujours construit par son constructeur complet : WGSL refuse d'en compiler un incomplet. Nouvel e2e `near-air` sur GPU pour Miller, Mann et Edmunds. Test qui interdit un `AirSpec` nu. |
+| **M1** | corrigé | `9790e01` | Une bascule de calibration remet à zéro les chronos, pas l'image. |
+| **M2** | corrigé | `e0d5f7a` | Les caches sont nommés par scope et par build. Un SW ne gère que ses propres dossiers. Les clés de stockage de la preview sont préfixées `test/`. |
+| **M3** | corrigé | `9c40427` | Seul `main` conditionne la prod ; une preview en échec est signalée puis écartée. Branche nommée une seule fois. Pas de jeton en écriture là où tourne le code de la branche. |
+| **M4** | corrigé | `dd43842` | L'univers du plan suit ses nœuds : il est oublié dès que le plan est vide. |
+| **M5** | corrigé | `b3d7b23` | `requestWarp` / `setWarpAuthority` sont explicites. Le souhait est rendu à la levée du plafond. Les plafonds, rails compris, sont combinés quel que soit l'ordre. |
+| **M6** | corrigé | `cd727f5` | PE et AP sont les vrais extrêmes géodésiques (`orbitExtreme`), aussi pour l'hyperbolique. Les drapeaux du diagramme et les marqueurs de la trace au sol y sont placés. |
+| **M7** | corrigé | `ebc9165` | Les délais sont comptés en temps visible (`util/visible-timeout.ts`). Un succès tardif est accepté. Une compilation bloquée 60 s libère la file. « Entrer maintenant » entre vraiment. |
+| **M8** | corrigé | `368b8d4` | En Jeu, le plafond du tier ne touche que les valeurs encore égales au préréglage. La résolution dynamique fonctionne à toute qualité. |
+| **M9** | corrigé | `9e048d8` | Le 8K est réservé aux tiers ≥ 2 avec BC7 ou ASTC. Un échec est mémorisé pour la session. Le worker est libéré après 10 s d'inactivité. Le KTX2 était en fait déjà mis en cache par le SW. |
+| **M10** | corrigé | `8bb90c9` | Une erreur répétée est comptée au lieu d'être recopiée ; les écritures sont regroupées (au plus 1 par seconde, plus un vidage quand la page passe en arrière-plan). |
+| **M11** | corrigé | `b72bcad` | Même sonde injectée des deux côtés, passes alternées A B B A, médianes et étendues. Les docs disent ce que les données montrent. |
+
+**Corrections Low.** Toutes appliquées, sauf la dernière :
+- **Démarrage et qualité :**
+  - la qualité retombe sur des pas fixes en cas d'échec du noyau qualité (`0828c0d`) ;
+  - le tier est gelé pendant un Kerr Bench (`2e47672`) ;
+  - le préchargement respecte Save-Data (`6a3a377`) ;
+  - le LUT qualité compile dès l'arrivée du noyau (`31823f0`) ;
+  - les commentaires sont à jour (`76c7806`).
+- **Géodésie et atmosphère :**
+  - plus de NaN au centre du corps (`0831352`) ;
+  - hauteur exacte près de l'axe polaire (`f6502d3`) ;
+  - l'aplatissement est celui du corps lui-même (`f6b24fa`) ;
+  - éclipse lunaire limitée à l'air terrestre (`867551f`) ;
+  - `cloudVolume` sorti de boucle (`d135d8d`).
+- **Vol et trou de ver :**
+  - azimut de lancement en latitude géocentrique (`5a421f4`) ;
+  - worker de prédiction : un job à la fois, messages traduits (`c63ac91`) ;
+  - le pilote est prévenu des plans abandonnés (`813e104`).
+- **Performance du passage du trou de ver** (`d1e1638`, fausse position) :
+
+  | Cas | Avant | Après |
+  |---|---|---|
+  | Passage Dneg | 10,1 ms | 0,83 ms |
+  | Passage Kerr | 4,8 ms | 0,20 ms |
+  | Pas Kerr loin de l'embouchure | jusqu'à 3× le pas Kerr seul | environ 1,3 à 1,4× |
+- **Hygiène :** l'audit Kimi est déplacé dans `docs/`, les captures racine ne sont plus suivies, `meta.json` est ignoré (`b4d6180`).
+- **Laissé en l'état, documenté :** sur les tiers ≤ 1, le sol de collision suit le relief « med ». Donner le relief haute résolution à la physique coûterait 64 MiB de mémoire CPU sur les appareils les plus faibles.
+
+**Constats découverts pendant la correction :**
+- **Trois goldens e2e étaient cassés par la branche Kimi**, qui n'avait jamais lancé l'e2e. Bissection :
+  - `moon-takeoff` vient de `c78718c` (taux IAU de la Lune) ;
+  - `entry-glide-edwards` vient de `8b6562c` (guidage WGS84) ;
+  - `wormhole-coast` vient de `ea2590f` (libellé hors du cylindre).
+
+  Ces trois changements sont voulus. Seules ces trois entrées ont été réenregistrées (`c62115a`) ; les correctifs de l'audit laissent les huit vols identiques au bit près.
+- **`assist-descent` était instable**, y compris sur la branche Kimi : le test lisait le DOM avant le redessin du HUD. Il attend maintenant le DOM (`4829e44`), 5 passages sur 5.
+
+**Ce qui reste à faire hors de cette branche :**
+- Tant que `main` n'a pas ce workflow, son déploiement efface encore `/test/`.
+- L'ancien SW racine gère encore mal `/test/` jusqu'au merge.
+- Le KTX2 de 32 MB et les captures restent dans l'historique git ; ni LFS ni réécriture d'historique n'ont été faits.
+- Les valeurs effectives de qualité ne sont pas affichées à côté des curseurs.
+- Le bouton « Entrer maintenant » n'a pas de test automatisé.
+
+**Vérification finale (HEAD après corrections) :**
+- `bun test` : 435 pass, 0 fail.
+- `bun run check` : Biome 0 erreur, tsc propre, 9/9 WGSL sous Metal.
+- **E2E complet en local : 106 pass, 0 fail**, en 13 min. kerr-mini était injoignable, d'où un passage sur cette machine.
