@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import { fromZamo } from "../src/geodesic";
 import { zamo, type Vec3 } from "../src/physics";
 import {
+  advanceTo,
   applyDv,
   apsides,
   circularBeta,
@@ -13,6 +14,7 @@ import {
   planPath,
   planRendezvous,
   position,
+  type ManeuverNode,
   type World,
 } from "../src/maneuver";
 
@@ -54,6 +56,28 @@ test("intercept: the path passes through a fixed point", () => {
   const plan = planIntercept(st, target, w, 0.2)!;
   expect(plan).not.toBeNull();
   expect(plan.miss).toBeLessThan(0.8);
+  // (then three corrections on the way, aimed in flight, and the arrival there: nodes of no Δv — the
+  // autopilot flies the coast to the mouth)
+  expect(plan.nodes.length).toBe(5);
+  const burn = plan.nodes[0]!;
+  const arrive = plan.nodes[4]! as ManeuverNode;
+  expect(plan.nodes.slice(1, 4).every((n) => n.role === "mcc" && n.t > burn.t && n.t < arrive.t)).toBe(true);
+  expect(arrive).toMatchObject({ dv: [0, 0, 0], role: "arrive", body: "wormhole" });
+  const there = advanceTo(applyDv(advanceTo(st, burn.t, w)!, burn.dv, a), arrive.t, w)!;
+  const p = position(there);
+  expect(Math.hypot(p[0] - target[0], p[1] - target[1], p[2] - target[2])).toBeLessThan(0.8);
+}, 30000);
+
+test("intercept from a 30 M orbit: no path that dives by the hole on its way to the mouth", () => {
+  // (Gargantua's far mouth 300 M out: the cheapest path once dove to 8 M of the hole, where the burn's
+  // least error became hundreds of M at the mouth; the owner's call — Δv for robustness)
+  const st = circular(30);
+  const target: Vec3 = [-150, 260, 0];
+  const plan = planIntercept(st, target, w, 0.0125, { accel: 0.02 })!;
+  expect(plan).not.toBeNull();
+  const s1 = advanceTo(st, plan.nodes[0]!.t, w)!;
+  const path = pathFrom(applyDv(s1, plan.nodes[0]!.dv, a), w, plan.nodes[4]!.t - s1.t, 400);
+  expect(Math.min(...path.pts.map((q) => Math.hypot(...q)))).toBeGreaterThan(18);
 }, 30000);
 
 test("rendezvous with a body on a circular orbit", () => {

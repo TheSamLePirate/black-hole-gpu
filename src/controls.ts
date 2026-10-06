@@ -885,6 +885,8 @@ export class CameraController {
   ourPlanned: OurPath | null = null;
   /** per node: the last re-aim (scene time), how many, one under way */
   refineState = new WeakMap<ManeuverNode, { at: number; n: number; pending: boolean }>();
+  /** Gargantua's side: the corrections on the way to the mouth already aimed (plan.ts nodeBurn) */
+  kerrAimed = new WeakSet<ManeuverNode>();
   ourPlan: OurPath | null = null;
 
   /** the navball's speed: in orbit (around the reference body) or relative to the target */

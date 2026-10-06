@@ -2,6 +2,7 @@
 export default {
   // ---- the flight computer's panels (ui/fc/computer.ts)
   "FLIGHT COMPUTER": "ORDINATEUR DE VOL",
+  "The wormhole's mouth missed by {0} M": "Bouche du trou de ver manquée de {0} M",
   "Fold the {0} panel to the edge (the map takes the room)": "Replier le panneau {0} sur le bord (la carte prend la place)",
   ANALYSIS: "ANALYSE",
   ORBIT: "ORBITE",

@@ -455,16 +455,33 @@ export function planIntercept(
   target: Vec3 | ((t: number) => Vec3),
   w0: World,
   tol: number,
+  o: { at?: number; fine?: boolean; accel?: number } = {},
 ): { nodes: ManeuverNode[]; note: string; miss: number } | null {
   // (the search's many trial paths feel the hole and the stars only: the planets' pull, far from
-  // them, is below the aim's tolerance — the plan's path is then drawn with all of them)
-  const w: World = { ...w0, lens: coarseLenses(w0.lens) };
+  // them, is below the aim's tolerance — the plan's path is then drawn with all of them; a correction
+  // in flight (o.fine) feels them all: the coarse aim passes ~0.5 M off, the size of the mouth's sphere)
+  const w: World = o.fine ? w0 : { ...w0, lens: coarseLenses(w0.lens) };
   // (a moving target — an orbiting mouth — is met where it is when the ship gets there)
   const at = typeof target === "function" ? target : () => target;
   const lead = Math.max(20, 0.03 * period(st0.r), w.lead ?? 0);
   const T = period(st0.r);
   // time to get there at the ship's speed, with room for a curved path
   const reach = (s1: Massive) => (3 * len(sub(position(s1), at(s1.t)))) / Math.max(len(toZamo(s1, w.a)), 0.1) + 100;
+  // (the burn as the node autopilot flies it, o.accel: centred on its time, its direction fixed in the
+  // local frame as it starts — a tenth of c is no impulse: some 16 M at the Cinema engine's 0.02 c/M, and
+  // the paths into the mouth dive by the hole, where that difference ends hundreds of M off)
+  const fin = o.accel && o.accel > 0 ? o.accel : 0;
+  let base: Massive = st0;
+  const burnFrom = (s1: Massive, dv: Vec3): Massive | null => {
+    const m = len(dv);
+    if (!fin || m === 0) return applyDv(s1, dv, w.a);
+    const b = toZamo(s1, w.a);
+    const L = m / fin / (zamo(s1.r, s1.th, w.a).alpha * Math.sqrt(Math.max(1 - dot(b, b), 1e-12)));
+    const s0 = advanceTo(base, Math.max(s1.t - L / 2, base.t), w);
+    if (!s0) return null;
+    const r = advance(s0, w.a, L, 0.05, fin, norm(dvLocal(toZamo(s0, w.a), dv)), w.lens, PLAN_TOL);
+    return r.stopped || r.landed ? null : r.st;
+  };
   const missVec = (s1: Massive, dv: Vec3): Vec3 | null => {
     // (the path ends once it is well past the target: going away, twice as far as its closest yet)
     let dMin = Infinity;
@@ -475,27 +492,40 @@ export function planIntercept(
       else away++;
       return away > 8 && d > 2 * dMin + 1;
     };
-    const p = pathFrom(applyDv(s1, dv, w.a), w, reach(s1), 260, past);
+    const sb = burnFrom(s1, dv);
+    if (!sb) return null;
+    const p = pathFrom(sb, w, reach(s1), 260, past);
     let best: Vec3 | null = null;
     let bd = Infinity;
-    // closest point, refined on the segment
+    // closest point, refined on the segment (and when the ship is there); the nearest to the hole on
+    // the way there
+    let low = len(position(s1));
     for (let j = 0; j < p.pts.length; j++) {
       const a = j ? p.pts[j - 1]! : position(s1),
         b = p.pts[j]!;
+      const ta = j ? p.times[j - 1]! : s1.t;
       const tgt = at(p.times[j]!);
       const e = sub(b, a);
       const u = Math.min(1, Math.max(0, dot(sub(tgt, a), e) / Math.max(dot(e, e), 1e-12)));
       const q = add(a, scale(e, u));
       const d = len(sub(q, tgt));
-      if (d < bd) (bd = d), (best = sub(q, tgt));
+      low = Math.min(low, len(b));
+      if (d < bd) (bd = d), (best = sub(q, tgt)), (missAt = ta + u * (p.times[j]! - ta)), (dive = low);
     }
     return best;
   };
-  let sol: { t1: number; dv: Vec3; miss: number } | null = null;
-  let s: Massive | null = advanceTo(st0, st0.t + lead, w);
-  const n = 12;
+  let missAt = Number.NaN;
+  // (a path that dives by the hole on its way is no path: there the least error of the burn — its finite
+  // length, its aim — is bent into hundreds of M at the mouth; the owner's call: Δv for robustness)
+  let dive = Infinity;
+  const rMin = Math.min(18, 0.8 * st0.r);
+  let sol: { t1: number; dv: Vec3; miss: number; s1: Massive } | null = null;
+  // (o.at: one burn then — a correction on the way, from no Δv: the path already near the target)
+  let s: Massive | null = advanceTo(st0, o.at ?? st0.t + lead, w);
+  const n = o.at === undefined ? 12 : 1;
   for (let k = 0; k < n && s; k++) {
-    const t1 = st0.t + lead + (T * k) / n;
+    const t1 = o.at ?? st0.t + lead + (T * k) / n;
+    if (k) base = s;
     s = advanceTo(s, t1, w);
     if (!s) break;
     // first guess: head straight for the target at about the current speed
@@ -505,7 +535,7 @@ export function planIntercept(
     const b = toZamo(s, w.a);
     const sp = Math.max(len(b), 0.15);
     const bT: Vec3 = scale([dot(d, f.er), dot(d, f.et), dot(d, f.ep)], sp);
-    let dv = matchDv(s, bT, w.a);
+    let dv: Vec3 = o.at === undefined ? matchDv(s, bT, w.a) : [0, 0, 0];
     let m = missVec(s, dv);
     for (let it = 0; it < 10 && m; it++) {
       if (len(m) < tol) break;
@@ -541,10 +571,24 @@ export function planIntercept(
       if (!next) break;
       dv = next;
     }
-    if (m && len(m) < tol * 4 && (!sol || len(dv) < len(sol.dv))) sol = { t1, dv, miss: len(m) };
+    if (m && len(m) < tol * 4 && (!sol || len(dv) < len(sol.dv)) && missVec(s, dv) && dive >= rMin) sol = { t1, dv, miss: len(m), s1: s };
   }
   if (!sol) return null;
-  return { nodes: [{ t: sol.t1, dv: sol.dv }], note: `intercept: passes ${sol.miss.toFixed(2)} M from the centre`, miss: sol.miss };
+  // (then the arrival at the mouth, a node of no Δv: the autopilot keeps flying the plan — the warp on the
+  // coast there, the crossing's warp kept into the throat — as our side's missions into the wormhole do;
+  // without it the plan ended at the burn and the coast of days went on in real time)
+  missVec(sol.s1, sol.dv);
+  const arrive: ManeuverNode[] = Number.isFinite(missAt) ? [{ t: missAt, dv: [0, 0, 0], role: "arrive", body: "wormhole" }] : [];
+  // (and corrections on the way — as the burn ends, a third and four fifths of the coast on —, aimed when they come (node
+  // autopilot: planIntercept at their time) — the burn flown is finite, the aim through a sphere of
+  // 0.4 M after a coast of a thousand: without them the path passed hundreds of M off)
+  const mcc = (f: number): ManeuverNode => ({ t: sol!.t1 + f * (missAt - sol!.t1), dv: [0, 0, 0], role: "mcc", body: "wormhole" });
+  const fixes = o.at === undefined && arrive.length ? [mcc(0.02), mcc(0.3), mcc(0.8)] : [];
+  return {
+    nodes: [{ t: sol.t1, dv: sol.dv, ...(o.at === undefined ? {} : { role: "mcc" as const, body: "wormhole" }) }, ...fixes, ...arrive],
+    note: `intercept: passes ${sol.miss.toFixed(2)} M from the centre`,
+    miss: sol.miss,
+  };
 }
 
 /** Solves J x = b for 3 column vectors J (J[c] = ∂miss/∂dv_c). */

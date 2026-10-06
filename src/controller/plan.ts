@@ -297,7 +297,9 @@ function planTransfer(this: CameraController, goal: "orbit" | "star" | "wormhole
   } else {
     if (!s.wormhole) return t("No wormhole in this scene");
     const m = mouth(s);
-    res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
+    res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho, {
+      accel: this.thrustMax(),
+    });
     if (!res) return t("No path into the mouth found from this orbit");
     s.target = "wormhole";
   }
@@ -543,7 +545,9 @@ async function missionPlan(
   if (spec.target === "wormhole") {
     if (!s.wormhole) return fail(t("No wormhole in this scene"));
     const m = mouth(s);
-    const res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho);
+    const res = planIntercept(st, s.whOrbit ? (t: number) => mouth(s, t).C as Vec3 : (m.C as Vec3), w, 0.25 * m.w.rho, {
+      accel: this.thrustMax(),
+    });
     if (!res) return fail(t("No path into the mouth found from this orbit"));
     const burns = burnsOf(res.nodes, st.t);
     this.pendingMission = { gen, note: res.note, commit: () => this.adoptKerr(res.nodes, res.note, "wormhole") };
@@ -1196,6 +1200,9 @@ function runDown(this: CameraController): number {
   return this.pilot.engineNow * this.thrustMax() * VESSELS[fleet.active].spool * (1 / (4.925490947e-6 * s.massSolar));
 }
 
+/** Gargantua's side: each arrival node's last distance to the mouth's sphere [M] (nodeBurn). */
+const arriveGap = new WeakMap<ManeuverNode, number>();
+
 /** Our universe: the velocity still to gain to the mean circle where the craft is, about its reference body (home, c). */
 function circleGain(nav: NonNullable<ReturnType<CameraController["ourNav"]>>): Vec3 {
   const rel = sub3(nav.V, nav.refVel);
@@ -1246,6 +1253,52 @@ function nodeBurn(
     this.pilot.setAuto("node");
     this.restoreWarp();
     return null;
+  }
+  // (Gargantua's side, a correction on the way to the mouth: aimed as it comes — from the path flown,
+  // all the bodies' pulls in —, the arrival's time with it)
+  if (
+    !nav &&
+    node.role === "mcc" &&
+    node.body === "wormhole" &&
+    !this.nodeBurning &&
+    !this.kerrAimed.has(node) &&
+    node.t - this.nowTime() < 30
+  ) {
+    this.kerrAimed.add(node);
+    const st = this.stateNow();
+    const fix =
+      st && s.wormhole
+        ? planIntercept(st, (t: number) => mouth(s, t).C as Vec3, this.world(), 0.25 * mouth(s).w.rho, {
+            at: Math.max(node.t, st.t + 1),
+            fine: true,
+            accel: this.thrustMax(),
+          })
+        : null;
+    node.dv = fix ? fix.nodes[0]!.dv : [0, 0, 0];
+    if (fix) node.t = fix.nodes[0]!.t;
+    const arrive = P.nodes[P.nodes.length - 1];
+    const fa = fix?.nodes[fix.nodes.length - 1];
+    if (arrive?.role === "arrive" && fa?.role === "arrive") arrive.t = fa.t;
+    this.refreshPlan(true);
+  }
+  // (Gargantua's side, the arrival at the mouth: kept ahead of the craft until the throat takes it — its
+  // time where the mouth's sphere is reached at the speed flown, the coast's warp slowing to it —, not
+  // flown as a burn of nothing at the planned instant, a little short of the mouth, the plan then over)
+  if (!nav && node.role === "arrive" && node.body === "wormhole" && s.wormhole && cam.region === "hole") {
+    const m = mouth(s, this.nowTime());
+    const d = Math.hypot(...sub3(blToCartesian(cam.r, cam.theta, cam.phi), m.C as Vec3)) - m.rGlue;
+    const was = arriveGap.get(node);
+    arriveGap.set(node, d);
+    // (going away from it: missed — the plan ends, said)
+    if (was !== undefined && d > was && d > m.rGlue) {
+      P.nodes = [];
+      this.pilot.setAuto("node");
+      this.restoreWarp();
+      this.onPilotMessage?.(tf("The wormhole's mouth missed by {0} M", (d + m.rGlue).toFixed(2)));
+      return null;
+    }
+    // (a moment beyond it: never reached as a burn, the throat's own branch above takes the craft)
+    node.t = this.nowTime() + Math.max(d, 0) / Math.max(Math.hypot(...cam.beta), 1e-3) + 1;
   }
   // (the pilot's warp before the plan, given back after it: their own, if an autopilot's ceiling held it)
   if (this.userWarp === null) {
