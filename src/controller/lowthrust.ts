@@ -820,6 +820,10 @@ export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGr
   const vc = Math.sqrt(sb.mass / r);
   let vUp = Math.min(Math.sqrt(Math.max(thr - gw, 0) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
   const vE = vc * Math.sqrt(f);
+  // (and never faster up than a coast tops out at the top — gravity less the east speed's own lift, a fifth
+  // of it at least: aimed past it, the climb coasted on, the orbit 4 % high — 105 km for 100)
+  const gEff = Math.max(gw * (1 - f), 0.2 * gw);
+  vUp = Math.min(vUp, Math.sqrt(2 * gEff * Math.max(d0 - r, 0)) + 0.2 / c);
   let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
   const rho = ourAir(id, h * M_METRES);
   if (rho > 0) {
