@@ -459,8 +459,8 @@ function gauss(A: number[][], b: number[]): number[] | null {
 function aimTol(m: OurMission, inFlight = false) {
   if (m.goal.target === "wormhole") return 1e6 * KM;
   const far = m.type === "sibling" || (m.home === "sun" && m.goal.target !== "moon");
-  // (in flight, the corrections close in: 30 km across the planets, 10 km near home)
-  return far ? (inFlight ? 30 : 300) * KM : 10 * KM;
+  // (in flight, the corrections close in: 5 km across the planets, 10 km near home)
+  return far ? (inFlight ? 5 : 300) * KM : 10 * KM;
 }
 
 /** The goals' residuals on a path: B-plane at the target, and/or the perigee back home. */
@@ -1315,7 +1315,10 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
       nodes.push(mcc);
       note += ` · correction ${kms(norm(mcc.dv))}`;
     } else nodes.push({ t: t1 + 0.3 * (tCa - t1), dv: [0, 0, 0], role: "mcc" });
-    if (m.type === "sibling") nodes.push({ t: t1 + 0.8 * (tCa - t1), dv: [0, 0, 0], role: "mcc" });
+    // (across the planets, two more: four fifths of the way, and the last few days — the pass's height
+    // as the flight's own fall has it; Mars's 300 km orbit once ended at 338)
+    if (m.type === "sibling")
+      nodes.push({ t: t1 + 0.8 * (tCa - t1), dv: [0, 0, 0], role: "mcc" }, { t: t1 + 0.97 * (tCa - t1), dv: [0, 0, 0], role: "mcc" });
     if (goal.arrival === "orbit" && tb.mass > 0) {
       const st = stateOf(goal.target, tCa);
       const vp = norm(sub(path.vels[ca.i]!, st.vel));

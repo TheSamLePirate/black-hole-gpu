@@ -166,8 +166,14 @@ test("to Mars: a launch window, a ~3.7 km/s escape, a correction of a few m/s, a
   const s = earthStart(t0, 400, true);
   const p = planOurTransfer(s.X, s.vel, t0, { kind: "transfer", target: "mars", arrival: "orbit", altM: 300e3, returnAltM: 200e3 }, o);
   if ("error" in p) throw new Error(p.error);
-  expect(p.nodes.map((n) => n.role)).toEqual(["depart", "mcc", "mcc", "capture"]);
-  const [tmi, mcc, , cap] = p.nodes as [(typeof p.nodes)[0], (typeof p.nodes)[0], (typeof p.nodes)[0], (typeof p.nodes)[0]];
+  expect(p.nodes.map((n) => n.role)).toEqual(["depart", "mcc", "mcc", "mcc", "capture"]);
+  const [tmi, mcc, , , cap] = p.nodes as [
+    (typeof p.nodes)[0],
+    (typeof p.nodes)[0],
+    (typeof p.nodes)[0],
+    (typeof p.nodes)[0],
+    (typeof p.nodes)[0],
+  ];
   // (the window: within a synodic period, ~2.1 years)
   expect((tmi.t - t0) / DAY).toBeGreaterThan(0);
   expect((tmi.t - t0) / DAY).toBeLessThan(800);
