@@ -2032,6 +2032,7 @@ async function main() {
   addEventListener("pagehide", (e) => {
     if (!benchPage) writePrefs(settings);
     if (settings.autosave && firstFrame) tools.autosaveNow();
+    gpuDiagnostics.flush();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is
     // collected: reloads in a row would stack them)
     if (!(e as PageTransitionEvent).persisted) renderer.release();

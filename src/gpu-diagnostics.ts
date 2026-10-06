@@ -7,8 +7,13 @@ export interface DiagnosticEvent {
   kind: string;
   message: string;
   stack?: string;
+  /** the same kind and message seen again: counted rather than listed (an error every frame) */
+  count?: number;
+  lastAtMs?: number;
 }
 const KEY = storageKey("kerr.gpu-diagnostic.v1");
+const MAX_EVENTS = 32;
+const PERSIST_DELAY_MS = 1000;
 interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -22,10 +27,13 @@ export class GpuDiagnostics {
   private startedAt: number;
   private timestamp = new Date().toISOString();
   private runtime: () => unknown = () => null;
+  private persistQueued = false;
 
   constructor(
     private storage?: StorageLike,
     private clock: () => number = () => performance.now(),
+    /** (a non-fatal record's write deferred: the storage is synchronous, and an error can come every frame) */
+    private later: (write: () => void) => void = (write) => void setTimeout(write, PERSIST_DELAY_MS),
   ) {
     this.startedAt = clock();
     try {
@@ -40,29 +48,32 @@ export class GpuDiagnostics {
   }
   setContext(context: Record<string, unknown>) {
     Object.assign(this.context, context);
-    this.persist();
+    this.persistSoon();
   }
   setRuntime(read: () => unknown) {
     this.runtime = read;
   }
+  /** A start's stage: written at once — a hung driver may never give the page another turn. */
   enter(stage: string) {
     if (this.status === "failed") return;
     this.stage = stage;
-    this.record("stage", stage);
+    this.add("stage", stage);
+    this.persist();
   }
   ready() {
     if (this.status === "failed") return;
     this.status = "running";
     this.enter("running");
   }
+  /** An event: a fatal one written at once, the others with the next deferred write. */
   record(kind: string, error: unknown, fatal = false) {
     if (fatal) this.status = "failed";
-    const detail = error && typeof error === "object" && "message" in error ? error : null;
-    const name = detail && "name" in detail ? String(detail.name) : detail?.constructor.name;
-    const message = (detail ? `${name || "Error"}: ${String(detail.message)}` : String(error)).slice(0, 1024);
-    const stack = error instanceof Error ? error.stack?.slice(0, 1024) : undefined;
-    this.events.push({ atMs: Math.round(this.clock() - this.startedAt), stage: this.stage, kind, message, stack });
-    if (this.events.length > 32) this.events.shift();
+    this.add(kind, error);
+    if (fatal) this.persist();
+    else this.persistSoon();
+  }
+  /** The diagnostic written now (the page going away). */
+  flush() {
     this.persist();
   }
   snapshot() {
@@ -85,6 +96,31 @@ export class GpuDiagnostics {
   }
   report() {
     return { ...this.snapshot(), previousIncompleteSession: this.previous };
+  }
+  private add(kind: string, error: unknown) {
+    const detail = error && typeof error === "object" && "message" in error ? error : null;
+    // (the error's own name first: a minified build renames classes, and GPU errors are not Errors)
+    const named = detail && "name" in detail && typeof detail.name === "string" && detail.name ? detail.name : null;
+    const name = named ?? detail?.constructor?.name;
+    const message = (detail ? `${name || "Error"}: ${String(detail.message)}` : String(error)).slice(0, 1024);
+    const atMs = Math.round(this.clock() - this.startedAt);
+    const same = this.events.find((event) => event.kind === kind && event.message === message);
+    if (same) {
+      same.count = (same.count ?? 1) + 1;
+      same.lastAtMs = atMs;
+      return;
+    }
+    const stack = error instanceof Error ? error.stack?.slice(0, 1024) : undefined;
+    this.events.push({ atMs, stage: this.stage, kind, message, stack });
+    if (this.events.length > MAX_EVENTS) this.events.shift();
+  }
+  private persistSoon() {
+    if (this.persistQueued) return;
+    this.persistQueued = true;
+    this.later(() => {
+      this.persistQueued = false;
+      this.persist();
+    });
   }
   private persist() {
     try {

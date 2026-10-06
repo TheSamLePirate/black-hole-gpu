@@ -40,7 +40,7 @@ test("diagnostics remain bounded and work when storage or renderer inspection fa
   diag.setRuntime(() => {
     throw new Error("Not ready");
   });
-  for (let i = 0; i < 100; i++) diag.record("validation", "x".repeat(10_000));
+  for (let i = 0; i < 100; i++) diag.record("validation", `${i} ${"x".repeat(10_000)}`);
   expect(diag.snapshot().events).toHaveLength(32);
   expect(diag.snapshot().events.every((event) => event.message.length <= 2048)).toBe(true);
   expect(diag.snapshot().runtime).toBeNull();
@@ -54,6 +54,46 @@ test("native GPU errors preserve their message even though they do not extend Er
   const diag = new GpuDiagnostics();
   diag.record("uncaptured-gpu-error", new GPUValidationError("Binding exceeds device limit"));
   expect(diag.snapshot().events[0]?.message).toBe("GPUValidationError: Binding exceeds device limit");
+  // (a minified build renames the class: the error's own name wins)
+  class e {
+    readonly name = "GPUOutOfMemoryError";
+    constructor(readonly message: string) {}
+  }
+  diag.record("uncaptured-gpu-error", new e("Allocation failed"));
+  expect(diag.snapshot().events[1]?.message).toBe("GPUOutOfMemoryError: Allocation failed");
+});
+
+test("an error repeated every frame is counted, its storage writes coalesced; fatal ones and stages written at once", () => {
+  let writes = 0;
+  let saved = "";
+  const queued: (() => void)[] = [];
+  let now = 0;
+  const diag = new GpuDiagnostics(
+    {
+      getItem: () => null,
+      setItem: (_key, value) => {
+        writes++;
+        saved = value;
+      },
+    },
+    () => now,
+    (write) => queued.push(write),
+  );
+  for (let frame = 0; frame < 600; frame++, now += 16) diag.record("uncaptured-gpu-error", new Error("Invalid bind group"));
+  expect(writes).toBe(0);
+  expect(queued).toHaveLength(1);
+  queued.shift()!();
+  expect(writes).toBe(1);
+  const events = JSON.parse(saved).events;
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ kind: "uncaptured-gpu-error", count: 600, atMs: 0, lastAtMs: 599 * 16 });
+  diag.enter("pipeline-creation");
+  expect(writes).toBe(2);
+  diag.record("startup-failure", new Error("Device lost"), true);
+  expect(writes).toBe(3);
+  expect(JSON.parse(saved).status).toBe("failed");
+  diag.flush();
+  expect(writes).toBe(4);
 });
 
 test("a page-wide error ends the start only before the first image; afterwards it is recorded and told once per kind", () => {

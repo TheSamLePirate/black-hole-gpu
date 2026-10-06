@@ -1126,7 +1126,8 @@ export class Renderer {
       console.error("WebGPU device lost:", info.message);
       return info;
     });
-    // Capture errors from canvas setup and constructors as well as later frame submissions.
+    // Capture errors from canvas setup and constructors as well as later frame submissions (an error
+    // repeated every frame is counted by the diagnostic, its write deferred — not one write a frame).
     device.addEventListener("uncapturederror", (e) => {
       gpuDiagnostics.record("uncaptured-gpu-error", (e as GPUUncapturedErrorEvent).error);
     });
@@ -1184,11 +1185,12 @@ export class Renderer {
       if (r.offline) r.offline.error = r.lost;
       if (info.reason !== "destroyed") r.onLost?.(r.lost);
     });
-    // (errors the code did not scope: counted, the first ones told — a silent black image otherwise)
+    // (errors the code did not scope: counted, the first ones told — a silent black image otherwise;
+    // the console has the first ten, the diagnostic counts them all)
     device.addEventListener("uncapturederror", (e) => {
       const m = (e as GPUUncapturedErrorEvent).error.message;
       r.gpuErrors++;
-      console.error("WebGPU error:", m);
+      if (r.gpuErrors <= 10) console.error("WebGPU error:", m);
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
     // (the pipelines compile in the GPU process: the realtime kernel and the probe awaited below,
