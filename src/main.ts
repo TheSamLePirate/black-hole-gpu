@@ -2241,9 +2241,11 @@ async function main() {
         scaleHeld = 0;
         resize();
       }
-      // (the hardware's tier measured, not guessed: at full scale, the finest blocks, the GPU's work under
-      // half the budget for 12 s while the image is held at the tier's pixel cap — one tier up, its cap
-      // raised; the scale governor above brings it down again if the larger image does not fit)
+      // (the hardware's tier measured, not guessed: at full scale, fine blocks, the GPU's work under half
+      // the budget for 12 s while the tier holds something back — the image's pixels, the precision, or
+      // a weak tier's Earth maps — one tier up, its caps raised and remembered for this adapter; the
+      // scale governor above brings it down again if the larger image does not fit. Never while a Kerr
+      // Bench runs: quality-policy.ts)
       const capped =
         on && cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) < settings.pixelRatio - 1e-3;
       // (block ≤ 4, not ≤ 2: on a fast GPU in a heavy scene the blocks can settle at 3–4 with the

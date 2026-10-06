@@ -42,16 +42,24 @@ export function effectiveQuality(s: Settings, tier: Tier) {
   };
 }
 
-/** Apply the texture policy after all camera/vessel requests; memory failures still cap exports. */
+/**
+ * The Earth's maps after all camera/vessel requests: a weak tier's live view in Game automatic keeps
+ * the medium ones (the high cube is ~60 MB of network and ~96 MB of VRAM — plan §3.5), an export (the
+ * frame drawn into another target than the live one) keeps its choice; memory failures cap both.
+ * The ground a craft stands on is the relief drawn (renderer.ts: requestEarthMaps), so with no terrain
+ * tile under it the collision ground follows this choice — the hardware tier's, deliberately: what is
+ * hit is what is seen, and the high heights for the physics alone would be 64 MB more of CPU memory on
+ * the weakest devices.
+ */
 export function earthMapQuality(
   wanted: "med" | "high" | null,
   automatic: boolean,
-  offline: boolean,
+  exporting: boolean,
   tier: Tier,
   memoryCap: "none" | "med" | "high",
 ): "med" | "high" | null {
   if (wanted === null || memoryCap === "none") return null;
-  return wanted === "high" && (memoryCap === "med" || (automatic && !offline && tier.level <= 1)) ? "med" : wanted;
+  return wanted === "high" && (memoryCap === "med" || (automatic && !exporting && tier.level <= 1)) ? "med" : wanted;
 }
 
 /** Promotion requires stable live work and unused budget, whether pixels or precision are capped —

@@ -542,7 +542,6 @@ export class Renderer {
   private clampSampler: GPUSampler;
 
   private traceSource: string;
-  /** the tracer's general pipelines compiled (create() waits for it: nothing is drawn before) */
   /** the pipelines the first image needs: the realtime kernel and the ship's probe (awaited at create) */
   private tracerCore: Promise<void>;
   /** Optional pipelines compile independently, after the first image or on demand. */
@@ -957,7 +956,8 @@ export class Renderer {
         }
         const old = this.earthMaps;
         this.earthMaps = maps;
-        // (the ground the ship stands on: the heights drawn — the terrain tiles over the map)
+        // (the ground the ship stands on: the heights drawn — the terrain tiles over the map; the maps'
+        // tier, hence the hardware's on a weak one, deliberately: quality-policy.ts, earthMapQuality)
         if (maps.heights) {
           const { map, W, H } = maps.heights;
           setGroundRelief(
@@ -2104,14 +2104,14 @@ export class Renderer {
       if (diskPx < 12) want = have && performance.now() - this.earthSeenAt > 5000 ? null : have;
       else {
         this.earthSeenAt = performance.now();
-        // (the tier's texture cap — plan §3.5: the high cube is ~60 MB of network and ~96 MB of
-        // VRAM a weak tier never asked for; the live view only — exports keep their choice)
         if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
       // (the ship by the Earth, the view away: its maps kept, the finer ones low over it)
       const F = this.shipFocus;
       if (F?.body === "earth") want = F.altKm < 2000 ? "high" : (want ?? "med");
+      // (the tier's texture cap — plan §3.5: the live view only, exports keep their choice — and the
+      // memory's: quality-policy.ts)
       want = earthMapQuality(want, automaticQuality(s), t !== this.live, this.tier, this.earthCap);
       if (want !== have) {
         if (want) this.requestEarthMaps(want);

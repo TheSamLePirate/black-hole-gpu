@@ -1,7 +1,10 @@
 // The hardware's tier, guessed at start from what WebGPU and the browser tell (vendor, architecture,
-// fallback adapter, the device's memory, a touch screen): it caps the realtime image's pixels — a
-// pixel budget, not a ratio of the CSS size (a 4K screen at ratio 1 was 8.3 Mpx in the Game quality,
-// four times a laptop's). The dynamic resolution then works under that cap.
+// fallback adapter, the device's memory, a touch screen) — or taken from this adapter's measure in an
+// earlier session (rememberedLevel, a week at most) —, then corrected by the measure: the governor
+// (main.ts) promotes or demotes it by the GPU's measured load, and remembers it. It caps the realtime
+// image's pixels — a pixel budget, not a ratio of the CSS size (a 4K screen at ratio 1 was 8.3 Mpx in
+// the Game quality, four times a laptop's), the dynamic resolution working under that cap; and, in
+// Game's automatic mode, the precision the Game quality set and the Earth's finer maps (quality-policy.ts).
 
 export interface Tier {
   /** 0 software … 4 high-end */
