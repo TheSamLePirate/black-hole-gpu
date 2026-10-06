@@ -91,6 +91,7 @@ declare module "../controls" {
     giveBackWarp: typeof giveBackWarp;
     requestWarp: typeof requestWarp;
     setWarpAuthority: typeof setWarpAuthority;
+    runDown: typeof runDown;
     nodeBurn: typeof nodeBurn;
     ourNav: typeof ourNav;
     radialOut: typeof radialOut;
@@ -1184,6 +1185,17 @@ function setNodeWarp(this: CameraController, auto: number) {
   this.nodeWarp = want === null ? "auto" : want > cap * (1 + 1e-9) ? "held" : "manual";
 }
 
+/**
+ * Our universe: the Δv [c] a Crew engine still gives once cut now — its thrust runs down over its spool
+ * time (8 m/s of the Ranger's at full thrust), in real time at any warp. A burn's cutoff, flown or cued,
+ * comes that much early.
+ */
+function runDown(this: CameraController): number {
+  const s = this.s;
+  if (s.engine !== "crew" || !this.ourNav(cameraFrame(s))) return 0;
+  return this.pilot.engineNow * this.thrustMax() * VESSELS[fleet.active].spool * (1 / (4.925490947e-6 * s.massSolar));
+}
+
 /** Our universe: the velocity still to gain to the mean circle where the craft is, about its reference body (home, c). */
 function circleGain(nav: NonNullable<ReturnType<CameraController["ourNav"]>>): Vec3 {
   const rel = sub3(nav.V, nav.refVel);
@@ -1341,7 +1353,7 @@ function nodeBurn(
     // (a Crew engine answers its throttle with a lag: cut now, it still gives its thrust over its spool
     // time — 8 m/s of the Ranger's at full thrust —; our universe's burns are cut that much early, and
     // done once it has run down)
-    const tail = nav && !assisted && s.engine === "crew" ? this.pilot.engineNow * aMax * VESSELS[fleet.active].spool * realTime : 0;
+    const tail = nav ? this.runDown() : 0;
     // (the engine cut, running down: in real time — its tail is what it is, at any warp)
     if (nav)
       w = Math.min(w, Math.max((left - tail) / (2 * aMax * Math.max(dt * dtau, 1e-6)), tail > 0 && left <= tail ? realTime : 0.0005));
@@ -1354,7 +1366,8 @@ function nodeBurn(
     const perFrame = aMax * s.timeSpeed * dt * dtau;
     // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
     // within a cm/s; assisted, within what a hand cuts — 0.2 % or 10 cm/s — and the engine cut)
-    const cut = assisted && lft <= Math.max(2e-3 * total, nav ? 0.1 / C_MPS : 1e-6);
+    // (the cue to cut comes as early as the engine's run-down: cut at the cue, the run-down gives the rest)
+    const cut = assisted && lft - tail <= Math.max(2e-3 * total, nav ? 0.1 / C_MPS : 1e-6);
     const done = assisted
       ? cut && this.pilot.throttle <= 0.01
       : (toCircle
@@ -1614,6 +1627,7 @@ export function installPlan(C: { prototype: CameraController }) {
     giveBackWarp,
     requestWarp,
     setWarpAuthority,
+    runDown,
     nodeBurn,
     ourNav,
     radialOut,

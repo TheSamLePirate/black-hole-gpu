@@ -1439,8 +1439,10 @@ function hubCompute(this: CameraController): HubInfo | null {
       burning,
       labels: { y: t("Δv left"), x: t("from the node"), ignition: t("IGN"), cutoff: t("CUT"), ...BURN_HELP() },
     });
-    // (the director's cue: lit, what is left; done — within what a hand cuts — the engine to cut)
-    const cue = { tIgn: burning ? 0 : start, left: leftM, dv, burning, cut: burning && leftM <= Math.max(2e-3 * dv, 0.1) };
+    // (the director's cue: lit, what is left; done — within what a hand cuts, the engine's run-down
+    // anticipated (nodeBurn's) — the engine to cut)
+    const cut = burning && leftM - (a === "node" ? this.runDown() * C : 0) <= Math.max(2e-3 * dv, 0.1);
+    const cue = { tIgn: burning ? 0 : start, left: leftM, dv, burning, cut };
     const where = circ
       ? this.ourCirc?.where === "pe"
         ? t("the periapsis")

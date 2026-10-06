@@ -85,3 +85,40 @@ for (const [name, o, where] of [
     }
     expect(hi - lo).toBeLessThan(3);
   }, 120_000);
+
+test("CIRC assisted, flown by hand: cut at the cue, the engine's run-down included, the Δv given is the burn's", () => {
+  // (the assist-burn e2e: 300 × 420 km at 20°, the pilot lights the burn at its cue, holds prograde and cuts
+  // at the cue — the Ranger's engine runs down 7 m/s after its cut: the cue once came that late)
+  const { c, height } = flight({ peKm: 300, apKm: 420, inc: 20, nu: 165 });
+  c.pilot.assist = true;
+  const sp0 = c.spent;
+  c.pilot.setAuto("circularize");
+  let dv = Number.NaN,
+    lit = false,
+    cut = false;
+  for (let i = 0; i < 20000 && !(cut && c.pilot.engineNow < 1e-3); i++) {
+    c.flyShip(1 / 30, null as never);
+    c.hubCache = null;
+    const cue = c.hubInfo()?.cue;
+    if (!cue) continue;
+    if (Number.isNaN(dv)) dv = cue.dv;
+    if (cue.burning && !lit) (lit = true), (c.pilot.hold = "prograde"), (c.pilot.throttle = 1);
+    if (lit && !cut && cue.cut) (cut = true), (c.pilot.throttle = 0);
+  }
+  expect(cut).toBe(true);
+  const given = (c.spent - sp0) * C_MPS;
+  expect(Math.abs(given - dv)).toBeLessThan(0.02 * dv);
+  // one revolution at ×30, the trim off: the circle asked
+  c.pilot.setAuto("circularize");
+  c.s.timeSpeed = 30 / M_SECONDS;
+  let lo = Infinity,
+    hi = -Infinity;
+  for (let i = 0; i < 5700; i++) {
+    c.flyShip(1 / 30, null as never);
+    const h = height();
+    lo = Math.min(lo, h);
+    hi = Math.max(hi, h);
+  }
+  expect(hi - lo).toBeLessThan(3);
+  expect(Math.abs((hi + lo) / 2 - 420)).toBeLessThan(3);
+}, 120_000);

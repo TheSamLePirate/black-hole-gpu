@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // A burn flown by hand, assisted (C1), by real input: CIRC assisted plans its burn at the apoapsis, the
 // time slows to real for its countdown; the pilot holds prograde (1) and lights it (Z), the Δv left follows the thrust given
 // along the burn, the graph beside the hub shows it on its profile; at the cue the pilot cuts (X) — the
-// orbit is the circle asked.
+// Δv given is the burn's, the orbit flown the circle asked.
 
 describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
   let app: App;
@@ -22,6 +22,7 @@ describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
     await app.js(`__bh.game.orbit("earth", { peKm: 300, apKm: 420, inc: 20, nu: 165 })`);
     await app.press("F4", "F4");
     expect(await app.js<boolean>("__bh.camera.pilot.assist")).toBe(true);
+    const sp0 = await app.js<number>("__bh.camera.spent");
     await app.press("Digit9", "9");
     // its burn planned: the hub's card counts down to it, the graph beside it
     await app.waitFor(`!!__bh.camera.hubInfo()?.cue`, 30_000);
@@ -44,11 +45,28 @@ describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
     expect(await app.js<string>(`document.querySelector(".fl-hub-graph").dataset.state`)).not.toBe("wait");
     await app.waitFor(`__bh.camera.hubInfo()?.cue?.cut`, 120_000);
     await app.press("KeyX", "x");
-    // the burn done (the node gone): the orbit circular within a few km
+    // the burn done (the node gone), the engine run down: the Δv given is the burn's — the cue came as
+    // early as the engine's run-down
     await app.waitFor(`!__bh.camera.plan.nodes.length`, 30_000);
-    const o = await app.js<{ peKm: number; apKm: number }>("__bh.game.status().orbit");
-    expect(o.apKm - o.peKm).toBeLessThan(12);
-    expect(o.peKm).toBeGreaterThan(380);
+    await app.waitFor(`__bh.camera.pilot.engineNow < 0.01`, 30_000);
+    const given = (await app.js<number>(`__bh.camera.spent - ${sp0}`)) * 299792458;
+    expect(Math.abs(given - dv) / dv).toBeLessThan(0.03);
     await app.press("Digit9", "9");
+    // the circle as flown over a revolution (fixed steps at ×30): its radius within a few km — the
+    // osculating apsides of a circle there stand ~17 km apart, the Earth's oblateness's, not the burn's
+    const r = await app.js<{ lo: number; hi: number }>(`(() => {
+      const c = __bh.camera, h = () => { const f = c.fcContext(); return (Math.hypot(...f.ctx.r) - f.ctx.R) / 1e3; };
+      __bh.freeze(true);
+      __bh.game.warp(30);
+      let lo = Infinity, hi = -Infinity;
+      for (let k = 0; k < 6000; k++) {
+        __bh.step(1 / 30);
+        if (k % 5 === 0) (lo = Math.min(lo, h())), (hi = Math.max(hi, h()));
+      }
+      __bh.freeze(false);
+      return { lo, hi };
+    })()`);
+    expect(r.hi - r.lo).toBeLessThan(5);
+    expect(Math.abs((r.hi + r.lo) / 2 - 420)).toBeLessThan(5);
   }, 420_000);
 });
