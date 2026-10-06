@@ -549,8 +549,17 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
   if (circ) return this.ourCircWant(nav, Tg, say, out);
   const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;
   if (orbiting) {
+    // (the height held: where it was engaged, if that orbit is clear — of the ground by 1 %, of the air
+    // (aero.ts airTop) —, as the rails judge a stable orbit; it once raised every orbit to the approach's
+    // stand-off, 10 % of the radius: the Moon's 100 km to 174, 334 m/s spent)
+    const atm = solarBody(tgt)?.atmosphere;
+    const clear = Tg.radius * 1.01 + (atm ? airTop(atm) / M_METRES : 0) + (air ? (12 * air.H) / M_METRES : 0);
+    // (the circle's own: the body's mean circle through the craft — its oblateness in (geopotential.ts
+    // meanCircular), its radius r₀ about which the craft swings —, not √(μ/r) level at r: the Earth's J2
+    // had the hold push 57 m/s in two hours against the circle it flies)
+    const mean = circularVelocity(tgt, Tg.mass, lin(d, -1, d, 0), rel, t);
     if (!this.ourOrbitR || this.ourOrbitR.body !== tgt)
-      this.ourOrbitR = { body: tgt, r: circ ? Math.max(D, Tg.radius * 1.01) : Math.max(D, low) };
+      this.ourOrbitR = { body: tgt, r: circ ? Math.max(D, Tg.radius * 1.01) : Math.max(mean.r0, clear) };
     const r = this.ourOrbitR.r;
     const Rh = lin(dh, -1, dh, 0);
     let n = cross(Rh, rel);
@@ -561,8 +570,8 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
     const vc = Math.sqrt(Tg.mass / D);
     this.hubNote = { name: BODY_NAMES[tgt] ?? tgt, orbitAlt: (r - Tg.radius) * M_METRES };
     // (the height held: a gentle radial pull back, a small part of the circular speed)
-    const vr = Math.max(-0.2, Math.min(0.2, (r - D) / (0.1 * r))) * vc * 0.5;
-    return out(lin(lin(Tg.vel, 1, th, vc), 1, Rh, vr));
+    const vr = Math.max(-0.2, Math.min(0.2, (r - mean.r0) / (0.1 * r))) * vc * 0.5;
+    return out(lin(lin(Tg.vel, 1, Math.abs(mean.r0 - r) < 1e-3 * r ? mean.v : lin(th, vc, th, 0), 1), 1, Rh, vr));
   }
   this.ourOrbitR = null;
   // approach: the stand-off, and the speed that still stops there
