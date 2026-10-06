@@ -9,7 +9,14 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const CASES: { name: string; setup: string; key: [string, string, boolean?]; auto: string }[] = [
   { name: "hold position", setup: `__bh.game.orbit("earth", { peKm: 400, apKm: 400 })`, key: ["Digit8", "8"], auto: "hover" },
-  { name: "circularize", setup: `__bh.game.orbit("earth", { peKm: 300, apKm: 600, nu: 170 })`, key: ["Digit9", "9"], auto: "circularize" },
+  // (CIRC flies its burn as a node — the hub's CIRC lit —: the pilot's real time, its burn half an hour ahead,
+  // so the node is still coasting through the hand-overs)
+  {
+    name: "circularize",
+    setup: `__bh.game.orbit("earth", { peKm: 300, apKm: 600, nu: 60 }), __bh.camera.setWarpAuthority(false), __bh.game.warp(1)`,
+    key: ["Digit9", "9"],
+    auto: "node",
+  },
   { name: "take-off", setup: `__bh.game.land("earth", 28.573, -80.649)`, key: ["KeyU", "u"], auto: "takeoff" },
   { name: "landing", setup: `__bh.game.near("moon", { altKm: 3 })`, key: ["KeyG", "g"], auto: "land" },
   { name: "entry's glide", setup: `__bh.game.glideTo("Kennedy", 40, 6, 220)`, key: ["", ""], auto: "entry" },
@@ -28,7 +35,7 @@ describe.skipIf(!E2E)("auto ⇄ assisted for every autopilot", () => {
 
   for (const c of CASES)
     test(c.name, async () => {
-      await app.js(`(__bh.camera.pilot.assist = false, ${c.setup}, true)`);
+      await app.js(`(__bh.camera.pilot.assist = false, __bh.camera.setWarpAuthority(true), ${c.setup}, true)`);
       await Bun.sleep(1500);
       if (c.key[0]) await app.press(c.key[0], c.key[1], { shift: !!c.key[2] });
       await app.waitFor(`__bh.camera.pilot.auto === ${JSON.stringify(c.auto)}`, 10_000);
