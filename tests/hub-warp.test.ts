@@ -1,8 +1,10 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { CameraController } from "../src/controls";
+import { fleet } from "../src/fleet";
+import { ourOrbitPose } from "../src/game/place";
 import { defaultSettings, presets } from "../src/settings";
 import { M_SECONDS } from "../src/units";
-import { setRepPose } from "../src/camera";
+import { setHomePose, setRepPose } from "../src/camera";
 import { mouth, setSceneTime } from "../src/wormhole";
 
 // The warp under the hub's authority (WARP: HUB) or the pilot's (WARP: YOU): the autopilots' ceilings
@@ -158,3 +160,33 @@ test("out of the throat after a crossing: real time, unless the pilot asked for 
     expect(s.timeSpeed).toBeCloseTo(asked ? 0.1 : 1 / (4.925490947e-6 * s.massSolar), 12);
   }
 });
+
+// (the propellant a flight here burns is the fleet's — global: given back for the other tests)
+afterEach(() => {
+  fleet.tanks = null;
+  fleet.spent = {};
+});
+
+test("WARP: YOU — a CIRC's coast and burn never above the pilot's ×200, given back after", () => {
+  setSceneTime(0);
+  const s = { ...defaultSettings(), ...presets["Earth: the Blue Marble"]!, target: "earth" as const };
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  const p = ourOrbitPose({ body: "earth", peKm: 250, apKm: 700, inc: 51.6 }, c.nowTime());
+  setHomePose(s, p.X, p.fwd, p.up, p.vel);
+  s.motion = "geodesic";
+  c.setPilot(true);
+  c.newFlight();
+  c.sync();
+  c.setWarpAuthority(false);
+  c.pilot.setAuto("circularize");
+  c.requestWarp(200 * real);
+  let most = 0;
+  for (let i = 0; i < 40000 && c.pilot.auto !== "none"; i++) {
+    c.flyShip(1 / 30, null as never);
+    most = Math.max(most, s.timeSpeed);
+  }
+  expect(c.pilot.auto).toBe("none");
+  // (the node's coast ran faster than ×200 under its own: the wish replaced by the autopilot's)
+  expect(most).toBeLessThanOrEqual(200 * real * (1 + 1e-9));
+  expect(s.timeSpeed).toBeCloseTo(200 * real, 9);
+}, 60_000);

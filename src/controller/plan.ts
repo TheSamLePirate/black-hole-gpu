@@ -1174,9 +1174,9 @@ function setNodeWarp(this: CameraController, auto: number) {
   if (s.autoWarp) this.nodeWarpWant = null;
   else {
     // (the pilot changed the warp since the last frame: that is the new choice; auto warp just
-    // turned off: the warp as it stands)
-    if (this.nodeWarpWant === null || s.timeSpeed !== this.nodeWarpSet)
-      this.nodeWarpWant = Number.isFinite(this.nodeWarpSet) ? s.timeSpeed : cap;
+    // turned off, or the manoeuvre just begun: the warp as it stands — the pilot's, never the
+    // autopilot's ceiling taken for their wish)
+    if (this.nodeWarpWant === null || s.timeSpeed !== this.nodeWarpSet) this.nodeWarpWant = s.timeSpeed;
   }
   const want = this.nodeWarpWant;
   const w = want === null ? cap : Math.min(want, cap);
