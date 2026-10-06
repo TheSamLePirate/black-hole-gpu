@@ -61,7 +61,7 @@ import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { altitudeOver, setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
-import { figureDiskShare, figureSourceElevation, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
@@ -2206,7 +2206,7 @@ export class Renderer {
       set(68, 0, 0, 0, 0);
     }
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
-    f.set(this.seaParams(near, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
+    f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
@@ -2360,6 +2360,7 @@ export class Renderer {
    */
   private seaParams(
     near: ReturnType<typeof localPatch>,
+    bodies: GpuBody[],
     earthK: number,
     altKm: number,
     time: number,
@@ -2371,7 +2372,7 @@ export class Renderer {
     // (in metres as the shader has it: P.near4.w)
     const mR = near.radius * 1476.625 * s.massSolar;
     const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
-    const surface = patchGeodetic(near, WGS84_F);
+    const surface = patchGeodetic(near, flatteningOf(bodies[near.index]!.id));
     const up = surface.normal;
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;
