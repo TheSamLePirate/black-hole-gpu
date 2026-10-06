@@ -1,11 +1,10 @@
 import { test, expect } from "bun:test";
 import { dockedFrame, VESSELS, type VesselId } from "../src/vessels";
 import { fleet, fleetStart, type Pose } from "../src/fleet";
-import { M_METRES, solarBody } from "../src/system/solar";
+import { M_METRES, M_SECONDS, solarBody } from "../src/system/solar";
+import { coastHome } from "../src/system/our-coast";
 import { ourState } from "../src/system/our-side";
-import { secularSpin, secularZonal } from "../src/system/geopotential";
 import { gameTimeOf } from "../src/system/iss";
-import { keplerProp } from "../src/system/our-plan";
 
 type V = [number, number, number];
 const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -53,22 +52,28 @@ test("the fleet's start: the Endurance 800 km up, the Lander 500 km up, the Rang
   const ringR = on(pr.ax, VESSELS.ranger.ports[0]!.centre).map((x, i) => pr.X[i]! + x / M_METRES) as V;
   const portE = on(pe.ax, VESSELS.endurance.ports[0]!.centre).map((x, i) => pe.X[i]! + x / M_METRES) as V;
   expect(Math.hypot(ringR[0] - portE[0], ringR[1] - portE[1], ringR[2] - portE[2]) * M_METRES).toBeLessThan(1e-3);
-  // coasting: a Kepler orbit with the Earth's J2 drift — an orbit later, where it was turned by the
-  // node's regression and the periapsis's turn (≈ 27 km along a 800 km orbit)
+  // coasting: as the flight flies it (the integrator, the rails' mean orbit) — an orbit later, its centre of
+  // mass where the flight's own steps put it, turned by the node's regression and the periapsis's turn
+  // (≈ 27 km along a 800 km orbit)
   const mu = solarBody("earth")!.mass;
   const r = solarBody("earth")!.radius * M_METRES + 800e3;
   const T = 2 * Math.PI * Math.sqrt((r / M_METRES) ** 3 / mu);
   const later = fleet.pose("endurance", t + T)!;
   const E2 = ourState("earth", t + T);
   const d0: V = [pe.X[0] - E.pos[0], pe.X[1] - E.pos[1], pe.X[2] - E.pos[2]];
-  const v0: V = [pe.V[0] - E.vel[0], pe.V[1] - E.vel[1], pe.V[2] - E.vel[2]];
   const d1: V = [later.X[0] - E2.pos[0], later.X[1] - E2.pos[1], later.X[2] - E2.pos[2]];
-  // (its Kepler arc flown at the velocity less the drift's own share, which the turn gives back)
-  const w0 = secularSpin("earth", mu, d0, v0, 0, t)!;
-  const vk: V = [v0[0] - (w0[1] * d0[2] - w0[2] * d0[1]), v0[1] - (w0[2] * d0[0] - w0[0] * d0[2]), v0[2] - (w0[0] * d0[1] - w0[1] * d0[0])];
-  const k = keplerProp(mu, d0, vk, T);
-  const want = secularZonal("earth", mu, k.r as V, k.v as V, T, t).r;
-  expect(Math.hypot(d1[0] - want[0], d1[1] - want[1], d1[2] - want[2]) * M_METRES).toBeLessThan(500);
+  const f = fleet.free.endurance!;
+  const com = f.com ?? [0, 0, 0];
+  const cm = (P: Pose) => on(P.ax, com).map((x, i) => P.X[i]! + x / M_METRES) as V;
+  let S = { X: cm({ ...pe, ax: f.ax }), V: f.V },
+    tt = f.t;
+  while (tt < t + T - 1e-12) {
+    const dt = Math.min(60 / M_SECONDS, t + T - tt);
+    S = coastHome(S.X, S.V, tt, dt);
+    tt += dt;
+  }
+  const c1 = cm(later);
+  expect(Math.hypot(c1[0] - S.X[0], c1[1] - S.X[1], c1[2] - S.X[2]) * M_METRES).toBeLessThan(100);
   expect(Math.hypot(d1[0] - d0[0], d1[1] - d0[1], d1[2] - d0[2]) * M_METRES).toBeGreaterThan(5000);
 });
 
@@ -111,6 +116,8 @@ test("a coasting craft's velocity is its place's own rate — the J2 drift's tur
         b = fleet.pose(id, t + dt)!,
         m = fleet.pose(id, t)!;
       const err = Math.hypot(...[0, 1, 2].map((k) => (b.X[k]! - a.X[k]!) / (2 * dt) - m.V[k]!)) * 299792458;
-      expect(err).toBeLessThan(0.05);
+      // (its pose ahead on the rails' mean orbit: its velocity and its place's rate within the model's own
+      // ~0.1 m/s — the drift's turn once missing was 1.5 to 5 m/s)
+      expect(err).toBeLessThan(0.15);
     }
 });

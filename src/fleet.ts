@@ -14,7 +14,7 @@ import { keplerProp } from "./system/our-plan";
 import { ourState, referenceBody } from "./system/our-side";
 import { coastHome } from "./system/our-coast";
 import { gearHeight, railsDecay, solidBody } from "./system/our-surface";
-import { M_METRES, solarBody } from "./system/solar";
+import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
 import { dockedFrame, VESSELS, VESSEL_IDS, type VesselId } from "./vessels";
 import { cross, dot, lin, sub } from "./math/vec3";
@@ -137,6 +137,22 @@ export class Fleet {
     // the craft too, some 2–5 m/s in a low orbit: the Kepler arc is flown at the velocity less that turn's
     // share, and the share given back below — set free at its velocity, it keeps it; coasting, the docking
     // autopilot no longer chases a point that goes elsewhere)
+    // (ahead by more than a few seconds — a rendezvous planned on where it will be: as the flight flies
+    // it, the integrator and the rails' mean orbit, as stepFree moves it frame by frame; the two-body arc
+    // with the J2's drift once put the Endurance 48 km off where it came to, a rendezvous with it missed)
+    if ((t - f.t) * M_SECONDS > 5 && !(solidBody(f.ref) && gearHeight(f.ref, C0, f.t) < 1e5)) {
+      let S = { X: C0, V: f.V },
+        tt = f.t;
+      for (let k = 0; k < 1000 && tt < t - 1e-12; k++) {
+        const c = coastHome(S.X, S.V, tt, t - tt);
+        S = c;
+        tt = c.t;
+      }
+      const w = f.w ?? [0, 0, 0];
+      const ax = f.ax.map((a) => rotate(a, lin(w, t - f.t, w, 0))) as [Vec3, Vec3, Vec3];
+      const X = lin(S.X, 1, onAxes(ax, com), -1 / M_METRES);
+      return { X, V: lin(S.V, 1, cross(w, sub(X, S.X)), 1), ax, w, Vc: S.V };
+    }
     const r0 = sub(C0, B0.pos),
       v0 = sub(f.V, B0.vel);
     const spin0 = secularSpin(f.ref, mu, r0, v0, 0, f.t);
