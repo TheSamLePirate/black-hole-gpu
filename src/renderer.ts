@@ -57,7 +57,14 @@ import {
   type GpuBody,
 } from "./system/scene-bodies";
 import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
-import { loadEarthMaps, placeholderEarth, prefetchEarthMaps, type EarthMaps, type EarthTier } from "./system/earth-maps";
+import {
+  earthPrefetchWanted,
+  loadEarthMaps,
+  placeholderEarth,
+  prefetchEarthMaps,
+  type EarthMaps,
+  type EarthTier,
+} from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { altitudeOver, setGroundHeights, setGroundRelief } from "./system/our-surface";
@@ -175,10 +182,14 @@ export function prefetchSkyAssets(get: (url: string, id: string) => Promise<Resp
   }
 }
 
-/** A prefetched asset as a fresh Response (an ArrayBuffer's body can be re-read), or null. */
+/**
+ * A prefetched asset as a fresh Response, or null. One-shot: the first call takes the download over
+ * (the map forgets it — no megabytes retained after loadSky), so a second call for the same URL — a
+ * second loadSky — gets null and fetches through the normal path.
+ */
 function prefetched(url: string): Promise<Response> | null {
   const pending = skyPrefetch.get(url);
-  skyPrefetch.delete(url); // transfer ownership: do not retain megabytes after loadSky
+  skyPrefetch.delete(url);
   return pending?.then((buf) => new Response(buf)) ?? null;
 }
 
@@ -1125,10 +1136,12 @@ export class Renderer {
     onDevice(device);
     // Start downloads while shaders compile, even for a scene with no Earth. This does not gate
     // startup or allocate Earth textures; the scene-dependent loader still controls GPU residency.
-    void prefetchEarthMaps(device).catch((error) => {
-      gpuDiagnostics.record("earth-prefetch", error);
-      console.warn("Earth prefetch unavailable:", error);
-    });
+    // (Not on a connection the user asked to spare — Save-Data: the maps then come when a view needs them.)
+    if (earthPrefetchWanted())
+      void prefetchEarthMaps(device).catch((error) => {
+        gpuDiagnostics.record("earth-prefetch", error);
+        console.warn("Earth prefetch unavailable:", error);
+      });
     // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
     // flight and offers a reload; nothing more is sent to it)
     const lost = device.lost.then((info) => {

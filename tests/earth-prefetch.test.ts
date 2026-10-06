@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { prefetchEarthMaps } from "../src/system/earth-maps";
+import { earthPrefetchWanted, prefetchEarthMaps } from "../src/system/earth-maps";
+
+test("no Earth prefetch on a connection the user asked to spare (Save-Data)", () => {
+  expect(earthPrefetchWanted({ connection: { saveData: true } })).toBe(false);
+  expect(earthPrefetchWanted({ connection: { saveData: false } })).toBe(true);
+  expect(earthPrefetchWanted({})).toBe(true);
+  expect(earthPrefetchWanted(undefined)).toBe(true);
+});
 
 test("Earth prefetch shares requests, retries failures and selects medium assets for the GPU", async () => {
   const compressed = { features: new Set<GPUFeatureName>(["texture-compression-bc"]) };

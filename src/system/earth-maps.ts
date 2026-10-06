@@ -93,6 +93,14 @@ const KTX: Record<EarthTier, Faces> = {
 // Only completion promises are retained: bodies live in the browser's HTTP/SW cache, not JS memory.
 const downloads = new Map<string, Promise<void>>();
 
+/** Whether to warm the Earth's maps ahead of need (≈ 24 MB): not when the browser says the user asked
+ * to spare the connection (Save-Data) — the maps then come when a view of the Earth needs them. */
+export function earthPrefetchWanted(
+  nav: { connection?: { saveData?: boolean } } | undefined = globalThis.navigator as { connection?: { saveData?: boolean } } | undefined,
+): boolean {
+  return !nav?.connection?.saveData;
+}
+
 /** Warm the medium Earth maps independently of the scene, without decoding or allocating VRAM.
  * Use the GPU's preferred representation, not both compressed and JPEG day/cloud cubes.
  * Failed requests are evicted so later prefetches or normal on-demand loading can retry. */
