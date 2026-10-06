@@ -20,7 +20,7 @@ import {
   ourTarget,
 } from "../targeting";
 import { fromZamo, step as geoStep, toZamo } from "../geodesic";
-import { engineThrust, fuelOn, pressureFactor, tank } from "../engine";
+import { engineThrust, fuelOn, loadShare, pressureFactor, tank } from "../engine";
 import { followDv, type V3 as KV3 } from "../fc/kepler";
 import type { Burn } from "../fc/ops";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kHohmann } from "../fc/kerr-ops";
@@ -51,7 +51,7 @@ import { airDensity as ourAir, gearHeight, groundSpeeds, solidBody } from "../sy
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { issTrack } from "../system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint } from "../system/iss-plan";
-import { AU_M, C_MPS, DAY_S, M_METRES, M_SECONDS } from "../units";
+import { AU_M, C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
@@ -1626,7 +1626,12 @@ function thrustMax(this: CameraController) {
   // assembly's mass now: the craft docked to it pushed along, the propellant burnt lightening it; in the
   // air, the ambient pressure on the nozzle's exit taken off)
   const V = VESSELS[fleet.active];
-  return (engineThrust(s) * V.accel * V.mass * this.pressureThrust()) / fleet.massProps().mass;
+  const a = (engineThrust(s) * V.accel * V.mass * this.pressureThrust()) / fleet.massProps().mass;
+  // (and no more than its structure bears — 85 % of its load limit, the engine throttled back as the
+  // propellant burnt lightens the craft: a long low-thrust transfer at 2 g once reached 9.7 g, the
+  // Ranger broken up; the Cinema engine's fictional thousands of g are borne by nothing — engine.ts)
+  if (loadShare(s) <= 0) return a;
+  return Math.min(a, (0.85 * V.aero.gMax * G0 * 1476.625 * s.massSolar) / C_MPS ** 2);
 }
 
 /** The main engine's thrust over its vacuum thrust here: the ambient pressure on its exit (engine.ts). */
