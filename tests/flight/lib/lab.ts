@@ -66,7 +66,7 @@ const PAGE = `(() => {
       dockInfo: c.dockInfo ? { range: r(c.dockInfo.range, 100), lateral: r(c.dockInfo.lateral, 100), closing: r(c.dockInfo.closing, 1000), angle: r(c.dockInfo.angle, 10) } : null,
       docked: !!c.docked, links: safe(() => __bh.fleet?.links?.length ?? null),
       nodes: c.plan?.nodes?.length ?? 0, burning: i.plan?.burning ?? null, xfer: c.transfer?.stage ?? null,
-      fuel: r(i.engine?.fuel?.fraction, 1000), spent: r(c.spent, 10),
+      fuel: r(i.engine?.fuel?.fraction, 1000), spent: r(c.spent * 299792458, 10),
       mission: safe(() => __bh.mission?.active ? __bh.mission.phase : null),
       animate: s.animate, frozen: safe(() => __bh.frozen ?? null),
     };
