@@ -744,6 +744,8 @@ export class Renderer {
       () => mkTrace(true),
       (p) => {
         this.qualityPipeline = p;
+        // (its LUT at once, not at the next completed frame: a converged view submits none)
+        if (this.lutWanted) void this.lutQCompile.start();
       },
     );
     this.lutCompile = optional(

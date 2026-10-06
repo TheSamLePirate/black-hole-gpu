@@ -132,6 +132,41 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  test("the quality LUT starts compiling as the quality kernel lands, no frame needed", async () => {
+    const app = await App.boot({
+      hash: scene,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+      const original = GPUDevice.prototype.createComputePipelineAsync;
+      let release;
+      const gate = new Promise((resolve) => (release = resolve));
+      globalThis.__releaseQuality = () => release();
+      GPUDevice.prototype.createComputePipelineAsync = function(desc) {
+        if (desc.compute.entryPoint === "main" && desc.compute.constants?.QUALITY_PIPELINE === 1)
+          return gate.then(() => original.call(this, desc));
+        return original.call(this, desc);
+      };
+    })()`,
+    });
+    try {
+      // (a still view the far field's LUT serves: time held, no jet)
+      await app.js("(__bh.freeze(true), (__bh.settings.jet = false), __bh.touch(), true)");
+      await app.waitFor(`__bh.renderer.qualityCompile.state === "pending" && __bh.renderer.lutWanted`, 30_000);
+      // (no frame submitted from here: a converged view draws none)
+      const lutQuality = await app.js<string>(`(async () => {
+        const renderer = __bh.renderer;
+        renderer.frame = () => null;
+        __releaseQuality();
+        await renderer.qualityCompile.start();
+        return renderer.lutQCompile.state;
+      })()`);
+      expect(lutQuality).not.toBe("idle");
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("failed quality LUT leaves the adaptive kernel and a PNG export usable", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("lut") });
     try {
