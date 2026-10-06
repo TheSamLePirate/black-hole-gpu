@@ -249,7 +249,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
           return { captured, stats };
         };
         return { moving: capture(manual, 0, true), still: capture(manual, 16, false),
-          auto: capture({ ...manual, quality: "game", dynamicResolution: true, realtimeSubsampling: "auto" }, 16, false) };
+          // (the Game preset's 32 spp, capped to 16 on tier 1 — a value set by hand would be kept)
+          auto: capture({ ...manual, quality: "game", dynamicResolution: true, realtimeSubsampling: "auto", targetSpp: 32 }, 16, false) };
       })()`);
       expect(integration.moving.captured.steps).toBe(1000);
       expect(integration.moving.captured.eps).toBe(0.05);

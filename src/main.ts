@@ -58,7 +58,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { automaticQuality, promotionEligible } from "./quality-policy";
+import { dynamicResolutionOn, promotionEligible } from "./quality-policy";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -1887,10 +1887,11 @@ async function main() {
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
   function resize() {
-    if (!automaticQuality(settings) && forcedScale === null) renderScale = 1;
-    // (with the dynamic resolution — the Game quality —, the image within the hardware tier's pixel
-    // budget, then its scale; the finer qualities keep the ratio asked for: their still image is the point)
-    const ratio = automaticQuality(settings)
+    if (!dynamicResolutionOn(settings) && forcedScale === null) renderScale = 1;
+    // (with the dynamic resolution — the Game quality turns it on, any quality may —, the image within
+    // the hardware tier's pixel budget, then its scale; without it the ratio asked for: the still image
+    // is the point)
+    const ratio = dynamicResolutionOn(settings)
       ? cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx)
       : settings.pixelRatio;
     // (the canvas at the display's size; the image rendered at its scale of it — upscaled by the display
@@ -2180,7 +2181,7 @@ async function main() {
     const held = lastStats?.phase === "converging" || lastStats?.phase === "converged";
     heldFor = held ? heldFor + dt : 0;
     movingFor = held ? 0 : movingFor + dt;
-    const dynOn = automaticQuality(settings) && !renderer.offlineActive && forcedScale === null;
+    const dynOn = dynamicResolutionOn(settings) && !renderer.offlineActive && forcedScale === null;
     if (forcedScale !== null && renderScale !== forcedScale) {
       renderScale = forcedScale;
       resize();

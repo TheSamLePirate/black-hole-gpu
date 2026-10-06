@@ -1,4 +1,4 @@
-import type { Settings } from "./settings";
+import { QUALITY, type Settings } from "./settings";
 import type { Tier } from "./tier";
 
 const STEPS = [150, 250, 350, Infinity, Infinity] as const;
@@ -6,20 +6,31 @@ const EPS = [0.18, 0.14, 0.1, 0, 0] as const;
 const SPP = [16, 16, Infinity, Infinity, Infinity] as const;
 const NOISE = [0.03, 0.03, 0, 0, 0] as const;
 
-/** Only Game's automatic mode delegates quality to the GPU governor. */
-export function automaticQuality(s: Pick<Settings, "quality" | "dynamicResolution" | "realtimeSubsampling">): boolean {
-  return s.quality === "game" && s.dynamicResolution && s.realtimeSubsampling === "auto";
+/** The dynamic resolution at work: the render scale governed, within the tier's pixel budget — at any
+ * quality where it is turned on (the Game quality turns it on). */
+export function dynamicResolutionOn(s: Pick<Settings, "dynamicResolution" | "realtimeSubsampling">): boolean {
+  return s.dynamicResolution && s.realtimeSubsampling === "auto";
 }
 
-/** Effective live values; manual choices and a disabled noise threshold are preserved. */
+/** Only Game's automatic mode delegates quality to the GPU governor. */
+export function automaticQuality(s: Pick<Settings, "quality" | "dynamicResolution" | "realtimeSubsampling">): boolean {
+  return s.quality === "game" && dynamicResolutionOn(s);
+}
+
+/**
+ * Effective live values. Game's automatic mode caps them by the tier — only the values the Game
+ * quality set: one raised or lowered by hand (the panel's "Custom") is the player's, kept as set
+ * (audit M8). A disabled noise threshold stays disabled.
+ */
 export function effectiveQuality(s: Settings, tier: Tier) {
   const auto = automaticQuality(s);
   const level = tier.level;
+  const governed = (k: "realtimeSteps" | "realtimeEps" | "targetSpp" | "noiseThreshold") => auto && s[k] === QUALITY.game[k];
   const result = {
-    realtimeSteps: auto ? Math.min(s.realtimeSteps, STEPS[level]) : s.realtimeSteps,
-    realtimeEps: auto ? Math.max(s.realtimeEps, EPS[level]) : s.realtimeEps,
-    targetSpp: auto ? Math.min(s.targetSpp, SPP[level]) : s.targetSpp,
-    noiseThreshold: auto && s.noiseThreshold > 0 ? Math.max(s.noiseThreshold, NOISE[level]) : s.noiseThreshold,
+    realtimeSteps: governed("realtimeSteps") ? Math.min(s.realtimeSteps, STEPS[level]) : s.realtimeSteps,
+    realtimeEps: governed("realtimeEps") ? Math.max(s.realtimeEps, EPS[level]) : s.realtimeEps,
+    targetSpp: governed("targetSpp") ? Math.min(s.targetSpp, SPP[level]) : s.targetSpp,
+    noiseThreshold: governed("noiseThreshold") && s.noiseThreshold > 0 ? Math.max(s.noiseThreshold, NOISE[level]) : s.noiseThreshold,
   };
   return {
     ...result,

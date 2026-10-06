@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test";
-import { automaticQuality, earthMapQuality, effectiveQuality, promotionEligible } from "../src/quality-policy";
-import { defaultSettings } from "../src/settings";
+import { automaticQuality, dynamicResolutionOn, earthMapQuality, effectiveQuality, promotionEligible } from "../src/quality-policy";
+import { defaultSettings, QUALITY } from "../src/settings";
 import { cappedRatio, tierAt } from "../src/tier";
 
+// (the Game quality as its preset sets it: automatic)
 const game = () => ({
   ...defaultSettings(),
+  ...QUALITY.game,
   quality: "game" as const,
   dynamicResolution: true,
   realtimeSubsampling: "auto" as const,
-  realtimeSteps: 1000,
-  realtimeEps: 0.05,
-  targetSpp: 256,
-  noiseThreshold: 0.01,
 });
+// (and its precision raised by hand)
+const manual = () => ({ ...game(), realtimeSteps: 1000, realtimeEps: 0.05, targetSpp: 256, noiseThreshold: 0.01 });
 
 test("weak GPU: Game automatic caps cost and exposes the effective sample target", () => {
   expect(effectiveQuality(game(), tierAt(1, "test"))).toEqual({
@@ -24,11 +24,11 @@ test("weak GPU: Game automatic caps cost and exposes the effective sample target
   });
 });
 
-test("manual precision and disabled noise convergence survive every hardware tier", () => {
+test("manual precision and disabled noise convergence survive every hardware tier, Game automatic included (audit M8)", () => {
   for (const level of [0, 1, 2, 3, 4] as const) {
-    for (const patch of [{ dynamicResolution: false }, { realtimeSubsampling: 1 as const }, { quality: "ultra" as const }]) {
-      const s = { ...game(), ...patch };
-      expect(automaticQuality(s)).toBe(false);
+    for (const patch of [{}, { dynamicResolution: false }, { realtimeSubsampling: 1 as const }, { quality: "ultra" as const }]) {
+      const s = { ...manual(), ...patch };
+      expect(automaticQuality(s)).toBe(Object.keys(patch).length === 0);
       expect(effectiveQuality(s, tierAt(level, "test"))).toEqual({
         realtimeSteps: 1000,
         realtimeEps: 0.05,
@@ -38,6 +38,25 @@ test("manual precision and disabled noise convergence survive every hardware tie
       });
     }
     expect(effectiveQuality({ ...game(), noiseThreshold: 0 }, tierAt(level, "test")).noiseThreshold).toBe(0);
+  }
+});
+
+test("Game automatic caps only the values its preset set: one raised by hand is kept, the others capped", () => {
+  expect(effectiveQuality({ ...game(), targetSpp: 128 }, tierAt(1, "test"))).toEqual({
+    realtimeSteps: 250,
+    realtimeEps: 0.14,
+    targetSpp: 128,
+    noiseThreshold: 0.03,
+    capped: true,
+  });
+});
+
+test("the dynamic resolution works at any quality it is turned on for, not only Game (audit M8)", () => {
+  for (const quality of ["low", "medium", "high", "ultra", "realtime", "game"] as const) {
+    const s = { ...game(), quality };
+    expect(dynamicResolutionOn(s)).toBe(true);
+    expect(dynamicResolutionOn({ ...s, dynamicResolution: false })).toBe(false);
+    expect(dynamicResolutionOn({ ...s, realtimeSubsampling: 2 })).toBe(false);
   }
 });
 
