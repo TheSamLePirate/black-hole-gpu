@@ -1,15 +1,29 @@
 name: Deploy to GitHub Pages
 
+# The site: main at the root and, beside it, a preview branch under /<PREVIEW_PATH>/ (an A/B of the
+# branch against production on the same origin). The app is base-path-agnostic; each build's Service
+# Worker keeps to its own scope's caches and pages, and the preview's storage keys carry its path
+# (scripts/build-pages.ts: KERR_SUBPATH) — the two never touch each other's offline shell or saves.
+#
+# (Until this file is on main, main's own copy of it runs on main's pushes: it deploys main alone, which
+# wipes /test/ until the next preview push, and it is not in this file's concurrency group.)
+
 on:
   push:
+    # (GitHub reads these before any env: the preview branch is named here too — keep it equal to
+    # env.PREVIEW_BRANCH; to retire the preview, remove it here and empty PREVIEW_BRANCH)
     branches: [main, test-kimi]
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+env:
+  # the preview: its branch (empty, or a branch that does not exist: none — everything below inert)
+  # and the site's directory it is served from
+  PREVIEW_BRANCH: test-kimi
+  PREVIEW_PATH: test
+
+# (each job asks for what it needs: no write token where branch code runs)
+permissions: {}
 
 concurrency:
   # Serialize the entire snapshot → verification → deployment, across both publishing branches.
@@ -18,11 +32,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # types, unit tests and the production build: nothing deploys unless all three pass
+  # a pull request: types, lint, shaders, unit tests and the production build
   verify:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: actions/cache@v4
         with:
@@ -41,26 +60,29 @@ jobs:
           path: junit.xml
       - run: bun run build:pages
 
-  # the site assembled for deployment: main at the root, test-kimi under /test/ — one artifact,
-  # one deployment (a Pages deployment replaces the whole site, so a main-only build would wipe
-  # /test/ and a branch-only build would wipe /). The app is base-path-agnostic: every URL in the
-  # bundle, the shell, the manifest and the Service Worker's registration is relative, and the
-  # /test/sw.js scope (/test/) wins over the root worker's (/) for the pages under it.
+  # a push (or a manual run): the site assembled from both branches' heads, each verified exactly as
+  # built — one artifact, one deployment (a Pages deployment replaces the whole site). main gates the
+  # deployment; a failing preview is reported and left out, the site deploying with main alone.
   site:
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
-    needs: verify
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      preview: ${{ steps.preview.outcome == 'success' && env.PREVIEW_PATH || '' }}
     steps:
       - uses: oven-sh/setup-bun@v2
       - name: Snapshot both branch revisions
         id: revisions
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # (a branch's head; "absent" for a missing preview branch — or none named)
           resolve_ref() {
             local branch="$1" response status sha
+            if [ -z "$branch" ]; then echo absent; return; fi
             response=$(mktemp)
             status=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
               --header "Authorization: Bearer $GH_TOKEN" \
@@ -70,7 +92,7 @@ jobs:
             if [ "$status" = 200 ]; then
               sha=$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' "$response") || { rm -f "$response"; return 1; }
               echo "$sha"
-            elif [ "$status" = 404 ] && [ "$branch" = test-kimi ]; then
+            elif [ "$status" = 404 ] && [ "$branch" = "$PREVIEW_BRANCH" ]; then
               echo absent
             else
               echo "Cannot resolve $branch: HTTP $status" >&2
@@ -80,18 +102,22 @@ jobs:
             rm -f "$response"
           }
           main_sha=$(resolve_ref main)
-          test_sha=$(resolve_ref test-kimi)
+          test_sha=$(resolve_ref "$PREVIEW_BRANCH")
           echo "main=$main_sha" >> "$GITHUB_OUTPUT"
           echo "test=$test_sha" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.revisions.outputs.main }}
           path: main-src
+          persist-credentials: false
+      # (a preview that cannot be checked out fails its verification below: reported, left out)
       - uses: actions/checkout@v4
         if: steps.revisions.outputs.test != 'absent'
+        continue-on-error: true
         with:
           ref: ${{ steps.revisions.outputs.test }}
           path: test-src
+          persist-credentials: false
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -103,11 +129,21 @@ jobs:
           bun run typecheck
           bunx biome ci .
           bun scripts/check-wgsl.ts
-          bun test
+          bun test --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
-      - name: Verify and build the exact test-kimi revision → /test/
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: main-src/junit.xml
+      # (its failure does not stop production: reported below, the preview left out)
+      - name: Verify and build the exact preview revision → /${{ env.PREVIEW_PATH }}/
+        id: preview
         if: steps.revisions.outputs.test != 'absent'
+        continue-on-error: true
         working-directory: test-src
+        env:
+          KERR_SUBPATH: ${{ env.PREVIEW_PATH }}
         run: |
           bun install --frozen-lockfile
           bun run typecheck
@@ -115,32 +151,49 @@ jobs:
           bun scripts/check-wgsl.ts
           bun test
           bun run build:pages
+      - name: Report a failed preview
+        if: steps.preview.outcome == 'failure'
+        run: |
+          msg="$PREVIEW_BRANCH (${{ steps.revisions.outputs.test }}) failed its verification: the site deploys with main alone, /$PREVIEW_PATH/ removed"
+          echo "::warning title=Preview not deployed::$msg"
+          echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
+          echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+      # (the two builds' identical hashed assets are not shared: each app's URLs are relative to its
+      # own directory, and Pages serves no links — the site is about twice one build, ~2 × 370 MB
+      # against Pages' 1 GB limit)
       - name: Assemble the site
         run: |
           mkdir -p _site
           cp -a main-src/_site/. _site/
-          if [ -d test-src/_site ]; then
-            mkdir -p _site/test
-            cp -a test-src/_site/. _site/test/
+          if [ "${{ steps.preview.outcome }}" = success ]; then
+            mkdir -p "_site/$PREVIEW_PATH"
+            cp -a test-src/_site/. "_site/$PREVIEW_PATH/"
           fi
+          du -sh _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
-  # (the github-pages environment's branch policy must name the branch, or this job is rejected
-  # before its first step: Settings → Environments → github-pages → deployment branches — main and
-  # test-kimi are both registered; after the branch is merged and deleted, its entry is inert)
+  # (the github-pages environment's branch policy must name every branch whose push deploys, or this
+  # job is rejected before its first step: Settings → Environments → github-pages → deployment
+  # branches — main and the preview branch; a retired branch's entry is inert)
   deploy:
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test-kimi')
+    if: github.event_name != 'pull_request'
     needs: site
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-      - name: The two addresses
+      - name: The addresses
+        env:
+          URL: ${{ steps.deployment.outputs.page_url }}
+          PREVIEW: ${{ needs.site.outputs.preview }}
         run: |
-          echo "main:      ${{ steps.deployment.outputs.page_url }}"
-          echo "test-kimi: ${{ steps.deployment.outputs.page_url }}test/"
+          echo "main:    $URL"
+          if [ -n "$PREVIEW" ]; then echo "preview: $URL$PREVIEW/"; fi
