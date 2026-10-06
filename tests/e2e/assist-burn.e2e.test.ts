@@ -38,6 +38,20 @@ describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
     await app.waitFor(`__bh.camera.hubInfo()?.cue?.burning`, 30_000);
     // nothing flown yet: the ship waits for its pilot
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBe(0);
+    // (the cue's moment and the cut's, each frame, the cue fresh — not the card's four refreshes a second:
+    // what the pilot's reaction adds after the cue is the burn's own, not the cue's error)
+    await app.js(`(() => {
+      const c = __bh.camera;
+      window.__cut = { cue: null, cut: null };
+      const w = () => {
+        c.hubCache = null;
+        if (window.__cut.cue === null && c.hubInfo()?.cue?.cut) window.__cut.cue = c.spent;
+        if (window.__cut.cue !== null && window.__cut.cut === null && c.pilot.throttle <= 0) window.__cut.cut = c.spent;
+        if (window.__cut.cut === null) requestAnimationFrame(w);
+      };
+      requestAnimationFrame(w);
+      return true;
+    })()`);
     await app.press("KeyZ", "z");
     await app.waitFor(`__bh.camera.pilot.throttle > 0.99`);
     // the Δv left falls as the pilot burns; the cue says cut once it is delivered
@@ -50,7 +64,11 @@ describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
     await app.waitFor(`!__bh.camera.plan.nodes.length`, 30_000);
     await app.waitFor(`__bh.camera.pilot.engineNow < 0.01`, 30_000);
     const given = (await app.js<number>(`__bh.camera.spent - ${sp0}`)) * 299792458;
-    expect(Math.abs(given - dv) / dv).toBeLessThan(0.03);
+    // (the Δv the pilot gave between the cue and the cut — their reaction, a poll here: some 0.1–0.2 s at
+    // 2 g on a slow machine —, given back; the rest the cue's own error, the engine's run-down included)
+    const late = (await app.js<number>("window.__cut.cut - window.__cut.cue")) * 299792458;
+    expect(late).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(given - late - dv) / dv).toBeLessThan(0.015);
     await app.press("Digit9", "9");
     // the circle as flown over a revolution (fixed steps at ×30): its radius within a few km — the
     // osculating apsides of a circle there stand ~17 km apart, the Earth's oblateness's, not the burn's
