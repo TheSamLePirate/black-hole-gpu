@@ -81,6 +81,7 @@ declare module "../controls" {
     deleteNode: typeof deleteNode;
     clearPlan: typeof clearPlan;
     refreshPlan: typeof refreshPlan;
+    planApplies: typeof planApplies;
     restoreWarp: typeof restoreWarp;
     goalDir: typeof goalDir;
     setNodeWarp: typeof setNodeWarp;
@@ -856,7 +857,10 @@ function planeOffsets(this: CameraController) {
 /** A manual node, `after` M from now (default: a tenth of an orbit), or its Δv / time nudged. */
 function addNode(this: CameraController, after?: number) {
   // our universe: a tenth of a turn around the reference body ahead (or `after`)
-  const nav = this.ourNav(cameraFrame(this.s));
+  const cam = cameraFrame(this.s);
+  // (the first node: the plan belongs to the universe it is placed in)
+  if (!this.plan.nodes.length) this.plan.universe = nodeUniverse(this.s, cam);
+  const nav = this.ourNav(cam);
   if (nav) {
     const period = this.ourPeriod(nav);
     const t = nav.t + (after ?? Math.max(0.1 * period, 8 * this.s.timeSpeed, 0.2));
@@ -904,18 +908,37 @@ function clearPlan(this: CameraController) {
   this.restoreWarp();
 }
 
+/**
+ * The universe whose frame a node placed here is in: ours on our side of the throat's centre (the home
+ * frame, ourNav), else Gargantua's. It matches the tunnel's exits (±a) outside the tunnel; inside it,
+ * where both frames meet, manoeuvres are suspended before their universe is looked at.
+ */
+const nodeUniverse = (s: CameraController["s"], cam: ReturnType<typeof cameraFrame>) => (onOurSide(s, cam) ? "ours" : "gargantua");
+
+/**
+ * Whether the plan's manoeuvres apply where the ship is: they belong to the universe they were planned
+ * in — stamped with the first node (a planner's whole plan: as it is first looked at), forgotten with
+ * the last, so that an emptied plan takes the universe of the next node added.
+ */
+function planApplies(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
+  const P = this.plan;
+  const here = nodeUniverse(this.s, cam);
+  if (!P.nodes.length) P.universe = undefined;
+  else P.universe ??= here;
+  return P.universe === here;
+}
+
 /** The path through the nodes, from the current state (at most 3 times a second). */
 function refreshPlan(this: CameraController, force = false) {
   const P = this.plan;
   const now = frameNow();
+  const frame = cameraFrame(this.s);
+  const applies = this.planApplies(frame);
   if (!P.nodes.length) {
     this.ourPlan = null;
     return (P.path = null);
   }
-  const frame = cameraFrame(this.s);
-  const universe = frame.region === "throat" && frame.ell < 0 ? "ours" : "gargantua";
-  P.universe ??= universe;
-  if (P.universe !== universe || (frame.region === "throat" && (Math.abs(frame.ell) <= mouth(this.s).w.a || !this.ourNav(frame)))) {
+  if (!applies || (frame.region === "throat" && (Math.abs(frame.ell) <= mouth(this.s).w.a || !this.ourNav(frame)))) {
     this.ourPlan = null;
     return (P.path = null);
   }
@@ -1117,15 +1140,14 @@ function nodeBurn(
   const P = this.plan;
   const node = P.nodes[0];
   const nav = this.ourNav(cam);
-  const universe = cam.region === "throat" && cam.ell < 0 ? "ours" : "gargantua";
-  P.universe ??= universe;
+  const applies = this.planApplies(cam);
   if (node && cam.region === "throat" && Math.abs(cam.ell) <= mouth(s).w.a && !(node.role === "arrive" && node.body === "wormhole")) {
     this.pilot.setAuto("node");
     this.restoreWarp();
     this.onPilotMessage?.(t("Flight plan suspended: manoeuvres are unavailable inside the tunnel"));
     return null;
   }
-  if (node && P.universe !== universe && !(node.role === "arrive" && node.body === "wormhole")) {
+  if (node && !applies && !(node.role === "arrive" && node.body === "wormhole")) {
     this.pilot.setAuto("node");
     this.restoreWarp();
     this.onPilotMessage?.(t("Flight plan suspended: its manoeuvres belong to the other universe"));
@@ -1490,6 +1512,7 @@ export function installPlan(C: { prototype: CameraController }) {
     deleteNode,
     clearPlan,
     refreshPlan,
+    planApplies,
     restoreWarp,
     goalDir,
     setNodeWarp,
