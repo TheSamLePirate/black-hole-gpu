@@ -1,6 +1,23 @@
 // French for the flight assistants (pilot.ts assist, the HUD's director, the graphs; keyed by the
 // English: see src/i18n.ts).
 export default {
+  "Prediction unavailable: {0}": "Prédiction indisponible : {0}",
+  "Tunnel entrance": "Entrée du tunnel",
+  "Tunnel centre": "Centre du tunnel",
+  "Tunnel exit": "Sortie du tunnel",
+  "End of the Dneg region": "Fin de la région Dneg",
+  "In the tunnel · {0}%": "Dans le tunnel · {0} %",
+  "Length: {0}": "Longueur : {0}",
+  "Tunnel length": "Longueur du tunnel",
+  "Near the wormhole": "Près du trou de ver",
+  "Beyond the wormhole: the other universe": "Au-delà du trou de ver : l’autre univers",
+  "Partial prediction: step limit reached": "Prédiction partielle : limite de calcul atteinte",
+  "Partial prediction: invalid state encountered": "Prédiction partielle : état invalide rencontré",
+  "Flight plan suspended: manoeuvres are unavailable inside the tunnel":
+    "Plan de vol suspendu : les manœuvres sont indisponibles dans le tunnel",
+  "Flight plan suspended: its manoeuvres belong to the other universe":
+    "Plan de vol suspendu : ses manœuvres appartiennent à l’autre univers",
+  "Clear of the wormhole region, {0} M from Gargantua": "Sortie de la région du trou de ver, à {0} M de Gargantua",
   "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle":
     "Autopilote : il vole, ou il assiste — vous pilotez, son directeur dans le HUD montre où pointer, combien de poussée",
   "Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies":

@@ -259,7 +259,7 @@ export class CameraController {
    * The flight plan: manoeuvre nodes (absolute coordinate times), the predicted path through them
    * (refreshed from the current state), the executing node's delivered Δv and the warp to restore.
    */
-  plan: { nodes: ManeuverNode[]; path: PlanPath | null; at: number; note: string; kind?: "align" } = {
+  plan: { nodes: ManeuverNode[]; path: PlanPath | null; at: number; note: string; kind?: "align"; universe?: "ours" | "gargantua" } = {
     nodes: [],
     path: null,
     at: 0,
@@ -292,6 +292,15 @@ export class CameraController {
   set spent(w: number) {
     fleet.spent[fleet.active] = w;
   }
+  /** Entry universe retained while the physical cylinder projects to a mouth sphere. */
+  tunnelEntry: "ours" | "gargantua" | null = null;
+  wormholePath: import("./system/wormhole-predict").WormholePath | null = null;
+  wormholePredictionError: string | null = null;
+  wormholePathKey = "";
+  wormholePathAt = 0;
+  wormholePending = 0;
+  predictionContext = "";
+  predictionGeneration = 0;
   pathKey = "";
   pathCost = 0;
   /** the free-fall path asked of the planner's worker, not back yet */

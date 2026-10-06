@@ -42,7 +42,17 @@ export function plan<T>(q: Req): Promise<T> {
   const id = next++;
   if (!w) return Promise.resolve(runPlan({ ...q, id } as PlanRequest) as T);
   return new Promise<T>((resolve) => {
-    waiting.set(id, resolve as (r: unknown) => void);
+    const timeout =
+      q.kind === "wormholePath"
+        ? setTimeout(() => {
+            waiting.delete(id);
+            resolve({ error: "Wormhole prediction timed out" } as T);
+          }, 15000)
+        : null;
+    waiting.set(id, (r) => {
+      if (timeout !== null) clearTimeout(timeout);
+      resolve(r as T);
+    });
     w.postMessage({ ...q, id });
   });
 }

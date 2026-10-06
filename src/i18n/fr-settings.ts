@@ -199,8 +199,8 @@ export default {
   "Radius of the wormhole's spherical cross sections inside its cylindrical interior (1 km in the film; here in units of the black hole's M).":
     "Rayon des sections sphériques du trou de ver dans son intérieur cylindrique (1 km dans le film ; ici en unités du M du trou noir).",
   "Length 2a/ρ": "Longueur 2a/ρ",
-  "Length of the cylindrical interior relative to the throat radius. The film used a very short wormhole (0.01); longer ones show multiple images of the far side wrapping around the throat.":
-    "Longueur de l'intérieur cylindrique rapportée au rayon de la gorge. Le film utilisait un trou de ver très court (0.01) ; plus long, il montre plusieurs images de l'autre côté enroulées autour de la gorge.",
+  "Length of the cylindrical interior relative to the throat radius. Its total length is this value times the throat radius. The map shows progress inside the cylinder and remains populated through the flared mouths. The film used 0.01; longer tunnels show multiple images of the far side.":
+    "Longueur de l'intérieur cylindrique rapportée au rayon de la gorge. Sa longueur totale est cette valeur multipliée par le rayon de la gorge. La carte indique la progression dans le cylindre et reste renseignée dans les embouchures évasées. Le film utilisait 0.01 ; les tunnels plus longs montrent plusieurs images de l'autre côté.",
   "Lensing width W/ρ": "Largeur de lentille W/ρ",
   "Width of the flaring of the mouths, W = 1.42953 M: how gently space turns from the cylinder to the flat exterior, i.e. how strongly the mouth lenses the stars around it (film: 0.05).":
     "Largeur de l'évasement des embouchures, W = 1.42953 M : la douceur avec laquelle l'espace passe du cylindre à l'extérieur plat, c.-à-d. la force avec laquelle l'embouchure dévie les étoiles autour d'elle (film : 0.05).",

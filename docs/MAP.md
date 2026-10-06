@@ -12,6 +12,26 @@ refused, the canvas draws everything itself (`src/ui/map3d/`: `camera.ts` the ea
 `map3d.ts` the drawing, gestures and bar). The flight HUD's map panel (`src/ui/flighthud.ts`) puts
 it under three tabs — **3D**, **Globe**, **Planisphere** (see *The ground track* below).
 
+## Wormhole crossings
+
+The map remains populated throughout the Dneg region, including its flares. The physical cylinder
+has proper length `whLength * whRho` and extends from `-a` to `+a`, where
+`a = whLength * whRho / 2`. Its inset shows intrinsic progress and the length converted using the
+current black-hole mass. Both map mouths use `whRho` as their radius. The larger gluing sphere
+connects Dneg to Kerr; leaving the cylinder and leaving that sphere are different events.
+
+Inside the cylinder, the map keeps the entry universe until the ship exits at the opposite end.
+The cylinder projects to a sphere in Cartesian map coordinates, so its longitudinal motion is shown
+in the inset. Saved games retain the entry universe, even when the ship is stopped at the centre.
+Free-flight predictions carry explicit times and universes, with entrance, centre, exit and gluing
+events. Paths never connect Cartesian points in different universes. The timeline announces when
+its preview reaches the other universe, a computation limit or a prediction failure.
+
+A change of universe or physical domain resets previews, trails and asynchronous path caches.
+Inapplicable manoeuvres are suspended with an explanation; their nodes retain their original
+universe. Wormhole arrival missions keep their traversal behavior. The existing warp restoration
+at the end of the Dneg region respects a warp value manually changed by the pilot.
+
 ## Gestures
 
 | | |

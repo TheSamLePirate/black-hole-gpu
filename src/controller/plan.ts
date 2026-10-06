@@ -775,6 +775,7 @@ function ourRefineTick(
     body: node.body,
     then: node.then === "circularize" ? "circularize" : undefined,
   };
+  const generation = this.predictionGeneration;
   void runPlanner<{ node: PlanNode | null } | { error: string }>({
     kind: "refine",
     X: nav.X,
@@ -785,6 +786,7 @@ function ourRefineTick(
     o,
   }).then((r) => {
     st!.pending = false;
+    if (generation !== this.predictionGeneration) return;
     this.lastRefine = { role: node.role!, at: nav.t, result: r };
     const i = this.plan.nodes.indexOf(node);
     if (i < 0 || "error" in r) return;
@@ -910,6 +912,13 @@ function refreshPlan(this: CameraController, force = false) {
     this.ourPlan = null;
     return (P.path = null);
   }
+  const frame = cameraFrame(this.s);
+  const universe = frame.region === "throat" && frame.ell < 0 ? "ours" : "gargantua";
+  P.universe ??= universe;
+  if (P.universe !== universe || (frame.region === "throat" && (Math.abs(frame.ell) <= mouth(this.s).w.a || !this.ourNav(frame)))) {
+    this.ourPlan = null;
+    return (P.path = null);
+  }
   // (at most 3 times a second — less when a prediction costs more than a few ms)
   if (!force && now - P.at < Math.max(330, 8 * this.planCost)) return P.path;
   P.at = now;
@@ -969,8 +978,10 @@ function refreshPlan(this: CameraController, force = false) {
     }
     if (!this.farBusy && (!far || far.key !== key || now - far.at > 2000)) {
       this.farBusy = true;
+      const generation = this.predictionGeneration;
       runPlanner<OurPath>({ kind: "predictPlan", X: nav.X, V: nav.V, t: nav.t, nodes: list, mouthR, accel, drag: this.dragPerMass() })
         .then((path) => {
+          if (generation !== this.predictionGeneration) return;
           if (!path || (path as unknown as { error?: string }).error) return;
           this.farPlan = { key, path, at: frameNow() };
           // (still these nodes: shown at once)
@@ -980,7 +991,9 @@ function refreshPlan(this: CameraController, force = false) {
           )
             this.ourPlan = path;
         })
-        .finally(() => (this.farBusy = false));
+        .finally(() => {
+          if (generation === this.predictionGeneration) this.farBusy = false;
+        });
     }
     return (P.path = null);
   }
@@ -1104,6 +1117,20 @@ function nodeBurn(
   const P = this.plan;
   const node = P.nodes[0];
   const nav = this.ourNav(cam);
+  const universe = cam.region === "throat" && cam.ell < 0 ? "ours" : "gargantua";
+  P.universe ??= universe;
+  if (node && cam.region === "throat" && Math.abs(cam.ell) <= mouth(s).w.a && !(node.role === "arrive" && node.body === "wormhole")) {
+    this.pilot.setAuto("node");
+    this.restoreWarp();
+    this.onPilotMessage?.(t("Flight plan suspended: manoeuvres are unavailable inside the tunnel"));
+    return null;
+  }
+  if (node && P.universe !== universe && !(node.role === "arrive" && node.body === "wormhole")) {
+    this.pilot.setAuto("node");
+    this.restoreWarp();
+    this.onPilotMessage?.(t("Flight plan suspended: its manoeuvres belong to the other universe"));
+    return null;
+  }
   if (!node || (cam.region !== "hole" && !nav)) {
     // (a mission into the wormhole, its throat now under way: arrived — the warp that crosses it
     // kept, the plan done)

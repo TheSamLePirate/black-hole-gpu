@@ -1620,7 +1620,13 @@ export class FlightHud {
   }
 
   /** The ship's trail (black hole's frame, with times) and the telemetry (wall clock). */
+  private trailContext = "";
   private record(i: Info, t: number) {
+    const context = i.map?.context ?? (i.ref ? "ours" : "gargantua");
+    if (this.trailContext !== context) {
+      this.trail = [];
+      this.trailContext = context;
+    }
     const w = performance.now() / 1000;
     const lastS = this.samples[this.samples.length - 1];
     if (!lastS || w - lastS.w >= 0.1) {

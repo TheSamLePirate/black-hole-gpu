@@ -188,9 +188,9 @@ function wormholeFrame(s: Settings, m: Mouth): CameraFrame {
   );
 }
 
-export function cameraFrame(s: Settings): CameraFrame {
+export function cameraFrame(s: Settings, time?: number): CameraFrame {
   if (!s.wormhole) return holeFrame(s);
-  const m = mouth(s);
+  const m = mouth(s, time);
   if (s.anchor === "wormhole") return wormholeFrame(s, m);
   const cam = holeFrame(s);
   // inside the gluing sphere the camera sees through the Dneg metric
@@ -231,9 +231,9 @@ export interface RepPose {
 }
 
 /** Current camera as a rep pose (any position in the wormhole world). */
-export function repPose(s: Settings): RepPose {
-  const m = mouth(s);
-  const cam = cameraFrame(s);
+export function repPose(s: Settings, time?: number): RepPose {
+  const m = mouth(s, time);
+  const cam = cameraFrame(s, time);
   if (cam.region === "throat") return { l: cam.ell, n: cam.n, fwd: cam.fwd, up: cam.up, vel: cam.beta };
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
   const f = sphericalFrame(X);

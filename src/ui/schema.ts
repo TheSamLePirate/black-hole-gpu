@@ -577,7 +577,7 @@ export const SCHEMA: ControlDef[] = [
     scale: "log",
     precision: 3,
     enabled: whOn,
-    help: "Length of the cylindrical interior relative to the throat radius. The film used a very short wormhole (0.01); longer ones show multiple images of the far side wrapping around the throat.",
+    help: "Length of the cylindrical interior relative to the throat radius. Its total length is this value times the throat radius. The map shows progress inside the cylinder and remains populated through the flared mouths. The film used 0.01; longer tunnels show multiple images of the far side.",
   },
   {
     key: "whLensing",

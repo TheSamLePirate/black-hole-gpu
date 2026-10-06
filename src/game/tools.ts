@@ -530,8 +530,11 @@ export class GameTools {
         spent: c.spent,
         spentBy: { ...fleet.spent },
         properTime: c.properTime,
+        tunnelEntry: c.tunnelEntry ?? undefined,
       },
-      plan: c.plan.nodes.length ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission } : null,
+      plan: c.plan.nodes.length
+        ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission, universe: c.plan.universe }
+        : null,
       camera: { gravity: c.gravity && !c.piloting },
     };
   }
@@ -549,8 +552,10 @@ export class GameTools {
     this.ctx.setTime(save.time);
     c.setCinematic(null);
     c.newFlight();
+    c.tunnelEntry = save.ship.tunnelEntry ?? null;
     if (save.ship.piloting && s.ship) {
       c.setPilot(true);
+      c.tunnelEntry = save.ship.tunnelEntry ?? null;
       // (setPilot's own choices — time running, the path shown — give way to the saved ones)
       Object.assign(s, save.settings, own);
       const p = c.pilot;
@@ -562,7 +567,7 @@ export class GameTools {
       c.spent = save.ship.spent;
       c.properTime = save.ship.properTime;
       if (save.plan) {
-        c.plan = { nodes: save.plan.nodes, path: null, at: 0, note: save.plan.note };
+        c.plan = { nodes: save.plan.nodes, path: null, at: 0, note: save.plan.note, universe: save.plan.universe };
         c.ourMission = save.plan.mission as typeof c.ourMission;
       }
       p.hold = save.ship.hold;

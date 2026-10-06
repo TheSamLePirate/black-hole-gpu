@@ -1,5 +1,6 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
 import { tf } from "../i18n";
 import { inv3 } from "../pilot";
@@ -8,14 +9,14 @@ import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHom
 import { TUNING } from "../game/tuning";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
-import { advance, fromZamo, toZamo } from "../geodesic";
+import { fromZamo, toZamo } from "../geodesic";
 import { spinFromZamo, spinToZamo } from "../gyro";
 import { airTop } from "../aero";
 import { GEAR, localToZamo, planetFrame, stepLocal, toGlobal, zamoBeta, zamoToLocal } from "../landing";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "../wormhole";
-import { gravityHome, homeOf, homeToRep, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "../system/our-side";
+import { gravityHome, homeOf, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "../system/our-side";
 import { symmetricStep, YOSHIDA } from "../system/our-predict";
 import { keplerProp } from "../system/our-plan";
 import {
@@ -200,7 +201,7 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
     const st0 = fromZamo(cam.r, cam.theta, cam.phi, cam.beta, a, this.nowTime());
     // (the ship's axes as gyroscopes — Fermi–Walker, gyro.ts —, or held on the distant stars)
     const gyro = s.gyroscopes ? [spinFromZamo(st0, a, cam.beta, cam.fwd), spinFromZamo(st0, a, cam.beta, cam.up)] : undefined;
-    const res = advance(st0, a, simDt, 0.05, accel, dirZ, this.lens(), undefined, gyro);
+    const res = advanceToMouth(s, st0, simDt, accel, dirZ, this.lens(), gyro);
     this.landed = res.landed;
     this.properTime += res.tau;
     const st = res.st;
@@ -247,38 +248,15 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
     steps = Math.min(Math.max(Math.ceil(span / (0.01 * tDyn)), 1), this.subCap);
   }
   // (the thrust of the time flown, not of the frame asked: a capped warp gave free Δv)
-  let v = thrust(span);
-  let pose = { l: p.l, n: p.n, fwd: p.fwd, up: p.up };
-  const dt = span / steps;
-  for (let i = 0; i < steps; i++) {
-    // (kick, drift along the geodesic, kick: second order — the half kicks carried by the geodesic's
-    // parallel transport of the velocity)
-    if (ours) {
-      const g = ourGravity(m.w, pose.l, pose.n, t0 + i * dt);
-      if (g.inside) {
-        v = homeToRep(m.w, pose.l, pose.n, ourState(g.inside, t0 + i * dt).vel);
-        break;
-      }
-      v = lin(v, 1, g.acc, dt / 2);
-    }
-    const speed = Math.hypot(...v);
-    this.properTime += dt * Math.sqrt(Math.max(1 - speed * speed, 0));
-    if (speed >= 1e-12) {
-      const q = flyDneg(m.w, pose.l, pose.n, lin(v, 1 / speed, v, 0), [pose.fwd, pose.up], speed * dt);
-      pose = { l: q.l, n: q.n, fwd: q.vectors[0]!, up: q.vectors[1]! };
-      v = lin(q.dir, speed, q.dir, 0);
-    }
-    if (ours) {
-      const g = ourGravity(m.w, pose.l, pose.n, t0 + (i + 1) * dt);
-      if (!g.inside) v = lin(v, 1, g.acc, dt / 2);
-      const sp = Math.hypot(...v);
-      if (sp > 0.999) v = lin(v, 0.999 / sp, v, 0);
-    }
-  }
-  setRepPose(s, { ...pose, vel: v });
+  const mouthStep = (0.08 * radius(m.w, p.l)[0]) / Math.max(Math.hypot(...thrust(span)), 1e-9);
+  span = Math.min(span, this.subCap * mouthStep);
+  steps = Math.max(steps, Math.ceil(span / mouthStep));
+  const drift = driftToGlue(m.w, { ...p, vel: thrust(span) }, t0, span, steps, s.system === "gargantua", m.lGlue, thrust);
+  this.properTime += drift.tau;
+  setRepPose(s, drift);
   s.motion = "geodesic";
   this.sync();
-  return t0 + span;
+  return t0 + drift.elapsed;
 }
 
 /**

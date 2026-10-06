@@ -37,6 +37,28 @@ export function dneg(s: Pick<Settings, WormholeKeys>): Dneg {
   return { rho, a: 0.5 * s.whLength * rho, M: Math.max((s.whLensing * rho) / W_OVER_M, 1e-4 * rho) };
 }
 
+export type WormholeUniverse = "ours" | "gargantua";
+
+/** Physical tunnel bounds, independent of the numerical Dneg/Kerr gluing sphere. */
+export function tunnelState(w: Dneg, ell: number) {
+  const inside = Math.abs(ell) <= w.a;
+  return {
+    inside,
+    length: 2 * w.a,
+    halfLength: w.a,
+    progress: Math.max(0, Math.min(1, (ell + w.a) / (2 * w.a))),
+    toOurs: Math.max(ell + w.a, 0),
+    toGargantua: Math.max(w.a - ell, 0),
+    universe: inside ? null : ell < 0 ? ("ours" as const) : ("gargantua" as const),
+  };
+}
+
+/** Derivative of the spherical map embedding, not a physical velocity or a Lorentz boost. */
+export function projectedRepVelocity(w: Dneg, ell: number, n: Vec3, v: Vec3): Vec3 {
+  const radial = dot(v, n);
+  return add(v, scale(n, radial * (radius(w, ell)[1] - 1)));
+}
+
 /** r(ℓ) and dr/dℓ. */
 export function radius(w: Dneg, l: number): [number, number] {
   const al = Math.abs(l);

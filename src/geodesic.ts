@@ -408,6 +408,7 @@ export function advance(
   lens?: Lenses,
   tol = TOL,
   spins?: number[][],
+  boundary?: { inside(st: Massive): boolean; maxDt(st: Massive): number },
 ) {
   const rH = horizon(a);
   const tEnd = st.t + dt;
@@ -423,6 +424,8 @@ export function advance(
     h = Math.min(h, hMax);
     const gi = inverseMetric(s.r, s.th, a);
     const tdot = -gi.tt * s.E + gi.tph * s.L;
+    // A change of physical domain must be resolved inside the adaptive integration, even at warp.
+    if (boundary) h = Math.min(h, boundary.maxDt(s) / tdot);
     let last = false;
     if (s.t + h * tdot >= tEnd) {
       h = Math.max((tEnd - s.t) / tdot, 1e-12);
@@ -448,6 +451,7 @@ export function advance(
     }
     s = n;
     tau += h;
+    if (boundary?.inside(s)) return { st: s, tau, stopped: false, landed };
     // next step: grow at most ×5
     const grow = Math.min(5, 0.9 * (1 / Math.max(r.err, 1e-12)) ** 0.2);
     if (!last) h *= grow;

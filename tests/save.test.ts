@@ -47,6 +47,18 @@ test("a corrupted save is refused with its fault", () => {
   expect(() => parseSave("not json")).toThrow();
 });
 
+test("a saved tunnel retains its entry universe and a flight plan retains its frame", () => {
+  const g = save();
+  g.ship.tunnelEntry = "gargantua";
+  g.plan = { nodes: [], note: "", mission: null, universe: "ours" };
+  expect(parseSave(JSON.stringify(g))).toEqual(g);
+  expect(saveFromHash(saveToHash(g))!.ship.tunnelEntry).toBe("gargantua");
+  expect(() => checkSave({ ...g, ship: { ...g.ship, tunnelEntry: "unknown" } })).toThrow();
+  expect(() => checkSave({ ...g, plan: { ...g.plan, universe: "unknown" } })).toThrow();
+  // Older v2 saves have no frame metadata and remain valid.
+  expect(checkSave(save()).ship.tunnelEntry).toBeUndefined();
+});
+
 test("a setting saved as null (a NaN) is repaired to its default, the flight still loads", () => {
   const g = save() as unknown as { settings: Record<string, unknown> };
   g.settings.fov = null;

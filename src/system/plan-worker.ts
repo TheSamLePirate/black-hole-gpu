@@ -8,12 +8,14 @@ import { loadEphemerides } from "./de440";
 import { extendFrom } from "./our-extend";
 import { predict, type Massive } from "../geodesic";
 import { lensesOf } from "../lenses";
+import { predictWormhole } from "./wormhole-predict";
 import type { Settings } from "../settings";
 import { EntryGuidance, planDeorbit, type EntryCraft, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import type { V3 } from "../aero";
 
 export type PlanRequest =
+  | { id: number; kind: "wormholePath"; s: Settings; t: number; entry: "ours" | "gargantua" }
   | { id: number; kind: "transfer"; X: Vec3; V: Vec3; t: number; goal: OurGoal; o: PlanOptions }
   | { id: number; kind: "orbit"; X: Vec3; V: Vec3; t: number; altM: number; o: PlanOptions }
   | { id: number; kind: "refine"; X: Vec3; V: Vec3; t: number; mission: OurMission; node: PlanNode; o: PlanOptions }
@@ -43,6 +45,7 @@ export type PlanRequest =
     };
 
 export function runPlan(q: PlanRequest) {
+  if (q.kind === "wormholePath") return predictWormhole(q.s, q.t, q.entry);
   if (q.kind === "transfer") return planOurTransfer(q.X, q.V, q.t, q.goal, q.o);
   if (q.kind === "orbit") return planOurOrbit(q.X, q.V, q.t, q.altM, q.o);
   // (the ship's free fall for the map and the telemetry: off the frame loop too)

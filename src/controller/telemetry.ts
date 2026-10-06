@@ -24,6 +24,9 @@ import type { Settings, Target } from "../settings";
 import type { PlanPath } from "../maneuver";
 import type { VesselId } from "../vessels";
 import { add3 } from "./util";
+import { tunnelEntrySide, wormholeMapPose, type WormholeMapPose } from "../system/wormhole-map";
+import { mouth, tunnelState } from "../wormhole";
+import type { WormholePath } from "../system/wormhole-predict";
 
 /** A direction in camera coordinates (x right, y up, z forward), unit; null when undefined. */
 type Dir = Vec3 | null;
@@ -110,6 +113,10 @@ export interface FlightInfo {
   speedMode: CameraController["speedMode"];
   precision: boolean;
   // ---- the map: position, velocity, nose and view (flat map: the hole's frame, or our home frame)
+  /** Dedicated display pose; never fed back into orbital/docking physics. */
+  map: WormholeMapPose | null;
+  wormholePath: WormholePath | null;
+  wormholePredictionError: string | null;
   X: Vec3 | null;
   V: Vec3 | null;
   nose: Vec3 | null;
@@ -263,6 +270,9 @@ function flightInfo(this: CameraController): FlightInfo {
       drift: this.driftDir(cam, C),
     },
     // flat-map position, velocity and nose (black hole's frame), for the map
+    map: null,
+    wormholePath: this.wormholePath,
+    wormholePredictionError: this.wormholePredictionError,
     X: null,
     V: null,
     nose: null,
@@ -485,6 +495,13 @@ function flightInfo(this: CameraController): FlightInfo {
       info.dirs.retrograde = info.dirs.tgtRetrograde;
     }
   }
+  if (s.wormhole) {
+    const ts = tunnelState(mouth(s, this.nowTime()).w, cam.ell);
+    if (cam.region === "hole") this.tunnelEntry = "gargantua";
+    else if (ts.universe) this.tunnelEntry = ts.universe;
+    else this.tunnelEntry ??= tunnelEntrySide(cam.ell, dot3(cam.beta, cam.n));
+    info.map = wormholeMapPose(s, cam, this.nowTime(), this.shipAxesLocal(cam)[2], this.tunnelEntry!);
+  } else this.tunnelEntry = null;
   return info;
 }
 

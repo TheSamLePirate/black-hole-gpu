@@ -11,6 +11,7 @@
 // to the automatic view). The bar: the focus (breadcrumb and list), the plane, the view (top, 3D,
 // edge-on), log scale, fit, the frame (theirs), the full-screen map.
 
+import { wormholeSampleAt } from "../../system/wormhole-predict";
 import type { Settings } from "../../settings";
 import { solarBody, solarState } from "../../system/solar";
 import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../../system/our-predict";
@@ -148,6 +149,8 @@ export class Map3D {
   }
   private scene: MapScene | null = null;
   private universe: Universe | null = null;
+  private context = "";
+  private generation = 0;
   /** the focus: a body's id, "ship", or null (automatic: the ship's primary) */
   private focus: string | null = null;
   private plane: PlaneMode = "system";
@@ -312,13 +315,17 @@ export class Map3D {
     const n = src.pts.length - 1;
     if (src !== this.extSrc && !this.extBusy) {
       this.extBusy = true;
+      const generation = this.generation;
       const ref = src.refs[n] ?? "sun";
       planJob<Extension>({ kind: "extend", X: src.pts[n]!, V: src.vels[n]!, t: src.times[n]!, ref, horizon: extensionHorizon(ref) })
         .then((e) => {
+          if (generation !== this.generation) return;
           this.ext = e && (e as unknown as { error?: string }).error ? null : e;
           this.extSrc = src;
         })
-        .finally(() => (this.extBusy = false));
+        .finally(() => {
+          if (generation === this.generation) this.extBusy = false;
+        });
     }
     const e = this.ext;
     if (!e || !e.times.length) return null;
@@ -384,6 +391,7 @@ export class Map3D {
 
   /** The timeline's automatic span: how far the predicted paths reach (at least an hour). */
   private autoSpan(i: Info, t0: number, ours: boolean) {
+    if (i.wormholePath?.samples.length) return Math.max(0.5, i.wormholePath.samples.at(-1)!.t - t0);
     let end = t0;
     if (ours) {
       for (const p of [i.ourFree, i.ourPlan]) if (p?.times.length) end = Math.max(end, p.times[p.times.length - 1]!);
@@ -414,6 +422,25 @@ export class Map3D {
   /** The events ahead on the paths: nodes, closest approach, spheres of influence, apsides, arrival, impact. */
   private marks(i: Info, t0: number, ours: boolean, sc: MapScene): Mark[] {
     const out: Mark[] = [];
+    if (i.wormholePath)
+      return [
+        ...(i.plan?.nodes ?? []).filter((n) => n.t > t0).map((n, k) => ({ t: n.t, kind: "node" as const, label: tf("Node {0}", k + 1) })),
+        ...i.wormholePath.events
+          .filter((e) => e.t > t0)
+          .map((e) => ({
+            t: e.t,
+            kind: "arrive" as const,
+            label: t(
+              e.kind === "entry"
+                ? "Tunnel entrance"
+                : e.kind === "centre"
+                  ? "Tunnel centre"
+                  : e.kind === "exit"
+                    ? "Tunnel exit"
+                    : "End of the Dneg region",
+            ),
+          })),
+      ];
     (i.plan?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "node", label: tf("Node {0}", k + 1) }));
     // (the preview's burns, and its arrival)
     (i.cand?.nodes ?? []).forEach((n, k) => out.push({ t: n.t, kind: "cand", label: tf("Preview · burn {0} · {1}", k + 1, i.cand!.note) }));
@@ -575,6 +602,10 @@ export class Map3D {
     sc: MapScene,
   ): { X: V3; V: V3; ref: string | null; beyond: boolean; conics?: boolean } | null {
     const lerp = (a: V3, b: V3, f: number): V3 => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    if (i.wormholePath && !i.plan?.nodes.length) {
+      const sample = wormholeSampleAt(i.wormholePath, tp, sc.universe);
+      return sample ? { X: sub(sample.X, sc.origin(tp)), V: sample.V, ref: null, beyond: false, conics: false } : null;
+    }
     const find = (times: number[]) => {
       let lo = 0,
         hi = times.length - 1;
@@ -1179,6 +1210,46 @@ export class Map3D {
   }
 
   private draw2d(i: Info, t0: number, G: MapGpu | null) {
+    const map = i.map;
+    const universe: Universe = map?.universe ?? (i.ref && i.X ? "ours" : "gargantua");
+    const fresh = this.universe !== universe;
+    const context = map?.context ?? universe;
+    if (context !== this.context) {
+      this.context = context;
+      this.generation++;
+      this.preview = 0;
+      this.playing = false;
+      this.span = 0;
+      this.ext = null;
+      this.extSrc = null;
+      this.extBusy = false;
+      this.theirExt = null;
+      this.tlKey = "";
+      this.pathMemo = new WeakMap();
+      this.relCache = new WeakMap();
+      this.hover = null;
+      this.gizmo = null;
+      this.nodeDrag = null;
+      this.nodeHits = [];
+      this.handleHits = [];
+    }
+    if (map) {
+      const physicalPaths =
+        (universe === "ours" && i.ref !== null && !map.tunnel.inside) || (universe === "gargantua" && i.region === "hole");
+      i = {
+        ...i,
+        X: map.X,
+        V: map.V,
+        nose: map.nose,
+        look: map.look,
+        ref: universe === "ours" ? (i.ref ?? "sun") : null,
+        path: physicalPaths ? i.path : null,
+        ourFree: physicalPaths ? i.ourFree : null,
+        ourPlan: physicalPaths ? i.ourPlan : null,
+        plan: physicalPaths ? i.plan : null,
+        cand: physicalPaths ? i.cand : null,
+      };
+    }
     const c = this.canvas;
     const dpr = devicePixelRatio;
     const cw = Math.round((c.clientWidth || 260) * dpr);
@@ -1187,7 +1258,7 @@ export class Map3D {
     this.cam.resize(cw, ch);
     const ins = this.host.mapView() ? this.host.insets?.() : null;
     this.cam.inset((ins?.l ?? 0) * dpr, (ins?.r ?? 0) * dpr, (ins?.t ?? 0) * dpr, (ins?.b ?? 0) * dpr);
-    this.syncLegend(!!(i.ref && i.X), ins ?? null);
+    this.syncLegend(universe === "ours", ins ?? null);
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, cw, ch);
     const pt = this.paint;
@@ -1196,8 +1267,8 @@ export class Map3D {
     this.bodyHits = [];
     this.pathHits = [];
     const s = this.host.s;
-    const ours = !!(i.ref && i.X);
-    if (!ours && (i.region !== "hole" || !i.X)) {
+    const ours = universe === "ours";
+    if (!i.X) {
       ctx.fillStyle = "rgba(220, 225, 235, 0.8)";
       ctx.font = `600 ${12.2 * dpr}px ${FONT}`;
       ctx.textAlign = "center";
@@ -1206,7 +1277,6 @@ export class Map3D {
       this.moving = false;
       return;
     }
-    const universe: Universe = ours ? "ours" : "gargantua";
     const cm = !ours && s.sun && s.sunMass > 0 && this.frame === "cm";
     // ---- the timeline: the preview's time (the positions shown), played on at 1/8 of the span a second
     const nowWall = performance.now();
@@ -1219,8 +1289,7 @@ export class Map3D {
     this.preview = clamp(this.preview, 0, span);
     const tp = t0 + this.preview;
     const previewing = this.preview > 0;
-    const sc = (this.scene = ours ? ourScene(tp) : theirScene(s, tp, cm));
-    const fresh = this.universe !== universe;
+    const sc = (this.scene = ours ? ourScene(tp, s.whRho) : theirScene(s, tp, cm));
     if (fresh) {
       this.universe = universe;
       this.focus = null;
@@ -1495,6 +1564,21 @@ export class Map3D {
     }
 
     // ---- paths
+    if (i.wormholePath) {
+      let segment: V3[] = [];
+      const flush = () => {
+        if (segment.length > 1) line(segment, "255, 190, 80", 0.95, 1.7, [5, 3]);
+        segment = [];
+      };
+      for (const q of i.wormholePath.samples) {
+        if (q.universe !== universe || q.tunnel) {
+          flush();
+          continue;
+        }
+        segment.push(sub(q.X, sc.origin(q.t)));
+      }
+      flush();
+    }
     if (ours) this.drawOurPaths(ctx, i, sc, t0, tp, fid, fb, dpr, P, line, labels, pn);
     else this.drawTheirPaths(ctx, i, sc, t0, dpr, P, line, labels, pn, cm);
 
@@ -1541,15 +1625,63 @@ export class Map3D {
 
     // ---- the footer: date, focus, plane, scale bar at the focus's depth
     this.drawFooter(ctx, tp, cw, ch, dpr, ours);
+    const previewTunnel = previewing && i.wormholePath ? wormholeSampleAt(i.wormholePath, tp, universe) : null;
+    if (map && (previewTunnel?.tunnel ?? map.tunnel.inside)) {
+      const ell = previewTunnel?.ell ?? map.tunnel.ell;
+      this.drawTunnel(
+        ctx,
+        { ...map.tunnel, ell, progress: Math.max(0, Math.min(1, (ell + map.tunnel.halfLength) / map.tunnel.length)) },
+        dpr,
+      );
+    }
+    this.stage.dataset.universe = universe;
+    this.stage.dataset.tunnel = String(map?.tunnel.inside ?? false);
+    this.stage.dataset.bodies = String(sc.bodies.length);
     this.renderCrumbs(sc, fid);
+    if (fresh && this.menu.classList.contains("open")) this.renderMenu();
     this.syncBar(sc, fid);
     this.syncTimeline(
       t0,
       span,
       marks,
       ours,
-      later?.beyond ? (later.conics ? t("end of the conics") : t("beyond the prediction")) : later?.conics ? t("conics (Kepler)") : "",
+      i.wormholePredictionError
+        ? tf("Prediction unavailable: {0}", i.wormholePredictionError)
+        : i.wormholePath?.reason === "step-limit"
+          ? t("Partial prediction: step limit reached")
+          : i.wormholePath?.reason === "invalid"
+            ? t("Partial prediction: invalid state encountered")
+            : previewing && i.wormholePath && !later
+              ? t("Beyond the wormhole: the other universe")
+              : later?.beyond
+                ? later.conics
+                  ? t("end of the conics")
+                  : t("beyond the prediction")
+                : later?.conics
+                  ? t("conics (Kepler)")
+                  : "",
     );
+  }
+
+  private drawTunnel(ctx: CanvasRenderingContext2D, tunnel: NonNullable<Info["map"]>["tunnel"], dpr: number) {
+    const [vx, vy, vw, vh] = this.cam.view;
+    const w = Math.min(270 * dpr, vw - 16 * dpr);
+    const x = vx + (vw - w) / 2,
+      y = vy + Math.min(vh * 0.15, 70 * dpr);
+    ctx.fillStyle = "rgba(5, 12, 24, .9)";
+    ctx.fillRect(x, y, w, 56 * dpr);
+    ctx.fillStyle = "#b7ddff";
+    ctx.font = `600 ${12 * dpr}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.fillText(tf("In the tunnel · {0}%", Math.round(tunnel.progress * 100)), x + w / 2, y + 17 * dpr);
+    ctx.strokeStyle = "#6587a0";
+    ctx.beginPath();
+    ctx.moveTo(x + 14 * dpr, y + 31 * dpr);
+    ctx.lineTo(x + w - 14 * dpr, y + 31 * dpr);
+    ctx.stroke();
+    this.paint.disc(x + 14 * dpr + (w - 28 * dpr) * tunnel.progress, y + 31 * dpr, 4 * dpr, "#7cd6ff");
+    ctx.font = `${10 * dpr}px ${MONO}`;
+    ctx.fillText(tf("Length: {0}", fmtLen(tunnel.length, this.host.s)), x + w / 2, y + 48 * dpr);
   }
 
   /** The reference plane's axes (e1 towards a fixed direction, n its normal). */
@@ -2553,7 +2685,7 @@ export class Map3D {
       for (const tt of tickTimes) dotAt(at(starCentre(s, tt), tt), 2, "rgba(255, 211, 107, 0.95)");
     }
     // the ship's track
-    line([...this.host.trail().map((q) => at(q.X, q.t)), at(i.X!, t0)], "124, 214, 255", 0.5, 1.4, [], false);
+    line([...(i.region === "hole" ? this.host.trail() : []).map((q) => at(q.X, q.t)), at(i.X!, t0)], "124, 214, 255", 0.5, 1.4, [], false);
     // its free fall
     if (path && path.pts.length > 1) {
       const fut = [at(i.X!, t0), ...path.pts.map((q, j) => at(q, t0 + (j + 1) * path.dt))];
@@ -2983,7 +3115,8 @@ export class Map3D {
     const d = len(sub(b.pos, ship)) - (b.kind === "mouth" ? 0 : b.radius);
     const rows: [string, string][] = [];
     rows.push([t("From the ship"), fmtDist(Math.max(d, 0), ours, s)]);
-    if (b.radius > 0 && b.kind !== "mouth") rows.push([t("Radius"), b.kind === "hole" ? fmtLen(b.radius, s) : fmtDist(b.radius, ours, s)]);
+    if (b.radius > 0) rows.push([t("Radius"), b.kind === "hole" ? fmtLen(b.radius, s) : fmtDist(b.radius, ours, s)]);
+    if (b.kind === "mouth") rows.push([t("Tunnel length"), fmtLen(s.whLength * s.whRho, s)]);
     const par = b.parent ? sc.byId.get(b.parent) : null;
     if (par) rows.push([tf("From {0}", par.name), fmtDist(len(sub(b.pos, par.pos)), ours, s)]);
     if (b.period) rows.push([t("Period"), fmtDur(b.period, s)]);

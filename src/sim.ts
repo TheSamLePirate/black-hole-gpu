@@ -57,6 +57,7 @@ export class Simulation {
       // the liquid throat's waves: at their own pace while time runs (slower in slow motion)
       if (s.cinematic && s.wormhole && s.waterSpeed > 0) this.renderer.water.clock += dt * s.waterSpeed * Math.min(1, warpFactor(s));
     }
+    setSceneTime(this.time); // every display and prediction sees the completed step's clock
     const f = this.camera.pilot.fired;
     if (f.at !== this.lastFired) {
       this.lastFired = f.at;

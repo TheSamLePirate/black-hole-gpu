@@ -1,5 +1,7 @@
 // The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { nearWormhole, type WormholePath } from "../system/wormhole-predict";
+import { tunnelEntrySide, wormholeMapPose } from "../system/wormhole-map";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, coordToZamo, type Vec3 } from "../physics";
 import {
@@ -1910,12 +1912,40 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
 
 /**
  * The camera's future free-fall path (no thrust) in the black hole's frame, for the overlay:
- * recomputed at most 4 times a second. Near the mouth the path is not predicted.
+ * recomputed at most 4 times a second; near the mouth, a segmented prediction runs at 2 Hz.
  */
 function predictPath(this: CameraController) {
   const now = frameNow();
-  if (!this.gravity) return (this.path = null);
+  if (!this.gravity) {
+    this.wormholePath = null;
+    return (this.path = null);
+  }
   const s = this.s;
+  const cam = cameraFrame(s);
+  const entry = this.tunnelEntry ?? tunnelEntrySide(cam.ell, dot3(cam.beta, cam.n));
+  const context = wormholeMapPose(s, cam, this.nowTime(), cam.fwd, entry)?.context ?? "hole";
+  if (this.predictionContext !== context) {
+    this.predictionContext = context;
+    this.predictionGeneration++;
+    this.planGen++;
+    this.planBusy = false;
+    this.pendingMission = null;
+    this.fcCand = null;
+    this.wormholePath = null;
+    this.wormholePathKey = "";
+    this.wormholePredictionError = null;
+    this.wormholePending = 0;
+    this.path = null;
+    this.pathKey = "";
+    this.ourFree = null;
+    this.ourFreeKey = "";
+    this.predicting = false;
+    this.kerrPending = false;
+    this.ourPlan = null;
+    this.farPlan = null;
+    this.farBusy = false;
+  }
+  const generation = this.predictionGeneration;
   // same state (e.g. time paused): same path object, so the renderer keeps converging
   const key = [
     s.spin,
@@ -1931,15 +1961,50 @@ function predictPath(this: CameraController) {
     s.whDist,
     s.whIncl,
     s.whAzimuth,
+    s.whRho,
+    s.whLength,
+    s.whLensing,
+    s.whOrbit,
+    s.whPhase,
+    s.massSolar,
+    s.system,
     s.sun,
     s.sunMass,
     s.sunOrbit,
     this.nowTime(),
   ].join();
+  if (nearWormhole(s, this.nowTime())) {
+    this.ourFree = null;
+    if (
+      this.wormholePending ||
+      (this.wormholePathKey !== "" && now - this.wormholePathAt < 500) ||
+      (this.wormholePath && this.wormholePathKey === key)
+    )
+      return (this.path = null);
+    const token = (this.wormholePending = generation + 1);
+    this.wormholePathKey = key;
+    this.wormholePathAt = now;
+    runPlanner<WormholePath | { error: string }>({ kind: "wormholePath", s: { ...s }, t: this.nowTime(), entry })
+      .then((p) => {
+        if (generation !== this.predictionGeneration) return;
+        if (p && "samples" in p) {
+          this.wormholePath = p;
+          this.wormholePredictionError = null;
+        } else if (p && "error" in p) this.wormholePredictionError = p.error;
+      })
+      .catch((error: unknown) => {
+        if (generation === this.predictionGeneration) this.wormholePredictionError = String(error);
+      })
+      .finally(() => {
+        if (this.wormholePending === token) this.wormholePending = 0;
+      });
+    return (this.path = null);
+  }
+  this.wormholePath = null;
+  this.wormholePredictionError = null;
   // (at most 4 times a second, and never more than a fifth of the frame time)
   if (this.path && (key === this.pathKey || now - this.path.at < Math.max(250, 5 * this.pathCost))) return this.path;
   this.pathKey = key;
-  const cam = cameraFrame(s);
   // our universe: the Newtonian prediction (the map draws it), no path in the hole's frame
   const nav = this.ourNav(cam);
   if (nav) {
@@ -1958,10 +2023,13 @@ function predictPath(this: CameraController) {
     this.predicting = true;
     runPlanner<OurPath>({ kind: "predict", X: nav.X, V: nav.V, t: nav.t, mouthR, drag: this.dragPerMass() }).then(
       (p) => {
+        if (generation !== this.predictionGeneration) return;
         this.predicting = false;
         if (p && Array.isArray(p.pts) && this.ourFreeKey === key) this.ourFree = p;
       },
-      () => (this.predicting = false),
+      () => {
+        if (generation === this.predictionGeneration) this.predicting = false;
+      },
     );
     return (this.path = null);
   }
@@ -1994,11 +2062,14 @@ function predictPath(this: CameraController) {
     tMax,
   }).then(
     (r) => {
+      if (generation !== this.predictionGeneration) return;
       this.kerrPending = false;
       if (!r || "error" in r || cameraFrame(this.s).region !== "hole" || this.ourNav(cameraFrame(this.s))) return;
       this.path = this.kerrPathFrom(r, st, tMax, now);
     },
-    () => (this.kerrPending = false),
+    () => {
+      if (generation === this.predictionGeneration) this.kerrPending = false;
+    },
   );
   return this.path;
 }

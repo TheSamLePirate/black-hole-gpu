@@ -1,3 +1,5 @@
+import { tunnelEntrySide } from "../system/wormhole-map";
+import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { GEARS } from "../gear";
@@ -99,6 +101,7 @@ function setPilot(this: CameraController, on: boolean) {
   if (on) delete fleet.free[fleet.active];
   this.piloting = on;
   this.shipSide = null; // (a new flight: no crossing to announce)
+  this.tunnelEntry = null;
   this.pilot.omega = [0, 0, 0];
   this.pilot.throttle = 0;
   this.pilot.hold = "none";
@@ -133,6 +136,12 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.tunnelEntry = null;
+  this.predictionContext = "";
+  this.predictionGeneration++;
+  this.wormholePath = null;
+  this.wormholePending = 0;
+  this.wormholePredictionError = null;
   this.entryRun = null;
   this.dockAuto = null;
   this.ourCirc = null;
@@ -674,7 +683,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const cam = cameraFrame(s);
   // (through the wormhole, one way or the other: said once)
   if (s.wormhole) {
-    const side = cam.region === "throat" ? (cam.ell < 0 ? "ours" : "gargantua") : "gargantua";
+    const physical = tunnelState(mouth(s).w, cam.ell);
+    const side =
+      cam.region === "hole" ? "gargantua" : (physical.universe ?? this.shipSide ?? tunnelEntrySide(cam.ell, dot3(cam.beta, cam.n)));
     if (this.shipSide && side !== this.shipSide)
       this.onPilotMessage?.(
         side === "gargantua" ? t("Through the wormhole — Gargantua's system") : t("Through the wormhole — back in the solar system"),
@@ -683,9 +694,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     // (out of the throat after a crossing at warp: real time again — the pilot's to choose)
     if (this.traversing && cam.region === "hole") {
       this.traversing = false;
-      s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+      if (s.timeSpeed === this.warpSet) s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
       this.warpWant = null;
-      this.onPilotMessage?.(tf("Out of the throat, {0} M from Gargantua — real time", Math.round(cam.r)));
+      this.onPilotMessage?.(tf("Clear of the wormhole region, {0} M from Gargantua", Math.round(cam.r)));
     }
   }
   // (another craft chosen: the camera onto it)

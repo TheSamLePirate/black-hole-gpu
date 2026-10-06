@@ -123,7 +123,7 @@ function cachedOrbit(key: string, t0: number, make: () => V3[], maxDt: number): 
 }
 
 // ------------------------------------------------------------------------------------ ours
-export function ourScene(t0: number): MapScene {
+export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
   budget = 3;
   const bodies: MapBody[] = [];
   const pos = new Map<string, V3>();
@@ -185,7 +185,7 @@ export function ourScene(t0: number): MapScene {
     kind: "mouth",
     parent: "sun",
     pos: [0, 0, 0],
-    radius: 0.05,
+    radius: mouthRadius,
     col: "200, 140, 255",
     pole: Z,
     soi: 0,
@@ -397,7 +397,7 @@ export function theirScene(s: Settings, t0: number, cm: boolean): MapScene {
       kind: "mouth",
       parent: "hole",
       pos: at(m0.C as V3, t0),
-      radius: m0.rGlue,
+      radius: m0.w.rho,
       col: "200, 140, 255",
       pole: Z,
       soi: 0,

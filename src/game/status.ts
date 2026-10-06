@@ -91,6 +91,19 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     next: null,
     kerr: null,
   };
+  // Map projection in Dneg is not an orbital state. Only the physical cylinder is a tunnel.
+  if (info.region === "throat" && info.map && (info.map.tunnel.inside || !info.ref)) {
+    const tunnel = info.map.tunnel;
+    return {
+      ...out,
+      side: tunnel.inside ? "throat" : info.map.universe,
+      soi: "wormhole",
+      soiName: tx("Wormhole"),
+      status: tunnel.inside ? "throat" : "escape",
+      label: tunnel.inside ? "IN THE THROAT" : tx("Near the wormhole"),
+      speed: info.speed * C,
+    };
+  }
   // ---- our universe (home frame, Newton)
   if (info.ref && info.X && info.V) {
     const ref = info.ref;

@@ -41,8 +41,9 @@ export interface GameSave {
     /** each craft's propellant spent (the fleet's tanks; older saves: the flown one's alone) */
     spentBy?: Record<string, number>;
     properTime: number;
+    tunnelEntry?: "ours" | "gargantua";
   };
-  plan: { nodes: ManeuverNode[]; note: string; mission: unknown } | null;
+  plan: { nodes: ManeuverNode[]; note: string; mission: unknown; universe?: "ours" | "gargantua" } | null;
   /** the free camera (no ship): falling freely (older saves: none) */
   camera?: { gravity: boolean };
 }
@@ -143,6 +144,8 @@ export function checkSave(x: unknown): GameSave {
   if (!isNum(sh.throttle) || sh.throttle < 0 || sh.throttle > 1) fault("throttle");
   if (sh.landed !== null && (typeof sh.landed?.body !== "string" || !isVec(sh.landed.q))) fault("ground");
   if (g.plan !== null && g.plan !== undefined && !Array.isArray(g.plan.nodes)) fault("plan");
+  if (sh.tunnelEntry !== undefined && sh.tunnelEntry !== "ours" && sh.tunnelEntry !== "gargantua") fault("tunnel entry side");
+  if (g.plan?.universe !== undefined && g.plan.universe !== "ours" && g.plan.universe !== "gargantua") fault("plan universe");
   return g;
 }
 
