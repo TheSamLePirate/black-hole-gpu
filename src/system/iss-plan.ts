@@ -19,6 +19,7 @@ import type { Vec3 } from "../physics";
 import { secularTurn } from "./geopotential";
 import { lambertAll, type LambertSolution } from "./lambert";
 import { coastOrbit } from "./our-plan";
+import { coastHome } from "./our-coast";
 import { nodeDvComponents } from "./our-predict";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "./solar";
 import { issAxes, issTrack, station } from "./iss";
@@ -95,6 +96,26 @@ export function craftPoint(id: VesselId, distM = RENDEZVOUS_M): RendezvousPoint 
   };
 }
 
+/**
+ * The ship's coast from (r, v) at t over dt about the Earth, as the flight flies it — its own integrator,
+ * the rails' mean orbit beyond a fraction of a turn (our-coast.ts) — not the two-body arc with the J2's
+ * secular drift (coastOrbit), which ran 49 km a turn off the flight: a rendezvous planned on it arrived
+ * 31 km from the station, too far for the docking autopilot to take over.
+ */
+export function flown(r: Vec3, v: Vec3, t: number, dt: number): { r: Vec3; v: Vec3 } {
+  const E0 = solarState("earth", t);
+  let S = { X: add(E0.pos, r), V: add(E0.vel, v) },
+    tt = t;
+  // (coastHome stops after its sub-steps' cap: carried on to the end)
+  for (let k = 0; k < 1000 && tt < t + dt - 1e-12; k++) {
+    const c = coastHome(S.X, S.V, tt, t + dt - tt);
+    S = c;
+    tt = c.t;
+  }
+  const E1 = solarState("earth", t + dt);
+  return { r: sub(S.X, E1.pos), v: sub(S.V, E1.vel) };
+}
+
 /** The J2 secular drift of the Earth orbit (r, v) at t0 over dt, as a rotation (none: the identity). */
 function drift(r: Vec3, v: Vec3, dt: number, t0: number): (x: Vec3) => Vec3 {
   return secularTurn("earth", solarBody("earth")!.mass, r, v, dt, t0) ?? ((x: Vec3) => x);
@@ -129,28 +150,50 @@ function driftArc(
  * arrives with. A many-turn arc near its shortest flight is ill-posed for Lambert (a few km of aim are
  * 100 m/s of answer); the course itself, shot again, is not. Null: no convergence (a miss over 10 m).
  */
-function shoot(r1: Vec3, v: Vec3, t1: number, tof: number, r2: Vec3): { v1: Vec3; v2: Vec3 } | null {
+function shoot(r1: Vec3, v: Vec3, t1: number, tof: number, r2: Vec3, o: { exactFirst?: boolean } = {}): { v1: Vec3; v2: Vec3 } | null {
   const mu = solarBody("earth")!.mass;
+  // (the miss as the flight flies it; its Jacobian on the two-body arc — a guide for Newton's steps, the
+  // miss itself the flight's. A plan from afar first converges on the two-body arc alone — free —, then on
+  // the flight's miss; a re-aim in flight, on course already, on the flight's miss from the start — the
+  // two-body arc tens of km off it, a many-turn arc's Newton from there once diverged to nothing)
   const end = (u: Vec3) => coastOrbit("earth", mu, r1, u, tof, t1);
   const h = 0.01 / C;
+  let exact = !!o.exactFirst;
   let u = v;
-  for (let it = 0; it < 10; it++) {
-    const e0 = end(u);
+  let best: { u: Vec3; v2: Vec3; miss: number; step: Vec3 } | null = null;
+  for (let it = 0; it < 16; it++) {
+    const ea = end(u);
+    const e0 = exact ? flown(r1, u, t1, tof) : ea;
     const miss = sub(e0.r, r2);
-    if (norm(miss) * M_METRES < 10) return { v1: u, v2: e0.v };
+    const m = norm(miss) * M_METRES;
+    // (the flight's miss within its own noise — the integrator's ~10 m a turn): aimed
+    if (exact && m < 30) return { v1: u, v2: e0.v };
+    if (!exact && m < 10) {
+      exact = true;
+      best = null;
+      continue;
+    }
+    // (worse than the best so far: back to it, half its step)
+    if (exact && best && !(m < best.miss)) {
+      best.step = best.step.map((x) => x / 2) as Vec3;
+      u = add(best.u, best.step);
+      continue;
+    }
     // (the miss's Jacobian in the velocity, by differences)
     const J = [0, 1, 2].map((k) => {
       const du: Vec3 = [0, 0, 0];
       du[k] = h;
-      return sub(end(add(u, du)).r, e0.r).map((x) => x / h) as Vec3;
+      return sub(end(add(u, du)).r, ea.r).map((x) => x / h) as Vec3;
     });
     // (J's columns J[k]: solve J x = −miss, Cramer's rule)
     const det = dot(J[0]!, cross(J[1]!, J[2]!));
-    if (!(Math.abs(det) > 0)) return null;
+    if (!(Math.abs(det) > 0)) break;
     const x: Vec3 = [dot(miss, cross(J[1]!, J[2]!)) / -det, dot(J[0]!, cross(miss, J[2]!)) / -det, dot(J[0]!, cross(J[1]!, miss)) / -det];
+    if (exact) best = { u, v2: e0.v, miss: m, step: x };
     u = add(u, x);
   }
-  return null;
+  // (not within the noise: the best aim kept if within the docking's reach — the corrections refine it)
+  return best && best.miss < 2000 ? { v1: best.u, v2: best.v2 } : null;
 }
 
 export function planIssRendezvous(
@@ -236,9 +279,14 @@ export function planIssRendezvous(
   const ta = b.t1 + b.tof;
   const E1 = solarState("earth", b.t1);
   const P = point(ta)!;
-  // (the arc shot through to its target on the drifting orbit itself: its departure's few km of aim)
+  // (the chosen arc taken up where the flight will really be at its departure — the grid's two-body coast
+  // tens of km off it —, then shot through to its target as the flight flies: the departure's few km of
+  // aim; the re-aims in flight start from the same physics, a burn flown as planned needs none)
   const Ea = solarState("earth", ta);
-  const sh = shoot(b.r1, add(b.v1, b.dv1), b.t1, b.tof, sub(P.X, Ea.pos));
+  const dep = flown(r0, v0, t, b.t1 - t);
+  const guess = add(b.v1, b.dv1);
+  b = { ...b, r1: dep.r, v1: dep.v, dv1: sub(guess, dep.v) };
+  const sh = shoot(b.r1, guess, b.t1, b.tof, sub(P.X, Ea.pos));
   if (sh) b = { ...b, dv1: sub(sh.v1, b.v1), dv2: sub(sub(P.V, Ea.vel), sh.v2) };
   // the burns as the plan carries them: [prograde, normal, radial] at the ship's state then
   const X1 = add(E1.pos, b.r1),
@@ -276,7 +324,6 @@ export function refineIssNode(
   tArrive: number,
   point: RendezvousPoint = rendezvousPoint,
 ): Vec3 | null {
-  const mu = solarBody("earth")!.mass;
   const E0 = solarState("earth", t);
   const r0 = sub(X, E0.pos),
     v0 = sub(V, E0.vel);
@@ -284,17 +331,17 @@ export function refineIssNode(
   if (!P) return null;
   const Ea = solarState("earth", tArrive);
   if (node.role === "arrive") {
-    const s = coastOrbit("earth", mu, r0, v0, tArrive - t, t);
+    const s = flown(r0, v0, t, tArrive - t);
     const dv = sub(sub(P.V, Ea.vel), s.v);
     return nodeDvComponents(add(Ea.pos, s.r), add(Ea.vel, s.v), tArrive, dv);
   }
-  const sm = coastOrbit("earth", mu, r0, v0, node.t - t, t);
+  const sm = flown(r0, v0, t, node.t - t);
   const near = (all: LambertSolution[]) =>
     all.length ? all.reduce((a, x) => (norm(sub(x.v1, sm.v)) < norm(sub(a.v1, sm.v)) ? x : a)) : undefined;
   const span = tArrive - node.t;
   // (the course flown shot again to the target; else the drifting frame's arc nearest it)
   const L =
-    shoot(sm.r, sm.v, node.t, span, sub(P.X, Ea.pos)) ??
+    shoot(sm.r, sm.v, node.t, span, sub(P.X, Ea.pos), { exactFirst: true }) ??
     driftArc(sm.r, node.t, sub(P.X, Ea.pos), sub(P.V, Ea.vel), span, cross(sm.r, sm.v), Math.floor(span / (0.8 * ISS_PERIOD)), near);
   if (!L) return null;
   const Em = solarState("earth", node.t);

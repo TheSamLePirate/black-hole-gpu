@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { gameTimeOf, issOrbit, station } from "../src/system/iss";
-import { planIssRendezvous, refineIssNode, rendezvousPoint, RENDEZVOUS_M } from "../src/system/iss-plan";
-import { coastOrbit } from "../src/system/our-plan";
+import { flown, planIssRendezvous, refineIssNode, rendezvousPoint, RENDEZVOUS_M } from "../src/system/iss-plan";
 import { nodeDvHome } from "../src/system/our-predict";
-import { M_METRES, M_SECONDS, solarBody, solarState } from "../src/system/solar";
+import { M_METRES, M_SECONDS, solarState } from "../src/system/solar";
 import { C_MPS } from "../src/units";
 import { add, cross, dot, len, lin, scale, sub, unit } from "../src/math/vec3";
 
@@ -76,7 +75,8 @@ test("from 20 km below and 60° behind: a phasing arc of a few turns within the 
   const dep = plan!.nodes[0]!;
   const E0 = solarState("earth", t),
     E1 = solarState("earth", dep.t);
-  const k = coastOrbit("earth", solarBody("earth")!.mass, sub(s.X, E0.pos), sub(s.V, E0.vel), dep.t - t, t);
+  // (the departure reached as the flight flies there — the plan's own physics)
+  const k = flown(sub(s.X, E0.pos), sub(s.V, E0.vel), t, dep.t - t);
   const X1 = add(E1.pos, k.r),
     V1 = add(E1.vel, k.v);
   const V2 = add(V1, nodeDvHome(X1, V1, dep.t, dep.dv));

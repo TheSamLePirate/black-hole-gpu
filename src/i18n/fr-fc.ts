@@ -288,7 +288,7 @@ export default {
   "circularize (correction)": "circularisation (correction)",
   "correction to {0} M": "correction à {0} M",
   "Circular at {0} M: a correction to {1} M ({2} km/s)": "Circulaire à {0} M : une correction à {1} M ({2} km/s)",
-  "At the ISS — the docking autopilot takes over": "À l'ISS — le pilote automatique d'amarrage prend le relais",
+  "At {0} — the docking autopilot takes over": "À {0} — le pilote automatique d'amarrage prend le relais",
   "Into the wormhole's throat — Gargantua's side at its end": "Dans la gorge du trou de ver — le côté de Gargantua au bout",
   "{0} passed": "{0} dépassé",
   "Manoeuvre done — {0}": "Manœuvre terminée — {0}",

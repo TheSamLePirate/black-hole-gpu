@@ -1504,6 +1504,8 @@ function nodeBurn(
         // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
         // ~20 s is kept, not the pilot's real time)
 
+        // (who was met: the station, or a craft of the fleet — said by its name)
+        const met = this.issGoal?.body ?? "iss";
         this.ourMission = null;
         this.ourPlanned = null;
         this.issGoal = null;
@@ -1514,7 +1516,10 @@ function nodeBurn(
         // (a circularization after the node: the trim where it is — the pilot's run kept, else a new one)
         if (then === "circularize") this.ourCirc = this.ourCirc ? { ...this.ourCirc, mode: "trim" } : { mode: "trim", spent0: this.spent };
         if (then) this.pilot.setAuto(then);
-        if (then === "dock") this.onPilotMessage?.(t("At the ISS — the docking autopilot takes over"));
+        if (then === "dock")
+          this.onPilotMessage?.(
+            tf("At {0} — the docking autopilot takes over", met === "iss" ? t("the ISS") : tf("the {0}", VESSELS[met as VesselId].name)),
+          );
         else if (node.role === "arrive")
           this.onPilotMessage?.(
             node.body === "wormhole"
