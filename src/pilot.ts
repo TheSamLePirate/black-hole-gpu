@@ -381,7 +381,10 @@ export class FlightComputer {
       if (len(A) > c.thrust) {
         const ff = c.want.ff;
         const fl = len(ff);
-        if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
+        // (no engine left — the tank empty: no push at all, never 0/0 — a NaN that once spread from
+        // the thrust to the ship's state and the HUD at the end of a low-thrust transfer)
+        if (c.thrust <= 0) A = [0, 0, 0];
+        else if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
         else {
           const ee = dot(err, err),
             fe = dot(ff, err);
@@ -391,7 +394,8 @@ export class FlightComputer {
       }
       const a = len(A);
       const rcsMax = TUNING.rcs * c.thrust;
-      if (a < 0.8 * rcsMax) {
+      // (nothing to push — or nothing to push with: no burn, never a direction of a zero vector)
+      if (a < 0.8 * rcsMax || a === 0) {
         rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
         throttle = 0;
         if (this.hold !== "none") point = this.holdDirection(c, toC);
@@ -591,7 +595,9 @@ export class FlightComputer {
     if (len(A) > c.thrust) {
       const ff = sf.ff;
       const fl = len(ff);
-      if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
+      // (no engine left: no push — see the autopilot's above)
+      if (c.thrust <= 0) A = [0, 0, 0];
+      else if (fl >= c.thrust) A = scale(ff, c.thrust / fl);
       else {
         const ee = dot(err, err),
           fe = dot(ff, err);

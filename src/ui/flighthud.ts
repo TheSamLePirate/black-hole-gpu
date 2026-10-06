@@ -3679,6 +3679,8 @@ function hexA(hex: string, a: number) {
  * Gaussian blur the GPU runs per draw, every frame, beside the tracer (240 of them halved the frame rate).
  */
 function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: string, a: number) {
+  // (a mark with no place — a direction gone NaN upstream — is not drawn: a drawing never throws)
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !(r > 0)) return;
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, `rgba(${rgb}, ${a})`);
   g.addColorStop(1, `rgba(${rgb}, 0)`);

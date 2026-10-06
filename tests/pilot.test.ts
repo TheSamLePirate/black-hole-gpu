@@ -88,3 +88,32 @@ test("manual keys: rates follow the stick with SAS, the engine follows the throt
   for (let i = 0; i < 120; i++) fc.step(ctx, NONE);
   expect(Math.hypot(...fc.omega)).toBe(0); // SAS stops the rotation
 });
+
+test("an autopilot with no engine left asks no push — never a NaN (the tank emptied by a transfer)", () => {
+  const S = shipToCamera("chase").S;
+  const right: Vec3 = [1, 0, 0],
+    up: Vec3 = [0, 1, 0],
+    fwd: Vec3 = [0, 0, 1];
+  const fc = new FlightComputer();
+  fc.auto = "orbit";
+  // (a velocity wanted, no feed-forward; the engine's thrust 0: the propellant gone)
+  const want = { beta: [-0.0156, 0, 0.016] as Vec3, ff: [0, 0, 0] as Vec3 };
+  const base = {
+    dt: 1 / 30,
+    right,
+    up,
+    fwd,
+    beta: [0.139, 0, 0.056] as Vec3,
+    S,
+    thrust: 0,
+    tauRate: 4461,
+    radialOut: [1, 0, 0] as Vec3,
+    target: null,
+  };
+  const out = fc.step({ ...base, want }, NONE);
+  expect(out.acc.every(Number.isFinite)).toBe(true);
+  expect(Math.hypot(...out.acc)).toBe(0);
+  // (the flight computer's vectored command alike)
+  const sf = fc.step({ ...base, sf: { beta: want.beta, ff: [0, 0, 0], nose: fwd, up, free: [0, 0, 0] } }, NONE);
+  expect(sf.acc.every(Number.isFinite)).toBe(true);
+});
