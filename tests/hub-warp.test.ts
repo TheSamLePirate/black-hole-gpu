@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { CameraController } from "../src/controls";
 import { fleet } from "../src/fleet";
-import { ourOrbitPose } from "../src/game/place";
+import { ourOrbitPose, theirOrbitPose } from "../src/game/place";
 import { defaultSettings, presets } from "../src/settings";
 import { M_SECONDS } from "../src/units";
-import { setHomePose, setRepPose } from "../src/camera";
+import { setHolePose, setHomePose, setRepPose } from "../src/camera";
 import { mouth, setSceneTime } from "../src/wormhole";
 
 // The warp under the hub's authority (WARP: HUB) or the pilot's (WARP: YOU): the autopilots' ceilings
@@ -190,3 +190,36 @@ test("WARP: YOU — a CIRC's coast and burn never above the pilot's ×200, given
   expect(most).toBeLessThanOrEqual(200 * real * (1 + 1e-9));
   expect(s.timeSpeed).toBeCloseTo(200 * real, 9);
 }, 60_000);
+
+test("between a plan's nodes: the step after a burn is flown no faster than the burn's ceiling, not at the pilot's warp", () => {
+  // (Gargantua's side, a 30 M circular orbit, the Cinema engine: a Hohmann transfer — two burns — flown
+  // by the node autopilot; the pilot's warp ×2000 before it)
+  setSceneTime(0);
+  const s = { ...defaultSettings(), ...presets["Gargantua system: departure near Saturn"]!, engine: "cinema" as const };
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  const p = theirOrbitPose({ body: "gargantua", rM: 30 }, 0, s.spin, s.massSolar);
+  setHolePose(s, p.X, p.fwd, p.up, p.vel);
+  s.motion = "geodesic";
+  c.sync();
+  c.setPilot(true);
+  s.timeSpeed = 2000 / (4.925490947e-6 * s.massSolar);
+  const op = c.fcKerrOp("hohmann", 40);
+  if (typeof op === "string" || !op.ok) throw new Error(typeof op === "string" ? op : op.note);
+  expect(c.fcSetPlan(op.burns, op.note) ?? c.fcExecute()).toBeNull();
+  expect(c.plan.nodes.length).toBe(2);
+  // (each frame's step — the time it advanced — against the ceiling that frame set; until a few frames
+  // past the first burn's end)
+  let worst = 0,
+    after = -1;
+  for (let i = 0; i < 6000 && after < 3; i++) {
+    const t0 = c.nowTime(),
+      n0 = c.plan.nodes.length;
+    c.flyShip(1 / 30, null as never);
+    const used = (c.nowTime() - t0) * 30;
+    if (c.hubWarpLimit !== null) worst = Math.max(worst, used / c.hubWarpLimit);
+    if (c.plan.nodes.length < n0) after = 0;
+    else if (after >= 0) after++;
+  }
+  expect(after).toBe(3);
+  expect(worst).toBeLessThan(1.001);
+});

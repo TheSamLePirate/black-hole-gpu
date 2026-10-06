@@ -1411,8 +1411,10 @@ function nodeBurn(
           }
         }
       }
-      // (the pilot's warp before the plan between its nodes — not a choice of the pilot's)
-      s.timeSpeed = this.nodeWarpSet = this.userWarp;
+      // (the pilot's warp before the plan between its nodes — not a choice of the pilot's —, no faster
+      // than this frame's ceiling: the frame's step is still to fly, before the next node's coast sets
+      // its own warp — at the pilot's, it once flew minutes past a burn's ceiling in one step)
+      s.timeSpeed = this.nodeWarpSet = P.nodes.length ? Math.min(this.userWarp!, this.hubWarpLimit ?? Infinity) : this.userWarp;
       if (!P.nodes.length) {
         const then = node.then ?? null;
         // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
