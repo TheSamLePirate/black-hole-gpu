@@ -657,7 +657,9 @@ function glideAlpha(
   // craft's own (Mach 2.4 at 25 km), hundreds of m/s short of the margin — unbounded, the nose went to no lift
   // at all, the craft fell 9° past its path and pulled 3 g out of the dive
   const short = 0.01 * Math.max(prot * vStall - sp, 0);
-  want -= (LA?.out.mach ?? 0) > 1 ? Math.min(short, 0.1) : short;
+  // (and so high up, 1.5 km over the ground, transonic too: at Mach 0.95, 11 km up, the nose went to no
+  // lift, the craft dived at 150 m/s and pulled 3.5 g out of it)
+  want -= (LA?.out.mach ?? 0) > 1 || agl > 1500 ? Math.min(short, 0.1) : short;
   const a = R.alpha + (clamp(want, 0, stall) - R.alpha) * Math.min(1, dt / 0.35);
   if (agl < 1500) {
     const Msec = 4.925490947e-6 * this.s.massSolar;
@@ -829,22 +831,26 @@ function approach(
     // the offset closed in ~20 s once near, a turn's width away from it in ~40 —, held; steep to
     // 300 m, then the flare)
     const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
-    // (the offset closed over a third of the distance left, 600 m at least near the runway: over a fixed
-    // 3 km, a crosswind held the craft 20 m off the axis to its touchdown)
-    const want = -Math.min(Math.max(Math.atan2(xt, clamp(-sAl / 3, 600, 3000)), -0.7), 0.7);
+    // (two loops, the inner the faster: the track turned by the bank, 2.5 × its error — the track's own
+    // time v / (2.5 g), ~7 s at 170 m/s —, the offset closed over 2.5 times that — the course to the axis
+    // atan(xt / L), L = 2.5 v² / (2.5 g). A slower inner loop — 1.2, and L shrunk to the distance's third
+    // — swung the craft across the axis: 430 m out of the circuit's turn, 30 m at the touchdown)
+    const kB = 2.5;
+    const want = -clamp(Math.atan2(xt, clamp((2.5 * sp * sp) / (9.81 * kB), 800, 3000)), -0.7, 0.7);
     // (held down to the touchdown — a crosswind drifts the craft off the axis in the last seconds
     // otherwise —, to 3° at most there: the wing low into the wind)
     const bMax = agl < 15 ? 0.05 + (0.45 * agl) / 15 : 0.5;
-    bank = clamp(-1.2 * (dpsi - want), -bMax, bMax);
+    bank = clamp(-kB * (dpsi - want), -bMax, bMax);
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
     const L = landingProfile(sAl, agl, sp, R.gOuter);
     if (R.gOuter === undefined && sAl < -6e3 && agl > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300) spiralFrom();
     if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
     gRef = clamp(Math.atan(L.slope) + clamp((L.h - agl) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
-    // (the last metres: the sink eased to a touchdown a real gear takes — 0.8 m/s plus the height over
-    // 2.5 s, whatever the parabola's tracking left: ~1 m/s at the wheels, not 4)
-    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, -Math.asin(Math.min((0.8 + agl / 2.5) / Math.max(sp, 1), 0.5)));
+    // (the last metres: the sink eased to a touchdown a real gear takes — 0.6 m/s plus the height over
+    // 4 s, whatever the parabola's tracking left: under 1 m/s at the wheels. Over 2.5 s, a flare floating
+    // 2 m up past the touchdown point was pushed down at 1.6 m/s, 2.6 at the wheels)
+    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, -Math.asin(Math.min((0.6 + agl / 4) / Math.max(sp, 1), 0.5)));
     // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
     gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
     R.flareTau = L.phase === "flare" ? 1 : undefined;
@@ -871,8 +877,11 @@ function approach(
     onFinal && R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35,
     gdotRef,
   );
-  // (the air brake: the speed held down the steep slope, then bled on the shallow one)
-  const vT = !onFinal ? 230 : R.prof && R.prof.phase !== "outer" ? 130 : 160;
+  // (the air brake: the speed held down the steep slope, then bled on the shallow one; in the circuit —
+  // downwind and its turn — the final's own speed, the turn then the 8 km the downwind's offset allows:
+  // at 230 m/s it was 15 km across, the craft swung through the axis and back, low, and sank short)
+  const circuit = R.leg === "downwind" || R.leg === "turn";
+  const vT = !onFinal ? (circuit ? 170 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160;
   this.airBrake = clamp((sp - vT) / 50, 0, 1);
   // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
   // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)

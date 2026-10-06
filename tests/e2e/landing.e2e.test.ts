@@ -62,6 +62,27 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
       expect(r.manualOnWheels).toBe(false);
     }, 120_000);
 
+  test("the circuit: from past the runway's end the wrong way round, onto the axis at the touchdown", async () => {
+    // (the circuit's turn at 230 m/s was 15 km across, through the axis and back; the final's inner loop
+    // slower than its outer swung the craft across it: 24 m off at the touchdown)
+    const r = await app.js<{ landed: boolean; fail: string | null; across: number | null; sink: number | null }>(`(() => {
+      __bh.freeze(true); __bh.settings.wind = 0; __bh.game.glideTo("Edwards", -5, 6, 250, { headingDeg: 180 });
+      const c = __bh.camera; let across = null;
+      for (let i = 0; i < 30 * 600; i++) {
+        __bh.step(1 / 30);
+        if (across === null && c.rolling) { c.runwayCache = null; across = c.runwayView()?.across ?? null; }
+        if (c.ourLanded || c.airFlight.failure) break;
+      }
+      __bh.freeze(false);
+      const td = __bh.game.log.events.filter((e) => e.kind === "pilot").map((e) => e.text).find((l) => l.startsWith("Touchdown"));
+      return { landed: !!c.ourLanded, fail: c.airFlight.failure, across, sink: td ? Number(/· ([-\\d.]+) m\\/s down/.exec(td)[1]) : null };
+    })()`);
+    expect(r.fail).toBeNull();
+    expect(r.landed).toBe(true);
+    expect(Math.abs(r.across ?? Infinity)).toBeLessThan(5);
+    expect(r.sink ?? Infinity).toBeLessThanOrEqual(1);
+  }, 180_000);
+
   test("the deorbit planned in real time: engaged at ×1000, the warp held while the worker plans", async () => {
     // (its burn is timed from the state it was given: at ×1000 the orbit ran on past it, the burn fired late)
     // (frames at fixed steps: the worker's plan arrives between them, not within one)
