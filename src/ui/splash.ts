@@ -5,6 +5,7 @@
 
 import { loading, type Stage } from "../loading";
 import { t } from "../i18n";
+import { visibleTimeout } from "../util/visible-timeout";
 
 const TIPS = [
   t("Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it."),
@@ -73,15 +74,16 @@ export class Splash {
       this.skip.textContent = t("Enter when the first image is ready");
       this.skip.hidden = false;
     }, 9000);
-    // A hung driver can leave the core promise pending indefinitely. Offer an explicit restart.
-    setTimeout(() => {
+    // A hung driver can leave the core promise pending indefinitely. Offer an explicit restart (after
+    // 180 s of the page seen: a tab started in the background is not hung).
+    visibleTimeout(180_000, () => {
       if (this.lifted || this.imageAt) return;
       this.skip.hidden = false;
       this.skip.disabled = false;
       this.skip.textContent = t("Reload");
       this.skip.title = t("The first image is still unavailable. Reload to restart graphics initialization.");
       this.skip.onclick = () => location.reload();
-    }, 180_000);
+    });
     loading.on(() => this.renderSteps());
     requestAnimationFrame(this.tick);
   }
@@ -101,6 +103,10 @@ export class Splash {
   firstImage() {
     if (this.imageAt) return;
     this.imageAt = performance.now();
+    // (the image late, after the reload offer: the button enters now, it no longer reloads)
+    this.skip.onclick = () => this.wantSkip();
+    this.skip.title = "";
+    this.skip.disabled = false;
     this.skip.textContent = t("Enter now");
     loading.done("pipelines");
     // (a skip asked for during the compile: in now, the remaining assets under the pill)

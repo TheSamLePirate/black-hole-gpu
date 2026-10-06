@@ -47,6 +47,66 @@ test("a stuck compile terminates waiting and ignores its late result", async () 
   expect(changes).toBe(1);
 });
 
+test("a timed-out optional compile still wanted is taken when it lands late (audit M7)", async () => {
+  const q = deferred<string>();
+  let wanted = true;
+  let changes = 0;
+  const quality = new AsyncResource(
+    () => q.promise,
+    () => {
+      changes++;
+    },
+    10,
+    () => wanted,
+  );
+  await quality.start();
+  expect(quality.state).toBe("failed");
+  q.resolve("late");
+  await Bun.sleep(0);
+  expect(quality.state).toBe("ready");
+  expect(quality.value).toBe("late");
+  expect(quality.error).toBeNull();
+  expect(changes).toBe(2);
+  // (no longer wanted — the device lost: the late result ignored)
+  const stale = deferred<string>();
+  const unwanted = new AsyncResource(
+    () => stale.promise,
+    undefined,
+    10,
+    () => wanted,
+  );
+  await unwanted.start();
+  wanted = false;
+  stale.resolve("late");
+  await Bun.sleep(0);
+  expect(unwanted.state).toBe("failed");
+  expect(unwanted.value).toBeNull();
+});
+
+test("a hung specialised compile releases the queue after its stall limit, its late result still delivered", async () => {
+  const queue = new CompileQueue(200);
+  const hung = deferred<string>();
+  let stalled = 0;
+  const a = queue.run(
+    () => true,
+    () => hung.promise,
+    () => stalled++,
+  );
+  const b = queue.run(
+    () => true,
+    async () => "B",
+  );
+  await Bun.sleep(5);
+  expect(queue.pending).toBe(2);
+  expect(await b).toBe("B");
+  expect(stalled).toBe(1);
+  expect(queue.pending).toBe(0);
+  hung.resolve("A");
+  expect(await a).toBe("A");
+  expect(queue.pending).toBe(0);
+  expect(stalled).toBe(1);
+});
+
 test("specialised compiles stay serial and obsolete queued work never starts", async () => {
   const queue = new CompileQueue();
   const first = deferred<string>();

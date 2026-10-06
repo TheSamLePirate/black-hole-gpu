@@ -61,6 +61,7 @@ import { applyTuning } from "./game/tuning";
 import { automaticQuality, promotionEligible } from "./quality-policy";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
+import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { CraftLost } from "./ui/craftlost";
@@ -200,28 +201,21 @@ async function main() {
     screen: { width: screen.width, height: screen.height, pixelRatio: devicePixelRatio },
   });
   let startupFailed = false;
-  let visibleWaitMs = 0;
-  let lastWatchdogAt = performance.now();
-  let wasVisible = !document.hidden;
-  const watchdog = window.setInterval(() => {
-    const now = performance.now();
-    if (wasVisible && !document.hidden) visibleWaitMs += now - lastWatchdogAt;
-    wasVisible = !document.hidden;
-    lastWatchdogAt = now;
-    if (firstFrame || startupFailed) return clearInterval(watchdog);
-    if (visibleWaitMs < 180_000) return;
+  // (no first image after 180 s of the page seen — a hidden tab does not count: a diagnostic rather
+  // than an endless splash)
+  const cancelWatchdog = visibleTimeout(180_000, () => {
+    if (firstFrame || startupFailed) return;
     startupFailed = true;
-    clearInterval(watchdog);
     const message = tf(
       "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.",
       gpuDiagnostics.stage,
     );
     gpuDiagnostics.record("first-image-timeout", message, true);
     fail(message);
-  }, 1000);
+  });
   const reportFatal = (kind: string, error: unknown) => {
     startupFailed = true;
-    clearInterval(watchdog);
+    cancelWatchdog();
     gpuDiagnostics.record(kind, error, true);
     fail(error instanceof Error ? error.message : String(error));
   };
@@ -263,7 +257,7 @@ async function main() {
     renderer = await Renderer.create(canvas);
   } catch (e) {
     startupFailed = true;
-    clearInterval(watchdog);
+    cancelWatchdog();
     gpuDiagnostics.record("startup-failure", e, true);
     fail(`${(e as Error).message}\n\n${t("Use a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+, Firefox 141+).")}`);
     return;
@@ -284,7 +278,7 @@ async function main() {
   // the device lost: the flight saved, the image frozen, a way back
   renderer.onLost = (why) => {
     startupFailed = true;
-    clearInterval(watchdog);
+    cancelWatchdog();
     let saved = false;
     try {
       if (settings.autosave) saved = tools.autosaveNow();
@@ -2156,7 +2150,7 @@ async function main() {
     if (!firstFrame && renderer.firstFrameDoneAt > 0) {
       firstFrame = true;
       firstFrameAt = renderer.firstFrameDoneAt;
-      clearInterval(watchdog);
+      cancelWatchdog();
       gpuDiagnostics.ready();
       splash.firstImage();
     }

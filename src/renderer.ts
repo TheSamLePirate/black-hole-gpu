@@ -15,6 +15,7 @@ import {
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
+import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
@@ -709,15 +710,21 @@ export class Renderer {
       this.tracePipeline = rt;
       this.envPipeline = env;
     });
+    // (a compile timed out but landing later, the device still there: taken after all)
     const optional = (compile: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
-      const resource = new AsyncResource(compile, () => {
-        if (resource.value) publish(resource.value);
-        else {
-          gpuDiagnostics.record("optional-pipeline-failure", resource.error);
-          console.warn("Optional tracer pipeline unavailable:", resource.error);
-        }
-        this.onAssets?.();
-      });
+      const resource = new AsyncResource(
+        compile,
+        () => {
+          if (resource.value) publish(resource.value);
+          else {
+            gpuDiagnostics.record("optional-pipeline-failure", resource.error);
+            console.warn("Optional tracer pipeline unavailable:", resource.error);
+          }
+          this.onAssets?.();
+        },
+        undefined,
+        () => !this.lost,
+      );
       return resource;
     };
     this.qualityCompile = optional(
@@ -1038,11 +1045,12 @@ export class Renderer {
   static async create(canvas: HTMLCanvasElement): Promise<Renderer> {
     let device: GPUDevice | null = null;
     let abandoned = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let cancelTimeout!: () => void;
     let rejectLost!: (error: Error) => void;
+    // (180 s of the page seen: a tab left in the background while it starts is not declared hung)
     const unavailable = new Promise<never>((_, reject) => {
       rejectLost = reject;
-      timer = setTimeout(() => reject(new Error(`Graphics startup timed out after 180 s (${gpuDiagnostics.stage})`)), 180_000);
+      cancelTimeout = visibleTimeout(180_000, () => reject(new Error(`Graphics startup timed out after 180 s (${gpuDiagnostics.stage})`)));
     });
     try {
       return await Promise.race([
@@ -1063,7 +1071,7 @@ export class Renderer {
       (device as GPUDevice | null)?.destroy();
       throw error;
     } finally {
-      clearTimeout(timer!);
+      cancelTimeout();
     }
   }
 
@@ -2539,6 +2547,8 @@ export class Renderer {
       lutq: GPUComputePipeline | null;
       /** the quality cascade (q, lutq) started: a still view asked for it */
       qStarted: boolean;
+      /** the realtime kernel's compile failed or hung: the general one draws — what the timings measure */
+      rtGivenUp: boolean;
     }
   >();
 
@@ -2575,21 +2585,25 @@ export class Renderer {
       this.variants.set(key, v);
     }
     if (!v) {
-      v = { rt: null, q: null, env: null, lut: null, lutq: null, qStarted: false };
+      v = { rt: null, q: null, env: null, lut: null, lutq: null, qStarted: false, rtGivenUp: false };
       this.variants.set(key, v);
       this.evictVariants();
       const slot = v;
       const current = () => this.variants.get(key) === slot && !this.lost;
-      const compile = (entry: "main" | "env" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, false));
+      const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
+        this.variantQueue.run(current, () => this.mkVariant(key, entry, false), onStall);
       // (the realtime kernel first, then its probe and its LUT; the quality cascade only when a
       // still view asks for it below — five specialised compiles of a 6 362-line kernel are tens
       // of seconds of GPU process, not spent while the player flies — plan §2.2-F)
-      void compile("main")
+      void compile("main", () => (slot.rtGivenUp = true))
         .then((p) => ((slot.rt = p), compile("env")))
         .then((p) => ((slot.env = p), (key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
         .then(
           (p) => (slot.lut = p),
-          (e) => console.warn("Specialised tracer unavailable:", e),
+          (e) => {
+            slot.rtGivenUp ||= !slot.rt;
+            console.warn("Specialised tracer unavailable:", e);
+          },
         );
     }
     if ((kind === "q" || kind === "lutq") && !v.qStarted) {
@@ -3779,10 +3793,11 @@ export class Renderer {
       lutQuality: this.lutQCompile.state,
     };
   }
-  /** Calibration excludes resource transitions and optional compilation load. */
+  /** Calibration excludes resource transitions and optional compilation load (a compile hung past
+   * the queue's stall limit, or failed, no longer counts: the kernel drawing is then for good). */
   get calibrationReady() {
     return (
-      this.variantReady &&
+      (this.variantReady || !!this.variants.get(this.featureKey)?.rtGivenUp) &&
       this.earthSettled &&
       this.variantQueue.pending === 0 &&
       ![this.qualityCompile, this.lutCompile, this.lutQCompile].some((r) => r.state === "pending")
