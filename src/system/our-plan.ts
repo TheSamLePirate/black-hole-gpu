@@ -9,7 +9,7 @@
 // Units: lengths and times in M, velocities in c, GM in M (G = c = 1).
 
 import { lambertAll } from "./lambert";
-import { poleOfDate, secularRates, secularZonal, ZONAL } from "./geopotential";
+import { circularVelocity, poleOfDate, secularRates, secularZonal, ZONAL } from "./geopotential";
 import type { Vec3 } from "../physics";
 import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
 import { referenceBody, soiOf } from "./our-side";
@@ -636,16 +636,50 @@ export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM0: number, o: Plan
   };
   const want = (vmag: number) => nodeDvComponents(s1.X, s1.V, t1, sub(scale(along, vmag), v));
   if (Math.abs(R - rt) < 0.01 * rt) {
-    const dv = want(Math.sqrt(b.mass / R));
+    const dv = nodeDvComponents(s1.X, s1.V, t1, sub(circularVelocity(ref, b.mass, r, v, t1).v, v));
     const nodes: PlanNode[] = [{ t: t1, dv, role: "circ", body: ref, then: "circularize" }];
     const path = predictOurs(X, V, t, nodes, { mouthR: o.mouthR, accel: o.accel, maxSteps: 4000 });
     return { nodes, mission, path, note: `circular orbit at ${km(R - b.radius)} around ${b.name} · Δv ${kms(norm(dv))}` };
   }
   const a = (R + rt) / 2;
-  const dv1 = want(Math.sqrt(b.mass * (2 / R - 1 / a)));
-  const t2 = t1 + Math.PI * Math.sqrt(a ** 3 / b.mass);
-  const vApo = Math.sqrt(b.mass * (2 / rt - 1 / a));
-  const dv2: Vec3 = [Math.sqrt(b.mass / rt) - vApo, 0, 0];
+  // (the transfer's far apsis on the path the ship will fly — the oblateness's pull, the Moon's: two bodies
+  // leave it ~15 km short of 1 000 km from a low Earth orbit —: the departure's speed found by the secant
+  // on it, the arrival's burn to the mean circle there)
+  const up = rt > R;
+  const far = (vmag: number) => {
+    const V1 = add(s1.V, nodeDvHome(s1.X, s1.V, t1, want(vmag)));
+    const path = predictOurs(s1.X, V1, t1, [], {
+      tMax: 0.75 * 2 * Math.PI * Math.sqrt(a ** 3 / b.mass),
+      maxSteps: 20000,
+      mouthR: o.mouthR,
+    });
+    let k = -1,
+      best = up ? -Infinity : Infinity;
+    for (let i = 1; i < path.pts.length; i++) {
+      const d = norm(sub(path.pts[i]!, stateOf(ref, path.times[i]!).pos));
+      if (up ? d > best : d < best) (best = d), (k = i);
+    }
+    return { r: best, k, path };
+  };
+  let v1 = Math.sqrt(b.mass * (2 / R - 1 / a)),
+    f1 = far(v1),
+    v0 = v1 * (1 + (up ? 1 : -1) * 1e-3),
+    f0 = far(v0);
+  for (let it = 0; it < 6 && Math.abs(f1.r - rt) * M_METRES > 50 && f1.r !== f0.r; it++) {
+    const v2 = v1 + ((rt - f1.r) * (v1 - v0)) / (f1.r - f0.r);
+    (v0 = v1), (f0 = f1), (v1 = v2), (f1 = far(v1));
+  }
+  const dv1 = want(v1);
+  const at = f1.k > 0 ? { X: f1.path.pts[f1.k]!, V: f1.path.vels[f1.k]!, t: f1.path.times[f1.k]! } : null;
+  const t2 = at ? at.t : t1 + Math.PI * Math.sqrt(a ** 3 / b.mass);
+  const dv2: Vec3 = at
+    ? (() => {
+        const P2 = stateOf(ref, at.t);
+        const rr = sub(at.X, P2.pos),
+          vv = sub(at.V, P2.vel);
+        return nodeDvComponents(at.X, at.V, at.t, sub(circularVelocity(ref, b.mass, rr, vv, at.t).v, vv));
+      })()
+    : [Math.sqrt(b.mass / rt) - Math.sqrt(b.mass * (2 / rt - 1 / a)), 0, 0];
   const nodes: PlanNode[] = [
     { t: t1, dv: dv1, role: "depart" },
     { t: t2, dv: dv2, role: "circ", body: ref, then: "circularize" },
@@ -1362,10 +1396,7 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     const st = stateOf(body, tt);
     const r = sub(s.X, st.pos),
       v = sub(s.V, st.vel);
-    let n = cross(r, v);
-    if (norm(n) < 1e-30) n = cross(r, [0, 0, 1]);
-    const along = unit(cross(unit(n), r));
-    const dv = nodeDvComponents(s.X, s.V, tt, sub(scale(along, Math.sqrt(b.mass / norm(r))), v));
+    const dv = nodeDvComponents(s.X, s.V, tt, sub(circularVelocity(body, b.mass, r, v, tt).v, v));
     return { ...node, t: tt, dv };
   }
   const stage: Stage = node.role === "mccReturn" ? "back" : node.role === "depart" && m.type === "sibling" ? "escape" : "out";

@@ -29,7 +29,7 @@ test("Kepler's and Lambert's problems agree (an orbit and back)", () => {
   expect(Math.abs(e1 - e0) / Math.abs(e0)).toBeLessThan(1e-10);
 });
 
-test("a Hohmann transfer from 400 to 1 000 km: the textbook burns", () => {
+test("a Hohmann transfer from 400 to 1 000 km: the textbook burns, its far apsis at 1 000 km on the path flown", () => {
   const t0 = 109.6;
   const s = earthStart(t0, 400, true);
   const p = planOurOrbit(s.X, s.vel, t0, 1000e3, { ...o, accel: 0 });
@@ -41,9 +41,22 @@ test("a Hohmann transfer from 400 to 1 000 km: the textbook burns", () => {
     a = (r1 + r2) / 2;
   const dv1 = Math.sqrt(mu * (2 / r1 - 1 / a)) - Math.sqrt(mu / r1);
   const dv2 = Math.sqrt(mu / r2) - Math.sqrt(mu * (2 / r2 - 1 / a));
-  expect(Math.abs(Math.hypot(...p.nodes[0]!.dv) - dv1) * C).toBeLessThan(2);
-  expect(Math.abs(p.nodes[1]!.dv[0] - dv2) * C).toBeLessThan(2);
+  // (within a few m/s of two bodies' — the oblateness's share)
+  expect(Math.abs(Math.hypot(...p.nodes[0]!.dv) - dv1) * C).toBeLessThan(8);
+  expect(Math.abs(p.nodes[1]!.dv[0] - dv2) * C).toBeLessThan(8);
   expect(p.nodes[1]!.then).toBe("circularize");
+  // the departure aimed on the predicted path: its far apsis 1 000 km up (two bodies' fell ~15 km
+  // short), the second burn there
+  const path = predictOurs(s.X, s.vel, t0, [p.nodes[0]!], { tMax: p.nodes[1]!.t - t0 + 600 / M_SECONDS, maxSteps: 20000, mouthR: 0.05 });
+  let far = 0,
+    tFar = 0;
+  for (let i = 0; i < path.pts.length; i++) {
+    const E = solarState("earth", path.times[i]!);
+    const d = Math.hypot(...path.pts[i]!.map((x, k) => x - E.pos[k]!));
+    if (d > far) (far = d), (tFar = path.times[i]!);
+  }
+  expect(Math.abs((far - r2) * M_METRES)).toBeLessThan(500);
+  expect(Math.abs(tFar - p.nodes[1]!.t) * M_SECONDS).toBeLessThan(30);
 });
 
 test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 200 km perigee", () => {
