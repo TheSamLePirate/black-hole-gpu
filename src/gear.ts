@@ -184,8 +184,10 @@ export function gearForces(def: GearDef, i: GearInput, ground: Ground): GearOut 
       slip = Math.atan2(vs, Math.max(Math.abs(vl), 1));
       const lat = -tyreGrip(slip, L.mu ?? def.mu) * N;
       // along: rolling, and the brakes at the anti-skid's peak (none backwards past a crawl)
+      // (the brakes' band of a crawl 5 cm/s: parked on a slope they hold — over 30 cm/s, a 9° crater's rim
+      // let the Ranger creep down it at 18 cm/s for ever, never standing)
       const brake = L.brakes ? i.brake * def.muBrake : 0;
-      const resist = (def.roll + brake) * N * Math.min(Math.abs(vl) / 0.3, 1);
+      const resist = (def.roll * Math.min(Math.abs(vl) / 0.3, 1) + brake * Math.min(Math.abs(vl) / 0.05, 1)) * N;
       ft = add(scale(side, lat), scale(fwd, -Math.sign(vl) * resist));
     }
     const f = add(scale(n, N), ft);

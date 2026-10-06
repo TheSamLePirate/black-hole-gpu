@@ -59,6 +59,22 @@ test("braking at the anti-skid's peak: about μ times the mains' share of g", ()
   expect(decel).toBeLessThan(1.2 * (def.muBrake * mains + def.roll) * g);
 });
 
+test("parked, the brakes on, on a 9° slope of the Moon: it stands — no creep down it", () => {
+  // (the slope as gravity's share along the ground; the motion's own 4 ms steps)
+  const gm = 1.62,
+    th = (9 * Math.PI) / 180;
+  let X: V3 = [0, 6.0, 0],
+    V: V3 = [0, 0, 0];
+  const dt = 0.004;
+  for (let t = 0; t < 20; t += dt) {
+    const o = gearForces(def, { mass: m, X, V, axes, w: [0, 0, 0], brake: 1, steer: 0 }, flat);
+    V = [V[0] + (o.F[0] / m) * dt, V[1] + (o.F[1] / m - gm * Math.cos(th)) * dt, V[2] + (o.F[2] / m - gm * Math.sin(th)) * dt];
+    X = [X[0] + V[0] * dt, X[1] + V[1] * dt, X[2] + V[2] * dt];
+  }
+  // (still by the craft's own measure: under 5 cm/s)
+  expect(Math.abs(V[2])).toBeLessThan(0.05);
+});
+
 test("a sideways drift is taken out by the tyres' grip", () => {
   let X: V3 = [0, 6.0, 0],
     V: V3 = [3, 0, 40];
