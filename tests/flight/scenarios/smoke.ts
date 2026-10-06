@@ -45,9 +45,19 @@ export const SMOKE: Scenario[] = [
       await Bun.sleep(500);
       await engage(lab, "circularize");
       const e = await lab.fixed({ until: `T.auto === "none"`, maxSim: 4 * 3600, maxWall: 300 });
-      const msg = said(lab, /Circular/);
-      const o = lab.T.orbit;
-      return { ok: e.end === "until" && !!msg && !!o && o.ap - o.pe < 15, why: msg ?? e.why, metrics: { pe: o?.pe, ap: o?.ap } };
+      // (the circle as the autopilot leaves it — the mean one, its J2 swing: the osculating apsides of a
+      // circle in a low orbit stand up to ~20 km apart, the oblateness's, not the autopilot's; the
+      // orbit family measures the radius flown over a revolution)
+      const msg = said(lab, /^Circular:/);
+      const [lo, hi] = /([\d.]+) × ([\d.]+) km/
+        .exec(msg ?? "")
+        ?.slice(1)
+        .map(Number) ?? [Number.NaN, Number.NaN];
+      return {
+        ok: e.end === "until" && !!msg && hi! - lo! < 5,
+        why: msg ?? e.why,
+        metrics: { lo, hi, pe: lab.T.orbit?.pe, ap: lab.T.orbit?.ap },
+      };
     },
   },
 ];
