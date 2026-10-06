@@ -64,17 +64,20 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
 
   test("the deorbit planned in real time: engaged at ×1000, the warp held while the worker plans", async () => {
     // (its burn is timed from the state it was given: at ×1000 the orbit ran on past it, the burn fired late)
-    const r = await app.js<{ phase: string; warp: number }[]>(`(async () => {
+    // (frames at fixed steps: the worker's plan arrives between them, not within one)
+    const r = await app.js<{ phase: string; warp: number }[]>(`(() => {
+      __bh.freeze(true);
       __bh.game.orbit("earth", { altKm: 400, inc: 40 });
       __bh.game.warp(1000);
       const c = __bh.camera, M = 4.925490947e-6 * __bh.settings.massSolar;
       c.pilot.auto = "none"; c.pilot.setAuto("entry");
       const seen = [];
-      for (let k = 0; k < 20 && c.entryRun?.phase === "plan"; k++) {
-        await new Promise((ok) => requestAnimationFrame(() => ok(true)));
+      for (let k = 0; k < 5; k++) {
+        __bh.step(1 / 30);
         if (c.entryRun?.phase === "plan") seen.push({ phase: c.entryRun.phase, warp: __bh.settings.timeSpeed * M });
       }
       c.pilot.setAuto("none");
+      __bh.freeze(false);
       return seen;
     })()`);
     expect(r.length).toBeGreaterThan(0);
