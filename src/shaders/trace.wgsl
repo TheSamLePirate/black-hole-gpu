@@ -5065,7 +5065,10 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   t1 = min(t1, t0 + 250000.0 / EARTH_RM);
   if (t1 <= t0) { return o; }
   let N = 16u;
-  let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
+  // (the sun's direction and the ray's metres per squashed radius on the physical axes: the same all along)
+  let physicalLs = airPhysicalDirection(Ls);
+  let stepM = EARTH_RM * airRayScale(rd);
+  let ct = dot(airPhysicalDirection(rd), physicalLs);
   // (the droplets' phase function two-lobed — the silver lining round the sun, a glow away from it —, and
   // the light scattered many times as octaves of it, each fainter, rounder, less dimmed: Wrenninge 2015)
   let hg = cloudPhase(ct, 1.0);
@@ -5080,7 +5083,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let u1 = (f32(i) + 1.0) / f32(N);
     let tn = t0 + (t1 - t0) * u1 * u1;
     let t = mix(tPrev, tn, jit);
-    let dm = (tn - tPrev) * EARTH_RM * airRayScale(rd);
+    let dm = (tn - tPrev) * stepM;
     tPrev = tn;
     let p = ro + rd * t;
     let r = length(p);
@@ -5107,7 +5110,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0); // (thin cover eroded to puffs and gaps)
     if (rho <= 0.0) { continue; }
     let sigma = rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2)); // (per metre: τ ~ 25 through a thick one)
-    let mu0 = dot(geoQ(q), airPhysicalDirection(Ls));
+    let mu0 = dot(geoQ(q), physicalLs);
     // the sunlight: through the air to this height, then the cloud above it towards the sun
     let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls);
     // (the cloud above this point, to its top; the sun's path through it — the clouds broken, it comes in by
