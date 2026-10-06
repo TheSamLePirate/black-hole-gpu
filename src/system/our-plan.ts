@@ -32,6 +32,8 @@ export interface PlanNode extends OurNode {
   then?: "circularize";
   /** the body a capture or a circularization is around */
   body?: string;
+  /** a departure re-aimed (refineOurNode): the meeting time its path now has [M] */
+  tArrive?: number;
 }
 
 export interface OurGoal {
@@ -1435,10 +1437,7 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     o,
     node.role === "depart",
     false,
-    // (the meeting time kept by the departure's re-aims too: free, the least change once slid a Moon
-    // transfer of 3.2 days onto the 2.2 days' branch — 87 m/s more at the burn, 590 at the capture —, and
-    // the correction then held to the planned time could no longer reach its pass)
-    node.role === "mcc" || node.role === "depart",
+    node.role === "mcc",
     node.role !== "depart",
   );
   if (!r) return { ...node, t: tAim };
@@ -1446,6 +1445,13 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
   if (node.role !== "depart" && norm(r.dv) < 0.03 * MS) return r.ok ? null : { ...node, t: tAim };
   // (a correction of more than 500 m/s is no correction: the aim failed — kept for the next try)
   if (node.role !== "depart" && norm(r.dv) > 500 * MS) return { ...node, t: tAim };
+  // (a departure re-aimed: its meeting where its path now meets the target — a rough plan's least change
+  // may slide to the next family of paths, a day sooner; the corrections, held to the meeting time,
+  // must aim at that one: held to the old, the Moon mission's found no aim and met the ground)
+  if (node.role === "depart" && m.type !== "parent") {
+    const bp = bPlane(r.path, g.target, 0, o.mouthR);
+    if (bp && bp.ca.i >= 0) return { ...node, t: r.t, dv: r.dv, tArrive: r.path.times[bp.ca.i]! };
+  }
   return { ...node, t: r.t, dv: r.dv };
 }
 

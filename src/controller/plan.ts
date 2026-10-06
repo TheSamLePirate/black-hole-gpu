@@ -816,6 +816,12 @@ function ourRefineTick(
     } else {
       node.t = r.node.t;
       node.dv = r.node.dv;
+      // (a departure re-aimed onto another meeting: the mission's, for its corrections and capture)
+      const M = this.ourMission;
+      if (M && r.node.tArrive !== undefined) {
+        M.tEnd += r.node.tArrive - M.tArrive;
+        M.tArrive = r.node.tArrive;
+      }
     }
     this.refreshPlan(true);
   });
