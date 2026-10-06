@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { secularRates, secularZonal, ZONAL, zonalAccelAbout, type Zonal } from "../src/system/geopotential";
+import { meanCircular, secularRates, secularZonal, ZONAL, zonalAccelAbout, type Zonal } from "../src/system/geopotential";
 import { gravityHome } from "../src/system/our-side";
 import { solarBody, solarState } from "../src/system/solar";
 import { M_METRES, M_SECONDS } from "../src/units";
@@ -158,4 +158,58 @@ test("the flight's gravity near the Earth holds the J2 term (a thousandth of g, 
   expect(extra).toBeLessThan(3e-3);
   expect(zAx[2]).toBe(1);
   expect(M_SECONDS).toBeGreaterThan(0);
+});
+
+test("the mean circle under J2: a low orbit flown from it swings the 2X the J2 makes, not the point mass's ~10 km", () => {
+  const J2: Zonal = { R: RE, J: [EARTH.J[0], 0, 0] };
+  const acc = (x: Vec3): Vec3 => {
+    const r = Math.hypot(...x),
+      z = zonalAccelAbout(MU, J2, Z, x);
+    return [(-MU * x[0]) / r ** 3 + z[0], (-MU * x[1]) / r ** 3 + z[1], (-MU * x[2]) / r ** 3 + z[2]];
+  };
+  // (one revolution and a half from a point at argument of latitude u, its radius's extremes)
+  const spread = (V0: Vec3, X0: Vec3) => {
+    let X = X0,
+      V = V0,
+      a = acc(X),
+      lo = Infinity,
+      hi = 0;
+    const dt = 2;
+    for (let t = 0; t < 9000; t += dt) {
+      V = [V[0] + (a[0] * dt) / 2, V[1] + (a[1] * dt) / 2, V[2] + (a[2] * dt) / 2];
+      X = [X[0] + V[0] * dt, X[1] + V[1] * dt, X[2] + V[2] * dt];
+      a = acc(X);
+      V = [V[0] + (a[0] * dt) / 2, V[1] + (a[1] * dt) / 2, V[2] + (a[2] * dt) / 2];
+      const r = Math.hypot(...X);
+      lo = Math.min(lo, r);
+      hi = Math.max(hi, r);
+    }
+    return hi - lo;
+  };
+  const i = 51.6 * D,
+    r = RE + 580e3;
+  for (const u of [0, 40 * D, 90 * D, 135 * D]) {
+    // (at u from the node on the x axis, the plane turned by i about it)
+    const X: Vec3 = [r * Math.cos(u), r * Math.sin(u) * Math.cos(i), r * Math.sin(u) * Math.sin(i)];
+    const along: Vec3 = [-Math.sin(u), Math.cos(u) * Math.cos(i), Math.cos(u) * Math.sin(i)];
+    const c = meanCircular(MU, J2.J[0] * RE * RE, Z, X, along);
+    expect(c.X).toBeCloseTo((J2.J[0] * RE * RE * Math.sin(i) ** 2) / (4 * r), 6);
+    const point = Math.sqrt(MU / r);
+    const s = spread(c.v, X),
+      sPoint = spread([along[0] * point, along[1] * point, along[2] * point], X);
+    // (the J2's own swing, 2X ≈ 1.9 km; the level √(μ/r) circle: several km more, ~10 at the equator)
+    expect(s).toBeLessThan(2 * c.X + 300);
+    expect(s).toBeGreaterThan(2 * c.X - 300);
+    if (u === 0) expect(sPoint).toBeGreaterThan(8000);
+  }
+});
+
+test("the mean circle about a round body, or with no motion across the radius: the level √(μ/r)", () => {
+  const X: Vec3 = [7e6, 0, 0];
+  const c = meanCircular(MU, 0, Z, X, [0, 7000, 1000]);
+  expect(Math.hypot(...c.v)).toBeCloseTo(Math.sqrt(MU / 7e6), 6);
+  expect(c.v[0]).toBeCloseTo(0, 9);
+  const radial = meanCircular(MU, EARTH.J[0] * RE * RE, Z, X, [5, 0, 0]);
+  expect(Number.isFinite(radial.v[0]) && Math.abs(radial.v[0]) < 1).toBe(true);
+  expect(Math.hypot(...radial.v)).toBeCloseTo(Math.sqrt(MU / 7e6), -1);
 });

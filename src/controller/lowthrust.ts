@@ -33,8 +33,10 @@ import { AUTO_NAMES, circularSpeed, type Auto } from "../pilot";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
+import { circularVelocity } from "../system/geopotential";
 import { gravityHome, OUR_BODIES, ourState, soiOf } from "../system/our-side";
 import { predictOurs, type OurPath } from "../system/our-predict";
+import { stateAt } from "../system/our-plan";
 import { plan as runPlanner } from "../system/plan-client";
 import {
   airDensity as ourAir,
@@ -84,6 +86,7 @@ declare module "../controls" {
     descentCard: typeof descentCard;
     entryAssist: typeof entryAssist;
     circPlan: typeof circPlan;
+    circFlown: typeof circFlown;
     ourCircWant: typeof ourCircWant;
     autopilotWant: typeof autopilotWant;
     predictPath: typeof predictPath;
@@ -1686,7 +1689,60 @@ function circPlan(
   const pick = (ok.length ? ok : cands).sort((a, b) => a.t - b.t)[0]!;
   const r = fcCircularize(c, pick.where);
   if (!r.ok || !r.burns.length) return tf("Circularize: {0}", r.note);
+  // (the apsis as the craft will fly to it: the two bodies' of a low Earth orbit is ~10 km and 20 m/s
+  // off — the oblateness, the Moon —; their burn kept where the flight's own path is not found)
+  const f = this.circFlown(pick.where, r.burns[0]!.t);
+  if (f) {
+    const burns = [{ ...r.burns[0]!, t: f.t, dv: f.dv }];
+    const km = ((f.r - c.R) / 1e3).toFixed(0);
+    return { burns, note: tf("Circular at {0} km", km), where: pick.where, altKm: (f.r - c.R) / 1e3, dv: Math.hypot(...f.dv), t: f.t };
+  }
   return { burns: r.burns, note: r.note, where: pick.where, altKm: (pick.r - c.R) / 1e3, dv: r.dvTotal, t: r.burns[0]!.t };
+}
+
+/**
+ * The apsis a circularization burns at, on the path the craft flies (our-predict.ts: the bodies' pulls,
+ * the oblateness): the radial rate's turn — downwards at the apoapsis, upwards at the periapsis — nearest
+ * the two bodies' time `tS` [s from now]; there, the burn to the mean circle (geopotential.ts
+ * meanCircular). Its time [s from now], its Δv (prograde, normal, radial [m/s]) and radius [m]; null:
+ * no such turn on the path.
+ */
+function circFlown(this: CameraController, where: "ap" | "pe", tS: number): { t: number; dv: KV3; r: number } | null {
+  const s = this.s;
+  const nav = this.ourNav(cameraFrame(s));
+  if (!nav || nav.ref === "sun") return null;
+  const Msec = 4.925490947e-6 * s.massSolar;
+  const path = predictOurs(nav.X, nav.V, nav.t, [], { tMax: (1.3 * tS + 600) / Msec, maxSteps: 20000 });
+  const rel = (k: number) => {
+    const st = ourState(nav.ref, path.times[k]!);
+    const d = sub3(path.pts[k]!, st.pos);
+    return { d, v: sub3(path.vels[k]!, st.vel), vr: dot3(d, sub3(path.vels[k]!, st.vel)) / Math.hypot(...d) };
+  };
+  const want = nav.t + tS / Msec;
+  let best: number | null = null;
+  let prev = rel(0).vr;
+  for (let k = 1; k < path.times.length; k++) {
+    const vr = rel(k).vr;
+    const turn = where === "ap" ? prev > 0 && vr <= 0 : prev < 0 && vr >= 0;
+    if (turn) {
+      // (where the rate crosses zero, between the two points)
+      const tk = path.times[k - 1]! + ((path.times[k]! - path.times[k - 1]!) * prev) / (prev - vr);
+      if (best === null || Math.abs(tk - want) < Math.abs(best - want)) best = tk;
+    }
+    prev = vr;
+  }
+  if (best === null || Math.abs(best - want) > (0.25 * Math.max(tS, 600)) / Msec) return null;
+  const at = stateAt(path, best);
+  if (!at) return null;
+  const st = ourState(nav.ref, best);
+  const d = sub3(at.X, st.pos),
+    v = sub3(at.V, st.vel);
+  const g = sub3(circularVelocity(nav.ref, solarBody(nav.ref)!.mass, d, v, best).v, v);
+  const P = lin(v, 1 / Math.hypot(...v), v, 0);
+  const n = cross(d, v);
+  const N = lin(n, 1 / Math.hypot(...n), n, 0);
+  const R = cross(N, P);
+  return { t: (best - nav.t) * Msec, dv: [dot3(g, P) * C_MPS, dot3(g, N) * C_MPS, dot3(g, R) * C_MPS], r: Math.hypot(...d) * M_METRES };
 }
 
 /** The circularization's frame: the plan made (pilot's), or the trim — the circular velocity where it is. */
@@ -1701,8 +1757,6 @@ function ourCircWant(
   const C = C_MPS;
   const rel = sub3(nav.V, Tg.vel);
   const Rv = sub3(nav.X, Tg.pos);
-  const D = Math.hypot(...Rv);
-  const Rh = lin(Rv, 1 / D, Rv, 0);
   const fmtT = (x: number) => (x < 90 ? `${Math.round(x)} s` : x < 5400 ? `${Math.round(x / 60)} min` : `${(x / 3600).toFixed(1)} h`);
   if (!this.ourCirc) {
     const plan = this.circPlan();
@@ -1726,34 +1780,24 @@ function ourCircWant(
   if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
   const R = this.ourCirc;
   R.since ??= frameNow();
-  // the trim: the circular velocity where the craft is — horizontal, in its plane —, no height held
-  let n = cross(Rh, rel);
-  if (Math.hypot(...n) < 1e-12 * Math.hypot(...rel) || Math.hypot(...rel) < 1e-15) n = cross(Rh, [0, 0, 1]);
-  n = lin(n, 1 / Math.hypot(...n), n, 0);
-  const th = cross(n, Rh);
-  const vc = Math.sqrt(Tg.mass / D);
-  const err = Math.hypot(...sub3(rel, lin(th, vc, th, 0))) * C;
+  // the trim: the circle where the craft is, in its plane — circular in the mean, the body's oblateness
+  // in (geopotential.ts meanCircular: the level √(μ/r) swings ~10 km in a low Earth orbit) —, no height held
+  const circle = circularVelocity(nav.ref, Tg.mass, Rv, rel, nav.t);
+  const err = Math.hypot(...sub3(rel, circle.v)) * C;
   // (done: within 0.2 m/s — or, the trim's minute out, within 2)
   const age = (frameNow() - R.since) / 1000;
   if (err < 0.2 || (age > 60 && err < 2)) {
-    const fc = this.fcContext();
-    const el = fc ? kepElements(fc.ctx.mu, fc.ctx.r, fc.ctx.v, fc.ctx.pole ?? [0, 0, 1]) : null;
     const used = (this.spent - (R.spent0 ?? this.spent)) * C;
     this.ourCirc = null;
     P.setAuto("none");
+    // (the heights it flies: the mean circle's, its J2 swing about it)
+    const km = (r: number) => (((r - Tg.radius) * M_METRES) / 1e3).toFixed(0);
     this.onPilotMessage?.(
-      el && fc
-        ? tf(
-            "Circular: {0} × {1} km — {2} m/s spent",
-            ((el.rp - fc.ctx.R) / 1e3).toFixed(0),
-            ((el.ra - fc.ctx.R) / 1e3).toFixed(0),
-            used.toFixed(0),
-          )
-        : t("Circular"),
+      tf("Circular: {0} × {1} km — {2} m/s spent", km(circle.r0 - circle.X), km(circle.r0 + circle.X), used.toFixed(0)),
     );
     return null;
   }
-  return out(lin(Tg.vel, 1, th, vc));
+  return out(lin(Tg.vel, 1, circle.v, 1));
 }
 
 function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | null {
@@ -2461,6 +2505,7 @@ export function installLowthrust(C: { prototype: CameraController }) {
     descentCard,
     entryAssist,
     circPlan,
+    circFlown,
     ourCircWant,
     autopilotWant,
     predictPath,

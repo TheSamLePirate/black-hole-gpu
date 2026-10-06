@@ -42,6 +42,7 @@ import {
 import { fleet } from "../fleet";
 import { VESSELS, type VesselId } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
+import { circularVelocity } from "../system/geopotential";
 import { gravityHome, homeOf, homeToRep, ourState, referenceBody, repToHomeVec } from "../system/our-side";
 import { nodeDvHome, predictOurs, type OurPath } from "../system/our-predict";
 import type { Arrival, OurPlanResult, PlanNode } from "../system/our-plan";
@@ -1183,6 +1184,13 @@ function setNodeWarp(this: CameraController, auto: number) {
   this.nodeWarp = want === null ? "auto" : want > cap * (1 + 1e-9) ? "held" : "manual";
 }
 
+/** Our universe: the velocity still to gain to the mean circle where the craft is, about its reference body (home, c). */
+function circleGain(nav: NonNullable<ReturnType<CameraController["ourNav"]>>): Vec3 {
+  const rel = sub3(nav.V, nav.refVel);
+  const c = circularVelocity(nav.ref, solarBody(nav.ref)!.mass, sub3(nav.X, nav.refPos), rel, nav.t);
+  return sub3(c.v, rel);
+}
+
 /**
  * Executing the next node: warp towards it, point along its burn, fire so that the burn is centred
  * on its time, stop when its Δv is delivered; then the next one, or the plan's last manoeuvre
@@ -1240,7 +1248,12 @@ function nodeBurn(
       : followDv(node.dv as KV3, Math.hypot(...sub3(nav.V, nav.refVel)))
     : node.dv;
   const total = Math.hypot(...ndv);
-  const left = Math.max(0, total - this.nodeDone);
+  // (our universe, a node that ends in a circle — the CIRC's, a mission's capture —: flown to that circle
+  // where the craft is, the velocity still to gain to it steered as the burn goes (geopotential.ts
+  // meanCircular), not the planned impulse: the planner's two bodies miss the oblateness's pull — 15 % of
+  // a circularization from 200 × 600 km, which the trim then had to take back)
+  const toCircle = nav && node.then === "circularize" ? circleGain(nav) : null;
+  const left = toCircle ? Math.hypot(...toCircle) : Math.max(0, total - this.nodeDone);
   // (the burn keeps the direction it had when it started: fixed in the local frame, not turning
   // with the velocity it changes)
   // (a Crew burn lasts a good part of an orbit: it follows the orbital frame — prograde, normal,
@@ -1248,8 +1261,9 @@ function nodeBurn(
   // (our universe: the burn follows the orbital frame of the reference body, as a Crew burn)
   // (a goal burn about the hole follows the prograde — or the retrograde —, as its estimate has it)
   const follow = s.engine === "crew" || !!nav || (!!node.goal && !nav);
-  const dir =
-    this.nodeBurning && this.burnDir && !follow
+  const dir = toCircle
+    ? nav!.toRep(toCircle)
+    : this.nodeBurning && this.burnDir && !follow
       ? this.burnDir
       : nav
         ? nav.toRep(nodeDvHome(nav.X, nav.V, nav.t, ndv))
@@ -1342,10 +1356,14 @@ function nodeBurn(
     const cut = assisted && lft <= Math.max(2e-3 * total, nav ? 0.1 / C_MPS : 1e-6);
     const done = assisted
       ? cut && this.pilot.throttle <= 0.01
-      : (nav ? left <= Math.max(3e-11, 1e-6 * total) : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) ||
+      : (toCircle
+          ? left <= 0.02 / C_MPS
+          : nav
+            ? left <= Math.max(3e-11, 1e-6 * total)
+            : lft <= Math.max(Math.min(1e-5, 1e-3 * total), 0.02 * perFrame)) ||
         lft < 1e-12 ||
-        // (the engine run down, a few cm/s from the end)
-        (!!nav && this.pilot.engineNow < 1e-3 && left <= 0.05 / C_MPS);
+        // (the engine run down, a few cm/s from the end: the last of it is the trim's)
+        (!!nav && this.pilot.engineNow < 1e-3 && left <= (toCircle ? 0.3 : 0.05) / C_MPS);
     if (done) {
       this.goalRem = null;
       P.nodes.shift();

@@ -92,6 +92,57 @@ export function zonalAccel(id: string, mu: number, d: Vec3, t: number): Vec3 | n
   return zonalAccelAbout(mu, z0, poleOfDate(id, t), d);
 }
 
+/**
+ * The circle through d (from the body's centre), in the plane of the motion v — circular in the mean: an
+ * oblate body bends every orbit, and the point-mass circle there, √(μ/r) level, swings ~10 km in a low
+ * Earth orbit (the equator pulls 0.14 % harder than the mean). To first order in J2 (Hill's equations
+ * under its pulls along a circle — radial −(3/2)k (1 − 3 sin²i sin²u), along the track −(3/2)k sin²i sin 2u,
+ * k = μ J2 R²/r⁴, u the argument of latitude from the ascending node), the radius swings ±X cos 2u about
+ * its mean r₀, X = J2 R² sin²i / 4r (1 km in a low orbit at 51.6°): the speed there n (r + X cos 2u), the
+ * radial rate −2nX sin 2u, n the mean motion under the mean pull μ [1 + (3/2) J2 (R/r₀)² (1 − (3/2) sin²i)].
+ * Flown, its radius swings the 2X the J2 itself makes. Any units, consistent (j2R2: J2 R²).
+ */
+export function meanCircular(mu: number, j2R2: number, z: Vec3, d: Vec3, v: Vec3): { v: Vec3; r0: number; X: number } {
+  const r = Math.hypot(d[0], d[1], d[2]);
+  const rh: Vec3 = [d[0] / r, d[1] / r, d[2] / r];
+  let h: Vec3 = [d[1] * v[2] - d[2] * v[1], d[2] * v[0] - d[0] * v[2], d[0] * v[1] - d[1] * v[0]];
+  let hl = Math.hypot(...h);
+  // (no motion across the radius: a plane through the pole's side)
+  if (!(hl > 1e-12 * r * Math.hypot(...v))) {
+    h = [rh[1] * z[2] - rh[2] * z[1], rh[2] * z[0] - rh[0] * z[2], rh[0] * z[1] - rh[1] * z[0]];
+    hl = Math.hypot(...h);
+    if (!(hl > 1e-9)) h = [rh[1], -rh[0], 0];
+    hl = Math.hypot(...h) || 1;
+  }
+  const hn: Vec3 = [h[0] / hl, h[1] / hl, h[2] / hl];
+  const ci = hn[0] * z[0] + hn[1] * z[1] + hn[2] * z[2];
+  const s2i = Math.max(1 - ci * ci, 0);
+  // the ascending node (along z × h), the argument of latitude's 2u
+  let nd: Vec3 = [z[1] * hn[2] - z[2] * hn[1], z[2] * hn[0] - z[0] * hn[2], z[0] * hn[1] - z[1] * hn[0]];
+  const nl = Math.hypot(...nd);
+  nd = nl > 1e-9 ? [nd[0] / nl, nd[1] / nl, nd[2] / nl] : rh;
+  const q: Vec3 = [hn[1] * nd[2] - hn[2] * nd[1], hn[2] * nd[0] - hn[0] * nd[2], hn[0] * nd[1] - hn[1] * nd[0]];
+  const cu = rh[0] * nd[0] + rh[1] * nd[1] + rh[2] * nd[2],
+    su = rh[0] * q[0] + rh[1] * q[1] + rh[2] * q[2];
+  const c2 = cu * cu - su * su,
+    s2 = 2 * su * cu;
+  const X = (j2R2 * s2i) / (4 * r);
+  const r0 = r - X * c2;
+  const n = Math.sqrt((mu * (1 + ((1.5 * j2R2) / (r0 * r0)) * (1 - 1.5 * s2i))) / r0 ** 3);
+  const vr = -2 * n * X * s2,
+    vh = n * (r + X * c2);
+  // (along the track: h × r̂)
+  const th: Vec3 = [hn[1] * rh[2] - hn[2] * rh[1], hn[2] * rh[0] - hn[0] * rh[2], hn[0] * rh[1] - hn[1] * rh[0]];
+  return { v: [rh[0] * vr + th[0] * vh, rh[1] * vr + th[1] * vh, rh[2] * vr + th[2] * vh], r0, X };
+}
+
+/** The mean circle's velocity through d about one of our bodies at time t [M, c] (meanCircular; a round body: √(μ/r) level). */
+export function circularVelocity(id: string, mu: number, d: Vec3, v: Vec3, t: number): { v: Vec3; r0: number; X: number } {
+  const z0 = ZONAL[id];
+  const far = !z0 || Math.hypot(d[0], d[1], d[2]) > REACH * z0.R;
+  return meanCircular(mu, far ? 0 : z0.J[0] * z0.R * z0.R, far ? [0, 0, 1] : poleOfDate(id, t), d, v);
+}
+
 /** The J2 secular rates of an orbit [rad per M of time]: its node, its periapsis, its mean anomaly's excess. */
 export function secularRates(mu: number, z0: Zonal, a: number, e: number, cosI: number) {
   const n = Math.sqrt(mu / a ** 3);
