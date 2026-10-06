@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { presets } from "../src/settings";
 import { sceneSlug } from "./scene-slug";
+import { chromeLock } from "./lib/chrome-lock";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -73,6 +74,8 @@ if (!(await up())) {
 // (old captures out of the way: what is in snapshots/ afterwards is this run's)
 for (const f of existsSync("snapshots") ? readdirSync("snapshots") : []) if (/^scene-.+\.webp$/.test(f)) rmSync(`snapshots/${f}`);
 
+// (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
+await chromeLock();
 procs.push(
   Bun.spawn(
     [

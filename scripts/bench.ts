@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { BenchReport, SceneReport } from "../src/bench/report";
+import { chromeLock } from "./lib/chrome-lock";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -45,6 +46,8 @@ const W = 1469,
 const CHROME =
   process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 
+// (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
+await chromeLock();
 const chrome = Bun.spawn(
   [
     CHROME,

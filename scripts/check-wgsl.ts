@@ -8,6 +8,7 @@
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Glob } from "bun";
+import { chromeLock } from "./lib/chrome-lock";
 
 const linux = process.platform === "linux";
 const CHROME =
@@ -23,6 +24,8 @@ const server = Bun.serve({
   port: 0,
   fetch: () => new Response("<!doctype html><title>wgsl</title>", { headers: { "content-type": "text/html" } }),
 });
+// (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
+await chromeLock();
 const chrome = Bun.spawn(
   [
     CHROME,

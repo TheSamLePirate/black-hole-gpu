@@ -16,13 +16,14 @@
 // scripts/flightlab.ts run --shard 2/2) they come back with the job's artifacts.
 // Shards: the scenarios dealt by their estimated duration (the longest first, each to the lightest shard) —
 // the same deal on every machine, so `--shard 1/2` here and `--shard 2/2` there cover them all once.
-import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { hostname } from "node:os";
 import { campaignReport, scenarioReport } from "../tests/flight/lib/charts";
 import { Lab, type Event, type Sample } from "../tests/flight/lib/lab";
 import { quality } from "../tests/flight/lib/quality";
 import { SCENARIOS, type Scenario } from "../tests/flight/scenarios/index";
 import { stopServer } from "../tests/e2e/lib/app";
+import { LAB_DIR } from "./lib/chrome-lock";
 
 const argv = process.argv.slice(2);
 const sub = argv[0];
@@ -178,6 +179,11 @@ async function run() {
       return new Response("status | shot | eval | pause | resume | skip | abort | note", { status: 404 });
     },
   });
+  // (registered for scripts/lab-monitor.ts: found, then asked through its control server)
+  const reg = `${LAB_DIR}/runs/${process.pid}.json`;
+  mkdirSync(`${LAB_DIR}/runs`, { recursive: true });
+  writeFileSync(reg, JSON.stringify({ pid: process.pid, port: server.port, out, cwd: process.cwd(), since: Date.now() }));
+  process.once("exit", () => rmSync(reg, { force: true }));
   say(
     `flightlab on ${MACHINE}: ${list.length} scenarios (~${list.reduce((a, s) => a + s.minutes, 0)} min) → ${out} · control 127.0.0.1:${server.port}`,
   );
@@ -191,6 +197,8 @@ async function run() {
       state.events = [];
       if (state.control === "skip") state.control = "run";
       say(`▶ ${sc.id} — ${sc.title}`);
+      // (what this machine's Chrome lock shows while this scenario holds it)
+      process.env.KERR_LAB_LABEL = `flightlab ${sc.id}`;
       let lastLine = 0;
       let lab: Lab | null = null;
       let verdict = "ERROR",

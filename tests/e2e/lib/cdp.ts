@@ -5,6 +5,7 @@
 // E2E_HOLD=<s>: each Chrome left open <s> seconds at its close, to see where the test left it.
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { chromeLock } from "../../../scripts/lib/chrome-lock";
 
 export interface Cdp {
   send<T = Record<string, unknown>>(method: string, params?: object): Promise<T>;
@@ -24,6 +25,8 @@ const GPU =
 export async function launch(o: { width?: number; height?: number; dpr?: number } = {}): Promise<Cdp> {
   const W = o.width ?? 1440,
     H = o.height ?? 900;
+  // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here)
+  const release = await chromeLock();
   const port = 9600 + Math.floor(Math.random() * 300);
   // (its own profile, removed on close: a run leaves nothing behind — they were 300 MB each)
   const profile = `${tmpdir()}/kerr-e2e-${port}`;
@@ -59,6 +62,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
   if (!page) {
     proc.kill();
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    release();
     throw new Error(`Chrome did not start (${CHROME})`);
   }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -91,6 +95,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
       proc.kill();
       Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
       rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      release();
     },
   };
 }

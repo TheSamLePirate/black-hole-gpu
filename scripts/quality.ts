@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { chromeLock } from "./lib/chrome-lock";
 // Deterministic realtime-vs-converged quality: the camera turns 0.2° per rendered frame (frame-locked),
 // stops on a realtime frame, which is captured; the same view is then left to converge (reference).
 // PSNR of the realtime capture against it (centre crop), for each config, averaged over stops.
@@ -24,6 +25,8 @@ const refJs = process.env.REF_JS ?? "";
 const step = process.env.STEP_JS ?? `__bh.camera.rotateView(${speed}, ${0.15 * speed}, 0)`;
 const animate = process.env.ANIMATE === "1";
 const port = 9570 + Math.floor(Math.random() * 20);
+// (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
+await chromeLock();
 const chrome = Bun.spawn(
   [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",

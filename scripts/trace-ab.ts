@@ -12,6 +12,7 @@
 // new): the machine's heat and clocks drift on both alike. A/A: ±1 % on the heavy scenes. Measure alone.
 
 import { tmpdir } from "node:os";
+import { chromeLock } from "./lib/chrome-lock";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -33,6 +34,8 @@ const W = 1469,
   H = 965;
 const CHROME =
   process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
+// (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
+await chromeLock();
 const chrome = Bun.spawn(
   [
     CHROME,
