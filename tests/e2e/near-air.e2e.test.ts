@@ -5,7 +5,9 @@ import { GARGANTUA_SYSTEM } from "../../src/system/bodies";
 // Gargantua's worlds' air (Miller, Mann, Edmunds) as the tracer draws it: the real nearAir and earthAir
 // run on the GPU (only the light stubbed: the sun overhead, unit irradiance) for a camera 2 m over the
 // ground — their zenith's transmittance against the exponential air's column, their sky lit. A field of
-// the air's spec once left at zero (its z scale) flattened that air onto the ground: no sky at all.
+// the air's spec once left at zero (its z scale) flattened that air onto the ground: no sky at all. And
+// the Moon's eclipses (P.eclipse, on the Earth's axes) leave their sky alone: one set before their sun
+// once dimmed it.
 
 const trace = await Bun.file(new URL("../../src/shaders/trace.wgsl", import.meta.url)).text();
 function shaderFunction(name: string) {
@@ -81,11 +83,15 @@ test.skipIf(!E2E)(
     @compute @workgroup_size(1) fn check(@builtin(global_invocation_id) id:vec3u){
       switch id.x {${init} default:{return;}}
       let a=nearAir(vec3f(0.0,0.0,1.0),1e30,0u);
-      let i=id.x*8u;
+      let i=id.x*12u;
       out[i]=a.T.r; out[i+1u]=a.T.g; out[i+2u]=a.T.b; out[i+3u]=a.L.r; out[i+4u]=a.L.g; out[i+5u]=a.L.b;
       out[i+6u]=airTop();
+      // (the Moon, as P.eclipse gives it, right before this world's sun: the Earth's eclipse, not theirs)
+      P.eclipse=vec4f(-P.near0.xyz+10.0*P.near4.xyz,1.0); P.earth4.y=0.0047;
+      let e=nearAir(vec3f(0.0,0.0,1.0),1e30,0u);
+      out[i+7u]=e.L.r; out[i+8u]=e.L.g; out[i+9u]=e.L.b;
     }`;
-    const bytes = cases.length * 8 * 4;
+    const bytes = cases.length * 12 * 4;
     const app = await App.boot({ width: 320, height: 240 });
     try {
       const values = await app.js<number[]>(`(async()=>{
@@ -102,7 +108,7 @@ test.skipIf(!E2E)(
       }finally{out.destroy();read.destroy();}
     })()`);
       cases.forEach((c, k) => {
-        const v = values.slice(k * 8, k * 8 + 8);
+        const v = values.slice(k * 12, k * 12 + 10);
         expect(v.every(Number.isFinite)).toBe(true);
         // (the top 12 scale heights up: the whole column below it)
         expect(v[6]).toBeCloseTo(c.near5[2]!, 6);
@@ -111,6 +117,7 @@ test.skipIf(!E2E)(
         // the sky lit, bluer than red
         expect(v[3]).toBeGreaterThan(0);
         expect(v[5]).toBeGreaterThan(v[3]!);
+        for (let j = 0; j < 3; j++) expect(v[7 + j]! / v[3 + j]!).toBeCloseTo(1, 6);
       });
       expect(app.cdp.errors).toEqual([]);
     } finally {

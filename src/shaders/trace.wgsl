@@ -3772,7 +3772,7 @@ struct AirSpec {
   g: vec3f,    // their asymmetry, per colour
   k: f32,      // drawn thicker (1: as it is)
   sky: vec3f,  // the sky's light on the ground by day, over the sunlight's irradiance
-  moon: f32,   // the Moon's light scattered too (the Earth: 1)
+  moon: f32,   // the Moon's light scattered too, its eclipses dimming the Sun (the Earth: 1)
 };
 var<private> AIR: AirSpec;
 // the maps (solar.ts: MAPS_HI, then MAPS_LO) of the worlds with air
@@ -3981,8 +3981,10 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let Ts = sunThrough(h, dot(normal, physicalLs));
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
     // the molecules' single scattering, a third of the aerosols'; under an eclipse the single scattering
-    // needs the Sun seen from there, the multiple the sunlit air around: the totality's sky a deep blue)
-    let s1 = sunSeen(p, Ls);
+    // needs the Sun seen from there, the multiple the sunlit air around: the totality's sky a deep blue —
+    // the Moon's eclipses, in the Earth's axes, its air's alone: another world's would be dimmed by a Moon
+    // placed on its own axes)
+    let s1 = select(1.0, sunSeen(p, Ls), AIR.moon > 0.5);
     let sM = select(max(s1, skySeen(p, Ls)), 1.0, s1 >= 1.0);
     let sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
     let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
