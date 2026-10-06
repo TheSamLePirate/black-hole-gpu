@@ -112,7 +112,7 @@ export class EarthTiles {
   private sinLat = 0;
   /** bumped when what the tracer draws changes (a level's valid rectangle) */
   stamp = 0;
-  /** heights of the global map (for a tile that will not load) */
+  /** heights of the global map (for a tile that will not load: terrain.ts, tileFallbackSampler) */
   fallback: ((q: Vec3) => number) | null = null;
   onChange: (() => void) | null = null;
   /** tiles loaded, failed (for the readouts) */

@@ -68,7 +68,7 @@ import {
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { altitudeOver, setGroundHeights, setGroundRelief } from "./system/our-surface";
-import { EARTH_RM, earthHeightSampler, mapHeightSampler } from "./terrain";
+import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
@@ -965,14 +965,8 @@ export class Renderer {
             // (the runways graded: the gear rolls on them — game/sites.ts)
             earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot), runwayWeight),
           );
-          // (a tile that will not load: the map's heights there)
-          this.earthTiles.fallback = (q) => {
-            const x = (0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI)) * W - 0.5,
-              y = (0.5 - Math.asin(q[2]) / Math.PI) * H - 0.5;
-            const i = ((Math.floor(x) % W) + W) % W,
-              j = Math.min(Math.max(Math.floor(y), 0), H - 1);
-            return Math.max(map[j * W + i]!, 0);
-          };
+          // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
+          this.earthTiles.fallback = tileFallbackSampler(map, W, H);
         }
         if (this.live) this.bindTarget(this.live);
         if (this.offline) {

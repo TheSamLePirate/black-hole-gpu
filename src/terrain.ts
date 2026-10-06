@@ -339,6 +339,19 @@ export function mapHeightSampler(map: Int16Array, W: number, H: number) {
 }
 
 /**
+ * The heights a terrain tile takes where its own will not load (offline, refused, timed out): the map's,
+ * sampled as the ground had them (mapHeightSampler's B-spline, the sea floor at 0) — on a runway, graded
+ * flat, the very ground the craft rolled on before the tile; elsewhere a ground as smooth as the map's
+ * (the tracer's detail then the tile's own octaves: finer, no longer the map's — a change in the hills,
+ * never a step). (Read at the map's nearest texel, they once made terraces — steps of metres a kilometre
+ * apart: a landing's rollout at Edwards ran into one and broke its gear.)
+ */
+export function tileFallbackSampler(map: Int16Array, W: number, H: number) {
+  const fromMap = mapHeightSampler(map, W, H);
+  return (q: V3): number => Math.max(fromMap(q), 0);
+}
+
+/**
  * The Earth's height [m] at a unit direction on its axes, from its height map (whole metres per texel,
  * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
  * samples it near — a cubic B-spline over its texels, wrapping in longitude — under the terrain tiles

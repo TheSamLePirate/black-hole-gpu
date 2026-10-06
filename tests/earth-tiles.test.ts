@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, Z0, Z1 } from "../src/system/earth-tiles";
-import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
+import { EARTH_RUNWAYS, runwayWeight } from "../src/game/sites";
+import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
+import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
 // The terrain tiles round the camera (src/system/earth-tiles.ts): the levels it wants, the heights it
 // gives the ship (the tracer's weights, trace.wgsl: earthH) — fed here with a known field instead of
@@ -108,4 +110,35 @@ test("a level's samples: bilinear and B-spline exact on a ramp, the windows' edg
   expect(edge(1, 500, 1024, 1024)).toBe(0);
   expect(edge(512, 512, 1024, 1024)).toBe(1);
   expect(edge(25, 512, 1024, 1024)).toBeGreaterThan(0.3);
+});
+
+test("tiles that will not load keep the ground: a runway's the same, no terrace anywhere", () => {
+  // (a map of 0.5° texels whose heights jump by up to 400 m from one texel to the next)
+  const W = 720,
+    H = 360;
+  const map = new Int16Array(W * H).map((_, k) => 500 + (((k % W) * 37 + Math.floor(k / W) * 91) % 400));
+  const t = new EarthTiles(fakeDevice());
+  t.fallback = tileFallbackSampler(map, W, H);
+  const ground = earthHeightSampler(map, W, H, (q, foot) => t.heightAt(q, foot), runwayWeight);
+  // (Edwards's runway 22, the craft rolling down it: the ground before any tile, then with every tile failed in)
+  t.update(camAt(34.905, -117.884, 2), 1e-3);
+  const rwy = EARTH_RUNWAYS.find((r) => r.site.name.includes("Edwards"))!;
+  // (every 100 m of its 4.5 km, as the relief is read: the geodetic direction)
+  const along = Array.from({ length: 46 }, (_, k): Vec3 => {
+    const g = cartToGeodetic(WGS84_A, WGS84_F, rwy.origin.map((o, i) => o + rwy.along[i]! * k * 100) as Vec3);
+    return dir(g.lat / deg, g.lon / deg);
+  });
+  const off = Array.from({ length: 201 }, (_, k) => dir(34.95, -117.95 + k * 2e-4));
+  const before = along.map((q) => ground(q, 1));
+  const tiles = t as unknown as { levels: unknown[]; fromFallback(L: unknown, x: number, y: number): Float32Array };
+  for (const [z, x, y] of t.wanted()) t.put(z, x, y, tiles.fromFallback(tiles.levels[z - Z0], x, y));
+  expect(t.pending).toBe(0);
+  // (on the graded runway: the same ground to a decimetre — read at the nearest texel it rose by tens of metres)
+  along.forEach((q, k) => {
+    expect(runwayWeight(q)).toBe(1);
+    expect(Math.abs(ground(q, 1) - before[k]!)).toBeLessThan(0.1);
+  });
+  // (off it, 20 m apart: no step — the terraces were the map's texel-to-texel jumps, up to 400 m here)
+  const h = off.map((q) => ground(q, 1));
+  for (let k = 1; k < h.length; k++) expect(Math.abs(h[k]! - h[k - 1]!)).toBeLessThan(15);
 });
