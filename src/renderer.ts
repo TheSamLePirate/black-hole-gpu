@@ -3789,14 +3789,25 @@ export class Renderer {
     );
   }
   private timingGeneration = 0;
-  /** Forget timing history when the hardware policy changes. */
+  /**
+   * Forget the frames' timing (the blocks' measured times, the recent frames, frames still in flight)
+   * when what they measured changed — a specialised kernel landing, a compile or a stream starting or
+   * ending (calibrationReady), the tier. The image is left alone: none of those changes a pixel (a
+   * specialised kernel draws what the general one does, faster; the Earth's tiles and the quality
+   * kernel invalidate on their own as they land) — invalidating here restarted a converged still
+   * view, and its temporal history, at every tile stream (audit M1).
+   */
   resetQualityTiming() {
     this.timingGeneration++;
     this.blockMs.clear();
     this.recentMs.length = 0;
     this.slowMs = this.fastMs = 0;
-    this.frameTimes.length = 0;
     this.lastGpuMs = 0;
+  }
+  /** A new hardware tier: its precision caps (effectiveQuality) change the image — drawn anew. */
+  setTier(tier: Tier) {
+    this.tier = tier;
+    this.resetQualityTiming();
     this.invalidate();
   }
   /** when the GPU last finished a frame [performance.now() ms] */

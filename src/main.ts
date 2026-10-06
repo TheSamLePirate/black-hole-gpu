@@ -2173,6 +2173,7 @@ async function main() {
         gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
       }
     }
+    // (a compile or a stream begun or ended: the timings measured afresh — the image untouched)
     const calibrationReady = renderer.calibrationReady;
     if (calibrationReady !== calibrationWasReady) {
       calibrationWasReady = calibrationReady;
@@ -2270,8 +2271,7 @@ async function main() {
         const up = promoted(renderer.tier);
         idleAtCap = 0;
         if (up) {
-          renderer.tier = up;
-          renderer.resetQualityTiming();
+          renderer.setTier(up);
           scaleMs.clear();
           gpuEma = 0;
           scaleHeld = 0;
@@ -2287,8 +2287,7 @@ async function main() {
         const down = demoted(renderer.tier);
         overAtFloor = 0;
         if (down) {
-          renderer.tier = down;
-          renderer.resetQualityTiming();
+          renderer.setTier(down);
           scaleMs.clear();
           gpuEma = 0;
           scaleHeld = 0;
