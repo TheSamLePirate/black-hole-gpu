@@ -1007,7 +1007,7 @@ export class Renderer {
   private requestHd(name: MapName) {
     if (this.hdMap.name === name || this.hdLoading === name) return;
     this.hdLoading = name;
-    loadHdMap(this.device, name)
+    loadHdMap(this.device, name, this.tier)
       .then((m) => {
         // (superseded while it loaded: both its textures freed — the relief leaked before)
         if (!m || this.hdLoading !== name) {

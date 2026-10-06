@@ -31,8 +31,10 @@ for (const fallback of [false, true]) {
         const map = await app.js(`({width:__bh.renderer.hdMap.color.width, height:__bh.renderer.hdMap.color.height,
           format:__bh.renderer.hdMap.color.format, mips:__bh.renderer.hdMap.color.mipLevelCount,
           hasRelief:__bh.renderer.hdMap.hasRelief, errors:__bh.renderer.gpuErrors,
-          compressed:__bh.renderer.device.features.has("texture-compression-bc") || __bh.renderer.device.features.has("texture-compression-astc")})`);
-        const native = !fallback && map.compressed;
+          compressed:__bh.renderer.device.features.has("texture-compression-bc") || __bh.renderer.device.features.has("texture-compression-astc"),
+          tier:__bh.renderer.tier.level})`);
+        // (the 8K map: a tier ≥ 2 only — the lower ones keep the JPEG)
+        const native = !fallback && map.compressed && map.tier >= 2;
         expect(map.width).toBe(native ? 8192 : 4096);
         expect(map.height).toBe(map.width / 2);
         expect(map.mips).toBe(native ? 14 : 13);

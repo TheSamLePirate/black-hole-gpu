@@ -22,6 +22,7 @@ import jupiterKtx from "../../assets/planets-hd/jupiter-color.ktx2";
 import jupiterMetadata from "../../assets/planets-hd/jupiter.json";
 import { ktxFormat, ktxLevels, ktxTarget, writeLevels } from "./ktx2";
 import { gpuDiagnostics } from "../gpu-diagnostics";
+import type { Tier } from "../tier";
 import saturnColor from "../../assets/planets-hd/saturn-color.jpg";
 import ioColor from "../../assets/planets-hd/io-color.jpg";
 import ioNormal from "../../assets/planets-hd/io-normal.jpg";
@@ -169,10 +170,21 @@ async function bitmap(url: string) {
   return createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
 }
 
+/** the compressed Jupiter failed this session (a fetch, the transcoder, the GPU's memory): not retried */
+let jupiterFailed = false;
+
+/**
+ * Whether Jupiter's 8K compressed map is worth fetching here: 32 MB to download and ~96 MB of transcoder
+ * heap while it decodes — a tier ≥ 2 (not a phone, a weak GPU, a ≤ 4 GB device) sampling BC7 or ASTC at
+ * 8192, and no failure yet this session. The others keep the 4K JPEG (3 MB).
+ */
+export function wantsJupiterKtx(device: Pick<GPUDevice, "features" | "limits">, tier: Pick<Tier, "level">): boolean {
+  return !jupiterFailed && tier.level >= 2 && ktxTarget(device) !== "rgba" && device.limits.maxTextureDimension2D >= jupiterMetadata.width;
+}
+
 /** Upload prebuilt mips directly: no full-size RGBA staging image or runtime BC encoder. */
 async function jupiterCompressed(device: GPUDevice): Promise<HdMap | null> {
   const target = ktxTarget(device);
-  if (target === "rgba" || device.limits.maxTextureDimension2D < jupiterMetadata.width) return null;
   let color: GPUTexture | null = null;
   let relief: GPUTexture | null = null;
   try {
@@ -212,16 +224,17 @@ async function jupiterCompressed(device: GPUDevice): Promise<HdMap | null> {
   } catch (error) {
     color?.destroy();
     relief?.destroy();
+    jupiterFailed = true;
     gpuDiagnostics.record("jupiter-hd-fallback", error);
     console.warn("Jupiter compressed map unavailable, using the 4K JPEG:", error);
     return null;
   }
 }
 
-export async function loadHdMap(device: GPUDevice, name: MapName): Promise<HdMap | null> {
+export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tier, "level">): Promise<HdMap | null> {
   const set = HD_SETS[name];
   if (!set) return null;
-  if (name === "jupiter") {
+  if (name === "jupiter" && wantsJupiterKtx(device, tier)) {
     const compressed = await jupiterCompressed(device);
     if (compressed) return compressed;
   }

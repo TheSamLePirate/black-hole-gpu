@@ -8,6 +8,13 @@ let worker: Worker | null = null;
 let failed = false;
 let next = 1;
 const waiting = new Map<number, (r: KtxReply) => void>();
+/**
+ * The worker let go once idle this long [ms]: its Emscripten heap grows to the largest file it has
+ * transcoded (~96 MB for Jupiter's 8K map) and never shrinks — terminated, it is returned; the next
+ * file starts another worker.
+ */
+export const KTX_IDLE_MS = 10_000;
+let idle: ReturnType<typeof setTimeout> | undefined;
 
 function getWorker(): Worker | null {
   if (worker || failed || typeof Worker === "undefined") return worker;
@@ -17,6 +24,7 @@ function getWorker(): Worker | null {
       const f = waiting.get(e.data.id);
       waiting.delete(e.data.id);
       f?.(e.data);
+      if (!waiting.size) idle = setTimeout(release, KTX_IDLE_MS);
     };
     worker.onerror = () => {
       failed = true;
@@ -28,6 +36,11 @@ function getWorker(): Worker | null {
     failed = true;
   }
   return worker;
+}
+
+function release() {
+  worker?.terminate();
+  worker = null;
 }
 
 /** What this device can sample of the compressed formats (the features the renderer asked for). */
@@ -44,6 +57,7 @@ export function ktxFormat(t: KtxTarget): GPUTextureFormat {
 
 /** A KTX2 file's levels, transcoded for the target (rejects without a worker or on error). */
 export function ktxLevels(url: string, target: KtxTarget): Promise<{ width: number; height: number; levels: Uint8Array[] }> {
+  clearTimeout(idle);
   const w = getWorker();
   if (!w) return Promise.reject(new Error("no KTX2 worker"));
   const id = next++;

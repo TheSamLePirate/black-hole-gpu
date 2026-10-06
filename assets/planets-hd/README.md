@@ -20,9 +20,12 @@ Viking, MESSENGER, Galileo, Cassini, New Horizons, Dawn).
 
 `jupiter-color.ktx2`: 8192 × 4096 UASTC with all 14 mip levels, transcoded in a worker to native
 BC7 or ASTC 4×4 sRGB. The complete GPU colour texture occupies about 42.7 MiB, uploaded directly
-without a full-resolution RGBA staging texture or a runtime compression pass. Devices without
-these compression formats, devices with a smaller texture limit, and failed compressed uploads use
-the 4096 × 2048 JPEG. A compressed-path failure is recorded as `jupiter-hd-fallback` in GPU diagnostics.
+without a full-resolution RGBA staging texture or a runtime compression pass. It is a 32 MB download
+and ~96 MB of transcoder heap while it decodes (the worker is terminated once idle), so only hardware
+tiers ≥ 2 fetch it; lower tiers (phones, weak GPUs, ≤ 4 GB devices), devices without these
+compression formats or with a smaller texture limit, and failed compressed uploads use the 4096 × 2048
+JPEG. A compressed-path failure is recorded as `jupiter-hd-fallback` in GPU diagnostics and not retried
+for the session. The Service Worker keeps it, like every hashed asset, cache-first.
 Only the nearby body's HD map is resident; the existing unload distance still applies.
 
 Source: Björn Jónsson's [merged Cassini and Juno global map](https://www.planetary.org/space-images/merged-cassini-and-juno),
