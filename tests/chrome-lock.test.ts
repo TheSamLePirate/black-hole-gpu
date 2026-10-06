@@ -21,7 +21,9 @@ test("three processes wanting Chrome hold it one after the other", async () => {
   writeFileSync(file, holderScript(out));
   const procs = [0, 1, 2].map(() => Bun.spawn(["bun", file], { env: { ...process.env, HOME: home }, stderr: "inherit" }));
   for (const p of procs) expect(await p.exited).toBe(0);
-  const spans = procs.map((p) => JSON.parse(readFileSync(join(out, `${p.pid}.json`), "utf8")) as [number, number]).sort((a, b) => a[0] - b[0]);
+  const spans = procs
+    .map((p) => JSON.parse(readFileSync(join(out, `${p.pid}.json`), "utf8")) as [number, number])
+    .sort((a, b) => a[0] - b[0]);
   for (let k = 1; k < spans.length; k++) expect(spans[k]![0]).toBeGreaterThanOrEqual(spans[k - 1]![1]);
 }, 30_000);
 
@@ -30,9 +32,32 @@ test("a holder whose process is gone is cleared", async () => {
   const out = mkdtempSync(join(tmpdir(), "kerr-lock-out-"));
   // (a lock left by a process that no longer exists)
   mkdirSync(join(home, ".kerr-lab", "chrome.lock"), { recursive: true });
-  writeFileSync(join(home, ".kerr-lab", "chrome.lock", "owner.json"), JSON.stringify({ pid: 999_999, label: "gone", cwd: "", host: "", since: 0 }));
+  writeFileSync(
+    join(home, ".kerr-lab", "chrome.lock", "owner.json"),
+    JSON.stringify({ pid: 999_999, label: "gone", cwd: "", host: "", since: 0 }),
+  );
   const file = join(out, "holder.ts");
   writeFileSync(file, holderScript(out));
   const p = Bun.spawn(["bun", file], { env: { ...process.env, HOME: home }, stderr: "inherit" });
   expect(await p.exited).toBe(0);
 }, 30_000);
+
+test("a test Chrome whose process died is found and ended — never the user's own Chrome", async () => {
+  const { orphanChromes } = await import("../scripts/lib/chrome-lock");
+  // (an orphan: a process named like a test Chrome — a DevTools port — whose parent exited, adopted by launchd)
+  Bun.spawnSync([
+    "bash",
+    "-c",
+    `(exec -a "Google Chrome" perl -e 'sleep 60' -- --remote-debugging-port=9999 --user-data-dir=/tmp/kerr-e2e-test &)`,
+  ]);
+  // (the user's Chrome: no DevTools port — left alone)
+  Bun.spawnSync(["bash", "-c", `(exec -a "Google Chrome" perl -e 'sleep 60' -- --user-data-dir=/tmp/kerr-user-test &)`]);
+  await Bun.sleep(300);
+  const found = orphanChromes().filter((o) => o.profile === "/tmp/kerr-e2e-test");
+  expect(found.length).toBe(1);
+  expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-user-test")).toBe(false);
+  orphanChromes(true);
+  await Bun.sleep(300);
+  expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-e2e-test")).toBe(false);
+  Bun.spawnSync(["pkill", "-f", "kerr-user-test"]);
+});

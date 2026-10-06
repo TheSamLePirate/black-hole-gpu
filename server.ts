@@ -1,6 +1,17 @@
 import index from "./index.html";
 
 const port = Number(process.env.PORT ?? 3000);
+// (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
+// an orphan holding its port once that process has died hard)
+const parent = Number(process.env.KERR_PARENT_PID ?? 0);
+if (parent)
+  setInterval(() => {
+    try {
+      process.kill(parent, 0);
+    } catch {
+      process.exit(0);
+    }
+  }, 2000);
 const dev = process.env.NODE_ENV !== "production";
 
 const server = Bun.serve({

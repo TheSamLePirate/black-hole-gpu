@@ -10,10 +10,11 @@
 //   bun scripts/lab-monitor.ts --watch [s]     refreshed every s seconds (5)
 //   bun scripts/lab-monitor.ts --local         this Mac only
 //   bun scripts/lab-monitor.ts --json          the state as JSON (what the other Mac answers over ssh)
+//   bun scripts/lab-monitor.ts --sweep         and the orphan Chromes ended (a dead process's, still rendering)
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
-import { holder, LAB_DIR, waiters } from "./lib/chrome-lock";
+import { holder, LAB_DIR, orphanChromes, waiters } from "./lib/chrome-lock";
 
 const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
 const RUNNER_DIR = join(homedir(), process.env.KERR_REMOTE_DIR ?? "kerr-runner");
@@ -42,6 +43,8 @@ interface State {
   campaigns: Campaign[];
   jobs: { id: string; state: string; cmd: string; started?: number }[];
   tests: { pid: number; elapsed: string; cmd: string; cwd: string }[];
+  /** what dead processes left running: Chromes, the tests' servers */
+  orphans: { pid: number; elapsed: string; what: string }[];
 }
 
 const alive = (pid: number) => {
@@ -106,7 +109,26 @@ async function local(): Promise<State> {
     cmd: m[3]!.slice(0, 120),
     cwd: cwdOf(Number(m[1])),
   }));
-  return { host: hostname().replace(/\.local$/, ""), at: Date.now(), lock: holder(), waiting: waiters(), chromes, campaigns, jobs, tests };
+  const sweep = argv.includes("--sweep");
+  const orphans = [
+    ...orphanChromes(sweep).map((o) => ({ pid: o.pid, elapsed: o.elapsed, what: `Chrome ${o.profile}${sweep ? " — ended" : ""}` })),
+    // (a test's production server outlives its process no longer — server.ts watches KERR_PARENT_PID —: an
+    // older one still may)
+    ...ps("bun server\\.ts")
+      .filter((m) => Bun.spawnSync(["ps", "-o", "ppid=", "-p", m[1]!], { stdout: "pipe" }).stdout.toString().trim() === "1")
+      .map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, what: `bun server.ts in ${where(cwdOf(Number(m[1])))}` })),
+  ];
+  return {
+    host: hostname().replace(/\.local$/, ""),
+    at: Date.now(),
+    lock: holder(),
+    waiting: waiters(),
+    chromes,
+    campaigns,
+    jobs,
+    tests,
+    orphans,
+  };
 }
 
 async function remote(): Promise<State | string> {
@@ -180,6 +202,7 @@ function show(s: State | string, title: string) {
     for (const d of done.filter((x) => !x.startsWith("PASS")).slice(-3)) console.log(`      ✗ ${d.slice(0, 150)}`);
   }
   for (const j of s.jobs) console.log(`  job ${j.state}: ${j.id} · ${j.cmd.slice(0, 90)}${j.started ? ` · ${age(j.started)}` : ""}`);
+  for (const o of s.orphans ?? []) console.log(`  ⚠ orphan pid ${o.pid} ${o.elapsed}: ${o.what}`);
   for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed} · ${where(t.cwd)}: ${t.cmd}`);
   console.log("");
 }

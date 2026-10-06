@@ -27,6 +27,9 @@
 // is pulled at each sync — fast-forward only, never in the way of the run: the jobs run on the copy sent
 // from here, not on it.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { LAB_DIR } from "./lib/chrome-lock";
+import { shellJoin } from "./lib/shell";
 
 const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
 const DIR = process.env.KERR_REMOTE_DIR ?? "kerr-runner";
@@ -87,10 +90,15 @@ async function runner(args: string[], o: { stdin?: Uint8Array; quiet?: boolean }
   return { code: await p.exited, out: out.trim() };
 }
 
-/** One sync at a time from here (two runs started together would prune each other's base). */
+/**
+ * One sync at a time from this Mac — from any of its checkouts and worktrees: the other Mac has one base,
+ * and two syncs of different trees pruned each other's files while their jobs' copies were made (agents'
+ * worktrees did, jobs then died at once) — the lock in ~/.kerr-lab, not in this checkout.
+ */
 async function withSyncLock<T>(f: () => Promise<T>) {
   mkdirSync(RESULTS, { recursive: true });
-  const lock = `${RESULTS}/.sync.lock`;
+  const lock = join(LAB_DIR, "sync.lock");
+  mkdirSync(LAB_DIR, { recursive: true });
   for (let i = 0; ; i++) {
     try {
       mkdirSync(lock);
@@ -241,7 +249,7 @@ if (sub === "run") {
   const dd = argv.indexOf("--");
   if (dd < 0 || dd === argv.length - 1) die("run [--headless] [--cpu] [--hold s] [--name n] [--detach] -- <command…>");
   const opts = argv.slice(1, dd);
-  const cmd = argv.slice(dd + 1).join(" ");
+  const cmd = shellJoin(argv.slice(dd + 1));
   const flag = (k: string) => opts.includes(`--${k}`);
   const val = (k: string) => {
     const i = opts.indexOf(`--${k}`);

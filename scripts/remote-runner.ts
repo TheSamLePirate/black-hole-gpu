@@ -51,6 +51,8 @@ interface Meta extends Job {
   ended?: number;
   exit?: number;
   pid?: number;
+  /** the job's process group (its zsh, and the server and Chrome it starts) */
+  pgid?: number;
   error?: string;
 }
 
@@ -69,6 +71,37 @@ const alive = (pid: number) => {
     return false;
   }
 };
+
+/** The job's whole group ended — its zsh, its server, its Chrome —, whether its worker lives or not. */
+function killGroup(m: Meta, sig: NodeJS.Signals) {
+  if (m.pgid)
+    try {
+      process.kill(-m.pgid, sig);
+    } catch {}
+  if (m.pid)
+    for (const k of spawnSync("pgrep", ["-P", String(m.pid)])
+      .stdout.toString()
+      .split("\n")
+      .filter(Boolean))
+      try {
+        process.kill(-Number(k), sig);
+      } catch {}
+}
+
+/**
+ * A job whose worker died (killed, crashed) is done — said so, what it started ended, the GPU let go if it
+ * held it —, never "running" for ever (the monitor once showed two such ghosts).
+ */
+function settle(m: Meta): Meta {
+  if (m.state === "done" || !m.pid || alive(m.pid)) return m;
+  killGroup(m, "SIGKILL");
+  try {
+    if (JSON.parse(readFileSync(join(LOCK, "owner"), "utf8")).pid === m.pid) rmSync(LOCK, { recursive: true, force: true });
+  } catch {}
+  Object.assign(m, { state: "done", ended: Date.now(), exit: m.exit ?? 255, error: m.error ?? "its worker died" });
+  writeMeta(m);
+  return m;
+}
 const fail = (msg: string): never => {
   console.error(`remote-runner: ${msg}`);
   process.exit(2);
@@ -161,6 +194,8 @@ async function worker(id: string) {
   writeMeta(m);
   const env = { ...process.env, PATH, KERR_REMOTE_JOB: id, E2E_HEADED: m.headed ? "1" : "", E2E_HOLD: m.hold ? String(m.hold) : "" };
   const child = spawn("/bin/zsh", ["-c", m.cmd], { cwd: run, env, detached: true, stdio: ["ignore", log, log] });
+  m.pgid = child.pid;
+  writeMeta(m);
   // (the screen and the machine kept awake while it runs: a sleeping display stops a headed page's frames)
   if (m.gpu) spawn("caffeinate", ["-dimsu", "-w", String(child.pid)], { stdio: "ignore" }).unref();
   const code = await new Promise<number>((ok) => child.on("exit", (c, s) => ok(c ?? 128 + (s === "SIGKILL" ? 9 : 15))));
@@ -204,7 +239,10 @@ async function follow(id: string, from: number) {
       }
     }
     if (m.state === "done") process.exit(m.exit ?? 1);
-    if (m.pid && !alive(m.pid)) fail(`${id}: its worker died (state ${m.state})`);
+    if (m.pid && !alive(m.pid)) {
+      settle(m);
+      fail(`${id}: its worker died (state ${m.state}) — settled, what it started ended`);
+    }
     await Bun.sleep(500);
   }
 }
@@ -220,7 +258,7 @@ function status() {
       console.log(`${id}  (prepared, not started)`);
       continue;
     }
-    if (m.state !== "done" && m.pid && !alive(m.pid)) m.state = "done";
+    m = settle(m);
     const took = m.ended && m.started ? fmt(m.ended - m.started) : m.started ? `${fmt(Date.now() - m.started)}…` : "";
     const flags = [m.gpu && "gpu", m.headed && "headed"].filter(Boolean).join(",");
     console.log(`${`${id}  ${m.state.padEnd(7)} ${m.exit ?? ""}`.padEnd(48)}${took.padEnd(8)} ${flags.padEnd(10)} ${m.cmd.slice(0, 90)}`);
@@ -228,17 +266,10 @@ function status() {
 }
 
 function cancel(id: string) {
-  const m = readMeta(id);
-  if (m.state === "done") return console.log(`${id} already done`);
-  // (the worker's child group: the job, its server, its Chrome; the worker then writes its end)
-  const kids = spawnSync("pgrep", ["-P", String(m.pid)])
-    .stdout.toString()
-    .split("\n")
-    .filter(Boolean);
-  for (const k of kids)
-    try {
-      process.kill(-Number(k), "SIGTERM");
-    } catch {}
+  const m = settle(readMeta(id));
+  if (m.state === "done") return console.log(`${id} ${m.error === "its worker died" ? "settled (its worker had died)" : "already done"}`);
+  // (the job's group: its zsh, its server, its Chrome — the worker then writes its end)
+  killGroup(m, "SIGTERM");
   if (m.state === "queued" && m.pid) {
     process.kill(m.pid, "SIGTERM");
     Object.assign(m, { state: "done", ended: Date.now(), exit: 130, error: "cancelled" });

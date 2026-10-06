@@ -55,6 +55,37 @@ const read = (f: string): Holder | null => {
   }
 };
 
+/**
+ * The test Chromes left behind — a browser started with a DevTools port whose process died hard (a crash,
+ * a SIGKILL, an agent stopped) is adopted by launchd and runs on, its GPU taken: found by that (a main
+ * Chrome process, --remote-debugging-port, parent 1 — the user's own Chrome has no such port) and, with
+ * `kill`, ended. Swept whenever the lock is taken; scripts/lab-monitor.ts shows them.
+ */
+export function orphanChromes(kill = false): { pid: number; elapsed: string; profile: string }[] {
+  const out: { pid: number; elapsed: string; profile: string }[] = [];
+  const ps = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,etime=,command="], { stdout: "pipe" }).stdout.toString();
+  for (const line of ps.split("\n")) {
+    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/);
+    if (
+      !m ||
+      m[2] !== "1" ||
+      !/Chrome|chromium|chrome/.test(m[4]!) ||
+      !m[4]!.includes("--remote-debugging-port=") ||
+      m[4]!.includes("--type=")
+    )
+      continue;
+    const o = { pid: Number(m[1]), elapsed: m[3]!, profile: m[4]!.match(/--user-data-dir=(\S+)/)?.[1] ?? "" };
+    out.push(o);
+    if (kill)
+      try {
+        process.kill(o.pid, "SIGKILL");
+      } catch {
+        /* (gone meanwhile) */
+      }
+  }
+  return out;
+}
+
 /** The holder now (null: free), a dead one cleared. */
 export function holder(): Holder | null {
   if (!existsSync(LOCK)) return null;
@@ -139,6 +170,8 @@ async function take(label: string) {
   const me: Holder = { pid: process.pid, label, cwd: process.cwd(), host: hostname(), since: Date.now() };
   const file = `${me.since}-${process.pid}-${Math.random().toString(36).slice(2, 8)}.json`;
   writeFileSync(join(WAIT, file), JSON.stringify(me));
+  // (a Chrome some dead process left running: ended before anyone counts on having the GPU alone)
+  for (const o of orphanChromes(true)) console.error(`chrome-lock: ended an orphan Chrome (pid ${o.pid}, ${o.elapsed}, ${o.profile})`);
   let said = 0;
   try {
     for (;;) {
@@ -156,9 +189,12 @@ async function take(label: string) {
       }
       if (Date.now() - said > 30_000) {
         said = Date.now();
-        const ahead = waiters().findIndex((w) => w.file === file);
+        const queue = waiters();
+        const ahead = queue.findIndex((w) => w.file === file);
         console.error(
-          `chrome-lock: waiting — Chrome held by pid ${h?.pid} (${h?.label ?? "?"}, ${h ? Math.round((Date.now() - h.since) / 1000) : 0} s)${ahead > 0 ? `, ${ahead} ahead` : ""}`,
+          h
+            ? `chrome-lock: waiting — Chrome held by pid ${h.pid} (${h.label}, ${Math.round((Date.now() - h.since) / 1000)} s)${ahead > 0 ? `, ${ahead} ahead` : ""}`
+            : `chrome-lock: waiting — ${ahead} ahead in turn (next: pid ${queue[0]?.pid}, ${queue[0]?.label})`,
         );
       }
       await Bun.sleep(500);

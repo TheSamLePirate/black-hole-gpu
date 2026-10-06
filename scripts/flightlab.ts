@@ -2,7 +2,7 @@
 // the other in the real app, each in a fresh page, watched while they fly — and steerable.
 //
 //   bun scripts/flightlab.ts list [--only <re>] [--tags a,b] [--shard i/n]
-//   bun scripts/flightlab.ts run  [--only <re>] [--tags a,b] [--shard i/n] [--port 4711] [--out <dir>] [--retries n]
+//   bun scripts/flightlab.ts run  [--only <re>] [--tags a,b] [--shard i/n] [--port 4711] [--out <dir>] [--retries n] [--over 3]
 //   bun scripts/flightlab.ts ctl  [--host kerr-mini] [--port 4711] status | shot [label] [--to file.png] | eval <js>
 //                                  | pause | resume | skip | abort | note <text>
 //   bun scripts/flightlab.ts report <dir>        (the charts and the index written again from a campaign's folder)
@@ -90,7 +90,21 @@ async function run() {
   const out = val("out") ?? `flight-results/${stamp()}-${MACHINE}${val("shard") ? `-${val("shard")!.replace("/", "of")}` : ""}`;
   mkdirSync(out, { recursive: true });
   const retries = Number(val("retries") ?? 0);
-  const port = Number(val("port") ?? 4711);
+  // (a scenario over this many times its estimate is ended — an await that never settles must not hold the
+  // campaign, its Chrome and the machine's lock: --over 3, at least 5 min)
+  const over = Number(val("over") ?? 3);
+  // (the control port asked, or the next free one: two campaigns on one Mac no longer collide — the monitor
+  // finds each through its registration)
+  const want = Number(val("port") ?? 4711);
+  const port =
+    Array.from({ length: 40 }, (_, k) => want + k).find((p) => {
+      try {
+        Bun.serve({ hostname: "127.0.0.1", port: p, fetch: () => new Response("") }).stop(true);
+        return true;
+      } catch {
+        return false;
+      }
+    }) ?? 0;
   const t0 = Date.now();
   const clock = () => {
     const s = Math.round((Date.now() - t0) / 1000);
@@ -184,6 +198,17 @@ async function run() {
   mkdirSync(`${LAB_DIR}/runs`, { recursive: true });
   writeFileSync(reg, JSON.stringify({ pid: process.pid, port: server.port, out, cwd: process.cwd(), since: Date.now() }));
   process.once("exit", () => rmSync(reg, { force: true }));
+  // (stopped — Ctrl-C, a remote job cancelled —: its Chrome and its server go with it, the lock let go)
+  for (const [sig, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ] as const)
+    process.once(sig, () => {
+      say(`${sig}: the flight stopped, its Chrome closed`);
+      state.lab?.close();
+      stopServer();
+      process.exit(code);
+    });
   say(
     `flightlab on ${MACHINE}: ${list.length} scenarios (~${list.reduce((a, s) => a + s.minutes, 0)} min) → ${out} · control 127.0.0.1:${server.port}`,
   );
@@ -225,7 +250,14 @@ async function run() {
           },
         });
         state.lab = lab;
-        const r = await sc.run(lab);
+        const limitMin = Math.max(sc.minutes * over, 5);
+        let watchdog: Timer | undefined;
+        const r = await Promise.race([
+          sc.run(lab),
+          new Promise<never>((_, fail) => {
+            watchdog = setTimeout(() => fail(new Error(`over its time: ${limitMin} min (${over} × its estimate)`)), limitMin * 60_000);
+          }),
+        ]).finally(() => clearTimeout(watchdog));
         verdict = state.control === "skip" ? "SKIP" : r.ok ? "PASS" : "FAIL";
         why = r.why;
         metrics = r.metrics ?? {};

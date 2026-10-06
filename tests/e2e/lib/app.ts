@@ -46,7 +46,7 @@ async function serve() {
     if (free(p)) port = p;
   }
   const proc = Bun.spawn(["bun", "server.ts"], {
-    env: { ...process.env, PORT: String(port), NODE_ENV: "production" },
+    env: { ...process.env, PORT: String(port), NODE_ENV: "production", KERR_PARENT_PID: String(process.pid) },
     stdout: "ignore",
     stderr: "inherit",
   });

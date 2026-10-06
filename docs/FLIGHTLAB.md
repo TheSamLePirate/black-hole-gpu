@@ -84,3 +84,30 @@ Il y a deux façons de voler :
 `until` est une expression JS évaluée dans la page sur `T`, le dernier échantillon, et `c`, la caméra. Chaque phase se termine aussi sur un échec commun : appareil perdu, crash annoncé, erreur de la page, état NaN, temps simulé figé.
 
 Le découpage en tranches laisse tourner l'asynchrone de la page entre deux tranches (tuiles, cartes). C'est voulu, puisque c'est ce que vit un joueur. C'est ainsi qu'on a trouvé les tuiles de relief en terrasses, corrigées en `d533c6a`.
+
+## Les deux Macs : un Chrome chacun, tout surveillé
+
+- **Un seul Chrome par Mac.** Tout ce qui lance Chrome passe par le verrou `scripts/lib/chrome-lock.ts` (`~/.kerr-lab/chrome.lock`) : l'e2e et le flight lab via `tests/e2e/lib/cdp.ts`, la vérification des shaders, les bancs, trace-ab, les galeries, `quality`.
+  - Les autres attendent dans l'ordre d'arrivée, et un message dit qui tient Chrome.
+  - Un détenteur mort est remplacé.
+  - Un même processus peut rouvrir Chrome (réentrant).
+- **Plus d'orphelins.**
+  - Un Chrome de test dont le processus est mort brutalement est arrêté à la prise suivante du verrou. On le reconnaît à son port DevTools et à son rattachement à `launchd` ; le Chrome personnel n'a pas de port DevTools et n'est pas concerné.
+  - Le serveur de production d'un test s'arrête avec son parent (`KERR_PARENT_PID`, `server.ts`).
+- **Pas d'attente infinie.**
+  - Chaque appel DevTools échoue après `E2E_CDP_TIMEOUT` secondes (300 par défaut), et immédiatement si Chrome meurt.
+  - Le flight lab arrête un scénario au-delà de `--over` × son estimation (3 par défaut, 5 min minimum). Ctrl-C ou une annulation distante ferme son Chrome et son serveur.
+- **Affichage par machine.** `~/.kerr-lab/config.json` : `{"chrome": "window"}` sur ce Mac (une fenêtre à regarder), `headless` par défaut. Le mini est en plein écran via le runner distant.
+- **Ports.** Une campagne prend le port de contrôle demandé ou le suivant libre ; deux campagnes sur un Mac ne se gênent plus.
+- **Le mini.**
+  - `remote.ts` transmet les mots tels qu'ils ont été tapés : `--only 'a|b'` n'y devient plus un tube.
+  - Une seule synchronisation à la fois depuis ce Mac, tous worktrees confondus (`~/.kerr-lab/sync.lock`).
+  - Un job dont le processus de travail est mort est réglé : groupe tué, GPU rendu, état « done ».
+  - `remote.ts doctor` vérifie le mini.
+- **Surveiller :** `bun scripts/lab-monitor.ts --watch` montre, pour les deux Macs :
+  - qui tient Chrome et la file d'attente ;
+  - les Chrome vivants ;
+  - les orphelins (`--sweep` les arrête) ;
+  - les campagnes et leur scénario en cours ;
+  - les jobs distants, y compris les morts ;
+  - les `bun test` et leur worktree.
