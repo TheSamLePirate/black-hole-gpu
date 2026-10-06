@@ -161,6 +161,54 @@ test("the deorbit from a 400 km orbit: a burn found whose entry ends over the pl
   expect(Math.abs(plan!.miss.across) / 1e3).toBeLessThan(600);
 }, 20000);
 
+test("the Lander's entry guided under its own load: its hand-over on its aim, not 146 km past it", () => {
+  // (held under the Ranger's 2.4 g — a capsule's entry pulls 4–5 —, its bank fell to nothing and the fall
+  // overshot; a still Earth: the plan's own pass, no crossrange)
+  const still: EntryEnv = { ...earth, ground: () => [0, 0, 0], carry: (p) => p };
+  const lander: EntryCraft = { aero: VESSELS.lander.aero, mass: VESSELS.lander.mass, alpha: 65 * D };
+  const r0 = R + 500e3,
+    v0 = Math.sqrt(mu / r0),
+    inc = 51.6 * D;
+  const s0: EntryState = { x: [r0, 0, 0], v: [0, v0 * Math.cos(inc), v0 * Math.sin(inc)] };
+  const ang = 120 * D;
+  const p = onGround([r0 * Math.cos(ang), r0 * Math.sin(ang) * Math.cos(inc), r0 * Math.sin(ang) * Math.sin(inc)]);
+  const plan = planDeorbit(still, lander, s0, p, { peH: 30e3, handoverMach: 1.4, short: 8e3, orbits: 16, reach: 150e3 })!;
+  expect(plan).not.toBeNull();
+  // the coast to the burn, the burn against the motion
+  let x = s0.x,
+    v = s0.v;
+  for (let t = 0; t < plan.t; t += 1) {
+    const h = Math.min(1, plan.t - t);
+    const a = still.gravity(x, v);
+    v = [v[0] + (a[0] * h) / 2, v[1] + (a[1] * h) / 2, v[2] + (a[2] * h) / 2];
+    x = [x[0] + v[0] * h, x[1] + v[1] * h, x[2] + v[2] * h];
+    const a2 = still.gravity(x, v);
+    v = [v[0] + (a2[0] * h) / 2, v[1] + (a2[1] * h) / 2, v[2] + (a2[2] * h) / 2];
+  }
+  const l = Math.hypot(...v);
+  v = v.map((c) => c - (c / l) * plan.dv) as V3;
+  const g = new EntryGuidance({ handoverMach: 1.4, short: 8e3, gCap: 0.85 * VESSELS.lander.aero.gMax! });
+  let next = 0,
+    b = 0.75;
+  const flown = predictEntry(
+    still,
+    lander,
+    { x, v },
+    (t, xx, vv) => {
+      if (t >= next) {
+        b = g.update(still, lander, { x: xx, v: vv }, p);
+        next = t + 2;
+      }
+      return b;
+    },
+    { handoverMach: 1.4, tMax: 8000 },
+  );
+  expect(flown.handover).toBe(true);
+  const m = miss({ x, v }, flown.end.x, p);
+  expect(Math.abs(m.along + 8e3) / 1e3).toBeLessThan(5);
+  expect(flown.gPeak).toBeLessThan(VESSELS.lander.aero.gMax!);
+}, 120000);
+
 test("the entry corridor: the lift's top over the heat's and load's floor; a Ranger's predicted fall within it", () => {
   const C = entryCorridor(earth, ranger, [1000, 3000, 5000, 7000, 7800]);
   for (const c of C) expect(c.hi).toBeGreaterThan(c.lo);

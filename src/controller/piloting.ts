@@ -1273,7 +1273,7 @@ function entryStep(
       tBurn: 0,
       dv: 0,
       done: 0,
-      guid: site ? new EntryGuidance({ handoverMach: handover, short: shortM }) : null,
+      guid: site ? new EntryGuidance({ handoverMach: handover, short: shortM, gCap: ranger ? 2.4 : 0.85 * VESSELS[fleet.active].aero.gMax! }) : null,
       bank: 0,
       next: -Infinity,
       alpha: craft.alpha,

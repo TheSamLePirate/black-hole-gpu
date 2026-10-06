@@ -300,7 +300,8 @@ export class EntryGuidance {
   last: EntryResult | null = null;
   lastMiss: { along: number; across: number; dist: number } | null = null;
   prev: { b: number; e: number } | null = null;
-  constructor(public o: { handoverMach: number; short: number }) {}
+  /** `gCap`: the load the guidance keeps under [g] (2.4 by default: the Ranger's crew's; a capsule's steeper entry its own) */
+  constructor(public o: { handoverMach: number; short: number; gCap?: number }) {}
 
   /** The signed bank [rad] to fly now, from the state and where the place is now (the ground carries
    *  it on while the craft falls). */
@@ -332,9 +333,9 @@ export class EntryGuidance {
       // (beyond the place: more bank; short of it: less)
       this.bank = Math.min(Math.max(this.bank + (e > 0 ? 0.08 : -0.08), 0), 1.4);
     }
-    // (the load kept under 2.4 g: the bank not raised while the fall it predicts pulls more — the lift
+    // (the load kept under its cap, 2.4 g: the bank not raised while the fall it predicts pulls more — the lift
     // turned down dives the craft into the thick air: 80° at Mach 4, 3.9 g)
-    if (r.gPeak > 2.4 && this.bank > bank0) this.bank = Math.max(bank0 - 0.05, 0);
+    if (r.gPeak > (this.o.gCap ?? 2.4) && this.bank > bank0) this.bank = Math.max(bank0 - 0.05, 0);
     // the side: towards the place, past a deadband narrowing with the speed and the way left — a tenth
     // of it, as the Shuttle's azimuth's (7 × the speed alone reversed sixteen times)
     const v = len(add(s.v, env.ground(s.x), -1));
