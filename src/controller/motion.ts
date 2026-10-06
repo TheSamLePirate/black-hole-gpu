@@ -585,7 +585,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           const sink = -dot3(vin, n) * C_MPS;
           const vh = Math.hypot(...lin(vin, 1, n, -dot3(vin, n))) * C_MPS;
           const verdict = touchdownVerdict(sink, TUNING.crashSpeed, s.gearForgiving);
-          touched = { speed: sink, vh, wheels: true, gear: verdict };
+          // (back on the gear within half a second of leaving it, gently — a leg lifted for a sub-step as the
+          // craft turns onto its other legs, a tyre's skip —: the same touchdown, not a new one said)
+          const rebound = verdict === "landed" && (t - this.offGround) * secM < 0.5;
+          if (!rebound) touched = { speed: sink, vh, wheels: true, gear: verdict };
           if (verdict === "crashed") {
             X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
             V = gv;
@@ -593,7 +596,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
             break;
           }
           this.rolling = { body: ground };
-          this.rollSince = t;
+          if (!rebound) this.rollSince = t;
           // (the ground spoilers out at the touchdown itself — the lift dumped before any bounce)
           if (this.pilot.throttle <= 0) this.groundSpoilers = true;
         } else if (tippedOver(gdef, axes[1], n)) {
@@ -619,6 +622,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         const vt = sub3(V, groundVelocity(ground, X, t));
         const spd = Math.hypot(...vt) * C_MPS;
         if (spd > 20 && (t - this.rollSince) * secM > 2) this.onPilotMessage?.(tf("Airborne · {0} m/s", spd.toFixed(0)));
+        this.offGround = t;
         this.rolling = null;
         this.rollSite = null;
       }

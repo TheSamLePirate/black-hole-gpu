@@ -161,6 +161,7 @@ function newFlight(this: CameraController) {
   this.gearLast = null;
   this.gearDw = null;
   this.rollSince = 0;
+  this.offGround = Number.NEGATIVE_INFINITY;
   this.windHome = null;
   this.windNow = null;
   this.weather.reset();

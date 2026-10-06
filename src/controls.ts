@@ -726,6 +726,8 @@ export class CameraController {
   groundSpoilers = false;
   /** when the wheels last touched [M of time] */
   rollSince = 0;
+  /** when the wheels last left the ground [M of time] — back on them soon after: the same touchdown */
+  offGround = Number.NEGATIVE_INFINITY;
   /** the gear's last forces (gear.ts): its legs' loads and compressions — none off the ground */
   gearLast: import("./gear").GearOut | null = null;
   /** the gear's turn of the craft over the last frame, for the pilot's rates (motion.ts) */

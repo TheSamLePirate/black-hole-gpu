@@ -32,6 +32,18 @@ test("the landing autopilot from a hover 1.5 km over a lunar mare: down on its g
   expect(gearHeight("moon", h1.q, h1.t)).toBeLessThan(1);
 });
 
+test("on Tranquility's own sloped ground: one touchdown said as the craft settles on its legs, standing at last", () => {
+  // (the first leg down, the craft turned by it lifted it off the ground for a sub-step: it was said twice)
+  const { c, msgs, fly } = overPlace("moon", TRANQUILITY.lat, TRANQUILITY.lon, 1.5);
+  fly(2);
+  c.pilot.auto = "none";
+  c.pilot.setAuto("land");
+  fly(240, () => !!c.ourLanded && c.pilot.auto === "none");
+  expect(msgs.filter((m) => /Touchdown|Hard landing|Airborne/.test(m))).toHaveLength(1);
+  expect(touchdown(msgs).sink!).toBeLessThanOrEqual(1);
+  expect(c.ourLanded).not.toBeNull();
+});
+
 test("over Kennedy's pad, 1 km up: the landing autopilot through the air, onto the spot", () => {
   const { c, msgs, fly, here } = overPlace("earth", 28.6, -80.6, 1);
   fly(2);
