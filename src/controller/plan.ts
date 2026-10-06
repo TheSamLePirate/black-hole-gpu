@@ -1251,8 +1251,9 @@ function nodeBurn(
   // (our universe, a node that ends in a circle — the CIRC's, a mission's capture —: flown to that circle
   // where the craft is, the velocity still to gain to it steered as the burn goes (geopotential.ts
   // meanCircular), not the planned impulse: the planner's two bodies miss the oblateness's pull — 15 % of
-  // a circularization from 200 × 600 km, which the trim then had to take back)
-  const toCircle = nav && node.then === "circularize" ? circleGain(nav) : null;
+  // a circularization from 200 × 600 km, which the trim then had to take back; a burn the pilot flies by
+  // hand keeps its planned impulse — the cue cuts it, the trim does the rest)
+  const toCircle = nav && !this.pilot.assist && node.then === "circularize" ? circleGain(nav) : null;
   const left = toCircle ? Math.hypot(...toCircle) : Math.max(0, total - this.nodeDone);
   // (the burn keeps the direction it had when it started: fixed in the local frame, not turning
   // with the velocity it changes)
