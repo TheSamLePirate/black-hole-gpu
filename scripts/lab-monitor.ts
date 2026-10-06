@@ -38,10 +38,10 @@ interface State {
   at: number;
   lock: ReturnType<typeof holder>;
   waiting: ReturnType<typeof waiters>;
-  chromes: { pid: number; elapsed: string; headless: boolean }[];
+  chromes: { pid: number; elapsed: string; headless: boolean; cwd: string }[];
   campaigns: Campaign[];
   jobs: { id: string; state: string; cmd: string; started?: number }[];
-  tests: { pid: number; elapsed: string; cmd: string }[];
+  tests: { pid: number; elapsed: string; cmd: string; cwd: string }[];
 }
 
 const alive = (pid: number) => {
@@ -60,10 +60,18 @@ const ps = (pattern: string) =>
     .map((l) => l.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/))
     .filter((m): m is RegExpMatchArray => !!m && new RegExp(pattern).test(m[3]!));
 
+/** A process's working directory (whose worktree it runs in). */
+const cwdOf = (pid: number) =>
+  Bun.spawnSync(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"], { stdout: "pipe" })
+    .stdout.toString()
+    .split("\n")
+    .find((l) => l.startsWith("n"))
+    ?.slice(1) ?? "";
+
 async function local(): Promise<State> {
   const chromes = ps("--remote-debugging-port=")
     .filter((m) => !/--type=/.test(m[3]!))
-    .map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, headless: m[3]!.includes("--headless") }));
+    .map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, headless: m[3]!.includes("--headless"), cwd: cwdOf(Number(m[1])) }));
   const runs = join(LAB_DIR, "runs");
   const campaigns: Campaign[] = [];
   for (const f of existsSync(runs) ? readdirSync(runs) : []) {
@@ -92,7 +100,12 @@ async function local(): Promise<State> {
       /* (not a job) */
     }
   }
-  const tests = ps("bun (test|run e2e)").map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, cmd: m[3]!.slice(0, 120) }));
+  const tests = ps("^(\\S*/)?bun (test|run e2e)").map((m) => ({
+    pid: Number(m[1]),
+    elapsed: m[2]!,
+    cmd: m[3]!.slice(0, 120),
+    cwd: cwdOf(Number(m[1])),
+  }));
   return { host: hostname().replace(/\.local$/, ""), at: Date.now(), lock: holder(), waiting: waiters(), chromes, campaigns, jobs, tests };
 }
 
@@ -148,7 +161,7 @@ function show(s: State | string, title: string) {
   for (const w of s.waiting) console.log(`    waiting: pid ${w.pid} · ${w.label} · ${where(w.cwd)} · ${age(w.since)}`);
   const n = s.chromes.length;
   console.log(
-    `  Chrome processes: ${n}${n ? ` — ${s.chromes.map((c) => `pid ${c.pid} ${c.headless ? "headless" : "on screen"} ${c.elapsed}`).join(", ")}` : ""}${n > 1 ? "  ⚠ more than one" : ""}`,
+    `  Chrome processes: ${n}${n ? ` — ${s.chromes.map((c) => `pid ${c.pid} ${c.headless ? "headless" : "on screen"} ${c.elapsed} (${where(c.cwd)})`).join(", ")}` : ""}${n > 1 ? "  ⚠ more than one" : ""}`,
   );
   if (s.campaigns.length) console.log("  Flight lab:");
   for (const c of s.campaigns) {
@@ -167,7 +180,7 @@ function show(s: State | string, title: string) {
     for (const d of done.filter((x) => !x.startsWith("PASS")).slice(-3)) console.log(`      ✗ ${d.slice(0, 150)}`);
   }
   for (const j of s.jobs) console.log(`  job ${j.state}: ${j.id} · ${j.cmd.slice(0, 90)}${j.started ? ` · ${age(j.started)}` : ""}`);
-  for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed}: ${t.cmd}`);
+  for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed} · ${where(t.cwd)}: ${t.cmd}`);
   console.log("");
 }
 
