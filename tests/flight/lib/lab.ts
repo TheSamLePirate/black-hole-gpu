@@ -267,7 +267,7 @@ export class Lab {
           else T = null;
           const S = T ?? L.sample();
           if (S.air && S.air.fail) { failed = "craft lost: " + S.air.fail; if (!T) samples.push(S); break; }
-          ${o.fail ? `if (${o.fail}) { failed = "scenario: " + ${JSON.stringify(o.fail)}; if (!T) samples.push(S); break; }` : ""}
+          ${o.fail ? `if (((T) => (${o.fail}))(S)) { failed = "scenario: " + ${JSON.stringify(o.fail)}; if (!T) samples.push(S); break; }` : ""}
           if (${o.until.includes("T.") || o.until.includes("c.") ? `((T) => (${o.until}))(S)` : o.until}) { met = true; if (!T) samples.push(S); break; }
         }
         const ev = __bh.game.log.events, log = ev.slice(${this.logIndex}).map((e) => ({ kind: e.kind, text: e.text }));
