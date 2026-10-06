@@ -3721,6 +3721,8 @@ fn figureSunShare(ro: vec3f, light: vec3f, rs: f32, ab: f32) -> f32 {
   let os = squashed(ro, ab);
   var distance: f32;
   if (dot(os, os) <= 1.0) {
+    // (the very centre: no horizon there, the source under the ground — not normalize(0)'s NaN)
+    if (R < 1e-15) { return 0.0; }
     let normal = normalize(vec3f(ro.xy, ro.z * ab * ab));
     distance = asin(clamp(dot(normal, L), -1.0, 1.0));
   } else if (lateralLength < 1e-7) {

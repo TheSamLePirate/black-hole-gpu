@@ -41,6 +41,8 @@ export function cartToGeodetic(a: number, f: number, p: Vec3): { lat: number; lo
   }
   const e2 = f * (2 - f);
   const b = a * (1 - f);
+  // (the very centre: the nearest ground under the poles, b below them — Newton's step would be 0 × ∞)
+  if (rho === 0 && p[2] === 0) return { lat: Math.PI / 2, lon, h: -b };
   // (Bowring's start, then Newton on the latitude: sub-millimetre anywhere above the core)
   const ep2 = e2 / (1 - e2);
   const u = Math.atan2(p[2] * a, rho * b);
@@ -95,6 +97,8 @@ export function rayFigure(origin: Vec3, direction: Vec3, a: number, f: number): 
  * The local tangent to the limb clips a small finite source; mirrored in trace.wgsl figureSunShare. */
 export function figureSourceElevation(origin: Vec3, light: Vec3, a: number, f: number): number {
   const ro = scale(origin, 1 / a);
+  // (the very centre: no horizon there, the source under the ground)
+  if (len(ro) === 0) return -Math.PI / 2;
   const radial = scale(ro, 1 / len(ro));
   const L = scale(light, 1 / len(light));
   const cosSep = Math.max(-1, Math.min(1, -dot(radial, L)));

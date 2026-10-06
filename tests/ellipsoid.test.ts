@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cartToGeodetic, geodeticDir, geodeticToCart, squashedHeight, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
+import { cartToGeodetic, figureDiskShare, geodeticDir, geodeticToCart, squashedHeight, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
 // The WGS84 ellipsoid (phase 2): geodetic ↔ Cartesian both ways, the poles 21 km in, the tracer's
 // squashed-space height equal to the geodetic one near the ground (the ground drawn and the ground felt).
@@ -11,6 +11,12 @@ const D = Math.PI / 180;
 test("the figure: a at the equator, b = a(1 − f) at the poles", () => {
   expect(geodeticToCart(A, F, 0, 0, 0)[0]).toBeCloseTo(6378137, 6);
   expect(geodeticToCart(A, F, 90 * D, 0, 0)[2]).toBeCloseTo(6356752.314245, 5);
+});
+
+test("the very centre: under the poles, b below them, and no source seen — not NaN", () => {
+  expect(cartToGeodetic(A, F, [0, 0, 0])).toEqual({ lat: 90 * D, lon: 0, h: -A * (1 - F) });
+  expect(cartToGeodetic(A, 0, [0, 0, 0]).h).toBe(-A);
+  expect(figureDiskShare([0, 0, 0], [0, 0, 1], 0.0047, A, F)).toBe(0);
 });
 
 test("geodetic → Cartesian → geodetic: back to the millimetre, from the ground to the Moon's distance", () => {

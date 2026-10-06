@@ -45,6 +45,14 @@ test.skipIf(!E2E)(
           light: Vec3 = [Math.sin(angle), 0, -Math.cos(angle)];
         sourceCases.push({ ro, light, rs: 0.0047, ab, share: figureDiskShare(ro, light, 0.0047, 1, 1 - 1 / ab) });
       }
+    // (the very centre: no horizon, the source hidden — not normalize(0)'s NaN)
+    sourceCases.push({
+      ro: [0, 0, 0],
+      light: [0, 0, 1],
+      rs: 0.0047,
+      ab: 1 / b,
+      share: figureDiskShare([0, 0, 0], [0, 0, 1], 0.0047, 1, F),
+    });
     const runwayCases = EARTH_RUNWAYS.flatMap((r) =>
       [
         [1000, 0],
