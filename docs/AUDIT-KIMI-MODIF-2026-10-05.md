@@ -357,7 +357,7 @@ pas une LUT non calculée, même si la LUT realtime a déjà réussi.
 | Intégrité Git | `git diff --check` réussi ; branche inchangée, modifications non commitées. |
 
 Le contrôle local du harnais se relance en définissant `AB_MAIN_URL`, `AB_TEST_URL` et `AB_OUT`.
-Rapport brut conservé dans [kimi-corrections-validation-2026-10-05.json](docs/perf/kimi-corrections-validation-2026-10-05.json).
+Rapport brut conservé dans [kimi-corrections-validation-2026-10-05.json](perf/kimi-corrections-validation-2026-10-05.json).
 Ses valeurs sont des observations de protocole : caches pilote et charge système non contrôlés.
 Les durées de completion de file ne sont pas des timestamps GPU purs ; le champ `gpuFrameMs`
 du profiler matériel est enregistré séparément. Aucune accélération de la branche déployée n'est

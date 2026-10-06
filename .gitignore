@@ -68,3 +68,8 @@ assets/dem/
 
 # what scripts/remote.ts brings back from the remote Mac (each run's log, meta.json, artifacts/)
 remote-results/
+
+# Bun bundle analysis (bun build --metafile), regenerated on demand
+/meta.json
+# local screenshots at the root (yosemite-tunnel-view*.png, committed by accident in 33625d0)
+/yosemite-tunnel-view*.png
