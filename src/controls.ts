@@ -277,6 +277,8 @@ export class CameraController {
   shipSide: "ours" | "gargantua" | null = null;
   /** crossing the throat at the mission's warp (real time given back beyond it) */
   traversing = false;
+  /** the crossing's warp still the mission's: none asked for by the pilot since (requestWarp) */
+  crossingWarp = false;
   userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
   lastWant: { beta: Vec3; ff: Vec3 } | null = null;
@@ -769,7 +771,7 @@ export class CameraController {
     port: number;
     phase: string;
     att: { nose: Vec3; up: Vec3 } | null;
-    warp: number | null;
+    warp: number;
     set: number;
     corridor: boolean;
     final: boolean;
@@ -777,12 +779,18 @@ export class CameraController {
     checked: number;
   } | null = null;
 
-  /** Warp the pilot asked for, while the rails hold it lower (null: none held back). */
+  /** Warp the pilot asked for, while the rails (or a glide) hold it lower (null: none held back). */
   warpWant: number | null = null;
+  /** the warp the flight last wrote: the scene's warp changed by anything else (the settings, a
+   *  script) is a new wish for the rails */
   warpSet = NaN;
-  /** User warp retained while the hub temporarily imposes a lower ceiling. */
+  /** Under the pilot's warp authority (WARP: YOU), their warp while an autopilot's ceiling holds it
+   *  lower: kept across the ceilings, given back once none holds it (null: none held). */
   hubWarpWant: number | null = null;
+  /** the autopilots' ceilings on the warp, this frame — the lowest (null: none) */
   hubWarpLimit: number | null = null;
+  /** the rails' ceiling on the warp, this frame (Infinity: none) */
+  railsCap = Infinity;
   /** Why the rails hold the warp back (for the HUD), or "". */
   railsNote = "";
 

@@ -300,10 +300,7 @@ function transferWant(
     this.transfer = null;
     // (a cruise still has the long straight flight ahead: the rails keep the warp until the orbit)
     if (T.goal === "body" && T.mode === "cruise") this.warpAfter = Math.min(T.warp ?? 4, 50);
-    else {
-      s.timeSpeed = this.warpSet = Math.min(T.warp ?? 4, 50);
-      this.warpWant = null;
-    }
+    else this.giveBackWarp(Math.min(T.warp ?? 4, 50));
     this.pilot.auto = "none";
     this.pilot.setAuto(auto);
     this.onPilotMessage?.(msg);
@@ -558,11 +555,9 @@ function ourWant(
   // no mass, than what the engine stops over a tenth of it)
   const vArrive = Math.max(Math.sqrt(Tg.mass / Math.max(D, 1e-30)), Math.sqrt(2 * 0.6 * thr * 0.1 * stand)) * 0.2;
   if (Math.abs(left) < 0.1 * stand && D > Tg.radius && Math.hypot(...rel) < vArrive) {
-    if (this.ourWarp !== null) s.timeSpeed = this.ourWarp;
-    this.ourWarp = null;
     // (the rails forget the approach's warps: not a wish of the pilot's)
-    this.warpWant = null;
-    this.warpSet = s.timeSpeed;
+    this.giveBackWarp(this.ourWarp ?? s.timeSpeed);
+    this.ourWarp = null;
     if (Tg.mass > 0) {
       P.setAuto("orbit");
       this.onPilotMessage?.(tf("In orbit around {0}", BODY_NAMES[tgt]));
@@ -1849,8 +1844,7 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
     // (the circular speed around it, in its proper time: in the scene's time, × its clock rate dτ/dt)
     // (settled in orbit: the warp a low-thrust cruise ran at is given back)
     if (this.warpAfter !== null && Math.abs(d - d0) < 0.2 * d0) {
-      s.timeSpeed = this.warpSet = this.warpAfter;
-      this.warpWant = null;
+      this.giveBackWarp(this.warpAfter);
       this.warpAfter = null;
     }
     const clock = s.target === "star" ? 1 : bodyState(GARGANTUA_SYSTEM, s.target, t).dtau;
@@ -1883,8 +1877,7 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
     const away = sub3(X, C);
     const dist = Math.hypot(...away);
     if (this.warpAfter !== null && dist < 3 * stand) {
-      s.timeSpeed = this.warpSet = this.warpAfter;
-      this.warpWant = null;
+      this.giveBackWarp(this.warpAfter);
       this.warpAfter = null;
     }
     const goal = axpy(C, away, stand / Math.max(dist, 1e-9));

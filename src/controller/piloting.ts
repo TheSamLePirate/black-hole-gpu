@@ -111,6 +111,7 @@ function setPilot(this: CameraController, on: boolean) {
   this.local = null;
   this.warpAfter = null;
   this.restoreWarp();
+  this.releaseHubWarp();
   if (!on) {
     this.stepOffMount();
     s.shipLookYaw = s.shipLookPitch = 0;
@@ -145,6 +146,9 @@ function newFlight(this: CameraController) {
   this.entryRun = null;
   this.dockAuto = null;
   this.ourCirc = null;
+  // (the warp: the scene's, nothing held back by the last flight's rails or ceilings, no crossing's)
+  this.warpWant = this.hubWarpWant = this.hubWarpLimit = null;
+  this.traversing = this.crossingWarp = false;
   this.airBrake = 0;
   this.airFlight.reset(fleet.active);
   this.airFlight.cfg = {};
@@ -691,11 +695,15 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         side === "gargantua" ? t("Through the wormhole — Gargantua's system") : t("Through the wormhole — back in the solar system"),
       );
     this.shipSide = side;
-    // (out of the throat after a crossing at warp: real time again — the pilot's to choose)
+    // (out of the throat after a crossing at warp: real time again — the pilot's to choose; a warp they
+    // asked for on the way, kept)
     if (this.traversing && cam.region === "hole") {
       this.traversing = false;
-      if (s.timeSpeed === this.warpSet) s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
-      this.warpWant = null;
+      if (this.crossingWarp) {
+        s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+        this.warpWant = null;
+      }
+      this.crossingWarp = false;
       this.onPilotMessage?.(tf("Clear of the wormhole region, {0} M from Gargantua", Math.round(cam.r)));
     }
   }
@@ -707,14 +715,15 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       this.onPilotMessage?.(why);
     }
   }
-  // Capture an explicit user change before the rails or guidance writes the effective warp.
-  if (this.pilot.auto === "none") this.hubWarpWant = null;
-  else if (!s.autoWarp && s.timeSpeed !== this.warpSet) this.hubWarpWant = s.timeSpeed;
+  // (the autopilot off, or no ceiling of its last frame — done holding the warp: the pilot's own wish
+  // back, the rails holding it where they must; then this frame's ceilings)
+  if (this.hubWarpLimit === null || this.pilot.auto === "none") this.releaseHubWarp();
   this.hubWarpLimit = null;
+  this.railsCap = Infinity;
   const inp = this.pilotInput(pad);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
   if (this.pilot.auto !== "dock" && this.dockAuto) {
-    if (this.dockAuto.warp !== null && s.timeSpeed === this.dockAuto.set) s.timeSpeed = this.warpSet = this.dockAuto.warp;
+    if (s.timeSpeed === this.dockAuto.set) this.giveBackWarp(this.dockAuto.warp);
     this.warpWant = null;
     this.dockAuto = null;
   }
@@ -733,9 +742,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   }
   if (this.pilot.auto !== "approach" && this.ourWarp !== null) {
     // (our approach stopped: the pilot's warp back)
-    s.timeSpeed = this.warpSet = this.ourWarp;
+    this.giveBackWarp(this.ourWarp);
     this.ourWarp = null;
-    this.warpWant = null;
   }
   // the wind (wind.ts): our worlds' air, flown through — the frame's mean wind, turbulence and gusts at
   // the craft's place, in the home frame for the flight
@@ -795,7 +803,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     if (!this.airWarpSaid) this.onPilotMessage?.(tf("In the air: the time warp held at ×{0}", AIR_WARP));
     this.airWarpSaid = true;
   }
-  if (thick && this.pilot.auto !== "none" && this.pilot.auto !== "node") this.hubWarpLimit = AIR_WARP / Msec;
+  if (thick && this.pilot.auto !== "none" && this.pilot.auto !== "node")
+    this.hubWarpLimit = Math.min(this.hubWarpLimit ?? Infinity, AIR_WARP / Msec);
   if (!thick) this.airWarpSaid = false;
   const dtPilot = thick ? dt * Math.min(s.timeSpeed * Msec, AIR_WARP) : dt;
   // the flight law in the air (the plane's surfaces; the sci-fi computer's commanded velocity)
@@ -825,7 +834,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // the entry autopilot: the deorbit, the guided entry, the glide (its attitude, its burn)
   if (this.pilot.auto !== "entry" && this.entryRun) {
     // (off: the time back to real if it was sped up waiting for the burn; the air brake in)
-    if (this.entryRun.phase === "wait") s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+    if (this.entryRun.phase === "wait") this.giveBackWarp(1 / (4.925490947e-6 * s.massSolar));
     this.airBrake = 0;
     this.entryRun = null;
   }

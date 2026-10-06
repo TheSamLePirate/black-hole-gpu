@@ -1094,29 +1094,16 @@ async function main() {
   }
   function setWarp(speed: number) {
     if (autoWarpHeld()) return;
-    if (camera.pilot.auto !== "none" && !settings.autoWarp) {
-      camera.hubWarpWant = speed;
-      if (camera.pilot.auto === "node") camera.nodeWarpWant = speed;
-      speed = Math.min(speed, camera.hubWarpLimit ?? Infinity);
-      // Keep the requested warp distinct from the capped value written to the scene.
-      camera.warpWant = null;
-      camera.warpSet = speed;
-      if (camera.pilot.auto === "node") camera.nodeWarpSet = speed;
-    }
-    settings.timeSpeed = speed;
+    camera.requestWarp(speed);
     refreshGui();
     scheduleUrlSave();
     touch();
     panel.toast(
-      `${tf("Time warp {0}", fmtWarp(settings, false))}${settings.animate ? "" : ` — ${t("paused (Space runs it)")}`} · ${+speed.toPrecision(3)} M/s`,
+      `${tf("Time warp {0}", fmtWarp(settings, false))}${settings.animate ? "" : ` — ${t("paused (Space runs it)")}`} · ${+settings.timeSpeed.toPrecision(3)} M/s`,
     );
   }
   function toggleAutoWarp() {
-    settings.autoWarp = !settings.autoWarp;
-    camera.hubWarpWant = settings.autoWarp ? null : settings.timeSpeed;
-    camera.nodeWarpWant = settings.autoWarp ? null : settings.timeSpeed;
-    if (camera.hubWarpLimit !== null && camera.pilot.auto !== "none" && camera.pilot.auto !== "node")
-      camera.setHubWarp(camera.hubWarpLimit);
+    camera.setWarpAuthority(!settings.autoWarp);
     refreshGui();
     scheduleUrlSave();
     touch();

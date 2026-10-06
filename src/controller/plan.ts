@@ -86,6 +86,10 @@ declare module "../controls" {
     goalDir: typeof goalDir;
     setNodeWarp: typeof setNodeWarp;
     setHubWarp: typeof setHubWarp;
+    releaseHubWarp: typeof releaseHubWarp;
+    giveBackWarp: typeof giveBackWarp;
+    requestWarp: typeof requestWarp;
+    setWarpAuthority: typeof setWarpAuthority;
     nodeBurn: typeof nodeBurn;
     ourNav: typeof ourNav;
     radialOut: typeof radialOut;
@@ -120,8 +124,10 @@ function rails(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     return;
   }
   const { lim, why } = this.railsLimit(cam);
-  // (never below 0.25 M/s — except near the ground, where seconds count)
-  const w = Math.max(Math.min(want, lim), Math.min(want, why === "ground" ? 1e-5 : 0.25));
+  // (never below 0.25 M/s — except near the ground, where seconds count; the autopilots' ceilings
+  // combine with this one — setHubWarp)
+  this.railsCap = Math.max(lim, why === "ground" ? 1e-5 : 0.25);
+  const w = Math.min(want, this.railsCap);
   if (w < want) this.warpWant = want;
   else this.warpWant = null;
   // (what holds the warp, shown: in the interface's language)
@@ -1077,15 +1083,66 @@ function restoreWarp(this: CameraController) {
   this.burnFollow = null;
 }
 
-/** Hub warp is independent of who flies: manual may slow down, never exceed its ceiling. */
+/**
+ * An autopilot's ceiling on the warp, this frame — whoever flies. Under the hub's authority the warp is
+ * the ceiling; under the pilot's (WARP: YOU) it is the pilot's own, never above it: their wish is kept
+ * while held (hubWarpWant) and given back once no ceiling holds it (flyShip). Every ceiling of the frame
+ * combines — the others, the rails' —, in any order: none relaxes another.
+ */
 function setHubWarp(this: CameraController, ceiling: number) {
   const s = this.s;
-  // Multiple safety constraints in a frame combine; none may relax an earlier ceiling.
   this.hubWarpLimit = Math.min(this.hubWarpLimit ?? Infinity, ceiling);
+  const cap = Math.min(this.hubWarpLimit, this.railsCap);
+  // (first held: the pilot's warp as they asked for it — the rails may have held it lower already)
   if (s.autoWarp) this.hubWarpWant = null;
-  else if (this.hubWarpWant === null) this.hubWarpWant = s.timeSpeed;
-  this.warpWant = null; // the rails must not restore a wish above the hub's limit
-  s.timeSpeed = this.warpSet = Math.min(s.autoWarp ? ceiling : this.hubWarpWant!, this.hubWarpLimit);
+  else this.hubWarpWant ??= this.warpWant ?? s.timeSpeed;
+  this.warpWant = null; // (held here: the rails must not give it back above the ceiling)
+  s.timeSpeed = this.warpSet = s.autoWarp ? cap : Math.min(this.hubWarpWant!, cap);
+}
+
+/** The pilot's own warp the autopilots' ceilings held, given back: the rails take it as the wish. */
+function releaseHubWarp(this: CameraController) {
+  if (this.hubWarpWant === null) return;
+  this.s.timeSpeed = this.hubWarpWant;
+  this.hubWarpWant = null;
+  this.warpWant = null;
+}
+
+/**
+ * An autopilot done gives the warp back: under the hub's authority, `w` (the warp it kept for the
+ * pilot, or real time); under the pilot's, their own wish its ceilings held.
+ */
+function giveBackWarp(this: CameraController, w: number) {
+  if (!this.s.autoWarp) return this.releaseHubWarp();
+  this.s.timeSpeed = this.warpSet = w;
+  this.warpWant = null;
+}
+
+/**
+ * The pilot's warp, asked for with the keys or the time bar (main.ts): the scene runs at it now, never
+ * above the autopilots' ceiling — under the pilot's authority, the wish such a ceiling keeps (that of
+ * a manoeuvre executing: its own) and gives back. A crossing's warp asked for is kept beyond the throat.
+ */
+function requestWarp(this: CameraController, speed: number) {
+  const s = this.s;
+  const engaged = this.pilot.auto !== "none";
+  if (!s.autoWarp && this.pilot.auto === "node") this.nodeWarpWant = speed;
+  else if (!s.autoWarp && this.hubWarpWant !== null) this.hubWarpWant = speed;
+  this.crossingWarp = false;
+  this.warpWant = null;
+  s.timeSpeed = this.warpSet = Math.min(speed, engaged ? (this.hubWarpLimit ?? Infinity) : Infinity);
+  if (this.pilot.auto === "node") this.nodeWarpSet = s.timeSpeed;
+}
+
+/**
+ * Who sets the warp while an autopilot flies (the hub card's WARP, the time bar's AUTO): the hub, or the
+ * pilot below its ceilings — from the warp as it runs now.
+ */
+function setWarpAuthority(this: CameraController, auto: boolean) {
+  this.s.autoWarp = auto;
+  this.hubWarpWant = null;
+  this.nodeWarpWant = null;
+  if (this.hubWarpLimit !== null && this.pilot.auto !== "none" && this.pilot.auto !== "node") this.setHubWarp(this.hubWarpLimit);
 }
 
 /** A goal burn's direction (local): along the velocity still to gain to a circle, or its sense. */
@@ -1111,18 +1168,19 @@ function goalDir(this: CameraController, node: ManeuverNode, cam: ReturnType<typ
  */
 function setNodeWarp(this: CameraController, auto: number) {
   const s = this.s;
-  this.hubWarpLimit = auto;
+  // (the frame's other ceilings too: none relaxed)
+  const cap = (this.hubWarpLimit = Math.min(this.hubWarpLimit ?? Infinity, auto));
   if (s.autoWarp) this.nodeWarpWant = null;
   else {
     // (the pilot changed the warp since the last frame: that is the new choice; auto warp just
     // turned off: the warp as it stands)
     if (this.nodeWarpWant === null || s.timeSpeed !== this.nodeWarpSet)
-      this.nodeWarpWant = Number.isFinite(this.nodeWarpSet) ? s.timeSpeed : auto;
+      this.nodeWarpWant = Number.isFinite(this.nodeWarpSet) ? s.timeSpeed : cap;
   }
   const want = this.nodeWarpWant;
-  const w = want === null ? auto : Math.min(want, auto);
+  const w = want === null ? cap : Math.min(want, cap);
   s.timeSpeed = this.nodeWarpSet = w;
-  this.nodeWarp = want === null ? "auto" : want > auto * (1 + 1e-9) ? "held" : "manual";
+  this.nodeWarp = want === null ? "auto" : want > cap * (1 + 1e-9) ? "held" : "manual";
 }
 
 /**
@@ -1163,13 +1221,17 @@ function nodeBurn(
       this.ourMission = null;
       this.ourPlanned = null;
       this.missionHold = false;
-      this.traversing = true;
+      this.traversing = this.crossingWarp = true;
     }
     this.pilot.setAuto("node");
     this.restoreWarp();
     return null;
   }
-  if (this.userWarp === null) this.userWarp = s.timeSpeed;
+  // (the pilot's warp before the plan, given back after it: their own, if an autopilot's ceiling held it)
+  if (this.userWarp === null) {
+    this.releaseHubWarp();
+    this.userWarp = s.timeSpeed;
+  }
   // (our universe: the burn follows the orbital frame — the node's impulse as that burn delivers it,
   // a turn of the velocity flown as its arc (fc/kepler.ts followDv); fixed as the burn starts)
   const ndv: Vec3 = nav
@@ -1517,6 +1579,10 @@ export function installPlan(C: { prototype: CameraController }) {
     goalDir,
     setNodeWarp,
     setHubWarp,
+    releaseHubWarp,
+    giveBackWarp,
+    requestWarp,
+    setWarpAuthority,
     nodeBurn,
     ourNav,
     radialOut,

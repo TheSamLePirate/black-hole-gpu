@@ -604,7 +604,6 @@ function dockWant(
   // the warp: by the range (the pilot's own, if lower, without auto warp)
   const real = 1 / M_SECONDS;
   const cap = (g.range > 150 ? 10 : g.range > 40 ? 5 : g.range > 4 ? 2 : 1) * real;
-  if (s.timeSpeed !== D.set && Number.isFinite(D.set)) D.warp = s.timeSpeed;
   this.setHubWarp(cap);
   D.set = s.timeSpeed;
   // (the lateral gain within what the velocity loop follows at this warp: damped)

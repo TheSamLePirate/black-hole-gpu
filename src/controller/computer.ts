@@ -659,7 +659,11 @@ function glideAlpha(
   if (agl < 1500) {
     const Msec = 4.925490947e-6 * this.s.massSolar;
     if (this.pilot.auto !== "none") this.setHubWarp(1 / Msec);
-    else this.s.timeSpeed = this.warpSet = Math.min(this.s.timeSpeed, 1 / Msec);
+    else if (this.s.timeSpeed > 1 / Msec) {
+      // (the pilot's own glide: held to real time, their warp given back by the rails once climbed out)
+      this.warpWant ??= this.s.timeSpeed;
+      this.s.timeSpeed = this.warpSet = 1 / Msec;
+    }
   }
   return clamp(a, 0, stall);
 }

@@ -29,7 +29,7 @@ test.skipIf(!E2E)(
         expect(await app.js<number>("__bh.settings.timeSpeed")).toBeCloseTo(1 / M_SECONDS, 8);
         // Shorten the guidance's countdown: the next frame must impose real time even if the user asks for more.
         await app.js(
-          `(()=>{const c=__bh.camera;c.entryRun.tBurn=c.nowTime()*${M_SECONDS}+20;__bh.settings.timeSpeed=100/${M_SECONDS};__bh.step(0.01);})()`,
+          `(()=>{const c=__bh.camera;c.entryRun.tBurn=c.nowTime()*${M_SECONDS}+20;c.requestWarp(100/${M_SECONDS});__bh.step(0.01);})()`,
         );
         expect(await app.js<number>("__bh.settings.timeSpeed")).toBeCloseTo(1 / M_SECONDS, 8);
         expect(await app.js<number>("__bh.camera.hubWarpWant")).toBeCloseTo(100 / M_SECONDS, 8);
