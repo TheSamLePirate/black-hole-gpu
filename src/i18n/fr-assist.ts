@@ -2,6 +2,8 @@
 // English: see src/i18n.ts).
 export default {
   "Prediction unavailable: {0}": "Prédiction indisponible : {0}",
+  "Wormhole prediction timed out": "Prédiction du trou de ver : délai dépassé",
+  "Wormhole prediction replaced by a newer one": "Prédiction du trou de ver remplacée par une plus récente",
   "Tunnel entrance": "Entrée du tunnel",
   "Tunnel centre": "Centre du tunnel",
   "Tunnel exit": "Sortie du tunnel",
