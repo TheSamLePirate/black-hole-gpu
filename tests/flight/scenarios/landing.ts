@@ -17,7 +17,7 @@ export const LIMITS = {
   across: 5,
   /** the share of the time in each assistant's corridor [%] */
   corridor: 85,
-  /** α's oscillations of more than 2° (counted both ways) */
+  /** α's oscillations in flight of more than 2° (reversals with another within 15 s; the flare's last 30 s out) */
   alphaSwings: { glide: 6, entry: 12 },
   /** the load factor's peak [g] */
   g: { glide: 2.5, entry: 3 },

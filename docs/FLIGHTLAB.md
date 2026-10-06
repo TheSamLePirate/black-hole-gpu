@@ -64,7 +64,7 @@ Chaque graphique ne porte qu'une mesure, sans double axe. Il affiche un réticul
 Elles sont calculées pour chaque scénario, quel que soit son verdict (`tests/flight/lib/quality.ts`) :
 - `q_shipS` : la durée du vol (temps simulé) ;
 - `q_gMax`, `q_alphaMaxDeg`, `q_qMaxKPa`, `q_heatMaxKWm2` : les maximums ;
-- `q_alphaSwings` : les oscillations d'α de plus de 2° ;
+- `q_alphaSwings` : les oscillations d'α de plus de 2° en vol — les inversions qui en ont une autre à moins de 15 s (une ressource, un piqué isolés sont des manœuvres), hors des 30 dernières secondes avant le toucher (l'arrondi) ;
 - `q_bankReversals` : les inversions d'inclinaison commandée de plus de 15° ;
 - `q_throttleChanges` : le battement des gaz ;
 - `q_fuelUsed`, `q_dvSpentMps` : ce qui a été dépensé ;
