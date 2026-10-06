@@ -647,7 +647,7 @@ function ourSurfaceWant(
   // take-off
   const LG = this.launchGoal;
   const d0 = climbTop(id, LG.altKm);
-  const east = launchEast(id, up, LG.incDeg);
+  const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg);
   const vc = Math.sqrt(sb.mass / r);
   const vi = sub3(nav.V, nav.refVel);
   if (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
@@ -671,11 +671,13 @@ function ourSurfaceWant(
 }
 
 /**
- * The take-off's heading over the ground at `up`: east, or — an inclination asked — the launch azimuth
- * for it (sin az = cos i / cos latitude, prograde), the nearest reachable when the site's latitude is
- * above it.
+ * The take-off's heading from `rel` (the craft − the body's centre): east, or — an inclination asked —
+ * the launch azimuth for it (sin az = cos i / cos latitude, prograde), the nearest reachable when the
+ * site's latitude is above it. The latitude is the geocentric one — the orbit's plane passes through
+ * the centre —, not the figure's geodetic up (0.19° apart at Kennedy on the Earth's ellipsoid).
  */
-export function launchEast(id: string, up: Vec3, incDeg: number | null): Vec3 {
+export function launchEast(id: string, rel: Vec3, incDeg: number | null): Vec3 {
+  const up = unitV(rel);
   const pole = unitV(spinAxis(id));
   let east = cross(pole, up);
   if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
@@ -777,7 +779,6 @@ function climbAssist(
   const Pb = nav.refPos;
   const rel = sub3(nav.X, Pb);
   const r = Math.hypot(...rel);
-  const radial = lin(rel, 1 / r, rel, 0);
   const up = figureUp(id, nav.X, nav.t);
   const h = Math.max(altitudeOver(id, nav.X, nav.t) / 1e3, 0);
   const d0 = climbTop(id, this.launchGoal.altKm);
@@ -792,7 +793,7 @@ function climbAssist(
   if (Math.hypot(...eastG) < 1e-12) eastG = cross([0, 0, 1], up);
   eastG = unitV(eastG);
   const north = cross(up, eastG);
-  const east = launchEast(id, radial, this.launchGoal.incDeg);
+  const east = launchEast(id, rel, this.launchGoal.incDeg);
   if (!this.climbRec || this.climbRec.id !== id) {
     const vGroundE = dot3(sub3(gv, nav.refVel), east);
     this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
