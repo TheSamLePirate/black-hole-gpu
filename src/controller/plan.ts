@@ -1278,7 +1278,12 @@ function nodeBurn(
     if (fix) node.t = fix.nodes[0]!.t;
     const arrive = P.nodes[P.nodes.length - 1];
     const fa = fix?.nodes[fix.nodes.length - 1];
-    if (arrive?.role === "arrive" && fa?.role === "arrive") arrive.t = fa.t;
+    if (arrive?.role === "arrive" && fa?.role === "arrive") {
+      // (the corrections still to come kept at their share of the coast left: the arrival moves with each)
+      for (const q of P.nodes)
+        if (q !== node && q.role === "mcc" && arrive.t > node.t) q.t = node.t + ((q.t - node.t) * (fa.t - node.t)) / (arrive.t - node.t);
+      arrive.t = fa.t;
+    }
     this.refreshPlan(true);
   }
   // (Gargantua's side, the arrival at the mouth: kept ahead of the craft until the throat takes it — its

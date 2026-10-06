@@ -579,11 +579,12 @@ export function planIntercept(
   // without it the plan ended at the burn and the coast of days went on in real time)
   missVec(sol.s1, sol.dv);
   const arrive: ManeuverNode[] = Number.isFinite(missAt) ? [{ t: missAt, dv: [0, 0, 0], role: "arrive", body: "wormhole" }] : [];
-  // (and corrections on the way — as the burn ends, a third and four fifths of the coast on —, aimed when they come (node
+  // (and corrections on the way — as the burn ends, a third, four fifths and the last twenty-fifth of the
+  // coast on: through the throat's 0.05 M, not the 0.4 M sphere about it —, aimed when they come (node
   // autopilot: planIntercept at their time) — the burn flown is finite, the aim through a sphere of
   // 0.4 M after a coast of a thousand: without them the path passed hundreds of M off)
   const mcc = (f: number): ManeuverNode => ({ t: sol!.t1 + f * (missAt - sol!.t1), dv: [0, 0, 0], role: "mcc", body: "wormhole" });
-  const fixes = o.at === undefined && arrive.length ? [mcc(0.02), mcc(0.3), mcc(0.8)] : [];
+  const fixes = o.at === undefined && arrive.length ? [mcc(0.02), mcc(0.3), mcc(0.8), mcc(0.96)] : [];
   return {
     nodes: [{ t: sol.t1, dv: sol.dv, ...(o.at === undefined ? {} : { role: "mcc" as const, body: "wormhole" }) }, ...fixes, ...arrive],
     note: `intercept: passes ${sol.miss.toFixed(2)} M from the centre`,

@@ -56,12 +56,12 @@ test("intercept: the path passes through a fixed point", () => {
   const plan = planIntercept(st, target, w, 0.2)!;
   expect(plan).not.toBeNull();
   expect(plan.miss).toBeLessThan(0.8);
-  // (then three corrections on the way, aimed in flight, and the arrival there: nodes of no Δv — the
+  // (then four corrections on the way, aimed in flight, and the arrival there: nodes of no Δv — the
   // autopilot flies the coast to the mouth)
-  expect(plan.nodes.length).toBe(5);
+  expect(plan.nodes.length).toBe(6);
   const burn = plan.nodes[0]!;
-  const arrive = plan.nodes[4]! as ManeuverNode;
-  expect(plan.nodes.slice(1, 4).every((n) => n.role === "mcc" && n.t > burn.t && n.t < arrive.t)).toBe(true);
+  const arrive = plan.nodes[5]! as ManeuverNode;
+  expect(plan.nodes.slice(1, 5).every((n) => n.role === "mcc" && n.t > burn.t && n.t < arrive.t)).toBe(true);
   expect(arrive).toMatchObject({ dv: [0, 0, 0], role: "arrive", body: "wormhole" });
   const there = advanceTo(applyDv(advanceTo(st, burn.t, w)!, burn.dv, a), arrive.t, w)!;
   const p = position(there);
@@ -76,7 +76,7 @@ test("intercept from a 30 M orbit: no path that dives by the hole on its way to 
   const plan = planIntercept(st, target, w, 0.0125, { accel: 0.02 })!;
   expect(plan).not.toBeNull();
   const s1 = advanceTo(st, plan.nodes[0]!.t, w)!;
-  const path = pathFrom(applyDv(s1, plan.nodes[0]!.dv, a), w, plan.nodes[4]!.t - s1.t, 400);
+  const path = pathFrom(applyDv(s1, plan.nodes[0]!.dv, a), w, plan.nodes[5]!.t - s1.t, 400);
   expect(Math.min(...path.pts.map((q) => Math.hypot(...q)))).toBeGreaterThan(18);
 }, 30000);
 
