@@ -620,7 +620,9 @@ function dockWant(
   D.set = s.timeSpeed;
   // (the lateral gain within what the velocity loop follows at this warp: damped)
   const Ts = 1.2 * s.timeSpeed * M_SECONDS;
-  const kLat = Math.min(0.08, 0.3 / Math.max(Ts, 1e-3));
+  // (0.15 at most: at 0.08 the orbit's relative drift held a ring 10 cm off the axis at contact — at the
+  // IDSS's limit; the velocity loop follows twice that at real time)
+  const kLat = Math.min(0.15, 0.3 / Math.max(Ts, 1e-3));
   const cone = 1 + 0.15 * Math.max(along, 0);
   D.corridor = along > -0.5 && lat < (D.corridor ? 1.5 : 1) * cone;
   let want: Vec3; // relative to the target's point [m/s]
@@ -630,6 +632,9 @@ function dockWant(
     const aligned = D.final ? lat < 0.2 && g.angle < 5 : lat < 0.1 && g.angle < 2 && g.lateralRate < 0.04;
     D.final = along < 12 && aligned;
     if (along < 12 && !aligned) vc = Math.max(Math.min(vc, 0.05 * (along - 10)), -0.1);
+    // (the last metres: slower while the ring is more than 4 cm off the axis — its alignment given time
+    // before the contact, not met at the capture's edge)
+    if (D.final && along < 3) vc *= Math.min(Math.max((0.1 - lat) / 0.06, 0.25), 1);
     D.phase = along >= 12 ? "APPROACH" : D.final ? "FINAL" : "HOLD 10 m";
     let vl = lin(latv, -kLat, latv, 0);
     const vll = Math.hypot(...vl);
