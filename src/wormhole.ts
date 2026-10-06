@@ -269,6 +269,23 @@ export function setSceneTime(t: number) {
 }
 
 type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "whOrbit" | "whPhase" | "spin" | "disk" | "diskOuter";
+
+/**
+ * Where the far mouth's centre is at time t, and its velocity — mouth() without its frame and gluing
+ * radii (their ℓ found by bisections): cheap enough for every step of a flight near it.
+ */
+export function mouthCentre(s: Pick<Settings, MouthKeys>, t = sceneTime) {
+  const rho = s.whRho;
+  const orbit = !!s.whOrbit;
+  const th = orbit ? Math.PI / 2 : s.whIncl * DEG;
+  const ph0 = orbit ? (s.whPhase ?? 0) * DEG : s.whAzimuth * DEG;
+  const D = Math.max(s.whDist, horizon(s.spin) + 4 * rho);
+  const omega = orbit ? 1 / (D ** 1.5 + s.spin) : 0;
+  const ph = ph0 + omega * t;
+  const C: Vec3 = [D * Math.sin(th) * Math.cos(ph), D * Math.sin(th) * Math.sin(ph), D * Math.cos(th)];
+  const V: Vec3 = [-omega * C[1], omega * C[0], 0];
+  return { th, ph0, D, omega, C, V };
+}
 /**
  * The far mouth at time t. Static: at (whDist, whIncl, whAzimuth). Orbiting: a test particle on the
  * prograde circular equatorial Kerr orbit at whDist (Ω = 1/(r^{3/2} + a)), its frame axes fixed —
@@ -276,14 +293,7 @@ type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "whOrbit" | 
  */
 export function mouth(s: Pick<Settings, MouthKeys>, t = sceneTime): Mouth {
   const w = dneg(s);
-  const orbit = !!s.whOrbit;
-  const th = orbit ? Math.PI / 2 : s.whIncl * DEG;
-  const ph0 = orbit ? (s.whPhase ?? 0) * DEG : s.whAzimuth * DEG;
-  const D = Math.max(s.whDist, horizon(s.spin) + 4 * w.rho);
-  const omega = orbit ? 1 / (D ** 1.5 + s.spin) : 0;
-  const ph = ph0 + omega * t;
-  const C: Vec3 = [D * Math.sin(th) * Math.cos(ph), D * Math.sin(th) * Math.sin(ph), D * Math.cos(th)];
-  const V: Vec3 = [-omega * C[1], omega * C[0], 0];
+  const { th, ph0, D, omega, C, V } = mouthCentre(s, t);
   const C0: Vec3 = [D * Math.sin(th) * Math.cos(ph0), D * Math.sin(th) * Math.sin(ph0), D * Math.cos(th)];
   const ex = scale(C0, -1 / D);
   let ez = sub([0, 0, 1], scale(ex, ex[2]));
