@@ -30,7 +30,8 @@ limitée — cf. §6), à vérifier par la mesure : le bench enregistre déjà l
 Le gros gain n'est donc pas micro-optimiser le WGSL mais **réorganiser l'ordre** :
 
 - attendre **2 pipelines** (rt + env, **+ lut ou un garde** selon la scène) au lieu de 5 →
-  gain ~2–3× sur le temps d'attente au splash ;
+  gain *estimé* ~2–3× sur le temps d'attente au splash — une estimation du plan (le nombre de
+  pipelines attendus), **jamais mesurée** depuis : voir §8, « Ce que les mesures établissent » ;
 - valider en `Promise.all` sur les modules existants (ou au build, `check-wgsl.ts` existe
   déjà en CI) → supprime un re-parse front-end redondant (gain **à mesurer**, non chiffré) ;
 - démarrer les téléchargements (éphémérides 7 Mo, ciel, cartes) **avant/pendant** la
@@ -419,7 +420,7 @@ t+      calibration continue (démotion/promotion) + persistance
 
 | # | Action | § | Gain | Effort | Risque |
 |---|---|---|---|---|---|
-| 1 | `create()` n'attend que rt + env (**+ lut, ou garde `lutOn && lutPipeline`**) ; q/lutq en arrière-plan affiché | 2.1-A | **~2–3× sur le splash** | faible | faible (le garde LUT est **obligatoire**) |
+| 1 | `create()` n'attend que rt + env (**+ lut, ou garde `lutOn && lutPipeline`**) ; q/lutq en arrière-plan affiché | 2.1-A | ~2–3× sur le splash (estimé, non mesuré — §8) | faible | faible (le garde LUT est **obligatoire**) |
 | 2 | Validation : `Promise.all` sur modules existants (ou purge au runtime, CI suffit) | 2.1-B | re-parse front-end évité — gain **à mesurer** (non chiffré) | faible | nul (mais perte des erreurs ligne par ligne côté utilisateur si supprimée) |
 | 3 | Fetch éphémérides/ciel **avant** `Renderer.create` + `<link rel=preload>` | 2.1-C | masque 7–15 Mo réseau | faible | nul |
 | 4 | ~40 pipelines sync → async ; ship/station/endurance différés (vérifier le pop-in du Ranger à l'écran titre) | 2.2-H,I | supprime le jank du constructeur | moyen | faible |
@@ -663,6 +664,17 @@ Chaque action du §4 appliquée dans l'ordre conseillé, un commit par étape, `
   micro-benchmark + mesure du temps de compile comme proxy — §3.4.
 - gpuweb issue #4536 + intent-to-ship Blink : passage de `requestAdapterInfo()` async à
   l'attribut sync `adapter.info` — §3.1.
+
+### Ce que les mesures établissent (audit du 2026-10-06, M11)
+
+- **Le « ~2–3× » du §0 et du §4 n'a jamais été mesuré.** C'était l'estimation du plan, tirée du
+  nombre de pipelines attendus avant la première image ; aucune mesure `main` contre branche ne le
+  confirme ni ne l'infirme.
+- **« froid 4 399 ms → rechargement 3 280 ms (−25 %) »** (action 12) compare un chargement à froid
+  et un rechargement **du même code** : ce n'est pas un gain de la branche sur `main`.
+- **L'A/B sur GitHub Pages** (`docs/perf/ab-pages-2026-10-05.md`) ne discrimine pas : n = 4, A toujours
+  avant B, A sondé toutes les 250 ms contre un horodatage exact pour B. Le harnais est corrigé (sonde
+  identique des deux côtés, runs intercalés A B B A, médiane et étendue) ; la mesure reste à refaire.
 
 ### Correctifs issus de l'audit — 2026-10-05
 

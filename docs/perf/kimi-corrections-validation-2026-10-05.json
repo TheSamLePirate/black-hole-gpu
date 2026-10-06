@@ -1,6 +1,7 @@
 {
   "date": "2026-10-05",
   "scope": "Protocol validation: both targets serve the same corrected local working tree; no comparison of main versus test-kimi",
+  "targetNames": "Added 2026-10-06 (audit M11): A-main and B-test-kimi are the harness's target names only; both runs served the same local working tree at the same URL, neither is main",
   "baseCommit": "64b8833cf4e3dd5eb0283382a517961ba0f2b33b",
   "uncommittedCorrections": true,
   "cacheIsolation": "Fresh browser profile per target; GPU driver cache and system load not isolated",

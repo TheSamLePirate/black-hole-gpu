@@ -1,16 +1,21 @@
-// Sequential observations of two deployments, with a fresh browser profile per side.
-// A fresh profile does not isolate the driver's shader cache; a reload also changes HTTP/SW
-// caches. Completed GPU submissions and browser callbacks are recorded separately.
+// Observations of two deployments, interleaved A B B A (AB_ROUNDS rounds: two runs a side each), a
+// fresh browser profile per run. Both sides are timed the same way, by a probe injected before the
+// page's own scripts (the first submission after a canvas texture was acquired, at its completion; the
+// splash's #loading marked done), from navigation start — not by the app's own telemetry, which only
+// the newer side has. A fresh profile does not isolate the driver's shader cache; a reload also changes
+// HTTP/SW caches. Completed GPU submissions and browser callbacks are recorded separately.
 // Effective settings must match before interpreting a frame-rate difference as a speedup.
-// Run: bun scripts/ab-pages.ts
+// Run: bun scripts/ab-pages.ts   (AB_MAIN_URL, AB_TEST_URL, AB_ROUNDS — default 2 —, AB_OUT)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { launch, type Cdp } from "../tests/e2e/lib/cdp";
 
 const TARGETS = [
   { name: "A-main", url: process.env.AB_MAIN_URL ?? "https://thesamlepirate.github.io/black-hole-gpu/" },
   { name: "B-test-kimi", url: process.env.AB_TEST_URL ?? "https://thesamlepirate.github.io/black-hole-gpu/test/" },
-];
+] as const;
+type Target = (typeof TARGETS)[number];
 
+const ROUNDS = Math.max(1, Number(process.env.AB_ROUNDS ?? 2));
 const OUT = process.env.AB_OUT ?? `remote-results/${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}-ab-pages`;
 mkdirSync(OUT, { recursive: true });
 
@@ -55,6 +60,36 @@ async function press(cdp: Cdp, key: string, code: number) {
   await Bun.sleep(60);
 }
 
+/**
+ * The probe, the same on both sides, injected before any of the page's scripts: the first frame — the
+ * first queue submission after a canvas texture was acquired, at its completion — and the splash
+ * lifted (#loading marked done, or gone), both from navigation start (performance.now()).
+ */
+const PROBE = `(() => {
+  const m = (window.__ab = { firstFrameMs: null, splashLiftedMs: null });
+  let acquired = false;
+  const acquire = GPUCanvasContext.prototype.getCurrentTexture;
+  GPUCanvasContext.prototype.getCurrentTexture = function () {
+    acquired = true;
+    return acquire.call(this);
+  };
+  const submit = GPUQueue.prototype.submit;
+  GPUQueue.prototype.submit = function (buffers) {
+    const r = submit.call(this, buffers);
+    if (acquired && m.firstFrameMs === null) {
+      acquired = false;
+      this.onSubmittedWorkDone().then(() => (m.firstFrameMs ??= performance.now()));
+    }
+    return r;
+  };
+  let seen = false;
+  new MutationObserver(() => {
+    const el = document.querySelector("#loading");
+    seen ||= !!el;
+    if (seen && m.splashLiftedMs === null && (!el || el.classList.contains("done"))) m.splashLiftedMs = performance.now();
+  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+})()`;
+
 interface LoadTiming {
   firstFrameMs: number;
   splashLiftedMs: number;
@@ -63,23 +98,33 @@ interface LoadTiming {
 async function load(cdp: Cdp, url: string, midShot?: string): Promise<LoadTiming> {
   const previousOrigin = await js<number>(cdp, "performance.timeOrigin");
   await cdp.send("Page.navigate", { url });
-  const fresh = `performance.timeOrigin !== ${previousOrigin} && !!globalThis.__bh?.renderer && __bh.renderer.lastFrameDoneAt > 0`;
-  const [firstFrameMs, splashLiftedMs] = await Promise.all([
-    until(cdp, fresh, 240_000),
-    until(cdp, `${fresh} && (!!document.querySelector("#loading.done") || !document.querySelector("#loading"))`, 240_000),
-    midShot ? Bun.sleep(2500).then(() => shot(cdp, midShot)) : Promise.resolve(),
-  ]);
-  const precise = await js<number | null>(cdp, `__bh.renderer.firstFrameDoneAt || null`);
-  return { firstFrameMs: precise ?? firstFrameMs, splashLiftedMs };
+  const done = `performance.timeOrigin !== ${previousOrigin} && globalThis.__ab?.firstFrameMs != null && __ab.splashLiftedMs != null`;
+  await Promise.all([until(cdp, done, 240_000), midShot ? Bun.sleep(2500).then(() => shot(cdp, midShot)) : Promise.resolve()]);
+  const t = await js<LoadTiming>(cdp, "__ab");
+  return { firstFrameMs: Math.round(t.firstFrameMs), splashLiftedMs: Math.round(t.splashLiftedMs) };
 }
 
-const report: Record<string, unknown> = {};
+interface Run {
+  side: string;
+  run: number;
+  cold: LoadTiming;
+  warm: LoadTiming;
+  frames: { renderedFps: number | null };
+  [more: string]: unknown;
+}
+const runs: Run[] = [];
+const save = (extra: object = {}) =>
+  writeFileSync(`${OUT}/ab-report.json`, JSON.stringify({ order: "ABBA", rounds: ROUNDS, ...extra, runs }, null, 2));
 
-for (const t of TARGETS) {
-  console.log(`\n=== ${t.name} — ${t.url}`);
+/** One run of a side: a fresh profile — the cold load, the first mission, the flight measured, a reload. */
+async function measure(t: Target, n: number) {
+  // (the screenshots: each side's first run only)
+  const snap = (cdp: Cdp, step: string) => (n === 0 ? shot(cdp, `${t.name}-${step}.png`) : Promise.resolve());
+  console.log(`\n=== ${t.name} #${n + 1} — ${t.url}`);
   const cdp = await launch({ width: 1440, height: 900 });
   try {
     await cdp.send("Page.enable");
+    await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PROBE });
     await cdp.send("Network.enable");
     // (the world's mutable services out of the measure, as in the e2e suite)
     await cdp.send("Network.setBlockedURLs", {
@@ -87,27 +132,24 @@ for (const t of TARGETS) {
     });
 
     // ---- cold load
-    const cold = await load(cdp, t.url, `${t.name}-1-loading.png`);
+    const cold = await load(cdp, t.url, n === 0 ? `${t.name}-1-loading.png` : undefined);
     console.log(`  cold: first GPU frame ${cold.firstFrameMs} ms, splash lifted ${cold.splashLiftedMs} ms`);
-    await shot(cdp, `${t.name}-2-title.png`);
+    await snap(cdp, "2-title");
 
     // ---- the first mission launched from the title screen (the focus lands on the first entry
     // once the splash has gone — wait for it, not for a fixed delay)
-    const focused = await until(cdp, `document.activeElement?.dataset.testid === "title-missions"`, 20_000);
-    if (focused < 0) throw new Error("the title screen never focused its Missions entry");
+    await until(cdp, `document.activeElement?.dataset.testid === "title-missions"`, 20_000);
     await press(cdp, "Enter", 13);
-    const opened = await until(cdp, `!!document.querySelector("[data-testid=missions]")`, 10_000);
-    if (opened < 0) throw new Error("the missions panel did not open");
+    await until(cdp, `!!document.querySelector("[data-testid=missions]")`, 10_000);
     const mission = await js<string>(cdp, `document.querySelector(".ms-name")?.textContent ?? "?"`);
-    await shot(cdp, `${t.name}-3-missions.png`);
-    const launchBtn = await until(cdp, `!!document.querySelector("[data-testid=mission-launch]")`, 5_000);
-    if (launchBtn < 0) throw new Error("the mission's launch button never showed");
+    await snap(cdp, "3-missions");
+    await until(cdp, `!!document.querySelector("[data-testid=mission-launch]")`, 5_000);
     await js(cdp, `document.querySelector("[data-testid=mission-launch]").click(), true`);
     await until(cdp, `!!globalThis.__bh?.camera?.piloting`, 30_000);
     console.log(`  mission launched: ${mission}`);
-    await shot(cdp, `${t.name}-4-scene.png`);
+    await snap(cdp, "4-scene");
     await Bun.sleep(6000);
-    await shot(cdp, `${t.name}-5-in-flight.png`);
+    await snap(cdp, "5-in-flight");
 
     // ---- the flight measured, the settings and the adapter's record
     const frames = await js(
@@ -139,7 +181,7 @@ for (const t of TARGETS) {
       effectiveQuality: __bh.renderer.effectiveQuality?.(__bh.settings) ?? null,
       pipelines: __bh.renderer.pipelineStatus ?? null,
       actualImage: { width: __bh.renderer.live?.width, height: __bh.renderer.live?.height, block: __bh.renderer.realtimeBlockNow },
-      firstFrameMeasurement: __bh.renderer.firstFrameDoneAt ? "completion timestamp" : "250 ms polling observation",
+      loadMeasurement: "injected probe, both sides: first presented submission completed; #loading done — from navigation start",
       tier: __bh.renderer.tier,
       adapter: __bh.renderer.adapter,
       settings: {
@@ -153,7 +195,8 @@ for (const t of TARGETS) {
       gpuFrameMs: __bh.renderer.prof.frameMs ?? null,
       gpuErrors: __bh.renderer.gpuErrors,
       lost: __bh.renderer.lost,
-      tierRemembered: localStorage.getItem("kerr.tier"),
+      // (a preview's keys carry its directory: test/kerr.tier)
+      tierRemembered: Object.fromEntries(Object.keys(localStorage).filter((k) => k.endsWith("kerr.tier")).map((k) => [k, localStorage.getItem(k)])),
     })`,
     );
     console.log(`  tier: ${JSON.stringify(data.tier)}`);
@@ -164,36 +207,53 @@ for (const t of TARGETS) {
     // ---- reload: shader, HTTP and Service Worker cache effects remain combined
     const warm = await load(cdp, t.url);
     console.log(`  reload: first GPU frame ${warm.firstFrameMs} ms, splash lifted ${warm.splashLiftedMs} ms`);
-    await shot(cdp, `${t.name}-6-reload.png`);
+    await snap(cdp, "6-reload");
 
-    report[t.name] = { url: t.url, cold, warm, mission, frames, ...data, consoleErrors: cdp.errors };
+    runs.push({ side: t.name, run: n, url: t.url, cold, warm, mission, frames, ...data, consoleErrors: cdp.errors });
     if (data.gpuErrors || data.lost || data.pipelines?.qualityError || cdp.errors.length)
-      throw new Error(`${t.name}: GPU or console errors; comparison invalid`);
+      throw new Error(`${t.name} #${n + 1}: GPU or console errors; comparison invalid`);
   } catch (error) {
-    report[t.name] = {
-      ...(report[t.name] as object),
-      error: error instanceof Error ? error.message : String(error),
-      consoleErrors: cdp.errors,
-    };
-    writeFileSync(`${OUT}/ab-report.json`, JSON.stringify(report, null, 2));
+    if (runs.at(-1)?.side !== t.name || runs.at(-1)?.run !== n) runs.push({ side: t.name, run: n } as Run);
+    Object.assign(runs.at(-1)!, { error: error instanceof Error ? error.message : String(error), consoleErrors: cdp.errors });
+    save();
     throw error;
   } finally {
     cdp.close();
   }
 }
 
-writeFileSync(`${OUT}/ab-report.json`, JSON.stringify(report, null, 2));
+// (A B B A each round: neither side always first — a drifting network, a warming driver, shared evenly)
+const [A, B] = TARGETS;
+const count = { [A.name]: 0, [B.name]: 0 };
+for (let r = 0; r < ROUNDS; r++) for (const t of [A, B, B, A]) await measure(t, count[t.name]++);
+
+/** a side's values: their median and their range */
+function spread(xs: number[]) {
+  const v = [...xs].sort((p, q) => p - q);
+  const mid = v.length >> 1;
+  const median = v.length % 2 ? v[mid]! : (v[mid - 1]! + v[mid]!) / 2;
+  return { n: v.length, median: Math.round(median), min: v[0]!, max: v.at(-1)! };
+}
+const METRICS: Record<string, (r: Run) => number> = {
+  "first GPU frame, cold": (r) => r.cold.firstFrameMs,
+  "splash lifted, cold": (r) => r.cold.splashLiftedMs,
+  "first GPU frame, reload": (r) => r.warm.firstFrameMs,
+  "splash lifted, reload": (r) => r.warm.splashLiftedMs,
+};
+const summary: Record<string, Record<string, ReturnType<typeof spread>>> = {};
+for (const [label, f] of Object.entries(METRICS))
+  summary[label] = Object.fromEntries(TARGETS.map((t) => [t.name, spread(runs.filter((r) => r.side === t.name).map(f))]));
+save({ summary });
 console.log(`\n=== report: ${OUT}/ab-report.json`);
-const a = report["A-main"] as { cold: LoadTiming; warm: LoadTiming; frames: { renderedFps: number | null } };
-const b = report["B-test-kimi"] as { cold: LoadTiming; warm: LoadTiming; frames: { renderedFps: number | null } };
+for (const [label, sides] of Object.entries(summary)) {
+  const a = sides[A.name]!,
+    b = sides[B.name]!;
+  console.log(
+    `${label.padEnd(24)} A ${a.median} ms [${a.min}–${a.max}]   B ${b.median} ms [${b.min}–${b.max}]   (medians, ranges; n = ${a.n})`,
+  );
+}
+const fps = (side: string) => runs.filter((r) => r.side === side).map((r) => r.frames.renderedFps ?? "unavailable");
+console.log(`completed GPU submissions/s: A ${fps(A.name).join(", ")}   B ${fps(B.name).join(", ")}`);
 console.log(
-  `\nfirst GPU frame, cold:  A ${a.cold.firstFrameMs} ms   B ${b.cold.firstFrameMs} ms   (Δ ${a.cold.firstFrameMs - b.cold.firstFrameMs} ms)`,
+  "Observations only: overlapping ranges are no difference; compare effective settings and image dimensions before drawing a performance conclusion.",
 );
-console.log(
-  `splash lifted, cold:    A ${a.cold.splashLiftedMs} ms   B ${b.cold.splashLiftedMs} ms   (Δ ${a.cold.splashLiftedMs - b.cold.splashLiftedMs} ms)`,
-);
-console.log(
-  `splash lifted, reload:  A ${a.warm.splashLiftedMs} ms   B ${b.warm.splashLiftedMs} ms   (Δ ${a.warm.splashLiftedMs - b.warm.splashLiftedMs} ms)`,
-);
-console.log(`completed GPU submissions/s: A ${a.frames.renderedFps ?? "unavailable"}   B ${b.frames.renderedFps ?? "unavailable"}`);
-console.log("Observations only: compare effective settings and image dimensions before drawing a performance conclusion.");
