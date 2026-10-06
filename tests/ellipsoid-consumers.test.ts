@@ -15,7 +15,7 @@ import { patchGeodetic } from "../src/system/local-patch";
 import { bodyAxes, M_METRES, solarBody } from "../src/system/solar";
 import { envOf } from "../src/entry-env";
 import { attitudeFor } from "../src/entry";
-import { apsisHeights, classify, elements, minimumOrbitHeight, orbitClearsHeight, stateFrom } from "../src/game/orbit";
+import { classify, elements, minimumOrbitHeight, orbitClearsHeight, orbitExtreme, stateFrom } from "../src/game/orbit";
 import { EARTH_RUNWAYS, runwayWeight } from "../src/game/sites";
 import { cross, dot, len, scale, type Vec3 } from "../src/math/vec3";
 
@@ -116,22 +116,67 @@ test("a spherical world's finite-source limb retains the original coverage curve
     }
 });
 
-test("orbit telemetry separates geodetic apsis heights from the minimum altitude over the whole orbit", () => {
+test("orbit figures: the lowest and highest geodetic heights over the whole orbit, where they are; the status judged by the same", () => {
   const mu = 3.986004418e14,
     b = A * (1 - F),
-    top = 150e3;
-  for (const raOffset of [0, 100e3]) {
-    const state = stateFrom(mu, { rp: b + 160e3, ra: b + 160e3 + raOffset, i: 90, argPe: 90, nu: 0 });
-    const el = elements(mu, state.r, state.v);
-    const h = apsisHeights(el, A, F);
-    const min = minimumOrbitHeight(el, A, F);
-    expect(h.pe).toBeCloseTo(raOffset ? 160e3 : b + 160e3 - A, 3);
-    expect(h.ap).toBeCloseTo(raOffset ? 160e3 + raOffset : b + 160e3 - A, 3);
-    const clear = orbitClearsHeight(el, A, F, top);
-    expect(clear).toBe(raOffset > 0);
-    expect(min >= top).toBe(clear);
-    expect(classify(el, { R: A, airTop: A + top, clearOfAir: clear })).toBe(clear ? "orbit" : "suborbital");
+    top = 100e3;
+  // (the reference: the heights along the orbit densely sampled from a state at each anomaly)
+  const along = (el: ReturnType<typeof elements>, nu: number) => {
+    const s = stateFrom(mu, { a: el.a, e: el.e, i: el.i / D, raan: el.raan / D, argPe: el.argPe / D, nu: nu / D });
+    return cartToGeodetic(A, F, s.r).h;
+  };
+  const sampled = (el: ReturnType<typeof elements>) => {
+    const span = el.e < 1 ? Math.PI : 0.99 * Math.acos(-1 / el.e);
+    let lo = Infinity,
+      hi = -Infinity;
+    for (let k = 0; k <= 200000; k++) {
+      const h = along(el, -span + (2 * span * k) / 200000);
+      lo = Math.min(lo, h);
+      hi = Math.max(hi, h);
+    }
+    return { lo, hi: el.e < 1 ? hi : Infinity };
+  };
+  const orbits = [
+    // polar, its periapsis over the pole 106 km up: the true lowest point under the air's top
+    { rp: b + 106.4e3, ra: b + 121.4e3, i: 90, argPe: 90 },
+    { rp: b + 106.4e3, ra: b + 600e3, i: 90, argPe: 90 },
+    // circular and polar: 21 km lower over the equator than over the poles
+    { rp: b + 160e3, ra: b + 160e3, i: 90, argPe: 0 },
+    { rp: b + 160e3, ra: b + 260e3, i: 90, argPe: 90 },
+    // inclined, grazing, and nearly equatorial
+    { rp: A + 120e3, ra: A + 2000e3, i: 63.4, argPe: 40, raan: 75 },
+    { rp: A + 90e3, ra: A + 400e3, i: 28.5, argPe: 120, raan: 200 },
+    { rp: A + 300e3, ra: A + 350e3, i: 1, argPe: 10 },
+  ].map((o) => elements(mu, stateFrom(mu, { ...o, nu: 33 }).r, stateFrom(mu, { ...o, nu: 33 }).v));
+  // unbound, its periapsis at high latitudes: the lowest point found on its branch too
+  for (const e of [1.2, 3]) {
+    const s = stateFrom(mu, { a: (b + 150e3) / (1 - e), e, i: 75, argPe: 70, nu: -20 });
+    orbits.push(elements(mu, s.r, s.v));
   }
+  for (const el of orbits) {
+    const lowest = orbitExtreme(el, A, F),
+      highest = orbitExtreme(el, A, F, true),
+      ref = sampled(el);
+    expect(lowest.h).toBeLessThanOrEqual(ref.lo + 1e-4);
+    expect(lowest.h).toBeGreaterThan(ref.lo - 0.01);
+    expect(along(el, lowest.nu)).toBeCloseTo(lowest.h, 2);
+    if (el.e < 1) {
+      expect(highest.h).toBeGreaterThanOrEqual(ref.hi - 1e-4);
+      expect(highest.h).toBeLessThan(ref.hi + 0.01);
+      expect(along(el, highest.nu)).toBeCloseTo(highest.h, 2);
+    } else expect(highest.h).toBe(Infinity);
+    expect(minimumOrbitHeight(el, A, F)).toBe(lowest.h);
+    // the clearance and the label: the lowest point's, never contradicting the Pe shown
+    const clear = orbitClearsHeight(el, A, F, top);
+    expect(clear).toBe(lowest.h >= top);
+    if (el.e < 1) expect(classify(el, { R: A, airTop: A + top, clearOfAir: clear })).toBe(clear ? "orbit" : "suborbital");
+  }
+  // the polar one: over the pole 106 km up, yet down to 99 km nearer the equator — suborbital
+  expect(cartToGeodetic(A, F, [0, 0, b + 106.4e3]).h).toBeGreaterThan(top);
+  expect(orbitExtreme(orbits[0]!, A, F).h).toBeLessThan(top);
+  // the circular polar one: lowest over the equator, highest over a pole
+  expect(orbitExtreme(orbits[2]!, A, F).h).toBeCloseTo(b + 160e3 - A, 3);
+  expect(orbitExtreme(orbits[2]!, A, F, true).h).toBeCloseTo(160e3, 3);
 });
 
 test("runway grading measures physical metres along and across each WGS84 threshold", () => {

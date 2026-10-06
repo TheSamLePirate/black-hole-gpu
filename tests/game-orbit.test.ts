@@ -78,3 +78,33 @@ test("a planet frame's turning rate: Hill's equations give n", async () => {
   ];
   expect(frameRate({ A })).toBeCloseTo(n, 12);
 });
+
+test("the HUD's Pe is the orbit's lowest point over the Earth's ellipsoid: under the air's top, the status suborbital", async () => {
+  const { rangerStatus } = await import("../src/game/status");
+  const { equatorAxes } = await import("../src/game/place");
+  const { solarBody, solarState, M_METRES } = await import("../src/system/solar");
+  const { WGS84_F } = await import("../src/system/ellipsoid");
+  const earth = solarBody("earth")!;
+  const b = earth.radius * (1 - WGS84_F);
+  const km = 1e3 / M_METRES;
+  // (polar, its periapsis over the north pole 106.4 km up — over the air's 102 km —, 15 km of swing: the
+  // lowest point, nearer the equator, 92 km up)
+  const t = 0;
+  const o = stateFrom(earth.mass, { rp: b + 106.4 * km, ra: b + 121.4 * km, i: 90, argPe: 90, nu: 150 }, equatorAxes("earth"));
+  const E = solarState("earth", t);
+  const info = {
+    region: "ours",
+    ref: "earth",
+    X: o.r.map((x, i) => x + E.pos[i]!),
+    V: o.v.map((x, i) => x + E.vel[i]!),
+    landed: false,
+    target: null,
+    ourFree: null,
+  } as unknown as Parameters<typeof rangerStatus>[2];
+  const st = rangerStatus({ massSolar: 1e8 } as Parameters<typeof rangerStatus>[0], {} as Parameters<typeof rangerStatus>[1], info, t);
+  expect(st.status).toBe("suborbital");
+  expect(st.orbit!.peKm).toBeLessThan(102);
+  expect(st.orbit!.peKm).toBeGreaterThan(90);
+  // (and its highest point over the pole the other side, 121.4 km up)
+  expect(st.orbit!.apKm).toBeCloseTo(121.4, 3);
+});

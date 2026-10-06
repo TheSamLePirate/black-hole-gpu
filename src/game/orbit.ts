@@ -151,43 +151,79 @@ export function stateFrom(mu: number, o: OrbitSpec, axes: Axes = ECLIPTIC): { r:
 
 export type Status = "landed" | "flight" | "suborbital" | "orbit" | "escape" | "hyperbolic";
 
-/** Geodetic heights at the Kepler apsides, using the body's equator as the elements' reference. */
-export function apsisHeights(el: Elements, R: number, flattening: number): { pe: number; ap: number } {
-  if (flattening === 0) return { pe: el.rp - R, ap: el.ra - R };
-  const z = Math.sin(el.i) * Math.sin(el.argPe);
-  const at = (r: number) => cartToGeodetic(R, flattening, [r * Math.sqrt(Math.max(1 - z * z, 0)), 0, r * z]).h;
-  return { pe: at(el.rp), ap: Number.isFinite(el.ra) ? at(el.ra) : Infinity };
-}
-
-/** Lowest geodetic height on a bound orbit. Radial periapsis need not be closest to an ellipsoid. */
-export function minimumOrbitHeight(el: Elements, R: number, f: number): number {
-  if (f === 0 || el.e < 1e-9 || Math.abs(Math.sin(el.i)) < 1e-12) return el.rp - R;
-  if (!Number.isFinite(el.ra)) return apsisHeights(el, R, f).pe;
+/**
+ * The orbit's lowest point over the body's figure (or its highest): its geodetic height and its true
+ * anomaly. Over an ellipsoid the radial periapsis need not be the lowest point — a polar orbit's
+ * periapsis over a pole stands 21 km higher over the ground than the same radius over the equator. A
+ * radius r stands between r − a and r − b over the ground (b = a(1 − f)), so the lowest point lies where
+ * the radius is within a − b of the periapsis's, the highest within a − b of the apoapsis's: only that
+ * arc is searched (on an unbound orbit, a piece of its branch), sampled, then refined round each local
+ * extremum. Unbound: no highest point (∞).
+ */
+export function orbitExtreme(el: Elements, R: number, f: number, highest = false): { h: number; nu: number } {
+  if (highest && !Number.isFinite(el.ra)) return { h: Infinity, nu: NaN };
+  if (f === 0 || Math.abs(Math.sin(el.i)) < 1e-12) return highest ? { h: el.ra - R, nu: Math.PI } : { h: el.rp - R, nu: 0 };
   const p = el.rp * (1 + el.e);
-  const sinI = Math.sin(el.i);
+  // (the highest point is the lowest of the heights' opposites)
+  const sign = highest ? -1 : 1;
+  // (the figure turns about its pole: a point's height its distances from the axis and the equator —
+  // the first not as √(r² − z²), which loses its centimetres over the poles)
   const at = (nu: number) => {
     const r = p / (1 + el.e * Math.cos(nu));
-    const z = r * sinI * Math.sin(el.argPe + nu);
-    return cartToGeodetic(R, f, [Math.sqrt(Math.max(r * r - z * z, 0)), 0, z]).h;
+    const u = el.argPe + nu;
+    return sign * cartToGeodetic(R, f, [r * Math.hypot(Math.cos(u), Math.cos(el.i) * Math.sin(u)), 0, r * Math.sin(el.i) * Math.sin(u)]).h;
   };
-  const N = 64,
-    step = TAU / N;
-  let best = Infinity;
-  for (let k = 0; k < N; k++) {
-    const nu = k * step,
-      h = at(nu);
-    if (h > at(nu - step) || h > at(nu + step)) continue;
-    let lo = nu - step,
-      hi = nu + step;
-    for (let j = 0; j < 24; j++) {
-      const a = lo + (hi - lo) / 3,
-        b = hi - (hi - lo) / 3;
-      if (at(a) < at(b)) hi = b;
-      else lo = a;
+  // the arc: cos ν ≥ c round the periapsis (the lowest), cos ν ≤ c round the apoapsis (the highest);
+  // a near-circular orbit's, the whole of it
+  const reach = highest ? el.ra - R * f : el.rp + R * f;
+  const c = Math.max(-1, Math.min(1, (p / reach - 1) / el.e));
+  const half = highest ? Math.PI - Math.acos(c) : Math.acos(c);
+  const centre = highest ? Math.PI : 0;
+  const whole = !(half < Math.PI);
+  const N = 32;
+  const lo = whole ? -Math.PI : centre - half,
+    step = (whole ? TAU : 2 * half) / N;
+  // (the whole orbit wraps round: its last sample is its first)
+  const n = whole ? N : N + 1;
+  const hs = Array.from({ length: n }, (_, k) => at(lo + k * step));
+  const G = (Math.sqrt(5) - 1) / 2;
+  let best = { h: Infinity, nu: centre };
+  for (let k = 0; k < n; k++) {
+    const prev = whole ? hs[(k + n - 1) % n]! : k > 0 ? hs[k - 1]! : Infinity;
+    const next = whole ? hs[(k + 1) % n]! : k < n - 1 ? hs[k + 1]! : Infinity;
+    if (hs[k]! > prev || hs[k]! > next) continue;
+    // (a golden-section search between its neighbours — on an arc, not past its ends)
+    let a = lo + (whole || k > 0 ? k - 1 : k) * step,
+      b = lo + (whole || k < n - 1 ? k + 1 : k) * step;
+    let x1 = b - G * (b - a),
+      x2 = a + G * (b - a);
+    let f1 = at(x1),
+      f2 = at(x2);
+    for (let j = 0; j < 30; j++) {
+      if (f1 < f2) {
+        b = x2;
+        x2 = x1;
+        f2 = f1;
+        x1 = b - G * (b - a);
+        f1 = at(x1);
+      } else {
+        a = x1;
+        x1 = x2;
+        f1 = f2;
+        x2 = a + G * (b - a);
+        f2 = at(x2);
+      }
     }
-    best = Math.min(best, at((lo + hi) / 2));
+    const nu = (a + b) / 2,
+      h = at(nu);
+    if (h < best.h) best = { h, nu };
   }
-  return best;
+  return { h: sign * best.h, nu: best.nu };
+}
+
+/** Lowest geodetic height on the orbit (orbitExtreme). */
+export function minimumOrbitHeight(el: Elements, R: number, f: number): number {
+  return orbitExtreme(el, R, f).h;
 }
 
 /** Fast clearance decision: only the band between the equatorial and polar radius needs a search. */

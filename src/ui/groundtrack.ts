@@ -364,25 +364,26 @@ export class GroundTrack {
     if (!c || c.id !== id) {
       const pts: V3[] = [],
         times: number[] = [];
-      let lo = { r: Infinity, h: 0, q: null as V3 | null },
-        hi = { r: -Infinity, h: 0, q: null as V3 | null };
+      let lo = { h: Infinity, q: null as V3 | null },
+        hi = { h: -Infinity, q: null as V3 | null };
       for (let k = 0; k < p.pts.length; k++) {
         if (p.refs[k] !== id) {
           if (pts.length) break;
           continue;
         }
         const q = toBodyFixed(id, p.pts[k] as V3, p.times[k]!);
-        const r = Math.hypot(...q);
         const u = onMap(id, q);
         pts.push(u);
         times.push(p.times[k]!);
+        // (the lowest and highest over the ground — the HUD's Pe and Ap: over the Earth's ellipsoid not
+        // always the nearest to its centre and the farthest)
         const h = cartToGeodetic(R, flatteningOf(id), q).h;
-        if (r < lo.r) lo = { r, h, q: u };
-        if (r > hi.r) hi = { r, h, q: u };
+        if (h < lo.h) lo = { h, q: u };
+        if (h > hi.h) hi = { h, q: u };
       }
       const km = (h: number) => (h * M_METRES) / 1e3;
       // (apsides only on an orbit that swings: more than 2 km between them)
-      const swing = hi.q && lo.q && (hi.r - lo.r) * M_METRES > 2000;
+      const swing = hi.q && lo.q && (hi.h - lo.h) * M_METRES > 2000;
       c = {
         id,
         pts,

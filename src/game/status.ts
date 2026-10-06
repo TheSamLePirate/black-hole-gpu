@@ -11,7 +11,7 @@ import { M_METRES, M_SECONDS, solarBody, solarState } from "../system/solar";
 import { soiOf } from "../system/our-side";
 import { altitudeOver, figureUp } from "../system/our-surface";
 import { flatteningOf } from "../system/ellipsoid";
-import { apsisHeights, classify, elements, orbitClearsHeight, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
+import { classify, elements, orbitClearsHeight, orbitExtreme, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
 import { C_MPS } from "../units";
 import { sub } from "../math/vec3";
@@ -24,9 +24,13 @@ const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id] ?? tx(
 export interface OrbitFigures {
   /** equatorial radius for orbit drawings; apsis heights cannot be used to reconstruct it */
   radiusKm: number;
-  /** above the surface [km] */
+  /** the orbit's lowest and highest heights over the surface [km] — geodetic: over the Earth's ellipsoid
+   *  not those at the radial apsides (tPe, tAp), the lowest the one the status's clearance is judged by */
   peKm: number;
   apKm: number;
+  /** their true anomalies [rad] (from the periapsis; the highest NaN when unbound) */
+  peNu: number;
+  apNu: number;
   incDeg: number;
   ecc: number;
   /** [s] (∞ unbound) */
@@ -59,11 +63,14 @@ export interface RangerStatus {
 }
 
 function figures(el: Elements, R: number, km: number, sec: number, flattening = 0): OrbitFigures {
-  const height = apsisHeights(el, R, flattening);
+  const lowest = orbitExtreme(el, R, flattening),
+    highest = orbitExtreme(el, R, flattening, true);
   return {
     radiusKm: R * km,
-    peKm: height.pe * km,
-    apKm: height.ap * km,
+    peKm: lowest.h * km,
+    apKm: highest.h * km,
+    peNu: lowest.nu,
+    apNu: highest.nu,
     incDeg: (el.i * 180) / Math.PI,
     ecc: el.e,
     period: el.period * sec,

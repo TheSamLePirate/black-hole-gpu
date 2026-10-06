@@ -1461,8 +1461,9 @@ export class FlightHud {
       ctx.fillText(txt, x + (left ? -S(6) : S(6)), y - S(8));
       ctx.textBaseline = "alphabetic";
     };
-    if (o.peKm >= 0) flag(...(at(0).slice(0, 2) as [number, number]), `Pe ${km(o.peKm)}`, false);
-    if (bound) flag(...(at(Math.PI).slice(0, 2) as [number, number]), `Ap ${km(o.apKm)}`, true);
+    // (where the orbit is lowest and highest over the ground: on the Earth's ellipsoid, not always its apsides)
+    if (o.peKm >= 0) flag(...(at(o.peNu).slice(0, 2) as [number, number]), `Pe ${km(o.peKm)}`, false);
+    if (bound) flag(...(at(o.apNu).slice(0, 2) as [number, number]), `Ap ${km(o.apKm)}`, true);
     // the ship: a gold chevron along its motion, a direction arrow a little ahead
     if (Number.isFinite(nuShip)) {
       const [x, y] = at(nuShip),
