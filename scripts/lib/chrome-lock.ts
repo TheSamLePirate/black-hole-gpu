@@ -17,6 +17,19 @@ export const LAB_DIR = join(homedir(), ".kerr-lab");
 export const LOCK = join(LAB_DIR, "chrome.lock");
 export const WAIT = join(LAB_DIR, "wait");
 
+/**
+ * This machine's own choices for the lab — ~/.kerr-lab/config.json, e.g. {"chrome": "window"}: how its
+ * Chromes show ("headless": none; "window": an ordinary window to watch while working beside it; "kiosk":
+ * full screen). E2E_HEADED=1 (the remote runner's default on the other Mac) still means kiosk.
+ */
+export function labConfig(): { chrome?: "headless" | "window" | "kiosk" } {
+  try {
+    return JSON.parse(readFileSync(join(LAB_DIR, "config.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
 export interface Holder {
   pid: number;
   label: string;
