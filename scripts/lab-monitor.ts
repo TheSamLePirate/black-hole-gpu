@@ -143,7 +143,7 @@ const age = (since: number) => {
       ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`
       : `${s}s`;
 };
-const where = (cwd: string) => {
+const where = (cwd = "") => {
   const w = cwd.match(/worktrees\/(agent-[0-9a-f]{6})/)?.[1];
   return w ? `worktree ${w}` : cwd.includes("kerr-runner") ? "remote job" : cwd.replace(homedir(), "~");
 };
