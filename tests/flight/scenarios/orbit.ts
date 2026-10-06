@@ -378,8 +378,16 @@ export const ORBIT: Scenario[] = [
       const end0 = await elements(lab);
       await lab.fixed({ until: "false", maxSim: 900, maxWall: 60 });
       const end1 = await elements(lab);
+      // (taken up again: no jump — the Lander flown where the fleet's coast had it at the switch's frame,
+      // place and velocity; its osculating elements swing with the Earth's J2 meanwhile, the fall itself)
+      await lab.js(`(window.__snap = JSON.parse(JSON.stringify(__bh.fleet.free.lander)), true)`);
       await lab.js(`(__bh.settings.vessel = "lander", true)`);
       await lab.fixed({ until: `T.vessel === "lander"`, maxSim: 30, maxWall: 30 });
+      const backJump = await lab.js<{ dX: number; dV: number }>(`(() => {
+        const n = __bh.camera.activePoseNow(), p = __bh.fleet.coast(window.__snap, n.t);
+        return { dX: Math.hypot(...n.X.map((x, k) => x - p.X[k])) * 1476.625 * __bh.settings.massSolar,
+          dV: Math.hypot(...n.V.map((x, k) => x - p.V[k])) * 299792458 };
+      })()`);
       const back = await elements(lab);
       const sp0 = await spent(lab);
       await engage(lab, "circularize");
@@ -393,6 +401,8 @@ export const ORBIT: Scenario[] = [
         landerRaBefore: before?.ra,
         landerRpBack: back?.rp,
         landerRaBack: back?.ra,
+        backJumpM: round(backJump.dX, 1000),
+        backJumpMps: round(backJump.dV, 1000),
         enduranceDriftKm: end0 && end1 ? round(Math.abs(end1.aKm - end0.aKm), 100) : null,
         planDv,
         dvSpent: round(dv, 10),
@@ -400,11 +410,11 @@ export const ORBIT: Scenario[] = [
         flownLo: fl?.lo,
         flownHi: fl?.hi,
       };
-      const kept = !!before && !!back && Math.abs(before.rp - back.rp) < 3 && Math.abs((before.ra ?? 0) - (back.ra ?? 0)) < 3;
+      const kept = backJump.dX < 5 && backJump.dV < 0.05;
       const ok = e.end === "until" && kept && !!fl && fl.spread <= 3 && !!said(lab, /^Circular:/) && dv <= planDv * 1.05 + 1;
       return {
         ok,
-        why: `${said(lab, /^Circular:/) ?? e.why} · Lander ${before?.rp}×${before?.ra} → back ${back?.rp}×${back?.ra} · flown ${fl?.lo}–${fl?.hi}`,
+        why: `${said(lab, /^Circular:/) ?? e.why} · Lander ${before?.rp}×${before?.ra} → back ${back?.rp}×${back?.ra}, taken up ${round(backJump.dX, 100)} m · ${round(backJump.dV, 1000)} m/s off · flown ${fl?.lo}–${fl?.hi}`,
         metrics,
       };
     },
