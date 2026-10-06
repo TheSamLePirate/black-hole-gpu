@@ -166,11 +166,21 @@ const rot = (v: Vec3, k: Vec3, a: number): Vec3 => {
  * node's regression (about `pole`, the body's pole of date unless given). Unchanged for a round body.
  */
 export function secularZonal(id: string, mu: number, r: Vec3, v: Vec3, dt: number, t: number, pole?: Vec3): { r: Vec3; v: Vec3 } {
+  const turn = secularTurn(id, mu, r, v, dt, t, pole);
+  return turn ? { r: turn(r), v: turn(v) } : { r, v };
+}
+
+/**
+ * The J2 secular drift of the orbit (r, v) over dt (secularZonal's), as the rotation it is — for any
+ * vector: a rendezvous's target taken back into the frame its two-body arc is solved in. Null: none
+ * (a round body, an unbound path).
+ */
+export function secularTurn(id: string, mu: number, r: Vec3, v: Vec3, dt: number, t: number, pole?: Vec3): ((x: Vec3) => Vec3) | null {
   const z0 = ZONAL[id];
-  if (!z0) return { r, v };
+  if (!z0) return null;
   const R = Math.hypot(...r);
   const eps = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) / 2 - mu / R;
-  if (!(eps < 0)) return { r, v };
+  if (!(eps < 0)) return null;
   const a = -mu / (2 * eps);
   const h: Vec3 = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
   const hl = Math.hypot(...h);
@@ -181,5 +191,5 @@ export function secularZonal(id: string, mu: number, r: Vec3, v: Vec3, dt: numbe
   const w = secularRates(mu, z0, a, e, cosI);
   const inPlane = (w.peri + w.mean) * dt,
     node = w.node * dt;
-  return { r: rot(rot(r, hn, inPlane), z, node), v: rot(rot(v, hn, inPlane), z, node) };
+  return (x: Vec3) => rot(rot(x, hn, inPlane), z, node);
 }

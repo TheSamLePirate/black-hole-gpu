@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { gameTimeOf, issOrbit, station } from "../src/system/iss";
 import { planIssRendezvous, refineIssNode, rendezvousPoint, RENDEZVOUS_M } from "../src/system/iss-plan";
-import { M_METRES, M_SECONDS, solarState } from "../src/system/solar";
+import { coastOrbit } from "../src/system/our-plan";
+import { nodeDvHome } from "../src/system/our-predict";
+import { M_METRES, M_SECONDS, solarBody, solarState } from "../src/system/solar";
 import { C_MPS } from "../src/units";
 import { add, cross, dot, len, lin, scale, sub, unit } from "../src/math/vec3";
 
@@ -58,4 +60,26 @@ test("in flight: the departure re-aimed from the same state is the planned burn"
   const d = len(sub(again, dep.dv)) / Math.max(len(dep.dv), 1e-30);
   expect(d).toBeLessThan(1e-3);
   expect(dot(again, dep.dv)).toBeGreaterThan(0);
+});
+
+test("from 20 km below and 60° behind: a phasing arc of a few turns within the day, its correction nil on course", () => {
+  const s = chaser(20e3, 60 * (Math.PI / 180));
+  const t0 = performance.now();
+  const plan = planIssRendezvous(s.X, s.V, t, 600 / M_SECONDS);
+  const ms = performance.now() - t0;
+  // (before: none found — sixteen turns' wait drift it 25° nearer at most, a direct arc no further)
+  expect(plan).not.toBeNull();
+  expect(((plan!.tArrive - t) * M_SECONDS) / 3600).toBeLessThan(48);
+  expect(plan!.dv * C_MPS).toBeLessThan(150);
+  expect(ms).toBeLessThan(2000);
+  // (the departure flown as planned: the first correction, re-aimed on the arc's own turns, is nil)
+  const dep = plan!.nodes[0]!;
+  const E0 = solarState("earth", t),
+    E1 = solarState("earth", dep.t);
+  const k = coastOrbit("earth", solarBody("earth")!.mass, sub(s.X, E0.pos), sub(s.V, E0.vel), dep.t - t, t);
+  const X1 = add(E1.pos, k.r),
+    V1 = add(E1.vel, k.v);
+  const V2 = add(V1, nodeDvHome(X1, V1, dep.t, dep.dv));
+  const fix = refineIssNode(X1, V2, dep.t, plan!.nodes[1]!, plan!.tArrive)!;
+  expect(len(fix) * C_MPS).toBeLessThan(0.5);
 });

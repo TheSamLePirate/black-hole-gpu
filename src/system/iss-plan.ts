@@ -2,16 +2,23 @@
 // point 200 m out on the axis of IDA-2 — Harmony's forward port, the one the Ranger backs into —
 // with the station's velocity there (its turning frame's: at rest beside it). Two impulses on a Lambert
 // arc, the departure and the time of flight searched over the next sixteen turns of the station (its
-// phasing: the ship waits on its orbit for the right moment), the least Δv kept (a little time
-// counted against it: an hour of waiting is worth 0.2 m/s); arcs whose perigee dips below 200 km set
-// aside. Two corrections on the way, re-aimed in flight from the ship's real state (controls.ts:
+// phasing: the ship waits on its orbit for the right moment) — the arc direct, or of up to eight turns
+// (a phasing orbit: a craft far behind or ahead catches up over a few turns rather than days of
+// waiting) —, the least Δv kept (a little time counted against it: an hour of waiting is worth
+// 0.2 m/s); arcs whose perigee dips below 200 km set aside. Two corrections on the way, re-aimed in flight from the ship's real state (controls.ts:
 // issRefine), the arrival's burn too: the game's fall — the Moon's pull, the air's drag — and the
-// station's own orbit (SGP4: the Earth's flattening) are not quite the two-body arc.
+// station's own orbit (SGP4: the Earth's flattening) are not quite the two-body arc. The flattening's
+// secular drift is the plan's, though: both orbits' planes regress ~5° a day — on a two-body arc the
+// target's plane drifts 2.5° from the ship's in half a day, 300 m/s to turn —, so the ship's orbit is
+// carried on with it (our-plan.ts coastOrbit) and each arc solved in the frame the drift turns with it:
+// its target taken back by the drift over the flight (geopotential.ts secularTurn).
 //
 // Units: lengths and times in M, velocities in c.
 
 import type { Vec3 } from "../physics";
-import { keplerProp, lambert } from "./our-plan";
+import { secularTurn } from "./geopotential";
+import { lambertAll, type LambertSolution } from "./lambert";
+import { coastOrbit } from "./our-plan";
 import { nodeDvComponents } from "./our-predict";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "./solar";
 import { issAxes, issTrack, station } from "./iss";
@@ -88,6 +95,64 @@ export function craftPoint(id: VesselId, distM = RENDEZVOUS_M): RendezvousPoint 
   };
 }
 
+/** The J2 secular drift of the Earth orbit (r, v) at t0 over dt, as a rotation (none: the identity). */
+function drift(r: Vec3, v: Vec3, dt: number, t0: number): (x: Vec3) => Vec3 {
+  return secularTurn("earth", solarBody("earth")!.mass, r, v, dt, t0) ?? ((x: Vec3) => x);
+}
+
+/**
+ * The two-body arc from r1 (at t1) to the target (r2, v2t) after tof, of m turns, solved in the frame its
+ * own drift turns with: aimed at the target taken back by the drift over the flight — the target's own
+ * first, then the arc's —, and its arrival's velocity carried forward again. `pick` chooses among
+ * Lambert's solutions. Null: none.
+ */
+function driftArc(
+  r1: Vec3,
+  t1: number,
+  r2: Vec3,
+  v2t: Vec3,
+  tof: number,
+  h: Vec3,
+  m: number,
+  pick: (L: LambertSolution[]) => LambertSolution | undefined,
+): { v1: Vec3; v2: Vec3; branch: string } | null {
+  const mu = solarBody("earth")!.mass;
+  const L0 = pick(lambertAll(mu, r1, drift(r2, v2t, -tof, t1 + tof)(r2), tof, h, m));
+  if (!L0) return null;
+  const L = pick(lambertAll(mu, r1, drift(r1, L0.v1, -tof, t1)(r2), tof, h, m)) ?? L0;
+  return { v1: L.v1, v2: drift(r1, L.v1, tof, t1)(L.v2), branch: L.branch };
+}
+
+/**
+ * The velocity at r1 (at t1) that coasts to r2 in tof — the orbit carried on with its drift (coastOrbit),
+ * from `v` (a guess: the course flown, an arc's) by Newton's steps on the miss —, and the velocity it
+ * arrives with. A many-turn arc near its shortest flight is ill-posed for Lambert (a few km of aim are
+ * 100 m/s of answer); the course itself, shot again, is not. Null: no convergence (a miss over 10 m).
+ */
+function shoot(r1: Vec3, v: Vec3, t1: number, tof: number, r2: Vec3): { v1: Vec3; v2: Vec3 } | null {
+  const mu = solarBody("earth")!.mass;
+  const end = (u: Vec3) => coastOrbit("earth", mu, r1, u, tof, t1);
+  const h = 0.01 / C;
+  let u = v;
+  for (let it = 0; it < 10; it++) {
+    const e0 = end(u);
+    const miss = sub(e0.r, r2);
+    if (norm(miss) * M_METRES < 10) return { v1: u, v2: e0.v };
+    // (the miss's Jacobian in the velocity, by differences)
+    const J = [0, 1, 2].map((k) => {
+      const du: Vec3 = [0, 0, 0];
+      du[k] = h;
+      return sub(end(add(u, du)).r, e0.r).map((x) => x / h) as Vec3;
+    });
+    // (J's columns J[k]: solve J x = −miss, Cramer's rule)
+    const det = dot(J[0]!, cross(J[1]!, J[2]!));
+    if (!(Math.abs(det) > 0)) return null;
+    const x: Vec3 = [dot(miss, cross(J[1]!, J[2]!)) / -det, dot(J[0]!, cross(miss, J[2]!)) / -det, dot(J[0]!, cross(J[1]!, miss)) / -det];
+    u = add(u, x);
+  }
+  return null;
+}
+
 export function planIssRendezvous(
   X: Vec3,
   V: Vec3,
@@ -104,44 +169,82 @@ export function planIssRendezvous(
     v0 = sub(V, E0.vel);
   const h = cross(r0, v0);
   const floor = earth.radius + 200e3 / M_METRES;
-  let best: { cost: number; t1: number; tof: number; dv1: Vec3; dv2: Vec3; r1: Vec3; v1: Vec3; v2arr: Vec3 } | null = null;
+  type Arc = { cost: number; t1: number; tof: number; m: number; branch: string; dv1: Vec3; dv2: Vec3; r1: Vec3; v1: Vec3 };
   const MS = 1 / C;
-  for (let i = 0; i <= 16 * 24; i++) {
-    const t1 = t + lead + (ISS_PERIOD * i) / 24;
-    const s1 = keplerProp(mu, r0, v0, t1 - t);
-    for (let j = 0; j <= 28; j++) {
-      const tof = ISS_PERIOD * (0.3 + (1.15 * j) / 28);
-      const ta = t1 + tof;
-      const P = point(ta);
-      if (!P) continue;
-      const Ea = solarState("earth", ta);
-      // (the Earth carries both: its own motion over the arc taken out)
-      const r2 = sub(P.X, Ea.pos),
-        v2t = sub(P.V, Ea.vel);
-      const L = lambert(mu, s1.r, r2, tof, h);
+  const t1min = t + lead;
+  // (an arc: departing at t1 for tof, of m turns on a branch — its perigee above the floor; its cost, the
+  // two burns and the time to the arrival)
+  const arc = (t1: number, tof: number, m: number, branch?: string): Arc | null => {
+    if (t1 < t1min || !(tof > 0)) return null;
+    const P = point(t1 + tof);
+    if (!P) return null;
+    const s1 = coastOrbit("earth", mu, r0, v0, t1 - t, t);
+    const Ea = solarState("earth", t1 + tof);
+    const r2 = sub(P.X, Ea.pos),
+      v2t = sub(P.V, Ea.vel);
+    let best: Arc | null = null;
+    for (const b of branch ? [branch] : m ? ["left", "right"] : ["direct"]) {
+      const L = driftArc(s1.r, t1, r2, v2t, tof, h, m, (all) => all.find((x) => x.revs === m && x.branch === b));
       if (!L) continue;
-      // (its perigee, if the arc reaches it: above 200 km)
       const ev = sub(cross(L.v1, cross(s1.r, L.v1)).map((c) => c / mu) as Vec3, s1.r.map((c) => c / norm(s1.r)) as Vec3);
-      const e = norm(ev);
       const a = 1 / (2 / norm(s1.r) - dot(L.v1, L.v1) / mu);
-      if (a > 0 && a * (1 - e) < floor) continue;
+      if (a > 0 && a * (1 - norm(ev)) < floor) continue;
       const dv1 = sub(L.v1, s1.v),
         dv2 = sub(v2t, L.v2);
-      const cost = norm(dv1) + norm(dv2) + 0.2 * MS * (((ta - t) * M_SECONDS) / 3600);
-      if (!best || cost < best.cost) best = { cost, t1, tof, dv1, dv2, r1: s1.r, v1: s1.v, v2arr: L.v2 };
+      const cost = norm(dv1) + norm(dv2) + 0.2 * MS * (((t1 + tof - t) * M_SECONDS) / 3600);
+      if (!best || cost < best.cost) best = { cost, t1, tof, m, branch: L.branch, dv1, dv2, r1: s1.r, v1: s1.v };
     }
+    return best;
+  };
+  // the grid: the best arc of each kind (direct; m turns, each branch)
+  const kinds = new Map<string, Arc>();
+  const keep = (q: Arc | null) => {
+    if (!q) return;
+    const k = `${q.m}${q.branch}`;
+    if (!kinds.has(k) || q.cost < kinds.get(k)!.cost) kinds.set(k, q);
+  };
+  for (let i = 0; i <= 16 * 24; i++) {
+    const t1 = t1min + (ISS_PERIOD * i) / 24;
+    for (let j = 0; j <= 28; j++) keep(arc(t1, ISS_PERIOD * (0.3 + (1.15 * j) / 28), 0));
+    // (a phasing arc of m turns, from every third departure)
+    if (i % 3) continue;
+    for (let m = 1; m <= 8; m++) for (let j = 0; j <= 17; j++) keep(arc(t1, ISS_PERIOD * (m - 0.5 + (1.7 * j) / 17), m));
   }
-  if (!best) return null;
-  const b = best;
+  // each kind's best refined (a turn of several is sharp in its time: a minute of flight is ~10 km of its
+  // phasing orbit), the departure and the time of flight stepped down to seconds
+  let b = null as Arc | null;
+  for (let q of kinds.values()) {
+    for (let st = ISS_PERIOD / 48; st > 2 / M_SECONDS; st /= 2) {
+      for (let moved = true, n = 0; moved && n < 20; n++) {
+        moved = false;
+        for (const [d1, d2] of [
+          [st, 0],
+          [-st, 0],
+          [0, st],
+          [0, -st],
+          [st, -st],
+          [-st, st],
+        ] as const) {
+          const r = arc(q.t1 + d1, q.tof + d2, q.m, q.branch);
+          if (r && r.cost < q.cost) (q = r), (moved = true);
+        }
+      }
+    }
+    if (!b || q.cost < b.cost) b = q;
+  }
+  if (!b) return null;
   const ta = b.t1 + b.tof;
-  const E1 = solarState("earth", b.t1),
-    Ea = solarState("earth", ta);
+  const E1 = solarState("earth", b.t1);
   const P = point(ta)!;
+  // (the arc shot through to its target on the drifting orbit itself: its departure's few km of aim)
+  const Ea = solarState("earth", ta);
+  const sh = shoot(b.r1, add(b.v1, b.dv1), b.t1, b.tof, sub(P.X, Ea.pos));
+  if (sh) b = { ...b, dv1: sub(sh.v1, b.v1), dv2: sub(sub(P.V, Ea.vel), sh.v2) };
   // the burns as the plan carries them: [prograde, normal, radial] at the ship's state then
   const X1 = add(E1.pos, b.r1),
     V1 = add(E1.vel, b.v1);
   const dvDep = nodeDvComponents(X1, V1, b.t1, b.dv1);
-  const Va = add(Ea.vel, b.v2arr);
+  const Va = sub(P.V, b.dv2);
   const dvArr = nodeDvComponents(P.X, Va, ta, b.dv2);
   const total = (norm(b.dv1) + norm(b.dv2)) * C;
   const wait = ((b.t1 - t) * M_SECONDS) / 60;
@@ -160,7 +263,8 @@ export function planIssRendezvous(
 
 /**
  * In flight: a node of the rendezvous re-aimed from the ship's state now (X, V at t). A correction:
- * the Lambert arc from where the ship will be at its time to the rendezvous point at the arrival; the
+ * the Lambert arc from where the ship will be at its time to the rendezvous point at the arrival — of
+ * the turns the planned one has left: of those the time allows, the nearest the course flown —; the
  * arrival: the station's velocity there, less the ship's on its present course. Its Δv [P, N, R], or
  * null (the arc not found).
  */
@@ -180,12 +284,18 @@ export function refineIssNode(
   if (!P) return null;
   const Ea = solarState("earth", tArrive);
   if (node.role === "arrive") {
-    const s = keplerProp(mu, r0, v0, tArrive - t);
+    const s = coastOrbit("earth", mu, r0, v0, tArrive - t, t);
     const dv = sub(sub(P.V, Ea.vel), s.v);
     return nodeDvComponents(add(Ea.pos, s.r), add(Ea.vel, s.v), tArrive, dv);
   }
-  const sm = keplerProp(mu, r0, v0, node.t - t);
-  const L = lambert(mu, sm.r, sub(P.X, Ea.pos), tArrive - node.t, cross(r0, v0));
+  const sm = coastOrbit("earth", mu, r0, v0, node.t - t, t);
+  const near = (all: LambertSolution[]) =>
+    all.length ? all.reduce((a, x) => (norm(sub(x.v1, sm.v)) < norm(sub(a.v1, sm.v)) ? x : a)) : undefined;
+  const span = tArrive - node.t;
+  // (the course flown shot again to the target; else the drifting frame's arc nearest it)
+  const L =
+    shoot(sm.r, sm.v, node.t, span, sub(P.X, Ea.pos)) ??
+    driftArc(sm.r, node.t, sub(P.X, Ea.pos), sub(P.V, Ea.vel), span, cross(sm.r, sm.v), Math.floor(span / (0.8 * ISS_PERIOD)), near);
   if (!L) return null;
   const Em = solarState("earth", node.t);
   return nodeDvComponents(add(Em.pos, sm.r), add(Em.vel, sm.v), node.t, sub(L.v1, sm.v));
