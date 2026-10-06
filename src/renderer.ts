@@ -332,6 +332,8 @@ interface OfflineJob {
   shown: boolean;
   /** the terrain tiles drawn when it started (EarthTiles.stamp): restarted when more come in */
   tiles: number;
+  /** the quality kernel failed: the error control off, the fixed steps for the whole job (no mix) */
+  fixedSteps?: string;
 }
 
 export class Renderer {
@@ -3867,11 +3869,14 @@ export class Renderer {
     const targetSpp = effective.targetSpp;
     this.liveTargetSpp = targetSpp;
     this.liveQualityError = s.adaptiveIntegrator ? (this.qualityCompile.error ?? undefined) : undefined;
-    if (this.completedFrames > 0 && !sceneChanged && !timeChanged && s.adaptiveIntegrator && this.sampleIndex < targetSpp)
+    // (the quality kernel failed: a still view converges on the fixed-step kernel — the path taken
+    // with the error control off — rather than drawing realtime frames for ever)
+    const adaptive = s.adaptiveIntegrator && this.qualityCompile.state !== "failed";
+    if (this.completedFrames > 0 && !sceneChanged && !timeChanged && adaptive && this.sampleIndex < targetSpp)
       void this.qualityCompile.start();
     // (the quality kernel still compiling in the background: a still view keeps the realtime path
     // — sampleIndex stays at 0, the convergence starts when the kernel lands)
-    if (sceneChanged || timeChanged || (s.adaptiveIntegrator && this.sampleIndex < targetSpp && !this.qualityPipeline)) {
+    if (sceneChanged || timeChanged || (adaptive && this.sampleIndex < targetSpp && !this.qualityPipeline)) {
       phase = "realtime";
       this.frameStamp++;
       this.updateValidFrom(time);
@@ -3915,7 +3920,7 @@ export class Renderer {
       const y1 = Math.min(t.height, y0 + this.bandRows);
       rows = y1 - y0;
       let flags = 0;
-      if (s.adaptiveIntegrator) flags |= FLAG_ADAPTIVE_RK;
+      if (adaptive) flags |= FLAG_ADAPTIVE_RK;
       if (s.noiseThreshold > 0) flags |= FLAG_ADAPTIVE_SPP;
       this.writeParams(t, s, time, {
         block: 1,
@@ -3930,7 +3935,7 @@ export class Renderer {
         noise: effective.noiseThreshold,
         minSpp: 8,
       });
-      this.dispatchTrace(enc, t, t.width, rows, s.adaptiveIntegrator);
+      this.dispatchTrace(enc, t, t.width, rows, adaptive);
       if (this.sampleIndex < 32) this.dispatchEnv(enc, t, s);
       this.bandY = y1;
       if (this.bandY >= t.height) {
@@ -4163,14 +4168,17 @@ export class Renderer {
       width: t.width,
       height: t.height,
       offline: this.offlineStatus(job),
+      qualityError: job.fixedSteps,
     });
     if (!working && job.shown && !displayChanged) return result();
-    // (the quality kernel still compiling: the job waits — the dialog polls offlineState.done)
-    if (job.opts.tolerance > 0 && !this.qualityPipeline) {
+    // (the quality kernel still compiling: the job waits — the dialog polls offlineState.done; failed:
+    // the job renders on the fixed-step kernel, as with the error control off, and the status says so)
+    if (job.opts.tolerance > 0 && !this.qualityPipeline && !job.fixedSteps) {
       void this.qualityCompile.start();
-      if (this.qualityCompile.error) job.error = `Quality pipeline unavailable: ${this.qualityCompile.error}`;
-      return result();
+      if (this.qualityCompile.state !== "failed") return result();
+      job.fixedSteps = this.qualityCompile.error ?? "Quality pipeline unavailable";
     }
+    const adaptive = job.opts.tolerance > 0 && !job.fixedSteps;
     if (job.error) return result();
 
     const enc = this.device.createCommandEncoder();
@@ -4189,7 +4197,7 @@ export class Renderer {
       const y1 = Math.min(t.height, y0 + job.bandRows);
       rows = y1 - y0;
       let flags = 0;
-      if (o.tolerance > 0) flags |= FLAG_ADAPTIVE_RK;
+      if (adaptive) flags |= FLAG_ADAPTIVE_RK;
       if (o.noiseThreshold > 0) flags |= FLAG_ADAPTIVE_SPP;
       this.writeParams(t, s, job.time, {
         block: 1,
@@ -4205,7 +4213,7 @@ export class Renderer {
         minSpp: o.minSpp,
         shutter: o.shutter,
       });
-      this.dispatchTrace(enc, t, t.width, rows, o.tolerance > 0);
+      this.dispatchTrace(enc, t, t.width, rows, adaptive);
       this.dispatchEnv(enc, t, s);
       job.bandY = y1;
       if (job.bandY >= t.height) {

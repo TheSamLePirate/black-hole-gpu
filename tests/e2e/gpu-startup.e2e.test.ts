@@ -158,24 +158,21 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
-  test("failed adaptive kernel terminates its job; nonadaptive rendering still completes", async () => {
+  test("failed adaptive kernel: the still view and the adaptive export converge on fixed steps", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("main") });
     try {
-      await app.js(`(__bh.freeze(true), __bh.renderer.startOffline(__bh.settings, __bh.time(), ${options}), true)`);
-      await app.waitFor("!!__bh.renderer.offlineState?.error", 10_000);
-      expect(await app.js<boolean>("__bh.renderer.offlineState.done")).toBe(false);
-      expect(await app.js<string>("__bh.renderer.offlineState.error")).toContain("Injected optional compile failure");
-      expect(
-        await app.js<string>(`(async () => {
-        try { await __bh.renderer.exportPNG(__bh.settings); return "exported"; }
-        catch (error) { return error.message; }
-      })()`),
-      ).toContain("Quality pipeline unavailable");
-      await app.js(`(__bh.renderer.startOffline(__bh.settings, __bh.time(), { ...${options}, tolerance: 0 }), true)`);
+      // (the live still view: refining on the fixed-step kernel, not drawing realtime frames for ever)
+      await app.js("(__bh.freeze(true), __bh.touch(), true)");
+      await app.waitFor(`__bh.renderer.pipelineStatus.quality === "failed"`, 30_000);
+      await app.waitFor(`["converging", "converged"].includes(__bh.renderer.lastPhase)`, 30_000);
+      expect(await app.js<string>("__bh.renderer.liveQualityError")).toContain("Injected optional compile failure");
+      await app.js(`(__bh.renderer.startOffline(__bh.settings, __bh.time(), ${options}), true)`);
       await app.waitFor("__bh.renderer.offlineState?.done || __bh.renderer.offlineState?.error", 120_000);
       expect(await app.js<string | null>("__bh.renderer.offlineState.error ?? null")).toBeNull();
       expect(await app.js<boolean>("__bh.renderer.offlineState.done")).toBe(true);
+      expect(await app.js<string>("__bh.renderer.offline.fixedSteps")).toContain("Injected optional compile failure");
       expect(await app.js<number>("(await __bh.renderer.exportPNG(__bh.settings)).size")).toBeGreaterThan(100);
+      // (a video failing midway leaves the live view as it was)
       const videoFailure = await app.js<{
         message: string;
         active: boolean;
@@ -183,13 +180,15 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
         scripted: boolean;
       } | null>(`(async () => {
         const rate = __bh.settings.timeSpeed;
+        __bh.renderer.exportRGBA = async () => { throw new Error("Injected export failure"); };
         try { await __bh.video("injected-failure", { ...${options}, seconds: 1, fps: 1, rate: rate + 1 }); }
         catch (error) { return { message: error.message, active: __bh.renderer.offlineActive,
           rateRestored: __bh.settings.timeSpeed === rate, scripted: __bh.camera.scripted }; }
+        finally { delete __bh.renderer.exportRGBA; }
         return null;
       })()`);
       expect(videoFailure).toEqual({
-        message: "Quality pipeline unavailable: Injected optional compile failure",
+        message: "Injected export failure",
         active: false,
         rateRestored: true,
         scripted: false,

@@ -2557,7 +2557,8 @@ async function main() {
         `<span class="chip">🔭 ${settings.fov < 1 ? `${(settings.fov * 60).toFixed(settings.fov < 0.1 ? 1 : 0)}′` : `${settings.fov.toFixed(1)}°`}</span>`,
       );
     if (camera.pad.connected) chips.push(`<span class="chip" title="${t("Game controller")}">🎮</span>`);
-    if (st.qualityError) chips.push(`<span class="chip hot">⚠ ${t("Refinement unavailable")}</span>`);
+    // (the quality kernel failed: the image refines on fixed steps — the error control unavailable)
+    if (st.qualityError) chips.push(`<span class="chip hot">⚠ ${t("Fixed-step refinement (error control unavailable)")}</span>`);
     statusEl.title = st.qualityError ?? "";
     statusEl.innerHTML = phase + chips.join("");
     progressEl.firstElementChild!.setAttribute("style", `width:${(Math.min(progress, 1) * 100).toFixed(1)}%`);

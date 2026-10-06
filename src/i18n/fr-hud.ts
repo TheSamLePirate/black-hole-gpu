@@ -497,7 +497,7 @@ export default {
   "Your flight could not be saved automatically.": "Votre vol n'a pas pu être sauvegardé automatiquement.",
   "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.":
     "Aucune première image après 180 s. Dernière étape graphique : {0}. Le navigateur n'a pas fourni de cause précise.",
-  "Refinement unavailable": "Affinage indisponible",
+  "Fixed-step refinement (error control unavailable)": "Affinage à pas fixe (contrôle d'erreur indisponible)",
   "Entering as soon as the first image is ready…": "Entrée dès que la première image est prête…",
   unavailable: "indisponible",
 
