@@ -99,6 +99,26 @@ test("the Lander handed over by its Martian entry (9 km up, 350 m/s, Jezero 9 km
   expect(apart(c.ourLanded!.q, bodyFixedOf("mars", site.lat, site.lon, 0))).toBeLessThan(50);
 });
 
+test("the Lander's Martian entry still at Mach 3, 9 km up, falling 180 m/s: its engines take over — no fall to the ground at Mach 2", () => {
+  setGroundRelief("mars", () => -2600);
+  const site = { body: "mars", name: "Jezero crater", lat: 18.44, lon: 77.45 };
+  const g = ourGroundPose("mars", site.lat - 60 / 59.16, site.lon, 0);
+  const to = ourGroundPose("mars", site.lat, site.lon, 0).X;
+  const X = add(g.X, scale(g.up, 9e3 / M_METRES));
+  const d = [to[0] - X[0], to[1] - X[1], to[2] - X[2]] as [number, number, number];
+  const along = add(d, scale(g.up, -(d[0] * g.up[0] + d[1] * g.up[1] + d[2] * g.up[2])));
+  const u = scale(along, 1 / Math.hypot(...along));
+  const vel = add(add(groundVelocity("mars", X, 0), scale(u, 700 / 299792458)), scale(g.up, -180 / 299792458));
+  const { c, msgs, fly } = flight({ ...g, X, fwd: u, up: g.up, vel, landed: undefined }, false, "lander");
+  c.entrySite = site as never;
+  c.pilot.auto = "none";
+  c.pilot.setAuto("entry");
+  fly(600, () => !!c.ourLanded || !!c.airFlight.failure || (c.pilot.auto === "none" && !!c.rolling));
+  expect(c.airFlight.failure).toBeNull();
+  expect(msgs.some((m) => /the engines land the Lander/.test(m))).toBe(true);
+  expect(touchdown(msgs).sink!).toBeLessThanOrEqual(1.5);
+}, 60_000);
+
 test("the Lander handed over by an Earth entry at Mach 2, 22 km up, its site 130 km on: whole, down gently", () => {
   // (through the thick air on its engines: the site out of reach, down where it stops)
   const site = { body: "earth", name: "a far pad", lat: 28.6 + 130 / 111.2, lon: -80.6 };

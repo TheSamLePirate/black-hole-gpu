@@ -1423,13 +1423,21 @@ function entryStep(
         R.bank = r.out;
       });
     }
-    if (LA && LA.out.mach < R.handover && LA.h < top * 0.5) {
+    // (the Lander's engines also take over once the fall needs them: low enough that its stop, at a third of
+    // the thrust over the weight, takes the height left with a margin — in Mars' thin air it fell to the
+    // ground at Mach 2, never slow enough for the hand-over)
+    const fall = -dot3(lin(fr.s.v, 1, fr.env.ground(fr.s.x), -1), up);
+    const net = this.thrustMax() * (C_MPS ** 2 / (1476.625 * s.massSolar)) - Math.hypot(...fr.env.gravity(fr.s.x, fr.s.v));
+    const mustBrake = !ranger && R.site && fall > 0 && net > 0 && h < (1.5 * fall * fall) / ((2 * net) / 3) + 1000;
+    if (LA && ((LA.out.mach < R.handover && LA.h < top * 0.5) || mustBrake)) {
       if (!R.site) return say(tf("Entry done over {0}: Mach {1}, the controls are yours", name, LA.out.mach.toFixed(1)));
       if (!ranger) {
         // (the Lander: its engines bring it down, the speed killed)
         P.auto = "none";
         P.setAuto("land");
         this.entryRun = null;
+        // (to the entry's site, our side: the powered descent's pad)
+        if (this.ourNav(cam)) this.landRun = { body: fr.body, site: R.site, q: null, heading: null, cmd: null };
         this.onPilotMessage?.(tf("Entry done: Mach {0} — the engines land the Lander", LA.out.mach.toFixed(1)));
         return null;
       }
