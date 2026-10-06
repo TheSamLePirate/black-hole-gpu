@@ -3,7 +3,10 @@
 // the command run in that copy, its log streamed here and what it wrote brought back.
 //
 //   bun scripts/remote.ts run [--headless] [--cpu] [--hold <s>] [--name <n>] [--detach] -- <command…>
-//   bun scripts/remote.ts status | logs <id> [-f] | fetch <id> | cancel <id> | clean [--keep 10] | sync
+//   bun scripts/remote.ts status | logs <id> [-f] | fetch <id> | cancel <id> | clean [--keep 10] | sync | doctor
+//
+//   doctor     the other Mac's health before a campaign: reached (by name, else its last address), internet,
+//              a screen session, Chrome, bun's version, disk, sleep, the GPU queue
 //
 //   (default)  Chrome full screen on that Mac's display (E2E_HEADED=1, tests/e2e/lib/cdp.ts): who sits at it
 //              sees it is in use, and can watch; one job at a time there, the others queued (the GPU lock)
@@ -31,6 +34,43 @@ const RESULTS = "remote-results";
 const CLONE = process.env.KERR_REMOTE_CLONE ?? "Documents/DEV/black-hole-gpu";
 const RUNNER = `~/.bun/bin/bun ${DIR}/base/scripts/remote-runner.ts`;
 
+// (ssh never waits for ever: a Mac asleep or off the network fails in seconds, a link gone quiet in a minute —
+// a run once hung 20 minutes on a name that no longer resolved)
+const SSH = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"];
+// (its address as last seen — remote-results/.host-ip, written by `doctor` and every reachable run: used when
+// its .local name no longer resolves, the Bonjour name being the first thing to go)
+const IP_FILE = `${RESULTS}/.host-ip`;
+const VIA: string[] = [];
+const ssh = (...a: string[]) => ["ssh", ...SSH, ...VIA, ...a];
+const rsyncE = () => ["-e", ["ssh", ...SSH, ...VIA].join(" ")];
+
+/** The machine reached: by its name, else at its last known address; its address then remembered. */
+async function reach(): Promise<boolean> {
+  const tryIt = async (via: string[]) => {
+    const p = Bun.spawn(["ssh", ...SSH, ...via, HOST, "ipconfig getifaddr en0 || ipconfig getifaddr en1"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = (await new Response(p.stdout).text()).trim();
+    const err = (await new Response(p.stderr).text()).trim();
+    return { ok: (await p.exited) === 0, ip: out.split("\n").pop() ?? "", err };
+  };
+  let r = await tryIt([]);
+  if (!r.ok && existsSync(IP_FILE)) {
+    const ip = readFileSync(IP_FILE, "utf8").trim();
+    console.error(`remote: ${HOST} unreachable by name (${r.err.split("\n").pop()}) — trying its last address ${ip}`);
+    r = await tryIt(["-o", `HostName=${ip}`]);
+    if (r.ok) VIA.push("-o", `HostName=${ip}`);
+  }
+  if (r.ok && /^\d+\.\d+\.\d+\.\d+$/.test(r.ip)) {
+    mkdirSync(RESULTS, { recursive: true });
+    writeFileSync(IP_FILE, r.ip);
+  }
+  if (!r.ok)
+    console.error(`remote: ${HOST} unreachable — ${r.err.split("\n").pop()} (asleep, off the network? \`bun scripts/remote.ts doctor\`)`);
+  return r.ok;
+}
+
 const die = (msg: string): never => {
   console.error(`remote: ${msg}`);
   process.exit(2);
@@ -38,7 +78,7 @@ const die = (msg: string): never => {
 
 /** The runner over ssh: its output here, its exit code back. */
 async function runner(args: string[], o: { stdin?: Uint8Array; quiet?: boolean } = {}) {
-  const p = Bun.spawn(["ssh", "-o", "BatchMode=yes", HOST, `${RUNNER} ${args.map((a) => `'${a}'`).join(" ")}`], {
+  const p = Bun.spawn(ssh(HOST, `${RUNNER} ${args.map((a) => `'${a}'`).join(" ")}`), {
     stdin: o.stdin ?? "ignore",
     stdout: o.quiet ? "pipe" : "inherit",
     stderr: "inherit",
@@ -79,10 +119,7 @@ async function pullClone() {
   if (!CLONE) return;
   const p = Bun.spawn(
     [
-      "ssh",
-      "-o",
-      "BatchMode=yes",
-      HOST,
+      ...ssh(HOST),
       `cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`,
     ],
     { stdout: "pipe", stderr: "pipe" },
@@ -99,11 +136,11 @@ async function sync(id?: string) {
   const files = (await Bun.$`git ls-files -co --exclude-standard -z`.text()).split("\0").filter((f) => f && existsSync(f));
   const list = new TextEncoder().encode(files.join("\0"));
   const t0 = performance.now();
-  await Bun.$`ssh -o BatchMode=yes ${HOST} mkdir -p ${DIR}/base`;
+  await Bun.$`${ssh(HOST, `mkdir -p ${DIR}/base`)}`;
   // (the network drops now and then — Wi-Fi —: a transfer cut short is resumed, the files already there kept)
   let stats = "";
   for (let attempt = 1; ; attempt++) {
-    const rs = Bun.spawn(["rsync", "-a", "--from0", "--files-from=-", "--stats", ".", `${HOST}:${DIR}/base/`], {
+    const rs = Bun.spawn(["rsync", ...rsyncE(), "-a", "--from0", "--files-from=-", "--stats", ".", `${HOST}:${DIR}/base/`], {
       stdin: list,
       stdout: "pipe",
       stderr: "inherit",
@@ -122,7 +159,7 @@ async function sync(id?: string) {
 
 async function fetch(id: string) {
   mkdirSync(`${RESULTS}/${id}`, { recursive: true });
-  const r = Bun.spawnSync(["rsync", "-a", `${HOST}:${DIR}/runs/${id}/.job/`, `${RESULTS}/${id}/`], { stderr: "inherit" });
+  const r = Bun.spawnSync(["rsync", ...rsyncE(), "-a", `${HOST}:${DIR}/runs/${id}/.job/`, `${RESULTS}/${id}/`], { stderr: "inherit" });
   if (r.exitCode !== 0) die(`fetch ${id} failed`);
   const art = `${RESULTS}/${id}/artifacts`;
   const n = existsSync(art) ? (await Bun.$`find ${art} -type f`.text()).split("\n").filter(Boolean) : [];
@@ -145,8 +182,61 @@ async function follow(id: string) {
   return code;
 }
 
+/** The other Mac's health, before a campaign: reached, its network, its screen, its tools, its queue. */
+async function doctor() {
+  const t0 = performance.now();
+  if (!(await reach())) process.exit(1);
+  const ms = Math.round(performance.now() - t0);
+  const probe = [
+    "echo os=$(sw_vers -productVersion)",
+    "echo bun=$(~/.bun/bin/bun --version 2>/dev/null || echo none)",
+    "echo user=$(whoami)",
+    // (a graphical session: the full-screen Chrome needs one — nobody logged in at its screen, it cannot open)
+    "echo console=$(stat -f %Su /dev/console)",
+    // (the internet: Chrome hangs at its start without it, headless too — seen on 2026-10-04)
+    "echo internet=$(curl -s -o /dev/null -m 6 -w %{http_code} https://www.google.com || echo 000)",
+    `echo chrome=$(test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" && echo yes || echo no)`,
+    "echo disk=$(df -h ~ | tail -1 | awk '{print $4}')",
+    "echo sleep=$(pmset -g | awk '/^ sleep/{print $2}')",
+    "echo display_sleep=$(pmset -g | awk '/displaysleep/{print $2}')",
+    "echo load=$(sysctl -n vm.loadavg | tr -d '{}')",
+    `echo gpu_lock=$(test -e ${DIR}/gpu.lock && cat ${DIR}/gpu.lock 2>/dev/null | head -c 80 || echo free)`,
+  ].join("; ");
+  const p = Bun.spawn(ssh(HOST, probe), { stdout: "pipe", stderr: "inherit" });
+  const kv = Object.fromEntries(
+    (await new Response(p.stdout).text())
+      .trim()
+      .split("\n")
+      .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
+  );
+  await p.exited;
+  const local = Bun.version;
+  const checks: [string, boolean, string][] = [
+    ["reached", true, `${ms} ms${VIA.length ? ` (by its last address, ${VIA[1]?.slice(9)} — its .local name does not resolve)` : ""}`],
+    [
+      "internet",
+      kv.internet === "200" || kv.internet === "301" || kv.internet === "302",
+      `HTTP ${kv.internet} (Chrome hangs at start without it)`,
+    ],
+    ["screen session", !!kv.console && kv.console !== "root", `console user: ${kv.console} (the full-screen Chrome needs one)`],
+    ["Chrome", kv.chrome === "yes", kv.chrome ?? "?"],
+    ["bun", kv.bun === local, `${kv.bun} there, ${local} here`],
+    ["disk", true, `${kv.disk} free`],
+    ["sleep", kv.sleep === "0", `system sleep ${kv.sleep} min (0: never — a sleeping Mac drops the run)`],
+    ["load", true, kv.load ?? "?"],
+    ["GPU queue", true, kv.gpu_lock ?? "?"],
+  ];
+  console.log(`${HOST} — macOS ${kv.os}, ${kv.user}`);
+  for (const [k, ok, d] of checks) console.log(`  ${ok ? "✓" : "✗"} ${k.padEnd(15)} ${d}`);
+  const bad = checks.filter((c) => !c[1]).length;
+  if (!bad) await runner(["status"]);
+  process.exit(bad ? 1 : 0);
+}
+
 const argv = process.argv.slice(2);
 const sub = argv[0];
+if (sub === "doctor") await doctor();
+else if (!(await reach())) process.exit(2);
 if (sub === "run") {
   const dd = argv.indexOf("--");
   if (dd < 0 || dd === argv.length - 1) die("run [--headless] [--cpu] [--hold s] [--name n] [--detach] -- <command…>");
@@ -181,12 +271,10 @@ else if (sub === "status") process.exit((await runner(["status"])).code);
 else if (sub === "logs") {
   const id = argv[1] ?? die("logs <id> [-f]");
   if (argv.includes("-f")) process.exit(await follow(id));
-  process.exit(
-    Bun.spawnSync(["ssh", "-o", "BatchMode=yes", HOST, `cat ${DIR}/runs/${id}/.job/log`], { stdout: "inherit", stderr: "inherit" })
-      .exitCode,
-  );
+  process.exit(Bun.spawnSync(ssh(HOST, `cat ${DIR}/runs/${id}/.job/log`), { stdout: "inherit", stderr: "inherit" }).exitCode);
 } else if (sub === "fetch") await fetch(argv[1] ?? die("fetch <id>"));
 else if (sub === "cancel") process.exit((await runner(["cancel", argv[1] ?? die("cancel <id>")])).code);
 else if (sub === "clean")
   process.exit((await runner(["clean", "--keep", argv.includes("--keep") ? argv[argv.indexOf("--keep") + 1]! : "10"])).code);
-else die("run | status | logs <id> [-f] | fetch <id> | cancel <id> | clean [--keep n] | sync — see the header of scripts/remote.ts");
+else
+  die("run | status | logs <id> [-f] | fetch <id> | cancel <id> | clean [--keep n] | sync | doctor — see the header of scripts/remote.ts");

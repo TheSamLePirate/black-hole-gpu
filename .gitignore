@@ -73,3 +73,6 @@ remote-results/
 /meta.json
 # local screenshots at the root (yosemite-tunnel-view*.png, committed by accident in 33625d0)
 /yosemite-tunnel-view*.png
+
+# the flight lab's campaigns (scripts/flightlab.ts)
+/flight-results/
