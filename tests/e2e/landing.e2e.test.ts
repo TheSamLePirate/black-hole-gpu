@@ -27,6 +27,7 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
         gMax: number;
         offProfile: number | null;
         manualOnWheels: boolean;
+        stop: number | null;
         log: string[];
       }>(`(() => {
         __bh.freeze(true); __bh.settings.wind = ${wind}; __bh.game.glideTo("Edwards");
@@ -41,7 +42,9 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
           if (c.ourLanded || c.airFlight.failure) break;
         }
         __bh.freeze(false);
-        return { landed: !!c.ourLanded, fail: c.airFlight.failure, across, gMax, offProfile, manualOnWheels,
+        c.runwayCache = null;
+        const stop = c.runwayView()?.across ?? null;
+        return { landed: !!c.ourLanded, fail: c.airFlight.failure, across, gMax, offProfile, manualOnWheels, stop,
           log: __bh.game.log.events.filter((e) => e.kind === "pilot").map((e) => e.text) };
       })()`);
       expect(r.fail).toBeNull();
@@ -60,6 +63,8 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
       expect(Math.abs(r.offProfile ?? Infinity)).toBeLessThan(150);
       // (the wheels down: no hand-flown final begun from the ground — its profile flat, the HUD's graph off)
       expect(r.manualOnWheels).toBe(false);
+      // (stopped on the axis: the rollout steered along the runway, through a tyre's skip too)
+      expect(Math.abs(r.stop ?? Infinity)).toBeLessThan(10);
     }, 120_000);
 
   test("the circuit: from past the runway's end the wrong way round, onto the axis at the touchdown", async () => {

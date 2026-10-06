@@ -624,7 +624,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         if (spd > 20 && (t - this.rollSince) * secM > 2) this.onPilotMessage?.(tf("Airborne · {0} m/s", spd.toFixed(0)));
         this.offGround = t;
         this.rolling = null;
-        this.rollSite = null;
+        // (the rollout's runway kept: a tyre's skip back on the wheels — the same touchdown — steers on
+        // along it; dropped, a gentle touchdown's skip left the craft rolling straight off the axis, 60 m.
+        // Used on the wheels only, set anew at the next touchdown said)
       }
     }
   }
