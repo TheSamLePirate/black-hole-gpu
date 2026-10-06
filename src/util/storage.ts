@@ -1,10 +1,21 @@
 // The browser's storage, safely: private modes, full quotas and blocked site data throw on access —
 // every read falls back, every write says whether it took. One place instead of a try/catch per use.
 
+/** the build's place in the site (scripts/build-pages.ts: KERR_SUBPATH — the CI's preview under test/; empty at the root) */
+declare const __KERR_SUBPATH__: string;
+const SUBPATH = typeof __KERR_SUBPATH__ === "string" ? __KERR_SUBPATH__ : "";
+
+/**
+ * A key of this app's: a preview deployed under the site shares its origin, so its storage — its saves,
+ * settings, tier and diagnostics under their own prefix, not the site's (whose keys, at the root, are
+ * unchanged).
+ */
+export const storageKey = (key: string, subpath = SUBPATH) => (subpath ? `${subpath}/${key}` : key);
+
 export const store = {
   get(key: string): string | null {
     try {
-      return localStorage.getItem(key);
+      return localStorage.getItem(storageKey(key));
     } catch {
       return null;
     }
@@ -12,7 +23,7 @@ export const store = {
   /** false when the browser refused (private mode, quota) */
   set(key: string, value: string): boolean {
     try {
-      localStorage.setItem(key, value);
+      localStorage.setItem(storageKey(key), value);
       return true;
     } catch {
       return false;
@@ -20,7 +31,7 @@ export const store = {
   },
   remove(key: string) {
     try {
-      localStorage.removeItem(key);
+      localStorage.removeItem(storageKey(key));
     } catch {
       /* nothing stored, nothing to remove */
     }

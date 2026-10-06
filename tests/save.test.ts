@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { defaultSettings, pickSettings, SETTING_KIND, settingKeys } from "../src/settings";
 import { checkSave, migrateSave, parseSave, SAVE_VERSION, saveFromHash, saveToHash, type GameSave } from "../src/game/save";
-import { store } from "../src/util/storage";
+import { storageKey, store } from "../src/util/storage";
 
 // Saved games: a flight round-trips through JSON, a link and the browser's storage; a corrupted one is
 // refused (never half-loaded), a setting of the wrong kind repaired.
@@ -70,6 +70,12 @@ test("storage without a browser: reads fall back, writes say they did not take",
   expect(store.get("kerr.nothing")).toBeNull();
   expect(store.getJSON("kerr.nothing", { a: 1 })).toEqual({ a: 1 });
   expect(typeof store.set("kerr.x", "1")).toBe("boolean");
+});
+
+test("storage keys: the site's unchanged at the root; a preview's (the CI's test/) apart", () => {
+  expect(storageKey("kerr.autosave")).toBe("kerr.autosave");
+  expect(storageKey("kerr.autosave", "")).toBe("kerr.autosave");
+  expect(storageKey("kerr.tier", "test")).toBe("test/kerr.tier");
 });
 
 test("a version 1 save (every setting) loads: migrated, the player's own left out", () => {

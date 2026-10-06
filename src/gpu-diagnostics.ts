@@ -1,3 +1,5 @@
+import { storageKey } from "./util/storage";
+
 /** Local, bounded graphics diagnostics. No network telemetry and no scene/save data. */
 export interface DiagnosticEvent {
   atMs: number;
@@ -6,7 +8,7 @@ export interface DiagnosticEvent {
   message: string;
   stack?: string;
 }
-const KEY = "kerr.gpu-diagnostic.v1";
+const KEY = storageKey("kerr.gpu-diagnostic.v1");
 interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

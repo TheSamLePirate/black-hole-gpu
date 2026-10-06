@@ -10,16 +10,33 @@
 //     (their index — url, last use, size — in IndexedDB, since the Cache API keeps no dates);
 //   · the station's elements: network first, the cache when offline.
 // A new build's worker waits until the page tells it to take over (the page shows a toast), then claims
-// the open pages and drops the older shells' caches.
+// the open pages and drops its own app's older shells' caches — the site and a preview under it (the
+// CI's test/) share the origin's Cache Storage: each worker keeps to its own scope's caches and pages.
 
 /// <reference lib="webworker" />
-import { classify, evictions, isShellCache, SHELL_CACHE, TILE_CACHE, TILE_BUDGET, type TileEntry } from "./pwa/rules";
+import {
+  classify,
+  evictions,
+  isAppPage,
+  isLegacyShell,
+  isOwnShellCache,
+  ownsLegacyShell,
+  SHELL_CACHE,
+  TILE_CACHE,
+  TILE_BUDGET,
+  type TileEntry,
+} from "./pwa/rules";
 
 declare const self: ServiceWorkerGlobalScope;
 /** the build this worker belongs to (the build script substitutes it; dev: the time the worker was built) */
 declare const __BUILD__: string;
 const BUILD = typeof __BUILD__ === "string" ? __BUILD__ : "dev";
-const SHELL = SHELL_CACHE(BUILD);
+/** the build's top-level directories (scripts/build-pages.ts; the dev server: none — the whole scope) */
+declare const __DIRS__: string[];
+const DIRS = typeof __DIRS__ === "object" ? __DIRS__ : null;
+/** the scope's root: the page whatever its query or hash (a navigation offline falls back on it) */
+const ROOT = self.registration.scope;
+const SHELL = SHELL_CACHE(ROOT, BUILD);
 
 // ---- the tiles' index (IndexedDB: one store, keyed by URL)
 const DB = "kerr-sw",
@@ -81,11 +98,15 @@ self.addEventListener("install", (ev) => {
   );
 });
 
-// ---- activate: the older builds' shells dropped, the open pages claimed
+// ---- activate: this app's older builds' shells dropped (not another app's), the open pages claimed
 self.addEventListener("activate", (ev) => {
   ev.waitUntil(
     (async () => {
-      for (const n of await caches.keys()) if (isShellCache(n) && n !== SHELL) await caches.delete(n);
+      for (const n of await caches.keys()) {
+        const urls = async () => (await (await caches.open(n)).keys()).map((r) => r.url);
+        const old = isOwnShellCache(n, ROOT) ? n !== SHELL : isLegacyShell(n) && ownsLegacyShell(await urls(), ROOT);
+        if (old) await caches.delete(n);
+      }
       await self.clients.claim();
     })(),
   );
@@ -113,7 +134,7 @@ async function clearTiles() {
 
 // ---- fetch
 self.addEventListener("fetch", (ev) => {
-  const kind = classify(ev.request.url, self.location.origin, ev.request.method);
+  const kind = classify(ev.request.url, ROOT, ev.request.method, DIRS);
   if (kind === "pass") return;
   if (kind === "immutable") ev.respondWith(cacheFirst(ev.request, SHELL));
   else if (kind === "shell" || kind === "elements") ev.respondWith(networkFirst(ev.request, SHELL));
@@ -129,15 +150,13 @@ async function cacheFirst(request: Request, name: string): Promise<Response> {
   return res;
 }
 
-/** the scope's root: the page whatever its query or hash (a navigation offline falls back on it) */
-const ROOT = new URL("./", self.location.href).href;
 async function networkFirst(request: Request, name: string): Promise<Response> {
   const cache = await caches.open(name);
   try {
     const res = await fetch(request);
     if (res.ok) {
       void cache.put(request, res.clone());
-      if (request.mode === "navigate") void cache.put(ROOT, res.clone());
+      if (request.mode === "navigate" && isAppPage(request.url, ROOT)) void cache.put(ROOT, res.clone());
     }
     return res;
   } catch (e) {
