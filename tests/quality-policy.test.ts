@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { automaticQuality, dynamicResolutionOn, earthMapQuality, effectiveQuality, promotionEligible } from "../src/quality-policy";
+import {
+  automaticQuality,
+  demotionEligible,
+  dynamicResolutionOn,
+  earthMapQuality,
+  effectiveQuality,
+  promotionEligible,
+} from "../src/quality-policy";
 import { defaultSettings, QUALITY } from "../src/settings";
 import { cappedRatio, tierAt } from "../src/tier";
 
@@ -65,6 +72,7 @@ test("1080p tier 2 can lift its precision cap even without a pixel cap", () => {
   const s = game();
   const state = {
     automatic: true,
+    benching: false,
     stable: true,
     pixelCapped: cappedRatio(1, 1920, 1080, tier.capMpx) < 1,
     precisionCapped: effectiveQuality(s, tier).capped,
@@ -79,6 +87,7 @@ test("1080p tier 2 can lift its precision cap even without a pixel cap", () => {
   expect(promotionEligible(state)).toBe(true);
   for (const patch of [
     { automatic: false },
+    { benching: true },
     { stable: false },
     { scale: 0.5 },
     { block: 8 },
@@ -87,6 +96,14 @@ test("1080p tier 2 can lift its precision cap even without a pixel cap", () => {
     { measuredMs: 9 },
   ]) {
     expect(promotionEligible({ ...state, ...patch })).toBe(false);
+  }
+});
+
+test("over budget at the floor demotes the tier, never while a Kerr Bench runs", () => {
+  const state = { automatic: true, benching: false, stable: true, scale: 0.5, block: 8, measuredMs: 30, budgetMs: 16 };
+  expect(demotionEligible(state)).toBe(true);
+  for (const patch of [{ automatic: false }, { benching: true }, { stable: false }, { scale: 0.625 }, { block: 6 }, { measuredMs: 20 }]) {
+    expect(demotionEligible({ ...state, ...patch })).toBe(false);
   }
 });
 

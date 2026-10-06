@@ -58,7 +58,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { dynamicResolutionOn, promotionEligible } from "./quality-policy";
+import { demotionEligible, dynamicResolutionOn, promotionEligible } from "./quality-policy";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -2250,6 +2250,7 @@ async function main() {
       // GPU idle — the promotion would never fire; and a minute's cooldown after a demotion)
       idleAtCap = promotionEligible({
         automatic: on,
+        benching: bench.running,
         stable: renderer.calibrationReady && settled,
         pixelCapped: capped,
         precisionCapped: renderer.effectiveQuality(settings).capped,
@@ -2276,8 +2277,17 @@ async function main() {
       }
       // (and the other way — the promotion's missing half (plan §3.4): over the budget and a half
       // at the coarsest block and the smallest scale, for 12 s — one tier down, its cap lowered)
-      overAtFloor =
-        on && renderer.calibrationReady && settled && renderScale === 0.5 && block >= 8 && gpuEma > 1.5 * budget ? overAtFloor + 1.5 : 0;
+      overAtFloor = demotionEligible({
+        automatic: on,
+        benching: bench.running,
+        stable: renderer.calibrationReady && settled,
+        scale: renderScale,
+        block,
+        measuredMs: gpuEma,
+        budgetMs: budget,
+      })
+        ? overAtFloor + 1.5
+        : 0;
       if (overAtFloor >= 12) {
         const down = demoted(renderer.tier);
         overAtFloor = 0;

@@ -54,9 +54,11 @@ export function earthMapQuality(
   return wanted === "high" && (memoryCap === "med" || (automatic && !offline && tier.level <= 1)) ? "med" : wanted;
 }
 
-/** Promotion requires stable live work and unused budget, whether pixels or precision are capped. */
+/** Promotion requires stable live work and unused budget, whether pixels or precision are capped —
+ * and no Kerr Bench running: a tier changed mid-run (and remembered) would change the steps it measures. */
 export function promotionEligible(o: {
   automatic: boolean;
+  benching: boolean;
   stable: boolean;
   pixelCapped: boolean;
   precisionCapped: boolean;
@@ -69,6 +71,7 @@ export function promotionEligible(o: {
 }): boolean {
   return (
     o.automatic &&
+    !o.benching &&
     o.stable &&
     (o.pixelCapped || o.precisionCapped || o.tier.level <= 1) &&
     o.scale === 1 &&
@@ -77,4 +80,18 @@ export function promotionEligible(o: {
     o.measuredMs > 0 &&
     o.measuredMs < 0.5 * o.budgetMs
   );
+}
+
+/** Demotion — the promotion's missing half (plan §3.4): over the budget and a half at the coarsest
+ * block and the smallest scale, the live work stable; never while a Kerr Bench runs. */
+export function demotionEligible(o: {
+  automatic: boolean;
+  benching: boolean;
+  stable: boolean;
+  scale: number;
+  block: number;
+  measuredMs: number;
+  budgetMs: number;
+}): boolean {
+  return o.automatic && !o.benching && o.stable && o.scale === 0.5 && o.block >= 8 && o.measuredMs > 1.5 * o.budgetMs;
 }
