@@ -132,14 +132,19 @@ export class Fleet {
     const com = f.com ?? [0, 0, 0];
     // the centre of mass on its orbit; the axes turned about it
     const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
-    const kp = keplerProp(mu, sub(C0, B0.pos), sub(f.V, B0.vel), t - f.t);
+    // (its velocity is the place's own rate — the oblateness's drift turns the orbit, and that turn moves
+    // the craft too, some 2–5 m/s in a low orbit: the Kepler arc is flown at the velocity less that turn's
+    // share, and the share given back below — set free at its velocity, it keeps it; coasting, the docking
+    // autopilot no longer chases a point that goes elsewhere)
+    const r0 = sub(C0, B0.pos),
+      v0 = sub(f.V, B0.vel);
+    const spin0 = secularSpin(f.ref, mu, r0, v0, 0, f.t);
+    const kp = keplerProp(mu, r0, spin0 ? sub(v0, cross(spin0, r0)) : v0, t - f.t);
     // (the body's oblateness: the orbit's node and periapsis drift, as the flown craft's on rails)
     const kz = secularZonal(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
     // (its orbit's decay in the thin air)
     const k = railsDecay(f.ref, mu, kz.r, kz.v, t - f.t);
-    // (its velocity the place's own rate: the drift's turn moves it too — without it the craft's velocity
-    // was some 2–5 m/s off its place's, and the docking autopilot chased a point that went elsewhere)
-    const spin = secularSpin(f.ref, mu, kp.r as Vec3, kp.v as Vec3, t - f.t, f.t);
+    const spin = secularSpin(f.ref, mu, r0, v0, t - f.t, f.t);
     const C = lin(B1.pos, 1, k.r, 1),
       Vc = lin(lin(B1.vel, 1, k.v, 1), 1, spin ? cross(spin, k.r) : [0, 0, 0], 1);
     const r = lin(w, t - f.t, w, 0);

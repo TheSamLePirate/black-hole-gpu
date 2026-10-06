@@ -3,8 +3,9 @@ import { dockedFrame, VESSELS, type VesselId } from "../src/vessels";
 import { fleet, fleetStart, type Pose } from "../src/fleet";
 import { M_METRES, solarBody } from "../src/system/solar";
 import { ourState } from "../src/system/our-side";
-import { secularZonal } from "../src/system/geopotential";
+import { secularSpin, secularZonal } from "../src/system/geopotential";
 import { gameTimeOf } from "../src/system/iss";
+import { keplerProp } from "../src/system/our-plan";
 
 type V = [number, number, number];
 const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -62,7 +63,11 @@ test("the fleet's start: the Endurance 800 km up, the Lander 500 km up, the Rang
   const d0: V = [pe.X[0] - E.pos[0], pe.X[1] - E.pos[1], pe.X[2] - E.pos[2]];
   const v0: V = [pe.V[0] - E.vel[0], pe.V[1] - E.vel[1], pe.V[2] - E.vel[2]];
   const d1: V = [later.X[0] - E2.pos[0], later.X[1] - E2.pos[1], later.X[2] - E2.pos[2]];
-  const want = secularZonal("earth", mu, d0, v0, T, t).r;
+  // (its Kepler arc flown at the velocity less the drift's own share, which the turn gives back)
+  const w0 = secularSpin("earth", mu, d0, v0, 0, t)!;
+  const vk: V = [v0[0] - (w0[1] * d0[2] - w0[2] * d0[1]), v0[1] - (w0[2] * d0[0] - w0[0] * d0[2]), v0[2] - (w0[0] * d0[1] - w0[1] * d0[0])];
+  const k = keplerProp(mu, d0, vk, T);
+  const want = secularZonal("earth", mu, k.r as V, k.v as V, T, t).r;
   expect(Math.hypot(d1[0] - want[0], d1[1] - want[1], d1[2] - want[2]) * M_METRES).toBeLessThan(500);
   expect(Math.hypot(d1[0] - d0[0], d1[1] - d0[1], d1[2] - d0[2]) * M_METRES).toBeGreaterThan(5000);
 });
@@ -92,7 +97,13 @@ test("a coasting craft's velocity is its place's own rate — the J2 drift's tur
   // (the Endurance and the Lander coast on their mean orbits, turned by the oblateness's drift: their
   // velocity once missed that turn's share — 1.5 to 5 m/s in a low orbit —, and the docking autopilot,
   // matching it, drifted off a port it never reached)
-  fleetStart(109.6, "ranger");
+  const start = fleetStart(109.6, "ranger");
+  // (set free at a velocity, it keeps it: no jump where a craft is let go — a Ranger undocked from the
+  // Endurance once met its port again at 4.4 m/s)
+  for (const id of ["endurance", "lander"] as const) {
+    const p = fleet.pose(id, 109.6)!;
+    expect(Math.hypot(...[0, 1, 2].map((k) => p.V[k]! - start[id].V[k]!)) * 299792458).toBeLessThan(0.01);
+  }
   for (const id of ["endurance", "lander"] as const)
     for (const t of [110, 140]) {
       const dt = 1e-3;
