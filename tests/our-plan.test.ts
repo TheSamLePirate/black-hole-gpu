@@ -75,6 +75,23 @@ test("a Hohmann's circularization re-aimed after the departure stays at its apsi
   expect(Math.abs(Math.hypot(...r!.dv) - Math.hypot(...p.nodes[1]!.dv)) * C).toBeLessThan(2);
 });
 
+test("a Moon transfer's departure re-aimed keeps its meeting time — not the next branch, a day earlier", () => {
+  // (the Artemis scene's own date: the planner's aim rough — 2 163 km for 100 —, the departure's re-aim
+  // slid onto the 2.2-day branch, 87 m/s more at the burn; the correction, held to the planned meeting,
+  // then found no aim and the Ranger met the Moon's ground)
+  const t0 = 109.6;
+  const s = earthStart(t0, 400, true);
+  const p = planOurTransfer(s.X, s.vel, t0, { kind: "transfer", target: "moon", arrival: "orbit", altM: 100e3, returnAltM: 0 }, o);
+  if ("error" in p) throw new Error(p.error);
+  const dep = p.nodes[0]!;
+  const r = refineOurNode(s.X, s.vel, t0, p.mission, dep, o)!;
+  expect(r).not.toBeNull();
+  const path = predictOurs(s.X, s.vel, t0, [{ t: r.t, dv: r.dv }], { tMax: 6 * DAY, maxSteps: 200000, step: 0.02, accel });
+  const bp = bPlane(path, "moon")!;
+  expect(Math.abs(path.times[bp.ca.i]! - p.mission.tArrive) * M_SECONDS).toBeLessThan(1800);
+  expect(Math.abs(Math.hypot(...r.dv) - Math.hypot(...dep.dv)) * C).toBeLessThan(30);
+}, 60_000);
+
 test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 200 km perigee", () => {
   const t0 = 109.6;
   const s = earthStart(t0, 400, true);

@@ -1435,7 +1435,10 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     o,
     node.role === "depart",
     false,
-    node.role === "mcc",
+    // (the meeting time kept by the departure's re-aims too: free, the least change once slid a Moon
+    // transfer of 3.2 days onto the 2.2 days' branch — 87 m/s more at the burn, 590 at the capture —, and
+    // the correction then held to the planned time could no longer reach its pass)
+    node.role === "mcc" || node.role === "depart",
     node.role !== "depart",
   );
   if (!r) return { ...node, t: tAim };
