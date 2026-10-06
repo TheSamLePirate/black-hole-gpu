@@ -314,6 +314,7 @@ export class EntryGuidance {
     this.lastMiss = m;
     // the downrange: the aim `short` before the place
     const e = m.along + this.o.short;
+    const bank0 = this.bank;
     if (r.skip) this.bank = Math.min(this.bank + 0.2, 1.4);
     else if (
       this.prev &&
@@ -331,9 +332,14 @@ export class EntryGuidance {
       // (beyond the place: more bank; short of it: less)
       this.bank = Math.min(Math.max(this.bank + (e > 0 ? 0.08 : -0.08), 0), 1.4);
     }
-    // the side: towards the place, past a deadband narrowing with the speed
+    // (the load kept under 2.4 g: the bank not raised while the fall it predicts pulls more — the lift
+    // turned down dives the craft into the thick air: 80° at Mach 4, 3.9 g)
+    if (r.gPeak > 2.4 && this.bank > bank0) this.bank = Math.max(bank0 - 0.05, 0);
+    // the side: towards the place, past a deadband narrowing with the speed and the way left — a tenth
+    // of it, as the Shuttle's azimuth's (7 × the speed alone reversed sixteen times)
     const v = len(add(s.v, env.ground(s.x), -1));
-    const band = Math.max(4e3, 7 * v);
+    const left = env.R * Math.acos(Math.min(Math.max(dot(unit(s.x), unit(place)), -1), 1));
+    const band = Math.max(4e3, 7 * v, 0.1 * left);
     if (m.across * this.sign < -band) this.sign = -this.sign;
     return this.sign * this.bank;
   }

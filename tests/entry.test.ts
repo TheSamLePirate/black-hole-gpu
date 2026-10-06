@@ -104,6 +104,46 @@ test("the guidance brings the handover over its aim — 400 km on and 120 km acr
   expect(Math.abs(g.lastMiss!.along + 40e3) / 1e3).toBeLessThan(12);
 }, 20000);
 
+test("the guidance updated every 2 s: a handful of bank reversals, the load under 2.5 g, the handover on its aim", () => {
+  // (the deadband a share of the distance left, as the Shuttle's azimuth's; the bank eased off past 2.4 g:
+  // a deadband of 7 × the speed and no limit reversed 16 times, the last at 80° every few seconds, 3.9 g)
+  const free = predictEntry(earth, ranger, start(), () => 45 * D, { handoverMach: 2.5 });
+  const end = free.end;
+  const l = Math.hypot(...end.x);
+  const up = end.x.map((c) => c / l) as V3;
+  const gr = earth.ground(end.x);
+  const va = [end.v[0] - gr[0], end.v[1] - gr[1], end.v[2] - gr[2]] as V3;
+  const vu = va[0] * up[0] + va[1] * up[1] + va[2] * up[2];
+  const h: V3 = [va[0] - vu * up[0], va[1] - vu * up[1], va[2] - vu * up[2]];
+  const f = h.map((c) => c / Math.hypot(...h)) as V3;
+  const right: V3 = [f[1] * up[2] - f[2] * up[1], f[2] * up[0] - f[0] * up[2], f[0] * up[1] - f[1] * up[0]];
+  const place = earth.carry(onGround([0, 1, 2].map((i) => end.x[i]! - 150e3 * f[i]! + 60e3 * right[i]!) as V3), -free.t);
+  const g = new EntryGuidance({ handoverMach: 2.5, short: 40e3 });
+  let next = 0,
+    b = 0,
+    flips = 0;
+  const flown = predictEntry(
+    earth,
+    ranger,
+    start(),
+    (t, x, v) => {
+      if (t >= next) {
+        const nb = g.update(earth, ranger, { x, v }, earth.carry(place, t));
+        if (b !== 0 && Math.sign(nb) !== Math.sign(b) && Math.abs(nb) > 0.1) flips++;
+        b = nb;
+        next = t + 2;
+      }
+      return b;
+    },
+    { handoverMach: 2.5 },
+  );
+  expect(flown.handover).toBe(true);
+  expect(flips).toBeLessThanOrEqual(6);
+  expect(flown.gPeak).toBeLessThan(2.6);
+  const m = miss(start(), flown.end.x, earth.carry(place, flown.t));
+  expect(Math.abs(m.dist - 40e3) / 1e3).toBeLessThan(15);
+}, 60000);
+
 test("the deorbit from a 400 km orbit: a burn found whose entry ends over the place", () => {
   const r0 = R + 400e3,
     v0 = Math.sqrt(mu / r0),
