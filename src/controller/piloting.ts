@@ -35,7 +35,6 @@ import {
 import { daysOf, solarBody, spinVector } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
-import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
@@ -1392,14 +1391,16 @@ function entryStep(
       // (the entry flown at ×4)
       this.setHubWarp(AIR_WARP / Msec);
     }
-    // the guidance: the bank, every second of the fall (the site carried by the ground)
-    // (each update predicts the rest of the fall — tens of ms: about once a second of the wall's)
-    const wall = frameNow() / 1000;
-    if (R.guid && R.site && wall >= R.next && !R.pending) {
+    // the guidance: the bank, every 2 s of the fall (the site carried by the ground) — of the fall's own
+    // time, not the wall's: the flight lab's fixed steps flew 40 s of it between two updates (a second of
+    // the wall), the bank reversed at 80° every few seconds and the entry overflew Edwards by 68 km
+    // (each update predicts the rest of the fall — tens of ms: twice a wall second at the entry's ×4)
+    const simS = this.nowTime() * Msec;
+    if (R.guid && R.site && simS >= R.next && !R.pending) {
       // (in the planner's worker: the next bank arrives a few frames on)
       const G = R.guid;
       R.pending = true;
-      R.next = wall + 1;
+      R.next = simS + 2;
       void runPlanner<{
         out: number;
         bank: number;
