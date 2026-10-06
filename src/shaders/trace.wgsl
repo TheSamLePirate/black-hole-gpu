@@ -3452,13 +3452,14 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
   o.L = vec3f(0.0);
   if (P.near5.y <= 0.0) { return o; }
   // (the world's air — its scale height, its density — in the solar system's model: the Earth's
-  // molecules and aerosols scaled by its density, no ozone)
-  var a: AirSpec;
-  a.rm = P.near4.w; a.hr = P.near5.x; a.hm = 0.15 * P.near5.x; a.top = (P.near5.z - 1.0) * P.near4.w;
-  a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6) * P.near5.y; a.bo = vec3f(0.0);
-  a.bms = vec3f(2.1e-5) * P.near5.y; a.bme = 2.33e-5 * P.near5.y; a.g = vec3f(0.8); a.k = 1.0;
-  a.sky = vec3f(0.0); a.moon = 0.0;
-  AIR = a;
+  // molecules and aerosols scaled by its density, no ozone; the world a sphere. Built whole: the
+  // constructor names every field, none left at zero — a zero ab once flattened this air onto the ground)
+  AIR = AirSpec(
+    1.0, P.near4.w, (P.near5.z - 1.0) * P.near4.w, // ab, rm, top
+    P.near5.x, 0.15 * P.near5.x, // hr, hm
+    vec3f(5.802e-6, 13.558e-6, 33.1e-6) * P.near5.y, vec3f(0.0), // br, bo
+    vec3f(2.1e-5) * P.near5.y, 2.33e-5 * P.near5.y, vec3f(0.8), // bms, bme, g
+    1.0, vec3f(0.0), 0.0); // k, sky, moon
   let lt = nearLight(k);
   let e = earthAir(-P.near0.xyz, look, tEnd, lt.dir, lt.e, 0.5, 3e38);
   o.T = e.T;
@@ -3782,13 +3783,14 @@ fn hasAir(k: u32) -> bool {
 }
 fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
-  var a: AirSpec;
-  a.ab = squashOf(k);
-  // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03)
-  a.rm = EARTH_RM; a.top = 100e3; a.hr = 8000.0; a.hm = 1200.0;
-  a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6); a.bo = vec3f(1.22e-6, 3.53e-6, 0.16e-6);
-  a.bms = vec3f(2.1e-5); a.bme = 2.33e-5; a.g = vec3f(0.8); a.k = max(P.earth2.w, 1.0);
-  a.sky = vec3f(0.035, 0.06, 0.12); a.moon = 1.0;
+  // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03) — built whole (the constructor
+  // names every field: none left at zero), the other worlds' below changing it
+  var a = AirSpec(
+    squashOf(k), EARTH_RM, 100e3, // ab, rm, top
+    8000.0, 1200.0, // hr, hm
+    vec3f(5.802e-6, 13.558e-6, 33.1e-6), vec3f(1.22e-6, 3.53e-6, 0.16e-6), // br, bo
+    vec3f(2.1e-5), 2.33e-5, vec3f(0.8), // bms, bme, g
+    max(P.earth2.w, 1.0), vec3f(0.035, 0.06, 0.12), 1.0); // k, sky, moon
   if (m != 0u) { a.moon = 0.0; }
   if (m == 2u) {
     // Mars: 0.6 % of the Earth's air (CO₂), its dust (τ ≈ 0.4, well mixed): the butterscotch sky, the
