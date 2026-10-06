@@ -1311,6 +1311,24 @@ function nodeBurn(
     // (a moment beyond it: never reached as a burn, the throat's own branch above takes the craft)
     node.t = this.nowTime() + Math.max(d, 0) / Math.max(Math.hypot(...cam.beta), 1e-3) + 1;
   }
+  // (our side, the arrival at the mouth: as Gargantua's — kept ahead of the craft, the coast's warp
+  // bringing it in, until the mouth's reach takes it (no home frame there: the throat's own branch above
+  // hands the crossing's warp over); going away from it: missed, the plan ended at real time. It was once
+  // flown as a burn of nothing at its planned instant, short of the mouth, the plan over at ×1)
+  if (nav && node.role === "arrive" && node.body === "wormhole" && s.wormhole && node.t - this.nowTime() < 1) {
+    const d = Math.hypot(...sub3(nav.X, ourTarget(s, "wormhole" as Body, nav.t).pos));
+    const was = arriveGap.get(node);
+    arriveGap.set(node, d);
+    if (was !== undefined && d > was) {
+      P.nodes = [];
+      this.pilot.setAuto("node");
+      this.restoreWarp();
+      s.timeSpeed = this.warpSet = 1 / (4.925490947e-6 * s.massSolar);
+      this.onPilotMessage?.(tf("The wormhole's mouth missed by {0} M", d.toFixed(2)));
+      return null;
+    }
+    node.t = this.nowTime() + 1 + d / Math.max(Math.hypot(...nav.V), 1e-9);
+  }
   // (the pilot's warp before the plan, given back after it: their own, if an autopilot's ceiling held it)
   if (this.userWarp === null) {
     this.releaseHubWarp();
@@ -1483,13 +1501,7 @@ function nodeBurn(
         const then = node.then ?? null;
         // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
         // ~20 s is kept, not the pilot's real time)
-        // (given to the scene now — it was once worked out, then dropped with the plan: the craft left
-        // short of the mouth at real time, months from it)
-        if (node.role === "arrive" && node.body === "wormhole" && nav) {
-          const v = Math.hypot(...nav.V);
-          s.timeSpeed = this.warpSet = Math.max(this.userWarp ?? 0, Math.min((24 * mouth(this.s).w.rho) / Math.max(v, 1e-9) / 20, 1e4));
-          this.traversing = this.crossingWarp = true;
-        }
+
         this.ourMission = null;
         this.ourPlanned = null;
         this.issGoal = null;

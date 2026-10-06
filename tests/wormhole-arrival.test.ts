@@ -3,38 +3,64 @@ import { cameraFrame, setHomePose } from "../src/camera";
 import { CameraController } from "../src/controls";
 import { fleet } from "../src/fleet";
 import { ourOrbitPose } from "../src/game/place";
+import type { Vec3 } from "../src/physics";
 import { defaultSettings, presets } from "../src/settings";
+import { ourTarget } from "../src/targeting";
 import { M_SECONDS } from "../src/units";
 import { mouth, setSceneTime } from "../src/wormhole";
 
-// Our side, a mission into the wormhole: at its arrival node the throat is months wide at the craft's
-// speed — the autopilot hands over a warp that crosses it in ~20 s. That warp was worked out, then dropped
-// with the plan: the grand tour's craft (flight lab tour-jupiter-wormhole) waited at real time, short of
-// the mouth, for ever.
+// Our side, a mission into the wormhole: its arrival node was flown as a burn of nothing at its planned
+// instant — the plan over, the craft short of the mouth at real time for months (flight lab
+// tour-jupiter-wormhole); handing the crossing's warp over there instead flung a craft that then missed
+// round the Sun at ×2 million. The arrival is now kept ahead of the craft until the mouth's reach takes
+// it, the coast's warp bringing it in; going away from the mouth, it is said missed, at real time.
 
 afterEach(() => {
   fleet.tanks = null;
   fleet.spent = {};
 });
 
-test("into the wormhole: the arrival node hands over the crossing's warp, kept until out of the throat", () => {
+function flight() {
   setSceneTime(0);
   const s = { ...defaultSettings(), ...presets["Earth: the Blue Marble"]!, whOrbit: false };
   const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  c.setPilot(true);
+  c.newFlight();
+  const said: string[] = [];
+  c.onPilotMessage = (m) => said.push(String(m));
+  const arrive = () => {
+    c.plan = { nodes: [{ t: c.nowTime() + 1e-4, dv: [0, 0, 0], role: "arrive", body: "wormhole" }], path: null, at: 0, note: "" };
+    c.pilot.auto = "none";
+    c.pilot.setAuto("node");
+  };
+  return { s, c, said, arrive };
+}
+
+test("on its way into the mouth: the arrival kept, the coast sped up to it", () => {
+  const { s, c, arrive } = flight();
+  const M = ourTarget(s, "wormhole", c.nowTime()).pos;
+  const r = 60 * mouth(s).w.rho;
+  setHomePose(s, [M[0] + r, M[1], M[2]] as Vec3, [-1, 0, 0], [0, 0, 1], [-0.01, 0, 0]);
+  s.motion = "geodesic";
+  c.sync();
+  s.timeSpeed = 1 / M_SECONDS;
+  arrive();
+  for (let i = 0; i < 60; i++) c.flyShip(1 / 30, null as never);
+  expect(c.plan.nodes.length).toBe(1);
+  expect(c.pilot.auto).toBe("node");
+  expect(s.timeSpeed * M_SECONDS).toBeGreaterThan(100);
+});
+
+test("going away from the mouth at its arrival: missed, said, at real time", () => {
+  const { s, c, said, arrive } = flight();
   const p = ourOrbitPose({ body: "earth", altKm: 400, inc: 30 }, c.nowTime());
   setHomePose(s, p.X, p.fwd, p.up, p.vel);
   s.motion = "geodesic";
-  c.setPilot(true);
-  c.newFlight();
   c.sync();
-  s.timeSpeed = 1 / M_SECONDS;
-  c.plan = { nodes: [{ t: c.nowTime() + 1e-4, dv: [0, 0, 0], role: "arrive", body: "wormhole" }], path: null, at: 0, note: "" };
-  c.pilot.auto = "none";
-  c.pilot.setAuto("node");
-  for (let i = 0; i < 30 && c.plan.nodes.length; i++) c.flyShip(1 / 30, null as never);
+  arrive();
+  for (let i = 0; i < 3000 && c.plan.nodes.length; i++) c.flyShip(1 / 30, null as never);
   expect(c.plan.nodes.length).toBe(0);
-  const nav = c.ourNav(cameraFrame(s))!;
-  const want = Math.min((24 * mouth(s).w.rho) / Math.hypot(...nav.V) / 20, 1e4);
-  expect(Math.abs(s.timeSpeed - want) / want).toBeLessThan(0.05);
-  expect(c.traversing && c.crossingWarp).toBe(true);
+  expect(said.some((m) => m.startsWith("The wormhole's mouth missed"))).toBe(true);
+  expect(s.timeSpeed * M_SECONDS).toBeCloseTo(1, 6);
+  expect(cameraFrame(s).region).not.toBe("hole");
 });
