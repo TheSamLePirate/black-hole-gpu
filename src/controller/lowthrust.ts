@@ -1919,6 +1919,10 @@ function predictPath(this: CameraController) {
   const entry = this.tunnelEntry ?? tunnelEntrySide(cam.ell, dot3(cam.beta, cam.n));
   const context = wormholeMapPose(s, cam, this.nowTime(), cam.fwd, entry)?.context ?? "hole";
   if (this.predictionContext !== context) {
+    // (the plans worked out in the last frame — a mission previewed, a planner at work, the computer's
+    // candidate — no longer apply: said, not dropped silently; the flight plan itself is kept)
+    if (this.predictionContext !== "" && (this.pendingMission || this.planBusy || this.fcCand))
+      this.onPilotMessage?.(t("Planning dropped: the ship changed frames (the wormhole, or the scene's settings) — plan again"));
     this.predictionContext = context;
     this.predictionGeneration++;
     this.planGen++;

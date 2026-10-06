@@ -4,6 +4,8 @@ export default {
   "Prediction unavailable: {0}": "Prédiction indisponible : {0}",
   "Wormhole prediction timed out": "Prédiction du trou de ver : délai dépassé",
   "Wormhole prediction replaced by a newer one": "Prédiction du trou de ver remplacée par une plus récente",
+  "Planning dropped: the ship changed frames (the wormhole, or the scene's settings) — plan again":
+    "Planification abandonnée : le vaisseau a changé de repère (le trou de ver, ou les réglages de la scène) — planifiez de nouveau",
   "Tunnel entrance": "Entrée du tunnel",
   "Tunnel centre": "Centre du tunnel",
   "Tunnel exit": "Sortie du tunnel",

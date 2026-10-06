@@ -238,3 +238,30 @@ test("unsupported manoeuvres suspend without destroying or reinterpreting their 
     expect(message).toContain(l < 0 ? "inside the tunnel" : "other universe");
   }
 });
+
+test("plans in progress dropped by a change of frame are said, not dropped silently", () => {
+  const s = { ...scene(), whOrbit: false };
+  setRepPose(s, { l: 0, n: [1, 0, 0], fwd: [1, 0, 0], vel: [0.01, 0, 0] });
+  const said: string[] = [];
+  const c = Object.assign(Object.create(CameraController.prototype), {
+    s,
+    gravity: true,
+    tunnelEntry: "ours",
+    predictionGeneration: 0,
+    predictionContext: "",
+    nowTime: () => 0,
+    onPilotMessage: (m: string) => said.push(m),
+  }) as CameraController;
+  c.predictPath();
+  expect(said).toEqual([]);
+  c.pendingMission = { gen: 0, note: "to the Moon", commit: () => {} };
+  s.whLength = 1;
+  c.predictPath();
+  expect(c.pendingMission).toBeNull();
+  expect(said.length).toBe(1);
+  expect(said[0]).toContain("Planning dropped");
+  // (nothing in progress: a change of frame says nothing)
+  s.whLength = 2;
+  c.predictPath();
+  expect(said.length).toBe(1);
+});
