@@ -684,6 +684,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const s = this.s;
   // (paused: the ship holds — its attitude too, its turn resumes with the time)
   if (!s.animate) return;
+  // (the fleet's craft coasting on their own: flown to now by the flown craft's own fall)
+  fleet.stepFree(this.nowTime());
   const cam = cameraFrame(s);
   // (through the wormhole, one way or the other: said once)
   if (s.wormhole) {

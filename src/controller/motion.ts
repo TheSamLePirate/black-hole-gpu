@@ -4,28 +4,25 @@ import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
 import { tf } from "../i18n";
 import { inv3 } from "../pilot";
-import { secularZonal } from "../system/geopotential";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
 import { fromZamo, toZamo } from "../geodesic";
 import { spinFromZamo, spinToZamo } from "../gyro";
-import { airTop } from "../aero";
 import { GEAR, localToZamo, planetFrame, stepLocal, toGlobal, zamoBeta, zamoToLocal } from "../landing";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { flyDneg, holeToRep, mouth, radius, repToHole, sphericalFrame, toMouth, type Dneg } from "../wormhole";
-import { gravityHome, homeOf, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec, soiOf } from "../system/our-side";
+import { gravityHome, homeOf, OUR_BODIES, ourGravity, ourState, referenceBody, repToHomeVec } from "../system/our-side";
 import { symmetricStep, YOSHIDA } from "../system/our-predict";
-import { keplerProp } from "../system/our-plan";
+import { railsCoast, stableOrbitOf } from "../system/our-coast";
 import {
   airDensity as ourAir,
   altitudeOver,
   dragAccel,
   figureUp,
   fromBodyFixed,
-  railsDecay,
   gearHeight,
   groundUnder,
   heightOverGround,
@@ -402,14 +399,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // around the body, carried along with it (as KSP's time warp)
   const rails = Math.hypot(...dvT) < 1e-15 ? this.stableOrbit(X, V, t0) : null;
   if (rails && simDt > 0.02 * rails.period) {
-    const kp = keplerProp(rails.mass, sub3(X, ourState(rails.ref, t0).pos), sub3(V, ourState(rails.ref, t0).vel), simDt);
-    // (the body's oblateness: its secular drift — the node's regression, the periapsis's turn)
-    const kz = secularZonal(rails.ref, rails.mass, kp.r as Vec3, kp.v as Vec3, simDt, t0);
-    // (and the thin air's: the orbit's decay)
-    const k = railsDecay(rails.ref, rails.mass, kz.r, kz.v, simDt);
-    const B = ourState(rails.ref, tEnd);
-    X = lin(B.pos, 1, k.r, 1);
-    V = lin(B.vel, 1, k.v, 1);
+    // (the fleet's craft coast so too: our-coast.ts)
+    ({ X, V } = railsCoast(rails, X, V, t0, simDt));
     this.properTime += simDt * Math.sqrt(Math.max(1 - dot3(V, V), 0));
     setHomePose(s, X, unitV(fwd), unitV(up), V);
     s.motion = "geodesic";
@@ -697,21 +688,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
  * sphere (the other bodies' pulls a small part of it). Null otherwise.
  */
 function stableOrbit(this: CameraController, X: Vec3, V: Vec3, t: number) {
-  const ref = referenceBody(X, t);
-  if (ref === "sun") return null;
-  const b = solarBody(ref)!;
-  const st = ourState(ref, t);
-  const r = sub3(X, st.pos),
-    v = sub3(V, st.vel);
-  const R = Math.hypot(...r);
-  const eps = dot3(v, v) / 2 - b.mass / R;
-  if (!(eps < 0)) return null;
-  const a = -b.mass / (2 * eps);
-  const h = cross(r, v);
-  const e = Math.sqrt(Math.max(1 - dot3(h, h) / (b.mass * a), 0));
-  const clear = b.radius * 1.01 + airTop(b.atmosphere) / M_METRES;
-  if (a * (1 - e) < clear || a * (1 + e) > 0.25 * soiOf(ref, t)) return null;
-  return { ref, mass: b.mass, period: 2 * Math.PI * Math.sqrt(a ** 3 / b.mass) };
+  return stableOrbitOf(X, V, t);
 }
 
 /**

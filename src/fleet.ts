@@ -7,12 +7,13 @@
 // Home frame, M units (lengths, times), velocities in c; the docking links in metres.
 
 import type { M3 } from "./mounts";
-import { railsDecay } from "./system/our-surface";
 import { massLeft } from "./engine";
 import { secularSpin, secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
-import { ourState } from "./system/our-side";
+import { ourState, referenceBody } from "./system/our-side";
+import { coastHome } from "./system/our-coast";
+import { gearHeight, railsDecay, solidBody } from "./system/our-surface";
 import { M_METRES, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
 import { dockedFrame, VESSELS, VESSEL_IDS, type VesselId } from "./vessels";
@@ -352,6 +353,30 @@ export class Fleet {
         }
     }
     return { mass, com, inertia: (I[0]![0]! + I[1]![1]! + I[2]![2]!) / 3, own, I };
+  }
+
+  /**
+   * The craft coasting on their own, flown to t as the flown craft falls (our-coast.ts coastHome: the same
+   * integrator, frame by frame — called at each frame's start): a rendezvous with them is exact, the
+   * analytic coast (Kepler, the J2's mean drift) left to the moments between frames and to the plans' far
+   * looks. Their centre of mass moved, their turn kept. A craft near a ground (within 100 km of it: set
+   * down, or on its way down) is left to the analytic coast — no ground of its own in that fall.
+   */
+  stepFree(t: number) {
+    for (const id of VESSEL_IDS) {
+      const f = this.free[id];
+      if (!f || !(t > f.t)) continue;
+      const com = f.com ?? [0, 0, 0];
+      const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
+      const ref = referenceBody(C0, f.t);
+      if (solidBody(ref) && gearHeight(ref, C0, f.t) < 1e5) continue;
+      const c = coastHome(C0, f.V, f.t, t - f.t);
+      const w = f.w ?? [0, 0, 0];
+      const ax = f.ax.map((a) => rotate(a, lin(w, c.t - f.t, w, 0))) as [Vec3, Vec3, Vec3];
+      const E = ourState("earth", c.t);
+      const near = Math.hypot(...sub(c.X, E.pos)) * M_METRES < 1.5e9;
+      this.free[id] = { ...f, X: lin(c.X, 1, onAxes(ax, com), -1 / M_METRES), V: c.V, ax, t: c.t, ref: near ? "earth" : "sun" };
+    }
   }
 
   /** Sets a craft coasting from a pose (the body it coasts around: the Earth near it, else the Sun). */
