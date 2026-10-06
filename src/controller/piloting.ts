@@ -838,6 +838,11 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     this.airBrake = 0;
     this.entryRun = null;
   }
+  // (the powered landing's run ended with its autopilot: the time back to real if it coasted)
+  if (this.pilot.auto !== "land" && this.landRun) {
+    if (this.landRun.cmd?.coast) this.giveBackWarp(1 / (4.925490947e-6 * s.massSolar));
+    this.landRun = null;
+  }
   const entryAtt = this.pilot.auto === "entry" ? this.entryStep(cam, dtPilot) : this.pilot.auto === "burns" ? this.burnsStep(cam) : null;
   if (mode !== "sf" || !sfCtx) this.sfCmd = null;
   const out = this.pilot.step(
@@ -1276,7 +1281,17 @@ function entryStep(
       short: shortM,
       handover,
     };
-    if (!fr.env.atm) return say(tf("Entry: {0} has no air — land with the engines (G)", name));
+    if (!fr.env.atm) {
+      // (no air: on our side, the engines down to the site — the powered landing's coast, its descent
+      // orbit and its braking; elsewhere, or no site, the pilot's G)
+      if (!site || !this.ourNav(cam)) return say(tf("Entry: {0} has no air — land with the engines (G)", name));
+      this.entryRun = null;
+      P.auto = "none";
+      P.setAuto("land");
+      this.landRun = { body: fr.body, site, q: null, heading: null, cmd: null };
+      this.onPilotMessage?.(tf("{0} has no air: a powered descent to {1}", name, site.name));
+      return null;
+    }
     if (h > top) {
       // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
       if (!site) return say(tf("Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)", name));

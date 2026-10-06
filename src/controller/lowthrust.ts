@@ -29,12 +29,12 @@ import { circularize as fcCircularize, type Burn } from "../fc/ops";
 import { timeTo as kepTimeTo } from "../fc/kepler";
 import { airTopKm } from "../game/place";
 import { airTop, entryInterface } from "../aero";
-import { AUTO_NAMES, circularSpeed, type Auto } from "../pilot";
+import { AUTO_NAMES, circularSpeed, type Auto, type Want } from "../pilot";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
 import { circularVelocity } from "../system/geopotential";
-import { gravityHome, OUR_BODIES, ourState, soiOf } from "../system/our-side";
+import { gravityHome, OUR_BODIES, ourState, repToHomeVec, soiOf } from "../system/our-side";
 import { predictOurs, type OurPath } from "../system/our-predict";
 import { stateAt } from "../system/our-plan";
 import { plan as runPlanner } from "../system/plan-client";
@@ -43,7 +43,9 @@ import {
   altitudeOver,
   dragAccel,
   figureUp,
+  fromBodyFixed,
   gearHeight,
+  groundPointOf,
   groundVelocity,
   solidBody,
   toBodyFixed,
@@ -60,6 +62,7 @@ import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } fro
 import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV, type LandingFix } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 import { entryCorridor, heightOf as heightOfEntry } from "../entry";
+import { brakingAccels, descentCommand, descentCurve, V_TD, V_TRANS } from "../descent";
 
 declare module "../controls" {
   interface CameraController {
@@ -74,6 +77,8 @@ declare module "../controls" {
     maneuverDir: typeof maneuverDir;
     ourWant: typeof ourWant;
     ourSurfaceWant: typeof ourSurfaceWant;
+    landWant: typeof landWant;
+    levelHeading: typeof levelHeading;
     hubInfo: typeof hubInfo;
     hubCompute: typeof hubCompute;
     climbAssist: typeof climbAssist;
@@ -485,12 +490,7 @@ function maneuverDir(this: CameraController, cam: ReturnType<typeof cameraFrame>
  *    its air), in the plane of the ship's motion;
  *  - hover: at rest against the reference body where engaged, the pull cancelled.
  */
-function ourWant(
-  this: CameraController,
-  cam: ReturnType<typeof cameraFrame>,
-  say: (t: string) => null,
-  T: number,
-): { beta: Vec3; ff: Vec3 } | null {
+function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, say: (t: string) => null, T: number): Want | null {
   const s = this.s;
   const P = this.pilot;
   const nav = this.ourNav(cam)!;
@@ -501,6 +501,24 @@ function ourWant(
   if (P.auto === "hover") {
     // (by the mouth — targeted, within a few of its stand-offs: at rest against it)
     const byMouth = !isOurs(s.target) && Math.hypot(...nav.X) < 0.5;
+    // low over a ground: the place over it held, carried by the ground's turning (at rest against the
+    // body's centre the Moon's ground slides 4.6 m/s under it, the Earth's 400), the craft level on its
+    // vectored thrust — a hover before a landing
+    if (!byMouth && nav.ref !== "sun" && solidBody(nav.ref) && gearHeight(nav.ref, nav.X, t) < HOVER_LOW) {
+      const id = nav.ref;
+      const key = `ground:${id}`;
+      if (this.ourAnchor?.ref !== key) this.ourAnchor = { ref: key, d: toBodyFixed(id, nav.X, t) };
+      const up = figureUp(id, nav.X, t);
+      const at = fromBodyFixed(id, this.ourAnchor.d, t);
+      const back = sub3(at, nav.X);
+      const gv = groundVelocity(id, at, t);
+      this.hubNote = { off: Math.hypot(...back) * M_METRES, drift: Math.hypot(...sub3(nav.V, groundVelocity(id, nav.X, t))) * C_MPS };
+      const k = Math.min(1 / (4 * T), 0.3 * Math.sqrt(thr / Math.max(Math.hypot(...back), 1e-15)));
+      const ff = lin(lin(g.acc, 1, dragAccel(id, nav.X, nav.V, t), 1), -1, g.acc, 0);
+      this.ourAnchor.heading ??= this.levelHeading(up);
+      const nose = unitV(lin(this.ourAnchor.heading, 1, up, -dot3(this.ourAnchor.heading, up)));
+      return { ...out(lin(gv, 1, back, k), ff), att: { nose: unitV(nav.toRep(nose)), up: unitV(nav.toRep(up)), vectored: true } };
+    }
     const refId = byMouth ? "mouth" : nav.ref;
     const ref = byMouth ? { pos: [0, 0, 0] as Vec3, vel: [0, 0, 0] as Vec3 } : ourState(nav.ref, t);
     if (!this.ourAnchor || this.ourAnchor.ref !== refId) this.ourAnchor = { ref: refId, d: sub3(nav.X, ref.pos) };
@@ -615,7 +633,6 @@ function ourSurfaceWant(
   if (!VESSELS[fleet.active].lands)
     return say(tf("{0}: the {1} never lands — it was built in orbit (the Ranger and the Lander land)", what, VESSELS[fleet.active].name));
   const sb = solarBody(id)!;
-  const c = C_MPS;
   const Pb = nav.refPos;
   const r = Math.hypot(...sub3(nav.X, Pb));
   const up = figureUp(id, nav.X, nav.t);
@@ -630,7 +647,6 @@ function ourSurfaceWant(
   }
   // (held against gravity and, in the air, its drag)
   const ff = lin(lin(g.acc, 1, dragAccel(id, nav.X, nav.V, nav.t), 1), -1, g.acc, 0);
-  const minute = 60 / M_SECONDS; // [M]
   const gv = groundVelocity(id, nav.X, nav.t);
   if (P.auto === "land") {
     if (this.ourLanded) {
@@ -638,14 +654,7 @@ function ourSurfaceWant(
       this.onPilotMessage?.(tf("Landed on {0}", name));
       return null;
     }
-    const va = sub3(nav.V, gv);
-    const vv = dot3(va, up);
-    const vh = Math.hypot(va[0] - vv * up[0], va[1] - vv * up[1], va[2] - vv * up[2]);
-    const tH = vh / (0.5 * thr);
-    const vd = -Math.max(Math.min(Math.sqrt(2 * 0.5 * (thr - gw) * h), h / (minute / 12 + tH), 0.02), 1.5 / c);
-    // (the descent rate first: its correction rides with the hold against gravity, the horizontal
-    // speed is killed with the thrust left — a fall is never traded for a sideways error)
-    return out(lin(gv, 1, up, vv), lin(ff, 1, up, (vd - vv) / T));
+    return this.landWant(nav, g, out, ff, T);
   }
   // take-off
   const LG = this.launchGoal;
@@ -671,6 +680,97 @@ function ourSurfaceWant(
     want = lin(want, 1, across, -f);
   }
   return out(want, ff);
+}
+
+/**
+ * The powered landing (descent.ts): its pad — the site handed over (the Lander's entry, a descent to a site
+ * on an airless world) while within reach, else the place under the craft once it is slow —, the guidance's
+ * velocity over the ground flown with the weight held first (and, fast, the motion's own centrifugal
+ * taken off it: an orbit holds itself up), the descent rate's correction riding with that hold — never
+ * pushing the craft down —, the curves' decelerations fed forward. Far and fast (an orbit) it coasts, the
+ * time sped up, its descent orbit burned half a turn before the braking; low and slow the thrust is
+ * vectored, the craft level on a heading (its gear under its belly).
+ */
+function landWant(
+  this: CameraController,
+  nav: NonNullable<ReturnType<CameraController["ourNav"]>>,
+  g: ReturnType<typeof gravityHome>,
+  out: (v: Vec3, ff?: Vec3) => { beta: Vec3; ff: Vec3 },
+  hold: Vec3,
+  T: number,
+): Want {
+  const id = nav.ref;
+  const t0 = nav.t;
+  const C = C_MPS;
+  const acc = (C * C) / M_METRES; // [m/s² per c²/M]
+  const Msec = 4.925490947e-6 * this.s.massSolar;
+  const rel = sub3(nav.X, nav.refPos);
+  const up = figureUp(id, nav.X, t0);
+  const h = Math.max(gearHeight(id, nav.X, t0), 0);
+  const gv = groundVelocity(id, nav.X, t0);
+  const va = sub3(nav.V, gv);
+  const vi = sub3(nav.V, nav.refVel);
+  if (this.landRun?.body !== id) this.landRun = { body: id, site: null, q: null, heading: null, cmd: null };
+  const L = this.landRun;
+  // (a site too far for a hover's translation — and not an orbit's coast — let go: here)
+  const sitePlace = (q: { lat: number; lon: number }) => fromBodyFixed(id, groundPointOf(id, q.lat, q.lon), t0);
+  const vhSI = Math.hypot(...lin(va, 1, up, -dot3(va, up))) * C;
+  if (L.site && vhSI < 200 && Math.hypot(...sub3(sitePlace(L.site), nav.X)) * M_METRES > 30e3) {
+    this.onPilotMessage?.(tf("Landing: {0} out of reach — down here", L.site.name));
+    L.site = null;
+  }
+  // (here: the place under the craft held once it is slow)
+  if (!L.site && !L.q && vhSI < 3) L.q = toBodyFixed(id, lin(nav.X, 1, up, -h / M_METRES), t0);
+  const padX = L.site ? sitePlace(L.site) : L.q ? fromBodyFixed(id, L.q, t0) : null;
+  // the weight the engine holds: gravity less the centrifugal of the motion over the body (an orbit's
+  // speed holds itself up)
+  const vih = lin(vi, 1, up, -dot3(vi, up));
+  const centri = dot3(vih, vih) / Math.hypot(...rel);
+  const ffHold = lin(hold, 1, up, -centri);
+  const gHold = Math.max(dot3(ffHold, up), 0) * acc;
+  const cmd = descentCommand({
+    up,
+    h,
+    v: lin(va, C, va, 0),
+    g: gHold,
+    aT: this.thrustMax() * acc,
+    pad: padX ? lin(sub3(padX, nav.X), M_METRES, padX, 0) : null,
+    orbit: { mu: solarBody(id)!.mass * acc * M_METRES ** 2, r: lin(rel, M_METRES, rel, 0), vi: lin(vi, C, vi, 0) },
+  });
+  L.cmd = cmd;
+  // the time: sped up while it coasts — to some twenty seconds before the braking, or the descent orbit's
+  // burn —, real time while it flies
+  this.setHubWarp((cmd.coast ? Math.min(1000, Math.max((cmd.tBrake - 25) / 3, 1)) : 1) / Msec);
+  // (the burns' attitude: retrograde while it waits — the braking starts with the nose on it)
+  const retro = unitV(lin(va, -1, va, 0));
+  if (cmd.coast) return { ...out(nav.V), att: { nose: unitV(nav.toRep(retro)), up: unitV(nav.toRep(up)), vectored: false } };
+  if (cmd.doi) return out(lin(gv, 1, cmd.doi, 1 / C));
+  const vv = dot3(va, up);
+  // (the descent rate: its correction with the hold — the engine never pushing down)
+  const corr = Math.max((-cmd.down / C - vv) / T + cmd.ffUp / acc, -dot3(ffHold, up));
+  const ff = lin(lin(ffHold, 1, up, corr), 1, cmd.ffH, 1 / acc);
+  const want = lin(lin(gv, 1, cmd.vh, 1 / C), 1, up, vv);
+  if (!cmd.vectored) return out(want, ff);
+  // low and slow: level on a heading (the craft coming out of a rocket's braking, nose up: where its belly faced)
+  L.heading ??= this.levelHeading(up);
+  const nose = unitV(lin(L.heading, 1, up, -dot3(L.heading, up)));
+  return { ...out(want, ff), att: { nose: unitV(nav.toRep(nose)), up: unitV(nav.toRep(up)), vectored: true } };
+}
+
+/** Below this over a ground [m], the hover holds a place on it (carried by its turning), level. */
+const HOVER_LOW = 20e3;
+
+/**
+ * The heading a craft levelled now keeps (home frame, horizontal, unit): its nose's over the ground, plus
+ * where its belly faces — a craft standing on its tail (a rocket's braking) pitches down the short way, its
+ * belly to the ground.
+ */
+function levelHeading(this: CameraController, up: Vec3): Vec3 {
+  const cam = cameraFrame(this.s);
+  const ax = this.shipAxesLocal(cam).map((a) => unitV(repToHomeVec(mouth(this.s).w, cam.ell, cam.n, a)));
+  const flat = (v: Vec3) => lin(v, 1, up, -dot3(v, up));
+  const hd = lin(flat(ax[2]!), 1, flat(ax[1]!), -1);
+  return Math.hypot(...hd) > 1e-6 ? unitV(hd) : unitV(flat(cross(up, [0, 0, 1])));
 }
 
 /**
@@ -1196,10 +1296,10 @@ function descentAssist(this: CameraController, sf: SurfaceLike, hold = false): P
   const vHor = sf.vHor ?? 0;
   const g = (sf.gLocal ?? 1) * G0;
   const thr = (sf.twr ?? 0) * g;
-  const net = Math.max(thr - g, 1e-3);
-  const tH = vHor / Math.max(0.5 * thr, 1e-3);
-  const want = (h: number) => Math.max(Math.min(Math.sqrt(2 * 0.5 * net * h), h / (5 + tH)), 1.5);
-  const stopAt = (h: number) => Math.sqrt(2 * 0.9 * net * h);
+  // (the landing autopilot's own curve: descent.ts)
+  const { aV, net } = brakingAccels(thr, g);
+  const want = (h: number) => descentCurve(h, aV);
+  const stopAt = (h: number) => Math.sqrt(V_TD * V_TD + 2 * 0.9 * net * h);
   const key = `descent:${fleet.active}`;
   if (this.glideTrace?.key !== key) this.glideTrace = { key, pts: [] };
   const tr = this.glideTrace.pts;
@@ -1233,7 +1333,9 @@ function descentAssist(this: CameraController, sf: SurfaceLike, hold = false): P
   // (the stop burn at full thrust: when it must start — the HUD's hover scope says it too)
   const stop = (vDown * vDown) / (2 * net);
   const tIn = vDown > 1 ? (alt - stop * 1.1) / vDown : NaN;
-  const say = hold ? [] : [tf("DESCENT {0} → {1} m/s", vDown.toFixed(1), want(alt).toFixed(1))];
+  // (the rate the autopilot asks — slower than its curve while it closes on its pad)
+  const asked = this.pilot.auto === "land" && this.landRun?.cmd && !this.landRun.cmd.coast ? this.landRun.cmd.down : want(alt);
+  const say = hold ? [] : [tf("DESCENT {0} → {1} m/s", vDown.toFixed(1), asked.toFixed(1))];
   if (Number.isFinite(tIn)) say.push(tIn <= 0 ? t("BURN NOW") : tIn < 60 ? tf("BURN IN {0} s", tIn.toFixed(tIn < 10 ? 1 : 0)) : "");
   if (vHor > 1) say.push(tf("DRIFT {0} m/s", vHor.toFixed(vHor < 10 ? 1 : 0)));
   return { graph, say: say.filter(Boolean) };
@@ -1593,23 +1695,34 @@ function hubCompute(this: CameraController): HubInfo | null {
   if (a === "land") {
     if (!sf || sf.alt === undefined) return base("LAND", t("descending"));
     const vs = sf.vVert ?? 0;
-    const tDown = sf.alt / Math.max(-vs, 0.5);
-    const H = base(
-      "LAND",
-      sf.landed
-        ? t("down")
-        : (sf.vHor ?? 0) > 2
-          ? t("killing the sideways speed, descending")
-          : sf.alt < 30
-            ? t("the touchdown")
-            : t("descending"),
-      [
-        [t("Height"), km(sf.alt)],
-        ["V/S", ms(vs)],
-        [t("Sideways"), ms(sf.vHor ?? 0)],
-      ],
-      sf.landed ? null : `→ ${tf("touchdown in ~{0}, at ~1.5 m/s", dur(tDown))}`,
-    );
+    const L = this.landRun;
+    const D = L?.cmd ?? null;
+    const site = L?.site?.name ?? null;
+    // (its phase: the coast to the braking, the descent orbit's burn, the braking, the way to the pad, the touchdown)
+    const phase = sf.landed
+      ? t("down")
+      : D?.coast
+        ? site
+          ? tf("coasting to the braking for {0}", site)
+          : t("coasting")
+        : D?.doi
+          ? t("the descent orbit's burn: its low point before the pad")
+          : (sf.vHor ?? 0) > V_TRANS
+            ? site
+              ? tf("braking towards {0}", site)
+              : t("killing the sideways speed, descending")
+            : sf.alt < 30
+              ? t("the touchdown")
+              : D && Number.isFinite(D.dist) && D.dist > 12
+                ? t("across to the pad, descending")
+                : t("descending onto the pad");
+    const rows: [string, string][] = [];
+    if (site) rows.push([t("Site"), site]);
+    if (D && Number.isFinite(D.dist)) rows.push([t("To the pad"), km(D.dist)]);
+    rows.push([t("Height"), km(sf.alt)], ["V/S", ms(vs)], [t("Sideways"), ms(sf.vHor ?? 0)]);
+    if (D?.coast) rows.push([t("Next burn in"), dur(D.tBrake)]);
+    const tDown = D && !D.coast && Number.isFinite(D.tGo) ? Math.max(D.tGo, sf.alt / Math.max(-vs, 0.5)) : sf.alt / Math.max(-vs, 0.5);
+    const H = base("LAND", phase, rows, sf.landed ? null : `→ ${tf("touchdown in ~{0}, at ~{1} m/s", dur(tDown), V_TD.toFixed(1))}`);
     return sf.landed ? H : { ...H, ...this.descentAssist(sf) };
   }
   if (a === "takeoff") {
@@ -1803,7 +1916,7 @@ function ourCircWant(
   return out(lin(Tg.vel, 1, circle.v, 1));
 }
 
-function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFrame>): { beta: Vec3; ff: Vec3 } | null {
+function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFrame>): Want | null {
   const s = this.s;
   const P = this.pilot;
   const say = (t: string) => {
@@ -2503,6 +2616,8 @@ export function installLowthrust(C: { prototype: CameraController }) {
     maneuverDir,
     ourWant,
     ourSurfaceWant,
+    landWant,
+    levelHeading,
     hubInfo,
     hubCompute,
     climbAssist,

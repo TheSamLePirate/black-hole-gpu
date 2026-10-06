@@ -10,7 +10,8 @@ import type { V3 as KV3 } from "./fc/kepler";
 import { Contrails, MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import type { KerrOrbit } from "./fc/kerr-ops";
 import type { LocalState, PlanetFrame } from "./landing";
-import { FlightComputer } from "./pilot";
+import { FlightComputer, type Want } from "./pilot";
+import type { DescentCmd } from "./descent";
 import { dvLocal, type ManeuverNode, type PlanPath } from "./maneuver";
 import type { Mount, MountPose } from "./mounts";
 import type { AssistGraph } from "./ui/hud/graph";
@@ -281,7 +282,7 @@ export class CameraController {
   crossingWarp = false;
   userWarp: number | null = null;
   /** Last autopilot goal and its velocity change still to make (|ΔU|), for the displays. */
-  lastWant: { beta: Vec3; ff: Vec3 } | null = null;
+  lastWant: Want | null = null;
   /** the orbit autopilot's last wanted 4-velocity (ZAMO components) and the proper time it was for */
   prevWant: { U: Vec3; tau: number; body: string } | null = null;
   /** the warp to give back once a low-thrust cruise has reached its orbit */
@@ -901,14 +902,20 @@ export class CameraController {
     return l > 0 ? lin(d, 1 / l, d, 0) : null;
   };
 
-  /** where our universe's hover holds (home frame, relative to the reference body) */
-  ourAnchor: { ref: string; d: Vec3 } | null = null;
+  /** where our universe's hover holds (home frame, relative to the reference body; low over a ground —
+   *  ref "ground:<body>" —: body-fixed, and the heading it holds level) */
+  ourAnchor: { ref: string; d: Vec3; heading?: Vec3 } | null = null;
+
+  /**
+   * Our universe's powered landing (lowthrust.ts landWant, descent.ts), its run: the body, its pad — a
+   * site (the entry's handed over, a descent to one on an airless world), else the place under the craft
+   * once it is slow (body-fixed [M]) —, the heading it holds level, the guidance's last command.
+   */
+  landRun: { body: string; site: Site | null; q: Vec3 | null; heading: Vec3 | null; cmd: DescentCmd | null } | null = null;
 
   /**
    * Our universe's landing and take-off (the body of the sphere of influence, if it has a ground):
-   *  - land: the horizontal motion over the ground killed, the descent spread over the time that takes
-   *    and no faster than half the engine's margin over the weight can stop (v² = 2 a h), a flare of
-   *    5 s at the end, 1.5 m/s at touchdown;
+   *  - land: the powered descent's guidance (descent.ts) — to a pad, or here —, 0.8 m/s at touchdown;
    *  - take-off: up, turning towards the east (the way the ground turns) as it climbs, to the circular
    *    speed at a low orbit (~200 km on the Earth: above 12 scale heights of air), the speed through
    *    the air held to a drag of 30 % of the thrust (a gravity turn); then circularize.

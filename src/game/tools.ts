@@ -101,6 +101,7 @@ export class GameTools {
       "orbit(body, {altKm, peKm, apKm, inc, raan, argPe, nu, retrograde})   put the Ranger in orbit",
       "land(body, lat, lon)          put it on the ground (our solid bodies)",
       "near(body, {altKm, rM})       beside a body at rest (the hover autopilot holds it there)",
+      "hoverOver(body, lat, lon, altKm)   over a place of a ground, at rest over it, hovering (G lands it)",
       "wormhole('ours'|'gargantua', dM)   before a mouth of the wormhole, at rest",
       "placeAt({frame, X, vel, fwd, up})   put it at a state (home frame / the hole's map)",
       "target(id) · targets()        select the target",
@@ -288,6 +289,29 @@ export class GameTools {
     c.entrySite = site;
     c.pilot.auto = "none";
     c.pilot.setAuto("entry");
+    return note;
+  }
+
+  /**
+   * Over a place of one of our solid bodies (latitude, east longitude [°]), `altKm` above its ground, at
+   * rest over it — carried by its turning —, the hover autopilot holding it there: the practice of a
+   * powered landing's last minutes (G lands it), as glideTo is of an entry's.
+   */
+  hoverOver(body: string, lat: number, lon: number, altKm = 1.5) {
+    if (universeOf(body) !== "ours") throw new Error("hoverOver: our worlds");
+    const t = this.ctx.time();
+    const g = ourGroundPose(body, lat, lon, t);
+    const k = (altKm * 1e3) / M_METRES;
+    const X: V3 = [g.X[0] + g.up[0] * k, g.X[1] + g.up[1] * k, g.X[2] + g.up[2] * k];
+    const note = this.placeAt({
+      frame: "ours",
+      X,
+      vel: groundVelocity(body, X, t),
+      fwd: g.fwd,
+      up: g.up,
+      note: `${nameOf(body)}: ${altKm} km over ${lat.toFixed(2)}°, ${lon.toFixed(2)}° — hovering`,
+    });
+    this.hover();
     return note;
   }
 

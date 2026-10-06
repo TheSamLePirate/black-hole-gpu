@@ -106,7 +106,7 @@ export interface FlightContext {
   /** the next manoeuvre node's burn direction (local), or null */
   maneuver?: V3 | null;
   /** autopilot: required velocity (local 3-velocity) and feed-forward proper acceleration (local) */
-  want?: { beta: V3; ff: V3; pos?: V3 } | null;
+  want?: Want | null;
   /** in the air: the flight law, the flow's angles (α, β [rad]), the control surfaces' authority added
    *  to the thrusters' [rad/s², the pilot's axes], the flight path's own turn (the pilot's axes and
    *  signs [rad/s]), on the wheels, the stall angle, the dynamic pressure [Pa] */
@@ -155,6 +155,19 @@ export interface FlightContext {
   /** on its own gear: the stabiliser lets the springs set its pitch and roll (the nose lowered onto
    *  its wheel after the touchdown — the derotation —, the craft level on the ground) */
   onGear?: boolean;
+}
+
+/**
+ * An autopilot's command: the velocity it wants (local 3-velocity), the proper acceleration fed forward
+ * (local), and — some — the attitude it holds (local: the nose, the ship's top): vectored, the thrust in any
+ * direction as the sci-fi computer's (a landing's last part, the craft level on its gear: its main engine
+ * aft cannot hold its weight); not, only where the nose waits while the burn is small (a coast's attitude).
+ */
+export interface Want {
+  beta: V3;
+  ff: V3;
+  pos?: V3;
+  att?: { nose: V3; up: V3; vectored: boolean } | null;
 }
 
 export interface FlightOutput {
@@ -318,7 +331,7 @@ export class FlightComputer {
     this.burn = null;
     let throttle = this.throttle;
     if (c.sf && this.auto === "none") {
-      ({ point, upC, throttle, rcsC } = this.sfCommand(c, toC, Z));
+      ({ point, upC, throttle, rcsC } = this.sfCommand(c, c.sf, toC, Z));
     } else if ((this.auto === "entry" || this.auto === "burns") && c.att) {
       // the entry: the attitude the guidance asks (the angle of attack, the bank — or retrograde for the
       // deorbit's burn, fired once the nose is on it)
@@ -350,6 +363,14 @@ export class FlightComputer {
         point = toC(c.dock.nose);
         upC = toC(c.dock.up);
       }
+    } else if (this.auto !== "none" && c.want?.att?.vectored) {
+      const a = c.want.att;
+      ({ point, upC, throttle, rcsC } = this.sfCommand(
+        c,
+        { beta: c.want.beta, ff: c.want.ff, nose: a.nose, up: a.up, free: [0, 0, 0] },
+        toC,
+        Z,
+      ));
     } else if (this.auto !== "none" && c.want) {
       const U = toU(c.beta);
       const T = Math.max(1.2 * c.tauRate, 1e-3);
@@ -374,6 +395,10 @@ export class FlightComputer {
         rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
         throttle = 0;
         if (this.hold !== "none") point = this.holdDirection(c, toC);
+        else if (c.want.att) {
+          point = toC(c.want.att.nose);
+          upC = toC(c.want.att.up);
+        }
       } else {
         this.burn = scale(A, 1 / a);
         point = toC(this.burn);
@@ -408,7 +433,7 @@ export class FlightComputer {
       upC = null;
       if (this.hold !== "none") point = this.holdDirection(c, toC);
       // (the sci-fi law: the stick's velocity flown, as without an autopilot)
-      if (c.sf) ({ point, upC, throttle, rcsC } = this.sfCommand(c, toC, Z));
+      if (c.sf) ({ point, upC, throttle, rcsC } = this.sfCommand(c, c.sf, toC, Z));
     }
 
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
@@ -554,11 +579,11 @@ export class FlightComputer {
   }
 
   /**
-   * The sci-fi flight computer: the velocity flown by thrust in any direction (the main engine along the
-   * nose, the vectored thrusters the rest), the feed-forward first; the attitude its own.
+   * The sci-fi flight computer (and an autopilot's vectored command): the velocity flown by thrust in any
+   * direction (the main engine along the nose, the vectored thrusters the rest), the feed-forward first; the
+   * attitude its own.
    */
-  private sfCommand(c: FlightContext, toC: (v: V3) => V3, Z: V3) {
-    const sf = c.sf!;
+  private sfCommand(c: FlightContext, sf: NonNullable<FlightContext["sf"]>, toC: (v: V3) => V3, Z: V3) {
     const U = toU(c.beta);
     const T = Math.max(1.2 * c.tauRate, 1e-3);
     const err = scale(add(toU(sf.beta), scale(U, -1)), 1 / T);
