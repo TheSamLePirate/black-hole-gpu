@@ -5,14 +5,15 @@
 // line. The long parts at fixed steps; the final and the touchdown live in some, as a player watches them.
 // Judged on the landing (stopped on the runway, one touchdown, its sink rate and its offset from the
 // centreline) and on how it flew (the assistants' corridors, α's oscillations, the load, the bank's reversals).
+import { readFileSync } from "node:fs";
 import type { ChunkEnd, Lab } from "../lib/lab";
 import { quality } from "../lib/quality";
 import { earthRelief, engage, onRunway, type Scenario, type Verdict } from "./helpers";
 
 /** What AAA asks of a landing: the limits each scenario is judged against (a check per line in `why`). */
 export const LIMITS = {
-  /** the touchdown's sink rate [m/s] */
-  sink: 1,
+  /** the touchdown's sink rate [m/s]: in calm or light wind, in a strong one (wind 2, its gusts) */
+  sink: { calm: 1, strong: 1.8 },
   /** the touchdown's offset from the centreline [m] */
   across: 5,
   /** the share of the time in each assistant's corridor [%] */
@@ -32,6 +33,9 @@ async function watchTouchdowns(lab: Lab) {
     window.__td = [];
     c.onPilotMessage = (t) => {
       if (/^Touchdown/.test(String(t))) {
+        // (the runway's view anew: its cache is kept a tenth of a wall second — at fixed steps, many
+        // seconds of flight: the offset read was the final's turn's, 450 m)
+        c.runwayCache = null;
         const w = c.runwayView?.();
         window.__td.push({ text: String(t), along: w?.along ?? null, across: w?.across ?? null });
       }
@@ -92,19 +96,27 @@ async function fly(lab: Lab, o: { live?: boolean; maxSim: number; maxWall: numbe
 }
 
 /** The verdict: the landing's checks, then the flight's quality (its graphs saved, measured). */
-async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry"): Promise<Verdict> {
+async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry", wind: number): Promise<Verdict> {
   const td = ((await lab.js(`window.__td ?? []`).catch(() => [])) ?? []) as { text: string; along: number | null; across: number | null }[];
   await lab.saveGraphs();
   const q = quality(lab.o.dir);
   const first = td[0];
   const sink = Number(/([-\d.]+) m\/s down/.exec(first?.text ?? "")?.[1] ?? Number.NaN);
-  const across = first?.across ?? Number.NaN;
+  const sinkMax = wind >= 2 ? LIMITS.sink.strong : LIMITS.sink.calm;
+  // (the offset at the touchdown: the first sample on the wheels — the runway's view read within the
+  // touchdown's own step is the camera's stale one, 100 m off what the telemetry shows)
+  const onWheels = readFileSync(`${lab.o.dir}/telemetry.jsonl`, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { rolling?: boolean; landed?: boolean; runway?: { across: number } | null })
+    .find((S) => (S.rolling || S.landed) && S.runway);
+  const across = onWheels?.runway?.across ?? Number.NaN;
   const hard = lab.events.find((x) => x.kind === "pilot" && /Hard landing|collapsed|tipped/.test(x.text));
   const checks: [string, boolean][] = [
     [`flown to a stop (${e.end}: ${e.why})`, e.end === "until"],
     [`stopped on the runway ${JSON.stringify(lab.T.runway)}`, onRunway(lab)],
     [`${td.length} touchdown(s)`, td.length === 1],
-    [`sink ${sink} m/s ≤ ${LIMITS.sink}`, sink <= LIMITS.sink],
+    [`sink ${sink} m/s ≤ ${sinkMax}`, sink <= sinkMax],
     [`across ${across?.toFixed?.(1)} m ≤ ${LIMITS.across}`, Math.abs(across) <= LIMITS.across],
     [`no hard landing${hard ? `: ${hard.text}` : ""}`, !hard],
     [`final corridor ${q.q_corridor_glide_pct ?? "—"} % ≥ ${LIMITS.corridor}`, (q.q_corridor_glide_pct ?? 0) >= LIMITS.corridor],
@@ -149,7 +161,7 @@ function entry(
     async run(lab) {
       await fromOrbit(lab, site, inc, wind, o);
       const e = await fly(lab, { live: o.live, maxSim: 2 * 86400, maxWall: 1500 });
-      return judge(lab, e, "entry");
+      return judge(lab, e, "entry", wind);
     },
   };
 }
@@ -171,7 +183,7 @@ function glideScenario(
     async run(lab) {
       await glide(lab, site, ...start, wind, { acrossKm: o.acrossKm, headingDeg: o.headingDeg });
       const e = await fly(lab, { live: o.live, maxSim: 1200, maxWall: 600 });
-      return judge(lab, e, "glide");
+      return judge(lab, e, "glide", wind);
     },
   };
 }

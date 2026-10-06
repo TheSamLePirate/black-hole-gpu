@@ -34,6 +34,9 @@ const PAGE = `(() => {
   const graphs = {}, onGraph = {};
   const sample = () => {
     const c = __bh.camera, p = c.pilot, s = __bh.settings, st = safe(() => __bh.game.status()) ?? {};
+    // (the hub's card and the runway's view anew: their caches last a fraction of a wall second — at fixed
+    // steps, many seconds of flight: a sample read the card of the final's turn on its flare)
+    c.hubCache = c.runwayCache = null;
     const h = safe(() => c.hubInfo()), R = c.entryRun, A = c.airFlight, i = safe(() => c.flightInfo()) ?? {};
     const G = h?.graph;
     if (G && G.kind) {
