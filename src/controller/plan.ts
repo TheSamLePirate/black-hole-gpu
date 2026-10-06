@@ -1472,9 +1472,12 @@ function nodeBurn(
         const then = node.then ?? null;
         // (into the wormhole: the throat is months wide at this speed — a warp that crosses it in
         // ~20 s is kept, not the pilot's real time)
+        // (given to the scene now — it was once worked out, then dropped with the plan: the craft left
+        // short of the mouth at real time, months from it)
         if (node.role === "arrive" && node.body === "wormhole" && nav) {
           const v = Math.hypot(...nav.V);
-          this.userWarp = Math.max(this.userWarp ?? 0, Math.min((24 * mouth(this.s).w.rho) / Math.max(v, 1e-9) / 20, 1e4));
+          s.timeSpeed = this.warpSet = Math.max(this.userWarp ?? 0, Math.min((24 * mouth(this.s).w.rho) / Math.max(v, 1e-9) / 20, 1e4));
+          this.traversing = this.crossingWarp = true;
         }
         this.ourMission = null;
         this.ourPlanned = null;
