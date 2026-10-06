@@ -379,12 +379,18 @@ function dockCheck(this: CameraController) {
       const X = lin(nav.X, 1, g.a, (0.05 - g.along) / M_METRES);
       setHomePose(s, X, unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)), V);
       this.sync();
+      // (what failed of the capture's terms — each said, none taken for another: the angle once named
+      // for a ring come in too far)
       const why =
         speed >= 0.5
           ? `${speed.toFixed(2)} m/s — 0.5 at most`
           : g.lateral >= 0.3
             ? `${g.lateral.toFixed(2)} m off its axis — 0.3 at most`
-            : `the ports ${g.angle.toFixed(0)}° apart — 10 at most`;
+            : g.angle >= 10
+              ? `the ports ${g.angle.toFixed(0)}° apart — 10 at most`
+              : g.along <= -0.6
+                ? `${(-g.along).toFixed(2)} m into the port — 0.6 at most`
+                : `moving away at ${(-g.closing).toFixed(2)} m/s`;
       this.onPilotMessage?.(`Bounced off the ${g.title}'s port · ${why}`);
     }
     return;
@@ -411,6 +417,12 @@ function dockCheck(this: CameraController) {
     const V = lin(nav.V, mMe / (mMe + mT), tgtPose.V, mT / (mMe + mT));
     const P = fleet.posesFrom(g.target, { X: tgtPose.X, V, ax: tgtPose.ax }, t).get(fleet.active)!;
     this.placeOnPose({ X: P.X, V, ax: P.ax });
+  } else if (held) {
+    // held by the station: at once where it carries the craft, at its port's velocity — not the approach's
+    // until the next frame's hold: a craft let go before it (undocked at once) once kept the 9 cm/s it
+    // came in with, ran back into the port past the springs' 5 cm/s and bounced
+    const P = fleet.pose(fleet.active, t, true);
+    if (P) this.placeOnPose({ X: P.X, V: P.V, ax: P.ax });
   }
   this.pilot.auto = "none";
   this.pilot.throttle = 0;

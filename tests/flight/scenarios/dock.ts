@@ -134,7 +134,7 @@ export const DOCK: Scenario[] = [
       await nearStation(lab, 60);
       const first = await dockRun(lab);
       if (!first.ok) return { ...first, why: `first docking: ${first.why}` };
-      await lab.js(`(__bh.camera.undock(), true)`);
+      await lab.js(`(__bh.camera.undock(), __bh.game.target("iss"), true)`);
       await lab.fixed({ until: "false", maxSim: 60, maxWall: 30 });
       const away = await lab.js<number | null>("__bh.camera.dockInfo?.range ?? null");
       lab.events.splice(0, lab.events.length, ...lab.events.filter((x) => !/^Docked to/.test(x.text)));
