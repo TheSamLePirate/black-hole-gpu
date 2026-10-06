@@ -333,7 +333,11 @@ function transferWant(
     const o = osc();
     // (a cruise leaves from where the engine beats the hole: the radius itself must be reached)
     const strong = a > 0.3 / (r * r) && !(T.goal === "body" && T.mode === "cruise");
-    const reached = up ? r >= T.rs : r <= T.rs;
+    // (the radius reached as the circle will round it: the spiral's drift outwards (inwards) still to
+    // take out at the engine's acceleration — vr²/2a further —, not where the climb stops: at 2 g the
+    // circle once rounded 5 M beyond the 45 asked)
+    const run = (b[0] * b[0]) / (2 * Math.max(a, 1e-12));
+    const reached = up ? r + run >= T.rs : r - run <= T.rs;
     let done = reached || (strong && (up ? o.ap >= T.rs : o.pe <= T.rs));
     if (done && T.goal === "body" && T.mode === "cruise") {
       // (a cruise also waits, still climbing, for a straight line to the body that clears the hole

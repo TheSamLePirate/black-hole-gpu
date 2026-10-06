@@ -477,13 +477,13 @@ export const GARGANTUA: Scenario[] = [
         await place(lab, `__bh.game.orbit(${JSON.stringify(world)}, { altKm: 200, nu: ${lon} + ${lat} })`);
         await watch(lab);
         await engage(lab, "land");
-        const e = await lab.fixed({ until: "T.landed", maxWall: 400 });
+        const e = await lab.fixed({ until: "c.landed", maxWall: 400 });
         const settle = await lab.fixed({ until: "false", maxWall: 10 });
         const td = said(lab, /Landed on|Touchdown|touchdown/);
         const sink = Number(/([\d.]+) m\/s/.exec(td ?? "")?.[1] ?? Number.NaN);
         const w = await watched(lab);
         return {
-          ok: ok(e) && settle.end !== "fail" && lab.T.landed && w.nan === 0,
+          ok: ok(e) && settle.end !== "fail" && (await lab.js<boolean>("__bh.camera.landed")) && w.nan === 0,
           why: `${e.why} · ${td ?? "no touchdown said"} · ${lab.T.label}`,
           metrics: { sinkMps: sink, warpOver: w.viol, simS: lab.T.t },
         };
