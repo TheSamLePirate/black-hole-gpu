@@ -71,7 +71,10 @@ const PAGE = `(() => {
       animate: s.animate, frozen: safe(() => __bh.frozen ?? null),
     };
   };
-  window.__lab = { msgs, sample, graphs, onGraph };
+  // (the flight waiting on the planner's worker — a node's re-aim, the entry's next bank: a player's
+  // frames go on at the wall's pace meanwhile, so the fixed steps do too, not hundreds ahead of it)
+  const waiting = () => !!(c.plan?.nodes?.some((n) => c.refineState?.get(n)?.pending) || c.entryRun?.pending);
+  window.__lab = { msgs, sample, graphs, onGraph, waiting };
   return true;
 })()`;
 
@@ -256,11 +259,12 @@ export class Lab {
         samples: Sample[];
         met: boolean;
         failed: string | null;
+        waited: boolean;
         msgs: { t: number; text: string }[];
         log: { kind: string; text: string }[];
       }>(`(() => {
         const L = window.__lab, c = __bh.camera, samples = [];
-        let T = L.sample(), met = false, failed = null;
+        let T = L.sample(), met = false, failed = null, waited = false;
         for (let k = 1; k <= ${chunk}; k++) {
           __bh.step(${dt});
           if (k % ${every} === 0 || k === ${chunk}) { T = L.sample(); samples.push(T); }
@@ -269,10 +273,13 @@ export class Lab {
           if (S.air && S.air.fail) { failed = "craft lost: " + S.air.fail; if (!T) samples.push(S); break; }
           ${o.fail ? `if (((T) => (${o.fail}))(S)) { failed = "scenario: " + ${JSON.stringify(o.fail)}; if (!T) samples.push(S); break; }` : ""}
           if (${o.until.includes("T.") || o.until.includes("c.") ? `((T) => (${o.until}))(S)` : o.until}) { met = true; if (!T) samples.push(S); break; }
+          if (L.waiting()) { waited = true; if (!T) samples.push(S); break; }
         }
         const ev = __bh.game.log.events, log = ev.slice(${this.logIndex}).map((e) => ({ kind: e.kind, text: e.text }));
-        return { samples, met, failed, msgs: L.msgs.splice(0), log };
+        return { samples, met, failed, waited, msgs: L.msgs.splice(0), log };
       })()`);
+      // (the worker answering: a frame's wall time per step until it has)
+      if (r.waited) await Bun.sleep(1000 / 30);
       // (every sample written; the messages and the moments with the last)
       for (let k = 0; k < r.samples.length - 1; k++) appendFileSync(`${this.o.dir}/telemetry.jsonl`, `${JSON.stringify(r.samples[k])}\n`);
       const T = await this.absorb(r.samples[r.samples.length - 1]!, r.msgs, r.log);
