@@ -8,12 +8,12 @@
 import { airTop } from "../aero";
 import type { Vec3 } from "../physics";
 import { cross, dot, lin, sub } from "../math/vec3";
-import { secularZonal } from "./geopotential";
-import { keplerProp } from "./our-plan";
 import { symmetricStep, YOSHIDA } from "./our-predict";
 import { gravityHome, ourState, referenceBody, soiOf } from "./our-side";
-import { dragAccel, gearHeight, groundVelocity, railsDecay, solidBody } from "./our-surface";
+import { dragAccel, gearHeight, groundVelocity, solidBody } from "./our-surface";
+import { buildMeanOrbit, type MeanOrbit, meanOrbitState } from "./mean-orbit";
 import { M_METRES, solarBody } from "./solar";
+import { C_MPS } from "../units";
 
 /** A stable orbit about the reference body — clear of its air, well inside its sphere — or null. */
 export function stableOrbitOf(X: Vec3, V: Vec3, t: number): { ref: string; mass: number; period: number } | null {
@@ -34,15 +34,50 @@ export function stableOrbitOf(X: Vec3, V: Vec3, t: number): { ref: string; mass:
   return { ref, mass: b.mass, period: 2 * Math.PI * Math.sqrt(a ** 3 / b.mass) };
 }
 
-/** On rails over simDt from a stable orbit (stableOrbitOf): the place and velocity at its end. */
+/**
+ * On rails over simDt from a stable orbit (stableOrbitOf): the place and velocity at its end — the mean
+ * orbit the flight's own integrator flies (mean-orbit.ts: a turn flown once, its mean elements and its
+ * short-period terms), within the integrator's own consistency (~10 m a turn in a low Earth orbit, where a
+ * Kepler orbit from the osculating state, turned by the J2's secular drift, ran 49 km a turn off it).
+ */
 export function railsCoast(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: number, simDt: number): { X: Vec3; V: Vec3 } {
-  const kp = keplerProp(rails.mass, sub(X, ourState(rails.ref, t0).pos), sub(V, ourState(rails.ref, t0).vel), simDt);
-  // (the body's oblateness: its secular drift — the node's regression, the periapsis's turn)
-  const kz = secularZonal(rails.ref, rails.mass, kp.r as Vec3, kp.v as Vec3, simDt, t0);
-  // (and the thin air's: the orbit's decay)
-  const k = railsDecay(rails.ref, rails.mass, kz.r, kz.v, simDt);
-  const B = ourState(rails.ref, t0 + simDt);
-  return { X: lin(B.pos, 1, k.r, 1), V: lin(B.vel, 1, k.v, 1) };
+  return meanOrbitState(railsModel(rails, X, V, t0), t0 + simDt);
+}
+
+// (the models in use: each kept while every call starts from the state it gave — no burn, no other pull
+// in between —, rebuilt as its fit ages; a few at once: the flown craft, the fleet's coasting ones)
+const models: (MeanOrbit & { calls?: number })[] = [];
+/** the rails' models built so far (a turn's integration each: what a warp costs) */
+export const railsStats = { builds: 0 };
+const MAX_MODELS = 8;
+/**
+ * How many of its turns a model is trusted for — measured against the integrator in a 400 km orbit: 50 m
+ * off after 15, 0.9 km after 50 (the air's drag varying, the Moon's and the Sun's long terms): 30 while it
+ * is flown at the warps of a rendezvous (less than a turn a call), 300 at a cruise's (turns a call: a blur)
+ * — a turn's integration (~50 ms) at most every few seconds, rebuilt as the warp comes down.
+ */
+const maxTurns = (m: MeanOrbit & { calls?: number }, t0: number) => ((t0 - m.t0) / Math.max(m.calls ?? 1, 1) < m.period ? 30 : 300);
+
+function railsModel(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: number): MeanOrbit {
+  // (the same state, to a centimetre and a micrometre a second: what the model itself gave, through the
+  // flight's frames' round trips — sub-millimetre)
+  const tolX = 1e-2 / M_METRES,
+    tolV = 1e-6 / C_MPS;
+  for (let k = 0; k < models.length; k++) {
+    const m = models[k]!;
+    if (m.ref !== rails.ref || t0 < m.t0 || t0 - m.t0 > maxTurns(m, t0) * m.period) continue;
+    const s = meanOrbitState(m, t0);
+    if (Math.hypot(...sub(s.X, X)) < tolX && Math.hypot(...sub(s.V, V)) < tolV) {
+      m.calls = (m.calls ?? 0) + 1;
+      if (k > 0) models.unshift(...models.splice(k, 1));
+      return m;
+    }
+  }
+  railsStats.builds++;
+  const m = buildMeanOrbit(rails.ref, rails.mass, X, V, t0, (x, v, t, dt) => coastHome(x, v, t, dt));
+  models.unshift(m);
+  if (models.length > MAX_MODELS) models.pop();
+  return m;
 }
 
 /** The fall over simDt [M] from (X, V) at t0 [home frame, c], the engine off: as the flown craft's (its end, t: tEnd unless subCap steps stopped short). */

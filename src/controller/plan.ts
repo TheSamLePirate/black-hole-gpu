@@ -150,12 +150,14 @@ function railsLimit(this: CameraController, cam: ReturnType<typeof cameraFrame>)
   const nav = this.ourNav(cam);
   if (nav) {
     const g = gravityHome(nav.X, nav.t);
-    // (a stable orbit rides Kepler's rails at any warp; else a turn of the tightest orbit in ~2 s)
-    if (!(this.pilot.throttle === 0 && this.pilot.accel === 0 && this.stableOrbit(nav.X, nav.V, nav.t)))
-      cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
+    // (a stable orbit rides the rails at any warp; else a turn of the tightest orbit in ~2 s)
+    const onRails = this.pilot.throttle === 0 && this.pilot.accel === 0 && !!this.stableOrbit(nav.X, nav.V, nav.t);
+    if (!onRails) cap(Math.max(0.6 * 2 * Math.PI * g.tDyn, 1e-3), BODY_NAMES[nav.ref as Body] ?? nav.ref);
     // near the ground (not on it): a frame covers no more than a fifth of the height left, the last
-    // metres at the pace of the last 20
-    if (!this.ourLanded && (solidBody(nav.ref) || ourAir(nav.ref, 0) > 0) && nav.ref !== "sun") {
+    // metres at the pace of the last 20 — not a stable orbit's, clear of the ground and the air (over an
+    // oblate Earth its height swings ~20 km a turn, its "vertical" speed never nil: once a ×100 ceiling
+    // in a 400 km orbit)
+    if (!onRails && !this.ourLanded && (solidBody(nav.ref) || ourAir(nav.ref, 0) > 0) && nav.ref !== "sun") {
       const hM = Math.max(gearHeight(nav.ref, nav.X, nav.t), 20);
       const sp = groundSpeeds(nav.ref, nav.X, nav.V, nav.t);
       const vv = Math.abs(sp.vv) / C_MPS + 1e-12;
