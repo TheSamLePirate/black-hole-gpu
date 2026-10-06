@@ -434,4 +434,5 @@ export default {
   "Hard landing on {0} · {1} m/s down — the gear damaged": "Atterrissage dur sur {0} · {1} m/s de descente — le train endommagé",
   "{0}: tipped over on {1}": "{0} : renversé sur {1}",
   "{0}: the gear collapsed on {1} at {2} m/s": "{0} : le train a cédé sur {1} à {2} m/s",
+  "{0}: crashed into {1} at {2} m/s, off its gear": "{0} : écrasé sur {1} à {2} m/s, hors de son train",
 } satisfies Record<string, string>;

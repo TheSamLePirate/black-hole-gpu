@@ -417,7 +417,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     return tEnd;
   }
   let a = accAt(X, V, t, g);
-  let touched: { speed: number; vh?: number; wheels?: boolean; gear?: "landed" | "hard" | "crashed" | "tipped" } | null = null;
+  let touched: { speed: number; vh?: number; wheels?: boolean; gear?: "landed" | "hard" | "crashed" | "tipped" | "hull" } | null = null;
   for (let i = 0; i < this.subCap && t < tEnd - 1e-12; i++) {
     // (the velocity before this step: a touchdown is judged by the sink it came down with, not by what
     // the springs gave back within it)
@@ -456,6 +456,15 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       const n = unitV(sub3(X, ourState(ground, t).pos));
       X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
       const vr = sub3(V, groundVelocity(ground, X, t));
+      // (flown into it, not on its legs — the nose or the tail first, the legs never touching —: the hull
+      // struck the ground, a crash; it was once set on it and left standing on its tail, never landed)
+      const sink = -dot3(vr, n) * C_MPS;
+      if (sink > 0.5) {
+        touched = { speed: sink, vh: Math.hypot(...lin(vr, 1, n, -dot3(vr, n))) * C_MPS, gear: "hull" };
+        V = groundVelocity(ground, X, t);
+        this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+        break;
+      }
       if (dot3(vr, n) < 0) V = lin(V, 1, n, -dot3(vr, n));
     }
     // rolling on the ground (no gear of its own: held on it, the wheels' friction along it, the tyres'
@@ -532,7 +541,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
       break;
     }
-    if (g.inside) {
+    // (within a solid body's mean figure is no surface: its ground is its relief — a mare, a crater, a
+    // basin under it (the Moon's Tranquility 2 km, Jezero 2.6 km): the gear stands on that, not on the
+    // sphere it once stopped on in mid-air)
+    if (g.inside && g.inside !== ground) {
       // (into a body with no ground to stand on: resting on its surface, moving with it)
       const b = ourState(g.inside, t);
       const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius;
@@ -639,7 +651,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       const why =
         touched.gear === "tipped"
           ? tf("{0}: tipped over on {1}", craft, name)
-          : tf("{0}: the gear collapsed on {1} at {2} m/s", craft, name, touched.speed.toFixed(0));
+          : touched.gear === "hull"
+            ? tf("{0}: crashed into {1} at {2} m/s, off its gear", craft, name, touched.speed.toFixed(0))
+            : tf("{0}: the gear collapsed on {1} at {2} m/s", craft, name, touched.speed.toFixed(0));
       this.onPilotMessage?.(why);
       this.crashed(why);
     }
