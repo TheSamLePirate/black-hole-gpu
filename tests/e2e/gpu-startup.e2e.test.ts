@@ -108,6 +108,30 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  test("an error thrown after the first frame leaves the loop running", async () => {
+    const app = await App.boot({ hash: scene, width: 320, height: 240 });
+    try {
+      const before = await app.js<number>(`(() => {
+        setTimeout(() => { throw new Error("Injected error after the first image"); });
+        void Promise.reject(new Error("Injected rejection after the first image"));
+        return __bh.renderer.completedFrames;
+      })()`);
+      await app.waitFor(`__bh.graphicsDiagnostic().events.filter((event) => event.message.includes("after the first image")).length === 2`);
+      // (the loop still turning: a change drawn again, frame after frame)
+      for (let i = 0; i < 5; i++) {
+        const done = await app.js<number>("(__bh.touch(), __bh.renderer.completedFrames)");
+        await app.waitFor(`__bh.renderer.completedFrames > ${done}`);
+      }
+      expect(await app.js<number>("__bh.renderer.completedFrames")).toBeGreaterThan(before + 4);
+      const report = await app.js<{ status: string; events: { kind: string }[] }>("__bh.graphicsDiagnostic()");
+      expect(report.status).toBe("running");
+      expect(report.events.map((event) => event.kind)).toEqual(expect.arrayContaining(["javascript-error", "unhandled-rejection"]));
+      expect(await app.js<boolean>(`document.getElementById("error").hidden`)).toBe(true);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("failed quality LUT leaves the adaptive kernel and a PNG export usable", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("lut") });
     try {

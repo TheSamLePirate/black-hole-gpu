@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GpuDiagnostics } from "../src/gpu-diagnostics";
+import { GpuDiagnostics, globalErrorRouter } from "../src/gpu-diagnostics";
 
 test("graphics diagnostics preserve the failed stage across reload without recursive reports", () => {
   let saved = "";
@@ -54,4 +54,25 @@ test("native GPU errors preserve their message even though they do not extend Er
   const diag = new GpuDiagnostics();
   diag.record("uncaptured-gpu-error", new GPUValidationError("Binding exceeds device limit"));
   expect(diag.snapshot().events[0]?.message).toBe("GPUValidationError: Binding exceeds device limit");
+});
+
+test("a page-wide error ends the start only before the first image; afterwards it is recorded and told once per kind", () => {
+  let started = false;
+  const fatal: string[] = [];
+  const recorded: string[] = [];
+  const told: string[] = [];
+  const route = globalErrorRouter({
+    started: () => started,
+    fatal: (kind) => fatal.push(kind),
+    record: (kind) => recorded.push(kind),
+    notify: (kind) => told.push(kind),
+  });
+  route("javascript-error", new Error("during the start"));
+  expect(fatal).toEqual(["javascript-error"]);
+  started = true;
+  for (let i = 0; i < 3; i++) route("unhandled-rejection", new Error("a stray promise"));
+  route("javascript-error", new Error("in flight"));
+  expect(fatal).toEqual(["javascript-error"]);
+  expect(recorded).toEqual(["unhandled-rejection", "unhandled-rejection", "unhandled-rejection", "javascript-error"]);
+  expect(told).toEqual(["unhandled-rejection", "javascript-error"]);
 });

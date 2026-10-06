@@ -12,6 +12,8 @@ export default {
     "Le périphérique graphique a été réinitialisé ({0}).\n\nVotre vol a été sauvegardé. Rechargez la page pour continuer.\n",
   Reload: "Recharger",
   "GPU error: {0}": "Erreur GPU : {0}",
+  "An unexpected error was recorded — the flight goes on (Pause › Download graphics diagnostic)":
+    "Une erreur inattendue a été enregistrée — le vol continue (Pause › Télécharger le diagnostic graphique)",
   "The solar system — NASA/JPL ephemerides (DE440)": "Le système solaire — éphémérides NASA/JPL (DE440)",
   "{0} is not in this universe": "{0} n'est pas dans cet univers",
   "Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)":

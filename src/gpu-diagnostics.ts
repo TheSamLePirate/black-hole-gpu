@@ -102,6 +102,29 @@ try {
 }
 export const gpuDiagnostics = new GpuDiagnostics(storage);
 
+/**
+ * Where a page-wide error goes (window "error", "unhandledrejection"). Before the first image it ends
+ * the start: a diagnostic rather than an endless splash. After it the flight goes on — a stray throw
+ * in a promise chain, an extension's script, a "ResizeObserver loop" must not stop the loop and lose
+ * the flight since the last autosave (audit H1): recorded, not fatal, the player told once per kind.
+ * (The browser's console keeps its own report of the error: nothing is prevented.)
+ */
+export function globalErrorRouter(o: {
+  started: () => boolean;
+  fatal: (kind: string, error: unknown) => void;
+  record: (kind: string, error: unknown) => void;
+  notify: (kind: string) => void;
+}): (kind: string, error: unknown) => void {
+  const told = new Set<string>();
+  return (kind, error) => {
+    if (!o.started()) return o.fatal(kind, error);
+    o.record(kind, error);
+    if (told.has(kind)) return;
+    told.add(kind);
+    o.notify(kind);
+  };
+}
+
 export function downloadGpuDiagnostic() {
   const url = URL.createObjectURL(new Blob([JSON.stringify(gpuDiagnostics.report(), null, 2)], { type: "application/json" }));
   const link = document.createElement("a");

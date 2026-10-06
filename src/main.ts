@@ -1,5 +1,5 @@
 import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
-import { downloadGpuDiagnostic, gpuDiagnostics } from "./gpu-diagnostics";
+import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
@@ -225,8 +225,20 @@ async function main() {
     gpuDiagnostics.record(kind, error, true);
     fail(error instanceof Error ? error.message : String(error));
   };
-  window.addEventListener("error", (event) => reportFatal("javascript-error", event.error ?? event.message));
-  window.addEventListener("unhandledrejection", (event) => reportFatal("unhandled-rejection", event.reason));
+  const globalError = globalErrorRouter({
+    started: () => firstFrame,
+    fatal: reportFatal,
+    record: (kind, error) => gpuDiagnostics.record(kind, error),
+    notify: () => {
+      try {
+        panel.toast(t("An unexpected error was recorded — the flight goes on (Pause › Download graphics diagnostic)"));
+      } catch {
+        /* (before the panel exists: the diagnostic has it) */
+      }
+    },
+  });
+  window.addEventListener("error", (event) => globalError("javascript-error", event.error ?? event.message));
+  window.addEventListener("unhandledrejection", (event) => globalError("unhandled-rejection", event.reason));
   const splash = new Splash($("loading") ?? document.createElement("div"));
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
