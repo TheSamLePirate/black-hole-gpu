@@ -52,7 +52,8 @@ export function cartToGeodetic(a: number, f: number, p: Vec3): { lat: number; lo
     const s = Math.sin(lat),
       c = Math.cos(lat);
     const N = a / Math.sqrt(1 - e2 * s * s);
-    h = Math.abs(c) > 1e-9 ? rho / c - N : Math.abs(p[2]) / Math.abs(s) - N * (1 - e2);
+    // (the height along the normal from both coordinates: ρ / cos φ − N lost centimetres over the poles)
+    h = rho * c + (p[2] + e2 * N * s) * s - N;
     lat = Math.atan2(p[2], rho * (1 - (e2 * N) / (N + h)));
   }
   return { lat, lon, h };

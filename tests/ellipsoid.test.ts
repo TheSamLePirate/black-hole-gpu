@@ -28,6 +28,15 @@ test("geodetic → Cartesian → geodetic: back to the millimetre, from the grou
     }
 });
 
+test("over the poles too: centimetres off the axis, the height the pole's to the micrometre", () => {
+  // (a point at r, d radians from the axis: its height the pole's, less ~2·10⁴ d² m — the figure's curvature)
+  for (const r of [A * (1 - F), A * (1 - F) + 106.4e3, A + 400e3])
+    for (const d of [1e-9, 1e-8, 3e-8, 1e-7]) {
+      const pole = cartToGeodetic(A, F, [0, 0, r]).h;
+      expect(Math.abs(cartToGeodetic(A, F, [r * Math.sin(d), 0, r * Math.cos(d)]).h - pole)).toBeLessThan(1e-6);
+    }
+});
+
 test("the squashed height: the geodetic height to 6 cm within 10 km of the ground; the geodetic direction on the ground its latitude", () => {
   for (const lat of [0, 20, 34.905, 45, 70, 89])
     for (const h of [0, 50, 2000, 9000]) {
