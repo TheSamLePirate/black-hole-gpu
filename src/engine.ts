@@ -43,6 +43,14 @@ export const rapidityCost = (dvs: number[]) => dvs.reduce((w, v) => w + Math.ata
 /** The propellant counted: on, unless the Cinema engine (quasi-impulsive, hypothetical: no tank). */
 export const fuelOn = (s: Pick<Settings, "fuel" | "engine">) => s.fuel && s.engine === "crew";
 
+/**
+ * The share of the engine's acceleration the craft's structure is judged by (flightair.ts's load): all
+ * of the Crew engine's few g; none of the Cinema engine's — a hypothetical engine, its thousands of g a
+ * fiction like its tank that never empties. Counted, they broke the Ranger up a quarter of a second into
+ * any burn (the automatic Interstellar mission's ignition among them).
+ */
+export const loadShare = (s: Pick<Settings, "engine">) => (s.engine === "crew" ? 1 : 0);
+
 /** The mass left over the full mass after spending the rapidity w (the tank's empty: the dry mass). */
 export function massLeft(s: Pick<Settings, "exhaust" | "massRatio">, spent: number) {
   const budget = s.exhaust * Math.log(Math.max(s.massRatio, 1));

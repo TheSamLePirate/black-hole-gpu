@@ -16,7 +16,7 @@ import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal,
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
 import { fleet } from "../fleet";
-import { fuelOn } from "../engine";
+import { fuelOn, loadShare } from "../engine";
 import { VESSELS } from "../vessels";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
@@ -964,7 +964,8 @@ function airAfter(this: CameraController, dtSec: number, acc: Vec3, dtPilot: num
   const s = this.s;
   const cam = cameraFrame(s);
   const ax = this.shipAxesLocal(cam);
-  const aU = C_MPS ** 2 / (1476.625 * s.massSolar);
+  // (the engine's acceleration in the load as far as the hull bears it: none of the Cinema engine's)
+  const aU = (loadShare(s) * C_MPS ** 2) / (1476.625 * s.massSolar);
   const thrust = ax.map((a) => (dot3(acc, a) / Math.max(Math.hypot(...a), 1e-12)) * aU) as Vec3;
   const mp = fleet.massProps();
   const was = this.airFlight.failure;

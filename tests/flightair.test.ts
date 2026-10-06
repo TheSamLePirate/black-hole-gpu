@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import type { V3 } from "../src/aero";
+import { CameraController } from "../src/controls";
+import { engineThrust } from "../src/engine";
 import { AirFlight, Q_FREE } from "../src/flightair";
+import { defaultSettings } from "../src/settings";
 import { solarBody } from "../src/system/solar";
 import { VESSELS } from "../src/vessels";
 
@@ -74,4 +77,29 @@ test("the flight path's turn: the motion's direction swinging about the ship's x
   }
   expect(Math.abs(Math.abs(f.pathRate[0]!) - w)).toBeLessThan(0.01);
   expect(Math.abs(f.pathRate[1]!)).toBeLessThan(1e-6);
+});
+
+test("a burn in the vacuum: the Crew engine's g in the load, the Cinema engine's not — no break-up at ignition", () => {
+  // (the controller's own once-a-frame step on a stand-in: the nose along z, a second at full thrust —
+  // the Cinema engine's 0.02 c²/M is ~1 240 g at 10⁸ M☉, the Crew engine's 3 g)
+  const fly = (engine: "cinema" | "crew") => {
+    const s = { ...defaultSettings(), engine, crewG: 3, thrust: 0.02, massSolar: 1e8, damage: true };
+    const lost: string[] = [];
+    const c = Object.assign(Object.create(CameraController.prototype), {
+      s,
+      airFlight: new AirFlight(),
+      pilot: { omega: [0, 0, 0] },
+      shipAxesLocal: () => axes,
+      onCraftLost: (why: string) => lost.push(why),
+    }) as CameraController;
+    c.airFlight.reset("ranger");
+    for (let i = 0; i < 60; i++) c.airAfter(1 / 60, [0, 0, engineThrust(s)], 1 / 60);
+    return { g: c.airFlight.g, lost };
+  };
+  const cinema = fly("cinema");
+  expect(cinema.lost).toEqual([]);
+  expect(cinema.g).toBe(0);
+  const crew = fly("crew");
+  expect(crew.lost).toEqual([]);
+  expect(crew.g).toBeCloseTo(3, 1);
 });
