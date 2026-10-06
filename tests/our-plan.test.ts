@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { earthStart } from "../src/system/our-side";
 import { predictOurs } from "../src/system/our-predict";
-import { bPlane, keplerProp, lambert, planOurOrbit, planOurTransfer, returnPerigee } from "../src/system/our-plan";
+import { bPlane, keplerProp, lambert, planOurOrbit, planOurTransfer, refineOurNode, returnPerigee } from "../src/system/our-plan";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "../src/system/solar";
 
 // Flight planning in our universe: two-body tools, then transfers aimed with the n-body predictor —
@@ -57,6 +57,22 @@ test("a Hohmann transfer from 400 to 1 000 km: the textbook burns, its far apsis
   }
   expect(Math.abs((far - r2) * M_METRES)).toBeLessThan(500);
   expect(Math.abs(tFar - p.nodes[1]!.t) * M_SECONDS).toBeLessThan(30);
+});
+
+test("a Hohmann's circularization re-aimed after the departure stays at its apsis, not a later turn's", () => {
+  // (the transfer orbit comes back to 1 000 km every turn: the re-aim once took the pass nearest that
+  // height over its whole look-ahead — three turns on — and the node autopilot flew there, a day late)
+  const t0 = 109.6;
+  const s = earthStart(t0, 400, true);
+  const p = planOurOrbit(s.X, s.vel, t0, 1000e3, { ...o, accel: 0 });
+  if ("error" in p) throw new Error(p.error);
+  const t1 = p.nodes[0]!.t + 120 / M_SECONDS;
+  const path = predictOurs(s.X, s.vel, t0, [p.nodes[0]!], { tMax: t1 - t0 + 1e-3, maxSteps: 20000, mouthR: 0.05 });
+  const at = path.pts.length - 1;
+  const r = refineOurNode(path.pts[at]!, path.vels[at]!, path.times[at]!, p.mission, p.nodes[1]!, o);
+  expect(r).not.toBeNull();
+  expect(Math.abs(r!.t - p.nodes[1]!.t) * M_SECONDS).toBeLessThan(60);
+  expect(Math.abs(Math.hypot(...r!.dv) - Math.hypot(...p.nodes[1]!.dv)) * C).toBeLessThan(2);
 });
 
 test("Artemis II: a free return round the Moon, the pass at 7 000 km, back to a 200 km perigee", () => {

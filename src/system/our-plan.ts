@@ -1378,13 +1378,22 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     const path = predictOurs(X, V, t, [], { tMax: span, maxSteps: 60000, mouthR: o.mouthR, accel: o.accel });
     const ca = closest(path, body);
     if (ca.i < 0) return node;
-    // (circ: the next apsis — the farthest or the nearest point before a turn is done)
+    // (circ: the apsis the plan burns at — the point nearest the height asked within half a turn of the
+    // node, not on the whole path: the transfer orbit comes back to that height every turn, and a later
+    // pass a few metres nearer it once moved the burn a day on, the warp skipping every turn between)
     let i = ca.i;
     if (node.role === "circ") {
       const target = b.radius + g.altM / M_METRES;
+      const at = stateAt(path, Math.max(node.t, t)) ?? { X: path.pts[0]!, V: path.vels[0]! };
+      const s0 = stateOf(body, Math.max(node.t, t));
+      const r0 = norm(sub(at.X, s0.pos)),
+        v0 = norm(sub(at.V, s0.vel));
+      const a = 1 / (2 / r0 - (v0 * v0) / b.mass);
+      const half = a > 0 ? Math.PI * Math.sqrt(a ** 3 / b.mass) : Infinity;
       let bestI = -1,
         bestE = Infinity;
       for (let k = 1; k < path.pts.length - 1; k++) {
+        if (Math.abs(path.times[k]! - node.t) > half) continue;
         const d = norm(sub(path.pts[k]!, stateOf(body, path.times[k]!).pos));
         const e = Math.abs(d - target);
         if (e < bestE && path.times[k]! > t + o.lead) (bestE = e), (bestI = k);
