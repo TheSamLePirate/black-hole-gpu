@@ -446,8 +446,10 @@ export class FlightHud {
     const cell = (k: string, label: string) => {
       const c = h("div", "fl-ms-cell");
       const v = h("b", "", "—");
-      c.append(h("small", "", label), v);
+      const l = h("small", "", label);
+      c.append(l, v);
       this.stripEls[k] = v;
+      this.stripEls[`${k}Label`] = l;
       return c;
     };
     const state = h("div", "fl-ms-state");
@@ -555,8 +557,13 @@ export class FlightHud {
     set("spd", st ? ms(st.speed) : "—");
     const ko = st?.kerr ? this.kerrApsides?.() : null;
     const r = (x: number) => (Number.isFinite(x) ? `${x.toFixed(2)} M` : "∞");
-    set("pe", ko ? (ko.fate === "horizon" ? t("horizon") : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
-    set("ap", ko ? (ko.fate === "bound" ? r(ko.ra) : t("escape")) : st?.orbit ? km(st.orbit.apKm) : "—");
+    // (a near-circular orbit: the circle it flies in the mean and its swing — the osculating apsides of
+    // a circle stand ~20 km apart in a low orbit; they stay in the status panel's tiles)
+    const circ = !ko ? (st?.orbit?.circular ?? null) : null;
+    set("peLabel", circ ? t("CIRCULAR (MEAN)") : t("PERIAPSIS"));
+    set("apLabel", circ ? t("SWING") : t("APOAPSIS"));
+    set("pe", circ ? km(circ.km) : ko ? (ko.fate === "horizon" ? t("horizon") : r(ko.rp)) : st?.orbit ? km(st.orbit.peKm) : "—");
+    set("ap", circ ? `± ${km(circ.swingKm)}` : ko ? (ko.fate === "bound" ? r(ko.ra) : t("escape")) : st?.orbit ? km(st.orbit.apKm) : "—");
     for (const [a, b] of this.stripBtns) {
       b.classList.toggle("on", i.auto === a || i.hub?.mode === a);
       const why = this.buttons.get(a)?.dataset.why;
@@ -1848,7 +1855,12 @@ export class FlightHud {
       O.pe!.textContent = ks.orbit ? `${km(ks.orbit.peKm)}${ks.orbit.tPe > 0 ? ` · T−${fmtS(ks.orbit.tPe)}` : ""}` : "—";
       O.ap!.textContent =
         ks.orbit && Number.isFinite(ks.orbit.apKm) ? `${km(ks.orbit.apKm)} · T−${fmtS(ks.orbit.tAp)}` : ks.orbit ? "∞" : "—";
-      O.el!.textContent = ks.orbit ? `i ${ks.orbit.incDeg.toFixed(1)}° · e ${ks.orbit.ecc.toFixed(3)}` : "—";
+      const circ = ks.orbit?.circular;
+      O.el!.textContent = ks.orbit
+        ? circ
+          ? `${tf("circular {0} ± {1} (mean)", km(circ.km), `${circ.swingKm.toFixed(1)} km`)} · i ${ks.orbit.incDeg.toFixed(1)}°`
+          : `i ${ks.orbit.incDeg.toFixed(1)}° · e ${ks.orbit.ecc.toFixed(3)}`
+        : "—";
     }
     // the alerts (hud/alerts.ts) and the master caution: three lines at most, the gravest first; the
     // lamp lit — and the master warning sounding — until acknowledged (Enter, or a click on the lamp)

@@ -14,7 +14,8 @@ import { flatteningOf } from "../system/ellipsoid";
 import { classify, elements, orbitClearsHeight, orbitExtreme, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
 import { C_MPS } from "../units";
-import { sub } from "../math/vec3";
+import { dot, sub } from "../math/vec3";
+import { circularVelocity } from "../system/geopotential";
 
 type Info = ReturnType<CameraController["flightInfo"]>;
 
@@ -39,6 +40,13 @@ export interface OrbitFigures {
   tAp: number;
   /** semi-major axis [km] */
   aKm: number;
+  /**
+   * Near-circular (its radius swings less than 0.2 % about its mean): the circle it flies in the mean —
+   * the one CIRC aims at, the body's oblateness in — its height over the mean radius and the swing about
+   * it [km]. Its osculating apsides stand up to ~20 km apart in a low Earth orbit (the J2's pull), and the
+   * geodetic heights 21 km more over a pole: what a player means by circular is this. Null otherwise.
+   */
+  circular: { km: number; swingKm: number } | null;
 }
 
 export interface RangerStatus {
@@ -62,10 +70,42 @@ export interface RangerStatus {
   kerr: { r: number; E: number; L: number } | null;
 }
 
-function figures(el: Elements, R: number, km: number, sec: number, flattening = 0): OrbitFigures {
+/**
+ * The circle an orbit flies in the mean, when it is near-circular (OrbitFigures.circular): the body's mean
+ * circle through the craft (geopotential.ts meanCircular: radius r₀, its J2 swing X), moved by what the
+ * velocity has beyond that circle's — an epicycle about a guiding circle 2δt/n higher, of amplitude
+ * √(δr² + (2δt)²)/n (δr, δt its radial and along-track parts, n the mean motion). Heights over the mean
+ * radius R; any consistent units (r, R; v), km the length's factor to km.
+ */
+export function meanCircle(id: string, mu: number, r: V3, v: V3, t: number, R: number, km: number): { km: number; swingKm: number } | null {
+  const c = circularVelocity(id, mu, r, v, t);
+  const rl = Math.hypot(...r);
+  const rh = r.map((x) => x / rl) as V3;
+  const d = sub(v, c.v as V3);
+  const vt = sub(c.v as V3, rh.map((x) => x * dot(c.v as V3, rh)) as V3);
+  const vtl = Math.hypot(...vt);
+  if (!(vtl > 0)) return null;
+  const n = vtl / rl;
+  const dr = dot(d, rh),
+    dt = dot(d, vt) / vtl;
+  const res = Math.hypot(dr, 2 * dt) / n;
+  const mean = c.r0 + (2 * dt) / n;
+  if (!(res < 2e-3 * mean)) return null;
+  return { km: (mean - R) * km, swingKm: (c.X + res) * km };
+}
+
+function figures(
+  el: Elements,
+  R: number,
+  km: number,
+  sec: number,
+  flattening = 0,
+  circular: OrbitFigures["circular"] = null,
+): OrbitFigures {
   const lowest = orbitExtreme(el, R, flattening),
     highest = orbitExtreme(el, R, flattening, true);
   return {
+    circular,
     radiusKm: R * km,
     peKm: lowest.h * km,
     apKm: highest.h * km,
@@ -123,12 +163,14 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     const f = flatteningOf(ref);
     const altitude = altitudeOver(ref, info.X as V3, t);
     const top = airTopKm(ref) / kmM;
+    const circ = el.e < 0.05 ? meanCircle(ref, b.mass, r as V3, v as V3, t, b.radius, kmM) : null;
     const st = classify(el, {
       R: b.radius,
       airTop: b.radius + top,
       soi,
       landed: info.landed,
-      clearOfAir: orbitClearsHeight(el, b.radius, f, top),
+      // (a circle: clear of the air if its lowest as flown is — the label agrees with the circle shown)
+      clearOfAir: circ ? circ.km - circ.swingKm >= top * kmM : orbitClearsHeight(el, b.radius, f, top),
       altitude: altitude / M_METRES,
     });
     const vertical = figureUp(ref, info.X as V3, t);
@@ -143,7 +185,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
       altKm: altitude / 1e3,
       speed: el.v * C,
       vVert: (vertical[0] * v[0] + vertical[1] * v[1] + vertical[2] * v[2]) * C,
-      orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS, f),
+      orbit: st === "landed" ? null : figures(el, b.radius, kmM, M_SECONDS, f, circ),
     });
     if (info.target && info.target !== "hole" && Number.isFinite(info.targetDist)) {
       out.target = {
