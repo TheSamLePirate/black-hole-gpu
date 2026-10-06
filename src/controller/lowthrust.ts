@@ -1556,6 +1556,7 @@ function hubCompute(this: CameraController): HubInfo | null {
       join: t("joining the runway's axis"),
       toStart: t("to the final's start"),
       downwind: t("downwind"),
+      spiral: t("round the alignment circle — too high for the final"),
       turn: t("turning onto the final"),
       final: t("on the final"),
     };
@@ -2191,16 +2192,23 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const vh = Math.hypot(...vhv);
   // a hand-flown final (no autopilot on it): on the runway's axis — within a fifth of the distance, 1.5 km
   // at least —, heading down it, below 6 km, within 40 km: the profile the pilot's own, as the
-  // autopilot's would be from where the final begins, frozen there — the pilot's drift from it shown
+  // autopilot's would be from where the final begins, frozen there — the pilot's drift from it shown.
+  // In the air: the wheels down (the autopilot's rollout, handed over at the touchdown), no final — a
+  // profile begun there would be one from the ground, its steep slope flat
   const manual =
     this.pilot.auto !== "entry" &&
+    !this.rolling &&
+    !this.ourLanded &&
     sAl > -40e3 &&
     sAl < LANDING.td &&
     Math.abs(xt) < Math.max(1500, 0.2 * -sAl) &&
     agl < 6000 &&
     vh > 30 &&
     dot3(vhv, along) > 0.85 * vh;
-  let fix: LandingFix | null = app?.final && R?.gOuter ? R.gOuter : null;
+  // (the autopilot's final: its profile from the final's start — the steep slope following the craft, frozen
+  // as the pull-up nears —, as the autopilot flies it: shown only once frozen, 5 km out, the final's first
+  // minute had no graph, its gates no PAPI)
+  let fix: LandingFix | null = app?.final ? (R?.gOuter ?? landingProfile(sAl, agl, Math.max(app.speed, 50)).fix) : null;
   if (manual) {
     const MF = this.manualFix?.site === site.name ? this.manualFix.fix : null;
     const L0 = landingProfile(sAl, agl, Math.max(vh, 50), MF ?? undefined);

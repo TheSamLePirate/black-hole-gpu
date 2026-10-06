@@ -1327,7 +1327,12 @@ function entryStep(
   }
   const R = this.entryRun!;
   const retro = () => ({ nose: fr.toLocal(lin(va, -1, va, 0)), up: fr.toLocal(up) });
-  if (R.phase === "plan") return retro();
+  if (R.phase === "plan") {
+    // (real time while the worker plans: its burn is timed from the state it was given — at ×1000 the
+    // orbit ran on past it, the burn fired late, wherever the craft then was)
+    this.setHubWarp(1 / Msec);
+    return retro();
+  }
   if (R.phase === "wait" || R.phase === "burn") {
     const thrSI = this.thrustMax() * (C_MPS ** 2 / (1476.625 * s.massSolar));
     const burnT = thrSI > 0 ? R.dv / thrSI : 0;
@@ -1433,6 +1438,7 @@ function entryStep(
   const sp = Math.hypot(...va);
   const agl = this.aglNow(cam, h);
   const bank = clamp(1.4 * dpsi, -0.6, 0.6) * (agl < 150 ? agl / 150 : 1);
+  R.bank = bank;
   const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
   const gRef = flareRef(R, agl, clamp(-Math.atan2(agl, Math.max(dist - 2000, 1500)), -0.35, -0.035), sp, gam);
   const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;

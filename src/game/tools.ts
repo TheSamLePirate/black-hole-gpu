@@ -227,9 +227,10 @@ export class GameTools {
   /**
    * On a site's approach (our worlds): `distKm` before its runway's threshold on the runway's line (or
    * north of a pad), `altKm` up, flying towards it at `speed` m/s — the entry autopilot's glide takes
-   * it from there (the practice of the last minutes of an entry).
+   * it from there (the practice of the last minutes of an entry). `o.acrossKm` puts it off the runway's
+   * line (> 0 to its right), `o.headingDeg` turns its course off the runway's (> 0 clockwise).
    */
-  glideTo(name: string, distKm = 80, altKm = 25, speed = 750) {
+  glideTo(name: string, distKm = 80, altKm = 25, speed = 750, o: { acrossKm?: number; headingDeg?: number } = {}) {
     const site = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase()));
     if (!site) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}`);
     if (universeOf(site.body) !== "ours") throw new Error("glideTo: our worlds' sites");
@@ -256,10 +257,12 @@ export class GameTools {
       north[2] * Math.cos(hd) + east[2] * Math.sin(hd),
     ];
     const ang = (distKm * 1e3) / (b.radius * M_METRES);
+    const right = cross(along, up);
+    const off = ((o.acrossKm ?? 0) * 1e3) / (b.radius * M_METRES);
     const dir = unit([
-      up[0] * Math.cos(ang) - along[0] * Math.sin(ang),
-      up[1] * Math.cos(ang) - along[1] * Math.sin(ang),
-      up[2] * Math.cos(ang) - along[2] * Math.sin(ang),
+      up[0] * Math.cos(ang) - along[0] * Math.sin(ang) + right[0] * off,
+      up[1] * Math.cos(ang) - along[1] * Math.sin(ang) + right[1] * off,
+      up[2] * Math.cos(ang) - along[2] * Math.sin(ang) + right[2] * off,
     ]);
     // (the height above the ground there — the relief's, once known)
     // (over the figure — the Earth's ellipsoid, not its equator's sphere — measured there and set right)
@@ -267,7 +270,9 @@ export class GameTools {
     const h0 = gearHeight(site.body, [P[0] + dir[0] * r0, P[1] + dir[1] * r0, P[2] + dir[2] * r0], t) + GEAR;
     const r = r0 + (altKm * 1e3 - h0) / M_METRES;
     const X: V3 = [P[0] + dir[0] * r, P[1] + dir[1] * r, P[2] + dir[2] * r];
-    const fwd = unit(sub(along, dir.map((x) => x * dot(along, dir)) as V3));
+    const hc = (o.headingDeg ?? 0) * D;
+    const course: V3 = [0, 1, 2].map((i) => along[i]! * Math.cos(hc) + right[i]! * Math.sin(hc)) as V3;
+    const fwd = unit(sub(course, dir.map((x) => x * dot(course, dir)) as V3));
     const g = groundVelocity(site.body, X, t);
     const k = speed / C_MPS;
     const vel: V3 = [g[0] + fwd[0] * k, g[1] + fwd[1] * k, g[2] + fwd[2] * k];
@@ -277,7 +282,7 @@ export class GameTools {
       vel,
       fwd,
       up: dir,
-      note: `${site.name}: ${distKm} km out, ${altKm} km up, ${speed} m/s — the approach`,
+      note: `${site.name}: ${distKm} km out${o.acrossKm ? `, ${o.acrossKm} km across` : ""}, ${altKm} km up, ${speed} m/s — the approach`,
     });
     const c = this.ctx.camera;
     c.entrySite = site;

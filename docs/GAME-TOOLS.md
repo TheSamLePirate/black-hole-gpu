@@ -80,6 +80,7 @@ __bh.game.near("jupiter")                           // beside it at rest, two ra
 __bh.game.near("gargantua", { rM: 12 })             // a static observer 12 M from Gargantua
 __bh.game.wormhole("gargantua")                     // before the far mouth (or "ours": beyond Saturn), at rest
 __bh.game.glideTo("Kennedy", 80, 25, 750)           // the Ranger on a runway's line, 80 km out, 25 km up, 750 m/s — the glide autopilot lands it
+__bh.game.glideTo("Kennedy", 40, 8, 300, { acrossKm: 10, headingDeg: -30 })  // 10 km right of the line, its course 30° left of the runway's
 __bh.game.orbitOver("earth", 48.86, 2.35, { altKm: 400, inc: 51.6 })  // an orbit passing over Paris now
 __bh.game.orbitTarget()                             // around the current target
 __bh.game.placeAt({ frame, X, vel, fwd, up })        // at a state (home frame / the hole's map)

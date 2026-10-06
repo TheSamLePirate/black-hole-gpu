@@ -416,6 +416,7 @@ export default {
   "joining the runway's axis": "ralliement de l'axe de piste",
   "to the final's start": "vers le début de la finale",
   downwind: "vent arrière",
+  "round the alignment circle — too high for the final": "sur le cercle d'alignement — trop haut pour la finale",
   "turning onto the final": "virage en finale",
   "on the final": "en finale",
   "the steep slope": "la pente raide",

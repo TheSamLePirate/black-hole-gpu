@@ -41,7 +41,7 @@ import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
-import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV } from "./util";
+import { LANDING, clamp, finalGate, fmtDur, landingProfile, spinAxis, unitV } from "./util";
 
 declare module "../controls" {
   interface CameraController {
@@ -653,8 +653,11 @@ function glideAlpha(
     if (ls > 0) vStall = sp * Math.sqrt((m * g) / ls);
   }
   // (the speed kept — `prot` × the stall's: the energy the flare needs, ×1.1 in it; slower, the nose down, the path
-  // given up rather than the wing)
-  want -= 0.01 * Math.max(prot * vStall - sp, 0);
+  // given up rather than the wing). Supersonic, by 0.1 rad at most: high in thin air the stall's speed is the
+  // craft's own (Mach 2.4 at 25 km), hundreds of m/s short of the margin — unbounded, the nose went to no lift
+  // at all, the craft fell 9° past its path and pulled 3 g out of the dive
+  const short = 0.01 * Math.max(prot * vStall - sp, 0);
+  want -= (LA?.out.mach ?? 0) > 1 ? Math.min(short, 0.1) : short;
   const a = R.alpha + (clamp(want, 0, stall) - R.alpha) * Math.min(1, dt / 0.35);
   if (agl < 1500) {
     const Msec = 4.925490947e-6 * this.s.massSolar;
@@ -680,7 +683,7 @@ function aglNow(this: CameraController, cam: ReturnType<typeof cameraFrame>, h: 
 
 /**
  * The Ranger's approach to a runway: the axis intercepted well before the final's start (12 km before
- * the threshold, ~3.5 km up) — or, from too close, flown to it and turned there; then the final — the bank against the cross-track error and
+ * the threshold, ~2 km up: finalGate) — or, from too close, flown to it and turned there; then the final — the bank against the cross-track error and
  * its rate, a steep glide path (as the Shuttle's, 18°) to an aim point 2 km short, the flare to a
  * shallow one, the touchdown on the centreline, the wheels and the brakes after.
  */
@@ -716,22 +719,59 @@ function approach(
   const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
   const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
   R.gPrev = gam;
+  // (too high to make it — the gate over the final's start even at the steepest glide, 24°; the final's
+  // corner even down its steepest slope, 19° —: the heading alignment cylinder, as the Shuttle's — a circle
+  // tangent to the runway's axis at the final's start, on the craft's side, its radius a 29° bank's at the
+  // speed then (6–12 km); flown round as many times as the height to lose asks, 17° down at most, and left
+  // at its tangent, on the axis, heading down it, at the final's height. Straight in from 60 km out, 28 km
+  // up, the final began 15 km high and dived at 20° into the runway; a spiral about no point drifted 25 km
+  // off the axis and left it there, 900 m up)
+  const dn = dot3(vh, along);
+  const hT = finalGate();
+  let hacRem = 0;
+  if (R.spiral) {
+    const phi = Math.atan2(xt - R.spiral.side * R.spiral.r, sAl + 12e3);
+    hacRem = (((R.spiral.side * (-R.spiral.side * (Math.PI / 2) - phi)) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    // (left at its tangent once down to the final's height — or below it anywhere: the legs below then)
+    if ((hacRem < 0.35 && agl < hT + 500) || agl < hT - 300) R.spiral = undefined;
+  }
   // (the final: within 6 km of the axis, heading down it — the turn onto it at the final's start
   // leaves the craft a turn's diameter off, ~4 km at 120 m/s: joined from there, not sent back to the
   // start behind it to turn again, and again)
-  const onFinal = sAl > -16e3 && Math.abs(xt) < 6e3 && dot3(vh, along) > 0.5;
+  const onFinal = !R.spiral && sAl > -16e3 && Math.abs(xt) < 6e3 && dn > 0.5;
+  const spiralFrom = () => {
+    if (!R.spiral) R.spiral = { side: Math.sign(xt) || 1, r: clamp(Math.max(sp, 180) ** 2 / (9.81 * Math.tan(0.5)), 6e3, 12e3) };
+  };
   let bank: number,
     gRef: number,
     gdotRef = 0;
-  if (!onFinal) {
+  if (R.spiral) {
+    // (round the circle: the course its tangent's, turned in or out by the distance off it — atan of 1.5 ×
+    // the error over the radius —, the bank its turn's own plus 1.2 × the course's error)
+    R.leg = "spiral";
+    const { side, r } = R.spiral;
+    const pu = sAl + 12e3,
+      pw = xt - side * r;
+    const d = Math.hypot(pu, pw);
+    const chi = Math.atan2(pw, pu) + side * (Math.PI / 2 + Math.atan((1.5 * (d - r)) / r));
+    const psi = Math.atan2(dot3(vh, rgt), dn);
+    const dpsi = Math.atan2(Math.sin(chi - psi), Math.cos(chi - psi));
+    const turn = side * Math.atan((sp * sp) / (9.81 * r)) * clamp(2 - d / r, 0, 1);
+    bank = clamp(1.2 * dpsi + turn, -0.6, 0.6);
+    // (the height to lose over the arc left to the tangent and whole turns, as many as 17° asks — and 8° down
+    // at least, the glide that keeps the speed: shallower, the turns bled it to the stall's margin, the
+    // final began at 120 m/s and sank short of the runway)
+    const per = 2 * Math.PI * r;
+    const n = Math.max(0, Math.ceil(((agl - hT) / Math.tan(0.3) - hacRem * r) / per));
+    gRef = clamp(-Math.atan2(Math.max(agl - hT, 0), Math.max(hacRem * r + n * per, 1500)), -0.42, -0.14);
+  } else if (!onFinal) {
     // (far enough back: the axis joined — the course turned onto it as the offset closes, atan(xt/L)
     // off it, L about a turn's radius: no overshoot. Down the runway but wide: to the final's start.
     // Against it, closer: a circuit — downwind, a turn's diameter off the axis on the craft's side,
-    // then abeam the final's start the turn towards the axis, rolled out on it. A glide path to
-    // 3.5 km over the final's start along the way still to fly.)
+    // then abeam the final's start the turn towards the axis, rolled out on it. A glide path to the
+    // gate over the final's start along the way still to fly.)
     const L0 = Math.max(6e3, (0.8 * Math.min(sp, 350) ** 2) / (9.81 * Math.tan(0.6)));
     const far = sAl < -(12e3 + 0.5 * Math.abs(xt) + L0);
-    const dn = dot3(vh, along);
     let tdir: Vec3 | null = null,
       dGo: number;
     bank = 0;
@@ -776,7 +816,11 @@ function approach(
       const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
       bank = clamp(1.4 * dpsi, -0.6, 0.6);
     }
-    gRef = clamp(-Math.atan2(Math.max(agl - 3500, 0), Math.max(dGo, 1500)), -0.35, -0.035);
+    // (the gate, finalGate: ~2 km over the final's start, on its nominal steep slope — 3.5 km was above
+    // the steepest: every final began with a dive onto it. Down to it 24° at most, the air brake out: the
+    // energy of a hand-over 80 km out, 25 km up)
+    gRef = clamp(-Math.atan2(Math.max(agl - hT, 0), Math.max(dGo, 1500)), -0.42, -0.035);
+    if (sp < 400 && sAl > -40e3 && agl > hT + dGo * Math.tan(0.42) + 500) spiralFrom();
   } else {
     R.side = undefined;
     R.turning = false;
@@ -785,13 +829,17 @@ function approach(
     // the offset closed in ~20 s once near, a turn's width away from it in ~40 —, held; steep to
     // 300 m, then the flare)
     const dpsi = Math.atan2(dot3(vh, rgt), dot3(vh, along));
-    const want = -Math.min(Math.max(Math.atan2(xt, 3000), -0.7), 0.7);
-    // (held down to 15 m — a crosswind drifts the craft off the axis in the last seconds otherwise —,
-    // faded to the wings level at the touchdown)
-    bank = clamp(-1.2 * (dpsi - want), -0.5, 0.5) * (agl < 15 ? agl / 15 : 1);
+    // (the offset closed over a third of the distance left, 600 m at least near the runway: over a fixed
+    // 3 km, a crosswind held the craft 20 m off the axis to its touchdown)
+    const want = -Math.min(Math.max(Math.atan2(xt, clamp(-sAl / 3, 600, 3000)), -0.7), 0.7);
+    // (held down to the touchdown — a crosswind drifts the craft off the axis in the last seconds
+    // otherwise —, to 3° at most there: the wing low into the wind)
+    const bMax = agl < 15 ? 0.05 + (0.45 * agl) / 15 : 0.5;
+    bank = clamp(-1.2 * (dpsi - want), -bMax, bMax);
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
     const L = landingProfile(sAl, agl, sp, R.gOuter);
+    if (R.gOuter === undefined && sAl < -6e3 && agl > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300) spiralFrom();
     if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
     gRef = clamp(Math.atan(L.slope) + clamp((L.h - agl) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
     // (the last metres: the sink eased to a touchdown a real gear takes — 0.8 m/s plus the height over
@@ -807,6 +855,8 @@ function approach(
     R.prof = undefined;
   }
   R.app = { along: sAl, across: xt, final: onFinal, agl, speed: sp, gRef, gam };
+  // (the bank commanded now — the HUD's "cmd", the map's —: the approach's, not the entry guidance's last)
+  R.bank = bank;
   const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
   R.alpha = this.glideAlpha(
     R,

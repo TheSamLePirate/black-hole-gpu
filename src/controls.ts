@@ -37,7 +37,7 @@ import { installJourney } from "./controller/journey";
 import { installTelemetry } from "./controller/telemetry";
 import { installSpectator } from "./controller/spectator";
 import { isTyping } from "./controller/util";
-export { FLIGHT_KEYS, LANDING, TELE_MIN, isTyping, landingProfile, wrapYaw } from "./controller/util";
+export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
 import type { LandingFix } from "./controller/util";
 
@@ -651,8 +651,11 @@ export class CameraController {
     /** the circuit's side of the runway's axis (+1 its right), kept once chosen; its turn begun */
     side?: number;
     turning?: boolean;
-    /** the approach's leg: joining the axis from far back, to the final's start, downwind, the turn, the final */
-    leg?: "join" | "toStart" | "downwind" | "turn" | "final";
+    /** the approach's leg: joining the axis from far back, to the final's start, downwind, the turn, the
+     *  spiral down (too high), the final */
+    leg?: "join" | "toStart" | "downwind" | "turn" | "spiral" | "final";
+    /** the heading alignment cylinder (too high): its side of the axis (the bank's sign), its radius [m]; absent: none */
+    spiral?: { side: number; r: number };
     /** a guidance update in the planner's worker */
     pending?: boolean;
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */

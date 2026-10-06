@@ -107,10 +107,11 @@ export function flareRef(R: { flareTau?: number }, agl: number, steep: number, s
  * there), and from 12 m a flare — a parabola tangent to the ground at the touchdown, 450 m past the
  * threshold. Along the runway's axis x [m from the threshold], the height h [m] over the ground, the
  * speed v [m/s]: the profile's height and slope there. The steep slope's angle follows the craft (the
- * line from it to the corner, 15° at most) until the pull-up nears; then it and the pull-up's length (its
+ * line from it to the corner, 19° at most — the Shuttle's outer glide slope) until the pull-up nears; then it and the pull-up's length (its
  * radius v² / 0.3 g) are frozen (`fix`): the touchdown no longer drifts with the speed or the float.
+ * `goNom` is the steep slope's nominal angle (12.6°): the approach aims for it (`finalGate`).
  */
-export const LANDING = { td: 450, gi: (1.5 * Math.PI) / 180, hF: 12, hC: 90, goMax: 0.26 };
+export const LANDING = { td: 450, gi: (1.5 * Math.PI) / 180, hF: 12, hC: 90, goMax: 0.33, goNom: 0.22 };
 export type LandingFix = { go: number; lb: number };
 export function landingProfile(
   x: number,
@@ -159,6 +160,15 @@ export function landingProfile(
     };
   }
   return { h: hC + (xC - x) * tgo, slope: -tgo, phase: "outer", fix, freeze, aim };
+}
+
+/**
+ * The height [m] the approach brings the craft to over the final's start, `start` m before the threshold:
+ * on the steep slope's nominal angle through the corner — a final begun there flies its own profile (the
+ * steep slope following the craft, 19° at most), not a dive onto it.
+ */
+export function finalGate(start = 12e3): number {
+  return landingProfile(-start, 0, 200, { go: LANDING.goNom, lb: 3000 }).h;
 }
 
 /** A duration [s], briefly. */
