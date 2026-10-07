@@ -35,7 +35,7 @@ exigés par le noyau (le défaut WebGPU est 8 : une partie d'Android et Safari e
 | # | Phase | Contenu | Statut |
 |---|---|---|---|
 | **M1** | PWA et cache | **Service Worker** : l'application en cache-first (coquille, bundle, polices, workers, WASM, textures de base) mis à jour en arrière-plan ; **cache des tuiles** de relief (S3) et d'imagerie (GIBS) par la Cache API avec un budget et une éviction LRU ; **manifest** (icône, couleurs, plein écran) ; préchargement en temps libre de la scène courante ; hors ligne : la dernière scène et ses tuiles. Mesure : rechargement à chaud, lecture hors ligne | fait | `6140d81` |
-| **M2** | Robustesse et chargement | **Recréation à chaud du device** perdu (les ressources GPU reconstruites, le vol sauvé d'abord : plus de rechargement) ; **tiering par micro-banc** de 200 ms au premier lancement (au lieu de la chaîne vendor), mémorisé ; **découpage du code** (`import()` : carte 3D, exports vidéo/EXR, outils dev, offline) ; `bun run build` complet (workers et WASM) | **en partie** (branche `test-kimi`, 05/10) : palier mesuré dans les deux sens et retenu, démarrage borné et diagnostiqué, première image sur 2 pipelines ([`ANALYSE-CHARGEMENT-GPU.md`](ANALYSE-CHARGEMENT-GPU.md) §8). Restent la recréation à chaud du device et le découpage (mesuré non rentable : modules câblés au démarrage) |
+| **M2** | Robustesse et chargement | **Recréation à chaud du device** perdu (les ressources GPU reconstruites, le vol sauvé d'abord : plus de rechargement) ; **tiering par micro-banc** de 200 ms au premier lancement (au lieu de la chaîne vendor), mémorisé ; **découpage du code** (`import()` : carte 3D, exports vidéo/EXR, outils dev, offline) ; `bun run build` complet (workers et WASM) | **fait** (08/10) : **recréation à chaud du device** — le vol sauvé, un nouveau `Renderer` fait sur un nouveau device et glissé sous la même poignée (`util/swappable.ts` : la page, la simulation et les calques gardent la leur), ce que la page lui avait donné repris (`adopt`), la carte et le globe refaits sur le nouveau device ; 357 ms ici (shaders en cache disque) ; deux pertes par minute rattrapées, la troisième rend la main (rechargement proposé) ; e2e `gpu-recovery` (perte simulée, `__bh.gpu.lose()`). Le reste : palier mesuré dans les deux sens et retenu, démarrage borné et diagnostiqué, première image sur 2 pipelines (`test-kimi`, [`ANALYSE-CHARGEMENT-GPU.md`](ANALYSE-CHARGEMENT-GPU.md) §8) ; build complet (workers, WASM, SW). Écarté : le découpage du code (mesuré non rentable, modules câblés au démarrage) |
 | **M3** | Téléchargement | **Maillages quantifiés** (positions 16 bits, normales octaédriques) et **meshopt** (ou l'équivalent sans dépendance) pour l'Endurance, l'ISS, le Ranger, le Lander ; **planètes HD en KTX2** (BC7/ASTC transcodés) au lieu de JPEG décodés en rgba8 ; objectif −60 % du poids, mesuré au premier chargement du Kerr Bench | à faire — cibles mesurées au 08/10 : les 89 JPEG/PNG des planètes (Lune 9,3 Mo, Mars 5,9 Mo, cartes normales et de relief de 3–4 Mo), les maillages `endurance-full` 11 Mo, `iss-lod1` 9,9 Mo, `endurance` 5,8 Mo ; la Terre « high » est déjà en KTX2 (≈ 67 Mo, à l'approche seulement) |
 | **M4** | Météo | **Pluie et visibilité** (brume, brouillard, gouttes sur la verrière), **couches nuageuses** animées (2–3, base et sommet, couverture), **vent en altitude et cisaillement** (le profil avec l'altitude, la rafale près du sol), **manche à air** et **piste choisie selon le vent** ; **METAR en option** (réseau, clé non requise) pour les sites terrestres ; tempêtes de poussière sur Mars ; tout dans la physique (`wind.ts`, `aero.ts`) et le rendu | à faire |
 | **M5** | Aéroports vivants | **Balisage de nuit** des pistes (bord, seuil, axe, PAPI en 3D), marquages, **ILS** au sol (localizer et glide : les aiguilles de l'écran NAV existent — les émetteurs placés par piste), **procédures d'approche** pour les 16 sites ; véhicules et trafic ambiant si le budget le permet | à faire |
@@ -50,24 +50,22 @@ Ordre : M1 → M2 → M3 (le chargement, le plus visible pour qui arrive), M4 �
 
 ## État au 08/10/2026
 
-Fait : **M1** (PWA, `6140d81`, et les caches séparés de `/` et `/test/`, `e0d5f7a`) ; **M2 en partie** (le
-chargement de `test-kimi` : première image sur 2 pipelines, palier mesuré dans les deux sens et retenu,
-démarrage borné). Depuis, le travail est allé aux autopilotes (campagne 15/20) et au HUD
+Fait : **M1** (PWA, `6140d81`, et les caches séparés de `/` et `/test/`, `e0d5f7a`) ; **M2** (le chargement
+de `test-kimi`, puis le 08/10 la recréation à chaud du device). Depuis, le travail est allé aux autopilotes (campagne 15/20) et au HUD
 ([`PLAN-HUB.md`](PLAN-HUB.md)) ; aucune phase M3–M10 n'a commencé.
 
 Vérifié dans le code au 08/10 :
 
 | Manque | Où en est le code |
 |---|---|
-| Perte du device | `renderer.onLost` sauve le vol puis demande de **recharger la page** (`main.ts`) : pas de recréation à chaud |
+| Perte du device | ~~`renderer.onLost` sauve le vol puis demande de recharger la page~~ → **recréé à chaud** (M2, 08/10) |
 | Storage buffers | le noyau exige toujours **10** (`maxStorageBuffersPerShaderStage: 10`, `renderer.ts`) : les appareils à 8 (une partie d'Android, Safari) refusés |
 | Poids | maillages déjà en LOD (ISS 2 + 9,9 Mo, Endurance 1–11 Mo, Ranger 1 Mo, Lander 2 Mo, cockpit 3,1 Mo) ; restent 89 images de planètes en JPEG/PNG et la quantification (M3) |
 | Manette | 4 axes lus (`gamepad.ts`), pas d'écran de mapping ni de courbes (M7) |
 | Audio | `audio/engine.ts` sans `PannerNode` HRTF, sans Doppler, sans voix (M6, M10) |
 
 **Le pilier Technologie (79 → 80)** se gagne d'abord par la robustesse et la compatibilité, avant le monde :
-1. **M2 : la recréation à chaud du device** et son e2e (perte simulée par `device.destroy()`) — l'audit
-   § 3.2 n° 4 n'est toujours pas couvert ;
+1. ~~**M2 : la recréation à chaud du device** et son e2e~~ — **fait le 08/10** (l'audit § 3.2 n° 4 couvert) ;
 2. **M9 : ≤ 8 storage buffers** — ouvre Android et Safari, la plus grosse audience manquante ;
 3. **M3 : le poids** (planètes en KTX2, maillages quantifiés), mesuré au premier chargement du Kerr Bench.
 

@@ -316,6 +316,14 @@ export function installBh(c: BhContext) {
       recorder,
       /** the HUD's room (hud/layout.ts): the panels shown and the boxes the HUD's canvas drew this frame [CSS px] —
        *  the e2e "nothing overlaps" reads them */
+      /** the GPU device (PLAN-MONDE M2): lost on purpose — its recovery tested —, how many frames since */
+      gpu: {
+        lose: () => renderer.simulateLoss(),
+        /** the renderer's generation: one more for each made again after a loss */
+        generation: () => renderer.generation,
+        lost: () => renderer.lost,
+        frames: () => renderer.frameTelemetry,
+      },
       hud: {
         boxes: () => {
           remeasureHud();

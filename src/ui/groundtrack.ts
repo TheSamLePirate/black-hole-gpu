@@ -442,9 +442,17 @@ export class GroundTrack {
   gpuSource: (() => { device: GPUDevice; textures(): MapTextures | null } | null) | null = null;
   private gpu: MapGpu | null = null;
   private gpuTried = false;
+  /** the device the layer was made on */
+  private gpuDevice: GPUDevice | null = null;
   private gpuLayer(): MapGpu | null {
+    // (a new device — the renderer made again after a loss, PLAN-MONDE M2 —: the layer made again on it)
+    const src = this.gpuSource?.();
+    if (src && src.device !== this.gpuDevice) {
+      this.gpu = null;
+      this.gpuTried = false;
+      this.gpuDevice = src.device;
+    }
     if (!this.gpu && !this.gpuTried) {
-      const src = this.gpuSource?.();
       if (!src) return null;
       this.gpuTried = true;
       try {

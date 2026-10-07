@@ -1,4 +1,5 @@
 import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
+import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
@@ -255,9 +256,13 @@ async function main() {
   loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
   loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
   prefetchSkyAssets((u, id) => loading.fetch(u, id));
+  // (the renderer behind a handle: rebuilt on a new device after a loss, the page, the simulation and the
+  // overlays keeping the handle they were given — PLAN-MONDE M2)
   let renderer: Renderer;
+  let rendererSlot: ReturnType<typeof swappable<Renderer>>;
   try {
-    renderer = await Renderer.create(canvas);
+    rendererSlot = swappable(await Renderer.create(canvas));
+    renderer = rendererSlot.proxy;
   } catch (e) {
     startupFailed = true;
     cancelWatchdog();
@@ -278,10 +283,14 @@ async function main() {
     loading: loading.list(),
   }));
 
-  // the device lost: the flight saved, the image frozen, a way back
-  renderer.onLost = (why) => {
-    startupFailed = true;
-    cancelWatchdog();
+  // the device lost: the flight saved first, then the renderer made again on a new device — the flight
+  // going on where it was (PLAN-MONDE M2); a third loss within a minute, or a device that will not come
+  // back: the image frozen, a reload offered
+  let recovering = false;
+  const losses: number[] = [];
+  const recoverGpu = async (why: string) => {
+    if (recovering) return;
+    recovering = true;
     let saved = false;
     try {
       if (settings.autosave) saved = tools.autosaveNow();
@@ -289,11 +298,57 @@ async function main() {
       gpuDiagnostics.record("autosave-after-device-loss", error);
     }
     gpuDiagnostics.record("autosave-after-device-loss", saved ? "saved" : "not saved");
-    fail(
-      `${tf("The graphics device was reset ({0}). Reload the page to go on.", why)}\n\n${t(saved ? "Your flight was saved." : "Your flight could not be saved automatically.")}`,
-    );
-    document.body.classList.add("gpu-lost");
+    const now = performance.now();
+    while (losses.length && now - losses[0]! > 60_000) losses.shift();
+    losses.push(now);
+    const giveUp = (reason: string) => {
+      startupFailed = true;
+      cancelWatchdog();
+      fail(
+        `${tf("The graphics device was reset ({0}). Reload the page to go on.", reason)}\n\n${t(saved ? "Your flight was saved." : "Your flight could not be saved automatically.")}`,
+      );
+      document.body.classList.add("gpu-lost");
+    };
+    if (losses.length > 2) {
+      giveUp(why);
+      return;
+    }
+    document.body.classList.add("gpu-recovering");
+    try {
+      panel.toast(tf("The graphics device was reset ({0}) — restarting it", why));
+    } catch {
+      /* (before the panel exists) */
+    }
+    try {
+      const fresh = await Renderer.create(canvas);
+      fresh.adopt(rendererSlot.current());
+      rendererSlot.swap(fresh);
+      // (what the page sent the old one once: the maps' GPU, the sky, the chart, the image's size)
+      flightHud.mapGpu = renderer.mapGpuSource();
+      void renderer
+        .loadSky()
+        .then(() => touch())
+        .catch((e) => console.warn("Real sky unavailable, using the procedural sky:", e));
+      chartKey = "";
+      resize();
+      touch();
+      displayChanged = true;
+      // (its compile's stages said again by the new renderer: the first image's closed on its first frame —
+      // the splash closes it only once, at the start)
+      const firstFrame = () =>
+        renderer.frameTelemetry.completedFrames > 0 || renderer.lost ? loading.done("pipelines") : requestAnimationFrame(firstFrame);
+      firstFrame();
+      gpuDiagnostics.record("device-recovered", why);
+      panel.toast(t("Graphics device restored — the flight goes on"));
+    } catch (error) {
+      gpuDiagnostics.record("device-recovery-failed", error, true);
+      giveUp(`${why}; ${(error as Error).message}`);
+    } finally {
+      document.body.classList.remove("gpu-recovering");
+      recovering = false;
+    }
   };
+  renderer.onLost = (why) => void recoverGpu(why);
   renderer.onGpuError = (m) => {
     try {
       panel.toast(tf("GPU error: {0}", m.split("\n")[0]!.slice(0, 140)));

@@ -124,6 +124,8 @@ export class Map3D {
   /** the bodies on the GPU, under the canvas (null: none — the canvas draws them) */
   private gpu: MapGpu | null = null;
   private gpuTried = false;
+  /** the device the layer was made on */
+  private gpuDevice: GPUDevice | null = null;
   readonly bar = h("div", "fl-mapbar m3-bar");
   readonly stage = h("div", "m3-stage");
   private crumbs = h("div", "m3-crumbs");
@@ -1100,8 +1102,14 @@ export class Map3D {
 
   /** The GPU's layer, made the first time the host has one (the stage's under-layer). */
   private gpuLayer(): MapGpu | null {
+    // (a new device — the renderer made again after a loss, PLAN-MONDE M2 —: the layer made again on it)
+    const src = this.host.gpu?.();
+    if (src && src.device !== this.gpuDevice) {
+      this.gpu = null;
+      this.gpuTried = false;
+      this.gpuDevice = src.device;
+    }
     if (!this.gpu && !this.gpuTried) {
-      const src = this.host.gpu?.();
       if (!src) return null;
       this.gpuTried = true;
       try {

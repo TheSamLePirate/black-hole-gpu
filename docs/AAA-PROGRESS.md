@@ -341,7 +341,7 @@ Nouvelle scène : *Docking to the tumbling Endurance* (à 300 km, 3 tr/min ; ama
 - n° 1 (de l'orbite à l'atterrissage) : couvert, par les rentrées et les planés du labo et par l'e2e d'atterrissage ;
 - n° 7 (amarrage ISS, missions) : couvert ;
 - n° 2 (les scènes chargées sans erreur) : en partie, par `worlds` et `ui-scenes-loading` ;
-- n° 4 (perte du device) : non couvert.
+- n° 4 (perte du device) : couvert le 08/10 par l'e2e `gpu-recovery` (M2).
 
 ## Plan HUB : hub, télémétrie, graphiques, rapport (terminé, 08/10/2026)
 
@@ -361,6 +361,16 @@ Plan : [`PLAN-HUB.md`](PLAN-HUB.md), HB1 à HB5, commits `7be5b69` à `6d81d41`,
 
 **Reste ouvert** : l'atterrissage autopiloté au Bourget a été noté F une fois sur six exécutions de l'e2e `report` (non diagnostiqué ; le test affiche désormais le contenu de la carte en cas d'échec).
 
+## M2 : la perte du GPU rattrapée (terminé, 08/10/2026)
+
+Avant : une perte du device (pilote réinitialisé, mémoire GPU épuisée, onglet en arrière-plan sur mobile) sauvait le vol puis arrêtait le jeu : « rechargez la page ». Maintenant :
+- le vol est sauvé, puis un **nouveau `Renderer`** est créé sur un nouveau device et glissé sous la **même poignée** (`util/swappable.ts`, un proxy qui relaie lectures, écritures et appels, les méthodes liées une fois par instance) : la page, la simulation, les calques et l'automatisation gardent la leur ;
+- le nouveau reprend ce que la page avait donné à l'ancien (`Renderer.adopt` : rappels, palier mesuré, horloge de l'eau, tableau de bord du cockpit) ; la page lui renvoie le ciel, la carte des étoiles, la taille de l'image ; la carte 3D et le globe refont leur couche GPU sur le nouveau device ; l'ancien est réduit au silence ;
+- **357 ms** ici pour revenir (les shaders sont dans le cache disque) ; deux pertes par minute sont rattrapées, une troisième rend la main avec le message d'avant ;
+- e2e **`gpu-recovery`** : perte simulée (`__bh.gpu.lose()`, le device détruit, annoncé comme une réinitialisation), deux récupérations, le même vol (altitude, temps), puis l'abandon à la troisième. `rates`, `smoke`, `gpu-startup` inchangés (le proxy ne coûte rien de mesurable).
+
+L'audit § 3.2 n° 4 (perte du device) est **couvert**.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -373,7 +383,7 @@ Par ordre de gain :
    - le retour par le trou de ver et Gargantua (points 9 et 10 du plan des autopilotes) ;
    - le flottement au Bourget ;
    - le F aléatoire de l'atterrissage au Bourget (e2e `report`, 1 sur 6).
-3. **Robustesse (M2)** : la **recréation à chaud du device** perdu, et un test e2e de la perte du GPU. Il faut aussi stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
+3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
    - météo ;
@@ -385,6 +395,8 @@ Par ordre de gain :
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **08/10/2026 — M2 : la perte du GPU rattrapée** sans rechargement (le renderer refait sous la même poignée, 357 ms ; e2e `gpu-recovery`).
 
 - **08/10/2026 — plan HUB terminé** (HB1–HB5, `7be5b69`…`6d81d41`, poussé) : mise en page sans chevauchement, carte du hub homogène, graphe agrandi, télémétrie et CSV, rapport de vol noté ; sauvegardes fidèles. UI 77 → 79, Produit 71 → 72.
 

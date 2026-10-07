@@ -1200,9 +1200,10 @@ export class Renderer {
     const remembered = rememberedLevel(adapterId(r.adapter));
     if (remembered !== null && remembered !== r.tier.level) r.tier = tierAt(remembered, `${r.tier.label} · remembered`);
     void lost.then((info) => {
-      r.lost = info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
+      // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
+      r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
-      if (info.reason !== "destroyed") r.onLost?.(r.lost);
+      if (info.reason !== "destroyed" || r.simulatedLoss) r.onLost?.(r.lost);
     });
     // (errors the code did not scope: counted, the first ones told — a silent black image otherwise;
     // the console has the first ten, the diagnostic counts them all)
@@ -3847,6 +3848,39 @@ export class Renderer {
   /** the device was lost (its reason), or null */
   lost: string | null = null;
   onLost?: (why: string) => void;
+  /** this renderer's generation: 1 at the start, one more for each made again after a loss (adopt) */
+  generation = 1;
+  /** the loss was simulated (simulateLoss) */
+  private simulatedLoss = false;
+
+  /** The device lost on purpose — its recovery tested (PLAN-MONDE M2): destroyed, told as a reset. */
+  simulateLoss() {
+    this.simulatedLoss = true;
+    this.device.destroy();
+  }
+
+  /**
+   * A renderer made on a new device after this one's was lost takes over what the page gave the old one
+   * (PLAN-MONDE M2): its callbacks, the tier measured this session, the profiler's switch, the refresh
+   * measured, the cockpit's dash. The rest the page sends each frame, or the renderer loads as it is
+   * needed (the maps, the meshes) — the sky and the chart, the page sends again.
+   */
+  adopt(old: Renderer) {
+    this.generation = old.generation + 1;
+    this.onLost = old.onLost;
+    this.onGpuError = old.onGpuError;
+    this.onAssets = old.onAssets;
+    this.exportWords = old.exportWords;
+    this.tier = old.tier;
+    this.refreshMs = old.refreshMs;
+    this.cockpitDash = old.cockpitDash;
+    this.prof.enabled = old.prof.enabled;
+    this.water = { ...old.water };
+    // (the old one silenced: a frame of it still in flight, failing, no longer starts a recovery)
+    old.onLost = undefined;
+    old.onGpuError = undefined;
+    old.onAssets = null;
+  }
   /** uncaptured GPU errors so far, and who hears of them */
   gpuErrors = 0;
   onGpuError?: (message: string) => void;
