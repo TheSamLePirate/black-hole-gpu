@@ -6,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // are the HUD gallery's (tests/hud/states/, saved by the flight lab beside its pictures). Before: a Lander
 // saved descending over Kennedy reloaded in its 500 km orbit, or by the wormhole after another flight; a
 // docking to the ISS reloaded by the wormhole; a deorbit to Le Bourget aimed at Baikonur; a fall saved
-// after its deorbit burn planned another deorbit, found none and let go.
+// after its deorbit burn planned another deorbit, found none and let go; so did a deorbit waited for.
 
 const state = (name: string) => Bun.file(`${import.meta.dir}/../hud/states/${name}.json`).text();
 
@@ -59,8 +59,12 @@ describe.skipIf(!E2E)("a saved flight reloads as it was", () => {
   }, 120_000);
 
   test("the entry: its site kept, and a fall saved after the burn guided on, not a deorbit planned again", async () => {
+    // (the deorbit waited for: taken up as planned — planned anew from its burn's moment, its pass was gone:
+    // "no deorbit within a day of orbits", and the autopilot let go)
     const wait = await load("03-deorbit");
     expect(wait.site).toBe("Paris – Le Bourget");
+    expect(wait.auto).toBe("entry");
+    expect(wait.entry).toBe("wait");
     const fall = await load("04-entry");
     expect(fall.auto).toBe("entry");
     expect(fall.site).toBe("Paris – Le Bourget");

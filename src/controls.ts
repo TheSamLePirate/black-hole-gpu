@@ -634,6 +634,8 @@ export class CameraController {
    *  [m/s]), the guidance and its bank, the angle of attack, the next guidance's update [s]. */
   entryRun: {
     phase: "plan" | "wait" | "burn" | "entry" | "glide";
+    /** the heat's last half-minute (scene s, W/m²): its trend on the hub's card */
+    heatHist?: [number, number][];
     site: Site | null;
     tBurn: number;
     dv: number;
@@ -997,6 +999,15 @@ export class CameraController {
 
   /** the pilot's warp while our approach sets it (given back on arrival) */
   ourWarp: number | null = null;
+
+  /** a saved game's deorbit, reloaded (game/tools.ts load): taken up as planned by the entry autopilot's
+   *  next start, if its burn is still ahead — replanned from the burn's own moment, its pass was gone */
+  entryResume: {
+    tBurn: number;
+    dv: number;
+    trim: { t: number; dv: number } | null;
+    plan: { heat: number; shield: number; g: number } | null;
+  } | null = null;
 
   /** a mission into orbit, its capture done: the height it asked, for the circularization's last look —
    *  arrived more than a little off it (the aim's miss, a correction flown short), a Hohmann to it */

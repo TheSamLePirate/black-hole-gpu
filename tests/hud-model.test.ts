@@ -41,3 +41,11 @@ test("in the air: the airspeed; on demand: the target's", () => {
   expect(shownSpeed(at({ speedMode: "target" }), ph("flight", "orbit"))).toMatchObject({ mode: "TGT", ref: "rel. Moon (target)" });
   expect(hudMode(at({ region: "hole" }), ph("flight", "kerr"))).toBe("KERR");
 });
+
+test("parked in the wind: the ground's speed, not the wind's through the air", () => {
+  // (a Lander standing on its pad in a 3.5 m/s wind once read SPEED · AIR 3.5 m/s)
+  const parked = at({ landed: true, air: { inAir: true, speed: 3.5 }, surface: { landed: true, vHor: 0, vVert: 0 } });
+  const s = shownSpeed(parked, ph("landed", "ground"));
+  expect(s.ref).toBe("ground");
+  expect(s.v).toBe(0);
+});

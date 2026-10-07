@@ -51,6 +51,7 @@ export default {
   "CIRCULAR (MEAN)": "CIRCULAIRE (MOYENNE)",
   SWING: "ÉCART",
   "circular {0} ± {1} (mean)": "circulaire {0} ± {1} (moyenne)",
+  "circ. {0} ± {1} km": "circ. {0} ± {1} km",
   APOAPSIS: "APOAPSIDE",
   AUTOPILOT: "PILOTE AUTO",
   horizon: "horizon",

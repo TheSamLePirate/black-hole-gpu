@@ -1781,9 +1781,46 @@ function hubCompute(this: CameraController): HubInfo | null {
     const LA = this.airFlight.last;
     if (R.phase === "entry") {
       const miss = R.guid?.lastMiss;
+      // (the entry's figures, one card: the site and how far off the heading to it, the flow, the bank asked
+      // and flown, the load and its peak, the heat and its trend, the peaks still ahead — the entry's own
+      // box once said them again, over the speed tape)
+      const D = 180 / Math.PI;
+      const side = (rad: number) => (Math.abs(rad * D) < 0.5 ? "" : rad > 0 ? " L" : " R");
+      const EI = this.entryInfo();
       const rows: [string, string][] = [[t("Site"), site]];
-      if (LA) rows.push(["Mach", LA.out.mach.toFixed(1)], [t("Height"), km(LA.h)]);
-      rows.push([t("Bank"), `${Math.round((R.bank * 180) / Math.PI)}°`]);
+      if (EI && Number.isFinite(EI.range))
+        rows.push([t("Range"), `${km(EI.range)} · Δψ ${Math.abs(EI.dpsi * D).toFixed(1)}°${side(EI.dpsi)}`]);
+      // (the flow, the load and the heat once in the air — above it, zeros)
+      const inAir = !!LA && LA.out.q > 1;
+      if (inAir) rows.push([t("Flow"), `M ${LA.out.mach.toFixed(1)} · q ${(LA.out.q / 1e3).toFixed(1)} kPa`]);
+      if (LA) rows.push([t("Height"), km(LA.h)]);
+      const bankNow = (this.attitudeNow() as { bank?: number }).bank ?? 0;
+      rows.push([
+        t("Bank"),
+        tf(
+          "cmd {0} · now {1}",
+          `${Math.round(Math.abs(R.bank * D))}°${side(-R.bank)}`,
+          `${Math.round(Math.abs(bankNow * D))}°${side(-bankNow)}`,
+        ),
+      ]);
+      const AF = this.airFlight;
+      if (LA && inAir) {
+        rows.push([t("Load"), `${AF.g.toFixed(1)} g · max ${AF.gPeak.toFixed(1)}`]);
+        // (the heat's trend over the last ten seconds of the fall: rising, falling, holding)
+        const H = (R.heatHist ??= []);
+        if (!H.length || nowS - H[H.length - 1]![0] >= 1 || nowS < H[H.length - 1]![0]) H.push([nowS, LA.out.heat]);
+        while (H.length > 30) H.shift();
+        const back = H.find(([ts]) => nowS - ts <= 10) ?? H[0]!;
+        const q0 = back[1],
+          q1 = LA.out.heat;
+        const trend = q1 > q0 * 1.05 + 50 ? " ▲" : q1 < q0 * 0.95 - 50 ? " ▼" : "";
+        rows.push([t("Heat"), `${(q1 / 1e4).toFixed(q1 < 1e5 ? 1 : 0)} W/cm²${trend}`]);
+      }
+      if (R.plan)
+        rows.push([
+          t("Peaks ahead"),
+          `${(R.plan.heat / 1e4).toFixed(0)} W/cm² · ${Math.round(R.plan.shield)} K · ${R.plan.g.toFixed(1)} g`,
+        ]);
       return {
         ...base(
           "ENTRY",

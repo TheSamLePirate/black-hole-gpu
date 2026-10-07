@@ -2297,6 +2297,9 @@ body.mobile .sp-opener span { display: none; }
 body.mobile .sp-opener .ico { width: 19px; height: 19px; }
 body.mobile #hud { top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); max-width: calc(100vw - 72px); }
 body.mobile.piloting #hud { display: none; }
+/* (flying: the render's status pill under the mission bar — it showed half cut ("Refin", "Live · E");
+   kept out of the way while its details are closed, I opens them) */
+body.piloting #hud:not(.open) { visibility: hidden; }
 /* (the settings open: over everything, the whole height on its side — upright, the bottom sheet — the
    touch controls out of the way) */
 body.mobile:not(.portrait) #panel.sp:not(.collapsed) {
@@ -2460,15 +2463,6 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .m3-stage.gpu > .fl-map { position: relative; background: none; }
 .fl-root.mapview .m3-stage.gpu { background: none; }
 
-/* ---- the entry's panel (flighthud drawEntry): the guidance shown, left of the centre */
-.fl-entry { position: absolute; left: 120px; top: 30vh; width: 270px; display: flex; flex-direction: column; gap: 2px; }
-.fl-entry[hidden] { display: none; }
-.fl-entry .fe-row { display: flex; justify-content: space-between; gap: 10px; font: 600 12px var(--hud-font); letter-spacing: 0.04em; }
-.fl-entry .fe-row span { color: var(--hud-dim); text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; }
-.fl-entry .fe-row b { font: 500 12px var(--mono); color: #eef5ff; white-space: nowrap; }
-.fl-entry .fe-row b i { font-style: normal; font-size: 11px; color: var(--hud-amber); letter-spacing: -0.08em; }
-.fl-entry .fe-row.hot b { color: #ffb4a8; }
-.fl-entry .fe-row.dim b { color: var(--hud-dim); }
 
 /* ---- the map under a finger (U5.4): its controls 44 px tall in the map view, the timeline's track
    as tall, so a finger finds them (the mini-map keeps its size: its bar is the open-the-map door) */

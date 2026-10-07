@@ -41,8 +41,10 @@ export function shownSpeed(i: SpeedInput, phase?: FlightPhase | null): ShownSpee
   const name = (b: string | null) => (b ? ((BODY_NAMES as Record<string, string>)[b] ?? b) : "");
   if (mode === "TGT") return { v: i.speed, ref: tf("rel. {0} (target)", name(i.target)), mode };
   if (mode === "SRF") {
-    // (through the air while in it; over the ground on it, or below the air)
-    if (i.air?.inAir && Number.isFinite(i.air.speed)) return { v: i.air.speed / C_MPS, ref: t("air"), mode };
+    // (through the air while flying in it; over the ground standing on it — a craft parked in the wind read
+    // the wind as its speed —, or below the air)
+    const parked = !!(i.landed || i.surface?.landed);
+    if (!parked && i.air?.inAir && Number.isFinite(i.air.speed)) return { v: i.air.speed / C_MPS, ref: t("air"), mode };
     const sf = i.surface;
     if (sf && Number.isFinite(sf.vHor)) return { v: Math.hypot(sf.vHor, sf.vVert) / C_MPS, ref: t("ground"), mode };
   }

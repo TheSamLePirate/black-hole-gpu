@@ -144,6 +144,8 @@ function newFlight(this: CameraController) {
   this.wormholePending = 0;
   this.wormholePredictionError = null;
   this.entryRun = null;
+  this.entryResume = null;
+  this.heightGoal = null;
   this.dockAuto = null;
   this.ourCirc = null;
   // (the warp: the scene's, nothing held back by the last flight's rails or ceilings, no crossing's)
@@ -1410,8 +1412,26 @@ function entryStep(
     if (h > top && !falling) {
       // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
       if (!site) return say(tf("Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)", name));
-      this.onPilotMessage?.(tf("Entry to {0}: planning the deorbit…", site.name));
-      planBurn(this.entryRun, site, ranger ? 16 : 96, false);
+      // (a saved game's deorbit, its burn still ahead: taken up as planned — replanned from the burn's own
+      // moment, its pass was gone and none came within a day)
+      const RS = this.entryResume;
+      this.entryResume = null;
+      // (its burn ahead, or under way when saved — what was left of it fired at once)
+      if (RS && RS.tBurn > fr.now - 120 && RS.dv > 0.5) {
+        Object.assign(this.entryRun, {
+          phase: "wait",
+          tBurn: RS.tBurn,
+          dv: RS.dv,
+          trim: RS.trim ? { ...RS.trim, done: 0, firing: false } : undefined,
+          plan: RS.plan ?? undefined,
+        });
+        this.onPilotMessage?.(
+          tf("Entry to {0}: the deorbit burn in {1}, {2} m/s", site.name, fmtDur(Math.max(RS.tBurn - fr.now, 0)), RS.dv.toFixed(0)),
+        );
+      } else {
+        this.onPilotMessage?.(tf("Entry to {0}: planning the deorbit…", site.name));
+        planBurn(this.entryRun, site, ranger ? 16 : 96, false);
+      }
     } else
       this.onPilotMessage?.(
         site ? tf("Entry: guided to {0}", site.name) : tf("Entry: no site on {0} — lift up, the controls yours when slow", name),

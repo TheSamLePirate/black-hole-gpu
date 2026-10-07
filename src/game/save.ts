@@ -46,6 +46,13 @@ export interface GameSave {
     tunnelEntry?: "ours" | "gargantua";
     /** the site the entry autopilot flies to (its name; older saves: none — the nearest pass's) */
     entrySite?: string | null;
+    /** the deorbit planned and waited for (the entry frame's seconds): taken up again, not planned anew */
+    entryPlan?: {
+      tBurn: number;
+      dv: number;
+      trim: { t: number; dv: number } | null;
+      plan: { heat: number; shield: number; g: number } | null;
+    } | null;
   };
   /** the fleet: the craft flown, the ones coasting, the docks (older saves: none — the craft the settings
    *  name is the one flown, the others where the scene puts them) */

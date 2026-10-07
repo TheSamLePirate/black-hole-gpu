@@ -562,6 +562,16 @@ export class GameTools {
         properTime: c.properTime,
         tunnelEntry: c.tunnelEntry ?? undefined,
         entrySite: c.entrySite?.name ?? null,
+        // (waited for, or under way: what is left of it)
+        entryPlan:
+          c.entryRun && (c.entryRun.phase === "wait" || c.entryRun.phase === "burn")
+            ? {
+                tBurn: c.entryRun.tBurn,
+                dv: c.entryRun.dv - c.entryRun.done,
+                trim: c.entryRun.trim && !c.entryRun.trim.done ? { t: c.entryRun.trim.t, dv: c.entryRun.trim.dv } : null,
+                plan: c.entryRun.plan ?? null,
+              }
+            : null,
       },
       // (the fleet as it flies: the craft flown, the others' coasts, the docks — reloaded, the craft flown
       // is not "switched to": a Lander saved over Kennedy once reloaded in its 500 km orbit)
@@ -620,6 +630,7 @@ export class GameTools {
     // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur)
     const site = save.ship.entrySite ? SITES.find((q) => q.name === save.ship.entrySite) : undefined;
     if (site) c.entrySite = site;
+    c.entryResume = save.ship.entryPlan ?? null;
     // (the free camera falling freely: again, from its saved velocity)
     if (!s.ship && !!save.camera?.gravity !== c.gravity) {
       const vel = [s.velR, s.velT, s.velP];

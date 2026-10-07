@@ -14,18 +14,7 @@ export interface Box {
 }
 
 /** The panels that hold their place on the screen while flying (the passing menus and toasts left out). */
-const PANELS = [
-  ".fl-mission",
-  ".fl-target",
-  ".fl-tel",
-  ".fl-orbit",
-  ".fl-right",
-  ".fl-bezel",
-  ".fl-hubcard",
-  ".fl-airdata",
-  ".fl-entry",
-  ".kh.show",
-];
+const PANELS = [".fl-mission", ".fl-target", ".fl-tel", ".fl-orbit", ".fl-right", ".fl-bezel", ".fl-hubcard", ".fl-airdata", ".kh.show"];
 
 let cache: Box[] = [];
 let at = -1e9;

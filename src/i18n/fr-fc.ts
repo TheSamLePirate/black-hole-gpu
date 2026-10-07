@@ -520,6 +520,7 @@ export default {
   "Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)":
     "Rentrée : aucun site d'atterrissage sur {0} — pilotez la rentrée à la main (F : la loi avion tient α en hypersonique)",
   "Entry to {0}: planning the deorbit…": "Rentrée vers {0} : planification de la désorbitation…",
+  "Entry to {0}: the deorbit burn in {1}, {2} m/s": "Entrée vers {0} : poussée de désorbitation dans {1}, {2} m/s",
   "Entry: no deorbit to {0} within a day of orbits — the orbit never passes near it":
     "Rentrée : aucune désorbitation vers {0} sur une journée d'orbites — l'orbite n'en passe jamais près",
   "Entry to {0}: the deorbit burn in {1} min {2} s, {3} m/s — then {4} W/cm², {5} g, the shield {6} K at most":

@@ -244,66 +244,7 @@ export class FlightHud {
   /** the alert whose explanation is open (a click on its line), "" none */
   private alertOpen = "";
   private caution = new MasterCaution();
-  /** the entry's panel (hud: the guidance shown — the site's range, the bank, the load, the heat) */
-  private entryBox = h("div", "fl-entry fl-panel");
-  private entryHeat: number[] = [];
-  private entryHeatAt = -1;
   private alertSig = "";
-
-  /**
-   * The entry's panel, while the guided entry flies (the air below, Mach above the handover): how far
-   * the site, how far off its heading, the bank commanded and flown, the load and its peak, the heat
-   * and its last half-minute, the flow — the Shuttle's ENTRY TRAJ, in a box.
-   */
-  private drawEntry(i: Info, time: number) {
-    const E = i.entry,
-      A = i.air;
-    // (not with the hub's card up: it is the entry's card — the same figures twice, the box over the speed tape)
-    const on = !!E && E.phase === "entry" && !!A && this.density < 2 && !this.mapView && !i.hub;
-    this.entryBox.hidden = !on;
-    if (!on || !E || !A) {
-      this.entryHeat = [];
-      return;
-    }
-    const D = 180 / Math.PI;
-    const side = (rad: number) => (Math.abs(rad * D) < 0.5 ? "" : rad > 0 ? " L" : " R");
-    const km = (m: number) => (Number.isFinite(m) ? `${Math.round(m / 1e3).toLocaleString("en")} km` : "—");
-    // (the heat's last half-minute of the scene's time, a sample a second)
-    const tS = time * M_SECONDS;
-    if (tS - this.entryHeatAt >= 1 || tS < this.entryHeatAt) {
-      this.entryHeatAt = tS;
-      this.entryHeat.push(A.heat);
-      if (this.entryHeat.length > 24) this.entryHeat.shift();
-    }
-    // (between the half-minute's least and most: the trend, not the level — flat when it holds)
-    const lo = Math.min(...this.entryHeat),
-      hi = Math.max(...this.entryHeat);
-    const bars = "▁▂▃▄▅▆▇█";
-    const spark = this.entryHeat
-      .map((x) => bars[hi - lo < 0.02 * Math.max(hi, 1) ? 3 : Math.min(7, Math.floor(((x - lo) / (hi - lo)) * 7.999))])
-      .join("");
-    const row = (k: string, v: string, cls = "") => `<div class="fe-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
-    const P = E.plan;
-    // (the attitude, when the craft has one over the ground)
-    const bankNow = "bank" in A && Number.isFinite(A.bank) ? A.bank : 0;
-    this.entryBox.innerHTML =
-      `<div class="fl-title">${t("Entry")}${E.site ? ` · ${E.site.name}` : ""}</div>` +
-      row(t("Range"), `${km(E.range)} · Δψ ${Number.isFinite(E.dpsi) ? `${Math.abs(E.dpsi * D).toFixed(1)}°${side(E.dpsi)}` : "—"}`) +
-      row(
-        t("Bank"),
-        tf(
-          "cmd {0} · now {1}",
-          `${Math.abs(E.bank * D).toFixed(0)}°${side(-E.bank)}`,
-          `${Math.abs(bankNow * D).toFixed(0)}°${side(-bankNow)}`,
-        ),
-      ) +
-      row(t("Load"), `${A.g.toFixed(1)} g · max ${A.gPeak.toFixed(1)}`, A.margins.g > 0.75 ? "hot" : "") +
-      row(t("Heat"), `${(A.heat / 1e4).toFixed(0)} W/cm²`, A.margins.shield > 0.85 ? "hot" : "") +
-      row(t("Heat · 30 s"), `<i>${spark}</i>`) +
-      row(t("Flow"), `M ${A.mach.toFixed(1)} · q ${(A.q / 1e3).toFixed(1)} kPa`) +
-      (P ? row(t("Peaks ahead"), `${(P.heat / 1e4).toFixed(0)} W/cm² · ${Math.round(P.shield)} K · ${P.g.toFixed(1)} g`, "dim") : "");
-  }
-
   /** The master caution acknowledged (Enter, or the lamp clicked): the lamp out, the warning silent. */
   acknowledge() {
     this.caution.acknowledge();
@@ -1218,7 +1159,6 @@ export class FlightHud {
     this.root.append(
       this.spectBar,
       this.warn,
-      this.entryBox,
       this.airData,
       this.mission,
       this.dock,
@@ -1699,7 +1639,6 @@ export class FlightHud {
 
   private drawText(i: Info, time: number) {
     const s = this.s;
-    this.drawEntry(i, time);
     const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : "—");
     // mission bar
     const M = this.missionEls;
@@ -1860,7 +1799,8 @@ export class FlightHud {
       const circ = ks.orbit?.circular;
       O.el!.textContent = ks.orbit
         ? circ
-          ? `${tf("circular {0} ± {1} (mean)", km(circ.km), `${circ.swingKm.toFixed(1)} km`)} · i ${ks.orbit.incDeg.toFixed(1)}°`
+          ? // (short: the panel's width — "circular 291 km ± 10.2 km (mean) · i 28.5" ran past its edge)
+            `${tf("circ. {0} ± {1} km", Math.round(circ.km).toLocaleString("en"), circ.swingKm.toFixed(0))} · i ${ks.orbit.incDeg.toFixed(1)}°`
           : `i ${ks.orbit.incDeg.toFixed(1)}° · e ${ks.orbit.ecc.toFixed(3)}`
         : "—";
     }
@@ -2313,7 +2253,9 @@ export class FlightHud {
    */
   private drawAirData(i: Info) {
     const A = i.air;
-    const show = !!A && (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) && this.density < 2;
+    // (not standing still on the ground: α and β of a craft parked in the wind are noise)
+    const parked = !!(i.landed || i.surface?.landed);
+    const show = !!A && !parked && (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) && this.density < 2;
     this.airData.hidden = !show;
     if (!show || !A) return;
     const d = 180 / Math.PI;
@@ -2793,8 +2735,12 @@ export class FlightHud {
     // height and speed
     small(t("ALTITUDE"), 2, 11);
     big(st.kerr ? `r ${st.kerr.r.toFixed(2)} M` : km(st.altKm), 2, 29);
-    small(t("SPEED"), W / 2 + 4, 11);
-    big(ms(st.speed), W / 2 + 4, 29);
+    // (the speed the tapes show: over the ground or through the air near it — a Lander standing on its pad
+    // once read 408.6 m/s, the Earth's turn —, relative to the body in space)
+    const sp = shownSpeed(i, this.phase);
+    const surf = sp.mode === "SRF";
+    small(surf ? `${t("SPEED")} · ${sp.ref.toUpperCase()}` : t("SPEED"), W / 2 + 4, 11);
+    big(ms(surf ? sp.v * C_MPS : st.speed), W / 2 + 4, 29);
     ctx.font = `500 ${S(10)}px ${MONO}`;
     ctx.fillStyle = st.vVert < 0 ? "#ffb0a0" : "#9fe3ff";
     ctx.textAlign = "left";
