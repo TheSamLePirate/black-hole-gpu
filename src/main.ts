@@ -29,6 +29,8 @@ import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targe
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
+import { recorder } from "./game/recorder";
+import { shownSpeed } from "./ui/hud/model";
 import { CockpitScreens } from "./ui/cockpitscreens";
 import { VESSELS } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
@@ -76,6 +78,7 @@ import { Take, type TakeState } from "./take";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
 import { solarBody, M_METRES } from "./system/solar";
+import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpLadder } from "./clock";
 import { loading } from "./loading";
@@ -2386,6 +2389,23 @@ async function main() {
             flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time)
           ),
         );
+      // (the flight's recorder — game/recorder.ts —: the tablet's TELEMETRY page, its CSV)
+      if (settings.ship && camera.piloting && status && info.region !== "hole") {
+        const A = info.air;
+        recorder.push({
+          t: sim.time * M_SECONDS,
+          alt: status.altKm * 1000,
+          speed: shownSpeed(info).v * C_MPS,
+          vz: status.vVert,
+          g: A?.g ?? 0,
+          q: A?.q ?? 0,
+          mach: A?.mach ?? 0,
+          heat: A?.heat ?? 0,
+          throttle: info.throttle,
+          dv: camera.spent * C_MPS,
+          fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
+        });
+      }
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
       tablet.tick(now);

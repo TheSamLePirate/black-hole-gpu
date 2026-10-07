@@ -207,6 +207,12 @@ body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.ma
 .fc-ops.tb-away > :is(.fc-head, .fc-tabs, .fc-body, .fc-result) { display: none !important; }
 .tb-page[hidden] { display: none; }
 .tb-page { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+/* the tablet's TELEMETRY page (ui/telemetry-page.ts): the curves chosen, the window, the CSV, the plot */
+.tm-page { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.tm-chips, .tm-wins { display: flex; flex-wrap: wrap; gap: 3px; }
+.tm-chips .k-btn, .tm-wins .k-btn { padding: 4px 7px; font-size: 10.5px; letter-spacing: 0.06em; }
+.tm-chips .k-btn.on { box-shadow: inset 0 -2px 0 var(--tm-ink); }
+.tm-cv { display: block; width: 100%; height: 440px; }
 /* the camera's and the sky's panels, moved in: in the flow, at the panel's width */
 #cam-pop.embedded, #sky-pop.embedded {
   position: static; inset: auto; transform: none; width: auto; max-height: none; margin: 0; padding: 0;

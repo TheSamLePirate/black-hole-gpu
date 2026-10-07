@@ -1,4 +1,5 @@
 import { tunnelEntrySide } from "../system/wormhole-map";
+import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
@@ -145,6 +146,8 @@ function newFlight(this: CameraController) {
   this.wormholePredictionError = null;
   this.entryRun = null;
   this.entryResume = null;
+  // (a new flight, a new record — the tablet's telemetry)
+  recorder.reset();
   this.heightGoal = null;
   this.dockAuto = null;
   this.ourCirc = null;
