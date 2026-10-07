@@ -811,8 +811,8 @@ export default {
     "12 août 2026 au maximum de l'éclipse, depuis 3 000 km au-dessus de la mer du Labrador : l'ombre, 290 km de large, assombrit les nuages à l'ouest de l'Islande, la pénombre atténue tout l'Arctique autour (éphémérides DE440 du JPL).",
   "The Endurance in Earth orbit": "L'Endurance en orbite terrestre",
   "Docking to the tumbling Endurance": "Amarrage à l'Endurance en rotation",
-  "The Endurance turns about its axis at 3 rpm, 220 km up, the Lander on its aft port: match its turn and dock the Ranger to its hub (B: auto-dock), stop the turn (the SAS), then fly the Endurance ([ ]) up to a stable 300 km orbit.":
-    "L'Endurance tourne sur son axe à 3 tr/min, à 220 km d'altitude, le Lander sur son port arrière : synchronisez-vous sur sa rotation et amarrez le Ranger à son moyeu (B : amarrage auto), stoppez la rotation (le SAS), puis pilotez l'Endurance ([ ]) jusqu'à une orbite stable de 300 km.",
+  "The Endurance turns about its axis at 3 rpm, 300 km up, the Lander on its aft port: match its turn and dock the Ranger to its hub (B: auto-dock), stop the turn (the SAS), then fly the Endurance ([ ]) up to a 400 km orbit.":
+    "L'Endurance tourne sur son axe à 3 tr/min, à 300 km d'altitude, le Lander sur son port arrière : synchronisez-vous sur sa rotation et amarrez le Ranger à son moyeu (B : amarrage auto), stoppez la rotation (le SAS), puis pilotez l'Endurance ([ ]) jusqu'à une orbite de 400 km.",
   "The Endurance 800 km up, the Ranger on its hub's fore port: fly the ring ship ([ ]: the Ranger, the Lander — 500 km up). Docked, the craft fly together, their masses added.":
     "L'Endurance à 800 km d'altitude, le Ranger sur le port avant de son moyeu : pilotez le vaisseau-anneau ([ ] : le Ranger, le Lander — à 500 km). Amarrés, les engins volent ensemble, leurs masses additionnées.",
   "The Lander in Earth orbit": "Le Lander en orbite terrestre",

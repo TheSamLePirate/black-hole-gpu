@@ -56,9 +56,9 @@ Chaque défaut trouvé est corrigé avec un test de régression, puis le scénar
 
 ## Nouvelle scène : l'Endurance en rotation
 
-« Earth: the Endurance tumbling, 220 km up » (galerie : *Docking to the tumbling Endurance*). L'Endurance tourne à 3 tr/min (18°/s) autour de l'axe de son moyeu, à 220 km, avec le Lander amarré au port arrière. Le Ranger, piloté, est à 150 m sur l'axe du port avant.
-Il faut d'abord s'amarrer en accordant la rotation (B : amarrage automatique). La capture exige moins de 3°/s de rotation relative. Il faut ensuite arrêter la rotation de l'ensemble avec le SAS (environ 7 min avec les seuls propulseurs du Ranger), puis prendre les commandes de l'Endurance (`[ ]`) et monter à 300 km.
-Le scénario `endurance-tumbling-dock` réussit : amarrage à 0,09 m/s, rotation arrêtée en 443 s, transfert de Hohmann de 51 m/s, orbite à 300 × 302 km. Les 12 scénarios d'amarrage réussissent tous (12/12).
+« Earth: the Endurance tumbling, 300 km up » (galerie : *Docking to the tumbling Endurance*). L'Endurance tourne à 3 tr/min (18°/s) autour de l'axe de son moyeu, à 300 km (au-dessus de l'air du jeu, qui s'arrête vers 296 km : orbite sur rails, coque froide), avec le Lander amarré au port arrière. Le Ranger, piloté, est à 150 m sur l'axe du port avant.
+Il faut d'abord s'amarrer en accordant la rotation (B : amarrage automatique). La capture exige moins de 3°/s de rotation relative. Il faut ensuite arrêter la rotation de l'ensemble avec le SAS (environ 7 min avec les seuls propulseurs du Ranger), puis prendre les commandes de l'Endurance (`[ ]`) et monter à 400 km.
+Le scénario `endurance-tumbling-dock` réussit : amarrage à 0,09 m/s, rotation arrêtée en 443 s, transfert de Hohmann de 62 m/s, orbite à 400 × 402 km. Les 12 scénarios d'amarrage réussissent tous (12/12).
 
 ![Finale à 10 m du moyeu de l'Endurance en rotation : sur l'axe, ports face à face, rotations accordées](progress/campagne-autopilotes/4-endurance-en-rotation-finale.jpg)
 

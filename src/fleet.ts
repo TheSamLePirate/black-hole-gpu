@@ -483,14 +483,14 @@ export function fleetStart(t: number, active: VesselId): Record<VesselId, Pose> 
 }
 
 /** The tumbling Endurance's start (fleetSpinStart): its height [km], its turn about its axis [rpm], the Ranger out on its fore port's axis [m]. */
-export const SPIN_START = { altKm: 220, rpm: 3, rangerM: 150 };
+export const SPIN_START = { altKm: 300, rpm: 3, rangerM: 150 };
 
 /**
- * The film's docking near the Earth: the Endurance in a low orbit (220 km, in the station's plane), turning
+ * The film's docking near the Earth: the Endurance in a low orbit (300 km, in the station's plane — clear of the air: on rails, its hull cold), turning
  * about its long axis — its hub's — at 3 rpm, the Lander docked on its hub's aft port; the Ranger flown,
  * 150 m out on the fore port's axis, its rear hatch to it, at rest against the Endurance's centre of mass
  * and not turning: to dock it must match the turn (dockCheck: the turn's too), then the assembly's turn is
- * stopped (the SAS, against the assembly's inertia), then the Endurance flown up to a stable orbit.
+ * stopped (the SAS, against the assembly's inertia), then the Endurance flown up to 400 km.
  */
 export function fleetSpinStart(t: number, o: Partial<typeof SPIN_START> = {}): Record<VesselId, Pose> {
   const S = { ...SPIN_START, ...o };

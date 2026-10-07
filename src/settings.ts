@@ -1259,10 +1259,10 @@ export const presets: Record<string, Preset> = {
   // Ranger on its fore port; the Lander 500 km up — each flown from its own orbit ([ ]: the other craft)
   "Earth: the Endurance, 800 km up": { ...EARTH_VIEW, target: "earth", vessel: "endurance", shipMount: "quarter", pose: "fleet" },
   "Earth: the Lander, 500 km up": { ...EARTH_VIEW, target: "earth", vessel: "lander", shipMount: "quarter", pose: "fleet" },
-  // the film's docking (fleet.ts fleetSpinStart): the Endurance tumbling about its axis at 3 rpm, 220 km up,
+  // the film's docking (fleet.ts fleetSpinStart): the Endurance tumbling about its axis at 3 rpm, 300 km up,
   // the Lander on its aft port; the Ranger 150 m out on the fore port's axis — dock while it turns (the turn
-  // matched), stop the assembly's turn, then fly the Endurance up to a stable 300 km orbit
-  "Earth: the Endurance tumbling, 220 km up": {
+  // matched), stop the assembly's turn, then fly the Endurance up to a 400 km orbit
+  "Earth: the Endurance tumbling, 300 km up": {
     ...EARTH_VIEW,
     target: "endurance",
     vessel: "ranger",

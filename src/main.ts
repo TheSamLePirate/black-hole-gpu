@@ -535,7 +535,7 @@ async function main() {
     if (pose === "fleetSpin") {
       panel.toast(
         t(
-          "The Endurance tumbles at 3 rpm, 220 km up: match its turn and dock to its hub (B: auto-dock) · then stop the turn (SAS) · then fly the Endurance ([ ]) up to a stable 300 km orbit",
+          "The Endurance tumbles at 3 rpm, 300 km up: match its turn and dock to its hub (B: auto-dock) · then stop the turn (SAS) · then fly the Endurance ([ ]) up to a 400 km orbit",
         ),
       );
     }

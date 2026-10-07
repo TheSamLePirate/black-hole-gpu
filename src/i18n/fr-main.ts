@@ -16,8 +16,8 @@ export default {
     "Une erreur inattendue a été enregistrée — le vol continue (Pause › Télécharger le diagnostic graphique)",
   "The solar system — NASA/JPL ephemerides (DE440)": "Le système solaire — éphémérides NASA/JPL (DE440)",
   "{0} is not in this universe": "{0} n'est pas dans cet univers",
-  "The Endurance tumbles at 3 rpm, 220 km up: match its turn and dock to its hub (B: auto-dock) · then stop the turn (SAS) · then fly the Endurance ([ ]) up to a stable 300 km orbit":
-    "L'Endurance tourne à 3 tr/min à 220 km : synchronisez-vous sur sa rotation et amarrez-vous à son moyeu (B : amarrage auto) · puis stoppez la rotation (SAS) · puis pilotez l'Endurance ([ ]) jusqu'à une orbite stable de 300 km",
+  "The Endurance tumbles at 3 rpm, 300 km up: match its turn and dock to its hub (B: auto-dock) · then stop the turn (SAS) · then fly the Endurance ([ ]) up to a 400 km orbit":
+    "L'Endurance tourne à 3 tr/min à 300 km : synchronisez-vous sur sa rotation et amarrez-vous à son moyeu (B : amarrage auto) · puis stoppez la rotation (SAS) · puis pilotez l'Endurance ([ ]) jusqu'à une orbite de 400 km",
   "Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)":
     "Artemis II · 400 km au-dessus de la Terre, la Lune en cible. O : le planificateur → Retour libre → PLANIFIER → EXÉCUTER (carte M : la trajectoire)",
   "2067 · Kennedy Space Center. U: take off to orbit · then Saturn — the wormhole waits 0.7 AU behind it (map M, a click: target · 0: approach)":

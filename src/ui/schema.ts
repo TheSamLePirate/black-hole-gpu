@@ -2956,10 +2956,10 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
     icon: "⊟",
     group: "earth",
   },
-  "Earth: the Endurance tumbling, 220 km up": {
+  "Earth: the Endurance tumbling, 300 km up": {
     title: "Docking to the tumbling Endurance",
     description:
-      "The Endurance turns about its axis at 3 rpm, 220 km up, the Lander on its aft port: match its turn and dock the Ranger to its hub (B: auto-dock), stop the turn (the SAS), then fly the Endurance ([ ]) up to a stable 300 km orbit.",
+      "The Endurance turns about its axis at 3 rpm, 300 km up, the Lander on its aft port: match its turn and dock the Ranger to its hub (B: auto-dock), stop the turn (the SAS), then fly the Endurance ([ ]) up to a 400 km orbit.",
     icon: "↻",
     group: "earth",
   },

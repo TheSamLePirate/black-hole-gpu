@@ -74,11 +74,11 @@ const turns = (lab: Lab) =>
 export const DOCK: Scenario[] = [
   {
     id: "endurance-tumbling-dock",
-    title: "The tumbling Endurance (3 rpm, 220 km): docked by the autopilot, its turn stopped, flown up to 300 km",
+    title: "The tumbling Endurance (3 rpm, 300 km): docked by the autopilot, its turn stopped, flown up to 400 km",
     tags: ["dock", "endurance", "ranger", "orbit", "spin"],
     minutes: 12,
     async run(lab): Promise<Verdict> {
-      await scene(lab, "Earth: the Endurance tumbling, 220 km up");
+      await scene(lab, "Earth: the Endurance tumbling, 300 km up");
       await orbInstall(lab);
       const w0 = await turns(lab);
       const sp0 = await spent(lab);
@@ -106,11 +106,11 @@ export const DOCK: Scenario[] = [
         maxWall: 400,
       });
       const stopS = (lab.T.t ?? 0) - t1;
-      // (the Endurance flown, the assembly with it, up to a stable 300 km orbit)
+      // (the Endurance flown, the assembly with it, up to a 400 km orbit)
       await lab.js(`(__bh.settings.vessel = "endurance", true)`);
       await lab.fixed({ until: `T.vessel === "endurance"`, maxSim: 10, maxWall: 30 });
       const w2 = await turns(lab);
-      const note = await lab.js<string>(`__bh.camera.planOurs("orbit", "orbit", 300, 0)`);
+      const note = await lab.js<string>(`__bh.camera.planOurs("orbit", "orbit", 400, 0)`);
       await lab.js("(__bh.camera.fcExecute(), true)");
       const e2 = await lab.fixed({ until: `T.auto === "none" && T.nodes === 0`, maxSim: 6 * 3600, maxWall: 400 });
       const fl = await flownSpread(lab);
@@ -125,7 +125,7 @@ export const DOCK: Scenario[] = [
         note,
         flownLo: fl?.lo,
         flownHi: fl?.hi,
-        heightErrKm: round(mid - 300, 10),
+        heightErrKm: round(mid - 400, 10),
         dvSpent: round(dv, 10),
       };
       const ok =
@@ -137,7 +137,7 @@ export const DOCK: Scenario[] = [
         e2.end === "until" &&
         !!fl &&
         fl.spread <= 5 &&
-        Math.abs(mid - 300) <= 5;
+        Math.abs(mid - 400) <= 5;
       return {
         ok,
         why: `${msg ?? e.why} · turning ${round(w1.flown, 10)}°/s docked (the Endurance ${round(w0.endurance, 10)}) · stopped in ${round(stopS, 1)} s · ${note} · ${fl ? `${fl.lo}–${fl.hi} km` : "no orbit"}`,

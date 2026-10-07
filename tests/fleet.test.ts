@@ -122,14 +122,14 @@ test("a coasting craft's velocity is its place's own rate — the J2 drift's tur
     }
 });
 
-test("the tumbling Endurance at 220 km: turning about its hub, the Lander on it; the map's path of it drawn in a blink", async () => {
+test("the tumbling Endurance (here 220 km up, in the air's reach): turning about its hub, the Lander on it; the map's path of it drawn in a blink", async () => {
   const { fleetSpinStart, SPIN_START } = await import("../src/fleet");
   const { ourTrack } = await import("../src/ui/map3d/scene");
   const t0 = gameTimeOf(Date.UTC(2026, 9, 1, 12));
-  const P = fleetSpinStart(t0);
+  const P = fleetSpinStart(t0, { altKm: 220 });
   const E = ourState("earth", t0);
   const r = Math.hypot(...(P.endurance.X.map((x, i) => x - E.pos[i]!) as V)) * M_METRES;
-  expect(Math.abs(r - solarBody("earth")!.radius * M_METRES - SPIN_START.altKm * 1e3)).toBeLessThan(1e3);
+  expect(Math.abs(r - solarBody("earth")!.radius * M_METRES - 220e3)).toBeLessThan(1e3);
   // (its turn: about its long axis, 3 rpm; the Lander turning with it, the Ranger not)
   const w = P.endurance.w!;
   expect((Math.hypot(...w) / M_SECONDS) * (60 / (2 * Math.PI))).toBeCloseTo(SPIN_START.rpm, 6);

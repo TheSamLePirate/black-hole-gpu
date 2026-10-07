@@ -137,7 +137,7 @@ export const SCENE_THUMBS: Record<string, string> = {
   "Earth: docking to the ISS": t53,
   "Earth: the Endurance, 800 km up": t54,
   "Earth: the Lander, 500 km up": t55,
-  "Earth: the Endurance tumbling, 220 km up": t54,
+  "Earth: the Endurance tumbling, 300 km up": t54,
   "game:artemis": t56,
   "Gargantua system: departure near Saturn": t57,
   "Mission: through the wormhole to the companion star (automatic flight)": t58,
