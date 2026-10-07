@@ -168,3 +168,18 @@ describe("the powered descent", () => {
     expect(f.miss).toBeLessThan(5);
   });
 });
+
+test("low and off the pad: vectored past the hover's speed once vectored, back up to the gate, across at 20 m/s", () => {
+  // (the Lander on the Earth, 26 m up, 600 m past its pad at 25 m/s: it swung between level and standing on
+  // its tail at the modes' edge, tilted 20° and fell — its thrust 1.27 × its weight)
+  const g = 9.8;
+  const base = { up: [0, 0, 1] as [number, number, number], h: 26, g, aT: 1.27 * g, pad: [-600, 0, -26] as [number, number, number] };
+  const a = descentCommand({ ...base, v: [-26, 0, 0], wasVectored: true });
+  expect(a.vectored).toBe(true);
+  expect(Math.hypot(...a.vh)).toBeLessThanOrEqual(20 + 1e-9);
+  expect(a.down).toBeLessThan(0);
+  // (not vectored before: the edge as it was — a rocket's braking above 25 m/s)
+  expect(descentCommand({ ...base, v: [-26, 0, 0] }).vectored).toBe(false);
+  // (over the pad the touchdown's descent goes on)
+  expect(descentCommand({ ...base, pad: [3, 0, -26], v: [0, 0, 0], wasVectored: true }).down).toBeGreaterThan(0);
+});

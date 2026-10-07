@@ -157,17 +157,25 @@ async function landFromHere(lab: Lab, maxSim: number, maxWall: number) {
   return lab.fixed({ until: DOWN, maxSim, maxWall });
 }
 
-function hoverLand(id: string, pad: Pad, altKm: number, minutes = 3): Scenario {
+function hoverLand(id: string, pad: Pad, altKm: number, minutes = 3, o: { lander?: boolean; northKm?: number } = {}): Scenario {
   return {
     id,
-    title: `${pad.name} — the landing autopilot from a hover ${altKm} km over it`,
-    tags: ["vertical", "landing", pad.body, "ranger", "hover"],
+    title: `${o.lander ? "Lander — " : ""}${pad.name} — the landing autopilot from a hover ${altKm} km over it${o.northKm ? `, ${o.northKm} km north` : ""}`,
+    tags: ["vertical", "landing", pad.body, o.lander ? "lander" : "ranger", "hover"],
     minutes,
     async run(lab) {
-      await lab.js(`(__bh.game.hoverOver(${JSON.stringify(pad.body)}, ${pad.lat}, ${pad.lon}, ${altKm}), true)`);
+      if (o.lander) await lander(lab);
+      const lat = pad.lat + (o.northKm ?? 0) / 111.2;
+      await lab.js(`(__bh.game.hoverOver(${JSON.stringify(pad.body)}, ${lat}, ${pad.lon}, ${altKm}), true)`);
       await Bun.sleep(300);
-      const e = await landFromHere(lab, 900, 400);
-      return judgeTouchdown(lab, pad, 10, e);
+      if (!o.northKm) return judgeTouchdown(lab, pad, 10, await landFromHere(lab, 900, 400));
+      // (off the pad: the landing autopilot given it — the entry's hand-over leaves it so)
+      await lab.js(DV_METER);
+      await engage(lab, "land");
+      await lab.js(
+        `(__bh.camera.landRun = { body: ${JSON.stringify(pad.body)}, site: ${JSON.stringify({ body: pad.body, name: pad.name, lat: pad.lat, lon: pad.lon })}, q: null, heading: null, cmd: null }, true)`,
+      );
+      return judgeTouchdown(lab, pad, 30, await lab.fixed({ until: DOWN, maxSim: 900, maxWall: 400 }));
     },
   };
 }
@@ -261,6 +269,9 @@ function landerEntry(id: string, pad: Pad, setup: (lab: Lab) => Promise<void>, m
 export const VERTICAL: Scenario[] = [
   hoverLand("moon-hover-tranquility", TRANQUILITY, 1.5),
   hoverLand("moon-hover-shackleton", SHACKLETON, 1.5),
+  // (the Lander's own powered landing on the Earth, its air and its relief, without the entry before it)
+  hoverLand("lander-earth-hover-ksc", KSC, 1.5, 3, { lander: true }),
+  hoverLand("lander-earth-hover-ksc-off", KSC, 1.5, 3, { lander: true, northKm: 0.5 }),
   orbitLand("moon-orbit-tranquility", TRANQUILITY, 50),
   orbitLand("moon-orbit-shackleton", SHACKLETON, 50),
   {

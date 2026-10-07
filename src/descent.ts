@@ -54,6 +54,9 @@ export interface DescentState {
   /** the orbit (an orbit's coast to the pad, its descent orbit): the body's μ [m³/s²], the craft from its
    *  centre [m], its velocity in the body's non-turning frame [m/s] */
   orbit?: { mu: number; r: Vec3; vi: Vec3 };
+  /** the last command vectored (low and slow): kept so up to 1.4 × the hover's translation — the modes'
+   *  edge not crossed back and forth */
+  wasVectored?: boolean;
 }
 
 export interface DescentCmd {
@@ -100,7 +103,9 @@ export function descentCommand(s: DescentState): DescentCmd {
   const vhv = add(s.v, scale(up, -vv));
   const vh = len(vhv);
   const vB = descentCurve(h, aV);
-  const slow = vh < V_TRANS && h < 5000;
+  // (with a margin once vectored: at the edge, translating at the hover's 25 m/s, the Lander swung between
+  // level and standing on its tail 26 m over the Earth — tilted 20°, its marginal thrust no longer held it)
+  const slow = h < 5000 && (vh < V_TRANS || (!!s.wasVectored && vh < 1.4 * V_TRANS));
   if (!s.pad) {
     // here: the sideways speed killed at once — the descent no faster than what reaches the gate as it stops
     const tGo = vh / aH;
@@ -128,7 +133,8 @@ export function descentCommand(s: DescentState): DescentCmd {
   const padR = O ? add(O.r, s.pad) : null;
   const d = O && padR ? len(padR) * angle(O.r, padR) : len(p);
   const vCurve = Math.sqrt(2 * aH * d);
-  const cap = Math.max(vh, V_TRANS);
+  // (never faster than the craft already goes or a hover's translation — slow, 0.8 of it: clear of the edge)
+  const cap = slow ? 0.8 * V_TRANS : Math.max(vh, V_TRANS);
   // (an orbit, clear of the ground: a pad behind comes round again)
   const el = O ? orbitOf(O.mu, O.r, O.vi) : null;
   const orbiting = !!el && !!padR && el.rp > len(padR) + 1000;
@@ -176,7 +182,9 @@ export function descentCommand(s: DescentState): DescentCmd {
   const over = d < D_OVER;
   // (down to the gate as the pad nears; over it, the rest down the curve; low and off it, the height held)
   const toGate = Math.max(h - H_GATE, 0) / Math.max(tGo, 1e-3);
-  const down = over ? vB : Math.min(vB, toGate);
+  // (and below the gate, off the pad, back up to it gently: across the ground at 26 m, a tilt's lost lift was
+  // the ground)
+  const down = over ? vB : h < H_GATE && d > 3 * D_OVER ? -Math.min((H_GATE - h) / 4, 2) : Math.min(vB, toGate);
   // (on the braking curve across: its deceleration along it, as the craft goes there)
   const along = dot(vhv, u);
   const ffH = vw === vCurve && along > 0 ? scale(u, -aH * Math.min(along / Math.max(vCurve, 1e-6), 2)) : ([0, 0, 0] as Vec3);

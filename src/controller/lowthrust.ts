@@ -749,6 +749,7 @@ function landWant(
     aT: this.thrustMax() * acc,
     pad: padX ? lin(sub3(padX, nav.X), M_METRES, padX, 0) : null,
     orbit: { mu: solarBody(id)!.mass * acc * M_METRES ** 2, r: lin(rel, M_METRES, rel, 0), vi: lin(vi, C, vi, 0) },
+    wasVectored: !!L.cmd?.vectored,
   });
   L.cmd = cmd;
   // the time: sped up while it coasts — to some twenty seconds before the braking, or the descent orbit's
