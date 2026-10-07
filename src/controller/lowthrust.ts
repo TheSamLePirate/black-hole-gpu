@@ -1385,6 +1385,7 @@ function dockCard(this: CameraController): HubInfo | null {
   };
   const say = [tf("CLOSE {0} → {1} m/s", closing.toFixed(2), want(along).toFixed(2))];
   say.push(tf("OFFSET {0} m · CONE {1} m", g.lateral.toFixed(1), cone.toFixed(1)), tf("PORTS {0}°", g.angle.toFixed(1)));
+  if (g.spin >= 1) say.push(tf("MATCH ITS TURN · {0}°/s APART", g.spin.toFixed(1)));
   if (D.phase === "HOLD 10 m") say.push(t("HOLD AT 10 m — ALIGN"));
   // (the contact: along the autopilot's profile from here — its rate slows as it nears, a logarithm)
   else if (D.corridor && closing > 0.02) {
@@ -1402,6 +1403,7 @@ function dockCard(this: CameraController): HubInfo | null {
       [t("Along · across"), `${m(along)} · ${m(g.lateral)}`],
       [t("Closing"), `${closing.toFixed(2)} m/s`],
       [t("Ports' axes"), `${g.angle.toFixed(1)}°`],
+      ...(g.spin >= 0.5 ? [[t("Turn against it"), `${g.spin.toFixed(1)}°/s`] as [string, string]] : []),
     ],
     next: D.corridor ? `→ ${tf("in the corridor (cone {0} m)", cone.toFixed(1))}` : null,
     bar: null,

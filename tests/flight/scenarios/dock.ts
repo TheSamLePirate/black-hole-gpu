@@ -5,7 +5,7 @@
 // time it took and the thrusters' Δv.
 import type { Lab } from "../lib/lab";
 import { engage, said, scene, type Scenario, type Verdict } from "./helpers";
-import { orbInstall, round, spent } from "./orbit";
+import { flownSpread, orbInstall, round, spent } from "./orbit";
 
 /** The Ranger off the station's IDA-2: `distM` out on its axis, `offset` [m] in the station's axes, turned `yawDeg` about its top. */
 async function nearStation(lab: Lab, distM: number, offset: [number, number, number] = [0, 0, 0], yawDeg = 0) {
@@ -63,7 +63,88 @@ async function dockRun(lab: Lab, o: { maxSim?: number; port?: number } = {}): Pr
   return { ok, why: `${start ?? ""} → ${msg ?? e.why}${portOk ? "" : ` · port ${d?.port}, not ${o.port}`}`, metrics };
 }
 
+/** The turns now [deg/s]: the Endurance's as it coasts (fleet.ts), the flown assembly's (the pilot's rates, at real time). */
+const turns = (lab: Lab) =>
+  lab.js<{ endurance: number; flown: number }>(`(() => {
+    const c = __bh.camera, t = c.nowTime(), p = __bh.fleet.pose("endurance", t), D = 180 / Math.PI;
+    const ms = 4.925490947e-6 * __bh.settings.massSolar;
+    return { endurance: p && p.w ? (Math.hypot(...p.w) / ms) * D : 0, flown: (Math.hypot(...c.pilot.omega) / (c.s.timeSpeed * ms)) * D };
+  })()`);
+
 export const DOCK: Scenario[] = [
+  {
+    id: "endurance-tumbling-dock",
+    title: "The tumbling Endurance (3 rpm, 220 km): docked by the autopilot, its turn stopped, flown up to 300 km",
+    tags: ["dock", "endurance", "ranger", "orbit", "spin"],
+    minutes: 12,
+    async run(lab): Promise<Verdict> {
+      await scene(lab, "Earth: the Endurance tumbling, 220 km up");
+      await orbInstall(lab);
+      const w0 = await turns(lab);
+      const sp0 = await spent(lab);
+      // (docked while it turns: the turn matched — the capture asks it within 3°/s)
+      await engage(lab, "dock");
+      // (the Lander already on its aft port: docked when the flown assembly holds the Endurance)
+      const docked = `__bh.fleet.flownAssembly().includes("endurance")`;
+      const e = await lab.fixed({ until: docked, maxSim: 3600, maxWall: 400, fail: `T.auto !== "dock" && !${docked}` });
+      const msg = said(lab, /^Docked to/);
+      const bounces = lab.events.filter((x) => x.kind === "pilot" && /^Bounced/.test(x.text)).length;
+      const w1 = await turns(lab);
+      // (not docked: no switch to the Endurance — flown alone, it would read as docked by hand)
+      if (e.end !== "until")
+        return {
+          ok: false,
+          why: `not docked: ${e.why} · ${bounces} bounces`,
+          metrics: { enduranceTurnDegS: round(w0.endurance, 100), bounces },
+        };
+      // (its turn stopped: the SAS against the assembly's inertia, the Ranger's thrusters)
+      const t1 = lab.T.t ?? 0;
+      await lab.js("(__bh.camera.pilot.sas = true, true)");
+      const s1 = await lab.fixed({
+        until: "Math.hypot(...c.pilot.omega) < 1e-3 * c.s.timeSpeed * 4.925490947e-6 * __bh.settings.massSolar",
+        maxSim: 1800,
+        maxWall: 400,
+      });
+      const stopS = (lab.T.t ?? 0) - t1;
+      // (the Endurance flown, the assembly with it, up to a stable 300 km orbit)
+      await lab.js(`(__bh.settings.vessel = "endurance", true)`);
+      await lab.fixed({ until: `T.vessel === "endurance"`, maxSim: 10, maxWall: 30 });
+      const w2 = await turns(lab);
+      const note = await lab.js<string>(`__bh.camera.planOurs("orbit", "orbit", 300, 0)`);
+      await lab.js("(__bh.camera.fcExecute(), true)");
+      const e2 = await lab.fixed({ until: `T.auto === "none" && T.nodes === 0`, maxSim: 6 * 3600, maxWall: 400 });
+      const fl = await flownSpread(lab);
+      const mid = fl ? (fl.lo + fl.hi) / 2 : Number.NaN;
+      const dv = (await spent(lab)) - sp0;
+      const metrics = {
+        enduranceTurnDegS: round(w0.endurance, 100),
+        afterDockTurnDegS: round(w1.flown, 100),
+        stopS: round(stopS, 1),
+        afterSwitchTurnDegS: round(w2.flown, 1000),
+        bounces,
+        note,
+        flownLo: fl?.lo,
+        flownHi: fl?.hi,
+        heightErrKm: round(mid - 300, 10),
+        dvSpent: round(dv, 10),
+      };
+      const ok =
+        e.end === "until" &&
+        !!msg &&
+        w1.flown > 0.8 * w0.endurance &&
+        s1.end === "until" &&
+        w2.flown < 0.1 &&
+        e2.end === "until" &&
+        !!fl &&
+        fl.spread <= 5 &&
+        Math.abs(mid - 300) <= 5;
+      return {
+        ok,
+        why: `${msg ?? e.why} · turning ${round(w1.flown, 10)}°/s docked (the Endurance ${round(w0.endurance, 10)}) · stopped in ${round(stopS, 1)} s · ${note} · ${fl ? `${fl.lo}–${fl.hi} km` : "no orbit"}`,
+        metrics,
+      };
+    },
+  },
   {
     id: "dock-iss-3km",
     title: "Dock — the ISS from 2.9 km on the axis",

@@ -28,7 +28,7 @@ import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
 import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, type Mount } from "./mounts";
-import { fleet, fleetStart } from "./fleet";
+import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { CockpitScreens } from "./ui/cockpitscreens";
 import { VESSELS } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
@@ -495,7 +495,7 @@ async function main() {
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose) {
       // (the station: at the real time now, unless the scene has its own)
-      const now = pose === "iss" || pose === "fleet";
+      const now = pose === "iss" || pose === "fleet" || pose === "fleetSpin";
       const t = time ?? (now ? gameTimeOf(dateNow()) : sim.time);
       if (now && time === undefined) sim.setTime(t);
       const d =
@@ -503,7 +503,7 @@ async function main() {
           ? earthGround(t)
           : pose === "iss"
             ? (issStart(t, issDistance, issOffset) ?? earthStart(t, 400))
-            : pose === "earth" || pose === "earthMoon" || pose === "fleet"
+            : pose === "earth" || pose === "earthMoon" || pose === "fleet" || pose === "fleetSpin"
               ? earthStart(t, 400, pose === "earthMoon")
               : saturnDeparture(t);
       setHomePose(settings, d.X, d.fwd, d.up, d.vel);
@@ -517,8 +517,8 @@ async function main() {
     // the fleet near the Earth (fleet.ts): the Endurance 800 km up, the Lander 500 km up; the craft flown
     // where the scene puts it — or, "fleet", where the fleet's start has it
     setMountVessel(settings.vessel);
-    const starts = fleetStart(sim.time, settings.vessel);
-    if (pose === "fleet" && settings.ship) camera.flyFrom(starts[settings.vessel]);
+    const starts = pose === "fleetSpin" ? fleetSpinStart(sim.time) : fleetStart(sim.time, settings.vessel);
+    if ((pose === "fleet" || pose === "fleetSpin") && settings.ship) camera.flyFrom(starts[settings.vessel]);
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
       // the camera then where its mount is)
@@ -530,6 +530,13 @@ async function main() {
     if (name === "game:artemis") {
       panel.toast(
         t("Artemis II · 400 km above the Earth, the Moon targeted. O: the planner → Free return → PLAN → EXECUTE (map M: the path)"),
+      );
+    }
+    if (pose === "fleetSpin") {
+      panel.toast(
+        t(
+          "The Endurance tumbles at 3 rpm, 220 km up: match its turn and dock to its hub (B: auto-dock) · then stop the turn (SAS) · then fly the Endurance ([ ]) up to a stable 300 km orbit",
+        ),
       );
     }
     if (name === "game:interstellar") {

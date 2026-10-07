@@ -27,7 +27,8 @@ const isCraftId = (id: string): id is VesselId => (CRAFT as readonly string[]).i
 /** A place in our universe's home frame at t: a body of the solar system's, the space station's, a craft's. */
 export function ourPos(id: string, t: number): V3 {
   if (id === "iss") return (issTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
-  if (isCraftId(id)) return (fleet.pose(id, t)?.X ?? solarState("earth", t).pos) as V3;
+  // (a drawing's: the analytic coast — fleet.ts pose)
+  if (isCraftId(id)) return (fleet.pose(id, t, false, false)?.X ?? solarState("earth", t).pos) as V3;
   return solarState(id, t).pos as V3;
 }
 

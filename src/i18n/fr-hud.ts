@@ -201,6 +201,7 @@ export default {
   Closing: "Rapprochement",
   Offset: "Décalage",
   "Ports' axes": "Axes des ports",
+  "Turn against it": "Rotation relative",
   "STOP AUTO-DOCK": "ARRÊTER L'AMARRAGE AUTO",
   "AUTO-DOCK · B": "AMARRAGE AUTO · B",
   "The docking autopilot: on the thrusters, to the port's axis, then in along it to the capture":

@@ -135,7 +135,7 @@ export interface FlightContext {
   burn?: { dir: V3; throttle: number; far?: boolean } | null;
   /** docking: the attitude to hold (local) — the nose and the ship's top; the thrusters alone
    *  translate (the main engine, along the nose, would push it off the port's axis) */
-  dock?: { nose: V3; up: V3 } | null;
+  dock?: { nose: V3; up: V3; rate?: V3 } | null;
   /** at a warp where the burn turns (with the orbit) faster than the ship can: the nose is held on it
    *  kinematically (attitude on rails), not flown */
   snap?: boolean;
@@ -513,6 +513,9 @@ export class FlightComputer {
         const ra = Math.atan2(dot(cross(Y, up), Z), dot(Y, up));
         want[2] = Math.sign(ra) * Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * Math.abs(ra)), 3 * Math.abs(ra));
       }
+      // (docking to a craft that turns: its turn flown ahead, the error only corrected about it)
+      const ffr = this.auto === "dock" ? c.dock?.rate : undefined;
+      if (ffr) for (let i = 0; i < 3; i++) want[i] = want[i]! + ffr[i]!;
     } else {
       for (let i = 0; i < 3; i++) {
         if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
@@ -530,7 +533,10 @@ export class FlightComputer {
         torque[i] = d / (acc3[i]! * dt);
         effort = Math.max(effort, Math.abs(torque[i]!));
       }
-      this.omega[i] = clamp(this.omega[i]! + d, -1.5 * TUNING.turnRate, 1.5 * TUNING.turnRate);
+      // (no faster than 1.5 × the commanded rate — but a turn the craft has past it kept, only slowed: docked
+      // to the tumbling Endurance, the assembly's 18°/s were cut to its 1.5 × 0.9°/s at once)
+      const lim = Math.max(1.5 * TUNING.turnRate, Math.abs(this.omega[i]!));
+      this.omega[i] = clamp(this.omega[i]! + d, -lim, lim);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
     // (Euler's equations: an asymmetric body's rates couple — ω̇ = I⁻¹(τ − ω × Iω), the torque above;

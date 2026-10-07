@@ -29,6 +29,7 @@ declare module "../controls" {
     undock: typeof undock;
     dockWant: typeof dockWant;
     targetBlocks: typeof targetBlocks;
+    ownTurn: typeof ownTurn;
   }
 }
 
@@ -90,7 +91,8 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
       id,
       title: VESSELS[id].name,
       P,
-      om: [0, 0, 0],
+      // (its turn as it coasts — the tumbling Endurance's: its ports' points move with it)
+      om: P.w ?? [0, 0, 0],
       ports: VESSELS[id].ports.flatMap((p, k) =>
         used.has(k) ? [] : [{ k, name: p.name, c: lin(P.X, 1, onAxesV(P.ax, p.centre), m), a: onAxesV(P.ax, p.axis) }],
       ),
@@ -108,9 +110,14 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
         if (best && range >= best.range) continue;
         // (relative to the target's point where the ring is: its turn, if it turns — co-orbiting is at rest)
         const vp = lin(T.P.V, 1, cross(T.om, sub3(op.c, T.P.X)), 1);
-        const vrel = lin(sub3(nav.V, vp), C, nav.V, 0);
+        // (the ring's own velocity: the ship's and its turn's — its ring off its roll axis, a turning ship's
+        // circles: read as the ship's alone, a drift of ω × r against a still ring held the final back)
+        const vring = lin(nav.V, 1, cross(this.ownTurn(me.ax), sub3(op.c, nav.X)), 1);
+        const vrel = lin(sub3(vring, vp), C, nav.V, 0);
         const closing = -dot3(vrel, tp.a);
         const angle = (Math.acos(Math.max(-1, Math.min(1, -dot3(op.a, tp.a)))) * 180) / Math.PI;
+        // (the turns apart: the flown craft's against the target's [deg/s])
+        const spin = (Math.hypot(...sub3(this.ownTurn(me.ax), T.om)) / M_SECONDS) * (180 / Math.PI);
         best = {
           target: T.id,
           title: T.title,
@@ -124,6 +131,7 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
           closing,
           lateralRate: Math.hypot(...lin(vrel, 1, tp.a, -dot3(vrel, tp.a))),
           angle,
+          spin,
           docked: false,
           ring: op.c,
           ownAxis: op.a,
@@ -364,7 +372,10 @@ function dockCheck(this: CameraController) {
   }
   const speed = Math.hypot(...g.vrel);
   // (closing in, or at rest against it: not on the rebound)
-  const capture = g.along < 0.3 && g.along > -0.6 && g.lateral < 0.3 && g.angle < 10 && speed < 0.5 && g.closing > -0.02;
+  // (and turning together: within 3°/s of the target's turn — a craft met still against the tumbling
+  // Endurance's hub, its ring turning 18°/s against the port, does not latch)
+  const capture =
+    g.along < 0.3 && g.along > -0.6 && g.lateral < 0.3 && g.angle < 10 && g.spin < SPIN_MAX && speed < 0.5 && g.closing > -0.02;
   const s = this.s;
   const cam = cameraFrame(s);
   const nav = this.ourNav(cam);
@@ -388,9 +399,11 @@ function dockCheck(this: CameraController) {
             ? `${g.lateral.toFixed(2)} m off its axis — 0.3 at most`
             : g.angle >= 10
               ? `the ports ${g.angle.toFixed(0)}° apart — 10 at most`
-              : g.along <= -0.6
-                ? `${(-g.along).toFixed(2)} m into the port — 0.6 at most`
-                : `moving away at ${(-g.closing).toFixed(2)} m/s`;
+              : g.spin >= SPIN_MAX
+                ? `turning ${g.spin.toFixed(1)}°/s against it — ${SPIN_MAX} at most`
+                : g.along <= -0.6
+                  ? `${(-g.along).toFixed(2)} m into the port — 0.6 at most`
+                  : `moving away at ${(-g.closing).toFixed(2)} m/s`;
       this.onPilotMessage?.(`Bounced off the ${g.title}'s port · ${why}`);
     }
     return;
@@ -410,6 +423,13 @@ function dockCheck(this: CameraController) {
   const held = g.target === "iss" || tgtGroup.includes("iss");
   const mT = tgtGroup.reduce((a, v) => a + (v === "iss" ? 0 : VESSELS[v as VesselId].mass), 0);
   const tgtPose = g.target === "iss" ? null : fleet.pose(g.target, t);
+  // (their turns shared too: the assembly's the inertia-weighted mean of the two — the flown assembly's and
+  // the target's, each about its own centre: the tumbling Endurance keeps turning with the Ranger on it)
+  const wMe = this.ownTurn(ownPose.ax);
+  const wT = tgtPose?.w ?? ([0, 0, 0] as Vec3);
+  const iMe = fleet.massProps().inertia;
+  const iT = g.target === "iss" ? 0 : fleet.massProps(g.target).inertia;
+  const wAll = held ? null : lin(wMe, iMe / (iMe + iT), wT, iT / (iMe + iT));
   fleet.links.push({ a: g.target, b: g.own, pa: g.port, pb: g.ownPort, c, ax });
   for (const v of fleet.assembly(fleet.active)) if (v !== "iss") delete fleet.free[v as VesselId];
   if (!held && tgtPose) {
@@ -417,6 +437,9 @@ function dockCheck(this: CameraController) {
     const V = lin(nav.V, mMe / (mMe + mT), tgtPose.V, mT / (mMe + mT));
     const P = fleet.posesFrom(g.target, { X: tgtPose.X, V, ax: tgtPose.ax }, t).get(fleet.active)!;
     this.placeOnPose({ X: P.X, V, ax: P.ax });
+    // (the assembly turning: the pilot's rates — per second of its clock, the other way round from the
+    // right-hand rule — on the flown craft's axes)
+    if (wAll && Math.hypot(...wAll) > 0) this.pilot.omega = P.ax.map((a) => -dot3(wAll, a) * s.timeSpeed) as Vec3;
   } else if (held) {
     // held by the station: at once where it carries the craft, at its port's velocity — not the approach's
     // until the next frame's hold: a craft let go before it (undocked at once) once kept the 9 cm/s it
@@ -426,7 +449,7 @@ function dockCheck(this: CameraController) {
   }
   this.pilot.auto = "none";
   this.pilot.throttle = 0;
-  this.pilot.omega = [0, 0, 0];
+  if (!wAll) this.pilot.omega = [0, 0, 0];
   this.dockInfo = null;
   // (the target now part of the assembly: the body it orbits instead)
   if (fleet.flownAssembly().includes(s.target as VesselId)) this.selectTarget(nav.ref as Body);
@@ -603,14 +626,21 @@ function dockWant(
     return lin(lin(pb, x, ub, y), 1, wb, z);
   };
   const loc = (v: Vec3) => unitV(nav.toRep(v));
-  D.att = { nose: loc(R([0, 0, 1])), up: loc(R([0, 1, 0])) };
+  // (and the target's turn, carried as the pilot's rates on the ship's axes — per second of its clock, the
+  // other way round from the right-hand rule: ownTurn's —, flown ahead of the attitude's error: the
+  // tumbling Endurance's 18°/s, chased on the error alone, were never caught — the roll's error went
+  // round past 180° and the pilot turned back)
+  D.att = { nose: loc(R([0, 0, 1])), up: loc(R([0, 1, 0])), rate: sh.map((x) => -dot3(g.om, x) * s.timeSpeed) as Vec3 };
   // the ring against the port [m]; the target's point there, its motion and pull
   const along = g.along,
     lat = g.lateral;
   const d = lin(sub3(g.ring, g.c), M_METRES, a, 0);
   const latv = lin(d, 1, a, -along);
   const om = g.om;
-  const rho = sub3(g.ring, g.tgt.X);
+  // (the target's point followed: on its port's axis, abeam the ring — not where the ring is: off the axis
+  // of a craft turning about it, that point circles, and the Ranger following it 5 m out spent all its
+  // thrusters' push on the circle's pull (ω²r: 0.5 m/s² at 18°/s), never nearer; the axis stays put)
+  const rho = sub3(lin(g.c, 1, a, Math.max(along, 0) / M_METRES), g.tgt.X);
   const Vp = lin(g.tgt.V, 1, cross(om, rho), 1);
   const ff = lin(sub3(gravityHome(g.tgt.X, nav.t).acc, gravityHome(nav.X, nav.t).acc), 1, cross(om, cross(om, rho)), 1);
   // the warp: by the range (the pilot's own, if lower, without auto warp)
@@ -674,7 +704,12 @@ function dockWant(
         : `AROUND THE ${VESSELS[D.target].name.toUpperCase()}`
       : "TO THE AXIS";
   }
-  return out(lin(Vp, 1, want, 1 / C), ff);
+  // (the ring's motion is the ship's and its own turn's: turning with the tumbling Endurance, the Ranger's
+  // ring, 1.1 m off its roll axis, circles — the ship's velocity is the ring's wanted less ω × r, its
+  // acceleration less the circle's pull; without, held 10 m out, the ring stayed 1.3 m off the axis)
+  const wOwn = this.ownTurn(sh);
+  const rr = sub3(g.ring, nav.X);
+  return out(lin(lin(Vp, 1, want, 1 / C), 1, cross(wOwn, rr), -1), lin(ff, 1, cross(wOwn, cross(wOwn, rr)), -1));
 }
 
 /**
@@ -708,6 +743,19 @@ function targetBlocks(this: CameraController, target: VesselId | "iss", p: Vec3,
   );
 }
 
+/** The turns apart a capture allows [deg/s]. */
+export const SPIN_MAX = 3;
+
+/**
+ * The flown craft's turn (home, rad per M): the pilot's rates — per second of its clock, the other way
+ * round from the right-hand rule (fleet.ts switchVessel's) — on its axes `ax`.
+ */
+function ownTurn(this: CameraController, ax: [Vec3, Vec3, Vec3]): Vec3 {
+  const k = -1 / Math.max(this.s.timeSpeed, 1e-30);
+  const o = this.pilot.omega;
+  return lin(lin(ax[0], k * o[0], ax[1], k * o[1]), 1, ax[2], k * o[2]);
+}
+
 /** Puts these methods on the controller's prototype (controls.ts, once). */
 export function installDocking(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
@@ -721,5 +769,6 @@ export function installDocking(C: { prototype: CameraController }) {
     undock,
     dockWant,
     targetBlocks,
+    ownTurn,
   });
 }

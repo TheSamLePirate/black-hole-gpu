@@ -54,6 +54,23 @@ Chaque défaut trouvé est corrigé avec un test de régression, puis le scénar
 - Distance au pad mesurée même quand l'engin glisse encore.
 - Un dossier de campagne réutilisé est vidé scénario par scénario : le juge lisait la télémétrie d'un vol précédent.
 
+## Nouvelle scène : l'Endurance en rotation
+
+« Earth: the Endurance tumbling, 220 km up » (galerie : *Docking to the tumbling Endurance*). L'Endurance tourne à 3 tr/min (18°/s) autour de l'axe de son moyeu, à 220 km, avec le Lander amarré au port arrière. Le Ranger, piloté, est à 150 m sur l'axe du port avant.
+Il faut d'abord s'amarrer en accordant la rotation (B : amarrage automatique). La capture exige moins de 3°/s de rotation relative. Il faut ensuite arrêter la rotation de l'ensemble avec le SAS (environ 7 min avec les seuls propulseurs du Ranger), puis prendre les commandes de l'Endurance (`[ ]`) et monter à 300 km.
+Le scénario `endurance-tumbling-dock` réussit : amarrage à 0,09 m/s, rotation arrêtée en 443 s, transfert de Hohmann de 51 m/s, orbite à 300 × 302 km. Les 12 scénarios d'amarrage réussissent tous (12/12).
+
+![Finale à 10 m du moyeu de l'Endurance en rotation : sur l'axe, ports face à face, rotations accordées](progress/campagne-autopilotes/4-endurance-en-rotation-finale.jpg)
+
+Ce qu'elle a révélé et qui est corrigé :
+- **Page figée 5 minutes** au chargement et pendant l'approche. Pour tracer la trajectoire de l'Endurance, la carte l'intégrait pas à pas depuis maintenant pour chaque point du tracé. Sous ~300 km il n'y a pas de rails, car l'engin est dans l'air. La carte utilise maintenant la propagation analytique pour un engin dans l'air. L'intégration exacte reste sur rails, et elle est limitée à 10 min d'avance dans l'air : une date de scène 40 ans plus tard faisait un million de pas par pose.
+- **Coque à 890 K à 220 km** (commit `6808fc1`) : la peau rayonnait vers la température du gaz de la thermosphère au lieu de l'espace.
+- **Pilote d'amarrage contre une cible qui tourne** :
+  - la rotation de la cible est anticipée (sans cela, l'écart de roulis passait 180° et le pilote repartait en arrière) ;
+  - le point suivi est celui de l'axe du port en face de l'anneau, et non le point qui tourne (le Ranger restait à 5 m, toute sa poussée prise par la force centripète) ;
+  - la vitesse de l'anneau inclut la rotation propre du vaisseau (l'anneau du Ranger est à 1,1 m de son axe de roulis).
+- **Capture** : l'ensemble garde la rotation, moyennée par les inerties. Le pilote ne la coupe plus instantanément et le SAS la freine selon l'inertie de l'assemblage.
+
 ## Reste à traiter
 
 - **Mission vers l'orbite lunaire** : réussie ici (orbite 102,7 km), ratée sur le mini (25 km). La différence vient de l'instant du départ : la page du mini finit de charger 273 s plus tard, et le plan prend une autre famille de trajectoires (arrivée à 4,4 j au lieu de 3,3). Le scénario `mission-moon-orbit-late` reproduit le cas ici (orbite à 23 km). La correction à mi-parcours (41 m/s, 2,4 jours avant la Lune) vise le périlune à 10 km près selon le propagateur du planificateur (`predictOurs`), mais le vol réel arrive 77 km plus bas, et la capture circularise à cette altitude. Le remède est de faire viser les corrections avec la propagation même du vol (comme pour l'ISS). Une seconde correction à 80 % du trajet, essayée, aggrave tout (la visée n'est pas faite pour corriger si près de la Lune) : elle a été retirée.

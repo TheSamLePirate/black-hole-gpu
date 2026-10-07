@@ -39,11 +39,11 @@ test("in orbit: the nose on the Earth's centre, the north up, a circular speed",
 
 test("the Earth's scenes all place the camera", () => {
   const names = Object.keys(presets).filter((n) => n.startsWith("Earth:"));
-  expect(names.length).toBe(20);
+  expect(names.length).toBe(21);
   for (const n of names) {
     const p = presets[n]!;
     // (the space station's: beside it at the real time now — iss.test.ts)
-    if (p.pose === "iss" || p.pose === "fleet") continue;
+    if (p.pose === "iss" || p.pose === "fleet" || p.pose === "fleetSpin") continue;
     expect(typeof p.pose).toBe("object");
     const v = earthView(p.time!, p.pose as Parameters<typeof earthView>[1]);
     expect(v.X.every(Number.isFinite)).toBe(true);

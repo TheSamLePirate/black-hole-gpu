@@ -12,7 +12,7 @@ import { secularSpin, secularZonal } from "./system/geopotential";
 import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
 import { ourState, referenceBody } from "./system/our-side";
-import { coastHome } from "./system/our-coast";
+import { coastHome, stableOrbitOf } from "./system/our-coast";
 import { gearHeight, railsDecay, solidBody } from "./system/our-surface";
 import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
@@ -73,6 +73,9 @@ const onAxes = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => lin(lin(A[0], v[0], A[1
 /** a home vector's components on the axes A */
 const inAxes = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [dot(v, A[0]), dot(v, A[1]), dot(v, A[2])];
 
+/** How far ahead a coasting craft in the air's reach is flown by the integrator for its pose [s]. */
+const AIR_EXACT_S = 600;
+
 export class Fleet {
   /** the craft flown */
   active: VesselId = "ranger";
@@ -124,8 +127,8 @@ export class Fleet {
     return { X: st.X, V: st.V, ax: issAxes(st.X, st.V, t) };
   }
 
-  /** A coasting craft's pose at t: Kepler around its body, its attitude held. */
-  private coast(f: FreeState, t: number): Pose {
+  /** A coasting craft's pose at t: Kepler around its body, its attitude held (`exact`: as the flight flies it beyond a few seconds). */
+  private coast(f: FreeState, t: number, exact = true): Pose {
     const mu = solarBody(f.ref)?.mass ?? solarBody("earth")!.mass;
     const B0 = ourState(f.ref, f.t),
       B1 = ourState(f.ref, t);
@@ -140,7 +143,12 @@ export class Fleet {
     // (ahead by more than a few seconds — a rendezvous planned on where it will be: as the flight flies
     // it, the integrator and the rails' mean orbit, as stepFree moves it frame by frame; the two-body arc
     // with the J2's drift once put the Endurance 48 km off where it came to, a rendezvous with it missed)
-    if ((t - f.t) * M_SECONDS > 5 && !(solidBody(f.ref) && gearHeight(f.ref, C0, f.t) < 1e5)) {
+    // (on rails, where it is cheap, always; in the air's reach — no rails, every step flown — within ten
+    // minutes, and not for a drawing: beyond, the analytic coast — the scene's clock set 40 years past the
+    // tumbling Endurance's state at 220 km once made each pose a million steps, the page frozen)
+    const span = (t - f.t) * M_SECONDS;
+    const onRails = span > 5 && !!stableOrbitOf(C0, f.V, f.t);
+    if ((onRails || (exact && span <= AIR_EXACT_S)) && span > 5 && !(solidBody(f.ref) && gearHeight(f.ref, C0, f.t) < 1e5)) {
       let S = { X: C0, V: f.V },
         tt = f.t;
       for (let k = 0; k < 1000 && tt < t - 1e-12; k++) {
@@ -173,8 +181,11 @@ export class Fleet {
   /**
    * A craft's pose at t (null: unknown — the flown one's before the controller gave it, the station's
    * when it is not known). The flown one's own is the controller's, at its time.
+   * `exact` false — a drawing's (the map's paths, hundreds of samples a path) —: in the air's reach (below
+   * ~300 km, no rails), the analytic coast however near — the flight's integrator ran from now to each
+   * sample, minutes of a frozen page for the tumbling Endurance's at 220 km; on rails, exact still (cheap).
    */
-  pose(id: VesselId, t: number, fromStation = false): Pose | null {
+  pose(id: VesselId, t: number, fromStation = false, exact = true): Pose | null {
     const group = this.assembly(id);
     // the root: the flown craft, else the station, else the one the assembly coasts as (fromStation: the
     // station even with the flown craft in the assembly — where the station carries it)
@@ -192,7 +203,7 @@ export class Fleet {
       const anchor = group.find((g) => g !== "iss" && this.free[g as VesselId]) as VesselId | undefined;
       if (anchor) {
         root = anchor;
-        P = this.coast(this.free[anchor]!, t);
+        P = this.coast(this.free[anchor]!, t, exact);
       }
     }
     if (!root || !P) return null;
@@ -469,4 +480,63 @@ export function fleetStart(t: number, active: VesselId): Record<VesselId, Pose> 
     ax: ax.map((v) => onAxes(end.ax, v)) as [Vec3, Vec3, Vec3],
   };
   return { endurance: end, lander: lan, ranger: ran };
+}
+
+/** The tumbling Endurance's start (fleetSpinStart): its height [km], its turn about its axis [rpm], the Ranger out on its fore port's axis [m]. */
+export const SPIN_START = { altKm: 220, rpm: 3, rangerM: 150 };
+
+/**
+ * The film's docking near the Earth: the Endurance in a low orbit (220 km, in the station's plane), turning
+ * about its long axis — its hub's — at 3 rpm, the Lander docked on its hub's aft port; the Ranger flown,
+ * 150 m out on the fore port's axis, its rear hatch to it, at rest against the Endurance's centre of mass
+ * and not turning: to dock it must match the turn (dockCheck: the turn's too), then the assembly's turn is
+ * stopped (the SAS, against the assembly's inertia), then the Endurance flown up to a stable orbit.
+ */
+export function fleetSpinStart(t: number, o: Partial<typeof SPIN_START> = {}): Record<VesselId, Pose> {
+  const S = { ...SPIN_START, ...o };
+  fleetStart(t, "ranger");
+  fleet.free = {};
+  fleet.links = [];
+  const mu = solarBody("earth")!.mass;
+  const E = ourState("earth", t);
+  const iss = issOrbit(t);
+  let e1: Vec3, h: Vec3;
+  if (iss) {
+    e1 = unit(sub(iss.X, E.pos));
+    h = unit(cross(sub(iss.X, E.pos), sub(iss.V, E.vel)));
+  } else {
+    const i = (51.6 * Math.PI) / 180;
+    e1 = [1, 0, 0];
+    h = [0, -Math.sin(i), Math.cos(i)];
+  }
+  const e2 = cross(h, e1);
+  const r = solarBody("earth")!.radius + (S.altKm * 1e3) / M_METRES;
+  // (its long axis along its motion, its top to the zenith; the turn about that axis, right-handed)
+  const z = e2,
+    y = e1,
+    x = cross(y, z);
+  const end: Pose = { X: lin(E.pos, 1, e1, r), V: lin(E.vel, 1, e2, Math.sqrt(mu / r)), ax: [x, y, z] };
+  const w = lin(z, (S.rpm * 2 * Math.PI * M_SECONDS) / 60, z, 0);
+  // (the Lander on the hub's aft port, its dorsal hatch in)
+  const aft = dockedFrame(VESSELS.lander.ports[0]!, VESSELS.endurance.ports[1]!, [1, 0, 0]);
+  fleet.links.push({ a: "endurance", b: "lander", pa: 1, pb: 0, c: aft.c, ax: aft.ax });
+  // (the assembly's centre of mass on the axis: the hub's ports are on it)
+  const com = fleet.massProps("endurance").com;
+  fleet.setFree("endurance", { ...end, w }, t, com);
+  const lan: Pose = {
+    X: lin(end.X, 1, onAxes(end.ax, aft.c), 1 / M_METRES),
+    V: end.V,
+    ax: aft.ax.map((v) => onAxes(end.ax, v)) as [Vec3, Vec3, Vec3],
+    w,
+  };
+  // (the Ranger docked on the fore port, then backed out along its axis — not turning)
+  const host = VESSELS.endurance.ports[0]!;
+  const fore = dockedFrame(VESSELS.ranger.ports[0]!, host, [0, 1, 0]);
+  const c = lin(fore.c, 1, host.axis, S.rangerM);
+  const ran: Pose = {
+    X: lin(end.X, 1, onAxes(end.ax, c), 1 / M_METRES),
+    V: end.V,
+    ax: fore.ax.map((v) => onAxes(end.ax, v)) as [Vec3, Vec3, Vec3],
+  };
+  return { endurance: { ...end, w }, lander: lan, ranger: ran };
 }

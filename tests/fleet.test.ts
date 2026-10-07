@@ -121,3 +121,35 @@ test("a coasting craft's velocity is its place's own rate — the J2 drift's tur
       expect(err).toBeLessThan(0.15);
     }
 });
+
+test("the tumbling Endurance at 220 km: turning about its hub, the Lander on it; the map's path of it drawn in a blink", async () => {
+  const { fleetSpinStart, SPIN_START } = await import("../src/fleet");
+  const { ourTrack } = await import("../src/ui/map3d/scene");
+  const t0 = gameTimeOf(Date.UTC(2026, 9, 1, 12));
+  const P = fleetSpinStart(t0);
+  const E = ourState("earth", t0);
+  const r = Math.hypot(...(P.endurance.X.map((x, i) => x - E.pos[i]!) as V)) * M_METRES;
+  expect(Math.abs(r - solarBody("earth")!.radius * M_METRES - SPIN_START.altKm * 1e3)).toBeLessThan(1e3);
+  // (its turn: about its long axis, 3 rpm; the Lander turning with it, the Ranger not)
+  const w = P.endurance.w!;
+  expect((Math.hypot(...w) / M_SECONDS) * (60 / (2 * Math.PI))).toBeCloseTo(SPIN_START.rpm, 6);
+  expect(Math.abs(dot(w as V, P.endurance.ax[2] as V)) / Math.hypot(...w)).toBeCloseTo(1, 9);
+  expect(fleet.links.some((l) => l.a === "endurance" && l.b === "lander")).toBe(true);
+  expect(fleet.pose("lander", t0)!.w).toEqual(w);
+  // (the map's path of it — 400 samples over three hours: in the air's reach, no rails; each sample once
+  // flown by the integrator from now, minutes of a frozen page — now the analytic coast, near the exact)
+  const times = Array.from({ length: 400 }, (_, k) => t0 + ((k + 1) * 27) / M_SECONDS);
+  const a = performance.now();
+  const track = ourTrack("endurance", times);
+  expect(performance.now() - a).toBeLessThan(1000);
+  // (18 min on: 3 km from the flight's own — a dot on the map)
+  const ex = fleet.pose("endurance", times[39]!)!.X;
+  expect(Math.hypot(...(track[39]!.map((x, i) => x - ex[i]!) as V)) * M_METRES).toBeLessThan(5000);
+  // (the scene's clock set far past its state — the place-and-time panel, a test's setSceneTime(0): 40
+  // years on — a pose at once, not a million steps of the integrator)
+  const b = performance.now();
+  expect(fleet.pose("endurance", t0 + (40 * 365.25 * 86400) / M_SECONDS)).not.toBeNull();
+  expect(performance.now() - b).toBeLessThan(200);
+  // (the fleet as the other tests find it)
+  fleetStart(t0, "ranger");
+});

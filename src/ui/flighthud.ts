@@ -2386,6 +2386,8 @@ export class FlightHud {
     row(t("Closing"), `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
     row(t("Offset"), `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));
     row(t("Ports' axes"), `${d.angle.toFixed(1)}°`, ok(d.angle < 10));
+    // (the turns apart — against a turning target, matched to dock)
+    if (d.spin >= 0.5) row(t("Turn against it"), `${d.spin.toFixed(1)}°/s`, ok(d.spin < 3));
     // the docking autopilot: what it does; the button that engages or stops it (B)
     if (i.dockPhase) row(t("Autopilot"), i.dockPhase, "ok");
     const b = h("button", "fl-go", i.dockPhase ? t("STOP AUTO-DOCK") : t("AUTO-DOCK · B")) as HTMLButtonElement;

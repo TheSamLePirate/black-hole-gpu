@@ -165,6 +165,7 @@ export default {
   "OFFSET {0} m · CONE {1} m": "ÉCART {0} m · CÔNE {1} m",
   "PORTS {0}°": "PORTS {0}°",
   "HOLD AT 10 m — ALIGN": "ATTENTE À 10 m — ALIGNEZ",
+  "MATCH ITS TURN · {0}°/s APART": "SUIVEZ SA ROTATION · {0}°/s D'ÉCART",
   "CONTACT IN ~{0}": "CONTACT DANS ~{0}",
   "Along · across": "Axe · travers",
   "in the corridor (cone {0} m)": "dans le couloir (cône de {0} m)",

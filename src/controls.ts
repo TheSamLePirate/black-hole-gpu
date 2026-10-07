@@ -102,6 +102,8 @@ export interface DockInfo {
   lateralRate: number;
   /** the two ports' axes apart (docked: facing) [deg] */
   angle: number;
+  /** the flown craft's turn against the target's [deg/s] (a capture: within 3) */
+  spin: number;
   docked: boolean;
   /** the own ring's centre and axis, the target port's (home) */
   ring: Vec3;
@@ -784,7 +786,7 @@ export class CameraController {
     target: VesselId | "iss";
     port: number;
     phase: string;
-    att: { nose: Vec3; up: Vec3 } | null;
+    att: { nose: Vec3; up: Vec3; rate?: Vec3 } | null;
     warp: number;
     set: number;
     corridor: boolean;
