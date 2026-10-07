@@ -3,7 +3,7 @@
 Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDIT-AAA-2026-10-03.md). Il est mis à jour à chaque étape, avec un commit par étape et un push par phase (chaque push déploie GitHub Pages).
 
 **Décisions du propriétaire (03/10/2026) :**
-- je travaille seul sur `main` ;
+- je travaille seul sur `main` (du 05 au 07/10, le travail s'est fait sur la branche `test-kimi`, déployée sous `/test/`, puis fusionnée dans `main` le 07/10 en avance rapide, `229b2f3`) ;
 - chaque phase est poussée ;
 - ordre : **phase 0 → G0 Kerr Bench → U0 → phase 1 → le reste** ;
 - interface en **FR + EN** (i18n).
@@ -12,12 +12,36 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 
 | Pilier | Départ (audit) | Actuel | Cible AAA |
 |---|---:|---:|---:|
-| Physique | 64 | 78 | 80 |
-| Code + tests | 44 | 73 | 75 |
-| Technologie | 67 | 77 | 80 |
-| UI / UX / HUD | 44 | 76 | 80 |
-| Produit / gameplay | 50 | 68 | 80 |
-| **Global** | **≈ 54** | **≈ 75** | **≈ 78–80** |
+| Physique | 64 | 80 | 80 |
+| Code + tests | 44 | 76 | 75 |
+| Technologie | 67 | 79 | 80 |
+| UI / UX / HUD | 44 | 77 | 80 |
+| Produit / gameplay | 50 | 71 | 80 |
+| **Global** | **≈ 54** | **≈ 77** | **≈ 78–80** |
+
+*Réestimé après la fusion de `test-kimi` (07/10/2026).* **Physique** (78 → 80, la cible) :
+- les rails suivent l'orbite que vole l'intégrateur du vol (10 m d'écart par tour, contre 49 km) ;
+- les engins de la flotte tombent comme l'engin piloté, si bien que les rendez-vous avec eux sont exacts ;
+- un monde solide pose sur son relief, et non sur sa sphère moyenne ;
+- les vitesses de rotation de l'IAU sont corrigées, ainsi que tous les usages du WGS84 ;
+- la coque d'un engin en orbite basse ne cuit plus dans la thermosphère ;
+- le planificateur vole les poussées finies exactement comme le pilote (une correction de 43 m/s partait à 0,9° de travers).
+
+**Code + tests** (73 → 76, cible dépassée) :
+- le **labo de vol** : 84 scénarios volés dans l'application, observés, pilotables, tracés et notés ;
+- l'exécuteur distant sur kerr-mini et un Chrome par Mac ;
+- 508 tests unitaires ;
+- la CI : seul `main` décide de la production, et la prévisualisation est déployée sous `/test/`.
+
+Reste à régler : 1 ou 2 échecs aléatoires au démarrage par suite e2e complète.
+
+**Technologie** (77 → 79) : la première image ne dépend plus que de 2 pipelines (les autres se compilent en arrière-plan), les éphémérides et le ciel se téléchargent pendant la compilation, le palier de qualité monte et descend selon la mesure et est retenu d'une session à l'autre, le démarrage WebGPU est borné et diagnostiqué, et les gros plans de Jupiter utilisent les cartes Cassini/Juno 8K.
+
+**UI** (76 → 77) : le temps du hub et celui du pilote sont distincts, et une orbite quasi circulaire s'affiche par sa hauteur moyenne et son écart.
+
+**Produit** (68 → 71) : les autopilotes sont fiables dans tous les domaines du labo (note de la campagne : **15/20**, voir [`CAMPAGNE-AUTOPILOTES-2026-10-07.md`](CAMPAGNE-AUTOPILOTES-2026-10-07.md)), et une nouvelle scène de jeu s'ajoute : l'amarrage à l'Endurance en rotation.
+
+Il manque toujours la progression et les objectifs suivis.
 
 *Réestimé après G4 (04/10/2026).* Technologie : le vrai sol de la Lune et de Mars (LOLA, MOLA : cratères, ombres, terminateur), l'imagerie de la NASA près de la Terre (611 m le jour, les lumières de VIIRS la nuit), la Terre d'orbite 4 à 6 fois moins chère (O13) ; la reprojection relativiste (R9) mesurée inutile, le PBR du Ranger sans matière (textures génériques). Reste au sol : l'imagerie plus fine que 611 m (vol bas). Code + tests : le vol rejoué déterministe (météo, tuiles), la mesure à rayons égaux corrigée (le gouverneur P2 annulé). *Avant : réestimé après G3 (04/10/2026).* Technologie : les étoiles nettes en mouvement (R8, +3,5 dB), la caméra tenue sans retour aux blocs, 270 Mo de VRAM rendus près d'une lune (BC7/BC5), pistes, océan, nuages et anneaux crédibles ; restent la reprojection relativiste, l'imagerie au sol, le PBR du Ranger (G4). Code + tests : les e2e de nouveau tous verts (déterminisme), la mesure de qualité fiable. *Avant : réestimé après la phase 2 (04/10/2026).* Physique : J2–J4 et dérive séculaire, propergol et masse, poussée selon la pression, atmosphères mesurées (Vénus, Mars, Titan) et thermosphère, corps rigide (tenseur, Euler), train d'atterrissage à ressorts et pneus, aérodynamique par surfaces, vent et turbulence de Dryden, Terre WGS84 (rendu et physique), Lambert d'Izzo, pas symplectique symétrisé, attitude gyroscopique (Fermi–Walker), vols de référence (ISS/SGP4, Apollo 4, Falcon 9). Restent : STS-1 (données), autorité des gouvernes abstraite, moment aéro une fois par image, attitude stockée en angles, pistes non dessinées, géoïde. Code + tests : 392 unitaires (dont les références), goldens ré-enregistrés à chaque changement voulu. *Avant : réestimé après U4 et U5 (03/10/2026).* UI : le langage HUD partout (kit, polices, réglages, galerie, dialogues), écran titre, menu pause, missions briefées, mode photo, tablette, roue radiale, indices de touches, manette dans les menus, Master caution, HUD par phase avec son view-model et son cadre libre, aides de rentrée et d'approche, glyphes distincts ; **toutes les touches remappables**, échelle d'interface, palette Okabe–Ito, réduction des animations, focus visible ; **interface entière en français** ; carte au doigt ; contraste AA vérifié sur le pire fond. Produit : une boucle d'entrée (titre → missions → vol → pause/sauvegarde) existe ; pas encore de progression ni d'objectifs suivis. Technologie : HUD 11,6 → 2,7 ms par frame. Code + tests : 334 unitaires, 58 e2e (fumée, accessibilité, français, tactile, S5 contraste/ratchet/fuites/tailles, titre, manette, préférences, vols de référence, fréquence).
 
@@ -253,7 +277,107 @@ Plan : [`PLAN-ASSISTANT.md`](PLAN-ASSISTANT.md) (décisions du propriétaire, co
 | M1.2 | **La page** `src/pwa.ts` : manifest et icônes déclarés, worker enregistré (pas sur le serveur de dev à rechargement à chaud, pas dans l'e2e sauf `sw=1`, pas sur `#bench` — un chargement à froid est ce qu'il mesure), toast quand un build attend, rechargement dessus, **coquille réchauffée en temps libre** (ce que la page a chargé avant que le worker ne la contrôle), `__bh.pwa` (ready, stats, clearTiles, update) ; `server.ts` et `scripts/build-pages.ts` servent `sw.js` (nommé par le build), le manifest, les icônes, `precache.json` ; `bun run build` complet | fait | `6140d81` |
 | M1.3 | **e2e** `tests/e2e/pwa.e2e.test.ts` (à vraies entrées, réseau du monde coupé comme partout sauf demandé) : le worker contrôle la page, la coquille (63 fichiers) et les tuiles mises en cache (224, ~9,8 Mo au cap Canaveral), le manifest servi ; **le réseau coupé : la page se recharge de son cache et la scène joue** (unitaires : les règles et l'éviction) | fait | `6140d81` |
 
+## Branche `test-kimi` : chargement, paliers, démarrage (Kimi, 05/10/2026)
+
+Plan : [`ANALYSE-CHARGEMENT-GPU.md`](ANALYSE-CHARGEMENT-GPU.md) §4, mise en œuvre au §8. Ce travail réalise en partie **M2** du [plan Monde](PLAN-MONDE.md) : le palier mesuré plutôt que deviné, le démarrage robuste. Il reste à faire : la recréation à chaud du device et le découpage du code, mesuré non rentable ici (les modules candidats sont tous câblés au démarrage).
+
+| # | Étape | Commit |
+|---|---|---|
+| L1 | La **première image sur 2 pipelines** (traceur temps réel et environnement) ; la LUT et le noyau de qualité compilés en arrière-plan | `33625d0` |
+| L2 | Shaders validés en parallèle, modules relus au lieu d'être réanalysés | `d997ec1` |
+| L3 | Éphémérides et ciel téléchargés pendant la compilation | `2d7b4bc` |
+| L4 | Le bouton « Entrer » n'attend plus la première image | `33b5d9f` |
+| L5 | Variantes spécialisées du traceur compilées par phase, sous LRU | `fd0c732` |
+| L6 | **Palier mesuré dans les deux sens**, retenu par identité d'adaptateur ; le coût de l'intégration suit le palier | `8b6d381`, `8119f4e` |
+| L7 | Pipelines d'affichage et de post-traitement compilés en asynchrone | `3e96fbf` |
+| L8 | e2e `reload` : le rechargement profite du cache disque des shaders (froid 4,4 s, chaud mesuré) | `f31ea4d` |
+| L9 | Démarrage WebGPU borné, politique de qualité GPU, préchargement de la Terre ; **diagnostics** des pannes graphiques | `c963fe7`, `dd5b059` |
+| L10 | Vitesses de rotation de l'IAU corrigées ; Jupiter en gros plan (Cassini/Juno 8K, mips HD) | `c78718c`, `9538f33` |
+| L11 | Utilisateurs du WGS84 corrigés (éclipses dans l'air, rendu et vol) | `699a27c`, `8b6562c` |
+| L12 | Temps du hub et temps du pilote indépendants ; continuité de la carte du trou de ver | `a452eb7`, `ea2590f` |
+
+## Audit de `test-kimi` et corrections (06/10/2026)
+
+Rapport : [`AUDIT-TEST-KIMI-2026-10-06.md`](AUDIT-TEST-KIMI-2026-10-06.md). Sur 23 commits, deux régressions graves :
+- **H1** : toute erreur JavaScript après le démarrage tuait l'application ;
+- **H2** : l'air des mondes de Gargantua était effondré ou NaN.
+
+Tout est corrigé, avec les 10 points moyens (M1–M10) et les mineurs, chacun avec son commit (§8 du rapport) : `6541c36`, `2037b74`, `e0d5f7a`, `9c40427`, `9e048d8`, `cd727f5`, `ebc9165`, `368b8d4`, `dd43842`, `b3d7b23`… e2e 106/0.
+
+CI : la branche est prévisualisée sous `/test/`. **Seul `main` décide de la production** : une prévisualisation en échec est signalée et laissée de côté. Chaque déploiement garde son propre Service Worker.
+
+## Labo de vol et campagne des autopilotes (06–07/10/2026)
+
+Outil : [`FLIGHTLAB.md`](FLIGHTLAB.md), soit `scripts/flightlab.ts` et `tests/flight/`. Les scénarios volent dans l'application réelle, à pas fixe ou en temps réel. Chacun est observé (télémétrie, captures aux moments clés), pilotable pendant le vol (serveur de contrôle) et noté sur la qualité du vol : taux de chute, axe, couloir, g, oscillations, Δv face à l'optimum. Ils se répartissent entre ce Mac et kerr-mini. Il y en a **84**, avec un rapport HTML par campagne.
+
+Rapport : [`CAMPAGNE-AUTOPILOTES-2026-10-07.md`](CAMPAGNE-AUTOPILOTES-2026-10-07.md). **Note : 15/20.**
+
+| Domaine | Note | Début de campagne → fin |
+|---|---|---|
+| Amarrage et rendez-vous | 18/20 | ISS en échec → 12/12 amarrages à 0,08–0,09 m/s, cible en rotation comprise ; rendez-vous ISS, Endurance et Lander |
+| Rentrée et planés | 17/20 | 0/4 et 2/7 → 4/4 et 7/7, toucher à 0,3–0,7 m/s |
+| Lander et descentes | 16/20 | 0/4 → 4/4 sites, 5/5 atterrissages lunaires |
+| Missions vers une lune ou une planète | 15/20 | Lune à 23 km ou impact → 100,2–100,7 km ; Mars 293 → 300,4–302,5 km ; **Jupiter échoue** |
+| Montées et décollages | 14/20 | 0/2 → 2/2, Δv +47 % → +27–30 % de l'optimum |
+| Gargantua et trou de ver | 12/20 | mission automatique réussie ; retour par le trou de ver, Edmunds et Miller non traités |
+| Fiabilité des tests | 15/20 | unitaires 508/0 ; e2e : 1 ou 2 échecs aléatoires par suite complète |
+
+Principaux changements de fond :
+- **rentrée :** couloir corrigé de la rotation de la Terre, phugoïde amortie ;
+- **approche :** spirale gérée sur l'énergie ;
+- **descente :** plus de battement entre modes ;
+- **montée :** guidage explicite hors de l'air ;
+- **rails :** ils volent l'orbite moyenne de l'intégrateur (`9c217b2`) ;
+- **rendez-vous :** planifiés sur la physique du vol (`f5a986b`, `89ccf20`) ;
+- **amarrage :** une cible qui tourne (`af9b583`) ;
+- **missions :** la poussée volée comme elle a été visée, le plan B lissé, un solveur de Levenberg-Marquardt, la boucle fermée (`eedef67`) ;
+- **aéro :** la thermosphère ne cuit plus les coques (`6808fc1`).
+
+Nouvelle scène : *Docking to the tumbling Endurance* (à 300 km, 3 tr/min ; amarrage, arrêt de la rotation, puis montée à 400 km).
+
+**Couverture de l'audit (§3.2) :**
+- n° 1 (de l'orbite à l'atterrissage) : couvert, par les rentrées et les planés du labo et par l'e2e d'atterrissage ;
+- n° 7 (amarrage ISS, missions) : couvert ;
+- n° 2 (les scènes chargées sans erreur) : en partie, par `worlds` et `ui-scenes-loading` ;
+- n° 4 (perte du device) : non couvert.
+
+## Ce qui reste pour l'AAA (au 07/10/2026)
+
+Par ordre de gain :
+
+1. **Produit, 71 → 80** : la **progression et les objectifs suivis** (phase 4 de l'audit : carrière, école de pilotage, préréglages de difficulté, musique et voix ; plan Monde M10). C'est le seul pilier encore loin de sa cible.
+2. **Autopilotes, 15 → 18/20** :
+   - la mission vers Jupiter ;
+   - la montée à +10 % de l'optimum au plus ;
+   - des repères de pôle unifiés (pôle de date) ;
+   - le retour par le trou de ver et Gargantua (points 9 et 10 du plan des autopilotes) ;
+   - le flottement au Bourget.
+3. **Robustesse (M2)** : la **recréation à chaud du device** perdu, et un test e2e de la perte du GPU. Il faut aussi stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
+4. **Technologie, 79 → 80, puis le plan Monde M3–M9** :
+   - maillages quantifiés ;
+   - météo ;
+   - aéroports vivants (balisage de nuit, ILS) ;
+   - audio spatial ;
+   - HOTAS ;
+   - cockpit interactif ;
+   - ≤ 8 storage buffers pour Android et Safari (action 7 du chargement, reportée).
+5. **UI, 77 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde.
+
 ## Journal
+
+- **07/10/2026 — fusion de `test-kimi` dans `main`** (avance rapide, `229b2f3`, CI vert, site et `/test/` déployés).
+  - **Campagne des autopilotes :** note 15/20, détails ci-dessus.
+  - **Nouvelle scène :** l'Endurance en rotation.
+  - **Missions :** Lune et Mars à l'altitude demandée.
+  - **CI :** la planification ISS passe de 1,6 à 0,7 s, les tests du verrou Chrome et des tuiles sont rendus stables sur le serveur de GitHub, et chaque carte de scène a son `data-testid` (cliquet 101 → 22).
+
+  Leçons :
+  - **le planificateur et le vol doivent partager le même modèle** de poussée et de propagation : chaque écart s'est payé en dizaines de kilomètres à l'arrivée ;
+  - **un scénario doit fixer sa date** : à l'heure de la page, chaque vol est une autre mission ;
+  - **un calcul visé par un solveur doit être lisse** : un échantillon qui saute rend la jacobienne inutilisable ;
+  - **une scène qui gèle se diagnostique par un profil CPU** pris pendant le gel.
+- **06/10/2026** : audit de `test-kimi` et corrections (H1, H2, M1–M10) ; le labo de vol (47 puis 84 scénarios) ; un Chrome par Mac ; la première campagne des autopilotes.
+- **05/10/2026** (Kimi, `test-kimi`) : le chargement (première image sur 2 pipelines, compilations en arrière-plan), le palier mesuré dans les deux sens, le démarrage borné, Jupiter 8K, WGS84, IAU, le temps du hub et celui du pilote.
 
 - **M1** (05/10/2026) : la PWA — coquille cache-first, tuiles de la Terre sous budget (LRU, index en IndexedDB), hors ligne la dernière scène joue. Leçon : une assertion e2e qui cherche `index-<hash>.js` ne voit pas le chunk du serveur de dev (`chunk-<hash>.js`) — viser le script principal chargé par la page, pas un nom.
 
