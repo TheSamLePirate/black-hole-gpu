@@ -11,6 +11,7 @@
 //   await __bh.game.audit({ planner: true })
 
 import { fleet } from "../fleet";
+import { setMountVessel } from "../mounts";
 import type { Settings, Target } from "../settings";
 import { defaultSettings, pickSettings, QUALITY } from "../settings";
 import type { CameraController } from "../controls";
@@ -560,7 +561,11 @@ export class GameTools {
         spentBy: { ...fleet.spent },
         properTime: c.properTime,
         tunnelEntry: c.tunnelEntry ?? undefined,
+        entrySite: c.entrySite?.name ?? null,
       },
+      // (the fleet as it flies: the craft flown, the others' coasts, the docks — reloaded, the craft flown
+      // is not "switched to": a Lander saved over Kennedy once reloaded in its 500 km orbit)
+      fleet: { active: fleet.active, free: structuredClone(fleet.free), links: structuredClone(fleet.links) },
       plan: c.plan.nodes.length
         ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission, universe: c.plan.universe }
         : null,
@@ -581,6 +586,15 @@ export class GameTools {
     this.ctx.setTime(save.time);
     c.setCinematic(null);
     c.newFlight();
+    // (the fleet as saved, the craft flown the save's — not switched to from the one flown before: the
+    // switch puts the camera where the fleet had that craft, not where the save has it)
+    if (save.fleet) {
+      fleet.free = structuredClone(save.fleet.free);
+      fleet.links = structuredClone(save.fleet.links);
+    }
+    fleet.active = save.fleet?.active ?? s.vessel;
+    s.vessel = fleet.active;
+    setMountVessel(fleet.active);
     c.tunnelEntry = save.ship.tunnelEntry ?? null;
     if (save.ship.piloting && s.ship) {
       c.setPilot(true);
@@ -603,6 +617,9 @@ export class GameTools {
       if (save.ship.auto !== "none" && (save.ship.auto !== "node" || save.plan)) p.auto = save.ship.auto;
     }
     c.setOurLanded(save.ship.landed);
+    // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur)
+    const site = save.ship.entrySite ? SITES.find((q) => q.name === save.ship.entrySite) : undefined;
+    if (site) c.entrySite = site;
     // (the free camera falling freely: again, from its saved velocity)
     if (!s.ship && !!save.camera?.gravity !== c.gravity) {
       const vel = [s.velR, s.velT, s.velP];

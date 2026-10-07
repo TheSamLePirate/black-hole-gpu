@@ -1396,7 +1396,18 @@ function entryStep(
       this.onPilotMessage?.(tf("{0} has no air: a powered descent to {1}", name, site.name));
       return null;
     }
-    if (h > top) {
+    // (above the air but already falling into it — the deorbit flown: its periapsis deep in the air —: no
+    // deorbit to plan, the fall itself guided; engaged there — a game saved after its burn, reloaded —
+    // it planned a deorbit from the falling arc, found none and let go)
+    const mu0 = len3(fr.env.gravity(fr.s.x, [0, 0, 0])) * dot3(fr.s.x, fr.s.x);
+    const r0 = len3(fr.s.x),
+      v0 = len3(fr.s.v);
+    const aSm = 1 / (2 / r0 - (v0 * v0) / mu0);
+    const hv = cross(fr.s.x, fr.s.v);
+    const ecc = Math.sqrt(Math.max(1 - dot3(hv, hv) / (mu0 * aSm), 0));
+    const peH = aSm > 0 ? aSm * (1 - ecc) - fr.env.R : -Infinity;
+    const falling = peH < Math.min(100e3, 0.5 * top);
+    if (h > top && !falling) {
       // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
       if (!site) return say(tf("Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)", name));
       this.onPilotMessage?.(tf("Entry to {0}: planning the deorbit…", site.name));

@@ -101,3 +101,49 @@ test("every setting has a kind; the player's own are the budget, the display, th
   // (where the ship is, when, what it flies: the scene's)
   for (const k of ["distance", "spin", "vessel", "timeSpeed", "target"] as const) expect(SETTING_KIND[k]).toBe("scene");
 });
+
+test("the fleet and the entry's site travel with a save; a foreign fleet is left out, the flight still loads", () => {
+  // (without them, a Lander saved over Kennedy reloaded in its 500 km orbit — the craft "switched to" where
+  // the fleet had it —, a docking to the ISS reloaded by the wormhole, a deorbit to Le Bourget aimed at Baikonur)
+  const g: GameSave = {
+    ...save(),
+    ship: { ...save().ship, entrySite: "Paris - Le Bourget" },
+    fleet: {
+      active: "lander",
+      free: {
+        endurance: {
+          X: [1, 2, 3],
+          V: [0, 1e-5, 0],
+          ax: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          t: 109.7,
+          ref: "earth",
+          w: [0, 0, 1e-3],
+        },
+      },
+      links: [
+        {
+          a: "endurance",
+          b: "ranger",
+          pa: 0,
+          pb: 0,
+          c: [0, 0, 20],
+          ax: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+        },
+      ],
+    },
+  };
+  expect(parseSave(JSON.stringify(g))).toEqual(g);
+  const bad = checkSave(JSON.parse(JSON.stringify({ ...g, fleet: { active: "zeppelin", free: {}, links: [] } })));
+  expect(bad.fleet).toBeUndefined();
+  expect(bad.ship.entrySite).toBe("Paris - Le Bourget");
+  // (an older save: no fleet, no site — loaded as before)
+  expect(checkSave(JSON.parse(JSON.stringify(save()))).fleet).toBeUndefined();
+});

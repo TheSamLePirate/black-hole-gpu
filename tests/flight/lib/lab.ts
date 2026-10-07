@@ -179,6 +179,13 @@ export class Lab {
     const n = String(this.shots.length + 1).padStart(2, "0");
     const file = `${this.o.dir}/shots/${n}-${label.replace(/[^a-z0-9.=-]+/gi, "_").slice(0, 60)}.png`;
     await this.app.shot(file);
+    // (LAB_STATES=1: the game saved beside each picture — scripts/hud-gallery.ts reloads it to picture the
+    // HUD again in the very same state, before and after a change)
+    if (process.env.LAB_STATES)
+      await this.app
+        .js<string>("JSON.stringify(__bh.game.snapshot('lab'))")
+        .then((json) => Bun.write(file.replace(/\.png$/, ".save.json"), json))
+        .catch(() => {});
     this.shots.push(file);
     this.note("shot", file.slice(this.o.dir.length + 1));
     return file;

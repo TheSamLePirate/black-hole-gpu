@@ -12,6 +12,8 @@ import { caught } from "../debug";
 import { store } from "../util/storage";
 import type { ManeuverNode } from "../maneuver";
 import type { Hold, Auto } from "../pilot";
+import type { DockLink, FreeState } from "../fleet";
+import { VESSEL_IDS, type VesselId } from "../vessels";
 
 /** The current version of a save. */
 export const SAVE_VERSION = 2;
@@ -42,7 +44,12 @@ export interface GameSave {
     spentBy?: Record<string, number>;
     properTime: number;
     tunnelEntry?: "ours" | "gargantua";
+    /** the site the entry autopilot flies to (its name; older saves: none — the nearest pass's) */
+    entrySite?: string | null;
   };
+  /** the fleet: the craft flown, the ones coasting, the docks (older saves: none — the craft the settings
+   *  name is the one flown, the others where the scene puts them) */
+  fleet?: { active: VesselId; free: Partial<Record<VesselId, FreeState>>; links: DockLink[] };
   plan: { nodes: ManeuverNode[]; note: string; mission: unknown; universe?: "ours" | "gargantua" } | null;
   /** the free camera (no ship): falling freely (older saves: none) */
   camera?: { gravity: boolean };
@@ -146,6 +153,13 @@ export function checkSave(x: unknown): GameSave {
   if (g.plan !== null && g.plan !== undefined && !Array.isArray(g.plan.nodes)) fault("plan");
   if (sh.tunnelEntry !== undefined && sh.tunnelEntry !== "ours" && sh.tunnelEntry !== "gargantua") fault("tunnel entry side");
   if (g.plan?.universe !== undefined && g.plan.universe !== "ours" && g.plan.universe !== "gargantua") fault("plan universe");
+  // (a fleet that is not one — a foreign file's — is left out, told: the flight still loads, the others
+  // where the scene puts them)
+  const F = g.fleet;
+  if (F !== undefined && (!F || !VESSEL_IDS.includes(F.active) || typeof F.free !== "object" || !F.free || !Array.isArray(F.links))) {
+    caught("save", new Error("the fleet left out: not a fleet"));
+    delete g.fleet;
+  }
   return g;
 }
 
