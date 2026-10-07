@@ -171,6 +171,9 @@ export class SceneGallery {
       thumb,
       h("span", "sg-text", h("b", "", sceneTitle(name)), h("span", "", t(info?.description ?? ""))),
     );
+    // (each card its own test id — the preset's name: a scene added no longer adds a control the tests
+    // cannot name, e2e s5's ratchet)
+    card.dataset.testid = `scene-${name}`;
     card.onclick = () => {
       this.close();
       this.o.apply(name);
