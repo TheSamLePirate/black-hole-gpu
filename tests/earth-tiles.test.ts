@@ -141,4 +141,5 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
   // (off it, 20 m apart: no step — the terraces were the map's texel-to-texel jumps, up to 400 m here)
   const h = off.map((q) => ground(q, 1));
   for (let k = 1; k < h.length; k++) expect(Math.abs(h[k]! - h[k - 1]!)).toBeLessThan(15);
-});
+  // (every wanted tile filled from the map: 3 s here, over the 5 s default on GitHub's runner)
+}, 30_000);

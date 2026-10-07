@@ -42,22 +42,27 @@ test("a holder whose process is gone is cleared", async () => {
   expect(await p.exited).toBe(0);
 }, 30_000);
 
-test("a test Chrome whose process died is found and ended — never the user's own Chrome", async () => {
-  const { orphanChromes } = await import("../scripts/lib/chrome-lock");
-  // (an orphan: a process named like a test Chrome — a DevTools port — whose parent exited, adopted by launchd)
-  Bun.spawnSync([
-    "bash",
-    "-c",
-    `(exec -a "Google Chrome" perl -e 'sleep 60' -- --remote-debugging-port=9999 --user-data-dir=/tmp/kerr-e2e-test &)`,
-  ]);
-  // (the user's Chrome: no DevTools port — left alone)
-  Bun.spawnSync(["bash", "-c", `(exec -a "Google Chrome" perl -e 'sleep 60' -- --user-data-dir=/tmp/kerr-user-test &)`]);
-  await Bun.sleep(300);
-  const found = orphanChromes().filter((o) => o.profile === "/tmp/kerr-e2e-test");
-  expect(found.length).toBe(1);
-  expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-user-test")).toBe(false);
-  orphanChromes(true);
-  await Bun.sleep(300);
-  expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-e2e-test")).toBe(false);
-  Bun.spawnSync(["pkill", "-f", "kerr-user-test"]);
-});
+// (macOS only: an orphan is adopted by launchd, pid 1 — on Linux, by whatever subreaper the session has)
+test.skipIf(process.platform !== "darwin")(
+  "a test Chrome whose process died is found and ended — never the user's own Chrome",
+  async () => {
+    const { orphanChromes } = await import("../scripts/lib/chrome-lock");
+    // (an orphan: a process named like a test Chrome — a DevTools port — whose parent exited, adopted by launchd;
+    // its output let go — holding spawnSync's pipe, it kept the test waiting its whole minute of sleep)
+    Bun.spawnSync([
+      "bash",
+      "-c",
+      `(exec -a "Google Chrome" perl -e 'sleep 60' -- --remote-debugging-port=9999 --user-data-dir=/tmp/kerr-e2e-test >/dev/null 2>&1 &)`,
+    ]);
+    // (the user's Chrome: no DevTools port — left alone)
+    Bun.spawnSync(["bash", "-c", `(exec -a "Google Chrome" perl -e 'sleep 60' -- --user-data-dir=/tmp/kerr-user-test >/dev/null 2>&1 &)`]);
+    await Bun.sleep(300);
+    const found = orphanChromes().filter((o) => o.profile === "/tmp/kerr-e2e-test");
+    expect(found.length).toBe(1);
+    expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-user-test")).toBe(false);
+    orphanChromes(true);
+    await Bun.sleep(300);
+    expect(orphanChromes().some((o) => o.profile === "/tmp/kerr-e2e-test")).toBe(false);
+    Bun.spawnSync(["pkill", "-f", "kerr-user-test"]);
+  },
+);
