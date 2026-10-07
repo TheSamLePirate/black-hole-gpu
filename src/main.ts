@@ -1379,6 +1379,11 @@ async function main() {
   camera.onPilotMessage = (text) => events.emit("pilotMessage", { text, t: sim.time });
   camera.onAirEntry = () => events.emit("airEntry", { t: sim.time });
   camera.onCraftLost = (why) => events.emit("craftLost", { why, t: sim.time });
+  // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
+  camera.onFlightReport = (r) => {
+    flightHud.showReport(r);
+    gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
+  };
   events.on("pilotMessage", ({ text, t }) => {
     panel.toast(text);
     cockpitScreens.message(text);

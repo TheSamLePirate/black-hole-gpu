@@ -1,5 +1,7 @@
 // The CameraController — docking: the ports, the approach, the contact.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { recorder } from "../game/recorder";
+import { gradeDocking } from "../game/report";
 import { cameraFrame, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
 import { type Body, isCraft } from "../targeting";
@@ -455,6 +457,20 @@ function dockCheck(this: CameraController) {
   if (fleet.flownAssembly().includes(s.target as VesselId)) this.selectTarget(nav.ref as Body);
   this.onPilotMessage?.(
     `Docked to the ${g.title} · ${g.name}${g.own !== fleet.active ? ` (the ${VESSELS[g.own].name}'s ${guest.name})` : ""} · ${speed.toFixed(2)} m/s`,
+  );
+  // (the docking's report — game/report.ts —: the capture's figures graded)
+  const S = recorder.samples;
+  this.onFlightReport?.(
+    gradeDocking({
+      target: g.title,
+      port: g.name,
+      closing: speed,
+      lateral: g.lateral,
+      angle: g.angle,
+      spin: g.spin,
+      dv: this.spent * C_MPS,
+      flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
+    }),
   );
 }
 

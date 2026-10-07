@@ -1358,6 +1358,21 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-gb-about { font: 500 11px/1.35 var(--hud-font); color: rgba(205, 220, 240, 0.8); margin: 0 0 6px; max-width: 100%; }
 .fl-gb-about.off { color: var(--hud-amber); }
 .fl-gb-cv { display: block; width: 100%; height: 300px; cursor: crosshair; }
+/* the flight's report (game/report.ts): a card over the view's top, its grade, each figure judged */
+.fl-report { left: 50%; top: 150px; transform: translateX(-50%); width: 320px; pointer-events: auto; z-index: 4; }
+.fl-report[hidden] { display: none; }
+.fl-rp-what { font: 600 13px var(--hud-font); color: #e8f0fa; letter-spacing: 0.04em; }
+.fl-rp-grade { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 8px; }
+.fl-rp-grade b { font: 700 40px/1 var(--hud-font); letter-spacing: 0.04em; }
+.fl-rp-grade span { font: 600 14px var(--mono); color: rgba(220, 232, 248, 0.85); }
+.fl-rp-grade.g-A b { color: #78ffaa; }
+.fl-rp-grade.g-B b { color: #9fe8ff; }
+.fl-rp-grade.g-C b { color: var(--hud-amber); }
+.fl-rp-grade.g-D b, .fl-rp-grade.g-F b { color: #ff7a6a; }
+.fl-report .q-good { color: #b9ffd2; }
+.fl-report .q-ok { color: var(--hud-amber); }
+.fl-report .q-bad { color: #ff8f80; }
+.fl-rp-foot { margin-top: 8px; font: 500 11px var(--hud-font); color: var(--hud-dim); }
 .fl-hub-gfix { margin-top: 4px; font: 600 11px/1.3 var(--hud-font); color: var(--hud-amber); }
 .fl-hub-gfix[hidden] { display: none; }
 body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); }

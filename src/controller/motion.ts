@@ -1,5 +1,7 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { recorder } from "../game/recorder";
+import { gradeLanding } from "../game/report";
 import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
 import { tf } from "../i18n";
@@ -47,6 +49,7 @@ declare module "../controls" {
     stableOrbit: typeof stableOrbit;
     ourSurfaceInfo: typeof ourSurfaceInfo;
     setOurLanded: typeof setOurLanded;
+    reportLanding: typeof reportLanding;
   }
 }
 
@@ -642,6 +645,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     if (touched.gear === "landed")
       this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", name, v, touched.vh!.toFixed(0)));
     else if (touched.gear === "hard") this.onPilotMessage?.(tf("Hard landing on {0} · {1} m/s down — the gear damaged", name, v));
+    if (touched.gear === "landed" || touched.gear === "hard") this.reportLanding(name, touched.gear, touched.speed, touched.vh ?? 0);
     else {
       const nav = this.ourNav(cameraFrame(s));
       if (nav && touched.gear === "crashed") this.levelShip(nav.radial);
@@ -663,9 +667,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     this.landed = true;
     const name = BODY_NAMES[ground as Body];
     const v = touched.speed;
-    if (touched.wheels && this.rolling)
+    if (touched.wheels && this.rolling) {
       this.onPilotMessage?.(`Touchdown on ${name} · ${v.toFixed(1)} m/s down, ${touched.vh!.toFixed(0)} m/s along`);
-    else {
+      this.reportLanding(name, "landed", v, touched.vh ?? 0);
+    } else {
       const nav = this.ourNav(cameraFrame(s));
       if (nav) this.levelShip(nav.radial);
       this.onPilotMessage?.(
@@ -738,6 +743,46 @@ function setOurLanded(this: CameraController, l: { body: string; q: Vec3 } | nul
 }
 
 /** Puts these methods on the controller's prototype (controls.ts, once). */
+/**
+ * The landing's report (game/report.ts): at the gear's verdict, its figures — the sink and the speed along,
+ * on a runway the axis and the threshold (runwayView: near its axis between its ends), else the distance to
+ * the site the autopilot aimed at (the entry's, the powered landing's) —, the flight's greatest load, the
+ * Δv spent, the flight's length; once a touchdown (a bounce's second contact is no new report).
+ */
+function reportLanding(this: CameraController, body: string, verdict: "landed" | "hard", sink: number, along: number) {
+  const now = performance.now();
+  if (now - (this.reportedAt ?? -1e9) < 20e3) return;
+  this.reportedAt = now;
+  const cam = cameraFrame(this.s);
+  const rw = this.runwayView();
+  const onRunway = !!rw && Math.abs(rw.across) < 150 && rw.along > -300 && rw.along < 5000;
+  const site = this.landRun?.site ?? this.entryRun?.site ?? this.entrySite ?? null;
+  let padM: number | null = null;
+  if (!onRunway && site) {
+    const fr = this.entryFrame(cam);
+    if (fr && fr.body === site.body) {
+      const T = fr.place(site);
+      const ang = Math.acos(Math.max(-1, Math.min(1, dot3(unitV(T), unitV(fr.s.x)))));
+      padM = ang * Math.hypot(...T);
+    }
+  }
+  const S = recorder.samples;
+  this.onFlightReport?.(
+    gradeLanding({
+      body,
+      site: onRunway ? rw!.name : site && padM !== null ? site.name : null,
+      verdict,
+      sink,
+      along,
+      runway: onRunway ? { across: rw!.across, along: rw!.along } : null,
+      padM,
+      gMax: Math.max(this.airFlight.gPeak, ...S.map((x) => x.g)),
+      dv: this.spent * C_MPS,
+      flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
+    }),
+  );
+}
+
 export function installMotion(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { fly, fall, fallStep, flyHome, stableOrbit, ourSurfaceInfo, setOurLanded });
+  Object.assign(C.prototype, { fly, fall, fallStep, flyHome, stableOrbit, ourSurfaceInfo, setOurLanded, reportLanding });
 }

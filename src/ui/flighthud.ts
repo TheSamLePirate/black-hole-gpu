@@ -49,6 +49,7 @@ import { type Box, fit } from "./hud/layout";
 import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
+import type { FlightReport } from "../game/report";
 
 /** the HUD's colours for the assistants' graphs: the corridor green, the trace white, the dot's verdict */
 const HUD_GRAPH: GraphPalette = {
@@ -338,6 +339,10 @@ export class FlightHud {
   private bigHover: { x: number; y: number } | null = null;
   private lastGraph: AssistGraph | null = null;
   private bigClose: (() => void) | null = null;
+  /** the flight's report (game/report.ts): its card, its Escape, when it goes */
+  private report = h("div", "fl-report fl-panel");
+  private reportClose: (() => void) | null = null;
+  private reportTimer = 0;
   private ball = h("canvas", "fl-ball");
   private right = h("div", "fl-right fl-panel");
   /** full screen: the flight's essentials in a strip under the map (the HUD's instruments hidden) */
@@ -423,6 +428,36 @@ export class FlightHud {
   }
 
   /** The hub's card: shown while an autopilot flies — what it does, its figures, what it predicts. */
+  /**
+   * The flight's report: its grade (the letter, out of 20), each figure judged (green, amber, red); 20 s
+   * on screen, or closed by ✕ or Escape.
+   */
+  showReport(r: FlightReport | null) {
+    clearTimeout(this.reportTimer);
+    const c = this.reportClose;
+    this.reportClose = null;
+    c?.();
+    const R = this.report;
+    if (!r) {
+      R.hidden = true;
+      return;
+    }
+    const esc = (x: string) => x.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!);
+    R.innerHTML =
+      // (what it reports on its own line — in the header, "Landing · Paris – Le Bourget" was cut)
+      `<div class="fl-title"><span class="fl-htext">${esc(t("Flight report"))}</span><button class="fl-gb-x" type="button" aria-label="${esc(t("Close"))}" title="${esc(t("Close (Esc)"))}">✕</button></div>` +
+      `<div class="fl-rp-what">${esc(r.title)}</div>` +
+      `<div class="fl-rp-grade g-${r.letter}"><b>${r.letter}</b><span>${r.score.toFixed(1)} / 20</span></div>` +
+      `<div class="fl-stgrid">${r.lines.map((l) => `<span>${esc(l.label)}</span><b class="q-${l.q}">${esc(l.value)}</b>`).join("")}</div>` +
+      `<div class="fl-rp-foot">${esc(t("M › Telemetry: the flight's curves"))}</div>`;
+    R.dataset.testid = "flight-report";
+    R.setAttribute("role", "dialog");
+    R.hidden = false;
+    R.querySelector<HTMLButtonElement>(".fl-gb-x")!.onclick = () => this.showReport(null);
+    this.reportClose = onEscape(() => this.showReport(null));
+    this.reportTimer = window.setTimeout(() => this.showReport(null), 20_000);
+  }
+
   /** The hub's graph opened large, or closed (Escape too); the hub without a graph closes it. */
   private openBig(on: boolean) {
     if (on === !this.big.hidden) return;
@@ -966,6 +1001,7 @@ export class FlightHud {
     this.hubGraphCv.title = t("Click: the graph large");
     this.hubGraphCv.onclick = () => this.openBig(true);
     this.big.hidden = true;
+    this.report.hidden = true;
     this.big.dataset.testid = "assist-graph-big";
     this.big.setAttribute("role", "dialog");
     const x = h("button", "fl-gb-x", "✕") as HTMLButtonElement;
@@ -1248,6 +1284,7 @@ export class FlightHud {
       this.warn,
       this.airData,
       this.big,
+      this.report,
       this.mission,
       this.dock,
       this.target,

@@ -1,4 +1,5 @@
 import type { cameraFrame } from "./camera";
+import type { FlightReport } from "./game/report";
 import { Weather } from "./wind";
 import type { Vec3 } from "./physics";
 import type { Settings } from "./settings";
@@ -240,6 +241,10 @@ export class CameraController {
   onAirEntry?: () => void;
   /** the craft lost to the air (heat, load): why */
   onCraftLost?: (why: string) => void;
+  /** the flight's end — a landing's, a docking's —: its figures graded (game/report.ts), for the HUD's card */
+  onFlightReport?: (r: FlightReport) => void;
+  /** the last report's moment (performance.now): a bounce's second contact reports nothing */
+  reportedAt: number | null = null;
   /** the flown craft in the air: its forces, skin, load (flightair.ts) */
   readonly airFlight = new AirFlight();
   /** the time warp held down in the air: said once per descent */
