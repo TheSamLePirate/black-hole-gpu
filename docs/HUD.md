@@ -74,14 +74,55 @@ it predicts (`CameraController.hubInfo`, redone four times a second; `FlightHud.
 |---|---|---|---|
 | CIRC | coasting to the apsis (the time sped up), turning to it, burning, trimming | the burn in, Δv, its length; burning, Δv and time left (a bar); trimming, the error and the orbit | → circular at the apsis' height |
 | NODE | the same for any planned burn | the same | → the orbit the burn leaves (Pe × Ap) |
-| ENTRY | planning; coasting to the deorbit; the burn (a bar); the guided entry (Mach, height, bank); the glide — joining the axis, to the final's start, downwind, the turn, the final (its steep slope, pull-up, shallow slope, flare) | the site; the distance to the threshold, the height, the speed, the height off the profile | → the deorbit's heat, load and shield; the hand-over's miss; the touchdown 450 m past the threshold and when |
+| ENTRY | planning; coasting to the deorbit; the burn (a bar); the guided entry; the glide — joining the axis, to the final's start, downwind, the turn, the final (its steep slope, pull-up, shallow slope, flare) | the entry: the site, its range and the heading off it (Δψ), the flow (Mach, q), the height, the bank asked and flown, the load and its peak, the heat, the peaks still ahead; the glide: the distance to the threshold, the height, the speed, the height off the profile | → the deorbit's heat, load and shield; the hand-over's miss; the touchdown 450 m past the threshold and when |
 | LAND | killing the sideways speed, descending, the touchdown | height, vertical and sideways speed | → the touchdown in ~… |
-| TAKE OFF | through the thick air, the gravity turn | height, apoapsis, speed against the circular | → the orbit's height, then CIRC; once above the ground, its Pe × Ap |
+| TAKE OFF | through the thick air, the gravity turn | height and apoapsis over the ground's figure, speed against the circular, the path's angle and heading against the command's, q and its peak, the gravity turn and MECO in | → the orbit's height, then CIRC; once above the ground, its Pe × Ap |
+| DOCK | to the port's axis, held 10 m out, in along the axis | range, along and across the axis, closing, the ports' axes, the turns apart | → in the corridor (its cone) |
 | APPROACH | closing on the target, backing off | the distance to the stand-off, the closing speed | → beside it in ~… |
 | HOLD POS | holding the place | the offset, the drift | |
 
 The hub's CIRC stays lit while its own burn is flown as a node. On a phone held upright, the card sits above
 the ring. ORBIT (the target's orbit) and DOCK have their buttons on the ring and the map's strip too.
+
+**Its rows, alike for every autopilot** (PLAN-HUB HB2): a value moving shows its trend beside it, **▲** or
+**▼** — the HUD's own for every row (`ui/hud/trend.ts`): a single figure with its unit, against itself a
+second before, by its last written digit at least, held 1.5 s; times counted down and rows of several
+figures have none. A figure past its mark is **amber**, well past it **red with ⚠** (`HubRow`'s third
+element, set by the autopilot):
+
+| Row | Amber | Red |
+|---|---|---|
+| ENTRY · Load | > 2.5 g | > 4 g |
+| ENTRY · Heat | > 1.1 × the peak planned | > 1.3 × |
+| ENTRY · Profile (final) | off by a fifth of the height (10 m at least) | by half of it (30 m at least) |
+| LAND · V/S (under 50 m) | falling > 2 m/s | > 3 m/s |
+| LAND · Sideways (under 100 m) | > 1 m/s | > 2 m/s |
+| TAKE OFF · Path angle (above 1 km) | 10° off the command's | 20° |
+| DOCK · Closing | a quarter over the profile's rate | half over (the graph's "off") |
+| DOCK · Ports' axes, turns apart (within 30 m) | > 3°, > 1°/s | > 6°, > 2°/s |
+
+**Its height bounded**: the phase and the prediction take two lines at most; the small graph is 96 px; on a
+window too short for the card under the mission's bar (below 620 px the cockpit already shrinks to ×0.72),
+the small graph folds away — its title stays — and comes back once there is room (with a margin).
+
+**Its graph opened large** (HB3): a click on the small graph opens it at up to 600 × 300 above the card
+and the ball — its title, what it shows (and what to do out of the corridor), its axes named, a legend,
+the reading under the pointer (the abscissa, the optimum, the corridor); ✕ or Esc closes it, the autopilot
+untouched.
+
+## The flight's telemetry and its report
+
+- **The recorder** (`game/recorder.ts`, `__bh.recorder`): height, the HUD's speed, vertical speed, load, q,
+  Mach, heat flux, throttle, Δv spent, propellant — one sample per step of the scene's time, the step
+  doubled when the record is full (4 000 samples): the whole flight kept, coarser as it lasts. Started
+  again with each flight.
+- **The tablet's TELEMETRY page** (M): up to three curves stacked on one time axis, a window of 1 min,
+  10 min, 1 h or the whole flight; each curve's last value, its least and its most; **Export CSV**.
+- **The flight's report** (`game/report.ts`): at a landing (the gear's verdict) and at a docking (the
+  capture), a card graded out of 20, A to F, each figure judged (good, fair, poor) — the sink, the axis or
+  the site's distance, the load's peak, the gear; the closing rate, the ring off the axis, the ports'
+  axes, the turns apart; the Δv spent and the flight's length. It stays 20 s (✕ or Esc), and the journal
+  keeps its line.
 
 ## The assistants: every autopilot flown by hand
 

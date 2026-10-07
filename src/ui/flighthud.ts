@@ -50,6 +50,7 @@ import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
 import type { FlightReport } from "../game/report";
+import { Trends } from "./hud/trend";
 
 /** the HUD's colours for the assistants' graphs: the corridor green, the trace white, the dot's verdict */
 const HUD_GRAPH: GraphPalette = {
@@ -330,6 +331,10 @@ export class FlightHud {
   private hubGraphFix = h("div", "fl-hub-gfix");
   private graphOpen = store.get("kerr.assist-graph") !== "0";
   private hubSig = "";
+  /** the card's rows' trends (▲ ▼), the same for every autopilot */
+  private trends = new Trends();
+  /** the card too tall for the window: its small graph folded away */
+  private hubTight = false;
   /** the hub's graph opened large (a click on the small one): its panel, its canvas, the pointer over it,
    *  the graph it shows (the hub's latest), its Escape */
   private big = h("div", "fl-graphbig fl-panel");
@@ -524,7 +529,16 @@ export class FlightHud {
       return;
     }
     const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-    const sig = JSON.stringify(H) + i.assist + this.s.autoWarp;
+    // (each row's trend, by its name under the card's title: the same name under another autopilot starts afresh)
+    const now = performance.now();
+    const keys = new Set<string>();
+    const arrows = H.rows.map(([k, v]) => {
+      const key = `${H.title}/${k}`;
+      keys.add(key);
+      return this.trends.arrow(key, v, now);
+    });
+    this.trends.keep(keys);
+    const sig = JSON.stringify(H) + arrows.join("") + i.assist + this.s.autoWarp;
     if (sig === this.hubSig && !C.hidden) return;
     this.hubSig = sig;
     C.hidden = false;
@@ -550,8 +564,38 @@ export class FlightHud {
     this.hubBody.innerHTML =
       `<div class="fl-hub-phase">${esc(H.phase)}</div>` +
       (H.bar !== null ? `<div class="fl-hub-bar"><b style="width:${Math.round(H.bar * 100)}%"></b></div>` : "") +
-      (H.rows.length ? `<div class="fl-stgrid">${H.rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>` : "") +
+      (H.rows.length
+        ? `<div class="fl-stgrid fl-hub-rows">${H.rows
+            .map(([k, v, q], n) => {
+              const c = q ? ` class="${q}"` : "";
+              const a = arrows[n] ? `<i class="fl-tr">${arrows[n]}</i>` : "";
+              return `<span${c}>${esc(k)}</span><b${c}>${esc(v)}${a}</b>`;
+            })
+            .join("")}</div>`
+        : "") +
       (H.next ? `<div class="fl-hub-next">${esc(H.next)}</div>` : "");
+    this.boundHubCard();
+  }
+
+  /**
+   * The card's height bounded: its top kept under the mission's bar — on a short window, or with a long
+   * card (the take-off's, eight rows), the small graph folded away (its title stays: a click opens it
+   * large); unfolded again once there is room for it, with a margin (no flicker at the edge).
+   */
+  private boundHubCard() {
+    const C = this.hubCard;
+    if (C.hidden || typeof innerHeight !== "number") return;
+    const bar = document.querySelector(".fl-mission");
+    const br = bar && !(bar as HTMLElement).hidden ? bar.getBoundingClientRect() : null;
+    const limit = Math.max(br && br.height > 0 ? br.bottom + 10 : 0, 56);
+    const top = C.getBoundingClientRect().top;
+    const GRAPH = 104; // (the small graph's height in the card, its gap)
+    const tight = this.hubTight ? top - GRAPH < limit + 24 : top < limit;
+    if (tight !== this.hubTight) {
+      this.hubTight = tight;
+      C.classList.toggle("tight", tight);
+      this.hubSig = "";
+    }
   }
 
   /** The assistant's graph under the hub's card: its title folds it; drawn at the card's width. */
@@ -569,8 +613,8 @@ export class FlightHud {
     if (this.hubGraphFix.textContent !== fix) this.hubGraphFix.textContent = fix;
     this.hubGraphFix.hidden = !fix;
     const cv = this.hubGraphCv;
-    cv.hidden = !this.graphOpen;
-    if (!this.graphOpen) return;
+    cv.hidden = !this.graphOpen || this.hubTight;
+    if (cv.hidden) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     // (small in the card — its height bounded: the take-off's card stood 368 px tall —, large on a click)
     const w = Math.max(cv.clientWidth, 120),

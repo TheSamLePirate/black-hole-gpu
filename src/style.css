@@ -1332,6 +1332,16 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-hub-bar { height: 3px; background: rgba(160, 210, 255, 0.12); border-radius: 2px; margin: 0 0 6px; overflow: hidden; }
 .fl-hub-bar b { display: block; height: 100%; background: var(--hud-amber); }
 .fl-hub-next { margin-top: 6px; font: 500 11px var(--mono); color: #9fe8ff; line-height: 1.35; }
+/* its rows alike for every autopilot: the value's trend beside it (▲ ▼), a figure past its mark amber, well past
+   it red with a sign (never the colour alone) */
+.fl-hub-rows b .fl-tr { font: 400 8.5px var(--mono); margin-left: 3px; vertical-align: 1px; color: rgba(205, 220, 240, 0.62); font-style: normal; }
+.fl-hub-rows span.warn { color: rgba(255, 179, 92, 0.9); }
+.fl-hub-rows b.warn { color: var(--hud-amber); }
+.fl-hub-rows span.bad { color: #ff9a8a; }
+.fl-hub-rows b.bad { color: #ff8a78; }
+.fl-hub-rows b.bad::before { content: "⚠ "; font-size: 9.5px; }
+/* the phase and the prediction kept to two lines each: the card's height bounded */
+.fl-hub-phase, .fl-hub-next { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 /* the assistant's graph under the card: its title folds it; the dot's verdict on its edge */
 .fl-hub-graph { margin-top: 8px; border-top: 1px solid rgba(160, 210, 255, 0.14); padding-top: 5px; }
 .fl-hub-graph[hidden], .fl-hub-gc[hidden] { display: none; }

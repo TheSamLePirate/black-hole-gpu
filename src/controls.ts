@@ -148,13 +148,16 @@ export interface RunwayView {
   flareIn: number | null;
 }
 
+/** A row of the hub's card: its name, its value — and, past its mark, how bad: "warn" (amber), "bad" (red). */
+export type HubRow = [string, string] | [string, string, "warn" | "bad"];
+
 /** The hub's card (CameraController.hubInfo): the autopilot, what it does now, its figures, its prediction. */
 export interface HubInfo {
   /** the hub's own autopilot (CIRC's node: "circularize") */
   mode: string;
   title: string;
   phase: string;
-  rows: [string, string][];
+  rows: HubRow[];
   /** what it predicts ("→ …"), or null */
   next: string | null;
   /** the phase's progress 0…1, or null */
@@ -639,8 +642,6 @@ export class CameraController {
    *  [m/s]), the guidance and its bank, the angle of attack, the next guidance's update [s]. */
   entryRun: {
     phase: "plan" | "wait" | "burn" | "entry" | "glide";
-    /** the heat's last half-minute (scene s, W/m²): its trend on the hub's card */
-    heatHist?: [number, number][];
     site: Site | null;
     tBurn: number;
     dv: number;

@@ -58,7 +58,7 @@ import { caught } from "../debug";
 import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
-import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
+import type { CameraController, FutureView, HubInfo, HubRow, LowThrust, RunwayView } from "../controls";
 import { LANDING, clamp, fmtDur, landingProfile, smoothstep, spinAxis, unitV, type LandingFix } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 import { entryCorridor, heightOf as heightOfEntry } from "../entry";
@@ -982,11 +982,16 @@ export function climbProfile(id: string, thr: number, dragK: number, d0: number,
  * peak (max-Q); the countdowns to the gravity turn and to the engine's cutoff (MECO). Its rows are
  * added to the card's.
  */
+/** A hub card's row, marked past its mark ("warn") or well past it ("bad"). */
+const hubRow = (k: string, v: string, q: HubRow[2] | null = null): HubRow => (q ? [k, v, q] : [k, v]);
+/** A figure against its marks: beyond the first "warn", beyond the second "bad". */
+const mark = (x: number, warn: number, bad: number): HubRow[2] | null => (x > bad ? "bad" : x > warn ? "warn" : null);
+
 function climbAssist(
   this: CameraController,
   nav: NonNullable<ReturnType<CameraController["ourNav"]>>,
   mu: number,
-  rows: [string, string][],
+  rows: HubRow[],
 ): Pick<HubInfo, "graph" | "say"> {
   const id = nav.ref;
   const sb = solarBody(id)!;
@@ -1088,12 +1093,14 @@ function climbAssist(
   const tMeco = Math.max(TS[TS.length - 1]! - tNow, 0);
   const dur = (t: number) => fmtDur(t);
   // (the height over the ground's figure — the card's from the mean sphere, off by kilometres on the Earth's)
-  rows[0] = [
-    t("Height"),
-    h >= 100 ? `${Math.round(h).toLocaleString("en-US")} km` : h >= 1 ? `${h.toFixed(1)} km` : `${Math.round(h * 1e3)} m`,
-  ];
+  const kmText = (x: number) =>
+    x >= 100 ? `${Math.round(x).toLocaleString("en-US")} km` : x >= 1 ? `${x.toFixed(1)} km` : `${Math.round(Math.max(x, 0) * 1e3)} m`;
+  rows[0] = [t("Height"), kmText(h)];
+  // (the apoapsis over the ground's figure too: from the equator's radius it read −4.7 km on the pad)
+  if (rows[1] && Number.isFinite(apKm)) rows[1] = [t("Apoapsis"), kmText(apKm)];
   rows.push(
-    [t("Path angle"), `${gam.toFixed(0)}° → ${gamAim.toFixed(0)}°`],
+    // (the path off the command's by 10° once away from the vertical climb: amber; by 20°: red)
+    hubRow(t("Path angle"), `${gam.toFixed(0)}° → ${gamAim.toFixed(0)}°`, h > 1 ? mark(Math.abs(gam - gamAim), 10, 20) : null),
     [t("Heading"), `${deg3(hdg)} → ${deg3(hdgAim)}`],
     [R.qMax > 1000 ? t("q · max") : "q", `${(qPa / 1e3).toFixed(1)}${R.qMax > 1000 ? ` · ${(R.qMax / 1e3).toFixed(1)}` : ""} kPa`],
   );
@@ -1179,7 +1186,7 @@ function entryAssist(
   this: CameraController,
   R: NonNullable<CameraController["entryRun"]>,
   nowS: number,
-  rows: [string, string][],
+  rows: HubRow[],
 ): Pick<HubInfo, "graph" | "say"> {
   const fr = this.entryFrame(cameraFrame(this.s));
   if (!fr || !fr.env.atm) return {};
@@ -1401,9 +1408,11 @@ function dockCard(this: CameraController): HubInfo | null {
     rows: [
       [t("Range"), m(g.range)],
       [t("Along · across"), `${m(along)} · ${m(g.lateral)}`],
-      [t("Closing"), `${closing.toFixed(2)} m/s`],
-      [t("Ports' axes"), `${g.angle.toFixed(1)}°`],
-      ...(g.spin >= 0.5 ? [[t("Turn against it"), `${g.spin.toFixed(1)}°/s`] as [string, string]] : []),
+      // (past their marks: too fast for the distance — the graph's own "off" —, the ports' axes and the
+      // turns apart near the contact, by the flight report's marks)
+      hubRow(t("Closing"), `${closing.toFixed(2)} m/s`, mark(closing - want(along), want(along) * 0.25 + 0.01, want(along) * 0.5 + 0.02)),
+      hubRow(t("Ports' axes"), `${g.angle.toFixed(1)}°`, along < 30 ? mark(g.angle, 3, 6) : null),
+      ...(g.spin >= 0.5 ? [hubRow(t("Turn against it"), `${g.spin.toFixed(1)}°/s`, along < 30 ? mark(g.spin, 1, 2) : null)] : []),
     ],
     next: D.corridor ? `→ ${tf("in the corridor (cone {0} m)", cone.toFixed(1))}` : null,
     bar: null,
@@ -1630,13 +1639,14 @@ function hubCompute(this: CameraController): HubInfo | null {
     const R = fc.ctx.R;
     return e.e < 1 ? `${km(e.rp - R)} × ${km(e.ra - R)}` : tf("escape · Pe {0}", km(e.rp - R));
   };
-  const base = (
-    title: string,
-    phase: string,
-    rows: [string, string][] = [],
-    next: string | null = null,
-    bar: number | null = null,
-  ): HubInfo => ({ mode: a, title, phase, rows, next, bar });
+  const base = (title: string, phase: string, rows: HubRow[] = [], next: string | null = null, bar: number | null = null): HubInfo => ({
+    mode: a,
+    title,
+    phase,
+    rows,
+    next,
+    bar,
+  });
   // a burn planned and flown (the node autopilot; CIRC's own burn)
   if (a === "node" || a === "burns") {
     const pl = this.fcPlan();
@@ -1698,7 +1708,7 @@ function hubCompute(this: CameraController): HubInfo | null {
     const rows: [string, string][] = burning
       ? [
           [t("Δv left"), ms(leftM)],
-          [t("Burn"), tf("{0} left", dur(leftM / Math.max(thrSI, 1e-9)))],
+          [t("Burn"), tf("{0} left", leftM / Math.max(thrSI, 1e-9) < 1 ? "< 1 s" : dur(leftM / Math.max(thrSI, 1e-9)))],
         ]
       : [
           [t("Burn in"), dur(start)],
@@ -1787,7 +1797,7 @@ function hubCompute(this: CameraController): HubInfo | null {
       const D = 180 / Math.PI;
       const side = (rad: number) => (Math.abs(rad * D) < 0.5 ? "" : rad > 0 ? " L" : " R");
       const EI = this.entryInfo();
-      const rows: [string, string][] = [[t("Site"), site]];
+      const rows: HubRow[] = [[t("Site"), site]];
       if (EI && Number.isFinite(EI.range))
         rows.push([t("Range"), `${km(EI.range)} · Δψ ${Math.abs(EI.dpsi * D).toFixed(1)}°${side(EI.dpsi)}`]);
       // (the flow, the load and the heat once in the air — above it, zeros)
@@ -1805,16 +1815,11 @@ function hubCompute(this: CameraController): HubInfo | null {
       ]);
       const AF = this.airFlight;
       if (LA && inAir) {
-        rows.push([t("Load"), `${AF.g.toFixed(1)} g · max ${AF.gPeak.toFixed(1)}`]);
-        // (the heat's trend over the last ten seconds of the fall: rising, falling, holding)
-        const H = (R.heatHist ??= []);
-        if (!H.length || nowS - H[H.length - 1]![0] >= 1 || nowS < H[H.length - 1]![0]) H.push([nowS, LA.out.heat]);
-        while (H.length > 30) H.shift();
-        const back = H.find(([ts]) => nowS - ts <= 10) ?? H[0]!;
-        const q0 = back[1],
-          q1 = LA.out.heat;
-        const trend = q1 > q0 * 1.05 + 50 ? " ▲" : q1 < q0 * 0.95 - 50 ? " ▼" : "";
-        rows.push([t("Heat"), `${(q1 / 1e4).toFixed(q1 < 1e5 ? 1 : 0)} W/cm²${trend}`]);
+        // (past their marks: the load beyond the flight report's 2.5 g, the heat beyond the peak planned —
+        // their trends the card's own, ▲ ▼, as every row's)
+        rows.push(hubRow(t("Load"), `${AF.g.toFixed(1)} g · max ${AF.gPeak.toFixed(1)}`, mark(AF.g, 2.5, 4)));
+        const q1 = LA.out.heat;
+        rows.push(hubRow(t("Heat"), `${(q1 / 1e4).toFixed(q1 < 1e5 ? 1 : 0)} W/cm²`, R.plan ? mark(q1 / R.plan.heat, 1.1, 1.3) : null));
       }
       if (R.plan)
         rows.push([
@@ -1849,11 +1854,18 @@ function hubCompute(this: CameraController): HubInfo | null {
       rollout: t("the touchdown"),
     };
     const phase = R.leg === "final" && R.prof ? `${legs.final} — ${profs[R.prof.phase]}` : (legs[R.leg ?? "join"] ?? t("gliding"));
-    const rows: [string, string][] = [[t("Site"), site]];
+    const rows: HubRow[] = [[t("Site"), site]];
     if (app) {
       rows.push([t("To the threshold"), km(Math.hypot(app.along, app.across))], [t("Height"), km(app.agl)], [t("Speed"), ms(app.speed)]);
       if (R.prof && R.leg === "final")
-        rows.push([t("Profile"), `${app.agl - R.prof.h >= 0 ? "+" : "−"}${Math.abs(Math.round(app.agl - R.prof.h))} m`]);
+        rows.push(
+          // (off the profile by a fifth of the height (10 m at least): amber; by half of it (30 m): red)
+          hubRow(
+            t("Profile"),
+            `${app.agl - R.prof.h >= 0 ? "+" : "−"}${Math.abs(Math.round(app.agl - R.prof.h))} m`,
+            mark(Math.abs(app.agl - R.prof.h), Math.max(10, 0.2 * app.agl), Math.max(30, 0.5 * app.agl)),
+          ),
+        );
     }
     const td = R.prof?.td ?? LANDING.td;
     const tGo = app ? (td - app.along) / Math.max(app.speed * 0.85, 1) : NaN;
@@ -1895,10 +1907,15 @@ function hubCompute(this: CameraController): HubInfo | null {
               : D && Number.isFinite(D.dist) && D.dist > 12
                 ? t("across to the pad, descending")
                 : t("descending onto the pad");
-    const rows: [string, string][] = [];
+    const rows: HubRow[] = [];
     if (site) rows.push([t("Site"), site]);
     if (D && Number.isFinite(D.dist)) rows.push([t("To the pad"), km(D.dist)]);
-    rows.push([t("Height"), km(sf.alt)], ["V/S", ms(vs)], [t("Sideways"), ms(sf.vHor ?? 0)]);
+    // (near the ground: falling faster than 3 m/s under 50 m, sliding faster than 2 m/s under 100 m)
+    rows.push(
+      [t("Height"), km(sf.alt)],
+      hubRow("V/S", ms(vs), sf.alt < 50 ? mark(-vs, 2, 3) : null),
+      hubRow(t("Sideways"), ms(sf.vHor ?? 0), sf.alt < 100 ? mark(sf.vHor ?? 0, 1, 2) : null),
+    );
     if (D?.coast) rows.push([t("Next burn in"), dur(D.tBrake)]);
     const tDown = D && !D.coast && Number.isFinite(D.tGo) ? Math.max(D.tGo, sf.alt / Math.max(-vs, 0.5)) : sf.alt / Math.max(-vs, 0.5);
     const H = base("LAND", phase, rows, sf.landed ? null : `→ ${tf("touchdown in ~{0}, at ~{1} m/s", dur(tDown), V_TD.toFixed(1))}`);
@@ -1906,7 +1923,7 @@ function hubCompute(this: CameraController): HubInfo | null {
   }
   if (a === "takeoff") {
     const LG = this.launchGoal;
-    const rows: [string, string][] = [];
+    const rows: HubRow[] = [];
     // (the height it climbs to: the one asked, else clear of the air — 1.5 × its top — or 3 % of the radius)
     const Rkm = fc ? fc.ctx.R / 1e3 : 0;
     const goal = LG.altKm ?? Math.round(Math.max(1.5 * airTopKm(fc?.body ?? ""), 0.03 * Rkm));

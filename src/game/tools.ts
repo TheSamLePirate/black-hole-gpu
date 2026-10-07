@@ -605,6 +605,9 @@ export class GameTools {
     fleet.active = save.fleet?.active ?? s.vessel;
     s.vessel = fleet.active;
     setMountVessel(fleet.active);
+    // (the camera straight at the saved craft's attach point, as a scene does: the last craft's pose kept
+    // turned the ship by its own mount — a docking reloaded 169° off the port's axis, spun back at 30°/s)
+    c.settleMount();
     c.tunnelEntry = save.ship.tunnelEntry ?? null;
     if (save.ship.piloting && s.ship) {
       c.setPilot(true);

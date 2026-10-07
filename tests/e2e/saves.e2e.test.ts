@@ -6,7 +6,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // are the HUD gallery's (tests/hud/states/, saved by the flight lab beside its pictures). Before: a Lander
 // saved descending over Kennedy reloaded in its 500 km orbit, or by the wormhole after another flight; a
 // docking to the ISS reloaded by the wormhole; a deorbit to Le Bourget aimed at Baikonur; a fall saved
-// after its deorbit burn planned another deorbit, found none and let go; so did a deorbit waited for.
+// after its deorbit burn planned another deorbit, found none and let go; so did a deorbit waited for; a
+// docking reloaded from another view of the ship turned 169° off the port's axis, 11 m further out.
 
 const state = (name: string) => Bun.file(`${import.meta.dir}/../hud/states/${name}.json`).text();
 
@@ -57,6 +58,15 @@ describe.skipIf(!E2E)("a saved flight reloads as it was", () => {
     expect(dock.auto).toBe("dock");
     expect(Math.abs(dock.altKm - 425)).toBeLessThan(15);
   }, 120_000);
+
+  test("the docking: on the port's axis, at its range — not turned and moved by the last view's attach point", async () => {
+    await load("07-rollout");
+    await load("10-dock");
+    const rows = await app.js<[string, string][]>("__bh.camera.hubInfo().rows");
+    const v = (k: string) => Number.parseFloat(rows.find((r) => r[0] === k)![1]);
+    expect(v("Ports' axes")).toBeLessThan(3);
+    expect(v("Range")).toBeLessThan(15);
+  }, 60_000);
 
   test("the entry: its site kept, and a fall saved after the burn guided on, not a deorbit planned again", async () => {
     // (the deorbit waited for: taken up as planned — planned anew from its burn's moment, its pass was gone:
