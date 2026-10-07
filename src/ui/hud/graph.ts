@@ -75,10 +75,21 @@ function step(span: number, n: number) {
   return (m >= 5 ? 5 : m >= 2 ? 2 : 1) * p;
 }
 
+/** The large graph's extras (the hub's graph opened in its own panel): the legend, the axes' names, the
+ *  reading under the pointer (the context's pixels). */
+export interface GraphExtras {
+  legend?: { ideal: string; corridor: string; flown: string; now: string };
+  names?: boolean;
+  hover?: { x: number; y: number } | null;
+  /** the reading's words: the optimum, the corridor */
+  words?: { ideal: string; corridor: string };
+}
+
 /**
  * Draws the graph into the box (x, y, w, h in the context's pixels; `k` the text's scale): the corridor
- * filled, the optimum dashed, the flight's trace, the craft's dot (an arrow on the edge when out of the
- * frame), the marks, the axes' ticks.
+ * filled, the optimum dashed, the flight's trace, the craft's dot — a halo about it (an arrow on the edge
+ * when out of the frame) —, the marks, the axes' ticks; large (`ex`), the legend, the axes' names and the
+ * reading under the pointer.
  */
 export function drawGraph(
   g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
@@ -86,10 +97,11 @@ export function drawGraph(
   box: { x: number; y: number; w: number; h: number },
   pal: GraphPalette,
   k = 1,
+  ex: GraphExtras = {},
 ) {
   const padL = 44 * k,
-    padB = 16 * k,
-    padT = 4 * k,
+    padB = (ex.names ? 30 : 16) * k,
+    padT = (ex.names ? 18 : 4) * k,
     padR = 6 * k;
   const X0 = box.x + padL,
     Y0 = box.y + padT,
@@ -208,6 +220,25 @@ export function drawGraph(
       py = sy(ny);
     const cx = Math.min(Math.max(px, X0), X0 + W),
       cy = Math.min(Math.max(py, Y0), Y0 + H);
+    // (where it is: dotted to both axes, a halo about the dot — a small dot on a busy plot was lost)
+    if (cx === px && cy === py) {
+      g.strokeStyle = col;
+      g.globalAlpha = 0.45;
+      g.lineWidth = 1 * k;
+      g.setLineDash([2 * k, 3 * k]);
+      g.beginPath();
+      g.moveTo(X0, cy);
+      g.lineTo(cx, cy);
+      g.moveTo(cx, cy);
+      g.lineTo(cx, Y0 + H);
+      g.stroke();
+      g.setLineDash([]);
+      g.beginPath();
+      g.arc(cx, cy, 7.5 * k, 0, 2 * Math.PI);
+      g.lineWidth = 2 * k;
+      g.stroke();
+      g.globalAlpha = 1;
+    }
     g.fillStyle = col;
     g.strokeStyle = "rgba(0, 0, 0, 0.6)";
     g.lineWidth = 1.5 * k;
@@ -228,6 +259,113 @@ export function drawGraph(
   g.strokeStyle = pal.grid;
   g.lineWidth = 1 * k;
   g.strokeRect(X0, Y0, W, H);
+  // (large: the axes' names — the y's above its ticks, the x's under its own)
+  if (ex.names) {
+    g.font = `600 ${9.5 * k}px ${pal.font}`;
+    g.fillStyle = pal.text;
+    g.textBaseline = "bottom";
+    g.textAlign = "left";
+    g.fillText(`${ay.label.toUpperCase()} · ${ay.unit}`, box.x + 2 * k, Y0 - 5 * k);
+    g.textAlign = "right";
+    g.textBaseline = "bottom";
+    g.fillText(`${ax.label.toUpperCase()} · ${ax.unit}`, X0 + W, box.y + box.h - 1 * k);
+  }
+  // (large: the legend, top right inside the frame)
+  if (ex.legend) {
+    const L = ex.legend;
+    const items: [string, (x: number, y: number) => void][] = [
+      [
+        L.ideal,
+        (x, y) => {
+          g.strokeStyle = pal.ideal;
+          g.lineWidth = 1.2 * k;
+          g.setLineDash([4 * k, 3 * k]);
+          g.beginPath();
+          g.moveTo(x, y);
+          g.lineTo(x + 16 * k, y);
+          g.stroke();
+          g.setLineDash([]);
+        },
+      ],
+      ...(G.lo && G.hi
+        ? ([
+            [
+              L.corridor,
+              (x: number, y: number) => {
+                g.fillStyle = pal.corridor;
+                g.fillRect(x, y - 4 * k, 16 * k, 8 * k);
+              },
+            ],
+          ] as [string, (x: number, y: number) => void][])
+        : []),
+      [
+        L.flown,
+        (x, y) => {
+          g.strokeStyle = pal.flown;
+          g.lineWidth = 1.8 * k;
+          g.beginPath();
+          g.moveTo(x, y);
+          g.lineTo(x + 16 * k, y);
+          g.stroke();
+        },
+      ],
+      [
+        L.now,
+        (x, y) => {
+          g.fillStyle = col;
+          g.beginPath();
+          g.arc(x + 8 * k, y, 3.5 * k, 0, 2 * Math.PI);
+          g.fill();
+        },
+      ],
+    ];
+    g.font = `500 ${9.5 * k}px ${pal.font}`;
+    const wMax = Math.max(...items.map(([s]) => g.measureText(s).width)) + 24 * k;
+    const lx = X0 + W - wMax - 6 * k,
+      ly = Y0 + 6 * k;
+    g.fillStyle = "rgba(4, 8, 14, 0.72)";
+    g.fillRect(lx - 4 * k, ly - 2 * k, wMax + 8 * k, items.length * 14 * k + 4 * k);
+    items.forEach(([s, mark], n) => {
+      const y = ly + 7 * k + n * 14 * k;
+      mark(lx, y);
+      g.fillStyle = pal.text;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.fillText(s, lx + 22 * k, y);
+    });
+  }
+  // (large: the reading under the pointer — its abscissa, the optimum and the corridor there)
+  const hv = ex.hover;
+  if (hv && hv.x >= X0 && hv.x <= X0 + W && hv.y >= Y0 && hv.y <= Y0 + H) {
+    const xv = ax.min + ((hv.x - X0) / W) * (ax.max - ax.min);
+    g.strokeStyle = pal.text;
+    g.globalAlpha = 0.5;
+    g.lineWidth = 1 * k;
+    g.beginPath();
+    g.moveTo(hv.x, Y0);
+    g.lineTo(hv.x, Y0 + H);
+    g.stroke();
+    g.globalAlpha = 1;
+    const id = G.ideal.length ? polyAt(G.ideal, xv) : NaN;
+    const parts = [`${ax.label} ${fmtAxis(xv, ax.unit)}`];
+    if (Number.isFinite(id)) parts.push(`${ex.words?.ideal ?? "optimum"} ${fmtAxis(id, ay.unit)}`);
+    if (G.lo && G.hi && G.lo.length && G.hi.length) {
+      const a = polyAt(G.lo, xv),
+        b = polyAt(G.hi, xv);
+      parts.push(`${ex.words?.corridor ?? "corridor"} ${fmtAxis(Math.min(a, b), ay.unit)}–${fmtAxis(Math.max(a, b), ay.unit)}`);
+    }
+    const txt = parts.join(" · ");
+    g.font = `500 ${10 * k}px ${pal.font}`;
+    const tw = g.measureText(txt).width;
+    const tx = Math.min(Math.max(hv.x - tw / 2, X0 + 2 * k), X0 + W - tw - 2 * k);
+    const ty = Y0 + H - 16 * k;
+    g.fillStyle = "rgba(4, 8, 14, 0.85)";
+    g.fillRect(tx - 4 * k, ty - 8 * k, tw + 8 * k, 16 * k);
+    g.fillStyle = pal.text;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillText(txt, tx, ty);
+  }
 }
 
 /** A corridor's edge at x: the polyline's value there (held flat beyond its ends). */

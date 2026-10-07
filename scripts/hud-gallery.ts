@@ -4,6 +4,7 @@
 //
 //   bun scripts/hud-gallery.ts <out-dir> [state.save.json …]     (default: every tests/hud/states/*.json)
 //   options: --settle <s> (real seconds flown after the load before the picture, default 3) · --sheet <file.jpg>
+//            · --big (the hub's graph opened large first, the pointer over its middle)
 //
 // Each state is loaded in one headless page (__bh.game.importSave), flown a few seconds at its own warp so
 // the cards, graphs and trends fill in, then pictured (<out-dir>/<state>.png). With --sheet, a contact sheet
@@ -22,6 +23,9 @@ const opt = (k: string) => {
 };
 const settle = Number(opt("--settle") ?? 3);
 const sheet = opt("--sheet");
+const bigAt = args.indexOf("--big");
+const big = bigAt >= 0;
+if (big) args.splice(bigAt, 1);
 const out = args.shift();
 if (!out) {
   console.error("usage: bun scripts/hud-gallery.ts <out-dir> [state.save.json …] [--settle s] [--sheet file.jpg]");
@@ -47,6 +51,15 @@ try {
     });
     if (!ok) continue;
     await Bun.sleep(settle * 1000);
+    if (big) {
+      await lab.js(`(document.querySelector("[data-testid=assist-graph-small]")?.click(), true)`);
+      await Bun.sleep(300);
+      const r = await lab.js<{ x: number; y: number } | null>(
+        `(() => { const c = document.querySelector("[data-testid=assist-graph-big] canvas"); if (!c || c.closest("[hidden]")) return null; const b = c.getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height / 2 }; })()`,
+      );
+      if (r) await lab.app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.x, y: r.y });
+      await Bun.sleep(300);
+    }
     const png = `${out}/${name}.png`;
     await lab.app.shot(png);
     shots.push([png, name]);

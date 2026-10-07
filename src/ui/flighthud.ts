@@ -329,6 +329,15 @@ export class FlightHud {
   private hubGraphFix = h("div", "fl-hub-gfix");
   private graphOpen = store.get("kerr.assist-graph") !== "0";
   private hubSig = "";
+  /** the hub's graph opened large (a click on the small one): its panel, its canvas, the pointer over it,
+   *  the graph it shows (the hub's latest), its Escape */
+  private big = h("div", "fl-graphbig fl-panel");
+  private bigTitle = h("div", "fl-title");
+  private bigAbout = h("div", "fl-gb-about");
+  private bigCv = h("canvas", "fl-gb-cv") as HTMLCanvasElement;
+  private bigHover: { x: number; y: number } | null = null;
+  private lastGraph: AssistGraph | null = null;
+  private bigClose: (() => void) | null = null;
   private ball = h("canvas", "fl-ball");
   private right = h("div", "fl-right fl-panel");
   /** full screen: the flight's essentials in a strip under the map (the HUD's instruments hidden) */
@@ -414,9 +423,67 @@ export class FlightHud {
   }
 
   /** The hub's card: shown while an autopilot flies — what it does, its figures, what it predicts. */
+  /** The hub's graph opened large, or closed (Escape too); the hub without a graph closes it. */
+  private openBig(on: boolean) {
+    if (on === !this.big.hidden) return;
+    this.big.hidden = !on;
+    this.bigHover = null;
+    if (on) this.bigClose = onEscape(() => this.openBig(false));
+    else {
+      const c = this.bigClose;
+      this.bigClose = null;
+      c?.();
+    }
+  }
+
+  /** The large graph, each frame while open: the hub's latest, at the panel's size. */
+  private drawBig() {
+    if (this.big.hidden) return;
+    const G = this.lastGraph;
+    if (!G) return this.openBig(false);
+    const head = this.bigTitle.firstElementChild as HTMLElement;
+    const title = G.title.toUpperCase();
+    if (head.textContent !== title) head.textContent = title;
+    const about = G.state === "off" && G.fix ? `${G.about ?? ""} — ${G.fix}` : (G.about ?? "");
+    if (this.bigAbout.textContent !== about) this.bigAbout.textContent = about;
+    this.bigAbout.classList.toggle("off", G.state === "off");
+    // (its place: above the hub's card and the attitude ball, below the mission bar — the canvas shorter
+    // when the room is less; placed by a fixed bottom it covered the card's head)
+    const room = (sel: string) => this.root.querySelector<HTMLElement>(sel)?.getBoundingClientRect();
+    const hubR = this.hubCard.hidden ? null : this.hubCard.getBoundingClientRect();
+    const bez = room(".fl-bezel");
+    const bar = room(".fl-mission");
+    const floor = Math.min(hubR?.top ?? Infinity, bez?.top ?? Infinity, innerHeight) - 10;
+    const ceil = (bar?.bottom ?? 50) + 8;
+    const cvH = Math.max(140, Math.min(300, floor - ceil - (this.big.offsetHeight - this.bigCv.offsetHeight)));
+    if (this.bigCv.style.height !== `${cvH}px`) this.bigCv.style.height = `${cvH}px`;
+    const top = `${Math.round(Math.max(ceil, floor - this.big.offsetHeight))}px`;
+    if (this.big.style.top !== top) this.big.style.top = top;
+    const cv = this.bigCv;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(cv.clientWidth, 200),
+      hh = Math.max(cv.clientHeight, 140);
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(hh * dpr);
+    }
+    const g = cv.getContext("2d");
+    if (!g) return;
+    g.clearRect(0, 0, cv.width, cv.height);
+    const hv = this.bigHover ? { x: this.bigHover.x * dpr, y: this.bigHover.y * dpr } : null;
+    drawGraph(g, G, { x: 0, y: 0, w: cv.width, h: cv.height }, HUD_GRAPH, dpr * 1.25, {
+      names: true,
+      legend: { ideal: t("optimum"), corridor: t("corridor"), flown: t("flown"), now: t("now") },
+      hover: hv,
+      words: { ideal: t("optimum"), corridor: t("corridor") },
+    });
+  }
+
   private drawHubCard(i: Info) {
     const H = i.hub;
     const C = this.hubCard;
+    this.lastGraph = H?.graph ?? null;
+    this.drawBig();
     if (!H) {
       if (!C.hidden) (C.hidden = true), (this.hubSig = "");
       return;
@@ -470,8 +537,9 @@ export class FlightHud {
     cv.hidden = !this.graphOpen;
     if (!this.graphOpen) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // (small in the card — its height bounded: the take-off's card stood 368 px tall —, large on a click)
     const w = Math.max(cv.clientWidth, 120),
-      hh = 118;
+      hh = 96;
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) {
       cv.width = Math.round(w * dpr);
       cv.height = Math.round(hh * dpr);
@@ -893,6 +961,25 @@ export class FlightHud {
       this.hubSig = "";
     };
     this.hubGraph.append(this.hubGraphBtn, this.hubGraphCv, this.hubGraphFix);
+    // (the small graph clicked: opened large — its axes named, a legend, the reading under the pointer)
+    this.hubGraphCv.dataset.testid = "assist-graph-small";
+    this.hubGraphCv.title = t("Click: the graph large");
+    this.hubGraphCv.onclick = () => this.openBig(true);
+    this.big.hidden = true;
+    this.big.dataset.testid = "assist-graph-big";
+    this.big.setAttribute("role", "dialog");
+    const x = h("button", "fl-gb-x", "✕") as HTMLButtonElement;
+    x.type = "button";
+    x.title = t("Close (Esc)");
+    x.setAttribute("aria-label", t("Close"));
+    x.onclick = () => this.openBig(false);
+    this.bigTitle.append(h("span", "fl-htext"), x);
+    this.big.append(this.bigTitle, this.bigAbout, this.bigCv);
+    this.bigCv.onpointermove = (e) => {
+      const r = this.bigCv.getBoundingClientRect();
+      this.bigHover = { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    this.bigCv.onpointerleave = () => (this.bigHover = null);
     this.hubMode.dataset.testid = "hub-assist";
     this.hubWarp.dataset.testid = "hub-warp";
     this.hubWarp.type = "button";
@@ -1160,6 +1247,7 @@ export class FlightHud {
       this.spectBar,
       this.warn,
       this.airData,
+      this.big,
       this.mission,
       this.dock,
       this.target,

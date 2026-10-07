@@ -1348,7 +1348,16 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-hub-gt:hover, .fl-hub-gt:focus-visible { color: #fff; }
 .fl-hub-graph[data-state="on"] .fl-hub-gt { color: rgba(150, 255, 190, 0.95); }
 .fl-hub-graph[data-state="off"] .fl-hub-gt { color: var(--hud-amber); }
-.fl-hub-gc { display: block; width: 100%; height: 118px; margin-top: 4px; }
+.fl-hub-gc { display: block; width: 100%; height: 96px; margin-top: 4px; pointer-events: auto; cursor: zoom-in; }
+/* the hub's graph opened large (a click on the small one): above the attitude ball, over the view */
+.fl-graphbig { left: 50%; top: 60px; transform: translateX(-50%); width: min(600px, calc(100vw - 32px)); pointer-events: auto; z-index: 4; }
+.fl-graphbig[hidden] { display: none; }
+.fl-graphbig .fl-title { margin-bottom: 2px; }
+.fl-gb-x { all: unset; cursor: pointer; margin-left: auto; padding: 0 4px; color: var(--hud-dim); font: 600 13px var(--hud-font); }
+.fl-gb-x:hover, .fl-gb-x:focus-visible { color: #fff; }
+.fl-gb-about { font: 500 11px/1.35 var(--hud-font); color: rgba(205, 220, 240, 0.8); margin: 0 0 6px; max-width: 100%; }
+.fl-gb-about.off { color: var(--hud-amber); }
+.fl-gb-cv { display: block; width: 100%; height: 300px; cursor: crosshair; }
 .fl-hub-gfix { margin-top: 4px; font: 600 11px/1.3 var(--hud-font); color: var(--hud-amber); }
 .fl-hub-gfix[hidden] { display: none; }
 body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); }
