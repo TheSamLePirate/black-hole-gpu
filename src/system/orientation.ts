@@ -102,7 +102,13 @@ const R3 = (a: number): M3 => [
   [-Math.sin(a), Math.cos(a), 0],
   [0, 0, 1],
 ];
-const mul = (A: M3, B: M3): M3 => A.map((r) => [0, 1, 2].map((j) => r[0]! * B[0]![j]! + r[1]! * B[1]![j]! + r[2]! * B[2]![j]!)) as M3;
+// (written out: the planners call it hundreds of thousands of times — the map's closures were half their time)
+const row = (r: Vec3, B: M3): Vec3 => [
+  r[0] * B[0][0] + r[1] * B[1][0] + r[2] * B[2][0],
+  r[0] * B[0][1] + r[1] * B[1][1] + r[2] * B[2][1],
+  r[0] * B[0][2] + r[1] * B[1][2] + r[2] * B[2][2],
+];
+const mul = (A: M3, B: M3): M3 => [row(A[0], B), row(A[1], B), row(A[2], B)];
 
 /** The nutation's main terms [rad] (Meeus ch. 22: ~0.5″ in longitude, 0.1″ in obliquity) and the mean obliquity. */
 export function nutation(T: number) {

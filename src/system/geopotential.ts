@@ -38,14 +38,18 @@ export const ZONAL: Record<string, Zonal> = {
 /** Beyond this many reference radii the harmonics are left out (J2 there: < 10⁻⁶ of the central pull). */
 const REACH = 40;
 
-/** The pole of date, kept an hour of time (its precession and nutation: arcseconds a day). */
+/** The pole of date, kept an hour of time (its precession and nutation: arcseconds a day) — a few
+ *  instants a body: a planner going back and forth over days emptied a single one at every call. */
 const POLE_EVERY = 3600 / M_SECONDS;
-const poles = new Map<string, { t: number; z: Vec3 }>();
+const POLES_KEPT = 64;
+const poles = new Map<string, { t: number; z: Vec3 }[]>();
 export function poleOfDate(id: string, t: number): Vec3 {
-  const c = poles.get(id);
-  if (c && Math.abs(t - c.t) < POLE_EVERY) return c.z;
+  let cs = poles.get(id);
+  if (!cs) poles.set(id, (cs = []));
+  for (const c of cs) if (Math.abs(t - c.t) < POLE_EVERY) return c.z;
   const z = bodyAxes(solarBody(id)!, t)[2];
-  poles.set(id, { t, z });
+  cs.unshift({ t, z });
+  if (cs.length > POLES_KEPT) cs.pop();
   return z;
 }
 
