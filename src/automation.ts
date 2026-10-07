@@ -25,6 +25,7 @@ import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
 import { ourState, referenceBody } from "./system/our-side";
 import { predictOurs } from "./system/our-predict";
+import { drawn as hudDrawn, panels as hudPanels, remeasure as remeasureHud } from "./ui/hud/layout";
 import { bodyState } from "./system/ephemeris";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { cameraFrame, homePosition, setHolePose, setHomePose } from "./camera";
@@ -310,6 +311,14 @@ export function installBh(c: BhContext) {
       mapView: () => c.mapView(),
       mission,
       /** a system's bodies (ephemeris) and camera placement, for automation */
+      /** the HUD's room (hud/layout.ts): the panels shown and the boxes the HUD's canvas drew this frame [CSS px] —
+       *  the e2e "nothing overlaps" reads them */
+      hud: {
+        boxes: () => {
+          remeasureHud();
+          return [...hudPanels(), ...hudDrawn];
+        },
+      },
       sys: {
         bodyState: (id: string, t: number) => bodyState(GARGANTUA_SYSTEM, id, t),
         setHolePose,

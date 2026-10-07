@@ -15,6 +15,7 @@ import { dot } from "../../math/vec3";
 import { blinkOn } from "../clock";
 import type { HudItem } from "./declutter";
 import { safeFrame } from "./safe";
+import { type Box, drawn, fit } from "./layout";
 import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
@@ -125,6 +126,7 @@ const crossW = (a: V3, b: V3): V3 => [-(a[1] * b[2] - a[2] * b[1]), -(a[2] * b[0
 const wrap360 = (a: number) => ((a % 360) + 360) % 360;
 
 export function drawSymbology(F: SymFrame) {
+  drawn.length = 0;
   const { ctx, W, H, dpr, s, i } = F;
   F.compact = W / dpr < 1000 || H / dpr < 560;
   const tanH = Math.tan((F.fov * D) / 2);
@@ -929,16 +931,16 @@ function drawRunway(
     if (rw.final && rw.agl < 60 && rw.agl > 1 && blinkOn()) text(t("FLARE"), W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
     return;
   }
-  // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the hub)
-  const x = W / 2 - Math.min(W, H) * 0.44,
-    y = H / 2 - 10 * dpr;
+  // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the panels:
+  // moved up, else down, out from under any — hud/layout.ts)
+  const boxH = (rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0);
+  const want: Box = { x: (W / 2 - Math.min(W, H) * 0.44) / dpr - 96, y: (H / 2 - 10 * dpr) / dpr - 28, w: 192, h: boxH, id: "runway" };
+  const at = fit(want, "up", { reach: 240 }) ?? fit(want, "down", { reach: 240 }) ?? want;
+  drawn.push(at);
+  const x = (at.x + 96) * dpr,
+    y = (at.y + 28) * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
-  ctx.fillRect(
-    x - 96 * dpr,
-    y - 28 * dpr,
-    192 * dpr,
-    (rw.gRef !== null && rw.gam !== null ? 70 : 54) * dpr + (rw.papi !== null ? 16 * dpr : 0),
-  );
+  ctx.fillRect(x - 96 * dpr, y - 28 * dpr, 192 * dpr, boxH * dpr);
   text(
     `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
     x,
@@ -1016,10 +1018,20 @@ function drawHover(
   if (!(sf.alt < 3000) || (A && A.speed && A.speed > 160 && A.q > 20)) return;
   const drift = i.dirs.drift ?? null;
   const vDown = Math.max(-sf.vVert, 0);
-  // ---- the scope
+  // ---- the scope (right of the view's centre, clear of the panels: moved up, else left — hud/layout.ts;
+  // its box: the height above, the drift and the stop cue below, the vertical speed's bar and figure right)
+  const want: Box = {
+    x: (W / 2 + Math.min(W, H) * 0.44) / dpr - 58,
+    y: (H / 2 + 20 * dpr) / dpr - 78,
+    w: 58 + 52 + 22 + 64,
+    h: 78 + 96,
+    id: "scope",
+  };
+  const at = fit(want, "up", { reach: 300 }) ?? fit(want, "left", { reach: 300 }) ?? want;
+  drawn.push(at);
   const R0 = 52 * dpr,
-    cx = W / 2 + Math.min(W, H) * 0.44,
-    cy = H / 2 + 20 * dpr;
+    cx = (at.x + 58) * dpr,
+    cy = (at.y + 78) * dpr;
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.beginPath();
   ctx.arc(cx, cy, R0 + 6 * dpr, 0, 2 * Math.PI);

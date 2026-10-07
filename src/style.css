@@ -2383,9 +2383,10 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 @keyframes cl-in { from { opacity: 0; } }
 
 /* the air data (flighthud.ts drawAirData) */
-.fl-airdata { position: absolute; left: 50%; bottom: 236px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; padding: 6px 12px; border-radius: 8px; background: rgba(8, 12, 18, 0.55); border: 1px solid rgba(140, 190, 255, 0.16); backdrop-filter: blur(6px); font: 500 11px/1.35 "JetBrains Mono", ui-monospace, monospace; color: rgba(205, 220, 240, 0.85); letter-spacing: 0.04em; white-space: nowrap; pointer-events: none; }
+/* (placed by the code — flighthud.ts placeAirData: left of the attitude ball's ring, clear of the panels) */
+.fl-airdata { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(180deg, rgba(9, 14, 25, 0.9), rgba(6, 10, 18, 0.86)); border: 1px solid rgba(140, 190, 255, 0.16); font: 500 11px/1.35 "JetBrains Mono", ui-monospace, monospace; color: rgba(205, 220, 240, 0.85); letter-spacing: 0.04em; white-space: nowrap; pointer-events: none; }
 .fl-airdata[hidden] { display: none; }
-.fl-ad-row { display: flex; gap: 12px; align-items: center; justify-content: center; }
+.fl-ad-row { display: flex; gap: 10px; align-items: center; justify-content: flex-start; }
 .fl-ad-row b { color: #f2f6ff; font-weight: 600; }
 .fl-ad-row .on { color: #7dffb2; }
 .fl-ad-mode { color: #ffb35c; font-weight: 700; letter-spacing: 0.12em; }

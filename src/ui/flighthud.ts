@@ -45,6 +45,7 @@ import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
 import { hudShown } from "./hud/declutter";
 import { safeFrame } from "./hud/safe";
+import { type Box, fit } from "./hud/layout";
 import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
@@ -257,7 +258,8 @@ export class FlightHud {
   private drawEntry(i: Info, time: number) {
     const E = i.entry,
       A = i.air;
-    const on = !!E && E.phase === "entry" && !!A && this.density < 2 && !this.mapView;
+    // (not with the hub's card up: it is the entry's card — the same figures twice, the box over the speed tape)
+    const on = !!E && E.phase === "entry" && !!A && this.density < 2 && !this.mapView && !i.hub;
     this.entryBox.hidden = !on;
     if (!on || !E || !A) {
       this.entryHeat = [];
@@ -2292,7 +2294,8 @@ export class FlightHud {
       const q = (sel: string) => document.querySelector<HTMLElement>(sel);
       // (upright, the attitude ball stands above the touch controls: the tapes end above it)
       const ball = phone && innerHeight > innerWidth ? this.cockpitEl() : null;
-      const L = phone ? band([this.mission, this.target], [q(".tf-stick"), ball]) : band([this.target], [this.orbit]);
+      // (the key hints, shown, stand under the left tape: it ends above them)
+      const L = phone ? band([this.mission, this.target], [q(".tf-stick"), ball]) : band([this.target], [this.orbit, q(".kh.show")]);
       const x = (phone ? 16 : 30) * dpr;
       if (L) this.speedTape(ctx, i, x, L.cy, L.h, u);
       const R = phone ? band([this.mission, this.right], [q(".tf-right"), ball]) : band([this.tel], [this.right]);
@@ -2322,19 +2325,39 @@ export class FlightHud {
     const cmd = A.sf
       ? `<span>CMD <b>${A.sf.speed.toFixed(0)} m/s</b> γ <b>${(A.sf.gamma * d).toFixed(0)}°</b> HDG <b>${((((A.sf.heading * d) % 360) + 360) % 360) | 0}°</b></span>`
       : "";
+    // (short rows — a block beside the attitude ball, not a band across it: the flow, the attitude to the
+    // air, the skin and the load, the configuration and the wind)
     const html =
-      `<div class="fl-ad-row"><span class="fl-ad-mode">${mode}</span>${cmd}<span>M <b>${A.mach.toFixed(2)}</b></span><span>q <b>${q}</b></span>` +
-      `<span>α <b>${(A.alpha * d).toFixed(1)}°</b></span><span>β <b>${(A.beta * d).toFixed(1)}°</b></span><span><b>${A.g.toFixed(2)}</b> g</span></div>` +
-      `<div class="fl-ad-row">${A.shieldMax ? `<span>${t("SHIELD")} <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>${t("HULL")} <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span>` +
-      `<span>${t("LOAD")}${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">${t("FLAPS")} ${flaps}</span><span class="${A.gear ? "on" : ""}">${t("GEAR")}</span><span class="${A.brake ? "on" : ""}">${t("BRAKE")}</span>` +
+      `<div class="fl-ad-row"><span class="fl-ad-mode">${mode}</span><span>M <b>${A.mach.toFixed(2)}</b></span><span>q <b>${q}</b></span></div>` +
+      (cmd ? `<div class="fl-ad-row">${cmd}</div>` : "") +
+      `<div class="fl-ad-row"><span>α <b>${(A.alpha * d).toFixed(1)}°</b></span><span>β <b>${(A.beta * d).toFixed(1)}°</b></span><span><b>${A.g.toFixed(2)}</b> g</span></div>` +
+      `<div class="fl-ad-row">${A.shieldMax ? `<span>${t("SHIELD")} <b>${Math.round(A.shield)} K</b>${bar(A.margins.shield)}</span>` : ""}<span>${t("HULL")} <b>${Math.round(A.hull)} K</b>${bar(A.margins.hull)}</span></div>` +
+      `<div class="fl-ad-row"><span>${t("LOAD")}${bar(A.margins.g)}</span><span class="${A.flaps ? "on" : ""}">${t("FLAPS")} ${flaps}</span><span class="${A.gear ? "on" : ""}">${t("GEAR")}</span><span class="${A.brake ? "on" : ""}">${t("BRAKE")}</span></div>` +
       // (the wind: where it blows from, its speed — the crosswind a landing has to hold)
       (A.wind && A.wind.speed >= 0.5
-        ? `<span>${t("WIND")} <b>${String(Math.round(A.wind.from)).padStart(3, "0")}°/${A.wind.speed.toFixed(0)}</b></span>`
-        : "") +
-      `</div>`;
-    if (html === this.airKey) return;
-    this.airKey = html;
-    this.airData.innerHTML = html;
+        ? `<div class="fl-ad-row"><span>${t("WIND")} <b>${String(Math.round(A.wind.from)).padStart(3, "0")}°/${A.wind.speed.toFixed(0)}</b></span></div>`
+        : "");
+    if (html !== this.airKey) {
+      this.airKey = html;
+      this.airData.innerHTML = html;
+    }
+    this.placeAirData();
+  }
+
+  /** The air data's block: left of the attitude ball's ring, its foot level with it; moved up, else left,
+   *  out from under any panel (hud/layout.ts) — across the ball and under the hub's card, once. */
+  private placeAirData() {
+    const E = this.airData;
+    const bez = this.root.querySelector<HTMLElement>(".fl-bezel")?.getBoundingClientRect();
+    if (!bez || !bez.width) return;
+    const w = E.offsetWidth,
+      hh = E.offsetHeight;
+    const want: Box = { x: bez.left - 10 - w, y: bez.bottom - hh, w, h: hh, id: ".fl-airdata" };
+    const at = fit(want, "up", { skip: ".fl-airdata", reach: 260 }) ?? fit(want, "left", { skip: ".fl-airdata", reach: 260 }) ?? want;
+    const l = `${Math.round(at.x)}px`,
+      tp = `${Math.round(at.y)}px`;
+    if (E.style.left !== l) E.style.left = l;
+    if (E.style.top !== tp) E.style.top = tp;
   }
 
   /**
