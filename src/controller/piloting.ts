@@ -8,7 +8,7 @@ import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body, onOurSide } from "../targeting";
 import { AIR_WARP } from "../flightair";
-import { attitudeFor, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
+import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import { siteDir, sitesOf, type Site } from "../game/sites";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
@@ -38,7 +38,7 @@ import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
-import { clamp, flareRef, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
+import { clamp, flareRef, fmtDur, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
 import { heldCode, type HeldAxis } from "../input/bindings";
 
 declare module "../controls" {
@@ -954,6 +954,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // direction; thrust the other way takes it back)
   const along = (d: Vec3 | null | undefined) => (this.pilot.assist && d ? (dot3(net, d) / (Math.hypot(...d) || 1)) * dTau : w);
   if (this.entryRun?.phase === "burn") this.entryRun.done = Math.max(this.entryRun.done + along(entryAtt?.nose) * C_MPS, 0);
+  if (this.entryRun?.phase === "wait" && this.entryRun.trim?.firing)
+    this.entryRun.trim.done = Math.max(this.entryRun.trim.done + along(entryAtt?.nose) * C_MPS, 0);
   if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing)
     this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
@@ -1258,6 +1260,91 @@ function entryStep(
   const top = airTop(fr.env.atm);
   const ranger = fleet.active === "ranger";
   const name = BODY_NAMES[fr.body as Body] ?? fr.body;
+  /**
+   * The deorbit planned in the planner's worker (a second of predicted falls, off the frame loop) over the
+   * coming `orbits` turns; `again`: re-aimed from the orbit as it is flown now, the next pass only — the
+   * old plan kept if none comes.
+   */
+  const planBurn = (R: NonNullable<CameraController["entryRun"]>, site: Site, orbits: number, again: boolean) => {
+    const prev = { tBurn: R.tBurn, dv: R.dv };
+    R.phase = "plan";
+    const at = fr.now;
+    void runPlanner<{ t: number; dv: number; trim: { t: number; dv: number } | null; heat: number; shield: number; g: number } | null>({
+      kind: "deorbit",
+      env: fr.desc,
+      craft,
+      s: fr.s,
+      place: fr.place(site),
+      o: {
+        peH: ranger ? 45e3 : 30e3,
+        handoverMach: R.handover,
+        short: R.short,
+        orbits,
+        reach: ranger ? 600e3 : CAPSULE.reach,
+      },
+    }).then((plan) => {
+      if (this.entryRun !== R || R.phase !== "plan") return;
+      if (!plan || (plan as { error?: string }).error) {
+        if (again) {
+          Object.assign(R, prev, { phase: "wait" });
+          return;
+        }
+        if (P.auto === "entry") P.setAuto("none");
+        this.entryRun = null;
+        this.onPilotMessage?.(tf("Entry: no deorbit to {0} within a day of orbits — the orbit never passes near it", site.name));
+        return;
+      }
+      R.phase = "wait";
+      R.tBurn = at + plan.t;
+      R.dv = plan.dv;
+      // (a pass past the lift's reach: a trim out of the orbit's plane on the way, a quarter turn before the end)
+      R.trim = plan.trim ? { t: at + plan.trim.t, dv: plan.trim.dv, done: 0, firing: false } : undefined;
+      R.plan = { heat: plan.heat, shield: plan.shield, g: plan.g };
+      const wait = R.tBurn - this.nowTime() * Msec;
+      R.waited ??= wait;
+      if (again) {
+        this.onPilotMessage?.(
+          tf("Entry to {0}: the deorbit re-aimed — the burn in {1}, {2} m/s", site.name, fmtDur(wait), plan.dv.toFixed(0)),
+        );
+        return;
+      }
+      const mm = Math.floor(wait / 60),
+        ss = Math.round(wait % 60);
+      this.onPilotMessage?.(
+        tf(
+          "Entry to {0}: the deorbit burn in {1} min {2} s, {3} m/s — then {4} W/cm², {5} g, the shield {6} K at most",
+          site.name,
+          mm,
+          ss,
+          plan.dv.toFixed(0),
+          (plan.heat / 1e4).toFixed(0),
+          plan.g.toFixed(1),
+          Math.round(plan.shield),
+        ),
+      );
+      if (R.trim)
+        this.onPilotMessage?.(
+          tf(
+            "{0}: no pass within its {1} km across — a trim of {2} m/s out of the orbit's plane in {3}",
+            VESSELS[fleet.active].name,
+            ((ranger ? 600e3 : CAPSULE.reach) / 1e3).toFixed(0),
+            Math.abs(R.trim.dv).toFixed(0),
+            fmtDur(R.trim.t - this.nowTime() * Msec),
+          ),
+        );
+      // (a capsule's wait for its pass, said: hours of orbits, the time sped up)
+      else if (!ranger && wait > 2 * 3600)
+        this.onPilotMessage?.(
+          tf(
+            "{0}: its lift corrects {1} km across — the deorbit waits {2} for the pass over {3} within it",
+            VESSELS[fleet.active].name,
+            (CAPSULE.reach / 1e3).toFixed(0),
+            fmtDur(wait),
+            site.name,
+          ),
+        );
+    });
+  };
   if (!this.entryRun) {
     // the site: the one chosen on this body, else the nearest to the orbit's plane (the ground track
     // sweeps over it soonest)
@@ -1276,7 +1363,12 @@ function entryStep(
       dv: 0,
       done: 0,
       guid: site
-        ? new EntryGuidance({ handoverMach: handover, short: shortM, gCap: ranger ? 2.4 : 0.85 * VESSELS[fleet.active].aero.gMax! })
+        ? new EntryGuidance({
+            handoverMach: handover,
+            short: shortM,
+            gCap: ranger ? 2.4 : 0.85 * VESSELS[fleet.active].aero.gMax!,
+            band: ranger ? undefined : CAPSULE.band,
+          })
         : null,
       bank: 0,
       next: -Infinity,
@@ -1299,46 +1391,8 @@ function entryStep(
     if (h > top) {
       // in orbit: the deorbit planned (to the site's downrange; without a site, a nominal burn now)
       if (!site) return say(tf("Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)", name));
-      // (planned in the planner's worker: a second of predicted falls, off the frame loop)
-      const R = this.entryRun;
-      R.phase = "plan";
-      const at = fr.now;
       this.onPilotMessage?.(tf("Entry to {0}: planning the deorbit…", site.name));
-      void runPlanner<{ t: number; dv: number; heat: number; shield: number; g: number } | null>({
-        kind: "deorbit",
-        env: fr.desc,
-        craft,
-        s: fr.s,
-        place: fr.place(site),
-        o: { peH: ranger ? 45e3 : 30e3, handoverMach: handover, short: shortM, orbits: 16, reach: ranger ? 600e3 : 150e3 },
-      }).then((plan) => {
-        if (this.entryRun !== R || R.phase !== "plan") return;
-        if (!plan || (plan as { error?: string }).error) {
-          if (P.auto === "entry") P.setAuto("none");
-          this.entryRun = null;
-          this.onPilotMessage?.(tf("Entry: no deorbit to {0} within a day of orbits — the orbit never passes near it", site.name));
-          return;
-        }
-        R.phase = "wait";
-        R.tBurn = at + plan.t;
-        R.dv = plan.dv;
-        R.plan = { heat: plan.heat, shield: plan.shield, g: plan.g };
-        const wait = R.tBurn - this.nowTime() * Msec;
-        const mm = Math.floor(wait / 60),
-          ss = Math.round(wait % 60);
-        this.onPilotMessage?.(
-          tf(
-            "Entry to {0}: the deorbit burn in {1} min {2} s, {3} m/s — then {4} W/cm², {5} g, the shield {6} K at most",
-            site.name,
-            mm,
-            ss,
-            plan.dv.toFixed(0),
-            (plan.heat / 1e4).toFixed(0),
-            plan.g.toFixed(1),
-            Math.round(plan.shield),
-          ),
-        );
-      });
+      planBurn(this.entryRun, site, ranger ? 16 : 96, false);
     } else
       this.onPilotMessage?.(
         site ? tf("Entry: guided to {0}", site.name) : tf("Entry: no site on {0} — lift up, the controls yours when slow", name),
@@ -1357,6 +1411,33 @@ function entryStep(
     const burnT = thrSI > 0 ? R.dv / thrSI : 0;
     const left = R.tBurn - burnT / 2 - fr.now;
     if (R.phase === "wait") {
+      // (a wait of hours, re-aimed once an hour and a half before the burn: planned days ahead, the air's
+      // drag and the Moon's pull moved the pass — the Lander came down out of its reach of Kennedy)
+      if (R.site && !R.reaimed && (R.waited ?? 0) > 3 * 3600 && left < 1.5 * 3600 && left > 600) {
+        R.reaimed = true;
+        planBurn(R, R.site, 2, true);
+        return retro();
+      }
+      // (the trim out of the plane first, if any: along the orbit's normal, at real time, its Δv counted)
+      const T = R.trim;
+      if (T && !T.over) {
+        const tl = T.t - Math.abs(T.dv) / Math.max(thrSI, 1e-9) / 2 - fr.now;
+        const normal = unitV(lin(cross(fr.s.x, fr.s.v), Math.sign(T.dv) || 1, up, 0));
+        const att = { nose: fr.toLocal(normal), up: fr.toLocal(up) };
+        if (T.firing && T.done >= Math.abs(T.dv)) {
+          T.firing = false;
+          T.over = true;
+          this.onPilotMessage?.(tf("Trim done ({0} m/s out of the plane)", T.done.toFixed(0)));
+        } else if (T.firing || tl <= 0) {
+          if (!T.firing) this.onPilotMessage?.(tf("Trim burn: {0} m/s out of the orbit's plane", Math.abs(T.dv).toFixed(0)));
+          T.firing = true;
+          this.setHubWarp(1 / Msec);
+          return { ...att, throttle: Math.min(1, Math.max((Math.abs(T.dv) - T.done) / Math.max(thrSI * 0.25, 1e-9), 0.02)) };
+        } else {
+          this.setHubWarp((tl > 40 ? Math.min(1000, Math.max((tl - 25) / 3, 1)) : 1) / Msec);
+          return tl < 120 ? att : retro();
+        }
+      }
       // (the time sped up to a minute before the burn, then real time)
       const want = left > 40 ? Math.min(1000, Math.max((left - 25) / 3, 1)) : 1;
       this.setHubWarp(want / Msec);
@@ -1450,7 +1531,9 @@ function entryStep(
       R.alpha = LA.out.alpha;
       this.onPilotMessage?.(tf("Mach {0}: gliding to {1}", LA.out.mach.toFixed(1), R.site.name));
     }
-    const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, R.bank, fr.env.normal?.(fr.s.x));
+    // (the guidance's bank, its phugoid damped as it predicts it — entry.ts EntryGuidance.flown)
+    const bank = R.guid ? R.guid.flown(R.bank, fr.env, fr.s) : R.bank;
+    const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, bank, fr.env.normal?.(fr.s.x));
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
   }
   // the glide (the Ranger): onto the runway's axis — a point 12 km before its threshold, then the

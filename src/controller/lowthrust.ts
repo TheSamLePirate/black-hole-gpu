@@ -1073,10 +1073,14 @@ function entryAssist(
   const top = airTop(fr.env.atm);
   if (!R.corr) {
     const vMax = Math.max(v * 1.05, 2000);
+    // (the ground's own speed along the track: the curve the craft falls round is its speed in space)
+    const up0 = unitV(fr.s.x);
+    const carried = dot3(fr.env.ground(fr.s.x), unitV(lin(va, 1, up0, -dot3(va, up0))));
     R.corr = entryCorridor(
       fr.env,
       craft,
       Array.from({ length: 48 }, (_, i) => 150 + ((vMax - 150) * i) / 47),
+      carried,
     );
   }
   const C = R.corr;
@@ -1129,7 +1133,9 @@ function entryAssist(
   // (in the air: above it the guidance holds its nominal — no crossrange to follow)
   if (miss && R.guid && h < ei) {
     const a = miss.across * R.guid.sign;
-    const band = Math.max(4e3, 7 * v);
+    // (the guidance's own deadband: the speed's, the way left's, a capsule's tight one)
+    const left = R.site ? Math.acos(clamp(dot3(unitV(fr.s.x), unitV(fr.place(R.site))), -1, 1)) * fr.env.R : 0;
+    const band = R.guid.deadband(v, left);
     const P = R.rev;
     if (!P) R.rev = { t: nowS, a, rate: 0 };
     else if (nowS - P.t > 0.5 && a !== P.a) {

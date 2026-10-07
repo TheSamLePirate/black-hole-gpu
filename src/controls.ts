@@ -657,11 +657,19 @@ export class CameraController {
     leg?: "join" | "toStart" | "downwind" | "turn" | "spiral" | "final";
     /** the heading alignment cylinder (too high): its side of the axis (the bank's sign), its radius [m]; absent: none */
     spiral?: { side: number; r: number };
+    /** the final's course error integrated [rad s] (approach: the wind's shear taken out) */
+    trkInt?: number;
     /** a guidance update in the planner's worker */
     pending?: boolean;
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
     app?: { along: number; across: number; final: boolean; agl: number; speed: number; gRef?: number; gam?: number };
     plan?: { heat: number; shield: number; g: number };
+    /** the wait for the deorbit burn as first planned [s]; re-aimed since (a long wait's last hour and a half) */
+    waited?: number;
+    reaimed?: boolean;
+    /** a trim out of the orbit's plane before the deorbit (a pass past the lift's reach): its time [s], size
+     *  along the orbit's normal [m/s], what is done of it */
+    trim?: { t: number; dv: number; done: number; firing: boolean; over?: boolean };
     /** the assistant's (lowthrust.ts entryAssist): the corridor in the height–speed plane (entry.ts
      *  entryCorridor), the path flown [km/s, km], the crossrange against its deadband as it was last seen */
     corr?: { v: number; lo: number; hi: number }[];

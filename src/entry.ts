@@ -51,6 +51,9 @@ export interface EntryEnv {
   ground: (x: V3) => V3;
   /** where a place fixed on the ground (its position now [m]) is dt seconds on, in the frame */
   carry: (p: V3, dt: number) => V3;
+  /** the coast as the flight flies it (our side: the rails, the thin air's drag, the Moon's and the Sun's
+   *  pulls), from a state t seconds on from the frame's time, over dt ≥ 0 seconds; none: `gravity`'s */
+  coast?: (s: EntryState, t: number, dt: number) => EntryState;
 }
 
 /** The craft: its aerodynamics, mass [kg], the angle of attack held [rad]. */
@@ -227,9 +230,12 @@ export function predictEntry(
  * cannot hold the fall's curve (½ ρ v² C_L S / m < g − v²/r: a dive); below its floor the stagnation
  * point takes more heat than the shield radiates at its limit (εσT⁴), or the load passes the
  * structure's. For each speed [m/s]: the floor and the top [m] (the top the air's when the orbit's
- * curve alone holds it; the floor 0 where no limit bites).
+ * curve alone holds it; the floor 0 where no limit bites). `carried` [m/s]: the ground's own speed along
+ * the track (the body's spin under it — 330 m/s flying east at 40°): the curve the craft falls round is
+ * its speed in space, not through the air — counted, the top 1–2 km higher at 6–7 km/s; without, an
+ * entry flown east rode a kilometre over the corridor's top all the way down.
  */
-export function entryCorridor(env: EntryEnv, c: EntryCraft, speeds: number[]): { v: number; lo: number; hi: number }[] {
+export function entryCorridor(env: EntryEnv, c: EntryCraft, speeds: number[], carried = 0): { v: number; lo: number; hi: number }[] {
   const A = c.aero;
   const top = airTop(env.atm);
   const skin = A.shield ?? A.hull;
@@ -255,7 +261,7 @@ export function entryCorridor(env: EntryEnv, c: EntryCraft, speeds: number[]): {
       const o = forces(v, h);
       return Math.hypot(o.L, o.D) / c.mass / G0 - A.gMax;
     }, 0);
-    const lift = cross0((h) => forces(v, h).L / c.mass - (g(h) - (v * v) / (env.R + h)), top);
+    const lift = cross0((h) => forces(v, h).L / c.mass - (g(h) - (v + carried) ** 2 / (env.R + h)), top);
     return { v, lo: Math.max(heat, load), hi: lift };
   });
 }
@@ -288,6 +294,14 @@ export function miss(from: EntryState, end: V3, place: V3): { along: number; acr
 }
 
 /**
+ * A capsule (the Lander: L/D ≈ 0.1): the crossrange its lift corrects — on its aim from 30 km off the
+ * ground track, 15 km past it at 50 — and its reversals' deadband, tight (the Ranger's left it 20 km
+ * aside). Its deorbit waits for a pass within that reach, days of orbits if need be: the first pass within
+ * 150 km left it 130–330 km from Kennedy.
+ */
+export const CAPSULE = { reach: 30e3, band: [2e3, 2, 0.03] as [number, number, number] };
+
+/**
  * The entry's guidance: the bank that brings the handover over the aim point (a place, an offset
  * short of it along the track). Each update predicts the rest of the fall with the bank's size now and
  * corrects it by the secant of the downrange miss; its side follows the crossrange, reversed past a
@@ -300,15 +314,22 @@ export class EntryGuidance {
   last: EntryResult | null = null;
   lastMiss: { along: number; across: number; dist: number } | null = null;
   prev: { b: number; e: number } | null = null;
-  /** `gCap`: the load the guidance keeps under [g] (2.4 by default: the Ranger's crew's; a capsule's steeper entry its own) */
-  constructor(public o: { handoverMach: number; short: number; gCap?: number }) {}
+  /** `gCap`: the load the guidance keeps under [g] (2.4 by default: the Ranger's crew's; a capsule's steeper entry its own);
+   *  `band`: the reversals' deadband — at least, per m/s of speed, per metre of the way left [m] (a capsule's
+   *  lift moves it a few km a minute: its own, tight, or it ends 20 km aside) */
+  constructor(public o: { handoverMach: number; short: number; gCap?: number; band?: [number, number, number] }) {}
 
   /** The signed bank [rad] to fly now, from the state and where the place is now (the ground carries
    *  it on while the craft falls). */
   update(env: EntryEnv, c: EntryCraft, s: EntryState, placeNow: V3): number {
     // (above the air the bank does nothing: the nominal kept, no prediction run)
     if (heightOf(env, s.x) > airTop(env.atm)) return this.sign * this.bank;
-    const r = predictEntry(env, c, s, () => this.sign * this.bank, { handoverMach: this.o.handoverMach, tMax: 8000, sample: 30 });
+    // (the rest of the fall as it will be flown: the bank now, its phugoid damped)
+    const r = predictEntry(env, c, s, (_t, x, v) => this.flown(this.sign * this.bank, env, { x, v }), {
+      handoverMach: this.o.handoverMach,
+      tMax: 8000,
+      sample: 30,
+    });
     this.last = r;
     const place = env.carry(placeNow, r.t);
     const m = miss(s, r.end.x, place);
@@ -340,9 +361,32 @@ export class EntryGuidance {
     // of it, as the Shuttle's azimuth's (7 × the speed alone reversed sixteen times)
     const v = len(add(s.v, env.ground(s.x), -1));
     const left = env.R * Math.acos(Math.min(Math.max(dot(unit(s.x), unit(place)), -1), 1));
-    const band = Math.max(4e3, 7 * v, 0.1 * left);
-    if (m.across * this.sign < -band) this.sign = -this.sign;
+    if (m.across * this.sign < -this.deadband(v, left)) this.sign = -this.sign;
     return this.sign * this.bank;
+  }
+
+  /** The reversals' deadband [m] at a speed through the air [m/s] and a way left to the place [m]. */
+  deadband(v: number, left: number): number {
+    const [b0, bv, bl] = this.o.band ?? [4e3, 7, 0.1];
+    return Math.max(b0, bv * v, bl * left);
+  }
+
+  /**
+   * The bank to fly now [rad]: the guidance's last, its phugoid damped — more of the lift down while the
+   * craft climbs (0.05 rad per m/s, over 5 km/s; 0.01 under 3), more up while it dives (0.01), 0.6 at most,
+   * in the air. Undamped, the
+   * fall bounced from 72 to 81 km at 60 m/s; damped alike both ways (0.01), the pull-out still climbed back
+   * 3 km at 55° of bank, over the corridor's top for ten minutes — harder on the climb, 0.6 km.
+   */
+  flown(bank: number, env: EntryEnv, s: EntryState): number {
+    if (heightOf(env, s.x) > airTop(env.atm)) return bank;
+    const va = add(s.v, env.ground(s.x), -1);
+    const climb = dot(va, unit(s.x));
+    const side = bank === 0 ? this.sign : Math.sign(bank);
+    // (the harder climb's damping fast only — the pull-out's bounce is at 7 km/s; slow, at Mach 2.5, it beat
+    // the bank 0.6 rad either way and the flight at 30 and at 120 steps a second parted)
+    const k = climb > 0 ? 0.01 + 0.04 * Math.min(Math.max((len(va) - 3000) / 2000, 0), 1) : 0.01;
+    return side * Math.min(Math.max(Math.abs(bank) + Math.min(Math.max(k * climb, -0.6), 0.6), 0), 1.4);
   }
 }
 
@@ -350,8 +394,13 @@ export class EntryGuidance {
  * The deorbit: when and how hard to brake (against the motion over the body) so that the entry ends
  * over a place. The burn sized for a vacuum periapsis `peH` [m] above the surface. One entry flown in
  * full gives the fall's arc and time from a burn; carried along the orbit, it gives every later burn's
- * end at once — the coming `orbits` turns scanned for the downrange's zero crossings, the pass with the
- * least crossrange kept, its time refined with whole entries by the secant.
+ * end at once — the coming `orbits` turns scanned for the downrange's zero crossings, the first pass within
+ * the craft's `reach` across (else the nearest) kept, its time refined with whole entries by the secant. A
+ * pass past a third of the reach: a trim burn out of the orbit's plane (`trim`: its time [s from now] and
+ * size along the orbit's normal [m/s]) a quarter turn before the fall ends — where it moves the end the
+ * most, 0.9 km a m/s; at the deorbit burn, half a turn before, 0.34 —, the crossrange brought to a third of
+ * the reach: a capsule's lift corrects 30 km, the nearest pass in six days of orbits came 85 km aside of
+ * Kennedy.
  */
 export function planDeorbit(
   env: EntryEnv,
@@ -359,7 +408,13 @@ export function planDeorbit(
   s0: EntryState,
   place: V3,
   o: { peH: number; handoverMach: number; short: number; orbits?: number; bank?: number; reach?: number },
-): { t: number; dv: number; result: EntryResult; miss: { along: number; across: number; dist: number } } | null {
+): {
+  t: number;
+  dv: number;
+  trim: { t: number; dv: number } | null;
+  result: EntryResult;
+  miss: { along: number; across: number; dist: number };
+} | null {
   const mu = len(env.gravity(s0.x, [0, 0, 0])) * dot(s0.x, s0.x);
   const bank = o.bank ?? 0.75;
   const reach = o.reach ?? 600e3;
@@ -374,8 +429,14 @@ export function planDeorbit(
     const dir = unit(add(s.v, env.ground(s.x), -1));
     return { b: { x: s.x, v: add(s.v, dir, -dv) }, dv };
   };
-  // the coast (the frame's gravity, RK4), from a state over a time, in steps
-  const coast = (s: EntryState, T: number, steps: number): EntryState[] => {
+  // the coast from a state at tb over a time, in steps: as the flight flies it (env.coast — days of orbits
+  // on: the air's drag moves the pass minutes, the ground under it tens of km), else the frame's gravity (RK4)
+  const coast = (s: EntryState, tb: number, T: number, steps: number): EntryState[] => {
+    if (env.coast && T >= 0) {
+      const out: EntryState[] = [s];
+      for (let i = 1; i <= steps; i++) out.push(env.coast(out[i - 1]!, tb + (T * (i - 1)) / steps, T / steps));
+      return out;
+    }
     const out: EntryState[] = [s];
     let { x, v } = s;
     const sub = Math.max(1, Math.ceil(Math.abs(T) / steps / 5));
@@ -398,9 +459,9 @@ export function planDeorbit(
     }
     return out;
   };
-  const full = (s: EntryState, tb: number) => {
+  const full = (s: EntryState, tb: number, side = 1) => {
     const { b, dv } = burned(s);
-    const res = predictEntry(env, c, b, () => bank, { handoverMach: o.handoverMach, tMax: 8000, sample: 60 });
+    const res = predictEntry(env, c, b, () => side * bank, { handoverMach: o.handoverMach, tMax: 8000, sample: 60 });
     const m = miss(s, res.end.x, env.carry(place, tb + res.t));
     return { dv, res, m, e: m.along + o.short };
   };
@@ -418,7 +479,7 @@ export function planDeorbit(
   const period = 2 * Math.PI * Math.sqrt(r0 ** 3 / mu);
   const T = period * (o.orbits ?? 16);
   const N = Math.ceil(120 * (o.orbits ?? 16));
-  const states = coast(s0, T, N);
+  const states = coast(s0, 0, T, N);
   // the scan: each burn's end, the nominal arc carried along its own orbit
   const quick = (s: EntryState, tb: number) => {
     const u = unit(s.x);
@@ -445,7 +506,7 @@ export function planDeorbit(
   for (const cd of cands.slice(0, 2)) {
     const slope = (() => {
       const a = quick(cd.lo.s, cd.lo.t),
-        sh = coast(cd.lo.s, cd.hi - cd.lo.t, 1)[1]!,
+        sh = coast(cd.lo.s, cd.lo.t, cd.hi - cd.lo.t, 1)[1]!,
         b = quick(sh, cd.hi);
       return (b.e - a.e) / Math.max(cd.hi - cd.lo.t, 1e-9);
     })();
@@ -454,7 +515,7 @@ export function planDeorbit(
     let p1 = p0;
     for (let k = 0; k < 4; k++) {
       const tn = Math.max(p1.t - p1.e / slope, 0);
-      const sn = coast(cd.lo.s, tn - cd.lo.t, Math.max(1, Math.ceil(Math.abs(tn - cd.lo.t) / 60))).at(-1)!;
+      const sn = coast(cd.lo.s, cd.lo.t, tn - cd.lo.t, Math.max(1, Math.ceil(Math.abs(tn - cd.lo.t) / 60))).at(-1)!;
       const pn = { t: tn, s: sn, ...full(sn, tn) };
       p0 = p1;
       p1 = pn;
@@ -470,7 +531,7 @@ export function planDeorbit(
         side = 0;
       for (let k = 0; k < 10 && Math.abs(m.e) > 300; k++) {
         const tm = Math.min(Math.max(hi.t - (fh * (hi.t - lo.t)) / (fh - fl), lo.t), hi.t);
-        const sm = coast(lo.s, tm - lo.t, 1)[1]!;
+        const sm = coast(lo.s, lo.t, tm - lo.t, 1)[1]!;
         m = { t: tm, s: sm, ...full(sm, tm) };
         if (Math.sign(m.e) === Math.sign(fl)) {
           lo = m;
@@ -493,7 +554,71 @@ export function planDeorbit(
       best = { t: m.t, dv: m.dv, res: m.res, m: m.m };
     if (best && Math.abs(best.m.across) < reach) break;
   }
-  return best ? { t: best.t, dv: best.dv, result: best.res, miss: best.m } : null;
+  if (!best) return null;
+  // the pass past a third of the reach: the burn's normal part, by the secant on the crossrange (the burn's
+  // time kept: the downrange barely moves)
+  // the trim: where the fall ends aside of the place, the lift's side averaged (the guidance reverses it) —
+  // the end's own offset from the burn's plane against the place's
+  const aside = (sb: EntryState, tb: number) => {
+    const e = [1, -1].map((side) => {
+      const f = full(sb, tb, side);
+      return { f, a: f.m.across - miss(sb, f.res.end.x, f.res.end.x).across };
+    });
+    return { f: e[0]!.f, across: (e[0]!.a + e[1]!.a) / 2 };
+  };
+  let trim: { t: number; dv: number } | null = null;
+  const keep = reach / 3;
+  if (Math.abs(best.m.across) > keep) {
+    // (a quarter turn before the end, a whole turn before the deorbit burn if need be; a minute on at the soonest)
+    const tEnd = best.t + best.res.t;
+    let tT = tEnd - period / 4;
+    while (tT > best.t - 300) tT -= period;
+    if (tT > 60) {
+      const sT = coast(s0, 0, tT, Math.max(1, Math.ceil(tT / 60))).at(-1)!;
+      const nT = unit(cross(sT.x, sT.v));
+      const at = (dv: number) => {
+        const s1 = { x: sT.x, v: add(sT.v, nT, dv) };
+        const sb = coast(s1, tT, best!.t - tT, Math.max(1, Math.ceil((best!.t - tT) / 60))).at(-1)!;
+        return { dv, ...aside(sb, best!.t) };
+      };
+      let a0 = at(0);
+      const goal = Math.sign(a0.across) * keep;
+      let a1 = at(-Math.sign(a0.across) * 20);
+      const start = a0.across;
+      for (let k = 0; k < 4 && Math.abs(a1.across - goal) > 0.1 * keep; k++) {
+        const slope = (a1.across - a0.across) / (a1.dv - a0.dv);
+        if (!(Math.abs(slope) > 1e-3)) break;
+        // (150 m/s at most: past it, the pass is the nearest the orbit offers — its crossrange said)
+        const n = Math.min(Math.max(a1.dv + (goal - a1.across) / slope, -150), 150);
+        a0 = a1;
+        a1 = at(n);
+      }
+      if (!a1.f.res.skip && Math.abs(a1.across) < Math.abs(start)) {
+        // (the plane turned, the ground track moved along too: the burn's time found again on the trimmed
+        // orbit — kept, the Lander fell 28 km short with all its lift up)
+        const s1 = { x: sT.x, v: add(sT.v, nT, a1.dv) };
+        const fly = (tb: number) => {
+          const sb = coast(s1, tT, tb - tT, Math.max(1, Math.ceil((tb - tT) / 60))).at(-1)!;
+          return { t: tb, ...full(sb, tb) };
+        };
+        let q0 = fly(best.t);
+        let q1 = fly(best.t + 20);
+        for (let k = 0; k < 6 && Math.abs(q1.e) > 300; k++) {
+          const sl = (q1.e - q0.e) / (q1.t - q0.t);
+          if (!(Math.abs(sl) > 1e-6)) break;
+          const tn = Math.max(q1.t - q1.e / sl, tT + 60);
+          q0 = q1;
+          q1 = fly(tn);
+        }
+        const q = Math.abs(q1.e) < Math.abs(q0.e) ? q1 : q0;
+        if (!q.res.skip && Math.abs(q.e) < 30e3) {
+          trim = { t: tT, dv: a1.dv };
+          best = { t: q.t, dv: q.dv, res: q.res, m: { ...q.m, across: a1.across } };
+        }
+      }
+    }
+  }
+  return { t: best.t, dv: best.dv, trim, result: best.res, miss: best.m };
 }
 
 /** The skin as it starts an entry: cold (space's average). */

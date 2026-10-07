@@ -62,7 +62,9 @@ export function runPlan(q: PlanRequest) {
   if (q.kind === "deorbit") {
     const env = envOf(q.env);
     const p = env ? planDeorbit(env, q.craft, q.s, q.place, q.o) : null;
-    return p ? { t: p.t, dv: p.dv, miss: p.miss, heat: p.result.heatPeak, shield: p.result.shieldPeak, g: p.result.gPeak } : null;
+    return p
+      ? { t: p.t, dv: p.dv, trim: p.trim, miss: p.miss, heat: p.result.heatPeak, shield: p.result.shieldPeak, g: p.result.gPeak }
+      : null;
   }
   if (q.kind === "guide") {
     const env = envOf(q.env);

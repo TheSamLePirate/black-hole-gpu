@@ -523,6 +523,13 @@ export default {
     "Rentrée : aucune désorbitation vers {0} sur une journée d'orbites — l'orbite n'en passe jamais près",
   "Entry to {0}: the deorbit burn in {1} min {2} s, {3} m/s — then {4} W/cm², {5} g, the shield {6} K at most":
     "Rentrée vers {0} : poussée de désorbitation dans {1} min {2} s, {3} m/s — puis {4} W/cm², {5} g, le bouclier à {6} K au plus",
+  "{0}: its lift corrects {1} km across — the deorbit waits {2} for the pass over {3} within it":
+    "{0} : sa portance corrige {1} km en travers — la désorbitation attend {2} le passage au-dessus de {3} à sa portée",
+  "{0}: no pass within its {1} km across — a trim of {2} m/s out of the orbit's plane in {3}":
+    "{0} : aucun passage à moins de {1} km en travers — une correction de {2} m/s hors du plan de l'orbite dans {3}",
+  "Trim burn: {0} m/s out of the orbit's plane": "Poussée de correction : {0} m/s hors du plan de l'orbite",
+  "Trim done ({0} m/s out of the plane)": "Correction faite ({0} m/s hors du plan)",
+  "Entry to {0}: the deorbit re-aimed — the burn in {1}, {2} m/s": "Rentrée vers {0} : désorbitation recalée — poussée dans {1}, {2} m/s",
   "Entry: guided to {0}": "Rentrée : guidée vers {0}",
   "Entry: no site on {0} — lift up, the controls yours when slow":
     "Rentrée : aucun site sur {0} — portance vers le haut, les commandes à vous une fois lent",

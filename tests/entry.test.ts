@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import {
+  CAPSULE,
   EntryGuidance,
   entryCorridor,
   miss,
@@ -93,7 +94,7 @@ test("the guidance brings the handover over its aim — 400 km on and 120 km acr
         b = g.update(earth, ranger, { x, v }, earth.carry(place, t));
         next = t + 8;
       }
-      return b;
+      return g.flown(b, earth, { x, v });
     },
     { handoverMach: 2.5 },
   );
@@ -133,13 +134,24 @@ test("the guidance updated every 2 s: a handful of bank reversals, the load unde
         b = nb;
         next = t + 2;
       }
-      return b;
+      return g.flown(b, earth, { x, v });
     },
     { handoverMach: 2.5 },
   );
   expect(flown.handover).toBe(true);
   expect(flips).toBeLessThanOrEqual(6);
   expect(flown.gPeak).toBeLessThan(2.6);
+  // (the phugoid damped: past its first pull-out, the fall climbs back no more than 2 km — undamped it
+  // bounced 9 km, over the corridor's top)
+  const hs = flown.track.map(([, h]) => h);
+  const i0 = hs.findIndex((h, i) => i > 0 && h < 85e3 && h <= hs[i - 1]! && h <= (hs[i + 1] ?? h));
+  let lo = hs[i0]!,
+    rise = 0;
+  for (const h of hs.slice(i0)) {
+    lo = Math.min(lo, h);
+    rise = Math.max(rise, h - lo);
+  }
+  expect(rise).toBeLessThan(1.2e3);
   const m = miss(start(), flown.end.x, earth.carry(place, flown.t));
   expect(Math.abs(m.dist - 40e3) / 1e3).toBeLessThan(15);
 }, 60000);
@@ -161,23 +173,30 @@ test("the deorbit from a 400 km orbit: a burn found whose entry ends over the pl
   expect(Math.abs(plan!.miss.across) / 1e3).toBeLessThan(600);
 }, 20000);
 
-test("the Lander's entry guided under its own load: its hand-over on its aim, not 146 km past it", () => {
-  // (held under the Ranger's 2.4 g — a capsule's entry pulls 4–5 —, its bank fell to nothing and the fall
-  // overshot; a still Earth: the plan's own pass, no crossrange)
+/**
+ * The Lander's deorbit and guided entry on a still Earth (no crossrange the ground's turning adds), the
+ * site `acrossKm` off the orbit's ground track: from where the hand-over ends to the site [km], and its
+ * offset along the track [km] (the aim: 8 km short).
+ */
+function landerEntry(acrossKm: number, band?: [number, number, number], reach = 150e3) {
   const still: EntryEnv = { ...earth, ground: () => [0, 0, 0], carry: (p) => p };
   const lander: EntryCraft = { aero: VESSELS.lander.aero, mass: VESSELS.lander.mass, alpha: 65 * D };
   const r0 = R + 500e3,
-    v0 = Math.sqrt(mu / r0),
-    inc = 51.6 * D;
-  const s0: EntryState = { x: [r0, 0, 0], v: [0, v0 * Math.cos(inc), v0 * Math.sin(inc)] };
-  const ang = 120 * D;
-  const p = onGround([r0 * Math.cos(ang), r0 * Math.sin(ang) * Math.cos(inc), r0 * Math.sin(ang) * Math.sin(inc)]);
-  const plan = planDeorbit(still, lander, s0, p, { peH: 30e3, handoverMach: 1.4, short: 8e3, orbits: 16, reach: 150e3 })!;
-  expect(plan).not.toBeNull();
-  // the coast to the burn, the burn against the motion
+    v0 = Math.sqrt(mu / r0);
+  const s0: EntryState = { x: [r0, 0, 0], v: [0, v0, 0] };
+  const ang = 120 * D,
+    off = (acrossKm * 1e3) / R;
+  const p: V3 = [R * Math.cos(ang) * Math.cos(off), R * Math.sin(ang) * Math.cos(off), R * Math.sin(off)];
+  const plan = planDeorbit(still, lander, s0, p, { peH: 30e3, handoverMach: 1.4, short: 8e3, orbits: 16, reach })!;
+  // the coast to the burn — the trim out of the plane on the way —, the burn against the motion
   let x = s0.x,
     v = s0.v;
   for (let t = 0; t < plan.t; t += 1) {
+    if (plan.trim && t <= plan.trim.t && plan.trim.t < t + 1) {
+      const n = [x[1] * v[2] - x[2] * v[1], x[2] * v[0] - x[0] * v[2], x[0] * v[1] - x[1] * v[0]] as V3;
+      const nl = Math.hypot(...n);
+      v = v.map((c, i) => c + (n[i]! / nl) * plan.trim!.dv) as V3;
+    }
     const h = Math.min(1, plan.t - t);
     const a = still.gravity(x, v);
     v = [v[0] + (a[0] * h) / 2, v[1] + (a[1] * h) / 2, v[2] + (a[2] * h) / 2];
@@ -187,7 +206,7 @@ test("the Lander's entry guided under its own load: its hand-over on its aim, no
   }
   const l = Math.hypot(...v);
   v = v.map((c) => c - (c / l) * plan.dv) as V3;
-  const g = new EntryGuidance({ handoverMach: 1.4, short: 8e3, gCap: 0.85 * VESSELS.lander.aero.gMax! });
+  const g = new EntryGuidance({ handoverMach: 1.4, short: 8e3, gCap: 0.85 * VESSELS.lander.aero.gMax!, band });
   let next = 0,
     b = 0.75;
   const flown = predictEntry(
@@ -199,14 +218,42 @@ test("the Lander's entry guided under its own load: its hand-over on its aim, no
         b = g.update(still, lander, { x: xx, v: vv }, p);
         next = t + 2;
       }
-      return b;
+      return g.flown(b, still, { x: xx, v: vv });
     },
     { handoverMach: 1.4, tMax: 8000 },
   );
-  expect(flown.handover).toBe(true);
-  const m = miss({ x, v }, flown.end.x, p);
-  expect(Math.abs(m.along + 8e3) / 1e3).toBeLessThan(5);
-  expect(flown.gPeak).toBeLessThan(VESSELS.lander.aero.gMax!);
+  const ue = flown.end.x.map((c) => c / Math.hypot(...flown.end.x)) as V3;
+  const dist = (R * Math.acos(Math.min(1, (ue[0] * p[0] + ue[1] * p[1] + ue[2] * p[2]) / R))) / 1e3;
+  return { flown, dist, along: miss({ x, v }, flown.end.x, p).along / 1e3, plan };
+}
+
+test("the Lander's entry guided under its own load: its hand-over on its aim, not 146 km past it", () => {
+  // (held under the Ranger's 2.4 g — a capsule's entry pulls 4–5 —, its bank fell to nothing and the fall
+  // overshot)
+  const r = landerEntry(0, CAPSULE.band);
+  expect(r.flown.handover).toBe(true);
+  expect(Math.abs(r.along + 8)).toBeLessThan(5);
+  expect(r.flown.gPeak).toBeLessThan(VESSELS.lander.aero.gMax!);
+}, 120000);
+
+test("the Lander from a pass 25 km off the site: its own tight deadband brings the hand-over onto its aim", () => {
+  // (the Ranger's deadband left it 20 km aside, 30 km from the site; its reach, CAPSULE.reach: 30 km)
+  const r = landerEntry(25, CAPSULE.band);
+  expect(Math.abs(r.dist - 8)).toBeLessThan(3);
+}, 120000);
+
+test("the Lander's deorbit waits for the pass within its reach: days of orbits, not the first within 150 km", () => {
+  const lander: EntryCraft = { aero: VESSELS.lander.aero, mass: VESSELS.lander.mass, alpha: 65 * D };
+  const r0 = R + 500e3,
+    v0 = Math.sqrt(mu / r0),
+    inc = 51.6 * D;
+  const s0: EntryState = { x: [r0, 0, 0], v: [0, v0 * Math.cos(inc), v0 * Math.sin(inc)] };
+  const ang = 120 * D;
+  const p = onGround([r0 * Math.cos(ang), r0 * Math.sin(ang) * Math.cos(inc), r0 * Math.sin(ang) * Math.sin(inc)]);
+  const o = { peH: 30e3, handoverMach: 1.4, short: 8e3, orbits: 96, reach: CAPSULE.reach };
+  const plan = planDeorbit(earth, lander, s0, earth.carry(p, 0), o)!;
+  expect(plan).not.toBeNull();
+  expect(Math.abs(plan.miss.across)).toBeLessThan(CAPSULE.reach);
 }, 120000);
 
 test("the entry corridor: the lift's top over the heat's and load's floor; a Ranger's predicted fall within it", () => {
@@ -230,3 +277,44 @@ test("the entry corridor: the lift's top over the heat's and load's floor; a Ran
   });
   expect(inside.length / r.track.length).toBeGreaterThan(0.8);
 });
+
+test("the corridor's top counts the ground's own speed: flying east, the curve is the speed in space", () => {
+  // (330 m/s carried at 6.5 km/s: the lift asked a fifth less, its height ~1.5 km up — an entry flown east
+  // rode over the corridor's top drawn from the air's speed alone)
+  const [still] = entryCorridor(earth, ranger, [6500]);
+  const [east] = entryCorridor(earth, ranger, [6500], 330);
+  const [west] = entryCorridor(earth, ranger, [6500], -330);
+  expect((east!.hi - still!.hi) / 1e3).toBeGreaterThan(1);
+  expect((east!.hi - still!.hi) / 1e3).toBeLessThan(3);
+  expect(west!.hi).toBeLessThan(still!.hi);
+  expect(east!.lo).toBe(still!.lo);
+});
+
+test("the pull-out at a steep bank: the phugoid damped, the fall climbing back under a kilometre", () => {
+  // (at 55° — the guidance's bank from the Edwards deorbit — damped alike on the climb and the dive the
+  // fall climbed back 2.5 km after its pull-out, over the corridor's top for ten minutes)
+  const g = new EntryGuidance({ handoverMach: 2.5, short: 40e3 });
+  const r = predictEntry(earth, ranger, start(), (_t, x, v) => g.flown(55 * D, earth, { x, v }), { handoverMach: 2.5, sample: 5 });
+  const hs = r.track.map(([, h]) => h);
+  const i0 = hs.findIndex((h, i) => i > 0 && h < 85e3 && h <= hs[i - 1]! && h <= (hs[i + 1] ?? h));
+  let lo = hs[i0]!,
+    rise = 0;
+  for (const h of hs.slice(i0)) {
+    lo = Math.min(lo, h);
+    rise = Math.max(rise, h - lo);
+  }
+  expect(rise).toBeLessThan(1e3);
+});
+
+test("the Lander from a pass 80 km off the site, past its lift's reach: a trim out of the plane, the hand-over on its aim", () => {
+  // (the nearest pass in six days of orbits came 85 km aside of Kennedy: the lift's 30 km left it there)
+  const r = landerEntry(80, CAPSULE.band, CAPSULE.reach);
+  expect(r.plan.trim).not.toBeNull();
+  // (a quarter turn before the end: ~0.9 km a m/s — at the deorbit burn it took 200)
+  expect(Math.abs(r.plan.trim!.dv)).toBeGreaterThan(30);
+  expect(Math.abs(r.plan.trim!.dv)).toBeLessThan(110);
+  expect(Math.abs(r.plan.miss.across) / 1e3).toBeLessThan(CAPSULE.reach / 1e3 / 2);
+  // (on its aim along the track too: the burn's time found again on the trimmed orbit)
+  expect(Math.abs(r.along + 8)).toBeLessThan(4);
+  expect(Math.abs(r.dist - 8)).toBeLessThan(5);
+}, 120000);
