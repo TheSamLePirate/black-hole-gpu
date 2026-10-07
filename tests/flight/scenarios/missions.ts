@@ -52,7 +52,7 @@ function toOrbit(
   title: string,
   target: string,
   altKm: number,
-  o: { minutes: number; maxSim: number; maxWall: number; tags?: string[]; delayS?: number },
+  o: { minutes: number; maxSim: number; maxWall: number; tags?: string[]; delayS?: number; date?: number },
 ): Scenario {
   return {
     id,
@@ -60,6 +60,8 @@ function toOrbit(
     tags: ["mission", "fc", "ranger", target, ...(o.tags ?? [])],
     minutes: o.minutes,
     async run(lab): Promise<Verdict> {
+      // (a date of its own: the same mission every run — at the page's own time, each run flew another)
+      if (o.date) await scene(lab, "game:artemis", o.date);
       await orbInstall(lab);
       // (the plan from later on the orbit: another family of paths — the page loaded later on the mini, its
       // plan arrived 4.3 days on, not 3.3, and its correction aimed into the Moon)
@@ -141,12 +143,15 @@ export const MISSIONS_FC: Scenario[] = [
     minutes: 8,
     maxSim: 8 * 86400,
     maxWall: 600,
+    // (its correction 43 m/s: flown 0.9° off once — the planner's finite burn not the flight's —, the pass 16 km)
+    date: Date.UTC(2026, 9, 6, 6),
   }),
   toOrbit("mission-moon-orbit-late", "Mission — Earth orbit to a 100 km orbit about the Moon, planned 273 s later", "moon", 100, {
     minutes: 8,
     maxSim: 8 * 86400,
     maxWall: 600,
     delayS: 273,
+    date: Date.UTC(2026, 9, 7, 12),
   }),
   {
     id: "mission-moon-free-return",

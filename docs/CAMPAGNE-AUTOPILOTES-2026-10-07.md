@@ -71,12 +71,34 @@ Ce qu'elle a révélé et qui est corrigé :
   - la vitesse de l'anneau inclut la rotation propre du vaisseau (l'anneau du Ranger est à 1,1 m de son axe de roulis).
 - **Capture** : l'ensemble garde la rotation, moyennée par les inerties. Le pilote ne la coupe plus instantanément et le SAS la freine selon l'inertie de l'assemblage.
 
+## Missions vers une lune ou une planète : la visée et l'exécution
+
+Le scénario lunaire partait de l'heure réelle : chaque vol était une autre mission. Il réussissait parfois, arrivait à 23 km pour 100 un autre jour, ou s'écrasait sur la Lune. Un balayage de 12 dates de départ sur 3 jours a isolé trois défauts. Les scénarios lunaires ont maintenant leur propre date de départ, la même à chaque vol.
+
+- **Correction exécutée de travers.** Pendant une poussée finie, le vol convertit l'impulsion du nœud pour suivre le repère orbital qui tourne avec la vitesse (`followDv`). Le planificateur appliquait au contraire les composantes brutes. La visée compensait donc la rotation une fois, et le vol une deuxième fois. Mesure : une correction de 43 m/s volée à 0,886° de la prévue, et un périlune lunaire à 16 km au lieu de 100. Le planificateur exécute maintenant les poussées comme le vol : il reste 0,14°.
+- **Visée du départ en échec une fois sur deux.** Le point du plan B était calculé sur l'hyperbole osculatrice du premier échantillon entré dans la sphère de la Lune. Ce point sautait d'un échantillon à l'autre au moindre changement de la poussée, et la jacobienne du solveur n'était que du bruit. Le croisement de la sphère et la plus proche approche sont maintenant interpolés. Autres changements :
+  - un départ ~180° avant la Lune ne pilote presque pas le côté de passage (hors du plan de l'orbite lunaire) : on ne le lui demande plus, et la correction à mi-parcours le règle ;
+  - le solveur de Newton devient un Levenberg-Marquardt.
+
+  Le périlune prévu dès le plan passe de 789–9 000 km à 102–105 km, et la correction à mi-parcours de 20–330 m/s à 5–7 m/s.
+- **Boucle fermée.** Après une correction à mi-parcours, une correction de rattrapage est prévue à mi-chemin du reste du trajet (deux au plus). Elle est visée depuis l'état réel, et abandonnée si inutile. En vol, la visée vers une lune est tenue à 3 km au lieu de 10. Après la capture, si l'orbite s'écarte de plus de 1 % de l'altitude demandée (2 km au moins), un transfert de Hohmann l'y ramène. `planOurOrbit` fait maintenant ce Hohmann dès 1 km d'écart (avant : 1 % du rayon, soit 18 km pour la Lune).
+
+Résultats (scénarios du labo) :
+
+| Mission | Avant | Maintenant |
+|---|---|---|
+| Lune, 100 km (date du cas difficile) | 16 km (correction 43 m/s) | **100,2–100,3 km**, Δv 3 898 pour 3 893 prévus |
+| Lune, 100 km (variante) | 23 km, ou 106 km et +670 m/s | **100,6–100,7 km**, Δv 3 898 pour 3 893 |
+| Mars, 300 km | 292,6–294,8 km | **300,4–302,5 km** |
+| Retour libre lunaire, rendez-vous ISS / Endurance / Lander, mission Gargantua | réussis | réussis |
+
+Outils ajoutés au harnais : `__bh.sys.predictClosest(id, jours)` donne la plus proche approche prévue par le propagateur du planificateur. `__bh.sys.predictAt(...)` donne l'état prévu après des nœuds, ce qui permet de comparer une poussée volée et la même poussée planifiée. La télémétrie des recalculs indique aussi si la visée a convergé et le passage qu'elle prévoit.
+
 ## Reste à traiter
 
-- **Mission vers l'orbite lunaire** : réussie ici (orbite 102,7 km), ratée sur le mini (25 km). La différence vient de l'instant du départ : la page du mini finit de charger 273 s plus tard, et le plan prend une autre famille de trajectoires (arrivée à 4,4 j au lieu de 3,3). Le scénario `mission-moon-orbit-late` reproduit le cas ici (orbite à 23 km). La correction à mi-parcours (41 m/s, 2,4 jours avant la Lune) vise le périlune à 10 km près selon le propagateur du planificateur (`predictOurs`), mais le vol réel arrive 77 km plus bas, et la capture circularise à cette altitude. Le remède est de faire viser les corrections avec la propagation même du vol (comme pour l'ISS). Une seconde correction à 80 % du trajet, essayée, aggrave tout (la visée n'est pas faite pour corriger si près de la Lune) : elle a été retirée.
+- **Jupiter** (`mission-jupiter-orbit`, jamais volée avant cette campagne) : la sonde n'entre pas dans la sphère de Jupiter. Les recalculs ne demandent plus de correction après la première, alors que la trajectoire volée s'éloigne de la cible : le planificateur se croit sur sa visée. Ce n'est pas une régression : la mission échoue aussi avec le code d'avant ces corrections (8 308 m/s dépensés).
 - **Repères de pôle** : le HUD et le décollage mesurent l'inclinaison par rapport au pôle J2000, mais les sites sont posés dans le repère de date. Pour la Lune (pôle à ~2° du J2000), le Lander ne peut pas viser 1° depuis Tranquility (il obtient 2,66°). Il faut unifier sur le pôle de date.
 - **Décollage du Lander depuis Mars** : orbite à 255,5 km pour 250 (limite 5 km) ; la circularisation laisse 250 × 261 km.
-- **Mission martienne** : orbite à 292,6–294,8 km pour 300.
 - **Le Bourget** : toucher à 75 m/s (l'avion flotte encore un peu avant le point de toucher).
 - Points 9 et 10 du plan : retour par le trou de ver (compromis réservoir), Gargantua (chauffe à Edmunds, décollage de Miller, orbites à faible poussée).
 - Le test e2e de manette (« Start pauses and B resumes ») a échoué une fois dans la suite complète et passe seul : instabilité à surveiller.

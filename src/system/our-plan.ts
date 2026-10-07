@@ -34,6 +34,9 @@ export interface PlanNode extends OurNode {
   body?: string;
   /** a departure re-aimed (refineOurNode): the meeting time its path now has [M] */
   tArrive?: number;
+  /** a burn re-aimed (refineOurNode): whether its aim met the goals, and the pass it predicts at the
+   *  target — its closest approach's height [km] (the HUD's and the lab's: what the burn is worth) */
+  aim?: { ok: boolean; passKm: number | null };
 }
 
 export interface OurGoal {
@@ -65,6 +68,10 @@ export interface OurMission {
   retSign?: number;
   /** a departure across the planets: the way out wanted from home (v∞, home frame axes) [c] */
   vinf?: Vec3;
+  /** the height's own trim after a mission's capture (ourCircWant): not trimmed again */
+  trim?: boolean;
+  /** the follow-up corrections added in flight after a mid-course correction (controller/plan.ts): two at most */
+  followUps?: number;
 }
 
 export interface OurPlanOk {
@@ -300,11 +307,31 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
       }
     }
   }
-  const st = stateOf(id, p.times[j]!);
-  const r = sub(p.pts[j]!, st.pos),
-    v = sub(p.vels[j]!, st.vel);
+  // (the hyperbola where the path crosses the sphere — between its two samples, Hermite's — not at the
+  // first sample inside it: home's pull turns the osculating orbit along the approach, and a burn's
+  // hundredth of a m/s that moved the first sample inside moved B by tens of km — the aim's Jacobian
+  // was noise, a Moon departure's re-aim found no step and flew its rough plan, 800 km off)
+  let tj = p.times[j]!;
+  let sj = { X: p.pts[j]!, V: p.vels[j]! };
+  if (b.mass > 0 && j > from && j < ca.i) {
+    let lo = p.times[j - 1]!,
+      hi = tj;
+    for (let k = 0; k < 40; k++) {
+      const mid = (lo + hi) / 2;
+      const q = stateAt(p, mid);
+      if (!q) break;
+      if (norm(sub(q.X, stateOf(id, mid).pos)) < soi) (hi = mid), (sj = q);
+      else lo = mid;
+    }
+    tj = hi;
+  }
+  const st = stateOf(id, tj);
+  const r = sub(sj.X, st.pos),
+    v = sub(sj.V, st.vel);
   let S: Vec3, B: Vec3, vinf: number;
-  let rpOsc = ca.d;
+  // (the closest approach between its samples too — the pass's height without the samples' ripple)
+  const caD = closestBetween(p, id, ca);
+  let rpOsc = caD;
   const vi2 = dot(v, v) - (2 * b.mass) / norm(r);
   if (b.mass > 0 && vi2 > 0) {
     const el = elementsOf(b.mass, r, v);
@@ -321,7 +348,7 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
     vinf = norm(v);
     B = sub(r, scale(S, dot(r, S)));
   }
-  let T = cross(S, orbitNormal(id, p.times[j]!));
+  let T = cross(S, orbitNormal(id, tj));
   if (norm(T) < 1e-9) T = cross(S, [0, 0, 1]);
   T = unit(T);
   const R = cross(S, T);
@@ -335,8 +362,27 @@ export function bPlane(p: OurPath, id: string, from = 0, mouthR = 0) {
     ca,
     entry: j,
     captured: b.mass > 0 && !(vi2 > 0),
-    rp: impact ? Math.min(rpOsc, ca.d) : ca.d,
+    rp: impact ? Math.min(rpOsc, caD) : caD,
   };
+}
+
+/** The closest approach's distance between the samples about it (a ternary search on Hermite's
+ *  interpolation): the sampled one ripples by the step's chord as the path moves. */
+function closestBetween(p: OurPath, id: string, ca: { d: number; i: number }): number {
+  if (ca.i <= 0 || ca.i >= p.pts.length - 1) return ca.d;
+  const dist = (t: number) => {
+    const q = stateAt(p, t);
+    return q ? norm(sub(q.X, stateOf(id, t).pos)) : Infinity;
+  };
+  let lo = p.times[ca.i - 1]!,
+    hi = p.times[ca.i + 1]!;
+  for (let k = 0; k < 40; k++) {
+    const a = lo + (hi - lo) / 3,
+      b = hi - (hi - lo) / 3;
+    if (dist(a) < dist(b)) hi = b;
+    else lo = a;
+  }
+  return Math.min(dist((lo + hi) / 2), ca.d);
 }
 
 /** The impact parameter that gives a periapsis radius rp at a body (gravity's focusing). */
@@ -393,9 +439,21 @@ function solve(goals: (x: number[]) => number[] | null, x0: number[], step: numb
   let r = goals(x);
   if (!r) return null;
   const cost = (q: number[]) => q.reduce((a, v, i) => a + (v / tol[i]!) ** 2, 0);
+  // (Levenberg–Marquardt: the least-norm step damped by μ — a step that does not bring the goals closer
+  // raises μ, turning it towards the gradient's descent, shorter; one that does lowers it. Gauss–Newton's
+  // step, only halved, failed where a goal hardly answers the unknowns — a Moon departure's B·R, out of
+  // its plane 180° on: the step chased it hundreds of m/s away and no fraction of it did better)
+  let mu = 0;
   for (let it = 0; it < maxIt; it++) {
     if ((globalThis as { __planDebug?: boolean }).__planDebug)
-      console.log("solve", it, r.map((v, i) => (v / tol[i]!).toFixed(1)).join(" "), x.map((v) => (v * C).toFixed(2)).join(" "));
+      console.log(
+        "solve",
+        it,
+        r.map((v, i) => (v / tol[i]!).toFixed(1)).join(" "),
+        x.map((v) => (v * C).toFixed(2)).join(" "),
+        "mu",
+        mu.toExponential(1),
+      );
     if (r.every((v, i) => Math.abs(v) < tol[i]!)) return { x, r, ok: true };
     const m = r.length,
       n = x.length;
@@ -408,28 +466,33 @@ function solve(goals: (x: number[]) => number[] | null, x0: number[], step: numb
       if (!rp) return { x, r, ok: false };
       for (let i = 0; i < m; i++) J[i]![j] = (rp[i]! - r[i]!) / tol[i]!;
     }
-    // least-norm step: dx = −Jᵀ (J Jᵀ + λI)⁻¹ r
+    // the step: dx = −Jᵀ (J Jᵀ + μI)⁻¹ r — μ from the scale of J Jᵀ, raised tenfold until the goals get closer
     const rs = r.map((v, i) => v / tol[i]!);
     const JJ = Array.from({ length: m }, (_, a) =>
-      Array.from({ length: m }, (_, b) => J[a]!.reduce((s, _v, k) => s + J[a]![k]! * J[b]![k]!, 0) + (a === b ? 1e-9 : 0)),
+      Array.from({ length: m }, (_, b) => J[a]!.reduce((s, _v, k) => s + J[a]![k]! * J[b]![k]!, 0)),
     );
-    const y = gauss(JJ, rs);
-    if (!y) return { x, r, ok: false };
-    const dx = Array.from({ length: n }, (_, k) => -J.reduce((s, row, i) => s + row[k]! * y[i]!, 0) * step[k]!);
-    // (damped: halve the step until the goals get closer)
-    let lam = 1,
-      done = false;
+    const scale0 = Math.max(...JJ.map((row, a) => row[a]!), 1e-300);
+    if (!(mu > 0)) mu = 1e-9 * scale0;
     const c0 = cost(r);
-    for (let k = 0; k < 8; k++) {
-      const xn = x.map((v, i) => v + lam * dx[i]!);
-      const rn = goals(xn);
-      if (rn && cost(rn) < c0) {
-        x = xn;
-        r = rn;
-        done = true;
-        break;
+    let done = false;
+    for (let k = 0; k < 10; k++) {
+      const y = gauss(
+        JJ.map((row, a) => row.map((v, b) => v + (a === b ? mu : 0))),
+        rs,
+      );
+      if (y) {
+        const dx = Array.from({ length: n }, (_, q) => -J.reduce((s, row, i) => s + row[q]! * y[i]!, 0) * step[q]!);
+        const xn = x.map((v, i) => v + dx[i]!);
+        const rn = goals(xn);
+        if (rn && cost(rn) < c0) {
+          x = xn;
+          r = rn;
+          done = true;
+          mu = Math.max(mu / 3, 1e-12 * scale0);
+          break;
+        }
       }
-      lam /= 2;
+      mu *= 10;
     }
     if (!done) return { x, r, ok: false };
   }
@@ -459,8 +522,9 @@ function gauss(A: number[][], b: number[]): number[] | null {
 function aimTol(m: OurMission, inFlight = false) {
   if (m.goal.target === "wormhole") return 1e6 * KM;
   const far = m.type === "sibling" || (m.home === "sun" && m.goal.target !== "moon");
-  // (in flight, the corrections close in: 5 km across the planets, 10 km near home)
-  return far ? (inFlight ? 5 : 300) * KM : 10 * KM;
+  // (in flight, the corrections close in: 5 km across the planets, 3 km near home — 10 once let a
+  // correction stop 8 km off, the circle at the Moon 8 km off the height asked)
+  return far ? (inFlight ? 5 : 300) * KM : (inFlight ? 3 : 10) * KM;
 }
 
 /** The goals' residuals on a path: B-plane at the target, and/or the perigee back home. */
@@ -572,6 +636,11 @@ function aim(
     stage === "escape" ? 0.3 * MS : m.type === "parent" && stage === "out" && !inFlight ? 60 * KM : aimTol(m, inFlight),
   );
   if (timed) tol.push(300 / M_SECONDS);
+  // (a departure to a moon, ~180° from it: its side in the B-plane — out of the moon's orbital plane —
+  // hardly answers the burn (a plane change turns about a line through the meeting point); asked of
+  // it, the aim chased it with tens of m/s of normal Δv. Left loose here, the height aimed: the mid-course
+  // correction, 90° on, sets the side for little)
+  if (moveTime && stage === "out" && m.type === "direct" && m.goal.arrival !== "freeReturn" && nGoals >= 2) tol[1] = tol[1]! * 30;
   // (the burn's time too, for a departure: moving it along the orbit turns the way out — cheaper
   // than a radial Δv; its step, a second, weighs as 0.05 m/s in the least change)
   const x0 = moveTime ? [...dv0, 0] : [...dv0];
@@ -637,7 +706,9 @@ export function planOurOrbit(X: Vec3, V: Vec3, t: number, altM0: number, o: Plan
     tArrive: t1,
   };
   const want = (vmag: number) => nodeDvComponents(s1.X, s1.V, t1, sub(scale(along, vmag), v));
-  if (Math.abs(R - rt) < 0.01 * rt) {
+  // (already there — within a kilometre: a circularization where it is; beyond, the Hohmann — within 1 % of
+  // the radius once, 18 km at the Moon: asked 100 from 106, it circled at 106)
+  if (Math.abs(R - rt) * M_METRES < 1000) {
     const dv = nodeDvComponents(s1.X, s1.V, t1, sub(circularVelocity(ref, b.mass, r, v, t1).v, v));
     const nodes: PlanNode[] = [{ t: t1, dv, role: "circ", body: ref, then: "circularize" }];
     const path = predictOurs(X, V, t, nodes, { mouthR: o.mouthR, accel: o.accel, maxSteps: 4000 });
@@ -1444,6 +1515,9 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
     node.role !== "depart",
   );
   if (!r) return { ...node, t: tAim };
+  const ca = closest(r.path, g.target);
+  const tb0 = info(g.target, o.mouthR);
+  const aimed = { ok: r.ok, passKm: ca.i >= 0 && tb0 ? ((ca.d - tb0.radius) * M_METRES) / 1e3 : null };
   // (dropped only when the aim is met without it — a failed aim is no reason to skip a correction)
   if (node.role !== "depart" && norm(r.dv) < 0.03 * MS) return r.ok ? null : { ...node, t: tAim };
   // (a correction of more than 500 m/s is no correction: the aim failed — kept for the next try)
@@ -1453,9 +1527,9 @@ export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: 
   // must aim at that one: held to the old, the Moon mission's found no aim and met the ground)
   if (node.role === "depart" && m.type !== "parent") {
     const bp = bPlane(r.path, g.target, 0, o.mouthR);
-    if (bp && bp.ca.i >= 0) return { ...node, t: r.t, dv: r.dv, tArrive: r.path.times[bp.ca.i]! };
+    if (bp && bp.ca.i >= 0) return { ...node, t: r.t, dv: r.dv, tArrive: r.path.times[bp.ca.i]!, aim: aimed };
   }
-  return { ...node, t: r.t, dv: r.dv };
+  return { ...node, t: r.t, dv: r.dv, aim: aimed };
 }
 
 /** The bodies one can plan for (targets of our universe). */

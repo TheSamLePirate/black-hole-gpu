@@ -985,7 +985,8 @@ export class CameraController {
    * (`then: "circularize"`: a capture at its periapsis), the trim where it is. Null: not running.
    */
   ourCirc: {
-    mode: "node" | "trim";
+    /** "await": circular, a Hohmann to the height asked being planned (heightGoal) */
+    mode: "node" | "trim" | "await";
     where?: "ap" | "pe";
     altKm?: number;
     dv?: number;
@@ -996,6 +997,10 @@ export class CameraController {
 
   /** the pilot's warp while our approach sets it (given back on arrival) */
   ourWarp: number | null = null;
+
+  /** a mission into orbit, its capture done: the height it asked, for the circularization's last look —
+   *  arrived more than a little off it (the aim's miss, a correction flown short), a Hohmann to it */
+  heightGoal: { body: string; altKm: number } | null = null;
 
   runwayCache: { at: number; v: RunwayView | null } | null = null;
   /** a hand-flown final's profile, frozen as its pull-up nears (the runway it is for) */

@@ -71,7 +71,7 @@ const PAGE = `(() => {
       dockInfo: c.dockInfo ? { range: r(c.dockInfo.range, 100), lateral: r(c.dockInfo.lateral, 100), closing: r(c.dockInfo.closing, 1000), angle: r(c.dockInfo.angle, 10) } : null,
       docked: !!c.docked, links: safe(() => __bh.fleet?.links?.length ?? null),
       nodes: c.plan?.nodes?.length ?? 0,
-      refine: safe(() => { const q = c.lastRefine; if (!q) return null; const n = q.result && q.result.node; return { role: q.role, at: r(q.at, 1), err: (q.result && q.result.error) || null, node: n ? { t: r(n.t, 1), dvMps: r(Math.hypot(...n.dv) * 299792458, 10) } : null }; }), burning: i.plan?.burning ?? null, xfer: c.transfer?.stage ?? null,
+      refine: safe(() => { const q = c.lastRefine; if (!q) return null; const n = q.result && q.result.node; return { role: q.role, at: r(q.at, 1), err: (q.result && q.result.error) || null, node: n ? { t: r(n.t, 1), dvMps: r(Math.hypot(...n.dv) * 299792458, 10), aim: n.aim ? { ok: n.aim.ok, passKm: r(n.aim.passKm, 10) } : null } : null }; }), burning: i.plan?.burning ?? null, xfer: c.transfer?.stage ?? null,
       fuel: r(i.engine?.fuel?.fraction, 1000), spent: r(c.spent * 299792458, 10),
       mission: safe(() => __bh.mission?.active ? __bh.mission.phase : null),
       animate: s.animate, frozen: safe(() => __bh.frozen ?? null),

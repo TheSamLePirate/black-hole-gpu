@@ -5,7 +5,7 @@
 //   __bh.game.help()
 import { bodyFixedOf, groundRelief, toBodyFixed } from "./system/our-surface";
 import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
-import { M_METRES, solarBody } from "./system/solar";
+import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
@@ -24,6 +24,7 @@ import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss
 import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
 import { ourState, referenceBody } from "./system/our-side";
+import { predictOurs } from "./system/our-predict";
 import { bodyState } from "./system/ephemeris";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { cameraFrame, homePosition, setHolePose, setHomePose } from "./camera";
@@ -324,6 +325,35 @@ export function installBh(c: BhContext) {
         /** the flown craft's navigation state, our side (controller ourNav: home frame [M, c], its reference
          *  body's place and velocity, the time [M]) — what the autopilots fly from; null elsewhere */
         nav: () => camera.ourNav(cameraFrame(settings)),
+        /** the planner's own prediction (our-predict.ts predictOurs, no node) from the flown craft's state: its
+         *  closest approach to a body within `days` — its height [km] and time [M]; the lab measures the
+         *  planner's physics against the flight's with it (null: no state, or not within reach) */
+        predictClosest: (id: string, days = 5) => {
+          const nav = camera.ourNav(cameraFrame(settings));
+          const b = solarBody(id);
+          if (!nav || !b) return null;
+          const path = predictOurs(nav.X, nav.V, nav.t, [], { tMax: (days * 86400) / M_SECONDS, maxSteps: 200000 });
+          let best = { d: Infinity, i: -1 };
+          for (let i = 0; i < path.pts.length; i++) {
+            const P = ourState(id, path.times[i]!).pos;
+            const d = Math.hypot(path.pts[i]![0] - P[0], path.pts[i]![1] - P[1], path.pts[i]![2] - P[2]);
+            if (d < best.d) best = { d, i };
+          }
+          return best.i < 0 ? null : { km: ((best.d - b.radius) * M_METRES) / 1e3, t: path.times[best.i]!, steps: path.pts.length };
+        },
+        /** the planner's coast (predictOurs) from a state, with nodes ({t, dv: [P, N, R]}), to a time: the state
+         *  there [M, c] (the lab: a burn as flown against the same burn as planned) */
+        predictAt: (
+          X: [number, number, number],
+          V: [number, number, number],
+          t: number,
+          nodes: { t: number; dv: [number, number, number] }[],
+          tAt: number,
+        ) => {
+          const path = predictOurs(X, V, t, nodes, { tMax: tAt - t + 1e-6, maxSteps: 200000, accel: camera.thrustMax() });
+          const k = path.times.length - 1;
+          return { X: path.pts[k]!, V: path.vels[k]!, t: path.times[k]! };
+        },
         /** where the camera is over the body it is nearest, our side: its geodetic latitude, longitude [°]
          *  and height over the ellipsoid [m] (null: about the hole, or by the Sun alone) */
         geodetic: () => {

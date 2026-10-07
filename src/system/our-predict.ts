@@ -14,6 +14,7 @@ import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, mouthAccel, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
 import { airAt, airTop } from "../aero";
 import { add, cross, dot, sub } from "../math/vec3";
+import { followDv } from "../fc/kepler";
 
 export interface OurNode {
   /** scene time [M] and Δv [P, N, R] (c) */
@@ -226,8 +227,16 @@ export function predictOurs(
     }
     if (next && t >= startOf(next) - 1e-9) {
       const size = Math.hypot(...next.dv);
-      if (acc > 0 && size > 0) burn = { dv: next.dv, left: size, T: size / acc };
-      else V = add(V, nodeDvHome(X, V, t, next.dv));
+      // (flown as the node autopilot flies it — controller/plan.ts —: along the orbital frame turning with the
+      // velocity it changes, the impulse's components as that burn delivers them (fc/kepler.ts followDv, at
+      // the speed it starts at); with the impulse's own components the aim and the flight disagreed to the
+      // second order: a 43 m/s correction on the way to the Moon flown 0.9° off, the pass 87 km low)
+      if (acc > 0 && size > 0) {
+        const st = solarState(referenceBody(X, t), t);
+        const f = followDv(next.dv as [number, number, number], Math.hypot(...sub(V, st.vel))) as Vec3;
+        const fs = Math.hypot(...f);
+        burn = { dv: f, left: fs, T: fs / acc };
+      } else V = add(V, nodeDvHome(X, V, t, next.dv));
       pending.shift();
       out.nodeAt.push(out.pts.length);
       // (after a burn: a turn of the new orbit)

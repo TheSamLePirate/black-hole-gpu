@@ -98,8 +98,11 @@ test("a Moon transfer's departure re-aimed onto another meeting: the correction 
   const fix = refineOurNode(after.pts[k]!, after.vels[k]!, after.times[k]!, m, mcc, o)!;
   expect(fix).not.toBeNull();
   expect(Math.hypot(...fix.dv) * C).toBeGreaterThan(0.5);
+  // (the departure aimed at the height, its side left to the correction: a few m/s — the side asked of the
+  // departure, the B-plane's first sample inside the sphere for its hyperbola, it was tens to hundreds)
+  expect(Math.hypot(...fix.dv) * C).toBeLessThan(15);
   const path = predictOurs(after.pts[k]!, after.vels[k]!, after.times[k]!, [{ t: fix.t, dv: fix.dv }], {
-    tMax: 4 * DAY,
+    tMax: 6 * DAY,
     maxSteps: 200000,
     step: 0.02,
     accel,
@@ -188,3 +191,17 @@ test("to Mars: a launch window, a ~3.7 km/s escape, a correction of a few m/s, a
   expect(tof).toBeGreaterThan(140);
   expect(tof).toBeLessThan(280);
 }, 180000);
+
+test("a Moon departure from anywhere on the orbit: aimed at the height asked, its side left to the correction", () => {
+  // (from these three points of a 400 km orbit the aim was rough — the pass planned at 789, 985 and 840 km
+  // for 100 —: the B-plane's hyperbola taken at the first sample inside the Moon's sphere made its
+  // Jacobian noise, and the departure was asked a side it hardly answers. The corrections then paid
+  // 20 to 330 m/s, and flown 0.9° off at 43 m/s, the pass came 16 km over the ground)
+  for (const t0 of [130, 170, 210]) {
+    const s = earthStart(t0, 400, true);
+    const p = planOurTransfer(s.X, s.vel, t0, { kind: "transfer", target: "moon", arrival: "orbit", altM: 100e3, returnAltM: 0 }, o);
+    if ("error" in p) throw new Error(p.error);
+    const bp = bPlane(p.path, "moon")!;
+    expect(Math.abs((bp.rp - solarBody("moon")!.radius) / KM - 100)).toBeLessThan(20);
+  }
+}, 180_000);

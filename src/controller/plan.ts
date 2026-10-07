@@ -1469,6 +1469,18 @@ function nodeBurn(
       this.nodeBurning = false;
       this.burnDir = null;
       this.burnFollow = null;
+      // (a mid-course correction flown, more than a day still to go: a follow-up halfway there — two at most — re-aimed from
+      // the real state as it nears (ourRefineTick), dropped if not needed. The burn's own execution, a tenth
+      // of a degree off, is ~12 km at the Moon from 2.4 days out: one correction left it to the capture)
+      const M = this.ourMission;
+      if (nav && node.role === "mcc" && M && (M.followUps ?? 0) < 2 && M.tArrive - nav.t > (86400 / M_SECONDS) * 1) {
+        const tf2 = nav.t + 0.5 * (M.tArrive - nav.t);
+        const k = P.nodes.findIndex((n) => n.t > tf2);
+        if (!P.nodes.some((n) => n.role === "mcc" && n.t > nav.t)) {
+          M.followUps = (M.followUps ?? 0) + 1;
+          P.nodes.splice(k < 0 ? P.nodes.length : k, 0, { t: tf2, dv: [0, 0, 0], then: null, role: "mcc" } as (typeof P.nodes)[number]);
+        }
+      }
       // (a circularization a long burn left off its radius: a Hohmann's correction, its burns short)
       const g = node.goal;
       if (g && "circ" in g && g.trim && !P.nodes.length && !nav) {
@@ -1506,6 +1518,10 @@ function nodeBurn(
 
         // (who was met: the station, or a craft of the fleet — said by its name)
         const met = this.issGoal?.body ?? "iss";
+        // (a mission into orbit: its height, for the circularization's last look — once: not after its own trim)
+        const M = this.ourMission;
+        this.heightGoal =
+          then === "circularize" && M && M.goal.arrival === "orbit" && !M.trim ? { body: M.goal.target, altKm: M.goal.altM / 1e3 } : null;
         this.ourMission = null;
         this.ourPlanned = null;
         this.issGoal = null;

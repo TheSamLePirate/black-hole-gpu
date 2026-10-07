@@ -2035,12 +2035,14 @@ function ourCircWant(
     }
     this.ourCirc = { mode: "trim", spent0: this.spent };
   }
-  if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
-  const R = this.ourCirc;
-  R.since ??= frameNow();
   // the trim: the circle where the craft is, in its plane — circular in the mean, the body's oblateness
   // in (geopotential.ts meanCircular: the level √(μ/r) swings ~10 km in a low Earth orbit) —, no height held
   const circle = circularVelocity(nav.ref, Tg.mass, Rv, rel, nav.t);
+  // (a Hohmann to the height asked being planned: the circle held meanwhile)
+  if (this.ourCirc.mode === "await") return out(lin(Tg.vel, 1, circle.v, 1));
+  if (this.ourCirc.mode !== "trim") this.ourCirc = { ...this.ourCirc, mode: "trim" };
+  const R = this.ourCirc;
+  R.since ??= frameNow();
   const err = Math.hypot(...sub3(rel, circle.v)) * C;
   // (done: within 0.2 m/s — or, the trim's minute out, within 2)
   const age = (frameNow() - R.since) / 1000;
@@ -2053,6 +2055,27 @@ function ourCircWant(
     this.onPilotMessage?.(
       tf("Circular: {0} × {1} km — {2} m/s spent", km(circle.r0 - circle.X), km(circle.r0 + circle.X), used.toFixed(0)),
     );
+    // (a mission into orbit, arrived off the height it asked — the aim's miss, a correction flown short:
+    // a Hohmann to it, once; the circle held while it is planned — the Moon's mission once circled at
+    // 23 km for 100)
+    const G = this.heightGoal;
+    this.heightGoal = null;
+    const meanKm = ((circle.r0 - Tg.radius) * M_METRES) / 1e3;
+    if (G && G.body === nav.ref && Math.abs(meanKm - G.altKm) > Math.max(2, 0.01 * G.altKm)) {
+      this.ourCirc = { mode: "await", spent0: this.spent };
+      P.setAuto("circularize");
+      this.onPilotMessage?.(tf("{0} km for the {1} asked: a Hohmann to it", meanKm.toFixed(0), G.altKm.toFixed(0)));
+      void this.planOurs("orbit", "orbit", G.altKm, 0).then(() => {
+        if (this.ourCirc?.mode !== "await") return;
+        this.ourCirc = null;
+        if (this.ourMission && this.plan.nodes.length) {
+          this.ourMission.trim = true;
+          P.auto = "none";
+          P.setAuto("node");
+        } else P.setAuto("none");
+      });
+      return out(lin(Tg.vel, 1, circle.v, 1));
+    }
     return null;
   }
   return out(lin(Tg.vel, 1, circle.v, 1));

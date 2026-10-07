@@ -469,6 +469,7 @@ export default {
   "Circularize at the apoapsis ({0} km) in {1}: {2} m/s": "Circularisation à l'apoapside ({0} km) dans {1} : {2} m/s",
   "Circularize at the periapsis ({0} km) in {1}: {2} m/s": "Circularisation à la périapside ({0} km) dans {1} : {2} m/s",
   "Circular: {0} × {1} km — {2} m/s spent": "Circulaire : {0} × {1} km — {2} m/s dépensés",
+  "{0} km for the {1} asked: a Hohmann to it": "{0} km pour les {1} demandés : un Hohmann pour les atteindre",
   Circular: "Circulaire",
   "Docking: with the ISS, in our solar system": "Amarrage : avec l'ISS, dans notre système solaire",
   "Circularize: only around the black hole": "Circulariser : seulement autour du trou noir",
