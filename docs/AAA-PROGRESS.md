@@ -15,9 +15,11 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 | Physique | 64 | 80 | 80 |
 | Code + tests | 44 | 76 | 75 |
 | Technologie | 67 | 79 | 80 |
-| UI / UX / HUD | 44 | 77 | 80 |
-| Produit / gameplay | 50 | 71 | 80 |
-| **Global** | **≈ 54** | **≈ 77** | **≈ 78–80** |
+| UI / UX / HUD | 44 | 79 | 80 |
+| Produit / gameplay | 50 | 72 | 80 |
+| **Global** | **≈ 54** | **≈ 77,5** | **≈ 78–80** |
+
+*Réestimé après le plan HUB (08/10/2026).* **UI** (77 → 79) : la carte du hub, la télémétrie, les graphiques et le rapport de vol (section [Plan HUB](#plan-hub--hub-télémétrie-graphiques-rapport-terminé-08102026)) — plus aucun chevauchement dans les 10 états de référence, la carte homogène pour tous les autopilotes (tendances ▲▼, seuils en couleur), le graphe ouvert en grand, une page TÉLÉMÉTRIE avec export CSV. **Produit** (71 → 72) : un vol noté sur 20 à l'atterrissage et à l'amarrage, première brique d'une progression ; la progression elle-même manque toujours. **Code + tests** (76) : 6 e2e de plus (`hud-layout`, `hub-graph`, `hub-card`, `telemetry`, `report`, `saves`) et une galerie d'états fixes (`scripts/hud-gallery.ts`) ; les sauvegardes rechargent exactement le vol (flotte, site, désorbitation attendue, attitude).
 
 *Réestimé après la fusion de `test-kimi` (07/10/2026).* **Physique** (78 → 80, la cible) :
 - les rails suivent l'orbite que vole l'intégrateur du vol (10 m d'écart par tour, contre 49 km) ;
@@ -341,29 +343,55 @@ Nouvelle scène : *Docking to the tumbling Endurance* (à 300 km, 3 tr/min ; ama
 - n° 2 (les scènes chargées sans erreur) : en partie, par `worlds` et `ui-scenes-loading` ;
 - n° 4 (perte du device) : non couvert.
 
-## Ce qui reste pour l'AAA (au 07/10/2026)
+## Plan HUB : hub, télémétrie, graphiques, rapport (terminé, 08/10/2026)
+
+Plan : [`PLAN-HUB.md`](PLAN-HUB.md), HB1 à HB5, commits `7be5b69` à `6d81d41`, planches dans `docs/progress/hub/`. Méthode : dix états de vol sauvegardés par le labo (`tests/hud/states/`), rechargés et photographiés avant et après chaque étape par `scripts/hud-gallery.ts`.
+
+**Décisions du propriétaire (07/10/2026)** : la télémétrie dans une page de la tablette **et** un rapport de vol noté ; le graphe du hub petit dans la carte, **ouvert en grand d'un clic**.
+
+| Étape | Ce qui a changé |
+|---|---|
+| HB1 Mise en page | Registre `hud/layout.ts` : les panneaux mesurés, les instruments du canevas placés hors d'eux (`fit`). Données air en bloc compact à gauche de la bille ; plus d'encadré ENTRY en double. e2e `hud-layout` : aucun chevauchement dans les 10 états. |
+| HB2 La carte du hub | Une carte ENTRY complète (cap, écoulement, gîte consigne/réelle, charge, flux, pics à venir). Lignes homogènes : tendance ▲▼ calculée par la HUD pour toutes, seuils ambre et rouge (⚠) par autopilote. Hauteur bornée. Vitesse sol une fois posé ; apoapside de la montée au-dessus du sol réel (−4,7 km auparavant). |
+| HB3 Les graphiques | Point actuel visible (halo, repères), petit graphe de 96 px cliquable, grand panneau (axes nommés, légende, lecture au survol, Échap). |
+| HB4 Télémétrie et rapport | Enregistreur du vol (10 canaux, tout le vol gardé) ; page TÉLÉMÉTRIE (3 courbes, fenêtre 1 min → tout, CSV) ; rapport de vol noté sur 20 (A–F) à l'atterrissage et à l'amarrage, chaque mesure jugée, une ligne au journal. |
+| HB5 Finitions | i18n, `HUD.md`, planche finale ; trois défauts du rapport trouvés par la planche et corrigés (une descente verticale jugée sur l'axe d'une piste, le site du vol précédent gardé, la carte restée affichée). |
+
+**Sauvegardes** (corrigées en route) : la flotte, le site de rentrée et la désorbitation attendue sont sauvegardés ; un vol rechargé ne se replace plus selon la vue précédente (un amarrage repartait à 169° de l'axe du port).
+
+**Reste ouvert** : l'atterrissage autopiloté au Bourget a été noté F une fois sur six exécutions de l'e2e `report` (non diagnostiqué ; le test affiche désormais le contenu de la carte en cas d'échec).
+
+## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
 
-1. **Produit, 71 → 80** : la **progression et les objectifs suivis** (phase 4 de l'audit : carrière, école de pilotage, préréglages de difficulté, musique et voix ; plan Monde M10). C'est le seul pilier encore loin de sa cible.
+1. **Produit, 72 → 80** : la **progression et les objectifs suivis** (phase 4 de l'audit : carrière, école de pilotage, préréglages de difficulté, musique et voix ; plan Monde M10). C'est le seul pilier encore loin de sa cible. Le rapport de vol noté (HB4) en donne la mesure : garder la meilleure note par mission suffit à amorcer une progression.
 2. **Autopilotes, 15 → 18/20** :
    - la mission vers Jupiter ;
    - la montée à +10 % de l'optimum au plus ;
    - des repères de pôle unifiés (pôle de date) ;
    - le retour par le trou de ver et Gargantua (points 9 et 10 du plan des autopilotes) ;
-   - le flottement au Bourget.
+   - le flottement au Bourget ;
+   - le F aléatoire de l'atterrissage au Bourget (e2e `report`, 1 sur 6).
 3. **Robustesse (M2)** : la **recréation à chaud du device** perdu, et un test e2e de la perte du GPU. Il faut aussi stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
-4. **Technologie, 79 → 80, puis le plan Monde M3–M9** :
-   - maillages quantifiés ;
+4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
+   - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
    - météo ;
    - aéroports vivants (balisage de nuit, ILS) ;
    - audio spatial ;
    - HOTAS ;
    - cockpit interactif ;
    - ≤ 8 storage buffers pour Android et Safari (action 7 du chargement, reportée).
-5. **UI, 77 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde.
+5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **08/10/2026 — plan HUB terminé** (HB1–HB5, `7be5b69`…`6d81d41`, poussé) : mise en page sans chevauchement, carte du hub homogène, graphe agrandi, télémétrie et CSV, rapport de vol noté ; sauvegardes fidèles. UI 77 → 79, Produit 71 → 72.
+
+  Leçons :
+  - **des états fixes rechargés** (la galerie) valent mieux que des vols rejoués pour juger une interface : avant/après en 2 minutes ;
+  - **la planche finale est un test** : elle a montré trois défauts du rapport qu'aucun e2e ne voyait ;
+  - **un chargement doit tout remettre** (le point de vue, le site, la carte du rapport) : ce qui n'est pas dans la sauvegarde vient du vol d'avant.
 
 - **07/10/2026 — fusion de `test-kimi` dans `main`** (avance rapide, `229b2f3`, CI vert, site et `/test/` déployés).
   - **Campagne des autopilotes :** note 15/20, détails ci-dessus.
