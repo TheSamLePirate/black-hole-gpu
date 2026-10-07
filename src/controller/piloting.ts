@@ -8,6 +8,7 @@ import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body, onOurSide } from "../targeting";
 import { AIR_WARP } from "../flightair";
+import { brakingAccels } from "../descent";
 import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import { siteDir, sitesOf, type Site } from "../game/sites";
@@ -34,7 +35,7 @@ import {
 } from "../system/our-surface";
 import { daysOf, solarBody, spinVector } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
-import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
+import { cross, dot as dot3, len as len3, lin, sub as sub3 } from "../math/vec3";
 import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
@@ -1355,7 +1356,14 @@ function entryStep(
       site = sites.reduce((a, b) => (Math.abs(dot3(unitV(fr.place(b)), n)) < Math.abs(dot3(unitV(fr.place(a)), n)) ? b : a));
     }
     const handover = ranger ? 2.5 : 1.4;
-    const shortM = ranger ? 90e3 : 8e3;
+    // (the Lander's hand-over short of its pad by its own braking across — 2.5 × v² / 2 a at the hand-over's
+    // 350 m/s — in a thick air (the Earth's, Titan's): handed over 13 km from Kennedy, 23 km up at 215 m/s
+    // down and 348 across, the braking across took the thrust, the fall ran past its curve and the Lander
+    // hit at 111 m/s; from 20 km it landed on its pad. In a thin air (Mars) the 8 km it lands from)
+    const thick = (fr.env.atm?.rho0 ?? 0) > 0.5;
+    const gG = len3(fr.env.gravity(lin(fr.s.x, fr.env.R / len3(fr.s.x), fr.s.x, 0), [0, 0, 0]));
+    const aH = brakingAccels(this.thrustMax() * (C_MPS ** 2 / (1476.625 * s.massSolar)), gG).aH;
+    const shortM = ranger ? 90e3 : thick ? Math.max(8e3, (2.5 * 350 ** 2) / (2 * aH)) : 8e3;
     this.entryRun = {
       phase: "entry",
       site,
@@ -1413,7 +1421,12 @@ function entryStep(
     if (R.phase === "wait") {
       // (a wait of hours, re-aimed once an hour and a half before the burn: planned days ahead, the air's
       // drag and the Moon's pull moved the pass — the Lander came down out of its reach of Kennedy)
-      if (R.site && !R.reaimed && (R.waited ?? 0) > 3 * 3600 && left < 1.5 * 3600 && left > 600) {
+      // (and a turn and a third before at least: about Titan, turns of hours, the trim then had no time left
+      // before the burn — the Lander came down 39 km from Huygens' site)
+      const mu = len3(fr.env.gravity(fr.s.x, fr.s.v)) * dot3(fr.s.x, fr.s.x);
+      const turn = 2 * Math.PI * Math.sqrt(len3(fr.s.x) ** 3 / mu);
+      const ahead = Math.max(1.5 * 3600, 1.3 * turn);
+      if (R.site && !R.reaimed && (R.waited ?? 0) > 2 * ahead && left < ahead && left > 600) {
         R.reaimed = true;
         planBurn(R, R.site, 2, true);
         return retro();

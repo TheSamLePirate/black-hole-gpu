@@ -923,7 +923,15 @@ export class CameraController {
    * site (the entry's handed over, a descent to one on an airless world), else the place under the craft
    * once it is slow (body-fixed [M]) —, the heading it holds level, the guidance's last command.
    */
-  landRun: { body: string; site: Site | null; q: Vec3 | null; heading: Vec3 | null; cmd: DescentCmd | null } | null = null;
+  landRun: {
+    body: string;
+    site: Site | null;
+    q: Vec3 | null;
+    heading: Vec3 | null;
+    cmd: DescentCmd | null;
+    /** the braking begun low (descent.ts: no coasting again) */
+    braking?: boolean;
+  } | null = null;
 
   /**
    * Our universe's landing and take-off (the body of the sphere of influence, if it has a ground):
@@ -961,6 +969,8 @@ export class CameraController {
     id: string;
     pad: Vec3;
     trace: [number, number][];
+    /** the trace's spacing [km], doubled as it is thinned */
+    step?: number;
     qMax: number;
     profile: { pts: [number, number][]; ts: number[]; turn: number };
   } | null = null;

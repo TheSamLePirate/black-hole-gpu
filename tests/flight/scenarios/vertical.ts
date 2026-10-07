@@ -258,7 +258,7 @@ function landerEntry(id: string, pad: Pad, setup: (lab: Lab) => Promise<void>, m
       await engage(lab, "entry");
       const e = await lab.fixed({
         until: DOWN,
-        maxSim: 8 * 86400,
+        maxSim: 10 * 86400,
         maxWall: 1800,
       });
       return judgeTouchdown(lab, pad, padM, e);

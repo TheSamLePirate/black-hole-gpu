@@ -57,6 +57,8 @@ export interface DescentState {
   /** the last command vectored (low and slow): kept so up to 1.4 × the hover's translation — the modes'
    *  edge not crossed back and forth */
   wasVectored?: boolean;
+  /** the braking begun (a command not coasting given since the descent began): no coasting again */
+  braking?: boolean;
 }
 
 export interface DescentCmd {
@@ -152,7 +154,9 @@ export function descentCommand(s: DescentState): DescentCmd {
   const tC = Math.max((d - (vh * vh) / (2 * aH)) / Math.max(vh, 1), 0);
   const hC = h + vv * tC - 0.5 * g * tC * tC;
   const fallOk = orbiting || (hC > H_GATE && -vv + g * tC < descentCurve(hC, aV));
-  if (vh > V_TRANS && fallOk && (vCurve > 1.02 * vh || (orbiting && behind) || high)) {
+  // (once braking, braking on: from a trimmed entry the Lander, 5 km up at 160 m/s, coasted and braked by turns,
+  // its attitude swinging from 0° to 68° each time, and hit at 111 m/s)
+  if (!s.braking && vh > V_TRANS && fallOk && (vCurve > 1.02 * vh || (orbiting && behind) || high)) {
     const base = { vh: vhv, down: -vv, vectored: false, dist: d, aH, aV, ffH: [0, 0, 0] as Vec3, ffUp: 0 };
     const sBrake = (vh * vh) / (2 * aH);
     let tBrake = (d - sBrake) / vh;

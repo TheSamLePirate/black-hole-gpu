@@ -426,7 +426,9 @@ export const SOLAR_BODIES: SolarBody[] = [
     15.945421,
     el([36.4, 84.0], 0.029, 78.3, 11.7, 0.3, 78.6, 346.68, 687.37),
     0.22,
-    "gas",
+    // (a ground under its haze — water ice and hydrocarbons, where Huygens came down: "gas" left the Lander's
+    // landing autopilot with none to land on at the end of its entry)
+    "ice",
     "titan",
     { atmosphere: { rho0: 5.43, H: 21000, T: 94, gas: "n2ch4", model: "titan" } },
   ),

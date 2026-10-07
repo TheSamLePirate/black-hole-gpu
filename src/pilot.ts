@@ -406,9 +406,11 @@ export class FlightComputer {
       } else {
         this.burn = scale(A, 1 / a);
         point = toC(this.burn);
-        // throttle only once the nose is on the burn vector (cos 12° … cos 3°)
+        // throttle only once the nose is on the burn vector (cos 12° … cos 3°) — landing, from 60° off it to 25°:
+        // the burn's direction turning as the craft brakes, cut while the nose chased it the Lander fell, its
+        // attitude swinging 0° to 60° every 6 s from 11 km down, and hit at 41 m/s
         const align = c.snap ? 1 : dot(Z, point);
-        const k = clamp((align - 0.978) / (0.9986 - 0.978), 0, 1);
+        const k = this.auto === "land" ? clamp((align - 0.5) / (0.9 - 0.5), 0, 1) : clamp((align - 0.978) / (0.9986 - 0.978), 0, 1);
         throttle = clamp(a / c.thrust, 0, 1) * k;
         // the RCS takes the rest (sideways part), within its authority
         const main = scale(point, throttle * c.thrust);

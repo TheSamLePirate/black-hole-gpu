@@ -59,7 +59,7 @@ import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, LowThrust, RunwayView } from "../controls";
-import { LANDING, clamp, fmtDur, landingProfile, spinAxis, unitV, type LandingFix } from "./util";
+import { LANDING, clamp, fmtDur, landingProfile, smoothstep, spinAxis, unitV, type LandingFix } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 import { entryCorridor, heightOf as heightOfEntry } from "../entry";
 import { brakingAccels, descentCommand, descentCurve, V_TD, V_TRANS } from "../descent";
@@ -675,7 +675,14 @@ function ourSurfaceWant(
   const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg);
   const vc = Math.sqrt(sb.mass / r);
   const vi = sub3(nav.V, nav.refVel);
-  if (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08) {
+  // (done: steered, at the top, the speed across the vertical the circular one's to 0.5 % — its east part only,
+  // within 8 %, ran the burn on 2 s past it, the apoapsis 50 km high)
+  const viH = lin(vi, 1, up, -dot3(vi, up));
+  const doneOut =
+    steerShare(sb.atmosphere?.H, h * M_METRES, thr, sb.mass / sb.radius ** 2) > 0 &&
+    r >= d0 - 0.003 * (d0 - sb.radius) &&
+    Math.hypot(...viH) >= 0.995 * vc;
+  if (doneOut || (r >= d0 && Math.abs(dot3(vi, east) / vc - 1) < 0.08)) {
     P.auto = "none";
     P.setAuto("circularize");
     this.onPilotMessage?.(tf("In orbit around {0}", name));
@@ -683,16 +690,35 @@ function ourSurfaceWant(
   }
   // (inertial east speed: the ground already gives its turning at lift-off)
   const vGroundE = dot3(sub3(gv, nav.refVel), east);
-  const { vUp, vEastAir, f } = climbCmd(id, thr, this.dragPerMass(), d0, vGroundE, r, h);
+  const { vUp, vEastAir, f } = climbCmd(id, thr, this.dragPerMass(), d0, vGroundE, r, h, dot3(vi, east));
   // (an inclination asked: the ground's own turn across the launch's heading taken off as the craft
   // climbs — else it is left in the orbit, which then comes out flatter)
   let want = lin(lin(gv, 1, up, vUp), 1, east, vEastAir);
+  // out of the air (steerShare): the thrust steered — the time to the top's circular speed, the climb's
+  // acceleration linear in time that brings the craft to the top's height then with no more speed up
+  // (steerUp). Flown by the velocity law, the east speed's error (2 km/s) took the thrust and the climb's
+  // (500 m/s) almost none: up at 790 m/s past the top, the orbit 409 km for 300
+  const w = steerShare(sb.atmosphere?.H, h * M_METRES, thr, sb.mass / sb.radius ** 2);
+  let hold = ff;
+  if (w > 0) {
+    const vcT = Math.sqrt(sb.mass / d0);
+    const vh = dot3(vi, east);
+    // (the speed still to gain across the vertical: up to the top's circular along the launch's heading, and
+    // what lies off its plane taken off — the ground's own turn, an inclination asked)
+    const gain = lin(east, vcT, viH, -1);
+    const sUp = steerUp(Math.hypot(...gain), thr, d0 - r, dot3(vi, up), Math.max(gw - (vh * vh) / r, 0));
+    const dir = lin(up, sUp, unitV(gain), Math.sqrt(1 - sUp * sUp));
+    // (a velocity far along it: the whole thrust there)
+    const steer = lin(nav.V, 1, dir, Math.max(Math.hypot(...gain), 50 / C_MPS));
+    want = lin(want, 1 - w, steer, w);
+    hold = lin(ff, 1 - w, ff, 0);
+  }
   if (LG.incDeg !== null) {
     const gi = sub3(gv, nav.refVel);
     const across = lin(lin(gi, 1, east, -dot3(gi, east)), 1, up, -dot3(gi, up));
-    want = lin(want, 1, across, -f);
+    want = lin(want, 1, across, -f * (1 - w));
   }
-  return out(want, ff);
+  return out(want, hold);
 }
 
 /**
@@ -750,8 +776,11 @@ function landWant(
     pad: padX ? lin(sub3(padX, nav.X), M_METRES, padX, 0) : null,
     orbit: { mu: solarBody(id)!.mass * acc * M_METRES ** 2, r: lin(rel, M_METRES, rel, 0), vi: lin(vi, C, vi, 0) },
     wasVectored: !!L.cmd?.vectored,
+    braking: L.braking,
   });
   L.cmd = cmd;
+  // (braking once below the air's top half — an orbit's coast to its braking stays a coast up there)
+  if (!cmd.coast && !cmd.doi && h * M_METRES < 30e3) L.braking = true;
   // the time: sped up while it coasts — to some twenty seconds before the braking, or the descent orbit's
   // burn —, real time while it flies
   this.setHubWarp((cmd.coast ? Math.min(1000, Math.max((cmd.tBrake - 25) / 3, 1)) : 1) / Msec);
@@ -824,7 +853,7 @@ export function climbTop(id: string, altKm: number | null): number {
  * dynamic pressure under 35 kPa (max-Q) — straight up through the thick air first, turning east as it
  * thins (a gravity turn). `thr` the thrust [c²/M], `dragK` the drag per mass, `vGroundE` the ground's east speed.
  */
-export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGroundE: number, r: number, h: number) {
+export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGroundE: number, r: number, h: number, vNowE?: number) {
   const sb = solarBody(id)!;
   const c = C_MPS;
   const minute = 60 / M_SECONDS;
@@ -833,10 +862,16 @@ export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGr
   const f = Math.min(Math.max((r - sb.radius) / (dAim - sb.radius), 0), 1);
   const vc = Math.sqrt(sb.mass / r);
   let vUp = Math.min(Math.sqrt(Math.max(thr - gw, 0) * (d0 - sb.radius)) * 0.5, (d0 - sb.radius) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
-  const vE = vc * Math.sqrt(f);
-  // (and never faster up than a coast tops out at the top — gravity less the east speed's own lift, a fifth
-  // of it at least: aimed past it, the climb coasted on, the orbit 4 % high — 105 km for 100)
-  const gEff = Math.max(gw * (1 - f), 0.2 * gw);
+  // (out of the air — between 3 and 7 of its scale heights —, the top's circular speed at once: tied to the
+  // height's share, √f, the climb crept up its last 30 km at 7 km/s for 450 s, the thrust holding the craft
+  // up — 11.3 km/s spent to a 300 km orbit, 9.4 a rocket's. An airless world keeps its √f: from its ground)
+  const out = steerShare(sb.atmosphere?.H, h * M_METRES, thr, sb.mass / sb.radius ** 2);
+  const vE = vc * Math.sqrt(f) + (Math.sqrt(sb.mass / d0) - vc * Math.sqrt(f)) * out;
+  // (and never faster up than a coast tops out at the top — gravity less the east speed's own lift, a fiftieth
+  // of it at least: aimed past it, the climb coasted on, the orbit 4 % high — 105 km for 100; a fifth, near the
+  // orbital speed, 409 km for 300); the east speed the craft has now when known, else the command's
+  const vh = vNowE ?? vc * Math.sqrt(f);
+  const gEff = Math.max(gw - (vh * vh) / r, 0.02 * gw);
   vUp = Math.min(vUp, Math.sqrt(2 * gEff * Math.max(d0 - r, 0)) + 0.2 / c);
   let vEastAir = Math.max(vE, vGroundE * (1 - f)) - vGroundE;
   const rho = ourAir(id, h * M_METRES);
@@ -851,31 +886,91 @@ export function climbCmd(id: string, thr: number, dragK: number, d0: number, vGr
 }
 
 /**
+ * The take-off's steering out of the air: the share of the thrust up (its sine) that brings the craft to its
+ * top with no more speed up as it reaches the speed across it still needs (`gain`, at `thr`): the climb's
+ * acceleration linear in time over the time to go (6 Δh − 4 v t) / t², the weight less the speed's lift
+ * (`gNet`) on top; the time to go on the thrust left across. The share asked falls as the share taken grows
+ * (the time to go lengthens): its fixed point by bisection — iterated, it swung between 0.95 and 0.18.
+ */
+export function steerUp(gain: number, thr: number, dh: number, vz: number, gNet: number) {
+  const tgoOf = (s: number) => Math.max(gain / (thr * Math.max(Math.sqrt(1 - s * s), 0.3)), 5 / M_SECONDS);
+  const ask = (s: number) => {
+    const t = tgoOf(s);
+    return clamp(((6 * dh - 4 * vz * t) / (t * t) + gNet) / thr, -0.4, 0.95);
+  };
+  let lo = -0.4,
+    hi = 0.95;
+  for (let k = 0; k < 24; k++) {
+    const m = (lo + hi) / 2;
+    if (ask(m) > m) lo = m;
+    else hi = m;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * The share of the take-off steered out of the air at a height [m] (`H` the scale height [m]): from 3 to 7 of
+ * them — none for a craft whose thrust is past 2.5 × its weight on the ground (the Lander on Mars: its time to
+ * the circular speed short, the law asked 1.4 km/s up of it, 727 km for 250 — the climb's speeds kept there).
+ */
+export function steerShare(H: number | undefined, h: number, thr: number, gGround: number) {
+  return H && thr < 2.5 * gGround ? smoothstep((h - 3 * H) / (4 * H)) : 0;
+}
+
+/**
  * The take-off's optimum path as its command flies it: the downrange and the height [km] from the pad
  * up to its top (the ground's east speed as at the pad), the time along it [s], and where its gravity
- * turn starts — the path 15° off the vertical — [km].
+ * turn starts — the path 15° off the vertical — [km]. A point mass flown as the take-off flies
+ * (ourSurfaceWant): in the air its speeds commanded, closed over the velocity law's 1.2 s with the weight
+ * held and what the thrust leaves; out of it (from 3 to 7 scale heights) the full thrust steered to the
+ * top's circular speed, the climb brought to nothing there. (Flown as asked at once, the path drawn ran
+ * 150 km ahead of the craft at 100 km up: the speed across takes its time.)
  */
 export function climbProfile(id: string, thr: number, dragK: number, d0: number, vGroundE: number) {
-  const R = solarBody(id)!.radius;
+  const sb = solarBody(id)!;
+  const R = sb.radius;
   const km = M_METRES / 1e3;
   const pts: [number, number][] = [[0, 0]];
   const ts = [0];
+  const H = sb.atmosphere?.H;
+  const dt = 0.5 / M_SECONDS,
+    T = 1.2 / M_SECONDS;
+  const vcT = Math.sqrt(sb.mass / d0);
   let x = 0,
-    tt = 0,
-    turn = NaN;
-  const N = 160;
-  // (heights in steps fine near the ground — the thick air —, coarser above)
-  let h0 = 0;
-  for (let i = 1; i <= N; i++) {
-    const h1 = (d0 - R) * 0.995 * (i / N) ** 2;
-    const hm = (h0 + h1) / 2;
-    const cm = climbCmd(id, thr, dragK, d0, vGroundE, R + hm, hm);
-    if (!Number.isFinite(turn) && Math.atan2(cm.vUp, Math.abs(cm.vEastAir)) < (75 * Math.PI) / 180) turn = h0 * km;
-    x += (Math.abs(cm.vEastAir) / Math.max(cm.vUp, 1e-12)) * (h1 - h0);
-    tt += ((h1 - h0) / Math.max(cm.vUp, 1e-12)) * M_SECONDS;
-    pts.push([x * km, h1 * km]);
-    ts.push(tt);
-    h0 = h1;
+    h = 0,
+    vz = 0,
+    vh = vGroundE,
+    turn = Number.NaN;
+  for (let k = 1; k <= 6000; k++) {
+    const r = R + h;
+    const vc = Math.sqrt(sb.mass / r);
+    const w = steerShare(H, h * M_METRES, thr, sb.mass / (R * R));
+    if (w > 0 && r >= d0 - 0.003 * (d0 - R) && vh >= 0.995 * vc) break;
+    if (r >= d0 && Math.abs(vh / vc - 1) < 0.08) break;
+    const gNet = sb.mass / (r * r) - (vh * vh) / r;
+    // the velocity law: the speeds commanded, the weight held, the rest of the thrust on their error
+    const cm = climbCmd(id, thr, dragK, d0, vGroundE, r, h, vh);
+    const ez = (cm.vUp - vz) / T,
+      eh = (cm.vEastAir + vGroundE - vh) / T;
+    const left = Math.sqrt(Math.max(thr * thr - Math.max(gNet, 0) ** 2, 0));
+    const ek = Math.min(1, left / Math.max(Math.hypot(ez, eh), 1e-30));
+    let az = ez * ek,
+      ah = eh * ek;
+    // out of the air: the thrust steered (ourSurfaceWant)
+    if (w > 0) {
+      const sUp = steerUp(vcT - vh, thr, d0 - r, vz, Math.max(gNet, 0));
+      az = (1 - w) * az + w * (thr * sUp - gNet);
+      ah = (1 - w) * ah + w * thr * Math.sqrt(1 - sUp * sUp);
+    }
+    vz += az * dt;
+    vh += ah * dt;
+    h = Math.max(h + vz * dt, 0);
+    x += (vh - vGroundE) * dt;
+    if (!Number.isFinite(turn) && h > 0 && Math.atan2(vz, Math.abs(vh - vGroundE)) < (75 * Math.PI) / 180) turn = h * km;
+    if (k % 4 === 0) {
+      pts.push([x * km, h * km]);
+      ts.push(k * 0.5);
+    }
   }
   return { pts, ts, turn: Number.isFinite(turn) ? turn : 0 };
 }
@@ -924,9 +1019,21 @@ function climbAssist(
   const x = Math.acos(cosA) * sb.radius * kmM;
   const tr = R.trace;
   const last = tr[tr.length - 1];
-  if (!last || Math.abs(x - last[0]) + Math.abs(h - last[1]) > 0.05) {
+  // (the trace thinned as it grows by a spacing doubled each time — every other point dropped at each push
+  // past 400 kept the last minutes and lost the climb's start: its second point 1 061 km downrange)
+  R.step ??= 0.05;
+  if (!last || Math.abs(x - last[0]) + Math.abs(h - last[1]) > R.step) {
     tr.push([x, h]);
-    if (tr.length > 400) R.trace = tr.filter((_, i) => i % 2 === 0 || i === tr.length - 1);
+    if (tr.length > 400) {
+      R.step *= 2;
+      let p = tr[0]!;
+      R.trace = tr.filter((q, i) => {
+        if (i === 0 || i === tr.length - 1) return true;
+        if (Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]) < R.step!) return false;
+        p = q;
+        return true;
+      });
+    }
   }
   // the path: its angle over the ground's horizon, its heading
   const va = sub3(nav.V, gv);
@@ -937,7 +1044,16 @@ function climbAssist(
   const az = (v: Vec3) => ((Math.atan2(dot3(v, eastG), dot3(v, north)) * 180) / Math.PI + 360) % 360;
   const hdg = vh * C > 1 ? az(vhv) : NaN;
   // (what the command asks here: its path's angle, its heading)
-  const cmd = climbCmd(id, thr, dragK, d0, dot3(sub3(gv, nav.refVel), east), r, Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES);
+  const cmd = climbCmd(
+    id,
+    thr,
+    dragK,
+    d0,
+    dot3(sub3(gv, nav.refVel), east),
+    r,
+    Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES,
+    dot3(sub3(nav.V, nav.refVel), east),
+  );
   const gamAim = (Math.atan2(cmd.vUp, Math.abs(cmd.vEastAir)) * 180) / Math.PI;
   const hdgAim = az(east);
   const deg3 = (a: number) => (Number.isFinite(a) ? `${a.toFixed(0).padStart(3, "0")}°` : "—");

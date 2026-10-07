@@ -183,3 +183,19 @@ test("low and off the pad: vectored past the hover's speed once vectored, back u
   // (over the pad the touchdown's descent goes on)
   expect(descentCommand({ ...base, pad: [3, 0, -26], v: [0, 0, 0], wasVectored: true }).down).toBeGreaterThan(0);
 });
+
+test("once braking, no coasting again: the flip between them is gone", () => {
+  // (from a trimmed entry the Lander, 5 km up at 160 m/s, coasted and braked by turns and hit at 111 m/s)
+  const g = 9.8;
+  // (20 km up, level at 800 m/s, 40 km from the pad: a coast to the braking — until the braking has begun)
+  const st = {
+    up: [0, 0, 1] as [number, number, number],
+    h: 20e3,
+    v: [800, 0, 0] as [number, number, number],
+    g,
+    aT: 3 * g,
+    pad: [40e3, 0, -20e3] as [number, number, number],
+  };
+  expect(descentCommand(st).coast).toBe(true);
+  expect(descentCommand({ ...st, braking: true }).coast).toBe(false);
+});

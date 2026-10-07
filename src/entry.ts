@@ -497,8 +497,10 @@ export function planDeorbit(
       cands.push({ t: tb, across: Math.abs(q.m.across), lo: { t: prev.t, s: prev.s }, hi: tb, slope: Math.sign(q.e - prev.e) });
     prev = { t: tb, e: q.e, s: states[i]! };
   }
-  // (the first pass the lift can reach — its crossrange within the craft's reach —, else the nearest)
-  const rank = (c: { t: number; across: number }) => (c.across < reach ? c.t : 1e15 + c.across);
+  // (the first pass the lift can reach — its crossrange within the craft's reach —, else the first a trim out
+  // of the plane brings within it cheaply — two reaches —, else the nearest: about Titan the nearest came 8.9 days
+  // on, for a 4 m/s trim)
+  const rank = (c: { t: number; across: number }) => (c.across < reach ? c.t : c.across < 2 * reach ? 1e12 + c.t : 1e15 + c.across);
   cands.sort((a, b) => rank(a) - rank(b));
   // the best two refined with whole entries: Newton's step from the candidate (the slope the quick
   // model gives: the burn later, the end that much farther), then false position within the bracket
