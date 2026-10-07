@@ -157,3 +157,19 @@ test("an entry from low orbit, full lift up: the Ranger within its limits, the E
   const e = fly("endurance", 0);
   expect(e.hull).toBeGreaterThan(VESSELS.endurance.aero.hull.tMax);
 });
+
+test("a low orbit in the thermosphere: its thin hot gas does not bake the hull — the Endurance at 220 km stays cold", () => {
+  // (the gas there ~900 K: once the skin's radiative sink, the hull went to 890 K, past the Endurance's 700)
+  const atm = solarBody("earth")!.atmosphere;
+  for (const hk of [160, 220]) {
+    const air = airAt(atm, hk * 1e3);
+    expect(air.rho).toBeGreaterThan(0);
+    expect(air.T).toBeGreaterThan(600);
+    const A = VESSELS.endurance.aero;
+    const v: V3 = [0, 0, 7800];
+    const o = aeroForces(A, v, air);
+    let th = coldSkin();
+    for (let i = 0; i < 3600; i++) th = heatStep(A, th, air, o, [0, 0, 1], 1);
+    expect(th.hull).toBeLessThan(350);
+  }
+});

@@ -554,7 +554,11 @@ export function heatShares(A: VesselAero, u: V3): { shield: number; hull: number
  */
 export function heatStep(A: VesselAero, th: Thermal, air: Air, out: AeroOut, u: V3, dt: number): Thermal {
   const sh = heatShares(A, u);
-  const sink = air.rho > 0 ? Math.max(air.T, 150) : T_SPACE;
+  // (the skin radiates to the air's temperature in dense air, to space in the thermosphere — its gas
+  // ~900 K at 220 km, but too thin to matter: as the sink, it once held a craft in a low orbit at 890 K,
+  // the Endurance's hull burnt through; the molecules' own ½ρV³ there, ~30 W/m², is less than the Sun's)
+  const thick = smooth(-8, -6, Math.log10(Math.max(air.rho, 1e-30)));
+  const sink = air.rho > 0 ? T_SPACE + (Math.max(air.T, 150) - T_SPACE) * thick : T_SPACE;
   // (forced convection towards T_r: a turbulent flat plate the craft's length, 0.037 Re^0.8 Pr^⅓ k/L —
   // what cools the skin in slow air; natural convection at rest)
   const V = out.mach * air.a;
