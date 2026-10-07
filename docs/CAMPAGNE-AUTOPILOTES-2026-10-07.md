@@ -56,7 +56,7 @@ Chaque défaut trouvé est corrigé avec un test de régression, puis le scénar
 
 ## Reste à traiter
 
-- **Mission vers l'orbite lunaire** : réussie ici (orbite 102,7 km), ratée sur le mini (25 km). Le mini n'a pas les noyaux DE440 (fichiers non versionnés) et vole avec les éphémérides de repli : aucune correction à mi-parcours n'y apparaît. La correction de trajectoire est à revoir.
+- **Mission vers l'orbite lunaire** : réussie ici (orbite 102,7 km), ratée sur le mini (25 km). La différence vient de l'instant du départ : la page du mini finit de charger 273 s plus tard, et le plan prend une autre famille de trajectoires (arrivée à 4,4 j au lieu de 3,3). Le scénario `mission-moon-orbit-late` reproduit le cas ici (orbite à 23 km). La correction à mi-parcours (41 m/s, 2,4 jours avant la Lune) vise le périlune à 10 km près selon le propagateur du planificateur (`predictOurs`), mais le vol réel arrive 77 km plus bas, et la capture circularise à cette altitude. Le remède est de faire viser les corrections avec la propagation même du vol (comme pour l'ISS). Une seconde correction à 80 % du trajet, essayée, aggrave tout (la visée n'est pas faite pour corriger si près de la Lune) : elle a été retirée.
 - **Repères de pôle** : le HUD et le décollage mesurent l'inclinaison par rapport au pôle J2000, mais les sites sont posés dans le repère de date. Pour la Lune (pôle à ~2° du J2000), le Lander ne peut pas viser 1° depuis Tranquility (il obtient 2,66°). Il faut unifier sur le pôle de date.
 - **Décollage du Lander depuis Mars** : orbite à 255,5 km pour 250 (limite 5 km) ; la circularisation laisse 250 × 261 km.
 - **Mission martienne** : orbite à 292,6–294,8 km pour 300.

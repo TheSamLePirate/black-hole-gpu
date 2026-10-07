@@ -52,7 +52,7 @@ function toOrbit(
   title: string,
   target: string,
   altKm: number,
-  o: { minutes: number; maxSim: number; maxWall: number; tags?: string[] },
+  o: { minutes: number; maxSim: number; maxWall: number; tags?: string[]; delayS?: number },
 ): Scenario {
   return {
     id,
@@ -61,6 +61,12 @@ function toOrbit(
     minutes: o.minutes,
     async run(lab): Promise<Verdict> {
       await orbInstall(lab);
+      // (the plan from later on the orbit: another family of paths — the page loaded later on the mini, its
+      // plan arrived 4.3 days on, not 3.3, and its correction aimed into the Moon)
+      if (o.delayS)
+        await lab.js(
+          `(() => { __bh.freeze(true); __bh.game.warp(100); for (let i = 0; i < ${Math.round(o.delayS / (100 / 30))}; i++) __bh.step(1 / 30); __bh.game.warp(1); __bh.freeze(false); return true; })()`,
+        );
       await lab.js(`(__bh.settings.autoWarp = true, true)`);
       const sp0 = await spent(lab);
       const p = await fly(lab, { target, arrival: "orbit", altKm });
@@ -135,6 +141,12 @@ export const MISSIONS_FC: Scenario[] = [
     minutes: 8,
     maxSim: 8 * 86400,
     maxWall: 600,
+  }),
+  toOrbit("mission-moon-orbit-late", "Mission — Earth orbit to a 100 km orbit about the Moon, planned 273 s later", "moon", 100, {
+    minutes: 8,
+    maxSim: 8 * 86400,
+    maxWall: 600,
+    delayS: 273,
   }),
   {
     id: "mission-moon-free-return",
