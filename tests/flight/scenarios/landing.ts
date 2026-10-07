@@ -219,11 +219,13 @@ export const LANDING: Scenario[] = [
   ),
   glideScenario("glide-kennedy-high", "Ranger — high energy: 60 km out, 28 km up, 850 m/s to Kennedy", "Kennedy", [60, 28, 850], 0),
   glideScenario("glide-kennedy-low", "Ranger — low energy: 45 km out, 7 km up, 230 m/s to Kennedy", "Kennedy", [45, 7, 230], 0),
+  // (3.5 km up, not 2.5: from 2.5 km at 170 m/s the Ranger's best glide — 1 in 6, at 8° of incidence —
+  // reaches the flare 350 m of energy short: no glider makes it, whatever its autopilot)
   glideScenario(
     "glide-bourget-short-live",
-    "Ranger — a short final: 20 km out, 2.5 km up, 170 m/s to Le Bourget, light wind, live",
+    "Ranger — a short final: 20 km out, 3.5 km up, 170 m/s to Le Bourget, light wind, live",
     "Bourget",
-    [20, 2.5, 170],
+    [20, 3.5, 170],
     1,
     {
       live: true,

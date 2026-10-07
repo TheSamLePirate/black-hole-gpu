@@ -659,7 +659,9 @@ function glideAlpha(
   const short = 0.01 * Math.max(prot * vStall - sp, 0);
   // (and so high up, 1.5 km over the ground, transonic too: at Mach 0.95, 11 km up, the nose went to no
   // lift, the craft dived at 150 m/s and pulled 3.5 g out of it)
-  want -= (LA?.out.mach ?? 0) > 1 || agl > 1500 ? Math.min(short, 0.1) : short;
+  // (the last 5 m none: the flare's attitude held onto the wheels — the nose dropped at 2 m, floating past the
+  // touchdown point, met the runway at 2.2 m/s)
+  if (agl > 5) want -= (LA?.out.mach ?? 0) > 1 || agl > 1500 ? Math.min(short, 0.1) : short;
   const a = R.alpha + (clamp(want, 0, stall) - R.alpha) * Math.min(1, dt / 0.35);
   if (agl < 1500) {
     const Msec = 4.925490947e-6 * this.s.massSolar;
@@ -732,6 +734,10 @@ function approach(
   const hT = finalGate();
   let hacRem = 0;
   if (R.spiral) {
+    // (the circle shrunk as the craft slows, to a 29° bank's at its speed — the air brake brings it to 200 m/s:
+    // kept at the 12 km it began with at 614 m/s, its last arc was 70 km for 34 km of glide left; begun at
+    // 200 m/s's 7.5 km, the craft at 545 m/s flew 12 km wide of it)
+    R.spiral.r = Math.max(Math.min(R.spiral.r, Math.max(sp, 180) ** 2 / (9.81 * Math.tan(0.5))), 6e3);
     const phi = Math.atan2(xt - R.spiral.side * R.spiral.r, sAl + 12e3);
     hacRem = (((R.spiral.side * (-R.spiral.side * (Math.PI / 2) - phi)) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     // (left at its tangent once down to the final's height — or below it anywhere: the legs below then)
@@ -740,7 +746,9 @@ function approach(
   // (the final: within 6 km of the axis, heading down it — the turn onto it at the final's start
   // leaves the craft a turn's diameter off, ~4 km at 120 m/s: joined from there, not sent back to the
   // start behind it to turn again, and again)
-  const onFinal = !R.spiral && sAl > -16e3 && Math.abs(xt) < 6e3 && dn > 0.5;
+  // (and before the threshold — or over the runway low, the flare and the wheels: past it 8 km up, heading
+  // down it, a final flew on 50 km beyond the runway's far end)
+  const onFinal = !R.spiral && sAl > -16e3 && (sAl < 0 || agl < 300) && Math.abs(xt) < 6e3 && dn > 0.5;
   const spiralFrom = () => {
     if (!R.spiral) R.spiral = { side: Math.sign(xt) || 1, r: clamp(Math.max(sp, 180) ** 2 / (9.81 * Math.tan(0.5)), 6e3, 12e3) };
   };
@@ -760,12 +768,20 @@ function approach(
     const dpsi = Math.atan2(Math.sin(chi - psi), Math.cos(chi - psi));
     const turn = side * Math.atan((sp * sp) / (9.81 * r)) * clamp(2 - d / r, 0, 1);
     bank = clamp(1.2 * dpsi + turn, -0.6, 0.6);
-    // (the height to lose over the arc left to the tangent and whole turns, as many as 17° asks — and 8° down
-    // at least, the glide that keeps the speed: shallower, the turns bled it to the stall's margin, the
-    // final began at 120 m/s and sank short of the runway)
+    // (its energy managed — the height and the speed's to 200 m/s, against the gate's, 160 m/s at hT —: the whole turns
+    // a banked glide of 1 in 4.5 asks, rounded down (a turned glide's best is 1 in 5.2: short of it, the air
+    // brake and a steeper path lose the rest; past it nothing makes it up). By the height alone, rounded
+    // up, the turns bled the speed: the final began 1.85 km up 15 km out at 135 m/s, sank short of the
+    // runway and broke the gear)
     const per = 2 * Math.PI * r;
-    const n = Math.max(0, Math.ceil(((agl - hT) / Math.tan(0.3) - hacRem * r) / per));
-    gRef = clamp(-Math.atan2(Math.max(agl - hT, 0), Math.max(hacRem * r + n * per, 1500)), -0.42, -0.14);
+    const n = Math.max(
+      0,
+      Math.floor(((agl + Math.min(sp, 200) ** 2 / (2 * 9.81) - hT - (160 * 160) / (2 * 9.81)) * 4.5 - hacRem * r) / per),
+    );
+    // (the last turn's arc the path itself: down to the gate at its tangent, the speed let bleed to the
+    // final's 160 m/s)
+    gRef = clamp(-Math.atan2(Math.max(agl - hT, 0), Math.max(hacRem * r + n * per, 1500)), -0.42, -0.02);
+    gRef -= clamp(0.004 * ((n > 0 ? 200 : 160) - sp), 0, 0.15);
   } else if (!onFinal) {
     // (far enough back: the axis joined — the course turned onto it as the offset closes, atan(xt/L)
     // off it, L about a turn's radius: no overshoot. Down the runway but wide: to the final's start.
@@ -840,7 +856,11 @@ function approach(
     // (held down to the touchdown — a crosswind drifts the craft off the axis in the last seconds
     // otherwise —, to 3° at most there: the wing low into the wind)
     const bMax = agl < 15 ? 0.05 + (0.45 * agl) / 15 : 0.5;
-    bank = clamp(-kB * (dpsi - want), -bMax, bMax);
+    // (the course's error integrated over 5 s, the last 600 m down: the wind's shear as the craft comes
+    // down is a steady push across — 0.9° of bank only held the drift at 0.3 m/s, 9 m at the wheels; the
+    // offset's own loop is slow by need, a turn's time over its inner one, and its integral too)
+    if (agl < 600 && dt > 0) R.trkInt = clamp((R.trkInt ?? 0) + (dpsi - want) * dt, -0.1, 0.1);
+    bank = clamp(-kB * (dpsi - want + (R.trkInt ?? 0) / 5), -bMax, bMax);
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
     const L = landingProfile(sAl, agl, sp, R.gOuter);
@@ -851,6 +871,9 @@ function approach(
     // 4 s, whatever the parabola's tracking left: under 1 m/s at the wheels. Over 2.5 s, a flare floating
     // 2 m up past the touchdown point was pushed down at 1.6 m/s, 2.6 at the wheels)
     if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, -Math.asin(Math.min((0.6 + agl / 4) / Math.max(sp, 1), 0.5)));
+    // (and past the touchdown point, still up, 0.6 m/s at least: the profile there is the runway, level — a
+    // flare floated 2 m up for 12 s in a light wind, bled to 74 m/s and 20° of incidence, and dropped at 1.7)
+    if (L.phase === "rollout" && agl > 0.2) gRef = Math.min(gRef, -Math.asin(Math.min(0.6 / Math.max(sp, 1), 0.5)));
     // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
     gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
     R.flareTau = L.phase === "flare" ? 1 : undefined;
@@ -859,6 +882,15 @@ function approach(
   if (!onFinal) {
     R.gOuter = undefined;
     R.prof = undefined;
+    R.trkInt = undefined;
+    // (the path's angle turned no faster than 0.7 g more than the weight turns it — and the spiral's 34° of
+    // bank on top, 2.2 g in all: into the spiral at 613 m/s the reference went from 24° down to 8° at once, the
+    // pull-up 3.8 g; at 1.2 g, 2.8)
+    const prev = R.app?.gRef;
+    if (prev !== undefined && dt > 0) {
+      const rate = (0.7 * 9.81 * dt) / Math.max(sp, 50);
+      gRef = clamp(gRef, prev - rate, prev + rate);
+    }
   }
   R.app = { along: sAl, across: xt, final: onFinal, agl, speed: sp, gRef, gam };
   // (the bank commanded now — the HUD's "cmd", the map's —: the approach's, not the entry guidance's last)
@@ -881,7 +913,7 @@ function approach(
   // downwind and its turn — the final's own speed, the turn then the 8 km the downwind's offset allows:
   // at 230 m/s it was 15 km across, the craft swung through the axis and back, low, and sank short)
   const circuit = R.leg === "downwind" || R.leg === "turn";
-  const vT = !onFinal ? (circuit ? 170 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160;
+  const vT = !onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160;
   this.airBrake = clamp((sp - vT) / 50, 0, 1);
   // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
   // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)
