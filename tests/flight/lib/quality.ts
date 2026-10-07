@@ -85,8 +85,13 @@ export function quality(dir: string): Record<string, number | null> {
       flying.map((S) => S.air?.alpha ?? 0),
       2,
     ),
+    // (the guidance's reversals of its bank — the guided entry's: the glide's turns onto its runway, its
+    // circuit and its circle, are the way flown, not reversals)
     q_bankReversals: reversals(
-      num((S) => S.bankCmd),
+      num(
+        (S) => S.bankCmd,
+        T.filter((S) => (S as { entry?: { ph?: string } | null }).entry?.ph !== "glide"),
+      ),
       15,
     ),
     q_qMaxKPa: round(max(num((S) => S.air?.q, air))),

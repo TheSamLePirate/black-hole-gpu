@@ -216,6 +216,9 @@ async function run() {
     if (state.control === "abort") break;
     for (let attempt = 0; attempt <= retries; attempt++) {
       const dir = `${out}/${sc.id}${attempt ? `-retry${attempt}` : ""}`;
+      // (a campaign's folder used again: the scenario's own emptied first — its telemetry is appended, and the
+      // judge reads it: an earlier flight's samples were taken for this one's touchdown)
+      rmSync(dir, { recursive: true, force: true });
       mkdirSync(dir, { recursive: true });
       state.current = sc;
       state.started = Date.now();

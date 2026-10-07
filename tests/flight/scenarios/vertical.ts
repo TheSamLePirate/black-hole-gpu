@@ -45,13 +45,23 @@ export function impulsiveAscent(body: string, altKm: number, vRot = 0) {
 /** The place the craft stands on now (landed): its distance to a pad [m], the body's radius used. */
 const STANDING = (p: Pad) => `(() => {
   const c = __bh.camera, L = c.ourLanded;
-  if (!L) return null;
-  const q = L.q, f = L.body === "earth" ? 1 / 298.257223563 : 0;
-  const lat = Math.atan2(q[2], (1 - f) ** 2 * Math.hypot(q[0], q[1])), lon = Math.atan2(q[1], q[0]);
+  // (not settled — still sliding, or never down —: where the camera is, over the nearest body)
+  const G = L ? null : __bh.sys.geodetic();
+  if (!L && !G) return null;
   const D = Math.PI / 180, la = ${p.lat} * D, lo = ${p.lon} * D;
-  const R = Math.hypot(...q) * 1476.625 * __bh.settings.massSolar;
+  let lat, lon, R;
+  if (L) {
+    const q = L.q, f = L.body === "earth" ? 1 / 298.257223563 : 0;
+    lat = Math.atan2(q[2], (1 - f) ** 2 * Math.hypot(q[0], q[1]));
+    lon = Math.atan2(q[1], q[0]);
+    R = Math.hypot(...q) * 1476.625 * __bh.settings.massSolar;
+  } else {
+    lat = G.lat * D;
+    lon = G.lon * D;
+    R = G.radiusM;
+  }
   const h = Math.sin((lat - la) / 2) ** 2 + Math.cos(lat) * Math.cos(la) * Math.sin((lon - lo) / 2) ** 2;
-  return { body: L.body, lat: lat / D, lon: lon / D, distM: 2 * R * Math.asin(Math.min(1, Math.sqrt(h))) };
+  return { body: L ? L.body : G.body, lat: lat / D, lon: lon / D, distM: 2 * R * Math.asin(Math.min(1, Math.sqrt(h))) };
 })()`;
 
 /**
@@ -240,8 +250,8 @@ function landerEntry(id: string, pad: Pad, setup: (lab: Lab) => Promise<void>, m
       await engage(lab, "entry");
       const e = await lab.fixed({
         until: DOWN,
-        maxSim: 20 * 3600,
-        maxWall: 900,
+        maxSim: 8 * 86400,
+        maxWall: 1800,
       });
       return judgeTouchdown(lab, pad, padM, e);
     },

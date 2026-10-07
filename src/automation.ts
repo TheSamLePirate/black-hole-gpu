@@ -3,7 +3,9 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
-import { bodyFixedOf, groundRelief } from "./system/our-surface";
+import { bodyFixedOf, groundRelief, toBodyFixed } from "./system/our-surface";
+import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
+import { M_METRES, solarBody } from "./system/solar";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
@@ -21,7 +23,7 @@ import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
 import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
 import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
-import { ourState } from "./system/our-side";
+import { ourState, referenceBody } from "./system/our-side";
 import { bodyState } from "./system/ephemeris";
 import { GARGANTUA_SYSTEM } from "./system/bodies";
 import { cameraFrame, homePosition, setHolePose, setHomePose } from "./camera";
@@ -319,6 +321,27 @@ export function installBh(c: BhContext) {
           vel?: [number, number, number],
         ) => setHomePose(settings, X, fwd, up, vel),
         homePosition: () => homePosition(settings),
+        /** the flown craft's navigation state, our side (controller ourNav: home frame [M, c], its reference
+         *  body's place and velocity, the time [M]) — what the autopilots fly from; null elsewhere */
+        nav: () => camera.ourNav(cameraFrame(settings)),
+        /** where the camera is over the body it is nearest, our side: its geodetic latitude, longitude [°]
+         *  and height over the ellipsoid [m] (null: about the hole, or by the Sun alone) */
+        geodetic: () => {
+          const X = homePosition(settings);
+          if (!X) return null;
+          const t = sim.time;
+          const id = referenceBody(X, t);
+          const b = id === "sun" ? null : solarBody(id);
+          if (!b) return null;
+          const g = cartToGeodetic(b.radius, flatteningOf(id), toBodyFixed(id, X, t));
+          return {
+            body: id,
+            lat: (g.lat * 180) / Math.PI,
+            lon: (g.lon * 180) / Math.PI,
+            altM: g.h * M_METRES,
+            radiusM: b.radius * M_METRES,
+          };
+        },
         /** where the camera sees a body (CPU geodesics, retarded, aberrated): a look direction */
         look: (id: string) => bodyLook(settings, cameraFrame(settings), id as Body, sim.time).look,
       },

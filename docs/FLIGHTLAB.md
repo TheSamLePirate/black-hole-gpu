@@ -41,7 +41,7 @@ La sortie affiche aussi une ligne toutes les 10 s (phase, hauteur, vitesse, auto
 
 | Fichier | Contenu |
 |---|---|
-| `telemetry.jsonl` | Un échantillon par seconde de vol simulée (ou de temps réel en vol live) : position, vitesse, orbite, autopilote, carte du hub, entrée (phase, profil, approche), aéro (α, β, Mach, q, g, flux thermique, L/D), attitude, amarrage, warp, ergols. |
+| `telemetry.jsonl` | Un échantillon par seconde de vol simulée (ou de temps réel en vol live) : position, vitesse, orbite, autopilote, carte du hub, entrée (phase, profil, écart prédit par le guidage `entry.miss` en km, approche : pente visée `gRef` et pente volée `gam` en degrés, aérofrein, cercle de spirale), aéro (α, β, Mach, q, g, flux thermique, L/D), attitude, roulage (`rollSite` : la piste suivie, `steer` : la roulette de nez en degrés), amarrage, warp, ergols. |
 | `events.jsonl` | Messages du pilote, journal du jeu, changements de phase, erreurs de la page. |
 | `graphs.json` | Les graphes des assistants (optimum, couloir, tracé volé) et la position de l'appareil à chaque échantillon. |
 | `shots/` | Une capture à chaque changement de phase (autopilote, carte du hub, phase d'entrée, profil d'approche, amarrage, statut, univers), une à la fin, et celles prises à la demande. |
@@ -65,7 +65,7 @@ Elles sont calculées pour chaque scénario, quel que soit son verdict (`tests/f
 - `q_shipS` : la durée du vol (temps simulé) ;
 - `q_gMax`, `q_alphaMaxDeg`, `q_qMaxKPa`, `q_heatMaxKWm2` : les maximums ;
 - `q_alphaSwings` : les oscillations d'α de plus de 2° en vol — les inversions qui en ont une autre à moins de 15 s (une ressource, un piqué isolés sont des manœuvres), hors des 30 dernières secondes avant le toucher (l'arrondi) ;
-- `q_bankReversals` : les inversions d'inclinaison commandée de plus de 15° ;
+- `q_bankReversals` : les inversions d'inclinaison commandée de plus de 15° de la rentrée guidée (les virages du plané vers sa piste n'en sont pas) ;
 - `q_throttleChanges` : le battement des gaz ;
 - `q_fuelUsed`, `q_dvSpentMps` : ce qui a été dépensé ;
 - `q_corridor_<graphe>_pct` : la part du temps passée dans le couloir de chaque assistant.
@@ -81,7 +81,9 @@ Il y a deux façons de voler :
 - **`lab.fixed({ until, maxSim, maxWall })`** : pas fixes de 1/30 s, la page gelée. C'est rapide, puisqu'un pas ne fait aucun rendu, et le warp demandé par les autopilotes s'applique. Le vol est découpé en tranches de 5 s pour être observable.
 - **`lab.live({ until, maxWall })`** : la boucle d'images de la page, comme un joueur. À utiliser pour le toucher, l'amarrage ou la traversée.
 
-`until` est une expression JS évaluée dans la page sur `T`, le dernier échantillon, et `c`, la caméra. Chaque phase se termine aussi sur un échec commun : appareil perdu, crash annoncé, erreur de la page, état NaN, temps simulé figé.
+`until` est une expression JS évaluée dans la page sur `T`, le dernier échantillon, et `c`, la caméra.
+
+Dans la page, `__bh.sys.nav()` donne l'état de navigation de l'appareil de notre côté (repère d'origine, en M et c, celui dont partent les autopilotes : `X`, `V`, le corps de référence et sa position, `t`), et `__bh.sys.geodetic()` sa latitude, sa longitude et sa hauteur au-dessus de l'ellipsoïde — posé ou non (la distance au pad des atterrisseurs s'en sert quand l'engin glisse encore). Un dossier de campagne réutilisé est vidé scénario par scénario avant son vol. Chaque phase se termine aussi sur un échec commun : appareil perdu, crash annoncé, erreur de la page, état NaN, temps simulé figé.
 
 Le découpage en tranches laisse tourner l'asynchrone de la page entre deux tranches (tuiles, cartes). C'est voulu, puisque c'est ce que vit un joueur. C'est ainsi qu'on a trouvé les tuiles de relief en terrasses, corrigées en `d533c6a`.
 
