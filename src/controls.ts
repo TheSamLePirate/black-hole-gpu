@@ -245,7 +245,8 @@ export class CameraController {
   /** the craft lost to the air (heat, load): why */
   onCraftLost?: (why: string) => void;
   /** the flight's end — a landing's, a docking's —: its figures graded (game/report.ts), for the HUD's card */
-  onFlightReport?: (r: FlightReport) => void;
+  /** the flight graded (null: the last report let go — a new flight) */
+  onFlightReport?: (r: FlightReport | null) => void;
   /** the last report's moment (performance.now): a bounce's second contact reports nothing */
   reportedAt: number | null = null;
   /** the flown craft in the air: its forces, skin, load (flightair.ts) */

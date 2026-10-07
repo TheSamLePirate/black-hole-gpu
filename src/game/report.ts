@@ -18,7 +18,7 @@ export interface LandingFigures {
   runway: { across: number; along: number } | null;
   /** off a runway: the distance to the site aimed at [m] (null: none aimed at) */
   padM: number | null;
-  /** the flight's greatest load [g] */
+  /** the flight's greatest load [g] (NaN: none recorded) */
   gMax: number;
   /** the Δv spent over the flight [m/s], its length [s] */
   dv: number;
@@ -65,7 +65,7 @@ export function gradeLanding(f: LandingFigures): FlightReport {
   s -= Math.max(0, f.sink - 0.6) * 4;
   if (f.runway) s -= Math.max(0, Math.abs(f.runway.across) - 3) / 5;
   else if (f.padM !== null) s -= Math.min(8, Math.max(0, f.padM - 5) / 20);
-  s -= Math.max(0, f.gMax - 2.5) * 3;
+  if (Number.isFinite(f.gMax)) s -= Math.max(0, f.gMax - 2.5) * 3;
   if (f.verdict === "hard") s -= 6;
   const score = Math.max(0, Math.min(20, s));
   const lines: FlightReport["lines"] = [
@@ -77,7 +77,11 @@ export function gradeLanding(f: LandingFigures): FlightReport {
     lines.push({ label: t("Past the threshold"), value: metres(f.runway.along), q: "good" });
   } else if (f.padM !== null) lines.push({ label: t("From the site"), value: metres(f.padM), q: judge(f.padM, 10, 100) });
   lines.push(
-    { label: t("Greatest load"), value: `${f.gMax.toFixed(1)} g`, q: judge(f.gMax, 2.5, 4) },
+    {
+      label: t("Greatest load"),
+      value: Number.isFinite(f.gMax) ? `${f.gMax.toFixed(1)} g` : "—",
+      q: Number.isFinite(f.gMax) ? judge(f.gMax, 2.5, 4) : "good",
+    },
     { label: t("Δv spent"), value: `${f.dv.toFixed(0)} m/s`, q: "good" },
     { label: t("Flight"), value: dur(f.flightS), q: "good" },
   );

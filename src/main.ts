@@ -1382,6 +1382,7 @@ async function main() {
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
   camera.onFlightReport = (r) => {
     flightHud.showReport(r);
+    if (!r) return;
     gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
   };
   events.on("pilotMessage", ({ text, t }) => {

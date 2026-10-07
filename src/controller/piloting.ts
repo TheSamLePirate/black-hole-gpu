@@ -148,6 +148,9 @@ function newFlight(this: CameraController) {
   this.entryResume = null;
   // (a new flight, a new record — the tablet's telemetry)
   recorder.reset();
+  // (the last flight's report let go: a new flight, a save loaded, is not graded by it)
+  this.reportedAt = null;
+  this.onFlightReport?.(null);
   this.heightGoal = null;
   this.dockAuto = null;
   this.ourCirc = null;

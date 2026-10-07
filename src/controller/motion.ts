@@ -755,8 +755,11 @@ function reportLanding(this: CameraController, body: string, verdict: "landed" |
   this.reportedAt = now;
   const cam = cameraFrame(this.s);
   const rw = this.runwayView();
-  const onRunway = !!rw && Math.abs(rw.across) < 150 && rw.along > -300 && rw.along < 5000;
-  const site = this.landRun?.site ?? this.entryRun?.site ?? this.entrySite ?? null;
+  // (a runway's landing rolls on: a craft put down on its engines beside one — the Lander at Kennedy, 0 m/s
+  // along, 54 m off the axis — is graded on its site, not on the runway's axis)
+  const onRunway = !!rw && along > 15 && Math.abs(rw.across) < 150 && rw.along > -300 && rw.along < 5000;
+  // (the site an autopilot flew to — not one only chosen on the map)
+  const site = this.landRun?.site ?? this.entryRun?.site ?? null;
   let padM: number | null = null;
   if (!onRunway && site) {
     const fr = this.entryFrame(cam);
@@ -776,7 +779,8 @@ function reportLanding(this: CameraController, body: string, verdict: "landed" |
       along,
       runway: onRunway ? { across: rw!.across, along: rw!.along } : null,
       padM,
-      gMax: Math.max(this.airFlight.gPeak, ...S.map((x) => x.g)),
+      // (nothing recorded — a save loaded just before —: no load to judge, not 0 g)
+      gMax: Math.max(this.airFlight.gPeak, ...S.map((x) => x.g)) || Number.NaN,
       dv: this.spent * C_MPS,
       flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
     }),

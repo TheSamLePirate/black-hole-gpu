@@ -43,3 +43,9 @@ test("a docking: the autopilot's 0.08 m/s, on the axis — A; a fast, skewed one
   const bad = gradeDocking({ target: "ISS", port: "IDA-2", closing: 0.45, lateral: 0.28, angle: 9, spin: 2.6, dv: 12, flightS: 300 });
   expect(bad.score).toBeLessThan(10);
 });
+
+test("a landing with no load recorded (a save loaded just before): no load judged, not 0 g", () => {
+  const r = gradeLanding({ ...base, gMax: Number.NaN });
+  expect(r.score).toBe(20);
+  expect(r.lines.find((l) => l.label === "Greatest load")!.value).toBe("—");
+});

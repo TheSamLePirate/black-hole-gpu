@@ -630,9 +630,10 @@ export class GameTools {
       if (save.ship.auto !== "none" && (save.ship.auto !== "node" || save.plan)) p.auto = save.ship.auto;
     }
     c.setOurLanded(save.ship.landed);
-    // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur)
+    // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur;
+    // none saved, none: the last flight's kept graded a Lander at Kennedy on its distance to Le Bourget)
     const site = save.ship.entrySite ? SITES.find((q) => q.name === save.ship.entrySite) : undefined;
-    if (site) c.entrySite = site;
+    c.entrySite = site ?? null;
     c.entryResume = save.ship.entryPlan ?? null;
     // (the free camera falling freely: again, from its saved velocity)
     if (!s.ship && !!save.camera?.gravity !== c.gravity) {
