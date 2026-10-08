@@ -31,8 +31,14 @@ import { dot, len } from "./math/vec3";
 
 type M6 = number[][];
 
-/** height of the ship's centre above its gear [m] */
-export const GEAR = 6;
+/** the flown craft's reference point (its belly, y = 0 of its frame) above its wheels' contact at rest [m]
+ *  — the Ranger's gear 1.8 m, at its own scale (PLAN-COCKPIT K4a: 6 m, invisible, set it floating over the
+ *  runway); the Lander's 6 m. A live binding: fleet.ts sets it with the craft flown (gear.ts GEARS). */
+export let GEAR = 6;
+/** The flown craft's gear height (fleet.ts, as the craft flown changes). */
+export function setGear(h: number) {
+  GEAR = h;
+}
 // (the ballistic coefficient m/(C_D A) and the crash speed: game/tuning.ts, from the settings)
 
 export interface PlanetFrame {

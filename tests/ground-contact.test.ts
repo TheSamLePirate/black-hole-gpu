@@ -30,5 +30,7 @@ test("flown tail first into the ground, off its gear: a crash, not a craft left 
     false,
   );
   fly(30, () => !!c.ourLanded);
-  expect(msgs.join(" | ")).toMatch(/crashed into Moon/);
+  // (a crash: the hull into the ground, or — the gear 1.8 m short, reaching the ground first — the gear
+  // collapsing under it; not a craft left standing on its tail)
+  expect(msgs.join(" | ")).toMatch(/crashed into Moon|gear collapsed on Moon/);
 });

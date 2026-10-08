@@ -65,6 +65,8 @@ struct Ship {
   re3: vec4f,
   re4: vec4f,
   re5: vec4f,
+  // the Ranger's landing gear (gear-mesh.ts): out (0…1), each leg's oleo compressed [m] — nose, left, right
+  gear: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
@@ -282,11 +284,22 @@ fn stickRot(a: vec3f) -> mat3x3f {
   return Rz * Rx * Ry;
 }
 
-/** A vertex where it is drawn (the cockpit's flight sticks, 72: turned about their pivots as the pilot flies). */
+/** A vertex where it is drawn (the cockpit's flight sticks, 72: turned about their pivots as the pilot flies;
+ *  the landing gear's pistons and wheels: up by their leg's oleo compression — gear-mesh.ts). */
 fn stickPos(v: VIn) -> vec3f {
   if (abs(v.mat - 72.0) < 0.5) {
     let pv = select(S.piv1.xyz, S.piv0.xyz, v.pos.x > 0.0);
     return pv + stickRot(S.ctl.xyz) * (v.pos - pv);
+  }
+  // (the gear's parts: the material's fraction 0.04 + 0.12 × leg + 0.03 × role; role 1 slides)
+  let f = v.mat - floor(v.mat + 0.5);
+  if (f > 0.02) {
+    let leg = u32(floor((f - 0.035) / 0.12));
+    let role = u32(round((f - 0.04 - 0.12 * f32(leg)) / 0.03));
+    if (role == 1u) {
+      let comp = select(select(S.gear.w, S.gear.z, leg == 1u), S.gear.y, leg == 0u);
+      return v.pos + vec3f(0.0, comp, 0.0);
+    }
   }
   return v.pos;
 }
@@ -616,6 +629,10 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     case 2u: { albedo = vec3f(0.35, 0.33, 0.31); metal = 1.0; rough = 0.32 + 0.1 * grime; coat = 0.0; } // nozzles
     case 3u: { albedo = vec3f(0.04); metal = 0.0; rough = 0.45; coat = 0.5 * coat; }                // window frames
     case 4u: { albedo *= 0.72; }                                                                     // hatch, airlock
+    // the landing gear (gear-mesh.ts): its struts' steel and chromed pistons, the tyres, the hubs
+    case 5u: { albedo = vec3f(0.62, 0.62, 0.64); metal = 1.0; rough = 0.22 + 0.15 * grime; coat = 0.0; }
+    case 6u: { albedo = vec3f(0.028, 0.028, 0.03); metal = 0.0; rough = 0.82; coat = 0.0; }
+    case 7u: { albedo = vec3f(0.3, 0.31, 0.33); metal = 0.8; rough = 0.4 + 0.15 * grime; coat = 0.0; }
     case 10u: {
       // the Lander: its painted maps — colour, normals (a cotangent frame from the derivatives: Schüler
       // 2013), its lights; plates of painted metal under a thin varnish, the dark ones rougher

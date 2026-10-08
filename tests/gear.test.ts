@@ -35,9 +35,9 @@ function drop(h0: number, vy0: number, vz0 = 0, brake = 0, seconds = 6) {
 }
 
 test("dropped at 2 m/s, it settles at the gear's height on its three wheels, the bounce damped", () => {
-  const r = drop(6.2, -2);
-  expect(r.X[1]).toBeGreaterThan(5.95);
-  expect(r.X[1]).toBeLessThan(6.05);
+  const r = drop(def.height + 0.2, -2);
+  expect(r.X[1]).toBeGreaterThan(def.height - 0.05);
+  expect(r.X[1]).toBeLessThan(def.height + 0.05);
   expect(Math.abs(r.V[1])).toBeLessThan(0.02);
   expect(r.out.contact).toBe(3);
   // (the weight carried whole)
@@ -47,12 +47,12 @@ test("dropped at 2 m/s, it settles at the gear's height on its three wheels, the
 });
 
 test("a 3 m/s drop takes half the stroke; a 9 m/s one bottoms it out (the oleo's gas stiffening)", () => {
-  expect(drop(6.2, -3, 0, 0, 1).peak).toBeLessThan(0.7);
-  expect(drop(6.2, -9, 0, 0, 1).peak).toBeGreaterThan(1);
+  expect(drop(def.height + 0.2, -3, 0, 0, 1).peak).toBeLessThan(0.7);
+  expect(drop(def.height + 0.2, -9, 0, 0, 1).peak).toBeGreaterThan(1);
 });
 
 test("braking at the anti-skid's peak: about μ times the mains' share of g", () => {
-  const r = drop(6.0, 0, 30, 1, 1);
+  const r = drop(def.height, 0, 30, 1, 1);
   const decel = (30 - r.V[2]) / 1;
   const mains = def.legs.filter((l) => l.brakes).reduce((s, l) => s + l.share, 0);
   expect(decel).toBeGreaterThan(0.8 * def.muBrake * mains * g);
@@ -106,5 +106,7 @@ test("tipping over past the gear's base, not in a gentle lean", () => {
   const n: V3 = [0, 1, 0];
   expect(tippedOver(def, [0, 1, 0], n)).toBe(false);
   expect(tippedOver(def, [Math.sin(0.2), Math.cos(0.2), 0], n)).toBe(false);
-  expect(tippedOver(def, [Math.sin(0.8), Math.cos(0.8), 0], n)).toBe(true);
+  // (its belly 1.8 m up on a track 8 m wide: past ~66° — on 6 m legs it went at 36°)
+  expect(tippedOver(def, [Math.sin(1.0), Math.cos(1.0), 0], n)).toBe(false);
+  expect(tippedOver(def, [Math.sin(1.25), Math.cos(1.25), 0], n)).toBe(true);
 });

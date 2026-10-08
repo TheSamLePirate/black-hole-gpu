@@ -18,6 +18,8 @@ import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
 import { dockedFrame, VESSELS, VESSEL_IDS, type VesselId } from "./vessels";
 import { cross, dot, lin, sub } from "./math/vec3";
+import { GEARS } from "./gear";
+import { setGear } from "./landing";
 
 /** A craft's place: centre (the ship frame's origin), velocity, its axes (x left, y up, z nose; unit, home). */
 export interface Pose {
@@ -77,8 +79,15 @@ const inAxes = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [dot(v, A[0]), dot(v, A
 const AIR_EXACT_S = 600;
 
 export class Fleet {
-  /** the craft flown */
-  active: VesselId = "ranger";
+  /** the craft flown — its gear's height the flight's (landing.ts GEAR) */
+  private flown: VesselId = "ranger";
+  get active(): VesselId {
+    return this.flown;
+  }
+  set active(id: VesselId) {
+    this.flown = id;
+    setGear(GEARS[id]?.height ?? 6);
+  }
   /** the coasting ones (not flown, not docked to something that carries them) */
   free: Partial<Record<VesselId, FreeState>> = {};
   links: DockLink[] = [];
@@ -428,6 +437,8 @@ export class Fleet {
 }
 
 export const fleet = new Fleet();
+// (its gear the flight's from the start)
+setGear(GEARS[fleet.active]!.height);
 
 /**
  * The fleet's start near the Earth (a scene's): the Endurance on a circular orbit 800 km up, the Lander

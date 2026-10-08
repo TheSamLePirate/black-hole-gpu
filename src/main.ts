@@ -1,4 +1,5 @@
 import { poseData } from "./cockpit/controls";
+import { GEARS } from "./gear";
 import { controlStates } from "./cockpit/state";
 import { cockpitAct, controlTip, type CockpitDeps } from "./cockpit/actions";
 import { Chrono } from "./cockpit/chrono";
@@ -2562,6 +2563,15 @@ async function main() {
           alt: status?.altKm ?? 0,
           time: performance.now() / 1000,
         };
+        // (the Ranger's landing gear, drawn when out — its oleos as the gear's physics has them)
+        {
+          const legs = GEARS.ranger!.legs;
+          const gl = camera.gearLast?.legs;
+          renderer.shipGear = {
+            ext: settings.vessel === "ranger" && camera.airFlight.cfg.gear ? 1 : 0,
+            comp: legs.map((L, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), L.stroke)),
+          };
+        }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         if (renderer.ship.cabinShown)
           renderer.cockpitControls = poseData(

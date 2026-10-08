@@ -26,6 +26,8 @@ export interface Leg {
 }
 
 export interface GearDef {
+  /** the reference point (the belly) above the wheels' contact at rest [m]: landing.ts GEAR while flown */
+  height: number;
   legs: Leg[];
   /** the static compression at 1 g, as a share of the stroke; the dampers' ratio */
   sag: number;
@@ -38,17 +40,22 @@ export interface GearDef {
 
 const G0 = 9.80665;
 
+/** A leg's wheel at full extension: the gear's height below the belly, plus its sag at rest. */
+const legY = (height: number, stroke: number, sag: number) => -(height + sag * stroke);
+
 /** The craft's gears: the Ranger's tricycle (a nose wheel that steers, two braked mains), the Lander's
- *  four pads. The legs reach GEAR (landing.ts: 6 m) below the reference point, plus their sag. */
+ *  four pads. The legs reach the gear's height below the reference point (the belly), plus their sag. */
 export const GEARS: Record<string, GearDef> = {
   ranger: {
+    // (1.8 m: the Ranger at its own scale on the runway — its gear 6 m long, invisible, set it floating)
+    height: 1.8,
     legs: [
       // (the mains 3.3 m behind the centre of mass — z 1.5 —: the weight holds the nose down on the ground
       // against the air's pitching moment; the nose wheel carries two fifths. Under the wings, 8 m apart: a
       // centre of mass 7.4 m up needs the track — the Shuttle's was 6.9 m, lower)
-      { at: [0, -6.13, 6.5], stroke: 0.4, share: 0.4, wheel: true, steers: true, mu: 0.35 },
-      { at: [4, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
-      { at: [-4, -6.13, -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
+      { at: [0, legY(1.8, 0.4, 0.3), 6.5], stroke: 0.4, share: 0.4, wheel: true, steers: true, mu: 0.35 },
+      { at: [4, legY(1.8, 0.45, 0.3), -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
+      { at: [-4, legY(1.8, 0.45, 0.3), -1.8], stroke: 0.45, share: 0.3, wheel: true, brakes: true },
     ],
     sag: 0.3,
     zeta: 0.6,
@@ -57,6 +64,7 @@ export const GEARS: Record<string, GearDef> = {
     roll: 0.015,
   },
   lander: {
+    height: 6,
     legs: [
       { at: [4.2, -6.15, 4.2], stroke: 0.5, share: 0.25, wheel: false },
       { at: [-4.2, -6.15, 4.2], stroke: 0.5, share: 0.25, wheel: false },

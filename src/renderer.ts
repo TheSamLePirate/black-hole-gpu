@@ -3265,6 +3265,7 @@ export class Renderer {
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
+            gear: this.shipGear ?? undefined,
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
             fov: s.fov,
@@ -3391,6 +3392,8 @@ export class Renderer {
   cockpitDash: { up: Vec3; fwd: Vec3; speed: number; alt: number; time: number } | null = null;
   /** the cockpit's controls' poses (cockpit/controls.ts poseData), set each frame the cabin is seen */
   cockpitControls: Float32Array<ArrayBuffer> | null = null;
+  /** the Ranger's landing gear: out (0…1), each leg's oleo compression [m] (set each frame by main.ts) */
+  shipGear: { ext: number; comp: number[] } | null = null;
 
   /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
   craftsShown = false;
@@ -4016,6 +4019,7 @@ export class Renderer {
     this.refreshMs = old.refreshMs;
     this.cockpitDash = old.cockpitDash;
     this.cockpitControls = old.cockpitControls;
+    this.shipGear = old.shipGear;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
     this.weatherReal = old.weatherReal;
