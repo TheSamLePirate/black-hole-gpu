@@ -1,4 +1,6 @@
-import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { type WeatherPreset, type WeatherState, weatherAt, windFromAt } from "../weather";
+import type { WindLevel } from "../wind";
 
 // Places to come down on: each world's runways, landing sites and the film's — latitude and east
 // longitude [°] (our bodies: on their own turning axes; Gargantua's worlds: on their frames' axes, x away
@@ -13,6 +15,8 @@ export interface Site {
   runway?: boolean;
   /** the runway's landing heading [° from north] (its threshold at the place) */
   rwy?: number;
+  /** landed the other way (PLAN-METEO W4: into the wind): this is the far end — its threshold, its heading */
+  reverse?: boolean;
 }
 
 export const SITES: Site[] = [
@@ -78,12 +82,78 @@ export function runwayWeight(q: [number, number, number]): number {
   let w = 0;
   for (const r of EARTH_RUNWAYS) {
     const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
-    if (Math.hypot(...d) > 6500) continue;
+    if (Math.hypot(...d) > 8000) continue;
     const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
     const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
-    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 4500 ? Math.max(0, 1 - (a - 4500) / 300) : 1;
+    // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
+    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 7500 ? Math.max(0, 1 - (a - 7500) / 300) : 1;
     const wc = c < 60 ? 1 : Math.max(0, 1 - (c - 60) / 60);
     w = Math.max(w, wa * wc);
   }
   return w;
+}
+
+/**
+ * A runway's other end (PLAN-METEO W4): its far threshold — the strip drawn RUNWAY_LENGTH along its heading
+ * from the site's (sites' frames: the Earth's ellipsoid; another world's sphere) —, landed the other way:
+ * the heading there back down the strip. The same name: the same runway.
+ */
+export function reciprocal(s: Site): Site {
+  if (s.rwy === undefined) return s;
+  const D = Math.PI / 180;
+  const earth = s.body === "earth";
+  const la = s.lat * D,
+    lo = s.lon * D;
+  const north: [number, number, number] = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+  const east: [number, number, number] = [-Math.sin(lo), Math.cos(lo), 0];
+  const h = s.rwy * D;
+  const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
+  // (another world: a unit sphere, the strip's length in its radii — its own radius unknown here: the far
+  // end at the same angle as on the Earth's, the heading's turn over 4.5 km negligible there too)
+  const R = earth ? 1 : WGS84_A;
+  const A = earth ? geodeticToCart(WGS84_A, WGS84_F, la, lo, 0) : geodeticToCart(R, 0, la, lo, 0);
+  const B = A.map((v, i) => v + along[i]! * RUNWAY_LENGTH) as [number, number, number];
+  const g = earth ? cartToGeodetic(WGS84_A, WGS84_F, B) : cartToGeodetic(R, 0, B);
+  // (the heading back: the strip's direction at the far end, on its own north and east)
+  const nB = [-Math.sin(g.lat) * Math.cos(g.lon), -Math.sin(g.lat) * Math.sin(g.lon), Math.cos(g.lat)];
+  const eB = [-Math.sin(g.lon), Math.cos(g.lon), 0];
+  const back = along.map((x) => -x);
+  const hd =
+    Math.atan2(back[0]! * eB[0]! + back[1]! * eB[1]! + back[2]! * eB[2]!, back[0]! * nB[0]! + back[1]! * nB[1]! + back[2]! * nB[2]!) / D;
+  return { ...s, lat: g.lat / D, lon: g.lon / D, rwy: ((hd % 360) + 360) % 360, reverse: !s.reverse };
+}
+
+/**
+ * The end a runway is landed at with the wind from `from` [°, null: none chosen — the fair weather's, the
+ * published end as before] at `u10` [m/s]: into it — the other end once the published one would have
+ * more than half a metre a second of tail wind (calm: the published one).
+ */
+export function intoWind(s: Site, from: number | null, u10: number): Site {
+  if (!s.runway || s.rwy === undefined || from === null || s.body !== "earth") return s;
+  const head = u10 * Math.cos(((from - s.rwy) * Math.PI) / 180);
+  return head < -0.5 ? reciprocal(s) : s;
+}
+
+/** The wind on a runway's heading: along it (> 0: head wind) and across it (> 0: from the right) [m/s]. */
+export function runwayWind(rwy: number, from: number, u10: number): { head: number; cross: number } {
+  const a = ((from - rwy) * Math.PI) / 180;
+  return { head: u10 * Math.cos(a), cross: u10 * Math.sin(a) };
+}
+
+/**
+ * The end of a runway landed at now (PLAN-METEO W4): into the weather's wind there — the player's preset,
+ * the day's draw, the airfield's report —; in fair weather the published end, as before (the flights flown
+ * before, the same). `site` either end: the same runway by its name.
+ */
+export function landingEnd(
+  site: Site,
+  s: { weather: WeatherPreset; wind: WindLevel },
+  days: number,
+  real: WeatherState | null = null,
+): Site {
+  if (!site.runway || site.body !== "earth") return site;
+  const base = site.reverse ? (SITES.find((x) => x.name === site.name && x.body === site.body) ?? reciprocal(site)) : site;
+  if (s.weather === "fair") return base;
+  const w = weatherAt(s, base, days, real);
+  return intoWind(base, windFromAt(w, base, days), w.wind.u10);
 }

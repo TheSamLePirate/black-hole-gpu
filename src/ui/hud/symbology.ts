@@ -933,7 +933,9 @@ function drawRunway(
   }
   // (left of the view's centre — the vertical landing's scope stands on the right —, clear of the panels:
   // moved up, else down, out from under any — hud/layout.ts)
-  const boxH = (rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0);
+  // (the surface wind on it — W4: where from, how strong, along and across the runway landed)
+  const wind = rw.wind && rw.wind.u10 >= 0.5 ? rw.wind : null;
+  const boxH = (rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0) + (wind ? 30 : 0);
   const want: Box = { x: (W / 2 - Math.min(W, H) * 0.44) / dpr - 96, y: (H / 2 - 10 * dpr) / dpr - 28, w: 192, h: boxH, id: "runway" };
   const at = fit(want, "up", { reach: 240 }) ?? fit(want, "down", { reach: 240 }) ?? want;
   drawn.push(at);
@@ -985,6 +987,33 @@ function drawRunway(
       ctx.stroke();
     }
     text("PAPI", x + 2.6 * gap, py, "rgba(214, 236, 255, 0.8)", 10.5, "left", true);
+  }
+  if (wind) {
+    const wy = y + ((rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0) - 16) * dpr;
+    // (the gusts as a range — "6–9": the HUD's G reads as a 6)
+    const gust = wind.gust > 0.5 ? `–${Math.round(wind.u10 + wind.gust)}` : "";
+    text(
+      tf("WIND {0}°/{1}{2} m/s", String(Math.round(wind.from) % 360 || 360).padStart(3, "0"), Math.round(wind.u10), gust),
+      x,
+      wy,
+      "rgba(214, 236, 255, 0.95)",
+      11,
+      "center",
+      true,
+    );
+    // (a tail wind amber; across, amber past 15 kt, red past 25 — the arrow the way it pushes)
+    const along = wind.head >= 0 ? tf("HEAD {0}", Math.round(wind.head)) : tf("TAIL {0}", Math.round(-wind.head));
+    const ac = Math.abs(wind.cross);
+    const across = ac >= 0.5 ? ` · ${tf("CROSS {0}", `${wind.cross > 0 ? "←" : "→"}${Math.round(ac)}`)}` : "";
+    text(
+      `${along}${across}`,
+      x,
+      wy + 15 * dpr,
+      wind.head < -0.5 || ac > 12.9 ? (ac > 12.9 ? "#ff5a46" : "#ffc85a") : ac > 7.7 ? "#ffc85a" : "#78ffaa",
+      11,
+      "center",
+      true,
+    );
   }
   // the flare: counted down over its last fifteen seconds, then called
   if (rw.final && rw.flareIn !== null && rw.flareIn > 0 && rw.flareIn <= 15 && rw.agl >= 60)

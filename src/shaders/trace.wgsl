@@ -3939,68 +3939,6 @@ fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   return mix(0.0004, 1.0, avg * avg);
 }
 
-// ---- The weather near the camera (P.wx; src/weather.ts, PLAN-METEO W3): its haze and fog in the air,
-// its cloud layers in place of the Earth's own round the camera, their shade on the ground. Its weight at
-// this ray's camera (earthNear sets it over the Earth: P.wx[0].x; elsewhere 0 — every weather term out,
-// the image as before) and where it is centred: the camera's place (unit, the Earth's squashed axes).
-var<private> WX_W: f32 = 0.0;
-var<private> WX_Q: vec3f = vec3f(0.0, 0.0, 1.0);
-// (it holds round the camera to 250 km — beyond the horizon seen from under a deck —, fading into the
-// Earth's own by 450 km)
-fn wxNear(q: vec3f) -> f32 {
-  if (!HAS_WX || WX_W <= 0.0) { return 0.0; }
-  return WX_W * (1.0 - smoothstep(250000.0, 450000.0, length(q - WX_Q) * EARTH_RM));
-}
-// where a weather noise of cell `cell` [m] is read at q: drifting with the wind (P.wx[4].yzw, modulo
-// 204.8 km — a whole number of the noise's periods for each cell used: 3 200 m down to 400 m)
-fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1.0 / cell); }
-// layer i's cover at q (0…1): patchy for a scattered sky, whole for an overcast one — a noise of 3.2 km
-// cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
-fn wxLayerA(q: vec3f, i: u32) -> f32 {
-  let c = P.wx[1u + i].z;
-  let s = wxAt(q, 3200.0) + vec3f(f32(i) * 7.31, f32(i) * 3.17, 0.0);
-  let n = 0.5 + 0.5 * (0.6 * dnoise(s) + 0.28 * dnoise(s * 2.0 + vec3f(1.7, 4.1, 2.3)) + 0.12 * dnoise(s * 4.0 + vec3f(3.3, 0.7, 5.9)));
-  return smoothstep(1.0 - c - 0.1, 1.0 - c + 0.12, n);
-}
-// the sunlight under the layers above a height h [m] (but layer `skip`), the weather's weight w there:
-// x what comes straight through their gaps, y all of it — the diffuse light a deck lets through too
-// (two-stream: 1 / (1 + 0.75 τ (1 − g)), g 0.85)
-fn wxVeil(h: f32, w: f32, skip: u32) -> vec2f {
-  var d = 1.0;
-  var a = 1.0;
-  for (var i = 0u; i < 3u; i++) {
-    let L = P.wx[1u + i];
-    if (L.z <= 0.0 || i == skip) { continue; }
-    let c = L.z * w * (1.0 - smoothstep(L.x, L.y, h));
-    d *= 1.0 - c;
-    a *= 1.0 - c * (1.0 - 1.0 / (1.0 + 0.1125 * L.w));
-  }
-  return vec2f(d, a);
-}
-// the haze's extinction at a height h [m], the weather's weight w there: thinning over 1.5 km above the ground
-fn wxHaze(h: f32, w: f32) -> f32 { return w * P.wx[0].y * exp(-max(h - P.wx[4].x, 0.0) / 1500.0); }
-// The fog lying on the ground (P.wx[0].z > 0) along ro + t rd: the stretch of the ray under its top
-// [t0, t1] (radii), its top heaving by a fifth of its depth where it is met from above — the sheet's
-// swell seen from over it. Its thickness is far under a march's step: its depth along each step is
-// taken exactly from this stretch (earthAir).
-fn wxFog(ro: vec3f, rd: vec3f) -> vec2f {
-  if (!HAS_WX || P.wx[0].z <= 0.0 || WX_W <= 0.0) { return vec2f(0.0); }
-  let D = P.wx[0].w - P.wx[4].x;
-  let b = dot(ro, rd);
-  let off2 = dot(ro, ro) - b * b;
-  var rF = 1.0 + (P.wx[0].w - 0.1 * D) / EARTH_RM;
-  var hF = rF * rF - off2;
-  if (hF <= 0.0) { return vec2f(0.0); }
-  if (dot(ro, ro) > rF * rF) {
-    let t0 = -b - sqrt(hF);
-    if (t0 <= 0.0) { return vec2f(0.0); }
-    rF += 0.2 * D * dnoise(wxAt(normalize(ro + rd * t0), 400.0)) / EARTH_RM;
-    hF = rF * rF - off2;
-    if (hF <= 0.0) { return vec2f(0.0); }
-  }
-  return vec2f(max(-b - sqrt(hF), 0.0), max(-b + sqrt(hF), 0.0));
-}
-
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
 // towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
 // through the air before it only). jit: the samples' offset (0…1).
@@ -4111,6 +4049,68 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   o.Tc = exp(-tauC);
   o.Lc = (LcS + LcM) * E;
   return o;
+}
+
+// ---- The weather near the camera (P.wx; src/weather.ts, PLAN-METEO W3): its haze and fog in the air,
+// its cloud layers in place of the Earth's own round the camera, their shade on the ground. Its weight at
+// this ray's camera (earthNear sets it over the Earth: P.wx[0].x; elsewhere 0 — every weather term out,
+// the image as before) and where it is centred: the camera's place (unit, the Earth's squashed axes).
+var<private> WX_W: f32 = 0.0;
+var<private> WX_Q: vec3f = vec3f(0.0, 0.0, 1.0);
+// (it holds round the camera to 250 km — beyond the horizon seen from under a deck —, fading into the
+// Earth's own by 450 km)
+fn wxNear(q: vec3f) -> f32 {
+  if (!HAS_WX || WX_W <= 0.0) { return 0.0; }
+  return WX_W * (1.0 - smoothstep(250000.0, 450000.0, length(q - WX_Q) * EARTH_RM));
+}
+// where a weather noise of cell `cell` [m] is read at q: drifting with the wind (P.wx[4].yzw, modulo
+// 204.8 km — a whole number of the noise's periods for each cell used: 3 200 m down to 400 m)
+fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1.0 / cell); }
+// layer i's cover at q (0…1): patchy for a scattered sky, whole for an overcast one — a noise of 3.2 km
+// cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
+fn wxLayerA(q: vec3f, i: u32) -> f32 {
+  let c = P.wx[1u + i].z;
+  let s = wxAt(q, 3200.0) + vec3f(f32(i) * 7.31, f32(i) * 3.17, 0.0);
+  let n = 0.5 + 0.5 * (0.6 * dnoise(s) + 0.28 * dnoise(s * 2.0 + vec3f(1.7, 4.1, 2.3)) + 0.12 * dnoise(s * 4.0 + vec3f(3.3, 0.7, 5.9)));
+  return smoothstep(1.0 - c - 0.1, 1.0 - c + 0.12, n);
+}
+// the sunlight under the layers above a height h [m] (but layer `skip`), the weather's weight w there:
+// x what comes straight through their gaps, y all of it — the diffuse light a deck lets through too
+// (two-stream: 1 / (1 + 0.75 τ (1 − g)), g 0.85)
+fn wxVeil(h: f32, w: f32, skip: u32) -> vec2f {
+  var d = 1.0;
+  var a = 1.0;
+  for (var i = 0u; i < 3u; i++) {
+    let L = P.wx[1u + i];
+    if (L.z <= 0.0 || i == skip) { continue; }
+    let c = L.z * w * (1.0 - smoothstep(L.x, L.y, h));
+    d *= 1.0 - c;
+    a *= 1.0 - c * (1.0 - 1.0 / (1.0 + 0.1125 * L.w));
+  }
+  return vec2f(d, a);
+}
+// the haze's extinction at a height h [m], the weather's weight w there: thinning over 1.5 km above the ground
+fn wxHaze(h: f32, w: f32) -> f32 { return w * P.wx[0].y * exp(-max(h - P.wx[4].x, 0.0) / 1500.0); }
+// The fog lying on the ground (P.wx[0].z > 0) along ro + t rd: the stretch of the ray under its top
+// [t0, t1] (radii), its top heaving by a fifth of its depth where it is met from above — the sheet's
+// swell seen from over it. Its thickness is far under a march's step: its depth along each step is
+// taken exactly from this stretch (earthAir).
+fn wxFog(ro: vec3f, rd: vec3f) -> vec2f {
+  if (!HAS_WX || P.wx[0].z <= 0.0 || WX_W <= 0.0) { return vec2f(0.0); }
+  let D = P.wx[0].w - P.wx[4].x;
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  var rF = 1.0 + (P.wx[0].w - 0.1 * D) / EARTH_RM;
+  var hF = rF * rF - off2;
+  if (hF <= 0.0) { return vec2f(0.0); }
+  if (dot(ro, ro) > rF * rF) {
+    let t0 = -b - sqrt(hF);
+    if (t0 <= 0.0) { return vec2f(0.0); }
+    rF += 0.2 * D * dnoise(wxAt(normalize(ro + rd * t0), 400.0)) / EARTH_RM;
+    hF = rF * rF - off2;
+    if (hF <= 0.0) { return vec2f(0.0); }
+  }
+  return vec2f(max(-b - sqrt(hF), 0.0), max(-b + sqrt(hF), 0.0));
 }
 
 // A map lookup's footprint: the pixel's axes gx, gy (unit, ⟂ the ray) at a distance giving fp (its
@@ -4282,10 +4282,11 @@ fn runwayGrade(g: vec3f) -> f32 {
   var w = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
-    if (dot(d, d) > 6500.0 * 6500.0) { continue; }
+    if (dot(d, d) > 8000.0 * 8000.0) { continue; }
     let a = dot(d, P.runways[2u + 4u * k].xyz);
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
-    let wa = select(select(1.0, max(0.0, 1.0 - (a - 4500.0) / 300.0), a > 4500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
+    // (the clear zone 3 km before either threshold: a runway lands both ways — sites.ts runwayWeight)
+    let wa = select(select(1.0, max(0.0, 1.0 - (a - 7500.0) / 300.0), a > 7500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
     let wc = select(max(0.0, 1.0 - (c - 60.0) / 60.0), 1.0, c < 60.0);
     w = max(w, wa * wc);
   }
@@ -4314,14 +4315,19 @@ struct RunwayLook { cover: f32, albedo: vec3f, lamps: vec3f };
 // shoulders and markings (ICAO: threshold bars, centreline, edges, touchdown zone, aiming point), its
 // lights — edges white every 60 m, the threshold green, the end red — and the PAPI, set for the
 // autopilot's inner glide (1.5° to the touchdown 450 m in: two white, two red on it)
-fn runwayShade(a: f32, c: f32, L: f32, hw: f32, fw: f32, el: f32) -> RunwayLook {
+fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool) -> RunwayLook {
   var o: RunwayLook;
+  // (landed the other way — PLAN-METEO W4 —: the lights and the PAPI from the far end; the markings both ways)
+  let a = select(a0, L - a0, rev);
+  let c = select(c0, -c0, rev);
   let ac = abs(c);
+  // (the touchdown zone's marks at either end: from the nearer threshold)
+  let am = min(a, L - a);
   let paved = bandCover(a, -60.0, L + 60.0, fw) * bandCover(ac, -1.0, hw + 7.5, fw);
   o.cover = paved;
   var alb = mix(vec3f(0.17, 0.165, 0.155), vec3f(0.075, 0.075, 0.08), bandCover(ac, -1.0, hw, fw));
   // (the touchdown zone's rubber: darker in the middle)
-  alb *= 1.0 - 0.35 * bandCover(a, 250.0, 1100.0, fw) * bandCover(ac, -1.0, 12.0, fw);
+  alb *= 1.0 - 0.35 * bandCover(am, 250.0, 1100.0, fw) * bandCover(ac, -1.0, 12.0, fw);
   var m = 0.0;
   // threshold bars: 30 m long, 1.8 m wide, 1.8 m apart, either side of a 3.6 m gap (and at the far end)
   let bars = stripeCover(ac - 1.8, 3.6, 1.8, fw) * bandCover(ac, 1.8, hw - 3.0, fw);
@@ -4331,8 +4337,8 @@ fn runwayShade(a: f32, c: f32, L: f32, hw: f32, fw: f32, el: f32) -> RunwayLook 
   // edges: 0.9 m lines
   m = max(m, bandCover(ac, hw - 1.4, hw - 0.5, fw) * bandCover(a, 0.0, L, fw));
   // aiming point: two 45 m × 9 m blocks 300 m in; touchdown zone: pairs of 22.5 m bars every 150 m
-  m = max(m, bandCover(a, 300.0, 345.0, fw) * bandCover(ac, 6.0, 15.0, fw));
-  let tz = stripeCover(a - 150.0, 150.0, 22.5, fw) * bandCover(a, 150.0, 922.5, fw) * (1.0 - bandCover(a, 280.0, 360.0, fw));
+  m = max(m, bandCover(am, 300.0, 345.0, fw) * bandCover(ac, 6.0, 15.0, fw));
+  let tz = stripeCover(am - 150.0, 150.0, 22.5, fw) * bandCover(am, 150.0, 922.5, fw) * (1.0 - bandCover(am, 280.0, 360.0, fw));
   m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fw) * bandCover(ac, 4.5, 12.6, fw));
   o.albedo = mix(alb, vec3f(0.72, 0.72, 0.7), m * paved);
   // the lights: edges, threshold, end; the PAPI 20 m left of the edge, 450 m in
@@ -4354,6 +4360,89 @@ fn runwayShade(a: f32, c: f32, L: f32, hw: f32, fw: f32, el: f32) -> RunwayLook 
 }
 // (the hit point from the camera [m, the Earth's squashed axes] — set by earthNear for its ground, w: on)
 var<private> RWY_HIT: vec4f = vec4f(0.0);
+
+// The windsocks (PLAN-METEO W4): one beside each end's touchdown zone of the runways near — 300 m in, 70 m
+// out on the landing's left —, a 6 m mast and its sock 3.6 m long, five bands orange and white, streaming
+// with the wind at 10 m (P.runways[0].yzw, towards), drooping in a light one (full out at 15 kt). Cylinders
+// met exactly in the runway's own metres; sub-pixel beyond 3 km (none drawn there).
+var<private> WS: vec4f = vec4f(0.0);   // the hit's normal (the Earth's physical axes), w: on
+var<private> WS_A: vec3f = vec3f(0.0); // its albedo
+// a ray from o (unit d, metres) against the cylinder from p0 along the unit ax, len long, r wide: x the
+// distance to it (−1: none), y along it (0 … 1) — from the ray's closest approach to the axis (the camera
+// kilometres away, the metres of the radius kept)
+fn cylHit(o: vec3f, d: vec3f, p0: vec3f, ax: vec3f, len: f32, r: f32) -> vec2f {
+  let oc = o - p0;
+  let dd = d - ax * dot(d, ax);
+  let A = dot(dd, dd);
+  if (A < 1e-8) { return vec2f(-1.0); }
+  let oo = oc - ax * dot(oc, ax);
+  let tc = -dot(oo, dd) / A;
+  let perp = oo + dd * tc;
+  let h2 = r * r - dot(perp, perp);
+  if (h2 <= 0.0) { return vec2f(-1.0); }
+  let t = tc - sqrt(h2 / A);
+  if (t <= 0.0) { return vec2f(-1.0); }
+  let s = dot(oc + d * t, ax);
+  if (s < 0.0 || s > len) { return vec2f(-1.0); }
+  return vec2f(t, s / len);
+}
+// the nearest windsock along the unit physical ray d [m] (tMax: the ground's), WS and WS_A set when met
+fn windsocks(d: vec3f, tMax: f32) -> f32 {
+  var best = tMax;
+  WS = vec4f(0.0);
+  let wv = P.runways[0].yzw;
+  let U = length(wv);
+  for (var k = 0u; k < rwyCount(); k++) {
+    let up = P.runways[1u + 4u * k].xyz;
+    let along = P.runways[2u + 4u * k].xyz;
+    let across = P.runways[3u + 4u * k].xyz;
+    let L = P.runways[1u + 4u * k].w;
+    let hw = P.runways[2u + 4u * k].w;
+    let cam = P.runways[4u + 4u * k].xyz;
+    let hg = P.runways[4u + 4u * k].w;
+    // (the sock's way: the wind's, level, drooping as it slackens — 75° in a calm)
+    let wh = wv - up * dot(wv, up);
+    let wl = length(wh);
+    let dirH = select(along, wh / max(wl, 1e-6), wl > 0.05);
+    let droop = (1.0 - clamp(U / 7.7, 0.0, 1.0)) * 1.3;
+    let ax = normalize(dirH * cos(droop) - up * sin(droop));
+    for (var e = 0u; e < 2u; e++) {
+      let a = select(300.0, L - 300.0, e == 1u);
+      let c = select(-(hw + 70.0), hw + 70.0, e == 1u);
+      // (its foot on the ground: the threshold's tangent plane brought down by the Earth's curve)
+      let foot = along * a + across * c + up * (hg - a * a / (2.0 * EARTH_RM));
+      let o = cam - foot;
+      if (dot(o, o) > 9e6) { continue; }
+      let hp = cylHit(o, d, vec3f(0.0), up, 6.0, 0.07);
+      if (hp.x > 0.0 && hp.x < best) {
+        best = hp.x;
+        let p = o + d * hp.x;
+        WS = vec4f(normalize(p - up * dot(p, up)), 1.0);
+        WS_A = vec3f(0.45, 0.46, 0.47);
+      }
+      let top = up * 5.8;
+      let hs = cylHit(o, d, top, ax, 3.6, 0.32 - 0.12 * 0.5);
+      if (hs.x > 0.0 && hs.x < best) {
+        best = hs.x;
+        let p = o + d * hs.x - top;
+        WS = vec4f(normalize(p - ax * dot(p, ax)), 1.0);
+        WS_A = select(vec3f(0.85, 0.85, 0.82), vec3f(0.9, 0.28, 0.04), (u32(floor(hs.y * 5.0)) & 1u) == 0u);
+      }
+    }
+  }
+  return best;
+}
+// a windsock's light at q (its normal WS, albedo WS_A): the sun through the air (and the weather's decks),
+// the sky's
+fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
+  let Lp = airPhysicalDirection(Ls);
+  let mu0 = dot(geoQ(q), Lp);
+  let vl = wxVeil(h, wxNear(q), 3u);
+  let Ts = sunThrough(h, mu0);
+  let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
+  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
+  return WS_A / PI * lit;
+}
 
 fn earthUV(q: vec3f) -> vec2f {
   return vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
@@ -4966,7 +5055,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       let ra = dot(rel, P.runways[2u + 4u * k].xyz);
       let rc = dot(rel, P.runways[3u + 4u * k].xyz);
       if (ra < -120.0 || ra > P.runways[1u + 4u * k].w + 120.0 || abs(rc) > P.runways[2u + 4u * k].w + 120.0) { continue; }
-      let rl = runwayShade(ra, rc, P.runways[1u + 4u * k].w, P.runways[2u + 4u * k].w, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)));
+      let rl = runwayShade(ra, rc, P.runways[1u + 4u * k].w, P.runways[2u + 4u * k].w, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), P.runways[3u + 4u * k].w > 0.5);
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;
@@ -5428,7 +5517,9 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    if (earth) {
+    if (HAS_RWY && WS.w > 0.5) {
+      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0));
+    } else if (earth) {
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
     } else {
       G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
@@ -5454,9 +5545,17 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let rd = rs / m;
   var t = unitHit(ro, rd);
   if (isEarth(k) && earthOn() && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
-  if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u)); }
+  // (the windsocks beside the runways near: before the ground, they are what the ray meets)
+  WS = vec4f(0.0);
+  if (HAS_RWY && isEarth(k) && rwyCount() > 0u) {
+    let dp = vec3f(rd.xy, rd.z / ab);
+    let kM = length(dp) * EARTH_RM;
+    let tw = windsocks(dp / length(dp), select(1e7, t * kM, t > 0.0));
+    if (WS.w > 0.5) { t = tw / kM; }
+  }
+  if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
-  SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0;
+  SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
   SEA_D = toBody(look) * (t / m * P.near4.w);
   WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
   WX_Q = normalize(ro);
@@ -5464,6 +5563,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   SEA_ON = false;
   WX_W = 0.0;
+  WS = vec4f(0.0);
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)

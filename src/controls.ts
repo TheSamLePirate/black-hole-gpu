@@ -147,6 +147,9 @@ export interface RunwayView {
   manual: boolean;
   speed: number;
   flareIn: number | null;
+  /** the surface wind there (PLAN-METEO W4: the weather's, at 10 m): where from [°], its speed and gusts
+   *  [m/s], along the runway (> 0: head wind) and across it (> 0: from the right) — null: no air */
+  wind: { from: number; u10: number; gust: number; head: number; cross: number } | null;
 }
 
 /** A row of the hub's card: its name, its value — and, past its mark, how bad: "warn" (amber), "bad" (red). */
@@ -671,6 +674,10 @@ export class CameraController {
     spiral?: { side: number; r: number };
     /** the final's course error integrated [rad s] (approach: the wind's shear taken out) */
     trkInt?: number;
+    /** the ground's rise under the craft [m/s], 1 s smoothed, and the height over it last step [m]: the
+     *  flare's sink measured from the runway's own slope (approach) */
+    gRise?: number;
+    aglPrev?: number;
     /** a guidance update in the planner's worker */
     pending?: boolean;
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */

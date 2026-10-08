@@ -870,10 +870,19 @@ function approach(
     // (the last metres: the sink eased to a touchdown a real gear takes — 0.6 m/s plus the height over
     // 4 s, whatever the parabola's tracking left: under 1 m/s at the wheels. Over 2.5 s, a flare floating
     // 2 m up past the touchdown point was pushed down at 1.6 m/s, 2.6 at the wheels)
-    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, -Math.asin(Math.min((0.6 + agl / 4) / Math.max(sp, 1), 0.5)));
+    // (both measured from the ground under the craft: its rise along the track — the vertical speed less the
+    // height's over it —, 1 s smoothed; a runway falling away 1 m a km — Edwards's 04, landed downhill into
+    // the wind — floated the flare 2.5 km, the ground leaving as fast as the sink asked)
+    if (dt > 0 && R.aglPrev !== undefined) {
+      const rise = clamp(dot3(va, up) - (agl - R.aglPrev) / dt, -0.05 * Math.max(sp, 1), 0.05 * Math.max(sp, 1));
+      R.gRise = (R.gRise ?? rise) + (rise - (R.gRise ?? rise)) * Math.min(dt, 1);
+    }
+    R.aglPrev = agl;
+    const gS = Math.asin(clamp((R.gRise ?? 0) / Math.max(sp, 1), -0.05, 0.05));
+    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, gS - Math.asin(Math.min((0.6 + agl / 4) / Math.max(sp, 1), 0.5)));
     // (and past the touchdown point, still up, 0.6 m/s at least: the profile there is the runway, level — a
     // flare floated 2 m up for 12 s in a light wind, bled to 74 m/s and 20° of incidence, and dropped at 1.7)
-    if (L.phase === "rollout" && agl > 0.2) gRef = Math.min(gRef, -Math.asin(Math.min(0.6 / Math.max(sp, 1), 0.5)));
+    if (L.phase === "rollout" && agl > 0.2) gRef = Math.min(gRef, gS - Math.asin(Math.min(0.6 / Math.max(sp, 1), 0.5)));
     // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
     gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
     R.flareTau = L.phase === "flare" ? 1 : undefined;
@@ -883,6 +892,8 @@ function approach(
     R.gOuter = undefined;
     R.prof = undefined;
     R.trkInt = undefined;
+    R.gRise = undefined;
+    R.aglPrev = undefined;
     // (the path's angle turned no faster than 0.7 g more than the weight turns it — and the spiral's 34° of
     // bank on top, 2.2 g in all: into the spiral at 613 m/s the reference went from 24° down to 8° at once, the
     // pull-up 3.8 g; at 1.2 g, 2.8)

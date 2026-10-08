@@ -233,9 +233,11 @@ export class GameTools {
    * line (> 0 to its right), `o.headingDeg` turns its course off the runway's (> 0 clockwise).
    */
   glideTo(name: string, distKm = 80, altKm = 25, speed = 750, o: { acrossKm?: number; headingDeg?: number } = {}) {
-    const site = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase()));
-    if (!site) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}`);
-    if (universeOf(site.body) !== "ours") throw new Error("glideTo: our worlds' sites");
+    const found = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase()));
+    if (!found) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}`);
+    if (universeOf(found.body) !== "ours") throw new Error("glideTo: our worlds' sites");
+    // (a runway's final into the wind: its far end's when the wind blows down it — W4)
+    const site = this.ctx.camera.runwayInUse(found);
     const t = this.ctx.time();
     const b = solarBody(site.body)!;
     const P = solarState(site.body, t).pos;

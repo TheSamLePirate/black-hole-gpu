@@ -13,7 +13,7 @@ import { AIR_WARP } from "../flightair";
 import { brakingAccels } from "../descent";
 import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
-import { siteDir, sitesOf, type Site } from "../game/sites";
+import { landingEnd, siteDir, sitesOf, type Site } from "../game/sites";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
@@ -66,6 +66,7 @@ declare module "../controls" {
     mountTarget: typeof mountTarget;
     settleMount: typeof settleMount;
     weatherPlace: typeof weatherPlace;
+    runwayInUse: typeof runwayInUse;
     stepMount: typeof stepMount;
     reorient: typeof reorient;
     shipMatrix: typeof shipMatrix;
@@ -1369,6 +1370,8 @@ function entryStep(
       const n = unitV(cross(fr.s.x, fr.s.v));
       site = sites.reduce((a, b) => (Math.abs(dot3(unitV(fr.place(b)), n)) < Math.abs(dot3(unitV(fr.place(a)), n)) ? b : a));
     }
+    // (a runway: landed into the wind — its far end, the other way, when the wind blows down it)
+    if (site) site = this.runwayInUse(site);
     const handover = ranger ? 2.5 : 1.4;
     // (the Lander's hand-over short of its pad by its own braking across — 2.5 × v² / 2 a at the hand-over's
     // 350 m/s — in a thick air (the Earth's, Titan's): handed over 13 km from Kennedy, 23 km up at 215 m/s
@@ -1626,6 +1629,14 @@ function entryStep(
  * ours), the latitude and longitude under it [°], the day [days past J2000], its height above it [m] —,
  * or null (no air there, or not in our universe).
  */
+/** A runway as it is landed now: into the weather's wind there (sites.ts landingEnd — fair weather: the
+ *  published end, as before); a pad, another world's site, as it is. */
+function runwayInUse(this: CameraController, site: Site): Site {
+  if (!site.runway || site.body !== "earth") return site;
+  const nav = this.ourNav(cameraFrame(this.s));
+  return landingEnd(site, this.s, nav ? daysOf(nav.t) : 0, this.weatherReal);
+}
+
 function weatherPlace(this: CameraController): { body: string; lat: number; lon: number; days: number; h: number } | null {
   const nav = this.ourNav(cameraFrame(this.s));
   if (!nav || nav.ref === "sun") return null;
@@ -1646,6 +1657,7 @@ function weatherPlace(this: CameraController): { body: string; lat: number; lon:
 export function installPiloting(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
     weatherPlace,
+    runwayInUse,
     setPilot,
     newFlight,
     stepOffMount,

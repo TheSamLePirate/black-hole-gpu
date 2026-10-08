@@ -23,7 +23,7 @@ import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
 import { accelToG, fuelOn, tank } from "../engine";
 import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
-import { type Site, SITES } from "../game/sites";
+import { runwayWind, type Site, SITES } from "../game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import { circularize as fcCircularize, type Burn } from "../fc/ops";
 import { timeTo as kepTimeTo } from "../fc/kepler";
@@ -51,7 +51,8 @@ import {
   toBodyFixed,
 } from "../system/our-surface";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
-import { bodyAxes, solarBody, solarState } from "../system/solar";
+import { bodyAxes, daysOf, solarBody, solarState } from "../system/solar";
+import { weatherAt, windFromAt } from "../weather";
 import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { caught } from "../debug";
@@ -1568,12 +1569,29 @@ function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "gra
 function glideCard(this: CameraController, rw: RunwayView): HubInfo {
   const A = this.glideAssist(rw);
   const dist = Math.max(-rw.along, 0);
-  const rows: [string, string][] = [
+  const rows: HubRow[] = [
     [t("To the threshold"), dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`],
     [t("Height"), `${Math.round(rw.agl)} m`],
     [t("Speed"), `${Math.round(rw.speed)} m/s`],
   ];
   if (rw.flareIn !== null) rows.push([t("Flare in"), fmtDur(rw.flareIn)]);
+  // (the surface wind on the runway — W4: along it, across it; a tail wind or a strong cross wind marked)
+  if (rw.wind && rw.wind.u10 >= 0.5) {
+    const w = rw.wind;
+    rows.push([t("Surface wind"), `${String(Math.round(w.from) % 360 || 360).padStart(3, "0")}° ${Math.round(w.u10)} m/s`]);
+    rows.push(
+      w.head >= 0
+        ? [t("Head wind"), `${Math.round(w.head)} m/s`]
+        : [t("Tail wind"), `${Math.round(-w.head)} m/s`, w.head < -2.5 ? "bad" : "warn"],
+    );
+    const ac = Math.abs(w.cross);
+    if (ac >= 0.5)
+      rows.push(
+        ac > 7.7
+          ? [t("Cross wind"), `${Math.round(ac)} m/s ${w.cross > 0 ? t("from the right") : t("from the left")}`, ac > 12.9 ? "bad" : "warn"]
+          : [t("Cross wind"), `${Math.round(ac)} m/s ${w.cross > 0 ? t("from the right") : t("from the left")}`],
+      );
+  }
   return {
     mode: "none",
     title: `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
@@ -2493,6 +2511,8 @@ function runwayCompute(this: CameraController): RunwayView | null {
       const d = ang * Math.hypot(...T);
       if (d < best) (best = d), (site = st);
     }
+    // (landed into the wind: its far end when the wind blows down it — W4)
+    if (site) site = this.runwayInUse(site);
   }
   if (!site) return null;
   const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
@@ -2592,7 +2612,18 @@ function runwayCompute(this: CameraController): RunwayView | null {
     manual,
     speed: vh,
     flareIn,
+    wind: runwaySurfaceWind(this, site),
   };
+}
+
+/** The surface wind on a runway (W4): the weather's at 10 m there, along and across its heading landed. */
+function runwaySurfaceWind(c: CameraController, site: Site): RunwayView["wind"] {
+  const nav = c.ourNav(cameraFrame(c.s));
+  if (!nav || !solarBody(site.body)?.atmosphere) return null;
+  const days = daysOf(nav.t);
+  const w = weatherAt(c.s, site, days, c.weatherReal);
+  const from = windFromAt(w, site, days);
+  return { from, u10: w.wind.u10, gust: w.wind.gust, ...runwayWind(site.rwy ?? 0, from, w.wind.u10) };
 }
 
 /**

@@ -658,10 +658,12 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       this.onPilotMessage?.(why);
       this.crashed(why);
     }
-    this.rollSite =
-      touched.gear !== "crashed" && touched.gear !== "tipped" && this.rolling && this.pilot.auto === "entry" && this.entryRun?.site?.runway
-        ? this.entryRun.site
-        : null;
+    // (the wheels touched — rolling still at the frame's end or skipped back up within it: a gentle touchdown
+    // into a head wind skims; asked rolling, the runway was lost there while the autopilot handed over, and
+    // the rollout ran 25 m off the axis two times in three —; back on the wheels after the skip, the same
+    // touchdown's runway steered on along)
+    const ok = touched.gear !== "crashed" && touched.gear !== "tipped";
+    this.rollSite = ok && this.pilot.auto === "entry" && this.entryRun?.site?.runway ? this.entryRun.site : ok ? this.rollSite : null;
     if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
   } else if (touched) {
     this.landed = true;
@@ -679,8 +681,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       if (v > TUNING.crashSpeed) this.crashed(`${VESSELS[fleet.active].name}: crashed on ${name} at ${v.toFixed(0)} m/s`);
     }
     // (the entry's glide down on its runway: the rollout steered along it)
-    this.rollSite =
-      touched.wheels && this.rolling && this.pilot.auto === "entry" && this.entryRun?.site?.runway ? this.entryRun.site : null;
+    // (the wheels touched, rolling or skipped back up: the touchdown's runway kept, as above)
+    const ok = !!touched.wheels;
+    this.rollSite = ok && this.pilot.auto === "entry" && this.entryRun?.site?.runway ? this.entryRun.site : ok ? this.rollSite : null;
     if (this.pilot.auto !== "none" && this.pilot.auto !== "takeoff") this.pilot.setAuto(this.pilot.auto);
   }
   if (flown) this.landed = !!this.rolling || !!this.ourLanded;

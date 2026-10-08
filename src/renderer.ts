@@ -1,5 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
-import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -2199,7 +2199,7 @@ export class Renderer {
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
       // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
       // physical body axes, in float64 (the markings to the centimetre: trace.wgsl runwayShade)
-      if (near.index === earthK && this.earthMaps.tier) runways = this.nearRunways(c as Vec3);
+      if (near.index === earthK && this.earthMaps.tier) runways = this.nearRunways(c as Vec3, s, time);
       // (runways near: the kernel with their code — elsewhere compiled out, a tenth of the Earth's cost)
       if (runways[0]! > 0) this.featureKey |= 256;
     } else {
@@ -2314,9 +2314,11 @@ export class Renderer {
    * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
    * threshold's geodetic direction and length, its landing direction and half width, its right, and the
    * camera from its threshold in physical body-fixed metres — c is in squashed radii. Their tangents
-   * projected, the threshold's height drops out.
+   * projected, the threshold's height drops out. Each landed into the weather's wind (W4: its lights and
+   * PAPI at that end — across.w 1: the far one); [0].yzw the wind at 10 m at the nearest, blowing towards
+   * [m/s, the Earth's axes] — the windsocks'.
    */
-  private nearRunways(c: Vec3): Float32Array {
+  private nearRunways(c: Vec3, s: Settings, time: number): Float32Array {
     const out = new Float32Array(RUNWAY_VEC4S * 4);
     const near = EARTH_RUNWAYS.map((r) => {
       const d: Vec3 = [c[0] * WGS84_A - r.origin[0], c[1] * WGS84_A - r.origin[1], c[2] * (1 - WGS84_F) * WGS84_A - r.origin[2]];
@@ -2326,9 +2328,26 @@ export class Renderer {
       .sort((a, b) => a.dist - b.dist)
       .slice(0, 4);
     out[0] = near.length;
+    const days = daysOf(time);
     near.forEach(({ r, d }, k) => {
-      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, 0, ...d, 0], 4 + 16 * k);
+      const rev = landingEnd(r.site, s, days, this.weatherReal).reverse ? 1 : 0;
+      // (w: the ground's height at the threshold — the windsocks' feet)
+      const hg = groundRelief("earth", bodyFixedOf("earth", r.site.lat, r.site.lon, 0));
+      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, rev, ...d, hg], 4 + 16 * k);
     });
+    if (near.length) {
+      const st = near[0]!.r.site;
+      const w = weatherAt(s, st, days, this.weatherReal);
+      const to = ((windFromAt(w, st, days) + 180) * Math.PI) / 180;
+      const p = near[0]!.r.p;
+      const eh = Math.hypot(p[0], p[1]) || 1;
+      const east = [-p[1] / eh, p[0] / eh, 0];
+      const north = [-p[2] * east[1]!, p[2] * east[0]!, p[0] * east[1]! - p[1] * east[0]!];
+      out.set(
+        [0, 1, 2].map((i) => w.wind.u10 * (east[i]! * Math.sin(to) + north[i]! * Math.cos(to))),
+        1,
+      );
+    }
     return out;
   }
 

@@ -167,6 +167,12 @@ the ring.
   the profile is the one the autopilot would fly from where the final began, frozen there — the PAPI, the
   gates, the aim and the glide's error work as under the autopilot, the card is the runway's; in a
   descent on the engines (below 5 km, slow, falling) the card is the descent's.
+- **The runway's wind** (PLAN-METEO W4): the runway box adds the surface wind — `WIND 070°/6–9 m/s` (the
+  gusts as a range) — and its parts on the runway landed, `HEAD 5 · CROSS ←3` (the arrow the way it
+  pushes): green, amber for a tail wind or past 15 kt across, red past 25 kt across. The hand-flown final's
+  card adds the same rows (surface wind, head or tail wind, cross wind marked past 15 and 25 kt). The
+  runway named is the one landed into the wind (its far end — `RWY 04` for Edwards's 22 — when the wind
+  blows down it; in fair weather the published end).
 - **Alerts explained**: every alert's line has a tooltip, and a click opens why it is on and what to do.
 - **The key hints** add F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
 
