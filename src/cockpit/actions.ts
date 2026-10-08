@@ -69,7 +69,13 @@ export function cockpitAct(d: CockpitDeps, id: string, value?: number) {
     case "chrono": {
       const was = d.chrono.seconds();
       const r = d.chrono.push();
-      return d.toast(r === "started" ? t("Chronometer started") : r === "stopped" ? tf("Chronometer stopped: {0}", fmtClock(was)) : t("Chronometer reset"));
+      return d.toast(
+        r === "started"
+          ? t("Chronometer started")
+          : r === "stopped"
+            ? tf("Chronometer stopped: {0}", fmtClock(was))
+            : t("Chronometer reset"),
+      );
     }
     case "apOff":
       return d.apOff();
@@ -81,7 +87,11 @@ export function cockpitAct(d: CockpitDeps, id: string, value?: number) {
 }
 
 /** A control's tip: its name, its state now, its key. */
-export function controlTip(id: string, st: ControlState | undefined, d: Pick<CockpitDeps, "chrono">): { name: string; state: string; key: string | null } | null {
+export function controlTip(
+  id: string,
+  st: ControlState | undefined,
+  d: Pick<CockpitDeps, "chrono">,
+): { name: string; state: string; key: string | null } | null {
   const c = CONTROLS.find((x) => x.id === id);
   if (!c) return null;
   const p = st?.pos ?? 0;

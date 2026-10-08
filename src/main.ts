@@ -1770,7 +1770,7 @@ async function main() {
     setAirBrake: (v) => {
       const was = camera.airBrake;
       camera.airBrake = v;
-      if ((was > 0) !== (v > 0)) panel.toast(v > 0 ? t("Air brake out") : t("Air brake in"));
+      if (was > 0 !== v > 0) panel.toast(v > 0 ? t("Air brake out") : t("Air brake in"));
     },
     apOff: () => {
       camera.pilot.setAuto("none");
@@ -2555,7 +2555,10 @@ async function main() {
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         if (renderer.ship.cabinShown)
           renderer.cockpitControls = poseData(
-            controlStates(camera, settings, cockpitChrono, { hover: camera.cockpit?.input.hover ?? null, pressed: camera.cockpit?.input.pressed ?? null }),
+            controlStates(camera, settings, cockpitChrono, {
+              hover: camera.cockpit?.input.hover ?? null,
+              pressed: camera.cockpit?.input.pressed ?? null,
+            }),
           );
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view

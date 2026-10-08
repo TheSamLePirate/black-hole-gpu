@@ -79,7 +79,9 @@ test("the controls apart: no two boxes overlap on a panel; each on its panel", (
       if (A.panel !== B.panel) continue;
       const ha = controlBox(A).half,
         hb = controlBox(B).half;
-      const apart = Math.abs(A.at[0] - B.at[0]) >= ha[0] + hb[0] - 1e-9 || Math.abs(A.at[1] - B.at[1]) >= Math.min(ha[1], 0.03) + Math.min(hb[1], 0.03) - 1e-9;
+      const apart =
+        Math.abs(A.at[0] - B.at[0]) >= ha[0] + hb[0] - 1e-9 ||
+        Math.abs(A.at[1] - B.at[1]) >= Math.min(ha[1], 0.03) + Math.min(hb[1], 0.03) - 1e-9;
       expect(apart).toBe(true);
     }
 });

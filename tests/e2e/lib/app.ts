@@ -184,11 +184,23 @@ export class App {
   }
 
   /** A raw mouse event at (x, y) [CSS px] — moved, pressed, released (left or right), the wheel. */
-  async mouse(type: "move" | "down" | "up" | "wheel", x: number, y: number, o: { button?: "left" | "right"; deltaY?: number; shift?: boolean } = {}) {
+  async mouse(
+    type: "move" | "down" | "up" | "wheel",
+    x: number,
+    y: number,
+    o: { button?: "left" | "right"; deltaY?: number; shift?: boolean } = {},
+  ) {
     const button = o.button ?? "left";
     const buttons = button === "left" ? 1 : 2;
     const modifiers = o.shift ? 8 : 0;
-    if (type === "move") await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, modifiers, ...(this.mouseDown ? { button: this.mouseDown, buttons: this.mouseDown === "left" ? 1 : 2 } : {}) });
+    if (type === "move")
+      await this.cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x,
+        y,
+        modifiers,
+        ...(this.mouseDown ? { button: this.mouseDown, buttons: this.mouseDown === "left" ? 1 : 2 } : {}),
+      });
     else if (type === "down") {
       this.mouseDown = button;
       await this.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons, clickCount: 1, modifiers });
