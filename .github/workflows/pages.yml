@@ -202,8 +202,11 @@ jobs:
   # the dedicated server (docs/DEPLOY.md): the same site artifact in an nginx image on GHCR, then the
   # `deploy` branch names that image — the server's Portainer polls the branch and pulls it; nothing
   # calls in. The branch moves only once the image is pushed, each image under its own tag.
+  # main alone: the preview is GitHub Pages' (/<PREVIEW_PATH>/), left out of the image, and a preview
+  # push — main unchanged — redeploys nothing (the branch named here as in `on.push`: env is not read in
+  # a job's `if`)
   server:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/test-kimi'
     needs: site
     runs-on: ubuntu-latest
     permissions:
@@ -228,6 +231,7 @@ jobs:
           mkdir -p _site
           tar -xf pages-artifact/artifact.tar -C _site
           rm -rf pages-artifact
+          if [ -n "$PREVIEW_PATH" ]; then rm -rf "_site/$PREVIEW_PATH"; fi
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           tag="${MAIN:0:7}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
