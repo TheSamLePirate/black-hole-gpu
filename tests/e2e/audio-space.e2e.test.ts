@@ -6,7 +6,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // its nozzles: behind the pilot, to the left of the right wingtip's camera, ahead of the nose looking back;
 // headphones turn the panner to HRTF; in the air, a free camera hears the passing ship's Doppler. S2: the
 // engine granular — its AudioWorklet loaded, rendering ten seconds offline for a few percent of a core. S3:
-// the attitude thrusters heard where they sit — a yaw from the stick fires clusters on both sides.
+// the attitude thrusters heard where they sit — a yaw from the stick fires clusters on both sides. S4: the
+// cabin — the hull's modes and the fan from the seat (not from the chase), the beeps from the panel, the
+// crew breathing and the structure creaking under 5 g.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -86,6 +88,44 @@ describe.skipIf(!E2E)("the sound's space", () => {
     expect(Math.max(...on.map((c) => c.x)) - Math.min(...on.map((c) => c.x))).toBeGreaterThan(2);
     expect(Math.max(...on.map((c) => c.z)) - Math.min(...on.map((c) => c.z))).toBeGreaterThan(5);
   });
+
+  test("the cabin: the hull's modes, the fan, the panel's beeps; breathing and creaks under 5 g", async () => {
+    type Cab = { hull: number; fan: number; breathing: boolean; breaths: number; creaks: number; g: number; beep: number[] };
+    const at = (m: string) =>
+      app.js<Cab>(`(async () => {
+        __bh.settings.shipMount = ${JSON.stringify(m)}; __bh.refresh();
+        await new Promise((ok) => setTimeout(ok, 1500));
+        return __sound.spaceState().cabin;
+      })()`);
+    const seat = await at("cockpit");
+
+    expect(seat.hull).toBeGreaterThan(5);
+    expect(seat.fan).toBeGreaterThan(0.005);
+    // (the panel: ahead and below, within arm's reach)
+    expect(seat.beep[2]!).toBeLessThan(-0.3);
+    expect(seat.beep[1]!).toBeLessThan(0);
+    expect(Math.hypot(...seat.beep)).toBeLessThan(1.5);
+    const chase = await at("chase");
+    expect(chase.hull).toBeLessThan(1);
+    expect(chase.fan).toBeLessThan(0.003);
+    // (5 g at full throttle: the crew strains)
+    const r = await app.js<{ before: Cab; after: Cab }>(`(async () => {
+      __bh.settings.shipMount = "cockpit"; __bh.refresh();
+      const was = __bh.settings.crewG;
+      const before = { ...__sound.spaceState().cabin };
+      __bh.game.set("crewG", 5);
+      __bh.camera.pilot.throttle = 1;
+      await new Promise((ok) => setTimeout(ok, 6000));
+      const after = __sound.spaceState().cabin;
+      __bh.camera.pilot.throttle = 0;
+      __bh.game.set("crewG", was);
+      return { before, after };
+    })()`);
+    expect(r.after.g).toBeGreaterThan(4.5);
+    expect(r.after.breathing).toBe(true);
+    expect(r.after.breaths).toBeGreaterThan(r.before.breaths);
+    expect(r.after.creaks).toBeGreaterThan(r.before.creaks + 2);
+  }, 60_000);
 
   test("headphones: the panner in HRTF; speakers: equal-power", async () => {
     await app.js(`(__bh.game.set("soundHeadphones", true), true)`);

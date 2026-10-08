@@ -22,7 +22,9 @@ export interface FlightSnapshot {
   landed: boolean;
   plan: { nodes: { t: number }[]; burning: boolean; now: number } | null;
   surface: { air: number; vVert: number; vHor: number } | null;
-  air?: { heat: number; mach: number; inAir: boolean } | null;
+  air?: { heat: number; mach: number; inAir: boolean; g?: number; hull?: number } | null;
+  /** the engines' proper acceleration [c²/M] (the load in vacuum) */
+  accel?: number;
   engine: { fuel: { empty: boolean; fraction: number } | null };
   path: { fate: string } | null;
 }
@@ -34,6 +36,15 @@ export interface Fired {
   turn: number;
   yaw: number;
   at: number;
+}
+
+/** The panel's screens from the ear (heard from the cabin's seats): 0.75 m ahead of the eyes, 0.4 m below
+ *  (ship frame) — the eye's own place drops out (S·(eye + d) + t = S·d): whatever mount the pose was
+ *  taken at — a frame's lag behind a change of vessel or of mount put it metres off. */
+function panelFrom(pose: ShipPose): [number, number, number] {
+  const d = [0, -0.4, 0.75];
+  const c = pose.S.map((row) => row[0] * d[0]! + row[1] * d[1]! + row[2] * d[2]!) as [number, number, number];
+  return [c[0], c[1], -c[2]];
 }
 
 export class SoundDirector {
@@ -58,6 +69,9 @@ export class SoundDirector {
   /** the engine's last distance from the ear [m] (its radial speed: the Doppler) */
   private engDist = Number.NaN;
   private vr = 0;
+  /** the hull's temperature last frame [K] and its rate, smoothed (the thermal ticks — S4) */
+  private hullT = Number.NaN;
+  private heating = 0;
   /** the flown craft's thruster clusters (S3), by vessel */
   private clusterCache: { vessel: string; cl: ReturnType<typeof rcsClusters> } | null = null;
 
@@ -119,6 +133,24 @@ export class SoundDirector {
     return { pos: at, dist, dop: doppler(this.vr, soundSpeed(air)), cutoff: airCutoff(dist, air) };
   }
 
+  /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
+  private felt(info: FlightSnapshot | null) {
+    if (!info) return 1;
+    if (info.air?.inAir && info.air.g !== undefined) return info.air.g;
+    const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
+    return (info.accel ?? 0) * gUnit;
+  }
+
+  /** The hull heating [K/s], smoothed over ~2 s. */
+  private hullHeating(info: FlightSnapshot | null, dt: number) {
+    const T = info?.air?.hull;
+    if (T === undefined || !Number.isFinite(T) || dt <= 0) return 0;
+    const r = Number.isFinite(this.hullT) ? (T - this.hullT) / dt : 0;
+    this.hullT = T;
+    this.heating += (r - this.heating) * Math.min(1, dt / 2);
+    return this.heating;
+  }
+
   /** Each attitude thruster cluster where it sits from the ear and how hard it fires — the jets the renderer
    *  draws (jets.ts), the clusters' strongest (S3). */
   private clusterSound(pose: ShipPose, th: ThrustAsked) {
@@ -164,6 +196,11 @@ export class SoundDirector {
       // cockpit was heard as an outside view)
       inside: hearing(s.shipMount, !!o.spectator) !== "outside",
       rcsClusters: fresh && o.pose && o.thrust ? this.clusterSound(o.pose, o.thrust) : null,
+      // (the cabin — S4: how the view hears the ship, the load the crew feels, the hull heating, the panel)
+      hearing: hearing(s.shipMount, !!o.spectator),
+      g: this.felt(info),
+      heating: this.hullHeating(info, dt),
+      panel: o.pose ? panelFrom(o.pose) : null,
       space: this.engineSpace(
         o.pose ?? null,
         sf ? Math.min(sf.air / 1.225, 2) : 0,

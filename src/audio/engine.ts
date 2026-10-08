@@ -69,6 +69,12 @@ export interface EngineState {
   /** the attitude thrusters by cluster (S3): each one's place from the ear [m] and how hard it fires 0…1
    *  — none: the single RCS voice, panned to the side that fires */
   rcsClusters?: { pos: [number, number, number]; level: number }[] | null;
+  /** the cabin (S4): how the camera hears the ship (the cabin's air, the hull's structure, outside), the
+   *  load the crew feels [g], the hull's heating [K/s], where the panel's screens are from the ear */
+  hearing?: "cabin" | "hull" | "outside";
+  g?: number;
+  heating?: number;
+  panel?: [number, number, number] | null;
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
@@ -125,6 +131,18 @@ export class SoundEngine {
   private hrtf = false;
   /** the attitude thrusters' clusters (S3): a hiss and a panner each, its level last frame (the valves) */
   private clusters: { gain: GainNode; panner: PannerNode; was: number }[] = [];
+  /** the cabin (S4): the hull's resonances on the listener's path, the ventilation's fan, the panel's place
+   *  for the beeps; the creaks', the regulator's and the breaths' clocks */
+  private cab: {
+    eq1: BiquadFilterNode;
+    eq2: BiquadFilterNode;
+    fan: GainNode;
+    beepPan: PannerNode;
+    g: number;
+    nextHiss: number;
+    nextBreath: number;
+    breathing: boolean;
+  } | null = null;
   /** the granular engine (its worklet loaded), its output's gain; null: the filtered noises */
   private gran: { node: AudioWorkletNode; out: GainNode } | null = null;
   private amb: {
@@ -138,6 +156,10 @@ export class SoundEngine {
     roar: GainNode;
   } | null = null;
   private last: EngineState | null = null;
+  /** the audio clock at the last update [s] */
+  private lastT = 0;
+  /** the creaks and the breaths played so far (tests) */
+  private counts = { creaks: 0, breaths: 0 };
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
@@ -211,6 +233,16 @@ export class SoundEngine {
           cutoff: this.engSpace!.air.frequency.value,
           cents: this.engSpace!.detune[0]?.value ?? 0,
           engine: this.gran ? "granular" : "noise",
+          cabin: this.cab
+            ? {
+                hull: this.cab.eq1.gain.value,
+                fan: this.cab.fan.gain.value,
+                breathing: this.cab.breathing,
+                ...this.counts,
+                g: this.cab.g,
+                beep: [this.cab.beepPan.positionX.value, this.cab.beepPan.positionY.value, this.cab.beepPan.positionZ.value],
+              }
+            : null,
           clusters: this.clusters.map((c) => ({
             x: c.panner.positionX.value,
             y: c.panner.positionY.value,
@@ -272,12 +304,23 @@ export class SoundEngine {
     this.listenerLP.type = "lowpass";
     this.listenerLP.frequency.value = 2400;
     this.listenerLP.Q.value = 0.5;
-    listener.connect(this.listenerLP).connect(master);
-    this.listenerLP.connect(room);
+    // (the hull's own modes: what its structure carries rings at them — S4)
+    const eq1 = new BiquadFilterNode(ctx, { type: "peaking", frequency: 85, Q: 2, gain: 0 });
+    const eq2 = new BiquadFilterNode(ctx, { type: "peaking", frequency: 170, Q: 3, gain: 0 });
+    listener.connect(this.listenerLP).connect(eq1).connect(eq2).connect(master);
+    eq2.connect(room);
 
+    // the flight computer's beeps: from the panel's screens in the cabin (S4), ahead elsewhere
     const beeps = gain(this.mix.beeps);
-    beeps.connect(master);
-    beeps.connect(room);
+    const beepPan = new PannerNode(ctx, {
+      panningModel: "equalpower",
+      distanceModel: "inverse",
+      refDistance: 1,
+      rolloffFactor: 0.3,
+      positionZ: -1,
+    });
+    beeps.connect(beepPan).connect(master);
+    beepPan.connect(room);
     const engine = gain(this.mix.engines);
     // (the engine placed: a panner at its nozzles, the air's absorption after it — S1)
     const panner = new PannerNode(ctx, {
@@ -301,6 +344,21 @@ export class SoundEngine {
     const ui = gain(this.mix.ui);
     ui.connect(master);
     this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener };
+    // the ventilation's fan: its blades' tone and a hiss of air (S4) — inside only
+    const fan = gain(0);
+    const fanLP = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 900 });
+    for (const [f, a] of [
+      [147, 1],
+      [294, 0.45],
+      [441, 0.2],
+    ] as const) {
+      const o = new OscillatorNode(ctx, { type: "triangle", frequency: f * (1 + (Math.random() - 0.5) * 0.01) });
+      const og = gain(a);
+      o.connect(og).connect(fanLP);
+      o.start();
+    }
+    fanLP.connect(fan).connect(ambience);
+    this.cab = { eq1, eq2, fan, beepPan, g: 1, nextHiss: 0, nextBreath: 0, breathing: false };
 
     this.white = this.noise(ctx, 2, "white");
     this.brown = this.noise(ctx, 4, "brown");
@@ -614,6 +672,48 @@ export class SoundEngine {
     if (!cl && rWas < 0.05 && r >= 0.05) this.valve(s.rcsPan, true);
     else if (!cl && rWas >= 0.05 && r < 0.05) this.valve(s.rcsPan, false);
 
+    // the cabin (S4): the hull's modes, the fan, the panel's beeps, the structure's creaks under the load and
+    // the heat, the pressure regulator's sigh, the crew's breathing past 4 g
+    const C = this.cab;
+    const hear = s.hearing ?? (s.inside ? "cabin" : "outside");
+    if (C) {
+      const cabin = hear === "cabin" && s.aboard;
+      set(C.eq1.gain, hear === "cabin" ? 7 : hear === "hull" ? 4 : 0, 0.3);
+      set(C.eq2.gain, hear === "cabin" ? 4 : 0, 0.3);
+      set(C.fan.gain, cabin ? 0.012 : 0, 0.5);
+      const pp = cabin && s.panel ? s.panel : [0, 0, -1];
+      set(C.beepPan.positionX, pp[0]!, 0.05);
+      set(C.beepPan.positionY, pp[1]!, 0.05);
+      set(C.beepPan.positionZ, pp[2]!, 0.05);
+      const g = Math.max(s.g ?? 1, 0);
+      const dt = prev ? Math.min(Math.max(t - (this.lastT || t), 0), 0.25) : 0;
+      this.lastT = t;
+      const dg = dt > 0 ? Math.abs(g - C.g) / dt : 0;
+      C.g += (g - C.g) * Math.min(1, dt * 4);
+      if (live && s.aboard && hear !== "outside" && dt > 0) {
+        // (the structure creaks: as the load changes, under a heavy one, as the hull heats — a few a second
+        // at most)
+        const stress = Math.min(
+          1.5 * Math.min(dg / 2, 1) + 0.25 * Math.max(g - 1.5, 0) + 0.15 * Math.min(Math.abs(s.heating ?? 0) / 20, 1),
+          3,
+        );
+        if (Math.random() < stress * dt)
+          this.creak(Math.min(0.15 + 0.25 * stress, 0.8) * (hear === "cabin" ? 1 : 0.6), (s.heating ?? 0) > 5);
+        // (the pressure regulator: a soft sigh every half minute or so)
+        if (cabin && t > C.nextHiss) {
+          if (C.nextHiss > 0) this.burst(this.busses.ambience, 0.05, 2600, 1.4, 0.7);
+          C.nextHiss = t + 25 + 20 * Math.random();
+        }
+      }
+      // (breathing against the load: past 4 g, out of it under 3.6; faster and harder as it grows)
+      C.breathing = cabin && live > 0 && (C.breathing ? C.g > 3.6 : C.g > 4);
+      if (C.breathing && t > C.nextBreath) {
+        const k = Math.min((C.g - 3.6) / 4, 1);
+        this.breath(0.12 + 0.3 * k, k);
+        C.nextBreath = t + Math.max(3.2 - 1.8 * k, 1.2);
+      }
+    }
+
     // cabin
     const a = this.amb;
     const aboard = s.aboard ? 1 : 0;
@@ -629,6 +729,74 @@ export class SoundEngine {
     set(a.wind.gain, aboard * 0.6 * Math.sqrt(q), 0.25);
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
     set(a.roar.gain, aboard * 1.1 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
+  }
+
+  /** The structure creaking: a groan (a resonance gliding down) — or, as the hull heats, the ticks of the
+   *  panels expanding. */
+  private creak(level: number, thermal: boolean) {
+    this.counts.creaks++;
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    const out = this.busses.ambience;
+    if (thermal && Math.random() < 0.6) {
+      // (a few ticks, a metal panel's)
+      const n = 1 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < n; k++) this.burst(out, level * 0.7, 2200 + 1800 * Math.random(), 0.03, 6, k * (0.04 + 0.08 * Math.random()));
+      return;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const f0 = 180 + 700 * Math.random();
+    const bp = new BiquadFilterNode(ctx, { type: "bandpass", Q: 18 });
+    bp.frequency.setValueAtTime(f0, t);
+    bp.frequency.exponentialRampToValueAtTime(f0 * (0.6 + 0.25 * Math.random()), t + 0.35);
+    const g = ctx.createGain();
+    const dur = 0.18 + 0.35 * Math.random();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(level, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(bp).connect(g).connect(out);
+    src.start(t, Math.random());
+    src.stop(t + dur + 0.05);
+  }
+
+  /** A breath under load (`k` 0…1: the strain): the inhalation through the teeth, a held grunt, the
+   *  exhalation — noise through the mouth's formants. */
+  private breath(level: number, k: number) {
+    this.counts.breaths++;
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    const out = this.busses.ambience;
+    const part = (at: number, dur: number, f0: number, f1: number, q: number, lv: number) => {
+      const src = ctx.createBufferSource();
+      src.buffer = this.white;
+      const bp = new BiquadFilterNode(ctx, { type: "bandpass", Q: q });
+      bp.frequency.setValueAtTime(f0, t + at);
+      bp.frequency.linearRampToValueAtTime(f1, t + at + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t + at);
+      g.gain.linearRampToValueAtTime(lv, t + at + dur * 0.35);
+      g.gain.linearRampToValueAtTime(0, t + at + dur);
+      src.connect(bp).connect(g).connect(out);
+      src.start(t + at, Math.random());
+      src.stop(t + at + dur + 0.05);
+    };
+    const inh = 0.55 - 0.2 * k;
+    part(0, inh, 1400, 2100, 2.5, level);
+    // (the strain's grunt: the glottis closed against the load — the anti-g manoeuvre)
+    if (k > 0.25) {
+      const o = new OscillatorNode(ctx, { type: "sawtooth", frequency: 95 + 20 * k });
+      const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 500 });
+      const g = ctx.createGain();
+      const at = t + inh + 0.05;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(level * 0.25 * k, at + 0.05);
+      g.gain.linearRampToValueAtTime(0, at + 0.28);
+      o.connect(lp).connect(g).connect(out);
+      o.start(at);
+      o.stop(at + 0.32);
+    }
+    part(inh + 0.12 + 0.2 * k, 0.6 - 0.15 * k, 900, 600, 2, level * 0.8);
   }
 
   private ignition(th: number) {
