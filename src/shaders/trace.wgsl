@@ -104,7 +104,9 @@ struct Params {
   // the runways near the camera (src/game/sites.ts, at most RWY_MAX): [0].x their count; then each its
   // threshold's geodetic unit direction (w: its length [m]), its landing direction (w: its half width [m]),
   // its right, and the camera from its threshold on the Earth's squashed axes [m] (float64 on the CPU)
-  runways: array<vec4f, 17>,
+  // [17]: a clock for the flashing lights [s, wall time], how poor the visibility there is (0 … 1: the lights
+  // at their brightest by day — PLAN-AEROPORTS A1)
+  runways: array<vec4f, 18>,
   // the sea's resolved waves near the camera (renderer: seaParams; seaShade): [0] the wind's way at the
   // camera (the Earth's axes), its speed at 10 m; [1] across it, w: their weight (1 under 15 km, 0 above
   // 30); [2] the camera in that frame from an anchor of whole kilometres [m], the anchor in 256 m cells;
@@ -4327,19 +4329,80 @@ fn stripeCover(x: f32, period: f32, w: f32, fw: f32) -> f32 {
   let c = max(bandCover(u, 0.0, w, fw), bandCover(u, period, period + w, fw));
   return mix(c, w / period, smoothstep(0.3 * period, period, fw));
 }
-// A point light's share of a pixel of footprint fw [m], d [m] from it: its flux spread over the pixel
-// (a 0.4 m lamp), so it stays one bright dot from afar
-fn lampAt(d: f32, fw: f32) -> f32 {
-  let sg = max(0.5 * fw, 0.4);
-  return exp(-0.5 * d * d / (sg * sg)) * (0.16 / (sg * sg));
-}
 struct RunwayLook { cover: f32, albedo: vec3f, lamps: vec3f };
+// the pixel's footprint on the runway's ground [m, along and across it]: its two axes (earthGround sets it)
+var<private> LAMP_F: vec4f = vec4f(1.0, 0.0, 0.0, 1.0);
+// A runway lamp's share of the pixel, d [m] from it on the ground (along, across): its flux (a 0.4 m lamp's,
+// 1 m² of white) spread over the pixel's own footprint — an ellipse, long down a grazing view: the lamps a
+// row of points from km out, not blobs merging into a slab —, or, nearer than a pixel's worth, the lamp itself
+fn lampV(d: vec2f) -> f32 {
+  let fa = LAMP_F.xy;
+  let fb = LAMP_F.zw;
+  let det = fa.x * fb.y - fa.y * fb.x;
+  if (abs(det) < 0.16) { return exp(-0.5 * dot(d, d) / 0.16) * (0.16 / 0.16); }
+  let u = (d.x * fb.y - d.y * fb.x) / det;
+  let v = (fa.x * d.y - fa.y * d.x) / det;
+  return exp(-0.5 * (u * u + v * v) / 0.36) / (6.2832 * 0.36 * abs(det));
+}
+// The runway's lights as ICAO lays them (PLAN-AEROPORTS A1), for the end in service (a from its threshold
+// [m], c across to the right; L long, hw half wide; fw the pixel's footprint; t a clock [s]): the edges every
+// 60 m, white, yellow the last 600 m (the caution zone); the threshold's green bar, the end's red; the
+// centreline every 15 m — white, red and white alternating 900 to 300 m from the end, red the last 300 —;
+// the touchdown zone's barrettes (three lights, 9 to 12 m out either side, every 30 m to 900 m); the
+// approach lights (ALSF) 900 m out — a barrette of five every 30 m, a crossbar 300 m out — and their
+// sequenced flashers running to the threshold twice a second (the rabbit); the threshold's identification
+// strobes either side, once a second. Each found by rounding to its nearest: a few lamps a pixel.
+fn runwayLights(a: f32, c: f32, L: f32, hw: f32, t: f32) -> vec3f {
+  let W = vec3f(1.0, 0.93, 0.78);
+  let Y = vec3f(1.0, 0.72, 0.22);
+  let R = vec3f(1.0, 0.12, 0.08);
+  let G = vec3f(0.2, 1.0, 0.4);
+  let S = vec3f(0.85, 0.9, 1.0);
+  let ac = abs(c);
+  var l = vec3f(0.0);
+  let ke = round(a / 60.0);
+  if (ke >= 0.0 && ke * 60.0 <= L) { l += select(W, Y, ke * 60.0 > L - 600.0) * lampV(vec2f(a - 60.0 * ke, ac - hw - 1.5)); }
+  let kc = clamp(round(c / 3.0), -floor(hw / 3.0), floor(hw / 3.0));
+  l += G * lampV(vec2f(a + 3.0, c - 3.0 * kc));
+  l += R * lampV(vec2f(a - L - 3.0, c - 3.0 * kc));
+  if (a > -10.0 && a < L + 10.0) {
+    let k = round(a / 15.0);
+    let ak = 15.0 * k;
+    let toEnd = L - ak;
+    let alt = select(W, R, (u32(max(k, 0.0)) & 1u) == 1u);
+    let col = select(select(W, alt, toEnd < 900.0), R, toEnd < 300.0);
+    if (ak >= 0.0 && ak <= L) { l += 0.8 * col * lampV(vec2f(a - ak, c - 0.6)); }
+    let kt = round(a / 30.0);
+    if (kt >= 2.0 && kt <= 30.0) {
+      let x = clamp(round((ac - 9.0) / 1.5), 0.0, 2.0);
+      l += 0.7 * W * lampV(vec2f(a - 30.0 * kt, ac - 9.0 - 1.5 * x));
+    }
+  }
+  if (a < -15.0 && a > -915.0) {
+    let ka = round(a / 30.0);
+    let x = clamp(round(c), -2.0, 2.0);
+    l += 1.5 * W * lampV(vec2f(a - 30.0 * ka, c - x));
+    let kx = clamp(round(c / 1.5), -10.0, 10.0);
+    l += 1.5 * W * lampV(vec2f(a + 300.0, c - 1.5 * kx));
+    // (the flashers: from 900 m out to 300 m, one after another toward the runway, the run twice a second)
+    let n = -ka;
+    if (n >= 10.0 && n <= 30.0) {
+      let lit = 30.0 - floor(fract(t * 2.0) * 21.0);
+      l += 25.0 * select(0.0, 1.0, n == lit) * S * lampV(vec2f(a - 30.0 * ka, c));
+    }
+  }
+  let flash = select(0.0, 1.0, fract(t) < 0.06);
+  if (flash > 0.0 && a > -40.0 && a < 30.0) {
+    l += 30.0 * S * (lampV(vec2f(a + 6.0, c - hw - 12.0)) + lampV(vec2f(a + 6.0, c + hw + 12.0)));
+  }
+  return l;
+}
 // The runway under a point at (a, c) [m] of its frame — along from the threshold, across to the right —
 // for a pixel of footprint fw [m], seen at an elevation el [rad] (the PAPI's): the paved strip, its
 // shoulders and markings (ICAO: threshold bars, centreline, edges, touchdown zone, aiming point), its
 // lights — edges white every 60 m, the threshold green, the end red — and the PAPI, set for the
 // autopilot's inner glide (1.5° to the touchdown 450 m in: two white, two red on it)
-fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool) -> RunwayLook {
+fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, lit: bool) -> RunwayLook {
   var o: RunwayLook;
   // (landed the other way — PLAN-METEO W4 —: the lights and the PAPI from the far end; the markings both ways)
   let a = select(a0, L - a0, rev);
@@ -4365,19 +4428,16 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool) -
   let tz = stripeCover(am - 150.0, 150.0, 22.5, fw) * bandCover(am, 150.0, 922.5, fw) * (1.0 - bandCover(am, 280.0, 360.0, fw));
   m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fw) * bandCover(ac, 4.5, 12.6, fw));
   o.albedo = mix(alb, vec3f(0.72, 0.72, 0.7), m * paved);
-  // the lights: edges, threshold, end; the PAPI 20 m left of the edge, 450 m in
+  // the lights (runwayLights: lit at night, at dusk, in a poor visibility — by day in the clear, too faint to
+  // see: not reckoned); the PAPI 20 m left of the edge, 450 m in, day and night
   var lmp = vec3f(0.0);
-  let ke = round(a / 60.0);
-  if (ke >= 0.0 && ke * 60.0 <= L) { lmp += vec3f(1.0, 0.95, 0.85) * lampAt(length(vec2f(a - 60.0 * ke, ac - hw - 1.5)), fw); }
-  let kc = clamp(round(c / 3.0), -floor(hw / 3.0), floor(hw / 3.0));
-  lmp += vec3f(0.2, 1.0, 0.4) * lampAt(length(vec2f(a + 3.0, c - 3.0 * kc)), fw);
-  lmp += vec3f(1.0, 0.12, 0.08) * lampAt(length(vec2f(a - L - 3.0, c - 3.0 * kc)), fw);
+  if (lit) { lmp = runwayLights(a, c, L, hw, P.runways[17].x); }
   let elDeg = el * 57.29578;
   for (var i = 0u; i < 4u; i++) {
     // (from the runway outwards: white above 2.0°, 1.67°, 1.33°, 1.0°)
     let th = 2.0 - 0.3333 * f32(i);
     let col = select(vec3f(1.0, 0.1, 0.06), vec3f(1.0, 0.97, 0.92), elDeg > th);
-    lmp += 2.5 * col * lampAt(length(vec2f(a - 450.0, c + hw + 20.0 + 9.0 * f32(i))), fw);
+    lmp += 2.5 * col * lampV(vec2f(a - 450.0, c + hw + 20.0 + 9.0 * f32(i)));
   }
   o.lamps = lmp;
   return o;
@@ -5078,8 +5138,23 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       let rel = P.runways[4u + 4u * k].xyz + RWY_HIT.xyz;
       let ra = dot(rel, P.runways[2u + 4u * k].xyz);
       let rc = dot(rel, P.runways[3u + 4u * k].xyz);
-      if (ra < -120.0 || ra > P.runways[1u + 4u * k].w + 120.0 || abs(rc) > P.runways[2u + 4u * k].w + 120.0) { continue; }
-      let rl = runwayShade(ra, rc, P.runways[1u + 4u * k].w, P.runways[2u + 4u * k].w, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), P.runways[3u + 4u * k].w > 0.5);
+      let L = P.runways[1u + 4u * k].w;
+      let hw = P.runways[2u + 4u * k].w;
+      // (the strip and its shoulders; beyond its ends, out to 1 km and 25 m wide, the approach lights alone —
+      // lit only: the markings reckoned over those fields cost the final's view 10 %)
+      let onStrip = ra >= -120.0 && ra <= L + 120.0 && abs(rc) <= hw + 120.0;
+      let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
+      if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
+      // (the pixel's footprint on this runway's ground, along and across it [m])
+      let ak = P.runways[2u + 4u * k].xyz;
+      let ck = P.runways[3u + 4u * k].xyz;
+      LAMP_F = vec4f(dot(fx, ak), dot(fx, ck), dot(fy, ak), dot(fy, ck)) * EARTH_RM;
+      let rev = P.runways[3u + 4u * k].w > 0.5;
+      if (!onStrip) {
+        rwyLamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x);
+        continue;
+      }
+      let rl = runwayShade(ra, rc, L, hw, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit);
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;
@@ -5160,7 +5235,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
   col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
   // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
-  if (HAS_RWY) { col += rwyLamps * (luminance(E) / PI) * mix(0.6, 40.0, dark); }
+  // (by day in a poor visibility — fog, rain: P.runways[17].y — at their brightest, as the tower sets them;
+  // at night thousands of times the night's own light: each lamp a point that glows — the bloom's — from km out)
+  if (HAS_RWY) { col += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), 3000.0, dark); }
   return col;
 }
 

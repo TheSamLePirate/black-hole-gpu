@@ -766,6 +766,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.windHome = null;
   this.windNow = null;
   this.weatherNow = null;
+  // (and the wind: none out of the air — a flight begun above 30 km kept the last flight's until it came down)
+  this.windHome = null;
   {
     const nav = this.ourNav(cameraFrame(s));
     const b = nav && nav.ref !== "sun" ? solarBody(nav.ref) : undefined;

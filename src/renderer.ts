@@ -118,7 +118,7 @@ const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
 const HANDOVER_PASSES = 8;
 /** the runways' block after the tiles' (trace.wgsl: Params.runways) */
-const RUNWAY_VEC4S = 17;
+const RUNWAY_VEC4S = 18;
 /** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
 const SEA_VEC4S = 15;
 /** the weather near the camera, last (trace.wgsl: Params.wx) */
@@ -2373,6 +2373,8 @@ export class Renderer {
         [0, 1, 2].map((i) => w.wind.u10 * (east[i]! * Math.sin(to) + north[i]! * Math.cos(to))),
         1,
       );
+      // (the lights' clock — their flashes, wall time — and the visibility there: under 3 km, fully up by day)
+      out.set([(performance.now() / 1000) % 600, 1 - Math.min(Math.max((w.visibility - 3000) / 5000, 0), 1)], 17 * 4);
     }
     return out;
   }
