@@ -34,6 +34,12 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // The rocket engine's AudioWorklet (PLAN-AUDIO S2), bundled on its own
+    "/audio-worklet.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/audio/engine-worklet.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     // The KTX2 transcoder's worker and its WebAssembly (vendor/basis)
     "/ktx-worker.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/system/ktx-worker.ts"], target: "browser", minify: !dev });

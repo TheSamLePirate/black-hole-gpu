@@ -8,6 +8,8 @@
 //   a small procedural room (convolution) gives the beeps and the thrusters the cabin they ring in.
 //   the main engine is placed (PLAN-AUDIO S1, audio/space.ts): a panner at its nozzles — equal-power, or HRTF
 //   with headphones —, the air's absorption over the distance, its Doppler from a spectator's view.
+//   its roar granular (S2, audio/rocket.ts in an AudioWorklet: the exhaust's eddies as grains, the Mach
+//   waves' crackle in the air); without worklets, the filtered noises before it.
 //
 // The context starts on the first user gesture (browsers keep audio off until then) and sleeps
 // while the page is hidden.
@@ -118,6 +120,8 @@ export class SoundEngine {
   private engSpace: { panner: PannerNode; air: BiquadFilterNode; detune: AudioParam[] } | null = null;
   /** headphones: the panners in HRTF (else equal-power) */
   private hrtf = false;
+  /** the granular engine (its worklet loaded), its output's gain; null: the filtered noises */
+  private gran: { node: AudioWorkletNode; out: GainNode } | null = null;
   private amb: {
     hum: GainNode;
     air: GainNode;
@@ -200,6 +204,7 @@ export class SoundEngine {
           model: p.panningModel,
           cutoff: this.engSpace!.air.frequency.value,
           cents: this.engSpace!.detune[0]?.value ?? 0,
+          engine: this.gran ? "granular" : "noise",
         }
       : null;
   }
@@ -289,6 +294,7 @@ export class SoundEngine {
     this.brown = this.noise(ctx, 4, "brown");
     this.slow = this.noise(ctx, 4, "slow");
     this.buildEngine();
+    void this.buildGranular();
     this.buildRcs();
     this.buildAmbience();
     if (this.last) this.update(this.last);
@@ -395,6 +401,26 @@ export class SoundEngine {
     this.eng = { rumble, rumbleLP, roar, roarBP, sub, subOsc, crackle };
     // (the Doppler's pitch: the voices' detune, in cents)
     if (this.engSpace) this.engSpace.detune = [rumbleSrc.detune, roarSrc.detune, subOsc.detune];
+  }
+
+  /** The granular engine (S2): its worklet loaded (by URL next to the page), its voice into the engine's
+   *  bus; the filtered noises' roar and rumble silenced from then on (the structure's sub kept). */
+  private async buildGranular() {
+    const ctx = this.ctx!;
+    if (!ctx.audioWorklet) return;
+    try {
+      await ctx.audioWorklet.addModule(new URL("audio-worklet.js", location.href));
+    } catch {
+      return;
+    }
+    if (this.ctx !== ctx) return;
+    const node = new AudioWorkletNode(ctx, "kerr-rocket", { numberOfInputs: 0, outputChannelCount: [1] });
+    const out = ctx.createGain();
+    // (the synth's full thrust at ~−15 dBFS RMS: brought to the noises' level it replaces)
+    out.gain.value = 3.2;
+    node.connect(out).connect(this.busses.engine);
+    this.gran = { node, out };
+    if (this.last) this.update(this.last);
   }
 
   private buildRcs() {
@@ -506,12 +532,20 @@ export class SoundEngine {
       for (const d of sp.detune) set(d, cents, 0.1);
     }
 
-    // main engine
+    // main engine: granular (its worklet's controls), else the filtered noises
     const th = clamp(s.throttle) * live;
     const e = this.eng;
-    set(e.rumble.gain, 0.9 * Math.sqrt(th), 0.08);
+    const g = this.gran;
+    if (g) {
+      const P = g.node.parameters;
+      set(P.get("throttle")!, th, 0.05);
+      set(P.get("air")!, clamp(s.air, 0, 2), 0.2);
+      set(P.get("pitch")!, s.space?.dop ?? 1, 0.1);
+    }
+    const old = g ? 0 : 1;
+    set(e.rumble.gain, old * 0.9 * Math.sqrt(th), 0.08);
     set(e.rumbleLP.frequency, 90 + 260 * th, 0.1);
-    set(e.roar.gain, 0.32 * th + 0.25 * th * air, 0.08);
+    set(e.roar.gain, old * (0.32 * th + 0.25 * th * air), 0.08);
     set(e.roarBP.frequency, 380 + 1200 * th + 1500 * air * th, 0.15);
     set(e.crackle.gain, 0.6 * th, 0.1);
     set(e.sub.gain, 0.5 * Math.sqrt(th), 0.08);

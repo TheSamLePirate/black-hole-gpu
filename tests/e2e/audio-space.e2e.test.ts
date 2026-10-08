@@ -4,7 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // PLAN-AUDIO S1: the sound's space, measured at the output (the engine's two channels metered apart —
 // Chrome's --mute-audio silences the speakers, not the graph). The main engine at full throttle, placed at
 // its nozzles: behind the pilot, to the left of the right wingtip's camera, ahead of the nose looking back;
-// headphones turn the panner to HRTF; in the air, a free camera hears the passing ship's Doppler.
+// headphones turn the panner to HRTF; in the air, a free camera hears the passing ship's Doppler. S2: the
+// engine granular — its AudioWorklet loaded, rendering ten seconds offline for a few percent of a core.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -44,6 +45,26 @@ describe.skipIf(!E2E)("the sound's space", () => {
     const rear = await burn("rear");
     expect(rear.sp.z).toBeLessThan(-5);
   }, 60_000);
+
+  test("the granular engine: its worklet loaded, cheap — ten seconds of full thrust in the air rendered offline", async () => {
+    expect(await app.js<string>("__sound.spaceState().engine")).toBe("granular");
+    const r = await app.js<{ share: number; rms: number }>(`(async () => {
+      const R = 48000, T = 10;
+      const ctx = new OfflineAudioContext(1, R * T, R);
+      await ctx.audioWorklet.addModule(new URL("audio-worklet.js", location.href));
+      const node = new AudioWorkletNode(ctx, "kerr-rocket", { numberOfInputs: 0, outputChannelCount: [1] });
+      node.parameters.get("throttle").value = 1;
+      node.parameters.get("air").value = 1;
+      node.connect(ctx.destination);
+      const t0 = performance.now();
+      const d = (await ctx.startRendering()).getChannelData(0);
+      let e = 0;
+      for (const x of d) e += x * x;
+      return { share: (performance.now() - t0) / (T * 1000), rms: Math.sqrt(e / d.length) };
+    })()`);
+    expect(r.rms).toBeGreaterThan(0.05);
+    expect(r.share).toBeLessThan(0.05);
+  });
 
   test("headphones: the panner in HRTF; speakers: equal-power", async () => {
     await app.js(`(__bh.game.set("soundHeadphones", true), true)`);
