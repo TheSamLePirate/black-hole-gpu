@@ -1,12 +1,13 @@
 # Deployment on the dedicated server
 
 The site also runs on the dedicated server (https://samlepirate.org), beside GitHub Pages: the same
-assembled site (main at the root, the preview under `/test/`), served by nginx in a container.
+site as main builds it (main at the root; the preview, `test-kimi`, is on GitHub Pages only, under
+`/test/`), served by nginx in a container.
 Nothing calls into the server — it fetches its updates itself.
 
 ```
 push main / test-kimi ─► pages.yml "site": verified, built, assembled (the Pages artifact)
-                      ─► pages.yml "server": that artifact in deploy/Dockerfile (nginx)
+push main             ─► pages.yml "server": that artifact, /test/ removed, in deploy/Dockerfile (nginx)
                            → ghcr.io/thesamlepirate/black-hole-gpu:<main sha>-<run>
                          ─► a commit on the `deploy` branch: compose.yml naming that tag
 Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit ─► pulls the tag ─► redeploys
