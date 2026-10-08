@@ -7,6 +7,7 @@ import type { Settings } from "../settings";
 import type { RangerStatus } from "../game/status";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
+import { GEARS, type GearOut } from "../gear";
 import { jetLevel, rcsClusters, type ThrustAsked } from "../jets";
 import { VESSELS } from "../vessels";
 import { sound, type Cue, type EngineSpace } from "./engine";
@@ -133,6 +134,21 @@ export class SoundDirector {
     return { pos: at, dist, dop: doppler(this.vr, soundSpeed(air)), cutoff: airCutoff(dist, air) };
   }
 
+  /** The wheels for the sound: where each is from the ear, its load; the speed over the ground, the brakes. */
+  private groundSound(
+    pose: ShipPose | null,
+    gear: GearOut | null,
+    sf: FlightSnapshot["surface"],
+    info: FlightSnapshot | null,
+    throttle: number,
+  ) {
+    const def = GEARS[fleet.active];
+    if (!pose || !gear || !def || !sf) return null;
+    const wheels = def.legs.map((L, k) => ({ pos: shipSource(pose, L.at), load: gear.legs[k]?.load ?? 0 }));
+    const all = gear.contact === def.legs.length;
+    return { wheels, speed: Math.hypot(sf.vHor, sf.vVert), brake: all && info?.auto === "none" && throttle < 0.01 ? 1 : 0 };
+  }
+
   /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
   private felt(info: FlightSnapshot | null) {
     if (!info) return 1;
@@ -176,6 +192,9 @@ export class SoundDirector {
       spectator?: boolean;
       /** the thrust asked (the renderer's: its plumes), the thruster clusters' (S3) */
       thrust?: ThrustAsked | null;
+      /** the gear's last state (its legs' loads) and the wind at the ground [m/s] (S5) */
+      gear?: GearOut | null;
+      groundWind?: number;
     },
   ) {
     const s = this.s;
@@ -201,6 +220,10 @@ export class SoundDirector {
       g: this.felt(info),
       heating: this.hullHeating(info, dt),
       panel: o.pose ? panelFrom(o.pose) : null,
+      // (the ground — S5: the wheels where they are, their loads; the speed over it; the brakes as motion.ts
+      // sets them — the engine idle, no autopilot, every wheel down)
+      ground: this.groundSound(o.pose ?? null, o.gear ?? null, sf, info, f.throttle),
+      groundWind: o.groundWind ?? 0,
       space: this.engineSpace(
         o.pose ?? null,
         sf ? Math.min(sf.air / 1.225, 2) : 0,

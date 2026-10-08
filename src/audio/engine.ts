@@ -75,6 +75,10 @@ export interface EngineState {
   g?: number;
   heating?: number;
   panel?: [number, number, number] | null;
+  /** on the ground (S5): each wheel's place from the ear and its load [N], the speed over the ground [m/s],
+   *  the brakes 0…1; the wind at the ground [m/s] */
+  ground?: { wheels: { pos: [number, number, number]; load: number }[]; speed: number; brake: number } | null;
+  groundWind?: number;
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
@@ -158,8 +162,22 @@ export class SoundEngine {
   private last: EngineState | null = null;
   /** the audio clock at the last update [s] */
   private lastT = 0;
+  /** the ground (S5): the rolling's rumble, the tyres' hiss, the brakes' squeal (all at the wheels), the wind
+   *  over the ground; each wheel's load last frame (the touchdown's chirps), the runway's joints' distance */
+  private gnd: {
+    pan: PannerNode;
+    roll: GainNode;
+    rollLP: BiquadFilterNode;
+    hiss: GainNode;
+    squeal: GainNode;
+    wind: GainNode;
+    loads: number[];
+    dist: number;
+  } | null = null;
+  /** the audio clock at the ground's last update [s] */
+  private groundT = 0;
   /** the creaks and the breaths played so far (tests) */
-  private counts = { creaks: 0, breaths: 0 };
+  private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0 };
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
@@ -219,6 +237,7 @@ export class SoundEngine {
     this.hrtf = on;
     if (this.engSpace) this.engSpace.panner.panningModel = on ? "HRTF" : "equalpower";
     for (const c of this.clusters) c.panner.panningModel = on ? "HRTF" : "equalpower";
+    if (this.gnd) this.gnd.pan.panningModel = on ? "HRTF" : "equalpower";
   }
 
   /** Where the engine's panner is now, its model (tests: S1). */
@@ -239,6 +258,9 @@ export class SoundEngine {
                 fan: this.cab.fan.gain.value,
                 breathing: this.cab.breathing,
                 ...this.counts,
+                roll: this.gnd?.roll.gain.value ?? 0,
+                squeal: this.gnd?.squeal.gain.value ?? 0,
+                wind: this.gnd?.wind.gain.value ?? 0,
                 g: this.cab.g,
                 beep: [this.cab.beepPan.positionX.value, this.cab.beepPan.positionY.value, this.cab.beepPan.positionZ.value],
               }
@@ -367,6 +389,7 @@ export class SoundEngine {
     void this.buildGranular();
     this.buildRcs();
     this.buildAmbience();
+    this.buildGround();
     if (this.last) this.update(this.last);
   }
 
@@ -597,6 +620,76 @@ export class SoundEngine {
     this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar };
   }
 
+  /** The ground's voices (S5): at the wheels — the rolling's rumble, the tyres' hiss, the brakes' squeal —,
+   *  and the wind over the ground (through the hull, as the flight's). */
+  private buildGround() {
+    const ctx = this.ctx!;
+    const pan = new PannerNode(ctx, {
+      panningModel: this.hrtf ? "HRTF" : "equalpower",
+      distanceModel: "inverse",
+      refDistance: 6,
+      rolloffFactor: 1,
+      positionY: -5,
+    });
+    pan.connect(this.busses.listener);
+    const roll = ctx.createGain();
+    roll.gain.value = 0;
+    const rollLP = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 80, Q: 0.9 });
+    this.loop(this.brown, 1.1).connect(rollLP).connect(roll).connect(pan);
+    const hiss = ctx.createGain();
+    hiss.gain.value = 0;
+    this.loop(this.white, 0.8)
+      .connect(new BiquadFilterNode(ctx, { type: "bandpass", frequency: 900, Q: 0.8 }))
+      .connect(hiss)
+      .connect(pan);
+    // (the brakes: a squeal wavering — a disc's resonance, the anti-skid's pulses under it)
+    const squeal = ctx.createGain();
+    squeal.gain.value = 0;
+    const so = new OscillatorNode(ctx, { type: "sine", frequency: 1180 });
+    const vib = new OscillatorNode(ctx, { type: "sine", frequency: 6.5 });
+    const vibG = new GainNode(ctx, { gain: 35 });
+    vib.connect(vibG).connect(so.frequency);
+    so.connect(squeal).connect(pan);
+    so.start();
+    vib.start();
+    const wind = ctx.createGain();
+    wind.gain.value = 0;
+    this.loop(this.white, 0.6)
+      .connect(new BiquadFilterNode(ctx, { type: "bandpass", frequency: 320, Q: 0.7 }))
+      .connect(wind)
+      .connect(this.busses.listener);
+    this.gnd = { pan, roll, rollLP, hiss, squeal, wind, loads: [], dist: 0 };
+  }
+
+  /** A tyre touching at speed: its chirp — the rubber dragged up to the wheel's speed —, at the wheel. */
+  private chirp(at: [number, number, number], k: number) {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    const p = new PannerNode(ctx, {
+      panningModel: this.hrtf ? "HRTF" : "equalpower",
+      distanceModel: "inverse",
+      refDistance: 6,
+      positionX: at[0],
+      positionY: at[1],
+      positionZ: at[2],
+    });
+    p.connect(this.busses.listener);
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const bp = new BiquadFilterNode(ctx, { type: "bandpass", Q: 3 });
+    bp.frequency.setValueAtTime(2600, t);
+    bp.frequency.exponentialRampToValueAtTime(900, t + 0.35);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.9 * k, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    src.connect(bp).connect(g).connect(p);
+    src.start(t, Math.random());
+    src.stop(t + 0.5);
+    this.burst(p, 0.5 * k, 140, 0.25, 0.8);
+    this.counts.chirps++;
+  }
+
   // ------------------------------------------------------------------------------ continuous
   /** Follows the ship's state (every frame). */
   update(s: EngineState) {
@@ -711,6 +804,43 @@ export class SoundEngine {
         const k = Math.min((C.g - 3.6) / 4, 1);
         this.breath(0.12 + 0.3 * k, k);
         C.nextBreath = t + Math.max(3.2 - 1.8 * k, 1.2);
+      }
+    }
+
+    // the ground (S5): rolling, its tyres, the brakes, the joints of the runway's slabs; the touchdown's
+    // chirps; the wind over the ground
+    const Gd = this.gnd;
+    const G = s.ground;
+    if (Gd) {
+      const on = !!G && G.wheels.some((w) => w.load > 0) && live > 0;
+      const v = on ? G!.speed : 0;
+      const n = G?.wheels.length ?? 0;
+      if (G && n) {
+        const c = [0, 1, 2].map((k) => G.wheels.reduce((m, w) => m + w.pos[k]! / n, 0));
+        set(Gd.pan.positionX, c[0]!, 0.05);
+        set(Gd.pan.positionY, c[1]!, 0.05);
+        set(Gd.pan.positionZ, c[2]!, 0.05);
+      }
+      set(Gd.roll.gain, on ? 0.55 * Math.min(v / 80, 1) ** 0.8 : 0, 0.08);
+      set(Gd.rollLP.frequency, 50 + 2.5 * v, 0.1);
+      set(Gd.hiss.gain, on ? 0.1 * Math.min(v / 100, 1) : 0, 0.08);
+      set(Gd.squeal.gain, on && (G?.brake ?? 0) > 0 && v > 4 ? 0.018 * Math.min(v / 40, 1) : 0, 0.15);
+      set(Gd.wind.gain, s.aboard && G?.wheels.some((w) => w.load > 0) ? 0.3 * Math.min((s.groundWind ?? 0) / 15, 1) : 0, 0.5);
+      G?.wheels.forEach((w, k) => {
+        if ((Gd.loads[k] ?? 0) <= 0 && w.load > 0 && G.speed > 15 && live) this.chirp(w.pos, Math.min(G.speed / 100, 1));
+        Gd.loads[k] = w.load;
+      });
+      if (!G) Gd.loads = [];
+      // (the slabs' joints every 15 m: a thump at the wheels, the rumble's beat)
+      const dtG = prev ? Math.min(Math.max(t - this.groundT, 0), 0.25) : 0;
+      this.groundT = t;
+      if (on && v > 3) {
+        Gd.dist += v * dtG;
+        if (Gd.dist > 15) {
+          Gd.dist %= 15;
+          this.burst(Gd.pan, 0.25 * Math.min(v / 60, 1), 90, 0.09, 1.2);
+          this.counts.joints++;
+        }
       }
     }
 

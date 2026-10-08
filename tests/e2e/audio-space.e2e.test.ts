@@ -8,7 +8,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // engine granular — its AudioWorklet loaded, rendering ten seconds offline for a few percent of a core. S3:
 // the attitude thrusters heard where they sit — a yaw from the stick fires clusters on both sides. S4: the
 // cabin — the hull's modes and the fan from the seat (not from the chase), the beeps from the panel, the
-// crew breathing and the structure creaking under 5 g.
+// crew breathing and the structure creaking under 5 g. S5: the ground — a landing at Edwards, live: the
+// tyres' chirps at the touchdown (the mains, then the nose), the rolling's rumble, the runway's joints, the
+// brakes' squeal once every wheel is down.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -133,6 +135,35 @@ describe.skipIf(!E2E)("the sound's space", () => {
     await app.js(`(__bh.game.set("soundHeadphones", false), true)`);
     expect(await app.js<string>("__sound.spaceState().model")).toBe("equalpower");
   });
+
+  test("the ground: a landing at Edwards — the tyres' chirps, the rolling, the runway's joints, the brakes", async () => {
+    await app.waitFor(`__bh.relief("earth", 34.905, -117.884) > 100`, 60_000);
+    type Cab = { chirps: number; joints: number; roll: number; squeal: number };
+    const r = await app.js<{ before: Cab; after: Cab; roll: number; squeal: number }>(`(async () => {
+      __bh.freeze(true);
+      __bh.game.glideTo("Edwards");
+      const c = __bh.camera;
+      for (let i = 0; i < 30 * 200; i++) { __bh.step(1 / 30); const A = c.entryRun?.app; if (A?.final && A.agl < 25) break; }
+      __bh.settings.shipMount = "chase"; __bh.refresh();
+      const before = { ...__sound.spaceState().cabin };
+      __bh.freeze(false);
+      let roll = 0, squeal = 0;
+      for (let i = 0; i < 300; i++) {
+        await new Promise((ok) => setTimeout(ok, 100));
+        const s = __sound.spaceState().cabin;
+        roll = Math.max(roll, s.roll);
+        squeal = Math.max(squeal, s.squeal);
+        if (s.joints > before.joints + 10 && squeal > 0) break;
+      }
+      __bh.freeze(true);
+      return { before, after: __sound.spaceState().cabin, roll, squeal };
+    })()`);
+    expect(r.after.chirps - r.before.chirps).toBeGreaterThanOrEqual(2);
+    expect(r.after.joints - r.before.joints).toBeGreaterThan(10);
+    expect(r.roll).toBeGreaterThan(0.2);
+    expect(r.squeal).toBeGreaterThan(0.005);
+    await app.js("(__bh.freeze(false), true)");
+  }, 120_000);
 
   test("in the air, the fly-by camera: the passing ship's Doppler, up then down, and the air's absorption far off", async () => {
     await app.waitFor(`__bh.relief("earth", 34.905, -117.884) > 100`, 60_000);

@@ -2540,6 +2540,8 @@ async function main() {
               : null,
           spectator: camera.spectating,
           thrust: renderer.shipThrust,
+          gear: camera.gearLast,
+          groundWind: camera.weatherNow?.wind.u10 ?? 0,
         }),
       );
     } else {
