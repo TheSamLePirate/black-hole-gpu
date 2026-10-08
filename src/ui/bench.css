@@ -286,9 +286,77 @@ body.benching #sky-pop,
 body.benching .gt-root,
 body.benching .tf,
 body.benching canvas.fl-hud,
+body.benching .kh,
 body.benching #overlay {
   display: none !important;
 }
 .kb-subs { margin-top: 16px; }
 .kb-subs caption { caption-side: top; text-align: left; padding-bottom: 4px; font: 600 11px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-dim); }
 .kb-subs td[title] { cursor: help; }
+/* the depth's four levels, the suites chosen, the estimate */
+.kb-modes-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+.kb-btn small.kb-dim {
+  opacity: 0.75;
+  font-family: var(--font);
+}
+.kb-suites {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+.kb-suites .kb-btn {
+  text-align: left;
+  padding-left: 40px;
+  position: relative;
+}
+.kb-suites .kb-btn[aria-pressed="false"] {
+  opacity: 0.55;
+}
+.kb-count {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 20px;
+  font: 600 14px var(--mono);
+  text-align: center;
+  color: var(--hud-amber);
+}
+.kb-total {
+  margin-top: 10px;
+  font: 600 13px var(--mono);
+  color: var(--hud-amber);
+}
+.kb-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.kb-suite {
+  margin-top: 18px;
+}
+.kb-suite caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: 4px;
+}
+.kb-suite caption b {
+  display: block;
+  font: 600 12px var(--hud-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-text);
+}
+.kb-suite caption span {
+  font: 500 11.5px var(--mono);
+  color: var(--hud-dim);
+}
+.kb-suite tr.kb-slow td:nth-child(2) {
+  color: var(--hud-amber);
+}
+@media (max-width: 720px) {
+  .kb-modes-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

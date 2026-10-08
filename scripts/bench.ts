@@ -2,8 +2,8 @@
 // server.ts). The measuring itself is the app's own — the Kerr Bench (src/bench/runner.ts, __bh.bench) —
 // so this, the nightly and a friend's browser measure the same thing.
 //
-//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick | --mode complete]
-//                        [--subsampling auto,1,2,4,6,8] [--no-shots] [--out dir]
+//   bun scripts/bench.ts [--url http://localhost:3000/] [--label name] [--scenes "a|b"] [--quick | --mode complete|full]
+//                        [--subsampling auto,1,2,4,6,8] [--suites all | core,worlds,vessels,weather,flights] [--no-shots] [--out dir]
 //   bun scripts/bench.ts --compare http://localhost:3012/ [--reps 2]
 //
 // A run writes a folder, docs/perf/bench-<label>/: report.json (the app's report, kerr-bench/1: the
@@ -37,6 +37,8 @@ const SUBS = arg("subsampling", "auto,1,2,3,4,6,8")
   .map((x) => (x === "auto" ? "auto" : Number(x)));
 const SHOTS = !process.argv.includes("--no-shots");
 const COMPARE = arg("compare", "");
+// (the suites beyond the reference scenes — src/bench/suites.ts —: "all", or a list; the default, the reference alone)
+const SUITES = arg("suites", "core") === "all" ? ["core", "worlds", "vessels", "weather", "flights"] : arg("suites", "core").split(",");
 const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
 const label = arg("label", sha);
 const port = 9350 + Math.floor(Math.random() * 40);
@@ -171,6 +173,7 @@ try {
       machineLabel: ${JSON.stringify(label)},
       scenes: ${JSON.stringify(scenes)},
       subsampling: ${JSON.stringify(SUBS)},
+      suites: ${JSON.stringify(SUITES)},
       onProgress: (p) => kerrProgress(JSON.stringify(p)),
       ${SHOTS ? `shot: (name) => new Promise((res) => { (window.__kerrShots ??= new Map()).set(name, res); kerrShot(name); }),` : ""}
     })`);
@@ -199,6 +202,22 @@ try {
         );
       }
       if (sc.still) console.log(`    still: ${sc.still.convergeMs} ms to converge, ${sc.still.spp} spp`);
+    }
+    // the suites beyond: an item by line (a flight: its height from the window's start to its end)
+    for (const su of report.suites ?? []) {
+      const m = su.summary;
+      console.log(`\n${su.id}: ${m.fpsGeo ?? "—"} fps (geo) · ${m.playable}/${m.n} ≥ 30 fps · worst p95 ${m.worstP95 ?? "—"} ms`);
+      for (const it of su.items) {
+        const f = it.flight;
+        const fl =
+          f?.start && f.end
+            ? `  ${f.start.altKm.toFixed(2)} → ${f.end.altKm.toFixed(2)} km, ${f.start.speed} → ${f.end.speed} m/s (${f.auto}) · tiles +${f.tilesLoaded}, ${f.tilesPending} pending`
+            : "";
+        console.log(
+          `    ${(it.id ?? it.scene).padEnd(22)} [${it.status}] ${pad(it.auto?.fps ?? "—", 6)} fps  p95 ${pad(it.auto?.p95 ?? "—", 6)}  >33 ${pad(it.auto?.over33 ?? "—", 4)}` +
+            `  ${it.fixed ? `${it.fixed.mraysPerS} Mrays/s` : ""}  assets ${(it.assetsMs / 1000).toFixed(1)} s${fl}${it.errors.length ? `  ⚠ ${it.errors.join(" | ")}` : ""}`,
+        );
+      }
     }
     console.log(`\n${report.durationS} s · ${out}/report.json${SHOTS ? ` + ${out}/shots/` : ""}`);
     kill();

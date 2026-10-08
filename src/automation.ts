@@ -15,7 +15,9 @@ import { CONTROLS, controlBox } from "./cockpit/controls";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import type { Simulation } from "./sim";
 import type { GameTools } from "./game/tools";
-import { BENCH_SCENES, type KerrBench } from "./bench/runner";
+import { BENCH_SCENES, estimateSeconds, type KerrBench } from "./bench/runner";
+import { BENCH_ITEMS } from "./bench/suites";
+import type { BenchMode, SuiteId } from "./bench/report";
 import { vram } from "./bench/vram";
 import type { Mission } from "./mission";
 import type { CockpitScreens } from "./ui/cockpitscreens";
@@ -216,6 +218,14 @@ export function installBh(c: BhContext) {
             quick ? { warm: 2500, auto: 4000, fixedWarm: 1500, fixed: 3000 } : { warm: 4000, auto: 8000, fixedWarm: 2500, fixed: 5000 },
           ),
         scenes: BENCH_SCENES,
+        /** one suite's item (bench/suites.ts) by its id, at a depth: __bh.bench.item("final-edwards") */
+        item: (id: string, mode: BenchMode = "quick") => {
+          const it = BENCH_ITEMS.find((i) => i.id === id);
+          if (!it) throw new Error(`no bench item "${id}" — ${BENCH_ITEMS.map((i) => i.id).join(", ")}`);
+          return bench.item(it, mode);
+        },
+        items: BENCH_ITEMS.map((i) => `${i.suite}/${i.id} (${i.depth})`),
+        estimate: (mode: BenchMode, suites: SuiteId[]) => estimateSeconds(mode, suites),
         vram,
       },
       settings,

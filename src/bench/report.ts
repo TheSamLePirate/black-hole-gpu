@@ -1,10 +1,19 @@
-// The Kerr Bench's report (kerr-bench/1): what a run measured, on what machine — the JSON a friend sends
+// The Kerr Bench's report (kerr-bench/2): what a run measured, on what machine — the JSON a friend sends
 // back. No personal data: an anonymous run id, the machine's label only if typed. The Kerr Score, the
 // quality it recommends; the report checked when it is read back (to compare two runs).
+// kerr-bench/2 adds the suites beyond the reference scenes (the heavy worlds, the vessels, the weather,
+// the flights): a /1 report is still read back (it has none).
 
-export const SCHEMA = "kerr-bench/1";
+export const SCHEMA = "kerr-bench/2";
+const SCHEMAS: string[] = ["kerr-bench/1", SCHEMA];
 
-export type BenchMode = "quick" | "standard" | "complete";
+/** The run's depth: how many items each suite takes, how long each is measured. */
+export type BenchMode = "quick" | "standard" | "complete" | "full";
+export const BENCH_MODES: BenchMode[] = ["quick", "standard", "complete", "full"];
+
+/** The suites: the reference scenes (the Kerr Score's), then what a player meets beyond them. */
+export type SuiteId = "core" | "worlds" | "vessels" | "weather" | "flights";
+export const SUITES: SuiteId[] = ["core", "worlds", "vessels", "weather", "flights"];
 
 export interface FrameStats {
   /** frames finished per second, their intervals' percentiles [ms], frames over 33 ms */
@@ -80,6 +89,46 @@ export interface SceneReport {
   subsampling?: SubsamplingPoint[];
   /** the image still, converged to full resolution (the script's capture) and how long it took [ms] */
   still?: { shot: string | null; convergeMs: number; spp: number } | null;
+  /** a suite's item (bench/suites.ts): its id, what it shows */
+  id?: string;
+  title?: string;
+  /** the weather it was measured in (the weather suite, the flights in weather) */
+  weather?: string;
+  /**
+   * a flight: the craft at the window's start and end, the autopilot flying it, the assets still loading at
+   * its end; the ground's tiles streamed in during the window and still wanted at its end
+   */
+  flight?: {
+    start: FlightPoint | null;
+    end: FlightPoint | null;
+    auto: string;
+    pendingAssets: number;
+    tilesLoaded: number;
+    tilesPending: number;
+  };
+}
+
+/** The craft at a moment of a flight: where, how fast [m/s], what the game calls its state. */
+export interface FlightPoint {
+  body: string;
+  altKm: number;
+  speed: number;
+  status: string;
+}
+
+/** A suite's items and their summary. */
+export interface SuiteReport {
+  id: SuiteId;
+  items: SceneReport[];
+  summary: SuiteSummary;
+}
+/** The frame rate's geometric mean over the items, the worst p95 [ms], the items at 30 fps or more, the frames over 33 ms. */
+export interface SuiteSummary {
+  n: number;
+  fpsGeo: number | null;
+  worstP95: number | null;
+  playable: number;
+  hitches: number;
 }
 
 export interface QualityPoint {
@@ -91,9 +140,9 @@ export interface QualityPoint {
 }
 
 export interface BenchReport {
-  schema: typeof SCHEMA;
+  schema: typeof SCHEMA | "kerr-bench/1";
   runId: string;
-  app: { version: string; date: string; mode: BenchMode; url: string };
+  app: { version: string; date: string; mode: BenchMode; url: string; suites?: SuiteId[] };
   machineLabel: string;
   system: {
     gpu: { vendor: string; architecture: string; device: string; description: string; fallback: boolean };
@@ -107,6 +156,8 @@ export interface BenchReport {
   };
   load: { firstImageMs: number | null; stages: { id: string; label: string; ms: number }[] };
   scenes: SceneReport[];
+  /** the suites beyond the reference scenes (kerr-bench/2; the core suite is `scenes`) */
+  suites?: SuiteReport[];
   quality: QualityPoint[];
   /** the run's own settings: the viewport, the timings, the subsamplings swept */
   run?: { viewport: [number, number, number]; subsamplings: Subsampling[]; sweepWarmMs: number; sweepMs: number; shots: boolean };
@@ -147,6 +198,19 @@ export function tierOfScore(score: number | null): { tier: number | null; qualit
   if (score === null) return { tier: null, quality: null };
   const tier = score >= 1500 ? 4 : score >= 800 ? 3 : score >= 400 ? 2 : score >= 150 ? 1 : 0;
   return { tier, quality: ["low", "medium", "game", "high", "ultra"][tier]! };
+}
+
+/** A suite's summary over its measured items (their phase A: as a player has it). */
+export function suiteSummary(items: SceneReport[]): SuiteSummary {
+  const ok = items.filter((s) => s.status === "ok" && s.auto && s.auto.fps > 0);
+  const geo = ok.length ? Math.exp(ok.reduce((a, s) => a + Math.log(s.auto!.fps), 0) / ok.length) : null;
+  return {
+    n: items.length,
+    fpsGeo: geo === null ? null : +geo.toFixed(1),
+    worstP95: ok.length ? Math.max(...ok.map((s) => s.auto!.p95)) : null,
+    playable: ok.filter((s) => s.auto!.fps >= 30).length,
+    hitches: ok.reduce((a, s) => a + s.auto!.over33, 0),
+  };
 }
 
 /** Frame intervals by bucket (HISTOGRAM_EDGES). */
@@ -190,7 +254,7 @@ export function frameStats(intervals: number[], spanMs: number): FrameStats {
 /** A report read back (a file dropped to compare): checked enough to be shown. */
 export function checkReport(x: unknown): BenchReport {
   const r = x as BenchReport;
-  if (!r || typeof r !== "object" || r.schema !== SCHEMA) throw new Error("not a Kerr Bench report (kerr-bench/1)");
+  if (!r || typeof r !== "object" || !SCHEMAS.includes(r.schema)) throw new Error("not a Kerr Bench report (kerr-bench/1, /2)");
   if (!Array.isArray(r.scenes) || !r.system?.gpu) throw new Error("an incomplete report");
   return r;
 }

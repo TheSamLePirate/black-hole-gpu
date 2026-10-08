@@ -210,3 +210,19 @@ renders/s in headless Chrome at 1600 × 900 (50 outside).
   (`still.jpg`). `--compare <url> [--reps 2]` alternates a reference build scene by scene instead
   (`docs/perf/bench-<label>.json`). The in-app Complete run (…/#bench) sweeps the subsampling too.
   Measure alone: another page rendering shares the GPU.
+- **The suites beyond the reference** (kerr-bench/2, `src/bench/suites.ts`): `--suites all` or
+  `--suites core,worlds,vessels,weather,flights` (default: `core`, the reference alone). *Heavy worlds*:
+  the real ground's tiles (Yosemite, Everest, the Cévennes), the Amazon from low orbit, Miller's sea, the
+  night side, the eclipse, Titan, the volumetric disk… *Vessels*: the ISS docking, the Endurance (still,
+  tumbling, before Gargantua), the Lander, the Ranger's cabin. *Weather*: each preset, the Ranger hovering
+  1.5 km over Le Bourget (Mars's dust over Jezero). *Flights*: the craft placed and flown in real time by
+  its autopilots — the final to Edwards, the entry's glide from 25 km, a final in a storm at Kennedy and in
+  fog at Le Bourget, the final from the cabin, a low orbit, a hover over the Moon, an orbit of Gargantua —
+  measured as it flies (the tiles streamed on the way: `flight.tilesLoaded/tilesPending`; the height and
+  speed at the window's start and end; the autopilot still flying). Each item has a least **depth**
+  (`--quick`, `--mode standard|complete|full`): quick ≈ 2 min (4 reference scenes + 5 items), standard
+  ≈ 9 min (8 + 14), complete ≈ 25 min (+ the sweeps, 26 items), full ≈ 40 min (all 36, measured longer).
+  The screen at …/#bench chooses the depth and the suites (kept between visits), shows the estimate, and a
+  table per suite (fps, p95, p99, frames over 33 ms, Mrays/s or the flight's height, the load) beside a
+  compared report's. `__bh.bench.item("final-edwards", "quick")` measures one item; `__bh.bench.items`
+  lists them. Only the reference scenes make the Kerr Score.

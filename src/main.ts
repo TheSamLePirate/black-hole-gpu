@@ -2148,6 +2148,8 @@ async function main() {
     get version() {
       return appVersion;
     },
+    game: tools,
+    autopilot: () => camera.pilot.auto,
   });
   if (benchPage) {
     // (a benchmark's scenes are not the player's flight: nothing autosaved on this page)
