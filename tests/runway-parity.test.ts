@@ -11,12 +11,12 @@ test("runwayWeight: graded on the strip, faded off it, nothing far away", () => 
   };
   expect(runwayWeight(at(1000, 0))).toBeCloseTo(1, 6);
   expect(runwayWeight(at(-2500, 40))).toBeCloseTo(1, 6);
-  // (the taxiway beside it graded too — A2 —: 140 m out, faded by 200)
+  // (the taxiway, the apron and the buildings beside it graded too — A2, A3 —: 280 m out, faded by 340)
   expect(runwayWeight(at(1000, 90))).toBeCloseTo(1, 6);
-  expect(runwayWeight(at(1000, 170))).toBeCloseTo(0.5, 2);
+  expect(runwayWeight(at(1000, 310))).toBeCloseTo(0.5, 2);
   // (graded 3 km past the far end too: the clear zone of the runway landed the other way — W4)
   expect(runwayWeight(at(4650, 0))).toBeCloseTo(1, 6);
   expect(runwayWeight(at(7650, 0))).toBeCloseTo(0.5, 2);
-  expect(runwayWeight(at(1000, 200))).toBeCloseTo(0, 6);
+  expect(runwayWeight(at(1000, 340))).toBeCloseTo(0, 6);
   expect(runwayWeight(at(20000, 0))).toBe(0);
 });

@@ -4313,8 +4313,8 @@ fn runwayGrade(g: vec3f) -> f32 {
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
     // (the clear zone 3 km before either threshold: a runway lands both ways — sites.ts runwayWeight)
     let wa = select(select(1.0, max(0.0, 1.0 - (a - 7500.0) / 300.0), a > 7500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
-    // (the strip and the taxiway beside it — A2 —: 140 m out of the axis, faded by 200)
-    let wc = select(max(0.0, 1.0 - (c - 140.0) / 60.0), 1.0, c < 140.0);
+    // (the strip, the taxiway beside it, the apron and the buildings — A2, A3 —: 280 m out of the axis, faded by 340)
+    let wc = select(max(0.0, 1.0 - (c - 280.0) / 60.0), 1.0, c < 280.0);
     w = max(w, wa * wc);
   }
   return w;
@@ -4478,6 +4478,14 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, l
     o.albedo = mix(o.albedo, ta, twy);
     o.cover = max(o.cover, twy);
   }
+  // the apron (A3): concrete beyond the taxiway, before the terminal; a yellow lead-in line to each stand
+  let apron = bandCover(c0, -205.0, -143.0, fw) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fw) * (1.0 - paved);
+  if (apron > 0.0) {
+    let ks = clamp(round((a0 - 0.4 * L) / 70.0), 0.0, 2.0);
+    let lead = bandCover(a0 - 0.4 * L - 70.0 * ks, -0.15, 0.15, fw) * bandCover(c0, -200.0, -143.0, fw);
+    o.albedo = mix(o.albedo, mix(vec3f(0.32, 0.32, 0.3), vec3f(0.75, 0.55, 0.1), lead), apron);
+    o.cover = max(o.cover, apron);
+  }
   // the lights (runwayLights: lit at night, at dusk, in a poor visibility — by day in the clear, too faint to
   // see: not reckoned); the PAPI 20 m left of the edge, 450 m in, day and night
   var lmp = vec3f(0.0);
@@ -4493,6 +4501,10 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, l
     let kl2 = clamp(round(a0 / (0.5 * L)), 0.0, 2.0);
     let kc2 = clamp(round((c0 + 120.0) / 15.0), 0.0, floor((120.0 - hw) / 15.0));
     lmp += 0.4 * Gt * lampV(vec2f(a0 - 0.5 * L * kl2, c0 + 120.0 - 15.0 * kc2));
+    // (the apron's floodlights — sodium, along its far edge — and the pools of light they lay on it)
+    let ka = round((a0 - 0.36 * L) / 60.0);
+    if (ka >= 0.0 && 0.36 * L + 60.0 * ka <= 0.4 * L + 175.0) { lmp += 3.0 * vec3f(1.0, 0.72, 0.38) * lampV(vec2f(a0 - 0.36 * L - 60.0 * ka, c0 + 205.0)); }
+    lmp += 1e-4 * vec3f(1.0, 0.78, 0.5) * bandCover(c0, -205.0, -143.0, fw) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fw);
   }
   let elDeg = el * 57.29578;
   for (var i = 0u; i < 4u; i++) {
@@ -4579,7 +4591,7 @@ fn windsocks(d: vec3f, tMax: f32) -> f32 {
   return best;
 }
 // a windsock's light at q (its normal WS, albedo WS_A): the sun through the air (and the weather's decks),
-// the sky's
+// the sky's; an airport's object its own light at night too (WS_E: the tower's cab, the terminal's windows)
 fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
   let Lp = airPhysicalDirection(Ls);
   let mu0 = dot(geoQ(q), Lp);
@@ -4587,7 +4599,132 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
   let Ts = sunThrough(h, mu0);
   let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
   let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
-  return WS_A / PI * lit;
+  return WS_A / PI * lit + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
+}
+
+// ---- The airport's buildings and its parked craft (PLAN-AEROPORTS A3), the published frame of each runway
+// near (a along from its threshold, c across to the right, h up from its ground) [m], on its left beyond
+// the taxiway: the tower (and its beacon), three hangars, the terminal, three airliners on the apron, their
+// vehicles. Boxes and cylinders met exactly; one box round them all first (most rays miss it); none past 6 km
+// (sub-pixel there).
+var<private> WS_E: vec3f = vec3f(0.0);  // the object's own light (the cab's, the windows'), over E
+var<private> BEACON: vec3f = vec3f(0.0); // the rotating beacon's glow along this ray, over E/π
+// a ray (o, unit d) against an axis-aligned box of the frame (centre, half sizes): x the distance (−1: none),
+// yzw the face's normal
+fn boxHit(o: vec3f, d: vec3f, cen: vec3f, hs: vec3f) -> vec4f {
+  let inv = 1.0 / select(d, vec3f(1e-9), abs(d) < vec3f(1e-9));
+  let t0 = (cen - hs - o) * inv;
+  let t1 = (cen + hs - o) * inv;
+  let tmin = min(t0, t1);
+  let tmax = max(t0, t1);
+  let tn = max(max(tmin.x, tmin.y), tmin.z);
+  let tf = min(min(tmax.x, tmax.y), tmax.z);
+  if (tn > tf || tn <= 0.0) { return vec4f(-1.0); }
+  return vec4f(tn, select(vec3f(0.0), -sign(d), tmin == vec3f(tn)));
+}
+fn airportScenery(dW: vec3f, tMax: f32) -> f32 {
+  var best = tMax;
+  BEACON = vec3f(0.0);
+  WS_E = vec3f(0.0);
+  let t = P.runways[17].x;
+  for (var k = 0u; k < rwyCount(); k++) {
+    let up = P.runways[1u + 4u * k].xyz;
+    let al = P.runways[2u + 4u * k].xyz;
+    let ac = P.runways[3u + 4u * k].xyz;
+    let L = P.runways[1u + 4u * k].w;
+    let cam = P.runways[4u + 4u * k].xyz;
+    let hg = P.runways[4u + 4u * k].w;
+    // (the ray in the runway's frame; the ground there its threshold's tangent plane brought down by the curve)
+    let o = vec3f(dot(cam, al), dot(cam, ac), dot(cam, up) - hg);
+    let d = vec3f(dot(dW, al), dot(dW, ac), dot(dW, up));
+    let mid = vec3f(0.5 * L, -215.0, 22.0);
+    if (length(o - mid) > 6000.0) { continue; }
+    let bb = boxHit(o, d, mid, vec3f(0.27 * L + 40.0, 85.0, 22.0));
+    let inside = all(abs(o - mid) < vec3f(0.27 * L + 40.0, 85.0, 22.0));
+    if (bb.x < 0.0 && !inside) { continue; }
+    let sag = (0.5 * L) * (0.5 * L) / (2.0 * EARTH_RM);
+    let oo = o + vec3f(0.0, 0.0, sag);
+    var hit = vec4f(-1.0);
+    var alb = vec3f(0.5);
+    var emit = vec3f(0.0);
+    // the tower: its base, shaft, glass cab (lit at night), roof
+    let tw = vec2f(0.5 * L, -235.0);
+    let parts = array<vec4f, 4>(vec4f(4.0, 6.0, 6.0, 4.0), vec4f(20.0, 2.5, 2.5, 12.0), vec4f(35.0, 5.0, 5.0, 3.0), vec4f(38.5, 5.5, 5.5, 0.5));
+    for (var i = 0u; i < 4u; i++) {
+      let pt = parts[i];
+      let h = boxHit(oo, d, vec3f(tw, pt.x), pt.yzw);
+      if (h.x > 0.0 && h.x < best) {
+        best = h.x; hit = h;
+        alb = select(vec3f(0.62, 0.6, 0.56), vec3f(0.06, 0.08, 0.1), i == 2u);
+        emit = select(vec3f(0.0), vec3f(1.0, 0.85, 0.55) * 0.6, i == 2u && h.w == 0.0);
+      }
+    }
+    // three hangars, their doors toward the runway
+    for (var i = 0u; i < 3u; i++) {
+      let cen = vec3f(0.3 * L + 75.0 * f32(i), -250.0, 9.0);
+      let h = boxHit(oo, d, cen, vec3f(32.0, 25.0, 9.0));
+      if (h.x > 0.0 && h.x < best) {
+        best = h.x; hit = h;
+        let p = oo + d * h.x;
+        alb = select(vec3f(0.52, 0.55, 0.58), vec3f(0.26, 0.28, 0.3), h.z > 0.5 && p.z < 13.0 && abs(p.x - cen.x) < 27.0);
+        emit = vec3f(0.0);
+      }
+    }
+    // the terminal: a band of windows, lit at night
+    {
+      let cen = vec3f(0.64 * L, -255.0, 6.0);
+      let h = boxHit(oo, d, cen, vec3f(70.0, 18.0, 6.0));
+      if (h.x > 0.0 && h.x < best) {
+        best = h.x; hit = h;
+        let p = oo + d * h.x;
+        let win = h.w == 0.0 && p.z > 3.0 && p.z < 5.5 && fract(p.x / 4.0 + p.y / 4.0) < 0.7;
+        alb = select(vec3f(0.62, 0.62, 0.6), vec3f(0.08, 0.1, 0.12), win);
+        emit = select(vec3f(0.0), vec3f(1.0, 0.9, 0.7) * 0.4, win);
+      }
+    }
+    // three airliners on the apron, nose to the taxiway: a fuselage, its wings, its fin; a vehicle by each
+    for (var i = 0u; i < 3u; i++) {
+      let ax = 0.4 * L + 70.0 * f32(i);
+      let f = cylHit(oo, d, vec3f(ax, -192.0, 4.0), vec3f(0.0, 1.0, 0.0), 34.0, 2.0);
+      if (f.x > 0.0 && f.x < best) {
+        best = f.x;
+        let p = oo + d * f.x - vec3f(ax, -192.0, 4.0);
+        hit = vec4f(f.x, normalize(vec3f(p.x, 0.0, p.z)));
+        alb = vec3f(0.82, 0.83, 0.85);
+        emit = vec3f(0.0);
+      }
+      let w = boxHit(oo, d, vec3f(ax, -178.0, 3.2), vec3f(17.0, 3.0, 0.3));
+      if (w.x > 0.0 && w.x < best) { best = w.x; hit = w; alb = vec3f(0.78, 0.79, 0.8); emit = vec3f(0.0); }
+      let fin = boxHit(oo, d, vec3f(ax, -189.0, 8.5), vec3f(0.25, 2.8, 3.5));
+      if (fin.x > 0.0 && fin.x < best) { best = fin.x; hit = fin; alb = vec3f(0.1, 0.25, 0.6); emit = vec3f(0.0); }
+      let v = boxHit(oo, d, vec3f(ax + 14.0, -168.0, 1.4), vec3f(4.0, 1.3, 1.4));
+      if (v.x > 0.0 && v.x < best) {
+        best = v.x; hit = v;
+        alb = select(vec3f(0.8, 0.6, 0.1), vec3f(0.85, 0.85, 0.85), (i & 1u) == 1u);
+        emit = vec3f(0.0);
+      }
+    }
+    if (hit.x > 0.0) {
+      WS = vec4f(normalize(al * hit.y + ac * hit.z + up * hit.w), 1.0);
+      WS_A = alb;
+      WS_E = emit;
+    }
+    // the beacon on the tower: green and white beams, back to back, sweeping 15 times a minute — the glow
+    // of the one turned to the eye, along this ray
+    let bp = vec3f(tw, 41.0) - oo;
+    let tb = dot(bp, d);
+    if (tb > 0.0 && tb < best) {
+      let miss = length(bp - d * tb);
+      let az = atan2(-bp.y, -bp.x);
+      let sweep = t * 6.2831853 * 0.25;
+      let beam = exp(-0.5 * sq(atan2(sin(az - sweep), cos(az - sweep)) / 0.12));
+      let beam2 = exp(-0.5 * sq(atan2(sin(az - sweep - 3.14159265), cos(az - sweep - 3.14159265)) / 0.12));
+      let sg = max(0.6, 0.0015 * tb);
+      let glow = exp(-0.5 * miss * miss / (sg * sg)) / (sg * sg);
+      BEACON += (vec3f(0.3, 1.0, 0.45) * beam + vec3f(1.0, 0.95, 0.85) * beam2) * glow * 2.0;
+    }
+  }
+  return best;
 }
 
 fn earthUV(q: vec3f) -> vec2f {
@@ -5205,7 +5342,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       // (the strip and its shoulders; beyond its ends, out to 1 km and 25 m wide, the approach lights alone —
       // lit only: the markings reckoned over those fields cost the final's view 10 %)
       // (the strip, its shoulders and the taxiway left of it — A2)
-      let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -140.0;
+      let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -210.0;
       let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
       if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
       // (the pixel's footprint on this runway's ground, along and across it [m])
@@ -5719,6 +5856,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let kM = length(dp) * EARTH_RM;
     let tw = windsocks(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tw / kM; }
+    // (and the airport's buildings and parked craft — A3)
+    let ws = WS;
+    let wa = WS_A;
+    let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
+    if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
@@ -5736,7 +5878,14 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
   let s = luminance(max(e.col - e.Lm, vec3f(0.0))) / max(luminance(lt.e) / PI, 1e-30);
   let veil = clamp(log(1e-2 / max(s, 1e-12)) / log(100.0), 0.0, 1.0);
-  return EarthNear(e.col, e.T, select(t, t / m, t > 0.0), veil * veil);
+  // (the airport's rotating beacon — A3 —: faint by day, a sweeping flash by night)
+  var col = e.col;
+  if (HAS_RWY && any(BEACON > vec3f(0.0))) {
+    let mz = dot(geoQ(normalize(ro)), airPhysicalDirection(normalize(squashed(toBody(lt.dir), ab))));
+    col += BEACON * (luminance(lt.e) / PI) * mix(0.3, 300.0, 1.0 - smoothstep(-0.12, 0.06, mz));
+    BEACON = vec3f(0.0);
+  }
+  return EarthNear(col, e.T, select(t, t / m, t > 0.0), veil * veil);
 }
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,
