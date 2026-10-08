@@ -354,7 +354,7 @@ interface OfflineJob {
 export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
-  private tracePipeline!: GPUComputePipeline; // realtime kernel
+  private tracePipeline: GPUComputePipeline | null = null; // realtime kernel, every feature (the general one: compiled after the scene's own)
   private qualityPipeline: GPUComputePipeline | null = null; // + error-controlled integrator (compiled in the background)
   private traceLayout: GPUBindGroupLayout;
   private displayPipeline!: GPURenderPipeline; // SDR canvas (preferred format) — set from the async compile (auxCompiled)
@@ -400,7 +400,7 @@ export class Renderer {
   private lastTime = 0;
   /** GPU time per pass (timestamp queries; off unless switched on) */
   readonly prof: GpuProfiler;
-  private envPipeline!: GPUComputePipeline;
+  private envPipeline: GPUComputePipeline | null = null;
   private envReset = true;
   /** frames left of a spread reset (every texel written over, one of each 2×2 block a frame) */
   private envSpread = 0;
@@ -544,8 +544,16 @@ export class Renderer {
   private clampSampler: GPUSampler;
 
   private traceSource: string;
-  /** the pipelines the first image needs: the realtime kernel and the ship's probe (awaited at create) */
-  private tracerCore: Promise<void>;
+  /** the general tracer (realtime kernel + ship's probe, every feature compiled in): no longer what the
+   *  first image waits for — on D3D12 it is minutes of compile (every function inlined), the scene's
+   *  specialised kernel a fraction of that. Started once the scene's own has landed (or failed), the
+   *  fallback of every later scene whose own is still compiling. */
+  private generalCompile!: AsyncResource<[GPUComputePipeline, GPUComputePipeline]>;
+  /** no tracer at all could be compiled before the first image (the scene's and the general one failed) */
+  onTracerFailure?: (error: Error) => void;
+  /** resolved when the first traced frame has completed on the GPU */
+  private firstImage: Promise<void>;
+  private resolveFirstImage!: () => void;
   /** Optional pipelines compile independently, after the first image or on demand. */
   private qualityCompile!: AsyncResource<GPUComputePipeline>;
   private lutCompile!: AsyncResource<GPUComputePipeline>;
@@ -709,19 +717,40 @@ export class Renderer {
         ],
       });
     }
-    // (the first image needs only the realtime kernel and the ship's probe: awaited at create —
-    // the LUT and the quality kernel compile in the background; until they land a still view stays
-    // on the realtime path and the LUT pass is skipped — see frame() and dispatchTrace)
-    this.tracerCore = Promise.all([
-      mkTrace(false),
-      device.createComputePipelineAsync({
-        layout,
-        compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } },
-      }),
-    ]).then(([rt, env]) => {
-      this.tracePipeline = rt;
-      this.envPipeline = env;
-    });
+    // (the first image needs only the scene's specialised realtime kernel — compiled at the first frame,
+    // once the scene's features are known (traceVariant) —, not the general one: the general kernel, the
+    // LUT and the quality kernel compile in the background; until they land a still view stays on the
+    // realtime path and the LUT pass is skipped — see frame() and dispatchTrace)
+    this.firstImage = new Promise<void>((resolve) => (this.resolveFirstImage = resolve));
+    this.generalCompile = new AsyncResource(
+      async () => {
+        const t0 = performance.now();
+        const pipelines = await Promise.all([
+          mkTrace(false),
+          device.createComputePipelineAsync({
+            layout,
+            compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } },
+          }),
+        ]);
+        gpuDiagnostics.record("pipeline-compiled", `general tracer (main + env): ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+        return pipelines;
+      },
+      () => {
+        const p = this.generalCompile.value;
+        if (p) [this.tracePipeline, this.envPipeline] = p;
+        else {
+          gpuDiagnostics.record("optional-pipeline-failure", this.generalCompile.error);
+          console.warn("General tracer unavailable:", this.generalCompile.error);
+          // (nothing drawn yet: neither the scene's kernel nor the general one — the start has failed)
+          if (!this.firstFrameDoneAt && !this.lost)
+            this.onTracerFailure?.(new Error(this.generalCompile.error ?? "the ray tracer could not be compiled"));
+        }
+        this.onAssets?.();
+      },
+      // (minutes on a slow D3D12 driver: its landing late still taken)
+      900_000,
+      () => !this.lost,
+    );
     // (a compile timed out but landing later, the device still there: taken after all)
     const optional = (compile: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
       const resource = new AsyncResource(
@@ -1197,13 +1226,14 @@ export class Renderer {
       if (r.gpuErrors <= 10) console.error("WebGPU error:", m);
       if (r.gpuErrors <= 3) r.onGpuError?.(m);
     });
-    // (the pipelines compile in the GPU process: the realtime kernel and the probe awaited below,
-    // optional LUT/quality pipelines start later. Their independent failures preserve realtime
+    // (the pipelines compile in the GPU process: the display and post chain awaited below; the tracer —
+    // the scene's specialised kernel — at the first frame, the general one after it; optional LUT/quality
+    // pipelines start later. Their independent failures preserve realtime
     // rendering and are exposed through pipelineStatus, the HUD and offlineStatus.error.)
     loading.stage("pipelines", t("Compiling the ray tracer — first image"), { weight: 4, indeterminate: true, eta: 3 });
     // (its failure held as a value: told after the WGSL's own messages, which name the line; the
     // display's and the post chain's async compiles are part of what the first frame needs)
-    const tracerFailure = Promise.all([r.tracerCore, r.auxCompiled]).then(
+    const tracerFailure = r.auxCompiled.then(
       () => null,
       (e: Error) => e,
     );
@@ -1240,7 +1270,8 @@ export class Renderer {
     const err = await device.popErrorScope();
     if (err) throw new Error(tf("WebGPU pipeline creation failed: {0}", err.message));
     loading.done("shaders");
-    gpuDiagnostics.enter("first-frame");
+    // (the scene's tracer compiles from the first frame on: "first-frame" once it has landed)
+    gpuDiagnostics.enter("tracer-compilation");
     return r;
   }
 
@@ -2588,7 +2619,9 @@ export class Renderer {
     // frames: a 30 ms hitch every 2 s became ~2 ms a frame)
     const job = this.probeJob;
     if (!job) {
-      if (s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
+      // (not before the first image: the probe's params bring their own features key, whose kernel would
+      // be compiled before the camera's)
+      if (!this.firstFrameDoneAt || s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
       // (the camera in our universe: they light nothing it can see — Gargantua's planets are specks
       // through the mouth — and the target's figures are ours)
       const cam0 = cameraFrame(s);
@@ -2692,7 +2725,10 @@ export class Renderer {
 
   /**
    * The tracer for the scene's features: a pipeline with the unused ones compiled out (built in the
-   * background the first time — ~10 s —, the general one drawing meanwhile).
+   * background the first time — ~10 s —, the general one drawing meanwhile). The first image waits for
+   * the start's own (the general kernel is several times its compile on D3D12, where every function is
+   * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
+   * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
     const general = {
@@ -2703,7 +2739,10 @@ export class Renderer {
       lutq: this.lutQPipeline,
     }[kind];
     const key = this.featureKey;
-    if (key === FEATURES_ALL || this.completedFrames === 0) return general;
+    if (key === FEATURES_ALL) {
+      void this.generalCompile.start();
+      return general;
+    }
     let v = this.variants.get(key);
     if (v) {
       this.variants.delete(key);
@@ -2716,18 +2755,25 @@ export class Renderer {
       const slot = v;
       const current = () => this.variants.get(key) === slot && !this.lost;
       const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
-        this.variantQueue.run(current, () => this.mkVariant(key, entry, false), onStall);
-      // (the realtime kernel first, then its probe and its LUT; the quality cascade only when a
+        this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
+      // (the realtime kernel first, then its probe — then the general kernel, the later scenes'
+      // fallback —, and its LUT once the first image is on screen; the quality cascade only when a
       // still view asks for it below — five specialised compiles of a 6 362-line kernel are tens
       // of seconds of GPU process, not spent while the player flies — plan §2.2-F)
       void compile("main", () => (slot.rtGivenUp = true))
         .then((p) => ((slot.rt = p), compile("env")))
-        .then((p) => ((slot.env = p), (key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
+        .then((p) => {
+          slot.env = p;
+          void this.generalCompile.start();
+          return this.firstImage;
+        })
+        .then(() => ((key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
         .then(
           (p) => (slot.lut = p),
           (e) => {
             slot.rtGivenUp ||= !slot.rt;
             console.warn("Specialised tracer unavailable:", e);
+            void this.generalCompile.start();
           },
         );
     }
@@ -2743,7 +2789,25 @@ export class Renderer {
           (e) => console.warn("Specialised tracer unavailable:", e),
         );
     }
-    return v[kind] ?? general;
+    return v[kind] ?? general ?? this.coveringVariant(key, kind);
+  }
+
+  /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
+   *  of them): it draws this scene as it would — the extra features are switched off by the params. */
+  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
+    for (const [k, v] of this.variants) if ((k & key) === key && v[kind]) return v[kind];
+    return null;
+  }
+
+  /** mkVariant, its compile time in the diagnostic while the first image waits for it */
+  private async timedVariant(key: number, entry: "main" | "env" | "lut") {
+    const t0 = performance.now();
+    const p = await this.mkVariant(key, entry, false);
+    if (!this.firstFrameDoneAt) {
+      gpuDiagnostics.record("pipeline-compiled", `tracer ${entry}, features ${key}: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      if (entry === "main") gpuDiagnostics.enter("first-frame");
+    }
+    return p;
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
@@ -2779,7 +2843,8 @@ export class Renderer {
     for (const k of keys.slice(0, Math.max(0, keys.length - 2))) this.variants.delete(k);
   }
 
-  private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean) {
+  /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
+  private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
     // skipped while its pipeline is still compiling in the background, the epoch left unmarked so
     // the next frame tries again)
@@ -2796,14 +2861,16 @@ export class Renderer {
       }
     }
     const pipeline = this.traceVariant(quality ? "q" : "rt");
-    // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then)
-    if (!pipeline) return;
+    // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
+    // the scene's realtime kernel still compiling at the start: no image yet)
+    if (!pipeline) return false;
     const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
     pass.end();
+    return true;
   }
 
   /**
@@ -3859,7 +3926,8 @@ export class Renderer {
     rp.end();
   }
 
-  private submit(enc: GPUCommandEncoder, done: (ms: number) => void) {
+  /** `traced`: the frame traced the scene (the first image: the first such frame completed) */
+  private submit(enc: GPUCommandEncoder, done: (ms: number) => void, traced = true) {
     const t0 = performance.now();
     this.prof.end(enc);
     this.device.queue.submit([enc.finish()]);
@@ -3872,12 +3940,16 @@ export class Renderer {
         this.lastDoneAt = now;
         this.lastGpuMs = ms;
         this.completedFrames++;
-        this.firstFrameDoneAt ||= now;
-        if (this.completedFrames === 1) this.prefetchEarthSoon();
+        if (traced && !this.firstFrameDoneAt) {
+          this.firstFrameDoneAt = now;
+          this.resolveFirstImage();
+          this.prefetchEarthSoon();
+        }
         this.completedDurations.push(ms);
         if (this.completedDurations.length > 512) this.completedDurations.shift();
-        // Optional LUT work starts only after the first image has completed on the GPU.
-        if (this.lutWanted) void this.lutCompile.start();
+        // Optional LUT work starts only after the first image has completed on the GPU — and the
+        // general kernel, a heavier compile, has landed (its LUT is that kernel's companion).
+        if (this.lutWanted && this.firstFrameDoneAt && this.generalCompile.state === "ready") void this.lutCompile.start();
         if (this.lutWanted && this.qualityCompile.state === "ready") void this.lutQCompile.start();
         done(ms);
       },
@@ -3928,6 +4000,7 @@ export class Renderer {
   /** Optional pipeline states are observable without starting a compilation. */
   get pipelineStatus() {
     return {
+      general: this.generalCompile.state,
       quality: this.qualityCompile.state,
       qualityError: this.qualityCompile.error,
       lut: this.lutCompile.state,
@@ -3941,7 +4014,7 @@ export class Renderer {
       (this.variantReady || !!this.variants.get(this.featureKey)?.rtGivenUp) &&
       this.earthSettled &&
       this.variantQueue.pending === 0 &&
-      ![this.qualityCompile, this.lutCompile, this.lutQCompile].some((r) => r.state === "pending")
+      ![this.generalCompile, this.qualityCompile, this.lutCompile, this.lutQCompile].some((r) => r.state === "pending")
     );
   }
   private timingGeneration = 0;
@@ -4018,6 +4091,7 @@ export class Renderer {
     this.generation = old.generation + 1;
     this.onLost = old.onLost;
     this.onGpuError = old.onGpuError;
+    this.onTracerFailure = old.onTracerFailure;
     this.onAssets = old.onAssets;
     this.exportWords = old.exportWords;
     this.tier = old.tier;
@@ -4031,6 +4105,7 @@ export class Renderer {
     // (the old one silenced: a frame of it still in flight, failing, no longer starts a recovery)
     old.onLost = undefined;
     old.onGpuError = undefined;
+    old.onTracerFailure = undefined;
     old.onAssets = null;
   }
   /** uncaptured GPU errors so far, and who hears of them */
@@ -4058,6 +4133,8 @@ export class Renderer {
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
     let rows = 0;
+    // (the scene traced this frame — not yet while its kernel compiles at the start)
+    let traced = false;
 
     // (the tier's convergence cap, plan §3.5: a still view on weak hardware refines less)
     const effective = effectiveQuality(s, this.tier);
@@ -4067,7 +4144,16 @@ export class Renderer {
     // (the quality kernel failed: a still view converges on the fixed-step kernel — the path taken
     // with the error control off — rather than drawing realtime frames for ever)
     const adaptive = s.adaptiveIntegrator && this.qualityCompile.state !== "failed";
-    if (this.completedFrames > 0 && !sceneChanged && !timeChanged && adaptive && this.sampleIndex < targetSpp)
+    // (after the first image, and once the general kernel is in: two kernels this size compiling side by
+    // side are minutes on a slow D3D12 driver)
+    if (
+      this.firstFrameDoneAt &&
+      this.generalCompile.state !== "pending" &&
+      !sceneChanged &&
+      !timeChanged &&
+      adaptive &&
+      this.sampleIndex < targetSpp
+    )
       void this.qualityCompile.start();
     // (the quality kernel still compiling in the background: a still view keeps the realtime path
     // — sampleIndex stays at 0, the convergence starts when the kernel lands)
@@ -4102,7 +4188,7 @@ export class Renderer {
         offset,
         stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
-      this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
+      traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
       this.lastOffset = offset;
@@ -4130,12 +4216,15 @@ export class Renderer {
         noise: effective.noiseThreshold,
         minSpp: 8,
       });
-      this.dispatchTrace(enc, t, t.width, rows, adaptive);
+      traced = this.dispatchTrace(enc, t, t.width, rows, adaptive);
       if (this.sampleIndex < 32) this.dispatchEnv(enc, t, s);
-      this.bandY = y1;
-      if (this.bandY >= t.height) {
-        this.bandY = 0;
-        this.sampleIndex++;
+      // (no kernel yet: the band traced again next frame — the image does not converge on nothing)
+      if (traced) {
+        this.bandY = y1;
+        if (this.bandY >= t.height) {
+          this.bandY = 0;
+          this.sampleIndex++;
+        }
       }
     } else {
       phase = "converged";
@@ -4154,16 +4243,20 @@ export class Renderer {
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
     const generation = this.timingGeneration;
-    this.submit(enc, (ms) => {
-      if (phase === "realtime" && auto && generation === this.timingGeneration) this.adaptBlock(ms, this.frameBudget(s), used);
-      if (phase === "converging" && rows > 0) {
-        const perRow = ms / rows;
-        // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
-        // refines —, 28 ms at most for the finer qualities)
-        const band = Math.min(28, this.frameBudget(s));
-        this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3)))));
-      }
-    });
+    this.submit(
+      enc,
+      (ms) => {
+        if (phase === "realtime" && auto && generation === this.timingGeneration) this.adaptBlock(ms, this.frameBudget(s), used);
+        if (phase === "converging" && rows > 0) {
+          const perRow = ms / rows;
+          // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
+          // refines —, 28 ms at most for the finer qualities)
+          const band = Math.min(28, this.frameBudget(s));
+          this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3)))));
+        }
+      },
+      traced,
+    );
     this.lastPhase = phase;
     return this.stats(phase, t);
   }
@@ -4409,10 +4502,11 @@ export class Renderer {
         minSpp: o.minSpp,
         shutter: o.shutter,
       });
-      this.dispatchTrace(enc, t, t.width, rows, adaptive);
+      // (the scene's kernel still compiling, the general one not in yet: the band traced again next frame)
+      const traced = this.dispatchTrace(enc, t, t.width, rows, adaptive);
       this.dispatchEnv(enc, t, s);
-      job.bandY = y1;
-      if (job.bandY >= t.height) {
+      if (traced) job.bandY = y1;
+      if (traced && job.bandY >= t.height) {
         job.bandY = 0;
         job.sampleIndex++;
         // (not before the Earth's maps and its terrain tiles are in: they would come into the next frame)

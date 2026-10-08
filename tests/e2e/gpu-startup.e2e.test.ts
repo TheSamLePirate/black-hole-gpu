@@ -101,6 +101,43 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  // (the general kernel — every feature compiled in, minutes on D3D12 — is no longer what the first image
+  // waits for: the scene's specialised kernel draws it, the general one compiling after it)
+  test("the first image waits for the scene's own kernel, not the general one", async () => {
+    const app = await App.boot({
+      hash: scene,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+      const original = GPUDevice.prototype.createComputePipelineAsync;
+      globalThis.__general = 0;
+      GPUDevice.prototype.createComputePipelineAsync = function(desc) {
+        const c = desc.compute.constants ?? {};
+        if ((desc.compute.entryPoint === "main" || desc.compute.entryPoint === "env") && !("HAS_RADIO" in c)) {
+          globalThis.__general++;
+          return new Promise(() => {});
+        }
+        return original.call(this, desc);
+      };
+    })()`,
+    });
+    try {
+      await app.waitFor("globalThis.__general === 2", 60_000);
+      const seen = await app.js<{ first: number; general: number; status: string; compiled: string[] }>(`(() => {
+        const d = __bh.graphicsDiagnostic();
+        return { first: __bh.renderer.firstFrameDoneAt, general: globalThis.__general, status: __bh.renderer.pipelineStatus.general,
+          compiled: d.events.filter((e) => e.kind === "pipeline-compiled").map((e) => e.message) };
+      })()`);
+      expect(seen.first).toBeGreaterThan(0);
+      // (asked for after the scene's kernel and its probe, and still compiling: not waited for)
+      expect(seen.general).toBe(2);
+      expect(seen.status).toBe("pending");
+      expect(seen.compiled.some((m) => m.startsWith("tracer main"))).toBe(true);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("device loss during initialization is reported even before runtime callbacks exist", async () => {
     const app = await App.boot({
       hash: scene,

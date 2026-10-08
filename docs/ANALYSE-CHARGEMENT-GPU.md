@@ -711,3 +711,29 @@ adapté au GPU, avec nuit, océans et relief, même si la Terre est absente de l
 Les demandes sont de priorité basse, partagées et réessayables après échec. Le préchargement
 alimente le cache réseau ; décodage et résidence GPU restent à la demande, sans attente au splash.
 Le niveau élevé continue à suivre la vue et la politique de qualité.
+
+## 9. Windows/D3D12 : la première image sans le noyau général (2026-10-09)
+
+**Constat** (rapports `graphics-diagnostic.json` d'une RX 5700 XT, Chrome 155, Windows) : deux
+démarrages bloqués à `core-pipeline-compilation` jusqu'au watchdog de 180 s, qui détruisait le
+device ; une RTX 5070 Ti démarre, mais en ~2 min. Le cœur attendu était le noyau **général**
+(`main` + `env`, tous les `HAS_*` à `true`) : sur D3D12 (WGSL → HLSL → DXIL → ISA) chaque fonction
+est inlinée dans le point d'entrée, et ce kernel-là est le plus gros possible. Et la compilation
+coupée à 180 s n'atteignait jamais le cache de shaders : chaque essai repartait de zéro.
+
+**Piste 1 — la variante de la scène d'abord.** `create()` n'attend plus que le display et la chaîne
+post ; le traceur se compile à la première frame, pour la clé de fonctionnalités de la scène
+(`traceVariant`, sans le raccourci `completedFrames === 0`). La première image = la première frame
+**tracée** terminée (`dispatchTrace` rend un booléen, `submit(…, traced)`). Le noyau général est
+lancé une fois le `main` et l'`env` de la scène arrivés (ou en échec) : il reste le repli des scènes
+suivantes ; avant lui, une variante déjà compilée qui **couvre** la clé (`coveringVariant`) dessine,
+sinon rien n'est tracé (l'image précédente reste). Le LUT général et le noyau qualité attendent le
+général ; les sondes des planètes attendent la première image (leur clé compilerait avant celle de
+la caméra). Le diagnostic note les durées (`pipeline-compiled`) et l'état `pipelineStatus.general`.
+
+**Piste 2 — ne plus tuer une compilation lente.** À 180 s sans image : un événement non fatal
+`first-image-slow` et un message sur l'écran de chargement (pas de « Recharger », qui repartirait de
+zéro) ; l'échec seulement à 15 min. Le noyau général a un délai de 15 min, sa réussite tardive gardée.
+
+**À mesurer** sur les machines Windows : les `pipeline-compiled` du diagnostic (variante contre
+général), et le deuxième démarrage (le cache).
