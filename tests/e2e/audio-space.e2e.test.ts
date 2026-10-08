@@ -104,7 +104,7 @@ describe.skipIf(!E2E)("the sound's space", () => {
       })()`);
     const seat = await at("cockpit");
 
-    expect(seat.hull).toBeGreaterThan(5);
+    expect(seat.hull).toBeGreaterThan(4);
     expect(seat.fan).toBeGreaterThan(0.005);
     // (the panel: ahead and below, within arm's reach)
     expect(seat.beep[2]!).toBeLessThan(-0.3);

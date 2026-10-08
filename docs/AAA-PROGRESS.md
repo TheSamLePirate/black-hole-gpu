@@ -430,6 +430,19 @@ Plan : [`PLAN-AEROPORTS.md`](PLAN-AEROPORTS.md), étapes A1 à A6.
 - **A5** : les procédures d'approche — la page Cartes de la tablette (plan, profil, points, minima), les points au HUD, la remise de gaz de l'autopilote (instable à la DH, ou plein gaz : TOGA) et sa nouvelle approche.
 - **A6** : au labo, la nuit, la remise de gaz automatique et commandée, le CAT III de nuit : 4/4, les 18 vols de piste posés. Corrigés : la météo des scénarios écrasée par le vrai METAR, la marche de vitesse à la ressource. Planche finale `docs/progress/aeroports/a6-final.jpg`.
 
+## M6 : l'audio spatial (terminée, 08/10/2026)
+
+Plan : [`PLAN-AUDIO.md`](PLAN-AUDIO.md), étapes S1 à S8 ; référence [`AUDIO.md`](AUDIO.md). Tout reste synthétisé, rien à télécharger.
+
+- **S1** : l'espace sonore (`audio/space.ts`, pur) — le moteur placé à ses tuyères, HRTF au réglage « Casque », le Doppler selon la vitesse du vol, l'absorption de l'air ; **le cockpit et la cabine entendus de l'intérieur** (le défaut de l'audit § 12).
+- **S2** : le moteur granulaire dans un AudioWorklet (la turbulence en grains, le crépitement des ondes de Mach dans l'air) : 1,1 % d'un cœur.
+- **S3** : chaque grappe RCS à sa place, avec ses vannes ; `jets.ts` partagé avec le rendu des panaches.
+- **S4** : la cabine — les modes de la coque, la ventilation, les bips au tableau, les craquements sous la charge et la chaleur, la respiration au-delà de 4 g.
+- **S5** : la piste — le crissement de chaque pneu, le roulement, les joints, les freins, le vent au sol.
+- **S6** : la station — son bourdonnement, l'amarrage (six loquets), la séparation.
+- **S7** : le bang là où le cône de Mach balaie un auditeur immobile, jamais à bord (les secousses transsoniques) ; le plasma de la rentrée.
+- **S8** : le mix mesuré dans neuf situations et rééquilibré (plein gaz au cockpit −5 → −14 dB RMS, crêtes −0,5 → −2,3 dB). Planche finale `docs/progress/audio/s8-final.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -447,7 +460,7 @@ Par ordre de gain :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
    - ~~météo~~ (M4 terminée le 08/10 : W1–W8 — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie, poussière de Mars, METAR réel, autopilotes éprouvés au labo) ;
    - ~~aéroports vivants~~ (M5 terminée le 08/10 : balisage OACI, décor, guidage MLS, cartes d'approche, remise de gaz) ;
-   - audio spatial ;
+   - ~~audio spatial~~ (M6 terminée le 08/10 : HRTF, Doppler, moteur granulaire, cabine, piste, station, bang) ;
    - HOTAS ;
    - cockpit interactif ;
    - ~~≤ 8 storage buffers pour Android et Safari~~ (M9, fait le 08/10) ; restent FSR1 et la matrice de compatibilité.
@@ -455,6 +468,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M6 terminée (S8)** : l'audio spatial — tout placé, la cabine, la piste, la station, le bang au cône de Mach ; le mix mesuré et rééquilibré.
 - **08/10/2026 — M5 terminée (A6)** : les aéroports au labo (nuit, remise de gaz, CAT III : 4/4) ; la météo des scénarios n'est plus écrasée par le METAR réel ; la vitesse en rampe à la ressource.
 - **08/10/2026 — M4 terminée (W8)** : l'autopilote posé dans la météo au labo (4/4) ; portance sur la vitesse air, marge de rafales ; notes selon la météo.
 - **08/10/2026 — M4 W7** : la météo réelle par le METAR des stations des pistes (sans clé).

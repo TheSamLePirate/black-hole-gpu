@@ -190,12 +190,28 @@ export class SoundEngine {
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
+  /** each bus metered (S8: the mix's balance, measured) */
+  private busMeters: Record<string, AnalyserNode> = {};
   /** the output's two channels, metered apart (tests: a source's side — S1) */
   private sides: [AnalyserNode, AnalyserNode] | null = null;
 
   /** The output's level now (RMS, dBFS). */
   level() {
     return this.meter ? rms(this.meter) : -Infinity;
+  }
+
+  /** Each bus's level now and the output's peak (S8): RMS [dBFS] by bus, the output's peak [dBFS]. */
+  busLevels() {
+    const out: Record<string, number> = {};
+    for (const [k, a] of Object.entries(this.busMeters)) out[k] = rms(a);
+    let peak = 0;
+    if (this.meter) {
+      const d = new Float32Array(this.meter.fftSize);
+      this.meter.getFloatTimeDomainData(d);
+      for (const x of d) peak = Math.max(peak, Math.abs(x));
+    }
+    out.peak = 20 * Math.log10(peak + 1e-20);
+    return out;
   }
 
   /** Each channel's level now (RMS, dBFS): left, right. */
@@ -380,6 +396,12 @@ export class SoundEngine {
     const ui = gain(this.mix.ui);
     ui.connect(master);
     this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener };
+    for (const [k, n] of Object.entries({ beeps, engine, rcs, ambience, listener: eq2, master })) {
+      const a = ctx.createAnalyser();
+      a.fftSize = 2048;
+      n.connect(a);
+      this.busMeters[k] = a;
+    }
     // the ventilation's fan: its blades' tone and a hiss of air (S4) — inside only
     const fan = gain(0);
     const fanLP = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 900 });
@@ -524,8 +546,9 @@ export class SoundEngine {
     if (this.ctx !== ctx) return;
     const node = new AudioWorkletNode(ctx, "kerr-rocket", { numberOfInputs: 0, outputChannelCount: [1] });
     const out = ctx.createGain();
-    // (the synth's full thrust at ~−15 dBFS RMS: brought to the noises' level it replaces)
-    out.gain.value = 3.2;
+    // (the synth's full thrust at ~−15 dBFS RMS: brought to the mix's — S8: full thrust from the seat ~−12 dB
+    // RMS at the output, its peaks under −3 dB; at 3.2 it held the limiter down, everything else crushed)
+    out.gain.value = 1.0;
     node.connect(out).connect(this.busses.engine);
     this.gran = { node, out };
     if (this.last) this.update(this.last);
@@ -826,7 +849,7 @@ export class SoundEngine {
     set(e.roar.gain, old * (0.32 * th + 0.25 * th * air), 0.08);
     set(e.roarBP.frequency, 380 + 1200 * th + 1500 * air * th, 0.15);
     set(e.crackle.gain, 0.6 * th, 0.1);
-    set(e.sub.gain, 0.5 * Math.sqrt(th), 0.08);
+    set(e.sub.gain, 0.25 * Math.sqrt(th), 0.08);
     set(e.subOsc.frequency, 36 + 14 * th, 0.2);
     // ignition and shutdown: a thump / a sigh
     const was = prev ? clamp(prev.throttle) * (prev.live ? 1 : 0) : 0;
@@ -843,7 +866,7 @@ export class SoundEngine {
         set(c.panner.positionY, q.pos[1], 0.02);
         set(c.panner.positionZ, q.pos[2], 0.02);
       }
-      set(c.gain.gain, 0.75 * lv, 0.015);
+      set(c.gain.gain, 0.5 * lv, 0.015);
       if (c.was < 0.05 && lv >= 0.05) this.valve(0, true, c.panner);
       else if (c.was >= 0.05 && lv < 0.05) this.valve(0, false, c.panner);
       c.was = lv;
@@ -862,7 +885,7 @@ export class SoundEngine {
     const hear = s.hearing ?? (s.inside ? "cabin" : "outside");
     if (C) {
       const cabin = hear === "cabin" && s.aboard;
-      set(C.eq1.gain, hear === "cabin" ? 7 : hear === "hull" ? 4 : 0, 0.3);
+      set(C.eq1.gain, hear === "cabin" ? 5 : hear === "hull" ? 3 : 0, 0.3);
       set(C.eq2.gain, hear === "cabin" ? 4 : 0, 0.3);
       set(C.fan.gain, cabin ? 0.012 : 0, 0.5);
       const pp = cabin && s.panel ? s.panel : [0, 0, -1];
@@ -912,9 +935,9 @@ export class SoundEngine {
         set(Gd.pan.positionY, c[1]!, 0.05);
         set(Gd.pan.positionZ, c[2]!, 0.05);
       }
-      set(Gd.roll.gain, on ? 0.55 * Math.min(v / 80, 1) ** 0.8 : 0, 0.08);
+      set(Gd.roll.gain, on ? 1.1 * Math.min(v / 80, 1) ** 0.8 : 0, 0.08);
       set(Gd.rollLP.frequency, 50 + 2.5 * v, 0.1);
-      set(Gd.hiss.gain, on ? 0.1 * Math.min(v / 100, 1) : 0, 0.08);
+      set(Gd.hiss.gain, on ? 0.2 * Math.min(v / 100, 1) : 0, 0.08);
       set(Gd.squeal.gain, on && (G?.brake ?? 0) > 0 && v > 4 ? 0.018 * Math.min(v / 40, 1) : 0, 0.15);
       set(Gd.wind.gain, s.aboard && G?.wheels.some((w) => w.load > 0) ? 0.3 * Math.min((s.groundWind ?? 0) / 15, 1) : 0, 0.5);
       G?.wheels.forEach((w, k) => {
@@ -961,8 +984,8 @@ export class SoundEngine {
     const q = clamp((air * s.airspeed * s.airspeed) / 2.5e5);
     set(a.wind.gain, aboard * 0.6 * Math.sqrt(q), 0.25);
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
-    set(a.roar.gain, aboard * 1.1 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
-    set(a.hiss.gain, aboard * 0.09 * clamp(s.plasma ?? 0) ** 2, 0.3);
+    set(a.roar.gain, aboard * 2.2 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
+    set(a.hiss.gain, aboard * 0.18 * clamp(s.plasma ?? 0) ** 2, 0.3);
   }
 
   /** The structure creaking: a groan (a resonance gliding down) — or, as the hull heats, the ticks of the
@@ -1066,7 +1089,7 @@ export class SoundEngine {
     hp.frequency.value = open ? 1700 : 1100;
     hp.Q.value = 2.5;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(open ? 0.5 : 0.22, t);
+    g.gain.setValueAtTime(open ? 0.35 : 0.16, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.05 : 0.08));
     if (at) src.connect(hp).connect(g).connect(at);
     else {
