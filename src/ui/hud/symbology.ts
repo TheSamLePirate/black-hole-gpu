@@ -962,6 +962,31 @@ function drawRunway(
       k ? 1.4 : 2,
     );
   });
+  // the approach chart's fixes ahead (game/procedures.ts — A5): a waypoint's star, its name and height
+  for (const f of rw.fixes) {
+    if (!front(f)) continue;
+    const p = pr(f.d);
+    if (!inside(p, 8 * dpr)) continue;
+    const R = 6 * dpr;
+    stroke(
+      () => {
+        ctx.moveTo(p![0], p![1] - R);
+        ctx.lineTo(p![0] + R * 0.35, p![1] - R * 0.35);
+        ctx.lineTo(p![0] + R, p![1]);
+        ctx.lineTo(p![0] + R * 0.35, p![1] + R * 0.35);
+        ctx.lineTo(p![0], p![1] + R);
+        ctx.lineTo(p![0] - R * 0.35, p![1] + R * 0.35);
+        ctx.lineTo(p![0] - R, p![1]);
+        ctx.lineTo(p![0] - R * 0.35, p![1] - R * 0.35);
+        ctx.closePath();
+      },
+      "#9fe8ff",
+      1.5,
+    );
+    const name = f.id === "PU" ? t("PULL-UP") : f.id === "TD" ? t("TOUCHDOWN") : f.id;
+    const hh = f.h >= 1000 ? `${(f.h / 1000).toFixed(1)} km` : `${f.h} m`;
+    text(`${name} ${hh}`, p![0] + R + 5 * dpr, p![1], "#9fe8ff", 10, "left", true);
+  }
   // the aim point
   const a = front(rw.aim) ? pr(rw.aim.d) : null;
   if (inside(a, 6 * dpr)) {

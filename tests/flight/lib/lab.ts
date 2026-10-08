@@ -56,6 +56,7 @@ const PAGE = `(() => {
       next: st.next ? st.next.kind + ":" + st.next.body + " " + Math.round(st.next.inS) + "s" : null,
       hub: h ? { title: h.title, phase: h.phase, next: h.next, rows: h.rows, say: h.say, graph: h.graph ? h.graph.kind + ":" + h.graph.state : null } : null,
       entry: R ? { ph: R.phase, site: R.site?.name ?? null, tBurn: r(R.tBurn), dv: r(R.dv, 10), prof: R.prof?.phase ?? null, leg: R.leg ?? null,
+        ga: R.gaN ?? 0, dh: R.dhCheck ? { across: r(R.dhCheck.across, 10), dh: r(R.dhCheck.dh, 10), ga: R.dhCheck.ga } : null,
         miss: R.guid?.lastMiss ? { along: r(R.guid.lastMiss.along / 1000, 10), across: r(R.guid.lastMiss.across / 1000, 10) } : null,
         app: R.app ? { along: r(R.app.along), across: r(R.app.across, 10), agl: r(R.app.agl), speed: r(R.app.speed, 10), gRef: r(((R.app.gRef ?? NaN) * 180) / Math.PI, 100), gam: r(((R.app.gam ?? NaN) * 180) / Math.PI, 100), brake: r(c.airBrake, 100), spiral: R.spiral ? { r: r(R.spiral.r), side: R.spiral.side } : null } : null } : null,
       runway: safe(() => { const w = c.runwayView?.(); return w ? { along: r(w.along), across: r(w.across, 10) } : null; }),

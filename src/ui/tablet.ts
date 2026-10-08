@@ -1,20 +1,23 @@
 // The tablet: the map's left panel (M, flying) holds one device of pages — the flight COMPUTER (its
 // ORBIT, TARGET, LAND, MISSION), the SHIP (its state, the orbit, the target, the pilot), the TELEMETRY (the
-// flight's curves, its CSV — ui/telemetry-page.ts), the CAMERA and
+// flight's curves, its CSV — ui/telemetry-page.ts), the CHARTS (the approach chart of the site
+// flown to — ui/charts-page.ts), the CAMERA and
 // the SKY (their panels, moved in from their popovers), the LOG (the journal). One place for what was
 // five windows; closing the map gives the camera and the sky back to their popovers.
 
 import { tr, type Text } from "../i18n";
 import type { GameLog, LogEvent } from "../game/log";
 import { button, el, h } from "./kit";
+import { ChartsPage, type ChartsDeps } from "./charts-page";
 import { TelemetryPage } from "./telemetry-page";
 
-export type TabletPage = "computer" | "ship" | "telemetry" | "camera" | "sky" | "log";
+export type TabletPage = "computer" | "ship" | "telemetry" | "charts" | "camera" | "sky" | "log";
 
 const PAGES: [TabletPage, Text][] = [
   ["computer", { fr: "Ordinateur", en: "Computer" }],
   ["ship", { fr: "Vaisseau", en: "Ship" }],
   ["telemetry", { fr: "Télémétrie", en: "Telemetry" }],
+  ["charts", { fr: "Cartes", en: "Charts" }],
   ["camera", { fr: "Caméra", en: "Camera" }],
   ["sky", { fr: "Ciel", en: "Sky" }],
   ["log", { fr: "Journal", en: "Log" }],
@@ -32,6 +35,8 @@ export interface TabletDeps {
   log: GameLog;
   /** a scene's time as a date */
   dateOf(t: number): string;
+  /** the approach charted (ui/charts-page.ts) */
+  approach: ChartsDeps["approach"];
 }
 
 export class Tablet {
@@ -44,6 +49,8 @@ export class Tablet {
   private unLog: (() => void) | null = null;
   private liveAt = 0;
   private telemetry: TelemetryPage | null = null;
+  private charts: ChartsPage | null = null;
+  private chartsAt = 0;
 
   constructor(
     private panel: HTMLElement,
@@ -90,6 +97,10 @@ export class Tablet {
   /** A few times a second: the ship's figures. */
   tick(now: number) {
     if (this.visible && this.page === "telemetry") this.telemetry?.draw(now);
+    if (this.visible && this.page === "charts" && now - this.chartsAt >= 200) {
+      this.chartsAt = now;
+      this.charts?.draw();
+    }
     if (!this.visible || this.page !== "ship" || !this.shipView || now - this.liveAt < 250) return;
     this.liveAt = now;
     this.shipView.live();
@@ -104,6 +115,10 @@ export class Tablet {
     } else if (this.page === "telemetry") {
       this.telemetry ??= new TelemetryPage();
       this.pageEl.append(this.telemetry.el);
+    } else if (this.page === "charts") {
+      this.charts ??= new ChartsPage({ approach: () => this.d.approach() });
+      this.pageEl.append(this.charts.el);
+      this.charts.draw();
     } else if (this.page === "camera") this.d.camera.embed(this.pageEl);
     else if (this.page === "sky") this.d.sky.embed(this.pageEl);
     else if (this.page === "log") this.logPage();

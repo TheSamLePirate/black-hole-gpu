@@ -1402,6 +1402,13 @@ async function main() {
     sky: skyPanel,
     log: gameLog,
     dateOf: (t) => fmtDate(t),
+    // (the runway in reach, the craft on it; else the site the entry flies to, its end in service)
+    approach: () => {
+      const rw = camera.runwayView();
+      if (rw) return { site: rw.site, craft: { along: rw.along, across: rw.across, agl: rw.agl } };
+      const s = camera.entryRun?.site ?? camera.entrySite;
+      return s ? { site: s.runway ? camera.runwayInUse(s) : s, craft: null } : null;
+    },
   });
   // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
   const tpDock = document.createElement("div");
@@ -1613,7 +1620,10 @@ async function main() {
     held: () => {},
     throttleFull: () => {
       // (the free camera's and the cabin's own keys)
-      if (camera.outsideView() !== "free" && settings.shipMount !== "cabin") camera.pilot.throttle = 1;
+      if (camera.outsideView() === "free" || settings.shipMount === "cabin") return;
+      // (on the entry autopilot's runway approach: TOGA — the missed approach flown — PLAN-AEROPORTS A5)
+      if (camera.goAround()) return;
+      camera.pilot.throttle = 1;
     },
     throttleCut: () => {
       if (camera.outsideView() !== "free" && settings.shipMount !== "cabin") camera.pilot.throttle = 0;

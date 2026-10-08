@@ -213,6 +213,34 @@ body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.ma
 .tm-chips .k-btn, .tm-wins .k-btn { padding: 4px 7px; font-size: 10.5px; letter-spacing: 0.06em; }
 .tm-chips .k-btn.on { box-shadow: inset 0 -2px 0 var(--tm-ink); }
 .tm-cv { display: block; width: 100%; height: 440px; }
+/* the tablet's CHARTS page (ui/charts-page.ts): the approach chart, in plan and in profile */
+.ch-page { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.ch-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font: 500 12px var(--font); color: var(--k-text); }
+.ch-head b { font: 700 15px var(--mono); color: var(--k-on); letter-spacing: 0.06em; }
+.ch-head small { color: var(--k-dim); }
+.ch-box { border: 1px solid var(--k-line); border-radius: 6px; background: rgba(4, 12, 20, 0.55); }
+.ch-svg { display: block; width: 100%; height: auto; font: 500 10px var(--mono); }
+.ch-t { fill: var(--k-dim); letter-spacing: 0.12em; }
+.ch-l { fill: #cfeaff; }
+.ch-g { fill: var(--k-dim); font-size: 9px; }
+.ch-grid { stroke: rgba(160, 200, 230, 0.12); stroke-width: 1; }
+.ch-ground { stroke: #8a7a5c; stroke-width: 1.5; }
+.ch-rwy { fill: #d8dde2; }
+.ch-course { fill: none; stroke: #7cd6ff; stroke-width: 2; }
+.ch-missed { fill: none; stroke: #ffc85a; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ch-dh { stroke: #ff8a7a; stroke-width: 1; stroke-dasharray: 2 3; }
+.ch-fix { fill: #0b1a26; stroke: #9fe8ff; stroke-width: 1.5; }
+.ch-lead { stroke: rgba(159, 232, 255, 0.35); stroke-width: 1; stroke-dasharray: 1 2; }
+.ch-table { width: 100%; border-collapse: collapse; font: 500 11px var(--mono); color: var(--k-text); }
+.ch-table th { text-align: right; font-weight: 500; color: var(--k-dim); padding: 2px 4px; }
+.ch-table td { text-align: right; padding: 2px 4px; border-top: 1px solid var(--k-line); white-space: nowrap; }
+.ch-table :is(th, td):first-child { text-align: left; white-space: normal; }
+.ch-table tr.ch-miss td { color: #ffc85a; }
+.ch-craft { fill: #78ffaa; stroke: #04140a; stroke-width: 1; }
+.ch-notes { display: grid; gap: 4px; font: 500 12px/1.4 var(--font); color: var(--k-text); }
+.ch-notes p { margin: 0; color: var(--k-dim); }
+.ch-min { font: 600 12px var(--mono); color: #ff8a7a; }
+.ch-none { color: var(--k-dim); font-style: italic; }
 /* the camera's and the sky's panels, moved in: in the flow, at the panel's width */
 #cam-pop.embedded, #sky-pop.embedded {
   position: static; inset: auto; transform: none; width: auto; max-height: none; margin: 0; padding: 0;

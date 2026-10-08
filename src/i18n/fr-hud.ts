@@ -47,6 +47,8 @@ export default {
   "M › Telemetry: the flight's curves": "M › Télémétrie : les courbes du vol",
   "Sink rate": "Taux de chute",
   Weather: "Météo",
+  "PULL-UP": "RESSOURCE",
+  TOUCHDOWN: "TOUCHER",
   calm: "calme",
   "cross {0} m/s": "travers {0} m/s",
   "tail {0} m/s": "arrière {0} m/s",

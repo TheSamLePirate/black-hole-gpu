@@ -1067,7 +1067,8 @@ export default {
   "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)": "Tangage · lacet · roulis (Z S · Q D · A E en AZERTY)",
   "⇧ · Alt · ↑ ↓": "⇧ · Alt · ↑ ↓",
   "Throttle up · down (held)": "Gaz plus · moins (maintenu)",
-  "Full throttle · cut (W · X on AZERTY)": "Plein gaz · coupure (W · X en AZERTY)",
+  "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around":
+    "Plein gaz · coupure (W · X en AZERTY) — en approche sous autopilote, plein gaz remet les gaz",
   "RCS translation: down/up · left/right · forward/back": "Translation RCS : bas/haut · gauche/droite · avant/arrière",
   "Caps Lock": "Verr. Maj",
   "Precision controls (fine rotation, throttle, RCS)": "Commandes de précision (rotation, gaz, RCS fins)",

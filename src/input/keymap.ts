@@ -229,7 +229,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "Z · X",
-        text: "Full throttle · cut (W · X on AZERTY)",
+        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around",
         bind: [fly("KeyZ", "throttleFull"), fly("KeyX", "throttleCut")],
       },
       {

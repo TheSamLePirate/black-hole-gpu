@@ -231,7 +231,13 @@ function flightInfo(this: CameraController): FlightInfo {
     photon: photonOrbits(a).pro,
     ergo: cam.region === "hole" && cam.r < 1 + Math.sqrt(Math.max(0, 1 - a * a * Math.cos(cam.theta) ** 2)),
     accel: this.pilot.accel,
-    throttle: this.pilot.auto !== "none" && this.pilot.burn ? this.pilot.accel / Math.max(this.thrustMax(), 1e-12) : this.pilot.throttle,
+    // (the entry autopilot's own throttle — its burns, a missed approach's climb —: what fired)
+    throttle:
+      this.pilot.auto !== "none" && this.pilot.burn
+        ? this.pilot.accel / Math.max(this.thrustMax(), 1e-12)
+        : this.pilot.auto === "entry"
+          ? this.pilot.fired.throttle
+          : this.pilot.throttle,
     sas: this.pilot.sas,
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,

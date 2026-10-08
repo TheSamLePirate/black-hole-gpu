@@ -24,6 +24,7 @@ import { bodyState } from "../system/ephemeris";
 import { accelToG, fuelOn, tank } from "../engine";
 import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
 import { mlsReading } from "../game/mls";
+import { procedureFor } from "../game/procedures";
 import { runwayWind, type Site, SITES } from "../game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import { circularize as fcCircularize, type Burn } from "../fc/ops";
@@ -1864,6 +1865,7 @@ function hubCompute(this: CameraController): HubInfo | null {
       spiral: t("round the alignment circle — too high for the final"),
       turn: t("turning onto the final"),
       final: t("on the final"),
+      missed: t("missed approach — climbing out"),
     };
     const profs: Record<string, string> = {
       outer: t("the steep slope"),
@@ -2618,6 +2620,12 @@ function runwayCompute(this: CameraController): RunwayView | null {
     wind: runwaySurfaceWind(this, site),
     // (the runway's guidance as the Shuttle's — A4: its azimuth, its elevation against the profile asked)
     mls: mlsReading({ along: sAl, across: xt, agl, profileH, length: L, td: LANDING.td }),
+    // (its chart — A5 —: the fixes still ahead, where the eye sees them, and their heights)
+    site,
+    // (flying the missed approach: its own fixes — the turn, then the hold —, until passed)
+    fixes: (R?.ga ? procedureFor(site).missed.filter((f) => R.ga!.phase === "climb" || f.id === "MAHF") : procedureFor(site).fixes)
+      .filter((f) => (R?.ga ? true : f.along > sAl + 200) && f.along - sAl < 40e3)
+      .map((f) => ({ id: f.id, h: f.h, ...see(lin(at(f.along, f.across), 1, tu, f.h)) })),
   };
 }
 

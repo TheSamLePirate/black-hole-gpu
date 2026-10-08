@@ -7,6 +7,7 @@ import { bodyCentre, BODY_NAMES, type Body, bodyVelocity, isCraft } from "../tar
 import { fuelOn, tank } from "../engine";
 import { attitudeFor } from "../entry";
 import { siteDir, type Site } from "../game/sites";
+import { MISSED_HOLD, MISSED_SIDE, MISSED_TOP_H, MISSED_TURN_H, RUNWAY_DH, unstableWhy } from "../game/procedures";
 import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
@@ -62,6 +63,8 @@ declare module "../controls" {
     glideAlpha: typeof glideAlpha;
     aglNow: typeof aglNow;
     approach: typeof approach;
+    goAround: typeof goAround;
+    missedStep: typeof missedStep;
     crashed: typeof crashed;
     rolloutSteer: typeof rolloutSteer;
     groundAttitude: typeof groundAttitude;
@@ -754,6 +757,23 @@ function approach(
   // (and before the threshold — or over the runway low, the flare and the wheels: past it 8 km up, heading
   // down it, a final flew on 50 km beyond the runway's far end)
   const onFinal = !R.spiral && sAl > -16e3 && (sAl < 0 || agl < 300) && Math.abs(xt) < 6e3 && dn > 0.5;
+  // (the minima — the decision height on the final's shallow glide, game/procedures.ts —: stabilised, on to the
+  // touchdown; not — over 25 m off the axis or the profile —, the missed approach. Twice at most: the third
+  // approach lands whatever, as a pilot short of fuel would)
+  if (onFinal && !R.ga && !R.dhSeen && R.prof && sAl < 0 && agl <= RUNWAY_DH) {
+    R.dhSeen = true;
+    const why = unstableWhy(xt, agl - R.prof.h);
+    R.dhCheck = { across: xt, dh: agl - R.prof.h, ga: !!why && (R.gaN ?? 0) < 2 };
+    if (why && (R.gaN ?? 0) < 2) this.goAround(why);
+  }
+  // (the missed approach flown — climbed out, turned back, out along the reciprocal, turned in at its hold 20
+  // km out —: done heading down the axis again, the legs below — to the final's start — take the craft on)
+  if (R.ga?.phase === "back" && dn > 0.9) {
+    R.ga = undefined;
+    R.dhSeen = undefined;
+    this.onPilotMessage?.(tf("Missed approach done: {0} up — a new approach", `${(agl / 1000).toFixed(1)} km`));
+  }
+  if (R.ga) return this.missedStep(fr, R, along, rgt, sAl, xt, va, up, vh, gam, gdot, agl, dt);
   const spiralFrom = () => {
     if (!R.spiral) R.spiral = { side: Math.sign(xt) || 1, r: clamp(Math.max(sp, 180) ** 2 / (9.81 * Math.tan(0.5)), 6e3, 12e3) };
   };
@@ -943,7 +963,97 @@ function approach(
   const vAir = this.airVelocity(va);
   const k = onFinal && agl < 12 ? 1 - agl / 12 : 0;
   const ax = attitudeFor(fr.s.x, lin(vAir, 1 - k, va, k), R.alpha, bank, fr.env.normal?.(fr.s.x));
-  return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
+  // (after a missed approach, the legs back to the final powered: the engines hold the speed — from its hold,
+  // 3 km up and 20 km out, a glide round the turn and down to the final's start was 400 m short at the minima)
+  const thr = R.gaN && !onFinal ? clamp((vT - spAir) / 20, 0, 1) : 0;
+  return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]), throttle: thr };
+}
+
+/**
+ * The missed approach (PLAN-AEROPORTS A5, game/procedures.ts): the engines on, the approach's state let go —
+ * from the autopilot at the minima (`why`: what was not stabilised) or from the pilot (full throttle on the
+ * entry autopilot's approach: TOGA). False when there is no runway approach to leave, or the wheels are down.
+ */
+function goAround(this: CameraController, why: { what: "axis" | "high" | "low"; by: number } | null = null): boolean {
+  const R = this.entryRun;
+  if (this.pilot.auto !== "entry" || !R || R.phase !== "glide" || !R.site?.runway || R.ga || this.rolling) return false;
+  R.ga = { phase: "climb" };
+  R.gaN = (R.gaN ?? 0) + 1;
+  R.gOuter = R.prof = R.trkInt = R.gRise = R.aglPrev = R.flareTau = R.spiral = R.side = undefined;
+  R.turning = false;
+  const by = why ? Math.round(why.by) : 0;
+  this.onPilotMessage?.(
+    !why
+      ? t("Go-around: climbing out on the engines")
+      : why.what === "axis"
+        ? tf("Go-around: {0} m off the axis at the minima", by)
+        : why.what === "high"
+          ? tf("Go-around: {0} m high at the minima", by)
+          : tf("Go-around: {0} m low at the minima", by),
+  );
+  return true;
+}
+
+/**
+ * The missed approach flown: straight ahead on the engines, the axis held, climbing at 10° to 1 500 m; a left
+ * turn back (34° of bank at 170 m/s: ~8.5 km across, the circuit's own); out along the reciprocal 8 km to the
+ * left, climbing on to 3 km; at its hold 20 km out, a left turn back onto the axis — then the approach's legs
+ * again. The engines hold the speed through the air (180 m/s climbing out, 170 after); the air brake in.
+ */
+function missedStep(
+  this: CameraController,
+  fr: NonNullable<ReturnType<CameraController["entryFrame"]>>,
+  R: NonNullable<CameraController["entryRun"]>,
+  along: Vec3,
+  rgt: Vec3,
+  sAl: number,
+  xt: number,
+  va: Vec3,
+  up: Vec3,
+  vh: Vec3,
+  gam: number,
+  gdot: number,
+  agl: number,
+  dt: number,
+) {
+  const G = R.ga!;
+  const dn = dot3(vh, along);
+  if (G.phase === "climb" && agl >= MISSED_TURN_H) G.phase = "turn";
+  if (G.phase === "turn" && dn < -0.85) G.phase = "up";
+  if (G.phase === "up" && sAl < MISSED_HOLD) G.phase = "back";
+  const sp = Math.hypot(...va);
+  let bank: number;
+  if (G.phase === "turn") bank = -0.6;
+  // (in at the hold: a left turn back onto the axis, its radius half the 8 km offset — the bank its own at the
+  // speed: the circuit's turn, flown there at 230 m/s, crossed the axis by 6 km)
+  else if (G.phase === "back") bank = -Math.min(Math.atan((sp * sp) / (9.81 * 0.5 * Math.abs(MISSED_SIDE))), 0.6);
+  else {
+    // (the course: ahead down the axis — back to it atan(xt / 3 km) —, or out along the reciprocal, its
+    // line 8 km to the left joined as the circuit's downwind is — atan(e / 3 km), 40° at most)
+    const e = G.phase === "climb" ? xt : xt - MISSED_SIDE;
+    const off = Math.min(Math.atan2(Math.abs(e), 3000), G.phase === "climb" ? 0.3 : 0.7);
+    const tdir = lin(along, G.phase === "climb" ? Math.cos(off) : -Math.cos(off), rgt, -Math.sign(e) * Math.sin(off));
+    const dpsi = Math.atan2(-dot3(cross(vh, tdir), up), dot3(vh, tdir));
+    bank = clamp(1.4 * dpsi, G.phase === "climb" ? -0.35 : -0.6, G.phase === "climb" ? 0.35 : 0.6);
+  }
+  const spAir = Math.hypot(...this.airVelocity(va));
+  // (the climb at 10°, eased in no faster than the final's other turns of the path — 0.7 g over the weight's —,
+  // levelled off at 3 km over ~10 s)
+  let gRef = clamp((MISSED_TOP_H - agl) / (Math.max(sp, 50) * 10), -0.05, 0.17);
+  const prev = R.app?.gRef;
+  if (prev !== undefined && dt > 0) {
+    const rate = (0.7 * 9.81 * dt) / Math.max(sp, 50);
+    gRef = clamp(gRef, prev - rate, prev + rate);
+  }
+  R.leg = "missed";
+  R.app = { along: sAl, across: xt, final: false, agl, speed: sp, gRef, gam };
+  R.bank = bank;
+  const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
+  R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, 1.35, 0, spAir);
+  this.airBrake = 0;
+  const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank, fr.env.normal?.(fr.s.x));
+  const vT = G.phase === "climb" ? 180 : 170;
+  return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]), throttle: clamp(0.5 + (vT - spAir) / 25, 0, 1) };
 }
 
 /** A ground-relative velocity [m/s, the entry frame's axes] made relative to the air: the wind taken off. */
@@ -1237,6 +1347,8 @@ export function installComputer(C: { prototype: CameraController }) {
     glideAlpha,
     aglNow,
     approach,
+    goAround,
+    missedStep,
     crashed,
     rolloutSteer,
     groundAttitude,

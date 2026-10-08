@@ -183,6 +183,18 @@ the ring.
   shallow inner one, not an airliner's 3°), 1° a dot —, the **azimuth**'s under the flight path marker —
   the bearing off the centreline, 1.5° a dot — with the distance to the touchdown point; magenta diamonds
   where the path lies. The cabin's NAV screen shows the same two needles (AZ, EL).
+- **The approach's fixes** (PLAN-AEROPORTS A5, `game/procedures.ts`): each runway end and each pad has its
+  chart — for a runway, the Ranger's own approach: the entry fix (IAF, 25 km out), the final approach fix
+  (FAF, 12 km, ~2 km up), the pull-up (90 m), the decision height (DH, 60 m on the shallow glide), the
+  touchdown; for a pad, its high and low gates. On the final, the fixes still ahead are cyan stars in the
+  world, named with their height (PULL-UP, DH, TOUCHDOWN); flying the missed approach, its turn (MA) and
+  its hold (MAHF). The map's tablet has a **CHARTS** page: the chart in plan and in profile (both on a
+  square-root scale), the craft on both, the fixes' table, the minima and the missed approach in words.
+- **The go-around**: at the DH the autopilot checks the approach — over 45 m off the axis or 30 m off the
+  profile, it goes around (twice at most); full throttle (W on AZERTY) on its approach does the same
+  (TOGA). The engines climb it ahead at 10° to 1 500 m, it turns back left, flies out along the reciprocal
+  8 km to the side climbing to 3 km, turns in at the hold 20 km out and flies the legs to the final again,
+  the engines holding its speed until the final. The hub's card shows "missed approach — climbing out".
 - **Alerts explained**: every alert's line has a tooltip, and a click opens why it is on and what to do.
 - **The key hints** add F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
 

@@ -30,26 +30,29 @@ describe.skipIf(!E2E)("a runway landed into the wind", () => {
       stop: number | null;
       along: number | null;
       log: string[];
+      dhc: { across: number; dh: number; ga: boolean } | null;
     }>(`(() => {
       const w = { source: "metar", kind: "windy", wind: { u10: 5, from: 40, gust: 0, turb: 1, shear: 0 }, visibility: 30000,
         fogTop: 0, layers: [], rain: 0, dust: 0 };
       __bh.freeze(true);
       __bh.settings.weather = "real"; __bh.camera.weatherReal = w; __bh.renderer.weatherReal = w;
       __bh.game.glideTo("Edwards");
-      const c = __bh.camera; let across = 0, rwy = null, head = null, mls = null;
+      const c = __bh.camera; let across = 0, rwy = null, head = null, mls = null, dhc = null;
       for (let i = 0; i < 30 * 170; i++) {
         __bh.step(1 / 30);
         const R = c.entryRun, A = R?.app; if (A && A.along > -500) across = Math.max(across, Math.abs(A.across));
         if (rwy === null && A?.final) { c.runwayCache = null; const v = c.runwayView(); rwy = v?.rwy ?? null; head = v?.wind?.head ?? null; }
         // (the guidance 6 km out, on the final: the far end's stations — A4)
         if (mls === null && A?.final && A.along > -6000) { c.runwayCache = null; mls = c.runwayView()?.mls ?? null; }
+        // (the decision at the minima — A5)
+        if (!dhc && R?.dhCheck) dhc = { ...R.dhCheck };
         if (c.ourLanded || c.airFlight.failure) break;
       }
       __bh.freeze(false);
       c.runwayCache = null;
       const v = c.runwayView();
       return { far: !!c.entrySite?.reverse, rwy, head, mls, landed: !!c.ourLanded, fail: c.airFlight.failure, across,
-        stop: v?.across ?? null, along: v?.along ?? null,
+        stop: v?.across ?? null, along: v?.along ?? null, dhc,
         log: __bh.game.log.events.filter((e) => e.kind === "pilot").map((e) => e.text) };
     })()`);
     // (the far end: runway 04 — 220 + 180, to the meridians' turn —, the wind on its nose)
@@ -61,6 +64,8 @@ describe.skipIf(!E2E)("a runway landed into the wind", () => {
     expect(Math.abs(r.mls!.az)).toBeLessThan(0.5);
     expect(Math.abs(r.mls!.el!)).toBeLessThan(1);
     expect(r.mls!.dmeKm).toBeGreaterThan(5);
+    // (stabilised at the minima: on, no go-around — A5)
+    expect(r.dhc?.ga).toBe(false);
     // (landed there as on the published end: under 2 m/s down, on the axis, stopped on the runway)
     expect(r.fail).toBeNull();
     expect(r.landed).toBe(true);

@@ -153,6 +153,10 @@ export interface RunwayView {
   wind: { from: number; u10: number; gust: number; head: number; cross: number } | null;
   /** the runway's guidance as the Shuttle's (game/mls.ts, PLAN-AEROPORTS A4): azimuth, elevation, coverage, distance */
   mls: MlsReading;
+  /** the site, as landed (its end in service) */
+  site: Site;
+  /** its approach chart's fixes still ahead (game/procedures.ts, A5): where the eye sees them, their heights [m] */
+  fixes: { id: string; h: number; d: Vec3; r: number }[];
 }
 
 /** A row of the hub's card: its name, its value — and, past its mark, how bad: "warn" (amber), "bad" (red). */
@@ -672,7 +676,15 @@ export class CameraController {
     turning?: boolean;
     /** the approach's leg: joining the axis from far back, to the final's start, downwind, the turn, the
      *  spiral down (too high), the final */
-    leg?: "join" | "toStart" | "downwind" | "turn" | "spiral" | "final";
+    leg?: "join" | "toStart" | "downwind" | "turn" | "spiral" | "final" | "missed";
+    /** the missed approach flown (computer.ts missedStep): climbing ahead, turning back, out along the
+     *  reciprocal, turning in at the hold; how
+     *  many so far; the minima passed on this final (the decision made) */
+    ga?: { phase: "climb" | "turn" | "up" | "back" };
+    gaN?: number;
+    dhSeen?: boolean;
+    /** the last decision at the minima: off the axis and the profile there [m], gone around */
+    dhCheck?: { across: number; dh: number; ga: boolean };
     /** the heading alignment cylinder (too high): its side of the axis (the bank's sign), its radius [m]; absent: none */
     spiral?: { side: number; r: number };
     /** the final's course error integrated [rad s] (approach: the wind's shear taken out) */
