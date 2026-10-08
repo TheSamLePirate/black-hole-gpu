@@ -44,3 +44,14 @@ test("a callback set again is called as set; one method bound once per object", 
   expect(r.cb?.(2)).toBe(20);
   expect(r.twice).toBe(r.twice);
 });
+
+test("an object made on the handle inherits as from a prototype: its own stubs called, not the current object's", () => {
+  const h = swappable(new Thing(5));
+  const d = Object.create(h.proxy) as Thing & { twice(): number };
+  d.n = 7;
+  expect(d.twice()).toBe(14);
+  expect(h.current().n).toBe(5);
+  d.twice = () => -1;
+  expect(d.twice()).toBe(-1);
+  expect(h.proxy.twice()).toBe(10);
+});

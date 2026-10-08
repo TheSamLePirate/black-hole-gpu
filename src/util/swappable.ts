@@ -16,8 +16,11 @@ export interface Swappable<T extends object> {
 export function swappable<T extends object>(first: T): Swappable<T> {
   let cur = first;
   let bound = new Map<PropertyKey, { src: unknown; fn: unknown }>();
-  const proxy = new Proxy(first, {
-    get(_, k) {
+  const proxy: T = new Proxy(first, {
+    get(_, k, receiver) {
+      // (read through an object made on the handle — Object.create(handle), a test's stub —: plain
+      // inheritance, its own methods and getters run on it, nothing bound to the current one)
+      if (receiver !== proxy) return Reflect.get(cur, k, receiver);
       const v = Reflect.get(cur, k, cur);
       if (typeof v !== "function" || k === "constructor") return v;
       // (a function property replaced since — a callback set again —: bound anew)
@@ -27,7 +30,7 @@ export function swappable<T extends object>(first: T): Swappable<T> {
       bound.set(k, { src: v, fn });
       return fn;
     },
-    set: (_, k, v) => Reflect.set(cur, k, v, cur),
+    set: (_, k, v, receiver) => Reflect.set(cur, k, v, receiver === proxy ? cur : receiver),
     has: (_, k) => Reflect.has(cur, k),
     deleteProperty: (_, k) => Reflect.deleteProperty(cur, k),
     ownKeys: () => Reflect.ownKeys(cur),

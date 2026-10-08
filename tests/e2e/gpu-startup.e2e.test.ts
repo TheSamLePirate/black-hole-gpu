@@ -22,21 +22,41 @@ function fault(entry: "main" | "lut") {
 describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
   afterAll(stopServer);
 
-  for (const failure of ["adapter", "limits", "pipeline"] as const) {
+  // (PLAN-MONDE M9: an adapter binding 8 storage buffers a stage — WebGPU's default, a part of Android and
+  // Safari — no longer a startup failure: it starts, and draws)
+  test("an adapter of 8 storage buffers a stage: the device at WebGPU's default, the tracer drawing, no GPU error", async () => {
+    const app = await App.boot({
+      hash: scene,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+        const original = GPUAdapter.prototype.requestDevice;
+        GPUAdapter.prototype.requestDevice = function (desc) {
+          globalThis.__asked = desc?.requiredLimits?.maxStorageBuffersPerShaderStage ?? null;
+          return original.call(this, desc);
+        };
+      })()`,
+    });
+    try {
+      await app.waitFor("__bh.gpu.frames().completedFrames > 30", 60_000);
+      const seen = await app.js<{ asked: number | null; limit: number; errors: number; lost: string | null }>(
+        `({ asked: globalThis.__asked, limit: __bh.renderer.device.limits.maxStorageBuffersPerShaderStage, errors: __bh.renderer.gpuErrors, lost: __bh.renderer.lost })`,
+      );
+      expect(seen.asked === null || seen.asked <= 8).toBe(true);
+      expect(seen.limit).toBe(8);
+      expect(seen.errors).toBe(0);
+      expect(seen.lost).toBeNull();
+    } finally {
+      app.close();
+    }
+  }, 120_000);
+
+  for (const failure of ["adapter", "pipeline"] as const) {
     test(`${failure} startup failure exposes a downloadable diagnostic with the failing stage`, async () => {
       const initScript =
         failure === "adapter"
           ? `navigator.gpu.requestAdapter = async () => null;`
-          : failure === "limits"
-            ? `(() => {
-              const original = navigator.gpu.requestAdapter.bind(navigator.gpu);
-              navigator.gpu.requestAdapter = async (options) => {
-                const adapter = await original(options);
-                Object.defineProperty(adapter, "limits", { value: { maxStorageBuffersPerShaderStage: 8 } });
-                return adapter;
-              };
-            })()`
-            : `GPUDevice.prototype.createComputePipelineAsync = function() { return Promise.reject(new Error("Injected core compilation failure")); };`;
+          : `GPUDevice.prototype.createComputePipelineAsync = function() { return Promise.reject(new Error("Injected core compilation failure")); };`;
       const app = await App.boot({ hash: scene, width: 320, height: 240, initScript, startupFailure: true });
       try {
         const report = await app.js<{ status: string; stage: string; events: { message: string }[] }>(
@@ -46,9 +66,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
         expect(report.stage).toBe(failure === "pipeline" ? "core-pipeline-compilation" : "adapter-request");
         expect(
           report.events.some((event) =>
-            event.message.includes(
-              failure === "adapter" ? "No WebGPU adapter" : failure === "limits" ? "needs 10" : "Injected core compilation failure",
-            ),
+            event.message.includes(failure === "adapter" ? "No WebGPU adapter" : "Injected core compilation failure"),
           ),
         ).toBe(true);
         expect(

@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // The flight's report (PLAN-HUB HB4): flown from the HUD gallery's states to their end — the final
 // approach to its touchdown at Le Bourget, the docking to its capture at the ISS —, the report's card
 // comes up: its grade (A … F, out of 20), each figure judged; Escape closes it; the journal says it. The
-// Lander put down on its engines beside Kennedy's runway: graded on its site, not on the runway's axis
+// Lander put down beside Kennedy's runway (not rolling): graded on its site, not on the runway's axis
 // (before: 54 m off it, a D; then on its distance to the last flight's site, Le Bourget — a C); a save loaded closes the last flight's card (before: it stayed over the next).
 
 interface Seen {
@@ -47,13 +47,15 @@ describe.skipIf(!E2E)("the flight's report", () => {
     expect(await app.js<boolean>(`__bh.game.log.events.some((e) => /Landing · .* — [ABCDF] \\(/.test(e.text))`)).toBe(true);
   }, 180_000);
 
-  test("the Lander on its engines: no runway's axis judged; a save loaded closes its card", async () => {
+  test("the Lander put down beside a runway: no runway's axis judged; a save loaded closes its card", async () => {
     const r = await fly("09-lander-descent", 60_000);
     expect(r.labels).not.toContain("Off the axis");
     expect(r.labels).not.toContain("Past the threshold");
     // (nor the last flight's site: Le Bourget, 7 187 km away — a C)
     expect(r.title).not.toContain("Le Bourget");
-    expect(["A", "B"]).toContain(r.letter);
+    // (its grade not asserted: the state is the Lander 0.6 m above its contact, its engine off — a drop at
+    // ~3 m/s, rightly a hard landing; the A once seen was the timing of the page's first frames)
+    expect(r.labels).toContain("Sink rate");
     const json = await Bun.file(`${import.meta.dir}/../hud/states/10-dock.json`).text();
     await app.js(`(__bh.game.importSave(${JSON.stringify(json)}, false), true)`);
     await app.waitFor(`document.querySelector("[data-testid=flight-report]").hidden`, 3000);

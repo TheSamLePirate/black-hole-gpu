@@ -42,7 +42,7 @@ exigés par le noyau (le défaut WebGPU est 8 : une partie d'Android et Safari e
 | **M6** | Audio spatial | **PannerNode HRTF** (le vaisseau, les propulseurs, la piste, la station), **Doppler**, la cabine entendue **de l'intérieur** (le cockpit : étouffé, la structure qui craque, la pressurisation), **AudioWorklet** pour un moteur granulaire ; mesure au RMS | à faire |
 | **M7** | Entrées HOTAS | Axes 4+ lus, **écran de mapping des axes et boutons** (manche, manette des gaz, palonnier), **courbes et zones mortes par axe**, inversion, profils (Xbox, HOTAS, pédales) ; retours haptiques (`rumble()`) sur le moteur, le plasma, le toucher | à faire |
 | **M8** | Cockpit interactif | **Picking par pré-passe d'IDs** (une texture d'identifiants des écrans et interrupteurs) : écrans cliquables (onglets, pages), interrupteurs (train, volets, SAS, lumières), éclairage de cabine réglable (la décision « cockpit éclairé » en attente depuis G3) | à faire |
-| **M9** | Bindings et compatibilité | **≤ 8 storage buffers** par étage dans le noyau (buffers fusionnés à offsets, tableaux de textures, 2 bind groups) pour Android et Safari ; matrice de compatibilité alimentée par le Kerr Bench ; **upscaler FSR1** (EASU + RCAS après le temporel, gigue de Halton) **à la mesure** — R10 étape 2 avait été écartée : adopté seulement si le PSNR et le temps le justifient | à faire |
+| **M9** | Bindings et compatibilité | **≤ 8 storage buffers** par étage dans le noyau (buffers fusionnés à offsets, tableaux de textures, 2 bind groups) pour Android et Safari ; matrice de compatibilité alimentée par le Kerr Bench ; **upscaler FSR1** (EASU + RCAS après le temporel, gigue de Halton) **à la mesure** — R10 étape 2 avait été écartée : adopté seulement si le PSNR et le temps le justifient | **en partie** (08/10) : **8 storage buffers** — les tables en lecture seule du traceur (corps, harmoniques, LUT du corps noir et du synchrotron, chemin de la caméra) dans un seul buffer à offsets fixes (`gpu-tables.ts`, les mêmes que `trace.wgsl` : test unitaire) ; le device demandé à la limite par défaut de WebGPU. Même image (A/B `trace-ab`, 6 scènes : écarts sous le bruit de capture — PSNR 53–71 dB contre 37–57 dB en A/A), même vitesse (−2,0 % et −2,7 % sur 4 passages) ; e2e `gpu-startup` : un adaptateur à 8 démarre et dessine. Restent la matrice de compatibilité et FSR1 |
 | **M10** | Musique, voix et TARS | **Partition adaptative** synthétisée (nappes, orgue additif) qui suit la phase de vol et la gravité du moment, le **tic-tac de Miller** (un battement = un jour sur Terre) ; **voix** (Web Speech, sous-titres) : annonces de finale (« 100… 50… 30… 10 », minimums, sink rate), le contrôle de mission (« Go for TLI », autorisations), **blackout radio** dans le plasma ; **TARS** : un assistant qui commente et répond (touche et champ), **honnêteté et humour réglables** — le texte par OpenRouter `z-ai/glm-5.3-flash`, les **décisions typées par Jev** (parler ou se taire, quel sujet, quel ton, l'alerte à dire d'abord — des questions `noul`/`choice`/`score` posées sur l'état du vol, en parallèle, pour quelques centièmes de centime) ; la **clé OpenRouter saisie dans les réglages** et gardée en local, jamais dans le code ; sans clé, les phrases écrites | à faire |
 
 Ordre : M1 → M2 → M3 (le chargement, le plus visible pour qui arrive), M4 → M5 (le monde), M6 → M7 → M8
@@ -59,14 +59,14 @@ Vérifié dans le code au 08/10 :
 | Manque | Où en est le code |
 |---|---|
 | Perte du device | ~~`renderer.onLost` sauve le vol puis demande de recharger la page~~ → **recréé à chaud** (M2, 08/10) |
-| Storage buffers | le noyau exige toujours **10** (`maxStorageBuffersPerShaderStage: 10`, `renderer.ts`) : les appareils à 8 (une partie d'Android, Safari) refusés |
+| Storage buffers | ~~le noyau exige 10~~ → **8**, la limite par défaut (M9, 08/10) |
 | Poids | maillages déjà en LOD (ISS 2 + 9,9 Mo, Endurance 1–11 Mo, Ranger 1 Mo, Lander 2 Mo, cockpit 3,1 Mo) ; restent 89 images de planètes en JPEG/PNG et la quantification (M3) |
 | Manette | 4 axes lus (`gamepad.ts`), pas d'écran de mapping ni de courbes (M7) |
 | Audio | `audio/engine.ts` sans `PannerNode` HRTF, sans Doppler, sans voix (M6, M10) |
 
 **Le pilier Technologie (79 → 80)** se gagne d'abord par la robustesse et la compatibilité, avant le monde :
 1. ~~**M2 : la recréation à chaud du device** et son e2e~~ — **fait le 08/10** (l'audit § 3.2 n° 4 couvert) ;
-2. **M9 : ≤ 8 storage buffers** — ouvre Android et Safari, la plus grosse audience manquante ;
+2. ~~**M9 : ≤ 8 storage buffers**~~ — **fait le 08/10** (même image, même vitesse) ;
 3. **M3 : le poids** (planètes en KTX2, maillages quantifiés), mesuré au premier chargement du Kerr Bench.
 
 Puis le monde et la sensation (M4 → M8), et M10 qui ferme la phase. Ordre proposé : **M2 → M9 → M3 → M4 →

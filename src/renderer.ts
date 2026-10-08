@@ -19,6 +19,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
@@ -130,10 +131,7 @@ const SEA_WAVES: { n: [number, number]; phase0: number }[] = [8, 12, 18, 27, 40,
   return { n: [Math.round(k * Math.cos(a)), Math.round(k * Math.sin(a))], phase0: (i * 2.399963) % (2 * Math.PI) };
 });
 /** the probe's harmonics as the tracer reads them: 9 × rgb, then the dominant direction */
-const SH_BYTES = 10 * 16;
-/** Camera free-fall path drawn in the render: points, then bounding spheres of chunks of 16 segments. */
-const PATH_MAX = 256;
-const PATH_CHUNK = 16;
+const SH_BYTES = SH_VEC4S * 16;
 const BANDS = { visible: 0, "230GHz": 1, multi: 2 } as const;
 const POL_FIELDS = { toroidal: 0, radial: 1, vertical: 2, spiral: 3 } as const;
 /** Catalogue star flux per unit 10^(−0.4 m), in Milky Way map units (see scripts/build-sky.ts). */
@@ -443,7 +441,6 @@ export class Renderer {
   private paramBuf: GPUBuffer;
   private displayBuf: GPUBuffer;
   /** the blackbody's LUT, then the synchrotron's (one binding: the tracer's storage buffers are counted) */
-  private lutBuf: GPUBuffer;
   private bgTexture: GPUTexture;
   private mwTexture: GPUTexture;
   private starLodTexture: GPUTexture;
@@ -495,7 +492,6 @@ export class Renderer {
   /** called when assets loaded in the background change the image (the loop redraws) */
   onAssets: (() => void) | null = null;
   private catalogue: GPUBuffer;
-  private pathBuf!: GPUBuffer;
   private bodyBuf!: GPUBuffer;
   /** the local patch for a body near the camera (off: traced like the others — for comparisons) */
   localPatchOn = true;
@@ -632,7 +628,6 @@ export class Renderer {
       entries: [
         { binding: 0, visibility: C, buffer: { type: "uniform" } },
         { binding: 1, visibility: C, buffer: { type: "storage" } },
-        { binding: 2, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 3, visibility: C, texture: { sampleType: "float" } },
         { binding: 4, visibility: C, sampler: { type: "filtering" } },
         { binding: 5, visibility: C, buffer: { type: "storage" } },
@@ -642,7 +637,6 @@ export class Renderer {
         { binding: 9, visibility: C, texture: { sampleType: "float" } },
         { binding: 10, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 11, visibility: C, buffer: { type: "storage" } },
-        { binding: 13, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 14, visibility: C, buffer: { type: "storage" } },
         { binding: 15, visibility: C, buffer: { type: "read-only-storage" } },
         { binding: 16, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } },
@@ -817,14 +811,10 @@ export class Renderer {
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 
-    this.pathBuf = device.createBuffer({
-      size: (PATH_MAX + PATH_MAX / PATH_CHUNK) * 16,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    // (after the bodies: the light probe's harmonics, copied there on the GPU — see dispatchEnv; the
-    // compute stage has no storage-buffer slot left for them)
+    // (the tracer's read-only tables, one buffer — gpu-tables.ts, PLAN-MONDE M9: the bodies; after them the
+    // light probe's harmonics, copied there on the GPU — see dispatchEnv —; the colours' LUTs; the path)
     this.bodyBuf = device.createBuffer({
-      size: this.bodyData.byteLength + SH_BYTES,
+      size: TABLE_VEC4S * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -832,12 +822,11 @@ export class Renderer {
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.displayBuf = device.createBuffer({ size: 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
-    // (trace.wgsl: luts — the synchrotron's from LUT_N = BB_LUT_SIZE)
+    // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
     const sync = buildSynchrotronLUT();
-    this.lutBuf = device.createBuffer({ size: lut.byteLength + sync.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    device.queue.writeBuffer(this.lutBuf, 0, lut);
-    device.queue.writeBuffer(this.lutBuf, lut.byteLength, sync);
+    device.queue.writeBuffer(this.bodyBuf, TABLE_LUT * 16, lut);
+    device.queue.writeBuffer(this.bodyBuf, TABLE_LUT * 16 + lut.byteLength, sync);
     // trilinear + anisotropic: sky lookups use explicit gradients from the lensed pixel footprint
     this.sampler = device.createSampler({
       magFilter: "linear",
@@ -1111,10 +1100,8 @@ export class Renderer {
         ),
       },
     });
-    // (the tracer's bind group holds 10 storage buffers: said plainly here rather than by a layout's validation error)
-    const storageBuffers = adapter.limits.maxStorageBuffersPerShaderStage;
-    if (storageBuffers < 10)
-      throw new Error(tf("This GPU binds {0} storage buffers per shader stage; the ray tracer needs 10.", storageBuffers));
+    // (the tracer's bind group holds 8 storage buffers — WebGPU's default, every adapter's: PLAN-MONDE M9;
+    // before, 10 shut out a part of Android and Safari)
     gpuDiagnostics.enter("device-request");
     const device = await adapter.requestDevice({
       // (the GPU profiler's timestamps, when the adapter has them)
@@ -1125,7 +1112,6 @@ export class Renderer {
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
-        maxStorageBuffersPerShaderStage: 10,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
       },
     });
@@ -1373,7 +1359,7 @@ export class Renderer {
         rad = Math.max(rad, Math.hypot(data[i * 4]! - ctr[0]!, data[i * 4 + 1]! - ctr[1]!, data[i * 4 + 2]! - ctr[2]!));
       data.set([ctr[0]!, ctr[1]!, ctr[2]!, rad], (PATH_MAX + c) * 4);
     }
-    this.device.queue.writeBuffer(this.pathBuf, 0, data);
+    this.device.queue.writeBuffer(this.bodyBuf, TABLE_PATH * 16, data);
     this.pathCount = n;
     this.pathFate = path.fate === "horizon" || path.fate === "star" ? 1 : path.fate === "escape" ? 2 : 0; // (red end: falls in)
     return true;
@@ -1511,7 +1497,6 @@ export class Renderer {
       entries: [
         { binding: 0, resource: { buffer: this.paramBuf } },
         { binding: 1, resource: { buffer: t.accum } },
-        { binding: 2, resource: { buffer: this.lutBuf } },
         { binding: 3, resource: this.bgTexture.createView() },
         { binding: 4, resource: this.sampler },
         { binding: 5, resource: { buffer: t.moments } },
@@ -1521,7 +1506,6 @@ export class Renderer {
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
         { binding: 11, resource: { buffer: t.polAcc } },
-        { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.ship.envBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
         { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
@@ -1543,7 +1527,6 @@ export class Renderer {
       entries: [
         { binding: 0, resource: { buffer: this.paramBuf } },
         { binding: 1, resource: { buffer: t.accum } },
-        { binding: 2, resource: { buffer: this.lutBuf } },
         { binding: 3, resource: this.bgTexture.createView() },
         { binding: 4, resource: this.sampler },
         { binding: 5, resource: { buffer: t.moments } },
@@ -1553,7 +1536,6 @@ export class Renderer {
         { binding: 9, resource: this.starLodTexture.createView() },
         { binding: 10, resource: { buffer: this.catalogue } },
         { binding: 11, resource: { buffer: t.polAcc } },
-        { binding: 13, resource: { buffer: this.pathBuf } },
         { binding: 14, resource: { buffer: this.probeBuf } },
         { binding: 15, resource: { buffer: this.bodyBuf } },
         { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },

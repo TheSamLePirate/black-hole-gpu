@@ -371,6 +371,19 @@ Avant : une perte du device (pilote réinitialisé, mémoire GPU épuisée, ongl
 
 L'audit § 3.2 n° 4 (perte du device) est **couvert**.
 
+## M9 : 8 storage buffers, la même qualité (08/10/2026)
+
+Le noyau du traceur liait **10** storage buffers par étage et exigeait donc une limite au-dessus du défaut de WebGPU (8) : une partie d'Android et Safari étaient refusés au démarrage. Les trois tables en lecture seule du noyau — les corps (avec les harmoniques de la sonde), les LUT du corps noir et du synchrotron, le chemin de la caméra — sont maintenant **un seul buffer à offsets fixes** (`gpu-tables.ts` ; les corps restent à l'offset 0, leurs 86 lectures inchangées). Le device est demandé à la limite par défaut.
+
+**Même qualité, mesurée** :
+- **image** : `trace-ab` sur 6 scènes, les vues de chaque build comparées pixel à pixel — les écarts sont sous le bruit de capture (PSNR 53–71 dB entre les builds, contre 37–57 dB entre deux captures de la même référence) ;
+- **vitesse** : −2,0 % (Kerr) et −2,7 % (Ranger) sur 4 passages alternés, les autres scènes à ±1–2 %, dans le bruit ;
+- **compatibilité** : e2e `gpu-startup` — un adaptateur à 8 storage buffers démarre, dessine, sans erreur GPU (avant : « le lancer de rayons en demande 10 ») ; suite e2e complète 130/132 (les deux échecs traités : ce test à réécrire, l'atterrissage aléatoire ci-dessous).
+
+Trouvé en route : le relais du renderer de M2 ne respectait pas l'objet par lequel on passait (un objet créé sur la poignée appelait les méthodes du renderer réel) — corrigé, testé. Le test du rapport de la Lander exigeait une note qu'un état moteur coupé à 0,6 m du contact ne peut pas garantir — corrigé.
+
+**Reste ouvert (autopilotes)** : l'atterrissage autopiloté au Bourget, juste après un chargement, rate une fois sur trois environ — posé à 94 m de l'axe, 437 m après le seuil, 3,3 g (contre 0,9 m, 1,2 km et 1,7 g d'habitude). Antérieur à M9 (vu au plan HUB) ; l'e2e `report` affiche la carte en cas d'échec.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -382,7 +395,7 @@ Par ordre de gain :
    - des repères de pôle unifiés (pôle de date) ;
    - le retour par le trou de ver et Gargantua (points 9 et 10 du plan des autopilotes) ;
    - le flottement au Bourget ;
-   - le F aléatoire de l'atterrissage au Bourget (e2e `report`, 1 sur 6).
+   - l'atterrissage au Bourget juste après un chargement : 1 sur 3 environ à 94 m de l'axe et 3,3 g (e2e `report`).
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
@@ -391,10 +404,12 @@ Par ordre de gain :
    - audio spatial ;
    - HOTAS ;
    - cockpit interactif ;
-   - ≤ 8 storage buffers pour Android et Safari (action 7 du chargement, reportée).
+   - ~~≤ 8 storage buffers pour Android et Safari~~ (M9, fait le 08/10) ; restent FSR1 et la matrice de compatibilité.
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **08/10/2026 — M9 : 8 storage buffers** (le défaut de WebGPU : Android et Safari admis), même image et même vitesse mesurées (`trace-ab`, A/A pour le bruit) ; le relais de M2 corrigé.
 
 - **08/10/2026 — M2 : la perte du GPU rattrapée** sans rechargement (le renderer refait sous la même poignée, 357 ms ; e2e `gpu-recovery`).
 

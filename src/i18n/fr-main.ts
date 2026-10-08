@@ -422,8 +422,6 @@ export default {
   "WebGPU — the graphics device": "WebGPU — le périphérique graphique",
   "Shaders — geodesics, disk, sky, Ranger": "Shaders — géodésiques, disque, ciel, Ranger",
   "No WebGPU adapter found.": "Aucun adaptateur WebGPU trouvé.",
-  "This GPU binds {0} storage buffers per shader stage; the ray tracer needs 10.":
-    "Ce GPU lie {0} tampons de stockage par étage de shader ; le lancer de rayons en demande 10.",
   "Could not create a WebGPU canvas context.": "Impossible de créer un contexte de canevas WebGPU.",
   "the GPU was reset": "le GPU a été réinitialisé",
   "Compiling the ray tracer — first image": "Compilation du lancer de rayons — première image",

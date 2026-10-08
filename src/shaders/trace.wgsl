@@ -148,7 +148,6 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 
 @group(0) @binding(0) var<uniform> P: Params;
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
-@group(0) @binding(2) var<storage, read> luts: array<vec4f>; // the blackbody's colours (LUT_N), then the synchrotron's (SYNC_N)
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
 @group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
@@ -161,8 +160,6 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 // Star catalogue: [magic, grid, count, 0, cellStart[6·grid² + 1], stars (x, y, z, mag|T packed)]
 @group(0) @binding(10) var<storage, read> catalogue: array<u32>;
 @group(0) @binding(11) var<storage, read_write> polAcc: array<vec2f>; // Σ Stokes Q, U (luminance)
-// camera path: 256 points (xyz, fraction along the path), then bounding spheres of chunks of 16 segments
-@group(0) @binding(13) var<storage, read> pathPts: array<vec4f>;
 // light probe around the camera (equirectangular, camera rest frame), for the Ranger's lighting
 @group(0) @binding(14) var<storage, read_write> envBuf: array<vec4f>;
 // Bodies drawn as spheres (src/system/scene-bodies.ts), 6 vec4 each:
@@ -179,8 +176,15 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 //   5: pole (its universe's frame), turn about it now (radians)
 // Places are computed on the CPU in float64 at the frame's time: the GPU only turns them by Ω·Δt for
 // the retarded time Δt along the ray (no absolute time in float32).
+// One buffer for the read-only tables (PLAN-MONDE M9: the stage within WebGPU's default 8 storage buffers,
+// Android's and Safari's): the bodies [0, SH_BASE), the light probe's harmonics [SH_BASE, LUT_OFF), the
+// blackbody's colours (LUT_N) then the synchrotron's (SYNC_N) from LUT_OFF, the camera's path from PATH_OFF
+// — 256 points (xyz, fraction along the path), then the bounding spheres of chunks of 16 segments
+// (renderer.ts: TABLE_*, the same offsets)
 @group(0) @binding(15) var<storage, read> bodies: array<vec4f>;
 const BV = 6u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
+const LUT_OFF = 250u; // SH_BASE + 10 harmonics
+const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 // The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
 // from the inner to the outer radius), mip-mapped (src/system/planet-maps.ts)
 @group(0) @binding(16) var mapHi: texture_2d_array<f32>; // 2048 × 1024 (solar.ts: MAPS_HI)
@@ -283,7 +287,7 @@ fn bbLookup(T: f32) -> vec4f {
   let x = (lt - LUT_LOG_MIN) / (LUT_LOG_MAX - LUT_LOG_MIN) * (LUT_N - 1.0);
   let i0 = u32(floor(x));
   let i1 = min(i0 + 1u, u32(LUT_N) - 1u);
-  return mix(luts[i0], luts[i1], fract(x));
+  return mix(bodies[LUT_OFF + i0], bodies[LUT_OFF + i1], fract(x));
 }
 // Radiance of a blackbody at T, relative to a reference log10 luminance.
 fn blackbody(T: f32, logYref: f32) -> vec3f {
@@ -304,7 +308,7 @@ fn syncColor(sArg: f32) -> vec3f {
   let i0 = u32(floor(x));
   let i1 = min(i0 + 1u, u32(SYNC_N) - 1u);
   let o = u32(LUT_N);
-  return mix(luts[o + i0].rgb, luts[o + i1].rgb, fract(x));
+  return mix(bodies[LUT_OFF + o + i0].rgb, bodies[LUT_OFF + o + i1].rgb, fract(x));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -569,7 +573,7 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
   let R = max(P.path.y * (rayLen + 0.5 * len), 0.004);
   for (var c = 0u; c * PATH_CHUNK < n - 1u; c++) {
     // chord vs the chunk's bounding sphere (+ tube radius)
-    let sph = pathPts[PATH_MAX + c];
+    let sph = bodies[PATH_OFF + PATH_MAX + c];
     let w = sph.xyz - p0;
     let u = clamp(dot(w, dv) / (len * len), 0.0, 1.0);
     let dc = length(w - u * dv);
@@ -577,8 +581,8 @@ fn pathGlow(p0: vec3f, p1: vec3f, rayLen: f32) -> vec4f {
     let i0 = c * PATH_CHUNK;
     let i1 = min(n - 1u, i0 + PATH_CHUNK);
     for (var i = i0; i < i1; i++) {
-      let a = pathPts[i];
-      let b = pathPts[i + 1u];
+      let a = bodies[PATH_OFF + i];
+      let b = bodies[PATH_OFF + i + 1u];
       let e = b.xyz - a.xyz;
       let L = length(e);
       if (L < 1e-6) { continue; }
