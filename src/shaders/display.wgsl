@@ -11,8 +11,8 @@ struct Display {
   lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), sharpening (RCAS, 0…1)
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
   eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), unused ×3
-  rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (0/1: the
-                // canopy's drops), the vertical field's half tangent
+  rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (1: the
+                // canopy's drops) + 2 for Mars's dust (W6: grains, not drops), the vertical field's half tangent
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
 };
 
@@ -223,8 +223,8 @@ fn rainStreaks(uv: vec2f) -> f32 {
     let z = 1.2 * pow(2.0, f32(i));
     let seed = f32(i) * 17.31;
     // (a drop 1.5 mm across — the near ones out of focus: a blur ~3 mm more —, its spacing 0.12 m in a
-    // steady rain; the far layers paler: the air between)
-    let wM = (0.0015 + 0.004 * exp(-0.25 * z)) / z;
+    // steady rain; the far layers paler: the air between; dust: grains, a third as wide)
+    let wM = (0.0015 + 0.004 * exp(-0.25 * z)) / z * select(1.0, 0.35, D.rain.z > 1.5);
     let fade = 1.0 - 0.13 * f32(i);
     var c = 0.0;
     if (radial < 0.999) {
@@ -492,14 +492,18 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // (in the cabin: the drops on its glass — where the Ranger's image lets the outside through —, the rain
     // beyond it fainter)
     var glass = 1.0;
-    if (D.rain.z > 0.5 && D.lod.y > 0.5) {
+    let inCab = D.rain.z > 0.5 && D.rain.z < 1.5;
+    if (inCab && D.lod.y > 0.5) {
       let q = uv * D.img.xy - D.ship.xy;
       if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
     }
     // (a drop sends on the sky's light above it as much as the scene's round it: brighter than a dark ground)
     let lit = max(rainLight(uv), textureSampleLevel(hdr, samp, vec2f(uv.x, max(uv.y - 0.3, 0.02)), 0.0).rgb);
-    c = mix(c, lit * 1.5, rainStreaks(uv) * glass * select(1.0, 0.5, D.rain.z > 0.5));
-    if (D.rain.z > 0.5 && glass > 0.0) { c = canopyDrops(uv, c, glass); }
+    // (dust: the grains the storm's own ochre, dimmer than drops — they scatter, they do not shine)
+    let dust = D.rain.z > 1.5;
+    let col = select(lit * 1.5, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
+    c = mix(c, col, rainStreaks(uv) * glass * select(1.0, 0.5, inCab));
+    if (inCab && glass > 0.0) { c = canopyDrops(uv, c, glass); }
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);

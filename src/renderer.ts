@@ -2226,6 +2226,10 @@ export class Renderer {
     }
     f.set(this.earthTiles.params(), 69 * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
+    f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
+    if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
+    // (the storm's diffuse light in the kernel's weather code: compiled in only then)
+    if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -2311,7 +2315,7 @@ export class Renderer {
     // (the rain — W5, display.wgsl rainLook —: its strength, a clock [s], in the cabin (its canopy's drops),
     // the vertical field's half tangent; the drops' velocity on the camera's axes [m/s], their speed)
     const r = target === this.live ? this.rain : null;
-    const inside = !!r && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin");
+    const inside = !!r && !r.dust && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin");
     const v = r?.v ?? [0, 0, 0];
     this.device.queue.writeBuffer(
       this.displayBuf,
@@ -2319,7 +2323,8 @@ export class Renderer {
       new Float32Array([
         r ? Math.min(r.rain, 1.3) : 0,
         (performance.now() / 1000) % 3600,
-        inside ? 1 : 0,
+        // (z: in the cabin 1; Mars's dust, not rain, 2)
+        (inside ? 1 : 0) + (r?.dust ? 2 : 0),
         Math.tan((s.fov * Math.PI) / 360),
         ...v,
         Math.hypot(...v),
@@ -2329,7 +2334,7 @@ export class Renderer {
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
-  rain: { rain: number; v: [number, number, number] } | null = null;
+  rain: { rain: number; v: [number, number, number]; dust?: boolean } | null = null;
 
   /**
    * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
@@ -2391,6 +2396,22 @@ export class Renderer {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
     }
+  }
+
+  /**
+   * Mars's dust storm (PLAN-METEO W6; trace.wgsl setAir: earth4.z), 0 … 1: the weather's dust at the camera's
+   * place when Mars is the body near it; else the Dust preset's, for all of Mars (a global storm) — a draw's
+   * regional storms seen only from near.
+   */
+  private marsDustNow = 0;
+  private marsDust(s: Settings, near: ReturnType<typeof localPatch>, bodies: GpuBody[], time: number): number {
+    if (s.weather === "fair") return 0;
+    if (near && bodies[near.index]?.id === "mars") {
+      const g = patchGeodetic(near, flatteningOf("mars"));
+      return weatherAt(s, { body: "mars", lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI }, daysOf(time), this.weatherReal)
+        .dust;
+    }
+    return s.weather === "dust" ? 1 : 0;
   }
 
   /** the weather's clouds' drift with the wind [m, the Earth's axes] and the clock it was last moved at [s] */
@@ -3701,6 +3722,8 @@ export class Renderer {
    * stops more; the cities show already, more and the stars fade, the ship's own lights blind).
    */
   private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>, surface: ReturnType<typeof patchGeodetic> | null) {
+    // (Mars in a dust storm — W6 —: the day a third as bright under it; the eye opens to it)
+    if (near && bodies[near.index]?.id === "mars") return 1 - 0.55 * this.marsDustNow;
     if (!near || bodies[near.index]?.id !== "earth") return 1;
     const place = surface ?? patchGeodetic(near, WGS84_F);
     const mu = place.up.reduce((v, n, i) => v + n * near.light[i]!, 0);

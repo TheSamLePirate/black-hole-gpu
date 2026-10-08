@@ -220,9 +220,12 @@ export function weatherAt(
   days: number,
   real: WeatherState | null = null,
 ): WeatherState {
-  if (s.weather === "real") return real ?? presetWeather("fair", s.wind);
-  if (s.weather === "random") return randomWeather(place.body, place.lat, place.lon, days, s.wind);
-  return presetWeather(s.weather, s.wind);
+  let w: WeatherState;
+  if (s.weather === "real") w = real ?? presetWeather("fair", s.wind);
+  else if (s.weather === "random") w = randomWeather(place.body, place.lat, place.lon, days, s.wind);
+  else w = presetWeather(s.weather, s.wind);
+  // (no rain on Mars — its air too thin and cold for liquid water: its clouds ice; dust only there)
+  return place.body === "mars" && w.rain > 0 ? { ...w, rain: 0 } : w;
 }
 
 /** A layer's report word by its cover: FEW, SCT, BKN, OVC. */

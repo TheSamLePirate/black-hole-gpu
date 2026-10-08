@@ -3789,6 +3789,8 @@ struct AirSpec {
   moon: f32,   // the Moon's light scattered too, its eclipses dimming the Sun (the Earth: 1)
 };
 var<private> AIR: AirSpec;
+// Mars's dust storm now (setAir: P.earth4.z when the air is Mars's, else 0) — earthAir's diffuse light through it
+var<private> AIR_DUST: f32 = 0.0;
 // the maps (solar.ts: MAPS_HI, then MAPS_LO) of the worlds with air
 fn airOf(m: u32) -> bool { return m == 0u || m == 2u || m == 4u || m == 5u || m == 6u || m == 19u || m == 20u || m == 21u || m == 22u; }
 fn hasAir(k: u32) -> bool {
@@ -3797,6 +3799,7 @@ fn hasAir(k: u32) -> bool {
 }
 fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
+  AIR_DUST = 0.0;
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03) — built whole (the constructor
   // names every field: none left at zero), the other worlds' below changing it
   var a = AirSpec(
@@ -3813,6 +3816,18 @@ fn setAir(k: u32) {
     a.br = vec3f(2.2e-7, 5.2e-7, 1.27e-6); a.bo = vec3f(0.0);
     a.bms = 3.6e-5 * vec3f(0.94, 0.78, 0.6); a.bme = 3.6e-5; a.g = vec3f(0.62, 0.7, 0.8); a.k = 2.0;
     a.sky = vec3f(0.07, 0.045, 0.025);
+    // a dust storm (PLAN-METEO W6; P.earth4.z, 0 … 1): its dust ten times thicker (τ ≈ 4 — the 2018 global
+    // storm reached ~9), lower (its scale height 7 km), darker in the blue; the sun a dim disc, the sky an
+    // opaque orange whose light outdoes the sun's on the ground
+    let dust = clamp(P.earth4.z, 0.0, 1.0);
+    if (dust > 0.0) {
+      a.bme *= 1.0 + 9.0 * dust;
+      a.hm = mix(11100.0, 7000.0, dust);
+      a.bms = a.bme * mix(vec3f(0.94, 0.78, 0.6), vec3f(0.96, 0.74, 0.5), dust);
+      a.g = mix(a.g, vec3f(0.7, 0.72, 0.76), dust);
+      a.sky *= 1.0 + 3.0 * dust;
+      AIR_DUST = dust;
+    }
   } else if (m == 6u) {
     // Venus: above its cloud deck (the drawn ground), CO₂ and a yellowish sulphuric haze
     a.rm = 6.0518e6; a.top = 90e3; a.hr = 15900.0; a.hm = 6000.0;
@@ -4024,6 +4039,15 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
     }
     o.L += sc * Ts * Tv;
+    // (a dust storm's thick air — τ ~ 4 —: the light scattered many times, its diffuse field through the
+    // dust above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an
+    // opaque orange glow, not the black the beam's light alone left)
+    if (HAS_WX && AIR_DUST > 0.0) {
+      let tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
+      let mz0 = dot(normal, physicalLs);
+      let Tdif = exp(-0.22 * tauV * vec3f(1.0, 1.25, 1.6)) * smoothstep(-0.1, 0.25, mz0) * 0.9;
+      o.L += AIR.bms * dM * (AIR_DUST * 1.2 / (4.0 * PI)) * Tdif * Tv;
+    }
     let mz = dot(normal, Lm);
     let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(normal, physicalLs));
     if (nightS > 0.0 && mz > -0.1 && P.earth3.w > 0.0 && AIR.moon > 0.5) {

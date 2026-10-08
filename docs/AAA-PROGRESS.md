@@ -415,6 +415,8 @@ Plan : [`PLAN-METEO.md`](PLAN-METEO.md), étapes W1 à W8.
 
 - **W5 (fait)** : la pluie à l'image — traînées sur cinq profondeurs, parallèles à l'arrêt, jaillissant du point de fuite en vol ; dans la cabine, les gouttes sur la verrière (des lentilles qui glissent, chassées vers le haut par l'air en vol) ; sans coût mesurable. Planche `docs/progress/meteo/w5-pluie.jpg`.
 
+- **W6 (fait)** : la tempête de poussière de Mars — l'air dix fois plus chargé (τ ≈ 4), sa lumière diffuse (le ciel ocre et opaque, l'horizon effacé), l'œil qui s'ouvre, les grains au vent ; pas de pluie sur Mars. +0,6 ms en tempête, rien par beau temps. Planche `docs/progress/meteo/w6-poussiere-mars.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -430,7 +432,7 @@ Par ordre de gain :
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
-   - météo (M4 : W1–W5 faits — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie ; restent la poussière de Mars, le METAR, les autopilotes au labo) ;
+   - météo (M4 : W1–W6 faits — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie, poussière de Mars ; restent le METAR, les autopilotes au labo) ;
    - aéroports vivants (balisage de nuit, ILS) ;
    - audio spatial ;
    - HOTAS ;
@@ -440,6 +442,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M4 W6** : la tempête de poussière de Mars (τ ≈ 4, lumière diffuse, grains au vent).
 - **08/10/2026 — M4 W5** : la pluie — traînées selon le mouvement, gouttes sur la verrière.
 - **08/10/2026 — M4 W4** : les pistes face au vent (les deux sens, la manche à air, le vent au HUD) ; l'arrondi mesuré depuis le sol, le roulage gardé après un rebond.
 - **08/10/2026 — M4 W3** : brouillard, brume et couches nuageuses de la météo dans l'image, compilés seulement quand elle agit (beau temps inchangé ; couvert +26 %).

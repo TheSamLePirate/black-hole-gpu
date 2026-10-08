@@ -221,7 +221,17 @@ export class WeatherPanel {
                 fr: "La poussière, c'est Mars ; ici, du vent et une visibilité réduite.",
                 en: "Dust is Mars's; here, wind and a shorter visibility.",
               })
-            : tr(HINTS[s.weather]);
+            : at.body === "mars" && (s.weather === "rain" || s.weather === "storm")
+              ? tr({
+                  fr: "Pas de pluie sur Mars : son air trop mince et trop froid pour l'eau liquide — des nuages de glace, du vent.",
+                  en: "No rain on Mars: its air too thin and cold for liquid water — ice clouds, wind.",
+                })
+              : at.body === "mars" && s.weather === "dust"
+                ? tr({
+                    fr: "Tempête de poussière : le ciel ocre et opaque, le soleil un disque pâle, l'horizon effacé.",
+                    en: "A dust storm: the sky an opaque ochre, the sun a pale disc, the horizon gone.",
+                  })
+                : tr(HINTS[s.weather]);
       // the wind: a compass, its arrow where it blows to; the speed large; the gusts
       const gust = w.wind.gust > 0 ? `${(w.wind.u10 + w.wind.gust).toFixed(0)}` : "—";
       tWind.innerHTML = `<div class="wx-k">${tr({ fr: "Vent", en: "Wind" })}</div><div class="wx-wind">

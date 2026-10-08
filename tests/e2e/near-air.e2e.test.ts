@@ -75,7 +75,7 @@ test.skipIf(!E2E)(
     const PI=3.14159265358979; const EARTH_RM=6378137.0; const EARTH_MOON=vec3f(0.07,0.085,0.11);
     struct Params {near0:vec4f,near4:vec4f,near5:vec4f,earth3:vec4f,eclipse:vec4f,earth4:vec4f,wx:array<vec4f,5>}; var<private> P:Params;
     // (the Earth's weather — W3 — out: earthAir's terms of it compiled away, as in fair weather)
-    const HAS_WX=false; var<private> WX_W:f32=0.0;
+    const HAS_WX=false; var<private> WX_W:f32=0.0; var<private> AIR_DUST:f32=0.0;
     fn wxFog(ro:vec3f,rd:vec3f)->vec2f{return vec2f(0.0);} fn wxNear(q:vec3f)->f32{return 0.0;}
     fn wxVeil(h:f32,w:f32,s:u32)->vec2f{return vec2f(1.0);} fn wxHaze(h:f32,w:f32)->f32{return 0.0;}
     fn hgPhase(g:f32,ct:f32)->f32{return 0.0;}

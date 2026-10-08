@@ -1,5 +1,5 @@
 import { tunnelEntrySide } from "../system/wormhole-map";
-import { weatherAt } from "../weather";
+import { weatherAt, windFromAt } from "../weather";
 import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
@@ -1631,34 +1631,43 @@ function entryStep(
  * or null (no air there, or not in our universe).
  */
 /**
- * The rain round the camera (PLAN-METEO W5): its strength (0…1 — the weather's rain there, under its
- * lowest deck; fading out 500 m into it; none higher, none off the Earth) and the drops' velocity relative
- * to the camera [m/s, on its axes: right, up, forward] — their fall (6–8 m/s, the heavier the rain the
- * faster), the wind (flying: the flight's own), the ground's turning, less the camera's motion. The image
- * draws them (display.wgsl: the streaks, the canopy's drops). Null: no rain.
+ * The rain round the camera (PLAN-METEO W5) — or on Mars, its storm's dust blown along the ground (W6): its
+ * strength (0…1 — the weather's rain there, under its lowest deck, fading out 500 m into it, none higher;
+ * the dust's within 2 km of the ground) and the particles' velocity relative to the camera [m/s, on its
+ * axes: right, up, forward] — their fall (rain 6–8 m/s, dust 0.3), the weather's wind there, the ground's
+ * turning, less the camera's motion. The image draws them (display.wgsl: the streaks, the canopy's drops).
+ * Null: none.
  */
-function rainView(this: CameraController): { rain: number; v: Vec3 } | null {
+function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolean } | null {
   const s = this.s;
   if (s.weather === "fair") return null;
   const cam = cameraFrame(s);
   const nav = this.ourNav(cam);
-  if (!nav || nav.ref !== "earth") return null;
+  if (!nav || (nav.ref !== "earth" && nav.ref !== "mars")) return null;
   const q = toBodyFixed(nav.ref, nav.X, nav.t);
   const ql = Math.hypot(...q);
   const place = { body: nav.ref, lat: (Math.asin(q[2] / ql) * 180) / Math.PI, lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI };
-  const w = weatherAt(s, place, daysOf(nav.t), this.weatherReal);
-  if (w.rain <= 0) return null;
+  const days = daysOf(nav.t);
+  const w = weatherAt(s, place, days, this.weatherReal);
+  const dust = nav.ref === "mars";
+  if ((dust ? w.dust : w.rain) <= 0) return null;
   const h = gearHeight(nav.ref, nav.X, nav.t);
   const base = w.layers.length ? Math.min(...w.layers.map((l) => l.base)) : 2500;
-  const k = Math.min(Math.max(1 - (h - base) / 500, 0), 1);
+  const k = dust ? Math.min(Math.max(1 - (h - 1500) / 500, 0), 1) : Math.min(Math.max(1 - (h - base) / 500, 0), 1);
   if (k <= 0) return null;
   const axes = this.camAxesHome();
   if (!axes) return null;
   const up = unitV(sub3(nav.X, ourState(nav.ref, nav.t).pos));
-  const fall = (6 + 2 * w.rain) / C_MPS;
-  const drop = lin(lin(groundVelocity(nav.ref, nav.X, nav.t), 1, this.windHome ?? [0, 0, 0], 1), 1, up, -fall);
+  const b = solarBody(nav.ref)!;
+  const east = unitV(cross(unitV(spinVector(b, nav.t)), up));
+  const north = cross(up, east);
+  // (the wind blowing towards the opposite of where it comes from, at its 10 m speed)
+  const to = ((windFromAt(w, place, days) + 180) * Math.PI) / 180;
+  const wind = lin(east, (w.wind.u10 * Math.sin(to)) / C_MPS, north, (w.wind.u10 * Math.cos(to)) / C_MPS);
+  const fall = (dust ? 0.3 : 6 + 2 * w.rain) / C_MPS;
+  const drop = lin(lin(groundVelocity(nav.ref, nav.X, nav.t), 1, wind, 1), 1, up, -fall);
   const rel = sub3(drop, nav.V);
-  return { rain: w.rain * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3 };
+  return { rain: (dust ? w.dust * 0.7 : w.rain) * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3, dust };
 }
 
 /** A runway as it is landed now: into the weather's wind there (sites.ts landingEnd — fair weather: the

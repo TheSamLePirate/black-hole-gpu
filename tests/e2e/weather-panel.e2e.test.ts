@@ -120,4 +120,23 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     await Bun.sleep(800);
     expect(await app.js<unknown>(`__bh.renderer.rain`)).toBeNull();
   }, 60_000);
+
+  test("Mars's dust storm (W6): on Mars, the Dust preset thickens its air and blows its grains; fair, none", async () => {
+    await app.js(`(__bh.game.land("mars", 18.44, -102.55), __bh.settings.weather = "dust", true)`);
+    await Bun.sleep(3000);
+    const st = await app.js<{ dust: number; key: number; grains: boolean; rain: boolean }>(`(() => {
+      const r = __bh.renderer;
+      return { dust: r.paramsF[61 * 4 + 2], key: r.featureKey, grains: !!r.rain?.dust, rain: !!r.rain };
+    })()`);
+    expect(st.dust).toBe(1);
+    expect(st.key & 1024).toBe(1024);
+    expect(st.grains).toBe(true);
+    await app.js(`(__bh.settings.weather = "rain", true)`);
+    await Bun.sleep(800);
+    // (no rain on Mars)
+    expect(await app.js<unknown>(`__bh.renderer.rain`)).toBeNull();
+    await app.js(`(__bh.settings.weather = "fair", true)`);
+    await Bun.sleep(800);
+    expect(await app.js<number>(`__bh.renderer.paramsF[61 * 4 + 2]`)).toBe(0);
+  }, 90_000);
 });

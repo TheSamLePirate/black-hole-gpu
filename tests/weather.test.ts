@@ -138,3 +138,11 @@ describe("the weather as the tracer reads it (W3)", () => {
     expect(layerTau({ base: 400, top: 9000, cover: 1 })).toBeCloseTo(143.3, 1);
   });
 });
+
+test("Mars: no rain (its air too thin and cold), its dust storms", () => {
+  const m = { body: "mars", lat: 18.4, lon: 77.5 };
+  expect(weatherAt({ weather: "rain", wind: 1 }, m, 3).rain).toBe(0);
+  expect(weatherAt({ weather: "storm", wind: 1 }, m, 3).rain).toBe(0);
+  expect(weatherAt({ weather: "dust", wind: 1 }, m, 3).dust).toBe(1);
+  expect(weatherAt({ weather: "rain", wind: 1 }, { ...m, body: "earth" }, 3).rain).toBeCloseTo(0.6, 6);
+});
