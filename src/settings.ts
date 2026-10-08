@@ -1,4 +1,5 @@
 import type { BodyView } from "./system/our-side";
+import type { WeatherPreset } from "./weather";
 import { M_SECONDS } from "./units";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
@@ -376,7 +377,8 @@ export interface Settings {
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
   gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
-  wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts)
+  wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts) — the fair weather's
+  weather: WeatherPreset; // the weather flown through (weather.ts): a preset, a draw, the airfields' real one
   ballistic: number; // ballistic coefficient m/(C_D A): how hard the air brakes the ship [kg/m²]
   damage: boolean; // the air's heat and loads can destroy the craft (off: alarms only)
   flightMode: "rocket" | "plane" | "sf"; // how the flown craft is flown in the air (pilot.ts FlightMode)
@@ -602,6 +604,7 @@ export function defaultSettings(): Settings {
     gearForgiving: false,
     gyroscopes: true,
     wind: 1,
+    weather: "fair",
     ballistic: 900,
     damage: true,
     flightMode: "plane",
@@ -1790,6 +1793,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   gearForgiving: "pref",
   gyroscopes: "pref",
   wind: "pref",
+  weather: "carried",
   ballistic: "carried",
   damage: "carried",
   flightMode: "scene",

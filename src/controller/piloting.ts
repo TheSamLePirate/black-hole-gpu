@@ -1,4 +1,5 @@
 import { tunnelEntrySide } from "../system/wormhole-map";
+import { weatherAt } from "../weather";
 import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
@@ -760,10 +761,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // the craft's place, in the home frame for the flight
   this.windHome = null;
   this.windNow = null;
+  this.weatherNow = null;
   {
     const nav = this.ourNav(cameraFrame(s));
     const b = nav && nav.ref !== "sun" ? solarBody(nav.ref) : undefined;
-    if (nav && b?.atmosphere && s.wind > 0) {
+    // (the fair weather calm: no wind, as before; any other weather has its own)
+    if (nav && b?.atmosphere && (s.wind > 0 || s.weather !== "fair")) {
       const P = ourState(nav.ref, nav.t).pos;
       const d = sub3(nav.X, P);
       const r = Math.hypot(...d);
@@ -776,7 +779,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         const Msec0 = 4.925490947e-6 * s.massSolar;
         const dtSec = s.animate ? s.timeSpeed * dt * Msec0 : 0;
         const V = this.airFlight.last?.speed ?? 0;
-        const w = this.weather.step(s.wind, h, lat, lon, daysOf(nav.t), V, dtSec);
+        // (the weather over this place — weather.ts: the setting's preset, a draw, the airfields' report)
+        const wx = (this.weatherNow = weatherAt(s, { body: nav.ref, lat, lon }, daysOf(nav.t), this.weatherReal));
+        const w = this.weather.step(wx.wind, h, lat, lon, daysOf(nav.t), V, dtSec);
         const up = unitV(d);
         const east = unitV(cross(unitV(spinVector(b, nav.t)), up));
         const north = cross(up, east);

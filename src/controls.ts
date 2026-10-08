@@ -1,4 +1,5 @@
 import type { cameraFrame } from "./camera";
+import type { WeatherState } from "./weather";
 import type { FlightReport } from "./game/report";
 import { Weather } from "./wind";
 import type { Vec3 } from "./physics";
@@ -738,6 +739,10 @@ export class CameraController {
   noseSteer = 0;
   /** the weather flown through (wind.ts), and its wind now in the home frame [c] — none: still air */
   readonly weather = new Weather();
+  /** the weather over the place flown now (weather.ts), or null (no air under the craft) */
+  weatherNow: WeatherState | null = null;
+  /** the airfields' real weather, when it came in (W7: METAR) — the "real" setting's */
+  weatherReal: WeatherState | null = null;
   windHome: [number, number, number] | null = null;
   /** the wind now: its speed [m/s] and where it blows from [° from north] — for the displays */
   windNow: { speed: number; from: number } | null = null;

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { dryden, meanWindSpeed, Weather, WIND_10M, windFrom } from "../src/wind";
+import { fairWind } from "../src/weather";
 
 // The wind (phase 2): its mean profile with the height, the Dryden turbulence's intensities and
 // scales, a field the same each time a flight is flown, its statistics as asked.
@@ -22,20 +23,24 @@ test("Dryden, low: the vertical intensity a tenth of the wind at 6 m, its scale 
 test("the same seed, the same weather", () => {
   const a = new Weather(42),
     b = new Weather(42);
-  for (let i = 0; i < 500; i++) expect(a.step(2, 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(2, 300, 35, -118, 1000, 120, 0.02));
+  for (let i = 0; i < 500; i++)
+    expect(a.step(fairWind(2), 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(fairWind(2), 300, 35, -118, 1000, 120, 0.02));
 });
 
 test("a new flight draws its weather at its first step: whatever the last flight left", () => {
   const a = new Weather(42),
     b = new Weather(9);
-  for (let i = 0; i < 300; i++) b.step(2, 300, 35, -118, 990, 120, 0.02);
+  for (let i = 0; i < 300; i++) b.step(fairWind(2), 300, 35, -118, 990, 120, 0.02);
   a.reset();
   b.reset();
-  for (let i = 0; i < 500; i++) expect(a.step(2, 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(2, 300, 35, -118, 1000, 120, 0.02));
+  for (let i = 0; i < 500; i++)
+    expect(a.step(fairWind(2), 300, 35, -118, 1000, 120, 0.02)).toEqual(b.step(fairWind(2), 300, 35, -118, 1000, 120, 0.02));
   // (another moment, another field)
   const c = new Weather();
   c.reset();
-  expect(c.step(2, 300, 35, -118, 1000.5, 120, 0.02)).not.toEqual(new Weather(1).step(2, 300, 35, -118, 1000, 120, 0.02));
+  expect(c.step(fairWind(2), 300, 35, -118, 1000.5, 120, 0.02)).not.toEqual(
+    new Weather(1).step(fairWind(2), 300, 35, -118, 1000, 120, 0.02),
+  );
 });
 
 test("flown through: the mean is the mean wind, the spread the Dryden intensity", () => {
@@ -49,7 +54,7 @@ test("flown through: the mean is the mean wind, the spread the Dryden intensity"
   const from = windFrom(35, -118, 1000);
   const to = from + Math.PI;
   for (let i = 0; i < 200000; i++) {
-    const v = w.step(1, h, 35, -118, 1000, 100, 0.02);
+    const v = w.step(fairWind(1), h, 35, -118, 1000, 100, 0.02);
     // (along the wind: its east and north parts projected)
     const along = v[0] * Math.sin(to) + v[1] * Math.cos(to);
     sx += along;

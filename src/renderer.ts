@@ -93,7 +93,8 @@ import {
 import type { Settings } from "./settings";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { AU_M, C_MPS } from "./units";
-import { WIND_10M, windFrom } from "./wind";
+import { windFrom } from "./wind";
+import { weatherAt, type WeatherState } from "./weather";
 
 /** the space station's loading stage, as the loading screen names it */
 const STATION_LOADING = t("The space station");
@@ -2375,11 +2376,12 @@ export class Renderer {
     const eh = Math.hypot(up[0]!, up[1]!) || 1;
     const east = [-up[1]! / eh, up[0]! / eh, 0];
     const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
-    // (blowing from windFrom: towards the opposite way — as the flight's wind does)
-    const to = windFrom(lat, lon, daysOf(time)) + Math.PI;
+    // (the weather's wind — weather.ts, as the flight's —: blowing from it, towards the opposite way)
+    const wx = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal).wind;
+    const to = (wx.from === null ? windFrom(lat, lon, daysOf(time)) : (wx.from * Math.PI) / 180) + Math.PI;
     const tu = [0, 1, 2].map((i) => east[i]! * Math.sin(to) + north[i]! * Math.cos(to));
     const tc = [up[1]! * tu[2]! - up[2]! * tu[1]!, up[2]! * tu[0]! - up[0]! * tu[2]!, up[0]! * tu[1]! - up[1]! * tu[0]!];
-    const U = Math.max(WIND_10M[s.wind] ?? 4, 0.5);
+    const U = Math.max(wx.u10, 0.5);
     const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
     const uc = cb[0]! * tu[0]! + cb[1]! * tu[1]! + cb[2]! * tu[2]!;
     const cc = cb[0]! * tc[0]! + cb[1]! * tc[1]! + cb[2]! * tc[2]!;
@@ -3820,6 +3822,8 @@ export class Renderer {
   get variantReady() {
     return this.featureKey === FEATURES_ALL || !!this.variants.get(this.featureKey)?.rt;
   }
+  /** the airfields' real weather when it came in (weather.ts, PLAN-METEO W7), the "real" setting's */
+  weatherReal: WeatherState | null = null;
   /** the device was lost (its reason), or null */
   lost: string | null = null;
   onLost?: (why: string) => void;
@@ -3869,6 +3873,7 @@ export class Renderer {
     this.cockpitDash = old.cockpitDash;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
+    this.weatherReal = old.weatherReal;
     // (the old one silenced: a frame of it still in flight, failing, no longer starts a recovery)
     old.onLost = undefined;
     old.onGpuError = undefined;

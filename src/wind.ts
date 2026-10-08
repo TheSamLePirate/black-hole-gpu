@@ -14,6 +14,7 @@
 // Seeded, so a flight is the same each time it is flown (the golden flights at fixed steps).
 
 import type { V3 } from "./mounts";
+import type { WindSpec } from "./weather";
 
 export type WindLevel = 0 | 1 | 2 | 3;
 
@@ -36,7 +37,11 @@ function rng(seed: number) {
 
 /** The mean wind's speed at a height above the ground [m/s]: the boundary layer, the jet aloft, nothing high up. */
 export function meanWindSpeed(level: WindLevel, h: number): number {
-  const u10 = WIND_10M[level]!;
+  return meanWind(WIND_10M[level]!, h);
+}
+
+/** The same for a wind of u10 at 10 m [m/s] (the weather's: weather.ts). */
+export function meanWind(u10: number, h: number): number {
   if (u10 <= 0) return 0;
   const hb = Math.max(h, 0.5);
   if (hb <= 500) return u10 * (hb / 10) ** (1 / 7);
@@ -53,7 +58,8 @@ export function windFrom(lat: number, lon: number, days: number): number {
   return ((270 + 70 * s) * Math.PI) / 180;
 }
 
-/** The Dryden model's intensities [m/s] and scales [m] at a height [m] for a wind at 6 m (20 ft) [m/s]. */
+/** The Dryden model's intensities [m/s] and scales [m] at a height [m] for a wind at 6 m (20 ft) [m/s]
+ *  (level: the turbulence aloft — none, light, moderate, severe). */
 export function dryden(h: number, w6: number, level: WindLevel) {
   const ft = Math.max(h, 1) / 0.3048;
   if (ft < 1000) {
@@ -99,22 +105,24 @@ export class Weather {
 
   /**
    * The wind now [m/s] — east, north, up — at a height h [m] above the ground, at latitude, longitude
-   * [°] on day `days`, for a craft moving through the air at V [m/s], advanced by dt [s].
+   * [°] on day `days`, for a craft moving through the air at V [m/s], advanced by dt [s]. The wind the
+   * weather's (weather.ts: a level's own — fairWind — is the wind before it).
    */
-  step(level: WindLevel, h: number, lat: number, lon: number, days: number, V: number, dt: number): V3 {
+  step(w: WindSpec, h: number, lat: number, lon: number, days: number, V: number, dt: number): V3 {
     if (this.unseeded) this.reset(1 + (Math.floor(Math.abs(days) * 864e5) % 2147483646));
-    if (level === 0 || !(h < 30e3)) {
+    if ((w.u10 <= 0 && w.turb === 0 && w.gust <= 0) || !(h < 30e3)) {
       this.turb = [0, 0, 0];
       return [0, 0, 0];
     }
-    const U = meanWindSpeed(level, h);
-    const from = windFrom(lat, lon, days);
+    // (the shear: the lowest 300 m's growth beyond the boundary layer's own — the final's)
+    const U = meanWind(w.u10, h) + w.shear * Math.min(Math.max(h, 0) / 300, 1);
+    const from = w.from === null ? windFrom(lat, lon, days) : (w.from * Math.PI) / 180;
     // (blowing from `from`: towards the opposite way)
     const to = from + Math.PI;
     const ax: V3 = [Math.sin(to), Math.cos(to), 0];
     const cr: V3 = [Math.cos(to), -Math.sin(to), 0];
     // the turbulence: each component a first-order filter of white noise over its scale, as flown through
-    const D = dryden(h, meanWindSpeed(level, 6), level);
+    const D = dryden(h, meanWind(w.u10, 6), w.turb);
     const Vf = Math.max(V, 5);
     if (dt > 0) {
       const sig = [D.su, D.su, D.sw],
@@ -127,7 +135,7 @@ export class Weather {
       this.nextGust -= Vf * dt;
       if (!this.gust && this.nextGust <= 0) {
         this.gust = {
-          peak: (0.4 + 0.6 * this.r.next()) * [0, 0, 5, 9][level]! * (this.r.next() < 0.5 ? -1 : 1),
+          peak: (0.4 + 0.6 * this.r.next()) * w.gust * (this.r.next() < 0.5 ? -1 : 1),
           len: 150 + 350 * this.r.next(),
           at: 0,
         };
