@@ -667,8 +667,10 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   // (outside, free — or about the cabin: the keys move the camera; the ship flies on as it was)
   // (the spectator away: the keys move it; the ship flies on as it was — its autopilots, its holds)
   if (this.outsideView() === "free" || this.s.shipMount === "cabin" || this.spectator) return i;
-  // (the keys as the player set them — input/bindings.ts; the defaults are KSP's)
-  const h = (a: HeldAxis) => k(heldCode(a));
+  // (the keys as the player set them — input/bindings.ts; the defaults are KSP's — or a controller's button
+  // bound to the same held key: PLAN-HOTAS)
+  const pc = this.padControls.last?.commands;
+  const h = (a: HeldAxis) => (k(heldCode(a)) || pc?.held.has(a) ? 1 : 0);
   i.pitch = h("pitchUp") - h("pitchDown");
   i.yaw = h("yawRight") - h("yawLeft");
   i.roll = h("rollRight") - h("rollLeft");
@@ -690,6 +692,33 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
     i.roll = clamp(i.roll - pad.move[3], -1, 1);
     i.throttle = clamp(i.throttle + pad.move[2], -1, 1);
   }
+  // the controllers through their profiles (PLAN-HOTAS H2): a stick's pitch (pulled back: nose up), roll and
+  // twist, the pedals' rudder, a mini-stick's translations — added; the throttle lever absolute: where it
+  // stands is the throttle — picked up as a mixing desk's fader is: once the keys (or a plugging-in) left the
+  // throttle elsewhere, the lever takes it back only as it passes through it (no jump from 30 % to full at
+  // its first touch); the pedals' toe brakes
+  const A = pc?.axes;
+  if (A) {
+    i.pitch = clamp(i.pitch + (A.pitch ?? 0), -1, 1);
+    i.yaw = clamp(i.yaw + (A.yaw ?? 0), -1, 1);
+    i.roll = clamp(i.roll + (A.roll ?? 0), -1, 1);
+    i.tx = clamp(i.tx + (A.rcsX ?? 0), -1, 1);
+    i.ty = clamp(i.ty + (A.rcsY ?? 0), -1, 1);
+    i.tz = clamp(i.tz + (A.rcsZ ?? 0), -1, 1);
+    const lever = A.throttle;
+    if (lever !== undefined) {
+      const thr = this.pilot.throttle;
+      const prev = this.leverWas;
+      const owns = this.leverSet !== null && Math.abs(thr - this.leverSet) < 0.005;
+      const crossed = prev !== null && (prev - thr) * (lever - thr) <= 0;
+      if (owns || crossed || Math.abs(lever - thr) < 0.01) {
+        this.pilot.throttle = lever;
+        this.leverSet = lever;
+      }
+      this.leverWas = lever;
+    } else this.leverWas = this.leverSet = null;
+    this.toeBrake = Math.max(A.brakeL ?? 0, A.brakeR ?? 0);
+  } else this.toeBrake = 0;
   return i;
 }
 

@@ -340,7 +340,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // (the wheel brakes, the engine idle, once every wheel is down — the nose wheel lowered first: braked
   // on the mains alone at speed, the craft would slam its nose down)
   const allDown = !!gdef && this.gearLast?.contact === gdef.legs.length;
-  const brake = this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown ? 1 : 0;
+  // (and the pedals' toe brakes, as hard as pressed — PLAN-HOTAS)
+  const brake = Math.max(this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown ? 1 : 0, allDown ? this.toeBrake : 0);
   const steer = this.noseSteer;
   // (the craft's turn in the home frame: the camera's basis — right = fwd × up — is left-handed there,
   // the pilot's rates turn the other way: ω = −Σ ωᵢ axisᵢ [rad/s])

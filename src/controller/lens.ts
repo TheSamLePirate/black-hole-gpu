@@ -146,6 +146,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const pad = this.scripted ? null : this.padFrame !== undefined ? this.padFrame : this.pad.poll();
   if (pad?.active) this.activity = performance.now();
   if (pad) for (const a of pad.actions) this.onPadAction?.(a);
+  // (the controllers through their profiles — a HOTAS, a pad the player set: their buttons' keymap actions)
+  const pc = this.scripted ? null : this.padControls.read();
+  if (pc) for (const p of pc.pressed) this.onPadKeyAction?.(p.action, p.arg);
 
   if (s.ship !== this.piloting) this.setPilot(s.ship);
   if (s.shipMount !== this.lastMount) this.lookOff = [0, 0];
@@ -186,6 +189,10 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // (about the cabin the keys walk, the throttle is off: the arrows turn the look — 90°/s, 70°/s)
   if ((kx || ky) && pilotNow && !away && s.shipMount === "cabin" && !s.lookAt)
     this.setLook(s.shipLookYaw + kx * 90 * dt, s.shipLookPitch + ky * 70 * dt);
+  // (a hat or a stick bound to the look: the pilot's head turned)
+  const lk = pc?.commands.axes;
+  if (lk && pilotNow && !away && (lk.lookX || lk.lookY))
+    this.setLook(s.shipLookYaw + (lk.lookX ?? 0) * 90 * dt, s.shipLookPitch + (lk.lookY ?? 0) * 70 * dt);
   if (pad && !away && (pad.look[0] || pad.look[1])) {
     // right stick: orbit the target, or turn the camera (free rotation, flight); piloting: look
     if (pilotNow) this.setLook(s.shipLookYaw + pad.look[0] * 90 * dt, s.shipLookPitch + pad.look[1] * 70 * dt);

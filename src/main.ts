@@ -1739,6 +1739,8 @@ async function main() {
       touch();
     },
   };
+  // (a controller's button bound to a keymap action — PLAN-HOTAS: the same as its key)
+  camera.onPadKeyAction = (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg);
   // photo mode (ui/photo.ts): the view alone, one bar for the picture
   let photoMode: PhotoMode | null = null;
   const openPhoto = () =>

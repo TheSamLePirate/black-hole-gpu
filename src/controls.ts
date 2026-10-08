@@ -21,6 +21,8 @@ import type { AssistGraph } from "./ui/hud/graph";
 import { fleet } from "./fleet";
 import type { VesselId } from "./vessels";
 import { type GamepadInput, sharedPad, type PadAction } from "./gamepad";
+import { PadControls } from "./input/devices";
+import type { KeyAction } from "./input/keymap";
 import { nodeDvHome, type OurPath } from "./system/our-predict";
 import type { OurMission } from "./system/our-plan";
 import type { RendezvousPoint } from "./system/iss-plan";
@@ -356,6 +358,16 @@ export class CameraController {
   nearShip = Infinity;
   /** a headless controller's pad this frame, polled by the main one (undefined: poll its own) */
   padFrame: ReturnType<GamepadInput["poll"]> | undefined = undefined;
+  /** the controllers read through their profiles (PLAN-HOTAS: a HOTAS, a pad set by the player), once a
+   *  frame (lens.ts); a button's keymap action handed to the app */
+  readonly padControls = new PadControls();
+  onPadKeyAction?: (action: KeyAction, arg?: string) => void;
+  /** the absolute throttle lever's last reading, and the throttle it last set (picked up: it holds the
+   *  throttle while that is still its own, takes it back passing through it) */
+  leverWas: number | null = null;
+  leverSet: number | null = null;
+  /** the toe brakes asked (the pedals' — 0…1) */
+  toeBrake = 0;
   onPadAction?: (a: PadAction) => void;
   lastSide = 0;
   hoverAt = 0;
