@@ -70,6 +70,7 @@ jobs:
       contents: read
     outputs:
       preview: ${{ steps.preview.outcome == 'success' && env.PREVIEW_PATH || '' }}
+      main: ${{ steps.revisions.outputs.main }}
     steps:
       - uses: oven-sh/setup-bun@v2
       - name: Snapshot both branch revisions
@@ -197,3 +198,58 @@ jobs:
         run: |
           echo "main:    $URL"
           if [ -n "$PREVIEW" ]; then echo "preview: $URL$PREVIEW/"; fi
+
+  # the dedicated server (docs/DEPLOY.md): the same site artifact in an nginx image on GHCR, then the
+  # `deploy` branch names that image — the server's Portainer polls the branch and pulls it; nothing
+  # calls in. The branch moves only once the image is pushed, each image under its own tag.
+  server:
+    if: github.event_name != 'pull_request'
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: pages-artifact
+      - name: Build and push the image
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN: ${{ needs.site.outputs.main }}
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          tar -xf pages-artifact/artifact.tar -C _site
+          rm -rf pages-artifact
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="${MAIN:0:7}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build -f deploy/Dockerfile -t "$image:$tag" -t "$image:latest" .
+          docker push "$image:$tag"
+          docker push "$image:latest"
+          echo "ref=$image:$tag" >> "$GITHUB_OUTPUT"
+      - name: Point the deploy branch at it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.image.outputs.ref }}
+          MAIN: ${{ needs.site.outputs.main }}
+        run: |
+          set -euo pipefail
+          git init -q deploy-branch
+          cd deploy-branch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 origin deploy; then git checkout -q -b deploy FETCH_HEAD; else git checkout -q --orphan deploy; fi
+          sed "s|IMAGE|$REF|" ../deploy/compose.yml > compose.yml
+          git add compose.yml
+          git commit -q -m "deploy: $REF (main ${MAIN:0:7})"
+          git push -q origin deploy
+          echo "server: $REF" >> "$GITHUB_STEP_SUMMARY"
