@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { gradeDocking, gradeLanding, type LandingFigures } from "../src/game/report";
+import { gradeDocking, gradeLanding, type LandingFigures, weatherDifficulty } from "../src/game/report";
 
 // The flight's report (PLAN-HUB HB4): a landing and a docking graded out of 20, each figure judged.
 
@@ -48,4 +48,19 @@ test("a landing with no load recorded (a save loaded just before): no load judge
   const r = gradeLanding({ ...base, gMax: Number.NaN });
   expect(r.score).toBe(20);
   expect(r.lines.find((l) => l.label === "Greatest load")!.value).toBe("—");
+});
+
+test("the weather widens a landing's marks (W8): a gusty crosswind's 1.5 m/s and 8 m off, an A; in calm, a B", () => {
+  const firm = { ...base, sink: 1.5, runway: { across: 8, along: 500 } };
+  const calm = gradeLanding({ ...firm, weather: { cross: 0, head: 5, gust: 0, vis: 30e3 } });
+  const gusty = gradeLanding({ ...firm, weather: { cross: 8, head: 3, gust: 5, vis: 30e3 } });
+  expect(weatherDifficulty({ cross: 8, head: 3, gust: 5, vis: 30e3 })).toBeCloseTo(0.5 + 5 / 12, 6);
+  expect(gusty.score).toBeGreaterThan(calm.score);
+  expect(gusty.letter).toBe("A");
+  expect(calm.letter).toBe("B");
+  // (the weather said: what widened them)
+  expect(gusty.lines.find((l) => l.label === "Weather")!.value).toBe("cross 8 m/s · gusts +5");
+  // (fog: a short visibility, a tail wind)
+  expect(weatherDifficulty({ cross: 0, head: -3, gust: 0, vis: 300 })).toBeCloseTo(0.3 + 0.4, 6);
+  expect(weatherDifficulty(null)).toBe(0);
 });

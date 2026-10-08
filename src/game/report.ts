@@ -23,6 +23,9 @@ export interface LandingFigures {
   /** the Δv spent over the flight [m/s], its length [s] */
   dv: number;
   flightS: number;
+  /** the weather it landed in (PLAN-METEO W8): the surface wind across the runway [m/s, ± from the right],
+   *  along it (> 0 head), its gusts' rise [m/s], the visibility [m]; absent: none known */
+  weather?: { cross: number; head: number; gust: number; vis: number } | null;
 }
 
 export interface DockingFigures {
@@ -56,24 +59,40 @@ const dur = (s: number) =>
 const metres = (m: number) => (Math.abs(m) >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m.toFixed(m < 10 ? 1 : 0)} m`);
 
 /**
+ * How hard the weather made the landing (0 calm … 1): the cross wind past 3 m/s (all of it at 13 — 25 kt), the
+ * gusts (all at 12 m/s), a visibility under a mile (+0.3), a tail wind (+0.2 a m/s past 1).
+ */
+export function weatherDifficulty(w: LandingFigures["weather"]): number {
+  if (!w) return 0;
+  const d = Math.max(Math.abs(w.cross) - 3, 0) / 10 + w.gust / 12 + (w.vis < 1609 ? 0.3 : 0) + Math.max(-w.head - 1, 0) * 0.2;
+  return Math.min(Math.max(d, 0), 1);
+}
+
+/**
  * A landing graded: 20 less a penalty for each figure past its mark — the sink beyond 0.6 m/s (−4 a
  * m/s), on a runway the axis beyond 3 m (−1 per 5 m), off one the site beyond 5 m (−1 per 20 m, 8 at
- * most), the load beyond 2.5 g (−3 a g); a hard landing −6.
+ * most), the load beyond 2.5 g (−3 a g); a hard landing −6. The weather's marks wider (W8): the sink's by
+ * 0.5 m/s and the axis's by 4 m at its hardest (weatherDifficulty), as a check pilot's are.
  */
 export function gradeLanding(f: LandingFigures): FlightReport {
+  const d = weatherDifficulty(f.weather);
   let s = 20;
-  s -= Math.max(0, f.sink - 0.6) * 4;
-  if (f.runway) s -= Math.max(0, Math.abs(f.runway.across) - 3) / 5;
+  s -= Math.max(0, f.sink - 0.6 - 0.5 * d) * 4;
+  if (f.runway) s -= Math.max(0, Math.abs(f.runway.across) - 3 - 4 * d) / 5;
   else if (f.padM !== null) s -= Math.min(8, Math.max(0, f.padM - 5) / 20);
   if (Number.isFinite(f.gMax)) s -= Math.max(0, f.gMax - 2.5) * 3;
   if (f.verdict === "hard") s -= 6;
   const score = Math.max(0, Math.min(20, s));
   const lines: FlightReport["lines"] = [
-    { label: t("Sink rate"), value: `${f.sink.toFixed(1)} m/s`, q: judge(f.sink, 1, 2) },
+    { label: t("Sink rate"), value: `${f.sink.toFixed(1)} m/s`, q: judge(f.sink, 1 + 0.5 * d, 2 + 0.5 * d) },
     { label: t("Speed along"), value: `${f.along.toFixed(0)} m/s`, q: "good" },
   ];
   if (f.runway) {
-    lines.push({ label: t("Off the axis"), value: metres(Math.abs(f.runway.across)), q: judge(Math.abs(f.runway.across), 5, 15) });
+    lines.push({
+      label: t("Off the axis"),
+      value: metres(Math.abs(f.runway.across)),
+      q: judge(Math.abs(f.runway.across), 5 + 4 * d, 15 + 4 * d),
+    });
     lines.push({ label: t("Past the threshold"), value: metres(f.runway.along), q: "good" });
   } else if (f.padM !== null) lines.push({ label: t("From the site"), value: metres(f.padM), q: judge(f.padM, 10, 100) });
   lines.push(
@@ -86,6 +105,17 @@ export function gradeLanding(f: LandingFigures): FlightReport {
     { label: t("Flight"), value: dur(f.flightS), q: "good" },
   );
   if (f.verdict === "hard") lines.unshift({ label: t("Gear"), value: t("damaged — a hard landing"), q: "bad" });
+  // (the weather it was flown in — its wind across and its gusts, the visibility —: what widened the marks)
+  if (f.weather && (d > 0 || Math.abs(f.weather.cross) >= 1 || f.weather.vis < 8000)) {
+    const w = f.weather;
+    const parts = [
+      Math.abs(w.cross) >= 1 ? tf("cross {0} m/s", Math.abs(w.cross).toFixed(0)) : null,
+      w.head < -1 ? tf("tail {0} m/s", (-w.head).toFixed(0)) : null,
+      w.gust >= 1 ? tf("gusts +{0}", w.gust.toFixed(0)) : null,
+      w.vis < 8000 ? tf("visibility {0}", metres(w.vis)) : null,
+    ].filter(Boolean);
+    lines.push({ label: t("Weather"), value: parts.join(" · ") || t("calm"), q: d > 0.6 ? "bad" : d > 0.25 ? "ok" : "good" });
+  }
   return {
     kind: "landing",
     title: f.site ? tf("Landing · {0}", f.site) : tf("Landing · {0}", f.body),

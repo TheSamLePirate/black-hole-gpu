@@ -624,6 +624,7 @@ function glideAlpha(
   stall: number,
   prot: number,
   gdotRef = 0,
+  spAir = sp,
 ): number {
   const LA = this.airFlight.last;
   const m = fleet.massProps().mass;
@@ -635,10 +636,13 @@ function glideAlpha(
   // Newton's steps from the angle it has)
   let want = R.alpha;
   let vStall = 0;
-  if (LA && LA.air.rho > 0 && sp > 1) {
+  // (the wing's lift at the speed through the air — `spAir`, the wind taken off —, the path turned at the speed
+  // over the ground: in a 7 m/s head wind, the lift reckoned at the ground speed was short of the wing's, and
+  // the craft floated 2.5 km past the touchdown point, stalled and dropped at 2.9 m/s)
+  if (LA && LA.air.rho > 0 && spAir > 1) {
     const A = VESSELS[fleet.active].aero;
     const lift = (al: number) => {
-      const o = aeroForces(A, [0, -sp * Math.sin(al), sp * Math.cos(al)], LA.air, [0, 0, 0], this.airFlight.cfg);
+      const o = aeroForces(A, [0, -spAir * Math.sin(al), spAir * Math.cos(al)], LA.air, [0, 0, 0], this.airFlight.cfg);
       return o.F[1] * Math.cos(al) + o.F[2] * Math.sin(al);
     };
     for (let i = 0; i < 3; i++) {
@@ -650,13 +654,13 @@ function glideAlpha(
     }
     // (the stall's speed here: the lift at the stall's angle grows as the speed squared)
     const ls = lift(stall);
-    if (ls > 0) vStall = sp * Math.sqrt((m * g) / ls);
+    if (ls > 0) vStall = spAir * Math.sqrt((m * g) / ls);
   }
   // (the speed kept — `prot` × the stall's: the energy the flare needs, ×1.1 in it; slower, the nose down, the path
   // given up rather than the wing). Supersonic, by 0.1 rad at most: high in thin air the stall's speed is the
   // craft's own (Mach 2.4 at 25 km), hundreds of m/s short of the margin — unbounded, the nose went to no lift
   // at all, the craft fell 9° past its path and pulled 3 g out of the dive
-  const short = 0.01 * Math.max(prot * vStall - sp, 0);
+  const short = 0.01 * Math.max(prot * vStall - spAir, 0);
   // (and so high up, 1.5 km over the ground, transonic too: at Mach 0.95, 11 km up, the nose went to no
   // lift, the craft dived at 150 m/s and pulled 3.5 g out of it)
   // (the last 5 m none: the flare's attitude held onto the wheels — the nose dropped at 2 m, floating past the
@@ -718,6 +722,7 @@ function approach(
   const sAl = dot3(rel, along); // (negative before the threshold)
   const xt = dot3(rel, rgt);
   const sp = Math.hypot(...va);
+  const spAir = Math.hypot(...this.airVelocity(va));
   const agl = this.aglNow(cam, h);
   const vh = unitV(lin(va, 1, up, -dot3(va, up)));
   const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
@@ -919,13 +924,20 @@ function approach(
     stall,
     onFinal && R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35,
     gdotRef,
+    spAir,
   );
   // (the air brake: the speed held down the steep slope, then bled on the shallow one; in the circuit —
   // downwind and its turn — the final's own speed, the turn then the 8 km the downwind's offset allows:
   // at 230 m/s it was 15 km across, the craft swung through the axis and back, low, and sank short)
   const circuit = R.leg === "downwind" || R.leg === "turn";
-  const vT = !onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160;
-  this.airBrake = clamp((sp - vT) / 50, 0, 1);
+  // (on the final, the pilots' margin for a gusty or strong wind: the gusts' rise and half the wind past 5 m/s,
+  // 15 m/s at most — a thunderstorm's 13 m/s gusting 21, shear and turbulence on top, left the craft short of
+  // energy at the flare: down 460 m before the threshold at 3.6 m/s)
+  const wx = this.weatherNow?.wind;
+  const vAdd = onFinal && wx ? Math.min(wx.gust + 0.5 * Math.max(wx.u10 - 5, 0), 15) : 0;
+  const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160) + vAdd;
+  // (the speed through the air held: a head wind's ground speed short of it left the brake in, the wing fast)
+  this.airBrake = clamp((spAir - vT) / 50, 0, 1);
   // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
   // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)
   const vAir = this.airVelocity(va);

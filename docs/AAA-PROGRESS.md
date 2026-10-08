@@ -394,7 +394,7 @@ Résultat (scène à Gargantua, 20 Mbit/s) : **première image 11,1 → 5,5–6,
 
 **M3b** : les maillages bruts (Endurance et ses 4 niveaux, Ranger, Lander) compressés sans perte, gzip au build, décompressés par le navigateur (`DecompressionStream`, sans dépendance) : **23,0 → 12,2 Mo**, même rendu (planche `docs/progress/monde/m3b-maillages.jpg`) ; test unitaire `inflate`, e2e `dock-undock` et `smoke`. L'ISS et le cockpit l'étaient déjà.
 
-## M4 : la météo (en cours, 08/10/2026)
+## M4 : la météo (terminée, 08/10/2026)
 
 Plan : [`PLAN-METEO.md`](PLAN-METEO.md), étapes W1 à W8.
 
@@ -419,6 +419,8 @@ Plan : [`PLAN-METEO.md`](PLAN-METEO.md), étapes W1 à W8.
 
 - **W7 (fait)** : la météo réelle — le METAR de la station la plus proche (metar.vatsim.net, sans clé, CORS ouvert), décodé (vent, rafales, visibilité, couches, pluie, orage, brouillard), en vigueur pour le vol et l'image ; le panneau montre le rapport ; sans réseau, beau temps. Planche `docs/progress/meteo/w7-metar.jpg`.
 
+- **W8 (fait)** : l'autopilote dans la météo, au labo — vent de travers, vent arrière (l'autre bout), brouillard, orage : 4/4 posés en douceur ; la portance et l'aérofrein sur la vitesse air (face au vent, il flottait puis décrochait), la marge de rafales en finale ; le rapport note selon la météo. Planche finale `docs/progress/meteo/w8-final.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -434,7 +436,7 @@ Par ordre de gain :
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
-   - météo (M4 : W1–W7 faits — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie, poussière de Mars, METAR réel ; restent les autopilotes au labo et les finitions — W8) ;
+   - ~~météo~~ (M4 terminée le 08/10 : W1–W8 — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie, poussière de Mars, METAR réel, autopilotes éprouvés au labo) ;
    - aéroports vivants (balisage de nuit, ILS) ;
    - audio spatial ;
    - HOTAS ;
@@ -444,6 +446,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M4 terminée (W8)** : l'autopilote posé dans la météo au labo (4/4) ; portance sur la vitesse air, marge de rafales ; notes selon la météo.
 - **08/10/2026 — M4 W7** : la météo réelle par le METAR des stations des pistes (sans clé).
 - **08/10/2026 — M4 W6** : la tempête de poussière de Mars (τ ≈ 4, lumière diffuse, grains au vent).
 - **08/10/2026 — M4 W5** : la pluie — traînées selon le mouvement, gouttes sur la verrière.

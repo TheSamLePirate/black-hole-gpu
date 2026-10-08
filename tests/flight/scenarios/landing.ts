@@ -27,7 +27,7 @@ export const LIMITS = {
 };
 
 /** The touchdowns as they happen (page side): the message, the runway's offset at that moment. */
-async function watchTouchdowns(lab: Lab) {
+export async function watchTouchdowns(lab: Lab) {
   await lab.js(`(() => {
     const c = __bh.camera, prev = c.onPilotMessage;
     window.__td = [];
@@ -63,7 +63,7 @@ async function fromOrbit(lab: Lab, site: string, inc: number, wind: number, o: {
 }
 
 /** The glide alone: glideTo's start, the wind. */
-async function glide(
+export async function glide(
   lab: Lab,
   site: string,
   dist: number,
@@ -84,7 +84,7 @@ const STOPPED = "T.landed && !T.rolling";
  * Flown to a stop: fixed steps all the way, or fixed to the final (2.5 km up on it) and live from there —
  * the final, the touchdown and the rollout at the page's own pace.
  */
-async function fly(lab: Lab, o: { live?: boolean; maxSim: number; maxWall: number }): Promise<ChunkEnd> {
+export async function fly(lab: Lab, o: { live?: boolean; maxSim: number; maxWall: number }): Promise<ChunkEnd> {
   if (!o.live) return lab.fixed({ until: STOPPED, maxSim: o.maxSim, maxWall: o.maxWall });
   const e = await lab.fixed({
     until: `(T.entry && T.entry.leg === "final" && T.entry.app && T.entry.app.agl < 2500) || T.landed`,
@@ -96,7 +96,7 @@ async function fly(lab: Lab, o: { live?: boolean; maxSim: number; maxWall: numbe
 }
 
 /** The verdict: the landing's checks, then the flight's quality (its graphs saved, measured). */
-async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry", wind: number): Promise<Verdict> {
+export async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry", wind: number): Promise<Verdict> {
   const td = ((await lab.js(`window.__td ?? []`).catch(() => [])) ?? []) as { text: string; along: number | null; across: number | null }[];
   await lab.saveGraphs();
   const q = quality(lab.o.dir);

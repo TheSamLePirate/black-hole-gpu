@@ -122,7 +122,10 @@ untouched.
   capture), a card graded out of 20, A to F, each figure judged (good, fair, poor) — the sink, the axis or
   the site's distance, the load's peak, the gear; the closing rate, the ring off the axis, the ports'
   axes, the turns apart; the Δv spent and the flight's length. It stays 20 s (✕ or Esc), and the journal
-  keeps its line.
+  keeps its line. A landing in weather (PLAN-METEO W8) has its marks widened as a check pilot's are — the
+  sink's by up to 0.5 m/s, the axis's by 4 m, by how hard the cross wind, the gusts, a visibility under a
+  mile and a tail wind made it (`weatherDifficulty`) — and a **Weather** line says what widened them
+  (`cross 8 m/s · gusts +5`).
 
 ## The assistants: every autopilot flown by hand
 

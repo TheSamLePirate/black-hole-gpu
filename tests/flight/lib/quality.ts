@@ -78,7 +78,16 @@ export function quality(dir: string): Record<string, number | null> {
   const max = (a: number[]) => (a.length ? Math.max(...a) : Number.NaN);
   const out: Record<string, number | null> = {
     q_shipS: round((T[T.length - 1]!.t ?? 0) - (T[0]!.t ?? 0), 1),
-    q_gMax: round(max(num((S) => S.air?.g))),
+    // (the placement's own jolt left out — glideTo, orbit: a craft set down at speed, its attitude not yet the
+    // flight's; at Kennedy its first 12 steps read 2.75 g in still air, none of the flight's)
+    q_gMax: round(
+      max(
+        num(
+          (S) => S.air?.g,
+          T.filter((S) => (S.t ?? 0) - (T[0]!.t ?? 0) > 5),
+        ),
+      ),
+    ),
     q_alphaMaxDeg: round(max(num((S) => Math.abs(S.air?.alpha), air))),
     q_alphaSwings: oscillations(
       flying.map((S) => S.t),

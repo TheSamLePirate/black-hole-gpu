@@ -7,6 +7,7 @@ import { MISSIONS_FC } from "./missions";
 import { ORBIT } from "./orbit";
 import { SMOKE } from "./smoke";
 import { VERTICAL } from "./vertical";
+import { WEATHER } from "./weather";
 
 export type { Scenario, Verdict } from "./helpers";
-export const SCENARIOS: Scenario[] = [...SMOKE, ...LANDING, ...VERTICAL, ...ORBIT, ...MISSIONS_FC, ...DOCK, ...GARGANTUA];
+export const SCENARIOS: Scenario[] = [...SMOKE, ...LANDING, ...WEATHER, ...VERTICAL, ...ORBIT, ...MISSIONS_FC, ...DOCK, ...GARGANTUA];

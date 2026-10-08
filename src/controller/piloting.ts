@@ -1617,10 +1617,25 @@ function entryStep(
   const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
   R.gPrev = gam;
   const stall = (V.aero.wing?.stall ?? 0.35) - 0.05;
-  R.alpha = this.glideAlpha(R, gRef, gam, gdot, sp, bank, agl, dt, stall, R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35);
+  // (the wing's lift and the brake on the speed through the air — computer.ts glideAlpha)
+  const spAir = Math.hypot(...this.airVelocity(va));
+  R.alpha = this.glideAlpha(
+    R,
+    gRef,
+    gam,
+    gdot,
+    sp,
+    bank,
+    agl,
+    dt,
+    stall,
+    R.flareTau !== undefined ? 1.1 : agl > 600 ? 1.6 : 1.35,
+    0,
+    spAir,
+  );
   // (too fast down the path: the air brake)
   const vT = Math.min(110 + 0.004 * dist, 320);
-  this.airBrake = clamp((sp - vT) / 60, 0, 1);
+  this.airBrake = clamp((spAir - vT) / 60, 0, 1);
   const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank, fr.env.normal?.(fr.s.x));
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
 }
