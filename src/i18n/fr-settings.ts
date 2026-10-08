@@ -763,14 +763,17 @@ export default {
   "Circles on the map where each body's sphere of influence ends (r = a (m/M)^0.4).":
     "Des cercles sur la carte là où finit la sphère d'influence de chaque corps (r = a (m/M)^0.4).",
   Sound: "Son",
-  "Everything synthesized live, no music: the flight computer's beeps and alarms, the main engine (rumble, roar, ignition), the RCS thrusters (hiss, valve pops, panned to the side that fires), the reaction wheels, life support, the wind in an atmosphere, the interface. In vacuum only the hull carries sound: from the cabin-side mounts (dorsal, belly, nose) it is heavy and close, from the outside ones far and muffled. Starts with the first click or key (the browser's rule).":
-    "Tout est synthétisé en direct, sans musique : les bips et alarmes de l'ordinateur de vol, le moteur principal (grondement, rugissement, allumage), les propulseurs RCS (sifflement, claquements de vannes, spatialisés du côté qui tire), les roues de réaction, le support vie, le vent dans une atmosphère, l'interface. Dans le vide, seule la coque transmet le son : depuis les fixations côté cabine (dorsale, ventre, nez) il est lourd et proche, depuis celles de l'extérieur lointain et étouffé. Démarre au premier clic ou à la première touche (règle du navigateur).",
+  "Everything synthesized live, no music: the flight computer's beeps and alarms, the main engine (rumble, roar, ignition), the RCS thrusters (hiss, valve pops, panned to the side that fires), the reaction wheels, life support, the wind in an atmosphere, the interface. The engine is placed where its nozzles are. In vacuum only the hull carries sound: from the cockpit, the cabin and the hull's mounts (dorsal, belly, nose) it is heavy and close, from the outside ones far and muffled. Starts with the first click or key (the browser's rule).":
+    "Tout est synthétisé en direct, sans musique : les bips et alarmes de l'ordinateur de vol, le moteur principal (grondement, rugissement, allumage), les propulseurs RCS (sifflement, claquements de vannes, spatialisés du côté qui tire), les roues de réaction, le support vie, le vent dans une atmosphère, l'interface. Le moteur est placé à ses tuyères. Dans le vide, seule la coque transmet le son : depuis le cockpit, la cabine et les fixations de la coque (dorsale, ventre, nez) il est lourd et proche, depuis celles de l'extérieur lointain et étouffé. Démarre au premier clic ou à la première touche (règle du navigateur).",
   Volume: "Volume",
   "Flight computer": "Ordinateur de vol",
   "SAS, holds, autopilots, warp, targets, manoeuvre countdowns, spheres of influence, alarms.":
     "SAS, maintiens, pilotes automatiques, accélération du temps, cibles, comptes à rebours de manœuvre, sphères d'influence, alarmes.",
   "Engines & RCS": "Moteurs et RCS",
   "Cabin & wind": "Cabine et vent",
+  "Headphones (3D sound)": "Casque (son 3D)",
+  "With headphones, the sources are placed in 3D (HRTF): the engine behind you, a thruster above, the ship passing a free camera. Off — speakers —, a plain left–right panning. The Doppler of a passing ship is heard either way.":
+    "Au casque, les sources sont placées en 3D (HRTF) : le moteur derrière vous, un propulseur au-dessus, le vaisseau qui passe devant une caméra libre. Désactivé — enceintes —, un simple panoramique gauche–droite. L'effet Doppler d'un vaisseau qui passe s'entend dans les deux cas.",
   Interface: "Interface",
   Autosave: "Sauvegarde auto",
   "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).":

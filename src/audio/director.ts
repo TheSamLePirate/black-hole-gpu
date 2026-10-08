@@ -6,10 +6,10 @@
 import type { Settings } from "../settings";
 import type { RangerStatus } from "../game/status";
 import { gameLog } from "../game/log";
-import { sound, type Cue } from "./engine";
-
-/** The attach points riding on the hull: the camera hears the ship through it (the others: outside). */
-const ON_HULL = new Set(["dorsal", "belly", "rear"]);
+import { fleet } from "../fleet";
+import { VESSELS } from "../vessels";
+import { sound, type Cue, type EngineSpace } from "./engine";
+import { airCutoff, centroid, doppler, hearing, radialSpeed, type ShipPose, shipSource, soundSpeed } from "./space";
 const HOLDS = ["prograde", "retrograde", "normal", "antinormal", "radialOut", "radialIn", "target", "antiTarget", "maneuver"];
 
 /** What the director reads of the flight (a subset of CameraController.flightInfo()). */
@@ -54,6 +54,9 @@ export class SoundDirector {
     toNode: number;
   } | null = null;
   private spin = 0;
+  /** the engine's last distance from the ear [m] (its radial speed: the Doppler) */
+  private engDist = Number.NaN;
+  private vr = 0;
 
   constructor(private s: Settings) {
     this.applyMix();
@@ -87,6 +90,7 @@ export class SoundDirector {
   /** Volumes from the settings (after a change). */
   applyMix() {
     const s = this.s;
+    sound.setHeadphones(!!s.soundHeadphones);
     sound.setMix(
       { master: s.soundVolume, beeps: s.soundBeeps, engines: s.soundEngines, ambience: s.soundAmbience, ui: s.soundUi },
       s.sound,
@@ -97,8 +101,35 @@ export class SoundDirector {
     if (this.s.sound) sound.play(c, arg);
   }
 
-  /** Every frame. `flying`: the Ranger is piloted and shown; `live`: the simulation's time runs. */
-  update(dt: number, o: { flying: boolean; live: boolean; info: FlightSnapshot | null; status: RangerStatus | null; fired: Fired }) {
+  /** Where the main engine is from the ear: its nozzles placed by the camera's pose on the ship (or a
+   *  spectator's view of it), the air between, the Doppler of a passing ship (S1). */
+  private engineSpace(pose: ShipPose | null, air: number, dt: number, warp: number): EngineSpace | null {
+    if (!pose) return null;
+    const V = VESSELS[fleet.active];
+    const at = shipSource(pose, centroid(V.jets.filter((j) => j.main).map((j) => j.p)));
+    const dist = Math.hypot(...at);
+    // (the radial speed smoothed over ~0.3 s: a frame's jitter is not a pitch; the flight's own, not the
+    // screen's — at ×4 a 200 m/s pass closed at 800 m/s, every pass shifted an octave)
+    const vr = warp > 0 ? radialSpeed(this.engDist, dist, dt) / warp : 0;
+    this.engDist = dist;
+    this.vr += (vr - this.vr) * Math.min(1, dt / 0.3);
+    return { pos: at, dist, dop: doppler(this.vr, soundSpeed(air)), cutoff: airCutoff(dist, air) };
+  }
+
+  /** Every frame. `flying`: the Ranger is piloted and shown; `live`: the simulation's time runs; `pose`: the
+   *  camera's against the ship (a spectator's view of it: `spectator`). */
+  update(
+    dt: number,
+    o: {
+      flying: boolean;
+      live: boolean;
+      info: FlightSnapshot | null;
+      status: RangerStatus | null;
+      fired: Fired;
+      pose?: ShipPose | null;
+      spectator?: boolean;
+    },
+  ) {
     const s = this.s;
     const { info, status, flying } = o;
     // ---- continuous: thrusters, cabin, wind
@@ -113,7 +144,15 @@ export class SoundDirector {
       rcsPan: f.rcs > 0.05 ? -f.rcsSide : -0.5 * Math.sign(f.yaw),
       spin: this.spin,
       torque: f.turn,
-      inside: ON_HULL.has(s.shipMount),
+      // (the cockpit and the cabin aboard, the hull's mounts through its structure — the audit's § 12: the
+      // cockpit was heard as an outside view)
+      inside: hearing(s.shipMount, !!o.spectator) !== "outside",
+      space: this.engineSpace(
+        o.pose ?? null,
+        sf ? Math.min(sf.air / 1.225, 2) : 0,
+        dt,
+        o.live ? s.timeSpeed * 4.925490947e-6 * s.massSolar : 0,
+      ),
       air: sf ? Math.min(sf.air / 1.225, 2) : 0,
       airspeed: sf ? Math.hypot(sf.vVert, sf.vHor) : 0,
       plasma: info?.air?.inAir ? Math.min(Math.max((Math.log10(Math.max(info.air.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,

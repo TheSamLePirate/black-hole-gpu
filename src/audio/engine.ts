@@ -6,6 +6,8 @@
 //           ├─ ambience (life support, reaction wheels, wind) ────────────────────────────────┤
 //           └─ ui (clicks) ────────────────────────────────────────────────────────────────────┘
 //   a small procedural room (convolution) gives the beeps and the thrusters the cabin they ring in.
+//   the main engine is placed (PLAN-AUDIO S1, audio/space.ts): a panner at its nozzles — equal-power, or HRTF
+//   with headphones —, the air's absorption over the distance, its Doppler from a spectator's view.
 //
 // The context starts on the first user gesture (browsers keep audio off until then) and sleeps
 // while the page is hidden.
@@ -58,8 +60,10 @@ export interface EngineState {
   /** reaction wheels: angular speed of the ship [rad/s] and its change */
   spin: number;
   torque: number;
-  /** the camera is in the cabin (true) or outside */
+  /** the camera hears the ship through its hull — in the cabin or on the structure (true) — or outside */
   inside: boolean;
+  /** where the main engine is from the ear (none: straight behind, near) */
+  space?: EngineSpace | null;
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
@@ -71,7 +75,25 @@ export interface EngineState {
   live: boolean;
 }
 
+/** Where the main engine is from the ear (audio/space.ts): its place in the listener's frame [m], its
+ *  distance, the Doppler factor, the air's low-pass there [Hz]. */
+export interface EngineSpace {
+  pos: [number, number, number];
+  dist: number;
+  dop: number;
+  cutoff: number;
+}
+
 const clamp = (x: number, a = 0, b = 1) => Math.min(Math.max(x, a), b);
+
+/** An analyser's level now (RMS, dBFS). */
+function rms(a: AnalyserNode) {
+  const d = new Float32Array(a.fftSize);
+  a.getFloatTimeDomainData(d);
+  let e = 0;
+  for (const x of d) e += x * x;
+  return 10 * Math.log10(e / d.length + 1e-20);
+}
 
 export class SoundEngine {
   ctx: AudioContext | null = null;
@@ -92,6 +114,10 @@ export class SoundEngine {
     crackle: GainNode;
   } | null = null;
   private rcsV: { gain: GainNode; bp: BiquadFilterNode; pan: StereoPannerNode } | null = null;
+  /** the engine's place: its panner, the air's low-pass after it; the pitches its Doppler shifts */
+  private engSpace: { panner: PannerNode; air: BiquadFilterNode; detune: AudioParam[] } | null = null;
+  /** headphones: the panners in HRTF (else equal-power) */
+  private hrtf = false;
   private amb: {
     hum: GainNode;
     air: GainNode;
@@ -106,15 +132,17 @@ export class SoundEngine {
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
+  /** the output's two channels, metered apart (tests: a source's side — S1) */
+  private sides: [AnalyserNode, AnalyserNode] | null = null;
 
   /** The output's level now (RMS, dBFS). */
   level() {
-    if (!this.meter) return -Infinity;
-    const d = new Float32Array(this.meter.fftSize);
-    this.meter.getFloatTimeDomainData(d);
-    let e = 0;
-    for (const x of d) e += x * x;
-    return 10 * Math.log10(e / d.length + 1e-20);
+    return this.meter ? rms(this.meter) : -Infinity;
+  }
+
+  /** Each channel's level now (RMS, dBFS): left, right. */
+  levels(): [number, number] {
+    return this.sides ? [rms(this.sides[0]), rms(this.sides[1])] : [-Infinity, -Infinity];
   }
 
   constructor() {
@@ -155,6 +183,27 @@ export class SoundEngine {
     if (enabled && !document.hidden) void this.ctx.resume();
   }
 
+  /** Headphones (the panners in HRTF: sources ahead, behind, above) or speakers (equal-power). */
+  setHeadphones(on: boolean) {
+    this.hrtf = on;
+    if (this.engSpace) this.engSpace.panner.panningModel = on ? "HRTF" : "equalpower";
+  }
+
+  /** Where the engine's panner is now, its model (tests: S1). */
+  spaceState() {
+    const p = this.engSpace?.panner;
+    return p
+      ? {
+          x: p.positionX.value,
+          y: p.positionY.value,
+          z: p.positionZ.value,
+          model: p.panningModel,
+          cutoff: this.engSpace!.air.frequency.value,
+          cents: this.engSpace!.detune[0]?.value ?? 0,
+        }
+      : null;
+  }
+
   private start() {
     if (this.started) {
       if (this.ctx?.state === "suspended" && this.enabled && !document.hidden) void this.ctx.resume();
@@ -186,6 +235,13 @@ export class SoundEngine {
     this.meter = ctx.createAnalyser();
     this.meter.fftSize = 2048;
     limit.connect(this.meter);
+    const split = ctx.createChannelSplitter(2);
+    limit.connect(split);
+    this.sides = [ctx.createAnalyser(), ctx.createAnalyser()];
+    this.sides.forEach((a, k) => {
+      a.fftSize = 2048;
+      split.connect(a, k);
+    });
 
     // the cabin: a short procedural room
     const room = gain(0.22);
@@ -206,7 +262,21 @@ export class SoundEngine {
     beeps.connect(master);
     beeps.connect(room);
     const engine = gain(this.mix.engines);
-    engine.connect(listener);
+    // (the engine placed: a panner at its nozzles, the air's absorption after it — S1)
+    const panner = new PannerNode(ctx, {
+      panningModel: this.hrtf ? "HRTF" : "equalpower",
+      distanceModel: "inverse",
+      refDistance: 10,
+      rolloffFactor: 1,
+      maxDistance: 1e5,
+      positionZ: 8,
+    });
+    const airLP = ctx.createBiquadFilter();
+    airLP.type = "lowpass";
+    airLP.frequency.value = 20000;
+    airLP.Q.value = 0.5;
+    engine.connect(panner).connect(airLP).connect(listener);
+    this.engSpace = { panner, air: airLP, detune: [] };
     const rcs = gain(this.mix.engines);
     rcs.connect(listener);
     const ambience = gain(this.mix.ambience);
@@ -292,7 +362,8 @@ export class SoundEngine {
     rumbleLP.type = "lowpass";
     rumbleLP.frequency.value = 120;
     rumbleLP.Q.value = 0.8;
-    this.loop(this.brown, 0.8).connect(rumbleLP).connect(rumble).connect(this.busses.engine);
+    const rumbleSrc = this.loop(this.brown, 0.8);
+    rumbleSrc.connect(rumbleLP).connect(rumble).connect(this.busses.engine);
     // roar: white noise, band-passed — the jet's hiss, brighter with the throttle
     const roar = ctx.createGain();
     roar.gain.value = 0;
@@ -308,7 +379,8 @@ export class SoundEngine {
     const roarAmp = ctx.createGain();
     roarAmp.gain.value = 1;
     crackle.connect(roarAmp.gain);
-    this.loop(this.white).connect(roarBP).connect(roarAmp).connect(roar).connect(this.busses.engine);
+    const roarSrc = this.loop(this.white);
+    roarSrc.connect(roarBP).connect(roarAmp).connect(roar).connect(this.busses.engine);
     // sub: the structure shaking
     const sub = ctx.createGain();
     sub.gain.value = 0;
@@ -321,6 +393,8 @@ export class SoundEngine {
     subOsc.connect(sub).connect(this.busses.engine);
     subOsc.start();
     this.eng = { rumble, rumbleLP, roar, roarBP, sub, subOsc, crackle };
+    // (the Doppler's pitch: the voices' detune, in cents)
+    if (this.engSpace) this.engSpace.detune = [rumbleSrc.detune, roarSrc.detune, subOsc.detune];
   }
 
   private buildRcs() {
@@ -419,6 +493,18 @@ export class SoundEngine {
     const cutoff = s.inside ? 2200 + 3000 * air : 1100 + 8000 * Math.sqrt(air);
     set(this.listenerLP.frequency, cutoff, 0.2);
     set(this.busses.listener.gain, s.inside ? 1 : 0.5 + 0.5 * Math.sqrt(air), 0.2);
+
+    // the engine's place: where it is, the air between, its Doppler (S1)
+    const sp = this.engSpace;
+    if (sp) {
+      const at = s.space?.pos ?? [0, 0, 8];
+      set(sp.panner.positionX, at[0], 0.03);
+      set(sp.panner.positionY, at[1], 0.03);
+      set(sp.panner.positionZ, at[2], 0.03);
+      set(sp.air.frequency, s.space?.cutoff ?? 20000, 0.1);
+      const cents = 1200 * Math.log2(s.space?.dop ?? 1);
+      for (const d of sp.detune) set(d, cents, 0.1);
+    }
 
     // main engine
     const th = clamp(s.throttle) * live;

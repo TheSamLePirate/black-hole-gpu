@@ -2774,7 +2774,7 @@ export const SCHEMA: ControlDef[] = [
     group: "Sound",
     label: "Sound",
     effect: "none",
-    help: "Everything synthesized live, no music: the flight computer's beeps and alarms, the main engine (rumble, roar, ignition), the RCS thrusters (hiss, valve pops, panned to the side that fires), the reaction wheels, life support, the wind in an atmosphere, the interface. In vacuum only the hull carries sound: from the cabin-side mounts (dorsal, belly, nose) it is heavy and close, from the outside ones far and muffled. Starts with the first click or key (the browser's rule).",
+    help: "Everything synthesized live, no music: the flight computer's beeps and alarms, the main engine (rumble, roar, ignition), the RCS thrusters (hiss, valve pops, panned to the side that fires), the reaction wheels, life support, the wind in an atmosphere, the interface. The engine is placed where its nozzles are. In vacuum only the hull carries sound: from the cockpit, the cabin and the hull's mounts (dorsal, belly, nose) it is heavy and close, from the outside ones far and muffled. Starts with the first click or key (the browser's rule).",
     keywords: "audio sound effects beeps volume mute engine thrusters rcs alarm",
   },
   {
@@ -2842,6 +2842,17 @@ export const SCHEMA: ControlDef[] = [
     effect: "none",
     enabled: (s) => s.sound,
     keywords: "audio clicks interface buttons",
+  },
+  {
+    key: "soundHeadphones",
+    type: "toggle",
+    section: "game",
+    group: "Sound",
+    label: "Headphones (3D sound)",
+    effect: "none",
+    enabled: (s) => s.sound,
+    help: "With headphones, the sources are placed in 3D (HRTF): the engine behind you, a thruster above, the ship passing a free camera. Off — speakers —, a plain left–right panning. The Doppler of a passing ship is heard either way.",
+    keywords: "audio headphones hrtf 3d spatial binaural doppler",
   },
   {
     key: "autosave",

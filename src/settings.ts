@@ -416,6 +416,7 @@ export interface Settings {
   soundEngines: number; // the main engine and the RCS
   soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
   soundUi: number; // the interface's clicks
+  soundHeadphones: boolean; // headphones: the sources placed in 3D (HRTF); speakers: equal-power panning
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
 
@@ -641,6 +642,7 @@ export function defaultSettings(): Settings {
     soundEngines: 0.9,
     soundAmbience: 0.5,
     soundUi: 0.35,
+    soundHeadphones: false,
     dynamicResolution: false,
   };
 }
@@ -1830,6 +1832,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soundEngines: "pref",
   soundAmbience: "pref",
   soundUi: "pref",
+  soundHeadphones: "pref",
   dynamicResolution: "pref",
 };
 

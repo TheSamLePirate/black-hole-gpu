@@ -30,7 +30,7 @@ import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
 import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNT_KEYS, MOUNTS, setMountVessel, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
@@ -2532,6 +2532,13 @@ async function main() {
           info,
           status,
           fired: camera.pilot.fired,
+          // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
+          pose: camera.spectating
+            ? renderer.shipPlace
+            : renderer.shipPose
+              ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
+              : null,
+          spectator: camera.spectating,
         }),
       );
     } else {
