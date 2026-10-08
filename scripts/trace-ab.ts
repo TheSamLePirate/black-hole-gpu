@@ -3,6 +3,7 @@
 // kernel changes win):
 //   bun scripts/trace-ab.ts --ref http://localhost:3012/ [--new http://localhost:3000/] [--scenes "a|b"]
 //                           [--reps 2] [--frames 150] [--seconds 6] [--out file.json] [--shots dir]
+//                           [--setup "js run after each scene's preset, e.g. __bh.settings.weather = 'overcast'"]
 // (~1 min a scene per run on the heavy ones; 5 scenes, 2 runs, the warm-up: ~12 min. --reps 1 for a
 // large effect)
 // Each scene at a fixed subsampling 4 and ~1.44 Mpx, its clock held, the view marked changed every frame
@@ -25,10 +26,26 @@ const FRAMES = Number(arg("frames", "150"));
 const SECONDS = Number(arg("seconds", "6"));
 // (each build's view of each scene, refined still, on the first run: <dir>/<ref|new>-<scene>.png)
 const SHOTS = arg("shots", "");
+// (a setting over each scene's own: the weather, a quality — on both builds alike)
+const SETUP = arg("setup", "");
 const SCENES = arg(
   "scenes",
   "Interstellar: along the disk (the film's close pass)|Kerr a=0.94, near edge-on|Ranger: approaching Gargantua|Miller: Gargantua over the sea|Saturn: backlit|Moon: an afternoon on the plains",
 ).split("|");
+// (the scene's data in — the Earth's maps, its terrain tiles, a finer map —, still for 1.5 s: before, an A/A on
+// a scene near the ground measured one run without its ground, the next with it, 8.6 → 55 ms)
+const SETTLE = (scene: string) => `{
+  const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
+  const ts = performance.now();
+  const earth = ${/^Earth/.test(scene)};
+  let calm = 0;
+  while (performance.now() - ts < 90000) {
+    const ready = r.earthTiles.pending === 0 && !r.hdLoading && (!!r.earthMaps.tier || !earth);
+    calm = ready ? calm || performance.now() : 0;
+    if (calm && performance.now() - calm > 1500) break;
+    __bh.touch(); await frame();
+  }
+}`;
 const port = 9390 + Math.floor(Math.random() * 40);
 const W = 1469,
   H = 965;
@@ -120,12 +137,14 @@ try {
       const r = __bh.renderer, s = __bh.settings;
       const frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
       __bh.game.preset(${JSON.stringify(scene)});
+      ${SETUP};
       // (the fixed setting of the Kerr Bench's phase B: subsampling 4, ~1.44 Mpx; the clock held)
       const area = Math.max(innerWidth * innerHeight, 1);
       Object.assign(s, { realtimeSubsampling: 4, dynamicResolution: false, pixelRatio: Math.sqrt(1.44e6 / area), fpsCap: 0, animate: false, autosave: false });
       __bh.touch();
       const t0 = performance.now();
       while (!r.variantReady && performance.now() - t0 < 90000) { __bh.touch(); await frame(); }
+      ${SETTLE(scene)}
       // (in regime: 120 frames or 3 s, whichever first — a heavy scene draws 7 a second)
       const tw = performance.now();
       for (let i = 0; i < 120 && performance.now() - tw < 3000; i++) { __bh.touch(); await frame(); }
@@ -161,6 +180,7 @@ try {
         __bh.game.preset(${JSON.stringify(sc)}); __bh.touch();
         const t0 = performance.now();
         while (!__bh.renderer.variantReady && performance.now() - t0 < 90000) { __bh.touch(); await frame(); }
+        ${SETTLE(sc)}
         return __bh.renderer.variantReady;
       })()`).catch(() => false);
   }

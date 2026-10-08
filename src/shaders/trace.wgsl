@@ -114,6 +114,13 @@ struct Params {
   // the near body's measured heights in its finer relief (hd-maps.ts: the Moon's LOLA, Mars's MOLA): on
   // (0/1), their highest and lowest [m] (the relief's shell), the body's radius [m]
   hd2: vec4f,
+  // the weather near the camera over the Earth (src/weather.ts, renderer: weatherParams; PLAN-METEO W3): [0]
+  // its weight (0: the Earth's own clouds and air alone — the fair weather, and above 30 km), the haze's
+  // extinction at the ground beyond the air's own [1/m], the fog's [1/m], its top [m above the sea];
+  // [1…3] its cloud layers, the lowest first: base, top [m above the sea], cover (0: none), optical
+  // thickness; [4] the ground's height there [m], the clouds' drift with the wind [m, the Earth's axes,
+  // modulo the noise's period]
+  wx: array<vec4f, 5>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -133,6 +140,7 @@ override HAS_WH: bool = true;     // the wormhole world
 override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
+override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
 // Dneg integrators out of the kernel (its registers)
@@ -3931,6 +3939,68 @@ fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   return mix(0.0004, 1.0, avg * avg);
 }
 
+// ---- The weather near the camera (P.wx; src/weather.ts, PLAN-METEO W3): its haze and fog in the air,
+// its cloud layers in place of the Earth's own round the camera, their shade on the ground. Its weight at
+// this ray's camera (earthNear sets it over the Earth: P.wx[0].x; elsewhere 0 — every weather term out,
+// the image as before) and where it is centred: the camera's place (unit, the Earth's squashed axes).
+var<private> WX_W: f32 = 0.0;
+var<private> WX_Q: vec3f = vec3f(0.0, 0.0, 1.0);
+// (it holds round the camera to 250 km — beyond the horizon seen from under a deck —, fading into the
+// Earth's own by 450 km)
+fn wxNear(q: vec3f) -> f32 {
+  if (!HAS_WX || WX_W <= 0.0) { return 0.0; }
+  return WX_W * (1.0 - smoothstep(250000.0, 450000.0, length(q - WX_Q) * EARTH_RM));
+}
+// where a weather noise of cell `cell` [m] is read at q: drifting with the wind (P.wx[4].yzw, modulo
+// 204.8 km — a whole number of the noise's periods for each cell used: 3 200 m down to 400 m)
+fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1.0 / cell); }
+// layer i's cover at q (0…1): patchy for a scattered sky, whole for an overcast one — a noise of 3.2 km
+// cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
+fn wxLayerA(q: vec3f, i: u32) -> f32 {
+  let c = P.wx[1u + i].z;
+  let s = wxAt(q, 3200.0) + vec3f(f32(i) * 7.31, f32(i) * 3.17, 0.0);
+  let n = 0.5 + 0.5 * (0.6 * dnoise(s) + 0.28 * dnoise(s * 2.0 + vec3f(1.7, 4.1, 2.3)) + 0.12 * dnoise(s * 4.0 + vec3f(3.3, 0.7, 5.9)));
+  return smoothstep(1.0 - c - 0.1, 1.0 - c + 0.12, n);
+}
+// the sunlight under the layers above a height h [m] (but layer `skip`), the weather's weight w there:
+// x what comes straight through their gaps, y all of it — the diffuse light a deck lets through too
+// (two-stream: 1 / (1 + 0.75 τ (1 − g)), g 0.85)
+fn wxVeil(h: f32, w: f32, skip: u32) -> vec2f {
+  var d = 1.0;
+  var a = 1.0;
+  for (var i = 0u; i < 3u; i++) {
+    let L = P.wx[1u + i];
+    if (L.z <= 0.0 || i == skip) { continue; }
+    let c = L.z * w * (1.0 - smoothstep(L.x, L.y, h));
+    d *= 1.0 - c;
+    a *= 1.0 - c * (1.0 - 1.0 / (1.0 + 0.1125 * L.w));
+  }
+  return vec2f(d, a);
+}
+// the haze's extinction at a height h [m], the weather's weight w there: thinning over 1.5 km above the ground
+fn wxHaze(h: f32, w: f32) -> f32 { return w * P.wx[0].y * exp(-max(h - P.wx[4].x, 0.0) / 1500.0); }
+// The fog lying on the ground (P.wx[0].z > 0) along ro + t rd: the stretch of the ray under its top
+// [t0, t1] (radii), its top heaving by a fifth of its depth where it is met from above — the sheet's
+// swell seen from over it. Its thickness is far under a march's step: its depth along each step is
+// taken exactly from this stretch (earthAir).
+fn wxFog(ro: vec3f, rd: vec3f) -> vec2f {
+  if (!HAS_WX || P.wx[0].z <= 0.0 || WX_W <= 0.0) { return vec2f(0.0); }
+  let D = P.wx[0].w - P.wx[4].x;
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  var rF = 1.0 + (P.wx[0].w - 0.1 * D) / EARTH_RM;
+  var hF = rF * rF - off2;
+  if (hF <= 0.0) { return vec2f(0.0); }
+  if (dot(ro, ro) > rF * rF) {
+    let t0 = -b - sqrt(hF);
+    if (t0 <= 0.0) { return vec2f(0.0); }
+    rF += 0.2 * D * dnoise(wxAt(normalize(ro + rd * t0), 400.0)) / EARTH_RM;
+    hF = rF * rF - off2;
+    if (hF <= 0.0) { return vec2f(0.0); }
+  }
+  return vec2f(max(-b - sqrt(hF), 0.0), max(-b + sqrt(hF), 0.0));
+}
+
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
 // towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
 // through the air before it only). jit: the samples' offset (0…1).
@@ -3971,9 +4041,13 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   var tauC = vec3f(0.0);
   var LcS = vec3f(0.0);
   var LcM = vec3f(0.0);
+  var fog = vec2f(0.0);
+  if (HAS_WX) { fog = wxFog(ro, rd); }
   for (var i = 0u; i < N; i++) {
     let u1 = (f32(i) + 1.0) / f32(N);
     let t1 = ta + (tb - ta) * select(u1, u1 * u1, inside);
+    // (the fog's share of this step: its stretch under the fog's top)
+    let fogIn = select(0.0, max(min(t1, fog.y) - max(tPrev, fog.x), 0.0) / max(t1 - tPrev, 1e-12), HAS_WX);
     let ds = (t1 - tPrev) * AIR.rm * stepScale;
     let t = mix(tPrev, t1, jit);
     tPrev = t1;
@@ -3982,9 +4056,9 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let h = airHeight(p);
     let dR = exp(-h / airHR()) / airK();
     let dM = exp(-h / airHM()) / airK();
-    let ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
+    var ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
     let normal = airPhysicalNormal(p / r);
-    let Ts = sunThrough(h, dot(normal, physicalLs));
+    var Ts = sunThrough(h, dot(normal, physicalLs));
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
     // the molecules' single scattering, a third of the aerosols'; under an eclipse the single scattering
     // needs the Sun seen from there, the multiple the sunlit air around: the totality's sky a deep blue —
@@ -3992,8 +4066,25 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // placed on its own axes)
     let s1 = select(1.0, sunSeen(p, Ls), AIR.moon > 0.5);
     let sM = select(max(s1, skySeen(p, Ls)), 1.0, s1 >= 1.0);
-    let sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
-    let Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
+    var sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
+    var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
+    if (HAS_WX && WX_W > 0.0) {
+      // the weather: under its decks the sunlight dimmed and spread (the air's own scattering with it);
+      // its haze and fog grey droplets — half a forward lobe, half spread by their many scatterings —
+      // lit by the sun through the decks' gaps, their diffuse light and the sky's; the haze in the sun's
+      // path too. Fog is thick: each step's light integrated exactly over it (τ ≫ 1 in one step)
+      let w = wxNear(p / r);
+      let vl = wxVeil(h, w, 3u);
+      let ew = wxHaze(h, w) + WX_W * P.wx[0].z * fogIn;
+      let mu0 = dot(normal, physicalLs);
+      Ts *= exp(-w * P.wx[0].y * 1500.0 * exp(-max(h - P.wx[4].x, 0.0) / 1500.0) / max(mu0, 0.05));
+      let pW = 0.5 * hgPhase(0.75, mu) + 0.5 / (4.0 * PI);
+      // (the diffuse share carries the blue sky's light that fell on the decks: a grey, not the sun's tint)
+      sc = sc * vl.y + 0.95 * ew * (vec3f(pW * s1 * vl.x) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
+      ext += vec3f(ew);
+      let x = ext * ds;
+      Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
+    }
     o.L += sc * Ts * Tv;
     let mz = dot(normal, Lm);
     let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(normal, physicalLs));
@@ -4890,7 +4981,22 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let hc = P.earth2.x;
   let marchMu = dot(q, Ls);
   let qs = normalize(q + (Ls - q * marchMu) * (hc / max(marchMu, 0.06)));
-  let shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+  var shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+  // (the weather near the camera: its layers' shadows in place of the map's — each cast from its middle
+  // along the sun's slant, through its gaps; the light its decks spread, below with the sky's)
+  let wg = wxNear(q);
+  var wxVl = vec2f(1.0);
+  if (HAS_WX && wg > 0.0) {
+    shade = mix(shade, 1.0, wg);
+    for (var i = 0u; i < 3u; i++) {
+      let L = P.wx[1u + i];
+      if (L.z <= 0.0 || hG >= L.y) { continue; }
+      let hm = 0.5 * (L.x + L.y) - hG;
+      let qi = normalize(q + (Ls - q * marchMu) * (hm / EARTH_RM / max(marchMu, 0.06)));
+      shade *= 1.0 - wg * wxLayerA(qi, i) * (1.0 - exp(-0.5 * L.w / max(marchMu, 0.06)));
+    }
+    wxVl = wxVeil(hG, wg, 3u);
+  }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
@@ -4915,7 +5021,14 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
   let sk = skySeen(q, Ls);
   // (a clear sky's light on the flat: ~a tenth of the sun's — bluish)
-  let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
+  var sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
+  // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what
+  // comes through them, and for a broken sky what their sunlit sides and bases send down, most at half
+  // cover: a cloud's shadow on the ground ~3 times darker than the sun beside it, not black)
+  if (HAS_WX && wg > 0.0) {
+    let side = 0.5 * wxVl.x * (1.0 - wxVl.x);
+    sky = sky * wxVl.x + (E * sunThrough(hG, mu0) * max(mu0, 0.0) * sk + sky) * (wxVl.y - wxVl.x + side);
+  }
   // (a face sees the sky over it and the ground round it — a plane's shares, ½(1 + n·up) and ½(1 − n·up)
   // —: on the steep faces in the shade, the sky's light halved and the light the ground sends back — the
   // sun's and the sky's on it, at an albedo of 0.18: a cliff's shadow 2–3 stops under the sunlit ground,
@@ -5069,6 +5182,8 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   if (tHit > 0.0) { t1 = min(t1, tHit); }
   // (no farther than 120 km: the clouds beyond thin into the haze)
   t1 = min(t1, t0 + 250000.0 / EARTH_RM);
+  // (the weather whole round the camera: its layers there, the map's clouds beyond 250 km only)
+  if (HAS_WX && WX_W >= 1.0) { t0 = max(t0, 250000.0 / EARTH_RM); }
   if (t1 <= t0) { return o; }
   let N = 16u;
   // (the sun's direction and the ray's metres per squashed radius on the physical axes: the same all along)
@@ -5101,7 +5216,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let fp = fp0 + fpK * t;
     let fx = earthFoot(q, rd, gx, fp);
     let fy = earthFoot(q, rd, gy, fp);
-    let a = earthCloud(q, fx, fy, Ls).x / max(P.earth2.y, 1e-3);
+    let a = earthCloud(q, fx, fy, Ls).x / max(P.earth2.y, 1e-3) * (1.0 - wxNear(q));
     if (a <= 0.01) { continue; }
     let qd = rotZ(q, P.earth.y);
     let x = qd * (EARTH_RM / 2600.0) + vec3f(0.0, 0.0, hn * 2.0);
@@ -5146,6 +5261,96 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   return o;
 }
 
+// The weather's layer i as a volume (P.wx[1 + i]): marched as the Earth's own clouds are — 16 samples
+// crowding near the camera, the same light — between its base and top above the sea, its cover from
+// wxLayerA (scattered cumulus, a broken or an overcast deck), shaped in height by a 3D noise drifting
+// with the wind (flat bases, domed tops; a deck's top heaving), its optical thickness its own (a storm's
+// tower ~150: a dark base); the sunlight dimmed by the layers over it too, the blue sky's light on its
+// tops spread through it (a deck's base grey, not the sun's own warm tint). Out to 480 km: the weather's
+// reach round the camera.
+fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f32) -> CloudVol {
+  var o: CloudVol;
+  o.t = -1.0;
+  let L = P.wx[1u + i];
+  if (L.z <= 0.0) { return o; }
+  let hb = L.x / EARTH_RM;
+  let ht = L.y / EARTH_RM;
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  let hT = (1.0 + ht) * (1.0 + ht) - off2;
+  if (hT <= 0.0) { return o; }
+  var t0 = max(-b - sqrt(hT), 0.0);
+  var t1 = -b + sqrt(hT);
+  let hB = (1.0 + hb) * (1.0 + hb) - off2;
+  if (hB > 0.0) {
+    let b0 = -b - sqrt(hB);
+    let b1 = -b + sqrt(hB);
+    if (b0 > t0) { t1 = min(t1, b0); } else if (b1 > t0) { t0 = b1; }
+  }
+  if (tHit > 0.0) { t1 = min(t1, tHit); }
+  t1 = min(t1, 480000.0 / EARTH_RM);
+  if (t1 <= t0) { return o; }
+  let N = 16u;
+  let physicalLs = airPhysicalDirection(Ls);
+  let stepM = EARTH_RM * airRayScale(rd);
+  let ct = dot(airPhysicalDirection(rd), physicalLs);
+  let hg = cloudPhase(ct, 1.0);
+  let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
+  let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
+  let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
+  let dz = vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0);
+  var Tv = 1.0;
+  var col = vec3f(0.0);
+  var tPrev = t0;
+  for (var j = 0u; j < N; j++) {
+    let u1 = (f32(j) + 1.0) / f32(N);
+    let tn = t0 + (t1 - t0) * u1 * u1;
+    let t = mix(tPrev, tn, jit);
+    let dm = (tn - tPrev) * stepM;
+    tPrev = tn;
+    let p = ro + rd * t;
+    let r = length(p);
+    let q = p / r;
+    let w = wxNear(q);
+    if (w <= 0.0) { continue; }
+    let a = wxLayerA(q, i) * w;
+    if (a <= 0.01) { continue; }
+    let hn = (r - 1.0 - hb) / (ht - hb);
+    let x = wxAt(q, 1600.0) + dz + vec3f(0.0, 0.0, hn * 1.5);
+    let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7));
+    // (a deck's top near its own, heaving; a scattered sky's domes rising with the noise)
+    let top = clamp(0.55 + 0.35 * a + 0.3 * sh, 0.3, 1.0);
+    let hp = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * top, top, hn));
+    let rho = hp * clamp(1.4 * (a * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
+    if (rho <= 0.0) { continue; }
+    let sigma = rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3));
+    let mu0 = dot(geoQ(q), physicalLs);
+    let hM = (r - 1.0) * EARTH_RM;
+    let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls) * wxVeil(hM, w, i).y;
+    let tauUp = a * L.w * max(top - hn, 0.0) / max(top, 0.3);
+    let tauSun = 0.4 * tauUp / max(mu0, 0.12);
+    let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
+    let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
+    let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
+    let sk = skySeen(q, Ls);
+    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+    let e1 = exp(-0.04 * tauSun);
+    let e2 = e1 * e1;
+    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
+    let skyTop = vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk * (0.25 + 0.75 * exp(-0.03 * tauUp));
+    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
+      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * wxVeil(hM, w, i).y);
+    let dT = exp(-sigma * dm);
+    col += Tv * Lin * (1.0 - dT);
+    if (o.t < 0.0) { o.t = t; }
+    Tv *= dT;
+    if (Tv < 0.01) { break; }
+  }
+  o.alpha = 1.0 - Tv;
+  o.cl = col / max(1.0 - Tv, 1e-4);
+  return o;
+}
+
 fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
   var o: EarthLook;
   let earth = isEarth(k) && earthOn();
@@ -5171,6 +5376,22 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
       let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
       alpha = cv.x;
       cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
+    }
+  }
+  // the weather's layers round the camera (their order along the ray: one way or the other, the lowest
+  // first — up from below them, down from above)
+  if (HAS_WX && volume && earth && WX_W > 0.0) {
+    for (var i = 0u; i < 3u; i++) {
+      let lv = wxCloud(ro, rd, tHit, i, Ls, E, jit);
+      if (lv.alpha <= 0.0) { continue; }
+      if (alpha <= 0.0 || lv.t < tc) {
+        cl = (lv.alpha * lv.cl + (1.0 - lv.alpha) * alpha * cl) / max(lv.alpha + (1.0 - lv.alpha) * alpha, 1e-5);
+        alpha = lv.alpha + (1.0 - lv.alpha) * alpha;
+        tc = lv.t;
+      } else {
+        cl = (alpha * cl + (1.0 - alpha) * lv.alpha * lv.cl) / max(alpha + (1.0 - alpha) * lv.alpha, 1e-5);
+        alpha = alpha + (1.0 - alpha) * lv.alpha;
+      }
     }
   }
   // the cirrus at 9 km (from far above, a third: the cloud map's own already holds them), before the
@@ -5237,9 +5458,12 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let lt = nearLight(k);
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0;
   SEA_D = toBody(look) * (t / m * P.near4.w);
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
+  WX_Q = normalize(ro);
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   SEA_ON = false;
+  WX_W = 0.0;
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)

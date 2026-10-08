@@ -394,6 +394,23 @@ Résultat (scène à Gargantua, 20 Mbit/s) : **première image 11,1 → 5,5–6,
 
 **M3b** : les maillages bruts (Endurance et ses 4 niveaux, Ranger, Lander) compressés sans perte, gzip au build, décompressés par le navigateur (`DecompressionStream`, sans dépendance) : **23,0 → 12,2 Mo**, même rendu (planche `docs/progress/monde/m3b-maillages.jpg`) ; test unitaire `inflate`, e2e `dock-undock` et `smoke`. L'ISS et le cockpit l'étaient déjà.
 
+## M4 : la météo (en cours, 08/10/2026)
+
+Plan : [`PLAN-METEO.md`](PLAN-METEO.md), étapes W1 à W8.
+
+- **W1 à W2b (faits)** : le modèle (`weather.ts` : préréglages, tirage en systèmes météo, vent du vol et de la mer), le panneau Météo avec la catégorie de vol et la coupe verticale, la couche Météo du planisphère ; refaits au niveau AAA (planche `w2c-refonte.jpg`).
+- **W3 (fait)** : la météo dans l'image du traceur, sous 30 km au-dessus de la Terre.
+  - **Brume et brouillard** : la brume selon la visibilité (Koschmieder) ; le brouillard couché, sa profondeur prise exactement sur chaque pas de la marche de l'air (120 m de brouillard sous des pas de centaines de mètres : sinon sauté vers le haut), son sommet qui ondule vu d'au-dessus.
+  - **Couches nuageuses** : les couches de l'état (base, sommet, couverture, épaisseur optique) marchées en volume à la place de la couche fixe dans un rayon de 250 km (fondues dans la carte réelle à 450 km) : cumulus épars, ponts nuageux, cumulonimbus ; elles dérivent avec le vent.
+  - **Lumière** : leurs ombres au sol ; sous les ponts, la lumière diffuse grise ; l'exposition automatique s'ouvre sous eux.
+  - **Coût** : le code météo est compilé seulement quand elle agit (bit `HAS_WX` du noyau). Sans cette spécialisation, sa seule présence coûtait +19 à +21 % même par beau temps. Mesures (`trace-ab`) :
+    - beau temps : identique (Yosemite à 56 dB, écarts de temps dans le bruit) ;
+    - brouillard : +5 % ;
+    - couvert, deux couches : +26 %.
+  - **Banc** : `trace-ab` attend désormais que la scène soit chargée (cartes, tuiles) : avant, un A/A sur une scène au sol donnait 8,6 contre 55 ms.
+  - **Tests** : unitaires `weather` ; e2e `weather-panel`, qui vérifie que la météo arrive au traceur et que le beau temps l'en retire.
+  - Planche `docs/progress/meteo/w3-brouillard-couches.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -409,7 +426,7 @@ Par ordre de gain :
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
-   - météo ;
+   - météo (M4 : W1–W3 faits — modèle, panneau, carte, brouillard et couches au rendu ; restent les pistes face au vent, la pluie, la poussière de Mars, le METAR, les autopilotes) ;
    - aéroports vivants (balisage de nuit, ILS) ;
    - audio spatial ;
    - HOTAS ;
@@ -419,6 +436,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M4 W3** : brouillard, brume et couches nuageuses de la météo dans l'image, compilés seulement quand elle agit (beau temps inchangé ; couvert +26 %).
 - **08/10/2026 — M3b** : maillages compressés sans perte, 23,0 → 12,2 Mo.
 - **08/10/2026 — M3a** : la première image n'attend plus la Terre ni les lunes de Jupiter hors de leurs scènes (à 20 Mbit/s, 11,1 → 5,5–6,1 s à Gargantua).
 

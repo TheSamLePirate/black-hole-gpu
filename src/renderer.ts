@@ -68,7 +68,7 @@ import {
 } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
-import { altitudeOver, setGroundHeights, setGroundRelief } from "./system/our-surface";
+import { altitudeOver, bodyFixedOf, groundRelief, setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -94,7 +94,7 @@ import type { Settings } from "./settings";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
-import { weatherAt, type WeatherState } from "./weather";
+import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
 
 /** the space station's loading stage, as the loading screen names it */
 const STATION_LOADING = t("The space station");
@@ -112,7 +112,7 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 1023;
+const FEATURES_ALL = 2047;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -121,7 +121,11 @@ const HANDOVER_PASSES = 8;
 const RUNWAY_VEC4S = 17;
 /** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
 const SEA_VEC4S = 15;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1;
+/** the weather near the camera, last (trace.wgsl: Params.wx) */
+const WX_VEC4S = 5;
+/** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
+const WX_DRIFT_PERIOD = 204800;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + WX_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -2204,6 +2208,7 @@ export class Renderer {
     }
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
+    f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (PARAM_VEC4S - WX_VEC4S) * 4);
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
@@ -2346,6 +2351,60 @@ export class Renderer {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
     }
+  }
+
+  /** the weather's clouds' drift with the wind [m, the Earth's axes] and the clock it was last moved at [s] */
+  private wxDrift: [number, number, number] = [0, 0, 0];
+  private wxDriftAt = Number.NaN;
+
+  /**
+   * The weather near the camera (trace.wgsl: Params.wx; PLAN-METEO W3), under 30 km over the Earth (its
+   * weight from 1 at 15 km to 0 at 30): weather.ts's state at the camera's place — the haze beyond the air's
+   * own (Koschmieder: 3.912 / visibility), the fog and its top, the layers above the sea (the ground's height
+   * there added), each with its optical thickness (~25 per 1.5 km: a storm's tower ~150) — and the clouds'
+   * drift with the wind at their height (~2.5 × its 10 m speed), moved on with the clock. None (0): the fair
+   * weather, its image as before — the Earth's own clouds and air.
+   */
+  private weatherParams(
+    surface: ReturnType<typeof patchGeodetic> | null,
+    altKm: number,
+    time: number,
+    tSec: number,
+    s: Settings,
+    live: boolean,
+  ): Float32Array {
+    const out = new Float32Array(WX_VEC4S * 4);
+    if (live) this.wxLight = 1;
+    if (!surface || !(altKm < 30) || !this.earthMaps.tier) return out;
+    const lat = (surface.lat * 180) / Math.PI,
+      lon = (surface.lon * 180) / Math.PI;
+    const w = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal);
+    if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
+    const ground = Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)), 0);
+    const g = weatherGpu(w, ground, altKm);
+    if (live) this.wxLight = g.light;
+    out.set(g.params, 0);
+    // the drift: the wind at the clouds' height, blowing from `from` — on the place's east and north
+    if (live) {
+      const dt = tSec - this.wxDriftAt;
+      this.wxDriftAt = tSec;
+      if (dt > 0 && dt < 600) {
+        const to = (windFromAt(w, { lat, lon }, daysOf(time)) * Math.PI) / 180 + Math.PI;
+        const n = surface.normal;
+        const eh = Math.hypot(n[0], n[1]) || 1;
+        const east = [-n[1] / eh, n[0] / eh, 0];
+        const north = [-n[2] * east[1]!, n[2] * east[0]!, n[0] * east[1]! - n[1] * east[0]!];
+        const v = 2.5 * Math.max(w.wind.u10, 1) * dt;
+        this.wxDrift = this.wxDrift.map((d, i) => {
+          const x = d + v * (east[i]! * Math.sin(to) + north[i]! * Math.cos(to));
+          return x - Math.floor(x / WX_DRIFT_PERIOD) * WX_DRIFT_PERIOD;
+        }) as [number, number, number];
+      }
+    }
+    out.set([ground, ...this.wxDrift], 16);
+    // (the kernel with the weather's code: fair weather — every scene but these — without it, +20 % before)
+    if (g.params[0]! > 0) this.featureKey |= 1024;
+    return out;
   }
 
   /**
@@ -2550,7 +2609,8 @@ export class Renderer {
       (s.hotFlow ? 16 : 0) |
       (s.wormhole ? 32 : 0) |
       (s.diskThickness > 0 ? 64 : 0)
-    ); // (bodies: 128, added with them; runways near: 256; the hole's metrics: 512, unless from afar — O13)
+    ); // (bodies: 128, added with them; runways near: 256; the hole's metrics: 512, unless from afar — O13;
+    // the weather near the camera: 1024, set with its params — fair, out of the kernel)
   }
 
   /**
@@ -2628,6 +2688,7 @@ export class Renderer {
           HAS_BODIES: has(128),
           HAS_RWY: has(256),
           HAS_KERR: has(512),
+          HAS_WX: has(1024),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },
@@ -3606,8 +3667,10 @@ export class Renderer {
     // (and an eclipse: the Sun's disk the Moon leaves — the totality's twilight, ten stops down)
     const home = this.meterHome;
     const ecl = home ? sunShare(home, this.meterTime) : 1;
-    return Math.max(sunThroughY(Math.max(place.h * EARTH_RM, 0), mu), 0.25) * Math.max(ecl, 0.002);
+    return Math.max(sunThroughY(Math.max(place.h * EARTH_RM, 0), mu), 0.25) * Math.max(ecl, 0.002) * this.wxLight;
   }
+  /** the share of the daylight the weather's decks and fog let down to the camera (weatherParams; 1: none) */
+  private wxLight = 1;
   /** where the meter reads the light (home frame) and when */
   private meterHome: Vec3 | null = null;
   private meterTime = 0;

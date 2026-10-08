@@ -82,4 +82,28 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     expect(on).toBeGreaterThan(off * 1.05);
     await app.press("KeyM");
   }, 60_000);
+
+  test("in the image (W3): on the ground, overcast reaches the tracer — its layers, its kernel —; fair leaves it out", async () => {
+    const wx = () =>
+      app.js<{ p: number[]; key: number }>(`(() => {
+        const r = __bh.renderer, f = r.paramsF;
+        return { p: Array.from(f.slice(f.length - 20)), key: r.featureKey };
+      })()`);
+    await app.js(`(__bh.settings.weather = "fair", __bh.game.land("earth", 28.573, -80.649), true)`);
+    await app.waitFor(`!!__bh.renderer.earthMaps?.tier`, 90_000);
+    await app.js(`(__bh.settings.weather = "overcast", true)`);
+    await Bun.sleep(1500);
+    const over = await wx();
+    // (its weight, its two decks above the sea — the ground's height added —, their covers; the weather's kernel)
+    expect(over.p[0]).toBe(1);
+    expect(over.p[4]).toBeGreaterThanOrEqual(600);
+    expect(over.p[6]).toBeCloseTo(0.95, 5);
+    expect(over.p[10]).toBeCloseTo(0.5, 5);
+    expect(over.key & 1024).toBe(1024);
+    await app.js(`(__bh.settings.weather = "fair", true)`);
+    await Bun.sleep(1500);
+    const fair = await wx();
+    expect(fair.p.slice(0, 16).every((x) => x === 0)).toBe(true);
+    expect(fair.key & 1024).toBe(0);
+  }, 150_000);
 });

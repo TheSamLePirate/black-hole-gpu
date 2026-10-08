@@ -255,3 +255,37 @@ export function windFromAt(w: WeatherState, place: { lat: number; lon: number },
   if (w.wind.from !== null) return w.wind.from;
   return ((((windFrom(place.lat, place.lon, days) * 180) / Math.PI) % 360) + 360) % 360;
 }
+
+/** A layer's optical thickness as the tracer draws it: ~25 per 1.5 km of cloud (a storm's tower ~150). */
+export function layerTau(l: CloudLayer): number {
+  return Math.min(Math.max((25 * (l.top - l.base)) / 1500, 8), 150);
+}
+
+/**
+ * The weather as the tracer reads it (trace.wgsl: Params.wx[0…3]; PLAN-METEO W3), the camera `altKm` above
+ * the sea over ground `ground` [m] high: its weight (1 under 15 km, none from 30 — and none in fair
+ * weather: the image as before), the haze's extinction beyond the air's own (Koschmieder, 3.912 /
+ * visibility, less the air's ~3.5e-5 /m; over a fog, a moist 8 km), the fog's and its top above the sea,
+ * the layers (the lowest first, at most three: base, top above the sea, cover, optical thickness). And
+ * `light`: the share of the daylight that comes down to the camera under the decks over it (the two-stream
+ * transmission of each, 1 / (1 + 0.75 τ (1 − g)), g 0.85), in the fog half again — the light meter opens to
+ * it; a storm's gloom ~4 stops, no darker than 1/20.
+ */
+export function weatherGpu(w: WeatherState, ground: number, altKm: number): { params: number[]; light: number } {
+  const params = new Array<number>(16).fill(0);
+  if (!(altKm < 30) || (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3)) return { params, light: 1 };
+  const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
+  const ext = (v: number) => Math.max(3.912 / v - 3.5e-5, 0);
+  const fog = w.fogTop > 0;
+  params.splice(0, 4, weight, ext(fog ? 8000 : w.visibility), fog ? 3.912 / w.visibility : 0, fog ? ground + w.fogTop : 0);
+  const layers = [...w.layers].sort((a, b) => a.base - b.base).slice(0, 3);
+  layers.forEach((l, i) => params.splice(4 * (1 + i), 4, ground + l.base, ground + l.top, l.cover, layerTau(l)));
+  const hCam = altKm * 1e3 - ground;
+  let v = 1;
+  for (const l of layers) {
+    const c = l.cover * weight * (hCam <= l.base ? 1 : hCam >= l.top ? 0 : (l.top - hCam) / (l.top - l.base));
+    v *= 1 - c * (1 - 1 / (1 + 0.1125 * layerTau(l)));
+  }
+  if (fog && hCam < w.fogTop) v *= 1 - 0.5 * weight;
+  return { params, light: Math.max(v, 0.05) };
+}

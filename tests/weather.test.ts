@@ -1,13 +1,15 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   ceilingOf,
   coverWord,
   fairWind,
   flightCategory,
+  layerTau,
   presetWeather,
   randomWeather,
   WEATHER_PRESETS,
   weatherAt,
+  weatherGpu,
   windFromAt,
   type WeatherPreset,
 } from "../src/weather";
@@ -101,4 +103,38 @@ test("the ceiling and the flight category as the charts have them; the wind's di
   const f = windFromAt(presetWeather("fair", 1), { lat: 48, lon: 2 }, 9800);
   expect(f).toBeGreaterThanOrEqual(0);
   expect(f).toBeLessThan(360);
+});
+
+describe("the weather as the tracer reads it (W3)", () => {
+  test("fair weather, or the camera above 30 km: nothing — the image as before", () => {
+    expect(weatherGpu(presetWeather("fair", 1), 0, 0.01)).toEqual({ params: new Array(16).fill(0), light: 1 });
+    expect(weatherGpu(presetWeather("overcast", 1), 0, 31).params.every((x) => x === 0)).toBe(true);
+  });
+  test("overcast at an airfield 100 m high: its layers above the sea, lowest first; the haze its visibility's", () => {
+    const g = weatherGpu(presetWeather("overcast", 1), 100, 0.11);
+    expect(g.params[0]).toBe(1);
+    // (Koschmieder: 12 km's extinction less the air's own)
+    expect(g.params[1]).toBeCloseTo(3.912 / 12e3 - 3.5e-5, 8);
+    expect(g.params.slice(4, 8)).toEqual([700, 2100, 0.95, layerTau({ base: 600, top: 2000, cover: 0.95 })]);
+    expect(g.params.slice(8, 11)).toEqual([4100, 5600, 0.5]);
+    expect(g.params.slice(12)).toEqual([0, 0, 0, 0]);
+    // (under two decks: a fifth of the daylight, the meter opening ~2.3 stops)
+    expect(g.light).toBeGreaterThan(0.15);
+    expect(g.light).toBeLessThan(0.3);
+  });
+  test("fog: its extinction and top; above every deck, the full daylight; a storm, no darker than 1/20", () => {
+    const f = weatherGpu(presetWeather("fog", 1), 0, 0.01);
+    expect(f.params[2]).toBeCloseTo(3.912 / 300, 6);
+    expect(f.params[3]).toBe(120);
+    expect(f.light).toBeLessThan(0.5);
+    expect(weatherGpu(presetWeather("cloudy", 1), 0, 8).light).toBe(1);
+    expect(weatherGpu(presetWeather("storm", 1), 0, 0).light).toBeGreaterThanOrEqual(0.05);
+    // (the weight fades from 15 to 30 km)
+    expect(weatherGpu(presetWeather("cloudy", 1), 0, 22.5).params[0]).toBeCloseTo(0.5, 6);
+  });
+  test("optical thickness: ~25 per 1.5 km, held between 8 and 150", () => {
+    expect(layerTau({ base: 0, top: 1500, cover: 1 })).toBe(25);
+    expect(layerTau({ base: 0, top: 100, cover: 1 })).toBe(8);
+    expect(layerTau({ base: 400, top: 9000, cover: 1 })).toBeCloseTo(143.3, 1);
+  });
 });

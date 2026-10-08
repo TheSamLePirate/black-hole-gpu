@@ -340,7 +340,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       app.close();
     }
   }, 300_000);
-  test("Earth downloads begin before the first image even in a Kerr scene with no Earth", async () => {
+  // (M3: after the first image, not before it — its critical path first; ~3 s after, warmed for a later Earth scene)
+  test("Earth downloads begin soon after the first image even in a Kerr scene with no Earth", async () => {
     const app = await App.boot({
       hash: scene,
       width: 320,
@@ -360,7 +361,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     })()`,
     });
     try {
-      await app.waitFor("__earthWarmRequests.length > 0 && __earthWarmRequests.every((request) => request.ok !== null)", 10_000);
+      await app.waitFor("__earthWarmRequests.length > 0 && __earthWarmRequests.every((request) => request.ok !== null)", 20_000);
       const state = await app.js<{
         requests: { url: string; beforeImage: boolean; ok: boolean }[];
         resident: string | null;
@@ -372,7 +373,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       expect(state.earthInScene).toBe(false);
       expect(state.resident).toBeNull();
       expect(state.requests.length).toBeGreaterThanOrEqual(14);
-      expect(state.requests.every((request) => request.beforeImage)).toBe(true);
+      expect(state.requests.every((request) => !request.beforeImage)).toBe(true);
       expect(state.requests.every((request) => request.ok)).toBe(true);
       expect(state.requests.some((request) => /med-.*\.ktx2|day-med/.test(request.url))).toBe(true);
       expect(state.requests.some((request) => request.url.includes("relief-med"))).toBe(true);
