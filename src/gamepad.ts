@@ -182,6 +182,9 @@ export class GamepadInput {
   private index = -1;
   /** WebHID pads (Chromium on macOS with wired Xbox 360 pads). */
   readonly hid = new HidPads();
+  /** A device read through its own profile (input/devices.ts — a HOTAS, a pad set by the player): left to
+   *  it, not read here as a pad too. */
+  claimed: (g: Gamepad) => boolean = () => false;
 
   /** Every pad the browser exposes, plus the WebHID ones. */
   list(): Gamepad[] {
@@ -189,9 +192,10 @@ export class GamepadInput {
     return [...native.filter((p): p is Gamepad => !!p && p.connected), ...(this.hid.pads as unknown as Gamepad[])];
   }
 
-  /** The first connected pad with the standard mapping (or any pad), or null. */
+  /** The first connected pad with the standard mapping (or any pad), or null — the ones read through a
+   *  profile left out (a HOTAS once read here as a pad, its axes at random). */
   private pad(): Gamepad | null {
-    const pads = this.list();
+    const pads = this.list().filter((p) => !this.claimed(p));
     const pad = pads.find((p) => p.index === this.index) ?? pads.find((p) => p.mapping === "standard") ?? pads[0] ?? null;
     this.index = pad ? pad.index : -1;
     return pad;
