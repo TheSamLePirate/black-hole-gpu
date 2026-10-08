@@ -33,6 +33,10 @@ import type { Settings } from "../settings";
 import { cross, dot, sub as sub3 } from "../math/vec3";
 import { el as h } from "./kit";
 import { t, tf } from "../i18n";
+import { daysOf } from "../system/solar";
+import type { WeatherState } from "../weather";
+import { drawWeatherLayer } from "./weather-map";
+import { store } from "../util/storage";
 
 type V3 = [number, number, number];
 export type GroundMode = "globe" | "map";
@@ -102,6 +106,12 @@ export class GroundTrack {
   private read = h("div", "gt-read");
   private tag = h("div", "gt-tag");
   mode: GroundMode = "globe";
+  /** the weather's layer on the planisphere (PLAN-METEO W2b), the player's choice kept */
+  weatherLayer = store.get("kerr.map-weather") === "1";
+  /** the airfields' real weather when it came in (the "real" setting's), from the page */
+  realWeather: () => WeatherState | null = () => null;
+  /** the scene's day [days past J2000] when last drawn (the weather's) */
+  private wxDays = 0;
   private tex = new Map<string, Tex | "loading" | "none">();
   /** the track left: directions on the world's axes, their times; per world */
   private past: { id: string; pts: { q: V3; t: number }[] } = { id: "", pts: [] };
@@ -112,7 +122,7 @@ export class GroundTrack {
   private cache = new WeakMap<OurPath, { id: string; pts: V3[]; times: number[]; pe: Scene["pe"]; ap: Scene["ap"] }>();
   private drag: { x: number; y: number; lat: number; lon: number } | null = null;
   /** draws again as last drawn (a map just loaded, the wheel, a drag) */
-  private redraw: (() => void) | null = null;
+  redraw: (() => void) | null = null;
   /** a drag or the zoom moved the globe: the HUD draws it at the display's rate */
   animating = false;
   /** the picker: a click on the world gives a place (a unit direction on its axes); the place chosen */
@@ -159,6 +169,7 @@ export class GroundTrack {
 
   draw(i: Info, time: number) {
     this.redraw = () => this.draw(i, time);
+    this.wxDays = daysOf(time);
     const sc = this.scene(i, time);
     if (!this.paint(sc) || !sc?.ship) {
       this.tag.textContent = "";
@@ -760,6 +771,18 @@ export class GroundTrack {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(c, x0, y0, mw, mh);
     }
+    // the weather (W2b): its zones, the wind, the sites' symbols — a world with air, ours
+    if (this.weatherLayer && sc.ours && solarBody(sc.id)?.atmosphere)
+      drawWeatherLayer(
+        ctx,
+        { x0, y0, mw, mh },
+        dpr,
+        sc.id,
+        this.s,
+        this.wxDays,
+        this.realWeather(),
+        sitesOf(sc.id).map((st) => ({ name: st.name, lat: st.lat, lon: st.lon })),
+      );
     // the graticule, the frame
     const pt = this.pen;
     for (let k = 0; k <= 12; k++) {
@@ -908,8 +931,10 @@ export class GroundTrack {
     // the flight computer's preview, the entry's predicted fall
     if (sc.cand?.length) path(sc.cand, "rgb(196, 140, 255)", 2.2, [7, 4]);
     if (sc.entry?.length) path(sc.entry, "rgb(255, 154, 74)", 2, [6, 3]);
-    // the world's landing sites: a ring (a runway: a bar), the chosen one bright
-    for (const st of sc.sites ?? []) {
+    // the world's landing sites: a ring (a runway: a bar), the chosen one bright — the weather's layer
+    // shown, their station symbols stand for them (the chosen one still ringed)
+    const wxShown = this.weatherLayer && sc.ours && !!solarBody(sc.id)?.atmosphere;
+    for (const st of (sc.sites ?? []).filter((x) => !wxShown || x.chosen)) {
       const p = at(st.q);
       if (!p) continue;
       const col = st.chosen ? "rgb(255, 210, 122)" : "rgba(255, 210, 122, 0.6)";

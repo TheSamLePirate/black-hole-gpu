@@ -1489,6 +1489,10 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-maptabs button:hover { color: #fff; border-color: rgba(160, 210, 255, 0.4); }
 .fl-maptabs button.on { color: #ffe6c6; border-color: var(--hud-amber); background: rgba(255, 179, 92, 0.18); }
 .fl-maptabs button.off { opacity: 0.4; }
+/* the weather's layer (PLAN-METEO W2b): a toggle after the tabs (not pushed right: the 3D map's bar sits
+   there in the map's view), sky blue when on */
+.fl-maptabs .fl-mapwx { margin-left: 6px; }
+.fl-maptabs .fl-mapwx.on { color: #d8f0ff; border-color: var(--hud-cyan); background: rgba(111, 210, 255, 0.16); }
 .fl-root.mapview .fl-maptabs button { flex: none; padding: 4px 12px; font-size: 11px; }
 .gt-stage { position: relative; width: 100%; height: 196px; border-radius: 5px; overflow: hidden; background: radial-gradient(circle at 50% 45%, rgba(20, 40, 64, 0.4), rgba(0, 0, 0, 0.5)); }
 .fl-mapbody:not(.ground) .gt-stage, .fl-mapbody.ground .m3-bar, .fl-mapbody.ground .m3-stage { display: none !important; }
@@ -2452,7 +2456,8 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-root.mapview .m3-stage, .fl-root.mapview .gt-stage { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; }
 /* (the tabs and the bar: over the free middle's top, the tabs left, the bar right) */
 .fl-root.mapview .fl-maptabs { position: absolute; z-index: 3; top: 62px; left: var(--fc-l); }
-.fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: 62px; right: var(--fc-r); left: calc(var(--fc-l) + 220px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
+/* (left clear of the tabs: 3D, Globe, Planisphere and the weather's toggle, ~300 px) */
+.fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: 62px; right: var(--fc-r); left: calc(var(--fc-l) + 310px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
 @media (max-width: 1500px) { .fl-root.mapview .fl-mapbar > .fl-label { display: none; } }
 .fl-root.mapview .m3-crumbs { top: 100px; left: var(--fc-l); right: auto; transform: none; justify-content: flex-start; }
 .fl-root.mapview .m3-menu { top: 100px; left: auto; right: var(--fc-r); }

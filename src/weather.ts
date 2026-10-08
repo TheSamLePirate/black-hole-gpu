@@ -137,46 +137,60 @@ function rand(seed: number) {
   };
 }
 
+/** A value noise over the sphere's latitude and longitude [°], cells of `cell` degrees (the longitude
+ *  wrapping), smoothed between their corners: 0…1, the same for the same seed. */
+function field(lat: number, lon: number, cell: number, seed: number): number {
+  const nx = Math.round(360 / cell);
+  const u = ((((lon + 180) % 360) + 360) % 360) / cell,
+    v = (lat + 90) / cell;
+  const i0 = Math.floor(u),
+    j0 = Math.floor(v);
+  const fu = u - i0,
+    fv = v - j0;
+  const at = (i: number, j: number) => rand(seed + (((i % nx) + nx) % nx) * 7919 + j * 104729)();
+  const s = (x: number) => x * x * (3 - 2 * x);
+  const a = at(i0, j0) + (at(i0 + 1, j0) - at(i0, j0)) * s(fu);
+  const b = at(i0, j0 + 1) + (at(i0 + 1, j0 + 1) - at(i0, j0 + 1)) * s(fu);
+  return a + (b - a) * s(fv);
+}
+
 /**
- * A plausible weather drawn for a place and a day: the same place (a 2° cell) and the same day, the same
- * weather. Mostly fair or cloudy; overcast, rain and wind now and then; fog rarely (and on a calm
- * morning's kind of day); storms in the tropics; Mars: fair, now and then dust.
+ * A plausible weather drawn for a place and a day: weather systems, not a patchwork — a moisture field
+ * and a wind field over the sphere, ~1 300 km across (a 12° noise and a 6° one under it), drawn anew
+ * each day: dry, fair; moister, clouds, then overcast; the moistest rain, and storms where the air is
+ * also unstable (the tropics most); fog where it is moist and calm; strong wind where the wind field
+ * peaks. Its direction the large-scale one (windFrom) turned a little by the field. The same place and
+ * day, the same weather. Mars: fair, its dust storms where its own field peaks.
  */
 export function randomWeather(body: string, lat: number, lon: number, days: number, windLevel: WindLevel): WeatherState {
-  const cell = Math.floor((lat + 90) / 2) * 180 + Math.floor((((lon % 360) + 360) % 360) / 2);
-  const r = rand(cell * 7919 + Math.floor(days) * 104729 + 17);
-  const pick = <T>(w: [T, number][]): T => {
-    let x = r() * w.reduce((a, [, k]) => a + k, 0);
-    for (const [v, k] of w) if ((x -= k) < 0) return v;
-    return w[w.length - 1]![0];
-  };
+  const day = Math.floor(days);
+  const seed = day * 2654435761 + (body === "mars" ? 99991 : 17);
+  const f = (cell: number, k: number) => 0.65 * field(lat, lon, cell, seed + k) + 0.35 * field(lat, lon, cell / 2, seed + k + 1);
+  const moist = f(12, 101),
+    windy = f(12, 202),
+    unstable = f(15, 303);
   const tropics = Math.abs(lat) < 23;
-  const kind: Fixed =
-    body === "mars"
-      ? pick<Fixed>([
-          ["fair", 0.75],
-          ["dust", 0.25],
-        ])
-      : pick<Fixed>([
-          ["fair", 0.32],
-          ["cloudy", 0.24],
-          ["overcast", 0.14],
-          ["rain", 0.1],
-          ["windy", 0.1],
-          ["fog", 0.05],
-          ["storm", tropics ? 0.08 : 0.03],
-        ]);
+  let kind: Fixed;
+  if (body === "mars") kind = moist > 0.66 ? "dust" : "fair";
+  else if (moist > 0.66 && unstable > (tropics ? 0.5 : 0.66)) kind = "storm";
+  else if (moist > 0.64) kind = "rain";
+  else if (moist > 0.56 && windy < 0.36) kind = "fog";
+  else if (moist > 0.52) kind = "overcast";
+  else if (windy > 0.68) kind = "windy";
+  else if (moist > 0.42) kind = "cloudy";
+  else kind = "fair";
   const w = presetWeather(kind, windLevel);
-  // (each figure moved a little: two draws alike are not the same weather)
-  const k = 0.75 + 0.5 * r();
+  // (the figures from the fields too: two places alike are not the same weather)
+  const k = 0.7 + 0.6 * windy;
+  const from = ((((windFrom(lat, lon, days) * 180) / Math.PI + (unstable - 0.5) * 80) % 360) + 360) % 360;
   return {
     ...w,
     source: "random",
-    wind: { ...w.wind, u10: kind === "fair" ? w.wind.u10 : Math.round(w.wind.u10 * k * 10) / 10, from: Math.round(360 * r()) },
-    visibility: Math.round(w.visibility * (0.7 + 0.6 * r())),
+    wind: { ...w.wind, u10: kind === "fair" ? w.wind.u10 : Math.round(w.wind.u10 * k * 10) / 10, from: Math.round(from) },
+    visibility: Math.round(w.visibility * (1.3 - 0.6 * moist)),
     layers: w.layers.map((l) => {
-      const f = 0.7 + 0.6 * r();
-      return { base: Math.round(l.base * f), top: Math.round(l.top * f), cover: Math.min(1, l.cover * (0.8 + 0.4 * r())) };
+      const g = 0.7 + 0.6 * unstable;
+      return { base: Math.round(l.base * g), top: Math.round(l.top * g), cover: Math.min(1, l.cover * (0.7 + 0.5 * moist)) };
     }),
   };
 }

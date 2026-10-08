@@ -1281,6 +1281,24 @@ export class FlightHud {
       this.tabBtns[id] = b;
       tabs.append(b);
     }
+    // (the weather's layer on the globe's flat map — PLAN-METEO W2b: the zones, the wind, the sites' symbols)
+    const wx = h("button", "fl-mapwx", t("Weather")) as HTMLButtonElement;
+    wx.dataset.testid = "map-weather";
+    wx.dataset.tip = t("The weather on the planisphere: the wind, the zones of rain, storm and fog, each site's flight category");
+    const syncWx = () => {
+      wx.classList.toggle("on", this.ground.weatherLayer);
+      wx.setAttribute("aria-pressed", String(this.ground.weatherLayer));
+    };
+    wx.onclick = () => {
+      this.ground.weatherLayer = !this.ground.weatherLayer;
+      store.set("kerr.map-weather", this.ground.weatherLayer ? "1" : "0");
+      // (seen on the planisphere: shown there)
+      if (this.ground.weatherLayer && this.mapTab !== "map") this.setMapTab("map");
+      syncWx();
+      this.ground.redraw?.();
+    };
+    syncWx();
+    tabs.append(wx);
     mapBody.append(tabs, this.map3d.bar, this.map3d.stage, this.ground.stage);
     this.mapBody = mapBody;
     this.right.append(mapHead.head, mapBody);

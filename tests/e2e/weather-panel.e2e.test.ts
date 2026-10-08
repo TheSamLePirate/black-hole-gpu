@@ -56,4 +56,30 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     await app.waitFor(`!!document.querySelector("[data-testid=weather-panel]")`, 5000);
     await app.press("Escape");
   }, 30_000);
+
+  test("the planisphere's weather layer: toggled by a real click, kept, drawn over the map", async () => {
+    const ink = () =>
+      app.js<number>(`(() => {
+        // (the planisphere's 2D layer: the HUD's ground track, its canvas laid over the GPU's)
+        const cv = [...document.querySelectorAll(".fl-root .gt-stage canvas.gt-canvas")].find((c) => c.getBoundingClientRect().width > 200);
+        const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+        let s = 0;
+        for (let i = 0; i < d.length; i += 64) s += d[i] + d[i + 1] + d[i + 2];
+        return s;
+      })()`);
+    await app.js(`(__bh.settings.weather = "random", true)`);
+    await app.press("KeyM");
+    await Bun.sleep(800);
+    await app.click("[data-testid=map-weather]");
+    await Bun.sleep(1500);
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=map-weather]").classList.contains("on")`)).toBe(true);
+    expect(await app.js<string>(`localStorage.getItem("kerr.map-weather")`)).toBe("1");
+    const on = await ink();
+    await app.click("[data-testid=map-weather]");
+    await Bun.sleep(1500);
+    const off = await ink();
+    // (the zones, the arrows, the symbols: more drawn on the 2D layer)
+    expect(on).toBeGreaterThan(off * 1.05);
+    await app.press("KeyM");
+  }, 60_000);
 });

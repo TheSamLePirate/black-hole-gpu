@@ -12,7 +12,7 @@ const GRID = "rgba(160, 210, 255, 0.10)";
 
 /** A barb as the charts draw it: the staff towards where the wind comes from, a pennant for 25 m/s
  *  (≈ 50 kt), a long feather for 5 m/s (≈ 10 kt), a short one for 2.5 — seen from above, north up. */
-function barb(g: CanvasRenderingContext2D, x: number, y: number, from: number, speed: number, len = 22) {
+export function barb(g: CanvasRenderingContext2D, x: number, y: number, from: number, speed: number, len = 22) {
   const a = (from * Math.PI) / 180;
   // (screen: north up, east right — the staff points to where it blows from)
   const dx = Math.sin(a),

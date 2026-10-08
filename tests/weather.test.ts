@@ -41,7 +41,16 @@ test("every preset sound: layers low to high, base under top, cover 0…1, a vis
 
 test("a draw: the same place and day, the same weather; another day, another; Mars fair or dusty", () => {
   const a = randomWeather("earth", 48.96, 2.44, 9800, 1);
-  expect(randomWeather("earth", 48.96, 2.44, 9800.4, 1)).toEqual(a);
+  // (the same day: the same weather — its direction turning slowly with the hour, as the fair wind's)
+  const b = randomWeather("earth", 48.96, 2.44, 9800.4, 1);
+  expect({ ...b, wind: { ...b.wind, from: 0 } }).toEqual({ ...a, wind: { ...a.wind, from: 0 } });
+  expect(Math.abs(((b.wind.from! - a.wind.from! + 540) % 360) - 180)).toBeLessThan(30);
+  // (weather systems, not a patchwork: a place's neighbour 1° away mostly the same)
+  let same = 0;
+  for (let la = -60; la <= 60; la += 6)
+    for (let lo = -180; lo < 180; lo += 12)
+      same += randomWeather("earth", la, lo, 9800, 1).kind === randomWeather("earth", la + 1, lo + 1, 9800, 1).kind ? 1 : 0;
+  expect(same / (21 * 30)).toBeGreaterThan(0.75);
   const kinds = new Set<string>();
   for (let d = 0; d < 200; d++) kinds.add(randomWeather("earth", 48.96, 2.44, 9800 + d, 1).kind);
   expect(kinds.size).toBeGreaterThanOrEqual(5);

@@ -45,6 +45,8 @@ export default {
   Cancel: "Annuler",
   Place: "Placer",
   Weather: "Météo",
+  "The weather on the planisphere: the wind, the zones of rain, storm and fog, each site's flight category":
+    "La météo sur le planisphère : le vent, les zones de pluie, d'orage et de brouillard, la catégorie de vol de chaque site",
   "The weather: fair, cloudy, fog, rain, storm, wind, Mars's dust, a draw, the real one (METAR)":
     "La météo : clair, nuageux, brouillard, pluie, orage, vent, poussière de Mars, un tirage, la réelle (METAR)",
   "Place the ship: in orbit, on a ground, beside a body, before the wormhole":
