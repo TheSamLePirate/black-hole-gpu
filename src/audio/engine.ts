@@ -44,7 +44,8 @@ export type Cue =
   | "wormhole"
   | "boom"
   | "dock"
-  | "undock";
+  | "undock"
+  | "transonic";
 
 export interface Mix {
   master: number;
@@ -163,6 +164,7 @@ export class SoundEngine {
     wind: GainNode;
     windBP: BiquadFilterNode;
     roar: GainNode;
+    hiss: GainNode;
   } | null = null;
   private last: EngineState | null = null;
   /** the audio clock at the last update [s] */
@@ -184,7 +186,7 @@ export class SoundEngine {
   /** the audio clock at the ground's last update [s] */
   private groundT = 0;
   /** the creaks and the breaths played so far (tests) */
-  private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0, docks: 0 };
+  private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0, docks: 0, booms: 0, transonic: 0 };
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
@@ -269,6 +271,7 @@ export class SoundEngine {
                 roll: this.gnd?.roll.gain.value ?? 0,
                 squeal: this.gnd?.squeal.gain.value ?? 0,
                 wind: this.gnd?.wind.gain.value ?? 0,
+                plasma: this.amb ? { roar: this.amb.roar.gain.value, hiss: this.amb.hiss.gain.value } : null,
                 station: this.stn
                   ? { g: this.stn.gain.gain.value, x: this.stn.pan.positionX.value, z: this.stn.pan.positionZ.value }
                   : null,
@@ -628,8 +631,21 @@ export class SoundEngine {
     roarLP.type = "lowpass";
     roarLP.frequency.value = 140;
     roarLP.Q.value = 1.4;
-    this.loop(this.brown, 1.3).connect(roarLP).connect(roar).connect(this.busses.listener);
-    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar };
+    // (buffeting: the shock layer's level shaken by a slow random signal — S7)
+    const buffet = ctx.createGain();
+    buffet.gain.value = 1;
+    const shake = ctx.createGain();
+    shake.gain.value = 0.5;
+    this.loop(this.slow, 3.2).connect(shake).connect(buffet.gain);
+    this.loop(this.brown, 1.3).connect(roarLP).connect(buffet).connect(roar).connect(this.busses.listener);
+    // the ionised flow's hiss along the hull (S7): bright, its level with the plasma's
+    const hiss = ctx.createGain();
+    hiss.gain.value = 0;
+    this.loop(this.white, 1.05)
+      .connect(new BiquadFilterNode(ctx, { type: "bandpass", frequency: 2800, Q: 0.6 }))
+      .connect(hiss)
+      .connect(this.busses.listener);
+    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar, hiss };
   }
 
   /** The ground's voices (S5): at the wheels — the rolling's rumble, the tyres' hiss, the brakes' squeal —,
@@ -707,6 +723,33 @@ export class SoundEngine {
       .connect(new GainNode(ctx, { gain: 0.5 }))
       .connect(gain);
     this.stn = { gain, pan };
+  }
+
+  /** A sonic boom heard where the Mach cone sweeps the listener (S7): its N-wave — the bow's shock (the
+   *  pressure's leap up), the fall, the tail's shock (its leap back): the "double bang", `gap` [s] apart (0.06
+   *  s at least) —, `level` 0…1 (the distance's). */
+  boomAt(level: number, gap: number) {
+    if (!this.running || !this.enabled) return;
+    this.nwave(this.busses.master, 0.95 * clamp(level), 0, Math.max(gap, 0.06));
+    this.counts.booms++;
+  }
+
+  /** A boom's N-wave, `dur` [s] long: the pressure leaping up, falling linearly below, leaping back; a low
+   *  rumble after it (the ground's echo). */
+  private nwave(out: AudioNode, level: number, at: number, dur: number) {
+    const ctx = this.ctx!;
+    const R = ctx.sampleRate;
+    const n = Math.round(R * dur);
+    const buf = ctx.createBuffer(1, n, R);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = 1 - (2 * i) / (n - 1);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 1800 });
+    const g = new GainNode(ctx, { gain: level });
+    src.connect(lp).connect(g).connect(out);
+    src.start(ctx.currentTime + at);
+    this.burst(out, level * 0.5, 60, 1.2, 0.6, at + dur);
   }
 
   /** A tyre touching at speed: its chirp — the rubber dragged up to the wheel's speed —, at the wheel. */
@@ -919,6 +962,7 @@ export class SoundEngine {
     set(a.wind.gain, aboard * 0.6 * Math.sqrt(q), 0.25);
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
     set(a.roar.gain, aboard * 1.1 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
+    set(a.hiss.gain, aboard * 0.09 * clamp(s.plasma ?? 0) ** 2, 0.3);
   }
 
   /** The structure creaking: a groan (a resonance gliding down) — or, as the hull heats, the ticks of the
@@ -1176,9 +1220,13 @@ export class SoundEngine {
         T(1200, 0.12, 0.07, { level: 0.2 });
         break;
       case "boom":
-        // (a sonic boom: two thumps, the bow's and the tail's shocks)
-        this.burst(this.busses.listener, 1.0, 90, 0.35, 0.8);
-        this.burst(this.busses.listener, 0.8, 70, 0.4, 0.8, 0.12);
+        this.boomAt(1, arg);
+        break;
+      case "transonic":
+        // (aboard, through Mach 1: no boom — one's own is never heard —, the airframe's shudder)
+        this.burst(this.busses.listener, 0.6, 70, 0.9, 0.7);
+        this.burst(this.busses.listener, 0.35, 160, 0.6, 1.2, 0.15);
+        this.counts.transonic++;
         break;
       case "touchdown":
         this.burst(this.busses.engine, 0.6, 220, 0.4, 0.7);

@@ -74,6 +74,8 @@ export class SoundDirector {
   /** the engine's last distance from the ear [m] (its radial speed: the Doppler) */
   private engDist = Number.NaN;
   private vr = 0;
+  /** the flown craft's place from a standing listener last frame [m], the listener in its Mach cone (S7) */
+  private cone: { p: [number, number, number] | null; inside: boolean } = { p: null, inside: false };
   /** the hull's temperature last frame [K] and its rate, smoothed (the thermal ticks — S4) */
   private hullT = Number.NaN;
   private heating = 0;
@@ -182,6 +184,31 @@ export class SoundDirector {
     if (!d || !(dist < 2000)) return null;
     const docked = fleet.assembly(fleet.active).includes(id as never);
     return { pos: [d[0] * dist, d[1] * dist, -d[2] * dist] as [number, number, number], dist, docked };
+  }
+
+  /**
+   * The sonic boom (S7): a standing listener — a spectator, the fly-by's camera — hears it as the craft's
+   * Mach cone sweeps it: the craft's place and velocity seen from it (frame to frame, the flight's own time),
+   * the listener inside the cone — behind the craft, within asin(1/M) of its wake's axis — now and not the
+   * frame before. The cone is where the sound emitted on the way has reached: its delay is in it already.
+   */
+  private sonicCone(pose: ShipPose | null, M: number, dt: number, warp: number, standing: boolean) {
+    const p = pose ? ([...pose.t] as [number, number, number]) : null;
+    const prev = this.cone.p;
+    this.cone.p = p;
+    if (!p || !prev || !standing || !(M > 1) || !(warp > 0) || !(dt > 0)) {
+      this.cone.inside = false;
+      return;
+    }
+    const v = [0, 1, 2].map((k) => (p[k]! - prev[k]!) / (dt * warp));
+    const vl = Math.hypot(...v);
+    const d = Math.hypot(...p);
+    // (a camera's jump — the fly-by moving on to wait further —: no motion of the craft)
+    if (vl < 100 || vl > 4000 || d < 1) return;
+    const cosA = (p[0] * v[0]! + p[1] * v[1]! + p[2] * v[2]!) / (d * vl);
+    const inside = cosA > Math.sqrt(1 - 1 / (M * M));
+    if (inside && !this.cone.inside && this.s.sound) sound.boomAt(Math.min(1, Math.sqrt(400 / d)), 0.06 + 15 / (M * 300));
+    this.cone.inside = inside;
   }
 
   /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
@@ -313,10 +340,13 @@ export class SoundDirector {
     if (now.precision !== p.precision) this.cue(now.precision ? "precision-on" : "precision-off");
     if (now.landed && !p.landed) this.cue("touchdown");
     if (now.target !== p.target) this.cue("target");
-    // through Mach 1 in the air: the boom
+    // through Mach 1 in the air, aboard (and on the views riding with the ship): the airframe's shudder —
+    // one's own boom is never heard (S7); the boom is a standing listener's, its Mach cone sweeping it
     const M = info.air?.inAir ? info.air.mach : 0;
-    if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2) this.cue("boom");
+    const standing = !!o.spectator || s.shipMount === "flyby";
+    if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2 && !standing) this.cue("transonic");
     this.mach = M;
+    this.sonicCone(o.pose ?? null, M, dt, o.live ? s.timeSpeed * 4.925490947e-6 * s.massSolar : 0, standing);
     if (now.mount !== p.mount) this.cue("mount");
     if (now.side !== p.side && p.side && now.side && now.side !== "throat" && p.side !== "throat") this.cue("wormhole");
     else if (now.soi !== p.soi && p.soi && now.soi) this.cue("soi");

@@ -11,7 +11,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // crew breathing and the structure creaking under 5 g. S5: the ground — a landing at Edwards, live: the
 // tyres' chirps at the touchdown (the mains, then the nose), the rolling's rumble, the runway's joints, the
 // brakes' squeal once every wheel is down. S6: the station — its hum where its port is on the approach,
-// through the structure once docked; the docking's latches and the undocking's springs.
+// through the structure once docked; the docking's latches and the undocking's springs. S7: the boom heard
+// by a standing listener as the Mach cone sweeps it — the fly-by's camera at Mach 2, none subsonic —, the
+// shudder aboard through Mach 1 (one's own boom never heard), the entry's plasma roaring round the hull.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -154,7 +156,8 @@ describe.skipIf(!E2E)("the sound's space", () => {
         const s = __sound.spaceState().cabin;
         roll = Math.max(roll, s.roll);
         squeal = Math.max(squeal, s.squeal);
-        if (s.joints > before.joints + 10 && squeal > 0) break;
+        // (the squeal eased in over a few tenths: waited for)
+        if (s.joints > before.joints + 10 && squeal > 0.01) break;
       }
       __bh.freeze(true);
       return { before, after: __sound.spaceState().cabin, roll, squeal };
@@ -172,7 +175,9 @@ describe.skipIf(!E2E)("the sound's space", () => {
       const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
       await wait(2500);
       const c = __bh.camera;
-      const near = __sound.spaceState().cabin.station;
+      // (the hum eased in as the scene settles: waited for, 8 s at most)
+      let near = __sound.spaceState().cabin.station;
+      for (let i = 0; i < 40 && near.g <= 0.01; i++) { await wait(200); near = __sound.spaceState().cabin.station; }
       const d0 = __sound.spaceState().cabin.docks;
       __bh.freeze(true);
       c.pilot.auto = "none"; c.pilot.setAuto("dock");
@@ -192,6 +197,32 @@ describe.skipIf(!E2E)("the sound's space", () => {
     expect(r.docks[1]).toBe(r.docks[0]! + 1);
     expect(r.docks[2]).toBe(r.docks[1]! + 1);
   }, 120_000);
+
+  test("the boom where the Mach cone sweeps a standing listener; aboard the shudder; the entry's plasma", async () => {
+    await app.waitFor(`__bh.relief("earth", 34.905, -117.884) > 100`, 60_000);
+    const run = (start: string, mount: string, secs: number) =>
+      app.js<{ booms: number; transonic: number; roar: number }>(`(async () => {
+        __bh.game.glideTo(${start});
+        __bh.settings.shipMount = ${JSON.stringify(mount)}; __bh.refresh();
+        const c0 = { ...__sound.spaceState().cabin };
+        let roar = 0;
+        for (let i = 0; i < ${secs} * 4; i++) {
+          await new Promise((ok) => setTimeout(ok, 250));
+          roar = Math.max(roar, __sound.spaceState().cabin.plasma.roar);
+        }
+        const c1 = __sound.spaceState().cabin;
+        return { booms: c1.booms - c0.booms, transonic: c1.transonic - c0.transonic, roar };
+      })()`);
+    const fast = await run(`"Edwards", 60, 15, 650`, "flyby", 8);
+    expect(fast.booms).toBeGreaterThan(0);
+    const slow = await run(`"Edwards", 20, 3, 200`, "flyby", 5);
+    expect(slow.booms).toBe(0);
+    const through = await run(`"Edwards", 30, 9, 320`, "cockpit", 8);
+    expect(through.transonic).toBeGreaterThan(0);
+    expect(through.booms).toBe(0);
+    const entry = await run(`"Edwards", 700, 55, 4500`, "cockpit", 6);
+    expect(entry.roar).toBeGreaterThan(0.05);
+  }, 180_000);
 
   test("in the air, the fly-by camera: the passing ship's Doppler, up then down, and the air's absorption far off", async () => {
     await app.waitFor(`__bh.relief("earth", 34.905, -117.884) > 100`, 60_000);
