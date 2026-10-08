@@ -1116,14 +1116,6 @@ export class Renderer {
       },
     });
     onDevice(device);
-    // Start downloads while shaders compile, even for a scene with no Earth. This does not gate
-    // startup or allocate Earth textures; the scene-dependent loader still controls GPU residency.
-    // (Not on a connection the user asked to spare — Save-Data: the maps then come when a view needs them.)
-    if (earthPrefetchWanted())
-      void prefetchEarthMaps(device).catch((error) => {
-        gpuDiagnostics.record("earth-prefetch", error);
-        console.warn("Earth prefetch unavailable:", error);
-      });
     // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
     // flight and offers a reload; nothing more is sent to it)
     const lost = device.lost.then((info) => {
@@ -3727,6 +3719,7 @@ export class Renderer {
         this.lastGpuMs = ms;
         this.completedFrames++;
         this.firstFrameDoneAt ||= now;
+        if (this.completedFrames === 1) this.prefetchEarthSoon();
         this.completedDurations.push(ms);
         if (this.completedDurations.length > 512) this.completedDurations.shift();
         // Optional LUT work starts only after the first image has completed on the GPU.
@@ -3834,6 +3827,24 @@ export class Renderer {
   generation = 1;
   /** the loss was simulated (simulateLoss) */
   private simulatedLoss = false;
+
+  /**
+   * The Earth's medium maps (22.7 MB) downloaded ahead of need — 3 s after the first image, not while the
+   * shaders compile (PLAN-MONDE M3): at 20 Mbit/s they put a scene without the Earth's first image back
+   * from 7.2 to 11.1 s. Not on a connection the user asked to spare (Save-Data: they come when a view
+   * needs them); no texture made — the scene's loader keeps the GPU's residency.
+   */
+  private prefetchEarthSoon() {
+    if (!earthPrefetchWanted()) return;
+    const device = this.device;
+    setTimeout(() => {
+      if (this.lost) return;
+      void prefetchEarthMaps(device).catch((error) => {
+        gpuDiagnostics.record("earth-prefetch", error);
+        console.warn("Earth prefetch unavailable:", error);
+      });
+    }, 3000);
+  }
 
   /** The device lost on purpose — its recovery tested (PLAN-MONDE M2): destroyed, told as a reset. */
   simulateLoss() {

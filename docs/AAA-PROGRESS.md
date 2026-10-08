@@ -384,6 +384,14 @@ Trouvé en route : le relais du renderer de M2 ne respectait pas l'objet par leq
 
 **Reste ouvert (autopilotes)** : l'atterrissage autopiloté au Bourget, juste après un chargement, rate une fois sur trois environ — posé à 94 m de l'axe, 437 m après le seuil, 3,3 g (contre 0,9 m, 1,2 km et 1,7 g d'habitude). Antérieur à M9 (vu au plan HUB) ; l'e2e `report` affiche la carte en cas d'échec.
 
+## M3a : la première image n'attend plus que ce qu'elle montre (08/10/2026)
+
+Mesuré d'abord, scène par scène, ce qui se télécharge et ce que la première image attend (navigateur headless, liaison bridée à 20 Mbit/s, cache coupé). Les cibles du plan (planètes en KTX2, reliefs) se sont révélées déjà optimisées. Le poids était ailleurs :
+- le **préchargement de la Terre** (22,7 Mo : son cube moyen et son relief) partait à la création du device, dans **toutes** les scènes — à Gargantua aussi — et concurrençait le reste malgré sa basse priorité : il part maintenant **3 s après la première image** ;
+- **JUP365** (le centre de Jupiter et ses lunes, 4,1 Mo, 2040–2100) était attendu avant toute scène : il ne l'est plus que pour une scène à Jupiter ou une sauvegarde, sinon il arrive 2 s après la première image. Dans la scène principale (tous les corps, datée 2067), ses lunes passent du modèle analytique à JUP365 à ce moment — 4 000 à 17 000 km, invisibles depuis la Terre (< 0,01″) ; le cache des positions est vidé à l'arrivée d'un fichier.
+
+Résultat (scène à Gargantua, 20 Mbit/s) : **première image 11,1 → 5,5–6,1 s**, 9,5 Mo téléchargés avant elle au lieu de 17,2 + 22,7. e2e **`first-image-downloads`** (échoue sur l'ancien code). `smoke`, `worlds`, `reload` inchangés.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -408,6 +416,8 @@ Par ordre de gain :
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **08/10/2026 — M3a** : la première image n'attend plus la Terre ni les lunes de Jupiter hors de leurs scènes (à 20 Mbit/s, 11,1 → 5,5–6,1 s à Gargantua).
 
 - **08/10/2026 — M9 : 8 storage buffers** (le défaut de WebGPU : Android et Safari admis), même image et même vitesse mesurées (`trace-ab`, A/A pour le bruit) ; le relais de M2 corrigé.
 

@@ -89,7 +89,7 @@ import { TouchFlight } from "./ui/touchflight";
 import { ViewOverlay } from "./ui/overlay";
 import { gameTimeOf, issAxes, issStart, issTrack } from "./system/iss";
 import { loadEphemerides } from "./system/de440";
-import { ephemerisUrls } from "./system/ephemeris-files";
+import { ephemerisUrls, JOVIAN } from "./system/ephemeris-files";
 import { store } from "./util/storage";
 import { caught, DEV, DEV_TOOLS } from "./debug";
 import { advanceFrameClock, frameNow } from "./frameclock";
@@ -243,16 +243,19 @@ async function main() {
   const fonts = Promise.all(
     [`600 12px Rajdhani`, `700 12px Rajdhani`, `500 12px "JetBrains Mono"`, `500 12px Inter`].map((f) => document.fonts.load(f)),
   ).catch(() => {});
-  // the solar system's ephemerides (DE440, JUP365: 7 MB) and the sky's assets: downloading while
-  // the shaders compile, not after them (plan §2.1-C)
+  // the solar system's ephemerides and the sky's assets: downloading while the shaders compile, not
+  // after them (plan §2.1-C). DE440 (3.3 MB) always, before the scene is placed; JUP365 (Jupiter's centre
+  // and moons, 2040–2100: 4.1 MB) only where it may matter — a scene about Jupiter, a save (its place not
+  // known here) —, else after the first image: at 20 Mbit/s it held every scene's first image back
+  // (PLAN-MONDE M3)
+  const ephemerisFetch = (u: string) =>
+    loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`))));
+  const startScene = new URLSearchParams(location.hash.slice(1)).get("scene");
+  const jovianFirst =
+    /[#&]save=/.test(location.hash) ||
+    (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : !!autosave.get());
   loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
-  const ephemerides = loading.track(
-    "ephemeris",
-    "",
-    loadEphemerides(ephemerisUrls(), (u) =>
-      loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
-    ),
-  );
+  const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(jovianFirst ? ["de", "jup"] : ["de"]), ephemerisFetch));
   loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
   loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
   prefetchSkyAssets((u, id) => loading.fetch(u, id));
@@ -2212,6 +2215,8 @@ async function main() {
       cancelWatchdog();
       gpuDiagnostics.ready();
       splash.firstImage();
+      // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn)
+      if (!jovianFirst) setTimeout(() => void loadEphemerides(ephemerisUrls(["jup"])), 2000);
     }
     if (st) {
       renderedAt = now;

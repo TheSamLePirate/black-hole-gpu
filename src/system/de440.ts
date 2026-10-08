@@ -42,19 +42,29 @@ export function addEphemeris(buf: ArrayBuffer) {
   }
 }
 
-let loading: Promise<void> | null = null;
+const loads = new Map<string, Promise<void>>();
 /**
- * Fetches the ephemerides (once) from their URLs (ephemeris-files.ts: the page's; the planner's worker,
- * bundled apart, gets them from the page); resolves when they are in (or failed: the models stand in).
+ * Fetches the ephemerides (each file once) from their URLs (ephemeris-files.ts: the page's; the planner's
+ * worker, bundled apart, gets them from the page); resolves when they are in (or failed: the models stand
+ * in). Asked again for a file already coming: the same wait.
  */
 export function loadEphemerides(
   urls: string[],
   fetchUrl: (u: string) => Promise<ArrayBuffer> = (u) =>
     fetch(u).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`)))),
 ): Promise<void> {
-  return (loading ??= Promise.all(urls.map((u) => fetchUrl(u).then(addEphemeris)))
-    .then(() => undefined)
-    .catch((e) => console.warn("Ephemerides unavailable, the analytic models stand in:", e)));
+  return Promise.all(
+    urls.map((u) => {
+      let p = loads.get(u);
+      if (!p) {
+        p = fetchUrl(u)
+          .then(addEphemeris)
+          .catch((e) => console.warn("Ephemerides unavailable, the analytic models stand in:", e));
+        loads.set(u, p);
+      }
+      return p;
+    }),
+  ).then(() => undefined);
 }
 
 /** The ephemerides reach this body at this time */
