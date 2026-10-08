@@ -8,7 +8,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // standard pad's path leaves the claimed devices alone. H3: without the test's profiles, the three are known by
 // their Thrustmaster ids. H4: the controllers screen by real clicks — the devices listed with their profiles,
 // the roll's source set by detection (the twist moved), inverted, kept as the player's own; back to the known
-// profile.
+// profile. H5: the vibrations — a simulated actuator on the stick: rumbling at full thrust, scaled by the
+// setting, none at 0.
 
 const FAKE = `(() => {
   const mk = (index, id, axes, n) => ({ index, id, connected: true, mapping: "", timestamp: 0, axes: axes.slice(),
@@ -159,5 +160,33 @@ describe.skipIf(!E2E)("a HOTAS in three pieces", () => {
     await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
     await app.press("Escape");
     await app.press("Escape");
+  });
+
+  test("the vibrations: the stick rumbles at full thrust, scaled by the setting, none at 0", async () => {
+    const r = await app.js<{ full: number; half: number; off: number; n: number }>(`(async () => {
+      const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+      const got = [];
+      window.__hotas[0].vibrationActuator = { playEffect: (k, o) => (got.push(o), Promise.resolve("complete")) };
+      const run = async (g) => {
+        __bh.game.set("haptics", g);
+        got.length = 0;
+        __bh.camera.pilot.auto = "none";
+        __bh.camera.pilot.throttle = 1;
+        // (the lever left alone: at its idle stop, it holds nothing)
+        await wait(800);
+        __bh.camera.pilot.throttle = 0;
+        await wait(300);
+        return Math.max(0, ...got.map((o) => o.weakMagnitude));
+      };
+      const full = await run(1), half = await run(0.5), off = await run(0);
+      const n = got.length;
+      __bh.game.set("haptics", 0.6);
+      return { full, half, off, n };
+    })()`);
+    expect(r.full).toBeGreaterThan(0.2);
+    // (half the setting, about half the rumble — the engine's spool-up makes the two runs differ a little)
+    expect(r.half / r.full).toBeGreaterThan(0.35);
+    expect(r.half / r.full).toBeLessThan(0.65);
+    expect(r.off).toBe(0);
   });
 });

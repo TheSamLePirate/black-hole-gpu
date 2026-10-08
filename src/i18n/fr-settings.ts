@@ -772,6 +772,9 @@ export default {
   "Engines & RCS": "Moteurs et RCS",
   "Cabin & wind": "Cabine et vent",
   "Headphones (3D sound)": "Casque (son 3D)",
+  "Controller vibrations": "Vibrations des manettes",
+  "What a controller that can vibrate makes you feel: the engine's thrust, the entry's plasma, the rolling on the runway, each wheel touching, a boom, the transonic shudder, the docking's latches. 0: none. Felt with the sound off too.":
+    "Ce qu'une manette capable de vibrer fait sentir : la poussée du moteur, le plasma de la rentrée, le roulage sur la piste, chaque roue qui touche, un bang, les secousses transsoniques, les loquets de l'amarrage. 0 : aucune. Sensible même le son coupé.",
   "With headphones, the sources are placed in 3D (HRTF): the engine behind you, a thruster above, the ship passing a free camera. Off — speakers —, a plain left–right panning. The Doppler of a passing ship is heard either way.":
     "Au casque, les sources sont placées en 3D (HRTF) : le moteur derrière vous, un propulseur au-dessus, le vaisseau qui passe devant une caméra libre. Désactivé — enceintes —, un simple panoramique gauche–droite. L'effet Doppler d'un vaisseau qui passe s'entend dans les deux cas.",
   Interface: "Interface",

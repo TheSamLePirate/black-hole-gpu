@@ -436,7 +436,7 @@ async function main() {
       else if (effect === "resize") resized = true;
       if (k === "distance" || k === "whL") camera.sync();
     }
-    if (keys.some((k) => k.startsWith("sound"))) audio.applyMix();
+    if (keys.some((k) => k.startsWith("sound") || k === "haptics")) audio.applyMix();
     if (scene) touch();
     if (resized) resize();
     syncButtons();

@@ -11,6 +11,7 @@ import { GEARS, type GearOut } from "../gear";
 import { jetLevel, rcsClusters, type ThrustAsked } from "../jets";
 import { VESSELS } from "../vessels";
 import { sound, type Cue, type EngineSpace } from "./engine";
+import { hapticMix, haptics } from "../input/haptics";
 import { airCutoff, centroid, doppler, hearing, radialSpeed, type ShipPose, shipSource, soundSpeed } from "./space";
 const HOLDS = ["prograde", "retrograde", "normal", "antinormal", "radialOut", "radialIn", "target", "antiTarget", "maneuver"];
 
@@ -74,6 +75,9 @@ export class SoundDirector {
   /** the engine's last distance from the ear [m] (its radial speed: the Doppler) */
   private engDist = Number.NaN;
   private vr = 0;
+  /** the wheels' loads last frame, the runway's joints' distance (the vibrations — H5) */
+  private wheelsWere: number[] = [];
+  private jointDist = 0;
   /** the flown craft's place from a standing listener last frame [m], the listener in its Mach cone (S7) */
   private cone: { p: [number, number, number] | null; inside: boolean } = { p: null, inside: false };
   /** the hull's temperature last frame [K] and its rate, smoothed (the thermal ticks — S4) */
@@ -86,6 +90,10 @@ export class SoundDirector {
     this.applyMix();
     // (events that are messages rather than states)
     gameLog.on((e) => {
+      // (the vibrations first: felt with the sound off — H5)
+      if (e.kind === "pilot" && /^Docked to /.test(e.text)) haptics.impulse("dock");
+      else if (e.kind === "pilot" && /^Undocked from /.test(e.text)) haptics.impulse("undock");
+      else if (/crash|collapsed|broke up/i.test(e.text)) haptics.impulse("crash");
       if (!this.s.sound) return;
       if (e.kind === "warn" && /crash/i.test(e.text)) sound.play("crash");
       else if (e.kind === "error") sound.play("error");
@@ -118,6 +126,7 @@ export class SoundDirector {
   applyMix() {
     const s = this.s;
     sound.setHeadphones(!!s.soundHeadphones);
+    haptics.intensity = s.haptics ?? 0.6;
     sound.setMix(
       { master: s.soundVolume, beeps: s.soundBeeps, engines: s.soundEngines, ambience: s.soundAmbience, ui: s.soundUi },
       s.sound,
@@ -207,8 +216,35 @@ export class SoundDirector {
     if (vl < 100 || vl > 4000 || d < 1) return;
     const cosA = (p[0] * v[0]! + p[1] * v[1]! + p[2] * v[2]!) / (d * vl);
     const inside = cosA > Math.sqrt(1 - 1 / (M * M));
-    if (inside && !this.cone.inside && this.s.sound) sound.boomAt(Math.min(1, Math.sqrt(400 / d)), 0.06 + 15 / (M * 300));
+    if (inside && !this.cone.inside) {
+      if (this.s.sound) sound.boomAt(Math.min(1, Math.sqrt(400 / d)), 0.06 + 15 / (M * 300));
+      haptics.impulse("boom", Math.min(1, Math.sqrt(400 / d)));
+    }
     this.cone.inside = inside;
+  }
+
+  /**
+   * The vibrations (PLAN-HOTAS H5, input/haptics.ts) — felt with the sound off too: the continuous rumble (the
+   * engine, the plasma, the rolling), each wheel's touch, the runway's joints.
+   */
+  private feel(dt: number, on: boolean, throttle: number, plasma: number, ground: ReturnType<SoundDirector["groundSound"]>) {
+    const rolling = on && ground?.wheels.some((w) => w.load > 0) ? ground.speed : 0;
+    haptics.continuous(on ? hapticMix({ throttle, plasma, rolling }) : { strong: 0, weak: 0 });
+    if (!on || !ground) {
+      this.wheelsWere = [];
+      return;
+    }
+    ground.wheels.forEach((w, k) => {
+      if ((this.wheelsWere[k] ?? 0) <= 0 && w.load > 0 && ground.speed > 10) haptics.impulse("wheel", Math.min(ground.speed / 100, 1));
+      this.wheelsWere[k] = w.load;
+    });
+    if (rolling > 3) {
+      this.jointDist += rolling * dt;
+      if (this.jointDist > 15) {
+        this.jointDist %= 15;
+        haptics.impulse("joint", Math.min(rolling / 60, 1));
+      }
+    }
   }
 
   /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
@@ -266,6 +302,9 @@ export class SoundDirector {
     const f = fresh ? o.fired : { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0 };
     this.spin += (f.yaw - this.spin) * Math.min(1, dt * 4);
     const sf = info?.surface ?? null;
+    const ground = this.groundSound(o.pose ?? null, o.gear ?? null, sf, info, f.throttle);
+    const plasma = info?.air?.inAir ? Math.min(Math.max((Math.log10(Math.max(info.air.heat, 1)) - 4.6) / 1.7, 0), 1) : 0;
+    this.feel(dt, flying && o.live, f.throttle, plasma, ground);
     sound.update({
       throttle: f.throttle,
       // (turning hard fires the RCS too, as the wheels saturate)
@@ -284,7 +323,7 @@ export class SoundDirector {
       panel: o.pose ? panelFrom(o.pose) : null,
       // (the ground — S5: the wheels where they are, their loads; the speed over it; the brakes as motion.ts
       // sets them — the engine idle, no autopilot, every wheel down)
-      ground: this.groundSound(o.pose ?? null, o.gear ?? null, sf, info, f.throttle),
+      ground,
       groundWind: o.groundWind ?? 0,
       station: this.stationSound(info, status, o.pose ?? null),
       space: this.engineSpace(
@@ -295,7 +334,7 @@ export class SoundDirector {
       ),
       air: sf ? Math.min(sf.air / 1.225, 2) : 0,
       airspeed: sf ? Math.hypot(sf.vVert, sf.vHor) : 0,
-      plasma: info?.air?.inAir ? Math.min(Math.max((Math.log10(Math.max(info.air.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+      plasma,
       aboard: flying,
       live: o.live,
     });
@@ -344,7 +383,10 @@ export class SoundDirector {
     // one's own boom is never heard (S7); the boom is a standing listener's, its Mach cone sweeping it
     const M = info.air?.inAir ? info.air.mach : 0;
     const standing = !!o.spectator || s.shipMount === "flyby";
-    if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2 && !standing) this.cue("transonic");
+    if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2 && !standing) {
+      this.cue("transonic");
+      haptics.impulse("transonic");
+    }
     this.mach = M;
     this.sonicCone(o.pose ?? null, M, dt, o.live ? s.timeSpeed * 4.925490947e-6 * s.massSolar : 0, standing);
     if (now.mount !== p.mount) this.cue("mount");

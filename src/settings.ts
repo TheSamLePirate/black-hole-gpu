@@ -417,6 +417,7 @@ export interface Settings {
   soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
   soundUi: number; // the interface's clicks
   soundHeadphones: boolean; // headphones: the sources placed in 3D (HRTF); speakers: equal-power panning
+  haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
 
@@ -643,6 +644,7 @@ export function defaultSettings(): Settings {
     soundAmbience: 0.5,
     soundUi: 0.35,
     soundHeadphones: false,
+    haptics: 0.6,
     dynamicResolution: false,
   };
 }
@@ -1833,6 +1835,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soundAmbience: "pref",
   soundUi: "pref",
   soundHeadphones: "pref",
+  haptics: "pref",
   dynamicResolution: "pref",
 };
 
