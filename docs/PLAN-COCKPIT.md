@@ -1,0 +1,47 @@
+# Plan Cockpit — M8 du plan Monde (8 octobre 2026)
+
+Suite de [`PLAN-MONDE.md`](PLAN-MONDE.md), phase **M8 : le cockpit interactif**. Suivi global : [`AAA-PROGRESS.md`](AAA-PROGRESS.md).
+
+## Décisions du propriétaire (08/10/2026)
+
+- **La sélection par un rayon CPU** : un rayon par clic ou par survol, lancé contre le BVH de la cabine (il existe déjà pour s'y déplacer), étendu pour rendre la pièce touchée. Ce choix remplace la pré-passe d'identifiants GPU du plan Monde : le résultat est exact, sans coût GPU.
+- **Toutes les commandes** :
+  - les écrans à pages ;
+  - le vol (train, volets, aérofrein, SAS) ;
+  - l'autopilote et l'ordinateur de vol ;
+  - les lumières.
+- **Le train commandé, avec alarme** : le pilote le sort (levier ou touche). Une alarme retentit s'il est rentré alors que l'appareil vole bas et lentement. L'autopilote et le mode assisté le sortent eux-mêmes. Un réglage « train automatique » garde le comportement d'aujourd'hui ; il ira au niveau Novice quand la difficulté existera (phase 4).
+- **Un gradateur et une nuit automatique** : un bouton règle les plafonniers de 0 à 100 %. La nuit ou dans l'ombre, ils baissent d'eux-mêmes et les écrans éclairent la cabine. Un mode « nuit rouge » est proposé en option. C'est la décision « cockpit éclairé », en attente depuis G3.
+
+## État de départ (inventaire du 08/10/2026)
+
+- **Le maillage** : `assets/ranger/cockpit.bin` (« CKPT » v2, 76 000 triangles), tiré de l'OBJ Sketchfab par `scripts/cockpit-convert.py` puis `scripts/build-cockpit.ts`.
+  - Chaque sommet porte une matière (60–72) et l'AO ; les écrans portent un affichage et un uv.
+  - L'OBJ ne compte que 26 objets fusionnés : **aucun bouton n'est nommé**. Les « petites pièces » (moins de 4 cm) ne sont reconnues que par leur taille, avec un hachage instable d'une construction à l'autre.
+  - Seuls les deux manches sont animés (matière 72, pivots).
+- **Le rendu** : une passe rastérisée par-dessus le rendu tracé (`ship.ts encodeShip`, `ship.wgsl cabinShade`). Les 30 écrans se partagent 8 affichages : un canevas 2048 × 1024 (`ui/cockpitscreens.ts`), redessiné à 8 Hz. NAV bascule tout seul sur l'approche, DOCKING sur l'atterrissage.
+- **La souris dans le cockpit** :
+  - un clic choisit une cible du ciel (`pickAt`) ;
+  - un glissement (bouton droit ou Maj) tourne le regard ;
+  - aucune sélection 3D. `TriBVH.segment` ne rend que `{t, n}`, sans le triangle.
+- **Les commandes** :
+  - SAS : touche T (`pilot.sas`) ;
+  - volets : touche P (`airFlight.cfg.flaps`, 0 → ½ → 1) ;
+  - aérofrein : Maj+P (`camera.airBrake`) ;
+  - **le train est automatique** (`cfg.gear` sorti sous 600 m et 160 m/s, `piloting.ts`) et n'a aucune touche (G sert à l'autopilote d'atterrissage) ;
+  - aucune lumière commandable.
+- **L'éclairage** : quatre plafonniers fixes dans `cabinShade`, plus le ciel par les hublots, le soleil (une ombre), le plasma, les écrans et les voyants. Aucun réglage.
+
+## Étapes
+
+| # | Étape | Contenu | Statut |
+|---|---|---|---|
+| K1 | **Le modèle des commandes** | `cockpit/controls.ts` (pur, testé) : chaque commande — son identifiant, son genre (levier, interrupteur gardé, bouton lumineux, bouton rotatif, onglet d'écran), sa fonction, sa place et son axe dans le repère du vaisseau, ses positions ; **leur géométrie générée** par `build-cockpit.ts` sur les consoles devant le pilote (le levier du train et sa roue, le levier des volets, l'aérofrein, le SAS et le panneau de l'autopilote, le gradateur, les interrupteurs des feux) — une matière 73, l'identifiant de la commande par sommet ; « CKPT » v3 ; leur pose animée par le shader depuis un tableau d'états (uniforme), les voyants des boutons allumés | à faire |
+| K2 | **La sélection** | `TriBVH` rend le triangle touché ; triangle → commande, ou écran (son affichage, son uv) ; dans le cockpit, **le survol** surligne la commande (son identifiant dans l'uniforme) et l'explique (une bulle : son nom, son état, sa touche), **le clic** l'actionne (un levier se tire, un bouton rotatif se tourne à la molette ou au glissement) ; un clic ailleurs choisit une cible comme avant ; le glissement tourne toujours le regard ; FR + EN ; e2e par de vrais clics | à faire |
+| K3 | **Les écrans à pages** | chaque affichage reçoit une rangée d'onglets (ses touches) : la page choisie au clic parmi PFD, ORBIT, NAV, SYSTEMS, DOCKING, PLAN, CLOCKS, LOG, approche, atterrissage ; les bascules automatiques gardées tant que le pilote n'a rien choisi ; le choix mémorisé ; e2e (un onglet cliqué dans la cabine, la page changée sur l'écran) | à faire |
+| K4 | **Le train commandé** | l'état du train commandé (levier, une touche libre, la manette et les HOTAS : une action `gear`) ; sa sortie et sa rentrée en ~8 s (la traînée qui monte, les trappes) ; **l'alarme** — rentré, bas et lent : un klaxon, le levier qui clignote rouge, l'alerte du HUD et de la voix — ; atterrir train rentré : sur le ventre (dégâts, glissade) ; l'autopilote et l'assistance le sortent ; le réglage « train automatique » ; le labo : les familles de piste reposées | à faire |
+| K5 | **Le vol et l'autopilote au tableau** | les volets, l'aérofrein, le SAS et les modes de l'autopilote (maintiens, rentrée, approche, assisté) à leurs leviers et boutons — les mêmes actions que les touches ; **leur position suit l'état** même changé par une touche, un HOTAS ou l'autopilote (un levier des volets qui bouge seul) ; les boutons des modes allumés ; le chronomètre | à faire |
+| K6 | **Les lumières** | le gradateur des plafonniers (0–100 %) ; **la nuit automatique** (le soleil couché ou caché : les plafonniers baissent, les écrans éclairent la cabine — leur lumière enfin visible) ; le mode « nuit rouge » ; les feux du Ranger (navigation, anticollision, atterrissage) sur la coque, leurs interrupteurs ; mesure de leur coût (la passe du vaisseau) | à faire |
+| K7 | **Labo, finitions** | un vol mené au tableau par de vrais clics (le train sorti, les volets, l'autopilote) ; `docs/COCKPIT.md`, FR + EN, planche finale | à faire |
+
+Chaque étape : un commit, une planche dans `docs/progress/cockpit/`, FR + EN.
