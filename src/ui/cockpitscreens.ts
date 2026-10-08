@@ -778,10 +778,11 @@ export class CockpitScreens {
     g.closePath();
     g.fill();
     g.restore();
-    // the localizer's needle (across as an angle from the aim point, ±5°) and the glide path's (±4°)
-    const dist = Math.max(-rw.along - 2000, 300);
-    const loc = Math.atan2(rw.across, dist) * (180 / Math.PI);
-    const gs = rw.gRef !== null && rw.gam !== null ? ((rw.gam - rw.gRef) * 180) / Math.PI : null;
+    // the guidance's needles (game/mls.ts — the Shuttle's microwave landing system, PLAN-AEROPORTS A4): the
+    // azimuth's (the bearing off the centreline from the far end's station, ±5°) and the elevation's (the
+    // angle above the Ranger's own profile from the touchdown point's station, ±4°); out of coverage, none
+    const loc = rw.mls.azIn ? rw.mls.az : 0;
+    const gs = rw.mls.elIn && rw.mls.el !== null ? rw.mls.el : null;
     const sx = 60,
       sy = 600,
       sw = 392;
@@ -797,12 +798,14 @@ export class CockpitScreens {
       g.stroke();
     }
     const lx = sx + sw / 2 - Math.max(-1, Math.min(1, loc / 5)) * (sw / 2.2);
-    g.fillStyle = Math.abs(loc) < 0.5 ? GREEN : AMBER;
-    g.fillRect(lx - 4, sy - 18, 8, 36);
+    if (rw.mls.azIn) {
+      g.fillStyle = Math.abs(loc) < 0.5 ? GREEN : AMBER;
+      g.fillRect(lx - 4, sy - 18, 8, 36);
+    }
     g.fillStyle = DIM;
     g.font = `600 16px ${FONT}`;
     g.textAlign = "center";
-    g.fillText("LOC", sx + sw / 2, sy + 34);
+    g.fillText(rw.mls.azIn ? `AZ · ${fmtKm(rw.mls.dmeKm)}` : "AZ —", sx + sw / 2, sy + 34);
     if (gs !== null) {
       const gx = 470,
         gy0 = 140,
@@ -816,7 +819,7 @@ export class CockpitScreens {
       g.fillStyle = Math.abs(gs) < 0.5 ? GREEN : AMBER;
       g.fillRect(gx - 18, gy - 4, 36, 8);
       g.fillStyle = DIM;
-      g.fillText("GS", gx, gy0 - 14);
+      g.fillText("EL", gx, gy0 - 14);
     }
     this.rows(
       g,

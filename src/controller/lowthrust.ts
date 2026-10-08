@@ -23,6 +23,7 @@ import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
 import { accelToG, fuelOn, tank } from "../engine";
 import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
+import { mlsReading } from "../game/mls";
 import { runwayWind, type Site, SITES } from "../game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import { circularize as fcCircularize, type Burn } from "../fc/ops";
@@ -2574,10 +2575,12 @@ function runwayCompute(this: CameraController): RunwayView | null {
   let gRef: number | null = app?.final ? (app.gRef ?? null) : null;
   let flareIn: number | null = null;
   let aimX = R?.prof?.aim ?? -2000;
+  let profileH: number | null = null;
   if (fix) {
     const sp = Math.max(app?.final ? app.speed : vh, 50);
     const L = landingProfile(sAl, agl, sp, fix);
     aimX = L.aim;
+    profileH = L.h;
     if (manual) gRef = Math.atan(L.slope);
     // (the flare's start: twice its height over the inner slope before the touchdown)
     const xF = LANDING.td - (2 * LANDING.hF) / Math.tan(LANDING.gi);
@@ -2613,6 +2616,8 @@ function runwayCompute(this: CameraController): RunwayView | null {
     speed: vh,
     flareIn,
     wind: runwaySurfaceWind(this, site),
+    // (the runway's guidance as the Shuttle's — A4: its azimuth, its elevation against the profile asked)
+    mls: mlsReading({ along: sAl, across: xt, agl, profileH, length: L, td: LANDING.td }),
   };
 }
 

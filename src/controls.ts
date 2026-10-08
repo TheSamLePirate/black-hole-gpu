@@ -1,3 +1,4 @@
+import type { MlsReading } from "./game/mls";
 import type { cameraFrame } from "./camera";
 import type { WeatherState } from "./weather";
 import type { FlightReport } from "./game/report";
@@ -150,6 +151,8 @@ export interface RunwayView {
   /** the surface wind there (PLAN-METEO W4: the weather's, at 10 m): where from [°], its speed and gusts
    *  [m/s], along the runway (> 0: head wind) and across it (> 0: from the right) — null: no air */
   wind: { from: number; u10: number; gust: number; head: number; cross: number } | null;
+  /** the runway's guidance as the Shuttle's (game/mls.ts, PLAN-AEROPORTS A4): azimuth, elevation, coverage, distance */
+  mls: MlsReading;
 }
 
 /** A row of the hub's card: its name, its value — and, past its mark, how bad: "warn" (amber), "bad" (red). */

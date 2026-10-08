@@ -23,6 +23,7 @@ describe.skipIf(!E2E)("a runway landed into the wind", () => {
       far: boolean;
       rwy: number | null;
       head: number | null;
+      mls: { az: number; el: number | null; azIn: boolean; elIn: boolean; dmeKm: number } | null;
       landed: boolean;
       fail: string | null;
       across: number;
@@ -35,17 +36,19 @@ describe.skipIf(!E2E)("a runway landed into the wind", () => {
       __bh.freeze(true);
       __bh.settings.weather = "real"; __bh.camera.weatherReal = w; __bh.renderer.weatherReal = w;
       __bh.game.glideTo("Edwards");
-      const c = __bh.camera; let across = 0, rwy = null, head = null;
+      const c = __bh.camera; let across = 0, rwy = null, head = null, mls = null;
       for (let i = 0; i < 30 * 170; i++) {
         __bh.step(1 / 30);
         const R = c.entryRun, A = R?.app; if (A && A.along > -500) across = Math.max(across, Math.abs(A.across));
         if (rwy === null && A?.final) { c.runwayCache = null; const v = c.runwayView(); rwy = v?.rwy ?? null; head = v?.wind?.head ?? null; }
+        // (the guidance 6 km out, on the final: the far end's stations — A4)
+        if (mls === null && A?.final && A.along > -6000) { c.runwayCache = null; mls = c.runwayView()?.mls ?? null; }
         if (c.ourLanded || c.airFlight.failure) break;
       }
       __bh.freeze(false);
       c.runwayCache = null;
       const v = c.runwayView();
-      return { far: !!c.entrySite?.reverse, rwy, head, landed: !!c.ourLanded, fail: c.airFlight.failure, across,
+      return { far: !!c.entrySite?.reverse, rwy, head, mls, landed: !!c.ourLanded, fail: c.airFlight.failure, across,
         stop: v?.across ?? null, along: v?.along ?? null,
         log: __bh.game.log.events.filter((e) => e.kind === "pilot").map((e) => e.text) };
     })()`);
@@ -53,6 +56,11 @@ describe.skipIf(!E2E)("a runway landed into the wind", () => {
     expect(r.far).toBe(true);
     expect(Math.abs((r.rwy ?? 0) - 40)).toBeLessThan(0.1);
     expect(r.head).toBeGreaterThan(4.5);
+    // (the guidance of runway 04 — its own stations —: in coverage, on the axis and the profile, 6 km out)
+    expect(r.mls?.azIn && r.mls?.elIn).toBe(true);
+    expect(Math.abs(r.mls!.az)).toBeLessThan(0.5);
+    expect(Math.abs(r.mls!.el!)).toBeLessThan(1);
+    expect(r.mls!.dmeKm).toBeGreaterThan(5);
     // (landed there as on the published end: under 2 m/s down, on the axis, stopped on the runway)
     expect(r.fail).toBeNull();
     expect(r.landed).toBe(true);

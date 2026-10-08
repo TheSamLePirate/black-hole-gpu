@@ -850,6 +850,65 @@ function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [num
  * threshold, the offset across the axis; on the final the glide path asked against the one flown;
  * FLARE low over it.
  */
+/**
+ * The runway's guidance on the HUD (game/mls.ts — the Shuttle's microwave landing system, PLAN-AEROPORTS A4):
+ * an ILS's two scales — the elevation's right of the view's centre, the azimuth's under it —, two dots a
+ * side (the elevation 1° a dot, the azimuth 1.5°), their diamonds magenta (guidance) where the path lies: high,
+ * the diamond below; right of the axis, it to the left. Out of a station's coverage, its scale grey and no
+ * diamond. The distance to the touchdown point under the azimuth's.
+ */
+function drawMls(F: SymFrame, rw: RunwayView, text: Text) {
+  const { ctx, dpr, W, H } = F;
+  const m = rw.mls;
+  if (!m.azIn) return;
+  const s = Math.min(W, H);
+  const cx = W / 2,
+    cy = H / 2;
+  const dot = 0.05 * s;
+  const scale = (x: number, y: number, vertical: boolean, on: boolean) => {
+    ctx.strokeStyle = on ? "rgba(214, 236, 255, 0.85)" : "rgba(160, 175, 195, 0.45)";
+    ctx.lineWidth = 1.5 * dpr;
+    for (let j = -2; j <= 2; j++) {
+      if (!j) continue;
+      ctx.beginPath();
+      ctx.arc(vertical ? x : x + j * dot, vertical ? y + j * dot : y, 3.2 * dpr, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    if (vertical) {
+      ctx.moveTo(x - 9 * dpr, y);
+      ctx.lineTo(x + 9 * dpr, y);
+    } else {
+      ctx.moveTo(x, y - 9 * dpr);
+      ctx.lineTo(x, y + 9 * dpr);
+    }
+    ctx.stroke();
+  };
+  const diamond = (x: number, y: number) => {
+    const r = 7 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.fillStyle = "#ff6ee6";
+    ctx.fill();
+  };
+  ctx.save();
+  const ex = cx + 0.33 * s;
+  const elOn = m.elIn && m.el !== null;
+  scale(ex, cy, true, elOn);
+  if (elOn) diamond(ex, cy + Math.max(-2.4, Math.min(2.4, m.el!)) * dot);
+  text("EL", ex, cy - 2.7 * dot, elOn ? "rgba(214, 236, 255, 0.9)" : "rgba(160, 175, 195, 0.6)", 10.5, "center", true);
+  // (under the flight path marker, clear of the attitude ball's ring below)
+  const ay = cy + 0.17 * s;
+  scale(cx, ay, false, true);
+  diamond(cx - Math.max(-2.4, Math.min(2.4, m.az / 1.5)) * dot, ay);
+  text(`${m.dmeKm.toFixed(1)} km · AZ`, cx - 2.7 * dot, ay, "rgba(214, 236, 255, 0.9)", 10.5, "right", true);
+  ctx.restore();
+}
+
 function drawRunway(
   F: SymFrame,
   rw: RunwayView,
@@ -1015,6 +1074,7 @@ function drawRunway(
       true,
     );
   }
+  drawMls(F, rw, text);
   // the flare: counted down over its last fifteen seconds, then called
   if (rw.final && rw.flareIn !== null && rw.flareIn > 0 && rw.flareIn <= 15 && rw.agl >= 60)
     text(tf("FLARE IN {0}", `${Math.ceil(rw.flareIn)} s`), W / 2, H / 2 - 70 * dpr, "#7cd6ff", 14);

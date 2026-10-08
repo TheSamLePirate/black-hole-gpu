@@ -176,6 +176,13 @@ the ring.
   card adds the same rows (surface wind, head or tail wind, cross wind marked past 15 and 25 kt). The
   runway named is the one landed into the wind (its far end — `RWY 04` for Edwards's 22 — when the wind
   blows down it; in fair weather the published end).
+- **The runway's guidance** (PLAN-AEROPORTS A4, `game/mls.ts`): as the Shuttle's microwave landing system,
+  each runway end has an azimuth station past its far end and an elevation station beside its touchdown
+  point. On a final in their coverage (±40°, 37 km, under 6 km), two ILS-style scales: the **elevation**'s
+  right of the view's centre — the angle above the Ranger's own profile (its steep outer glide, then the
+  shallow inner one, not an airliner's 3°), 1° a dot —, the **azimuth**'s under the flight path marker —
+  the bearing off the centreline, 1.5° a dot — with the distance to the touchdown point; magenta diamonds
+  where the path lies. The cabin's NAV screen shows the same two needles (AZ, EL).
 - **Alerts explained**: every alert's line has a tooltip, and a click opens why it is on and what to do.
 - **The key hints** add F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
 
