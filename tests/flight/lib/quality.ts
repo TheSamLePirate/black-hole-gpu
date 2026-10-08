@@ -71,9 +71,10 @@ export function quality(dir: string): Record<string, number | null> {
   if (T.length < 2) return {};
   const air = T.filter((S) => S.air?.body && (S.air?.q ?? 0) > 0.05);
   // (α's oscillations judged in flight: before the touchdown's last 30 s — the flare is a manoeuvre, the
-  // rollout no flight)
+  // rollout no flight —)
   const td = T.find((S) => S.rolling || S.landed)?.t ?? Number.POSITIVE_INFINITY;
-  const flying = air.filter((S) => S.t < td - 30 && !S.rolling && !S.landed);
+  // (and after the first 5 s: the placement's own transient — a craft put down at 40° of incidence, as q_gMax)
+  const flying = air.filter((S) => S.t < td - 30 && !S.rolling && !S.landed && (S.t ?? 0) - (T[0]!.t ?? 0) > 5);
   const num = (f: (S: Sample) => unknown, from = T) => from.map(f).filter((x): x is number => typeof x === "number" && Number.isFinite(x));
   const max = (a: number[]) => (a.length ? Math.max(...a) : Number.NaN);
   const out: Record<string, number | null> = {

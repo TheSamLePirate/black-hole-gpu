@@ -955,7 +955,11 @@ function approach(
   // energy at the flare: down 460 m before the threshold at 3.6 m/s)
   const wx = this.weatherNow?.wind;
   const vAdd = onFinal && wx ? Math.min(wx.gust + 0.5 * Math.max(wx.u10 - 5, 0), 15) : 0;
-  const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : R.prof && R.prof.phase !== "outer" ? 130 : 160) + vAdd;
+  // (on the final, 160 m/s down the steep slope, 130 on the shallow one: eased down over the pull-up's heights,
+  // 500 to 90 m — a step at the pull-up's start threw the air brake from half out to full in a frame, α
+  // swinging 6° under it four times in 8 s)
+  const vFinal = R.prof && R.prof.phase !== "outer" ? 130 + 30 * smooth01((agl - LANDING.hC) / (500 - LANDING.hC)) : 160;
+  const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : vFinal) + vAdd;
   // (the speed through the air held: a head wind's ground speed short of it left the brake in, the wing fast)
   this.airBrake = clamp((spAir - vT) / 50, 0, 1);
   // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
@@ -1054,6 +1058,12 @@ function missedStep(
   const ax = attitudeFor(fr.s.x, this.airVelocity(va), R.alpha, bank, fr.env.normal?.(fr.s.x));
   const vT = G.phase === "climb" ? 180 : 170;
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]), throttle: clamp(0.5 + (vT - spAir) / 25, 0, 1) };
+}
+
+/** A smoothstep on [0, 1]. */
+function smooth01(x: number) {
+  const t = clamp(x, 0, 1);
+  return t * t * (3 - 2 * t);
 }
 
 /** A ground-relative velocity [m/s, the entry frame's axes] made relative to the air: the wind taken off. */

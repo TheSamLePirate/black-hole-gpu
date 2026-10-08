@@ -18,8 +18,9 @@ export const LIMITS = {
   across: 5,
   /** the share of the time in each assistant's corridor [%] */
   corridor: 85,
-  /** α's oscillations in flight of more than 2° (reversals with another within 15 s; the flare's last 30 s out) */
-  alphaSwings: { glide: 6, entry: 12 },
+  /** α's oscillations in flight of more than 2° (reversals with another within 15 s; the flare's last 30 s out);
+   *  in a strong gusty wind (wind 2, a storm's turbulence) the gusts' own swings on top: 3 more */
+  alphaSwings: { glide: 6, entry: 12, gusty: 3 },
   /** the load factor's peak [g] */
   g: { glide: 2.5, entry: 3 },
   /** the commanded bank's reversals of more than 15° */
@@ -103,6 +104,7 @@ export async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry", wind
   const first = td[0];
   const sink = Number(/([-\d.]+) m\/s down/.exec(first?.text ?? "")?.[1] ?? Number.NaN);
   const sinkMax = wind >= 2 ? LIMITS.sink.strong : LIMITS.sink.calm;
+  const swingMax = LIMITS.alphaSwings[kind] + (wind >= 2 ? LIMITS.alphaSwings.gusty : 0);
   // (the offset at the touchdown: the first sample on the wheels — the runway's view read within the
   // touchdown's own step is the camera's stale one, 100 m off what the telemetry shows)
   const onWheels = readFileSync(`${lab.o.dir}/telemetry.jsonl`, "utf8")
@@ -120,7 +122,7 @@ export async function judge(lab: Lab, e: ChunkEnd, kind: "glide" | "entry", wind
     [`across ${across?.toFixed?.(1)} m ≤ ${LIMITS.across}`, Math.abs(across) <= LIMITS.across],
     [`no hard landing${hard ? `: ${hard.text}` : ""}`, !hard],
     [`final corridor ${q.q_corridor_glide_pct ?? "—"} % ≥ ${LIMITS.corridor}`, (q.q_corridor_glide_pct ?? 0) >= LIMITS.corridor],
-    [`α swings ${q.q_alphaSwings} ≤ ${LIMITS.alphaSwings[kind]}`, (q.q_alphaSwings ?? 0) <= LIMITS.alphaSwings[kind]],
+    [`α swings ${q.q_alphaSwings} ≤ ${swingMax}`, (q.q_alphaSwings ?? 0) <= swingMax],
     [`g ${q.q_gMax} ≤ ${LIMITS.g[kind]}`, (q.q_gMax ?? 0) <= LIMITS.g[kind]],
     [`bank reversals ${q.q_bankReversals} ≤ ${LIMITS.bankReversals[kind]}`, (q.q_bankReversals ?? 0) <= LIMITS.bankReversals[kind]],
   ];

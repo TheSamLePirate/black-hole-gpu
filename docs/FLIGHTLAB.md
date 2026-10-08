@@ -64,7 +64,7 @@ Chaque graphique ne porte qu'une mesure, sans double axe. Il affiche un réticul
 Elles sont calculées pour chaque scénario, quel que soit son verdict (`tests/flight/lib/quality.ts`) :
 - `q_shipS` : la durée du vol (temps simulé) ;
 - `q_gMax`, `q_alphaMaxDeg`, `q_qMaxKPa`, `q_heatMaxKWm2` : les maximums (la charge sans les 5 premières secondes : l'à-coup du placement de `glideTo` ou `orbit`, qui n'est pas du vol — 2,75 g par calme à Kennedy) ;
-- `q_alphaSwings` : les oscillations d'α de plus de 2° en vol — les inversions qui en ont une autre à moins de 15 s (une ressource, un piqué isolés sont des manœuvres), hors des 30 dernières secondes avant le toucher (l'arrondi) ;
+- `q_alphaSwings` : les oscillations d'α de plus de 2° en vol — les inversions qui en ont une autre à moins de 15 s (une ressource, un piqué isolés sont des manœuvres), hors des 30 dernières secondes avant le toucher (l'arrondi) et des 5 premières (la mise en place) ; par vent fort en rafales (vent 2, un orage), 3 de plus permises — la réponse aux rafales, pas une oscillation du pilote ;
 - `q_bankReversals` : les inversions d'inclinaison commandée de plus de 15° de la rentrée guidée (les virages du plané vers sa piste n'en sont pas) ;
 - `q_throttleChanges` : le battement des gaz ;
 - `q_fuelUsed`, `q_dvSpentMps` : ce qui a été dépensé ;
@@ -73,6 +73,10 @@ Elles sont calculées pour chaque scénario, quel que soit son verdict (`tests/f
 ## La météo (`weather.ts`, PLAN-METEO W8)
 
 La famille `weather` pose le Ranger depuis la remise nominale (80 km, 25 km, 750 m/s) dans un temps fixé — l'état « réel » (W7) écrit par le scénario, le même à chaque vol : un vent de travers de 15 kt avec rafales à Edwards, le vent dans l'axe de la 22 (la 04, l'autre bout, attendue), le brouillard au Bourget (300 m, LIFR), un orage à Kennedy (13 m/s, rafales à 21, turbulence sévère, cisaillement, forte pluie). Jugés comme tout atterrissage (`LIMITS`), les venteux sur la descente du vent fort, le bout posé vérifié. `--only "^weather"` : 4 scénarios, ~2 min de vol chacun.
+
+## Les aéroports (`airports.ts`, PLAN-AEROPORTS A6)
+
+La famille `airport` vole les procédures d'approche (A5) : Edwards de nuit (01:00 locale, `game.setDate` — le balisage OACI de A1), une finale tardive décalée de 300 m à 5 km du seuil (instable aux minima : la remise de gaz automatique, puis une nouvelle approche), plein gaz à 3 km (TOGA : la remise de gaz commandée), Le Bourget de nuit dans un brouillard CAT III (150 m, sommet 60 m). Jugés comme tout atterrissage, puis sur la procédure — le nombre de remises de gaz attendu, la dernière décision aux minima stabilisée (télémétrie `entry.ga`, `entry.dh`) ; les remises de gaz sont dispensées du couloir de finale et des inversions d'inclinaison, que leurs virages manquent par construction. `--only airport` : 4 scénarios.
 
 ## Écrire un scénario
 

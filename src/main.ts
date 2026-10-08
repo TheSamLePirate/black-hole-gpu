@@ -2044,6 +2044,9 @@ async function main() {
   const metarFeed = new MetarFeed();
   const metarTick = () => {
     if (settings.weather !== "real") return;
+    // (a state with no report — set by a script: the flight lab's, an e2e's — kept: the feed replaced it
+    // with the station's real METAR within 15 s, the fog or the storm asked flown in the day's weather)
+    if (camera.weatherReal && camera.weatherReal.report === undefined) return;
     const p = camera.weatherPlace();
     const st = p && p.body === "earth" ? nearestStation(p) : null;
     if (!st) {
