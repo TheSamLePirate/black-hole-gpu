@@ -10,7 +10,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // cabin — the hull's modes and the fan from the seat (not from the chase), the beeps from the panel, the
 // crew breathing and the structure creaking under 5 g. S5: the ground — a landing at Edwards, live: the
 // tyres' chirps at the touchdown (the mains, then the nose), the rolling's rumble, the runway's joints, the
-// brakes' squeal once every wheel is down.
+// brakes' squeal once every wheel is down. S6: the station — its hum where its port is on the approach,
+// through the structure once docked; the docking's latches and the undocking's springs.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -163,6 +164,33 @@ describe.skipIf(!E2E)("the sound's space", () => {
     expect(r.roll).toBeGreaterThan(0.2);
     expect(r.squeal).toBeGreaterThan(0.005);
     await app.js("(__bh.freeze(false), true)");
+  }, 120_000);
+
+  test("the station: its hum at the port on the approach, through the structure docked; the latches, the springs", async () => {
+    const r = await app.js<{ near: { g: number; z: number }; docked: { g: number }; isDocked: boolean; docks: number[] }>(`(async () => {
+      __bh.setDate(Date.UTC(2026, 9, 1, 12)); __bh.game.preset("Earth: docking to the ISS");
+      const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+      await wait(2500);
+      const c = __bh.camera;
+      const near = __sound.spaceState().cabin.station;
+      const d0 = __sound.spaceState().cabin.docks;
+      __bh.freeze(true);
+      c.pilot.auto = "none"; c.pilot.setAuto("dock");
+      for (let i = 0; i < 30 * 600 && !c.docked; i++) __bh.step(1 / 30);
+      __bh.freeze(false);
+      await wait(3000);
+      const docked = __sound.spaceState().cabin.station, isDocked = !!c.docked, d1 = __sound.spaceState().cabin.docks;
+      c.undock();
+      await wait(1000);
+      return { near, docked, isDocked, docks: [d0, d1, __sound.spaceState().cabin.docks] };
+    })()`);
+    // (ahead, tens of metres off: a dulled hum)
+    expect(r.near.g).toBeGreaterThan(0.01);
+    expect(r.near.z).toBeLessThan(-10);
+    expect(r.isDocked).toBe(true);
+    expect(r.docked.g).toBeGreaterThan(r.near.g * 2);
+    expect(r.docks[1]).toBe(r.docks[0]! + 1);
+    expect(r.docks[2]).toBe(r.docks[1]! + 1);
   }, 120_000);
 
   test("in the air, the fly-by camera: the passing ship's Doppler, up then down, and the air's absorption far off", async () => {

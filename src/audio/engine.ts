@@ -42,7 +42,9 @@ export type Cue =
   | "crash"
   | "arrive"
   | "wormhole"
-  | "boom";
+  | "boom"
+  | "dock"
+  | "undock";
 
 export interface Mix {
   master: number;
@@ -79,6 +81,9 @@ export interface EngineState {
    *  the brakes 0…1; the wind at the ground [m/s] */
   ground?: { wheels: { pos: [number, number, number]; load: number }[]; speed: number; brake: number } | null;
   groundWind?: number;
+  /** a station near (S6: the ISS, the Endurance): where it is from the ear [m], docked to it (its hum
+   *  through the structure) */
+  station?: { pos: [number, number, number]; dist: number; docked: boolean } | null;
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
@@ -174,10 +179,12 @@ export class SoundEngine {
     loads: number[];
     dist: number;
   } | null = null;
+  /** the station's hum (S6): its fans, its pumps, its mains' harmonics — at the station */
+  private stn: { gain: GainNode; pan: PannerNode } | null = null;
   /** the audio clock at the ground's last update [s] */
   private groundT = 0;
   /** the creaks and the breaths played so far (tests) */
-  private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0 };
+  private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0, docks: 0 };
   private alarms = new Map<string, { stop: () => void }>();
   private started = false;
   meter: AnalyserNode | null = null;
@@ -238,6 +245,7 @@ export class SoundEngine {
     if (this.engSpace) this.engSpace.panner.panningModel = on ? "HRTF" : "equalpower";
     for (const c of this.clusters) c.panner.panningModel = on ? "HRTF" : "equalpower";
     if (this.gnd) this.gnd.pan.panningModel = on ? "HRTF" : "equalpower";
+    if (this.stn) this.stn.pan.panningModel = on ? "HRTF" : "equalpower";
   }
 
   /** Where the engine's panner is now, its model (tests: S1). */
@@ -261,6 +269,9 @@ export class SoundEngine {
                 roll: this.gnd?.roll.gain.value ?? 0,
                 squeal: this.gnd?.squeal.gain.value ?? 0,
                 wind: this.gnd?.wind.gain.value ?? 0,
+                station: this.stn
+                  ? { g: this.stn.gain.gain.value, x: this.stn.pan.positionX.value, z: this.stn.pan.positionZ.value }
+                  : null,
                 g: this.cab.g,
                 beep: [this.cab.beepPan.positionX.value, this.cab.beepPan.positionY.value, this.cab.beepPan.positionZ.value],
               }
@@ -390,6 +401,7 @@ export class SoundEngine {
     this.buildRcs();
     this.buildAmbience();
     this.buildGround();
+    this.buildStation();
     if (this.last) this.update(this.last);
   }
 
@@ -661,6 +673,42 @@ export class SoundEngine {
     this.gnd = { pan, roll, rollLP, hiss, squeal, wind, loads: [], dist: 0 };
   }
 
+  /** A station's hum (S6): its mains' harmonics, its coolant pumps' whine wavering, its fans' air. */
+  private buildStation() {
+    const ctx = this.ctx!;
+    const pan = new PannerNode(ctx, {
+      panningModel: this.hrtf ? "HRTF" : "equalpower",
+      distanceModel: "inverse",
+      refDistance: 12,
+      rolloffFactor: 1,
+    });
+    const gain = new GainNode(ctx, { gain: 0 });
+    gain.connect(pan).connect(this.busses.listener);
+    const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 1200 });
+    lp.connect(gain);
+    for (const [f, a] of [
+      [60, 1],
+      [120, 0.6],
+      [180, 0.3],
+      [240, 0.15],
+    ] as const) {
+      const o = new OscillatorNode(ctx, { type: "sine", frequency: f * (1 + (Math.random() - 0.5) * 0.003) });
+      o.connect(new GainNode(ctx, { gain: a })).connect(lp);
+      o.start();
+    }
+    const pump = new OscillatorNode(ctx, { type: "triangle", frequency: 385 });
+    const wob = new OscillatorNode(ctx, { type: "sine", frequency: 0.3 });
+    wob.connect(new GainNode(ctx, { gain: 6 })).connect(pump.frequency);
+    pump.connect(new GainNode(ctx, { gain: 0.12 })).connect(lp);
+    pump.start();
+    wob.start();
+    this.loop(this.white, 0.55)
+      .connect(new BiquadFilterNode(ctx, { type: "lowpass", frequency: 600 }))
+      .connect(new GainNode(ctx, { gain: 0.5 }))
+      .connect(gain);
+    this.stn = { gain, pan };
+  }
+
   /** A tyre touching at speed: its chirp — the rubber dragged up to the wheel's speed —, at the wheel. */
   private chirp(at: [number, number, number], k: number) {
     const ctx = this.ctx!;
@@ -842,6 +890,18 @@ export class SoundEngine {
           this.counts.joints++;
         }
       }
+    }
+
+    // a station near (S6): its hum at it — through the structure, docked; else a game's licence, dulled
+    const St = this.stn;
+    if (St) {
+      const q = s.station;
+      if (q) {
+        set(St.pan.positionX, q.pos[0], 0.05);
+        set(St.pan.positionY, q.pos[1], 0.05);
+        set(St.pan.positionZ, q.pos[2], 0.05);
+      }
+      set(St.gain.gain, !q || !s.aboard ? 0 : q.docked ? 0.09 : q.dist < 400 ? 0.035 : 0, 0.6);
     }
 
     // cabin
@@ -1161,6 +1221,25 @@ export class SoundEngine {
         break;
       case "close":
         T(900, 0, 0.06, { level: 0.07, to: 600, out: this.busses.ui });
+        break;
+      case "dock": {
+        // (the capture: the rings meet — a thud through the structure —; the hooks' motor; the latches,
+        // one after the other; the last one hard: hard-mated)
+        const L = this.busses.listener;
+        this.burst(L, 0.9, 110, 0.5, 0.8);
+        this.burst(L, 0.4, 1800, 0.08, 4, 0.02);
+        T(220, 0.6, 1.6, { level: 0.05, type: "sawtooth", to: 260, out: L, attack: 0.2 });
+        for (let k = 0; k < 6; k++) this.burst(L, 0.35, 2400 - 150 * k, 0.04, 6, 2.3 + 0.18 * k);
+        this.burst(L, 0.8, 150, 0.35, 0.9, 3.5);
+        this.counts.docks++;
+        break;
+      }
+      case "undock":
+        // (the hooks open, the springs push: a release's clank, a soft thrust's hiss)
+        this.burst(this.busses.listener, 0.6, 600, 0.15, 3);
+        this.burst(this.busses.listener, 0.7, 120, 0.4, 0.8, 0.12);
+        this.burst(this.busses.listener, 0.15, 3000, 0.8, 0.6, 0.2);
+        this.counts.docks++;
         break;
       case "crash":
         this.burst(this.busses.engine, 1, 160, 1.4, 0.5);

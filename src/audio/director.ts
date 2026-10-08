@@ -28,6 +28,10 @@ export interface FlightSnapshot {
   accel?: number;
   engine: { fuel: { empty: boolean; fraction: number } | null };
   path: { fate: string } | null;
+  /** the target's and the station port's directions from the eye (the camera's frame: right, up, forward) */
+  dirs?: { target: [number, number, number] | null; dock?: [number, number, number] | null };
+  /** the docking in reach: to what, the rings' distance [m] */
+  dock?: { target: string; range: number } | null;
 }
 
 export interface Fired {
@@ -84,6 +88,9 @@ export class SoundDirector {
       if (e.kind === "warn" && /crash/i.test(e.text)) sound.play("crash");
       else if (e.kind === "error") sound.play("error");
       else if (e.kind === "pilot" && /^(In orbit|Arrived|Manoeuvre done)/i.test(e.text)) sound.play("arrive");
+      // (docking: the capture, the hooks, the latches; undocking: the springs — S6)
+      else if (e.kind === "pilot" && /^Docked to /.test(e.text)) sound.play("dock");
+      else if (e.kind === "pilot" && /^Undocked from /.test(e.text)) sound.play("undock");
     });
     // the interface: a click for every button, a breath on hover over the main controls
     addEventListener(
@@ -147,6 +154,34 @@ export class SoundDirector {
     const wheels = def.legs.map((L, k) => ({ pos: shipSource(pose, L.at), load: gear.legs[k]?.load ?? 0 }));
     const all = gear.contact === def.legs.length;
     return { wheels, speed: Math.hypot(sf.vHor, sf.vVert), brake: all && info?.auto === "none" && throttle < 0.01 ? 1 : 0 };
+  }
+
+  /** The station near (S6): the docking in reach — its port where the eye sees it —, else the target when
+   *  it is the ISS or the Endurance, within 2 km; docked to it (the flown craft's assembly holding it). */
+  private stationSound(info: FlightSnapshot | null, status: RangerStatus | null, pose: ShipPose | null) {
+    // (docked to one — the capture over, no docking in reach any more —: heard through the port's ring)
+    const held = fleet.assembly(fleet.active).find((v) => (v === "iss" || v === "endurance") && v !== fleet.active);
+    if (held && pose) {
+      const port = VESSELS[fleet.active].ports[0]?.centre ?? [0, 1, -5];
+      const pos = shipSource(pose, port);
+      return { pos, dist: Math.hypot(...pos), docked: true };
+    }
+    const D = info?.dock;
+    const T = status?.target;
+    const big = (id: string) => (id === "iss" || id === "endurance") && id !== fleet.active;
+    let id: string, d: [number, number, number] | null | undefined, dist: number;
+    if (D && big(D.target)) {
+      id = D.target;
+      d = info?.dirs?.dock;
+      dist = Math.max(D.range, 2);
+    } else if (T && big(T.id)) {
+      id = T.id;
+      d = info?.dirs?.target;
+      dist = T.distKm * 1000;
+    } else return null;
+    if (!d || !(dist < 2000)) return null;
+    const docked = fleet.assembly(fleet.active).includes(id as never);
+    return { pos: [d[0] * dist, d[1] * dist, -d[2] * dist] as [number, number, number], dist, docked };
   }
 
   /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
@@ -224,6 +259,7 @@ export class SoundDirector {
       // sets them — the engine idle, no autopilot, every wheel down)
       ground: this.groundSound(o.pose ?? null, o.gear ?? null, sf, info, f.throttle),
       groundWind: o.groundWind ?? 0,
+      station: this.stationSound(info, status, o.pose ?? null),
       space: this.engineSpace(
         o.pose ?? null,
         sf ? Math.min(sf.air / 1.225, 2) : 0,
