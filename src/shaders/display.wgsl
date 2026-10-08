@@ -11,6 +11,9 @@ struct Display {
   lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), sharpening (RCAS, 0…1)
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
   eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), unused ×3
+  rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (0/1: the
+                // canopy's drops), the vertical field's half tangent
+  rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -162,6 +165,126 @@ fn lensFlare(uv: vec2f) -> vec3f {
     }
   }
   return f;
+}
+
+// ---- The rain (PLAN-METEO W5): what falls between the camera and the scene, and on the canopy ----
+fn rh21(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
+fn rh22(p: vec2f) -> vec2f { return fract(sin(vec2f(dot(p, vec2f(127.1, 311.7)), dot(p, vec2f(269.5, 183.3)))) * 43758.5453); }
+// the scene's light round uv (four taps 6 % of the image out): what the drops catch and send on
+fn rainLight(uv: vec2f) -> vec3f {
+  let o = 0.06;
+  return 0.25 * (textureSampleLevel(hdr, samp, uv + vec2f(o, 0.0), 0.0).rgb + textureSampleLevel(hdr, samp, uv - vec2f(o, 0.0), 0.0).rgb
+    + textureSampleLevel(hdr, samp, uv + vec2f(0.0, o), 0.0).rgb + textureSampleLevel(hdr, samp, uv - vec2f(0.0, o), 0.0).rgb);
+}
+// one streak layer in coordinates (a across, b along the drops' motion, both in cells — b already moved by
+// the clock): a drop in some cells, its streak L cells long behind it, w cells wide; how much of the pixel
+// it covers (fwa: the pixel across, in cells)
+fn rainCells(a: f32, b0: f32, L: f32, w: f32, fwa: f32, dens: f32, seed: f32) -> f32 {
+  // (each column of cells shifted along by its own amount: no rows of drops lined up — rings, radially)
+  let b = b0 + rh21(vec2f(floor(a), seed + 0.37));
+  let id = vec2f(floor(a), floor(b));
+  let h = rh22(id + seed);
+  if (h.x > dens) { return 0.0; }
+  let fa = fract(a);
+  let fb = fract(b);
+  let ra = 0.15 + 0.7 * h.y;
+  // (its head within the cell, the streak behind it inside the cell too)
+  let rb = min(L, 0.9) + (1.0 - min(L, 0.9)) * rh21(id + seed + 7.1);
+  let across = 1.0 - smoothstep(0.0, 0.5 * w + fwa, abs(fa - ra));
+  let along = smoothstep(rb - min(L, 0.9), rb - 0.7 * min(L, 0.9), fb) * (1.0 - smoothstep(rb - 0.02, rb, fb));
+  // (thinner than the pixel: its share of it)
+  return across * along * min(1.0, w / max(fwa, 1e-4));
+}
+// The falling drops as the camera sees them in its exposure (1/60 s): five layers, 1.2 to 20 m away. Still
+// or slow, streaks parallel — the fall and the wind; moving fast, they rush out of the point the drops come
+// from (the focus of expansion), log-polar about it. The drops lit by the scene round them.
+fn rainStreaks(uv: vec2f) -> f32 {
+  let tanH = D.rain.w;
+  let asp = D.img.x / D.img.y;
+  let n = vec2f((uv.x - 0.5) * 2.0 * tanH * asp, (0.5 - uv.y) * 2.0 * tanH);
+  let v = D.rainV.xyz;
+  let t = D.rain.y;
+  let T = 1.0 / 60.0;
+  let k = clamp(D.rain.x, 0.0, 1.3);
+  // (the focus of expansion: where the drops come from, when they come at the camera)
+  let fz = max(-v.z, 1e-3);
+  let foe = -v.xy / fz;
+  let radial = select(0.0, 1.0 - smoothstep(0.8 * tanH * asp, 2.5 * tanH * asp, length(foe)), v.z < -1.0);
+  let mxy = length(v.xy);
+  let dirP = select(vec2f(0.0, -1.0), v.xy / max(mxy, 1e-4), mxy > 0.05);
+  let perp = vec2f(-dirP.y, dirP.x);
+  let dq = n - foe;
+  let r = max(length(dq), 1e-4);
+  let th = atan2(dq.y, dq.x);
+  // (a screen pixel in the view's tangent — the image placed in the output: its scale)
+  let pxT = 2.0 * tanH / max(D.size.y * D.view.y, 1.0);
+  var cover = 0.0;
+  for (var i = 0u; i < 5u; i++) {
+    let z = 1.2 * pow(2.0, f32(i));
+    let seed = f32(i) * 17.31;
+    // (a drop 1.5 mm across — the near ones out of focus: a blur ~3 mm more —, its spacing 0.12 m in a
+    // steady rain; the far layers paler: the air between)
+    let wM = (0.0015 + 0.004 * exp(-0.25 * z)) / z;
+    let fade = 1.0 - 0.13 * f32(i);
+    var c = 0.0;
+    if (radial < 0.999) {
+      let cellA = 0.12 / (z * sqrt(max(k, 0.05)));
+      let speed = mxy / z;
+      let L = speed * T;
+      let cellB = max(3.0 * cellA, 1.6 * L);
+      let a = dot(n, perp) / cellA;
+      let b = dot(n, dirP) / cellB - t * speed / cellB;
+      c += (1.0 - radial) * rainCells(a, b, L / cellB, wM / cellA, pxT / cellA, 0.55, seed);
+    }
+    if (radial > 0.001) {
+      let rate = fz / z;
+      let N = floor(700.0 / sqrt(z) * sqrt(max(k, 0.05)));
+      let a = th * N / 6.2831853;
+      let cellR = 0.12;
+      let b = (log(r) - t * rate) / cellR;
+      let L = rate * T / cellR;
+      c += radial * rainCells(a, b, L, wM / r * N / 6.2831853, pxT / r * N / 6.2831853, 0.35, seed + 3.3);
+    }
+    cover += c * fade;
+  }
+  return clamp(cover * 0.9 * min(k, 1.0), 0.0, 0.7);
+}
+// The canopy's drops (in the cabin, k: the glass's share of the pixel): beads on the glass, each a small
+// lens — the scene through it upside down, its rim dark —; slow, they creep down; past ~25 m/s the air
+// drives them up the canopy, stretched, and clears them faster. A drop lives a few seconds, then another.
+fn canopyDrops(uv: vec2f, c: vec3f, glass: f32) -> vec3f {
+  let asp = D.img.x / D.img.y;
+  let blow = smoothstep(25.0, 75.0, D.rainV.w);
+  let k = clamp(D.rain.x, 0.0, 1.0);
+  let t = D.rain.y;
+  let p = vec2f(uv.x * asp, uv.y) * 11.0;
+  var out = c;
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let id = floor(p) + vec2f(f32(i), f32(j));
+      let h = rh22(id);
+      if (rh21(id + 3.7) > 0.2 + 0.6 * k) { continue; }
+      let period = mix(6.0, 1.6, blow) * (0.7 + 0.6 * h.x);
+      let ph = fract(t / period + h.y);
+      // (down the glass — slow, then quicker as it grows —, or up it in the air's stream)
+      let drift = mix(vec2f(0.0, 0.9 * ph * ph * ph), vec2f(0.15 * (h.x - 0.5), -2.4 * ph), blow);
+      let ctr = id + vec2f(0.2, 0.2) + 0.6 * h + drift;
+      let rad = (0.07 + 0.12 * rh21(id + 9.1)) * (1.0 - 0.35 * blow);
+      var d = p - ctr;
+      // (stretched along its motion when blown: a streak, its trail behind)
+      d.y = select(d.y, d.y / (1.0 + 2.5 * blow), d.y > 0.0);
+      let dist = length(d);
+      let m = (1.0 - smoothstep(0.8 * rad, rad, dist)) * (1.0 - smoothstep(0.85, 1.0, ph));
+      if (m <= 0.0) { continue; }
+      // (a lens: the scene seen through it inverted, its rim darker, a glint at its top)
+      let refr = textureSampleLevel(hdr, samp, uv - d / rad * 0.035, 0.0).rgb;
+      let rim = 1.0 - 0.55 * smoothstep(0.35 * rad, rad, dist);
+      let glint = smoothstep(0.35 * rad, 0.0, length(d - vec2f(-0.3, -0.35) * rad));
+      let lit = refr * rim * 0.92 + glint * 0.6 * rainLight(uv);
+      out = mix(out, lit, m * glass);
+    }
+  }
+  return out;
 }
 
 struct VSOut { @builtin(position) pos: vec4f };
@@ -364,6 +487,19 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // coverage in alpha)
     let pl = textureSampleLevel(plumes, samp, uv, 0.0);
     c = c * (1.0 - clamp(pl.a, 0.0, 1.0)) + min(pl.rgb, vec3f(60000.0));
+  }
+  if (D.rain.x > 0.0 && D.flags.x < 0.5) {
+    // (in the cabin: the drops on its glass — where the Ranger's image lets the outside through —, the rain
+    // beyond it fainter)
+    var glass = 1.0;
+    if (D.rain.z > 0.5 && D.lod.y > 0.5) {
+      let q = uv * D.img.xy - D.ship.xy;
+      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+    }
+    // (a drop sends on the sky's light above it as much as the scene's round it: brighter than a dark ground)
+    let lit = max(rainLight(uv), textureSampleLevel(hdr, samp, vec2f(uv.x, max(uv.y - 0.3, 0.02)), 0.0).rgb);
+    c = mix(c, lit * 1.5, rainStreaks(uv) * glass * select(1.0, 0.5, D.rain.z > 0.5));
+    if (D.rain.z > 0.5 && glass > 0.0) { c = canopyDrops(uv, c, glass); }
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);

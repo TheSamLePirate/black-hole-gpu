@@ -2217,6 +2217,7 @@ async function main() {
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
     renderer.shipFocus = camera.spectating ? shipFocus() : null;
+    renderer.rain = camera.rainView();
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>

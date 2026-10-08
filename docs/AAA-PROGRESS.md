@@ -413,6 +413,8 @@ Plan : [`PLAN-METEO.md`](PLAN-METEO.md), étapes W1 à W8.
 
 - **W4 (fait)** : les pistes face au vent. Chaque piste se pose dans les deux sens (le seuil lointain exact, le cap retour) ; le sens en service est celui face au vent du lieu (par beau temps, le publié : les vols d'avant les mêmes) — l'autopilote de rentrée, `glideTo`, le HUD (piste, vent au sol, de face et de travers) et le rapport le suivent ; au rendu les feux et le PAPI du sens en service, le marquage aux deux bouts, et **la manche à air** (tendue ou pendante, tournée par le vent). Deux défauts d'autopilote trouvés en route et corrigés : l'arrondi flottait sur une piste en pente (mesuré désormais depuis le sol) ; un toucher doux qui rebondit dans la même image perdait la piste du roulage (arrêt à 14–33 m de l'axe 2 fois sur 3 par vent de face, avant W4 déjà ; 6/6 à 1,5 m depuis). Planche `docs/progress/meteo/w4-pistes-vent.jpg`.
 
+- **W5 (fait)** : la pluie à l'image — traînées sur cinq profondeurs, parallèles à l'arrêt, jaillissant du point de fuite en vol ; dans la cabine, les gouttes sur la verrière (des lentilles qui glissent, chassées vers le haut par l'air en vol) ; sans coût mesurable. Planche `docs/progress/meteo/w5-pluie.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -428,7 +430,7 @@ Par ordre de gain :
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
-   - météo (M4 : W1–W4 faits — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air ; restent la pluie, la poussière de Mars, le METAR, les autopilotes au labo) ;
+   - météo (M4 : W1–W5 faits — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie ; restent la poussière de Mars, le METAR, les autopilotes au labo) ;
    - aéroports vivants (balisage de nuit, ILS) ;
    - audio spatial ;
    - HOTAS ;
@@ -438,6 +440,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M4 W5** : la pluie — traînées selon le mouvement, gouttes sur la verrière.
 - **08/10/2026 — M4 W4** : les pistes face au vent (les deux sens, la manche à air, le vent au HUD) ; l'arrondi mesuré depuis le sol, le roulage gardé après un rebond.
 - **08/10/2026 — M4 W3** : brouillard, brume et couches nuageuses de la météo dans l'image, compilés seulement quand elle agit (beau temps inchangé ; couvert +26 %).
 - **08/10/2026 — M3b** : maillages compressés sans perte, 23,0 → 12,2 Mo.

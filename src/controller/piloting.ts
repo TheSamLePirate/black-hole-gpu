@@ -67,6 +67,7 @@ declare module "../controls" {
     settleMount: typeof settleMount;
     weatherPlace: typeof weatherPlace;
     runwayInUse: typeof runwayInUse;
+    rainView: typeof rainView;
     stepMount: typeof stepMount;
     reorient: typeof reorient;
     shipMatrix: typeof shipMatrix;
@@ -1629,6 +1630,37 @@ function entryStep(
  * ours), the latitude and longitude under it [°], the day [days past J2000], its height above it [m] —,
  * or null (no air there, or not in our universe).
  */
+/**
+ * The rain round the camera (PLAN-METEO W5): its strength (0…1 — the weather's rain there, under its
+ * lowest deck; fading out 500 m into it; none higher, none off the Earth) and the drops' velocity relative
+ * to the camera [m/s, on its axes: right, up, forward] — their fall (6–8 m/s, the heavier the rain the
+ * faster), the wind (flying: the flight's own), the ground's turning, less the camera's motion. The image
+ * draws them (display.wgsl: the streaks, the canopy's drops). Null: no rain.
+ */
+function rainView(this: CameraController): { rain: number; v: Vec3 } | null {
+  const s = this.s;
+  if (s.weather === "fair") return null;
+  const cam = cameraFrame(s);
+  const nav = this.ourNav(cam);
+  if (!nav || nav.ref !== "earth") return null;
+  const q = toBodyFixed(nav.ref, nav.X, nav.t);
+  const ql = Math.hypot(...q);
+  const place = { body: nav.ref, lat: (Math.asin(q[2] / ql) * 180) / Math.PI, lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI };
+  const w = weatherAt(s, place, daysOf(nav.t), this.weatherReal);
+  if (w.rain <= 0) return null;
+  const h = gearHeight(nav.ref, nav.X, nav.t);
+  const base = w.layers.length ? Math.min(...w.layers.map((l) => l.base)) : 2500;
+  const k = Math.min(Math.max(1 - (h - base) / 500, 0), 1);
+  if (k <= 0) return null;
+  const axes = this.camAxesHome();
+  if (!axes) return null;
+  const up = unitV(sub3(nav.X, ourState(nav.ref, nav.t).pos));
+  const fall = (6 + 2 * w.rain) / C_MPS;
+  const drop = lin(lin(groundVelocity(nav.ref, nav.X, nav.t), 1, this.windHome ?? [0, 0, 0], 1), 1, up, -fall);
+  const rel = sub3(drop, nav.V);
+  return { rain: w.rain * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3 };
+}
+
 /** A runway as it is landed now: into the weather's wind there (sites.ts landingEnd — fair weather: the
  *  published end, as before); a pad, another world's site, as it is. */
 function runwayInUse(this: CameraController, site: Site): Site {
@@ -1658,6 +1690,7 @@ export function installPiloting(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
     weatherPlace,
     runwayInUse,
+    rainView,
     setPilot,
     newFlight,
     stepOffMount,

@@ -106,4 +106,18 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     expect(fair.p.slice(0, 16).every((x) => x === 0)).toBe(true);
     expect(fair.key & 1024).toBe(0);
   }, 150_000);
+
+  test("the rain (W5): on the ground in the rain, the drops falling past the camera; fair, none", async () => {
+    await app.js(`(__bh.settings.weather = "rain", true)`);
+    await Bun.sleep(800);
+    const r = await app.js<{ rain: number; v: number[] } | null>(`__bh.renderer.rain`);
+    expect(r).not.toBeNull();
+    expect(r!.rain).toBeCloseTo(0.6, 5);
+    // (falling past a still camera — 7.2 m/s, the chase camera's axes near level —, carried by the wind)
+    expect(r!.v[1]).toBeLessThan(-5);
+    expect(Math.hypot(...r!.v)).toBeLessThan(25);
+    await app.js(`(__bh.settings.weather = "fair", true)`);
+    await Bun.sleep(800);
+    expect(await app.js<unknown>(`__bh.renderer.rain`)).toBeNull();
+  }, 60_000);
 });

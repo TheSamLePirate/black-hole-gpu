@@ -825,7 +825,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -2308,7 +2308,28 @@ export class Renderer {
     // adapts to is: daylight EV ~14.4, night ~16.3 — the shadows of a sunlit day stay in colour)
     const scotopic = Math.min(Math.max((this.ev(s) - 15) / 1.2, 0), 1);
     this.device.queue.writeBuffer(this.displayBuf, 128, new Float32Array([s.purkinje * scotopic, 0, 0, 0]));
+    // (the rain — W5, display.wgsl rainLook —: its strength, a clock [s], in the cabin (its canopy's drops),
+    // the vertical field's half tangent; the drops' velocity on the camera's axes [m/s], their speed)
+    const r = target === this.live ? this.rain : null;
+    const inside = !!r && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin");
+    const v = r?.v ?? [0, 0, 0];
+    this.device.queue.writeBuffer(
+      this.displayBuf,
+      144,
+      new Float32Array([
+        r ? Math.min(r.rain, 1.3) : 0,
+        (performance.now() / 1000) % 3600,
+        inside ? 1 : 0,
+        Math.tan((s.fov * Math.PI) / 360),
+        ...v,
+        Math.hypot(...v),
+      ]),
+    );
   }
+
+  /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
+   *  velocity on the camera's axes [m/s]; null: none */
+  rain: { rain: number; v: [number, number, number] } | null = null;
 
   /**
    * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
@@ -4067,7 +4088,8 @@ export class Renderer {
       }
     } else {
       phase = "converged";
-      if (this.lastPhase === "converged" && !displayChanged && !this.chartDirty) return this.stats(phase, t);
+      // (the rain moving over a still image: drawn every frame)
+      if (this.lastPhase === "converged" && !displayChanged && !this.chartDirty && !this.rain) return this.stats(phase, t);
     }
 
     this.writeResolve(t, s);
