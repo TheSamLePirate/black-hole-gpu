@@ -65,6 +65,7 @@ declare module "../controls" {
     refBeta: typeof refBeta;
     mountTarget: typeof mountTarget;
     settleMount: typeof settleMount;
+    weatherPlace: typeof weatherPlace;
     stepMount: typeof stepMount;
     reorient: typeof reorient;
     shipMatrix: typeof shipMatrix;
@@ -1620,8 +1621,31 @@ function entryStep(
 }
 
 /** Puts these methods on the controller's prototype (controls.ts, once). */
+/**
+ * The place whose weather it is (weather.ts): the world under the camera — its body (one with air, of
+ * ours), the latitude and longitude under it [°], the day [days past J2000], its height above it [m] —,
+ * or null (no air there, or not in our universe).
+ */
+function weatherPlace(this: CameraController): { body: string; lat: number; lon: number; days: number; h: number } | null {
+  const nav = this.ourNav(cameraFrame(this.s));
+  if (!nav || nav.ref === "sun") return null;
+  const b = solarBody(nav.ref);
+  if (!b?.atmosphere) return null;
+  const q = toBodyFixed(nav.ref, nav.X, nav.t);
+  const ql = Math.hypot(...q);
+  const h = (Math.hypot(...sub3(nav.X, ourState(nav.ref, nav.t).pos)) - b.radius) * M_METRES;
+  return {
+    body: nav.ref,
+    lat: (Math.asin(q[2] / ql) * 180) / Math.PI,
+    lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI,
+    days: daysOf(nav.t),
+    h,
+  };
+}
+
 export function installPiloting(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
+    weatherPlace,
     setPilot,
     newFlight,
     stepOffMount,

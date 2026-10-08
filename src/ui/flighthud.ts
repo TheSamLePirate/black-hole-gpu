@@ -83,6 +83,8 @@ const ICONS: Record<string, string> = {
   plan: '<circle cx="6" cy="17" r="2" /><circle cx="18" cy="7" r="2" /><path d="M7.6 15.6C10 9 14 13 16.4 8.4" stroke-dasharray="2 2.2" />',
   chevron: '<path d="M7 10l5 5 5-5" />',
   place: '<path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z" /><circle cx="12" cy="10.5" r="2.2" />',
+  weather:
+    '<path d="M7 17h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7.1 9.6 3.75 3.75 0 0 0 7 17z" /><path d="M9 20l-1 2M13 20l-1 2M17 20l-1 2" />',
   ship: '<path d="M12 3.5l2.2 6.5 6.3 3.2-6.3 1.6L12 20.5l-2.2-5.7-6.3-1.6 6.3-3.2z" /><circle cx="12" cy="12" r="1.3" class="f" />',
 };
 const icon = (name: string, cls = "fl-ic") => {
@@ -311,6 +313,8 @@ export class FlightHud {
   private spectText = h("span", "fl-spect-t");
   /** the Place button: placing the ship (ui/placepanel.ts) */
   onPlace: (() => void) | null = null;
+  /** the weather (ui/weatherpanel.ts) */
+  onWeather: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
@@ -773,6 +777,11 @@ export class FlightHud {
     placeBtn.title = t("Place the ship: in orbit, on a ground, beside a body, before the wormhole");
     placeBtn.dataset.testid = "hud-place";
     placeBtn.onclick = () => this.onPlace?.();
+    const weatherBtn = h("button", "fl-tools fl-placebtn fl-weatherbtn") as HTMLButtonElement;
+    weatherBtn.append(icon("weather"), h("span", "", t("Weather")));
+    weatherBtn.title = t("The weather: fair, cloudy, fog, rain, storm, wind, Mars's dust, a draw, the real one (METAR)");
+    weatherBtn.dataset.testid = "hud-weather";
+    weatherBtn.onclick = () => this.onWeather?.();
     const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
     const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
@@ -931,7 +940,7 @@ export class FlightHud {
           ),
         ),
       ),
-      group("fl-mg-acts", craftBox, planBtn, placeBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
+      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles

@@ -1,5 +1,16 @@
 import { expect, test } from "bun:test";
-import { fairWind, presetWeather, randomWeather, WEATHER_PRESETS, weatherAt, type WeatherPreset } from "../src/weather";
+import {
+  ceilingOf,
+  coverWord,
+  fairWind,
+  flightCategory,
+  presetWeather,
+  randomWeather,
+  WEATHER_PRESETS,
+  weatherAt,
+  windFromAt,
+  type WeatherPreset,
+} from "../src/weather";
 import { Weather, WIND_10M } from "../src/wind";
 
 // The weather (PLAN-METEO W1): its presets, its draws, the wind it gives the flight.
@@ -62,4 +73,23 @@ test("the wind flown: a storm's stronger than fair's, a fixed direction kept, th
   const lo = mean({ u10: 5, from: 90, gust: 0, turb: 0, shear: 6 }, 20);
   const hi = mean({ u10: 5, from: 90, gust: 0, turb: 0, shear: 6 }, 300);
   expect(Math.hypot(...hi) - Math.hypot(...lo)).toBeGreaterThan(5);
+});
+
+test("the ceiling and the flight category as the charts have them; the wind's direction in effect", () => {
+  expect(coverWord(0.2)).toBe("FEW");
+  expect(coverWord(0.45)).toBe("SCT");
+  expect(coverWord(0.75)).toBe("BKN");
+  expect(coverWord(1)).toBe("OVC");
+  expect(ceilingOf(presetWeather("fair", 1))).toBeNull();
+  expect(ceilingOf(presetWeather("cloudy", 1))).toBeNull();
+  expect(ceilingOf(presetWeather("overcast", 1))).toBe(600);
+  expect(flightCategory(presetWeather("fair", 1))).toBe("VFR");
+  expect(flightCategory(presetWeather("overcast", 1))).toBe("MVFR");
+  expect(flightCategory(presetWeather("rain", 1))).toBe("IFR");
+  expect(flightCategory(presetWeather("fog", 1))).toBe("LIFR");
+  const w = { ...presetWeather("windy", 1), wind: { ...presetWeather("windy", 1).wind, from: 300 } };
+  expect(windFromAt(w, { lat: 0, lon: 0 }, 0)).toBe(300);
+  const f = windFromAt(presetWeather("fair", 1), { lat: 48, lon: 2 }, 9800);
+  expect(f).toBeGreaterThanOrEqual(0);
+  expect(f).toBeLessThan(360);
 });

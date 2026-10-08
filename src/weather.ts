@@ -8,7 +8,7 @@
 // turning with the place and the day, the clouds of the Earth's real map — the flights flown before are
 // flown the same.
 
-import { WIND_10M, type WindLevel } from "./wind";
+import { WIND_10M, windFrom, type WindLevel } from "./wind";
 
 export type WeatherPreset = "fair" | "cloudy" | "overcast" | "fog" | "rain" | "storm" | "windy" | "dust" | "random" | "real";
 
@@ -194,4 +194,35 @@ export function weatherAt(
   if (s.weather === "real") return real ?? presetWeather("fair", s.wind);
   if (s.weather === "random") return randomWeather(place.body, place.lat, place.lon, days, s.wind);
   return presetWeather(s.weather, s.wind);
+}
+
+/** A layer's report word by its cover: FEW, SCT, BKN, OVC. */
+export function coverWord(cover: number): "FEW" | "SCT" | "BKN" | "OVC" {
+  return cover >= 0.95 ? "OVC" : cover >= 0.625 ? "BKN" : cover >= 0.3 ? "SCT" : "FEW";
+}
+
+/** The ceiling [m above the ground]: the lowest layer broken or overcast (BKN, OVC), the fog's sky when it
+ *  hides it; null: none. */
+export function ceilingOf(w: WeatherState): number | null {
+  if (w.fogTop > 0 && w.visibility < 1000) return w.fogTop;
+  const l = w.layers.find((x) => x.cover >= 0.625);
+  return l ? l.base : null;
+}
+
+/** The flight category as the charts colour it (the FAA's): its ceiling and visibility against 3 000, 1 000
+ *  and 500 ft, and 5, 3 and 1 statute miles. */
+export function flightCategory(w: WeatherState): "VFR" | "MVFR" | "IFR" | "LIFR" {
+  const c = ceilingOf(w);
+  const ft = c === null ? Number.POSITIVE_INFINITY : c / 0.3048;
+  const sm = w.visibility / 1609.344;
+  if (ft < 500 || sm < 1) return "LIFR";
+  if (ft < 1000 || sm < 3) return "IFR";
+  if (ft <= 3000 || sm <= 5) return "MVFR";
+  return "VFR";
+}
+
+/** Where the wind blows from at a place [° from north]: the weather's own, or the fair weather's turning one. */
+export function windFromAt(w: WeatherState, place: { lat: number; lon: number }, days: number): number {
+  if (w.wind.from !== null) return w.wind.from;
+  return ((((windFrom(place.lat, place.lon, days) * 180) / Math.PI) % 360) + 360) % 360;
 }

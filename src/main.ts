@@ -17,6 +17,7 @@ import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { TimePanel } from "./ui/timepanel";
+import { WeatherPanel } from "./ui/weatherpanel";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
@@ -1583,6 +1584,7 @@ async function main() {
       photo: () => openPhoto(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
+      weather: () => weatherPanel.open(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
@@ -2013,6 +2015,17 @@ async function main() {
   flightHud.onPlace = () => placePanel.open();
   // the date and time (ui/timepanel.ts): the transport bar's clock, the pause menu
   const timePanel = new TimePanel({ tools, settings, sceneStart: () => sceneStart, toast: (x) => panel.toast(x) });
+  // the weather (ui/weatherpanel.ts, PLAN-METEO W2): the HUD's Weather button, the pause menu
+  const weatherPanel = new WeatherPanel({
+    settings,
+    place: () => camera.weatherPlace(),
+    real: () => camera.weatherReal,
+    changed: () => {
+      touch();
+      scheduleUrlSave();
+    },
+  });
+  flightHud.onWeather = () => weatherPanel.open();
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   const bench = new KerrBench({
     settings,

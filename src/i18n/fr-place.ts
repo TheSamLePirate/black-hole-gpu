@@ -44,6 +44,9 @@ export default {
   "End it and place": "Y mettre fin et placer",
   Cancel: "Annuler",
   Place: "Placer",
+  Weather: "Météo",
+  "The weather: fair, cloudy, fog, rain, storm, wind, Mars's dust, a draw, the real one (METAR)":
+    "La météo : clair, nuageux, brouillard, pluie, orage, vent, poussière de Mars, un tirage, la réelle (METAR)",
   "Place the ship: in orbit, on a ground, beside a body, before the wormhole":
     "Placer le vaisseau : en orbite, au sol, auprès d'un corps, devant le trou de ver",
   // ---- the date and time (ui/timepanel.ts)
