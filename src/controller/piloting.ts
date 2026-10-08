@@ -685,8 +685,9 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   i.pitch = clamp(i.pitch + t.pitch, -1, 1);
   i.yaw = clamp(i.yaw + t.yaw, -1, 1);
   i.roll = clamp(i.roll + t.roll, -1, 1);
-  if (pad) {
-    // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle
+  if (pad && !this.padControls.flightOwned(pad.id)) {
+    // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle — the built-in mapping (a
+    // player's own profile for this pad flies it instead: PLAN-HOTAS)
     i.pitch = clamp(i.pitch - pad.move[0], -1, 1);
     i.yaw = clamp(i.yaw + pad.move[1], -1, 1);
     i.roll = clamp(i.roll - pad.move[3], -1, 1);

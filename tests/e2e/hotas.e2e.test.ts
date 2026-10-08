@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // pedals — no "standard" mapping), read together through their profiles. H2: the stick rolls the ship, the
 // lever sets the throttle where it stands — picked up (once the keys set it elsewhere, the lever takes it back
 // only passing through it) —, a button fires its keymap action, the pedals' toe brakes are read; the
-// standard pad's path leaves the claimed devices alone.
+// standard pad's path leaves the claimed devices alone. H3: without the test's profiles, the three are known by
+// their Thrustmaster ids.
 
 const FAKE = `(() => {
   const mk = (index, id, axes, n) => ({ index, id, connected: true, mapping: "", timestamp: 0, axes: axes.slice(),
@@ -34,6 +35,7 @@ const PROFILES = `(() => {
       { target: "brakeL", source: { kind: "axis", index: 0 } },
       { target: "brakeR", source: { kind: "axis", index: 1 } } ] },
   };
+  window.__presetKnown = __bh.camera.padControls.presetFor;
   __bh.camera.padControls.presetFor = (d) => P[d.model] ?? null;
   return true;
 })()`;
@@ -103,5 +105,12 @@ describe.skipIf(!E2E)("a HOTAS in three pieces", () => {
     expect(r.sas[1]).toBe(!r.sas[0]);
     expect(r.sas[2]).toBe(r.sas[1]);
     expect(r.toe).toBeCloseTo(1, 2);
+  });
+
+  test("known by their ids: the T.16000M, the TWCS, the rudder pedals", async () => {
+    await app.js("(__bh.camera.padControls.presetFor = window.__presetKnown, true)");
+    await frame();
+    const names = await app.js<(string | null)[]>("__bh.camera.padControls.last.devices.map((d) => d.profile)");
+    expect(names).toEqual(["Thrustmaster T.16000M", "Thrustmaster TWCS Throttle", "Thrustmaster rudder pedals"]);
   });
 });

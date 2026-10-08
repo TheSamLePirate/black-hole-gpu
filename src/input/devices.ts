@@ -8,6 +8,7 @@ import { sharedPad } from "../gamepad";
 import { store } from "../util/storage";
 import { type Commands, type DeviceSnapshot, deviceModel, pressedEdges, type Profile, readCommands } from "./axes";
 import type { KeyAction } from "./keymap";
+import { presetFor } from "./profiles";
 
 const STORE = "kerr.pads";
 
@@ -68,12 +69,18 @@ export class PadControls {
   private before = new Map<string, boolean>();
   private own = storedProfiles();
   /** the known models' profiles (input/profiles.ts — H3) */
-  presetFor: PresetFor = () => null;
+  presetFor: PresetFor = presetFor;
   last: PadFrame | null = null;
 
   constructor(private list: () => readonly Gamepad[] = () => sharedPad().list()) {
-    // (a device with a profile is claimed: the pad path leaves it)
-    sharedPad().claimed = (g) => this.profileOf(snapshotDevices([g])[0]!) !== null;
+    // (a device with a profile is claimed: the pad path leaves it — not a standard pad: its camera, its menus
+    // stay the pad path's; a profile of the player's for it flies it instead of the built-in mapping)
+    sharedPad().claimed = (g) => g.mapping !== "standard" && this.profileOf(snapshotDevices([g])[0]!) !== null;
+  }
+
+  /** A standard pad flown through the player's own profile (its id): the pad path's flight mapping skipped. */
+  flightOwned(id: string): boolean {
+    return this.own.has(deviceModel(id).model);
   }
 
   /** The player's profiles changed (the controls screen): read anew. */
