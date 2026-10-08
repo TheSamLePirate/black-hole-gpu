@@ -16,4 +16,6 @@ export default {
   "Flaps: {0}": "Volets : {0}",
   "Air brake: {0}": "Aérofrein : {0}",
   "key {0}": "touche {0}",
+  "Screen: {0}": "Écran : {0}",
+  "Screen: its own page, automatic": "Écran : sa page à lui, automatique",
 };

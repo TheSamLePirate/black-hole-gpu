@@ -415,7 +415,7 @@ export class CameraController {
     canvas.addEventListener("pointerleave", () => {
       this.setHover(null);
       if (this.cockpit && !this.ckHeld) {
-        this.cockpit.input.hover = null;
+        this.cockpit.input.move(NaN, NaN);
         this.cockpit.tip(null, 0, 0);
       }
     });
@@ -651,11 +651,12 @@ export class CameraController {
         ck.tip(ck.input.focus, e.clientX, e.clientY);
         if (t) {
           this.setHover(null);
-          this.canvas.style.cursor = t.kind === "control" ? "pointer" : "";
+          this.canvas.style.cursor = t.kind === "control" || ck.input.overTab ? "pointer" : "";
           return;
         }
-      } else if (ck?.input.hover) {
+      } else if (ck?.input.hover || ck?.input.over) {
         ck.input.hover = null;
+        ck.input.over = null;
         ck.tip(null, 0, 0);
       }
       const now = performance.now();

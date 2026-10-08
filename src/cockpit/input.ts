@@ -15,6 +15,11 @@ export interface CockpitHost {
   value(id: string): number;
   /** act: a control set to a position (a lever, a switch, the knob), or pushed (a button: no value) */
   act(id: string, value?: number): void;
+  /** the pointer over a screen (its display, the point on it) or off them all; whether that point is a
+   *  tab; a click there (K3: the screens' pages) */
+  screenHover?(slot: number | null, u: number, v: number): void;
+  screenTab?(slot: number, u: number, v: number): boolean;
+  screenClick?(slot: number, u: number, v: number): void;
 }
 
 const byId = new Map(CONTROLS.map((c) => [c.id, c]));
@@ -47,8 +52,11 @@ export class CockpitInput {
   hover: string | null = null;
   pressed: string | null = null;
   private held: { c: ControlDef; v0: number; v: number; dx: number; dy: number } | null = null;
-  /** what the pointer is over now (a screen: K3's) */
+  /** what the pointer is over now; whether on a screen's tab */
   over: CockpitTarget | null = null;
+  overTab = false;
+  /** a screen's tab pressed */
+  private tabHeld: { slot: number; u: number; v: number } | null = null;
 
   constructor(private host: CockpitHost) {}
 
@@ -56,12 +64,24 @@ export class CockpitInput {
   move(ndcX: number, ndcY: number): CockpitTarget | null {
     this.over = this.host.target(ndcX, ndcY);
     this.hover = this.over?.kind === "control" ? this.over.id : null;
+    const o = this.over;
+    if (o?.kind === "screen") {
+      this.host.screenHover?.(o.slot, o.u, o.v);
+      this.overTab = !!this.host.screenTab?.(o.slot, o.u, o.v);
+    } else {
+      this.host.screenHover?.(null, 0, 0);
+      this.overTab = false;
+    }
     return this.over;
   }
 
   /** Pressed: on a control, it is held (true: the pointer is the cockpit's until let go). */
   down(ndcX: number, ndcY: number): boolean {
     const t = this.move(ndcX, ndcY);
+    if (t?.kind === "screen" && this.overTab) {
+      this.tabHeld = { slot: t.slot, u: t.u, v: t.v };
+      return true;
+    }
     if (t?.kind !== "control") return false;
     const c = byId.get(t.id)!;
     const v = this.host.value(c.id);
@@ -97,6 +117,9 @@ export class CockpitInput {
 
   /** Let go: a click (no drag) does the control's click; a drag ends where it is. */
   up(click: boolean) {
+    const tb = this.tabHeld;
+    this.tabHeld = null;
+    if (tb && click) this.host.screenClick?.(tb.slot, tb.u, tb.v);
     const h = this.held;
     this.held = null;
     this.pressed = null;

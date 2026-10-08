@@ -43,7 +43,7 @@ import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
-import { CockpitScreens } from "./ui/cockpitscreens";
+import { CockpitScreens, tabAt } from "./ui/cockpitscreens";
 import { VESSELS } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
@@ -1791,6 +1791,16 @@ async function main() {
     },
     value: (id) => controlStates(camera, settings, cockpitChrono)[id]?.pos ?? 0,
     act: (id, v) => cockpitAct(cockpitDeps, id, v),
+    // (the screens' pages: their tabs over the screen under the pointer — PLAN-COCKPIT K3)
+    screenHover: (slot, u, v) => cockpitScreens.hoverScreen(slot, u, v),
+    screenTab: (_, u, v) => tabAt(u, v) !== null,
+    screenClick: (slot, u, v) => {
+      const p = cockpitScreens.clickScreen(slot, u, v);
+      if (p === undefined) return;
+      settings.cockpitPages = cockpitScreens.pagesSetting();
+      scheduleUrlSave();
+      panel.toast(p ? tf("Screen: {0}", p.toUpperCase()) : t("Screen: its own page, automatic"));
+    },
   });
   const cockpitTip = new CockpitTip();
   camera.cockpit = {

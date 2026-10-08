@@ -12,6 +12,7 @@ import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
 import { cockpitHull } from "./system/collide";
 import { cabinHitOf } from "./cockpit/pick";
 import { CONTROLS, controlBox } from "./cockpit/controls";
+import { tabAt } from "./ui/cockpitscreens";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import type { Simulation } from "./sim";
 import type { GameTools } from "./game/tools";
@@ -280,6 +281,18 @@ export function installBh(c: BhContext) {
       cockpitControlAt: (id: string) => {
         const c = CONTROLS.find((x) => x.id === id);
         return c ? renderer.ship.cabinProject(controlBox(c).c) : null;
+      },
+      /** a point of the view (ndc) on a display's screen, on its tab for `page` (K3) — the view scanned; or
+       *  null */
+      cockpitScreenPoint: (slot: number, page: string) => {
+        if (!cockpitHull.bvh || !cockpitHull.verts) return null;
+        for (let y = 0.95; y > -0.95; y -= 0.012)
+          for (let x = -0.95; x < 0.95; x += 0.012) {
+            const ray = renderer.ship.cabinRay(x, y);
+            const h = ray && cabinHitOf(ray.o, ray.d, cockpitHull.bvh, cockpitHull.verts);
+            if (h?.screen?.slot === slot && tabAt(h.screen.u, h.screen.v) === page) return [x, y];
+          }
+        return null;
       },
       cabinPick: (ndcX: number, ndcY: number) => {
         const ray = renderer.ship.cabinRay(ndcX, ndcY);

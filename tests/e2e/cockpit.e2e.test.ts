@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // control it is lit and its tip names it; a click on the SAS button toggles the SAS, on the flaps' lever moves
 // them a detent on; the air brake's lever dragged down puts it out; the wheel over the CABIN knob dims the
 // lights; a switch flipped; the right button's drag still turns the look; a click on the cabin's wall picks
-// nothing beyond it.
+// nothing beyond it. K3: over a screen its tabs show; a click on one shows that page there, kept; again,
+// back to automatic.
 
 describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
   let app: App;
@@ -105,5 +106,30 @@ describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
     const target = await app.js<string>("__bh.settings.target");
     await click({ x: 720, y: 600 });
     expect(await app.js<string>("__bh.settings.target")).toBe(target);
+  });
+
+  test("K3: a screen's tabs under the pointer; ORB clicked: the PFD's display shows the orbit, kept; again: automatic", async () => {
+    await app.js(`(__bh.settings.cockpitPages = "", __bh.camera.setLook(0, -35), true)`);
+    await Bun.sleep(600);
+    const toPx = (n: [number, number]) =>
+      app.js<{ x: number; y: number; top: string }>(`(() => {
+        const c = [...document.querySelectorAll("canvas")].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+        const b = c.getBoundingClientRect();
+        const x = b.left + (${n[0]} + 1) / 2 * b.width, y = b.top + (1 - ${n[1]}) / 2 * b.height;
+        return { x, y, top: document.elementFromPoint(x, y)?.tagName ?? "" };
+      })()`);
+    const n = await app.js<[number, number] | null>(`__bh.cockpitScreenPoint(0, "orbit")`);
+    expect(n).not.toBeNull();
+    const p = await toPx(n!);
+    expect(p.top).toBe("CANVAS");
+    await app.mouse("move", p.x - 2, p.y);
+    await app.mouse("move", p.x, p.y);
+    await Bun.sleep(200);
+    expect(await app.js<boolean>("__bh.camera.cockpit.input.overTab")).toBe(true);
+    await click(p);
+    expect(await app.js<string>("__bh.settings.cockpitPages")).toBe("orbit,,,,,,,");
+    expect(await app.js<string | null>("__bh.cockpitScreens.pages[0]")).toBe("orbit");
+    await click(p);
+    expect(await app.js<string>("__bh.settings.cockpitPages")).toBe("");
   });
 });

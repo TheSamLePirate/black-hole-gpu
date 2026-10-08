@@ -410,6 +410,7 @@ export interface Settings {
   hudDock: boolean; // the docking: gates along the port's axis, the scope down it, range, closing
   hudRelativity: boolean; // near Gargantua: the clock rate, γ, the sky's Doppler, bound or escaping, the radii, the tide
   cockpitAids: boolean; // the same aids on the cabin's screens (the PFD, NAV, DOCKING / LANDING, PLAN, CLOCKS)
+  cockpitPages: string; // each cockpit display's page chosen (8, comma-separated; empty: its own, automatic)
   cabinLight: number; // the cabin's ceiling lights, 0 (off) … 1 (the cockpit's dimmer)
   nightLighting: boolean; // the cabin lit red at night (the cockpit's NIGHT switch)
   navLights: boolean; // the Ranger's navigation lights (the cockpit's switches)
@@ -642,6 +643,7 @@ export function defaultSettings(): Settings {
     hudDock: true,
     hudRelativity: true,
     cockpitAids: true,
+    cockpitPages: "",
     cabinLight: 1,
     nightLighting: false,
     navLights: false,
@@ -1838,6 +1840,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudDock: "pref",
   hudRelativity: "pref",
   cockpitAids: "pref",
+  cockpitPages: "pref",
   cabinLight: "pref",
   nightLighting: "pref",
   navLights: "carried",

@@ -13,6 +13,11 @@
 //   5 PLAN       the manoeuvre nodes: when, how much; the plan's note
 //   6 CLOCKS     (black, amber) the date, the scene's time, the ship's proper time, the warp
 //   7 LOG        (black, white) the pilot's messages, the latest last
+//
+// Each display's page chosen by the pilot (PLAN-COCKPIT K3): the pointer over a screen shows its tabs, a
+// click on one shows that page there — APPROACH and LANDING among them —, a click on the page shown goes back
+// to the display's own, automatic (NAV becomes APPROACH near a runway, DOCKING becomes LANDING low and slow).
+// Several of the cabin's screens share a display: they change together.
 
 import type { Info } from "./flighthud";
 import type { RunwayView } from "../controls";
@@ -119,7 +124,74 @@ export function pfdAttitude(up: readonly number[] | null): { roll: number; pitch
   return { roll: Math.atan2(up[0]!, up[1]!), pitch: Math.asin(Math.max(-1, Math.min(1, up[2]!))) };
 }
 
+/** The pages a display can show. */
+export const PAGES = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log", "approach", "landing"] as const;
+export type PageId = (typeof PAGES)[number];
+/** each display's own page (its automatic one) */
+export const SLOT_PAGE: PageId[] = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log"];
+const TAB_LABEL: Record<PageId, string> = {
+  pfd: "PFD",
+  orbit: "ORB",
+  nav: "NAV",
+  systems: "SYS",
+  docking: "DCK",
+  plan: "PLN",
+  clocks: "CLK",
+  log: "LOG",
+  approach: "APP",
+  landing: "LDG",
+};
+/** the tabs' strip: two rows of five at the screen's foot (drawing units: 512 × 683 a display) */
+const TABS = { cols: 5, rows: 2, x0: 12, y0: SH - 118, w: (SLOT - 24) / 5, h: 50 } as const;
+
+/** The tab under a point of a display (u, v: 0…1 across and down the screen, as the cabin's pick gives
+ *  them), or null. */
+export function tabAt(u: number, v: number): PageId | null {
+  // (the shader shows the slot inset by 2 % on each side)
+  const x = (0.02 + 0.96 * u) * SLOT,
+    y = (0.02 + 0.96 * v) * SH;
+  const c = Math.floor((x - TABS.x0) / TABS.w),
+    r = Math.floor((y - TABS.y0) / TABS.h);
+  if (c < 0 || c >= TABS.cols || r < 0 || r >= TABS.rows) return null;
+  return PAGES[r * TABS.cols + c] ?? null;
+}
+
+/** The pages chosen, as kept (settings.cockpitPages: eight, comma-separated; empty: automatic). */
+export function parsePages(s: string): (PageId | null)[] {
+  const p = s.split(",");
+  return SLOT_PAGE.map((_, i) => (PAGES.includes(p[i] as PageId) ? (p[i] as PageId) : null));
+}
+
 export class CockpitScreens {
+  /** each display's page chosen (null: its own, automatic), and the setting it was read from */
+  pages: (PageId | null)[] = SLOT_PAGE.map(() => null);
+  private pagesKey = "";
+  /** the display whose tabs show (the pointer over one of its screens), the tab under the pointer */
+  private tabs: { slot: number; over: PageId | null } | null = null;
+
+  /** The pointer over a display (or none): its tabs shown — redrawn at once. */
+  hoverScreen(slot: number | null, u = 0, v = 0) {
+    const t = slot === null ? null : { slot, over: tabAt(u, v) };
+    if (t?.slot !== this.tabs?.slot || t?.over !== this.tabs?.over) this.lastDraw = -Infinity;
+    this.tabs = t;
+  }
+
+  /** A click on a display at (u, v): a tab — its page chosen, or back to automatic if it is the one shown.
+   *  The page chosen, or undefined if not on a tab. */
+  clickScreen(slot: number, u: number, v: number): PageId | null | undefined {
+    const tab = tabAt(u, v);
+    if (!tab || slot < 0 || slot >= 8) return undefined;
+    this.pages[slot] = this.pages[slot] === tab ? null : tab;
+    this.pagesKey = this.pagesSetting();
+    this.lastDraw = -Infinity;
+    return this.pages[slot];
+  }
+
+  /** The pages chosen, as the setting keeps them. */
+  pagesSetting(): string {
+    return this.pages.some((p) => p) ? this.pages.map((p) => p ?? "").join(",") : "";
+  }
+
   readonly canvas = new OffscreenCanvas(W, H);
   private g = this.canvas.getContext("2d")!;
   private log: { t: number; text: string }[] = [];
@@ -138,17 +210,32 @@ export class CockpitScreens {
     this.lastDraw = now;
     const g = this.g;
     g.clearRect(0, 0, W, H);
-    const slots: ((g: OffscreenCanvasRenderingContext2D, d: ScreenData) => void)[] = [
-      (g, d) => this.pfd(g, d),
-      (g, d) => this.orbit(g, d),
-      (g, d) => this.nav(g, d),
-      (g, d) => this.systems(g, d),
-      (g, d) => this.docking(g, d),
-      (g, d) => this.plan(g, d),
-      (g, d) => this.clocks(g, d),
-      (g, d) => this.logScreen(g, d),
-    ];
-    slots.forEach((fn, i) => {
+    // (the pages as kept: a saved setting, another tab's change)
+    if (d.settings.cockpitPages !== this.pagesKey) {
+      this.pages = parsePages(d.settings.cockpitPages);
+      this.pagesKey = d.settings.cockpitPages;
+    }
+    const page: Record<PageId, (g: OffscreenCanvasRenderingContext2D, d: ScreenData, auto: boolean) => void> = {
+      pfd: (g, d) => this.pfd(g, d),
+      orbit: (g, d) => this.orbit(g, d),
+      nav: (g, d, auto) => this.nav(g, d, auto),
+      systems: (g, d) => this.systems(g, d),
+      docking: (g, d, auto) => this.docking(g, d, auto),
+      plan: (g, d) => this.plan(g, d),
+      clocks: (g, d) => this.clocks(g, d),
+      log: (g, d) => this.logScreen(g, d),
+      approach: (g, d) => (d.runway ? this.approachScreen(g, d.runway) : this.none(g, "APPROACH", "— no runway in reach —")),
+      landing: (g, d) => {
+        const sf = d.info.surface as SurfaceLike | null | undefined;
+        return sf ? this.landingScreen(g, d, sf) : this.none(g, "LANDING", "— no ground near —");
+      },
+    };
+    SLOT_PAGE.forEach((own, i) => {
+      const chosen = this.pages[i] ?? null;
+      const fn = (g: OffscreenCanvasRenderingContext2D, d: ScreenData) => {
+        page[chosen ?? own](g, d, chosen === null);
+        if (this.tabs?.slot === i) this.tabStrip(g, chosen, this.tabs.over);
+      };
       g.save();
       g.translate((i % 4) * SLOT, Math.floor(i / 4) * SLOT);
       g.beginPath();
@@ -163,6 +250,44 @@ export class CockpitScreens {
       g.restore();
     });
     return true;
+  }
+
+  // ---------------------------------------------------------------------------------- the tabs
+  /** The tabs over a display's foot: the page chosen filled, the one under the pointer outlined; AUTO when
+   *  none is chosen. */
+  private tabStrip(g: OffscreenCanvasRenderingContext2D, chosen: PageId | null, over: PageId | null) {
+    g.fillStyle = "rgba(2, 14, 20, 0.86)";
+    g.fillRect(0, TABS.y0 - 34, SLOT, SH - TABS.y0 + 34);
+    g.font = `700 17px ${FONT}`;
+    g.textBaseline = "middle";
+    g.textAlign = "left";
+    g.fillStyle = chosen ? DIM : GREEN;
+    g.fillText(chosen ? "PAGE · CLICK IT AGAIN: AUTO" : "PAGE · AUTO", TABS.x0 + 4, TABS.y0 - 17);
+    PAGES.forEach((p, k) => {
+      const x = TABS.x0 + (k % TABS.cols) * TABS.w,
+        y = TABS.y0 + Math.floor(k / TABS.cols) * TABS.h;
+      const on = p === chosen;
+      g.fillStyle = on ? LINE : PANEL;
+      g.fillRect(x + 3, y + 3, TABS.w - 6, TABS.h - 6);
+      g.strokeStyle = p === over ? "#ffffff" : LINE;
+      g.lineWidth = p === over ? 3 : 1.5;
+      g.strokeRect(x + 3, y + 3, TABS.w - 6, TABS.h - 6);
+      g.fillStyle = on ? BG : TEXT;
+      g.font = `700 22px ${FONT}`;
+      g.textAlign = "center";
+      g.fillText(TAB_LABEL[p], x + TABS.w / 2, y + TABS.h / 2 + 1);
+    });
+    g.textAlign = "left";
+  }
+
+  /** A page with nothing to show now. */
+  private none(g: OffscreenCanvasRenderingContext2D, title: string, why: string) {
+    this.frame(g, title);
+    g.font = `600 22px ${FONT}`;
+    g.fillStyle = DIM;
+    g.textAlign = "center";
+    g.fillText(why, SLOT / 2, 300);
+    g.textAlign = "left";
   }
 
   // ---------------------------------------------------------------------------------- helpers
@@ -674,9 +799,9 @@ export class CockpitScreens {
   }
 
   // ---------------------------------------------------------------------------------- 2 NAV
-  private nav(g: OffscreenCanvasRenderingContext2D, d: ScreenData) {
+  private nav(g: OffscreenCanvasRenderingContext2D, d: ScreenData, auto = true) {
     const rw = d.runway;
-    if (rw && d.settings.cockpitAids && d.settings.hudRunway && -rw.along < 40e3 && rw.along < 4500) return this.approachScreen(g, rw);
+    if (auto && rw && d.settings.cockpitAids && d.settings.hudRunway && -rw.along < 40e3 && rw.along < 4500) return this.approachScreen(g, rw);
     const st = d.status;
     const tg = st?.target;
     this.frame(g, `NAV · ${tg ? tg.name.toUpperCase() : "NO TARGET"}`);
@@ -885,12 +1010,12 @@ export class CockpitScreens {
   }
 
   // ---------------------------------------------------------------------------------- 4 DOCKING
-  private docking(g: OffscreenCanvasRenderingContext2D, d: ScreenData) {
+  private docking(g: OffscreenCanvasRenderingContext2D, d: ScreenData, auto = true) {
     const dk = d.info.dock;
     const links = d.info.links ?? [];
     const sf = d.info.surface as SurfaceLike | null | undefined;
     // (low and slow over the ground — not the glide to a runway)
-    if (!dk && !links.length && sf && !sf.landed && sf.alt < 3000 && sf.vHor < 150 && d.settings.cockpitAids && d.settings.hudHover)
+    if (auto && !dk && !links.length && sf && !sf.landed && sf.alt < 3000 && sf.vHor < 150 && d.settings.cockpitAids && d.settings.hudHover)
       return this.landingScreen(g, d, sf);
     this.frame(g, dk ? `DOCKING · ${dk.title.toUpperCase()}` : links.length ? "DOCKED" : "DOCKING");
     if (!dk) {
