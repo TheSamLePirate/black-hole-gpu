@@ -15,6 +15,7 @@ const T = {
   reset: { fr: "Tout réinitialiser", en: "Reset all" },
   help: { fr: "Aide complète", en: "Full help" },
   back: { fr: "Retour", en: "Back" },
+  pads: { fr: "Manettes et HOTAS…", en: "Controllers and HOTAS…" },
   custom: { fr: "modifié", en: "changed" },
   pad: {
     fr: "Manette : stick gauche tangage et lacet · LB RB roulis · RT LT gaz · A SAS · X/Y pro/rétrograde · Start pause",
@@ -33,6 +34,8 @@ const GROUPS: [Remappable["group"], Text][] = [
 
 export interface ControlsDeps {
   help(): void;
+  /** the controllers screen (ui/pads-screen.ts) */
+  pads(): void;
   /** gone back (to the pause menu) */
   back(): void;
   toast(text: string): void;
@@ -62,6 +65,14 @@ export class ControlsScreen {
       h(
         "div",
         { class: "cs-acts" },
+        button({
+          label: tr(T.pads),
+          testid: "controls-pads",
+          onClick: () => {
+            this.close(false);
+            this.d.pads();
+          },
+        }),
         button({ label: tr(T.help), onClick: () => this.d.help() }),
         button({
           label: tr(T.reset),

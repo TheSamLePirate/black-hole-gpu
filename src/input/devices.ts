@@ -71,6 +71,9 @@ export class PadControls {
   /** the known models' profiles (input/profiles.ts — H3) */
   presetFor: PresetFor = presetFor;
   last: PadFrame | null = null;
+  /** the controllers screen open: the devices read, nothing flown (a button pressed to be bound must not fire
+   *  its action — a HOTAS's SAS toggled while being set) */
+  suspended = false;
 
   constructor(private list: () => readonly Gamepad[] = () => sharedPad().list()) {
     // (a device with a profile is claimed: the pad path leaves it — not a standard pad: its camera, its menus
@@ -101,7 +104,9 @@ export class PadControls {
       const p = this.profileOf(d);
       if (p) profiles.set(d.model, p);
     }
-    const commands = readCommands(devices, profiles);
+    const commands = this.suspended
+      ? { axes: {}, actions: new Map<string, boolean>(), held: new Set<never>() }
+      : readCommands(devices, profiles);
     const pressed = pressedEdges(commands.actions, this.before).map((k) => {
       const i = k.indexOf(":");
       return i < 0 ? { action: k as KeyAction } : { action: k.slice(0, i) as KeyAction, arg: k.slice(i + 1) };

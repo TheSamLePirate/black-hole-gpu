@@ -6,7 +6,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // lever sets the throttle where it stands — picked up (once the keys set it elsewhere, the lever takes it back
 // only passing through it) —, a button fires its keymap action, the pedals' toe brakes are read; the
 // standard pad's path leaves the claimed devices alone. H3: without the test's profiles, the three are known by
-// their Thrustmaster ids.
+// their Thrustmaster ids. H4: the controllers screen by real clicks — the devices listed with their profiles,
+// the roll's source set by detection (the twist moved), inverted, kept as the player's own; back to the known
+// profile.
 
 const FAKE = `(() => {
   const mk = (index, id, axes, n) => ({ index, id, connected: true, mapping: "", timestamp: 0, axes: axes.slice(),
@@ -112,5 +114,50 @@ describe.skipIf(!E2E)("a HOTAS in three pieces", () => {
     await frame();
     const names = await app.js<(string | null)[]>("__bh.camera.padControls.last.devices.map((d) => d.profile)");
     expect(names).toEqual(["Thrustmaster T.16000M", "Thrustmaster TWCS Throttle", "Thrustmaster rudder pedals"]);
+  });
+
+  test("the controllers screen: listed, a source detected, inverted, kept as mine; back to the known profile", async () => {
+    await app.press("Escape");
+    await app.click("[data-testid=pause-controls]");
+    await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
+    await app.click("[data-testid=controls-pads]");
+    await app.waitFor(`!!document.querySelector("[data-testid=pads]")`);
+    await app.waitFor(`document.querySelectorAll(".ps-dev").length === 3`, 5000);
+    const list = await app.js<string>(`document.querySelector("[data-testid=pads-list]").textContent`);
+    expect(list).toContain("Thrustmaster T.16000M");
+    expect(list).toContain("Thrustmaster TWCS Throttle");
+    // (the stick selected: its first binding, the roll, detected anew — the twist, axis 5, moved one way)
+    await app.click('[data-testid="pads-dev-044f:b10a"]');
+    await app.click("[data-testid=pads-src-0]");
+    await app.js("(window.__hotas[0].axes = [0, 0, 0, 0, 0, 0], true)");
+    await Bun.sleep(150);
+    await app.js("(window.__hotas[0].axes[5] = 0.9, true)");
+    await app.waitFor(`document.querySelector("[data-testid=pads-src-0]")?.textContent.includes("5")`, 5000);
+    await app.js("(window.__hotas[0].axes[5] = 0, true)");
+    expect(await app.js<string>(`document.querySelector("[data-testid=pads-src-0]").textContent`)).toMatch(/5 \+$/);
+    await app.click("[data-testid=pads-inv-0]");
+    // (a button pressed while the screen is open: shown, not flown — the SAS as it was)
+    const sas0 = await app.js<boolean>("__bh.camera.pilot.sas");
+    await app.js("(window.__press(0, 1, true), true)");
+    await Bun.sleep(300);
+    await app.js("(window.__press(0, 1, false), true)");
+    expect(await app.js<boolean>("__bh.camera.pilot.sas")).toBe(sas0);
+    const own = await app.js<{ source: { kind: string; index: number; half?: number }; shape?: { invert: boolean } }>(
+      `JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => k.endsWith("kerr.pads")))).find((p) => p.model === "044f:b10a").bindings[0]`,
+    );
+    expect(own.source).toEqual({ kind: "axis", index: 5, half: 1 });
+    expect(own.shape?.invert).toBe(true);
+    expect(await app.js<string>(`document.querySelector('[data-testid="pads-dev-044f:b10a"]').textContent`)).toMatch(
+      /mon profil|my profile/,
+    );
+    // (the known profile back)
+    await app.click("[data-testid=pads-reset]");
+    expect(await app.js<string>(`document.querySelector('[data-testid="pads-dev-044f:b10a"]').textContent`)).toContain(
+      "Thrustmaster T.16000M",
+    );
+    await app.click("[data-testid=pads-back]");
+    await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
+    await app.press("Escape");
+    await app.press("Escape");
   });
 });

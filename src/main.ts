@@ -13,6 +13,7 @@ import { installBh } from "./automation";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
+import { PadsScreen } from "./ui/pads-screen";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
@@ -1570,11 +1571,14 @@ async function main() {
     if (camera.cinematic) camera.setCinematic(null);
   };
   // the controls screen (ui/controls-screen.ts): from the pause menu, back to it
-  const controlsScreen = new ControlsScreen({
+  const controlsScreen: ControlsScreen = new ControlsScreen({
     help: () => actions["btn-help"]!(),
+    pads: () => padsScreen.open(),
     back: () => (pauseMenu ??= makePauseMenu()).open(),
     toast: (t) => panel.toast(t),
   });
+  // the controllers screen (ui/pads-screen.ts — PLAN-HOTAS H4): from the controls screen, back to it
+  const padsScreen = new PadsScreen({ pads: camera.padControls, back: () => controlsScreen.open(), toast: (t) => panel.toast(t) });
   // (made at its first opening: the game's tools are built further down)
   let pauseMenu: PauseMenu | null = null;
   const makePauseMenu = () =>

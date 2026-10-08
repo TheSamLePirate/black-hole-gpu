@@ -322,5 +322,37 @@ body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-po
 .cs-key.listening { min-width: 220px; color: #fff; border-color: var(--k-amber); background: rgba(255, 179, 92, 0.18); animation: fl-blink 0.9s steps(2) infinite; }
 .cs-pad { margin: 0; font: 500 11.5px var(--font); color: var(--k-dim); }
 .cs-acts { display: flex; gap: 8px; justify-content: flex-end; }
+/* the controllers screen (ui/pads-screen.ts) */
+.ps { width: min(1100px, 96vw); }
+.ps-body { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 16px; min-height: 0; overflow: hidden; }
+.ps-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.ps-dev { display: grid; gap: 2px; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--k-line); background: rgba(255, 255, 255, 0.03); color: var(--k-text); cursor: pointer; font: 500 12.5px var(--font); }
+.ps-dev small { font: 500 10.5px var(--mono); color: var(--k-dim); }
+.ps-dev.on { border-color: var(--k-on); background: rgba(111, 210, 255, 0.12); }
+.ps-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+.ps-live { display: grid; gap: 6px; }
+.ps-axes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
+.ps-axis { display: flex; align-items: center; gap: 6px; font: 500 10.5px var(--mono); color: var(--k-dim); }
+.ps-axis-n { width: 14px; text-align: right; }
+.ps-bar { position: relative; flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+.ps-bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--k-line); }
+.ps-bar b { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--k-on); }
+.ps-btns { display: flex; flex-wrap: wrap; gap: 3px; }
+.ps-btn { min-width: 22px; padding: 2px 3px; text-align: center; border-radius: 4px; border: 1px solid var(--k-line); font: 500 10px var(--mono); color: var(--k-dim); }
+.ps-btn.on { color: #04140a; background: #78ffaa; border-color: #78ffaa; }
+.ps-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ps-head b { flex: 1; font: 600 13px var(--font); color: var(--k-text); }
+.ps-rows { display: flex; flex-direction: column; }
+.ps-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--k-line); flex-wrap: wrap; }
+.ps-inv { display: flex; align-items: center; gap: 3px; font: 500 11px var(--font); color: var(--k-dim); }
+.ps-sl { display: grid; font: 500 9.5px var(--mono); color: var(--k-dim); }
+.ps-sl input { width: 90px; }
+.ps-curve svg { display: block; }
+.ps-grid { stroke: rgba(160, 200, 230, 0.2); fill: none; }
+.ps-line { stroke: #7cd6ff; stroke-width: 2; fill: none; }
+.ps-add { align-self: flex-start; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); color: var(--k-text); border: 1px solid var(--k-line); }
+.ps-none, .ps-listen { color: var(--k-dim); font: 500 12px var(--font); }
+.ps-listen { color: var(--k-amber); }
+@media (max-width: 720px) { .ps-body { grid-template-columns: 1fr; } }
 /* (a dialog open: the toasts below it, at the bottom — still read, not over its title) */
 body:has(.k-modal) .sp-toasts { top: auto; bottom: 24px; }
