@@ -14,6 +14,7 @@ import { brakingAccels } from "../descent";
 import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import { landingEnd, siteDir, sitesOf, type Site } from "../game/sites";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
@@ -1645,8 +1646,7 @@ function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolea
   const nav = this.ourNav(cam);
   if (!nav || (nav.ref !== "earth" && nav.ref !== "mars")) return null;
   const q = toBodyFixed(nav.ref, nav.X, nav.t);
-  const ql = Math.hypot(...q);
-  const place = { body: nav.ref, lat: (Math.asin(q[2] / ql) * 180) / Math.PI, lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI };
+  const place = { body: nav.ref, ...geodeticPlace(nav.ref, q) };
   const days = daysOf(nav.t);
   const w = weatherAt(s, place, days, this.weatherReal);
   const dust = nav.ref === "mars";
@@ -1678,18 +1678,27 @@ function runwayInUse(this: CameraController, site: Site): Site {
   return landingEnd(site, this.s, nav ? daysOf(nav.t) : 0, this.weatherReal);
 }
 
+/** A body-fixed point's geodetic latitude and east longitude [°] (the Earth's ellipsoid: a site's latitude —
+ *  the geocentric one put Edwards 20 km off its own runway). */
+function geodeticPlace(body: string, q: Vec3): { lat: number; lon: number } {
+  const g = cartToGeodetic(solarBody(body)!.radius, flatteningOf(body), q);
+  return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
+}
+
 function weatherPlace(this: CameraController): { body: string; lat: number; lon: number; days: number; h: number } | null {
   const nav = this.ourNav(cameraFrame(this.s));
   if (!nav || nav.ref === "sun") return null;
   const b = solarBody(nav.ref);
   if (!b?.atmosphere) return null;
   const q = toBodyFixed(nav.ref, nav.X, nav.t);
-  const ql = Math.hypot(...q);
-  const h = (Math.hypot(...sub3(nav.X, ourState(nav.ref, nav.t).pos)) - b.radius) * M_METRES;
+  // (its height over the ground — a solid world's, its relief and figure; the giants', over their sphere: the
+  // equator's sphere put a craft on Edwards's runway 6 km under it)
+  const h = solidBody(nav.ref)
+    ? gearHeight(nav.ref, nav.X, nav.t) + GEAR
+    : (Math.hypot(...sub3(nav.X, ourState(nav.ref, nav.t).pos)) - b.radius) * M_METRES;
   return {
     body: nav.ref,
-    lat: (Math.asin(q[2] / ql) * 180) / Math.PI,
-    lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI,
+    ...geodeticPlace(nav.ref, q),
     days: daysOf(nav.t),
     h,
   };

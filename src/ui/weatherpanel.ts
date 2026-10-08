@@ -4,6 +4,7 @@
 // coloured by the categories' marks, the precipitation, the flight category and what it means), and the
 // place's vertical cut alive under them (weather-section.ts).
 
+import { nearestStation } from "../metar";
 import "./weather.css";
 import type { Settings } from "../settings";
 import { tr } from "../i18n";
@@ -210,28 +211,36 @@ export class WeatherPanel {
       where.innerHTML = place
         ? `<b>${name}</b><span>${Math.abs(at.lat).toFixed(2)}° ${at.lat >= 0 ? "N" : "S"} · ${Math.abs(at.lon).toFixed(2)}° ${at.lon >= 0 ? "E" : "W"}</span>`
         : `<b>${tr({ fr: "Pas d'air ici", en: "No air here" })}</b><span>${tr({ fr: "le temps choisi vaudra pour le prochain monde à atmosphère", en: "the weather chosen holds for the next world with an atmosphere" })}</span>`;
+      const st = s.weather === "real" && at.body === "earth" ? nearestStation(at) : null;
       says.textContent =
         s.weather === "real" && !H.real()
-          ? tr({
-              fr: "La météo réelle n'est pas encore arrivée : beau temps en attendant.",
-              en: "The real weather has not come in yet: fair weather meanwhile.",
-            })
-          : s.weather === "dust" && at.body !== "mars"
+          ? st
             ? tr({
-                fr: "La poussière, c'est Mars ; ici, du vent et une visibilité réduite.",
-                en: "Dust is Mars's; here, wind and a shorter visibility.",
+                fr: `La météo réelle de ${st.site.name.split(",")[0]} (${st.icao}) n'est pas encore arrivée : beau temps en attendant.`,
+                en: `The real weather of ${st.site.name.split(",")[0]} (${st.icao}) has not come in yet: fair weather meanwhile.`,
               })
-            : at.body === "mars" && (s.weather === "rain" || s.weather === "storm")
+            : tr({
+                fr: "Pas de station à moins de 600 km (les METAR des pistes terrestres) : beau temps.",
+                en: "No station within 600 km (the Earth's runways' METARs): fair weather.",
+              })
+          : s.weather === "real" && st && H.real()?.report
+            ? `${tr({ fr: "METAR de", en: "METAR of" })} ${st.site.name.split(",")[0]}, ${Math.round(st.km)} km — ${H.real()!.report}`
+            : s.weather === "dust" && at.body !== "mars"
               ? tr({
-                  fr: "Pas de pluie sur Mars : son air trop mince et trop froid pour l'eau liquide — des nuages de glace, du vent.",
-                  en: "No rain on Mars: its air too thin and cold for liquid water — ice clouds, wind.",
+                  fr: "La poussière, c'est Mars ; ici, du vent et une visibilité réduite.",
+                  en: "Dust is Mars's; here, wind and a shorter visibility.",
                 })
-              : at.body === "mars" && s.weather === "dust"
+              : at.body === "mars" && (s.weather === "rain" || s.weather === "storm")
                 ? tr({
-                    fr: "Tempête de poussière : le ciel ocre et opaque, le soleil un disque pâle, l'horizon effacé.",
-                    en: "A dust storm: the sky an opaque ochre, the sun a pale disc, the horizon gone.",
+                    fr: "Pas de pluie sur Mars : son air trop mince et trop froid pour l'eau liquide — des nuages de glace, du vent.",
+                    en: "No rain on Mars: its air too thin and cold for liquid water — ice clouds, wind.",
                   })
-                : tr(HINTS[s.weather]);
+                : at.body === "mars" && s.weather === "dust"
+                  ? tr({
+                      fr: "Tempête de poussière : le ciel ocre et opaque, le soleil un disque pâle, l'horizon effacé.",
+                      en: "A dust storm: the sky an opaque ochre, the sun a pale disc, the horizon gone.",
+                    })
+                  : tr(HINTS[s.weather]);
       // the wind: a compass, its arrow where it blows to; the speed large; the gusts
       const gust = w.wind.gust > 0 ? `${(w.wind.u10 + w.wind.gust).toFixed(0)}` : "—";
       tWind.innerHTML = `<div class="wx-k">${tr({ fr: "Vent", en: "Wind" })}</div><div class="wx-wind">

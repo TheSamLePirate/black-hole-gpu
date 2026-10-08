@@ -18,6 +18,7 @@ import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
+import { MetarFeed, nearestStation } from "./metar";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
@@ -2021,11 +2022,31 @@ async function main() {
     place: () => camera.weatherPlace(),
     real: () => camera.weatherReal,
     changed: () => {
+      metarTick();
       touch();
       scheduleUrlSave();
     },
   });
   flightHud.onWeather = () => weatherPanel.open();
+  // the real weather (metar.ts, PLAN-METEO W7): with "Real" chosen, the METAR of the runway's station nearest
+  // the camera over the Earth (within 600 km), checked every 15 s, fetched each half hour; none, no network:
+  // the fair weather
+  const metarFeed = new MetarFeed();
+  const metarTick = () => {
+    if (settings.weather !== "real") return;
+    const p = camera.weatherPlace();
+    const st = p && p.body === "earth" ? nearestStation(p) : null;
+    if (!st) {
+      camera.weatherReal = renderer.weatherReal = null;
+      return;
+    }
+    void metarFeed.weather(st.icao).then((w) => {
+      if (settings.weather !== "real" || camera.weatherReal?.report === w?.report) return;
+      camera.weatherReal = renderer.weatherReal = w;
+      touch();
+    });
+  };
+  window.setInterval(metarTick, 15000);
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   const bench = new KerrBench({
     settings,

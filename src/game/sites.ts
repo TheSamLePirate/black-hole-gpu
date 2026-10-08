@@ -17,16 +17,26 @@ export interface Site {
   rwy?: number;
   /** landed the other way (PLAN-METEO W4: into the wind): this is the far end — its threshold, its heading */
   reverse?: boolean;
+  /** the airfield's weather station (its METAR: W7) — its own, or the nearest that reports */
+  icao?: string;
 }
 
 export const SITES: Site[] = [
-  { body: "earth", name: "Kennedy Space Center, Shuttle Landing Facility", lat: 28.615, lon: -80.695, runway: true, rwy: 150 },
-  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220 },
-  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70 },
-  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60 },
-  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270 },
-  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340 },
-  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0 },
+  {
+    body: "earth",
+    name: "Kennedy Space Center, Shuttle Landing Facility",
+    lat: 28.615,
+    lon: -80.695,
+    runway: true,
+    rwy: 150,
+    icao: "KTTS",
+  },
+  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220, icao: "KEDW" },
+  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70, icao: "SOCA" },
+  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60, icao: "UAOO" },
+  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270, icao: "LFPB" },
+  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340, icao: "RJFG" },
+  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0, icao: "YPWR" },
   { body: "mars", name: "Jezero crater", lat: 18.44, lon: 77.45 },
   { body: "mars", name: "Gale crater", lat: -5.4, lon: 137.8 },
   { body: "mars", name: "Utopia Planitia", lat: 47.6, lon: 118.0 },
