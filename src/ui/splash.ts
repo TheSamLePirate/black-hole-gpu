@@ -5,7 +5,6 @@
 
 import { loading, type Stage } from "../loading";
 import { t } from "../i18n";
-import { visibleTimeout } from "../util/visible-timeout";
 
 const TIPS = [
   t("Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it."),
@@ -74,16 +73,6 @@ export class Splash {
       this.skip.textContent = t("Enter when the first image is ready");
       this.skip.hidden = false;
     }, 9000);
-    // A hung driver can leave the core promise pending indefinitely. Offer an explicit restart (after
-    // 180 s of the page seen: a tab started in the background is not hung).
-    visibleTimeout(180_000, () => {
-      if (this.lifted || this.imageAt) return;
-      this.skip.hidden = false;
-      this.skip.disabled = false;
-      this.skip.textContent = t("Reload");
-      this.skip.title = t("The first image is still unavailable. Reload to restart graphics initialization.");
-      this.skip.onclick = () => location.reload();
-    });
     loading.on(() => this.renderSteps());
     requestAnimationFrame(this.tick);
   }
@@ -99,13 +88,21 @@ export class Splash {
     this.skip.textContent = t("Entering as soon as the first image is ready…");
   }
 
+  /** No first image after 3 min (main.ts): the graphics card is still compiling the tracer — said in place
+   *  of the tips. No reload offered: a compile cut short is not cached, a reload would start it over. */
+  slowStart() {
+    if (this.lifted || this.imageAt) return;
+    clearInterval(this.tipTimer);
+    this.tipEl.textContent = t(
+      "Still compiling the ray tracer for this graphics card. The first time can take several minutes (Windows especially); the next starts reuse the browser's cache.",
+    );
+    this.skip.hidden = false;
+  }
+
   /** The first image is on screen. */
   firstImage() {
     if (this.imageAt) return;
     this.imageAt = performance.now();
-    // (the image late, after the reload offer: the button enters now, it no longer reloads)
-    this.skip.onclick = () => this.wantSkip();
-    this.skip.title = "";
     this.skip.disabled = false;
     this.skip.textContent = t("Enter now");
     loading.done("pipelines");

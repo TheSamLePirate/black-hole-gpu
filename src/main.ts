@@ -216,18 +216,25 @@ async function main() {
     screen: { width: screen.width, height: screen.height, pixelRatio: devicePixelRatio },
   });
   let startupFailed = false;
-  // (no first image after 180 s of the page seen — a hidden tab does not count: a diagnostic rather
-  // than an endless splash)
-  const cancelWatchdog = visibleTimeout(180_000, () => {
+  // (no first image after 180 s of the page seen — a hidden tab does not count: said, and noted in the
+  // diagnostic, but the start goes on: a slow driver's compile (minutes on D3D12) cut short is never
+  // cached, every reload starting it over. After 15 min: a diagnostic rather than an endless splash)
+  const cancelSlow = visibleTimeout(180_000, () => {
+    if (firstFrame || startupFailed) return;
+    gpuDiagnostics.record("first-image-slow", `No first image after 180 s (${gpuDiagnostics.stage}): still waiting`);
+    splash.slowStart();
+  });
+  const cancelHang = visibleTimeout(900_000, () => {
     if (firstFrame || startupFailed) return;
     startupFailed = true;
     const message = tf(
-      "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.",
+      "No first image after 15 min. Last graphics stage: {0}. The browser did not provide a precise cause.",
       gpuDiagnostics.stage,
     );
     gpuDiagnostics.record("first-image-timeout", message, true);
     fail(message);
   });
+  const cancelWatchdog = () => (cancelSlow(), cancelHang());
   const reportFatal = (kind: string, error: unknown) => {
     startupFailed = true;
     cancelWatchdog();
@@ -350,7 +357,7 @@ async function main() {
       // (its compile's stages said again by the new renderer: the first image's closed on its first frame —
       // the splash closes it only once, at the start)
       const firstFrame = () =>
-        renderer.frameTelemetry.completedFrames > 0 || renderer.lost ? loading.done("pipelines") : requestAnimationFrame(firstFrame);
+        renderer.firstFrameDoneAt > 0 || renderer.lost ? loading.done("pipelines") : requestAnimationFrame(firstFrame);
       firstFrame();
       gpuDiagnostics.record("device-recovered", why);
       panel.toast(t("Graphics device restored — the flight goes on"));
@@ -363,6 +370,17 @@ async function main() {
     }
   };
   renderer.onLost = (why) => void recoverGpu(why);
+  // (no tracer could be compiled — the scene's nor the general one: the start has failed, said with the
+  // compiler's message; after a recovery, the image is frozen and a reload offered)
+  renderer.onTracerFailure = (error) => {
+    if (startupFailed) return;
+    if (!firstFrame) reportFatal("startup-failure", new Error(tf("The ray tracer's pipelines failed to compile: {0}", error.message)));
+    else {
+      startupFailed = true;
+      gpuDiagnostics.record("tracer-failure", error, true);
+      fail(tf("The ray tracer's pipelines failed to compile: {0}", error.message));
+    }
+  };
   renderer.onGpuError = (m) => {
     try {
       panel.toast(tf("GPU error: {0}", m.split("\n")[0]!.slice(0, 140)));

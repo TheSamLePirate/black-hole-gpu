@@ -520,8 +520,8 @@ export default {
     "Votre vol est sauvegardé au fil de l'eau : il reprend là où vous l'avez laissé.",
   Ready: "Prêt",
   "Almost there…": "Presque prêt…",
-  "The first image is still unavailable. Reload to restart graphics initialization.":
-    "La première image reste indisponible. Rechargez pour relancer le démarrage graphique.",
+  "Still compiling the ray tracer for this graphics card. The first time can take several minutes (Windows especially); the next starts reuse the browser's cache.":
+    "Compilation du traceur de rayons pour cette carte graphique toujours en cours. La première fois peut prendre plusieurs minutes (sous Windows surtout) ; les démarrages suivants réutilisent le cache du navigateur.",
   "Enter when the first image is ready": "Entrer dès que la première image est prête",
   "Enter now": "Entrer maintenant",
   "Download graphics diagnostic": "Télécharger le diagnostic graphique",
@@ -531,8 +531,8 @@ export default {
   "Graphics device restored — the flight goes on": "Périphérique graphique rétabli — le vol continue",
   "Your flight was saved.": "Votre vol a été sauvegardé.",
   "Your flight could not be saved automatically.": "Votre vol n'a pas pu être sauvegardé automatiquement.",
-  "No first image after 180 s. Last graphics stage: {0}. The browser did not provide a precise cause.":
-    "Aucune première image après 180 s. Dernière étape graphique : {0}. Le navigateur n'a pas fourni de cause précise.",
+  "No first image after 15 min. Last graphics stage: {0}. The browser did not provide a precise cause.":
+    "Aucune première image après 15 min. Dernière étape graphique : {0}. Le navigateur n'a pas fourni de cause précise.",
   "Fixed-step refinement (error control unavailable)": "Affinage à pas fixe (contrôle d'erreur indisponible)",
   "Entering as soon as the first image is ready…": "Entrée dès que la première image est prête…",
   unavailable: "indisponible",
