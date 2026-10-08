@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { circularSpeed, FlightComputer, type PilotInput } from "../src/pilot";
+import { alphaLimit, circularSpeed, FlightComputer, type PilotInput } from "../src/pilot";
 import { shipToCamera } from "../src/mounts";
 import { keplerOmega, photonOrbits, zamo, type Vec3 } from "../src/physics";
 import { advance, fromZamo } from "../src/geodesic";
@@ -116,4 +116,14 @@ test("an autopilot with no engine left asks no push — never a NaN (the tank em
   // (the flight computer's vectored command alike)
   const sf = fc.step({ ...base, sf: { beta: want.beta, ff: [0, 0, 0], nose: fwd, up, free: [0, 0, 0] } }, NONE);
   expect(sf.acc.every(Number.isFinite)).toBe(true);
+});
+
+test("the plane law's angle-of-attack limit: the wing's stall subsonic, an entry's 40° hypersonic", () => {
+  // (the Ranger's wing stalls at 0.4 rad; its entry is flown at 40°)
+  expect(alphaLimit(0.4, 0.8)).toBeCloseTo(0.365, 6);
+  expect(alphaLimit(0.4, 1.5)).toBeCloseTo(0.365, 6);
+  expect(alphaLimit(0.4, 2)).toBeGreaterThan(0.365);
+  expect(alphaLimit(0.4, 2)).toBeLessThan(0.785);
+  expect(alphaLimit(0.4, 2.5)).toBeCloseTo(0.785, 6);
+  expect(alphaLimit(0.4, 20)).toBeGreaterThan((40 * Math.PI) / 180);
 });

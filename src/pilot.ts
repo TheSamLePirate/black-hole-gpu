@@ -244,6 +244,17 @@ export interface Director {
   align: number;
 }
 
+/**
+ * The plane law's angle-of-attack protection [rad]: the wing's stall less a margin — subsonic and
+ * transonic; from Mach 1.5 to 2.5 opened to 45°, none of a wing's stall in a hypersonic flow (an entry is
+ * flown at 40°, the Shuttle's: assisted, the director's cue asked it and the stick could not pass 21°).
+ */
+export function alphaLimit(stall: number, mach: number): number {
+  const lo = stall - 0.035;
+  const k = clamp((mach - 1.5) / 1, 0, 1);
+  return lo + (Math.max(0.785, lo) - lo) * k;
+}
+
 export class FlightComputer {
   /** body rates about the ship's x (left), y (up), z (nose) axes [rad/s] */
   omega: V3 = [0, 0, 0];
@@ -470,7 +481,7 @@ export class FlightComputer {
       // coordinates), the bank kept — the nose turning with the path; the stall kept off
       const P = c.air!;
       const rates: V3 = [0.35, 0.14, 1.2];
-      const stallSafe = P.stall - 0.035;
+      const stallSafe = alphaLimit(P.stall, P.mach);
       if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
