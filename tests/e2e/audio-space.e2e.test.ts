@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Chrome's --mute-audio silences the speakers, not the graph). The main engine at full throttle, placed at
 // its nozzles: behind the pilot, to the left of the right wingtip's camera, ahead of the nose looking back;
 // headphones turn the panner to HRTF; in the air, a free camera hears the passing ship's Doppler. S2: the
-// engine granular — its AudioWorklet loaded, rendering ten seconds offline for a few percent of a core.
+// engine granular — its AudioWorklet loaded, rendering ten seconds offline for a few percent of a core. S3:
+// the attitude thrusters heard where they sit — a yaw from the stick fires clusters on both sides.
 
 describe.skipIf(!E2E)("the sound's space", () => {
   let app: App;
@@ -64,6 +65,26 @@ describe.skipIf(!E2E)("the sound's space", () => {
     })()`);
     expect(r.rms).toBeGreaterThan(0.05);
     expect(r.share).toBeLessThan(0.05);
+  });
+
+  test("a yaw from the stick: the thruster clusters that fire, where they sit on the hull", async () => {
+    const r = await app.js<{ x: number; z: number; g: number }[]>(`(async () => {
+      __bh.settings.shipMount = "cockpit"; __bh.refresh();
+      __bh.camera.touchInput = { pitch: 0, yaw: 1, roll: 0 };
+      let best = [];
+      for (let k = 0; k < 8; k++) {
+        await new Promise((ok) => setTimeout(ok, 100));
+        const c = __sound.spaceState().clusters;
+        if (c.filter((q) => q.g > 0.3).length > best.filter((q) => q.g > 0.3).length) best = c;
+      }
+      __bh.camera.touchInput = { pitch: 0, yaw: 0, roll: 0 };
+      return best;
+    })()`);
+    const on = r.filter((c) => c.g > 0.3);
+    expect(on.length).toBeGreaterThanOrEqual(2);
+    // (placed: not all at one point — on both sides of the pilot, fore and aft)
+    expect(Math.max(...on.map((c) => c.x)) - Math.min(...on.map((c) => c.x))).toBeGreaterThan(2);
+    expect(Math.max(...on.map((c) => c.z)) - Math.min(...on.map((c) => c.z))).toBeGreaterThan(5);
   });
 
   test("headphones: the panner in HRTF; speakers: equal-power", async () => {

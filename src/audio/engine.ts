@@ -66,6 +66,9 @@ export interface EngineState {
   inside: boolean;
   /** where the main engine is from the ear (none: straight behind, near) */
   space?: EngineSpace | null;
+  /** the attitude thrusters by cluster (S3): each one's place from the ear [m] and how hard it fires 0…1
+   *  — none: the single RCS voice, panned to the side that fires */
+  rcsClusters?: { pos: [number, number, number]; level: number }[] | null;
   /** air: density relative to sea level (0: vacuum) and the airspeed [m/s] */
   air: number;
   airspeed: number;
@@ -120,6 +123,8 @@ export class SoundEngine {
   private engSpace: { panner: PannerNode; air: BiquadFilterNode; detune: AudioParam[] } | null = null;
   /** headphones: the panners in HRTF (else equal-power) */
   private hrtf = false;
+  /** the attitude thrusters' clusters (S3): a hiss and a panner each, its level last frame (the valves) */
+  private clusters: { gain: GainNode; panner: PannerNode; was: number }[] = [];
   /** the granular engine (its worklet loaded), its output's gain; null: the filtered noises */
   private gran: { node: AudioWorkletNode; out: GainNode } | null = null;
   private amb: {
@@ -191,6 +196,7 @@ export class SoundEngine {
   setHeadphones(on: boolean) {
     this.hrtf = on;
     if (this.engSpace) this.engSpace.panner.panningModel = on ? "HRTF" : "equalpower";
+    for (const c of this.clusters) c.panner.panningModel = on ? "HRTF" : "equalpower";
   }
 
   /** Where the engine's panner is now, its model (tests: S1). */
@@ -205,6 +211,12 @@ export class SoundEngine {
           cutoff: this.engSpace!.air.frequency.value,
           cents: this.engSpace!.detune[0]?.value ?? 0,
           engine: this.gran ? "granular" : "noise",
+          clusters: this.clusters.map((c) => ({
+            x: c.panner.positionX.value,
+            y: c.panner.positionY.value,
+            z: c.panner.positionZ.value,
+            g: c.gain.gain.value,
+          })),
         }
       : null;
   }
@@ -438,6 +450,30 @@ export class SoundEngine {
     const pan = ctx.createStereoPanner();
     this.loop(this.white, 0.9).connect(hp).connect(bp).connect(gain).connect(pan).connect(this.busses.rcs);
     this.rcsV = { gain, bp, pan };
+    // the clusters (S3): the same hiss — another stretch of the noise —, a gain and a panner each, at their
+    // places on the hull
+    const hp2 = ctx.createBiquadFilter();
+    hp2.type = "highpass";
+    hp2.frequency.value = 700;
+    const pk2 = ctx.createBiquadFilter();
+    pk2.type = "peaking";
+    pk2.frequency.value = 2100;
+    pk2.gain.value = 6;
+    pk2.Q.value = 1.2;
+    this.loop(this.white, 0.93).connect(hp2).connect(pk2);
+    this.clusters = Array.from({ length: 8 }, () => {
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const panner = new PannerNode(ctx, {
+        panningModel: this.hrtf ? "HRTF" : "equalpower",
+        distanceModel: "inverse",
+        refDistance: 4,
+        rolloffFactor: 1,
+        maxDistance: 1e5,
+      });
+      pk2.connect(g).connect(panner).connect(this.busses.rcs);
+      return { gain: g, panner, was: 0 };
+    });
   }
 
   private buildAmbience() {
@@ -555,14 +591,28 @@ export class SoundEngine {
     if (was < 0.02 && th >= 0.02) this.ignition(th);
     else if (was >= 0.05 && th < 0.02) this.cutoff();
 
-    // RCS
-    const r = clamp(s.rcs) * live;
+    // RCS: by cluster, each where it sits (S3) — else the single voice, panned to the side that fires
+    const cl = s.rcsClusters;
+    this.clusters.forEach((c, k) => {
+      const q = cl?.[k];
+      const lv = q ? clamp(q.level) * live : 0;
+      if (q) {
+        set(c.panner.positionX, q.pos[0], 0.02);
+        set(c.panner.positionY, q.pos[1], 0.02);
+        set(c.panner.positionZ, q.pos[2], 0.02);
+      }
+      set(c.gain.gain, 0.75 * lv, 0.015);
+      if (c.was < 0.05 && lv >= 0.05) this.valve(0, true, c.panner);
+      else if (c.was >= 0.05 && lv < 0.05) this.valve(0, false, c.panner);
+      c.was = lv;
+    });
+    const r = cl ? 0 : clamp(s.rcs) * live;
     set(this.rcsV.gain.gain, 0.9 * r, 0.02);
     set(this.rcsV.pan.pan, clamp(s.rcsPan, -1, 1) * 0.7, 0.05);
     set(this.rcsV.bp.frequency, 1500 + 900 * r, 0.05);
     const rWas = prev ? clamp(prev.rcs) * (prev.live ? 1 : 0) : 0;
-    if (rWas < 0.05 && r >= 0.05) this.valve(s.rcsPan, true);
-    else if (rWas >= 0.05 && r < 0.05) this.valve(s.rcsPan, false);
+    if (!cl && rWas < 0.05 && r >= 0.05) this.valve(s.rcsPan, true);
+    else if (!cl && rWas >= 0.05 && r < 0.05) this.valve(s.rcsPan, false);
 
     // cabin
     const a = this.amb;
@@ -603,8 +653,8 @@ export class SoundEngine {
     this.burst(this.busses.engine, 0.12, 500, 0.5, 0.6);
   }
 
-  /** An RCS valve: a pop when it opens, a softer one when it shuts. */
-  private valve(pan: number, open: boolean) {
+  /** An RCS valve: a pop when it opens, a softer one when it shuts — panned, or into a cluster's panner. */
+  private valve(pan: number, open: boolean, at?: AudioNode) {
     const ctx = this.ctx!;
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
@@ -616,9 +666,12 @@ export class SoundEngine {
     const g = ctx.createGain();
     g.gain.setValueAtTime(open ? 0.5 : 0.22, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.05 : 0.08));
-    const p = ctx.createStereoPanner();
-    p.pan.value = clamp(pan, -1, 1) * 0.7;
-    src.connect(hp).connect(g).connect(p).connect(this.busses.rcs);
+    if (at) src.connect(hp).connect(g).connect(at);
+    else {
+      const p = ctx.createStereoPanner();
+      p.pan.value = clamp(pan, -1, 1) * 0.7;
+      src.connect(hp).connect(g).connect(p).connect(this.busses.rcs);
+    }
     src.start(t, Math.random());
     src.stop(t + 0.12);
   }

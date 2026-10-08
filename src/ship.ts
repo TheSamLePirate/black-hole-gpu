@@ -18,6 +18,7 @@ import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
+import { jetLevel } from "./jets";
 import { cross, dot, sub } from "./math/vec3";
 
 type V3 = [number, number, number];
@@ -109,10 +110,6 @@ const JET_FLOATS = 16;
 const norm = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
-};
-const smooth = (a: number, b: number, x: number) => {
-  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
-  return t * t * (3 - 2 * t);
 };
 
 export const ENV_W = 256;
@@ -798,36 +795,14 @@ export class ShipRenderer {
     let n = 0;
     if (th) {
       const air = Math.min(Math.max(th.air, 0), 1);
-      const tq = th.torque;
-      const tl = Math.hypot(...tq);
       const V = VESSELS[this.vessel];
       const defs: JetDef[] = V.jets;
-      const COM = V.com;
       for (let i = 0; i < defs.length && n < MAX_JETS; i++) {
         const J = defs[i]!;
-        let level: number;
-        let len: number;
-        if (J.main) {
-          level = Math.min(Math.max(th.throttle, 0), 1);
-          if (level < 0.01) continue;
-          len = (4 + 20 * level) * (1 - 0.45 * air) * V.flame;
-        } else {
-          const F: V3 = [-J.d[0], -J.d[1], -J.d[2]];
-          const arm = sub(J.p, COM);
-          // (the flight computer's rates turn the ship the other way round from the right-hand rule
-          // in its frame — +y turns the nose right, +x lifts it: pilot.ts — so its torque, likewise)
-          const tau = cross(F, arm);
-          const taul = Math.hypot(...tau);
-          const push = Math.max(0, dot(F, th.force));
-          const turn = tl > 0.02 && taul > 1e-6 ? smooth(0.35, 0.85, dot(tau, tq) / (taul * tl)) * Math.min(tl, 1) : 0;
-          const want = Math.min(1, push + turn);
-          if (want < 0.03) continue;
-          // (pulse-width modulated below full demand: ~9 pulses a second)
-          const phase = (th.time * 9 + i * 0.37) % 1;
-          if (want < 0.9 && phase > Math.max(want, 0.2)) continue;
-          level = Math.min(1, 0.55 + want);
-          len = 1.2 + 1.6 * level;
-        }
+        // (which fire, how hard: jets.ts — the sound's the same)
+        const level = jetLevel(V, J, i, th);
+        if (level <= 0) continue;
+        const len = J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
         out.set([...J.p, level, ...J.d, J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, 0], n * JET_FLOATS);
         // (the camera inside its proxy — the shader's frustum, a margin for the near plane)
         const spread = J.main ? 0.16 * (1 - air) + 0.03 * air : 0.45;

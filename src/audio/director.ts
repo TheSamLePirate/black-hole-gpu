@@ -7,6 +7,7 @@ import type { Settings } from "../settings";
 import type { RangerStatus } from "../game/status";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
+import { jetLevel, rcsClusters, type ThrustAsked } from "../jets";
 import { VESSELS } from "../vessels";
 import { sound, type Cue, type EngineSpace } from "./engine";
 import { airCutoff, centroid, doppler, hearing, radialSpeed, type ShipPose, shipSource, soundSpeed } from "./space";
@@ -57,6 +58,8 @@ export class SoundDirector {
   /** the engine's last distance from the ear [m] (its radial speed: the Doppler) */
   private engDist = Number.NaN;
   private vr = 0;
+  /** the flown craft's thruster clusters (S3), by vessel */
+  private clusterCache: { vessel: string; cl: ReturnType<typeof rcsClusters> } | null = null;
 
   constructor(private s: Settings) {
     this.applyMix();
@@ -116,6 +119,17 @@ export class SoundDirector {
     return { pos: at, dist, dop: doppler(this.vr, soundSpeed(air)), cutoff: airCutoff(dist, air) };
   }
 
+  /** Each attitude thruster cluster where it sits from the ear and how hard it fires — the jets the renderer
+   *  draws (jets.ts), the clusters' strongest (S3). */
+  private clusterSound(pose: ShipPose, th: ThrustAsked) {
+    const V = VESSELS[fleet.active];
+    if (this.clusterCache?.vessel !== V.id) this.clusterCache = { vessel: V.id, cl: rcsClusters(V) };
+    return this.clusterCache.cl.slice(0, 8).map((c) => ({
+      pos: shipSource(pose, c.p),
+      level: Math.max(0, ...c.jets.map((i) => jetLevel(V, V.jets[i]!, i, th))),
+    }));
+  }
+
   /** Every frame. `flying`: the Ranger is piloted and shown; `live`: the simulation's time runs; `pose`: the
    *  camera's against the ship (a spectator's view of it: `spectator`). */
   update(
@@ -128,6 +142,8 @@ export class SoundDirector {
       fired: Fired;
       pose?: ShipPose | null;
       spectator?: boolean;
+      /** the thrust asked (the renderer's: its plumes), the thruster clusters' (S3) */
+      thrust?: ThrustAsked | null;
     },
   ) {
     const s = this.s;
@@ -147,6 +163,7 @@ export class SoundDirector {
       // (the cockpit and the cabin aboard, the hull's mounts through its structure — the audit's § 12: the
       // cockpit was heard as an outside view)
       inside: hearing(s.shipMount, !!o.spectator) !== "outside",
+      rcsClusters: fresh && o.pose && o.thrust ? this.clusterSound(o.pose, o.thrust) : null,
       space: this.engineSpace(
         o.pose ?? null,
         sf ? Math.min(sf.air / 1.225, 2) : 0,

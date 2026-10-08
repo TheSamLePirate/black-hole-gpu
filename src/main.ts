@@ -2539,6 +2539,7 @@ async function main() {
               ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
               : null,
           spectator: camera.spectating,
+          thrust: renderer.shipThrust,
         }),
       );
     } else {
