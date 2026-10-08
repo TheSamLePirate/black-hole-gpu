@@ -316,6 +316,15 @@ function actionLabel(b: KeyBind): Text {
   return ACTION_LABELS[b.do] ?? { fr: b.do, en: b.do };
 }
 
+/** The key of a flight action now (its first binding, as the player set it), printed — "⇧G", "P" — or null. */
+export function keyFor(action: KeyAction, arg?: string): string | null {
+  const b = BINDINGS.find((x) => x.layer === "flight" && x.do === action && (arg === undefined || x.arg === arg));
+  if (!b) return null;
+  const e = effective(b);
+  const k = e.code ? { code: e.code[0]! } : e.key ? { key: e.key[0]! } : null;
+  return k ? (b.shift ? "⇧" : "") + keyLabel(k) : null;
+}
+
 /** A key as the keyboard prints it (the layout's letter where the browser knows it). */
 export function keyLabel(k: KeyRef): string {
   if (k.key) return k.key.length === 1 ? k.key.toUpperCase() : k.key;

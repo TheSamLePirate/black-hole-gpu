@@ -183,6 +183,23 @@ export class App {
     await Bun.sleep(100);
   }
 
+  /** A raw mouse event at (x, y) [CSS px] — moved, pressed, released (left or right), the wheel. */
+  async mouse(type: "move" | "down" | "up" | "wheel", x: number, y: number, o: { button?: "left" | "right"; deltaY?: number; shift?: boolean } = {}) {
+    const button = o.button ?? "left";
+    const buttons = button === "left" ? 1 : 2;
+    const modifiers = o.shift ? 8 : 0;
+    if (type === "move") await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, modifiers, ...(this.mouseDown ? { button: this.mouseDown, buttons: this.mouseDown === "left" ? 1 : 2 } : {}) });
+    else if (type === "down") {
+      this.mouseDown = button;
+      await this.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons, clickCount: 1, modifiers });
+    } else if (type === "up") {
+      this.mouseDown = null;
+      await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, clickCount: 1, modifiers });
+    } else await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: o.deltaY ?? 100, modifiers });
+    await Bun.sleep(30);
+  }
+  private mouseDown: "left" | "right" | null = null;
+
   /**
    * Fingers on the screen (CSS px): each step, every finger's point; the first step puts them down, the
    * last lifts them (Chrome turns the touches into pointer events of type "touch").

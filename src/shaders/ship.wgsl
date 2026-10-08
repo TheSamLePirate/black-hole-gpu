@@ -1349,8 +1349,8 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
           albedo = mix(vec3f(0.03, 0.032, 0.035), vec3f(0.55, 0.56, 0.57), legend); metal = 0.0; rough = 0.6;
         }
       }
-      // (under the pointer: a cool glow — what a click would work)
-      emit += vec3f(0.18, 0.4, 0.6) * L.w * 0.35;
+      // (under the pointer: a cool glow on what the hand takes — the knob, the cap, the arm; the base not)
+      emit += vec3f(0.18, 0.4, 0.6) * L.w * select(0.0, select(0.06, 0.12, kp >= 2u), kp >= 1u && kp <= 3u);
       coat = 0.0;
     }
     // (the glass: no diffuse light of its own — the lamps' highlights only)

@@ -11,6 +11,7 @@ import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
 import { cockpitHull } from "./system/collide";
 import { cabinHitOf } from "./cockpit/pick";
+import { CONTROLS, controlBox } from "./cockpit/controls";
 import { defaultSettings, presets, QUALITY, type Settings, type Target } from "./settings";
 import type { Simulation } from "./sim";
 import type { GameTools } from "./game/tools";
@@ -265,6 +266,11 @@ export function installBh(c: BhContext) {
       cockpitScreens,
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,
        *  a screen's display and uv — or null (cockpit/pick.ts) */
+      /** where a cockpit control is in the view (its box's centre): ndc (y up), or null (cockpit/controls.ts ids) */
+      cockpitControlAt: (id: string) => {
+        const c = CONTROLS.find((x) => x.id === id);
+        return c ? renderer.ship.cabinProject(controlBox(c).c) : null;
+      },
       cabinPick: (ndcX: number, ndcY: number) => {
         const ray = renderer.ship.cabinRay(ndcX, ndcY);
         return ray && cockpitHull.bvh && cockpitHull.verts ? cabinHitOf(ray.o, ray.d, cockpitHull.bvh, cockpitHull.verts) : null;

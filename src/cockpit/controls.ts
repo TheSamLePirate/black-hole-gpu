@@ -8,6 +8,8 @@
 // Panel frame: a along the panel to the pilot's right, b up it, n out of it (towards the pilot) — the
 // ship's frame is x left, y up, z the nose.
 
+import type { Text } from "../i18n";
+
 type V3 = [number, number, number];
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -57,6 +59,10 @@ export interface ControlDef {
   lamp?: V3;
   /** its placard (aviation English, as cockpits' are): on a button's cap, under the others */
   placard: string;
+  /** its name (the pointer's tip) */
+  name: Text;
+  /** a lever's detents (its positions 0…1; none: anywhere between) */
+  stops?: number[];
 }
 
 const GREEN: V3 = [0.25, 1, 0.45],
@@ -67,25 +73,25 @@ const D = Math.PI / 180;
 /** Every control, in their uniform's order (its index: the vertices' uv.x). */
 export const CONTROLS: ControlDef[] = [
   // panel A: the gear (up the panel: up; down: down — its wheel), the flaps (0, ½, full: down), the air brake
-  { id: "gear", placard: "GEAR", kind: "lever", panel: "A", at: [-0.12, -0.032], knob: "wheel", swing: [28 * D, -28 * D] },
-  { id: "flaps", placard: "FLAPS", kind: "lever", panel: "A", at: [-0.01, -0.032], knob: "wedge", swing: [30 * D, -30 * D] },
-  { id: "airBrake", placard: "SPD BRK", kind: "lever", panel: "A", at: [0.09, -0.032], knob: "tee", swing: [30 * D, -30 * D] },
+  { id: "gear", name: { fr: "Train d'atterrissage", en: "Landing gear" }, placard: "GEAR", kind: "lever", panel: "A", at: [-0.12, -0.032], knob: "wheel", stops: [0, 1], swing: [28 * D, -28 * D] },
+  { id: "flaps", name: { fr: "Volets", en: "Flaps" }, placard: "FLAPS", kind: "lever", panel: "A", at: [-0.01, -0.032], knob: "wedge", stops: [0, 0.5, 1], swing: [30 * D, -30 * D] },
+  { id: "airBrake", name: { fr: "Aérofrein", en: "Air brake" }, placard: "SPD BRK", kind: "lever", panel: "A", at: [0.09, -0.032], knob: "tee", swing: [30 * D, -30 * D] },
   // panel B: the cabin's dimmer, the red night lighting; the navigation lights, the strobes, the landing lights
-  { id: "dimmer", placard: "CABIN", kind: "knob", panel: "B", at: [-0.035, 0.045] },
-  { id: "night", placard: "NIGHT", kind: "toggle", panel: "B", at: [0.04, 0.045], swing: [-25 * D, 25 * D] },
-  { id: "navLights", placard: "NAV", kind: "toggle", panel: "B", at: [-0.05, -0.045], swing: [-25 * D, 25 * D] },
-  { id: "strobe", placard: "STROBE", kind: "toggle", panel: "B", at: [0, -0.045], swing: [-25 * D, 25 * D] },
-  { id: "landingLights", placard: "LAND LT", kind: "toggle", panel: "B", at: [0.05, -0.045], swing: [-25 * D, 25 * D] },
+  { id: "dimmer", name: { fr: "Éclairage de la cabine", en: "Cabin lighting" }, placard: "CABIN", kind: "knob", panel: "B", at: [-0.035, 0.045] },
+  { id: "night", name: { fr: "Éclairage de nuit (rouge)", en: "Night lighting (red)" }, placard: "NIGHT", kind: "toggle", panel: "B", at: [0.04, 0.045], swing: [-25 * D, 25 * D] },
+  { id: "navLights", name: { fr: "Feux de navigation", en: "Navigation lights" }, placard: "NAV", kind: "toggle", panel: "B", at: [-0.05, -0.045], swing: [-25 * D, 25 * D] },
+  { id: "strobe", name: { fr: "Feux anticollision", en: "Strobe lights" }, placard: "STROBE", kind: "toggle", panel: "B", at: [0, -0.045], swing: [-25 * D, 25 * D] },
+  { id: "landingLights", name: { fr: "Phares d'atterrissage", en: "Landing lights" }, placard: "LAND LT", kind: "toggle", panel: "B", at: [0.05, -0.045], swing: [-25 * D, 25 * D] },
   // panel C: the autopilot — the attitude holds, the modes, the disconnect; the SAS, the chronometer
-  { id: "holdPrograde", placard: "PRO", kind: "button", panel: "C", at: [-0.06, 0.065], lamp: GREEN },
-  { id: "holdRetrograde", placard: "RETRO", kind: "button", panel: "C", at: [0, 0.065], lamp: GREEN },
-  { id: "holdTarget", placard: "TGT", kind: "button", panel: "C", at: [0.06, 0.065], lamp: GREEN },
-  { id: "assist", placard: "ASSIST", kind: "button", panel: "C", at: [-0.06, 0], lamp: WHITE },
-  { id: "autoEntry", placard: "ENTRY", kind: "button", panel: "C", at: [0, 0], lamp: GREEN },
-  { id: "autoLand", placard: "LAND", kind: "button", panel: "C", at: [0.06, 0], lamp: GREEN },
-  { id: "sas", placard: "SAS", kind: "button", panel: "C", at: [-0.06, -0.065], lamp: GREEN },
-  { id: "chrono", placard: "CHRONO", kind: "button", panel: "C", at: [0, -0.065], lamp: WHITE },
-  { id: "apOff", placard: "AP OFF", kind: "button", panel: "C", at: [0.06, -0.065], lamp: AMBER },
+  { id: "holdPrograde", name: { fr: "Maintien : prograde", en: "Hold: prograde" }, placard: "PRO", kind: "button", panel: "C", at: [-0.06, 0.065], lamp: GREEN },
+  { id: "holdRetrograde", name: { fr: "Maintien : rétrograde", en: "Hold: retrograde" }, placard: "RETRO", kind: "button", panel: "C", at: [0, 0.065], lamp: GREEN },
+  { id: "holdTarget", name: { fr: "Maintien : vers la cible", en: "Hold: towards the target" }, placard: "TGT", kind: "button", panel: "C", at: [0.06, 0.065], lamp: GREEN },
+  { id: "assist", name: { fr: "Mode assisté", en: "Assisted mode" }, placard: "ASSIST", kind: "button", panel: "C", at: [-0.06, 0], lamp: WHITE },
+  { id: "autoEntry", name: { fr: "Autopilote : rentrée et atterrissage", en: "Autopilot: entry and landing" }, placard: "ENTRY", kind: "button", panel: "C", at: [0, 0], lamp: GREEN },
+  { id: "autoLand", name: { fr: "Autopilote : atterrir", en: "Autopilot: land" }, placard: "LAND", kind: "button", panel: "C", at: [0.06, 0], lamp: GREEN },
+  { id: "sas", name: { fr: "SAS (stabilisation)", en: "SAS (stability assist)" }, placard: "SAS", kind: "button", panel: "C", at: [-0.06, -0.065], lamp: GREEN },
+  { id: "chrono", name: { fr: "Chronomètre", en: "Chronometer" }, placard: "CHRONO", kind: "button", panel: "C", at: [0, -0.065], lamp: WHITE },
+  { id: "apOff", name: { fr: "Autopilote et maintiens coupés", en: "Autopilot and holds off" }, placard: "AP OFF", kind: "button", panel: "C", at: [0.06, -0.065], lamp: AMBER },
 ];
 
 export const MAX_CONTROLS = 32;

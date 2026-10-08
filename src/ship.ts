@@ -604,6 +604,15 @@ export class ShipRenderer {
     return { o: [...this.camShip] as V3, d: [d[0] / l, d[1] / l, d[2] / l] };
   }
 
+  /** A point of the ship's frame in the last frame's view: its ndc (y up), or null behind the eye. */
+  cabinProject(p: V3): [number, number] | null {
+    const C = this.lastCam;
+    if (!C) return null;
+    const q: V3 = [p[0] - this.camShip[0], p[1] - this.camShip[1], p[2] - this.camShip[2]];
+    const c = C.R.map((r) => r[0]! * q[0] + r[1]! * q[1] + r[2]! * q[2]) as V3;
+    return c[2] > 1e-3 ? [c[0] / (c[2] * C.tanX), c[1] / (c[2] * C.tanY)] : null;
+  }
+
   /** The Ranger's cockpit (assets/ranger/cockpit.bin, gzip: scripts/build-cockpit.ts), when first needed. */
   private loadCockpit() {
     if (this.cockpitLoading) return;

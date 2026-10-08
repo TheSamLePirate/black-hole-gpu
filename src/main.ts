@@ -1,5 +1,11 @@
 import { poseData } from "./cockpit/controls";
 import { controlStates } from "./cockpit/state";
+import { cockpitAct, controlTip, type CockpitDeps } from "./cockpit/actions";
+import { Chrono } from "./cockpit/chrono";
+import { CockpitInput } from "./cockpit/input";
+import { cockpitTarget } from "./cockpit/pointer";
+import { CockpitTip } from "./ui/cockpit-tip";
+import { cockpitHull } from "./system/collide";
 import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
 import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
@@ -1247,6 +1253,8 @@ async function main() {
   document.body.append(touchFlight.el);
   // the Ranger's cockpit screens (the cabin's shader shows them)
   const cockpitScreens = new CockpitScreens();
+  // (the cockpit's chronometer: its CHRONO button)
+  const cockpitChrono = new Chrono();
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -1747,6 +1755,49 @@ async function main() {
   };
   // (a controller's button bound to a keymap action — PLAN-HOTAS: the same as its key)
   camera.onPadKeyAction = (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg);
+  // the cockpit's controls under the pointer (PLAN-COCKPIT K2): the same actions as the keys', the lights'
+  // settings, the chronometer; a tip beside the pointer
+  const cockpitDeps: CockpitDeps = {
+    settings,
+    chrono: cockpitChrono,
+    key: (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg),
+    setFlaps: (v) => {
+      const cfg = camera.airFlight.cfg;
+      if (cfg.flaps === v) return;
+      cfg.flaps = v;
+      panel.toast(v === 0 ? t("Flaps up") : v === 0.5 ? t("Flaps half") : t("Flaps full"));
+    },
+    setAirBrake: (v) => {
+      const was = camera.airBrake;
+      camera.airBrake = v;
+      if ((was > 0) !== (v > 0)) panel.toast(v > 0 ? t("Air brake out") : t("Air brake in"));
+    },
+    apOff: () => {
+      camera.pilot.setAuto("none");
+      camera.pilot.setHold("none");
+      panel.toast(t("Autopilot and holds off"));
+    },
+    toast: (m) => panel.toast(m),
+    changed: () => {
+      refreshGui();
+      scheduleUrlSave();
+    },
+  };
+  const cockpitInput = new CockpitInput({
+    target: (x, y) => {
+      const r = renderer.ship.cabinRay(x, y);
+      const H = cockpitHull.bvh && cockpitHull.verts ? { bvh: cockpitHull.bvh, verts: cockpitHull.verts } : null;
+      return r ? cockpitTarget(r.o, r.d, H) : null;
+    },
+    value: (id) => controlStates(camera, settings, cockpitChrono)[id]?.pos ?? 0,
+    act: (id, v) => cockpitAct(cockpitDeps, id, v),
+  });
+  const cockpitTip = new CockpitTip();
+  camera.cockpit = {
+    input: cockpitInput,
+    active: () => camera.piloting && renderer.ship.cabinShown && !camera.spectating,
+    tip: (id, x, y) => cockpitTip.show(id ? controlTip(id, controlStates(camera, settings, cockpitChrono)[id], cockpitDeps) : null, x, y),
+  };
   // photo mode (ui/photo.ts): the view alone, one bar for the picture
   let photoMode: PhotoMode | null = null;
   const openPhoto = () =>
@@ -2500,7 +2551,10 @@ async function main() {
           time: performance.now() / 1000,
         };
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
-        if (renderer.ship.cabinShown) renderer.cockpitControls = poseData(controlStates(camera));
+        if (renderer.ship.cabinShown)
+          renderer.cockpitControls = poseData(
+            controlStates(camera, settings, cockpitChrono, { hover: camera.cockpit?.input.hover ?? null, pressed: camera.cockpit?.input.pressed ?? null }),
+          );
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)

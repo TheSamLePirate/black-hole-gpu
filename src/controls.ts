@@ -1,4 +1,5 @@
 import type { MlsReading } from "./game/mls";
+import type { CockpitInput } from "./cockpit/input";
 import type { cameraFrame } from "./camera";
 import type { WeatherState } from "./weather";
 import type { FlightReport } from "./game/report";
@@ -411,7 +412,13 @@ export class CameraController {
     canvas.addEventListener("pointercancel", this.onUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
     canvas.addEventListener("dblclick", this.onDblClick);
-    canvas.addEventListener("pointerleave", () => this.setHover(null));
+    canvas.addEventListener("pointerleave", () => {
+      this.setHover(null);
+      if (this.cockpit && !this.ckHeld) {
+        this.cockpit.input.hover = null;
+        this.cockpit.tip(null, 0, 0);
+      }
+    });
     document.addEventListener("pointerlockchange", () => {
       this.flyMode = document.pointerLockElement === canvas;
       this.onCinematicChange(this.cinematic);
@@ -492,6 +499,19 @@ export class CameraController {
     return this.s.motion === "comoving" ? 1 : 0;
   }
 
+  /** The cockpit's controls under the pointer (PLAN-COCKPIT — main.ts sets it): their input, whether the
+   *  cabin is what the view shows, the tip shown (a control's id, or none) */
+  cockpit: { input: CockpitInput; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
+  /** a control held by the pointer: which pointer, where it was pressed and when, where it is */
+  private ckHeld: { id: number; x0: number; y0: number; t: number; x: number; y: number } | null = null;
+  private ckWheel = 0;
+
+  /** A pointer's place in the view's ndc (−1…1, y up). */
+  private ndcOf(e: { clientX: number; clientY: number }): [number, number] {
+    const r = this.canvas.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * 2 - 1, 1 - ((e.clientY - r.top) / r.height) * 2];
+  }
+
   onDown = (e: PointerEvent) => {
     // (a spectator out: the pointer is its)
     if (this.spectator) {
@@ -499,6 +519,20 @@ export class CameraController {
       return;
     }
     if (!this.enabled || this.flyMode) return;
+    // (in the cabin: pressed on a control, the control is held — the look's drags stay the right button's
+    // and Shift's)
+    const ck = this.cockpit;
+    if (ck && e.button === 0 && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
+      const [nx, ny] = this.ndcOf(e);
+      if (ck.input.down(nx, ny)) {
+        this.canvas.setPointerCapture(e.pointerId);
+        this.ckHeld = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now(), x: e.clientX, y: e.clientY };
+        this.setHover(null);
+        this.canvas.style.cursor = "grabbing";
+        ck.tip(ck.input.focus, e.clientX, e.clientY);
+        return;
+      }
+    }
     // (a middle click: game-style mouse look, the free camera's)
     if (e.button === 1 && !this.piloting) {
       e.preventDefault();
@@ -528,6 +562,14 @@ export class CameraController {
       this.spectator.onUp(e);
       return;
     }
+    // (a control let go: a click, or the end of its drag)
+    const h = this.ckHeld;
+    if (h && e.pointerId === h.id) {
+      this.ckHeld = null;
+      this.cockpit?.input.up(Math.hypot(e.clientX - h.x0, e.clientY - h.y0) < 5 && performance.now() - h.t < 600);
+      this.canvas.style.cursor = this.cockpit?.input.hover ? "pointer" : "";
+      return;
+    }
     this.pointers.delete(e.pointerId);
     this.pinchMid = null;
     // released after a pause: no fling
@@ -537,8 +579,12 @@ export class CameraController {
     this.down = null;
     if (d && this.pointers.size === 0 && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5 && performance.now() - d.t < 400) {
       const r = this.canvas.getBoundingClientRect();
-      // (the space station first: a click on it locks the targeting on it)
-      if (this.pickIss(e.clientX - r.left, e.clientY - r.top)) {
+      // (in the cabin, a click on its walls or its screens: no body beyond them)
+      const [nx, ny] = this.ndcOf(e);
+      const inside = this.cockpit?.active() ? this.cockpit.input.move(nx, ny) : null;
+      if (inside) {
+        // (nothing: the cabin hides the sky there)
+      } else if (this.pickIss(e.clientX - r.left, e.clientY - r.top)) {
         if (this.s.target !== "iss" && this.selectTarget("iss")) this.onPilotMessage?.("Target: the ISS");
       } else {
         const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
@@ -584,10 +630,34 @@ export class CameraController {
       this.spectator.onMove(e);
       return;
     }
+    // (a control held: it follows the pointer)
+    const h = this.ckHeld;
+    if (h && e.pointerId === h.id) {
+      this.cockpit?.input.drag(e.clientX - h.x, e.clientY - h.y);
+      h.x = e.clientX;
+      h.y = e.clientY;
+      this.cockpit?.tip(this.cockpit.input.focus, e.clientX, e.clientY);
+      return;
+    }
     const p = this.pointers.get(e.pointerId);
     if (!p) {
       // hover: what is under the pointer (throttled; one traced ray)
       if (!this.enabled || this.flyMode || e.pointerType === "touch") return;
+      // (in the cabin: a control lit and named; the walls and the screens hide the sky — the glass not)
+      const ck = this.cockpit;
+      if (ck?.active()) {
+        const [nx, ny] = this.ndcOf(e);
+        const t = ck.input.move(nx, ny);
+        ck.tip(ck.input.focus, e.clientX, e.clientY);
+        if (t) {
+          this.setHover(null);
+          this.canvas.style.cursor = t.kind === "control" ? "pointer" : "";
+          return;
+        }
+      } else if (ck?.input.hover) {
+        ck.input.hover = null;
+        ck.tip(null, 0, 0);
+      }
       const now = performance.now();
       if (now - this.hoverAt < 70) return;
       this.hoverAt = now;
@@ -635,6 +705,19 @@ export class CameraController {
     }
     e.preventDefault();
     if (!this.enabled) return;
+    // (over a control in the cabin: the wheel turns the knob, moves the lever)
+    // (a notch every 50 px of scrolling: a trackpad's stream of small steps would spin it)
+    if (e.deltaY && this.cockpit?.active() && this.cockpit.input.hover) {
+      this.ckWheel += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      while (Math.abs(this.ckWheel) >= 50) {
+        this.cockpit.input.wheel(Math.sign(this.ckWheel));
+        this.ckWheel -= 50 * Math.sign(this.ckWheel);
+      }
+      if (this.cockpit.input.hover) {
+        this.cockpit.tip(this.cockpit.input.focus, e.clientX, e.clientY);
+        return;
+      }
+    }
     this.zoomStep(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, e.altKey);
   };
 

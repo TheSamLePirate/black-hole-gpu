@@ -410,6 +410,11 @@ export interface Settings {
   hudDock: boolean; // the docking: gates along the port's axis, the scope down it, range, closing
   hudRelativity: boolean; // near Gargantua: the clock rate, γ, the sky's Doppler, bound or escaping, the radii, the tide
   cockpitAids: boolean; // the same aids on the cabin's screens (the PFD, NAV, DOCKING / LANDING, PLAN, CLOCKS)
+  cabinLight: number; // the cabin's ceiling lights, 0 (off) … 1 (the cockpit's dimmer)
+  nightLighting: boolean; // the cabin lit red at night (the cockpit's NIGHT switch)
+  navLights: boolean; // the Ranger's navigation lights (the cockpit's switches)
+  strobeLights: boolean; // its strobes
+  landingLights: boolean; // its landing lights
   sound: boolean; // the sound (flight computer, thrusters, cabin, interface)
   soundVolume: number; // master, 0…1
   soundBeeps: number; // the flight computer's beeps and alarms
@@ -637,6 +642,11 @@ export function defaultSettings(): Settings {
     hudDock: true,
     hudRelativity: true,
     cockpitAids: true,
+    cabinLight: 1,
+    nightLighting: false,
+    navLights: false,
+    strobeLights: false,
+    landingLights: false,
     sound: true,
     soundVolume: 0.7,
     soundBeeps: 0.8,
@@ -1828,6 +1838,11 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudDock: "pref",
   hudRelativity: "pref",
   cockpitAids: "pref",
+  cabinLight: "pref",
+  nightLighting: "pref",
+  navLights: "carried",
+  strobeLights: "carried",
+  landingLights: "carried",
   sound: "pref",
   soundVolume: "pref",
   soundBeeps: "pref",

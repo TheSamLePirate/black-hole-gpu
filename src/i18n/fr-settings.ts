@@ -757,6 +757,21 @@ export default {
   "Near Gargantua: the ship's clock rate dτ/dt, its speed against the local observer and γ, the sky ahead's Doppler factor, the orbit's energy (bound and the margin to escape, or escaping), the radius against the ISCO, the photon orbit and the horizon (red inside), the tide per metre; the radial-in marker named: the way to the hole.":
     "Près de Gargantua : le rythme de l'horloge du vaisseau dτ/dt, sa vitesse par rapport à l'observateur local et γ, le facteur Doppler du ciel devant, l'énergie de l'orbite (liée et la marge avant l'évasion, ou en évasion), le rayon comparé à l'ISCO, à l'orbite des photons et à l'horizon (rouge à l'intérieur), la marée par mètre ; le marqueur radial entrant nommé : la direction du trou.",
   "Aids on the cockpit's screens": "Aides sur les écrans du cockpit",
+  "Cabin lighting": "Éclairage de la cabine",
+  "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). 0: off, the screens and the outside alone.":
+    "Les plafonniers de la cabine — le bouton CABIN du cockpit (le tourner, ou la molette dessus). 0 : éteints, les écrans et le dehors seuls.",
+  "Night lighting (red)": "Éclairage de nuit (rouge)",
+  "The cabin lit red, dim — the eyes kept for the dark outside: the cockpit's NIGHT switch.":
+    "La cabine éclairée en rouge, faiblement — les yeux gardés pour le noir du dehors : l'interrupteur NIGHT du cockpit.",
+  "Navigation lights": "Feux de navigation",
+  "The Ranger's navigation lights — red on the left, green on the right, white aft: the cockpit's NAV switch.":
+    "Les feux de navigation du Ranger — rouge à gauche, vert à droite, blanc à l'arrière : l'interrupteur NAV du cockpit.",
+  "Strobe lights": "Feux anticollision",
+  "The Ranger's white anti-collision flashes: the cockpit's STROBE switch.":
+    "Les éclats blancs anticollision du Ranger : l'interrupteur STROBE du cockpit.",
+  "Landing lights": "Phares d'atterrissage",
+  "The Ranger's landing lights, ahead and down: the cockpit's LAND LT switch.":
+    "Les phares d'atterrissage du Ranger, devant et vers le bas : l'interrupteur LAND LT du cockpit.",
   "The cabin's screens get the HUD's aids: the PFD the flight path through the air, the angle-of-attack bracket and stall marks, the energy chevron, the sideslip ball, the flight director and a heading tape; NAV an approach view of the runway with its localizer and glide path deviations; DOCKING the oriented scope, or LANDING near the ground (drift, vertical speed, the stop burn); PLAN the next burn's countdown and aim; CLOCKS dτ/dt near Gargantua.":
     "Les écrans de la cabine reçoivent les aides du HUD : le PFD la trajectoire dans l'air, le crochet d'incidence et les repères de décrochage, le chevron d'énergie, la bille de dérapage, le directeur de vol et une bande de cap ; NAV une vue d'approche de la piste avec ses écarts d'alignement et de plan de descente ; DOCKING le viseur orienté, ou LANDING près du sol (dérive, vitesse verticale, poussée d'arrêt) ; PLAN le compte à rebours et la visée de la prochaine poussée ; CLOCKS dτ/dt près de Gargantua.",
   "Spheres of influence on the map": "Sphères d'influence sur la carte",
