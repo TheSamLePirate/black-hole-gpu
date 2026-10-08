@@ -11,6 +11,11 @@ export interface Hit {
   /** the crossing's fraction of the segment, and the triangle's unit normal (either side) */
   t: number;
   n: Vec3;
+  /** the triangle crossed (its index in `tri` / 3) and the crossing's barycentrics along its 2nd and 3rd
+   *  vertices */
+  tri: number;
+  u: number;
+  v: number;
 }
 
 export class TriBVH {
@@ -189,7 +194,7 @@ export class TriBVH {
         ny /= l;
         nz /= l;
         tMax = tt;
-        best = { t: tt, n: [nx, ny, nz] };
+        best = { t: tt, n: [nx, ny, nz], tri: q, u, v };
       }
     }
     return best;
@@ -256,7 +261,13 @@ export const vesselHulls: Record<"ranger" | "lander" | "endurance", Hull> = {
 /** The Ranger's. */
 export const rangerHull = vesselHulls.ranger;
 /** The Ranger's cabin (ship frame, metres): its triangles — what the camera moving about it meets — and its box. */
-export const cockpitHull: { bvh: TriBVH | null; lo: Vec3; hi: Vec3 } = { bvh: null, lo: [0, 0, 0], hi: [0, 0, 0] };
+export const cockpitHull: { bvh: TriBVH | null; lo: Vec3; hi: Vec3; verts: Float32Array | null } = {
+  bvh: null,
+  lo: [0, 0, 0],
+  hi: [0, 0, 0],
+  /** its vertices as drawn (10 floats each: position, normal, material, AO, uv — scripts/build-cockpit.ts) */
+  verts: null,
+};
 
 /** The space station's parts for contacts (their rest frame, metres): one hierarchy each (0: the
  *  station itself, k + 1: joint k's). */

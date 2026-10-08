@@ -1,3 +1,5 @@
+import { poseData } from "./cockpit/controls";
+import { controlStates } from "./cockpit/state";
 import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
 import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
@@ -2497,6 +2499,8 @@ async function main() {
           alt: status?.altKm ?? 0,
           time: performance.now() / 1000,
         };
+        // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
+        if (renderer.ship.cabinShown) renderer.cockpitControls = poseData(controlStates(camera));
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
       // shown, not a pose one or two frames ahead of it)

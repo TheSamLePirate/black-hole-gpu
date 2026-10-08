@@ -291,6 +291,51 @@ fn stickPos(v: VIn) -> vec3f {
   return v.pos;
 }
 
+// the cockpit's controls (cockpit/controls.ts: material 73 — the control's index in uv.x, its part in
+// uv.y: 0 the base, still; 1 the arm, 2 the knob, 3 the lit cap, moving): per control its moving part's
+// pivot and angle, the axis it turns about, a push, the lamp's light and the hover
+struct Controls { pose: array<vec4f, 128> };
+@group(0) @binding(20) var<uniform> K: Controls;
+// their placards (cockpit/placards.ts: a cell per control, 4 × 8; white text, its alpha)
+@group(0) @binding(21) var placardTex: texture_2d<f32>;
+
+// a control vertex's index and part (uv: index + a placard's u × 0.9, part + its v × 0.9 — a margin
+// against the interpolation's rounding)
+fn ctlIndex(uv: vec2f) -> u32 { return u32(floor(uv.x + 0.002)); }
+fn ctlPart(uv: vec2f) -> u32 { return u32(floor(uv.y + 0.002)); }
+
+fn turnAbout(v: vec3f, k: vec3f, a: f32) -> vec3f {
+  let c = cos(a);
+  return v * c + cross(k, v) * sin(a) + k * dot(k, v) * (1.0 - c);
+}
+
+@vertex
+fn ctlVs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
+  var o: VOut;
+  let M = inst[ii].model;
+  var pos = v.pos;
+  var nrm = v.nrm;
+  let kp = ctlPart(v.uv);
+  if (kp >= 1u && kp <= 3u) {
+    let i = ctlIndex(v.uv) * 4u;
+    let P = K.pose[i];
+    let A = K.pose[i + 1u].xyz;
+    pos = P.xyz + turnAbout(v.pos - P.xyz, A, P.w) + K.pose[i + 2u].xyz;
+    nrm = turnAbout(v.nrm, A, P.w);
+  }
+  let p = (M * vec4f(pos, 1.0)).xyz;
+  o.p = p;
+  o.clip = project(p);
+  o.n = (M * vec4f(nrm, 0.0)).xyz;
+  o.mat = v.mat;
+  o.ao = v.ao;
+  o.q = pos;
+  o.qn = nrm;
+  o.uv = v.uv;
+  o.ii = ii;
+  return o;
+}
+
 // the depth alone, first (the shading then runs once a pixel — the cabin's surfaces overlap many times);
 // the cockpit's glass left out
 struct DOut { @builtin(position) @invariant clip: vec4f };
@@ -1226,6 +1271,12 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   let auv = (vec2f(f32(slot % 4u), f32(slot / 4u)) + vec2f(0.02) + su * 0.96) / vec2f(4.0, 2.0);
   let gx = dpdx(auv);
   let gy = dpdy(auv);
+  // a control's placard: its cell (the derivatives here, in uniform control flow)
+  let ci = f32(ctlIndex(in.uv));
+  let fu = clamp((in.uv.x - ci) / 0.9, 0.0, 1.0);
+  let fv = clamp((in.uv.y - floor(in.uv.y + 0.002)) / 0.9, 0.0, 1.0);
+  let puv = (vec2f(ci % 4.0, floor(ci / 4.0)) + vec2f(fu, 1.0 - fv)) / vec2f(4.0, 8.0);
+  let legend = select(0.0, textureSampleGrad(placardTex, linSamp, puv, dpdx(puv), dpdy(puv)).a, part == 73u);
   // relief on the dominant plane
   let aq = abs(qn);
   let w = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), aq.y >= aq.z), vec3f(1.0, 0.0, 0.0), aq.x >= aq.y && aq.x >= aq.z);
@@ -1252,16 +1303,19 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
       // the consoles: charcoal, their panels' markings silk-screened light grey (labels, lines), the small
       // parts — switches — a little lighter
       let small = floor(in.uv.y) < 4.0;
-      // (labels: a thin strip — text from arm's length — in one cell of eight on a 6 × 2.5 cm grid; a rule
-      // every 20 cm; faded out where a pixel spans them)
+      // (labels: a line of small text — 3 × 5-cell characters, 4 mm — in one cell of eight on a 6 × 2.5 cm
+      // grid; a rule every 20 cm; faded out where a pixel spans them. Solid light strips read as white
+      // rectangles all over the consoles: the user's report, K1)
       let gc = c / vec2f(0.06, 0.025);
       let fc = fract(gc);
       let hc = hash3(vec3i(vec2i(floor(gc)), 3));
-      let fadeL = clamp(0.004 / (1.5 * fw) - 0.35, 0.0, 1.0);
-      let lab = step(0.87, hc) * step(0.1, fc.x) * step(fc.x, 0.25 + 0.6 * fract(hc * 13.0)) * step(0.38, fc.y) * step(fc.y, 0.62) * fadeL;
+      let fadeL = clamp(0.0015 / (1.5 * fw) - 0.35, 0.0, 1.0);
+      let strip = step(0.87, hc) * step(0.1, fc.x) * step(fc.x, 0.25 + 0.6 * fract(hc * 13.0)) * step(0.4, fc.y) * step(fc.y, 0.6);
+      let ch = vec2f(fc.x * 15.0, (fc.y - 0.4) / 0.2);
+      let lab = strip * glyph(fract(ch) * vec2f(1.25, 1.0), hc + floor(ch.x) * 0.37) * step(fract(ch.x), 0.8) * fadeL;
       let ruled = (1.0 - smoothstep(0.0, 0.0008, abs(fract(c.y * 5.0 + 0.5) - 0.5) / 5.0)) * fadeL;
       albedo = select(vec3f(0.03, 0.033, 0.036) * (0.85 + 0.3 * fract(in.uv.y)), vec3f(0.07, 0.072, 0.075), small);
-      albedo = mix(albedo, vec3f(0.5), clamp(lab * 0.85 + ruled * 0.3, 0.0, 1.0) * select(1.0, 0.0, small));
+      albedo = mix(albedo, vec3f(0.3), clamp(lab * 0.7 + ruled * 0.2, 0.0, 1.0) * select(1.0, 0.0, small));
       metal = 0.0; rough = 0.55 + 0.15 * grime; coat = 0.1 * coat;
     }
     case 63u: { albedo = vec3f(0.04, 0.045, 0.055) * (0.85 + 0.3 * fract(in.uv.y)); metal = 0.0; rough = 0.92; coat = 0.0; }
@@ -1276,6 +1330,29 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
     case 68u: { albedo = vec3f(0.008); metal = 0.0; rough = 0.35; coat = 0.0; }
     case 69u: { albedo = vec3f(0.16, 0.16, 0.17) * (1.0 - 0.2 * grime); metal = 0.75; rough = 0.38 + 0.2 * grime; coat = 0.0; }
     case 72u: { albedo = vec3f(0.025); metal = 0.0; rough = 0.62; coat = 0.0; }
+    // the controls (73): their bases charcoal, the arms brushed steel, the knobs white, the caps lit
+    case 73u: {
+      let kp = ctlPart(in.uv);
+      let L = K.pose[ctlIndex(in.uv) * 4u + 3u];
+      switch kp {
+        case 0u: { albedo = vec3f(0.035, 0.037, 0.04); metal = 0.0; rough = 0.5; }
+        case 1u: { albedo = vec3f(0.6, 0.6, 0.62); metal = 1.0; rough = 0.3; }
+        case 2u: { albedo = vec3f(0.75, 0.75, 0.72); metal = 0.0; rough = 0.4; }
+        case 3u: {
+          // (a cap: frosted dark glass, its legend lit by the lamp behind it — faintly when off, so it reads)
+          albedo = vec3f(0.025) + L.rgb * 0.05; metal = 0.0; rough = 0.3;
+          let on = max(max(L.r, L.g), L.b);
+          emit = L.rgb * (0.25 + 0.75 * legend) + vec3f(0.5, 0.52, 0.55) * legend * 0.06 * (1.0 - on);
+        }
+        default: {
+          // (a placard: silk-screened light grey on the panel's charcoal)
+          albedo = mix(vec3f(0.03, 0.032, 0.035), vec3f(0.55, 0.56, 0.57), legend); metal = 0.0; rough = 0.6;
+        }
+      }
+      // (under the pointer: a cool glow — what a click would work)
+      emit += vec3f(0.18, 0.4, 0.6) * L.w * 0.35;
+      coat = 0.0;
+    }
     // (the glass: no diffuse light of its own — the lamps' highlights only)
     case 71u: { albedo = vec3f(0.0); metal = 0.0; rough = 0.05; coat = 0.0; }
     default: {}
@@ -1284,18 +1361,19 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   if (part == 68u) {
     // (the telemetry, drawn: display-referred, as bright whatever the exposure)
     emit = textureSampleGrad(screenTex, linSamp, auv, gx, gy).rgb * 2.4;
-  } else if ((part == 62u || part == 66u || part == 69u) && floor(in.uv.y) < 2.5 && fract(in.uv.y) > 0.72) {
-    // (the tiniest parts — indicators —: white and amber, a rare red, a few blinking)
+  } else if ((part == 62u || part == 66u || part == 69u) && floor(in.uv.y) < 2.5 && fract(in.uv.y) > 0.88) {
+    // (the tiniest parts — indicators, one in eight lit —: green, amber, a rare red, a few blinking; a
+    // quarter of them lit white read as white rectangles everywhere)
     let hh = fract(in.uv.y);
-    let led = select(select(vec3f(1.0, 0.95, 0.85), vec3f(1.0, 0.55, 0.12), hh > 0.84), vec3f(1.0, 0.18, 0.08), hh > 0.94);
-    let blink = select(1.0, step(0.5, fract(tm * (0.7 + hh) + hh * 7.0)), hh > 0.95);
-    emit = led * 1.2 * blink * (0.5 + 0.5 * clamp(dot(n, normalize(-in.p)), 0.0, 1.0));
+    let led = select(select(vec3f(0.35, 1.0, 0.5), vec3f(1.0, 0.55, 0.12), hh > 0.93), vec3f(1.0, 0.18, 0.08), hh > 0.97);
+    let blink = select(1.0, step(0.5, fract(tm * (0.7 + hh) + hh * 7.0)), hh > 0.975);
+    emit = led * 0.8 * blink * (0.5 + 0.5 * clamp(dot(n, normalize(-in.p)), 0.0, 1.0));
     albedo = led * 0.15;
   }
   rough = clamp(rough, 0.04, 1.0);
   let ao = pow(clamp(in.ao, 0.0, 1.0), 0.8);
   // the outside's light: only through the windows — the share of the sky each point sees, baked
-  let sky = select(clamp(in.uv.x, 0.0, 1.0), 1.0, part == 68u);
+  let sky = select(select(clamp(in.uv.x, 0.0, 1.0), 0.2, part == 73u), 1.0, part == 68u);
   let v = normalize(-in.p);
   let nv = clamp(dot(n, v), 1e-4, 1.0);
   let r = reflect(-v, n);

@@ -3264,6 +3264,7 @@ export class Renderer {
             mPerM: 1476.625 * (s.massSolar || 1),
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
             dash: this.cockpitDash ?? undefined,
+            controls: this.cockpitControls ?? undefined,
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
             fov: s.fov,
@@ -3388,6 +3389,8 @@ export class Renderer {
   /** the cockpit's dashboard (main.ts, from the flight's figures): the local up and the motion on the
    *  ship's axes, the speed [km/s], the height [km], the clock [s] */
   cockpitDash: { up: Vec3; fwd: Vec3; speed: number; alt: number; time: number } | null = null;
+  /** the cockpit's controls' poses (cockpit/controls.ts poseData), set each frame the cabin is seen */
+  cockpitControls: Float32Array<ArrayBuffer> | null = null;
 
   /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
   craftsShown = false;
@@ -4012,6 +4015,7 @@ export class Renderer {
     this.tier = old.tier;
     this.refreshMs = old.refreshMs;
     this.cockpitDash = old.cockpitDash;
+    this.cockpitControls = old.cockpitControls;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
     this.weatherReal = old.weatherReal;

@@ -14,6 +14,8 @@ import enduranceUrl from "../assets/endurance/endurance.bin";
 import cockpitUrl from "../assets/ranger/cockpit.bin";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
+import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
+import { placardLevels } from "./cockpit/placards";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
@@ -44,6 +46,8 @@ export interface ShipView {
   /** the cockpit's dashboard: the local up and the motion in the ship's frame, the speed [km/s], the
    *  height [km], the clock [s] */
   dash?: { up: V3; fwd: V3; speed: number; alt: number; time: number };
+  /** the cockpit's controls: their moving parts' poses (cockpit/controls.ts poseData) */
+  controls?: Float32Array<ArrayBuffer>;
   mount: Mount | MountPose;
   /** the flown ship placed in the view directly (a spectator's): its axes in the camera's, its origin
    *  there [m] — instead of the mount's */
@@ -189,6 +193,8 @@ export class ShipRenderer {
   private jetInside: boolean[] = [];
   /** the camera in the ship's frame */
   private camShip: V3 = [0, 0, 0];
+  /** the last frame's camera: its axes in the ship's frame (rows) and the projection's half-extents */
+  private lastCam: { R: M3; tanX: number; tanY: number } | null = null;
   /** the craft's meshes (loaded when first seen) */
   private meshes: Partial<Record<VesselId, Mesh>> = {};
   private loadingMesh = new Set<VesselId>();
@@ -198,7 +204,9 @@ export class ShipRenderer {
   /** this frame's draws: mesh, and whether in the shadow map */
   private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean }[] = [];
   /** the cockpit (the Ranger's cabin): its mesh, its sticks' pivots; loading */
-  private cockpit: { mesh: Mesh; pivots: V3[]; solid: number } | null = null;
+  private cockpit: { mesh: Mesh; pivots: V3[]; solid: number; controls: Mesh } | null = null;
+  /** the controls' poses (cockpit/controls.ts: ship.wgsl Controls) */
+  private ctlBuf: GPUBuffer | null = null;
   private cockpitLoading = false;
   /** the sticks' deflections, eased (forward, right, twist) [rad], and when last eased */
   private stick: V3 = [0, 0, 0];
@@ -232,6 +240,7 @@ export class ShipRenderer {
     glass: GPURenderPipeline;
     cabin: GPURenderPipeline;
     depthPre: GPURenderPipeline;
+    ctl: GPURenderPipeline;
   };
   private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
   /** the shading's bindings but the traced image (one bind group per target: shipBindFor) */
@@ -446,6 +455,14 @@ export class ShipRenderer {
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
         multisample: { count: 4 },
       }),
+      ctl: d.createRenderPipeline({
+        layout: "auto",
+        vertex: { ...vertex, entryPoint: "ctlVs" },
+        fragment: { module, entryPoint: "fsCabin", targets: [{ format: "rgba16float" }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
       glass: d.createRenderPipeline({
         layout: "auto",
         vertex,
@@ -577,6 +594,16 @@ export class ShipRenderer {
     this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r, lo, hi } };
   }
 
+  /** A pixel's ray in the ship's frame (the last frame's camera; ndc: −1…1, y up): from the eye, unit. */
+  cabinRay(ndcX: number, ndcY: number): { o: V3; d: V3 } | null {
+    const C = this.lastCam;
+    if (!C) return null;
+    const c: V3 = [ndcX * C.tanX, ndcY * C.tanY, 1];
+    const d: V3 = [0, 1, 2].map((k) => c[0] * C.R[0]![k]! + c[1] * C.R[1]![k]! + c[2] * C.R[2]![k]!) as V3;
+    const l = Math.hypot(...d);
+    return { o: [...this.camShip] as V3, d: [d[0] / l, d[1] / l, d[2] / l] };
+  }
+
   /** The Ranger's cockpit (assets/ranger/cockpit.bin, gzip: scripts/build-cockpit.ts), when first needed. */
   private loadCockpit() {
     if (this.cockpitLoading) return;
@@ -616,15 +643,26 @@ export class ShipRenderer {
         const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
         d.queue.writeBuffer(ibuf, 0, idx);
         const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+        const bound = { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi };
+        // (its controls: generated — cockpit/controls.ts —, drawn after it, their moving parts posed)
+        const cm = controlMesh();
+        const cv = d.createBuffer({ size: cm.verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(cv, 0, cm.verts);
+        const ci = d.createBuffer({ size: cm.idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(ci, 0, cm.idx);
+        this.ctlBuf ??= d.createBuffer({ size: MAX_CONTROLS * POSE_VEC4 * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(this.ctlBuf, 0, poseData({}));
         this.cockpit = {
-          mesh: { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } },
+          mesh: { vbuf, ibuf, count: ni, bound },
           pivots,
           solid: firstGlass * 3,
+          controls: { vbuf: cv, ibuf: ci, count: cm.idx.length, bound },
         };
         // (its walls for the camera moving about it: the triangles in a hierarchy)
         const pos = new Float32Array(nv * 3);
         for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
         cockpitHull.bvh = new TriBVH(pos, idx);
+        cockpitHull.verts = verts;
         cockpitHull.lo = lo;
         cockpitHull.hi = hi;
         this.onLoaded?.();
@@ -835,6 +873,8 @@ export class ShipRenderer {
     };
     model(R, t, m, 0);
     const tanH = Math.tan((v.fov * Math.PI) / 360);
+    this.lastCam = { R, tanX: tanH * v.aspect, tanY: tanH };
+    if (v.controls && this.ctlBuf) this.device.queue.writeBuffer(this.ctlBuf, 0, v.controls);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     // near and far planes about the ship where it is (the outside views: up to tens of km — not a fixed
     // 80 m, beyond which it vanished), its plumes (a few hundred metres) within them
@@ -993,9 +1033,24 @@ export class ShipRenderer {
 
   /** the cabin drawn this frame (its glass then) */
   private inCabin = false;
-  private cabinBinds: { gen: number; cabin: GPUBindGroup; glass: GPUBindGroup } | null = null;
+  private cabinBinds: { gen: number; cabin: GPUBindGroup; glass: GPUBindGroup; ctl: GPUBindGroup } | null = null;
   /** the cockpit's screens: the telemetry drawn (ui/cockpitscreens.ts), 4 × 2 slots, mip-mapped */
   private screens: GPUTexture | null = null;
+  /** The controls' placards (cockpit/placards.ts), drawn once. */
+  private placardTexture() {
+    if (this.placards) return this.placards;
+    const lv = placardLevels();
+    const tex = this.device.createTexture({
+      size: [lv[0]!.width, lv[0]!.height],
+      format: "rgba8unorm",
+      mipLevelCount: lv.length,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    lv.forEach((c, l) => this.device.queue.copyExternalImageToTexture({ source: c }, { texture: tex, mipLevel: l }, [c.width, c.height]));
+    return (this.placards = tex);
+  }
+  private placards: GPUTexture | null = null;
+
   private screenTexture() {
     return (this.screens ??= this.device.createTexture({
       size: [2048, 1024],
@@ -1213,12 +1268,15 @@ export class ShipRenderer {
             entries: [
               ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
               { binding: 17, resource: this.screenTexture().createView() },
+              { binding: 20, resource: { buffer: this.ctlBuf! } },
+              { binding: 21, resource: this.placardTexture().createView() },
             ],
           });
         this.cabinBinds = {
           gen: this.bindGen,
           cabin: make(this.pipes.cabin.getBindGroupLayout(0)),
           glass: make(this.pipes.glass.getBindGroupLayout(0)),
+          ctl: make(this.pipes.ctl.getBindGroupLayout(0)),
         };
       }
       rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
@@ -1228,6 +1286,14 @@ export class ShipRenderer {
       rp.setPipeline(this.pipes.cabin);
       rp.setBindGroup(0, this.cabinBinds.cabin);
       rp.drawIndexed(ck.solid, 1, 0, 0, 0);
+      // (its controls, their moving parts posed — before the glass, which blends over all)
+      rp.setPipeline(this.pipes.ctl);
+      rp.setBindGroup(0, this.cabinBinds.ctl);
+      rp.setVertexBuffer(0, ck.controls.vbuf);
+      rp.setIndexBuffer(ck.controls.ibuf, "uint32");
+      rp.drawIndexed(ck.controls.count, 1, 0, 0, 0);
+      rp.setVertexBuffer(0, ck.mesh.vbuf);
+      rp.setIndexBuffer(ck.mesh.ibuf, "uint32");
       rp.setPipeline(this.pipes.glass);
       rp.setBindGroup(0, this.cabinBinds.glass);
       rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
