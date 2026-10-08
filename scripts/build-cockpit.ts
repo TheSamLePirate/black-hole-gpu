@@ -30,7 +30,9 @@ const RV = new Float32Array(raw, 12, nv0 * 11);
 const RI = new Uint32Array(raw, 12 + nv0 * 44, ni0);
 
 // ---- the hull (assets/ranger/ranger.bin): its triangles, its glass (material 1)
-const hb = await Bun.file("assets/ranger/ranger.bin").arrayBuffer();
+const hbRaw = new Uint8Array(await Bun.file("assets/ranger/ranger.bin").arrayBuffer());
+// (gzip'd since PLAN-MONDE M3)
+const hb = (hbRaw[0] === 0x1f && hbRaw[1] === 0x8b ? Bun.gunzipSync(hbRaw) : hbRaw).slice().buffer;
 const [hnv, hni] = [new Uint32Array(hb, 8, 2)[0]!, new Uint32Array(hb, 8, 2)[1]!];
 const HV = new Float32Array(hb, 40, hnv * 8);
 const HI = new Uint32Array(hb, 40 + hnv * 32, hni);

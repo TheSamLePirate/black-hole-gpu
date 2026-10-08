@@ -246,7 +246,13 @@ new Uint8Array(head, 0, 4).set(new TextEncoder().encode("LNDR"));
 new Uint32Array(head, 4, 3).set([1, verts.length, indices.length]);
 new Float32Array(head, 16, 6).set([...lo, ...hi]);
 await $`mkdir -p ${out}`;
-await Bun.write(`${out}/lander.bin`, new Blob([head, new Float32Array(verts.flat()), new Uint32Array(indices)]));
+// (gzip'd: the page inflates it — src/util/inflate.ts, PLAN-MONDE M3: −44 to −50 %)
+await Bun.write(
+  `${out}/lander.bin`,
+  Bun.gzipSync(new Uint8Array(await new Blob([head, new Float32Array(verts.flat()), new Uint32Array(indices)]).arrayBuffer()), {
+    level: 9,
+  }),
+);
 // the maps: WebP (Pillow)
 const maps: [string, string, number][] = [
   ["lander.png", "lander-albedo.webp", 88],

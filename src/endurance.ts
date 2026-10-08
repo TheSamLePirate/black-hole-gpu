@@ -7,6 +7,7 @@
 // Its level of detail follows its size on screen (5, 10, 40 or 100 % of the model's triangles, each
 // downloaded when first needed); it is shaded with GGX, lit by the disk as seen from where it is
 // (projected on spherical harmonics each frame: its light wraps round the ring as the disk's does).
+import { inflated } from "./util/inflate";
 import lod2Url from "../assets/endurance/endurance-lod2.bin";
 import lod1Url from "../assets/endurance/endurance-lod1.bin";
 import lod0Url from "../assets/endurance/endurance.bin";
@@ -210,7 +211,7 @@ export class EnduranceRenderer {
 
   private fetchLod(i: number) {
     return (this.fetching[i] ??= (async () => {
-      const mesh = await this.get(LODS[i]!.url).then((r) => r.arrayBuffer());
+      const mesh = await this.get(LODS[i]!.url).then(inflated);
       const u32 = new Uint32Array(mesh, 0, 4);
       if (new TextDecoder().decode(new Uint8Array(mesh, 0, 4)) !== "ENDR" || u32[1] !== 1) throw new Error("bad endurance mesh");
       const nv = u32[2]!,

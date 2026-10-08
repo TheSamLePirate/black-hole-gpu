@@ -392,6 +392,8 @@ Mesuré d'abord, scène par scène, ce qui se télécharge et ce que la premièr
 
 Résultat (scène à Gargantua, 20 Mbit/s) : **première image 11,1 → 5,5–6,1 s**, 9,5 Mo téléchargés avant elle au lieu de 17,2 + 22,7. e2e **`first-image-downloads`** (échoue sur l'ancien code). `smoke`, `worlds`, `reload` inchangés.
 
+**M3b** : les maillages bruts (Endurance et ses 4 niveaux, Ranger, Lander) compressés sans perte, gzip au build, décompressés par le navigateur (`DecompressionStream`, sans dépendance) : **23,0 → 12,2 Mo**, même rendu (planche `docs/progress/monde/m3b-maillages.jpg`) ; test unitaire `inflate`, e2e `dock-undock` et `smoke`. L'ISS et le cockpit l'étaient déjà.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -417,6 +419,7 @@ Par ordre de gain :
 
 ## Journal
 
+- **08/10/2026 — M3b** : maillages compressés sans perte, 23,0 → 12,2 Mo.
 - **08/10/2026 — M3a** : la première image n'attend plus la Terre ni les lunes de Jupiter hors de leurs scènes (à 20 Mbit/s, 11,1 → 5,5–6,1 s à Gargantua).
 
 - **08/10/2026 — M9 : 8 storage buffers** (le défaut de WebGPU : Android et Safari admis), même image et même vitesse mesurées (`trace-ab`, A/A pour le bruit) ; le relais de M2 corrigé.

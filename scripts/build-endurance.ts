@@ -213,7 +213,9 @@ async function build(ratio: number, name: string) {
   new Uint8Array(head, 0, 4).set(new TextEncoder().encode("ENDR"));
   new Uint32Array(head, 4, 3).set([1, verts.length, indices.length]);
   new Float32Array(head, 16, 6).set([...blo, ...bhi]);
-  await Bun.write(`${out}/${name}.bin`, new Blob([head, new Float32Array(verts.flat()), new Uint32Array(indices)]));
+  // (gzip'd: the page inflates it — src/util/inflate.ts, PLAN-MONDE M3: −44 to −50 %)
+  const body = new Uint8Array(await new Blob([head, new Float32Array(verts.flat()), new Uint32Array(indices)]).arrayBuffer());
+  await Bun.write(`${out}/${name}.bin`, Bun.gzipSync(body, { level: 9 }));
   console.log(
     `${name}.bin: ${indices.length / 3} triangles, ${verts.length} vertices; AO ${AO_RAYS} rays in ${((performance.now() - t0) / 1000).toFixed(1)} s`,
   );

@@ -4,6 +4,7 @@
 // other), with the tracer's own pinhole projection, and composited over the traced image (before bloom:
 // the disk's glare spills over their silhouettes). They are lit by a light probe traced around the camera
 // (lensed disk, Gargantua, sky) — see ship.wgsl.
+import { inflated } from "./util/inflate";
 import rangerUrl from "../assets/ranger/ranger.bin";
 import landerUrl from "../assets/lander/lander.bin";
 import landerAlbedoUrl from "../assets/lander/lander-albedo.webp";
@@ -531,7 +532,7 @@ export class ShipRenderer {
   private async loadVessel(id: VesselId) {
     const d = this.device;
     const url = id === "ranger" ? rangerUrl : id === "lander" ? landerUrl : enduranceUrl;
-    const buf = await this.getter(url).then((r) => r.arrayBuffer());
+    const buf = await this.getter(url).then(inflated);
     const magic = new TextDecoder().decode(new Uint8Array(buf, 0, 4));
     const u32 = new Uint32Array(buf, 0, 4);
     const nv = u32[2]!,
@@ -587,12 +588,7 @@ export class ShipRenderer {
     this.getter(cockpitUrl)
       .then(async (r) => {
         // (served compressed: inflated here)
-        const raw = await r.arrayBuffer();
-        const gz = new Uint8Array(raw, 0, 2);
-        const buf =
-          gz[0] === 0x1f && gz[1] === 0x8b
-            ? await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()
-            : raw;
+        const buf = await inflated(r);
         if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "CKPT") throw new Error("bad cockpit.bin");
         const [ver, nv, ni] = new Uint32Array(buf, 4, 3) as unknown as [number, number, number];
         const bb = new Float32Array(buf, 16, 6);
