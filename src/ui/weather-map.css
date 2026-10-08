@@ -1,0 +1,99 @@
+/* The weather on the planisphere (weather-map.ts): the wind's particles, the stations' markers, the legend —
+   over the ground track's stage. The flight categories in the charts' colours, always named. */
+.gt-stage { --wx-vfr: #3ddc84; --wx-mvfr: #4aa8ff; --wx-ifr: #ff5a46; --wx-lifr: #d86bff; }
+.wxm-particles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
+.wxm-marks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.wxm-particles[hidden], .wxm-marks[hidden], .wxm-legend[hidden] { display: none; }
+
+/* a station: its category's dot, the wind's arrow, its name, its category and visibility; its report on hover */
+.wxm-mark {
+  --c: var(--wx-vfr);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -9px 0 0 -9px;
+  padding: 2px 7px 2px 3px;
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  border-radius: 10px;
+  background: rgba(5, 9, 16, 0.78);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: default;
+  outline: none;
+}
+/* (placed by declutter: its label to the left of its dot, or a line lower) */
+.wxm-mark { translate: 0 var(--dy, 0px); }
+.wxm-mark.left { translate: calc(-100% + 18px) var(--dy, 0px); padding: 2px 3px 2px 7px; }
+/* (to the left: still read name, category, visibility — the arrow and the dot at its right end, on the place) */
+.wxm-mark.left b { order: 1; }
+.wxm-mark.left .cat { order: 2; }
+.wxm-mark.left .vis { order: 3; }
+.wxm-mark.left .arr { order: 4; }
+.wxm-mark.left .dot { order: 5; }
+.wxm-mark.left .tip { left: auto; right: -1px; }
+.wxm-mark.mvfr { --c: var(--wx-mvfr); }
+.wxm-mark.ifr { --c: var(--wx-ifr); }
+.wxm-mark.lifr { --c: var(--wx-lifr); }
+.wxm-mark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); flex: none; }
+.wxm-mark .arr { width: 10px; height: 10px; fill: rgba(222, 232, 246, 0.9); flex: none; }
+.wxm-mark b { font: 700 10.5px/1 var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(222, 232, 246, 0.94); }
+.wxm-mark .cat { font: 600 9.5px/1 var(--mono); color: var(--c); }
+.wxm-mark .vis { font: 500 9.5px/1 var(--mono); color: rgba(176, 196, 222, 0.7); }
+.wxm-mark:hover, .wxm-mark:focus-visible { z-index: 5; border-color: var(--c); background: rgba(8, 14, 24, 0.95); }
+.wxm-mark .tip {
+  position: absolute;
+  left: -1px;
+  top: calc(100% + 6px);
+  display: none;
+  min-width: 230px;
+  padding: 9px 11px 10px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, rgba(140, 200, 255, 0.2));
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(8, 13, 23, 0.98), rgba(5, 9, 16, 0.97));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  white-space: normal;
+}
+.wxm-mark:hover .tip, .wxm-mark:focus-visible .tip { display: block; }
+.wxm-mark .tip .th { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 7px; padding-bottom: 6px; border-bottom: 1px solid rgba(160, 210, 255, 0.1); }
+.wxm-mark .tip .th b { font-size: 11px; }
+.wxm-mark .tip .th .cat { font-size: 11px; font-weight: 700; }
+.wxm-mark .tip dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.wxm-mark .tip dt { font: 700 9.5px/1.3 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: rgba(176, 196, 222, 0.66); }
+.wxm-mark .tip dd { margin: 0; font: 500 10.5px/1.3 var(--mono); color: rgba(222, 232, 246, 0.94); }
+
+/* the legend, bottom left */
+.wxm-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid rgba(140, 200, 255, 0.16);
+  border-radius: 5px;
+  background: rgba(5, 9, 16, 0.82);
+  pointer-events: none;
+}
+.wxm-legend .lg-row { display: grid; gap: 3px; }
+.wxm-legend .lg-k { font: 700 9.5px/1.2 var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(176, 196, 222, 0.72); }
+.wxm-legend .lg-ramp, .wxm-legend .lg-wind { display: block; width: 168px; height: 6px; border-radius: 3px; }
+.wxm-legend .lg-wind { background: linear-gradient(90deg, rgb(210, 228, 255), rgb(110, 210, 255) 50%, rgb(255, 180, 90)); }
+.wxm-legend .lg-ends { display: flex; justify-content: space-between; width: 168px; font: 500 9px var(--mono); color: rgba(176, 196, 222, 0.66); }
+.wxm-legend .lg-ends i { font-style: normal; }
+.wxm-legend .lg-cats { display: flex; gap: 9px; }
+.wxm-legend .lg-cat { display: flex; align-items: center; gap: 4px; font: 600 9.5px var(--mono); color: rgba(222, 232, 246, 0.9); }
+.wxm-legend .lg-cat i { width: 8px; height: 8px; border-radius: 50%; }
+.wxm-legend .lg-cat.vfr i { background: var(--wx-vfr); }
+.wxm-legend .lg-cat.mvfr i { background: var(--wx-mvfr); }
+.wxm-legend .lg-cat.ifr i { background: var(--wx-ifr); }
+.wxm-legend .lg-cat.lifr i { background: var(--wx-lifr); }
+
+/* the HUD's small map: the stations their dots and arrows, no legend — the map's view shows it all */
+.fl-root:not(.mapview) .wxm-mark { padding: 2px; gap: 2px; }
+.fl-root:not(.mapview) .wxm-mark b, .fl-root:not(.mapview) .wxm-mark .vis, .fl-root:not(.mapview) .wxm-mark .cat { display: none; }
+.fl-root:not(.mapview) .wxm-legend { display: none; }

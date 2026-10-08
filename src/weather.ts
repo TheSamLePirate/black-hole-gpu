@@ -162,13 +162,28 @@ function field(lat: number, lon: number, cell: number, seed: number): number {
  * peaks. Its direction the large-scale one (windFrom) turned a little by the field. The same place and
  * day, the same weather. Mars: fair, its dust storms where its own field peaks.
  */
-export function randomWeather(body: string, lat: number, lon: number, days: number, windLevel: WindLevel): WeatherState {
+/** The draw's fields at a place and day (0…1): its moisture, its wind, its instability — randomWeather's,
+ *  and the weather map's (its rain as a radar draws it, continuous). */
+export function weatherFields(body: string, lat: number, lon: number, days: number): { moist: number; windy: number; unstable: number } {
   const day = Math.floor(days);
   const seed = day * 2654435761 + (body === "mars" ? 99991 : 17);
   const f = (cell: number, k: number) => 0.65 * field(lat, lon, cell, seed + k) + 0.35 * field(lat, lon, cell / 2, seed + k + 1);
-  const moist = f(12, 101),
-    windy = f(12, 202),
-    unstable = f(15, 303);
+  return { moist: f(12, 101), windy: f(12, 202), unstable: f(15, 303) };
+}
+
+/** How hard it rains at a place of a draw, as a radar shows it (0 none … 1 heavy, up to 1.3 a storm's core). */
+export function rainIntensity(f: { moist: number; unstable: number }, lat: number): number {
+  const s = (a: number, b: number, x: number) => {
+    const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+    return t * t * (3 - 2 * t);
+  };
+  const rain = s(0.6, 0.8, f.moist);
+  const storm = s(0.62, 0.72, f.moist) * s(Math.abs(lat) < 23 ? 0.48 : 0.62, Math.abs(lat) < 23 ? 0.62 : 0.76, f.unstable);
+  return rain + 0.35 * storm;
+}
+
+export function randomWeather(body: string, lat: number, lon: number, days: number, windLevel: WindLevel): WeatherState {
+  const { moist, windy, unstable } = weatherFields(body, lat, lon, days);
   const tropics = Math.abs(lat) < 23;
   let kind: Fixed;
   if (body === "mars") kind = moist > 0.66 ? "dust" : "fair";

@@ -35,8 +35,7 @@ import { el as h } from "./kit";
 import { t, tf } from "../i18n";
 import { daysOf } from "../system/solar";
 import type { WeatherState } from "../weather";
-import { drawWeatherLayer } from "./weather-map";
-import { store } from "../util/storage";
+import { WeatherMapLayer } from "./weather-map";
 
 type V3 = [number, number, number];
 export type GroundMode = "globe" | "map";
@@ -106,8 +105,11 @@ export class GroundTrack {
   private read = h("div", "gt-read");
   private tag = h("div", "gt-tag");
   mode: GroundMode = "globe";
-  /** the weather's layer on the planisphere (PLAN-METEO W2b), the player's choice kept */
-  weatherLayer = store.get("kerr.map-weather") === "1";
+  /** the weather's layer on the planisphere (PLAN-METEO W2b; the HUD's map sets it from the player's choice) */
+  weatherLayer = false;
+  /** its pieces over the stage (made the first time it is drawn), and whether this draw showed them */
+  private wxLayer: WeatherMapLayer | null = null;
+  private wxShown = false;
   /** the airfields' real weather when it came in (the "real" setting's), from the page */
   realWeather: () => WeatherState | null = () => null;
   /** the scene's day [days past J2000] when last drawn (the weather's) */
@@ -236,8 +238,10 @@ export class GroundTrack {
     this.hit = null;
     if (!sc) return false;
     const tex = this.texture(sc.id);
+    this.wxShown = false;
     if (this.mode === "globe") this.drawGlobe(ctx, W, H, dpr, sc, tex);
     else this.drawMap(ctx, W, H, dpr, sc, tex);
+    if (!this.wxShown) this.wxLayer?.hide();
     return true;
   }
 
@@ -771,9 +775,10 @@ export class GroundTrack {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(c, x0, y0, mw, mh);
     }
-    // the weather (W2b): its zones, the wind, the sites' symbols — a world with air, ours
-    if (this.weatherLayer && sc.ours && solarBody(sc.id)?.atmosphere)
-      drawWeatherLayer(
+    // the weather (W2b): its radar, the wind's particles, the stations — a world with air, ours
+    if (this.weatherLayer && sc.ours && solarBody(sc.id)?.atmosphere) {
+      this.wxShown = true;
+      (this.wxLayer ??= new WeatherMapLayer(this.stage)).draw(
         ctx,
         { x0, y0, mw, mh },
         dpr,
@@ -783,6 +788,7 @@ export class GroundTrack {
         this.realWeather(),
         sitesOf(sc.id).map((st) => ({ name: st.name, lat: st.lat, lon: st.lon })),
       );
+    }
     // the graticule, the frame
     const pt = this.pen;
     for (let k = 0; k <= 12; k++) {

@@ -51,13 +51,3 @@
 .tm-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tm-pick .tm-date { width: auto; min-width: 220px; color-scheme: dark; }
 
-/* the weather (weatherpanel.ts): its presets, what is in force, the vertical cut */
-.wx-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
-.wx-presets .k-btn { padding: 7px 8px; }
-.wx-presets .k-btn.on { border-color: var(--k-on-edge); background: rgba(111, 210, 255, 0.14); color: var(--k-text); }
-.wx-where { color: var(--k-on); }
-.wx-rows { display: grid; grid-template-columns: repeat(3, auto 1fr); gap: 4px 12px; align-items: baseline; }
-.wx-rows span { font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-dim); }
-.wx-rows b { font: var(--k-font-value); color: var(--k-text); }
-.wx-cut { width: 100%; height: 230px; display: block; border: 1px solid var(--k-line); border-radius: var(--k-r); background: linear-gradient(#0b1626, #132338); }
-@media (max-width: 560px) { .wx-rows { grid-template-columns: auto 1fr; } }

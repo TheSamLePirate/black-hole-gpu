@@ -1263,6 +1263,7 @@ export class FlightHud {
     const tab = store.get("kerr.map-tab");
     if (tab === "globe" || tab === "map") this.mapTab = tab;
     this.ground = new GroundTrack(this.s);
+    this.ground.weatherLayer = store.get("kerr.map-weather") === "1";
     const tabs = h("div", "fl-maptabs");
     for (const [id, label, tip] of [
       ["orbit", "3D", t("The system in 3D: the orbits, the paths, the nodes")],

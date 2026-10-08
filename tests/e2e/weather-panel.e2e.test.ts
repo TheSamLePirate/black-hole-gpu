@@ -21,7 +21,7 @@ describe.skipIf(!E2E)("the weather's panel", () => {
       const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       let ink = 0;
       for (let i = 3; i < d.length; i += 16) ink += d[i] > 0 ? 1 : 0;
-      return { weather: __bh.settings.weather, category: document.querySelector(".wx-rows").dataset.category, ink };
+      return { weather: __bh.settings.weather, category: document.querySelector("[data-testid=weather-category]").dataset.category, ink };
     })()`);
 
   test("opened from the HUD; fair, then fog and storm chosen: the category, the cut, the save", async () => {

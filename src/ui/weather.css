@@ -1,0 +1,125 @@
+/* The weather's panel (weatherpanel.ts, PLAN-METEO W2): the presets as cards, the conditions as tiles, the
+   place's cut under them — in the kit's language (corner brackets, Rajdhani names, mono figures, cyan for
+   what is on); the flight categories in the charts' colours, always with their names. */
+.wx-frame { width: min(980px, calc(100vw - 32px)); padding: 16px 18px 18px; }
+.wx { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; --wx-vfr: #3ddc84; --wx-mvfr: #4aa8ff; --wx-ifr: #ff5a46; --wx-lifr: #d86bff; }
+
+/* ---- the presets */
+.wx-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.wx-card {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid var(--k-ctl-edge);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.wx-card:hover { border-color: var(--k-edge-hi); background: linear-gradient(180deg, rgba(111, 210, 255, 0.09), rgba(111, 210, 255, 0.02)); }
+.wx-card:focus-visible { outline: 2px solid var(--k-on); outline-offset: 2px; }
+.wx-card.on {
+  border-color: var(--k-on-edge);
+  background: linear-gradient(180deg, rgba(111, 210, 255, 0.2), rgba(111, 210, 255, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(111, 210, 255, 0.22), 0 0 22px rgba(111, 210, 255, 0.12);
+}
+.wx-card.on::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--k-on);
+  border-left: 0;
+  border-bottom: 0;
+}
+.wx-ico { grid-row: 1 / span 2; width: 28px; height: 28px; filter: drop-shadow(0 0 6px currentColor); opacity: 0.95; }
+.wx-fair .wx-ico { color: #ffd36a; }
+.wx-cloudy .wx-ico { color: #d6e6ff; }
+.wx-overcast .wx-ico { color: #a9b6c8; }
+.wx-fog .wx-ico { color: #c9d2dc; }
+.wx-rain .wx-ico { color: #6fb6ff; }
+.wx-storm .wx-ico { color: #c48bff; }
+.wx-windy .wx-ico { color: #8fe3d0; }
+.wx-dust .wx-ico { color: #e89a5c; }
+.wx-random .wx-ico { color: var(--k-amber); }
+.wx-real .wx-ico { color: var(--k-on); }
+.wx-name { font: 700 12.5px/1.15 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--k-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-sub { display: flex; align-items: center; gap: 5px; font: 500 10px/1.2 var(--mono); color: var(--k-dim); letter-spacing: 0.04em; }
+.wx-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.wx-dot.vfr { background: var(--wx-vfr); }
+.wx-dot.mvfr { background: var(--wx-mvfr); }
+.wx-dot.ifr { background: var(--wx-ifr); }
+.wx-dot.lifr { background: var(--wx-lifr); }
+
+/* ---- where, what the choice gives */
+.wx-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 2px 2px 0; border-top: 1px solid var(--k-line); padding-top: 12px; }
+.wx-where b { font: 700 14px/1.2 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--k-on); }
+.wx-where span { margin-left: 10px; font: 500 11px var(--mono); color: var(--k-dim); }
+.wx-says { font: 12.5px/1.35 var(--font); color: var(--k-dim); text-align: right; }
+
+/* ---- the conditions */
+.wx-tiles { display: grid; grid-template-columns: 1.35fr 1fr 1fr 0.9fr 1fr; gap: 8px; }
+.wx-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 98px;
+  padding: 10px 12px;
+  border: 1px solid var(--k-edge);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+}
+.wx-k { font: var(--k-font-label); letter-spacing: 0.2em; text-transform: uppercase; color: var(--k-dim); }
+.wx-big { font: 600 30px/1 var(--mono); color: var(--k-text); letter-spacing: -0.01em; }
+.wx-big small { margin-left: 4px; font: 500 12px var(--mono); color: var(--k-dim); }
+.wx-mid { font: 700 18px/1.1 var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--k-text); }
+.wx-sm { font: 500 10.5px/1.3 var(--mono); color: var(--k-dim); }
+.wx-wind { display: flex; align-items: center; gap: 12px; }
+.wx-rose { width: 64px; height: 64px; flex: none; }
+.wx-rose .ring { fill: rgba(0, 0, 0, 0.28); stroke: rgba(160, 210, 255, 0.35); stroke-width: 1; }
+.wx-rose .tick { stroke: rgba(160, 210, 255, 0.55); stroke-width: 1.2; }
+.wx-rose .n { fill: var(--k-dim); font: 700 8px var(--hud-font); text-anchor: middle; dominant-baseline: middle; }
+.wx-rose .arrow { fill: var(--k-on); filter: drop-shadow(0 0 3px rgba(111, 210, 255, 0.8)); }
+.wx-gauge { position: relative; display: flex; height: 5px; margin-top: auto; border-radius: 3px; }
+.wx-gauge i { height: 100%; opacity: 0.6; }
+.wx-gauge i:first-child { border-radius: 3px 0 0 3px; }
+.wx-gauge i:last-child { border-radius: 0 3px 3px 0; }
+.wx-gauge .lifr { background: var(--wx-lifr); }
+.wx-gauge .ifr { background: var(--wx-ifr); }
+.wx-gauge .mvfr { background: var(--wx-mvfr); }
+.wx-gauge .vfr { background: var(--wx-vfr); }
+.wx-gauge b { position: absolute; top: -4px; width: 3px; height: 13px; margin-left: -1.5px; border-radius: 1px; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.9); }
+.wx-bars { display: flex; align-items: flex-end; gap: 4px; height: 22px; margin-top: auto; }
+.wx-bars i { width: 9px; border-radius: 1px; background: rgba(255, 255, 255, 0.1); }
+.wx-bars i:nth-child(1) { height: 25%; }
+.wx-bars i:nth-child(2) { height: 50%; }
+.wx-bars i:nth-child(3) { height: 75%; }
+.wx-bars i:nth-child(4) { height: 100%; }
+.wx-bars i.on { background: #6fb6ff; box-shadow: 0 0 6px rgba(111, 182, 255, 0.6); }
+.wx-bars i.on.storm { background: #c48bff; box-shadow: 0 0 6px rgba(196, 139, 255, 0.6); }
+.wx-t-cat { --wx-c: var(--wx-vfr); border-color: color-mix(in srgb, var(--wx-c) 55%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--wx-c) 16%, transparent), transparent); }
+.wx-t-cat.mvfr { --wx-c: var(--wx-mvfr); }
+.wx-t-cat.ifr { --wx-c: var(--wx-ifr); }
+.wx-t-cat.lifr { --wx-c: var(--wx-lifr); }
+.wx-badge { font: 700 28px/1 var(--hud-font); letter-spacing: 0.12em; color: var(--wx-c); text-shadow: 0 0 14px color-mix(in srgb, var(--wx-c) 60%, transparent); }
+
+/* ---- the cut */
+.wx-cutbox { position: relative; border: 1px solid var(--k-edge); border-radius: 4px; overflow: hidden; background: #060b13; }
+.wx-cut { display: block; width: 100%; height: 300px; }
+
+@media (max-width: 860px) {
+  .wx-presets { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .wx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wx-t-wind { grid-column: 1 / -1; }
+  .wx-head { flex-direction: column; align-items: flex-start; }
+  .wx-says { text-align: left; }
+  .wx-cut { height: 240px; }
+}
