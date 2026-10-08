@@ -34,7 +34,7 @@ import { mouth } from "../wormhole";
 import { ourState } from "../system/our-side";
 import type { OurPath } from "../system/our-predict";
 import { plan as runPlanner } from "../system/plan-client";
-import { bodyFixedOf, fromBodyFixed, gearHeight } from "../system/our-surface";
+import { bodyFixedOf, fromBodyFixed, gearHeight, groundRelief, toBodyFixed } from "../system/our-surface";
 import { solarBody, solarState } from "../system/solar";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
@@ -727,6 +727,14 @@ function approach(
   const sp = Math.hypot(...va);
   const spAir = Math.hypot(...this.airVelocity(va));
   const agl = this.aglNow(cam, h);
+  // (the height the final's profile and its minima read: over the threshold — a barometric one, as a pilot's
+  // decision height is —, the ground under the craft's only in the last 500 m before it, down to the wheels.
+  // On the ground's: a 40 m rise 3.3 km out of Edwards set off the minima there — 60 m over it, 108 over the
+  // runway —, a go-around "45 m low")
+  const hThr = nav
+    ? agl + groundRelief(nav.ref, toBodyFixed(nav.ref, nav.X, nav.t)) - groundRelief(nav.ref, bodyFixedOf(nav.ref, site.lat, site.lon, 0))
+    : agl;
+  const hp = Math.max(hThr + (agl - hThr) * smooth01((sAl + 1500) / 1000), 0);
   const vh = unitV(lin(va, 1, up, -dot3(va, up)));
   const gam = Math.asin(clamp(dot3(va, up) / Math.max(sp, 1e-9), -1, 1));
   const gdot = R.gPrev !== null && dt > 0 ? (gam - R.gPrev) / dt : 0;
@@ -760,10 +768,10 @@ function approach(
   // (the minima — the decision height on the final's shallow glide, game/procedures.ts —: stabilised, on to the
   // touchdown; not — over 25 m off the axis or the profile —, the missed approach. Twice at most: the third
   // approach lands whatever, as a pilot short of fuel would)
-  if (onFinal && !R.ga && !R.dhSeen && R.prof && sAl < 0 && agl <= RUNWAY_DH) {
+  if (onFinal && !R.ga && !R.dhSeen && R.prof && sAl < 0 && hp <= RUNWAY_DH) {
     R.dhSeen = true;
-    const why = unstableWhy(xt, agl - R.prof.h);
-    R.dhCheck = { across: xt, dh: agl - R.prof.h, ga: !!why && (R.gaN ?? 0) < 2 };
+    const why = unstableWhy(xt, hp - R.prof.h);
+    R.dhCheck = { across: xt, dh: hp - R.prof.h, ga: !!why && (R.gaN ?? 0) < 2 };
     if (why && (R.gaN ?? 0) < 2) this.goAround(why);
   }
   // (the missed approach flown — climbed out, turned back, out along the reciprocal, turned in at its hold 20
@@ -888,10 +896,10 @@ function approach(
     bank = clamp(-kB * (dpsi - want + (R.trkInt ?? 0) / 5), -bMax, bMax);
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
-    const L = landingProfile(sAl, agl, sp, R.gOuter);
-    if (R.gOuter === undefined && sAl < -6e3 && agl > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300) spiralFrom();
+    const L = landingProfile(sAl, hp, sp, R.gOuter);
+    if (R.gOuter === undefined && sAl < -6e3 && hp > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300) spiralFrom();
     if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
-    gRef = clamp(Math.atan(L.slope) + clamp((L.h - agl) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
+    gRef = clamp(Math.atan(L.slope) + clamp((L.h - hp) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
     // (the last metres: the sink eased to a touchdown a real gear takes — 0.6 m/s plus the height over
     // 4 s, whatever the parabola's tracking left: under 1 m/s at the wheels. Over 2.5 s, a flare floating
     // 2 m up past the touchdown point was pushed down at 1.6 m/s, 2.6 at the wheels)
@@ -909,7 +917,7 @@ function approach(
     // flare floated 2 m up for 12 s in a light wind, bled to 74 m/s and 20° of incidence, and dropped at 1.7)
     if (L.phase === "rollout" && agl > 0.2) gRef = Math.min(gRef, gS - Math.asin(Math.min(0.6 / Math.max(sp, 1), 0.5)));
     // (the slope's turn ahead — the pull-up, the flare —: its rate fed forward, half a second on)
-    gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, agl, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
+    gdotRef = (Math.atan(landingProfile(sAl + sp * 0.5, hp, sp, L.fix).slope) - Math.atan(L.slope)) / 0.5;
     R.flareTau = L.phase === "flare" ? 1 : undefined;
     R.prof = { phase: L.phase, aim: L.aim, td: LANDING.td, h: L.h };
   }
@@ -928,7 +936,7 @@ function approach(
       gRef = clamp(gRef, prev - rate, prev + rate);
     }
   }
-  R.app = { along: sAl, across: xt, final: onFinal, agl, speed: sp, gRef, gam };
+  R.app = { along: sAl, across: xt, final: onFinal, agl, hp, speed: sp, gRef, gam };
   // (the bank commanded now — the HUD's "cmd", the map's —: the approach's, not the entry guidance's last)
   R.bank = bank;
   const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
@@ -958,7 +966,7 @@ function approach(
   // (on the final, 160 m/s down the steep slope, 130 on the shallow one: eased down over the pull-up's heights,
   // 500 to 90 m — a step at the pull-up's start threw the air brake from half out to full in a frame, α
   // swinging 6° under it four times in 8 s)
-  const vFinal = R.prof && R.prof.phase !== "outer" ? 130 + 30 * smooth01((agl - LANDING.hC) / (500 - LANDING.hC)) : 160;
+  const vFinal = R.prof && R.prof.phase !== "outer" ? 130 + 30 * smooth01((hp - LANDING.hC) / (500 - LANDING.hC)) : 160;
   const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : vFinal) + vAdd;
   // (the speed through the air held: a head wind's ground speed short of it left the brake in, the wing fast)
   this.airBrake = clamp((spAir - vT) / 50, 0, 1);
@@ -968,7 +976,7 @@ function approach(
   const k = onFinal && agl < 12 ? 1 - agl / 12 : 0;
   const ax = attitudeFor(fr.s.x, lin(vAir, 1 - k, va, k), R.alpha, bank, fr.env.normal?.(fr.s.x));
   // (after a missed approach, the legs back to the final powered: the engines hold the speed — from its hold,
-  // 3 km up and 20 km out, a glide round the turn and down to the final's start was 400 m short at the minima)
+  // 3 km up and 20 km out, a glide round and down to the final's start was 400 m short at the minima)
   const thr = R.gaN && !onFinal ? clamp((vT - spAir) / 20, 0, 1) : 0;
   return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]), throttle: thr };
 }

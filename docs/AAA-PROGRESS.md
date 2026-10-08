@@ -443,6 +443,17 @@ Plan : [`PLAN-AUDIO.md`](PLAN-AUDIO.md), étapes S1 à S8 ; référence [`AUDIO.
 - **S7** : le bang là où le cône de Mach balaie un auditeur immobile, jamais à bord (les secousses transsoniques) ; le plasma de la rentrée.
 - **S8** : le mix mesuré dans neuf situations et rééquilibré (plein gaz au cockpit −5 → −14 dB RMS, crêtes −0,5 → −2,3 dB). Planche finale `docs/progress/audio/s8-final.jpg`.
 
+## M7 : les entrées HOTAS (terminée, 08/10/2026)
+
+Plan : [`PLAN-HOTAS.md`](PLAN-HOTAS.md), étapes H1 à H6 ; référence [`HOTAS.md`](HOTAS.md).
+
+- **H1** : le modèle des entrées (`input/axes.ts`, pur) — le modèle d'un périphérique d'après l'identifiant du navigateur, la mise en forme d'un axe (calibration, zone morte, courbe, inversion), le levier absolu et son cran, les affectations lues sur tous les périphériques, la détection ; un HOTAS n'est plus lu comme une manette, ses axes au hasard.
+- **H2** : dans le vol — le tangage, le roulis, le lacet (torsion et palonnier sommés), les translations RCS, le regard ; la manette des gaz absolue **reprise comme un fader** ; les boutons sur les actions du clavier ; les freins aux pieds.
+- **H3** : douze HOTAS reconnus (Thrustmaster, Saitek/Logitech, VKB, palonniers), un profil générique pour un appareil de vol inconnu.
+- **H4** : l'écran « Manettes et HOTAS » — les périphériques en direct, l'affectation par détection, les courbes tracées, la calibration ; rien n'est piloté pendant qu'on règle.
+- **H5** : les vibrations — la poussée, le plasma, le roulage, chaque roue, les joints, les bangs, l'amarrage ; un réglage d'intensité.
+- **H6** : un vol entier au HOTAS simulé, posé à Edwards (e2e `hotas-flight`). Corrigé : l'approche lit la hauteur au-dessus du seuil, plus la hauteur sol (une bosse de 40 m déclenchait les minima). Planche finale `docs/progress/hotas/h6-final.jpg`.
+
 ## Ce qui reste pour l'AAA (au 08/10/2026)
 
 Par ordre de gain :
@@ -461,13 +472,14 @@ Par ordre de gain :
    - ~~météo~~ (M4 terminée le 08/10 : W1–W8 — modèle, panneau, carte, brouillard et couches au rendu, pistes face au vent et manche à air, pluie, poussière de Mars, METAR réel, autopilotes éprouvés au labo) ;
    - ~~aéroports vivants~~ (M5 terminée le 08/10 : balisage OACI, décor, guidage MLS, cartes d'approche, remise de gaz) ;
    - ~~audio spatial~~ (M6 terminée le 08/10 : HRTF, Doppler, moteur granulaire, cabine, piste, station, bang) ;
-   - HOTAS ;
+   - ~~HOTAS~~ (M7 terminée le 08/10 : tous les périphériques, douze profils, l'écran de réglage, levier absolu, vibrations) ;
    - cockpit interactif ;
    - ~~≤ 8 storage buffers pour Android et Safari~~ (M9, fait le 08/10) ; restent FSR1 et la matrice de compatibilité.
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
 
+- **08/10/2026 — M7 terminée (H6)** : les entrées HOTAS — tous les périphériques ensemble, douze profils connus, l'écran « Manettes et HOTAS », la manette des gaz absolue, les vibrations ; un vol entier au HOTAS simulé ; l'approche sur la hauteur au-dessus du seuil.
 - **08/10/2026 — M6 terminée (S8)** : l'audio spatial — tout placé, la cabine, la piste, la station, le bang au cône de Mach ; le mix mesuré et rééquilibré.
 - **08/10/2026 — M5 terminée (A6)** : les aéroports au labo (nuit, remise de gaz, CAT III : 4/4) ; la météo des scénarios n'est plus écrasée par le METAR réel ; la vitesse en rampe à la ressource.
 - **08/10/2026 — M4 terminée (W8)** : l'autopilote posé dans la météo au labo (4/4) ; portance sur la vitesse air, marge de rafales ; notes selon la météo.

@@ -707,8 +707,10 @@ export class CameraController {
     aglPrev?: number;
     /** a guidance update in the planner's worker */
     pending?: boolean;
-    /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final */
-    app?: { along: number; across: number; final: boolean; agl: number; speed: number; gRef?: number; gam?: number };
+    /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final;
+     *  `agl` over the ground under the craft, `hp` the height its profile and minima read — over the
+     *  threshold, the ground's in the last 500 m */
+    app?: { along: number; across: number; final: boolean; agl: number; hp?: number; speed: number; gRef?: number; gam?: number };
     plan?: { heat: number; shield: number; g: number };
     /** the wait for the deorbit burn as first planned [s]; re-aimed since (a long wait's last hour and a half) */
     waited?: number;
