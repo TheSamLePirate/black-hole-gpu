@@ -185,8 +185,8 @@ test("runway grading measures physical metres along and across each WGS84 thresh
       geodeticNormal(A, F, r.origin.map((v, i) => v + along * r.along[i]! + across * r.across[i]!) as Vec3);
     expect(runwayWeight(at(0, 0))).toBe(1);
     expect(runwayWeight(at(4500, 30))).toBeCloseTo(1, 7);
-    expect(runwayWeight(at(2000, 90))).toBeCloseTo(0.5, 4);
-    expect(runwayWeight(at(2000, 130))).toBe(0);
+    expect(runwayWeight(at(2000, 170))).toBeCloseTo(0.5, 4);
+    expect(runwayWeight(at(2000, 210))).toBe(0);
     expect(runwayWeight(at(7900, 0))).toBe(0);
   }
 });

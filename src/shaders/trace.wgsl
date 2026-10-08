@@ -4313,7 +4313,8 @@ fn runwayGrade(g: vec3f) -> f32 {
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
     // (the clear zone 3 km before either threshold: a runway lands both ways — sites.ts runwayWeight)
     let wa = select(select(1.0, max(0.0, 1.0 - (a - 7500.0) / 300.0), a > 7500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
-    let wc = select(max(0.0, 1.0 - (c - 60.0) / 60.0), 1.0, c < 60.0);
+    // (the strip and the taxiway beside it — A2 —: 140 m out of the axis, faded by 200)
+    let wc = select(max(0.0, 1.0 - (c - 140.0) / 60.0), 1.0, c < 140.0);
     w = max(w, wa * wc);
   }
   return w;
@@ -4402,7 +4403,35 @@ fn runwayLights(a: f32, c: f32, L: f32, hw: f32, t: f32) -> vec3f {
 // shoulders and markings (ICAO: threshold bars, centreline, edges, touchdown zone, aiming point), its
 // lights — edges white every 60 m, the threshold green, the end red — and the PAPI, set for the
 // autopilot's inner glide (1.5° to the touchdown 450 m in: two white, two red on it)
-fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, lit: bool) -> RunwayLook {
+// A seven-segment numeral's paint at (u across to the right, v up the digit) [m] in its 3 × 9 m box —
+// segments 0.8 m wide: a runway's designation as it is read from the approach
+fn digitPaint(d: u32, u: f32, v: f32, fw: f32) -> f32 {
+  // (segments a b c d e f g: top, top right, bottom right, bottom, bottom left, top left, middle)
+  let mask = array<u32, 10>(0x3Fu, 0x06u, 0x5Bu, 0x4Fu, 0x66u, 0x6Du, 0x7Du, 0x07u, 0x7Fu, 0x6Fu)[min(d, 9u)];
+  let w = 0.8;
+  var m = 0.0;
+  let hor = bandCover(u, 0.0, 3.0, fw);
+  let ver = bandCover(v, 0.0, 9.0, fw);
+  if ((mask & 1u) != 0u) { m = max(m, hor * bandCover(v, 9.0 - w, 9.0, fw)); }
+  if ((mask & 2u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fw) * bandCover(v, 4.5, 9.0, fw)); }
+  if ((mask & 4u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fw) * bandCover(v, 0.0, 4.5, fw)); }
+  if ((mask & 8u) != 0u) { m = max(m, hor * bandCover(v, 0.0, w, fw)); }
+  if ((mask & 16u) != 0u) { m = max(m, bandCover(u, 0.0, w, fw) * bandCover(v, 0.0, 4.5, fw)); }
+  if ((mask & 32u) != 0u) { m = max(m, bandCover(u, 0.0, w, fw) * bandCover(v, 4.5, 9.0, fw)); }
+  if ((mask & 64u) != 0u) { m = max(m, hor * bandCover(v, 4.5 - 0.5 * w, 4.5 + 0.5 * w, fw)); }
+  return m * ver;
+}
+// A runway end's designation (n: 1 … 36) at (a, c) of that end's frame: two digits (or one), 9 m long, past
+// its threshold bars (45 to 54 m in), either side of the axis
+fn designation(n: u32, a: f32, c: f32, fw: f32) -> f32 {
+  if (a < 44.0 || a > 55.0 || abs(c) > 8.0) { return 0.0; }
+  let tens = n / 10u;
+  let ones = n % 10u;
+  if (tens == 0u) { return digitPaint(ones, c + 1.5, a - 45.0, fw); }
+  return max(digitPaint(tens, c + 4.5, a - 45.0, fw), digitPaint(ones, c - 1.5, a - 45.0, fw));
+}
+
+fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, lit: bool, n0: u32) -> RunwayLook {
   var o: RunwayLook;
   // (landed the other way — PLAN-METEO W4 —: the lights and the PAPI from the far end; the markings both ways)
   let a = select(a0, L - a0, rev);
@@ -4427,11 +4456,44 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, l
   m = max(m, bandCover(am, 300.0, 345.0, fw) * bandCover(ac, 6.0, 15.0, fw));
   let tz = stripeCover(am - 150.0, 150.0, 22.5, fw) * bandCover(am, 150.0, 922.5, fw) * (1.0 - bandCover(am, 280.0, 360.0, fw));
   m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fw) * bandCover(ac, 4.5, 12.6, fw));
+  // (the designations: the published end's number past its threshold, the other's — 18 more — past its own,
+  // turned about: each read from its approach — A2)
+  let n1 = (n0 + 17u) % 36u + 1u;
+  m = max(m, max(designation(n0, a0, c0, fw), designation(n1, L - a0, -c0, fw)));
   o.albedo = mix(alb, vec3f(0.72, 0.72, 0.7), m * paved);
+  // the parallel taxiway (A2; the published frame: 120 m left of the axis, 23 m wide, the runway's length) and
+  // its three links (the ends, the middle): darker asphalt, a yellow centreline, the holding lines across
+  // each link 60 m out of the runway's edge, blue edge lights every 60 m, green centreline lights every 30
+  let tc = c0 + 120.0;
+  let onTwy = bandCover(abs(tc), -1.0, 11.5, fw) * bandCover(a0, -12.0, L + 12.0, fw);
+  let kl = clamp(round(a0 / (0.5 * L)), 0.0, 2.0);
+  let al = a0 - 0.5 * L * kl;
+  let onLink = bandCover(abs(al), -1.0, 11.5, fw) * bandCover(c0, -120.0, -hw, fw);
+  let twy = max(onTwy, onLink) * (1.0 - paved);
+  if (twy > 0.0) {
+    var ta = vec3f(0.105, 0.1, 0.095);
+    let yl = max(bandCover(tc, -0.15, 0.15, fw) * bandCover(a0, 0.0, L, fw), bandCover(al, -0.15, 0.15, fw) * bandCover(c0, -120.0, -hw - 6.0, fw));
+    let hold = bandCover(c0, -(hw + 61.5), -(hw + 60.0), fw) * stripeCover(c0 + hw + 62.0, 0.9, 0.45, fw) + bandCover(c0, -(hw + 59.4), -(hw + 58.8), fw);
+    ta = mix(ta, vec3f(0.75, 0.55, 0.1), max(yl, hold * onLink));
+    o.albedo = mix(o.albedo, ta, twy);
+    o.cover = max(o.cover, twy);
+  }
   // the lights (runwayLights: lit at night, at dusk, in a poor visibility — by day in the clear, too faint to
   // see: not reckoned); the PAPI 20 m left of the edge, 450 m in, day and night
   var lmp = vec3f(0.0);
-  if (lit) { lmp = runwayLights(a, c, L, hw, P.runways[17].x); }
+  if (lit) {
+    lmp = runwayLights(a, c, L, hw, P.runways[17].x);
+    // (the taxiway's: blue at its edges, green down its middle and its links')
+    let B = vec3f(0.15, 0.35, 1.0);
+    let Gt = vec3f(0.25, 1.0, 0.45);
+    let kt = round(a0 / 60.0);
+    if (kt >= 0.0 && kt * 60.0 <= L) { lmp += 0.5 * B * lampV(vec2f(a0 - 60.0 * kt, abs(c0 + 120.0) - 12.5)); }
+    let kg = round(a0 / 30.0);
+    if (kg >= 0.0 && kg * 30.0 <= L) { lmp += 0.4 * Gt * lampV(vec2f(a0 - 30.0 * kg, c0 + 120.0)); }
+    let kl2 = clamp(round(a0 / (0.5 * L)), 0.0, 2.0);
+    let kc2 = clamp(round((c0 + 120.0) / 15.0), 0.0, floor((120.0 - hw) / 15.0));
+    lmp += 0.4 * Gt * lampV(vec2f(a0 - 0.5 * L * kl2, c0 + 120.0 - 15.0 * kc2));
+  }
   let elDeg = el * 57.29578;
   for (var i = 0u; i < 4u; i++) {
     // (from the runway outwards: white above 2.0°, 1.67°, 1.33°, 1.0°)
@@ -5142,7 +5204,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       let hw = P.runways[2u + 4u * k].w;
       // (the strip and its shoulders; beyond its ends, out to 1 km and 25 m wide, the approach lights alone —
       // lit only: the markings reckoned over those fields cost the final's view 10 %)
-      let onStrip = ra >= -120.0 && ra <= L + 120.0 && abs(rc) <= hw + 120.0;
+      // (the strip, its shoulders and the taxiway left of it — A2)
+      let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -140.0;
       let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
       if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
       // (the pixel's footprint on this runway's ground, along and across it [m])
@@ -5154,7 +5217,10 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
         rwyLamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x);
         continue;
       }
-      let rl = runwayShade(ra, rc, L, hw, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit);
+      // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)
+      let pk = select(P.runways[17].z, P.runways[17].w, k >= 2u);
+      let n0 = u32(pk / select(1.0, 37.0, (k & 1u) == 1u)) % 37u;
+      let rl = runwayShade(ra, rc, L, hw, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0);
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;

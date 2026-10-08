@@ -97,7 +97,8 @@ export function runwayWeight(q: [number, number, number]): number {
     const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
     // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
     const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 7500 ? Math.max(0, 1 - (a - 7500) / 300) : 1;
-    const wc = c < 60 ? 1 : Math.max(0, 1 - (c - 60) / 60);
+    // (the strip and the taxiway beside it — PLAN-AEROPORTS A2 —: 140 m out of the axis, faded by 200)
+    const wc = c < 140 ? 1 : Math.max(0, 1 - (c - 140) / 60);
     w = Math.max(w, wa * wc);
   }
   return w;

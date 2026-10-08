@@ -2373,8 +2373,21 @@ export class Renderer {
         [0, 1, 2].map((i) => w.wind.u10 * (east[i]! * Math.sin(to) + north[i]! * Math.cos(to))),
         1,
       );
-      // (the lights' clock — their flashes, wall time — and the visibility there: under 3 km, fully up by day)
-      out.set([(performance.now() / 1000) % 600, 1 - Math.min(Math.max((w.visibility - 3000) / 5000, 0), 1)], 17 * 4);
+      // (the lights' clock — their flashes, wall time — and the visibility there: under 3 km, fully up by day;
+      // the published ends' designations, by twos, 37 to a place — A2)
+      const des = [0, 1, 2, 3].map((k) => {
+        const r = near[k]?.r.site.rwy;
+        return r === undefined ? 0 : Math.round(r / 10) % 36 || 36;
+      });
+      out.set(
+        [
+          (performance.now() / 1000) % 600,
+          1 - Math.min(Math.max((w.visibility - 3000) / 5000, 0), 1),
+          des[0]! + 37 * des[1]!,
+          des[2]! + 37 * des[3]!,
+        ],
+        17 * 4,
+      );
     }
     return out;
   }
