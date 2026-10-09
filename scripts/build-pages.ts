@@ -30,6 +30,8 @@ await Bun.write(
 // files to precache (the page, its script and styles, the workers, the WASM — not the textures)
 const sha = (await $`git rev-parse --short HEAD`.text()).trim();
 await $`cp pwa/manifest.webmanifest _site/ && mkdir -p _site/icons && cp pwa/icons/* _site/icons/`;
+// (the OAuth callback of "Sign in with OpenRouter" — PLAN-TARS T6: TARS's key, the player's own)
+await $`cp pwa/openrouter.html _site/`;
 const dirs = readdirSync("_site", { withFileTypes: true })
   .filter((d) => d.isDirectory())
   .map((d) => d.name)

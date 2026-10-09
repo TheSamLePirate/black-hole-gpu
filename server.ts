@@ -68,6 +68,8 @@ const server = Bun.serve({
       return new Response(Bun.file(`pwa/icons/${f}`));
     },
     "/precache.json": () => Response.json([]),
+    // (the OAuth callback of "Sign in with OpenRouter" — PLAN-TARS T6)
+    "/openrouter.html": () => new Response(Bun.file("pwa/openrouter.html"), { headers: { "content-type": "text/html; charset=utf-8" } }),
     "/basis_transcoder.wasm": () =>
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).

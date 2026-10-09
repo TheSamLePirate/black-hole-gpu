@@ -96,6 +96,8 @@ import { Music } from "./audio/music";
 import { ScoreDirector } from "./audio/score";
 import { Tars, type TarsMoment, type TarsState } from "./game/tars";
 import { TarsPanel } from "./ui/tars-panel";
+import { connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
+import { TarsOnline } from "./ai/tars-online";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
@@ -524,9 +526,14 @@ async function main() {
   let tarsMoment: string | null = null;
   let tarsFuelLow = false;
   let tarsDocked = false;
+  let tarsLook = performance.now();
   const tarsPersonality = () => ({ honesty: settings.tarsHonesty, humour: settings.tarsHumour });
-  const tarsPanel = new TarsPanel((q) => {
-    const st: TarsState = tarsView ?? {
+  // (through OpenRouter — T6 —: the player's own key; his answers by GLM, his remarks decided by Jev)
+  const openRouter = new OpenRouter();
+  const tarsOnline = new TarsOnline(openRouter);
+  let tarsBusy = false;
+  const tarsNow = (): TarsState =>
+    tarsView ?? {
       body: null,
       altKm: null,
       status: null,
@@ -541,15 +548,41 @@ async function main() {
       auto: camera.pilot.auto,
       dtau: null,
     };
-    const r = tars.answer(q, st, tarsPersonality());
-    if (r.set) {
-      if (r.set.honesty !== undefined) settings.tarsHonesty = r.set.honesty;
-      if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
-      onSettingsChange(["tarsHonesty", "tarsHumour"]);
-      refreshGui();
-    }
-    voice.say({ text: r.text, speaker: "tars", priority: 2 });
+  const online = () => settings.tarsOnline && !!openRouterKey.get() && navigator.onLine !== false;
+  const tarsPanel = new TarsPanel({
+    ask: async (q) => {
+      const st = tarsNow();
+      const r = tars.answer(q, st, tarsPersonality());
+      // (his settings said aloud: his own, at once — not the model's to decide)
+      if (r.set) {
+        if (r.set.honesty !== undefined) settings.tarsHonesty = r.set.honesty;
+        if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
+        onSettingsChange(["tarsHonesty", "tarsHumour"]);
+        refreshGui();
+        voice.say({ text: r.text, speaker: "tars", priority: 2 });
+        return;
+      }
+      let text = r.text;
+      if (online()) {
+        tarsBusy = true;
+        tarsPanel.refresh();
+        text = (await tarsOnline.answer(q, st, tarsPersonality(), lang)) ?? r.text;
+        tarsBusy = false;
+        tarsPanel.refresh();
+      }
+      voice.say({ text, speaker: "tars", priority: 2 });
+    },
+    link: () => ({ hint: openRouterKey.hint(), online: settings.tarsOnline, spent: openRouter.spent, busy: tarsBusy }),
+    connect: () =>
+      void orConnect().then((k) => {
+        tarsPanel.refresh(k ? t("Connected: TARS speaks through OpenRouter.") : t("Not connected."));
+        if (k) voice.say({ text: t("Connected. I'm told I'll be smarter now. We'll see."), speaker: "tars", priority: 2 });
+      }),
+    paste: (k) => openRouterKey.set(k),
+    disconnect: () => openRouterKey.clear(),
   });
+  // (a phone's way back from OpenRouter's sign-in: the code in the fragment)
+  void finishFromFragment().then((k) => k && panel.toast(t("Connected: TARS speaks through OpenRouter.")));
   const voice = new Speech({
     lang: () => lang,
     volume: () => settings.soundVoice * settings.soundVolume,
@@ -2828,9 +2861,39 @@ async function main() {
           dtau: status.side === "gargantua" ? ((info as { dtau?: number }).dtau ?? null) : null,
         };
         const said = (m: TarsMoment | null) => {
-          const r = m && settings.tarsRemarks ? tars.remark(m, wall, tarsPersonality()) : null;
+          if (!m || !settings.tarsRemarks) return;
+          // (online: Jev decides whether it is worth saying, GLM says it; offline: his written lines)
+          if (online()) {
+            const st = tarsView!;
+            void tarsOnline
+              .remark(
+                m,
+                st,
+                tarsPersonality(),
+                lang,
+                wall,
+                flightHud.alerts.map((a) => a.id),
+              )
+              .then((r) => r && voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 }));
+            return;
+          }
+          const r = tars.remark(m, wall, tarsPersonality());
           if (r) voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 });
         };
+        // (online, every two minutes of flight: a look — the pilot stuck, a mistake — Jev deciding)
+        if (online() && settings.tarsRemarks && wall - tarsLook > 120_000 && ph2?.mode === "flight") {
+          tarsLook = wall;
+          void tarsOnline
+            .remark(
+              "routine look",
+              tarsView!,
+              tarsPersonality(),
+              lang,
+              wall,
+              flightHud.alerts.map((a) => a.id),
+            )
+            .then((r) => r && voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 }));
+        }
         if (moment !== tarsMoment) {
           said(moment === "liftoff" || moment === "wormhole" || moment === "gargantua" || moment === "miller" ? moment : null);
           tarsMoment = moment;

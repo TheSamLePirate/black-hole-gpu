@@ -172,4 +172,20 @@ export default {
   "Fuel at {0} percent: delta-v for {1} percent of the speed of light.":
     "Carburant à {0} pour cent : du delta-v pour {1} pour cent de la vitesse de la lumière.",
   "{0} percent of the speed of light relative to {1}.": "{0} pour cent de la vitesse de la lumière par rapport à {1}.",
+  "TARS through OpenRouter": "TARS par OpenRouter",
+  "With your own OpenRouter key (F6: sign in with OpenRouter, or paste a key — kept in this browser only), TARS answers in his own words (the model GLM-5.3-flash, a few hundredths of a cent a line) and decides himself when a remark is worth it (Jev). Off, or without a key, or offline: his written lines.":
+    "Avec votre propre clé OpenRouter (F6 : se connecter avec OpenRouter, ou coller une clé — gardée dans ce navigateur seulement), TARS répond avec ses propres mots (le modèle GLM-5.3-flash, quelques centièmes de centime la phrase) et décide lui-même quand une remarque vaut la peine (Jev). Désactivé, sans clé ou hors ligne : ses phrases écrites.",
+  "Connected: TARS speaks through OpenRouter.": "Connecté : TARS parle par OpenRouter.",
+  "Not connected.": "Non connecté.",
+  "Connected. I'm told I'll be smarter now. We'll see.": "Connecté. On me dit que je serai plus malin. On verra.",
+  "Key kept in this browser only.": "Clé gardée dans ce navigateur seulement.",
+  "That is not an OpenRouter key (sk-or-…).": "Ce n'est pas une clé OpenRouter (sk-or-…).",
+  "Paste your OpenRouter key (sk-or-…) — Enter": "Collez votre clé OpenRouter (sk-or-…) — Entrée",
+  "TARS is thinking…": "TARS réfléchit…",
+  "OpenRouter {0} · this session {1} $": "OpenRouter {0} · cette session {1} $",
+  "OpenRouter {0} — off in the settings: his written lines": "OpenRouter {0} — désactivé dans les réglages : ses phrases écrites",
+  disconnect: "déconnecter",
+  "Offline: his written lines.": "Hors ligne : ses phrases écrites.",
+  "Sign in with OpenRouter": "Se connecter avec OpenRouter",
+  "paste a key": "coller une clé",
 } as Record<string, string>;

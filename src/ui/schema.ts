@@ -2985,6 +2985,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "tars robot assistant remarks comments voice",
   },
   {
+    key: "tarsOnline",
+    type: "toggle",
+    section: "game",
+    group: "TARS",
+    label: "TARS through OpenRouter",
+    effect: "none",
+    help: "With your own OpenRouter key (F6: sign in with OpenRouter, or paste a key — kept in this browser only), TARS answers in his own words (the model GLM-5.3-flash, a few hundredths of a cent a line) and decides himself when a remark is worth it (Jev). Off, or without a key, or offline: his written lines.",
+    keywords: "tars openrouter ai llm key online glm jev",
+  },
+  {
     key: "tarsHonesty",
     type: "number",
     section: "game",

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>TARS · OpenRouter</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; height: 100vh; display: grid; place-items: center; background: #0b0f15; color: #dde3ee; font: 15px system-ui, sans-serif; }
+      p { max-width: 32em; text-align: center; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <p id="m">TARS is connecting to OpenRouter…</p>
+    <script>
+      // The OAuth callback of "Sign in with OpenRouter" (PLAN-TARS T6): its code handed back to the game that
+      // opened this window — the game exchanges it for the key, kept in its own storage —, then closed; without
+      // an opener (a phone's single tab), back to the game with the code in the fragment.
+      const code = new URLSearchParams(location.search).get("code");
+      const m = document.getElementById("m");
+      if (!code) m.textContent = "No code from OpenRouter: the connection was cancelled. You can close this window.";
+      else if (window.opener) {
+        window.opener.postMessage({ type: "kerr-openrouter", code }, location.origin);
+        m.textContent = "Connected. This window closes itself.";
+        setTimeout(() => window.close(), 400);
+      } else location.replace(`./#openrouter-code=${encodeURIComponent(code)}`);
+    </script>
+  </body>
+</html>
