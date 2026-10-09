@@ -249,6 +249,8 @@ export class FlightHud {
   private alertOpen = "";
   private caution = new MasterCaution();
   private alertSig = "";
+  /** the alerts of the last frame drawn (the landing's callouts say the warnings — PLAN-TARS T2) */
+  alerts: { id: string; level: string }[] = [];
   /** The master caution acknowledged (Enter, or the lamp clicked): the lamp out, the warning silent. */
   acknowledge() {
     this.caution.acknowledge();
@@ -2004,6 +2006,7 @@ export class FlightHud {
     // the alerts (hud/alerts.ts) and the master caution: three lines at most, the gravest first; the
     // lamp lit — and the master warning sounding — until acknowledged (Enter, or a click on the lamp)
     const alerts = alertsOf({ ...i, animate: s.animate, fmtM: (t) => fmtM(t, s) });
+    this.alerts = alerts;
     const mc = this.caution.update(alerts);
     sound.alarm("master", s.sound && mc.sound, "warning");
     const shown = alerts.slice(0, 3);

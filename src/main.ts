@@ -88,6 +88,8 @@ import { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
 import { Speech } from "./audio/voice";
 import { Subtitles } from "./ui/subtitles";
+import { Callouts } from "./game/callouts";
+import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
@@ -498,10 +500,13 @@ async function main() {
   // the voices (PLAN-TARS T1): who speaks in what order, the system's speech, the subtitles, the radio heard
   // round mission control's lines
   const subtitles = new Subtitles();
+  const callouts = new Callouts();
   const voice = new Speech({
     lang: () => lang,
     volume: () => settings.soundVoice * settings.soundVolume,
-    enabled: () => settings.voice,
+    // (a test's page — ?e2e= —: silent, its lines timed and subtitled as without voices: a suite on a machine
+    // with speakers does not talk through it)
+    enabled: () => settings.voice && !/[?&]e2e=/.test(location.search),
     onStart: (l) => {
       subtitles.show(l, settings.subtitles);
       if (l.radio && settings.sound) sound.radio(true);
@@ -559,6 +564,9 @@ async function main() {
     setMountVessel(settings.vessel);
     camera.settleMount();
     camera.newFlight();
+    // (the last scene's voices let go, its callouts armed again)
+    voice.stop();
+    callouts.reset();
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards
@@ -2666,6 +2674,21 @@ async function main() {
             flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time)
           ),
         );
+      // (the landing's callouts — PLAN-TARS T2 —: the radio heights, minimums, sink rate, the warnings said)
+      if (settings.ship && camera.piloting && !camera.spectating) {
+        const sf = info.surface;
+        const app = camera.entryRun?.app;
+        for (const l of callouts.update({
+          inAir: !!sf && !sf.landed && !sf.rolling,
+          agl: sf?.alt ?? Number.NaN,
+          vz: sf?.vVert ?? 0,
+          final: !!app?.final,
+          hp: app?.hp,
+          dh: RUNWAY_DH,
+          alerts: flightHud.alerts,
+        }))
+          voice.say(l);
+      }
       // (the flight's recorder — game/recorder.ts —: the tablet's TELEMETRY page, its CSV)
       if (settings.ship && camera.piloting && status && info.region !== "hole") {
         const A = info.air;

@@ -128,6 +128,8 @@ export class Speech {
   readonly queue = new VoiceQueue();
   /** every line said (the tests, the lab) */
   readonly said: { text: string; speaker: Speaker; at: number }[] = [];
+  /** every line asked, said or not (the tests, the lab: a flight stepped faster than speech) */
+  readonly asked: { id?: string; text: string; speaker: Speaker }[] = [];
   private synth: SpeechSynthesis | null = typeof speechSynthesis !== "undefined" ? speechSynthesis : null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private utter: SpeechSynthesisUtterance | null = null;
@@ -136,6 +138,8 @@ export class Speech {
 
   /** A line to say (the order and the cuts: VoiceQueue). */
   say(line: VoiceLine) {
+    this.asked.push({ id: line.id, text: line.text, speaker: line.speaker });
+    if (this.asked.length > 400) this.asked.shift();
     const now = performance.now();
     const r = this.queue.push(line, now);
     if (r === "interrupt") this.cut();
