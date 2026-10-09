@@ -192,3 +192,22 @@ test("memory: kept across visits, notes, summarized past its budget, cleared", a
   expect(st.peek()).toBeNull();
   expect(new TarsMemory(st).empty).toBe(true);
 });
+
+test("an order answered with nothing done: sent back once to act", async () => {
+  const done: string[] = [];
+  const tools: Tool[] = [{ name: "undo", description: "", run: () => (done.push("undo"), "back") }];
+  const { complete, seen } = scripted([
+    () => ({ content: "Cancelled." }),
+    () => ({ content: null, tool_calls: [call("u", "undo", {})] }),
+    () => ({ content: "Back as before." }),
+  ]);
+  const r = await new Agent(complete, () => tools).turn([], "cancel that", { unacted: () => "Nothing was done: act." });
+  expect(done).toEqual(["undo"]);
+  expect(r.text).toBe("Back as before.");
+  expect(seen[1]!.at(-1)).toEqual({ role: "user", content: "Nothing was done: act." });
+  // (once only: a second empty answer stands)
+  const twice = scripted([() => ({ content: "Done." })]);
+  const r2 = await new Agent(twice.complete, () => tools).turn([], "cancel", { unacted: () => "act" });
+  expect(r2.text).toBe("Done.");
+  expect(twice.seen.length).toBe(2);
+});

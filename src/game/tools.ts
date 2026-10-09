@@ -205,6 +205,9 @@ export class GameTools {
     const s = this.ctx.settings,
       c = this.ctx.camera;
     this.shipOn();
+    // (docked, the craft would stay where its station carries it: let go of its links first — no push, it
+    // is moved anyway)
+    if (c.docked) fleet.links = fleet.links.filter((l) => l.a !== fleet.active && l.b !== fleet.active);
     if (p.frame === "ours") {
       if (!s.wormhole) throw new Error("our universe is reached through the wormhole: pick a Gargantua-system scene (game:interstellar)");
       setHomePose(s, p.X, p.fwd, p.up, p.vel);

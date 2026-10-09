@@ -85,6 +85,9 @@ export class Agent {
       onStep?: (text: string) => void;
       /** a call about to run: its tool and arguments (as sent) */
       onCall?: (tool: string, args: Args) => void;
+      /** the model answers having done nothing: words to send it back to work (null: the answer stands) —
+       *  once a turn (an order answered "done" with no tool called) */
+      unacted?: (text: string) => string | null;
       maxSteps?: number;
     } = {},
   ): Promise<TurnResult> {
@@ -96,6 +99,7 @@ export class Agent {
     const actions: Action[] = [];
     const t0 = this.now();
     const maxSteps = o.maxSteps ?? MAX_STEPS;
+    let nudged = false;
     for (let step = 0; step < maxSteps; step++) {
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (this.now() - t0 > MAX_TURN_MS) return { text: null, actions, cut: "time" };
@@ -103,7 +107,14 @@ export class Agent {
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (!r) return { text: null, actions, cut: null };
       const calls = r.tool_calls ?? [];
-      if (!calls.length) return { text: r.content?.trim() || null, actions, cut: null };
+      if (!calls.length) {
+        const text = r.content?.trim() || null;
+        const back = !actions.length && !nudged && text ? (o.unacted?.(text) ?? null) : null;
+        if (!back) return { text, actions, cut: null };
+        nudged = true;
+        messages.push({ role: "assistant", content: text } as ChatMessage, { role: "user", content: back });
+        continue;
+      }
       if (r.content?.trim()) o.onStep?.(r.content.trim());
       messages.push({ role: "assistant", content: r.content ?? null, tool_calls: calls });
       // (the calls of one reply in their order: a gear then a landing autopilot, not both at once)

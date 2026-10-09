@@ -379,6 +379,8 @@ export class TarsPanel {
       });
     bar.append(yes, no, hint);
     this.proposalEl.append(bar);
+    // (its buttons in sight, the console scrolled to them)
+    requestAnimationFrame(() => bar.scrollIntoView({ block: "nearest" }));
   }
 
   /** The wait's live line (null: none). */

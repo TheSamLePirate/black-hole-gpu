@@ -387,7 +387,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "autopilot",
       description:
-        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target; orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: dock with the station/craft (within 3 km); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns.",
+        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target only (it does not dock); orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: TO DOCK — target the station or craft first; within 3 km it closes in, aligns and docks by itself (farther: plan_mission to it first, which ends 200 m from the port); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns.",
       params: {
         mode: { type: "string", enum: AUTOS },
         site: { type: "string", description: "entry/land: a landing site or runway name (list_places)" },
@@ -519,7 +519,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "plan_maneuver",
       description:
-        "The flight computer: a manoeuvre about the body the ship orbits, planned and (execute: true, the default) flown by the autopilot. op: circularize (where: now/pe/ap), apoapsis/periapsis (altKm, where), hohmann (altKm), inclination (incDeg), match_planes (with the target), resonant (ratio), rendezvous/intercept (the target about the same body), match_velocities, fine_tune (inS), align_over_site (site: the orbit passing over a landing site). Near Gargantua itself the Kerr equivalents are used. For another body or the station use plan_mission.",
+        "The flight computer: a manoeuvre about the body the ship orbits, planned and (execute: true, the default) flown by the autopilot; execute: false only previews it (nothing changed — for a proposal). op: circularize (where: now/pe/ap), apoapsis/periapsis (altKm, where), hohmann (altKm), inclination (incDeg), match_planes (with the target), resonant (ratio), rendezvous/intercept (the target about the same body), match_velocities, fine_tune (inS), align_over_site (site: the orbit passing over a landing site). Near Gargantua itself the Kerr equivalents are used. For another body or the station use plan_mission.",
       params: {
         op: {
           type: "string",
@@ -626,19 +626,22 @@ export function gameTools(h: GameHost): Tool[] {
         }
         if (typeof r === "string") throw new Error(r);
         if (!r.ok) return opText(r);
+        // (execute: false — a proposal's figures —: previewed on the maps, nothing adopted, nothing flown)
+        if (a.execute === false) {
+          camera.fcPreview(r.burns, r.note);
+          return { ...opText(r), executing: false, adopted: false };
+        }
         const err = camera.fcSetPlan(r.burns, r.note);
         if (err) throw new Error(err);
-        if (a.execute !== false) {
-          const e = camera.fcExecute();
-          if (e) throw new Error(e);
-        }
-        return { ...opText(r), executing: a.execute !== false };
+        const e = camera.fcExecute();
+        if (e) throw new Error(e);
+        return { ...opText(r), executing: true };
       }),
     },
     {
       name: "plan_mission",
       description:
-        "A mission to another body, the station or a craft, or the wormhole, planned by the flight computer (MISSION tab) and (execute: true, the default) flown. target: a body/craft name; arrival: orbit (altKm), flyby, freeReturn (retKm: the return's periapsis). Rendezvous with iss/ranger/lander/endurance ends 200 m from the port (then autopilot dock).",
+        "A mission to another body, the station or a craft, or the wormhole, planned by the flight computer (MISSION tab) and (execute: true, the default) flown; execute: false only works out its figures (the target and plan untouched — for a proposal). target: a body/craft name; arrival: orbit (altKm), flyby, freeReturn (retKm: the return's periapsis). Rendezvous with iss/ranger/lander/endurance ends 200 m from the port (then autopilot dock).",
       params: {
         target: { type: "string" },
         arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn"] },
@@ -657,9 +660,10 @@ export function gameTools(h: GameHost): Tool[] {
           retKm: a.retKm as number | undefined,
         });
         if (!r.ok) return { ok: false, note: r.note };
-        const err = camera.missionCommit();
-        if (err) throw new Error(err);
+        // (execute: false — a proposal's figures —: the mission only previewed, its target and plan untouched)
         if (a.execute !== false) {
+          const err = camera.missionCommit();
+          if (err) throw new Error(err);
           const e = camera.fcExecute();
           if (e) throw new Error(e);
         }
@@ -1000,6 +1004,7 @@ export function gameTools(h: GameHost): Tool[] {
       },
       required: ["until"],
       run: (a, signal) => {
+        if (a.until === "stage" && !a.stage) throw new Error("until stage needs stage (ground, air, orbit, docking…)");
         const max = ((a.maxSeconds as number) ?? 120) * 1000;
         const t0 = h.now();
         const on = a.body !== undefined ? body(a.body) : null;

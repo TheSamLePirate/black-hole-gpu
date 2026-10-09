@@ -147,10 +147,11 @@ describe.skipIf(!LIVE)(`TARS directs the flight (${MODEL})`, () => {
     await app.click("[data-testid=tars-accept]");
     await app.waitFor(`__bh.tars.agent.busy`, 10_000).catch(() => {});
     await app.waitFor(`!__bh.tars.agent.busy`, 300_000);
-    const x = await app.js<{ target: string; warp: number }>(
-      `({ target: String(__bh.settings.target), warp: Math.round(__bh.settings.timeSpeed * 4.925490947e-6 * __bh.settings.massSolar) })`,
+    const x = await app.js<{ target: string; soi: string; flying: boolean }>(
+      `({ target: String(__bh.settings.target), soi: __bh.game.status().soi, flying: !!__bh.camera.fcPlan()?.executing || ["node", "burns", "transfer"].includes(__bh.camera.pilot.auto) })`,
     );
-    const ok = x.target === "moon" && x.warp === 50;
+    // (accepted: the mission under way, or flown already — the warp asked only for its transit)
+    const ok = x.target === "moon" && (x.flying || x.soi === "moon");
     runs.push({
       task: "plan accepté",
       ok,

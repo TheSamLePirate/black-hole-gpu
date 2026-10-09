@@ -10,6 +10,7 @@ import { checkArgs } from "./tool-schema";
 import { summaryPrompt, type TarsMemory } from "./memory";
 import type { OpenRouter } from "./openrouter";
 import { systemPrompt } from "./tars-online";
+import { parseOrders } from "./offline-orders";
 import type { Proposal } from "./game-tools";
 
 export interface TarsAgentDeps {
@@ -40,10 +41,13 @@ export function agentPrompt(p: Personality, lang: "fr" | "en"): string {
     "For long tasks only, say a short line before waiting (say), warp time with `time` and `wait` for the outcome when it matters; otherwise answer once the action is engaged. Never use say for your final answer.",
     "After a teleport, a load, a date change or a scene, the previous state is saved as 'Before TARS' (saves action undo goes back).",
     "Your memory: whenever the pilot tells you something about themselves (their name, a preference, a goal) or asks you to remember, call memory with action remember and a short note; forget when asked; clear everything only if the pilot asks you to forget all.",
+    "Never say you did something unless a tool call in this turn did it.",
     "Your final answer is spoken: one or two short sentences, plain text.",
   ].join(" ");
 }
 
+const UNACTED =
+  "(Check: you answered without calling any tool, but the pilot gave an order — nothing has been done in the game. Do it now with the tools (to cancel or go back: saves with action undo), then answer. If it truly needs no action, repeat your answer.)";
 const YES =
   /^\s*(oui|ouais|ok|okay|d'accord|vas[- ]y|go|accepte|j'accepte|on y va|c'est parti|yes|yep|do it|accept(ed)?|approved?|let's go)\b/i;
 const NO = /^\s*(non|nan|refuse|je refuse|pas question|no|nope|refused?|reject(ed)?|cancel)\b/i;
@@ -106,6 +110,9 @@ export class TarsAgent {
           onAction: (a) => this.d.onAction(resultShort(a), a.ok, actionLine(a), a.tool),
           onStep: (text) => this.d.say(text),
           onCall: (tool, args) => this.d.onCall?.(tool, args),
+          // (an order — the words read as one offline — answered with no tool called: nothing was done; sent
+          // back once to do it, rather than let him claim it)
+          unacted: () => (parseOrders(q).length ? UNACTED : null),
         },
       );
       this.last = r.actions;
