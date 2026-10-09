@@ -38,7 +38,8 @@ describe.skipIf(!E2E)("the flight's report", () => {
   test("a landing: touched down at Le Bourget, graded; Escape closes it", async () => {
     const r = await fly("06-final", 120_000);
     expect(r.title).toContain("Le Bourget");
-    // (the autopilot's landing: soft, on the axis — the card's text in the failure: an F seen once in three runs)
+    // (the autopilot's landing: soft, on the axis — the card's text in the failure: an F seen once in three runs,
+    // the runway read within the touchdown's step, its frame not yet the craft's — now graded the frame after)
     const text = await app.js<string>(`document.querySelector("[data-testid=flight-report]").innerText.replace(/\\n/g, " | ")`);
     expect({ letter: r.letter, text }).toMatchObject({ letter: expect.stringMatching(/^[AB]$/) });
     expect(r.lines).toBeGreaterThanOrEqual(5);

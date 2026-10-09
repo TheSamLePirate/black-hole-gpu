@@ -263,6 +263,8 @@ export class CameraController {
   onFlightReport?: (r: FlightReport | null) => void;
   /** the last report's moment (performance.now): a bounce's second contact reports nothing */
   reportedAt: number | null = null;
+  /** a touchdown to report, from its step (motion.ts reportLanding: graded at the next frame's start) */
+  reportDue: { body: string; verdict: "landed" | "hard"; sink: number; along: number } | null = null;
   /** the flown craft in the air: its forces, skin, load (flightair.ts) */
   readonly airFlight = new AirFlight();
   /** the time warp held down in the air: said once per descent */

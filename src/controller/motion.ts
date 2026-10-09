@@ -50,6 +50,7 @@ declare module "../controls" {
     ourSurfaceInfo: typeof ourSurfaceInfo;
     setOurLanded: typeof setOurLanded;
     reportLanding: typeof reportLanding;
+    reportLandingDue: typeof reportLandingDue;
   }
 }
 
@@ -773,8 +774,20 @@ function reportLanding(this: CameraController, body: string, verdict: "landed" |
   const now = performance.now();
   if (now - (this.reportedAt ?? -1e9) < 20e3) return;
   this.reportedAt = now;
+  // (graded at the next frame's start — flyShip —, not within the touchdown's step: the runway's figures
+  // read there were the place's of seconds before — 2 m off the axis and 260 m in, graded 119 m off and 840
+  // m in: F —; one step on, the craft a few metres further, they are its own)
+  this.reportDue = { body, verdict, sink, along };
+}
+
+/** The landing's report, due since the touchdown's step (reportLanding). */
+function reportLandingDue(this: CameraController) {
+  const due = this.reportDue;
+  this.reportDue = null;
+  if (!due) return;
+  const { body, verdict, sink, along } = due;
   const cam = cameraFrame(this.s);
-  const rw = this.runwayView();
+  const rw = this.runwayCompute();
   // (a runway's landing rolls on: a craft put down on its engines beside one — the Lander at Kennedy, 0 m/s
   // along, 54 m off the axis — is graded on its site, not on the runway's axis)
   const onRunway = !!rw && along > 15 && Math.abs(rw.across) < 150 && rw.along > -300 && rw.along < 5000;
@@ -815,5 +828,15 @@ function reportLanding(this: CameraController, body: string, verdict: "landed" |
 }
 
 export function installMotion(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { fly, fall, fallStep, flyHome, stableOrbit, ourSurfaceInfo, setOurLanded, reportLanding });
+  Object.assign(C.prototype, {
+    fly,
+    fall,
+    fallStep,
+    flyHome,
+    stableOrbit,
+    ourSurfaceInfo,
+    setOurLanded,
+    reportLanding,
+    reportLandingDue,
+  });
 }

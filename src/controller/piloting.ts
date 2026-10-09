@@ -155,6 +155,7 @@ function newFlight(this: CameraController) {
   recorder.reset();
   // (the last flight's report let go: a new flight, a save loaded, is not graded by it)
   this.reportedAt = null;
+  this.reportDue = null;
   this.onFlightReport?.(null);
   this.heightGoal = null;
   this.dockAuto = null;
@@ -731,6 +732,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const s = this.s;
   // (paused: the ship holds — its attitude too, its turn resumes with the time)
   if (!s.animate) return;
+  // (a touchdown's report, graded now that its step is done — motion.ts reportLanding)
+  if (this.reportDue) this.reportLandingDue();
   // (the fleet's craft coasting on their own: flown to now by the flown craft's own fall)
   fleet.stepFree(this.nowTime());
   const cam = cameraFrame(s);
