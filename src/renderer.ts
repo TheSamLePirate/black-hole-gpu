@@ -2646,7 +2646,7 @@ export class Renderer {
       probe: { cam: job.cam, hide: job.b.id, slice: job.slice },
     });
     const enc = this.device.createCommandEncoder();
-    const pipeline = this.traceVariant("env");
+    const pipeline = this.traceVariant("env", this.featureKey, false);
     if (!pipeline) return; // (still compiling: the next slice's frame tries again)
     const pass = enc.beginComputePass(this.prof.pass("planet probe"));
     pass.setPipeline(pipeline);
@@ -2704,8 +2704,15 @@ export class Renderer {
       env: GPUComputePipeline | null;
       lut: GPUComputePipeline | null;
       lutq: GPUComputePipeline | null;
-      /** the quality cascade (q, lutq) started: a still view asked for it */
-      qStarted: boolean;
+      /** a still view asked for the quality cascade (q, lutq) */
+      qWanted: boolean;
+      /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
+       *  skipped, when the camera leaves the key; started again for what is missing when it comes back */
+      busy: boolean;
+      qBusy: boolean;
+      /** a compile failed (not merely skipped): not tried again */
+      failed: boolean;
+      qFailed: boolean;
       /** the realtime kernel's compile failed or hung: the general one draws — what the timings measure */
       rtGivenUp: boolean;
     }
@@ -2732,7 +2739,7 @@ export class Renderer {
    * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq", key = this.featureKey): GPUComputePipeline | null {
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq", key = this.featureKey, create = true): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
@@ -2748,49 +2755,93 @@ export class Renderer {
     if (v) {
       this.variants.delete(key);
       this.variants.set(key, v);
-    }
-    if (!v) {
-      v = { rt: null, q: null, env: null, lut: null, lutq: null, qStarted: false, rtGivenUp: false };
+    } else {
+      // (a planet probe's key: drawn by what there is — its own kernel would be compiled before the
+      // camera's, for a light probe)
+      if (!create) return general ?? this.coveringVariant(key, kind);
+      v = {
+        rt: null,
+        q: null,
+        env: null,
+        lut: null,
+        lutq: null,
+        qWanted: false,
+        busy: false,
+        qBusy: false,
+        failed: false,
+        qFailed: false,
+        rtGivenUp: false,
+      };
       this.variants.set(key, v);
       this.evictVariants();
-      const slot = v;
-      const current = () => this.variants.get(key) === slot && !this.lost;
-      const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
-        this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
-      // (the realtime kernel first, then its probe — then the general kernel, the later scenes'
-      // fallback —, and its LUT once the first image is on screen; the quality cascade only when a
-      // still view asks for it below — five specialised compiles of a 6 362-line kernel are tens
-      // of seconds of GPU process, not spent while the player flies — plan §2.2-F)
-      void compile("main", () => (slot.rtGivenUp = true))
-        .then((p) => ((slot.rt = p), compile("env")))
-        .then((p) => {
-          slot.env = p;
-          void this.generalCompile.start();
-          return this.firstImage;
-        })
-        .then(() => ((key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
-        .then(
-          (p) => (slot.lut = p),
-          (e) => {
-            slot.rtGivenUp ||= !slot.rt;
-            console.warn("Specialised tracer unavailable:", e);
-            void this.generalCompile.start();
-          },
-        );
     }
-    if ((kind === "q" || kind === "lutq") && !v.qStarted) {
-      v.qStarted = true;
-      const slot = v;
-      const current = () => this.variants.get(key) === slot && !this.lost;
-      const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, true));
-      void compile("main")
-        .then((p) => ((slot.q = p), (key & LUT_BLOCKERS) === 0 ? compile("lut") : null))
-        .then(
-          (p) => (slot.lutq = p),
-          (e) => console.warn("Specialised tracer unavailable:", e),
-        );
-    }
+    const lutOk = (key & LUT_BLOCKERS) === 0;
+    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut))) this.realtimeCascade(key, v);
+    if (kind === "q" || kind === "lutq") v.qWanted = true;
+    if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
     return v[kind] ?? general ?? this.coveringVariant(key, kind);
+  }
+
+  /** whether a key's queued compile is still wanted: its slot kept, the device there, the camera on it —
+   *  a scene left, its remaining compiles (minutes each on a slow D3D12 driver) no longer hold the new
+   *  scene's back */
+  private wanted(key: number, slot: unknown) {
+    return () => this.variants.get(key) === slot && !this.lost && key === this.cameraKey;
+  }
+
+  /** the realtime kernel first, then its probe — then the general kernel, the later scenes' fallback —,
+   *  and its LUT once the first image is on screen; the quality cascade only when a still view asks for
+   *  it — five specialised compiles of a 6 362-line kernel are tens of seconds of GPU process, not spent
+   *  while the player flies (plan §2.2-F). What is already there is not compiled again. */
+  private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
+    slot.busy = true;
+    const current = this.wanted(key, slot);
+    const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
+      this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
+    const run = async () => {
+      if (!slot.rt) {
+        slot.rt = await compile("main", () => (slot.rtGivenUp = true));
+        if (!slot.rt) return;
+      }
+      if (!slot.env) {
+        slot.env = await compile("env");
+        if (!slot.env) return;
+      }
+      void this.generalCompile.start();
+      await this.firstImage;
+      if (!slot.lut && (key & LUT_BLOCKERS) === 0) slot.lut = await compile("lut");
+    };
+    void run().then(
+      () => (slot.busy = false),
+      (e) => {
+        slot.busy = false;
+        slot.failed = true;
+        slot.rtGivenUp ||= !slot.rt;
+        console.warn("Specialised tracer unavailable:", e);
+        void this.generalCompile.start();
+      },
+    );
+  }
+
+  private qualityCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
+    slot.qBusy = true;
+    const current = this.wanted(key, slot);
+    const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, true));
+    const run = async () => {
+      if (!slot.q) {
+        slot.q = await compile("main");
+        if (!slot.q) return;
+      }
+      if (!slot.lutq && (key & LUT_BLOCKERS) === 0) slot.lutq = await compile("lut");
+    };
+    void run().then(
+      () => (slot.qBusy = false),
+      (e) => {
+        slot.qBusy = false;
+        slot.qFailed = true;
+        console.warn("Specialised tracer unavailable:", e);
+      },
+    );
   }
 
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
@@ -4257,8 +4308,19 @@ export class Renderer {
       },
       traced,
     );
+    // (a scene whose kernel still compiles, the general one not in yet: the last image stays — said)
+    if (this.firstFrameDoneAt && phase !== "converged") this.noteSceneTracer(!traced);
     this.lastPhase = phase;
     return this.stats(phase, t);
+  }
+
+  private sceneTracerShown = false;
+  /** the pill (splash.ts's AssetPill) while the scene's tracer compiles and nothing else can draw it */
+  private noteSceneTracer(waiting: boolean) {
+    if (waiting === this.sceneTracerShown) return;
+    this.sceneTracerShown = waiting;
+    if (waiting) loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: 30 });
+    else loading.done("scene-tracer");
   }
 
   /**

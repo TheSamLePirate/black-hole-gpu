@@ -164,6 +164,55 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  // (Windows/D3D12: the general kernel minutes away, each specialised one long — a scene changed then
+  // was left on the first scene's image, its compiles queued behind the first scene's remaining ones)
+  test("a scene change before the general kernel: the new scene's kernel next, the old one's skipped, said meanwhile", async () => {
+    const app = await App.boot({
+      hash: scene,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+      const original = GPUDevice.prototype.createComputePipelineAsync;
+      const BITS = ["HAS_RADIO", "HAS_POL", "HAS_JET", "HAS_SPOT", "HAS_VOL", "HAS_WH", "HAS_THICK", "HAS_BODIES", "HAS_RWY", "HAS_KERR", "HAS_WX"];
+      globalThis.__compiles = [];
+      GPUDevice.prototype.createComputePipelineAsync = function(desc) {
+        const c = desc.compute.constants ?? {};
+        const entry = desc.compute.entryPoint;
+        if (entry === "main" || entry === "env" || entry === "lut") {
+          if (!("HAS_RADIO" in c)) return new Promise(() => {});
+          const key = BITS.reduce((k, b, i) => k | (c[b] ? 1 << i : 0), 0);
+          __compiles.push({ at: performance.now(), key, entry, q: c.QUALITY_PIPELINE === 1 });
+          return new Promise((r) => setTimeout(r, 3000)).then(() => original.call(this, desc));
+        }
+        return original.call(this, desc);
+      };
+    })()`,
+    });
+    try {
+      const first = await app.js<number>("__bh.renderer.cameraKey");
+      const switchedAt = await app.js<number>(
+        `(__bh.preset("Interstellar: the Endurance before Gargantua"), __bh.touch(), performance.now())`,
+      );
+      let pill = false;
+      const t0 = Date.now();
+      for (;;) {
+        const s = await app.js<{ key: number; rt: boolean; shown: boolean }>(
+          "({ key: __bh.renderer.cameraKey, rt: !!__bh.renderer.variants.get(__bh.renderer.cameraKey)?.rt, shown: __bh.renderer.sceneTracerShown })",
+        );
+        pill ||= s.shown;
+        if (s.key !== first && s.rt && !s.shown) break;
+        if (Date.now() - t0 > 60_000) throw new Error(`the new scene never drawn: ${JSON.stringify(s)}`);
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(pill).toBe(true);
+      // (the first scene's compiles not started after the change — one already running finishes)
+      const late = await app.js<number>(`__compiles.filter((c) => c.key === ${first} && c.at > ${switchedAt} + 50).length`);
+      expect(late).toBe(0);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("device loss during initialization is reported even before runtime callbacks exist", async () => {
     const app = await App.boot({
       hash: scene,
