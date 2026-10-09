@@ -745,3 +745,26 @@ cours » quand le général n'avait pas encore démarré) et dépassait 180 s, e
 général. Il attend désormais le général prêt, et la vue immobile ne l'attend plus : elle s'affine sur
 le noyau qualité **de la scène** (la cascade q de `traceVariant`, demandée pour la clé de la caméra
 — `cameraKey`, une sonde de planète ayant pu réécrire `featureKey` entre-temps).
+
+**Changement de scène** (`76a6399`) : avant que le noyau général ne soit là, une scène nouvelle
+n'avait rien pour la dessiner, et ses compilations attendaient celles, restantes, de la scène quittée
+(sonde, LUT, qualité) : l'image restait sur la première scène. Les compilations en file d'une clé que
+la caméra a quittée sont désormais sautées (`wanted` : la clé de la caméra), les cascades reprennent ce
+qui manque au retour, et la pastille « Compilation du lancer de rayons pour cette scène » le dit.
+Mesuré (RTX 5070 Ti, `76a6399`, cache vide) : première image 24 s (clé 576), changement de scène à
+~59 s, nouvelle scène tracée à 133 s — au moment où le général (90 s) arrivait, la variante de la
+nouvelle scène compilant à côté.
+
+**Audit, deux corrections** :
+- *Sondes d'éclairage des planètes* : elles ne lancent plus de compilation à elles ; mesuré, leur clé
+  est celle de la caméra dans les scènes du système de Gargantua (736/736) — elles tournent donc sur la
+  sonde (`env`) de la variante de la caméra, sans attendre le général (e2e).
+- *File de compilation* : son délai de « compilation bloquée » (60 s) prenait une compilation de 213 s
+  sur RX 5700 XT pour une compilation bloquée et en lançait une seconde à côté. En mode `learn`, plus
+  aucun délai avant la première compilation achevée (le watchdog de 15 min couvre un pilote bloqué),
+  puis max(60 s, 3 × la plus longue vue).
+
+**Restent** : le calibrage du tier suspendu tant que le général et le noyau qualité général
+compilent (~10 min sur RX 5700 XT) ; un export juste après le démarrage attend le noyau qualité
+général ; à cache vide, une scène lourde (trou de ver, 213 s sur RX 5700 XT) — le levier est la taille
+du code inliné par D3D12 (analyse statique des sites d'appel, à faire).

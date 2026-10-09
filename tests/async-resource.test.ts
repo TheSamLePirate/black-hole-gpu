@@ -182,3 +182,51 @@ test("synchronous and empty-message failures still provide a terminal error", as
   expect(resource.state).toBe("failed");
   expect(resource.error).toBe("Compilation failed");
 });
+
+test("a learning queue never stalls before a first compile has completed", async () => {
+  const queue = new CompileQueue(20, true);
+  const first = deferred<string>();
+  let stalled = 0;
+  const a = queue.run(
+    () => true,
+    () => first.promise,
+    () => stalled++,
+  );
+  let ranB = false;
+  const b = queue.run(
+    () => true,
+    async () => ((ranB = true), "B"),
+  );
+  await Bun.sleep(120);
+  expect(stalled).toBe(0);
+  expect(ranB).toBe(false);
+  expect(queue.stallLimit).toBe(Number.POSITIVE_INFINITY);
+  first.resolve("A");
+  expect(await a).toBe("A");
+  expect(await b).toBe("B");
+});
+
+test("a learning queue's stall limit follows the longest compile seen", async () => {
+  const queue = new CompileQueue(20, true);
+  expect(
+    await queue.run(
+      () => true,
+      () => Bun.sleep(60).then(() => "slow"),
+    ),
+  ).toBe("slow");
+  expect(queue.stallLimit).toBeGreaterThanOrEqual(180);
+  const hung = deferred<string>();
+  let stalledAt = 0;
+  const t0 = performance.now();
+  void queue.run(
+    () => true,
+    () => hung.promise,
+    () => (stalledAt = performance.now() - t0),
+  );
+  await Bun.sleep(100);
+  // (a 20 ms limit would have stalled long ago: 3 × 60 ms holds it)
+  expect(stalledAt).toBe(0);
+  await Bun.sleep(200);
+  expect(stalledAt).toBeGreaterThanOrEqual(180);
+  hung.resolve("late");
+});

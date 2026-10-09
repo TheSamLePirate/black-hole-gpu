@@ -48,14 +48,29 @@ export class AsyncResource<T> {
 
 /** Serialises costly specialised compiles. Obsolete queued work is skipped before it starts.
  * A running WebGPU compile cannot be cancelled: it keeps its slot until it settles — or, hung past
- * `stallMs` of visible time, the queue moves on without it (onStall told; its result still delivered
- * if it ever lands), so one hung driver compile does not hold every later scene's (audit M7). */
+ * the stall limit of visible time, the queue moves on without it (onStall told; its result still delivered
+ * if it ever lands), so one hung driver compile does not hold every later scene's (audit M7).
+ * `learn`: the limit follows the driver — none before a first compile has completed (the 15-min start
+ * watchdog covers a hung one), then `stallMs` or 3× the longest compile seen, whichever is longer: a
+ * slow D3D12 driver's 3-minute compile (RX 5700 XT) is not taken for a hung one, and a second kernel
+ * compiled beside it. */
 export class CompileQueue {
   private tail = Promise.resolve();
   /** compiles queued or running, a stalled one no longer counted */
   pending = 0;
+  /** the longest compile completed so far [ms] */
+  private longest = 0;
 
-  constructor(private readonly stallMs = 60_000) {}
+  constructor(
+    private readonly stallMs = 60_000,
+    private readonly learn = false,
+  ) {}
+
+  /** the stall limit now [ms] (Infinity: none yet) */
+  get stallLimit() {
+    if (!this.learn) return this.stallMs;
+    return this.longest > 0 ? Math.max(this.stallMs, 3 * this.longest) : Number.POSITIVE_INFINITY;
+  }
 
   run<T>(current: () => boolean, compile: () => Promise<T>, onStall: () => void = () => {}): Promise<T | null> {
     this.pending++;
@@ -71,11 +86,25 @@ export class CompileQueue {
     const task = this.tail
       .then(() => {
         if (!current()) return null;
-        const cancel = visibleTimeout(this.stallMs, () => {
-          release();
-          onStall();
-        });
-        return Promise.resolve().then(compile).finally(cancel);
+        // (checked every stallMs of visible time against the limit, which may have grown meanwhile)
+        let cancel = () => {};
+        const arm = (waited: number) => {
+          cancel = visibleTimeout(this.stallMs, () => {
+            const total = waited + this.stallMs;
+            if (total < this.stallLimit) return arm(total);
+            release();
+            onStall();
+          });
+        };
+        arm(0);
+        const t0 = performance.now();
+        return Promise.resolve()
+          .then(compile)
+          .then((value) => {
+            this.longest = Math.max(this.longest, performance.now() - t0);
+            return value;
+          })
+          .finally(() => cancel());
       })
       .finally(release);
     this.tail = slot;
