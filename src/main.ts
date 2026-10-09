@@ -90,6 +90,8 @@ import { Speech } from "./audio/voice";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
 import { Capcom } from "./game/capcom";
+import { Music } from "./audio/music";
+import { ScoreDirector } from "./audio/score";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
@@ -509,6 +511,9 @@ async function main() {
   let lastGrade: string | null = null;
   let earthLight = { s: 0, at: -1e9 };
   let staticOn = false;
+  // the score (PLAN-TARS T4): silence, but at the flight's great moments
+  const score = new ScoreDirector();
+  const music = new Music(() => sound.musicOut());
   const voice = new Speech({
     lang: () => lang,
     volume: () => settings.soundVoice * settings.soundVolume,
@@ -577,6 +582,8 @@ async function main() {
     callouts.reset();
     capcom.reset();
     capcomDue.length = 0;
+    score.reset();
+    music.stop();
     lastGrade = null;
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
@@ -2302,6 +2309,7 @@ async function main() {
     audio,
     voice,
     capcom,
+    music,
     skyLoading,
     touch,
     resize,
@@ -2739,6 +2747,23 @@ async function main() {
           }),
         );
         for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
+        // (the score: the moment's piece — none: silence)
+        const ph2 = phaseWatch.current;
+        music.update(
+          settings.sound && settings.music
+            ? score.moment({
+                now: wall / 1000,
+                mode: ph2?.mode ?? null,
+                stage: ph2?.stage ?? null,
+                side: status.side,
+                plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+                final: !!camera.entryRun?.app?.final,
+                agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
+                r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
+                body: status.soi ?? null,
+              })
+            : null,
+        );
         // (the blackout: the static on the radio while it lasts)
         if (capcom.blackout !== staticOn && settings.sound) sound.radioNoise((staticOn = capcom.blackout) ? 1 : 0);
       }

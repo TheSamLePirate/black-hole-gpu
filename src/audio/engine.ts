@@ -55,6 +55,8 @@ export interface Mix {
   ui: number;
   /** the voices played here (TARS's — PLAN-TARS T5 —) and the radio's frame round the system's ones (T1) */
   voice: number;
+  /** the score (PLAN-TARS T4) */
+  music: number;
 }
 
 /** What the thrusters and the cabin are doing now (set every frame by the director). */
@@ -120,9 +122,9 @@ function rms(a: AnalyserNode) {
 
 export class SoundEngine {
   ctx: AudioContext | null = null;
-  private mix: Mix = { master: 0.7, beeps: 0.8, engines: 0.9, ambience: 0.5, ui: 0.4, voice: 0.9 };
+  private mix: Mix = { master: 0.7, beeps: 0.8, engines: 0.9, ambience: 0.5, ui: 0.4, voice: 0.9, music: 0.6 };
   enabled = true;
-  private busses!: Record<"master" | "beeps" | "engine" | "rcs" | "ambience" | "ui" | "room" | "listener" | "voice", GainNode>;
+  private busses!: Record<"master" | "beeps" | "engine" | "rcs" | "ambience" | "ui" | "room" | "listener" | "voice" | "music", GainNode>;
   /** the radio's hiss under a line said by radio (PLAN-TARS T1), its band */
   private radioHiss: { g: GainNode; src: AudioBufferSourceNode } | null = null;
   private listenerLP!: BiquadFilterNode;
@@ -205,6 +207,15 @@ export class SoundEngine {
   }
 
   /** Each bus's level now and the output's peak (S8): RMS [dBFS] by bus, the output's peak [dBFS]. */
+  /** A bus's spectrum now [dB per bin, 0 … Nyquist] (the measurements' spectrograms — PLAN-TARS T4). */
+  busSpectrum(bus: string): number[] | null {
+    const a = this.busMeters[bus];
+    if (!a) return null;
+    const d = new Float32Array(a.frequencyBinCount);
+    a.getFloatFrequencyData(d);
+    return [...d];
+  }
+
   busLevels() {
     const out: Record<string, number> = {};
     for (const [k, a] of Object.entries(this.busMeters)) out[k] = rms(a);
@@ -259,6 +270,7 @@ export class SoundEngine {
     g(this.busses.ambience, this.mix.ambience);
     g(this.busses.ui, this.mix.ui);
     g(this.busses.voice, this.mix.voice);
+    g(this.busses.music, this.mix.music);
     if (enabled && !document.hidden) void this.ctx.resume();
   }
 
@@ -403,8 +415,11 @@ export class SoundEngine {
     // (the voices: TARS's, the radio's frame — not through the hull: heard as a headset hears them)
     const voice = gain(this.mix.voice);
     voice.connect(master);
-    this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener, voice };
-    for (const [k, n] of Object.entries({ beeps, engine, rcs, ambience, listener: eq2, voice, master })) {
+    // (the score: straight to the master — music is not in the cabin)
+    const music = gain(this.mix.music);
+    music.connect(master);
+    this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener, voice, music };
+    for (const [k, n] of Object.entries({ beeps, engine, rcs, ambience, listener: eq2, voice, music, master })) {
       const a = ctx.createAnalyser();
       a.fftSize = 2048;
       n.connect(a);
@@ -1358,6 +1373,11 @@ export class SoundEngine {
     this.radioHiss.g.gain.setTargetAtTime(on ? hiss : 0, t, on ? 0.02 : 0.08);
     this.tone(on ? 2525 : 2475, 0, 0.25, { level: 0.07, type: "sine", out });
     this.burst(out, 0.09, 2600, on ? 0.06 : 0.14, 0.8, on ? 0.25 : 0);
+  }
+
+  /** The score's way out (audio/music.ts): the context and the music bus, once the sound runs. */
+  musicOut(): { ctx: AudioContext; bus: GainNode } | null {
+    return this.running && this.enabled && this.ctx ? { ctx: this.ctx, bus: this.busses.music } : null;
   }
 
   /** The radio's hiss alone, held (the blackout's static — PLAN-TARS T3): 0 off … 1 loud. */

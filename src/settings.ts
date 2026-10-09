@@ -427,6 +427,8 @@ export interface Settings {
   voice: boolean; // the voices spoken (the landing's callouts, mission control, TARS — PLAN-TARS); off: subtitles alone
   soundVoice: number; // their volume, 0…1
   subtitles: boolean; // the line being said shown, its speaker named
+  music: boolean; // the score at the flight's great moments (PLAN-TARS T4); silence otherwise
+  soundMusic: number; // its volume, 0…1
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
@@ -664,6 +666,8 @@ export function defaultSettings(): Settings {
     voice: true,
     soundVoice: 0.9,
     subtitles: true,
+    music: true,
+    soundMusic: 0.6,
     haptics: 0.6,
     dynamicResolution: false,
   };
@@ -1865,6 +1869,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   voice: "pref",
   soundVoice: "pref",
   subtitles: "pref",
+  music: "pref",
+  soundMusic: "pref",
   haptics: "pref",
   dynamicResolution: "pref",
 };

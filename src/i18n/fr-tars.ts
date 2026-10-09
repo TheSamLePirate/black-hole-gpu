@@ -46,6 +46,10 @@ export default {
   Overload: "Surcharge",
   "Event horizon ahead": "Horizon des événements devant",
   Voices: "Voix",
+  Music: "Musique",
+  "Music volume": "Volume de la musique",
+  "Silence by default; the score comes only at the flight's great moments — the lift-off, the entry's plasma, the final, the wormhole, near Gargantua, on Miller (its tick, the film's motif) —, an organ and pads synthesized live, faded in and out.":
+    "Le silence par défaut ; la musique ne vient qu'aux grands moments du vol — le décollage, le plasma de la rentrée, la finale, le trou de ver, près de Gargantua, sur Miller (son tic-tac, le motif du film) —, un orgue et des nappes synthétisés en direct, en fondu.",
   "Voice volume": "Volume des voix",
   Subtitles: "Sous-titres",
   "The voices spoken: the landing's callouts (heights, minimums, sink rate), mission control by radio, TARS. The system's voices (the browser's, the computer's), in the interface's language. Off: their subtitles alone.":

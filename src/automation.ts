@@ -26,6 +26,7 @@ import type { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
 import type { Speech } from "./audio/voice";
 import type { Capcom } from "./game/capcom";
+import type { Music } from "./audio/music";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
 import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
@@ -59,6 +60,8 @@ export interface BhContext {
   voice: Speech;
   /** mission control (PLAN-TARS T3): its blackout */
   capcom: Capcom;
+  /** the score (PLAN-TARS T4): the moment playing, the notes and ticks started */
+  music: Music;
   skyLoading: Promise<unknown>;
   touch(): void;
   resize(): void;
@@ -84,7 +87,7 @@ export interface BhContext {
 }
 
 export function installBh(c: BhContext) {
-  const { settings, renderer, camera, sim, tools, bench, mission, cockpitScreens, audio, skyLoading, voice, capcom } = c;
+  const { settings, renderer, camera, sim, tools, bench, mission, cockpitScreens, audio, skyLoading, voice, capcom, music } = c;
   const { touch, resize, applyPreset, goTo, skyGoTo, updateChart } = c;
   const refreshGui = () => c.refreshGui();
   const snapshot = async (name = "snapshot") =>
@@ -282,6 +285,7 @@ export function installBh(c: BhContext) {
       /** the voices (PLAN-TARS): __bh.voice.say({ text, speaker, priority }), .said, .queue */
       voice,
       capcom,
+      music,
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,

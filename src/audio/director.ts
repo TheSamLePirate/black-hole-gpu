@@ -143,6 +143,7 @@ export class SoundDirector {
         ambience: s.soundAmbience,
         ui: s.soundUi,
         voice: s.soundVoice ?? 0.9,
+        music: s.music ? (s.soundMusic ?? 0.6) : 0,
       },
       s.sound,
     );
