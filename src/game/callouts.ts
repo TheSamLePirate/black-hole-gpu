@@ -26,6 +26,8 @@ export interface CalloutInput {
   dh: number;
   /** the HUD's alerts now (hud/alerts.ts): their ids and levels */
   alerts: { id: string; level: string }[];
+  /** the wall's clock [ms] (a warning that comes back within 30 s not said again) */
+  now?: number;
 }
 
 /** The radio heights called going down [m]. */
@@ -84,6 +86,8 @@ export class Callouts {
   private sinking = false;
   private pulling = false;
   private warned = new Set<string>();
+  /** when each warning was last said [ms] */
+  private saidAt = new Map<string, number>();
 
   /** A new flight: everything armed again. */
   reset() {
@@ -91,14 +95,19 @@ export class Callouts {
     this.dhArmed = true;
     this.sinking = this.pulling = false;
     this.warned.clear();
+    this.saidAt.clear();
   }
 
   update(i: CalloutInput): VoiceLine[] {
     const out: VoiceLine[] = [];
     // the warnings: each said as it comes, once while it lasts
     const now = new Set(i.alerts.filter((a) => a.level === "warning" || a.level === "caution").map((a) => a.id));
+    const wall = i.now ?? 0;
     for (const id of now)
-      if (SPOKEN[id] && !this.warned.has(id)) out.push({ id: `alert-${id}`, text: SPOKEN[id]!(), speaker: "callout", priority: 0 });
+      if (SPOKEN[id] && !this.warned.has(id) && !(i.now !== undefined && wall - (this.saidAt.get(id) ?? -Infinity) < 30_000)) {
+        this.saidAt.set(id, wall);
+        out.push({ id: `alert-${id}`, text: SPOKEN[id]!(), speaker: "callout", priority: 0 });
+      }
     this.warned = new Set([...now].filter((id) => SPOKEN[id]));
     if (!i.inAir || !Number.isFinite(i.agl)) {
       if (!i.inAir) {

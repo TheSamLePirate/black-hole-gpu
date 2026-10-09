@@ -1360,6 +1360,16 @@ export class SoundEngine {
     this.burst(out, 0.09, 2600, on ? 0.06 : 0.14, 0.8, on ? 0.25 : 0);
   }
 
+  /** The radio's hiss alone, held (the blackout's static — PLAN-TARS T3): 0 off … 1 loud. */
+  radioNoise(level: number) {
+    if (!this.running || !this.enabled) return;
+    if (!this.radioHiss) {
+      this.radio(true, 0);
+      this.radio(false);
+    }
+    this.radioHiss!.g.gain.setTargetAtTime(level > 0 ? 0.012 + 0.16 * Math.min(level, 1) : 0, this.ctx!.currentTime, 0.3);
+  }
+
   /**
    * A repeating alarm while `on` (e.g. a collision course, terrain): two tones, `rate` per second.
    * kind "caution": slow and soft; "warning": fast and insistent.

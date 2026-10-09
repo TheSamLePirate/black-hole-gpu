@@ -4,6 +4,7 @@
 // interface's clicks, delegated from the DOM.
 
 import type { Settings } from "../settings";
+import { t } from "../i18n";
 import type { RangerStatus } from "../game/status";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
@@ -53,6 +54,12 @@ function panelFrom(pose: ShipPose): [number, number, number] {
   return [c[0], c[1], -c[2]];
 }
 
+/** An arrival's message (an orbit reached, a body arrived at, a manoeuvre flown), in English or as translated. */
+function arrived(text: string): boolean {
+  const heads = ["In orbit around {0}", "Arrived: {0}", "Manoeuvre done"].flatMap((k) => [k, t(k)].map((x) => x.split("{0}")[0]!.trim()));
+  return heads.some((h) => h && text.toLowerCase().startsWith(h.toLowerCase()));
+}
+
 export class SoundDirector {
   /** the last Mach number (the boom when it crosses 1) */
   private mach = 0;
@@ -97,7 +104,8 @@ export class SoundDirector {
       if (!this.s.sound) return;
       if (e.kind === "warn" && /crash/i.test(e.text)) sound.play("crash");
       else if (e.kind === "error") sound.play("error");
-      else if (e.kind === "pilot" && /^(In orbit|Arrived|Manoeuvre done)/i.test(e.text)) sound.play("arrive");
+      // (the messages as said — translated: in French the English prefixes never matched, the chime silent)
+      else if (e.kind === "pilot" && arrived(e.text)) sound.play("arrive");
       // (docking: the capture, the hooks, the latches; undocking: the springs — S6)
       else if (e.kind === "pilot" && /^Docked to /.test(e.text)) sound.play("dock");
       else if (e.kind === "pilot" && /^Undocked from /.test(e.text)) sound.play("undock");

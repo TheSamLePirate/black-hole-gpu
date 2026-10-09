@@ -12,7 +12,7 @@ import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
-import { bodyView, earthGround, earthStart, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
+import { bodyView, earthGround, earthStart, ourState, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
 import { toBodyFixed } from "./system/our-surface";
 import { theirFlightPose, theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, isTyping } from "./controls";
@@ -89,6 +89,7 @@ import { sound } from "./audio/engine";
 import { Speech } from "./audio/voice";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
+import { Capcom } from "./game/capcom";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
@@ -501,6 +502,13 @@ async function main() {
   // round mission control's lines
   const subtitles = new Subtitles();
   const callouts = new Callouts();
+  // mission control (PLAN-TARS T3): Houston and the tower on the flight's moments, the light's delay from the
+  // Earth (measured every 2 s), the blackout's static; the last landing's grade for its word
+  const capcom = new Capcom();
+  const capcomDue: { line: import("./audio/voice").VoiceLine; at: number }[] = [];
+  let lastGrade: string | null = null;
+  let earthLight = { s: 0, at: -1e9 };
+  let staticOn = false;
   const voice = new Speech({
     lang: () => lang,
     volume: () => settings.soundVoice * settings.soundVolume,
@@ -567,6 +575,9 @@ async function main() {
     // (the last scene's voices let go, its callouts armed again)
     voice.stop();
     callouts.reset();
+    capcom.reset();
+    capcomDue.length = 0;
+    lastGrade = null;
     camera.setOurLanded(null);
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards
@@ -1522,6 +1533,7 @@ async function main() {
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
   camera.onFlightReport = (r) => {
     flightHud.showReport(r);
+    lastGrade = r?.letter ?? null;
     if (!r) return;
     gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
   };
@@ -2289,6 +2301,7 @@ async function main() {
     cockpitScreens,
     audio,
     voice,
+    capcom,
     skyLoading,
     touch,
     resize,
@@ -2686,8 +2699,48 @@ async function main() {
           hp: app?.hp,
           dh: RUNWAY_DH,
           alerts: flightHud.alerts,
+          now: performance.now(),
         }))
           voice.say(l);
+      }
+      // (mission control — PLAN-TARS T3 —: its lines on the flight's moments, each when it arrives)
+      if (settings.ship && camera.piloting && !camera.spectating && status) {
+        const wall = performance.now();
+        const Msec = 4.925490947e-6 * settings.massSolar;
+        if (wall - earthLight.at > 2000) {
+          const nav = status.side === "ours" ? camera.ourNav(cameraFrame(settings)) : null;
+          const E = nav ? ourState("earth", nav.t).pos : null;
+          earthLight = {
+            s: nav && E ? Math.hypot(nav.X[0] - E[0], nav.X[1] - E[1], nav.X[2] - E[2]) * Msec : 0,
+            at: wall,
+          };
+        }
+        const A = info.air;
+        const rv = camera.entryRun?.app?.final ? camera.runwayView() : null;
+        const ph = phaseWatch.current;
+        capcomDue.push(
+          ...capcom.update({
+            now: wall,
+            side: status.side,
+            stage: ph?.stage ?? null,
+            mode: ph?.mode ?? null,
+            callsign: VESSELS[fleet.active].name,
+            orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
+            entry: camera.entryRun?.phase ?? null,
+            site: camera.entryRun?.site?.name ?? null,
+            final: rv ? { rwy: rv.rwy, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
+            plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+            stopped: !!camera.ourLanded && !camera.rolling,
+            docked: !!info.links.length,
+            grade: lastGrade,
+            failed: !!camera.airFlight.failure,
+            lightS: earthLight.s,
+            warp: settings.timeSpeed * Msec,
+          }),
+        );
+        for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
+        // (the blackout: the static on the radio while it lasts)
+        if (capcom.blackout !== staticOn && settings.sound) sound.radioNoise((staticOn = capcom.blackout) ? 1 : 0);
       }
       // (the flight's recorder — game/recorder.ts —: the tablet's TELEMETRY page, its CSV)
       if (settings.ship && camera.piloting && status && info.region !== "hole") {

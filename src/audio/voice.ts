@@ -8,7 +8,7 @@
 
 /** Who speaks: the landing's callouts (the aircraft's own voice), mission control (by radio), TARS, the
  *  flight computer's messages. */
-export type Speaker = "callout" | "mission" | "tars" | "computer";
+export type Speaker = "callout" | "mission" | "tower" | "tars" | "computer";
 
 /** A line to say. */
 export interface VoiceLine {
@@ -107,6 +107,7 @@ export function voiceScore(v: { lang: string; name: string; localService: boolea
 export const SPEAKER_STYLE: Record<Speaker, { rate: number; pitch: number }> = {
   callout: { rate: 1.05, pitch: 0.9 },
   mission: { rate: 1.08, pitch: 1.0 },
+  tower: { rate: 1.12, pitch: 1.05 },
   tars: { rate: 1.0, pitch: 0.8 },
   computer: { rate: 1.0, pitch: 1.0 },
 };

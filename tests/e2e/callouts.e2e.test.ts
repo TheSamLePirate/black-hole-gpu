@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// PLAN-TARS T2: the landing's callouts on a real flight — the entry autopilot's glide onto Edwards, flown at
+// PLAN-TARS T2–T3: the landing's callouts and mission control on a real flight — the entry autopilot's glide onto Edwards, flown at
 // fixed steps with the loop's frames between (the callouts are read there): the radio heights going down and
-// minimums, in order, never "sink rate" nor "pull up" (a dive's: tests/callouts.test.ts).
+// minimums, in order, never "sink rate" nor "pull up" (a dive's: tests/callouts.test.ts); the tower's clearance
+// on the final, Houston's "wheels stop" once stopped.
 
 describe.skipIf(!E2E)("the landing's callouts", () => {
   let app: App;
@@ -30,6 +31,15 @@ describe.skipIf(!E2E)("the landing's callouts", () => {
       if (done) break;
       await app.js(`new Promise((r) => requestAnimationFrame(() => r(true)))`);
     }
+    // (a few frames on the ground: the report out, then the wheels' stop said)
+    for (let k = 0; k < 20; k++) await app.js(`new Promise((r) => requestAnimationFrame(() => r(true)))`);
+    const radio = await app.js<[string, string][]>(
+      `__bh.voice.asked.slice(window.__n0).filter((l) => l.speaker === "mission" || l.speaker === "tower").map((l) => [l.id, l.speaker])`,
+    );
+    expect(radio).toEqual([
+      ["cleared", "tower"],
+      ["wheels", "mission"],
+    ]);
     const r = await app.js<{ ids: string[]; landed: boolean }>(
       `(__bh.freeze(false), { ids: __bh.voice.asked.slice(window.__n0).filter((l) => l.speaker === "callout").map((l) => l.id), landed: !!__bh.camera.ourLanded })`,
     );

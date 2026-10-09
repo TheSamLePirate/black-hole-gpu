@@ -7,6 +7,7 @@ import type { Speaker, VoiceLine } from "../audio/voice";
 const NAMES: Record<Speaker, () => string> = {
   callout: () => t("RANGER"),
   mission: () => t("MISSION CONTROL"),
+  tower: () => t("TOWER"),
   tars: () => "TARS",
   computer: () => t("COMPUTER"),
 };
