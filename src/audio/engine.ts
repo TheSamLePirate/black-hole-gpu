@@ -125,6 +125,15 @@ export class SoundEngine {
   private mix: Mix = { master: 0.7, beeps: 0.8, engines: 0.9, ambience: 0.5, ui: 0.4, voice: 0.9, music: 0.6 };
   enabled = true;
   private busses!: Record<"master" | "beeps" | "engine" | "rcs" | "ambience" | "ui" | "room" | "listener" | "voice" | "music", GainNode>;
+  /** TARS's voice being said (T5a) */
+  private robotSrc: AudioBufferSourceNode | null = null;
+  /** TARS's voice cut (a more urgent line) */
+  stopRobot() {
+    try {
+      this.robotSrc?.stop();
+    } catch {}
+    this.robotSrc = null;
+  }
   /** the radio's hiss under a line said by radio (PLAN-TARS T1), its band */
   private radioHiss: { g: GainNode; src: AudioBufferSourceNode } | null = null;
   private listenerLP!: BiquadFilterNode;
@@ -1380,6 +1389,25 @@ export class SoundEngine {
     return this.running && this.enabled && this.ctx ? { ctx: this.ctx, bus: this.busses.music } : null;
   }
 
+  /**
+   * TARS's voice played (PLAN-TARS T5a): the samples of audio/formant.ts through a robot's timbre — the
+   * voice's presence lifted, a short metallic comb (a small resonant chassis), a gentle saturation — placed
+   * behind the pilot on the right in the cabin (his seat), ahead from outside; on the voice bus. Resolves
+   * when it has been said (null: the sound not running).
+   */
+  playRobot(samples: Float32Array, sampleRate: number, inside: boolean): Promise<void> | null {
+    if (!this.running || !this.enabled || !this.ctx) return null;
+    const ctx = this.ctx;
+    const src = robotVoice(ctx, samples, sampleRate, this.busses.voice, inside, this.hrtf);
+    this.robotSrc = src;
+    return new Promise((done) => {
+      src.onended = () => {
+        if (this.robotSrc === src) this.robotSrc = null;
+        done();
+      };
+    });
+  }
+
   /** The radio's hiss alone, held (the blackout's static — PLAN-TARS T3): 0 off … 1 loud. */
   radioNoise(level: number) {
     if (!this.running || !this.enabled) return;
@@ -1420,6 +1448,59 @@ export class SoundEngine {
       },
     });
   }
+}
+
+/** TARS's voice's chain (PLAN-TARS T5a): its samples, the robot's timbre — the presence lifted, a short
+ *  metallic comb (a small resonant chassis), a gentle saturation —, placed (his seat in the cabin, ahead from
+ *  outside), into `out`; started. Its source (to stop it). Any context: the game's, or an offline one (its
+ *  measurement). */
+export function robotVoice(
+  ctx: BaseAudioContext,
+  samples: Float32Array,
+  sampleRate: number,
+  out: AudioNode,
+  inside: boolean,
+  hrtf: boolean,
+): AudioBufferSourceNode {
+  const buf = ctx.createBuffer(1, samples.length, sampleRate);
+  buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+  const src = new AudioBufferSourceNode(ctx, { buffer: buf });
+  const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: 110, Q: 0.7 });
+  const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: 2600, Q: 1, gain: 4 });
+  const dry = new GainNode(ctx, { gain: 0.8 });
+  const comb = new DelayNode(ctx, { delayTime: 0.0045 });
+  const fb = new GainNode(ctx, { gain: 0.32 });
+  const wet = new GainNode(ctx, { gain: 0.3 });
+  const shape = new WaveShaperNode(ctx, { curve: robotCurve() });
+  const pan = new PannerNode(ctx, {
+    panningModel: hrtf ? "HRTF" : "equalpower",
+    distanceModel: "inverse",
+    refDistance: 1,
+    rolloffFactor: 0.2,
+    positionX: inside ? 0.7 : 0,
+    positionY: inside ? -0.1 : 0,
+    positionZ: inside ? 0.5 : -1,
+  });
+  src.connect(hp).connect(pres);
+  pres.connect(dry).connect(shape);
+  pres.connect(comb).connect(fb).connect(comb);
+  comb.connect(wet).connect(shape);
+  shape.connect(pan).connect(out);
+  src.start();
+  src.addEventListener("ended", () => setTimeout(() => pan.disconnect(), 300));
+  return src;
+}
+
+/** A soft saturation's curve (TARS's voice: a little grit, its peaks rounded). */
+let curve: Float32Array<ArrayBuffer> | null = null;
+function robotCurve() {
+  if (curve) return curve;
+  curve = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) {
+    const x = (i / 1023) * 2 - 1;
+    curve[i] = Math.tanh(1.8 * x) / Math.tanh(1.8);
+  }
+  return curve;
 }
 
 /** (a hot reload replaces the engine: the old one is silenced, not left humming underneath) */

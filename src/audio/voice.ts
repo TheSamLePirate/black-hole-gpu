@@ -121,6 +121,11 @@ export interface SpeechHost {
   /** a line begins and ends (the subtitles, the radio's squelch) */
   onStart(l: VoiceLine): void;
   onEnd(l: VoiceLine): void;
+  /** a voice of the game's own for this line (TARS's robot, in English — PLAN-TARS T5a): resolves when said;
+   *  null: the system's speech says it */
+  robot?(l: VoiceLine): Promise<void> | null;
+  /** that voice stopped (a more urgent line) */
+  stopRobot?(): void;
 }
 
 /** The voices said by Web Speech: the queue drained one line at a time. Without speechSynthesis (or the
@@ -158,6 +163,7 @@ export class Speech {
     // (its own end event is let go: the next line starts here)
     if (u) u.onend = u.onerror = null;
     this.synth?.cancel();
+    this.host.stopRobot?.();
     this.queue.done();
     this.host.onEnd(cur);
   }
@@ -183,6 +189,13 @@ export class Speech {
       this.host.onEnd(l);
       this.pump();
     };
+    // (TARS's own voice, played by the game's audio)
+    const own = this.host.robot?.(l) ?? null;
+    if (own) {
+      void own.then(finish);
+      this.timer = setTimeout(finish, 2 * readingMs(l.text) + 4000);
+      return;
+    }
     // (no voice — none in the browser, or switched off —: its reading time, the subtitles alone)
     const synth = this.synth;
     if (!synth || !this.host.enabled()) {

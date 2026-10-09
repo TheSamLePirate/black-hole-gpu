@@ -87,6 +87,8 @@ import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
 import { Speech } from "./audio/voice";
+import { synthesize } from "./audio/formant";
+import { phonemes } from "./audio/g2p";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
 import { Capcom } from "./game/capcom";
@@ -528,6 +530,13 @@ async function main() {
       subtitles.end(l);
       if (l.radio && settings.sound) sound.radio(false);
     },
+    // (TARS in English: his own robot voice, synthesized here — PLAN-TARS T5a; in French the system's, the
+    // owner's choice: the home-made French was not understood)
+    robot: (l) =>
+      l.speaker === "tars" && lang === "en" && settings.voice
+        ? sound.playRobot(synthesize(phonemes(l.text)), 22050, settings.shipMount === "cockpit" || settings.shipMount === "cabin")
+        : null,
+    stopRobot: () => sound.stopRobot(),
   });
   const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
   panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));

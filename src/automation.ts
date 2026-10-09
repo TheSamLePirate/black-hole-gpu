@@ -23,7 +23,9 @@ import { vram } from "./bench/vram";
 import type { Mission } from "./mission";
 import type { CockpitScreens } from "./ui/cockpitscreens";
 import type { SoundDirector } from "./audio/director";
-import { sound } from "./audio/engine";
+import { robotVoice, sound } from "./audio/engine";
+import { synthesize } from "./audio/formant";
+import { phonemes } from "./audio/g2p";
 import type { Speech } from "./audio/voice";
 import type { Capcom } from "./game/capcom";
 import type { Music } from "./audio/music";
@@ -286,6 +288,8 @@ export function installBh(c: BhContext) {
       voice,
       capcom,
       music,
+      /** TARS's robot voice's parts (PLAN-TARS T5a): its measurement renders it offline */
+      tarsVoice: { phonemes, synthesize, robotVoice },
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,
