@@ -33,7 +33,9 @@ describe.skipIf(!E2E)("the take-off assisted", () => {
     expect(say.some((l) => l.startsWith("GRAVITY TURN IN"))).toBe(true);
     // the autopilot flies: on its optimum, max-Q met, the cutoff counted down
     await app.click("[data-testid=hub-assist]");
-    await app.waitFor(`__bh.game.status().altKm > 12`, 120_000);
+    // (on its optimum 5 km up — the Ranger's take-off a runway's now, its gear real (PLAN-COCKPIT K4b): the
+    // optimum taken from where the climb proper begins; past ~8 km the wings' lift flattens the climb off it)
+    await app.waitFor(`__bh.game.status().altKm > 5`, 120_000);
     const H = await app.js<{ state: string; n: number; rows: string[] }>(
       `(() => { const h = __bh.camera.hubInfo(); return { state: h.graph.state, n: h.graph.flown.length, rows: h.rows.map((r) => r[0]) }; })()`,
     );

@@ -37,6 +37,7 @@ export type KeyAction =
   | "antigrav"
   | "flaps"
   | "airBrake"
+  | "gear"
   | "pathInView"
   | "hudDensity"
   | "missions"
@@ -246,14 +247,14 @@ export const KEYMAP: KeySection[] = [
         bind: HOLDS.map((h, i) => fly(`Digit${i + 1}`, "hold", { arg: h })),
       },
       {
-        keys: "8 · 9 · 0 · ⇧0 · G · U · B",
+        keys: "8 · 9 · 0 · ⇧0 · F7 · U · B",
         text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)",
         bind: [
           fly("Digit8", "auto", { arg: "hover" }),
           fly("Digit9", "auto", { arg: "circularize" }),
           fly("Digit0", "auto", { arg: "approach", shift: false }),
           fly("Digit0", "auto", { arg: "orbit", shift: true }),
-          fly("KeyG", "auto", { arg: "land", shift: false }),
+          fly("F7", "auto", { arg: "land" }),
           fly("KeyU", "auto", { arg: "takeoff" }),
           fly("KeyB", "auto", { arg: "dock" }),
         ],
@@ -298,6 +299,11 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyF", "flightMode", off), fly("KeyF", "antigrav", on)],
       },
       { keys: "P · ⇧P", text: "Flaps (up · half · full) · air brake", bind: [fly("KeyP", "flaps", off), fly("KeyP", "airBrake", on)] },
+      {
+        keys: "G",
+        text: "Landing gear: down · up (8 s; locked down on the ground; an alarm if it is up low and slow)",
+        bind: [fly("KeyG", "gear", off)],
+      },
       {
         keys: "⇧G",
         text: "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing",

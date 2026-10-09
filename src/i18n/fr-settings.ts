@@ -757,6 +757,9 @@ export default {
   "Near Gargantua: the ship's clock rate dτ/dt, its speed against the local observer and γ, the sky ahead's Doppler factor, the orbit's energy (bound and the margin to escape, or escaping), the radius against the ISCO, the photon orbit and the horizon (red inside), the tide per metre; the radial-in marker named: the way to the hole.":
     "Près de Gargantua : le rythme de l'horloge du vaisseau dτ/dt, sa vitesse par rapport à l'observateur local et γ, le facteur Doppler du ciel devant, l'énergie de l'orbite (liée et la marge avant l'évasion, ou en évasion), le rayon comparé à l'ISCO, à l'orbite des photons et à l'horizon (rouge à l'intérieur), la marée par mètre ; le marqueur radial entrant nommé : la direction du trou.",
   "Aids on the cockpit's screens": "Aides sur les écrans du cockpit",
+  "Landing gear by itself": "Train d'atterrissage automatique",
+  "The gear lowered and raised by itself — below 600 m over the ground, on the ground —, as it was before it was commanded. Off: you lower it (G, the cockpit's GEAR lever, a controller), an alarm sounds if it is up low and slow, and a landing gear up is on the belly. The autopilots lower it themselves either way.":
+    "Le train sorti et rentré de lui-même — sous 600 m au-dessus du sol, au sol —, comme avant qu'il ne soit commandé. Désactivé : c'est vous qui le sortez (G, le levier GEAR du cockpit, une manette), une alarme sonne s'il est rentré bas et lent, et un atterrissage train rentré se fait sur le ventre. Les autopilotes le sortent d'eux-mêmes dans tous les cas.",
   "Cabin lighting": "Éclairage de la cabine",
   "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). 0: off, the screens and the outside alone.":
     "Les plafonniers de la cabine — le bouton CABIN du cockpit (le tourner, ou la molette dessus). 0 : éteints, les écrans et le dehors seuls.",
@@ -1113,6 +1116,8 @@ export default {
   "In the air: fly as a rocket · a plane (let go: the flight path held) · with the flight computer (the stick and throttle set the way and the speed) — antigravity":
     "Dans l'air : voler comme une fusée · un avion (relâché : la trajectoire maintenue) · avec l'ordinateur de vol (le manche et les gaz fixent la direction et la vitesse) — antigravité",
   "Flaps (up · half · full) · air brake": "Volets (rentrés · mi-course · pleins) · aérofrein",
+  "Landing gear: down · up (8 s; locked down on the ground; an alarm if it is up low and slow)":
+    "Train d'atterrissage : sorti · rentré (8 s ; verrouillé sorti au sol ; une alarme s'il est rentré bas et lent)",
   "Entry & landing: from orbit the deorbit burn for a site (the flight computer's LAND tab chooses it), the guided entry, the glide and the landing":
     "Rentrée et atterrissage : depuis l'orbite, la poussée de désorbitation vers un site (choisi dans l'onglet LAND de l'ordinateur de vol), la rentrée guidée, le plané et l'atterrissage",
   "The future path in the view": "La trajectoire future dans la vue",

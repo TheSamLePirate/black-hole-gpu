@@ -31,7 +31,7 @@ function helpOf(id: string): { why: string; todo: string } {
       return {
         why: t("The predicted path meets the body's surface."),
         todo: t(
-          "Raise the periapsis (prograde at the apoapsis, or radially out); to come down on purpose: land (G) or entry and landing (⇧G).",
+          "Raise the periapsis (prograde at the apoapsis, or radially out); to come down on purpose: land (F7) or entry and landing (⇧G).",
         ),
       };
     case "failure":
@@ -53,6 +53,11 @@ function helpOf(id: string): { why: string; todo: string } {
       return {
         why: t("The acceleration nears what the structure bears."),
         todo: t("Ease the pull: less angle of attack, less bank, a gentler throttle."),
+      };
+    case "gear":
+      return {
+        why: t("The landing gear is not down and locked, the craft low and slow: a landing like this is on the belly."),
+        todo: t("Lower the gear (G, the cockpit's GEAR lever) — 8 s to come down — or climb away."),
       };
     case "stall":
       return {
@@ -145,6 +150,7 @@ export function alertsOf(i: AlertInput): Alert[] {
     if (air.margins.g > 0.75)
       add("load", air.margins.g > 0.92 ? "warning" : "caution", tf("LOAD {0} g · {1}", air.g.toFixed(1), pc(air.margins.g)));
     if (air.stalled && air.mach < 3) add("stall", "warning", t("STALL"));
+    if (air.gearWarn) add("gear", "warning", t("GEAR UP · TOO LOW"));
     if (air.heat > 5e4) add("plasma", "advisory", tf("PLASMA · {0} W/cm² · MACH {1}", (air.heat / 1e4).toFixed(0), air.mach.toFixed(1)));
   }
   // the tank

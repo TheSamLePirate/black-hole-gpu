@@ -874,6 +874,14 @@ export class CameraController {
   offGround = Number.NEGATIVE_INFINITY;
   /** the gear's last forces (gear.ts): its legs' loads and compressions — none off the ground */
   gearLast: import("./gear").GearOut | null = null;
+  /** the landing gear (PLAN-COCKPIT K4b): commanded down; its extension 0…1 (8 s each way — locked at 1);
+   *  set from the flight's state at its first frame (down on the ground, up in the air); on the belly */
+  gearDown = true;
+  gearExt = 1;
+  gearInit = false;
+  onBelly = false;
+  /** the take-off's run on the wheels and its first climb away (lowthrust.ts — the Ranger in the air) */
+  takeoffRoll = false;
   /** the gear's turn of the craft over the last frame, for the pilot's rates (motion.ts) */
   gearDw: [number, number, number] | null = null;
   /** on its own gear at the frame's start: the craft's whole turn integrated within the flight's
@@ -1109,6 +1117,9 @@ export class CameraController {
     step?: number;
     qMax: number;
     profile: { pts: [number, number][]; ts: number[]; turn: number };
+    /** begun on a runway (the Ranger's run and first climb): its optimum to be taken from where the climb
+     *  proper begins */
+    fromRun?: boolean;
   } | null = null;
   /** the burn's trace for its graph: the node it flies (its time), the Δv left against the time from it */
   burnTrace: { key: string; pts: [number, number][] } | null = null;

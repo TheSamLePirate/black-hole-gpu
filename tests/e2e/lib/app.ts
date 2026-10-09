@@ -14,6 +14,7 @@ const KEYCODES: Record<string, number> = {
   ArrowUp: 38,
   F2: 113,
   F5: 116,
+  F7: 118,
   F9: 120,
   Backspace: 8,
   Backquote: 192,

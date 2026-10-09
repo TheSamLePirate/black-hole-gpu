@@ -18,7 +18,7 @@ const CASES: { name: string; setup: string; key: [string, string, boolean?]; aut
     auto: "node",
   },
   { name: "take-off", setup: `__bh.game.land("earth", 28.573, -80.649)`, key: ["KeyU", "u"], auto: "takeoff" },
-  { name: "landing", setup: `__bh.game.near("moon", { altKm: 3 })`, key: ["KeyG", "g"], auto: "land" },
+  { name: "landing", setup: `__bh.game.near("moon", { altKm: 3 })`, key: ["F7", "F7"], auto: "land" },
   { name: "entry's glide", setup: `__bh.game.glideTo("Kennedy", 40, 6, 220)`, key: ["", ""], auto: "entry" },
 ];
 

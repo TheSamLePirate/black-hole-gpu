@@ -79,6 +79,41 @@ export const GEARS: Record<string, GearDef> = {
   },
 };
 
+/** The Ranger's belly, gear up (PLAN-COCKPIT K4b): skids where the hull's underside is lowest — the nose,
+ *  the fuselage either side, the tail — that slide on the ground, scraping (pads: they grip as the
+ *  hull's metal does, a sliding friction), no spring to speak of. Its height 0: the belly on the ground. */
+export const BELLY: Record<string, GearDef> = {
+  ranger: {
+    height: 0,
+    legs: [
+      { at: [0, 0.1, 7.5], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [-1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [0, 0.2, -4.5], stroke: 0.08, share: 0.25, wheel: false },
+    ],
+    sag: 0.3,
+    zeta: 0.9,
+    mu: 0.45,
+    muBrake: 0.45,
+    roll: 0,
+  },
+};
+
+/** The gear's travel, down or up [s]. */
+export const GEAR_TRAVEL_S = 8;
+
+/** The gear moved over `dt` seconds towards down (1) or up (0): its extension 0…1. */
+export function stepGear(ext: number, down: boolean, dt: number): number {
+  const k = dt / GEAR_TRAVEL_S;
+  return down ? Math.min(ext + k, 1) : Math.max(ext - k, 0);
+}
+
+/** The gear lowered by itself (the setting, an autopilot flying the approach or the take-off): on the
+ *  wheels, or below 600 m over the ground under 250 m/s — the final's whole length: at 160 m/s, as it was
+ *  (for the drag alone), an approach flown at 170 met the runway with its gear half out. */
+export const gearByItself = (onGround: boolean, h: number | undefined, speed: number | undefined) =>
+  onGround || (h !== undefined && h < 600 && (speed === undefined || speed < 250));
+
 /** The touchdown's limits [m/s down]: up to `limit` a landing, to `crash` a hard one, beyond a crash. */
 export function touchdownVerdict(sink: number, crash: number, forgiving = false): "landed" | "hard" | "crashed" {
   const k = forgiving ? 3 : 1;

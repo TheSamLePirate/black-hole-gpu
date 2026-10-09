@@ -99,6 +99,13 @@ class Out {
  *  centreline, the wings' underside out on them (ranger.bin: ≈ 0.1 m under the fuselage, 0.25 m the wings). */
 const hullAbove = (x: number, z: number) => (Math.abs(x) > 3 ? 0.25 : z > 7 ? 0.2 : 0.1);
 
+/** Each leg's hinge on the hull (where its strut meets it: it folds forwards about it, gear up) and its
+ *  doors' offset across from it [m]. */
+export const GEAR_HINGES: { at: V3; door: number }[] = GEARS.ranger!.legs.map((L) => ({
+  at: [L.at[0], hullAbove(L.at[0], L.at[2]), L.at[2]],
+  door: L.steers ? 0.32 : 0.45,
+}));
+
 /** The wheels' radii: the nose's, the mains' [m]. */
 export const WHEEL = { nose: 0.36, main: 0.5 } as const;
 

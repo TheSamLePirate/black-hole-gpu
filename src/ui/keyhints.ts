@@ -58,6 +58,7 @@ const HINTS = {
   air: (): Hint[] => [
     [key("KeyF", "F"), { fr: "loi de vol : fusée · avion · ordinateur", en: "flight law: rocket · plane · computer" }],
     [`${key("KeyP", "P")} · ⇧${key("KeyP", "P")}`, { fr: "volets · aérofreins", en: "flaps · air brake" }],
+    [key("KeyG", "G"), { fr: "train d'atterrissage", en: "landing gear" }],
     [`⇧${key("KeyG", "G")}`, { fr: "rentrée et atterrissage guidés", en: "guided entry and landing" }],
     [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
   ],

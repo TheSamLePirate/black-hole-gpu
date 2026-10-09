@@ -912,7 +912,9 @@ function approach(
     }
     R.aglPrev = agl;
     const gS = Math.asin(clamp((R.gRise ?? 0) / Math.max(sp, 1), -0.05, 0.05));
-    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, gS - Math.asin(Math.min((0.6 + agl / 4) / Math.max(sp, 1), 0.5)));
+    // (0.5 m/s at the wheels' height: the gear down the whole final since it is commanded — its drag there
+    // — the tailwind's touchdown came at 1.1 m/s on 0.6)
+    if (L.phase === "flare" || agl < 15) gRef = Math.max(gRef, gS - Math.asin(Math.min((0.5 + agl / 4) / Math.max(sp, 1), 0.5)));
     // (and past the touchdown point, still up, 0.6 m/s at least: the profile there is the runway, level — a
     // flare floated 2 m up for 12 s in a light wind, bled to 74 m/s and 20° of incidence, and dropped at 1.7)
     if (L.phase === "rollout" && agl > 0.2) gRef = Math.min(gRef, gS - Math.asin(Math.min(0.6 / Math.max(sp, 1), 0.5)));
@@ -1242,6 +1244,11 @@ function airInfo(this: CameraController) {
     flaps: A.cfg.flaps ?? 0,
     brake: A.cfg.brake ?? 0,
     gear: !!A.cfg.gear,
+    // (the gear: commanded down, how far out; its alarm — the Ranger in the air, the gear left up (its
+    // lever up: lowered, the alarm stops — it is coming), low and slow: below 300 m and 150 m/s — K4b)
+    gearDown: this.gearDown,
+    gearExt: this.gearExt,
+    gearWarn: fleet.active === "ranger" && A.inAir && !this.gearDown && !A.cfg.gear && (A.cfg.agl ?? Infinity) - GEAR < 300 && (L?.speed ?? Infinity) < 150,
     // (the wind there: its speed [m/s], where it blows from [°])
     wind: this.windNow,
     sf: this.sfCmd ? { ...this.sfCmd } : null,

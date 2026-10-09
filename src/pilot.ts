@@ -155,7 +155,18 @@ export interface FlightContext {
   /** on its own gear: the stabiliser lets the springs set its pitch and roll (the nose lowered onto
    *  its wheel after the touchdown — the derotation —, the craft level on the ground) */
   onGear?: boolean;
+  /** on the ground on its own gear (rolling, or at rest on it): the local up (the frame of `fwd`, `up`, `right`)
+   *  — an autopilot raises the nose no more than its tail clears the ground by (PLAN-COCKPIT K4a: the
+   *  Ranger's real gear, 1.8 m; a take-off pitched up to the vertical where it stood tipped it over) */
+  groundUp?: V3;
+  /** the take-off's run and first climb (the Ranger in the air): the local up — the wings held level about
+   *  it (left free, it rolled to 90° at the rotation and climbed on its side) */
+  levelUp?: V3;
 }
+
+/** The nose's highest pitch over the ground an autopilot asks on the gear [rad]: the Ranger's tail, 5.3 m
+ *  behind and 1.8 m up, clears it with a margin. */
+export const GEAR_PITCH_MAX = (12 * Math.PI) / 180;
 
 /**
  * An autopilot's command: the velocity it wants (local 3-velocity), the proper acceleration fed forward
@@ -335,6 +346,18 @@ export class FlightComputer {
     const fromC = (v: V3): V3 => add(add(scale(c.right, v[0]), scale(c.up, v[1])), scale(c.fwd, v[2]));
     const body = (vC: V3): V3 => [dot(X, vC), dot(Y, vC), dot(Z, vC)];
 
+    // (on the gear, an autopilot's nose no higher than its tail clears: GEAR_PITCH_MAX — its burn's
+    // direction as its attitude's, the throttle then on it)
+    const onGround = (p: V3): V3 => {
+      if (!c.groundUp) return p;
+      const u = toC(c.groundUp);
+      const el = dot(p, u);
+      if (el <= Math.sin(GEAR_PITCH_MAX)) return p;
+      let hz = add(p, scale(u, -el));
+      if (len(hz) < 1e-3) hz = add(Z, scale(u, -dot(Z, u)));
+      const hl = len(hz) || 1;
+      return add(scale(hz, Math.cos(GEAR_PITCH_MAX) / hl), scale(u, Math.sin(GEAR_PITCH_MAX)));
+    };
     // ---- autopilot: required proper acceleration → a burn direction and a throttle
     let rcsC: V3 = [0, 0, 0];
     let point: V3 | null = null; // desired nose direction (C)
@@ -416,7 +439,8 @@ export class FlightComputer {
         }
       } else {
         this.burn = scale(A, 1 / a);
-        point = toC(this.burn);
+        point = onGround(toC(this.burn));
+
         // throttle only once the nose is on the burn vector (cos 12° … cos 3°) — landing, from 60° off it to 25°:
         // the burn's direction turning as the craft brakes, cut while the nose chased it the Lander fell, its
         // attitude swinging 0° to 60° every 6 s from 11 km down, and hit at 41 m/s
@@ -453,6 +477,11 @@ export class FlightComputer {
       if (c.sf) ({ point, upC, throttle, rcsC } = this.sfCommand(c, c.sf, toC, Z));
     }
 
+    // (on the gear, an autopilot's nose no higher than the tail clears — the thrust tipped forward of the
+    // vertical: on an airless world it lifts off at once and pitches up clear of the ground, on the Earth
+    // it rolls, the wings lifting it)
+    if (point && this.auto !== "none") point = onGround(point);
+    if (point && c.levelUp && !upC) upC = toC(c.levelUp);
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)

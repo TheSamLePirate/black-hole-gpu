@@ -4,7 +4,7 @@ import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { GEARS } from "../gear";
+import { GEARS, gearByItself, stepGear } from "../gear";
 import { basis, blToCartesian, cameraFrame, setHolePose, setHomePose, setRepPose, yawPitchRoll } from "../camera";
 import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
@@ -173,6 +173,9 @@ function newFlight(this: CameraController) {
   this.turnOnGear = false;
   this.gearLast = null;
   this.gearDw = null;
+  // (the gear: down on the ground, up in the air — set at the flight's first frame)
+  this.gearInit = false;
+  this.onBelly = false;
   this.rollSince = 0;
   this.offGround = Number.NEGATIVE_INFINITY;
   this.windHome = null;
@@ -933,6 +936,20 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       inertia: mp.I,
       torque,
       onGear: !!this.rolling && !!GEARS[fleet.active],
+      // (the take-off's run and first climb: the wings level)
+      levelUp: (() => {
+        if (!this.takeoffRoll || this.pilot.auto !== "takeoff") return undefined;
+        const nv = this.ourNav(cam);
+        return nv && solidBody(nv.ref) ? (unitV(nv.toRep(figureUp(nv.ref, nv.X, nv.t))) as [number, number, number]) : undefined;
+      })(),
+      // (on the gear: rolling, or at rest on it)
+      groundUp: (() => {
+        if (fleet.active !== "ranger" || !(this.rolling || this.ourLanded)) return undefined;
+        const nv = this.ourNav(cam);
+        if (!nv || !solidBody(nv.ref)) return undefined;
+        // (in the camera's representation, as the autopilots' wants: nav.toRep)
+        return unitV(nv.toRep(figureUp(nv.ref, nv.X, nv.t))) as [number, number, number];
+      })(),
       spoolK: s.engine === "crew" ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool) : 1,
     },
     inp,
@@ -981,7 +998,31 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   }
   if (this.pilot.throttle > 0.05) this.groundSpoilers = false;
   this.airFlight.cfg.brake = (onWheels || this.groundSpoilers) && this.pilot.throttle <= 0 ? 1 : this.airBrake;
-  this.airFlight.cfg.gear = onWheels || this.landed || (!!LA && LA.h < 600 && LA.speed < 160);
+  // the landing gear (PLAN-COCKPIT K4b): commanded — G, the cockpit's lever, a controller's button —, or
+  // lowered by itself (the setting; an autopilot flying the approach, the landing or the take-off, flown
+  // or assisted): on the wheels, or below 600 m and 160 m/s. 8 s down or up; only down and locked does
+  // it carry the craft (motion.ts — else the belly)
+  const onGround = onWheels || (this.landed && !this.onBelly);
+  // (the height over the ground — the wheels' —: the last frame's; not LA.h, over the sea: Edwards is 700 m
+  // up, its gear was never lowered by itself before the wheels touched)
+  // (and an airless world's: the navigation's — the air's figures none there: on the Moon the landing
+  // autopilot came down on the belly)
+  // (only when it is asked: the navigation each frame slowed the far flights)
+  const hGround = () => {
+    if (this.airFlight.cfg.agl !== undefined) return this.airFlight.cfg.agl - GEAR;
+    const navG = this.ourNav(cameraFrame(s));
+    return navG && solidBody(navG.ref) ? gearHeight(navG.ref, navG.X, navG.t) : LA?.h;
+  };
+  if (!this.gearInit) {
+    this.gearInit = true;
+    this.gearDown = onGround || gearByItself(false, hGround(), LA?.speed);
+    this.gearExt = this.gearDown ? 1 : 0;
+  }
+  const P = this.pilot;
+  const byItself = s.autoGear || P.auto === "entry" || P.auto === "land" || P.auto === "takeoff";
+  if (byItself && !this.onBelly) this.gearDown = gearByItself(onGround, hGround(), LA?.speed);
+  if (s.animate && dtPilot > 0) this.gearExt = stepGear(this.gearExt, this.gearDown, dtPilot);
+  this.airFlight.cfg.gear = this.gearExt >= 1;
   // (the control surfaces as deflected: the attitude's effort where the air answers — their drag)
   this.airFlight.cfg.deflect = airCtx ? this.pilot.fired.torque : undefined;
   this.airFlight.vacuum();
@@ -1439,7 +1480,7 @@ function entryStep(
     if (!fr.env.atm) {
       // (no air: on our side, the engines down to the site — the powered landing's coast, its descent
       // orbit and its braking; elsewhere, or no site, the pilot's G)
-      if (!site || !this.ourNav(cam)) return say(tf("Entry: {0} has no air — land with the engines (G)", name));
+      if (!site || !this.ourNav(cam)) return say(tf("Entry: {0} has no air — land with the engines (F7)", name));
       this.entryRun = null;
       P.auto = "none";
       P.setAuto("land");

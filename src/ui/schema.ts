@@ -2758,6 +2758,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "cockpit screens pfd nav approach landing burn aids",
   },
   {
+    key: "autoGear",
+    type: "toggle",
+    section: "game",
+    group: "Cockpit",
+    label: "Landing gear by itself",
+    effect: "none",
+    help: "The gear lowered and raised by itself — below 600 m over the ground, on the ground —, as it was before it was commanded. Off: you lower it (G, the cockpit's GEAR lever, a controller), an alarm sounds if it is up low and slow, and a landing gear up is on the belly. The autopilots lower it themselves either way.",
+    keywords: "gear landing wheels automatic auto down up alarm belly",
+  },
+  {
     key: "cabinLight",
     type: "number",
     section: "game",

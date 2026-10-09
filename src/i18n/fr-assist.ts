@@ -52,8 +52,8 @@ export default {
   "Burn now, prograde or radially out — the earlier, the cheaper; or let an autopilot hold the ship (8: hold position).":
     "Poussez maintenant, prograde ou radial sortant — plus tôt, moins cher ; ou laissez un autopilote tenir le vaisseau (8 : maintien de position).",
   "The predicted path meets the body's surface.": "La trajectoire prévue rencontre la surface du corps.",
-  "Raise the periapsis (prograde at the apoapsis, or radially out); to come down on purpose: land (G) or entry and landing (⇧G).":
-    "Remontez le périapside (prograde à l'apoapside, ou radial sortant) ; pour descendre exprès : atterrir (G) ou rentrée et atterrissage (⇧G).",
+  "Raise the periapsis (prograde at the apoapsis, or radially out); to come down on purpose: land (F7) or entry and landing (⇧G).":
+    "Remontez le périapside (prograde à l'apoapside, ou radial sortant) ; pour descendre exprès : atterrir (F7) ou rentrée et atterrissage (⇧G).",
   "A limit was exceeded and a part failed: the load, or the heat on the shield or the hull.":
     "Une limite a été dépassée et une pièce a cédé : la charge, ou la chaleur sur le bouclier ou la coque.",
   "Ease off at once: less speed, less bank, the shield to the flow — then check what still works.":

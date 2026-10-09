@@ -253,6 +253,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   antigrav: { fr: "Antigravité", en: "Antigravity" },
   flaps: { fr: "Volets", en: "Flaps" },
   airBrake: { fr: "Aérofreins", en: "Air brake" },
+  gear: { fr: "Train d'atterrissage", en: "Landing gear" },
   pathInView: { fr: "Trajectoire dans la vue", en: "Path in the view" },
   hudDensity: { fr: "Densité du HUD", en: "HUD density" },
   missions: { fr: "Ordinateur de vol (missions)", en: "Flight computer (missions)" },

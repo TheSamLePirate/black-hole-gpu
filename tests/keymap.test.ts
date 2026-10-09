@@ -34,7 +34,9 @@ test("the layers: flying, the craft's keys come first; on foot, the scene's", ()
   expect(matchKey(press("KeyT", "t"), false, false)?.do).toBe("journey");
   expect(matchKey(press("KeyT", "T", true), false, false)?.do).toBe("standOn");
   expect(matchKey(press("KeyG", "G", true), true, false)).toMatchObject({ do: "auto", arg: "entry" });
-  expect(matchKey(press("KeyG", "g"), true, false)).toMatchObject({ do: "auto", arg: "land" });
+  // (G: the landing gear, as the simulators have it — PLAN-COCKPIT K4b; the landing autopilot on F7)
+  expect(matchKey(press("KeyG", "g"), true, false)).toMatchObject({ do: "gear" });
+  expect(matchKey(press("F7", "F7"), true, false)).toMatchObject({ do: "auto", arg: "land" });
   expect(matchKey(press("Digit3", "3"), true, false)).toMatchObject({ do: "hold", arg: "radialOut" });
   expect(matchKey(press("Digit3", "3"), false, false)).toMatchObject({ do: "quality", arg: "high" });
   // (Y flying: the telescope still — ⇧Y the path)

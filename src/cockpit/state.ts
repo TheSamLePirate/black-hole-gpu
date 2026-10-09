@@ -23,7 +23,12 @@ export function controlStates(
   const cfg = c.airFlight.cfg;
   const on = (b: boolean) => (b ? 1 : 0);
   const st: Record<string, ControlState> = {
-    gear: { pos: on(!!cfg.gear) },
+    // (the gear's lever where it is commanded; its wheel lit red while the gear moves, flashing with the
+    // alarm — as a real one's)
+    gear: {
+      pos: on(c.gearDown),
+      lit: c.airInfo().gearWarn ? on(Math.floor(performance.now() / 300) % 2 === 0) : c.gearExt > 0 && c.gearExt < 1 ? 1 : 0,
+    },
     flaps: { pos: cfg.flaps ?? 0 },
     airBrake: { pos: Math.min(Math.max(c.airBrake, 0), 1) },
     dimmer: { pos: s.cabinLight },

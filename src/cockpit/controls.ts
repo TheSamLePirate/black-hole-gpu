@@ -83,6 +83,7 @@ export const CONTROLS: ControlDef[] = [
     knob: "wheel",
     stops: [0, 1],
     swing: [28 * D, -28 * D],
+    lamp: [1, 0.12, 0.06],
   },
   {
     id: "flaps",

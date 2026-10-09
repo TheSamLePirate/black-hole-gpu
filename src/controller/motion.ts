@@ -3,7 +3,7 @@
 import { recorder } from "../game/recorder";
 import { gradeLanding } from "../game/report";
 import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
-import { GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
+import { BELLY, GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
 import { tf } from "../i18n";
 import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
@@ -278,8 +278,11 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (on the ground as it is known now: a scene placed before the Earth's relief was read back
     // stood at its sphere, inside the mountain — raised onto it once the heights are in)
     const qr = Math.hypot(...L.q);
-    const off = GEAR - heightOverGround(L.body, L.q);
-    if (Math.abs(off) > 1) {
+    // (to 5 cm: the gear's stroke is 0.45 m — set a metre low, as 1 m allowed with the old 6 m legs, the
+    // Ranger sat on its bottomed oleos and was flung up as it moved off — PLAN-COCKPIT K4b)
+    // (on its belly — gear up —: its belly on the ground, not its gear's height)
+    const off = (this.onBelly ? 0 : GEAR) - heightOverGround(L.body, L.q);
+    if (Math.abs(off) > 0.05) {
       const k = 1 + off / M_METRES / qr;
       L.q = [L.q[0] * k, L.q[1] * k, L.q[2] * k];
     }
@@ -325,7 +328,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   let aAir = 0;
   // the landing gear (gear.ts): the flown craft's legs on a solid ground — springs and dampers along the
   // ground's normal, tyres, brakes —; its torque turns the craft after the frame (this.gearDw)
-  const gdef = flown && ground && VESSELS[fleet.active].lands ? GEARS[fleet.active] : undefined;
+  // (the gear not down and locked — up, or in transit —: the belly's skids, scraping — PLAN-COCKPIT K4b)
+  const lands = flown && ground && VESSELS[fleet.active].lands;
+  const belly = lands && this.gearExt < 1 ? BELLY[fleet.active] : undefined;
+  const gdef = lands ? (belly ?? GEARS[fleet.active]) : undefined;
   const mass = fleet.massProps().mass;
   const secM = M_METRES / C_MPS;
   const Iw = gdef ? worldTensor(fleet.massProps().I, axes) : null;
@@ -412,7 +418,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     return tEnd;
   }
   let a = accAt(X, V, t, g);
-  let touched: { speed: number; vh?: number; wheels?: boolean; gear?: "landed" | "hard" | "crashed" | "tipped" | "hull" } | null = null;
+  let touched: { speed: number; vh?: number; wheels?: boolean; gear?: "landed" | "hard" | "crashed" | "tipped" | "hull" | "belly" } | null =
+    null;
   for (let i = 0; i < this.subCap && t < tEnd - 1e-12; i++) {
     // (the velocity before this step: a touchdown is judged by the sink it came down with, not by what
     // the springs gave back within it)
@@ -447,7 +454,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     g = gravityHome(X, t, V);
     // (found deep in the ground — a scene placed before the relief was known, the relief come in under
     // it —: set on it, its fall stopped, no spring flung from metres down)
-    if (gdef && ground && gearHeight(ground, X, t) < -1.5) {
+    // (on the belly the reference point is down to the ground: the gear's whole height lower)
+    if (gdef && ground && gearHeight(ground, X, t) < (belly ? -GEAR - 0.4 : -1.5)) {
       const n = unitV(sub3(X, ourState(ground, t).pos));
       X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
       const vr = sub3(V, groundVelocity(ground, X, t));
@@ -583,7 +591,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           // (back on the gear within half a second of leaving it, gently — a leg lifted for a sub-step as the
           // craft turns onto its other legs, a tyre's skip —: the same touchdown, not a new one said)
           const rebound = verdict === "landed" && (t - this.offGround) * secM < 0.5;
-          if (!rebound) touched = { speed: sink, vh, wheels: true, gear: verdict };
+          // (on the belly: a landing on it, the hull scraped — or a crash past the crash speed)
+          if (!rebound) touched = { speed: sink, vh, wheels: !belly, gear: belly && verdict !== "crashed" ? "belly" : verdict };
           if (verdict === "crashed") {
             X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
             V = gv;
@@ -603,7 +612,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         }
         // (at rest on all its legs, the engine idle, not turning: standing — carried by the ground)
         const still = Math.hypot(...vr) * C_MPS < 0.05 && Math.hypot(...wWorld()) < 0.003;
-        if (o.contact === gdef.legs.length && still && this.pilot.throttle <= 0) {
+        // (on the belly, its underside not flat: still on two skids is at rest)
+        if (o.contact >= (belly ? 2 : gdef.legs.length) && still && this.pilot.throttle <= 0) {
           this.rolling = null;
           this.rollSite = null;
           this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
@@ -646,7 +656,13 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     if (touched.gear === "landed")
       this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", name, v, touched.vh!.toFixed(0)));
     else if (touched.gear === "hard") this.onPilotMessage?.(tf("Hard landing on {0} · {1} m/s down — the gear damaged", name, v));
-    if (touched.gear === "landed" || touched.gear === "hard") this.reportLanding(name, touched.gear, touched.speed, touched.vh ?? 0);
+    else if (touched.gear === "belly") {
+      // (gear up: on the belly, sliding to a stop — the gear stays in, jammed)
+      this.onBelly = true;
+      this.onPilotMessage?.(tf("Belly landing on {0} · {1} m/s down — gear up, the hull scraped", name, v));
+    }
+    if (touched.gear === "landed" || touched.gear === "hard" || touched.gear === "belly")
+      this.reportLanding(name, touched.gear === "landed" ? "landed" : "hard", touched.speed, touched.vh ?? 0);
     else {
       const nav = this.ourNav(cameraFrame(s));
       if (nav && touched.gear === "crashed") this.levelShip(nav.radial);

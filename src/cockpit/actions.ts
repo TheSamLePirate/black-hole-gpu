@@ -16,6 +16,10 @@ export interface CockpitDeps {
   /** the flaps set (0, ½, 1), the air brake (0…1) */
   setFlaps(v: number): void;
   setAirBrake(v: number): void;
+  /** the landing gear commanded down or up */
+  setGear(down: boolean): void;
+  /** the gear now: commanded down, its extension */
+  gearNow(): { down: boolean; ext: number };
   /** the autopilot and the holds off */
   apOff(): void;
   /** a message to the pilot */
@@ -26,6 +30,7 @@ export interface CockpitDeps {
 
 /** The key each control's action has (its tip shows it). */
 const KEYS: Record<string, [KeyAction, string?]> = {
+  gear: ["gear"],
   flaps: ["flaps"],
   airBrake: ["airBrake"],
   sas: ["sas"],
@@ -49,8 +54,7 @@ export function cockpitAct(d: CockpitDeps, id: string, value?: number) {
   };
   switch (id) {
     case "gear":
-      // (the gear is lowered by itself for now: below 600 m and 160 m/s — PLAN-COCKPIT K4 commands it)
-      return d.toast(t("Landing gear: lowered by itself below 600 m and 160 m/s"));
+      return d.setGear((value ?? 0) > 0.5);
     case "flaps":
       return d.setFlaps(value ?? 0);
     case "airBrake":
@@ -90,14 +94,17 @@ export function cockpitAct(d: CockpitDeps, id: string, value?: number) {
 export function controlTip(
   id: string,
   st: ControlState | undefined,
-  d: Pick<CockpitDeps, "chrono">,
+  d: Pick<CockpitDeps, "chrono" | "gearNow">,
 ): { name: string; state: string; key: string | null } | null {
   const c = CONTROLS.find((x) => x.id === id);
   if (!c) return null;
   const p = st?.pos ?? 0;
   const pct = `${Math.round(p * 100)} %`;
   let state: string;
-  if (id === "gear") state = p > 0.5 ? t("down (by itself)") : t("up (by itself)");
+  if (id === "gear") {
+    const g = d.gearNow();
+    state = g.ext >= 1 ? t("down and locked") : g.ext <= 0 ? t("up") : t("in transit");
+  }
   else if (id === "flaps" || id === "airBrake" || id === "dimmer") state = pct;
   else if (id === "chrono") state = `${d.chrono.running ? t("running") : t("stopped")} · ${fmtClock(d.chrono.seconds())}`;
   else if (c.kind === "toggle") state = p > 0.5 ? t("ON") : t("OFF");

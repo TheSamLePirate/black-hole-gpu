@@ -1,4 +1,4 @@
-// The powered descent's guidance — the landing autopilot (G), the Lander's after its entry, a descent to a
+// The powered descent's guidance — the landing autopilot (F7), the Lander's after its entry, a descent to a
 // site on an airless world (⇧G): from wherever the craft is (an orbit, a hover, an entry's end) to a stop on
 // the ground, on its pad when it has one. A field of velocities over the ground, flown by the pilot's
 // velocity law (pilot.ts) with the weight held first:

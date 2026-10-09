@@ -1223,6 +1223,18 @@ async function main() {
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }
+  /** The landing gear commanded (G, the cockpit's lever, a controller — PLAN-COCKPIT K4b): down or up, but
+   *  not up on the ground, not at all on the belly; said when the setting or an autopilot holds it. */
+  function setGear(down: boolean) {
+    if (camera.onBelly) return panel.toast(t("Landing gear jammed: the craft is on its belly"));
+    if (!down && (camera.rolling || camera.landed)) return panel.toast(t("Landing gear locked down on the ground"));
+    const a = camera.pilot.auto;
+    if (settings.autoGear || a === "entry" || a === "land" || a === "takeoff")
+      return panel.toast(settings.autoGear ? t("Landing gear: by itself (the setting)") : t("Landing gear: the autopilot sets it"));
+    if (camera.gearDown === down) return;
+    camera.gearDown = down;
+    panel.toast(down ? t("Gear down") : t("Gear up"));
+  }
   function pilotSas() {
     camera.pilot.sas = !camera.pilot.sas;
     panel.toast(camera.pilot.sas ? t("SAS on") : t("SAS off"));
@@ -1699,6 +1711,7 @@ async function main() {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
     },
+    gear: () => setGear(!camera.gearDown),
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
     missions: () => openMissions(),
@@ -1773,6 +1786,8 @@ async function main() {
       camera.airBrake = v;
       if (was > 0 !== v > 0) panel.toast(v > 0 ? t("Air brake out") : t("Air brake in"));
     },
+    setGear: (down) => setGear(down),
+    gearNow: () => ({ down: camera.gearDown, ext: camera.gearExt }),
     apOff: () => {
       camera.pilot.setAuto("none");
       camera.pilot.setHold("none");
@@ -2568,7 +2583,7 @@ async function main() {
           const legs = GEARS.ranger!.legs;
           const gl = camera.gearLast?.legs;
           renderer.shipGear = {
-            ext: settings.vessel === "ranger" && camera.airFlight.cfg.gear ? 1 : 0,
+            ext: settings.vessel === "ranger" ? camera.gearExt : 0,
             comp: legs.map((L, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), L.stroke)),
           };
         }

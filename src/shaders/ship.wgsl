@@ -65,8 +65,10 @@ struct Ship {
   re3: vec4f,
   re4: vec4f,
   re5: vec4f,
-  // the Ranger's landing gear (gear-mesh.ts): out (0…1), each leg's oleo compressed [m] — nose, left, right
+  // the Ranger's landing gear (gear-mesh.ts): out (0…1), each leg's oleo compressed [m] — nose, left, right;
+  // each leg's hinge on the hull (ship frame) and its doors' offset from it
   gear: vec4f,
+  gearH: array<vec4f, 3>,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
@@ -296,10 +298,24 @@ fn stickPos(v: VIn) -> vec3f {
   if (f > 0.02) {
     let leg = u32(floor((f - 0.035) / 0.12));
     let role = u32(round((f - 0.04 - 0.12 * f32(leg)) / 0.03));
-    if (role == 1u) {
-      let comp = select(select(S.gear.w, S.gear.z, leg == 1u), S.gear.y, leg == 0u);
-      return v.pos + vec3f(0.0, comp, 0.0);
+    let H = S.gearH[min(leg, 2u)];
+    let up = 1.0 - S.gear.x;
+    if (role == 2u) {
+      // (a door: closing under the belly as the gear comes up — turned about its top edge, inwards)
+      let s = select(-1.0, 1.0, v.pos.x > H.x);
+      let e = vec2f(H.x + s * H.w, H.y);
+      let a = -s * up * 1.5707963;
+      let d = v.pos.xy - e;
+      return vec3f(e + vec2f(d.x * cos(a) - d.y * sin(a), d.x * sin(a) + d.y * cos(a)), v.pos.z);
     }
+    // (the leg: the oleo compressed, then the whole leg folded forwards about its hinge as it comes up)
+    var p = v.pos;
+    if (role == 1u) {
+      p.y += select(select(S.gear.w, S.gear.z, leg == 1u), S.gear.y, leg == 0u);
+    }
+    let a = -up * 1.5707963;
+    let d = p.yz - H.yz;
+    return vec3f(p.x, H.y + d.x * cos(a) - d.y * sin(a), H.z + d.x * sin(a) + d.y * cos(a));
   }
   return v.pos;
 }
@@ -1354,7 +1370,11 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
       switch kp {
         case 0u: { albedo = vec3f(0.035, 0.037, 0.04); metal = 0.0; rough = 0.5; }
         case 1u: { albedo = vec3f(0.6, 0.6, 0.62); metal = 1.0; rough = 0.3; }
-        case 2u: { albedo = vec3f(0.75, 0.75, 0.72); metal = 0.0; rough = 0.4; }
+        case 2u: {
+          // (a knob: white — the gear's wheel lit red from within while the gear moves)
+          albedo = vec3f(0.75, 0.75, 0.72) * (1.0 - 0.6 * max(max(L.r, L.g), L.b)); metal = 0.0; rough = 0.4;
+          emit = L.rgb * 1.4;
+        }
         case 3u: {
           // (a cap: frosted dark glass, its legend lit by the lamp behind it — faintly when off, so it reads)
           albedo = vec3f(0.025) + L.rgb * 0.05; metal = 0.0; rough = 0.3;

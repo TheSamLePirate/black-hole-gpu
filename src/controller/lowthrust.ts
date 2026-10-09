@@ -691,6 +691,36 @@ function ourSurfaceWant(
     this.onPilotMessage?.(tf("In orbit around {0}", name));
     return null;
   }
+  // (on its own gear in the air — the Ranger on a runway, PLAN-COCKPIT K4b —: a take-off as a plane's, its
+  // gear 1.8 m short of the vertical one — pitched up where it stood, it sat on its tail and tipped over:
+  // level along the launch's heading, the engine full, the weight on the wheels; rotated at 110 m/s, its
+  // 12° (pilot.ts GEAR_PITCH_MAX), the wings and the thrust lifting it — then the climb as before. Airless,
+  // its 12° on the gear and the engine lift it at once)
+  // (off the wheels, below 300 m: the climb away steep — 150 m/s up, the speed along kept —, before the
+  // climb's own law: taken 5 m up, it pitched up, sank back onto its wheels nose high and tipped over; at
+  // 50 m, at 170 m/s along, the law — a vertical start's, its dynamic pressure capped at 35 kPa — braked it
+  // along, the thrust turned back, and it came down)
+  const onWheels = !!this.rolling || !!this.ourLanded;
+  if (fleet.active === "ranger" && sb.atmosphere && (onWheels || (this.takeoffRoll && h * M_METRES < 300))) {
+    this.takeoffRoll = true;
+    const va = sub3(nav.V, gv);
+    const along = dot3(va, east) * C_MPS;
+    if (onWheels) {
+      const want = lin(lin(gv, 1, east, (along + 80) / C_MPS), 1, up, along > 110 ? 25 / C_MPS : 0);
+      return out(want, [0, 0, 0]);
+    }
+    // (the weight held, not the drag: held too, low and fast its pull along took the whole thrust — none
+    // left to climb; let it slow the craft, under the climb's 35 kPa)
+    // (the climb asked growing with the height — 15 m/s off the wheels, 150 m/s by 300 m: asked at once, the
+    // nose pitched up 5 m over the runway and the tail sank back onto it)
+    const hm = h * M_METRES;
+    const vz = Math.min(15 + 0.45 * hm, 150);
+    // (just off the runway, the drag held too — slowing there, near the wing's stall, it sank back —; let
+    // go by 100 m up)
+    const kd = clamp(1 - hm / 100, 0, 1);
+    return out(lin(lin(gv, 1, east, along / C_MPS), 1, up, vz / C_MPS), lin(ff, kd, g.acc, -(1 - kd)));
+  }
+  this.takeoffRoll = false;
   // (inertial east speed: the ground already gives its turning at lift-off)
   const vGroundE = dot3(sub3(gv, nav.refVel), east);
   const { vUp, vEastAir, f } = climbCmd(id, thr, this.dragPerMass(), d0, vGroundE, r, h, dot3(vi, east));
@@ -929,20 +959,28 @@ export function steerShare(H: number | undefined, h: number, thr: number, gGroun
  * top's circular speed, the climb brought to nothing there. (Flown as asked at once, the path drawn ran
  * 150 km ahead of the craft at 100 km up: the speed across takes its time.)
  */
-export function climbProfile(id: string, thr: number, dragK: number, d0: number, vGroundE: number) {
+export function climbProfile(
+  id: string,
+  thr: number,
+  dragK: number,
+  d0: number,
+  vGroundE: number,
+  /** a climb begun in flight (the Ranger's, off its runway): its height, its speeds up and east (inertial) */
+  start?: { h: number; vz: number; vh: number },
+) {
   const sb = solarBody(id)!;
   const R = sb.radius;
   const km = M_METRES / 1e3;
-  const pts: [number, number][] = [[0, 0]];
+  const pts: [number, number][] = [[0, (start?.h ?? 0) * km]];
   const ts = [0];
   const H = sb.atmosphere?.H;
   const dt = 0.5 / M_SECONDS,
     T = 1.2 / M_SECONDS;
   const vcT = Math.sqrt(sb.mass / d0);
   let x = 0,
-    h = 0,
-    vz = 0,
-    vh = vGroundE,
+    h = start?.h ?? 0,
+    vz = start?.vz ?? 0,
+    vh = start?.vh ?? vGroundE,
     turn = Number.NaN;
   for (let k = 1; k <= 6000; k++) {
     const r = R + h;
@@ -958,7 +996,9 @@ export function climbProfile(id: string, thr: number, dragK: number, d0: number,
     const left = Math.sqrt(Math.max(thr * thr - Math.max(gNet, 0) ** 2, 0));
     const ek = Math.min(1, left / Math.max(Math.hypot(ez, eh), 1e-30));
     let az = ez * ek,
-      ah = eh * ek;
+      // (no thrust back against the motion — the nose up, a craft begun in flight with its speed along sheds
+      // it to the drag alone; a vertical start never asks it)
+      ah = start ? Math.max(eh * ek, 0) : eh * ek;
     // out of the air: the thrust steered (ourSurfaceWant)
     if (w > 0) {
       const sUp = steerUp(vcT - vh, thr, d0 - r, vz, Math.max(gNet, 0));
@@ -1023,6 +1063,24 @@ function climbAssist(
     this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
   }
   const R = this.climbRec;
+  // (the Ranger's run on a runway and its first climb away — PLAN-COCKPIT K4b —: the optimum, a vertical
+  // start's, from where the climb proper begins — from the runway's start, the climb was off its corridor
+  // all the way up, kilometres behind it)
+  if (this.takeoffRoll) {
+    R.pad = lin(q, 1 / ql, q, 0) as Vec3;
+    R.trace.length = 0;
+    R.fromRun = true;
+  } else if (R.fromRun) {
+    // (and the optimum from there: from its height, its speeds — along the runway it gained speed east; from
+    // rest, the vertical start's optimum ran kilometres short of the climb from 5 km up)
+    R.fromRun = false;
+    const va0 = sub3(nav.V, gv);
+    R.profile = climbProfile(id, thr, dragK, d0, dot3(sub3(gv, nav.refVel), east), {
+      h: Math.max(gearHeight(id, nav.X, nav.t), 0) / M_METRES,
+      vz: dot3(va0, up),
+      vh: dot3(sub3(nav.V, nav.refVel), east),
+    });
+  }
   const cosA = Math.min(Math.max(dot3(R.pad, lin(q, 1 / ql, q, 0)), -1), 1);
   const x = Math.acos(cosA) * sb.radius * kmM;
   const tr = R.trace;

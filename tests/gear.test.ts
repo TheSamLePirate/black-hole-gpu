@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GEARS, gearForces, tippedOver, touchdownVerdict, tyreGrip, type Ground } from "../src/gear";
+import { BELLY, GEAR_TRAVEL_S, GEARS, gearByItself, gearForces, stepGear, tippedOver, touchdownVerdict, tyreGrip, type Ground } from "../src/gear";
 import type { V3 } from "../src/mounts";
 
 // The landing gear (phase 2): the Ranger dropped onto a flat runway settles on its three wheels at the
@@ -109,4 +109,41 @@ test("tipping over past the gear's base, not in a gentle lean", () => {
   // (its belly 1.8 m up on a track 8 m wide: past ~66° — on 6 m legs it went at 36°)
   expect(tippedOver(def, [Math.sin(1.0), Math.cos(1.0), 0], n)).toBe(false);
   expect(tippedOver(def, [Math.sin(1.25), Math.cos(1.25), 0], n)).toBe(true);
+});
+
+// PLAN-COCKPIT K4b: the gear commanded — its travel, lowered by itself, the belly's skids.
+test("the gear's travel: 8 s down, 8 s up; by itself low and slow, or on the ground", () => {
+  let e = 0;
+  for (let t = 0; t < 4; t += 0.1) e = stepGear(e, true, 0.1);
+  expect(e).toBeCloseTo(0.5, 6);
+  for (let t = 0; t < 5; t += 0.1) e = stepGear(e, true, 0.1);
+  expect(e).toBe(1);
+  expect(stepGear(1, false, 2)).toBeCloseTo(0.75, 9);
+  expect(GEAR_TRAVEL_S).toBe(8);
+  expect(gearByItself(true, undefined, undefined)).toBe(true);
+  expect(gearByItself(false, 500, 150)).toBe(true);
+  expect(gearByItself(false, 500, 200)).toBe(true);
+  expect(gearByItself(false, 700, 150)).toBe(false);
+  expect(gearByItself(false, 500, 260)).toBe(false);
+});
+
+test("on the belly: the skids carry it at the belly's height, sliding — no spring, a scraping friction", () => {
+  const belly = BELLY.ranger!;
+  let X: V3 = [0, 0.3, 0],
+    V: V3 = [0, -2, 30];
+  const dt = 0.002;
+  let out = gearForces(belly, { mass: m, X, V, axes, w: [0, 0, 0], brake: 0, steer: 0 }, flat);
+  for (let t = 0; t < 1; t += dt) {
+    out = gearForces(belly, { mass: m, X, V, axes, w: [0, 0, 0], brake: 0, steer: 0 }, flat);
+    const a: V3 = [out.F[0] / m, out.F[1] / m - g, out.F[2] / m];
+    V = [V[0] + a[0] * dt, V[1] + a[1] * dt, V[2] + a[2] * dt];
+    X = [X[0] + V[0] * dt, X[1] + V[1] * dt, X[2] + V[2] * dt];
+  }
+  // (resting on its skids, just over its underside's lowest points)
+  expect(X[1]).toBeGreaterThan(-0.1);
+  expect(X[1]).toBeLessThan(0.1);
+  // (held level: on its lowest skids, the fuselage's either side — free, it would rock onto the others)
+  expect(out.contact).toBeGreaterThanOrEqual(2);
+  // (slowing at about μ g — a car's braking, not a rolling tyre's 0.15 m/s²)
+  expect(30 - V[2]).toBeGreaterThan(0.6 * belly.mu * g);
 });

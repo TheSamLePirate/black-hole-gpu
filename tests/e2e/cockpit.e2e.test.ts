@@ -132,4 +132,14 @@ describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
     await click(p);
     expect(await app.js<string>("__bh.settings.cockpitPages")).toBe("");
   });
+
+  test("K4b: the GEAR lever clicked in orbit: the gear commanded down — its tip says it is moving", async () => {
+    await app.js(`(__bh.settings.autoGear = false, __bh.camera.gearDown = false, __bh.camera.gearExt = 0, true)`);
+    const g = await aim("gear", -42, -22);
+    await click(g);
+    expect(await app.js<boolean>("__bh.camera.gearDown")).toBe(true);
+    await app.mouse("move", g.x + 1, g.y);
+    await Bun.sleep(400);
+    expect(await app.js<string>(`document.querySelector("[data-testid=cockpit-tip]").textContent`)).toMatch(/in transit|en mouvement|down and locked|sorti/);
+  });
 });

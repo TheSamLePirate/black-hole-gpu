@@ -35,10 +35,10 @@ describe.skipIf(!E2E)("the vertical descent assisted", () => {
     expect(G.state).toBe("wait");
     // the landing assisted: its rates said
     await app.press("F4", "F4");
-    await app.press("KeyG", "g");
+    await app.press("F7", "F7");
     await app.waitFor(`__bh.camera.pilot.auto === "land"`, 5_000);
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("DESCENT "))`, 10_000);
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBe(0);
-    await app.press("KeyG", "g");
+    await app.press("F7", "F7");
   }, 300_000);
 });

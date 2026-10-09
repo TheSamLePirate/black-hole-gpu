@@ -16,7 +16,7 @@ import cockpitUrl from "../assets/ranger/cockpit.bin";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
 import { placardLevels } from "./cockpit/placards";
-import { gearMesh } from "./gear-mesh";
+import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
@@ -319,7 +319,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 192 + 96 + 96 + 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64 + 192 + 96 + 96 + 16 + 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -903,7 +903,11 @@ export class ShipRenderer {
     this.lastCam = { R, tanX: tanH * v.aspect, tanY: tanH };
     // (the landing gear: out, its oleos' compression — ship.wgsl S.gear)
     const gc = v.gear?.comp ?? [];
-    this.device.queue.writeBuffer(this.uniform, 448, new Float32Array([v.gear?.ext ?? 0, gc[0] ?? 0, gc[1] ?? 0, gc[2] ?? 0]));
+    this.device.queue.writeBuffer(
+      this.uniform,
+      448,
+      new Float32Array([v.gear?.ext ?? 0, gc[0] ?? 0, gc[1] ?? 0, gc[2] ?? 0, ...GEAR_HINGES.flatMap((h) => [...h.at, h.door])]),
+    );
     if (v.controls && this.ctlBuf) this.device.queue.writeBuffer(this.ctlBuf, 0, v.controls);
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     // near and far planes about the ship where it is (the outside views: up to tens of km — not a fixed

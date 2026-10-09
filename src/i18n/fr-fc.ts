@@ -527,7 +527,7 @@ export default {
   "Entry: the {0} has no heat shield — it was built in orbit and never comes down":
     "Rentrée : {0} n'a pas de bouclier thermique — il a été construit en orbite et ne redescend jamais",
   "Entry: get near a world with air or ground first": "Rentrée : approchez d'abord un monde doté d'une atmosphère ou d'un sol",
-  "Entry: {0} has no air — land with the engines (G)": "Rentrée : {0} n'a pas d'atmosphère — posez-vous aux moteurs (G)",
+  "Entry: {0} has no air — land with the engines (F7)": "Rentrée : {0} n'a pas d'atmosphère — posez-vous aux moteurs (F7)",
   "{0} has no air: a powered descent to {1}": "{0} n'a pas d'atmosphère : descente propulsée vers {1}",
   "Entry: no landing site on {0} — fly the entry by hand (F: the plane law holds α hypersonic)":
     "Rentrée : aucun site d'atterrissage sur {0} — pilotez la rentrée à la main (F : la loi avion tient α en hypersonique)",
