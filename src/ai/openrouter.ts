@@ -14,6 +14,18 @@ export const DECISION_MODEL = "typesafe/jev-1.13";
 /** the alias that follows Jev's releases: asked if the pinned one is refused (retired) */
 export const DECISION_ALIAS = "~typesafe/jev-latest";
 const KEY = "kerr.openrouter.key";
+
+/** The models TARS may think with (PLAN-TARS-AGENT; the setting "TARS's model"): each calls tools; their
+ *  price per million tokens in and out (OpenRouter's catalogue, 09/10/2026). */
+export const AGENT_MODELS = [
+  { id: "z-ai/glm-5.3-flash", name: "GLM-5.3 Flash", inUsd: 0.15, outUsd: 0.5 },
+  { id: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5", inUsd: 0.1, outUsd: 0.5 },
+  { id: "openai/gpt-6-luna", name: "GPT-6 Luna", inUsd: 0.1, outUsd: 0.5 },
+  { id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", inUsd: 0.3, outUsd: 1.2 },
+  { id: "google/gemini-3.8-flash", name: "Gemini 3.8 Flash", inUsd: 0.75, outUsd: 3.75 },
+  { id: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5", inUsd: 2, outUsd: 10 },
+] as const;
+export type AgentModel = (typeof AGENT_MODELS)[number]["id"];
 const VERIFIER = "kerr.openrouter.verifier";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -149,6 +161,8 @@ export class OpenRouter {
   constructor(
     private key: () => string | null = () => openRouterKey.get(),
     private fetchFn: Fetch = (u, i) => fetch(u, i),
+    /** the model the agent thinks with (the setting) */
+    public model: () => string = () => TEXT_MODEL,
   ) {}
 
   private headers(k: string) {
@@ -170,7 +184,7 @@ export class OpenRouter {
           method: "POST",
           headers: this.headers(k),
           body: JSON.stringify({
-            model: TEXT_MODEL,
+            model: this.model(),
             messages,
             max_tokens: o.maxTokens ?? 160,
             temperature: o.temperature ?? 0.7,
@@ -193,6 +207,62 @@ export class OpenRouter {
       this.spent += j.usage?.cost ?? 0;
       const text = j.choices?.[0]?.message?.content?.trim();
       return text ? text : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The agent's step (PLAN-TARS-AGENT): the conversation and the tools — the model's words and calls (null: no
+   *  key, a failure, the time out, stopped). The reasoning switched off as for the chat (dropped if refused). */
+  async complete(
+    messages: unknown[],
+    tools: unknown[],
+    o: { signal?: AbortSignal; timeoutMs?: number; maxTokens?: number; model?: string } = {},
+  ): Promise<{
+    content: string | null;
+    tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
+  } | null> {
+    const k = this.key();
+    if (!k) return null;
+    const timeout = AbortSignal.timeout(o.timeoutMs ?? 40_000);
+    const signal = o.signal ? AbortSignal.any([o.signal, timeout]) : timeout;
+    try {
+      const ask = () =>
+        this.fetchFn(`${BASE}/api/v1/chat/completions`, {
+          method: "POST",
+          headers: this.headers(k),
+          body: JSON.stringify({
+            model: o.model ?? this.model(),
+            messages,
+            ...(tools.length ? { tools, tool_choice: "auto" } : {}),
+            max_tokens: o.maxTokens ?? 600,
+            temperature: 0.4,
+            usage: { include: true },
+            ...(this.noReasoning ? { reasoning: { enabled: false } } : {}),
+          }),
+          signal,
+        });
+      let r = await ask();
+      if (r.status === 400 && this.noReasoning) {
+        this.calls++;
+        this.noReasoning = false;
+        r = await ask();
+      }
+      this.calls++;
+      if (!r.ok) return null;
+      const j = (await r.json()) as {
+        choices?: {
+          message?: {
+            content?: string | null;
+            tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
+          };
+        }[];
+        usage?: { cost?: number };
+      };
+      this.spent += j.usage?.cost ?? 0;
+      const m = j.choices?.[0]?.message;
+      if (!m) return null;
+      return { content: m.content ?? null, tool_calls: m.tool_calls?.length ? m.tool_calls : undefined };
     } catch {
       return null;
     }
