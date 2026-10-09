@@ -2010,6 +2010,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fps frame rate cap limit vsync battery",
   },
   {
+    key: "showFps",
+    type: "toggle",
+    section: "render",
+    group: "Realtime",
+    label: "Show the frame rate",
+    effect: "none",
+    help: "A small counter in the top corner: the frames per second and the frame's time, refreshed twice a second.",
+    keywords: "fps frame rate counter performance show display",
+  },
+  {
     key: "realtimeBudget",
     type: "number",
     section: "render",

@@ -20,6 +20,8 @@ const T = {
   render: { fr: "Rendu…", en: "Render…" },
   hide: { fr: "masquer la barre", en: "hide the bar" },
   leave: { fr: "quitter", en: "leave" },
+  back: { fr: "Retour au jeu", en: "Back to the game" },
+  show: { fr: "Afficher la barre", en: "Show the bar" },
 } satisfies Record<string, Text>;
 
 export interface PhotoDeps {
@@ -36,6 +38,8 @@ export interface PhotoDeps {
 
 export class PhotoMode {
   private bar: HTMLElement | null = null;
+  /** the bar hidden (H): a small button to bring it back — a touch screen has no H */
+  private peek: HTMLButtonElement | null = null;
   private restore: (() => void) | null = null;
   private unEscape: (() => void) | null = null;
   private onKey = (e: KeyboardEvent) => {
@@ -43,11 +47,16 @@ export class PhotoMode {
     if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.bar?.classList.toggle("ph-hidden");
+      this.hideBar(!this.bar?.classList.contains("ph-hidden"));
     }
   };
 
   constructor(private d: PhotoDeps) {}
+
+  private hideBar(hidden: boolean) {
+    this.bar?.classList.toggle("ph-hidden", hidden);
+    if (this.peek) this.peek.hidden = !hidden;
+  }
 
   get isOpen() {
     return !!this.bar;
@@ -133,8 +142,17 @@ export class PhotoMode {
       button({ label: tr(T.png), testid: "photo-png", onClick: () => this.d.png() }),
       button({ label: tr(T.render), kind: "primary", testid: "photo-render", onClick: () => this.d.render() }),
       h("span", { class: "ph-keys" }, kbd("H"), ` ${tr(T.hide)} · `, kbd(t("Esc")), ` ${tr(T.leave)}`),
+      // (the way back, in plain sight: Escape is not on every keyboard, nor on a tablet)
+      button({ label: tr(T.back), icon: "close", testid: "photo-back", onClick: () => this.close() }),
     );
-    document.body.append(this.bar);
+    this.peek = h(
+      "button",
+      { class: "ph-peek", type: "button", "data-testid": "photo-peek", "aria-label": tr(T.show) },
+      tr(T.show),
+    ) as HTMLButtonElement;
+    this.peek.hidden = true;
+    this.peek.addEventListener("click", () => this.hideBar(false));
+    document.body.append(this.bar, this.peek);
     this.unEscape = onEscape(() => this.close());
     addEventListener("keydown", this.onKey, true);
   }
@@ -146,6 +164,8 @@ export class PhotoMode {
     this.unEscape = null;
     this.bar.remove();
     this.bar = null;
+    this.peek?.remove();
+    this.peek = null;
     document.body.classList.remove("photo");
     this.restore?.();
     this.restore = null;

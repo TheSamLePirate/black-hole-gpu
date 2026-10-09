@@ -1260,4 +1260,7 @@ export default {
   "15 m/s at 10 m, strong turbulence and gusts": "15 m/s à 10 m, forte turbulence et rafales",
   "The air's own motion: a mean wind growing with the height (a jet near 11 km, nothing above 30 km), its direction turning with the place and the day; the Dryden model's turbulence; now and then a gust. The same flight, the same weather.":
     "Le mouvement propre de l'air : un vent moyen qui forcit avec l'altitude (un courant-jet vers 11 km, rien au-dessus de 30 km), sa direction tournant avec le lieu et le jour ; la turbulence du modèle de Dryden ; de temps en temps une rafale. Le même vol, la même météo.",
+  "Show the frame rate": "Afficher les FPS",
+  "A small counter in the top corner: the frames per second and the frame's time, refreshed twice a second.":
+    "Un petit compteur dans le coin en haut : les images par seconde et le temps d'une image, mis à jour deux fois par seconde.",
 } satisfies Record<string, string>;

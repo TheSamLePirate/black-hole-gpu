@@ -2689,3 +2689,12 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
   text-transform: uppercase;
   color-scheme: dark;
 }
+
+/* the frame rate, when asked (Settings › Render › Show the frame rate): a small counter over everything */
+.fps-meter {
+  /* (flush with the screen's top edge, above the bars) */
+  position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: var(--z-toast); pointer-events: none;
+  padding: 0 8px; border-radius: 0 0 4px 4px; background: rgba(4, 8, 14, 0.78); border: 1px solid rgba(160, 210, 255, 0.18); border-top: 0;
+  font: 600 10px/13px var(--mono); color: #b8f5c8; letter-spacing: 0.02em; white-space: nowrap;
+}
+.fps-meter[hidden] { display: none; }

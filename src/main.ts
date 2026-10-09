@@ -2722,6 +2722,9 @@ async function main() {
   let last = performance.now();
   const loopIv: number[] = [];
   let renderedAt = 0;
+  const fpsMeter = Object.assign(document.createElement("div"), { className: "fps-meter", hidden: true });
+  fpsMeter.dataset.testid = "fps-meter";
+  document.body.append(fpsMeter);
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -2750,6 +2753,9 @@ async function main() {
       fps = fpsN / fpsAcc;
       fpsAcc = 0;
       fpsN = 0;
+      // (the frame rate in its corner, when asked — Settings › Render › Show the frame rate)
+      fpsMeter.hidden = !settings.showFps;
+      if (settings.showFps) fpsMeter.textContent = fps > 0 ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms` : "— fps";
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the
@@ -3382,7 +3388,7 @@ async function main() {
       progress = st.offline.progress;
     } else if (st.phase === "realtime") {
       // (the frame rate is a developer's figure: on the dev server only — F2 › Perf has it everywhere)
-      phase = `<span class="phase rt">${t("Live")}${DEV ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
+      phase = `<span class="phase rt">${t("Live")}${DEV || settings.showFps ? ` · ${fpsNow.toFixed(0)} fps` : ""}</span>`;
     } else if (st.phase === "converging") {
       phase = `<span class="phase cv">${tf("Refining · {0} / {1}", Math.floor(st.spp), st.targetSpp ?? settings.targetSpp)}</span>`;
       progress = st.spp / (st.targetSpp ?? settings.targetSpp);

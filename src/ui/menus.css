@@ -356,3 +356,12 @@ body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-po
 @media (max-width: 720px) { .ps-body { grid-template-columns: 1fr; } }
 /* (a dialog open: the toasts below it, at the bottom — still read, not over its title) */
 body:has(.k-modal) .sp-toasts { top: auto; bottom: 24px; }
+
+/* photo mode, its bar hidden (H): the button that brings it back */
+.ph-peek {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: var(--z-panel);
+  padding: 4px 12px; border-radius: 14px; cursor: pointer; opacity: 0.55;
+  background: rgba(8, 12, 20, 0.7); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--text); font: 500 11px var(--font);
+}
+.ph-peek:hover { opacity: 1; }
+.ph-peek[hidden] { display: none; }
