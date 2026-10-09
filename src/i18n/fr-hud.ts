@@ -523,6 +523,7 @@ export default {
   "Still compiling the ray tracer for this graphics card. The first time can take several minutes (Windows especially); the next starts reuse the browser's cache.":
     "Compilation du traceur de rayons pour cette carte graphique toujours en cours. La première fois peut prendre plusieurs minutes (sous Windows surtout) ; les démarrages suivants réutilisent le cache du navigateur.",
   "Enter when the first image is ready": "Entrer dès que la première image est prête",
+  "Compiling the ray tracer for this scene": "Compilation du lancer de rayons pour cette scène",
   "Enter now": "Entrer maintenant",
   "Download graphics diagnostic": "Télécharger le diagnostic graphique",
   "The graphics device was reset ({0}). Reload the page to go on.":
