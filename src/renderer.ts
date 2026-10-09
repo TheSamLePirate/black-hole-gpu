@@ -2694,6 +2694,9 @@ export class Renderer {
   private tracePipeLayout!: GPUPipelineLayout;
   /** the scene's features (bits: radio, polarization, jet, hot spot, hot flow, wormhole, thick disk) — set with its params */
   private featureKey = FEATURES_ALL;
+  /** the camera's features key, as the last trace dispatched had it (a planet probe's params, written
+   *  since, bring their own) */
+  private cameraKey = FEATURES_ALL;
   private variants = new Map<
     number,
     {
@@ -2730,7 +2733,7 @@ export class Renderer {
    * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq", key = this.featureKey): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
@@ -2738,7 +2741,6 @@ export class Renderer {
       lut: this.lutPipeline,
       lutq: this.lutQPipeline,
     }[kind];
-    const key = this.featureKey;
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
       return general;
@@ -2845,6 +2847,7 @@ export class Renderer {
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
+    this.cameraKey = this.featureKey;
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
     // skipped while its pipeline is still compiling in the background, the epoch left unmarked so
     // the next frame tries again)
@@ -4144,20 +4147,26 @@ export class Renderer {
     // (the quality kernel failed: a still view converges on the fixed-step kernel — the path taken
     // with the error control off — rather than drawing realtime frames for ever)
     const adaptive = s.adaptiveIntegrator && this.qualityCompile.state !== "failed";
-    // (after the first image, and once the general kernel is in: two kernels this size compiling side by
-    // side are minutes on a slow D3D12 driver)
+    // (the general quality kernel — every feature, the later scenes' fallback — only once the general
+    // realtime one is in: two kernels this size compiling side by side are minutes on a slow D3D12 driver,
+    // 5 min each on an RX 5700 XT; the still view does not wait for it, below)
     if (
       this.firstFrameDoneAt &&
-      this.generalCompile.state !== "pending" &&
+      this.generalCompile.state === "ready" &&
       !sceneChanged &&
       !timeChanged &&
       adaptive &&
       this.sampleIndex < targetSpp
     )
       void this.qualityCompile.start();
-    // (the quality kernel still compiling in the background: a still view keeps the realtime path
-    // — sampleIndex stays at 0, the convergence starts when the kernel lands)
-    if (sceneChanged || timeChanged || (adaptive && this.sampleIndex < targetSpp && !this.qualityPipeline)) {
+    // (the scene's quality kernel still compiling in the background — asked for here, the camera still:
+    // traceVariant's quality cascade — a still view keeps the realtime path: sampleIndex stays at 0, the
+    // convergence starts when the kernel lands)
+    if (
+      sceneChanged ||
+      timeChanged ||
+      (adaptive && this.sampleIndex < targetSpp && !(this.firstFrameDoneAt && this.traceVariant("q", this.cameraKey)))
+    ) {
       phase = "realtime";
       this.frameStamp++;
       this.updateValidFrom(time);

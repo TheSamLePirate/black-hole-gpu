@@ -138,6 +138,32 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  // (the still view refines on the scene's own quality kernel: the general one — every feature, 5 min on
+  // an RX 5700 XT — is not waited for)
+  test("a still view converges without the general quality kernel", async () => {
+    const app = await App.boot({
+      hash: scene,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+      const original = GPUDevice.prototype.createComputePipelineAsync;
+      GPUDevice.prototype.createComputePipelineAsync = function(desc) {
+        const c = desc.compute.constants ?? {};
+        if (c.QUALITY_PIPELINE === 1 && !("HAS_RADIO" in c)) return new Promise(() => {});
+        return original.call(this, desc);
+      };
+    })()`,
+    });
+    try {
+      await app.js("(__bh.freeze(true), (__bh.settings.adaptiveIntegrator = true), __bh.touch(), true)");
+      await app.waitFor("__bh.renderer.sampleIndex > 0", 120_000);
+      expect(await app.js<boolean>("__bh.settings.adaptiveIntegrator")).toBe(true);
+      expect(await app.js<string | null>("__bh.renderer.pipelineStatus.quality")).not.toBe("ready");
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("device loss during initialization is reported even before runtime callbacks exist", async () => {
     const app = await App.boot({
       hash: scene,

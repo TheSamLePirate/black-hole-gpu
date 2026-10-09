@@ -735,5 +735,13 @@ la caméra). Le diagnostic note les durées (`pipeline-compiled`) et l'état `pi
 `first-image-slow` et un message sur l'écran de chargement (pas de « Recharger », qui repartirait de
 zéro) ; l'échec seulement à 15 min. Le noyau général a un délai de 15 min, sa réussite tardive gardée.
 
-**À mesurer** sur les machines Windows : les `pipeline-compiled` du diagnostic (variante contre
-général), et le deuxième démarrage (le cache).
+**Mesuré** (RX 5700 XT, Chrome 155, Windows, `4bbcbd7`) : la variante de la scène (clé 516 : la
+métrique de Kerr + le jet) **27,8 s** → première image à 31 s (avant : jamais) ; le noyau général
+**317 s** en arrière-plan, ~11× la variante ; frames 10–30 ms ; au rechargement, le cache de shaders
+de Chrome sert (première image quasi immédiate).
+
+**Suite** : le noyau qualité général partait dès la première image (la garde testait « pas en
+cours » quand le général n'avait pas encore démarré) et dépassait 180 s, en concurrence avec le
+général. Il attend désormais le général prêt, et la vue immobile ne l'attend plus : elle s'affine sur
+le noyau qualité **de la scène** (la cascade q de `traceVariant`, demandée pour la clé de la caméra
+— `cameraKey`, une sonde de planète ayant pu réécrire `featureKey` entre-temps).
