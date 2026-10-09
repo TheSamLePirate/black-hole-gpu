@@ -128,7 +128,14 @@ export class SoundDirector {
     sound.setHeadphones(!!s.soundHeadphones);
     haptics.intensity = s.haptics ?? 0.6;
     sound.setMix(
-      { master: s.soundVolume, beeps: s.soundBeeps, engines: s.soundEngines, ambience: s.soundAmbience, ui: s.soundUi },
+      {
+        master: s.soundVolume,
+        beeps: s.soundBeeps,
+        engines: s.soundEngines,
+        ambience: s.soundAmbience,
+        ui: s.soundUi,
+        voice: s.soundVoice ?? 0.9,
+      },
       s.sound,
     );
   }

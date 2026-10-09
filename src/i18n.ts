@@ -10,6 +10,7 @@ import frPwa from "./i18n/fr-pwa";
 import frMain from "./i18n/fr-main";
 import frSettings from "./i18n/fr-settings";
 import frCockpit from "./i18n/fr-cockpit";
+import frTars from "./i18n/fr-tars";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -59,6 +60,7 @@ export const hasFrench = (en: string) => FR.has(en);
 
 addFrench(frSettings);
 addFrench(frCockpit);
+addFrench(frTars);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);

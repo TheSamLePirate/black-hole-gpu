@@ -85,6 +85,9 @@ import { sitesOf } from "./game/sites";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
+import { sound } from "./audio/engine";
+import { Speech } from "./audio/voice";
+import { Subtitles } from "./ui/subtitles";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
@@ -111,7 +114,7 @@ import { installVramHook } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
 import { setSteady } from "./ui/clock";
 import { applyPalette } from "./ui/hudkit";
-import { t, tf, tr } from "./i18n";
+import { lang, t, tf, tr } from "./i18n";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -464,6 +467,9 @@ async function main() {
       if (k === "distance" || k === "whL") camera.sync();
     }
     if (keys.some((k) => k.startsWith("sound") || k === "haptics")) audio.applyMix();
+    // (the voices off: the line being said stopped — its subtitle stays its reading time)
+    if (keys.includes("voice") && !settings.voice) voice.cut();
+    if (keys.includes("subtitles") && !settings.subtitles) subtitles.hide();
     if (scene) touch();
     if (resized) resize();
     syncButtons();
@@ -489,6 +495,22 @@ async function main() {
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
   const audio = new SoundDirector(settings);
+  // the voices (PLAN-TARS T1): who speaks in what order, the system's speech, the subtitles, the radio heard
+  // round mission control's lines
+  const subtitles = new Subtitles();
+  const voice = new Speech({
+    lang: () => lang,
+    volume: () => settings.soundVoice * settings.soundVolume,
+    enabled: () => settings.voice,
+    onStart: (l) => {
+      subtitles.show(l, settings.subtitles);
+      if (l.radio && settings.sound) sound.radio(true);
+    },
+    onEnd: (l) => {
+      subtitles.end(l);
+      if (l.radio && settings.sound) sound.radio(false);
+    },
+  });
   const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
   panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));
   const refreshGui = () => {
@@ -2258,6 +2280,7 @@ async function main() {
     mission,
     cockpitScreens,
     audio,
+    voice,
     skyLoading,
     touch,
     resize,

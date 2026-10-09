@@ -53,6 +53,8 @@ export interface Mix {
   engines: number;
   ambience: number;
   ui: number;
+  /** the voices played here (TARS's — PLAN-TARS T5 —) and the radio's frame round the system's ones (T1) */
+  voice: number;
 }
 
 /** What the thrusters and the cabin are doing now (set every frame by the director). */
@@ -118,9 +120,11 @@ function rms(a: AnalyserNode) {
 
 export class SoundEngine {
   ctx: AudioContext | null = null;
-  private mix: Mix = { master: 0.7, beeps: 0.8, engines: 0.9, ambience: 0.5, ui: 0.4 };
+  private mix: Mix = { master: 0.7, beeps: 0.8, engines: 0.9, ambience: 0.5, ui: 0.4, voice: 0.9 };
   enabled = true;
-  private busses!: Record<"master" | "beeps" | "engine" | "rcs" | "ambience" | "ui" | "room" | "listener", GainNode>;
+  private busses!: Record<"master" | "beeps" | "engine" | "rcs" | "ambience" | "ui" | "room" | "listener" | "voice", GainNode>;
+  /** the radio's hiss under a line said by radio (PLAN-TARS T1), its band */
+  private radioHiss: { g: GainNode; src: AudioBufferSourceNode } | null = null;
   private listenerLP!: BiquadFilterNode;
   private white!: AudioBuffer;
   private brown!: AudioBuffer;
@@ -254,6 +258,7 @@ export class SoundEngine {
     g(this.busses.rcs, this.mix.engines);
     g(this.busses.ambience, this.mix.ambience);
     g(this.busses.ui, this.mix.ui);
+    g(this.busses.voice, this.mix.voice);
     if (enabled && !document.hidden) void this.ctx.resume();
   }
 
@@ -395,8 +400,11 @@ export class SoundEngine {
     ambience.connect(master);
     const ui = gain(this.mix.ui);
     ui.connect(master);
-    this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener };
-    for (const [k, n] of Object.entries({ beeps, engine, rcs, ambience, listener: eq2, master })) {
+    // (the voices: TARS's, the radio's frame — not through the hull: heard as a headset hears them)
+    const voice = gain(this.mix.voice);
+    voice.connect(master);
+    this.busses = { master, beeps, engine, rcs, ambience, ui, room, listener, voice };
+    for (const [k, n] of Object.entries({ beeps, engine, rcs, ambience, listener: eq2, voice, master })) {
       const a = ctx.createAnalyser();
       a.fftSize = 2048;
       n.connect(a);
@@ -1322,6 +1330,34 @@ export class SoundEngine {
         this.bell(523, 1.2, 0.1, 3);
         break;
     }
+  }
+
+  /**
+   * A radio line's frame (PLAN-TARS T1) — the system's voice cannot be filtered, the radio is heard round
+   * it: at its start Quindar's intro tone (2525 Hz, 250 ms, as Apollo's capcom keyed) and the squelch's
+   * click, a hiss in the voice's band while it is said; at its end the outro tone (2475 Hz) and the
+   * squelch's tail. `static` 0…1: the hiss louder (a radio blackout's, T3).
+   */
+  radio(on: boolean, staticLevel = 0) {
+    if (!this.running || !this.enabled) return;
+    const ctx = this.ctx!;
+    const out = this.busses.voice;
+    const t = ctx.currentTime;
+    if (!this.radioHiss) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.white;
+      src.loop = true;
+      const bp = new BiquadFilterNode(ctx, { type: "bandpass", frequency: 1800, Q: 0.7 });
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      src.connect(bp).connect(g).connect(out);
+      src.start();
+      this.radioHiss = { g, src };
+    }
+    const hiss = 0.012 + 0.16 * Math.min(Math.max(staticLevel, 0), 1);
+    this.radioHiss.g.gain.setTargetAtTime(on ? hiss : 0, t, on ? 0.02 : 0.08);
+    this.tone(on ? 2525 : 2475, 0, 0.25, { level: 0.07, type: "sine", out });
+    this.burst(out, 0.09, 2600, on ? 0.06 : 0.14, 0.8, on ? 0.25 : 0);
   }
 
   /**

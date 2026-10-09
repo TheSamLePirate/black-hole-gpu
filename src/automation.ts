@@ -24,6 +24,7 @@ import type { Mission } from "./mission";
 import type { CockpitScreens } from "./ui/cockpitscreens";
 import type { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
+import type { Speech } from "./audio/voice";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
 import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
@@ -53,6 +54,8 @@ export interface BhContext {
   mission: Mission;
   cockpitScreens: CockpitScreens;
   audio: SoundDirector;
+  /** the voices (PLAN-TARS): say(line), what was said, the queue */
+  voice: Speech;
   skyLoading: Promise<unknown>;
   touch(): void;
   resize(): void;
@@ -78,7 +81,7 @@ export interface BhContext {
 }
 
 export function installBh(c: BhContext) {
-  const { settings, renderer, camera, sim, tools, bench, mission, cockpitScreens, audio, skyLoading } = c;
+  const { settings, renderer, camera, sim, tools, bench, mission, cockpitScreens, audio, skyLoading, voice } = c;
   const { touch, resize, applyPreset, goTo, skyGoTo, updateChart } = c;
   const refreshGui = () => c.refreshGui();
   const snapshot = async (name = "snapshot") =>
@@ -273,6 +276,8 @@ export function installBh(c: BhContext) {
       /** the sound: __bh.sound.play("sas-on"), __bh.sound.ctx */
       sound,
       audio,
+      /** the voices (PLAN-TARS): __bh.voice.say({ text, speaker, priority }), .said, .queue */
+      voice,
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,

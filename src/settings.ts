@@ -424,6 +424,9 @@ export interface Settings {
   soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
   soundUi: number; // the interface's clicks
   soundHeadphones: boolean; // headphones: the sources placed in 3D (HRTF); speakers: equal-power panning
+  voice: boolean; // the voices spoken (the landing's callouts, mission control, TARS — PLAN-TARS); off: subtitles alone
+  soundVoice: number; // their volume, 0…1
+  subtitles: boolean; // the line being said shown, its speaker named
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
@@ -658,6 +661,9 @@ export function defaultSettings(): Settings {
     soundAmbience: 0.5,
     soundUi: 0.35,
     soundHeadphones: false,
+    voice: true,
+    soundVoice: 0.9,
+    subtitles: true,
     haptics: 0.6,
     dynamicResolution: false,
   };
@@ -1856,6 +1862,9 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soundAmbience: "pref",
   soundUi: "pref",
   soundHeadphones: "pref",
+  voice: "pref",
+  soundVoice: "pref",
+  subtitles: "pref",
   haptics: "pref",
   dynamicResolution: "pref",
 };

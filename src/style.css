@@ -1624,6 +1624,21 @@ body.mobile .fl-dock { top: 92px; transform: translateX(-50%) scale(0.85); trans
 .mission-caption span { font: 400 14px var(--font); letter-spacing: 0.02em; color: rgba(230, 234, 243, 0.88); max-width: 70vw; }
 body.hide-ui .mission-caption { display: none; }
 
+/* the subtitles (PLAN-TARS T1): the line being said and its speaker, above the HUD's lower third */
+.subtitles {
+  position: fixed; left: 50%; bottom: 31vh; transform: translate(-50%, 6px); z-index: 4; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; max-width: min(760px, 86vw);
+  padding: 6px 14px 8px; border-radius: 6px; background: rgba(4, 8, 14, 0.55);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+.subtitles.on { opacity: 1; transform: translate(-50%, 0); }
+.subtitles small { font: 700 11px var(--hud-font); letter-spacing: 0.3em; text-transform: uppercase; color: rgba(160, 200, 230, 0.85); }
+.subtitles span { font: 500 16px var(--font); letter-spacing: 0.01em; color: #f2f5fa; }
+.subtitles[data-speaker="callout"] small { color: rgba(255, 196, 92, 0.95); }
+.subtitles[data-speaker="tars"] small { color: rgba(140, 255, 190, 0.95); }
+.subtitles.radio span { font-style: italic; }
+body.hide-ui .subtitles { display: none; }
+
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
 .fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }
