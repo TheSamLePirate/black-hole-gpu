@@ -90,6 +90,11 @@ test("the HUD's warnings: said as they come, once while they last, the shown-onl
   ).toEqual([["alert-stall", 0, "Stall! Stall!"]]);
   expect(at([])).toEqual([]);
   expect(at([{ id: "gear", level: "warning" }]).length).toBe(1);
+  // (the entry autopilot's glide past the stall, on purpose: not cried; by hand, it is)
+  expect(new Callouts().update({ ...base, agl: 30_000, vz: -50, auto: "entry", alerts: [{ id: "stall", level: "warning" }] })).toEqual([]);
+  expect(new Callouts().update({ ...base, agl: 30_000, vz: -50, auto: "none", alerts: [{ id: "stall", level: "warning" }] }).length).toBe(
+    1,
+  );
   // (one that flickers — gone, back within 30 s —: said once)
   const w = new Callouts();
   const sayAt = (now: number, on: boolean) =>

@@ -28,6 +28,9 @@ export interface CalloutInput {
   alerts: { id: string; level: string }[];
   /** the wall's clock [ms] (a warning that comes back within 30 s not said again) */
   now?: number;
+  /** the autopilot flying ("none": the pilot) — the entry's flies its glide past the stall on purpose: the
+   *  HUD shows it, the voice does not cry it */
+  auto?: string;
 }
 
 /** The radio heights called going down [m]. */
@@ -101,7 +104,11 @@ export class Callouts {
   update(i: CalloutInput): VoiceLine[] {
     const out: VoiceLine[] = [];
     // the warnings: each said as it comes, once while it lasts
-    const now = new Set(i.alerts.filter((a) => a.level === "warning" || a.level === "caution").map((a) => a.id));
+    const now = new Set(
+      i.alerts
+        .filter((a) => (a.level === "warning" || a.level === "caution") && !(a.id === "stall" && i.auto === "entry"))
+        .map((a) => a.id),
+    );
     const wall = i.now ?? 0;
     for (const id of now)
       if (SPOKEN[id] && !this.warned.has(id) && !(i.now !== undefined && wall - (this.saidAt.get(id) ?? -Infinity) < 30_000)) {

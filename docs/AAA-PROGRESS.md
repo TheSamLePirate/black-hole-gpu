@@ -466,6 +466,19 @@ Plan : [`PLAN-COCKPIT.md`](PLAN-COCKPIT.md), étapes K1 à K7 ; référence [`CO
 - **K6** : les lumières — la cabine baissée la nuit, rouge en NIGHT, éclairée par ses écrans ; les feux du Ranger sur la coque, leur coût mesuré (deux pièges de 1,3 et 5 ms évités).
 - **K7** : un vol mené au tableau par de vrais clics, posé à Edwards, noté A ; en chemin, **le rapport d'atterrissage corrigé** (lu dans le pas du toucher, il notait F un posé parfait une fois sur trois). Planche finale `docs/progress/cockpit/k7-vol-au-tableau.jpg`.
 
+## M10 : la musique, les voix et TARS (terminée, 09/10/2026)
+
+Plan : [`PLAN-TARS.md`](PLAN-TARS.md), étapes T1 à T7 ; référence [`TARS.md`](TARS.md).
+
+- **T1** : les voix — une file par priorité, les voix du système (Web Speech), les sous-titres, la radio autour du contrôle (Quindar, squelch, souffle).
+- **T2** : les annonces de l'atterrissage — hauteurs radio, minimums, taux de chute sur l'enveloppe mesurée du plané du Ranger, remontez, les alertes dites.
+- **T3** : le contrôle de mission et la tour, lus sur l'état du vol — le délai de la lumière, aucun Houston du côté de Gargantua, le blackout du plasma.
+- **T4** : la musique aux seuls grands moments (décision) — orgue additif, nappes, salle ; le tic-tac de Miller (le motif du film, décision).
+- **T5a** : la voix robot de TARS — règles de lecture et synthèse par formants, mesurée par Whisper (13 % de mots manqués) ; en français la voix du système (décision, le français maison mesuré à 76–87 %).
+- **T5b** : TARS hors ligne — F6, ses réponses tirées du vol en anglais ou en français, son honnêteté et son humour, ses remarques rares.
+- **T6** : TARS par OpenRouter — la clé du joueur (OAuth PKCE ou collée), ses réponses par GLM-5.3-flash, ses remarques décidées par Jev, rationnées ; CORS vérifié sur le vrai service (sans clé).
+- **T7** : un vol écouté de bout en bout ; corrigé par lui : le décrochage crié sous l'autopilote de rentrée. Planche finale `docs/progress/tars/t7-vol-ecoute.jpg`.
+
 ## Ce qui reste pour l'AAA (au 09/10/2026)
 
 Par ordre de gain :
@@ -490,6 +503,13 @@ Par ordre de gain :
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **09/10/2026 — M10 terminée (T7) : la phase 3 (plan Monde) est close.** Les voix, les annonces, le contrôle de mission et la tour, la musique aux grands moments, TARS (sa voix robot, hors ligne et par OpenRouter).
+
+  Leçons :
+  - **une voix se mesure** : Whisper comme oreille, validé d'abord sur les voix du système ; sans mesure, le français maison aurait été livré inaudible ;
+  - **la physique du jeu prime sur le film** quand elle diffère (dτ/dt = 0,85 sur Miller) : le choix d'un hommage se décide, il ne se cache pas ;
+  - **écouter un vol entier** trouve ce que les tests de morceaux ne voient pas (le décrochage crié sous autopilote).
 
 - **09/10/2026 — M8 terminée (K7)** : le cockpit interactif — 20 commandes au pointeur sur trois panneaux, les écrans à pages, le train réel commandé et son alarme, les phases du vol au tableau, les lumières de la cabine et les feux de la coque ; un vol mené au tableau par de vrais clics, noté A. Corrigé en chemin : le rapport d'atterrissage (le flake « F une fois sur trois » de `report.e2e`).
 

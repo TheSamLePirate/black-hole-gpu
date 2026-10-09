@@ -2790,6 +2790,7 @@ async function main() {
           dh: RUNWAY_DH,
           alerts: flightHud.alerts,
           now: performance.now(),
+          auto: camera.pilot.auto,
         }))
           voice.say(l);
       }
