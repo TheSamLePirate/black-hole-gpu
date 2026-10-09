@@ -454,7 +454,19 @@ Plan : [`PLAN-HOTAS.md`](PLAN-HOTAS.md), étapes H1 à H6 ; référence [`HOTAS.
 - **H5** : les vibrations — la poussée, le plasma, le roulage, chaque roue, les joints, les bangs, l'amarrage ; un réglage d'intensité.
 - **H6** : un vol entier au HOTAS simulé, posé à Edwards (e2e `hotas-flight`). Corrigé : l'approche lit la hauteur au-dessus du seuil, plus la hauteur sol (une bosse de 40 m déclenchait les minima). Planche finale `docs/progress/hotas/h6-final.jpg`.
 
-## Ce qui reste pour l'AAA (au 08/10/2026)
+## M8 : le cockpit interactif (terminée, 09/10/2026)
+
+Plan : [`PLAN-COCKPIT.md`](PLAN-COCKPIT.md), étapes K1 à K7 ; référence [`COCKPIT.md`](COCKPIT.md).
+
+- **K1** : 20 commandes générées sur trois panneaux mesurés de la cabine (leviers, interrupteurs, boutons allumés, un bouton rotatif), leurs inscriptions, leurs poses.
+- **K2** : le pointeur — un rayon CPU contre la cabine ; survol et bulle, clic, glissement, molette ; le regard toujours au bouton droit.
+- **K3** : les écrans à pages — dix pages pour chacun des huit affichages, leurs onglets sous le pointeur.
+- **K4** : le train réel — le Ranger à 1,8 m sur ses roues, le train dessiné ; commandé (G, le levier), son alarme, l'atterrissage sur le ventre, le décollage sur piste.
+- **K5** : les phases du vol au tableau (TKOFF, CIRC, APPR), les leviers qui voyagent jusqu'à leur état, le chronomètre sur CLOCKS.
+- **K6** : les lumières — la cabine baissée la nuit, rouge en NIGHT, éclairée par ses écrans ; les feux du Ranger sur la coque, leur coût mesuré (deux pièges de 1,3 et 5 ms évités).
+- **K7** : un vol mené au tableau par de vrais clics, posé à Edwards, noté A ; en chemin, **le rapport d'atterrissage corrigé** (lu dans le pas du toucher, il notait F un posé parfait une fois sur trois). Planche finale `docs/progress/cockpit/k7-vol-au-tableau.jpg`.
+
+## Ce qui reste pour l'AAA (au 09/10/2026)
 
 Par ordre de gain :
 
@@ -465,7 +477,7 @@ Par ordre de gain :
    - des repères de pôle unifiés (pôle de date) ;
    - le retour par le trou de ver et Gargantua (points 9 et 10 du plan des autopilotes) ;
    - le flottement au Bourget ;
-   - l'atterrissage au Bourget juste après un chargement : 1 sur 3 environ à 94 m de l'axe et 3,3 g (e2e `report`).
+   - ~~l'atterrissage au Bourget juste après un chargement : 1 sur 3 à 94 m de l'axe~~ (09/10 : c'était le rapport, lu dans le pas du toucher — corrigé en K7).
 3. **Robustesse** : ~~la recréation à chaud du device et son e2e~~ (M2, fait le 08/10). Reste à stabiliser le harnais e2e (échecs aléatoires au démarrage sur le mini).
 4. **Technologie, 79 → 80, puis le plan Monde M3–M9** (état mesuré au 08/10 dans [`PLAN-MONDE.md`](PLAN-MONDE.md)) :
    - le poids du téléchargement, mesuré dans le build : la **Terre « high »** en KTX2 (6 faces 4096², ≈ 67 Mo, chargée à l'approche de la Terre), **Jupiter** (32,5 Mo, paliers ≥ 2), les **planètes en JPEG** décodées en rgba8 (89 images, Lune 9,3 Mo, Mars 5,9 Mo) et les reliefs (Terre 10,6, Lune 9,8, Mars 8,5 Mo) ; les maillages sont déjà découpés en LOD (l'ISS 2 + 9,9 Mo, l'Endurance 1–11 Mo) — restent leur quantification et les planètes en KTX2 ;
@@ -473,11 +485,18 @@ Par ordre de gain :
    - ~~aéroports vivants~~ (M5 terminée le 08/10 : balisage OACI, décor, guidage MLS, cartes d'approche, remise de gaz) ;
    - ~~audio spatial~~ (M6 terminée le 08/10 : HRTF, Doppler, moteur granulaire, cabine, piste, station, bang) ;
    - ~~HOTAS~~ (M7 terminée le 08/10 : tous les périphériques, douze profils, l'écran de réglage, levier absolu, vibrations) ;
-   - cockpit interactif ;
+   - ~~cockpit interactif~~ (M8 terminée le 09/10 : 20 commandes au pointeur, écrans à pages, train réel commandé, lumières de la cabine et de la coque) ;
    - ~~≤ 8 storage buffers pour Android et Safari~~ (M9, fait le 08/10) ; restent FSR1 et la matrice de compatibilité.
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 
 ## Journal
+
+- **09/10/2026 — M8 terminée (K7)** : le cockpit interactif — 20 commandes au pointeur sur trois panneaux, les écrans à pages, le train réel commandé et son alarme, les phases du vol au tableau, les lumières de la cabine et les feux de la coque ; un vol mené au tableau par de vrais clics, noté A. Corrigé en chemin : le rapport d'atterrissage (le flake « F une fois sur trois » de `report.e2e`).
+
+  Leçons :
+  - **mesurer le coût GPU de chaque ajout**, même minuscule : 7 halos de feux coûtaient 5 ms parce que chaque fragment lisait la profondeur tracée (lue une fois par sommet : 0) ;
+  - **un rapport calculé au milieu d'un pas** lit un état à moitié mis à jour : le noter au pas suivant ;
+  - **un vol scripté doit vérifier ses propres conditions** : `airInfo().agl` n'existait pas, la condition « sous 3 km » ne se déclenchait jamais et le diagnostic est parti sur une fausse piste.
 
 - **08/10/2026 — M7 terminée (H6)** : les entrées HOTAS — tous les périphériques ensemble, douze profils connus, l'écran « Manettes et HOTAS », la manette des gaz absolue, les vibrations ; un vol entier au HOTAS simulé ; l'approche sur la hauteur au-dessus du seuil.
 - **08/10/2026 — M6 terminée (S8)** : l'audio spatial — tout placé, la cabine, la piste, la station, le bang au cône de Mach ; le mix mesuré et rééquilibré.
