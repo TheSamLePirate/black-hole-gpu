@@ -1,5 +1,16 @@
 import { expect, test } from "bun:test";
-import { BELLY, GEAR_TRAVEL_S, GEARS, gearByItself, gearForces, stepGear, tippedOver, touchdownVerdict, tyreGrip, type Ground } from "../src/gear";
+import {
+  BELLY,
+  GEAR_TRAVEL_S,
+  GEARS,
+  gearByItself,
+  gearForces,
+  stepGear,
+  tippedOver,
+  touchdownVerdict,
+  tyreGrip,
+  type Ground,
+} from "../src/gear";
 import type { V3 } from "../src/mounts";
 
 // The landing gear (phase 2): the Ranger dropped onto a flat runway settles on its three wheels at the

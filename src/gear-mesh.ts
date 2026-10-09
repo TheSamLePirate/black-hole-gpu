@@ -60,7 +60,12 @@ class Out {
     for (let k = 0; k < seg; k++) {
       const d0 = ring(k),
         d1 = ring(k + 1);
-      const q = [this.vert(add(a, mul(d0, r)), d0, m, ao), this.vert(add(a, mul(d1, r)), d1, m, ao), this.vert(add(b, mul(d1, r)), d1, m, ao), this.vert(add(b, mul(d0, r)), d0, m, ao)];
+      const q = [
+        this.vert(add(a, mul(d0, r)), d0, m, ao),
+        this.vert(add(a, mul(d1, r)), d1, m, ao),
+        this.vert(add(b, mul(d1, r)), d1, m, ao),
+        this.vert(add(b, mul(d0, r)), d0, m, ao),
+      ];
       const mid = norm(add(d0, d1));
       this.tri(q[0]!, q[1]!, q[2]!, mid);
       this.tri(q[0]!, q[2]!, q[3]!, mid);
@@ -110,7 +115,12 @@ export const GEAR_HINGES: { at: V3; door: number }[] = GEARS.ranger!.legs.map((L
 export const WHEEL = { nose: 0.36, main: 0.5 } as const;
 
 /** The gear's mesh (gear down, every oleo at full extension), and its bounds. */
-export function gearMesh(legs: Leg[] = GEARS.ranger!.legs): { verts: Float32Array<ArrayBuffer>; idx: Uint32Array<ArrayBuffer>; lo: V3; hi: V3 } {
+export function gearMesh(legs: Leg[] = GEARS.ranger!.legs): {
+  verts: Float32Array<ArrayBuffer>;
+  idx: Uint32Array<ArrayBuffer>;
+  lo: V3;
+  hi: V3;
+} {
   const o = new Out();
   legs.forEach((L, k) => {
     const nose = !!L.steers;
@@ -142,7 +152,14 @@ export function gearMesh(legs: Leg[] = GEARS.ranger!.legs): { verts: Float32Arra
     const dl = nose ? 1.0 : 1.4,
       dh = nose ? 0.55 : 0.7;
     for (const s of [-1, 1])
-      o.box([x + s * (nose ? 0.32 : 0.45), top[1] - dh / 2, z + (nose ? 0.1 : 0)], [0.015, 0, 0], [0, dh / 2, 0], [0, 0, dl / 2], Dr(GEAR_MAT.door), 0.8);
+      o.box(
+        [x + s * (nose ? 0.32 : 0.45), top[1] - dh / 2, z + (nose ? 0.1 : 0)],
+        [0.015, 0, 0],
+        [0, dh / 2, 0],
+        [0, 0, dl / 2],
+        Dr(GEAR_MAT.door),
+        0.8,
+      );
   });
   const lo: V3 = [Infinity, Infinity, Infinity],
     hi: V3 = [-Infinity, -Infinity, -Infinity];

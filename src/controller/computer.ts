@@ -1248,7 +1248,13 @@ function airInfo(this: CameraController) {
     // lever up: lowered, the alarm stops — it is coming), low and slow: below 300 m and 150 m/s — K4b)
     gearDown: this.gearDown,
     gearExt: this.gearExt,
-    gearWarn: fleet.active === "ranger" && A.inAir && !this.gearDown && !A.cfg.gear && (A.cfg.agl ?? Infinity) - GEAR < 300 && (L?.speed ?? Infinity) < 150,
+    gearWarn:
+      fleet.active === "ranger" &&
+      A.inAir &&
+      !this.gearDown &&
+      !A.cfg.gear &&
+      (A.cfg.agl ?? Infinity) - GEAR < 300 &&
+      (L?.speed ?? Infinity) < 150,
     // (the wind there: its speed [m/s], where it blows from [°])
     wind: this.windNow,
     sf: this.sfCmd ? { ...this.sfCmd } : null,

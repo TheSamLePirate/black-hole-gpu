@@ -104,8 +104,7 @@ export function controlTip(
   if (id === "gear") {
     const g = d.gearNow();
     state = g.ext >= 1 ? t("down and locked") : g.ext <= 0 ? t("up") : t("in transit");
-  }
-  else if (id === "flaps" || id === "airBrake" || id === "dimmer") state = pct;
+  } else if (id === "flaps" || id === "airBrake" || id === "dimmer") state = pct;
   else if (id === "chrono") state = `${d.chrono.running ? t("running") : t("stopped")} · ${fmtClock(d.chrono.seconds())}`;
   else if (c.kind === "toggle") state = p > 0.5 ? t("ON") : t("OFF");
   else if (id === "apOff") state = t("push: everything off");

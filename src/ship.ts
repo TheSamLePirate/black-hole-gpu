@@ -609,7 +609,12 @@ export class ShipRenderer {
     const ibuf = d.createBuffer({ size: g.idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(ibuf, 0, g.idx);
     const c: V3 = [0, 1, 2].map((j) => (g.lo[j]! + g.hi[j]!) / 2) as V3;
-    return (this.gearMeshBuf = { vbuf, ibuf, count: g.idx.length, bound: { c, r: Math.hypot(...sub(g.hi, g.lo)) / 2, lo: g.lo, hi: g.hi } });
+    return (this.gearMeshBuf = {
+      vbuf,
+      ibuf,
+      count: g.idx.length,
+      bound: { c, r: Math.hypot(...sub(g.hi, g.lo)) / 2, lo: g.lo, hi: g.hi },
+    });
   }
 
   /** A pixel's ray in the ship's frame (the last frame's camera; ndc: −1…1, y up): from the eye, unit. */

@@ -20,7 +20,8 @@ export default {
   "Landing gear: the autopilot sets it": "Train d'atterrissage : l'autopilote s'en charge",
   "Gear down": "Train sorti",
   "Gear up": "Train rentré",
-  "Belly landing on {0} · {1} m/s down — gear up, the hull scraped": "Atterrissage sur le ventre, {0} · {1} m/s de descente — train rentré, la coque raclée",
+  "Belly landing on {0} · {1} m/s down — gear up, the hull scraped":
+    "Atterrissage sur le ventre, {0} · {1} m/s de descente — train rentré, la coque raclée",
   "GEAR UP · TOO LOW": "TRAIN RENTRÉ · TROP BAS",
   "The landing gear is not down and locked, the craft low and slow: a landing like this is on the belly.":
     "Le train n'est pas sorti et verrouillé, l'appareil bas et lent : un atterrissage ainsi se fait sur le ventre.",

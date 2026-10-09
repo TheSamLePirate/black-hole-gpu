@@ -20,7 +20,14 @@ describe.skipIf(!E2E)("the landing gear, commanded", () => {
   });
 
   test("up in the air; G: down in 8 s, drawn coming down; the alarm low and slow with it up", async () => {
-    const r = await app.js<{ init: [boolean, number]; half: number; full: number; drawn: number; warnUp: boolean; warnDown: boolean }>(`(() => {
+    const r = await app.js<{
+      init: [boolean, number];
+      half: number;
+      full: number;
+      drawn: number;
+      warnUp: boolean;
+      warnDown: boolean;
+    }>(`(() => {
       __bh.freeze(true); __bh.settings.autoGear = false; __bh.settings.wind = 0;
       // (high and fast at the flight's start: the gear up)
       __bh.game.glideTo("Edwards", 30, 3, 200);

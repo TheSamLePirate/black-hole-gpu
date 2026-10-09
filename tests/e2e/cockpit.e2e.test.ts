@@ -140,6 +140,8 @@ describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
     expect(await app.js<boolean>("__bh.camera.gearDown")).toBe(true);
     await app.mouse("move", g.x + 1, g.y);
     await Bun.sleep(400);
-    expect(await app.js<string>(`document.querySelector("[data-testid=cockpit-tip]").textContent`)).toMatch(/in transit|en mouvement|down and locked|sorti/);
+    expect(await app.js<string>(`document.querySelector("[data-testid=cockpit-tip]").textContent`)).toMatch(
+      /in transit|en mouvement|down and locked|sorti/,
+    );
   });
 });
