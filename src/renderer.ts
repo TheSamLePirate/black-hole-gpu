@@ -558,7 +558,7 @@ export class Renderer {
   private qualityCompile!: AsyncResource<GPUComputePipeline>;
   private lutCompile!: AsyncResource<GPUComputePipeline>;
   private lutQCompile!: AsyncResource<GPUComputePipeline>;
-  private readonly variantQueue = new CompileQueue();
+  private readonly variantQueue = new CompileQueue(60_000, true);
   private live: Target | null = null;
   private offline: OfflineJob | null = null;
 

@@ -213,6 +213,31 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
+  // (the planets' light probes on the camera's own kernel: their key is the camera's — not left unlit
+  // for the minutes the general kernel takes on a slow D3D12 driver)
+  test("the planets' light probes run without the general kernel", async () => {
+    const app = await App.boot({
+      hash: `scene=${encodeURIComponent("Miller: the water world")}`,
+      width: 320,
+      height: 240,
+      initScript: `(() => {
+      const original = GPUDevice.prototype.createComputePipelineAsync;
+      GPUDevice.prototype.createComputePipelineAsync = function(desc) {
+        const c = desc.compute.constants ?? {};
+        const entry = desc.compute.entryPoint;
+        if ((entry === "main" || entry === "env" || entry === "lut") && !("HAS_RADIO" in c)) return new Promise(() => {});
+        return original.call(this, desc);
+      };
+    })()`,
+    });
+    try {
+      await app.waitFor("__bh.renderer.planetProbes.size > 0", 90_000);
+      expect(await app.js<string>("__bh.renderer.pipelineStatus.general")).not.toBe("ready");
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("device loss during initialization is reported even before runtime callbacks exist", async () => {
     const app = await App.boot({
       hash: scene,
