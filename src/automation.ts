@@ -29,6 +29,9 @@ import { phonemes } from "./audio/g2p";
 import type { Speech } from "./audio/voice";
 import type { Capcom } from "./game/capcom";
 import type { Music } from "./audio/music";
+import type { TarsAgent } from "./ai/tars-agent";
+import type { TarsMemory } from "./ai/memory";
+import type { Tool } from "./ai/agent";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
 import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
@@ -64,6 +67,8 @@ export interface BhContext {
   capcom: Capcom;
   /** the score (PLAN-TARS T4): the moment playing, the notes and ticks started */
   music: Music;
+  /** TARS the agent (PLAN-TARS-AGENT): his turns, his memory, his tools */
+  tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[] };
   skyLoading: Promise<unknown>;
   touch(): void;
   resize(): void;
@@ -288,6 +293,8 @@ export function installBh(c: BhContext) {
       voice,
       capcom,
       music,
+      /** TARS the agent: __bh.tars.agent.ask("…"), .agent.last (his actions), .memory, .tools() */
+      tars: c.tars,
       /** TARS's robot voice's parts (PLAN-TARS T5a): its measurement renders it offline */
       tarsVoice: { phonemes, synthesize, robotVoice },
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */

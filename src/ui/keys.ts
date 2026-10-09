@@ -35,3 +35,10 @@ addEventListener("pointerup", (e: PointerEvent) => {
   const t = e.target as HTMLInputElement | null;
   if (t?.tagName === "INPUT" && /^(range|checkbox|radio|color)$/.test(t.type)) requestAnimationFrame(() => t.blur());
 });
+
+/** Closes the topmost surface on the Escape stack, as Escape would (TARS's interface tool): whether one was. */
+export function closeTop(): boolean {
+  const close = stack.pop();
+  close?.();
+  return !!close;
+}

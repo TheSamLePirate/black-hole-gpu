@@ -1,6 +1,7 @@
 import { OUR_TARGETS, type Settings } from "../settings";
 import { SOLAR_BODIES } from "../system/solar";
 import { MOUNTS } from "../mounts";
+import { AGENT_MODELS } from "../ai/openrouter";
 
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
 export type Effect = "scene" | "display" | "none" | "resize";
@@ -2991,8 +2992,21 @@ export const SCHEMA: ControlDef[] = [
     group: "TARS",
     label: "TARS through OpenRouter",
     effect: "none",
-    help: "With your own OpenRouter key (F6: sign in with OpenRouter, or paste a key — kept in this browser only), TARS answers in his own words (the model GLM-5.3-flash, a few hundredths of a cent a line) and decides himself when a remark is worth it (Jev). Off, or without a key, or offline: his written lines.",
+    help: "With your own OpenRouter key (F6: sign in with OpenRouter, or paste a key — kept in this browser only), TARS is an agent: he answers in his own words and does what you ask — flies, navigates, the time, the views, the settings, the saves, anything in the game, without asking (the model of your choice below, a few hundredths of a cent a question) —; he remembers your conversations (F6: clear) and decides himself when a remark is worth it (Jev). Off, or without a key, or offline: his written lines and the simple orders.",
     keywords: "tars openrouter ai llm key online glm jev",
+  },
+  {
+    key: "tarsModel",
+    type: "choice",
+    section: "game",
+    group: "TARS",
+    label: "TARS's model",
+    style: "select",
+    effect: "none",
+    enabled: (s) => s.tarsOnline,
+    options: AGENT_MODELS.map((m) => ({ value: m.id, label: m.name, hint: `${m.inUsd} / ${m.outUsd} $ / M tokens` })),
+    help: "The model TARS thinks and acts with through your OpenRouter key: every one of them can use the game's tools. GLM-5.3 Flash is the cheapest; Claude Haiku 5.5 and GPT-6 Luna as cheap; the others cost more.",
+    keywords: "tars model llm ai openrouter glm claude gpt gemini deepseek agent",
   },
   {
     key: "tarsHonesty",

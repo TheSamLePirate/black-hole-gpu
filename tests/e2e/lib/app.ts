@@ -163,6 +163,16 @@ export class App {
     await Bun.sleep(60);
   }
 
+  /** A key held down for a while (`during` runs while it is down: a push-to-talk's words), then released. */
+  async hold(code: string, ms: number, during?: () => Promise<void>) {
+    const ev = { code, key: code, windowsVirtualKeyCode: vk(code), nativeVirtualKeyCode: vk(code), modifiers: 0 };
+    await this.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...ev });
+    await Bun.sleep(ms);
+    await during?.();
+    await this.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });
+    await Bun.sleep(60);
+  }
+
   /** Text typed into the focused field (as an input method gives it: no key events for the flight). */
   async type(text: string) {
     await this.cdp.send("Input.insertText", { text });

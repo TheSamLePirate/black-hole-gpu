@@ -2,7 +2,8 @@
 // and subtitled; Escape, or Enter on nothing, closes it. Its keys are its own while open (the flight's not
 // triggered by typing). Under it, his link to OpenRouter (T6): offline (his written lines) or connected (the
 // key's end, what the session has cost); "Sign in with OpenRouter", a key pasted (the field hidden then),
-// disconnect.
+// disconnect. The agent (PLAN-TARS-AGENT A3): his actions listed as he does them (✓ done, ✗ refused), Escape
+// stopping a turn that runs; his memory (how many exchanges and notes) and its Clear button.
 
 import { t, tf } from "../i18n";
 
@@ -15,12 +16,24 @@ export interface TarsPanelHost {
   /** a key pasted: kept (false: not an OpenRouter key) */
   paste(k: string): boolean;
   disconnect(): void;
+  /** his memory: its exchanges and notes */
+  memory(): { turns: number; notes: number };
+  clearMemory(): void;
+  /** the turn running stopped */
+  stop(): void;
+  /** speaking (A5): the microphone's button pressed (null: no recognition here); its key pressed in the field */
+  talk: (() => void) | null;
+  talkKey(e: KeyboardEvent): void;
 }
+
+/** actions shown at most */
+const ACTIONS = 6;
 
 export class TarsPanel {
   readonly el = document.createElement("div");
   private input = document.createElement("input");
   private status = document.createElement("div");
+  private actions = document.createElement("ol");
   private keyMode = false;
 
   constructor(
@@ -41,14 +54,50 @@ export class TarsPanel {
     this.input.spellcheck = false;
     this.input.setAttribute("aria-label", t("Ask TARS"));
     row.append(who, this.input);
+    // (the microphone: a click listens, another sends — the key held does the same)
+    if (host.talk) {
+      const mic = document.createElement("button");
+      mic.type = "button";
+      mic.className = "tars-mic";
+      mic.dataset.testid = "tars-mic";
+      mic.textContent = "🎙";
+      mic.title = t("Speak to TARS (or hold F6)");
+      mic.setAttribute("aria-label", t("Speak to TARS (or hold F6)"));
+      mic.addEventListener("click", (e) => {
+        e.stopPropagation();
+        host.talk!();
+      });
+      row.append(mic);
+    }
+    this.actions.className = "tars-actions";
+    this.actions.dataset.testid = "tars-actions";
+    this.actions.setAttribute("aria-live", "polite");
     this.status.className = "tars-link";
     this.status.dataset.testid = "tars-link";
-    this.el.append(row, this.status);
+    this.el.append(row, this.actions, this.status);
     parent.append(this.el);
+    // (the subtitles kept above the field while it is open: his words not hidden behind his actions)
+    const clear = () =>
+      document.documentElement.style.setProperty(
+        "--tars-clear",
+        this.el.hidden ? "0px" : `${Math.round(innerHeight - this.el.getBoundingClientRect().top + 10)}px`,
+      );
+    new ResizeObserver(clear).observe(this.el);
+    new MutationObserver(clear).observe(this.el, { attributes: true, attributeFilter: ["hidden"] });
+    addEventListener("resize", clear);
     this.input.addEventListener("keydown", (e) => {
-      // (the field's keys stay in it: no flight, no menu)
+      // (the field's keys stay in it: no flight, no menu — but its own key, held, speaks)
       e.stopPropagation();
-      if (e.key === "Escape") return this.keyMode ? this.setKeyMode(false) : this.close();
+      if (e.code === "F6") {
+        e.preventDefault();
+        return this.host.talkKey(e);
+      }
+      if (e.key === "Escape") {
+        if (this.keyMode) return this.setKeyMode(false);
+        // (a turn running: Escape stops it first)
+        if (this.host.link().busy) return this.host.stop();
+        return this.close();
+      }
       if (e.key !== "Enter") return;
       const q = this.input.value.trim();
       this.input.value = "";
@@ -85,6 +134,35 @@ export class TarsPanel {
     else this.show();
   }
 
+  /** Listening (A5): the field says so; the words heard shown as they come. */
+  listening(on: boolean) {
+    this.el.classList.toggle("listening", on);
+    if (on) {
+      if (!this.open) this.show();
+      this.input.value = "";
+      this.input.placeholder = t("Listening… (release to send)");
+    } else this.input.placeholder = t("Ask TARS — where are we, the fuel, what now… (Enter)");
+  }
+
+  hearing(text: string) {
+    this.input.value = text;
+  }
+
+  /** A new question: the last one's actions cleared. */
+  clearActions() {
+    this.actions.replaceChildren();
+  }
+
+  /** An action of his, as it ends (its full line in the tooltip). */
+  action(line: string, ok: boolean, full = line) {
+    const li = document.createElement("li");
+    li.className = ok ? "ok" : "no";
+    li.textContent = `${ok ? "✓" : "✗"} ${line}`;
+    li.title = full;
+    this.actions.append(li);
+    while (this.actions.children.length > ACTIONS) this.actions.firstElementChild!.remove();
+  }
+
   private setKeyMode(on: boolean) {
     this.keyMode = on;
     this.input.type = on ? "password" : "text";
@@ -114,7 +192,7 @@ export class TarsPanel {
     };
     if (L.hint) {
       text.textContent = L.busy
-        ? t("TARS is thinking…")
+        ? t("TARS is working… (Esc: stop)")
         : L.online
           ? tf("OpenRouter {0} · this session {1} $", L.hint, L.spent < 0.01 ? L.spent.toFixed(4) : L.spent.toFixed(2))
           : tf("OpenRouter {0} — off in the settings: his written lines", L.hint);
@@ -131,6 +209,21 @@ export class TarsPanel {
         text,
         btn(t("Sign in with OpenRouter"), "tars-connect", () => this.host.connect()),
         btn(t("paste a key"), "tars-paste", () => this.setKeyMode(true)),
+      );
+    }
+    // (his memory: what he keeps of you, and its eraser)
+    const m = this.host.memory();
+    if (m.turns || m.notes) {
+      const mem = document.createElement("span");
+      mem.dataset.testid = "tars-memory";
+      mem.textContent = `${m.turns === 1 ? t("memory: 1 exchange") : tf("memory: {0} exchanges", m.turns)} · ${tf("notes: {0}", m.notes)}`;
+      this.status.append(
+        mem,
+        btn(t("clear"), "tars-clear", () => {
+          this.host.clearMemory();
+          this.clearActions();
+          this.refresh(t("Memory cleared."));
+        }),
       );
     }
     if (note) {

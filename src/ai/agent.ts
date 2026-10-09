@@ -125,6 +125,19 @@ export class Agent {
   }
 }
 
+/** An action as the panel shows it: the tool, its arguments, what came back — its note or result, not its
+ *  JSON ("plan_mission · Lune, orbit, 100 → 3.09 km/s burn in 1.6 h…"). */
+export function actionShort(a: Action): string {
+  const args = Object.values(a.args)
+    .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+    .join(", ");
+  const r = a.result as { note?: unknown; result?: unknown; error?: unknown } | string | null;
+  const said =
+    typeof r === "string" ? r : r && typeof r === "object" ? String(r.note ?? (typeof r.result === "string" ? r.result : "") ?? "") : "";
+  const out = a.ok ? said : `${String(a.result)}`;
+  return `${a.tool}${args ? ` · ${args}` : ""}${out ? ` → ${out}` : ""}`;
+}
+
 /** An action in a line, for the memory and the panel: "autopilot(mode=land, site=Edwards) → engaged". */
 export function actionLine(a: Action): string {
   const args = Object.entries(a.args)

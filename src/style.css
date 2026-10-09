@@ -1626,7 +1626,7 @@ body.hide-ui .mission-caption { display: none; }
 
 /* the subtitles (PLAN-TARS T1): the line being said and its speaker, above the HUD's lower third */
 .subtitles {
-  position: fixed; left: 50%; bottom: 31vh; transform: translate(-50%, 6px); z-index: 4; pointer-events: none;
+  position: fixed; left: 50%; bottom: max(31vh, var(--tars-clear, 0px)); transform: translate(-50%, 6px); z-index: 4; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; max-width: min(760px, 86vw);
   padding: 6px 14px 8px; border-radius: 6px; background: rgba(4, 8, 14, 0.55);
   opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
@@ -1657,6 +1657,13 @@ body.hide-ui .subtitles { display: none; }
   font: 500 15px var(--font); color: #f2f5fa;
 }
 .tars-panel input::placeholder { color: rgba(200, 210, 225, 0.5); }
+.tars-actions { list-style: none; margin: 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 1px; max-height: 8.5em; overflow: hidden; }
+.tars-actions:empty { display: none; }
+.tars-mic { background: transparent; border: 1px solid rgba(140, 255, 190, 0.35); border-radius: 50%; width: 28px; height: 28px; font-size: 14px; line-height: 1; cursor: pointer; color: inherit; flex: none; }
+.tars-panel.listening { border-color: rgba(255, 120, 110, 0.85); box-shadow: 0 0 0 2px rgba(255, 120, 110, 0.25), 0 6px 24px rgba(0, 0, 0, 0.5); }
+.tars-panel.listening .tars-mic { background: rgba(255, 120, 110, 0.85); border-color: transparent; }
+.tars-actions li { font: 400 11.5px var(--hud-font); color: rgba(170, 230, 195, 0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tars-actions li.no { color: rgba(255, 170, 140, 0.9); }
 
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }

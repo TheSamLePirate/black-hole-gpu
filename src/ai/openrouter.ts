@@ -153,7 +153,8 @@ export class OpenRouter {
   /** what the session has cost [USD], and the calls made */
   spent = 0;
   calls = 0;
-  /** the reasoning switched off in the chat's request (dropped if refused) */
+  /** the reasoning kept brief in the requests (dropped if refused): GLM-5.3-flash refuses it switched off
+   *  ("mandatory", 400) — the brief kind costs it a third (measured 09/10/2026) */
   private noReasoning = true;
   /** Jev's model asked (the pinned one; its alias once refused) */
   decisionModel = DECISION_MODEL;
@@ -188,14 +189,14 @@ export class OpenRouter {
             messages,
             max_tokens: o.maxTokens ?? 160,
             temperature: o.temperature ?? 0.7,
-            // (its cost in the response's usage; no reasoning: a short spoken line, now)
+            // (its cost in the response's usage; a brief reasoning: a short spoken line, now)
             usage: { include: true },
-            ...(this.noReasoning ? { reasoning: { enabled: false } } : {}),
+            ...(this.noReasoning ? { reasoning: { effort: "low" } } : {}),
           }),
           signal: AbortSignal.timeout(o.timeoutMs ?? 12_000),
         });
       let r = await ask();
-      // (the reasoning switch refused: asked without it, for the session)
+      // (the brief reasoning refused: asked without it, for the session)
       if (r.status === 400 && this.noReasoning) {
         this.calls++;
         this.noReasoning = false;
@@ -213,7 +214,7 @@ export class OpenRouter {
   }
 
   /** The agent's step (PLAN-TARS-AGENT): the conversation and the tools — the model's words and calls (null: no
-   *  key, a failure, the time out, stopped). The reasoning switched off as for the chat (dropped if refused). */
+   *  key, a failure, the time out, stopped). The reasoning brief as for the chat (dropped if refused). */
   async complete(
     messages: unknown[],
     tools: unknown[],
@@ -238,7 +239,7 @@ export class OpenRouter {
             max_tokens: o.maxTokens ?? 600,
             temperature: 0.4,
             usage: { include: true },
-            ...(this.noReasoning ? { reasoning: { enabled: false } } : {}),
+            ...(this.noReasoning ? { reasoning: { effort: "low" } } : {}),
           }),
           signal,
         });

@@ -166,9 +166,12 @@ test("memory: kept across visits, notes, summarized past its budget, cleared", a
   const ctx = again.context();
   expect(ctx[0]!.content).toContain("- The pilot is called Cooper");
   expect(ctx[1]).toEqual({ role: "user", content: "I'm Cooper" });
-  expect(ctx[2]!.content).toContain("[actions: remember(");
+  expect(ctx[2]).toEqual({ role: "assistant", content: "Noted, Cooper." });
+  expect(again.carry()).toContain("Tools you called in your last answer: remember(");
   // (past the budget: the oldest folded into the summary)
   for (let i = 0; i < TURNS_KEPT; i++) again.add({ at: i, user: `q${i}`, tars: `a${i}` });
+  // (the actions of a turn noted before the next words, not in his own)
+  expect(again.context()[3]!.content).toMatch(/^\(Tools you called in your last answer: remember\(.*\)\nq0$/s);
   expect(again.full).toBe(true);
   let folded = 0;
   await again.compact(async (prev, turns) => {

@@ -433,6 +433,7 @@ export interface Settings {
   tarsHonesty: number; // his honesty, 0…100 %
   tarsHumour: number; // his humour, 0…100 %
   tarsOnline: boolean; // TARS through OpenRouter when a key is there (T6); off: his written lines
+  tarsModel: string; // the model TARS thinks with through OpenRouter (PLAN-TARS-AGENT; ai/openrouter.ts AGENT_MODELS)
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
@@ -676,6 +677,7 @@ export function defaultSettings(): Settings {
     tarsHonesty: 90,
     tarsHumour: 75,
     tarsOnline: true,
+    tarsModel: "z-ai/glm-5.3-flash",
     haptics: 0.6,
     dynamicResolution: false,
   };
@@ -1883,6 +1885,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   tarsHonesty: "pref",
   tarsHumour: "pref",
   tarsOnline: "pref",
+  tarsModel: "pref",
   haptics: "pref",
   dynamicResolution: "pref",
 };

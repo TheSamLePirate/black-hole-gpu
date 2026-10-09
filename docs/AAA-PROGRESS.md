@@ -479,6 +479,16 @@ Plan : [`PLAN-TARS.md`](PLAN-TARS.md), étapes T1 à T7 ; référence [`TARS.md`
 - **T6** : TARS par OpenRouter — la clé du joueur (OAuth PKCE ou collée), ses réponses par GLM-5.3-flash, ses remarques décidées par Jev, rationnées ; CORS vérifié sur le vrai service (sans clé).
 - **T7** : un vol écouté de bout en bout ; corrigé par lui : le décrochage crié sous l'autopilote de rentrée. Planche finale `docs/progress/tars/t7-vol-ecoute.jpg`.
 
+## TARS agent : l'IA du jeu (en cours, 09/10/2026)
+
+Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1 à A7 ; référence [`TARS.md`](TARS.md) § TARS agent.
+
+- **A1** : le cœur — les outils décrits par un schéma et leurs arguments vérifiés, la boucle d'un tour, la mémoire gardée entre les visites, le modèle au choix.
+- **A2** : 31 outils, tout le jeu — lire, piloter, naviguer, le temps, les vues, téléporter, sauvegarder, tout réglage, toute touche, attendre ; le filet « Before TARS ».
+- **A3** : TARS agent en jeu — vérifié sur le vrai OpenRouter : « Emmène-nous en orbite autour de la Lune », volé et confirmé par le jeu (100 km, 0,0012 $).
+- **A4** : hors ligne, les ordres courants par les mêmes outils.
+- **A5** : le push-to-talk (F6 tenu, le bouton 🎙).
+
 ## Ce qui reste pour l'AAA (au 09/10/2026)
 
 Par ordre de gain :

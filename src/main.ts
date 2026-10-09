@@ -98,6 +98,13 @@ import { Tars, type TarsMoment, type TarsState } from "./game/tars";
 import { TarsPanel } from "./ui/tars-panel";
 import { connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
 import { TarsOnline } from "./ai/tars-online";
+import { TarsAgent, runOrders } from "./ai/tars-agent";
+import { orderReply, parseOrders } from "./ai/offline-orders";
+import { TarsMemory, TARS_MEMORY_KEY, type MemoryData } from "./ai/memory";
+import type { Tool } from "./ai/agent";
+import { gameTools } from "./ai/game-tools";
+import { PushToTalk } from "./ai/listen";
+import { closeTop } from "./ui/keys";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
@@ -515,6 +522,7 @@ async function main() {
   const capcom = new Capcom();
   const capcomDue: { line: import("./audio/voice").VoiceLine; at: number }[] = [];
   let lastGrade: string | null = null;
+  let lastReport: import("./game/report").FlightReport | null = null;
   let earthLight = { s: 0, at: -1e9 };
   let staticOn = false;
   // the score (PLAN-TARS T4): silence, but at the flight's great moments
@@ -528,8 +536,8 @@ async function main() {
   let tarsDocked = false;
   let tarsLook = performance.now();
   const tarsPersonality = () => ({ honesty: settings.tarsHonesty, humour: settings.tarsHumour });
-  // (through OpenRouter — T6 —: the player's own key; his answers by GLM, his remarks decided by Jev)
-  const openRouter = new OpenRouter();
+  // (through OpenRouter — T6 —: the player's own key; his remarks decided by Jev; the model of the setting)
+  const openRouter = new OpenRouter(undefined, undefined, () => settings.tarsModel);
   const tarsOnline = new TarsOnline(openRouter);
   let tarsBusy = false;
   const tarsNow = (): TarsState =>
@@ -549,29 +557,31 @@ async function main() {
       dtau: null,
     };
   const online = () => settings.tarsOnline && !!openRouterKey.get() && navigator.onLine !== false;
-  const tarsPanel = new TarsPanel({
-    ask: async (q) => {
-      const st = tarsNow();
-      const r = tars.answer(q, st, tarsPersonality());
-      // (his settings said aloud: his own, at once — not the model's to decide)
-      if (r.set) {
-        if (r.set.honesty !== undefined) settings.tarsHonesty = r.set.honesty;
-        if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
-        onSettingsChange(["tarsHonesty", "tarsHumour"]);
-        refreshGui();
-        voice.say({ text: r.text, speaker: "tars", priority: 2 });
-        return;
-      }
-      let text = r.text;
-      if (online()) {
-        tarsBusy = true;
-        tarsPanel.refresh();
-        text = (await tarsOnline.answer(q, st, tarsPersonality(), lang)) ?? r.text;
-        tarsBusy = false;
-        tarsPanel.refresh();
-      }
-      voice.say({ text, speaker: "tars", priority: 2 });
+  // TARS the agent (PLAN-TARS-AGENT): the whole game as his tools (built once everything is declared, below),
+  // his memory kept in this browser
+  let tarsTools: Tool[] = [];
+  const tarsMemory = new TarsMemory({
+    get: () => store.getJSON<MemoryData | null>(TARS_MEMORY_KEY, null),
+    set: (d) => store.setJSON(TARS_MEMORY_KEY, d),
+    clear: () => store.remove(TARS_MEMORY_KEY),
+  });
+  const tarsAgent = new TarsAgent({
+    or: openRouter,
+    tools: () => tarsTools,
+    memory: tarsMemory,
+    personality: () => tarsPersonality(),
+    lang: () => lang,
+    flight: () => tarsNow(),
+    say: (text) => voice.say({ text, speaker: "tars", priority: 2 }),
+    onAction: (line, ok, full) => tarsPanel.action(line, ok, full),
+    onBusy: (b) => {
+      tarsBusy = b;
+      tarsPanel.refresh();
     },
+  });
+  const tarsPanelAsk = (q: string) => void tarsAsk(q);
+  const tarsPanel = new TarsPanel({
+    ask: (q) => tarsPanelAsk(q),
     link: () => ({ hint: openRouterKey.hint(), online: settings.tarsOnline, spent: openRouter.spent, busy: tarsBusy }),
     connect: () =>
       void orConnect().then((k) => {
@@ -580,7 +590,85 @@ async function main() {
       }),
     paste: (k) => openRouterKey.set(k),
     disconnect: () => openRouterKey.clear(),
+    memory: () => ({ turns: tarsMemory.turns.length, notes: tarsMemory.notes.length }),
+    clearMemory: () => tarsMemory.clear(),
+    stop: () => tarsAgent.stop(),
+    talk: PushToTalk.supported ? () => (tarsTalk.listening ? tarsTalk.stop() : tarsTalk.start()) : null,
+    talkKey: (e) => tarsKey(e),
   });
+  /** A question to TARS (typed, or spoken): the agent online; offline the orders, else his written answers. */
+  async function tarsAsk(q: string) {
+    // (the words "stop": the turn running stopped, nothing else)
+    if (tarsAgent.busy && TarsAgent.isStop(q)) {
+      tarsAgent.stop();
+      return;
+    }
+    const st = tarsNow();
+    const r = tars.answer(q, st, tarsPersonality());
+    // (his settings said aloud: his own, at once — not the model's to decide)
+    if (r.set) {
+      if (r.set.honesty !== undefined) settings.tarsHonesty = r.set.honesty;
+      if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
+      onSettingsChange(["tarsHonesty", "tarsHumour"]);
+      refreshGui();
+      voice.say({ text: r.text, speaker: "tars", priority: 2 });
+      return;
+    }
+    let text: string | null = null;
+    tarsPanel.clearActions();
+    if (online()) {
+      const a = await tarsAgent.ask(q);
+      // ("": stopped — nothing to say; null: the model failed — the orders understood offline, his written line)
+      if (a === "") return;
+      text = a;
+    }
+    if (text === null) {
+      // (offline: the common orders run by the same tools — PLAN-TARS-AGENT A4)
+      const orders = parseOrders(q);
+      if (orders.length) {
+        const done = await runOrders(orders, tarsTools, (line, ok, full) => tarsPanel.action(line, ok, full));
+        text = orderReply(lang, done);
+        tarsMemory.add({ at: Date.now(), user: q, tars: text, did: done.map((d) => `${d.tool} → ${d.ok ? "done" : d.error}`) });
+      }
+    }
+    refreshGui();
+    voice.say({ text: text ?? r.text, speaker: "tars", priority: 2 });
+  }
+  // speaking to TARS (PLAN-TARS-AGENT A5): his key held listens, released sends; a tap is his field
+  const tarsTalk = new PushToTalk({
+    lang: () => lang,
+    hearing: (text) => tarsPanel.hearing(text),
+    heard: (text) => {
+      if (!text) return tarsPanel.refresh(t("Nothing heard."));
+      tarsPanel.hearing("");
+      tarsPanelAsk(text);
+    },
+    failed: (why) =>
+      tarsPanel.refresh(
+        why === "denied"
+          ? t("The microphone is not allowed (the browser's site settings).")
+          : why === "network"
+            ? t("Speech recognition needs the network.")
+            : why === "none"
+              ? t("Nothing heard.")
+              : t("Speech recognition failed."),
+      ),
+    state: (on) => tarsPanel.listening(on),
+  });
+  /** his key (F6, or as bound) pressed: held, it listens; tapped, his field */
+  function tarsKey(e: KeyboardEvent) {
+    // (a controller's button — no key up to wait for —, or no recognition here: the field)
+    if (!e.code || !PushToTalk.supported) return tarsPanel.toggle();
+    if (e.repeat) return;
+    tarsTalk.down();
+    const code = e.code;
+    const up = (u: KeyboardEvent) => {
+      if (u.code !== code) return;
+      removeEventListener("keyup", up, true);
+      if (tarsTalk.up()) tarsPanel.toggle();
+    };
+    addEventListener("keyup", up, true);
+  }
   // (a phone's way back from OpenRouter's sign-in: the code in the fragment)
   void finishFromFragment().then((k) => k && panel.toast(t("Connected: TARS speaks through OpenRouter.")));
   const voice = new Speech({
@@ -1616,6 +1704,7 @@ async function main() {
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
   camera.onFlightReport = (r) => {
     flightHud.showReport(r);
+    if (r) lastReport = r;
     lastGrade = r?.letter ?? null;
     // (TARS's word on the landing, sometimes)
     if (r && settings.tarsRemarks && (r.letter === "A" || r.letter === "F")) {
@@ -1861,7 +1950,7 @@ async function main() {
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
     },
     gear: () => setGear(!camera.gearDown),
-    tars: () => tarsPanel.toggle(),
+    tars: (e) => tarsKey(e),
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
     missions: () => openMissions(),
@@ -2273,6 +2362,74 @@ async function main() {
     },
   });
   flightHud.onWeather = () => weatherPanel.open();
+  // TARS's tools (PLAN-TARS-AGENT A2): the whole game — the closures above, the panels, every key
+  tarsTools = gameTools({
+    settings,
+    camera,
+    tools,
+    flight: () => tarsNow(),
+    phase: () => phaseWatch.current,
+    alerts: () => flightHud.alerts,
+    log: () => gameLog.events,
+    report: () => lastReport,
+    mission: () => ({
+      active: mission.active,
+      phase: mission.active ? String(mission.phase) : null,
+      caption: mission.active ? mission.captionText.filter(Boolean).join(" — ") : null,
+    }),
+    scenes: () => Object.keys(presets),
+    pilotAuto,
+    pilotHold,
+    autoWhy: (a) => flightHud.autoWhy(a),
+    setGear,
+    toggleAssist,
+    releaseControls,
+    setWarp,
+    realTimeSpeed: () => realTimeSpeed(settings),
+    playPause,
+    setMount,
+    setSpectator,
+    setView: (v) => setView(v),
+    cinematic: (c) => (c === null ? camera.setCinematic(null) : camera.cinematic !== c && cinematic(c)),
+    lookAt: (on) => settings.lookAt !== on && toggleLookAt(),
+    telescope: (on) => settings.telescope !== on && toggleTelescope(),
+    goTo,
+    standOn,
+    skyGoTo: (kind, i) => void skyGoTo(kind, i),
+    map: (on, tab) => {
+      if (flightHud.mapView !== on) flightHud.toggleMapView();
+      if (on && tab) flightHud.setMapTab(tab);
+    },
+    hudDensity: (n) => flightHud.setDensity(n),
+    open: (p) => {
+      const open: Record<typeof p, () => void> = {
+        settings: () => panel.toggle(true),
+        place: () => placePanel.open(),
+        time: () => timePanel.open(),
+        weather: () => weatherPanel.open(),
+        scenes: () => scenes.open(),
+        photo: () => openPhoto(),
+        controls: () => controlsScreen.open(),
+        help: () => actions["btn-help"]!(),
+        pause: () => keyActions.pause(new KeyboardEvent("keydown")),
+        planner: () => openMissions(),
+        sky: () => actions["btn-sky"]!(),
+        camera: () => actions["btn-camera"]!(),
+      };
+      open[p]();
+    },
+    close: () => void closeTop(),
+    changed: (keys) => {
+      onSettingsChange(keys);
+      refreshGui();
+    },
+    key: (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg),
+    applyScene: (name) => panel.applyScene(name),
+    screenshot: () => savePNG(),
+    say: (text) => voice.say({ text, speaker: "tars", priority: 2 }),
+    memory: tarsMemory,
+    now: () => performance.now(),
+  });
   // the real weather (metar.ts, PLAN-METEO W7): with "Real" chosen, the METAR of the runway's station nearest
   // the camera over the Earth (within 600 km), checked every 15 s, fetched each half hour; none, no network:
   // the fair weather
@@ -2392,6 +2549,7 @@ async function main() {
     voice,
     capcom,
     music,
+    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools },
     skyLoading,
     touch,
     resize,

@@ -19,7 +19,11 @@ Tout est synthétisé ou tiré du système : rien à télécharger. TARS peut au
 | `src/audio/g2p.ts`, `src/audio/formant.ts` | la voix robot de TARS en anglais : le texte en phonèmes, la synthèse par formants |
 | `src/game/tars.ts` | pur : TARS hors ligne — ses réponses, son honnêteté et son humour, ses remarques |
 | `src/ai/openrouter.ts`, `src/ai/tars-online.ts` | TARS par OpenRouter : la clé, la connexion OAuth (PKCE), les appels GLM et Jev, leur coût ; son caractère pour le modèle, ses remarques décidées par Jev |
-| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | le champ F6 et le lien à OpenRouter ; la page de rappel de la connexion |
+| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | le champ F6 (ses actions, sa mémoire, le micro) et le lien à OpenRouter ; la page de rappel de la connexion |
+| `src/ai/agent.ts`, `src/ai/tool-schema.ts` | TARS agent : la boucle d'un tour (appels, résultats, bornes, arrêt) ; le schéma des outils et la vérification des arguments |
+| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 31 outils : tout le jeu ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ai/tars-agent.ts`, `src/ai/memory.ts` | sa consigne d'agent, un tour à la fois ; sa mémoire gardée entre les visites |
+| `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne ; le push-to-talk |
 | `src/audio/engine.ts` | les bus « voix » et « musique », la radio autour des voix (Quindar, squelch, souffle), le souffle du blackout, la chaîne de la voix de TARS |
 
 ## Les voix
@@ -114,6 +118,26 @@ Ce qui encadre ces répliques :
   - **Une panne, hors ligne, un délai dépassé** (12 s) : il reprend ses phrases écrites.
 - **Réglages** : Remarques, Honnêteté (90 %), Humour (75 %), TARS par OpenRouter.
 
+## TARS agent
+
+Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
+
+- **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
+- **Ce qu'il fait** : ses 31 outils couvrent tout le jeu.
+  - Lire : l'état entier, les sites et pistes, les corps, la météo, les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
+  - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
+  - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
+  - Le temps et la date, les vues, le ciel, les panneaux et la carte.
+  - Téléporter, sauvegarder et charger, lancer une scène.
+  - **Tout réglage**, vérifié au schéma ; **toute touche**.
+  - **Attendre** l'issue (la fin d'un autopilote, un posé, une orbite autour d'un corps) pendant que le jeu tourne.
+- **Ce qu'on voit** : ses actions au fil de l'eau (✓ fait, ✗ refusé ; la ligne entière en info-bulle), « TARS travaille… (Échap : arrêter) », ses phrases dites en route et à la fin.
+- **L'arrêter** : Échap, « stop », ou une nouvelle question.
+- **Le filet** : avant ce qui ne se défait pas (charger, déplacer, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
+- **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
+- **Le modèle** : réglage « Modèle de TARS » — GLM-5.3 Flash par défaut (le moins cher), Claude Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash, Gemini 3.8 Flash, Claude Sonnet 5.5. Un vol vers la Lune mené par TARS a coûté 0,0012 $ avec GLM.
+- **Hors ligne** (sans clé, sans réseau, ou le réglage coupé) : les ordres courants compris en français et en anglais — poser, décoller, circulariser, amarrer, la cible, le train, le temps, les vues, la carte, sauvegarder, annuler, téléporter en orbite, oublier — exécutés par les mêmes outils ; une question garde ses phrases écrites.
+
 ## Les outils de test (`__bh`)
 
 | Outil | Rôle |
@@ -122,6 +146,7 @@ Ce qui encadre ces répliques :
 | `__bh.capcom` | `blackout` |
 | `__bh.music` | `moment`, `notes`, `ticks` |
 | `__bh.tarsVoice` | `phonemes`, `synthesize`, `robotVoice` : la voix de TARS rendue hors ligne (sa mesure) |
+| `__bh.tars` | `agent.ask(question)`, `agent.last` (ses actions), `agent.lastText`, `memory`, `tools()` |
 | `__sound.busLevels()`, `__sound.busSpectrum(bus)` | les niveaux et les spectres des bus (voix, musique…) |
 
 ## Les tests
@@ -130,7 +155,8 @@ Ce qui encadre ces répliques :
   - `voice` (la file, la voix choisie) ;
   - `callouts`, `capcom`, `score` ;
   - `tars-voice` (phonèmes, synthèse), `tars` ;
-  - `openrouter` (clé, PKCE, échange, appels, coût, alias, rationnement).
+  - `openrouter` (clé, PKCE, échange, appels, coût, alias, rationnement) ;
+  - `tars-agent` (arguments, un tour, ses bornes, la mémoire), `tars-tools` (noms, sites, touches, réglages, ordres hors ligne).
 - **e2e** :
   - `voice` (les sous-titres, l'ordre) ;
   - `callouts` (le posé d'Edwards : les hauteurs dans l'ordre, minimums, la tour, l'arrêt des roues) ;

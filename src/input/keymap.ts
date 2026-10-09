@@ -277,7 +277,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "F6",
-        text: 'TARS: ask him — where we are, the fuel, the speed, the target, what to do; his honesty and humour ("honesty 70")',
+        text: 'TARS: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, target Mars, warp ×1000, the cockpit view… (his honesty and humour: "honesty 70")',
         bind: [fly("F6", "tars")],
       },
       {

@@ -32,6 +32,9 @@ export interface MemoryStore {
   clear(): void;
 }
 
+/** where it is kept (this browser's storage; never in a save, the settings, an export) */
+export const TARS_MEMORY_KEY = "kerr.tars.memory";
+
 /** turns kept word for word; past it the oldest half summarized */
 export const TURNS_KEPT = 24;
 export const NOTES_MAX = 40;
@@ -113,6 +116,12 @@ export class TarsMemory {
     this.save();
   }
 
+  /** The note of the last turn's actions, for the head of the question asked now. */
+  carry(): string {
+    const t = this.d.turns.at(-1);
+    return t ? actionsNote(t) : "";
+  }
+
   /** What the model is given after its system prompt: the summary and the notes, then the turns. */
   context(): AgentMessage[] {
     const out: AgentMessage[] = [];
@@ -120,14 +129,20 @@ export class TarsMemory {
     if (this.d.summary) head.push(`Earlier conversations with this pilot (summary): ${this.d.summary}`);
     if (this.d.notes.length) head.push(`Your notes (things you chose to remember):\n${this.d.notes.map((n) => `- ${n}`).join("\n")}`);
     if (head.length) out.push({ role: "system", content: head.join("\n\n") });
+    // (what he did, noted at the head of the pilot's next words — in his own words the model would copy its
+    // form instead of calling the tools; a system message amid the turns not every provider takes)
+    let note = "";
     for (const t of this.d.turns) {
-      out.push({ role: "user", content: t.user });
-      const did = t.did?.length ? `[actions: ${t.did.join("; ")}] ` : "";
-      out.push({ role: "assistant", content: `${did}${t.tars}`.trim() || "(no answer)" });
+      out.push({ role: "user", content: note + t.user });
+      out.push({ role: "assistant", content: t.tars.trim() || "(no answer)" });
+      note = actionsNote(t);
     }
     return out;
   }
 }
+
+/** The note of a turn's actions, put before the next words of the pilot. */
+export const actionsNote = (t: Turn) => (t.did?.length ? `(Tools you called in your last answer: ${t.did.join("; ")})\n` : "");
 
 /** The turns written out for the summarizer. */
 export function turnsText(turns: Turn[]): string {
