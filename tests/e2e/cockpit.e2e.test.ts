@@ -144,4 +144,39 @@ describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
       /in transit|en mouvement|down and locked|sorti/,
     );
   });
+
+  test("K5: the flaps' key — their lever seen travelling there; CIRC at the panel engages, lit; AP OFF", async () => {
+    await app.js(`(__bh.camera.airFlight.cfg.flaps = 0, true)`);
+    await Bun.sleep(800);
+    // (the flaps: the second control — their lever's angle in the poses' uniform, each frame after the key)
+    const angles = await app.js<number[]>(`new Promise((done) => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "p" }));
+      window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyP", key: "p" }));
+      const out = [], t0 = performance.now();
+      const tick = () => {
+        out.push(__bh.renderer.cockpitControls[1 * 16 + 3]);
+        if (performance.now() - t0 < 900) requestAnimationFrame(tick); else done(out);
+      };
+      requestAnimationFrame(tick);
+    })`);
+    expect(await app.js<number>("__bh.camera.airFlight.cfg.flaps")).toBe(0.5);
+    // (from up — 30° — to half — 0° —, through the angles between)
+    expect(angles.some((a) => a > 0.05 && a < 0.47)).toBe(true);
+    expect(Math.abs(angles.at(-1)!)).toBeLessThan(1e-3);
+    // CIRC: an orbit to circularize, the pilot's real time
+    await app.js(
+      `(__bh.game.orbit("earth", { peKm: 300, apKm: 600, nu: 60 }), __bh.camera.setWarpAuthority(false), __bh.game.warp(1), true)`,
+    );
+    await Bun.sleep(1500);
+    await app.js(`(__bh.settings.shipMount = "cockpit", __bh.refresh(), true)`);
+    await app.waitFor("__bh.renderer.ship.cabinShown", 20_000);
+    const c = await aim("autoCirc", 38, -16);
+    await click(c);
+    await app.waitFor(`["node", "circularize"].includes(__bh.camera.pilot.auto)`, 10_000);
+    // (its lamp lit: the CIRC button — the 10th control's lamp in the uniform)
+    await app.waitFor(`__bh.renderer.cockpitControls[9 * 16 + 13] > 0.5`, 5_000);
+    const off = await aim("apOff", 38, -21);
+    await click(off);
+    expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("none");
+  });
 });

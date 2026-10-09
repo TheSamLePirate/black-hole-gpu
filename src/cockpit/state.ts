@@ -42,6 +42,10 @@ export function controlStates(
     assist: { pos: 0, lit: on(P.assist) },
     autoEntry: { pos: 0, lit: on(P.auto === "entry") },
     autoLand: { pos: 0, lit: on(P.auto === "land") },
+    autoTakeoff: { pos: 0, lit: on(P.auto === "takeoff") },
+    // (CIRC flies its burn as a node: lit while that node is CIRC's — as the hub's button)
+    autoCirc: { pos: 0, lit: on(P.auto === "circularize" || (P.auto === "node" && !!c.ourCirc)) },
+    autoApproach: { pos: 0, lit: on(P.auto === "approach") },
     sas: { pos: 0, lit: on(P.sas) },
     chrono: { pos: 0, lit: on(!!chrono?.running) },
     apOff: { pos: 0, lit: on(P.auto !== "none" || P.hold !== "none") * 0.25 },
@@ -49,4 +53,27 @@ export function controlStates(
   if (ptr.hover && st[ptr.hover]) st[ptr.hover]!.hover = true;
   if (ptr.pressed && st[ptr.pressed]) st[ptr.pressed]!.pressed = true;
   return st;
+}
+
+/** How fast each control's moving part travels to where the flight has it [its range per second]: a lever
+ *  thrown by a hand, a key, an autopilot is seen going there — the gear's swiftly, the flaps' and the air
+ *  brake's as their surfaces run; a switch snaps; the knob turns. Held by the pointer: where the hand is. */
+const TRAVEL: Record<string, number> = { gear: 4, flaps: 1.5, airBrake: 2.5, dimmer: 4 };
+const TRAVEL_TOGGLE = 12;
+
+export class ControlTravel {
+  private shown: Record<string, number> = {};
+
+  /** The states with each moving part where it has got to after `dt` [s]. */
+  step(st: Record<string, ControlState>, dt: number): Record<string, ControlState> {
+    for (const [id, s] of Object.entries(st)) {
+      const want = s.pos;
+      const was = this.shown[id];
+      const rate = TRAVEL[id] ?? TRAVEL_TOGGLE;
+      const now = was === undefined || s.pressed ? want : was + Math.min(Math.max(want - was, -rate * dt), rate * dt);
+      this.shown[id] = now;
+      s.pos = now;
+    }
+    return st;
+  }
 }

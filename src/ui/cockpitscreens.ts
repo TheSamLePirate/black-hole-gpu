@@ -89,6 +89,8 @@ export interface ScreenData {
   time: number;
   /** the runway in reach (controls.ts runwayView): the NAV screen's approach */
   runway?: RunwayView | null;
+  /** the cockpit's chronometer, when it has a time (its CHRONO button — PLAN-COCKPIT K5) */
+  chrono?: { s: number; running: boolean } | null;
 }
 
 const fmtKm = (km: number) =>
@@ -1318,9 +1320,19 @@ export class CockpitScreens {
     big(warp >= 1000 ? `×${Math.round(warp).toLocaleString("en-US")}` : `×${warp.toFixed(warp < 10 ? 1 : 0)}`, 480);
     g.fillStyle = "rgba(255, 220, 160, 0.6)";
     g.font = `600 20px ${FONT}`;
-    // (near Gargantua: the ship's clock rate instead of the local time)
+    // (the chronometer running or held: in the local time's place — near Gargantua, the ship's clock rate)
     const dt = (d.info as { dtau?: number; region?: string }).dtau;
-    if ((d.info as { region?: string }).region === "hole" && Number.isFinite(dt) && d.settings.cockpitAids && d.settings.hudRelativity) {
+    if (d.chrono) {
+      g.fillText(d.chrono.running ? "CHRONO ▸" : "CHRONO ■", 22, 547);
+      const s = d.chrono.s;
+      const hms = `${s >= 3600 ? `${Math.floor(s / 3600)}:` : ""}${String(Math.floor(s / 60) % 60).padStart(s >= 3600 ? 2 : 1, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+      big(d.chrono.running ? hms : `${hms}.${Math.floor((s % 1) * 10)}`, 604, d.chrono.running ? "#7dffa0" : AMBER);
+    } else if (
+      (d.info as { region?: string }).region === "hole" &&
+      Number.isFinite(dt) &&
+      d.settings.cockpitAids &&
+      d.settings.hudRelativity
+    ) {
       g.fillText("dτ/dt · THE SHIP'S CLOCK RATE", 22, 547);
       big(dt!.toFixed(4), 604, dt! < 0.5 ? "#ff7a5c" : dt! < 0.9 ? AMBER : "#fff4dc");
     } else {

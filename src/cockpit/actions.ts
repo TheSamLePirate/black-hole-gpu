@@ -40,6 +40,9 @@ const KEYS: Record<string, [KeyAction, string?]> = {
   assist: ["assist"],
   autoEntry: ["auto", "entry"],
   autoLand: ["auto", "land"],
+  autoTakeoff: ["auto", "takeoff"],
+  autoCirc: ["auto", "circularize"],
+  autoApproach: ["auto", "approach"],
 };
 
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;

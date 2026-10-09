@@ -151,7 +151,35 @@ export const CONTROLS: ControlDef[] = [
     at: [0.05, -0.045],
     swing: [-25 * D, 25 * D],
   },
-  // panel C: the autopilot — the attitude holds, the modes, the disconnect; the SAS, the chronometer
+  // panel C: the autopilot — the flight's phases (its top row, over the model's studs as the row under it),
+  // the attitude holds, the modes, the disconnect; the SAS, the chronometer
+  {
+    id: "autoTakeoff",
+    name: { fr: "Autopilote : décollage vers l'orbite", en: "Autopilot: take-off to orbit" },
+    placard: "TKOFF",
+    kind: "button",
+    panel: "C",
+    at: [-0.06, 0.13],
+    lamp: GREEN,
+  },
+  {
+    id: "autoCirc",
+    name: { fr: "Autopilote : circulariser", en: "Autopilot: circularize" },
+    placard: "CIRC",
+    kind: "button",
+    panel: "C",
+    at: [0, 0.13],
+    lamp: GREEN,
+  },
+  {
+    id: "autoApproach",
+    name: { fr: "Autopilote : approche de la cible", en: "Autopilot: approach the target" },
+    placard: "APPR",
+    kind: "button",
+    panel: "C",
+    at: [0.06, 0.13],
+    lamp: GREEN,
+  },
   {
     id: "holdPrograde",
     name: { fr: "Maintien : prograde", en: "Hold: prograde" },

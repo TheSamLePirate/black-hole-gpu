@@ -1,6 +1,6 @@
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
-import { controlStates } from "./cockpit/state";
+import { ControlTravel, controlStates } from "./cockpit/state";
 import { cockpitAct, controlTip, type CockpitDeps } from "./cockpit/actions";
 import { Chrono } from "./cockpit/chrono";
 import { CockpitInput } from "./cockpit/input";
@@ -1268,6 +1268,7 @@ async function main() {
   const cockpitScreens = new CockpitScreens();
   // (the cockpit's chronometer: its CHRONO button)
   const cockpitChrono = new Chrono();
+  const cockpitTravel = new ControlTravel();
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -2562,7 +2563,18 @@ async function main() {
     );
     if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
-      if (renderer.ship.cabinShown && cockpitScreens.draw({ info, status, settings, time: sim.time, runway: camera.runwayView() }))
+      if (
+        renderer.ship.cabinShown &&
+        cockpitScreens.draw({
+          info,
+          status,
+          settings,
+          time: sim.time,
+          runway: camera.runwayView(),
+          chrono:
+            cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
+        })
+      )
         renderer.ship.updateScreens(cockpitScreens.canvas);
       // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
       {
@@ -2588,12 +2600,16 @@ async function main() {
           };
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
+        // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)
         if (renderer.ship.cabinShown)
           renderer.cockpitControls = poseData(
-            controlStates(camera, settings, cockpitChrono, {
-              hover: camera.cockpit?.input.hover ?? null,
-              pressed: camera.cockpit?.input.pressed ?? null,
-            }),
+            cockpitTravel.step(
+              controlStates(camera, settings, cockpitChrono, {
+                hover: camera.cockpit?.input.hover ?? null,
+                pressed: camera.cockpit?.input.pressed ?? null,
+              }),
+              dt,
+            ),
           );
       }
       // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
