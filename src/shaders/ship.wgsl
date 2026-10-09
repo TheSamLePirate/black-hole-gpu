@@ -69,6 +69,17 @@ struct Ship {
   // each leg's hinge on the hull (ship frame) and its doors' offset from it
   gear: vec4f,
   gearH: array<vec4f, 3>,
+  // the cabin's light (cockpit/lights.ts — PLAN-COCKPIT K6): the ceiling lamps' level (the CABIN knob), red
+  // (the NIGHT switch), the screens lighting (0: their colours not known yet), the screen lights' count; then
+  // each screen light (the screens before the pilots, grouped): its centre (ship frame) and area [m²], its
+  // normal (into the cabin), its colour (linear, the displays' mean)
+  cab: vec4f,
+  scr: array<vec4f, 24>,
+  // the flown Ranger's lamps (ship-lights.ts — K6): how many lit; each one's place (ship frame) and lens
+  // radius [m], its colour × level (display-referred), its beam (ship frame) and the cone's cosine (−2: all
+  // round)
+  lampN: vec4f,
+  lamp: array<vec4f, 24>,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
@@ -781,6 +792,13 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
   // (the thrusters light the flown craft; the lights, display-referred too: seen whatever the exposure)
   let own = select(0.0, 1.0, in.ii == 0u);
+  // (the flown Ranger's lamps: their lenses lit on its hull — their glare is drawn with the flames)
+  if (in.ii == 0u) {
+    for (var i = 0u; i < u32(S.lampN.x); i++) {
+      let lp = S.lamp[3u * i];
+      emit += S.lamp[3u * i + 1u].rgb * 0.5 * (1.0 - smoothstep(lp.w * 0.6, lp.w * 1.6, length(in.q - lp.xyz)));
+    }
+  }
   let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
 }
@@ -1210,6 +1228,71 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   return vec4f(L * S.light.x * a, a);
 }
 
+// ------------------------------------------------------------------------------------ the lamps' glare
+// The flown Ranger's lamps (ship-lights.ts — K6) as the eye sees a light at night: a sharp core and a halo,
+// a few pixels however far, added with the flames (hidden by the hull — a ray from the eye, ship.ts — and
+// by what the traced image holds nearer); a landing light blinding seen from within its beam, faint from
+// aside.
+struct LOut {
+  @builtin(position) clip: vec4f,
+  @location(0) c: vec3f,  // the lamp, camera frame
+  @location(1) uv: vec2f, // across the glare: −1 … 1
+  @location(2) @interpolate(flat) i: u32,
+  @location(3) rpx: f32,  // the glare's radius [px]
+};
+
+@vertex
+fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> LOut {
+  let L = S.lamp[3u * ii];
+  let c = (S.model * vec4f(L.xyz, 1.0)).xyz;
+  let CX = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
+  let CY = array<f32, 6>(-1.0, -1.0, 1.0, 1.0, -1.0, 1.0);
+  // (a pixel's size there; the glare 20 cm — a landing light's 35 — or 12 px, whichever is more: close by,
+  // the lens itself shows on the hull)
+  let mpx = 2.0 * max(c.z, 0.05) * S.proj.y / max(S.img.y, 1.0);
+  let r = max(select(0.2, 0.35, S.lamp[3u * ii + 2u].w > -1.5), 12.0 * mpx);
+  var o: LOut;
+  // (hidden where the traced image holds something nearer — the lamp's own pixel, read here, once a corner:
+  // read by each of the glare's fragments it cost 5 ms; a depth not traced yet — the image starting over as
+  // the view moves: 0 — hides nothing)
+  if (S.img.w > 0.5 && c.z > 0.0) {
+    let px = vec2f((c.x / (c.z * S.proj.x) + 1.0) * 0.5, (1.0 - c.y / (c.z * S.proj.y)) * 0.5) * S.img.xy;
+    let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
+    let dt = moments[q.y * u32(S.img.x) + q.x].y * S.img.z;
+    if (dt > 1.0 && dt < length(c) - 0.5) {
+      o.clip = vec4f(0.0, 0.0, 2.0, 1.0);
+      return o;
+    }
+  }
+  // (brought 15 cm towards the eye: its own lens does not hide it)
+  let p = c - normalize(c) * 0.15 + vec3f(CX[vi], CY[vi], 0.0) * r;
+  o.clip = projectFull(p);
+  if (o.clip.w > 0.0) { o.clip.z = clamp(o.clip.z, 1e-6 * o.clip.w, 0.99999 * o.clip.w); }
+  o.c = c;
+  o.uv = vec2f(CX[vi], CY[vi]);
+  o.i = ii;
+  o.rpx = r / mpx;
+  return o;
+}
+
+@fragment
+fn lampFs(in: LOut) -> @location(0) vec4f {
+  let c = in.c;
+  if (c.z <= 0.0) { discard; }
+  let d = length(in.uv);
+  if (d >= 1.0) { discard; }
+  let dp = d * in.rpx;
+  // (a core of two or three pixels — drawn at half the image's resolution —, a halo round it; a beam's light
+  // seen from within it)
+  var g = exp(-dp * dp / 12.5) + 0.25 * exp(-4.0 * d);
+  let B = S.lamp[3u * in.i + 2u];
+  if (B.w > -1.5) {
+    let ca = dot(normalize((S.model * vec4f(B.xyz, 0.0)).xyz), normalize(-c));
+    g *= 0.06 + 4.0 * smoothstep(B.w - 0.2, 1.0, ca);
+  }
+  return vec4f(S.lamp[3u * in.i + 1u].rgb * g * (1.0 - smoothstep(0.7, 1.0, d)) * S.jet.y, 0.0);
+}
+
 // ------------------------------------------------------------------------------------ composite
 @group(0) @binding(0) var shipTex: texture_2d<f32>;
 
@@ -1287,7 +1370,7 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
       let hv = normalize(L * inverseSqrt(d2) + gv);
       hl += pow(clamp(dot(gn, hv), 0.0, 1.0), 400.0) * 60.0 / (d2 + 0.25);
     }
-    let og = vec3f(0.85, 0.93, 1.0) * (hl * F + 0.02 * F) * S.jet.y;
+    let og = mix(vec3f(0.85, 0.93, 1.0), vec3f(1.4, 0.16, 0.05), S.cab.y) * (hl * S.cab.x * F + 0.02 * F) * S.jet.y;
     let a = clamp(0.02 + 0.9 * F, 0.0, 1.0);
     return vec4f(og / (1.0 + dot(og, vec3f(0.2126, 0.7152, 0.0722))), a);
   }
@@ -1446,7 +1529,28 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
     let spec = pow(clamp(dot(n, hv), 0.0, 1.0), 2.0 / max(rough * rough * rough * rough, 1e-4) - 2.0) * (2.0 / max(rough * rough * rough * rough, 1e-4) + 2.0) / (8.0 * PI);
     cl += (kd / PI + f0 * spec) * lnl / (d2 + 0.25);
   }
-  cl = (cl * 3.5 * vec3f(0.85, 0.93, 1.0) + kd * vec3f(0.12, 0.14, 0.16)) * ao;
+  // (their level: the CABIN knob; by night — no direct sunlight on the ship: the Sun set, eclipsed, behind
+  // the world — dimmed to a third, the screens' own light then seen; red with the NIGHT switch, which is the
+  // night's lighting itself: not dimmed further)
+  let Ekey = select(irradiance(l) * dom.w * 2.0, sh[11].rgb, keyOn);
+  let day = smoothstep(0.004, 0.06, dot(Ekey, vec3f(0.2126, 0.7152, 0.0722)) * S.light.x);
+  let lampCol = mix(vec3f(0.85, 0.93, 1.0), vec3f(1.4, 0.16, 0.05), S.cab.y);
+  cl = (cl * 3.5 + kd * 0.14) * lampCol * (S.cab.x * mix(mix(0.3, 1.0, day), 1.0, S.cab.y)) * ao;
+  // the screens: lights of their own — each group before the pilots a patch of its displays' mean colour
+  // (their radiance as drawn: 2.4 × 2 the picture), lighting what faces it; × 6: the eye adapted to the
+  // dim cabin (its lamps' light is display-referred: no exposure opens to the screens' glow)
+  if (S.cab.z > 0.5) {
+    var cs = vec3f(0.0);
+    for (var i = 0u; i < u32(S.cab.w); i++) {
+      let sc = S.scr[3u * i];
+      let L = (model * vec4f(sc.xyz, 1.0)).xyz - in.p;
+      let d2 = dot(L, L);
+      let lv = L * inverseSqrt(d2);
+      let facing = max(dot((model * vec4f(S.scr[3u * i + 1u].xyz, 0.0)).xyz, -lv), 0.0);
+      cs += S.scr[3u * i + 2u].rgb * (sc.w * facing * max(dot(n, lv), 0.0) / (d2 + sc.w));
+    }
+    cl += kd / PI * cs * 4.8 * 6.0 * ao;
+  }
   // re-entry: the plasma's light through the windows, flickering
   let pl = S.re0.w;
   if (pl > 0.0) { cl += kd * S.re2.rgb * (pl * pl * 2.4 * sky * ao * (0.85 + 0.15 * sin(S.re5.w * 23.0 + in.p.x))); }

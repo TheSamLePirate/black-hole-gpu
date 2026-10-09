@@ -1,4 +1,5 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
+import { lampsOf } from "./cockpit/lights";
 import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
 import {
   bodyAxes,
@@ -3266,6 +3267,8 @@ export class Renderer {
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
+            cabin: lampsOf(s, this.cockpitGlow),
+            lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
             fov: s.fov,
@@ -3394,6 +3397,8 @@ export class Renderer {
   cockpitControls: Float32Array<ArrayBuffer> | null = null;
   /** the Ranger's landing gear: out (0…1), each leg's oleo compression [m] (set each frame by main.ts) */
   shipGear: { ext: number; comp: number[] } | null = null;
+  /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
+  cockpitGlow: Float32Array | null = null;
 
   /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
   craftsShown = false;

@@ -6,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // them a detent on; the air brake's lever dragged down puts it out; the wheel over the CABIN knob dims the
 // lights; a switch flipped; the right button's drag still turns the look; a click on the cabin's wall picks
 // nothing beyond it. K3: over a screen its tabs show; a click on one shows that page there, kept; again,
-// back to automatic.
+// back to automatic. K5: a key's lever seen travelling, the phases' buttons. K6: the lights.
 
 describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
   let app: App;
@@ -178,5 +178,22 @@ describe.skipIf(!E2E)("the cockpit's controls by the mouse", () => {
     const off = await aim("apOff", 38, -21);
     await click(off);
     expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("none");
+  });
+
+  test("K6: the NIGHT switch clicked — the cabin red; outside, the navigation lights lit on the hull", async () => {
+    await app.js(`(__bh.settings.nightLighting = false, __bh.settings.navLights = false, true)`);
+    const n = await aim("night", -21, -22);
+    await click(n);
+    expect(await app.js<boolean>("__bh.settings.nightLighting")).toBe(true);
+    // (the screens' colours measured for their light in the cabin)
+    expect(await app.js<number>("__bh.renderer.cockpitGlow?.length ?? 0")).toBe(24);
+    await click(n);
+    // (outside, from the hull's quarter — behind, above, on the left: the red at the left wingtip and the
+    // white aft seen, the green beyond the hull hidden by it)
+    await app.js(`(__bh.settings.navLights = true, __bh.settings.shipMount = "quarter", __bh.refresh(), true)`);
+    await app.waitFor("__bh.renderer.ship.lampCount >= 2", 10_000);
+    await app.js(`(__bh.settings.navLights = false, true)`);
+    await app.waitFor("__bh.renderer.ship.lampCount === 0", 5_000);
+    await app.js(`(__bh.settings.shipMount = "cockpit", __bh.refresh(), true)`);
   });
 });

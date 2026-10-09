@@ -27,6 +27,7 @@ import { VESSELS } from "../vessels";
 import { EPOCH_DATE, M_SECONDS } from "../system/solar";
 import { C_MPS, G0, M_METRES } from "../units";
 import { caught } from "../debug";
+import { displayColours } from "../cockpit/lights";
 import { shownSpeed } from "./hud/model";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
 
@@ -251,7 +252,22 @@ export class CockpitScreens {
       }
       g.restore();
     });
+    this.measureGlow();
     return true;
+  }
+
+  /** The displays' mean colours, as last drawn (cockpit/lights.ts): the screens' light in the cabin. */
+  glow: Float32Array | null = null;
+  private small: OffscreenCanvasRenderingContext2D | null = null;
+  private measureGlow() {
+    // (the picture shrunk 16 times — the browser's downscale averaging it —, then each display's mean)
+    this.small ??= new OffscreenCanvas(128, 64).getContext("2d", { willReadFrequently: true });
+    const s = this.small;
+    if (!s) return;
+    s.imageSmoothingQuality = "high";
+    s.clearRect(0, 0, 128, 64);
+    s.drawImage(this.canvas, 0, 0, 128, 64);
+    this.glow = displayColours(s.getImageData(0, 0, 128, 64).data, 128, 64);
   }
 
   // ---------------------------------------------------------------------------------- the tabs

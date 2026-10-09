@@ -761,8 +761,8 @@ export default {
   "The gear lowered and raised by itself — below 600 m over the ground, on the ground —, as it was before it was commanded. Off: you lower it (G, the cockpit's GEAR lever, a controller), an alarm sounds if it is up low and slow, and a landing gear up is on the belly. The autopilots lower it themselves either way.":
     "Le train sorti et rentré de lui-même — sous 600 m au-dessus du sol, au sol —, comme avant qu'il ne soit commandé. Désactivé : c'est vous qui le sortez (G, le levier GEAR du cockpit, une manette), une alarme sonne s'il est rentré bas et lent, et un atterrissage train rentré se fait sur le ventre. Les autopilotes le sortent d'eux-mêmes dans tous les cas.",
   "Cabin lighting": "Éclairage de la cabine",
-  "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). 0: off, the screens and the outside alone.":
-    "Les plafonniers de la cabine — le bouton CABIN du cockpit (le tourner, ou la molette dessus). 0 : éteints, les écrans et le dehors seuls.",
+  "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). By night — no sunlight on the ship: the Sun set, eclipsed, behind the world — they dim to a third by themselves, the screens then lighting the cabin. 0: off, the screens and the outside alone.":
+    "Les plafonniers de la cabine — le bouton CABIN du cockpit (le tourner, ou la molette dessus). De nuit — pas de soleil sur le vaisseau : couché, éclipsé, derrière le monde — ils baissent d'eux-mêmes au tiers, les écrans éclairant alors la cabine. 0 : éteints, les écrans et le dehors seuls.",
   "Night lighting (red)": "Éclairage de nuit (rouge)",
   "The cabin lit red, dim — the eyes kept for the dark outside: the cockpit's NIGHT switch.":
     "La cabine éclairée en rouge, faiblement — les yeux gardés pour le noir du dehors : l'interrupteur NIGHT du cockpit.",

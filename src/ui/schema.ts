@@ -2777,7 +2777,7 @@ export const SCHEMA: ControlDef[] = [
     max: 1,
     step: 0.05,
     effect: "none",
-    help: "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). 0: off, the screens and the outside alone.",
+    help: "The cabin's ceiling lights — the cockpit's CABIN knob (turn it, or the wheel over it). By night — no sunlight on the ship: the Sun set, eclipsed, behind the world — they dim to a third by themselves, the screens then lighting the cabin. 0: off, the screens and the outside alone.",
     keywords: "cockpit cabin light lamps dimmer",
   },
   {

@@ -16,6 +16,8 @@ import cockpitUrl from "../assets/ranger/cockpit.bin";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
 import { placardLevels } from "./cockpit/placards";
+import { cabinUniform, screenLights, type ScreenLight } from "./cockpit/lights";
+import { lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, type PlacedLamp } from "./ship-lights";
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
@@ -51,6 +53,11 @@ export interface ShipView {
   gear?: { ext: number; comp: number[] };
   /** the cockpit's controls: their moving parts' poses (cockpit/controls.ts poseData) */
   controls?: Float32Array<ArrayBuffer>;
+  /** the cabin's light (PLAN-COCKPIT K6): the ceiling lamps' level and red, the displays' mean colours
+   *  (cockpit/lights.ts) */
+  cabin?: { level: number; red: number; colours: Float32Array | null };
+  /** the Ranger's lamps switched on (the cockpit's switches — ship-lights.ts), a clock for the strobes [s] */
+  lamps?: { navLights: boolean; strobeLights: boolean; landingLights: boolean; t: number };
   mount: Mount | MountPose;
   /** the flown ship placed in the view directly (a spectator's): its axes in the camera's, its origin
    *  there [m] — instead of the mount's */
@@ -111,6 +118,10 @@ export interface Reentry {
 const MAX_JETS = 40;
 /** the craft drawn at once, at most */
 const MAX_INST = 8;
+/** ship.wgsl's Ship: up to the gear's hinges 512 bytes, then the cabin's light (S.cab, S.scr: 1 + 8 × 3 vec4s) */
+const SHIP_UNIFORM_BYTES = 512 + 16 + 8 * 3 * 16 + 16 + MAX_LAMPS * 3 * 16;
+/** where the lamps start in it (S.lampN) */
+const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 const INST_FLOATS = 20;
 const JET_FLOATS = 16;
 
@@ -157,6 +168,9 @@ interface ShipTargetRes {
   /** the trails' bind group, with this target's traced depths */
   trailBind?: GPUBindGroup;
   trailMoments?: GPUBuffer;
+  /** the lamps' glare's bind group, with this target's traced depths */
+  lampBind?: GPUBindGroup;
+  lampMoments?: GPUBuffer;
   /** the shading's bind group, with this target's traced image and depths (and the bindings' generation) */
   bind?: GPUBindGroup;
   bindGen?: number;
@@ -210,6 +224,11 @@ export class ShipRenderer {
   private gearMeshBuf: Mesh | null = null;
   /** the cockpit (the Ranger's cabin): its mesh, its sticks' pivots; loading */
   private cockpit: { mesh: Mesh; pivots: V3[]; solid: number; controls: Mesh } | null = null;
+  /** the cabin's screens as lights (cockpit/lights.ts), from its mesh */
+  private screenLights: ScreenLight[] = [];
+  /** the Ranger's lamps set on its hull (ship-lights.ts), how many lit now */
+  private lampsPlaced: PlacedLamp[] | null = null;
+  private lampCount = 0;
   /** the controls' poses (cockpit/controls.ts: ship.wgsl Controls) */
   private ctlBuf: GPUBuffer | null = null;
   private cockpitLoading = false;
@@ -241,6 +260,7 @@ export class ShipRenderer {
     glow: GPURenderPipeline;
     sheath: GPURenderPipeline;
     trail: GPURenderPipeline;
+    lamp: GPURenderPipeline;
     dist: GPURenderPipeline;
     glass: GPURenderPipeline;
     cabin: GPURenderPipeline;
@@ -319,7 +339,7 @@ export class ShipRenderer {
       this.ggxBufs.push(b);
     }
     this.shBuf = d.createBuffer({ size: 16 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    this.uniform = d.createBuffer({ size: 64 + 192 + 96 + 96 + 16 + 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: SHIP_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -433,6 +453,26 @@ export class ShipRenderer {
             },
             primitive: { topology: "triangle-list", cullMode: "none" },
             depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less" },
+          }),
+          // the Ranger's lamps' glare: added, hidden by the hull's depth (ship-lights.ts — K6)
+          lamp: d.createRenderPipeline({
+            layout: "auto",
+            vertex: { module, entryPoint: "lampVs" },
+            fragment: {
+              module,
+              entryPoint: "lampFs",
+              targets: [
+                {
+                  format: "rgba16float",
+                  blend: {
+                    color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+                    alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+                  },
+                },
+              ],
+            },
+            primitive: { topology: "triangle-list", cullMode: "none" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "always" },
           }),
           dist: d.createRenderPipeline({
             layout: "auto",
@@ -662,6 +702,7 @@ export class ShipRenderer {
         }
         const verts = new Float32Array(buf.slice(off, off + nv * STRIDE));
         const idx0 = new Uint32Array(buf.slice(off + nv * STRIDE, off + nv * STRIDE + ni * 4));
+        this.screenLights = screenLights(verts, idx0);
         // (the glass's triangles last: its pass draws them alone)
         const isGlass = (t: number) => Math.round(verts[10 * idx0[3 * t]! + 6]!) === 71;
         const idx = new Uint32Array(ni);
@@ -914,6 +955,33 @@ export class ShipRenderer {
       new Float32Array([v.gear?.ext ?? 0, gc[0] ?? 0, gc[1] ?? 0, gc[2] ?? 0, ...GEAR_HINGES.flatMap((h) => [...h.at, h.door])]),
     );
     if (v.controls && this.ctlBuf) this.device.queue.writeBuffer(this.ctlBuf, 0, v.controls);
+    // (the flown Ranger's lamps, those lit — ship.wgsl S.lampN, S.lamp)
+    {
+      const H = vesselHulls.ranger.bvh;
+      if (!this.lampsPlaced && H) this.lampsPlaced = placeLamps(H);
+      const on = this.flown && this.vessel === "ranger" && !!v.lamps && !!this.lampsPlaced;
+      // (each hidden by the hull from where the eye is — a ray against its triangles, not its depth drawn
+      // again: that cost 1.3 ms a frame —, stopped 60 cm short: the lips round a lamp, a wingtip's own skin seen from above, do not hide it)
+      const levels = on ? lampLevels(RANGER_LAMPS, v.lamps!, v.lamps!.t) : [];
+      if (on && H)
+        this.lampsPlaced!.forEach((L, i) => {
+          if (!levels[i]) return;
+          const e = this.camShip;
+          const d = Math.hypot(L.p[0] - e[0], L.p[1] - e[1], L.p[2] - e[2]);
+          const k = Math.max(d - 0.6, 0) / d;
+          if (H.segment(e, [e[0] + (L.p[0] - e[0]) * k, e[1] + (L.p[1] - e[1]) * k, e[2] + (L.p[2] - e[2]) * k])) levels[i] = 0;
+        });
+      const u = on ? lampUniform(this.lampsPlaced!, levels) : new Float32Array(4);
+      this.lampCount = u[0]!;
+      this.device.queue.writeBuffer(this.uniform, LAMPS_AT, u);
+    }
+    // (the cabin's light: the lamps, the screens — ship.wgsl S.cab, S.scr)
+    if (v.inside)
+      this.device.queue.writeBuffer(
+        this.uniform,
+        512,
+        cabinUniform(v.cabin ?? { level: 1, red: 0 }, this.screenLights, v.cabin?.colours ?? null),
+      );
     const c = R.map((r) => dot(r, this.bound.c) + 0) as V3;
     // near and far planes about the ship where it is (the outside views: up to tens of km — not a fixed
     // 80 m, beyond which it vanished), its plumes (a few hundred metres) within them
@@ -1344,7 +1412,9 @@ export class ShipRenderer {
     rp.end();
     const re = this.reOn;
     const trails = this.trailCount > 0;
-    if (jets || re.glow || re.sheath || trails) {
+    // (from the cabin, its walls hide them: not drawn)
+    const lamps = this.lampCount > 0 && !this.inCabin;
+    if (jets || re.glow || re.sheath || trails || lamps) {
       const B = this.plumeBinds!;
       // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
       const occl = this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.count };
@@ -1373,11 +1443,14 @@ export class ShipRenderer {
           depthStencilAttachment: { view: res.plumeDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
         }),
       );
-      pp.setPipeline(this.pipes.hullDepth);
-      pp.setBindGroup(0, B.hullDepth);
-      pp.setVertexBuffer(0, occl.m.vbuf);
-      pp.setIndexBuffer(occl.m.ibuf, "uint32");
-      pp.drawIndexed(occl.n);
+      // (the lamps alone: hidden by rays — writeUniform —, the hull's depth not needed)
+      if (jets || re.glow || re.sheath || trails) {
+        pp.setPipeline(this.pipes.hullDepth);
+        pp.setBindGroup(0, B.hullDepth);
+        pp.setVertexBuffer(0, occl.m.vbuf);
+        pp.setIndexBuffer(occl.m.ibuf, "uint32");
+        pp.drawIndexed(occl.n);
+      }
       for (const inside of [false, true]) {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
         pp.setBindGroup(0, inside ? B.plumeIn : B.plume);
@@ -1399,6 +1472,21 @@ export class ShipRenderer {
         pp.setPipeline(this.pipes.trail);
         pp.setBindGroup(0, res.trailBind);
         pp.draw(6, this.trailCount);
+      }
+      if (lamps) {
+        if (!res.lampBind || res.lampMoments !== mb) {
+          res.lampBind = this.device.createBindGroup({
+            layout: this.pipes.lamp.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: { buffer: this.uniform } },
+              { binding: 11, resource: { buffer: mb } },
+            ],
+          });
+          res.lampMoments = mb;
+        }
+        pp.setPipeline(this.pipes.lamp);
+        pp.setBindGroup(0, res.lampBind);
+        pp.draw(6, this.lampCount);
       }
       if (re.glow && !this.inCabin) {
         pp.setPipeline(this.pipes.glow);

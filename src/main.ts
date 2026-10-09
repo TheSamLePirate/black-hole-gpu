@@ -2574,8 +2574,10 @@ async function main() {
           chrono:
             cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
         })
-      )
+      ) {
         renderer.ship.updateScreens(cockpitScreens.canvas);
+        renderer.cockpitGlow = cockpitScreens.glow;
+      }
       // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
       {
         const S = info.S as number[][];
