@@ -5,11 +5,12 @@
 // running, and so do "stop", Escape. Null when the model fails: the caller answers offline.
 
 import type { Personality, TarsState } from "../game/tars";
-import { Agent, actionLine, actionShort, type Action, type Tool } from "./agent";
+import { Agent, actionLine, resultShort, type Action, type Tool } from "./agent";
 import { checkArgs } from "./tool-schema";
 import { summaryPrompt, type TarsMemory } from "./memory";
 import type { OpenRouter } from "./openrouter";
 import { systemPrompt } from "./tars-online";
+import type { Proposal } from "./game-tools";
 
 export interface TarsAgentDeps {
   or: OpenRouter;
@@ -20,8 +21,10 @@ export interface TarsAgentDeps {
   flight(): TarsState;
   /** a line said (his voice, subtitled) */
   say(text: string): void;
-  /** an action done, as it ends: its short line, whether it went, its full line */
-  onAction(line: string, ok: boolean, full: string): void;
+  /** an action begun */
+  onCall?(tool: string, args: Record<string, unknown>): void;
+  /** an action done, as it ends: what it came back with (short), whether it went, its full line, its tool */
+  onAction(result: string, ok: boolean, full: string, tool: string): void;
   onBusy(busy: boolean): void;
 }
 
@@ -30,7 +33,8 @@ export function agentPrompt(p: Personality, lang: "fr" | "en"): string {
   return [
     systemPrompt(p, lang),
     "You are also the ship's agent: you can do anything in the game with your tools — fly (autopilots, holds, controls), navigate (target, manoeuvres, missions), the time, the camera and views, the interface, teleport the ship, the date, saves and scenes, every setting, any key.",
-    "When the pilot asks for something, do it with the tools straight away — never ask for confirmation, never just explain how. Chain the tools a task needs (e.g. target, then plan_mission; a site, then the entry autopilot; warp, then wait).",
+    "Two kinds of requests. ORDERS ('land us', 'target Mars', 'pose-nous', 'vise', 'mets…'): do them with the tools straight away — never ask for confirmation, never just explain how; chain the tools a task needs (target, then plan_mission; a site, then the entry autopilot; warp, then wait). PROPOSALS ('propose-moi un plan pour…', 'que proposes-tu', 'suggest a plan', 'what would you do'): do not act — gather real figures (read tools; plan_mission or plan_maneuver with execute: false), then call propose_plan once; the pilot accepts or refuses on screen, and only if accepted are you asked to carry it out.",
+    "To show the pilot something — a graph, the telemetry, figures, a comparison, a screen — use show_chart (the flight's channels live, or series you computed), show_card (a card of figures), show_screen (the map, the tablet's pages, a cockpit display, the flight report); hide_display closes them. Prefer showing over reciting numbers.",
     "Read the state (get_state) when you need figures you were not given; use list_places, find_settings, list_keys to find names. If a tool returns an error, correct the call or try another way; say plainly what could not be done.",
     "Teleporting (place_ship) is instant; flying there (plan_mission, autopilots) takes the game's time: when the pilot says 'take us', 'fly', 'go' choose a real flight; 'put us', 'teleport', 'directly' a teleport.",
     "For long tasks only, say a short line before waiting (say), warp time with `time` and `wait` for the outcome when it matters; otherwise answer once the action is engaged. Never use say for your final answer.",
@@ -40,6 +44,9 @@ export function agentPrompt(p: Personality, lang: "fr" | "en"): string {
   ].join(" ");
 }
 
+const YES =
+  /^\s*(oui|ouais|ok|okay|d'accord|vas[- ]y|go|accepte|j'accepte|on y va|c'est parti|yes|yep|do it|accept(ed)?|approved?|let's go)\b/i;
+const NO = /^\s*(non|nan|refuse|je refuse|pas question|no|nope|refused?|reject(ed)?|cancel)\b/i;
 const STOP = /^\s*(stop|halt|cancel|arr[eê]te|stoppe|annule (le|ce) tour|tais[- ]toi)\b/i;
 
 export class TarsAgent {
@@ -52,6 +59,24 @@ export class TarsAgent {
 
   constructor(private d: TarsAgentDeps) {
     this.agent = new Agent((m, fns, signal) => d.or.complete(m, fns, { signal }), d.tools);
+  }
+
+  /** a plan proposed and not yet answered (propose_plan) */
+  pending: Proposal | null = null;
+
+  static isYes(q: string) {
+    return YES.test(q);
+  }
+  static isNo(q: string) {
+    return NO.test(q);
+  }
+
+  /** The words that carry out an accepted plan (asked to the agent as the pilot's). */
+  static acceptance(p: Proposal, lang: "fr" | "en") {
+    const steps = p.steps.map((x, i) => `${i + 1}. ${x}`).join(" ");
+    return lang === "fr"
+      ? `J'accepte ton plan « ${p.title} » (${steps}). Exécute-le maintenant, en entier.`
+      : `I accept your plan "${p.title}" (${steps}). Carry it out now, all of it.`;
   }
 
   /** whether the words only stop the turn running */
@@ -78,8 +103,9 @@ export class TarsAgent {
         `${this.d.memory.carry()}Flight data now: ${JSON.stringify(flight)}\nPilot: ${q}`,
         {
           signal: ctl.signal,
-          onAction: (a) => this.d.onAction(actionShort(a), a.ok, actionLine(a)),
+          onAction: (a) => this.d.onAction(resultShort(a), a.ok, actionLine(a), a.tool),
           onStep: (text) => this.d.say(text),
+          onCall: (tool, args) => this.d.onCall?.(tool, args),
         },
       );
       this.last = r.actions;
@@ -126,10 +152,12 @@ const doneWord = (lang: "fr" | "en", why: "steps" | "time") =>
 export async function runOrders(
   orders: { tool: string; args: Record<string, unknown> }[],
   tools: Tool[],
-  onAction: (line: string, ok: boolean, full: string) => void,
+  onAction: (result: string, ok: boolean, full: string, tool: string) => void,
+  onCall?: (tool: string, args: Record<string, unknown>) => void,
 ): Promise<{ tool: string; ok: boolean; error?: string }[]> {
   const done: { tool: string; ok: boolean; error?: string }[] = [];
   for (const o of orders) {
+    onCall?.(o.tool, o.args);
     const t = tools.find((x) => x.name === o.tool);
     const chk = t ? checkArgs(t, o.args) : null;
     let a: Action;
@@ -141,7 +169,7 @@ export async function runOrders(
       } catch (e) {
         a = { tool: o.tool, args: o.args, ok: false, result: e instanceof Error ? e.message : String(e) };
       }
-    onAction(actionShort(a), a.ok, actionLine(a));
+    onAction(resultShort(a), a.ok, actionLine(a), a.tool);
     done.push({ tool: a.tool, ok: a.ok, error: a.ok ? undefined : String(a.result) });
   }
   return done;

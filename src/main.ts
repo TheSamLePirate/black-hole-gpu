@@ -96,13 +96,14 @@ import { Music } from "./audio/music";
 import { ScoreDirector } from "./audio/score";
 import { Tars, type TarsMoment, type TarsState } from "./game/tars";
 import { TarsPanel } from "./ui/tars-panel";
-import { connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
+import { AGENT_MODELS, connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
 import { TarsOnline } from "./ai/tars-online";
 import { TarsAgent, runOrders } from "./ai/tars-agent";
 import { orderReply, parseOrders } from "./ai/offline-orders";
 import { TarsMemory, TARS_MEMORY_KEY, type MemoryData } from "./ai/memory";
 import type { Tool } from "./ai/agent";
 import { gameTools } from "./ai/game-tools";
+import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
 import { closeTop } from "./ui/keys";
 import { RUNWAY_DH } from "./game/procedures";
@@ -573,16 +574,87 @@ async function main() {
     lang: () => lang,
     flight: () => tarsNow(),
     say: (text) => voice.say({ text, speaker: "tars", priority: 2 }),
-    onAction: (line, ok, full) => tarsPanel.action(line, ok, full),
+    onCall: (tool, args) => {
+      tarsPanel.begin(tool, args);
+      tarsPanel.setState("acting");
+    },
+    onAction: (result, ok, full, tool) => {
+      tarsPanel.action(result, ok, full, tool);
+      if (tarsBusy) tarsPanel.setState("thinking");
+    },
     onBusy: (b) => {
       tarsBusy = b;
+      tarsPanel.setState(b ? "thinking" : voice.queue.current?.speaker === "tars" ? "speaking" : "idle");
       tarsPanel.refresh();
     },
   });
-  const tarsPanelAsk = (q: string) => void tarsAsk(q);
+  // what TARS shows (PLAN-TARS-AGENT A8): his cards over the view; the live ones redrawn a few times a second
+  const tarsDisplay = new TarsDisplay();
+  setInterval(() => tarsDisplay.count && tarsDisplay.update(performance.now()), 250);
+  /** a plan he proposed, answered: accepted, he carries it out; refused, it is dropped */
+  const tarsAnswer = (yes: boolean) => {
+    const p = tarsAgent.pending;
+    if (!p) return;
+    tarsAgent.pending = null;
+    tarsPanel.propose(null);
+    if (yes) return tarsPanelAsk(TarsAgent.acceptance(p, lang), `✓ ${tr({ fr: "Plan accepté", en: "Plan accepted" })} : ${p.title}`);
+    const text = tr({ fr: "Compris. Plan abandonné.", en: "Understood. Plan dropped." });
+    tarsMemory.add({
+      at: Date.now(),
+      user: tr({ fr: `Je refuse le plan « ${p.title} ».`, en: `I refuse the plan "${p.title}".` }),
+      tars: text,
+    });
+    tarsPanel.answer(text);
+    voice.say({ text, speaker: "tars", priority: 2 });
+  };
+  // what TARS started — an autopilot, a plan — followed to its end, its live line on his console and
+  // presence, its outcome said (PLAN-TARS-AGENT A7)
+  let tarsFollow: { auto: string; at: number } | null = null;
+  const tarsFollowStart = () => {
+    const a = camera.pilot.auto;
+    // (the same autopilot still flying: followed since it began)
+    tarsFollow = a === "none" ? null : tarsFollow?.auto === a ? tarsFollow : { auto: a, at: performance.now() };
+    if (tarsFollow) tarsPanel.setState("acting");
+  };
+  setInterval(() => {
+    if (!tarsFollow || tarsBusy) return;
+    const a = camera.pilot.auto;
+    const st = tools.status();
+    if (a !== "none") {
+      const s = Math.round((performance.now() - tarsFollow.at) / 1000);
+      tarsPanel.progress(
+        `${AUTO_NAMES[a as Auto] ?? a} · ${st.soiName} · ${st.label} · ${st.altKm < 100 ? st.altKm.toFixed(2) : Math.round(st.altKm).toLocaleString("en")} km · ${Math.round(st.speed).toLocaleString("en")} m/s · ${s} s`,
+      );
+      if (tarsPanel.currentState === "idle") tarsPanel.setState("acting");
+      return;
+    }
+    // (done: what came of it, in a word)
+    tarsFollow = null;
+    tarsPanel.progress(null);
+    const said = camera.docked
+      ? tr({ fr: "Amarrés.", en: "Docked." })
+      : camera.landed
+        ? tr({ fr: `Posés. ${st.soiName}.`, en: `Down. ${st.soiName}.` })
+        : st.status === "orbit" && st.orbit
+          ? tr({
+              fr: `En orbite autour de ${st.soiName} : ${Math.round(st.orbit.peKm)} par ${Math.round(st.orbit.apKm)} km.`,
+              en: `In orbit about ${st.soiName}: ${Math.round(st.orbit.peKm)} by ${Math.round(st.orbit.apKm)} km.`,
+            })
+          : tr({ fr: "Autopilote terminé.", en: "Autopilot done." });
+    tarsPanel.answer(said);
+    voice.say({ text: said, speaker: "tars", priority: 2 });
+    if (tarsPanel.currentState === "acting") tarsPanel.setState("idle");
+  }, 1000);
+  const tarsPanelAsk = (q: string, shown?: string) => void tarsAsk(q, shown);
   const tarsPanel = new TarsPanel({
     ask: (q) => tarsPanelAsk(q),
-    link: () => ({ hint: openRouterKey.hint(), online: settings.tarsOnline, spent: openRouter.spent, busy: tarsBusy }),
+    link: () => ({
+      hint: openRouterKey.hint(),
+      online: settings.tarsOnline,
+      spent: openRouter.spent,
+      busy: tarsBusy,
+      model: AGENT_MODELS.find((m) => m.id === settings.tarsModel)?.name ?? settings.tarsModel,
+    }),
     connect: () =>
       void orConnect().then((k) => {
         tarsPanel.refresh(k ? t("Connected: TARS speaks through OpenRouter.") : t("Not connected."));
@@ -597,12 +669,15 @@ async function main() {
     talkKey: (e) => tarsKey(e),
   });
   /** A question to TARS (typed, or spoken): the agent online; offline the orders, else his written answers. */
-  async function tarsAsk(q: string) {
+  async function tarsAsk(q: string, shown?: string) {
     // (the words "stop": the turn running stopped, nothing else)
     if (tarsAgent.busy && TarsAgent.isStop(q)) {
       tarsAgent.stop();
       return;
     }
+    // (a plan proposed: "yes" carries it out, "no" drops it — anything else is a new question)
+    if (tarsAgent.pending && (TarsAgent.isYes(q) || TarsAgent.isNo(q))) return tarsAnswer(TarsAgent.isYes(q));
+    tarsPanel.exchange(q, shown);
     const st = tarsNow();
     const r = tars.answer(q, st, tarsPersonality());
     // (his settings said aloud: his own, at once — not the model's to decide)
@@ -611,11 +686,12 @@ async function main() {
       if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
       onSettingsChange(["tarsHonesty", "tarsHumour"]);
       refreshGui();
+      tarsPanel.exchange(q, shown);
+      tarsPanel.answer(r.text);
       voice.say({ text: r.text, speaker: "tars", priority: 2 });
       return;
     }
     let text: string | null = null;
-    tarsPanel.clearActions();
     if (online()) {
       const a = await tarsAgent.ask(q);
       // ("": stopped — nothing to say; null: the model failed — the orders understood offline, his written line)
@@ -626,14 +702,31 @@ async function main() {
       // (offline: the common orders run by the same tools — PLAN-TARS-AGENT A4)
       const orders = parseOrders(q);
       if (orders.length) {
-        const done = await runOrders(orders, tarsTools, (line, ok, full) => tarsPanel.action(line, ok, full));
+        const done = await runOrders(
+          orders,
+          tarsTools,
+          (result, ok, full, tool) => tarsPanel.action(result, ok, full, tool),
+          (tool, args) => tarsPanel.begin(tool, args),
+        );
         text = orderReply(lang, done);
         tarsMemory.add({ at: Date.now(), user: q, tars: text, did: done.map((d) => `${d.tool} → ${d.ok ? "done" : d.error}`) });
       }
     }
     refreshGui();
+    tarsPanel.answer(text ?? r.text);
     voice.say({ text: text ?? r.text, speaker: "tars", priority: 2 });
+    // (an autopilot he engaged, or a plan: followed to its end)
+    tarsFollowStart();
   }
+  // (his emblem moves with his voice: the robot's own measured on the voice bus; a system voice's guessed)
+  tarsPanel.levels(
+    () => {
+      if (tarsPanel.currentState !== "speaking" || lang !== "en" || !settings.voice) return null;
+      const db = sound.busLevels().voice ?? -Infinity;
+      return Number.isFinite(db) ? Math.min(1, Math.max(0, (db + 52) / 36)) : 0;
+    },
+    () => settings.reduceMotion || matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   // speaking to TARS (PLAN-TARS-AGENT A5): his key held listens, released sends; a tap is his field
   const tarsTalk = new PushToTalk({
     lang: () => lang,
@@ -653,7 +746,10 @@ async function main() {
               ? t("Nothing heard.")
               : t("Speech recognition failed."),
       ),
-    state: (on) => tarsPanel.listening(on),
+    state: (on) => {
+      tarsPanel.listening(on);
+      tarsPanel.setState(on ? "listening" : tarsBusy ? "thinking" : "idle");
+    },
   });
   /** his key (F6, or as bound) pressed: held, it listens; tapped, his field */
   function tarsKey(e: KeyboardEvent) {
@@ -678,11 +774,15 @@ async function main() {
     // with speakers does not talk through it)
     enabled: () => settings.voice && !/[?&]e2e=/.test(location.search),
     onStart: (l) => {
-      subtitles.show(l, settings.subtitles);
+      // (his words already on his console when it is open: not subtitled twice)
+      subtitles.show(l, settings.subtitles && !(l.speaker === "tars" && tarsPanel.open));
+      if (l.speaker === "tars") tarsPanel.setState("speaking");
       if (l.radio && settings.sound) sound.radio(true);
     },
     onEnd: (l) => {
       subtitles.end(l);
+      if (l.speaker === "tars" && tarsPanel.currentState === "speaking")
+        tarsPanel.setState(tarsBusy ? "thinking" : tarsFollow ? "acting" : "idle");
       if (l.radio && settings.sound) sound.radio(false);
     },
     // (TARS in English: his own robot voice, synthesized here — PLAN-TARS T5a; in French the system's, the
@@ -2429,6 +2529,48 @@ async function main() {
     say: (text) => voice.say({ text, speaker: "tars", priority: 2 }),
     memory: tarsMemory,
     now: () => performance.now(),
+    display: tarsDisplay,
+    screen: (name, slot = 0) => {
+      const map = (tab?: "orbit" | "globe" | "map") => {
+        if (!flightHud.mapView) flightHud.toggleMapView();
+        if (tab) flightHud.setMapTab(tab);
+      };
+      if (name.startsWith("map_")) {
+        map(name === "map_3d" ? "orbit" : name === "map_globe" ? "globe" : "map");
+        return `map: ${name.slice(4)}`;
+      }
+      const pages: Partial<Record<string, import("./ui/tablet").TabletPage>> = {
+        telemetry: "telemetry",
+        approach_chart: "charts",
+        flight_computer: "computer",
+        ship: "ship",
+        log: "log",
+      };
+      const page = pages[name];
+      if (page) {
+        map();
+        tablet.setPage(page);
+        if (page === "computer") flightComputer.show(true);
+        return `tablet: ${page}`;
+      }
+      if (name === "flight_report") {
+        if (!lastReport) throw new Error("no flight report yet (a landing or a docking makes one)");
+        flightHud.showReport(lastReport);
+        return `report: ${lastReport.title} — ${lastReport.letter}`;
+      }
+      // (a cockpit display's page: the cockpit view, the page on that display)
+      const id = name.slice("cockpit_".length) as import("./ui/cockpitscreens").PageId;
+      cockpitScreens.setPage(slot, id);
+      settings.cockpitPages = cockpitScreens.pagesSetting();
+      if (settings.shipMount !== "cockpit" && settings.shipMount !== "cabin") setMount("cockpit");
+      scheduleUrlSave();
+      return `cockpit display ${slot}: ${id}`;
+    },
+    propose: (p) => {
+      tarsAgent.pending = p;
+      tarsPanel.propose(p, tarsAnswer);
+    },
+    progress: (text) => tarsPanel.progress(text),
   });
   // the real weather (metar.ts, PLAN-METEO W7): with "Real" chosen, the METAR of the runway's station nearest
   // the camera over the Earth (within 600 km), checked every 15 s, fetched each half hour; none, no network:
@@ -2549,7 +2691,7 @@ async function main() {
     voice,
     capcom,
     music,
-    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools },
+    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent },
     skyLoading,
     touch,
     resize,

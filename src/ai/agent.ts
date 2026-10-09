@@ -49,9 +49,9 @@ export interface TurnResult {
   cut: "stopped" | "steps" | "time" | null;
 }
 
-export const MAX_STEPS = 12;
+export const MAX_STEPS = 24;
 /** a turn's wall time, waits included [ms] */
-export const MAX_TURN_MS = 15 * 60_000;
+export const MAX_TURN_MS = 40 * 60_000;
 /** a tool's result as said to the model, at most [characters] */
 const RESULT_CHARS = 4000;
 
@@ -79,7 +79,14 @@ export class Agent {
   async turn(
     context: AgentMessage[],
     user: string,
-    o: { signal?: AbortSignal; onAction?: (a: Action) => void; onStep?: (text: string) => void; maxSteps?: number } = {},
+    o: {
+      signal?: AbortSignal;
+      onAction?: (a: Action) => void;
+      onStep?: (text: string) => void;
+      /** a call about to run: its tool and arguments (as sent) */
+      onCall?: (tool: string, args: Args) => void;
+      maxSteps?: number;
+    } = {},
   ): Promise<TurnResult> {
     const signal = o.signal ?? new AbortController().signal;
     const tools = this.tools();
@@ -101,6 +108,15 @@ export class Agent {
       messages.push({ role: "assistant", content: r.content ?? null, tool_calls: calls });
       // (the calls of one reply in their order: a gear then a landing autopilot, not both at once)
       for (const c of calls) {
+        if (o.onCall) {
+          let args: Args = {};
+          try {
+            args = JSON.parse(c.function.arguments || "{}") as Args;
+          } catch {
+            /* shown without its arguments; the call says why */
+          }
+          o.onCall(c.function.name, args);
+        }
         const a = await this.call(byName.get(c.function.name), c, signal);
         actions.push(a);
         o.onAction?.(a);
@@ -125,17 +141,14 @@ export class Agent {
   }
 }
 
-/** An action as the panel shows it: the tool, its arguments, what came back — its note or result, not its
- *  JSON ("plan_mission · Lune, orbit, 100 → 3.09 km/s burn in 1.6 h…"). */
-export function actionShort(a: Action): string {
-  const args = Object.values(a.args)
-    .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
-    .join(", ");
-  const r = a.result as { note?: unknown; result?: unknown; error?: unknown } | string | null;
+/** What an action came back with, short, as the console shows it after its step: its note or result, not
+ *  its JSON ("3.09 km/s burn in 1.6 h…"); the error when it failed. */
+export function resultShort(a: Action): string {
+  if (!a.ok) return String(a.result);
+  const r = a.result as { note?: unknown; result?: unknown } | string | null;
   const said =
-    typeof r === "string" ? r : r && typeof r === "object" ? String(r.note ?? (typeof r.result === "string" ? r.result : "") ?? "") : "";
-  const out = a.ok ? said : `${String(a.result)}`;
-  return `${a.tool}${args ? ` · ${args}` : ""}${out ? ` → ${out}` : ""}`;
+    typeof r === "string" ? r : r && typeof r === "object" ? String(r.note ?? (typeof r.result === "string" ? r.result : "")) : "";
+  return said === "done" ? "" : said;
 }
 
 /** An action in a line, for the memory and the panel: "autopilot(mode=land, site=Edwards) → engaged". */

@@ -1640,30 +1640,129 @@ body.hide-ui .mission-caption { display: none; }
 body.hide-ui .subtitles { display: none; }
 
 /* the field to speak to TARS (PLAN-TARS T5b): F6, under the subtitles */
+/* TARS (PLAN-TARS-AGENT A7–A8): his console — not a chat box: his emblem and what he does, the exchange, a
+   plan he proposes, his actions as he does them, the wait's live line, the field; his presence while closed;
+   his cards over the view. Its accent follows his state. */
+.tars-panel, .tars-presence { --tc: 140, 255, 190; }
+.tars-panel[data-state="listening"], .tars-presence[data-state="listening"] { --tc: 255, 128, 112; }
+.tars-panel[data-state="thinking"], .tars-presence[data-state="thinking"] { --tc: 124, 214, 255; }
+.tars-panel[data-state="acting"], .tars-presence[data-state="acting"] { --tc: 255, 200, 90; }
+.tars-panel[data-state="error"], .tars-presence[data-state="error"] { --tc: 255, 120, 110; }
 .tars-panel {
-  position: fixed; left: 50%; bottom: 24vh; transform: translateX(-50%); z-index: 6;
-  display: flex; flex-direction: column; gap: 4px; width: min(560px, 86vw);
-  padding: 8px 12px; border-radius: 8px; background: rgba(6, 12, 18, 0.88); border: 1px solid rgba(140, 255, 190, 0.35);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  position: fixed; left: 50%; bottom: 23vh; transform: translateX(-50%); z-index: 6;
+  display: flex; flex-direction: column; gap: 6px; width: min(600px, 92vw); max-height: 62vh; overflow: hidden;
+  padding: 10px 14px 9px; border-radius: 10px;
+  background: linear-gradient(180deg, rgba(8, 14, 24, 0.94), rgba(5, 9, 16, 0.9));
+  border: 1px solid rgba(var(--tc), 0.32);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 10px 34px rgba(0, 0, 0, 0.55), 0 0 26px rgba(var(--tc), 0.08);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  animation: tars-in 0.22s ease-out;
 }
-.tars-panel[hidden] { display: none; }
-.tars-row { display: flex; align-items: center; gap: 10px; }
-.tars-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font: 400 12px var(--font); color: rgba(200, 210, 225, 0.7); padding-left: 2px; }
-.tars-link .sp-link { font-size: 12px; }
-.tars-link em { color: rgba(255, 210, 120, 0.9); font-style: normal; }
-.tars-panel small { font: 700 11px var(--hud-font); letter-spacing: 0.3em; color: rgba(140, 255, 190, 0.95); }
-.tars-panel input {
-  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-  font: 500 15px var(--font); color: #f2f5fa;
-}
-.tars-panel input::placeholder { color: rgba(200, 210, 225, 0.5); }
-.tars-actions { list-style: none; margin: 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 1px; max-height: 8.5em; overflow: hidden; }
+.tars-panel::before, .tars-panel::after { content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none; border: 1.5px solid rgba(var(--tc), 0.75); }
+.tars-panel::before { top: 4px; right: 4px; border-left: 0; border-bottom: 0; }
+.tars-panel::after { bottom: 4px; left: 4px; border-right: 0; border-top: 0; }
+@keyframes tars-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.tars-panel[hidden], .tars-presence[hidden] { display: none; }
+.tp-head { display: flex; align-items: center; gap: 10px; }
+.tp-who { display: flex; flex-direction: column; line-height: 1.1; }
+.tp-who small { font: 700 12px var(--hud-font); letter-spacing: 0.34em; color: rgba(var(--tc), 0.98); }
+.tp-state { font: 600 10.5px var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(var(--tc), 0.7); margin-top: 3px; }
+.tars-emblem { flex: none; overflow: visible; }
+.te-slab { fill: rgba(var(--tc), 0.07); stroke: rgba(var(--tc), 0.55); stroke-width: 0.8; }
+.te-strip { fill: rgba(var(--tc), 0.9); filter: drop-shadow(0 0 2px rgba(var(--tc), 0.8)); }
+.tars-emblem[data-state="idle"] .te-strip { fill: rgba(var(--tc), 0.45); filter: none; }
+.tp-thread { display: flex; flex-direction: column; gap: 3px; }
+.tp-thread p { margin: 0; }
+.tp-thread p:empty { display: none; }
+.tp-you { font: 500 12.5px var(--font); color: rgba(200, 212, 230, 0.66); }
+.tp-you::before { content: "› "; color: rgba(var(--tc), 0.6); }
+.tp-tars { font: 500 14.5px/1.4 var(--font); color: #f1f6fc; }
+.tp-task { display: flex; flex-direction: column; gap: 3px; }
+.tars-actions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .tars-actions:empty { display: none; }
-.tars-mic { background: transparent; border: 1px solid rgba(140, 255, 190, 0.35); border-radius: 50%; width: 28px; height: 28px; font-size: 14px; line-height: 1; cursor: pointer; color: inherit; flex: none; }
-.tars-panel.listening { border-color: rgba(255, 120, 110, 0.85); box-shadow: 0 0 0 2px rgba(255, 120, 110, 0.25), 0 6px 24px rgba(0, 0, 0, 0.5); }
-.tars-panel.listening .tars-mic { background: rgba(255, 120, 110, 0.85); border-color: transparent; }
-.tars-actions li { font: 400 11.5px var(--hud-font); color: rgba(170, 230, 195, 0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tars-actions li.no { color: rgba(255, 170, 140, 0.9); }
+.tars-actions li { display: flex; align-items: baseline; gap: 7px; font: 500 11.5px var(--hud-font); color: rgba(185, 236, 205, 0.9); white-space: nowrap; overflow: hidden; animation: tars-step 0.2s ease-out; }
+@keyframes tars-step { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
+.tars-actions li.no { color: rgba(255, 176, 150, 0.95); }
+.tars-actions li.run { color: rgba(255, 214, 130, 0.95); }
+.tp-mark { width: 12px; flex: none; text-align: center; }
+.tars-actions li.run .tp-mark { animation: tars-spin 1s linear infinite; display: inline-block; }
+@keyframes tars-spin { to { transform: rotate(360deg); } }
+.tp-icon { width: 14px; flex: none; text-align: center; opacity: 0.85; }
+.tp-what { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+.tp-res { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: rgba(200, 212, 230, 0.55); font-weight: 400; }
+.tp-res::before { content: "→ "; }
+.tp-wait { position: relative; font: 500 11.5px var(--hud-font); color: rgba(255, 214, 130, 0.95); padding: 4px 8px 6px; border-radius: 5px; background: rgba(255, 200, 90, 0.06); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tp-wait::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 200, 90, 0.9), transparent); animation: tars-scan 1.6s ease-in-out infinite; }
+@keyframes tars-scan { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.tars-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(var(--tc), 0.14); padding-top: 7px; }
+.tars-panel input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font: 500 15px var(--font); color: #f2f5fa; }
+.tars-panel input::placeholder { color: rgba(200, 210, 225, 0.45); }
+.tars-mic { background: transparent; border: 1px solid rgba(var(--tc), 0.4); border-radius: 50%; width: 30px; height: 30px; font-size: 14px; line-height: 1; cursor: pointer; color: inherit; flex: none; }
+.tars-panel.listening .tars-mic { background: rgba(255, 128, 112, 0.9); border-color: transparent; box-shadow: 0 0 0 6px rgba(255, 128, 112, 0.15); animation: tars-rec 1.2s ease-in-out infinite; }
+@keyframes tars-rec { 50% { box-shadow: 0 0 0 10px rgba(255, 128, 112, 0.05); } }
+.tars-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; font: 400 11.5px var(--font); color: rgba(200, 210, 225, 0.6); }
+.tars-link .sp-link { font-size: 11.5px; }
+.tars-link em { color: rgba(255, 210, 120, 0.9); font-style: normal; }
+.tp-model { font: 600 10.5px var(--hud-font); letter-spacing: 0.06em; color: rgba(var(--tc), 0.8); border: 1px solid rgba(var(--tc), 0.3); border-radius: 4px; padding: 0 5px; }
+/* a plan he proposes: its steps, its figures, accept or refuse */
+.tp-proposal { border: 1px solid rgba(124, 214, 255, 0.4); border-radius: 8px; padding: 9px 11px; background: rgba(124, 214, 255, 0.06); animation: tars-step 0.25s ease-out; }
+.tp-proposal header { display: flex; align-items: baseline; gap: 8px; }
+.tp-proposal small { font: 700 10px var(--hud-font); letter-spacing: 0.24em; text-transform: uppercase; color: rgba(124, 214, 255, 0.95); }
+.tp-proposal h3 { margin: 0; font: 600 14px var(--font); color: #fff; }
+.tp-sum { margin: 4px 0 6px; font: 400 12.5px/1.4 var(--font); color: rgba(220, 230, 245, 0.85); }
+.tp-steps { margin: 0 0 6px; padding-left: 20px; font: 500 12px/1.5 var(--font); color: #e6eef8; }
+.tp-steps li::marker { color: rgba(124, 214, 255, 0.85); font-family: var(--hud-font); }
+.tp-figs { display: grid; grid-template-columns: auto 1fr; gap: 1px 12px; margin: 0 0 8px; font: 500 11.5px var(--hud-font); }
+.tp-figs dt { color: rgba(190, 205, 225, 0.6); }
+.tp-figs dd { margin: 0; color: #eaf3ff; }
+.tp-choose { display: flex; align-items: center; gap: 8px; }
+.tp-choose button { font: 700 12px var(--hud-font); letter-spacing: 0.08em; text-transform: uppercase; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.tp-yes { background: rgba(120, 255, 170, 0.9); color: #04140b; border: none; }
+.tp-no { background: transparent; color: rgba(255, 190, 170, 0.95); border: 1px solid rgba(255, 150, 130, 0.5); }
+.tp-hint { font: 400 11px var(--font); color: rgba(200, 210, 225, 0.5); }
+/* his presence while the console is closed: the emblem and what he is doing */
+.tars-presence {
+  position: fixed; left: 50%; top: 140px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 8px; border-radius: 18px; cursor: pointer; max-width: min(520px, 90vw);
+  background: rgba(6, 11, 19, 0.86); border: 1px solid rgba(var(--tc), 0.4); color: rgba(var(--tc), 0.95);
+  font: 600 11.5px var(--hud-font); letter-spacing: 0.05em; box-shadow: 0 0 18px rgba(var(--tc), 0.12);
+  animation: tars-in 0.22s ease-out;
+}
+.tp-presence-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* his cards over the view */
+.tars-display { position: fixed; left: max(16px, 19vw); top: 92px; z-index: 5; width: min(440px, 40vw); display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.tars-card {
+  position: relative; pointer-events: auto; padding: 9px 12px 10px; border-radius: 9px;
+  background: linear-gradient(180deg, rgba(8, 14, 24, 0.93), rgba(5, 9, 16, 0.88));
+  border: 1px solid rgba(140, 255, 190, 0.22); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0; transform: translateY(-6px) scale(0.98); transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.tars-card.in { opacity: 1; transform: none; }
+.tars-card.out { opacity: 0; transform: translateY(-6px); }
+.tars-card::before { content: ""; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border: 1.5px solid rgba(140, 255, 190, 0.6); border-left: 0; border-bottom: 0; }
+.tars-card header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.tars-card header small { font: 700 9.5px var(--hud-font); letter-spacing: 0.3em; color: rgba(140, 255, 190, 0.9); }
+.tars-card h3 { margin: 0; flex: 1; font: 600 13px var(--font); color: #f1f6fc; }
+.tc-x { background: none; border: none; color: rgba(200, 212, 230, 0.6); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.tc-x:hover { color: #fff; }
+.tc-cv { display: block; width: 100%; }
+.tars-card footer { margin-top: 4px; font: 500 10px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(140, 255, 190, 0.55); }
+.tars-card footer.tc-at::before { content: none; }
+.tars-card footer.tc-at { color: rgba(190, 205, 225, 0.45); }
+.tars-card footer::before { content: "● "; color: rgba(255, 110, 100, 0.9); animation: tars-blink 1.4s steps(2) infinite; }
+@keyframes tars-blink { 50% { opacity: 0.2; } }
+.tars-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 0; font: 500 12px var(--hud-font); }
+.tars-card dt { color: rgba(190, 205, 225, 0.62); }
+.tars-card dd { margin: 0; color: #eef4fc; text-align: right; }
+.tars-card dd[data-tone="good"] { color: #7dffae; }
+.tars-card dd[data-tone="caution"] { color: #ffd27a; }
+.tars-card dd[data-tone="bad"] { color: #ff8d7f; }
+.tars-card p { margin: 8px 0 0; font: 400 12px/1.4 var(--font); color: rgba(220, 230, 245, 0.8); }
+/* the map open: its tablet on the left — the cards beside it */
+body.map-open .tars-display { left: 392px; }
+@media (max-width: 900px) { .tars-display { left: 12px; right: 12px; width: auto; top: 64px; } }
+@media (prefers-reduced-motion: reduce) { .tars-panel, .tars-presence, .tars-actions li, .tp-proposal { animation: none; } .tp-wait::after, .tars-actions li.run .tp-mark, .tars-card footer::before { animation: none; } }
+body.reduce-motion .tars-panel, body.reduce-motion .tars-presence { animation: none; }
 
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }

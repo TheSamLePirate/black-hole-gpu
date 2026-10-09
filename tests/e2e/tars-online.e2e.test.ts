@@ -41,10 +41,7 @@ describe.skipIf(!E2E)("TARS through OpenRouter", () => {
     expect(await app.js<string>(`document.querySelector("[data-testid=tars-link]").textContent`)).toContain("…0042");
     await app.type("How high are we?");
     await app.press("Enter");
-    await app.waitFor(
-      `document.querySelector("[data-testid=subtitles] span")?.textContent === "Four hundred kilometres up, as advertised."`,
-      8_000,
-    );
+    await app.waitFor(`document.querySelector(".tp-tars")?.textContent === "Four hundred kilometres up, as advertised."`, 8_000);
     const req = await app.js<{ auth: string; model: string; sys: string; user: string }>(
       `(() => { const r = window.__or.find((x) => x.u.endsWith("/chat/completions")); return { auth: r.auth, model: r.body.model, sys: r.body.messages[0].content, user: r.body.messages.at(-1).content }; })()`,
     );

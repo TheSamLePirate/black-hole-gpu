@@ -16,7 +16,8 @@ describe.skipIf(!E2E)("TARS asked", () => {
     stopServer();
   });
 
-  const sub = () => app.js<string>(`document.querySelector("[data-testid=subtitles] span").textContent`);
+  // (his answer on his console — not subtitled twice while it is open)
+  const sub = () => app.js<string>(`document.querySelector(".tp-tars").textContent`);
 
   test("F6, a question, Enter: his answer from the flight; his honesty set aloud; the flight untouched by typing", async () => {
     await app.press("F6", "F6");
@@ -25,7 +26,7 @@ describe.skipIf(!E2E)("TARS asked", () => {
     const thr0 = await app.js<number>(`__bh.camera.pilot.throttle`);
     await app.type("Where are we?");
     await app.press("Enter");
-    await app.waitFor(`document.querySelector("[data-testid=subtitles]").dataset.speaker === "tars"`, 5_000);
+    await app.waitFor(`!!document.querySelector(".tp-tars").textContent && __bh.voice.said.some((l) => l.speaker === "tars")`, 5_000);
     expect(await sub()).toMatch(/kilometres above Earth|kilomètres au-dessus de/);
     // (typed "w", "z", "x"…: no throttle, no flight key)
     await app.type("zzz wsx");

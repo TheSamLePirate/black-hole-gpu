@@ -28,7 +28,7 @@ import { KEYMAP, type KeyAction } from "../input/keymap";
 import { MOUNTS, type Mount } from "../mounts";
 import { BODY_NAMES } from "../targeting";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
-import { FRENCH } from "../i18n";
+import { FRENCH, tr, type Text } from "../i18n";
 import { findSettings, checkSetting } from "./settings-tools";
 import { CONSTELLATIONS, NAMED_STARS } from "../skychart";
 import {
@@ -45,6 +45,8 @@ import {
   type OpResult,
 } from "../fc/ops";
 import { alignOverSite } from "../fc/land-ops";
+import type { CardSpec } from "../ui/tars/display";
+import { CHANNELS, type RecKey } from "../game/recorder";
 
 export const UNDO_SAVE = "Before TARS";
 
@@ -90,8 +92,47 @@ export interface GameHost {
   screenshot(): Promise<unknown>;
   say(text: string): void;
   memory: TarsMemory;
+  /** what he shows (ui/tars/display.ts): a card, its id; hide one or all */
+  display: { show(spec: CardSpec): number; hide(id?: number): number; list(): { id: number; kind: string; title: string }[] };
+  /** a real screen of the game opened (the map's tabs, the tablet's pages, a cockpit display's page, the report) */
+  screen(name: Screen, slot?: number): string;
+  /** a plan proposed to the pilot (accepted or refused by them, later) */
+  propose(p: Proposal): void;
+  /** the wait's live line (null: done) */
+  progress(text: string | null): void;
   /** wall time [ms] (the waits) */
   now(): number;
+}
+
+export const SCREENS = [
+  "map_3d",
+  "map_globe",
+  "map_planisphere",
+  "telemetry",
+  "approach_chart",
+  "flight_computer",
+  "ship",
+  "log",
+  "flight_report",
+  "cockpit_pfd",
+  "cockpit_orbit",
+  "cockpit_nav",
+  "cockpit_systems",
+  "cockpit_docking",
+  "cockpit_plan",
+  "cockpit_clocks",
+  "cockpit_log",
+  "cockpit_approach",
+  "cockpit_landing",
+] as const;
+export type Screen = (typeof SCREENS)[number];
+
+/** A plan TARS proposes: what for, its steps, its figures; done only once the pilot accepts. */
+export interface Proposal {
+  title: string;
+  summary: string;
+  steps: string[];
+  figures?: { label: string; value: string }[];
 }
 
 export const PANELS = [
@@ -981,10 +1022,35 @@ export function gameTools(h: GameHost): Tool[] {
               return false;
           }
         };
+        // (what is awaited, in words: the console shows it)
+        const words: Record<string, Text> = {
+          autopilot_off: { fr: "fin de l'autopilote", en: "the autopilot's end" },
+          landed: { fr: "le posé", en: "the landing" },
+          in_orbit: { fr: "l'orbite", en: "the orbit" },
+          docked: { fr: "l'amarrage", en: "the docking" },
+          plan_done: { fr: "le plan exécuté", en: "the plan flown" },
+          stage: { fr: "la phase", en: "the phase" },
+          seconds: { fr: "le temps", en: "the time" },
+        };
+        const what = `${tr(words[String(a.until)] ?? { fr: String(a.until), en: String(a.until) })}${a.stage ? ` ${a.stage}` : ""}${on ? ` · ${String(a.body)}` : ""}`;
+        let shown = 0;
         return new Promise((res) => {
           const tick = () => {
-            if (signal.aborted) return res({ waited: "stopped" });
+            if (signal.aborted) {
+              h.progress(null);
+              return res({ waited: "stopped" });
+            }
             const met = a.until !== "seconds" && done();
+            // (the wait's live line, once a second: what is awaited, how long, where the craft is)
+            if (h.now() - shown > 1000) {
+              shown = h.now();
+              const st = tools.status();
+              const el = Math.round((h.now() - t0) / 1000);
+              h.progress(
+                `${what} · ${el} s · ${st.soiName} · ${st.label} · ${st.altKm < 100 ? st.altKm.toFixed(2) : Math.round(st.altKm).toLocaleString("en")} km`,
+              );
+            }
+            if (met || h.now() - t0 >= max) h.progress(null);
             if (met || h.now() - t0 >= max)
               return res({
                 waited: Math.round((h.now() - t0) / 1000),
@@ -1015,6 +1081,111 @@ export function gameTools(h: GameHost): Tool[] {
       run: (a) => {
         h.say(String(a.text));
         return "said";
+      },
+    },
+    // ------------------------------------------------------------------ showing
+    {
+      name: "show_chart",
+      description:
+        "Show the pilot a chart beside the flight. Either the flight's recorded channels, live (channels: alt, speed, vz, g, q, mach, heat, throttle, dv, fuel; seconds: the window, default 600), or series you computed (series: [{label, unit, points: [[x, y], …]}], xLabel). Up to 4 lanes.",
+      params: {
+        title: { type: "string" },
+        channels: { type: "array", maxItems: 4, items: { type: "string", enum: CHANNELS.map((c) => c.key) } },
+        seconds: { type: "number", minimum: 10, maximum: 1e7 },
+        series: {
+          type: "array",
+          maxItems: 4,
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              unit: { type: "string" },
+              points: { type: "array", maxItems: 400, items: { type: "array", maxItems: 2, items: { type: "number" } } },
+            },
+            required: ["label", "points"],
+          },
+        },
+        xLabel: { type: "string" },
+      },
+      required: ["title"],
+      run: (a) => {
+        const series = (a.series as { label: string; unit?: string; points: number[][] }[] | undefined)?.map((x) => ({
+          label: x.label,
+          unit: x.unit,
+          points: x.points.filter((p) => p.length === 2) as [number, number][],
+        }));
+        const channels = a.channels as RecKey[] | undefined;
+        if (!series?.length && !channels?.length) throw new Error("give channels (live) or series");
+        const id = h.display.show(
+          series?.length
+            ? { kind: "chart", title: String(a.title), series, xLabel: a.xLabel as string | undefined }
+            : { kind: "chart", title: String(a.title), live: { channels: channels!, seconds: (a.seconds as number) ?? 600 } },
+        );
+        return `chart ${id} shown`;
+      },
+    },
+    {
+      name: "show_card",
+      description:
+        "Show the pilot a card of data you compose — a mission's balance, a comparison, a checklist, figures: a title, rows {label, value, tone: good|caution|bad}, a note.",
+      params: {
+        title: { type: "string" },
+        rows: {
+          type: "array",
+          maxItems: 16,
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              value: { type: "string" },
+              tone: { type: "string", enum: ["good", "caution", "bad"] },
+            },
+            required: ["label", "value"],
+          },
+        },
+        note: { type: "string" },
+      },
+      required: ["title", "rows"],
+      run: (a) =>
+        `card ${h.display.show({ kind: "data", title: String(a.title), rows: a.rows as never, note: a.note as string | undefined })} shown`,
+    },
+    {
+      name: "show_screen",
+      description:
+        "Open a real screen of the game for the pilot: the map (map_3d, map_globe, map_planisphere), the tablet's pages (telemetry: the flight's curves; approach_chart; flight_computer; ship; log), the last flight_report, or a page on a cockpit display (cockpit_pfd, cockpit_orbit, cockpit_nav, cockpit_systems, cockpit_docking, cockpit_plan, cockpit_clocks, cockpit_log, cockpit_approach, cockpit_landing; slot 0–7 the display, default 0).",
+      params: { screen: { type: "string", enum: SCREENS }, slot: { type: "number", minimum: 0, maximum: 7, integer: true } },
+      required: ["screen"],
+      run: act((a) => h.screen(a.screen as Screen, a.slot as number | undefined)),
+    },
+    {
+      name: "hide_display",
+      description: "Close what you showed: one card (id) or all of them.",
+      params: { id: { type: "number", integer: true, minimum: 1 } },
+      run: (a) => `${h.display.hide(a.id as number | undefined)} closed`,
+    },
+    {
+      name: "propose_plan",
+      description:
+        "When the pilot asks you to PROPOSE or SUGGEST a plan ('propose-moi un plan pour…', 'que proposes-tu', 'suggest', 'what would you do'): after gathering real figures (read tools; plan_mission / plan_maneuver with execute: false), propose it here — a title, a one-line summary, the steps in order, the key figures (Δv, duration, arrival…). Do NOT execute anything yourself: the pilot accepts or refuses on screen; accepted, you are asked to carry it out. One proposal per turn, then answer briefly.",
+      params: {
+        title: { type: "string" },
+        summary: { type: "string" },
+        steps: { type: "array", maxItems: 10, items: { type: "string" } },
+        figures: {
+          type: "array",
+          maxItems: 8,
+          items: { type: "object", properties: { label: { type: "string" }, value: { type: "string" } }, required: ["label", "value"] },
+        },
+      },
+      required: ["title", "summary", "steps"],
+      run: (a) => {
+        h.propose({
+          title: String(a.title),
+          summary: String(a.summary),
+          steps: (a.steps as string[]) ?? [],
+          figures: a.figures as Proposal["figures"],
+        });
+        return "proposed: the pilot will accept or refuse — do not carry it out now";
       },
     },
     {

@@ -190,6 +190,14 @@ export class CockpitScreens {
     return this.pages[slot];
   }
 
+  /** A display's page set (TARS's show_screen; null: back to its own). */
+  setPage(slot: number, page: PageId | null) {
+    if (slot < 0 || slot >= 8) return;
+    this.pages[slot] = page;
+    this.pagesKey = this.pagesSetting();
+    this.lastDraw = -Infinity;
+  }
+
   /** The pages chosen, as the setting keeps them. */
   pagesSetting(): string {
     return this.pages.some((p) => p) ? this.pages.map((p) => p ?? "").join(",") : "";

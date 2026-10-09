@@ -488,6 +488,9 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1 à A7 ; référenc
 - **A3** : TARS agent en jeu — vérifié sur le vrai OpenRouter : « Emmène-nous en orbite autour de la Lune », volé et confirmé par le jeu (100 km, 0,0012 $).
 - **A4** : hors ligne, les ordres courants par les mêmes outils.
 - **A5** : le push-to-talk (F6 tenu, le bouton 🎙).
+- **A6** (en cours) : le banc des vols dirigés par TARS sur le vrai service, à relancer en court.
+- **A7** : sa console AAA — son emblème animé selon son état, ses actions en direct, sa présence console fermée, le suivi de ce qu'il a lancé.
+- **A8** : il montre (graphes en direct, fiches, vrais écrans) et il propose (« propose-moi un plan » : accepter ou refuser ; un ordre reste sans confirmation).
 
 ## Ce qui reste pour l'AAA (au 09/10/2026)
 

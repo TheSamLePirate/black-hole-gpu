@@ -29,6 +29,38 @@ const MODEL = `(() => {
       if (!tools.length) return reply({ content: "J'attends.", tool_calls: [call("w", "wait", { until: "landed", maxSeconds: 600 })] });
       return reply({ content: "Fini d'attendre." });
     }
+    if (/Montre/.test(q)) {
+      if (!tools.length)
+        return reply({
+          content: null,
+          tool_calls: [
+            call("c1", "show_chart", { title: "Altitude et vitesse", channels: ["alt", "speed"], seconds: 600 }),
+            call("c2", "show_chart", { title: "Budget Δv", series: [{ label: "Δv", unit: "m/s", points: [[0, 3900], [1, 3100], [2, 800], [3, 0]] }], xLabel: "étape" }),
+            call("c3", "show_card", { title: "Bilan", rows: [{ label: "Carburant", value: "60 %", tone: "good" }, { label: "Δv", value: "2,1 km/s", tone: "caution" }], note: "Assez pour la Lune." }),
+            call("c4", "show_screen", { screen: "telemetry" }),
+          ],
+        });
+      return reply({ content: "Voilà." });
+    }
+    if (/Propose/.test(q)) {
+      if (!tools.length)
+        return reply({
+          content: null,
+          tool_calls: [
+            call("p1", "propose_plan", {
+              title: "Cap sur Mars",
+              summary: "Vise Mars puis accélère le temps.",
+              steps: ["Viser Mars", "Temps ×100"],
+              figures: [{ label: "Δv", value: "0 m/s" }],
+            }),
+          ],
+        });
+      return reply({ content: "Je vous propose ce plan." });
+    }
+    if (/J'accepte ton plan/.test(q)) {
+      if (!tools.length) return reply({ content: null, tool_calls: [call("e1", "set_target", { name: "Mars" }), call("e2", "time", { warp: 100 })] });
+      return reply({ content: "Plan exécuté." });
+    }
     if (/Cooper/.test(q)) {
       if (!tools.length) return reply({ content: null, tool_calls: [call("m", "memory", { action: "remember", note: "Le pilote s'appelle Cooper" })] });
       return reply({ content: "Noté, Cooper." });
@@ -72,12 +104,18 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     await app.waitFor(`__bh.tars.agent.lastText === "Mars en cible, vent modéré."`, 15_000);
     expect(await app.js<string>(`String(__bh.settings.target)`)).toBe("mars");
     expect(await app.js<number>(`__bh.settings.wind`)).toBe(2);
-    const lines = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-actions] li")].map((l) => l.textContent)`);
-    expect(lines[0]).toBe("✓ set_target · Mars → Target: Mars");
+    const steps = await app.js<{ tool: string; cls: string; what: string; res: string; title: string }[]>(
+      `[...document.querySelectorAll("[data-testid=tars-actions] li")].map((l) => ({ tool: l.dataset.tool, cls: l.className, what: l.querySelector(".tp-what").textContent, res: l.querySelector(".tp-res")?.textContent ?? "", title: l.title }))`,
+    );
+    // (each step in words, its result after it, its whole line in the tooltip)
+    expect(steps[0]).toMatchObject({ tool: "set_target", cls: "ok", what: "Cible · Mars", res: "Target: Mars" });
     // (the wind 9 refused by the schema: said to the model, which set 2 — the full line in the tooltip)
-    expect(lines[1]).toMatch(/^✓ set_settings · \[\{"key":"wind","value":"9"\}\]/);
-    expect(await app.js<string>(`document.querySelectorAll("[data-testid=tars-actions] li")[1].title`)).toContain("wind must be one of");
-    expect(await app.js<string>(`document.querySelectorAll("[data-testid=tars-actions] li")[2].title`)).toContain('"wind":2');
+    expect(steps[1]).toMatchObject({ tool: "set_settings", cls: "ok", what: "Réglages" });
+    expect(steps[1]!.title).toContain("wind must be one of");
+    expect(steps[2]!.title).toContain('"wind":2');
+    // (the exchange on the console: his words under the pilot's)
+    expect(await app.js<string>(`document.querySelector(".tp-you").textContent`)).toBe("Vise Mars et mets un vent modéré.");
+    expect(await app.js<string>(`document.querySelector(".tp-tars").textContent`)).toBe("Mars en cible, vent modéré.");
     await app.waitFor(`__bh.voice.said.some((l) => l.speaker === "tars" && l.text === "Mars en cible, vent modéré.")`, 15_000);
     // (the agent's request: the tools, the model of the setting, the flight data)
     const req = await app.js<{ model: string; tools: string[]; user: string }>(
@@ -170,10 +208,80 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     await app.press("Enter");
     await app.waitFor(`String(__bh.settings.target) === "jupiter"`, 5_000);
     expect(Math.round(await app.js<number>(`__bh.settings.timeSpeed * 4.925490947e-6 * __bh.settings.massSolar`))).toBe(10);
-    const lines = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-actions] li")].map((l) => l.textContent)`);
-    expect(lines[0]).toMatch(/^✓ set_target · jupiter/);
-    expect(lines[1]).toMatch(/^✓ time · 10/);
+    const steps = await app.js<{ tool: string; cls: string; what: string }[]>(
+      `[...document.querySelectorAll("[data-testid=tars-actions] li")].map((l) => ({ tool: l.dataset.tool, cls: l.className, what: l.querySelector(".tp-what").textContent, res: l.querySelector(".tp-res")?.textContent ?? "", title: l.title }))`,
+    );
+    expect(steps[0]).toMatchObject({ tool: "set_target", cls: "ok", what: "Cible · jupiter" });
+    expect(steps[1]).toMatchObject({ tool: "time", cls: "ok", what: "Temps · 10" });
     await app.waitFor(`__bh.voice.said.some((l) => l.speaker === "tars" && l.text === "C'est fait, tout.")`, 10_000);
     await app.js(`(__bh.settings.tarsOnline = true, true)`);
+  }, 30_000);
+
+  test("he shows: live charts, a chart of his own, a card of figures, a real screen (A8)", async () => {
+    await app.js(`(__bh.tars.memory.clear(), true)`);
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    await app.type("Montre-moi l'altitude, le budget et la télémétrie.");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Voilà."`, 15_000);
+    const cards = await app.js<{ kind: string; title: string }[]>(
+      `[...document.querySelectorAll("[data-testid=tars-card]")].map((c) => ({ kind: c.dataset.kind, title: c.querySelector("h3").textContent }))`,
+    );
+    // (three at most, the newest on top)
+    expect(cards).toEqual([
+      { kind: "data", title: "Bilan" },
+      { kind: "chart", title: "Budget Δv" },
+      { kind: "chart", title: "Altitude et vitesse" },
+    ]);
+    expect(
+      await app.js<string>(`document.querySelector("[data-testid=tars-card][data-kind=data] dd[data-tone=caution]").textContent`),
+    ).toBe("2,1 km/s");
+    // (a chart drawn: its canvas not blank)
+    expect(
+      await app.js<boolean>(
+        `(() => { const cv = document.querySelectorAll("[data-testid=tars-card] canvas")[0]; const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; for (let i = 3; i < d.length; i += 4) if (d[i]) return true; return false; })()`,
+      ),
+    ).toBe(true);
+    // (the real screen: the map and its tablet on the telemetry page)
+    await app.waitFor(`!!document.querySelector("[data-testid=telemetry-page]")?.offsetParent`, 5_000);
+    // (closed by its ×)
+    await app.click("[data-testid=tars-card] .tc-x");
+    await app.waitFor(`document.querySelectorAll("[data-testid=tars-card]").length === 2`, 3_000);
+  }, 60_000);
+
+  test("a plan proposed: nothing done until accepted, then carried out; refused, dropped", async () => {
+    await app.js(`(__bh.settings.target = "moon", __bh.game.target("moon"), true)`);
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    await app.type("Propose-moi un plan pour aller vers Mars.");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Je vous propose ce plan."`, 15_000);
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=tars-proposal]").hidden`)).toBe(false);
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-proposal] h3").textContent`)).toBe("Cap sur Mars");
+    expect(await app.js<string[]>(`[...document.querySelectorAll(".tp-steps li")].map((l) => l.textContent)`)).toEqual([
+      "Viser Mars",
+      "Temps ×100",
+    ]);
+    // (nothing done yet)
+    expect(await app.js<string>(`String(__bh.settings.target)`)).toBe("moon");
+    await app.click("[data-testid=tars-accept]");
+    await app.waitFor(`__bh.tars.agent.lastText === "Plan exécuté."`, 15_000);
+    expect(await app.js<string>(`String(__bh.settings.target)`)).toBe("mars");
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=tars-proposal]").hidden`)).toBe(true);
+    // (another, refused by the words)
+    await app.type("Propose-moi un plan pour aller vers Mars.");
+    await app.press("Enter");
+    await app.waitFor(`!document.querySelector("[data-testid=tars-proposal]").hidden && !__bh.tars.agent.busy`, 15_000);
+    await app.type("non");
+    await app.press("Enter");
+    await app.waitFor(`document.querySelector("[data-testid=tars-proposal]").hidden`, 5_000);
+    expect(await app.js<string>(`document.querySelector(".tp-tars").textContent`)).toBe("Compris. Plan abandonné.");
+  }, 60_000);
+
+  test("closed while he works: his presence shows what he does", async () => {
+    if (!(await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`))) await app.press("F6", "F6");
+    await app.js(`(__bh.tars.agent.ask("Attends qu'on soit posés."), true)`);
+    await app.waitFor(`!document.querySelector("[data-testid=tars-presence]").hidden`, 5_000);
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-presence]").dataset.state`)).toMatch(/thinking|acting/);
+    await app.js(`(__bh.tars.agent.stop(), true)`);
+    await app.waitFor(`!__bh.tars.agent.busy`, 5_000);
   }, 30_000);
 });

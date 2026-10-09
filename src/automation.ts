@@ -68,7 +68,7 @@ export interface BhContext {
   /** the score (PLAN-TARS T4): the moment playing, the notes and ticks started */
   music: Music;
   /** TARS the agent (PLAN-TARS-AGENT): his turns, his memory, his tools */
-  tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[] };
+  tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[]; spent: () => number };
   skyLoading: Promise<unknown>;
   touch(): void;
   resize(): void;
@@ -293,7 +293,7 @@ export function installBh(c: BhContext) {
       voice,
       capcom,
       music,
-      /** TARS the agent: __bh.tars.agent.ask("…"), .agent.last (his actions), .memory, .tools() */
+      /** TARS the agent: __bh.tars.agent.ask("…"), .agent.last (his actions), .memory, .tools(), .spent() (USD) */
       tars: c.tars,
       /** TARS's robot voice's parts (PLAN-TARS T5a): its measurement renders it offline */
       tarsVoice: { phonemes, synthesize, robotVoice },

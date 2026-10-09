@@ -21,7 +21,8 @@ Tout est synthétisé ou tiré du système : rien à télécharger. TARS peut au
 | `src/ai/openrouter.ts`, `src/ai/tars-online.ts` | TARS par OpenRouter : la clé, la connexion OAuth (PKCE), les appels GLM et Jev, leur coût ; son caractère pour le modèle, ses remarques décidées par Jev |
 | `src/ui/tars-panel.ts`, `pwa/openrouter.html` | le champ F6 (ses actions, sa mémoire, le micro) et le lien à OpenRouter ; la page de rappel de la connexion |
 | `src/ai/agent.ts`, `src/ai/tool-schema.ts` | TARS agent : la boucle d'un tour (appels, résultats, bornes, arrêt) ; le schéma des outils et la vérification des arguments |
-| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 31 outils : tout le jeu ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 36 outils : tout le jeu, montrer, proposer ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ui/tars/emblem.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | son emblème animé ; ses cartes sur la vue (graphes, fiches) et leur tracé |
 | `src/ai/tars-agent.ts`, `src/ai/memory.ts` | sa consigne d'agent, un tour à la fois ; sa mémoire gardée entre les visites |
 | `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne ; le push-to-talk |
 | `src/audio/engine.ts` | les bus « voix » et « musique », la radio autour des voix (Quindar, squelch, souffle), le souffle du blackout, la chaîne de la voix de TARS |
@@ -123,7 +124,7 @@ Ce qui encadre ces répliques :
 Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
-- **Ce qu'il fait** : ses 31 outils couvrent tout le jeu.
+- **Ce qu'il fait** : ses 36 outils couvrent tout le jeu.
   - Lire : l'état entier, les sites et pistes, les corps, la météo, les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
   - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
   - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
@@ -131,7 +132,9 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TAR
   - Téléporter, sauvegarder et charger, lancer une scène.
   - **Tout réglage**, vérifié au schéma ; **toute touche**.
   - **Attendre** l'issue (la fin d'un autopilote, un posé, une orbite autour d'un corps) pendant que le jeu tourne.
-- **Ce qu'on voit** : ses actions au fil de l'eau (✓ fait, ✗ refusé ; la ligne entière en info-bulle), « TARS travaille… (Échap : arrêter) », ses phrases dites en route et à la fin.
+- **Sa console** (F6) : son emblème — quatre monolithes animés selon son état (prêt, à l'écoute, réfléchit, agit, parle) —, l'échange, ses actions en direct (◌ en cours, ✓ fait, ✗ refusé ; la ligne entière en info-bulle), la ligne vivante d'une attente, « TARS travaille… (Échap : arrêter) ». Fermée, **sa présence** reste en haut de l'écran tant qu'il agit ou parle. Ce qu'il a lancé (un autopilote, un plan) est **suivi jusqu'au bout**, puis l'issue dite.
+- **Il montre** : des graphes (les canaux de l'enregistreur en direct, ou ses propres séries), des fiches de chiffres, et les vrais écrans du jeu (la carte, la tablette, un écran du cockpit, le rapport de vol) ; trois cartes au plus sur la vue, fermées par leur ×.
+- **Ordres et propositions** : un ordre (« pose-nous », « vise Mars ») s'exécute sans confirmation ; « propose-moi un plan pour… » donne un plan chiffré, sans rien exécuter, avec ACCEPTER / REFUSER (ou « oui » / « non ») — accepté, il l'exécute.
 - **L'arrêter** : Échap, « stop », ou une nouvelle question.
 - **Le filet** : avant ce qui ne se défait pas (charger, déplacer, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
 - **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
