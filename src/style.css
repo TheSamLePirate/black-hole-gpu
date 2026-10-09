@@ -1639,6 +1639,21 @@ body.hide-ui .mission-caption { display: none; }
 .subtitles.radio span { font-style: italic; }
 body.hide-ui .subtitles { display: none; }
 
+/* the field to speak to TARS (PLAN-TARS T5b): F6, under the subtitles */
+.tars-panel {
+  position: fixed; left: 50%; bottom: 24vh; transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 10px; width: min(560px, 86vw);
+  padding: 8px 12px; border-radius: 8px; background: rgba(6, 12, 18, 0.88); border: 1px solid rgba(140, 255, 190, 0.35);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.tars-panel[hidden] { display: none; }
+.tars-panel small { font: 700 11px var(--hud-font); letter-spacing: 0.3em; color: rgba(140, 255, 190, 0.95); }
+.tars-panel input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  font: 500 15px var(--font); color: #f2f5fa;
+}
+.tars-panel input::placeholder { color: rgba(200, 210, 225, 0.5); }
+
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
 .fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }

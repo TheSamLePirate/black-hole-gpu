@@ -56,4 +56,120 @@ export default {
     "Les voix parlées : les annonces de l'atterrissage (hauteurs, minimums, taux de chute), le contrôle de mission par radio, TARS. Les voix du système (du navigateur, de l'ordinateur), dans la langue de l'interface. Désactivé : leurs sous-titres seuls.",
   "The line being said, written over the lower third of the view, its speaker named (the craft, mission control, TARS).":
     "La phrase dite, écrite au-dessus du tiers bas de la vue, avec le nom de qui parle (l'appareil, le contrôle de mission, TARS).",
+  "TARS remarks": "Remarques de TARS",
+  "TARS speaks unasked, rarely, at the flight's moments (a landing, the wormhole, Gargantua, the fuel getting low). Asked — F6 —, he always answers.":
+    "TARS parle de lui-même, rarement, aux moments du vol (un atterrissage, le trou de ver, Gargantua, le carburant qui baisse). Interrogé — F6 —, il répond toujours.",
+  TARS: "TARS",
+  "TARS honesty": "Honnêteté de TARS",
+  'Lower: rounder figures, softer words — never on a danger (the fuel nearly gone, the ground coming). Also by asking him: "honesty 70".':
+    "Plus bas : des chiffres plus ronds, des mots plus doux — jamais sur un danger (le carburant presque épuisé, le sol qui approche). Aussi en le lui demandant : « honnêteté 70 ».",
+  "TARS humour": "Humour de TARS",
+  'His dry asides, his jokes when asked, his remarks unasked. 0: none. Also by asking him: "humour 50".':
+    "Ses apartés pince-sans-rire, ses blagues sur demande, ses remarques spontanées. 0 : aucun. Aussi en le lui demandant : « humour 50 ».",
+  'TARS: ask him — where we are, the fuel, the speed, the target, what to do; his honesty and humour ("honesty 70")':
+    "TARS : lui demander — où on est, le carburant, la vitesse, la cible, quoi faire ; son honnêteté et son humour (« honnêteté 70 »)",
+  "{0} seconds": "{0} secondes",
+  "{0} minutes": "{0} minutes",
+  "{0} hours": "{0} heures",
+  "{0} days": "{0} jours",
+  "Not that anyone asked me.": "Pas que quelqu'un me l'ait demandé.",
+  "I checked twice. Once out of habit.": "J'ai vérifié deux fois. Une par habitude.",
+  "You're welcome.": "Il n'y a pas de quoi.",
+  "I'd shrug, but I'm a rectangle.": "Je hausserais les épaules, mais je suis un rectangle.",
+  "Write that down. I won't.": "Notez-le. Moi, non.",
+  "Honesty setting: {0} percent. I'll try to sound sure of everything.":
+    "Honnêteté réglée à {0} pour cent. J'essaierai d'avoir l'air sûr de tout.",
+  "Honesty setting: {0} percent.": "Honnêteté réglée à {0} pour cent.",
+  "Honesty setting at {0} percent.": "Honnêteté à {0} pour cent.",
+  "Humour setting: zero. Finally, some peace.": "Humour réglé à zéro. Enfin la paix.",
+  "Humour setting: {0} percent.": "Humour réglé à {0} pour cent.",
+  "Humour setting at {0} percent.": "Humour à {0} pour cent.",
+  "My humour setting is too low for that.": "Mon humour est réglé trop bas pour ça.",
+  "Why don't black holes ever go hungry? They always find room for more.":
+    "Pourquoi un trou noir n'a-t-il jamais faim ? Il trouve toujours de la place pour un peu plus.",
+  "I asked the autopilot for a joke. It said: altitude. I'm still waiting for the punchline.":
+    "J'ai demandé une blague à l'autopilote. Il a répondu : altitude. J'attends encore la chute.",
+  "A photon checks into a hotel. 'Any luggage?' 'No, I'm travelling light.'":
+    "Un photon arrive à l'hôtel. « Des bagages ? » « Non, je voyage léger. »",
+  "Time flies near Gargantua. Well, it crawls. It's complicated.": "Le temps file près de Gargantua. Enfin, il rampe. C'est compliqué.",
+  "TARS. Former marine robot, now your copilot. Ask me where we are, the fuel, the speed, the target, or what to do.":
+    "TARS. Ancien robot des marines, votre copilote. Demandez-moi où on est, le carburant, la vitesse, la cible, ou quoi faire.",
+  "The propellant isn't counted on this engine. Burn all you like.":
+    "Les ergols ne sont pas comptés avec ce moteur. Poussez autant que vous voulez.",
+  "Fuel at {0} percent: {1} metres per second left. That's not a figure to be modest about.":
+    "Carburant à {0} pour cent : il reste {1} mètres par seconde. Ce n'est pas un chiffre à arrondir.",
+  "Fuel at {0} percent: {1} metres per second of delta-v.": "Carburant à {0} pour cent : {1} mètres par seconde de delta-v.",
+  "Plenty. Probably.": "Largement. Probablement.",
+  "Speed relative to what? Out here, that's a real question.": "La vitesse par rapport à quoi ? Ici, c'est une vraie question.",
+  "{0} metres per second relative to {1}.": "{0} mètres par seconde par rapport à {1}.",
+  "the nearest body": "l'astre le plus proche",
+  "On the ground at {0}. Solid. I checked.": "Au sol, sur {0}. Du solide. J'ai vérifié.",
+  somewhere: "quelque part",
+  "Docked. Going nowhere until you say so.": "Amarrés. On ne bouge pas tant que vous ne le dites pas.",
+  "Far from everything. That's the short answer.": "Loin de tout. C'est la réponse courte.",
+  "{0} kilometres above {1}. {2}.": "{0} kilomètres au-dessus de {1}. {2}.",
+  "Nothing on our path for now. Enjoy the quiet.": "Rien sur notre route pour l'instant. Profitez du calme.",
+  "we meet the ground of": "on touche le sol de",
+  "we leave the sphere of influence of": "on quitte la sphère d'influence de",
+  "we enter the sphere of influence of": "on entre dans la sphère d'influence de",
+  "we reach the wormhole by": "on atteint le trou de ver près de",
+  "Impact with {0} in {1}. Do something.": "Impact avec {0} dans {1}. Faites quelque chose.",
+  "In {0}, {1} {2}.": "Dans {0}, {1} {2}.",
+  "No target selected. Pick one on the map, M.": "Aucune cible choisie. Prenez-en une sur la carte, M.",
+  "{0} is {1} kilometres away.": "{0} est à {1} kilomètres.",
+  "Our clocks run like Earth's here, give or take a few microseconds a day.":
+    "Nos horloges battent comme celles de la Terre ici, à quelques microsecondes par jour près.",
+  "Every hour aboard is {0} hours far away. Spend them wisely.": "Chaque heure à bord en vaut {0} au loin. Dépensez-les bien.",
+  "Fuel {0} percent.": "Carburant {0} pour cent.",
+  "Landed on {0}.": "Posés sur {0}.",
+  "Docked.": "Amarrés.",
+  "{0} at {1} kilometres.": "{0} à {1} kilomètres.",
+  "Everything's fine.": "Tout va bien.",
+  "Nothing alarming.": "Rien d'alarmant.",
+  "I'd answer that, but it's outside my parameters. Try the fuel, our position, the speed, the target, or what to do.":
+    "Je répondrais bien, mais c'est hors de mes paramètres. Essayez le carburant, notre position, la vitesse, la cible, ou quoi faire.",
+  "I don't understand. Ask me about the fuel, our position, the speed, the target, or what to do.":
+    "Je ne comprends pas. Demandez-moi le carburant, notre position, la vitesse, la cible, ou quoi faire.",
+  "The autopilot has it. Watch, and keep a hand near the controls.": "L'autopilote s'en charge. Surveillez, une main près des commandes.",
+  "We're down. Take off with U, or the take-off autopilot on the hub.":
+    "On est posés. Décollez avec U, ou l'autopilote de décollage dans le hub.",
+  "Docked. Undock when you're ready, or plan the next leg with the planner.":
+    "Amarrés. Désamarrez quand vous voulez, ou préparez l'étape suivante avec le planificateur.",
+  "In orbit. For {0}: open the planner (0) and plan the transfer.":
+    "En orbite. Pour {0} : ouvrez le planificateur (0) et préparez le transfert.",
+  "In orbit. Pick a target on the map (M), then plan the transfer.":
+    "En orbite. Choisissez une cible sur la carte (M), puis préparez le transfert.",
+  "We're in the entry. Hold the attitude; the entry autopilot (Shift G) can fly it.":
+    "On est en rentrée. Tenez l'attitude ; l'autopilote de rentrée (Maj G) peut la piloter.",
+  "On the approach. Gear down (G), follow the path; the landing autopilot can take it.":
+    "En approche. Train sorti (G), suivez la trajectoire ; l'autopilote d'atterrissage peut la prendre.",
+  "Flying. Pick a runway, or let the entry autopilot take us down.":
+    "En vol. Choisissez une piste, ou laissez l'autopilote de rentrée nous poser.",
+  "Suborbital: we're coming back down. Raise the periapsis, or plan the landing.":
+    "Suborbital : on redescend. Remontez le périastre, ou préparez l'atterrissage.",
+  "We're leaving this world for good. Check the trajectory on the map.":
+    "On quitte ce monde pour de bon. Vérifiez la trajectoire sur la carte.",
+  "Plan the next step on the map (M) or with the planner (0). I'll be here.":
+    "Préparez l'étape suivante sur la carte (M) ou avec le planificateur (0). Je serai là.",
+  "Nice landing. I'd give it a ten, if I had a scale.": "Bel atterrissage. Je mettrais dix, si j'avais un barème.",
+  "Smooth. I didn't even need to brace.": "En douceur. Je n'ai même pas eu à me cramponner.",
+  "We're down. All of us. That counts for something.": "On est posés. Tous. Ça compte.",
+  "I've logged that landing under 'learning experiences'.": "J'ai classé cet atterrissage dans « expériences formatrices ».",
+  "Here we go. Keep your hands inside the spacecraft.": "C'est parti. Gardez les mains à l'intérieur du vaisseau.",
+  "A sphere in space. Nobody tell me it's a hole.": "Une sphère dans l'espace. Que personne ne me dise que c'est un trou.",
+  "Gargantua. Mind the clocks; ours are about to fall behind.": "Gargantua. Attention aux horloges ; les nôtres vont prendre du retard.",
+  "Big, isn't it. Don't stare too long.": "Gros, hein. Ne le fixez pas trop longtemps.",
+  "Miller's planet. Every minute here costs. Let's not dawdle.": "La planète de Miller. Chaque minute ici coûte. Ne traînons pas.",
+  "Water world. Nobody look at the horizon too long.": "Un monde d'eau. Que personne ne regarde l'horizon trop longtemps.",
+  "Fuel's getting low. I'd plan the next burn carefully.": "Le carburant baisse. Je préparerais la prochaine poussée avec soin.",
+  "We're running low on propellant. Just so it's said.": "On est à court d'ergols. Que ce soit dit.",
+  "Wheels up. Here we go again.": "Train rentré. C'est reparti.",
+  "Lift-off. I love this part.": "Décollage. J'adore ce moment.",
+  "Hard dock. Nicely done.": "Amarrage confirmé. Bien joué.",
+  "Docked. That one was textbook.": "Amarrés. Du travail de manuel.",
+  "Ask TARS": "Demander à TARS",
+  "Ask TARS — where are we, the fuel, what now… (Enter)": "Demander à TARS — où on est, le carburant, et maintenant… (Entrée)",
+  "Fuel at {0} percent: delta-v for {1} percent of the speed of light.":
+    "Carburant à {0} pour cent : du delta-v pour {1} pour cent de la vitesse de la lumière.",
+  "{0} percent of the speed of light relative to {1}.": "{0} pour cent de la vitesse de la lumière par rapport à {1}.",
 } as Record<string, string>;

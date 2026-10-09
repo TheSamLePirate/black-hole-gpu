@@ -38,6 +38,7 @@ export type KeyAction =
   | "flaps"
   | "airBrake"
   | "gear"
+  | "tars"
   | "pathInView"
   | "hudDensity"
   | "missions"
@@ -273,6 +274,11 @@ export const KEYMAP: KeySection[] = [
         keys: "F3",
         text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)",
         bind: [fly("F3", "spectator")],
+      },
+      {
+        keys: "F6",
+        text: 'TARS: ask him — where we are, the fuel, the speed, the target, what to do; his honesty and humour ("honesty 70")',
+        bind: [fly("F6", "tars")],
       },
       {
         keys: "F4",

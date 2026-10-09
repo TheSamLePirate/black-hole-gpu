@@ -14,6 +14,7 @@ const KEYCODES: Record<string, number> = {
   ArrowUp: 38,
   F2: 113,
   F5: 116,
+  F6: 117,
   F7: 118,
   F9: 120,
   Backspace: 8,
@@ -159,6 +160,12 @@ export class App {
     const ev = { code, key: k, windowsVirtualKeyCode: vk(code), nativeVirtualKeyCode: vk(code), modifiers: o.shift ? 8 : 0 };
     await this.cdp.send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", ...ev, text });
     await this.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });
+    await Bun.sleep(60);
+  }
+
+  /** Text typed into the focused field (as an input method gives it: no key events for the flight). */
+  async type(text: string) {
+    await this.cdp.send("Input.insertText", { text });
     await Bun.sleep(60);
   }
 

@@ -94,6 +94,8 @@ import { Callouts } from "./game/callouts";
 import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
 import { ScoreDirector } from "./audio/score";
+import { Tars, type TarsMoment, type TarsState } from "./game/tars";
+import { TarsPanel } from "./ui/tars-panel";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
@@ -516,6 +518,38 @@ async function main() {
   // the score (PLAN-TARS T4): silence, but at the flight's great moments
   const score = new ScoreDirector();
   const music = new Music(() => sound.musicOut());
+  // TARS (PLAN-TARS T5b): asked by F6, answering from the flight's state; his remarks unasked
+  const tars = new Tars(Math.floor(Math.random() * 2 ** 31));
+  let tarsView: TarsState | null = null;
+  let tarsMoment: string | null = null;
+  let tarsFuelLow = false;
+  let tarsDocked = false;
+  const tarsPersonality = () => ({ honesty: settings.tarsHonesty, humour: settings.tarsHumour });
+  const tarsPanel = new TarsPanel((q) => {
+    const st: TarsState = tarsView ?? {
+      body: null,
+      altKm: null,
+      status: null,
+      landed: false,
+      docked: false,
+      speed: null,
+      fuel: null,
+      dv: null,
+      target: null,
+      next: null,
+      stage: null,
+      auto: camera.pilot.auto,
+      dtau: null,
+    };
+    const r = tars.answer(q, st, tarsPersonality());
+    if (r.set) {
+      if (r.set.honesty !== undefined) settings.tarsHonesty = r.set.honesty;
+      if (r.set.humour !== undefined) settings.tarsHumour = r.set.humour;
+      onSettingsChange(["tarsHonesty", "tarsHumour"]);
+      refreshGui();
+    }
+    voice.say({ text: r.text, speaker: "tars", priority: 2 });
+  });
   const voice = new Speech({
     lang: () => lang,
     volume: () => settings.soundVoice * settings.soundVolume,
@@ -1550,6 +1584,11 @@ async function main() {
   camera.onFlightReport = (r) => {
     flightHud.showReport(r);
     lastGrade = r?.letter ?? null;
+    // (TARS's word on the landing, sometimes)
+    if (r && settings.tarsRemarks && (r.letter === "A" || r.letter === "F")) {
+      const w = tars.remark(r.letter === "A" ? "landed-A" : "landed-F", performance.now(), tarsPersonality());
+      if (w) voice.say({ text: w, speaker: "tars", priority: 3, ttl: 20_000 });
+    }
     if (!r) return;
     gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
   };
@@ -1789,6 +1828,7 @@ async function main() {
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
     },
     gear: () => setGear(!camera.gearDown),
+    tars: () => tarsPanel.toggle(),
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
     missions: () => openMissions(),
@@ -2758,21 +2798,47 @@ async function main() {
         for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
         // (the score: the moment's piece — none: silence)
         const ph2 = phaseWatch.current;
-        music.update(
-          settings.sound && settings.music
-            ? score.moment({
-                now: wall / 1000,
-                mode: ph2?.mode ?? null,
-                stage: ph2?.stage ?? null,
-                side: status.side,
-                plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
-                final: !!camera.entryRun?.app?.final,
-                agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
-                r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
-                body: status.soi ?? null,
-              })
-            : null,
-        );
+        const moment = score.moment({
+          now: wall / 1000,
+          mode: ph2?.mode ?? null,
+          stage: ph2?.stage ?? null,
+          side: status.side,
+          plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+          final: !!camera.entryRun?.app?.final,
+          agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
+          r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
+          body: status.soi ?? null,
+        });
+        music.update(settings.sound && settings.music ? moment : null);
+        // (TARS — PLAN-TARS T5b —: what he knows of the flight, for when he is asked; his remarks unasked)
+        const fuel = info.engine.fuel;
+        tarsView = {
+          body: status.soiName ?? null,
+          altKm: Number.isFinite(status.altKm) ? status.altKm : null,
+          status: status.label ?? null,
+          landed: !!camera.ourLanded,
+          docked: !!info.links.length,
+          speed: Number.isFinite(status.speed) ? status.speed : null,
+          fuel: fuel ? fuel.fraction : null,
+          dv: fuel ? fuel.dvLeft * C_MPS : null,
+          target: status.target ? { name: status.target.name, distKm: status.target.distKm } : null,
+          next: status.next ? { kind: status.next.kind, name: status.next.name, inS: status.next.inS } : null,
+          stage: ph2?.stage ?? null,
+          auto: camera.pilot.auto,
+          dtau: status.side === "gargantua" ? ((info as { dtau?: number }).dtau ?? null) : null,
+        };
+        const said = (m: TarsMoment | null) => {
+          const r = m && settings.tarsRemarks ? tars.remark(m, wall, tarsPersonality()) : null;
+          if (r) voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 });
+        };
+        if (moment !== tarsMoment) {
+          said(moment === "liftoff" || moment === "wormhole" || moment === "gargantua" || moment === "miller" ? moment : null);
+          tarsMoment = moment;
+        }
+        if (fuel && fuel.fraction < 0.15 && !tarsFuelLow) said("fuel-low");
+        tarsFuelLow = !!fuel && fuel.fraction < 0.15;
+        if (info.links.length && !tarsDocked) said("docked");
+        tarsDocked = !!info.links.length;
         // (the blackout: the static on the radio while it lasts)
         if (capcom.blackout !== staticOn && settings.sound) sound.radioNoise((staticOn = capcom.blackout) ? 1 : 0);
       }

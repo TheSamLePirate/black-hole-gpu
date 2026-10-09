@@ -429,6 +429,9 @@ export interface Settings {
   subtitles: boolean; // the line being said shown, its speaker named
   music: boolean; // the score at the flight's great moments (PLAN-TARS T4); silence otherwise
   soundMusic: number; // its volume, 0…1
+  tarsRemarks: boolean; // TARS speaks unasked at the flight's moments (PLAN-TARS T5b)
+  tarsHonesty: number; // his honesty, 0…100 %
+  tarsHumour: number; // his humour, 0…100 %
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
 }
@@ -668,6 +671,9 @@ export function defaultSettings(): Settings {
     subtitles: true,
     music: true,
     soundMusic: 0.6,
+    tarsRemarks: true,
+    tarsHonesty: 90,
+    tarsHumour: 75,
     haptics: 0.6,
     dynamicResolution: false,
   };
@@ -1871,6 +1877,9 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   subtitles: "pref",
   music: "pref",
   soundMusic: "pref",
+  tarsRemarks: "pref",
+  tarsHonesty: "pref",
+  tarsHumour: "pref",
   haptics: "pref",
   dynamicResolution: "pref",
 };

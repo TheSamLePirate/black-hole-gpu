@@ -254,6 +254,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   flaps: { fr: "Volets", en: "Flaps" },
   airBrake: { fr: "Aérofreins", en: "Air brake" },
   gear: { fr: "Train d'atterrissage", en: "Landing gear" },
+  tars: { fr: "Parler à TARS", en: "Talk to TARS" },
   pathInView: { fr: "Trajectoire dans la vue", en: "Path in the view" },
   hudDensity: { fr: "Densité du HUD", en: "HUD density" },
   missions: { fr: "Ordinateur de vol (missions)", en: "Flight computer (missions)" },
