@@ -1730,7 +1730,7 @@ function entryStep(
  * turning, less the camera's motion. The image draws them (display.wgsl: the streaks, the canopy's drops).
  * Null: none.
  */
-function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolean } | null {
+function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolean; gust: number } | null {
   const s = this.s;
   if (s.weather === "fair") return null;
   const cam = cameraFrame(s);
@@ -1758,7 +1758,9 @@ function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolea
   const fall = (dust ? 0.3 : 6 + 2 * w.rain) / C_MPS;
   const drop = lin(lin(groundVelocity(nav.ref, nav.X, nav.t), 1, wind, 1), 1, up, -fall);
   const rel = sub3(drop, nav.V);
-  return { rain: (dust ? w.dust * 0.7 : w.rain) * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3, dust };
+  // (the gusts, 0…1: how much the rain's curtains swing)
+  const gust = Math.min(Math.max(w.wind.gust / 12, w.wind.turb / 3), 1);
+  return { rain: (dust ? w.dust * 0.7 : w.rain) * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3, dust, gust };
 }
 
 /** A runway as it is landed now: into the weather's wind there (sites.ts landingEnd — fair weather: the

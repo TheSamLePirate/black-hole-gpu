@@ -14,6 +14,8 @@ struct Display {
   rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (1: the
                 // canopy's drops) + 2 for Mars's dust (W6: grains, not drops), the vertical field's half tangent
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
+  rainX: vec4f, // the rain's more (PLAN-PLUIE): the flown craft's distance from the camera [m] (0: none — the
+                // drops beyond it hidden by it), the gusts (0…1: the curtains), the camera's lens wet (0/1), unused
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -176,29 +178,47 @@ fn rainLight(uv: vec2f) -> vec3f {
   return 0.25 * (textureSampleLevel(hdr, samp, uv + vec2f(o, 0.0), 0.0).rgb + textureSampleLevel(hdr, samp, uv - vec2f(o, 0.0), 0.0).rgb
     + textureSampleLevel(hdr, samp, uv + vec2f(0.0, o), 0.0).rgb + textureSampleLevel(hdr, samp, uv - vec2f(0.0, o), 0.0).rgb);
 }
+// A value noise (bilinear, smoothed) — the curtains' and the veil's
+fn rvn(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(rh21(i), rh21(i + vec2f(1.0, 0.0)), u.x), mix(rh21(i + vec2f(0.0, 1.0)), rh21(i + vec2f(1.0, 1.0)), u.x), u.y);
+}
 // one streak layer in coordinates (a across, b along the drops' motion, both in cells — b already moved by
-// the clock): a drop in some cells, its streak L cells long behind it, w cells wide; how much of the pixel
-// it covers (fwa: the pixel across, in cells)
-fn rainCells(a: f32, b0: f32, L: f32, w: f32, fwa: f32, dens: f32, seed: f32) -> f32 {
+// the clock): a drop in some cells — each its own size, sheen and fall (the big ones fall faster, their
+// streaks longer) —, its streak L cells long behind it, w cells wide, tapered, brightest at its head;
+// x: how much of the pixel it covers (fwa: the pixel across, in cells), y: that cover by its sheen
+fn rainCells(a: f32, b0: f32, L: f32, w: f32, fwa: f32, dens: f32, seed: f32) -> vec2f {
   // (each column of cells shifted along by its own amount: no rows of drops lined up — rings, radially)
   let b = b0 + rh21(vec2f(floor(a), seed + 0.37));
   let id = vec2f(floor(a), floor(b));
   let h = rh22(id + seed);
-  if (h.x > dens) { return 0.0; }
+  if (h.x > dens) { return vec2f(0.0); }
+  let g = rh22(id + seed + 5.3);
+  let size = 0.6 + 1.0 * g.x;
+  let sheen = 0.55 + 0.8 * g.y;
+  let Ld = min(L * (0.8 + 0.25 * size), 0.9);
   let fa = fract(a);
   let fb = fract(b);
   let ra = 0.15 + 0.7 * h.y;
   // (its head within the cell, the streak behind it inside the cell too)
-  let rb = min(L, 0.9) + (1.0 - min(L, 0.9)) * rh21(id + seed + 7.1);
-  let across = 1.0 - smoothstep(0.0, 0.5 * w + fwa, abs(fa - ra));
-  let along = smoothstep(rb - min(L, 0.9), rb - 0.7 * min(L, 0.9), fb) * (1.0 - smoothstep(rb - 0.02, rb, fb));
+  let rb = Ld + (1.0 - Ld) * rh21(id + seed + 7.1);
+  let wd = w * size;
+  let across = 1.0 - smoothstep(0.0, 0.5 * wd + fwa, abs(fa - ra));
+  let u = clamp((fb - (rb - Ld)) / max(Ld, 1e-4), 0.0, 1.0);
+  let along = smoothstep(rb - Ld, rb - 0.75 * Ld, fb) * (1.0 - smoothstep(rb - 0.015, rb, fb)) * (0.45 + 0.55 * u);
   // (thinner than the pixel: its share of it)
-  return across * along * min(1.0, w / max(fwa, 1e-4));
+  let c = across * along * min(1.0, wd / max(fwa, 1e-4));
+  return vec2f(c, c * sheen);
 }
-// The falling drops as the camera sees them in its exposure (1/60 s): five layers, 1.2 to 20 m away. Still
+// The falling drops as the camera sees them in its exposure (1/60 s): seven layers, 0.9 to 13 m away. Still
 // or slow, streaks parallel — the fall and the wind; moving fast, they rush out of the point the drops come
-// from (the focus of expansion), log-polar about it. The drops lit by the scene round them.
-fn rainStreaks(uv: vec2f) -> f32 {
+// from (the focus of expansion), log-polar about it. The near ones out of focus — wide and faint —, the far
+// ones paler (the air between). Their density in curtains the wind drives (stronger in gusts and a storm),
+// behind them a veil of the rain further off. Those beyond the flown craft hidden by it (shipA: its cover
+// at the pixel). x: their cover, y: their sheen (cover-weighted)
+fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
   let tanH = D.rain.w;
   let asp = D.img.x / D.img.y;
   let n = vec2f((uv.x - 0.5) * 2.0 * tanH * asp, (0.5 - uv.y) * 2.0 * tanH);
@@ -206,6 +226,7 @@ fn rainStreaks(uv: vec2f) -> f32 {
   let t = D.rain.y;
   let T = 1.0 / 60.0;
   let k = clamp(D.rain.x, 0.0, 1.3);
+  let dust = D.rain.z > 1.5;
   // (the focus of expansion: where the drops come from, when they come at the camera)
   let fz = max(-v.z, 1e-3);
   let foe = -v.xy / fz;
@@ -218,36 +239,61 @@ fn rainStreaks(uv: vec2f) -> f32 {
   let th = atan2(dq.y, dq.x);
   // (a screen pixel in the view's tangent — the image placed in the output: its scale)
   let pxT = 2.0 * tanH / max(D.size.y * D.view.y, 1.0);
+  // (the curtains: how much the density swings, the gusts and a storm's rain driving it)
+  let curt = select(0.35 + 0.45 * D.rainX.y + 0.3 * max(k - 1.0, 0.0) / 0.3, 0.2, dust);
   var cover = 0.0;
-  for (var i = 0u; i < 5u; i++) {
-    let z = 1.2 * pow(2.0, f32(i));
+  var sheen = 0.0;
+  for (var i = 0u; i < 7u; i++) {
+    let z = 0.9 * pow(1.55, f32(i));
     let seed = f32(i) * 17.31;
-    // (a drop 1.5 mm across — the near ones out of focus: a blur ~3 mm more —, its spacing 0.12 m in a
-    // steady rain; the far layers paler: the air between; dust: grains, a third as wide)
-    let wM = (0.0015 + 0.004 * exp(-0.25 * z)) / z * select(1.0, 0.35, D.rain.z > 1.5);
-    let fade = 1.0 - 0.13 * f32(i);
-    var c = 0.0;
+    // (a drop ~1.5 mm across — the near ones out of focus: a blur ~4 mm more —, its spacing 0.1 m in a
+    // steady rain; dust: grains, a third as wide)
+    let wM = (0.0015 + 0.004 * exp(-0.6 * z)) / z * select(1.0, 0.35, dust);
+    // (out of focus, near: as much light spread wider — fainter)
+    let blur = 1.0 / (1.0 + 2.2 * exp(-0.9 * z));
+    let fade = (1.0 - 0.09 * f32(i)) * blur;
+    // (behind the flown craft: hidden by it)
+    let hid = select(1.0, 1.0 - shipA, D.rainX.x > 0.0 && z > D.rainX.x);
+    // (the curtains at this depth: the density over the ground, metres across, carried by the wind)
+    let xm = dot(n, perp) * z + t * 0.35 * mxy;
+    let dens0 = select(0.55, 0.35, radial > 0.5) * mix(1.0, 0.35 + 1.3 * rvn(vec2f(xm * 0.18, t * 0.25 + f32(i))), curt);
+    var c = vec2f(0.0);
     if (radial < 0.999) {
-      let cellA = 0.12 / (z * sqrt(max(k, 0.05)));
+      let cellA = 0.1 / (z * sqrt(max(k, 0.05)));
       let speed = mxy / z;
       let L = speed * T;
       let cellB = max(3.0 * cellA, 1.6 * L);
       let a = dot(n, perp) / cellA;
       let b = dot(n, dirP) / cellB - t * speed / cellB;
-      c += (1.0 - radial) * rainCells(a, b, L / cellB, wM / cellA, pxT / cellA, 0.55, seed);
+      c += (1.0 - radial) * rainCells(a, b, L / cellB, wM / cellA, pxT / cellA, dens0, seed);
     }
     if (radial > 0.001) {
       let rate = fz / z;
-      let N = floor(700.0 / sqrt(z) * sqrt(max(k, 0.05)));
+      let N = floor(220.0 / sqrt(z) * sqrt(max(k, 0.05)));
       let a = th * N / 6.2831853;
       let cellR = 0.12;
       let b = (log(r) - t * rate) / cellR;
       let L = rate * T / cellR;
-      c += radial * rainCells(a, b, L, wM / r * N / 6.2831853, pxT / r * N / 6.2831853, 0.35, seed + 3.3);
+      c += radial * rainCells(a, b, L, wM / r * N / 6.2831853, pxT / r * N / 6.2831853, dens0 * 0.25, seed + 3.3) * (1.0 - 0.1 * f32(i));
     }
-    cover += c * fade;
+    cover += c.x * fade * hid;
+    sheen += c.y * fade * hid;
   }
-  return clamp(cover * 0.9 * min(k, 1.0), 0.0, 0.7);
+  // (the rain further off: a veil of fine streaks falling, in its own curtains — no grains for dust)
+  var veil = 0.0;
+  if (!dust) {
+    let vx = dot(n, perp) / tanH;
+    let vy = dot(n, dirP) / tanH;
+    let fall = t * (0.6 + 0.03 * mxy);
+    let s1 = rvn(vec2f(vx * 180.0, vy * 3.0 - fall * 6.0));
+    let s2 = rvn(vec2f(vx * 97.0 + 13.0, vy * 2.0 - fall * 4.0));
+    let sheet = 0.35 + 0.65 * rvn(vec2f(vx * 2.5 + t * 0.05 * (1.0 + mxy), t * 0.07));
+    veil = smoothstep(0.6, 1.0, max(s1, s2)) * sheet * (1.0 - radial) * 0.22;
+  }
+  let kk = min(k, 1.0) * (0.85 + 0.25 * max(k - 1.0, 0.0) / 0.3);
+  // (rushing at the camera, the streaks long and many: fainter — as a camera sees them, not a tunnel)
+  let cv = clamp((cover * 0.95 * kk + veil * kk) * (1.0 - 0.45 * radial), 0.0, mix(0.75, 0.4, radial));
+  return vec2f(cv, sheen / max(cover, 1e-4));
 }
 // The canopy's drops (in the cabin, k: the glass's share of the pixel): beads on the glass, each a small
 // lens — the scene through it upside down, its rim dark —; slow, they creep down; past ~25 m/s the air
@@ -497,12 +543,21 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       let q = uv * D.img.xy - D.ship.xy;
       if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
     }
-    // (a drop sends on the sky's light above it as much as the scene's round it: brighter than a dark ground)
+    // (a drop sends on the sky's light above it as much as the scene's round it: brighter than a dark ground;
+    // near a light — a runway's, the landing lights' — it shines with it: the bloom's glow there)
     let lit = max(rainLight(uv), textureSampleLevel(hdr, samp, vec2f(uv.x, max(uv.y - 0.3, 0.02)), 0.0).rgb);
+    let glow = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
     // (dust: the grains the storm's own ochre, dimmer than drops — they scatter, they do not shine)
     let dust = D.rain.z > 1.5;
-    let col = select(lit * 1.5, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
-    c = mix(c, col, rainStreaks(uv) * glass * select(1.0, 0.5, inCab));
+    // (the flown craft over the image here: the drops beyond it hidden)
+    var shipA = 0.0;
+    if (D.rainX.x > 0.0 && D.lod.y > 0.5) {
+      let q = uv * D.img.xy - D.ship.xy;
+      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { shipA = clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+    }
+    let rs = rainStreaks(uv, shipA);
+    let col = select((lit * 1.25 + glow * 3.0) * rs.y, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
+    c = mix(c, col, rs.x * glass * select(1.0, 0.5, inCab));
     if (inCab && glass > 0.0) { c = canopyDrops(uv, c, glass); }
   }
   if (D.flags.x < 0.5) {

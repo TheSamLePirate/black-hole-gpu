@@ -855,7 +855,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -2360,13 +2360,19 @@ export class Renderer {
         Math.tan((s.fov * Math.PI) / 360),
         ...v,
         Math.hypot(...v),
+        // (rainX: the flown craft's distance from the camera [m] — outside it, the drops beyond it hidden —,
+        // the gusts, the lens wet)
+        r && !inside && s.ship && this.shipPose ? Math.hypot(...shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t) : 0,
+        r?.gust ?? 0,
+        0,
+        0,
       ]),
     );
   }
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
-  rain: { rain: number; v: [number, number, number]; dust?: boolean } | null = null;
+  rain: { rain: number; v: [number, number, number]; dust?: boolean; gust?: number } | null = null;
   /** the rain's clock [s] (main.ts): the frames' time while the time runs — paused, held: the drops stand
    *  still in the air and on the glass */
   rainClock = 0;
