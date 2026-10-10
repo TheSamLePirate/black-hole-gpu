@@ -3119,7 +3119,11 @@ async function main() {
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
     renderer.shipFocus = camera.spectating ? shipFocus() : null;
-    renderer.rain = camera.rainView();
+    // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
+    // has its own, or none)
+    const viewer = camera.viewController();
+    viewer.weatherReal = camera.weatherReal;
+    renderer.rain = viewer.rainView();
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>

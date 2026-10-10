@@ -123,7 +123,7 @@ const RUNWAY_VEC4S = 18;
 /** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
 const SEA_VEC4S = 15;
 /** the weather near the camera, last (trace.wgsl: Params.wx) */
-const WX_VEC4S = 5;
+const WX_VEC4S = 6;
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
 const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + WX_VEC4S;
@@ -2521,6 +2521,8 @@ export class Renderer {
       }
     }
     out.set([ground, ...this.wxDrift], 16);
+    // (the rain — PLAN-PLUIE P4 —: the ground's wetness, the rain now, its clock — the drops' rings)
+    if (w.rain > 0) out.set([Math.min(1, w.rain * 1.6), w.rain, this.rainClock % 3600, 0], 20);
     // (the kernel with the weather's code: fair weather — every scene but these — without it, +20 % before)
     if (g.params[0]! > 0) this.featureKey |= 1024;
     return out;

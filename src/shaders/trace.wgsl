@@ -121,8 +121,9 @@ struct Params {
   // extinction at the ground beyond the air's own [1/m], the fog's [1/m], its top [m above the sea];
   // [1…3] its cloud layers, the lowest first: base, top [m above the sea], cover (0: none), optical
   // thickness; [4] the ground's height there [m], the clouds' drift with the wind [m, the Earth's axes,
-  // modulo the noise's period]
-  wx: array<vec4f, 5>,
+  // modulo the noise's period]; [5] the rain (PLAN-PLUIE P4): the ground's wetness (0…1), the rain now (0…1.3),
+  // its clock [s] (held while the time is), unused
+  wx: array<vec4f, 6>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -5381,6 +5382,10 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   // (a runway: its pavement and markings over the ground, flat; its lights added below)
   var rwyLamps = vec3f(0.0);
+  // (the paving's cover here and its coordinates on its runway [m, along and across]: the rain's puddles
+  // and ripples on it — PLAN-PLUIE P4)
+  var rwyPaved = 0.0;
+  var rwyAt = vec2f(0.0);
   if (HAS_RWY && RWY_HIT.w > 0.5) {
     for (var k = 0u; k < rwyCount(); k++) {
       let rel = P.runways[4u + 4u * k].xyz + RWY_HIT.xyz;
@@ -5411,7 +5416,48 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;
+      if (rl.cover > rwyPaved) {
+        rwyPaved = rl.cover;
+        rwyAt = vec2f(ra, rc);
+      }
     }
+  }
+  // (the rain — PLAN-PLUIE P4 —: the ground wet, darker — the soil's pores and the asphalt's filled with water
+  // —, and a sheen of the sky, strong at a grazing view; on the paving, water lying in its hollows and the
+  // drops' rings spreading on it, near)
+  var wetS = 0.0;
+  var ripple = 0.0;
+  if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0) {
+    let wet = P.wx[5].x * WX_W * (1.0 - ocean);
+    var pud = 0.0;
+    if (HAS_RWY && rwyPaved > 0.0) {
+      // (the puddles: the paving's hollows, a few metres long, more of them the harder it rains)
+      let pn = vnoise(vec3f(rwyAt.x * 0.08, rwyAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(rwyAt.x * 0.31, rwyAt.y * 0.55, 7.0)) * 0.28
+        + vnoise(vec3f(rwyAt.x * 1.3, rwyAt.y * 1.7, 11.0)) * 0.12;
+      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * rwyPaved * wet;
+      // (the rings: a drop's impact every ~0.3 m about every second, each ring spreading at ~0.35 m/s and
+      // fading; seen only near, the pixel under a few centimetres)
+      let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
+      if (near > 0.0) {
+        let cp = rwyAt / 0.3;
+        for (var dj = 0; dj < 2; dj++) {
+          for (var di = 0; di < 2; di++) {
+            let id = floor(cp) + vec2f(f32(di), f32(dj)) - vec2f(0.5);
+            let hh = vec2f(hash31(vec3f(id, 11.0)), hash31(vec3f(id, 23.0)));
+            let age = fract(P.wx[5].z * (0.9 + 0.5 * hh.x) + hh.y);
+            let ctr = (id + 0.5 + 0.5 * (vec2f(hash31(vec3f(id, 5.0)), hash31(vec3f(id, 7.0))) - 0.5)) * 0.3;
+            let d = length(rwyAt - ctr);
+            let rr = age * 0.11;
+            ripple += exp(-pow((d - rr) / 0.006, 2.0)) * (1.0 - age) * (1.0 - age);
+          }
+        }
+        ripple *= near * (0.35 + 0.65 * pud / max(wet, 1e-3));
+      }
+    }
+    A *= mix(vec3f(1.0), vec3f(mix(0.58, 0.7, rwyPaved)), wet);
+    A *= 1.0 - 0.35 * pud;
+    // (the sheen: rough wet ground a little of the sky's, wet asphalt more, a puddle a mirror)
+    wetS = wet * mix(0.08, 0.3, rwyPaved) + pud * 0.4;
   }
   let V = -rd;
   let physicalLs = airPhysicalDirection(Ls);
@@ -5478,6 +5524,15 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var col = A / PI * (Eg * max(dot(physicalNormal, physicalLs), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
+  // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead
+  // silvery —, the rings breaking it)
+  if (wetS > 0.0) {
+    let cv = clamp(dot(physicalNormal, airPhysicalDirection(V)), 0.0, 1.0);
+    let F = (0.02 + 0.98 * pow(1.0 - cv, 5.0)) * wetS;
+    col = col * (1.0 - F) + F * sky * 1.1 / PI * (1.0 + 2.5 * ripple);
+    // (a ring catches the sky's light whatever the view: its crest a bright line)
+    col += ripple * 0.35 * sky / PI;
+  }
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
     col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM), ocean);
