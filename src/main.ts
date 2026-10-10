@@ -1218,9 +1218,10 @@ async function main() {
   });
   /** what speaks a line, of the game's own (null: the system's): Deepgram when chosen and within reach, the robot (English) */
   function ownVoice(l: import("./audio/voice").VoiceLine): Promise<void> | null {
-    if (!settings.voice || /[?&]e2e=/.test(location.search)) return null;
+    if (!settings.voice) return null;
     const inside = settings.shipMount === "cockpit" || settings.shipMount === "cabin";
-    const reach = earState().by !== "browser";
+    // (an e2e page never reaches Deepgram — no network, no key —: its robot voice speaks, as a player's offline)
+    const reach = earState().by !== "browser" && !/[?&]e2e=/.test(location.search);
     if (l.speaker === "tars") {
       const e = settings.tarsVoiceEngine;
       if (e === "deepgram" || (e === "auto" && reach))
