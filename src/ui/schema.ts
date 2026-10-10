@@ -3026,7 +3026,7 @@ export const SCHEMA: ControlDef[] = [
     label: "TARS's reflexes and rules",
     effect: "none",
     enabled: (s) => s.tarsOnline,
-    help: "TARS wakes by himself — at the key moments (an autopilot's end, the entry's phases, a warning, a deviation, a report) and on the rules you ask him for (\"every 10 minutes check the fuel\", \"at each burn, call it out\"). Listed in his console (F6), each to switch off. Off: he speaks only when asked.",
+    help: 'TARS wakes by himself — at the key moments (an autopilot\'s end, the entry\'s phases, a warning, a deviation, a report) and on the rules you ask him for ("every 10 minutes check the fuel", "at each burn, call it out"). Listed in his console (F6), each to switch off. Off: he speaks only when asked.',
     keywords: "tars reflexes triggers cron schedule wake events agent",
   },
   {

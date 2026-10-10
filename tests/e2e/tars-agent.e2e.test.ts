@@ -331,7 +331,9 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     await app.type("Analyse le carburant et Mars en parallèle.");
     await app.press("Enter");
     await app.waitFor(`__bh.tars.agent.lastText === "Analyses faites."`, 15_000);
-    const subs = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-sub]")].map((s) => s.className + " " + s.textContent)`);
+    const subs = await app.js<string[]>(
+      `[...document.querySelectorAll("[data-testid=tars-sub]")].map((s) => s.className + " " + s.textContent)`,
+    );
     expect(subs.length).toBe(2);
     expect(subs.every((s) => s.includes("done") && s.includes("Conclusion"))).toBe(true);
     // (the telemetry: the attitude, the controls)
