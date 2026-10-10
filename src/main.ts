@@ -3063,6 +3063,8 @@ async function main() {
     const dt = Math.min(0.1, (now - last) / 1000);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
     if (!frozen && !paused) advanceFrameClock(dt * 1000);
+    // (the rain's: only while the time runs — paused, the drops stand still)
+    if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
     loopIv.push(now - last);
     if (loopIv.length > 31) loopIv.shift();

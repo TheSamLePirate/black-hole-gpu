@@ -2354,7 +2354,7 @@ export class Renderer {
       144,
       new Float32Array([
         r ? Math.min(r.rain, 1.3) : 0,
-        (performance.now() / 1000) % 3600,
+        this.rainClock % 3600,
         // (z: in the cabin 1; Mars's dust, not rain, 2)
         (inside ? 1 : 0) + (r?.dust ? 2 : 0),
         Math.tan((s.fov * Math.PI) / 360),
@@ -2367,6 +2367,10 @@ export class Renderer {
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
   rain: { rain: number; v: [number, number, number]; dust?: boolean } | null = null;
+  /** the rain's clock [s] (main.ts): the frames' time while the time runs — paused, held: the drops stand
+   *  still in the air and on the glass */
+  rainClock = 0;
+  private rainDrawn = -1;
 
   /**
    * The Earth's runways within 150 km of the camera (at most 4, nearest first) for the tracer: each its
@@ -4288,8 +4292,10 @@ export class Renderer {
       }
     } else {
       phase = "converged";
-      // (the rain moving over a still image: drawn every frame)
-      if (this.lastPhase === "converged" && !displayChanged && !this.chartDirty && !this.rain) return this.stats(phase, t);
+      // (the rain moving over a still image: drawn every frame — held with the time, not)
+      const rainMoves = !!this.rain && this.rainClock !== this.rainDrawn;
+      this.rainDrawn = this.rainClock;
+      if (this.lastPhase === "converged" && !displayChanged && !this.chartDirty && !rainMoves) return this.stats(phase, t);
     }
 
     this.writeResolve(t, s);
