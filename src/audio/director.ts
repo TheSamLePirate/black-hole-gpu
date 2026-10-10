@@ -309,6 +309,8 @@ export class SoundDirector {
       /** the gear's last state (its legs' loads) and the wind at the ground [m/s] (S5) */
       gear?: GearOut | null;
       groundWind?: number;
+      /** the rain where the view is (PLAN-PLUIE P5; 0: none, or the time held) */
+      rain?: number;
     },
   ) {
     const s = this.s;
@@ -353,6 +355,7 @@ export class SoundDirector {
       plasma,
       aboard: flying,
       live: o.live,
+      rain: o.rain ?? 0,
     });
     if (!flying || !info) {
       sound.alarm("collision", false);

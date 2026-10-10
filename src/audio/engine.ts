@@ -98,6 +98,8 @@ export interface EngineState {
   aboard: boolean;
   /** the simulation runs (paused / warping far: thrusters quiet) */
   live: boolean;
+  /** the rain where the view is (PLAN-PLUIE P5: 0 none — or the time paused —, 1 heavy, 1.3 a storm's core) */
+  rain?: number;
 }
 
 /** Where the main engine is from the ear (audio/space.ts): its place in the listener's frame [m], its
@@ -304,6 +306,8 @@ export class SoundEngine {
           cutoff: this.engSpace!.air.frequency.value,
           cents: this.engSpace!.detune[0]?.value ?? 0,
           engine: this.gran ? "granular" : "noise",
+          // (the rain's voices — P5 —: their gains now)
+          rain: this.rainV ? Object.fromEntries(Object.entries(this.rainV).map(([k, g]) => [k, g.gain.value])) : null,
           cabin: this.cab
             ? {
                 hull: this.cab.eq1.gain.value,
@@ -459,6 +463,7 @@ export class SoundEngine {
     this.buildAmbience();
     this.buildGround();
     this.buildStation();
+    this.buildRain();
     if (this.last) this.update(this.last);
   }
 
@@ -702,6 +707,82 @@ export class SoundEngine {
       .connect(this.busses.listener);
     this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar, hiss };
   }
+
+  /** The rain (PLAN-PLUIE P5), synthesized: two patters — drops striking, sparse and dense —, each a few
+   *  seconds of impulses (a short burst of noise, some ringing like a drop on a hard skin), looped; and the
+   *  rain's hiss. Outside: the hiss wide, the patter of the drops on the ground soft; in the cabin: the
+   *  canopy drummed — denser and louder with the speed —, the hiss through the hull. */
+  private buildRain() {
+    const ctx = this.ctx!;
+    const patter = (rate: number, seconds: number) => {
+      const n = Math.floor(ctx.sampleRate * seconds);
+      const buf = ctx.createBuffer(2, n, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c);
+        const hits = Math.floor(rate * seconds);
+        for (let k = 0; k < hits; k++) {
+          const at = Math.floor(Math.random() * n);
+          const amp = (0.25 + 0.75 * Math.random() ** 2) * (Math.random() < 0.08 ? 2 : 1);
+          const tau = ctx.sampleRate * (0.0015 + 0.005 * Math.random());
+          // (some ring: a drop on a hard skin — a damped tone 1.2–4 kHz)
+          const ring = Math.random() < 0.35 ? (2 * Math.PI * (1200 + 2800 * Math.random())) / ctx.sampleRate : 0;
+          const len = Math.min(Math.floor(tau * 6), n - at);
+          let prev = 0;
+          for (let i = 0; i < len; i++) {
+            const env = Math.exp(-i / tau);
+            const w = Math.random() * 2 - 1;
+            // (the burst high-passed: a click, not a thud)
+            const hp = w - prev;
+            prev = w;
+            d[at + i] = d[at + i]! + amp * env * (ring ? 0.6 * Math.sin(ring * i) + 0.4 * hp : hp);
+          }
+        }
+        // (a seamless loop)
+        const f = Math.floor(ctx.sampleRate * 0.03);
+        for (let i = 0; i < f; i++) {
+          const k = i / f;
+          d[i] = d[i]! * k + d[n - f + i]! * (1 - k);
+        }
+      }
+      return buf;
+    };
+    const sparse = patter(70, 3.1);
+    const dense = patter(420, 2.7);
+    const out = this.busses.ambience;
+    const g = (v = 0) => new GainNode(ctx, { gain: v });
+    // outside: the hiss (the rain on everything round) and the drops on the ground
+    const hissOut = g();
+    this.loop(this.white, 0.83)
+      .connect(new BiquadFilterNode(ctx, { type: "highpass", frequency: 900, Q: 0.5 }))
+      .connect(new BiquadFilterNode(ctx, { type: "lowpass", frequency: 7500, Q: 0.4 }))
+      .connect(hissOut)
+      .connect(out);
+    const patOut = g();
+    this.loop(sparse, 1)
+      .connect(new BiquadFilterNode(ctx, { type: "lowpass", frequency: 5000, Q: 0.5 }))
+      .connect(patOut)
+      .connect(out);
+    const patOutDense = g();
+    this.loop(dense, 0.9)
+      .connect(new BiquadFilterNode(ctx, { type: "lowpass", frequency: 4200, Q: 0.5 }))
+      .connect(patOutDense)
+      .connect(out);
+    // in the cabin: the canopy drummed — its skin's resonance —, the hiss through the hull
+    const drum = g();
+    const drumDense = g();
+    const skin = new BiquadFilterNode(ctx, { type: "peaking", frequency: 1600, Q: 0.8, gain: 6 });
+    const skinLP = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 6000, Q: 0.4 });
+    skin.connect(skinLP).connect(out);
+    this.loop(sparse, 1.07).connect(drum).connect(skin);
+    this.loop(dense, 1.13).connect(drumDense).connect(skin);
+    const hissIn = g();
+    this.loop(this.white, 0.71)
+      .connect(new BiquadFilterNode(ctx, { type: "bandpass", frequency: 900, Q: 0.6 }))
+      .connect(hissIn)
+      .connect(out);
+    this.rainV = { hissOut, patOut, patOutDense, drum, drumDense, hissIn };
+  }
+  private rainV: Record<"hissOut" | "patOut" | "patOutDense" | "drum" | "drumDense" | "hissIn", GainNode> | null = null;
 
   /** The ground's voices (S5): at the wheels — the rolling's rumble, the tyres' hiss, the brakes' squeal —,
    *  and the wind over the ground (through the hull, as the flight's). */
@@ -1018,6 +1099,23 @@ export class SoundEngine {
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
     set(a.roar.gain, aboard * 2.2 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
     set(a.hiss.gain, aboard * 0.18 * clamp(s.plasma ?? 0) ** 2, 0.3);
+
+    // the rain (P5): outside, its hiss and the drops on the ground; in the cabin, the canopy drummed — the
+    // drops met faster in flight: denser and louder with the speed, a roar past ~100 m/s
+    const R = this.rainV;
+    if (R) {
+      const k = clamp(s.rain ?? 0, 0, 1.3);
+      const kk = clamp(k);
+      const cab = s.hearing === "cabin" || (s.hearing === undefined && s.inside);
+      const fast = clamp(s.airspeed / 90, 0, 1.5);
+      const dense = clamp(kk * 0.6 + 0.6 * fast * kk + (0.3 * Math.max(k - 1, 0)) / 0.3);
+      set(R.hissOut.gain, cab ? 0 : 0.11 * k, 0.4);
+      set(R.patOut.gain, cab ? 0 : 0.06 * kk * (1 - dense), 0.4);
+      set(R.patOutDense.gain, cab ? 0 : 0.07 * kk * dense, 0.4);
+      set(R.drum.gain, cab ? 0.22 * kk * (1 - dense) : 0, 0.3);
+      set(R.drumDense.gain, cab ? 0.2 * kk * dense * (1 + 0.6 * fast) : 0, 0.3);
+      set(R.hissIn.gain, cab ? 0.045 * k * (1 + fast) : 0, 0.4);
+    }
   }
 
   /** The structure creaking: a groan (a resonance gliding down) — or, as the hull heats, the ticks of the

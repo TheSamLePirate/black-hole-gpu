@@ -3577,12 +3577,21 @@ async function main() {
           thrust: renderer.shipThrust,
           gear: camera.gearLast,
           groundWind: camera.weatherNow?.wind.u10 ?? 0,
+          // (the rain heard where it falls — none held with the time)
+          rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
         }),
       );
     } else {
       flightComputer.show(false);
       tablet.setVisible(false);
-      audio.update(dt, { flying: false, live: false, info: null, status: null, fired: camera.pilot.fired });
+      audio.update(dt, {
+        flying: false,
+        live: false,
+        info: null,
+        status: null,
+        fired: camera.pilot.fired,
+        rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
+      });
     }
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
