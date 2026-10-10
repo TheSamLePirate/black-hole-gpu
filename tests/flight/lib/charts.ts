@@ -204,7 +204,7 @@ export function buildCharts(
     ["α", (S) => (inAir(S) ? S.air.alpha : null)],
     ["β", (S) => (inAir(S) ? S.air.beta : null), { dash: true }],
   );
-  ts("Bank", "°", ["flown", (S) => (inAir(S) ? S.att?.bank : null)], ["commanded (entry)", (S) => S.bankCmd, { dash: true }]);
+  ts("Bank (the body's, about its nose)", "°", ["body", (S) => (inAir(S) ? S.att?.bank : null)]);
   ts("Pitch", "°", ["pitch", (S) => S.att?.pitch]);
   ts("Mach", "", ["Mach", (S) => (inAir(S) ? S.air.mach : null)]);
   ts("Dynamic pressure", "kPa", ["q", (S) => (inAir(S) ? S.air.q : null)]);
@@ -322,11 +322,29 @@ export function buildCharts(
     if (series.length === 2) commanded.push({ title, unit, xLabel: ax.label, series, marks });
   };
   pair(
-    "Bank — commanded vs flown",
+    "Bank — commanded vs flown (about the velocity)",
     "°",
-    ["commanded (entry guidance)", (S) => S.bankCmd],
-    ["flown", (S) => (inAir(S) ? S.att?.bank : null)],
+    // (the command flown — the guidance's damped against the phugoid —; older records: the guidance's own)
+    ["commanded", (S) => S.bankFlownCmd ?? S.bankCmd],
+    // (flown about the velocity, the command's own angle; older records: the body's bank, another angle)
+    ["flown", (S) => (inAir(S) ? (S.bankVel ?? S.att?.bank) : null)],
   );
+  {
+    // (the guidance's own bank beside the one flown: the phugoid's damping, how much it moved it)
+    const g = ser(T, ax.x, (S) => S.bankCmd),
+      f = ser(T, ax.x, (S) => S.bankFlownCmd);
+    if (f.length > 1 && g.some((p, i) => Math.abs(p[1] - (f[i]?.[1] ?? p[1])) > 1))
+      commanded.push({
+        title: "Bank — the guidance's against the one flown (the phugoid's damping)",
+        unit: "°",
+        xLabel: ax.label,
+        series: [
+          { name: "flown (damped)", pts: f, slot: 2 },
+          { name: "guidance", pts: g, slot: 1, dash: true },
+        ],
+        marks,
+      });
+  }
   pair("Glide slope — aimed vs flown", "°", ["aimed (gRef)", (S) => S.entry?.app?.gRef], ["flown (γ)", (S) => S.entry?.app?.gam]);
   pair(
     "Approach line — axis vs flown",

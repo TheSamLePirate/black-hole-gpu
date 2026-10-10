@@ -1888,14 +1888,19 @@ function hubCompute(this: CameraController): HubInfo | null {
       const inAir = !!LA && LA.out.q > 1;
       if (inAir) rows.push([t("Flow"), `M ${LA.out.mach.toFixed(1)} · q ${(LA.out.q / 1e3).toFixed(1)} kPa`]);
       if (LA) rows.push([t("Height"), km(LA.h)]);
-      const bankNow = (this.attitudeNow() as { bank?: number }).bank ?? 0;
+      // (the bank as flown against the bank commanded — both about the velocity, the lift's roll: the
+      // command the one flown, the guidance's damped against the phugoid; the guidance's own, when the damping
+      // moves it, said beside — it once read "cmd 54° · now 25°", the 54 the guidance's undamped and the 25
+      // the body's bank about its nose at 40° of incidence, two other angles)
+      const att = this.attitudeNow() as { bank?: number; velBank?: number };
+      const bankNow = att.velBank ?? att.bank ?? 0;
+      const flown = R.bankFlown ?? R.bank;
+      const deg = (r: number) => `${Math.round(Math.abs(r * D))}°${side(-r)}`;
       rows.push([
         t("Bank"),
-        tf(
-          "cmd {0} · now {1}",
-          `${Math.round(Math.abs(R.bank * D))}°${side(-R.bank)}`,
-          `${Math.round(Math.abs(bankNow * D))}°${side(-bankNow)}`,
-        ),
+        Math.abs(flown - R.bank) * D >= 2
+          ? tf("cmd {0} (guidance {1}, damped) · now {2}", deg(flown), deg(R.bank), deg(bankNow))
+          : tf("cmd {0} · now {1}", deg(flown), deg(bankNow)),
       ]);
       const AF = this.airFlight;
       if (LA && inAir) {

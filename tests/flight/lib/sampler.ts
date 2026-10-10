@@ -66,6 +66,9 @@ export const LAB_PAGE = `(() => {
         ld: A.last?.out?.D > 0 ? r(A.last.out.L / A.last.out.D, 100) : null, h: r(A.last?.h), aspeed: r(A.last?.speed, 10) } : null,
       att: safe(() => { const a = c.attitudeNow(); return a.pitch === undefined ? null : { pitch: r((a.pitch * 180) / Math.PI, 100), bank: r((a.bank * 180) / Math.PI, 100), hdg: r((a.heading * 180) / Math.PI, 10) }; }),
       bankCmd: R && typeof R.bank === "number" ? r((R.bank * 180) / Math.PI, 100) : null,
+      // (the bank flown as commanded — the guidance's damped in the entry —, and as measured about the velocity)
+      bankFlownCmd: R && typeof (R.phase === "entry" ? (R.bankFlown ?? R.bank) : R.bank) === "number" ? r(((R.phase === "entry" ? (R.bankFlown ?? R.bank) : R.bank) * 180) / Math.PI, 100) : null,
+      bankVel: safe(() => { const v = c.attitudeNow().velBank; return typeof v === "number" ? r((v * 180) / Math.PI, 100) : null; }),
       landed: !!c.ourLanded, landedOn: c.ourLanded?.body ?? null, rolling: !!c.rolling,
       rollSite: c.rollSite?.name ?? null, steer: r(((c.noseSteer ?? 0) * 180) / Math.PI, 100),
       dock: c.dockAuto?.phase ?? null,

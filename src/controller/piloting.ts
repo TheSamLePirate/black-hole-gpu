@@ -1670,6 +1670,8 @@ function entryStep(
     }
     // (the guidance's bank, its phugoid damped as it predicts it — entry.ts EntryGuidance.flown)
     const bank = R.guid ? R.guid.flown(R.bank, fr.env, fr.s) : R.bank;
+    // (what is flown, kept: the guidance's bank damped — the hub's and the telemetry's commanded bank)
+    R.bankFlown = bank;
     const ax = attitudeFor(fr.s.x, this.airVelocity(va), craft.alpha, bank, fr.env.normal?.(fr.s.x));
     return { nose: fr.toLocal(ax[2]), up: fr.toLocal(ax[1]) };
   }

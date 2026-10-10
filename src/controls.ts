@@ -759,6 +759,8 @@ export class CameraController {
     done: number;
     guid: EntryGuidance | null;
     bank: number;
+    /** the bank flown in the entry phase: the guidance's, its phugoid damped (EntryGuidance.flown) */
+    bankFlown?: number;
     next: number;
     alpha: number;
     gPrev: number | null;

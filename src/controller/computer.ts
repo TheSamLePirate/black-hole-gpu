@@ -1310,16 +1310,30 @@ function pathAngle(this: CameraController, cam: ReturnType<typeof cameraFrame>):
 }
 
 /** The flown craft's attitude over the ground below: pitch, bank (right: +), heading [rad]. */
-function attitudeNow(this: CameraController): { pitch: number; bank: number; heading: number } | Record<string, never> {
+function attitudeNow(this: CameraController): { pitch: number; bank: number; heading: number; velBank?: number } | Record<string, never> {
   const cam = cameraFrame(this.s);
   const fr = this.sfFrame(cam);
   if (!fr) return {};
   const ax = this.shipAxesLocal(cam).map((a) => fr.fromLocal(a));
   const [X, Y, Z] = ax as [Vec3, Vec3, Vec3];
+  // (the bank about the velocity — the lift's roll from the vertical plane, what the entry's guidance commands
+  // (entry.ts attitudeFor) —: at 40° of incidence the body's own bank about its nose is another angle)
+  let velBank: number | undefined;
+  if (Math.hypot(...fr.vRel) > 1) {
+    const vh = unitV(fr.vRel);
+    const n0 = lin(fr.up, 1, vh, -dot3(fr.up, vh));
+    if (Math.hypot(...n0) > 1e-6) {
+      const n = unitV(n0),
+        right = cross(vh, n);
+      const l = lin(Y, 1, vh, -dot3(Y, vh));
+      velBank = Math.atan2(dot3(l, right), dot3(l, n));
+    }
+  }
   return {
     pitch: Math.asin(clamp(dot3(Z, fr.up), -1, 1)),
     bank: Math.atan2(dot3(X, fr.up), dot3(Y, fr.up)),
     heading: Math.atan2(dot3(Z, fr.east), dot3(Z, fr.north)),
+    velBank,
   };
 }
 

@@ -37,6 +37,7 @@ export default {
   Range: "Distance",
   Bank: "Inclinaison",
   "cmd {0} · now {1}": "consigne {0} · actuelle {1}",
+  "cmd {0} (guidance {1}, damped) · now {2}": "consigne {0} (guidage {1}, amortie) · actuelle {2}",
   Load: "Facteur de charge",
   Heat: "Flux thermique",
   "Heat · 30 s": "Flux · 30 s",

@@ -112,7 +112,11 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
       ? {
           phase: e.phase,
           site: e.site?.name,
-          commandedBankDeg: deg(e.bank),
+          // (the bank commanded: the one flown — the guidance's, damped against the phugoid in the entry —; the
+          // guidance's own; and the bank flown now about the velocity, the same angle)
+          commandedBankDeg: deg(e.phase === "entry" ? (e.bankFlown ?? e.bank) : e.bank),
+          guidanceBankDeg: deg(e.bank),
+          flownBankDeg: deg(c.attitudeNow?.()?.velBank),
           commandedAoaDeg: deg(e.alpha),
           rangeToSiteKm: n((i?.range ?? Number.NaN) / 1e3),
           headingErrorDeg: deg(i?.dpsi),
@@ -202,6 +206,7 @@ export const TARS_CHANNELS = {
   aoa: { label: { fr: "Incidence", en: "Angle of attack" }, unit: "°" },
   sideslip: { label: { fr: "Dérapage", en: "Sideslip" }, unit: "°" },
   cmdBank: { label: { fr: "Inclinaison commandée", en: "Commanded bank" }, unit: "°" },
+  velBank: { label: { fr: "Inclinaison sur la vitesse", en: "Bank about the velocity" }, unit: "°" },
   cmdAoa: { label: { fr: "Incidence commandée", en: "Commanded AoA" }, unit: "°" },
   across: { label: { fr: "Écart latéral piste", en: "Runway offset" }, unit: "m" },
   profile: { label: { fr: "Écart au profil", en: "Profile deviation" }, unit: "m" },
@@ -224,7 +229,8 @@ export class AttitudeSampler {
       heading: deg(air?.heading),
       aoa: deg(air?.alpha),
       sideslip: deg(air?.beta),
-      cmdBank: deg(e?.bank),
+      cmdBank: deg(e ? (e.phase === "entry" ? (e.bankFlown ?? e.bank) : e.bank) : undefined),
+      velBank: deg(c.attitudeNow?.()?.velBank),
       cmdAoa: deg(e?.alpha),
       across: r ? n(r.across, 0) : undefined,
       profile: r && e?.prof ? n(r.agl - e.prof.h, 0) : undefined,

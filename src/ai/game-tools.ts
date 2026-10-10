@@ -1487,7 +1487,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "show_chart",
       description:
-        "Show the pilot a chart beside the flight. Either channels, live — the flight recorder's (alt, speed, vz, g, q, mach, heat, throttle, dv, fuel) and your own (bank, pitch, heading, aoa, sideslip, cmdBank, cmdAoa: the entry's commanded bank and AoA, across: the runway offset, profile: the approach's height deviation); seconds: the window, default 600 — or series you computed (series: [{label, unit, points: [[x, y], …]}], xLabel). Up to 4 lanes.",
+        "Show the pilot a chart beside the flight. Either channels, live — the flight recorder's (alt, speed, vz, g, q, mach, heat, throttle, dv, fuel) and your own (bank, pitch, heading, aoa, sideslip, cmdBank, cmdAoa: the entry's commanded bank (as flown: the guidance's damped against the phugoid) and AoA, velBank: the bank flown about the velocity — the command's own angle (bank is the body's about its nose, another angle at high incidence) —, across: the runway offset, profile: the approach's height deviation); seconds: the window, default 600 — or series you computed (series: [{label, unit, points: [[x, y], …]}], xLabel). Up to 4 lanes.",
       params: {
         title: { type: "string" },
         channels: {

@@ -138,7 +138,7 @@ Les sources sont `camera.airInfo()`, `hubInfo()`, `entryRun`, `entryInfo()`, `ru
 peut manquer.
 
 `AttitudeSampler` échantillonne deux fois par seconde en vol (1 200 points) : `bank`, `pitch`,
-`heading`, `aoa`, `sideslip`, `cmdBank`, `cmdAoa`, `across`, `profile`. `show_chart` peut les tracer en
+`heading`, `aoa`, `sideslip`, `cmdBank` (la consigne volée : celle du guidage amortie contre la phugoïde), `velBank` (l'inclinaison volée autour de la vitesse, l'angle de la consigne — `bank` est celle du corps autour de son nez, un autre angle à forte incidence), `cmdAoa`, `across`, `profile`. `show_chart` peut les tracer en
 direct.
 
 ### Ce qu'il montre (`ui/tars/display.ts`)

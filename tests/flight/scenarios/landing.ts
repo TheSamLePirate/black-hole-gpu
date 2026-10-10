@@ -83,10 +83,12 @@ const STOPPED = "T.landed && !T.rolling";
 
 /**
  * Flown to a stop: fixed steps all the way, or fixed to the final (2.5 km up on it) and live from there —
- * the final, the touchdown and the rollout at the page's own pace.
+ * the final, the touchdown and the rollout at the page's own pace —, or live all the way ("all"): the page's
+ * own frame loop from the orbit, as a player flies it, the autopilot speeding up the long waits itself.
  */
-export async function fly(lab: Lab, o: { live?: boolean; maxSim: number; maxWall: number }): Promise<ChunkEnd> {
+export async function fly(lab: Lab, o: { live?: boolean | "all"; maxSim: number; maxWall: number }): Promise<ChunkEnd> {
   if (!o.live) return lab.fixed({ until: STOPPED, maxSim: o.maxSim, maxWall: o.maxWall });
+  if (o.live === "all") return lab.live({ until: STOPPED, maxWall: o.maxWall });
   const e = await lab.fixed({
     until: `(T.entry && T.entry.leg === "final" && T.entry.app && T.entry.app.agl < 2500) || T.landed`,
     maxSim: o.maxSim,
@@ -153,16 +155,16 @@ function entry(
   site: string,
   inc: number,
   wind: number,
-  o: { live?: boolean; warp?: number; raan?: number; minutes?: number } = {},
+  o: { live?: boolean | "all"; warp?: number; raan?: number; minutes?: number } = {},
 ): Scenario {
   return {
     id,
     title,
     tags: ["landing", "entry", "ranger", "plane", "runway", ...(o.live ? ["live"] : []), ...(wind ? ["wind"] : [])],
-    minutes: o.minutes ?? (o.live ? 14 : 10),
+    minutes: o.minutes ?? (o.live === "all" ? 18 : o.live ? 14 : 10),
     async run(lab) {
       await fromOrbit(lab, site, inc, wind, o);
-      const e = await fly(lab, { live: o.live, maxSim: 2 * 86400, maxWall: 1500 });
+      const e = await fly(lab, { live: o.live, maxSim: 2 * 86400, maxWall: o.live === "all" ? 3600 : 1500 });
       return judge(lab, e, "entry", wind);
     },
   };
@@ -199,6 +201,16 @@ export const LANDING: Scenario[] = [
   entry("entry-kourou-i10", "Ranger — from a low-inclination orbit (10°) to Kourou, calm", "Kourou", 10, 0),
   entry("entry-baikonur-i51-wind2", "Ranger — from 51.6° to Baikonur, moderate wind", "Baikonur", 51.6, 2),
   entry("entry-bourget-i51", "Ranger — from 51.6° to Le Bourget, light wind", "Bourget", 51.6, 1),
+  entry(
+    "entry-bourget-i51-live-all",
+    "Ranger — from 51.6° to Le Bourget, light wind, all of it live as a player flies it",
+    "Bourget",
+    51.6,
+    1,
+    {
+      live: "all",
+    },
+  ),
   entry("entry-tanegashima-i35-live", "Ranger — from 35° to Tanegashima, calm, the final live", "Tanegashima", 35, 0, { live: true }),
   entry("entry-woomera-i40", "Ranger — from 40° to Woomera (south), light wind", "Woomera", 40, 1),
   entry(
