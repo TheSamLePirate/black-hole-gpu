@@ -2364,7 +2364,8 @@ export class Renderer {
         // the gusts, the lens wet)
         r && !inside && s.ship && this.shipPose ? Math.hypot(...shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t) : 0,
         r?.gust ?? 0,
-        0,
+        // (outside, the camera's lens wet: a few soft drops — PLAN-PLUIE, the owner's choice)
+        r && !r.dust && !inside ? 1 : 0,
         0,
       ]),
     );

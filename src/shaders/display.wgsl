@@ -295,42 +295,132 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
   let cv = clamp((cover * 0.95 * kk + veil * kk) * (1.0 - 0.45 * radial), 0.0, mix(0.75, 0.4, radial));
   return vec2f(cv, sheen / max(cover, 1e-4));
 }
-// The canopy's drops (in the cabin, k: the glass's share of the pixel): beads on the glass, each a small
-// lens — the scene through it upside down, its rim dark —; slow, they creep down; past ~25 m/s the air
-// drives them up the canopy, stretched, and clears them faster. A drop lives a few seconds, then another.
-fn canopyDrops(uv: vec2f, c: vec3f, glass: f32) -> vec3f {
-  let asp = D.img.x / D.img.y;
-  let blow = smoothstep(25.0, 75.0, D.rainV.w);
-  let k = clamp(D.rain.x, 0.0, 1.0);
-  let t = D.rain.y;
-  let p = vec2f(uv.x * asp, uv.y) * 11.0;
-  var out = c;
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let id = floor(p) + vec2f(f32(i), f32(j));
-      let h = rh22(id);
-      if (rh21(id + 3.7) > 0.2 + 0.6 * k) { continue; }
-      let period = mix(6.0, 1.6, blow) * (0.7 + 0.6 * h.x);
-      let ph = fract(t / period + h.y);
-      // (down the glass — slow, then quicker as it grows —, or up it in the air's stream)
-      let drift = mix(vec2f(0.0, 0.9 * ph * ph * ph), vec2f(0.15 * (h.x - 0.5), -2.4 * ph), blow);
-      let ctr = id + vec2f(0.2, 0.2) + 0.6 * h + drift;
-      let rad = (0.07 + 0.12 * rh21(id + 9.1)) * (1.0 - 0.35 * blow);
-      var d = p - ctr;
-      // (stretched along its motion when blown: a streak, its trail behind)
-      d.y = select(d.y, d.y / (1.0 + 2.5 * blow), d.y > 0.0);
-      let dist = length(d);
-      let m = (1.0 - smoothstep(0.8 * rad, rad, dist)) * (1.0 - smoothstep(0.85, 1.0, ph));
-      if (m <= 0.0) { continue; }
-      // (a lens: the scene seen through it inverted, its rim darker, a glint at its top)
-      let refr = textureSampleLevel(hdr, samp, uv - d / rad * 0.035, 0.0).rgb;
-      let rim = 1.0 - 0.55 * smoothstep(0.35 * rad, rad, dist);
-      let glint = smoothstep(0.35 * rad, 0.0, length(d - vec2f(-0.3, -0.35) * rad));
-      let lit = refr * rim * 0.92 + glint * 0.6 * rainLight(uv);
-      out = mix(out, lit, m * glass);
-    }
+// ---- The drops on the glass (PLAN-PLUIE P3): a height field of water on the canopy (or the lens) — its
+// height h and slope g — that refracts the scene behind it. Three layers: fixed droplets coming and drying,
+// a mist of tiny ones, and big drops sliding in jerks, a beaded trail behind them, wiping the droplets on
+// their way. Still or slow, they slide down; in flight the air drives them up the glass and out, stretched,
+// and blows them off past ~100 m/s.
+struct Wet { h: f32, g: vec2f };
+// a dome of water: c its centre, r its radius, s its stretch along y (1: round) — its height and slope at p
+fn dome(p: vec2f, c: vec2f, r: f32, s: f32) -> Wet {
+  var o: Wet;
+  let d = vec2f(p.x - c.x, (p.y - c.y) / s) / r;
+  let q = dot(d, d);
+  if (q >= 1.0) { return o; }
+  let z = sqrt(1.0 - q);
+  o.h = z;
+  // (its slope: steep at its rim — the refraction strongest there, as in a real bead)
+  o.g = -d / max(z, 0.22) / r * vec2f(1.0, 1.0 / s);
+  return o;
+}
+fn wetMax(a: Wet, b: Wet) -> Wet {
+  if (b.h > a.h) { return b; }
+  return a;
+}
+// fixed droplets: p in cells; each cell maybe a droplet that comes and dries (its life at rate per s)
+fn dropletLayer(p: vec2f, t: f32, dens: f32, rMax: f32, seed: f32) -> Wet {
+  let id = floor(p);
+  let f = fract(p);
+  let h = rh22(id + seed);
+  var o: Wet;
+  if (rh21(id + seed + 4.1) > dens) { return o; }
+  let r = rMax * (0.35 + 0.65 * h.x);
+  let c = vec2f(r + (1.0 - 2.0 * r) * h.x, r + (1.0 - 2.0 * r) * h.y);
+  // (it lands — grows in a flash —, stays, then dries away)
+  let life = fract(t * (0.05 + 0.08 * h.y) + rh21(id + seed + 9.7));
+  let g = smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.75, 1.0, life));
+  o = dome(f, c, r * (0.55 + 0.45 * g), 1.0);
+  o.h *= g;
+  o.g *= g;
+  return o;
+}
+// big drops sliding: p in cells (a cell a column's stretch of glass); each slides down it in jerks (or up and
+// out in the air's stream), a beaded wet trail behind; trail: its cover (it wipes the droplets)
+fn slideLayer(p: vec2f, t: f32, dens: f32, blow: f32, xOut: f32, trail: ptr<function, f32>) -> Wet {
+  let id = floor(p);
+  let f = fract(p);
+  let h = rh22(id + 31.7);
+  var o: Wet;
+  if (rh21(id + 12.9) > dens) { return o; }
+  // (its run down the cell: a stick-slip — still, then a slide —, wrapping round; in the air's stream, up)
+  let rate = mix(0.12 + 0.12 * h.x, 0.9 + 0.6 * h.x, blow);
+  let ph = fract(t * rate + h.y);
+  let stick = ph + 0.06 * sin(ph * 31.0 + h.x * 6.0) * (1.0 - blow);
+  var y = mix(stick * 1.1 - 0.05, 1.05 - stick * 1.1, blow);
+  // (its wander across: a zig-zag down the glass; out from the middle in the stream)
+  let x = 0.5 + 0.18 * sin(stick * 8.0 + h.x * 9.0) * (1.0 - blow) + 0.3 * blow * (xOut - 0.5) * stick;
+  let r = (0.13 + 0.07 * h.x) * (1.0 - 0.45 * blow);
+  o = dome(f, vec2f(x, y), r, 1.0 + 1.6 * blow);
+  // (its trail: where it has been — above it sliding down, below it blown up —, narrower, beaded, drying)
+  let behind = select(y - f.y, f.y - y, blow > 0.5);
+  if (behind > 0.0) {
+    let w = 1.0 - smoothstep(0.25 * r, 0.6 * r, abs(f.x - x));
+    let fade = 1.0 - smoothstep(0.0, 0.85, behind);
+    *trail = max(*trail, w * fade);
+    // (its beads: small drops left every few millimetres)
+    let by = fract(f.y * 9.0 + h.y);
+    let bead = dome(vec2f(f.x, by), vec2f(x, 0.5), 0.35 * r * 3.0, 1.0);
+    if (w * fade > 0.3) { o = wetMax(o, Wet(bead.h * 0.6 * fade, bead.g * 0.6 * fade / 9.0)); }
   }
-  return out;
+  return o;
+}
+// The water on the glass at uv: k the rain, blow 0…1 the air's stream over it, lens: the camera's lens (out
+// of focus, few and large) rather than the canopy
+fn glassWater(uv: vec2f, k: f32, blow: f32, lens: bool) -> Wet {
+  let asp = D.img.x / D.img.y;
+  let t = D.rain.y;
+  let p = vec2f(uv.x * asp, uv.y);
+  var trail = 0.0;
+  var w: Wet;
+  if (lens) {
+    // (the lens: a few big drops, slow)
+    w = dropletLayer(p * 4.0, t * 0.5, 0.3 * k, 0.42, 51.0);
+    w.g *= 4.0;
+    return w;
+  }
+  // (the air's stream thins them: past ~100 m/s the glass is swept)
+  let keep = 1.0 - 0.85 * smoothstep(60.0, 110.0, D.rainV.w);
+  var s = slideLayer(vec2f(p.x * 7.0, p.y * 2.2), t, (0.35 + 0.4 * k) * keep, blow, uv.x, &trail);
+  s.g *= vec2f(7.0, 2.2);
+  var d1 = dropletLayer(p * 22.0, t, (0.25 + 0.45 * k) * keep, 0.4, 3.0);
+  d1.g *= 22.0;
+  var d2 = dropletLayer(p * 55.0, t * 1.3, (0.3 + 0.4 * k) * keep, 0.42, 17.0);
+  d2.g *= 55.0 * 0.6;
+  d2.h *= 0.6;
+  // (the droplets wiped where a drop has slid)
+  let wipe = 1.0 - smoothstep(0.1, 0.5, trail);
+  d1.h *= wipe;
+  d1.g *= wipe;
+  d2.h *= wipe;
+  d2.g *= wipe;
+  w = wetMax(wetMax(d2, d1), s);
+  // (in the stream, every drop stretched along it: its slope across)
+  return w;
+}
+// The scene through the water: each bead a small lens — the scene behind it shifted, inverted at its
+// heart, its rim darker (the light bent away), a glint of the sky at its top; the lens's drops soft
+fn wetGlass(uv: vec2f, c: vec3f, glass: f32, lens: bool) -> vec3f {
+  let k = clamp(D.rain.x, 0.0, 1.0);
+  let blow = smoothstep(25.0, 75.0, D.rainV.w);
+  let w = glassWater(uv, k, blow, lens);
+  if (w.h <= 0.0) { return c; }
+  let asp = D.img.x / D.img.y;
+  // (the refraction: a bead shows the scene round it, a few per cent of the view, upside down — the shift
+  // along its slope, strongest at its rim)
+  let gn0 = normalize(w.g + vec2f(1e-5));
+  let shift = gn0 * (1.0 - w.h) * vec2f(1.0 / asp, 1.0) * select(0.06, 0.12, lens);
+  let refr = textureSampleLevel(hdr, samp, clamp(uv + shift, vec2f(0.001), vec2f(0.999)), 0.0).rgb;
+  // (clear water: the scene through it as bright as beside it; a thin dark ring at its edge, where the light
+  // is bent away; a small sharp glint of the sky near its top; a faint caustic brightening at its foot)
+  let rim = (1.0 - 0.62 * smoothstep(0.42, 0.95, 1.0 - w.h)) * 0.94;
+  let gn = normalize(w.g + vec2f(1e-5));
+  let glint = pow(max(dot(gn, vec2f(0.35, 0.94)), 0.0), 24.0) * smoothstep(0.25, 0.6, 1.0 - w.h) * (1.0 - smoothstep(0.85, 1.0, 1.0 - w.h));
+  let foot = pow(max(dot(gn, vec2f(-0.2, -0.98)), 0.0), 6.0) * 0.12;
+  let sky = rainLight(uv);
+  let lit = refr * (rim + foot) + glint * 1.8 * max(sky, refr);
+  // (the edge of a bead soft — the lens's drops out of focus, softer still)
+  let m = smoothstep(0.0, select(0.18, 0.6, lens), w.h);
+  return mix(c, lit, m * glass * select(1.0, 0.75, lens));
 }
 
 struct VSOut { @builtin(position) pos: vec4f };
@@ -558,7 +648,9 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let rs = rainStreaks(uv, shipA);
     let col = select((lit * 1.25 + glow * 3.0) * rs.y, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
     c = mix(c, col, rs.x * glass * select(1.0, 0.5, inCab));
-    if (inCab && glass > 0.0) { c = canopyDrops(uv, c, glass); }
+    if (!dust && inCab && glass > 0.0) { c = wetGlass(uv, c, glass, false); }
+    // (outside: the camera's lens wet — a few soft drops — PLAN-PLUIE, the owner's choice)
+    if (!dust && !inCab && D.rainX.z > 0.5) { c = wetGlass(uv, c, 1.0, true); }
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
