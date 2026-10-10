@@ -232,6 +232,26 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     expect(await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)).toBe(!before);
   }, 60_000);
 
+  test("his ear's key: the line in his console and under the setting; a key Deepgram refuses is not kept", async () => {
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    const line = () => app.js<string>(`document.querySelector("[data-testid=tars-ear-key]").textContent`);
+    expect(await line()).toMatch(/Deepgram/);
+    await app.click("[data-testid=tars-ear-key] [data-testid=ek-paste], [data-testid=tars-ear-key] [data-testid=ek-change]");
+    await app.click("[data-testid=tars-ear-key] [data-testid=ek-input]");
+    await app.type("abcdefabcdefabcdefabcdefabcdef0123456789");
+    await app.press("Enter");
+    await app.waitFor(`document.querySelector("[data-testid=tars-ear-key]").textContent.includes("refuse")`, 15_000);
+    expect(await app.js<string | null>(`localStorage.getItem("kerr.deepgram.key")`)).toBeNull();
+    // (not a key's shape: said at once)
+    await app.click("[data-testid=tars-ear-key] [data-testid=ek-paste], [data-testid=tars-ear-key] [data-testid=ek-change]");
+    await app.click("[data-testid=tars-ear-key] [data-testid=ek-input]");
+    await app.type("abc");
+    await app.press("Enter");
+    await app.waitFor(`document.querySelector("[data-testid=tars-ear-key]").textContent.includes("pas une clé Deepgram")`, 5_000);
+    // (back to his field for what follows)
+    await app.click("[data-testid=tars-input]");
+  }, 60_000);
+
   test("offline: the common orders run by the same tools (A4)", async () => {
     await app.js(`(__bh.settings.tarsOnline = false, true)`);
     if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");

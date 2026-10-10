@@ -42,6 +42,8 @@ export interface PanelOptions {
   shareUrl: () => string;
   /** WebHID access to a USB controller the browser does not expose (Chromium + wired Xbox 360 pads). */
   connectController?: () => void;
+  /** a line under a setting's control (its own action: TARS's ear's key under "TARS's ear") */
+  controlExtra?: (key: Key) => HTMLElement | null;
 }
 
 const STORE_PRESETS = "kerr.userPresets.v1";
@@ -751,7 +753,11 @@ export class SettingsPanel {
       );
     });
 
-    for (const d of list) rows.append(this.renderControl(d));
+    for (const d of list) {
+      rows.append(this.renderControl(d));
+      const extra = this.o.controlExtra?.(d.key);
+      if (extra) rows.append(extra);
+    }
     const group = h("section", { class: `sp-group${collapsed ? " collapsed" : ""}` }, head, rows);
     return group;
   }

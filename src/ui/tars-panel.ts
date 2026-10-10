@@ -19,6 +19,8 @@ import { store } from "../util/storage";
 import { TarsEmblem, type EmblemState } from "./tars/emblem";
 import type { Proposal } from "../ai/game-tools";
 import { MODE_WORDS, type Mode, type Suggestion } from "../ai/commands";
+import { checkDeepgramKey, deepgramKey } from "../ai/deepgram";
+import { earKeyLine } from "./ear-key";
 
 export interface TarsPanelHost {
   /** a question asked */
@@ -28,8 +30,6 @@ export interface TarsPanelHost {
   connect(): void;
   /** a key pasted: kept (false: not an OpenRouter key) */
   paste(k: string): boolean;
-  /** a Deepgram key pasted (his ear in any browser): kept */
-  pasteDeepgram?(k: string): boolean;
   disconnect(): void;
   /** his memory: its exchanges and notes */
   memory(): { turns: number; notes: number };
@@ -212,6 +212,8 @@ export class TarsPanel {
   private proposalEl = el("section", "tp-proposal");
   /** the field taking a key, hidden (OpenRouter's, Deepgram's) — none: a question */
   private keyMode: "" | "openrouter" | "deepgram" = "";
+  /** his ear's key line (ui/ear-key.ts) */
+  private ear: (HTMLElement & { update(): void }) | null = null;
   private state: EmblemState = "idle";
   private running: HTMLLIElement | null = null;
   private tab: Tab = "talk";
@@ -446,9 +448,20 @@ export class TarsPanel {
     this.closeSuggest();
     this.askedAt = -1;
     if (this.keyMode === "deepgram") {
-      const ok = q ? !!this.host.pasteDeepgram?.(q) : false;
       this.setKeyMode("");
-      this.refresh(ok ? t("Deepgram key kept in this browser only: hold F6 to speak.") : q ? t("That is not a Deepgram key.") : "");
+      if (!q) return this.refresh();
+      // (tried with Deepgram before it is kept)
+      this.refresh(t("checking…"));
+      void checkDeepgramKey(q).then((r) => {
+        const ok = r === "ok" && deepgramKey.set(q);
+        this.refresh(
+          ok
+            ? t("Deepgram key kept in this browser only: hold F6 to speak.")
+            : r === "format"
+              ? t("That is not a Deepgram key.")
+              : t("Deepgram refused this key (or cannot be reached)."),
+        );
+      });
       return;
     }
     if (this.keyMode) {
@@ -1067,6 +1080,11 @@ export class TarsPanel {
         }),
       );
     }
+    // (his ear: how he hears — the Deepgram key, the local relay, the browser's — and its key: one line, kept
+    // across the refreshes — a key being typed is not wiped)
+    this.ear ??= Object.assign(earKeyLine({ testid: "tars-ear-key" }), { className: "ek tp-ear" });
+    this.ear.update();
+    this.status.append(this.ear);
     if (note) this.status.append(el("em", "", note));
   }
 }

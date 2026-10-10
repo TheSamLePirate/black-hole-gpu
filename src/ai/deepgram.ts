@@ -28,6 +28,55 @@ export const deepgramKey = {
   },
 };
 
+/**
+ * A key tried before it is kept: Deepgram's WebSocket opened with it, then closed at once (its REST calls are
+ * closed to a page by CORS) — "ok", "refused" (the handshake turned down), "format" (not a key's shape).
+ */
+export function checkDeepgramKey(key: string, timeoutMs = 8000): Promise<"ok" | "refused" | "format"> {
+  const k = key.trim();
+  if (!/^[\w-]{20,}$/.test(k)) return Promise.resolve("format");
+  return new Promise((done) => {
+    let settled = false;
+    const end = (r: "ok" | "refused") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      done(r);
+    };
+    const ws = new WebSocket("wss://api.deepgram.com/v1/listen?model=nova-3&encoding=linear16&sample_rate=16000", ["token", k]);
+    const timer = setTimeout(() => {
+      ws.close();
+      end("refused");
+    }, timeoutMs);
+    ws.onopen = () => {
+      // (said first: a close may call onclose at once)
+      end("ok");
+      ws.send(JSON.stringify({ type: "CloseStream" }));
+      ws.close();
+    };
+    ws.onclose = () => end("refused");
+  });
+}
+
+/** How TARS hears now: a key pasted (its end), the dev server's relay, or the browser's own recognition. */
+export function earState(): { by: "key" | "relay" | "browser"; hint?: string } {
+  const k = deepgramKey.hint();
+  if (k) return { by: "key", hint: k };
+  return relay ? { by: "relay" } : { by: "browser" };
+}
+
+/** Whether the dev server relays to Deepgram (asked once). */
+export async function probeRelay(): Promise<boolean> {
+  if (relay === null) {
+    try {
+      relay = (await fetch("/__deepgram", { signal: AbortSignal.timeout(3000) })).ok;
+    } catch {
+      relay = false;
+    }
+  }
+  return relay;
+}
+
 /** Where to stream: Deepgram itself (the pasted key, as the WebSocket's subprotocol) or the dev server's relay. */
 export interface EarTarget {
   url: string;
@@ -52,14 +101,7 @@ export async function earTarget(lang: "fr" | "en"): Promise<EarTarget | null> {
   }).toString();
   const key = deepgramKey.get();
   if (key) return { url: `wss://api.deepgram.com/v1/listen?${q}`, protocols: ["token", key] };
-  if (relay === null) {
-    try {
-      relay = (await fetch("/__deepgram", { signal: AbortSignal.timeout(3000) })).ok;
-    } catch {
-      relay = false;
-    }
-  }
-  return relay ? { url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/__deepgram?${q}` } : null;
+  return (await probeRelay()) ? { url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/__deepgram?${q}` } : null;
 }
 
 /** A turn's ear: the words as they come (interim, final), its failure, its end. */

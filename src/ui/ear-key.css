@@ -1,0 +1,15 @@
+/* TARS's ear's key line (ui/ear-key.ts): under the setting "TARS's ear", and in his console. */
+.ek { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 2px 10px 6px 8px; font-size: 12px; color: var(--dim, #9aa4b2); }
+.ek-state { color: inherit; }
+.ek-note { flex-basis: 100%; font-style: normal; color: var(--accent, #6fd2ff); }
+.ek-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+  font: inherit;
+  color-scheme: dark;
+}

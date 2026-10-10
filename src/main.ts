@@ -125,7 +125,8 @@ import { checkArgs } from "./ai/tool-schema";
 import { gameTools, keyCatalog, SCREENS } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
-import { DeepgramEar, deepgramKey, earTarget } from "./ai/deepgram";
+import { DeepgramEar, earTarget, probeRelay } from "./ai/deepgram";
+import { earKeyLine } from "./ui/ear-key";
 import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
 import { Budget } from "./ai/budget";
 import { READ_TOOLS, runSubagents } from "./ai/subagents";
@@ -539,6 +540,8 @@ async function main() {
     loadImage: () => fileInput.click(),
     connectController: HidPads.supported ? () => connectController() : undefined,
     shareUrl: () => tools.shareLink(),
+    // (under "TARS's ear": his Deepgram key — pasted, tried, changed, forgotten)
+    controlExtra: (key) => (key === "tarsEar" ? earKeyLine({ testid: "settings-ear-key", changed: () => tarsPanel?.refresh() }) : null),
   });
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
@@ -845,7 +848,6 @@ async function main() {
         if (k) voice.say({ text: t("Connected. I'm told I'll be smarter now. We'll see."), speaker: "tars", priority: 2 });
       }),
     paste: (k) => openRouterKey.set(k),
-    pasteDeepgram: (k) => deepgramKey.set(k),
     disconnect: () => openRouterKey.clear(),
     memory: () => ({ turns: tarsMemory.turns.length, notes: tarsMemory.notes.length }),
     clearMemory: () => {
@@ -883,6 +885,8 @@ async function main() {
     talkKey: (e) => tarsKey(e),
   };
   const tarsPanel = new TarsPanel(tarsPanelHost);
+  // (his ear's way known early: the dev server's relay, said in his console)
+  void probeRelay().then((r) => r && tarsPanel.refresh());
   /** A question to TARS (typed, or spoken): the agent online; offline the orders, else his written answers. */
   async function tarsAsk(q: string, shown?: string) {
     // (the words "stop": the turn running stopped, nothing else)
