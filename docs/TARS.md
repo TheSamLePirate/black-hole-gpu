@@ -92,6 +92,7 @@ Ce qui encadre ces répliques :
 ## TARS
 
 - **F6** ouvre son champ. Ses touches restent dedans : taper ne pilote pas. Entrée pose la question, Échap ferme.
+- **F6 maintenu** (ou le bouton micro de sa console, cliqué pour commencer puis pour finir) l'écoute : la reconnaissance du navigateur s'arrête parfois d'elle-même (Chrome après un temps mort, Safari après sa première phrase) — elle est relancée aussitôt, ce qui a été dit gardé, jusqu'au relâchement ; un micro refusé ou des coupures immédiates répétées arrêtent l'écoute, leur code dit dans la console (`ai/listen.ts`, `tests/listen.test.ts`).
 - **Hors ligne**, ou sans clé, il répond avec ses phrases écrites :
   - **ce qu'il comprend**, en anglais ou en français : où on est, le carburant, la vitesse, la cible, combien de temps, quoi faire, comment ça va, qui il est, une blague, le temps près de Gargantua ;
   - **ses réglages**, dits à voix haute : « honesty 70 », « humour 0 » ;

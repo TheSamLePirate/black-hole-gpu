@@ -26,8 +26,8 @@ export interface ListenHost {
   hearing(text: string): void;
   /** what was said, once the key is released (empty: nothing heard) */
   heard(text: string): void;
-  /** it went wrong: the microphone refused, no network, no speech */
-  failed(why: "denied" | "network" | "none" | "other"): void;
+  /** it went wrong: the microphone refused, no network, no speech — the recognition's own error code too */
+  failed(why: "denied" | "network" | "none" | "other", code?: string): void;
   /** listening on / off */
   state(on: boolean): void;
 }
@@ -41,9 +41,19 @@ export class PushToTalk {
   private interim = "";
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
   private held = false;
+  /** listening asked for — the key held, the microphone switched on — until released or switched off */
+  private wanted = false;
+  /** the recognition's last error, and how many times running it ended right after it began */
+  private error = "";
+  private quickEnds = 0;
+  private startedAt = 0;
   listening = false;
 
-  constructor(private host: ListenHost) {}
+  constructor(
+    private host: ListenHost,
+    private ctor: () => (new () => Recognition) | null = Ctor,
+    private now: () => number = () => performance.now(),
+  ) {}
 
   static get supported() {
     return !!Ctor();
@@ -72,15 +82,32 @@ export class PushToTalk {
     return false;
   }
 
+  /** Listening on, until stop(): the words so far kept across the recognition's own ends. */
   start() {
-    const C = Ctor();
-    if (!C || this.listening) return;
+    if (!this.ctor() || this.listening) return;
+    this.finals = "";
+    this.interim = "";
+    this.error = "";
+    this.quickEnds = 0;
+    this.wanted = true;
+    this.listening = true;
+    this.host.state(true);
+    this.run();
+  }
+
+  /**
+   * One recognition: the browser's end its own whenever it likes — Chrome's after a pause or a hiccup
+   * ("aborted", "no-speech"), Safari's after its first phrase —, half a second in at times: while listening
+   * is still wanted it is begun again at once (what was heard kept), until stop(); a refusal, or ends right
+   * at the start three times running, give up — the reason said.
+   */
+  private run() {
+    const C = this.ctor();
+    if (!C) return this.finish();
     const r = new C();
     r.lang = this.host.lang() === "fr" ? "fr-FR" : "en-US";
     r.continuous = true;
     r.interimResults = true;
-    this.finals = "";
-    this.interim = "";
     r.onresult = (e) => {
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -89,40 +116,68 @@ export class PushToTalk {
         else interim += res[0]!.transcript;
       }
       this.interim = interim;
-      this.host.hearing(`${this.finals}${interim}`.replace(/\s+/g, " ").trim());
+      this.quickEnds = 0;
+      this.host.hearing(this.text());
     };
-    r.onerror = (e) =>
-      this.host.failed(
-        e.error === "not-allowed" || e.error === "service-not-allowed"
-          ? "denied"
-          : e.error === "network"
-            ? "network"
-            : e.error === "no-speech"
-              ? "none"
-              : "other",
-      );
+    r.onerror = (e) => {
+      this.error = e.error;
+    };
     r.onend = () => {
       if (this.rec !== r) return;
       this.rec = null;
-      this.listening = false;
-      this.host.state(false);
-      this.host.heard(`${this.finals}${this.interim}`.replace(/\s+/g, " ").trim());
+      // (a phrase in progress kept: the next recognition starts afresh)
+      if (this.interim) {
+        this.finals += `${this.interim} `;
+        this.interim = "";
+      }
+      const fatal = this.error === "not-allowed" || this.error === "service-not-allowed" || this.error === "audio-capture";
+      this.quickEnds = this.now() - this.startedAt < 400 ? this.quickEnds + 1 : 0;
+      if (this.wanted && !fatal && this.quickEnds < 3) {
+        this.error = "";
+        this.run();
+        return;
+      }
+      if (this.wanted && (fatal || this.quickEnds >= 3)) this.fail();
+      this.finish();
     };
     this.rec = r;
-    this.listening = true;
-    this.host.state(true);
+    this.startedAt = this.now();
     try {
       r.start();
     } catch {
       this.rec = null;
-      this.listening = false;
-      this.host.state(false);
-      this.host.failed("other");
+      this.error = this.error || "start";
+      this.fail();
+      this.finish();
     }
+  }
+
+  private text() {
+    return `${this.finals}${this.interim}`.replace(/\s+/g, " ").trim();
+  }
+
+  private fail() {
+    const e = this.error;
+    this.host.failed(
+      e === "not-allowed" || e === "service-not-allowed" ? "denied" : e === "network" ? "network" : e === "no-speech" ? "none" : "other",
+      e,
+    );
+  }
+
+  /** Listening over: off, and what was heard sent. */
+  private finish() {
+    const was = this.listening;
+    this.wanted = false;
+    this.listening = false;
+    if (!was) return;
+    this.host.state(false);
+    this.host.heard(this.text());
   }
 
   /** The words ended: the last results come, then `heard`. */
   stop() {
-    this.rec?.stop();
+    this.wanted = false;
+    if (this.rec) this.rec.stop();
+    else this.finish();
   }
 }
