@@ -363,8 +363,9 @@ export function earthHeightSampler(
   W: number,
   H: number,
   tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number },
-  /** where the ground is graded (runways: game/sites.ts), 0…1 — the drawn detail taken off there */
-  graded?: (q: V3) => number,
+  /** where the ground is graded (runways: game/sites.ts runwayGrade) — flat, 0…1: the drawn detail taken off
+   * there; level, 0…1: the relief brought to elev [m] */
+  graded?: (q: V3) => { flat: number; level: number; elev: number },
 ) {
   const texelA = (EARTH_RM * 2 * Math.PI) / W;
   const fromMap = mapHeightSampler(map, W, H);
@@ -378,7 +379,9 @@ export function earthHeightSampler(
       h0 = fromMap(q);
       res = texelA;
     }
-    const flat = graded ? graded(q) : 0;
+    const g = graded?.(q);
+    const flat = g?.flat ?? 0;
+    if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
     return Math.max(h0 + (flat < 1 ? (1 - flat) * earthDetail(q, h0, foot, res) : 0), 0);
   };
 }

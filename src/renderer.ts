@@ -1,6 +1,6 @@
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { lampsOf } from "./cockpit/lights";
-import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWeight } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -987,7 +987,7 @@ export class Renderer {
           setGroundRelief(
             "earth",
             // (the runways graded: the gear rolls on them — game/sites.ts)
-            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot), runwayWeight),
+            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot), runwayGrade),
           );
           // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
           this.earthTiles.fallback = tileFallbackSampler(map, W, H);
@@ -2389,9 +2389,9 @@ export class Renderer {
     const days = daysOf(time);
     near.forEach(({ r, d }, k) => {
       const rev = landingEnd(r.site, s, days, this.weatherReal).reverse ? 1 : 0;
-      // (w: the ground's height at the threshold — the windsocks' feet)
-      const hg = groundRelief("earth", bodyFixedOf("earth", r.site.lat, r.site.lon, 0));
-      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, rev, ...d, hg], 4 + 16 * k);
+      // (w: the runway's level [m] — its airfield graded to it (sites.ts runwayGrade), the windsocks' and the
+      // buildings' feet)
+      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, rev, ...d, r.elev], 4 + 16 * k);
     });
     if (near.length) {
       const st = near[0]!.r.site;

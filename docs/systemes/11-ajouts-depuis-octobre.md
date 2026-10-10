@@ -78,6 +78,11 @@ Guides : [HUD.md](../HUD.md), [PLAN-HUB.md](../PLAN-HUB.md), [PLAN-ASSISTANT.md]
 | `ui/weatherpanel.ts`, `ui/weather-map.ts`, `ui/weather-section.ts` | Le panneau Météo ; la météo sur le planisphère (radar, nuages, vent) ; la coupe verticale de l'air |
 | `ui/charts-page.ts` | La page CARTES de la tablette : la carte d'approche du site |
 
+Le sol des terrains d'aviation (`game/sites.ts runwayGrade`, et la même fonction dans `trace.wgsl`) : chaque piste a
+son niveau (`Site.elev`) ; la piste, ses bouts et son aire y sont nivelés, raccordés au relief par un talus, le
+détail dessiné ôté — le CPU (le train) et le GPU (l'image) lisent le même sol. Le marquage de la piste se calcule
+avec l'empreinte du pixel le long d'elle et en travers (A7).
+
 Guides : [PLAN-METEO.md](../PLAN-METEO.md), [PLAN-AEROPORTS.md](../PLAN-AEROPORTS.md).
 
 ## Le cockpit interactif

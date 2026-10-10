@@ -4295,17 +4295,21 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
 // gear and for the eye)
 const RWY_MAX = 4u;
 fn rwyCount() -> u32 { return select(0u, min(u32(P.runways[0].x), RWY_MAX), HAS_RWY); }
-// How much of a runway's graded strip a geodetic direction is on (0…1): from 3 km before its threshold to
-// 4.5 km past it, 60 m either side — faded over 300 m along, 60 m across. There the drawn detail is off.
+// How a geodetic direction is graded by the runways near (sites.ts runwayGrade, the same figures): x, flat
+// (0…1: the drawn detail off) — from 3 km before a threshold to 3 km past the far end, 280 m either side,
+// faded over 300 m along, 60 m across —; y, level (0…1: the relief brought to the runway's level) — the
+// strip and 300 m past its ends, 320 m either side, eased back over 600 m along, 300 m across —; z, that level [m].
 // WGS84 surface point from its geodetic unit normal, body-fixed metres.
 fn earthSurface(g: vec3f) -> vec3f {
   let ba = 1.0 / EARTH_AB;
   let N = EARTH_RM / sqrt(1.0 - (1.0 - ba * ba) * g.z * g.z);
   return N * vec3f(g.xy, g.z * ba * ba);
 }
-fn runwayGrade(g: vec3f) -> f32 {
+fn runwayGrade(g: vec3f) -> vec3f {
   let point = earthSurface(g);
   var w = 0.0;
+  var lv = 0.0;
+  var el = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
     if (dot(d, d) > 8000.0 * 8000.0) { continue; }
@@ -4315,9 +4319,17 @@ fn runwayGrade(g: vec3f) -> f32 {
     let wa = select(select(1.0, max(0.0, 1.0 - (a - 7500.0) / 300.0), a > 7500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
     // (the strip, the taxiway beside it, the apron and the buildings — A2, A3 —: 280 m out of the axis, faded by 340)
     let wc = select(max(0.0, 1.0 - (c - 280.0) / 60.0), 1.0, c < 280.0);
-    w = max(w, wa * wc);
+    // (the level: the strip and its airfield, eased back to the relief)
+    let L = P.runways[1u + 4u * k].w;
+    let la = 1.0 - smoothstep(0.0, 1.0, max(max(-300.0 - a, a - L - 300.0), 0.0) / 600.0);
+    let lc = 1.0 - smoothstep(0.0, 1.0, (c - 320.0) / 300.0);
+    if (la * lc > lv) {
+      lv = la * lc;
+      el = P.runways[4u + 4u * k].w;
+    }
+    w = max(max(w, wa * wc), la * lc);
   }
-  return w;
+  return vec3f(w, lv, el);
 }
 // the share of a pixel of footprint fw [m] a band lo…hi along x covers (the band thinner than the pixel:
 // its share of it)
@@ -4405,84 +4417,88 @@ fn runwayLights(a: f32, c: f32, L: f32, hw: f32, t: f32) -> vec3f {
 // autopilot's inner glide (1.5° to the touchdown 450 m in: two white, two red on it)
 // A seven-segment numeral's paint at (u across to the right, v up the digit) [m] in its 3 × 9 m box —
 // segments 0.8 m wide: a runway's designation as it is read from the approach
-fn digitPaint(d: u32, u: f32, v: f32, fw: f32) -> f32 {
+fn digitPaint(d: u32, u: f32, v: f32, fC: f32, fA: f32) -> f32 {
   // (segments a b c d e f g: top, top right, bottom right, bottom, bottom left, top left, middle)
   let mask = array<u32, 10>(0x3Fu, 0x06u, 0x5Bu, 0x4Fu, 0x66u, 0x6Du, 0x7Du, 0x07u, 0x7Fu, 0x6Fu)[min(d, 9u)];
   let w = 0.8;
   var m = 0.0;
-  let hor = bandCover(u, 0.0, 3.0, fw);
-  let ver = bandCover(v, 0.0, 9.0, fw);
-  if ((mask & 1u) != 0u) { m = max(m, hor * bandCover(v, 9.0 - w, 9.0, fw)); }
-  if ((mask & 2u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fw) * bandCover(v, 4.5, 9.0, fw)); }
-  if ((mask & 4u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fw) * bandCover(v, 0.0, 4.5, fw)); }
-  if ((mask & 8u) != 0u) { m = max(m, hor * bandCover(v, 0.0, w, fw)); }
-  if ((mask & 16u) != 0u) { m = max(m, bandCover(u, 0.0, w, fw) * bandCover(v, 0.0, 4.5, fw)); }
-  if ((mask & 32u) != 0u) { m = max(m, bandCover(u, 0.0, w, fw) * bandCover(v, 4.5, 9.0, fw)); }
-  if ((mask & 64u) != 0u) { m = max(m, hor * bandCover(v, 4.5 - 0.5 * w, 4.5 + 0.5 * w, fw)); }
+  let hor = bandCover(u, 0.0, 3.0, fC);
+  let ver = bandCover(v, 0.0, 9.0, fA);
+  if ((mask & 1u) != 0u) { m = max(m, hor * bandCover(v, 9.0 - w, 9.0, fA)); }
+  if ((mask & 2u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fC) * bandCover(v, 4.5, 9.0, fA)); }
+  if ((mask & 4u) != 0u) { m = max(m, bandCover(u, 3.0 - w, 3.0, fC) * bandCover(v, 0.0, 4.5, fA)); }
+  if ((mask & 8u) != 0u) { m = max(m, hor * bandCover(v, 0.0, w, fA)); }
+  if ((mask & 16u) != 0u) { m = max(m, bandCover(u, 0.0, w, fC) * bandCover(v, 0.0, 4.5, fA)); }
+  if ((mask & 32u) != 0u) { m = max(m, bandCover(u, 0.0, w, fC) * bandCover(v, 4.5, 9.0, fA)); }
+  if ((mask & 64u) != 0u) { m = max(m, hor * bandCover(v, 4.5 - 0.5 * w, 4.5 + 0.5 * w, fA)); }
   return m * ver;
 }
 // A runway end's designation (n: 1 … 36) at (a, c) of that end's frame: two digits (or one), 9 m long, past
 // its threshold bars (45 to 54 m in), either side of the axis
-fn designation(n: u32, a: f32, c: f32, fw: f32) -> f32 {
+fn designation(n: u32, a: f32, c: f32, fA: f32, fC: f32) -> f32 {
   if (a < 44.0 || a > 55.0 || abs(c) > 8.0) { return 0.0; }
   let tens = n / 10u;
   let ones = n % 10u;
-  if (tens == 0u) { return digitPaint(ones, c + 1.5, a - 45.0, fw); }
-  return max(digitPaint(tens, c + 4.5, a - 45.0, fw), digitPaint(ones, c - 1.5, a - 45.0, fw));
+  if (tens == 0u) { return digitPaint(ones, c + 1.5, a - 45.0, fC, fA); }
+  return max(digitPaint(tens, c + 4.5, a - 45.0, fC, fA), digitPaint(ones, c - 1.5, a - 45.0, fC, fA));
 }
 
-fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, lit: bool, n0: u32) -> RunwayLook {
+fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool, lit: bool, n0: u32) -> RunwayLook {
   var o: RunwayLook;
+  // (the pixel's footprint along the runway and across it [m]: seen down a final, the first a hundred times
+  // the second — one figure for both had the width thinner than a pixel, the strip gone into the grass)
+  let fA = fw.x;
+  let fC = fw.y;
   // (landed the other way — PLAN-METEO W4 —: the lights and the PAPI from the far end; the markings both ways)
   let a = select(a0, L - a0, rev);
   let c = select(c0, -c0, rev);
   let ac = abs(c);
   // (the touchdown zone's marks at either end: from the nearer threshold)
   let am = min(a, L - a);
-  let paved = bandCover(a, -60.0, L + 60.0, fw) * bandCover(ac, -1.0, hw + 7.5, fw);
+  let paved = bandCover(a, -60.0, L + 60.0, fA) * bandCover(ac, -1.0, hw + 7.5, fC);
   o.cover = paved;
-  var alb = mix(vec3f(0.17, 0.165, 0.155), vec3f(0.075, 0.075, 0.08), bandCover(ac, -1.0, hw, fw));
+  var alb = mix(vec3f(0.17, 0.165, 0.155), vec3f(0.075, 0.075, 0.08), bandCover(ac, -1.0, hw, fC));
   // (the touchdown zone's rubber: darker in the middle)
-  alb *= 1.0 - 0.35 * bandCover(am, 250.0, 1100.0, fw) * bandCover(ac, -1.0, 12.0, fw);
+  alb *= 1.0 - 0.35 * bandCover(am, 250.0, 1100.0, fA) * bandCover(ac, -1.0, 12.0, fC);
   var m = 0.0;
   // threshold bars: 30 m long, 1.8 m wide, 1.8 m apart, either side of a 3.6 m gap (and at the far end)
-  let bars = stripeCover(ac - 1.8, 3.6, 1.8, fw) * bandCover(ac, 1.8, hw - 3.0, fw);
-  m = max(m, bars * max(bandCover(a, 6.0, 36.0, fw), bandCover(a, L - 36.0, L - 6.0, fw)));
+  let bars = stripeCover(ac - 1.8, 3.6, 1.8, fC) * bandCover(ac, 1.8, hw - 3.0, fC);
+  m = max(m, bars * max(bandCover(a, 6.0, 36.0, fA), bandCover(a, L - 36.0, L - 6.0, fA)));
   // centreline: 36 m dashes, 24 m gaps, 0.9 m wide
-  m = max(m, stripeCover(a - 80.0, 60.0, 36.0, fw) * bandCover(c, -0.45, 0.45, fw) * bandCover(a, 80.0, L - 80.0, fw));
+  m = max(m, stripeCover(a - 80.0, 60.0, 36.0, fA) * bandCover(c, -0.45, 0.45, fC) * bandCover(a, 80.0, L - 80.0, fA));
   // edges: 0.9 m lines
-  m = max(m, bandCover(ac, hw - 1.4, hw - 0.5, fw) * bandCover(a, 0.0, L, fw));
+  m = max(m, bandCover(ac, hw - 1.4, hw - 0.5, fC) * bandCover(a, 0.0, L, fA));
   // aiming point: two 45 m × 9 m blocks 300 m in; touchdown zone: pairs of 22.5 m bars every 150 m
-  m = max(m, bandCover(am, 300.0, 345.0, fw) * bandCover(ac, 6.0, 15.0, fw));
-  let tz = stripeCover(am - 150.0, 150.0, 22.5, fw) * bandCover(am, 150.0, 922.5, fw) * (1.0 - bandCover(am, 280.0, 360.0, fw));
-  m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fw) * bandCover(ac, 4.5, 12.6, fw));
+  m = max(m, bandCover(am, 300.0, 345.0, fA) * bandCover(ac, 6.0, 15.0, fC));
+  let tz = stripeCover(am - 150.0, 150.0, 22.5, fA) * bandCover(am, 150.0, 922.5, fA) * (1.0 - bandCover(am, 280.0, 360.0, fA));
+  m = max(m, tz * stripeCover(ac - 4.5, 3.0, 1.8, fC) * bandCover(ac, 4.5, 12.6, fC));
   // (the designations: the published end's number past its threshold, the other's — 18 more — past its own,
   // turned about: each read from its approach — A2)
   let n1 = (n0 + 17u) % 36u + 1u;
-  m = max(m, max(designation(n0, a0, c0, fw), designation(n1, L - a0, -c0, fw)));
+  m = max(m, max(designation(n0, a0, c0, fA, fC), designation(n1, L - a0, -c0, fA, fC)));
   o.albedo = mix(alb, vec3f(0.72, 0.72, 0.7), m * paved);
   // the parallel taxiway (A2; the published frame: 120 m left of the axis, 23 m wide, the runway's length) and
   // its three links (the ends, the middle): darker asphalt, a yellow centreline, the holding lines across
   // each link 60 m out of the runway's edge, blue edge lights every 60 m, green centreline lights every 30
   let tc = c0 + 120.0;
-  let onTwy = bandCover(abs(tc), -1.0, 11.5, fw) * bandCover(a0, -12.0, L + 12.0, fw);
+  let onTwy = bandCover(abs(tc), -1.0, 11.5, fC) * bandCover(a0, -12.0, L + 12.0, fA);
   let kl = clamp(round(a0 / (0.5 * L)), 0.0, 2.0);
   let al = a0 - 0.5 * L * kl;
-  let onLink = bandCover(abs(al), -1.0, 11.5, fw) * bandCover(c0, -120.0, -hw, fw);
+  let onLink = bandCover(abs(al), -1.0, 11.5, fA) * bandCover(c0, -120.0, -hw, fC);
   let twy = max(onTwy, onLink) * (1.0 - paved);
   if (twy > 0.0) {
     var ta = vec3f(0.105, 0.1, 0.095);
-    let yl = max(bandCover(tc, -0.15, 0.15, fw) * bandCover(a0, 0.0, L, fw), bandCover(al, -0.15, 0.15, fw) * bandCover(c0, -120.0, -hw - 6.0, fw));
-    let hold = bandCover(c0, -(hw + 61.5), -(hw + 60.0), fw) * stripeCover(c0 + hw + 62.0, 0.9, 0.45, fw) + bandCover(c0, -(hw + 59.4), -(hw + 58.8), fw);
+    let yl = max(bandCover(tc, -0.15, 0.15, fC) * bandCover(a0, 0.0, L, fA), bandCover(al, -0.15, 0.15, fA) * bandCover(c0, -120.0, -hw - 6.0, fC));
+    let hold = bandCover(c0, -(hw + 61.5), -(hw + 60.0), fC) * stripeCover(c0 + hw + 62.0, 0.9, 0.45, fC) + bandCover(c0, -(hw + 59.4), -(hw + 58.8), fC);
     ta = mix(ta, vec3f(0.75, 0.55, 0.1), max(yl, hold * onLink));
     o.albedo = mix(o.albedo, ta, twy);
     o.cover = max(o.cover, twy);
   }
   // the apron (A3): concrete beyond the taxiway, before the terminal; a yellow lead-in line to each stand
-  let apron = bandCover(c0, -205.0, -143.0, fw) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fw) * (1.0 - paved);
+  let apron = bandCover(c0, -205.0, -143.0, fC) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fA) * (1.0 - paved);
   if (apron > 0.0) {
     let ks = clamp(round((a0 - 0.4 * L) / 70.0), 0.0, 2.0);
-    let lead = bandCover(a0 - 0.4 * L - 70.0 * ks, -0.15, 0.15, fw) * bandCover(c0, -200.0, -143.0, fw);
+    let lead = bandCover(a0 - 0.4 * L - 70.0 * ks, -0.15, 0.15, fA) * bandCover(c0, -200.0, -143.0, fC);
     o.albedo = mix(o.albedo, mix(vec3f(0.32, 0.32, 0.3), vec3f(0.75, 0.55, 0.1), lead), apron);
     o.cover = max(o.cover, apron);
   }
@@ -4504,7 +4520,7 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: f32, el: f32, rev: bool, l
     // (the apron's floodlights — sodium, along its far edge — and the pools of light they lay on it)
     let ka = round((a0 - 0.36 * L) / 60.0);
     if (ka >= 0.0 && 0.36 * L + 60.0 * ka <= 0.4 * L + 175.0) { lmp += 3.0 * vec3f(1.0, 0.72, 0.38) * lampV(vec2f(a0 - 0.36 * L - 60.0 * ka, c0 + 205.0)); }
-    lmp += 1e-4 * vec3f(1.0, 0.78, 0.5) * bandCover(c0, -205.0, -143.0, fw) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fw);
+    lmp += 1e-4 * vec3f(1.0, 0.78, 0.5) * bandCover(c0, -205.0, -143.0, fC) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fA);
   }
   let elDeg = el * 57.29578;
   for (var i = 0u; i < 4u; i++) {
@@ -4887,11 +4903,12 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
 }
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
-  // (a runway's strip graded: its detail off — the gear's ground the same)
-  var flat = 0.0;
-  if (HAS_RWY) { flat = runwayGrade(q); }
-  if (flat >= 1.0) { return max(hr.x, 0.0); }
-  return max(hr.x + (1.0 - flat) * earthDetail(q, hr.x, foot, hr.y), 0.0);
+  // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
+  var g = vec3f(0.0);
+  if (HAS_RWY) { g = runwayGrade(q); }
+  let h0 = mix(hr.x, g.z, g.y);
+  if (g.x >= 1.0) { return max(h0, 0.0); }
+  return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0);
 }
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
@@ -4901,15 +4918,16 @@ fn earthHeight(q: vec3f, foot: f32) -> f32 { return earthHeightG(geoQ(q), foot) 
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
 fn earthHeightStep(q: vec3f, foot: f32) -> f32 { return earthHeightStepG(geoQ(q), foot) / earthSq(q); }
 fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
-  var flat = 0.0;
-  if (HAS_RWY) { flat = runwayGrade(q); }
+  var g = vec3f(0.0);
+  if (HAS_RWY) { g = runwayGrade(q); }
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
-    return max(hr.x + (1.0 - flat) * earthDetail(q, hr.x, max(foot * 4.0, 1.0), hr.y), 0.0);
+    let h1 = mix(hr.x, g.z, g.y);
+    return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
-  let h0 = textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r;
-  return max(h0 + (1.0 - flat) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
+  let h0 = mix(textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r, g.z, g.y);
+  return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
@@ -5300,16 +5318,24 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let gq = geoQ(q);
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   let rel = earthRelief(gq, fx, fy);
-  let ocean = smoothstep(0.35, 0.65, rel.b);
+  // (an airfield levelled — sites.ts runwayGrade —: land, even where the map had the sea — a runway's
+  // embankment on the shore, Tanegashima's)
+  var lvl = 0.0;
+  if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayGrade(gq).y; }
+  let sea0 = smoothstep(0.35, 0.65, rel.b);
+  let ocean = sea0 * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
   let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
+  A = mix(A, vec3f(0.11, 0.12, 0.065) * P.earth2.z, sea0 * lvl);
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
   let north = cross(q, east);
   let tn = vec2f(rel.r * 2.0 - 1.0, 1.0 - rel.g * 2.0) * P.earth.w * (1.0 - ocean);
   var n = normalize(q + tn.x * east + tn.y * north);
+  // (an airfield levelled — sites.ts runwayGrade —: the map's slopes gone with its relief)
+  n = normalize(mix(n, q, lvl));
   // (near — a pixel under the map's texel — the relief's own normal: its ridges, crests and rocks)
   let footM = max(length(fx), length(fy)) * EARTH_RM;
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
@@ -5357,7 +5383,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)
       let pk = select(P.runways[17].z, P.runways[17].w, k >= 2u);
       let n0 = u32(pk / select(1.0, 37.0, (k & 1u) == 1u)) % 37u;
-      let rl = runwayShade(ra, rc, L, hw, max(footM, 0.02), asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0);
+      let fw = max(vec2f(max(abs(LAMP_F.x), abs(LAMP_F.z)), max(abs(LAMP_F.y), abs(LAMP_F.w))), vec2f(0.02));
+      let rl = runwayShade(ra, rc, L, hw, fw, asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0);
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;

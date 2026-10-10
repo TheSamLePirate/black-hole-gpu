@@ -19,6 +19,9 @@ export interface Site {
   reverse?: boolean;
   /** the airfield's weather station (its METAR: W7) — its own, or the nearest that reports */
   icao?: string;
+  /** a runway's level [m above the sea]: the strip and its airfield graded flat there (the median of the real
+   * relief under them — Terrarium's tiles, which carry the trees and the roofs: never a runway's own figure) */
+  elev?: number;
 }
 
 export const SITES: Site[] = [
@@ -30,13 +33,14 @@ export const SITES: Site[] = [
     runway: true,
     rwy: 150,
     icao: "KTTS",
+    elev: 2,
   },
-  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220, icao: "KEDW" },
-  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70, icao: "SOCA" },
-  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60, icao: "UAOO" },
-  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270, icao: "LFPB" },
-  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340, icao: "RJFG" },
-  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0, icao: "YPWR" },
+  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220, icao: "KEDW", elev: 699 },
+  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70, icao: "SOCA", elev: 10 },
+  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60, icao: "UAOO", elev: 105 },
+  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270, icao: "LFPB", elev: 43 },
+  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340, icao: "RJFG", elev: 23 },
+  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0, icao: "YPWR", elev: 158 },
   { body: "mars", name: "Jezero crater", lat: 18.44, lon: 77.45 },
   { body: "mars", name: "Gale crater", lat: -5.4, lon: 137.8 },
   { body: "mars", name: "Utopia Planitia", lat: 47.6, lon: 118.0 },
@@ -57,10 +61,16 @@ export function siteDir(s: { lat: number; lon: number }): [number, number, numbe
 }
 
 /**
- * How much of a runway a point of the Earth is on (0…1; geodetic unit direction on the Earth's own axes):
- * from 3 km before each runway's threshold (its approach's clear zone: no procedural hill under the final) to 4.5 km past it, 60 m either side of its axis — faded to none
- * 60 m further across and 300 m further along. There the ground is graded: the relief's base, without
- * the drawn detail (the gear rolls on a runway, not on the procedural bumps between the map's texels).
+ * How a point of the Earth is graded by a runway (geodetic unit direction on the Earth's own axes):
+ * - `flat`, 0…1: the drawn detail taken off — from 3 km before each runway's threshold (its approach's
+ *   clear zone: no procedural hill under the final) to 3 km past its far end, 280 m either side of its axis
+ *   (the strip, the taxiway, the apron, the buildings) — faded to none 60 m further across and 300 m further
+ *   along;
+ * - `level`, 0…1: the relief itself brought to the runway's level `elev` — the strip, 300 m past either end,
+ *   its airfield 320 m either side —, eased back to the relief over 600 m along and 300 m across (an
+ *   embankment, a cutting: a few per cent). The real relief under an airfield carries its trees and roofs,
+ *   and slopes: a runway on it was not flat — the gear met bumps of metres (Le Bourget's strip read 36 to
+ *   52 m, Tanegashima's 1 to 40).
  */
 export interface RunwayFrame {
   site: Site;
@@ -70,6 +80,8 @@ export interface RunwayFrame {
   across: [number, number, number];
   /** threshold on the WGS84 surface, body-fixed metres */
   origin: [number, number, number];
+  /** its level [m above the sea] (Site.elev) */
+  elev: number;
 }
 /** A runway as drawn [m] (trace.wgsl: runwayShade): the graded strip's paved middle, 4.5 km from its threshold. */
 export const RUNWAY_LENGTH = 4500;
@@ -84,12 +96,21 @@ export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "eart
   const h = (s.rwy ?? 0) * D;
   const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
-  return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0) };
+  return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0), elev: s.elev ?? 0 };
 });
-// (the shader's runwayGrade holds the same figures: change both)
-export function runwayWeight(q: [number, number, number]): number {
+/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both) */
+export const RUNWAY_GRADE = { levelPast: 300, levelEase: 600, levelSide: 320, levelSideEase: 300 } as const;
+const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+export interface Grade {
+  flat: number;
+  level: number;
+  /** the level's height [m] (that of the runway levelling most) */
+  elev: number;
+}
+export function runwayGrade(q: [number, number, number]): Grade {
   const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
-  let w = 0;
+  const g: Grade = { flat: 0, level: 0, elev: 0 };
+  const G = RUNWAY_GRADE;
   for (const r of EARTH_RUNWAYS) {
     const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
     if (Math.hypot(...d) > 8000) continue;
@@ -100,10 +121,21 @@ export function runwayWeight(q: [number, number, number]): number {
     // (the strip, the taxiway beside it, the apron and the buildings — PLAN-AEROPORTS A2, A3 —: 280 m out of
     // the axis, faded by 340)
     const wc = c < 280 ? 1 : Math.max(0, 1 - (c - 280) / 60);
-    w = Math.max(w, wa * wc);
+    // (the level: the strip and its airfield, eased back to the relief)
+    const out = Math.max(-G.levelPast - a, a - RUNWAY_LENGTH - G.levelPast, 0);
+    const la = 1 - ease(out / G.levelEase);
+    const lc = 1 - ease((c - G.levelSide) / G.levelSideEase);
+    const level = la * lc;
+    if (level > g.level) {
+      g.level = level;
+      g.elev = r.elev;
+    }
+    g.flat = Math.max(g.flat, wa * wc, level);
   }
-  return w;
+  return g;
 }
+/** How much of a point the drawn detail is taken off (runwayGrade's flat). */
+export const runwayWeight = (q: [number, number, number]): number => runwayGrade(q).flat;
 
 /**
  * A runway's other end (PLAN-METEO W4): its far threshold — the strip drawn RUNWAY_LENGTH along its heading

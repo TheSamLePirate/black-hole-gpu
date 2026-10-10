@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, Z0, Z1 } from "../src/system/earth-tiles";
-import { EARTH_RUNWAYS, runwayWeight } from "../src/game/sites";
+import { EARTH_RUNWAYS, runwayGrade, runwayWeight } from "../src/game/sites";
 import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
@@ -119,7 +119,7 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
   const map = new Int16Array(W * H).map((_, k) => 500 + (((k % W) * 37 + Math.floor(k / W) * 91) % 400));
   const t = new EarthTiles(fakeDevice());
   t.fallback = tileFallbackSampler(map, W, H);
-  const ground = earthHeightSampler(map, W, H, (q, foot) => t.heightAt(q, foot), runwayWeight);
+  const ground = earthHeightSampler(map, W, H, (q, foot) => t.heightAt(q, foot), runwayGrade);
   // (Edwards's runway 22, the craft rolling down it: the ground before any tile, then with every tile failed in)
   t.update(camAt(34.905, -117.884, 2), 1e-3);
   const rwy = EARTH_RUNWAYS.find((r) => r.site.name.includes("Edwards"))!;
