@@ -525,6 +525,10 @@ Par ordre de gain :
 
 ## Journal
 
+- **10/10/2026 — Aéroports A8 : l'horizon en vue rasante.** Au-dessus de l'horizon, une bande de « terre » déformée et un mirage de la piste : la marche du relief manquait de pas pour les rayons rasants (256 pour ~580 nécessaires par décade de distance) et dessinait leur dernier point comme le sol — démontré par un test du shader (ces rayons en magenta). Les pas suivent maintenant l'écart au sol (sa chute prédit la rencontre ; un rayon qui s'éloigne avance de 5 % de la distance et, à court de pas, voit le ciel) : plus aucun rayon perdu, et le relief 4 à 27 % moins cher.
+
+  Leçon : **un artefact se voit d'abord dans le shader** — peindre la branche suspecte d'une couleur franche a tranché en une image ce que des captures comparées laissaient deviner.
+
 - **10/10/2026 — Aéroports A7 : des pistes plates, lisibles en vue rasante** (signalé par le propriétaire). Le sol sous les pistes gardait le relief réel (jusqu'à 16 m de bosses au roulage à Tanegashima) : chaque terrain d'aviation est désormais nivelé à son altitude, raccordé au relief par un talus, identique pour le CPU (le train) et le GPU (l'image) ; le marquage de la piste calculé avec l'empreinte du pixel le long et en travers d'elle (une seule empreinte, celle de la visée, la noyait dans l'herbe en finale) ; un terrain remblayé sur la mer devient de la terre. Planche `docs/progress/aeroports/a7-nivellement.jpg`.
 
 - **10/10/2026 — TARS agent terminé (A1–A9, B1–B7, C1–C6), la doc mise à jour.** TARS est un agent : 43 outils sur tout le jeu, ordres sans confirmation et propositions acceptées ou refusées, la télémétrie entière et les consignes des autopilotes, ses réveils aux moments clés sous un budget par heure, des sous-agents en lecture seule, une console d'agent déplaçable à onglets, 26 commandes d'agent et 67 commandes de jeu complétées en tapant. Vérifié sur le vrai OpenRouter (GLM-5.3 Flash) : la Lune en orbite, un plan proposé puis volé, un plané vers Edwards suivi par ses réflexes (rapport A), le banc court repassé sans échec.

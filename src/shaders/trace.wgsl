@@ -4998,6 +4998,10 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   var fPrev = 1.0;
   // (once within the margin, the full heights to the end: near the ground both would be evaluated)
   var band = false;
+  // (the last step's f on the full heights or not: its fall to this one, on the same, is the clearance's rate)
+  var prevFull = false;
+  // (the clearance growing at the last step: the ray leaving the ground)
+  var rising = false;
   for (var i = 0u; i < 256u; i++) {
     let v = o + rd * t;
     let p = A + v;
@@ -5027,13 +5031,32 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
       // (the root between the last two: the side above may have closed in on it, the one below not)
       return clamp(lo + (hi - lo) * flo / (flo - fhi), lo, hi);
     }
+    // (a grazing ray over gentle ground — a runway seen from the cockpit, any plain to its horizon —: its
+    // clearance falls by a thousandth of the distance, and steps of 0.4 % of it took ~600 a decade — it ran out
+    // of them short of the ground, which was drawn there: a hump on the horizon, a runway's lines bent. Its
+    // clearance's fall since the last step (both on the same heights: the cheap ones and their margin, or
+    // the full ones) foretells the crossing: half of that, at most 3 % of the distance — the crossing then
+    // bracketed as before)
+    // A ray rising from the ground but slowly — just above the horizon, a metre a kilometre — stepped as
+    // slowly and ran out of steps a kilometre or two out: that point, in the air, was drawn as the ground —
+    // a band of smeared land above the horizon, the runway's mirage in it. Its clearance growing, the
+    // relief would have to rise faster than it to meet it: steps of 5 % of the distance (the shell left in
+    // ~150 steps); a ridge met is bracketed as any crossing)
+    var step = max(0.5 * f, 0.004 * t + 1e-9);
+    rising = false;
+    if (i > 0u && prevFull == band) {
+      if (fPrev > f) { step = max(step, min(0.5 * f * (t - tPrev) / (fPrev - f), 0.03 * t)); } else { step = max(step, 0.05 * t); rising = true; }
+    }
+    prevFull = band;
     tPrev = t;
     fPrev = f;
-    t += max(0.5 * f, 0.004 * t + 1e-9);
+    t += step;
     if (t > t1) { return -1.0; }
   }
   // (the steps spent still under the relief's shell: a grazing ray, near the ground over tens of km —
-  // it meets the far ridges; a miss here showed the sky through the land, in bands)
+  // it meets the far ridges; a miss here showed the sky through the land, in bands. Unless it was
+  // leaving the ground — tangent to the Earth, just above the horizon —: it met nothing, the sky)
+  if (rising) { return -1.0; }
   return t;
 }
 
