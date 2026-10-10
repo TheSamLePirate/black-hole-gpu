@@ -19,6 +19,8 @@ const MODEL = `(() => {
     const msgs = body.messages;
     const q = [...msgs].reverse().find((m) => m.role === "user").content.split("Pilot: ").at(-1);
     const tools = msgs.filter((m) => m.role === "tool");
+    // (the tools a mode allows, seen by the model)
+    if (!msgs[0].content.includes("sub-agent of TARS")) window.__lastTools = (body.tools ?? []).map((t) => t.function.name);
     const reply = (m) => Response.json({ choices: [{ message: m }], usage: { cost: 0.0001 } });
     if (/Vise Mars/.test(q)) {
       if (!tools.length) return reply({ content: null, tool_calls: [call("a", "set_target", { name: "Mars" }), call("b", "set_settings", { changes: [{ key: "wind", value: "9" }] })] });
@@ -60,6 +62,14 @@ const MODEL = `(() => {
     if (/J'accepte ton plan/.test(q)) {
       if (!tools.length) return reply({ content: null, tool_calls: [call("e1", "set_target", { name: "Mars" }), call("e2", "time", { warp: 100 })] });
       return reply({ content: "Plan exécuté." });
+    }
+    if (/Fais la liste/.test(q)) {
+      if (!tools.length)
+        return reply({
+          content: null,
+          tool_calls: [call("t1", "update_todos", { items: [{ text: "Viser la Lune", status: "done" }, { text: "Planifier", status: "active" }, { text: "Exécuter", status: "pending" }] })],
+        });
+      return reply({ content: "Liste faite." });
     }
     // (a sub-agent's own request: its conclusion at once)
     if (msgs[0].content.includes("sub-agent of TARS")) return reply({ content: "Conclusion: " + q });
@@ -344,5 +354,66 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     const tm = await app.js<{ attitude?: { bankDeg?: number }; controls?: { sas?: boolean } }>(`window.__telemetry`);
     expect(typeof tm.attitude?.bankDeg).toBe("number");
     expect(typeof tm.controls?.sas).toBe("boolean");
+  }, 90_000);
+
+  test("the field: / and @ completed, the mode (Shift+Tab, /mode), /help, ↑ the history, his task list, a skill kept and run (C1–C5)", async () => {
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    await app.click("[data-testid=tars-tab-talk]");
+    const sug = () => app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-suggest] li b")].map((b) => b.textContent)`);
+    // ("/mo": model, mode; ↓ then Tab takes mode; its values; Enter on "plan")
+    await app.type("/mo");
+    expect(await sug()).toEqual(["/model <modèle>", "/mode act|plan|watch"]);
+    await app.press("ArrowDown", "ArrowDown");
+    await app.press("Tab", "Tab");
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-input]").value`)).toBe("/mode ");
+    await app.type("pl");
+    expect(await sug()).toEqual(["plan"]);
+    await app.press("Enter");
+    await app.waitFor(`document.querySelector("[data-testid=tars-mode]").dataset.mode === "plan"`, 3_000);
+    // (in plan mode his acting tools are gone)
+    await app.type("Fais la liste");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Liste faite."`, 15_000);
+    const tools = await app.js<string[]>(`window.__lastTools`);
+    expect(tools).toContain("propose_plan");
+    expect(tools).not.toContain("autopilot");
+    expect(await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-todos] li")].map((l) => l.className)`)).toEqual([
+      "done",
+      "active",
+      "pending",
+    ]);
+    // (Shift+Tab: observe; again: act)
+    await app.press("Tab", "Tab", { shift: true });
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-mode]").dataset.mode`)).toBe("watch");
+    await app.press("Tab", "Tab", { shift: true });
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-mode]").dataset.mode`)).toBe("act");
+    // ("@lu": the Moon)
+    await app.type("vise @lu");
+    expect(await sug()).toContain("Lune");
+    await app.press("Tab", "Tab");
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-input]").value`)).toBe("vise @Lune ");
+    await app.js(`(document.querySelector("[data-testid=tars-input]").value = "", true)`);
+    // (/help: a card of the commands)
+    await app.type("/help");
+    await app.press("Enter");
+    await app.waitFor(
+      `[...document.querySelectorAll("[data-testid=tars-card] h3")].some((h) => h.textContent === "Commandes de TARS")`,
+      3_000,
+    );
+    // (↑: the last question again)
+    await app.press("ArrowUp", "ArrowUp");
+    expect(await app.js<string>(`document.querySelector("[data-testid=tars-input]").value`)).toBe("/help");
+    await app.js(`(document.querySelector("[data-testid=tars-input]").value = "", true)`);
+    // (a skill: the last request kept, run by its name, offered by the completion)
+    await app.type("/skill save liste");
+    await app.press("Enter");
+    await app.type("/lis");
+    expect(await sug()).toContain("/liste");
+    await app.js(`(document.querySelector("[data-testid=tars-input]").value = "/liste", true)`);
+    await app.press("Enter");
+    await app.waitFor(
+      `__bh.tars.agent.lastText === "Liste faite." && document.querySelector(".tp-you").textContent === "★ /liste"`,
+      15_000,
+    );
   }, 90_000);
 });

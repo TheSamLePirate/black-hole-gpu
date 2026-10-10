@@ -11,6 +11,8 @@ import { summaryPrompt, type TarsMemory } from "./memory";
 import type { OpenRouter } from "./openrouter";
 import { systemPrompt } from "./tars-online";
 import { parseOrders } from "./offline-orders";
+import type { Mode } from "./commands";
+import { READ_TOOLS } from "./subagents";
 import type { Proposal } from "./game-tools";
 
 export interface TarsAgentDeps {
@@ -24,6 +26,8 @@ export interface TarsAgentDeps {
   say(text: string): void;
   /** an action begun */
   onCall?(tool: string, args: Record<string, unknown>): void;
+  /** his mode (C3): act, propose before acting, observe only */
+  mode?(): Mode;
   /** an action done, as it ends: what it came back with (short), whether it went, its full line, its tool */
   onAction(result: string, ok: boolean, full: string, tool: string): void;
   onBusy(busy: boolean): void;
@@ -49,6 +53,30 @@ export function agentPrompt(p: Personality, lang: "fr" | "en"): string {
   ].join(" ");
 }
 
+/** the tools each mode keeps (C3) */
+const SHOWING = new Set([
+  "show_chart",
+  "show_card",
+  "show_screen",
+  "hide_display",
+  "memory",
+  "update_todos",
+  "spawn_agents",
+  "say",
+  "list_schedules",
+]);
+export function modeTools(tools: Tool[], mode: Mode): Tool[] {
+  if (mode === "act") return tools;
+  return tools.filter(
+    (t) => READ_TOOLS.has(t.name) || SHOWING.has(t.name) || (mode === "plan" && (t.name === "propose_plan" || t.name === "schedule")),
+  );
+}
+const MODE_PROMPT: Record<Mode, string> = {
+  act: "Mode: ACT — carry out what is asked.",
+  plan: "Mode: PROPOSE — you may not act on the ship or the game: for anything that would act, work out the figures (plan_* compute only) and propose it with propose_plan; the pilot accepts or refuses.",
+  watch: "Mode: OBSERVE — you only read, analyse, show and answer; you never act and never propose to act unless asked.",
+};
+
 const UNACTED =
   "(Check: you answered without calling any tool, but the pilot gave an order — nothing has been done in the game. Do it now with the tools (to cancel or go back: saves with action undo), then answer. If it truly needs no action, repeat your answer.)";
 const YES =
@@ -65,7 +93,12 @@ export class TarsAgent {
   lastText: string | null = null;
 
   constructor(private d: TarsAgentDeps) {
-    this.agent = new Agent((m, fns, signal) => d.or.complete(m, fns, { signal }), d.tools);
+    // (his tools as his mode allows: all when acting; reading, showing, proposing when proposing; reading and
+    // showing when observing)
+    this.agent = new Agent(
+      (m, fns, signal) => d.or.complete(m, fns, { signal }),
+      () => modeTools(d.tools(), d.mode?.() ?? "act"),
+    );
   }
 
   /** a plan proposed and not yet answered (propose_plan) */
@@ -106,7 +139,10 @@ export class TarsAgent {
     const flight = this.d.flight();
     try {
       const r = await this.agent.turn(
-        [{ role: "system", content: agentPrompt(this.d.personality(), lang) }, ...this.d.memory.context()],
+        [
+          { role: "system", content: `${agentPrompt(this.d.personality(), lang)} ${MODE_PROMPT[this.d.mode?.() ?? "act"]}` },
+          ...this.d.memory.context(),
+        ],
         `${this.d.memory.carry()}Flight data now: ${JSON.stringify(flight)}\nPilot: ${q}`,
         {
           signal: ctl.signal,
@@ -115,7 +151,7 @@ export class TarsAgent {
           onCall: (tool, args) => this.d.onCall?.(tool, args),
           // (an order — the words read as one offline — answered with no tool called: nothing was done; sent
           // back once to do it, rather than let him claim it)
-          unacted: () => (parseOrders(q).length ? UNACTED : null),
+          unacted: () => ((this.d.mode?.() ?? "act") === "act" && parseOrders(q).length ? UNACTED : null),
         },
       );
       this.last = r.actions;

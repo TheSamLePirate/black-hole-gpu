@@ -124,7 +124,7 @@ Ce qui encadre ces répliques :
 Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
-- **Ce qu'il fait** : ses 41 outils couvrent tout le jeu.
+- **Ce qu'il fait** : ses 43 outils couvrent tout le jeu.
   - Lire : l'état entier, les sites et pistes, les corps, la météo, les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
   - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
   - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
@@ -148,6 +148,14 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TAR
 - **Ses sous-agents** : jusqu'à 4 copies en parallèle, en lecture et en calcul seulement ; seul TARS agit.
 - **Il montre** le graphe du hub et le couloir de rentrée en direct, ses propres canaux (inclinaison, incidence…) ; « vue vaisseau » ramène la caméra au vaisseau.
 - **Sa console** se déplace par sa poignée ⠿ (en haut à droite ; sa place est gardée, un double clic la remet), s'agrandit, se replie ; ses onglets : Échange, Agents, Réveils, Mémoire.
+
+### Phase 3 : ce qu'ont les grands agents
+
+- **Les commandes « / »**, complétées en tapant (↑ ↓, Tab, Entrée) : /help, /clear, /compact, /model, /mode, /plan, /cost, /budget, /status, /telemetry, /show, /stop, /undo, /retry, /export, /memory, /forget, /agents, /wakes, /reflexes, /voice, /skill, /dock, /login, /key, /logout.
+- **@** complète un corps, un site, un écran, un réglage ; **↑ ↓** rappellent les questions passées.
+- **Ses modes** (Maj+Tab, /mode) : Agir (sans confirmation), Proposer (il propose chaque plan avant d'agir), Observer (il lit et montre, n'agit pas).
+- **Sa liste de tâches** pour une tâche en plusieurs étapes, cochée en direct.
+- **Les savoir-faire** : « /skill save nom » garde la dernière demande ; « /nom » la rejoue ; il peut en créer lui-même.
 
 ## Les outils de test (`__bh`)
 

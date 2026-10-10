@@ -81,7 +81,7 @@ import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { CraftLost } from "./ui/craftlost";
 import { FlightComputer } from "./ui/fc/computer";
-import { sitesOf } from "./game/sites";
+import { sitesOf, SITES } from "./game/sites";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
@@ -95,20 +95,22 @@ import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
 import { ScoreDirector } from "./audio/score";
 import { Tars, type TarsMoment, type TarsState } from "./game/tars";
-import { TarsPanel } from "./ui/tars-panel";
+import { TarsPanel, type TarsPanelHost } from "./ui/tars-panel";
 import { AGENT_MODELS, connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
 import { TarsOnline } from "./ai/tars-online";
 import { TarsAgent, runOrders } from "./ai/tars-agent";
 import { orderReply, parseOrders } from "./ai/offline-orders";
 import { TarsMemory, TARS_MEMORY_KEY, type MemoryData } from "./ai/memory";
 import type { Tool } from "./ai/agent";
-import { gameTools } from "./ai/game-tools";
+import { gameTools, SCREENS } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
 import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
 import { Budget } from "./ai/budget";
 import { runSubagents } from "./ai/subagents";
 import { AttitudeSampler } from "./ai/telemetry";
+import { complete, MODES, parseCommand, TARS_MODE_KEY, TARS_SKILLS_KEY, unmention, type Mode, type Skill } from "./ai/commands";
+import { runCommand } from "./ai/tars-commands";
 import { closeTop } from "./ui/keys";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
@@ -580,8 +582,19 @@ async function main() {
   // (his own channels — the attitude, the commands —, sampled twice a second while flying: his charts — B2)
   const tarsSampler = new AttitudeSampler();
   setInterval(() => camera.piloting && tarsSampler.sample(sim.time * 4.925490947e-6 * settings.massSolar, camera), 500);
+  // his mode (C3) and the pilot's skills (C5), kept in this browser
+  let tarsMode: Mode = (["act", "plan", "watch"] as const).find((m) => m === store.get(TARS_MODE_KEY)) ?? "act";
+  const tarsSkills: Skill[] = store.getJSON<Skill[]>(TARS_SKILLS_KEY, []);
+  const saveSkill = (name: string, description: string, prompt: string) => {
+    const i = tarsSkills.findIndex((k) => k.name === name);
+    const k = { name, description, prompt, at: Date.now() };
+    if (i >= 0) tarsSkills[i] = k;
+    else tarsSkills.push(k);
+    store.setJSON(TARS_SKILLS_KEY, tarsSkills);
+  };
   const tarsAgent = new TarsAgent({
     or: openRouter,
+    mode: () => tarsMode,
     tools: () => tarsTools,
     memory: tarsMemory,
     personality: () => tarsPersonality(),
@@ -765,8 +778,24 @@ async function main() {
     tarsFollowStart();
   }
   const tarsPanelAsk = (q: string, shown?: string) => void tarsAsk(q, shown);
-  const tarsPanel = new TarsPanel({
+  const tarsPanelHost: TarsPanelHost = {
     ask: (q) => tarsPanelAsk(q),
+    complete: (input) =>
+      complete(input, {
+        lang,
+        models: AGENT_MODELS.map((m) => ({ id: m.id, name: m.name })),
+        screens: SCREENS,
+        bodies: tools.targets().map((id) => ({ id, name: (BODY_NAMES as Record<string, string>)[id] ?? id })),
+        sites: SITES.map((x) => ({ name: x.name, body: x.body })),
+        settings: SCHEMA.map((d) => ({ key: d.key, label: t(d.label) })),
+        notes: tarsMemory.notes,
+        skills: tarsSkills,
+      }),
+    mode: () => tarsMode,
+    cycleMode: () => {
+      tarsMode = MODES[(MODES.indexOf(tarsMode) + 1) % MODES.length]!;
+      store.set(TARS_MODE_KEY, tarsMode);
+    },
     link: () => ({
       hint: openRouterKey.hint(),
       online: settings.tarsOnline,
@@ -815,7 +844,8 @@ async function main() {
     stop: () => tarsAgent.stop(),
     talk: PushToTalk.supported ? () => (tarsTalk.listening ? tarsTalk.stop() : tarsTalk.start()) : null,
     talkKey: (e) => tarsKey(e),
-  });
+  };
+  const tarsPanel = new TarsPanel(tarsPanelHost);
   /** A question to TARS (typed, or spoken): the agent online; offline the orders, else his written answers. */
   async function tarsAsk(q: string, shown?: string) {
     // (the words "stop": the turn running stopped, nothing else)
@@ -825,6 +855,17 @@ async function main() {
     }
     // (a plan proposed: "yes" carries it out, "no" drops it — anything else is a new question)
     if (tarsAgent.pending && (TarsAgent.isYes(q) || TarsAgent.isNo(q))) return tarsAnswer(TarsAgent.isYes(q));
+    // (a "/" command, or one of the pilot's skills — C1, C5)
+    const cmd = parseCommand(q, tarsSkills);
+    if (cmd) return tarsCommand(cmd, q);
+    if (q.startsWith("/")) {
+      tarsPanel.exchange(q);
+      return tarsPanel.answer(tr({ fr: "Commande inconnue — /help les liste.", en: "Unknown command — /help lists them." }));
+    }
+    // (the @mentions made plain for him — C2; shown as typed)
+    shown ??= q;
+    q = unmention(q);
+    if (!q.startsWith("[")) tarsLastAsked = q;
     tarsPanel.exchange(q, shown);
     const st = tarsNow();
     const r = tars.answer(q, st, tarsPersonality());
@@ -866,6 +907,48 @@ async function main() {
     // (an autopilot he engaged, or a plan: followed to its end)
     tarsFollowStart();
   }
+  // the "/" commands (C1, C5: ai/tars-commands.ts)
+  let tarsLastAsked = "";
+  const tarsCommand = (c: { name: string; arg: string; skill?: Skill }, typed: string) => {
+    tarsPanel.exchange(typed);
+    void runCommand(
+      {
+        lang: () => lang,
+        settings,
+        camera,
+        tools,
+        or: openRouter,
+        memory: tarsMemory,
+        agentTools: () => tarsTools,
+        skills: tarsSkills,
+        saveSkills: () => store.setJSON(TARS_SKILLS_KEY, tarsSkills),
+        lastAsked: () => tarsLastAsked,
+        mode: () => tarsMode,
+        setMode: (m) => {
+          tarsMode = m;
+          store.set(TARS_MODE_KEY, m);
+          tarsPanel.syncMode();
+        },
+        budget: tarsBudget,
+        changed: (keys) => {
+          onSettingsChange(keys);
+          refreshGui();
+        },
+        say: (text) => tarsPanel.answer(text),
+        card: (title, rows, note) => tarsDisplay.show({ kind: "data", title, rows, note }),
+        ask: (q, shown) => tarsPanelAsk(q, shown),
+        stop: () => tarsAgent.stop(),
+        tab: (x) => tarsPanel.setTab(x),
+        history: () => tarsPanel.drawHistory(),
+        dock: () => tarsPanel.setLook({ dock: true } as never),
+        connect: () => tarsPanelHost.connect(),
+        pasteKey: () => tarsPanel.pasteMode(),
+        refresh: () => tarsPanel.refresh(),
+      },
+      c,
+      typed,
+    ).catch((e) => tarsPanel.answer(e instanceof Error ? e.message : String(e)));
+  };
   // (his emblem moves with his voice: the robot's own measured on the voice bus; a system voice's guessed)
   tarsPanel.levels(
     () => {
@@ -2726,6 +2809,8 @@ async function main() {
     progress: (text) => tarsPanel.progress(text),
     triggers: tarsTriggers,
     sampler: tarsSampler,
+    todos: (items) => tarsPanel.todos(items),
+    skills: { save: saveSkill },
     subagents: (tasks, signal) => {
       tarsPanel.clearSubagents();
       tarsPanel.setTab("agents");

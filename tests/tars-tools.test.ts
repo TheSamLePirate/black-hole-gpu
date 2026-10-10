@@ -79,3 +79,37 @@ test("offline: the common orders turned into the tools' calls (A4); questions ar
   expect(orderReply("fr", [{ tool: "a", ok: true }])).toBe("C'est fait.");
   expect(orderReply("en", [{ tool: "a", ok: false, error: "no runway" }])).toBe("Couldn't: no runway.");
 });
+
+test("commands, skills and mentions: parsed and completed as typed (C1–C2, C5)", async () => {
+  const { complete, parseCommand, unmention } = await import("../src/ai/commands");
+  const ctx = {
+    models: [
+      { id: "z-ai/glm-5.3-flash", name: "GLM-5.3 Flash" },
+      { id: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5" },
+    ],
+    screens: ["map_globe", "entry_corridor"],
+    bodies: [
+      { id: "moon", name: "Lune" },
+      { id: "mars", name: "Mars" },
+    ],
+    sites: [{ name: "Le Bourget", body: "earth" }],
+    settings: [{ key: "music", label: "Musique" }],
+    notes: ["Le pilote s'appelle Cooper"],
+    skills: [{ name: "retour", description: "Rentrer au Bourget", prompt: "Ramène-nous au Bourget", at: 0 }],
+  };
+  // ("/": the commands and his skills; "/mo": model, mode)
+  expect(complete("/mo", ctx).map((s) => s.label)).toEqual(["/model <modèle>", "/mode act|plan|watch"]);
+  expect(complete("/re", ctx).map((s) => s.label)).toContain("/retour");
+  // (an argument's values, by value or hint)
+  expect(complete("/model hai", ctx).map((s) => s.text)).toEqual(["/model anthropic/claude-haiku-5.5"]);
+  expect(complete("/mode p", ctx).map((s) => s.text)).toEqual(["/mode plan"]);
+  // (mentions: a body, a site with its spaces quoted)
+  expect(complete("emmène-nous vers @lu", ctx).map((s) => s.text)).toEqual(["emmène-nous vers @Lune "]);
+  expect(complete("pose-nous au @bo", ctx).map((s) => s.text)).toEqual(['pose-nous au @"Le Bourget" ']);
+  expect(complete("bonjour", ctx)).toEqual([]);
+  expect(parseCommand("/model glm")).toEqual({ name: "model", arg: "glm" });
+  expect(parseCommand("/retour vite", ctx.skills)?.skill?.prompt).toBe("Ramène-nous au Bourget");
+  expect(parseCommand("/nope")).toBeNull();
+  expect(parseCommand("vise Mars")).toBeNull();
+  expect(unmention('pose-nous au @"Le Bourget" puis vise @Mars')).toBe("pose-nous au Le Bourget puis vise Mars");
+});

@@ -99,6 +99,12 @@ export class TarsMemory {
     this.store.clear();
   }
 
+  /** A new conversation (/clear): the exchanges and their summary gone, his notes kept. */
+  clearTurns() {
+    this.d = { ...this.d, turns: [], summary: "" };
+    this.save();
+  }
+
   /** whether the turns have outgrown their budget */
   get full(): boolean {
     return this.d.turns.length > TURNS_KEPT;
@@ -106,9 +112,10 @@ export class TarsMemory {
 
   /** The oldest half of the turns folded into the summary: by `summarize` (the model; null: failed — the
    *  turns then simply dropped, their gist lost but the memory bounded). */
-  async compact(summarize: ((previous: string, turns: Turn[]) => Promise<string | null>) | null) {
-    if (!this.full) return;
-    const n = this.d.turns.length - Math.floor(TURNS_KEPT / 2);
+  async compact(summarize: ((previous: string, turns: Turn[]) => Promise<string | null>) | null, force = false) {
+    if (!this.full && !(force && this.d.turns.length > 2)) return;
+    // (forced — /compact —: all but the last two exchanges folded)
+    const n = force ? this.d.turns.length - 2 : this.d.turns.length - Math.floor(TURNS_KEPT / 2);
     const old = this.d.turns.slice(0, n);
     const s = summarize ? await summarize(this.d.summary, old) : null;
     if (s) this.d.summary = s.trim().slice(0, SUMMARY_CHARS);

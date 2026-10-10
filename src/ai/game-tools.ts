@@ -106,6 +106,10 @@ export interface GameHost {
   progress(text: string | null): void;
   /** his wakings (B1): the rules he sets himself */
   triggers: Triggers;
+  /** his task list shown (C4) */
+  todos(items: { text: string; status: "pending" | "active" | "done" }[]): void;
+  /** his skills (C5): saved requests run by their name */
+  skills: { save(name: string, description: string, prompt: string): void };
   /** his own channels sampled while flying (the attitude, the commands): his charts' (B2) */
   sampler: AttitudeSampler;
   /** his sub-agents (B5): questions answered in parallel, reading only */
@@ -1324,6 +1328,45 @@ export function gameTools(h: GameHost): Tool[] {
       run: async (a, signal) => {
         const r = await h.subagents(a.tasks as SubTask[], signal);
         return r.map((x) => ({ name: x.name, ok: x.ok, conclusion: x.text }));
+      },
+    },
+    {
+      name: "update_todos",
+      description:
+        "Your task list, shown to the pilot: for a task of several steps, write its steps (pending, active, done) at the start and update it as you go — the whole list each time.",
+      params: {
+        items: {
+          type: "array",
+          maxItems: 12,
+          items: {
+            type: "object",
+            properties: { text: { type: "string" }, status: { type: "string", enum: ["pending", "active", "done"] } },
+            required: ["text", "status"],
+          },
+        },
+      },
+      required: ["items"],
+      run: (a) => {
+        h.todos(a.items as { text: string; status: "pending" | "active" | "done" }[]);
+        return "shown";
+      },
+    },
+    {
+      name: "save_skill",
+      description:
+        "Save a procedure that worked as one of the pilot's commands: a short name (letters, digits, dashes), what it does, and the request that does it (in the pilot's words). The pilot runs it with /name.",
+      params: { name: { type: "string" }, description: { type: "string" }, prompt: { type: "string" } },
+      required: ["name", "description", "prompt"],
+      run: (a) => {
+        const name = String(a.name)
+          .toLowerCase()
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9-]+/g, "-")
+          .replace(/^-|-$/g, "");
+        if (!name) throw new Error("a name of letters, digits and dashes");
+        h.skills.save(name, String(a.description), String(a.prompt));
+        return `saved as /${name}`;
       },
     },
     {

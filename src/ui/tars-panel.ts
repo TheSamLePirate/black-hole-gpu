@@ -18,6 +18,7 @@ import { t, tf, tr, type Text } from "../i18n";
 import { store } from "../util/storage";
 import { TarsEmblem, type EmblemState } from "./tars/emblem";
 import type { Proposal } from "../ai/game-tools";
+import { MODE_WORDS, type Mode, type Suggestion } from "../ai/commands";
 
 export interface TarsPanelHost {
   /** a question asked */
@@ -44,6 +45,11 @@ export interface TarsPanelHost {
   /** his memory's contents (the Memory tab), a note forgotten */
   memoryContents?(): { notes: readonly string[]; summary: string; turns: readonly { at: number; user: string; tars: string }[] };
   forget?(note: string): void;
+  /** what completes the field as typed (C1–C2) */
+  complete?(input: string): Suggestion[];
+  /** his mode (C3) and the next one */
+  mode?(): Mode;
+  cycleMode?(): void;
 }
 
 /** A waking as the console lists it. */
@@ -85,9 +91,13 @@ const KIND_WORDS: Record<string, Text> = {
 };
 
 const POS_KEY = "kerr.tars.console";
+/** the questions asked, for ↑ ↓ (C2) */
+const HISTORY_KEY = "kerr.tars.asked";
+const HISTORY_MAX = 60;
 
 /** the tools whose result is for him, not the pilot: their step shown without it */
 const QUIET = new Set([
+  "update_todos",
   "schedule",
   "list_schedules",
   "spawn_agents",
@@ -165,6 +175,8 @@ export const TOOL_WORDS: Record<string, { w: Text; i: string }> = {
   cancel_schedule: { w: { fr: "Réveil changé", en: "Waking changed" }, i: "⏲" },
   spawn_agents: { w: { fr: "Sous-agents", en: "Sub-agents" }, i: "⑂" },
   get_telemetry: { w: { fr: "Télémétrie lue", en: "Telemetry read" }, i: "≋" },
+  update_todos: { w: { fr: "Liste de tâches", en: "Task list" }, i: "☑" },
+  save_skill: { w: { fr: "Savoir-faire gardé", en: "Skill saved" }, i: "★" },
 };
 
 const wrap = (inner: HTMLElement) => {
@@ -208,6 +220,14 @@ export class TarsPanel {
   private memoryEl = el("div", "tp-memory");
   private budgetEl = el("span", "tp-budget");
   private followEl = el("section", "tp-follow");
+  private todosEl = el("ol", "tp-todos");
+  private suggestEl = el("ul", "tp-suggest");
+  private sugs: Suggestion[] = [];
+  private sugAt = 0;
+  private asked: string[] = store.getJSON<string[]>(HISTORY_KEY, []);
+  private askedAt = -1;
+  private draft = "";
+  private modeEl = el("button", "tp-mode");
   private subs = new Map<string, { state: string; line: string; at: number; el: HTMLElement }>();
 
   constructor(
@@ -269,7 +289,20 @@ export class TarsPanel {
     this.input.autocomplete = "off";
     this.input.spellcheck = false;
     this.input.setAttribute("aria-label", t("Ask TARS"));
-    row.append(this.input);
+    // (his mode before the field: a click, or Shift+Tab in it, turns it — C3)
+    this.modeEl.type = "button";
+    this.modeEl.dataset.testid = "tars-mode";
+    this.modeEl.title = tr({ fr: "Mode — Maj+Tab : Agir · Proposer · Observer", en: "Mode — Shift+Tab: Act · Propose · Observe" });
+    this.modeEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.host.cycleMode?.();
+      this.syncMode();
+    });
+    this.suggestEl.dataset.testid = "tars-suggest";
+    this.suggestEl.setAttribute("role", "listbox");
+    this.suggestEl.hidden = true;
+    row.append(this.suggestEl, this.modeEl, this.input);
+    this.input.addEventListener("input", () => this.suggest());
     // (the microphone: a click listens, another sends — the key held does the same)
     if (host.talk) {
       const mic = el("button", "tars-mic", "🎙");
@@ -305,7 +338,9 @@ export class TarsPanel {
     this.history.dataset.testid = "tars-history";
     this.followEl.dataset.testid = "tars-follow";
     this.followEl.hidden = true;
-    talk.append(this.history, thread, this.proposalEl, this.followEl, task);
+    this.todosEl.dataset.testid = "tars-todos";
+    this.todosEl.hidden = true;
+    talk.append(this.history, thread, this.proposalEl, this.followEl, this.todosEl, task);
     this.agentsEl.dataset.testid = "tars-agents";
     this.wakesEl.dataset.testid = "tars-wakes";
     this.memoryEl.dataset.testid = "tars-memory-tab";
@@ -350,6 +385,43 @@ export class TarsPanel {
         e.preventDefault();
         return this.host.talkKey(e);
       }
+      // (Shift+Tab: his mode turned — C3)
+      if (e.key === "Tab" && e.shiftKey) {
+        e.preventDefault();
+        this.host.cycleMode?.();
+        return this.syncMode();
+      }
+      // (the completions: ↑ ↓ to choose, Tab or Enter to take, Escape to close — C1)
+      if (this.sugs.length) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          this.sugAt = (this.sugAt + (e.key === "ArrowDown" ? 1 : this.sugs.length - 1)) % this.sugs.length;
+          return this.drawSuggest();
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && this.sugs[this.sugAt]!.text.trim() !== this.input.value.trim())) {
+          e.preventDefault();
+          const t = this.sugs[this.sugAt]!.text;
+          this.input.value = t;
+          this.suggest();
+          // (a whole command, nothing more to type: done at once with Enter)
+          if (e.key === "Enter" && !t.endsWith(" ")) return this.submit();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          return this.closeSuggest();
+        }
+      }
+      // (↑ ↓: the questions asked before — C2)
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !this.keyMode && this.asked.length) {
+        const up = e.key === "ArrowUp";
+        if (this.askedAt < 0 && !up) return;
+        if (this.askedAt < 0) this.draft = this.input.value;
+        e.preventDefault();
+        this.askedAt = up ? Math.min(this.asked.length - 1, this.askedAt + 1) : this.askedAt - 1;
+        this.input.value = this.askedAt < 0 ? this.draft : this.asked[this.asked.length - 1 - this.askedAt]!;
+        return;
+      }
       if (e.key === "Escape") {
         if (this.keyMode) return this.setKeyMode(false);
         // (a turn running: Escape stops it first)
@@ -357,19 +429,84 @@ export class TarsPanel {
         return this.close();
       }
       if (e.key !== "Enter") return;
-      const q = this.input.value.trim();
-      this.input.value = "";
-      if (this.keyMode) {
-        const ok = q ? this.host.paste(q) : false;
-        this.setKeyMode(false);
-        this.refresh(ok ? t("Key kept in this browser only.") : q ? t("That is not an OpenRouter key (sk-or-…).") : "");
-        return;
-      }
-      if (!q) return this.close();
-      this.host.ask(q);
+      this.submit();
     });
     this.input.addEventListener("keyup", (e) => e.stopPropagation());
+    this.syncMode();
     this.setState("idle");
+  }
+
+  /** The field sent: a key pasted, or a question (kept for ↑). */
+  private submit() {
+    const q = this.input.value.trim();
+    this.input.value = "";
+    this.closeSuggest();
+    this.askedAt = -1;
+    if (this.keyMode) {
+      const ok = q ? this.host.paste(q) : false;
+      this.setKeyMode(false);
+      this.refresh(ok ? t("Key kept in this browser only.") : q ? t("That is not an OpenRouter key (sk-or-…).") : "");
+      return;
+    }
+    if (!q) return this.close();
+    if (this.asked.at(-1) !== q) {
+      this.asked.push(q);
+      this.asked.splice(0, Math.max(0, this.asked.length - HISTORY_MAX));
+      store.setJSON(HISTORY_KEY, this.asked);
+    }
+    this.host.ask(q);
+  }
+
+  /** The completions for what is typed (C1–C2). */
+  private suggest() {
+    this.sugs = this.keyMode ? [] : (this.host.complete?.(this.input.value) ?? []);
+    this.sugAt = 0;
+    this.drawSuggest();
+  }
+
+  private closeSuggest() {
+    this.sugs = [];
+    this.drawSuggest();
+  }
+
+  private drawSuggest() {
+    this.suggestEl.hidden = !this.sugs.length;
+    this.suggestEl.replaceChildren(
+      ...this.sugs.map((sg, i) => {
+        const li = el("li", `${sg.kind}${i === this.sugAt ? " on" : ""}`);
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", String(i === this.sugAt));
+        li.append(el("b", "", sg.label), el("span", "", sg.hint ?? ""));
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          this.input.value = sg.text;
+          this.suggest();
+          this.input.focus();
+        });
+        return li;
+      }),
+    );
+  }
+
+  /** His mode shown (C3). */
+  syncMode() {
+    const m = this.host.mode?.() ?? "act";
+    this.modeEl.hidden = !this.host.mode;
+    this.modeEl.dataset.mode = m;
+    this.modeEl.textContent = tr(MODE_WORDS[m]);
+    this.el.dataset.mode = m;
+  }
+
+  /** His task list (C4): each item to do, under way, done; null: none. */
+  todos(items: { text: string; status: "pending" | "active" | "done" }[] | null) {
+    this.todosEl.hidden = !items?.length;
+    this.todosEl.replaceChildren(
+      ...(items ?? []).map((t) => {
+        const li = el("li", t.status);
+        li.append(el("span", "tp-todo-mark", t.status === "done" ? "✓" : t.status === "active" ? "◌" : "○"), el("span", "", t.text));
+        return li;
+      }),
+    );
   }
 
   get open() {
@@ -848,6 +985,12 @@ export class TarsPanel {
 
   hearing(text: string) {
     this.input.value = text;
+  }
+
+  /** The field ready for a key (/key). */
+  pasteMode() {
+    if (!this.open) this.show();
+    this.setKeyMode(true);
   }
 
   private setKeyMode(on: boolean) {
