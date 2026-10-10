@@ -105,6 +105,10 @@ import type { Tool } from "./ai/agent";
 import { gameTools } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
+import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
+import { Budget } from "./ai/budget";
+import { runSubagents } from "./ai/subagents";
+import { AttitudeSampler } from "./ai/telemetry";
 import { closeTop } from "./ui/keys";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
@@ -566,6 +570,16 @@ async function main() {
     set: (d) => store.setJSON(TARS_MEMORY_KEY, d),
     clear: () => store.remove(TARS_MEMORY_KEY),
   });
+  // his wakings (PLAN-TARS-AGENT B1): his reflexes and his rules, kept with his memory; his budget an hour
+  const tarsTriggers = new Triggers({
+    get: () => store.getJSON<Trigger[] | null>(TARS_TRIGGERS_KEY, null),
+    set: (t) => store.setJSON(TARS_TRIGGERS_KEY, t),
+    clear: () => store.remove(TARS_TRIGGERS_KEY),
+  });
+  const tarsBudget = new Budget(() => settings.tarsBudget);
+  // (his own channels — the attitude, the commands —, sampled twice a second while flying: his charts — B2)
+  const tarsSampler = new AttitudeSampler();
+  setInterval(() => camera.piloting && tarsSampler.sample(sim.time * 4.925490947e-6 * settings.massSolar, camera), 500);
   const tarsAgent = new TarsAgent({
     or: openRouter,
     tools: () => tarsTools,
@@ -641,10 +655,115 @@ async function main() {
               en: `In orbit about ${st.soiName}: ${Math.round(st.orbit.peKm)} by ${Math.round(st.orbit.apKm)} km.`,
             })
           : tr({ fr: "Autopilote terminé.", en: "Autopilot done." });
+    if (tarsPanel.currentState === "acting") tarsPanel.setState("idle");
+    // (online, his reflex says it in his own words — B1)
+    if (tarsWakesOn() && tarsTriggers.match({ kind: "autopilot", to: "none" }).length) return;
     tarsPanel.answer(said);
     voice.say({ text: said, speaker: "tars", priority: 2 });
-    if (tarsPanel.currentState === "acting") tarsPanel.setState("idle");
   }, 1000);
+  // his wakings (B1): the game's changes heard each second, the rules they wake, his timed rules; each waking
+  // one turn of his own initiative — when online, the wakings on, his budget not spent, no turn running
+  const tarsWakesOn = () => online() && settings.tarsWake;
+  // (one waking per event, every rule it woke in it; a waking left waiting more than 90 s let go: stale)
+  const tarsWakeQueue: { rules: Trigger[]; e: GameEvent | null; at: number }[] = [];
+  const tarsEvent = (e: GameEvent) => {
+    const rules = tarsTriggers.match(e);
+    if (!rules.length) return;
+    tarsWakeQueue.push({ rules, e, at: performance.now() });
+    tarsWakeQueue.splice(0, Math.max(0, tarsWakeQueue.length - 6));
+  };
+  let tarsSeen: {
+    auto: string;
+    entry: string;
+    hub: string;
+    alerts: Set<string>;
+    soi: string;
+    landed: boolean;
+    docked: boolean;
+    off: string;
+    papi: string;
+  } | null = null;
+  let tarsSpentSeen = 0;
+  setInterval(() => {
+    // (what OpenRouter cost since: the budget's)
+    tarsBudget.add(openRouter.spent - tarsSpentSeen);
+    tarsSpentSeen = openRouter.spent;
+    if (!camera.piloting) return void (tarsSeen = null);
+    const st = tools.status();
+    // (what he follows — B4: the hub's card mirrored on his console)
+    const hub = camera.hubInfo?.() ?? null;
+    tarsPanel.follow(
+      hub
+        ? {
+            title: hub.title,
+            step: hub.phase,
+            progress: hub.bar,
+            rows: hub.rows as [string, string, string?][],
+            next: hub.next,
+            callout: hub.say?.length ? hub.say.join(" · ") : null,
+            verdict: hub.graph?.state ?? null,
+            fix: hub.graph?.fix,
+          }
+        : null,
+    );
+    const now = {
+      auto: camera.pilot.auto,
+      entry: camera.entryRun?.phase ?? "",
+      hub: hub?.phase ?? "",
+      alerts: new Set(flightHud.alerts.map((a) => `${a.level}:${a.id}`)),
+      soi: st.soi,
+      landed: camera.landed && !camera.rolling,
+      docked: camera.docked,
+      // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
+      // white or all red on final)
+      off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
+      papi: (() => {
+        const r = camera.runwayView?.();
+        return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
+      })(),
+    };
+    const was = tarsSeen;
+    tarsSeen = now;
+    if (was) {
+      if (now.auto !== was.auto) tarsEvent({ kind: "autopilot", from: was.auto, to: now.auto });
+      if (now.entry !== was.entry && now.entry) tarsEvent({ kind: "entry_phase", from: was.entry, to: now.entry });
+      if (now.hub !== was.hub && now.hub) tarsEvent({ kind: "hub_step", from: was.hub, to: now.hub, detail: hub?.title });
+      for (const a of now.alerts) if (!was.alerts.has(a)) tarsEvent({ kind: "alert", to: a.split(":")[0], detail: a.split(":")[1] });
+      if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
+      if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
+      if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
+      if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
+      if (now.papi && now.papi !== was.papi)
+        tarsEvent({ kind: "deviation", to: "approach", detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}` });
+    }
+    for (const r of tarsTriggers.due(sim.time * 4.925490947e-6 * settings.massSolar))
+      if (!tarsWakeQueue.some((q) => q.rules.includes(r))) {
+        // (fired as queued: not due again meanwhile)
+        tarsTriggers.fired(r.id);
+        tarsWakeQueue.push({ rules: [r], e: null, at: performance.now() });
+      }
+    while (tarsWakeQueue.length && performance.now() - tarsWakeQueue[0]!.at > 90_000) tarsWakeQueue.shift();
+    tarsPanel.budget(
+      tarsWakesOn() ? `${tarsBudget.lastHour().toFixed(3)} / ${settings.tarsBudget.toFixed(2)} $·h` : null,
+      tarsBudget.why() === "budget",
+    );
+    if (!tarsWakeQueue.length || !tarsWakesOn() || tarsAgent.busy || !tarsBudget.canWake()) return;
+    const { rules, e } = tarsWakeQueue.shift()!;
+    if (e) for (const r of rules) tarsTriggers.fired(r.id);
+    tarsBudget.woke();
+    void tarsWakeTurn(rules, e);
+  }, 1000);
+  /** A turn of his own initiative: shown as such, said unless he chose silence ("—"). */
+  async function tarsWakeTurn(rules: Trigger[], e: GameEvent | null) {
+    const r = rules[0]!;
+    const label = `⚡ ${rules.every((x) => x.reflex) ? tr({ fr: "Réflexe", en: "Reflex" }) : tr({ fr: "Réveil", en: "Waking" })} · ${e ? `${e.kind}${e.to ? ` → ${e.to}` : ""}` : r.on.kind}`;
+    tarsPanel.exchange(wakeText(rules, e), label);
+    const a = await tarsAgent.ask(wakeText(rules, e));
+    if (!a || a.trim() === "—" || a.trim() === "-") return tarsPanel.answer("—");
+    tarsPanel.answer(a);
+    voice.say({ text: a, speaker: "tars", priority: 3, ttl: 30_000 });
+    tarsFollowStart();
+  }
   const tarsPanelAsk = (q: string, shown?: string) => void tarsAsk(q, shown);
   const tarsPanel = new TarsPanel({
     ask: (q) => tarsPanelAsk(q),
@@ -663,7 +782,36 @@ async function main() {
     paste: (k) => openRouterKey.set(k),
     disconnect: () => openRouterKey.clear(),
     memory: () => ({ turns: tarsMemory.turns.length, notes: tarsMemory.notes.length }),
-    clearMemory: () => tarsMemory.clear(),
+    clearMemory: () => {
+      tarsMemory.clear();
+      tarsTriggers.clear();
+    },
+    wakes: () => ({
+      rules: tarsTriggers.list().map((r) => ({
+        id: r.id,
+        kind: r.on.kind,
+        to: r.on.to,
+        minutes: r.on.minutes,
+        prompt: r.prompt,
+        enabled: r.enabled,
+        reflex: r.reflex,
+        fired: r.fired,
+        firedAt: r.firedAt,
+      })),
+      on: settings.tarsWake,
+      spent: tarsBudget.lastHour(),
+      perHour: settings.tarsBudget,
+      why: tarsBudget.why(),
+    }),
+    wakeToggle: (id, on) => void tarsTriggers.enable(id, on),
+    wakeRemove: (id) => void tarsTriggers.remove(id),
+    wakeAll: (on) => {
+      settings.tarsWake = on;
+      onSettingsChange(["tarsWake"]);
+      refreshGui();
+    },
+    memoryContents: () => ({ notes: tarsMemory.notes, summary: tarsMemory.summary, turns: tarsMemory.turns }),
+    forget: (note) => void tarsMemory.forget(note),
     stop: () => tarsAgent.stop(),
     talk: PushToTalk.supported ? () => (tarsTalk.listening ? tarsTalk.stop() : tarsTalk.start()) : null,
     talkKey: (e) => tarsKey(e),
@@ -1804,7 +1952,10 @@ async function main() {
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
   camera.onFlightReport = (r) => {
     flightHud.showReport(r);
-    if (r) lastReport = r;
+    if (r) {
+      lastReport = r;
+      tarsEvent({ kind: "report", to: r.letter, detail: `${r.title} — ${r.score.toFixed(1)}/20` });
+    }
     lastGrade = r?.letter ?? null;
     // (TARS's word on the landing, sometimes)
     if (r && settings.tarsRemarks && (r.letter === "A" || r.letter === "F")) {
@@ -1825,6 +1976,8 @@ async function main() {
   const phaseWatch = new PhaseWatcher((from, to) => events.emit("phase", { from, to, t: sim.time }));
   events.on("phase", ({ from, to, t }) => {
     if (from) gameLog.add("phase", phaseText(to), t, { from, to });
+    if (from && to?.stage && from.stage !== to.stage)
+      tarsEvent({ kind: "phase", from: from.stage ?? "", to: to.stage, detail: phaseText(to) });
     flightHud.phase = to;
   });
   // the automatic Interstellar mission (a preset starts it; Esc hands the controls back)
@@ -2571,6 +2724,18 @@ async function main() {
       tarsPanel.propose(p, tarsAnswer);
     },
     progress: (text) => tarsPanel.progress(text),
+    triggers: tarsTriggers,
+    sampler: tarsSampler,
+    subagents: (tasks, signal) => {
+      tarsPanel.clearSubagents();
+      tarsPanel.setTab("agents");
+      return runSubagents(tasks, (m, fns, sig) => openRouter.complete(m, fns, { signal: sig }), tarsTools, {
+        lang,
+        signal,
+        context: [{ role: "system", content: `Flight data now: ${JSON.stringify(tarsNow())}` }],
+        onUpdate: (u) => tarsPanel.subagent(u),
+      });
+    },
   });
   // the real weather (metar.ts, PLAN-METEO W7): with "Real" chosen, the METAR of the runway's station nearest
   // the camera over the Earth (within 600 km), checked every 15 s, fetched each half hour; none, no network:

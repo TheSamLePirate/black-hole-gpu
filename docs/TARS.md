@@ -124,7 +124,7 @@ Ce qui encadre ces répliques :
 Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
-- **Ce qu'il fait** : ses 36 outils couvrent tout le jeu.
+- **Ce qu'il fait** : ses 41 outils couvrent tout le jeu.
   - Lire : l'état entier, les sites et pistes, les corps, la météo, les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
   - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
   - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
@@ -140,6 +140,14 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TAR
 - **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
 - **Le modèle** : réglage « Modèle de TARS » — GLM-5.3 Flash par défaut (le moins cher), Claude Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash, Gemini 3.8 Flash, Claude Sonnet 5.5. Un vol vers la Lune mené par TARS a coûté 0,0012 $ avec GLM.
 - **Hors ligne** (sans clé, sans réseau, ou le réglage coupé) : les ordres courants compris en français et en anglais — poser, décoller, circulariser, amarrer, la cible, le train, le temps, les vues, la carte, sauvegarder, annuler, téléporter en orbite, oublier — exécutés par les mêmes outils ; une question garde ses phrases écrites.
+
+### Phase 2 : le super-agent
+
+- **Il sait tout du vol** (`get_telemetry`) : l'attitude, l'air, les commandes, ce que chaque autopilote commande (l'inclinaison et l'incidence de la rentrée, le profil et le PAPI de l'approche, la poussée en cours), l'étape du hub et ses écarts.
+- **Il se réveille** : ses réflexes (fin d'un autopilote, phases de la rentrée, alerte grave, écart, rapport de vol) et les règles qu'on lui demande (« toutes les 10 minutes, vérifie le carburant », « à chaque étape, annonce-la »). Un réveil par événement ; il peut se taire. Réglages : Réflexes et réveils, Budget par heure (0,05 $). Onglet Réveils de sa console : chacun activable.
+- **Ses sous-agents** : jusqu'à 4 copies en parallèle, en lecture et en calcul seulement ; seul TARS agit.
+- **Il montre** le graphe du hub et le couloir de rentrée en direct, ses propres canaux (inclinaison, incidence…) ; « vue vaisseau » ramène la caméra au vaisseau.
+- **Sa console** se déplace par sa poignée ⠿ (en haut à droite ; sa place est gardée, un double clic la remet), s'agrandit, se replie ; ses onglets : Échange, Agents, Réveils, Mémoire.
 
 ## Les outils de test (`__bh`)
 

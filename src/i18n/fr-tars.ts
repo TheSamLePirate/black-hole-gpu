@@ -213,4 +213,10 @@ export default {
   "The microphone is not allowed (the browser's site settings).": "Le micro n'est pas autorisé (les réglages du site dans le navigateur).",
   "Speech recognition needs the network.": "La reconnaissance vocale a besoin du réseau.",
   "Speech recognition failed.": "La reconnaissance vocale a échoué.",
+  "TARS's reflexes and rules": "Réflexes et réveils de TARS",
+  'TARS wakes by himself — at the key moments (an autopilot\'s end, the entry\'s phases, a warning, a deviation, a report) and on the rules you ask him for ("every 10 minutes check the fuel", "at each burn, call it out"). Listed in his console (F6), each to switch off. Off: he speaks only when asked.':
+    "TARS se réveille de lui-même — aux moments clés (la fin d'un autopilote, les phases de la rentrée, une alerte grave, un écart, un rapport) et sur les règles que vous lui demandez (« toutes les 10 minutes, vérifie le carburant », « à chaque poussée, annonce-la »). Listés dans sa console (F6), chacun désactivable. Désactivé : il ne parle que si on lui parle.",
+  "TARS's budget per hour": "Budget de TARS par heure",
+  "What his own initiatives (reflexes, rules) may cost in an hour through your key; at the ceiling he waits for the hour to roll on. What you ask him is always answered. 0.05 $ ≈ 300 wakings with GLM-5.3 Flash.":
+    "Ce que ses propres initiatives (réflexes, réveils) peuvent coûter en une heure par votre clé ; au plafond, il attend que l'heure tourne. Ce que vous lui demandez reçoit toujours sa réponse. 0,05 $ ≈ 300 réveils avec GLM-5.3 Flash.",
 } as Record<string, string>;

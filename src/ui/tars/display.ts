@@ -23,6 +23,19 @@ export type CardSpec =
       live?: { channels: RecKey[]; seconds: number };
       /** or series of his own */
       series?: Series[];
+      /** or series computed afresh each time it is drawn (his channels, the hub's graph, the entry's corridor) */
+      source?: () => {
+        title?: string;
+        series: Series[];
+        overlay?: boolean;
+        band?: [number, number];
+        now?: [number, number] | null;
+        time?: boolean;
+        xLabel?: string;
+        yUnit?: string;
+      } | null;
+      /** its lanes' height, as asked (the overlay: one) */
+      lanes?: number;
       xLabel?: string;
       xUnit?: string;
     }
@@ -111,10 +124,10 @@ export class TarsDisplay {
     if (spec.kind === "chart") {
       const cv = document.createElement("canvas");
       cv.className = "tc-cv";
-      const n = spec.live ? spec.live.channels.length : (spec.series?.length ?? 1);
+      const n = spec.lanes ?? (spec.live ? spec.live.channels.length : (spec.series?.length ?? 1));
       cv.style.height = `${Math.min(4, Math.max(1, n)) * 64 + 22}px`;
       el.append(cv);
-      if (spec.live) {
+      if (spec.live || spec.source) {
         const foot = document.createElement("footer");
         foot.textContent = tr({ fr: "en direct · l'enregistreur du vol", en: "live · the flight recorder" });
         el.append(foot);
@@ -175,10 +188,15 @@ export class TarsDisplay {
 
   private draw(c: Card, now: number, force: boolean) {
     if (!c.cv || c.spec.kind !== "chart") return;
-    if (!force && (!c.spec.live || now - c.drawnAt < 250)) return;
+    if (!force && ((!c.spec.live && !c.spec.source) || now - c.drawnAt < 250)) return;
     c.drawnAt = now;
     const s = c.spec;
-    if (s.live) drawChart(c.cv, liveSeries(s.live.channels, s.live.seconds), { time: true });
+    if (s.source) {
+      const d = s.source();
+      // (its title following what it shows: the hub's graph changes with the flight's phase)
+      if (d?.title) c.el.querySelector("h3")!.textContent = d.title;
+      if (d) drawChart(c.cv, d.series, { overlay: d.overlay, band: d.band, now: d.now, time: d.time, xLabel: d.xLabel, yUnit: d.yUnit });
+    } else if (s.live) drawChart(c.cv, liveSeries(s.live.channels, s.live.seconds), { time: true });
     else drawChart(c.cv, s.series ?? [], { xLabel: s.xLabel, xUnit: s.xUnit });
   }
 

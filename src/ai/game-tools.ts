@@ -46,6 +46,10 @@ import {
 } from "../fc/ops";
 import { alignOverSite } from "../fc/land-ops";
 import type { CardSpec } from "../ui/tars/display";
+import { EVENT_KINDS, type Triggers, type TriggerKind } from "./triggers";
+import { SUBAGENTS_MAX, type SubResult, type SubTask } from "./subagents";
+import { type AttitudeSampler, TARS_CHANNELS, TELEMETRY_GROUPS, telemetry, type TarsChannel, type TelemetryGroup } from "./telemetry";
+import { liveSeries } from "../ui/tars/display";
 import { CHANNELS, type RecKey } from "../game/recorder";
 
 export const UNDO_SAVE = "Before TARS";
@@ -100,6 +104,12 @@ export interface GameHost {
   propose(p: Proposal): void;
   /** the wait's live line (null: done) */
   progress(text: string | null): void;
+  /** his wakings (B1): the rules he sets himself */
+  triggers: Triggers;
+  /** his own channels sampled while flying (the attitude, the commands): his charts' (B2) */
+  sampler: AttitudeSampler;
+  /** his sub-agents (B5): questions answered in parallel, reading only */
+  subagents(tasks: SubTask[], signal: AbortSignal): Promise<SubResult[]>;
   /** wall time [ms] (the waits) */
   now(): number;
 }
@@ -124,6 +134,8 @@ export const SCREENS = [
   "cockpit_log",
   "cockpit_approach",
   "cockpit_landing",
+  "entry_corridor",
+  "hub_graph",
 ] as const;
 export type Screen = (typeof SCREENS)[number];
 
@@ -323,6 +335,13 @@ export function gameTools(h: GameHost): Tool[] {
           docked: camera.docked,
         };
       },
+    },
+    {
+      name: "get_telemetry",
+      description:
+        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, glidepath vs flown path, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, closing rate). Ask only the groups you need.",
+      params: { groups: { type: "array", maxItems: TELEMETRY_GROUPS.length, items: { type: "string", enum: TELEMETRY_GROUPS } } },
+      run: (a) => telemetry(camera, (a.groups as TelemetryGroup[] | undefined)?.length ? (a.groups as TelemetryGroup[]) : TELEMETRY_GROUPS),
     },
     {
       name: "list_places",
@@ -732,7 +751,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "camera",
       description:
-        "The camera (only what is given): mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground.",
+        "The camera (only what is given): shipView: back to the ship's view (from the spectator, a cinematic, the map); mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground.",
       params: {
         mount: { type: "string", enum: MOUNT_IDS },
         spectator: { type: "boolean" },
@@ -743,9 +762,20 @@ export function gameTools(h: GameHost): Tool[] {
         cinematic: { type: "string", enum: ["orbit", "dive", "journey", "none"] },
         goTo: { type: "string" },
         standOn: { type: "string" },
+        shipView: {
+          type: "boolean",
+          description: "back to the ship's view: the ship on, the spectator and cinematics off, the map closed",
+        },
       },
       run: act((a) => {
         const notes: string[] = [];
+        if (a.shipView) {
+          if (!settings.ship) h.key("ship");
+          h.setSpectator(false);
+          h.cinematic(null);
+          h.map(false);
+          if (a.mount === undefined && (settings.shipMount === "free" || settings.shipMount === "flyby")) h.setMount("chase");
+        }
         if (a.spectator !== undefined) h.setSpectator(a.spectator as boolean);
         if (a.mount !== undefined) h.setMount(a.mount as Mount);
         if (a.view !== undefined) h.setView(a.view as never);
@@ -1092,10 +1122,14 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "show_chart",
       description:
-        "Show the pilot a chart beside the flight. Either the flight's recorded channels, live (channels: alt, speed, vz, g, q, mach, heat, throttle, dv, fuel; seconds: the window, default 600), or series you computed (series: [{label, unit, points: [[x, y], …]}], xLabel). Up to 4 lanes.",
+        "Show the pilot a chart beside the flight. Either channels, live — the flight recorder's (alt, speed, vz, g, q, mach, heat, throttle, dv, fuel) and your own (bank, pitch, heading, aoa, sideslip, cmdBank, cmdAoa: the entry's commanded bank and AoA, across: the runway offset, profile: the approach's height deviation); seconds: the window, default 600 — or series you computed (series: [{label, unit, points: [[x, y], …]}], xLabel). Up to 4 lanes.",
       params: {
         title: { type: "string" },
-        channels: { type: "array", maxItems: 4, items: { type: "string", enum: CHANNELS.map((c) => c.key) } },
+        channels: {
+          type: "array",
+          maxItems: 4,
+          items: { type: "string", enum: [...CHANNELS.map((c) => c.key), ...Object.keys(TARS_CHANNELS)] },
+        },
         seconds: { type: "number", minimum: 10, maximum: 1e7 },
         series: {
           type: "array",
@@ -1119,12 +1153,33 @@ export function gameTools(h: GameHost): Tool[] {
           unit: x.unit,
           points: x.points.filter((p) => p.length === 2) as [number, number][],
         }));
-        const channels = a.channels as RecKey[] | undefined;
+        const channels = a.channels as string[] | undefined;
         if (!series?.length && !channels?.length) throw new Error("give channels (live) or series");
+        const secs = (a.seconds as number) ?? 600;
+        const mine = (channels ?? []).filter((k) => k in TARS_CHANNELS) as TarsChannel[];
         const id = h.display.show(
           series?.length
             ? { kind: "chart", title: String(a.title), series, xLabel: a.xLabel as string | undefined }
-            : { kind: "chart", title: String(a.title), live: { channels: channels!, seconds: (a.seconds as number) ?? 600 } },
+            : mine.length
+              ? {
+                  kind: "chart",
+                  title: String(a.title),
+                  lanes: channels!.length,
+                  // (the recorder's channels and his own, each in its lane, live)
+                  source: () => ({
+                    time: true,
+                    series: channels!.map((k) =>
+                      k in TARS_CHANNELS
+                        ? {
+                            label: tr(TARS_CHANNELS[k as TarsChannel].label),
+                            unit: TARS_CHANNELS[k as TarsChannel].unit,
+                            points: h.sampler.series(k as TarsChannel, secs),
+                          }
+                        : liveSeries([k as RecKey], secs)[0]!,
+                    ),
+                  }),
+                }
+              : { kind: "chart", title: String(a.title), live: { channels: channels as RecKey[], seconds: secs } },
         );
         return `chart ${id} shown`;
       },
@@ -1157,10 +1212,23 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "show_screen",
       description:
-        "Open a real screen of the game for the pilot: the map (map_3d, map_globe, map_planisphere), the tablet's pages (telemetry: the flight's curves; approach_chart; flight_computer; ship; log), the last flight_report, or a page on a cockpit display (cockpit_pfd, cockpit_orbit, cockpit_nav, cockpit_systems, cockpit_docking, cockpit_plan, cockpit_clocks, cockpit_log, cockpit_approach, cockpit_landing; slot 0–7 the display, default 0).",
+        "Open a real screen of the game for the pilot: the map (map_3d, map_globe, map_planisphere), the tablet's pages (telemetry: the flight's curves; approach_chart; flight_computer; ship; log), the last flight_report, the hub's live graph (hub_graph: the burn, climb, entry, glide, descent, approach or docking — the optimum, its corridor, what was flown, the craft now) and the entry corridor (entry_corridor), or a page on a cockpit display (cockpit_pfd, cockpit_orbit, cockpit_nav, cockpit_systems, cockpit_docking, cockpit_plan, cockpit_clocks, cockpit_log, cockpit_approach, cockpit_landing; slot 0–7 the display, default 0).",
       params: { screen: { type: "string", enum: SCREENS }, slot: { type: "number", minimum: 0, maximum: 7, integer: true } },
       required: ["screen"],
-      run: act((a) => h.screen(a.screen as Screen, a.slot as number | undefined)),
+      run: act((a) => {
+        // (the hub's graph — the entry's corridor among them —: his live card)
+        if (a.screen === "entry_corridor" || a.screen === "hub_graph") {
+          const src = graphSource(camera, a.screen === "entry_corridor");
+          if (!src())
+            throw new Error(
+              a.screen === "entry_corridor"
+                ? "no entry under way: the corridor exists during an entry"
+                : "no hub graph now (an autopilot or a manoeuvre has one)",
+            );
+          return `card ${h.display.show({ kind: "chart", title: src()!.title, lanes: 3, source: src })} shown`;
+        }
+        return h.screen(a.screen as Screen, a.slot as number | undefined);
+      }),
     },
     {
       name: "hide_display",
@@ -1193,6 +1261,71 @@ export function gameTools(h: GameHost): Tool[] {
         return "proposed: the pilot will accept or refuse — do not carry it out now";
       },
     },
+    // ------------------------------------------------------------------ waking himself, sub-agents
+    {
+      name: "schedule",
+      description:
+        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
+      params: {
+        on: { type: "string", enum: [...EVENT_KINDS, "every", "at", "in"] },
+        to: { type: "string" },
+        minutes: { type: "number", minimum: 1, maximum: 1440 },
+        seconds: { type: "number", minimum: 5, maximum: 86400 },
+        simTimeS: { type: "number" },
+        prompt: { type: "string" },
+        once: { type: "boolean" },
+      },
+      required: ["on", "prompt"],
+      run: (a) => {
+        const r = h.triggers.add({
+          on: {
+            kind: a.on as TriggerKind,
+            to: a.to as string | undefined,
+            minutes: a.minutes as number | undefined,
+            seconds: a.seconds as number | undefined,
+            simTime: a.simTimeS as number | undefined,
+          },
+          prompt: String(a.prompt),
+          once: a.once as boolean | undefined,
+        });
+        return { scheduled: r.id };
+      },
+    },
+    {
+      name: "list_schedules",
+      description: "Your rules and reflexes that wake you: id, what wakes you, what you do then, on or off, how many times fired.",
+      run: () =>
+        h.triggers
+          .list()
+          .map((r) => ({ id: r.id, on: r.on, prompt: r.prompt, enabled: r.enabled, reflex: !!r.reflex, fired: r.fired ?? 0 })),
+    },
+    {
+      name: "cancel_schedule",
+      description: "Delete one of your rules (a reflex is switched off), or switch one on or off (enabled).",
+      params: { id: { type: "string" }, enabled: { type: "boolean" } },
+      required: ["id"],
+      run: (a) => {
+        const ok = a.enabled !== undefined ? h.triggers.enable(String(a.id), a.enabled as boolean) : h.triggers.remove(String(a.id));
+        if (!ok) throw new Error(`no rule "${a.id}" — list_schedules lists them`);
+        return "done";
+      },
+    },
+    {
+      name: "spawn_agents",
+      description: `Run up to ${SUBAGENTS_MAX} sub-agents in parallel — copies of you that only READ the game and COMPUTE (plans worked out, never executed) — each on its own question ("fuel to Mars and back", "the next windows to the station", "is the entry within its corridor"). Their conclusions come back to you; you decide and act. Use it for analyses that take several looks, or to compare options.`,
+      params: {
+        tasks: {
+          type: "array",
+          maxItems: SUBAGENTS_MAX,
+          items: { type: "object", properties: { name: { type: "string" }, question: { type: "string" } }, required: ["name", "question"] },
+        },
+      },
+      required: ["tasks"],
+      run: async (a, signal) => {
+        const r = await h.subagents(a.tasks as SubTask[], signal);
+        return r.map((x) => ({ name: x.name, ok: x.ok, conclusion: x.text }));
+      },
+    },
     {
       name: "memory",
       description:
@@ -1202,6 +1335,7 @@ export function gameTools(h: GameHost): Tool[] {
       run: (a) => {
         if (a.action === "clear") {
           h.memory.clear();
+          h.triggers.clear();
           return "memory cleared";
         }
         if (!a.note) throw new Error(`${a.action} needs a note`);
@@ -1211,4 +1345,57 @@ export function gameTools(h: GameHost): Tool[] {
     },
   ];
   return tools_;
+}
+
+/** The hub's graph as a live card's source (the entry's corridor from the entry run when the hub has none). */
+function graphSource(camera: CameraController, entryOnly: boolean) {
+  // biome-ignore lint/suspicious/noExplicitAny: the controller's state, read loosely
+  const c = camera as any;
+  return () => {
+    const g = c.hubInfo?.()?.graph;
+    if (g && (!entryOnly || g.kind === "entry"))
+      return {
+        title: g.title as string,
+        overlay: true,
+        band: [0, 1] as [number, number],
+        now: g.now as [number, number] | null,
+        xLabel: `${g.x.label} (${g.x.unit})`,
+        yUnit: g.y.unit as string,
+        series: [
+          { label: "lo", points: (g.lo ?? []) as [number, number][], color: "#78ffaa" },
+          { label: "hi", points: (g.hi ?? []) as [number, number][], color: "#78ffaa" },
+          { label: tr({ fr: "optimum", en: "optimum" }), points: g.ideal as [number, number][], color: "#7cd6ff" },
+          { label: tr({ fr: "volé", en: "flown" }), points: g.flown as [number, number][], color: "#ffc85a" },
+        ],
+      };
+    const e = c.entryRun;
+    if (!e?.corr?.length) return null;
+    const pred = (e.guid?.last?.track ?? []) as [number, number][];
+    return {
+      title: tr({ fr: "Couloir de rentrée", en: "Entry corridor" }),
+      overlay: true,
+      band: [0, 1] as [number, number],
+      now: (e.trace?.at(-1) ?? null) as [number, number] | null,
+      xLabel: tr({ fr: "vitesse (km/s)", en: "speed (km/s)" }),
+      yUnit: "km",
+      series: [
+        {
+          label: "lo",
+          points: e.corr.map((p: { v: number; lo: number }) => [p.v / 1e3, p.lo / 1e3]) as [number, number][],
+          color: "#78ffaa",
+        },
+        {
+          label: "hi",
+          points: e.corr.map((p: { v: number; hi: number }) => [p.v / 1e3, p.hi / 1e3]) as [number, number][],
+          color: "#78ffaa",
+        },
+        {
+          label: tr({ fr: "prévu", en: "predicted" }),
+          points: pred.map(([v, h]) => [v / 1e3, h / 1e3]) as [number, number][],
+          color: "#7cd6ff",
+        },
+        { label: tr({ fr: "volé", en: "flown" }), points: (e.trace ?? []) as [number, number][], color: "#ffc85a" },
+      ],
+    };
+  };
 }

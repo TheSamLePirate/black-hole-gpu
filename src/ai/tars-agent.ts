@@ -41,6 +41,9 @@ export function agentPrompt(p: Personality, lang: "fr" | "en"): string {
     "For long tasks only, say a short line before waiting (say), warp time with `time` and `wait` for the outcome when it matters; otherwise answer once the action is engaged. Never use say for your final answer.",
     "After a teleport, a load, a date change or a scene, the previous state is saved as 'Before TARS' (saves action undo goes back).",
     "Your memory: whenever the pilot tells you something about themselves (their name, a preference, a goal) or asks you to remember, call memory with action remember and a short note; forget when asked; clear everything only if the pilot asks you to forget all.",
+    "You know the flight in depth: get_telemetry gives the attitude (bank, pitch, AoA…), the air, the controls, what each autopilot commands (the entry's commanded bank and AoA, the approach's profile and PAPI, the burn's cue), the hub's current step and its deviations — read it during manoeuvres, entries and landings rather than guessing. show_screen hub_graph / entry_corridor shows the live corridor; camera shipView brings the ship's view back.",
+    "You can wake yourself: schedule a rule (on an autopilot change, a phase, a hub step, an entry phase, an alert, a deviation, a landing, every N minutes, at a game time) when the pilot asks you to watch, remind or react. Your reflexes already wake you at the key moments; when woken, act or speak only if it is worth it.",
+    "For analyses that need several looks or comparisons, spawn_agents runs copies of you in parallel (they read and compute only); then you decide and act.",
     "Never say you did something unless a tool call in this turn did it.",
     "Your final answer is spoken: one or two short sentences, plain text.",
   ].join(" ");

@@ -491,6 +491,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1 à A7 ; référenc
 - **A6** : le banc court des vols dirigés par TARS sur le vrai service (GLM) — 3/6 au premier passage ; corrigés : l'amarrage, une annulation dite sans être faite (un garde-fou), une proposition qui touchait au jeu, et un bogue du jeu (un vaisseau amarré ne se téléportait pas) ; les trois tâches repassées avec succès.
 - **A7** : sa console AAA — son emblème animé selon son état, ses actions en direct, sa présence console fermée, le suivi de ce qu'il a lancé.
 - **A8** : il montre (graphes en direct, fiches, vrais écrans) et il propose (« propose-moi un plan » : accepter ou refuser ; un ordre reste sans confirmation).
+- **Phase 2 (B1–B6)** : le super-agent — toute la télémétrie et les consignes des autopilotes, ses réveils (réflexes aux moments clés, règles planifiées, budget par heure), le suivi des étapes du hub et des écarts, des sous-agents en parallèle, le couloir de rentrée et le graphe du hub en direct, sa console déplaçable à onglets.
 
 ## Ce qui reste pour l'AAA (au 09/10/2026)
 

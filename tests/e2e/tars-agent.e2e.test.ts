@@ -61,6 +61,25 @@ const MODEL = `(() => {
       if (!tools.length) return reply({ content: null, tool_calls: [call("e1", "set_target", { name: "Mars" }), call("e2", "time", { warp: 100 })] });
       return reply({ content: "Plan exécuté." });
     }
+    // (a sub-agent's own request: its conclusion at once)
+    if (msgs[0].content.includes("sub-agent of TARS")) return reply({ content: "Conclusion: " + q });
+    if (/Surveille/.test(q)) {
+      if (!tools.length) return reply({ content: null, tool_calls: [call("s1", "schedule", { on: "every", minutes: 10, prompt: "Vérifie le carburant." })] });
+      return reply({ content: "Réglé." });
+    }
+    if (/Analyse/.test(q)) {
+      if (!tools.length)
+        return reply({
+          content: null,
+          tool_calls: [call("a1", "spawn_agents", { tasks: [{ name: "carburant", question: "le carburant ?" }, { name: "mars", question: "le Δv vers Mars ?" }] })],
+        });
+      return reply({ content: "Analyses faites." });
+    }
+    if (/Télémétrie/.test(q)) {
+      if (!tools.length) return reply({ content: null, tool_calls: [call("g1", "get_telemetry", { groups: ["attitude", "controls"] })] });
+      window.__telemetry = JSON.parse(tools[0].content);
+      return reply({ content: "Lue." });
+    }
     if (/Cooper/.test(q)) {
       if (!tools.length) return reply({ content: null, tool_calls: [call("m", "memory", { action: "remember", note: "Le pilote s'appelle Cooper" })] });
       return reply({ content: "Noté, Cooper." });
@@ -284,4 +303,44 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     await app.js(`(__bh.tars.agent.stop(), true)`);
     await app.waitFor(`!__bh.tars.agent.busy`, 5_000);
   }, 30_000);
+
+  test("the agent's console: its grip moves it (its place kept), its tabs; his wakings, a rule he sets; sub-agents; telemetry (B1–B6)", async () => {
+    await app.js(`(__bh.settings.tarsOnline = true, true)`);
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    // (the grip, dragged: the console follows, its place kept)
+    const g = await app.hit("[data-testid=tars-grip]");
+    await app.mouse("move", g.x, g.y);
+    await app.mouse("down", g.x, g.y);
+    for (let i = 1; i <= 5; i++) await app.mouse("move", g.x - 60 * i, g.y - 40 * i);
+    await app.mouse("up", g.x - 300, g.y - 200);
+    const moved = await app.js<{ floating: boolean; kept: { x: number; y: number } }>(
+      `({ floating: document.querySelector("[data-testid=tars-panel]").classList.contains("floating"), kept: JSON.parse(localStorage.getItem("kerr.tars.console")) })`,
+    );
+    expect(moved.floating).toBe(true);
+    expect(moved.kept.x).toBeGreaterThan(0);
+    // (a rule he sets himself, listed with his reflexes)
+    await app.type("Surveille le carburant toutes les 10 minutes.");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Réglé."`, 15_000);
+    await app.click("[data-testid=tars-tab-wakes]");
+    const rules = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-rule]")].map((r) => r.dataset.id)`);
+    expect(rules.filter((r) => r.startsWith("reflex-")).length).toBe(5);
+    expect(rules.length).toBe(6);
+    // (sub-agents, in parallel, shown at work then done)
+    await app.click("[data-testid=tars-tab-talk]");
+    await app.type("Analyse le carburant et Mars en parallèle.");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Analyses faites."`, 15_000);
+    const subs = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-sub]")].map((s) => s.className + " " + s.textContent)`);
+    expect(subs.length).toBe(2);
+    expect(subs.every((s) => s.includes("done") && s.includes("Conclusion"))).toBe(true);
+    // (the telemetry: the attitude, the controls)
+    await app.click("[data-testid=tars-tab-talk]");
+    await app.type("Télémétrie ?");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.lastText === "Lue."`, 15_000);
+    const tm = await app.js<{ attitude?: { bankDeg?: number }; controls?: { sas?: boolean } }>(`window.__telemetry`);
+    expect(typeof tm.attitude?.bankDeg).toBe("number");
+    expect(typeof tm.controls?.sas).toBe("boolean");
+  }, 90_000);
 });

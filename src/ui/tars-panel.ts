@@ -9,8 +9,13 @@
 //   - his link: offline or OpenRouter (the key's end, the model, what the session has cost), sign in, paste a
 //     key, disconnect; his memory (exchanges, notes) and its eraser.
 // Closed while he acts or speaks, a small presence stays: the emblem and what he is doing.
+// The agent's console (PLAN-TARS-AGENT B6): moved by its grip (top right; its place kept, a double click
+// docks it back), larger or smaller, folded to its head; its tabs — the exchange (and the past ones), his
+// sub-agents at work, his wakings (reflexes and rules, each switched on or off, the hour's budget), his
+// memory (his notes, each forgotten by its ×, the summary).
 
 import { t, tf, tr, type Text } from "../i18n";
+import { store } from "../util/storage";
 import { TarsEmblem, type EmblemState } from "./tars/emblem";
 import type { Proposal } from "../ai/game-tools";
 
@@ -31,10 +36,62 @@ export interface TarsPanelHost {
   /** speaking (A5): the microphone's button pressed (null: no recognition here); its key pressed in the field */
   talk: (() => void) | null;
   talkKey(e: KeyboardEvent): void;
+  /** his wakings (B1): the rules, whether they are on, the hour's cost and ceiling, why he waits */
+  wakes?(): { rules: WakeRow[]; on: boolean; spent: number; perHour: number; why: string | null };
+  wakeToggle?(id: string, on: boolean): void;
+  wakeRemove?(id: string): void;
+  wakeAll?(on: boolean): void;
+  /** his memory's contents (the Memory tab), a note forgotten */
+  memoryContents?(): { notes: readonly string[]; summary: string; turns: readonly { at: number; user: string; tars: string }[] };
+  forget?(note: string): void;
 }
+
+/** A waking as the console lists it. */
+export interface WakeRow {
+  id: string;
+  kind: string;
+  to?: string;
+  minutes?: number;
+  prompt: string;
+  enabled: boolean;
+  reflex?: boolean;
+  fired?: number;
+  firedAt?: number;
+}
+
+type Tab = "talk" | "agents" | "wakes" | "memory";
+
+const TABS: [Tab, Text][] = [
+  ["talk", { fr: "Échange", en: "Exchange" }],
+  ["agents", { fr: "Agents", en: "Agents" }],
+  ["wakes", { fr: "Réveils", en: "Wakings" }],
+  ["memory", { fr: "Mémoire", en: "Memory" }],
+];
+
+const KIND_WORDS: Record<string, Text> = {
+  autopilot: { fr: "Autopilote", en: "Autopilot" },
+  phase: { fr: "Phase du vol", en: "Flight phase" },
+  hub_step: { fr: "Étape du hub", en: "Hub step" },
+  entry_phase: { fr: "Phase de rentrée", en: "Entry phase" },
+  alert: { fr: "Alerte", en: "Alert" },
+  soi: { fr: "Sphère d'influence", en: "Sphere of influence" },
+  landed: { fr: "Posé", en: "Landed" },
+  docked: { fr: "Amarré", en: "Docked" },
+  report: { fr: "Rapport", en: "Report" },
+  deviation: { fr: "Écart", en: "Deviation" },
+  every: { fr: "Toutes les", en: "Every" },
+  at: { fr: "À l'heure du jeu", en: "At game time" },
+  in: { fr: "Dans", en: "In" },
+};
+
+const POS_KEY = "kerr.tars.console";
 
 /** the tools whose result is for him, not the pilot: their step shown without it */
 const QUIET = new Set([
+  "schedule",
+  "list_schedules",
+  "spawn_agents",
+  "get_telemetry",
   "show_chart",
   "show_card",
   "show_screen",
@@ -103,6 +160,18 @@ export const TOOL_WORDS: Record<string, { w: Text; i: string }> = {
   show_screen: { w: { fr: "Écran", en: "Screen" }, i: "▣" },
   hide_display: { w: { fr: "Affichage fermé", en: "Display closed" }, i: "▢" },
   propose_plan: { w: { fr: "Plan proposé", en: "Plan proposed" }, i: "☷" },
+  schedule: { w: { fr: "Réveil réglé", en: "Waking set" }, i: "⏲" },
+  list_schedules: { w: { fr: "Réveils lus", en: "Wakings read" }, i: "⏲" },
+  cancel_schedule: { w: { fr: "Réveil changé", en: "Waking changed" }, i: "⏲" },
+  spawn_agents: { w: { fr: "Sous-agents", en: "Sub-agents" }, i: "⑂" },
+  get_telemetry: { w: { fr: "Télémétrie lue", en: "Telemetry read" }, i: "≋" },
+};
+
+const wrap = (inner: HTMLElement) => {
+  const p = document.createElement("div");
+  p.className = "tp-pane";
+  p.append(inner);
+  return p;
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
@@ -130,6 +199,16 @@ export class TarsPanel {
   private keyMode = false;
   private state: EmblemState = "idle";
   private running: HTMLLIElement | null = null;
+  private tab: Tab = "talk";
+  private panes = new Map<Tab, HTMLElement>();
+  private tabBtns = new Map<Tab, HTMLButtonElement>();
+  private history = el("ol", "tp-history");
+  private agentsEl = el("div", "tp-agents");
+  private wakesEl = el("div", "tp-wakes");
+  private memoryEl = el("div", "tp-memory");
+  private budgetEl = el("span", "tp-budget");
+  private followEl = el("section", "tp-follow");
+  private subs = new Map<string, { state: string; line: string; at: number; el: HTMLElement }>();
 
   constructor(
     private host: TarsPanelHost,
@@ -142,7 +221,35 @@ export class TarsPanel {
     const who = el("div", "tp-who");
     who.append(el("small", "", "TARS"), this.stateWord);
     this.stateWord.dataset.testid = "tars-state";
-    head.append(this.emblem.el, who);
+    head.append(this.emblem.el, who, this.budgetEl);
+    this.budgetEl.dataset.testid = "tars-budget";
+    // (its controls, top right: larger, folded, closed — and the grip that moves it)
+    const ctl = el("div", "tp-ctl");
+    const cbtn = (glyph: string, title: Text, id: string, fn: () => void) => {
+      const b = el("button", "tp-cbtn", glyph);
+      b.type = "button";
+      b.title = tr(title);
+      b.setAttribute("aria-label", tr(title));
+      b.dataset.testid = id;
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        fn();
+      });
+      return b;
+    };
+    const grip = el("span", "tp-grip", "⠿");
+    grip.title = tr({ fr: "Déplacer (double clic : remettre en place)", en: "Move (double click: back in place)" });
+    grip.dataset.testid = "tars-grip";
+    ctl.append(
+      cbtn("⤢", { fr: "Plus grand / plus petit", en: "Larger / smaller" }, "tars-size", () =>
+        this.setLook({ large: !this.el.classList.contains("large") }),
+      ),
+      cbtn("–", { fr: "Replier", en: "Fold" }, "tars-fold", () => this.setLook({ folded: !this.el.classList.contains("folded") })),
+      cbtn("×", { fr: "Fermer (F6)", en: "Close (F6)" }, "tars-close", () => this.close()),
+      grip,
+    );
+    head.append(ctl);
+    this.grip(grip);
     // (the exchange)
     const thread = el("div", "tp-thread");
     thread.dataset.testid = "tars-thread";
@@ -179,7 +286,44 @@ export class TarsPanel {
     this.status.dataset.testid = "tars-link";
     this.proposalEl.dataset.testid = "tars-proposal";
     this.proposalEl.hidden = true;
-    this.el.append(head, thread, this.proposalEl, task, row, this.status);
+    // (the tabs, and their panes: the exchange and its task; his sub-agents; his wakings; his memory)
+    const tabs = el("div", "tp-tabs");
+    tabs.setAttribute("role", "tablist");
+    for (const [id, label] of TABS) {
+      const b = el("button", "tp-tab", tr(label));
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.dataset.testid = `tars-tab-${id}`;
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.setTab(id);
+      });
+      this.tabBtns.set(id, b);
+      tabs.append(b);
+    }
+    const talk = el("div", "tp-pane");
+    this.history.dataset.testid = "tars-history";
+    this.followEl.dataset.testid = "tars-follow";
+    this.followEl.hidden = true;
+    talk.append(this.history, thread, this.proposalEl, this.followEl, task);
+    this.agentsEl.dataset.testid = "tars-agents";
+    this.wakesEl.dataset.testid = "tars-wakes";
+    this.memoryEl.dataset.testid = "tars-memory-tab";
+    for (const [id, pane] of [
+      ["talk", talk],
+      ["agents", wrap(this.agentsEl)],
+      ["wakes", wrap(this.wakesEl)],
+      ["memory", wrap(this.memoryEl)],
+    ] as const)
+      this.panes.set(id, pane);
+    const body = el("div", "tp-body");
+    body.append(...this.panes.values());
+    this.el.append(head, tabs, body, row, this.status);
+    this.clearSubagents();
+    this.setTab("talk");
+    // (as left last time: its place, its size, folded or not)
+    const kept = store.getJSON<{ x?: number; y?: number; large?: boolean; folded?: boolean } | null>(POS_KEY, null);
+    if (kept) this.setLook(kept, false);
     // (the presence: his emblem and his current doing, while the console is closed — a click opens it)
     this.presence.type = "button";
     this.presence.dataset.testid = "tars-presence";
@@ -251,6 +395,306 @@ export class TarsPanel {
     else this.show();
   }
 
+  /** A tab shown (its pane drawn afresh). */
+  setTab(id: Tab) {
+    this.tab = id;
+    for (const [k, b] of this.tabBtns) {
+      b.classList.toggle("on", k === id);
+      b.setAttribute("aria-selected", String(k === id));
+    }
+    for (const [k, p] of this.panes) p.hidden = k !== id;
+    if (id === "wakes") this.drawWakes();
+    if (id === "memory") this.drawMemory();
+    if (id === "talk") this.drawHistory();
+  }
+
+  /** Its look: moved to (x, y), larger, folded — kept for the next visit. */
+  setLook(o: { x?: number; y?: number; large?: boolean; folded?: boolean }, keep = true) {
+    if (o.large !== undefined) this.el.classList.toggle("large", o.large);
+    if (o.folded !== undefined) this.el.classList.toggle("folded", o.folded);
+    if (o.x !== undefined && o.y !== undefined) {
+      const r = this.el.getBoundingClientRect();
+      const x = Math.min(Math.max(0, o.x), Math.max(0, innerWidth - Math.max(r.width, 260)));
+      const y = Math.min(Math.max(0, o.y), Math.max(0, innerHeight - 60));
+      this.el.classList.add("floating");
+      this.el.style.left = `${x}px`;
+      this.el.style.top = `${y}px`;
+    }
+    if (o.x === undefined && o.y === undefined && keep && "dock" in o) {
+      this.el.classList.remove("floating");
+      this.el.style.left = this.el.style.top = "";
+    }
+    if (!keep) return;
+    const floating = this.el.classList.contains("floating");
+    store.setJSON(POS_KEY, {
+      ...(floating ? { x: Number.parseFloat(this.el.style.left), y: Number.parseFloat(this.el.style.top) } : {}),
+      large: this.el.classList.contains("large"),
+      folded: this.el.classList.contains("folded"),
+    });
+  }
+
+  /** The grip: dragged, the console follows; a double click docks it back. */
+  private grip(g: HTMLElement) {
+    g.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = this.el.getBoundingClientRect();
+      const dx = e.clientX - r.left,
+        dy = e.clientY - r.top;
+      g.setPointerCapture(e.pointerId);
+      this.el.classList.add("dragging");
+      const move = (m: PointerEvent) => this.setLook({ x: m.clientX - dx, y: m.clientY - dy }, false);
+      const up = (u: PointerEvent) => {
+        g.releasePointerCapture(u.pointerId);
+        g.removeEventListener("pointermove", move);
+        g.removeEventListener("pointerup", up);
+        this.el.classList.remove("dragging");
+        this.setLook({ x: u.clientX - dx, y: u.clientY - dy });
+      };
+      g.addEventListener("pointermove", move);
+      g.addEventListener("pointerup", up);
+    });
+    g.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      this.setLook({ dock: true } as never);
+    });
+  }
+
+  /** A sub-agent's news (B5): its card made or updated in the Agents tab, its badge. */
+  subagent(u: { name: string; state: "running" | "done" | "failed"; line: string }) {
+    let s = this.subs.get(u.name);
+    if (!s) {
+      const card = el("div", "tp-sub");
+      card.dataset.testid = "tars-sub";
+      this.agentsEl.querySelector(".tp-empty")?.remove();
+      this.agentsEl.append(card);
+      s = { state: u.state, line: u.line, at: performance.now(), el: card };
+      this.subs.set(u.name, s);
+    }
+    s.state = u.state;
+    s.line = u.line;
+    s.el.className = `tp-sub ${u.state}`;
+    s.el.replaceChildren(
+      el("span", "tp-sub-mark", u.state === "running" ? "◌" : u.state === "done" ? "✓" : "✗"),
+      el("b", "", u.name),
+      // (its conclusion as text: a model's markdown marks dropped)
+      el("p", "", u.line.replace(/\*\*|__|`/g, "").replace(/^\s*[-*]\s+/gm, "• ")),
+    );
+    this.badge("agents", [...this.subs.values()].filter((x) => x.state === "running").length);
+  }
+
+  /** The sub-agents' cards let go (a new batch). */
+  clearSubagents() {
+    this.subs.clear();
+    this.agentsEl.replaceChildren(
+      el(
+        "p",
+        "tp-empty",
+        tr({
+          fr: "Aucun sous-agent en cours. Demandez-lui une analyse en parallèle.",
+          en: "No sub-agent at work. Ask him for analyses in parallel.",
+        }),
+      ),
+    );
+    this.badge("agents", 0);
+  }
+
+  private badge(id: Tab, n: number) {
+    const b = this.tabBtns.get(id);
+    if (b) b.dataset.badge = n ? String(n) : "";
+  }
+
+  /** The Wakings tab: the hour's budget, all on or off, each rule. */
+  drawWakes() {
+    const w = this.host.wakes?.();
+    this.wakesEl.replaceChildren();
+    if (!w) return;
+    const head = el("div", "tp-wakes-head");
+    const all = el("label", "tp-switch");
+    const box = el("input");
+    box.type = "checkbox";
+    box.checked = w.on;
+    box.dataset.testid = "tars-wake-all";
+    box.addEventListener("change", () => {
+      this.host.wakeAll?.(box.checked);
+      this.drawWakes();
+    });
+    all.append(box, el("span", "", tr({ fr: "Réveils actifs", en: "Wakings on" })));
+    const meter = el("div", "tp-meter");
+    const f = w.perHour > 0 ? Math.min(1, w.spent / w.perHour) : 1;
+    meter.style.setProperty("--f", String(f));
+    meter.title = tr({ fr: "Coût de la dernière heure / plafond", en: "The last hour's cost / ceiling" });
+    const mtext = el("span", "tp-meter-text", `${w.spent.toFixed(4)} / ${w.perHour.toFixed(2)} $ · ${tr({ fr: "h", en: "h" })}`);
+    head.append(all, meter, mtext);
+    if (w.why)
+      head.append(
+        el(
+          "em",
+          "",
+          w.why === "budget"
+            ? tr({ fr: "plafond atteint : en veille", en: "ceiling reached: waiting" })
+            : tr({ fr: "pause entre deux réveils", en: "gap between two wakings" }),
+        ),
+      );
+    const list = el("ul", "tp-rules");
+    for (const r of w.rules) {
+      const li = el("li", `tp-rule${r.enabled ? "" : " off"}${r.reflex ? " reflex" : ""}`);
+      li.dataset.testid = "tars-rule";
+      li.dataset.id = r.id;
+      const sw = el("input");
+      sw.type = "checkbox";
+      sw.checked = r.enabled;
+      sw.setAttribute("aria-label", r.prompt);
+      sw.addEventListener("change", () => {
+        this.host.wakeToggle?.(r.id, sw.checked);
+        this.drawWakes();
+      });
+      const when = `${tr(KIND_WORDS[r.kind] ?? { fr: r.kind, en: r.kind })}${r.kind === "every" ? ` ${r.minutes ?? 10} min` : r.to ? ` · ${r.to}` : ""}`;
+      const txt = el("div", "tp-rule-text");
+      txt.append(el("b", "", `${r.reflex ? "⚡ " : "⏲ "}${when}`), el("p", "", r.prompt));
+      const meta = el("span", "tp-rule-meta", r.fired ? `×${r.fired}` : "");
+      li.append(sw, txt, meta);
+      if (!r.reflex) {
+        const x = el("button", "tp-x", "×");
+        x.type = "button";
+        x.title = tr({ fr: "Supprimer", en: "Delete" });
+        x.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.host.wakeRemove?.(r.id);
+          this.drawWakes();
+        });
+        li.append(x);
+      }
+      list.append(li);
+    }
+    const hint = el(
+      "p",
+      "tp-hint",
+      tr({
+        fr: "Demandez-lui : « toutes les 10 minutes, vérifie le carburant », « à chaque étape du hub, annonce-la »…",
+        en: 'Ask him: "every 10 minutes, check the fuel", "at each hub step, call it out"…',
+      }),
+    );
+    this.wakesEl.append(head, list, hint);
+    this.badge("wakes", w.rules.filter((r) => r.enabled && !r.reflex).length);
+  }
+
+  /** The Memory tab: his notes (each forgotten by its ×), the summary, all cleared. */
+  drawMemory() {
+    const m = this.host.memoryContents?.();
+    this.memoryEl.replaceChildren();
+    if (!m) return;
+    const notes = el("ul", "tp-notes");
+    for (const n of m.notes) {
+      const li = el("li");
+      const x = el("button", "tp-x", "×");
+      x.type = "button";
+      x.title = tr({ fr: "Oublier", en: "Forget" });
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.host.forget?.(n);
+        this.drawMemory();
+        this.refresh();
+      });
+      li.append(el("span", "", n), x);
+      notes.append(li);
+    }
+    if (!m.notes.length)
+      notes.append(
+        el(
+          "li",
+          "tp-empty",
+          tr({
+            fr: "Aucune note. Il en prend quand vous lui dites qui vous êtes ou ce que vous préférez.",
+            en: "No notes. He takes some when you tell him who you are or what you like.",
+          }),
+        ),
+      );
+    this.memoryEl.append(el("h4", "", tr({ fr: "Ses notes", en: "His notes" })), notes);
+    if (m.summary)
+      this.memoryEl.append(
+        el("h4", "", tr({ fr: "Résumé des échanges anciens", en: "Older exchanges, summarized" })),
+        el("p", "tp-summary", m.summary),
+      );
+    this.memoryEl.append(el("p", "tp-hint", tf("memory: {0} exchanges", m.turns.length)));
+  }
+
+  /** The past exchanges, above the current one (the last ones, small). */
+  drawHistory() {
+    const m = this.host.memoryContents?.();
+    this.history.replaceChildren();
+    if (!m) return;
+    for (const t of m.turns.slice(-7, -1)) {
+      const li = el("li");
+      // (a waking of his own: what woke him, not his instruction to himself)
+      const woke = /^\[Woken by your [^—]*— (.*?)\. No pilot/.exec(t.user);
+      li.append(el("span", "tp-h-you", woke ? `⚡ ${woke[1]}` : t.user), el("span", "tp-h-tars", t.tars || "—"));
+      this.history.append(li);
+    }
+    this.history.scrollTop = this.history.scrollHeight;
+  }
+
+  /** What he follows (B4): the hub's card mirrored — its step, its progress, its rows, its callout, its graph's
+   *  verdict (in the corridor, out of it: its fix) —; null: nothing to follow. */
+  follow(
+    h: {
+      title: string;
+      step: string;
+      progress: number | null;
+      rows: [string, string, string?][];
+      next: string | null;
+      callout: string | null;
+      verdict: "on" | "off" | "wait" | null;
+      fix?: string;
+    } | null,
+  ) {
+    this.followEl.hidden = !h;
+    if (!h) return;
+    const key = JSON.stringify(h);
+    if (this.followEl.dataset.key === key) return;
+    this.followEl.dataset.key = key;
+    this.followEl.replaceChildren();
+    const head = el("header");
+    const v = el(
+      "span",
+      `tp-verdict ${h.verdict ?? "none"}`,
+      h.verdict === "on"
+        ? tr({ fr: "dans le couloir", en: "in corridor" })
+        : h.verdict === "off"
+          ? tr({ fr: "hors couloir", en: "off corridor" })
+          : h.verdict === "wait"
+            ? tr({ fr: "pas encore", en: "not yet" })
+            : "",
+    );
+    head.append(el("small", "", tr({ fr: "Suivi", en: "Following" })), el("b", "", h.title), v);
+    const step = el("p", "tp-step", h.step);
+    this.followEl.append(head, step);
+    if (h.progress !== null) {
+      const bar = el("div", "tp-bar");
+      bar.style.setProperty("--f", String(Math.min(1, Math.max(0, h.progress))));
+      this.followEl.append(bar);
+    }
+    if (h.rows.length) {
+      const dl = el("dl", "tp-rows");
+      for (const [k, val, tone] of h.rows.slice(0, 6)) {
+        const dd = el("dd", "", val);
+        if (tone) dd.dataset.tone = tone;
+        dl.append(el("dt", "", k), dd);
+      }
+      this.followEl.append(dl);
+    }
+    if (h.callout) this.followEl.append(el("p", "tp-callout", h.callout));
+    if (h.verdict === "off" && h.fix) this.followEl.append(el("p", "tp-fix", h.fix));
+    if (h.next) this.followEl.append(el("p", "tp-next", h.next));
+  }
+
+  /** The hour's budget in the head (null: none). */
+  budget(text: string | null, warn = false) {
+    this.budgetEl.textContent = text ?? "";
+    this.budgetEl.hidden = !text;
+    this.budgetEl.classList.toggle("warn", warn);
+  }
+
   /** What he is doing: the emblem, the word, the presence. */
   setState(s: EmblemState) {
     this.state = s;
@@ -285,6 +729,8 @@ export class TarsPanel {
   /** A new question (`shown`: how it is written on the console, if not as asked): the exchange begun, the last
    *  task cleared. */
   exchange(q: string, shown = q) {
+    if (this.tab !== "talk") this.setTab("talk");
+    else this.drawHistory();
     this.youLine.textContent = shown;
     this.tarsLine.textContent = "";
     this.clearActions();

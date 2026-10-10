@@ -211,3 +211,104 @@ test("an order answered with nothing done: sent back once to act", async () => {
   expect(r2.text).toBe("Done.");
   expect(twice.seen.length).toBe(2);
 });
+
+test("his wakings: rules on events, timed rules, reflexes kept switched off, the budget", async () => {
+  const { Triggers, REFLEXES, wakeText } = await import("../src/ai/triggers");
+  const { Budget } = await import("../src/ai/budget");
+  let now = 1_000_000;
+  let kept: import("../src/ai/triggers").Trigger[] | null = null;
+  const st = { get: () => kept, set: (t: never[]) => ((kept = structuredClone(t)), true), clear: () => void (kept = null) };
+  const T = new Triggers(st as never, () => now);
+  expect(T.list().length).toBe(REFLEXES.length);
+  // (an autopilot that ended: its reflex; another mode: none)
+  expect(T.match({ kind: "autopilot", to: "none" }).map((r) => r.id)).toEqual(["reflex-autopilot-end"]);
+  expect(T.match({ kind: "autopilot", to: "land" })).toEqual([]);
+  const burn = T.add({ on: { kind: "hub_step" }, prompt: "Call out each hub step." });
+  const tick = T.add({ on: { kind: "every", minutes: 5 }, prompt: "Fuel check." });
+  const soon = T.add({ on: { kind: "in", seconds: 30 }, prompt: "Remind me." });
+  expect(T.match({ kind: "hub_step", to: "coast" }).map((r) => r.id)).toEqual([burn.id]);
+  expect(T.due(0)).toEqual([]);
+  now += 31_000;
+  expect(T.due(0).map((r) => r.id)).toEqual([soon.id]);
+  T.fired(soon.id);
+  expect(T.list().some((r) => r.id === soon.id)).toBe(false);
+  now += 5 * 60_000;
+  expect(T.due(0).map((r) => r.id)).toEqual([tick.id]);
+  // (a reflex switched off stays off after a reload; a rule of his kept)
+  T.remove("reflex-entry");
+  const again = new Triggers(st as never, () => now);
+  expect(again.list().find((r) => r.id === "reflex-entry")!.enabled).toBe(false);
+  expect(again.list().some((r) => r.id === burn.id)).toBe(true);
+  again.clear();
+  expect(again.list().every((r) => r.reflex && r.enabled)).toBe(true);
+  expect(wakeText([again.list()[0]!], { kind: "autopilot", from: "node", to: "none" })).toContain("autopilot node → none");
+  // (two rules one event woke: one waking, both asked)
+  const both = wakeText([again.list()[0]!, again.list()[1]!], { kind: "entry_phase", to: "glide" });
+  expect(both).toContain('reflex "reflex-autopilot-end", reflex "reflex-entry"');
+  expect(both).toContain("1) ");
+  // (the budget: a ceiling an hour, a gap between two wakings)
+  const B = new Budget(
+    () => 0.01,
+    () => 20_000,
+    () => now,
+  );
+  expect(B.canWake()).toBe(true);
+  B.woke();
+  expect(B.why()).toBe("gap");
+  now += 21_000;
+  B.add(0.012);
+  expect(B.why()).toBe("budget");
+  now += 3_601_000;
+  expect(B.canWake()).toBe(true);
+});
+
+test("sub-agents: in parallel, reading only, the planners computing without executing", async () => {
+  const { runSubagents, readOnlyTools } = await import("../src/ai/subagents");
+  const ran: string[] = [];
+  const tools: Tool[] = [
+    { name: "get_state", description: "", run: () => (ran.push("get_state"), { fuel: 0.6 }) },
+    {
+      name: "plan_mission",
+      description: "",
+      params: { target: { type: "string" }, execute: { type: "boolean" } },
+      run: (a) => (ran.push(`plan:${a.execute}`), { dv: 3900 }),
+    },
+    { name: "autopilot", description: "", run: () => (ran.push("autopilot"), "engaged") },
+  ];
+  expect(readOnlyTools(tools).map((t) => t.name)).toEqual(["get_state", "plan_mission"]);
+  // (each sub-agent: its calls, then its conclusion — an act it tries refused as unknown)
+  const complete: Complete = async (m, fns) => {
+    expect(fns.map((f) => f.function.name)).not.toContain("autopilot");
+    const q = (m.at(-1)!.role === "tool" ? m.find((x) => x.role === "user") : m.at(-1))!.content as string;
+    const tools = m.filter((x) => x.role === "tool").length;
+    if (!tools)
+      return {
+        content: null,
+        tool_calls: /fuel/.test(q)
+          ? [{ id: "a", function: { name: "get_state", arguments: "{}" } }]
+          : [
+              { id: "b", function: { name: "plan_mission", arguments: '{"target":"Mars","execute":true}' } },
+              { id: "c", function: { name: "autopilot", arguments: "{}" } },
+            ],
+      };
+    return { content: /fuel/.test(q) ? "60 % left." : "3.9 km/s to Mars." };
+  };
+  const ups: string[] = [];
+  const r = await runSubagents(
+    [
+      { name: "fuel", question: "How much fuel?" },
+      { name: "mars", question: "Δv to Mars?" },
+    ],
+    complete,
+    tools,
+    { lang: "en", onUpdate: (u) => ups.push(`${u.name}:${u.state}`) },
+  );
+  expect(r.map((x) => [x.name, x.ok, x.text])).toEqual([
+    ["fuel", true, "60 % left."],
+    ["mars", true, "3.9 km/s to Mars."],
+  ]);
+  // (the planner forced to compute; the autopilot never run)
+  expect(ran.sort()).toEqual(["get_state", "plan:false"]);
+  expect(r[1]!.actions.find((a) => a.tool === "autopilot")!.ok).toBe(false);
+  expect(ups).toContain("fuel:done");
+});
