@@ -266,3 +266,39 @@ test("the eclipse calculator for TARS (PLAN-CIEL C5): find_eclipses, eclipse_loc
   const { gameCall } = await import("../src/ai/game-commands");
   expect(gameCall("/eclipses solar,lunar", tools)).toEqual({ tool: "find_eclipses", args: { kinds: ["solar", "lunar"] } });
 });
+
+test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labels, /analemma", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { gameCall } = await import("../src/ai/game-commands");
+  const asked: import("../src/ui/multiexposure").MxRequest[] = [];
+  const host = {
+    camera: { weatherPlace: () => ({ body: "earth", lat: 42.34, lon: -3.7 }) },
+    settings: {},
+    tools: {},
+    utcNow: () => Date.UTC(2026, 0, 1),
+    multiExposure: async (r: import("../src/ui/multiexposure").MxRequest) => (asked.push(r), { rendered: 54 }),
+  } as unknown as import("../src/ai/game-tools").GameHost;
+  const tools = gameTools(host);
+  const mx = tools.find((t) => t.name === "multiple_exposure")!;
+  const r = (await mx.run(
+    { kind: "analemma", time: "11:30", cadence: 20, position: true, dates: "all" },
+    new AbortController().signal,
+  )) as { exposures: number };
+  expect(r.exposures).toBe(54);
+  expect(asked[0]).toMatchObject({
+    kind: "analemma",
+    lat: 42.34,
+    lon: -3.7,
+    minutesUtc: 690,
+    cadence: 10,
+    base: "dusk",
+    dates: "all",
+    position: true,
+  });
+  await mx.run({ kind: "analemma" }, new AbortController().signal);
+  expect(asked[1]).toMatchObject({ minutesUtc: 720, cadence: 7, dates: "monthly", position: false });
+  expect(gameCall('/analemma "Paris - Le Bourget" 12:00 7 position=true', tools)).toEqual({
+    tool: "multiple_exposure",
+    args: { kind: "analemma", site: "Paris - Le Bourget", time: "12:00", cadence: 7, position: true },
+  });
+});

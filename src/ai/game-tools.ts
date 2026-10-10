@@ -122,6 +122,8 @@ export interface GameHost {
   now(): number;
   /** the game's date now [ms UTC] */
   utcNow?(): number;
+  /** a multiple exposure made (PLAN-CIEL C8–C10: its dialog opened, the series run): how many exposures, or null */
+  multiExposure?(r: import("../ui/multiexposure").MxRequest): Promise<{ rendered: number } | null>;
   /** taken to see an eclipse (PLAN-CIEL C7): the one of that kind nearest a date (within 3 days), from a place
    *  if it is seen there, else from where it is best; its id, or null: none */
   seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
@@ -464,6 +466,56 @@ export function gameTools(h: GameHost): Tool[] {
         if ("error" in r) return r;
         const limit = Math.max(1, Math.min(Number(a.limit ?? 40), 200));
         return { count: r.events.length, clipped: r.clipped, events: r.events.slice(0, limit).map(eclipseBrief) };
+      },
+    },
+    {
+      name: "multiple_exposure",
+      description:
+        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button): 'analemma' — the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
+      params: {
+        kind: { type: "string", enum: ["analemma"] },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        site: { type: "string" },
+        time: { type: "string", description: "the clock time each day, HH:MM UTC (default 12:00)" },
+        from: { type: "string", description: "the first day (ISO date; default the game's)" },
+        cadence: { type: "number", description: "days between exposures, 1–10 (default 7)" },
+        base: { type: "string", enum: ["dusk", "same", "none"], description: "the landscape under it: at dusk, at that hour, none" },
+        dates: {
+          type: "string",
+          enum: ["monthly", "all", "none"],
+          description: "dates written beside the Suns: one a month (default), every one, none",
+        },
+        position: { type: "boolean", description: "write each labelled Sun's azimuth and altitude, and the place and hour in a corner" },
+      },
+      required: ["kind"],
+      run: async (a) => {
+        if (!h.multiExposure) return { error: "not available" };
+        const site = a.site ? resolveSite(String(a.site), "earth") : null;
+        const here = camera.weatherPlace?.();
+        const lat = site?.lat ?? (a.lat !== undefined ? Number(a.lat) : here?.body === "earth" ? here.lat : 48.86);
+        const lon = site?.lon ?? (a.lon !== undefined ? Number(a.lon) : here?.body === "earth" ? here.lon : 2.35);
+        const [hh, mm] = String(a.time ?? "12:00")
+          .split(":")
+          .map(Number);
+        const start = a.from ? Date.parse(String(a.from)) : (h.utcNow?.() ?? Date.now());
+        const r = await h.multiExposure({
+          kind: "analemma",
+          lat,
+          lon,
+          minutesUtc: (hh ?? 12) * 60 + (mm ?? 0),
+          start,
+          cadence: Math.min(Math.max(Number(a.cadence ?? 7), 1), 10),
+          base: (a.base as "dusk" | "same" | "none") ?? "dusk",
+          dates: (a.dates as "monthly" | "all" | "none") ?? "monthly",
+          position: a.position === true,
+          width: 1200,
+          height: 1600,
+          spp: 2,
+        });
+        return r
+          ? { ok: true, exposures: r.rendered, shown: "the image is in the Multiple exposure dialog (Download PNG)" }
+          : { error: "stopped or failed" };
       },
     },
     {

@@ -30,6 +30,9 @@ import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
 import { EclipsePage } from "./ui/eclipses";
+import { type MxHost, runExposures } from "./photo/multiexposure";
+import { analemmaMarks, analemmaPlan } from "./photo/plans";
+import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
@@ -2493,6 +2496,7 @@ async function main() {
       playPause: (on) => playPause(on),
       png: () => void savePNG(),
       render: () => renderDialog.toggle(),
+      multi: () => void mxDialog.open(),
     })).open();
 
   // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
@@ -2792,6 +2796,110 @@ async function main() {
     },
   });
   flightHud.onEclipses = () => eclipses.open();
+  // multiple exposures (photo/multiexposure.ts, PLAN-CIEL C8–C10): a tripod's series rendered offline and
+  // blended — the analemma, an eclipse's phases, the stars' trails; the game put back after
+  const mxSnapshot = () => ({
+    save: tools.snapshot("before the multiple exposure"),
+    settings: { ...settings },
+    time: sim.time,
+    ev: renderer.autoExposureEV,
+  });
+  const mxHost: MxHost = {
+    settings,
+    apply: (p) => {
+      presets["Multiple exposure"] = p;
+      applyPreset("Multiple exposure");
+    },
+    settle: async () => {
+      // (the scene's frames drawn, its Earth's maps and tiles in — a minute at most)
+      for (let i = 0; i < 4; i++) await new Promise((r) => requestAnimationFrame(() => r(null)));
+      for (let i = 0; i < 600 && !renderer.earthSettled; i++) await new Promise((r) => setTimeout(r, 100));
+    },
+    render: async (o) => {
+      renderer.startOffline(settings, sim.time, {
+        width: o.width,
+        height: o.height,
+        spp: o.spp,
+        tolerance: 0,
+        eps: 0.02,
+        maxSteps: 6000,
+        noiseThreshold: 0,
+        minSpp: Math.min(o.spp, 16),
+        shutter: 0,
+        budgetMs: 80,
+      });
+      while (!renderer.offlineState?.done) {
+        if (renderer.offlineState?.error) throw new Error(renderer.offlineState.error);
+        if (!renderer.offlineActive) throw new Error("Render cancelled");
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      const px = await renderer.exportRGBA(settings);
+      renderer.cancelOffline();
+      return px.data;
+    },
+    snapshot: mxSnapshot,
+    restore: (x) => {
+      const b = x as ReturnType<typeof mxSnapshot>;
+      tools.load(b.save, { quiet: true });
+      Object.assign(settings, b.settings);
+      sim.setTime(b.time);
+      renderer.autoExposureEV = b.ev;
+      camera.sync();
+      refreshGui();
+      touch();
+      touchDisplay();
+    },
+    active: (on) => {
+      camera.enabled = !on;
+      document.body.classList.toggle("offline", on);
+      touch();
+    },
+  };
+  /** An analemma made (its options as the dialog gives them; the place and the date default to the game's). */
+  const runAnalemma = (
+    o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number; spp?: number },
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const p = camera.weatherPlace();
+    const width = o.width ?? 1200,
+      height = o.height ?? 1600;
+    const plan = analemmaPlan({
+      lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
+      minutesUtc: o.minutesUtc ?? 12 * 60,
+      start: o.start ?? utcOf(sim.time),
+      cadence: o.cadence ?? 7,
+      count: o.count,
+      base: o.base ?? "dusk",
+      aspect: width / height,
+      template: mxTemplate(),
+      sunEV: o.sunEV ?? 9,
+    });
+    return runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 2, baseSpp: 32 }, progress, signal).then((r) => ({
+      ...r,
+      view: plan.view,
+      marks: analemmaMarks(plan.suns, plan.view, width, height),
+    }));
+  };
+  const mxDialog = new MultiExposureDialog({
+    place: () => {
+      const p = camera.weatherPlace();
+      return p && p.body === "earth" ? { lat: p.lat, lon: p.lon } : null;
+    },
+    now: () => utcOf(sim.time),
+    run: (r, progress, signal) => {
+      if (r.kind === "analemma") return runAnalemma({ ...r }, progress, signal);
+      return Promise.reject(new Error(`${r.kind}: not yet`));
+    },
+    download: (b, name) => download(b, name),
+  });
+  /** The template of a ground view for a multiple exposure (no ship, the Earth's sky). */
+  const mxTemplate = (): Preset => ({
+    ...presets["Earth: total eclipse over Burgos, 12 Aug 2026"]!,
+    earthClouds: settings.earthClouds,
+    weather: settings.weather,
+  });
   /**
    * Taken to see an eclipse (PLAN-CIEL C7): a scene made for it — a solar or a lunar one from the place
    * asked if it is seen there, else from where it is best (the greatest point, the Moon at the zenith), a
@@ -2907,6 +3015,7 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     utcNow: () => utcOf(sim.time),
+    multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
     seeEclipse: async (kind, t, place) => {
       const r = await plan<{ events: EclipseEvent[] } | { error: string }>({
         kind: "eclipses",
@@ -3107,6 +3216,7 @@ async function main() {
     music,
     tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent },
     skyLoading,
+    mx: { runAnalemma, host: mxHost, dialog: mxDialog },
     touch,
     resize,
     refreshGui,

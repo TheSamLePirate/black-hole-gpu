@@ -18,6 +18,7 @@ const T = {
   held: { fr: "Figé", en: "Held" },
   png: { fr: "PNG", en: "PNG" },
   render: { fr: "Rendu…", en: "Render…" },
+  multi: { fr: "Surimpression…", en: "Multiple exposure…" },
   hide: { fr: "masquer la barre", en: "hide the bar" },
   leave: { fr: "quitter", en: "leave" },
   back: { fr: "Retour au jeu", en: "Back to the game" },
@@ -34,6 +35,8 @@ export interface PhotoDeps {
   playPause(on: boolean): void;
   png(): void;
   render(): void;
+  /** the multiple exposure's dialog (PLAN-CIEL C8) */
+  multi?(): void;
 }
 
 export class PhotoMode {
@@ -140,6 +143,7 @@ export class PhotoMode {
       toggle(T.dof, "dof"),
       toggle(T.time, "animate"),
       button({ label: tr(T.png), testid: "photo-png", onClick: () => this.d.png() }),
+      button({ label: tr(T.multi), testid: "photo-multi", onClick: () => this.d.multi?.() }),
       button({ label: tr(T.render), kind: "primary", testid: "photo-render", onClick: () => this.d.render() }),
       h("span", { class: "ph-keys" }, kbd("H"), ` ${tr(T.hide)} · `, kbd(t("Esc")), ` ${tr(T.leave)}`),
       // (the way back, in plain sight: Escape is not on every keyboard, nor on a tablet)

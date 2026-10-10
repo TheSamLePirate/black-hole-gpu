@@ -285,6 +285,24 @@ export function altitudeAt(id: string, lat: number, lon: number, hM: number, ms:
   return Math.asin(dot(v, zenithAt(lat, lon, ms)) / len(v)) / D;
 }
 
+/** A body's azimuth (from the north, eastwards) and geometric altitude [°] from a place (lat, lon [rad], h [m]) at a UTC time. */
+export function azAltAt(id: string, lat: number, lon: number, hM: number, ms: number): { az: number; alt: number } {
+  const p = earthPointKm(lat, lon, hM, ms);
+  const v = sub(seenKm(id, ms, p), p);
+  const A = bodyAxes(solarBody("earth")!, tOf(ms));
+  const z = zenithAt(lat, lon, ms);
+  // (east: the pole × up; north: up × east)
+  const pole = A[2];
+  let e: Vec3 = [pole[1] * z[2] - pole[2] * z[1], pole[2] * z[0] - pole[0] * z[2], pole[0] * z[1] - pole[1] * z[0]];
+  e = scale(e, 1 / len(e));
+  const n: Vec3 = [z[1] * e[2] - z[2] * e[1], z[2] * e[0] - z[0] * e[2], z[0] * e[1] - z[1] * e[0]];
+  const l = len(v);
+  return {
+    az: ((((Math.atan2(dot(v, e), dot(v, n)) * 180) / Math.PI) % 360) + 360) % 360,
+    alt: (Math.asin(dot(v, z) / l) * 180) / Math.PI,
+  };
+}
+
 /** A solar eclipse seen from a place (lat, lon [rad], height [m]) about its greatest moment t. */
 export function solarLocal(lat: number, lon: number, hM: number, t: number): SolarLocal {
   const at = (x: number) => discsAt(earthPointKm(lat, lon, hM, x), "moon", "sun", x);

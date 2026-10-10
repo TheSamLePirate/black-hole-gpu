@@ -70,6 +70,8 @@ export interface BhContext {
   /** TARS the agent (PLAN-TARS-AGENT): his turns, his memory, his tools */
   tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[]; spent: () => number };
   skyLoading: Promise<unknown>;
+  /** multiple exposures (PLAN-CIEL C8): the analemma's runner */
+  mx?: unknown;
   touch(): void;
   resize(): void;
   refreshGui(): void;
@@ -258,6 +260,7 @@ export function installBh(c: BhContext) {
       presets,
       refresh: refreshGui,
       skyLoading,
+      mx: c.mx,
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
       iss: {
         orbit: issOrbit,

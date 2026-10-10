@@ -218,6 +218,9 @@ export interface BodyView {
   lookEl?: number;
   /** (no `look`) the nose at a place of the body instead: its latitude, east longitude [°] */
   aim?: [number, number];
+  /** on the ground, no `look` nor `aim`: the nose level towards this azimuth [° from the north, eastwards] —
+   *  a fixed view (a tripod for a multiple exposure: PLAN-CIEL C8); `off` then raises it */
+  heading?: number;
   off?: [number, number];
   /** in orbit: the ship's nose that far [°] below the body, its back towards it (the look turned onto
    *  the body passes over the cockpit: the hull out of the image) */
@@ -300,7 +303,16 @@ export function bodyView(t: number, v: BodyView) {
   }
   // the body's direction (the Moon's from here: its parallax is a degree)
   const P = v.look ? ourState(v.look, t).pos : v.aim ? fromBodyFixed(id, bodyFixedOf(id, v.aim[0], v.aim[1], 0), t) : null;
-  const dir = P ? unit([P[0] - X[0], P[1] - X[1], P[2] - X[2]]) : east;
+  let dir = P ? unit([P[0] - X[0], P[1] - X[1], P[2] - X[2]]) : east;
+  if (!P && v.heading !== undefined) {
+    const n = unit(cross(up, east));
+    const a = (v.heading * Math.PI) / 180;
+    dir = unit([
+      n[0] * Math.cos(a) + east[0] * Math.sin(a),
+      n[1] * Math.cos(a) + east[1] * Math.sin(a),
+      n[2] * Math.cos(a) + east[2] * Math.sin(a),
+    ]);
+  }
   if (landed) {
     const el = Math.asin(Math.max(-1, Math.min(1, dot(dir, up))));
     const h: Vec3 = [dir[0] - up[0] * Math.sin(el), dir[1] - up[1] * Math.sin(el), dir[2] - up[2] * Math.sin(el)];
