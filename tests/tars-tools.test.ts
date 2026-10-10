@@ -230,3 +230,39 @@ test("the sky in TARS's telemetry (PLAN-CIEL C3): the Sun's and the Moon's heigh
   const cam = { skyInfo: () => sky } as unknown as import("../src/controls").CameraController;
   expect(telemetry(cam, ["sky"])).toEqual({ sky });
 });
+
+test("the eclipse calculator for TARS (PLAN-CIEL C5): find_eclipses, eclipse_local, their / commands", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { addEphemeris } = await import("../src/system/de440");
+  const b = readFileSync("assets/ephemeris/de440.bin");
+  addEphemeris(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  const { gameTools } = await import("../src/ai/game-tools");
+  const host = {
+    camera: {},
+    settings: {},
+    tools: {},
+    utcNow: () => Date.UTC(2026, 0, 1),
+  } as unknown as import("../src/ai/game-tools").GameHost;
+  const tools = gameTools(host);
+  const find = tools.find((t) => t.name === "find_eclipses")!;
+  const sig = new AbortController().signal;
+  const r = (await find.run({ kinds: ["solar", "lunar"] }, sig)) as {
+    count: number;
+    events: { kind: string; type: string; t: string; saros: number }[];
+  };
+  expect(r.events.map((e) => `${e.kind} ${e.type} ${e.t.slice(0, 10)}`).slice(0, 4)).toEqual([
+    "solar annular 2026-02-17",
+    "lunar total 2026-03-03",
+    "solar total 2026-08-12",
+    "lunar partial 2026-08-28",
+  ]);
+  const local = tools.find((t) => t.name === "eclipse_local")!;
+  const burgos = (await local.run({ date: "2026-08-12", kind: "solar", lat: 42.34, lon: -3.7 }, sig)) as {
+    here: { type: string; contacts: { name: string; t: string }[] };
+  };
+  expect(burgos.here.type).toBe("total");
+  expect(burgos.here.contacts.map((c) => c.name)).toEqual(["C1", "C2", "C3", "C4"]);
+  expect(burgos.here.contacts[1]!.t).toStartWith("2026-08-12T18:2");
+  const { gameCall } = await import("../src/ai/game-commands");
+  expect(gameCall("/eclipses solar,lunar", tools)).toEqual({ tool: "find_eclipses", args: { kinds: ["solar", "lunar"] } });
+});

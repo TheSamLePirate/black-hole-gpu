@@ -300,6 +300,24 @@ export const GAME_COMMANDS: GameCommand[] = [
       en: "The real weather of a place at a date: /weatherat 42.5 -2.5 2026-08-12T18:30Z",
     },
   },
+  {
+    name: "eclipses",
+    tool: "find_eclipses",
+    args: [{ param: "kinds" }, { param: "from" }, { param: "to" }],
+    desc: {
+      fr: "Les éclipses à venir : /eclipses solar,lunar [de] [à] — aussi transit, phenomena, world",
+      en: "The eclipses to come: /eclipses solar,lunar [from] [to] — also transit, phenomena, world",
+    },
+  },
+  {
+    name: "eclipse",
+    tool: "eclipse_local",
+    args: [{ param: "kind" }, { param: "date" }, { param: "lat" }, { param: "lon" }],
+    desc: {
+      fr: "Une éclipse vue d'un lieu : /eclipse solar 2026-08-12 42.34 -3.7",
+      en: "An eclipse from a place: /eclipse solar 2026-08-12 42.34 -3.7",
+    },
+  },
   { name: "report", tool: "get_flight_report", desc: { fr: "Le dernier rapport de vol", en: "The last flight report" } },
   {
     name: "tool",
@@ -321,6 +339,11 @@ const truthy = (v: string) => !/^(off|non|no|0|false|up|haut)$/i.test(v);
 /** A word as a parameter's value: a number, a switch, or the text. */
 function asValue(p: Param | undefined, v: string, from?: Provider): unknown {
   if (from === "onoff" || from === "updown" || p?.type === "boolean") return truthy(v);
+  if (p?.type === "array")
+    return v
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
   if (p?.type === "number") {
     const n = Number(v.replace(",", "."));
     return Number.isFinite(n) ? n : v;

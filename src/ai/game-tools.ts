@@ -25,6 +25,8 @@ import type { Args } from "./tool-schema";
 import { SITES, type Site } from "../game/sites";
 import { OpenMeteoFeed, modelWeatherAt } from "../openmeteo";
 import { msOfDays } from "../realweather";
+import { plan } from "../system/plan-client";
+import type { EclipseEvent, EclipseKind } from "../eclipse/search";
 import { MISSIONS } from "../game/missions";
 import { KEYMAP, type KeyAction } from "../input/keymap";
 import { MOUNTS, type Mount } from "../mounts";
@@ -118,6 +120,8 @@ export interface GameHost {
   subagents(tasks: SubTask[], signal: AbortSignal): Promise<SubResult[]>;
   /** wall time [ms] (the waits) */
   now(): number;
+  /** the game's date now [ms UTC] */
+  utcNow?(): number;
   /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
   dayClouds?(): { date: string; layer: string } | null;
 }
@@ -266,6 +270,26 @@ const opText = (r: OpResult) =>
       }
     : { ok: false, note: r.note };
 
+/** An eclipse in a few words for TARS: its kind, type, times as ISO, its figures rounded. */
+export function eclipseBrief(e: EclipseEvent): Record<string, unknown> {
+  return isoTimes({ ...e, at: undefined }) as Record<string, unknown>;
+}
+/** Times [ms] in an answer as ISO dates (the keys t, at, start, end and contacts' t); numbers rounded. */
+export function isoTimes(v: unknown, key = ""): unknown {
+  if (Array.isArray(v)) return v.map((x) => isoTimes(x));
+  if (v && typeof v === "object")
+    return Object.fromEntries(
+      Object.entries(v)
+        .filter(([, x]) => x !== undefined)
+        .map(([k, x]) => [k, isoTimes(x, k)]),
+    );
+  if (typeof v === "number") {
+    if (/^(t|at|start|end|max)$/.test(key)) return Number.isFinite(v) ? new Date(v).toISOString().slice(0, 19) + "Z" : null;
+    return Math.round(v * 1e4) / 1e4;
+  }
+  return v;
+}
+
 /** the weather_at tool's own requests (the game's feed is the real weather's) */
 const toolFeed = new OpenMeteoFeed();
 
@@ -405,6 +429,59 @@ export function gameTools(h: GameHost): Tool[] {
         const r = await modelWeatherAt(toolFeed, Number(a.lat), Number(a.lon), ms);
         if (!r.reachable) return { reachable: false, why: "before 1940 or beyond the 15-day forecast", date: new Date(ms).toISOString() };
         return r.state ? { reachable: true, weather: r.state } : { reachable: true, error: "no answer (network)" };
+      },
+    },
+    {
+      name: "find_eclipses",
+      description:
+        "The eclipse calculator: every eclipse in a window of dates — solar (total, annular, hybrid, partial: the greatest moment UTC, gamma, magnitude, its place, the duration and the path's width there, saros), lunar (total, partial, penumbral: umbral and penumbral magnitudes, contacts P1…P4, durations, saros), Mercury's and Venus's transits, the phenomena of a planet's moons seen from the Earth (ecl: in its shadow; occ: behind it; tra: before it; sha: its shadow on it — a year at most; Jupiter's by default), and the Sun's eclipses seen from another world (world: its planet's and its moons' shadows on it — two years at most). Up to 50 years for the Earth's. Use it for any question about eclipses past or to come, then eclipse_local for a place.",
+      params: {
+        kinds: { type: "array", items: { type: "string", enum: ["solar", "lunar", "transit", "phenomena", "world"] } },
+        from: { type: "string", description: "ISO date (default: the game's date)" },
+        to: { type: "string", description: "ISO date (default: from + 3 years; phenomena: + 1 month)" },
+        planet: { type: "string", description: "phenomena: jupiter (default), saturn, neptune, mars, uranus, pluto" },
+        world: { type: "string", description: "world: the body the Sun is seen from (moon, io, mars, titan…)" },
+        limit: { type: "number", description: "at most this many events (default 40)" },
+      },
+      required: ["kinds"],
+      run: async (a) => {
+        const kinds = (a.kinds as EclipseKind[]) ?? [];
+        const from = a.from ? Date.parse(String(a.from)) : (h.utcNow?.() ?? Date.now());
+        const phen = kinds.length === 1 && kinds[0] === "phenomena";
+        const to = a.to ? Date.parse(String(a.to)) : from + (phen ? 31 : 3 * 365.25) * 86400e3;
+        if (!Number.isFinite(from) || !Number.isFinite(to)) return { error: "bad date" };
+        const world = a.world ? (resolveBody(String(a.world)) ?? String(a.world)) : undefined;
+        const planet = a.planet ? (resolveBody(String(a.planet)) ?? String(a.planet)) : undefined;
+        const r = await plan<{ events: EclipseEvent[]; clipped: EclipseKind[] } | { error: string }>({
+          kind: "eclipses",
+          q: { from, to, kinds, planets: planet ? [planet] : undefined, world },
+        });
+        if ("error" in r) return r;
+        const limit = Math.max(1, Math.min(Number(a.limit ?? 40), 200));
+        return { count: r.events.length, clipped: r.clipped, events: r.events.slice(0, limit).map(eclipseBrief) };
+      },
+    },
+    {
+      name: "eclipse_local",
+      description:
+        "What a solar or lunar eclipse looks like from a place: its contacts (UTC), the greatest moment, the magnitude and the obscuration, total/annular/partial or not seen there, the Sun's or the Moon's height at each (geometric, degrees). Give the eclipse's date (from find_eclipses) and a place (lat/lon in degrees, or a site's name).",
+      params: {
+        date: { type: "string", description: "the eclipse's greatest moment or its day (ISO)" },
+        kind: { type: "string", enum: ["solar", "lunar"] },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        site: { type: "string", description: "a site's name instead of lat/lon" },
+      },
+      required: ["date", "kind"],
+      run: async (a) => {
+        const t = Date.parse(String(a.date));
+        if (!Number.isFinite(t)) return { error: "bad date" };
+        const site = a.site ? resolveSite(String(a.site), "earth") : null;
+        const lat = site ? site.lat : Number(a.lat),
+          lon = site ? site.lon : Number(a.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { error: "a place: lat and lon, or a site" };
+        const r = await plan<unknown>({ kind: "eclipseLocal", what: a.kind === "lunar" ? "lunar" : "solar", t, lat, lon, h: 0 });
+        return r ? isoTimes(r) : { error: "no such eclipse within 3 days of that date" };
       },
     },
     {

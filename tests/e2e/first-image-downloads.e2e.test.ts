@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // What the first image waits for (PLAN-MONDE M3): a scene away from the Earth and from Jupiter downloads
-// neither the Earth's medium maps (22.7 MB) nor Jupiter's moons' ephemeris (JUP365, 4.1 MB) before its
+// neither the Earth's medium maps (22.7 MB) nor Jupiter's moons' ephemeris (JUP365, 7.5 MB) before its
 // first image — both come after it, ahead of need; a scene at Jupiter waits for JUP365 before it is
 // placed. Before: every scene's first image waited behind all of them (at 20 Mbit/s, 11.1 s against 5.5–6.1).
 

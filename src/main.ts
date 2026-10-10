@@ -121,7 +121,7 @@ import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
-import { solarBody, M_METRES } from "./system/solar";
+import { solarBody, M_METRES, utcOf } from "./system/solar";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpLadder } from "./clock";
@@ -2838,6 +2838,7 @@ async function main() {
     memory: tarsMemory,
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
+    utcNow: () => utcOf(sim.time),
     display: tarsDisplay,
     screen: (name, slot = 0) => {
       const map = (tab?: "orbit" | "globe" | "map") => {

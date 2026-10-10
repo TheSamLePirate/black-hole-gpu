@@ -13,8 +13,11 @@ import type { Settings } from "../settings";
 import { EntryGuidance, planDeorbit, type EntryCraft, type EntryState } from "../entry";
 import { envOf, type EnvDesc } from "../entry-env";
 import type { V3 } from "../aero";
+import { eclipseLocal, searchEclipses, type EclipseQuery } from "../eclipse/search";
 
 export type PlanRequest =
+  | { id: number; kind: "eclipses"; q: EclipseQuery }
+  | { id: number; kind: "eclipseLocal"; what: "solar" | "lunar"; t: number; lat: number; lon: number; h: number }
   | { id: number; kind: "wormholePath"; s: Settings; t: number; entry: "ours" | "gargantua" }
   | { id: number; kind: "transfer"; X: Vec3; V: Vec3; t: number; goal: OurGoal; o: PlanOptions }
   | { id: number; kind: "orbit"; X: Vec3; V: Vec3; t: number; altM: number; o: PlanOptions }
@@ -45,6 +48,9 @@ export type PlanRequest =
     };
 
 export function runPlan(q: PlanRequest) {
+  // (the eclipse calculator — PLAN-CIEL C5: seconds of searching for a year of Jupiter's moons)
+  if (q.kind === "eclipses") return searchEclipses(q.q);
+  if (q.kind === "eclipseLocal") return eclipseLocal(q.what, q.t, q.lat, q.lon, q.h);
   if (q.kind === "wormholePath") return predictWormhole(q.s, q.t, q.entry);
   if (q.kind === "transfer") return planOurTransfer(q.X, q.V, q.t, q.goal, q.o);
   if (q.kind === "orbit") return planOurOrbit(q.X, q.V, q.t, q.altM, q.o);

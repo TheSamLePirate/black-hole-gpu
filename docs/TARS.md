@@ -130,7 +130,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
 - **Ce qu'il fait** : ses 43 outils couvrent tout le jeu.
-  - Lire : l'état entier, les sites et pistes, les corps, la météo (et la météo réelle de n'importe quel lieu à n'importe quelle date depuis 1940 : `weather_at`, `/weatherat`), le ciel (télémétrie « sky » : hauteurs vraies et réfractées du Soleil et de la Lune), les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
+  - Lire : l'état entier, les sites et pistes, les corps, la météo (et la météo réelle de n'importe quel lieu à n'importe quelle date depuis 1940 : `weather_at`, `/weatherat`), le ciel (télémétrie « sky » : hauteurs vraies et réfractées du Soleil et de la Lune), les éclipses passées et à venir partout dans le système solaire (`find_eclipses`, `eclipse_local`, `/eclipses`, `/eclipse`), les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
   - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
   - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
   - Le temps et la date, les vues, le ciel, les panneaux et la carte.

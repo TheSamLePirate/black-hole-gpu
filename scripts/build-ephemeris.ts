@@ -79,7 +79,7 @@ const FITS: Fit[] = [
   { id: "pluto", of: helio(9), tol: 5, prec: 64, from: 1990, to: 2150 },
   { id: "moon", of: (et) => ecl(sub(ssb(301, et), ssb(399, et))), tol: 0.02, prec: 64, from: 1990, to: 2150 },
 ];
-// (the Galilean moons from Jupiter's centre, over the game's years: Io turns in 1.8 days — 160 years
+// (the Galilean moons from Jupiter's centre, from 1990 — the eclipse calculator's present, PLAN-CIEL C5 — to 2100: Io turns in 1.8 days — 160 years
 // of it would weigh megabytes)
 const JUP_FITS: Fit[] = haveJup
   ? (
@@ -89,7 +89,7 @@ const JUP_FITS: Fit[] = haveJup
         ["ganymede", 503],
         ["callisto", 504],
       ] as const
-    ).map(([id, n]) => ({ id, of: (et: number) => ecl(sub(ssb(n, et), ssb(599, et))), tol: 5, prec: 32 as const, from: 2040, to: 2100 }))
+    ).map(([id, n]) => ({ id, of: (et: number) => ecl(sub(ssb(n, et), ssb(599, et))), tol: 5, prec: 32 as const, from: 1990, to: 2100 }))
   : [];
 
 /**

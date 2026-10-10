@@ -14,6 +14,8 @@ export const READ_TOOLS = new Set([
   "list_bodies",
   "get_weather",
   "weather_at",
+  "find_eclipses",
+  "eclipse_local",
   "find_settings",
   "list_saves_and_scenes",
   "get_log",
