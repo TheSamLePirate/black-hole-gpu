@@ -74,6 +74,7 @@ Guides : [HUD.md](../HUD.md), [PLAN-HUB.md](../PLAN-HUB.md), [PLAN-ASSISTANT.md]
 |---|---|
 | `weather.ts` | L'état de la météo à un endroit : vent, rafales, turbulence, cisaillement, visibilité, brouillard, trois couches de nuages, précipitations |
 | `metar.ts` | Le vrai METAR d'un aérodrome (metar.vatsim.net, sans clé), décodé |
+| `system/refraction.ts`, `system/sky-now.ts` | La réfraction de l'air de la Terre (le modèle du traceur, `airBend` : la colonne d'air de Chapman, ~35′ à l'horizon, selon la température) ; le ciel en chiffres à la caméra (hauteurs vraies et apparentes du Soleil et de la Lune) pour la télémétrie « sky » de TARS |
 | `system/day-clouds.ts` | Les nuages réels du jour sur toute la Terre : la mosaïque satellite de GIBS (VIIRS, MODIS) changée en couverture nuageuse sur le GPU (démélangée de la Blue Marble), dans le vert de la carte de nuit |
 | `openmeteo.ts`, `realweather.ts` | La vraie météo partout sur la Terre à la date du jeu (Open-Meteo : prévision de J−92 à J+15, archive ERA5 depuis 1940), décodée en couches, visibilité, pluie, orage, vent ; le choix entre METAR (maintenant, près d'une piste), modèle et tirage plausible (hors de portée) |
 | `game/mls.ts`, `game/procedures.ts` | Le guidage MLS des pistes ; les cartes d'approche de chaque site (repères, profil, minima, remise de gaz) |

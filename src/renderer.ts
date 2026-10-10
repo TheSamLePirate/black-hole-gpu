@@ -15,6 +15,7 @@ import {
   utcOf,
 } from "./system/solar";
 import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
+import { refractionParams, seaRefractivity } from "./system/refraction";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
@@ -128,7 +129,7 @@ const SEA_VEC4S = 15;
 const WX_VEC4S = 6;
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + WX_VEC4S;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + WX_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -1032,6 +1033,13 @@ export class Renderer {
     const failed = this.dayCloudsFail?.date === w.date && Date.now() - this.dayCloudsFail.at < 5 * 60e3;
     if (this.dayCloudsJob !== w.date && !failed) this.loadDayClouds(w);
     return false;
+  }
+
+  /** The air's refractivity at sea level (n − 1): 2.93·10⁻⁴ at 15 °C and 1013.25 hPa, as the density —
+   *  the real weather's temperature at the ground when it is in (refraction.ts). */
+  refractivity(s: Settings): number {
+    const m = s.weather === "real" ? this.weatherReal?.model : undefined;
+    return seaRefractivity(m ? m.T : 15);
   }
 
   /** The satellites' mosaic of the day in force (the map's weather layer), or null. */
@@ -2305,6 +2313,12 @@ export class Renderer {
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (PARAM_VEC4S - WX_VEC4S) * 4);
+    // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
+    // air when it is in (cold air bends more), else the standard atmosphere's
+    f.set(
+      earthSurface && s.refraction ? refractionParams(this.refractivity(s), earthSurface.h * EARTH_RM, EARTH_RM) : [0, 0, 0, 0],
+      (PARAM_VEC4S - WX_VEC4S - 1) * 4,
+    );
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;

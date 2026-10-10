@@ -218,3 +218,15 @@ test("the real weather anywhere at a date (PLAN-CIEL C1): weather_at, its / comm
     args: { lat: 42.5, lon: -2.5, date: "2026-08-12T18:30Z" },
   });
 });
+
+test("the sky in TARS's telemetry (PLAN-CIEL C3): the Sun's and the Moon's heights, true and refracted", async () => {
+  const { telemetry } = await import("../src/ai/telemetry");
+  const sky = {
+    over: "earth",
+    heightM: 12,
+    refraction: { refractivity: 2.93e-4, horizonArcmin: 35.3 },
+    sun: { altDeg: -0.25, apparentAltDeg: 0.27, azDeg: 300 },
+  };
+  const cam = { skyInfo: () => sky } as unknown as import("../src/controls").CameraController;
+  expect(telemetry(cam, ["sky"])).toEqual({ sky });
+});

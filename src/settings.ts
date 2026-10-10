@@ -298,6 +298,7 @@ export interface Settings {
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
+  refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   realtimeEps: number;
@@ -553,6 +554,7 @@ export function defaultSettings(): Settings {
     farFieldLut: true,
     volumetricClouds: true,
     earthClouds: 1,
+    refraction: true,
     autoWarp: true,
     earthTerrain: true,
     realtimeEps: 0.07,
@@ -1765,6 +1767,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   farFieldLut: "pref",
   volumetricClouds: "pref",
   earthClouds: "scene",
+  refraction: "pref",
   autoWarp: "scene",
   earthTerrain: "scene",
   realtimeEps: "pref",

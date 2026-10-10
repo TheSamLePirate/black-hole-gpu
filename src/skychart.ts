@@ -15,7 +15,8 @@ import { projectLook } from "./shadow";
 import { aberrateRep, cameraHome, onOurSide } from "./targeting";
 import { homeToRep, ourState } from "./system/our-side";
 import { eclOf, equatorOfDate } from "./system/orientation";
-import { bodyPole, SOLAR_BODIES, utcOf } from "./system/solar";
+import { bodyPole, M_METRES, SOLAR_BODIES, utcOf } from "./system/solar";
+import { apparentAltitude } from "./system/refraction";
 import { tdbOf } from "./system/timescale";
 import { mouth } from "./wormhole";
 import { cross, dot, lin } from "./math/vec3";
@@ -177,6 +178,8 @@ export interface SkyChartOptions {
   opacity: number;
   /** a constellation drawn brighter (hovered), or −1 */
   highlight: number;
+  /** the air's sea-level refractivity the tracer draws with (PLAN-CIEL C3; standard when not given) */
+  refractivity?: number;
 }
 export function chartOptions(s: Settings, highlight = -1): SkyChartOptions {
   return {
@@ -276,6 +279,23 @@ export function buildChart(
   const radius = Math.atan(tanH * Math.hypot(1, aspect)) + 2 * D;
   const fovV = s.fov;
   const hz = horizonAt(s, cam, t);
+  // (the Earth's air bending the light from beyond it — PLAN-CIEL C3, as the tracer draws it: what lies in
+  // the sky seen raised by its refraction at the camera's height; the horizon's own grid as it is)
+  const refr =
+    hz?.body === "earth" && s.refraction !== false
+      ? { z: hz.zenith, h: (Math.hypot(hz.X[0] - hz.C[0], hz.X[1] - hz.C[1], hz.X[2] - hz.C[2]) - hz.R) * M_METRES }
+      : null;
+  const lift = (v: Vec3): Vec3 => {
+    if (!refr || refr.h > 120e3) return v;
+    const z = Math.max(-1, Math.min(1, dot(v, refr.z)));
+    const w = lin(refr.z, 1, v, -z);
+    const wl = Math.hypot(...w);
+    if (wl < 1e-9) return v;
+    const alt = Math.asin(z);
+    const d = apparentAltitude(alt, refr.h, o.refractivity) - alt;
+    return lin(v, Math.cos(d), w, Math.sin(d) / wl);
+  };
+  const projectSky = refr ? (v: Vec3) => project(lift(v)) : project;
 
   const out: number[] = [];
   let count = 0;
@@ -287,7 +307,7 @@ export function buildChart(
   };
   const step = Math.min(1, Math.max(0.01, fovV / 90)) * D;
   /** a curve f(u), u in [u0, u1] (radians along it), drawn where it crosses the view; its visible points */
-  const curve = (f: (u: number) => Vec3, u0: number, u1: number, st: Style, alpha = 1) => {
+  const curve = (f: (u: number) => Vec3, u0: number, u1: number, st: Style, alpha = 1, pf = projectSky) => {
     const pts: [number, number][] = [];
     const coarse = Math.max(step, 1 * D);
     const n = Math.max(1, Math.ceil((u1 - u0) / coarse));
@@ -297,9 +317,9 @@ export function buildChart(
         b = u0 + ((u1 - u0) * (i + 1)) / n;
       if (dot(f(a), centre) < cr && dot(f(b), centre) < cr && dot(f((a + b) / 2), centre) < cr) continue;
       const m = Math.max(1, Math.ceil((b - a) / step));
-      let prev: [number, number] | null = project(f(a));
+      let prev: [number, number] | null = pf(f(a));
       for (let j = 1; j <= m; j++) {
-        const q = project(f(a + ((b - a) * j) / m));
+        const q = pf(f(a + ((b - a) * j) / m));
         if (prev && q) {
           emit(prev, q, st, alpha);
           if (Math.abs(q[0]) < 1 && Math.abs(q[1]) < 1) pts.push(q);
@@ -320,6 +340,7 @@ export function buildChart(
     labels: ChartLabel[],
     kindAlpha: number,
     azimuthal: boolean,
+    pf = projectSky,
   ) => {
     const rgb = minor.rgb.join(", ");
     const y = cross(z, x);
@@ -340,7 +361,7 @@ export function buildChart(
       const lat = k * latStep;
       if (Math.abs(lat) > Math.PI / 2 - 1e-6) continue;
       const major0 = Math.abs(lat) < 1e-9;
-      const pts = curve((u) => at(u, lat), clon - dLon, clon + dLon, major0 ? major : minor);
+      const pts = curve((u) => at(u, lat), clon - dLon, clon + dLon, major0 ? major : minor, 1, pf);
       const left = pts.reduce<[number, number] | null>((b, p) => (!b || p[0] < b[0] ? p : b), null);
       if (left && !major0) labels.push({ text: latLabel(lat / D), x: left[0], y: left[1], kind: "grid", alpha: kindAlpha, rgb });
     }
@@ -349,7 +370,7 @@ export function buildChart(
     for (let k = Math.ceil((clon - dLon) / lonStep); k * lonStep <= clon + dLon; k++) {
       const lon = k * lonStep;
       const main = Math.round((((lon / D) % 360) + 360) % 360) % 90 === 0 && lonStep < 90 * D;
-      const pts = curve((u) => at(lon, u), Math.max(lat0, -poleCut), Math.min(lat1, poleCut), minor, main ? 1.4 : 1);
+      const pts = curve((u) => at(lon, u), Math.max(lat0, -poleCut), Math.min(lat1, poleCut), minor, main ? 1.4 : 1, pf);
       const low = pts.reduce<[number, number] | null>((b, p) => (!b || p[1] < b[1] ? p : b), null);
       if (low)
         labels.push({
@@ -381,6 +402,7 @@ export function buildChart(
       labels,
       0.8 * o.opacity,
       true,
+      project,
     );
     // (azimuth from the north through the east: the grid's longitude runs the other way)
     CARDINALS.forEach((c, i) => {
@@ -404,8 +426,8 @@ export function buildChart(
       // (the line stops short of its stars — 5 CSS pixels —, leaving them their own light)
       const gap = Math.min(0.3 * ang, (5 * fovV * D) / Math.max(cssHeight, 1));
       const pts = curve((u) => unit(lin(sg.a, Math.sin(ang - u), sg.b, Math.sin(u))), gap, ang - gap, hi ? STYLE.figureHi : STYLE.figure);
-      const pa = project(sg.a),
-        pb = project(sg.b);
+      const pa = projectSky(sg.a),
+        pb = projectSky(sg.b);
       if (pa && pb && pts.length) figures.push({ c: sg.c, x0: pa[0], y0: pa[1], x1: pb[0], y1: pb[1] });
     }
   }
@@ -417,7 +439,7 @@ export function buildChart(
   if (o.names) {
     CONSTELLATIONS.forEach((c, i) => {
       if (dot(c.label, centre) < Math.cos(radius)) return;
-      const p = project(c.label);
+      const p = projectSky(c.label);
       if (!p || Math.abs(p[0]) > 1 || Math.abs(p[1]) > 1 || !visible(c.label)) return;
       labels.push({ text: c.name, x: p[0], y: p[1], kind: "constellation", alpha: o.opacity * (i === o.highlight ? 1 : 0.8) });
       picks.push({ kind: "constellation", index: i, x: p[0], y: p[1] });
@@ -427,7 +449,7 @@ export function buildChart(
   const magMax = 1.6 + Math.max(0, Math.log2(60 / Math.max(fovV, 0.1))) * 1.3;
   NAMED_STARS.forEach((st, i) => {
     if (dot(st.v, centre) < Math.cos(radius)) return;
-    const p = project(st.v);
+    const p = projectSky(st.v);
     if (!p || Math.abs(p[0]) > 1 || Math.abs(p[1]) > 1 || !visible(st.v)) return;
     picks.push({ kind: "star", index: i, x: p[0], y: p[1] });
     if (o.stars && st.mag <= magMax)

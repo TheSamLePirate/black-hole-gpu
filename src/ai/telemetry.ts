@@ -23,6 +23,7 @@ export const TELEMETRY_GROUPS = [
   "descent",
   "burn",
   "dock",
+  "sky",
 ] as const;
 export type TelemetryGroup = (typeof TELEMETRY_GROUPS)[number];
 
@@ -173,6 +174,9 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
       burning: !!c.nodeBurning,
     };
   }
+  // the sky where the camera stands (PLAN-CIEL C3, system/sky-now.ts): the Sun's and the Moon's heights, true
+  // and as seen through the air, the refraction at the horizon
+  if (want.has("sky")) out.sky = c.skyInfo?.() ?? null;
   if (want.has("dock")) {
     const d = c.flightInfo?.()?.dock;
     out.dock = d

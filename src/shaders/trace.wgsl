@@ -116,6 +116,10 @@ struct Params {
   // the near body's measured heights in its finer relief (hd-maps.ts: the Moon's LOLA, Mars's MOLA): on
   // (0/1), their highest and lowest [m] (the relief's shell), the body's radius [m]
   hd2: vec4f,
+  // the sky seen through the Earth's air (PLAN-CIEL C3; trace.wgsl airBend): its refractivity at sea level
+  // (n − 1, from the air's temperature; 0: no refraction) and at the camera, the Earth's radius and the
+  // camera's distance from its centre in the density's scale heights
+  sky: vec4f,
   // the weather near the camera over the Earth (src/weather.ts, renderer: weatherParams; PLAN-METEO W3): [0]
   // its weight (0: the Earth's own clouds and air alone — the fair weather, and above 30 km), the haze's
   // extinction at the ground beyond the air's own [1/m], the fog's [1/m], its top [m above the sea];
@@ -3003,6 +3007,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var pre = vec3f(0.0);
   var T = vec3f(1.0);
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
+  var lookSky = look; // (the direction beyond the near body's air: bent by it — airBend)
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
@@ -3040,6 +3045,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       pre = ring.rgb + (1.0 - ring.w) * e.col;
       T = (1.0 - ring.w) * e.T;
       veil = e.veil;
+      // (what lies beyond the air, seen through it: lower than it looks)
+      if (isEarth(k) && P.sky.x > 0.0) { lookSky = airBend(look); }
     } else {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
       // part of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
@@ -3061,7 +3068,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     }
   }
   FOOT = FOOT_FAR;
-  var tr = traceLook(look, rnd, tNow);
+  var tr = traceLook(lookSky, rnd, tNow);
   tr.col = pre + T * tr.col;
   tr.tint *= T * veil;
   return tr;
@@ -5953,6 +5960,34 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
   o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
   return o;
+}
+
+// The air's refraction (PLAN-CIEL C3): a ray from the camera that leaves the Earth's air comes out bent
+// towards the ground — what it meets beyond (the Sun, the Moon, the stars) lies lower than it looks. The
+// bending through an exponential air of refractivity N = N₀ e^(−h/H) (H, the density's scale height:
+// 8.4 km) is ∫ (N/H) sin ψ ds — the air's column along the ray (Chapman's grazing function, Schüler's
+// form) times N/H and the sine of its angle to the vertical (near 1 at a grazing ray's lowest point,
+// where its column lies): from the sea 35′ at the horizon (Bennett's 34.5′), 1′ at 45°, none at the
+// zenith; a ray grazing the air from above, twice the horizon's at its lowest point (seen from orbit, the
+// setting Sun squashed). The CPU's constants for the camera's height (refraction.ts): P.sky = (N₀, N at
+// the camera, the Earth's radius and the camera's distance from its centre in scale heights). The
+// direction beyond: the look turned down by it in its vertical plane.
+fn airBend(look: vec3f) -> vec3f {
+  let up = normalize(nearCam());
+  let rd = toBody(look);
+  let mu = dot(rd, up);
+  let w = up - mu * rd;
+  let wl = length(w);
+  let c = sqrt(1.5707963 * P.sky.w);
+  var delta = P.sky.y * wl * c / ((c - 1.0) * mu + 1.0);
+  if (mu < 0.0) {
+    // (below the camera's horizon, not meeting the ground: the whole chord through its lowest point, less
+    // the part behind the camera)
+    let x0 = P.sky.w * wl;
+    delta = 2.0 * P.sky.x * sqrt(1.5707963 * x0) * exp(min(P.sky.z - x0, 0.0)) - P.sky.y * c / ((c - 1.0) * -mu + 1.0);
+  }
+  delta = clamp(delta, 0.0, 0.03);
+  return fromBody(rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6)));
 }
 
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them

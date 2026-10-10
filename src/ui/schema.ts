@@ -1968,6 +1968,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
   },
   {
+    key: "refraction",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Atmospheric refraction",
+    effect: "scene",
+    help: "The Earth's air bends the light from beyond it: the Sun, the Moon, the planets and the stars seen half a degree higher at the horizon (the setting Sun flattened, still seen when it is already below; an eclipsed Moon and the Sun seen together — a selenelion), more in cold, dense air. Off: each where it is.",
+    keywords: "refraction atmosphere horizon sun flattened selenelion bending air",
+  },
+  {
     key: "volumetricClouds",
     type: "toggle",
     section: "render",

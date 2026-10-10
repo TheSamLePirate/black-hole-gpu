@@ -29,6 +29,7 @@ import { PlacePanel } from "./ui/placepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
+import { skyNow } from "./system/sky-now";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
@@ -1590,7 +1591,7 @@ async function main() {
     Math.min(canvas.clientHeight, (canvas.clientWidth * off.height) / off.width);
   /** Builds the chart for the image about to be drawn (the offline render's scene while one runs). */
   function updateChart(force = false) {
-    const o = chartOptions(settings, chartHover);
+    const o = { ...chartOptions(settings, chartHover), refractivity: renderer.refractivity(settings) };
     const off = renderer.offlineScene;
     const s = off?.settings ?? camera.viewSettings();
     const t = off?.time ?? sim.time;
@@ -2912,6 +2913,8 @@ async function main() {
     touch();
   };
   realWeather.onUpdate = metarTick;
+  // (the sky in figures for TARS's telemetry: system/sky-now.ts)
+  (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => skyNow(settings, sim.time, renderer.refractivity(settings));
   // (the map's weather layer: the real weather's own — the day's clouds, each station's)
   flightHud.mapWeather = {
     real: () => camera.weatherReal,
