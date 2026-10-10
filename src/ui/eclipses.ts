@@ -33,6 +33,8 @@ export interface EclipseHost {
   goSee(e: EclipseEvent, place: { lat: number; lon: number } | null): void;
   /** a question to TARS */
   ask(text: string): void;
+  /** the eclipse's phases as a multiple exposure (the Surimpression dialog, filled for it) */
+  photo?(e: EclipseEvent, place: { lat: number; lon: number } | null): void;
   /** a planet and its moons as seen from the Earth then */
   moonsView(planet: string, t: number): Promise<MoonsView | { error: string }>;
 }
@@ -468,6 +470,13 @@ export class EclipsePage {
         testid: "ec-go",
         onClick: () => this.host.goSee(e, this.place),
       }),
+      e.kind === "solar" || e.kind === "lunar"
+        ? button({
+            label: tr({ fr: "Surimpression", en: "Multiple exposure" }),
+            testid: "ec-photo",
+            onClick: () => this.host.photo?.(e, this.place),
+          })
+        : null,
       button({
         label: tr({ fr: "Demander à TARS", en: "Ask TARS" }),
         testid: "ec-ask",

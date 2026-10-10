@@ -297,6 +297,29 @@ test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labe
   });
   await mx.run({ kind: "analemma" }, new AbortController().signal);
   expect(asked[1]).toMatchObject({ minutesUtc: 720, cadence: 7, dates: "monthly", position: false });
+  await mx.run(
+    { kind: "eclipse", eclipse: "lunar", date: "2026-03-03", lat: 35, lon: -100, before: 12, framing: "sky", share: true },
+    new AbortController().signal,
+  );
+  expect(asked[2]).toMatchObject({
+    kind: "eclipse",
+    eclipse: "lunar",
+    date: Date.UTC(2026, 2, 3),
+    lat: 35,
+    lon: -100,
+    before: 10,
+    after: 5,
+    framing: "sky",
+    base: "central",
+    sky: "clear",
+    times: true,
+    share: true,
+    caption: true,
+  });
+  expect(gameCall("/eclipsephoto solar 2026-08-12 lat=42.34 lon=-3.7 framing=sky", tools)).toEqual({
+    tool: "multiple_exposure",
+    args: { kind: "eclipse", eclipse: "solar", date: "2026-08-12", lat: 42.34, lon: -3.7, framing: "sky" },
+  });
   expect(gameCall('/analemma "Paris - Le Bourget" 12:00 7 position=true', tools)).toEqual({
     tool: "multiple_exposure",
     args: { kind: "analemma", site: "Paris - Le Bourget", time: "12:00", cadence: 7, position: true },

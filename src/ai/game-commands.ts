@@ -328,6 +328,16 @@ export const GAME_COMMANDS: GameCommand[] = [
       en: 'A place\'s analemma (multiple exposure): /analemma "Paris - Le Bourget" 12:00 7 — position=true dates=all',
     },
   },
+  {
+    name: "eclipsephoto",
+    tool: "multiple_exposure",
+    fixed: { kind: "eclipse" },
+    args: [{ param: "eclipse" }, { param: "date" }, { param: "site", from: "site", rest: true }],
+    desc: {
+      fr: "Une éclipse en surimpression : /eclipsephoto solar 2026-08-12 — lat=42.34 lon=-3.7 before=5 after=5 framing=sky",
+      en: "An eclipse as a multiple exposure: /eclipsephoto solar 2026-08-12 — lat=42.34 lon=-3.7 before=5 after=5 framing=sky",
+    },
+  },
   { name: "report", tool: "get_flight_report", desc: { fr: "Le dernier rapport de vol", en: "The last flight report" } },
   {
     name: "tool",

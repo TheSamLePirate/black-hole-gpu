@@ -31,7 +31,7 @@ import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
 import { EclipsePage } from "./ui/eclipses";
 import { type MxHost, runExposures } from "./photo/multiexposure";
-import { analemmaMarks, analemmaPlan } from "./photo/plans";
+import { analemmaMarks, analemmaPlan, eclipsePlan, type EclipseSeqOptions, MX_EV, placeFrames, skyMarks } from "./photo/plans";
 import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
@@ -2790,6 +2790,13 @@ async function main() {
     detail: (e, place) => plan({ kind: "eclipseDetail", e, place }),
     moonsView: (planet, t) => plan({ kind: "moonsView", planet, t }),
     goSee: (e, place) => goSeeEclipse(e, place),
+    // (its phases from the place if it is seen there, else from where it is best)
+    photo: (e, place) => {
+      if (e.kind !== "solar" && e.kind !== "lunar") return;
+      const where = e.here?.seen && place ? place : bestPlace(e);
+      eclipses.hide();
+      void mxDialog.open({ kind: "eclipse", fill: { eclipse: e.kind, date: e.t, lat: where.lat, lon: where.lon } });
+    },
     ask: (q) => {
       tarsPanel.show();
       tarsPanelAsk(q);
@@ -2810,10 +2817,24 @@ async function main() {
       presets["Multiple exposure"] = p;
       applyPreset("Multiple exposure");
     },
-    settle: async () => {
+    settle: async (first = true) => {
       // (the scene's frames drawn, its Earth's maps and tiles in — a minute at most)
       for (let i = 0; i < 4; i++) await new Promise((r) => requestAnimationFrame(() => r(null)));
-      for (let i = 0; i < 600 && !renderer.earthSettled; i++) await new Promise((r) => setTimeout(r, 100));
+      // (the ground too: its finer tiles come in waves, the tripod's height and the hills about it with them —
+      // the series on one ground: settled two seconds running at its first frame, then its tiles all in)
+      for (let i = 0, calm = 0; i < 600 && calm < (first ? 20 : 3); i++) {
+        touch();
+        await new Promise((r) => setTimeout(r, 100));
+        calm = renderer.earthSettled ? calm + 1 : 0;
+      }
+      // (the meter's: come to its reading — eased, a totality's twilight ten stops under the day the game was
+      // in takes seconds; frames drawn meanwhile: a still view draws none, and the meter reads only what is drawn)
+      if (settings.autoExposure)
+        for (let i = 0, calm = 0; i < 200 && (i < 10 || calm < 5); i++) {
+          touch();
+          await new Promise((r) => setTimeout(r, 100));
+          calm = renderer.meterSettled ? calm + 1 : 0;
+        }
     },
     render: async (o) => {
       renderer.startOffline(settings, sim.time, {
@@ -2857,7 +2878,7 @@ async function main() {
   };
   /** An analemma made (its options as the dialog gives them; the place and the date default to the game's). */
   const runAnalemma = (
-    o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number; spp?: number },
+    o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number; spp?: number; mask?: boolean },
     progress: (p: { done: number; total: number; label: string }) => void = () => {},
     signal = { stop: false },
   ) => {
@@ -2876,10 +2897,69 @@ async function main() {
       template: mxTemplate(),
       sunEV: o.sunEV ?? 9,
     });
-    return runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 2, baseSpp: 32 }, progress, signal).then((r) => ({
+    const marks = analemmaMarks(plan.suns, plan.view, width, height);
+    const frames = o.mask === false ? plan.frames : placeFrames(plan.frames, marks, 2);
+    return runExposures(mxHost, frames, { width, height, spp: o.spp ?? 2, baseSpp: 32 }, progress, signal).then((r) => ({
       ...r,
       view: plan.view,
-      marks: analemmaMarks(plan.suns, plan.view, width, height),
+      marks,
+    }));
+  };
+  /** An eclipse's sequence planned (PLAN-CIEL C9): the nearest solar or lunar eclipse to a date, from a place. */
+  type EclipseRun = Partial<Omit<EclipseSeqOptions, "template" | "aspect">> & {
+    width?: number;
+    height?: number;
+    spp?: number;
+    sky?: "game" | "clear";
+    /** false: each frame laid whole (its sky too), not its disc alone */
+    mask?: boolean;
+    insets?: boolean;
+  };
+  const planEclipse = (o: EclipseRun) => {
+    const p = camera.weatherPlace();
+    const width = o.width ?? 1920,
+      height = o.height ?? 1080;
+    const kind = o.kind ?? "solar";
+    return eclipsePlan({
+      kind,
+      date: o.date ?? utcOf(sim.time),
+      lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
+      before: o.before ?? 5,
+      after: o.after ?? 5,
+      base: o.base ?? "central",
+      framing: o.framing ?? "landscape",
+      aspect: width / height,
+      template: mxTemplate(o.sky ?? "clear"),
+      phaseEV: o.phaseEV ?? (kind === "solar" ? MX_EV.sun : MX_EV.moon),
+      centralComp: o.centralComp ?? MX_EV.central,
+      insets: o.insets,
+    });
+  };
+  /** An eclipse's sequence made. */
+  const runEclipse = (
+    o: EclipseRun,
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const width = o.width ?? 1920,
+      height = o.height ?? 1080;
+    const plan = planEclipse(o);
+    if (!plan)
+      return Promise.reject(
+        new Error((o.kind ?? "solar") === "solar" ? "No solar eclipse seen from there near that date" : "No lunar eclipse near that date"),
+      );
+    const marks = skyMarks(plan.moments, plan.view, width, height).map(({ of, ...m }) => ({
+      ...m,
+      hidden: of.hidden,
+      central: of.central,
+    }));
+    const frames = o.mask === false ? plan.frames : placeFrames(plan.frames, marks);
+    return runExposures(mxHost, frames, { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal).then((r) => ({
+      ...r,
+      view: plan.view,
+      eclipse: plan.eclipse,
+      marks,
     }));
   };
   const mxDialog = new MultiExposureDialog({
@@ -2889,16 +2969,48 @@ async function main() {
     },
     now: () => utcOf(sim.time),
     run: (r, progress, signal) => {
-      if (r.kind === "analemma") return runAnalemma({ ...r }, progress, signal);
+      if (r.kind === "analemma") return runAnalemma({ ...r, base: r.base === "central" ? "dusk" : r.base }, progress, signal);
+      if (r.kind === "eclipse")
+        return runEclipse(
+          {
+            kind: r.eclipse ?? "solar",
+            date: r.date,
+            lat: r.lat,
+            lon: r.lon,
+            before: r.before,
+            after: r.after,
+            framing: r.framing,
+            base: r.base === "same" ? "dusk" : r.base,
+            sky: r.sky,
+            width: r.width,
+            height: r.height,
+            spp: r.spp,
+          },
+          progress,
+          signal,
+        );
       return Promise.reject(new Error(`${r.kind}: not yet`));
+    },
+    eclipses: async (kind, lat, lon, around) => {
+      const YEAR = 365.25 * 86400e3;
+      const r = (await plan({
+        kind: "eclipses",
+        q: { from: around - 10 * YEAR, to: around + 40 * YEAR, kinds: [kind], place: { lat, lon } },
+      })) as { events: EclipseEvent[] } | { error: string };
+      if ("error" in r) throw new Error(r.error);
+      return r.events
+        .filter((e) => e.here?.seen)
+        .map((e) => ({ t: (e as { t: number }).t, type: e.here?.type ?? (e as { type: string }).type, magnitude: e.here?.magnitude }));
     },
     download: (b, name) => download(b, name),
   });
   /** The template of a ground view for a multiple exposure (no ship, the Earth's sky). */
-  const mxTemplate = (): Preset => ({
+  const mxTemplate = (sky: "game" | "clear" = "game"): Preset => ({
     ...presets["Earth: total eclipse over Burgos, 12 Aug 2026"]!,
-    earthClouds: settings.earthClouds,
-    weather: settings.weather,
+    earthClouds: sky === "clear" ? 0 : settings.earthClouds,
+    weather: sky === "clear" ? "fair" : settings.weather,
+    // (the base's glow — the scene has none of its own: undefined, it blackened the image)
+    bloom: presets["Earth: total eclipse over Burgos, 12 Aug 2026"]!.bloom ?? settings.bloom,
   });
   /**
    * Taken to see an eclipse (PLAN-CIEL C7): a scene made for it — a solar or a lunar one from the place
@@ -3216,7 +3328,7 @@ async function main() {
     music,
     tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent },
     skyLoading,
-    mx: { runAnalemma, host: mxHost, dialog: mxDialog },
+    mx: { runAnalemma, runEclipse, planEclipse, host: mxHost, dialog: mxDialog },
     touch,
     resize,
     refreshGui,

@@ -471,22 +471,42 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "multiple_exposure",
       description:
-        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button): 'analemma' — the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
+        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button). 'analemma': the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. 'eclipse': a solar or lunar eclipse seen from a place — `before` phases, the central one (totality, ring or greatest), `after` phases, each disc taken through a telephoto and laid where it was in the sky, over the landscape (the totality's own twilight, or dusk) or black; the eclipse nearest `date` that is seen from there (find_eclipses gives them). It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
       params: {
-        kind: { type: "string", enum: ["analemma"] },
+        kind: { type: "string", enum: ["analemma", "eclipse"] },
         lat: { type: "number" },
         lon: { type: "number" },
         site: { type: "string" },
-        time: { type: "string", description: "the clock time each day, HH:MM UTC (default 12:00)" },
-        from: { type: "string", description: "the first day (ISO date; default the game's)" },
-        cadence: { type: "number", description: "days between exposures, 1–10 (default 7)" },
-        base: { type: "string", enum: ["dusk", "same", "none"], description: "the landscape under it: at dusk, at that hour, none" },
+        time: { type: "string", description: "analemma: the clock time each day, HH:MM UTC (default 12:00)" },
+        from: { type: "string", description: "analemma: the first day (ISO date; default the game's)" },
+        cadence: { type: "number", description: "analemma: days between exposures, 1–10 (default 7)" },
+        base: {
+          type: "string",
+          enum: ["dusk", "same", "central", "none"],
+          description: "the landscape under it: at dusk, at that hour (analemma), the eclipse's totality (default for a total one), none",
+        },
         dates: {
           type: "string",
           enum: ["monthly", "all", "none"],
-          description: "dates written beside the Suns: one a month (default), every one, none",
+          description: "analemma: dates written beside the Suns: one a month (default), every one, none",
         },
-        position: { type: "boolean", description: "write each labelled Sun's azimuth and altitude, and the place and hour in a corner" },
+        position: {
+          type: "boolean",
+          description: "write each labelled disc's azimuth and altitude (analemma: and the place and hour in a corner)",
+        },
+        eclipse: { type: "string", enum: ["solar", "lunar"], description: "eclipse: of the Sun or the Moon (default solar)" },
+        date: { type: "string", description: "eclipse: its day or a date near it (ISO; default the game's: the nearest)" },
+        before: { type: "number", description: "eclipse: phases before the central one, 0–10 (default 5)" },
+        after: { type: "number", description: "eclipse: phases after it, 0–10 (default 5)" },
+        framing: {
+          type: "string",
+          enum: ["landscape", "sky"],
+          description: "eclipse: the horizon in the frame (default) or the sky alone, larger discs",
+        },
+        sky: { type: "string", enum: ["clear", "game"], description: "eclipse: a clear sky (default) or the game's weather" },
+        times: { type: "boolean", description: "eclipse: each disc's time written beside it (default true)" },
+        share: { type: "boolean", description: "eclipse: each disc's share hidden written beside it" },
+        caption: { type: "boolean", description: "eclipse: its name, date, place and saros in a corner (default true)" },
       },
       required: ["kind"],
       run: async (a) => {
@@ -495,27 +515,53 @@ export function gameTools(h: GameHost): Tool[] {
         const here = camera.weatherPlace?.();
         const lat = site?.lat ?? (a.lat !== undefined ? Number(a.lat) : here?.body === "earth" ? here.lat : 48.86);
         const lon = site?.lon ?? (a.lon !== undefined ? Number(a.lon) : here?.body === "earth" ? here.lon : 2.35);
-        const [hh, mm] = String(a.time ?? "12:00")
-          .split(":")
-          .map(Number);
-        const start = a.from ? Date.parse(String(a.from)) : (h.utcNow?.() ?? Date.now());
-        const r = await h.multiExposure({
-          kind: "analemma",
-          lat,
-          lon,
-          minutesUtc: (hh ?? 12) * 60 + (mm ?? 0),
-          start,
-          cadence: Math.min(Math.max(Number(a.cadence ?? 7), 1), 10),
-          base: (a.base as "dusk" | "same" | "none") ?? "dusk",
-          dates: (a.dates as "monthly" | "all" | "none") ?? "monthly",
-          position: a.position === true,
-          width: 1200,
-          height: 1600,
-          spp: 2,
-        });
+        const now = h.utcNow?.() ?? Date.now();
+        const clamp = (v: unknown, d: number, lo: number, hi: number) => Math.min(Math.max(Number(v ?? d), lo), hi);
+        let r: { rendered: number } | null;
+        if (a.kind === "eclipse") {
+          const date = a.date ? Date.parse(String(a.date)) : now;
+          if (!Number.isFinite(date)) return { error: `not a date: ${a.date}` };
+          r = await h.multiExposure({
+            kind: "eclipse",
+            lat,
+            lon,
+            eclipse: a.eclipse === "lunar" ? "lunar" : "solar",
+            date,
+            before: clamp(a.before, 5, 0, 10),
+            after: clamp(a.after, 5, 0, 10),
+            framing: a.framing === "sky" ? "sky" : "landscape",
+            base: (a.base as "central" | "dusk" | "none" | undefined) ?? "central",
+            sky: a.sky === "game" ? "game" : "clear",
+            times: a.times !== false,
+            share: a.share === true,
+            position: a.position === true,
+            caption: a.caption !== false,
+            width: 1920,
+            height: 1080,
+            spp: 4,
+          });
+        } else {
+          const [hh, mm] = String(a.time ?? "12:00")
+            .split(":")
+            .map(Number);
+          r = await h.multiExposure({
+            kind: "analemma",
+            lat,
+            lon,
+            minutesUtc: (hh ?? 12) * 60 + (mm ?? 0),
+            start: a.from ? Date.parse(String(a.from)) : now,
+            cadence: clamp(a.cadence, 7, 1, 10),
+            base: (a.base as "dusk" | "same" | "none") ?? "dusk",
+            dates: (a.dates as "monthly" | "all" | "none") ?? "monthly",
+            position: a.position === true,
+            width: 1200,
+            height: 1600,
+            spp: 2,
+          });
+        }
         return r
           ? { ok: true, exposures: r.rendered, shown: "the image is in the Multiple exposure dialog (Download PNG)" }
-          : { error: "stopped or failed" };
+          : { error: "stopped, failed, or no such eclipse seen from there (see the dialog's message)" };
       },
     },
     {

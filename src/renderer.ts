@@ -3897,6 +3897,13 @@ export class Renderer {
     return s.exposure + (s.autoExposure ? this.autoEVDrawn : 0);
   }
 
+  /** the meter's last reading [EV]: where the auto exposure is going */
+  private meterTarget = NaN;
+  /** The auto exposure come to the meter's reading (within a tenth of a stop) — a multiple exposure's frame waits for it. */
+  get meterSettled() {
+    return Number.isFinite(this.meterTarget) && Math.abs(this.meterTarget - this.autoEVDrawn) < 0.1;
+  }
+
   /** The auto exposure's value in use [EV] — a take keeps it, a video sets it back frame by frame. */
   get autoExposureEV() {
     return this.autoEVDrawn;
@@ -4053,6 +4060,7 @@ export class Renderer {
       }
     }
     const target = Math.min(Math.max(Math.log2(m), -6), 32);
+    this.meterTarget = target;
     const now = performance.now();
     const dt = Math.min((now - this.meterAt) / 1000, 1);
     this.meterAt = now;

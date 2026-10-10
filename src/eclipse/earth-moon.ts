@@ -353,6 +353,18 @@ export function solarLocal(lat: number, lon: number, hM: number, t: number): Sol
   };
 }
 
+/** The share of the Sun's disc the Moon hides, seen from a place (lat, lon [rad], height [m]) at a UTC time. */
+export function sunHidden(lat: number, lon: number, hM: number, ms: number): number {
+  const d = discsAt(earthPointKm(lat, lon, hM, ms), "moon", "sun", ms);
+  return 1 - diskShare(d.rFar, d.rNear, d.sep);
+}
+
+/** The share of the Moon's disc inside the Earth's umbra (Danjon's) at a UTC time. */
+export function moonInUmbra(ms: number): number {
+  const s = shadowAt("earth", "moon", ms, DANJON, DANJON_R);
+  return s.umbra > 0 ? 1 - diskShare(s.R, s.umbra, s.d) : 0;
+}
+
 /** The lunar eclipses in [a, b] (UTC ms). */
 export function lunarEclipses(a: number, b: number): LunarEclipse[] {
   const out: LunarEclipse[] = [];
