@@ -25,8 +25,11 @@ export interface MxRequest {
   dates?: "all" | "monthly" | "none";
   /** the Sun's place in the sky (azimuth, altitude) beside its label, and the place and hour in a corner */
   position?: boolean;
-  /** an eclipse's: of the Sun or the Moon, near which date [ms]; the exposures before and after the central one */
-  eclipse?: "solar" | "lunar";
+  /** an eclipse's: of the Sun or the Moon (or a planet's transit), near which date [ms]; the exposures before and after the central one */
+  eclipse?: "solar" | "lunar" | "transit";
+  /** its layout: the tripod's sky, the phases in a row, the Moons about the Earth's shadow, a transit's way on the Sun */
+  layout?: "sky" | "strip" | "shadow" | "transit";
+  planet?: "mercury" | "venus";
   date?: number;
   before?: number;
   after?: number;
@@ -84,7 +87,9 @@ export interface MxResult {
   rendered: number;
   marks?: SunMark[];
   hidden?: number[];
-  eclipse?: { kind: "solar" | "lunar"; type: string; t: number; saros: number; magnitude: number };
+  eclipse?: { kind: "solar" | "lunar" | "transit"; type: string; t: number; saros: number; magnitude: number };
+  /** a layout's guides (the Earth's shadow's circles) */
+  guides?: { x: number; y: number; r: number; label: string }[];
   /** the star trails' night span [ms UTC]; the ISS pass shown */
   span?: { from: number; to: number };
   pass?: MxPass;
@@ -97,7 +102,7 @@ export interface MxDialogHost {
   /** the series run: its progress, a stop; the image */
   run(r: MxRequest, progress: (p: { done: number; total: number; label: string }) => void, signal: { stop: boolean }): Promise<MxResult>;
   /** the eclipses seen from a place over the years about a date (the calculator's worker) */
-  eclipses?(kind: "solar" | "lunar", lat: number, lon: number, around: number): Promise<MxEclipse[]>;
+  eclipses?(kind: "solar" | "lunar" | "transit", lat: number, lon: number, around: number): Promise<MxEclipse[]>;
   /** the ISS's passes seen from a place over ten days from a date */
   issPasses?(lat: number, lon: number, from: number): Promise<MxPass[]>;
   /** an image saved (a download) */
@@ -201,6 +206,8 @@ export interface LabelOptions {
   central?: string;
   /** the share's word before its figure (the Moon's: lit) */
   shareWord?: string;
+  /** circles drawn, a word on each (the Earth's shadow's umbra and penumbra) */
+  guides?: { x: number; y: number; r: number; label: string }[];
 }
 
 /**
@@ -270,6 +277,16 @@ export function drawLabels(g: CanvasRenderingContext2D, marks: SunMark[], o: Lab
       const d = m.r * (m.central ? 3.2 : 1.3) + px * 0.8;
       write(text, m.x + nx * d, m.y + ny * d, nx < -0.35 ? "right" : nx > 0.35 ? "left" : "center");
     }
+  }
+  for (const c of o.guides ?? []) {
+    g.beginPath();
+    g.arc(c.x, c.y, c.r, 0, 2 * Math.PI);
+    g.setLineDash([px * 0.6, px * 0.5]);
+    g.lineWidth = Math.max(1, px / 9);
+    g.strokeStyle = "rgba(255, 210, 160, 0.45)";
+    g.stroke();
+    g.setLineDash([]);
+    write(c.label, c.x, c.y - c.r - px * 0.8, "center", Math.round(px * 0.95), 500);
   }
   if (o.caption) write(o.caption, px * 1.4, H - px * 1.6, "left", Math.round(px * 1.15), 500);
 }
@@ -386,10 +403,27 @@ export class MultiExposureDialog {
       [
         ["solar", { fr: "De Soleil", en: "Solar" }],
         ["lunar", { fr: "De Lune", en: "Lunar" }],
+        ["transit", { fr: "Transit (Mercure, Vénus)", en: "Transit (Mercury, Venus)" }],
       ],
-      run.eclipse ?? "solar",
+      run.eclipse ?? (run.layout === "transit" ? "transit" : "solar"),
       "mx-ecl-kind",
     );
+    const layout = select(
+      [
+        ["sky", { fr: "Dans le ciel du trépied", en: "In the tripod's sky" }],
+        ["strip", { fr: "En bande (nord en haut)", en: "In a row (north up)" }],
+        ["shadow", { fr: "Dans l'ombre de la Terre", en: "In the Earth's shadow" }],
+      ],
+      run.layout === "transit" ? undefined : run.layout,
+      "mx-layout",
+    );
+    // (the shadow's map: a lunar one's; a transit: its own way across the Sun)
+    const syncLayout = () => {
+      (layout.options[2] as HTMLOptionElement).disabled = eKind.value !== "lunar";
+      if (eKind.value !== "lunar" && layout.value === "shadow") layout.value = "sky";
+      layout.disabled = eKind.value === "transit";
+    };
+    syncLayout();
     const eList = h("select", { "data-testid": "mx-ecl-list" }) as HTMLSelectElement;
     const eNote = el("p", "mx-hint", "");
     const before = num({ fr: "Avant", en: "Before" }, run.before ?? 5, "1", 0, 10, "mx-before");
@@ -564,7 +598,7 @@ export class MultiExposureDialog {
       eList.disabled = true;
       const want = run.date;
       try {
-        const list = await this.host.eclipses(eKind.value as "solar" | "lunar", lat.get(), lon.get(), this.host.now());
+        const list = await this.host.eclipses(eKind.value as "solar" | "lunar" | "transit", lat.get(), lon.get(), this.host.now());
         if (key !== listFor) return;
         found = list;
         const fmt = new Intl.DateTimeFormat(tr({ fr: "fr-FR", en: "en-GB" }), {
@@ -606,7 +640,10 @@ export class MultiExposureDialog {
       (eBase.options[0] as HTMLOptionElement).disabled = !total;
       if (!total && eBase.value === "central") eBase.value = eKind.value === "lunar" ? "none" : "dusk";
     };
-    eKind.addEventListener("change", () => void fillList());
+    eKind.addEventListener("change", () => {
+      syncLayout();
+      void fillList();
+    });
     eList.addEventListener("change", syncBase);
     for (const i of [lat.input, lon.input]) i.addEventListener("change", () => kind === "eclipse" && void fillList());
     const drawForm = () => {
@@ -653,6 +690,7 @@ export class MultiExposureDialog {
           ),
           eNote,
           h("div", { class: "mx-grid" }, before.el, after.el, field({ fr: "Ciel", en: "Sky" }, sky)),
+          field({ fr: "Mise en page", en: "Layout" }, layout),
           h("div", { class: "mx-grid" }, field({ fr: "Cadrage", en: "Framing" }, framing), field({ fr: "Fond", en: "Base" }, eBase)),
           field({ fr: "Étiquettes", en: "Labels" }, h("div", { class: "mx-checks" }, times.el, share.el, ePos.el, caption.el)),
           h("div", { class: "mx-grid" }, field({ fr: "Taille", en: "Size" }, size), field({ fr: "Qualité", en: "Quality" }, spp)),
@@ -736,7 +774,12 @@ export class MultiExposureDialog {
       if (kind === "eclipse")
         return {
           ...common,
-          eclipse: eKind.value as "solar" | "lunar",
+          eclipse: eKind.value as "solar" | "lunar" | "transit",
+          layout: eKind.value === "transit" ? "transit" : (layout.value as MxRequest["layout"]),
+          planet:
+            eKind.value === "transit"
+              ? (found.find((x) => String(x.t) === eList.value)?.type as "mercury" | "venus" | undefined)
+              : undefined,
           date: eList.value && Number.isFinite(Number(eList.value)) ? Number(eList.value) : (run.date ?? this.host.now()),
           before: before.get(),
           after: after.get(),
@@ -892,7 +935,7 @@ export class MultiExposureDialog {
 
 /** A request's labels: an analemma's dates beside its Suns; an eclipse's times along its path, its caption;
  *  the star trails' caption; the Moon's times or days and lit shares; the station's times at its ends and highest. */
-export function labelsOf(req: MxRequest, r: Pick<MxResult, "hidden" | "eclipse" | "span" | "pass">): LabelOptions {
+export function labelsOf(req: MxRequest, r: Pick<MxResult, "hidden" | "eclipse" | "span" | "pass" | "guides">): LabelOptions {
   const long = new Intl.DateTimeFormat(tr({ fr: "fr-FR", en: "en-GB" }), {
     day: "numeric",
     month: "long",
@@ -976,7 +1019,21 @@ export function labelsOf(req: MxRequest, r: Pick<MxResult, "hidden" | "eclipse" 
       caption:
         req.caption === false || !e
           ? undefined
-          : `${eclipseName(e.kind, e.type)}  ·  ${fmt.format(e.t)}  ·  ${placeText(req.lat, req.lon)}${tr({ fr: `  ·  saros ${e.saros}`, en: `  ·  saros ${e.saros}` })}`,
+          : e.kind === "transit"
+            ? tr({
+                fr: `Transit de ${e.type === "venus" ? "Vénus" : "Mercure"}  ·  ${fmt.format(e.t)}  ·  vu du centre de la Terre, nord en haut`,
+                en: `Transit of ${e.type === "venus" ? "Venus" : "Mercury"}  ·  ${fmt.format(e.t)}  ·  seen from the Earth's centre, north up`,
+              })
+            : `${eclipseName(e.kind, e.type)}  ·  ${fmt.format(e.t)}  ·  ${req.layout === "shadow" ? tr({ fr: "dans l'ombre de la Terre, nord en haut", en: "in the Earth's shadow, north up" }) : placeText(req.lat, req.lon)}  ·  saros ${e.saros}`,
+      guides: r.guides?.map((g) => ({
+        ...g,
+        label:
+          g.label === "umbra"
+            ? tr({ fr: "ombre", en: "umbra" })
+            : g.label === "penumbra"
+              ? tr({ fr: "pénombre", en: "penumbra" })
+              : g.label,
+      })),
     };
   }
   const m = req.minutesUtc ?? 720;

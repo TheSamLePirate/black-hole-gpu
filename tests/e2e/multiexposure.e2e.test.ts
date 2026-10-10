@@ -119,4 +119,26 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/poses fusionnées/);
     await app.press("Escape");
   }, 500_000);
+
+  test("the layouts from the dialog: the lunar eclipse of 3 March 2026 in the Earth's shadow, its circles", async () => {
+    await app.js(
+      `(void __bh.mx.dialog.open({ kind: "eclipse", fill: { eclipse: "lunar", date: Date.UTC(2026, 2, 3), lat: 35, lon: -100, before: 2, after: 2 } }), true)`,
+    );
+    await app.waitFor(`document.querySelector("[data-testid=mx-ecl-list]")?.selectedOptions[0]?.textContent.includes("2026")`, 60_000);
+    await app.js(
+      `(() => { const e = document.querySelector("[data-testid=mx-layout]"); e.value = "shadow"; e.dispatchEvent(new Event("change")); return 1; })()`,
+    );
+    await app.click("[data-testid=mx-start]");
+    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    // (five Moons, the reddest in the middle, about the image's centre)
+    const red = await app.js<number>(`(() => {
+      const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(c.width / 2 - 200, c.height / 2 - 200, 400, 400).data;
+      let n = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k] > 90 && d[k] > 1.6 * d[k + 2]) n++;
+      return n;
+    })()`);
+    expect(red).toBeGreaterThan(2000);
+    expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/5 poses fusionnées/);
+    await app.press("Escape");
+  }, 400_000);
 });

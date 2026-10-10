@@ -277,3 +277,81 @@ test("the ISS's passes over Paris in mid-October 2026: morning ones, bright, its
   for (let i = 0; i < out.length; i += 4) if (out[i]! > 120) lit++;
   expect(lit).toBeGreaterThan(100);
 });
+
+// PLAN-CIEL C9 (the layouts): the strip, the Earth's shadow, the transits — north up
+import { eclipseLayout, parallactic } from "../src/photo/plans";
+
+test("the parallactic angle: nil on the meridian under the pole, upside down over it, leaning one way in the east and the other in the west", () => {
+  expect(parallactic(45, 180, 40)).toBeCloseTo(0, 9);
+  expect(parallactic(45, 0, 20)).toBeCloseTo(0, 9);
+  expect(Math.abs(parallactic(45, 0, 60))).toBeCloseTo(Math.PI, 9);
+  const e = parallactic(45, 120, 20),
+    w = parallactic(45, 240, 20);
+  expect(Math.sign(e)).toBe(-Math.sign(w));
+  expect(e).toBeCloseTo(-w, 9);
+});
+
+test("the layouts: a row of phases; the Moons crossing the Earth's shadow eastward; Mercury's way of 2032 across the Sun", () => {
+  const base = { before: 3, after: 3, aspect: 16 / 9, width: 1920, height: 1080, template: {} as Preset, phaseEV: 9, centralComp: 0 };
+  const strip = eclipseLayout({ ...base, kind: "solar", layout: "strip", date: Date.UTC(2026, 7, 12), ...BURGOS })!;
+  expect(strip.frames.length).toBe(7);
+  expect(new Set(strip.marks.map((m) => m.y)).size).toBe(1);
+  expect(strip.frames[3]!.inset!.check).toBe(false);
+  const sh = eclipseLayout({ ...base, kind: "lunar", layout: "shadow", date: Date.UTC(2026, 2, 3), lat: 0, lon: 0 })!;
+  expect(sh.guides.map((g) => g.label)).toEqual(["umbra", "penumbra"]);
+  // (the umbra 2.7 Moon radii or so, the penumbra about 4.6)
+  expect(sh.guides[0]!.r / sh.marks[0]!.r).toBeGreaterThan(2.4);
+  expect(sh.guides[1]!.r / sh.marks[0]!.r).toBeGreaterThan(4.2);
+  // (east to the left: the Moon overtakes its shadow from the west — right to left)
+  for (let i = 1; i < sh.marks.length; i++) expect(sh.marks[i]!.x).toBeLessThan(sh.marks[i - 1]!.x);
+  const mid = sh.marks[3]!;
+  expect(mid.hidden).toBe(1);
+  const tr = eclipseLayout({
+    ...base,
+    kind: "transit",
+    layout: "transit",
+    planet: "mercury",
+    date: Date.UTC(2032, 10, 13),
+    lat: 0,
+    lon: 0,
+    width: 1080,
+    height: 1080,
+  })!;
+  expect(tr.eclipse.type).toBe("mercury");
+  // (its way a straight line, east to west: left to right, all on the disc)
+  const m = tr.marks;
+  for (let i = 1; i < m.length; i++) expect(m[i]!.x).toBeGreaterThan(m[i - 1]!.x);
+  const slope = (m.at(-1)!.y - m[0]!.y) / (m.at(-1)!.x - m[0]!.x);
+  for (const p of m) {
+    expect(Math.abs(p.y - (m[0]!.y + slope * (p.x - m[0]!.x)))).toBeLessThan(3);
+    expect(Math.hypot(p.x - 540, p.y - 540)).toBeLessThan(0.4 * 1080);
+  }
+  expect(tr.frames.filter((f) => f.inset!.mode === "set").length).toBe(1);
+});
+
+test("a close frame turned north up, darkened only where its planet is", () => {
+  const N = 64;
+  const px = new Uint8Array(N * N * 4).fill(255);
+  // (a dark dot up in the frame — at its north once turned a quarter)
+  const k = (20 * N + 32) * 4;
+  px[k] = px[k + 1] = px[k + 2] = 0;
+  const fov = (2 * Math.atan((32 / 16) * Math.tan((0.266 * Math.PI) / 180)) * 180) / Math.PI;
+  const out = new Uint8ClampedArray(64 * 64 * 4).fill(255);
+  // (turned: the frame's right is the north)
+  placeInset(out, px, 64, 64, N, {
+    x: 32,
+    y: 32,
+    r: 16,
+    k: 1.9,
+    fov,
+    rot: Math.PI / 2,
+    mode: "darken",
+    area: { x: 24, y: 32, r: 4, search: 10 },
+  });
+  let dark: [number, number] | null = null;
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) if (out[(y * 64 + x) * 4]! < 100) dark = [x, y];
+  expect(dark).not.toBeNull();
+  // (the dot at the frame's top, its north at its right: the north turned up, the top stands to the left)
+  expect(Math.abs(dark![1] - 32)).toBeLessThan(3);
+  expect(Math.abs(dark![0] - 20)).toBeLessThan(3);
+});

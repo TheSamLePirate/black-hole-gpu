@@ -327,6 +327,11 @@ test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labe
     share: true,
     caption: true,
   });
+  await mx.run({ kind: "eclipse", eclipse: "lunar", date: "2026-03-03", layout: "shadow" }, new AbortController().signal);
+  expect(asked.at(-1)).toMatchObject({ eclipse: "lunar", layout: "shadow" });
+  await mx.run({ kind: "eclipse", eclipse: "transit", date: "2032-11-13", planet: "mercury" }, new AbortController().signal);
+  expect(asked.at(-1)).toMatchObject({ eclipse: "transit", layout: "transit", planet: "mercury" });
+  asked.splice(3);
   await mx.run({ kind: "trails", date: "2026-10-10", hours: 4, count: 500, comet: true }, new AbortController().signal);
   expect(asked[3]).toMatchObject({
     kind: "trails",

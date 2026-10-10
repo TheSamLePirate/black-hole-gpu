@@ -8,8 +8,11 @@
 //    the central one (the totality, the ring, the greatest), some after — each where the sky had it, over
 //    the landscape (the totality's own, or the dusk's) or the black.
 
-import { azAltAt, lunarEclipses, moonInUmbra, solarLocal, sunHidden, type Contact } from "../eclipse/earth-moon";
-import { solarEclipses } from "../eclipse/earth-moon";
+import { azAltAt, DANJON, lunarEclipses, moonInUmbra, solarEclipses, solarLocal, sunHidden, type Contact } from "../eclipse/earth-moon";
+import { earthLatLon, earthPointKm, posKm, radiusKm, seenKm, shadowAt } from "../eclipse/core";
+import { transits } from "../eclipse/moons";
+import { dot, len, sub, type Vec3 } from "../math/vec3";
+import { bodyAxes, solarBody } from "../system/solar";
 import { apparentAltitude, seaRefractivity } from "../system/refraction";
 import { tOf } from "../eclipse/core";
 import type { Preset } from "../settings";
@@ -366,7 +369,15 @@ export function eclipsePlan(
     const totality = m.central && e.type === "total";
     const label = `${when(m.ms)} UTC`;
     if (totality)
-      frames.push({ ...close(m, o.kind === "solar" ? 4 : 1.12), exposure: "auto", comp: o.centralComp, blend: "lighten", label, ms: m.ms });
+      frames.push({
+        ...close(m, o.kind === "solar" ? 4 : 1.12),
+        exposure: "auto",
+        comp: o.centralComp,
+        blend: "lighten",
+        label,
+        ms: m.ms,
+        check: o.kind !== "solar",
+      });
     else if (o.kind === "lunar") frames.push({ ...close(m, 1.12), exposure: "auto", comp: o.phaseEV, blend: "lighten", label, ms: m.ms });
     else frames.push({ ...close(m, 1.12), exposure: o.phaseEV, blend: "lighten", label, ms: m.ms });
   }
@@ -407,7 +418,214 @@ export function placeFrames(frames: Exposure[], marks: SunMark[], k = 1.6, kCent
     if (f.blend !== "lighten" || f.ms === undefined) return f;
     const m = marks.find((x) => x.ms === f.ms);
     if (!m) return f;
-    if (f.inset) return { ...f, inset: { ...f.inset, x: m.x, y: m.y, r: Math.max(m.r, 1) } };
+    if (f.inset) return { ...f, inset: { ...f.inset, x: m.x, y: m.y, r: Math.max(m.r, 1), check: f.check ?? f.inset.check } };
     return { ...f, mask: { x: m.x, y: m.y, r: Math.max(m.r * (m.central ? kCentral : k), min) } };
   });
+}
+
+/**
+ * The parallactic angle of a direction (azimuth, altitude [°]) at a latitude [°]: the celestial north's
+ * direction in a level camera's image of it, from its up towards its right [rad] — the turn that sets the
+ * north up.
+ */
+export function parallactic(lat: number, az: number, alt: number): number {
+  const d: [number, number, number] = [Math.cos(alt * D) * Math.sin(az * D), Math.cos(alt * D) * Math.cos(az * D), Math.sin(alt * D)];
+  const along = (v: number[]) => {
+    const k = v[0]! * d[0] + v[1]! * d[1] + v[2]! * d[2];
+    const w = [v[0]! - k * d[0], v[1]! - k * d[1], v[2]! - k * d[2]];
+    const l = Math.hypot(w[0]!, w[1]!, w[2]!) || 1;
+    return [w[0]! / l, w[1]! / l, w[2]! / l];
+  };
+  const up = along([0, 0, 1]);
+  const north = along([0, Math.cos(lat * D), Math.sin(lat * D)]);
+  // (the image's right: forward × up)
+  const right = [d[1] * up[2]! - d[2] * up[1]!, d[2] * up[0]! - d[0] * up[2]!, d[0] * up[1]! - d[1] * up[0]!];
+  return Math.atan2(
+    north[0]! * right[0]! + north[1]! * right[1]! + north[2]! * right[2]!,
+    north[0]! * up[0]! + north[1]! * up[1]! + north[2]! * up[2]!,
+  );
+}
+
+/** A place 25° north of the point under a body at a UTC time [°]: the body 65° up due south — its frame
+ *  with the north up (on the meridian: no turn to make), the air thin before it (a tripod tilts no higher). */
+function underBody(id: "sun" | "moon", ms: number) {
+  const p = earthLatLon(posKm(id, ms), ms);
+  return { lat: Math.min(p.lat / D + 25, 89), lon: p.lon / D };
+}
+
+export interface LayoutOptions extends Omit<EclipseSeqOptions, "kind" | "framing" | "base" | "insets"> {
+  kind: "solar" | "lunar" | "transit";
+  /** the phases in a row (north up, black), the Moons placed about the Earth's shadow (a lunar one's), the
+   *  planet's way across the Sun (a transit's) */
+  layout: "strip" | "shadow" | "transit";
+  width: number;
+  height: number;
+  /** a transit's planet (its event found near the date) */
+  planet?: "mercury" | "venus";
+}
+
+/** A layout's drawn guides (the shadow's circles), in the image's pixels. */
+export interface LayoutGuide {
+  x: number;
+  y: number;
+  r: number;
+  label: string;
+}
+
+/** A layout's frames (each a close one, turned north up, laid at its place), its discs' marks, its guides. */
+export function eclipseLayout(o: LayoutOptions): {
+  frames: Exposure[];
+  marks: SunMark[];
+  guides: LayoutGuide[];
+  eclipse: { kind: "solar" | "lunar" | "transit"; type: string; t: number; saros: number; magnitude: number };
+} | null {
+  const W = o.width,
+    H = o.height;
+  const scene = (ms: number, target: "sun" | "moon"): Preset => ({
+    ...o.template,
+    ship: false,
+    target,
+    bloom: 0,
+    lensFlare: 0,
+    time: tOf(ms),
+  });
+  const close = (ms: number, body: "sun" | "moon", at: { lat: number; lon: number }, k: number) => {
+    const p = azAltAt(body, at.lat * D, at.lon * D, 0, ms);
+    const f = closeFrame(scene(ms, body), p, at.lat, at.lon, k);
+    return { ...f, inset: { ...f.inset!, rot: parallactic(at.lat, p.az, apparentAltitude(p.alt * D, 0, seaRefractivity()) / D) } };
+  };
+  const label = (ms: number) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
+  if (o.layout === "transit" || o.kind === "transit") {
+    const planet = o.planet ?? "venus";
+    const t = transits(planet, o.date - 400 * DAY, o.date + 400 * DAY);
+    const e = t.reduce<(typeof t)[number] | null>((a, b) => (!a || Math.abs(b.t - o.date) < Math.abs(a.t - o.date) ? b : a), null);
+    if (!e) return null;
+    const n = Math.max(3, o.before + o.after + 1);
+    const r = Math.min(W, H) * 0.4;
+    const frames: Exposure[] = [];
+    const marks: SunMark[] = [];
+    // (the Sun's centre where it is drawn; the planet's offset from it, north up, east left)
+    const pxPerRad = r / (DISC_DEG * D);
+    // (the Sun once — the middle frame's —, then each frame's planet alone darkened in where it is: the Sun's
+    // own spots, turning with it over hours, not dragged into streaks)
+    const mid = Math.floor(n / 2);
+    const order = [mid, ...Array.from({ length: n }, (_, i) => i).filter((i) => i !== mid)];
+    for (const i of order) {
+      const ms = e.start + ((e.end - e.start) * (i + 0.5)) / n;
+      const at = underBody("sun", ms);
+      const f = close(ms, "sun", at, 1.06);
+      const obs = earthPointKm(at.lat * D, at.lon * D, 0, ms);
+      const s = sub(seenKm("sun", ms, obs), obs),
+        pl = sub(seenKm(planet, ms, obs), obs);
+      const { north, east } = skyAxes(s, ms);
+      const sl = len(s),
+        pll = len(pl);
+      const dx = (dot(pl, east) / pll - dot(s, east) / sl) * pxPerRad,
+        dy = (dot(pl, north) / pll - dot(s, north) / sl) * pxPerRad;
+      const x = W / 2 - dx,
+        y = H / 2 - dy;
+      const pr = (radiusKm(planet) / pll) * pxPerRad;
+      // (five stops under the filter's: the limb's darkening shows, the planet's dot black on it — Mercury's
+      // a few pixels: the frame as large as the image's disc)
+      frames.push({
+        ...f,
+        inset: {
+          ...f.inset!,
+          x: W / 2,
+          y: H / 2,
+          r,
+          mode: i === mid ? "set" : "darken",
+          maxN: 1800,
+          area: i === mid ? undefined : { x, y, r: Math.max(6, pr * 2.5), search: Math.max(24, r * 0.08) },
+        },
+        exposure: o.phaseEV - 5,
+        blend: "lighten",
+        label: label(ms),
+        ms,
+      });
+      marks.push({ x, y, r: Math.max(pr, 2), ms, az: 0, alt: 0 });
+    }
+    marks.sort((a, b) => a.ms - b.ms);
+    return { frames, marks, guides: [], eclipse: { kind: "transit", type: planet, t: e.t, saros: 0, magnitude: 0 } };
+  }
+  const e = eclipseHere(o.kind, o.date, o.lat, o.lon);
+  if (o.layout === "shadow" && o.kind === "lunar") {
+    const le = lunarEclipses(o.date - 3 * DAY, o.date + 3 * DAY)[0];
+    if (!le) return null;
+    const at = (nm: string) => le.contacts.find((c) => c.name === nm)?.t;
+    const P1 = at("P1")!,
+      P4 = at("P4")!;
+    const a = at("U1") !== undefined ? (P1 + at("U1")!) / 2 : P1,
+      b = at("U4") !== undefined ? (P4 + at("U4")!) / 2 : P4;
+    const n = Math.max(3, o.before + o.after + 1);
+    const sh = (ms: number) => shadowAt("earth", "moon", ms, DANJON, 0.99834);
+    const mid = sh(le.t);
+    const dist = len(sub(mid.rec, posKm("earth", le.t)));
+    // (the scale: the penumbra and the Moons' way within the frame)
+    const reach = Math.max(mid.pen, ...[a, b].map((t) => len(sh(t).off) + sh(t).R)) / dist;
+    const pxPerRad = (Math.min(W, H) * 0.46) / reach;
+    const frames: Exposure[] = [];
+    const marks: SunMark[] = [];
+    for (let i = 0; i < n; i++) {
+      const ms = a + ((b - a) * i) / (n - 1);
+      const s = sh(ms);
+      const { north, east } = skyAxes(s.axis, ms);
+      const x = W / 2 - (dot(s.off, east) / dist) * pxPerRad,
+        y = H / 2 - (dot(s.off, north) / dist) * pxPerRad;
+      const f = close(ms, "moon", underBody("moon", ms), 1.12);
+      const r = DISC_DEG * D * pxPerRad;
+      frames.push({ ...f, inset: { ...f.inset!, x, y, r }, exposure: "auto", comp: o.phaseEV, blend: "lighten", label: label(ms), ms });
+      marks.push({ x, y, r, ms, az: 0, alt: 0, hidden: moonInUmbra(ms) });
+    }
+    const umbra = (mid.umbra / dist) * pxPerRad,
+      pen = (mid.pen / dist) * pxPerRad;
+    return {
+      frames,
+      marks,
+      guides: [
+        { x: W / 2, y: H / 2, r: umbra, label: "umbra" },
+        { x: W / 2, y: H / 2, r: pen, label: "penumbra" },
+      ],
+      eclipse: { kind: "lunar", type: le.type, t: le.t, saros: le.saros, magnitude: le.umbral },
+    };
+  }
+  // (the strip: the phases seen from the place, in a row)
+  if (!e) return null;
+  const moments = eclipseMoments(e, o.lat, o.lon, o.before, o.after);
+  if (!moments.length) return null;
+  const n = moments.length;
+  const r = Math.min(H * 0.16, W / (n * 2.5));
+  const body = o.kind === "solar" ? "sun" : "moon";
+  const frames: Exposure[] = [];
+  const marks: SunMark[] = [];
+  for (const [i, m] of moments.entries()) {
+    const x = (W * (i + 0.5)) / n,
+      y = H / 2;
+    const totality = m.central && e.type === "total";
+    const f = close(m.ms, body, { lat: o.lat, lon: o.lon }, totality && o.kind === "solar" ? 2.6 : 1.12);
+    frames.push({
+      ...f,
+      inset: { ...f.inset!, x, y, r, check: !(totality && o.kind === "solar"), row: y },
+      exposure: totality || o.kind === "lunar" ? "auto" : o.phaseEV,
+      comp: totality ? o.centralComp : o.kind === "lunar" ? o.phaseEV : undefined,
+      blend: "lighten",
+      label: label(m.ms),
+      ms: m.ms,
+    });
+    marks.push({ x, y, r, ms: m.ms, az: m.az, alt: m.alt, hidden: m.hidden, central: m.central });
+  }
+  return { frames, marks, guides: [], eclipse: e };
+}
+
+/** The sky's north and east [unit, home frame] about a direction seen from the Earth (east: north × the direction). */
+function skyAxes(dir: Vec3, ms: number): { north: Vec3; east: Vec3 } {
+  const l = len(dir);
+  const v: Vec3 = [dir[0] / l, dir[1] / l, dir[2] / l];
+  const P = bodyAxes(solarBody("earth")!, tOf(ms))[2];
+  const k = dot(P, v);
+  const n0: Vec3 = [P[0] - k * v[0], P[1] - k * v[1], P[2] - k * v[2]];
+  const nl = len(n0);
+  const north: Vec3 = [n0[0] / nl, n0[1] / nl, n0[2] / nl];
+  const east: Vec3 = [north[1] * v[2] - north[2] * v[1], north[2] * v[0] - north[0] * v[2], north[0] * v[1] - north[1] * v[0]];
+  return { north, east };
 }

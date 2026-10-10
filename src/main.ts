@@ -31,9 +31,19 @@ import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
 import { EclipsePage } from "./ui/eclipses";
 import { type MxHost, runExposures } from "./photo/multiexposure";
-import { analemmaMarks, analemmaPlan, eclipsePlan, type EclipseSeqOptions, MX_EV, placeFrames, skyMarks } from "./photo/plans";
+import {
+  analemmaMarks,
+  analemmaPlan,
+  eclipseLayout,
+  eclipsePlan,
+  type EclipseSeqOptions,
+  MX_EV,
+  placeFrames,
+  skyMarks,
+} from "./photo/plans";
 import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
 import { drawIssTrail, issPasses, issPhotoPlan } from "./photo/iss-pass";
+import { transits } from "./eclipse/moons";
 import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
@@ -2916,6 +2926,9 @@ async function main() {
     /** false: each frame laid whole (its sky too), not its disc alone */
     mask?: boolean;
     insets?: boolean;
+    /** the tripod's sky (default), the phases in a row, the Moons about the Earth's shadow, a transit's way */
+    layout?: "sky" | "strip" | "shadow" | "transit";
+    planet?: "mercury" | "venus";
   };
   const planEclipse = (o: EclipseRun) => {
     const p = camera.weatherPlace();
@@ -2946,6 +2959,45 @@ async function main() {
   ) => {
     const width = o.width ?? 1920,
       height = o.height ?? 1080;
+    if (o.layout && o.layout !== "sky") {
+      const p = camera.weatherPlace();
+      const kind = o.layout === "transit" ? "transit" : (o.kind ?? "solar");
+      // (a transit's planet unnamed: the one whose transit is nearer the date)
+      const date = o.date ?? utcOf(sim.time);
+      const gap = (pl: "mercury" | "venus") =>
+        Math.min(...transits(pl, date - 400 * 864e5, date + 400 * 864e5).map((x) => Math.abs(x.t - date)));
+      const planet = o.planet ?? (kind === "transit" ? (gap("mercury") <= gap("venus") ? "mercury" : "venus") : undefined);
+      const lay = eclipseLayout({
+        kind,
+        layout: o.layout,
+        planet,
+        date,
+        lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+        lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
+        before: o.before ?? 5,
+        after: o.after ?? 5,
+        aspect: width / height,
+        width,
+        height,
+        template: mxTemplate("clear"),
+        phaseEV: o.phaseEV ?? (kind === "lunar" ? MX_EV.moon : MX_EV.sun),
+        centralComp: o.centralComp ?? MX_EV.central,
+      });
+      if (!lay)
+        return Promise.reject(
+          new Error(kind === "transit" ? "No transit near that date" : "No such eclipse seen from there near that date"),
+        );
+      return runExposures(mxHost, lay.frames, { width, height, spp: o.spp ?? 4 }, progress, signal).then((r) => ({
+        ...r,
+        // (a row's discs where they were laid, those behind the hills left out)
+        marks: lay.marks.map((m) => {
+          const p = r.placed.find((q) => q.ms === m.ms);
+          return p ? { ...m, x: p.x, y: p.y } : m;
+        }),
+        guides: lay.guides,
+        eclipse: lay.eclipse,
+      }));
+    }
     const plan = planEclipse(o);
     if (!plan)
       return Promise.reject(
@@ -3080,7 +3132,7 @@ async function main() {
       if (r.kind === "eclipse")
         return runEclipse(
           {
-            kind: r.eclipse ?? "solar",
+            kind: r.eclipse === "lunar" ? "lunar" : "solar",
             date: r.date,
             lat: r.lat,
             lon: r.lon,
@@ -3089,6 +3141,8 @@ async function main() {
             framing: r.framing,
             base: r.base === "same" ? "dusk" : r.base === "middle" ? "central" : r.base,
             sky: r.sky,
+            layout: r.layout,
+            planet: r.planet,
             width: r.width,
             height: r.height,
             spp: r.spp,
@@ -3158,6 +3212,15 @@ async function main() {
     issPasses: async (lat, lon, from) => issPasses(lat, lon, from, 10),
     eclipses: async (kind, lat, lon, around) => {
       const YEAR = 365.25 * 86400e3;
+      // (the transits: seen from the whole day side, over a century and a half)
+      if (kind === "transit") {
+        const t = (await plan({
+          kind: "eclipses",
+          q: { from: around - 30 * YEAR, to: around + 120 * YEAR, kinds: ["transit"], place: null },
+        })) as { events: EclipseEvent[] } | { error: string };
+        if ("error" in t) throw new Error(t.error);
+        return t.events.map((e) => ({ t: (e as { t: number }).t, type: (e as { planet: string }).planet }));
+      }
       const r = (await plan({
         kind: "eclipses",
         q: { from: around - 10 * YEAR, to: around + 40 * YEAR, kinds: [kind], place: { lat, lon } },

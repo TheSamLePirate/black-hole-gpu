@@ -22,6 +22,8 @@ export interface Exposure {
   mask?: { x: number; y: number; r: number };
   /** the moment it shows [ms UTC] (its disc's mask found by it) */
   ms?: number;
+  /** false: its close frame laid without asking whether its disc shows (carried to its inset) */
+  check?: boolean;
   /** lighten: its light scaled first (a star trail's comet tail: the older frames dimmer) */
   gain?: number;
   /** after it is laid: more drawn from it into the image (a star trail's arcs run on to the next frame) */
@@ -31,7 +33,30 @@ export interface Exposure {
    * meter (a wide view's would not open for a red Moon) — then laid at its place in the image: its disc of
    * `r` px at (x, y), within `k` radii, softly
    */
-  inset?: { x: number; y: number; r: number; k: number; fov: number };
+  inset?: {
+    x: number;
+    y: number;
+    r: number;
+    k: number;
+    fov: number;
+    /** the frame turned [rad] before it is laid: its north up (the parallactic angle — the north's
+     *  direction in it from its up, towards its right) */
+    rot?: number;
+    /** its frame's size at most [px] (a transit's Sun: Mercury a few pixels on it) */
+    maxN?: number;
+    /** a row's: laid once the series is done, the discs seen spread evenly across the image at this height
+     *  (one behind the hills leaves no gap) */
+    row?: number;
+    /** laid only within this disc of the image [px] (a transit's planet: the Sun's own spots not dragged
+     *  along) — centred on the darkest point within `search` px of it (the planet where the frame has it: its
+     *  light's aberration and the air's bending move it by half a minute of arc from the reckoned place) */
+    area?: { x: number; y: number; r: number; search?: number };
+    /** false: laid without asking whether its disc shows (a totality: its Moon darker than its corona) */
+    check?: boolean;
+    /** how it is laid: lightened (the default), darkened (a transit's planet: the dark dot kept), set as it is
+     *  (a darkened series' first) */
+    mode?: "lighten" | "darken" | "set";
+  };
 }
 
 /** the discs' angular radius the marks are drawn with [°] (the Sun's and the Moon's, near enough) */
@@ -39,8 +64,8 @@ export const DISC_DEG = 0.266;
 
 /** A close frame's size [px] for its disc of `r` px within `k` radii in the image (its field holds 1.6 at
  *  least: the sky's ring about the disc): three samples a pixel. */
-export function insetSize(i: { r: number; k: number }) {
-  return Math.min(Math.max(Math.ceil(2 * Math.max(i.k, 1.6) * 1.15 * i.r * 3), 48), 720);
+export function insetSize(i: { r: number; k: number; maxN?: number }) {
+  return Math.min(Math.max(Math.ceil(2 * Math.max(i.k, 1.6) * 1.15 * i.r * 3), 48), i.maxN ?? 720);
 }
 
 /**
@@ -58,34 +83,55 @@ export function placeInset(
 ): boolean {
   const D = Math.PI / 180;
   const rr = ((N / 2) * Math.tan(DISC_DEG * D)) / Math.tan((i.fov / 2) * D);
-  if (!discSeen(px, N, rr)) return false;
+  const mode = i.mode ?? "lighten";
+  if (mode === "lighten" && i.check !== false && !discSeen(px, N, rr)) return false;
   const s = i.r / rr;
   const R = i.k * i.r;
+  const c = Math.cos(i.rot ?? 0),
+    sn = Math.sin(i.rot ?? 0);
+  // (each pixel the mean of 3 × 3 points of it, each the close frame's pixel under it — turned, scaled)
+  const at = (ox: number, oy: number, j: number) => {
+    let sum = 0,
+      n = 0;
+    for (let a = 0; a < 3; a++)
+      for (let b = 0; b < 3; b++) {
+        const dx = ox + (a + 0.5) / 3 - i.x,
+          dy = oy + (b + 0.5) / 3 - i.y;
+        const u = Math.floor((dx * c - dy * sn) / s + N / 2),
+          v = Math.floor((dx * sn + dy * c) / s + N / 2);
+        if (u < 0 || v < 0 || u >= N || v >= N) continue;
+        sum += px[(v * N + u) * 4 + j]!;
+        n++;
+      }
+    return n ? sum / n : -1;
+  };
+  let area = i.area;
+  if (area?.search) {
+    let best = Infinity;
+    const a0 = area;
+    for (let oy = Math.floor(a0.y - a0.search!); oy <= a0.y + a0.search!; oy++)
+      for (let ox = Math.floor(a0.x - a0.search!); ox <= a0.x + a0.search!; ox++) {
+        if (Math.hypot(ox - a0.x, oy - a0.y) > a0.search! || Math.hypot(ox + 0.5 - i.x, oy + 0.5 - i.y) > i.r * 0.97) continue;
+        const L = at(ox, oy, 0) + at(ox, oy, 1) + at(ox, oy, 2);
+        if (L >= 0 && L < best) [best, area] = [L, { x: ox + 0.5, y: oy + 0.5, r: a0.r }];
+      }
+  }
   for (let oy = Math.max(0, Math.floor(i.y - R)); oy <= Math.min(H - 1, Math.ceil(i.y + R)); oy++)
     for (let ox = Math.max(0, Math.floor(i.x - R)); ox <= Math.min(W - 1, Math.ceil(i.x + R)); ox++) {
       const d = Math.hypot(ox + 0.5 - i.x, oy + 0.5 - i.y) / R;
       if (d >= 1) continue;
-      const w = d < 2 / 3 ? 1 : (1 - d) * 3;
-      const u0 = Math.max(0, Math.floor((ox - i.x) / s + N / 2)),
-        u1 = Math.min(N - 1, Math.max(u0, Math.ceil((ox + 1 - i.x) / s + N / 2) - 1));
-      const v0 = Math.max(0, Math.floor((oy - i.y) / s + N / 2)),
-        v1 = Math.min(N - 1, Math.max(v0, Math.ceil((oy + 1 - i.y) / s + N / 2) - 1));
-      let r = 0,
-        g = 0,
-        b = 0,
-        n = 0;
-      for (let v = v0; v <= v1; v++)
-        for (let u = u0; u <= u1; u++) {
-          const k = (v * N + u) * 4;
-          r += px[k]!;
-          g += px[k + 1]!;
-          b += px[k + 2]!;
-          n++;
-        }
-      if (!n) continue;
+      if (area && Math.hypot(ox + 0.5 - area.x, oy + 0.5 - area.y) > area.r) continue;
+      // (softened in its last tenth of a disc radius — or its outer third, for a wide one: a corona's)
+      const soft = Math.min(1 / 3, 0.1 / i.k);
+      const w = mode !== "lighten" || d < 1 - soft ? 1 : (1 - d) / soft;
       const k = (oy * W + ox) * 4;
-      const c = [r / n, g / n, b / n];
-      for (let j = 0; j < 3; j++) if (c[j]! > out[k + j]!) out[k + j] = out[k + j]! + (c[j]! - out[k + j]!) * w;
+      for (let j = 0; j < 3; j++) {
+        const v = at(ox, oy, j);
+        if (v < 0) continue;
+        const u = out[k + j]!;
+        if (mode === "set") out[k + j] = v;
+        else if (mode === "darken" ? v < u : v > u) out[k + j] = u + (v - u) * w;
+      }
     }
   return true;
 }
@@ -185,7 +231,15 @@ export async function runExposures(
   o: MxOptions,
   progress: (p: MxProgress) => void,
   signal: { stop: boolean },
-): Promise<{ data: Uint8ClampedArray; width: number; height: number; rendered: number; hidden: number[] }> {
+): Promise<{
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+  rendered: number;
+  hidden: number[];
+  /** a row's discs where they were laid */
+  placed: { ms: number; x: number; y: number }[];
+}> {
   // (opaque black: what a frame laid by its disc alone leaves round it)
   const out = new Uint8ClampedArray(o.width * o.height * 4);
   for (let k = 3; k < out.length; k += 4) out[k] = 255;
@@ -193,6 +247,8 @@ export async function runExposures(
   host.active(true);
   let rendered = 0;
   const hidden: number[] = [];
+  const row: { img: Uint8Array; N: number; f: Exposure }[] = [];
+  const placed: { ms: number; x: number; y: number }[] = [];
   try {
     for (const [i, f] of frames.entries()) {
       if (signal.stop) break;
@@ -209,8 +265,13 @@ export async function runExposures(
       await host.settle(i === 0);
       if (f.inset) {
         const N = insetSize(f.inset);
-        if (!placeInset(out, await host.render({ width: N, height: N, spp: o.spp }), o.width, o.height, N, f.inset) && f.ms !== undefined)
-          hidden.push(f.ms);
+        const img = await host.render({ width: N, height: N, spp: o.spp });
+        if (f.inset.row !== undefined) {
+          // (a row's: kept if its disc shows, laid at the end)
+          const rr = ((N / 2) * Math.tan((DISC_DEG * Math.PI) / 180)) / Math.tan((f.inset.fov / 2) * (Math.PI / 180));
+          if (f.inset.check === false || discSeen(img, N, rr)) row.push({ img: Uint8Array.from(img), N, f });
+          else if (f.ms !== undefined) hidden.push(f.ms);
+        } else if (!placeInset(out, img, o.width, o.height, N, f.inset) && f.ms !== undefined) hidden.push(f.ms);
         rendered++;
         continue;
       }
@@ -228,10 +289,16 @@ export async function runExposures(
       }
       rendered++;
     }
+    // (the row: its discs seen spread evenly)
+    for (const [j, r] of row.entries()) {
+      const x = (o.width * (j + 0.5)) / row.length;
+      placeInset(out, r.img, o.width, o.height, r.N, { ...r.f.inset!, x, y: r.f.inset!.row!, check: false });
+      if (r.f.ms !== undefined) placed.push({ ms: r.f.ms, x, y: r.f.inset!.row! });
+    }
     progress({ done: rendered, total: frames.length, label: "" });
   } finally {
     host.active(false);
     host.restore(before);
   }
-  return { data: out, width: o.width, height: o.height, rendered, hidden };
+  return { data: out, width: o.width, height: o.height, rendered, hidden, placed };
 }
