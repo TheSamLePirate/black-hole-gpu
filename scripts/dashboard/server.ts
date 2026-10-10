@@ -5,7 +5,8 @@
 //
 //   bun run dashboard                  → http://localhost:4700 (E2E_DASH_PORT)
 //
-// Local only: it listens on 127.0.0.1 — it starts processes and evaluates code in a browser.
+// It listens on every interface (E2E_DASH_HOST to narrow it): it starts processes and evaluates code in a
+// browser — a trusted network only.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
@@ -35,6 +36,9 @@ import {
 type Req = Request & { params: { id: string; job: string; name: string } };
 
 const PORT = Number(process.env.E2E_DASH_PORT || 4700);
+// (every interface by default — the dashboard reached from the other Macs of the network, the user's choice;
+// it starts processes and evaluates code in a browser: E2E_DASH_HOST=127.0.0.1 keeps it to this Mac)
+const HOSTNAME = process.env.E2E_DASH_HOST || "0.0.0.0";
 
 // ------------------------------------------------------------------------------------------- clients
 
@@ -159,7 +163,7 @@ const guard = async (fn: () => Promise<Response> | Response) => {
 };
 
 const server = Bun.serve<{ frames: boolean }>({
-  hostname: "127.0.0.1",
+  hostname: HOSTNAME,
   port: PORT,
   development: process.env.NODE_ENV !== "production" ? { hmr: true, console: false } : false,
   routes: {
@@ -300,4 +304,9 @@ for (const [sig, code] of [
     process.exit(code);
   });
 
-console.log(`e2e dashboard: http://localhost:${server.port}/`);
+const lan =
+  Bun.spawnSync(["ipconfig", "getifaddr", "en0"]).stdout.toString().trim() ||
+  Bun.spawnSync(["ipconfig", "getifaddr", "en1"]).stdout.toString().trim();
+console.log(
+  `e2e dashboard: http://localhost:${server.port}/${HOSTNAME === "0.0.0.0" && lan ? ` · on the network: http://${lan}:${server.port}/ (${Bun.spawnSync(["hostname"]).stdout.toString().trim()})` : ""}`,
+);
