@@ -214,8 +214,9 @@ remote-results/e2e-reports/<time>-<host>/<file>/<NN>/     (NN: the test's place 
 
 The run's line `e2e reports: <root>` says where (a mini run's come back in its artifacts). The test's name
 and verdict are matched from bun test's output, in order. `E2E_REPORT_ROOT` chooses the root,
-`E2E_TELEMETRY=0` or `App.boot({ telemetry: false })` turns it off. The sampler only observes: it keeps
-the hub's caches (recomputing them mid-flight changed the flight — a landing failed until it did not).
+`E2E_TELEMETRY=0` or `App.boot({ telemetry: false })` turns it off. The sampler only observes (it keeps
+the hub's caches, the cheaper way; dropping them on every sample is proven harmless too — `landing`,
+`golden`, `rates` pass either way).
 Plain `E2E=1 bun test …` (no preload) records nothing.
 
 ### Rules that keep tests honest

@@ -21,8 +21,8 @@ export const LAB_PAGE = `(() => {
   // (the assistants' own graphs — the corridor, the optimum, what was flown — the latest of each kind, and
   // where the craft was on it at each sample: the corridor charts of the report)
   const graphs = {}, onGraph = {};
-  // (light: the caches kept — an observer, never a cause: the e2e's recorder samples inside a test's own
-  // stepped flight, and the hub's card recomputed there changed the flight it watched)
+  // (light: the hub's and the runway's caches kept — cheaper, sampled every half second of a test's stepped
+  // flight; their caches are keyed on the autopilot and the wheels, so a read never returns a state before's)
   const sample = (light = false) => {
     const c = __bh.camera, p = c.pilot, s = __bh.settings, st = safe(() => __bh.game.status()) ?? {};
     // (the hub's card and the runway's view anew: their caches last a fraction of a wall second — at fixed

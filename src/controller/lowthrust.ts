@@ -1670,7 +1670,10 @@ function glideCard(this: CameraController, rw: RunwayView): HubInfo {
  */
 function hubInfo(this: CameraController): HubInfo | null {
   const now = frameNow();
-  if (this.hubCache && now - this.hubCache.at < 250) return this.hubCache.v;
+  // (kept a quarter of a second — but not across a change of state: an autopilot engaged or let go, the
+  // wheels down, landed — a card read then would be the state before's)
+  const key = cacheKey(this);
+  if (this.hubCache && now - this.hubCache.at < 250 && this.hubCache.key === key) return this.hubCache.v;
   // (the climb's own record — its pad, its trace, its max-Q — kept while the take-off flies)
   if (this.pilot.auto !== "takeoff") this.climbRec = null;
   let v: HubInfo | null = null;
@@ -1679,9 +1682,12 @@ function hubInfo(this: CameraController): HubInfo | null {
   } catch (e) {
     caught("hub", e);
   }
-  this.hubCache = { at: now, v };
+  this.hubCache = { at: now, v, key };
   return v;
 }
+
+/** What a cached card or runway view depends on beyond time: the autopilot, its hold, rolling, landed. */
+const cacheKey = (c: CameraController) => `${c.pilot.auto}|${c.pilot.hold}|${c.rolling ? 1 : 0}|${c.ourLanded ? 1 : 0}`;
 
 function hubCompute(this: CameraController): HubInfo | null {
   const P = this.pilot,
@@ -2548,9 +2554,10 @@ function driftDir(this: CameraController, cam: ReturnType<typeof cameraFrame>, C
  */
 function runwayView(this: CameraController): RunwayView | null {
   const now = frameNow();
-  if (this.runwayCache && now - this.runwayCache.at < 100) return this.runwayCache.v;
+  const key = cacheKey(this);
+  if (this.runwayCache && now - this.runwayCache.at < 100 && this.runwayCache.key === key) return this.runwayCache.v;
   const v = this.runwayCompute();
-  this.runwayCache = { at: now, v };
+  this.runwayCache = { at: now, v, key };
   return v;
 }
 

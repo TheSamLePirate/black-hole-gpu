@@ -1111,7 +1111,7 @@ export class CameraController {
     /** the target's orbit, settled: the height it holds [m] */
     orbitAlt?: number;
   } = {};
-  hubCache: { at: number; v: HubInfo | null } | null = null;
+  hubCache: { at: number; v: HubInfo | null; key?: string } | null = null;
   /** the take-off's record for its assistant (lowthrust.ts climbAssist): its pad (body-fixed unit), the
    *  path flown [downrange, height km], the peak dynamic pressure [Pa], the optimum path */
   climbRec: {
@@ -1161,7 +1161,7 @@ export class CameraController {
    *  arrived more than a little off it (the aim's miss, a correction flown short), a Hohmann to it */
   heightGoal: { body: string; altKm: number } | null = null;
 
-  runwayCache: { at: number; v: RunwayView | null } | null = null;
+  runwayCache: { at: number; v: RunwayView | null; key?: string } | null = null;
   /** a hand-flown final's profile, frozen as its pull-up nears (the runway it is for) */
   manualFix: { site: string; fix: LandingFix } | null = null;
   /** the final's trace for its graph: the runway, the path flown [along km, height m] */
