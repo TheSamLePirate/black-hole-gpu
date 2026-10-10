@@ -246,14 +246,17 @@ const loop = async (fn: () => Promise<unknown>, ms: number) => {
 void loop(pollHere, 4000);
 void loop(pollMini, 10_000);
 
-// (new pictures and finished remote jobs: the history's pages told to refresh)
-let lastShot = 0;
+// (anything new on disk — a run, a remote job fetched, an --each summary, a picture, made here or from the
+// command line —: the pages told to refresh their history, files and pictures)
+let lastStamp = "";
 setInterval(() => {
-  const s = shots()[0];
-  if (s && s.mtime > lastShot) {
-    if (lastShot) emit({ t: "history" });
-    lastShot = s.mtime;
-  }
+  const stamp = [RESULTS, `${RESULTS}/dash`, FLIGHTS]
+    .filter((d) => existsSync(d))
+    .map((d) => `${d}:${readdirSync(d).length}:${statSync(d).mtimeMs}`)
+    .concat(String(shots()[0]?.mtime ?? 0))
+    .join("|");
+  if (lastStamp && stamp !== lastStamp) emit({ t: "history" });
+  lastStamp = stamp;
 }, 5000);
 
 // (the live page's Chrome ended with the server, whatever stops it)

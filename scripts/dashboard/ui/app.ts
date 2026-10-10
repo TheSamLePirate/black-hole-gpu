@@ -358,6 +358,8 @@ function onMsg(m: Record<string, unknown>) {
     case "history":
       S.history = null;
       S.shots = null;
+      S.files = null;
+      detailCache = null;
       if (["overview", "history", "captures", "run"].includes(view())) schedule();
       break;
     case "probe":
