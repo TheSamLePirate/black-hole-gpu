@@ -151,6 +151,7 @@ override HAS_WH: bool = true;     // the wormhole world
 override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
+override HAS_SHADE: bool = true;  // a body's shadow falling on another now (P.shade, PLAN-CIEL C6: out of the kernel when none)
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
@@ -1492,6 +1493,7 @@ fn earthRingLight(d: f32, rs: f32, ro: f32) -> vec3f {
 // bends into its own shadow. 1: none.
 fn bodyShadow(k: u32, pat: vec3f) -> vec3f {
   var T = vec3f(1.0);
+  if (!HAS_SHADE) { return T; }
   for (var i = 0u; i < 3u; i++) {
     let hd = P.shade[3u * i + 2u];
     if (u32(hd.x + 0.5) != k + 1u) { continue; }
@@ -4070,6 +4072,7 @@ fn discShare(rs: f32, ro: f32, d: f32) -> f32 {
 var<private> AIR_K: u32 = 0u;
 fn airShade(p: vec3f) -> f32 {
   var lit = 1.0;
+  if (!HAS_SHADE) { return lit; }
   for (var i = 0u; i < 3u; i++) {
     let hd = P.shade[3u * i + 2u];
     if (u32(hd.x + 0.5) != AIR_K + 1u) { continue; }

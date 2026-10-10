@@ -118,7 +118,7 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 2047;
+const FEATURES_ALL = 4095;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -2325,7 +2325,13 @@ export class Renderer {
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (PARAM_VEC4S - WX_VEC4S) * 4);
     // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
-    f.set(shadowParams(bodies, ourStart(bodies), homePosition(s) ?? origin), (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
+    // (a receiver under two pixels across left out: Io in Jupiter's shadow seen from the Earth would keep the
+    // shadows' code in the kernel for a dot)
+    const shade = shadowParams(bodies, ourStart(bodies), homePosition(s) ?? origin, (s.fov * Math.PI) / 180 / Math.max(t.height, 1));
+    f.set(shade, (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
+    // (a shadow falling: 2048 — none, its code out of the kernel: the kernel is register-bound, a pair's loop
+    // cost 6–12 % over the Earth where no shadow ever fell)
+    if (shade[8]! > 0) this.featureKey |= 2048;
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(
@@ -2834,7 +2840,8 @@ export class Renderer {
       (s.wormhole ? 32 : 0) |
       (s.diskThickness > 0 ? 64 : 0)
     ); // (bodies: 128, added with them; runways near: 256; the hole's metrics: 512, unless from afar — O13;
-    // the weather near the camera: 1024, set with its params — fair, out of the kernel)
+    // the weather near the camera: 1024, set with its params — fair, out of the kernel; a body's shadow on
+    // another: 2048, with its params)
   }
 
   /**
@@ -2987,6 +2994,7 @@ export class Renderer {
           HAS_RWY: has(256),
           HAS_KERR: has(512),
           HAS_WX: has(1024),
+          HAS_SHADE: has(2048),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },

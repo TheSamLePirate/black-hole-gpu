@@ -36,7 +36,7 @@ export function spunAxes(pole: Vec3, spin: number): [Vec3, Vec3, Vec3] {
 }
 
 /** The pairs (receiver k, occluder j) whose shadow falls on the receiver now, nearest-looking first. */
-export function activeShadows(list: GpuBody[], start: number, camera: Vec3): { r: number; o: number }[] {
+export function activeShadows(list: GpuBody[], start: number, camera: Vec3, minAngle = 0): { r: number; o: number }[] {
   const sun = list.findIndex((b, k) => k >= start && b.id === "sun");
   if (sun < 0) return [];
   const S = list[sun]!.pos,
@@ -62,17 +62,20 @@ export function activeShadows(list: GpuBody[], start: number, camera: Vec3): { r
       // (the penumbra's radius there: the occluder's, grown by the Sun's disc past its limb)
       const pen = ob.radius + (z * (Rs + ob.radius)) / D;
       if (d >= pen + rb.radius) continue;
-      pairs.push({ r, o, score: rb.radius / Math.max(len(sub(rb.pos, camera)), 1e-30) });
+      // (a receiver too small to see from here left out: a pair kept turns the shadows' code on in the kernel)
+      const score = rb.radius / Math.max(len(sub(rb.pos, camera)), 1e-30);
+      if (score < minAngle) continue;
+      pairs.push({ r, o, score });
     }
   });
   return pairs.sort((a, b) => b.score - a.score).slice(0, SHADE_PAIRS);
 }
 
 /** The pairs packed for the tracer (P.shade). */
-export function shadowParams(list: GpuBody[], start: number, camera: Vec3): Float32Array {
+export function shadowParams(list: GpuBody[], start: number, camera: Vec3, minAngle = 0): Float32Array {
   const out = new Float32Array(SHADE_VEC4S * 4);
   const sun = list.findIndex((b, k) => k >= start && b.id === "sun");
-  activeShadows(list, start, camera).forEach(({ r, o }, i) => {
+  activeShadows(list, start, camera, minAngle).forEach(({ r, o }, i) => {
     const rb = list[r]!,
       ob = list[o]!,
       sb = list[sun]!;
