@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { overrideConsts } from "./lib/wgsl-slice";
 import { GARGANTUA_SYSTEM } from "../../src/system/bodies";
 
 // Gargantua's worlds' air (Miller, Mann, Edmunds) as the tracer draws it: the real nearAir and earthAir
@@ -103,7 +104,11 @@ test.skipIf(!E2E)(
     try {
       const values = await app.js<number[]>(`(async()=>{
       const device=__bh.renderer.device;device.pushErrorScope("validation");
-      const pipeline=await device.createComputePipelineAsync({layout:"auto",compute:{module:device.createShaderModule({code:${JSON.stringify(shader)}}),entryPoint:"check"}});
+      const module=device.createShaderModule({code:${JSON.stringify(`${overrideConsts(trace, shader)}\n${shader}`)}});
+      // (the compiler's own words when the slice no longer compiles: which symbol, which line)
+      const errs=(await module.getCompilationInfo()).messages.filter((m)=>m.type==="error");
+      if(errs.length) throw new Error("WGSL: "+errs.map((m)=>m.lineNum+":"+m.linePos+" "+m.message).join(" | "));
+      const pipeline=await device.createComputePipelineAsync({layout:"auto",compute:{module,entryPoint:"check"}});
       const out=device.createBuffer({size:${bytes},usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
       const read=device.createBuffer({size:${bytes},usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
       try{
