@@ -20,7 +20,8 @@ export const WAIT = join(LAB_DIR, "wait");
 /**
  * This machine's own choices for the lab — ~/.kerr-lab/config.json, e.g. {"chrome": "window"}: how its
  * Chromes show ("headless": none; "window": an ordinary window to watch while working beside it; "kiosk":
- * full screen). E2E_HEADED=1 (the remote runner's default on the other Mac) still means kiosk.
+ * full screen). The lab: "headless" on the main Mac, "kiosk" on kerr-mini (`bun scripts/remote.ts doctor` shows
+ * both). E2E_HEADED=1 forces kiosk, E2E_HEADED=0 headless (tests/e2e/lib/cdp.ts).
  */
 export function labConfig(): { chrome?: "headless" | "window" | "kiosk" } {
   try {

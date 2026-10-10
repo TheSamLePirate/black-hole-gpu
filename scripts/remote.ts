@@ -28,7 +28,7 @@
 // from here, not on it.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { LAB_DIR } from "./lib/chrome-lock";
+import { LAB_DIR, labConfig } from "./lib/chrome-lock";
 import { shellJoin } from "./lib/shell";
 
 const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
@@ -208,6 +208,10 @@ async function doctor() {
     "echo sleep=$(pmset -g | awk '/^ sleep/{print $2}')",
     "echo display_sleep=$(pmset -g | awk '/displaysleep/{print $2}')",
     "echo load=$(sysctl -n vm.loadavg | tr -d '{}')",
+    // (how its Chromes show — the lab's choice: full screen there, headless here; docs/E2E.md)
+    `echo chrome_mode=$(sed -n 's/.*"chrome": *"\\([a-z]*\\)".*/\\1/p' ~/.kerr-lab/config.json 2>/dev/null)`,
+    // (a test Chrome alive there: one at a time per Mac — scripts/lib/chrome-lock.ts)
+    `echo chromes=$(pgrep -f -- '--remote-debugging-port=[0-9]' | wc -l | tr -d ' ')`,
     `echo gpu_lock=$(test -e ${DIR}/gpu.lock && cat ${DIR}/gpu.lock 2>/dev/null | head -c 80 || echo free)`,
   ].join("; ");
   const p = Bun.spawn(ssh(HOST, probe), { stdout: "pipe", stderr: "inherit" });
@@ -230,6 +234,12 @@ async function doctor() {
     ["Chrome", kv.chrome === "yes", kv.chrome ?? "?"],
     ["bun", kv.bun === local, `${kv.bun} there, ${local} here`],
     ["disk", true, `${kv.disk} free`],
+    [
+      "Chrome mode",
+      kv.chrome_mode === "kiosk",
+      `${kv.chrome_mode || "unset (headless)"} there, ${labConfig().chrome ?? "headless"} here (~/.kerr-lab/config.json; the lab wants kiosk there)`,
+    ],
+    ["test Chromes", Number(kv.chromes) <= 1, `${kv.chromes} running there (one at a time per Mac)`],
     ["sleep", kv.sleep === "0", `system sleep ${kv.sleep} min (0: never — a sleeping Mac drops the run)`],
     ["load", true, kv.load ?? "?"],
     ["GPU queue", true, kv.gpu_lock ?? "?"],

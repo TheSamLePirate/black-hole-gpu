@@ -192,7 +192,7 @@ async function worker(id: string) {
   m.state = "running";
   m.started = Date.now();
   writeMeta(m);
-  const env = { ...process.env, PATH, KERR_REMOTE_JOB: id, E2E_HEADED: m.headed ? "1" : "", E2E_HOLD: m.hold ? String(m.hold) : "" };
+  const env = { ...process.env, PATH, KERR_REMOTE_JOB: id, E2E_HEADED: m.headed ? "1" : "0", E2E_HOLD: m.hold ? String(m.hold) : "" };
   const child = spawn("/bin/zsh", ["-c", m.cmd], { cwd: run, env, detached: true, stdio: ["ignore", log, log] });
   m.pgid = child.pid;
   writeMeta(m);

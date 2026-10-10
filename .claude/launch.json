@@ -1,6 +1,22 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "blackhole", "runtimeExecutable": "bun", "runtimeArgs": ["--hot", "server.ts"], "port": 3000 }
+    {
+      "name": "blackhole",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "--hot",
+        "server.ts"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "e2e-dashboard",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "scripts/dashboard/server.ts"
+      ],
+      "port": 4700
+    }
   ]
 }

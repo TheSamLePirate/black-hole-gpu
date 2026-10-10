@@ -26,12 +26,17 @@ const KEYCODES: Record<string, number> = {
 const vk = (code: string) =>
   code.startsWith("Key") ? code.charCodeAt(3) : code.startsWith("Digit") ? 48 + Number(code[5]) : (KEYCODES[code] ?? 0);
 
-let server: { url: string; stop(): void } | null = null;
+let server: { url: string; stop(): void; alive(): boolean } | null = null;
 
-/** A production server on a free port (E2E_URL: one already running). */
+/**
+ * A production server on a free port (E2E_URL: one already running). Proven up before a page is sent to it,
+ * and started again if it died since the last test — a server gone left each boot waiting its full 180 s on a
+ * page that could not load (Chrome's "address unreachable") instead of failing at once with the cause.
+ */
 async function serve() {
-  if (process.env.E2E_URL) return { url: process.env.E2E_URL, stop() {} };
-  if (server) return server;
+  if (process.env.E2E_URL) return { url: process.env.E2E_URL, stop() {}, alive: () => true };
+  if (server?.alive()) return server;
+  if (server) console.error("e2e: the app's server had died — started again");
   // (a port nothing listens on: tried before the server is started — macOS's media sharing holds 3689,
   // and a run cut short leaves its server behind)
   const free = (p: number) => {
@@ -47,22 +52,33 @@ async function serve() {
     const p = 3200 + Math.floor(Math.random() * 500);
     if (free(p)) port = p;
   }
+  if (!port) throw new Error("e2e: no free port for the app's server (3200–3700 all taken?)");
   const proc = Bun.spawn(["bun", "server.ts"], {
     env: { ...process.env, PORT: String(port), NODE_ENV: "production", KERR_PARENT_PID: String(process.pid) },
     stdout: "ignore",
     stderr: "inherit",
   });
+  let exited: number | null = null;
+  void proc.exited.then((c) => {
+    exited = c;
+  });
   const url = `http://localhost:${port}/`;
-  for (let i = 0; i < 200; i++) {
-    if (
-      await fetch(url)
-        .then((r) => r.ok)
-        .catch(() => false)
-    )
-      break;
-    await Bun.sleep(100);
+  let up = false;
+  for (let i = 0; i < 300 && !up && exited === null; i++) {
+    up = await fetch(url)
+      .then((r) => r.ok)
+      .catch(() => false);
+    if (!up) await Bun.sleep(100);
   }
-  server = { url, stop: () => proc.kill() };
+  if (!up) {
+    proc.kill();
+    throw new Error(
+      exited !== null
+        ? `e2e: the app's server (bun server.ts, port ${port}) exited with code ${exited} before answering — its error is above`
+        : `e2e: the app's server (bun server.ts, port ${port}) did not answer in 30 s`,
+    );
+  }
+  server = { url, stop: () => proc.kill(), alive: () => exited === null };
   return server;
 }
 
@@ -114,6 +130,7 @@ export class App {
   lastLoadMs = 0;
 
   async load(hash: string, startupFailure = false) {
+    if (server && !server.alive()) throw new Error("e2e: the app's server has died (its error is in the log above) — the page cannot load");
     const t0 = performance.now();
     const previousOrigin = await this.js<number>("performance.timeOrigin");
     await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}` });
