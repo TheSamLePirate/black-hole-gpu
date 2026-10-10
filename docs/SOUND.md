@@ -1,7 +1,12 @@
 # Sound
 
+> Since this page was written (6 Oct), the sound has grown: spatial placement (HRTF, Doppler, the boom),
+> a granular rocket engine on the audio thread, busses for the **voices** and the **music** — see
+> [AUDIO.md](AUDIO.md) (French, current) and, for the voices, the callouts, mission control, the music and
+> TARS, [TARS.md](TARS.md). What follows still describes the director and the cues.
+
 Everything is synthesized live with the Web Audio API (`src/audio/engine.ts`): no sample, nothing
-downloaded, no music. A director (`src/audio/director.ts`) watches the flight every frame and turns
+downloaded. A director (`src/audio/director.ts`) watches the flight every frame and turns
 what changes into sound (`src/main.ts` feeds it every frame and plays the warp ticks). Settings ›
 Game › **Sound**: on/off, **Volume** (master), and a mix of four busses — **Flight computer** (beeps,
 alarms), **Engines & RCS**, **Cabin & wind**, **Interface**. The toolbar's **Sound** button and the

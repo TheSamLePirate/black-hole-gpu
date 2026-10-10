@@ -19,10 +19,15 @@ Tout est synthétisé ou tiré du système : rien à télécharger. TARS peut au
 | `src/audio/g2p.ts`, `src/audio/formant.ts` | la voix robot de TARS en anglais : le texte en phonèmes, la synthèse par formants |
 | `src/game/tars.ts` | pur : TARS hors ligne — ses réponses, son honnêteté et son humour, ses remarques |
 | `src/ai/openrouter.ts`, `src/ai/tars-online.ts` | TARS par OpenRouter : la clé, la connexion OAuth (PKCE), les appels GLM et Jev, leur coût ; son caractère pour le modèle, ses remarques décidées par Jev |
-| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | le champ F6 (ses actions, sa mémoire, le micro) et le lien à OpenRouter ; la page de rappel de la connexion |
+| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | sa console F6 (emblème, onglets Échange · Agents · Réveils · Mémoire, actions en direct, suivi du hub, proposition, tâches, autocomplétion, modes, poignée) et le lien à OpenRouter ; la page de rappel de la connexion |
 | `src/ai/agent.ts`, `src/ai/tool-schema.ts` | TARS agent : la boucle d'un tour (appels, résultats, bornes, arrêt) ; le schéma des outils et la vérification des arguments |
-| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 36 outils : tout le jeu, montrer, proposer ; les réglages trouvés par les mots et vérifiés au schéma |
-| `src/ui/tars/emblem.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | son emblème animé ; ses cartes sur la vue (graphes, fiches) et leur tracé |
+| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 43 outils : tout le jeu, montrer, proposer, attendre, réveils, sous-agents, tâches, savoir-faire ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ai/telemetry.ts` | `get_telemetry` par groupes (attitude, air, commandes, autopilote, hub, rentrée, approche, descente, poussée, amarrage) ; ses canaux échantillonnés pour ses graphes |
+| `src/ai/triggers.ts`, `src/ai/budget.ts` | ses réveils : réflexes et règles (événements, toutes les N min, à une heure du jeu) ; le plafond par heure et l'intervalle |
+| `src/ai/subagents.ts` | ses sous-agents : jusqu'à 4 copies en parallèle, lecture et calcul seulement |
+| `src/ai/commands.ts`, `src/ai/tars-commands.ts` | les 26 commandes « / » de l'agent, les mentions @, les modes, les savoir-faire ; leurs complétions (pur) et leur exécution |
+| `src/ai/game-commands.ts` | les 67 commandes de jeu (« /target », « /cockpit », « /teleport »…) exécutées par ses outils sans le modèle ; leurs arguments complétés |
+| `src/ui/tars/emblem.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | son emblème animé ; ses cartes sur la vue (graphes en direct, couloir et graphe du hub superposés, fiches) et leur tracé |
 | `src/ai/tars-agent.ts`, `src/ai/memory.ts` | sa consigne d'agent, un tour à la fois ; sa mémoire gardée entre les visites |
 | `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne ; le push-to-talk |
 | `src/audio/engine.ts` | les bus « voix » et « musique », la radio autour des voix (Quindar, squelch, souffle), le souffle du blackout, la chaîne de la voix de TARS |
@@ -121,7 +126,7 @@ Ce qui encadre ces répliques :
 
 ## TARS agent
 
-Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
+Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). Le code, système par système : [`systemes/10-tars-agent.md`](systemes/10-tars-agent.md). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
 - **Ce qu'il fait** : ses 43 outils couvrent tout le jeu.
@@ -176,14 +181,16 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TAR
   - `callouts`, `capcom`, `score` ;
   - `tars-voice` (phonèmes, synthèse), `tars` ;
   - `openrouter` (clé, PKCE, échange, appels, coût, alias, rationnement) ;
-  - `tars-agent` (arguments, un tour, ses bornes, la mémoire), `tars-tools` (noms, sites, touches, réglages, ordres hors ligne).
+  - `tars-agent` (arguments, un tour, ses bornes, la mémoire, les réveils, le budget, les sous-agents, les commandes et leurs complétions), `tars-tools` (noms, sites, touches, réglages, ordres hors ligne, télémétrie).
 - **e2e** :
   - `voice` (les sous-titres, l'ordre) ;
   - `callouts` (le posé d'Edwards : les hauteurs dans l'ordre, minimums, la tour, l'arrêt des roues) ;
   - `music` (Miller, le tic-tac, le silence) ;
   - `tars-voice` (la voix robot jouée, coupée) ;
   - `tars` (F6, vraie saisie) ;
-  - `tars-online` (réseau simulé dans la page).
+  - `tars-online` (réseau simulé dans la page) ;
+  - `tars-agent` (modèle simulé, 11 cas : un ordre, une erreur corrigée, l'arrêt, la mémoire, la présence, la proposition, les réveils, la console, les commandes « / » et les commandes de jeu sans appel au modèle) ;
+  - `tars-agent-live` et `tars-eval` (le vrai OpenRouter, `TARS_LIVE=1` : le banc court ; `TARS_LONG=1` : les longs vols).
 - **Mesurer une voix**
   - Whisper (`faster-whisper`, modèle « small ») ;
   - 0,4 s de silence autour de chaque phrase ;

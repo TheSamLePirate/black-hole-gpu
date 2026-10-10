@@ -1,17 +1,21 @@
 # Kerr black hole — WebGPU general-relativistic ray tracer
 
-**Live:** [the simulator](https://thesamlepirate.github.io/black-hole-gpu/) (needs WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+) · [Atlas de Kerr](https://thesamlepirate.github.io/black-hole-gpu/docs/), the gallery of renders and videos. Deployed by `.github/workflows/pages.yml` on every push to `main` (`bun run build:pages` → `_site/`: the app at the root, `gallery/` under `docs/` with the videos of `docs/video/`).
+**Live:** [samlepirate.org](https://samlepirate.org) and [GitHub Pages](https://thesamlepirate.github.io/black-hole-gpu/) (needs WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+) · [the presentation](https://thesamlepirate.github.io/black-hole-gpu/docs/decouvrir.html) · [how to play](https://thesamlepirate.github.io/black-hole-gpu/docs/comment-jouer.html) · [Atlas de Kerr](https://thesamlepirate.github.io/black-hole-gpu/docs/), the gallery of renders and videos. Deployed by `.github/workflows/pages.yml` on every push to `main` — verified (types, Biome, WGSL, tests), built (`bun run build:pages` → `_site/`), then published to Pages and to the server ([docs/DEPLOY.md](docs/DEPLOY.md)). An installable PWA: once loaded it plays offline.
 
 Real-time and progressively converged rendering of a rotating (Kerr) black hole, its accretion disk
 and the lensed sky, written in TypeScript + WGSL, served with Bun — and, around it, a space game: fly
 Interstellar's Ranger (and the Lander, the Endurance) from the pad at the Kennedy Space Center through the
-solar system to scale, to the wormhole near Saturn and Gargantua's side (Miller, Mann, Edmunds).
+solar system to scale, to the wormhole near Saturn and Gargantua's side (Miller, Mann, Edmunds) — with a
+working cockpit, real weather and airports, spatial sound, HOTAS support, and TARS, an AI copilot that can
+fly, navigate and set anything in the game.
 
 ```bash
 bun install
 bun run dev        # http://localhost:3000 (hot reload; server.ts)
 bun test           # physics unit tests (geodesics, closed-form Kerr solutions, ISCO, colorimetry, ephemerides…)
 bun run typecheck  # tsc --noEmit
+bun run check      # what the CI verifies: biome ci, tsc, the WGSL
+bun run e2e        # the end-to-end suite in Chrome (tests/e2e; slow — scripts/remote.ts runs it on another Mac)
 bun run build      # static bundle in dist/ (+ the planner's worker)
 bun run build:pages  # the GitHub Pages site in _site/ (app, workers, gallery, docs/comment-jouer.html)
 bun run gallery    # the scene gallery's pictures recaptured and compared (visual regression; dev server running)
@@ -26,18 +30,33 @@ GPU process being lost.
 
 ## Documentation
 
-- [`docs/comment-jouer.html`](docs/comment-jouer.html) — **how to play** (French, illustrated): the journey,
-  the interface, flying, autopilots, map and planner, camera and time, every key, controller and touch.
-  Published with the site under `docs/`.
-- [`docs/decouvrir.html`](docs/decouvrir.html) — the presentation page (French): hero, physics, the journey,
-  the game's features, the film, a gallery. Published with the site under `docs/`.
-- [`docs/systemes/`](docs/systemes/README.md) — **how the code works** (French): one sheet per system —
-  the geodesic tracer, the render pipeline, the universe and ephemerides, controls and camera, pilot and
-  autopilots, flight planning, 3D models, the interface, game/sound/tools/build.
-- [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window (F2), saves, `__bh.game`.
-- [`docs/MAP.md`](docs/MAP.md) — the 3D map: gestures, bar, timeline, what it shows.
-- [`docs/SOUND.md`](docs/SOUND.md) — the synthesized sound and its director.
-- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — the performance analysis, the profilers, the Game quality.
+For players (French, illustrated, published with the site under `docs/`):
+- [`docs/decouvrir.html`](docs/decouvrir.html) — the presentation page: the physics, the journey, the
+  simulator (cockpit, weather, approach, HOTAS, sound), TARS, the game's features, the film, a gallery.
+- [`docs/comment-jouer.html`](docs/comment-jouer.html) — **how to play**: the journey, the interface,
+  flying, autopilots and the hub, the HUD's aids, map and planner, camera and time, the cockpit, weather and
+  airports, sound and voices, TARS and his commands, controllers, HOTAS and touch, every key.
+
+How the code works:
+- [`docs/systemes/`](docs/systemes/README.md) — one sheet per system (French): the geodesic tracer, the
+  render pipeline, the universe and ephemerides, controls and camera, pilot and autopilots, flight
+  planning, 3D models, the interface, game/sound/tools/build, **TARS the agent** (10), and **every file
+  added since the first reading** (11).
+
+Guides per feature:
+- [`docs/TARS.md`](docs/TARS.md) — the voices, the music, mission control and TARS (offline, OpenRouter, the agent).
+- [`docs/COCKPIT.md`](docs/COCKPIT.md) — the interactive cockpit. [`docs/HUD.md`](docs/HUD.md) — the HUD's piloting aids.
+- [`docs/HOTAS.md`](docs/HOTAS.md) — gamepads, sticks, throttles and pedals. [`docs/AUDIO.md`](docs/AUDIO.md),
+  [`docs/SOUND.md`](docs/SOUND.md) — the spatial sound and its synthesis.
+- [`docs/MAP.md`](docs/MAP.md) — the 3D map. [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window (F2), saves, `__bh.game`.
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — the performance analysis, the profilers, the Game quality, the Kerr Bench.
+- [`docs/FLIGHTLAB.md`](docs/FLIGHTLAB.md) — the autopilots' flight lab.
+
+Working on it:
+- [`docs/AAA-PROGRESS.md`](docs/AAA-PROGRESS.md) — where the AAA work stands; the plans `docs/PLAN-*.md`
+  (HUD, hub, assistant, map, weather, airports, audio, HOTAS, cockpit, world, TARS, TARS agent…) and the audits.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — GitHub Pages and the server. [`docs/REMOTE-TESTS.md`](docs/REMOTE-TESTS.md),
+  [`docs/IPAD-TESTS.md`](docs/IPAD-TESTS.md) — the tests run on the Mac mini and on a real iPad.
 - `docs/progress/` — a screenshot sheet per step; `docs/video/` — the videos of the gallery.
 
 ## The game
@@ -127,6 +146,51 @@ GPU process being lost.
   from the adapter, the device's memory and a touch screen, and caps the realtime image's pixels (0.5 to
   6 Mpx); the **Game** quality (key 6: a ~16 ms GPU budget, dynamic resolution) works under that cap. The
   kernel is specialised to the scene's features. Details in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+- **The title screen, the pause menu, the missions** (`src/ui/title.ts`, `pause.ts`, `missions.ts`): the
+  last flight already loaded behind the title (Continue), Escape for the pause (resume, save, load, hand the
+  controls back, settings, controls), a mission selector with its briefings.
+- **The hub and the assistants** (F4; `src/ui/hud/`): every autopilot's card — its step, its figures and
+  their trends, the next step, the cue — and its graph (Δv against time, height against distance: the
+  optimum, the corridor, what was flown); the HUD's conformal symbology and its aids, each with its switch
+  ([docs/HUD.md](docs/HUD.md)); the alerts ranked WARNING / CAUTION / ADVISORY; the flight's recorder and,
+  after a landing or a docking, a **flight report** graded out of 20.
+- **The tablet** (M in flight): the flight computer, the ship, the TELEMETRY page (the recorded curves, CSV),
+  the approach CHARTS, the log.
+- **Weather and airports** (the HUD's Weather button; `src/weather.ts`, `src/metar.ts`): presets or random,
+  or the **real METAR** of the nearest station, refreshed — wind with height, gusts, turbulence, cloud
+  decks, fog, rain; the weather on the planisphere and in a vertical cut. The runways lit as ICAO wants them
+  (approach lights, PAPI, edges), windsocks, the runway in use chosen into the wind, MLS guidance, approach
+  charts with their minima (60 m) and the **go-around** (`src/game/mls.ts`, `procedures.ts`).
+- **The cockpit, interactive** (the Cockpit view; `src/cockpit/`): some twenty controls worked with the
+  pointer as the keys do — the gear lever, flaps, air brake, throttle, holds, autopilots, lights, the
+  chronometer —; eight screens with pages (PFD, ORBIT, NAV, SYSTEMS, DOCKING, PLAN, CLOCKS, LOG, and on the
+  approach APPROACH and LANDING); the cabin's lights, the ship's navigation lights, strobes and landing lights
+  ([docs/COCKPIT.md](docs/COCKPIT.md)).
+- **Controllers and HOTAS** (pause › Controls; `src/input/`): every device at once — Xbox or PlayStation
+  pads, sticks, throttles, pedals —, a dozen known HOTAS profiles, each axis and button bound by detection,
+  calibration, dead zone, curve, rumble; every key rebindable ([docs/HOTAS.md](docs/HOTAS.md)).
+- **Spatial sound, voices, music** (`src/audio/`): the engine as granular synthesis, the RCS, the cabin
+  muffled in the cockpit, HRTF placement, Doppler and the supersonic boom ([docs/AUDIO.md](docs/AUDIO.md));
+  the landing's callouts, Houston with the light's delay and the plasma blackout, the tower; music only at
+  the great moments; subtitles ([docs/TARS.md](docs/TARS.md)).
+- **TARS, the AI copilot** (F6; `src/ai/`, [docs/TARS.md](docs/TARS.md),
+  [docs/systemes/10-tars-agent.md](docs/systemes/10-tars-agent.md)): offline he answers with his written
+  lines and understands the common orders; with the player's own OpenRouter key he is **an agent** with 43
+  tools over the whole game — he flies the autopilots, plans and flies missions, teleports, sets any setting,
+  presses any key, waits for the outcome. Orders run without confirmation; "propose me a plan for…" gives a
+  costed plan to accept or refuse; three modes (Act, Propose, Observe). He shows live charts, the entry
+  corridor, the hub's graph, telemetry cards and the game's own screens; wakes himself at the key moments
+  (reflexes, rules he schedules, an hourly budget); runs read-only sub-agents in parallel; keeps a clearable
+  memory. His console has **"/" commands** with completion — 26 for the agent (/help, /clear, /model, /mode,
+  /plan, /cost, /undo, /export, /skill…) and 67 for the game, run without the model (/target, /cockpit,
+  /autopilot entry Edwards, /teleport orbit Moon 100, /warp, /set…) —, @ mentions, the questions' history,
+  push-to-talk (F6 held).
+- **Photo mode** (the toolbar, the pause menu): the view alone, the time held, the lens, depth of field, exposure, a PNG or
+  an offline render; its Back to the game button. **Settings › Render › Show the frame rate** puts the FPS
+  in a corner.
+- **A PWA** (`src/sw.ts`, `src/pwa.ts`): installable, served from its cache, the last scene playable
+  offline, the Earth's tiles kept under a budget; a lost GPU device rebuilt without reloading the page
+  (`src/util/swappable.ts`).
 
 ## Physics
 
@@ -629,6 +693,9 @@ seen from the rain frame) · T wormhole journey · ⇧T tripod on the ground · 
 N · ⇧N constellations · star names · U sky grids · J jet · G shadow guide · L liquid wormhole ·
 K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · ⌘K search · ⌘Z undo ·
 1–6 quality (5 RT max, 6 Game) · P PNG · F fullscreen · H hide UI · F2 game tools · ? the shortcut sheet.
+In flight: F flight mode (⇧F antigravity) · P · ⇧P flaps · air brake · G gear · F4 the hub · F3 spectator ·
+F6 TARS (held: speak) · F7 land · ⇧G entry · Enter acknowledge the master warning · ⌫ hand the controls back ·
+Escape pause. Every key can be rebound (pause › Controls); comment-jouer.html lists them all, AZERTY and QWERTY.
 
 The URL is not kept in sync with the settings any more: a link (`#save=…`, Copy a link in the game tools;
 or the panel's share link) restores a moment, `#scene=…` starts a scene, and old setting links are read once.

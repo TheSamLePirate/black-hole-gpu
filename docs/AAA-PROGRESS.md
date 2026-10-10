@@ -19,6 +19,8 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 | Produit / gameplay | 50 | 72 | 80 |
 | **Global** | **≈ 54** | **≈ 77,5** | **≈ 78–80** |
 
+*TARS agent (10/10/2026), non réestimé :* il relève le **Produit** (un copilote qui pilote, explique, propose, surveille et répond aux commandes « / ») et l'**UI** (sa console d'agent), mais la progression et les objectifs suivis manquent toujours ; les notes restent celles du plan HUB.
+
 *Réestimé après le plan HUB (08/10/2026).* **UI** (77 → 79) : la carte du hub, la télémétrie, les graphiques et le rapport de vol (section [Plan HUB](#plan-hub--hub-télémétrie-graphiques-rapport-terminé-08102026)) — plus aucun chevauchement dans les 10 états de référence, la carte homogène pour tous les autopilotes (tendances ▲▼, seuils en couleur), le graphe ouvert en grand, une page TÉLÉMÉTRIE avec export CSV. **Produit** (71 → 72) : un vol noté sur 20 à l'atterrissage et à l'amarrage, première brique d'une progression ; la progression elle-même manque toujours. **Code + tests** (76) : 6 e2e de plus (`hud-layout`, `hub-graph`, `hub-card`, `telemetry`, `report`, `saves`) et une galerie d'états fixes (`scripts/hud-gallery.ts`) ; les sauvegardes rechargent exactement le vol (flotte, site, désorbitation attendue, attitude).
 
 *Réestimé après la fusion de `test-kimi` (07/10/2026).* **Physique** (78 → 80, la cible) :
@@ -479,12 +481,12 @@ Plan : [`PLAN-TARS.md`](PLAN-TARS.md), étapes T1 à T7 ; référence [`TARS.md`
 - **T6** : TARS par OpenRouter — la clé du joueur (OAuth PKCE ou collée), ses réponses par GLM-5.3-flash, ses remarques décidées par Jev, rationnées ; CORS vérifié sur le vrai service (sans clé).
 - **T7** : un vol écouté de bout en bout ; corrigé par lui : le décrochage crié sous l'autopilote de rentrée. Planche finale `docs/progress/tars/t7-vol-ecoute.jpg`.
 
-## TARS agent : l'IA du jeu (en cours, 09/10/2026)
+## TARS agent : l'IA du jeu (terminé, 10/10/2026)
 
-Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1 à A7 ; référence [`TARS.md`](TARS.md) § TARS agent.
+Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1–A9, B1–B7, C1–C6 ; référence [`TARS.md`](TARS.md) § TARS agent ; le code : [`systemes/10-tars-agent.md`](systemes/10-tars-agent.md).
 
 - **A1** : le cœur — les outils décrits par un schéma et leurs arguments vérifiés, la boucle d'un tour, la mémoire gardée entre les visites, le modèle au choix.
-- **A2** : 31 outils, tout le jeu — lire, piloter, naviguer, le temps, les vues, téléporter, sauvegarder, tout réglage, toute touche, attendre ; le filet « Before TARS ».
+- **A2** : 31 outils (43 à la fin de la phase 3), tout le jeu — lire, piloter, naviguer, le temps, les vues, téléporter, sauvegarder, tout réglage, toute touche, attendre ; le filet « Before TARS ».
 - **A3** : TARS agent en jeu — vérifié sur le vrai OpenRouter : « Emmène-nous en orbite autour de la Lune », volé et confirmé par le jeu (100 km, 0,0012 $).
 - **A4** : hors ligne, les ordres courants par les mêmes outils.
 - **A5** : le push-to-talk (F6 tenu, le bouton 🎙).
@@ -493,8 +495,11 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1 à A7 ; référenc
 - **A8** : il montre (graphes en direct, fiches, vrais écrans) et il propose (« propose-moi un plan » : accepter ou refuser ; un ordre reste sans confirmation).
 - **Phase 2 (B1–B6)** : le super-agent — toute la télémétrie et les consignes des autopilotes, ses réveils (réflexes aux moments clés, règles planifiées, budget par heure), le suivi des étapes du hub et des écarts, des sous-agents en parallèle, le couloir de rentrée et le graphe du hub en direct, sa console déplaçable à onglets.
 - **Phase 3 (C1–C5)** : les commandes « / » complétées, les mentions @, l'historique, les modes Agir · Proposer · Observer, sa liste de tâches, les savoir-faire, l'export.
+- **C6** : tout le jeu en commandes « / » — 67 commandes de jeu (la cible, les vues, les autopilotes, les commandes, la mission, la téléportation, le temps, la carte, le ciel, les sauvegardes, les scènes, tout réglage, toute touche) exécutées par ses outils sans le modèle, leurs arguments complétés ; `/tool` pour n'importe lequel de ses 43 outils.
+- **En chemin** : le mode photo a son bouton « Retour au jeu » ; le compteur d'images revient en réglage (Réglages › Rendu › Afficher la fréquence d'images).
+- **A9, B7 : la doc** — `TARS.md`, une fiche système pour TARS (`systemes/10-tars-agent.md`) et une pour tout ce qui s'est ajouté depuis le 2 octobre (`systemes/11-ajouts-depuis-octobre.md`), le README, et les deux pages HTML refaites pour le simulateur et TARS (`decouvrir.html` : les sections « Le simulateur » et « TARS » ; `comment-jouer.html` : le cockpit, la météo et les aéroports, le son, TARS et ses commandes, les touches corrigées). Restent les longs vols du banc réel (`TARS_LONG=1`).
 
-## Ce qui reste pour l'AAA (au 09/10/2026)
+## Ce qui reste pour l'AAA (au 10/10/2026)
 
 Par ordre de gain :
 
@@ -516,8 +521,17 @@ Par ordre de gain :
    - ~~cockpit interactif~~ (M8 terminée le 09/10 : 20 commandes au pointeur, écrans à pages, train réel commandé, lumières de la cabine et de la coque) ;
    - ~~≤ 8 storage buffers pour Android et Safari~~ (M9, fait le 08/10) ; restent FSR1 et la matrice de compatibilité.
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
+6. **TARS** : les longs vols de son banc réel (`TARS_LONG=1` : un décollage vers 300 km, une rentrée et un posé à Edwards), puis GLM comparé à Claude Haiku 5.5 sur le même banc.
 
 ## Journal
+
+- **10/10/2026 — TARS agent terminé (A1–A9, B1–B7, C1–C6), la doc mise à jour.** TARS est un agent : 43 outils sur tout le jeu, ordres sans confirmation et propositions acceptées ou refusées, la télémétrie entière et les consignes des autopilotes, ses réveils aux moments clés sous un budget par heure, des sous-agents en lecture seule, une console d'agent déplaçable à onglets, 26 commandes d'agent et 67 commandes de jeu complétées en tapant. Vérifié sur le vrai OpenRouter (GLM-5.3 Flash) : la Lune en orbite, un plan proposé puis volé, un plané vers Edwards suivi par ses réflexes (rapport A), le banc court repassé sans échec.
+
+  Leçons :
+  - **un agent se règle en vol réel** : chaque échec du banc venait d'une description d'outil ambiguë ou d'un résultat mal dit, pas du modèle ;
+  - **un ordre répondu sans outil** est le défaut le plus trompeur (« Annulé. », rien de fait) : un garde-fou simple le rattrape ;
+  - **les commandes « / » de jeu n'ont pas besoin du modèle** : instantanées, gratuites, hors ligne aussi ;
+  - **la CI formate plus strictement que l'arbre local** : vérifier `biome ci` sur une copie propre de HEAD avant de dire qu'elle passera.
 
 - **09/10/2026 — M10 terminée (T7) : la phase 3 (plan Monde) est close.** Les voix, les annonces, le contrôle de mission et la tour, la musique aux grands moments, TARS (sa voix robot, hors ligne et par OpenRouter).
 

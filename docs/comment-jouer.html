@@ -169,7 +169,11 @@
     <li><a href="#carte">Carte &amp; planificateur</a></li>
     <li><a href="#camera">Caméra &amp; temps</a></li>
     <li><a href="#touches">Toutes les touches</a></li>
-    <li><a href="#manette">Manette &amp; tactile</a></li>
+    <li><a href="#cockpit">Le cockpit</a></li>
+    <li><a href="#meteo">Météo &amp; aéroports</a></li>
+    <li><a href="#son">Son, musique &amp; voix</a></li>
+    <li><a href="#tars">TARS, l'IA de bord</a></li>
+    <li><a href="#manette">Manettes, HOTAS &amp; tactile</a></li>
     <li><a href="#outils">Outils &amp; sauvegardes</a></li>
   </ul>
 </nav>
@@ -285,7 +289,15 @@
       <tr><td><kbd>⇪ Verr.Maj</kbd></td><td><kbd>Caps Lock</kbd></td><td>Commandes de précision (rotation, gaz et RCS fins)</td></tr>
       <tr><td><kbd>T</kbd></td><td><kbd>T</kbd></td><td>SAS : maintien de l'attitude</td></tr>
       <tr><td><kbd>R</kbd></td><td><kbd>R</kbd></td><td>Alignement du roulis : les ailes dans le plan de l'orbite, le nez tenu</td></tr>
-      <tr><td><kbd>Échap</kbd></td><td><kbd>Esc</kbd></td><td>Reprendre la main : arrête la mission automatique, le maintien et l'autopilote en cours</td></tr>
+      <tr><td><kbd>F</kbd> · <kbd>⇧F</kbd></td><td><kbd>F</kbd> · <kbd>⇧F</kbd></td><td>Dans l'air : voler en fusée · en avion · avec l'ordinateur de vol — l'antigravité</td></tr>
+      <tr><td><kbd>P</kbd> · <kbd>⇧P</kbd></td><td><kbd>P</kbd> · <kbd>⇧P</kbd></td><td>Volets (rentrés · mi · pleins) · aérofrein</td></tr>
+      <tr><td><kbd>G</kbd></td><td><kbd>G</kbd></td><td>Train d'atterrissage : sorti · rentré (8 s ; verrouillé au sol ; une alarme s'il est rentré bas et lent)</td></tr>
+      <tr><td><kbd>F4</kbd></td><td><kbd>F4</kbd></td><td>Assisté : vous pilotez, le directeur de l'autopilote montre où pointer et combien de gaz</td></tr>
+      <tr><td><kbd>F3</kbd></td><td><kbd>F3</kbd></td><td>Spectateur : une caméra libre, le vaisseau continue (<kbd>F3</kbd> ou <kbd>V</kbd> pour revenir)</td></tr>
+      <tr><td><kbd>F6</kbd></td><td><kbd>F6</kbd></td><td>TARS : tapé, sa console ; tenu, lui parler (voir <a href="#tars">TARS</a>)</td></tr>
+      <tr><td><kbd>Entrée</kbd></td><td><kbd>Enter</kbd></td><td>Acquitter l'alarme principale : le voyant éteint, l'alarme muette</td></tr>
+      <tr><td><kbd>⌫</kbd></td><td><kbd>Backspace</kbd></td><td>Reprendre la main : arrête la mission automatique, le maintien et l'autopilote en cours</td></tr>
+      <tr><td><kbd>Échap</kbd></td><td><kbd>Esc</kbd></td><td>Ferme le panneau du dessus ; sinon le menu pause (le temps s'arrête) : reprendre, sauvegarder, charger, réglages</td></tr>
       <tr><td><kbd>⇧K</kbd></td><td><kbd>⇧K</kbd></td><td>Quitter le Ranger (caméra libre) — <kbd>K</kbd> pour y revenir</td></tr>
     </tbody>
   </table></div>
@@ -313,10 +325,12 @@
       <tr><td><kbd>7</kbd></td><td>Tenir la cible (ANTI et NODE sont sur le panneau du HUD)</td></tr>
       <tr><td><kbd>8</kbd></td><td>Autopilote : tenir la position</td></tr>
       <tr><td><kbd>9</kbd></td><td>Autopilote : circulariser l'orbite</td></tr>
-      <tr><td><kbd>0</kbd></td><td>Autopilote : approche de la cible</td></tr>
-      <tr><td><kbd>G</kbd></td><td>Autopilote : atterrir</td></tr>
+      <tr><td><kbd>0</kbd> · <kbd>⇧0</kbd></td><td>Autopilote : approche de la cible · orbite autour de la cible</td></tr>
+      <tr><td><kbd>F7</kbd></td><td>Autopilote : atterrissage propulsé, ici</td></tr>
+      <tr><td><kbd>⇧G</kbd></td><td>Rentrée &amp; atterrissage : depuis l'orbite, la poussée de désorbitation pour un site (l'onglet LAND de l'ordinateur le choisit), la rentrée guidée, le plané, la piste</td></tr>
       <tr><td><kbd>U</kbd></td><td>Autopilote : décoller (virage gravitationnel jusqu'en orbite)</td></tr>
       <tr><td><kbd>B</kbd></td><td>Autopilote : amarrage (l'ISS à moins de 3 km, ou un autre vaisseau de la flotte)</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>Assisté : l'autopilote vous guide au lieu de piloter</td></tr>
     </tbody>
   </table></div>
   <p class="muted">Les autopilotes rendent la main à votre accélération du temps quand ils ont fini. Pendant la croisière, le SAS affiche PRO.</p><figure class="shot"><a href="img/comment-jouer/50_iss.webp"><img src="img/comment-jouer/50_iss.webp" alt="Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK." loading="lazy"></a><figcaption>Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK.</figcaption></figure>
@@ -442,8 +456,74 @@
   <p class="muted">En vol, certaines lettres changent de sens (<kbd>M</kbd> carte, <kbd>O</kbd> planificateur, <kbd>U</kbd> décollage, <kbd>G</kbd> atterrissage, <kbd>B</kbd> amarrage…) : ce sont celles des sections précédentes qui s'appliquent.</p>
 </section>
 
+<section id="cockpit">
+  <h2>Le cockpit<small>Vue <em>Cockpit</em> : tout se commande au pointeur</small></h2>
+  <p>Dans la vue cockpit, une vingtaine de commandes répondent au pointeur, comme les touches : le levier du train (qui voyage jusqu'à sa position), les volets, l'aérofrein, les gaz, le SAS, les maintiens, les autopilotes, les feux, l'éclairage de la cabine, le chronomètre. Survolées, elles disent ce qu'elles font.</p>
+  <ul>
+    <li><strong>Huit écrans à pages</strong> — PFD (assiette, vitesse, altitude ; dans l'air l'incidence, l'énergie, le directeur), ORBIT, NAV, SYSTEMS, DOCKING, PLAN (les nœuds ou le graphe de l'assistance), CLOCKS, LOG, et en approche APPROACH et LANDING. Les onglets en haut de chaque écran changent sa page ; un second clic le rend à sa page automatique.</li>
+    <li><strong>Les lumières</strong> — la cabine baissée la nuit, rouge en mode NIGHT, éclairée par ses écrans ; les feux de navigation, les stroboscopes et les phares d'atterrissage sur la coque.</li>
+    <li><strong>Le rapport de vol</strong> — après un posé ou un amarrage, une note sur 20 et sa lettre : vitesse, axe, taux de chute, précision.</li>
+  </ul>
+  <figure class="shot"><a href="img/marketing/sim_entry_cockpit.webp"><img src="img/marketing/sim_entry_cockpit.webp" alt="Le cockpit en pleine rentrée : le plasma à la fenêtre, Mach 21,8 à 66 km, le PFD et la page NAV (rentrée vers Edwards, inclinaison commandée, écart)." loading="lazy"></a><figcaption>Le cockpit en pleine rentrée : le plasma à la fenêtre, Mach 21,8 à 66 km ; le PFD et la page NAV (rentrée vers Edwards, inclinaison commandée, écart).</figcaption></figure>
+</section>
+
+<section id="meteo">
+  <h2>Météo &amp; aéroports<small>Le bouton Météo du HUD, le menu pause</small></h2>
+  <p>Beau temps, nuageux, couvert, brouillard, pluie, orage, vent, poussière de Mars, au hasard — ou <strong>la vraie météo</strong> : le METAR de la station la plus proche de la piste, relu toutes les 15 s. Le vent souffle avec la hauteur, la turbulence secoue, les nuages ont leurs couches, le brouillard son sommet.</p>
+  <ul>
+    <li><strong>Les aéroports vivants</strong> — balisage OACI (rampe d'approche, PAPI, axe, bords), manche à air, la piste en service choisie face au vent.</li>
+    <li><strong>L'approche</strong> — les cartes d'approche (onglet CARTES de la tablette), le guidage MLS, les minima à 60 m ; mal engagé, <kbd class="f">W</kbd> (plein gaz) fait la <strong>remise de gaz</strong> et un nouveau circuit.</li>
+  </ul>
+  <figure class="shot"><a href="img/marketing/sim_storm_final.webp"><img src="img/marketing/sim_storm_final.webp" alt="Finale d'orage au Bourget, vue cockpit : la piste à 10 km, le PAPI, le vent de travers, le hub ENTRY et son graphe d'approche." loading="lazy"></a><figcaption>Finale d'orage au Bourget : la piste à 10 km, le PAPI, le vent de travers, le hub ENTRY et le graphe de l'approche finale.</figcaption></figure>
+</section>
+
+<section id="son">
+  <h2>Son, musique &amp; voix<small>Réglages › Jeu › Son</small></h2>
+  <ul>
+    <li><strong>L'audio spatial</strong> — tout est synthétisé en direct : le moteur granulaire, le RCS, le vent, la cabine (étouffée, en vue cockpit), le roulement sur la piste, la station ; au casque, le son est placé en 3D (HRTF), avec l'effet Doppler et le bang supersonique.</li>
+    <li><strong>Les annonces</strong> — en finale les hauteurs radio (300 … 10 m), « Minimums », « Taux de chute », « Terrain ! Remontez ! », et les alarmes graves du HUD dites à voix haute.</li>
+    <li><strong>Le contrôle de mission et la tour</strong> — Houston avec le délai de la lumière (rien de l'autre côté du trou de ver), la coupure radio dans le plasma de la rentrée, la tour qui autorise l'atterrissage.</li>
+    <li><strong>La musique</strong> — le silence, sauf aux grands moments : le décollage, la rentrée, la finale, le trou de ver, Gargantua ; et sur Miller, le tic‑tac.</li>
+    <li><strong>Les sous‑titres</strong> — chaque voix nommée, au‑dessus du tiers bas de l'écran.</li>
+  </ul>
+</section>
+
+<section id="tars">
+  <h2>TARS, l'IA de bord<small><kbd>F6</kbd> — tapé : sa console · tenu : lui parler</small></h2>
+  <p>TARS est le copilote du Ranger. Hors ligne, il répond avec ses phrases écrites et comprend les ordres courants. Avec <strong>votre clé OpenRouter</strong> (dans sa console : « Se connecter avec OpenRouter », ou coller une clé — gardée dans ce navigateur seulement), il devient un <strong>agent</strong> : il pilote, navigue, règle, montre, et se souvient de vous.</p>
+  <div class="grid">
+    <div class="card"><h4>Il fait</h4><p>« Emmène‑nous en orbite autour de la Lune », « pose‑nous à Edwards », « vise Mars et accélère le temps », « coupe la musique et mets la vue cockpit » : il agit tout de suite, sans demander. Avant ce qui ne se défait pas, la partie est gardée sous « Before TARS » — « annule » y revient.</p></div>
+    <div class="card"><h4>Il propose</h4><p>« Propose‑moi un plan pour… » : il chiffre (Δv, durée, arrivée) sans rien faire, et vous montre le plan avec <strong>Accepter</strong> et <strong>Refuser</strong> (ou « oui » / « non »).</p></div>
+    <div class="card"><h4>Il montre</h4><p>La télémétrie en direct (altitude, vitesse, charge, inclinaison, incidence…), le couloir de rentrée, le graphe du hub, des fiches de chiffres, et les vrais écrans du jeu (carte, tablette, écrans du cockpit, rapport).</p></div>
+    <div class="card"><h4>Il veille</h4><p>Ses réflexes le réveillent aux moments clés — la fin d'un autopilote, les phases de la rentrée, une alerte, un écart, un rapport — et vous pouvez lui en donner : « toutes les 10 minutes, vérifie le carburant ». Un budget par heure les borne.</p></div>
+    <div class="card"><h4>Il délègue</h4><p>Pour une analyse en plusieurs regards, il lance des <strong>sous‑agents</strong> en parallèle (en lecture seule) et décide ensuite.</p></div>
+    <div class="card"><h4>Il se souvient</h4><p>Votre nom, vos préférences, vos échanges, d'une visite à l'autre — onglet Mémoire de sa console, « oublie tout » pour effacer.</p></div>
+  </div>
+  <h3>Sa console</h3>
+  <p>Son emblème (quatre monolithes) s'anime selon ce qu'il fait : prêt, à l'écoute, réfléchit, agit, parle. Ses actions s'affichent au fil de l'eau, sa liste de tâches se coche, ses onglets donnent l'<em>Échange</em>, ses <em>Agents</em>, ses <em>Réveils</em>, sa <em>Mémoire</em>. On la déplace par sa poignée <code>⠿</code> (en haut à droite) ; fermée, une pastille montre ce qu'il fait. <kbd>Échap</kbd> arrête un tour en cours.</p>
+  <div class="shots"><figure class="shot"><a href="img/marketing/tars_console.webp"><img src="img/marketing/tars_console.webp" alt="TARS pendant une approche d'Edwards : l'inclinaison et l'incidence en direct, le couloir de rentrée, le suivi du hub dans sa console." loading="lazy"></a><figcaption>En approche d'Edwards : l'inclinaison et l'incidence en direct, le couloir, le suivi du hub.</figcaption></figure><figure class="shot"><a href="img/marketing/tars_proposal.webp"><img src="img/marketing/tars_proposal.webp" alt="Un plan proposé par TARS : injection lunaire, chiffres, ACCEPTER / REFUSER." loading="lazy"></a><figcaption>Un plan proposé : ses étapes, ses chiffres, Accepter ou Refuser.</figcaption></figure></div>
+  <h3>Les commandes « / »</h3>
+  <p>Tout le jeu se commande aussi au clavier, <strong>sans le modèle</strong> (et sans coût) : tapez <kbd>/</kbd>, la liste s'ouvre avec la description de chaque commande ; <kbd>↑</kbd> <kbd>↓</kbd> pour choisir, <kbd>Tab</kbd> ou <kbd>Entrée</kbd> pour prendre ; les arguments se complètent à leur tour (corps, sites, vues, écrans, réglages et leurs valeurs…).</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Commande</th><th>Effet</th></tr></thead>
+    <tbody>
+      <tr><td><code>/target Mars</code> · <code>/cockpit</code> · <code>/chase</code> · <code>/view …</code> · <code>/shipview</code></td><td>La cible, les vues, retour au vaisseau</td></tr>
+      <tr><td><code>/autopilot entry Edwards</code> · <code>/land</code> · <code>/takeoff 300</code> · <code>/dock</code> · <code>/hold prograde</code></td><td>Autopilotes et maintiens</td></tr>
+      <tr><td><code>/gear down</code> · <code>/flaps 1</code> · <code>/throttle 0.5</code> · <code>/sas on</code> · <code>/goaround</code></td><td>Les commandes de vol</td></tr>
+      <tr><td><code>/mission Lune orbit 100</code> · <code>/maneuver hohmann 800</code> · <code>/execute</code></td><td>Le calculateur de vol</td></tr>
+      <tr><td><code>/teleport orbit Lune 100</code> · <code>/teleport glide Edwards</code> · <code>/warp 1000</code> · <code>/date +24</code></td><td>Se déplacer, le temps</td></tr>
+      <tr><td><code>/map globe</code> · <code>/show entry_corridor</code> · <code>/sky Orion</code> · <code>/set music off</code> · <code>/quality game</code></td><td>Écrans, ciel, réglages</td></tr>
+      <tr><td><code>/save</code> · <code>/load</code> · <code>/scene …</code> · <code>/undo</code> · <code>/press …</code> · <code>/tool …</code></td><td>Parties, scènes, toute touche, tout outil</td></tr>
+      <tr><td><code>/help</code> · <code>/model</code> · <code>/mode</code> · <code>/plan …</code> · <code>/cost</code> · <code>/clear</code> · <code>/export</code> · <code>/skill save nom</code></td><td>L'agent : aide, modèle, mode, plan, coût, conversation, savoir‑faire</td></tr>
+    </tbody>
+  </table></div>
+  <p><kbd>@</kbd> complète un corps, un site, un écran ou un réglage dans une question ; <kbd>↑</kbd> <kbd>↓</kbd> rappellent vos questions ; <kbd>⇧Tab</kbd> change son <strong>mode</strong> : <em>Agir</em> (il agit), <em>Proposer</em> (il propose chaque plan avant d'agir), <em>Observer</em> (il lit et montre, n'agit pas).</p>
+  <p class="muted">Réglages › Jeu › TARS : ses remarques, son honnêteté et son humour (« honesty 70 »), le modèle (GLM‑5.3 Flash par défaut, Claude Haiku 5.5…), ses réveils et leur budget par heure. Un vol vers la Lune mené par TARS coûte environ un millième de dollar.</p>
+</section>
+
 <section id="manette">
-  <h2>Manette &amp; écran tactile</h2>
+  <h2>Manettes, HOTAS &amp; écran tactile</h2>
+  <p><strong>Tout périphérique de jeu</strong> est reconnu — manette, manche, manette des gaz, palonnier : des profils connus (Thrustmaster T.16000M, TWCS, Warthog, T.Flight ; Saitek/Logitech X52, X56, Extreme 3D Pro ; VKB Gladiator ; les palonniers) ou le vôtre, réglé dans le menu pause › <em>Commandes</em> › <em>Manettes et HOTAS</em> (chaque axe, sa courbe, sa zone morte, la calibration ; chaque bouton lié à n'importe quelle action du clavier). La manette des gaz absolue garde sa position ; les vibrations suivent le moteur, le toucher, les alarmes.</p>
   <h3>Manette (Xbox · PlayStation)</h3>
   <div class="grid">
     <div class="tbl"><table>
@@ -498,7 +578,8 @@
     <div class="card"><h4>Rien ne bouge ?</h4><p>Le temps est peut‑être en pause : <kbd>Espace</kbd>. Ou revenez au temps réel avec <kbd>!</kbd>.</p></div>
     <div class="card"><h4>Le voyage est long</h4><p>Une fois le plan lancé (<em>EXECUTE</em>), le temps s’accélère tout seul entre les allumages (auto‑warp). Vous pouvez choisir le vôtre avec <kbd>;</kbd> <kbd>:</kbd> — il reste plafonné pour ne pas rater un allumage.</p></div>
     <div class="card"><h4>Perdu dans l'espace ?</h4><p><kbd>M</kbd> en vol, puis <em>Fit</em> pour recadrer la carte ; <kbd>⇧R</kbd> remet la caméra à sa place.</p></div>
-    <div class="card"><h4>Une belle image</h4><p>Pause (<kbd>Espace</kbd>) pour que l'image s'affine, <kbd>H</kbd> pour cacher l'interface, <kbd>P</kbd> pour l'enregistrer.</p></div>
+    <div class="card"><h4>Demandez à TARS</h4><p><kbd>F6</kbd> puis « que dois‑je faire ? », ou <kbd>/help</kbd> pour toutes les commandes.</p></div>
+    <div class="card"><h4>Une belle image</h4><p>Pause (<kbd>Espace</kbd>) pour que l'image s'affine, <kbd>H</kbd> pour cacher l'interface, <kbd>P</kbd> pour l'enregistrer — ou le <strong>mode photo</strong> (bouton Photo) : exposition, focale, profondeur de champ, rendu ; « Retour au jeu » pour en sortir. Réglages › Rendu : <em>Afficher les FPS</em>.</p></div>
   </div>
 </section>
 

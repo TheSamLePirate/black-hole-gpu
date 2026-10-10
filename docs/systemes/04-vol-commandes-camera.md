@@ -8,7 +8,7 @@ Au cœur se trouve `CameraController` (`src/controls.ts`), que `Sim.step` (`src/
 
 | Fichier | Lignes | Rôle |
 |---|---:|---|
-| `src/controls.ts` | 6655 | `CameraController` : entrées, modes de caméra, rig planétaire, intégration du vaisseau (chute libre Kerr, repère planète, repère home), pilotage, flotte, amarrage, contacts, distorsion « sur rails », plan de vol (nœuds), autopilotes (branchement), cinématiques. Exporte `FLIGHT_KEYS`, `TELE_MIN`, `isTyping`. |
+| `src/controls.ts` + `src/controller/*` | 1188 + 6 500 | `CameraController` : entrées, modes de caméra, rig planétaire, intégration du vaisseau (chute libre Kerr, repère planète, repère home), pilotage, flotte, amarrage, contacts, distorsion « sur rails », plan de vol (nœuds), autopilotes (branchement), cinématiques. Exporte `FLIGHT_KEYS`, `TELE_MIN`, `isTyping`. **Depuis le 2026-10-02**, ses méthodes sont rangées par sujet dans `src/controller/` (installées sur son prototype) : les numéros de ligne `controls.ts:N` de cette fiche renvoient à l'ancien fichier ; voir la [fiche 11](11-ajouts-depuis-octobre.md#le-contrôleur-découpé). |
 | `src/camera.ts` | 281 | Pose de la caméra ↔ `Settings` : `cameraFrame()` (région `hole`/`throat`, base ZAMO, vitesse β, γ), `basis`/`yawPitchRoll`, `setHolePose`/`setRepPose`/`setHomePose`, `switchAnchor`, `gpuTheta`. |
 | `src/mounts.ts` | 93 | Points d'attache de la caméra sur le vaisseau (`MOUNTS`), `shipToCamera()` (matrice vaisseau → caméra, regard libre), `setMountVessel`. |
 | `src/vessels.ts` | 224 | Catalogue `VESSELS` : masse, accélération, rayon de giration, agilité, centre de masse, ports d'amarrage, tuyères, points d'attache, aérodynamique. `dockedFrame()`. |

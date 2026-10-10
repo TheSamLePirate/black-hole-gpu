@@ -6,8 +6,10 @@ Lander et l'Endurance, le Système solaire à l'échelle, la Terre, l'ISS, et de
 Gargantua et ses mondes. Chaque fiche décrit les fichiers, le flux de données, les algorithmes, les
 réglages, les pièges connus, et donne des recettes pour modifier le système.
 
-Rédigées le 2026-10-02 à partir d'une lecture complète du code (≈ 125 fichiers, 53 000 lignes de
-TypeScript et de WGSL). Le code évolue vite : en cas de doute, le code fait foi.
+Les fiches 1 à 9 ont été rédigées le 2026-10-02 à partir d'une lecture complète du code (≈ 125 fichiers,
+53 000 lignes de TypeScript et de WGSL). Le jeu a beaucoup grandi depuis : la fiche 10 décrit TARS, la
+fiche 11 recense chaque fichier ajouté depuis (mise à jour le 2026-10-10). Le code évolue vite : en cas de
+doute, le code fait foi.
 
 ## Les fiches
 
@@ -22,10 +24,13 @@ TypeScript et de WGSL). Le code évolue vite : en cas de doute, le code fait foi
 | 7 | [Modèles 3D](07-modeles-3d-vaisseaux.md) | Formats binaires, construction hors ligne, niveaux de détail, rastérisation MSAA dans le repère de repos local, éclairage par le traceur, cockpit et ses écrans, Endurance, ISS | `src/ship.ts`, `ship.wgsl`, `station.ts`, `ui/cockpitscreens.ts` |
 | 8 | [L'interface](08-interface.md) | Démarrage, boucle principale, modèle de réglages (scènes, `KEEP_ON_PRESET`, annulation), panneau généré par schéma, barres, HUD de vol, `window.__bh`, mobile | `src/main.ts`, `settings.ts`, `ui/panel.ts`, `ui/flighthud.ts` |
 | 9 | [Jeu, son, outils et build](09-jeu-audio-outils-build.md) | Statut, placement, sauvegardes, audit, journal, fenêtre F2, synthèse sonore, serveur de dev, scripts, tests, Atlas, GitHub Pages | `src/game/*`, `src/audio/*`, `server.ts`, `scripts/*` |
+| 10 | [TARS, l'agent du jeu](10-tars-agent.md) | La boucle d'un tour, les 43 outils, la télémétrie, la mémoire, les réveils et le budget, les sous-agents, les modes, les commandes « / » et leur complétion, la console | `src/ai/*`, `ui/tars-panel.ts`, `ui/tars/*` |
+| 11 | [Ce qui s'est ajouté depuis](11-ajouts-depuis-octobre.md) | Chaque fichier apparu après le 2 octobre, par système : le contrôleur découpé, la physique de l'audit, le HUD et le hub, la météo et les aéroports, le cockpit, les manettes, le son et les voix, l'interface, la PWA, le Kerr Bench, le déploiement | `src/controller/*`, `ui/hud/*`, `cockpit/*`, `input/*`, `sw.ts`… |
 
-Guides voisins (côté utilisateur ou mesures) : [la carte](../MAP.md), [le son](../SOUND.md),
-[les outils de jeu](../GAME-TOOLS.md), [les performances](../PERFORMANCE.md),
-[comment jouer](../comment-jouer.html), et le [README](../../README.md) pour le résumé de la physique.
+Guides voisins (côté utilisateur ou mesures) : [la carte](../MAP.md), [le son](../SOUND.md) et
+[l'audio spatial](../AUDIO.md), [les outils de jeu](../GAME-TOOLS.md), [les performances](../PERFORMANCE.md),
+[le HUD](../HUD.md), [le cockpit](../COCKPIT.md), [les manettes](../HOTAS.md), [TARS](../TARS.md),
+[le déploiement](../DEPLOY.md), [comment jouer](../comment-jouer.html), et le [README](../../README.md) pour le résumé de la physique.
 
 ## Vue d'ensemble
 
@@ -51,6 +56,7 @@ flowchart LR
     M["7 · Modèles 3D<br/>MSAA"]
   end
   G["9 · Jeu · son · outils"]
+  AI["10 · TARS agent<br/>outils · réveils"]
 
   K --> UI --> S
   K --> C
@@ -68,6 +74,10 @@ flowchart LR
   C --> M
   S --> G
   C --> G
+  K --> AI
+  AI --> C
+  AI --> S
+  C --> AI
 ```
 
 ### Une image, de bout en bout
@@ -87,8 +97,8 @@ flowchart LR
    reprojetée et débruitée. Les maillages (vaisseaux, cockpit, ISS) sont rastérisés avec la même
    projection, puis composités avant le bloom. Viennent ensuite l'exposition automatique, le tone mapping
    et la surimpression de la carte du ciel.
-5. **Autour** (fiches 8 et 9) : HUD de vol, mini‑carte, ordinateur de bord, son, sauvegarde automatique,
-   fenêtre d'outils. Le panneau de réglages est rafraîchi toutes les 0,15 s.
+5. **Autour** (fiches 8 à 11) : HUD de vol et hub, tablette, ordinateur de bord, son et voix, sauvegarde
+   automatique, fenêtre d'outils, TARS. Le panneau de réglages est rafraîchi toutes les 0,15 s.
 
 ### Principes transverses
 

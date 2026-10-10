@@ -3,7 +3,10 @@
 Écarts entre le code et la documentation, relevés le 2026-10-02 pendant la mise à jour des docs
 (commit e3a778f). À corriger dans le code.
 
-- [ ] **Aide‑mémoire des touches : `/` ne cherche plus dans les réglages.**
+Revu le 2026-10-10 : les points cochés sont corrigés dans le code. Les fiches 1 à 9 datent du 2 octobre ;
+les fichiers ajoutés depuis sont recensés dans [`docs/systemes/11-ajouts-depuis-octobre.md`](docs/systemes/11-ajouts-depuis-octobre.md).
+
+- [x] **Aide‑mémoire des touches : `/` ne cherche plus dans les réglages.** *(Corrigé : l'aide est tirée de `src/input/keymap.ts`, « M · ⌘K ».)*
   `src/ui/panel.ts:1015` (`showShortcuts`, section *Interface*) affiche `["M · /", "Settings · search them"]`,
   mais `/` (code `Slash`) remet le temps réel dans tous les modes (`src/main.ts`, gestionnaire `keydown`).
   La recherche se fait avec ⌘K / Ctrl+K. → remplacer par `["M · ⌘K", "Settings · search them"]`.
@@ -61,14 +64,14 @@ de la fiche indiquée.
 - [ ] **`guessTier` ne renvoie jamais 4** (`src/tier.ts`) → plafond 3,5 Mpx en qualité game (fiches 2, PERFORMANCE).
 - [ ] **Build de la cabine non reproductible** (fiche 7) — `cockpit-convert.py` utilise `hash(ob.name)`
   (aléatoire par lancement Python).
-- [ ] **`bun run build` incomplet** (fiche 9) — ni `ktx-worker.js` ni `basis_transcoder.wasm` ; seul
+- [x] **`bun run build` incomplet** *(corrigé : workers, WASM, Service Worker et PWA copiés)* (fiche 9) — ni `ktx-worker.js` ni `basis_transcoder.wasm` ; seul
   `build:pages` est complet.
 - [ ] **`constellations.json` non reconstructible** (fiche 3) — `scripts/build-constellations.ts` lit
   `assets/etoiles/`, non commité.
 
 ### Robustesse et échelle
 
-- [ ] `492.5490947` (seconde en M pour 10⁸ M☉) en dur dans `src/controls.ts` (`dockWant`, `railsLimit`) et
+- [ ] `492.5490947` (seconde en M pour 10⁸ M☉) *(depuis : une seule fois, `M_SECONDS` dans `src/units.ts` — reste qu'elle ne suit pas `s.massSolar`)* en dur dans `src/controls.ts` (`dockWant`, `railsLimit`) et
   `M_SECONDS`/`M_METRES` dans `src/system/solar.ts`, alors que `clock.ts` suit `s.massSolar` (fiches 3, 4).
 - [ ] `flyShip` modifie `TUNING.turnRate/turnAccel` autour de `pilot.step` sans `try/finally` (fiches 4, 5).
 - [ ] Feed‑forward des autopilotes atterrissage/décollage sur une traînée simplifiée (`ballistic`) alors que
@@ -93,7 +96,7 @@ de la fiche indiquée.
 - [ ] En‑tête de `src/ui/flighthud.ts` : « N cycles the density » → `²` (Backquote).
 - [ ] Menu du panneau : « Copy share link — URL with every non-default setting » produit un `#save=` ;
   `saveToUrl` (`src/urlstate.ts`) n'est plus appelée.
-- [ ] Astuce du splash : « Settings › Scenes » n'existe plus.
+- [x] Astuce du splash : « Settings › Scenes » n'existe plus. *(Corrigé : la phrase n'existe plus.)*
 - [ ] Aides FC « Apoapsis / Periapsis (or now) » sans bouton NOW.
 - [ ] En‑tête de `scripts/gallery.ts` (320×180, SSIM 0,9 → 160×90, 0,85) ; en‑tête de
   `scripts/build-ephemeris.ts` (tolérances ≠ table `FITS`).

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gargantua — le trou noir d'Interstellar, calculé en temps réel</title>
-<meta name="description" content="Pilotez le Ranger de la Terre jusqu'à Gargantua. Un trou noir de Kerr tracé rayon par rayon dans votre navigateur, le Système solaire à l'échelle, la Terre, l'ISS, le trou de ver et les mondes de Miller, Mann et Edmunds.">
+<meta name="description" content="Un simulateur de vol spatial dans le navigateur : pilotez le Ranger de la Terre jusqu'à Gargantua avec TARS, votre copilote IA. Un trou noir de Kerr tracé rayon par rayon, le Système solaire à l'échelle, rentrées et atterrissages réels, météo, aéroports, cockpit interactif.">
 <meta property="og:title" content="Gargantua — le trou noir d'Interstellar, calculé en temps réel">
-<meta property="og:description" content="Un simulateur de vol relativiste dans le navigateur : de Kennedy à Saturne, puis à travers le trou de ver.">
+<meta property="og:description" content="Un simulateur de vol relativiste dans le navigateur, avec un copilote IA : de Kennedy à Saturne, puis à travers le trou de ver.">
 <meta property="og:image" content="img/marketing/endurance-og.jpg">
 <meta name="theme-color" content="#050507">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,6 +119,15 @@
   .feat p { margin: 0; color: var(--muted); font-size: .95rem; }
   .feat .tag { display: inline-block; margin-bottom: 10px; font: 600 .68rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ice); }
 
+  /* ---------- simulator, TARS ---------- */
+  @media (min-width: 961px) { #simulateur .split { grid-template-columns: 1.15fr 1fr; } }
+  .tars { background: radial-gradient(ellipse 60% 50% at 80% 30%, rgba(120,255,170,.07), transparent 70%), linear-gradient(180deg, var(--bg), #06100c 40%, var(--bg)); }
+  .tars .eyebrow { color: #7dffae; }
+  .tars h2 em { background: linear-gradient(90deg, #7dffae, #7cd6ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tars .points .ic { background: rgba(120,255,170,.08); border-color: rgba(120,255,170,.28); color: #7dffae; }
+  .tars .frame { box-shadow: 0 40px 120px -40px rgba(120,255,170,.3); }
+  .tars .req { margin-top: 28px; text-align: center; }
+
   /* ---------- film ---------- */
   .film { padding-top: 60px; }
   .video { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16/9; background: #000; box-shadow: 0 60px 140px -50px rgba(255,140,40,.45); }
@@ -189,6 +198,8 @@
   <ul>
     <li><a href="#physique">La physique</a></li>
     <li><a href="#voyage">Le voyage</a></li>
+    <li><a href="#simulateur">Le simulateur</a></li>
+    <li><a href="#tars">TARS</a></li>
     <li><a href="#jeu">Le jeu</a></li>
     <li><a href="#film">Le film</a></li>
     <li><a href="#galerie">Galerie</a></li>
@@ -199,14 +210,14 @@
 <header class="hero" id="top">
   <div class="hero-bg" role="img" aria-label="L'Endurance devant Gargantua, son disque d'accrétion courbé par la gravité"></div>
   <div class="hero-content wrap">
-    <div class="eyebrow rv">Simulateur de vol relativiste · dans le navigateur</div>
+    <div class="eyebrow rv">Simulateur de vol spatial · relativité générale · copilote IA</div>
     <h1 class="rv d1"><span class="glow">Gargantua</span><span class="thin">Le trou noir d'<em>Interstellar</em>, calculé rayon par rayon. Et vous êtes aux commandes.</span></h1>
     <div class="ctas rv d2">
       <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Décoller de Kennedy</a>
       <a class="btn" href="#film">Voir le film</a>
       <a class="btn" href="comment-jouer.html">Comment jouer</a>
     </div>
-    <div class="meta rv d3">WebGPU · sans installation · clavier, manette ou écran tactile</div>
+    <div class="meta rv d3">WebGPU · sans installation · hors ligne · clavier, manette, HOTAS ou écran tactile</div>
   </div>
   <div class="scroll-cue" aria-hidden="true"></div>
 </header>
@@ -216,7 +227,7 @@
     <div class="stat rv"><b>10<sup>8</sup> M☉</b><span>la masse de Gargantua</span></div>
     <div class="stat rv d1"><b>a* = 0,998</b><span>un trou noir de Kerr presque extrême</span></div>
     <div class="stat rv d2"><b>DE440</b><span>les éphémérides de la NASA pour le Système solaire</span></div>
-    <div class="stat rv d3"><b>0 Mo</b><span>à installer : tout tourne sur votre carte graphique</span></div>
+    <div class="stat rv d3"><b>43 outils</b><span>pour TARS, le copilote IA qui pilote avec vous</span></div>
   </div>
 </section>
 
@@ -263,11 +274,66 @@
   </div>
 </section>
 
+<section id="simulateur">
+  <div class="wrap">
+    <div class="split">
+      <figure class="frame rv" style="aspect-ratio: 16/10; margin: 0;">
+        <img src="img/marketing/sim_entry_cockpit.webp" alt="Le cockpit du Ranger en pleine rentrée atmosphérique, le plasma à la fenêtre, Mach 21,8 à 66 km" loading="lazy">
+        <figcaption>RENTRÉE · MACH 21,8 · 66 KM · LE PLASMA À LA FENÊTRE</figcaption>
+      </figure>
+      <div>
+        <div class="eyebrow rv">Le simulateur</div>
+        <h2 class="rv d1">De l'orbite <em>à la piste.</em></h2>
+        <p class="lead rv d2">La rentrée, le plasma, le plané, la finale et le toucher : chaque étape calculée, chaque instrument vivant.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">⌂</span><div><strong>Un cockpit qui répond</strong><p>Une vingtaine de commandes au pointeur, huit écrans à pages (PFD, orbite, navigation, systèmes, amarrage, plan, approche, atterrissage), les lumières de la cabine et de la coque.</p></div></li>
+          <li class="rv d2"><span class="ic">☁</span><div><strong>Météo et aéroports réels</strong><p>Orage, brouillard, vent qui tourne avec l'altitude — ou le vrai METAR de la piste. Balisage, PAPI, guidage MLS, minima, remise de gaz.</p></div></li>
+          <li class="rv d3"><span class="ic">◈</span><div><strong>Le hub et le couloir</strong><p>Chaque autopilote affiche ses étapes, sa prédiction et son graphe : le couloir de rentrée, la pente d'approche, le Δv d'une poussée. Un rapport de vol noté sur 20.</p></div></li>
+          <li class="rv d1"><span class="ic">⇅</span><div><strong>Manche, palonnier, manette des gaz</strong><p>Douze profils de HOTAS reconnus, ou le vôtre : chaque axe, sa courbe, sa zone morte, chaque bouton lié à une action.</p></div></li>
+          <li class="rv d2"><span class="ic">♪</span><div><strong>Son 3D, voix, radio</strong><p>Les annonces de finale, Houston avec le délai de la lumière, la coupure radio dans le plasma, la tour, la musique aux grands moments.</p></div></li>
+        </ul>
+      </div>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="img/marketing/sim_storm_final.webp" alt="Finale d'orage au Bourget, vue cockpit, le PAPI et le hub d'approche" loading="lazy"><figcaption>FINALE D'ORAGE · PARIS – LE BOURGET · RWY 27</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="img/marketing/tars_console.webp" alt="Approche d'Edwards : l'inclinaison et l'incidence en direct, le couloir de rentrée, le suivi du hub" loading="lazy"><figcaption>APPROCHE D'EDWARDS · LE COULOIR ET LA TÉLÉMÉTRIE EN DIRECT</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="tars" id="tars">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">TARS · l'IA de bord</div>
+        <h2 class="rv d1">Un copilote <em>qui agit.</em></h2>
+        <p class="lead rv d2">Parlez‑lui, ou écrivez‑lui. TARS connaît tout le vaisseau, chaque consigne de chaque autopilote, et peut tout faire dans le jeu — avec sa voix, son humour, et sa mémoire de vous.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">▶</span><div><strong>« Emmène‑nous en orbite lunaire »</strong><p>Il planifie la mission, accélère le temps, attend la capture, circularise — et vous le dit. Un ordre s'exécute sans confirmation ; « annule » revient en arrière.</p></div></li>
+          <li class="rv d2"><span class="ic">☷</span><div><strong>« Propose‑moi un plan »</strong><p>Les chiffres d'abord, rien n'est fait : vous acceptez ou refusez. Trois modes — agir, proposer, observer.</p></div></li>
+          <li class="rv d3"><span class="ic">∿</span><div><strong>Il montre et il veille</strong><p>Télémétrie en direct, couloir de rentrée, écrans du jeu ; ses réflexes le réveillent à la fin d'un autopilote, à chaque phase de la rentrée, sur une alerte ou un écart.</p></div></li>
+          <li class="rv d1"><span class="ic">⑂</span><div><strong>Des sous‑agents en parallèle</strong><p>Pour une analyse en plusieurs regards, il lance des copies de lui‑même, puis décide.</p></div></li>
+          <li class="rv d2"><span class="ic">/</span><div><strong>Tout le jeu au clavier</strong><p>« /teleport orbit Lune 100 », « /cockpit », « /autopilot entry Edwards » : des commandes complétées en tapant, sans le modèle, sans coût.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="img/marketing/tars_proposal.webp" alt="La console de TARS : un plan de transfert lunaire proposé, ses étapes, ses chiffres, Accepter ou Refuser" loading="lazy">
+        <figcaption>UN PLAN PROPOSÉ · ACCEPTER OU REFUSER</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="img/marketing/tars_agents.webp" alt="Deux sous-agents de TARS analysent en parallèle le vent à Edwards et la marge d'énergie" loading="lazy"><figcaption>DEUX SOUS‑AGENTS · LE VENT ET L'ÉNERGIE</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="img/marketing/tars_commands.webp" alt="Les commandes « / » de TARS complétées en tapant : /teleport orbit Ma" loading="lazy"><figcaption>« /TELEPORT ORBIT MA… » · COMPLÉTÉ EN TAPANT</figcaption></figure>
+    </div>
+    <p class="req rv">Avec votre propre clé OpenRouter (connexion en un clic, gardée dans votre navigateur). Sans clé, TARS répond et obéit aux ordres courants hors ligne.</p>
+  </div>
+</section>
+
 <section id="jeu">
   <div class="wrap">
     <div class="eyebrow rv">Le jeu</div>
     <h2 class="rv d1">Un vrai vaisseau. <em>De vrais outils.</em></h2>
-    <p class="lead rv d2">Pilotage à la Kerbal Space Program, planificateur de vol, carte 3D, cockpit vivant — et des autopilotes quand vous voulez regarder par le hublot.</p>
+    <p class="lead rv d2">Pilotage à la Kerbal Space Program, planificateur de vol, carte 3D, cockpit vivant — et des autopilotes quand vous voulez regarder par le hublot. Sans installation, et même hors ligne.</p>
     <div class="features">
       <article class="feat wide rv"><div class="shot"><img src="img/comment-jouer/20_cockpit.webp" alt="Le cockpit du Ranger et ses écrans" loading="lazy"></div><div class="body"><span class="tag">Cockpit</span><h3>Le siège du pilote</h3><p>Écrans de télémétrie en direct, manches qui bougent avec vos commandes, et une vue cabine pour regarder autour de soi.</p></div></article>
       <article class="feat wide rv d1"><div class="shot"><img src="img/comment-jouer/33_carte_artemis.webp" alt="La carte 3D avec la trajectoire de retour libre" loading="lazy"></div><div class="body"><span class="tag">Carte 3D</span><h3>Voir où l'on va</h3><p>Trajectoires prédites, nœuds de manœuvre à tirer à la souris, frise temporelle, globe et planisphère avec la trace au sol.</p></div></article>
@@ -275,7 +341,7 @@
       <article class="feat rv d1"><div class="shot"><img src="img/comment-jouer/50_iss.webp" alt="Amarrage à l'ISS" loading="lazy"></div><div class="body"><span class="tag">Autopilotes</span><h3>Décoller, se poser, s'amarrer</h3><p>Maintiens d'attitude, circularisation, approche, atterrissage, décollage et amarrage automatiques.</p></div></article>
       <article class="feat rv d2"><div class="shot"><img src="img/comment-jouer/44_carte_du_ciel.webp" alt="La carte du ciel et les constellations" loading="lazy"></div><div class="body"><span class="tag">Ciel</span><h3>Le vrai ciel</h3><p>88 constellations, les étoiles nommées, grilles équatoriale et horizontale, et un télescope qui suit sa cible.</p></div></article>
       <article class="feat rv"><div class="shot"><img src="img/comment-jouer/60_mobile.webp" alt="Le jeu sur téléphone avec les commandes tactiles" loading="lazy"></div><div class="body"><span class="tag">Partout</span><h3>Clavier, manette, tactile</h3><p>AZERTY ou QWERTY, manette Xbox ou PlayStation, ou un manche et une manette des gaz au doigt sur téléphone.</p></div></article>
-      <article class="feat rv d1"><div class="shot"><img src="img/marketing/sunset_orbit.webp" alt="Coucher de soleil vu de l'orbite" loading="lazy"></div><div class="body"><span class="tag">Son</span><h3>Entièrement synthétisé</h3><p>Grondement du moteur, sifflement du RCS, bips de l'ordinateur de bord, vent dans l'atmosphère — tout est généré en direct.</p></div></article>
+      <article class="feat rv d1"><div class="shot"><img src="img/marketing/sunset_orbit.webp" alt="Coucher de soleil vu de l'orbite" loading="lazy"></div><div class="body"><span class="tag">Son</span><h3>Entièrement synthétisé</h3><p>Moteur granulaire, RCS, vent, cabine, son 3D au casque, Doppler et bang ; les annonces de finale, Houston et la tour à la radio, la musique aux grands moments — tout est généré en direct.</p></div></article>
       <article class="feat rv d2"><div class="shot"><img src="img/marketing/q1_hero.webp" alt="Rendu hors ligne de Gargantua" loading="lazy"></div><div class="body"><span class="tag">Studio</span><h3>Rendus et vidéos</h3><p>Rendu hors ligne à n'importe quelle résolution, export PNG 16 bits et EXR, prises de vue rejouées en vidéo.</p></div></article>
     </div>
   </div>
@@ -314,7 +380,7 @@
   <div class="wrap">
     <div class="eyebrow rv">Prêt au décollage</div>
     <h2 class="rv d1">L'horizon vous <em>attend.</em></h2>
-    <p class="lead rv d2">Ouvrez la page, appuyez sur <b>U</b> : le Ranger quitte le pas de tir. Le reste du chemin jusqu'à Gargantua, c'est vous qui le tracez.</p>
+    <p class="lead rv d2">Ouvrez la page, appuyez sur <b>U</b> : le Ranger quitte le pas de tir. Le reste du chemin jusqu'à Gargantua, c'est vous qui le tracez — ou appuyez sur <b>F6</b> et demandez‑le à TARS.</p>
     <div class="ctas rv d3">
       <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Lancer la partie</a>
       <a class="btn" href="../#scene=game:artemis">S'entraîner avec Artemis II</a>

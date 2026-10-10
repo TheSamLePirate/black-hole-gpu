@@ -34,7 +34,7 @@ Le guide utilisateur des outils est dans [docs/GAME-TOOLS.md](../GAME-TOOLS.md),
 | `server.ts` | 44 | Serveur Bun : la page, les workers bundlés à la volée, `/__snapshot` et `/__snapshots/:name` (dev seulement) |
 | `package.json` | 19 | Scripts `dev`, `start`, `build`, `test`, `typecheck`, `build:pages`, `gallery` |
 | `scripts/build-pages.ts` | 18 | Construit `_site/` pour GitHub Pages : simulateur + Atlas + vidéos + page « comment jouer » |
-| `.github/workflows/pages.yml` | — | CI : `bun test`, puis `build:pages`, puis déploiement Pages à chaque push sur `main` |
+| `.github/workflows/pages.yml` | — | CI : vérification (types, `biome ci`, WGSL, tests), `build:pages`, puis Pages et le serveur samlepirate.org à chaque push sur `main` ; `test-kimi` sur Pages seulement, sous `/test/` |
 | `scripts/gallery.ts` | 231 | Test de régression visuelle des vignettes de scènes (Chrome headless + CDP, SSIM) |
 | `scripts/scene-thumbs.ts` | 47 | Déplace les captures vers `assets/scenes/` et régénère `src/ui/scene-thumbs.ts` |
 | `scripts/scene-slug.ts` | 3 | `sceneSlug()` : nom de scène → nom de fichier |
@@ -339,23 +339,29 @@ flowchart LR
 
 `snapshots/`, `_site/` et `dist/` sont ignorés par git.
 
-### 13. Build et déploiement GitHub Pages
+### 13. Build et déploiement (GitHub Pages et samlepirate.org)
+
+*Mis à jour le 2026-10-10.* Détails : [DEPLOY.md](../DEPLOY.md).
 
 ```mermaid
 flowchart LR
-  push["push sur main"] --> CI[".github/workflows/pages.yml"]
-  CI --> I["bun install --frozen-lockfile"] --> T["bun test"] --> B["bun run build:pages"] --> U["upload-pages-artifact _site"] --> D["deploy-pages"]
+  push["push sur main ou test-kimi"] --> CI[".github/workflows/pages.yml"]
+  CI --> V["site : types · biome ci · WGSL · tests · build:pages<br/>main à la racine, test-kimi sous /test/"]
+  V --> D["deploy : GitHub Pages"]
+  V --> S["server (main seulement) : image nginx → GHCR<br/>commit sur la branche deploy"]
+  S -.-> P["Portainer (pile kerr) relève deploy toutes les 2 min"]
 ```
 
 `scripts/build-pages.ts` effectue les étapes suivantes :
 1. `bun build ./index.html --outdir _site --minify` ;
-2. les deux workers et le `.wasm` à côté de la page. Ils sont chargés par URL, d'où des builds séparés ;
+2. les workers (planificateur, KTX2, moteur audio, Service Worker) et le `.wasm` à côté de la page. Ils sont chargés par URL, d'où des builds séparés ;
 3. `gallery/` → `_site/docs/` (l'Atlas) ;
 4. `docs/video/*.mp4` → `_site/docs/video/` ;
-5. `docs/comment-jouer.html` et ses images ;
-6. `.nojekyll`.
+5. `docs/comment-jouer.html`, `docs/decouvrir.html` et leurs images (`docs/img/comment-jouer`, `docs/img/marketing`) ;
+6. le manifeste et les icônes de la PWA, `pwa/openrouter.html` (le retour de la connexion OpenRouter), `version.json` et `precache.json` (ce que le Service Worker met en cache) ;
+7. `.nojekyll`.
 
-Un test qui échoue bloque le déploiement. `concurrency: pages` annule le déploiement précédent. Selon la mémoire du projet, le travail se fait directement sur `main`, donc chaque push déploie.
+Un échec de vérification sur `main` bloque le déploiement. Un échec sur `test-kimi` laisse la CI verte avec un avertissement « Preview not deployed », et `/test/` disparaît de Pages. Le serveur ne reçoit aucun appel : il relève lui-même la branche `deploy`, écrite par la CI seule. On vérifie un déploiement par `https://samlepirate.org/version.json`.
 
 ### 14. La galerie « Atlas de Kerr » (`gallery/`)
 
