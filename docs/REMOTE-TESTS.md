@@ -25,9 +25,9 @@ open vnc://Mac-mini-de-olivier.local
 
 `bun run remote …` revient au même que `bun scripts/remote.ts …` (script de `package.json`).
 
-**Piège** : `bun run e2e tests/e2e/x.e2e.test.ts` lance **toutes** les e2e (le filtre `tests/e2e` du
-script s'ajoute au vôtre, ici comme sur le mini). Pour un seul fichier : `E2E=1 bun test <fichier>
---timeout 600000`.
+Depuis le 2026-10-10 : `bun run e2e --remote [--each] <noms>` lance seulement ces fichiers sur le mini
+(un nom, un chemin ou un morceau de nom) ; `--each` donne un tableau par fichier à la fin. Le guide
+complet (pour tout agent) : [E2E.md](E2E.md) ; le tableau de bord : `bun run dashboard`.
 
 ---
 

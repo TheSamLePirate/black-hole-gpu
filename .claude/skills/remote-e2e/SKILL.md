@@ -19,7 +19,9 @@ what it wrote. Full reference: `docs/REMOTE-TESTS.md`; the options: the header o
 ## How
 
 ```bash
-# one e2e file — NOT `bun run e2e <file>`, which runs every e2e (its tests/e2e filter adds to yours)
+# e2e files by name (docs/E2E.md): --each gives a timed table per file
+bun run e2e --remote --each landing gear
+# the same by hand
 bun scripts/remote.ts run -- E2E=1 bun test tests/e2e/landing.e2e.test.ts --timeout 600000
 # no browser in it: beside the browser jobs, without waiting for the GPU
 bun scripts/remote.ts run --cpu -- bun test
@@ -30,7 +32,7 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
 ```
 
 - **Full screen by default** — the user's choice: every e2e Chrome opens full screen on the mini's
-  display, so whoever is at it sees it is in use. Keep it so; `--headless` only when the user asks. `--hold <s>` leaves each
+  display (its ~/.kerr-lab/config.json says kiosk; the test's viewport is scaled to fill the screen), so whoever is at it sees it is in use. Keep it so; `--headless` only when the user asks. `--hold <s>` leaves each
   Chrome open at its close, when the user wants to see the end state.
 - Run `remote.ts run` with Bash `run_in_background: true` for anything over a minute (you are
   notified when it ends); put the estimated duration in the task's title (e.g. "e2e landing on the
