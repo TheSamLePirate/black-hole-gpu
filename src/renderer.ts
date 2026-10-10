@@ -16,6 +16,8 @@ import {
 } from "./system/solar";
 import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
 import { refractionParams, seaRefractivity } from "./system/refraction";
+import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
+import { lookOf } from "./skychart";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
@@ -127,9 +129,11 @@ const RUNWAY_VEC4S = 18;
 const SEA_VEC4S = 15;
 /** the weather near the camera, last (trace.wgsl: Params.wx) */
 const WX_VEC4S = 6;
+/** the Earth's shadow on the Moon as Danjon draws it: its radius at 45° of latitude, grown by its air */
+const DANJON_SCALE = 0.99834 * (1 + 1 / 85);
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + WX_VEC4S;
+const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -470,6 +474,8 @@ export class Renderer {
   private dayCloudsFail: { date: string; at: number } | null = null;
   /** off: the fixed map of clouds even with the real weather (a script's switch, an A/B) */
   dayCloudsOn = true;
+  /** the Moon's sunlight left by the Earth's shadow, over its disc (1: no lunar eclipse — PLAN-CIEL C6) */
+  moonLight = 1;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
   readonly earthTiles: EarthTiles;
   private earthWant: EarthTier | null = null;
@@ -2077,7 +2083,9 @@ export class Renderer {
       this.meterSky = (3 * f2) / (Math.PI * (0.75 * pixelAngle) ** 2);
       this.meterHome = s.wormhole ? homePosition(s) : null;
       this.meterTime = time;
-      this.meterIncident = this.incidentLight(s, cam, bodies, origin, dc.logY, near, earthSurface);
+      this.meterIncident =
+        this.incidentLight(s, cam, bodies, origin, dc.logY, near, earthSurface) *
+        this.eclipsedMoonMeter(s, cam, bodies, t.width / Math.max(t.height, 1));
       this.meterGain = s.tonemap === "Film" ? 4 : 1;
       this.earthIsNear = !!near && bodies[near.index]?.id === "earth";
       this.meterInAir = this.earthIsNear;
@@ -2274,7 +2282,10 @@ export class Renderer {
       const q = A.map((a) => (a[0] * m[0]! + a[1] * m[1]! + a[2] * m[2]!) / ml);
       // (Sun–Moon–Earth angle: 0 at full Moon)
       const cosPhase = -(m[0]! * sn[0]! + m[1]! * sn[1]! + m[2]! * sn[2]!) / (ml * sl);
-      moon = [q[0]!, q[1]!, q[2]!, (1 + cosPhase) / 2];
+      // (its light dimmed by the Earth's shadow on it — a lunar eclipse: PLAN-CIEL C6)
+      const shade = moonLightShare(E, M, S, solarBody("earth")!.radius * DANJON_SCALE, solarBody("moon")!.radius, solarBody("sun")!.radius);
+      this.moonLight = shade;
+      moon = [q[0]!, q[1]!, q[2]!, ((1 + cosPhase) / 2) * shade];
       // the eclipses: the Moon and the Sun where the light shows them from the camera (the Moon 1.3 s
       // ago — the shadow's place, to a kilometre), on the Earth's axes [its radii]; the Sun's angular radius
       const obs = homePosition(s) ?? E;
@@ -2313,11 +2324,13 @@ export class Renderer {
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (PARAM_VEC4S - WX_VEC4S) * 4);
+    // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
+    f.set(shadowParams(bodies, ourStart(bodies), homePosition(s) ?? origin), (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(
       earthSurface && s.refraction ? refractionParams(this.refractivity(s), earthSurface.h * EARTH_RM, EARTH_RM) : [0, 0, 0, 0],
-      (PARAM_VEC4S - WX_VEC4S - 1) * 4,
+      (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S - 1) * 4,
     );
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
@@ -3896,6 +3909,24 @@ export class Renderer {
   /** The predicted path drawn now (setCameraPath's), for a take. */
   get cameraPath() {
     return this.pathKey;
+  }
+
+  /**
+   * The meter opening for an eclipsed Moon in the frame (PLAN-CIEL C6), as a camera's would: the light it
+   * reads lowered by the Moon's own dimming (a ten-thousandth at the totality's heart) — the brightest
+   * pixels (the Moon) then hold it back; the sky, drawn at its own scale under the auto exposure, unchanged.
+   */
+  private eclipsedMoonMeter(s: Settings, cam: CameraFrame, bodies: GpuBody[], aspect: number): number {
+    if (this.moonLight >= 0.5) return 1;
+    const X = homePosition(s);
+    const moon = bodies.find((b) => b.id === "moon");
+    if (!X || !moon) return 1;
+    const v: Vec3 = [moon.pos[0] - X[0], moon.pos[1] - X[1], moon.pos[2] - X[2]];
+    const l = Math.hypot(...v);
+    const f = lookOf(s, cam, [v[0] / l, v[1] / l, v[2] / l]);
+    const half = Math.atan(Math.tan((s.fov * Math.PI) / 360) * Math.hypot(1, aspect));
+    const c = f[0] * cam.fwd[0] + f[1] * cam.fwd[1] + f[2] * cam.fwd[2];
+    return c > Math.cos(half) ? Math.max(this.moonLight, 2e-4) : 1;
   }
 
   /** The sky's brightness factor: auto exposure keeps the (artistic) sky as it looks on screen. */

@@ -56,7 +56,7 @@ test.skipIf(!E2E)(
         .map((c, i) => `case ${i}u: { p=${vec(c.p)}; ls=${vec(c.ls)}; P.eclipse=${vec(c.eclipse)}; P.earth4.y=${c.rs}; AIR.ab=${c.ab}; }`)
         .join("\n");
       const shader = `const PI: f32 = 3.141592653589793; const EARTH_RM: f32 = 6378137.0;
-      struct Params { eclipse: vec4f, earth4: vec4f }; var<private> P: Params;
+      struct Params { eclipse: vec4f, earth4: vec4f, shade: array<vec4f, 9> }; var<private> P: Params;
       struct AirSpec { ab: f32 }; var<private> AIR: AirSpec;
       ${helpers}
       @group(0) @binding(0) var<storage,read_write> out: array<f32>;

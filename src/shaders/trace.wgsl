@@ -120,6 +120,10 @@ struct Params {
   // (n − 1, from the air's temperature; 0: no refraction) and at the camera, the Earth's radius and the
   // camera's distance from its centre in the density's scale heights
   sky: vec4f,
+  // the shadows our bodies cast on one another (PLAN-CIEL C6, eclipse/shadows-gpu.ts; bodyShadow): three
+  // pairs, each in the receiver's turning axes and radii — the occluder (centre, radius), the Sun (centre,
+  // radius), (the receiver's index + 1 — 0: none —, the occluder's air bending light into its shadow, 0, 0)
+  shade: array<vec4f, 9>,
   // the weather near the camera over the Earth (src/weather.ts, renderer: weatherParams; PLAN-METEO W3): [0]
   // its weight (0: the Earth's own clouds and air alone — the fair weather, and above 30 km), the haze's
   // extinction at the ground beyond the air's own [1/m], the fog's [1/m], its top [m above the sea];
@@ -1440,7 +1444,81 @@ var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
 // ldir, view: any one frame; pat: the normal in the black-hole frame (the surface pattern)
 // (rs: the sunlight's share through the rings — the direct light's, not the rings' own: their shine)
-fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32, rs: f32) -> vec3f {
+// The Sun's light the Earth's air bends into its shadow (PLAN-CIEL C6 — the eclipsed Moon's red): seen from
+// a point there, the Sun d from the Earth's centre behind it, the Earth ro across. A ray grazing the air at a
+// height h is bent by α(h) = 2 N₀ √(πR/2H) e^(−h/H) (~70′ at the sea, C3's model doubled); to reach the point it
+// must be bent by the Earth's limb's angle less (near side) or plus (far side) d: its height solved (Newton),
+// its light through the air along that grazing path — Rayleigh's red the deepest (the shadow's heart from
+// ~2 km: a dark brick red), the dust low down, the ozone's Chappuis band taking the red higher (the rays of
+// 15–30 km: the turquoise fringe at the umbra's edge) —, spread by the refraction's own defocusing (1 + D α'/…)
+// and gathered by the ring's convergence on the axis (ro / d, held at the Sun's own size). A fraction of
+// the Sun's: a ten-thousandth to a millionth.
+fn earthRingLight(d: f32, rs: f32, ro: f32) -> vec3f {
+  let H = 8.4;
+  let R = 6371.0;
+  let A0 = 0.0205;
+  // (vertical optical depths: Rayleigh at 610, 550, 465 nm; ozone's Chappuis band)
+  let tauR = vec3f(0.065, 0.099, 0.197);
+  let tauO = vec3f(0.042, 0.027, 0.005);
+  var L = vec3f(0.0);
+  // (the Sun's disc: its centre and four points 0.7 of its radius off — its far limb, needing less bending,
+  // sends rays higher through the air, far clearer: they light the shadow most)
+  for (var j = 0; j < 5; j++) {
+    let o = select(vec2f(0.0), vec2f(select(0.7, -0.7, j % 2 == 0), 0.0), j > 0 && j < 3) + select(vec2f(0.0), vec2f(0.0, select(0.7, -0.7, j == 3)), j >= 3);
+    let dj = length(vec2f(d + o.x * rs, o.y * rs));
+    for (var side = 0; side < 2; side++) {
+      let sg = select(-1.0, 1.0, side == 0);
+      // (the bending needed at the limb: its angle there (the limb ro grown by h) less or plus the Sun's offset)
+      let need0 = ro - sg * dj;
+      if (need0 >= A0 || need0 <= 0.0) { continue; }
+      var h = H * log(A0 / need0);
+      for (var i = 0; i < 3; i++) {
+        let f = ro * (1.0 + h / R) - sg * dj - A0 * exp(-h / H);
+        let df = ro / R + (A0 / H) * exp(-h / H);
+        h = clamp(h - f / df, 0.0, 80.0);
+      }
+      let alpha = A0 * exp(-h / H);
+      let tau = tauR * 70.7 * exp(-h / H) + vec3f(0.03 * 183.0 * exp(-h / 1.2)) + tauO * 25.0 * (1.0 - smoothstep(22.0, 40.0, h));
+      // (half the ring each side; its convergence on the axis, held at the Sun's size; the refraction's spread)
+      let phi = 0.5 * (ro / max(dj, rs)) / (1.0 + alpha * (R / H) / ro);
+      L += phi * exp(-tau);
+    }
+  }
+  return L * 0.2;
+}
+
+// The sunlight left at a point of body k (its unit normal pat, in its turning axes) by the bodies whose
+// shadows fall on it now (P.shade): the share of the Sun's disc each leaves, and the light the Earth's air
+// bends into its own shadow. 1: none.
+fn bodyShadow(k: u32, pat: vec3f) -> vec3f {
+  var T = vec3f(1.0);
+  for (var i = 0u; i < 3u; i++) {
+    let hd = P.shade[3u * i + 2u];
+    if (u32(hd.x + 0.5) != k + 1u) { continue; }
+    let oc = P.shade[3u * i];
+    let su = P.shade[3u * i + 1u];
+    let o = oc.xyz - pat;
+    let sv = su.xyz - pat;
+    let dO = length(o);
+    let dS = length(sv);
+    if (dO >= dS) { continue; }
+    let uo = o / dO;
+    let us = sv / dS;
+    if (dot(uo, us) <= 0.0) { continue; }
+    let d = asin(min(length(cross(uo, us)), 1.0));
+    let rs = asin(min(su.w / dS, 1.0));
+    let ro = asin(min(oc.w / dO, 1.0));
+    if (d >= rs + ro) { continue; }
+    var t = vec3f(discShare(rs, ro, d));
+    if (hd.y > 0.5) { t += earthRingLight(d, rs, ro); }
+    T *= t;
+  }
+  return T;
+}
+
+fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f32, g: f32, rs0: f32) -> vec3f {
+  // (the rings' shadow, and the other bodies' — PLAN-CIEL C6)
+  let rs = rs0 * bodyShadow(k, pat);
   let b3 = bodies[BV * k + 3u];
   let src = lightSource(k);
   let Tl = src.x;
@@ -3825,6 +3903,7 @@ fn hasAir(k: u32) -> bool {
 }
 fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
+  AIR_K = k;
   AIR_DUST = 0.0;
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03) — built whole (the constructor
   // names every field: none left at zero), the other worlds' below changing it
@@ -3973,8 +4052,41 @@ fn sunSeenPhysical(p: vec3f, Ls: vec3f) -> f32 {
   }
   return clamp(1.0 - a / (PI * rs * rs), 0.0, 1.0);
 }
+// Two discs' overlap: the share of a disc of angular radius rs left uncovered by one of radius ro, their
+// centres d apart (all small angles) — a body's shadow, its penumbra by the Sun's own disc.
+fn discShare(rs: f32, ro: f32, d: f32) -> f32 {
+  if (d >= rs + ro) { return 1.0; }
+  if (d <= abs(ro - rs)) { return select(1.0 - (ro * ro) / (rs * rs), 0.0, ro >= rs); }
+  let k1 = clamp((d * d + rs * rs - ro * ro) / (2.0 * d * rs), -1.0, 1.0);
+  let k2 = clamp((d * d + ro * ro - rs * rs) / (2.0 * d * ro), -1.0, 1.0);
+  let k3 = max((-d + rs + ro) * (d + rs - ro) * (d - rs + ro) * (d + rs + ro), 0.0);
+  let a = rs * rs * acos(k1) + ro * ro * acos(k2) - 0.5 * sqrt(k3);
+  return clamp(1.0 - a / (PI * rs * rs), 0.0, 1.0);
+}
+
+// The shadows a world's moons cast on its air, clouds and ground (PLAN-CIEL C6; P.shade, the current air's
+// body AIR_K): Phobos's on Mars, Io's on Jupiter, Titan's on Saturn — the share of the Sun's disc each leaves at
+// p (the world's own axes and radii). 1: none.
+var<private> AIR_K: u32 = 0u;
+fn airShade(p: vec3f) -> f32 {
+  var lit = 1.0;
+  for (var i = 0u; i < 3u; i++) {
+    let hd = P.shade[3u * i + 2u];
+    if (u32(hd.x + 0.5) != AIR_K + 1u) { continue; }
+    let oc = P.shade[3u * i];
+    let su = P.shade[3u * i + 1u];
+    let o = oc.xyz - p;
+    let sv = su.xyz - p;
+    let dO = length(o);
+    let dS = length(sv);
+    if (dO >= dS || dot(o, sv) <= 0.0) { continue; }
+    let d = asin(min(length(cross(o / dO, sv / dS)), 1.0));
+    lit *= discShare(asin(min(su.w / dS, 1.0)), asin(min(oc.w / dO, 1.0)), d);
+  }
+  return lit;
+}
 fn sunSeen(p: vec3f, Ls: vec3f) -> f32 {
-  return sunSeenPhysical(eclipsePhysical(p), normalize(eclipsePhysical(Ls)));
+  return sunSeenPhysical(eclipsePhysical(p), normalize(eclipsePhysical(Ls))) * airShade(eclipsePhysical(p));
 }
 // The sky's own light at p under an eclipse: the sunlit air around it — the Sun's share seen from p and
 // from four places 200 km about it (across the shadow), averaged: at the umbra's heart a thousandth or so
@@ -5613,6 +5725,10 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   if (isEarth(k)) {
     direct = sunSeenPhysical(earthSurface(q) / EARTH_RM, Ls);
     sky = max(sky * direct, nightFloor(direct, mu0));
+  } else {
+    // (a moon's shadow on it — PLAN-CIEL C6: Io's black dot on Jupiter, Phobos's on Mars)
+    direct = airShade(q);
+    sky *= direct;
   }
   return A / PI * E * (sunThrough(0.0, mu0) * f * rs * direct + sky + shine);
 }
